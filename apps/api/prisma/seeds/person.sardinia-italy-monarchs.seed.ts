@@ -397,16 +397,22 @@ export async function seedSardiniaItalyMonarchs(
 
       const positionDefinitionId = await getPositionDefId(prisma, reign.positionTitle)
 
+      // 유니크 제약 (historicalCountryId, regnalNumber) — 다른 personId라도 충돌하므로 제약 키로 lookup.
       const existingReign = await prisma.sovereignReign.findFirst({
         where: {
-          personId,
           historicalCountryId,
           regnalNumber: reign.regnalNumber ?? 1,
         },
       })
 
       if (existingReign) {
-        console.log(`    ⏭️  재위 ${reign.regnalNumber ?? 1}: ${reign.countryName}`)
+        if (existingReign.personId === personId) {
+          console.log(`    ⏭️  재위 ${reign.regnalNumber ?? 1}: ${reign.countryName}`)
+        } else {
+          console.warn(
+            `    ⚠️  재위 ${reign.regnalNumber ?? 1}: ${reign.countryName} — 다른 인물에 이미 점유됨 (skip)`,
+          )
+        }
         continue
       }
 

@@ -164,6 +164,26 @@ export class EventResponseDto {
   })
   relatedHistoricalCountries?: Array<{ id: string; name: string }>
 
+  @ApiProperty({
+    description: '관련 인물 목록 — PersonEvent 행. 인물별 role(역할) + note(시점 서술, 장문)',
+    required: false,
+  })
+  relatedPersons?: Array<{
+    /** PersonEvent 행 PK */
+    id: string
+    personId: string
+    /** 그 사건에서의 역할 (자유 텍스트) */
+    role?: string | null
+    /** 그 인물 시점의 사건 서술 (장문) — 인물 연보에도 그대로 표시됨 */
+    note?: string | null
+    person?: {
+      id: string
+      name?: string | null
+      surname?: string | null
+      profileImageUrl?: string | null
+    } | null
+  }>
+
   @ApiProperty({ description: '교전 세력 정보 (통합 구조)', required: false })
   belligerents?:
     | {

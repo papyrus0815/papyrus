@@ -323,12 +323,20 @@ export async function seedSerbiaMonarchs(prisma: PrismaService): Promise<void> {
 
       const positionDefinitionId = await getPositionDefId(prisma, reign.positionTitle)
 
+      // 유니크 제약은 (historicalCountryId, regnalNumber). 다른 personId라도
+      // 충돌하므로 제약 키로 lookup. 다른 인물에 이미 점유돼 있으면 경고만 남기고 skip.
       const existing = await prisma.sovereignReign.findFirst({
-        where: { personId, historicalCountryId, regnalNumber: reign.regnalNumber ?? 1 },
+        where: { historicalCountryId, regnalNumber: reign.regnalNumber ?? 1 },
       })
 
       if (existing) {
-        console.log(`    ⏭️  재위 ${reign.regnalNumber ?? 1}: ${reign.countryName}`)
+        if (existing.personId === personId) {
+          console.log(`    ⏭️  재위 ${reign.regnalNumber ?? 1}: ${reign.countryName}`)
+        } else {
+          console.warn(
+            `    ⚠️  재위 ${reign.regnalNumber ?? 1}: ${reign.countryName} — 다른 인물에 이미 점유됨 (skip)`,
+          )
+        }
         continue
       }
 

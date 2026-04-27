@@ -30,10 +30,12 @@ import {
   seedWiveDynasties,
   seedRussiaEmperors,
   seedRomanovDynasty,
+  seedRussiaUnofficialCommittee,
   seedSardiniaItalyMonarchs,
   seedSavoyDynasty,
   seedGermanyEmpireParties,
   seedGermanyReichstagElections,
+  seedAustroPrussianWar,
   seedFrancoPrussianWar,
 } from './seeds'
 
@@ -143,6 +145,9 @@ async function main() {
         // 11. 로마노프 왕조 + 황후 + 관계 시딩
         await seedRomanovDynasty(prisma)
 
+        // 11-1. 비공식위원회(1801–1803) 4인 + 가문 + 인간관계 시딩
+        await seedRussiaUnofficialCommittee(prisma)
+
         // 12. 독일 제국 정당 시딩
         await seedGermanyEmpireParties(prisma)
 
@@ -152,7 +157,10 @@ async function main() {
         // 13. 이벤트 카테고리 시딩
         await seedEventCategories(prisma)
 
-        // 13-1. 보불전쟁(1870–1871) 시딩 — eventCategory + 역사국가들 + 현대국가(프랑스) 의존
+        // 13-1. 보오전쟁(1866) 시딩 — eventCategory + 역사국가들 의존
+        await seedAustroPrussianWar(prisma)
+
+        // 13-2. 보불전쟁(1870–1871) 시딩 — eventCategory + 역사국가들 + 현대국가(프랑스) 의존
         await seedFrancoPrussianWar(prisma)
 
         // 11. 행정 부처 카테고리 시딩 (국방·외교 등)

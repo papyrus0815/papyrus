@@ -305,16 +305,22 @@ export async function seedPrussiaGermanyMonarchs(
         ? new Date(r.endYear, (r.endMonth ?? 1) - 1, r.endDay ?? 1)
         : undefined
 
+      // 유니크 제약 (historicalCountryId, regnalNumber) — 다른 personId라도 충돌하므로 제약 키로 lookup.
       const existingReign = await prisma.sovereignReign.findFirst({
         where: {
-          personId,
           historicalCountryId,
           regnalNumber: r.regnalNumber,
         },
       })
 
       if (existingReign) {
-        console.log(`    ⏭️  재위: ${r.countryName} ${r.positionTitle} (${r.startYear}-${r.endYear ?? '현재'})`)
+        if (existingReign.personId === personId) {
+          console.log(`    ⏭️  재위: ${r.countryName} ${r.positionTitle} (${r.startYear}-${r.endYear ?? '현재'})`)
+        } else {
+          console.warn(
+            `    ⚠️  재위: ${r.countryName} ${r.positionTitle} ${r.regnalNumber ?? ''} — 다른 인물에 이미 점유됨 (skip)`,
+          )
+        }
       } else {
         await prisma.sovereignReign.create({
           data: {

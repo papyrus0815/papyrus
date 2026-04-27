@@ -170,3 +170,43 @@ export interface PersonLifeEventResponseDto {
   createdAt: string
   updatedAt: string
 }
+
+/**
+ * 통합 연보 타임라인 항목 — kind 로 구분.
+ * - 'life-event': 인물 자유 서술형 연보 (PersonLifeEvent)
+ * - 'event-participation': 사건 참여 (PersonEvent + 사건 정보 + 인물 시점 role/note)
+ */
+export interface PersonTimelineLifeEventItem extends PersonLifeEventResponseDto {
+  kind: 'life-event'
+}
+
+export interface PersonTimelineEventParticipationItem {
+  kind: 'event-participation'
+  /** PersonEvent 행 PK */
+  id: string
+  personId: string
+  eventId: string
+  /** 그 사건에서의 역할 (자유 텍스트, 예: "1군단 사령관") */
+  role?: string | null
+  /** 그 인물 시점의 사건 서술 (장문 가능) */
+  note?: string | null
+  createdAt: string
+  updatedAt: string
+  event: {
+    id: string
+    title: string
+    description?: string | null
+    startDate?: string | null
+    startDatePrecision?: string | null
+    endDate?: string | null
+    endDatePrecision?: string | null
+    location?: string | null
+    parentEventId?: string | null
+    categoryId?: string | null
+    category?: { id: string; name: string } | null
+  }
+}
+
+export type PersonTimelineItem =
+  | PersonTimelineLifeEventItem
+  | PersonTimelineEventParticipationItem

@@ -116,6 +116,23 @@ export class EventController {
       relatedHistoricalCountryIds: relatedHistoricalCountryIds.length > 0 ? relatedHistoricalCountryIds : undefined,
       relatedCountries: relatedCountries.length > 0 ? relatedCountries : undefined,
       relatedHistoricalCountries: relatedHistoricalCountries.length > 0 ? relatedHistoricalCountries : undefined,
+      // 참여 인물(PersonEvent) — 인물 시점 role/note(장문) 포함
+      relatedPersons: Array.isArray(event.persons) && event.persons.length > 0
+        ? event.persons.map((pe: any) => ({
+            id: pe.id,
+            personId: pe.personId,
+            role: pe.role ?? null,
+            note: pe.note ?? null,
+            person: pe.person
+              ? {
+                  id: pe.person.id,
+                  name: pe.person.name ?? null,
+                  surname: pe.person.surname ?? null,
+                  profileImageUrl: pe.person.profileImageUrl ?? null,
+                }
+              : null,
+          }))
+        : undefined,
       warCost: event.warCost ?? null,
       cabinetEvents: event.cabinetEvents
         ? event.cabinetEvents.map((ce: any) => ({
@@ -321,6 +338,19 @@ export class EventController {
         },
         eventImages: {
           orderBy: { order: 'asc' },
+        },
+        // 참여 인물(PersonEvent) — 인물 시점의 role/note(장문) 포함
+        persons: {
+          include: {
+            person: {
+              select: {
+                id: true,
+                name: true,
+                surname: true,
+                profileImageUrl: true,
+              },
+            },
+          },
         },
         cabinetEvents: {
           include: {

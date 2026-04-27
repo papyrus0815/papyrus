@@ -16,9 +16,13 @@ import type {
 
 export * as with_government_positions from "./with_government_positions/index";
 export * as dashboard from "./dashboard/index";
+export * as my_evaluations from "./my_evaluations/index";
 export * as tenures from "./tenures/index";
 export * as human_relationships from "./human_relationships/index";
 export * as mentor_lineage from "./mentor_lineage/index";
+export * as my_stats from "./my_stats/index";
+export * as my_traits from "./my_traits/index";
+export * as my_evaluation from "./my_evaluation/index";
 export * as family_tree from "./family_tree/index";
 export * as detail from "./detail/index";
 export * as careers from "./careers/index";

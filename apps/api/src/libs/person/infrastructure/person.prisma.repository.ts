@@ -4024,6 +4024,78 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 인물 통합 연보 타임라인.
+   * - PersonLifeEvent (자유 서술형 연보)
+   * - PersonEvent (참여 사건 + 그 사건에 대한 인물 시점의 role/note)
+   * 두 소스를 시간순으로 merge 해 반환.
+   *
+   * 각 항목은 `kind` 필드로 구분:
+   *   - 'life-event'        → PersonLifeEvent 행
+   *   - 'event-participation' → PersonEvent 행 (event 관계 포함)
+   *
+   * 정렬 키: PersonLifeEvent 는 startDate, PersonEvent 는 event.startDate.
+   * 둘 다 null 인 항목은 배열 뒤로 (createdAt 보조 정렬).
+   */
+  async findPersonLifeTimelineByPersonId(personId: string): Promise<any[]> {
+    const [lifeEvents, eventParticipations] = await Promise.all([
+      this.prisma.personLifeEvent.findMany({
+        where: { personId },
+      }),
+      this.prisma.personEvent.findMany({
+        where: { personId },
+        include: {
+          event: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              startDate: true,
+              startDatePrecision: true,
+              endDate: true,
+              endDatePrecision: true,
+              location: true,
+              parentEventId: true,
+              categoryId: true,
+              category: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+    ])
+
+    const items: Array<{
+      kind: 'life-event' | 'event-participation'
+      sortKey: number
+      payload: any
+    }> = []
+
+    for (const le of lifeEvents) {
+      const t = le.startDate ? new Date(le.startDate as any).getTime() : Number.POSITIVE_INFINITY
+      items.push({
+        kind: 'life-event',
+        sortKey: t,
+        payload: { kind: 'life-event' as const, ...le },
+      })
+    }
+    for (const pe of eventParticipations) {
+      const startDate = (pe as any).event?.startDate
+      const t = startDate ? new Date(startDate as any).getTime() : Number.POSITIVE_INFINITY
+      items.push({
+        kind: 'event-participation',
+        sortKey: t,
+        payload: { kind: 'event-participation' as const, ...pe },
+      })
+    }
+    items.sort((a, b) => {
+      if (a.sortKey !== b.sortKey) return a.sortKey - b.sortKey
+      // 동일 시점일 땐 life-event 우선 (개인사 → 사건 순)
+      if (a.kind !== b.kind) return a.kind === 'life-event' ? -1 : 1
+      return 0
+    })
+    return items.map((i) => i.payload)
+  }
+
+  /**
    * 전역 수반(국가에 속하지 않는 직책: 교황 등) 재임 기록 조회
    * countryId, historicalCountryId가 모두 null인 tenure
    */

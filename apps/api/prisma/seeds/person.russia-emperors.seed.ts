@@ -36,6 +36,12 @@ interface MonarchEntry {
   deathDay?: number
   gender: string
 
+  /** 부친(originalName 으로 lookup, 시드 안에 같이 정의돼 있어야 함) */
+  fatherOriginalName?: string
+  /** 모친(originalName 으로 lookup) */
+  motherOriginalName?: string
+
+  /** 재위 기록. 황제가 아닌 연결고리 인물(예: 황태자·황녀)은 빈 배열 */
   reigns: {
     countryName: string
     positionTitle: string
@@ -54,6 +60,30 @@ interface MonarchEntry {
 }
 
 const MONARCHS: MonarchEntry[] = [
+  // ── 0. 이반 5세 (연결고리 — 표트르 1세의 형, 안나 여제의 부친) ──────────
+  {
+    name: '이반',
+    surname: '로마노프',
+    originalName: 'Ivan V of Russia',
+    regnalName: 'Ivan',
+    biography:
+      '러시아 차르국의 차르(1682-1696). 알렉세이 미하일로비치 차르의 다섯째 아들이자 표트르 1세의 형(이복형). 병약하고 시각·언어 장애를 가졌으나 나리시킨가-밀로슬라프스키가 권력 다툼 끝에 동생 표트르 1세와 공동 차르로 추대되었다(1682). 실권은 누나 소피야 알렉세예브나 섭정공주가 행사했으며, 1689년 표트르 1세가 친정을 시작한 뒤로 형식상 공동 군주로만 남았다. 안나 여제(러시아 제국 4대 황제)와 이반 6세 가계의 시조.',
+    birthYear: 1666, birthMonth: 9, birthDay: 6,
+    deathYear: 1696, deathMonth: 2, deathDay: 8,
+    gender: 'MALE',
+    reigns: [
+      {
+        countryName: '러시아 차르국',
+        positionTitle: '차르',
+        startYear: 1682, startMonth: 5, startDay: 7,
+        endYear: 1696, endMonth: 2, endDay: 8,
+        appointmentMethod: AppointmentMethod.HEREDITARY,
+        endReason: TenureEndReason.DEATH_IN_OFFICE,
+        notes: '동생 표트르 1세와 공동 차르. 실권은 섭정 소피야 → 표트르 1세에게 있었음.',
+      },
+    ],
+  },
+
   // ── 1. 표트르 1세 (대제) ──────────────────────────────────────────
   {
     name: '표트르',
@@ -104,6 +134,35 @@ const MONARCHS: MonarchEntry[] = [
     ],
   },
 
+  // ── 연결고리: 알렉세이 표트로비치 (표트르 1세의 장남, 표트르 2세의 부친) ──
+  {
+    name: '알렉세이',
+    surname: '로마노프',
+    originalName: 'Alexei Petrovich of Russia',
+    biography:
+      '러시아 황태자(차레비치, 1690-1718). 표트르 1세와 첫 황후 예브도키야 로푸히나의 장남. 서구화 개혁에 거부감을 보이고 보수파의 구심점이 되어 부친과 갈등했다. 1716년 빈으로 도주했다가 1718년 송환되어 반역 혐의로 심문 끝에 페트로파블롭스크 요새에서 사망(고문 후유증으로 추정). 표트르 1세 직계 남성 후계 단절의 결정적 사건이며, 그의 아들이 후일 표트르 2세로 즉위했다.',
+    birthYear: 1690, birthMonth: 2, birthDay: 28,
+    deathYear: 1718, deathMonth: 6, deathDay: 26,
+    gender: 'MALE',
+    fatherOriginalName: 'Peter I of Russia',
+    reigns: [],
+  },
+
+  // ── 연결고리: 안나 페트로브나 (표트르 1세의 차녀, 표트르 3세의 모친) ───
+  {
+    name: '안나',
+    surname: '로마노프',
+    originalName: 'Anna Petrovna of Russia',
+    biography:
+      '러시아 황녀(체사레브나, 1708-1728). 표트르 1세와 예카테리나 1세의 차녀. 1725년 홀슈타인-고토르프 공작 카를 프리드리히와 결혼해 독일로 이주했다. 1728년 아들 카를 페터(훗날의 표트르 3세)를 낳은 직후 산후 합병증으로 사망. 그녀의 아들이 외숙모 엘리자베타 여제의 후계자로 지명되어 러시아 황제(표트르 3세)로 즉위함으로써 로마노프 직계 남성 계열을 홀슈타인-고토르프-로마노프 가계로 잇는 결정적 연결고리가 되었다.',
+    birthYear: 1708, birthMonth: 2, birthDay: 7,
+    deathYear: 1728, deathMonth: 5, deathDay: 15,
+    gender: 'FEMALE',
+    fatherOriginalName: 'Peter I of Russia',
+    motherOriginalName: 'Catherine I of Russia',
+    reigns: [],
+  },
+
   // ── 3. 표트르 2세 ─────────────────────────────────────────────────
   {
     name: '표트르',
@@ -115,6 +174,7 @@ const MONARCHS: MonarchEntry[] = [
     birthYear: 1715, birthMonth: 10, birthDay: 23,
     deathYear: 1730, deathMonth: 1, deathDay: 30,
     gender: 'MALE',
+    fatherOriginalName: 'Alexei Petrovich of Russia',
     reigns: [
       {
         countryName: '러시아 제국',
@@ -140,6 +200,7 @@ const MONARCHS: MonarchEntry[] = [
     birthYear: 1693, birthMonth: 2, birthDay: 7,
     deathYear: 1740, deathMonth: 10, deathDay: 28,
     gender: 'FEMALE',
+    fatherOriginalName: 'Ivan V of Russia',
     reigns: [
       {
         countryName: '러시아 제국',
@@ -191,6 +252,8 @@ const MONARCHS: MonarchEntry[] = [
     birthYear: 1709, birthMonth: 12, birthDay: 29,
     deathYear: 1762, deathMonth: 1, deathDay: 5,
     gender: 'FEMALE',
+    fatherOriginalName: 'Peter I of Russia',
+    motherOriginalName: 'Catherine I of Russia',
     reigns: [
       {
         countryName: '러시아 제국',
@@ -216,6 +279,7 @@ const MONARCHS: MonarchEntry[] = [
     birthYear: 1728, birthMonth: 2, birthDay: 21,
     deathYear: 1762, deathMonth: 7, deathDay: 17,
     gender: 'MALE',
+    motherOriginalName: 'Anna Petrovna of Russia',
     reigns: [
       {
         countryName: '러시아 제국',
@@ -267,6 +331,8 @@ const MONARCHS: MonarchEntry[] = [
     birthYear: 1754, birthMonth: 10, birthDay: 1,
     deathYear: 1801, deathMonth: 3, deathDay: 23,
     gender: 'MALE',
+    fatherOriginalName: 'Peter III of Russia',
+    motherOriginalName: 'Catherine II of Russia',
     reigns: [
       {
         countryName: '러시아 제국',
@@ -282,6 +348,19 @@ const MONARCHS: MonarchEntry[] = [
     ],
   },
 
+  // ── 연결고리: 마리야 표도로브나 (파벨 1세의 황후, 알렉1·니콜1의 모친) ──
+  {
+    name: '마리야',
+    surname: '로마노프',
+    originalName: 'Maria Feodorovna (Sophie Dorothea of Württemberg)',
+    biography:
+      '러시아 황후(1796-1801, 1759-1828). 본명 조피 도로테아 폰 뷔르템베르크(Sophie Dorothea of Württemberg). 1776년 파벨 1세와 결혼해 정교회로 개종하면서 마리야 표도로브나로 개명했다. 알렉산드르 1세, 니콜라이 1세를 비롯해 10명의 자녀를 두어 19세기 로마노프 가계의 어머니로 불린다. 남편 파벨 1세 사후(1801) 자선·교육 사업에 헌신해 황실 자선기관(마리야 부서)을 운영했다.',
+    birthYear: 1759, birthMonth: 10, birthDay: 25,
+    deathYear: 1828, deathMonth: 11, deathDay: 5,
+    gender: 'FEMALE',
+    reigns: [],
+  },
+
   // ── 10. 알렉산드르 1세 ───────────────────────────────────────────
   {
     name: '알렉산드르',
@@ -293,6 +372,8 @@ const MONARCHS: MonarchEntry[] = [
     birthYear: 1777, birthMonth: 12, birthDay: 23,
     deathYear: 1825, deathMonth: 12, deathDay: 1,
     gender: 'MALE',
+    fatherOriginalName: 'Paul I of Russia',
+    motherOriginalName: 'Maria Feodorovna (Sophie Dorothea of Württemberg)',
     reigns: [
       {
         countryName: '러시아 제국',
@@ -318,6 +399,8 @@ const MONARCHS: MonarchEntry[] = [
     birthYear: 1796, birthMonth: 7, birthDay: 6,
     deathYear: 1855, deathMonth: 3, deathDay: 2,
     gender: 'MALE',
+    fatherOriginalName: 'Paul I of Russia',
+    motherOriginalName: 'Maria Feodorovna (Sophie Dorothea of Württemberg)',
     reigns: [
       {
         countryName: '러시아 제국',
@@ -343,6 +426,7 @@ const MONARCHS: MonarchEntry[] = [
     birthYear: 1818, birthMonth: 4, birthDay: 29,
     deathYear: 1881, deathMonth: 3, deathDay: 13,
     gender: 'MALE',
+    fatherOriginalName: 'Nicholas I of Russia',
     reigns: [
       {
         countryName: '러시아 제국',
@@ -369,6 +453,7 @@ const MONARCHS: MonarchEntry[] = [
     birthYear: 1845, birthMonth: 3, birthDay: 10,
     deathYear: 1894, deathMonth: 11, deathDay: 1,
     gender: 'MALE',
+    fatherOriginalName: 'Alexander II of Russia',
     reigns: [
       {
         countryName: '러시아 제국',
@@ -394,6 +479,7 @@ const MONARCHS: MonarchEntry[] = [
     birthYear: 1868, birthMonth: 5, birthDay: 18,
     deathYear: 1918, deathMonth: 7, deathDay: 17,
     gender: 'MALE',
+    fatherOriginalName: 'Alexander III of Russia',
     reigns: [
       {
         countryName: '러시아 제국',
@@ -414,6 +500,9 @@ export async function seedRussiaEmperors(
   prisma: PrismaService,
 ): Promise<void> {
   console.log('\n👑 러시아 제국 황제 시딩 시작...')
+
+  /** Pass 1 결과: originalName → personId 매핑. Pass 2(부모 연결)에서 사용. */
+  const idByOriginalName = new Map<string, string>()
 
   for (const m of MONARCHS) {
     // ── 인물 생성 또는 확인 ──────────────────────────────────────
@@ -452,6 +541,8 @@ export async function seedRussiaEmperors(
       console.log(`  ✅ ${m.originalName}`)
     }
 
+    idByOriginalName.set(m.originalName, personId)
+
     // ── 재위 기록 생성 ─────────────────────────────────────────
     for (const r of m.reigns) {
       const historicalCountryId = await getHistoricalCountryId(prisma, r.countryName)
@@ -467,16 +558,22 @@ export async function seedRussiaEmperors(
         ? new Date(r.endYear, (r.endMonth ?? 1) - 1, r.endDay ?? 1)
         : undefined
 
+      // 유니크 제약 (historicalCountryId, regnalNumber) — 다른 personId라도 충돌하므로 제약 키로 lookup.
       const existingReign = await prisma.sovereignReign.findFirst({
         where: {
-          personId,
           historicalCountryId,
           regnalNumber: r.regnalNumber,
         },
       })
 
       if (existingReign) {
-        console.log(`    ⏭️  재위: ${r.countryName} ${r.positionTitle} (${r.startYear}-${r.endYear ?? '현재'})`)
+        if (existingReign.personId === personId) {
+          console.log(`    ⏭️  재위: ${r.countryName} ${r.positionTitle} (${r.startYear}-${r.endYear ?? '현재'})`)
+        } else {
+          console.warn(
+            `    ⚠️  재위: ${r.countryName} ${r.positionTitle} ${r.regnalNumber ?? ''} — 다른 인물에 이미 점유됨 (skip)`,
+          )
+        }
       } else {
         await prisma.sovereignReign.create({
           data: {
@@ -497,6 +594,43 @@ export async function seedRussiaEmperors(
       }
     }
   }
+
+  // ── Pass 2: 부모 연결 ──────────────────────────────────────────────
+  console.log('\n👨‍👩‍👧 부모-자식 연결 적용 중...')
+  let linked = 0
+  for (const m of MONARCHS) {
+    if (!m.fatherOriginalName && !m.motherOriginalName) continue
+    const personId = idByOriginalName.get(m.originalName)
+    if (!personId) continue
+
+    const fatherId = m.fatherOriginalName
+      ? (idByOriginalName.get(m.fatherOriginalName) ?? null)
+      : undefined
+    const motherId = m.motherOriginalName
+      ? (idByOriginalName.get(m.motherOriginalName) ?? null)
+      : undefined
+
+    if (m.fatherOriginalName && fatherId == null) {
+      console.warn(`    ⚠️  부친 lookup 실패: ${m.originalName} ← ${m.fatherOriginalName}`)
+    }
+    if (m.motherOriginalName && motherId == null) {
+      console.warn(`    ⚠️  모친 lookup 실패: ${m.originalName} ← ${m.motherOriginalName}`)
+    }
+
+    const data: { fatherId?: string; motherId?: string } = {}
+    if (fatherId) data.fatherId = fatherId
+    if (motherId) data.motherId = motherId
+    if (Object.keys(data).length === 0) continue
+
+    await prisma.person.update({ where: { id: personId }, data })
+    const parts = [
+      data.fatherId ? `부 ${m.fatherOriginalName}` : null,
+      data.motherId ? `모 ${m.motherOriginalName}` : null,
+    ].filter(Boolean)
+    console.log(`    🔗 ${m.originalName} ← ${parts.join(', ')}`)
+    linked += 1
+  }
+  console.log(`✅ 부모 연결 ${linked}건`)
 
   console.log(`\n✅ 러시아 제국 황제 시딩 완료 (${MONARCHS.length}명)\n`)
 }

@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
-import { AttachmentOwner, EventMethod, PersonHumanRelationshipType, PersonRelationshipTag } from '@prisma/client'
+import { AttachmentOwner, EventMethod, PersonHumanRelationshipType, PersonRelationshipTag, PersonTrait } from '@prisma/client'
 import {
   IPersonRepository,
   CreatePersonData,
@@ -46,6 +46,12 @@ import {
   AllCareersResponseDto,
   CreatePersonHumanRelationshipDto,
   UpdatePersonHumanRelationshipDto,
+  PersonStatsResponseDto,
+  PersonTraitAssignmentDto,
+  UpsertPersonStatsDto,
+  UpsertPersonTraitsDto,
+  UpsertPersonEvaluationDto,
+  PersonEvaluationResponseDto,
 } from '../presentation/dto'
 
 /**
@@ -520,6 +526,15 @@ export class PersonService {
   }
 
   /**
+   * 인물 통합 연보 타임라인 (자유 연보 + 참여 사건).
+   * - PersonLifeEvent (자유 서술형) 와 PersonEvent (참여 사건 + 인물 시점 role/note) 를
+   *   시간순 merge → kind 로 구분된 단일 배열 반환.
+   */
+  async findPersonLifeTimelineByPersonId(personId: string): Promise<any[]> {
+    return this.personRepository.findPersonLifeTimelineByPersonId(personId)
+  }
+
+  /**
    * 인물의 재임 기록만 조회 (수정 페이지 경력 로딩용)
    */
   async findTenuresByPersonId(personId: string): Promise<any[]> {
@@ -830,6 +845,9 @@ export class PersonService {
       id: string
       relationshipType: PersonHumanRelationshipType
       affinityLevel: number | null
+      trustLevel?: number | null
+      powerDynamic?: number | null
+      formality?: number | null
       isMutual: boolean
       startDate: Date | null
       endDate: Date | null
@@ -850,6 +868,17 @@ export class PersonService {
           startDate: Date | null
           endDate: Date | null
         }
+      }[]
+      phases?: {
+        id: string
+        startDate: Date | null
+        endDate: Date | null
+        affinityLevel: number | null
+        trustLevel: number | null
+        powerDynamic: number | null
+        formality: number | null
+        label: string | null
+        note: string | null
       }[]
     },
     subjectPersonId: string,
@@ -877,6 +906,9 @@ export class PersonService {
       id: rel.id,
       relationshipType: rel.relationshipType,
       affinityLevel: rel.affinityLevel,
+      trustLevel: rel.trustLevel ?? null,
+      powerDynamic: rel.powerDynamic ?? null,
+      formality: rel.formality ?? null,
       isMutual: rel.isMutual,
       startDate: rel.startDate?.toISOString() ?? null,
       endDate: rel.endDate?.toISOString() ?? null,
@@ -898,6 +930,17 @@ export class PersonService {
           startDate: s.lifeEvent.startDate?.toISOString() ?? null,
           endDate: s.lifeEvent.endDate?.toISOString() ?? null,
         },
+      })),
+      phases: (rel.phases ?? []).map((p) => ({
+        id: p.id,
+        startDate: p.startDate?.toISOString() ?? null,
+        endDate: p.endDate?.toISOString() ?? null,
+        affinityLevel: p.affinityLevel,
+        trustLevel: p.trustLevel,
+        powerDynamic: p.powerDynamic,
+        formality: p.formality,
+        label: p.label,
+        note: p.note,
       })),
     }
   }
@@ -956,6 +999,7 @@ export class PersonService {
         },
       },
     },
+    phases: true,
   } as const
 
   /**
@@ -1055,6 +1099,9 @@ export class PersonService {
           relationshipType: dto.relationshipType,
           isMutual,
           affinityLevel: dto.affinityLevel ?? null,
+          trustLevel: dto.trustLevel ?? null,
+          powerDynamic: dto.powerDynamic ?? null,
+          formality: dto.formality ?? null,
           startDate: dto.startDate ? new Date(dto.startDate) : null,
           endDate: dto.endDate ? new Date(dto.endDate) : null,
           note: dto.note ?? null,
@@ -1154,7 +1201,13 @@ export class PersonService {
             relationshipType: dto.relationshipType ?? undefined,
             isMutual: nextIsMutual,
             // affinityLevel은 null로 명시적 초기화 가능 — undefined만 "미변경"
-            affinityLevel: dto.affinityLevel === undefined ? undefined : dto.affinityLevel,
+            affinityLevel:
+              dto.affinityLevel === undefined ? undefined : dto.affinityLevel,
+            trustLevel:
+              dto.trustLevel === undefined ? undefined : dto.trustLevel,
+            powerDynamic:
+              dto.powerDynamic === undefined ? undefined : dto.powerDynamic,
+            formality: dto.formality === undefined ? undefined : dto.formality,
             startDate:
               dto.startDate === undefined ? undefined : dto.startDate ? new Date(dto.startDate) : null,
             endDate: dto.endDate === undefined ? undefined : dto.endDate ? new Date(dto.endDate) : null,
@@ -1216,6 +1269,164 @@ export class PersonService {
       throw new ForbiddenException('이 인물과 연결된 관계만 삭제할 수 있습니다.')
     }
     await this.prisma.personHumanRelationship.delete({ where: { id: relationshipId } })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Phase (시기별 스냅샷) CRUD
+  // ─────────────────────────────────────────────────────────────────────────
+
+  private async assertOwnsRelationship(
+    subjectPersonId: string,
+    relationshipId: string,
+    accountId?: string,
+  ) {
+    await this.findById(subjectPersonId, accountId)
+    const rel = await this.prisma.personHumanRelationship.findUnique({
+      where: { id: relationshipId },
+    })
+    if (!rel) {
+      throw new NotFoundException(
+        `인간관계를 찾을 수 없습니다 (ID: ${relationshipId})`,
+      )
+    }
+    if (
+      rel.fromPersonId !== subjectPersonId &&
+      rel.toPersonId !== subjectPersonId
+    ) {
+      throw new ForbiddenException(
+        '이 인물과 연결된 관계만 수정할 수 있습니다.',
+      )
+    }
+    return rel
+  }
+
+  private mapPhase(p: {
+    id: string
+    startDate: Date | null
+    endDate: Date | null
+    affinityLevel: number | null
+    trustLevel: number | null
+    powerDynamic: number | null
+    formality: number | null
+    label: string | null
+    note: string | null
+  }) {
+    return {
+      id: p.id,
+      startDate: p.startDate?.toISOString() ?? null,
+      endDate: p.endDate?.toISOString() ?? null,
+      affinityLevel: p.affinityLevel,
+      trustLevel: p.trustLevel,
+      powerDynamic: p.powerDynamic,
+      formality: p.formality,
+      label: p.label,
+      note: p.note,
+    }
+  }
+
+  async createRelationshipPhase(
+    subjectPersonId: string,
+    relationshipId: string,
+    dto: {
+      startDate?: string | null
+      endDate?: string | null
+      affinityLevel?: number | null
+      trustLevel?: number | null
+      powerDynamic?: number | null
+      formality?: number | null
+      label?: string | null
+      note?: string | null
+    },
+    accountId?: string,
+  ) {
+    await this.assertOwnsRelationship(subjectPersonId, relationshipId, accountId)
+    const created = await this.prisma.personHumanRelationshipPhase.create({
+      data: {
+        relationshipId,
+        startDate: dto.startDate ? new Date(dto.startDate) : null,
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
+        affinityLevel: dto.affinityLevel ?? null,
+        trustLevel: dto.trustLevel ?? null,
+        powerDynamic: dto.powerDynamic ?? null,
+        formality: dto.formality ?? null,
+        label: dto.label ?? null,
+        note: dto.note ?? null,
+      },
+    })
+    return this.mapPhase(created)
+  }
+
+  async updateRelationshipPhase(
+    subjectPersonId: string,
+    relationshipId: string,
+    phaseId: string,
+    dto: {
+      startDate?: string | null
+      endDate?: string | null
+      affinityLevel?: number | null
+      trustLevel?: number | null
+      powerDynamic?: number | null
+      formality?: number | null
+      label?: string | null
+      note?: string | null
+    },
+    accountId?: string,
+  ) {
+    await this.assertOwnsRelationship(subjectPersonId, relationshipId, accountId)
+    const existing = await this.prisma.personHumanRelationshipPhase.findUnique({
+      where: { id: phaseId },
+    })
+    if (!existing || existing.relationshipId !== relationshipId) {
+      throw new NotFoundException(
+        `관계 시기 스냅샷을 찾을 수 없습니다 (ID: ${phaseId})`,
+      )
+    }
+    const updated = await this.prisma.personHumanRelationshipPhase.update({
+      where: { id: phaseId },
+      data: {
+        startDate:
+          dto.startDate === undefined
+            ? undefined
+            : dto.startDate
+              ? new Date(dto.startDate)
+              : null,
+        endDate:
+          dto.endDate === undefined
+            ? undefined
+            : dto.endDate
+              ? new Date(dto.endDate)
+              : null,
+        affinityLevel:
+          dto.affinityLevel === undefined ? undefined : dto.affinityLevel,
+        trustLevel: dto.trustLevel === undefined ? undefined : dto.trustLevel,
+        powerDynamic:
+          dto.powerDynamic === undefined ? undefined : dto.powerDynamic,
+        formality: dto.formality === undefined ? undefined : dto.formality,
+        label: dto.label === undefined ? undefined : dto.label,
+        note: dto.note === undefined ? undefined : dto.note,
+      },
+    })
+    return this.mapPhase(updated)
+  }
+
+  async deleteRelationshipPhase(
+    subjectPersonId: string,
+    relationshipId: string,
+    phaseId: string,
+    accountId?: string,
+  ) {
+    await this.assertOwnsRelationship(subjectPersonId, relationshipId, accountId)
+    const existing = await this.prisma.personHumanRelationshipPhase.findUnique({
+      where: { id: phaseId },
+    })
+    if (!existing || existing.relationshipId !== relationshipId) {
+      throw new NotFoundException(
+        `관계 시기 스냅샷을 찾을 수 없습니다 (ID: ${phaseId})`,
+      )
+    }
+    await this.prisma.personHumanRelationshipPhase.delete({
+      where: { id: phaseId },
+    })
   }
 
   /**
@@ -1321,6 +1532,291 @@ export class PersonService {
       rootPersonId: personId,
       nodes,
       edges,
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // 인물 능력치(6축) — 사용자별 평가
+  // ────────────────────────────────────────────────────────────────────
+
+  /** 인물 존재만 검증. 인물 소유와 평가는 분리 — 다른 사용자가 등록한 인물에도 내 평가 가능. */
+  private async assertPersonExistsForRating(personId: string) {
+    const exists = await this.prisma.person.findUnique({
+      where: { id: personId },
+      select: { id: true },
+    })
+    if (!exists) {
+      throw new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${personId})`)
+    }
+  }
+
+  private static toStatsResponse(row: {
+    id: string
+    personId: string
+    accountId: string
+    politics: number | null
+    military: number | null
+    diplomacy: number | null
+    intellect: number | null
+    charisma: number | null
+    administration: number | null
+    notes: string | null
+    createdAt: Date
+    updatedAt: Date
+  }): PersonStatsResponseDto {
+    return {
+      id: row.id,
+      personId: row.personId,
+      accountId: row.accountId,
+      politics: row.politics,
+      military: row.military,
+      diplomacy: row.diplomacy,
+      intellect: row.intellect,
+      charisma: row.charisma,
+      administration: row.administration,
+      notes: row.notes,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }
+  }
+
+  /** 본인 능력치 평가 조회 (없으면 null) */
+  async findMyStats(
+    personId: string,
+    accountId: string,
+  ): Promise<PersonStatsResponseDto | null> {
+    await this.assertPersonExistsForRating(personId)
+    const row = await this.prisma.personStats.findUnique({
+      where: { person_stats_person_account_key: { personId, accountId } },
+    })
+    return row ? PersonService.toStatsResponse(row) : null
+  }
+
+  /**
+   * 본인 능력치 평가 upsert.
+   * 필드 키가 dto에 명시되어 있으면 그 값으로 (null도 명시적 초기화), 생략된 키는 기존값 유지.
+   */
+  async upsertMyStats(
+    personId: string,
+    accountId: string,
+    dto: UpsertPersonStatsDto,
+  ): Promise<PersonStatsResponseDto> {
+    await this.assertPersonExistsForRating(personId)
+    const data: {
+      politics?: number | null
+      military?: number | null
+      diplomacy?: number | null
+      intellect?: number | null
+      charisma?: number | null
+      administration?: number | null
+      notes?: string | null
+    } = {}
+    if ('politics' in dto) data.politics = dto.politics ?? null
+    if ('military' in dto) data.military = dto.military ?? null
+    if ('diplomacy' in dto) data.diplomacy = dto.diplomacy ?? null
+    if ('intellect' in dto) data.intellect = dto.intellect ?? null
+    if ('charisma' in dto) data.charisma = dto.charisma ?? null
+    if ('administration' in dto) data.administration = dto.administration ?? null
+    if ('notes' in dto) data.notes = dto.notes ?? null
+
+    const row = await this.prisma.personStats.upsert({
+      where: { person_stats_person_account_key: { personId, accountId } },
+      create: {
+        personId,
+        accountId,
+        ...data,
+      },
+      update: data,
+    })
+    return PersonService.toStatsResponse(row)
+  }
+
+  /** 본인 능력치 삭제 (평가 자체 제거) */
+  async deleteMyStats(personId: string, accountId: string): Promise<void> {
+    await this.prisma.personStats.deleteMany({
+      where: { personId, accountId },
+    })
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // 인물 성격 태그 — 사용자별 다중 부착
+  // ────────────────────────────────────────────────────────────────────
+
+  /** 본인이 부착한 성격 태그 목록 */
+  async findMyTraits(
+    personId: string,
+    accountId: string,
+  ): Promise<PersonTraitAssignmentDto[]> {
+    await this.assertPersonExistsForRating(personId)
+    const rows = await this.prisma.personTraitAssignment.findMany({
+      where: { personId, accountId },
+      orderBy: { createdAt: 'asc' },
+    })
+    return rows.map((r) => ({
+      id: r.id,
+      trait: r.trait,
+      intensity: r.intensity,
+      note: r.note,
+    }))
+  }
+
+  /**
+   * 성격 태그 전체 교체 — 트랜잭션으로 deleteMany + createMany.
+   * 빈 배열 = 모두 제거.
+   */
+  async upsertMyTraits(
+    personId: string,
+    accountId: string,
+    dto: UpsertPersonTraitsDto,
+  ): Promise<PersonTraitAssignmentDto[]> {
+    await this.assertPersonExistsForRating(personId)
+    return this.prisma.$transaction(async (tx) => {
+      await tx.personTraitAssignment.deleteMany({
+        where: { personId, accountId },
+      })
+      if (dto.items.length > 0) {
+        await tx.personTraitAssignment.createMany({
+          data: dto.items.map((it) => ({
+            personId,
+            accountId,
+            trait: it.trait as PersonTrait,
+            intensity: it.intensity ?? null,
+            note: it.note ?? null,
+          })),
+        })
+      }
+      const rows = await tx.personTraitAssignment.findMany({
+        where: { personId, accountId },
+        orderBy: { createdAt: 'asc' },
+      })
+      return rows.map((r) => ({
+        id: r.id,
+        trait: r.trait,
+        intensity: r.intensity,
+        note: r.note,
+      }))
+    })
+  }
+
+  /**
+   * 능력치 + 성격 태그 합본 upsert (단일 트랜잭션).
+   * stats / traits 둘 다 옵셔널 — 한쪽만 보내면 그쪽만 변경.
+   * 부분 실패 없음: 두 작업이 모두 성공하거나 모두 롤백.
+   */
+  async upsertMyEvaluation(
+    personId: string,
+    accountId: string,
+    dto: UpsertPersonEvaluationDto,
+  ): Promise<PersonEvaluationResponseDto> {
+    await this.assertPersonExistsForRating(personId)
+
+    const statsDto = dto.stats
+    const traitsDto = dto.traits
+
+    return this.prisma.$transaction(async (tx) => {
+      // 능력치
+      let statsRow = null
+      if (statsDto) {
+        const data: {
+          politics?: number | null
+          military?: number | null
+          diplomacy?: number | null
+          intellect?: number | null
+          charisma?: number | null
+          administration?: number | null
+          notes?: string | null
+        } = {}
+        if ('politics' in statsDto) data.politics = statsDto.politics ?? null
+        if ('military' in statsDto) data.military = statsDto.military ?? null
+        if ('diplomacy' in statsDto) data.diplomacy = statsDto.diplomacy ?? null
+        if ('intellect' in statsDto) data.intellect = statsDto.intellect ?? null
+        if ('charisma' in statsDto) data.charisma = statsDto.charisma ?? null
+        if ('administration' in statsDto)
+          data.administration = statsDto.administration ?? null
+        if ('notes' in statsDto) data.notes = statsDto.notes ?? null
+        statsRow = await tx.personStats.upsert({
+          where: { person_stats_person_account_key: { personId, accountId } },
+          create: { personId, accountId, ...data },
+          update: data,
+        })
+      } else {
+        statsRow = await tx.personStats.findUnique({
+          where: { person_stats_person_account_key: { personId, accountId } },
+        })
+      }
+
+      // 태그
+      if (traitsDto) {
+        await tx.personTraitAssignment.deleteMany({
+          where: { personId, accountId },
+        })
+        if (traitsDto.items.length > 0) {
+          await tx.personTraitAssignment.createMany({
+            data: traitsDto.items.map((it) => ({
+              personId,
+              accountId,
+              trait: it.trait as PersonTrait,
+              intensity: it.intensity ?? null,
+              note: it.note ?? null,
+            })),
+          })
+        }
+      }
+
+      const traitRows = await tx.personTraitAssignment.findMany({
+        where: { personId, accountId },
+        orderBy: { createdAt: 'asc' },
+      })
+
+      return {
+        stats: statsRow ? PersonService.toStatsResponse(statsRow) : null,
+        traits: traitRows.map((r) => ({
+          id: r.id,
+          trait: r.trait,
+          intensity: r.intensity,
+          note: r.note,
+        })),
+      }
+    })
+  }
+
+  /** 능력치 + 성격 태그 일괄 삭제 (단일 트랜잭션). */
+  async deleteMyEvaluation(
+    personId: string,
+    accountId: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.personStats.deleteMany({ where: { personId, accountId } })
+      await tx.personTraitAssignment.deleteMany({
+        where: { personId, accountId },
+      })
+    })
+  }
+
+  /**
+   * 사용자의 모든 인물 평가(stats + traits)를 한 번에 조회.
+   * 인물 리스트에서 평가 indicator·정렬·필터에 사용.
+   */
+  async findAllMyEvaluations(accountId: string): Promise<{
+    stats: PersonStatsResponseDto[]
+    traits: Array<PersonTraitAssignmentDto & { personId: string }>
+  }> {
+    const [statsRows, traitRows] = await Promise.all([
+      this.prisma.personStats.findMany({ where: { accountId } }),
+      this.prisma.personTraitAssignment.findMany({
+        where: { accountId },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ])
+    return {
+      stats: statsRows.map((r) => PersonService.toStatsResponse(r)),
+      traits: traitRows.map((r) => ({
+        id: r.id,
+        personId: r.personId,
+        trait: r.trait,
+        intensity: r.intensity,
+        note: r.note,
+      })),
     }
   }
 }

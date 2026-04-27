@@ -43,7 +43,12 @@ import {
   PersonEducationResponseDto,
   PersonAwardResponseDto,
   CreatePersonHumanRelationshipDto,
+  CreatePersonHumanRelationshipPhaseDto,
   UpdatePersonHumanRelationshipDto,
+  UpdatePersonHumanRelationshipPhaseDto,
+  UpsertPersonStatsDto,
+  UpsertPersonTraitsDto,
+  UpsertPersonEvaluationDto,
 } from './dto'
 
 export interface PersonCountByModernCountry {
@@ -116,6 +121,17 @@ export class PersonController {
   }
 
   /**
+   * 사용자의 모든 인물 평가(stats + traits) 일괄 조회.
+   * 인물 리스트의 평가 indicator·정렬·필터에 사용 — 한 번 호출로 N+1 방지.
+   * 주의: 이 라우트는 `:id` 보다 위에 위치해야 함 (NestJS 라우트 매칭 순서).
+   */
+  @Get('my-evaluations')
+  async getAllMyEvaluations(@Request() req: any): Promise<any> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.findAllMyEvaluations(accountId)
+  }
+
+  /**
    * ID로 인물 조회 (본인 등록분만)
    */
   @Get(':id')
@@ -178,6 +194,59 @@ export class PersonController {
     await this.personService.deleteHumanRelationship(personId, relationshipId, accountId)
   }
 
+  // ── 관계 시기 스냅샷(phase) CRUD ────────────────────────────────────
+  /** 시기별 스냅샷 추가 — 한 관계에 N개의 phase로 변화 기록 */
+  @Post(':personId/human-relationships/:relationshipId/phases')
+  async createRelationshipPhase(
+    @Param('personId') personId: string,
+    @Param('relationshipId') relationshipId: string,
+    @Body() dto: CreatePersonHumanRelationshipPhaseDto,
+    @Request() req: any,
+  ): Promise<any> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.createRelationshipPhase(
+      personId,
+      relationshipId,
+      dto,
+      accountId,
+    )
+  }
+
+  @Put(':personId/human-relationships/:relationshipId/phases/:phaseId')
+  async updateRelationshipPhase(
+    @Param('personId') personId: string,
+    @Param('relationshipId') relationshipId: string,
+    @Param('phaseId') phaseId: string,
+    @Body() dto: UpdatePersonHumanRelationshipPhaseDto,
+    @Request() req: any,
+  ): Promise<any> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.updateRelationshipPhase(
+      personId,
+      relationshipId,
+      phaseId,
+      dto,
+      accountId,
+    )
+  }
+
+  @Delete(':personId/human-relationships/:relationshipId/phases/:phaseId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteRelationshipPhase(
+    @Param('personId') personId: string,
+    @Param('relationshipId') relationshipId: string,
+    @Param('phaseId') phaseId: string,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.personService.deleteRelationshipPhase(
+      personId,
+      relationshipId,
+      phaseId,
+      accountId,
+    )
+  }
+
   /**
    * 멘토 계보 — 인물 중심으로 위쪽 스승 체인과 아래쪽 제자 체인을 깊이 우선 수집
    */
@@ -188,6 +257,81 @@ export class PersonController {
   ): Promise<any> {
     const accountId = req.user?.id ?? req.user?.sub
     return this.personService.findMentorLineage(id, accountId)
+  }
+
+  // ── 인물 능력치 (사용자별 평가) ───────────────────────────────────
+  /** 본인의 능력치 평가 조회 (없으면 null) */
+  @Get(':id/my-stats')
+  async getMyStats(@Param('id') id: string, @Request() req: any): Promise<any> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.findMyStats(id, accountId)
+  }
+
+  /** 본인의 능력치 평가 upsert */
+  @Put(':id/my-stats')
+  async upsertMyStats(
+    @Param('id') id: string,
+    @Body() dto: UpsertPersonStatsDto,
+    @Request() req: any,
+  ): Promise<any> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.upsertMyStats(id, accountId, dto)
+  }
+
+  /** 본인의 능력치 평가 삭제 */
+  @Delete(':id/my-stats')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteMyStats(
+    @Param('id') id: string,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.personService.deleteMyStats(id, accountId)
+  }
+
+  // ── 인물 성격 태그 (사용자별 다중) ──────────────────────────────
+  /** 본인이 부착한 성격 태그 목록 */
+  @Get(':id/my-traits')
+  async getMyTraits(@Param('id') id: string, @Request() req: any): Promise<any> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.findMyTraits(id, accountId)
+  }
+
+  /** 본인의 성격 태그 전체 교체 */
+  @Put(':id/my-traits')
+  async upsertMyTraits(
+    @Param('id') id: string,
+    @Body() dto: UpsertPersonTraitsDto,
+    @Request() req: any,
+  ): Promise<any> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.upsertMyTraits(id, accountId, dto)
+  }
+
+  // ── 능력치 + 성격 태그 합본 (단일 트랜잭션) ──────────────────
+  /**
+   * 능력치 + 성격 태그를 한 트랜잭션으로 upsert.
+   * stats/traits 중 한쪽만 보내면 그쪽만 업데이트.
+   */
+  @Put(':id/my-evaluation')
+  async upsertMyEvaluation(
+    @Param('id') id: string,
+    @Body() dto: UpsertPersonEvaluationDto,
+    @Request() req: any,
+  ): Promise<any> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.upsertMyEvaluation(id, accountId, dto)
+  }
+
+  /** 능력치 + 성격 태그 일괄 삭제 */
+  @Delete(':id/my-evaluation')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteMyEvaluation(
+    @Param('id') id: string,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.personService.deleteMyEvaluation(id, accountId)
   }
 
   /**

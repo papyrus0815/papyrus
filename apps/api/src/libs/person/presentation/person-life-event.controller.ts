@@ -17,6 +17,7 @@ import { PersonService } from '../application/person.service'
 import {
   CreatePersonLifeEventDto,
   PersonLifeEventResponseDto,
+  PersonTimelineItem,
   UpdatePersonLifeEventDto,
 } from './dto'
 
@@ -52,6 +53,30 @@ export class PersonLifeEventController {
     @Query('limit') limit?: string,
   ): Promise<PersonLifeEventResponseDto[]> {
     const rows = await this.personService.findPersonLifeEventsByPersonId(personId)
+    const parsed = limit ? Number.parseInt(limit, 10) : NaN
+    const capped = Number.isFinite(parsed) && parsed > 0
+      ? Math.min(parsed, 200)
+      : null
+    const sliced = capped != null ? rows.slice(0, capped) : rows
+    return sliced.map(serializeBigInt)
+  }
+
+  /**
+   * 인물 통합 연보 타임라인 — 자유 서술형 연보 + 참여 사건 시간순 merge.
+   *
+   * 응답: `PersonTimelineItem[]`
+   *   - `kind: 'life-event'` → PersonLifeEvent (자유 연보)
+   *   - `kind: 'event-participation'` → PersonEvent + 사건 정보 + 인물 시점 role/note
+   *
+   * 정렬: PersonLifeEvent.startDate 또는 event.startDate 오름차순. 둘 다 null 이면 뒤로.
+   * `limit`: 동일 — 반환 개수 상한(기본 미제한, 상한 200).
+   */
+  @Get('timeline/by-person/:personId')
+  async timelineByPerson(
+    @Param('personId') personId: string,
+    @Query('limit') limit?: string,
+  ): Promise<PersonTimelineItem[]> {
+    const rows = await this.personService.findPersonLifeTimelineByPersonId(personId)
     const parsed = limit ? Number.parseInt(limit, 10) : NaN
     const capped = Number.isFinite(parsed) && parsed > 0
       ? Math.min(parsed, 200)

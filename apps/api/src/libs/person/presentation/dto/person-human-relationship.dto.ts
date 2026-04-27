@@ -28,13 +28,37 @@ export class CreatePersonHumanRelationshipDto {
   @IsEnum(PersonHumanRelationshipType)
   relationshipType!: PersonHumanRelationshipType
 
-  /** 친밀도 -2..+2, 미설정 가능 */
+  /** 친밀도 -2..+2, 미설정(NULL) = 기록 없음 */
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(-2)
   @Max(2)
   affinityLevel?: number | null
+
+  /** 신뢰도 -2..+2 — 친밀도와 분리. NULL = 기록 없음 */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-2)
+  @Max(2)
+  trustLevel?: number | null
+
+  /** 권력 비대칭 -2..+2 (from 인물 기준). NULL = 해당 없음 */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-2)
+  @Max(2)
+  powerDynamic?: number | null
+
+  /** 격식 -2..+2. NULL = 기록 없음 */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-2)
+  @Max(2)
+  formality?: number | null
 
   @IsOptional()
   @IsString()
@@ -88,6 +112,27 @@ export class UpdatePersonHumanRelationshipDto {
   affinityLevel?: number | null
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-2)
+  @Max(2)
+  trustLevel?: number | null
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-2)
+  @Max(2)
+  powerDynamic?: number | null
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-2)
+  @Max(2)
+  formality?: number | null
+
+  @IsOptional()
   @IsString()
   startDate?: string | null
 
@@ -122,3 +167,55 @@ export class UpdatePersonHumanRelationshipDto {
   @IsUUID('all', { each: true })
   sourceLifeEventIds?: string[]
 }
+
+/**
+ * 인간관계의 시기별 스냅샷(phase) 생성/수정 DTO.
+ * 한 관계가 시간에 따라 affinity·신뢰·권력·격식이 달라지는 변화를 기록.
+ */
+export class CreatePersonHumanRelationshipPhaseDto {
+  @IsOptional()
+  @IsString()
+  startDate?: string | null
+
+  @IsOptional()
+  @IsString()
+  endDate?: string | null
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-2)
+  @Max(2)
+  affinityLevel?: number | null
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-2)
+  @Max(2)
+  trustLevel?: number | null
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-2)
+  @Max(2)
+  powerDynamic?: number | null
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(-2)
+  @Max(2)
+  formality?: number | null
+
+  @IsOptional()
+  @IsString()
+  label?: string | null
+
+  @IsOptional()
+  @IsString()
+  note?: string | null
+}
+
+export class UpdatePersonHumanRelationshipPhaseDto extends CreatePersonHumanRelationshipPhaseDto {}
