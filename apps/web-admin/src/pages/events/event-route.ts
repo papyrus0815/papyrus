@@ -12,9 +12,8 @@ export const eventPageRoute: RouteObject = {
     {
       index: true,
       lazy: async () => {
-        const { EventsCatalogPageRefactored } =
-          await import('./list/events.page.ui.refactored')
-        return { Component: EventsCatalogPageRefactored }
+        const { EventsCatalogPage } = await import('./list/events.page')
+        return { Component: EventsCatalogPage }
       },
     },
     {
