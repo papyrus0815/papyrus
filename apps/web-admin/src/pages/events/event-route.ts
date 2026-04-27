@@ -9,13 +9,7 @@ import { RouteObject } from 'react-router-dom'
 export const eventPageRoute: RouteObject = {
   path: 'events',
   children: [
-    {
-      index: true,
-      lazy: async () => {
-        const { EventsCatalogPage } = await import('./list/events.page')
-        return { Component: EventsCatalogPage }
-      },
-    },
+    // index(/events) 페이지는 재설계 중 — 추후 별도로 추가
     {
       path: 'create',
       lazy: async () => {
