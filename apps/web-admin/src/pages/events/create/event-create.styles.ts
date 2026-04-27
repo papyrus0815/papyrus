@@ -1,7 +1,7 @@
 /**
  * EventCreatePage 스타일 컴포넌트
  */
-import styled, { keyframes } from 'styled-components'
+import styled, { keyframes, type DefaultTheme } from 'styled-components'
 
 import type { HistoricalEventCategory } from './events.types'
 import type { MentionEntityType } from '@/shared/lib/mention/mention-system'
@@ -13,48 +13,125 @@ import { MENTION_TYPE_CONFIG } from '@/shared/lib/mention/mention-system'
 export const FORM_FIELD_MAX_WIDTH = '1200px'
 
 // ============================================
-// 메인 색상 변수 (여기서 한 번에 변경 가능)
+// 메인 색상 변수 (라이트/다크 분리 — getC(theme)로 접근)
 // ============================================
-export const COLORS = {
-  // 메인 보라색 계열
+type ColorSet = {
   primary: {
-    main: '#8b5cf6', // 메인 보라색
-    light: '#a78bfa', // 밝은 보라색
-    dark: '#7c3aed', // 어두운 보라색
+    main: string
+    light: string
+    dark: string
+    gradient: string
+    gradientFull: string
+  }
+  background: {
+    page: string
+    content: string
+    section: string
+    hover: string
+    input: string
+  }
+  border: {
+    default: string
+    hover: string
+    focus: string
+    light: string
+  }
+  text: {
+    primary: string
+    secondary: string
+    muted: string
+    inverse: string
+  }
+  state: {
+    success: string
+    error: string
+    warning: string
+    info: string
+  }
+}
+
+const LIGHT_COLORS: ColorSet = {
+  primary: {
+    main: '#8b5cf6',
+    light: '#a78bfa',
+    dark: '#7c3aed',
     gradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
     gradientFull:
       'linear-gradient(135deg, #1e293b 0%, #4f46e5 50%, #7c3aed 100%)',
   },
-  // 배경색
   background: {
-    page: '#f5f7fa', // 페이지 배경 (회색)
-    content: '#ffffff', // 콘텐츠 배경 (흰색)
-    section: '#fafbfc', // 섹션 배경 (연한 회색)
-    hover: '#f8fafc', // 호버 배경
-    input: '#f8fafc', // 입력 필드 배경
+    page: '#f5f7fa',
+    content: '#ffffff',
+    section: '#fafbfc',
+    hover: '#f8fafc',
+    input: '#f8fafc',
   },
-  // 테두리
   border: {
-    default: '#e2e8f0', // 기본 테두리
-    hover: '#cbd5e1', // 호버 테두리
-    focus: '#8b5cf6', // 포커스 테두리
-    light: '#f1f5f9', // 연한 테두리
+    default: '#e2e8f0',
+    hover: '#cbd5e1',
+    focus: '#8b5cf6',
+    light: '#f1f5f9',
   },
-  // 텍스트
   text: {
-    primary: '#1e293b', // 주요 텍스트
-    secondary: '#64748b', // 보조 텍스트
-    muted: '#94a3b8', // 흐린 텍스트
-    inverse: '#ffffff', // 반전 텍스트
+    primary: '#1e293b',
+    secondary: '#64748b',
+    muted: '#94a3b8',
+    inverse: '#ffffff',
   },
-  // 상태 색상
   state: {
     success: '#10b981',
     error: '#ef4444',
     warning: '#f59e0b',
     info: '#3b82f6',
   },
-} as const
+}
+
+const DARK_COLORS: ColorSet = {
+  primary: {
+    main: '#a78bfa',
+    light: '#c4b5fd',
+    dark: '#8b5cf6',
+    gradient: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
+    gradientFull:
+      'linear-gradient(135deg, #312e81 0%, #6366f1 50%, #a78bfa 100%)',
+  },
+  background: {
+    page: '#0f0f0f',
+    content: '#1a1a1a',
+    section: '#212121',
+    hover: '#2a2a2a',
+    input: '#212121',
+  },
+  border: {
+    default: '#2a2a2a',
+    hover: '#3f3f46',
+    focus: '#a78bfa',
+    light: '#212121',
+  },
+  text: {
+    primary: '#f5f5f5',
+    secondary: '#a1a1aa',
+    muted: '#71717a',
+    inverse: '#0f0f0f',
+  },
+  state: {
+    success: '#30d158',
+    error: '#ff453a',
+    warning: '#ffd60a',
+    info: '#3b82f6',
+  },
+}
+
+/** 라이트/다크 색상 셋 선택 — styled-components 내부에서만 사용 */
+export const getC = (theme: DefaultTheme) =>
+  theme.mode === 'dark' ? DARK_COLORS : LIGHT_COLORS
+
+/** 라이트/다크 분기 단축 헬퍼 */
+export const pickC = (theme: DefaultTheme, light: string, dark: string) =>
+  theme.mode === 'dark' ? dark : light
+
+/** 외부에서 import 하는 정적 색상 (라이트 기준) — 하위 호환 */
+export const COLORS = LIGHT_COLORS
 
 const shimmer = keyframes`
   0% {
@@ -285,9 +362,9 @@ export const HeaderContent = styled.div`
 `
 
 export const BackButton = styled.button`
-  border: 1.5px solid ${COLORS.border.default};
-  background: ${COLORS.background.content};
-  color: ${COLORS.text.secondary};
+  border: 1.5px solid ${({ theme }) => getC(theme).border.default};
+  background: ${({ theme }) => getC(theme).background.content};
+  color: ${({ theme }) => getC(theme).text.secondary};
   font-weight: 600;
   padding: 10px 14px;
   border-radius: 10px;
@@ -306,9 +383,9 @@ export const BackButton = styled.button`
   }
 
   &:hover {
-    background: ${COLORS.background.hover};
-    border-color: ${COLORS.border.hover};
-    color: ${COLORS.text.primary};
+    background: ${({ theme }) => getC(theme).background.hover};
+    border-color: ${({ theme }) => getC(theme).border.hover};
+    color: ${({ theme }) => getC(theme).text.primary};
 
     svg {
       transform: translateX(-3px);
@@ -331,7 +408,7 @@ export const HeaderTitleText = styled.h1`
   margin: 0;
   font-size: 28px;
   font-weight: 800;
-  background: ${COLORS.primary.gradientFull};
+  background: ${({ theme }) => getC(theme).primary.gradientFull};
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -358,7 +435,7 @@ export const HeaderTitleText = styled.h1`
 export const HeaderSubtitle = styled.p`
   margin: 0;
   font-size: 14px;
-  color: ${COLORS.text.secondary};
+  color: ${({ theme }) => getC(theme).text.secondary};
   font-weight: 500;
   line-height: 1.5;
   display: flex;
@@ -428,8 +505,8 @@ export const ContentWrapper = styled.div`
 `
 
 export const StepNavigation = styled.nav`
-  background: ${COLORS.background.content};
-  border: 1.5px solid ${COLORS.border.default};
+  background: ${({ theme }) => getC(theme).background.content};
+  border: 1.5px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 16px;
   padding: 0;
   display: flex;
@@ -446,8 +523,8 @@ export const StepNavigation = styled.nav`
 
 export const StepNavigationHeader = styled.div`
   padding: 20px;
-  background: ${COLORS.background.section};
-  border-bottom: 1.5px solid ${COLORS.border.default};
+  background: ${({ theme }) => getC(theme).background.section};
+  border-bottom: 1.5px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 16px 16px 0 0;
   display: flex;
   flex-direction: column;
@@ -458,7 +535,7 @@ export const StepNavigationTitle = styled.h2`
   margin: 12px 0 0 0;
   font-size: 15px;
   font-weight: 700;
-  color: ${COLORS.text.primary};
+  color: ${({ theme }) => getC(theme).text.primary};
   letter-spacing: -0.01em;
 `
 
@@ -466,8 +543,8 @@ export const StepNavigationActions = styled.div`
   display: flex;
   gap: 8px;
   padding: 12px;
-  border-top: 1.5px solid #e2e8f0;
-  background: #fafbfc;
+  border-top: 1.5px solid ${({ theme }) => getC(theme).border.default};
+  background: ${({ theme }) => getC(theme).background.section};
   border-radius: 0 0 16px 16px;
 `
 
@@ -487,9 +564,16 @@ export const StepItem = styled.button<{
   border: none;
   border-radius: 10px;
   padding: 14px 16px;
-  background: ${({ $active, $completed }) =>
-    $active ? '#f8f9fa' : $completed ? '#f0fdf4' : 'transparent'};
-  color: ${({ $active }) => ($active ? '#0f172a' : COLORS.text.primary)};
+  background: ${({ $active, $completed, theme }) =>
+    $active
+      ? pickC(theme, '#f8f9fa', 'rgba(139,92,246,0.12)')
+      : $completed
+        ? pickC(theme, '#f0fdf4', 'rgba(34,197,94,0.10)')
+        : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? pickC(theme, '#0f172a', '#f5f5f5')
+      : getC(theme).text.primary};
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
@@ -505,8 +589,10 @@ export const StepItem = styled.button<{
     $active ? '0 2px 8px rgba(139, 92, 246, 0.1)' : 'none'};
 
   &:hover {
-    background: ${({ $active }) =>
-      $active ? '#f1f3f5' : 'rgba(139, 92, 246, 0.04)'};
+    background: ${({ $active, theme }) =>
+      $active
+        ? pickC(theme, '#f1f3f5', 'rgba(139,92,246,0.18)')
+        : 'rgba(139, 92, 246, 0.08)'};
   }
 
   &:active {
@@ -521,9 +607,9 @@ export const StepNumber = styled.div<{
   height: 32px;
   border-radius: 10px;
   background: ${({ $active }) =>
-    $active ? 'rgba(255, 255, 255, 0.2)' : 'rgba(139, 92, 246, 0.1)'};
-  color: ${({ $active }) =>
-    $active ? COLORS.text.inverse : COLORS.primary.main};
+    $active ? 'rgba(255, 255, 255, 0.2)' : 'rgba(139, 92, 246, 0.15)'};
+  color: ${({ $active, theme }) =>
+    $active ? getC(theme).text.inverse : getC(theme).primary.main};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -540,9 +626,9 @@ export const StepIconWrapper = styled.div<{
   height: 32px;
   border-radius: 8px;
   background: ${({ $active, $completed }) =>
-    $active ? '#8b5cf6' : $completed ? '#22c55e' : 'rgba(139, 92, 246, 0.1)'};
-  color: ${({ $active, $completed }) =>
-    $active || $completed ? '#ffffff' : COLORS.primary.main};
+    $active ? '#8b5cf6' : $completed ? '#22c55e' : 'rgba(139, 92, 246, 0.15)'};
+  color: ${({ $active, $completed, theme }) =>
+    $active || $completed ? '#ffffff' : getC(theme).primary.main};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -556,7 +642,10 @@ export const StepLabel = styled.div<{
 }>`
   font-size: 14px;
   font-weight: ${({ $active }) => ($active ? '700' : '600')};
-  color: ${({ $active }) => ($active ? '#0f172a' : COLORS.text.primary)};
+  color: ${({ $active, theme }) =>
+    $active
+      ? pickC(theme, '#0f172a', '#f5f5f5')
+      : getC(theme).text.primary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -569,11 +658,12 @@ export const StepConnector = styled.div`
   top: 50%;
   width: 4px;
   height: 2px;
-  background: ${COLORS.border.default};
+  background: ${({ theme }) => getC(theme).border.default};
   transform: translateY(-50%);
 `
 
 export const FormArea = styled.div`
+  position: relative; /* FormOverlay 기준점 */
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
   backdrop-filter: ${({ theme }) => theme.mode === 'dark' ? 'blur(12px)' : 'none'};
@@ -608,6 +698,42 @@ export const FormAreaTitle = styled.h2`
   letter-spacing: -0.02em;
 `
 
+// 폼 영역 위에 떠있는 로딩 오버레이 (편집 모드 데이터 로드, 저장 중)
+export const FormOverlay = styled.div`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(15, 15, 15, 0.72)'
+      : 'rgba(255, 255, 255, 0.78)'};
+  backdrop-filter: blur(2px);
+  border-radius: 16px;
+  z-index: 10;
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => getC(theme).text.primary};
+`
+
+export const OverlaySpinner = styled.div`
+  width: 32px;
+  height: 32px;
+  border: 3px solid ${({ theme }) => getC(theme).border.default};
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: form-spinner-rotate 0.8s linear infinite;
+
+  @keyframes form-spinner-rotate {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+`
+
 export const FormSection = styled.div`
   display: flex;
   flex-direction: column;
@@ -636,14 +762,14 @@ export const SectionHeader = styled.div`
     margin: 0;
     font-size: 24px;
     font-weight: 700;
-    color: ${COLORS.text.primary};
+    color: ${({ theme }) => getC(theme).text.primary};
     letter-spacing: -0.02em;
   }
 
   p {
     margin: 6px 0 0;
     font-size: 14px;
-    color: #64748b;
+    color: ${({ theme }) => getC(theme).text.secondary};
     line-height: 1.6;
   }
 `
@@ -707,7 +833,7 @@ export const PeriodBadge = styled.div`
   gap: 4px;
 
   span {
-    color: #94a3b8;
+    color: ${({ theme }) => getC(theme).text.muted};
     font-size: 10px;
   }
 `
@@ -776,7 +902,12 @@ export const Label = styled.label`
   gap: 4px;
 `
 
-export const Required = styled.span`
+// 필수 항목 마커. aria-label 기본 부여로 스크린리더에 "필수"가 명시됨.
+// JSX 사용 시 별도 속성 없이도 accessible — 시각적 별표(*) + 청각 메시지 모두 전달.
+export const Required = styled.span.attrs({
+  'aria-label': '필수',
+  role: 'img',
+})`
   color: #ef4444;
   font-size: 14px;
 `
@@ -799,23 +930,25 @@ export const ExpandableCategoryCard = styled.div<{
 }>`
   position: relative;
   border: 2px solid
-    ${({ $selected, $category }) =>
-      $selected ? getCategoryColor($category).border : '#e2e8f0'};
+    ${({ $selected, $category, theme }) =>
+      $selected
+        ? getCategoryColor($category).border
+        : getC(theme).border.default};
   border-radius: 16px;
-  background: #ffffff;
+  background: ${({ theme }) => getC(theme).background.content};
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: ${({ $selected }) =>
+  box-shadow: ${({ $selected, theme }) =>
     $selected
       ? '0 4px 16px rgba(139, 92, 246, 0.15)'
-      : '0 2px 6px rgba(0, 0, 0, 0.04)'};
+      : pickC(theme, '0 2px 6px rgba(0, 0, 0, 0.04)', '0 2px 6px rgba(0, 0, 0, 0.4)')};
 
   /* 확장 시 전체 너비 차지 */
   grid-column: ${({ $expanded }) => ($expanded ? '1 / -1' : 'auto')};
 
   &:hover {
     border-color: ${({ $category }) => getCategoryColor($category).border};
-    background: #ffffff;
+    background: ${({ theme }) => getC(theme).background.content};
     transform: ${({ $expanded }) => ($expanded ? 'none' : 'translateY(-3px)')};
     box-shadow: 0 6px 20px
       ${({ $category }) => getCategoryColor($category).shadow};
@@ -865,7 +998,7 @@ export const ExpandedLabel = styled.div`
   span:first-child {
     font-size: 12px;
     font-weight: 600;
-    color: #475569;
+    color: ${({ theme }) => getC(theme).text.secondary};
   }
 `
 
@@ -883,10 +1016,12 @@ export const MiniCombatTypeGrid = styled.div`
 
 export const MiniTypeButton = styled.button<{ $selected: boolean }>`
   padding: 12px 8px;
-  border: 1.5px solid ${({ $selected }) => ($selected ? '#ef4444' : '#e2e8f0')};
+  border: 1.5px solid
+    ${({ $selected, theme }) =>
+      $selected ? '#ef4444' : getC(theme).border.default};
   border-radius: 10px;
-  background: ${({ $selected }) =>
-    $selected ? 'rgba(239, 68, 68, 0.08)' : '#ffffff'};
+  background: ${({ $selected, theme }) =>
+    $selected ? 'rgba(239, 68, 68, 0.08)' : getC(theme).background.content};
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -895,7 +1030,7 @@ export const MiniTypeButton = styled.button<{ $selected: boolean }>`
   gap: 6px;
   text-align: center;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }) => getC(theme).text.secondary};
 
   &:hover {
     border-color: #f87171;
@@ -917,12 +1052,16 @@ export const CategoryCard = styled.button<{
 }>`
   position: relative;
   border: 2px solid
-    ${({ $selected, $category }) =>
-      $selected ? getCategoryColor($category).border : '#e2e8f0'};
+    ${({ $selected, $category, theme }) =>
+      $selected
+        ? getCategoryColor($category).border
+        : getC(theme).border.default};
   border-radius: 16px;
   padding: 20px;
-  background: ${({ $selected, $category }) =>
-    $selected ? getCategoryColor($category).background : '#ffffff'};
+  background: ${({ $selected, $category, theme }) =>
+    $selected
+      ? getCategoryColor($category).background
+      : getC(theme).background.content};
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -930,10 +1069,10 @@ export const CategoryCard = styled.button<{
   align-items: center;
   gap: 10px;
   text-align: center;
-  box-shadow: ${({ $selected }) =>
+  box-shadow: ${({ $selected, theme }) =>
     $selected
       ? '0 4px 16px rgba(139, 92, 246, 0.15)'
-      : '0 2px 6px rgba(0, 0, 0, 0.04)'};
+      : pickC(theme, '0 2px 6px rgba(0, 0, 0, 0.04)', '0 2px 6px rgba(0, 0, 0, 0.4)')};
 
   &:hover {
     border-color: ${({ $category }) => getCategoryColor($category).border};
@@ -964,7 +1103,7 @@ export const CategoryIcon = styled.div<{
 export const CategoryLabel = styled.span`
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }) => getC(theme).text.secondary};
 `
 
 export const CategoryCheck = styled.div`
@@ -1018,11 +1157,11 @@ export const CombatTypeSection = styled.div`
     position: absolute;
     top: -12px;
     left: 16px;
-    background: #ffffff;
+    background: ${({ theme }) => getC(theme).background.content};
     padding: 4px 12px;
     font-size: 12px;
     font-weight: 600;
-    color: #64748b;
+    color: ${({ theme }) => getC(theme).text.secondary};
     border-radius: 8px;
     border: 1px solid rgba(148, 163, 184, 0.3);
   }
@@ -1038,11 +1177,13 @@ export const ConflictTypeGrid = styled.div`
 
 export const ConflictTypeButton = styled.button<{ $selected: boolean }>`
   position: relative;
-  border: 2px solid ${({ $selected }) => ($selected ? '#ef4444' : '#e2e8f0')};
+  border: 2px solid
+    ${({ $selected, theme }) =>
+      $selected ? '#ef4444' : getC(theme).border.default};
   border-radius: 16px;
   padding: 20px;
-  background: ${({ $selected }) =>
-    $selected ? 'rgba(239, 68, 68, 0.08)' : '#ffffff'};
+  background: ${({ $selected, theme }) =>
+    $selected ? 'rgba(239, 68, 68, 0.08)' : getC(theme).background.content};
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -1050,10 +1191,10 @@ export const ConflictTypeButton = styled.button<{ $selected: boolean }>`
   align-items: center;
   gap: 10px;
   text-align: center;
-  box-shadow: ${({ $selected }) =>
+  box-shadow: ${({ $selected, theme }) =>
     $selected
       ? '0 4px 16px rgba(239, 68, 68, 0.18)'
-      : '0 2px 6px rgba(0, 0, 0, 0.04)'};
+      : pickC(theme, '0 2px 6px rgba(0, 0, 0, 0.04)', '0 2px 6px rgba(0, 0, 0, 0.4)')};
 
   &:hover {
     border-color: #f87171;
@@ -1085,7 +1226,7 @@ export const ConflictTypeIcon = styled.div<{ $selected: boolean }>`
 export const ConflictTypeLabel = styled.span`
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }) => getC(theme).text.secondary};
 `
 
 export const CombatTypeGrid = styled.div`
@@ -1097,11 +1238,13 @@ export const CombatTypeGrid = styled.div`
 
 export const CombatTypeButton = styled.button<{ $selected: boolean }>`
   position: relative;
-  border: 2px solid ${({ $selected }) => ($selected ? '#ef4444' : '#e2e8f0')};
+  border: 2px solid
+    ${({ $selected, theme }) =>
+      $selected ? '#ef4444' : getC(theme).border.default};
   border-radius: 16px;
   padding: 20px;
-  background: ${({ $selected }) =>
-    $selected ? 'rgba(239, 68, 68, 0.08)' : '#ffffff'};
+  background: ${({ $selected, theme }) =>
+    $selected ? 'rgba(239, 68, 68, 0.08)' : getC(theme).background.content};
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -1109,10 +1252,10 @@ export const CombatTypeButton = styled.button<{ $selected: boolean }>`
   align-items: center;
   gap: 10px;
   text-align: center;
-  box-shadow: ${({ $selected }) =>
+  box-shadow: ${({ $selected, theme }) =>
     $selected
       ? '0 4px 16px rgba(239, 68, 68, 0.18)'
-      : '0 2px 6px rgba(0, 0, 0, 0.04)'};
+      : pickC(theme, '0 2px 6px rgba(0, 0, 0, 0.04)', '0 2px 6px rgba(0, 0, 0, 0.4)')};
 
   &:hover {
     border-color: #f87171;
@@ -1144,7 +1287,7 @@ export const CombatTypeIcon = styled.div<{ $selected: boolean }>`
 export const CombatTypeLabel = styled.span`
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }) => getC(theme).text.secondary};
 `
 
 // InfoBox 스타일 (전투 유형 가이드용)
@@ -1152,8 +1295,8 @@ export const InfoBox = styled.div`
   display: flex;
   gap: 14px;
   padding: 16px 18px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: ${({ theme }) => getC(theme).background.section};
+  border: 1px solid ${({ theme }) => getC(theme).border.default};
   border-left: 3px solid #6366f1;
   border-radius: 10px;
   margin-bottom: 20px;
@@ -1204,12 +1347,15 @@ export const GuideTooltip = styled.div<{ $visible: boolean }>`
   right: 0;
   width: 380px;
   max-width: calc(100vw - 40px);
-  background: #ffffff;
+  background: ${({ theme }) => getC(theme).background.content};
   border-radius: 12px;
-  box-shadow:
-    0 4px 20px rgba(15, 23, 42, 0.12),
-    0 12px 40px rgba(15, 23, 42, 0.08);
-  border: 1px solid rgba(148, 163, 184, 0.15);
+  box-shadow: ${({ theme }) =>
+    pickC(
+      theme,
+      '0 4px 20px rgba(15, 23, 42, 0.12), 0 12px 40px rgba(15, 23, 42, 0.08)',
+      '0 4px 20px rgba(0, 0, 0, 0.6), 0 12px 40px rgba(0, 0, 0, 0.4)',
+    )};
+  border: 1px solid ${({ theme }) => getC(theme).border.default};
   padding: 18px;
   z-index: 1000;
   opacity: ${({ $visible }) => ($visible ? 1 : 0)};
@@ -1227,8 +1373,8 @@ export const GuideTooltip = styled.div<{ $visible: boolean }>`
     right: 10px;
     width: 12px;
     height: 12px;
-    background: #ffffff;
-    border: 1px solid rgba(148, 163, 184, 0.15);
+    background: ${({ theme }) => getC(theme).background.content};
+    border: 1px solid ${({ theme }) => getC(theme).border.default};
     border-bottom: none;
     border-right: none;
     transform: rotate(45deg);
@@ -1257,7 +1403,7 @@ export const GuideTooltipTitle = styled.h4`
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #334155;
+  color: ${({ theme }) => getC(theme).text.primary};
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1278,13 +1424,13 @@ export const GuideTooltipClose = styled.button`
   border-radius: 6px;
   border: none;
   background: transparent;
-  color: #94a3b8;
+  color: ${({ theme }) => getC(theme).text.muted};
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(148, 163, 184, 0.1);
-    color: #64748b;
+    background: rgba(148, 163, 184, 0.15);
+    color: ${({ theme }) => getC(theme).text.secondary};
   }
 
   svg {
@@ -1354,7 +1500,7 @@ export const GuideTitle = styled.h4`
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: ${({ theme }) => getC(theme).text.primary};
   letter-spacing: -0.01em;
 `
 
@@ -1379,14 +1525,19 @@ export const GuideTip = styled.div`
   display: flex;
   gap: 10px;
   padding: 10px 12px;
-  background: rgba(248, 250, 252, 0.8);
+  background: ${({ theme }) =>
+    pickC(theme, 'rgba(248, 250, 252, 0.8)', 'rgba(255, 255, 255, 0.04)')};
   border-radius: 8px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  border: 1px solid
+    ${({ theme }) =>
+      pickC(theme, 'rgba(226, 232, 240, 0.8)', 'rgba(255, 255, 255, 0.08)')};
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(241, 245, 249, 1);
-    border-color: rgba(203, 213, 225, 1);
+    background: ${({ theme }) =>
+      pickC(theme, 'rgba(241, 245, 249, 1)', 'rgba(255, 255, 255, 0.06)')};
+    border-color: ${({ theme }) =>
+      pickC(theme, 'rgba(203, 213, 225, 1)', 'rgba(255, 255, 255, 0.12)')};
   }
 `
 
@@ -1409,14 +1560,14 @@ export const TipTitle = styled.h5`
   margin: 0 0 4px 0;
   font-size: 13px;
   font-weight: 600;
-  color: #334155;
+  color: ${({ theme }) => getC(theme).text.primary};
 `
 
 export const TipDescription = styled.p`
   margin: 0 0 6px 0;
   font-size: 12px;
   line-height: 1.5;
-  color: #64748b;
+  color: ${({ theme }) => getC(theme).text.secondary};
 `
 
 export const TipExample = styled.div`
@@ -1462,7 +1613,7 @@ export const InfoTitle = styled.h3`
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #334155;
+  color: ${({ theme }) => getC(theme).text.primary};
   letter-spacing: -0.01em;
 
   @media (max-width: 768px) {
@@ -1474,7 +1625,7 @@ export const InfoDescription = styled.p`
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
-  color: #64748b;
+  color: ${({ theme }) => getC(theme).text.secondary};
   font-weight: 400;
 
   @media (max-width: 768px) {
@@ -1492,7 +1643,7 @@ export const InfoExamples = styled.div`
 export const InfoExample = styled.div`
   font-size: 12px;
   line-height: 1.6;
-  color: #64748b;
+  color: ${({ theme }) => getC(theme).text.secondary};
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -1506,7 +1657,7 @@ export const InfoExample = styled.div`
 
   strong {
     font-weight: 600;
-    color: #475569;
+    color: ${({ theme }) => getC(theme).text.primary};
   }
 
   @media (max-width: 768px) {
@@ -1518,12 +1669,12 @@ export const MilitaryNoticeIcon = styled.div`
   flex-shrink: 0;
   width: 48px;
   height: 48px;
-  background: ${COLORS.primary.gradient};
+  background: ${({ theme }) => getC(theme).primary.gradient};
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: ${COLORS.text.inverse};
+  color: #ffffff;
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 `
 
@@ -1537,20 +1688,20 @@ export const MilitaryNoticeContent = styled.div`
 export const MilitaryNoticeTitle = styled.div`
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => getC(theme).text.primary};
   line-height: 1.4;
 `
 
 export const MilitaryNoticeText = styled.div`
   font-size: 13px;
   font-weight: 500;
-  color: #64748b;
+  color: ${({ theme }) => getC(theme).text.secondary};
   line-height: 1.6;
 `
 
 export const Hint = styled.span`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${({ theme }) => getC(theme).text.muted};
   line-height: 1.5;
   font-weight: 400;
 `
@@ -1579,7 +1730,7 @@ export const DateRangeInfo = styled.div`
 export const DateRangeText = styled.div`
   font-size: 14px;
   font-weight: 500;
-  color: #475569;
+  color: ${({ theme }) => getC(theme).text.secondary};
   line-height: 1.5;
 
   strong {
@@ -1589,7 +1740,7 @@ export const DateRangeText = styled.div`
   }
 
   span {
-    color: #64748b;
+    color: ${({ theme }) => getC(theme).text.secondary};
     font-size: 13px;
     margin-left: 4px;
   }
@@ -1599,27 +1750,27 @@ export const DateInputWrapper = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1.5px solid ${COLORS.border.default};
+  border: 1.5px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 12px;
   padding: 14px 16px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: ${COLORS.background.input};
+  background: ${({ theme }) => getC(theme).background.input};
   max-width: ${FORM_FIELD_MAX_WIDTH};
 
   &:hover {
-    border-color: ${COLORS.border.hover};
-    background: ${COLORS.border.light};
+    border-color: ${({ theme }) => getC(theme).border.hover};
+    background: ${({ theme }) => getC(theme).border.light};
   }
 
   &:focus-within {
-    border-color: ${COLORS.border.focus};
-    background: ${COLORS.background.content};
+    border-color: ${({ theme }) => getC(theme).border.focus};
+    background: ${({ theme }) => getC(theme).background.content};
     box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
   }
 
   svg {
-    color: ${COLORS.primary.main};
+    color: ${({ theme }) => getC(theme).primary.main};
     flex-shrink: 0;
   }
 `
@@ -1627,11 +1778,11 @@ export const DateInputWrapper = styled.div`
 export const DateInputDisplay = styled.div`
   flex: 1;
   font-size: 14px;
-  color: ${COLORS.text.primary};
+  color: ${({ theme }) => getC(theme).text.primary};
 
   &:empty::before {
     content: '날짜를 선택하세요';
-    color: #94a3b8;
+    color: ${({ theme }) => getC(theme).text.muted};
   }
 `
 
@@ -1665,12 +1816,12 @@ export const ActionButton = styled.button<{
   border: none;
   border-radius: 12px;
   padding: 14px 28px;
-  background: ${({ $variant }) =>
+  background: ${({ $variant, theme }) =>
     $variant === 'primary'
-      ? COLORS.primary.gradient
-      : COLORS.background.content};
-  color: ${({ $variant }) =>
-    $variant === 'primary' ? COLORS.text.inverse : COLORS.text.secondary};
+      ? getC(theme).primary.gradient
+      : getC(theme).background.content};
+  color: ${({ $variant, theme }) =>
+    $variant === 'primary' ? '#ffffff' : getC(theme).text.secondary};
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
@@ -1678,23 +1829,25 @@ export const ActionButton = styled.button<{
   display: flex;
   align-items: center;
   gap: 8px;
-  box-shadow: ${({ $variant }) =>
+  box-shadow: ${({ $variant, theme }) =>
     $variant === 'primary'
       ? '0 4px 12px rgba(139, 92, 246, 0.3)'
-      : '0 2px 6px rgba(0, 0, 0, 0.08)'};
-  border: ${({ $variant }) =>
-    $variant === 'secondary' ? `1.5px solid ${COLORS.border.default}` : 'none'};
+      : pickC(theme, '0 2px 6px rgba(0, 0, 0, 0.08)', '0 2px 6px rgba(0, 0, 0, 0.4)')};
+  border: ${({ $variant, theme }) =>
+    $variant === 'secondary'
+      ? `1.5px solid ${getC(theme).border.default}`
+      : 'none'};
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
-    background: ${({ $variant }) =>
+    background: ${({ $variant, theme }) =>
       $variant === 'primary'
-        ? `linear-gradient(135deg, ${COLORS.primary.dark} 0%, #6d28d9 100%)`
-        : COLORS.background.hover};
-    box-shadow: ${({ $variant }) =>
+        ? `linear-gradient(135deg, ${getC(theme).primary.dark} 0%, #6d28d9 100%)`
+        : getC(theme).background.hover};
+    box-shadow: ${({ $variant, theme }) =>
       $variant === 'primary'
         ? '0 6px 16px rgba(139, 92, 246, 0.4)'
-        : '0 4px 10px rgba(0, 0, 0, 0.1)'};
+        : pickC(theme, '0 4px 10px rgba(0, 0, 0, 0.1)', '0 4px 10px rgba(0, 0, 0, 0.5)')};
   }
 
   &:active:not(:disabled) {
@@ -1711,11 +1864,16 @@ export const ActionButton = styled.button<{
 export const PreviewPanel = styled.aside`
   position: sticky;
   top: calc(var(--header-height) + 24px);
-  background: #fff;
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  background: ${({ theme }) => getC(theme).background.content};
+  border: 1px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 20px;
   padding: 20px;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  box-shadow: ${({ theme }) =>
+    pickC(
+      theme,
+      '0 4px 12px rgba(15, 23, 42, 0.04)',
+      '0 4px 12px rgba(0, 0, 0, 0.4)',
+    )};
   max-height: calc(100vh - var(--header-height) - 48px);
   overflow-y: auto;
 
@@ -1729,7 +1887,7 @@ export const PreviewHeader = styled.div`
   align-items: center;
   gap: 10px;
   padding-bottom: 16px;
-  border-bottom: 1.5px solid rgba(99, 102, 241, 0.1);
+  border-bottom: 1.5px solid rgba(99, 102, 241, 0.15);
   margin-bottom: 16px;
 
   svg {
@@ -1740,7 +1898,7 @@ export const PreviewHeader = styled.div`
     margin: 0;
     font-size: 16px;
     font-weight: 700;
-    color: #0f172a;
+    color: ${({ theme }) => getC(theme).text.primary};
   }
 `
 
@@ -1766,7 +1924,7 @@ export const PreviewLabel = styled.span`
 
 export const PreviewValue = styled.div`
   font-size: 13px;
-  color: #0f172a;
+  color: ${({ theme }) => getC(theme).text.primary};
   line-height: 1.6;
 `
 
@@ -1781,23 +1939,27 @@ export const ParentEventInputWrapper = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  border: 1.5px solid
+    ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.12)', 'rgba(167, 139, 250, 0.18)')};
   border-radius: 10px;
   padding: 12px 14px;
-  background: #ffffff;
+  background: ${({ theme }) => getC(theme).background.input};
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.25);
+    border-color: ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.25)', 'rgba(167, 139, 250, 0.32)')};
   }
 
   &:focus-within {
-    border-color: rgba(99, 102, 241, 0.4);
+    border-color: ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.4)', 'rgba(167, 139, 250, 0.5)')};
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
   }
 
   svg:first-child {
-    color: #94a3b8;
+    color: ${({ theme }) => getC(theme).text.muted};
     flex-shrink: 0;
   }
 `
@@ -1807,11 +1969,11 @@ export const ParentEventInput = styled.input`
   border: none;
   outline: none;
   font-size: 14px;
-  color: #0f172a;
+  color: ${({ theme }) => getC(theme).text.primary};
   background: transparent;
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${({ theme }) => getC(theme).text.muted};
   }
 `
 
@@ -1842,7 +2004,7 @@ export const ToggleButton = styled.button`
   height: 24px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: ${({ theme }) => getC(theme).text.secondary};
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
@@ -1859,10 +2021,15 @@ export const ParentEventList = styled.div`
   right: 0;
   max-height: 320px;
   overflow-y: auto;
-  background: #ffffff;
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  background: ${({ theme }) => getC(theme).background.content};
+  border: 1.5px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  box-shadow: ${({ theme }) =>
+    pickC(
+      theme,
+      '0 8px 24px rgba(15, 23, 42, 0.12)',
+      '0 8px 24px rgba(0, 0, 0, 0.5)',
+    )};
   z-index: 100;
   margin-top: 4px;
 `
@@ -1874,20 +2041,24 @@ export const ParentEventItem = styled.button<{ $selected: boolean }>`
   width: 100%;
   padding: 12px 16px;
   border: none;
-  background: ${({ $selected }) =>
-    $selected ? 'rgba(99, 102, 241, 0.05)' : '#ffffff'};
+  background: ${({ $selected, theme }) =>
+    $selected
+      ? pickC(theme, 'rgba(99, 102, 241, 0.08)', 'rgba(167, 139, 250, 0.15)')
+      : getC(theme).background.content};
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.05);
+  border-bottom: 1px solid ${({ theme }) => getC(theme).border.light};
 
   &:last-child {
     border-bottom: none;
   }
 
   &:hover {
-    background: ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.08)' : 'rgba(99, 102, 241, 0.03)'};
+    background: ${({ $selected, theme }) =>
+      $selected
+        ? pickC(theme, 'rgba(99, 102, 241, 0.12)', 'rgba(167, 139, 250, 0.22)')
+        : pickC(theme, 'rgba(99, 102, 241, 0.04)', 'rgba(167, 139, 250, 0.08)')};
   }
 `
 
@@ -1916,7 +2087,7 @@ export const ParentEventInfo = styled.div`
 export const ParentEventTitle = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => getC(theme).text.primary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1924,7 +2095,7 @@ export const ParentEventTitle = styled.div`
 
 export const ParentEventMeta = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${({ theme }) => getC(theme).text.secondary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1933,14 +2104,14 @@ export const ParentEventMeta = styled.div`
 export const ParentEventDate = styled.span`
   margin-left: auto;
   font-size: 12px;
-  color: #94a3b8;
+  color: ${({ theme }) => getC(theme).text.muted};
   font-weight: 500;
 `
 
 export const EmptyState = styled.div`
   padding: 32px 16px;
   text-align: center;
-  color: #94a3b8;
+  color: ${({ theme }) => getC(theme).text.muted};
 
   svg {
     margin-bottom: 8px;
@@ -1990,14 +2161,17 @@ export const SelectedPersonItem = styled.div`
   justify-content: space-between;
   gap: 12px;
   padding: 12px;
-  background: rgba(99, 102, 241, 0.05);
-  border: 1px solid rgba(99, 102, 241, 0.15);
+  background: ${({ theme }) =>
+    pickC(theme, 'rgba(99, 102, 241, 0.05)', 'rgba(167, 139, 250, 0.10)')};
+  border: 1px solid
+    ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.15)', 'rgba(167, 139, 250, 0.25)')};
   border-radius: 8px;
 
   strong {
     display: block;
     font-size: 13px;
-    color: #0f172a;
+    color: ${({ theme }) => getC(theme).text.primary};
     margin-bottom: 4px;
   }
 `
@@ -2010,16 +2184,19 @@ export const SelectedEventsList = styled.div`
 `
 
 export const SectionCard = styled.div`
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  border: 1.5px solid
+    ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.12)', 'rgba(167, 139, 250, 0.18)')};
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 16px;
-  background: #ffffff;
+  background: ${({ theme }) => getC(theme).background.content};
   transition: all 0.2s ease;
   max-width: ${FORM_FIELD_MAX_WIDTH};
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.25);
+    border-color: ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.25)', 'rgba(167, 139, 250, 0.32)')};
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
   }
 `
@@ -2047,21 +2224,26 @@ export const SectionNumber = styled.div`
 
 export const SectionTitleInput = styled.input`
   flex: 1;
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  border: 1.5px solid
+    ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.12)', 'rgba(167, 139, 250, 0.18)')};
+  background: ${({ theme }) => getC(theme).background.input};
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => getC(theme).text.primary};
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.25);
+    border-color: ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.25)', 'rgba(167, 139, 250, 0.32)')};
   }
 
   &:focus {
     outline: none;
-    border-color: rgba(99, 102, 241, 0.4);
+    border-color: ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.4)', 'rgba(167, 139, 250, 0.5)')};
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
   }
 `
@@ -2144,22 +2326,22 @@ export const RemoveMentionButton = styled.button`
 `
 
 export const ThumbnailUploadArea = styled.div`
-  border: 2px dashed rgba(226, 232, 240, 1);
+  border: 2px dashed ${({ theme }) => getC(theme).border.default};
   border-radius: 12px;
   padding: 20px;
-  background: #f8fafc;
+  background: ${({ theme }) => getC(theme).background.section};
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #94a3b8;
+  color: ${({ theme }) => getC(theme).text.muted};
   max-width: ${FORM_FIELD_MAX_WIDTH};
 
   &:hover {
     border-color: #6366f1;
-    background: rgba(99, 102, 241, 0.02);
+    background: rgba(99, 102, 241, 0.05);
   }
 
   svg {
@@ -2169,15 +2351,15 @@ export const ThumbnailUploadArea = styled.div`
   p {
     margin: 0;
     font-size: 14px;
-    color: #94a3b8;
+    color: ${({ theme }) => getC(theme).text.muted};
   }
 `
 
 export const ThumbnailPreview = styled.div`
-  border: 2px dashed rgba(226, 232, 240, 1);
+  border: 2px dashed ${({ theme }) => getC(theme).border.default};
   border-radius: 12px;
   padding: 20px;
-  background: #f8fafc;
+  background: ${({ theme }) => getC(theme).background.section};
   transition: all 0.2s ease;
   position: relative;
   display: flex;
@@ -2188,7 +2370,7 @@ export const ThumbnailPreview = styled.div`
 
   in &:hover {
     border-color: #6366f1;
-    background: rgba(99, 102, 241, 0.02);
+    background: rgba(99, 102, 241, 0.05);
   }
 
   img {
@@ -2386,7 +2568,7 @@ export const SidebarCardTitle = styled.h3`
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  color: ${COLORS.text.primary};
+  color: ${({ theme }) => getC(theme).text.primary};
   letter-spacing: -0.01em;
 `
 
@@ -2403,20 +2585,20 @@ export const QuickInfoItem = styled.div`
   font-size: 13px;
 
   svg {
-    color: ${COLORS.primary.main};
+    color: ${({ theme }) => getC(theme).primary.main};
     flex-shrink: 0;
     margin-top: 2px;
   }
 `
 
 export const QuickInfoLabel = styled.span`
-  color: ${COLORS.text.secondary};
+  color: ${({ theme }) => getC(theme).text.secondary};
   font-weight: 500;
   min-width: 60px;
 `
 
 export const QuickInfoValue = styled.span`
-  color: ${COLORS.text.primary};
+  color: ${({ theme }) => getC(theme).text.primary};
   font-weight: 400;
   flex: 1;
   word-break: break-word;
@@ -2427,7 +2609,7 @@ export const QuickInfoThumbnail = styled.img`
   height: 120px;
   object-fit: cover;
   border-radius: 8px;
-  border: 1px solid ${COLORS.border.default};
+  border: 1px solid ${({ theme }) => getC(theme).border.default};
   margin-bottom: 8px;
 `
 
@@ -2453,13 +2635,13 @@ export const TocItem = styled.button<{ $active?: boolean }>`
       ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(124, 58, 237, 0.06))'
       : 'transparent'};
   border-left: 3px solid
-    ${(props) => (props.$active ? COLORS.primary.main : 'transparent')};
+    ${(props) => (props.$active ? getC(props.theme).primary.main : 'transparent')};
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 13px;
   color: ${(props) =>
-    props.$active ? COLORS.primary.main : COLORS.text.secondary};
+    props.$active ? getC(props.theme).primary.main : getC(props.theme).text.secondary};
   font-weight: ${(props) => (props.$active ? 600 : 500)};
 
   &:hover {
@@ -2484,8 +2666,8 @@ export const TocItemTitle = styled.span`
 export const TocItemBadge = styled.span`
   padding: 2px 8px;
   border-radius: 12px;
-  background: rgba(139, 92, 246, 0.1);
-  color: ${COLORS.primary.main};
+  background: rgba(139, 92, 246, 0.15);
+  color: ${({ theme }) => getC(theme).primary.main};
   font-size: 11px;
   font-weight: 600;
   flex-shrink: 0;
@@ -2516,14 +2698,14 @@ export const StatCard = styled.div`
 export const StatValue = styled.div`
   font-size: 20px;
   font-weight: 700;
-  color: ${COLORS.primary.main};
+  color: ${({ theme }) => getC(theme).primary.main};
   margin-bottom: 4px;
 `
 
 export const StatLabel = styled.div`
   font-size: 11px;
   font-weight: 500;
-  color: ${COLORS.text.secondary};
+  color: ${({ theme }) => getC(theme).text.secondary};
   text-transform: uppercase;
   letter-spacing: 0.5px;
 `
@@ -2556,13 +2738,13 @@ export const QuickRefItem = styled.div`
   }
 
   svg {
-    color: ${COLORS.primary.main};
+    color: ${({ theme }) => getC(theme).primary.main};
     flex-shrink: 0;
   }
 `
 
 export const QuickRefName = styled.span`
-  color: ${COLORS.text.primary};
+  color: ${({ theme }) => getC(theme).text.primary};
   font-weight: 500;
   flex: 1;
   overflow: hidden;
@@ -2573,7 +2755,7 @@ export const QuickRefName = styled.span`
 export const QuickRefCount = styled.span`
   padding: 2px 6px;
   border-radius: 10px;
-  background: ${COLORS.primary.main};
+  background: ${({ theme }) => getC(theme).primary.main};
   color: #ffffff;
   font-size: 10px;
   font-weight: 600;
@@ -2583,7 +2765,7 @@ export const QuickRefCount = styled.span`
 export const QuickRefEmpty = styled.div`
   padding: 16px;
   text-align: center;
-  color: ${COLORS.text.muted};
+  color: ${({ theme }) => getC(theme).text.muted};
   font-size: 12px;
   font-style: italic;
 `
@@ -2742,15 +2924,16 @@ export const TagChip = styled.div<{ $isGroup?: boolean }>`
   padding: 6px 12px;
   background: ${({ $isGroup }) =>
     $isGroup
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1))'
-      : 'rgba(99, 102, 241, 0.08)'};
+      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(168, 85, 247, 0.12))'
+      : 'rgba(99, 102, 241, 0.10)'};
   border: 1px solid
     ${({ $isGroup }) =>
-      $isGroup ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.15)'};
+      $isGroup ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.20)'};
   border-radius: 8px;
   font-size: 12px;
   font-weight: ${({ $isGroup }) => ($isGroup ? '600' : '500')};
-  color: ${({ $isGroup }) => ($isGroup ? '#6366f1' : '#475569')};
+  color: ${({ $isGroup, theme }) =>
+    $isGroup ? '#6366f1' : getC(theme).text.secondary};
   transition: all 0.2s ease;
 
   ${({ $isGroup }) =>
@@ -2792,11 +2975,14 @@ export const SelectedEventItem = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background: rgba(99, 102, 241, 0.05);
-  border: 1px solid rgba(99, 102, 241, 0.15);
+  background: ${({ theme }) =>
+    pickC(theme, 'rgba(99, 102, 241, 0.05)', 'rgba(167, 139, 250, 0.10)')};
+  border: 1px solid
+    ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.15)', 'rgba(167, 139, 250, 0.25)')};
   border-radius: 8px;
   font-size: 13px;
-  color: #0f172a;
+  color: ${({ theme }) => getC(theme).text.primary};
 
   span {
     flex: 1;
@@ -2861,7 +3047,7 @@ export const CountryInfo = styled.div`
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => getC(theme).text.primary};
 
   svg {
     color: #6366f1;
@@ -2885,7 +3071,7 @@ export const RoleBadge = styled.span`
 
 export const CountryDescription = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${({ theme }) => getC(theme).text.secondary};
   padding-left: 24px;
   line-height: 1.5;
 `
@@ -2922,9 +3108,9 @@ export const CancelButton = styled.button`
   justify-content: center;
   gap: 6px;
   padding: 10px 18px;
-  background: white;
-  color: #64748b;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: ${({ theme }) => getC(theme).background.content};
+  color: ${({ theme }) => getC(theme).text.secondary};
+  border: 1px solid rgba(99, 102, 241, 0.25);
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
@@ -2932,8 +3118,8 @@ export const CancelButton = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.3);
-    background: rgba(99, 102, 241, 0.05);
+    border-color: rgba(99, 102, 241, 0.35);
+    background: rgba(99, 102, 241, 0.08);
     color: #6366f1;
   }
 `
@@ -2950,12 +3136,15 @@ export const SelectedItem = styled.div`
   align-items: center;
   gap: 8px;
   padding: 6px 10px 6px 12px;
-  background: rgba(99, 102, 241, 0.08);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: ${({ theme }) =>
+    pickC(theme, 'rgba(99, 102, 241, 0.08)', 'rgba(167, 139, 250, 0.14)')};
+  border: 1px solid
+    ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.2)', 'rgba(167, 139, 250, 0.30)')};
   border-radius: 20px;
   font-size: 13px;
   font-weight: 500;
-  color: #1e293b;
+  color: ${({ theme }) => getC(theme).text.primary};
 `
 
 export const AddButton = styled.button`
@@ -3001,16 +3190,19 @@ export const RemoveButton = styled.button`
 
 export const Select = styled.select`
   padding: 10px 12px;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border: 1px solid
+    ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.2)', 'rgba(167, 139, 250, 0.30)')};
   border-radius: 8px;
-  background: white;
+  background: ${({ theme }) => getC(theme).background.input};
   font-size: 13px;
-  color: #0f172a;
+  color: ${({ theme }) => getC(theme).text.primary};
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.3);
+    border-color: ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.3)', 'rgba(167, 139, 250, 0.42)')};
   }
 
   &:focus {
@@ -3023,7 +3215,7 @@ export const Select = styled.select`
 export const EmptyMessage = styled.div`
   padding: 20px;
   text-align: center;
-  color: #94a3b8;
+  color: ${({ theme }) => getC(theme).text.muted};
   font-size: 13px;
 `
 
@@ -3032,12 +3224,15 @@ export const CountryChip = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: rgba(99, 102, 241, 0.08);
-  border: 1px solid rgba(99, 102, 241, 0.15);
+  background: ${({ theme }) =>
+    pickC(theme, 'rgba(99, 102, 241, 0.08)', 'rgba(167, 139, 250, 0.14)')};
+  border: 1px solid
+    ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.15)', 'rgba(167, 139, 250, 0.25)')};
   border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
-  color: #0f172a;
+  color: ${({ theme }) => getC(theme).text.primary};
 
   svg {
     color: #6366f1;
@@ -3086,9 +3281,14 @@ export const Modal = styled.div`
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
-  background: white;
+  background: ${({ theme }) => getC(theme).background.content};
   border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: ${({ theme }) =>
+    pickC(
+      theme,
+      '0 20px 60px rgba(0, 0, 0, 0.3)',
+      '0 20px 60px rgba(0, 0, 0, 0.7)',
+    )};
   z-index: 9999;
   display: flex;
   flex-direction: column;
@@ -3099,19 +3299,19 @@ export const ModalHeader = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid rgba(99, 102, 241, 0.12);
+  border-bottom: 1px solid ${({ theme }) => getC(theme).border.default};
 
   h3 {
     margin: 0;
     font-size: 18px;
     font-weight: 700;
-    color: #0f172a;
+    color: ${({ theme }) => getC(theme).text.primary};
   }
 
   button {
     background: none;
     border: none;
-    color: #64748b;
+    color: ${({ theme }) => getC(theme).text.secondary};
     cursor: pointer;
     padding: 4px;
     display: flex;
@@ -3169,11 +3369,15 @@ export const CountryModalItem = styled.div<{ $selected?: boolean }>`
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: ${({ $selected }) =>
-    $selected ? 'rgba(99, 102, 241, 0.1)' : 'white'};
+  background: ${({ $selected, theme }) =>
+    $selected
+      ? pickC(theme, 'rgba(99, 102, 241, 0.12)', 'rgba(167, 139, 250, 0.18)')
+      : getC(theme).background.content};
   border: 1px solid
-    ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.12)'};
+    ${({ $selected, theme }) =>
+      $selected
+        ? pickC(theme, 'rgba(99, 102, 241, 0.3)', 'rgba(167, 139, 250, 0.4)')
+        : getC(theme).border.default};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -3186,14 +3390,17 @@ export const CountryModalItem = styled.div<{ $selected?: boolean }>`
   span {
     flex: 1;
     font-size: 13px;
-    color: #0f172a;
+    color: ${({ theme }) => getC(theme).text.primary};
     font-weight: ${({ $selected }) => ($selected ? '600' : '500')};
   }
 
   &:hover {
-    background: ${({ $selected }) =>
-      $selected ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.05)'};
-    border-color: rgba(99, 102, 241, 0.3);
+    background: ${({ $selected, theme }) =>
+      $selected
+        ? pickC(theme, 'rgba(99, 102, 241, 0.18)', 'rgba(167, 139, 250, 0.24)')
+        : pickC(theme, 'rgba(99, 102, 241, 0.05)', 'rgba(167, 139, 250, 0.10)')};
+    border-color: ${({ theme }) =>
+      pickC(theme, 'rgba(99, 102, 241, 0.3)', 'rgba(167, 139, 250, 0.4)')};
   }
 `
 
@@ -3213,13 +3420,13 @@ export const ChildEventItem = styled.div`
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: ${COLORS.background.section};
-  border: 1px solid ${COLORS.border.default};
+  background: ${({ theme }) => getC(theme).background.section};
+  border: 1px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 12px;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: ${COLORS.border.hover};
+    border-color: ${({ theme }) => getC(theme).border.hover};
     box-shadow: 0 2px 8px rgba(139, 92, 246, 0.05);
   }
 `
@@ -3240,13 +3447,13 @@ export const ChildEventInfo = styled.div`
     display: block;
     font-size: 14px;
     font-weight: 600;
-    color: ${COLORS.text.primary};
+    color: ${({ theme }) => getC(theme).text.primary};
     margin-bottom: 4px;
   }
 
   div {
     font-size: 12px;
-    color: ${COLORS.text.secondary};
+    color: ${({ theme }) => getC(theme).text.secondary};
   }
 
   span {
@@ -3279,8 +3486,8 @@ export const ChildEventFormCard = styled.div`
   flex-direction: column;
   gap: 20px;
   padding: 24px;
-  background: ${COLORS.background.content};
-  border: 1.5px solid ${COLORS.border.default};
+  background: ${({ theme }) => getC(theme).background.content};
+  border: 1.5px solid ${({ theme }) => getC(theme).border.default};
   border-radius: 12px;
   margin-bottom: 16px;
 `
@@ -3290,5 +3497,5 @@ export const ChildEventFormActions = styled.div`
   gap: 12px;
   justify-content: flex-end;
   padding-top: 12px;
-  border-top: 1px solid ${COLORS.border.light};
+  border-top: 1px solid ${({ theme }) => getC(theme).border.light};
 `

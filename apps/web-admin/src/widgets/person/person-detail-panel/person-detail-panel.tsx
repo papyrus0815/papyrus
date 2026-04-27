@@ -1,7 +1,7 @@
 /**
  * 인물 상세 패널 (리스트 페이지 우측 컨텐츠 영역)
  */
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -37,6 +37,7 @@ import {
   listPersonLifeEvents,
 } from '@/shared/api/person-life-events'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
+import { pathKeys } from '@/shared/router'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import {
   type RichTextDynastyTooltipState,
@@ -57,7 +58,7 @@ import {
 } from '@/shared/lib/influence-tier'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { glassCardMixin } from '@/shared/styles/mixins'
-import { Z_INDEX } from '@/shared/styles/z-index'
+import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
@@ -67,6 +68,8 @@ import { PersonLifeEventFormModal } from '@/widgets/person/person-life-event-for
 import { PersonLifeTimelineInfographic } from '@/widgets/person/person-life-timeline-infographic/person-life-timeline-infographic'
 import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-infographic/person-genealogy-infographic'
 import { PersonHumanRelationshipsSection } from '@/widgets/person/person-human-relationships-section/person-human-relationships-section'
+import { SameDynastyMembersSection } from '@/widgets/person/same-dynasty-members-section/same-dynasty-members-section'
+import { PersonStatsSection } from '@/widgets/person/person-stats-section/person-stats-section'
 import {
   type ElectionCandidacyDetail,
   PersonPoliticsSection,
@@ -307,6 +310,22 @@ export function PersonDetailPanel({
   const [editingLifeEvent, setEditingLifeEvent] = useState<PersonLifeEvent | null>(null)
   /** 저장 직후 하이라이트·스크롤 대상 id (타임라인 인포그래픽에 전달). 0.8초 뒤 자동 해제 */
   const [highlightedLifeEventId, setHighlightedLifeEventId] = useState<string | null>(null)
+
+  /** URL `?life=<id>` 진입 시 해당 연보로 자동 스크롤·하이라이트 */
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const lifeId = params.get('life')
+    if (lifeId) {
+      setHighlightedLifeEventId(lifeId)
+      // 너무 짧으면 데이터 로드 전에 사라질 수 있어 4초 유지
+      const timer = window.setTimeout(
+        () => setHighlightedLifeEventId(null),
+        4000,
+      )
+      return () => window.clearTimeout(timer)
+    }
+  }, [])
   const [editingBiography, setEditingBiography] = useState(false)
   const [biographyDraft, setBiographyDraft] = useState('')
   const [savingBiography, setSavingBiography] = useState(false)
@@ -1192,7 +1211,10 @@ export function PersonDetailPanel({
                     })()}
                   </section>
 
-                  {/* 2.5. 사망 정보 — 유형·원인·메모 중 하나라도 있으면 표시 */}
+                  {/* 2.5. 능력치 · 성격 — 영향력과 같은 0–100 평가 메트릭 클러스터 */}
+                  <PersonStatsSection personId={person.id} personName={fullName} />
+
+                  {/* 2.6. 사망 정보 — 유형·원인·메모 중 하나라도 있으면 표시 */}
                   {(p.deathType || p.deathCause || p.deathNote) && (
                     <section aria-label="사망 정보">
                       <OverviewSectionHeaderRow>
@@ -1496,6 +1518,19 @@ export function PersonDetailPanel({
                     </FullGenealogyLinkRow>
                   )}
                 </section>
+
+                {person.dynasty?.id && person.dynasty?.name && (
+                  <SameDynastyMembersSection
+                    dynastyId={person.dynasty.id}
+                    dynastyName={person.dynasty.name}
+                    currentPersonId={person.id}
+                    onPersonClick={
+                      embedInModal
+                        ? onLinkedPersonClick
+                        : pushPersonToModalStack
+                    }
+                  />
+                )}
               </TabContent>
             )}
 
@@ -1606,6 +1641,9 @@ export function PersonDetailPanel({
                           }
                         : undefined
                     }
+                    onEventClick={(eventId) => {
+                      navigate(pathKeys.events.detail(eventId))
+                    }}
                   />
                 </section>
               </TabContent>
@@ -1621,6 +1659,7 @@ export function PersonDetailPanel({
         lifeEvent={editingLifeEvent}
         birthDate={person.birthDate ?? null}
         deathDate={person.deathDate ?? null}
+        existingLifeEvents={lifeEvents}
         onClose={() => {
           setLifeEventModalOpen(false)
           setEditingLifeEvent(null)
@@ -1825,9 +1864,9 @@ export function PersonDetailPanel({
 const BioMentionModalOverlay = styled(motion.div)`
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.52);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: ${OVERLAY_STYLES.BACKGROUND};
+  backdrop-filter: ${OVERLAY_STYLES.BACKDROP_FILTER};
+  -webkit-backdrop-filter: ${OVERLAY_STYLES.BACKDROP_FILTER};
   z-index: ${Z_INDEX.MODAL_OVERLAY};
   display: flex;
   align-items: center;

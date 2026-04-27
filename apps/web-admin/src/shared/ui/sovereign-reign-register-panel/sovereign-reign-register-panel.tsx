@@ -1,19 +1,31 @@
 /**
- * 군주 재위 등록/수정 패널
+ * 군주 재위 등록/수정 모달
  * - 인물 상세 패널에서 "군주 등록" 버튼으로 열림
  * - SovereignReign 테이블 전용 (GovernmentPositionTenure와 별도)
  */
 import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
+import { AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
-import { FiChevronDown } from 'react-icons/fi'
+import { FiChevronDown, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { useHistoricalCountriesByModernCountry, useCountries } from '@/features/country/api'
 import { personCareerApi } from '@/shared/api/person-career'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
-import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
+import {
+  PersonRegisterModalBox,
+  PersonRegisterModalCloseBtn,
+  PersonRegisterModalFormScroll,
+  PersonRegisterModalHeader,
+  PersonRegisterModalOverlay,
+  PersonRegisterModalStickyFooter,
+  PersonRegisterModalTitle,
+  PersonRegisterModalPrimaryBtn,
+  PersonRegisterModalCancelBtn,
+} from '@/shared/ui/person-register-modal/person-register-modal-shell'
 import {
   FormRows,
   FieldRow,
@@ -26,7 +38,7 @@ import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 
 const FORM_ID = 'sovereign-reign-register-form'
 
-const SidebarFormWrap = styled.div`
+const ModalFormWrap = styled.div`
   width: 100%;
   min-width: 0;
 
@@ -34,10 +46,13 @@ const SidebarFormWrap = styled.div`
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 16px 0;
+    padding: 12px 0;
     align-items: stretch;
     border: none;
     border-bottom: none;
+  }
+  ${FieldRow}:first-child {
+    padding-top: 0;
   }
   ${FieldLabel} {
     padding-top: 0;
@@ -49,6 +64,29 @@ const SidebarFormWrap = styled.div`
   ${FieldControl} {
     max-width: none;
     width: 100%;
+  }
+`
+
+const FooterDeleteBtn = styled.button`
+  margin-right: auto;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.error};
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 69, 58, 0.16)'
+        : 'rgba(239, 68, 68, 0.08)'};
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 `
 
@@ -106,29 +144,6 @@ const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
   }
 `
 
-
-const DeleteBtn = styled.button`
-  margin-top: 24px;
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.error};
-  background: transparent;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.2s;
-  &:hover:not(:disabled) {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 69, 58, 0.16)'
-        : 'rgba(239, 68, 68, 0.08)'};
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
 
 const RequiredMark = styled.span`
   color: ${({ theme }) => theme.colors.error};
@@ -224,10 +239,21 @@ export function SovereignReignRegisterPanel({
     setRegnalNumber(r.regnalNumber != null ? String(r.regnalNumber) : '')
   }, [open, existingReign])
 
-  const selectedCountry = (countries as any[]).find((c: any) => c.id === countryId)
-  const selectedHistorical = (historicalCountries as any[]).find(
-    (c: any) => c.id === historicalCountryId,
-  )
+  // 수정 모드에서 모달이 열렸을 때, 저장된 historicalCountryId만 있고
+  // 연결된 modern countryId가 없으면 historical 목록 쿼리가 비어 있어 lookup이 실패한다.
+  // 이때 existingReign에 include된 country/historicalCountry 관계로 fallback해 이름을 그대로 표시.
+  const existingReignAny = existingReign as any
+  const selectedCountry =
+    (countries as any[]).find((c: any) => c.id === countryId) ??
+    (existingReignAny?.country?.id && existingReignAny.country.id === countryId
+      ? existingReignAny.country
+      : null)
+  const selectedHistorical =
+    (historicalCountries as any[]).find((c: any) => c.id === historicalCountryId) ??
+    (existingReignAny?.historicalCountry?.id &&
+    existingReignAny.historicalCountry.id === historicalCountryId
+      ? existingReignAny.historicalCountry
+      : null)
   const selectedDef = positionDefinitionId
     ? (positionDefinitions as any[]).find((d: any) => d.id === positionDefinitionId)
     : null
@@ -294,132 +320,182 @@ export function SovereignReignRegisterPanel({
 
   return (
     <>
-      <FormSidePanel
-        isOpen={open}
-        title={isEdit ? '군주 재위 수정' : '군주 재위 등록'}
-        onClose={onClose}
-        submitLabel={submitting ? '저장 중…' : isEdit ? '수정 저장' : '등록'}
-        formId={FORM_ID}
-        submitDisabled={!canSubmit || submitting || deleting}
-      >
-        <SidebarFormWrap>
-          <form id={FORM_ID} onSubmit={handleSubmit}>
-            <FormRows>
-              {/* 국가 */}
-              <FieldRow>
-                <FieldLabel>국가</FieldLabel>
-                <FieldControl>
-                  <SelectTriggerButton
-                    type="button"
-                    $hasValue={!!countryId}
-                    onClick={() => setCountryModalOpen(true)}
-                  >
-                    <span>{selectedCountry?.name ?? '현대 국가 선택 (선택)'}</span>
-                    <FiChevronDown size={16} />
-                  </SelectTriggerButton>
-                </FieldControl>
-              </FieldRow>
-
-              {/* 역사적 국가 */}
-              <FieldRow>
-                <FieldLabel>역사적 국가</FieldLabel>
-                <FieldControl>
-                  <SelectTriggerButton
-                    type="button"
-                    $hasValue={!!historicalCountryId}
-                    onClick={() => setHistoricalCountryModalOpen(true)}
-                    disabled={!countryId}
-                  >
-                    <span>
-                      {historicalCountryId
-                        ? (selectedHistorical?.name ?? '역사적 국가')
-                        : countryId
-                          ? '역사적 국가 선택 (선택)'
-                          : '현대 국가를 먼저 선택하세요'}
-                    </span>
-                    <FiChevronDown size={16} />
-                  </SelectTriggerButton>
-                  <FieldHint>역사적 국가가 있으면 현대 국가보다 우선 표시됩니다.</FieldHint>
-                </FieldControl>
-              </FieldRow>
-
-              {/* 왕명 */}
-              <FieldRow>
-                <FieldLabel>왕명 (군주명)</FieldLabel>
-                <FieldControl>
-                  <Input
-                    type="text"
-                    value={regnalName}
-                    onChange={(e) => setRegnalName(e.target.value)}
-                    placeholder="예: 빅토리아, 루이 14세 (선택)"
-                  />
-                  <FieldHint>인물 리스트·가계도에 이 이름으로 표시됩니다.</FieldHint>
-                </FieldControl>
-              </FieldRow>
-
-              {/* 직위 */}
-              <FieldRow>
-                <FieldLabel>직위 (예: 국왕, 황제)</FieldLabel>
-                <FieldControl>
-                  <SelectTriggerButton
-                    type="button"
-                    $hasValue={!!positionDefinitionId}
-                    onClick={() => setPositionModalOpen(true)}
-                  >
-                    <span>{selectedDef?.title ?? '직위 선택 (선택)'}</span>
-                    <FiChevronDown size={16} />
-                  </SelectTriggerButton>
-                </FieldControl>
-              </FieldRow>
-
-              {/* 재위 기간 */}
-              <FieldRow>
-                <FieldLabel>
-                  재위 기간 <RequiredMark>*</RequiredMark>
-                </FieldLabel>
-                <FieldControl>
-                  <DateRangeField
-                    startValue={startDate}
-                    endValue={endDate}
-                    onStartChange={setStartDate}
-                    onEndChange={setEndDate}
-                    startPlaceholder="재위 시작 (필수)"
-                    endPlaceholder="재위 종료 (비워두면 현재)"
-                    renderControlOnly
-                    startPickerTitle="재위 시작일"
-                    endPickerTitle="재위 종료일"
-                  />
-                </FieldControl>
-              </FieldRow>
-
-              {/* 대수 */}
-              <FieldRow>
-                <FieldLabel>재위 대수 (예: 1, 2…)</FieldLabel>
-                <FieldControl>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={regnalNumber}
-                    onChange={(e) => setRegnalNumber(e.target.value)}
-                    placeholder="대수 (선택)"
-                  />
-                </FieldControl>
-              </FieldRow>
-
-            </FormRows>
-
-            {isEdit && (
-              <DeleteBtn
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting || submitting}
+      {createPortal(
+        <AnimatePresence>
+          {open && (
+            <PersonRegisterModalOverlay
+              key="sovereign-reign-modal-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="sovereign-reign-modal-title"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+            >
+              <PersonRegisterModalBox
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ duration: 0.2 }}
+                $maxWidth="min(560px, 94vw)"
+                $minHeight="auto"
+                onClick={(event) => event.stopPropagation()}
               >
-                {deleting ? '삭제 중…' : '이 재위 기록 삭제'}
-              </DeleteBtn>
-            )}
-          </form>
-        </SidebarFormWrap>
-      </FormSidePanel>
+                <PersonRegisterModalHeader>
+                  <PersonRegisterModalTitle id="sovereign-reign-modal-title">
+                    {isEdit ? '군주 재위 수정' : '군주 재위 등록'}
+                  </PersonRegisterModalTitle>
+                  <PersonRegisterModalCloseBtn
+                    type="button"
+                    aria-label="닫기"
+                    onClick={onClose}
+                  >
+                    <FiX size={20} />
+                  </PersonRegisterModalCloseBtn>
+                </PersonRegisterModalHeader>
+                <PersonRegisterModalFormScroll>
+                  <ModalFormWrap>
+                    <form id={FORM_ID} onSubmit={handleSubmit}>
+                      <FormRows>
+                        {/* 국가 */}
+                        <FieldRow>
+                          <FieldLabel>국가</FieldLabel>
+                          <FieldControl>
+                            <SelectTriggerButton
+                              type="button"
+                              $hasValue={!!countryId}
+                              onClick={() => setCountryModalOpen(true)}
+                            >
+                              <span>{selectedCountry?.name ?? '현대 국가 선택 (선택)'}</span>
+                              <FiChevronDown size={16} />
+                            </SelectTriggerButton>
+                          </FieldControl>
+                        </FieldRow>
+
+                        {/* 역사적 국가 */}
+                        <FieldRow>
+                          <FieldLabel>역사적 국가</FieldLabel>
+                          <FieldControl>
+                            <SelectTriggerButton
+                              type="button"
+                              $hasValue={!!historicalCountryId}
+                              onClick={() => setHistoricalCountryModalOpen(true)}
+                              disabled={!countryId}
+                            >
+                              <span>
+                                {historicalCountryId
+                                  ? (selectedHistorical?.name ?? '역사적 국가')
+                                  : countryId
+                                    ? '역사적 국가 선택 (선택)'
+                                    : '현대 국가를 먼저 선택하세요'}
+                              </span>
+                              <FiChevronDown size={16} />
+                            </SelectTriggerButton>
+                            <FieldHint>역사적 국가가 있으면 현대 국가보다 우선 표시됩니다.</FieldHint>
+                          </FieldControl>
+                        </FieldRow>
+
+                        {/* 왕명 */}
+                        <FieldRow>
+                          <FieldLabel>왕명 (군주명)</FieldLabel>
+                          <FieldControl>
+                            <Input
+                              type="text"
+                              value={regnalName}
+                              onChange={(e) => setRegnalName(e.target.value)}
+                              placeholder="예: 빅토리아, 루이 14세 (선택)"
+                            />
+                            <FieldHint>인물 리스트·가계도에 이 이름으로 표시됩니다.</FieldHint>
+                          </FieldControl>
+                        </FieldRow>
+
+                        {/* 직위 */}
+                        <FieldRow>
+                          <FieldLabel>직위 (예: 국왕, 황제)</FieldLabel>
+                          <FieldControl>
+                            <SelectTriggerButton
+                              type="button"
+                              $hasValue={!!positionDefinitionId}
+                              onClick={() => setPositionModalOpen(true)}
+                            >
+                              <span>{selectedDef?.title ?? '직위 선택 (선택)'}</span>
+                              <FiChevronDown size={16} />
+                            </SelectTriggerButton>
+                          </FieldControl>
+                        </FieldRow>
+
+                        {/* 재위 기간 */}
+                        <FieldRow>
+                          <FieldLabel>
+                            재위 기간 <RequiredMark>*</RequiredMark>
+                          </FieldLabel>
+                          <FieldControl>
+                            <DateRangeField
+                              startValue={startDate}
+                              endValue={endDate}
+                              onStartChange={setStartDate}
+                              onEndChange={setEndDate}
+                              startPlaceholder="재위 시작 (필수)"
+                              endPlaceholder="재위 종료 (비워두면 현재)"
+                              renderControlOnly
+                              startPickerTitle="재위 시작일"
+                              endPickerTitle="재위 종료일"
+                            />
+                          </FieldControl>
+                        </FieldRow>
+
+                        {/* 대수 */}
+                        <FieldRow>
+                          <FieldLabel>즉위 순서 (n대)</FieldLabel>
+                          <FieldControl>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={regnalNumber}
+                              onChange={(e) => setRegnalNumber(e.target.value)}
+                              placeholder="예: 1 (해당 국가의 1대 군주)"
+                            />
+                            <FieldHint>
+                              한 국가에 같은 대수의 군주는 단 한 명입니다 (예: 표트르 대제 = 러시아 제국 1대).
+                            </FieldHint>
+                          </FieldControl>
+                        </FieldRow>
+                      </FormRows>
+                    </form>
+                  </ModalFormWrap>
+                </PersonRegisterModalFormScroll>
+                <PersonRegisterModalStickyFooter>
+                  {isEdit && (
+                    <FooterDeleteBtn
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={deleting || submitting}
+                    >
+                      {deleting ? '삭제 중…' : '삭제'}
+                    </FooterDeleteBtn>
+                  )}
+                  <PersonRegisterModalCancelBtn
+                    type="button"
+                    onClick={onClose}
+                    disabled={submitting || deleting}
+                  >
+                    취소
+                  </PersonRegisterModalCancelBtn>
+                  <PersonRegisterModalPrimaryBtn
+                    type="submit"
+                    form={FORM_ID}
+                    disabled={!canSubmit || submitting || deleting}
+                  >
+                    {submitting ? '저장 중…' : isEdit ? '수정 저장' : '등록'}
+                  </PersonRegisterModalPrimaryBtn>
+                </PersonRegisterModalStickyFooter>
+              </PersonRegisterModalBox>
+            </PersonRegisterModalOverlay>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
 
       {/* 현대 국가 선택 모달 */}
       <CountrySearchModal

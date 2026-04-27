@@ -30,11 +30,17 @@ import {
   FORM_STEPS,
   buildEventSubmitData,
   buildMilitaryEventData,
+  checkBasicInfo,
+  clearDraft,
   extractMentions,
+  extractMentionsFromHtml,
+  getDraftKey,
   getFormSteps,
   getStepTitle,
   isDiplomaticCategory,
   isMilitaryCategory,
+  loadDraft,
+  saveDraft,
   validateBasicInfo,
 } from '@/features/event-create/lib'
 import { type EventSection, type FormStep } from '@/features/event-create/model'
@@ -44,6 +50,7 @@ import {
 } from '@/features/event-form/model'
 import { getImageUrl } from '@/pages/events/utils/event-create.utils'
 import {
+  type EventResponseDto,
   createEvent,
   getEventById,
   getEventsByParentId,
@@ -91,7 +98,18 @@ export const EventCreatePageRefactored: React.FC<
   const { eventId: editEventId } = useParams<{ eventId?: string }>()
   const playClickSound = useClickSound()
 
-  const handleBack = onBackProp ?? (() => navigate(pathKeys.events.root()))
+  const goBack = onBackProp ?? (() => navigate(pathKeys.events.root()))
+  const handleBack = () => {
+    if (
+      isDirtyRef.current &&
+      !window.confirm(
+        '저장하지 않은 변경 사항이 있습니다. 페이지를 떠나시겠습니까?',
+      )
+    ) {
+      return
+    }
+    goBack()
+  }
 
   // 편집 모드 감지
   const isEditMode = Boolean(editEventId)
@@ -179,7 +197,12 @@ export const EventCreatePageRefactored: React.FC<
   // ===== Page State =====
   const [currentStep, setCurrentStep] = useState<FormStep>(FORM_STEPS.BASIC)
   const [isLoadingEvent, setIsLoadingEvent] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [showCountryModal, setShowCountryModal] = useState(false)
+  // Unsaved changes 추적 — submit 시 false로 전환되어 경고 안 뜨게 함
+  const isDirtyRef = React.useRef(false)
+  // 편집 모드: 초기 로드 직후엔 dirty 아님 (사용자 입력만 dirty 처리)
+  const skipNextDirtyRef = React.useRef(false)
 
   // 군사 카테고리 전용 필드
   const [militaryEvent, setMilitaryEvent] = useState<MilitaryEvent>({
@@ -223,27 +246,14 @@ export const EventCreatePageRefactored: React.FC<
     { id: '1', title: 'Part 1', content: '', mentions: [] },
   ])
 
-  // 하위 사건들의 관계 데이터
-  const [childEventsRelations, setChildEventsRelations] = useState<
-    Array<{ relation: EventBelligerentsGraph; sourceName: string }>
-  >([])
-
   // 🆕 하위 사건 선택 (기존 사건 연결)
   const [childEventIds, setChildEventIds] = useState<string[]>([])
   const [childEventSearch, setChildEventSearch] = useState('')
   const [showChildEventList, setShowChildEventList] = useState(false)
   const childEventSelectorRef = React.useRef<HTMLDivElement>(null)
-  const [loadedChildEvents, setLoadedChildEvents] = useState<any[]>([])
-
-  // 빠른 등록 (deprecated - 사용 안 함)
-  const childEvents: Array<{
-    title: string
-    startDate?: string
-    endDate?: string
-    description?: string
-    location?: string
-    thumbnail?: string
-  }> = []
+  const [loadedChildEvents, setLoadedChildEvents] = useState<
+    EventResponseDto[]
+  >([])
 
   // 멘션 시스템
   const [mentionState, setMentionState] = useState<{
@@ -253,6 +263,13 @@ export const EventCreatePageRefactored: React.FC<
     type: 'person' | 'event' | null
   } | null>(null)
 
+  // 사용자가 한 번이라도 제출을 시도했는지 — 제출 전엔 inline 에러 숨김
+  const [submitAttempted, setSubmitAttempted] = useState(false)
+  const validation = useMemo(
+    () => checkBasicInfo({ title, startDate, endDate }),
+    [title, startDate, endDate],
+  )
+
   // 폼 단계
   const steps = useMemo(() => getFormSteps(category), [category])
 
@@ -260,64 +277,82 @@ export const EventCreatePageRefactored: React.FC<
   useEffect(() => {
     if (!isEditMode || !editEventId) return
 
+    // editEventId가 빠르게 바뀔 때(예: 뒤로/앞으로) 이전 요청 결과로 덮어쓰지
+    // 못하도록 mounted 플래그로 가드. AbortController가 없는 SDK 호출이라
+    // 응답 자체는 막을 수 없지만 setState는 차단함.
+    let cancelled = false
+    setIsLoadingEvent(true)
+
     const loadEvent = async () => {
-      setIsLoadingEvent(true)
       try {
-        const event = await getEventById(editEventId)
+        // 본 사건 + 하위 사건 목록을 병렬로 받음 (두 호출은 서로 의존 없음).
+        // 어느 한쪽이 실패해도 가능한 한 다른 쪽 결과는 반영하기 위해 allSettled.
+        const [eventResult, childResult] = await Promise.allSettled([
+          getEventById(editEventId),
+          getEventsByParentId(editEventId),
+        ])
+        if (cancelled) return
+
+        // 하위 사건 결과 처리
+        if (childResult.status === 'fulfilled') {
+          setLoadedChildEvents(childResult.value)
+          setChildEventIds(childResult.value.map((c) => c.id))
+        } else {
+          console.error(
+            '[EventCreatePage] 하위 사건 로드 실패:',
+            childResult.reason,
+          )
+          setLoadedChildEvents([])
+          setChildEventIds([])
+        }
+
+        // 메인 사건 실패 시 알림 후 종료
+        if (eventResult.status !== 'fulfilled') {
+          throw eventResult.reason
+        }
+        const event = eventResult.value
 
         // 기본 정보 설정
         setTitle(event.title)
         setDescription(event.description || '')
 
-        // 🔧 FIX: 시작일/시간 설정
-        if (event.startDate) {
-          try {
-            const startDateTime = new Date(event.startDate)
-            if (!isNaN(startDateTime.getTime())) {
-              const hours = startDateTime.getHours().toString().padStart(2, '0')
-              const minutes = startDateTime
-                .getMinutes()
-                .toString()
-                .padStart(2, '0')
-              if (hours !== '00' || minutes !== '00') {
-                setStartTime(`${hours}:${minutes}`)
-              }
-              setStartDate(event.startDate.split('T')[0])
-            }
-          } catch (e) {
-            setStartDate(event.startDate.split('T')[0] || '')
-          }
+        // ISO 문자열에서 날짜·시간 분리. 자정(00:00)도 명시 입력으로 인정 —
+        // 원본 ISO에 시간 부분이 있으면 그대로 시간 필드에 채워, 자정 시작
+        // 사건이 다음 저장에서 시간 정보 손실되지 않게 함.
+        const splitDateTime = (
+          iso: string,
+        ): { date: string; time: string } => {
+          const date = iso.split('T')[0] || ''
+          const m = iso.match(/T(\d{2}):(\d{2})/)
+          // 원본 문자열에 시간이 명시돼 있을 때만 time을 채움. 시간 부분이
+          // 없는 ISO("YYYY-MM-DD")는 시간 미입력으로 처리.
+          return { date, time: m ? `${m[1]}:${m[2]}` : '' }
         }
 
-        // 🔧 FIX: 종료일/시간 설정
+        if (event.startDate) {
+          const { date, time } = splitDateTime(event.startDate)
+          setStartDate(date)
+          if (time) setStartTime(time)
+        }
+
         if (event.endDate) {
-          try {
-            const endDateTime = new Date(event.endDate)
-            if (!isNaN(endDateTime.getTime())) {
-              const hours = endDateTime.getHours().toString().padStart(2, '0')
-              const minutes = endDateTime
-                .getMinutes()
-                .toString()
-                .padStart(2, '0')
-              if (hours !== '00' || minutes !== '00') {
-                setEndTime(`${hours}:${minutes}`)
-              }
-              setEndDate(event.endDate.split('T')[0])
-            }
-          } catch (e) {
-            setEndDate(event.endDate.split('T')[0] || '')
-          }
+          const { date, time } = splitDateTime(event.endDate)
+          setEndDate(date)
+          if (time) setEndTime(time)
         }
 
         setLocation(event.location || '')
         setKeywords(Array.isArray(event.keywords) ? event.keywords : [])
 
         // 썸네일 로드 (새 구조 우선, 레거시 fallback)
-        if (event.eventImages && event.eventImages.length > 0) {
-          const primaryImage = event.eventImages.find((img) => img.isPrimary)
-          setThumbnail(
-            primaryImage?.imageUrl || event.eventImages[0].imageUrl || '',
-          )
+        type LoadedImage = {
+          imageUrl: string
+          isPrimary?: boolean
+        }
+        const eventImages = event.eventImages as LoadedImage[] | undefined
+        if (eventImages && eventImages.length > 0) {
+          const primaryImage = eventImages.find((img) => img.isPrimary)
+          setThumbnail(primaryImage?.imageUrl || eventImages[0].imageUrl || '')
         } else if (event.thumbnail) {
           setThumbnail(event.thumbnail)
         }
@@ -336,13 +371,18 @@ export const EventCreatePageRefactored: React.FC<
         }
 
         // 섹션 로드 (새 구조 우선, 레거시 fallback)
-        if (event.eventSections && event.eventSections.length > 0) {
-          // 새 구조: EventSection[] → EventSection[]
-          const loadedSections = event.eventSections.map((section, index) => ({
+        type LoadedSection = { id: string; title: string; content: string }
+        const eventSections = event.eventSections as
+          | LoadedSection[]
+          | undefined
+        if (eventSections && eventSections.length > 0) {
+          // 본문 HTML에서 entity-link 멘션 복원 — 편집 후 저장 시 멘션
+          // 메타데이터(relatedPersons/relatedEventIds)가 사라지지 않도록 함
+          const loadedSections = eventSections.map((section) => ({
             id: section.id,
             title: section.title,
             content: section.content,
-            mentions: [], // 멘션은 별도 로직으로 추출 가능
+            mentions: extractMentionsFromHtml(section.content),
           }))
           setSections(loadedSections)
         } else if (event.sections) {
@@ -369,44 +409,284 @@ export const EventCreatePageRefactored: React.FC<
           setConferenceEvent(event.conferenceEvent)
         }
 
-        toast.success('사건 정보를 불러왔습니다')
-      } catch {
-        toast.error('사건 정보를 불러오는데 실패했습니다')
+        // 상위 사건 로드
+        if (event.parentEventId) {
+          setParentEventId(event.parentEventId)
+          if (event.parentEvent?.title) {
+            setParentEventSearch(event.parentEvent.title)
+          }
+        }
+
+        // 관련 인물 로드 (PersonEvent 행 → relatedPersons 폼 형태로 매핑)
+        if (
+          'relatedPersons' in event &&
+          Array.isArray(
+            (event as { relatedPersons?: unknown }).relatedPersons,
+          )
+        ) {
+          const rp = (
+            event as {
+              relatedPersons?: Array<{
+                personId: string
+                role?: string | null
+                note?: string | null
+              }>
+            }
+          ).relatedPersons
+          if (rp) {
+            setRelatedPersons(
+              rp.map((p) => ({
+                personId: p.personId,
+                role: p.role ?? '',
+                note: p.note ?? '',
+              })),
+            )
+          }
+        }
+
+        // 관련 사건 ID 로드 (relatedEventIds — 평면 배열로 들어오는 경우)
+        if (
+          'relatedEventIds' in event &&
+          Array.isArray(
+            (event as { relatedEventIds?: unknown }).relatedEventIds,
+          )
+        ) {
+          setRelatedEventIds(
+            (event as { relatedEventIds?: string[] }).relatedEventIds ?? [],
+          )
+        }
+
+        if (!cancelled) toast.success('사건 정보를 불러왔습니다')
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[EventCreatePage] 사건 로드 실패:', error)
+          toast.error('사건 정보를 불러오는데 실패했습니다')
+        }
       } finally {
-        setIsLoadingEvent(false)
+        if (!cancelled) setIsLoadingEvent(false)
       }
     }
 
     loadEvent()
-  }, [isEditMode, editEventId])
-
-  // 하위 사건 관계 로드
-  useEffect(() => {
-    if (isEditMode && editEventId) {
-      getEventsByParentId(editEventId)
-        .then((childEventsData) => {
-          // 하위 사건 데이터와 ID 목록 설정
-          setLoadedChildEvents(childEventsData)
-          const childIds = childEventsData.map((child) => child.id)
-          setChildEventIds(childIds)
-        })
-        .catch(() => {
-          setLoadedChildEvents([])
-          setChildEventIds([])
-        })
+    return () => {
+      cancelled = true
     }
   }, [isEditMode, editEventId])
 
+  // 폼 입력 추적 — 첫 렌더와 편집 모드 로딩 직후엔 dirty 처리하지 않음
+  useEffect(() => {
+    if (skipNextDirtyRef.current) {
+      skipNextDirtyRef.current = false
+      return
+    }
+    isDirtyRef.current = true
+  }, [
+    title,
+    description,
+    startDate,
+    startTime,
+    endDate,
+    endTime,
+    category,
+    thumbnail,
+    location,
+    keywords,
+    relatedCountryIds,
+    relatedHistoricalCountryIds,
+    parentEventId,
+    relatedPersons,
+    relatedEventIds,
+    sections,
+    militaryEvent,
+    conferenceEvent,
+    belligerentsGraph,
+    warCost,
+    childEventIds,
+  ])
+
+  // 편집 모드 로딩이 끝나면 다음 렌더의 dirty 갱신 한 번 무시
+  useEffect(() => {
+    if (!isLoadingEvent) {
+      skipNextDirtyRef.current = true
+    }
+  }, [isLoadingEvent])
+
+  // beforeunload — 새로고침/탭 닫기 시 경고
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!isDirtyRef.current) return
+      e.preventDefault()
+      // 최신 브라우저는 사용자 메시지를 무시하지만 기본 경고는 띄움
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
+
+  // ===== Autosave (localStorage) =====
+  const draftKey = useMemo(
+    () => getDraftKey(editEventId),
+    [editEventId],
+  )
+
+  // 마운트 시 1회: 임시 저장된 draft 있으면 복원 여부 확인.
+  // 편집 모드에서도 동작 — 사용자가 편집 도중 새로고침한 경우 서버 데이터를
+  // 한 번 덮어쓴 뒤 복원할 수 있게 함.
+  // draftKey 단위로 가드 — 다른 사건으로 이동했다가 돌아오면 그 사건의
+  // draft에 대해 다시 한 번만 묻도록.
+  const draftPromptedKeyRef = React.useRef<string | null>(null)
+
+  type DraftPayload = {
+    title: string
+    description: string
+    startDate: string
+    startTime: string
+    endDate: string
+    endTime: string
+    category: typeof category
+    thumbnail: string
+    location: string
+    keywords: string[]
+    relatedCountryIds: string[]
+    relatedHistoricalCountryIds: string[]
+    parentEventId: string
+    relatedPersons: typeof relatedPersons
+    relatedEventIds: string[]
+    sections: typeof sections
+    childEventIds: string[]
+    // 군사 / 회담 관련 — 카테고리 작성 후 새로고침 시 손실 방지
+    militaryEvent: typeof militaryEvent
+    belligerentsGraph: typeof belligerentsGraph
+    conferenceEvent: typeof conferenceEvent
+    warCost: string
+    militaryDetails: typeof militaryDetails
+    casualties: typeof casualties
+    belligerents: typeof belligerents
+  }
+
+  useEffect(() => {
+    if (draftPromptedKeyRef.current === draftKey) return
+    if (isEditMode && isLoadingEvent) return // 편집 모드는 서버 로드 끝난 뒤
+    draftPromptedKeyRef.current = draftKey
+
+    const env = loadDraft<DraftPayload>(draftKey)
+    if (!env) return
+    const savedAtLabel = new Date(env.savedAt).toLocaleString('ko-KR')
+    const ok = window.confirm(
+      `${savedAtLabel}에 저장된 임시 작성본이 있습니다. 복원할까요?\n(취소하면 저장된 작성본은 유지됩니다)`,
+    )
+    if (!ok) return
+    const p = env.payload
+    setTitle(p.title)
+    setDescription(p.description)
+    setStartDate(p.startDate)
+    setStartTime(p.startTime)
+    setEndDate(p.endDate)
+    setEndTime(p.endTime)
+    setCategory(p.category)
+    setThumbnail(p.thumbnail)
+    setLocation(p.location)
+    setKeywords(p.keywords)
+    setRelatedCountryIds(p.relatedCountryIds)
+    setRelatedHistoricalCountryIds(p.relatedHistoricalCountryIds)
+    setParentEventId(p.parentEventId)
+    setRelatedPersons(p.relatedPersons)
+    setRelatedEventIds(p.relatedEventIds)
+    setSections(p.sections)
+    setChildEventIds(p.childEventIds)
+    // 군사/회담 카테고리 데이터 복원 (없으면 무시)
+    if (p.militaryEvent) setMilitaryEvent(p.militaryEvent)
+    if (p.belligerentsGraph) setBelligerentsGraph(p.belligerentsGraph)
+    if (p.conferenceEvent) setConferenceEvent(p.conferenceEvent)
+    if (typeof p.warCost === 'string') setWarCost(p.warCost)
+    if (p.militaryDetails) setMilitaryDetails(p.militaryDetails)
+    if (p.casualties) setCasualties(p.casualties)
+    if (p.belligerents) setBelligerents(p.belligerents)
+  }, [draftKey, isEditMode, isLoadingEvent])
+
+  // 폼 입력 변경 시 1.5초 디바운스 후 localStorage에 임시 저장.
+  // 처음 렌더(빈 폼)에선 저장 안 함 — `isDirtyRef`가 true가 된 이후만.
+  useEffect(() => {
+    if (!isDirtyRef.current) return
+    const id = window.setTimeout(() => {
+      const payload: DraftPayload = {
+        title,
+        description,
+        startDate,
+        startTime,
+        endDate,
+        endTime,
+        category,
+        thumbnail,
+        location,
+        keywords,
+        relatedCountryIds,
+        relatedHistoricalCountryIds,
+        parentEventId,
+        relatedPersons,
+        relatedEventIds,
+        sections,
+        childEventIds,
+        militaryEvent,
+        belligerentsGraph,
+        conferenceEvent,
+        warCost,
+        militaryDetails,
+        casualties,
+        belligerents,
+      }
+      saveDraft(draftKey, payload)
+    }, 1500)
+    return () => window.clearTimeout(id)
+  }, [
+    draftKey,
+    title,
+    description,
+    startDate,
+    startTime,
+    endDate,
+    endTime,
+    category,
+    thumbnail,
+    location,
+    keywords,
+    relatedCountryIds,
+    relatedHistoricalCountryIds,
+    parentEventId,
+    relatedPersons,
+    relatedEventIds,
+    sections,
+    childEventIds,
+    militaryEvent,
+    belligerentsGraph,
+    conferenceEvent,
+    warCost,
+    militaryDetails,
+    casualties,
+    belligerents,
+  ])
+
   // 제출 처리
   const handleSubmit = async () => {
+    if (isSubmitting) return // 중복 제출 방지
+    setSubmitAttempted(true)
     try {
       if (!validateBasicInfo({ title, startDate })) {
+        // 첫 단계로 되돌려 inline 에러를 보여줌
+        setCurrentStep(FORM_STEPS.BASIC)
         return
       }
 
+      setIsSubmitting(true)
       const { mentionedPersons, mentionedEvents } = extractMentions(sections)
 
-      const finalMilitaryEvent = isMilitaryCategory(category)
+      // 카테고리 변경 후 이전 카테고리 데이터가 잔존해도 서버에 보내지 않도록
+      // 카테고리별로 한 번 더 게이팅. (UI 상으로는 보존돼서, 카테고리를 다시
+      // 군사/외교로 되돌리면 입력값이 살아남음.)
+      const isMilitary = isMilitaryCategory(category)
+      const isDiplomatic = isDiplomaticCategory(category)
+
+      const finalMilitaryEvent = isMilitary
         ? buildMilitaryEventData(category, {
             belligerents,
             belligerentsGraph,
@@ -434,13 +714,14 @@ export const EventCreatePageRefactored: React.FC<
         relatedEventIds,
         sections,
         militaryEvent: finalMilitaryEvent,
-        conferenceEvent,
-        belligerentsGraph,
-        warCost,
+        conferenceEvent: isDiplomatic ? conferenceEvent : undefined,
+        belligerentsGraph: isMilitary
+          ? belligerentsGraph
+          : { countries: [], relations: [] },
+        warCost: isMilitary ? warCost : '',
         mentionedPersons,
         mentionedEvents,
-        childEvents, // 🆕 하위 사건 빠른 추가 (deprecated)
-        childEventIds, // 🆕 하위 사건 연결 (기존 사건)
+        childEventIds, // 하위 사건 연결 (기존 사건)
         keywords,
       })
 
@@ -455,17 +736,25 @@ export const EventCreatePageRefactored: React.FC<
         toast.success('사건이 성공적으로 등록되었습니다!')
       }
 
+      // 저장 성공 — 더 이상 dirty 아님 (이탈 경고 비활성화)
+      isDirtyRef.current = false
+      // 임시 저장본도 정리
+      clearDraft(draftKey)
+
       if (onSuccess) {
         onSuccess()
       } else {
         navigate(pathKeys.events.root())
       }
     } catch (error) {
+      console.error('[EventCreatePage] 사건 저장 실패:', error)
       toast.error(
-        `사건 등록에 실패했습니다: ${
+        `사건 ${isEditMode ? '수정' : '등록'}에 실패했습니다: ${
           error instanceof Error ? error.message : '알 수 없는 오류'
         }`,
       )
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -482,7 +771,19 @@ export const EventCreatePageRefactored: React.FC<
         />
 
         {/* 우측: 폼 */}
-        <S.FormArea>
+        <S.FormArea aria-busy={isLoadingEvent || isSubmitting}>
+          {(isLoadingEvent || isSubmitting) && (
+            <S.FormOverlay role="status" aria-live="polite">
+              <S.OverlaySpinner />
+              <span>
+                {isLoadingEvent
+                  ? '사건 정보를 불러오는 중...'
+                  : isEditMode
+                    ? '수정 사항을 저장하는 중...'
+                    : '사건을 등록하는 중...'}
+              </span>
+            </S.FormOverlay>
+          )}
           <S.FormAreaHeader>
             <S.FormAreaTitle>
               {getStepTitle(currentStep, category)}
@@ -495,10 +796,31 @@ export const EventCreatePageRefactored: React.FC<
                   playClickSound()
                   handleSubmit()
                 }}
-                disabled={!isBasicInfoValid()}
+                disabled={
+                  !isBasicInfoValid() || isSubmitting || isLoadingEvent
+                }
+                title={
+                  isLoadingEvent
+                    ? '사건 정보를 불러오는 중'
+                    : isSubmitting
+                      ? '저장 중...'
+                      : !isBasicInfoValid()
+                        ? (validation.firstError ??
+                          '기본 정보를 입력해야 저장할 수 있습니다')
+                        : undefined
+                }
+                aria-disabled={
+                  !isBasicInfoValid() || isSubmitting || isLoadingEvent
+                }
               >
                 <FiSave size={16} />
-                {isEditMode ? '수정 완료' : '사건 등록'}
+                {isSubmitting
+                  ? isEditMode
+                    ? '수정 중...'
+                    : '등록 중...'
+                  : isEditMode
+                    ? '수정 완료'
+                    : '사건 등록'}
               </S.ActionButton>
             </div>
           </S.FormAreaHeader>
@@ -544,6 +866,16 @@ export const EventCreatePageRefactored: React.FC<
               playClickSound={playClickSound}
               getDateError={getDateError}
               calculateDaysDifference={calculateDaysDifference}
+              titleError={
+                submitAttempted ? validation.fields.title : undefined
+              }
+              startDateError={
+                submitAttempted ? validation.fields.startDate : undefined
+              }
+              endDateError={
+                // 종료일 < 시작일 에러는 사용자가 인지하기 좋게 즉시 노출
+                validation.fields.endDate
+              }
             />
           )}
 
@@ -909,7 +1241,7 @@ export const EventCreatePageRefactored: React.FC<
                         )
                         return (
                           <S.SelectedPersonItem key={person.personId}>
-                            <div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
                               <strong>{personData?.name || '이름 없음'}</strong>
                               <S.Input
                                 type="text"
@@ -925,6 +1257,21 @@ export const EventCreatePageRefactored: React.FC<
                                   )
                                 }}
                                 style={{ marginTop: '8px', fontSize: '12px' }}
+                              />
+                              <S.Textarea
+                                placeholder="이 인물 시점의 사건 메모 — 인물 연보에 그대로 표시됩니다 (예: 1군단 사령관으로 노르망디 작전 지휘 / 다리 부상 후 영국 송환)"
+                                value={person.note}
+                                onChange={(e) => {
+                                  setRelatedPersons((prev) =>
+                                    prev.map((p) =>
+                                      p.personId === person.personId
+                                        ? { ...p, note: e.target.value }
+                                        : p,
+                                    ),
+                                  )
+                                }}
+                                rows={3}
+                                style={{ marginTop: '6px', fontSize: '12px' }}
                               />
                             </div>
                             <S.ClearButton
@@ -1131,7 +1478,6 @@ export const EventCreatePageRefactored: React.FC<
                   }
                   belligerentsGraph={belligerentsGraph}
                   setBelligerentsGraph={setBelligerentsGraph}
-                  childEventsRelations={childEventsRelations}
                 />
               </S.FormSection>
             )}

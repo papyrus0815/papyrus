@@ -46,6 +46,8 @@ import {
   type PersonInfographicView,
 } from '@/widgets/person-infographic'
 
+import { StatsView } from './stats-view'
+
 // 검색 하이라이트
 function highlight(text: string, q: string): React.ReactNode {
   const trimmed = q.trim()
@@ -2937,6 +2939,7 @@ export function InfographicContent({ onPersonClick }: InfographicContentProps) {
             {activeView === 'galaxy' && <GalaxyView people={filtered} onOpen={onPersonClick} />}
             {activeView === 'story' && <EraStory people={filtered} onOpen={onPersonClick} q={q} pinned={pinned} togglePin={togglePin} />}
             {activeView === 'dynasty' && <DynastyView people={filtered} onOpen={onPersonClick} q={q} pinned={pinned} togglePin={togglePin} />}
+            {activeView === 'stats' && <StatsView people={filtered} onPersonClick={onPersonClick} />}
           </ViewArea>
         )}
 

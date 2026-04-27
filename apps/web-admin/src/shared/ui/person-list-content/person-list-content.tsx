@@ -2,22 +2,39 @@
  * 인물 리스트 UI — 국가 상세·인물 페이지 공용
  * 국가 선택 시 인물 탭과 동일한 기능·디자인
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiPlus, FiSearch } from 'react-icons/fi'
+import {
+  FiCheck,
+  FiGrid,
+  FiList,
+  FiPlus,
+  FiSearch,
+  FiSquare,
+  FiStar,
+  FiTable,
+  FiTarget,
+  FiTrash2,
+} from 'react-icons/fi'
 import styled, { css, useTheme } from 'styled-components'
 
 import { personKeys } from '@/entities/person/api'
 import { useHistoricalCountries } from '@/entities/historical-country/api'
 import { useCountries } from '@/features/country/api'
+import { PERSON_TRAIT_META } from '@/shared/api/person-stats'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { usePersonEvaluationIndex } from '@/shared/lib/person-evaluation-index'
 import { getPositionBg, getPositionColor } from '@/shared/lib/position-color'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { BORDER_COLOR, FOCUS_COLOR } from '@/shared/ui/register-form-layout'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
+import { PersonBulkEvaluateModal } from '@/widgets/person/person-stats-section/person-bulk-evaluate-modal'
+import { PersonStatsEditModal } from '@/widgets/person/person-stats-section/person-stats-edit-modal'
+
+import { PersonTable } from './person-table'
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
 
@@ -72,6 +89,12 @@ type PersonLike = {
   /** 군주명 관련 */
   regnalName?: string | null
   templeName?: string | null
+  /** 사망 유형 (필터·검색용) */
+  deathType?: string | null
+  /** 사망 원인 (검색용) */
+  deathCause?: string | null
+  /** 별명/호/필명 (검색용) */
+  nicknames?: Array<{ nickname: string }> | null
 }
 
 interface DynastyItem {
@@ -168,6 +191,99 @@ function getCentury(
 }
 
 const CENTURY_UNKNOWN = 999
+
+/** 사망 유형 enum → 한국어 라벨 (필터 칩) */
+const DEATH_TYPE_LABELS: Record<string, string> = {
+  NATURAL: '자연사',
+  ILLNESS: '병사',
+  ASSASSINATION: '암살',
+  EXECUTION: '처형',
+  BATTLE: '전사',
+  ACCIDENT: '사고사',
+  SUICIDE: '자살',
+  UNKNOWN: '불명',
+  OTHER: '기타',
+}
+
+type SortMode =
+  | 'century' // 기본 — 세기별 그루핑 + 출생년 내림차순
+  | 'name' // 이름 가나다순
+  | 'influence' // 영향력 내림차순
+  | 'statsAvg' // 능력치 평균 내림차순
+  | 'recent' // 최근 등록순
+
+const SORT_OPTIONS: Array<{ key: SortMode; label: string }> = [
+  { key: 'century', label: '세기별' },
+  { key: 'recent', label: '최근 등록순' },
+  { key: 'influence', label: '영향력 ↓' },
+  { key: 'statsAvg', label: '능력치 평균 ↓' },
+  { key: 'name', label: '이름 가나다순' },
+]
+
+type EvalFilter = 'all' | 'evaluated' | 'unevaluated'
+
+type ViewMode = 'cards' | 'compact' | 'table'
+
+const VIEW_MODE_OPTIONS: Array<{
+  key: ViewMode
+  label: string
+  Icon: typeof FiGrid
+}> = [
+  { key: 'cards', label: '카드', Icon: FiGrid },
+  { key: 'compact', label: '조밀', Icon: FiList },
+  { key: 'table', label: '표', Icon: FiTable },
+]
+
+/**
+ * 검색어가 비어 있지 않으면 텍스트에서 매치 부분을 <mark>로 감싸 반환.
+ * 단순 case-insensitive includes 매치 — 검색 로직과 동일.
+ */
+function highlightMatch(text: string, query: string): React.ReactNode {
+  const q = query.trim()
+  if (!q || !text) return text
+  const lowerText = text.toLowerCase()
+  const lowerQ = q.toLowerCase()
+  const out: React.ReactNode[] = []
+  let cursor = 0
+  let idx = lowerText.indexOf(lowerQ, cursor)
+  let key = 0
+  while (idx !== -1) {
+    if (idx > cursor) out.push(text.slice(cursor, idx))
+    out.push(<HighlightMark key={`m-${key++}`}>{text.slice(idx, idx + q.length)}</HighlightMark>)
+    cursor = idx + q.length
+    idx = lowerText.indexOf(lowerQ, cursor)
+  }
+  if (cursor < text.length) out.push(text.slice(cursor))
+  return out
+}
+
+/** 이름에서 모노그램(이니셜) 생성 — 사진 없는 인물 placeholder용 */
+function buildMonogram(person: PersonLike): string {
+  const reg = (person.regnalName || '').trim()
+  // 군주명이 영문이면 첫 글자 + 숫자 추출 (Vittorio Emanuele II → "VE2")
+  if (reg && /^[A-Za-z]/.test(reg)) {
+    const tokens = reg.split(/\s+/).filter(Boolean)
+    const initials = tokens
+      .filter((t) => /^[A-Za-z]/.test(t))
+      .slice(0, 2)
+      .map((t) => t[0]!.toUpperCase())
+      .join('')
+    const numMatch = reg.match(/\b([IVXLCDM]+)\b/i)
+    let num = ''
+    if (numMatch) {
+      const ROMAN: Record<string, number> = {
+        I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10,
+      }
+      num = String(ROMAN[numMatch[1]!.toUpperCase()] ?? '')
+    }
+    return `${initials}${num}` || initials || '?'
+  }
+  // 한글/한자: 이름 첫 글자 + (성 첫 글자가 있으면 성)
+  const sur = (person.surname || '').trim()
+  const nm = (person.name || '').trim()
+  if (sur && nm) return `${sur[0]}${nm[0]}`
+  return (nm[0] ?? sur[0] ?? '?').toString()
+}
 
 // ─── Styled ───────────────────────────────────────────────────────────────────
 const ListHeader = styled.header<{ $compact?: boolean }>`
@@ -375,6 +491,219 @@ const CountryFilterSection = styled.div`
   gap: 8px;
 `
 
+const ViewModeToggle = styled.div`
+  display: inline-flex;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  overflow: hidden;
+`
+
+const ViewModeBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  cursor: pointer;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  transition: background 0.12s, color 0.12s;
+  &:last-child {
+    border-right: none;
+  }
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  ${({ $active, theme }) =>
+    $active &&
+    css`
+      background: ${theme.colors.activeLight};
+      color: ${theme.colors.active};
+      &:hover {
+        background: ${theme.colors.activeLight};
+        color: ${theme.colors.active};
+      }
+    `}
+`
+
+const SortSelect = styled.select`
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+  outline: none;
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.border.medium};
+  }
+  &:focus-visible {
+    border-color: ${({ theme }) => theme.colors.active};
+  }
+`
+
+const SecondaryFilterRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  min-width: 0;
+`
+
+const SecondaryFilterLabel = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-shrink: 0;
+  width: 56px;
+`
+
+const SecondaryChipScroll = styled.div`
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+`
+
+const SecondaryChip = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: ${(p) => (p.$active ? 600 : 500)};
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  ${({ $active, theme }) =>
+    $active &&
+    css`
+      background: ${theme.colors.activeLight};
+      color: ${theme.colors.active};
+      &:hover {
+        background: ${theme.colors.activeLight};
+        color: ${theme.colors.active};
+      }
+    `}
+`
+
+const SecondaryChipCount = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+`
+
+const BulkActionBar = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.12)'
+      : 'rgba(99, 102, 241, 0.08)'};
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  backdrop-filter: blur(8px);
+`
+
+const BulkActionLeft = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+`
+
+const BulkActionRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const BulkSelectedCount = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #4f46e5;
+  font-variant-numeric: tabular-nums;
+`
+
+const BulkActionGhost = styled.button`
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  &:hover {
+    background: rgba(99, 102, 241, 0.12);
+    color: #4f46e5;
+  }
+`
+
+const BulkActionPrimary = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 7px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  &:hover:not(:disabled) {
+    opacity: 0.92;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
+const BulkActionDanger = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 7px;
+  cursor: pointer;
+  background: #dc2626;
+  color: #fff;
+  border: 1px solid #b91c1c;
+  &:hover:not(:disabled) {
+    background: #b91c1c;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
 const ModernCountryRow = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -562,17 +891,23 @@ const DetailViewWrap = styled.div`
   }
 `
 
-const AdaptiveGrid = styled.div`
+const AdaptiveGrid = styled.div<{ $compact?: boolean }>`
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: ${({ $compact }) => ($compact ? '8px' : '12px')};
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(${({ $compact }) => ($compact ? '260px' : '360px')}, 1fr)
+  );
   @media (min-width: 1400px) {
-    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(
+      auto-fill,
+      minmax(${({ $compact }) => ($compact ? '280px' : '400px')}, 1fr)
+    );
+    gap: ${({ $compact }) => ($compact ? '10px' : '14px')};
   }
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: ${({ $compact }) => ($compact ? '6px' : '10px')};
   }
 `
 
@@ -601,6 +936,76 @@ const CenturySection = styled.section`
   &:last-child {
     margin-bottom: 0;
   }
+`
+
+/** 리스트 + 우측 세기 navigator 레이아웃 */
+const ListWithNavWrap = styled.div`
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: start;
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+/** 우측 sticky 세기 navigator */
+const CenturyNav = styled.nav`
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  font-size: 11px;
+  width: 84px;
+  flex-shrink: 0;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  @media (max-width: 1024px) {
+    display: none;
+  }
+`
+
+const CenturyNavBtn = styled.button`
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const CenturyNavDot = styled.span<{ $era: EraKey }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $era }) => ERA_DOT[$era]};
+  flex-shrink: 0;
+`
+
+const CenturyNavLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+`
+
+const CenturyNavCount = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
 `
 
 const CenturySeparator = styled.div<{ $era: EraKey }>`
@@ -675,18 +1080,67 @@ const CenturyCountBadge = styled.span`
  * 인물 카드 — 키보드 접근성을 위해 `<button>`.
  * Enter/Space는 native button이 자동 처리, focus-visible 링 추가.
  */
-const Card = styled.button`
-  border-radius: 16px;
+/**
+ * 카드 wrapper — Card(button)와 hover 액션(QuickEditBtn)을 함께 묶음.
+ * Card는 button이라 button 안에 button을 넣을 수 없어 분리.
+ */
+const CardWrap = styled.div`
+  position: relative;
+  &:hover button[data-quick-edit='true'],
+  &:focus-within button[data-quick-edit='true'] {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+`
+
+/** 카드 좌상단 다중 선택 체크박스 — hover 시 노출, 선택된 카드는 항상 노출 */
+const CardCheckbox = styled.button<{ $checked: boolean }>`
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid
+    ${({ $checked }) =>
+      $checked ? '#6366f1' : 'rgba(255, 255, 255, 0.6)'};
+  background: ${({ $checked }) =>
+    $checked ? '#6366f1' : 'rgba(0, 0, 0, 0.45)'};
+  color: #fff;
+  backdrop-filter: blur(6px);
+  opacity: ${({ $checked }) => ($checked ? 1 : 0)};
+  transform: ${({ $checked }) => ($checked ? 'translateY(0)' : 'translateY(-4px)')};
+  pointer-events: ${({ $checked }) => ($checked ? 'auto' : 'none')};
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.12s ease,
+    border-color 0.12s ease;
+  @media (hover: none) {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+`
+
+const Card = styled.button<{ $compact?: boolean; $selected?: boolean }>`
+  border-radius: ${({ $compact }) => ($compact ? '12px' : '16px')};
   overflow: hidden;
   display: flex;
   flex-direction: row;
   align-items: stretch;
   cursor: pointer;
-  min-height: 116px;
-  transition: box-shadow 0.25s ease, transform 0.25s ease;
+  min-height: ${({ $compact }) => ($compact ? '74px' : '116px')};
+  transition: box-shadow 0.25s ease, transform 0.25s ease, outline-color 0.15s ease;
   padding: 0;
   margin: 0;
   border: none;
+  outline: 2px solid
+    ${({ $selected }) => ($selected ? '#6366f1' : 'transparent')};
+  outline-offset: -2px;
   font: inherit;
   color: inherit;
   text-align: left;
@@ -723,8 +1177,8 @@ const Card = styled.button`
 `
 
 /* Left: image column */
-const CardImageSide = styled.div`
-  width: 110px;
+const CardImageSide = styled.div<{ $compact?: boolean }>`
+  width: ${({ $compact }) => ($compact ? '64px' : '110px')};
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
@@ -807,6 +1261,23 @@ const CardImagePlaceholder = styled.div<{ $color: string }>`
   }
 `
 
+/** 사진 부재 시 모노그램 (이름 이니셜 또는 군주명 단축형) */
+const CardMonogram = styled.div<{ $color: string; $compact?: boolean }>`
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: ${({ $color, theme }) =>
+    theme.mode === 'dark' ? `${$color}1f` : `${$color}14`};
+  color: ${({ $color }) => $color};
+  font-size: ${({ $compact }) => ($compact ? '15px' : '22px')};
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-variant: small-caps;
+  opacity: 0.85;
+`
+
 /* Right: content column */
 const CardContent = styled.div`
   flex: 1;
@@ -860,6 +1331,78 @@ const MonarchCrown = styled.span`
   font-size: 11px;
   line-height: 1;
   flex-shrink: 0;
+`
+
+/** 작은 "평가됨" 버튼 핀 — 카드에 boolean 신호만 + 클릭으로 수정 진입 */
+const EvalPinBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  flex-shrink: 0;
+  cursor: pointer;
+  font-family: inherit;
+  &:hover {
+    background: rgba(99, 102, 241, 0.18);
+  }
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 1px;
+  }
+`
+
+/**
+ * 카드 hover 시 우측 상단에 떠오르는 평가 진입 버튼.
+ * - 데스크톱(hover 가능): hover/focus 시에만 노출
+ * - 모바일/터치(@media (hover: none)): hover 없으니 항상 노출 + 약간 작게
+ */
+const QuickEditBtn = styled.button`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.12s ease;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+  &:hover {
+    background: #4f46e5;
+  }
+  &:focus-visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+  @media (hover: none) {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    padding: 4px 8px;
+    font-size: 10.5px;
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.2);
+  }
 `
 
 const GenderBadge = styled.span<{ $gender: 'MALE' | 'FEMALE' }>`
@@ -1014,6 +1557,16 @@ const CardBio = styled.p`
   overflow: hidden;
 `
 
+/** 검색 매치 강조 — 노란 배경 + 약간 굵은 글씨 */
+const HighlightMark = styled.mark`
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(250, 204, 21, 0.22)' : '#fef08a'};
+  color: inherit;
+  font-weight: 700;
+  padding: 0 2px;
+  border-radius: 2px;
+`
+
 const LifespanYearMuted = styled.span`
   font-size: 11px;
   font-weight: 500;
@@ -1050,7 +1603,43 @@ const EmptyStateDesc = styled.div`
   font-size: 13px;
   line-height: 1.55;
   color: ${({ theme }) => theme.colors.text.secondary};
-  max-width: 420px;
+  max-width: 520px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+`
+
+const ActiveFilterPill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: ${({ theme }) => theme.colors.activeLight};
+  color: ${({ theme }) => theme.colors.active};
+`
+
+const ActiveFilterClearX = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  &:hover {
+    background: rgba(0, 0, 0, 0.08);
+  }
 `
 
 const EmptyStateActions = styled.div`
@@ -1127,6 +1716,187 @@ export function PersonListContent({
   const [filterGender, setFilterGender] = useState<string>('')
   const [filterCountryIds, setFilterCountryIds] = useState<string[]>([])
   const [expandedModernId, setExpandedModernId] = useState<string | null>(null)
+  const [sortMode, setSortMode] = useState<SortMode>('century')
+  const [evalFilter, setEvalFilter] = useState<EvalFilter>('all')
+  const [filterDynastyId, setFilterDynastyId] = useState<string | null>(null)
+  const [filterDeathType, setFilterDeathType] = useState<string | null>(null)
+  const [filterTraits, setFilterTraits] = useState<string[]>([])
+  const [quickEditPersonId, setQuickEditPersonId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === 'undefined') return 'cards'
+    return (localStorage.getItem('person-list-view') as ViewMode) || 'cards'
+  })
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkEvalOpen, setBulkEvalOpen] = useState(false)
+  // 세기 navigator → 클릭 시 점프할 ref 저장소
+  const centuryRefs = useRef<Map<number, HTMLElement>>(new Map())
+
+  // 뷰 모드 변경 영구 저장
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('person-list-view', viewMode)
+    }
+  }, [viewMode])
+
+  // 뷰 모드/필터/정렬 변경 시 선택 초기화 — 화면에서 사라진 인물이 선택 상태로 남는 것 방지
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [viewMode, sortMode, filterCountryIds, filterDynastyId, filterDeathType, evalFilter, filterTraits])
+
+  const toggleSelected = useCallback((id: string, _additive: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return
+    const ids = Array.from(selectedIds)
+    const targetPersons = ids
+      .map((id) => persons.find((p) => p.id === id))
+      .filter((p): p is PersonLike => p != null)
+    if (
+      !window.confirm(
+        `선택된 ${ids.length}명의 인물을 삭제할까요? (등록 정보·관계·평가 모두 함께 제거됩니다)\n\n삭제 후 5초 내에 토스트의 "되돌리기" 버튼으로 복원할 수 있습니다.`,
+      )
+    )
+      return
+    setBulkDeleting(true)
+    try {
+      const { deletePerson } = await import('@/shared/api/persons')
+      const results = await Promise.allSettled(ids.map((id) => deletePerson(id)))
+      const successIds = ids.filter((_, i) => results[i]!.status === 'fulfilled')
+      const failed = results.length - successIds.length
+      const { toast } = await import('react-hot-toast')
+      if (failed > 0) {
+        toast.error(`${successIds.length}명 삭제 성공, ${failed}명 실패`)
+      } else {
+        // C3: 5초 Undo — 토스트의 버튼 클릭 시 삭제된 인물을 재등록
+        toast(
+          (t) => (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+              <span>{successIds.length}명을 삭제했습니다.</span>
+              <button
+                type="button"
+                onClick={async () => {
+                  toast.dismiss(t.id)
+                  const undoToastId = toast.loading('복원 중…')
+                  try {
+                    const { createPerson } = await import('@/shared/api/persons')
+                    const restored = targetPersons.filter((p) => successIds.includes(p.id))
+                    await Promise.allSettled(
+                      restored.map((p) =>
+                        // 핵심 필드만 재등록 — 관계·평가 등은 유실 (cascade 됐기 때문)
+                        createPerson({
+                          name: p.name,
+                          surname: p.surname ?? undefined,
+                          gender: (p.gender as 'MALE' | 'FEMALE' | undefined) ?? undefined,
+                          dynastyId: p.dynastyId ?? undefined,
+                          countryId: p.countryId ?? undefined,
+                          influence: p.influence ?? undefined,
+                          biography: p.biography ?? undefined,
+                          profileImageUrl: p.profileImageUrl ?? undefined,
+                          regnalName: p.regnalName ?? undefined,
+                          templeName: p.templeName ?? undefined,
+                        }),
+                      ),
+                    )
+                    toast.dismiss(undoToastId)
+                    toast.success('복원되었습니다 (관계·평가 등 부속 정보는 유실).')
+                    if (invalidateKeys.length > 0) {
+                      queryClient.invalidateQueries({ queryKey: invalidateKeys as string[] })
+                    }
+                  } catch (err) {
+                    toast.dismiss(undoToastId)
+                    toast.error('복원 실패')
+                  }
+                }}
+                style={{
+                  background: '#fff',
+                  color: '#4f46e5',
+                  border: '1px solid #c7d2fe',
+                  borderRadius: 6,
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                되돌리기
+              </button>
+            </span>
+          ),
+          { duration: 5000 },
+        )
+      }
+      setSelectedIds(new Set())
+      if (invalidateKeys.length > 0) {
+        queryClient.invalidateQueries({ queryKey: invalidateKeys as string[] })
+      }
+      queryClient.invalidateQueries({ queryKey: ['my-evaluations'] })
+    } finally {
+      setBulkDeleting(false)
+    }
+  }, [selectedIds, queryClient, invalidateKeys, persons])
+
+  /** 사용자 전체 평가 인덱스 — 평가 indicator·정렬·필터에 활용 */
+  const evalIndex = usePersonEvaluationIndex()
+
+  /** 등록 인물에 실제 쓰인 가문만 chip — 전체 가문 풀에서 필터링하면 빈 결과 노이즈 */
+  const dynastiesUsedByPersons = useMemo(() => {
+    const counts = new Map<string, { id: string; name: string; count: number }>()
+    for (const p of persons) {
+      if (!p.dynastyId) continue
+      const name =
+        p.dynasty?.name ??
+        dynasties.find((d) => d.id === p.dynastyId)?.name ??
+        ''
+      if (!name) continue
+      const cur = counts.get(p.dynastyId)
+      if (cur) cur.count += 1
+      else counts.set(p.dynastyId, { id: p.dynastyId, name, count: 1 })
+    }
+    return Array.from(counts.values()).sort((a, b) => b.count - a.count)
+  }, [persons, dynasties])
+
+  /** 등록 인물에 실제 쓰인 사망 유형만 chip */
+  const deathTypesUsedByPersons = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const p of persons) {
+      if (!p.deathType) continue
+      counts.set(p.deathType, (counts.get(p.deathType) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [persons])
+
+  /** B5: 평가에 부착된 태그만 chip — bulk eval index에서 카운트 */
+  const traitsUsedByPersons = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const p of persons) {
+      const traits = evalIndex.get(p.id)?.traits ?? []
+      const seen = new Set<string>()
+      for (const t of traits) {
+        const key = t.trait as string
+        if (seen.has(key)) continue // 한 인물당 한 트레이트 한 번만 카운트
+        seen.add(key)
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([trait, count]) => ({
+        trait,
+        count,
+        // PERSON_TRAIT_META에서 라벨 가져옴
+        label: (PERSON_TRAIT_META as Record<string, { label: string }>)[trait]?.label ?? trait,
+      }))
+      .sort((a, b) => b.count - a.count)
+  }, [persons, evalIndex])
 
   const { data: modernCountries = [] } = useCountries()
   const { data: historicalCountries = [] } = useHistoricalCountries()
@@ -1163,7 +1933,9 @@ export function PersonListContent({
   }, [onClearPreset, initialCountryId, modernCountries, historicalCountries])
 
   const filteredPersons = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
     return persons.filter((person) => {
+      // 검색 — 이름·약력·가문 + 군주명·묘호·별명·직책·사망원인
       const name = getPersonDisplayName(person, true)
       const bio =
         person.biography
@@ -1175,13 +1947,27 @@ export function PersonListContent({
         (person.dynastyId != null
           ? dynasties.find((d) => d.id === person.dynastyId)?.name
           : '')
-      const matchSearch =
-        !searchQuery.trim() ||
-        name.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
-        bio.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
-        (dynastyName ?? '')
-          .toLowerCase()
-          .includes(searchQuery.trim().toLowerCase())
+      const positionTitles =
+        person.governmentTenures
+          ?.map((t) => t.positionDefinition?.title ?? t.title ?? '')
+          .filter(Boolean)
+          .join(' ') ?? ''
+      const nicknameStr =
+        person.nicknames?.map((n) => n.nickname).join(' ') ?? ''
+      const searchHaystack = [
+        name,
+        bio,
+        dynastyName ?? '',
+        person.regnalName ?? '',
+        person.templeName ?? '',
+        nicknameStr,
+        positionTitles,
+        person.deathCause ?? '',
+      ]
+        .join(' ')
+        .toLowerCase()
+
+      const matchSearch = !q || searchHaystack.includes(q)
       const matchGender =
         !filterGender ||
         (filterGender === 'MALE' && person.gender === 'MALE') ||
@@ -1190,7 +1976,33 @@ export function PersonListContent({
         filterCountryIds.length === 0 ||
         (person.countryId != null &&
           filterCountryIds.includes(person.countryId))
-      return matchSearch && matchGender && matchCountry
+      const matchDynasty =
+        !filterDynastyId ||
+        (person.dynastyId != null && person.dynastyId === filterDynastyId)
+      const matchDeathType =
+        !filterDeathType ||
+        (person.deathType != null && person.deathType === filterDeathType)
+      const matchEval =
+        evalFilter === 'all' ||
+        (evalFilter === 'evaluated' && evalIndex.get(person.id)?.hasEvaluation === true) ||
+        (evalFilter === 'unevaluated' && !evalIndex.get(person.id)?.hasEvaluation)
+      // B5: 트레이트 필터 — 선택된 모든 트레이트가 부착된 인물만 (AND 매칭)
+      const matchTraits = (() => {
+        if (filterTraits.length === 0) return true
+        const personTraits = new Set(
+          (evalIndex.get(person.id)?.traits ?? []).map((t) => t.trait as string),
+        )
+        return filterTraits.every((t) => personTraits.has(t))
+      })()
+      return (
+        matchSearch &&
+        matchGender &&
+        matchCountry &&
+        matchDynasty &&
+        matchDeathType &&
+        matchEval &&
+        matchTraits
+      )
     })
   }, [
     persons,
@@ -1198,9 +2010,47 @@ export function PersonListContent({
     searchQuery,
     filterGender,
     filterCountryIds,
+    filterDynastyId,
+    filterDeathType,
+    evalFilter,
+    filterTraits,
+    evalIndex,
   ])
 
   const personsByCentury = useMemo(() => {
+    const toBirthSortableYear = (p: PersonLike): number => {
+      const year = p.birthYear ?? p.birth_year
+      const era = p.birthEra ?? p.birth_era
+      if (year == null) return -Infinity
+      return era === 'BC' ? -year : year
+    }
+
+    // 세기 외 정렬은 평면 그룹 (단일 키)으로 묶고 헤더 라벨을 정렬 모드 기준으로 표기
+    if (sortMode !== 'century') {
+      const sorters: Record<Exclude<SortMode, 'century'>, (a: PersonLike, b: PersonLike) => number> = {
+        name: (a, b) =>
+          getPersonDisplayName(a, true).localeCompare(
+            getPersonDisplayName(b, true),
+            'ko',
+          ),
+        influence: (a, b) =>
+          (b.influence ?? -Infinity) - (a.influence ?? -Infinity),
+        statsAvg: (a, b) => {
+          const av = evalIndex.get(a.id)?.statsAverage ?? -Infinity
+          const bv = evalIndex.get(b.id)?.statsAverage ?? -Infinity
+          return bv - av
+        },
+        recent: (a, b) => {
+          const at = a.createdAt ? new Date(a.createdAt).getTime() : 0
+          const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0
+          return bt - at
+        },
+      }
+      const sorted = [...filteredPersons].sort(sorters[sortMode])
+      // CENTURY_UNKNOWN을 평면 키로 재사용 — 렌더에서 평면 모드 체크
+      return [[CENTURY_UNKNOWN, sorted]] as Array<[number, PersonLike[]]>
+    }
+
     const currentCentury = Math.ceil(new Date().getFullYear() / 100)
     const map = new Map<number, PersonLike[]>()
     filteredPersons.forEach((p) => {
@@ -1219,13 +2069,6 @@ export function PersonListContent({
       map.get(key)!.push(p)
     })
 
-    const toBirthSortableYear = (p: PersonLike): number => {
-      const year = p.birthYear ?? p.birth_year
-      const era = p.birthEra ?? p.birth_era
-      if (year == null) return -Infinity
-      return era === 'BC' ? -year : year
-    }
-
     return Array.from(map.entries())
       .sort(([a], [b]) =>
         a === CENTURY_UNKNOWN ? 1 : b === CENTURY_UNKNOWN ? -1 : b - a,
@@ -1239,7 +2082,7 @@ export function PersonListContent({
             ),
           ] as [number, PersonLike[]],
       )
-  }, [filteredPersons])
+  }, [filteredPersons, sortMode, evalIndex])
 
   useEffect(() => {
     onViewChange?.(selectedPersonId ? 'detail' : 'list')
@@ -1278,6 +2121,8 @@ export function PersonListContent({
               queryKey: personKeys.detail(personId),
             })
           }
+          // 평가 인덱스도 갱신 — 인물 삭제·재등록 시 평가 키와 정합 유지
+          queryClient.invalidateQueries({ queryKey: ['my-evaluations'] })
           setShowRegisterForm(false)
           setEditingPersonId(null)
           if (!wasEditing) {
@@ -1389,6 +2234,57 @@ export function PersonListContent({
                     ♀ 여
                   </GenderBtn>
                 </GenderBtnGroup>
+                <GenderBtnGroup role="group" aria-label="평가 여부 필터">
+                  <GenderBtn
+                    type="button"
+                    $active={evalFilter === 'all'}
+                    onClick={() => setEvalFilter('all')}
+                  >
+                    전체
+                  </GenderBtn>
+                  <GenderBtn
+                    type="button"
+                    $active={evalFilter === 'evaluated'}
+                    onClick={() => setEvalFilter('evaluated')}
+                    title="능력치·태그 평가가 있는 인물만"
+                  >
+                    <FiStar size={11} /> 평가됨
+                  </GenderBtn>
+                  <GenderBtn
+                    type="button"
+                    $active={evalFilter === 'unevaluated'}
+                    onClick={() => setEvalFilter('unevaluated')}
+                    title="평가 안 한 인물만"
+                  >
+                    미평가
+                  </GenderBtn>
+                </GenderBtnGroup>
+                <ViewModeToggle role="group" aria-label="뷰 모드">
+                  {VIEW_MODE_OPTIONS.map(({ key, label, Icon }) => (
+                    <ViewModeBtn
+                      key={key}
+                      type="button"
+                      $active={viewMode === key}
+                      onClick={() => setViewMode(key)}
+                      title={label}
+                      aria-label={label}
+                      aria-pressed={viewMode === key}
+                    >
+                      <Icon size={13} />
+                    </ViewModeBtn>
+                  ))}
+                </ViewModeToggle>
+                <SortSelect
+                  value={sortMode}
+                  onChange={(e) => setSortMode(e.target.value as SortMode)}
+                  aria-label="정렬"
+                >
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.key} value={o.key}>
+                      {o.label}
+                    </option>
+                  ))}
+                </SortSelect>
                 {!hideCreateButton && (
                   <CreateButton
                     type="button"
@@ -1404,6 +2300,47 @@ export function PersonListContent({
                 )}
               </ToolbarRow>
             </ListHeader>
+
+            {/* 다중 선택 툴바 — 선택된 인물이 있을 때만 등장 */}
+            {selectedIds.size > 0 && (
+              <BulkActionBar role="toolbar" aria-label="다중 선택 액션">
+                <BulkActionLeft>
+                  <BulkSelectedCount>{selectedIds.size}명 선택됨</BulkSelectedCount>
+                  <BulkActionGhost
+                    type="button"
+                    onClick={() =>
+                      setSelectedIds(
+                        new Set(personsByCentury.flatMap(([, l]) => l).map((p) => p.id)),
+                      )
+                    }
+                  >
+                    화면 전체 선택
+                  </BulkActionGhost>
+                  <BulkActionGhost type="button" onClick={() => setSelectedIds(new Set())}>
+                    선택 해제
+                  </BulkActionGhost>
+                </BulkActionLeft>
+                <BulkActionRight>
+                  <BulkActionPrimary
+                    type="button"
+                    onClick={() => setBulkEvalOpen(true)}
+                    disabled={bulkDeleting}
+                    title="선택된 인물에 동일 평가 적용"
+                  >
+                    <FiStar size={13} /> 선택 평가
+                  </BulkActionPrimary>
+                  <BulkActionDanger
+                    type="button"
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleting}
+                  >
+                    <FiTrash2 size={13} />
+                    {bulkDeleting ? '삭제 중…' : '선택 삭제'}
+                  </BulkActionDanger>
+                </BulkActionRight>
+              </BulkActionBar>
+            )}
+
             {enableCountryFilter && modernCountriesWithHistory.length > 0 && (
               <CountryFilterSection>
                 <ModernCountryRow>
@@ -1481,6 +2418,98 @@ export function PersonListContent({
                 )}
               </CountryFilterSection>
             )}
+
+            {/* 가문 필터 — 등록된 인물의 가문만 chip 노출 (전체 가문에서 필터링하면 노이즈) */}
+            {dynastiesUsedByPersons.length > 0 && (
+              <SecondaryFilterRow aria-label="가문 필터">
+                <SecondaryFilterLabel>가문</SecondaryFilterLabel>
+                <SecondaryChipScroll>
+                  <SecondaryChip
+                    type="button"
+                    $active={filterDynastyId === null}
+                    onClick={() => setFilterDynastyId(null)}
+                  >
+                    전체
+                  </SecondaryChip>
+                  {dynastiesUsedByPersons.map((d) => (
+                    <SecondaryChip
+                      key={d.id}
+                      type="button"
+                      $active={filterDynastyId === d.id}
+                      onClick={() =>
+                        setFilterDynastyId((prev) => (prev === d.id ? null : d.id))
+                      }
+                    >
+                      {d.name}
+                      <SecondaryChipCount>{d.count}</SecondaryChipCount>
+                    </SecondaryChip>
+                  ))}
+                </SecondaryChipScroll>
+              </SecondaryFilterRow>
+            )}
+
+            {/* B5: 트레이트 필터 — 평가에 사용된 태그만 chip 노출 (AND 매칭) */}
+            {traitsUsedByPersons.length > 0 && (
+              <SecondaryFilterRow aria-label="태그 필터">
+                <SecondaryFilterLabel>태그</SecondaryFilterLabel>
+                <SecondaryChipScroll>
+                  <SecondaryChip
+                    type="button"
+                    $active={filterTraits.length === 0}
+                    onClick={() => setFilterTraits([])}
+                  >
+                    전체
+                  </SecondaryChip>
+                  {traitsUsedByPersons.map((t) => (
+                    <SecondaryChip
+                      key={t.trait}
+                      type="button"
+                      $active={filterTraits.includes(t.trait)}
+                      onClick={() =>
+                        setFilterTraits((prev) =>
+                          prev.includes(t.trait)
+                            ? prev.filter((x) => x !== t.trait)
+                            : [...prev, t.trait],
+                        )
+                      }
+                    >
+                      {t.label}
+                      <SecondaryChipCount>{t.count}</SecondaryChipCount>
+                    </SecondaryChip>
+                  ))}
+                </SecondaryChipScroll>
+              </SecondaryFilterRow>
+            )}
+
+            {/* 사망 유형 필터 — 등록된 인물의 사망 유형만 chip 노출 */}
+            {deathTypesUsedByPersons.length > 0 && (
+              <SecondaryFilterRow aria-label="사망 유형 필터">
+                <SecondaryFilterLabel>사망 유형</SecondaryFilterLabel>
+                <SecondaryChipScroll>
+                  <SecondaryChip
+                    type="button"
+                    $active={filterDeathType === null}
+                    onClick={() => setFilterDeathType(null)}
+                  >
+                    전체
+                  </SecondaryChip>
+                  {deathTypesUsedByPersons.map((dt) => (
+                    <SecondaryChip
+                      key={dt.type}
+                      type="button"
+                      $active={filterDeathType === dt.type}
+                      onClick={() =>
+                        setFilterDeathType((prev) => (prev === dt.type ? null : dt.type))
+                      }
+                    >
+                      {DEATH_TYPE_LABELS[dt.type] ?? dt.type}
+                      <SecondaryChipCount>{dt.count}</SecondaryChipCount>
+                    </SecondaryChip>
+                  ))}
+                </SecondaryChipScroll>
+              </SecondaryFilterRow>
+            )}
+
             {persons.length === 0 ? (
               <EmptyState>
                 <EmptyStateTitle>{emptyMessage}</EmptyStateTitle>
@@ -1504,29 +2533,113 @@ export function PersonListContent({
                 )}
               </EmptyState>
             ) : filteredPersons.length === 0 ? (
-              <EmptyState>
-                <EmptyStateTitle>{emptyFilterMessage}</EmptyStateTitle>
-                <EmptyStateDesc>
-                  검색어·성별·국가 필터를 조정하거나 초기화해 다시 확인해보세요.
-                </EmptyStateDesc>
-                <EmptyStateActions>
-                  <EmptyStateCta
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery('')
-                      setFilterGender('')
+              (() => {
+                // 활성 필터 목록 — 어떤 필터가 결과를 좁혔는지 사용자에게 명시
+                const activeFilters: Array<{ label: string; clear: () => void }> = []
+                if (searchQuery.trim())
+                  activeFilters.push({
+                    label: `검색 "${searchQuery.trim()}"`,
+                    clear: () => setSearchQuery(''),
+                  })
+                if (filterGender)
+                  activeFilters.push({
+                    label: filterGender === 'MALE' ? '성별: 남' : '성별: 여',
+                    clear: () => setFilterGender(''),
+                  })
+                if (filterCountryIds.length > 0)
+                  activeFilters.push({
+                    label: `국가 ${filterCountryIds.length}개`,
+                    clear: () => {
                       setFilterCountryIds([])
                       setExpandedModernId(null)
-                    }}
-                  >
-                    필터 초기화
-                  </EmptyStateCta>
-                </EmptyStateActions>
-              </EmptyState>
+                    },
+                  })
+                if (filterDynastyId) {
+                  const d = dynasties.find((x) => x.id === filterDynastyId)
+                  activeFilters.push({
+                    label: `가문: ${d?.name ?? '?'}`,
+                    clear: () => setFilterDynastyId(null),
+                  })
+                }
+                if (filterDeathType)
+                  activeFilters.push({
+                    label: `사망: ${DEATH_TYPE_LABELS[filterDeathType] ?? filterDeathType}`,
+                    clear: () => setFilterDeathType(null),
+                  })
+                if (evalFilter !== 'all')
+                  activeFilters.push({
+                    label: evalFilter === 'evaluated' ? '평가됨만' : '미평가만',
+                    clear: () => setEvalFilter('all'),
+                  })
+                if (filterTraits.length > 0)
+                  activeFilters.push({
+                    label: `태그 ${filterTraits.length}개`,
+                    clear: () => setFilterTraits([]),
+                  })
+                return (
+                  <EmptyState>
+                    <EmptyStateTitle>{emptyFilterMessage}</EmptyStateTitle>
+                    <EmptyStateDesc>
+                      현재 활성 필터: {activeFilters.length === 0 ? '없음' : ''}
+                      {activeFilters.map((f, i) => (
+                        <ActiveFilterPill key={i}>
+                          {f.label}
+                          <ActiveFilterClearX type="button" onClick={f.clear} aria-label={`${f.label} 해제`}>
+                            ×
+                          </ActiveFilterClearX>
+                        </ActiveFilterPill>
+                      ))}
+                    </EmptyStateDesc>
+                    <EmptyStateActions>
+                      <EmptyStateCta
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery('')
+                          setFilterGender('')
+                          setFilterCountryIds([])
+                          setExpandedModernId(null)
+                          setFilterDynastyId(null)
+                          setFilterDeathType(null)
+                          setEvalFilter('all')
+                          setFilterTraits([])
+                        }}
+                      >
+                        모든 필터 초기화
+                      </EmptyStateCta>
+                    </EmptyStateActions>
+                  </EmptyState>
+                )
+              })()
+            ) : viewMode === 'table' ? (
+              // 테이블 뷰 — 95명 단위 비교에 최적
+              <ListScrollArea>
+                <PersonTable
+                  persons={personsByCentury.flatMap(([, l]) => l)}
+                  dynasties={dynasties}
+                  evalIndex={evalIndex}
+                  selectedIds={selectedIds}
+                  onToggleSelected={toggleSelected}
+                  onToggleAll={(allSelected) => {
+                    if (allSelected) {
+                      setSelectedIds(new Set())
+                    } else {
+                      setSelectedIds(
+                        new Set(personsByCentury.flatMap(([, l]) => l).map((p) => p.id)),
+                      )
+                    }
+                  }}
+                  onPersonClick={(id) =>
+                    onPersonClick ? onPersonClick(id) : setSelectedPersonId(id)
+                  }
+                  onQuickEdit={setQuickEditPersonId}
+                />
+              </ListScrollArea>
             ) : (
+              <ListWithNavWrap>
               <ListScrollArea>
                 {personsByCentury.map(([century, list]) => {
                   const era = getCenturyEra(century)
+                  const isFlatSort = sortMode !== 'century'
                   const centuryLabel =
                     century === CENTURY_UNKNOWN
                       ? '세기 미상'
@@ -1534,21 +2647,30 @@ export function PersonListContent({
                         ? `기원전 ${-century}세기`
                         : `${century}세기`
                   return (
-                  <CenturySection key={century}>
-                    <CenturySeparator $era={era} />
-                    <CenturyHeadingRow>
-                      <CenturyHeadingLeft>
-                        <CenturyEraDot $era={era} />
-                        <CenturyHeadingLabel>
-                          {centuryLabel}
-                        </CenturyHeadingLabel>
-                      </CenturyHeadingLeft>
-                      <CenturyCountBadge>
-                        {list.length}명
-                      </CenturyCountBadge>
-                    </CenturyHeadingRow>
+                  <CenturySection
+                    key={`${sortMode}-${century}`}
+                    ref={(el) => {
+                      if (el) centuryRefs.current.set(century, el)
+                      else centuryRefs.current.delete(century)
+                    }}
+                  >
+                    {!isFlatSort && <CenturySeparator $era={era} />}
+                    {!isFlatSort && (
+                      <CenturyHeadingRow>
+                        <CenturyHeadingLeft>
+                          <CenturyEraDot $era={era} />
+                          <CenturyHeadingLabel>
+                            {centuryLabel}
+                          </CenturyHeadingLabel>
+                        </CenturyHeadingLeft>
+                        <CenturyCountBadge>
+                          {list.length}명
+                        </CenturyCountBadge>
+                      </CenturyHeadingRow>
+                    )}
                     <AdaptiveGrid
                       as={motion.div}
+                      $compact={viewMode === 'compact'}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ duration: 0.25 }}
@@ -1629,19 +2751,44 @@ export function PersonListContent({
                           ),
                         ).slice(0, 2) as string[]
 
+                        const evalSummary = evalIndex.get(person.id) ?? null
+                        const monogram = buildMonogram(person)
+
                         return (
-                          <Card
-                            key={person.id}
-                            type="button"
-                            aria-label={`${fullName || '이름 없음'} 상세 보기`}
-                            onClick={() =>
-                              onPersonClick
-                                ? onPersonClick(person.id)
-                                : setSelectedPersonId(person.id)
-                            }
-                          >
+                          <CardWrap key={person.id}>
+                            {/* 다중 선택 체크박스 — 모든 카드 모드에서 좌상단 노출 */}
+                            <CardCheckbox
+                              type="button"
+                              data-quick-edit="true"
+                              $checked={selectedIds.has(person.id)}
+                              aria-label={
+                                selectedIds.has(person.id) ? '선택 해제' : '선택'
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                e.preventDefault()
+                                toggleSelected(person.id, false)
+                              }}
+                            >
+                              {selectedIds.has(person.id) ? (
+                                <FiCheck size={11} />
+                              ) : (
+                                <FiSquare size={11} />
+                              )}
+                            </CardCheckbox>
+                            <Card
+                              type="button"
+                              $compact={viewMode === 'compact'}
+                              $selected={selectedIds.has(person.id)}
+                              aria-label={`${fullName || '이름 없음'} 상세 보기`}
+                              onClick={() =>
+                                onPersonClick
+                                  ? onPersonClick(person.id)
+                                  : setSelectedPersonId(person.id)
+                              }
+                            >
                             {/* Image — left column */}
-                            <CardImageSide>
+                            <CardImageSide $compact={viewMode === 'compact'}>
                               {showNewBadge && <NewBadge>NEW</NewBadge>}
                               <InfluenceBadge
                                 influence={person.influence}
@@ -1655,23 +2802,46 @@ export function PersonListContent({
                                   decoding="async"
                                 />
                               ) : (
-                                <CardImagePlaceholder $color={accentColor}>
-                                  <svg viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                                  </svg>
-                                </CardImagePlaceholder>
+                                <CardMonogram
+                                  $color={accentColor}
+                                  $compact={viewMode === 'compact'}
+                                >
+                                  {monogram}
+                                </CardMonogram>
                               )}
                             </CardImageSide>
 
                             {/* Info — right column */}
                             <CardContent>
                               <PersonNameRow>
-                                <PersonName>{fullName || '(이름 없음)'}</PersonName>
+                                <PersonName>
+                                  {fullName
+                                    ? highlightMatch(fullName, searchQuery)
+                                    : '(이름 없음)'}
+                                </PersonName>
                                 {person.gender === 'MALE' && (
                                   <GenderBadge $gender="MALE">♂ 남</GenderBadge>
                                 )}
                                 {person.gender === 'FEMALE' && (
                                   <GenderBadge $gender="FEMALE">♀ 여</GenderBadge>
+                                )}
+                                {evalSummary?.hasEvaluation && (
+                                  <EvalPinBtn
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      e.preventDefault()
+                                      setQuickEditPersonId(person.id)
+                                    }}
+                                    title={
+                                      evalSummary.statsAverage != null
+                                        ? `내 평가 평균 ${evalSummary.statsAverage}점${evalSummary.traitCount > 0 ? ` · 태그 ${evalSummary.traitCount}개` : ''} · 클릭으로 수정`
+                                        : `내 평가됨 · 태그 ${evalSummary.traitCount}개 · 클릭으로 수정`
+                                    }
+                                  >
+                                    <FiTarget size={9} />
+                                    평가됨
+                                  </EvalPinBtn>
                                 )}
                               </PersonNameRow>
 
@@ -1691,8 +2861,16 @@ export function PersonListContent({
                                 </MonarchNameRow>
                               )}
 
-                              {/* Lifespan bar */}
-                              <LifespanRow>
+                              {/* Lifespan bar — track 폭은 100세 만점 기준의 수명 비율 */}
+                              <LifespanRow
+                                title={
+                                  ageAtDeath != null
+                                    ? `수명 ${ageAtDeath}세 (track 100세 만점 기준)`
+                                    : birthYear != null
+                                      ? '생존 또는 사망일 미상'
+                                      : '생몰년 미상'
+                                }
+                              >
                                 {birthYear != null ? (
                                   <>
                                     <LifespanYear>
@@ -1737,23 +2915,41 @@ export function PersonListContent({
                                 </CardBadgeRow>
                               )}
 
-                              {/* Dynasty / birthplace */}
+                              {/* Dynasty / birthplace — 조밀 모드에서는 가문만 1줄 */}
                               {dynastyName && (
                                 <CardMetaRow>
                                   <CardMetaLabel>가문</CardMetaLabel>
                                   <CardMetaValue>{dynastyName}</CardMetaValue>
                                 </CardMetaRow>
                               )}
-                              {birthPlace && (
+                              {viewMode !== 'compact' && birthPlace && (
                                 <CardMetaRow>
                                   <CardMetaLabel>출신</CardMetaLabel>
                                   <CardMetaValue>{birthPlace}</CardMetaValue>
                                 </CardMetaRow>
                               )}
 
-                              {bioExcerpt && <CardBio>{bioExcerpt}</CardBio>}
+                              {viewMode !== 'compact' && bioExcerpt && (
+                                <CardBio>{highlightMatch(bioExcerpt, searchQuery)}</CardBio>
+                              )}
                             </CardContent>
-                          </Card>
+                            </Card>
+                            {/* Hover quick-edit — 모달 직접 호출, 카드 클릭(상세 진입)을 가로채지 않도록 stopPropagation */}
+                            <QuickEditBtn
+                              type="button"
+                              data-quick-edit="true"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                e.preventDefault()
+                                setQuickEditPersonId(person.id)
+                              }}
+                              title={evalSummary?.hasEvaluation ? '평가 수정' : '평가 시작'}
+                              aria-label={evalSummary?.hasEvaluation ? '평가 수정' : '평가 시작'}
+                            >
+                              <FiStar size={12} />
+                              {evalSummary?.hasEvaluation ? '수정' : '평가'}
+                            </QuickEditBtn>
+                          </CardWrap>
                         )
                       })}
                     </AdaptiveGrid>
@@ -1761,10 +2957,63 @@ export function PersonListContent({
                   )
                 })}
               </ListScrollArea>
+              {/* 세기 navigator — 세기별 정렬일 때만 노출, 95명+ 빠른 점프 */}
+              {sortMode === 'century' && personsByCentury.length > 1 && (
+                <CenturyNav aria-label="세기 navigator">
+                  {personsByCentury.map(([century, list]) => {
+                    const era = getCenturyEra(century)
+                    const label =
+                      century === CENTURY_UNKNOWN
+                        ? '미상'
+                        : century < 0
+                          ? `BC ${-century}c`
+                          : `${century}c`
+                    return (
+                      <CenturyNavBtn
+                        key={`nav-${century}`}
+                        type="button"
+                        onClick={() => {
+                          const el = centuryRefs.current.get(century)
+                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                        }}
+                        title={`${label} (${list.length}명)`}
+                      >
+                        <CenturyNavDot $era={era} />
+                        <CenturyNavLabel>{label}</CenturyNavLabel>
+                        <CenturyNavCount>{list.length}</CenturyNavCount>
+                      </CenturyNavBtn>
+                    )
+                  })}
+                </CenturyNav>
+              )}
+              </ListWithNavWrap>
             )}
           </ListSectionWrap>
         )}
       </AnimatePresence>
+
+      {/* D5: 일괄 평가 모달 */}
+      <PersonBulkEvaluateModal
+        open={bulkEvalOpen}
+        personIds={Array.from(selectedIds)}
+        onClose={() => setBulkEvalOpen(false)}
+      />
+
+      {/* Hover quick-edit 모달 — 리스트에서 평가 직접 호출 */}
+      {quickEditPersonId && (
+        <PersonStatsEditModal
+          open={true}
+          personId={quickEditPersonId}
+          personName={(() => {
+            const p = persons.find((x) => x.id === quickEditPersonId)
+            return p ? getPersonDisplayName(p as PersonLike) : undefined
+          })()}
+          initialStats={evalIndex.get(quickEditPersonId)?.stats ?? null}
+          initialTraits={evalIndex.get(quickEditPersonId)?.traits ?? []}
+          canDelete={evalIndex.get(quickEditPersonId)?.hasEvaluation ?? false}
+          onClose={() => setQuickEditPersonId(null)}
+        />
+      )}
     </>
   )
 }

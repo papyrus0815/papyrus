@@ -48,11 +48,15 @@ export interface EventTheater {
 }
 
 export interface EventKeyFigure {
+  /** PersonEvent 행 ID (목록 key) */
   id: string
+  /** 인물 ID — 카드 클릭 시 인물 상세 이동 */
+  personId?: string
   name: string
   role: string
   nation: string
   portraitUrl?: string
+  /** 인물 시점의 사건 서술 (PersonEvent.note, 장문 가능) */
   contribution: string
 }
 

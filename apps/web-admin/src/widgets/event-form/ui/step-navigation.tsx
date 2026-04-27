@@ -6,6 +6,7 @@ import React from 'react'
 
 import type { IconType } from 'react-icons'
 import { FiArrowLeft, FiCheck } from 'react-icons/fi'
+import { useTheme } from 'styled-components'
 
 import type { FormStep } from '@/features/event-create/model'
 import * as S from '@/pages/events/create/event-create.styles'
@@ -32,6 +33,8 @@ export const StepNavigation: React.FC<StepNavigationProps> = ({
   onBack,
 }) => {
   const currentIndex = steps.findIndex((step) => step.id === currentStep)
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
 
   return (
     <S.StepNavigation>
@@ -47,7 +50,7 @@ export const StepNavigation: React.FC<StepNavigationProps> = ({
           style={{
             marginBottom: '16px',
             background: 'transparent',
-            border: '1.5px solid #e2e8f0',
+            border: `1.5px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
           }}
         >
           <S.StepIconWrapper $active={false} $completed={false}>

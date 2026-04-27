@@ -550,10 +550,16 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
       pointer-events: all;
     }
 
-    &.is-selected {
+    &.is-selected,
+    &:focus-visible {
       outline: 2px solid #4f46e5;
       outline-offset: 4px;
       border-radius: 16px;
+    }
+
+    /* tabindex로 인한 기본 outline 제거 — 위 :focus-visible로 일관 처리 */
+    &:focus {
+      outline: none;
     }
   }
 
@@ -717,6 +723,117 @@ const EditorContent = styled.div<{ $hasTitle?: boolean }>`
     &:hover::after {
       opacity: 1;
     }
+  }
+`
+
+/* 단축키 도움말 모달 — body 포털 */
+const ShortcutsHelpOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  z-index: ${Z_INDEX.RICH_TEXT_EDITOR_OVERLAY};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`
+
+const ShortcutsHelpModal = styled.div`
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(30,30,30,0.95)' : '#fff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  border-radius: 20px;
+  width: 92%;
+  max-width: 560px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+`
+
+const ShortcutsHelpHeader = styled.div`
+  padding: 18px 22px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`
+
+const ShortcutsHelpTitle = styled.h3`
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ShortcutsHelpClose = styled.button`
+  background: transparent;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.tertiary};
+  }
+`
+
+const ShortcutsHelpContent = styled.div`
+  overflow-y: auto;
+  padding: 16px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  ${scrollbarMixin}
+`
+
+const ShortcutsSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const ShortcutsSectionTitle = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-bottom: 2px;
+`
+
+const ShortcutRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  & > span:last-child {
+    margin-left: auto;
+    color: ${({ theme }) => theme.colors.text.primary};
+    font-weight: 500;
+  }
+
+  & kbd {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 7px;
+    border-radius: 6px;
+    border: 1px solid ${({ theme }) => theme.colors.border.default};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
+    color: ${({ theme }) => theme.colors.text.primary};
+    font: 600 11.5px/1
+      ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   }
 `
 
@@ -1680,6 +1797,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     left: number
   } | null>(null)
 
+  // 단축키 도움말 모달
+  const [shortcutsHelpVisible, setShortcutsHelpVisible] = useState(false)
+
   // 클릭 사운드 훅
   const playClickSound = useClickSound()
 
@@ -1908,6 +2028,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         img.addEventListener('dragstart', onDrag)
         dragstartHandlers.set(img, onDrag)
       }
+      // 키보드 접근: Tab으로 figure 포커스 가능, aria-label 부여
+      if (!figure.hasAttribute('tabindex')) {
+        figure.setAttribute('tabindex', '0')
+      }
+      const captionText = figure.querySelector('figcaption')?.textContent?.trim()
+      figure.setAttribute(
+        'aria-label',
+        captionText ? `이미지: ${captionText}` : '이미지',
+      )
       ensureAspectRatio(figure, img)
       ensureHandles(figure)
     }
@@ -2537,6 +2666,36 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         return
       }
 
+      // 단독 URL 페이스트 → 자동 a 태그
+      const trimmed = text.trim()
+      const urlOnly =
+        /^(?:https?:\/\/|www\.)[^\s<>"]+$/i.test(trimmed) && trimmed === text
+      if (urlOnly) {
+        const href = trimmed.startsWith('www.') ? `https://${trimmed}` : trimmed
+        const safeText = trimmed.replace(/[&<>"']/g, (c) =>
+          c === '&'
+            ? '&amp;'
+            : c === '<'
+              ? '&lt;'
+              : c === '>'
+                ? '&gt;'
+                : c === '"'
+                  ? '&quot;'
+                  : '&#39;',
+        )
+        try {
+          document.execCommand(
+            'insertHTML',
+            false,
+            `<a href="${href}" target="_blank" rel="noopener noreferrer">${safeText}</a>`,
+          )
+        } catch {
+          document.execCommand('insertText', false, text)
+        }
+        handleContentChange()
+        return
+      }
+
       try {
         document.execCommand('insertText', false, text)
       } catch {
@@ -2627,6 +2786,230 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         return
       }
 
+      // 마크다운 단축 (줄 시작에서):
+      //   "* " / "- "    → 순서없는 목록
+      //   "1. "          → 순서있는 목록
+      //   "# ", "## "…   → h1, h2, h3
+      //   "> "           → blockquote
+      //   "--- "         → 수평선
+      //   URL 직후 스페이스 → a 태그 자동 변환
+      // (이미 목록·표·코드블록 안이면 비활성)
+      if (
+        e.key === ' ' &&
+        !e.shiftKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey
+      ) {
+        const editor = editorRef.current
+        const sel = window.getSelection()
+        if (
+          editor &&
+          sel &&
+          sel.rangeCount > 0 &&
+          sel.isCollapsed &&
+          editor.contains(sel.getRangeAt(0).startContainer)
+        ) {
+          const range = sel.getRangeAt(0)
+          const startEl =
+            range.startContainer.nodeType === Node.ELEMENT_NODE
+              ? (range.startContainer as Element)
+              : range.startContainer.parentElement
+          const insideExcluded = startEl?.closest(
+            'ul, ol, li, pre, code, table',
+          )
+          if (!insideExcluded) {
+            const block =
+              (startEl?.closest(
+                'p, div, h1, h2, h3, h4, h5, h6, blockquote',
+              ) as HTMLElement | null) ?? null
+            const effectiveBlock =
+              block && block !== editor ? block : editor
+            const blockRange = document.createRange()
+            blockRange.setStart(effectiveBlock, 0)
+            blockRange.setEnd(range.startContainer, range.startOffset)
+            const textBefore = blockRange.toString()
+
+            // 1) 목록·헤딩·인용·수평선 트리거
+            let blockTransform:
+              | { kind: 'list'; cmd: 'insertUnorderedList' | 'insertOrderedList' }
+              | { kind: 'heading'; level: 1 | 2 | 3 }
+              | { kind: 'quote' }
+              | { kind: 'hr' }
+              | null = null
+            if (textBefore === '*' || textBefore === '-') {
+              blockTransform = { kind: 'list', cmd: 'insertUnorderedList' }
+            } else if (textBefore === '1.') {
+              blockTransform = { kind: 'list', cmd: 'insertOrderedList' }
+            } else if (textBefore === '#') {
+              blockTransform = { kind: 'heading', level: 1 }
+            } else if (textBefore === '##') {
+              blockTransform = { kind: 'heading', level: 2 }
+            } else if (textBefore === '###') {
+              blockTransform = { kind: 'heading', level: 3 }
+            } else if (textBefore === '>') {
+              blockTransform = { kind: 'quote' }
+            } else if (textBefore === '---') {
+              blockTransform = { kind: 'hr' }
+            }
+
+            if (blockTransform) {
+              e.preventDefault()
+              blockRange.deleteContents()
+              if (blockTransform.kind === 'list') {
+                document.execCommand(blockTransform.cmd, false)
+              } else if (blockTransform.kind === 'heading') {
+                document.execCommand(
+                  'formatBlock',
+                  false,
+                  `H${blockTransform.level}`,
+                )
+              } else if (blockTransform.kind === 'quote') {
+                document.execCommand('formatBlock', false, 'BLOCKQUOTE')
+              } else if (blockTransform.kind === 'hr') {
+                document.execCommand(
+                  'insertHTML',
+                  false,
+                  `${PROSE_HR_HTML}<p><br></p>`,
+                )
+              }
+              handleContentChange()
+              updateFormatState()
+              return
+            }
+
+            // 2) URL 자동 링크 — 캐럿 직전이 공백 없는 http(s)://… 또는 www.… 인 경우.
+            //    block 안 상관없이, 단어 단위로 검사.
+            const wordMatch = textBefore.match(
+              /(^|\s)((?:https?:\/\/|www\.)[^\s<>"]+[^\s<>".,!?;:'"()])$/,
+            )
+            if (wordMatch) {
+              const url = wordMatch[2]
+              const href = url.startsWith('www.') ? `https://${url}` : url
+              const urlStartIdx = (textBefore.length - url.length) | 0
+              // urlStartIdx부터 캐럿까지를 링크로 감싸기
+              const urlRange = document.createRange()
+              urlRange.setStart(effectiveBlock, 0)
+              urlRange.collapse(true)
+              // urlStartIdx 만큼 텍스트 오프셋 이동 — TreeWalker로 텍스트 순회
+              let consumed = 0
+              const walker = document.createTreeWalker(
+                effectiveBlock,
+                NodeFilter.SHOW_TEXT,
+              )
+              let urlStartNode: Node | null = null
+              let urlStartOffset = 0
+              for (
+                let n: Node | null = walker.nextNode();
+                n;
+                n = walker.nextNode()
+              ) {
+                const t = (n as Text).data
+                if (consumed + t.length >= urlStartIdx) {
+                  urlStartNode = n
+                  urlStartOffset = urlStartIdx - consumed
+                  break
+                }
+                consumed += t.length
+              }
+              if (urlStartNode) {
+                e.preventDefault()
+                const linkRange = document.createRange()
+                linkRange.setStart(urlStartNode, urlStartOffset)
+                linkRange.setEnd(range.startContainer, range.startOffset)
+                const linkText = linkRange.toString()
+                linkRange.deleteContents()
+                const a = document.createElement('a')
+                a.href = href
+                a.target = '_blank'
+                a.rel = 'noopener noreferrer'
+                a.textContent = linkText
+                linkRange.insertNode(a)
+                // 링크 뒤로 캐럿 + 스페이스 한 칸
+                const space = document.createTextNode(' ')
+                a.parentNode?.insertBefore(space, a.nextSibling)
+                const newRange = document.createRange()
+                newRange.setStart(space, 1)
+                newRange.collapse(true)
+                sel.removeAllRanges()
+                sel.addRange(newRange)
+                handleContentChange()
+                return
+              }
+            }
+          }
+        }
+      }
+
+      // 빈 list-item에서 Enter/Backspace → 목록 탈출
+      if (
+        (e.key === 'Enter' || e.key === 'Backspace') &&
+        !e.shiftKey &&
+        !e.ctrlKey &&
+        !e.metaKey
+      ) {
+        const selection = window.getSelection()
+        if (
+          selection?.rangeCount &&
+          selection.isCollapsed &&
+          editorRef.current?.contains(selection.getRangeAt(0).startContainer)
+        ) {
+          const r = selection.getRangeAt(0)
+          const startEl =
+            r.startContainer.nodeType === Node.ELEMENT_NODE
+              ? (r.startContainer as Element)
+              : r.startContainer.parentElement
+          const li = startEl?.closest('li')
+          if (li && editorRef.current.contains(li)) {
+            const liText = (li.textContent ?? '').replace(/​/g, '')
+            const liEmpty = liText.trim() === ''
+            const atStart = e.key === 'Backspace' && r.startOffset === 0
+            // Enter: 빈 li → 목록 종료
+            // Backspace: 빈 li 또는 li 시작에서 → 목록 종료
+            if (
+              (e.key === 'Enter' && liEmpty) ||
+              (e.key === 'Backspace' && (liEmpty || atStart))
+            ) {
+              e.preventDefault()
+              const list = li.closest('ul, ol')
+              const p = document.createElement('p')
+              p.innerHTML = '<br>'
+              if (list && list.parentNode) {
+                // 마지막 li면 목록 뒤에 단락; 중간 li면 목록을 분할하지 않고 단순히 li 제거 + 단락 삽입
+                if (li === list.lastElementChild) {
+                  list.parentNode.insertBefore(p, list.nextSibling)
+                  li.remove()
+                  if (!list.firstElementChild) list.remove()
+                } else {
+                  // 중간 li 탈출: 목록 분할 (간단히 li를 제거하고 위 목록 뒤에 p, 그 뒤에 새 목록)
+                  list.parentNode.insertBefore(p, list.nextSibling)
+                  // 이후 li들을 새 목록에 옮김
+                  const newList = document.createElement(list.tagName)
+                  let next = li.nextElementSibling
+                  while (next) {
+                    const n = next.nextElementSibling
+                    newList.appendChild(next)
+                    next = n
+                  }
+                  if (newList.firstElementChild) {
+                    p.parentNode?.insertBefore(newList, p.nextSibling)
+                  }
+                  li.remove()
+                }
+                const newRange = document.createRange()
+                newRange.setStart(p, 0)
+                newRange.collapse(true)
+                selection.removeAllRanges()
+                selection.addRange(newRange)
+                handleContentChange()
+                updateFormatState()
+                return
+              }
+            }
+          }
+        }
+      }
+
       // prose-hr div 안에서 Enter 시 복제 방지: 다음 빈 단락으로 이동
       if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
         const selection = window.getSelection()
@@ -2675,6 +3058,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
           e.preventDefault()
           applyFormat('redo')
+          return
+        }
+        if (e.key === '/') {
+          e.preventDefault()
+          setShortcutsHelpVisible((v) => !v)
           return
         }
       }
@@ -3180,6 +3568,16 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   ])
 
   // 에디터 내 .term 클릭 → 수정 모달
+  /** figure를 선택 상태로 만들고 부유 툴바 위치 계산 — 클릭/포커스/Enter 공통 진입점 */
+  const focusFigure = useCallback((figure: HTMLElement) => {
+    const rect = figure.getBoundingClientRect()
+    setSelectedFigure(figure)
+    setImageMenuPos({
+      top: Math.max(rect.top - 52, 8),
+      left: rect.left + rect.width / 2,
+    })
+  }, [])
+
   const handleEditorContentClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement
 
@@ -3191,12 +3589,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       if (img) {
         e.preventDefault()
         e.stopPropagation()
-        const rect = figure.getBoundingClientRect()
-        setSelectedFigure(figure as HTMLElement)
-        setImageMenuPos({
-          top: Math.max(rect.top - 52, 8),
-          left: rect.left + rect.width / 2,
-        })
+        focusFigure(figure as HTMLElement)
         return
       }
     } else {
@@ -3229,7 +3622,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         setTermEditModalVisible(false)
       })
       .finally(() => setTermEditLoading(false))
-  }, [selectedFigure])
+  }, [selectedFigure, focusFigure])
 
   const handleCloseTermEditModal = useCallback(() => {
     setTermEditModalVisible(false)
@@ -3531,7 +3924,30 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           data-placeholder={placeholder}
           onInput={handleContentChange}
           onPaste={handlePaste}
-          onKeyDown={handleKeyDown}
+          onKeyDown={(e) => {
+            // figure에 포커스된 상태에서 Enter → 부유 툴바 열기
+            const t = e.target as HTMLElement
+            if (
+              e.key === 'Enter' &&
+              !e.shiftKey &&
+              !e.ctrlKey &&
+              !e.metaKey &&
+              t instanceof HTMLElement &&
+              t.tagName === 'FIGURE'
+            ) {
+              e.preventDefault()
+              focusFigure(t)
+              return
+            }
+            handleKeyDown(e)
+          }}
+          onFocus={(e) => {
+            // 키보드 Tab으로 figure에 포커스가 들어오면 자동 선택
+            const t = e.target as HTMLElement
+            if (t instanceof HTMLElement && t.tagName === 'FIGURE') {
+              focusFigure(t)
+            }
+          }}
           onMouseUp={updateFormatState}
           onKeyUp={updateFormatState}
           onContextMenu={handleContextMenu}
@@ -4238,6 +4654,116 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               )
             })()}
           </ImageToolbar>,
+          document.body,
+        )}
+
+      {/* 단축키 도움말 모달 — Ctrl+/ 토글 */}
+      {shortcutsHelpVisible &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <ShortcutsHelpOverlay onClick={() => setShortcutsHelpVisible(false)}>
+            <ShortcutsHelpModal onClick={(e) => e.stopPropagation()}>
+              <ShortcutsHelpHeader>
+                <ShortcutsHelpTitle>키보드 단축키</ShortcutsHelpTitle>
+                <ShortcutsHelpClose
+                  type="button"
+                  onClick={() => setShortcutsHelpVisible(false)}
+                  aria-label="닫기"
+                >
+                  <FiX size={20} />
+                </ShortcutsHelpClose>
+              </ShortcutsHelpHeader>
+              <ShortcutsHelpContent>
+                <ShortcutsSection>
+                  <ShortcutsSectionTitle>서식</ShortcutsSectionTitle>
+                  <ShortcutRow>
+                    <kbd>Ctrl/⌘</kbd> + <kbd>B</kbd>
+                    <span>굵게</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>Ctrl/⌘</kbd> + <kbd>I</kbd>
+                    <span>기울임</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>Ctrl/⌘</kbd> + <kbd>Z</kbd>
+                    <span>실행 취소</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>Ctrl/⌘</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd>
+                    <span>다시 실행</span>
+                  </ShortcutRow>
+                </ShortcutsSection>
+                <ShortcutsSection>
+                  <ShortcutsSectionTitle>마크다운(줄 시작)</ShortcutsSectionTitle>
+                  <ShortcutRow>
+                    <kbd>*</kbd>/<kbd>-</kbd> + <kbd>Space</kbd>
+                    <span>순서 없는 목록</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>1.</kbd> + <kbd>Space</kbd>
+                    <span>순서 있는 목록</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>#</kbd>/<kbd>##</kbd>/<kbd>###</kbd> + <kbd>Space</kbd>
+                    <span>제목 1·2·3</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>&gt;</kbd> + <kbd>Space</kbd>
+                    <span>인용</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>---</kbd> + <kbd>Space</kbd>
+                    <span>수평선</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <span style={{ color: '#94a3b8' }}>http://… </span>
+                    <span>+ Space → 자동 링크</span>
+                  </ShortcutRow>
+                </ShortcutsSection>
+                <ShortcutsSection>
+                  <ShortcutsSectionTitle>목록·표</ShortcutsSectionTitle>
+                  <ShortcutRow>
+                    <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd>
+                    <span>들여쓰기 / 내어쓰기</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>Enter</kbd>
+                    <span>빈 항목에서 → 목록 종료</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>Backspace</kbd>
+                    <span>빈/시작 항목에서 → 목록 종료</span>
+                  </ShortcutRow>
+                </ShortcutsSection>
+                <ShortcutsSection>
+                  <ShortcutsSectionTitle>이미지</ShortcutsSectionTitle>
+                  <ShortcutRow>
+                    <kbd>Tab</kbd>
+                    <span>이미지 포커스</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>Enter</kbd>
+                    <span>이미지 툴바 열기</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>Delete</kbd>/<kbd>Backspace</kbd>
+                    <span>선택한 이미지 삭제</span>
+                  </ShortcutRow>
+                  <ShortcutRow>
+                    <kbd>Esc</kbd>
+                    <span>선택 해제</span>
+                  </ShortcutRow>
+                </ShortcutsSection>
+                <ShortcutsSection>
+                  <ShortcutsSectionTitle>이 도움말</ShortcutsSectionTitle>
+                  <ShortcutRow>
+                    <kbd>Ctrl/⌘</kbd> + <kbd>/</kbd>
+                    <span>열기/닫기</span>
+                  </ShortcutRow>
+                </ShortcutsSection>
+              </ShortcutsHelpContent>
+            </ShortcutsHelpModal>
+          </ShortcutsHelpOverlay>,
           document.body,
         )}
 

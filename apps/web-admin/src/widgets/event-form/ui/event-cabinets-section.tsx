@@ -29,23 +29,31 @@ const ROLE_OPTIONS: CabinetEventRole[] = ['ORIGIN', 'PARTY', 'MEDIATOR', 'AFFECT
 const Section = styled.section`
   margin-top: 24px;
   padding: 16px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
 `
 const Header = styled.div`
   display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
 `
 const Title = styled.h3`
-  margin: 0; font-size: 14px; font-weight: 700; color: #111827;
+  margin: 0; font-size: 14px; font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
-const Count = styled.span`font-size: 12px; color: #6b7280;`
+const Count = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
 const AddBtn = styled.button`
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 6px 10px; background: #f3f4f6; border: 1px solid #e5e7eb;
-  border-radius: 6px; color: #374151; font-size: 12px; font-weight: 600;
+  padding: 6px 10px;
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 6px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12px; font-weight: 600;
   cursor: pointer;
-  &:hover { background: #e5e7eb; }
+  &:hover { background: ${({ theme }) => theme.colors.background.quaternary}; }
 `
 const List = styled.ul`
   list-style: none; padding: 0; margin: 0;
@@ -53,59 +61,97 @@ const List = styled.ul`
 `
 const Card = styled.li`
   display: flex; align-items: center; gap: 12px;
-  padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 8px;
+  padding: 12px 14px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
 `
 const CardBody = styled.div`flex: 1; min-width: 0;`
 const CardTitle = styled.div`
-  font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 2px;
+  font-size: 13px; font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  margin-bottom: 2px;
 `
-const CardMeta = styled.div`font-size: 11px; color: #6b7280;`
+const CardMeta = styled.div`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
 const RoleSelect = styled.select`
-  padding: 4px 6px; font-size: 11px; border: 1px solid #d1d5db;
-  border-radius: 4px; background: #fff; color: #374151;
+  padding: 4px 6px; font-size: 11px;
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-radius: 4px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 const IconBtn = styled.button`
-  padding: 6px; background: transparent; border: none; color: #9ca3af;
+  padding: 6px; background: transparent; border: none;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer; border-radius: 4px;
-  &:hover { color: #ef4444; background: #fef2f2; }
+  &:hover {
+    color: ${({ theme }) => theme.colors.error};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2'};
+  }
 `
 
 // modal
 const Overlay = styled.div`
-  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+  position: fixed; inset: 0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0, 0, 0, 0.6)' : 'rgba(15, 23, 42, 0.45)'};
   display: flex; align-items: center; justify-content: center; z-index: 1100;
 `
 const Modal = styled.div`
-  background: #fff; border-radius: 12px; width: min(520px, 92vw);
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-radius: 12px; width: min(520px, 92vw);
   max-height: 84vh; display: flex; flex-direction: column; overflow: hidden;
 `
 const MHeader = styled.div`
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 18px; border-bottom: 1px solid #e5e7eb;
+  padding: 16px 18px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
 `
-const MTitle = styled.h4`margin: 0; font-size: 15px; font-weight: 700; color: #111827;`
-const CloseBtn = styled.button`background: transparent; border: none; cursor: pointer; color: #6b7280; padding: 4px;`
+const MTitle = styled.h4`
+  margin: 0; font-size: 15px; font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+const CloseBtn = styled.button`
+  background: transparent; border: none; cursor: pointer;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  padding: 4px;
+`
 const MBody = styled.div`padding: 14px 18px; overflow-y: auto;`
 const MFooter = styled.div`
-  padding: 12px 18px; border-top: 1px solid #e5e7eb;
+  padding: 12px 18px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.default};
   display: flex; justify-content: flex-end; gap: 8px;
 `
 const FieldLabel = styled.label`
-  display: block; font-size: 12px; font-weight: 600; color: #374151;
+  display: block; font-size: 12px; font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin: 12px 0 6px;
 `
 const Select = styled.select`
   width: 100%; padding: 9px 10px; font-size: 13px;
-  border: 1px solid #d1d5db; border-radius: 6px; background: #fff;
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-radius: 6px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 const PrimaryBtn = styled.button`
   padding: 8px 14px; background: #2563eb; color: #fff; border: none;
   border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
-  &:disabled { background: #9ca3af; cursor: not-allowed; }
+  &:disabled {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? '#4b5563' : '#9ca3af'};
+    cursor: not-allowed;
+  }
 `
 const GhostBtn = styled.button`
-  padding: 8px 14px; background: transparent; border: 1px solid #d1d5db;
-  border-radius: 6px; color: #374151; font-size: 13px; cursor: pointer;
+  padding: 8px 14px; background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-radius: 6px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 13px; cursor: pointer;
 `
 
 export interface EventCabinetsSectionProps {
@@ -335,13 +381,26 @@ function PickCabinetModal({
               >
                 <option value="">선택하세요</option>
                 {candidates.map((c) => {
-                  const head: any = (c as any).headTenure
+                  // headTenure는 SDK 응답 확장 필드 — DTO에는 없을 수 있어 좁은
+                  // 형태로 안전 접근. 변경 시 server 응답 스키마 확인 필요.
+                  type WithHead = {
+                    headTenure?: {
+                      person?: { name?: string | null } | null
+                      country?: { name?: string | null } | null
+                      historicalCountry?: { name?: string | null } | null
+                    } | null
+                  }
+                  const head = (c as WithHead).headTenure
                   const personName = head?.person?.name ?? '이름 없음'
-                  const countryName = head?.country?.name ?? head?.historicalCountry?.name ?? ''
+                  const countryName =
+                    head?.country?.name ??
+                    head?.historicalCountry?.name ??
+                    ''
                   const label = c.name ?? `${personName} 행정부`
                   return (
                     <option key={c.id} value={c.id}>
-                      {countryName ? `[${countryName}] ` : ''}{label}
+                      {countryName ? `[${countryName}] ` : ''}
+                      {label}
                     </option>
                   )
                 })}

@@ -182,6 +182,7 @@ export interface EventBelligerentsGraph {
     id: string
     name: string
     color?: string  // UI 표시용
+    description?: string // 진영 설명 (선택)
     memberCountryIds: string[]
   }>
 }

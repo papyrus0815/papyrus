@@ -1252,10 +1252,16 @@ const AncColumnDiv = styled.div`
   min-width: ${ANC_W}px;
 `
 
-/** AncParentsGrid: 부/모 AncestorColumn을 1:1로 나란히 */
+/**
+ * AncParentsGrid: 부/모 AncestorColumn을 1:1로 나란히
+ * align-items: flex-end — 한쪽 가지에 윗 세대 데이터가 없으면(컬럼이 짧으면)
+ * 짧은 쪽 카드가 위로 떠서 형제 가지의 윗 세대와 같은 행에 그려지는 문제를 방지.
+ * 두 카드 하단이 항상 같은 y에 정렬돼야 그 아래 fork(상단 y=0에서 시작)가 카드 끝과 정확히 만남.
+ */
 const AncParentsGrid = styled.div`
   display: flex;
   flex-direction: row;
+  align-items: flex-end;
   width: 100%;
 `
 

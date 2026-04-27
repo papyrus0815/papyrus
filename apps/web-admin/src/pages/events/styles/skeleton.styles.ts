@@ -20,12 +20,17 @@ const shimmer = `
 
 // List Skeleton
 export const SkeletonListItem = styled.div<{ $depth: number }>`
-  border: 1.5px solid rgba(20, 19, 34, 0.06);
+  border: 1.5px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(20, 19, 34, 0.06)'};
   border-radius: 14px;
   padding: 0;
   margin-left: ${({ $depth }) => $depth * 24}px;
   min-height: ${({ $depth }) => Math.max(70, 90 - $depth * 10)}px;
-  background: #ffffff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'};
   display: flex;
   gap: 0;
   opacity: 0.6;
@@ -187,10 +192,17 @@ export const SkeletonText = styled.div<{ $width?: string }>`
 `
 
 export const SkeletonCard = styled.div`
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(20, 19, 34, 0.08)'};
   border-radius: 12px;
   padding: 12px;
-  background: linear-gradient(180deg, #fafbff, #ffffff);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))'
+      : 'linear-gradient(180deg, #fafbff, #ffffff)'};
   height: 60px;
   display: flex;
   gap: 8px;
@@ -229,10 +241,15 @@ export const SkeletonCard = styled.div`
 
 // Century Skeleton
 export const SkeletonCenturyButton = styled.div`
-  border: 1.5px solid rgba(99, 102, 241, 0.08);
+  border: 1.5px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.18)'
+        : 'rgba(99, 102, 241, 0.08)'};
   border-radius: 10px;
   padding: 10px 12px;
-  background: #ffffff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#ffffff'};
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -279,9 +296,15 @@ export const SkeletonCategorySummaryCard = styled.div`
   display: flex;
   align-items: center;
   gap: 14px;
-  background: #ffffff;
-  border: 1px solid #e4e7ec;
-  box-shadow: 0 6px 20px rgba(15, 17, 29, 0.06);
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e4e7ec'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 6px 20px rgba(0, 0, 0, 0.45)'
+      : '0 6px 20px rgba(15, 17, 29, 0.06)'};
   ${pulseAnimation}
 `
 
@@ -303,8 +326,13 @@ export const SkeletonIconBubble = styled.div`
 export const SkeletonHighlight = styled.div`
   padding: 10px;
   border-radius: 10px;
-  background: #f8fafc;
-  border: 1px solid rgba(99, 102, 241, 0.08);
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.18)'
+        : 'rgba(99, 102, 241, 0.08)'};
   display: flex;
   flex-direction: column;
   gap: 6px;

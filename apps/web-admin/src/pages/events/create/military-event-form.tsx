@@ -21,7 +21,12 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
+
+import {
+  useEscapeKey,
+  useFocusFirstOnMount,
+} from '@/shared/hooks/use-modal-a11y.hook'
 
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
@@ -35,7 +40,10 @@ import { TimePickerModal } from '@/shared/ui/time-picker-modal/time-picker-modal
 
 import { BelligerentsGraphForm } from '../components/belligerents-graph-form'
 import { BelligerentsGraphVisualization } from '../components/belligerents-graph-visualization'
-import type { EventBelligerentsGraph } from '../types/belligerents-graph.types'
+import type {
+  CountryRelation,
+  EventBelligerentsGraph,
+} from '../types/belligerents-graph.types'
 import { FORM_FIELD_MAX_WIDTH } from './event-create.styles'
 
 // 타입 정의
@@ -136,6 +144,8 @@ export interface BelligerentSide {
   description?: string
   parentSideId?: string
   level?: 'coalition' | 'country' | 'force'
+  /** 그래프/표시용 색상 (Hex). 진영을 시각적으로 구분 */
+  color?: string
 }
 
 export interface CasualtyData {
@@ -191,6 +201,7 @@ interface MilitaryEventFormProps {
     title: string
     belligerents?: {
       sides: BelligerentSide[]
+      relations?: CountryRelation[]
     }
   }
 
@@ -198,19 +209,18 @@ interface MilitaryEventFormProps {
   belligerentsGraph?: EventBelligerentsGraph
   setBelligerentsGraph?: (value: EventBelligerentsGraph) => void
 
-  // 하위 사건들의 관계 (조회용)
-  childEventsRelations?: Array<{
-    relation: EventBelligerentsGraph
-    sourceName: string
-  }>
 }
 
-// 툴팁 컴포넌트
+// 툴팁 컴포넌트 — 다크/라이트 분기
 const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({
   text,
   children,
 }) => {
   const [show, setShow] = useState(false)
+  const t = useTheme()
+  // 다크 모드에선 라이트 풍선 + 다크 텍스트, 라이트 모드에선 다크 풍선 + 화이트 텍스트
+  const bubbleBg = t.mode === 'dark' ? '#f5f5f5' : '#1e293b'
+  const bubbleText = t.mode === 'dark' ? '#1a1a1a' : '#ffffff'
 
   return (
     <div
@@ -221,6 +231,7 @@ const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({
       {children}
       {show && (
         <div
+          role="tooltip"
           style={{
             position: 'absolute',
             bottom: '100%',
@@ -228,13 +239,16 @@ const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({
             transform: 'translateX(-50%)',
             marginBottom: '8px',
             padding: '8px 12px',
-            background: '#1e293b',
-            color: 'white',
+            background: bubbleBg,
+            color: bubbleText,
             fontSize: '12px',
             borderRadius: '6px',
             whiteSpace: 'nowrap',
             zIndex: 1000,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            boxShadow:
+              t.mode === 'dark'
+                ? '0 4px 12px rgba(0,0,0,0.5)'
+                : '0 4px 12px rgba(0,0,0,0.15)',
           }}
         >
           {text}
@@ -248,7 +262,7 @@ const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({
               height: 0,
               borderLeft: '6px solid transparent',
               borderRight: '6px solid transparent',
-              borderTop: '6px solid #1e293b',
+              borderTop: `6px solid ${bubbleBg}`,
             }}
           />
         </div>
@@ -257,34 +271,26 @@ const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({
   )
 }
 
+// Semantic 색상만 유지 — neutral 색은 useTheme 기반 tone 헬퍼로 분기 (다크 대응)
 const COLORS = {
   primary: '#6366f1', // 인디고
   primaryLight: 'rgba(99, 102, 241, 0.08)',
-  primaryBorder: 'rgba(99, 102, 241, 0.2)',
   primaryDark: '#4f46e5',
-  danger: '#ef4444', // 빨강
-  dangerLight: 'rgba(239, 68, 68, 0.08)',
-  success: '#10b981', // 초록
+  success: '#10b981',
   successLight: 'rgba(16, 185, 129, 0.08)',
-  warning: '#f59e0b', // 주황
-  warningLight: 'rgba(245, 158, 11, 0.08)',
-  info: '#3b82f6', // 파랑
+  info: '#3b82f6',
   infoLight: 'rgba(59, 130, 246, 0.08)',
-  text: '#1e293b',
-  textLight: '#64748b',
-  bg: '#f8fafc',
-  border: 'rgba(148, 163, 184, 0.2)',
-}
+} as const
 
 export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
   // 새로운 구조
   militaryEvent,
   setMilitaryEvent,
 
-  // 레거시 (하위 호환성)
-  belligerents,
+  // 레거시 (하위 호환성) — 부모가 미전달 시 안전한 기본값으로 폴백
+  belligerents = [],
   setBelligerents,
-  casualties,
+  casualties = {},
   setCasualties,
 
   militaryDetails,
@@ -298,9 +304,23 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
   parentEvent,
   belligerentsGraph,
   setBelligerentsGraph,
-  childEventsRelations = [],
 }) => {
   const playClickSound = useClickSound()
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
+  // 다크/라이트 분기 색 헬퍼 — 인라인 style용
+  const tone = {
+    bgPrimary: isDark ? '#1a1a1a' : '#ffffff',
+    bgSecondary: isDark ? '#212121' : '#fafbfc',
+    bgTertiary: isDark ? '#2a2a2a' : '#f1f5f9',
+    bgWhite: isDark ? '#1a1a1a' : '#ffffff',
+    border: isDark ? '#2a2a2a' : '#e5e7eb',
+    borderDashed: isDark ? '#3f3f46' : '#cbd5e1',
+    textPrimary: isDark ? '#f5f5f5' : '#0f172a',
+    textSecondary: isDark ? '#a1a1aa' : '#64748b',
+    textTertiary: isDark ? '#71717a' : '#94a3b8',
+    textStrong: isDark ? '#e5e5e5' : '#475569',
+  }
 
   // 탭 상태
   const [activeTab, setActiveTab] = useState<'belligerents' | 'details'>(
@@ -311,9 +331,15 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
   const [showAddSideModal, setShowAddSideModal] = useState(false)
   const [newSideName, setNewSideName] = useState('')
   const [newSideDescription, setNewSideDescription] = useState('')
+  const addSideModalRef = React.useRef<HTMLDivElement | null>(null)
+  useEscapeKey(showAddSideModal, () => setShowAddSideModal(false))
+  useFocusFirstOnMount(addSideModalRef, showAddSideModal)
 
   // 진영 수정 모달 (그래프 방식)
   const [showEditSideModal, setShowEditSideModal] = useState(false)
+  const editSideModalRef = React.useRef<HTMLDivElement | null>(null)
+  useEscapeKey(showEditSideModal, () => setShowEditSideModal(false))
+  useFocusFirstOnMount(editSideModalRef, showEditSideModal)
   const [editingSideId, setEditingSideId] = useState<string | null>(null)
   const [editSideName, setEditSideName] = useState('')
   const [editSideColor, setEditSideColor] = useState('')
@@ -586,30 +612,35 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
   ) => {
     if (!setBelligerents) return
 
-    const updated: BelligerentSide[] = newSides.map((side) => ({
-      id: side.id,
-      name: side.name,
-      level: side.level,
-      commander: '',
-      commanderPersonId: undefined,
-      forces: '',
-      countries: side.countryIds
-        .map((countryId) => {
-          const country = newCountryData[countryId]
-          if (!country) return null
-          return {
-            countryId: country.countryId,
-            countryName: country.countryName,
-            isHistorical: country.isHistorical,
-            joinDate: country.joinDate,
-            withdrawDate: country.withdrawDate,
-            participation: country.participation,
-          }
-        })
-        .filter((country): country is CountryParticipation => country !== null),
-    }))
+    const updated: BelligerentSide[] = newSides.map((side) => {
+      const sideBase: BelligerentSide = {
+        id: side.id,
+        name: side.name,
+        commander: '',
+        forces: '',
+        countries: side.countryIds.flatMap<CountryParticipation>(
+          (countryId) => {
+            const country = newCountryData[countryId]
+            if (!country) return []
+            const cp: CountryParticipation = {
+              countryId: country.countryId,
+              countryName: country.countryName,
+              isHistorical: country.isHistorical,
+            }
+            if (country.joinDate !== undefined) cp.joinDate = country.joinDate
+            if (country.withdrawDate !== undefined)
+              cp.withdrawDate = country.withdrawDate
+            if (country.participation !== undefined)
+              cp.participation = country.participation
+            return [cp]
+          },
+        ),
+      }
+      if (side.level !== undefined) sideBase.level = side.level
+      return sideBase
+    })
 
-    setBelligerents(updated)
+    setBelligerents?.(updated)
   }
 
   // ============================================
@@ -645,8 +676,8 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
     if (side) {
       setEditingSideId(sideId)
       setEditSideName(side.name)
-      setEditSideColor((side as any).color || '')
-      setEditSideDescription((side as any).description || '')
+      setEditSideColor(side.color || '')
+      setEditSideDescription(side.description || '')
       setIsGraphMode(false)
       setShowEditSideModal(true)
     }
@@ -659,8 +690,8 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
     if (side) {
       setEditingSideId(sideId)
       setEditSideName(side.name)
-      setEditSideColor((side as any).color || '')
-      setEditSideDescription((side as any).description || '')
+      setEditSideColor(side.color || '')
+      setEditSideDescription(side.description || '')
       setIsGraphMode(true)
       setShowEditSideModal(true)
     }
@@ -687,7 +718,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
         ...belligerentsGraph,
         manualSides: updatedSides,
       })
-    } else if (!isGraphMode && setBelligerents) {
+    } else if (!isGraphMode && setBelligerents && belligerents) {
       // 레거시 모드
       const updated = belligerents.map((s) =>
         s.id === editingSideId
@@ -699,7 +730,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
             }
           : s,
       )
-      setBelligerents(updated)
+      setBelligerents?.(updated)
     }
 
     setShowEditSideModal(false)
@@ -823,6 +854,10 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
     open: boolean
   }>({ sideId: null, open: false })
   const [unitSearchQuery, setUnitSearchQuery] = useState('')
+  useEscapeKey(unitSelectionOpen.open, () => {
+    setUnitSelectionOpen({ sideId: null, open: false })
+    setUnitSearchQuery('')
+  })
 
   // 지휘관 선택 모달
   const [commanderSelectionOpen, setCommanderSelectionOpen] = useState<{
@@ -830,6 +865,10 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
     open: boolean
   }>({ sideId: null, open: false })
   const [commanderSearchQuery, setCommanderSearchQuery] = useState('')
+  useEscapeKey(commanderSelectionOpen.open, () => {
+    setCommanderSelectionOpen({ sideId: null, open: false })
+    setCommanderSearchQuery('')
+  })
 
   // 세력 추가
   const addBelligerent = () => {
@@ -923,7 +962,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                   ? { ...currentSide, forces: event.target.value }
                   : currentSide,
               )
-              setBelligerents(updated)
+              setBelligerents?.(updated)
             }}
           />
         </InputGroup>
@@ -962,7 +1001,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                   ? { ...currentSide, weaponsUsed: weapons }
                   : currentSide,
               )
-              setBelligerents(updated)
+              setBelligerents?.(updated)
             }}
           />
         </InputGroup>
@@ -981,7 +1020,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                   ? { ...currentSide, description: event.target.value }
                   : currentSide,
               )
-              setBelligerents(updated)
+              setBelligerents?.(updated)
             }}
           />
         </InputGroup>
@@ -1018,7 +1057,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       },
                     },
                   }
-                  setCasualties(newCasualties)
+                  setCasualties?.(newCasualties)
                 }}
               />
               <CasualtyInputField
@@ -1048,7 +1087,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       },
                     },
                   }
-                  setCasualties(newCasualties)
+                  setCasualties?.(newCasualties)
                 }}
               />
               <CasualtyInputField
@@ -1078,7 +1117,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       },
                     },
                   }
-                  setCasualties(newCasualties)
+                  setCasualties?.(newCasualties)
                 }}
               />
               <CasualtyInputField
@@ -1108,7 +1147,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       },
                     },
                   }
-                  setCasualties(newCasualties)
+                  setCasualties?.(newCasualties)
                 }}
               />
             </CasualtyGrid>
@@ -1140,10 +1179,10 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
     playClickSound()
     if (!belligerents || !setBelligerents || !casualties || !setCasualties)
       return
-    setBelligerents(belligerents.filter((side) => side.id !== id))
+    setBelligerents?.(belligerents.filter((side) => side.id !== id))
     const newCasualties = { ...casualties }
     delete newCasualties[id]
-    setCasualties(newCasualties)
+    setCasualties?.(newCasualties)
     const newExpanded = new Set(expandedSides)
     newExpanded.delete(id)
     setExpandedSides(newExpanded)
@@ -1197,7 +1236,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
         }
         return side
       })
-      setBelligerents(updated)
+      setBelligerents?.(updated)
     } else {
       addCountryToSide(
         selectedSideForCountry,
@@ -1277,7 +1316,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
       }
       return side
     })
-    setBelligerents(updated)
+    setBelligerents?.(updated)
   }
 
   // 세력 확장/축소 토글
@@ -1376,7 +1415,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     <Tooltip text="전투에 참여한 진영과 국가, 그리고 그들 간의 관계를 입력하세요">
                       <FiHelpCircle
                         size={14}
-                        color={COLORS.textLight}
+                        color={tone.textSecondary}
                         style={{ cursor: 'help' }}
                       />
                     </Tooltip>
@@ -1404,8 +1443,8 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       padding: '20px 24px',
-                      background: '#fafbfc',
-                      border: '1px solid #e5e7eb',
+                      background: tone.bgSecondary,
+                      border: `1px solid ${tone.border}`,
                       borderBottom: 'none',
                       borderRadius: '12px 12px 0 0',
                     }}
@@ -1436,7 +1475,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                             margin: 0,
                             fontSize: '16px',
                             fontWeight: 600,
-                            color: '#0f172a',
+                            color: tone.textPrimary,
                           }}
                         >
                           교전 진영 설정
@@ -1445,7 +1484,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                           style={{
                             margin: '4px 0 0 0',
                             fontSize: '13px',
-                            color: '#64748b',
+                            color: tone.textSecondary,
                           }}
                         >
                           참전 진영을 등록하고 국가를 분류하세요
@@ -1455,15 +1494,15 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     <div
                       style={{
                         padding: '8px 16px',
-                        background: 'white',
+                        background: tone.bgWhite,
                         borderRadius: '8px',
-                        border: '1px solid #e5e7eb',
+                        border: `1px solid ${tone.border}`,
                       }}
                     >
                       <div
                         style={{
                           fontSize: '11px',
-                          color: '#64748b',
+                          color: tone.textSecondary,
                           fontWeight: 500,
                           marginBottom: '2px',
                         }}
@@ -1474,7 +1513,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                         style={{
                           fontSize: '20px',
                           fontWeight: 700,
-                          color: '#0f172a',
+                          color: tone.textPrimary,
                           lineHeight: 1,
                         }}
                       >
@@ -1486,9 +1525,9 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                   {/* 진영 카드 컨테이너 */}
                   <div
                     style={{
-                      background: 'white',
+                      background: tone.bgWhite,
                       padding: '24px',
-                      border: '1px solid #e5e7eb',
+                      border: `1px solid ${tone.border}`,
                       borderTop: 'none',
                       borderRadius: '0 0 12px 12px',
                     }}
@@ -1498,9 +1537,9 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                         style={{
                           textAlign: 'center',
                           padding: '48px 20px',
-                          background: '#fafbfc',
+                          background: tone.bgSecondary,
                           borderRadius: '8px',
-                          border: '1px dashed #cbd5e1',
+                          border: `1px dashed ${tone.borderDashed}`,
                         }}
                       >
                         <div
@@ -1508,7 +1547,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                             width: '64px',
                             height: '64px',
                             margin: '0 auto 16px',
-                            background: '#f1f5f9',
+                            background: tone.bgTertiary,
                             borderRadius: '12px',
                             display: 'flex',
                             alignItems: 'center',
@@ -1522,7 +1561,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                             margin: '0 0 6px 0',
                             fontSize: '15px',
                             fontWeight: 600,
-                            color: '#0f172a',
+                            color: tone.textPrimary,
                           }}
                         >
                           진영을 추가하여 시작하세요
@@ -1531,7 +1570,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                           style={{
                             margin: '0 0 20px 0',
                             fontSize: '13px',
-                            color: '#64748b',
+                            color: tone.textSecondary,
                             lineHeight: 1.5,
                           }}
                         >
@@ -1581,7 +1620,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       >
                         {(belligerentsGraph.manualSides || []).map(
                           (side, index) => {
-                            const sideColor = (side as any).color
+                            const sideColor = side.color
                             const countriesInSide =
                               belligerentsGraph.countries.filter(
                                 (c) => c.role === side.name,
@@ -1591,8 +1630,8 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                               <div
                                 key={side.id}
                                 style={{
-                                  background: 'white',
-                                  border: '1px solid #e5e7eb',
+                                  background: tone.bgWhite,
+                                  border: `1px solid ${tone.border}`,
                                   borderRadius: '10px',
                                   overflow: 'hidden',
                                   transition: 'all 0.2s',
@@ -1655,7 +1694,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                         style={{
                                           fontSize: '16px',
                                           fontWeight: 600,
-                                          color: '#0f172a',
+                                          color: tone.textPrimary,
                                           marginBottom: '6px',
                                           overflow: 'hidden',
                                           textOverflow: 'ellipsis',
@@ -1670,11 +1709,11 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                           alignItems: 'center',
                                           gap: '4px',
                                           padding: '4px 8px',
-                                          background: '#f1f5f9',
+                                          background: tone.bgTertiary,
                                           borderRadius: '6px',
                                           fontSize: '12px',
                                           fontWeight: 500,
-                                          color: '#64748b',
+                                          color: tone.textSecondary,
                                         }}
                                       >
                                         <FiUsers size={12} />
@@ -1691,7 +1730,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                         alignItems: 'center',
                                         gap: '8px',
                                         padding: '10px 12px',
-                                        background: '#fafbfc',
+                                        background: tone.bgSecondary,
                                         borderRadius: '8px',
                                       }}
                                     >
@@ -1709,7 +1748,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                         <div
                                           style={{
                                             fontSize: '12px',
-                                            color: '#64748b',
+                                            color: tone.textSecondary,
                                             fontWeight: 500,
                                           }}
                                         >
@@ -1720,20 +1759,20 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                   )}
 
                                   {/* 진영 설명 */}
-                                  {(side as any).description && (
+                                  {side.description && (
                                     <div
                                       style={{
                                         marginTop: '12px',
                                         padding: '12px',
-                                        background: '#fafbfc',
+                                        background: tone.bgSecondary,
                                         borderRadius: '8px',
-                                        border: '1px solid #f1f5f9',
+                                        border: `1px solid ${tone.bgTertiary}`,
                                       }}
                                     >
                                       <div
                                         style={{
                                           fontSize: '11px',
-                                          color: '#64748b',
+                                          color: tone.textSecondary,
                                           fontWeight: 500,
                                           marginBottom: '6px',
                                         }}
@@ -1743,11 +1782,11 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                       <div
                                         style={{
                                           fontSize: '13px',
-                                          color: '#475569',
+                                          color: tone.textStrong,
                                           lineHeight: 1.5,
                                         }}
                                       >
-                                        {(side as any).description}
+                                        {side.description}
                                       </div>
                                     </div>
                                   )}
@@ -1757,7 +1796,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                 <div
                                   style={{
                                     padding: '12px 20px',
-                                    background: '#fafbfc',
+                                    background: tone.bgSecondary,
                                     borderTop: '1px solid #f1f5f9',
                                     display: 'flex',
                                     gap: '8px',
@@ -1776,10 +1815,10 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                       justifyContent: 'center',
                                       gap: '6px',
                                       padding: '10px 16px',
-                                      background: 'white',
-                                      border: '1px solid #e5e7eb',
+                                      background: tone.bgWhite,
+                                      border: `1px solid ${tone.border}`,
                                       borderRadius: '8px',
-                                      color: '#0f172a',
+                                      color: tone.textPrimary,
                                       fontSize: '13px',
                                       fontWeight: 500,
                                       cursor: 'pointer',
@@ -1793,10 +1832,12 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                         '#8b5cf6'
                                     }}
                                     onMouseLeave={(e) => {
-                                      e.currentTarget.style.background = 'white'
-                                      e.currentTarget.style.color = '#0f172a'
+                                      e.currentTarget.style.background =
+                                        tone.bgWhite
+                                      e.currentTarget.style.color =
+                                        tone.textPrimary
                                       e.currentTarget.style.borderColor =
-                                        '#e5e7eb'
+                                        tone.border
                                     }}
                                   >
                                     <FiEdit2 size={14} />
@@ -1820,10 +1861,10 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                       alignItems: 'center',
                                       justifyContent: 'center',
                                       padding: '10px',
-                                      background: 'white',
-                                      border: '1px solid #e5e7eb',
+                                      background: tone.bgWhite,
+                                      border: `1px solid ${tone.border}`,
                                       borderRadius: '8px',
-                                      color: '#64748b',
+                                      color: tone.textSecondary,
                                       cursor: 'pointer',
                                       transition: 'all 0.2s',
                                     }}
@@ -1852,8 +1893,8 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                         {/* 진영 추가 카드 */}
                         <div
                           style={{
-                            background: '#fafbfc',
-                            border: '1px dashed #cbd5e1',
+                            background: tone.bgSecondary,
+                            border: `1px dashed ${tone.borderDashed}`,
                             borderRadius: '10px',
                             padding: '32px 20px',
                             display: 'flex',
@@ -1886,7 +1927,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                             style={{
                               width: '48px',
                               height: '48px',
-                              background: '#f1f5f9',
+                              background: tone.bgTertiary,
                               borderRadius: '10px',
                               display: 'flex',
                               alignItems: 'center',
@@ -1900,7 +1941,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                               style={{
                                 fontSize: '14px',
                                 fontWeight: 600,
-                                color: '#0f172a',
+                                color: tone.textPrimary,
                                 marginBottom: '4px',
                               }}
                             >
@@ -1909,7 +1950,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                             <div
                               style={{
                                 fontSize: '12px',
-                                color: '#64748b',
+                                color: tone.textSecondary,
                               }}
                             >
                               새 진영 등록
@@ -1925,7 +1966,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                 <div
                   style={{
                     height: '1px',
-                    background: COLORS.border,
+                    background: tone.border,
                     margin: '24px 0',
                   }}
                 />
@@ -1960,7 +2001,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                             margin: 0,
                             fontSize: '15px',
                             fontWeight: 600,
-                            color: COLORS.text,
+                            color: tone.textPrimary,
                           }}
                         >
                           관계도 그래프
@@ -1968,7 +2009,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                         <Tooltip text="국가 간 관계를 시각적으로 보여줍니다. 노드를 드래그하여 위치를 조정할 수 있습니다.">
                           <FiHelpCircle
                             size={14}
-                            color={COLORS.textLight}
+                            color={tone.textSecondary}
                             style={{ cursor: 'help' }}
                           />
                         </Tooltip>
@@ -1984,7 +2025,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     <div
                       style={{
                         height: '1px',
-                        background: COLORS.border,
+                        background: tone.border,
                         margin: '24px 0',
                       }}
                     />
@@ -2019,7 +2060,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                         margin: 0,
                         fontSize: '15px',
                         fontWeight: 600,
-                        color: COLORS.text,
+                        color: tone.textPrimary,
                       }}
                     >
                       ② 참전 국가 등록
@@ -2027,7 +2068,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     <Tooltip text="각 국가를 추가하고, 진영을 선택한 후 병력, 지휘관 등의 세부 정보를 입력하세요">
                       <FiHelpCircle
                         size={14}
-                        color={COLORS.textLight}
+                        color={tone.textSecondary}
                         style={{ cursor: 'help' }}
                       />
                     </Tooltip>
@@ -2050,13 +2091,8 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     )}
                     // 상위 사건의 관계 상속
                     parentRelations={
-                      parentEvent?.belligerents &&
-                      'relations' in parentEvent.belligerents
-                        ? (parentEvent.belligerents as any).relations || []
-                        : []
+                      parentEvent?.belligerents?.relations ?? []
                     }
-                    // 하위 사건들의 관계
-                    childRelations={childEventsRelations}
                   />
                 </div>
               </div>
@@ -2186,7 +2222,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                           ? { ...s, name: e.target.value }
                                           : s,
                                       )
-                                      setBelligerents(updated)
+                                      setBelligerents?.(updated)
                                     }}
                                   />
                                 </InputGroup>
@@ -2240,7 +2276,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       >
                         <SideNumber>세력 {index + 1}</SideNumber>
                         <SideName>
-                          <SideColorIndicator $color={(side as any).color} />
+                          <SideColorIndicator $color={side.color} />
                           {side.name || '세력 이름 미입력'}
                           {side.countries.length > 0 && (
                             <CountryCount>
@@ -2288,7 +2324,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                     ? { ...s, name: e.target.value }
                                     : s,
                                 )
-                                setBelligerents(updated)
+                                setBelligerents?.(updated)
                               }}
                             />
                           </InputGroup>
@@ -2323,7 +2359,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                         }
                                         return s
                                       })
-                                      setBelligerents(updated)
+                                      setBelligerents?.(updated)
                                     }}
                                   >
                                     현대
@@ -2348,7 +2384,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                         }
                                         return s
                                       })
-                                      setBelligerents(updated)
+                                      setBelligerents?.(updated)
                                     }}
                                   >
                                     과거
@@ -2485,7 +2521,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                     }
                                     return s
                                   })
-                                  setBelligerents(updated)
+                                  setBelligerents?.(updated)
                                 }}
                               />
 
@@ -2513,7 +2549,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                       }
                                       return s
                                     })
-                                    setBelligerents(updated)
+                                    setBelligerents?.(updated)
                                   }}
                                 />
 
@@ -2534,7 +2570,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                       }
                                       return s
                                     })
-                                    setBelligerents(updated)
+                                    setBelligerents?.(updated)
                                   }}
                                 />
 
@@ -2547,13 +2583,14 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                         const newCountries = [...s.countries]
                                         newCountries[countryIdx] = {
                                           ...newCountries[countryIdx],
-                                          participation: e.target.value as any,
+                                          participation: e.target
+                                            .value as CountryParticipation['participation'],
                                         }
                                         return { ...s, countries: newCountries }
                                       }
                                       return s
                                     })
-                                    setBelligerents(updated)
+                                    setBelligerents?.(updated)
                                   }}
                                   style={{
                                     fontSize: '13px',
@@ -2584,7 +2621,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                       }
                                       return s
                                     })
-                                    setBelligerents(updated)
+                                    setBelligerents?.(updated)
                                   }}
                                   rows={2}
                                   style={{
@@ -2627,7 +2664,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                           }
                                         : s,
                                     )
-                                    setBelligerents(updated)
+                                    setBelligerents?.(updated)
                                   }}
                                 >
                                   <FiTrash2 size={14} />
@@ -2662,7 +2699,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                     ? { ...s, forces: e.target.value }
                                     : s,
                                 )
-                                setBelligerents(updated)
+                                setBelligerents?.(updated)
                               }}
                             />
                           </InputGroup>
@@ -2702,7 +2739,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                                   }
                                                 : s,
                                           )
-                                          setBelligerents(updated)
+                                          setBelligerents?.(updated)
                                         }}
                                       >
                                         <FiTrash2 size={12} />
@@ -2755,7 +2792,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                               }
                                             : s,
                                         )
-                                        setBelligerents(updated)
+                                        setBelligerents?.(updated)
                                       }}
                                     >
                                       <FiTrash2 size={12} />
@@ -2787,7 +2824,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                             }
                                           : s,
                                       )
-                                      setBelligerents(updated)
+                                      setBelligerents?.(updated)
                                       e.currentTarget.value = ''
                                     }
                                   }
@@ -2812,7 +2849,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                           }
                                         : s,
                                     )
-                                    setBelligerents(updated)
+                                    setBelligerents?.(updated)
                                     input.value = ''
                                   }
                                 }}
@@ -2838,7 +2875,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                   casualties[side.id]?.military.killed || ''
                                 }
                                 onChange={(e) => {
-                                  setCasualties({
+                                  setCasualties?.({
                                     ...casualties,
                                     [side.id]: {
                                       ...(casualties[side.id] || {
@@ -2870,7 +2907,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                   casualties[side.id]?.military.wounded || ''
                                 }
                                 onChange={(e) => {
-                                  setCasualties({
+                                  setCasualties?.({
                                     ...casualties,
                                     [side.id]: {
                                       ...(casualties[side.id] || {
@@ -2902,7 +2939,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                   casualties[side.id]?.military.missing || ''
                                 }
                                 onChange={(e) => {
-                                  setCasualties({
+                                  setCasualties?.({
                                     ...casualties,
                                     [side.id]: {
                                       ...(casualties[side.id] || {
@@ -2934,7 +2971,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                   casualties[side.id]?.military.captured || ''
                                 }
                                 onChange={(e) => {
-                                  setCasualties({
+                                  setCasualties?.({
                                     ...casualties,
                                     [side.id]: {
                                       ...(casualties[side.id] || {
@@ -2972,7 +3009,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                   casualties[side.id]?.civilian?.killed || ''
                                 }
                                 onChange={(e) => {
-                                  setCasualties({
+                                  setCasualties?.({
                                     ...casualties,
                                     [side.id]: {
                                       ...(casualties[side.id] || {
@@ -3003,7 +3040,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                   casualties[side.id]?.civilian?.wounded || ''
                                 }
                                 onChange={(e) => {
-                                  setCasualties({
+                                  setCasualties?.({
                                     ...casualties,
                                     [side.id]: {
                                       ...(casualties[side.id] || {
@@ -3034,7 +3071,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                   casualties[side.id]?.civilian?.displaced || ''
                                 }
                                 onChange={(e) => {
-                                  setCasualties({
+                                  setCasualties?.({
                                     ...casualties,
                                     [side.id]: {
                                       ...(casualties[side.id] || {
@@ -3066,7 +3103,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                             placeholder="총 피해 요약 (예: 약 27,000명 - 전사 9,000, 부상 16,000, 포로 2,000)"
                             value={casualties[side.id]?.total || ''}
                             onChange={(e) => {
-                              setCasualties({
+                              setCasualties?.({
                                 ...casualties,
                                 [side.id]: {
                                   ...(casualties[side.id] || {
@@ -3266,7 +3303,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                 }
                 return s
               })
-              setBelligerents(updated)
+              setBelligerents?.(updated)
               setDateModalState({
                 isOpen: false,
                 type: 'join',
@@ -3325,7 +3362,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                 }
                 return s
               })
-              setBelligerents(updated)
+              setBelligerents?.(updated)
               setTimeModalState({
                 isOpen: false,
                 type: 'join',
@@ -3457,7 +3494,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                   }
                                   return side
                                 })
-                                setBelligerents(updated)
+                                setBelligerents?.(updated)
                               }}
                             >
                               <FiShield size={18} />
@@ -3532,21 +3569,17 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                         .includes(commanderSearchQuery.toLowerCase()),
                     )
 
-                    // 참전국 인물과 기타 인물로 분리 (nationalityId 필드가 있다고 가정)
+                    // 참전국 인물과 기타 인물로 분리 — Person.countryId 기준
                     const participatingPersons = filteredPersons.filter(
                       (person) =>
-                        (person as any).nationalityId
-                          ? participatingCountryIds.includes(
-                              (person as any).nationalityId,
-                            )
+                        person.countryId
+                          ? participatingCountryIds.includes(person.countryId)
                           : false,
                     )
                     const otherPersons = filteredPersons.filter(
                       (person) =>
-                        !(person as any).nationalityId ||
-                        !participatingCountryIds.includes(
-                          (person as any).nationalityId,
-                        ),
+                        !person.countryId ||
+                        !participatingCountryIds.includes(person.countryId),
                     )
 
                     if (filteredPersons.length === 0) {
@@ -3592,7 +3625,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                           return side
                                         },
                                       )
-                                      setBelligerents(updated)
+                                      setBelligerents?.(updated)
                                       setCommanderSelectionOpen({
                                         sideId: null,
                                         open: false,
@@ -3603,16 +3636,16 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                     <FiUsers size={18} />
                                     <UnitItemInfo>
                                       <UnitItemName>{person.name}</UnitItemName>
-                                      {((person as any).birthDay ||
-                                        (person as any).deathDay) && (
+                                      {(person.birthDay ||
+                                        person.deathDay) && (
                                         <UnitItemMeta>
-                                          {(person as any).birthDay &&
-                                            (person as any).birthDay}
-                                          {(person as any).birthDay &&
-                                            (person as any).deathDay &&
+                                          {person.birthDay &&
+                                            person.birthDay}
+                                          {person.birthDay &&
+                                            person.deathDay &&
                                             ' - '}
-                                          {(person as any).deathDay &&
-                                            (person as any).deathDay}
+                                          {person.deathDay &&
+                                            person.deathDay}
                                         </UnitItemMeta>
                                       )}
                                     </UnitItemInfo>
@@ -3659,7 +3692,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                       }
                                       return side
                                     })
-                                    setBelligerents(updated)
+                                    setBelligerents?.(updated)
                                     setCommanderSelectionOpen({
                                       sideId: null,
                                       open: false,
@@ -3670,16 +3703,16 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                                   <FiUsers size={18} />
                                   <UnitItemInfo>
                                     <UnitItemName>{person.name}</UnitItemName>
-                                    {((person as any).birthDay ||
-                                      (person as any).deathDay) && (
+                                    {(person.birthDay ||
+                                      person.deathDay) && (
                                       <UnitItemMeta>
-                                        {(person as any).birthDay &&
-                                          (person as any).birthDay}
-                                        {(person as any).birthDay &&
-                                          (person as any).deathDay &&
+                                        {person.birthDay &&
+                                          person.birthDay}
+                                        {person.birthDay &&
+                                          person.deathDay &&
                                           ' - '}
-                                        {(person as any).deathDay &&
-                                          (person as any).deathDay}
+                                        {person.deathDay &&
+                                          person.deathDay}
                                       </UnitItemMeta>
                                     )}
                                   </UnitItemInfo>
@@ -3701,6 +3734,9 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
       {/* 진영 추가 모달 */}
       {showAddSideModal && belligerentsGraph && setBelligerentsGraph && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="진영 추가"
           style={{
             position: 'fixed',
             top: 0,
@@ -3722,8 +3758,9 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
           }}
         >
           <div
+            ref={addSideModalRef}
             style={{
-              background: 'white',
+              background: tone.bgWhite,
               borderRadius: '16px',
               padding: '0',
               width: '440px',
@@ -3737,7 +3774,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
             {/* 헤더 */}
             <div
               style={{
-                background: '#fafbfc',
+                background: tone.bgSecondary,
                 padding: '24px',
                 borderBottom: '1px solid #e5e7eb',
                 display: 'flex',
@@ -3764,7 +3801,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     margin: 0,
                     fontSize: '16px',
                     fontWeight: 600,
-                    color: '#0f172a',
+                    color: tone.textPrimary,
                   }}
                 >
                   진영 추가
@@ -3773,7 +3810,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                   style={{
                     margin: '4px 0 0 0',
                     fontSize: '13px',
-                    color: '#64748b',
+                    color: tone.textSecondary,
                   }}
                 >
                   교전 진영을 등록하세요
@@ -3785,11 +3822,11 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
             <div style={{ padding: '24px' }}>
               <div
                 style={{
-                  background: COLORS.bg,
+                  background: tone.bgSecondary,
                   padding: '16px',
                   borderRadius: '8px',
                   marginBottom: '20px',
-                  border: `1px solid ${COLORS.border}`,
+                  border: `1px solid ${tone.border}`,
                 }}
               >
                 <div
@@ -3805,7 +3842,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     style={{
                       fontSize: '13px',
                       fontWeight: 600,
-                      color: COLORS.text,
+                      color: tone.textPrimary,
                     }}
                   >
                     진영이란?
@@ -3815,7 +3852,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                   style={{
                     margin: 0,
                     fontSize: '12px',
-                    color: COLORS.textLight,
+                    color: tone.textSecondary,
                     lineHeight: '1.6',
                   }}
                 >
@@ -3831,7 +3868,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     display: 'block',
                     fontSize: '13px',
                     fontWeight: 600,
-                    color: COLORS.text,
+                    color: tone.textPrimary,
                     marginBottom: '8px',
                   }}
                 >
@@ -3840,7 +3877,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                 <div style={{ position: 'relative' }}>
                   <FiShield
                     size={18}
-                    color={COLORS.textLight}
+                    color={tone.textSecondary}
                     style={{
                       position: 'absolute',
                       left: '12px',
@@ -3879,7 +3916,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     style={{
                       width: '100%',
                       padding: '12px 12px 12px 42px',
-                      border: `2px solid ${COLORS.border}`,
+                      border: `2px solid ${tone.border}`,
                       borderRadius: '8px',
                       fontSize: '14px',
                       outline: 'none',
@@ -3891,7 +3928,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       e.currentTarget.style.boxShadow = `0 0 0 3px ${COLORS.primaryLight}`
                     }}
                     onBlur={(e) => {
-                      e.currentTarget.style.borderColor = COLORS.border
+                      e.currentTarget.style.borderColor = tone.border
                       e.currentTarget.style.boxShadow = 'none'
                     }}
                     autoFocus
@@ -3906,7 +3943,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     display: 'block',
                     fontSize: '13px',
                     fontWeight: 600,
-                    color: COLORS.text,
+                    color: tone.textPrimary,
                     marginBottom: '8px',
                   }}
                 >
@@ -3920,7 +3957,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                   style={{
                     width: '100%',
                     padding: '12px',
-                    border: `1px solid ${COLORS.border}`,
+                    border: `1px solid ${tone.border}`,
                     borderRadius: '8px',
                     fontSize: '13px',
                     outline: 'none',
@@ -3934,7 +3971,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     e.currentTarget.style.boxShadow = `0 0 0 3px ${COLORS.primaryLight}`
                   }}
                   onBlur={(e) => {
-                    e.currentTarget.style.borderColor = COLORS.border
+                    e.currentTarget.style.borderColor = tone.border
                     e.currentTarget.style.boxShadow = 'none'
                   }}
                 />
@@ -3960,17 +3997,17 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     alignItems: 'center',
                     gap: '6px',
                     padding: '11px 20px',
-                    border: `1.5px solid ${COLORS.border}`,
+                    border: `1.5px solid ${tone.border}`,
                     borderRadius: '8px',
-                    background: 'white',
+                    background: tone.bgWhite,
                     cursor: 'pointer',
                     fontSize: '14px',
                     fontWeight: 500,
-                    color: COLORS.text,
+                    color: tone.textPrimary,
                     transition: 'all 0.2s',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = COLORS.bg
+                    e.currentTarget.style.background = tone.bgSecondary
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'white'
@@ -4012,7 +4049,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     borderRadius: '8px',
                     background: newSideName.trim()
                       ? `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark || '#4f46e5'} 100%)`
-                      : COLORS.border,
+                      : tone.border,
                     color: 'white',
                     cursor: newSideName.trim() ? 'pointer' : 'not-allowed',
                     fontSize: '14px',
@@ -4049,6 +4086,9 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
       {/* 진영 수정 모달 */}
       {showEditSideModal && editingSideId && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="진영 수정"
           style={{
             position: 'fixed',
             top: 0,
@@ -4071,8 +4111,9 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
           }}
         >
           <div
+            ref={editSideModalRef}
             style={{
-              background: 'white',
+              background: tone.bgWhite,
               borderRadius: '16px',
               padding: '0',
               width: '500px',
@@ -4086,7 +4127,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
             {/* 헤더 */}
             <div
               style={{
-                background: '#fafbfc',
+                background: tone.bgSecondary,
                 padding: '24px',
                 borderBottom: '1px solid #e5e7eb',
                 display: 'flex',
@@ -4113,7 +4154,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     margin: 0,
                     fontSize: '16px',
                     fontWeight: 600,
-                    color: '#0f172a',
+                    color: tone.textPrimary,
                   }}
                 >
                   진영 수정
@@ -4122,7 +4163,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                   style={{
                     margin: '4px 0 0 0',
                     fontSize: '13px',
-                    color: '#64748b',
+                    color: tone.textSecondary,
                   }}
                 >
                   진영 정보를 변경하세요
@@ -4139,7 +4180,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     display: 'block',
                     fontSize: '13px',
                     fontWeight: 600,
-                    color: COLORS.text,
+                    color: tone.textPrimary,
                     marginBottom: '8px',
                   }}
                 >
@@ -4148,7 +4189,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                 <div style={{ position: 'relative' }}>
                   <FiShield
                     size={18}
-                    color={COLORS.textLight}
+                    color={tone.textSecondary}
                     style={{
                       position: 'absolute',
                       left: '12px',
@@ -4171,7 +4212,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       width: '100%',
                       padding: '12px 12px 12px 42px',
                       fontSize: '14px',
-                      border: `1.5px solid ${COLORS.border}`,
+                      border: `1.5px solid ${tone.border}`,
                       borderRadius: '8px',
                       outline: 'none',
                       transition: 'all 0.2s',
@@ -4181,7 +4222,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       e.target.style.boxShadow = `0 0 0 3px ${COLORS.primary}20`
                     }}
                     onBlur={(e) => {
-                      e.target.style.borderColor = COLORS.border
+                      e.target.style.borderColor = tone.border
                       e.target.style.boxShadow = 'none'
                     }}
                     autoFocus
@@ -4196,7 +4237,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     display: 'block',
                     fontSize: '13px',
                     fontWeight: 600,
-                    color: COLORS.text,
+                    color: tone.textPrimary,
                     marginBottom: '12px',
                   }}
                 >
@@ -4234,8 +4275,8 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                         background: color.value,
                         border:
                           editSideColor === color.value
-                            ? '3px solid #1e293b'
-                            : '2px solid #e5e7eb',
+                            ? `3px solid ${tone.textPrimary}`
+                            : `2px solid ${tone.border}`,
                         borderRadius: '8px',
                         cursor: 'pointer',
                         transition: 'all 0.2s',
@@ -4261,10 +4302,10 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       marginTop: '8px',
                       padding: '6px 12px',
                       background: 'transparent',
-                      border: `1px solid ${COLORS.border}`,
+                      border: `1px solid ${tone.border}`,
                       borderRadius: '6px',
                       fontSize: '12px',
-                      color: COLORS.textLight,
+                      color: tone.textSecondary,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -4272,7 +4313,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                       transition: 'all 0.2s',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = COLORS.bg
+                      e.currentTarget.style.background = tone.bgSecondary
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = 'transparent'
@@ -4291,7 +4332,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     display: 'block',
                     fontSize: '13px',
                     fontWeight: 600,
-                    color: COLORS.text,
+                    color: tone.textPrimary,
                     marginBottom: '8px',
                   }}
                 >
@@ -4305,7 +4346,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                   style={{
                     width: '100%',
                     padding: '12px',
-                    border: `1px solid ${COLORS.border}`,
+                    border: `1px solid ${tone.border}`,
                     borderRadius: '8px',
                     fontSize: '13px',
                     outline: 'none',
@@ -4319,7 +4360,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     e.currentTarget.style.boxShadow = `0 0 0 3px ${COLORS.primary}20`
                   }}
                   onBlur={(e) => {
-                    e.currentTarget.style.borderColor = COLORS.border
+                    e.currentTarget.style.borderColor = tone.border
                     e.currentTarget.style.boxShadow = 'none'
                   }}
                 />
@@ -4331,7 +4372,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                   display: 'flex',
                   gap: '12px',
                   paddingTop: '16px',
-                  borderTop: `1px solid ${COLORS.border}`,
+                  borderTop: `1px solid ${tone.border}`,
                 }}
               >
                 <button
@@ -4346,17 +4387,17 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                   style={{
                     flex: 1,
                     padding: '11px 20px',
-                    border: `1px solid ${COLORS.border}`,
+                    border: `1px solid ${tone.border}`,
                     borderRadius: '8px',
-                    background: 'white',
+                    background: tone.bgWhite,
                     cursor: 'pointer',
                     fontSize: '14px',
                     fontWeight: 500,
-                    color: COLORS.text,
+                    color: tone.textPrimary,
                     transition: 'all 0.2s',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = COLORS.bg
+                    e.currentTarget.style.background = tone.bgSecondary
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'white'
@@ -4378,7 +4419,7 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
                     borderRadius: '8px',
                     background: editSideName.trim()
                       ? `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark || '#4f46e5'} 100%)`
-                      : COLORS.border,
+                      : tone.border,
                     color: 'white',
                     cursor: editSideName.trim() ? 'pointer' : 'not-allowed',
                     fontSize: '14px',
@@ -4428,7 +4469,7 @@ const Label = styled.label`
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 10px;
 `
 
@@ -4445,14 +4486,14 @@ const OptionalBadge = styled.span`
   padding: 3px 8px;
   font-size: 10px;
   font-weight: 600;
-  color: #64748b;
-  background: rgba(148, 163, 184, 0.1);
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: rgba(148, 163, 184, 0.15);
   border-radius: 4px;
 `
 
 const Hint = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-bottom: 12px;
   line-height: 1.5;
 `
@@ -4468,13 +4509,14 @@ const TypeButton = styled.button<{ $selected: boolean }>`
   padding: 12px 16px;
   font-size: 13px;
   font-weight: 600;
-  color: ${({ $selected }) => ($selected ? '#ffffff' : '#64748b')};
+  color: ${({ $selected, theme }) =>
+    $selected ? '#ffffff' : theme.colors.text.secondary};
   background: ${({ $selected }) =>
     $selected
       ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
-      : 'rgba(148, 163, 184, 0.08)'};
+      : 'rgba(148, 163, 184, 0.10)'};
   border: 1.5px solid
-    ${({ $selected }) => ($selected ? '#8b5cf6' : 'rgba(148, 163, 184, 0.15)')};
+    ${({ $selected }) => ($selected ? '#8b5cf6' : 'rgba(148, 163, 184, 0.18)')};
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -4499,14 +4541,17 @@ const TypeButton = styled.button<{ $selected: boolean }>`
 
 const BelligerentCard = styled.div`
   margin-bottom: 20px;
-  background: white;
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.25);
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(167, 139, 250, 0.3)'
+        : 'rgba(99, 102, 241, 0.25)'};
     box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
   }
 `
@@ -4516,13 +4561,19 @@ const BelligerentHeader = styled.div`
   align-items: center;
   gap: 12px;
   padding: 16px 20px;
-  background: rgba(99, 102, 241, 0.03);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(167, 139, 250, 0.06)'
+      : 'rgba(99, 102, 241, 0.03)'};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.06);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(167, 139, 250, 0.10)'
+        : 'rgba(99, 102, 241, 0.06)'};
   }
 `
 
@@ -4545,7 +4596,7 @@ const SideName = styled.div`
   flex: 1;
   font-size: 16px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   display: flex;
   align-items: center;
   gap: 12px;
@@ -4629,7 +4680,7 @@ const BelligerentBody = styled.div`
   flex-direction: column;
   gap: 24px;
   padding: 24px;
-  background: #fafafa;
+  background: ${({ theme }) => theme.colors.background.secondary};
 `
 
 const SectionDivider = styled.div`
@@ -4639,7 +4690,7 @@ const SectionDivider = styled.div`
   margin: 20px 0 12px;
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
 
@@ -4666,7 +4717,7 @@ const InputGroup = styled.div`
 const InputLabel = styled.div`
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-bottom: 8px;
 `
 
@@ -4674,12 +4725,12 @@ const Select = styled.select`
   width: 100%;
   padding: 12px 16px;
   font-size: 14px;
-  color: #0f172a;
-  border: 1.5px solid rgba(226, 232, 240, 1);
+  color: ${({ theme }) => theme.colors.text.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   outline: none;
   transition: all 0.2s ease;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   cursor: pointer;
   margin-bottom: 12px;
 
@@ -4697,11 +4748,14 @@ const CountrySelectButton = styled.button<{ $selected: boolean }>`
   padding: 12px 16px;
   font-size: 14px;
   font-weight: ${({ $selected }) => ($selected ? '600' : '500')};
-  color: ${({ $selected }) => ($selected ? '#0f172a' : '#64748b')};
-  background: #ffffff;
+  color: ${({ $selected, theme }) =>
+    $selected ? theme.colors.text.primary : theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.primary};
   border: 1.5px solid
-    ${({ $selected }) =>
-      $selected ? 'rgba(139, 92, 246, 0.3)' : 'rgba(226, 232, 240, 1)'};
+    ${({ $selected, theme }) =>
+      $selected
+        ? 'rgba(139, 92, 246, 0.35)'
+        : theme.colors.border.default};
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -4710,13 +4764,14 @@ const CountrySelectButton = styled.button<{ $selected: boolean }>`
 
   svg {
     flex-shrink: 0;
-    color: ${({ $selected }) => ($selected ? '#8b5cf6' : '#94a3b8')};
+    color: ${({ $selected, theme }) =>
+      $selected ? '#8b5cf6' : theme.colors.text.tertiary};
   }
 
   &:hover {
     border-color: ${({ $selected }) =>
       $selected ? 'rgba(139, 92, 246, 0.5)' : 'rgba(139, 92, 246, 0.3)'};
-    background: rgba(139, 92, 246, 0.03);
+    background: rgba(139, 92, 246, 0.05);
   }
 
   &:active {
@@ -4727,13 +4782,16 @@ const CountrySelectButton = styled.button<{ $selected: boolean }>`
 const CountryCard = styled.div`
   padding: 16px;
   margin-bottom: 12px;
-  background: white;
-  border: 1.5px solid rgba(226, 232, 240, 0.8);
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.3);
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(167, 139, 250, 0.35)'
+        : 'rgba(99, 102, 241, 0.3)'};
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.06);
   }
 `
@@ -4758,7 +4816,8 @@ const ToggleButton = styled.button<{ $active: boolean }>`
   padding: 6px 14px;
   font-size: 11px;
   font-weight: 600;
-  color: ${({ $active }) => ($active ? '#ffffff' : '#64748b')};
+  color: ${({ $active, theme }) =>
+    $active ? '#ffffff' : theme.colors.text.secondary};
   background: ${({ $active }) =>
     $active ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : 'transparent'};
   border: none;
@@ -4801,14 +4860,15 @@ const SmallInputGrid = styled.div`
 const SmallInput = styled.input`
   padding: 10px 14px;
   font-size: 13px;
-  color: #0f172a;
-  border: 1.5px solid rgba(226, 232, 240, 1);
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
   outline: none;
   transition: all 0.2s ease;
 
   &::placeholder {
-    color: #cbd5e1;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     font-size: 12px;
   }
 
@@ -4851,7 +4911,7 @@ const CasualtyGroup = styled.div`
 const CasualtyLabel = styled.div`
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-bottom: 10px;
 `
 
@@ -4865,14 +4925,15 @@ const CasualtyGrid = styled.div`
 const CasualtyInput = styled.input`
   padding: 10px 14px;
   font-size: 13px;
-  color: #0f172a;
-  border: 1.5px solid rgba(226, 232, 240, 1);
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
   outline: none;
   transition: all 0.2s ease;
 
   &::placeholder {
-    color: #cbd5e1;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     font-size: 12px;
   }
 
@@ -4939,12 +5000,12 @@ const DeployedUnitChip = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: rgba(139, 92, 246, 0.08);
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  background: rgba(139, 92, 246, 0.10);
+  border: 1px solid rgba(139, 92, 246, 0.25);
   border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
 
   svg {
     color: #8b5cf6;
@@ -5004,7 +5065,11 @@ const UnitSelectButton = styled.button`
   }
 `
 
-const UnitSelectModal = styled.div`
+// role/aria 기본 부여 — UnitSelectModal 사용처에서 별도 prop 없이 a11y 충족
+const UnitSelectModal = styled.div.attrs({
+  role: 'dialog',
+  'aria-modal': 'true',
+})`
   position: fixed;
   top: 0;
   left: 0;
@@ -5019,19 +5084,22 @@ const UnitSelectModal = styled.div`
 `
 
 const UnitSelectContent = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   border-radius: 16px;
   width: 100%;
   max-width: 600px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 20px 60px rgba(0, 0, 0, 0.7)'
+      : '0 20px 60px rgba(0, 0, 0, 0.3)'};
 `
 
 const UnitSelectHeader = styled.div`
   padding: 24px;
-  border-bottom: 1px solid rgba(226, 232, 240, 1);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5040,7 +5108,7 @@ const UnitSelectHeader = styled.div`
 const UnitSelectTitle = styled.h3`
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin: 0;
 `
 
@@ -5051,8 +5119,8 @@ const UnitSelectClose = styled.button`
   align-items: center;
   justify-content: center;
   border: none;
-  background: rgba(148, 163, 184, 0.1);
-  color: #64748b;
+  background: rgba(148, 163, 184, 0.15);
+  color: ${({ theme }) => theme.colors.text.secondary};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -5067,7 +5135,9 @@ const UnitSelectSearch = styled.input`
   width: 100%;
   padding: 12px 16px;
   font-size: 14px;
-  border: 1.5px solid rgba(226, 232, 240, 1);
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   outline: none;
   transition: all 0.2s ease;
@@ -5075,7 +5145,7 @@ const UnitSelectSearch = styled.input`
   width: calc(100% - 48px);
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
   &:focus {
@@ -5096,11 +5166,13 @@ const UnitSelectItem = styled.button<{ $selected: boolean }>`
   display: flex;
   align-items: center;
   gap: 12px;
-  background: ${({ $selected }) =>
-    $selected ? 'rgba(139, 92, 246, 0.08)' : '#ffffff'};
+  background: ${({ $selected, theme }) =>
+    $selected
+      ? 'rgba(139, 92, 246, 0.10)'
+      : theme.colors.background.primary};
   border: 1.5px solid
-    ${({ $selected }) =>
-      $selected ? 'rgba(139, 92, 246, 0.3)' : 'rgba(226, 232, 240, 1)'};
+    ${({ $selected, theme }) =>
+      $selected ? 'rgba(139, 92, 246, 0.35)' : theme.colors.border.default};
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -5108,13 +5180,14 @@ const UnitSelectItem = styled.button<{ $selected: boolean }>`
   text-align: left;
 
   &:hover {
-    background: rgba(139, 92, 246, 0.05);
+    background: rgba(139, 92, 246, 0.08);
     border-color: rgba(139, 92, 246, 0.3);
   }
 
   svg {
     flex-shrink: 0;
-    color: ${({ $selected }) => ($selected ? '#8b5cf6' : '#94a3b8')};
+    color: ${({ $selected, theme }) =>
+      $selected ? '#8b5cf6' : theme.colors.text.tertiary};
   }
 `
 
@@ -5128,12 +5201,12 @@ const UnitItemInfo = styled.div`
 const UnitItemName = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const UnitItemMeta = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const CommanderSelectedBox = styled.div`
@@ -5141,7 +5214,7 @@ const CommanderSelectedBox = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(99, 102, 241, 0.10);
   border: 1.5px solid rgba(99, 102, 241, 0.3);
   border-radius: 10px;
 `
@@ -5149,7 +5222,7 @@ const CommanderSelectedBox = styled.div`
 const CommanderInfo = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const RemoveCommanderButton = styled.button`
@@ -5209,12 +5282,12 @@ const WeaponChip = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: rgba(220, 38, 38, 0.08);
-  border: 1px solid rgba(220, 38, 38, 0.2);
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid rgba(220, 38, 38, 0.25);
   border-radius: 8px;
   font-size: 12px;
   font-weight: 500;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
 
   svg {
     color: #dc2626;
@@ -5232,14 +5305,15 @@ const WeaponInput = styled.input`
   flex: 1;
   padding: 10px 14px;
   font-size: 13px;
-  color: #0f172a;
-  border: 1.5px solid rgba(226, 232, 240, 1);
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
   outline: none;
   transition: all 0.2s ease;
 
   &::placeholder {
-    color: #cbd5e1;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     font-size: 12px;
   }
 
@@ -5304,7 +5378,7 @@ const InfoIcon = styled.div`
 const InfoText = styled.div`
   flex: 1;
   font-size: 14px;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
 
   strong {
@@ -5354,10 +5428,10 @@ const InheritedBadge = styled.span`
 
 const ParentCountries = styled.div`
   padding: 12px 16px;
-  background: rgba(99, 102, 241, 0.03);
+  background: rgba(99, 102, 241, 0.05);
   border-radius: 8px;
   font-size: 13px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-bottom: 16px;
 `
 
@@ -5368,14 +5442,14 @@ const SubForcesContainer = styled.div`
 const SubForcesLabel = styled.div`
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-bottom: 12px;
 `
 
 const SubForceCard = styled.div`
   padding: 16px;
-  background: #ffffff;
-  border: 1.5px solid rgba(226, 232, 240, 1);
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   margin-bottom: 12px;
   transition: all 0.2s ease;
@@ -5427,9 +5501,9 @@ const CountrySelectButtonSimple = styled.button`
   width: 100%;
   padding: 12px 16px;
   font-size: 14px;
-  color: #0f172a;
-  background: #ffffff;
-  border: 1.5px solid rgba(226, 232, 240, 1);
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   outline: none;
   cursor: pointer;
@@ -5444,10 +5518,10 @@ const CountrySelectButtonSimple = styled.button`
 // 고급 설정 섹션 스타일
 const AdvancedSection = styled.div`
   margin-top: 40px;
-  border: 1.5px solid rgba(99, 102, 241, 0.15);
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   overflow: hidden;
-  background: white;
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 const AdvancedSectionHeader = styled.button`
@@ -5456,13 +5530,19 @@ const AdvancedSectionHeader = styled.button`
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  background: rgba(99, 102, 241, 0.03);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(167, 139, 250, 0.06)'
+      : 'rgba(99, 102, 241, 0.03)'};
   border: none;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.06);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(167, 139, 250, 0.10)'
+        : 'rgba(99, 102, 241, 0.06)'};
   }
 `
 
@@ -5472,7 +5552,7 @@ const AdvancedSectionTitle = styled.div`
   gap: 12px;
   font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
 
   svg {
     color: #6366f1;
@@ -5492,7 +5572,7 @@ const AdvancedToggleIcon = styled.div<{ $expanded: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   transform: ${({ $expanded }) =>
     $expanded ? 'rotate(180deg)' : 'rotate(0deg)'};
   transition: transform 0.3s ease;
@@ -5503,16 +5583,16 @@ const AdvancedSectionContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 24px;
-  border-top: 1px solid rgba(226, 232, 240, 0.6);
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const AdvancedSectionDescription = styled.p`
   margin: 0;
   font-size: 14px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.6;
   padding: 16px;
-  background: rgba(99, 102, 241, 0.03);
+  background: rgba(99, 102, 241, 0.05);
   border-left: 3px solid #6366f1;
   border-radius: 8px;
 `
@@ -5576,10 +5656,13 @@ const TabButton = styled.button<{ $active: boolean }>`
   padding: 12px 18px;
   background: ${(props) =>
     props.$active
-      ? 'linear-gradient(135deg, #ffffff 0%, #faf9fc 100%)'
-      : '#ffffff'};
+      ? props.theme.mode === 'dark'
+        ? 'linear-gradient(135deg, rgba(167,139,250,0.10) 0%, rgba(139,92,246,0.08) 100%)'
+        : 'linear-gradient(135deg, #ffffff 0%, #faf9fc 100%)'
+      : props.theme.colors.background.primary};
   border: 1.5px solid
-    ${(props) => (props.$active ? '#8b5cf6' : 'rgba(226, 232, 240, 1)')};
+    ${(props) =>
+      props.$active ? '#8b5cf6' : props.theme.colors.border.default};
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -5615,8 +5698,12 @@ const TabButton = styled.button<{ $active: boolean }>`
   &:hover {
     background: ${(props) =>
       props.$active
-        ? 'linear-gradient(135deg, #ffffff 0%, #faf9fc 100%)'
-        : 'linear-gradient(135deg, #fafafa 0%, #f5f3ff 100%)'};
+        ? props.theme.mode === 'dark'
+          ? 'linear-gradient(135deg, rgba(167,139,250,0.14) 0%, rgba(139,92,246,0.12) 100%)'
+          : 'linear-gradient(135deg, #ffffff 0%, #faf9fc 100%)'
+        : props.theme.mode === 'dark'
+          ? 'linear-gradient(135deg, rgba(167,139,250,0.06) 0%, rgba(139,92,246,0.04) 100%)'
+          : 'linear-gradient(135deg, #fafafa 0%, #f5f3ff 100%)'};
     border-color: ${(props) => (props.$active ? '#7c3aed' : '#8b5cf6')};
     transform: translateY(-2px);
     box-shadow: ${(props) =>
@@ -5646,8 +5733,9 @@ const TabIcon = styled.div<{ $active: boolean }>`
   background: ${(props) =>
     props.$active
       ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
-      : 'rgba(148, 163, 184, 0.08)'};
-  color: ${(props) => (props.$active ? '#ffffff' : '#64748b')};
+      : 'rgba(148, 163, 184, 0.12)'};
+  color: ${(props) =>
+    props.$active ? '#ffffff' : props.theme.colors.text.secondary};
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: ${(props) =>
     props.$active ? '0 2px 6px rgba(139, 92, 246, 0.25)' : 'none'};
@@ -5680,7 +5768,8 @@ const TabIcon = styled.div<{ $active: boolean }>`
 const TabLabel = styled.span<{ $active?: boolean }>`
   font-size: 14px;
   font-weight: ${(props) => (props.$active ? '700' : '600')};
-  color: ${(props) => (props.$active ? '#8b5cf6' : '#64748b')};
+  color: ${(props) =>
+    props.$active ? '#8b5cf6' : props.theme.colors.text.secondary};
   letter-spacing: -0.01em;
   transition: all 0.3s ease;
   white-space: nowrap;
@@ -5699,8 +5788,11 @@ const InfoBox = styled.div`
   display: flex;
   gap: 14px;
   padding: 16px 18px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(167,139,250,0.06) 100%)'
+      : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-left: 3px solid #8b5cf6;
   border-radius: 10px;
   margin-bottom: 20px;
@@ -5753,7 +5845,7 @@ const InfoTitle = styled.h3`
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #334155;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.01em;
 
   @media (max-width: 768px) {
@@ -5765,7 +5857,7 @@ const InfoDescription = styled.p`
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 400;
 
   @media (max-width: 768px) {
@@ -5783,7 +5875,7 @@ const InfoExamples = styled.div`
 const InfoExample = styled.div`
   font-size: 12px;
   line-height: 1.6;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -5797,7 +5889,7 @@ const InfoExample = styled.div`
 
   strong {
     font-weight: 600;
-    color: #475569;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   @media (max-width: 768px) {
@@ -5816,7 +5908,7 @@ const DateTimeGroup = styled.div`
 const DateTimeLabel = styled.div`
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const DateTimeInputs = styled.div`
@@ -5830,17 +5922,17 @@ const DateInputButton = styled.button`
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
   font-size: 13px;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: #cbd5e1;
-    background: #f8fafc;
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   span {
@@ -5850,7 +5942,7 @@ const DateInputButton = styled.button`
 
   svg {
     flex-shrink: 0;
-    color: #64748b;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
@@ -5860,17 +5952,17 @@ const TimeInputButton = styled.button`
   justify-content: center;
   gap: 6px;
   padding: 10px 12px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 8px;
   font-size: 13px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: #cbd5e1;
-    background: #f8fafc;
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) => theme.colors.background.secondary};
   }
 
   svg {

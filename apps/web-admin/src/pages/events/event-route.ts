@@ -27,6 +27,24 @@ export const eventPageRoute: RouteObject = {
       },
     },
     {
+      // 신규 에디터 (v2) — 풀 페이지·좌측 섹션 네비.
+      // 안정화 후 위 create / :eventId/edit 로 승격 예정.
+      path: 'create/v2',
+      lazy: async () => {
+        const { default: EventEditorPage } =
+          await import('./editor/event-editor.page')
+        return { Component: EventEditorPage }
+      },
+    },
+    {
+      path: ':eventId/edit/v2',
+      lazy: async () => {
+        const { default: EventEditorPage } =
+          await import('./editor/event-editor.page')
+        return { Component: EventEditorPage }
+      },
+    },
+    {
       path: ':eventId',
       lazy: async () => {
         const { default: EventDetailPage } =

@@ -51,19 +51,6 @@ interface ConferenceEventFormProps {
   availablePersons: PersonResponseDto[]
 }
 
-const COLORS = {
-  primary: '#6366f1',
-  primaryLight: 'rgba(99, 102, 241, 0.08)',
-  primaryBorder: 'rgba(99, 102, 241, 0.2)',
-  success: '#10b981',
-  successLight: 'rgba(16, 185, 129, 0.08)',
-  danger: '#ef4444',
-  text: '#0f172a',
-  textLight: '#64748b',
-  bg: '#f8fafc',
-  border: 'rgba(148, 163, 184, 0.2)',
-}
-
 export const ConferenceEventForm: React.FC<ConferenceEventFormProps> = ({
   conferenceEvent,
   setConferenceEvent,
@@ -1417,14 +1404,14 @@ const SectionTitle = styled.h3`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
 `
 
 const SectionDesc = styled.p`
   margin: 6px 0 0;
   font-size: 13px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
 `
 
@@ -1488,7 +1475,7 @@ const FormContent = styled.div`
 
 const Hint = styled.span`
   font-size: 12px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.5;
   font-weight: 400;
 `
@@ -1581,15 +1568,15 @@ const CountryList = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${({ theme }) => theme.colors.background.tertiary};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${({ theme }) => theme.colors.border.medium};
     border-radius: 3px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${({ theme }) => theme.colors.text.tertiary};
     }
   }
 `
@@ -1611,8 +1598,9 @@ const CountryListItem = styled.div<{ $selected: boolean }>`
     props.$selected ? '0 2px 8px rgba(139, 92, 246, 0.12)' : 'none'};
 
   &:hover {
-    background: rgba(139, 92, 246, 0.06);
-    border-left-color: ${(props) => (props.$selected ? '#8b5cf6' : '#cbd5e1')};
+    background: rgba(139, 92, 246, 0.08);
+    border-left-color: ${(props) =>
+      props.$selected ? '#8b5cf6' : props.theme.colors.border.medium};
   }
 `
 
@@ -1711,15 +1699,15 @@ const DetailContent = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${({ theme }) => theme.colors.background.tertiary};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${({ theme }) => theme.colors.border.medium};
     border-radius: 3px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${({ theme }) => theme.colors.text.tertiary};
     }
   }
 `
@@ -1731,14 +1719,14 @@ const EmptyDetailState = styled.div`
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   padding: 40px;
   text-align: center;
 
   p {
     margin: 0;
     font-size: 14px;
-    color: #64748b;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
@@ -1747,21 +1735,24 @@ const ParticipantsList = styled.div`
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  background: white;
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-top: none;
   border-radius: 0 0 12px 12px;
 `
 
 const ParticipantCard = styled.div`
   padding: 20px;
-  background: white;
-  border: 1.5px solid rgba(99, 102, 241, 0.08);
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   transition: all 0.2s;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.2);
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(167, 139, 250, 0.3)'
+        : 'rgba(99, 102, 241, 0.2)'};
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
   }
 `
@@ -1772,7 +1763,7 @@ const ParticipantHeader = styled.div`
   justify-content: space-between;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1.5px solid rgba(99, 102, 241, 0.08);
+  border-bottom: 1.5px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const CountryName = styled.div`
@@ -1781,7 +1772,7 @@ const CountryName = styled.div`
   gap: 8px;
   font-size: 15px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
 
   svg {
     color: #6366f1;
@@ -1827,15 +1818,15 @@ const TreatyContent = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${({ theme }) => theme.colors.background.tertiary};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${({ theme }) => theme.colors.border.medium};
     border-radius: 3px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${({ theme }) => theme.colors.text.tertiary};
     }
   }
 `
@@ -1845,16 +1836,23 @@ const CountryTermsList = styled.div`
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  background: white;
-  border: 1.5px solid rgba(99, 102, 241, 0.12);
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-top: none;
   border-radius: 0 0 12px 12px;
 `
 
 const TermSection = styled.div`
   padding: 16px;
-  background: rgba(99, 102, 241, 0.02);
-  border: 1px solid rgba(99, 102, 241, 0.08);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(167, 139, 250, 0.05)'
+      : 'rgba(99, 102, 241, 0.02)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(167, 139, 250, 0.15)'
+        : 'rgba(99, 102, 241, 0.08)'};
   border-radius: 10px;
   margin-bottom: 16px;
   width: 100%;
@@ -1863,7 +1861,7 @@ const TermSection = styled.div`
 const TermSectionTitle = styled.div`
   font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 12px;
   display: flex;
   align-items: center;
@@ -1889,16 +1887,19 @@ const FormGroup = styled.div`
 const Label = styled.label`
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const SelectButton = styled.button<{ $hasValue?: boolean }>`
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   padding: 14px 16px;
   font-size: 14px;
-  color: ${(props) => (props.$hasValue ? '#1e293b' : '#94a3b8')};
-  background: #f8fafc;
+  color: ${(props) =>
+    props.$hasValue
+      ? props.theme.colors.text.primary
+      : props.theme.colors.text.tertiary};
+  background: ${({ theme }) => theme.colors.background.secondary};
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1908,14 +1909,14 @@ const SelectButton = styled.button<{ $hasValue?: boolean }>`
   justify-content: space-between;
 
   &:hover {
-    border-color: #cbd5e1;
-    background: #f1f5f9;
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) => theme.colors.background.tertiary};
   }
 
   &:focus {
     outline: none;
     border-color: #8b5cf6;
-    background: #ffffff;
+    background: ${({ theme }) => theme.colors.background.primary};
     box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
   }
 
@@ -1930,12 +1931,12 @@ const SelectButton = styled.button<{ $hasValue?: boolean }>`
 `
 
 const DateButton = styled.button`
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   padding: 14px 16px;
   font-size: 13px;
-  color: #64748b;
-  background: #f8fafc;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.secondary};
   text-align: center;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1946,15 +1947,15 @@ const DateButton = styled.button`
   gap: 8px;
 
   &:hover {
-    border-color: #cbd5e1;
-    background: #f1f5f9;
-    color: #1e293b;
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   &:focus {
     outline: none;
     border-color: #8b5cf6;
-    background: #ffffff;
+    background: ${({ theme }) => theme.colors.background.primary};
     box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
   }
 
@@ -1990,9 +1991,12 @@ const ModalContent = styled.div`
   width: 90%;
   max-width: 600px;
   max-height: 85vh;
-  background: white;
+  background: ${({ theme }) => theme.colors.background.primary};
   border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 20px 60px rgba(0, 0, 0, 0.7)'
+      : '0 20px 60px rgba(0, 0, 0, 0.3)'};
   display: flex;
   flex-direction: column;
   animation: slideUp 0.3s ease-out;
@@ -2014,8 +2018,11 @@ const ModalHeader = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 24px;
-  background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
-  border-bottom: 1px solid #e2e8f0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(99, 102, 241, 0.12) 100%)'
+      : 'linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%)'};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 16px 16px 0 0;
 `
 
@@ -2042,13 +2049,13 @@ const ModalTitle = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #1e293b;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const ModalSubtitle = styled.p`
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const CloseButton = styled.button`
@@ -2059,14 +2066,14 @@ const CloseButton = styled.button`
   height: 32px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   border-radius: 8px;
   transition: all 0.2s;
 
   &:hover {
-    background: #f1f5f9;
-    color: #0f172a;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -2090,11 +2097,14 @@ const RoleOption = styled.button<{ $selected?: boolean; $color?: string }>`
   background: ${(props) =>
     props.$selected
       ? props.$color
-        ? `${props.$color}10`
-        : 'rgba(99, 102, 241, 0.08)'
-      : 'white'};
+        ? `${props.$color}1A`
+        : 'rgba(99, 102, 241, 0.10)'
+      : props.theme.colors.background.primary};
   border: 2px solid
-    ${(props) => (props.$selected ? props.$color || '#6366f1' : '#e2e8f0')};
+    ${(props) =>
+      props.$selected
+        ? props.$color || '#6366f1'
+        : props.theme.colors.border.default};
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
@@ -2126,13 +2136,13 @@ const RoleIcon = styled.div`
 const RoleLabel = styled.div`
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 4px;
 `
 
 const RoleDesc = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.4;
 `
 
@@ -2155,11 +2165,14 @@ const TreatyTypeOption = styled.button<{
   background: ${(props) =>
     props.$selected
       ? props.$color
-        ? `${props.$color}10`
-        : 'rgba(99, 102, 241, 0.08)'
-      : 'white'};
+        ? `${props.$color}1A`
+        : 'rgba(99, 102, 241, 0.10)'
+      : props.theme.colors.background.primary};
   border: 2px solid
-    ${(props) => (props.$selected ? props.$color || '#6366f1' : '#e2e8f0')};
+    ${(props) =>
+      props.$selected
+        ? props.$color || '#6366f1'
+        : props.theme.colors.border.default};
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
@@ -2187,12 +2200,12 @@ const TreatyTypeIcon = styled.div`
 const TreatyTypeLabel = styled.div`
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 2px;
 `
 
 const TreatyTypeDesc = styled.div`
   font-size: 11px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.3;
 `

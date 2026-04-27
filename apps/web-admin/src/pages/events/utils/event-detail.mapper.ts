@@ -108,7 +108,24 @@ export function mapEventResponseToHistoricalEvent(
     hierarchy: toHierarchyNode(dto),
     timeline: [],
     theaters: [] as EventTheater[],
-    keyFigures: [],
+    keyFigures: Array.isArray(dto.relatedPersons)
+      ? dto.relatedPersons.map((rp: any) => {
+          const fullName = [rp.person?.surname, rp.person?.name]
+            .filter((s: unknown) => s != null && String(s).trim())
+            .join(' ')
+            .trim()
+          return {
+            id: rp.id,
+            personId: rp.person?.id ?? rp.personId,
+            name: fullName || '이름 없음',
+            role: rp.role ?? '',
+            nation: '',
+            portraitUrl: rp.person?.profileImageUrl ?? undefined,
+            // 인물 시점의 사건 서술 (PersonEvent.note, 장문)
+            contribution: rp.note ?? '',
+          }
+        })
+      : [],
     countries: toCountries(dto),
     influence: [],
     visuals: toVisuals(dto),

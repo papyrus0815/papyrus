@@ -14,6 +14,7 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
+import styled from 'styled-components'
 
 import type { SortOption } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
@@ -214,7 +215,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 
       {isLoading ? (
         <List.CompactList>
-          {[...Array(8)].map((_, index) => {
+          {[...Array(Math.min(pageSize, 12))].map((_, index) => {
             const depth = index % 3
             return (
               <Skeleton.SkeletonListItem key={index} $depth={depth}>
@@ -232,7 +233,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             )
           })}
         </List.CompactList>
-      ) : filteredEvents.length === 0 ? (
+      ) : flattenedHierarchy.length === 0 ? (
         <List.EmptyCatalogState>
           <List.EmptyIcon>
             <FiFilter size={44} />
@@ -265,16 +266,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         <List.CompactList onScroll={onScroll}>
           {periodHeadsOfState.length > 0 && (
             <>
-              <div
-                style={{
-                  padding: '8px 0 4px',
-                  fontSize: '12px',
-                  color: '#94a3b8',
-                  fontWeight: 500,
-                }}
-              >
+              <PeriodHeadsLabel>
                 이 목록에 포함된 시기의 재임 인물
-              </div>
+              </PeriodHeadsLabel>
               <OtherHeadsOfStateList otherHeadsOfState={periodHeadsOfState} />
             </>
           )}
@@ -514,43 +508,49 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 
           {/* 로딩 인디케이터 */}
           {isLoadingMore && (
-            <div
-              style={{
-                padding: '40px',
-                textAlign: 'center',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '12px',
-              }}
-            >
+            <LoadingMoreRow>
               <List.LoadingSpinner />
-              <div
-                style={{
-                  color: '#94a3b8',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                }}
-              >
-                로딩 중
-              </div>
-            </div>
+              <LoadingMoreText>로딩 중</LoadingMoreText>
+            </LoadingMoreRow>
           )}
-          {!isLoadingMore && hasMoreData && (
-            <div
-              style={{
-                padding: '32px',
-                textAlign: 'center',
-                color: '#cbd5e1',
-                fontSize: '12px',
-                fontWeight: '500',
-              }}
-            >
-              ↓
-            </div>
-          )}
+          {!isLoadingMore && hasMoreData && <ScrollHint>↓</ScrollHint>}
         </List.CompactList>
       )}
     </List.CatalogSection>
   )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// styled (theme-aware)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PeriodHeadsLabel = styled.div`
+  padding: 8px 0 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const LoadingMoreRow = styled.div`
+  padding: 40px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+`
+
+const LoadingMoreText = styled.div`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 13px;
+  font-weight: 500;
+`
+
+const ScrollHint = styled.div`
+  padding: 32px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : '#cbd5e1'};
+`

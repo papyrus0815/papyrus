@@ -17,6 +17,8 @@ import type {
 } from '../../../pages/events/create/military-event-form'
 import type { EventBelligerentsGraph } from '../../../pages/events/types/belligerents-graph.types'
 import type { ConferenceEvent } from '../../../pages/events/types/conference-event.types'
+import type { MentionEntityType } from '@/shared/lib/mention/mention-system'
+
 import type { EventSection } from '../model/use-event-basic-info'
 import {
   categoryNameMap,
@@ -26,6 +28,40 @@ import {
   toCombatType,
   toConflictType,
 } from './type-converters'
+
+/**
+ * RichText HTML에서 멘션(`<span class="entity-link" data-entity-type="..." data-entity-id="..." data-entity-name="...">`)을 추출.
+ *
+ * 편집 모드에서 서버가 돌려준 본문 HTML을 EventSection.mentions로 복원할 때 사용.
+ * SSR 환경 안전을 위해 DOMParser가 없으면 빈 배열 반환.
+ *
+ * startIndex/endIndex는 원본 HTML 내 노드의 outerHTML 위치로 채우되,
+ * 정확한 텍스트 오프셋 계산이 어려우므로 -1로 두어 "위치 미상" 신호로 처리.
+ * 멘션 자체의 type/id/name은 보존되므로 연관 엔티티 매핑에는 충분.
+ */
+export const extractMentionsFromHtml = (
+  html: string,
+): EventSection['mentions'] => {
+  if (!html || typeof DOMParser === 'undefined') return []
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    const nodes = doc.querySelectorAll<HTMLElement>(
+      'span.entity-link[data-entity-id][data-entity-type]',
+    )
+    return Array.from(nodes).map((el) => ({
+      type: (el.getAttribute('data-entity-type') ?? 'event') as MentionEntityType,
+      id: el.getAttribute('data-entity-id') ?? '',
+      name:
+        el.getAttribute('data-entity-name') ??
+        el.textContent?.trim() ??
+        '',
+      startIndex: -1,
+      endIndex: -1,
+    }))
+  } catch {
+    return []
+  }
+}
 
 /**
  * 멘션 데이터 추출
@@ -276,14 +312,6 @@ export const buildEventSubmitData = (params: {
   warCost: string
   mentionedPersons: Array<{ personId: string; role: string; note: string }>
   mentionedEvents: string[]
-  childEvents?: Array<{
-    title: string
-    startDate?: string
-    endDate?: string
-    description?: string
-    location?: string
-    thumbnail?: string
-  }>
   childEventIds?: string[] // 기존 사건을 하위 사건으로 연결
   /** 키워드 (동일 사건 매핑용) */
   keywords?: string[]
@@ -377,14 +405,10 @@ export const buildEventSubmitData = (params: {
         ? params.belligerentsGraph
         : undefined,
     warCost: params.warCost || undefined,
-    childEvents:
-      params.childEvents && params.childEvents.length > 0
-        ? params.childEvents
-        : undefined, // 🆕 하위 사건 빠른 추가
     childEventIds:
       params.childEventIds && params.childEventIds.length > 0
         ? params.childEventIds
-        : undefined, // 🆕 기존 사건을 하위 사건으로 연결
+        : undefined, // 기존 사건을 하위 사건으로 연결
     keywords:
       params.keywords && params.keywords.length > 0
         ? params.keywords.filter((k) => k.trim())

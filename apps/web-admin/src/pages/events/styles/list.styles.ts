@@ -38,9 +38,12 @@ export const CompactList = styled.div`
   }
 `
 
+export type ListItemImportance = 'critical' | 'major' | 'normal'
+
 export const CompactListItem = styled.div<{
   $active: boolean
   $depth: number
+  $importance?: ListItemImportance
 }>`
   border-radius: 14px;
   padding: 0;
@@ -50,6 +53,14 @@ export const CompactListItem = styled.div<{
   position: relative;
   display: flex;
   animation: fadeIn 0.3s ease-out;
+
+  /* importance에 따라 카드 최소 높이 차등 — 한눈 스캔 시 위계 인지 */
+  min-height: ${({ $importance }) =>
+    $importance === 'critical'
+      ? '84px'
+      : $importance === 'major'
+        ? '68px'
+        : '52px'};
 
   @keyframes fadeIn {
     from {
@@ -62,8 +73,15 @@ export const CompactListItem = styled.div<{
     }
   }
 
-  border-left: ${({ $active }) =>
-    $active ? '4px solid #6366f1' : '1.5px solid transparent'};
+  /* 좌측 importance 강조 보더 — active > critical > major 순 우선 */
+  border-left: ${({ $active, $importance }) =>
+    $active
+      ? '4px solid #6366f1'
+      : $importance === 'critical'
+        ? '4px solid #6366f1'
+        : $importance === 'major'
+          ? '3px solid rgba(245, 158, 11, 0.7)'
+          : '1.5px solid transparent'};
 
   /* 타임라인 연결선 */
   &::before {

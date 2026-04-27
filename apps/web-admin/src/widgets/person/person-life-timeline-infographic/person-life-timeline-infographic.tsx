@@ -5,12 +5,14 @@
  * - 중앙: 타임라인 척추(spine) + 카테고리 색 도트 + 기간 막대
  * - 우측: 카드 (제목·날짜·설명)
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   FiCalendar,
   FiCircle,
+  FiDownload,
   FiFlag,
   FiHeart,
+  FiLink,
   FiStar,
   FiUserMinus,
   FiUserPlus,
@@ -86,7 +88,10 @@ interface TenureInput {
 interface PersonEventInput {
   id: string
   role?: string | null
+  /** 이 인물 시점의 사건 서술 (PersonEvent.note, 장문 가능) */
+  note?: string | null
   event?: {
+    id?: string | null
     title?: string | null
     startDate?: string | null
     endDate?: string | null
@@ -123,6 +128,8 @@ export interface PersonLifeTimelineInfographicProps {
   onStartEditLife?: (lifeEvent: PersonLifeEvent) => void
   /** 가족 이벤트 카드 클릭 → 해당 인물 상세로 이동 */
   onFamilyPersonClick?: (personId: string) => void
+  /** 사건 카드 클릭 → 해당 사건 상세로 이동 */
+  onEventClick?: (eventId: string) => void
   /** 빈 상태 CTA — "연보 추가하기" 버튼 콜백 */
   onAddLifeEvent?: () => void
   /**
@@ -242,6 +249,8 @@ interface TimelineNode {
   familyRelation?: FamilyRelation
   /** 가족 노드의 대상 인물 ID — 카드 클릭으로 해당 인물 상세 이동 */
   familyPersonId?: string
+  /** 사건 노드의 사건 ID — 카드 클릭으로 사건 상세 이동 */
+  eventId?: string | null
   /** 본인 오늘 기준 기간(일) — 긴 재위/재임에 막대 표시 기준 */
   durationDays?: number | null
 }
@@ -258,6 +267,77 @@ function countFiguresInHtml(html: string | null | undefined): number {
   if (!html) return 0
   const matches = html.match(/<figure\b/gi)
   return matches ? matches.length : 0
+}
+
+/** HTML → 평문 (export Markdown용 — 실제론 Rich text를 그대로 살려 .md에 박아도 자연스럽지만,
+ * 여기선 단순화: 대다수 마크업을 평문으로 일자화하고 줄바꿈만 남김) */
+function htmlToPlainText(html: string | null | undefined): string {
+  if (!html) return ''
+  return html
+    .replace(/<\/(?:p|div|li|h[1-6]|blockquote|figure|figcaption)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/** 인물 연보 전체를 JSON 또는 Markdown 파일로 다운로드 */
+function exportLifeEvents(
+  lifeEvents: PersonLifeEvent[],
+  format: 'json' | 'markdown',
+) {
+  if (typeof document === 'undefined' || lifeEvents.length === 0) return
+  const sorted = [...lifeEvents].sort((a, b) => {
+    const aTs = a.startDate ? new Date(a.startDate).getTime() : 0
+    const bTs = b.startDate ? new Date(b.startDate).getTime() : 0
+    if (aTs !== bTs) return aTs - bTs
+    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+  })
+
+  let content: string
+  let mime: string
+  let ext: string
+
+  if (format === 'json') {
+    content = JSON.stringify(sorted, null, 2)
+    mime = 'application/json;charset=utf-8'
+    ext = 'json'
+  } else {
+    const lines: string[] = ['# 인물 연보', '']
+    for (const le of sorted) {
+      const date = le.startDate
+        ? le.endDate && le.endDate !== le.startDate
+          ? `${le.startDate.slice(0, 10)} ~ ${le.endDate.slice(0, 10)}`
+          : le.startDate.slice(0, 10)
+        : '(날짜 미정)'
+      const cat = le.category
+        ? ` _(${PERSON_LIFE_EVENT_CATEGORY_LABEL[le.category]})_`
+        : ''
+      lines.push(`## ${le.title}${cat}`)
+      lines.push(`*${date}*`)
+      const desc = htmlToPlainText(le.description)
+      if (desc) {
+        lines.push('')
+        lines.push(desc)
+      }
+      lines.push('')
+    }
+    content = lines.join('\n')
+    mime = 'text/markdown;charset=utf-8'
+    ext = 'md'
+  }
+
+  const blob = new Blob([content], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `life-events-${new Date()
+    .toISOString()
+    .slice(0, 10)}.${ext}`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 /** 노드의 시작일이 어떤 재위/재임 기간 안에 들어가면 그 색을 반환 (재위 우선) */
@@ -297,6 +377,7 @@ export function PersonLifeTimelineInfographic({
   siblings,
   onStartEditLife,
   onFamilyPersonClick,
+  onEventClick,
   onAddLifeEvent,
   highlightedLifeEventId,
 }: PersonLifeTimelineInfographicProps) {
@@ -392,6 +473,9 @@ export function PersonLifeTimelineInfographic({
           evt.event?.startDatePrecision,
           evt.event?.endDatePrecision,
         ),
+        // 인물 시점의 사건 서술 (장문) — 카드 본문에 표시
+        description: evt.note ?? null,
+        eventId: evt.event?.id ?? null,
       })
     }
 
@@ -598,6 +682,26 @@ export function PersonLifeTimelineInfographic({
     family: true,
   })
 
+  // ── 검색 ── 제목·본문(태그 제외) 매칭. 입력 디바운스는 사용자 체감상 즉시.
+  const [searchQuery, setSearchQuery] = useState('')
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+
+  const matchesQuery = useCallback(
+    (n: TimelineNode) => {
+      if (!normalizedQuery) return true
+      const haystacks: string[] = [n.title]
+      if (n.subtitle) haystacks.push(n.subtitle)
+      if (n.dateLabel) haystacks.push(n.dateLabel)
+      if (n.description) {
+        // HTML 태그 제거 후 매칭
+        haystacks.push(n.description.replace(/<[^>]+>/g, ' '))
+      }
+      const blob = haystacks.join(' ').toLowerCase()
+      return blob.includes(normalizedQuery)
+    },
+    [normalizedQuery],
+  )
+
   // 각 필터 그룹에 속한 노드가 있는지 파악해서 비활성 필터 표시만 조정
   const availableFilters = useMemo(() => {
     const set = new Set<FilterKey>()
@@ -607,6 +711,15 @@ export function PersonLifeTimelineInfographic({
     }
     return set
   }, [nodes])
+
+  /** 모든 필터가 꺼져 있는지 (사용 가능한 필터 기준) */
+  const allFiltersOff = useMemo(() => {
+    if (availableFilters.size === 0) return false
+    for (const f of availableFilters) {
+      if (filters[f]) return false
+    }
+    return true
+  }, [filters, availableFilters])
 
   const visibleNodes = useMemo(
     () =>
@@ -658,29 +771,75 @@ export function PersonLifeTimelineInfographic({
   return (
     <TimelineRoot>
       {availableFilters.size > 0 && (
-        <FilterBar>
-          {FILTER_OPTIONS.map((opt) => {
-            const enabled = filters[opt.key]
-            const dimmed = !availableFilters.has(opt.key)
-            return (
-              <FilterChip
-                key={opt.key}
+        <ToolbarRow>
+          <FilterBar>
+            {FILTER_OPTIONS.map((opt) => {
+              const enabled = filters[opt.key]
+              const dimmed = !availableFilters.has(opt.key)
+              return (
+                <FilterChip
+                  key={opt.key}
+                  type="button"
+                  $active={enabled}
+                  $dimmed={dimmed}
+                  $color={opt.color}
+                  onClick={() =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      [opt.key]: !prev[opt.key],
+                    }))
+                  }
+                  aria-pressed={enabled}
+                  disabled={dimmed}
+                >
+                  <ChipDot $color={opt.color} $active={enabled} />
+                  <span>{opt.label}</span>
+                </FilterChip>
+              )
+            })}
+          </FilterBar>
+          <SearchInput
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="제목·본문 검색"
+            aria-label="타임라인 검색"
+          />
+          {lifeEvents.length > 0 && (
+            <ExportMenu>
+              <ExportToggle
                 type="button"
-                $active={enabled}
-                $dimmed={dimmed}
-                $color={opt.color}
-                onClick={() =>
-                  setFilters((prev) => ({ ...prev, [opt.key]: !prev[opt.key] }))
-                }
-                aria-pressed={enabled}
-                disabled={dimmed}
+                aria-label="연보 내보내기"
+                title="연보 내보내기 (JSON·Markdown)"
               >
-                <ChipDot $color={opt.color} $active={enabled} />
-                <span>{opt.label}</span>
-              </FilterChip>
-            )
-          })}
-        </FilterBar>
+                <FiDownload size={13} strokeWidth={2.4} />
+                <span>내보내기</span>
+              </ExportToggle>
+              <ExportDropdown>
+                <ExportItem
+                  type="button"
+                  onClick={() => exportLifeEvents(lifeEvents, 'json')}
+                >
+                  JSON
+                </ExportItem>
+                <ExportItem
+                  type="button"
+                  onClick={() => exportLifeEvents(lifeEvents, 'markdown')}
+                >
+                  Markdown
+                </ExportItem>
+              </ExportDropdown>
+            </ExportMenu>
+          )}
+        </ToolbarRow>
+      )}
+
+      {/* 모든 필터 꺼진 안내 */}
+      {allFiltersOff && (
+        <FilterAllOffNote>
+          모든 필터가 꺼져 있어 표시할 항목이 없습니다 — 위 필터에서 보고 싶은
+          종류를 켜주세요.
+        </FilterAllOffNote>
       )}
 
       {nodes.length === 0 ? (
@@ -708,8 +867,7 @@ export function PersonLifeTimelineInfographic({
                   ? ageAt(node.start, birth)
                   : null
             const isFirst = idx === 0
-            const isLast =
-              idx === renderedNodes.length - 1 && !onAddLifeEvent
+            const isLast = idx === renderedNodes.length - 1
 
             // 직전 노드와 같은 연도면 YearLabel 숨김 (묶음 시각화)
             const prevNode = idx > 0 ? renderedNodes[idx - 1] : null
@@ -726,6 +884,9 @@ export function PersonLifeTimelineInfographic({
               node.kind === 'life' &&
               node.lifeEventSource?.id != null &&
               highlightedLifeEventId === node.lifeEventSource.id
+
+            // 검색어 매칭 — 비매칭 행은 dim
+            const matchesSearch = matchesQuery(node)
             return (
               <TimelineRow
                 key={node.key}
@@ -736,6 +897,7 @@ export function PersonLifeTimelineInfographic({
                   else rowRefs.current.delete(id)
                 }}
                 $highlight={highlighted}
+                $dimmed={!matchesSearch}
               >
                 <YearCell>
                   {year != null && !sameYearAsPrev ? (
@@ -800,12 +962,18 @@ export function PersonLifeTimelineInfographic({
                       isFamilyNode &&
                       !!node.familyPersonId &&
                       !!onFamilyPersonClick
-                    const clickable = canEditLife || canNavFamily
+                    const canNavEvent =
+                      node.kind === 'event' &&
+                      !!node.eventId &&
+                      !!onEventClick
+                    const clickable = canEditLife || canNavFamily || canNavEvent
                     const handleClick = canEditLife
                       ? () => onStartEditLife!(node.lifeEventSource!)
                       : canNavFamily
                         ? () => onFamilyPersonClick!(node.familyPersonId!)
-                        : undefined
+                        : canNavEvent
+                          ? () => onEventClick!(node.eventId!)
+                          : undefined
                     const cardAriaLabel = node.dateLabel
                       ? `${node.title} — ${node.dateLabel}`
                       : node.title
@@ -834,6 +1002,28 @@ export function PersonLifeTimelineInfographic({
                         title={node.title}
                       >
                       <CardTopRow>
+                        {/* 연보 카드만: URL 앵커 복사 */}
+                        {node.kind === 'life' && node.lifeEventSource?.id && (
+                          <CardLinkCopyBtn
+                            type="button"
+                            aria-label="이 연보 링크 복사"
+                            title="이 연보 링크 복사"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const id = node.lifeEventSource!.id
+                              const url = new URL(window.location.href)
+                              url.searchParams.set('life', id)
+                              const link = url.toString()
+                              navigator.clipboard
+                                ?.writeText(link)
+                                .catch(() => {
+                                  /* 클립보드 권한 실패 시 fallback 없음 — 단지 무시 */
+                                })
+                            }}
+                          >
+                            <FiLink size={11} strokeWidth={2.4} />
+                          </CardLinkCopyBtn>
+                        )}
                         <KindBadge $kind={node.kind} $color={
                           node.category
                             ? PERSON_LIFE_EVENT_CATEGORY_COLOR[node.category].text
@@ -893,13 +1083,6 @@ export function PersonLifeTimelineInfographic({
               </TimelineRow>
             )
           })}
-          {/* 본문 끝 인라인 추가 CTA — 항목이 1개 이상일 때만 (빈 상태는 기존 EmptyState가 담당) */}
-          {onAddLifeEvent && (
-            <AddRow type="button" onClick={onAddLifeEvent}>
-              <AddRowSpine />
-              <AddRowText>+ 새 연보 추가</AddRowText>
-            </AddRow>
-          )}
         </TimelineList>
       )}
 
@@ -940,11 +1123,134 @@ const TimelineRoot = styled.div`
   gap: 4px;
 `
 
+const ToolbarRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 4px 8px;
+  flex-wrap: wrap;
+`
+
 const FilterBar = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 4px 4px 8px;
+  flex: 1 1 auto;
+`
+
+const SearchInput = styled.input`
+  flex: 0 1 240px;
+  min-width: 160px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+
+  &:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  }
+
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const FilterAllOffNote = styled.div`
+  padding: 12px 16px;
+  margin: 4px 0 8px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.55;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  letter-spacing: -0.005em;
+`
+
+/** 내보내기 — JSON/Markdown 드롭다운 */
+const ExportMenu = styled.div`
+  position: relative;
+  & > div {
+    display: none;
+  }
+  &:hover > div,
+  &:focus-within > div {
+    display: flex;
+  }
+
+  @media print {
+    display: none;
+  }
+`
+
+const ExportToggle = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.08)'
+        : 'rgba(99,102,241,0.06)'};
+    color: #4f46e5;
+    border-color: rgba(99, 102, 241, 0.4);
+  }
+`
+
+const ExportDropdown = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 140px;
+  flex-direction: column;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(25,25,25,0.95)' : '#fff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  z-index: 5;
+`
+
+const ExportItem = styled.button`
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: rgba(99, 102, 241, 0.08);
+    color: #4f46e5;
+  }
 `
 
 const FilterChip = styled.button<{
@@ -1024,13 +1330,17 @@ const lifeHighlightAnim = keyframes`
   100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); transform: translateY(0); }
 `
 
-const TimelineRow = styled.div<{ $highlight?: boolean }>`
+const TimelineRow = styled.div<{
+  $highlight?: boolean
+  /** 검색어 비매칭 — 흐리게 표시 (필터링이 아닌 dim) */
+  $dimmed?: boolean
+}>`
   display: grid;
   grid-template-columns: 76px 28px 1fr;
   align-items: stretch; /* SpineCell의 ::after(top:42px;bottom:0)가 셀 높이에 의존 */
   min-height: 76px;
   border-radius: 12px;
-  transition: background 0.4s ease;
+  transition: background 0.4s ease, opacity 0.2s ease;
 
   ${({ $highlight }) =>
     $highlight &&
@@ -1039,9 +1349,34 @@ const TimelineRow = styled.div<{ $highlight?: boolean }>`
       animation: ${lifeHighlightAnim} 1.6s ease-out;
     `}
 
+  ${({ $dimmed }) =>
+    $dimmed &&
+    css`
+      opacity: 0.28;
+      filter: grayscale(0.6);
+    `}
+
   @media (max-width: 560px) {
     grid-template-columns: 52px 18px 1fr;
     min-height: 68px;
+  }
+
+  /* 모션 줄임 환경에선 하이라이트 애니메이션·트랜지션 제거 */
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    animation: none !important;
+  }
+
+  /* 인쇄 친화 — 컬러 살리기, hover/animation 무력화, 카드 크기 컴팩트 */
+  @media print {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    grid-template-columns: 64px 16px 1fr;
+    min-height: auto;
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    filter: none !important;
   }
 `
 
@@ -1054,9 +1389,23 @@ const YearCell = styled.div`
   padding: 18px 12px 0 0;
   font-variant-numeric: tabular-nums;
   text-align: right;
+  /* 긴 타임라인에서 현재 영역의 시작 연도가 화면 상단에 sticky로 남도록 */
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  z-index: 1;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(15,23,42,0.85)' : 'rgba(255,255,255,0.85)'};
+  backdrop-filter: blur(6px);
 
   @media (max-width: 560px) {
     padding: 16px 8px 0 0;
+  }
+
+  @media print {
+    position: static;
+    background: transparent;
+    backdrop-filter: none;
   }
 `
 
@@ -1279,6 +1628,36 @@ const CardTopRow = styled.div`
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+`
+
+/** 카드 우상단 — 이 연보 링크 복사 (작은 아이콘 버튼) */
+const CardLinkCopyBtn = styled.button`
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.45;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    background: rgba(99, 102, 241, 0.1);
+    color: #4f46e5;
+  }
+
+  @media print {
+    display: none;
+  }
 `
 
 const KindBadge = styled.span<{
@@ -1539,87 +1918,6 @@ const EmptyDescHint = styled.span`
   color: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.45)' : '#94a3b8'};
   letter-spacing: -0.01em;
-`
-
-/** 타임라인 끝 인라인 추가 CTA — 점선 박스 1줄 행 */
-const AddRow = styled.button`
-  display: grid;
-  grid-template-columns: 76px 28px 1fr;
-  align-items: center;
-  min-height: 56px;
-  border: none;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-  border-radius: 12px;
-  transition: background 0.15s ease;
-  text-align: left;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.06)'
-        : 'rgba(99,102,241,0.04)'};
-  }
-
-  @media (max-width: 560px) {
-    grid-template-columns: 52px 18px 1fr;
-    min-height: 52px;
-  }
-`
-
-/** AddRow의 spine 칸 — 위로 연결되는 1줄 + 빈 도트 */
-const AddRowSpine = styled.span`
-  position: relative;
-  align-self: stretch;
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 50%;
-    width: 1.5px;
-    height: 28px;
-    transform: translateX(-50%);
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.08)'
-        : 'rgba(15,23,42,0.08)'};
-    border-radius: 999px;
-  }
-  &::after {
-    content: '+';
-    position: absolute;
-    top: 22px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    border: 1.5px dashed
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(99,102,241,0.45)'
-          : 'rgba(99,102,241,0.45)'};
-    color: #6366f1;
-    font-size: 14px;
-    line-height: 18px;
-    text-align: center;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? '#0f172a' : '#fff'};
-  }
-`
-
-const AddRowText = styled.span`
-  margin-left: 18px;
-  padding: 10px 16px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #6366f1;
-  letter-spacing: -0.01em;
-  border: 1px dashed rgba(99, 102, 241, 0.35);
-  border-radius: 12px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.04)'};
 `
 
 const EmptyState = styled.div`

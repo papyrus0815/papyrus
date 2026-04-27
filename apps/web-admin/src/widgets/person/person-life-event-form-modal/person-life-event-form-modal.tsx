@@ -121,11 +121,38 @@ export interface PersonLifeEventFormModalProps {
   /** 인물 출생·사망일 — 입력한 날짜가 범위 밖이면 인라인 경고 (저장은 허용) */
   birthDate?: string | null
   deathDate?: string | null
+  /** 같은 인물의 기존 연보 — 중복 등록 경고·sortOrder 자동 분배에 사용 */
+  existingLifeEvents?: PersonLifeEvent[]
 }
 
-/** localStorage 드래프트 키 */
-function draftKey(personId: string, lifeEventId?: string) {
-  return `draft:life-event:${personId}:${lifeEventId ?? 'new'}`
+/** localStorage 드래프트 키 — tabId 포함해 다른 탭과 충돌 방지 */
+function draftKey(personId: string, lifeEventId: string | undefined, tabId: string) {
+  return `draft:life-event:${personId}:${lifeEventId ?? 'new'}:${tabId}`
+}
+
+/** 카테고리 사용 빈도 localStorage 키 — 자주 쓰는 카테고리 상단 정렬 */
+const CATEGORY_FREQ_KEY = 'life-event:category-freq'
+type CategoryFreqMap = Partial<Record<PersonLifeEventCategory, number>>
+
+function loadCategoryFreq(): CategoryFreqMap {
+  if (typeof localStorage === 'undefined') return {}
+  try {
+    const raw = localStorage.getItem(CATEGORY_FREQ_KEY)
+    return raw ? (JSON.parse(raw) as CategoryFreqMap) : {}
+  } catch {
+    return {}
+  }
+}
+
+function bumpCategoryFreq(c: PersonLifeEventCategory) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    const freq = loadCategoryFreq()
+    freq[c] = (freq[c] ?? 0) + 1
+    localStorage.setItem(CATEGORY_FREQ_KEY, JSON.stringify(freq))
+  } catch {
+    /* 무시 */
+  }
 }
 
 interface DraftPayload {
@@ -139,6 +166,23 @@ interface DraftPayload {
   savedAt: number
 }
 
+/** 탭 단위 고유 id — 같은 사용자가 여러 탭에서 동일 인물 편집 시 드래프트 충돌 방지 */
+const tabIdRef = (() => {
+  if (typeof window === 'undefined') return { current: 'ssr' }
+  const KEY = '__life_event_tab_id'
+  // sessionStorage는 탭별로 분리되므로 탭별 id 보관에 적합
+  let id = window.sessionStorage.getItem(KEY)
+  if (!id) {
+    id = Math.random().toString(36).slice(2, 10)
+    try {
+      window.sessionStorage.setItem(KEY, id)
+    } catch {
+      /* 무시 */
+    }
+  }
+  return { current: id }
+})()
+
 export function PersonLifeEventFormModal({
   open,
   personId,
@@ -147,6 +191,7 @@ export function PersonLifeEventFormModal({
   onSuccess,
   birthDate,
   deathDate,
+  existingLifeEvents,
 }: PersonLifeEventFormModalProps) {
   const queryClient = useQueryClient()
   const [isEdit, setIsEdit] = useState(() => !!lifeEvent)
@@ -223,7 +268,9 @@ export function PersonLifeEventFormModal({
     // 드래프트 확인: 대상 레코드 updatedAt 이후 저장된 드래프트만 유효
     let restoredFromDraft = false
     try {
-      const raw = localStorage.getItem(draftKey(personId, lifeEvent?.id))
+      const raw = localStorage.getItem(
+        draftKey(personId, lifeEvent?.id, tabIdRef.current),
+      )
       if (raw) {
         const draft = JSON.parse(raw) as DraftPayload
         const recordStamp = lifeEvent?.updatedAt
@@ -296,7 +343,7 @@ export function PersonLifeEventFormModal({
           savedAt: Date.now(),
         }
         localStorage.setItem(
-          draftKey(personId, lifeEventId),
+          draftKey(personId, lifeEventId, tabIdRef.current),
           JSON.stringify(payload),
         )
       } catch {
@@ -324,7 +371,9 @@ export function PersonLifeEventFormModal({
 
   const clearDraft = useCallback(() => {
     try {
-      localStorage.removeItem(draftKey(personId, lifeEventId))
+      localStorage.removeItem(
+        draftKey(personId, lifeEventId, tabIdRef.current),
+      )
     } catch {
       /* 무시 */
     }
@@ -389,6 +438,32 @@ export function PersonLifeEventFormModal({
     return ''
   }, [startDate, birthDate, deathDate])
 
+  /** 동일 제목+날짜 연보 중복 경고 (자기 자신 제외) — 저장은 허용 */
+  const duplicateWarning = useMemo(() => {
+    if (!title.trim() || !startDate) return ''
+    const startKey = startDate.slice(0, 10)
+    const existing = (existingLifeEvents ?? []).find(
+      (le) =>
+        le.id !== lifeEventId &&
+        le.title.trim() === title.trim() &&
+        le.startDate?.slice(0, 10) === startKey,
+    )
+    return existing
+      ? '같은 제목·날짜 연보가 이미 있습니다 — 그래도 등록하시겠어요?'
+      : ''
+  }, [title, startDate, existingLifeEvents, lifeEventId])
+
+  /** 자주 쓰는 카테고리 상위 3개 — 카테고리 그리드에서 첫 줄에 강조 표시
+      (조회는 모달 열릴 때 1회로 충분) */
+  const frequentCategories = useMemo<PersonLifeEventCategory[]>(() => {
+    if (!open) return []
+    const freq = loadCategoryFreq()
+    return PERSON_LIFE_EVENT_CATEGORIES.slice()
+      .filter((c) => (freq[c] ?? 0) > 0)
+      .sort((a, b) => (freq[b] ?? 0) - (freq[a] ?? 0))
+      .slice(0, 3)
+  }, [open])
+
   const canSubmit =
     title.trim().length > 0 &&
     !dateError &&
@@ -427,10 +502,32 @@ export function PersonLifeEventFormModal({
         trimmedDescription && getVisibleTextLength(trimmedDescription) > 0
           ? trimmedDescription
           : null
-      const sortForSave =
-        sortOrder === '' || Number.isNaN(Number(sortOrder))
-          ? null
-          : Number(sortOrder)
+      // 같은 시작일에 sortOrder가 비어 있는 경우 — 기존 항목 max+1로 자동 분배.
+      // 사용자가 직접 sortOrder를 입력했으면 그 값을 우선.
+      let sortForSave: number | null
+      if (sortOrder !== '' && !Number.isNaN(Number(sortOrder))) {
+        sortForSave = Number(sortOrder)
+      } else if (startDate && (existingLifeEvents ?? []).length > 0) {
+        const sameDay = (existingLifeEvents ?? []).filter(
+          (le) =>
+            le.id !== lifeEventId &&
+            le.startDate?.slice(0, 10) === startDate.slice(0, 10),
+        )
+        if (sameDay.length > 0) {
+          const maxSort = sameDay.reduce(
+            (m, le) => Math.max(m, le.sortOrder ?? 0),
+            -1,
+          )
+          sortForSave = maxSort + 1
+        } else {
+          sortForSave = null
+        }
+      } else {
+        sortForSave = null
+      }
+
+      // 카테고리 사용 빈도 — "자주 쓰는 카테고리 상단" 정렬용
+      if (category) bumpCategoryFreq(category)
       let savedId: string | undefined
       if (isEdit && lifeEventId) {
         const updated = await updatePersonLifeEvent(lifeEventId, {
@@ -591,6 +688,16 @@ export function PersonLifeEventFormModal({
               handleSubmit(e as unknown as React.FormEvent, {
                 keepOpenForNext: e.shiftKey,
               })
+              return
+            }
+            // Alt+1~9: 카테고리 빠른 선택 (텍스트 입력 중에도 동작)
+            if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-9]$/.test(e.key)) {
+              const idx = Number(e.key) - 1
+              const target = PERSON_LIFE_EVENT_CATEGORIES[idx]
+              if (target) {
+                e.preventDefault()
+                setCategory((cur) => (cur === target ? '' : target))
+              }
             }
           }}
         >
@@ -718,12 +825,57 @@ export function PersonLifeEventFormModal({
               {!dateError && dateRangeWarning && (
                 <FieldWarning>{dateRangeWarning}</FieldWarning>
               )}
+              {!dateError && duplicateWarning && (
+                <FieldWarning>{duplicateWarning}</FieldWarning>
+              )}
             </DateField>
 
             {/* 카테고리 — roving tabindex 패턴: ←→로 이동, Enter/Space로 선택 */}
             <Field>
-              <Label>카테고리</Label>
-              <CategoryGrid role="radiogroup" aria-label="카테고리">
+              <Label>
+                카테고리
+                <CategoryHint>Alt+1~9로 빠른 선택</CategoryHint>
+              </Label>
+              {/* 자주 쓰는 카테고리 상단 — localStorage 빈도 기준 상위 3개 */}
+              {frequentCategories.length > 0 && (
+                <FrequentCategoryRow>
+                  {frequentCategories.map((c) => {
+                    const Icon = CATEGORY_ICON[c]
+                    const color = PERSON_LIFE_EVENT_CATEGORY_COLOR[c]
+                    const active = category === c
+                    return (
+                      <CategoryChip
+                        key={`freq-${c}`}
+                        type="button"
+                        $active={active}
+                        $color={color.base}
+                        $soft={color.soft}
+                        onClick={() => setCategory(active ? '' : c)}
+                        title="자주 쓰는 카테고리"
+                      >
+                        <Icon size={14} strokeWidth={2.2} />
+                        <span>{PERSON_LIFE_EVENT_CATEGORY_LABEL[c]}</span>
+                        <FreqStar>★</FreqStar>
+                      </CategoryChip>
+                    )
+                  })}
+                </FrequentCategoryRow>
+              )}
+              <CategoryGrid
+                role="radiogroup"
+                aria-label="카테고리"
+                onKeyDown={(e) => {
+                  // Alt+1~9 빠른 선택 (그리드 포커스됐을 때)
+                  if (e.altKey && /^[1-9]$/.test(e.key)) {
+                    const idx = Number(e.key) - 1
+                    const target = PERSON_LIFE_EVENT_CATEGORIES[idx]
+                    if (target) {
+                      e.preventDefault()
+                      setCategory(category === target ? '' : target)
+                    }
+                  }
+                }}
+              >
                 {PERSON_LIFE_EVENT_CATEGORIES.map((c, idx) => {
                   const Icon = CATEGORY_ICON[c]
                   const color = PERSON_LIFE_EVENT_CATEGORY_COLOR[c]
@@ -1129,6 +1281,32 @@ const CategoryGrid = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+`
+
+const FrequentCategoryRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
+  margin-bottom: 6px;
+`
+
+const FreqStar = styled.span`
+  font-size: 10px;
+  color: #f59e0b;
+  margin-left: 2px;
+`
+
+const CategoryHint = styled.span`
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const CategoryChip = styled.button<{

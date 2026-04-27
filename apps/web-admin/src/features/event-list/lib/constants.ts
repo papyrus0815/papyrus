@@ -15,10 +15,12 @@ export type SortOption = (typeof SORT_OPTIONS)[keyof typeof SORT_OPTIONS]
 
 /**
  * 뷰 모드
+ *  - LIST: 카드 리스트 (선형 탐색·검색 결과)
+ *  - TIMELINE: 가로 타임라인 (시대×카테고리 그리드, "한눈에" 보는 메인 뷰)
  */
 export const VIEW_MODES = {
-  GRID: 'grid',
   LIST: 'list',
+  TIMELINE: 'timeline',
 } as const
 
 export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]

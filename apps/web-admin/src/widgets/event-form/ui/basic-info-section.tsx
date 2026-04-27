@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
+import { useTheme } from 'styled-components'
 import {
   FiAlertCircle,
   FiCalendar,
@@ -81,6 +82,11 @@ interface BasicInfoSectionProps {
   playClickSound: () => void
   getDateError: () => string | null
   calculateDaysDifference: () => number | null
+  // 폼 제출 시도 후 노출되는 inline 에러 — 부모에서 submitAttempted 분기 후 전달
+  titleError?: string
+  startDateError?: string
+  // 종료일 < 시작일은 즉시 노출 (제출 시도 전이라도)
+  endDateError?: string
 }
 
 export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
@@ -118,7 +124,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   playClickSound,
   getDateError,
   calculateDaysDifference,
+  titleError,
+  startDateError,
+  endDateError,
 }) => {
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
   const combatTypeSectionRef = useRef<HTMLDivElement>(null)
   const hasScrolledRef = useRef(false) // 스크롤 여부 추적
@@ -299,17 +310,30 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
 
       {/* 사건명 */}
       <S.FormRow>
-        <S.FormLabel>
+        <S.FormLabel htmlFor="event-form-title">
           사건명 <S.Required>*</S.Required>
         </S.FormLabel>
         <S.FormField>
           <S.Input
+            id="event-form-title"
             type="text"
             placeholder="예: 제2차 세계 대전"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            aria-invalid={Boolean(titleError)}
+            aria-describedby={
+              titleError ? 'event-form-title-error' : 'event-form-title-hint'
+            }
           />
-          <S.Hint>역사적 사건의 정식 명칭을 입력하세요</S.Hint>
+          {titleError ? (
+            <S.ErrorMessage id="event-form-title-error" role="alert">
+              {titleError}
+            </S.ErrorMessage>
+          ) : (
+            <S.Hint id="event-form-title-hint">
+              역사적 사건의 정식 명칭을 입력하세요
+            </S.Hint>
+          )}
         </S.FormField>
       </S.FormRow>
 
@@ -377,9 +401,13 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     alignItems: 'center',
                     gap: 4,
                     padding: '4px 10px',
-                    background: '#e5e7eb',
-                    color: '#1f2937',
-                    border: '1px solid #d1d5db',
+                    background: isDark
+                      ? 'rgba(255,255,255,0.08)'
+                      : '#e5e7eb',
+                    color: isDark ? '#e5e7eb' : '#1f2937',
+                    border: `1px solid ${
+                      isDark ? 'rgba(255,255,255,0.14)' : '#d1d5db'
+                    }`,
                     borderRadius: 6,
                     fontSize: 13,
                     fontWeight: 500,
@@ -396,7 +424,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       border: 'none',
                       cursor: 'pointer',
                       lineHeight: 1,
-                      color: '#6b7280',
+                      color: isDark ? '#a1a1aa' : '#6b7280',
                     }}
                     aria-label={`${k} 제거`}
                   >
@@ -500,7 +528,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               </S.DateInputWrapper>
             </S.DateRangeColumn>
           </S.DateRangeRow>
-          {getDateError() && <S.ErrorMessage>{getDateError()}</S.ErrorMessage>}
+          {(startDateError || endDateError || getDateError()) && (
+            <S.ErrorMessage role="alert">
+              {startDateError ?? endDateError ?? getDateError()}
+            </S.ErrorMessage>
+          )}
           <S.Hint>
             사건의 시작과 종료 날짜/시간을 설정하세요 (진행중이면 종료일
             비워두기)
@@ -669,10 +701,17 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </S.CategoryGrid>
           ) : (
             <S.EmptyState>
-              <FiAlertCircle size={32} color="#cbd5e1" />
+              <FiAlertCircle
+                size={32}
+                color={isDark ? '#52525b' : '#cbd5e1'}
+              />
               <p>카테고리를 불러올 수 없습니다.</p>
               <p
-                style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}
+                style={{
+                  fontSize: '12px',
+                  color: isDark ? '#71717a' : '#94a3b8',
+                  marginTop: '4px',
+                }}
               >
                 서버와의 연결을 확인해주세요.
               </p>

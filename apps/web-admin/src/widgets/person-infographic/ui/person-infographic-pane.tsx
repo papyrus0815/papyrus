@@ -30,6 +30,7 @@ const VIEW_OPTIONS: Array<[Exclude<PersonInfographicView, 'cards'>, string]> = [
   ['galaxy', '은하계'],
   ['story', '시대 스토리'],
   ['dynasty', '왕조'],
+  ['stats', '능력치'],
 ]
 
 interface PersonInfographicPaneProps {
@@ -91,6 +92,87 @@ const PaneWrap = styled.div`
   }
 `
 
+/** 카드 모양 스켈레톤 — 텍스트 안내보다 안정감 있는 로딩 표지 */
+function PersonCardSkeletonGrid({ count }: { count: number }) {
+  return (
+    <SkeletonGrid>
+      {Array.from({ length: count }).map((_, i) => (
+        <SkeletonCard key={i}>
+          <SkeletonImageBlock />
+          <SkeletonContent>
+            <SkeletonLine $w="60%" />
+            <SkeletonLine $w="40%" />
+            <SkeletonLine $w="80%" />
+            <SkeletonLine $w="55%" />
+          </SkeletonContent>
+        </SkeletonCard>
+      ))}
+    </SkeletonGrid>
+  )
+}
+
+const SkeletonGrid = styled.div`
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  padding: 24px 32px 32px;
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+`
+
+const SkeletonCard = styled.div`
+  display: flex;
+  border-radius: 16px;
+  min-height: 116px;
+  overflow: hidden;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+`
+
+const shimmer = `
+  @keyframes skel {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+`
+
+const SkeletonImageBlock = styled.div`
+  ${shimmer}
+  width: 110px;
+  flex-shrink: 0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%)'
+      : 'linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%)'};
+  background-size: 200% 100%;
+  animation: skel 1.4s ease-in-out infinite;
+`
+
+const SkeletonContent = styled.div`
+  flex: 1;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+`
+
+const SkeletonLine = styled.div<{ $w: string }>`
+  ${shimmer}
+  height: 10px;
+  width: ${({ $w }) => $w};
+  border-radius: 4px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%)'
+      : 'linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%)'};
+  background-size: 200% 100%;
+  animation: skel 1.4s ease-in-out infinite;
+`
+
 /** 국가 프리셋 카드 뷰 — PersonListContent 재사용 (국가 상세 "인물 리스트"와 동일 디자인) */
 function PersonListCardsView({
   onPersonClick,
@@ -109,11 +191,7 @@ function PersonListCardsView({
   })
 
   if (isLoading) {
-    return (
-      <div style={{ padding: '48px 0', textAlign: 'center', color: '#64748b' }}>
-        인물 데이터를 불러오는 중…
-      </div>
-    )
+    return <PersonCardSkeletonGrid count={6} />
   }
 
   return (

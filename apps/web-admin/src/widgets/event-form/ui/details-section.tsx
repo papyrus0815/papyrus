@@ -22,6 +22,7 @@ import {
   FiX,
 } from 'react-icons/fi'
 
+import { extractMentionsFromHtml } from '@/features/event-create/lib'
 import type { EventSection } from '@/features/event-create/model/use-event-basic-info'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventResponseDto } from '@/shared/api/events'
@@ -52,7 +53,7 @@ import { getImageUrl, formatDateRange } from '../utils'
 
 interface DetailsSectionProps {
   sections: EventSection[]
-  setSections: (sections: EventSection[]) => void
+  setSections: React.Dispatch<React.SetStateAction<EventSection[]>>
   availablePersons: PersonResponseDto[]
   availableEvents: EventResponseDto[]
   availableCountries: CountryResponseDto[]
@@ -283,10 +284,18 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
                 titlePlaceholder={`섹션 ${index + 1} 제목 (예: 배경, 전개, 여파 등)`}
                 value={section.content}
                 onChange={(newContent) => {
+                  // 본문 변경 시 mentions도 같이 갱신 — entity-link span을
+                  // 다시 파싱해 메타데이터(타입/ID) 동기화. 이 mentions는
+                  // 저장 시 relatedPersons / relatedEventIds로 합류됨.
+                  const newMentions = extractMentionsFromHtml(newContent)
                   setSections((prevSections) =>
                     prevSections.map((sectionItem) =>
                       sectionItem.id === section.id
-                        ? { ...sectionItem, content: newContent }
+                        ? {
+                            ...sectionItem,
+                            content: newContent,
+                            mentions: newMentions,
+                          }
                         : sectionItem,
                     ),
                   )
@@ -420,7 +429,6 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
                 style={{
                   fontWeight: 600,
                   fontSize: '14px',
-                  color: '#1e293b',
                 }}
               >
                 {eventTitle}

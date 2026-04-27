@@ -7,6 +7,7 @@ export type PersonInfographicView =
   | 'galaxy'
   | 'story'
   | 'dynasty'
+  | 'stats'
 
 export type AliveFilter = 'all' | 'alive' | 'dead'
 

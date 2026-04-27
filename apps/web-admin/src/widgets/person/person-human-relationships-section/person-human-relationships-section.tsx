@@ -33,16 +33,25 @@ import styled, { css } from 'styled-components'
 import {
   AFFINITY_LEVELS,
   AFFINITY_SPECTRUM,
+  AFFINITY_UNKNOWN_META,
   type AffinityLevel,
+  FORMALITY_SPECTRUM,
+  POWER_SPECTRUM,
   type PersonHumanRelationshipItem,
   type PersonHumanRelationshipType,
   type PersonRelationshipTag,
   RELATIONSHIP_TAG_META,
   RELATIONSHIP_TAG_ORDER,
+  type RelationshipPhase,
+  TRUST_SPECTRUM,
   createHumanRelationship,
+  createRelationshipPhase,
   deleteHumanRelationship,
+  deleteRelationshipPhase,
+  detectAffinityTagConflict,
   getMentorLineage,
   updateHumanRelationship,
+  updateRelationshipPhase,
 } from '@/shared/api/person-human-relationships'
 import {
   type PersonLifeEvent,
@@ -174,6 +183,16 @@ export function PersonHumanRelationshipsSection({
   const [editSourceIds, setEditSourceIds] = useState<string[]>([])
   const [lineageOpen, setLineageOpen] = useState(false)
 
+  // 추가 차원 (신뢰·권력·격식) — 모두 -2..+2 또는 null. 고급 토글 안에서만 노출.
+  const [newTrust, setNewTrust] = useState<number | null>(null)
+  const [newPower, setNewPower] = useState<number | null>(null)
+  const [newFormality, setNewFormality] = useState<number | null>(null)
+  const [newAdvancedOpen, setNewAdvancedOpen] = useState(false)
+  const [editTrust, setEditTrust] = useState<number | null>(null)
+  const [editPower, setEditPower] = useState<number | null>(null)
+  const [editFormality, setEditFormality] = useState<number | null>(null)
+  const [editAdvancedOpen, setEditAdvancedOpen] = useState(false)
+
   /** 새 관계 폼: 기본값에서 바뀐 항목이 있으면 닫기 시 경고 */
   const isNewFormDirty = useMemo(
     () =>
@@ -265,6 +284,10 @@ export function PersonHumanRelationshipsSection({
     setNewTags([])
     setNewIsMutual(false)
     setNewSourceIds([])
+    setNewTrust(null)
+    setNewPower(null)
+    setNewFormality(null)
+    setNewAdvancedOpen(false)
   }, [])
 
   const createMut = useMutation({
@@ -274,6 +297,9 @@ export function PersonHumanRelationshipsSection({
         relatedPersonId: newRelatedId,
         relationshipType: newType,
         affinityLevel: newAffinity,
+        trustLevel: newTrust,
+        powerDynamic: newPower,
+        formality: newFormality,
         startDate: newStartDate ? newStartDate : undefined,
         endDate: newEndDate ? newEndDate : undefined,
         note: newNote.trim() || undefined,
@@ -300,6 +326,9 @@ export function PersonHumanRelationshipsSection({
       updateHumanRelationship(personId, rel.id, {
         relationshipType: editType,
         affinityLevel: editAffinity,
+        trustLevel: editTrust,
+        powerDynamic: editPower,
+        formality: editFormality,
         startDate: editStartDate ? editStartDate : null,
         endDate: editEndDate ? editEndDate : null,
         note: editNote.trim() || null,
@@ -324,6 +353,82 @@ export function PersonHumanRelationshipsSection({
       deleteHumanRelationship(personId, relId),
     onSuccess: () => {
       toast.success('삭제했습니다.')
+      invalidateDetail()
+    },
+    onError: (error: unknown) => {
+      toast.error(formatRelationshipApiError(error))
+    },
+  })
+
+  // ── phase(시기별 스냅샷) 추가/편집 모달 상태 ──
+  const [phaseModal, setPhaseModal] = useState<null | {
+    relationshipId: string
+    /** 편집 대상 phase id — null이면 신규 추가 */
+    phaseId: string | null
+    label: string
+    startDate: string
+    endDate: string
+    affinityLevel: AffinityLevel | null
+    note: string
+  }>(null)
+
+  const openPhaseModal = (
+    relationshipId: string,
+    existing: RelationshipPhase | null,
+  ) => {
+    setPhaseModal({
+      relationshipId,
+      phaseId: existing?.id ?? null,
+      label: existing?.label ?? '',
+      startDate: existing?.startDate?.slice(0, 10) ?? '',
+      endDate: existing?.endDate?.slice(0, 10) ?? '',
+      affinityLevel:
+        (existing?.affinityLevel as AffinityLevel | null | undefined) ?? null,
+      note: existing?.note ?? '',
+    })
+  }
+
+  const closePhaseModal = () => setPhaseModal(null)
+
+  const phaseSaveMut = useMutation({
+    mutationFn: async () => {
+      if (!phaseModal) throw new Error('phase 모달 상태 없음')
+      const body = {
+        label: phaseModal.label.trim() || null,
+        startDate: phaseModal.startDate || null,
+        endDate: phaseModal.endDate || null,
+        affinityLevel: phaseModal.affinityLevel,
+        note: phaseModal.note.trim() || null,
+      }
+      if (phaseModal.phaseId) {
+        return updateRelationshipPhase(
+          personId,
+          phaseModal.relationshipId,
+          phaseModal.phaseId,
+          body,
+        )
+      }
+      return createRelationshipPhase(
+        personId,
+        phaseModal.relationshipId,
+        body,
+      )
+    },
+    onSuccess: () => {
+      toast.success('시기를 저장했습니다.')
+      closePhaseModal()
+      invalidateDetail()
+    },
+    onError: (error: unknown) => {
+      toast.error(formatRelationshipApiError(error))
+    },
+  })
+
+  const phaseDeleteMut = useMutation({
+    mutationFn: async (args: { relationshipId: string; phaseId: string }) =>
+      deleteRelationshipPhase(personId, args.relationshipId, args.phaseId),
+    onSuccess: () => {
+      toast.success('시기를 삭제했습니다.')
       invalidateDetail()
     },
     onError: (error: unknown) => {
@@ -405,6 +510,13 @@ export function PersonHumanRelationshipsSection({
     setEditTags([...(rel.tags ?? [])])
     setEditIsMutual(rel.isMutual)
     setEditSourceIds((rel.sources ?? []).map((s) => s.lifeEventId))
+    setEditTrust(rel.trustLevel ?? null)
+    setEditPower(rel.powerDynamic ?? null)
+    setEditFormality(rel.formality ?? null)
+    // 추가 차원이 하나라도 있으면 고급 섹션 자동 펼침
+    setEditAdvancedOpen(
+      rel.trustLevel != null || rel.powerDynamic != null || rel.formality != null,
+    )
   }
 
   /** 타입 전환이 친밀도를 의미 변화시킬 수 있을 때 사용자 확인 */
@@ -453,8 +565,27 @@ export function PersonHumanRelationshipsSection({
         transition={{ layout: { duration: 0.18, ease: 'easeOut' } }}
       >
         {editingId === rel.id ? (
-          <CleanForm>
-            <TopTypeToggle
+          createPortal(
+            <RelEditOverlay onClick={cancelEdit}>
+              <RelEditBox onClick={(e) => e.stopPropagation()}>
+                <RelEditHeader>
+                  <RelEditTitle>
+                    <span>관계 수정</span>
+                    <RelEditSubject>
+                      {getPersonDisplayName(rel.otherPerson)}
+                    </RelEditSubject>
+                  </RelEditTitle>
+                  <RelEditClose
+                    type="button"
+                    aria-label="닫기"
+                    onClick={cancelEdit}
+                  >
+                    <FiX size={18} />
+                  </RelEditClose>
+                </RelEditHeader>
+                <RelEditBody>
+                  <CleanForm>
+                    <TopTypeToggle
               role="radiogroup"
               aria-label="관계 종류"
               onKeyDown={(event) => {
@@ -661,7 +792,74 @@ export function PersonHumanRelationshipsSection({
                 onChange={setEditTags}
                 disabled={updateMut.isPending}
               />
+              {(() => {
+                const conflict = detectAffinityTagConflict(
+                  editAffinity,
+                  editTags,
+                )
+                return conflict ? (
+                  <ConflictWarning role="status" aria-live="polite">
+                    ⚠ {conflict}
+                  </ConflictWarning>
+                ) : null
+              })()}
             </FormField>
+
+            {/* 고급 — 추가 차원 (신뢰·권력·격식) */}
+            <AdvancedToggleBtn
+              type="button"
+              onClick={() => setEditAdvancedOpen((v) => !v)}
+              aria-expanded={editAdvancedOpen}
+            >
+              {editAdvancedOpen ? '− 고급 차원 접기' : '+ 고급 차원 (신뢰·권력·격식)'}
+            </AdvancedToggleBtn>
+            {editAdvancedOpen && (
+              <>
+                <FormField>
+                  <FormFieldLabel>
+                    신뢰도{' '}
+                    <FormFieldHint>친밀도와 분리. 미설정 가능</FormFieldHint>
+                  </FormFieldLabel>
+                  <DimensionBipolarPicker
+                    value={editTrust}
+                    onChange={setEditTrust}
+                    spectrum={TRUST_SPECTRUM}
+                    unsetLabel="신뢰도 미설정"
+                    disabled={updateMut.isPending}
+                  />
+                </FormField>
+                <FormField>
+                  <FormFieldLabel>
+                    권력 비대칭{' '}
+                    <FormFieldHint>
+                      이 인물 기준 — 음수: 종속, 0: 대등, 양수: 우위
+                    </FormFieldHint>
+                  </FormFieldLabel>
+                  <DimensionBipolarPicker
+                    value={editPower}
+                    onChange={setEditPower}
+                    spectrum={POWER_SPECTRUM}
+                    unsetLabel="권력 비대칭 미설정"
+                    disabled={updateMut.isPending}
+                  />
+                </FormField>
+                <FormField>
+                  <FormFieldLabel>
+                    격식{' '}
+                    <FormFieldHint>
+                      음수: 격의없음, 양수: 격식·예의
+                    </FormFieldHint>
+                  </FormFieldLabel>
+                  <DimensionBipolarPicker
+                    value={editFormality}
+                    onChange={setEditFormality}
+                    spectrum={FORMALITY_SPECTRUM}
+                    unsetLabel="격식 미설정"
+                    disabled={updateMut.isPending}
+                  />
+                </FormField>
+              </>
+            )}
 
             <FormField>
               <FormFieldLabel>
@@ -703,8 +901,14 @@ export function PersonHumanRelationshipsSection({
                 {updateMut.isPending ? '저장 중…' : '저장'}
               </PrimaryButton>
             </SaveRow>
-          </CleanForm>
-        ) : (
+                  </CleanForm>
+                </RelEditBody>
+              </RelEditBox>
+            </RelEditOverlay>,
+            document.body,
+          )
+        ) : null}
+        {editingId !== rel.id && (
           <>
             <RelCardTop>
               <RelPerson>
@@ -751,7 +955,54 @@ export function PersonHumanRelationshipsSection({
                 </AffinitySign>
               </AffinityInline>
             ) : (
-              <AffinityUnsetLine>친밀도 미설정</AffinityUnsetLine>
+              <AffinityUnsetLine
+                title="친밀도가 사료에서 확인되지 않거나 의도적으로 입력하지 않음. 0(중립)과는 다름."
+              >
+                <UnknownDot aria-hidden="true" /> 친밀도 기록 없음
+              </AffinityUnsetLine>
+            )}
+            {/* 추가 차원 — 입력된 것만 표시 */}
+            {(rel.trustLevel != null ||
+              rel.powerDynamic != null ||
+              rel.formality != null) && (
+              <ExtraDimRow>
+                {rel.trustLevel != null && (
+                  <ExtraDimChip title={`신뢰도: ${TRUST_SPECTRUM[rel.trustLevel].label}`}>
+                    신뢰 {TRUST_SPECTRUM[rel.trustLevel].short}
+                  </ExtraDimChip>
+                )}
+                {rel.powerDynamic != null && (
+                  <ExtraDimChip
+                    title={`권력 비대칭: ${POWER_SPECTRUM[rel.powerDynamic].label} (이 인물 기준)`}
+                  >
+                    권력 {POWER_SPECTRUM[rel.powerDynamic].short}
+                  </ExtraDimChip>
+                )}
+                {rel.formality != null && (
+                  <ExtraDimChip title={`격식: ${FORMALITY_SPECTRUM[rel.formality].label}`}>
+                    격식 {FORMALITY_SPECTRUM[rel.formality].short}
+                  </ExtraDimChip>
+                )}
+              </ExtraDimRow>
+            )}
+            {/* phase 미니 타임라인 — 시기별 친밀도 변화. 칩 클릭 = 편집 */}
+            {(rel.phases ?? []).length > 0 && (
+              <PhaseTimeline
+                phases={rel.phases ?? []}
+                onEditPhase={(phase) => openPhaseModal(rel.id, phase)}
+                onDeletePhase={(phase) =>
+                  setConfirmDialog({
+                    message: `"${phase.label || '시기'}"를 삭제할까요?`,
+                    onConfirm: () => {
+                      phaseDeleteMut.mutate({
+                        relationshipId: rel.id,
+                        phaseId: phase.id,
+                      })
+                      setConfirmDialog(null)
+                    },
+                  })
+                }
+              />
             )}
             {(rel.startDate || rel.endDate) && (
               <RelMeta>
@@ -767,10 +1018,10 @@ export function PersonHumanRelationshipsSection({
                 ))}
               </TagChipRow>
             )}
-            {rel.sources.length > 0 && (
+            {(rel.sources ?? []).length > 0 && (
               <SourceChipRow aria-label="근거 사건">
                 <SourceChipLabel>근거</SourceChipLabel>
-                {rel.sources.map((s) => (
+                {(rel.sources ?? []).map((s) => (
                   <SourceChipLink
                     key={s.id}
                     to={`/persons/${s.lifeEvent.personId}`}
@@ -787,6 +1038,14 @@ export function PersonHumanRelationshipsSection({
               <IconTextBtn type="button" onClick={() => startEdit(rel)}>
                 <FiEdit2 size={14} />
                 수정
+              </IconTextBtn>
+              <IconTextBtn
+                type="button"
+                onClick={() => openPhaseModal(rel.id, null)}
+                title="이 관계의 시기별 변화 추가"
+              >
+                <FiPlus size={14} />
+                시기 추가
               </IconTextBtn>
               <IconTextBtn
                 type="button"
@@ -1147,7 +1406,78 @@ export function PersonHumanRelationshipsSection({
                             onChange={setNewTags}
                             disabled={createMut.isPending}
                           />
+                          {(() => {
+                            const conflict = detectAffinityTagConflict(
+                              newAffinity,
+                              newTags,
+                            )
+                            return conflict ? (
+                              <ConflictWarning role="status" aria-live="polite">
+                                ⚠ {conflict}
+                              </ConflictWarning>
+                            ) : null
+                          })()}
                         </FormField>
+
+                        {/* 고급 — 추가 차원 */}
+                        <AdvancedToggleBtn
+                          type="button"
+                          onClick={() => setNewAdvancedOpen((v) => !v)}
+                          aria-expanded={newAdvancedOpen}
+                        >
+                          {newAdvancedOpen
+                            ? '− 고급 차원 접기'
+                            : '+ 고급 차원 (신뢰·권력·격식)'}
+                        </AdvancedToggleBtn>
+                        {newAdvancedOpen && (
+                          <>
+                            <FormField>
+                              <FormFieldLabel>
+                                신뢰도{' '}
+                                <FormFieldHint>
+                                  친밀도와 분리. 미설정 가능
+                                </FormFieldHint>
+                              </FormFieldLabel>
+                              <DimensionBipolarPicker
+                                value={newTrust}
+                                onChange={setNewTrust}
+                                spectrum={TRUST_SPECTRUM}
+                                unsetLabel="신뢰도 미설정"
+                                disabled={createMut.isPending}
+                              />
+                            </FormField>
+                            <FormField>
+                              <FormFieldLabel>
+                                권력 비대칭{' '}
+                                <FormFieldHint>
+                                  이 인물 기준 — 음수: 종속, 0: 대등, 양수: 우위
+                                </FormFieldHint>
+                              </FormFieldLabel>
+                              <DimensionBipolarPicker
+                                value={newPower}
+                                onChange={setNewPower}
+                                spectrum={POWER_SPECTRUM}
+                                unsetLabel="권력 비대칭 미설정"
+                                disabled={createMut.isPending}
+                              />
+                            </FormField>
+                            <FormField>
+                              <FormFieldLabel>
+                                격식{' '}
+                                <FormFieldHint>
+                                  음수: 격의없음, 양수: 격식·예의
+                                </FormFieldHint>
+                              </FormFieldLabel>
+                              <DimensionBipolarPicker
+                                value={newFormality}
+                                onChange={setNewFormality}
+                                spectrum={FORMALITY_SPECTRUM}
+                                unsetLabel="격식 미설정"
+                                disabled={createMut.isPending}
+                              />
+                            </FormField>
+                          </>
+                        )}
 
                         <FormField>
                           <FormFieldLabel>
@@ -1202,6 +1532,111 @@ export function PersonHumanRelationshipsSection({
         </AnimatePresence>,
         document.body,
       )}
+
+      {/* 시기별 스냅샷(phase) 추가/편집 모달 */}
+      {phaseModal &&
+        createPortal(
+          <PhaseModalOverlay onClick={closePhaseModal}>
+            <PhaseModalBox onClick={(e) => e.stopPropagation()}>
+              <PhaseModalHeader>
+                <span>
+                  {phaseModal.phaseId ? '시기 편집' : '시기 추가'}
+                </span>
+                <PhaseModalClose
+                  type="button"
+                  aria-label="닫기"
+                  onClick={closePhaseModal}
+                >
+                  <FiX size={18} />
+                </PhaseModalClose>
+              </PhaseModalHeader>
+              <PhaseModalBody>
+                <FormField>
+                  <FormFieldLabel>
+                    라벨 <FormFieldHint>예: 황태자 시절</FormFieldHint>
+                  </FormFieldLabel>
+                  <PhaseTextInput
+                    type="text"
+                    value={phaseModal.label}
+                    onChange={(e) =>
+                      setPhaseModal({ ...phaseModal, label: e.target.value })
+                    }
+                    placeholder="시기 이름"
+                    maxLength={120}
+                  />
+                </FormField>
+                <FormField>
+                  <FormFieldLabel>기간</FormFieldLabel>
+                  <DateRangeRow>
+                    <PhaseDateInput
+                      type="date"
+                      value={phaseModal.startDate}
+                      onChange={(e) =>
+                        setPhaseModal({
+                          ...phaseModal,
+                          startDate: e.target.value,
+                        })
+                      }
+                    />
+                    <DateRangeSep>~</DateRangeSep>
+                    <PhaseDateInput
+                      type="date"
+                      value={phaseModal.endDate}
+                      onChange={(e) =>
+                        setPhaseModal({
+                          ...phaseModal,
+                          endDate: e.target.value,
+                        })
+                      }
+                    />
+                  </DateRangeRow>
+                </FormField>
+                <FormField>
+                  <FormFieldLabel>
+                    친밀도{' '}
+                    <FormFieldHint>이 시기 동안의 친밀도</FormFieldHint>
+                  </FormFieldLabel>
+                  <AffinityBipolarPicker
+                    value={phaseModal.affinityLevel}
+                    onChange={(v) =>
+                      setPhaseModal({ ...phaseModal, affinityLevel: v })
+                    }
+                    allowClear
+                  />
+                </FormField>
+                <FormField>
+                  <FormFieldLabel>메모</FormFieldLabel>
+                  <PhaseTextarea
+                    rows={3}
+                    value={phaseModal.note}
+                    onChange={(e) =>
+                      setPhaseModal({ ...phaseModal, note: e.target.value })
+                    }
+                    placeholder="이 시기에 대한 추가 설명 (선택)"
+                  />
+                </FormField>
+              </PhaseModalBody>
+              <PhaseModalFooter>
+                <SecondaryButton type="button" onClick={closePhaseModal}>
+                  취소
+                </SecondaryButton>
+                <PrimaryButton
+                  type="button"
+                  disabled={phaseSaveMut.isPending}
+                  onClick={() => phaseSaveMut.mutate()}
+                >
+                  {phaseSaveMut.isPending
+                    ? '저장 중…'
+                    : phaseModal.phaseId
+                      ? '저장'
+                      : '추가'}
+                </PrimaryButton>
+              </PhaseModalFooter>
+            </PhaseModalBox>
+          </PhaseModalOverlay>,
+          document.body,
+        )}
+
       <Root>
         <HeaderRow>
           <SectionTitle>인간관계</SectionTitle>
@@ -2770,6 +3205,635 @@ const AffinityUnsetLine = styled.div`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-style: italic;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+`
+
+/** "+ 고급 차원" 토글 버튼 — 인라인 텍스트 스타일 */
+const AdvancedToggleBtn = styled.button`
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  transition: color 0.15s;
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+/** 태그-친밀도 충돌 시 비차단 노란 박스 경고 */
+const ConflictWarning = styled.div`
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  letter-spacing: -0.005em;
+`
+
+/** NULL(미설정) 전용 점선 도트 — 0(중립)의 회색 fill 도트와 시각적으로 구분 */
+const UnknownDot = styled.span`
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.35)' : '#cbd5e1'};
+  background: transparent;
+`
+
+/** 추가 차원 (신뢰·권력·격식) 표시 row */
+const ExtraDimRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+`
+
+const ExtraDimChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(199,210,254,0.85)' : '#475569'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.04)'
+      : 'rgba(99,102,241,0.06)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(99,102,241,0.15)'};
+`
+
+/** 추가 차원(신뢰·권력·격식) 5단계 picker — 친밀도와 같은 -2..+2이지만 별도 라벨/심볼 */
+function DimensionBipolarPicker({
+  value,
+  onChange,
+  spectrum,
+  unsetLabel,
+  disabled,
+}: {
+  value: number | null
+  onChange: (v: number | null) => void
+  spectrum: Record<number, { short: string; label: string }>
+  unsetLabel: string
+  disabled?: boolean
+}) {
+  const isUnset = value == null
+  return (
+    <DimPickerWrap>
+      <DimUnsetRow>
+        <DimUnsetLabel>
+          <input
+            type="checkbox"
+            checked={isUnset}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.checked ? null : 0)}
+          />
+          <span>{unsetLabel}</span>
+        </DimUnsetLabel>
+      </DimUnsetRow>
+      {!isUnset && (
+        <DimSegmented role="radiogroup">
+          {[-2, -1, 0, 1, 2].map((s) => {
+            const active = value === s
+            return (
+              <DimSegmentedBtn
+                key={s}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                $active={active}
+                disabled={disabled}
+                title={spectrum[s].label}
+                onClick={() => onChange(s)}
+              >
+                <DimShort>{spectrum[s].short}</DimShort>
+                <DimLabel>{spectrum[s].label}</DimLabel>
+              </DimSegmentedBtn>
+            )
+          })}
+        </DimSegmented>
+      )}
+    </DimPickerWrap>
+  )
+}
+
+const DimPickerWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const DimUnsetRow = styled.div`
+  display: flex;
+`
+
+const DimUnsetLabel = styled.label`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+`
+
+const DimSegmented = styled.div`
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+`
+
+const DimSegmentedBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active
+        ? 'rgba(99,102,241,0.55)'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.1)'
+          : '#e2e8f0'};
+  background: ${({ theme, $active }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.16)'
+        : 'rgba(99,102,241,0.08)'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.03)'
+        : '#fff'};
+  color: ${({ theme, $active }) =>
+    $active ? '#4f46e5' : theme.colors.text.secondary};
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  &:hover:not(:disabled) {
+    background: rgba(99, 102, 241, 0.06);
+    border-color: rgba(99, 102, 241, 0.4);
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+`
+
+const DimShort = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+`
+
+const DimLabel = styled.span`
+  font-size: 10.5px;
+  font-weight: 500;
+`
+
+/** phase 미니 타임라인 — 시기별 친밀도 변화 가로형. 칩 클릭=편집, X=삭제. */
+function PhaseTimeline({
+  phases,
+  onEditPhase,
+  onDeletePhase,
+}: {
+  phases: RelationshipPhase[]
+  onEditPhase?: (phase: RelationshipPhase) => void
+  onDeletePhase?: (phase: RelationshipPhase) => void
+}) {
+  if (phases.length === 0) return null
+  return (
+    <PhaseTimelineRoot>
+      <PhaseTimelineLabel>시기별 변화</PhaseTimelineLabel>
+      <PhaseTimelineRow>
+        {phases.map((p) => {
+          const aff = p.affinityLevel
+          const tone =
+            aff == null
+              ? 'unknown'
+              : aff > 0
+                ? 'positive'
+                : aff < 0
+                  ? 'negative'
+                  : 'neutral'
+          const period =
+            p.startDate || p.endDate
+              ? `${p.startDate ? new Date(p.startDate).getFullYear() : '?'}–${p.endDate ? new Date(p.endDate).getFullYear() : '현재'}`
+              : ''
+          return (
+            <PhasePill
+              key={p.id}
+              $tone={tone}
+              title={[
+                p.label,
+                period,
+                aff != null ? AFFINITY_SPECTRUM[aff].label : '기록 없음',
+                p.note,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              as={onEditPhase ? 'button' : 'span'}
+              type={onEditPhase ? 'button' : undefined}
+              onClick={onEditPhase ? () => onEditPhase(p) : undefined}
+              $clickable={!!onEditPhase}
+            >
+              <PhaseAffShort>
+                {aff != null
+                  ? AFFINITY_SPECTRUM[aff].short
+                  : AFFINITY_UNKNOWN_META.short}
+              </PhaseAffShort>
+              <PhaseLabel>{p.label || period || '시기'}</PhaseLabel>
+              {onDeletePhase && (
+                <PhaseDeleteX
+                  as="span"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="시기 삭제"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDeletePhase(p)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onDeletePhase(p)
+                    }
+                  }}
+                >
+                  ×
+                </PhaseDeleteX>
+              )}
+            </PhasePill>
+          )
+        })}
+      </PhaseTimelineRow>
+    </PhaseTimelineRoot>
+  )
+}
+
+const PhaseTimelineRoot = styled.div`
+  margin: 4px 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.025)'
+      : 'rgba(15,23,42,0.025)'};
+`
+
+const PhaseTimelineLabel = styled.div`
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-bottom: 6px;
+`
+
+const PhaseTimelineRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const PhasePill = styled.span<{
+  $tone: 'positive' | 'negative' | 'neutral' | 'unknown'
+  $clickable?: boolean
+}>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.1s;
+  ${({ $clickable }) =>
+    $clickable &&
+    css`
+      &:hover {
+        filter: brightness(0.96);
+      }
+      &:active {
+        transform: translateY(1px);
+      }
+    `}
+  ${({ $tone, theme }) => {
+    if ($tone === 'positive') {
+      return css`
+        background: rgba(99, 102, 241, 0.1);
+        color: #4f46e5;
+        border: 1px solid rgba(99, 102, 241, 0.3);
+      `
+    }
+    if ($tone === 'negative') {
+      return css`
+        background: rgba(239, 68, 68, 0.08);
+        color: #b91c1c;
+        border: 1px solid rgba(239, 68, 68, 0.32);
+      `
+    }
+    if ($tone === 'unknown') {
+      return css`
+        background: transparent;
+        color: ${theme.colors.text.tertiary};
+        border: 1px dashed
+          ${theme.mode === 'dark'
+            ? 'rgba(255,255,255,0.18)'
+            : 'rgba(15,23,42,0.18)'};
+      `
+    }
+    return css`
+      background: ${theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : 'rgba(15,23,42,0.04)'};
+      color: ${theme.colors.text.secondary};
+      border: 1px solid
+        ${theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.08)'
+          : 'rgba(15,23,42,0.08)'};
+    `
+  }}
+`
+
+const PhaseAffShort = styled.span`
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+`
+
+const PhaseLabel = styled.span`
+  font-size: 11px;
+`
+
+const PhaseDeleteX = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  margin-left: 2px;
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+  &:hover {
+    opacity: 1;
+    background: rgba(239, 68, 68, 0.18);
+    color: #b91c1c;
+  }
+`
+
+/* 인간관계 수정 모달 — 카드의 인라인 편집을 모달로 승격 */
+const RelEditOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+`
+
+const RelEditBox = styled.div`
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(28,28,32,0.96)' : '#fff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  border-radius: 18px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow:
+    0 24px 64px rgba(15, 23, 42, 0.18),
+    0 2px 6px rgba(15, 23, 42, 0.06);
+`
+
+const RelEditHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+`
+
+const RelEditTitle = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  span:first-child {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const RelEditSubject = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: -0.005em;
+`
+
+const RelEditClose = styled.button`
+  background: transparent;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const RelEditBody = styled.div`
+  padding: 16px 20px 18px;
+  overflow-y: auto;
+`
+
+/* phase 추가/편집 모달 */
+const PhaseModalOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+`
+
+const PhaseModalBox = styled.div`
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(28,28,32,0.96)' : '#fff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  border-radius: 18px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow:
+    0 24px 64px rgba(15, 23, 42, 0.18),
+    0 2px 6px rgba(15, 23, 42, 0.06);
+`
+
+const PhaseModalHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const PhaseModalClose = styled.button`
+  background: transparent;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const PhaseModalBody = styled.div`
+  padding: 16px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+`
+
+const PhaseModalFooter = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+`
+
+const PhaseTextInput = styled.input`
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  &:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  }
+`
+
+const PhaseDateInput = styled(PhaseTextInput).attrs({ type: 'date' })`
+  font-variant-numeric: tabular-nums;
+`
+
+const PhaseTextarea = styled.textarea`
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  &:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  }
+`
+
+const SecondaryButton = styled.button`
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : 'rgba(15,23,42,0.04)'};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const RelNote = styled.p`

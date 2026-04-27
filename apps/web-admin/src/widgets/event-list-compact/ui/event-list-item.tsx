@@ -1,23 +1,23 @@
 /**
- * Event List Item Widget - 정보 풍부하게 개편
+ * Event List Item Widget — Row 기반 피드 스타일 (한눈 스캔용)
  * FSD: widgets/event-list-compact/ui
+ *
+ * 디자인 원칙
+ *  - "카드 박스"가 아닌 "행(row)" — 박스/그림자 대신 하단 구분선으로 흐름.
+ *  - 좌측 연도 칼럼이 시간 인덱스 역할 (큰 숫자, 기간은 작게).
+ *  - 우측 mini sparkbar — 그 사건이 자기 세기에서 어디에 위치하는지 막대로.
+ *  - importance에 따라 좌측 색 막대 두께 + 행 패딩 + 제목 크기 차등.
+ *  - 상세(키워드·국가·하위 사건 등)는 우측 상세 패널로 위임.
  */
 import React from 'react'
 
-import {
-  FiBookOpen,
-  FiChevronDown,
-  FiChevronRight,
-  FiGitBranch,
-  FiGlobe,
-  FiMapPin,
-  FiTag,
-  FiUsers,
-} from 'react-icons/fi'
+import { FiBookmark, FiChevronRight, FiGitBranch } from 'react-icons/fi'
+import styled, { css } from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
+import { CATEGORY_BADGE_COLORS } from '../../../pages/events/styles/theme'
 import type {
   EventHierarchyNode,
   HistoricalEvent,
@@ -41,6 +41,50 @@ interface EventListItemProps {
   onToggleBookmark?: () => void
 }
 
+type ImportanceTier = 'critical' | 'major' | 'normal'
+
+const tierFromNode = (
+  importance: EventHierarchyNode['importance'] | undefined,
+): ImportanceTier => {
+  if (importance === 'critical') return 'critical'
+  if (importance === 'major') return 'major'
+  return 'normal'
+}
+
+const formatDuration = (start: Date, end: Date | null) => {
+  if (!end || start.getTime() === end.getTime()) return '1일'
+  const diffDays = Math.ceil(
+    Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
+  )
+  if (diffDays >= 365) {
+    const years = Math.floor(diffDays / 365)
+    const remDays = diffDays % 365
+    const months = Math.floor(remDays / 30)
+    if (months > 0) return `${years}년 ${months}개월`
+    return `${years}년`
+  }
+  if (diffDays >= 30) {
+    const months = Math.floor(diffDays / 30)
+    const days = diffDays % 30
+    return days > 0 ? `${months}개월 ${days}일` : `${months}개월`
+  }
+  return `${diffDays}일`
+}
+
+/** 연도가 자기 세기 안에서 어디에 위치하는지 0~1로 환산. 기간도 0~1로 환산해서 막대로 그림. */
+const sparkPosition = (start: Date, end: Date | null) => {
+  const startYear = start.getFullYear()
+  const century = Math.floor(startYear / 100) * 100
+  const startPos = (startYear - century) / 100
+  const endYear = end ? end.getFullYear() : startYear
+  const endPos = Math.min(1, (endYear - century) / 100)
+  return {
+    centuryLabel: `${Math.floor(startYear / 100) + 1}C`,
+    startPercent: Math.max(0, Math.min(100, startPos * 100)),
+    endPercent: Math.max(0, Math.min(100, endPos * 100)),
+  }
+}
+
 export const EventListItem: React.FC<EventListItemProps> = ({
   node,
   event,
@@ -56,408 +100,487 @@ export const EventListItem: React.FC<EventListItemProps> = ({
   onShowSummary,
   onToggleBookmark,
 }) => {
-  const formatFullDate = (date: Date) => {
-    return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`
-  }
+  const tier = tierFromNode(node.importance)
+  const start = new Date(node.period.start)
+  const end = node.period.end ? new Date(node.period.end) : null
+  const startYear = start.getFullYear()
+  const duration = formatDuration(start, end)
+  const spark = sparkPosition(start, end)
 
-  const renderPeriod = () => {
-    const start = new Date(node.period.start)
-    const end = node.period.end ? new Date(node.period.end) : null
-
-    if (!end || start.getTime() === end.getTime()) {
-      return <span>{formatFullDate(start)}</span>
-    }
-
-    const diffTime = Math.abs(end.getTime() - start.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
-    const years = Math.floor(diffDays / 365)
-    const remainingDaysAfterYears = diffDays % 365
-    const months = Math.floor(remainingDaysAfterYears / 30)
-    const days = remainingDaysAfterYears % 30
-
-    const parts = []
-    if (years > 0) parts.push(`${years}년`)
-    if (months > 0) parts.push(`${months}개월`)
-    if (days > 0 || parts.length === 0) parts.push(`${days}일`)
-    const durationText = parts.join(' ')
-
+  // 재임 그룹 내 사건은 기존 그룹 컴포넌트 유지 (시각 컨텍스트가 다름)
+  if (isInTenureGroup) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-        }}
+      <List.CompactListItemInTenure
+        $active={isActive}
+        $depth={depth}
+        $importance={tier}
+        onClick={onSelect}
+        data-event-id={node.id}
       >
-        <div
-          style={{
-            fontSize: '11px',
-            color: '#64748b',
-          }}
-        >
-          {formatFullDate(start)} ~ {formatFullDate(end)}
-        </div>
-        <div
-          style={{
-            fontSize: '11px',
-            fontWeight: '600',
-            color: '#64748b',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {durationText}
-        </div>
-      </div>
+        <TenureInner $tier={tier}>
+          <TenureYear $tier={tier}>{startYear}</TenureYear>
+          <CategoryDot $category={event.category} aria-hidden />
+          <TenureTitleStack>
+            <TenureTitle $tier={tier}>{node.title}</TenureTitle>
+            {node.summary && tier !== 'normal' && (
+              <TenureSummary>{node.summary}</TenureSummary>
+            )}
+          </TenureTitleStack>
+          <TenureMeta>{duration}</TenureMeta>
+        </TenureInner>
+      </List.CompactListItemInTenure>
     )
   }
 
-  const ListItemComponent = isInTenureGroup
-    ? List.CompactListItemInTenure
-    : List.CompactListItem
-
   return (
-    <ListItemComponent
+    <RowItem
       $active={isActive}
       $depth={depth}
+      $tier={tier}
       onClick={onSelect}
       data-event-id={node.id}
     >
-      <List.CompactListBody>
-        <List.CompactThumbnail
-          $depth={depth}
-          $isEmpty={!event.visuals.thumbnailUrl}
-          style={
-            event.visuals.thumbnailUrl
-              ? {
-                  backgroundImage: `url(${event.visuals.thumbnailUrl})`,
-                }
-              : undefined
-          }
-        >
-          <List.CompactCategoryBadge $category={event.category}>
-            {getCategoryName(event.category, dbCategories)}
-          </List.CompactCategoryBadge>
-        </List.CompactThumbnail>
-        <List.CompactListContent>
-          <List.CompactListHeader>
-            {hasChildren ? (
-              <List.ExpandButton
-                type="button"
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  e.stopPropagation()
-                  onToggleExpansion()
-                }}
-              >
-                {isExpanded ? (
-                  <FiChevronDown size={14} />
-                ) : (
-                  <FiChevronRight size={14} />
-                )}
-              </List.ExpandButton>
-            ) : (
-              <List.ExpandSpacer />
-            )}
-            <List.CompactCategoryDot
-              $category={event.category}
-              $depth={depth}
-            />
-            <List.CompactListTitle>
-              {node.title}
-              {hasChildren && depth === 0 && (
-                <Modal.SummaryIconButton
-                  type="button"
-                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                    e.stopPropagation()
-                    onShowSummary()
-                  }}
-                  title="사건 요약 보기"
-                >
-                  <FiGitBranch size={13} />
-                </Modal.SummaryIconButton>
-              )}
-              {onToggleBookmark && (
-                <button
-                  type="button"
-                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                    e.stopPropagation()
-                    onToggleBookmark()
-                  }}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    padding: '4px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    color: isBookmarked ? '#f59e0b' : '#cbd5e1',
-                    fontSize: '16px',
-                    transition: 'all 0.2s ease',
-                    marginLeft: 'auto',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.2)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)'
-                  }}
-                  title={isBookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-                >
-                  {isBookmarked ? '★' : '☆'}
-                </button>
-              )}
-            </List.CompactListTitle>
-          </List.CompactListHeader>
+      <YearCol>
+        <YearLarge $tier={tier}>{startYear}</YearLarge>
+        <DurationSmall>{duration}</DurationSmall>
+      </YearCol>
 
-          <List.CompactListMeta $depth={depth}>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                width: '100%',
+      <ContentCol>
+        <HeadRow>
+          {hasChildren ? (
+            <ExpandBtn
+              type="button"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                e.stopPropagation()
+                onToggleExpansion()
               }}
+              $expanded={isExpanded}
+              aria-label={isExpanded ? '접기' : '하위 사건 펼치기'}
             >
-              {renderPeriod()}
-              {(node.importance === 'critical' ||
-                node.importance === 'major') && (
-                <div
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                  {node.importance === 'critical' && (
-                    <List.ImportanceBadge>핵심</List.ImportanceBadge>
-                  )}
-                  {node.importance === 'major' && (
-                    <List.ImportanceBadge $major>주요</List.ImportanceBadge>
-                  )}
-                </div>
-              )}
-            </div>
-          </List.CompactListMeta>
-
-          {node.summary && (
-            <List.CompactListSummary $depth={depth}>
-              {node.summary}
-            </List.CompactListSummary>
+              <FiChevronRight size={12} />
+            </ExpandBtn>
+          ) : (
+            <ExpandSpacer />
           )}
+          <CategoryChip $category={event.category}>
+            {getCategoryName(event.category, dbCategories)}
+          </CategoryChip>
+          {tier !== 'normal' && (
+            <ImportancePill $tier={tier}>
+              {tier === 'critical' ? '핵심' : '주요'}
+            </ImportancePill>
+          )}
+          <Title $tier={tier}>{node.title}</Title>
+          {hasChildren && depth === 0 && (
+            <Modal.SummaryIconButton
+              type="button"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                e.stopPropagation()
+                onShowSummary()
+              }}
+              title="사건 요약 보기"
+            >
+              <FiGitBranch size={13} />
+            </Modal.SummaryIconButton>
+          )}
+        </HeadRow>
 
-          {/* 추가 정보 - 한눈에 보기 */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '6px',
-              marginTop: '8px',
-              fontSize: '12px',
+        {node.summary && (
+          <Summary $tier={tier}>{node.summary}</Summary>
+        )}
+
+        <Spark>
+          <SparkRail>
+            <SparkBar
+              $category={event.category}
+              style={{
+                left: `${spark.startPercent}%`,
+                width: `${Math.max(2, spark.endPercent - spark.startPercent)}%`,
+              }}
+            />
+          </SparkRail>
+          <SparkLabel>{spark.centuryLabel}</SparkLabel>
+        </Spark>
+      </ContentCol>
+
+      <ActionsCol onClick={(e) => e.stopPropagation()}>
+        {onToggleBookmark && (
+          <BookmarkBtn
+            type="button"
+            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+              e.stopPropagation()
+              onToggleBookmark()
             }}
+            $bookmarked={isBookmarked}
+            title={isBookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
           >
-            {/* 본문 구성 */}
-            {event.sectionTitles && event.sectionTitles.length > 0 && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '6px',
-                  color: '#64748b',
-                }}
-              >
-                <FiBookOpen
-                  size={13}
-                  style={{ marginTop: '2px', flexShrink: 0 }}
-                />
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontWeight: 500 }}>본문:</span>{' '}
-                  {event.sectionTitles.slice(0, 3).map((title, idx) => (
-                    <span key={idx}>
-                      {idx > 0 && ', '}
-                      <span
-                        style={{
-                          background: '#f1f5f9',
-                          padding: '1px 6px',
-                          borderRadius: '3px',
-                          color: '#475569',
-                        }}
-                      >
-                        {title}
-                      </span>
-                    </span>
-                  ))}
-                  {event.sectionTitles.length > 3 && (
-                    <span style={{ color: '#94a3b8' }}>
-                      {' '}
-                      외 {event.sectionTitles.length - 3}개
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 키워드 */}
-            {event.keywords && event.keywords.length > 0 && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '6px',
-                  color: '#64748b',
-                }}
-              >
-                <FiTag size={13} style={{ marginTop: '2px', flexShrink: 0 }} />
-                <div
-                  style={{
-                    flex: 1,
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '4px',
-                  }}
-                >
-                  {event.keywords.slice(0, 8).map((k, idx) => (
-                    <span
-                      key={idx}
-                      style={{
-                        background: '#e0e7ff',
-                        padding: '2px 8px',
-                        borderRadius: '10px',
-                        fontSize: '11px',
-                        color: '#4338ca',
-                        fontWeight: '500',
-                      }}
-                    >
-                      {k}
-                    </span>
-                  ))}
-                  {event.keywords.length > 8 && (
-                    <span style={{ color: '#94a3b8', fontSize: '11px' }}>
-                      +{event.keywords.length - 8}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 관련 국가 */}
-            {((event as any).relatedCountries?.length > 0 ||
-              (event as any).relatedHistoricalCountries?.length > 0) && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '6px',
-                  color: '#64748b',
-                }}
-              >
-                <FiGlobe
-                  size={13}
-                  style={{ marginTop: '2px', flexShrink: 0 }}
-                />
-                <div
-                  style={{
-                    flex: 1,
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '4px',
-                  }}
-                >
-                  {(event as any).relatedCountries?.map((country: any) => (
-                    <span
-                      key={country.id}
-                      style={{
-                        background: '#f1f5f9',
-                        padding: '2px 8px',
-                        borderRadius: '10px',
-                        fontSize: '11px',
-                        color: '#475569',
-                        fontWeight: '500',
-                      }}
-                    >
-                      {country.flagEmoji} {country.name}
-                    </span>
-                  ))}
-                  {(event as any).relatedHistoricalCountries?.map(
-                    (country: any) => (
-                      <span
-                        key={country.id}
-                        style={{
-                          background: '#fef3c7',
-                          padding: '2px 8px',
-                          borderRadius: '10px',
-                          fontSize: '11px',
-                          color: '#92400e',
-                          fontWeight: '500',
-                        }}
-                      >
-                        🏛️ {country.name}
-                      </span>
-                    ),
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 위치 */}
-            {event.location && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  color: '#64748b',
-                }}
-              >
-                <FiMapPin size={13} />
-                <span>
-                  <span style={{ fontWeight: 500 }}>위치:</span>{' '}
-                  {event.location}
-                </span>
-              </div>
-            )}
-
-            {/* 참전국/사상자 (군사 카테고리) */}
-            {event.category === 'military' &&
-              event.stats.participatingNations > 0 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    color: '#64748b',
-                  }}
-                >
-                  <FiUsers size={13} />
-                  <span>
-                    <span style={{ fontWeight: 500 }}>참전국:</span>{' '}
-                    {event.stats.participatingNations}개국
-                    {event.stats.casualties.total > 0 && (
-                      <>
-                        , <span style={{ fontWeight: 500 }}>사상자:</span>{' '}
-                        {event.stats.casualties.total.toLocaleString()}명
-                      </>
-                    )}
-                  </span>
-                </div>
-              )}
-
-            {/* 하위 사건 */}
-            {hasChildren && node.children && node.children.length > 0 && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  color: '#64748b',
-                }}
-              >
-                <FiGitBranch size={13} />
-                <span>
-                  <span style={{ fontWeight: 500 }}>하위 사건:</span>{' '}
-                  {node.children.length}개
-                </span>
-              </div>
-            )}
-          </div>
-        </List.CompactListContent>
-      </List.CompactListBody>
-    </ListItemComponent>
+            <FiBookmark
+              size={14}
+              fill={isBookmarked ? 'currentColor' : 'none'}
+            />
+          </BookmarkBtn>
+        )}
+      </ActionsCol>
+    </RowItem>
   )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// styled (theme-aware) — Row layout, no card box
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RowItem = styled.div<{
+  $active: boolean
+  $depth: number
+  $tier: ImportanceTier
+}>`
+  position: relative;
+  display: grid;
+  grid-template-columns: 88px 1fr auto;
+  align-items: stretch;
+  gap: 14px;
+  padding: ${({ $tier }) =>
+    $tier === 'critical'
+      ? '18px 16px 18px 14px'
+      : $tier === 'major'
+        ? '14px 16px 14px 14px'
+        : '11px 16px 11px 14px'};
+  margin-left: ${({ $depth }) => $depth * 24}px;
+  cursor: pointer;
+  background: ${({ theme, $active }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'linear-gradient(90deg, rgba(99,102,241,0.14), rgba(99,102,241,0.04) 70%)'
+        : 'linear-gradient(90deg, rgba(99,102,241,0.08), rgba(99,102,241,0.02) 70%)'
+      : 'transparent'};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.05)'};
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  /* 좌측 importance 색 막대 (4·6·invisible) */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: ${({ $tier }) => ($tier === 'critical' ? '8px' : '12px')};
+    bottom: ${({ $tier }) => ($tier === 'critical' ? '8px' : '12px')};
+    width: ${({ $tier, $active }) =>
+      $active ? '5px' : $tier === 'critical' ? '4px' : $tier === 'major' ? '3px' : '0'};
+    border-radius: 3px;
+    background: ${({ $active, $tier }) =>
+      $active
+        ? '#6366f1'
+        : $tier === 'critical'
+          ? 'linear-gradient(180deg, #6366f1, #8b5cf6)'
+          : $tier === 'major'
+            ? 'rgba(245, 158, 11, 0.7)'
+            : 'transparent'};
+    transition: width 0.15s ease;
+  }
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'linear-gradient(90deg, rgba(99,102,241,0.18), rgba(99,102,241,0.06) 70%)'
+          : 'linear-gradient(90deg, rgba(99,102,241,0.1), rgba(99,102,241,0.03) 70%)'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.025)'
+          : 'rgba(99,102,241,0.025)'};
+  }
+`
+
+const YearCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  padding-left: 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+`
+
+const YearLarge = styled.div<{ $tier: ImportanceTier }>`
+  font-size: ${({ $tier }) =>
+    $tier === 'critical' ? '20px' : $tier === 'major' ? '17px' : '15px'};
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const DurationSmall = styled.div`
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ContentCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+`
+
+const HeadRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+`
+
+const ExpandBtn = styled.button<{ $expanded: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
+  border-radius: 5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, transform 0.15s;
+  transform: rotate(${({ $expanded }) => ($expanded ? 90 : 0)}deg);
+  &:hover {
+    background: rgba(99, 102, 241, 0.16);
+    color: #6366f1;
+  }
+`
+
+const ExpandSpacer = styled.span`
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+`
+
+const CategoryChip = styled.span<{ $category: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: #ffffff;
+  background: ${({ $category }) =>
+    `${
+      CATEGORY_BADGE_COLORS[
+        $category as keyof typeof CATEGORY_BADGE_COLORS
+      ] ?? '#6b7280'
+    }`};
+  /* 약간 어둡게 — 흰 글씨 가독성 확보 */
+  filter: brightness(0.95) saturate(1.05);
+`
+
+const ImportancePill = styled.span<{ $tier: ImportanceTier }>`
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  ${({ theme, $tier }) =>
+    $tier === 'critical'
+      ? css`
+          background: ${theme.mode === 'dark'
+            ? 'rgba(99, 102, 241, 0.28)'
+            : 'rgba(99, 102, 241, 0.16)'};
+          color: ${theme.mode === 'dark' ? '#c7d2fe' : '#4338ca'};
+        `
+      : css`
+          background: ${theme.mode === 'dark'
+            ? 'rgba(245, 158, 11, 0.22)'
+            : 'rgba(245, 158, 11, 0.16)'};
+          color: ${theme.mode === 'dark' ? '#fcd34d' : '#b45309'};
+        `}
+`
+
+const Title = styled.h4<{ $tier: ImportanceTier }>`
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+  font-size: ${({ $tier }) =>
+    $tier === 'critical'
+      ? '16px'
+      : $tier === 'major'
+        ? '14.5px'
+        : '13.5px'};
+  font-weight: ${({ $tier }) => ($tier === 'critical' ? 800 : 700)};
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`
+
+const Summary = styled.p<{ $tier: ImportanceTier }>`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  display: -webkit-box;
+  -webkit-line-clamp: ${({ $tier }) => ($tier === 'critical' ? 2 : 1)};
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+`
+
+const Spark = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+`
+
+const SparkRail = styled.div`
+  position: relative;
+  flex: 1;
+  max-width: 240px;
+  height: 4px;
+  border-radius: 2px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.06)'
+      : 'rgba(15,23,42,0.06)'};
+  overflow: hidden;
+`
+
+const SparkBar = styled.div<{ $category: string }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: ${({ $category }) =>
+    CATEGORY_BADGE_COLORS[$category as keyof typeof CATEGORY_BADGE_COLORS] ??
+    '#6366f1'};
+`
+
+const SparkLabel = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+`
+
+const ActionsCol = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 4px;
+`
+
+const BookmarkBtn = styled.button<{ $bookmarked: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 50%;
+  color: ${({ theme, $bookmarked }) =>
+    $bookmarked
+      ? '#f59e0b'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.3)'
+        : 'rgba(15,23,42,0.3)'};
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+  flex-shrink: 0;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15,23,42,0.05)'};
+    color: ${({ $bookmarked }) => ($bookmarked ? '#d97706' : '#f59e0b')};
+    transform: scale(1.1);
+  }
+`
+
+const CategoryDot = styled.span<{ $category: string }>`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: ${({ $category }) =>
+    CATEGORY_BADGE_COLORS[$category as keyof typeof CATEGORY_BADGE_COLORS] ??
+    '#6366f1'};
+`
+
+/* ── Tenure 그룹 안 사건 — 기존 그룹 컨테이너 안에서 컴팩트한 한 줄 ── */
+
+const TenureInner = styled.div<{ $tier: ImportanceTier }>`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: ${({ $tier }) =>
+    $tier === 'critical' ? '12px 16px' : '10px 16px'};
+  min-width: 0;
+`
+
+const TenureYear = styled.span<{ $tier: ImportanceTier }>`
+  font-size: ${({ $tier }) => ($tier === 'critical' ? '14px' : '13px')};
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const TenureTitleStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+`
+
+const TenureTitle = styled.div<{ $tier: ImportanceTier }>`
+  font-size: ${({ $tier }) =>
+    $tier === 'critical' ? '14px' : $tier === 'major' ? '13px' : '12.5px'};
+  font-weight: ${({ $tier }) => ($tier === 'critical' ? 700 : 600)};
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const TenureSummary = styled.div`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const TenureMeta = styled.span`
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-shrink: 0;
+`

@@ -22,7 +22,7 @@ import styled, { css } from 'styled-components'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
-import { Z_INDEX } from '@/shared/styles/z-index'
+import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 import {
   AddButton,
   SaveButton,
@@ -501,9 +501,9 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: ${OVERLAY_STYLES.BACKGROUND};
+  backdrop-filter: ${OVERLAY_STYLES.BACKDROP_FILTER};
+  -webkit-backdrop-filter: ${OVERLAY_STYLES.BACKDROP_FILTER};
   display: flex;
   align-items: center;
   justify-content: center;

@@ -57,7 +57,7 @@ function EventLinkedCabinetsPanelBody({ eventId }: { eventId: string }) {
   }
   if (isError) {
     return (
-      <p style={{ margin: 0, fontSize: 13, color: '#dc2626' }}>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--color-error, #dc2626)' }}>
         목록을 불러오지 못했습니다.
       </p>
     )
@@ -68,7 +68,7 @@ function EventLinkedCabinetsPanelBody({ eventId }: { eventId: string }) {
         style={{
           margin: 0,
           fontSize: 13,
-          color: '#64748b',
+          color: 'var(--color-text-secondary, #64748b)',
           lineHeight: 1.55,
         }}
       >
@@ -484,24 +484,55 @@ export const EventDetailPage: React.FC = () => {
               </div>
             </PanelHeader>
             <KeyFigureGrid>
-              {selectedEvent.keyFigures.map((figure) => (
-                <KeyFigureCard key={figure.id}>
-                  <AvatarCircle>
-                    {figure.name
-                      .split(' ')
-                      .map((token) => token[0])
-                      .join('')
-                      .slice(0, 2)
-                      .toUpperCase()}
-                  </AvatarCircle>
-                  <div>
-                    <strong>{figure.name}</strong>
-                    <span>{figure.role}</span>
-                    <small>{figure.nation}</small>
-                  </div>
-                  <p>{figure.contribution}</p>
-                </KeyFigureCard>
-              ))}
+              {selectedEvent.keyFigures.map((figure) => {
+                const clickable = !!figure.personId
+                return (
+                  <KeyFigureCard
+                    key={figure.id}
+                    onClick={
+                      clickable
+                        ? () => navigate(pathKeys.persons.detail(figure.personId!))
+                        : undefined
+                    }
+                    style={clickable ? { cursor: 'pointer' } : undefined}
+                    title={clickable ? '인물 상세 보기' : undefined}
+                  >
+                    <AvatarCircle>
+                      {figure.portraitUrl ? (
+                        <img
+                          src={figure.portraitUrl}
+                          alt={figure.name}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            borderRadius: '50%',
+                          }}
+                        />
+                      ) : (
+                        figure.name
+                          .split(' ')
+                          .map((token) => token[0])
+                          .join('')
+                          .slice(0, 2)
+                          .toUpperCase()
+                      )}
+                    </AvatarCircle>
+                    <div>
+                      <strong>{figure.name}</strong>
+                      {figure.role && <span>{figure.role}</span>}
+                      {figure.nation && <small>{figure.nation}</small>}
+                    </div>
+                    {figure.contribution && <p>{figure.contribution}</p>}
+                  </KeyFigureCard>
+                )
+              })}
+              {selectedEvent.keyFigures.length === 0 && (
+                <p style={{ gridColumn: '1 / -1', color: 'var(--color-text-tertiary, #94a3b8)', fontSize: 13 }}>
+                  등록된 핵심 인물이 없습니다. 사건 등록·수정 시 "관련 인물"
+                  섹션에서 추가할 수 있습니다.
+                </p>
+              )}
             </KeyFigureGrid>
           </Panel>
 
@@ -679,7 +710,7 @@ const PageWrapper = styled.div`
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
-  background: #f6f7fb;
+  background: ${({ theme }) => theme.colors.background.secondary};
   background-image: none;
 
   @media (max-width: 1024px) {
@@ -757,11 +788,11 @@ const MainContent = styled.div`
 `
 
 const SidebarPanel = styled.div`
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 16px;
   padding: 18px;
-  background: #fff;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  background: ${({ theme }) => theme.colors.background.primary};
+  box-shadow: 0 4px 12px ${({ theme }) => theme.colors.shadow.sm};
 `
 
 const SidebarBadge = styled.span`
@@ -782,7 +813,7 @@ const SidebarTitle = styled.h2`
   font-size: 20px;
   font-weight: 700;
   line-height: 1.3;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const SidebarTagRow = styled.div`
@@ -804,7 +835,7 @@ const SidebarSectionTitle = styled.h4`
   margin: 0 0 12px;
   font-size: 13px;
   font-weight: 700;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
 `
@@ -813,7 +844,7 @@ const SidebarStat = styled.div`
   display: flex;
   gap: 10px;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(20, 19, 34, 0.06);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   &:last-child {
     border-bottom: none;
@@ -825,14 +856,14 @@ const SidebarStat = styled.div`
   }
 
   svg {
-    color: #6366f1;
+    color: ${({ theme }) => theme.colors.primary};
     flex-shrink: 0;
     margin-top: 2px;
   }
 
   span {
     font-size: 11px;
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     display: block;
   }
 
@@ -840,12 +871,12 @@ const SidebarStat = styled.div`
     font-size: 13px;
     display: block;
     margin-top: 2px;
-    color: #0f172a;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   small {
     font-size: 11px;
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     display: block;
     margin-top: 2px;
   }
@@ -853,7 +884,7 @@ const SidebarStat = styled.div`
 
 const SidebarInfoItem = styled.div`
   padding: 10px 0;
-  border-bottom: 1px solid rgba(20, 19, 34, 0.06);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   &:last-child {
     border-bottom: none;
@@ -866,7 +897,7 @@ const SidebarInfoItem = styled.div`
 
   span {
     font-size: 11px;
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     display: block;
   }
 
@@ -874,7 +905,7 @@ const SidebarInfoItem = styled.div`
     font-size: 12px;
     display: block;
     margin-top: 4px;
-    color: #0f172a;
+    color: ${({ theme }) => theme.colors.text.primary};
     line-height: 1.4;
   }
 `
@@ -891,7 +922,7 @@ const CompactInfluenceRow = styled.div`
   flex-direction: column;
   gap: 6px;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(20, 19, 34, 0.06);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   &:last-child {
     border-bottom: none;
@@ -905,17 +936,18 @@ const CompactInfluenceRow = styled.div`
   strong {
     font-size: 12px;
     display: block;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   small {
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     font-size: 11px;
   }
 
   span {
     font-size: 12px;
     font-weight: 600;
-    color: #4a3aff;
+    color: ${({ theme }) => theme.colors.primary};
   }
 `
 
@@ -959,27 +991,27 @@ const SectionNav = styled.nav`
   flex-direction: column;
   gap: 6px;
   padding: 16px;
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 20px;
-  background: #fff;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  background: ${({ theme }) => theme.colors.background.primary};
+  box-shadow: 0 4px 12px ${({ theme }) => theme.colors.shadow.sm};
 `
 
 const NavTitle = styled.h4`
   margin: 0 0 8px;
   font-size: 13px;
   font-weight: 700;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   text-transform: uppercase;
   letter-spacing: 0.05em;
 `
 
 const RelatedEventsPanel = styled.div`
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 20px;
   padding: 20px;
-  background: #fff;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  background: ${({ theme }) => theme.colors.background.primary};
+  box-shadow: 0 4px 12px ${({ theme }) => theme.colors.shadow.sm};
 `
 
 const RelatedEventsHeader = styled.div`
@@ -992,14 +1024,14 @@ const RelatedEventsHeader = styled.div`
 
   span {
     font-size: 11px;
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
 
   strong {
     font-size: 16px;
-    color: #0f172a;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -1026,14 +1058,14 @@ const RelatedEventsList = styled.div`
 
 const RelatedEventItem = styled.button<{ $active: boolean }>`
   border: 1px solid
-    ${({ $active }) =>
-      $active ? 'rgba(99, 102, 241, 0.3)' : 'rgba(20, 19, 34, 0.08)'};
+    ${({ $active, theme }) =>
+      $active ? 'rgba(99, 102, 241, 0.3)' : theme.colors.border.default};
   border-radius: 12px;
   padding: 12px;
-  background: ${({ $active }) =>
+  background: ${({ $active, theme }) =>
     $active
       ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.05))'
-      : '#fff'};
+      : theme.colors.background.primary};
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1043,10 +1075,10 @@ const RelatedEventItem = styled.button<{ $active: boolean }>`
 
   &:hover {
     border-color: rgba(99, 102, 241, 0.25);
-    background: ${({ $active }) =>
+    background: ${({ $active, theme }) =>
       $active
         ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08))'
-        : '#f8fafc'};
+        : theme.colors.background.secondary};
     transform: translateX(2px);
   }
 `
@@ -1088,13 +1120,13 @@ const RelatedEventTitle = styled.h5`
   margin: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   line-height: 1.3;
 `
 
 const RelatedEventMeta = styled.span`
   font-size: 11px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const SectionNavButton = styled.button<{ $active?: boolean }>`
@@ -1105,7 +1137,8 @@ const SectionNavButton = styled.button<{ $active?: boolean }>`
     $active
       ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1))'
       : 'transparent'};
-  color: ${({ $active }) => ($active ? '#4f46e5' : '#64748b')};
+  color: ${({ $active, theme }) =>
+    $active ? '#4f46e5' : theme.colors.text.secondary};
   font-size: 12px;
   font-weight: ${({ $active }) => ($active ? '700' : '600')};
   cursor: pointer;
@@ -1121,7 +1154,8 @@ const SectionNavButton = styled.button<{ $active?: boolean }>`
       $active
         ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.15))'
         : 'rgba(99, 102, 241, 0.08)'};
-    color: ${({ $active }) => ($active ? '#4f46e5' : '#475569')};
+    color: ${({ $active, theme }) =>
+      $active ? '#4f46e5' : theme.colors.text.primary};
     transform: translateX(2px);
   }
 
@@ -1161,8 +1195,8 @@ const SidebarActions = styled.div`
 const BackLink = styled.button`
   flex: 1;
   border: 1px solid rgba(99, 102, 241, 0.2);
-  background: #fff;
-  color: #6366f1;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.primary};
   font-weight: 600;
   padding: 10px 16px;
   border-radius: 12px;
@@ -1173,7 +1207,7 @@ const BackLink = styled.button`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
 
   &:hover {
     border-color: rgba(99, 102, 241, 0.4);
@@ -1234,8 +1268,8 @@ const HeroSection = styled.div<{ $heroImage: string }>`
   align-items: flex-end;
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(20, 19, 34, 0.08);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  box-shadow: 0 10px 30px ${({ theme }) => theme.colors.shadow.sm};
 
   @media (max-width: 1024px) {
     min-height: 280px;
@@ -1282,10 +1316,10 @@ const HeroDescription = styled.p`
 `
 
 const GallerySection = styled(SectionBlock)`
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 24px;
   padding: 24px;
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 const GalleryHeader = styled.div`
@@ -1296,7 +1330,7 @@ const GalleryHeader = styled.div`
 
   span {
     font-size: 13px;
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
@@ -1307,10 +1341,10 @@ const GalleryGrid = styled.div`
 `
 
 const GalleryItem = styled.div`
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 18px;
   overflow: hidden;
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
   display: flex;
   flex-direction: column;
 `
@@ -1330,17 +1364,18 @@ const GalleryMeta = styled.div`
 
   strong {
     font-size: 15px;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   p {
     margin: 0;
     font-size: 13px;
-    color: #4a4f5f;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 
   small {
     font-size: 12px;
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
@@ -1355,28 +1390,30 @@ const NarrativeGrid = styled(SectionBlock)`
 `
 
 const NarrativeCard = styled.article`
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 20px;
   padding: 20px;
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 const CardTitle = styled.h3`
   margin: 0 0 8px;
   font-size: 16px;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 /** 배경/여파 — RichTextReadView + 이벤트 상세 페이지 톤 */
 const NarrativeRichText = styled(RichTextReadView)`
   margin: 0;
   line-height: 1.6;
-  color: #4a4f5f;
+  color: ${({ theme }) => theme.colors.text.secondary};
 
   h1,
   h2,
   h3 {
     margin: 16px 0 8px 0;
     font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   li p {
@@ -1385,11 +1422,11 @@ const NarrativeRichText = styled(RichTextReadView)`
 `
 
 const Panel = styled.section`
-  border: 1px solid rgba(20, 19, 34, 0.06);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 20px;
   padding: 22px;
-  background: #fff;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+  background: ${({ theme }) => theme.colors.background.primary};
+  box-shadow: 0 10px 30px ${({ theme }) => theme.colors.shadow.sm};
   scroll-margin-top: calc(var(--header-height) + 20px);
   scroll-padding-top: calc(var(--header-height) + 20px);
 `
@@ -1402,13 +1439,14 @@ const PanelHeader = styled.div`
 
   span {
     font-size: 12px;
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
   strong {
     display: block;
     font-size: 18px;
     margin-top: 4px;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -1421,15 +1459,15 @@ const HierarchyTree = styled.div`
 const HierarchyNode = styled.div<{ $depth: number; $importance: string }>`
   padding: 8px;
   border-radius: 12px;
-  background: ${({ $depth }) =>
-    $depth === 0 ? 'rgba(74, 58, 255, 0.08)' : '#fafafa'};
+  background: ${({ $depth, theme }) =>
+    $depth === 0 ? 'rgba(74, 58, 255, 0.08)' : theme.colors.background.tertiary};
   margin-left: ${({ $depth }) => $depth * 12}px;
   border-left: 2px solid rgba(74, 58, 255, 0.2);
   display: flex;
   gap: 8px;
 
   small {
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     font-size: 10px;
   }
 
@@ -1437,11 +1475,12 @@ const HierarchyNode = styled.div<{ $depth: number; $importance: string }>`
     display: block;
     font-size: 12px;
     line-height: 1.3;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   p {
     margin: 2px 0 0;
-    color: #5c6173;
+    color: ${({ theme }) => theme.colors.text.secondary};
     font-size: 11px;
     line-height: 1.4;
   }
@@ -1453,14 +1492,14 @@ const HierarchyBullet = styled.span<{ $importance: string }>`
   border-radius: 50%;
   margin-top: 6px;
   flex-shrink: 0;
-  background: ${({ $importance }) => {
+  background: ${({ $importance, theme }) => {
     switch ($importance) {
       case 'critical':
-        return '#ed5f5f'
+        return theme.colors.error
       case 'major':
-        return '#f4b400'
+        return theme.colors.warning
       default:
-        return '#a0a4b8'
+        return theme.colors.text.tertiary
     }
   }};
 `
@@ -1490,10 +1529,11 @@ const InfluenceRow = styled.div`
 
   strong {
     display: block;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   small {
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
@@ -1564,7 +1604,7 @@ const MapMarker = styled.div<{ $category: EventMapMarker['category'] }>`
 const MapSummary = styled.p`
   margin: 0;
   font-size: 12px;
-  color: #4a4f5f;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
 `
 
@@ -1575,7 +1615,7 @@ const MapLegend = styled.ul`
   display: flex;
   gap: 12px;
   align-items: center;
-  color: #4a4f5f;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 11px;
   flex-wrap: wrap;
 `
@@ -1628,24 +1668,25 @@ const TimelineMarker = styled.span`
   height: 12px;
   border-radius: 50%;
   background: #4a3aff;
-  border: 3px solid #fff;
+  border: 3px solid ${({ theme }) => theme.colors.background.primary};
   box-shadow: 0 0 0 4px rgba(74, 58, 255, 0.15);
 `
 
 const TimelineContent = styled.div`
-  background: #f8f9ff;
+  background: ${({ theme }) => theme.colors.background.tertiary};
   border-radius: 18px;
   padding: 16px;
   small {
     font-size: 12px;
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
   h4 {
     margin: 6px 0;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   p {
     margin: 0;
-    color: #4a4f5f;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
@@ -1674,13 +1715,13 @@ const TheaterGrid = styled.div`
 `
 
 const TheaterCard = styled.div`
-  border: 1px solid rgba(20, 19, 34, 0.1);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 20px;
   padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 const TheaterHeader = styled.div`
@@ -1688,11 +1729,12 @@ const TheaterHeader = styled.div`
   gap: 12px;
   align-items: center;
   small {
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
   strong {
     display: block;
     font-size: 16px;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -1713,15 +1755,16 @@ const OperationList = styled.ul`
 
   strong {
     display: block;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   span {
-    color: #4a4f5f;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 
   small {
     font-size: 12px;
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
@@ -1732,10 +1775,10 @@ const KeyFigureGrid = styled.div`
 `
 
 const KeyFigureCard = styled.div`
-  border: 1px solid rgba(20, 19, 34, 0.1);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 20px;
   padding: 16px;
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1745,19 +1788,23 @@ const KeyFigureCard = styled.div`
     flex-direction: column;
   }
 
+  strong {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
   span {
-    color: #4a4f5f;
+    color: ${({ theme }) => theme.colors.text.secondary};
     font-size: 13px;
   }
 
   small {
-    color: #8a8f9d;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     font-size: 12px;
   }
 
   p {
     margin: 0;
-    color: #4a4f5f;
+    color: ${({ theme }) => theme.colors.text.secondary};
     font-size: 13px;
   }
 `
@@ -1781,15 +1828,16 @@ const CountryGrid = styled.div`
 `
 
 const CountryCard = styled.div`
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 18px;
   padding: 16px;
-  background: #fafbff;
+  background: ${({ theme }) => theme.colors.background.tertiary};
   h5 {
     margin: 0 0 8px;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   small {
-    color: #4a4f5f;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
@@ -1798,7 +1846,7 @@ const CountryMeta = styled.div`
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #4a4f5f;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-right: 8px;
 `
 
@@ -1812,21 +1860,21 @@ const EmptyStateWrapper = styled.div`
 `
 
 const EmptyState = styled.div`
-  border: 1px dashed rgba(20, 19, 34, 0.2);
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
   border-radius: 16px;
   padding: 40px;
   text-align: center;
-  color: #4a4f5f;
+  color: ${({ theme }) => theme.colors.text.secondary};
   display: flex;
   flex-direction: column;
   gap: 8px;
 `
 
 const SourcesSection = styled.section`
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 20px;
   padding: 20px;
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 const SourcesList = styled.div`
