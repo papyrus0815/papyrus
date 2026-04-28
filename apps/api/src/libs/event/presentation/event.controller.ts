@@ -180,10 +180,23 @@ export class EventController {
   }
 
   /**
-   * 모든 사건 조회 (페이징 지원)
+   * 모든 사건 조회 (페이징 + 다축 필터).
+   *
+   * 클라이언트 lens 칩(country/hcountry/category/decade/century/quality)을
+   * 1:1로 매핑하기 위한 query 파라미터들. 모두 AND 결합. 누락 검사 플래그는
+   * "true"/"1"만 의미 있음.
    *
    * @param offset 시작 위치 (기본값: 0)
    * @param limit 가져올 개수 (기본값: 20, 최대: 100)
+   * @param countryId (legacy) 단일 국가 — 현대/역사적 양쪽 매칭
+   * @param countryIds 쉼표 구분 현대 국가 id 목록 — 다중 OR
+   * @param historicalCountryIds 쉼표 구분 역사 국가 id 목록 — 다중 OR
+   * @param categoryId EventCategory.id 정확 매칭
+   * @param decade 십년대 시작 연도 (예: "1860") — startDate ∈ [year, year+10)
+   * @param century 세기 (예: "19") — startDate ∈ 해당 세기
+   * @param hasNoDescription "true" 시 description이 null/빈 사건만
+   * @param hasNoCountries "true" 시 countryRelations 비어있는 사건만
+   * @param hasNoKeywords "true" 시 keywords 비어있는 사건만
    * @returns 사건 목록
    * @tag events
    */
@@ -193,6 +206,14 @@ export class EventController {
     @Query('limit') limit?: string,
     @Query('createdSinceDays') createdSinceDays?: string,
     @Query('countryId') countryId?: string,
+    @Query('countryIds') countryIds?: string,
+    @Query('historicalCountryIds') historicalCountryIds?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('decade') decade?: string,
+    @Query('century') century?: string,
+    @Query('hasNoDescription') hasNoDescription?: string,
+    @Query('hasNoCountries') hasNoCountries?: string,
+    @Query('hasNoKeywords') hasNoKeywords?: string,
     @Request() req?: any,
   ): Promise<EventResponseDto[]> {
     const userId = req.user?.id || req.user?.sub // AuthGuard가 이미 인증 체크함
@@ -208,27 +229,86 @@ export class EventController {
         ? countryId.trim()
         : undefined
 
-    console.log(`📄 사건 목록 조회: offset=${skip}, limit=${take}, createdSinceDays=${sinceDays ?? 'all'}, countryId=${filterCountryId ?? 'all'}`)
-    console.log(`👤 req.user:`, req.user)
-    console.log(`👤 userId:`, userId)
+    // 쉼표 구분 ids → 빈값 제거된 배열. 빈 배열은 undefined(필터 미적용).
+    const splitIds = (raw?: string): string[] | undefined => {
+      if (!raw) return undefined
+      const parts = raw.split(',').map((part) => part.trim()).filter(Boolean)
+      return parts.length > 0 ? parts : undefined
+    }
+    const countryIdList = splitIds(countryIds)
+    const hCountryIdList = splitIds(historicalCountryIds)
+
+    const isFlagOn = (raw?: string): boolean => raw === 'true' || raw === '1'
+
+    // 시간 범위 — decade/century 동시 적용 가능 (양쪽 만족하는 교집합).
+    const dateRange: { gte?: Date; lt?: Date } = {}
+    if (decade) {
+      const decadeNum = parseInt(decade, 10)
+      if (!Number.isNaN(decadeNum)) {
+        dateRange.gte = new Date(`${decadeNum}-01-01T00:00:00.000Z`)
+        dateRange.lt = new Date(`${decadeNum + 10}-01-01T00:00:00.000Z`)
+      }
+    }
+    if (century) {
+      const centuryNum = parseInt(century, 10)
+      if (!Number.isNaN(centuryNum)) {
+        const startYear = (centuryNum - 1) * 100 + 1
+        const endYear = centuryNum * 100 + 1
+        const cGte = new Date(`${startYear}-01-01T00:00:00.000Z`)
+        const cLt = new Date(`${endYear}-01-01T00:00:00.000Z`)
+        // 교집합: 더 좁은 범위 채택
+        dateRange.gte =
+          dateRange.gte && dateRange.gte > cGte ? dateRange.gte : cGte
+        dateRange.lt =
+          dateRange.lt && dateRange.lt < cLt ? dateRange.lt : cLt
+      }
+    }
+
+    console.log(
+      `📄 사건 목록 조회: offset=${skip}, limit=${take}, ` +
+        `createdSinceDays=${sinceDays ?? 'all'}, ` +
+        `countryId=${filterCountryId ?? 'all'}, ` +
+        `category=${categoryId ?? 'all'}, decade=${decade ?? '-'}, century=${century ?? '-'}`,
+    )
+
+    // countryRelations 단일 필터 — has-no-countries 우선(country 지정 + 빈 관계는
+    // 항상 0이라 사용자의 has-no 명시 요청을 그대로 따른다).
+    let countryRelationsFilter: Record<string, unknown> | undefined
+    if (isFlagOn(hasNoCountries)) {
+      countryRelationsFilter = { none: {} }
+    } else {
+      const countryRelationOr: Array<Record<string, unknown>> = []
+      if (filterCountryId) {
+        countryRelationOr.push({ countryId: filterCountryId })
+        countryRelationOr.push({ historicalCountryId: filterCountryId })
+      }
+      if (countryIdList) {
+        countryRelationOr.push({ countryId: { in: countryIdList } })
+      }
+      if (hCountryIdList) {
+        countryRelationOr.push({ historicalCountryId: { in: hCountryIdList } })
+      }
+      if (countryRelationOr.length > 0) {
+        countryRelationsFilter = { some: { OR: countryRelationOr } }
+      }
+    }
 
     // 최상위 사건만 페이징 (본인이 등록한 것만, 삭제되지 않은 것만)
-    // countryId 있으면: 해당 국가(현대 또는 역사적)에 연관된 사건만
     const events = await this.prisma.event.findMany({
       where: {
         parentEventId: null,
         createdById: userId,
         deletedAt: null,
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
-        ...(filterCountryId && {
-          countryRelations: {
-            some: {
-              OR: [
-                { countryId: filterCountryId },
-                { historicalCountryId: filterCountryId },
-              ],
-            },
-          },
+        ...(categoryId && { categoryId }),
+        ...((dateRange.gte || dateRange.lt) && { startDate: dateRange }),
+        ...(countryRelationsFilter && { countryRelations: countryRelationsFilter }),
+        ...(isFlagOn(hasNoDescription) && {
+          OR: [{ description: null }, { description: '' }],
+        }),
+        ...(isFlagOn(hasNoKeywords) && {
+          // Json? 필드는 Prisma에서 equals: null만 안전. 빈 배열은 못잡음.
+          keywords: { equals: null as any },
         }),
       },
       skip,
