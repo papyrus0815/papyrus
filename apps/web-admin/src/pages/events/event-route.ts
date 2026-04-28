@@ -9,7 +9,14 @@ import { RouteObject } from 'react-router-dom'
 export const eventPageRoute: RouteObject = {
   path: 'events',
   children: [
-    // index(/events) 페이지는 재설계 중 — 추후 별도로 추가
+    {
+      // /events — 신규 ledger 페이지 (lens 칩 + 5축 피벗 + ⌘K 팔레트)
+      index: true,
+      lazy: async () => {
+        const { EventsLedgerPage } = await import('./ledger/events-ledger.page')
+        return { Component: EventsLedgerPage }
+      },
+    },
     {
       path: 'create',
       lazy: async () => {
