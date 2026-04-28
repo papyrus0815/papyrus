@@ -20,7 +20,9 @@ export const Page = styled.div`
   position: relative;
   display: grid;
   grid-template-rows: 60px 40px minmax(0, 1fr);
-  height: 100%;
+  /* 앱 전역 fixed Header(--header-height, 기본 64px) 아래로 내려서 겹침 방지 */
+  height: calc(100vh - var(--header-height, 64px));
+  margin-top: var(--header-height, 64px);
   background: ${({ theme }) => ledgerBackground(theme.mode)};
   color: ${({ theme }) => theme.colors.text.primary};
   overflow: hidden;

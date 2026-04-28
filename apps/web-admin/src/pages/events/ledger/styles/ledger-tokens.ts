@@ -80,9 +80,9 @@ export const BODY_TEXT = css`
   font-feature-settings: 'kern' 1, 'liga' 1;
 `
 
-/** 페이지 배경 — 라이트=종이결 회백, 다크=잉크 */
+/** 페이지 배경 — 라이트=중성 화이트, 다크=잉크 */
 export const ledgerBackground = (mode: Mode) =>
-  mode === 'dark' ? '#0e0f12' : '#f7f5ef'
+  mode === 'dark' ? '#0e0f12' : '#ffffff'
 
 /** 잉크라인 — 1px 구분선 (가장 옅은 단계) */
 export const ledgerInkLine = (mode: Mode) =>
