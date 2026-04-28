@@ -7,9 +7,9 @@ import { useEffect, useState } from 'react'
 import { getAllEvents } from '@/shared/api/events'
 import { getAllPersonsWithGovernmentPositions } from '@/shared/api/persons'
 
-import type { HistoricalEvent } from '../../../pages/events/create/events.types'
 import { MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS } from './mock-government-positions'
 import { transformEventsFromApi } from './eventTransformers'
+import type { HistoricalEvent } from './types'
 
 export const useEvents = (
   pageSizeParam: number = 20,
@@ -31,7 +31,6 @@ export const useEvents = (
     if (!hasMore && !reset) return
 
     setIsLoading(true)
-    const startTime = Date.now()
 
     try {
       const currentOffset = reset ? 0 : offset
@@ -47,13 +46,6 @@ export const useEvents = (
       ])
 
       const newEvents = transformEventsFromApi(eventsResponse)
-
-      // 최소 2초 지연 보장
-      const elapsed = Date.now() - startTime
-      const minDelay = 2000
-      if (elapsed < minDelay) {
-        await new Promise((resolve) => setTimeout(resolve, minDelay - elapsed))
-      }
 
       if (reset) {
         setEvents(newEvents)

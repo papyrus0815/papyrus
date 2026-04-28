@@ -1,206 +1,142 @@
 /**
  * Event Entity - Data Transformers
  * FSD: entities/event/model
+ *
+ * 리스트 단계에서는 *얕은* hierarchy(직계 자식 1단)만 만든다. 이유:
+ *  - 행 렌더에 필요한 건 childCount + 직계 자식 id/title/period뿐 (event-row,
+ *    event-row-expansion, category-pivot의 importanceFromHierarchy).
+ *  - 풀 트리는 detail 페이지에서 필요할 때만 별도 매퍼(event-detail.mapper)가 빌드.
+ *
+ * 이전 구현(O(n²) buildFullHierarchy + 재귀 buildHierarchy)을 평탄 1패스로 대체.
  */
-import { extractCategoryKey } from '@/features/event-create/lib'
 import { getAllEvents } from '@/shared/api/events'
 
 import type {
   EventHierarchyNode,
   HistoricalEvent,
   HistoricalEventCategory,
-} from '../../../pages/events/create/events.types'
+} from './types'
 
 type EventResponse = Awaited<ReturnType<typeof getAllEvents>>[0]
+type EventImageResponse = NonNullable<EventResponse['eventImages']>[number]
 
 /**
- * API 응답을 HistoricalEvent 배열로 변환
+ * API 응답을 평탄한 HistoricalEvent 배열로 변환.
+ * 부모·자식이 모두 같은 배열에 들어간다(리스트 페이지는 평탄 뷰가 기본).
  */
 export const transformEventsFromApi = (
   response: EventResponse[],
 ): HistoricalEvent[] => {
-  const allEvents: HistoricalEvent[] = []
-
-  // 1️⃣ 먼저 모든 이벤트를 Map으로 인덱싱 (빠른 조회를 위해)
+  // 1️⃣ 모든 이벤트 평탄화 (응답이 nested일 수 있어 재귀 인덱싱).
   const eventMap = new Map<string, EventResponse>()
+  const indexEvent = (evt: EventResponse) => {
+    eventMap.set(evt.id, evt)
+    evt.childEvents?.forEach(indexEvent)
+  }
+  response.forEach(indexEvent)
 
-  // 재귀적으로 모든 이벤트(하위 사건 포함)를 Map에 추가
-  const addToMap = (event: EventResponse) => {
-    eventMap.set(event.id, event)
-    if (event.childEvents) {
-      event.childEvents.forEach((child: EventResponse) => addToMap(child))
+  // 2️⃣ 직계 자식 맵 — parentEventId 역참조 + childEvents 직참조의 합집합(id 중복 제거).
+  const childMap = new Map<string, EventResponse[]>()
+  const addChild = (parentId: string, child: EventResponse) => {
+    const list = childMap.get(parentId)
+    if (list) {
+      if (!list.some((existing) => existing.id === child.id)) list.push(child)
+    } else {
+      childMap.set(parentId, [child])
     }
   }
-
-  response.forEach((event: EventResponse) => {
-    addToMap(event)
-  })
-
-  // 2️⃣ 재귀적으로 전체 트리를 구축하는 함수 (API 응답 기반)
-  const buildFullHierarchy = (eventId: string): EventResponse | null => {
-    const event = eventMap.get(eventId)
-    if (!event) return null
-
-    // 자식 이벤트 ID 수집: childEvents + parentEventId로 연결된 모든 자식
-    const childIds = new Set<string>()
-
-    // childEvents에서 ID 수집
-    if (event.childEvents) {
-      event.childEvents.forEach((child: EventResponse) => {
-        childIds.add(child.id)
-      })
-    }
-
-    // parentEventId가 현재 이벤트를 가리키는 모든 이벤트 찾기 (Map에서 검색)
-    eventMap.forEach((evt: EventResponse) => {
-      if (evt.parentEventId === eventId) childIds.add(evt.id)
-    })
-
-    // 재귀적으로 자식들의 전체 트리 구축
-    const fullChildEvents = Array.from(childIds)
-      .map((childId) => buildFullHierarchy(childId))
-      .filter((child): child is NonNullable<typeof child> => child !== null)
-
-    return {
-      ...event,
-      childEvents: fullChildEvents.length > 0 ? fullChildEvents : undefined,
-    }
+  for (const evt of eventMap.values()) {
+    if (evt.parentEventId) addChild(evt.parentEventId, evt)
+    evt.childEvents?.forEach((child: EventResponse) => addChild(evt.id, child))
   }
 
-  // 재귀적으로 hierarchy를 구축하는 헬퍼 함수
-  const buildHierarchy = (evt: EventResponse): EventHierarchyNode => {
-    return {
-      id: evt.id,
-      title: evt.title,
-      summary: evt.description || '',
+  // 3️⃣ 얕은 hierarchy 노드 빌더 — 자식의 자식은 비움(필요 시 detail에서 fetch).
+  const buildShallowHierarchy = (evt: EventResponse): EventHierarchyNode => ({
+    id: evt.id,
+    title: evt.title,
+    summary: evt.description ?? '',
+    period: {
+      start: evt.startDate ?? new Date().toISOString(),
+      end: evt.endDate ?? undefined,
+    },
+    importance: 'notable' as const,
+    children: (childMap.get(evt.id) ?? []).map((child) => ({
+      id: child.id,
+      title: child.title,
+      summary: '',
       period: {
-        start: evt.startDate || new Date().toISOString(),
-        end: evt.endDate === null ? undefined : evt.endDate,
+        start: child.startDate ?? '',
+        end: child.endDate ?? undefined,
       },
       importance: 'notable' as const,
-      // 재귀적으로 자식의 자식까지 모두 처리
-      children: evt.childEvents?.map((child) => buildHierarchy(child)),
-    }
-  }
+    })),
+  })
 
-  // 이벤트를 HistoricalEvent로 변환하는 헬퍼 함수
-  const convertToHistoricalEvent = (
-    evt: EventResponse,
-    isChild: boolean = false,
-  ): HistoricalEvent => {
-    // ===== FSD: 카테고리 ID 사용 =====
-    const evtCategoryId = evt.category?.id || 'cat-other-001'
-    const evtCategoryKey = extractCategoryKey(evtCategoryId)
+  const convertToHistoricalEvent = (evt: EventResponse): HistoricalEvent => {
+    // category — DB의 한국어 이름을 1차 식별자로(렌더·필터 일관성 ↑).
+    // 안정 매칭 필요한 곳(칩 등)은 categoryId 사용.
+    const evtCategoryId = evt.category?.id ?? 'cat-other-001'
+    const evtCategoryName = evt.category?.name ?? '기타'
+    const primaryImage =
+      evt.thumbnail ||
+      evt.eventImages?.find((img: EventImageResponse) => img.isPrimary)
+        ?.imageUrl ||
+      ''
 
     return {
       id: evt.id,
       title: evt.title,
       type: 'battle' as const,
-      category: evtCategoryKey as HistoricalEventCategory,
-      description: evt.description || '',
-      startDate: evt.startDate || new Date().toISOString(),
-      endDate: evt.endDate || undefined,
-      location: evt.location || undefined,
+      category: evtCategoryName as HistoricalEventCategory,
+      categoryId: evtCategoryId,
+      description: evt.description ?? '',
+      startDate: evt.startDate ?? new Date().toISOString(),
+      endDate: evt.endDate ?? undefined,
+      location: evt.location ?? undefined,
       tags: [],
-      background: evt.background || '',
-      aftermath: evt.aftermath || '',
+      background: evt.background ?? '',
+      aftermath: evt.aftermath ?? '',
       stats: {
-        casualties: {
-          total: 0,
-          civilians: 0,
-          military: 0,
-        },
+        casualties: { total: 0, civilians: 0, military: 0 },
         participatingNations: 0,
         theaters: 0,
         durationInYears: 0,
       },
-      // 재귀적으로 전체 hierarchy 구축
-      hierarchy: buildHierarchy(evt),
+      hierarchy: buildShallowHierarchy(evt),
       timeline: [],
       theaters: [],
       keyFigures: [],
       countries: [],
       influence: [],
       visuals: {
-        heroImageUrl:
-          evt.thumbnail ||
-          evt.eventImages?.find((img) => img.isPrimary)?.imageUrl ||
-          '',
-        thumbnailUrl:
-          evt.thumbnail ||
-          evt.eventImages?.find((img) => img.isPrimary)?.imageUrl ||
-          '',
+        heroImageUrl: primaryImage,
+        thumbnailUrl: primaryImage,
         gallery:
-          evt.eventImages?.map((img) => ({
+          evt.eventImages?.map((img: EventImageResponse) => ({
             id: img.id,
-            title: img.caption || '',
+            title: img.caption ?? '',
             url: img.imageUrl,
             caption: img.caption,
             source: img.source,
-          })) || [],
+          })) ?? [],
       },
-      map: {
-        summary: '',
-        markers: [],
-      },
+      map: { summary: '', markers: [] },
       quickFacts: {
         commandStructure: '',
         decisiveTechnology: '',
         intelligenceNotes: '',
         logisticalScale: '',
       },
-      // 자식 여부 표시
-      parentEventId: isChild ? evt.parentEventId || undefined : undefined,
-      // ✅ 섹션 제목 추가 (deprecated)
-      sectionTitles: evt.sectionTitles || [],
-      // ✅ 새 구조: 섹션과 이미지
+      parentEventId: evt.parentEventId ?? undefined,
+      sectionTitles: evt.sectionTitles ?? [],
       eventSections: evt.eventSections,
       eventImages: evt.eventImages,
-      // ✅ 관련 국가 추가
       relatedCountries: evt.relatedCountries,
       relatedHistoricalCountries: evt.relatedHistoricalCountries,
-      // ✅ 키워드 추가
       keywords: evt.keywords ?? undefined,
     }
   }
 
-  // 재귀적으로 모든 자식 이벤트를 수집하는 함수
-  const collectAllDescendants = (
-    evt: EventResponse,
-    descendants: EventResponse[] = [],
-  ): EventResponse[] => {
-    if (evt.childEvents && evt.childEvents.length > 0) {
-      evt.childEvents.forEach((child) => {
-        descendants.push(child)
-        // 재귀: 자식의 자식도 수집
-        collectAllDescendants(child, descendants)
-      })
-    }
-    return descendants
-  }
-
-  // 3️⃣ 최상위 이벤트만 필터링하여 처리
-  response
-    .filter((event: EventResponse) => !event.parentEventId)
-    .forEach((event: EventResponse) => {
-      // 전체 트리가 구축된 이벤트 가져오기
-      const fullEvent = buildFullHierarchy(event.id)
-      if (!fullEvent) return
-
-      // ===== FSD: 카테고리 ID 직접 사용 =====
-      const categoryId = fullEvent.category?.id || 'cat-other-001'
-      const categoryKey = extractCategoryKey(categoryId)
-
-      // ✅ 부모 이벤트 추가
-      const parentEventData = convertToHistoricalEvent(fullEvent, false)
-      allEvents.push(parentEventData)
-
-      // ✅ 모든 하위 이벤트들을 재귀적으로 수집하여 추가
-      const allDescendants = collectAllDescendants(fullEvent)
-      allDescendants.forEach((descendant) => {
-        allEvents.push(convertToHistoricalEvent(descendant, true))
-      })
-    })
-
-  return allEvents
+  // 4️⃣ 평탄 변환 — 부모·자식 모두 같은 배열에 단 한 번씩 들어간다.
+  return Array.from(eventMap.values()).map(convertToHistoricalEvent)
 }

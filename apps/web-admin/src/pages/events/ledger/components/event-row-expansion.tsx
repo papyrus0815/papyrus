@@ -1,0 +1,345 @@
+/**
+ * EventRowExpansion — 행 클릭 시 그 자리에서 펼쳐지는 정독 영역.
+ *
+ * 보여주는 것:
+ *  - 본문 요약 (description)
+ *  - 위치 + 키워드
+ *  - 참여 국가 (역할 배지)
+ *  - 자식 사건 미니 트리 (1단계, 더 깊으면 상세 페이지로)
+ *  - 액션: 상세 페이지로 이동
+ */
+import React from 'react'
+
+import { FiArrowRight, FiExternalLink, FiMapPin, FiTag } from 'react-icons/fi'
+import { useNavigate } from 'react-router-dom'
+import styled from 'styled-components'
+
+import { pathKeys } from '@/shared/router'
+
+import {
+  DIGIT_DISPLAY,
+  durationInDays,
+  formatDuration,
+  ledgerHairline,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  ledgerSurface,
+  resolveCategory,
+} from '../styles/ledger-tokens'
+import type {
+  EventHierarchyNode,
+  HistoricalEvent,
+} from '@/entities/event/model'
+
+interface Props {
+  event: HistoricalEvent
+  onSelectChild: (id: string) => void
+}
+
+const KEYWORD_LIMIT = 5
+const CHILD_LIMIT = 8
+
+const startYear = (start?: string | null): number | null => {
+  if (!start) return null
+  const date = new Date(start)
+  return Number.isNaN(date.getTime()) ? null : date.getFullYear()
+}
+
+export const EventRowExpansion: React.FC<Props> = ({ event, onSelectChild }) => {
+  const navigate = useNavigate()
+  const category = resolveCategory(event.category)
+  const countries = [
+    ...(event.relatedHistoricalCountries ?? []).map((item) => ({
+      id: item.id,
+      name: item.name,
+      flagEmoji: undefined as string | undefined,
+    })),
+    ...(event.relatedCountries ?? []),
+  ]
+  const allChildren: EventHierarchyNode[] = event.hierarchy?.children ?? []
+  const visibleChildren = allChildren.slice(0, CHILD_LIMIT)
+  const overflowChildren = Math.max(0, allChildren.length - visibleChildren.length)
+  const goDetail = () => navigate(pathKeys.events.detail(event.id))
+
+  return (
+    <Wrap $color={category.color}>
+      <Inner>
+        {event.description && <Desc>{event.description}</Desc>}
+
+        <MetaRow>
+          {event.location && (
+            <MetaItem>
+              <FiMapPin size={11} />
+              <span>{event.location}</span>
+            </MetaItem>
+          )}
+          {(event.keywords?.length ?? 0) > 0 && (
+            <MetaItem>
+              <FiTag size={11} />
+              <KeywordList>
+                {(event.keywords ?? []).slice(0, KEYWORD_LIMIT).map((keyword, idx) => (
+                  <Keyword key={`${keyword}-${idx}`}>{keyword}</Keyword>
+                ))}
+                {(event.keywords?.length ?? 0) > KEYWORD_LIMIT && (
+                  <Keyword>+{(event.keywords?.length ?? 0) - KEYWORD_LIMIT}</Keyword>
+                )}
+              </KeywordList>
+            </MetaItem>
+          )}
+        </MetaRow>
+
+        {countries.length > 0 && (
+          <Section>
+            <SectionTitle>참여 국가 ({countries.length})</SectionTitle>
+            <CountryGrid>
+              {countries.map((item) => (
+                <CountryPill key={item.id}>
+                  {item.flagEmoji && <span aria-hidden="true">{item.flagEmoji}</span>}
+                  <span>{item.name}</span>
+                </CountryPill>
+              ))}
+            </CountryGrid>
+          </Section>
+        )}
+
+        {allChildren.length > 0 && (
+          <Section>
+            <SectionTitle>자식 사건 ({allChildren.length})</SectionTitle>
+            <ChildList>
+              {visibleChildren.map((child) => (
+                <ChildRow
+                  key={child.id}
+                  type="button"
+                  onClick={(evt) => {
+                    evt.stopPropagation()
+                    onSelectChild(child.id)
+                  }}
+                >
+                  <ChildYear>{startYear(child.period?.start) ?? '—'}</ChildYear>
+                  <ChildTitle>{child.title}</ChildTitle>
+                  <ChildDuration>
+                    {formatDuration(
+                      durationInDays(child.period?.start, child.period?.end ?? null),
+                    )}
+                  </ChildDuration>
+                  <FiArrowRight size={12} />
+                </ChildRow>
+              ))}
+              {overflowChildren > 0 && (
+                <ChildMore
+                  type="button"
+                  onClick={(evt) => {
+                    evt.stopPropagation()
+                    goDetail()
+                  }}
+                >
+                  +{overflowChildren}건 더 — 상세에서 전체 보기
+                </ChildMore>
+              )}
+            </ChildList>
+          </Section>
+        )}
+
+        <Actions>
+          <DetailBtn
+            type="button"
+            onClick={(evt) => {
+              evt.stopPropagation()
+              goDetail()
+            }}
+          >
+            <FiExternalLink size={12} />
+            <span>상세 페이지</span>
+          </DetailBtn>
+        </Actions>
+      </Inner>
+    </Wrap>
+  )
+}
+
+const Wrap = styled.div<{ $color: string }>`
+  position: relative;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.04)' : 'rgba(99,102,241,0.025)'};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-left: 3px solid ${({ $color }) => $color};
+`
+
+const Inner = styled.div`
+  padding: 14px 20px 16px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  @media (max-width: 720px) {
+    padding: 12px 14px 14px 20px;
+  }
+`
+
+const Desc = styled.p`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  max-width: 880px;
+`
+
+const MetaRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+`
+
+const MetaItem = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const KeywordList = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+`
+
+const Keyword = styled.span`
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 10.5px;
+  font-weight: 600;
+`
+
+const Section = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const SectionTitle = styled.h4`
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CountryGrid = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const CountryPill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSurface(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 11px;
+  font-weight: 600;
+`
+
+const ChildList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 720px;
+`
+
+const ChildRow = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  transition: background 0.12s;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const ChildYear = styled.span`
+  ${DIGIT_DISPLAY}
+  width: 44px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ChildTitle = styled.span`
+  flex: 1;
+  font-size: 12.5px;
+  font-weight: 500;
+`
+
+const ChildDuration = styled.span`
+  ${DIGIT_DISPLAY}
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ChildMore = styled.button`
+  margin-top: 2px;
+  padding: 6px 10px;
+  border: 1px dashed rgba(99, 102, 241, 0.4);
+  background: transparent;
+  color: #4f46e5;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: rgba(99, 102, 241, 0.06);
+    border-color: rgba(99, 102, 241, 0.6);
+  }
+`
+
+const Actions = styled.div`
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+`
+
+const DetailBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.06);
+  color: #4f46e5;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover {
+    background: rgba(99, 102, 241, 0.12);
+  }
+`
