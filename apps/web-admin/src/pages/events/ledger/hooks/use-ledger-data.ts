@@ -1,11 +1,12 @@
 /**
- * 데이터 일괄 로드 — 사건·카테고리·국가(현대/역사).
+ * 데이터 일괄 로드 — 사건(서버 페이징·필터)·카테고리·국가(현대/역사).
  *
- * Lens 칩의 라벨 복원 시 카테고리/국가 사전이 필요하므로 한 곳에서 모은다.
+ * Lens 칩 → 서버 query 파라미터로 변환해 useEvents에 그대로 전달한다.
+ * 카테고리/국가 사전은 칩 라벨 복원에 쓴다.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { useEvents } from '@/entities/event/model'
+import { type UseEventsOptions, useEvents } from '@/entities/event/model'
 import { getAllCountries } from '@/shared/api/countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import {
@@ -34,8 +35,81 @@ const QUALITY_LABELS: Record<string, string> = {
   'no-keywords': '키워드 없음',
 }
 
-export function useLedgerData(countryId?: string | null) {
-  const { events, isLoading } = useEvents(1000, countryId)
+type EventsLensOptions = Pick<
+  UseEventsOptions,
+  | 'countryId'
+  | 'countryIds'
+  | 'historicalCountryIds'
+  | 'categoryId'
+  | 'decade'
+  | 'century'
+  | 'hasNoDescription'
+  | 'hasNoCountries'
+  | 'hasNoKeywords'
+>
+
+/**
+ * Lens 칩 배열 → useEvents 옵션. 같은 kind는 한 번만 활성화되므로 단순 매핑.
+ * 다중 country/hcountry는 같은 kind가 여러 개 있을 수 있는 형태로 확장 가능하나,
+ * 현 use-ledger-state는 kind당 1개로 제약 — 단일 값을 배열에 담아 전달한다.
+ */
+const lensToEventsOptions = (
+  lens: LensChip[],
+  countryId?: string | null,
+): EventsLensOptions => {
+  const opts: EventsLensOptions = {
+    countryId: countryId ?? undefined,
+  }
+  for (const chip of lens) {
+    switch (chip.kind) {
+      case 'country':
+        opts.countryIds = [...(opts.countryIds ?? []), chip.value]
+        break
+      case 'hcountry':
+        opts.historicalCountryIds = [
+          ...(opts.historicalCountryIds ?? []),
+          chip.value,
+        ]
+        break
+      case 'category':
+        opts.categoryId = chip.value
+        break
+      case 'decade': {
+        const num = parseInt(chip.value, 10)
+        if (!Number.isNaN(num)) opts.decade = num
+        break
+      }
+      case 'century': {
+        const num = parseInt(chip.value, 10)
+        if (!Number.isNaN(num)) opts.century = num
+        break
+      }
+      case 'quality':
+        if (chip.value === 'missing-description') opts.hasNoDescription = true
+        else if (chip.value === 'no-countries') opts.hasNoCountries = true
+        else if (chip.value === 'no-keywords') opts.hasNoKeywords = true
+        break
+    }
+  }
+  return opts
+}
+
+export function useLedgerData(
+  countryId?: string | null,
+  lens: LensChip[] = [],
+) {
+  const eventsOptions = useMemo(
+    () => lensToEventsOptions(lens, countryId),
+    [lens, countryId],
+  )
+  const {
+    events,
+    isLoading,
+    isFetching,
+    isFetchingNextPage,
+    hasMore,
+    fetchMoreEvents,
+  } = useEvents(eventsOptions)
 
   const [dbCategories, setDbCategories] = useState<EventCategoryDto[]>([])
   const [countries, setCountries] = useState<CountryResponseDto[]>([])
@@ -129,6 +203,10 @@ export function useLedgerData(countryId?: string | null) {
   return {
     events,
     isLoading: isLoading || dictLoading,
+    isFetching,
+    isFetchingNextPage,
+    hasMore,
+    fetchMoreEvents,
     isError: dictError !== null,
     error: dictError,
     dbCategories,

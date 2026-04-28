@@ -66,12 +66,14 @@ export function EventsTimelineSection({
   const navigate = useNavigate()
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
-  const [pageSize] = useState(10000)
+  const [pageSize] = useState(50)
   const [view, setView] = useState<'list' | 'form'>(() =>
     initialFormFromSearchParams ? 'form' : 'list',
   )
-  const { events, isLoading, hasMore, fetchMoreEvents, resetAndFetch } =
-    useEvents(pageSize, countryId)
+  const { events, isLoading, hasMore, fetchMoreEvents, refetch } = useEvents({
+    pageSize,
+    countryId: countryId ?? undefined,
+  })
 
   const list = events ?? []
 
@@ -90,7 +92,7 @@ export function EventsTimelineSection({
   }
 
   const handleCreateSuccess = () => {
-    resetAndFetch(pageSize)
+    refetch()
     goToList()
   }
 

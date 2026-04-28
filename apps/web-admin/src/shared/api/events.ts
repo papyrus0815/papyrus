@@ -21,32 +21,61 @@ export type UpdateEventDto = Parameters<typeof api.events.updateEvent>[2]
 const getConnection = () => nestiaApiService.getConnection()
 
 /**
- * 모든 사건 조회 (페이징 지원)
- * countryId: 현대 국가 또는 역사적 국가 ID로 연관 사건만 조회
+ * 모든 사건 조회 (페이징 + 다축 필터).
+ * 클라이언트 lens 칩(country/hcountry/category/decade/century/quality)을
+ * 1:1 매핑하기 위한 옵션을 모두 받는다. 누락 검사 플래그는 true 시에만 적용.
  */
-export async function getAllEvents(params?: {
+export interface GetAllEventsParams {
   offset?: number
   limit?: number
-  /** 일주일만: 7 전달 시 createdAt이 최근 N일 이내인 사건만 반환 */
+  /** 7 전달 시 createdAt이 최근 N일 이내인 사건만 반환 */
   createdSinceDays?: number
-  /** 연관 국가(현대/역사적) ID로 필터 */
+  /** (legacy) 단일 국가 — 현대/역사적 양쪽 매칭 */
   countryId?: string
-}): Promise<EventResponseDto[]> {
+  /** 현대 국가 id 다중 — OR 결합 */
+  countryIds?: string[]
+  /** 역사 국가 id 다중 — OR 결합 */
+  historicalCountryIds?: string[]
+  /** EventCategory.id 정확 매칭 */
+  categoryId?: string
+  /** 십년대 시작 연도 (예: 1860) */
+  decade?: number
+  /** 세기 (예: 19) */
+  century?: number
+  hasNoDescription?: boolean
+  hasNoCountries?: boolean
+  hasNoKeywords?: boolean
+}
+
+export async function getAllEvents(
+  params?: GetAllEventsParams,
+): Promise<EventResponseDto[]> {
   try {
     const connection = getConnection()
     const url = new URL(`${connection.host}/events`)
-    if (params?.offset !== undefined) {
-      url.searchParams.set('offset', params.offset.toString())
+    const set = (key: string, value: string | number | undefined) => {
+      if (value === undefined || value === null) return
+      url.searchParams.set(key, String(value))
     }
-    if (params?.limit !== undefined) {
-      url.searchParams.set('limit', params.limit.toString())
+    set('offset', params?.offset)
+    set('limit', params?.limit)
+    set('createdSinceDays', params?.createdSinceDays)
+    set('countryId', params?.countryId)
+    if (params?.countryIds?.length) {
+      url.searchParams.set('countryIds', params.countryIds.join(','))
     }
-    if (params?.createdSinceDays !== undefined) {
-      url.searchParams.set('createdSinceDays', params.createdSinceDays.toString())
+    if (params?.historicalCountryIds?.length) {
+      url.searchParams.set(
+        'historicalCountryIds',
+        params.historicalCountryIds.join(','),
+      )
     }
-    if (params?.countryId) {
-      url.searchParams.set('countryId', params.countryId)
-    }
+    set('categoryId', params?.categoryId)
+    set('decade', params?.decade)
+    set('century', params?.century)
+    if (params?.hasNoDescription) url.searchParams.set('hasNoDescription', 'true')
+    if (params?.hasNoCountries) url.searchParams.set('hasNoCountries', 'true')
+    if (params?.hasNoKeywords) url.searchParams.set('hasNoKeywords', 'true')
 
     const response = await fetch(url.toString(), {
       headers: (connection.headers ?? {}) as HeadersInit,

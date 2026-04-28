@@ -7,7 +7,7 @@
  * Lens 칩이 곧 *지금 보고 있는 맥락*이고, 피벗은 *그 맥락을 어떤 축으로 정리할지*.
  * 두 개념은 직교한다.
  */
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 
 import toast from 'react-hot-toast'
 
@@ -21,7 +21,6 @@ import { CountryPivot } from './components/pivots/country-pivot'
 import { PersonPivot } from './components/pivots/person-pivot'
 import { QualityPivot } from './components/pivots/quality-pivot'
 import { TimePivot } from './components/pivots/time-pivot'
-import { useFilteredEvents } from './hooks/use-filtered-events'
 import { useLedgerData } from './hooks/use-ledger-data'
 import { PIVOT, useLedgerState } from './hooks/use-ledger-state'
 import {
@@ -41,16 +40,6 @@ export const EventsLedgerPage: React.FC<EventsLedgerPageProps> = ({
   countryId,
 }) => {
   const {
-    events,
-    isLoading,
-    isError,
-    dbCategories,
-    countries,
-    historicalCountries,
-    resolveChipLabel,
-  } = useLedgerData(countryId)
-
-  const {
     lens,
     addLens,
     removeLens,
@@ -64,28 +53,43 @@ export const EventsLedgerPage: React.FC<EventsLedgerPageProps> = ({
     setPaletteOpen,
   } = useLedgerState()
 
-  const filtered = useFilteredEvents(events, lens)
-  const visibleCount = useMemo(() => filtered.length, [filtered])
+  const {
+    events,
+    isLoading,
+    isFetchingNextPage,
+    hasMore,
+    fetchMoreEvents,
+    isError,
+    dbCategories,
+    countries,
+    historicalCountries,
+    resolveChipLabel,
+  } = useLedgerData(countryId, lens)
 
   /**
-   * 인라인 확장 사건이 현재 lens로 인해 사라지면 닫고 토스트로 안내.
-   * 사용자가 "방금 클릭한 사건이 왜 사라졌지?"라고 느끼지 않게 한다.
-   * 첫 마운트(events 미적재) 단계에서는 토스트가 잘못 뜨지 않도록 가드.
+   * 인라인 확장 사건이 lens 변경(서버 재요청)으로 결과에서 사라지면 닫고
+   * 토스트로 안내한다. "직전 events에는 있었는데 지금은 사라졌다"를 판별하기
+   * 위해 이전 events id 셋을 ref에 저장. ref 갱신은 *체크 이후*에 해야 정확.
    */
+  const prevEventIdsRef = useRef<Set<string>>(new Set())
   useEffect(() => {
-    if (!expandedEventId) return
-    if (events.length === 0) return
-    if (!filtered.some((evt) => evt.id === expandedEventId)) {
-      const closed = events.find((evt) => evt.id === expandedEventId)
-      setExpandedEventId(null)
-      toast(
-        closed
-          ? `현재 렌즈 조건에서 "${closed.title}" 사건이 보이지 않아 닫았어요.`
-          : '확장된 사건이 현재 결과에 없어 닫았어요.',
-        { icon: 'ℹ️', duration: 3000 },
-      )
+    if (isLoading || isFetchingNextPage) {
+      prevEventIdsRef.current = new Set(events.map((evt) => evt.id))
+      return
     }
-  }, [events, filtered, expandedEventId, setExpandedEventId])
+    if (expandedEventId && events.length > 0) {
+      const inCurrent = events.some((evt) => evt.id === expandedEventId)
+      const wasKnown = prevEventIdsRef.current.has(expandedEventId)
+      if (!inCurrent && wasKnown) {
+        setExpandedEventId(null)
+        toast('현재 렌즈 조건에서 해당 사건이 보이지 않아 닫았어요.', {
+          icon: 'ℹ️',
+          duration: 3000,
+        })
+      }
+    }
+    prevEventIdsRef.current = new Set(events.map((evt) => evt.id))
+  }, [events, expandedEventId, isLoading, isFetchingNextPage, setExpandedEventId])
 
   const showLoading = isLoading && events.length === 0
   const showError = isError && events.length === 0
@@ -107,7 +111,7 @@ export const EventsLedgerPage: React.FC<EventsLedgerPageProps> = ({
           onClear={clearLens}
           resolveLabel={resolveChipLabel}
           totalCount={events.length}
-          filteredCount={visibleCount}
+          filteredCount={events.length}
         />
       </LensSlot>
 
@@ -137,16 +141,19 @@ export const EventsLedgerPage: React.FC<EventsLedgerPageProps> = ({
             <>
               {pivot === PIVOT.TIME && (
                 <TimePivot
-                  events={filtered}
+                  events={events}
                   expandedEventId={expandedEventId}
                   onToggleExpand={toggleExpand}
                   onSelectChild={(id) => setExpandedEventId(id)}
                   scrollerRef={scrollerRef}
+                  hasMore={hasMore}
+                  isFetchingMore={isFetchingNextPage}
+                  onLoadMore={fetchMoreEvents}
                 />
               )}
               {pivot === PIVOT.COUNTRY && (
                 <CountryPivot
-                  events={filtered}
+                  events={events}
                   onSelectEvent={(id) => {
                     setPivot(PIVOT.TIME)
                     setExpandedEventId(id)
@@ -158,7 +165,7 @@ export const EventsLedgerPage: React.FC<EventsLedgerPageProps> = ({
               )}
               {pivot === PIVOT.CATEGORY && (
                 <CategoryPivot
-                  events={filtered}
+                  events={events}
                   onSelectEvent={(id) => {
                     setPivot(PIVOT.TIME)
                     setExpandedEventId(id)
@@ -174,7 +181,7 @@ export const EventsLedgerPage: React.FC<EventsLedgerPageProps> = ({
               )}
               {pivot === PIVOT.PERSON && (
                 <PersonPivot
-                  events={filtered}
+                  events={events}
                   onSelectEvent={(id) => {
                     setPivot(PIVOT.TIME)
                     setExpandedEventId(id)
@@ -183,7 +190,7 @@ export const EventsLedgerPage: React.FC<EventsLedgerPageProps> = ({
               )}
               {pivot === PIVOT.QUALITY && (
                 <QualityPivot
-                  events={filtered}
+                  events={events}
                   onSelectEvent={(id) => {
                     setPivot(PIVOT.TIME)
                     setExpandedEventId(id)

@@ -1,88 +1,107 @@
 /**
  * Event Entity - Data Loading Hook
  * FSD: entities/event/model
+ *
+ * useInfiniteQuery 기반. 사건은 서버 페이징(parentEventId=null만 페이징 단위)으로
+ * 가져오고, 클라이언트는 누적된 페이지를 평탄화해 화면에 보여준다.
+ * 필터(렌즈)는 모두 서버 query 파라미터로 매핑된다 — 클라 후처리 없음.
  */
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 
-import { getAllEvents } from '@/shared/api/events'
-import { getAllPersonsWithGovernmentPositions } from '@/shared/api/persons'
+import { useInfiniteQuery } from '@tanstack/react-query'
 
-import { MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS } from './mock-government-positions'
+import {
+  type GetAllEventsParams,
+  getAllEvents,
+} from '@/shared/api/events'
+
 import { transformEventsFromApi } from './eventTransformers'
 import type { HistoricalEvent } from './types'
 
-export const useEvents = (
-  pageSizeParam: number = 20,
-  countryId?: string | null,
-) => {
-  const [events, setEvents] = useState<HistoricalEvent[]>([])
-  const [personsWithGovPositions, setPersonsWithGovPositions] = useState<
-    typeof MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS
-  >([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [hasMore, setHasMore] = useState(true)
-  const [offset, setOffset] = useState(0)
-  const [pageSize, setPageSize] = useState(pageSizeParam)
+const DEFAULT_PAGE_SIZE = 50
 
-  const fetchMoreEvents = async (
-    reset: boolean = false,
-    customLimit?: number,
-  ) => {
-    if (!hasMore && !reset) return
+export interface UseEventsOptions
+  extends Omit<GetAllEventsParams, 'offset' | 'limit'> {
+  /** 페이지당 사건 수 (default 50) */
+  pageSize?: number
+  /** false 시 fetch 완전 보류 */
+  enabled?: boolean
+}
 
-    setIsLoading(true)
+/** 안정 queryKey — 옵션 변경 시 새 쿼리로 캐시 분리. 배열은 정렬 후 join. */
+const buildQueryKey = (opts: UseEventsOptions) =>
+  [
+    'events',
+    {
+      countryId: opts.countryId ?? null,
+      countryIds: [...(opts.countryIds ?? [])].sort().join(','),
+      historicalCountryIds: [...(opts.historicalCountryIds ?? [])]
+        .sort()
+        .join(','),
+      categoryId: opts.categoryId ?? null,
+      decade: opts.decade ?? null,
+      century: opts.century ?? null,
+      hasNoDescription: !!opts.hasNoDescription,
+      hasNoCountries: !!opts.hasNoCountries,
+      hasNoKeywords: !!opts.hasNoKeywords,
+      createdSinceDays: opts.createdSinceDays ?? null,
+      pageSize: opts.pageSize ?? DEFAULT_PAGE_SIZE,
+    },
+  ] as const
 
-    try {
-      const currentOffset = reset ? 0 : offset
-      const limit = customLimit || pageSize
+export const useEvents = (options: UseEventsOptions = {}) => {
+  const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE
+  const enabled = options.enabled ?? true
 
-      const [eventsResponse, personsResponse] = await Promise.all([
-        getAllEvents({
-          offset: currentOffset,
-          limit,
-          ...(countryId && { countryId }),
-        }),
-        getAllPersonsWithGovernmentPositions(),
-      ])
+  const query = useInfiniteQuery({
+    queryKey: buildQueryKey(options),
+    enabled,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const offset = typeof pageParam === 'number' ? pageParam : 0
+      return getAllEvents({
+        offset,
+        limit: pageSize,
+        countryId: options.countryId ?? undefined,
+        countryIds: options.countryIds,
+        historicalCountryIds: options.historicalCountryIds,
+        categoryId: options.categoryId,
+        decade: options.decade,
+        century: options.century,
+        hasNoDescription: options.hasNoDescription,
+        hasNoCountries: options.hasNoCountries,
+        hasNoKeywords: options.hasNoKeywords,
+        createdSinceDays: options.createdSinceDays,
+      })
+    },
+    getNextPageParam: (lastPage, allPages) => {
+      // 페이지가 가득 차지 않으면 더 없음.
+      if (!lastPage || lastPage.length < pageSize) return undefined
+      return allPages.length * pageSize
+    },
+    staleTime: 30_000, // 30초 — 같은 렌즈로 재방문 시 즉시 표시
+  })
 
-      const newEvents = transformEventsFromApi(eventsResponse)
-
-      if (reset) {
-        setEvents(newEvents)
-        setOffset(eventsResponse.length)
-      } else {
-        setEvents((prev) => [...prev, ...newEvents])
-        setOffset((prev) => prev + eventsResponse.length)
-      }
-
-      setHasMore(eventsResponse.length === limit)
-      setPersonsWithGovPositions(personsResponse)
-    } catch (error) {
-      if (reset) {
-        setEvents([])
-      }
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const resetAndFetch = (newPageSize: number) => {
-    setPageSize(newPageSize)
-    setOffset(0)
-    setHasMore(true)
-    fetchMoreEvents(true, newPageSize)
-  }
-
-  useEffect(() => {
-    fetchMoreEvents(true)
-  }, [countryId ?? ''])
+  const events: HistoricalEvent[] = useMemo(() => {
+    if (!query.data) return []
+    const flat = query.data.pages.flat()
+    return transformEventsFromApi(
+      flat as Parameters<typeof transformEventsFromApi>[0],
+    )
+  }, [query.data])
 
   return {
     events,
-    personsWithGovPositions,
-    isLoading,
-    hasMore,
-    fetchMoreEvents: () => fetchMoreEvents(false),
-    resetAndFetch,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    isFetchingNextPage: query.isFetchingNextPage,
+    hasMore: query.hasNextPage ?? false,
+    fetchMoreEvents: () => {
+      if (query.hasNextPage && !query.isFetchingNextPage) {
+        return query.fetchNextPage()
+      }
+      return undefined
+    },
+    refetch: query.refetch,
   }
 }

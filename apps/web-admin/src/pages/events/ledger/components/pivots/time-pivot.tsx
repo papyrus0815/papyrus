@@ -8,7 +8,7 @@
  * 평탄 row 시퀀스로 펼친 뒤 가상화한다. 외부 스크롤 컨테이너(LedgerScroller)는
  * 부모가 ref로 제공한다.
  */
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo } from 'react'
 
 import { useVirtualizer } from '@tanstack/react-virtual'
 import styled from 'styled-components'
@@ -37,7 +37,16 @@ interface Props {
   onToggleExpand: (id: string) => void
   onSelectChild: (id: string) => void
   scrollerRef: React.RefObject<HTMLDivElement | null>
+  /** 다음 페이지가 더 있는지 (서버 페이징) */
+  hasMore?: boolean
+  /** 추가 페이지 fetch 중 — 트리거 중복 호출 방지 */
+  isFetchingMore?: boolean
+  /** 가상 스크롤 끝 근처 도달 시 호출. 부모가 fetchNextPage 호출 */
+  onLoadMore?: () => void
 }
+
+/** 끝에서부터 N개 row 이내로 들어오면 prefetch 시작 */
+const PREFETCH_ROW_THRESHOLD = 10
 
 interface DecadeChapter {
   decade: number
@@ -66,6 +75,9 @@ export const TimePivot: React.FC<Props> = ({
   onToggleExpand,
   onSelectChild,
   scrollerRef,
+  hasMore = false,
+  isFetchingMore = false,
+  onLoadMore,
 }) => {
   const chapters = useMemo<DecadeChapter[]>(() => {
     const byDecade = groupBy(events, (evt) => {
@@ -142,6 +154,17 @@ export const TimePivot: React.FC<Props> = ({
 
   const items = virtualizer.getVirtualItems()
   const totalSize = virtualizer.getTotalSize()
+
+  // 가상 스크롤이 끝에서 PREFETCH_ROW_THRESHOLD 이내로 들어오면 다음 페이지 요청.
+  const lastVisibleIndex =
+    items.length > 0 ? items[items.length - 1]!.index : -1
+  useEffect(() => {
+    if (!hasMore || isFetchingMore || !onLoadMore) return
+    if (rows.length === 0) return
+    if (lastVisibleIndex >= rows.length - 1 - PREFETCH_ROW_THRESHOLD) {
+      onLoadMore()
+    }
+  }, [lastVisibleIndex, rows.length, hasMore, isFetchingMore, onLoadMore])
 
   return (
     <Outer style={{ height: `${totalSize}px` }}>

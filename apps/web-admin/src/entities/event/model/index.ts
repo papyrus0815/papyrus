@@ -4,6 +4,7 @@
  */
 
 export { useEvents } from './useEvents'
+export type { UseEventsOptions } from './useEvents'
 export { transformEventsFromApi } from './eventTransformers'
 export type {
   CenturyFilter,
