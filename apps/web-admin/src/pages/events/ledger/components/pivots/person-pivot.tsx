@@ -125,9 +125,10 @@ const List = styled.div`
   gap: 10px;
 `
 
+/* 그룹 카드 — country-pivot Card와 같은 8px radius로 시각 통일 */
 const Group = styled.section`
   border: 1px solid ${({ theme }) => ledgerInkLine(theme.mode)};
-  border-radius: 6px;
+  border-radius: 8px;
   background: ${({ theme }) => ledgerSurface(theme.mode)};
   overflow: hidden;
 `

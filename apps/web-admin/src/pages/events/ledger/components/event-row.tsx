@@ -174,6 +174,7 @@ const DurationChip = styled.span`
   ${fontTier('META')}
 `
 
+/* 행 — 높이 ~44px(padding 12px·내용 ~20px). padding은 4-multiple로 정렬. */
 const Row = styled.button<{ $expanded: boolean; $color: string }>`
   position: relative;
   display: grid;
@@ -182,7 +183,7 @@ const Row = styled.button<{ $expanded: boolean; $color: string }>`
   gap: 12px;
   width: 100%;
   text-align: left;
-  padding: 9px 16px;
+  padding: 12px 16px;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -202,7 +203,7 @@ const Row = styled.button<{ $expanded: boolean; $color: string }>`
   @media (max-width: 720px) {
     grid-template-columns: 18px 50px minmax(0, 1fr) auto 20px;
     gap: 8px;
-    padding: 9px 12px;
+    padding: 12px 12px;
 
     & > ${BarLane}, & ${DurationChip} {
       display: none;

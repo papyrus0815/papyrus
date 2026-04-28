@@ -12,12 +12,13 @@ import React from 'react'
 
 import { FiArrowRight, FiExternalLink, FiMapPin, FiTag } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { keyframes } from 'styled-components'
 
 import { pathKeys } from '@/shared/router'
 
 import {
   DIGIT_DISPLAY,
+  MOTION,
   durationInDays,
   fontTier,
   formatDuration,
@@ -163,21 +164,35 @@ export const EventRowExpansion: React.FC<Props> = ({ event, onSelectChild }) => 
   )
 }
 
+/* 확장 영역 등장 모션 — opacity 페이드 + 미세 slideDown(translateY).
+ * max-height 전환은 가상 스크롤 row 높이 계산과 충돌하므로 사용하지 않음. */
+const expandFadeIn = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`
+
 const Wrap = styled.div<{ $color: string }>`
   position: relative;
   background: ${({ theme }) => ledgerExpandedFill(theme.mode)};
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   border-left: 3px solid ${({ $color }) => $color};
+  animation: ${expandFadeIn} ${MOTION.normal} ease-out;
 `
 
 const Inner = styled.div`
-  padding: 14px 20px 16px 36px;
+  padding: 16px 20px 16px 36px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 
   @media (max-width: 720px) {
-    padding: 12px 14px 14px 20px;
+    padding: 12px 16px 16px 20px;
   }
 `
 

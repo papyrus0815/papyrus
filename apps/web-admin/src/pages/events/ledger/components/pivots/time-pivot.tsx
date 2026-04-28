@@ -63,10 +63,13 @@ type Row =
   | { kind: 'expansion'; key: string; event: HistoricalEvent }
   | { kind: 'pad'; key: string }
 
+/** 가상 스크롤 row 높이 추정치 — 실제 측정 전까지 사용. 너무 작으면 끝까지
+ * 한 번에 fetch가 트리거되고, 너무 크면 처음에 빈 공간이 보임. event=48은
+ * Row(padding 12+12 + content ~24)와 일치. */
 const ESTIMATED = {
   century: 38,
   header: 50,
-  event: 44,
+  event: 48,
   expansion: 220,
   pad: 80,
 }

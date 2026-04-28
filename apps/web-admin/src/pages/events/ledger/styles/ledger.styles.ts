@@ -98,4 +98,12 @@ export const FloatingHintWrap = styled.div`
   bottom: 18px;
   right: 22px;
   z-index: 5;
+
+  /* 모바일에선 가상 키보드가 올라오면 가려질 수 있으므로 약간 더 위로,
+   * 그리고 가운데 정렬해 한 손 조작 친화적으로. */
+  @media (max-width: 480px) {
+    bottom: 14px;
+    right: 50%;
+    transform: translateX(50%);
+  }
 `
