@@ -10,18 +10,24 @@ import { css } from 'styled-components'
 
 export type Mode = 'light' | 'dark'
 
-/** 카테고리 — 시드(eventCategory.seed.ts)와 1:1 명시 매핑 (휴리스틱 안 씀) */
+/**
+ * 카테고리 — 시드(eventCategory.seed.ts)와 1:1 명시 매핑.
+ *
+ * 색 선택 원칙: 작은 점·짧은 막대에서도 변별 가능한 거리를 우선.
+ * 이전 팔레트는 파랑 4종(정치·과학·외교·회담)이 충돌해 색맹 환경에서 동일 인상.
+ * 정치=인디고-퍼플, 과학=청록 시안, 외교=하늘, 회담=네이비로 톤을 분리.
+ */
 export const LEDGER_CATEGORY = {
-  정치: { key: 'politics', color: '#5b6ee0', icon: '◆' },
-  경제: { key: 'economy', color: '#a16207', icon: '$' },
-  '전쟁/군사': { key: 'war', color: '#b91c1c', icon: '⚔' },
-  사회: { key: 'social', color: '#0d9488', icon: '◉' },
-  문화: { key: 'culture', color: '#7c3aed', icon: '✦' },
-  과학기술: { key: 'tech', color: '#0369a1', icon: '⚙' },
-  외교: { key: 'diplomacy', color: '#0284c7', icon: '☍' },
-  '회담/조약': { key: 'treaty', color: '#1e40af', icon: '✎' },
-  종교: { key: 'religion', color: '#9333ea', icon: '✚' },
-  기타: { key: 'other', color: '#6b7280', icon: '·' },
+  정치: { key: 'politics', color: '#6d28d9', icon: '◆' }, // 보라(인디고-퍼플)
+  경제: { key: 'economy', color: '#b45309', icon: '$' }, // 황갈색
+  '전쟁/군사': { key: 'war', color: '#b91c1c', icon: '⚔' }, // 빨강
+  사회: { key: 'social', color: '#0d9488', icon: '◉' }, // 짙은 청록
+  문화: { key: 'culture', color: '#db2777', icon: '✦' }, // 마젠타
+  과학기술: { key: 'tech', color: '#0e7490', icon: '⚙' }, // 시안 (변경: 0369a1→0e7490)
+  외교: { key: 'diplomacy', color: '#0ea5e9', icon: '☍' }, // 하늘
+  '회담/조약': { key: 'treaty', color: '#1e3a8a', icon: '✎' }, // 네이비
+  종교: { key: 'religion', color: '#a16207', icon: '✚' }, // 황금
+  기타: { key: 'other', color: '#6b7280', icon: '·' }, // 회색
 } as const
 
 export type LedgerCategoryName = keyof typeof LEDGER_CATEGORY
@@ -80,6 +86,44 @@ export const BODY_TEXT = css`
   font-feature-settings: 'kern' 1, 'liga' 1;
 `
 
+/**
+ * 폰트 스케일 5단계.
+ *
+ * 이전엔 9.5 / 10.5 / 11 / 11.5 / 12 / 12.5 / 13 / 15 / 22 등 9가지가 무작위로
+ * 흩어져 있었음 — 동일 역할인데 사이즈가 다른 사례가 다수.
+ *
+ *  - HEADING : 챕터 제목·통계 큰 숫자                           (15px / 800)
+ *  - TITLE   : 행 제목·카드 헤더                                 (13px / 600)
+ *  - BODY    : 일반 본문·설명                                    (12.5px / 500)
+ *  - LABEL   : 부제·라벨·count 등 보조 텍스트                    (11.5px / 600)
+ *  - META    : 칩·micro 라벨·tertiary                            (10.5px / 600)
+ *
+ * 매우 큰 디스플레이 숫자(연도 챕터의 22px 등)는 ChapterLabel 같이 한정된
+ * 자리에서만 사용하며 별도 스케일로 두지 않음.
+ */
+export const FONT_SCALE = {
+  HEADING: { size: 15, weight: 800 },
+  TITLE: { size: 13, weight: 600 },
+  BODY: { size: 12.5, weight: 500 },
+  LABEL: { size: 11.5, weight: 600 },
+  META: { size: 10.5, weight: 600 },
+} as const
+
+export type FontTier = keyof typeof FONT_SCALE
+
+/** font-size + font-weight를 한 번에 적는 헬퍼 css */
+export const fontTier = (tier: FontTier) => css`
+  font-size: ${FONT_SCALE[tier].size}px;
+  font-weight: ${FONT_SCALE[tier].weight};
+`
+
+/** 표준 transition 시간 — 모션 일관성 */
+export const MOTION = {
+  fast: '0.12s',
+  normal: '0.18s',
+  slow: '0.24s',
+} as const
+
 /** 페이지 배경 — 라이트=중성 화이트, 다크=잉크 */
 export const ledgerBackground = (mode: Mode) =>
   mode === 'dark' ? '#0e0f12' : '#ffffff'
@@ -88,8 +132,53 @@ export const ledgerBackground = (mode: Mode) =>
 export const ledgerInkLine = (mode: Mode) =>
   mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.08)'
 
+/**
+ * 강조색 — 인디고 계열. ledger 전반의 primary 액션·하이라이트.
+ * 라이트=`#4f46e5`, 다크=`#a5b4fc`로 충분한 콘트라스트 보장.
+ * 이전 코드 곳곳의 `#4f46e5`·`#a78bfa`·`#5b21b6` 하드코딩을 이 토큰으로 통일한다.
+ */
 export const ledgerAccent = (mode: Mode) =>
-  mode === 'dark' ? '#a78bfa' : '#5b21b6'
+  mode === 'dark' ? '#a5b4fc' : '#4f46e5'
+
+/** 강조색 hover 단계 */
+export const ledgerAccentHover = (mode: Mode) =>
+  mode === 'dark' ? '#c7d2fe' : '#4338ca'
+
+/** 강조색 면(surface) — 옅은 인디고 fill */
+export const ledgerAccentSubtle = (mode: Mode) =>
+  mode === 'dark' ? 'rgba(165,180,252,0.12)' : 'rgba(99,102,241,0.08)'
+
+/** 강조색 border — outlined 버튼 등 */
+export const ledgerAccentBorder = (mode: Mode) =>
+  mode === 'dark' ? 'rgba(165,180,252,0.4)' : 'rgba(99,102,241,0.45)'
+
+/**
+ * Lens 칩 색 — kind별 hue 분리.
+ * 토큰화 전엔 lens-bar.tsx에 #dc2626/#0f766e/#1e40af가 inline으로 흩뿌려져 있었다.
+ */
+export const LENS_KIND_COLOR = {
+  /** 카테고리는 카테고리 자체 색을 따라가므로 placeholder만 둔다 */
+  category: { light: '#4f46e5', dark: '#a5b4fc' },
+  quality: { light: '#dc2626', dark: '#fca5a5' },
+  decade: { light: '#0f766e', dark: '#5eead4' },
+  century: { light: '#0f766e', dark: '#5eead4' },
+  country: { light: '#1e40af', dark: '#93c5fd' },
+  hcountry: { light: '#1e40af', dark: '#93c5fd' },
+  default: { light: '#4f46e5', dark: '#a5b4fc' },
+} as const
+
+export type LensKindColorKey = keyof typeof LENS_KIND_COLOR
+
+export const lensKindColor = (
+  kind: LensKindColorKey | string,
+  mode: Mode,
+): string => {
+  const entry =
+    (LENS_KIND_COLOR as Record<string, (typeof LENS_KIND_COLOR)[LensKindColorKey]>)[
+      kind
+    ] ?? LENS_KIND_COLOR.default
+  return mode === 'dark' ? entry.dark : entry.light
+}
 
 /* ── Surface 토큰 ─────────────────────────────────────────
  * UI 요소 기준이 되는 배경/테두리/구분선 모음. 모든 ledger 컴포넌트는
@@ -113,14 +202,20 @@ export const ledgerHairline = (mode: Mode) =>
 export const ledgerHairlineStrong = (mode: Mode) =>
   mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'
 
+/* 다크 모드는 전반적으로 알파를 라이트보다 1.5~2배 두텁게 — 어두운 배경에서
+ * 0.03~0.06은 시각적으로 거의 사라지므로 0.08~0.14 범위가 안정적. */
 export const ledgerSubtleFill = (mode: Mode) =>
-  mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'
+  mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.04)'
 
 export const ledgerExpandedFill = (mode: Mode) =>
-  mode === 'dark' ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.04)'
+  mode === 'dark' ? 'rgba(165,180,252,0.12)' : 'rgba(99,102,241,0.05)'
 
 export const ledgerHoverFill = (mode: Mode) =>
-  mode === 'dark' ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.03)'
+  mode === 'dark' ? 'rgba(165,180,252,0.1)' : 'rgba(99,102,241,0.04)'
+
+/** Country/keyword 등 inline chip 배경 — 다크에서 너무 옅으면 보이지 않음 */
+export const ledgerChipFill = (mode: Mode) =>
+  mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)'
 
 /** 카테고리 색에 알파를 16진 2자리로 합쳐 문자열로 — `#rrggbb` + `aa` */
 export const withAlpha = (hex: string, alpha: number): string => {
