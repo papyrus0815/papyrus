@@ -19,6 +19,8 @@ import {
   centuryOf,
   decadeLabel,
   decadeOf,
+  fontTier,
+  ledgerAccentSubtle,
   ledgerHairline,
 } from '../../styles/ledger-tokens'
 import type { HistoricalEvent } from '@/entities/event/model'
@@ -238,21 +240,19 @@ const CenturyDivider = styled.div`
 const CenturyText = styled.h2`
   ${DIGIT_DISPLAY}
   margin: 0;
-  font-size: 11.5px;
+  ${fontTier('LABEL')}
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+/* 세기 구분선 — accent 토큰의 subtle 단계로 그라데이션 */
 const CenturyLine = styled.div`
   flex: 1;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.32),
-    transparent
-  );
+  background: ${({ theme }) =>
+    `linear-gradient(90deg, ${ledgerAccentSubtle(theme.mode)} 0%, transparent 100%)`};
 `
 
 const ChapterHeader = styled.header`
@@ -262,6 +262,7 @@ const ChapterHeader = styled.header`
   padding: 4px 20px 4px 16px;
 `
 
+/* 가장 큰 디스플레이 숫자 — 22px 단발성 사용 */
 const ChapterLabel = styled.h3`
   ${DIGIT_DISPLAY}
   margin: 0;
@@ -279,7 +280,7 @@ const ChapterRule = styled.div`
 
 const ChapterCount = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 11.5px;
+  ${fontTier('LABEL')}
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `

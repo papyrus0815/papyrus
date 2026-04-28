@@ -17,6 +17,9 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 
 import {
   decadeOf,
+  fontTier,
+  ledgerAccent,
+  ledgerAccentSubtle,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerSurfaceSolid,
@@ -200,18 +203,17 @@ const TabBtn = styled.button<{ $active: boolean }>`
   height: 26px;
   padding: 0 8px;
   border: none;
-  background: ${({ $active }) =>
-    $active ? 'rgba(99,102,241,0.14)' : 'transparent'};
+  background: ${({ $active, theme }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   color: ${({ $active, theme }) =>
-    $active ? '#4f46e5' : theme.colors.text.secondary};
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
   border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
+  ${fontTier('LABEL')}
   cursor: pointer;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.08);
-    color: #4f46e5;
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
@@ -246,7 +248,7 @@ const Input = styled.input`
   border: none;
   outline: none;
   background: transparent;
-  font-size: 12.5px;
+  ${fontTier('BODY')}
   color: ${({ theme }) => theme.colors.text.primary};
 
   &::placeholder {
@@ -263,7 +265,7 @@ const List = styled.div`
     width: 4px;
   }
   &::-webkit-scrollbar-thumb {
-    background: rgba(99, 102, 241, 0.2);
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   }
 `
 
@@ -278,11 +280,11 @@ const Item = styled.button`
   border-radius: 6px;
   background: transparent;
   cursor: pointer;
-  font-size: 12.5px;
+  ${fontTier('BODY')}
   color: ${({ theme }) => theme.colors.text.primary};
 
   &:hover {
-    background: rgba(99, 102, 241, 0.08);
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   }
 `
 

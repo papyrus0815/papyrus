@@ -11,7 +11,9 @@ import {
   DIGIT_DISPLAY,
   IMPORTANCE_OPACITY,
   type LedgerImportance,
+  fontTier,
   importanceFromHierarchy,
+  ledgerAccentHover,
   ledgerHairline,
   ledgerSurface,
   resolveCategory,
@@ -161,14 +163,14 @@ const ColAccent = styled.span<{ $color: string }>`
 
 const ColName = styled.div`
   flex: 1;
-  font-size: 12.5px;
+  ${fontTier('BODY')}
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const ColCount = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 11px;
+  ${fontTier('LABEL')}
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -177,9 +179,11 @@ const FocusBtn = styled.button`
   border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  font-size: 13px;
+  ${fontTier('TITLE')}
   cursor: pointer;
-  &:hover { color: #4f46e5; }
+  &:hover {
+    color: ${({ theme }) => ledgerAccentHover(theme.mode)};
+  }
 `
 
 const ColBody = styled.div`
@@ -210,13 +214,13 @@ const Card = styled.button<{ $color: string; $opacity: number }>`
 
 const CardYear = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 12px;
+  ${fontTier('LABEL')}
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const CardTitle = styled.span`
-  font-size: 12.5px;
+  ${fontTier('BODY')}
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
   white-space: nowrap;

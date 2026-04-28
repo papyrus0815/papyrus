@@ -6,7 +6,12 @@ import React from 'react'
 import { FiCommand, FiSearch } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { DIGIT_DISPLAY } from '../styles/ledger-tokens'
+import {
+  DIGIT_DISPLAY,
+  fontTier,
+  ledgerAccent,
+  ledgerAccentBorder,
+} from '../styles/ledger-tokens'
 
 interface Props {
   onClick: () => void
@@ -35,8 +40,7 @@ const Btn = styled.button`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(20,20,24,0.85)' : 'rgba(255,255,255,0.92)'};
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12px;
-  font-weight: 600;
+  ${fontTier('LABEL')}
   cursor: pointer;
   box-shadow:
     0 8px 24px rgba(15, 23, 42, 0.12),
@@ -49,8 +53,8 @@ const Btn = styled.button`
     transform 0.1s;
 
   &:hover {
-    color: #4f46e5;
-    border-color: rgba(99, 102, 241, 0.45);
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
     box-shadow:
       0 12px 28px rgba(15, 23, 42, 0.16),
       0 1px 3px rgba(15, 23, 42, 0.08);
@@ -71,6 +75,6 @@ const Sep = styled.span`
 
 const Key = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 11px;
+  ${fontTier('LABEL')}
   font-weight: 700;
 `

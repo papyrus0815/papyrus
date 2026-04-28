@@ -19,10 +19,14 @@ import type { EventCategoryDto } from '@/shared/api/event-categories'
 import {
   DIGIT_DISPLAY,
   decadeOf,
+  fontTier,
+  ledgerAccent,
+  ledgerAccentSubtle,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerOverlay,
   ledgerScrim,
+  lensKindColor,
 } from '../styles/ledger-tokens'
 import type { LensChip } from '../types/lens'
 import type { HistoricalEvent } from '@/entities/event/model'
@@ -317,7 +321,8 @@ const Input = styled.input`
   border: none;
   outline: none;
   background: transparent;
-  font-size: 14px;
+  ${fontTier('TITLE')}
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.primary};
 
   &::placeholder {
@@ -327,7 +332,7 @@ const Input = styled.input`
 
 const Hint = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 10.5px;
+  ${fontTier('META')}
   color: ${({ theme }) => theme.colors.text.tertiary};
   white-space: nowrap;
 
@@ -351,17 +356,17 @@ const ItemRow = styled.button<{ $active: boolean }>`
   padding: 8px 10px;
   border: none;
   background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.14)'
-        : 'rgba(99,102,241,0.08)'
-      : 'transparent'};
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
+  ${fontTier('TITLE')}
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
+/* 결과 종류별 아이콘 칩 — decade=청록, category=보라(LEDGER_CATEGORY와는 별개의
+ * 액션 표시용 보라), event=인디고(accent). lensKindColor 토큰을 사용 가능하지만
+ * category 아이콘만 별색으로 두어 시각적 구분. */
 const Icon = styled.span<{ $type: Item['type'] }>`
   display: inline-flex;
   width: 22px;
@@ -369,14 +374,18 @@ const Icon = styled.span<{ $type: Item['type'] }>`
   align-items: center;
   justify-content: center;
   border-radius: 5px;
-  background: ${({ $type }) =>
+  background: ${({ $type, theme }) =>
     $type === 'decade'
-      ? 'rgba(15, 118, 110, 0.16)'
+      ? `${lensKindColor('decade', theme.mode)}28`
       : $type === 'category'
-        ? 'rgba(124, 58, 237, 0.16)'
-        : 'rgba(99, 102, 241, 0.14)'};
-  color: ${({ $type }) =>
-    $type === 'decade' ? '#0f766e' : $type === 'category' ? '#7c3aed' : '#4f46e5'};
+        ? `${lensKindColor('category', theme.mode)}28`
+        : ledgerAccentSubtle(theme.mode)};
+  color: ${({ $type, theme }) =>
+    $type === 'decade'
+      ? lensKindColor('decade', theme.mode)
+      : $type === 'category'
+        ? lensKindColor('category', theme.mode)
+        : ledgerAccent(theme.mode)};
   flex-shrink: 0;
 `
 
@@ -389,14 +398,13 @@ const Title = styled.span`
 
 const ItemHint = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 11px;
-  font-weight: 600;
+  ${fontTier('LABEL')}
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Empty = styled.div`
   padding: 22px 14px;
   text-align: center;
-  font-size: 12.5px;
+  ${fontTier('BODY')}
   color: ${({ theme }) => theme.colors.text.tertiary};
 `

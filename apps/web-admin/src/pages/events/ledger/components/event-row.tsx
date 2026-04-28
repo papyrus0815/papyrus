@@ -24,8 +24,12 @@ import {
   IMPORTANCE_OPACITY,
   type LedgerImportance,
   durationInDays,
+  fontTier,
   formatDuration,
   importanceFromHierarchy,
+  ledgerAccent,
+  ledgerAccentSubtle,
+  ledgerChipFill,
   ledgerExpandedFill,
   ledgerHairline,
   ledgerHoverFill,
@@ -163,12 +167,11 @@ const DurationChip = styled.span`
   display: inline-flex;
   align-items: center;
   height: 18px;
-  padding: 0 7px;
+  padding: 0 8px;
   border-radius: 3px;
   background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
   color: ${({ theme }) => theme.colors.text.tertiary};
-  font-size: 10.5px;
-  font-weight: 600;
+  ${fontTier('META')}
 `
 
 const Row = styled.button<{ $expanded: boolean; $color: string }>`
@@ -218,7 +221,7 @@ const ActiveStripe = styled.span<{ $color: string; $expanded: boolean }>`
 
 const Year = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 13px;
+  ${fontTier('TITLE')}
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
 `
@@ -238,8 +241,7 @@ const Bar = styled.div<{
 `
 
 const Title = styled.span`
-  font-size: 13px;
-  font-weight: 600;
+  ${fontTier('TITLE')}
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -268,13 +270,11 @@ const CountryChip = styled.span`
   align-items: center;
   gap: 3px;
   height: 18px;
-  padding: 0 7px;
+  padding: 0 8px;
   border-radius: 3px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.03)'};
+  background: ${({ theme }) => ledgerChipFill(theme.mode)};
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 10.5px;
-  font-weight: 600;
+  ${fontTier('META')}
   white-space: nowrap;
 `
 
@@ -282,7 +282,8 @@ const CountryDot = styled.span`
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgba(99, 102, 241, 0.45);
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  opacity: 0.55;
 `
 
 const ChildChip = styled.span`
@@ -292,9 +293,9 @@ const ChildChip = styled.span`
   height: 18px;
   padding: 0 6px;
   border-radius: 3px;
-  background: rgba(99, 102, 241, 0.12);
-  color: #4f46e5;
-  font-size: 10.5px;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  ${fontTier('META')}
   font-weight: 700;
 `
 

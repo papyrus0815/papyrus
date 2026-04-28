@@ -15,7 +15,12 @@ import {
 import styled from 'styled-components'
 
 import { PIVOT, type Pivot } from '../hooks/use-ledger-state'
-import { ledgerHairline } from '../styles/ledger-tokens'
+import {
+  fontTier,
+  ledgerAccent,
+  ledgerAccentHover,
+  ledgerHairline,
+} from '../styles/ledger-tokens'
 
 interface Props {
   pivot: Pivot
@@ -64,7 +69,7 @@ export const PivotTabs: React.FC<Props> = ({ pivot, setPivot }) => {
 const Lead = styled.div`
   display: inline-flex;
   align-items: center;
-  font-size: 10.5px;
+  ${fontTier('META')}
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -93,7 +98,7 @@ const Tab = styled.button<{ $active: boolean }>`
   background: transparent;
   color: ${({ $active, theme }) =>
     $active ? theme.colors.text.primary : theme.colors.text.tertiary};
-  font-size: 12.5px;
+  ${fontTier('BODY')}
   font-weight: ${({ $active }) => ($active ? 700 : 500)};
   cursor: pointer;
   transition: color 0.12s;
@@ -104,6 +109,7 @@ const Tab = styled.button<{ $active: boolean }>`
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
+  /* 활성 탭 하단 강조선 — 단색 accent로 통일 (이전: 인디고-퍼플 그라데이션) */
   &::after {
     content: '';
     position: absolute;
@@ -112,8 +118,10 @@ const Tab = styled.button<{ $active: boolean }>`
     bottom: -1px;
     height: 2px;
     border-radius: 2px 2px 0 0;
-    background: ${({ $active }) =>
-      $active ? 'linear-gradient(90deg, #4338ca, #8b5cf6)' : 'transparent'};
+    background: ${({ $active, theme }) =>
+      $active
+        ? `linear-gradient(90deg, ${ledgerAccentHover(theme.mode)}, ${ledgerAccent(theme.mode)})`
+        : 'transparent'};
     transition: background 0.18s;
   }
 
@@ -133,7 +141,7 @@ const Hint = styled.span`
   background: ${({ theme }) => ledgerHairline(theme.mode)};
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 9.5px;
+  font-size: 9.5px; /* META(10.5)보다 작은 단축키 표시 — 의도적 micro */
   font-weight: 700;
   margin-left: 2px;
 

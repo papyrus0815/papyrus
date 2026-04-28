@@ -10,7 +10,12 @@ import styled from 'styled-components'
 
 import {
   DIGIT_DISPLAY,
+  fontTier,
+  ledgerAccent,
+  ledgerAccentHover,
+  ledgerAccentSubtle,
   ledgerHairline,
+  ledgerHoverFill,
   ledgerInkLine,
   ledgerSurface,
   resolveCategory,
@@ -160,7 +165,7 @@ const CardTitle = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  ${fontTier('TITLE')}
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
 `
@@ -169,11 +174,12 @@ const Tag = styled.span`
   display: inline-flex;
   align-items: center;
   height: 16px;
-  padding: 0 5px;
+  padding: 0 6px;
   border-radius: 3px;
-  background: rgba(99, 102, 241, 0.12);
-  color: #4f46e5;
-  font-size: 9.5px;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  ${fontTier('META')}
+  font-size: 9.5px; /* META 10.5보다 작은 micro tag */
   font-weight: 700;
 `
 
@@ -182,12 +188,12 @@ const FocusBtn = styled.button`
   border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  font-size: 11px;
+  ${fontTier('LABEL')}
   font-weight: 700;
   cursor: pointer;
 
   &:hover {
-    color: #4f46e5;
+    color: ${({ theme }) => ledgerAccentHover(theme.mode)};
   }
 `
 
@@ -209,7 +215,7 @@ const Row = styled.button`
   text-align: left;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.05);
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 `
 
@@ -222,14 +228,13 @@ const RowDot = styled.span<{ $color: string }>`
 
 const RowYear = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 11.5px;
+  ${fontTier('LABEL')}
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const RowTitle = styled.span`
-  font-size: 12px;
-  font-weight: 500;
+  ${fontTier('BODY')}
   color: ${({ theme }) => theme.colors.text.primary};
   white-space: nowrap;
   overflow: hidden;
@@ -239,8 +244,7 @@ const RowTitle = styled.span`
 const More = styled.div`
   ${DIGIT_DISPLAY}
   padding: 4px 12px 6px;
-  font-size: 10.5px;
-  font-weight: 600;
+  ${fontTier('META')}
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 

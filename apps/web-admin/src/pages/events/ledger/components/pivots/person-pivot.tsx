@@ -10,6 +10,7 @@ import styled from 'styled-components'
 
 import {
   DIGIT_DISPLAY,
+  fontTier,
   ledgerHairline,
   ledgerHoverFill,
   ledgerInkLine,
@@ -115,8 +116,7 @@ const Notice = styled.div`
   border-radius: 6px;
   background: rgba(217, 119, 6, 0.06);
   color: #92400e;
-  font-size: 11.5px;
-  font-weight: 600;
+  ${fontTier('LABEL')}
 `
 
 const List = styled.div`
@@ -142,14 +142,14 @@ const GroupHead = styled.header`
 
 const GroupName = styled.div`
   flex: 1;
-  font-size: 13px;
+  ${fontTier('TITLE')}
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const GroupCount = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 11.5px;
+  ${fontTier('LABEL')}
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -183,14 +183,13 @@ const Dot = styled.span<{ $color: string }>`
 
 const Year = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 12px;
+  ${fontTier('LABEL')}
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Title = styled.span`
-  font-size: 12.5px;
-  font-weight: 500;
+  ${fontTier('BODY')}
   color: ${({ theme }) => theme.colors.text.primary};
   white-space: nowrap;
   overflow: hidden;

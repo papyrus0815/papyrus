@@ -13,7 +13,13 @@
  */
 import styled from 'styled-components'
 
-import { BODY_TEXT, ledgerBackground, ledgerHairline, ledgerInkLine } from './ledger-tokens'
+import {
+  BODY_TEXT,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerInkLine,
+} from './ledger-tokens'
 
 export const Page = styled.div`
   ${BODY_TEXT}
@@ -79,7 +85,7 @@ export const LedgerScroller = styled.div`
     width: 8px;
   }
   &::-webkit-scrollbar-thumb {
-    background: rgba(99, 102, 241, 0.18);
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
     border-radius: 4px;
   }
   &::-webkit-scrollbar-track {

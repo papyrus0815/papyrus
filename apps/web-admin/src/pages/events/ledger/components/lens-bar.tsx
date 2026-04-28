@@ -10,7 +10,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { FiPlus, FiX } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
@@ -18,9 +18,16 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 
 import type { HistoricalEvent } from '@/entities/event/model'
 import {
+  fontTier,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentHover,
+  ledgerAccentSubtle,
   ledgerHairline,
   ledgerHairlineStrong,
+  lensKindColor,
   resolveCategory,
+  type Mode,
 } from '../styles/ledger-tokens'
 import { lensKey, type LensChip } from '../types/lens'
 
@@ -44,19 +51,18 @@ interface Props {
 /**
  * 칩 색상 — kind별. 카테고리는 chip.value(id)만으로는 색을 모르므로,
  * 호출부에서 사전(dbCategories)을 통해 한국어 이름을 찾아 resolveCategory에 넘긴다.
+ * 그 외 kind 색은 LENS_KIND_COLOR(라이트/다크 페어)에서 가져온다.
  */
 const chipColor = (
   chip: LensChip,
+  mode: Mode,
   categoryNameLookup: (id: string) => string | undefined,
 ): string => {
   if (chip.kind === 'category') {
     const name = categoryNameLookup(chip.value)
     return resolveCategory(name).color
   }
-  if (chip.kind === 'quality') return '#dc2626'
-  if (chip.kind === 'decade' || chip.kind === 'century') return '#0f766e'
-  if (chip.kind === 'country' || chip.kind === 'hcountry') return '#1e40af'
-  return '#4f46e5'
+  return lensKindColor(chip.kind, mode)
 }
 
 export const LensBar: React.FC<Props> = ({
@@ -72,6 +78,7 @@ export const LensBar: React.FC<Props> = ({
   totalCount,
   filteredCount,
 }) => {
+  const theme = useTheme()
   const [popoverOpen, setPopoverOpen] = useState(false)
   const addBtnRef = useRef<HTMLButtonElement | null>(null)
   const popoverWrapRef = useRef<HTMLSpanElement | null>(null)
@@ -119,7 +126,7 @@ export const LensBar: React.FC<Props> = ({
           lens.map((chip) => (
             <Chip
               key={lensKey(chip)}
-              $color={chipColor(chip, categoryNameLookup)}
+              $color={chipColor(chip, theme.mode, categoryNameLookup)}
               title={chip.kind}
             >
               <ChipLabel>{resolveLabel(chip)}</ChipLabel>
@@ -193,7 +200,7 @@ const Wrap = styled.div`
 `
 
 const Lead = styled.div`
-  font-size: 10.5px;
+  ${fontTier('META')}
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -216,8 +223,7 @@ const ChipsScroll = styled.div`
 `
 
 const EmptyHint = styled.div`
-  font-size: 12.5px;
-  font-weight: 500;
+  ${fontTier('BODY')}
   color: ${({ theme }) => theme.colors.text.tertiary};
 
   @media (max-width: 480px) {
@@ -235,8 +241,7 @@ const Chip = styled.span<{ $color: string }>`
   border: 1px solid ${({ $color }) => $color}55;
   background: ${({ $color }) => $color}10;
   color: ${({ $color }) => $color};
-  font-size: 12px;
-  font-weight: 600;
+  ${fontTier('LABEL')}
   white-space: nowrap;
 `
 
@@ -279,20 +284,20 @@ const AddBtn = styled.button<{ $open: boolean }>`
   padding: 0 10px;
   border: 1px dashed
     ${({ $open, theme }) =>
-      $open ? '#6366f1' : ledgerHairlineStrong(theme.mode)};
-  background: ${({ $open }) => ($open ? 'rgba(99,102,241,0.08)' : 'transparent')};
+      $open ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
+  background: ${({ $open, theme }) =>
+    $open ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   color: ${({ $open, theme }) =>
-    $open ? '#4f46e5' : theme.colors.text.secondary};
+    $open ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
   border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
+  ${fontTier('LABEL')}
   cursor: pointer;
   transition: border-color 0.12s, background 0.12s, color 0.12s;
   flex-shrink: 0;
 
   &:hover {
-    color: #4f46e5;
-    border-color: rgba(99, 102, 241, 0.45);
+    color: ${({ theme }) => ledgerAccentHover(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
   }
 `
 
@@ -309,8 +314,7 @@ const ClearBtn = styled.button`
   border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  font-size: 11.5px;
-  font-weight: 600;
+  ${fontTier('LABEL')}
   cursor: pointer;
   flex-shrink: 0;
 

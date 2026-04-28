@@ -15,8 +15,10 @@ import styled from 'styled-components'
 
 import {
   DIGIT_DISPLAY,
+  fontTier,
   ledgerBackground,
   ledgerHairline,
+  ledgerHoverFill,
   ledgerInkLine,
   resolveCategory,
 } from '../../styles/ledger-tokens'
@@ -185,7 +187,7 @@ const SummaryItem = styled.div<{ $tone?: 'ok' | 'bad' }>`
 `
 
 const SummaryLabel = styled.span`
-  font-size: 11px;
+  ${fontTier('LABEL')}
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -194,8 +196,7 @@ const SummaryLabel = styled.span`
 
 const SummaryNum = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 17px;
-  font-weight: 800;
+  ${fontTier('HEADING')}
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
 `
@@ -203,7 +204,7 @@ const SummaryNum = styled.span`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  ${fontTier('BODY')}
 
   thead tr {
     position: sticky;
@@ -228,7 +229,7 @@ const Th = styled.th<{ $w?: string; $center?: boolean; $right?: boolean }>`
   text-align: ${({ $center, $right }) =>
     $center ? 'center' : $right ? 'right' : 'left'};
   padding: 10px 14px;
-  font-size: 10.5px;
+  ${fontTier('META')}
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -247,13 +248,13 @@ const Row = styled.tr<{ $hasIssues: boolean }>`
   background: ${({ $hasIssues, theme }) =>
     $hasIssues
       ? theme.mode === 'dark'
-        ? 'rgba(220, 38, 38, 0.04)'
-        : 'rgba(220, 38, 38, 0.02)'
+        ? 'rgba(252, 165, 165, 0.06)'
+        : 'rgba(220, 38, 38, 0.03)'
       : 'transparent'};
   transition: background 0.1s;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.05);
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 `
 
@@ -288,7 +289,7 @@ const CatPill = styled.span<{ $color: string }>`
   border-radius: 999px;
   background: ${({ $color }) => $color}1a;
   color: ${({ $color }) => $color};
-  font-size: 10.5px;
+  ${fontTier('META')}
   font-weight: 700;
 `
 
@@ -323,7 +324,7 @@ const IssueChip = styled.span`
   border-radius: 4px;
   background: rgba(220, 38, 38, 0.14);
   color: #b91c1c;
-  font-size: 10.5px;
+  ${fontTier('META')}
   font-weight: 700;
 `
 

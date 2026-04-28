@@ -19,7 +19,13 @@ import { pathKeys } from '@/shared/router'
 import {
   DIGIT_DISPLAY,
   durationInDays,
+  fontTier,
   formatDuration,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentHover,
+  ledgerAccentSubtle,
+  ledgerExpandedFill,
   ledgerHairline,
   ledgerHoverFill,
   ledgerSubtleFill,
@@ -159,8 +165,7 @@ export const EventRowExpansion: React.FC<Props> = ({ event, onSelectChild }) => 
 
 const Wrap = styled.div<{ $color: string }>`
   position: relative;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.04)' : 'rgba(99,102,241,0.025)'};
+  background: ${({ theme }) => ledgerExpandedFill(theme.mode)};
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   border-left: 3px solid ${({ $color }) => $color};
 `
@@ -178,7 +183,8 @@ const Inner = styled.div`
 
 const Desc = styled.p`
   margin: 0;
-  font-size: 13px;
+  ${fontTier('TITLE')}
+  font-weight: 500;
   line-height: 1.65;
   color: ${({ theme }) => theme.colors.text.secondary};
   max-width: 880px;
@@ -195,7 +201,7 @@ const MetaItem = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 11.5px;
+  ${fontTier('LABEL')}
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -210,12 +216,11 @@ const Keyword = styled.span`
   display: inline-flex;
   align-items: center;
   height: 18px;
-  padding: 0 6px;
+  padding: 0 8px;
   border-radius: 3px;
   background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 10.5px;
-  font-weight: 600;
+  ${fontTier('META')}
 `
 
 const Section = styled.section`
@@ -226,7 +231,7 @@ const Section = styled.section`
 
 const SectionTitle = styled.h4`
   margin: 0;
-  font-size: 10.5px;
+  ${fontTier('META')}
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -244,13 +249,12 @@ const CountryPill = styled.span`
   align-items: center;
   gap: 4px;
   height: 22px;
-  padding: 0 9px;
+  padding: 0 10px;
   border-radius: 999px;
   background: ${({ theme }) => ledgerSurface(theme.mode)};
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 11px;
-  font-weight: 600;
+  ${fontTier('LABEL')}
 `
 
 const ChildList = styled.div`
@@ -282,39 +286,38 @@ const ChildRow = styled.button`
 const ChildYear = styled.span`
   ${DIGIT_DISPLAY}
   width: 44px;
-  font-size: 11.5px;
+  ${fontTier('LABEL')}
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const ChildTitle = styled.span`
   flex: 1;
-  font-size: 12.5px;
-  font-weight: 500;
+  ${fontTier('BODY')}
 `
 
 const ChildDuration = styled.span`
   ${DIGIT_DISPLAY}
-  font-size: 10.5px;
-  font-weight: 600;
+  ${fontTier('META')}
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const ChildMore = styled.button`
   margin-top: 2px;
   padding: 6px 10px;
-  border: 1px dashed rgba(99, 102, 241, 0.4);
+  border: 1px dashed ${({ theme }) => ledgerAccentBorder(theme.mode)};
   background: transparent;
-  color: #4f46e5;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
   border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
+  ${fontTier('LABEL')}
   cursor: pointer;
   text-align: left;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.06);
-    border-color: rgba(99, 102, 241, 0.6);
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentHover(theme.mode)};
+    color: ${({ theme }) => ledgerAccentHover(theme.mode)};
   }
 `
 
@@ -330,16 +333,16 @@ const DetailBtn = styled.button`
   gap: 5px;
   height: 28px;
   padding: 0 12px;
-  border: 1px solid rgba(99, 102, 241, 0.45);
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
   border-radius: 6px;
-  background: rgba(99, 102, 241, 0.06);
-  color: #4f46e5;
-  font-size: 11.5px;
-  font-weight: 600;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  ${fontTier('LABEL')}
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background 0.12s, color 0.12s;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.12);
+    color: ${({ theme }) => ledgerAccentHover(theme.mode)};
+    filter: brightness(0.95);
   }
 `
