@@ -48,6 +48,10 @@ import {
   seedJapanGeography,
   seedUsaGeography,
   seedChinaGeography,
+  seedKoreaAdminDivisions,
+  seedJapanAdminDivisions,
+  seedUsaAdminDivisions,
+  seedChinaAdminDivisions,
 } from './seeds'
 
 const options = {
@@ -206,6 +210,12 @@ async function main() {
         await seedJapanGeography(prisma)
         await seedUsaGeography(prisma)
         await seedChinaGeography(prisma)
+
+        // 14-1. 행정구역 — 한국·일본·미국·중국 (CountryAdminDivisionConfig + AdministrativeDivision)
+        await seedKoreaAdminDivisions(prisma)
+        await seedJapanAdminDivisions(prisma)
+        await seedUsaAdminDivisions(prisma)
+        await seedChinaAdminDivisions(prisma)
 
         // 11. 행정 부처 카테고리 시딩 (국방·외교 등)
         await seedAdministrationDepartmentCategories(prisma)
