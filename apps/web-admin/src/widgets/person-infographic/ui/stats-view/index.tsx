@@ -8,11 +8,12 @@
  *  - galaxy   : 6축 PCA 2D 산포도 (톱축 / K-means)
  *  - compare  : 다중 인물 레이더 overlay
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
 
 import { usePersonEvaluationIndex } from '@/shared/lib/person-evaluation-index'
 import type { AdaptedPerson } from '../../model/types'
+import { PersonPreviewModal } from '../_shared/person-preview-modal'
 
 import { ComparePane } from './compare'
 import { GalaxyPane } from './galaxy'
@@ -39,10 +40,31 @@ const TAB_OPTIONS: Array<{ key: SubTab; label: string }> = [
 export function StatsView({ people, onPersonClick }: Props) {
   const evalIndex = usePersonEvaluationIndex()
   const [tab, setTab] = useState<SubTab>('overview')
+  const [previewPerson, setPreviewPerson] = useState<AdaptedPerson | null>(null)
 
   const evaluatedPeople = useMemo(
     () => people.filter((p) => evalIndex.get(p.id)?.hasEvaluation === true),
     [people, evalIndex],
+  )
+
+  /** 인물 ID로 빠르게 lookup — 자식 패널에서 클릭 시 모달 띄울 때 사용 */
+  const peopleById = useMemo(() => {
+    const m = new Map<string, AdaptedPerson>()
+    for (const p of people) m.set(p.id, p)
+    return m
+  }, [people])
+
+  /**
+   * 자식 패널들에 내려주는 클릭 핸들러 — 매트릭스 뷰처럼 모달을 먼저 띄움.
+   * 모달의 "상세 보기"를 누르면 부모에서 받은 onPersonClick 호출 (실제 라우팅).
+   */
+  const handlePreview = useCallback(
+    (id: string) => {
+      const p = peopleById.get(id)
+      if (p) setPreviewPerson(p)
+      else onPersonClick(id) // 데이터 못 찾으면 폴백으로 바로 이동
+    },
+    [peopleById, onPersonClick],
   )
 
   // C1: 인물 상세에서 "비교 추가"로 진입 — sessionStorage 신호 읽고 compare sub-tab으로 점프
@@ -83,26 +105,34 @@ export function StatsView({ people, onPersonClick }: Props) {
           people={people}
           evaluated={evaluatedPeople}
           evalIndex={evalIndex}
-          onPersonClick={onPersonClick}
+          onPersonClick={handlePreview}
         />
       )}
       {tab === 'matrix' && (
-        <MatrixPane evaluated={evaluatedPeople} evalIndex={evalIndex} onPersonClick={onPersonClick} />
+        <MatrixPane evaluated={evaluatedPeople} evalIndex={evalIndex} onPersonClick={handlePreview} />
       )}
       {tab === 'group' && (
         <GroupRadarPane evaluated={evaluatedPeople} evalIndex={evalIndex} />
       )}
       {tab === 'galaxy' && (
-        <GalaxyPane evaluated={evaluatedPeople} evalIndex={evalIndex} onPersonClick={onPersonClick} />
+        <GalaxyPane evaluated={evaluatedPeople} evalIndex={evalIndex} onPersonClick={handlePreview} />
       )}
       {tab === 'compare' && (
         <ComparePane
           people={people}
           evaluated={evaluatedPeople}
           evalIndex={evalIndex}
-          onPersonClick={onPersonClick}
+          onPersonClick={handlePreview}
         />
       )}
+      <PersonPreviewModal
+        person={previewPerson}
+        onClose={() => setPreviewPerson(null)}
+        onOpenDetail={(id) => {
+          setPreviewPerson(null)
+          onPersonClick(id)
+        }}
+      />
     </Wrap>
   )
 }

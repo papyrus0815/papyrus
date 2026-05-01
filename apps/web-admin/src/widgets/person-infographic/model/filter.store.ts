@@ -13,6 +13,9 @@ export type AliveFilter = 'all' | 'alive' | 'dead'
 
 export type ScopeKind = 'era' | 'region' | 'field' | 'country'
 
+/** 인물 정렬 기준 — 모든 뷰에서 공유. */
+export type PersonSortKey = 'influence' | 'name' | 'year' | 'deathYear'
+
 /** 다중 선택 가능한 카테고리별 필터 — 카테고리 안 OR, 카테고리 간 AND */
 export interface MultiScopes {
   era: string[]
@@ -34,8 +37,20 @@ interface PersonInfographicFilterState {
   aliveFilter: AliveFilter
   view: PersonInfographicView
   query: string
+  /** 인물 정렬 기준 — 매트릭스/갤럭시/스토리/왕조 공통 */
+  sort: PersonSortKey
   /** 좋아요 고정 인물 (localStorage로 유지) */
   pinned: string[]
+
+  /** 한 번에 여러 필드를 갱신 — URL → store 동기화에서 사용 (single render) */
+  setMany: (
+    patch: Partial<
+      Pick<
+        PersonInfographicFilterState,
+        'scopes' | 'minInfluence' | 'aliveFilter' | 'view' | 'query' | 'sort'
+      >
+    >,
+  ) => void
 
   /** 카테고리·값 toggle. 이미 있으면 제거, 없으면 추가 */
   toggleScope: (kind: ScopeKind, value: string) => void
@@ -47,6 +62,7 @@ interface PersonInfographicFilterState {
   setAliveFilter: (v: AliveFilter) => void
   setView: (v: PersonInfographicView) => void
   setQuery: (q: string) => void
+  setSort: (s: PersonSortKey) => void
   togglePin: (id: string) => void
   resetFilters: () => void
 }
@@ -60,8 +76,10 @@ export const usePersonInfographicFilterStore =
         aliveFilter: 'all',
         view: 'cards',
         query: '',
+        sort: 'influence',
         pinned: [],
 
+        setMany: (patch) => set(patch),
         toggleScope: (kind, value) =>
           set((state) => {
             const cur = state.scopes[kind]
@@ -77,6 +95,7 @@ export const usePersonInfographicFilterStore =
         setAliveFilter: (aliveFilter) => set({ aliveFilter }),
         setView: (view) => set({ view }),
         setQuery: (query) => set({ query }),
+        setSort: (sort) => set({ sort }),
         togglePin: (id) =>
           set((state) => ({
             pinned: state.pinned.includes(id)
@@ -89,6 +108,7 @@ export const usePersonInfographicFilterStore =
             minInfluence: 0,
             aliveFilter: 'all',
             query: '',
+            sort: 'influence',
           }),
       }),
       {

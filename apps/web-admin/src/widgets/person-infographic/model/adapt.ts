@@ -1,8 +1,8 @@
 import type { Person } from '@/entities/person/api'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
-import { COUNTRY_REGION, ERAS } from './constants'
-import type { AdaptedPerson } from './types'
+import { COUNTRY_REGION, ERAS, FIELDS } from './constants'
+import type { AdaptedPerson, ReignLite, TenureLite } from './types'
 
 export function getRegion(name?: string | null): string {
   if (!name) return '기타'
@@ -13,19 +13,54 @@ export function getRegion(name?: string | null): string {
   return '기타'
 }
 
+/**
+ * Person.country(=현대 국가 직결, deprecated 예정)가 비어 있을 때
+ * countryAffiliations 체인으로 폴백:
+ *   1) affiliation.country.name (현대 국가가 affiliation에 직접)
+ *   2) affiliation.historicalCountry.modernConnections[0].modernCountry.name (HC ↔ 모던 링크)
+ *   3) affiliation.historicalCountry.name (마지막 — HC 이름 자체)
+ */
+export function pickCountryName(p: Person): string {
+  const direct = p.country?.name
+  if (direct) return direct
+  const affs = (p.countryAffiliations ?? []) as Array<{
+    country?: { name?: string | null } | null
+    historicalCountry?: {
+      name?: string | null
+      modernConnections?: Array<{ modernCountry?: { name?: string | null } | null }>
+    } | null
+  }>
+  for (const aff of affs) {
+    const fromAffCountry = aff.country?.name
+    if (fromAffCountry) return fromAffCountry
+    const linkedModern = aff.historicalCountry?.modernConnections?.[0]?.modernCountry?.name
+    if (linkedModern) return linkedModern
+  }
+  for (const aff of affs) {
+    const hcName = aff.historicalCountry?.name
+    if (hcName) return hcName
+  }
+  return ''
+}
+
+const POLITICAL_TYPES = new Set([
+  'HEAD_OF_STATE',
+  'HEAD_OF_GOVERNMENT',
+  'CABINET_MINISTER',
+  'LEGISLATOR',
+  'JUDICIARY',
+])
+
+/** Person → 분야 분류 (FIELDS 상수 기준). */
 export function getField(p: Person): string {
-  const reigns: any[] = (p as any).sovereignReigns ?? []
-  const tenures: any[] = (p as any).governmentTenures ?? []
+  const reigns = (p.sovereignReigns ?? []) as ReignLite[]
+  const tenures = (p.governmentTenures ?? []) as TenureLite[]
   if (reigns.length > 0) return '정치'
-  const types = tenures.map((t) => t.positionType as string)
+  const types = tenures.map((t) => t.positionType ?? '')
   if (types.includes('MILITARY_COMMANDER')) return '군사'
-  if (
-    types.some((t) =>
-      ['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT', 'CABINET_MINISTER', 'LEGISLATOR', 'JUDICIARY'].includes(t),
-    )
-  )
-    return '정치'
-  return '정치'
+  if (types.some((t) => POLITICAL_TYPES.has(t))) return '정치'
+  // 매칭 정보가 없으면 '기타' — 데이터 부족이지 정치 분류는 아님
+  return FIELDS[FIELDS.length - 1]
 }
 
 export function toYear(y?: number | null, era?: string | null): number {
@@ -40,36 +75,44 @@ export function yearOfEra(y: number) {
 
 export function adapt(p: Person): AdaptedPerson | null {
   if (!p.birthYear && !p.deathYear) return null
+
   const born = toYear(p.birthYear, p.birthEra)
+  // deathYear가 있으면 isAlive와 무관하게 그 값을 우선. 둘 다 없으면 currentYear 폴백.
+  const deathYearVal = toYear(p.deathYear, p.deathEra)
   const isAliveFlag = !!p.isAlive
-  const died = isAliveFlag
-    ? new Date().getFullYear()
-    : toYear(p.deathYear, p.deathEra) || new Date().getFullYear()
-  const countryName = (p as any).country?.name ?? ''
-  const tenures: any[] = (p as any).governmentTenures ?? []
-  const reigns: any[] = (p as any).sovereignReigns ?? []
-  const raw = (p as any).influence
+  const died = deathYearVal !== 0
+    ? deathYearVal
+    : isAliveFlag
+      ? new Date().getFullYear()
+      : new Date().getFullYear()
+
+  // 잘못된 입력(NaN/Infinity) 방어 — 시각화가 깨지지 않도록 폐기
+  if (!Number.isFinite(born) || !Number.isFinite(died)) return null
+
+  const countryName = pickCountryName(p)
+  const tenures = (p.governmentTenures ?? []) as TenureLite[]
+  const reigns = (p.sovereignReigns ?? []) as ReignLite[]
+  const rawInfluence = p.influence
   const influence =
-    typeof raw === 'number' ? Math.max(0, Math.min(100, raw)) : 0
+    typeof rawInfluence === 'number'
+      ? Math.max(0, Math.min(100, rawInfluence))
+      : 0
   const name =
     getPersonDisplayName({
       name: p.name,
-      surname: (p as any).surname,
-      middleName: (p as any).middleName,
-      country: (p as any).country,
+      surname: p.surname,
+      middleName: p.middleName,
+      country: p.country,
     }) ||
     p.name ||
     '이름 없음'
 
   // 시대 분류용 활동연도: 재임 시작연도 평균 → 없으면 생몰 중간값
   const tenureYears = tenures
-    .map((t: any) =>
-      t.startDate ? new Date(t.startDate).getFullYear() : null,
-    )
-    .filter((y: number | null): y is number => y !== null && !isNaN(y))
+    .map((t) => (t.startDate ? new Date(t.startDate).getFullYear() : null))
+    .filter((y): y is number => y !== null && !isNaN(y))
   const activityYear = tenureYears.length
-    ? tenureYears.reduce((a: number, b: number) => a + b, 0) /
-      tenureYears.length
+    ? tenureYears.reduce((a, b) => a + b, 0) / tenureYears.length
     : (born + died) / 2
 
   const age =
@@ -77,7 +120,7 @@ export function adapt(p: Person): AdaptedPerson | null {
       ? Math.max(0, Math.abs(died - born))
       : null
 
-  const regnal = (p as any).regnalName as string | null | undefined
+  const regnal = p.regnalName
   const firstTenure = tenures[0]
   const primaryTitle: string | null =
     (regnal && regnal.trim()) ||
@@ -87,12 +130,12 @@ export function adapt(p: Person): AdaptedPerson | null {
 
   const isMonarch = reigns.length > 0 || !!(regnal && regnal.trim())
   const isHeadOfState = tenures.some(
-    (t: any) =>
+    (t) =>
       t.positionType === 'HEAD_OF_STATE' ||
       t.positionDefinition?.positionType === 'HEAD_OF_STATE',
   )
 
-  const bioRaw = (p as any).biography
+  const bioRaw = p.biography
   const biography =
     typeof bioRaw === 'string' && bioRaw.trim() ? bioRaw.trim() : null
 
@@ -106,9 +149,9 @@ export function adapt(p: Person): AdaptedPerson | null {
     region: getRegion(countryName),
     country: countryName || '미상',
     field: getField(p),
-    faction: (p as any).dynasty?.name ?? '',
+    faction: p.dynasty?.name ?? '',
     influence,
-    profileImageUrl: (p as any).profileImageUrl ?? null,
+    profileImageUrl: p.profileImageUrl ?? null,
     isMonarch,
     isHeadOfState,
     primaryTitle,

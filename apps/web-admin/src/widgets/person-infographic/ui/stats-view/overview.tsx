@@ -438,13 +438,22 @@ export function OverviewPane({
                 {list.length === 0 ? (
                   <LeaderEmpty>—</LeaderEmpty>
                 ) : (
-                  list.map((row, i) => (
-                    <LeaderRow key={row.person.id} type="button" onClick={() => onPersonClick(row.person.id)}>
-                      <LeaderRank>{i + 1}</LeaderRank>
-                      <LeaderName>{row.person.name}</LeaderName>
-                      <LeaderValue style={{ color: meta.color }}>{row.value}</LeaderValue>
-                    </LeaderRow>
-                  ))
+                  list.map((row, i) => {
+                    const rank = i + 1
+                    return (
+                      <LeaderRow
+                        key={row.person.id}
+                        type="button"
+                        onClick={() => onPersonClick(row.person.id)}
+                      >
+                        <LeaderRank $rank={rank}>{rank}</LeaderRank>
+                        <LeaderName $rank={rank}>{row.person.name}</LeaderName>
+                        <LeaderValue $rank={rank} style={{ color: meta.color }}>
+                          {row.value}
+                        </LeaderValue>
+                      </LeaderRow>
+                    )
+                  })
                 )}
               </LeaderColumn>
             )
@@ -756,13 +765,15 @@ const LeaderEmpty = styled.div`
   padding: 6px 0;
 `
 
+/** 1·2·3위 메달 색 — gold/silver/bronze. 인덱스는 (rank-1) */
+const MEDAL_COLORS = ['#f59e0b', '#9ca3af', '#b45309'] as const
+
 const LeaderRow = styled.button`
   display: grid;
   grid-template-columns: 18px 1fr auto;
   align-items: center;
   gap: 8px;
   padding: 4px 6px;
-  font-size: 11.5px;
   border: none;
   border-radius: 5px;
   background: transparent;
@@ -774,23 +785,32 @@ const LeaderRow = styled.button`
   }
 `
 
-const LeaderRank = styled.span`
-  font-weight: 700;
-  font-size: 10.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+/**
+ * 1·2·3위는 메달 색으로 강조, 나머지는 무채색.
+ * 행 자체는 같은 높이/패딩으로 유지 — 위계는 색·굵기로만 표현.
+ */
+const LeaderRank = styled.span<{ $rank: number }>`
   font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  font-weight: ${({ $rank }) => ($rank <= 3 ? 800 : 600)};
+  text-align: center;
+  color: ${({ $rank, theme }) =>
+    $rank <= 3 ? MEDAL_COLORS[$rank - 1] : theme.colors.text.tertiary};
 `
 
-const LeaderName = styled.span`
-  font-weight: 600;
+const LeaderName = styled.span<{ $rank: number }>`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 11.5px;
+  font-weight: ${({ $rank }) => ($rank === 1 ? 700 : $rank <= 3 ? 600 : 500)};
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const LeaderValue = styled.span`
-  font-weight: 700;
+const LeaderValue = styled.span<{ $rank: number }>`
   font-variant-numeric: tabular-nums;
+  font-weight: ${({ $rank }) => ($rank === 1 ? 800 : 700)};
+  font-size: ${({ $rank }) => ($rank === 1 ? '13px' : '11.5px')};
 `
 
 const TraitFreqList = styled.div`
