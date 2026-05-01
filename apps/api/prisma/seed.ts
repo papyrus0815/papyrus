@@ -45,6 +45,9 @@ import {
   seedQianlongEmperor,
   seedBackfillPersonCountryId,
   seedKoreaGeography,
+  seedJapanGeography,
+  seedUsaGeography,
+  seedChinaGeography,
 } from './seeds'
 
 const options = {
@@ -198,8 +201,11 @@ async function main() {
         // 13-5. Person.countryId 백필 — 인물 시드 모두 끝난 뒤 affiliation 체인으로 NULL 채움
         await seedBackfillPersonCountryId(prisma)
 
-        // 14. 한국 자연지리·인프라 (한라산·KTX·인천공항 등)
+        // 14. 자연지리·인프라 — 한국·일본·미국·중국
         await seedKoreaGeography(prisma)
+        await seedJapanGeography(prisma)
+        await seedUsaGeography(prisma)
+        await seedChinaGeography(prisma)
 
         // 11. 행정 부처 카테고리 시딩 (국방·외교 등)
         await seedAdministrationDepartmentCategories(prisma)

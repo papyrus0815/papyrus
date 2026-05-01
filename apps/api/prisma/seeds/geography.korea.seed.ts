@@ -1,37 +1,12 @@
 /**
  * 대한민국 자연지리(NaturalFeature) + 인프라(Infrastructure) 시드.
- *
- * 시연·테스트용 대표 항목 — 명승·대형 인프라 위주.
- * Country '대한민국'을 isoCode 'KR'로 조회한 뒤 그 ID를 모든 항목에 연결.
  */
 import { PrismaService } from '../prisma.service'
-
-interface NaturalFeatureSeed {
-  type: 'mountain' | 'river' | 'lake' | 'coast'
-  name: string
-  localName?: string
-  region?: string
-  latitude?: number
-  longitude?: number
-  heightM?: number
-  lengthKm?: number
-  areaSqKm?: number
-  isProtected?: boolean
-}
-
-interface InfrastructureSeed {
-  type: 'highway' | 'railway' | 'airport' | 'port'
-  name: string
-  localName?: string
-  code?: string
-  region?: string
-  latitude?: number
-  longitude?: number
-  lengthKm?: number
-  capacity?: string
-  operatorName?: string
-  openedYear?: number
-}
+import {
+  type InfrastructureSeed,
+  type NaturalFeatureSeed,
+  seedGeographyForCountry,
+} from './geography.shared'
 
 const NATURAL_FEATURES: NaturalFeatureSeed[] = [
   // 산
@@ -265,82 +240,10 @@ const INFRASTRUCTURES: InfrastructureSeed[] = [
 ]
 
 export async function seedKoreaGeography(prisma: PrismaService): Promise<void> {
-  console.log('\n🇰🇷 대한민국 자연지리·인프라 시딩 시작...')
-
-  const country = await prisma.country.findFirst({
-    where: { isoCode: 'KR' },
-    select: { id: true, name: true },
+  await seedGeographyForCountry(prisma, {
+    isoCode: 'KR',
+    countryNameKo: '대한민국',
+    naturalFeatures: NATURAL_FEATURES,
+    infrastructures: INFRASTRUCTURES,
   })
-  if (!country) {
-    console.warn('  ⚠️  대한민국 Country 레코드 없음 — 시딩 건너뜀')
-    return
-  }
-
-  // Idempotency: 같은 국가에 이미 동일 (type, name)이 있으면 skip
-  const existingFeatures = await prisma.naturalFeature.findMany({
-    where: { countryId: country.id },
-    select: { type: true, name: true },
-  })
-  const existingFeatureKeys = new Set(
-    existingFeatures.map((f) => `${f.type}::${f.name}`),
-  )
-
-  let createdFeatures = 0
-  for (const f of NATURAL_FEATURES) {
-    const key = `${f.type}::${f.name}`
-    if (existingFeatureKeys.has(key)) continue
-    await prisma.naturalFeature.create({
-      data: {
-        countryId: country.id,
-        type: f.type,
-        name: f.name,
-        localName: f.localName ?? null,
-        region: f.region ?? null,
-        latitude: f.latitude ?? null,
-        longitude: f.longitude ?? null,
-        heightM: f.heightM ?? null,
-        lengthKm: f.lengthKm ?? null,
-        areaSqKm: f.areaSqKm ?? null,
-        isProtected: f.isProtected ?? false,
-      },
-    })
-    createdFeatures++
-  }
-  console.log(
-    `  ✅ NaturalFeature: 신규 ${createdFeatures}건 / 기존 ${existingFeatures.length}건`,
-  )
-
-  const existingInfra = await prisma.infrastructure.findMany({
-    where: { countryId: country.id },
-    select: { type: true, name: true },
-  })
-  const existingInfraKeys = new Set(
-    existingInfra.map((i) => `${i.type}::${i.name}`),
-  )
-
-  let createdInfra = 0
-  for (const i of INFRASTRUCTURES) {
-    const key = `${i.type}::${i.name}`
-    if (existingInfraKeys.has(key)) continue
-    await prisma.infrastructure.create({
-      data: {
-        countryId: country.id,
-        type: i.type,
-        name: i.name,
-        localName: i.localName ?? null,
-        code: i.code ?? null,
-        region: i.region ?? null,
-        latitude: i.latitude ?? null,
-        longitude: i.longitude ?? null,
-        lengthKm: i.lengthKm ?? null,
-        capacity: i.capacity ?? null,
-        operatorName: i.operatorName ?? null,
-        openedYear: i.openedYear ?? null,
-      },
-    })
-    createdInfra++
-  }
-  console.log(
-    `  ✅ Infrastructure: 신규 ${createdInfra}건 / 기존 ${existingInfra.length}건`,
-  )
 }
