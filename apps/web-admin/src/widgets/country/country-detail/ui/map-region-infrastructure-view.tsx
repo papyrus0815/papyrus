@@ -2,9 +2,10 @@
  * 지도 및 지역 — 인프라 전용 뷰
  *
  * 데이터 소스: GET /infrastructures?countryId=xxx
- * CRUD: POST/PATCH/DELETE 모달 + 호버 액션.
+ * - 항목 클릭 시 지도가 좌표로 이동·핀 표시
+ * - 검색 / 정렬 / 키보드 네비 / URL 동기화 지원
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { toast } from 'react-hot-toast'
 
@@ -20,6 +21,7 @@ import {
   FilterPill,
   InfrastructureFormModal,
   ListEmptyState,
+  ListToolbarRow,
   MapCard,
   MetaCard,
   PillToolbar,
@@ -29,10 +31,18 @@ import {
   RegionListPanel,
   RegionSplitLayout,
   RegisterButton,
+  SearchInput,
+  SortSelect,
+  useListKeyboard,
   useRegionPalette,
+  useRegionUrlState,
 } from './map-region'
 
 type InfraFilter = 'all' | InfrastructureType
+type InfraSort = 'name' | 'length' | 'opened' | 'recent'
+
+const FILTER_VALUES = ['all', 'highway', 'railway', 'airport', 'port'] as const
+const SORT_VALUES = ['name', 'length', 'opened', 'recent'] as const
 
 interface MapRegionInfrastructureViewProps {
   country: {
@@ -49,6 +59,13 @@ const FILTERS: { value: InfraFilter; label: string }[] = [
   { value: 'railway', label: '철도' },
   { value: 'airport', label: '공항' },
   { value: 'port', label: '항구' },
+]
+
+const SORT_OPTIONS = [
+  { value: 'name' as const, label: '이름순' },
+  { value: 'length' as const, label: '길이 긴 순' },
+  { value: 'opened' as const, label: '개통 빠른 순' },
+  { value: 'recent' as const, label: '최근 등록순' },
 ]
 
 const TYPE_LABEL: Record<InfrastructureType, string> = {
@@ -71,8 +88,14 @@ export function MapRegionInfrastructureView({
   country,
 }: MapRegionInfrastructureViewProps) {
   const palette = useRegionPalette()
-  const [filter, setFilter] = useState<InfraFilter>('all')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const url = useRegionUrlState<InfraFilter, InfraSort>({
+    prefix: 'infra',
+    filterValues: FILTER_VALUES,
+    sortValues: SORT_VALUES,
+    defaultFilter: 'all',
+    defaultSort: 'name',
+  })
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Infrastructure | null>(null)
@@ -83,14 +106,50 @@ export function MapRegionInfrastructureView({
   const { data: allInfra = [], isLoading } = useInfrastructures(country.id)
   const deleteMut = useDeleteInfrastructure()
 
-  const filtered = useMemo(() => {
-    if (filter === 'all') return allInfra
-    return allInfra.filter((i) => i.type === filter)
-  }, [allInfra, filter])
+  const filteredAndSorted = useMemo(() => {
+    let list = allInfra
+    if (url.filter !== 'all') list = list.filter((i) => i.type === url.filter)
+    if (url.search.trim()) {
+      const q = url.search.trim().toLowerCase()
+      list = list.filter(
+        (i) =>
+          i.name.toLowerCase().includes(q) ||
+          (i.localName ?? '').toLowerCase().includes(q) ||
+          (i.code ?? '').toLowerCase().includes(q) ||
+          (i.region ?? '').toLowerCase().includes(q),
+      )
+    }
+    const sorted = [...list]
+    if (url.sort === 'name') {
+      sorted.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    } else if (url.sort === 'length') {
+      sorted.sort(
+        (a, b) => Number(b.lengthKm ?? 0) - Number(a.lengthKm ?? 0),
+      )
+    } else if (url.sort === 'opened') {
+      sorted.sort(
+        (a, b) =>
+          (a.openedYear ?? Number.MAX_SAFE_INTEGER) -
+          (b.openedYear ?? Number.MAX_SAFE_INTEGER),
+      )
+    } else {
+      sorted.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )
+    }
+    return sorted
+  }, [allInfra, url.filter, url.search, url.sort])
 
-  const selectedItem = selectedId
-    ? allInfra.find((i) => i.id === selectedId) ?? null
+  const selectedItem = url.selectedId
+    ? allInfra.find((i) => i.id === url.selectedId) ?? null
     : null
+
+  useEffect(() => {
+    if (url.selectedId && !allInfra.some((i) => i.id === url.selectedId)) {
+      url.setSelectedId(null)
+    }
+  }, [allInfra, url])
 
   const countByType = useMemo(() => {
     const counts: Record<InfrastructureType, number> = {
@@ -104,6 +163,24 @@ export function MapRegionInfrastructureView({
   }, [allInfra])
 
   const totalCount = allInfra.length
+
+  useListKeyboard({
+    items: filteredAndSorted,
+    selectedId: url.selectedId,
+    onSelect: url.setSelectedId,
+    enabled: !formOpen && !pendingDelete,
+  })
+
+  const mapLocation = useMemo(() => {
+    if (selectedItem?.latitude != null && selectedItem?.longitude != null) {
+      return {
+        latitude: Number(selectedItem.latitude),
+        longitude: Number(selectedItem.longitude),
+        name: selectedItem.name,
+      }
+    }
+    return null
+  }, [selectedItem])
 
   const openCreate = () => {
     setEditing(null)
@@ -123,7 +200,7 @@ export function MapRegionInfrastructureView({
     try {
       await deleteMut.mutateAsync(pendingDelete.id)
       toast.success('인프라 항목을 삭제했습니다')
-      if (selectedId === pendingDelete.id) setSelectedId(null)
+      if (url.selectedId === pendingDelete.id) url.setSelectedId(null)
       setPendingDelete(null)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '삭제에 실패했습니다')
@@ -183,23 +260,28 @@ export function MapRegionInfrastructureView({
         />
       )
     }
-    if (filtered.length === 0) {
+    if (filteredAndSorted.length === 0) {
+      const message = url.search.trim()
+        ? `"${url.search}" 검색 결과가 없습니다`
+        : `${TYPE_LABEL[url.filter as InfrastructureType] ?? ''} 항목이 없습니다`
       return (
         <ListEmptyState
           palette={palette}
-          message={`${TYPE_LABEL[filter as InfrastructureType] ?? ''} 항목이 없습니다`}
+          message={message}
           action={
-            <RegisterButton palette={palette} onClick={openCreate} />
+            !url.search.trim() ? (
+              <RegisterButton palette={palette} onClick={openCreate} />
+            ) : undefined
           }
         />
       )
     }
-    return filtered.map((item) => (
+    return filteredAndSorted.map((item) => (
       <RegionListItem
         key={item.id}
         palette={palette}
-        selected={selectedId === item.id}
-        onSelect={() => setSelectedId(item.id)}
+        selected={url.selectedId === item.id}
+        onSelect={() => url.setSelectedId(item.id)}
         title={item.name}
         subtitle={buildSubtitle(item) || TYPE_LABEL[item.type]}
         onEdit={() => openEdit(item)}
@@ -213,7 +295,8 @@ export function MapRegionInfrastructureView({
       <MapCard
         palette={palette}
         country={country}
-        zoom={{ withLocation: 7, withoutLocation: 7 }}
+        mapLocation={mapLocation}
+        zoom={{ withLocation: 11, withoutLocation: 7 }}
       />
 
       <RegionSplitLayout
@@ -227,23 +310,39 @@ export function MapRegionInfrastructureView({
             maxHeight={1120}
             minHeight={400}
             toolbar={
-              <PillToolbar
-                palette={palette}
-                rightSlot={
-                  <RegisterButton palette={palette} onClick={openCreate} />
-                }
-              >
-                {FILTERS.map((f) => (
-                  <FilterPill
-                    key={f.value}
+              <>
+                <ListToolbarRow
+                  palette={palette}
+                  rightSlot={
+                    <RegisterButton palette={palette} onClick={openCreate} />
+                  }
+                >
+                  <SearchInput
                     palette={palette}
-                    active={filter === f.value}
-                    onClick={() => setFilter(f.value)}
-                  >
-                    {f.label}
-                  </FilterPill>
-                ))}
-              </PillToolbar>
+                    value={url.search}
+                    onChange={url.setSearch}
+                    placeholder="이름·코드·지역으로 검색"
+                  />
+                  <SortSelect
+                    palette={palette}
+                    value={url.sort}
+                    options={SORT_OPTIONS}
+                    onChange={url.setSort}
+                  />
+                </ListToolbarRow>
+                <PillToolbar palette={palette}>
+                  {FILTERS.map((f) => (
+                    <FilterPill
+                      key={f.value}
+                      palette={palette}
+                      active={url.filter === f.value}
+                      onClick={() => url.setFilter(f.value)}
+                    >
+                      {f.label}
+                    </FilterPill>
+                  ))}
+                </PillToolbar>
+              </>
             }
           >
             {listContent}
@@ -255,6 +354,7 @@ export function MapRegionInfrastructureView({
             isSelected={!!selectedItem}
             emptyIcon="⚡"
             emptyTitle="인프라를 선택해주세요"
+            emptyDescription="좌측 목록에서 항목을 선택하면 지도가 해당 위치로 이동합니다 (↑↓ Esc)"
             header={
               selectedItem ? (
                 <RegionDetailHeader
@@ -318,7 +418,9 @@ export function MapRegionInfrastructureView({
         isOpen={formOpen}
         countryId={country.id}
         editing={editing}
-        defaultType={filter !== 'all' ? (filter as InfrastructureType) : 'highway'}
+        defaultType={
+          url.filter !== 'all' ? (url.filter as InfrastructureType) : 'highway'
+        }
         onClose={closeForm}
       />
 
