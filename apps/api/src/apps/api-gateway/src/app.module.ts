@@ -27,6 +27,8 @@ import { GlossaryModule } from '../../../libs/glossary/glossary.module'
 import { TreatyModule } from '../../../libs/treaty/treaty.module'
 import { ElectionModule } from '../../../libs/election/election.module'
 import { EntityLinkSearchModule } from '../../../libs/entity-link-search/entity-link-search.module'
+import { NaturalFeatureModule } from '../../../libs/natural-feature/natural-feature.module'
+import { InfrastructureModule } from '../../../libs/infrastructure/infrastructure.module'
 
 import {
   AppConfigModule,
@@ -68,6 +70,8 @@ import {
     TreatyModule,
     ElectionModule,
     EntityLinkSearchModule,
+    NaturalFeatureModule,
+    InfrastructureModule,
     HealthModule,
   ],
   controllers: [AppController],

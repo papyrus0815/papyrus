@@ -1,9 +1,16 @@
 /**
  * 지도 및 지역 — 인프라 전용 뷰
+ *
+ * 데이터 소스: GET /infrastructures?countryId=xxx
  */
 import { useMemo, useState } from 'react'
 
-import { mockInfrastructureData } from '../mock'
+import {
+  type Infrastructure,
+  type InfrastructureType,
+  useInfrastructures,
+} from '@/entities/country/api.infrastructure'
+
 import {
   FilterPill,
   ListEmptyState,
@@ -18,19 +25,40 @@ import {
   useRegionPalette,
 } from './map-region'
 
-type InfraFilter = 'all' | 'highways' | 'railways' | 'airports' | 'ports'
+type InfraFilter = 'all' | InfrastructureType
 
 interface MapRegionInfrastructureViewProps {
-  country: { name: string; latitude?: number | null; longitude?: number | null }
+  country: {
+    id: string
+    name: string
+    latitude?: number | null
+    longitude?: number | null
+  }
 }
 
 const FILTERS: { value: InfraFilter; label: string }[] = [
   { value: 'all', label: '전체' },
-  { value: 'highways', label: '고속도로' },
-  { value: 'railways', label: '철도' },
-  { value: 'airports', label: '공항' },
-  { value: 'ports', label: '항구' },
+  { value: 'highway', label: '고속도로' },
+  { value: 'railway', label: '철도' },
+  { value: 'airport', label: '공항' },
+  { value: 'port', label: '항구' },
 ]
+
+const TYPE_LABEL: Record<InfrastructureType, string> = {
+  highway: '고속도로',
+  railway: '철도',
+  airport: '공항',
+  port: '항구',
+}
+
+function buildSubtitle(item: Infrastructure): string {
+  const parts: string[] = []
+  if (item.code) parts.push(item.code)
+  if (item.lengthKm != null) parts.push(`${item.lengthKm.toLocaleString()}km`)
+  if (item.capacity) parts.push(item.capacity)
+  if (item.openedYear != null) parts.push(`${item.openedYear}`)
+  return parts.join(' · ')
+}
 
 export function MapRegionInfrastructureView({
   country,
@@ -39,77 +67,29 @@ export function MapRegionInfrastructureView({
   const [filter, setFilter] = useState<InfraFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const items = useMemo(() => {
-    const list: { id: string; name: string; subtitle: string; type: string }[] =
-      []
-    if (filter === 'all' || filter === 'highways') {
-      ;(mockInfrastructureData.highways || []).forEach((h) =>
-        list.push({
-          id: h.id,
-          name: h.name,
-          subtitle: `${h.number} · ${h.length} · ${h.opening}`,
-          type: 'highway',
-        }),
-      )
-    }
-    if (filter === 'all' || filter === 'railways') {
-      ;(mockInfrastructureData.railways || []).forEach((r) =>
-        list.push({
-          id: r.id,
-          name: r.name,
-          subtitle: `${r.type} · ${r.length} · ${r.operator}`,
-          type: 'railway',
-        }),
-      )
-    }
-    if (filter === 'all' || filter === 'airports') {
-      ;(mockInfrastructureData.airports || []).forEach((a) =>
-        list.push({
-          id: a.id,
-          name: a.name,
-          subtitle: `${a.code} · ${a.type} · ${a.passengers}`,
-          type: 'airport',
-        }),
-      )
-    }
-    if (filter === 'all' || filter === 'ports') {
-      ;(mockInfrastructureData.ports || []).forEach((p) =>
-        list.push({
-          id: p.id,
-          name: p.name,
-          subtitle: `${p.type} · ${p.capacity} · ${p.location}`,
-          type: 'port',
-        }),
-      )
-    }
-    return list
-  }, [filter])
+  const { data: allInfra = [], isLoading } = useInfrastructures(country.id)
+
+  const filtered = useMemo(() => {
+    if (filter === 'all') return allInfra
+    return allInfra.filter((i) => i.type === filter)
+  }, [allInfra, filter])
 
   const selectedItem = selectedId
-    ? items.find((i) => i.id === selectedId)
+    ? allInfra.find((i) => i.id === selectedId) ?? null
     : null
-  const selectedHighway =
-    selectedId && mockInfrastructureData.highways
-      ? mockInfrastructureData.highways.find((h) => h.id === selectedId)
-      : null
-  const selectedRailway =
-    selectedId && mockInfrastructureData.railways
-      ? mockInfrastructureData.railways.find((r) => r.id === selectedId)
-      : null
-  const selectedAirport =
-    selectedId && mockInfrastructureData.airports
-      ? mockInfrastructureData.airports.find((a) => a.id === selectedId)
-      : null
-  const selectedPort =
-    selectedId && mockInfrastructureData.ports
-      ? mockInfrastructureData.ports.find((p) => p.id === selectedId)
-      : null
 
-  const totalCount =
-    (mockInfrastructureData.highways?.length ?? 0) +
-    (mockInfrastructureData.railways?.length ?? 0) +
-    (mockInfrastructureData.airports?.length ?? 0) +
-    (mockInfrastructureData.ports?.length ?? 0)
+  const countByType = useMemo(() => {
+    const counts: Record<InfrastructureType, number> = {
+      highway: 0,
+      railway: 0,
+      airport: 0,
+      port: 0,
+    }
+    for (const i of allInfra) counts[i.type]++
+    return counts
+  }, [allInfra])
+
+  const totalCount = allInfra.length
 
   const kpiStrip = (
     <div
@@ -129,10 +109,10 @@ export function MapRegionInfrastructureView({
     >
       <span style={{ color: palette.text, fontWeight: 600 }}>현재 보기</span>
       <span>·</span>
-      <span>고속도로 {mockInfrastructureData.highways?.length ?? 0}개</span>
-      <span>철도 {mockInfrastructureData.railways?.length ?? 0}개</span>
-      <span>공항 {mockInfrastructureData.airports?.length ?? 0}개</span>
-      <span>항구 {mockInfrastructureData.ports?.length ?? 0}개</span>
+      <span>고속도로 {countByType.highway}개</span>
+      <span>철도 {countByType.railway}개</span>
+      <span>공항 {countByType.airport}개</span>
+      <span>항구 {countByType.port}개</span>
       <span
         style={{
           marginLeft: 'auto',
@@ -144,6 +124,38 @@ export function MapRegionInfrastructureView({
       </span>
     </div>
   )
+
+  const listContent = (() => {
+    if (isLoading) {
+      return <ListEmptyState palette={palette} message="불러오는 중..." />
+    }
+    if (allInfra.length === 0) {
+      return (
+        <ListEmptyState
+          palette={palette}
+          message="등록된 인프라 항목이 없습니다"
+        />
+      )
+    }
+    if (filtered.length === 0) {
+      return (
+        <ListEmptyState
+          palette={palette}
+          message={`${TYPE_LABEL[filter as InfrastructureType] ?? ''} 항목이 없습니다`}
+        />
+      )
+    }
+    return filtered.map((item) => (
+      <RegionListItem
+        key={item.id}
+        palette={palette}
+        selected={selectedId === item.id}
+        onSelect={() => setSelectedId(item.id)}
+        title={item.name}
+        subtitle={buildSubtitle(item) || TYPE_LABEL[item.type]}
+      />
+    ))
+  })()
 
   return (
     <>
@@ -178,20 +190,7 @@ export function MapRegionInfrastructureView({
               </PillToolbar>
             }
           >
-            {items.length === 0 ? (
-              <ListEmptyState palette={palette} />
-            ) : (
-              items.map((item) => (
-                <RegionListItem
-                  key={item.id}
-                  palette={palette}
-                  selected={selectedId === item.id}
-                  onSelect={() => setSelectedId(item.id)}
-                  title={item.name}
-                  subtitle={item.subtitle}
-                />
-              ))
-            )}
+            {listContent}
           </RegionListPanel>
         }
         right={
@@ -205,43 +204,55 @@ export function MapRegionInfrastructureView({
                 <RegionDetailHeader
                   palette={palette}
                   title={selectedItem.name}
-                  subtitle={selectedItem.subtitle}
+                  subtitle={
+                    selectedItem.localName
+                      ? `${TYPE_LABEL[selectedItem.type]} · ${selectedItem.localName}`
+                      : TYPE_LABEL[selectedItem.type]
+                  }
                 />
               ) : null
             }
           >
-            {selectedHighway && (
-              <>
-                <MetaCard palette={palette} label="노선 번호" value={selectedHighway.number} />
-                <MetaCard palette={palette} label="연장" value={selectedHighway.length} />
-                <MetaCard palette={palette} label="차선" value={selectedHighway.lanes} />
-                <MetaCard palette={palette} label="구간" value={selectedHighway.sections} />
-                <MetaCard palette={palette} label="개통" value={selectedHighway.opening} />
-              </>
+            {selectedItem?.code && (
+              <MetaCard palette={palette} label="식별 코드" value={selectedItem.code} />
             )}
-            {selectedRailway && (
-              <>
-                <MetaCard palette={palette} label="유형" value={selectedRailway.type} />
-                <MetaCard palette={palette} label="연장" value={selectedRailway.length} />
-                <MetaCard palette={palette} label="역 수" value={selectedRailway.stations ?? '—'} />
-                <MetaCard palette={palette} label="개통" value={selectedRailway.opening} />
-                <MetaCard palette={palette} label="운영" value={selectedRailway.operator} />
-              </>
+            {selectedItem?.region && (
+              <MetaCard palette={palette} label="지역" value={selectedItem.region} />
             )}
-            {selectedAirport && (
-              <>
-                <MetaCard palette={palette} label="코드" value={selectedAirport.code} />
-                <MetaCard palette={palette} label="유형" value={selectedAirport.type} />
-                <MetaCard palette={palette} label="이용객" value={selectedAirport.passengers} />
-                <MetaCard palette={palette} label="위치" value={selectedAirport.location} />
-              </>
+            {selectedItem?.lengthKm != null && (
+              <MetaCard
+                palette={palette}
+                label="길이"
+                value={`${selectedItem.lengthKm.toLocaleString()}km`}
+              />
             )}
-            {selectedPort && (
-              <>
-                <MetaCard palette={palette} label="유형" value={selectedPort.type} />
-                <MetaCard palette={palette} label="처리능력" value={selectedPort.capacity} />
-                <MetaCard palette={palette} label="위치" value={selectedPort.location} />
-              </>
+            {selectedItem?.capacity && (
+              <MetaCard
+                palette={palette}
+                label="이용량/처리능력"
+                value={selectedItem.capacity}
+              />
+            )}
+            {selectedItem?.operatorName && (
+              <MetaCard
+                palette={palette}
+                label="운영"
+                value={selectedItem.operatorName}
+              />
+            )}
+            {selectedItem?.openedYear != null && (
+              <MetaCard
+                palette={palette}
+                label="개통"
+                value={`${selectedItem.openedYear}년`}
+              />
+            )}
+            {selectedItem?.latitude != null && selectedItem?.longitude != null && (
+              <MetaCard
+                palette={palette}
+                label="좌표"
+                value={`${selectedItem.latitude.toFixed(4)}, ${selectedItem.longitude.toFixed(4)}`}
+              />
             )}
           </RegionDetailPanel>
         }

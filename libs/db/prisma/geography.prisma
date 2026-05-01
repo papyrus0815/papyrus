@@ -58,3 +58,136 @@ model Continent {
   @@index([parentId], name: "idx_continent_parentId")
   @@map("continent")
 }
+
+// ========================
+// NaturalFeature
+// ========================
+/// 자연 지리 항목 — 산·강·호수·해안을 type으로 구분.
+/// 자주 쓰는 검색·정렬 필드(고도·길이·면적·보호구역 여부)는 1급 컬럼,
+/// 그 외 부가 정보는 attributes JSON으로.
+model NaturalFeature {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 국가
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 항목 유형
+  type NaturalFeatureType
+
+  /// 명칭 (한국어 또는 기본 표기)
+  name String @db.VarChar(120)
+
+  /// 현지어 명칭
+  localName String? @map("local_name") @db.VarChar(120)
+
+  /// 위치 설명 (예: "강원특별자치도", "전북/전남/경남")
+  region String? @db.VarChar(120)
+
+  /// 위도
+  latitude Decimal? @db.Decimal(10, 7)
+
+  /// 경도
+  longitude Decimal? @db.Decimal(10, 7)
+
+  /// 산 고도 (미터)
+  heightM Int? @map("height_m")
+
+  /// 길이 (km) — 강·해안
+  lengthKm Decimal? @map("length_km") @db.Decimal(10, 2)
+
+  /// 면적 (km²) — 호수
+  areaSqKm Decimal? @map("area_sq_km") @db.Decimal(15, 2)
+
+  /// 국립공원·보호구역 등록 여부
+  isProtected Boolean @default(false) @map("is_protected")
+
+  /// 부가 정보 (수원지·하구·수심·유형 등 type별 자유서식)
+  attributes Json?
+
+  //--- 관계 필드
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId, type], name: "idx_natural_feature_country_type")
+  @@index([type], name: "idx_natural_feature_type")
+  @@map("natural_feature")
+}
+
+enum NaturalFeatureType {
+  mountain
+  river
+  lake
+  coast
+}
+
+// ========================
+// Infrastructure
+// ========================
+/// 인프라 항목 — 고속도로·철도·공항·항구를 type으로 구분.
+/// 자주 쓰는 1급 필드(코드·길이·운영자·개통연도)만 컬럼으로,
+/// 차로 수·역 수·이용객 등 부가 정보는 attributes JSON으로.
+model Infrastructure {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 국가
+  countryId String @map("country_id") @db.Char(36)
+
+  /// 항목 유형
+  type InfrastructureType
+
+  /// 명칭
+  name String @db.VarChar(120)
+
+  /// 현지어 명칭
+  localName String? @map("local_name") @db.VarChar(120)
+
+  /// 식별 코드 — 노선번호(고속도로 1번), IATA 코드(ICN), 항구코드 등
+  code String? @db.VarChar(20)
+
+  /// 위치 설명
+  region String? @map("region") @db.VarChar(120)
+
+  /// 위도
+  latitude Decimal? @db.Decimal(10, 7)
+
+  /// 경도
+  longitude Decimal? @db.Decimal(10, 7)
+
+  /// 길이 (km) — 고속도로·철도
+  lengthKm Decimal? @map("length_km") @db.Decimal(10, 2)
+
+  /// 처리능력·이용객 (자유서식, 예: "연 7천만명", "20만 TEU")
+  capacity String? @db.VarChar(80)
+
+  /// 운영 기관
+  operatorName String? @map("operator_name") @db.VarChar(120)
+
+  /// 개통 연도
+  openedYear Int? @map("opened_year")
+
+  /// 부가 정보 (차선·역수·구간 등)
+  attributes Json?
+
+  //--- 관계 필드
+  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId, type], name: "idx_infrastructure_country_type")
+  @@index([type], name: "idx_infrastructure_type")
+  @@map("infrastructure")
+}
+
+enum InfrastructureType {
+  highway
+  railway
+  airport
+  port
+}

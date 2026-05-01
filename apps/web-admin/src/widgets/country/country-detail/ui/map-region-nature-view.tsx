@@ -1,9 +1,17 @@
 /**
  * 지도 및 지역 — 자연지리 전용 뷰
+ *
+ * 데이터 소스: GET /natural-features?countryId=xxx
+ * 비어 있으면 "등록된 항목 없음" 빈 상태 노출.
  */
 import { useMemo, useState } from 'react'
 
-import { mockNatureData } from '../mock'
+import {
+  type NaturalFeature,
+  type NaturalFeatureType,
+  useNaturalFeatures,
+} from '@/entities/country/api.natural-feature'
+
 import {
   FilterPill,
   ListEmptyState,
@@ -18,96 +26,77 @@ import {
   useRegionPalette,
 } from './map-region'
 
-type NatureFilter = 'all' | 'mountains' | 'rivers' | 'lakes' | 'coasts'
+type NatureFilter = 'all' | NaturalFeatureType
 
 interface MapRegionNatureViewProps {
-  country: { name: string; latitude?: number | null; longitude?: number | null }
+  country: {
+    id: string
+    name: string
+    latitude?: number | null
+    longitude?: number | null
+  }
 }
 
 const FILTERS: { value: NatureFilter; label: string }[] = [
   { value: 'all', label: '전체' },
-  { value: 'mountains', label: '산' },
-  { value: 'rivers', label: '강' },
-  { value: 'lakes', label: '호수' },
-  { value: 'coasts', label: '해안' },
+  { value: 'mountain', label: '산' },
+  { value: 'river', label: '강' },
+  { value: 'lake', label: '호수' },
+  { value: 'coast', label: '해안' },
 ]
+
+const TYPE_LABEL: Record<NaturalFeatureType, string> = {
+  mountain: '산',
+  river: '강',
+  lake: '호수',
+  coast: '해안',
+}
+
+const EMPTY_ICON_BY_TYPE: Record<NaturalFeatureType, string> = {
+  mountain: '🏔️',
+  river: '🏞️',
+  lake: '🏞️',
+  coast: '🏖️',
+}
+
+function buildSubtitle(item: NaturalFeature): string {
+  const parts: string[] = []
+  if (item.region) parts.push(item.region)
+  if (item.heightM != null) parts.push(`${item.heightM.toLocaleString()}m`)
+  if (item.lengthKm != null) parts.push(`${item.lengthKm.toLocaleString()}km`)
+  if (item.areaSqKm != null) parts.push(`${item.areaSqKm.toLocaleString()}km²`)
+  if (item.isProtected) parts.push('보호구역')
+  return parts.join(' · ')
+}
 
 export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
   const palette = useRegionPalette()
   const [filter, setFilter] = useState<NatureFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const items = useMemo(() => {
-    const list: { id: string; name: string; subtitle: string; type: string }[] =
-      []
-    if (filter === 'all' || filter === 'mountains') {
-      ;(mockNatureData.mountains || []).forEach((m) =>
-        list.push({
-          id: m.id,
-          name: m.name,
-          subtitle: `${m.region} · ${m.height}${m.nationalPark ? ' · 국립공원' : ''}`,
-          type: 'mountain',
-        }),
-      )
-    }
-    if (filter === 'all' || filter === 'rivers') {
-      ;(mockNatureData.rivers || []).forEach((r) =>
-        list.push({
-          id: r.id,
-          name: r.name,
-          subtitle: `${r.region} · ${r.length} · ${r.source} → ${r.mouth}`,
-          type: 'river',
-        }),
-      )
-    }
-    if (filter === 'all' || filter === 'lakes') {
-      ;(mockNatureData.lakes || []).forEach((l) =>
-        list.push({
-          id: l.id,
-          name: l.name,
-          subtitle: `${l.region} · ${l.area} · ${l.type}`,
-          type: 'lake',
-        }),
-      )
-    }
-    if (filter === 'all' || filter === 'coasts') {
-      ;(mockNatureData.coasts || []).forEach((c) =>
-        list.push({
-          id: c.id,
-          name: c.name,
-          subtitle: `${c.region} · ${c.length} · ${c.type}`,
-          type: 'coast',
-        }),
-      )
-    }
-    return list
-  }, [filter])
+  const { data: allFeatures = [], isLoading } = useNaturalFeatures(country.id)
+
+  const filtered = useMemo(() => {
+    if (filter === 'all') return allFeatures
+    return allFeatures.filter((f) => f.type === filter)
+  }, [allFeatures, filter])
 
   const selectedItem = selectedId
-    ? items.find((i) => i.id === selectedId)
+    ? allFeatures.find((f) => f.id === selectedId) ?? null
     : null
-  const selectedMountain =
-    selectedId && mockNatureData.mountains
-      ? mockNatureData.mountains.find((m) => m.id === selectedId)
-      : null
-  const selectedRiver =
-    selectedId && mockNatureData.rivers
-      ? mockNatureData.rivers.find((r) => r.id === selectedId)
-      : null
-  const selectedLake =
-    selectedId && mockNatureData.lakes
-      ? mockNatureData.lakes.find((l) => l.id === selectedId)
-      : null
-  const selectedCoast =
-    selectedId && mockNatureData.coasts
-      ? mockNatureData.coasts.find((c) => c.id === selectedId)
-      : null
 
-  const totalCount =
-    (mockNatureData.mountains?.length ?? 0) +
-    (mockNatureData.rivers?.length ?? 0) +
-    (mockNatureData.lakes?.length ?? 0) +
-    (mockNatureData.coasts?.length ?? 0)
+  const countByType = useMemo(() => {
+    const counts: Record<NaturalFeatureType, number> = {
+      mountain: 0,
+      river: 0,
+      lake: 0,
+      coast: 0,
+    }
+    for (const f of allFeatures) counts[f.type]++
+    return counts
+  }, [allFeatures])
+
+  const totalCount = allFeatures.length
 
   const kpiStrip = (
     <div
@@ -127,10 +116,10 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
     >
       <span style={{ color: palette.text, fontWeight: 600 }}>현재 보기</span>
       <span>·</span>
-      <span>산 {mockNatureData.mountains?.length ?? 0}개</span>
-      <span>강 {mockNatureData.rivers?.length ?? 0}개</span>
-      <span>호수 {mockNatureData.lakes?.length ?? 0}개</span>
-      <span>해안 {mockNatureData.coasts?.length ?? 0}개</span>
+      <span>산 {countByType.mountain}개</span>
+      <span>강 {countByType.river}개</span>
+      <span>호수 {countByType.lake}개</span>
+      <span>해안 {countByType.coast}개</span>
       <span
         style={{
           marginLeft: 'auto',
@@ -142,6 +131,38 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
       </span>
     </div>
   )
+
+  const listContent = (() => {
+    if (isLoading) {
+      return <ListEmptyState palette={palette} message="불러오는 중..." />
+    }
+    if (allFeatures.length === 0) {
+      return (
+        <ListEmptyState
+          palette={palette}
+          message="등록된 자연 지리 항목이 없습니다"
+        />
+      )
+    }
+    if (filtered.length === 0) {
+      return (
+        <ListEmptyState
+          palette={palette}
+          message={`${TYPE_LABEL[filter as NaturalFeatureType] ?? ''} 항목이 없습니다`}
+        />
+      )
+    }
+    return filtered.map((item) => (
+      <RegionListItem
+        key={item.id}
+        palette={palette}
+        selected={selectedId === item.id}
+        onSelect={() => setSelectedId(item.id)}
+        title={item.name}
+        subtitle={buildSubtitle(item) || TYPE_LABEL[item.type]}
+      />
+    ))
+  })()
 
   return (
     <>
@@ -176,70 +197,66 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
               </PillToolbar>
             }
           >
-            {items.length === 0 ? (
-              <ListEmptyState palette={palette} />
-            ) : (
-              items.map((item) => (
-                <RegionListItem
-                  key={item.id}
-                  palette={palette}
-                  selected={selectedId === item.id}
-                  onSelect={() => setSelectedId(item.id)}
-                  title={item.name}
-                  subtitle={item.subtitle}
-                />
-              ))
-            )}
+            {listContent}
           </RegionListPanel>
         }
         right={
           <RegionDetailPanel
             palette={palette}
             isSelected={!!selectedItem}
-            emptyIcon="🏔️"
+            emptyIcon={
+              filter !== 'all'
+                ? EMPTY_ICON_BY_TYPE[filter as NaturalFeatureType]
+                : '🏔️'
+            }
             emptyTitle="자연 지형을 선택해주세요"
             header={
               selectedItem ? (
                 <RegionDetailHeader
                   palette={palette}
                   title={selectedItem.name}
-                  subtitle={selectedItem.subtitle}
+                  subtitle={
+                    selectedItem.localName
+                      ? `${TYPE_LABEL[selectedItem.type]} · ${selectedItem.localName}`
+                      : TYPE_LABEL[selectedItem.type]
+                  }
                 />
               ) : null
             }
           >
-            {selectedMountain && (
-              <>
-                <MetaCard palette={palette} label="지역" value={selectedMountain.region} />
-                <MetaCard palette={palette} label="높이" value={selectedMountain.height} />
-                <MetaCard palette={palette} label="위치" value={selectedMountain.location} />
-                {selectedMountain.nationalPark && (
-                  <MetaCard palette={palette} label="구분" value="국립공원" />
-                )}
-              </>
+            {selectedItem?.region && (
+              <MetaCard palette={palette} label="지역" value={selectedItem.region} />
             )}
-            {selectedRiver && (
-              <>
-                <MetaCard palette={palette} label="길이" value={selectedRiver.length} />
-                <MetaCard palette={palette} label="발원" value={selectedRiver.source} />
-                <MetaCard palette={palette} label="하구" value={selectedRiver.mouth} />
-                <MetaCard palette={palette} label="지역" value={selectedRiver.region} />
-              </>
+            {selectedItem?.heightM != null && (
+              <MetaCard
+                palette={palette}
+                label="고도"
+                value={`${selectedItem.heightM.toLocaleString()}m`}
+              />
             )}
-            {selectedLake && (
-              <>
-                <MetaCard palette={palette} label="면적" value={selectedLake.area} />
-                <MetaCard palette={palette} label="수심" value={selectedLake.depth} />
-                <MetaCard palette={palette} label="유형" value={selectedLake.type} />
-                <MetaCard palette={palette} label="지역" value={selectedLake.region} />
-              </>
+            {selectedItem?.lengthKm != null && (
+              <MetaCard
+                palette={palette}
+                label="길이"
+                value={`${selectedItem.lengthKm.toLocaleString()}km`}
+              />
             )}
-            {selectedCoast && (
-              <>
-                <MetaCard palette={palette} label="길이" value={selectedCoast.length} />
-                <MetaCard palette={palette} label="지역" value={selectedCoast.region} />
-                <MetaCard palette={palette} label="유형" value={selectedCoast.type} />
-              </>
+            {selectedItem?.areaSqKm != null && (
+              <MetaCard
+                palette={palette}
+                label="면적"
+                value={`${selectedItem.areaSqKm.toLocaleString()}km²`}
+              />
+            )}
+            {selectedItem?.isProtected && (
+              <MetaCard palette={palette} label="구분" value="보호구역" />
+            )}
+            {selectedItem?.latitude != null && selectedItem?.longitude != null && (
+              <MetaCard
+                palette={palette}
+                label="좌표"
+                value={`${selectedItem.latitude.toFixed(4)}, ${selectedItem.longitude.toFixed(4)}`}
+              />
             )}
           </RegionDetailPanel>
         }
