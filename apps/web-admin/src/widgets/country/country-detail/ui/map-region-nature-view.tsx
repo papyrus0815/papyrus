@@ -1,14 +1,22 @@
 /**
  * 지도 및 지역 — 자연지리 전용 뷰
- * 행정조직/행정구역과 동일한 UI: SectionLabel, pill 필터, 카드, 단순 목록·상세
  */
 import { useMemo, useState } from 'react'
 
-import { GoogleMap } from '@/shared/ui/google-map/google-map'
-import { useThemeStore } from '@/shared/styles/theme.store'
-
 import { mockNatureData } from '../mock'
-import * as Styled from './map-region-section.styles'
+import {
+  FilterPill,
+  ListEmptyState,
+  MapCard,
+  MetaCard,
+  PillToolbar,
+  RegionDetailHeader,
+  RegionDetailPanel,
+  RegionListItem,
+  RegionListPanel,
+  RegionSplitLayout,
+  useRegionPalette,
+} from './map-region'
 
 type NatureFilter = 'all' | 'mountains' | 'rivers' | 'lakes' | 'coasts'
 
@@ -25,29 +33,9 @@ const FILTERS: { value: NatureFilter; label: string }[] = [
 ]
 
 export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-
-  const BORDER = isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'
-  const MUTED = isDark ? '#a1a1aa' : '#64748b'
-  const TITLE = isDark ? '#f4f4f5' : '#0f172a'
-  const MAIN = '#6366f1'
-  const BG = isDark ? 'rgba(255,255,255,0.03)' : '#ffffff'
-  const BG_SECONDARY = isDark ? 'rgba(255,255,255,0.02)' : '#f8fafc'
-  const BG_SELECTED = isDark ? 'rgba(99,106,242,0.12)' : '#eef2ff'
-  const PILL_BG = isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'
-  const SHADOW = isDark
-    ? '0 2px 8px rgba(0,0,0,0.35)'
-    : '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)'
-
+  const palette = useRegionPalette()
   const [filter, setFilter] = useState<NatureFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-
-  const currentMapLocation = {
-    latitude: country.latitude ?? 37.5665,
-    longitude: country.longitude ?? 126.978,
-    name: country.name,
-  }
 
   const items = useMemo(() => {
     const list: { id: string; name: string; subtitle: string; type: string }[] =
@@ -121,348 +109,141 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
     (mockNatureData.lakes?.length ?? 0) +
     (mockNatureData.coasts?.length ?? 0)
 
-  return (
-    <>
-      <section aria-label="지도">
-        <Styled.MapRegionSectionLabel>지도</Styled.MapRegionSectionLabel>
-        <div
-          style={{
-            background: BG,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 16,
-            overflow: 'hidden',
-            boxShadow: SHADOW,
-            height: 320,
-          }}
-        >
-          {country.latitude != null && country.longitude != null ? (
-            <div style={{ height: '100%', minHeight: 320 }}>
-              <GoogleMap
-                latitude={currentMapLocation.latitude}
-                longitude={currentMapLocation.longitude}
-                name={currentMapLocation.name}
-                zoom={7}
-              />
-            </div>
-          ) : (
-            <div
-              style={{
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: BG_SECONDARY,
-              }}
-            >
-              <span style={{ color: MUTED, fontSize: 14, fontWeight: 500 }}>
-                지도 정보가 없습니다
-              </span>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section aria-label="자연지리">
-        <Styled.MapRegionSectionLabel>자연지리</Styled.MapRegionSectionLabel>
-        {/* KPI 스트립 */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            marginBottom: 16,
-            padding: '10px 14px',
-            background: BG_SECONDARY,
-            borderRadius: 12,
-            border: `1px solid ${BORDER}`,
-            fontSize: 13,
-            color: MUTED,
-            fontWeight: 500,
-          }}
-        >
-          <span style={{ color: TITLE, fontWeight: 600 }}>현재 보기</span>
-          <span>·</span>
-          <span>산 {mockNatureData.mountains?.length ?? 0}개</span>
-          <span>강 {mockNatureData.rivers?.length ?? 0}개</span>
-          <span>호수 {mockNatureData.lakes?.length ?? 0}개</span>
-          <span>해안 {mockNatureData.coasts?.length ?? 0}개</span>
-          <span style={{ marginLeft: 'auto', color: MAIN, fontWeight: 600 }}>
-            총 {totalCount}개
-          </span>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '360px 1fr',
-            gap: 24,
-            alignItems: 'start',
-          }}
-        >
-          {/* 좌측: pill 필터 + 목록 */}
-          <div
-            style={{
-              background: BG,
-              border: `1px solid ${BORDER}`,
-              borderRadius: 16,
-              overflow: 'hidden',
-              boxShadow: SHADOW,
-              display: 'flex',
-              flexDirection: 'column',
-              maxHeight: 1120,
-              minHeight: 400,
-            }}
-          >
-            <div
-              style={{
-                padding: '14px 16px',
-                borderBottom: `1px solid ${BORDER}`,
-                background: PILL_BG,
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 6,
-                flexShrink: 0,
-              }}
-            >
-              {FILTERS.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  onClick={() => setFilter(f.value)}
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: 14,
-                    border: 'none',
-                    background: filter === f.value
-                      ? (isDark ? 'rgba(255,255,255,0.15)' : '#ffffff')
-                      : 'transparent',
-                    color: filter === f.value
-                      ? (isDark ? '#ffffff' : '#4f46e5')
-                      : MUTED,
-                    fontSize: 13,
-                    fontWeight: filter === f.value ? 600 : 500,
-                    cursor: 'pointer',
-                    boxShadow: filter === f.value
-                      ? (isDark ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(79,70,229,0.12)')
-                      : 'none',
-                  }}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                padding: 12,
-                WebkitOverflowScrolling: 'touch',
-              }}
-            >
-              {items.length === 0 ? (
-                <div
-                  style={{
-                    padding: 24,
-                    textAlign: 'center',
-                    color: MUTED,
-                    fontSize: 13,
-                  }}
-                >
-                  항목이 없습니다
-                </div>
-              ) : (
-                items.map((item) => (
-                  <div
-                    key={item.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedId(item.id)}
-                    onKeyDown={(e) =>
-                      e.key === 'Enter' && setSelectedId(item.id)
-                    }
-                    style={{
-                      padding: '12px 14px',
-                      marginBottom: 6,
-                      borderRadius: 12,
-                      borderLeft: `3px solid ${selectedId === item.id ? MAIN : 'transparent'}`,
-                      background: selectedId === item.id ? BG_SELECTED : BG,
-                      border: `1px solid ${selectedId === item.id ? MAIN : BORDER}`,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: TITLE,
-                        marginBottom: 4,
-                      }}
-                    >
-                      {item.name}
-                    </div>
-                    <div style={{ fontSize: 12, color: MUTED }}>
-                      {item.subtitle}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* 우측: 상세 */}
-          <div
-            style={{
-              background: BG,
-              border: `1px solid ${BORDER}`,
-              borderRadius: 16,
-              overflow: 'auto',
-              boxShadow: SHADOW,
-              padding: 24,
-              minHeight: 0,
-            }}
-          >
-            {!selectedItem ? (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  height: '100%',
-                  minHeight: 320,
-                  color: MUTED,
-                  fontSize: 14,
-                  textAlign: 'center',
-                }}
-              >
-                <div
-                  style={{
-                    width: 64,
-                    height: 64,
-                    borderRadius: '50%',
-                    background: BG_SECONDARY,
-                    border: `1px solid ${BORDER}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: 12,
-                    fontSize: 28,
-                  }}
-                >
-                  🏔️
-                </div>
-                <div style={{ fontWeight: 600, color: TITLE, marginBottom: 4 }}>
-                  자연 지형을 선택해주세요
-                </div>
-                <div>
-                  좌측 목록에서 항목을 선택하면 상세 정보를 볼 수 있습니다
-                </div>
-              </div>
-            ) : (
-              <div>
-                <h2
-                  style={{
-                    fontSize: 20,
-                    fontWeight: 800,
-                    color: TITLE,
-                    margin: '0 0 8px',
-                  }}
-                >
-                  {selectedItem.name}
-                </h2>
-                <div style={{ fontSize: 13, color: MUTED, marginBottom: 20 }}>
-                  {selectedItem.subtitle}
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-                    gap: 12,
-                  }}
-                >
-                  {selectedMountain && (
-                    <>
-                      <MetaCard label="지역" value={selectedMountain.region} isDark={isDark} />
-                      <MetaCard label="높이" value={selectedMountain.height} isDark={isDark} />
-                      <MetaCard label="위치" value={selectedMountain.location} isDark={isDark} />
-                      {selectedMountain.nationalPark && (
-                        <MetaCard label="구분" value="국립공원" isDark={isDark} />
-                      )}
-                    </>
-                  )}
-                  {selectedRiver && (
-                    <>
-                      <MetaCard label="길이" value={selectedRiver.length} isDark={isDark} />
-                      <MetaCard label="발원" value={selectedRiver.source} isDark={isDark} />
-                      <MetaCard label="하구" value={selectedRiver.mouth} isDark={isDark} />
-                      <MetaCard label="지역" value={selectedRiver.region} isDark={isDark} />
-                    </>
-                  )}
-                  {selectedLake && (
-                    <>
-                      <MetaCard label="면적" value={selectedLake.area} isDark={isDark} />
-                      <MetaCard label="수심" value={selectedLake.depth} isDark={isDark} />
-                      <MetaCard label="유형" value={selectedLake.type} isDark={isDark} />
-                      <MetaCard label="지역" value={selectedLake.region} isDark={isDark} />
-                    </>
-                  )}
-                  {selectedCoast && (
-                    <>
-                      <MetaCard label="길이" value={selectedCoast.length} isDark={isDark} />
-                      <MetaCard label="지역" value={selectedCoast.region} isDark={isDark} />
-                      <MetaCard label="유형" value={selectedCoast.type} isDark={isDark} />
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-    </>
-  )
-}
-
-function MetaCard({
-  label,
-  value,
-  isDark,
-}: {
-  label: string
-  value: string
-  isDark: boolean
-}) {
-  const BG = isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc'
-  const BORDER = isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'
-  const MUTED = isDark ? '#a1a1aa' : '#64748b'
-  const TITLE = isDark ? '#f4f4f5' : '#0f172a'
-
-  return (
+  const kpiStrip = (
     <div
       style={{
-        padding: '14px 16px',
-        background: BG,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 16,
+        padding: '10px 14px',
+        background: palette.bgSecondary,
         borderRadius: 12,
-        border: `1px solid ${BORDER}`,
+        border: `1px solid ${palette.border}`,
+        fontSize: 13,
+        color: palette.textSecondary,
+        fontWeight: 500,
       }}
     >
-      <div
+      <span style={{ color: palette.text, fontWeight: 600 }}>현재 보기</span>
+      <span>·</span>
+      <span>산 {mockNatureData.mountains?.length ?? 0}개</span>
+      <span>강 {mockNatureData.rivers?.length ?? 0}개</span>
+      <span>호수 {mockNatureData.lakes?.length ?? 0}개</span>
+      <span>해안 {mockNatureData.coasts?.length ?? 0}개</span>
+      <span
         style={{
-          fontSize: 11,
+          marginLeft: 'auto',
+          color: palette.primary,
           fontWeight: 600,
-          color: MUTED,
-          marginBottom: 6,
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
         }}
       >
-        {label}
-      </div>
-      <div style={{ fontSize: 15, fontWeight: 600, color: TITLE }}>{value}</div>
+        총 {totalCount}개
+      </span>
     </div>
+  )
+
+  return (
+    <>
+      <MapCard
+        palette={palette}
+        country={country}
+        zoom={{ withLocation: 7, withoutLocation: 7 }}
+      />
+
+      <RegionSplitLayout
+        ariaLabel="자연지리"
+        sectionLabel="자연지리"
+        kpiStrip={kpiStrip}
+        minHeight={400}
+        left={
+          <RegionListPanel
+            palette={palette}
+            maxHeight={1120}
+            minHeight={400}
+            toolbar={
+              <PillToolbar palette={palette}>
+                {FILTERS.map((f) => (
+                  <FilterPill
+                    key={f.value}
+                    palette={palette}
+                    active={filter === f.value}
+                    onClick={() => setFilter(f.value)}
+                  >
+                    {f.label}
+                  </FilterPill>
+                ))}
+              </PillToolbar>
+            }
+          >
+            {items.length === 0 ? (
+              <ListEmptyState palette={palette} />
+            ) : (
+              items.map((item) => (
+                <RegionListItem
+                  key={item.id}
+                  palette={palette}
+                  selected={selectedId === item.id}
+                  onSelect={() => setSelectedId(item.id)}
+                  title={item.name}
+                  subtitle={item.subtitle}
+                />
+              ))
+            )}
+          </RegionListPanel>
+        }
+        right={
+          <RegionDetailPanel
+            palette={palette}
+            isSelected={!!selectedItem}
+            emptyIcon="🏔️"
+            emptyTitle="자연 지형을 선택해주세요"
+            header={
+              selectedItem ? (
+                <RegionDetailHeader
+                  palette={palette}
+                  title={selectedItem.name}
+                  subtitle={selectedItem.subtitle}
+                />
+              ) : null
+            }
+          >
+            {selectedMountain && (
+              <>
+                <MetaCard palette={palette} label="지역" value={selectedMountain.region} />
+                <MetaCard palette={palette} label="높이" value={selectedMountain.height} />
+                <MetaCard palette={palette} label="위치" value={selectedMountain.location} />
+                {selectedMountain.nationalPark && (
+                  <MetaCard palette={palette} label="구분" value="국립공원" />
+                )}
+              </>
+            )}
+            {selectedRiver && (
+              <>
+                <MetaCard palette={palette} label="길이" value={selectedRiver.length} />
+                <MetaCard palette={palette} label="발원" value={selectedRiver.source} />
+                <MetaCard palette={palette} label="하구" value={selectedRiver.mouth} />
+                <MetaCard palette={palette} label="지역" value={selectedRiver.region} />
+              </>
+            )}
+            {selectedLake && (
+              <>
+                <MetaCard palette={palette} label="면적" value={selectedLake.area} />
+                <MetaCard palette={palette} label="수심" value={selectedLake.depth} />
+                <MetaCard palette={palette} label="유형" value={selectedLake.type} />
+                <MetaCard palette={palette} label="지역" value={selectedLake.region} />
+              </>
+            )}
+            {selectedCoast && (
+              <>
+                <MetaCard palette={palette} label="길이" value={selectedCoast.length} />
+                <MetaCard palette={palette} label="지역" value={selectedCoast.region} />
+                <MetaCard palette={palette} label="유형" value={selectedCoast.type} />
+              </>
+            )}
+          </RegionDetailPanel>
+        }
+      />
+    </>
   )
 }

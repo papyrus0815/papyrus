@@ -1,11 +1,7 @@
 /**
  * 지도 및 지역 — 행정구역 전용 뷰
- * 행정조직과 동일한 UI 패턴: SectionLabel + 카드, 단순 목록, 상세 카드
  */
-import { useState, useMemo } from 'react'
-
-import { GoogleMap } from '@/shared/ui/google-map/google-map'
-import { useThemeStore } from '@/shared/styles/theme.store'
+import { useMemo, useState } from 'react'
 
 import {
   administrativeSystemByCountry,
@@ -13,7 +9,17 @@ import {
   mockAdministrativeRegions,
   mockCityDetails,
 } from '../mock'
-import * as Styled from './map-region-section.styles'
+import {
+  ListEmptyState,
+  MapCard,
+  MetaCard,
+  RegionDetailHeader,
+  RegionDetailPanel,
+  RegionListItem,
+  RegionListPanel,
+  RegionSplitLayout,
+  useRegionPalette,
+} from './map-region'
 
 type NavLevel = 'level1' | 'level2'
 
@@ -32,27 +38,14 @@ interface MapRegionAdministrativeViewProps {
   }) => void
 }
 
+const DEFAULT_LATLNG = { lat: 37.5665, lng: 126.978 }
+
 export function MapRegionAdministrativeView({
   country,
   mapLocation,
   onCityClick,
 }: MapRegionAdministrativeViewProps) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-
-  const BORDER = isDark ? 'rgba(255,255,255,0.08)' : '#e5e7eb'
-  const MUTED = isDark ? '#a1a1aa' : '#64748b'
-  const TITLE = isDark ? '#f4f4f5' : '#0f172a'
-  const MAIN = '#6366f1'
-  const BG = isDark ? 'rgba(255,255,255,0.03)' : '#ffffff'
-  const BG_SECONDARY = isDark ? 'rgba(255,255,255,0.02)' : '#f8fafc'
-  const BG_SELECTED = isDark ? 'rgba(99,106,242,0.12)' : '#eef2ff'
-  const BG_HOVER = isDark ? 'rgba(255,255,255,0.05)' : '#f8fafc'
-  const BADGE_BG = isDark ? 'rgba(99,106,242,0.15)' : '#eef2ff'
-  const PILL_BG = isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9'
-  const SHADOW = isDark
-    ? '0 2px 8px rgba(0,0,0,0.35)'
-    : '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)'
+  const palette = useRegionPalette()
 
   const [level, setLevel] = useState<NavLevel>('level1')
   const [selectedLevel1Id, setSelectedLevel1Id] = useState<string | null>(null)
@@ -61,11 +54,6 @@ export function MapRegionAdministrativeView({
 
   const countryCode = getCountryCode(country.name)
   const adminSystem = administrativeSystemByCountry[countryCode]
-  const currentMapLocation = mapLocation ?? {
-    latitude: country.latitude ?? 37.5665,
-    longitude: country.longitude ?? 126.978,
-    name: country.name,
-  }
 
   const level1List = mockAdministrativeRegions.level1
   const level2List = selectedLevel1Id
@@ -76,9 +64,9 @@ export function MapRegionAdministrativeView({
   const filteredItems = useMemo(
     () =>
       currentItems.filter((item: { name: string }) =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()),
       ),
-    [currentItems, searchQuery]
+    [currentItems, searchQuery],
   )
 
   const handleLevel1Click = (id: string) => {
@@ -97,23 +85,28 @@ export function MapRegionAdministrativeView({
       id,
       name: region.name,
       population: details?.population ?? '—',
-      latitude: 37.5665,
-      longitude: 126.978,
+      latitude: DEFAULT_LATLNG.lat,
+      longitude: DEFAULT_LATLNG.lng,
       area: details?.area,
       gdp: details?.gdp,
       industry: details?.industry,
     })
   }
 
-  const handleLevel2Click = (item: { id: string; name: string; population?: string; area?: string }) => {
+  const handleLevel2Click = (item: {
+    id: string
+    name: string
+    population?: string
+    area?: string
+  }) => {
     setSelectedId(item.id)
     const details = mockCityDetails[item.id as keyof typeof mockCityDetails]
     onCityClick({
       id: item.id,
       name: item.name,
       population: details?.population ?? item.population ?? '—',
-      latitude: 37.5665,
-      longitude: 126.978,
+      latitude: DEFAULT_LATLNG.lat,
+      longitude: DEFAULT_LATLNG.lng,
       area: details?.area ?? item.area,
       gdp: details?.gdp,
       industry: details?.industry,
@@ -128,8 +121,8 @@ export function MapRegionAdministrativeView({
       id: '',
       name: '',
       population: '',
-      latitude: currentMapLocation.latitude,
-      longitude: currentMapLocation.longitude,
+      latitude: country.latitude ?? DEFAULT_LATLNG.lat,
+      longitude: country.longitude ?? DEFAULT_LATLNG.lng,
     })
   }
 
@@ -140,340 +133,207 @@ export function MapRegionAdministrativeView({
     ? mockCityDetails[selectedId as keyof typeof mockCityDetails]
     : null
 
-  return (
-    <>
-      {/* 지도 */}
-      <section aria-label="지도">
-        <Styled.MapRegionSectionLabel>지도</Styled.MapRegionSectionLabel>
-        <div
-          style={{
-            background: BG,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 16,
-            overflow: 'hidden',
-            boxShadow: SHADOW,
-            height: 320,
-          }}
-        >
-          {country.latitude != null && country.longitude != null ? (
-            <div style={{ height: '100%', minHeight: 320 }}>
-              <GoogleMap
-                latitude={currentMapLocation.latitude}
-                longitude={currentMapLocation.longitude}
-                name={currentMapLocation.name}
-                zoom={mapLocation ? 12 : 6}
-              />
-            </div>
-          ) : (
-            <div
-              style={{
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: BG_SECONDARY,
-              }}
-            >
-              <span style={{ color: MUTED, fontSize: 14, fontWeight: 500 }}>
-                지도 정보가 없습니다
-              </span>
-            </div>
-          )}
-        </div>
-      </section>
+  const detailTitle =
+    level === 'level1'
+      ? selectedLevel1?.name ?? ''
+      : level2List.find((x: { id: string }) => x.id === selectedId)?.name ??
+        selectedId ??
+        ''
+  const detailSubtitle =
+    adminSystem && selectedLevel1
+      ? `${adminSystem.countryNameKo} · ${selectedLevel1.name}`
+      : undefined
 
-      {/* 행정구역 */}
-      <section aria-label="행정구역">
-        <Styled.MapRegionSectionLabel>행정구역</Styled.MapRegionSectionLabel>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '360px 1fr',
-            gap: 24,
-            minHeight: 320,
-            maxHeight: 'calc(100vh - 380px)',
-          }}
-        >
-          {/* 좌측: 목록 카드 */}
-          <div
+  const toolbar = (
+    <>
+      <div
+        style={{
+          padding: '20px 24px',
+          borderBottom: `1px solid ${palette.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+        }}
+      >
+        {level === 'level2' && (
+          <button
+            type="button"
+            onClick={handleBack}
+            aria-label="뒤로가기"
             style={{
-              background: BG,
-              border: `1px solid ${BORDER}`,
-              borderRadius: 16,
-              boxShadow: SHADOW,
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              border: `1px solid ${palette.border}`,
+              background: palette.bg,
+              cursor: 'pointer',
               display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              minHeight: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <div
-              style={{
-                padding: '20px 24px',
-                borderBottom: `1px solid ${BORDER}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-              }}
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={palette.textSecondary}
+              strokeWidth="2.5"
             >
-              {level === 'level2' && (
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    border: `1px solid ${BORDER}`,
-                    background: BG,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = BADGE_BG
-                    e.currentTarget.style.borderColor = MAIN
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = BG
-                    e.currentTarget.style.borderColor = BORDER
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.5">
-                    <path d="M19 12H5M12 19l-7-7 7-7" />
-                  </svg>
-                </button>
-              )}
-              <span style={{ fontSize: 15, fontWeight: 700, color: TITLE }}>
-                {level === 'level1' ? '1차 행정구역' : selectedLevel1?.name ?? '하위 구역'}
-              </span>
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: MAIN,
-                  background: BADGE_BG,
-                  padding: '4px 10px',
-                  borderRadius: 8,
-                }}
-              >
-                {filteredItems.length}개
-              </span>
-            </div>
-            <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}` }}>
-              <input
-                type="text"
-                placeholder="검색..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px 10px 36px',
-                  fontSize: 13,
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 10,
-                  background: BG,
-                  color: TITLE,
-                  outline: 'none',
-                }}
-              />
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-              {filteredItems.map((item: { id: string; name: string; count?: number; population?: string; area?: string }) => {
-                const isSelected = selectedId === item.id
-                return (
-                  <button
-                    type="button"
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
+        <span
+          style={{
+            fontSize: 15,
+            fontWeight: 700,
+            color: palette.text,
+            flex: 1,
+          }}
+        >
+          {level === 'level1' ? '1차 행정구역' : selectedLevel1?.name ?? '하위 구역'}
+        </span>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: palette.primary,
+            background: palette.badgeBg,
+            padding: '4px 10px',
+            borderRadius: 8,
+          }}
+        >
+          {filteredItems.length}개
+        </span>
+      </div>
+      <div
+        style={{
+          padding: '12px 16px',
+          borderBottom: `1px solid ${palette.border}`,
+        }}
+      >
+        <input
+          type="text"
+          placeholder="검색..."
+          aria-label="행정구역 검색"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '10px 14px',
+            fontSize: 13,
+            border: `1px solid ${palette.border}`,
+            borderRadius: 10,
+            background: palette.bg,
+            color: palette.text,
+            outline: 'none',
+          }}
+        />
+      </div>
+    </>
+  )
+
+  return (
+    <>
+      <MapCard palette={palette} country={country} mapLocation={mapLocation} />
+
+      <RegionSplitLayout
+        ariaLabel="행정구역"
+        sectionLabel="행정구역"
+        maxHeight="calc(100vh - 380px)"
+        left={
+          <RegionListPanel palette={palette} toolbar={toolbar}>
+            {filteredItems.length === 0 ? (
+              <ListEmptyState palette={palette} />
+            ) : (
+              filteredItems.map(
+                (item: {
+                  id: string
+                  name: string
+                  count?: number
+                  population?: string
+                  area?: string
+                }) => (
+                  <RegionListItem
                     key={item.id}
-                    onClick={() =>
+                    palette={palette}
+                    selected={selectedId === item.id}
+                    onSelect={() =>
                       level === 'level1'
                         ? handleLevel1Click(item.id)
                         : handleLevel2Click(item)
                     }
-                    style={{
-                      width: '100%',
-                      padding: '14px 24px',
-                      border: 'none',
-                      borderBottom: `1px solid ${BORDER}`,
-                      background: isSelected ? BG_SELECTED : BG,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      borderLeft: isSelected ? `3px solid ${MAIN}` : '3px solid transparent',
-                      transition: 'background 0.15s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = BG_HOVER
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) e.currentTarget.style.background = BG
-                    }}
-                  >
-                    <span style={{ fontSize: 14, fontWeight: 600, color: TITLE }}>
-                      {item.name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: MUTED,
-                        background: PILL_BG,
-                        padding: '2px 8px',
-                        borderRadius: 6,
-                      }}
-                    >
-                      {'count' in item ? `${item.count}개` : item.population ?? '—'}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* 우측: 상세 카드 */}
-          <div
-            style={{
-              background: BG,
-              border: `1px solid ${BORDER}`,
-              borderRadius: 16,
-              boxShadow: SHADOW,
-              padding: 28,
-              overflowY: 'auto',
-              minHeight: 0,
-            }}
-          >
-            {!selectedId ? (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: 320,
-                  color: MUTED,
-                  fontSize: 15,
-                  fontWeight: 500,
-                  textAlign: 'center',
-                }}
-              >
-                좌측 목록에서 지역을 선택하세요
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                <div>
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: 22,
-                      fontWeight: 700,
-                      color: TITLE,
-                      letterSpacing: '-0.02em',
-                    }}
-                  >
-                    {level === 'level1'
-                      ? selectedLevel1?.name
-                      : level2List.find((x: { id: string }) => x.id === selectedId)?.name ?? selectedId}
-                  </h3>
-                  {adminSystem && selectedLevel1Id && (
-                    <p
-                      style={{
-                        margin: '8px 0 0',
-                        fontSize: 13,
-                        color: MUTED,
-                        fontWeight: 500,
-                      }}
-                    >
-                      {adminSystem.countryNameKo} · {selectedLevel1?.name}
-                    </p>
-                  )}
-                </div>
-                {selectedDetails && (
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(2, 1fr)',
-                      gap: 16,
-                    }}
-                  >
-                    {selectedDetails.population && (
-                      <div
+                    title={item.name}
+                    trailing={
+                      <span
                         style={{
-                          padding: 16,
-                          background: BG_SECONDARY,
-                          borderRadius: 12,
-                          border: `1px solid ${BORDER}`,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: palette.textSecondary,
+                          background: palette.bgSecondary,
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          flexShrink: 0,
                         }}
                       >
-                        <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-                          인구
-                        </div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: TITLE }}>
-                          {selectedDetails.population}
-                        </div>
-                      </div>
-                    )}
-                    {selectedDetails.area && (
-                      <div
-                        style={{
-                          padding: 16,
-                          background: BG_SECONDARY,
-                          borderRadius: 12,
-                          border: `1px solid ${BORDER}`,
-                        }}
-                      >
-                        <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-                          면적
-                        </div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: TITLE }}>
-                          {selectedDetails.area}
-                        </div>
-                      </div>
-                    )}
-                    {selectedDetails.mayor && (
-                      <div
-                        style={{
-                          padding: 16,
-                          background: BG_SECONDARY,
-                          borderRadius: 12,
-                          border: `1px solid ${BORDER}`,
-                          gridColumn: '1 / -1',
-                        }}
-                      >
-                        <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-                          행정 수장
-                        </div>
-                        <div style={{ fontSize: 15, fontWeight: 600, color: TITLE }}>
-                          {selectedDetails.mayor}
-                          {selectedDetails.party && (
-                            <span
-                              style={{
-                                marginLeft: 8,
-                                fontSize: 12,
-                                fontWeight: 600,
-                                color: MAIN,
-                                background: BADGE_BG,
-                                padding: '2px 8px',
-                                borderRadius: 6,
-                              }}
-                            >
-                              {selectedDetails.party}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                        {'count' in item && item.count != null
+                          ? `${item.count}개`
+                          : item.population ?? '—'}
+                      </span>
+                    }
+                  />
+                ),
+              )
             )}
-          </div>
-        </div>
-      </section>
+          </RegionListPanel>
+        }
+        right={
+          <RegionDetailPanel
+            palette={palette}
+            isSelected={!!selectedId}
+            emptyTitle="좌측 목록에서 지역을 선택하세요"
+            emptyDescription=""
+            header={
+              selectedId ? (
+                <RegionDetailHeader
+                  palette={palette}
+                  title={detailTitle}
+                  subtitle={detailSubtitle}
+                />
+              ) : null
+            }
+          >
+            {selectedDetails?.population && (
+              <MetaCard
+                palette={palette}
+                label="인구"
+                value={selectedDetails.population}
+              />
+            )}
+            {selectedDetails?.area && (
+              <MetaCard
+                palette={palette}
+                label="면적"
+                value={selectedDetails.area}
+              />
+            )}
+            {selectedDetails?.mayor && (
+              <MetaCard
+                palette={palette}
+                label="행정 수장"
+                value={
+                  selectedDetails.party
+                    ? `${selectedDetails.mayor} (${selectedDetails.party})`
+                    : selectedDetails.mayor
+                }
+                fullWidth
+              />
+            )}
+          </RegionDetailPanel>
+        }
+      />
     </>
   )
 }
