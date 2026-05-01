@@ -2,27 +2,33 @@
  * 지도 및 지역 — 자연지리 전용 뷰
  *
  * 데이터 소스: GET /natural-features?countryId=xxx
- * 비어 있으면 "등록된 항목 없음" 빈 상태 노출.
+ * CRUD: POST/PATCH/DELETE 모달 + 호버 액션.
  */
 import { useMemo, useState } from 'react'
+
+import { toast } from 'react-hot-toast'
 
 import {
   type NaturalFeature,
   type NaturalFeatureType,
+  useDeleteNaturalFeature,
   useNaturalFeatures,
 } from '@/entities/country/api.natural-feature'
+import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 
 import {
   FilterPill,
   ListEmptyState,
   MapCard,
   MetaCard,
+  NaturalFeatureFormModal,
   PillToolbar,
   RegionDetailHeader,
   RegionDetailPanel,
   RegionListItem,
   RegionListPanel,
   RegionSplitLayout,
+  RegisterButton,
   useRegionPalette,
 } from './map-region'
 
@@ -74,7 +80,14 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
   const [filter, setFilter] = useState<NatureFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<NaturalFeature | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<NaturalFeature | null>(
+    null,
+  )
+
   const { data: allFeatures = [], isLoading } = useNaturalFeatures(country.id)
+  const deleteMut = useDeleteNaturalFeature()
 
   const filtered = useMemo(() => {
     if (filter === 'all') return allFeatures
@@ -97,6 +110,31 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
   }, [allFeatures])
 
   const totalCount = allFeatures.length
+
+  const openCreate = () => {
+    setEditing(null)
+    setFormOpen(true)
+  }
+  const openEdit = (item: NaturalFeature) => {
+    setEditing(item)
+    setFormOpen(true)
+  }
+  const closeForm = () => {
+    setFormOpen(false)
+    setEditing(null)
+  }
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return
+    try {
+      await deleteMut.mutateAsync(pendingDelete.id)
+      toast.success('자연 지리 항목을 삭제했습니다')
+      if (selectedId === pendingDelete.id) setSelectedId(null)
+      setPendingDelete(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '삭제에 실패했습니다')
+    }
+  }
 
   const kpiStrip = (
     <div
@@ -141,6 +179,13 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
         <ListEmptyState
           palette={palette}
           message="등록된 자연 지리 항목이 없습니다"
+          action={
+            <RegisterButton
+              palette={palette}
+              onClick={openCreate}
+              label="첫 항목 등록"
+            />
+          }
         />
       )
     }
@@ -149,6 +194,9 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
         <ListEmptyState
           palette={palette}
           message={`${TYPE_LABEL[filter as NaturalFeatureType] ?? ''} 항목이 없습니다`}
+          action={
+            <RegisterButton palette={palette} onClick={openCreate} />
+          }
         />
       )
     }
@@ -160,6 +208,8 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
         onSelect={() => setSelectedId(item.id)}
         title={item.name}
         subtitle={buildSubtitle(item) || TYPE_LABEL[item.type]}
+        onEdit={() => openEdit(item)}
+        onDelete={() => setPendingDelete(item)}
       />
     ))
   })()
@@ -183,7 +233,12 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
             maxHeight={1120}
             minHeight={400}
             toolbar={
-              <PillToolbar palette={palette}>
+              <PillToolbar
+                palette={palette}
+                rightSlot={
+                  <RegisterButton palette={palette} onClick={openCreate} />
+                }
+              >
                 {FILTERS.map((f) => (
                   <FilterPill
                     key={f.value}
@@ -260,6 +315,29 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
             )}
           </RegionDetailPanel>
         }
+      />
+
+      <NaturalFeatureFormModal
+        isOpen={formOpen}
+        countryId={country.id}
+        editing={editing}
+        defaultType={filter !== 'all' ? (filter as NaturalFeatureType) : 'mountain'}
+        onClose={closeForm}
+      />
+
+      <ConfirmDialog
+        isOpen={!!pendingDelete}
+        title="자연 지리 항목 삭제"
+        message={
+          pendingDelete
+            ? `"${pendingDelete.name}" 항목을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
+            : ''
+        }
+        confirmLabel="삭제"
+        cancelLabel="취소"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
       />
     </>
   )

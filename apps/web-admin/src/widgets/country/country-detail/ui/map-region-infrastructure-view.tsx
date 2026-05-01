@@ -2,17 +2,23 @@
  * 지도 및 지역 — 인프라 전용 뷰
  *
  * 데이터 소스: GET /infrastructures?countryId=xxx
+ * CRUD: POST/PATCH/DELETE 모달 + 호버 액션.
  */
 import { useMemo, useState } from 'react'
+
+import { toast } from 'react-hot-toast'
 
 import {
   type Infrastructure,
   type InfrastructureType,
+  useDeleteInfrastructure,
   useInfrastructures,
 } from '@/entities/country/api.infrastructure'
+import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 
 import {
   FilterPill,
+  InfrastructureFormModal,
   ListEmptyState,
   MapCard,
   MetaCard,
@@ -22,6 +28,7 @@ import {
   RegionListItem,
   RegionListPanel,
   RegionSplitLayout,
+  RegisterButton,
   useRegionPalette,
 } from './map-region'
 
@@ -67,7 +74,14 @@ export function MapRegionInfrastructureView({
   const [filter, setFilter] = useState<InfraFilter>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<Infrastructure | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Infrastructure | null>(
+    null,
+  )
+
   const { data: allInfra = [], isLoading } = useInfrastructures(country.id)
+  const deleteMut = useDeleteInfrastructure()
 
   const filtered = useMemo(() => {
     if (filter === 'all') return allInfra
@@ -90,6 +104,31 @@ export function MapRegionInfrastructureView({
   }, [allInfra])
 
   const totalCount = allInfra.length
+
+  const openCreate = () => {
+    setEditing(null)
+    setFormOpen(true)
+  }
+  const openEdit = (item: Infrastructure) => {
+    setEditing(item)
+    setFormOpen(true)
+  }
+  const closeForm = () => {
+    setFormOpen(false)
+    setEditing(null)
+  }
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return
+    try {
+      await deleteMut.mutateAsync(pendingDelete.id)
+      toast.success('인프라 항목을 삭제했습니다')
+      if (selectedId === pendingDelete.id) setSelectedId(null)
+      setPendingDelete(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '삭제에 실패했습니다')
+    }
+  }
 
   const kpiStrip = (
     <div
@@ -134,6 +173,13 @@ export function MapRegionInfrastructureView({
         <ListEmptyState
           palette={palette}
           message="등록된 인프라 항목이 없습니다"
+          action={
+            <RegisterButton
+              palette={palette}
+              onClick={openCreate}
+              label="첫 항목 등록"
+            />
+          }
         />
       )
     }
@@ -142,6 +188,9 @@ export function MapRegionInfrastructureView({
         <ListEmptyState
           palette={palette}
           message={`${TYPE_LABEL[filter as InfrastructureType] ?? ''} 항목이 없습니다`}
+          action={
+            <RegisterButton palette={palette} onClick={openCreate} />
+          }
         />
       )
     }
@@ -153,6 +202,8 @@ export function MapRegionInfrastructureView({
         onSelect={() => setSelectedId(item.id)}
         title={item.name}
         subtitle={buildSubtitle(item) || TYPE_LABEL[item.type]}
+        onEdit={() => openEdit(item)}
+        onDelete={() => setPendingDelete(item)}
       />
     ))
   })()
@@ -176,7 +227,12 @@ export function MapRegionInfrastructureView({
             maxHeight={1120}
             minHeight={400}
             toolbar={
-              <PillToolbar palette={palette}>
+              <PillToolbar
+                palette={palette}
+                rightSlot={
+                  <RegisterButton palette={palette} onClick={openCreate} />
+                }
+              >
                 {FILTERS.map((f) => (
                   <FilterPill
                     key={f.value}
@@ -256,6 +312,29 @@ export function MapRegionInfrastructureView({
             )}
           </RegionDetailPanel>
         }
+      />
+
+      <InfrastructureFormModal
+        isOpen={formOpen}
+        countryId={country.id}
+        editing={editing}
+        defaultType={filter !== 'all' ? (filter as InfrastructureType) : 'highway'}
+        onClose={closeForm}
+      />
+
+      <ConfirmDialog
+        isOpen={!!pendingDelete}
+        title="인프라 항목 삭제"
+        message={
+          pendingDelete
+            ? `"${pendingDelete.name}" 항목을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
+            : ''
+        }
+        confirmLabel="삭제"
+        cancelLabel="취소"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
       />
     </>
   )

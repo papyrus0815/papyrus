@@ -1,14 +1,18 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  type CreateNaturalFeatureInput,
   type NaturalFeature,
   type NaturalFeatureType,
+  type UpdateNaturalFeatureInput,
   naturalFeatureApi,
 } from '@/shared/api/natural-feature'
 
 export type {
+  CreateNaturalFeatureInput,
   NaturalFeature,
   NaturalFeatureType,
+  UpdateNaturalFeatureInput,
 } from '@/shared/api/natural-feature'
 
 export const naturalFeatureKeys = {
@@ -32,5 +36,42 @@ export function useNaturalFeatures(
       return await naturalFeatureApi.list({ countryId, type })
     },
     enabled: !!countryId,
+  })
+}
+
+export function useCreateNaturalFeature() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreateNaturalFeatureInput) =>
+      naturalFeatureApi.create(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: naturalFeatureKeys.all })
+    },
+  })
+}
+
+export function useUpdateNaturalFeature() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string
+      data: UpdateNaturalFeatureInput
+    }) => naturalFeatureApi.update(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: naturalFeatureKeys.all })
+    },
+  })
+}
+
+export function useDeleteNaturalFeature() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => naturalFeatureApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: naturalFeatureKeys.all })
+    },
   })
 }

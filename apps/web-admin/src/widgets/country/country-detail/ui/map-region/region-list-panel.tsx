@@ -96,10 +96,12 @@ export function FilterPill({
 interface PillToolbarProps {
   palette: RegionPalette
   children: ReactNode
+  /** 우측 액션 (예: + 등록 버튼) */
+  rightSlot?: ReactNode
 }
 
 /** pill 필터들을 담는 툴바 컨테이너 */
-export function PillToolbar({ palette, children }: PillToolbarProps) {
+export function PillToolbar({ palette, children, rightSlot }: PillToolbarProps) {
   return (
     <div
       style={{
@@ -107,13 +109,80 @@ export function PillToolbar({ palette, children }: PillToolbarProps) {
         borderBottom: `1px solid ${palette.border}`,
         background: palette.bgSecondary,
         display: 'flex',
-        flexWrap: 'wrap',
-        gap: 6,
+        alignItems: 'center',
+        gap: 8,
         flexShrink: 0,
       }}
     >
-      {children}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 6,
+          flex: 1,
+          minWidth: 0,
+        }}
+      >
+        {children}
+      </div>
+      {rightSlot}
     </div>
+  )
+}
+
+interface RegisterButtonProps {
+  palette: RegionPalette
+  onClick: () => void
+  label?: string
+}
+
+/** "+ 등록" 액션 버튼 — PillToolbar의 rightSlot에 주로 사용 */
+export function RegisterButton({
+  palette,
+  onClick,
+  label = '등록',
+}: RegisterButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '7px 12px',
+        fontSize: 12,
+        fontWeight: 600,
+        color: '#ffffff',
+        background: palette.primary,
+        border: 'none',
+        borderRadius: 10,
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = '#4f46e5'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = palette.primary
+      }}
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+      {label}
+    </button>
   )
 }
 
@@ -125,6 +194,10 @@ interface RegionListItemProps {
   subtitle?: ReactNode
   /** 우측 보조(개수 등) — pill 뷰에서는 안 씀, 행정구역 뷰에서 사용 */
   trailing?: ReactNode
+  /** 호버 시 노출되는 수정 버튼 콜백 */
+  onEdit?: () => void
+  /** 호버 시 노출되는 삭제 버튼 콜백 */
+  onDelete?: () => void
 }
 
 /**
@@ -138,7 +211,10 @@ export function RegionListItem({
   title,
   subtitle,
   trailing,
+  onEdit,
+  onDelete,
 }: RegionListItemProps) {
+  const hasActions = !!(onEdit || onDelete)
   return (
     <div
       role="button"
@@ -150,6 +226,7 @@ export function RegionListItem({
           onSelect()
         }
       }}
+      className="region-list-item"
       style={{
         padding: '12px 14px',
         margin: '6px 12px',
@@ -163,6 +240,7 @@ export function RegionListItem({
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 12,
+        position: 'relative',
       }}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -190,7 +268,124 @@ export function RegionListItem({
           </div>
         )}
       </div>
-      {trailing}
+      {hasActions ? (
+        <ListItemActions
+          palette={palette}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+      ) : (
+        trailing
+      )}
+    </div>
+  )
+}
+
+interface ListItemActionsProps {
+  palette: RegionPalette
+  onEdit?: () => void
+  onDelete?: () => void
+}
+
+function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit()
+          }}
+          aria-label="수정"
+          title="수정"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            border: `1px solid ${palette.border}`,
+            background: 'transparent',
+            color: palette.textSecondary,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = palette.bgHover
+            e.currentTarget.style.color = palette.primary
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent'
+            e.currentTarget.style.color = palette.textSecondary
+          }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z" />
+          </svg>
+        </button>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          aria-label="삭제"
+          title="삭제"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            border: `1px solid ${palette.border}`,
+            background: 'transparent',
+            color: palette.textSecondary,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#fef2f2'
+            e.currentTarget.style.color = '#dc2626'
+            e.currentTarget.style.borderColor = '#fecaca'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent'
+            e.currentTarget.style.color = palette.textSecondary
+            e.currentTarget.style.borderColor = palette.border
+          }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6M14 11v6" />
+            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+          </svg>
+        </button>
+      )}
     </div>
   )
 }
@@ -198,23 +393,31 @@ export function RegionListItem({
 interface ListEmptyStateProps {
   palette: RegionPalette
   message?: string
+  /** 빈 상태에서 표시할 액션 (예: + 등록 버튼) */
+  action?: ReactNode
 }
 
 /** 리스트가 비었을 때 표시 */
 export function ListEmptyState({
   palette,
   message = '항목이 없습니다',
+  action,
 }: ListEmptyStateProps) {
   return (
     <div
       style={{
-        padding: 24,
+        padding: '32px 24px',
         textAlign: 'center',
         color: palette.textSecondary,
         fontSize: 13,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 12,
       }}
     >
-      {message}
+      <div>{message}</div>
+      {action}
     </div>
   )
 }
