@@ -20,45 +20,6 @@ import { MapRegionSection } from './map-region-section.widget'
 import { type OverviewSubTab, OverviewSubTabs } from './overview-sub-tabs'
 import { TreatySectionWidget } from './treaty-section.widget'
 
-// 목업 데이터 (지도 및 지역 탭용)
-const mockCities = [
-  {
-    id: '1',
-    name: '서울',
-    population: '9,776,000',
-    latitude: 37.5665,
-    longitude: 126.978,
-  },
-  {
-    id: '2',
-    name: '부산',
-    population: '3,349,000',
-    latitude: 35.1796,
-    longitude: 129.0756,
-  },
-  {
-    id: '3',
-    name: '인천',
-    population: '2,945,000',
-    latitude: 37.4563,
-    longitude: 126.7052,
-  },
-  {
-    id: '4',
-    name: '대구',
-    population: '2,401,000',
-    latitude: 35.8714,
-    longitude: 128.6014,
-  },
-  {
-    id: '5',
-    name: '대전',
-    population: '1,454,000',
-    latitude: 36.3504,
-    longitude: 127.3845,
-  },
-]
-
 export interface CountryDetailProps {
   country: UnifiedCountry | null
   continents: ContinentOption[]
@@ -108,26 +69,11 @@ function CountryDetailInner({
     name: string
   } | null>(null)
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
-  // 선택된 행정구역 정보 상태
-  const [selectedRegionInfo, setSelectedRegionInfo] = useState<{
-    name: string
-    population: string
-    area: string
-    gdp: string
-    industry: string
-  } | null>(null)
 
   // country 변경 시 상태 초기화
   React.useEffect(() => {
     setMapLocation(null)
   }, [country?.id])
-
-  // activeSubTab 변경 시 selectedRegionInfo 초기화 (지도 및 지역 → 대시보드로 이동 시)
-  React.useEffect(() => {
-    if (activeSubTab !== 'map') {
-      setSelectedRegionInfo(null)
-    }
-  }, [activeSubTab])
 
   // URL 등으로 역대 수반 / 대시보드 / 역사적 국가 / 행정구역 / 행정조직 진입 시 → 해당 탭으로 열기
   // 인물 탭은 헤더 "인물" 페이지로 통합됐으므로 ?tab=person / persons-list 진입은 대시보드로 폴백됨 (page 계층에서 리다이렉트)
@@ -182,31 +128,17 @@ function CountryDetailInner({
 
   const continent = continents.find((cont) => cont.id === country.continentId)
 
-  const handleCityClick = (
-    city: (typeof mockCities)[0] & {
-      area?: string
-      gdp?: string
-      industry?: string
-    },
-  ) => {
+  /** 지도/지역 탭에서 항목을 선택했을 때 — 지도 위치만 갱신 */
+  const handleCityClick = (city: {
+    name: string
+    latitude: number
+    longitude: number
+  }) => {
     setMapLocation({
       latitude: city.latitude,
       longitude: city.longitude,
       name: city.name,
     })
-
-    // 선택된 행정구역 정보 업데이트
-    if (city.area || city.gdp || city.industry) {
-      setSelectedRegionInfo({
-        name: city.name,
-        population: city.population,
-        area: city.area || '정보 없음',
-        gdp: city.gdp || '정보 없음',
-        industry: city.industry || '정보 없음',
-      })
-    } else {
-      setSelectedRegionInfo(null)
-    }
   }
 
   return (

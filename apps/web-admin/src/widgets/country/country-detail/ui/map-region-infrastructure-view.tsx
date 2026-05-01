@@ -20,6 +20,8 @@ import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import {
   FilterPill,
   InfrastructureFormModal,
+  KpiChip,
+  KpiStrip,
   ListEmptyState,
   ListToolbarRow,
   MapCard,
@@ -218,37 +220,40 @@ export function MapRegionInfrastructureView({
   }
 
   const kpiStrip = (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        marginBottom: 16,
-        padding: '10px 14px',
-        background: palette.bgSecondary,
-        borderRadius: 12,
-        border: `1px solid ${palette.border}`,
-        fontSize: 13,
-        color: palette.textSecondary,
-        fontWeight: 500,
-      }}
-    >
-      <span style={{ color: palette.text, fontWeight: 600 }}>현재 보기</span>
-      <span>·</span>
-      <span>고속도로 {countByType.highway}개</span>
-      <span>철도 {countByType.railway}개</span>
-      <span>공항 {countByType.airport}개</span>
-      <span>항구 {countByType.port}개</span>
-      <span
-        style={{
-          marginLeft: 'auto',
-          color: palette.primary,
-          fontWeight: 600,
-        }}
-      >
-        총 {totalCount}개
-      </span>
-    </div>
+    <KpiStrip palette={palette} totalCount={totalCount}>
+      <KpiChip
+        palette={palette}
+        filterValue="highway"
+        currentFilter={url.filter}
+        onFilterChange={url.setFilter}
+        label="고속도로"
+        count={countByType.highway}
+      />
+      <KpiChip
+        palette={palette}
+        filterValue="railway"
+        currentFilter={url.filter}
+        onFilterChange={url.setFilter}
+        label="철도"
+        count={countByType.railway}
+      />
+      <KpiChip
+        palette={palette}
+        filterValue="airport"
+        currentFilter={url.filter}
+        onFilterChange={url.setFilter}
+        label="공항"
+        count={countByType.airport}
+      />
+      <KpiChip
+        palette={palette}
+        filterValue="port"
+        currentFilter={url.filter}
+        onFilterChange={url.setFilter}
+        label="항구"
+        count={countByType.port}
+      />
+    </KpiStrip>
   )
 
   const listContent = (() => {

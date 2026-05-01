@@ -1,4 +1,5 @@
 export { InfrastructureFormModal } from './infrastructure-form-modal'
+export { KpiChip, KpiStrip } from './kpi-strip'
 export { ListToolbarRow, SearchInput, SortSelect } from './list-toolbar'
 export { MapCard } from './map-card'
 export { MetaCard } from './meta-card'

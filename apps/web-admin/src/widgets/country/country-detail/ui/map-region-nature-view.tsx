@@ -19,6 +19,8 @@ import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 
 import {
   FilterPill,
+  KpiChip,
+  KpiStrip,
   ListEmptyState,
   ListToolbarRow,
   MapCard,
@@ -227,37 +229,40 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
   }
 
   const kpiStrip = (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        marginBottom: 16,
-        padding: '10px 14px',
-        background: palette.bgSecondary,
-        borderRadius: 12,
-        border: `1px solid ${palette.border}`,
-        fontSize: 13,
-        color: palette.textSecondary,
-        fontWeight: 500,
-      }}
-    >
-      <span style={{ color: palette.text, fontWeight: 600 }}>현재 보기</span>
-      <span>·</span>
-      <span>산 {countByType.mountain}개</span>
-      <span>강 {countByType.river}개</span>
-      <span>호수 {countByType.lake}개</span>
-      <span>해안 {countByType.coast}개</span>
-      <span
-        style={{
-          marginLeft: 'auto',
-          color: palette.primary,
-          fontWeight: 600,
-        }}
-      >
-        총 {totalCount}개
-      </span>
-    </div>
+    <KpiStrip palette={palette} totalCount={totalCount}>
+      <KpiChip
+        palette={palette}
+        filterValue="mountain"
+        currentFilter={url.filter}
+        onFilterChange={url.setFilter}
+        label="산"
+        count={countByType.mountain}
+      />
+      <KpiChip
+        palette={palette}
+        filterValue="river"
+        currentFilter={url.filter}
+        onFilterChange={url.setFilter}
+        label="강"
+        count={countByType.river}
+      />
+      <KpiChip
+        palette={palette}
+        filterValue="lake"
+        currentFilter={url.filter}
+        onFilterChange={url.setFilter}
+        label="호수"
+        count={countByType.lake}
+      />
+      <KpiChip
+        palette={palette}
+        filterValue="coast"
+        currentFilter={url.filter}
+        onFilterChange={url.setFilter}
+        label="해안"
+        count={countByType.coast}
+      />
+    </KpiStrip>
   )
 
   const listContent = (() => {
