@@ -1,11 +1,11 @@
 /**
  * List Styled Components
- * 이벤트 리스트 관련 스타일
+ * 이벤트 리스트 관련 스타일 — ledger polish 톤(평면, 단색, 축소된 모션) 적용.
  */
 import styled, { css } from 'styled-components'
 
 import type { HistoricalEventCategory } from '../create/events.types'
-import { CATEGORY_BADGE_COLORS } from './theme'
+import { BRAND, CATEGORY_BADGE_COLORS, MOTION, SHADOW } from './theme'
 
 export const CompactList = styled.div`
   display: flex;
@@ -26,11 +26,11 @@ export const CompactList = styled.div`
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb {
-    background: rgba(99, 102, 241, 0.2);
+    background: rgba(37, 99, 235, 0.2);
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: rgba(99, 102, 241, 0.3);
+    background: rgba(37, 99, 235, 0.3);
   }
 
   @media (max-width: 768px) {
@@ -40,19 +40,25 @@ export const CompactList = styled.div`
 
 export type ListItemImportance = 'critical' | 'major' | 'normal'
 
+/**
+ * 카드 — 평면 톤. hover translateX/box-shadow lift 제거.
+ * 도트 외곽 링은 surface 색에 의존 → CSS 변수 `--surface-bg`로 외부 주입 가능하도록 두되,
+ * 기본은 PageScene/drawer 양쪽에서 안전한 currentColor 흉내 (theme 분기).
+ *
+ * importance 좌측 보더 (active 4px / critical 4px / major 3px) 우선순위 유지.
+ */
 export const CompactListItem = styled.div<{
   $active: boolean
   $depth: number
   $importance?: ListItemImportance
 }>`
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 0;
   margin-left: ${({ $depth }) => $depth * 24}px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color ${MOTION.fast}, background ${MOTION.fast};
   position: relative;
   display: flex;
-  animation: fadeIn 0.3s ease-out;
 
   /* importance에 따라 카드 최소 높이 차등 — 한눈 스캔 시 위계 인지 */
   min-height: ${({ $importance }) =>
@@ -62,28 +68,17 @@ export const CompactListItem = styled.div<{
         ? '68px'
         : '52px'};
 
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
   /* 좌측 importance 강조 보더 — active > critical > major 순 우선 */
   border-left: ${({ $active, $importance }) =>
     $active
-      ? '4px solid #6366f1'
+      ? `4px solid ${BRAND.primary}`
       : $importance === 'critical'
-        ? '4px solid #6366f1'
+        ? `4px solid ${BRAND.primary}`
         : $importance === 'major'
           ? '3px solid rgba(245, 158, 11, 0.7)'
           : '1.5px solid transparent'};
 
-  /* 타임라인 연결선 */
+  /* 타임라인 연결선 — hover 시 폭 변화 미세하게만 */
   &::before {
     content: '';
     position: absolute;
@@ -91,8 +86,8 @@ export const CompactListItem = styled.div<{
     top: 50%;
     width: ${({ $depth }) => 38 + $depth * 24}px;
     height: 2px;
-    background: rgba(99, 102, 241, 0.25);
-    transition: all 0.2s ease;
+    background: ${BRAND.primarySoftHover};
+    transition: width ${MOTION.fast};
   }
 
   &:hover::before {
@@ -103,27 +98,27 @@ export const CompactListItem = styled.div<{
     theme.mode === 'dark'
       ? css`
           background: ${$active
-            ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1))'
+            ? BRAND.primarySoftDark
             : $depth > 0
               ? 'rgba(255, 255, 255, 0.03)'
               : 'rgba(255, 255, 255, 0.04)'};
           border: 1.5px solid
             ${$active
-              ? 'rgba(99, 102, 241, 0.4)'
+              ? BRAND.primaryBorderHover
               : $depth > 0
-                ? 'rgba(99, 102, 241, 0.1)'
+                ? 'rgba(37, 99, 235, 0.1)'
                 : 'rgba(255, 255, 255, 0.07)'};
           border-left: ${$active
-            ? '4px solid #6366f1'
-            : `1.5px solid ${$depth > 0 ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255, 255, 255, 0.07)'}`};
-          box-shadow: ${$active
-            ? '0 2px 8px rgba(99, 102, 241, 0.15)'
-            : 'none'};
+            ? `4px solid ${BRAND.primary}`
+            : `1.5px solid ${$depth > 0 ? 'rgba(37, 99, 235, 0.1)' : 'rgba(255, 255, 255, 0.07)'}`};
+          box-shadow: ${$active ? SHADOW.smDark : SHADOW.none};
           &:hover {
-            border-color: rgba(99, 102, 241, 0.3);
-            transform: translateX(2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border-color: ${BRAND.primaryBorder};
+            background: ${$active
+              ? BRAND.primaryFillDark
+              : 'rgba(255, 255, 255, 0.06)'};
           }
+          /* 도트 — 외곽 링 색을 currentColor 기반으로 (drawer/PageScene surface와 무관하게 매끈) */
           &::after {
             content: '';
             position: absolute;
@@ -132,40 +127,36 @@ export const CompactListItem = styled.div<{
             transform: translateY(-50%);
             width: ${$active ? '10px' : '8px'};
             height: ${$active ? '10px' : '8px'};
-            background: ${$active ? '#6366f1' : 'rgba(30, 30, 40, 0.9)'};
-            border: 2px solid ${$active ? '#6366f1' : 'rgba(99, 102, 241, 0.4)'};
+            background: ${$active ? BRAND.primary : 'rgba(30, 30, 40, 0.9)'};
+            border: 2px solid
+              ${$active ? BRAND.primary : BRAND.primaryBorderHover};
             border-radius: 50%;
-            box-shadow: 0 0 0 2px rgba(15, 15, 15, 0.8);
-            transition: all 0.2s ease;
+            transition: background ${MOTION.fast};
             z-index: 1;
           }
           &:hover::after {
-            background: #6366f1;
-            transform: translateY(-50%) scale(1.15);
+            background: ${BRAND.primary};
           }
         `
       : css`
           background: ${$active
-            ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.06))'
+            ? BRAND.primarySoft
             : $depth > 0
               ? 'rgba(248, 250, 252, 0.8)'
               : '#ffffff'};
           border: 1.5px solid
             ${$active
-              ? 'rgba(99, 102, 241, 0.4)'
+              ? BRAND.primaryBorderHover
               : $depth > 0
-                ? 'rgba(99, 102, 241, 0.08)'
+                ? 'rgba(37, 99, 235, 0.08)'
                 : 'rgba(20, 19, 34, 0.08)'};
           border-left: ${$active
-            ? '4px solid #6366f1'
-            : `1.5px solid ${$depth > 0 ? 'rgba(99, 102, 241, 0.08)' : 'rgba(20, 19, 34, 0.08)'}`};
-          box-shadow: ${$active
-            ? '0 2px 8px rgba(99, 102, 241, 0.12)'
-            : '0 1px 3px rgba(0, 0, 0, 0.04)'};
+            ? `4px solid ${BRAND.primary}`
+            : `1.5px solid ${$depth > 0 ? 'rgba(37, 99, 235, 0.08)' : 'rgba(20, 19, 34, 0.08)'}`};
+          box-shadow: ${$active ? SHADOW.sm : SHADOW.xs};
           &:hover {
-            border-color: rgba(99, 102, 241, 0.3);
-            transform: translateX(2px);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+            border-color: ${BRAND.primaryBorder};
+            background: ${$active ? BRAND.primarySoftHover : '#fafbfd'};
           }
           &::after {
             content: '';
@@ -175,18 +166,25 @@ export const CompactListItem = styled.div<{
             transform: translateY(-50%);
             width: ${$active ? '10px' : '8px'};
             height: ${$active ? '10px' : '8px'};
-            background: ${$active ? '#6366f1' : '#ffffff'};
-            border: 2px solid ${$active ? '#6366f1' : 'rgba(99, 102, 241, 0.4)'};
+            background: ${$active ? BRAND.primary : '#ffffff'};
+            border: 2px solid
+              ${$active ? BRAND.primary : BRAND.primaryBorderHover};
             border-radius: 50%;
-            box-shadow: 0 0 0 2px #ffffff;
-            transition: all 0.2s ease;
+            transition: background ${MOTION.fast};
             z-index: 1;
           }
           &:hover::after {
-            background: #6366f1;
-            transform: translateY(-50%) scale(1.15);
+            background: ${BRAND.primary};
           }
         `}
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &::before,
+    &::after {
+      transition: none;
+    }
+  }
 
   @media (max-width: 768px) {
     min-height: ${({ $depth }) => Math.max(80, 100 - $depth * 10)}px;
@@ -214,7 +212,7 @@ export const CompactThumbnail = styled.div<{
   border-radius: 12px 0 0 12px;
   overflow: hidden;
   background-color: ${({ $isEmpty }) =>
-    $isEmpty ? 'rgba(99, 102, 241, 0.05)' : 'transparent'};
+    $isEmpty ? 'rgba(37, 99, 235, 0.05)' : 'transparent'};
 
   ${({ $isEmpty }) =>
     $isEmpty &&
@@ -227,7 +225,7 @@ export const CompactThumbnail = styled.div<{
       content: '';
       width: 24px;
       height: 24px;
-      background-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="rgba(99, 102, 241, 0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Crect x="3" y="3" width="18" height="18" rx="2" ry="2"/%3E%3Ccircle cx="8.5" cy="8.5" r="1.5"/%3E%3Cpolyline points="21 15 16 10 5 21"/%3E%3C/svg%3E');
+      background-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="rgba(37, 99, 235, 0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Crect x="3" y="3" width="18" height="18" rx="2" ry="2"/%3E%3Ccircle cx="8.5" cy="8.5" r="1.5"/%3E%3Cpolyline points="21 15 16 10 5 21"/%3E%3C/svg%3E');
       background-size: contain;
       background-repeat: no-repeat;
       background-position: center;
@@ -283,6 +281,7 @@ export const CompactListHeader = styled.div`
   min-width: 0;
 `
 
+/* 평면 톤 — hover scale 제거. */
 export const ExpandButton = styled.button`
   border-radius: 6px;
   padding: 0;
@@ -291,31 +290,38 @@ export const ExpandButton = styled.button`
   justify-content: center;
   width: 20px;
   height: 20px;
-  color: #6366f1;
+  color: ${BRAND.primary};
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background ${MOTION.fast}, border-color ${MOTION.fast};
   flex-shrink: 0;
   margin-top: 1px;
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(99, 102, 241, 0.12);
-          border: 1px solid rgba(99, 102, 241, 0.25);
+          background: ${BRAND.primarySoftDark};
+          border: 1px solid rgba(37, 99, 235, 0.25);
           &:hover {
-            background: rgba(99, 102, 241, 0.22);
-            border-color: rgba(99, 102, 241, 0.4);
-            transform: scale(1.1);
+            background: ${BRAND.primaryFillDark};
+            border-color: ${BRAND.primaryBorderHover};
           }
         `
       : css`
           background: #fff;
-          border: 1px solid rgba(99, 102, 241, 0.2);
+          border: 1px solid ${BRAND.primaryBorder};
           &:hover {
-            background: rgba(99, 102, 241, 0.1);
-            border-color: rgba(99, 102, 241, 0.35);
-            transform: scale(1.1);
+            background: ${BRAND.primarySoftHover};
+            border-color: ${BRAND.primaryBorderHover};
           }
         `}
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 export const ExpandSpacer = styled.span`
@@ -382,6 +388,7 @@ export const TimelineDateWrapper = styled.div`
   color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#64748b')};
 `
 
+/* 좌측 leading line — 의미 없는 ━━━ 글리프(SR에 읽힘) 제거 후 CSS pseudo border로 대체. */
 export const TimelineDateRow = styled.div`
   display: flex;
   align-items: center;
@@ -389,9 +396,13 @@ export const TimelineDateRow = styled.div`
   font-weight: 500;
 
   &::before {
-    content: '━━━';
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#334155' : '#cbd5e1')};
-    letter-spacing: -2px;
+    content: '';
+    display: inline-block;
+    width: 18px;
+    height: 1.5px;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#334155' : '#cbd5e1')};
+    border-radius: 1px;
+    flex-shrink: 0;
   }
 `
 
@@ -416,7 +427,7 @@ export const LoadingSpinner = styled.div`
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
   border-top-color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#6366f1' : '#94a3b8'};
+    theme.mode === 'dark' ? '#2563eb' : '#94a3b8'};
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 
@@ -427,6 +438,7 @@ export const LoadingSpinner = styled.div`
   }
 `
 
+/* 평면 톤 — hover scale/box-shadow 변화 제거. 도트 색만 단색 유지. */
 export const YearDivider = styled.button`
   display: flex;
   align-items: center;
@@ -437,7 +449,6 @@ export const YearDivider = styled.button`
   border: none;
   width: calc(100% + 70px);
   cursor: pointer;
-  transition: all 0.3s ease;
   position: relative;
 
   &::before {
@@ -447,17 +458,13 @@ export const YearDivider = styled.button`
     transform: translateX(-50%);
     width: 14px;
     height: 14px;
-    background: #6366f1;
+    background: ${BRAND.primary};
+    /* 도트 외곽 링 — 표면색에 의존하지 않도록 currentColor 흉내 (alpha) */
     border: 3px solid
-      ${({ theme }) => (theme.mode === 'dark' ? '#0f0f0f' : '#ffffff')};
+      ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#ffffff'};
     border-radius: 50%;
-    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
     z-index: 2;
-    transition: all 0.2s ease;
-  }
-
-  &:hover::before {
-    transform: translateX(-50%) scale(1.1);
   }
 
   span {
@@ -470,41 +477,50 @@ export const YearDivider = styled.button`
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    transition: all 0.2s ease;
+    transition: border-color ${MOTION.fast};
     ${({ theme }) =>
       theme.mode === 'dark'
         ? css`
             color: #94a3b8;
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: none;
           `
         : css`
             color: #475569;
             background: #ffffff;
             border: 1px solid rgba(203, 213, 225, 0.5);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
           `}
 
     svg {
-      transition: transform 0.2s ease;
-      color: #6366f1;
+      color: ${BRAND.primary};
       font-size: 10px;
       flex-shrink: 0;
     }
   }
 
   &:hover span {
-    border-color: rgba(99, 102, 241, 0.3);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    border-color: ${BRAND.primaryBorder};
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+  &:focus-visible span {
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    span {
+      transition: none;
+    }
   }
 `
 
 export const CollapsedCount = styled.span`
   font-size: 10px;
   font-weight: 600;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.1);
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
   padding: 2px 6px;
   border-radius: 6px;
   margin-left: 2px;
@@ -529,7 +545,7 @@ export const DateDivider = styled.button`
     transform: translateX(-50%);
     width: 8px;
     height: 8px;
-    background: rgba(99, 102, 241, 0.4);
+    background: rgba(37, 99, 235, 0.4);
     border-radius: 50%;
     z-index: 1;
   }
@@ -561,7 +577,7 @@ export const DateDivider = styled.button`
   }
 
   &:hover span {
-    border-color: rgba(99, 102, 241, 0.25);
+    border-color: rgba(37, 99, 235, 0.25);
   }
 `
 
@@ -583,16 +599,16 @@ export const CollapsedPlaceholder = styled.div`
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(99, 102, 241, 0.03);
-          border: 1px dashed rgba(99, 102, 241, 0.15);
+          background: rgba(37, 99, 235, 0.03);
+          border: 1px dashed rgba(37, 99, 235, 0.15);
         `
       : css`
           background: linear-gradient(
             135deg,
-            rgba(99, 102, 241, 0.03) 0%,
-            rgba(168, 85, 247, 0.02) 100%
+            rgba(37, 99, 235, 0.03) 0%,
+            rgba(37, 99, 235, 0.02) 100%
           );
-          border: 1px dashed rgba(99, 102, 241, 0.2);
+          border: 1px dashed rgba(37, 99, 235, 0.2);
         `}
 
   &::before {
@@ -602,9 +618,10 @@ export const CollapsedPlaceholder = styled.div`
     top: 50%;
     width: 38px;
     height: 1px;
-    border-top: 1px dashed rgba(99, 102, 241, 0.2);
+    border-top: 1px dashed ${BRAND.primaryBorder};
   }
 
+  /* 외곽 링은 box-shadow surface color 가정 대신 그냥 단색. */
   &::after {
     content: '';
     position: absolute;
@@ -613,11 +630,9 @@ export const CollapsedPlaceholder = styled.div`
     transform: translateY(-50%);
     width: 6px;
     height: 6px;
-    background: rgba(99, 102, 241, 0.2);
-    border: 2px solid rgba(99, 102, 241, 0.3);
+    background: ${BRAND.primaryBorder};
+    border: 2px solid ${BRAND.primaryBorder};
     border-radius: 50%;
-    box-shadow: 0 0 0 2px
-      ${({ theme }) => (theme.mode === 'dark' ? '#0f0f0f' : '#ffffff')};
   }
 
   span {
@@ -677,13 +692,13 @@ export const EmptyCatalogState = styled.div`
     background: linear-gradient(
       to bottom,
       ${({ theme }) =>
-          theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.15)' : '#e2e8f0'}
+          theme.mode === 'dark' ? 'rgba(37, 99, 235, 0.15)' : '#e2e8f0'}
         0%,
       ${({ theme }) =>
-          theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.25)' : '#cbd5e1'}
+          theme.mode === 'dark' ? 'rgba(37, 99, 235, 0.25)' : '#cbd5e1'}
         50%,
       ${({ theme }) =>
-          theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.15)' : '#e2e8f0'}
+          theme.mode === 'dark' ? 'rgba(37, 99, 235, 0.15)' : '#e2e8f0'}
         100%
     );
   }
@@ -701,11 +716,11 @@ export const EmptyCatalogState = styled.div`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
     border: 2px solid
       ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.3)' : '#cbd5e1'};
+        theme.mode === 'dark' ? 'rgba(37, 99, 235, 0.3)' : '#cbd5e1'};
     box-shadow: 0 0 0 4px
       ${({ theme }) =>
         theme.mode === 'dark'
-          ? 'rgba(99, 102, 241, 0.08)'
+          ? 'rgba(37, 99, 235, 0.08)'
           : 'rgba(226, 232, 240, 0.3)'};
   }
 
@@ -827,7 +842,7 @@ export const EmptyResetButton = styled.button`
   display: flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
   svg {
     width: 14px;
     height: 14px;
@@ -879,11 +894,11 @@ export const EmptyCreateButton = styled.button`
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          border: 1px solid rgba(99, 102, 241, 0.25);
-          background: rgba(99, 102, 241, 0.1);
-          color: #a5b4fc;
+          border: 1px solid rgba(37, 99, 235, 0.25);
+          background: rgba(37, 99, 235, 0.1);
+          color: #93c5fd;
           &:hover {
-            background: rgba(99, 102, 241, 0.18);
+            background: rgba(37, 99, 235, 0.18);
           }
         `
       : css`
@@ -902,24 +917,33 @@ export const EmptyCreateButton = styled.button`
   }
 `
 
+/* 평면 톤 — hover scale 제거. */
 export const SummaryIconButton = styled.button`
   border: none;
-  background: rgba(99, 102, 241, 0.1);
+  background: ${BRAND.primarySoftHover};
   padding: 4px 6px;
   border-radius: 6px;
-  color: #6366f1;
+  color: ${BRAND.primary};
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background ${MOTION.fast}, color ${MOTION.fast};
   flex-shrink: 0;
   margin-left: 6px;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.18);
-    color: #4f46e5;
-    transform: scale(1.1);
+    background: ${BRAND.primaryFill};
+    color: ${BRAND.primaryHover};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 `
 
@@ -941,9 +965,9 @@ export const CatalogSection = styled.section`
     width: 2px;
     background: linear-gradient(
       180deg,
-      rgba(99, 102, 241, 0.3) 0%,
-      rgba(99, 102, 241, 0.1) 50%,
-      rgba(99, 102, 241, 0.3) 100%
+      rgba(37, 99, 235, 0.3) 0%,
+      rgba(37, 99, 235, 0.1) 50%,
+      rgba(37, 99, 235, 0.3) 100%
     );
     border-radius: 1px;
     z-index: 0;
@@ -951,44 +975,36 @@ export const CatalogSection = styled.section`
   }
 `
 
+/* 평면 톤 — hover lift 제거. */
 export const ResultControls = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 18px;
-  border-radius: 14px;
-  transition: all 0.2s ease;
+  padding: 12px 16px;
+  border-radius: 10px;
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
           background: rgba(255, 255, 255, 0.03);
-          border: 1.5px solid rgba(255, 255, 255, 0.07);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          &:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-          }
+          border: 1px solid rgba(255, 255, 255, 0.07);
         `
       : css`
           background: #ffffff;
-          border: 1.5px solid rgba(20, 19, 34, 0.08);
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-          &:hover {
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
-          }
+          border: 1px solid rgba(20, 19, 34, 0.08);
+          box-shadow: ${SHADOW.xs};
         `}
 `
 
 export const ToolbarMeta = styled.div`
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  padding: 6px 12px;
-  background: rgba(99, 102, 241, 0.08);
-  border-radius: 8px;
+  padding: 5px 10px;
+  background: ${BRAND.primarySoftHover};
+  border-radius: 6px;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
 
   span {
-    color: #6366f1;
+    color: ${BRAND.primary};
   }
 `
 
@@ -997,16 +1013,16 @@ export const ToolbarToggle = styled.div`
   align-items: center;
   gap: 10px;
   padding: 6px 10px;
-  border-radius: 10px;
+  border-radius: 8px;
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(99, 102, 241, 0.06);
-          border: 1px solid rgba(99, 102, 241, 0.15);
+          background: rgba(37, 99, 235, 0.06);
+          border: 1px solid rgba(37, 99, 235, 0.15);
         `
       : css`
-          background: rgba(99, 102, 241, 0.04);
-          border: 1px solid rgba(99, 102, 241, 0.12);
+          background: ${BRAND.primarySoft};
+          border: 1px solid ${BRAND.primarySoftHover};
         `}
 `
 
@@ -1028,93 +1044,102 @@ export const ToolbarToggleDescription = styled.span`
     theme.mode === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(20, 19, 34, 0.5)'};
 `
 
+/* filter.styles의 SortSelect와 시각 family 통일 — radius 8 / 1px / focus halo 토큰 */
 export const SortSelect = styled.select`
-  border-radius: 10px;
-  padding: 9px 32px 9px 14px;
-  font-size: 13px;
-  font-weight: 600;
+  border-radius: 8px;
+  padding: 7px 32px 7px 12px;
+  height: 34px;
+  font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color ${MOTION.fast}, background ${MOTION.fast};
   appearance: none;
-  background-image: url('data:image/svg+xml,%3Csvg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M1 1L6 6L11 1" stroke="%236366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/%3E%3C/svg%3E');
+  background-image: url('data:image/svg+xml,%3Csvg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg"%3E%3Cpath d="M1 1L6 6L11 1" stroke="%232563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/%3E%3C/svg%3E');
   background-repeat: no-repeat;
   background-position: calc(100% - 10px) 50%;
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background-color: rgba(255, 255, 255, 0.05);
-          border: 1.5px solid rgba(99, 102, 241, 0.2);
+          background-color: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           color: #e2e8f0;
           option {
             background: #1e1e2e;
             color: #e2e8f0;
           }
           &:hover {
-            border-color: rgba(99, 102, 241, 0.35);
-          }
-          &:focus {
-            outline: none;
-            border-color: #6366f1;
-            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            border-color: ${BRAND.primaryBorder};
           }
         `
       : css`
-          background-color: #ffffff;
-          border: 1.5px solid rgba(99, 102, 241, 0.2);
-          color: #0f172a;
-          box-shadow: 0 1px 2px rgba(99, 102, 241, 0.04);
+          background-color: #f8fafc;
+          border: 1px solid rgba(203, 213, 225, 0.6);
+          color: #1e293b;
           &:hover {
-            border-color: rgba(99, 102, 241, 0.35);
-            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.1);
-          }
-          &:focus {
-            outline: none;
-            border-color: #6366f1;
-            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            border-color: ${BRAND.primaryBorder};
+            background-color: #ffffff;
           }
         `}
+
+  &:focus {
+    outline: none;
+    border-color: ${BRAND.primaryBorderHover};
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
-export const SortDirectionToggle = styled.button`
-  border-radius: 10px;
-  padding: 9px 11px;
-  color: #6366f1;
+/* 평면 톤 — hover scale 제거. $direction prop으로 회전 (filter.styles.SortButton과 통일) */
+export const SortDirectionToggle = styled.button<{ $direction?: 'asc' | 'desc' }>`
+  border-radius: 8px;
+  padding: 0;
+  width: 34px;
+  height: 34px;
+  color: ${BRAND.primary};
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color ${MOTION.fast}, background ${MOTION.fast};
   svg {
-    transition: transform 0.2s ease;
-  }
-  &:active {
-    transform: scale(0.95);
+    transition: transform ${MOTION.base};
+    transform: rotate(
+      ${({ $direction }) => ($direction === 'asc' ? '180deg' : '0deg')}
+    );
   }
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(255, 255, 255, 0.05);
-          border: 1.5px solid rgba(99, 102, 241, 0.2);
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           &:hover {
-            border-color: rgba(99, 102, 241, 0.35);
-            background: rgba(99, 102, 241, 0.1);
-            svg {
-              transform: scale(1.1);
-            }
+            border-color: ${BRAND.primaryBorder};
+            background: rgba(37, 99, 235, 0.1);
           }
         `
       : css`
-          background: #ffffff;
-          border: 1.5px solid rgba(99, 102, 241, 0.2);
-          box-shadow: 0 1px 2px rgba(99, 102, 241, 0.04);
+          background: #f8fafc;
+          border: 1px solid rgba(203, 213, 225, 0.6);
           &:hover {
-            border-color: rgba(99, 102, 241, 0.35);
-            background: rgba(99, 102, 241, 0.05);
-            svg {
-              transform: scale(1.1);
-            }
+            border-color: ${BRAND.primaryBorder};
+            background: #ffffff;
           }
         `}
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    svg {
+      transition: none;
+    }
+  }
 `
 
 export const HeadOfStateSection = styled.div<{ $depth: number }>`
@@ -1122,18 +1147,18 @@ export const HeadOfStateSection = styled.div<{ $depth: number }>`
   padding: 10px 12px;
   background: linear-gradient(
     135deg,
-    rgba(99, 102, 241, 0.04),
-    rgba(168, 85, 247, 0.03)
+    rgba(37, 99, 235, 0.04),
+    rgba(37, 99, 235, 0.03)
   );
   border-radius: 8px;
-  border: 1px solid rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(37, 99, 235, 0.1);
   margin-left: ${({ $depth }) => $depth * 24}px;
 `
 
 export const HeadOfStateTitle = styled.div`
   font-size: 11px;
   font-weight: 600;
-  color: rgba(99, 102, 241, 0.8);
+  color: rgba(37, 99, 235, 0.8);
   margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1163,18 +1188,18 @@ export const HeadOfStateItem = styled.div`
     theme.mode === 'dark'
       ? css`
           background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(99, 102, 241, 0.1);
+          border: 1px solid rgba(37, 99, 235, 0.1);
           &:hover {
-            border-color: rgba(99, 102, 241, 0.2);
+            border-color: rgba(37, 99, 235, 0.2);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
           }
         `
       : css`
           background: white;
-          border: 1px solid rgba(99, 102, 241, 0.08);
+          border: 1px solid rgba(37, 99, 235, 0.08);
           &:hover {
-            border-color: rgba(99, 102, 241, 0.2);
-            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.08);
+            border-color: rgba(37, 99, 235, 0.2);
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.08);
           }
         `}
 `
@@ -1185,15 +1210,15 @@ export const HeadOfStateAvatar = styled.div`
   border-radius: 50%;
   background: linear-gradient(
     135deg,
-    rgba(99, 102, 241, 0.15),
-    rgba(168, 85, 247, 0.1)
+    rgba(37, 99, 235, 0.15),
+    rgba(37, 99, 235, 0.1)
   );
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   font-weight: 600;
-  color: rgba(99, 102, 241, 0.9);
+  color: rgba(37, 99, 235, 0.9);
   flex-shrink: 0;
   overflow: hidden;
   img {
@@ -1230,10 +1255,10 @@ export const HeadOfStateCountry = styled.span`
   align-items: center;
   gap: 3px;
   padding: 2px 6px;
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(37, 99, 235, 0.08);
   border-radius: 4px;
   font-weight: 500;
-  color: rgba(99, 102, 241, 0.9);
+  color: rgba(37, 99, 235, 0.9);
 `
 
 export const HeadOfStatePosition = styled.span`
@@ -1253,10 +1278,10 @@ export const TenureStartYearRow = styled.div`
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 500;
-  color: rgba(99, 102, 241, 0.75);
-  background: rgba(99, 102, 241, 0.06);
+  color: rgba(37, 99, 235, 0.75);
+  background: rgba(37, 99, 235, 0.06);
   border-radius: 6px;
-  border-left: 2px solid rgba(99, 102, 241, 0.25);
+  border-left: 2px solid rgba(37, 99, 235, 0.25);
 `
 
 export const TenureEndYearRow = styled.div`
@@ -1264,10 +1289,10 @@ export const TenureEndYearRow = styled.div`
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 500;
-  color: rgba(99, 102, 241, 0.75);
-  background: rgba(99, 102, 241, 0.06);
+  color: rgba(37, 99, 235, 0.75);
+  background: rgba(37, 99, 235, 0.06);
   border-radius: 6px;
-  border-left: 2px solid rgba(99, 102, 241, 0.25);
+  border-left: 2px solid rgba(37, 99, 235, 0.25);
 `
 
 export const TenureGroupHeader = styled.div<{
@@ -1276,9 +1301,9 @@ export const TenureGroupHeader = styled.div<{
 }>`
   margin: 12px 0 6px 0;
   padding: 8px 12px;
-  background: rgba(99, 102, 241, 0.04);
+  background: rgba(37, 99, 235, 0.04);
   border-radius: 6px;
-  border-left: 3px solid rgba(99, 102, 241, 0.5);
+  border-left: 3px solid rgba(37, 99, 235, 0.5);
   position: relative;
   margin-left: ${({ $depth }) => $depth * 24}px;
   display: flex;
@@ -1291,16 +1316,16 @@ export const TenureGroupHeader = styled.div<{
     width: 100%;
     text-align: left;
     border: none;
-    border-left: 3px solid rgba(99, 102, 241, 0.5);
+    border-left: 3px solid rgba(37, 99, 235, 0.5);
     transition: background 0.2s ease;
-    &:hover { background: rgba(99, 102, 241, 0.08); }
+    &:hover { background: rgba(37, 99, 235, 0.08); }
   `}
 `
 
 export const TenureGroupTitle = styled.div`
   font-size: 12px;
   font-weight: 600;
-  color: rgba(99, 102, 241, 0.8);
+  color: rgba(37, 99, 235, 0.8);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1322,10 +1347,10 @@ export const TenureGroupInfo = styled.div`
 
 export const TenureGroupExpandButton = styled.button`
   padding: 4px 8px;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(37, 99, 235, 0.2);
   border-radius: 6px;
-  color: rgba(99, 102, 241, 0.9);
+  color: rgba(37, 99, 235, 0.9);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -1339,8 +1364,8 @@ export const TenureGroupExpandButton = styled.button`
     height: 12px;
   }
   &:hover {
-    background: rgba(99, 102, 241, 0.15);
-    border-color: rgba(99, 102, 241, 0.3);
+    background: rgba(37, 99, 235, 0.15);
+    border-color: rgba(37, 99, 235, 0.3);
   }
 `
 
@@ -1348,7 +1373,7 @@ export const TenureDetailsPanel = styled.div`
   margin: 0 0 8px 0;
   padding: 10px 12px;
   border-radius: 6px;
-  border-left: 3px solid rgba(99, 102, 241, 0.25);
+  border-left: 3px solid rgba(37, 99, 235, 0.25);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1389,7 +1414,7 @@ export const TenureDetailRow = styled.div`
 
 export const TenureDetailLabel = styled.span`
   min-width: 44px;
-  color: rgba(99, 102, 241, 0.9);
+  color: rgba(37, 99, 235, 0.9);
   font-weight: 600;
 `
 
@@ -1418,11 +1443,11 @@ export const TenureTimelineItem = styled.div`
     theme.mode === 'dark'
       ? css`
           background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(99, 102, 241, 0.1);
+          border: 1px solid rgba(37, 99, 235, 0.1);
         `
       : css`
           background: #fff;
-          border: 1px solid rgba(99, 102, 241, 0.08);
+          border: 1px solid rgba(37, 99, 235, 0.08);
         `}
 `
 
@@ -1455,7 +1480,7 @@ export const HeadsOfStateYearGroupLabel = styled.div`
   padding: 0;
   font-size: 11px;
   font-weight: 600;
-  color: rgba(99, 102, 241, 0.85);
+  color: rgba(37, 99, 235, 0.85);
   width: 100%;
   display: block;
 `
@@ -1469,16 +1494,16 @@ export const HeadsOfStateYearGroupToggle = styled.button`
   width: 100%;
   border: none;
   border-radius: 6px;
-  background: rgba(99, 102, 241, 0.06);
-  border-left: 3px solid rgba(99, 102, 241, 0.35);
+  background: rgba(37, 99, 235, 0.06);
+  border-left: 3px solid rgba(37, 99, 235, 0.35);
   font-size: 11px;
   font-weight: 600;
-  color: rgba(99, 102, 241, 0.85);
+  color: rgba(37, 99, 235, 0.85);
   cursor: pointer;
   text-align: left;
   transition: background 0.2s ease;
   &:hover {
-    background: rgba(99, 102, 241, 0.1);
+    background: rgba(37, 99, 235, 0.1);
   }
 `
 
@@ -1486,7 +1511,7 @@ export const OtherHeadsOfStateList = styled.div`
   margin: 0 0 6px 0;
   padding: 8px 12px;
   border-radius: 6px;
-  border-left: 3px solid rgba(99, 102, 241, 0.3);
+  border-left: 3px solid rgba(37, 99, 235, 0.3);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1512,17 +1537,17 @@ export const OtherHeadOfStateRow = styled.div`
     theme.mode === 'dark'
       ? css`
           background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(99, 102, 241, 0.08);
+          border: 1px solid rgba(37, 99, 235, 0.08);
           &:hover {
-            border-color: rgba(99, 102, 241, 0.15);
+            border-color: rgba(37, 99, 235, 0.15);
             background: rgba(255, 255, 255, 0.06);
           }
         `
       : css`
           background: white;
-          border: 1px solid rgba(99, 102, 241, 0.08);
+          border: 1px solid rgba(37, 99, 235, 0.08);
           &:hover {
-            border-color: rgba(99, 102, 241, 0.15);
+            border-color: rgba(37, 99, 235, 0.15);
             background: rgba(249, 250, 251, 1);
           }
         `}
@@ -1534,15 +1559,15 @@ export const OtherHeadAvatar = styled.div`
   border-radius: 50%;
   background: linear-gradient(
     135deg,
-    rgba(99, 102, 241, 0.12),
-    rgba(168, 85, 247, 0.08)
+    rgba(37, 99, 235, 0.12),
+    rgba(37, 99, 235, 0.08)
   );
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 9px;
   font-weight: 600;
-  color: rgba(99, 102, 241, 0.8);
+  color: rgba(37, 99, 235, 0.8);
   flex-shrink: 0;
   overflow: hidden;
   img {
@@ -1576,21 +1601,21 @@ export const TenureGroupAvatar = styled.div`
   border-radius: 50%;
   background: linear-gradient(
     135deg,
-    rgba(99, 102, 241, 0.15),
-    rgba(168, 85, 247, 0.1)
+    rgba(37, 99, 235, 0.15),
+    rgba(37, 99, 235, 0.1)
   );
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
   font-weight: 700;
-  color: rgba(99, 102, 241, 1);
+  color: rgba(37, 99, 235, 1);
   flex-shrink: 0;
   overflow: hidden;
   border: 1.5px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'white'};
-  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.1);
   img {
     width: 100%;
     height: 100%;
@@ -1623,10 +1648,10 @@ export const TenureGroupBadge = styled.span`
   align-items: center;
   gap: 3px;
   padding: 2px 6px;
-  background: rgba(99, 102, 241, 0.08);
+  background: rgba(37, 99, 235, 0.08);
   border-radius: 4px;
   font-weight: 500;
-  color: rgba(99, 102, 241, 0.9);
+  color: rgba(37, 99, 235, 0.9);
   font-size: 10px;
   svg {
     width: 10px;
@@ -1634,25 +1659,32 @@ export const TenureGroupBadge = styled.span`
   }
 `
 
+/**
+ * Tenure 그룹 내부 카드.
+ *
+ * 이전 버그: `border-left: 4px solid linear-gradient(...)` — `border` 속성은 gradient를
+ * 받지 않아 *완전히 무효*. 좌측 보더가 사라져 시각적으로 group 인지가 약했음.
+ * → `border-left`는 단색만 사용. 그라데이션 효과는 ::before pseudo로 구현 가능하지만
+ *    평면 톤 정책이라 단색 alpha로 충분.
+ */
 export const CompactListItemInTenure = styled(CompactListItem)`
   position: relative;
   margin-left: ${({ $depth }) => $depth * 24 + 8}px;
 
   background: ${({ $active, $depth }) =>
     $active
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.1))'
+      ? BRAND.primarySoftHover
       : $depth > 0
         ? 'rgba(248, 250, 252, 0.9)'
         : 'rgba(249, 250, 251, 1)'};
 
   border-color: ${({ $active }) =>
-    $active ? 'rgba(99, 102, 241, 0.5)' : 'rgba(99, 102, 241, 0.15)'};
+    $active ? BRAND.primaryBorderHover : 'rgba(37, 99, 235, 0.15)'};
 
+  /* 단색 only — gradient 무효 버그 수정 */
   border-left: 4px solid
     ${({ $active }) =>
-      $active
-        ? '#6366f1'
-        : 'linear-gradient(180deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.3))'};
+      $active ? BRAND.primary : 'rgba(37, 99, 235, 0.35)'};
 
   &::before {
     left: ${({ $depth }) => -49 - $depth * 24}px;
@@ -1664,24 +1696,20 @@ export const CompactListItemInTenure = styled(CompactListItem)`
   }
 
   &:hover {
-    background: ${({ $active, $depth }) =>
-      $active
-        ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(168, 85, 247, 0.15))'
-        : $depth > 0
-          ? 'rgba(240, 244, 255, 1)'
-          : 'rgba(245, 247, 255, 1)'};
-    border-color: rgba(99, 102, 241, 0.4);
+    background: ${({ $active }) =>
+      $active ? BRAND.primaryFill : '#fafbfd'};
+    border-color: ${BRAND.primaryBorderHover};
   }
 `
 
 export const TenureGroupFooter = styled.div`
   margin: 6px 0 12px 0;
   padding: 6px 12px;
-  background: rgba(99, 102, 241, 0.03);
+  background: rgba(37, 99, 235, 0.03);
   border-radius: 4px;
-  border-left: 3px solid rgba(99, 102, 241, 0.25);
+  border-left: 3px solid rgba(37, 99, 235, 0.25);
   font-size: 11px;
-  color: rgba(99, 102, 241, 0.7);
+  color: rgba(37, 99, 235, 0.7);
   font-weight: 500;
   text-align: center;
 `

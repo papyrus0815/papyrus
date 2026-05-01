@@ -10,11 +10,11 @@ export const eventPageRoute: RouteObject = {
   path: 'events',
   children: [
     {
-      // /events — 신규 ledger 페이지 (lens 칩 + 5축 피벗 + ⌘K 팔레트)
+      // /events — 사건 리스트(catalog) 페이지. ledger 페이지는 보류·미라우트.
       index: true,
       lazy: async () => {
-        const { EventsLedgerPage } = await import('./ledger/events-ledger.page')
-        return { Component: EventsLedgerPage }
+        const { EventsCatalogPage } = await import('./list/events.page')
+        return { Component: EventsCatalogPage }
       },
     },
     {
@@ -31,24 +31,6 @@ export const eventPageRoute: RouteObject = {
         const { default: EventCreatePage } =
           await import('./create/event-create.page.refactored')
         return { Component: EventCreatePage }
-      },
-    },
-    {
-      // 신규 에디터 (v2) — 풀 페이지·좌측 섹션 네비.
-      // 안정화 후 위 create / :eventId/edit 로 승격 예정.
-      path: 'create/v2',
-      lazy: async () => {
-        const { default: EventEditorPage } =
-          await import('./editor/event-editor.page')
-        return { Component: EventEditorPage }
-      },
-    },
-    {
-      path: ':eventId/edit/v2',
-      lazy: async () => {
-        const { default: EventEditorPage } =
-          await import('./editor/event-editor.page')
-        return { Component: EventEditorPage }
       },
     },
     {

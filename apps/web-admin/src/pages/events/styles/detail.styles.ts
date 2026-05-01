@@ -1,36 +1,60 @@
 /**
  * Detail Panel Styled Components
- * 상세 패널 관련 스타일
+ * 상세 패널 관련 스타일 — ledger polish 적용 (transform/lift 제거, 토큰 사용).
+ *
+ * 표시 책임 분리:
+ *   - desktop (>=1200px): CatalogSplit grid의 두 번째 컬럼이 호스트
+ *   - mobile (<1200px): CatalogDetailDrawer가 호스트 (PageStyles.DetailPanelHost)
+ *   → DetailPanel 자체는 *어디에 있든 항상 표시*. 이전 `display:none` 분기는 drawer 안에서도
+ *      숨기는 버그였음 — 제거.
  */
 import styled, { css } from 'styled-components'
 
 import type { HistoricalEventCategory } from '../create/events.types'
-import { CATEGORY_BADGE_COLORS } from './theme'
+import { BRAND, CATEGORY_BADGE_COLORS, DANGER, MOTION, SHADOW } from './theme'
 
-export const DetailPanel = styled.aside`
+/**
+ * Detail panel root — `<section>` (이전 `<aside>`는 drawer dialog 안에 들어가면 SR semantics 충돌).
+ * mobile drawer 안에서도 표시되어야 하므로 `display:none` 분기 제거.
+ */
+export const DetailPanel = styled.section`
   height: 100%;
-  border-radius: 14px;
+  border-radius: 12px;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255, 255, 255, 0.04);
-    border: 1.5px solid rgba(255, 255, 255, 0.07);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  ` : css`
-    background: #ffffff;
-    border: 1.5px solid rgba(20, 19, 34, 0.08);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  `}
+  position: relative;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+        `
+      : css`
+          background: #ffffff;
+          border: 1px solid rgba(20, 19, 34, 0.08);
+        `}
 
-  &::-webkit-scrollbar { width: 6px; }
-  &::-webkit-scrollbar-track { background: transparent; }
-  &::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.2); border-radius: 3px; }
-  &::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.3); }
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: ${BRAND.primarySoftHover};
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: ${BRAND.primaryFill};
+  }
 
-  @media (max-width: 1200px) { display: none; }
+  /* drawer 안에서는 자체 border 제거 (drawer가 border-left 가짐) */
+  @media (max-width: 1200px) {
+    border: none;
+    border-radius: 0;
+  }
 `
 
 export const DetailPanelContent = styled.div`
@@ -40,67 +64,10 @@ export const DetailPanelContent = styled.div`
   gap: 0;
 `
 
-export const DetailHeroImage = styled.div<{ $isEmpty?: boolean }>`
-  width: 100%;
-  max-width: 400px;
-  height: 220px;
-  background-size: cover;
-  background-position: center;
-  position: relative;
-  border-radius: 12px;
-  margin: 20px auto;
-  background-color: ${({ $isEmpty }) => $isEmpty ? 'rgba(99, 102, 241, 0.04)' : 'transparent'};
-
-  ${({ $isEmpty }) => $isEmpty && `
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    &::before {
-      content: '';
-      width: 60px;
-      height: 60px;
-      background-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="60" fill="none" stroke="rgba(99, 102, 241, 0.25)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Crect x="3" y="3" width="54" height="54" rx="6" ry="6"/%3E%3Ccircle cx="22.5" cy="22.5" r="4.5"/%3E%3Cpolyline points="54 45 42 33 15 54"/%3E%3C/svg%3E');
-      background-size: contain;
-      background-repeat: no-repeat;
-      background-position: center;
-      opacity: 0.3;
-      z-index: 1;
-    }
-  `}
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: ${({ $isEmpty }) => $isEmpty
-      ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.02) 0%, rgba(168, 85, 247, 0.02) 100%)'
-      : 'linear-gradient(135deg, rgba(10, 12, 28, 0.4) 0%, rgba(33, 18, 66, 0.3) 100%)'};
-    z-index: 0;
-  }
-`
-
-export const DetailCategory = styled.span<{
-  $category: HistoricalEventCategory
-}>`
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #fff;
-  z-index: 2;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  background: ${({ $category }) => {
-    const color = CATEGORY_BADGE_COLORS[$category]
-    return `${color}E6`
-  }};
-`
+/**
+ * Hero image / category chip은 새 `HeroFigure` + `CategoryChip`으로 대체됨 (위젯에서 사용).
+ * 이전 컴포넌트는 사용처 0이라 제거.
+ */
 
 export const DetailPanelEmpty = styled.div`
   display: flex;
@@ -113,32 +80,25 @@ export const DetailPanelEmpty = styled.div`
   @media (max-width: 768px) { min-height: 320px; padding: 32px 20px; }
 `
 
+/* EmptyResults(40px+18px)와 비례 통일 */
 export const DetailPanelEmptyIcon = styled.div`
   position: relative;
   z-index: 1;
-  width: 72px;
-  height: 72px;
-  margin-bottom: 20px;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 12px;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.08));
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12);
 
   svg {
-    width: 32px;
-    height: 32px;
-    color: #6366f1;
-    animation: iconFloat 3s ease-in-out infinite;
+    width: 18px;
+    height: 18px;
+    color: ${BRAND.primary};
   }
-
-  @keyframes iconFloat {
-    0%, 100% { transform: translateY(0px) rotate(0deg); }
-    50% { transform: translateY(-6px) rotate(5deg); }
-  }
-
-  @media (max-width: 768px) { width: 64px; height: 64px; margin-bottom: 16px; svg { width: 28px; height: 28px; } }
 `
 
 export const DetailPanelEmptyContent = styled.div`
@@ -163,27 +123,55 @@ export const DetailPanelEmptyDescription = styled.p`
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#475569' : '#64748b'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#64748b')};
   animation: textPulse 3s ease-in-out infinite;
 
   @keyframes textPulse {
-    0%, 100% { opacity: 0.7; }
-    50% { opacity: 1; }
+    0%, 100% {
+      opacity: 0.7;
+    }
+    50% {
+      opacity: 1;
+    }
   }
 
-  @media (max-width: 768px) { font-size: 12px; }
+  /* 운동 민감 사용자 — pulse 정지 */
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    opacity: 0.85;
+  }
+
+  @media (max-width: 768px) {
+    font-size: 12px;
+  }
 `
 
+/**
+ * 헤더 — sticky top. 본문 길어져도 제목/액션 항상 보임.
+ * 배경색은 panel surface와 동일 (불투명) — 스크롤 시 본문이 비치지 않게.
+ */
 export const DetailPanelHeader = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 20px 24px;
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    border-bottom: 1.5px solid rgba(255, 255, 255, 0.07);
-  ` : css`
-    border-bottom: 1.5px solid rgba(99, 102, 241, 0.1);
-  `}
+  gap: 8px;
+  padding: 16px 20px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: #0f0f12;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        `
+      : css`
+          background: #ffffff;
+          border-bottom: 1px solid rgba(15, 23, 42, 0.07);
+        `}
+
+  @media (max-width: 768px) {
+    padding: 14px 16px;
+  }
 `
 
 export const DetailTitle = styled.h2`
@@ -213,7 +201,7 @@ export const DetailSectionTitle = styled.h3`
   margin: 0;
   font-size: 12px;
   font-weight: 700;
-  color: #6366f1;
+  color: #2563eb;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 `
@@ -231,14 +219,14 @@ export const DetailStatCard = styled.div`
   gap: 8px;
   align-items: flex-start;
   ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.07);
   ` : css`
-    background: linear-gradient(180deg, #fafbff, #ffffff);
+    background: #fafbff;
     border: 1px solid rgba(20, 19, 34, 0.08);
   `}
 
-  svg { color: #6366f1; flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; }
+  svg { color: #2563eb; flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; }
   div { display: flex; flex-direction: column; gap: 3px; }
   small { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: ${({ theme }) => theme.mode === 'dark' ? '#475569' : '#64748b'}; }
   strong { font-size: 13px; font-weight: 600; color: ${({ theme }) => theme.mode === 'dark' ? '#e2e8f0' : '#0f172a'}; }
@@ -283,8 +271,8 @@ export const DetailFigureAvatar = styled.span`
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: rgba(99, 102, 241, 0.12);
-  color: #6366f1;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -300,10 +288,10 @@ export const DetailCountriesGrid = styled.div`
 `
 
 export const DetailCountryTag = styled.span`
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(99, 102, 241, 0.08);
-  color: #4f46e5;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
   font-size: 11px;
   font-weight: 600;
 `
@@ -319,32 +307,50 @@ export const DetailChildItem = styled.button`
   padding: 10px 12px;
   text-align: left;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background ${MOTION.fast}, border-color ${MOTION.fast};
   display: flex;
   flex-direction: column;
   gap: 4px;
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(99, 102, 241, 0.12);
-    strong { font-size: 12px; font-weight: 600; color: #e2e8f0; }
-    span { font-size: 11px; line-height: 1.4; color: #64748b; }
-    &:hover { border-color: rgba(99, 102, 241, 0.3); background: rgba(99, 102, 241, 0.1); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-  ` : css`
-    background: #fafbff;
-    border: 1px solid rgba(99, 102, 241, 0.12);
-    strong { font-size: 12px; font-weight: 600; color: #0f172a; }
-    span { font-size: 11px; line-height: 1.4; color: #64748b; }
-    &:hover { border-color: rgba(99, 102, 241, 0.25); background: #f0f4ff; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1); }
-  `}
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(37, 99, 235, 0.12);
+          strong { font-size: 12px; font-weight: 600; color: #e2e8f0; }
+          span { font-size: 11px; line-height: 1.4; color: #64748b; }
+          &:hover {
+            border-color: ${BRAND.primaryBorder};
+            background: ${BRAND.primarySoftDark};
+          }
+        `
+      : css`
+          background: #fafbff;
+          border: 1px solid rgba(37, 99, 235, 0.12);
+          strong { font-size: 12px; font-weight: 600; color: #0f172a; }
+          span { font-size: 11px; line-height: 1.4; color: #64748b; }
+          &:hover {
+            border-color: ${BRAND.primaryBorder};
+            background: #f0f4ff;
+          }
+        `}
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 export const DetailActions = styled.div`
   padding: 12px 16px;
   ${({ theme }) => theme.mode === 'dark' ? css`
-    border-top: 1.5px solid rgba(255, 255, 255, 0.07);
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
     background: rgba(255, 255, 255, 0.02);
   ` : css`
-    border-top: 1.5px solid rgba(99, 102, 241, 0.1);
+    border-top: 1px solid rgba(37, 99, 235, 0.1);
     background: rgba(248, 250, 252, 0.5);
   `}
 `
@@ -358,107 +364,145 @@ export const SecondaryActionButton = styled.button`
   flex: 1;
   border-radius: 8px;
   padding: 8px 12px;
-  color: #6366f1;
+  color: ${BRAND.primary};
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background ${MOTION.fast}, border-color ${MOTION.fast};
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
   white-space: nowrap;
   svg { width: 13px; height: 13px; }
-  &:active { transform: scale(0.98); }
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(99, 102, 241, 0.08);
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    &:hover { border-color: rgba(99, 102, 241, 0.35); background: rgba(99, 102, 241, 0.15); color: #a5b4fc; }
-  ` : css`
-    background: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(99, 102, 241, 0.15);
-    &:hover { border-color: rgba(99, 102, 241, 0.3); background: rgba(99, 102, 241, 0.05); color: #4f46e5; box-shadow: 0 2px 6px rgba(99, 102, 241, 0.08); }
-  `}
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(37, 99, 235, 0.08);
+          border: 1px solid ${BRAND.primaryBorder};
+          &:hover {
+            border-color: ${BRAND.primaryBorderHover};
+            background: ${BRAND.primarySoftDark};
+            color: #93c5fd;
+          }
+        `
+      : css`
+          background: rgba(255, 255, 255, 0.8);
+          border: 1px solid rgba(37, 99, 235, 0.15);
+          &:hover {
+            border-color: rgba(37, 99, 235, 0.3);
+            background: rgba(37, 99, 235, 0.06);
+            color: #1d4ed8;
+          }
+        `}
 `
 
 export const ViewAllHierarchyButton = styled.button`
-  border-radius: 10px;
-  padding: 10px 14px;
-  color: #6366f1;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #2563eb;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.15s, border-color 0.15s;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   width: 100%;
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(99, 102, 241, 0.08);
-    border: 1.5px solid rgba(99, 102, 241, 0.2);
-    &:hover { border-color: rgba(99, 102, 241, 0.4); background: rgba(99, 102, 241, 0.15); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15); }
-  ` : css`
-    background: rgba(99, 102, 241, 0.05);
-    border: 1.5px solid rgba(99, 102, 241, 0.25);
-    &:hover { border-color: rgba(99, 102, 241, 0.4); background: rgba(99, 102, 241, 0.1); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15); }
-  `}
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(37, 99, 235, 0.08);
+          border: 1px solid rgba(37, 99, 235, 0.2);
+          &:hover {
+            border-color: rgba(37, 99, 235, 0.4);
+            background: rgba(37, 99, 235, 0.14);
+          }
+        `
+      : css`
+          background: rgba(37, 99, 235, 0.05);
+          border: 1px solid rgba(37, 99, 235, 0.25);
+          &:hover {
+            border-color: rgba(37, 99, 235, 0.4);
+            background: rgba(37, 99, 235, 0.1);
+          }
+        `}
 `
 
 // Timeline View
 export const TimelineContainer = styled.div`
   position: relative;
-  padding-left: 32px;
+  padding-left: 28px;
 
+  /* 타임라인 rail — gradient → 단색 alpha, 두께 3 → 2px */
   &::before {
     content: '';
     position: absolute;
-    left: 12px;
+    left: 10px;
     top: 0;
     bottom: 0;
-    width: 3px;
-    background: linear-gradient(180deg, rgba(99, 102, 241, 0.3) 0%, rgba(168, 85, 247, 0.25) 50%, rgba(99, 102, 241, 0.2) 100%);
-    border-radius: 999px;
+    width: 2px;
+    background: rgba(37, 99, 235, 0.3);
+    border-radius: 1px;
   }
 `
 
+/* TimelineEventCard — gradient/shadow ladder 제거. 단순 카드. */
 export const TimelineEventCard = styled.div<{ $depth: number }>`
   position: relative;
-  padding: 16px 18px;
-  margin-bottom: 20px;
-  margin-left: ${({ $depth }) => $depth * 24}px;
-  border-radius: 14px;
-  transition: all 0.2s ease;
-  ${({ theme, $depth }) => theme.mode === 'dark' ? css`
-    background: ${$depth === 0 ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255, 255, 255, 0.04)'};
-    border: 1.5px solid rgba(99, 102, 241, 0.15);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    &:hover { border-color: rgba(99, 102, 241, 0.3); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
-  ` : css`
-    background: ${$depth === 0 ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(168, 85, 247, 0.03))' : '#ffffff'};
-    border: 1.5px solid rgba(99, 102, 241, 0.15);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
-    &:hover { border-color: rgba(99, 102, 241, 0.3); box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12); }
-  `}
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  margin-left: ${({ $depth }) => $depth * 22}px;
+  border-radius: 8px;
+  transition: border-color 0.15s, background 0.15s;
+  ${({ theme, $depth }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: ${$depth === 0
+            ? 'rgba(37, 99, 235, 0.08)'
+            : 'rgba(255, 255, 255, 0.03)'};
+          border: 1px solid rgba(37, 99, 235, 0.15);
+          &:hover {
+            border-color: rgba(37, 99, 235, 0.3);
+          }
+        `
+      : css`
+          background: ${$depth === 0
+            ? 'rgba(37, 99, 235, 0.05)'
+            : '#ffffff'};
+          border: 1px solid rgba(37, 99, 235, 0.15);
+          &:hover {
+            border-color: rgba(37, 99, 235, 0.3);
+          }
+        `}
 
   &::before {
     content: '';
     position: absolute;
-    left: -32px;
-    top: 24px;
-    width: 12px;
-    height: 12px;
+    left: -28px;
+    top: 20px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: ${({ $depth }) => $depth === 0 ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'transparent'};
-    border: 3px solid ${({ $depth }) => $depth === 0 ? '#6366f1' : 'rgba(99, 102, 241, 0.5)'};
-    box-shadow: 0 0 0 4px ${({ theme }) => theme.mode === 'dark' ? 'rgba(15,15,15,0.8)' : 'rgba(255, 255, 255, 1)'};
+    background: ${({ $depth }) =>
+      $depth === 0 ? BRAND.primary : 'transparent'};
+    border: 2px solid
+      ${({ $depth }) =>
+        $depth === 0 ? BRAND.primary : BRAND.primaryBorderHover};
+    /* 외곽 링 — 표면색 가정 대신 currentColor 기반 alpha (drawer/page 모두 매끈) */
+    box-shadow: 0 0 0 3px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.06)'
+          : 'rgba(255,255,255,1)'};
   }
 `
 
 export const TimelineEventDate = styled.div`
   font-size: 12px;
   font-weight: 700;
-  color: #6366f1;
+  color: #2563eb;
   margin-bottom: 6px;
 `
 
@@ -491,14 +535,14 @@ export const TimelineImportance = styled.span<{
     switch ($importance) {
       case 'critical': return 'rgba(239, 68, 68, 0.15)'
       case 'major': return 'rgba(251, 191, 36, 0.15)'
-      default: return 'rgba(99, 102, 241, 0.1)'
+      default: return 'rgba(37, 99, 235, 0.1)'
     }
   }};
   color: ${({ $importance }) => {
     switch ($importance) {
       case 'critical': return '#dc2626'
       case 'major': return '#d97706'
-      default: return '#6366f1'
+      default: return '#2563eb'
     }
   }};
 `
@@ -522,7 +566,7 @@ export const TreeNodeWrapper = styled.div<{ $depth: number }>`
       top: 20px;
       width: 12px;
       height: 2px;
-      background: rgba(99, 102, 241, 0.25);
+      background: rgba(37, 99, 235, 0.25);
     }
 
     &::after {
@@ -532,34 +576,35 @@ export const TreeNodeWrapper = styled.div<{ $depth: number }>`
       top: 0;
       bottom: 50%;
       width: 2px;
-      background: rgba(99, 102, 241, 0.15);
+      background: rgba(37, 99, 235, 0.15);
     }
   `}
 `
 
+/* TreeNodeCard — 2px 두꺼운 border + 중첩 box-shadow + hover translateX 모두 제거.
+ * 좌측 1px stripe만 importance 색으로 (시각 단서 보존). */
 export const TreeNodeCard = styled.div<{
   $depth: number
   $importance: 'critical' | 'major' | 'notable'
 }>`
-  border-radius: 14px;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  transition: all 0.2s ease;
-  border: 2px solid ${({ $importance }) => {
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  transition: border-color 0.15s, background 0.15s;
+  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.08)'};
+  border-left: 3px solid ${({ $importance }) => {
     switch ($importance) {
-      case 'critical': return 'rgba(239, 68, 68, 0.3)'
-      case 'major': return 'rgba(251, 191, 36, 0.3)'
-      default: return 'rgba(99, 102, 241, 0.2)'
+      case 'critical': return 'rgba(239, 68, 68, 0.5)'
+      case 'major': return 'rgba(251, 191, 36, 0.5)'
+      default: return 'rgba(37, 99, 235, 0.4)'
     }
   }};
   ${({ theme, $depth }) => theme.mode === 'dark' ? css`
-    background: ${$depth === 0 ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255, 255, 255, 0.04)'};
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    &:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.3); transform: translateX(4px); }
+    background: ${$depth === 0 ? 'rgba(37, 99, 235, 0.06)' : 'rgba(255, 255, 255, 0.03)'};
+    &:hover { background: ${$depth === 0 ? 'rgba(37, 99, 235, 0.1)' : 'rgba(255, 255, 255, 0.06)'}; }
   ` : css`
-    background: ${$depth === 0 ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.05))' : '#ffffff'};
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
-    &:hover { box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12); transform: translateX(4px); }
+    background: ${$depth === 0 ? 'rgba(37, 99, 235, 0.04)' : '#ffffff'};
+    &:hover { background: ${$depth === 0 ? 'rgba(37, 99, 235, 0.07)' : 'rgba(37, 99, 235, 0.03)'}; }
   `}
 `
 
@@ -592,21 +637,21 @@ export const TreeImportanceBadge = styled.span<{
     switch ($importance) {
       case 'critical': return 'rgba(239, 68, 68, 0.15)'
       case 'major': return 'rgba(251, 191, 36, 0.15)'
-      default: return 'rgba(99, 102, 241, 0.1)'
+      default: return 'rgba(37, 99, 235, 0.1)'
     }
   }};
   color: ${({ $importance }) => {
     switch ($importance) {
       case 'critical': return '#dc2626'
       case 'major': return '#d97706'
-      default: return '#6366f1'
+      default: return '#2563eb'
     }
   }};
 `
 
 export const TreeNodeDate = styled.div`
   font-size: 12px;
-  color: #6366f1;
+  color: #2563eb;
   font-weight: 600;
   margin-bottom: 6px;
 `
@@ -626,21 +671,365 @@ export const TreeNodeChildren = styled.div`
 
 export const SummaryIconButton = styled.button`
   border: none;
-  background: rgba(99, 102, 241, 0.1);
+  background: ${BRAND.primarySoftHover};
   padding: 4px 6px;
   border-radius: 6px;
-  color: #6366f1;
+  color: ${BRAND.primary};
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background ${MOTION.fast}, color ${MOTION.fast};
   flex-shrink: 0;
   margin-left: 6px;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.18);
-    color: #4f46e5;
-    transform: scale(1.1);
+    background: ${BRAND.primaryFill};
+    color: ${BRAND.primaryHover};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EventDetailPanel 위젯 전용 스타일 — 이전엔 위젯 안 inline. detail.styles로 hoist.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/* Hero image — 패널 폭 fit. 16px 좌우 여백만. CLS 방지를 위해 height는 skeleton과 일치. */
+export const HeroFigure = styled.figure`
+  margin: 12px 16px 0;
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  height: 200px;
+  background-color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
+`
+
+export const HeroImg = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+`
+
+export const HeroPlaceholder = styled.button`
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  background: transparent;
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color ${MOTION.fast}, background ${MOTION.fast},
+    color ${MOTION.fast};
+  font-family: inherit;
+
+  svg {
+    opacity: 0.55;
+  }
+
+  &:hover {
+    border-color: ${BRAND.primaryBorder};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
+    color: ${BRAND.primary};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+/**
+ * Action toolbar — icon ghost group + 우측 filled primary CTA.
+ * primary는 페이지 단 CreateEventButton과 동일 톤 (filled indigo).
+ */
+export const ActionButtonRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+
+  & > [data-cta='primary'] {
+    margin-left: auto;
+  }
+`
+
+type ActionVariant = 'ghost' | 'ghost-danger' | 'primary'
+
+export const ActionButton = styled.button<{ $variant: ActionVariant }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: -0.005em;
+  border-radius: 8px;
+  transition: background ${MOTION.fast}, color ${MOTION.fast},
+    border-color ${MOTION.fast};
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  ${({ $variant, theme }) => {
+    if ($variant === 'primary') {
+      // CreateEventButton과 동일한 filled primary
+      return css`
+        height: 32px;
+        padding: 0 12px;
+        font-size: 12.5px;
+        font-weight: 600;
+        background: ${BRAND.primary};
+        border: 1px solid ${BRAND.primary};
+        color: #ffffff;
+        &:hover {
+          background: ${BRAND.primaryHover};
+          border-color: ${BRAND.primaryHover};
+        }
+      `
+    }
+    if ($variant === 'ghost-danger') {
+      return css`
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        background: transparent;
+        border: 1px solid transparent;
+        /* 평소에도 약한 빨강 단서 — 위험 동작 인지 */
+        color: ${theme.mode === 'dark' ? '#fca5a5' : DANGER.base};
+        opacity: 0.7;
+        &:hover {
+          background: ${theme.mode === 'dark'
+            ? 'rgba(239, 68, 68, 0.12)'
+            : DANGER.fill};
+          color: ${theme.mode === 'dark' ? '#f87171' : DANGER.base};
+          border-color: ${DANGER.border};
+          opacity: 1;
+        }
+      `
+    }
+    return css`
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      background: transparent;
+      border: 1px solid transparent;
+      color: ${theme.colors.text.secondary};
+      &:hover {
+        background: ${theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.06)'
+          : 'rgba(15, 23, 42, 0.04)'};
+        color: ${theme.colors.text.primary};
+      }
+    `
+  }}
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+/* 본문 컨텐츠 영역 — sticky 헤더와 분리 */
+export const InfoBlock = styled.div`
+  padding: 14px 20px 16px;
+
+  @media (max-width: 768px) {
+    padding: 12px 16px 14px;
+  }
+`
+
+/* InfoGrid — line-height 1.8 → 1.6 (정보 밀도 ↑) */
+export const InfoGrid = styled.div`
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+`
+
+export const InfoLabel = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+`
+
+export const InfoValue = styled.div`
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-weight: 500;
+`
+
+export const InfoMutedHint = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-left: 8px;
+  white-space: nowrap;
+`
+
+export const ChipRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+`
+
+/**
+ * Country chip — 평면 톤 통일 (이전 gradient 제거).
+ * filter.styles.FilterChip / list-toolbar.ActiveFilterChip와 family.
+ */
+export const CountryChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : BRAND.primaryHover)};
+  border: 1px solid ${BRAND.primaryBorder};
+`
+
+/* 역사적 국가 — amber 톤. 페이지 안에서 오직 이 chip만 amber라 색 분리 의도 보존. */
+export const HistoricalCountryChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(245, 158, 11, 0.18)'
+      : 'rgba(245, 158, 11, 0.08)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#92400e')};
+  border: 1px solid rgba(245, 158, 11, 0.3);
+`
+
+/* SectionChip — neutral, 본문 구성 표시 */
+export const SectionChip = styled.span`
+  display: inline-block;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.06);
+          color: ${theme.colors.text.secondary};
+        `
+      : css`
+          background: #f1f5f9;
+          color: #475569;
+        `}
+`
+
+/**
+ * 카테고리 chip — InfoGrid 안에서 항상 표시 (이전엔 hero image 위 absolute라 이미지 없으면 사라짐).
+ * 카테고리 색을 좌측 dot으로 표현 + 텍스트.
+ */
+export const CategoryChip = styled.span<{
+  $category: HistoricalEventCategory
+}>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8fafc'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+
+  &::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: ${({ $category }) =>
+      CATEGORY_BADGE_COLORS[$category] ?? '#6b7280'};
+    flex-shrink: 0;
+  }
+`
+
+/**
+ * 길이 긴 description — line-clamp + "더 보기"/"접기" 토글.
+ * `$expanded` prop으로 외부에서 제어.
+ */
+export const DescriptionWrap = styled.div`
+  position: relative;
+`
+
+export const DescriptionText = styled.p<{ $expanded: boolean }>`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
+
+  ${({ $expanded }) =>
+    !$expanded &&
+    css`
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    `}
+`
+
+export const DescriptionToggle = styled.button`
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: ${BRAND.primary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: color ${MOTION.fast};
+
+  &:hover {
+    color: ${BRAND.primaryHover};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 `

@@ -5,7 +5,7 @@
  * 리스트 단계에서는 *얕은* hierarchy(직계 자식 1단)만 만든다. 이유:
  *  - 행 렌더에 필요한 건 childCount + 직계 자식 id/title/period뿐 (event-row,
  *    event-row-expansion, category-pivot의 importanceFromHierarchy).
- *  - 풀 트리는 detail 페이지에서 필요할 때만 별도 매퍼(event-detail.mapper)가 빌드.
+ *  - 풀 트리는 detail 페이지에서 필요할 때만 별도로 펼쳐서 사용한다.
  *
  * 이전 구현(O(n²) buildFullHierarchy + 재귀 buildHierarchy)을 평탄 1패스로 대체.
  */

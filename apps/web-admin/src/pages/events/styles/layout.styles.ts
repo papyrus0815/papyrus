@@ -4,6 +4,8 @@
  */
 import styled, { css } from 'styled-components'
 
+import { BRAND, MOTION } from './theme'
+
 export const PageScene = styled.div`
   position: fixed;
   top: var(--header-height);
@@ -28,7 +30,7 @@ export const PageScene = styled.div`
 export const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
   padding: 0 20px;
   flex: 1;
@@ -68,50 +70,38 @@ export const PageTopTitle = styled.div`
   }
 `
 
+/* primary action 버튼 — 페이지 내 *유일한 primary CTA*. ledger polish 평면 톤 안에서도
+ * 채워진 indigo로 시인성 확보. hover는 한 톤 진하게(`primaryHover`)로만 변경. */
 export const CreateEventButton = styled.button`
-  border-radius: 12px;
-  padding: 12px 20px;
-  font-size: 14px;
+  border-radius: 8px;
+  padding: 8px 14px;
+  height: 34px;
+  font-size: 13px;
   font-weight: 600;
+  letter-spacing: -0.005em;
   cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
+  transition: background ${MOTION.fast}, border-color ${MOTION.fast},
+    box-shadow ${MOTION.fast};
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(99, 102, 241, 0.15);
-          border: 1.5px solid rgba(99, 102, 241, 0.35);
-          color: #a5b4fc;
-          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
-          &:hover {
-            background: rgba(99, 102, 241, 0.25);
-            border-color: rgba(99, 102, 241, 0.5);
-            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.2);
-            transform: translateY(-2px);
-          }
-        `
-      : css`
-          background: linear-gradient(
-            135deg,
-            rgba(99, 102, 241, 0.12),
-            rgba(168, 85, 247, 0.08)
-          );
-          border: 1.5px solid rgba(99, 102, 241, 0.3);
-          color: #4f46e5;
-          box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
-          &:hover {
-            border-color: rgba(99, 102, 241, 0.4);
-            background: linear-gradient(
-              135deg,
-              rgba(99, 102, 241, 0.18),
-              rgba(168, 85, 247, 0.12)
-            );
-            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.2);
-            transform: translateY(-2px);
-          }
-        `}
+  gap: 6px;
+  background: ${BRAND.primary};
+  border: 1px solid ${BRAND.primary};
+  color: #ffffff;
+
+  &:hover {
+    background: ${BRAND.primaryHover};
+    border-color: ${BRAND.primaryHover};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 
   @media (max-width: 768px) {
     width: 100%;
@@ -119,40 +109,35 @@ export const CreateEventButton = styled.button`
   }
 `
 
+/* toolbar — *카드 아닌 단순 flex row*. border / bg 모두 제거.
+ * (이전: card-in-card 인상 → 14개 bordered children 위에 또 카드 1개) */
 export const TopFilterBar = styled.div`
   display: flex;
-  gap: 16px;
-  padding: 16px 20px;
-  border-radius: 14px;
-  margin-bottom: 16px;
+  gap: 10px;
+  padding: 4px 0 12px;
   flex-wrap: wrap;
   align-items: center;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.03);
-          border: 1.5px solid rgba(255, 255, 255, 0.07);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-        `
-      : css`
-          background: #ffffff;
-          border: 1.5px solid rgba(20, 19, 34, 0.08);
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-        `}
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : 'rgba(20, 19, 34, 0.06)'};
 `
 
+/* detail 패널 폭 — 1400+에서 440px (본문/관계/이미지 충분).
+ *   1200~1400: 380px (콤팩트)
+ *   <1200: drawer (좌측 main만, 우측 slide-in) */
 export const CatalogSplit = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 440px;
+  gap: 20px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
 
   @media (max-width: 1400px) {
-    grid-template-columns: minmax(0, 1fr) 360px;
-    gap: 20px;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 18px;
   }
 
   @media (max-width: 1200px) {

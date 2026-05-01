@@ -31,16 +31,12 @@ import {
   buildEventSubmitData,
   buildMilitaryEventData,
   checkBasicInfo,
-  clearDraft,
   extractMentions,
   extractMentionsFromHtml,
-  getDraftKey,
   getFormSteps,
   getStepTitle,
   isDiplomaticCategory,
   isMilitaryCategory,
-  loadDraft,
-  saveDraft,
   validateBasicInfo,
 } from '@/features/event-create/lib'
 import { type EventSection, type FormStep } from '@/features/event-create/model'
@@ -523,149 +519,6 @@ export const EventCreatePageRefactored: React.FC<
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
-  // ===== Autosave (localStorage) =====
-  const draftKey = useMemo(
-    () => getDraftKey(editEventId),
-    [editEventId],
-  )
-
-  // 마운트 시 1회: 임시 저장된 draft 있으면 복원 여부 확인.
-  // 편집 모드에서도 동작 — 사용자가 편집 도중 새로고침한 경우 서버 데이터를
-  // 한 번 덮어쓴 뒤 복원할 수 있게 함.
-  // draftKey 단위로 가드 — 다른 사건으로 이동했다가 돌아오면 그 사건의
-  // draft에 대해 다시 한 번만 묻도록.
-  const draftPromptedKeyRef = React.useRef<string | null>(null)
-
-  type DraftPayload = {
-    title: string
-    description: string
-    startDate: string
-    startTime: string
-    endDate: string
-    endTime: string
-    category: typeof category
-    thumbnail: string
-    location: string
-    keywords: string[]
-    relatedCountryIds: string[]
-    relatedHistoricalCountryIds: string[]
-    parentEventId: string
-    relatedPersons: typeof relatedPersons
-    relatedEventIds: string[]
-    sections: typeof sections
-    childEventIds: string[]
-    // 군사 / 회담 관련 — 카테고리 작성 후 새로고침 시 손실 방지
-    militaryEvent: typeof militaryEvent
-    belligerentsGraph: typeof belligerentsGraph
-    conferenceEvent: typeof conferenceEvent
-    warCost: string
-    militaryDetails: typeof militaryDetails
-    casualties: typeof casualties
-    belligerents: typeof belligerents
-  }
-
-  useEffect(() => {
-    if (draftPromptedKeyRef.current === draftKey) return
-    if (isEditMode && isLoadingEvent) return // 편집 모드는 서버 로드 끝난 뒤
-    draftPromptedKeyRef.current = draftKey
-
-    const env = loadDraft<DraftPayload>(draftKey)
-    if (!env) return
-    const savedAtLabel = new Date(env.savedAt).toLocaleString('ko-KR')
-    const ok = window.confirm(
-      `${savedAtLabel}에 저장된 임시 작성본이 있습니다. 복원할까요?\n(취소하면 저장된 작성본은 유지됩니다)`,
-    )
-    if (!ok) return
-    const p = env.payload
-    setTitle(p.title)
-    setDescription(p.description)
-    setStartDate(p.startDate)
-    setStartTime(p.startTime)
-    setEndDate(p.endDate)
-    setEndTime(p.endTime)
-    setCategory(p.category)
-    setThumbnail(p.thumbnail)
-    setLocation(p.location)
-    setKeywords(p.keywords)
-    setRelatedCountryIds(p.relatedCountryIds)
-    setRelatedHistoricalCountryIds(p.relatedHistoricalCountryIds)
-    setParentEventId(p.parentEventId)
-    setRelatedPersons(p.relatedPersons)
-    setRelatedEventIds(p.relatedEventIds)
-    setSections(p.sections)
-    setChildEventIds(p.childEventIds)
-    // 군사/회담 카테고리 데이터 복원 (없으면 무시)
-    if (p.militaryEvent) setMilitaryEvent(p.militaryEvent)
-    if (p.belligerentsGraph) setBelligerentsGraph(p.belligerentsGraph)
-    if (p.conferenceEvent) setConferenceEvent(p.conferenceEvent)
-    if (typeof p.warCost === 'string') setWarCost(p.warCost)
-    if (p.militaryDetails) setMilitaryDetails(p.militaryDetails)
-    if (p.casualties) setCasualties(p.casualties)
-    if (p.belligerents) setBelligerents(p.belligerents)
-  }, [draftKey, isEditMode, isLoadingEvent])
-
-  // 폼 입력 변경 시 1.5초 디바운스 후 localStorage에 임시 저장.
-  // 처음 렌더(빈 폼)에선 저장 안 함 — `isDirtyRef`가 true가 된 이후만.
-  useEffect(() => {
-    if (!isDirtyRef.current) return
-    const id = window.setTimeout(() => {
-      const payload: DraftPayload = {
-        title,
-        description,
-        startDate,
-        startTime,
-        endDate,
-        endTime,
-        category,
-        thumbnail,
-        location,
-        keywords,
-        relatedCountryIds,
-        relatedHistoricalCountryIds,
-        parentEventId,
-        relatedPersons,
-        relatedEventIds,
-        sections,
-        childEventIds,
-        militaryEvent,
-        belligerentsGraph,
-        conferenceEvent,
-        warCost,
-        militaryDetails,
-        casualties,
-        belligerents,
-      }
-      saveDraft(draftKey, payload)
-    }, 1500)
-    return () => window.clearTimeout(id)
-  }, [
-    draftKey,
-    title,
-    description,
-    startDate,
-    startTime,
-    endDate,
-    endTime,
-    category,
-    thumbnail,
-    location,
-    keywords,
-    relatedCountryIds,
-    relatedHistoricalCountryIds,
-    parentEventId,
-    relatedPersons,
-    relatedEventIds,
-    sections,
-    childEventIds,
-    militaryEvent,
-    belligerentsGraph,
-    conferenceEvent,
-    warCost,
-    militaryDetails,
-    casualties,
-    belligerents,
-  ])
-
   // 제출 처리
   const handleSubmit = async () => {
     if (isSubmitting) return // 중복 제출 방지
@@ -738,8 +591,6 @@ export const EventCreatePageRefactored: React.FC<
 
       // 저장 성공 — 더 이상 dirty 아님 (이탈 경고 비활성화)
       isDirtyRef.current = false
-      // 임시 저장본도 정리
-      clearDraft(draftKey)
 
       if (onSuccess) {
         onSuccess()

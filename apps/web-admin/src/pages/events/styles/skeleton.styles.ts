@@ -1,24 +1,44 @@
 /**
  * Skeleton Loading Styled Components
- * 스켈레톤 로딩 관련 스타일
+ *
+ * shimmer/pulse 키프레임은 `theme.ts`의 `KEYFRAMES`에 1회 정의되며 `shared.styles`의
+ * `shimmerAnimation`/`pulseAnimation` mixin을 통해 주입된다. 컴포넌트마다 keyframes
+ * 인라인 재선언하던 12곳은 정리됨.
+ *
+ * `prefers-reduced-motion`은 mixin 안에서 `animation: none`으로 분기 — 운동 민감
+ * 사용자에게는 정적 표면색만 표시된다.
  */
 import styled from 'styled-components'
 
 import { pulseAnimation, shimmerAnimation } from './shared.styles'
 
-// Skeleton 애니메이션 키프레임
-const shimmer = `
-  @keyframes shimmer {
-    0% {
-      background-position: -200% 0;
-    }
-    100% {
-      background-position: 200% 0;
-    }
-  }
+/** 카드 표면 위에 얹는 shimmering bar — height/width를 prop으로 받도록 base 통일 */
+const skeletonBar = `
+  background: linear-gradient(
+    90deg,
+    rgba(37, 99, 235, 0.1) 0%,
+    rgba(37, 99, 235, 0.15) 50%,
+    rgba(37, 99, 235, 0.1) 100%
+  );
+`
+const skeletonBarStrong = `
+  background: linear-gradient(
+    90deg,
+    rgba(37, 99, 235, 0.15) 0%,
+    rgba(37, 99, 235, 0.25) 50%,
+    rgba(37, 99, 235, 0.15) 100%
+  );
+`
+const skeletonBarSubtle = `
+  background: linear-gradient(
+    90deg,
+    rgba(37, 99, 235, 0.08) 0%,
+    rgba(37, 99, 235, 0.12) 50%,
+    rgba(37, 99, 235, 0.08) 100%
+  );
 `
 
-// List Skeleton
+// ─── List Skeleton ────────────────────────────────────────────────
 export const SkeletonListItem = styled.div<{ $depth: number }>`
   border: 1.5px solid
     ${({ theme }) =>
@@ -43,15 +63,9 @@ export const SkeletonThumbnail = styled.div<{ $depth: number }>`
   width: ${({ $depth }) => Math.max(60, 90 - $depth * 10)}px;
   align-self: stretch;
   flex-shrink: 0;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.15) 0%,
-    rgba(99, 102, 241, 0.25) 50%,
-    rgba(99, 102, 241, 0.15) 100%
-  );
+  ${skeletonBarStrong}
   ${shimmerAnimation}
   border-radius: 12px 0 0 12px;
-  ${shimmer}
 `
 
 export const SkeletonHeader = styled.div`
@@ -63,83 +77,53 @@ export const SkeletonHeader = styled.div`
 export const SkeletonExpandButton = styled.div`
   width: 20px;
   height: 20px;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.1) 0%,
-    rgba(99, 102, 241, 0.2) 50%,
-    rgba(99, 102, 241, 0.1) 100%
-  );
+  ${skeletonBar}
   ${shimmerAnimation}
   border-radius: 6px;
   flex-shrink: 0;
   margin-top: 1px;
-  ${shimmer}
 `
 
 export const SkeletonDot = styled.div`
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.15) 0%,
-    rgba(99, 102, 241, 0.25) 50%,
-    rgba(99, 102, 241, 0.15) 100%
-  );
+  ${skeletonBarStrong}
   ${shimmerAnimation}
   flex-shrink: 0;
   margin-top: 4px;
-  ${shimmer}
 `
 
 export const SkeletonTitle = styled.div`
   height: 14px;
   flex: 1;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.1) 0%,
-    rgba(99, 102, 241, 0.15) 50%,
-    rgba(99, 102, 241, 0.1) 100%
-  );
+  ${skeletonBar}
   ${shimmerAnimation}
   border-radius: 6px;
   margin-top: 3px;
-  ${shimmer}
 `
 
 export const SkeletonMeta = styled.div`
   height: 10px;
   width: 60%;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.08) 0%,
-    rgba(99, 102, 241, 0.12) 50%,
-    rgba(99, 102, 241, 0.08) 100%
-  );
+  ${skeletonBarSubtle}
   ${shimmerAnimation}
   border-radius: 5px;
   margin-left: 28px;
   margin-top: 4px;
-  ${shimmer}
 `
 
 export const SkeletonSummary = styled.div`
   height: 10px;
   width: 80%;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.08) 0%,
-    rgba(99, 102, 241, 0.12) 50%,
-    rgba(99, 102, 241, 0.08) 100%
-  );
+  ${skeletonBarSubtle}
   ${shimmerAnimation}
   border-radius: 5px;
   margin-left: 28px;
   margin-top: 4px;
-  ${shimmer}
 `
 
-// Detail Panel Skeleton
+// ─── Detail Panel Skeleton ────────────────────────────────────────
 export const DetailPanelSkeleton = styled.div`
   display: flex;
   flex-direction: column;
@@ -147,20 +131,13 @@ export const DetailPanelSkeleton = styled.div`
   padding: 24px;
 `
 
+/* HeroFigure(200px)와 height 일치 — skeleton→실제 전환 시 CLS 0 */
 export const SkeletonDetailHeroImage = styled.div`
-  width: 100%;
-  max-width: 400px;
-  height: 220px;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.15) 0%,
-    rgba(99, 102, 241, 0.25) 50%,
-    rgba(99, 102, 241, 0.15) 100%
-  );
+  height: 200px;
+  margin: 12px 16px 0;
+  ${skeletonBarStrong}
   ${shimmerAnimation}
-  border-radius: 12px;
-  margin: 20px auto;
-  ${shimmer}
+  border-radius: 10px;
 `
 
 export const SkeletonDetailTitle = styled.div`
@@ -168,27 +145,20 @@ export const SkeletonDetailTitle = styled.div`
   height: 24px;
   background: linear-gradient(
     90deg,
-    rgba(99, 102, 241, 0.12) 0%,
-    rgba(99, 102, 241, 0.18) 50%,
-    rgba(99, 102, 241, 0.12) 100%
+    rgba(37, 99, 235, 0.12) 0%,
+    rgba(37, 99, 235, 0.18) 50%,
+    rgba(37, 99, 235, 0.12) 100%
   );
   ${shimmerAnimation}
   border-radius: 8px;
-  ${shimmer}
 `
 
 export const SkeletonText = styled.div<{ $width?: string }>`
   width: ${({ $width }) => $width ?? '100%'};
   height: 12px;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.08) 0%,
-    rgba(99, 102, 241, 0.12) 50%,
-    rgba(99, 102, 241, 0.08) 100%
-  );
+  ${skeletonBarSubtle}
   ${shimmerAnimation}
   border-radius: 6px;
-  ${shimmer}
 `
 
 export const SkeletonCard = styled.div`
@@ -201,8 +171,8 @@ export const SkeletonCard = styled.div`
   padding: 12px;
   background: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))'
-      : 'linear-gradient(180deg, #fafbff, #ffffff)'};
+      ? 'rgba(255, 255, 255, 0.03)'
+      : '#ffffff'};
   height: 60px;
   display: flex;
   gap: 8px;
@@ -212,40 +182,28 @@ export const SkeletonCard = styled.div`
     content: '';
     width: 16px;
     height: 16px;
-    background: linear-gradient(
-      90deg,
-      rgba(99, 102, 241, 0.1) 0%,
-      rgba(99, 102, 241, 0.15) 50%,
-      rgba(99, 102, 241, 0.1) 100%
-    );
+    ${skeletonBar}
     ${shimmerAnimation}
     border-radius: 4px;
-    ${shimmer}
   }
 
   &::after {
     content: '';
     flex: 1;
     height: 12px;
-    background: linear-gradient(
-      90deg,
-      rgba(99, 102, 241, 0.08) 0%,
-      rgba(99, 102, 241, 0.12) 50%,
-      rgba(99, 102, 241, 0.08) 100%
-    );
+    ${skeletonBarSubtle}
     ${shimmerAnimation}
     border-radius: 6px;
-    ${shimmer}
   }
 `
 
-// Century Skeleton
+// ─── Century Skeleton ─────────────────────────────────────────────
 export const SkeletonCenturyButton = styled.div`
   border: 1.5px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.18)'
-        : 'rgba(99, 102, 241, 0.08)'};
+        ? 'rgba(37, 99, 235, 0.18)'
+        : 'rgba(37, 99, 235, 0.08)'};
   border-radius: 10px;
   padding: 10px 12px;
   background: ${({ theme }) =>
@@ -264,32 +222,20 @@ export const SkeletonCenturyButton = styled.div`
 export const SkeletonCenturyLabel = styled.div`
   height: 32px;
   width: 100%;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.1) 0%,
-    rgba(99, 102, 241, 0.15) 50%,
-    rgba(99, 102, 241, 0.1) 100%
-  );
+  ${skeletonBar}
   ${shimmerAnimation}
   border-radius: 6px;
-  ${shimmer}
 `
 
 export const SkeletonCenturyCount = styled.div`
   height: 18px;
   width: 50px;
-  background: linear-gradient(
-    90deg,
-    rgba(99, 102, 241, 0.08) 0%,
-    rgba(99, 102, 241, 0.12) 50%,
-    rgba(99, 102, 241, 0.08) 100%
-  );
+  ${skeletonBarSubtle}
   ${shimmerAnimation}
   border-radius: 6px;
-  ${shimmer}
 `
 
-// Category Summary Skeleton
+// ─── Category Summary Skeleton ────────────────────────────────────
 export const SkeletonCategorySummaryCard = styled.div`
   border-radius: 20px;
   padding: 16px 18px;
@@ -301,10 +247,6 @@ export const SkeletonCategorySummaryCard = styled.div`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e4e7ec'};
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 6px 20px rgba(0, 0, 0, 0.45)'
-      : '0 6px 20px rgba(15, 17, 29, 0.06)'};
   ${pulseAnimation}
 `
 
@@ -314,13 +256,12 @@ export const SkeletonIconBubble = styled.div`
   border-radius: 14px;
   background: linear-gradient(
     90deg,
-    rgba(99, 102, 241, 0.12) 0%,
-    rgba(99, 102, 241, 0.18) 50%,
-    rgba(99, 102, 241, 0.12) 100%
+    rgba(37, 99, 235, 0.12) 0%,
+    rgba(37, 99, 235, 0.18) 50%,
+    rgba(37, 99, 235, 0.12) 100%
   );
   ${shimmerAnimation}
   flex-shrink: 0;
-  ${shimmer}
 `
 
 export const SkeletonHighlight = styled.div`
@@ -331,15 +272,17 @@ export const SkeletonHighlight = styled.div`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.18)'
-        : 'rgba(99, 102, 241, 0.08)'};
+        ? 'rgba(37, 99, 235, 0.18)'
+        : 'rgba(37, 99, 235, 0.08)'};
   display: flex;
   flex-direction: column;
   gap: 6px;
   ${pulseAnimation}
 `
 
-// Category Summary Cards (Real Components)
+// ─── Category Summary Cards (Real Components) ─────────────────────
+// 카테고리별 색은 의도적으로 톤 다양성 유지 (정보 색채). hover lift는 평면 톤 정책 위반이라
+// 제거 — 뱃지/색은 카테고리 변별을 돕고, 인터랙션은 boder-color shift로만.
 export const CategorySummaryGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -352,73 +295,38 @@ export const CategorySummaryGrid = styled.div`
   }
 `
 
+const CATEGORY_BORDERS: Record<string, string> = {
+  military: 'rgba(239, 68, 68, 0.2)',
+  political: 'rgba(37, 99, 235, 0.2)',
+  economic: 'rgba(245, 158, 11, 0.25)',
+  social: 'rgba(6, 182, 212, 0.22)',
+  technological: 'rgba(14, 165, 233, 0.22)',
+  cultural: 'rgba(236, 72, 153, 0.22)',
+  diplomatic: 'rgba(37, 99, 235, 0.22)',
+  conference: 'rgba(37, 99, 235, 0.2)',
+  religious: 'rgba(251, 146, 60, 0.22)',
+  other: 'rgba(107, 114, 128, 0.22)',
+}
+
 export const CategorySummaryCard = styled.div<{ $category: string }>`
-  border-radius: 20px;
+  border-radius: 14px;
   padding: 18px 20px;
   display: flex;
   align-items: center;
   gap: 16px;
   background: #ffffff;
   border: 1px solid
-    ${(props) => {
-      const colors = {
-        military: 'rgba(239, 68, 68, 0.2)',
-        political: 'rgba(99, 102, 241, 0.2)',
-        economic: 'rgba(245, 158, 11, 0.25)',
-        social: 'rgba(6, 182, 212, 0.22)',
-        technological: 'rgba(14, 165, 233, 0.22)',
-        cultural: 'rgba(236, 72, 153, 0.22)',
-        diplomatic: 'rgba(139, 92, 246, 0.22)',
-        conference: 'rgba(99, 102, 241, 0.2)',
-        religious: 'rgba(251, 146, 60, 0.22)',
-        other: 'rgba(107, 114, 128, 0.22)',
-      }
-      return (
-        colors[props.$category as keyof typeof colors] ||
-        'rgba(99, 102, 241, 0.2)'
-      )
-    }};
-  box-shadow: ${(props) => {
-    const shadows = {
-      military: '0 8px 24px rgba(239, 68, 68, 0.12)',
-      political: '0 8px 24px rgba(99, 102, 241, 0.12)',
-      economic: '0 8px 24px rgba(245, 158, 11, 0.12)',
-      social: '0 8px 24px rgba(6, 182, 212, 0.12)',
-      technological: '0 8px 24px rgba(14, 165, 233, 0.12)',
-      cultural: '0 8px 24px rgba(236, 72, 153, 0.12)',
-      diplomatic: '0 8px 24px rgba(139, 92, 246, 0.12)',
-      conference: '0 8px 24px rgba(99, 102, 241, 0.12)',
-      religious: '0 8px 24px rgba(251, 146, 60, 0.12)',
-      other: '0 8px 24px rgba(107, 114, 128, 0.12)',
-    }
-    return (
-      shadows[props.$category as keyof typeof shadows] ||
-      '0 8px 24px rgba(99, 102, 241, 0.12)'
-    )
-  }};
-  transition: all 0.3s ease;
+    ${({ $category }) => CATEGORY_BORDERS[$category] ?? CATEGORY_BORDERS.other};
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
 
   &:hover {
-    transform: translateY(-3px);
-    box-shadow: ${(props) => {
-      const shadows = {
-        military: '0 12px 32px rgba(239, 68, 68, 0.18)',
-        political: '0 12px 32px rgba(99, 102, 241, 0.18)',
-        economic: '0 12px 32px rgba(245, 158, 11, 0.18)',
-        social: '0 12px 32px rgba(6, 182, 212, 0.18)',
-        technological: '0 12px 32px rgba(14, 165, 233, 0.18)',
-        cultural: '0 12px 32px rgba(236, 72, 153, 0.18)',
-        diplomatic: '0 12px 32px rgba(139, 92, 246, 0.18)',
-        conference: '0 12px 32px rgba(99, 102, 241, 0.18)',
-        religious: '0 12px 32px rgba(251, 146, 60, 0.18)',
-        other: '0 12px 32px rgba(107, 114, 128, 0.18)',
-      }
-      return (
-        shadows[props.$category as keyof typeof shadows] ||
-        '0 12px 32px rgba(99, 102, 241, 0.18)'
-      )
-    }};
+    border-color: rgba(37, 99, 235, 0.45);
+    background: #fafbfd;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 
   @media (max-width: 768px) {
@@ -427,28 +335,37 @@ export const CategorySummaryCard = styled.div<{ $category: string }>`
   }
 `
 
+const CATEGORY_BUBBLE_BG: Record<string, string> = {
+  military: 'rgba(239, 68, 68, 0.15)',
+  political: 'rgba(37, 99, 235, 0.15)',
+  economic: 'rgba(245, 158, 11, 0.18)',
+  social: 'rgba(6, 182, 212, 0.15)',
+  technological: 'rgba(14, 165, 233, 0.15)',
+  cultural: 'rgba(236, 72, 153, 0.15)',
+  diplomatic: 'rgba(37, 99, 235, 0.15)',
+  conference: 'rgba(37, 99, 235, 0.15)',
+  religious: 'rgba(251, 146, 60, 0.15)',
+  other: 'rgba(107, 114, 128, 0.15)',
+}
+const CATEGORY_BUBBLE_COLOR: Record<string, string> = {
+  military: '#dc2626',
+  political: '#1d4ed8',
+  economic: '#d97706',
+  social: '#0891b2',
+  technological: '#0284c7',
+  cultural: '#db2777',
+  diplomatic: '#7c3aed',
+  conference: '#1e40af',
+  religious: '#ea580c',
+  other: '#4b5563',
+}
+
 export const CategoryIconBubble = styled.div<{ $category: string }>`
   width: 48px;
   height: 48px;
-  border-radius: 16px;
-  background: ${(props) => {
-    const backgrounds = {
-      military: 'rgba(239, 68, 68, 0.15)',
-      political: 'rgba(99, 102, 241, 0.15)',
-      economic: 'rgba(245, 158, 11, 0.18)',
-      social: 'rgba(6, 182, 212, 0.15)',
-      technological: 'rgba(14, 165, 233, 0.15)',
-      cultural: 'rgba(236, 72, 153, 0.15)',
-      diplomatic: 'rgba(139, 92, 246, 0.15)',
-      conference: 'rgba(99, 102, 241, 0.15)',
-      religious: 'rgba(251, 146, 60, 0.15)',
-      other: 'rgba(107, 114, 128, 0.15)',
-    }
-    return (
-      backgrounds[props.$category as keyof typeof backgrounds] ||
-      'rgba(99, 102, 241, 0.15)'
-    )
-  }};
+  border-radius: 12px;
+  background: ${({ $category }) =>
+    CATEGORY_BUBBLE_BG[$category] ?? CATEGORY_BUBBLE_BG.other};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -457,21 +374,8 @@ export const CategoryIconBubble = styled.div<{ $category: string }>`
   svg {
     width: 22px;
     height: 22px;
-    color: ${(props) => {
-      const colors = {
-        military: '#dc2626',
-        political: '#4f46e5',
-        economic: '#d97706',
-        social: '#0891b2',
-        technological: '#0284c7',
-        cultural: '#db2777',
-        diplomatic: '#7c3aed',
-        conference: '#4338ca',
-        religious: '#ea580c',
-        other: '#4b5563',
-      }
-      return colors[props.$category as keyof typeof colors] || '#4f46e5'
-    }};
+    color: ${({ $category }) =>
+      CATEGORY_BUBBLE_COLOR[$category] ?? CATEGORY_BUBBLE_COLOR.other};
   }
 
   @media (max-width: 768px) {
@@ -494,20 +398,20 @@ export const CategorySummaryContent = styled.div`
 
 export const CategorySummaryTitle = styled.h3`
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #0f172a;
   letter-spacing: -0.01em;
 
   @media (max-width: 768px) {
-    font-size: 15px;
+    font-size: 14px;
   }
 `
 
 export const CategorySummaryCount = styled.div`
   font-size: 13px;
   font-weight: 600;
-  color: #6366f1;
+  color: #2563eb;
 
   @media (max-width: 768px) {
     font-size: 12px;

@@ -1,8 +1,10 @@
 /**
  * Modal Styled Components
- * 모달 관련 스타일
+ * 모달 관련 스타일 — ledger polish 톤(평면, transform/lift 제거).
  */
 import styled, { css } from 'styled-components'
+
+import { BRAND, MOTION, SHADOW } from './theme'
 
 export const ModalOverlay = styled.div`
   position: fixed;
@@ -13,12 +15,13 @@ export const ModalOverlay = styled.div`
   z-index: 1000;
 `
 
+/* Modal — radius 24 → 14 (admin 톤), shadow는 토큰 사용. */
 export const Modal = styled.div`
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  border-radius: 24px;
+  border-radius: 14px;
   z-index: 1001;
   width: 90%;
   max-width: 480px;
@@ -29,12 +32,13 @@ export const Modal = styled.div`
   ${({ theme }) => theme.mode === 'dark' ? css`
     background: rgba(20, 20, 28, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    box-shadow: ${SHADOW.modalDark};
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
   ` : css`
     background: #ffffff;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(20, 19, 34, 0.06);
+    box-shadow: ${SHADOW.modal};
   `}
 `
 
@@ -46,7 +50,7 @@ export const ModalHeader = styled.div`
   ${({ theme }) => theme.mode === 'dark' ? css`
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   ` : css`
-    border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+    border-bottom: 1px solid rgba(37, 99, 235, 0.1);
   `}
 `
 
@@ -66,12 +70,23 @@ export const ModalClose = styled.button`
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  transition: all 0.2s ease;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
+  transition: background ${MOTION.fast}, color ${MOTION.fast};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#64748b')};
 
   &:hover {
-    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(99, 102, 241, 0.08)'};
-    color: ${({ theme }) => theme.mode === 'dark' ? '#a5b4fc' : '#6366f1'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : BRAND.primarySoftHover};
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primaryTextOnDark : BRAND.primary};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 `
 
@@ -84,47 +99,56 @@ export const ModalContent = styled.div`
 
   &::-webkit-scrollbar { width: 6px; }
   &::-webkit-scrollbar-track { background: transparent; }
-  &::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.2); border-radius: 3px; }
+  &::-webkit-scrollbar-thumb { background: rgba(37, 99, 235, 0.2); border-radius: 3px; }
 `
 
+/* 평면 톤 — gradient/box-shadow lift 제거. radius 14 → 10. */
 export const ModalOption = styled.button<{ $active: boolean }>`
-  border-radius: 14px;
-  padding: 14px 16px;
+  border-radius: 10px;
+  padding: 12px 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background ${MOTION.fast}, border-color ${MOTION.fast};
   display: flex;
   gap: 14px;
   align-items: center;
   text-align: left;
   div { display: flex; flex-direction: column; gap: 4px; }
   ${({ theme, $active }) => theme.mode === 'dark' ? css`
-    background: ${$active ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255,255,255,0.04)'};
-    border: 1.5px solid ${$active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255,255,255,0.08)'};
-    strong { font-size: 14px; font-weight: 600; color: ${$active ? '#a5b4fc' : '#e2e8f0'}; }
+    background: ${$active ? BRAND.primarySoftDark : 'rgba(255,255,255,0.04)'};
+    border: 1px solid ${$active ? BRAND.primaryBorderHover : 'rgba(255,255,255,0.08)'};
+    strong { font-size: 14px; font-weight: 600; color: ${$active ? BRAND.primaryTextOnDark : '#e2e8f0'}; }
     span { font-size: 12px; color: #64748b; }
     &:hover {
-      border-color: rgba(99, 102, 241, 0.3);
-      background: ${$active ? 'rgba(99, 102, 241, 0.22)' : 'rgba(255,255,255,0.07)'};
+      border-color: ${BRAND.primaryBorder};
+      background: ${$active ? BRAND.primaryFillDark : 'rgba(255,255,255,0.07)'};
     }
   ` : css`
-    background: ${$active ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.08))' : '#ffffff'};
-    border: 1.5px solid ${$active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(20, 19, 34, 0.08)'};
+    background: ${$active ? BRAND.primarySoft : '#ffffff'};
+    border: 1px solid ${$active ? BRAND.primaryBorderHover : 'rgba(20, 19, 34, 0.08)'};
     strong { font-size: 14px; font-weight: 600; color: #0f172a; }
     span { font-size: 12px; color: #6b7280; }
     &:hover {
-      border-color: rgba(99, 102, 241, 0.25);
-      background: ${$active ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.1))' : '#f8fafc'};
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+      border-color: ${BRAND.primaryBorder};
+      background: ${$active ? BRAND.primarySoftHover : '#f8fafc'};
     }
   `}
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 export const ModalOptionIcon = styled.div`
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: rgba(99, 102, 241, 0.12);
-  color: #6366f1;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -137,7 +161,7 @@ export const SummaryModal = styled.div`
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  border-radius: 24px;
+  border-radius: 14px;
   z-index: 1001;
   width: 90%;
   max-width: 1000px;
@@ -148,12 +172,13 @@ export const SummaryModal = styled.div`
   ${({ theme }) => theme.mode === 'dark' ? css`
     background: rgba(15, 15, 20, 0.97);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+    box-shadow: ${SHADOW.modalDark};
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
   ` : css`
     background: #ffffff;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(20, 19, 34, 0.06);
+    box-shadow: ${SHADOW.modal};
   `}
 `
 
@@ -172,32 +197,42 @@ export const SummaryTabBar = styled.div`
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     background: rgba(255, 255, 255, 0.02);
   ` : css`
-    border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+    border-bottom: 1px solid rgba(37, 99, 235, 0.1);
     background: #fafbff;
   `}
 `
 
 export const SummaryTab = styled.button<{ $active: boolean }>`
-  border-radius: 12px;
-  padding: 10px 16px;
+  border-radius: 8px;
+  padding: 8px 14px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background ${MOTION.fast}, border-color ${MOTION.fast},
+    color ${MOTION.fast};
   display: flex;
   align-items: center;
   gap: 8px;
   ${({ theme, $active }) => theme.mode === 'dark' ? css`
-    background: ${$active ? 'rgba(99, 102, 241, 0.15)' : 'transparent'};
-    border: 1.5px solid ${$active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255,255,255,0.07)'};
-    color: ${$active ? '#a5b4fc' : '#64748b'};
-    &:hover { border-color: rgba(99, 102, 241, 0.3); background: ${$active ? 'rgba(99, 102, 241, 0.22)' : 'rgba(255,255,255,0.05)'}; }
+    background: ${$active ? BRAND.primarySoftDark : 'transparent'};
+    border: 1px solid ${$active ? BRAND.primaryBorderHover : 'rgba(255,255,255,0.07)'};
+    color: ${$active ? BRAND.primaryTextOnDark : '#64748b'};
+    &:hover { border-color: ${BRAND.primaryBorder}; background: ${$active ? BRAND.primaryFillDark : 'rgba(255,255,255,0.05)'}; }
   ` : css`
-    background: ${$active ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08))' : '#ffffff'};
-    border: 1.5px solid ${$active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(20, 19, 34, 0.08)'};
-    color: ${$active ? '#4f46e5' : '#64748b'};
-    &:hover { border-color: rgba(99, 102, 241, 0.3); background: ${$active ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1))' : '#f8fafc'}; }
+    background: ${$active ? BRAND.primarySoft : '#ffffff'};
+    border: 1px solid ${$active ? BRAND.primaryBorderHover : 'rgba(20, 19, 34, 0.08)'};
+    color: ${$active ? BRAND.primaryHover : '#64748b'};
+    &:hover { border-color: ${BRAND.primaryBorder}; background: ${$active ? BRAND.primarySoftHover : '#f8fafc'}; }
   `}
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 export const SummaryContent = styled.div`
@@ -206,9 +241,9 @@ export const SummaryContent = styled.div`
   padding: 24px;
 
   &::-webkit-scrollbar { width: 8px; }
-  &::-webkit-scrollbar-track { background: rgba(99, 102, 241, 0.04); }
-  &::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.2); border-radius: 4px; }
-  &::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.3); }
+  &::-webkit-scrollbar-track { background: rgba(37, 99, 235, 0.04); }
+  &::-webkit-scrollbar-thumb { background: rgba(37, 99, 235, 0.2); border-radius: 4px; }
+  &::-webkit-scrollbar-thumb:hover { background: rgba(37, 99, 235, 0.3); }
 `
 
 export const TimelineContainer = styled.div`
@@ -222,28 +257,28 @@ export const TimelineContainer = styled.div`
     top: 0;
     bottom: 0;
     width: 3px;
-    background: linear-gradient(180deg, rgba(99, 102, 241, 0.3) 0%, rgba(168, 85, 247, 0.25) 50%, rgba(99, 102, 241, 0.2) 100%);
+    background: linear-gradient(180deg, rgba(37, 99, 235, 0.3) 0%, rgba(37, 99, 235, 0.25) 50%, rgba(37, 99, 235, 0.2) 100%);
     border-radius: 999px;
   }
 `
 
+/* 평면 톤 — hover lift box-shadow 변화 제거. 도트 외곽 링은 surface 무관 단색 사용. */
 export const TimelineEventCard = styled.div<{ $depth: number }>`
   position: relative;
-  padding: 16px 18px;
-  margin-bottom: 20px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
   margin-left: ${({ $depth }) => $depth * 24}px;
-  border-radius: 14px;
-  transition: all 0.2s ease;
+  border-radius: 12px;
+  transition: border-color ${MOTION.fast}, background ${MOTION.fast};
   ${({ theme, $depth }) => theme.mode === 'dark' ? css`
-    background: ${$depth === 0 ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255,255,255,0.04)'};
-    border: 1.5px solid rgba(99, 102, 241, 0.15);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    &:hover { border-color: rgba(99, 102, 241, 0.3); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
+    background: ${$depth === 0 ? BRAND.primarySoftDark : 'rgba(255,255,255,0.04)'};
+    border: 1px solid rgba(37, 99, 235, 0.15);
+    &:hover { border-color: ${BRAND.primaryBorder}; }
   ` : css`
-    background: ${$depth === 0 ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(168, 85, 247, 0.03))' : '#ffffff'};
-    border: 1.5px solid rgba(99, 102, 241, 0.15);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
-    &:hover { border-color: rgba(99, 102, 241, 0.3); box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12); }
+    background: ${$depth === 0 ? BRAND.primarySoft : '#ffffff'};
+    border: 1px solid rgba(37, 99, 235, 0.15);
+    box-shadow: ${SHADOW.xs};
+    &:hover { border-color: ${BRAND.primaryBorder}; }
   `}
 
   &::before {
@@ -254,16 +289,20 @@ export const TimelineEventCard = styled.div<{ $depth: number }>`
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: ${({ $depth }) => $depth === 0 ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'transparent'};
-    border: 3px solid ${({ $depth }) => $depth === 0 ? '#6366f1' : 'rgba(99, 102, 241, 0.5)'};
-    box-shadow: 0 0 0 4px ${({ theme }) => theme.mode === 'dark' ? 'rgba(15,15,20,0.9)' : 'rgba(255, 255, 255, 1)'};
+    background: ${({ $depth }) => ($depth === 0 ? BRAND.primary : 'transparent')};
+    border: 3px solid
+      ${({ $depth }) => ($depth === 0 ? BRAND.primary : BRAND.primaryBorderHover)};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 `
 
 export const TimelineEventDate = styled.div`
   font-size: 12px;
   font-weight: 700;
-  color: #6366f1;
+  color: #2563eb;
   margin-bottom: 6px;
 `
 
@@ -296,14 +335,14 @@ export const TimelineImportance = styled.span<{
     switch ($importance) {
       case 'critical': return 'rgba(239, 68, 68, 0.15)'
       case 'major': return 'rgba(251, 191, 36, 0.15)'
-      default: return 'rgba(99, 102, 241, 0.1)'
+      default: return 'rgba(37, 99, 235, 0.1)'
     }
   }};
   color: ${({ $importance }) => {
     switch ($importance) {
       case 'critical': return '#dc2626'
       case 'major': return '#d97706'
-      default: return '#6366f1'
+      default: return '#2563eb'
     }
   }};
 `
@@ -326,7 +365,7 @@ export const TreeNodeWrapper = styled.div<{ $depth: number }>`
       top: 20px;
       width: 12px;
       height: 2px;
-      background: rgba(99, 102, 241, 0.25);
+      background: rgba(37, 99, 235, 0.25);
     }
 
     &::after {
@@ -336,35 +375,52 @@ export const TreeNodeWrapper = styled.div<{ $depth: number }>`
       top: 0;
       bottom: 50%;
       width: 2px;
-      background: rgba(99, 102, 241, 0.15);
+      background: rgba(37, 99, 235, 0.15);
     }
   `}
 `
 
+/* 평면 톤 — hover translateX/box-shadow lift 모두 제거. 보더 컬러만 변화. */
 export const TreeNodeCard = styled.div<{
   $depth: number
   $importance: 'critical' | 'major' | 'notable'
 }>`
-  border-radius: 14px;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  transition: all 0.2s ease;
-  border: 2px solid ${({ $importance }) => {
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  transition: border-color ${MOTION.fast}, background ${MOTION.fast};
+  border: 1.5px solid ${({ $importance }) => {
     switch ($importance) {
-      case 'critical': return 'rgba(239, 68, 68, 0.3)'
-      case 'major': return 'rgba(251, 191, 36, 0.3)'
-      default: return 'rgba(99, 102, 241, 0.2)'
+      case 'critical':
+        return 'rgba(239, 68, 68, 0.3)'
+      case 'major':
+        return 'rgba(251, 191, 36, 0.35)'
+      default:
+        return 'rgba(37, 99, 235, 0.2)'
     }
   }};
-  ${({ theme, $depth }) => theme.mode === 'dark' ? css`
-    background: ${$depth === 0 ? 'rgba(99, 102, 241, 0.08)' : 'rgba(255,255,255,0.04)'};
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    &:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.3); transform: translateX(4px); }
-  ` : css`
-    background: ${$depth === 0 ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.05))' : '#ffffff'};
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
-    &:hover { box-shadow: 0 6px 16px rgba(99, 102, 241, 0.12); transform: translateX(4px); }
-  `}
+  ${({ theme, $depth }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: ${$depth === 0
+            ? BRAND.primarySoftDark
+            : 'rgba(255,255,255,0.04)'};
+          &:hover {
+            border-color: ${BRAND.primaryBorderHover};
+          }
+        `
+      : css`
+          background: ${$depth === 0 ? BRAND.primarySoft : '#ffffff'};
+          box-shadow: ${SHADOW.xs};
+          &:hover {
+            border-color: ${BRAND.primaryBorderHover};
+            background: #fafbfd;
+          }
+        `}
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 export const TreeNodeHeader = styled.div`
@@ -396,21 +452,21 @@ export const TreeImportanceBadge = styled.span<{
     switch ($importance) {
       case 'critical': return 'rgba(239, 68, 68, 0.15)'
       case 'major': return 'rgba(251, 191, 36, 0.15)'
-      default: return 'rgba(99, 102, 241, 0.1)'
+      default: return 'rgba(37, 99, 235, 0.1)'
     }
   }};
   color: ${({ $importance }) => {
     switch ($importance) {
       case 'critical': return '#dc2626'
       case 'major': return '#d97706'
-      default: return '#6366f1'
+      default: return '#2563eb'
     }
   }};
 `
 
 export const TreeNodeDate = styled.div`
   font-size: 12px;
-  color: #6366f1;
+  color: #2563eb;
   font-weight: 600;
   margin-bottom: 6px;
 `
@@ -430,46 +486,72 @@ export const TreeNodeChildren = styled.div`
 
 export const SummaryIconButton = styled.button`
   border: none;
-  background: rgba(99, 102, 241, 0.1);
+  background: ${BRAND.primarySoftHover};
   padding: 4px 6px;
   border-radius: 6px;
-  color: #6366f1;
+  color: ${BRAND.primary};
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background ${MOTION.fast}, color ${MOTION.fast};
   flex-shrink: 0;
   margin-left: 6px;
 
   &:hover {
-    background: rgba(99, 102, 241, 0.18);
-    color: #4f46e5;
-    transform: scale(1.1);
+    background: ${BRAND.primaryFill};
+    color: ${BRAND.primaryHover};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 `
 
+/* 평면 톤 — hover translateY 제거. */
 export const ViewAllHierarchyButton = styled.button`
-  border-radius: 10px;
-  padding: 12px 16px;
-  color: #6366f1;
-  font-size: 14px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: ${BRAND.primary};
+  font-size: 13px;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background ${MOTION.fast}, border-color ${MOTION.fast};
   width: 100%;
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(99, 102, 241, 0.08);
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    &:hover { background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.35); transform: translateY(-1px); }
-  ` : css`
-    background: rgba(99, 102, 241, 0.05);
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    &:hover { background: rgba(99, 102, 241, 0.1); border-color: rgba(99, 102, 241, 0.35); transform: translateY(-1px); }
-  `}
-  &:active { transform: translateY(0); }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(37, 99, 235, 0.08);
+          border: 1px solid ${BRAND.primaryBorder};
+          &:hover {
+            background: ${BRAND.primarySoftDark};
+            border-color: ${BRAND.primaryBorderHover};
+          }
+        `
+      : css`
+          background: ${BRAND.primarySoft};
+          border: 1px solid ${BRAND.primaryBorder};
+          &:hover {
+            background: ${BRAND.primarySoftHover};
+            border-color: ${BRAND.primaryBorderHover};
+          }
+        `}
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `

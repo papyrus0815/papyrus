@@ -17,7 +17,10 @@ import styled, { css } from 'styled-components'
 import { getCategoryName } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
-import { CATEGORY_BADGE_COLORS } from '../../../pages/events/styles/theme'
+import {
+  CATEGORY_BADGE_COLORS,
+  CATEGORY_SOFT_COLORS,
+} from '../../../pages/events/styles/theme'
 import type {
   EventHierarchyNode,
   HistoricalEvent,
@@ -145,7 +148,7 @@ export const EventListItem: React.FC<EventListItemProps> = ({
         <DurationSmall>{duration}</DurationSmall>
       </YearCol>
 
-      <ContentCol>
+      <ContentCol $tier={tier}>
         <HeadRow>
           {hasChildren ? (
             <ExpandBtn
@@ -250,8 +253,8 @@ const RowItem = styled.div<{
   background: ${({ theme, $active }) =>
     $active
       ? theme.mode === 'dark'
-        ? 'linear-gradient(90deg, rgba(99,102,241,0.14), rgba(99,102,241,0.04) 70%)'
-        : 'linear-gradient(90deg, rgba(99,102,241,0.08), rgba(99,102,241,0.02) 70%)'
+        ? 'linear-gradient(90deg, rgba(37, 99, 235,0.14), rgba(37, 99, 235,0.04) 70%)'
+        : 'linear-gradient(90deg, rgba(37, 99, 235,0.08), rgba(37, 99, 235,0.02) 70%)'
       : 'transparent'};
   border-bottom: 1px solid
     ${({ theme }) =>
@@ -270,9 +273,9 @@ const RowItem = styled.div<{
     border-radius: 3px;
     background: ${({ $active, $tier }) =>
       $active
-        ? '#6366f1'
+        ? '#2563eb'
         : $tier === 'critical'
-          ? 'linear-gradient(180deg, #6366f1, #8b5cf6)'
+          ? 'linear-gradient(180deg, #2563eb, #2563eb)'
           : $tier === 'major'
             ? 'rgba(245, 158, 11, 0.7)'
             : 'transparent'};
@@ -283,11 +286,11 @@ const RowItem = styled.div<{
     background: ${({ theme, $active }) =>
       $active
         ? theme.mode === 'dark'
-          ? 'linear-gradient(90deg, rgba(99,102,241,0.18), rgba(99,102,241,0.06) 70%)'
-          : 'linear-gradient(90deg, rgba(99,102,241,0.1), rgba(99,102,241,0.03) 70%)'
+          ? 'linear-gradient(90deg, rgba(37, 99, 235,0.18), rgba(37, 99, 235,0.06) 70%)'
+          : 'linear-gradient(90deg, rgba(37, 99, 235,0.1), rgba(37, 99, 235,0.03) 70%)'
         : theme.mode === 'dark'
           ? 'rgba(255,255,255,0.025)'
-          : 'rgba(99,102,241,0.025)'};
+          : 'rgba(37, 99, 235,0.025)'};
   }
 `
 
@@ -318,10 +321,11 @@ const DurationSmall = styled.div`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const ContentCol = styled.div`
+const ContentCol = styled.div<{ $tier?: ImportanceTier }>`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: ${({ $tier }) =>
+    $tier === 'critical' ? '8px' : $tier === 'major' ? '7px' : '5px'};
   min-width: 0;
 `
 
@@ -349,8 +353,8 @@ const ExpandBtn = styled.button<{ $expanded: boolean }>`
   transition: background 0.12s, transform 0.15s;
   transform: rotate(${({ $expanded }) => ($expanded ? 90 : 0)}deg);
   &:hover {
-    background: rgba(99, 102, 241, 0.16);
-    color: #6366f1;
+    background: rgba(37, 99, 235, 0.16);
+    color: #2563eb;
   }
 `
 
@@ -360,27 +364,31 @@ const ExpandSpacer = styled.span`
   flex-shrink: 0;
 `
 
+/* soft chip — Linear/Notion 톤. bg/border tint + 진한 글씨, 단색 배지보다 가벼움 */
 const CategoryChip = styled.span<{ $category: string }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.015em;
   text-transform: uppercase;
   white-space: nowrap;
   flex-shrink: 0;
-  color: #ffffff;
-  background: ${({ $category }) =>
-    `${
-      CATEGORY_BADGE_COLORS[
-        $category as keyof typeof CATEGORY_BADGE_COLORS
-      ] ?? '#6b7280'
-    }`};
-  /* 약간 어둡게 — 흰 글씨 가독성 확보 */
-  filter: brightness(0.95) saturate(1.05);
+  ${({ $category, theme }) => {
+    const tok =
+      CATEGORY_SOFT_COLORS[
+        $category as keyof typeof CATEGORY_SOFT_COLORS
+      ] ?? CATEGORY_SOFT_COLORS.other
+    const isDark = theme.mode === 'dark'
+    return css`
+      background: rgba(${tok.rgb}, ${isDark ? 0.16 : 0.1});
+      border: 1px solid rgba(${tok.rgb}, ${isDark ? 0.32 : 0.22});
+      color: ${isDark ? tok.textDark : tok.text};
+    `
+  }}
 `
 
 const ImportancePill = styled.span<{ $tier: ImportanceTier }>`
@@ -397,9 +405,9 @@ const ImportancePill = styled.span<{ $tier: ImportanceTier }>`
     $tier === 'critical'
       ? css`
           background: ${theme.mode === 'dark'
-            ? 'rgba(99, 102, 241, 0.28)'
-            : 'rgba(99, 102, 241, 0.16)'};
-          color: ${theme.mode === 'dark' ? '#c7d2fe' : '#4338ca'};
+            ? 'rgba(37, 99, 235, 0.28)'
+            : 'rgba(37, 99, 235, 0.16)'};
+          color: ${theme.mode === 'dark' ? '#c7d2fe' : '#1e40af'};
         `
       : css`
           background: ${theme.mode === 'dark'
@@ -432,13 +440,17 @@ const Title = styled.h4<{ $tier: ImportanceTier }>`
   gap: 6px;
 `
 
+/* tier별 호흡감 차등: critical=2줄·여유 있는 행간, major=2줄·살짝 콤팩트, normal=1줄 */
 const Summary = styled.p<{ $tier: ImportanceTier }>`
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
+  font-size: ${({ $tier }) =>
+    $tier === 'critical' ? '13px' : $tier === 'major' ? '12.5px' : '12.5px'};
+  line-height: ${({ $tier }) =>
+    $tier === 'critical' ? 1.6 : $tier === 'major' ? 1.5 : 1.45};
   color: ${({ theme }) => theme.colors.text.secondary};
   display: -webkit-box;
-  -webkit-line-clamp: ${({ $tier }) => ($tier === 'critical' ? 2 : 1)};
+  -webkit-line-clamp: ${({ $tier }) =>
+    $tier === 'critical' ? 2 : $tier === 'major' ? 2 : 1};
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
@@ -451,27 +463,36 @@ const Spark = styled.div`
   margin-top: 2px;
 `
 
+/* 6px·rounded — 4px solid에서 한 단계 폴리시. 라일은 한 톤 옅게(0.05). */
 const SparkRail = styled.div`
   position: relative;
   flex: 1;
   max-width: 240px;
-  height: 4px;
-  border-radius: 2px;
+  height: 6px;
+  border-radius: 999px;
   background: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.06)'
-      : 'rgba(15,23,42,0.06)'};
+      ? 'rgba(255,255,255,0.05)'
+      : 'rgba(15,23,42,0.05)'};
   overflow: hidden;
 `
 
+/* 카테고리 베이스 → spark end로 향하는 라이트 그라데이션. 끝부분도 rounded. */
 const SparkBar = styled.div<{ $category: string }>`
   position: absolute;
   top: 0;
   bottom: 0;
-  border-radius: 2px;
-  background: ${({ $category }) =>
-    CATEGORY_BADGE_COLORS[$category as keyof typeof CATEGORY_BADGE_COLORS] ??
-    '#6366f1'};
+  border-radius: 999px;
+  background: ${({ $category }) => {
+    const base =
+      CATEGORY_BADGE_COLORS[
+        $category as keyof typeof CATEGORY_BADGE_COLORS
+      ] ?? '#2563eb'
+    const end =
+      CATEGORY_SOFT_COLORS[$category as keyof typeof CATEGORY_SOFT_COLORS]
+        ?.sparkEnd ?? base
+    return `linear-gradient(90deg, ${base}, ${end})`
+  }};
 `
 
 const SparkLabel = styled.span`
@@ -527,7 +548,7 @@ const CategoryDot = styled.span<{ $category: string }>`
   flex-shrink: 0;
   background: ${({ $category }) =>
     CATEGORY_BADGE_COLORS[$category as keyof typeof CATEGORY_BADGE_COLORS] ??
-    '#6366f1'};
+    '#2563eb'};
 `
 
 /* ── Tenure 그룹 안 사건 — 기존 그룹 컨테이너 안에서 컴팩트한 한 줄 ── */

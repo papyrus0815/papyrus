@@ -9,7 +9,6 @@ import React from 'react'
 
 import {
   FiArrowDown,
-  FiArrowUp,
   FiCalendar,
   FiGlobe,
   FiGrid,
@@ -70,8 +69,9 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   onSortDirectionToggle,
 }) => {
   return (
-    <Filter.FilterColumn>
-      <Filter.FilterBlock>
+    <Filter.FilterBlock>
+      {/* 필터 트리거 5개 — 한 외곽 border로 묶음 (내부 hairline divider) */}
+      <Filter.FilterGroup>
         {/* 카테고리 */}
         <Filter.FilterTriggerButton type="button" onClick={onShowCategoryModal}>
           <FiGrid size={13} />
@@ -96,9 +96,9 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
           </span>
         </Filter.FilterTriggerButton>
 
-        {/* 세기 선택 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <FiCalendar size={13} style={{ color: '#64748b', flexShrink: 0 }} />
+        {/* 세기 — icon은 select prefix 자리에 padding으로 통합 */}
+        <Filter.CenturySelectWrap>
+          <FiCalendar size={13} aria-hidden="true" />
           <Filter.CenturySelect
             value={selectedCentury === FILTER_ALL ? 'all' : selectedCentury}
             onChange={(e) => {
@@ -107,6 +107,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
                 value === 'all' ? FILTER_ALL : parseInt(value, 10),
               )
             }}
+            aria-label="세기 선택"
           >
             <option value="all">전체</option>
             {availableCenturies.map((century) => (
@@ -115,58 +116,64 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
               </option>
             ))}
           </Filter.CenturySelect>
-        </div>
+        </Filter.CenturySelectWrap>
 
-        {/* 정렬 */}
+        {/* 정렬 by */}
         <Filter.SortSelect
           value={sortBy}
           onChange={(e) => onSortChange(e.target.value)}
+          aria-label="정렬 기준"
         >
           <option value="recent">최근순</option>
           <option value="duration">기간순</option>
         </Filter.SortSelect>
 
+        {/* 정렬 방향 — 단일 아이콘을 transform rotate로 부드럽게 토글 (위치 흔들림 방지) */}
         <Filter.SortButton
           type="button"
           onClick={onSortDirectionToggle}
+          aria-label={sortDirection === 'asc' ? '오름차순' : '내림차순'}
+          $direction={sortDirection}
         >
-          {sortDirection === 'asc' ? (
-            <FiArrowUp size={14} />
-          ) : (
-            <FiArrowDown size={14} />
-          )}
+          <FiArrowDown size={14} aria-hidden="true" />
         </Filter.SortButton>
+      </Filter.FilterGroup>
 
-        {/* 계층 구조 토글 */}
-        <Filter.FilterToggle>
-          <FiLayers size={12} style={{ color: '#64748b' }} />
-          <Filter.FilterToggleLabel>계층</Filter.FilterToggleLabel>
+      {/* 토글들 — segmented group 외부, inline group */}
+      <Filter.FilterToggle onClick={onToggleFlatView}>
+        <FiLayers size={12} style={{ color: '#64748b' }} aria-hidden="true" />
+        <Filter.FilterToggleLabel>계층</Filter.FilterToggleLabel>
+        <Filter.Switch
+          type="button"
+          $active={!showFlatView}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleFlatView()
+          }}
+        >
+          <Filter.SwitchThumb $active={!showFlatView} />
+        </Filter.Switch>
+      </Filter.FilterToggle>
+
+      {onToggleShowGlobalHeadsOfState && (
+        <Filter.FilterToggle
+          onClick={onToggleShowGlobalHeadsOfState}
+          title="교황 등 전역 수반(모든 국가에 영향을 미친 인물)을 역대 수반 목록에 표시합니다. 끄면 숨깁니다."
+        >
+          <FiUsers size={12} style={{ color: '#64748b' }} aria-hidden="true" />
+          <Filter.FilterToggleLabel>교황 등 전역</Filter.FilterToggleLabel>
           <Filter.Switch
             type="button"
-            $active={!showFlatView}
-            onClick={onToggleFlatView}
+            $active={showGlobalHeadsOfState}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleShowGlobalHeadsOfState()
+            }}
           >
-            <Filter.SwitchThumb $active={!showFlatView} />
+            <Filter.SwitchThumb $active={showGlobalHeadsOfState} />
           </Filter.Switch>
         </Filter.FilterToggle>
-
-        {/* 교황 등 전역 수반 표시 토글 */}
-        {onToggleShowGlobalHeadsOfState && (
-          <Filter.FilterToggle
-            title="교황 등 전역 수반(모든 국가에 영향을 미친 인물)을 역대 수반 목록에 표시합니다. 끄면 숨깁니다."
-          >
-            <FiUsers size={12} style={{ color: '#64748b' }} />
-            <Filter.FilterToggleLabel>교황 등 전역</Filter.FilterToggleLabel>
-            <Filter.Switch
-              type="button"
-              $active={showGlobalHeadsOfState}
-              onClick={onToggleShowGlobalHeadsOfState}
-            >
-              <Filter.SwitchThumb $active={showGlobalHeadsOfState} />
-            </Filter.Switch>
-          </Filter.FilterToggle>
-        )}
-      </Filter.FilterBlock>
-    </Filter.FilterColumn>
+      )}
+    </Filter.FilterBlock>
   )
 }

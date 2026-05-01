@@ -1,32 +1,54 @@
 /**
- * Event Timeline Widget — 가로 타임라인 메인 뷰
+ * Event Timeline Widget — 가로 타임라인 메인 뷰 (v3)
  * FSD: widgets/event-timeline/ui
  *
  * 디자인 원칙
  *  - 역사는 (시간 × 카테고리)의 2차원 객체. 카드 리스트가 못 보여주는
  *    "동시대성·기간·밀도"를 막대 길이/색/굵기로 시각화한다.
- *  - 줌은 일단 fit-to-width 고정 (MVP). 사건이 많고 화면이 좁으면 가로 스크롤.
- *  - 단일 사건 클릭 → 우측 상세 패널이 떠 있는 페이지 컨텍스트와 공유.
  *
- * 좌표계
- *  - X: 연도 (year). pixelsPerYear로 환산.
- *  - Y: 카테고리 레인. dbCategories 순서를 따른다. 카테고리 미매핑 사건은 '기타' 레인.
+ * 인코딩
+ *  - 색         = 카테고리
+ *  - 길이       = 기간 (단발성 minWidth=6px)
+ *  - 높이       = importance (44/36/28/28)
+ *  - 좌측 wedge = critical/major (색맹 보조 — WCAG 1.4.1)
+ *  - dashed border = notable (normal과 시각 차등)
+ *  - active outline = 선택 시 별도 rect (stroke center-align 회피)
+ *  - focus outline = 키보드 포커스만 했을 때도 시각 단서 (rule #7)
  *
- * 막대 시각 인코딩
- *  - 색       = 카테고리 (CATEGORY_BADGE_COLORS — military/political/economic/...)
- *  - 길이     = startDate~endDate 기간. 단발성 사건도 minWidth=4px로 보이게.
- *  - 높이     = importance (critical: 22, major: 16, normal: 12)
- *  - 외곽선   = active(선택) 시 흰/검 테두리 강조
- *  - 투명도   = bookmarksOnly 등 외부 필터로 dim 처리(선택 사항)
+ * 인터랙션
+ *  - Ctrl/⌘+휠 → 줌 (포인터 위치 중심), +/- 버튼, 100% 클릭 → 1× 복귀
+ *  - Space+드래그 또는 미들 클릭 드래그 → panning
+ *    (Bar focus 중에는 Space는 선택용으로 동작 — 충돌 회피)
+ *  - 키보드: Tab → 막대 포커스, Enter/Space → 선택, ←/→ → 같은 lane 시간순 이동
+ *  - Minimap: 클릭/드래그 → 그 시기로 이동 (pointer 통합)
+ *  - Legend 클릭 → 해당 카테고리 hide/show 토글 (사용자 정의 필터)
+ *  - "오늘" 마커, viewport 연도 readout, export(JSON/SVG) 메뉴
+ *
+ * 성능
+ *  - viewport culling — 화면 밖 막대 skip (1000건+ 안전)
+ *  - 첫 페인트 culling — viewport null이어도 첫 화면 추정 범위로 culling
+ *  - scroll throttle — requestAnimationFrame 1회
+ *  - ticks max 200개 cap — 먼 시간 범위 freeze 방지
+ *  - SVG 첫 measure 전 렌더 보류 — CLS 0
  */
-import React, { useMemo, useRef, useState, useEffect } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
-import { CATEGORY_BADGE_COLORS } from '../../../pages/events/styles/theme'
+import {
+  BRAND,
+  CATEGORY_BADGE_COLORS,
+  MOTION,
+} from '../../../pages/events/styles/theme'
 import type {
   EventHierarchyNode,
   HistoricalEvent,
@@ -43,9 +65,7 @@ interface FlatItem {
 }
 
 interface EventTimelineProps {
-  /** flattenedHierarchy from useEventHierarchy — depth 0만 사용 */
   flattenedHierarchy: FlatItem[]
-  /** id → root event 빠른 조회용 */
   events: HistoricalEvent[]
   selectedEventId: string | null
   dbCategories: EventCategoryDto[]
@@ -64,22 +84,96 @@ interface BarData {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// constants — 시각 인코딩
+// constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const LANE_HEIGHT = 48
-const LANE_LABEL_WIDTH = 130
-const TOP_AXIS_HEIGHT = 36
-const MINIMAP_HEIGHT = 64
-const PIXELS_PER_YEAR_DEFAULT = 22
+const LANE_HEIGHT = 72
+const LANE_LABEL_WIDTH = 115
+const TOP_AXIS_HEIGHT = 40
+const PIXELS_PER_YEAR_DEFAULT = 24
 const MIN_BAR_WIDTH = 6
 const TIMELINE_BOTTOM_PAD = 20
 
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 4
+const ZOOM_STEP = 1.4
+
+/**
+ * 짧은 사건 인코딩 임계값.
+ *   - 의미적 폭 < SHORT_BAR_PX → milestone(다이아몬드)로 표시
+ *   - milestone 간 거리 < CLUSTER_GAP_PX 이고 같은 lane이면 클러스터 chip
+ *   - 외부 라벨은 다음 milestone/막대까지 거리 ≥ EXT_LABEL_MIN_GAP 일 때만 표시
+ */
+const SHORT_BAR_PX = 8
+const CLUSTER_GAP_PX = 5
+const CLUSTER_MIN_COUNT = 5
+const EXT_LABEL_MIN_GAP = 60
+const EXT_LABEL_MAX_WIDTH = 140
+
 const IMPORTANCE_BAR_HEIGHT: Record<BarData['importance'], number> = {
-  critical: 30,
-  major: 22,
-  notable: 16,
-  normal: 16,
+  critical: 44,
+  major: 36,
+  notable: 28,
+  normal: 28,
+}
+
+/** Milestone 다이아몬드 반지름 — importance에 따라 차등 (critical 7 / major 6 / 그 외 5) */
+const MILESTONE_RADIUS: Record<BarData['importance'], number> = {
+  critical: 7,
+  major: 6,
+  notable: 5,
+  normal: 5,
+}
+/** Cluster 다이아몬드 — importance와 무관, 묶음 표시용으로 약간 큼 */
+const CLUSTER_RADIUS = 8
+/** 외부 라벨 최소 폭 — 이 값 미만이면 표시 자체를 보류 (음수/오류 방지) */
+const EXT_LABEL_MIN_WIDTH = 24
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RenderItem 타입 — 컴포넌트 외부 hoist (가독성)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type RenderBar = {
+  kind: 'bar'
+  id: string
+  bar: BarData
+  x: number
+  y: number
+  w: number
+  h: number
+  showExternalLabel: boolean
+  externalLabelWidth: number
+}
+type RenderMilestone = {
+  kind: 'milestone'
+  id: string
+  bar: BarData
+  cx: number
+  cy: number
+  r: number
+  showExternalLabel: boolean
+  externalLabelWidth: number
+}
+type RenderCluster = {
+  kind: 'cluster'
+  id: string
+  bars: BarData[]
+  cx: number
+  cy: number
+  r: number
+  /** cluster 시기 범위 — fit-to-cluster 줌에 사용 */
+  startYear: number
+  endYear: number
+  centerYear: number
+  category: string
+}
+type RenderItem = RenderBar | RenderMilestone | RenderCluster
+
+const IMPORTANCE_LABEL: Record<BarData['importance'], string> = {
+  critical: '핵심',
+  major: '주요',
+  notable: '주목',
+  normal: '일반',
 }
 
 const KNOWN_CATEGORIES = [
@@ -95,6 +189,11 @@ const KNOWN_CATEGORIES = [
   'other',
 ] as const
 
+/** CJK 한 글자 ≈ 12px, ASCII ≈ 6.5px. truncation 시 가중치 측정으로 정확도 ↑ */
+const CJK_CHAR_PX = 12
+const ASCII_CHAR_PX = 6.5
+const CJK_RE = /[ㄱ-힣一-鿿]/
+
 // ─────────────────────────────────────────────────────────────────────────────
 // component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -107,14 +206,29 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   onSelectEvent,
 }) => {
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const [tooltip, setTooltip] = useState<{
-    x: number
-    y: number
-    bar: BarData
-  } | null>(null)
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const tooltipIdRef = useRef(`tl-tooltip-${Math.random().toString(36).slice(2, 9)}`)
 
-  // 컨테이너 크기 측정 — fit-to-width / fit-to-height 계산용
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; bar: BarData } | null>(null)
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null)
+  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set())
+  const [exportOpen, setExportOpen] = useState(false)
+  const [focusedBarId, setFocusedBarId] = useState<string | null>(null)
+  /** Bar에 포커스 있을 때 Space는 선택. 그 외엔 panning 토글로 사용. */
+  const [spaceHeld, setSpaceHeld] = useState(false)
+  /** prefers-reduced-motion 감지 — smooth scroll 분기 */
+  const [reducedMotion, setReducedMotion] = useState(false)
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const update = () => setReducedMotion(mql.matches)
+    update()
+    mql.addEventListener('change', update)
+    return () => mql.removeEventListener('change', update)
+  }, [])
+
+  // ── 컨테이너 크기 측정 ──────────────────────────────────────────────────
   useEffect(() => {
     if (!scrollRef.current) return
     const obs = new ResizeObserver((entries) => {
@@ -125,8 +239,8 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     return () => obs.disconnect()
   }, [])
 
-  // ── 막대 데이터 추출 (depth 0만, 날짜 있는 것만) ────────────────────────
-  const bars = useMemo<BarData[]>(() => {
+  // ── 막대 데이터 추출 ───────────────────────────────────────────────────
+  const allBars = useMemo<BarData[]>(() => {
     const out: BarData[] = []
     const eventById = new Map(events.map((e) => [e.id, e]))
 
@@ -140,8 +254,10 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       if (!startStr) continue
       const start = new Date(startStr)
       const end = endStr ? new Date(endStr) : start
-      const startYear = start.getFullYear() + (start.getMonth() + start.getDate() / 31) / 12
-      const endYear = end.getFullYear() + (end.getMonth() + end.getDate() / 31) / 12
+      const startYear =
+        start.getFullYear() + (start.getMonth() + start.getDate() / 31) / 12
+      const endYear =
+        end.getFullYear() + (end.getMonth() + end.getDate() / 31) / 12
       const importance = (node.importance as BarData['importance']) ?? 'normal'
       out.push({
         id: node.id,
@@ -157,6 +273,12 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     return out
   }, [flattenedHierarchy, events])
 
+  /** 사용자가 legend로 hide한 카테고리는 막대/lane에서 제외 */
+  const bars = useMemo(
+    () => allBars.filter((b) => !hiddenCategories.has(b.category)),
+    [allBars, hiddenCategories],
+  )
+
   // ── 시간 범위 ───────────────────────────────────────────────────────────
   const { minYear, maxYear } = useMemo(() => {
     if (bars.length === 0) {
@@ -169,28 +291,40 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       if (b.startYear < min) min = b.startYear
       if (b.endYear > max) max = b.endYear
     }
-    // 연도 시작/끝으로 padding
-    return {
-      minYear: Math.floor(min - 1),
-      maxYear: Math.ceil(max + 1),
-    }
+    return { minYear: Math.floor(min - 1), maxYear: Math.ceil(max + 1) }
   }, [bars])
 
   const yearSpan = Math.max(1, maxYear - minYear)
 
-  // ── 픽셀/연 환산 — fit-to-width with min ────────────────────────────────
-  const pixelsPerYear = useMemo(() => {
-    const innerWidth = Math.max(0, containerSize.width - LANE_LABEL_WIDTH - 16)
-    const fit = innerWidth / yearSpan
-    // fit이 너무 작으면 기본값으로 강제 → 가로 스크롤
-    return Math.max(fit, PIXELS_PER_YEAR_DEFAULT * 0.5)
-  }, [containerSize.width, yearSpan])
+  /** 데이터/범위 변경 시 zoom 자동 reset — 50년 → 1000년 등 큰 변화 후 압축 방지 */
+  const prevSpanRef = useRef<number>(yearSpan)
+  useEffect(() => {
+    const prev = prevSpanRef.current
+    // 2배 이상 변하면 reset
+    if (prev > 0 && (yearSpan / prev > 2 || prev / yearSpan > 2)) {
+      setZoom(1)
+    }
+    prevSpanRef.current = yearSpan
+  }, [yearSpan])
 
+  // ── 픽셀/연 환산 — fit-to-width × zoom (helper로 공유) ─────────────────
+  const renderReady = containerSize.width > 0
+  const computePxPerYear = useCallback(
+    (forZoom: number, forSpan: number = yearSpan): number => {
+      const innerWidth = Math.max(0, containerSize.width - LANE_LABEL_WIDTH - 16)
+      const fit = innerWidth > 0 ? innerWidth / forSpan : PIXELS_PER_YEAR_DEFAULT
+      const base = Math.max(fit, PIXELS_PER_YEAR_DEFAULT * 0.5)
+      return base * forZoom
+    },
+    [containerSize.width, yearSpan],
+  )
+  const pixelsPerYear = useMemo(
+    () => (renderReady ? computePxPerYear(zoom) : PIXELS_PER_YEAR_DEFAULT),
+    [computePxPerYear, zoom, renderReady],
+  )
   const timelineWidth = Math.ceil(yearSpan * pixelsPerYear)
 
-  // ── 레인 (카테고리) ─────────────────────────────────────────────────────
-  /** 표준 카테고리 10개를 항상 표시 — 데이터가 없는 레인도 보여 시각적 위계가 살아남.
-   *  데이터에만 등장하는 미분류 카테고리(UUID 등)는 끝에 추가. */
+  // ── 레인 ────────────────────────────────────────────────────────────────
   const lanes = useMemo<{ key: string; label: string }[]>(() => {
     const KNOWN_LABEL: Record<string, string> = {
       military: '전쟁/군사',
@@ -204,18 +338,13 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       religious: '종교',
       other: '기타',
     }
-
-    const present = new Set(bars.map((b) => b.category))
+    const present = new Set(allBars.map((b) => b.category))
     const ordered: { key: string; label: string }[] = []
     const seen = new Set<string>()
-
-    // 1) 표준 10개 카테고리는 항상 표시
     for (const k of KNOWN_CATEGORIES) {
       ordered.push({ key: k, label: KNOWN_LABEL[k] ?? k })
       seen.add(k)
     }
-
-    // 2) 데이터에 등장한 추가 카테고리 (dbCategories의 UUID 등) — 끝에 추가
     for (const c of present) {
       if (seen.has(c)) continue
       ordered.push({
@@ -225,37 +354,46 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       seen.add(c)
     }
     return ordered
-  }, [bars, dbCategories])
+  }, [allBars, dbCategories])
+
+  /** legend로 숨기지 않은 lane만 그리기 */
+  const visibleLanes = useMemo(
+    () => lanes.filter((l) => !hiddenCategories.has(l.key)),
+    [lanes, hiddenCategories],
+  )
 
   const laneIndex = useMemo(() => {
     const m = new Map<string, number>()
-    lanes.forEach((l, i) => m.set(l.key, i))
+    visibleLanes.forEach((l, i) => m.set(l.key, i))
     return m
-  }, [lanes])
+  }, [visibleLanes])
 
   const intrinsicHeight =
-    TOP_AXIS_HEIGHT + lanes.length * LANE_HEIGHT + TIMELINE_BOTTOM_PAD
-  /** SVG 높이는 데이터에 따른 intrinsic height와 컨테이너 높이 중 큰 값 — 빈 공간을 그리드로 채워 시각적 위계 유지 */
+    TOP_AXIS_HEIGHT + visibleLanes.length * LANE_HEIGHT + TIMELINE_BOTTOM_PAD
   const totalHeight = Math.max(intrinsicHeight, containerSize.height)
 
   // ── 연도 눈금 ───────────────────────────────────────────────────────────
   const ticks = useMemo(() => {
-    // pixelsPerYear에 따라 연 단위, 5년, 10년 단위로 자동
     let step = 1
-    const pxPerYear = pixelsPerYear
-    if (pxPerYear < 4) step = 50
-    else if (pxPerYear < 8) step = 20
-    else if (pxPerYear < 16) step = 10
-    else if (pxPerYear < 30) step = 5
+    const px = pixelsPerYear
+    if (px < 4) step = 50
+    else if (px < 8) step = 20
+    else if (px < 16) step = 10
+    else if (px < 30) step = 5
     else step = 1
 
     const out: number[] = []
     const start = Math.ceil(minYear / step) * step
-    for (let y = start; y <= maxYear; y += step) out.push(y)
+    const MAX_TICKS = 200
+    let count = 0
+    for (let y = start; y <= maxYear && count < MAX_TICKS; y += step) {
+      out.push(y)
+      count++
+    }
     return out
   }, [minYear, maxYear, pixelsPerYear])
 
-  // ── 10년 단위 밀도 sparkline ────────────────────────────────────────────
+  // ── 10년 sparkline ──────────────────────────────────────────────────────
   const decadeBuckets = useMemo(() => {
     const map = new Map<number, { count: number; weight: number }>()
     for (const b of bars) {
@@ -263,11 +401,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       const cur = map.get(decade) ?? { count: 0, weight: 0 }
       cur.count += 1
       cur.weight +=
-        b.importance === 'critical'
-          ? 3
-          : b.importance === 'major'
-            ? 2
-            : 1
+        b.importance === 'critical' ? 3 : b.importance === 'major' ? 2 : 1
       map.set(decade, cur)
     }
     const startDecade = Math.floor(minYear / 10) * 10
@@ -285,329 +419,1728 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     [decadeBuckets],
   )
 
-  // ── 호버 툴팁 좌표 ──────────────────────────────────────────────────────
-  const handleMouseEnter = (e: React.MouseEvent<SVGRectElement>, bar: BarData) => {
-    const rect = (e.currentTarget.ownerSVGElement as SVGSVGElement)?.getBoundingClientRect()
-    const targetRect = e.currentTarget.getBoundingClientRect()
-    if (!rect) return
-    setTooltip({
-      x: targetRect.left + targetRect.width / 2 - rect.left,
-      y: targetRect.top - rect.top - 8,
-      bar,
+  const labelStep = useMemo<1 | 2 | 5>(() => {
+    if (decadeBuckets.length <= 6) return 1
+    if (decadeBuckets.length <= 14) return 2
+    return 5
+  }, [decadeBuckets.length])
+
+  // ── viewport years 추적 (raf throttle) ─────────────────────────────────
+  const [viewportYears, setViewportYears] = useState<{ start: number; end: number } | null>(null)
+  const rafIdRef = useRef<number | null>(null)
+  const updateViewport = useCallback(() => {
+    if (rafIdRef.current != null) return
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null
+      const el = scrollRef.current
+      if (!el) return
+      const visibleLeft = Math.max(0, el.scrollLeft - LANE_LABEL_WIDTH)
+      const visibleRight = el.scrollLeft + el.clientWidth - LANE_LABEL_WIDTH
+      const start = visibleLeft / pixelsPerYear + minYear
+      const end = visibleRight / pixelsPerYear + minYear
+      setViewportYears({
+        start: Math.max(minYear, start),
+        end: Math.min(maxYear, end),
+      })
+    })
+  }, [pixelsPerYear, minYear, maxYear])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    updateViewport()
+    el.addEventListener('scroll', updateViewport, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', updateViewport)
+      if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current)
+    }
+  }, [updateViewport, containerSize.width])
+
+  // ── 줌 — Ctrl/⌘+휠 ────────────────────────────────────────────────────
+  const handleWheel = useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      const el = scrollRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const pointerX = e.clientX - rect.left
+      // Lane label 영역 위에서 휠 → 클램프해서 음수 year 회피
+      const pointerInTimeline = Math.max(0, pointerX - LANE_LABEL_WIDTH)
+      const yearAtPointer =
+        (el.scrollLeft + pointerInTimeline) / pixelsPerYear + minYear
+
+      const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP
+      const nextZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom * factor))
+      if (nextZoom === zoom) return
+
+      setZoom(nextZoom)
+      // 동일한 helper로 새 pixelsPerYear 계산 (stale 회피)
+      requestAnimationFrame(() => {
+        const el2 = scrollRef.current
+        if (!el2) return
+        const newPx = computePxPerYear(nextZoom)
+        const newScrollLeft =
+          (yearAtPointer - minYear) * newPx - pointerInTimeline
+        el2.scrollLeft = Math.max(0, newScrollLeft)
+      })
+    },
+    [zoom, pixelsPerYear, minYear, computePxPerYear],
+  )
+
+  const zoomBy = (factor: number) => {
+    setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * factor)))
+  }
+  const resetZoom = () => setZoom(1)
+
+  // ── 드래그 패닝 (Space+드래그 또는 미들 버튼) ──────────────────────────
+  const dragStateRef = useRef<{ startX: number; startScrollLeft: number } | null>(null)
+  /** Bar에 포커스 있으면 Space는 panning 토글이 아닌 *선택*용으로 동작.
+   *  여기서 일찍 return하면 spaceHeld가 켜지지 않아 충돌 회피. */
+  const isBarFocused = focusedBarId != null
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== ' ') return
+      if (isInEditableElement(e.target)) return
+      if (isBarFocused) return // Bar 선택용 Space — panning 모드 진입 안 함
+      e.preventDefault()
+      setSpaceHeld(true)
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ') setSpaceHeld(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [isBarFocused])
+
+  /** 창 blur / visibility 변경 → drag 종료 + cursor 복원 (잃어버린 mouseup 방어) */
+  useEffect(() => {
+    const cleanup = () => {
+      if (dragStateRef.current) {
+        dragStateRef.current = null
+        document.body.style.cursor = ''
+      }
+      setSpaceHeld(false)
+    }
+    window.addEventListener('blur', cleanup)
+    document.addEventListener('visibilitychange', cleanup)
+    return () => {
+      window.removeEventListener('blur', cleanup)
+      document.removeEventListener('visibilitychange', cleanup)
+    }
+  }, [])
+
+  const handlePanMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const isMiddle = e.button === 1
+    const isSpaceLeft = e.button === 0 && spaceHeld
+    if (!isMiddle && !isSpaceLeft) return
+    e.preventDefault()
+    const el = scrollRef.current
+    if (!el) return
+    dragStateRef.current = { startX: e.clientX, startScrollLeft: el.scrollLeft }
+    document.body.style.cursor = 'grabbing'
+  }
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      const drag = dragStateRef.current
+      if (!drag) return
+      const el = scrollRef.current
+      if (!el) return
+      el.scrollLeft = drag.startScrollLeft - (e.clientX - drag.startX)
+    }
+    const onMouseUp = () => {
+      if (dragStateRef.current) {
+        dragStateRef.current = null
+        document.body.style.cursor = ''
+      }
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
+
+  // ── 호버/포커스 툴팁 + clamp ────────────────────────────────────────────
+  const TOOLTIP_W = 280
+  const TOOLTIP_H = 70
+  const showTooltip = useCallback((target: SVGGraphicsElement, bar: BarData) => {
+    const host = scrollRef.current
+    if (!host) return
+    const hostRect = host.getBoundingClientRect()
+    const targetRect = target.getBoundingClientRect()
+    const rawX = targetRect.left + targetRect.width / 2 - hostRect.left
+    const rawY = targetRect.top - hostRect.top - 8
+    const x = Math.max(
+      TOOLTIP_W / 2 + 8,
+      Math.min(hostRect.width - TOOLTIP_W / 2 - 8, rawX),
+    )
+    const y = Math.max(TOOLTIP_H + 8, rawY)
+    setTooltip({ x, y, bar })
+  }, [])
+  const hideTooltip = useCallback(() => setTooltip(null), [])
+
+  // ── 미니맵 클릭/드래그 brush ────────────────────────────────────────────
+  const minimapRef = useRef<HTMLDivElement | null>(null)
+  const minimapDragRef = useRef<boolean>(false)
+
+  const yearAtMinimapX = (clientX: number): number | null => {
+    const el = minimapRef.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    const ratio = (clientX - rect.left) / rect.width
+    const startDecade = Math.floor(minYear / 10) * 10
+    const endDecade = Math.ceil(maxYear / 10) * 10
+    return startDecade + ratio * (endDecade - startDecade)
+  }
+
+  const scrollToYear = useCallback(
+    (year: number) => {
+      const el = scrollRef.current
+      if (!el) return
+      const x = (year - minYear) * pixelsPerYear + LANE_LABEL_WIDTH
+      el.scrollTo({
+        left: Math.max(0, x - el.clientWidth / 2),
+        behavior: reducedMotion ? 'auto' : 'smooth',
+      })
+    },
+    [minYear, pixelsPerYear, reducedMotion],
+  )
+
+  /**
+   * Cluster 활성화 — fit-to-cluster:
+   *   1) cluster span을 viewport 폭의 약 60%에 맞도록 zoom 계산
+   *   2) ZOOM_MAX 이하로 클램프 (이미 MAX면 그대로)
+   *   3) 줌 적용 후 raf 두 번 (state→render→layout) 후 scroll + focus 첫 사건
+   */
+  const activateCluster = useCallback(
+    (cluster: RenderCluster) => {
+      const innerWidth = Math.max(0, containerSize.width - LANE_LABEL_WIDTH - 16)
+      const span = Math.max(1, cluster.endYear - cluster.startYear)
+      // 목표: cluster가 viewport 60%를 차지하도록
+      const desiredPxPerYear = (innerWidth * 0.6) / span
+      const basePxPerYear = computePxPerYear(1)
+      const fitZoom =
+        basePxPerYear > 0 ? desiredPxPerYear / basePxPerYear : ZOOM_MAX
+      const targetZoom = Math.min(ZOOM_MAX, Math.max(zoom, fitZoom))
+
+      if (targetZoom !== zoom) setZoom(targetZoom)
+
+      // 두 번 raf — state 적용 + 다음 프레임 layout 보장
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollToYear(cluster.centerYear)
+          // 풀린 후 cluster 첫 사건에 focus 복귀 — Tab 흐름 유지
+          const firstId = cluster.bars[0].id
+          const el = svgRef.current?.querySelector<SVGElement>(
+            `[data-bar-id="${firstId}"]`,
+          )
+          if (el && 'focus' in el) (el as unknown as HTMLElement).focus()
+        })
+      })
+    },
+    [containerSize.width, computePxPerYear, zoom, scrollToYear],
+  )
+
+  const handleMinimapPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const year = yearAtMinimapX(e.clientX)
+    if (year == null) return
+    minimapDragRef.current = true
+    scrollToYear(year)
+  }
+  const handleMinimapPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!minimapDragRef.current) return
+    const year = yearAtMinimapX(e.clientX)
+    if (year == null) return
+    scrollToYear(year)
+  }
+  const endMinimapDrag = () => {
+    minimapDragRef.current = false
+  }
+
+  // ── viewport culling — 첫 페인트도 추정 범위로 ──────────────────────────
+  const visibleBars = useMemo(() => {
+    if (viewportYears) {
+      const lo = viewportYears.start - 1
+      const hi = viewportYears.end + 1
+      return bars.filter((b) => b.endYear >= lo && b.startYear <= hi)
+    }
+    // 첫 페인트: 추정 viewport — 컨테이너 너비 / pixelsPerYear
+    if (renderReady) {
+      const visibleSpan =
+        (containerSize.width - LANE_LABEL_WIDTH) / pixelsPerYear
+      const hi = minYear + visibleSpan + 1
+      return bars.filter((b) => b.startYear <= hi)
+    }
+    return bars
+  }, [bars, viewportYears, renderReady, containerSize.width, pixelsPerYear, minYear])
+
+  // ── 렌더 파이프라인 — bar / milestone / cluster ─────────────────────────
+  /**
+   * visibleBars를 *시각 표현 단위*로 변환.
+   *
+   *   - 의미적 폭 ≥ SHORT_BAR_PX → bar (기존 막대)
+   *   - 그 외 → milestone (다이아몬드 점)
+   *   - milestone들이 같은 lane × CLUSTER_GAP_PX 이내 CLUSTER_MIN_COUNT개 이상 → cluster
+   *
+   * 외부 라벨 표시 여부는 *같은 lane 내 다음 아이템과의 거리*로 결정 (그리디 placement).
+   */
+  const renderItems = useMemo<RenderItem[]>(() => {
+    if (!renderReady) return []
+    // lane별로 시간순 정렬
+    const byLane = new Map<string, BarData[]>()
+    for (const b of visibleBars) {
+      const arr = byLane.get(b.category) ?? []
+      arr.push(b)
+      byLane.set(b.category, arr)
+    }
+
+    const out: RenderItem[] = []
+
+    for (const [category, arr] of byLane) {
+      arr.sort((a, b) => a.startYear - b.startYear)
+      const lane = laneIndex.get(category)
+      if (lane == null) continue
+      const laneCenter = TOP_AXIS_HEIGHT + lane * LANE_HEIGHT + LANE_HEIGHT / 2
+
+      // 1단계: bar / milestone 분리 + 위치 계산
+      type Pre = {
+        bar: BarData
+        x: number
+        w: number
+        cx: number
+        kind: 'bar' | 'milestone'
+        /** y offset — 같은 lane 안 milestone 충돌 row 보정 */
+        yOffset: number
+      }
+      const pre: Pre[] = arr.map((b) => {
+        const x = (b.startYear - minYear) * pixelsPerYear
+        const w = Math.max(MIN_BAR_WIDTH, (b.endYear - b.startYear) * pixelsPerYear)
+        const semanticW = (b.endYear - b.startYear) * pixelsPerYear
+        const kind: 'bar' | 'milestone' = semanticW < SHORT_BAR_PX ? 'milestone' : 'bar'
+        const cx = kind === 'milestone' ? x + Math.max(2, semanticW / 2) : x
+        return { bar: b, x, w, cx, kind, yOffset: 0 }
+      })
+
+      /**
+       * milestone 충돌 회피 — 같은 lane 안에서 cx 기준으로 너무 가까운(< 18px) 다이아몬드들에
+       * row offset 부여. 클러스터로 묶이지 않은 4개 이하 케이스에서 시각 분리.
+       *   row 0 → offset 0, row 1 → -12, row 2 → +12, row 3 → -22, ...
+       */
+      const milestoneRowEnds: number[] = []
+      for (const p of pre) {
+        if (p.kind !== 'milestone') continue
+        let row = -1
+        for (let i = 0; i < milestoneRowEnds.length; i++) {
+          if (p.cx - milestoneRowEnds[i] >= 18) {
+            row = i
+            break
+          }
+        }
+        if (row === -1) {
+          row = milestoneRowEnds.length
+          milestoneRowEnds.push(p.cx)
+        } else {
+          milestoneRowEnds[row] = p.cx
+        }
+        if (row > 0) {
+          const sign = row % 2 === 0 ? 1 : -1
+          const magnitude = Math.ceil(row / 2) * 12
+          p.yOffset = sign * magnitude
+        }
+      }
+
+      // 2단계: milestone 클러스터링 — 연속된 milestone들이 CLUSTER_GAP_PX 이내 CLUSTER_MIN_COUNT개+ 면 묶음
+      type Bucket = { items: Pre[]; isCluster: boolean }
+      const buckets: Bucket[] = []
+      let cur: Pre[] = []
+      const flushCluster = () => {
+        if (cur.length === 0) return
+        if (cur.length >= CLUSTER_MIN_COUNT) {
+          buckets.push({ items: cur, isCluster: true })
+        } else {
+          for (const it of cur) buckets.push({ items: [it], isCluster: false })
+        }
+        cur = []
+      }
+
+      for (const p of pre) {
+        if (p.kind !== 'milestone') {
+          flushCluster()
+          buckets.push({ items: [p], isCluster: false })
+          continue
+        }
+        const last = cur[cur.length - 1]
+        if (!last || p.cx - last.cx <= CLUSTER_GAP_PX) {
+          cur.push(p)
+        } else {
+          flushCluster()
+          cur.push(p)
+        }
+      }
+      flushCluster()
+
+      // 3단계: 그리디 외부 라벨 placement — 다음 bucket까지 거리 ≥ EXT_LABEL_MIN_GAP 이면 표시
+      const items: RenderItem[] = []
+      for (let i = 0; i < buckets.length; i++) {
+        const b = buckets[i]
+        const next = buckets[i + 1]
+        const myEnd =
+          b.isCluster || b.items[0].kind === 'milestone'
+            ? b.items[b.items.length - 1].cx +
+              MILESTONE_RADIUS[b.items[0].bar.importance]
+            : b.items[0].x + b.items[0].w
+        const nextStart = next
+          ? next.items[0].kind === 'milestone'
+            ? next.items[0].cx -
+              MILESTONE_RADIUS[next.items[0].bar.importance]
+            : next.items[0].x
+          : Infinity
+        const gap = nextStart - myEnd
+        // 라벨 폭 가드 — gap이 작아 labelWidth가 EXT_LABEL_MIN_WIDTH 미만이면 표시 안 함
+        const candidateWidth = Math.min(EXT_LABEL_MAX_WIDTH, gap - 8)
+        const showExt = gap >= EXT_LABEL_MIN_GAP && candidateWidth >= EXT_LABEL_MIN_WIDTH
+        const labelWidth = Math.max(EXT_LABEL_MIN_WIDTH, candidateWidth)
+
+        if (b.isCluster) {
+          const first = b.items[0]
+          const last = b.items[b.items.length - 1]
+          const centerCx = (first.cx + last.cx) / 2
+          // startYear 평균 — milestone들의 시점 중심 (endYear는 거의 startYear와 동일)
+          const centerYear =
+            b.items.reduce((acc, it) => acc + it.bar.startYear, 0) / b.items.length
+          items.push({
+            kind: 'cluster',
+            id: `cluster-${category}-${first.bar.id}`,
+            bars: b.items.map((it) => it.bar),
+            cx: centerCx,
+            cy: laneCenter,
+            r: CLUSTER_RADIUS,
+            startYear: first.bar.startYear,
+            endYear: last.bar.endYear,
+            centerYear,
+            category,
+          })
+        } else {
+          const it = b.items[0]
+          if (it.kind === 'milestone') {
+            items.push({
+              kind: 'milestone',
+              id: it.bar.id,
+              bar: it.bar,
+              cx: it.cx,
+              cy: laneCenter + it.yOffset,
+              r: MILESTONE_RADIUS[it.bar.importance],
+              showExternalLabel: showExt,
+              externalLabelWidth: labelWidth,
+            })
+          } else {
+            const h = IMPORTANCE_BAR_HEIGHT[it.bar.importance]
+            items.push({
+              kind: 'bar',
+              id: it.bar.id,
+              bar: it.bar,
+              x: it.x,
+              y: laneCenter - h / 2,
+              w: it.w,
+              h,
+              // 막대 안에 라벨 표시되는 경우(w > 70)는 외부 라벨 안 그림
+              showExternalLabel: showExt && it.w <= 70,
+              externalLabelWidth: labelWidth,
+            })
+          }
+        }
+      }
+      out.push(...items)
+    }
+
+    return out
+  }, [visibleBars, laneIndex, renderReady, minYear, pixelsPerYear])
+
+  // ── 키보드 ←/→ 같은 lane 시간순 이동 + Home/End ────────────────────────
+  const focusBar = useCallback((id: string) => {
+    const el = svgRef.current?.querySelector<SVGRectElement>(
+      `[data-bar-id="${id}"]`,
+    )
+    if (el) el.focus()
+  }, [])
+
+  /**
+   * Cluster 키보드 — Enter/Space로 활성화, ←/→로 같은 lane 안 인접 RenderItem(bar/milestone/cluster) 이동.
+   */
+  const handleClusterKeyDown = (
+    e: React.KeyboardEvent<SVGElement>,
+    cluster: RenderCluster,
+    activate: () => void,
+  ) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      activate()
+      return
+    }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End') {
+      e.preventDefault()
+      const sameLane = renderItems
+        .filter((r) =>
+          r.kind === 'cluster'
+            ? r.category === cluster.category
+            : r.bar.category === cluster.category,
+        )
+        .sort((a, c) => {
+          const ax = a.kind === 'bar' ? a.x : a.cx
+          const cx = c.kind === 'bar' ? c.x : c.cx
+          return ax - cx
+        })
+      const idx = sameLane.findIndex((r) => r.id === cluster.id)
+      if (idx === -1) return
+      let next: RenderItem | undefined
+      if (e.key === 'Home') next = sameLane[0]
+      else if (e.key === 'End') next = sameLane[sameLane.length - 1]
+      else if (e.key === 'ArrowRight')
+        next = sameLane[Math.min(idx + 1, sameLane.length - 1)]
+      else next = sameLane[Math.max(idx - 1, 0)]
+      if (next && next.id !== cluster.id) {
+        focusBar(next.id)
+        const targetYear = next.kind === 'cluster' ? next.centerYear : next.bar.startYear
+        scrollToYear(targetYear)
+      }
+    }
+  }
+
+  const handleBarKeyDown = (e: React.KeyboardEvent<SVGElement>, b: BarData) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onSelectEvent(b.id)
+      return
+    }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End') {
+      e.preventDefault()
+      const sameCategory = bars
+        .filter((x) => x.category === b.category)
+        .sort((a, c) => a.startYear - c.startYear)
+      const idx = sameCategory.findIndex((x) => x.id === b.id)
+      if (idx === -1) return
+      let next: BarData | undefined
+      if (e.key === 'Home') next = sameCategory[0]
+      else if (e.key === 'End') next = sameCategory[sameCategory.length - 1]
+      else if (e.key === 'ArrowRight')
+        next = sameCategory[Math.min(idx + 1, sameCategory.length - 1)]
+      else next = sameCategory[Math.max(idx - 1, 0)]
+      if (next && next.id !== b.id) {
+        focusBar(next.id)
+        scrollToYear(next.startYear)
+      }
+    }
+  }
+
+  // ── 오늘 마커 ───────────────────────────────────────────────────────────
+  const currentYear = new Date().getFullYear()
+  const showToday = currentYear >= minYear && currentYear <= maxYear
+  const todayX = (currentYear - minYear) * pixelsPerYear
+
+  // ── legend toggle ───────────────────────────────────────────────────────
+  const toggleCategory = (key: string) => {
+    setHiddenCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
     })
   }
-  const handleMouseLeave = () => setTooltip(null)
+  const showAllCategories = () => setHiddenCategories(new Set())
 
-  // ── 미니맵 클릭 → 해당 시대로 스크롤 ────────────────────────────────────
-  const handleMinimapClick = (decade: number) => {
-    if (!scrollRef.current) return
-    const x = (decade - minYear) * pixelsPerYear + LANE_LABEL_WIDTH
-    scrollRef.current.scrollTo({ left: Math.max(0, x - 80), behavior: 'smooth' })
+  // ── viewport readout 텍스트 ─────────────────────────────────────────────
+  const viewportReadout = viewportYears
+    ? `${Math.round(viewportYears.start)}–${Math.round(viewportYears.end)}`
+    : `${minYear}–${maxYear}`
+
+  // ── export ──────────────────────────────────────────────────────────────
+  const downloadBlob = (content: string, mime: string, ext: string) => {
+    const blob = new Blob([content], { type: mime })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `timeline-${new Date().toISOString().slice(0, 10)}.${ext}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
+  const exportSvg = () => {
+    const svg = svgRef.current
+    if (!svg) return
+    const xml = new XMLSerializer().serializeToString(svg)
+    downloadBlob(
+      `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`,
+      'image/svg+xml;charset=utf-8',
+      'svg',
+    )
+    setExportOpen(false)
+  }
+
+  const exportJson = () => {
+    const payload = bars.map((b) => ({
+      id: b.id,
+      title: b.title,
+      category: b.category,
+      importance: b.importance,
+      startDate: b.startDate,
+      endDate: b.endDate,
+    }))
+    downloadBlob(
+      JSON.stringify(payload, null, 2),
+      'application/json;charset=utf-8',
+      'json',
+    )
+    setExportOpen(false)
+  }
+
+  /* export menu 외부 클릭 시 닫기 */
+  useEffect(() => {
+    if (!exportOpen) return
+    const onDocDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (t && !(t as Element).closest?.('[data-export-menu]')) {
+        setExportOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocDown)
+    return () => document.removeEventListener('mousedown', onDocDown)
+  }, [exportOpen])
+
+  // ── render ──────────────────────────────────────────────────────────────
+  const legendItems = lanes.slice(0, 10)
+  const anyHidden = hiddenCategories.size > 0
+
   return (
-    <Wrapper>
-      {/* 10년 밀도 sparkline */}
-      <Minimap aria-label="10년 단위 사건 밀도">
-        {decadeBuckets.map(({ decade, count, weight }) => {
-          const ratio = weight / maxBucketWeight
-          const h = Math.max(2, ratio * (MINIMAP_HEIGHT - 16))
-          return (
-            <MinimapBar
-              key={decade}
-              type="button"
-              onClick={() => handleMinimapClick(decade)}
-              title={`${decade}~${decade + 9} · ${count}건`}
-            >
-              <MinimapBarFill
-                style={{ height: `${h}px`, opacity: 0.4 + 0.6 * ratio }}
-              />
-              <MinimapBarLabel>{decade}</MinimapBarLabel>
-            </MinimapBar>
-          )
-        })}
-      </Minimap>
-
-      {/* 가로 타임라인 본체 */}
-      <ScrollHost ref={scrollRef}>
-        <SvgRoot
-          width={LANE_LABEL_WIDTH + timelineWidth}
-          height={totalHeight}
+    <>
+      {/* ═══ 카드 1: 사건 분포 ═══ */}
+      <MinimapCard>
+        <CardHeader>
+          <CardTitleGroup>
+            <CardTitle>사건 분포</CardTitle>
+            <CardHint>10년 단위 · 클릭/드래그 → 그 시기로 이동</CardHint>
+          </CardTitleGroup>
+        </CardHeader>
+        <Minimap
+          ref={minimapRef}
+          aria-label="10년 단위 사건 밀도 — 드래그로 범위 이동"
+          onPointerDown={handleMinimapPointerDown}
+          onPointerMove={handleMinimapPointerMove}
+          onPointerUp={endMinimapDrag}
+          onPointerCancel={endMinimapDrag}
+          onPointerLeave={endMinimapDrag}
         >
-          {/* 상단 연도 눈금 — 10·100년 단위는 굵게 (메이저), 그 외 점선 */}
-          <g transform={`translate(${LANE_LABEL_WIDTH}, 0)`}>
-            {ticks.map((y) => {
-              const x = (y - minYear) * pixelsPerYear
-              const major = y % 10 === 0
-              return (
-                <g key={y} transform={`translate(${x}, 0)`}>
-                  <TickLine
-                    x1={0}
-                    x2={0}
-                    y1={TOP_AXIS_HEIGHT - 8}
-                    y2={totalHeight - TIMELINE_BOTTOM_PAD}
-                    $major={major}
-                  />
-                  <TickLabel x={2} y={TOP_AXIS_HEIGHT - 12}>
-                    {y}
-                  </TickLabel>
-                </g>
-              )
-            })}
-          </g>
-
-          {/* 레인 라벨 + 가이드 라인 */}
-          {lanes.map((lane, i) => {
-            const yTop = TOP_AXIS_HEIGHT + i * LANE_HEIGHT
+          {decadeBuckets.map(({ decade, count, weight }) => {
+            const ratio = weight / maxBucketWeight
+            const h = Math.max(2, ratio * 78)
+            const showLabel =
+              labelStep === 1
+                ? true
+                : labelStep === 2
+                  ? decade % 20 === 0
+                  : decade % 50 === 0
+            const inViewport =
+              viewportYears !== null &&
+              !(decade + 10 < viewportYears.start || decade > viewportYears.end)
             return (
-              <g key={lane.key}>
-                <LaneBg
-                  x={0}
-                  y={yTop}
-                  width={LANE_LABEL_WIDTH + timelineWidth}
-                  height={LANE_HEIGHT}
-                  $alt={i % 2 === 1}
+              <MinimapBar
+                key={decade}
+                type="button"
+                onClick={() => scrollToYear(decade + 5)}
+                title={`${decade}~${decade + 9} · ${count}건`}
+                data-count={`${count}건`}
+                aria-label={`${decade}년대 ${count}건 — Enter 또는 클릭으로 이동`}
+              >
+                <MinimapBarFill
+                  $inViewport={inViewport}
+                  $thin={h < 6}
+                  style={{ height: `${h}px` }}
                 />
-                <LaneSeparator
-                  x1={LANE_LABEL_WIDTH}
-                  x2={LANE_LABEL_WIDTH + timelineWidth}
-                  y1={yTop + LANE_HEIGHT}
-                  y2={yTop + LANE_HEIGHT}
-                />
-                <LaneLabel
-                  x={LANE_LABEL_WIDTH - 10}
-                  y={yTop + LANE_HEIGHT / 2 + 4}
-                >
-                  {lane.label}
-                </LaneLabel>
-                <LaneDot
-                  cx={LANE_LABEL_WIDTH - LANE_LABEL_WIDTH + 12}
-                  cy={yTop + LANE_HEIGHT / 2}
-                  r={3}
-                  fill={CATEGORY_BADGE_COLORS[lane.key as keyof typeof CATEGORY_BADGE_COLORS] ?? '#6b7280'}
-                />
-              </g>
+                {showLabel ? (
+                  <MinimapBarLabel>{decade}</MinimapBarLabel>
+                ) : (
+                  <MinimapBarLabelSpacer aria-hidden="true" />
+                )}
+              </MinimapBar>
             )
           })}
+        </Minimap>
+      </MinimapCard>
 
-          {/* 선택된 사건의 vertical guide — 좌우 다른 카테고리와 시각적으로 연결 */}
-          {(() => {
-            if (!selectedEventId) return null
-            const sel = bars.find((b) => b.id === selectedEventId)
-            if (!sel) return null
-            const xStart = LANE_LABEL_WIDTH + (sel.startYear - minYear) * pixelsPerYear
-            const xEnd = LANE_LABEL_WIDTH + (sel.endYear - minYear) * pixelsPerYear
-            return (
-              <g pointerEvents="none">
-                <SelectedRangeBg
-                  x={xStart}
-                  y={TOP_AXIS_HEIGHT}
-                  width={Math.max(MIN_BAR_WIDTH, xEnd - xStart)}
-                  height={totalHeight - TOP_AXIS_HEIGHT - TIMELINE_BOTTOM_PAD}
-                />
-                <SelectedGuide
-                  x1={xStart}
-                  x2={xStart}
-                  y1={TOP_AXIS_HEIGHT - 4}
-                  y2={totalHeight - TIMELINE_BOTTOM_PAD}
-                />
-              </g>
-            )
-          })()}
+      {/* ═══ 카드 2: 사건 타임라인 ═══ */}
+      <TimelineCard>
+        <CardHeader>
+          <CardTitleGroup>
+            <CardTitle>사건 타임라인</CardTitle>
+            <CardHint>
+              막대 클릭 · ←/→ 이동 · Ctrl+휠 줌 · Space+드래그 패닝
+            </CardHint>
+          </CardTitleGroup>
+          <HeaderActions>
+            <ViewportReadout
+              aria-live="polite"
+              aria-atomic="true"
+              title="현재 보이는 연도 범위"
+            >
+              {viewportReadout}
+            </ViewportReadout>
+            <ZoomControls aria-label="확대/축소">
+              <ZoomButton
+                type="button"
+                aria-label="축소"
+                onClick={() => zoomBy(1 / ZOOM_STEP)}
+                disabled={zoom <= ZOOM_MIN + 0.01}
+              >
+                −
+              </ZoomButton>
+              <ZoomReadout
+                onClick={resetZoom}
+                title="원래 크기로 (1×)"
+                aria-label={`현재 확대율 ${Math.round(zoom * 100)}% — 클릭하여 1× 복귀`}
+                aria-live="polite"
+              >
+                {Math.round(zoom * 100)}%
+              </ZoomReadout>
+              <ZoomButton
+                type="button"
+                aria-label="확대"
+                onClick={() => zoomBy(ZOOM_STEP)}
+                disabled={zoom >= ZOOM_MAX - 0.01}
+              >
+                +
+              </ZoomButton>
+            </ZoomControls>
+            <ExportWrap data-export-menu>
+              <ExportButton
+                type="button"
+                onClick={() => setExportOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={exportOpen}
+                title="내보내기"
+              >
+                ⤓
+              </ExportButton>
+              {exportOpen && (
+                <ExportMenu role="menu">
+                  <ExportMenuItem role="menuitem" onClick={exportSvg}>
+                    SVG로 내보내기
+                  </ExportMenuItem>
+                  <ExportMenuItem role="menuitem" onClick={exportJson}>
+                    JSON으로 내보내기
+                  </ExportMenuItem>
+                </ExportMenu>
+              )}
+            </ExportWrap>
+            <Legend aria-label="카테고리 색 범례 — 클릭으로 표시/숨김 토글">
+              {legendItems.map((lane) => {
+                const hidden = hiddenCategories.has(lane.key)
+                return (
+                  <LegendItem
+                    key={lane.key}
+                    type="button"
+                    aria-pressed={!hidden}
+                    aria-label={`${lane.label} ${hidden ? '표시' : '숨기기'}`}
+                    $dim={hoveredCategory != null && hoveredCategory !== lane.key}
+                    $hidden={hidden}
+                    onClick={() => toggleCategory(lane.key)}
+                    onMouseEnter={() => setHoveredCategory(lane.key)}
+                    onMouseLeave={() => setHoveredCategory(null)}
+                  >
+                    <LegendDot
+                      style={{
+                        background:
+                          CATEGORY_BADGE_COLORS[
+                            lane.key as keyof typeof CATEGORY_BADGE_COLORS
+                          ] ?? '#6b7280',
+                      }}
+                    />
+                    <span>{lane.label}</span>
+                  </LegendItem>
+                )
+              })}
+              {anyHidden && (
+                <LegendShowAll
+                  type="button"
+                  onClick={showAllCategories}
+                  aria-label="숨긴 카테고리 모두 보이기"
+                >
+                  모두 보이기
+                </LegendShowAll>
+              )}
+            </Legend>
+          </HeaderActions>
+        </CardHeader>
 
-          {/* 막대 */}
-          <g transform={`translate(${LANE_LABEL_WIDTH}, 0)`}>
-            {bars.map((b) => {
-              const lane = laneIndex.get(b.category) ?? lanes.length - 1
-              const yCenter = TOP_AXIS_HEIGHT + lane * LANE_HEIGHT + LANE_HEIGHT / 2
-              const h = IMPORTANCE_BAR_HEIGHT[b.importance] ?? 12
-              const y = yCenter - h / 2
-              const x = (b.startYear - minYear) * pixelsPerYear
-              const w = Math.max(
-                MIN_BAR_WIDTH,
-                (b.endYear - b.startYear) * pixelsPerYear,
-              )
-              const color =
-                CATEGORY_BADGE_COLORS[b.category as keyof typeof CATEGORY_BADGE_COLORS] ??
-                '#6b7280'
-              const isActive = selectedEventId === b.id
-              return (
-                <g key={b.id}>
-                  <Bar
-                    x={x}
-                    y={y}
-                    width={w}
-                    height={h}
-                    rx={3}
-                    fill={color}
-                    $active={isActive}
-                    $importance={b.importance}
-                    onClick={() => onSelectEvent(b.id)}
-                    onMouseEnter={(e) => handleMouseEnter(e, b)}
-                    onMouseLeave={handleMouseLeave}
-                  />
-                  {/* 막대가 충분히 길면 제목을 안에 표시 */}
-                  {w > 60 && (
-                    <BarLabel
-                      x={x + 6}
-                      y={y + h / 2 + 3.5}
-                      pointerEvents="none"
-                    >
-                      {b.title.length > Math.floor(w / 7)
-                        ? `${b.title.slice(0, Math.floor(w / 7) - 1)}…`
-                        : b.title}
-                    </BarLabel>
-                  )}
-                </g>
-              )
-            })}
-          </g>
-        </SvgRoot>
-
-        {tooltip && (
-          <Tooltip
-            style={{
-              left: `${tooltip.x}px`,
-              top: `${tooltip.y}px`,
-            }}
+        {bars.length === 0 ? (
+          <EmptyHint>
+            <EmptyIconBubble aria-hidden="true">∅</EmptyIconBubble>
+            <span>표시할 사건이 없습니다.</span>
+            {anyHidden && (
+              <EmptySubAction onClick={showAllCategories}>
+                숨긴 카테고리 모두 보이기
+              </EmptySubAction>
+            )}
+          </EmptyHint>
+        ) : (
+          <ScrollHost
+            ref={scrollRef}
+            onWheel={handleWheel}
+            onMouseDown={handlePanMouseDown}
+            $panning={spaceHeld}
+            tabIndex={-1}
           >
-            <TooltipTitle>{tooltip.bar.title}</TooltipTitle>
-            <TooltipMeta>
-              {tooltip.bar.startDate}
-              {tooltip.bar.endDate && tooltip.bar.endDate !== tooltip.bar.startDate
-                ? ` ~ ${tooltip.bar.endDate}`
-                : ''}
-            </TooltipMeta>
-            <TooltipMeta>
-              {getCategoryName(tooltip.bar.category, dbCategories)}
-              {tooltip.bar.importance !== 'normal' &&
-                ` · ${
-                  tooltip.bar.importance === 'critical'
-                    ? '핵심'
-                    : tooltip.bar.importance === 'major'
-                      ? '주요'
-                      : '주목'
-                }`}
-            </TooltipMeta>
-          </Tooltip>
-        )}
-      </ScrollHost>
+            {renderReady && (
+              <SvgRoot
+                ref={svgRef}
+                width={LANE_LABEL_WIDTH + timelineWidth}
+                height={totalHeight}
+                role="img"
+                aria-label={`사건 타임라인 — ${bars.length}건, ${minYear}년부터 ${maxYear}년까지`}
+              >
+                {/* 상단 연도 눈금 */}
+                <g transform={`translate(${LANE_LABEL_WIDTH}, 0)`}>
+                  {ticks.map((y) => {
+                    const x = (y - minYear) * pixelsPerYear
+                    const major = y % 10 === 0
+                    return (
+                      <g key={y} transform={`translate(${x}, 0)`}>
+                        <TickLine
+                          x1={0}
+                          x2={0}
+                          y1={TOP_AXIS_HEIGHT - 8}
+                          y2={totalHeight - TIMELINE_BOTTOM_PAD}
+                          $major={major}
+                        />
+                        <TickLabel x={2} y={TOP_AXIS_HEIGHT - 12}>
+                          {y}
+                        </TickLabel>
+                      </g>
+                    )
+                  })}
+                </g>
 
-      {bars.length === 0 && (
-        <EmptyHint>
-          <span>표시할 사건이 없습니다.</span>
-        </EmptyHint>
-      )}
-    </Wrapper>
+                {/* 레인 */}
+                {visibleLanes.map((lane, i) => {
+                  const yTop = TOP_AXIS_HEIGHT + i * LANE_HEIGHT
+                  return (
+                    <g
+                      key={lane.key}
+                      onMouseEnter={() => setHoveredCategory(lane.key)}
+                      onMouseLeave={() => setHoveredCategory(null)}
+                    >
+                      <LaneBg
+                        x={0}
+                        y={yTop}
+                        width={LANE_LABEL_WIDTH + timelineWidth}
+                        height={LANE_HEIGHT}
+                        $alt={i % 2 === 1}
+                        $highlighted={hoveredCategory === lane.key}
+                      />
+                      <LaneSeparator
+                        x1={LANE_LABEL_WIDTH}
+                        x2={LANE_LABEL_WIDTH + timelineWidth}
+                        y1={yTop + LANE_HEIGHT}
+                        y2={yTop + LANE_HEIGHT}
+                      />
+                      <LaneLabel
+                        x={LANE_LABEL_WIDTH - 10}
+                        y={yTop + LANE_HEIGHT / 2 + 4}
+                      >
+                        {truncateLabel(lane.label, 10)}
+                      </LaneLabel>
+                      <LaneDot
+                        cx={12}
+                        cy={yTop + LANE_HEIGHT / 2}
+                        r={3}
+                        fill={
+                          CATEGORY_BADGE_COLORS[
+                            lane.key as keyof typeof CATEGORY_BADGE_COLORS
+                          ] ?? '#6b7280'
+                        }
+                      />
+                    </g>
+                  )
+                })}
+
+                {/* 오늘 마커 — TickLine과 동일한 dasharray 패턴(2 4) 사용해 시각 통일 */}
+                {showToday && (
+                  <g transform={`translate(${LANE_LABEL_WIDTH}, 0)`} pointerEvents="none">
+                    <TodayLine
+                      x1={todayX}
+                      x2={todayX}
+                      y1={TOP_AXIS_HEIGHT - 4}
+                      y2={totalHeight - TIMELINE_BOTTOM_PAD}
+                    />
+                    <TodayLabelBg
+                      x={todayX - 18}
+                      y={TOP_AXIS_HEIGHT - 28}
+                      width={36}
+                      height={18}
+                      rx={4}
+                    />
+                    <TodayLabelText x={todayX} y={TOP_AXIS_HEIGHT - 15}>
+                      오늘
+                    </TodayLabelText>
+                  </g>
+                )}
+
+                {/* 선택 vertical guide */}
+                {(() => {
+                  if (!selectedEventId) return null
+                  const sel = bars.find((b) => b.id === selectedEventId)
+                  if (!sel) return null
+                  const xStart =
+                    LANE_LABEL_WIDTH + (sel.startYear - minYear) * pixelsPerYear
+                  const xEnd =
+                    LANE_LABEL_WIDTH + (sel.endYear - minYear) * pixelsPerYear
+                  // SelectedRangeBg와 LaneBg highlighted 누적 방지: highlight 중인 lane 제외
+                  return (
+                    <g pointerEvents="none">
+                      <SelectedRangeBg
+                        x={xStart}
+                        y={TOP_AXIS_HEIGHT}
+                        width={Math.max(MIN_BAR_WIDTH, xEnd - xStart)}
+                        height={
+                          totalHeight - TOP_AXIS_HEIGHT - TIMELINE_BOTTOM_PAD
+                        }
+                        $dimmed={hoveredCategory === sel.category}
+                      />
+                      <SelectedGuide
+                        x1={xStart}
+                        x2={xStart}
+                        y1={TOP_AXIS_HEIGHT - 4}
+                        y2={totalHeight - TIMELINE_BOTTOM_PAD}
+                      />
+                    </g>
+                  )
+                })()}
+
+                {/* 막대 / milestone / cluster */}
+                <g transform={`translate(${LANE_LABEL_WIDTH}, 0)`} role="list">
+                  {renderItems.map((it) => {
+                    if (it.kind === 'cluster') {
+                      const color =
+                        CATEGORY_BADGE_COLORS[
+                          it.category as keyof typeof CATEGORY_BADGE_COLORS
+                        ] ?? '#6b7280'
+                      // 시기 정보 포함 — SR이 위치 인지 가능
+                      const sy = Math.round(it.startYear)
+                      const ey = Math.round(it.endYear)
+                      const yearRange = sy === ey ? `${sy}년` : `${sy}–${ey}년`
+                      const ariaLabel = `${it.bars.length}개 사건 모음, ${yearRange}, ${getCategoryName(
+                        it.category,
+                        dbCategories,
+                      )} — Enter로 확대`
+                      // cluster 안에 selectedEventId가 포함되면 active 표시
+                      const containsSelected =
+                        selectedEventId != null &&
+                        it.bars.some((b) => b.id === selectedEventId)
+                      // badge width cap — N이 100+이어도 36px 제한
+                      const badgeText = `+${it.bars.length}`
+                      const badgeWidth = Math.min(
+                        36,
+                        Math.max(20, badgeText.length * 7 + 8),
+                      )
+                      const onActivate = () => activateCluster(it)
+                      return (
+                        <g key={it.id} role="listitem">
+                          <ClusterDiamond
+                            data-bar-id={it.id}
+                            data-cluster
+                            transform={`translate(${it.cx}, ${it.cy})`}
+                            tabIndex={0}
+                            role="button"
+                            aria-label={ariaLabel}
+                            aria-describedby={tooltipIdRef.current}
+                            onClick={onActivate}
+                            onKeyDown={(e) =>
+                              handleClusterKeyDown(e, it, onActivate)
+                            }
+                          >
+                            <polygon
+                              points={`0,${-CLUSTER_RADIUS} ${CLUSTER_RADIUS},0 0,${CLUSTER_RADIUS} ${-CLUSTER_RADIUS},0`}
+                              fill={`${color}E6`}
+                              stroke={color}
+                              strokeWidth={1.5}
+                            />
+                            {/* cluster 안에 선택된 사건 있으면 outline */}
+                            {containsSelected && (
+                              <polygon
+                                points={`0,${-CLUSTER_RADIUS - 3} ${CLUSTER_RADIUS + 3},0 0,${CLUSTER_RADIUS + 3} ${-CLUSTER_RADIUS - 3},0`}
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={1.5}
+                                style={{ color: '#0f172a' }}
+                                pointerEvents="none"
+                              />
+                            )}
+                            <ClusterBadge
+                              x={CLUSTER_RADIUS + 2}
+                              y={-9}
+                              width={badgeWidth}
+                              height={14}
+                              rx={7}
+                            />
+                            <ClusterBadgeText
+                              x={CLUSTER_RADIUS + 2 + badgeWidth / 2}
+                              y={1}
+                            >
+                              {badgeText}
+                            </ClusterBadgeText>
+                          </ClusterDiamond>
+                        </g>
+                      )
+                    }
+
+                    const b = it.bar
+                    const color =
+                      CATEGORY_BADGE_COLORS[
+                        b.category as keyof typeof CATEGORY_BADGE_COLORS
+                      ] ?? '#6b7280'
+                    const isActive = selectedEventId === b.id
+                    const isFocused = focusedBarId === b.id
+                    const dim =
+                      hoveredCategory != null && hoveredCategory !== b.category
+                    const importanceLabel = IMPORTANCE_LABEL[b.importance]
+                    const ariaLabel = [
+                      b.title,
+                      `${b.startDate}${b.endDate && b.endDate !== b.startDate ? ` ~ ${b.endDate}` : ''}`,
+                      getCategoryName(b.category, dbCategories),
+                      b.importance !== 'normal' ? importanceLabel : null,
+                    ]
+                      .filter(Boolean)
+                      .join(', ')
+
+                    const commonHandlers = {
+                      tabIndex: 0,
+                      role: 'button' as const,
+                      'aria-label': ariaLabel,
+                      'aria-pressed': isActive,
+                      'aria-describedby': tooltipIdRef.current,
+                      'data-bar-id': b.id,
+                      onClick: () => onSelectEvent(b.id),
+                      onKeyDown: (e: React.KeyboardEvent<SVGElement>) =>
+                        handleBarKeyDown(e, b),
+                      onMouseEnter: (e: React.MouseEvent<SVGElement>) =>
+                        showTooltip(e.currentTarget as SVGGraphicsElement, b),
+                      onMouseLeave: hideTooltip,
+                      onFocus: (e: React.FocusEvent<SVGElement>) => {
+                        setFocusedBarId(b.id)
+                        showTooltip(e.currentTarget as SVGGraphicsElement, b)
+                      },
+                      onBlur: () => {
+                        setFocusedBarId((curr) => (curr === b.id ? null : curr))
+                        hideTooltip()
+                      },
+                    }
+
+                    if (it.kind === 'milestone') {
+                      const r = it.r
+                      // 다이아몬드 polygon: top → right → bottom → left
+                      const points = `${it.cx},${it.cy - r} ${it.cx + r},${it.cy} ${it.cx},${it.cy + r} ${it.cx - r},${it.cy}`
+                      const importantStroke =
+                        b.importance === 'critical' || b.importance === 'major'
+                      // 모든 milestone에 stroke — notable/normal은 약한 alpha, important는 진함
+                      const strokeColor = importantStroke
+                        ? color
+                        : `${color}80` // 50% alpha
+                      return (
+                        <g key={b.id} role="listitem">
+                          <MilestoneShape
+                            points={points}
+                            fill={`${color}E6`}
+                            stroke={strokeColor}
+                            strokeWidth={importantStroke ? 1.5 : 1}
+                            $active={isActive}
+                            $dim={dim}
+                            $importance={b.importance}
+                            {...commonHandlers}
+                          />
+                          {/* focus / active outline — 다이아몬드용 */}
+                          {(isFocused || isActive) && (
+                            <MilestoneOutline
+                              points={`${it.cx},${it.cy - r - 3} ${it.cx + r + 3},${it.cy} ${it.cx},${it.cy + r + 3} ${it.cx - r - 3},${it.cy}`}
+                              $active={isActive}
+                              pointerEvents="none"
+                            />
+                          )}
+                          {it.showExternalLabel && (
+                            <ExternalLabel
+                              x={it.cx + r + 6}
+                              y={it.cy + 3.5}
+                              aria-hidden="true"
+                              onClick={() => onSelectEvent(b.id)}
+                            >
+                              {truncateBarText(b.title, it.externalLabelWidth)}
+                            </ExternalLabel>
+                          )}
+                        </g>
+                      )
+                    }
+
+                    // it.kind === 'bar'
+                    const rx = b.importance === 'critical' ? 7 : 6
+                    const showWedge =
+                      b.importance === 'critical' || b.importance === 'major'
+                    const dashedBorder = b.importance === 'notable'
+                    const inLabel = it.w > 70
+                    return (
+                      <g key={b.id} role="listitem">
+                        <Bar
+                          x={it.x}
+                          y={it.y}
+                          width={it.w}
+                          height={it.h}
+                          rx={rx}
+                          fill={`${color}E6`}
+                          $active={isActive}
+                          $dim={dim}
+                          $importance={b.importance}
+                          {...commonHandlers}
+                        />
+                        {dashedBorder && (
+                          <NotableDashed
+                            x={it.x + 0.75}
+                            y={it.y + 0.75}
+                            width={Math.max(0, it.w - 1.5)}
+                            height={Math.max(0, it.h - 1.5)}
+                            rx={Math.max(0, rx - 1)}
+                            pointerEvents="none"
+                          />
+                        )}
+                        {showWedge && (
+                          <WedgePolygon
+                            points={`${it.x},${it.y + rx} ${it.x + 7},${it.y + it.h / 2} ${it.x},${it.y + it.h - rx}`}
+                            $importance={b.importance}
+                            pointerEvents="none"
+                          />
+                        )}
+                        {isFocused && !isActive && (
+                          <FocusOutline
+                            x={it.x - 1.5}
+                            y={it.y - 1.5}
+                            width={it.w + 3}
+                            height={it.h + 3}
+                            rx={rx + 1}
+                            pointerEvents="none"
+                          />
+                        )}
+                        {isActive && (
+                          <ActiveOutline
+                            x={it.x - 1.5}
+                            y={it.y - 1.5}
+                            width={it.w + 3}
+                            height={it.h + 3}
+                            rx={rx + 1}
+                            pointerEvents="none"
+                          />
+                        )}
+                        {inLabel && (
+                          <BarLabel
+                            x={it.x + (showWedge ? 12 : 6)}
+                            y={it.y + it.h / 2 + 3.5}
+                            pointerEvents="none"
+                          >
+                            {truncateBarText(b.title, it.w - (showWedge ? 18 : 12))}
+                          </BarLabel>
+                        )}
+                        {/* 막대 안에 라벨 안 들어가면 외부 라벨 시도 */}
+                        {!inLabel && it.showExternalLabel && (
+                          <ExternalLabel
+                            x={it.x + it.w + 6}
+                            y={it.y + it.h / 2 + 3.5}
+                            aria-hidden="true"
+                            onClick={() => onSelectEvent(b.id)}
+                          >
+                            {truncateBarText(b.title, it.externalLabelWidth)}
+                          </ExternalLabel>
+                        )}
+                      </g>
+                    )
+                  })}
+                </g>
+              </SvgRoot>
+            )}
+
+            {tooltip && (
+              <Tooltip
+                id={tooltipIdRef.current}
+                role="tooltip"
+                style={{ left: `${tooltip.x}px`, top: `${tooltip.y}px` }}
+              >
+                <TooltipTitle>{tooltip.bar.title}</TooltipTitle>
+                <TooltipMeta>
+                  {tooltip.bar.startDate}
+                  {tooltip.bar.endDate &&
+                  tooltip.bar.endDate !== tooltip.bar.startDate
+                    ? ` ~ ${tooltip.bar.endDate}`
+                    : ''}
+                </TooltipMeta>
+                <TooltipMeta>
+                  {getCategoryName(tooltip.bar.category, dbCategories)}
+                  {tooltip.bar.importance !== 'normal' &&
+                    ` · ${IMPORTANCE_LABEL[tooltip.bar.importance]}`}
+                </TooltipMeta>
+              </Tooltip>
+            )}
+          </ScrollHost>
+        )}
+      </TimelineCard>
+    </>
   )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// styled (theme-aware)
+// helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const Wrapper = styled.div`
+function isInEditableElement(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  return (
+    el instanceof HTMLInputElement ||
+    el instanceof HTMLTextAreaElement ||
+    (el?.isContentEditable ?? false)
+  )
+}
+
+function truncateLabel(label: string, maxChars: number): string {
+  return label.length > maxChars ? `${label.slice(0, maxChars - 1)}…` : label
+}
+
+/**
+ * 막대 안 텍스트 — CJK/ASCII 가중치로 truncation 정확도 ↑.
+ * 한국어/한자는 약 12px, 영문은 약 6.5px. 글자 종류 비율로 누적 폭 계산.
+ */
+function truncateBarText(title: string, widthPx: number): string {
+  let acc = 0
+  let cut = title.length
+  for (let i = 0; i < title.length; i++) {
+    const w = CJK_RE.test(title[i]) ? CJK_CHAR_PX : ASCII_CHAR_PX
+    if (acc + w > widthPx) {
+      cut = i
+      break
+    }
+    acc += w
+  }
+  if (cut >= title.length) return title
+  return cut <= 1 ? title.slice(0, 1) : `${title.slice(0, cut - 1)}…`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// styled
+// ─────────────────────────────────────────────────────────────────────────────
+
+const cardBase = css`
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
   overflow: hidden;
-  border-radius: 14px;
-  border: 1.5px solid
+  border-radius: 12px;
+  border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(20,19,34,0.08)'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#ffffff'};
 `
 
+const MinimapCard = styled.section`
+  ${cardBase}
+  flex: 0 0 152px;
+
+  @media (max-width: 768px) {
+    flex: 0 0 110px;
+  }
+`
+
+const TimelineCard = styled.section`
+  ${cardBase}
+  flex: 1;
+  min-height: 0;
+`
+
+const CardHeader = styled.header`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  flex-wrap: wrap;
+`
+
+const CardTitleGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+`
+
+const CardTitle = styled.h3`
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CardHint = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const HeaderActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+
+  @media (max-width: 1024px) {
+    & > [aria-label^='카테고리 색 범례'] {
+      display: none;
+    }
+  }
+`
+
+/* viewport readout — 현재 보이는 연도 범위 */
+const ViewportReadout = styled.span`
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  flex-shrink: 0;
+`
+
+const ZoomControls = styled.div`
+  display: inline-flex;
+  align-items: stretch;
+  height: 26px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.12)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+`
+
+const ZoomButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background ${MOTION.fast};
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15,23,42,0.04)'};
+    color: ${BRAND.primary};
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+    background: ${BRAND.primarySoft};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+const ZoomReadout = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  border-left: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+  border-right: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  font-family: inherit;
+  transition: background ${MOTION.fast}, color ${MOTION.fast};
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15,23,42,0.04)'};
+    color: ${BRAND.primary};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+/* Export 버튼/메뉴 */
+const ExportWrap = styled.div`
+  position: relative;
+  flex-shrink: 0;
+`
+
+const ExportButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.12)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background ${MOTION.fast}, border-color ${MOTION.fast},
+    color ${MOTION.fast};
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15,23,42,0.04)'};
+    color: ${BRAND.primary};
+    border-color: ${BRAND.primaryBorder};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+const ExportMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 180px;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#1c1c20' : '#ffffff'};
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const ExportMenuItem = styled.button`
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+  font-family: inherit;
+  transition: background ${MOTION.fast};
+
+  &:hover {
+    background: ${BRAND.primarySoft};
+    color: ${BRAND.primary};
+  }
+
+  &:focus-visible {
+    outline: none;
+    background: ${BRAND.primarySoft};
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+const Legend = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex: 0 1 auto;
+  max-width: 60%;
+  justify-content: flex-end;
+`
+
+const LegendItem = styled.button<{ $dim?: boolean; $hidden?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: ${({ $hidden }) => ($hidden ? 400 : 500)};
+  color: inherit;
+  /* hidden 카테고리 — strikethrough + opacity */
+  text-decoration: ${({ $hidden }) => ($hidden ? 'line-through' : 'none')};
+  opacity: ${({ $dim, $hidden }) => ($hidden ? 0.45 : $dim ? 0.5 : 1)};
+  transition: opacity ${MOTION.fast}, background ${MOTION.fast};
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : 'rgba(15,23,42,0.04)'};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+const LegendShowAll = styled.button`
+  margin-left: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  border: 1px solid ${BRAND.primaryBorder};
+  background: ${BRAND.primarySoft};
+  color: ${BRAND.primary};
+  cursor: pointer;
+  font-family: inherit;
+  transition: background ${MOTION.fast};
+
+  &:hover {
+    background: ${BRAND.primarySoftHover};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+const LegendDot = styled.span`
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+`
+
 const Minimap = styled.div`
   display: flex;
   align-items: flex-end;
   gap: 2px;
-  height: ${MINIMAP_HEIGHT}px;
-  padding: 8px 12px 6px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9'};
+  height: 100%;
+  padding: 8px 14px 8px;
   overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  min-height: 0;
+  cursor: grab;
+  touch-action: pan-x;
+
+  &:active {
+    cursor: grabbing;
+  }
 
   &::-webkit-scrollbar {
     height: 4px;
   }
   &::-webkit-scrollbar-thumb {
-    background: rgba(99, 102, 241, 0.2);
+    background: ${BRAND.primarySoftHover};
     border-radius: 2px;
   }
 `
 
 const MinimapBar = styled.button`
   position: relative;
-  flex: 1 0 18px;
-  min-width: 18px;
-  max-width: 36px;
+  flex: 1 0 20px;
+  min-width: 20px;
+  max-width: 56px;
   height: 100%;
-  padding: 0;
+  padding: 0 1px;
   border: none;
   background: transparent;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   align-items: stretch;
+  gap: 4px;
   cursor: pointer;
   border-radius: 4px;
-  transition: background 0.15s;
+  transition: background ${MOTION.fast};
 
   &:hover {
     background: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  &:hover::after {
+    content: attr(data-count);
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 3px 7px;
+    border-radius: 4px;
+    background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.10)'
-        : 'rgba(99,102,241,0.06)'};
+        ? 'rgba(28, 28, 32, 0.96)'
+        : 'rgba(15, 23, 42, 0.94)'};
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 5;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 `
 
-const MinimapBarFill = styled.div`
+const MinimapBarFill = styled.div<{ $inViewport: boolean; $thin: boolean }>`
   width: 100%;
-  border-radius: 3px 3px 0 0;
-  background: linear-gradient(
-    180deg,
-    rgba(99, 102, 241, 0.85),
-    rgba(139, 92, 246, 0.65)
-  );
+  border-radius: ${({ $thin }) => ($thin ? '0' : '3px 3px 0 0')};
+  background: ${({ $inViewport, theme }) =>
+    $inViewport
+      ? BRAND.primary
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.18)'
+        : 'rgba(15, 23, 42, 0.18)'};
+  flex-shrink: 0;
+  transition: background ${MOTION.base};
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 const MinimapBarLabel = styled.span`
-  position: absolute;
-  bottom: -14px;
-  left: 50%;
-  transform: translateX(-50%);
   font-size: 9.5px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   pointer-events: none;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 `
 
-const ScrollHost = styled.div`
+const MinimapBarLabelSpacer = styled.span`
+  height: 11px;
+  flex-shrink: 0;
+`
+
+const ScrollHost = styled.div<{ $panning?: boolean }>`
   position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
+  cursor: ${({ $panning }) => ($panning ? 'grab' : 'auto')};
 
   &::-webkit-scrollbar {
     width: 6px;
-    height: 6px;
+    height: 8px;
   }
   &::-webkit-scrollbar-thumb {
-    background: rgba(99, 102, 241, 0.25);
+    background: ${BRAND.primarySoftHover};
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: rgba(99, 102, 241, 0.4);
+    background: ${BRAND.primaryFill};
   }
 `
 
 const SvgRoot = styled.svg`
   display: block;
   font-family: inherit;
+
+  &:focus {
+    outline: none;
+  }
 `
 
 const TickLine = styled.line<{ $major?: boolean }>`
@@ -630,13 +2163,18 @@ const TickLabel = styled.text`
   fill: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const LaneBg = styled.rect<{ $alt: boolean }>`
-  fill: ${({ theme, $alt }) =>
-    $alt
+const LaneBg = styled.rect<{ $alt: boolean; $highlighted?: boolean }>`
+  fill: ${({ theme, $alt, $highlighted }) =>
+    $highlighted
       ? theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.025)'
-        : 'rgba(99,102,241,0.025)'
-      : 'transparent'};
+        ? 'rgba(37, 99, 235, 0.07)'
+        : 'rgba(37, 99, 235, 0.05)'
+      : $alt
+        ? theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.04)'
+          : 'rgba(37, 99, 235,0.045)'
+        : 'transparent'};
+  transition: fill ${MOTION.fast};
 `
 
 const LaneSeparator = styled.line`
@@ -657,46 +2195,217 @@ const LaneLabel = styled.text`
 
 const LaneDot = styled.circle``
 
+/**
+ * Bar opacity:
+ *   - dim (다른 카테고리 hover 중): 0.4 (이전 0.25에서 완화 — 정보 유지)
+ *   - notable/normal: 0.7
+ *   - critical/major: 1.0
+ *   - hover/focus: 1.0 (dim 무시)
+ */
 const Bar = styled.rect<{
   $active: boolean
+  $dim: boolean
   $importance: BarData['importance']
 }>`
   cursor: pointer;
-  transition: filter 0.12s, transform 0.12s, opacity 0.12s;
-  /* critical/major는 더 큰 명도/채도 + drop shadow로 위계 시각화 */
-  filter: ${({ $active, $importance }) =>
-    $active
-      ? 'brightness(1.12) saturate(1.18) drop-shadow(0 2px 4px rgba(0,0,0,0.25))'
-      : $importance === 'critical'
-        ? 'drop-shadow(0 1.5px 2.5px rgba(0,0,0,0.18))'
-        : $importance === 'major'
-          ? 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.12))'
-          : 'none'};
+  transition: opacity ${MOTION.fast};
+  opacity: ${({ $importance, $dim }) => {
+    if ($dim) return 0.4
+    return $importance === 'normal' || $importance === 'notable' ? 0.7 : 1
+  }};
+
+  &:hover,
+  &:focus {
+    opacity: 1;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+/**
+ * Milestone (다이아몬드) — 짧은 사건의 시점 인코딩.
+ * Bar와 동일한 opacity/dim/active 의미. 인터랙션 시그너처(focus/hover) 동일.
+ */
+const MilestoneShape = styled.polygon<{
+  $active: boolean
+  $dim: boolean
+  $importance: BarData['importance']
+}>`
+  cursor: pointer;
+  transition: opacity ${MOTION.fast}, stroke-width ${MOTION.fast};
+  opacity: ${({ $importance, $dim }) => {
+    if ($dim) return 0.4
+    return $importance === 'normal' || $importance === 'notable' ? 0.7 : 1
+  }};
+
+  &:hover,
+  &:focus {
+    opacity: 1;
+    /* 작은 점 hover 인식 강화 — stroke 두꺼워짐 */
+    stroke-width: 2.5;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+/* 다이아몬드 active/focus outline — Bar의 ActiveOutline/FocusOutline에 대응 */
+const MilestoneOutline = styled.polygon<{ $active: boolean }>`
+  fill: none;
   stroke: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
         ? '#ffffff'
         : '#0f172a'
-      : 'transparent'};
-  stroke-width: ${({ $active }) => ($active ? 2 : 0)};
+      : BRAND.primary};
+  stroke-width: 1.5;
+  stroke-dasharray: ${({ $active }) => ($active ? 'none' : '3 2')};
+`
 
-  &:hover {
-    filter: brightness(1.16) saturate(1.25)
-      drop-shadow(0 2px 4px rgba(0, 0, 0, 0.22));
+/**
+ * Cluster — 같은 lane × 5px 이내 milestone 5개+ 묶음.
+ * 다이아몬드 1개 + "+N" badge. 클릭 시 줌 + 점프.
+ */
+const ClusterDiamond = styled.g`
+  cursor: pointer;
+  transition: opacity ${MOTION.fast};
+
+  & polygon {
+    transition: opacity ${MOTION.fast};
+  }
+
+  &:hover polygon,
+  &:focus polygon {
+    opacity: 1;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus polygon {
+    stroke-width: 2.5;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    & polygon {
+      transition: none;
+    }
   }
 `
 
-const SelectedRangeBg = styled.rect`
+const ClusterBadge = styled.rect`
   fill: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.07)'
-      : 'rgba(99, 102, 241, 0.05)'};
+    theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.9)' : 'rgba(15, 23, 42, 0.85)'};
+`
+
+const ClusterBadgeText = styled.text`
+  font-size: 10px;
+  font-weight: 700;
+  fill: #ffffff;
+  text-anchor: start;
+  dominant-baseline: middle;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+`
+
+/**
+ * 외부 라벨 — 막대/milestone이 좁아 안에 라벨 못 넣을 때 우측 옆에 표시.
+ * `paint-order: stroke` + 배경색 stroke로 outline 효과 — LaneBg highlighted 위에서도 가독.
+ * 클릭 가능 (hit-area).
+ */
+const ExternalLabel = styled.text`
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  fill: ${({ theme }) => theme.colors.text.primary};
+  paint-order: stroke;
+  stroke: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(15, 15, 15, 0.95)' : 'rgba(255, 255, 255, 0.92)'};
+  stroke-width: 3;
+  stroke-linejoin: round;
+  cursor: pointer;
+`
+
+/* notable importance dashed inner border — normal과 패턴 차등 (색맹 보조) */
+const NotableDashed = styled.rect`
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.5);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+`
+
+/* Active outline — 선택 시 */
+const ActiveOutline = styled.rect`
+  fill: none;
+  stroke: ${({ theme }) => (theme.mode === 'dark' ? '#ffffff' : '#0f172a')};
+  stroke-width: 1.5;
+`
+
+/* Focus outline — 키보드 포커스만 (선택 안 됨) */
+const FocusOutline = styled.rect`
+  fill: none;
+  stroke: ${BRAND.primary};
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+`
+
+/**
+ * Wedge polygon — 색맹 보조.
+ * 라이트 모드: 짙은 검정 alpha
+ * 다크 모드: 흰색 alpha (contrast 확보)
+ */
+const WedgePolygon = styled.polygon<{ $importance: BarData['importance'] }>`
+  fill: ${({ $importance, theme }) => {
+    const base =
+      theme.mode === 'dark' ? 'rgba(255,255,255,' : 'rgba(15, 23, 42,'
+    const alpha = $importance === 'critical' ? '0.6)' : '0.35)'
+    return base + alpha
+  }};
+`
+
+/* SelectedRangeBg — alpha 강화 + lane highlight 누적 회피 */
+const SelectedRangeBg = styled.rect<{ $dimmed?: boolean }>`
+  fill: ${({ theme, $dimmed }) => {
+    const a = $dimmed ? 0.07 : theme.mode === 'dark' ? 0.16 : 0.12
+    return `rgba(37, 99, 235, ${a})`
+  }};
 `
 
 const SelectedGuide = styled.line`
-  stroke: rgba(99, 102, 241, 0.55);
+  stroke: ${BRAND.primaryBorderHover};
+  stroke-width: 2;
+`
+
+/* TodayLine — TickLine과 같은 dasharray 패턴(2 4) — 점선 패턴 통일 */
+const TodayLine = styled.line`
+  stroke: #dc2626;
   stroke-width: 1.5;
-  stroke-dasharray: 3 3;
+  stroke-dasharray: 2 4;
+`
+
+const TodayLabelBg = styled.rect`
+  fill: #dc2626;
+`
+
+const TodayLabelText = styled.text`
+  font-size: 10.5px;
+  font-weight: 700;
+  fill: #ffffff;
+  text-anchor: middle;
+  letter-spacing: -0.005em;
 `
 
 const BarLabel = styled.text`
@@ -704,35 +2413,33 @@ const BarLabel = styled.text`
   font-weight: 600;
   letter-spacing: -0.005em;
   fill: #ffffff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 `
 
 const Tooltip = styled.div`
   position: absolute;
   transform: translate(-50%, -100%);
   pointer-events: none;
-  padding: 8px 12px;
-  border-radius: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
   font-size: 12px;
-  white-space: nowrap;
   z-index: 10;
   ${({ theme }) =>
     theme.mode === 'dark'
       ? `
-    background: rgba(28, 28, 32, 0.97);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    background: rgba(28, 28, 32, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
   `
       : `
-    background: rgba(15, 23, 42, 0.95);
+    background: rgba(15, 23, 42, 0.94);
     border: 1px solid rgba(15, 23, 42, 0.9);
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
   `}
   color: #ffffff;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-width: 360px;
+  max-width: 280px;
   white-space: normal;
 `
 
@@ -750,8 +2457,52 @@ const TooltipMeta = styled.div`
 const EmptyHint = styled.div`
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EmptyIconBubble = styled.div`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
+  color: ${BRAND.primary};
+`
+
+const EmptySubAction = styled.button`
+  margin-top: 4px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid ${BRAND.primaryBorder};
+  background: ${BRAND.primarySoft};
+  color: ${BRAND.primary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background ${MOTION.fast};
+
+  &:hover {
+    background: ${BRAND.primarySoftHover};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `

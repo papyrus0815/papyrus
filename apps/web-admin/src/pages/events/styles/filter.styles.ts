@@ -4,27 +4,100 @@
  */
 import styled, { css } from 'styled-components'
 
+import { BRAND, MOTION } from './theme'
+
+/* FilterColumn — 사용처에서 obsolete (FilterBlock과 중복 wrapper)이지만
+ * 외부 import 호환 위해 단순 contents fragment처럼 둠. 모든 layout 스타일은
+ * FilterBlock에서 처리. 새 코드는 FilterColumn 사용 X. */
 export const FilterColumn = styled.div`
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: center;
-  flex: 1;
-
-  &::-webkit-scrollbar { width: 5px; }
-  &::-webkit-scrollbar-track { background: transparent; }
-  &::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.2); border-radius: 3px; }
-  &::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.3); }
-
-  @media (max-width: 768px) { position: static; max-height: none; overflow-y: visible; }
+  display: contents;
 `
 
+/* FilterBlock — toolbar 아이템들이 직접 flex로 배치되는 row. */
 export const FilterBlock = styled.div`
-  display: flex;
+  display: inline-flex;
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
-  padding: 0;
+`
+
+/**
+ * FilterGroup — *연관된 filter 트리거 5개를 한 묶음 border*로.
+ *
+ * 이전: 카테고리 / 국가 / 세기 / 정렬 / 정렬방향 — 각자 *자신의 1px border*
+ *       → toolbar 한 줄에 bordered box 5개 + 그 외 6개 = 어수선
+ *
+ * 지금: 외곽 1px border 1개 + 내부 hairline `border-right` 구분선
+ *       → 한 *그룹* 인상. Linear / Notion 데이터 toolbar 패턴.
+ *
+ * 자식들은 각자 border 제거 / radius 0 / hover 시 inset bg shift만.
+ */
+export const FilterGroup = styled.div`
+  display: inline-flex;
+  align-items: stretch;
+  height: 34px;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        `
+      : css`
+          background: #f8fafc;
+          border: 1px solid rgba(203, 213, 225, 0.6);
+        `}
+
+  /* 모든 nested control(직속 + 깊이 1단)은 자기 border/bg 제거 */
+  & button,
+  & select {
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    height: 100% !important;
+    box-shadow: none !important;
+  }
+
+  /* 직속 자식들 사이 hairline divider */
+  & > button,
+  & > select,
+  & > div {
+    border-right: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.08)'
+          : 'rgba(15, 23, 42, 0.08)'} !important;
+    border-radius: 0 !important;
+  }
+  & > *:last-child {
+    border-right: none !important;
+  }
+
+  /* 내부 hover는 inset bg shift */
+  & button:hover,
+  & select:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06) !important'
+        : 'rgba(15, 23, 42, 0.04) !important'};
+  }
+
+  /* 그룹 외곽 hover */
+  &:hover {
+    border-color: ${BRAND.primaryBorder};
+  }
+
+  /* focus halo — 그룹에 표시 */
+  &:focus-within {
+    border-color: ${BRAND.primaryBorderHover};
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 export const FilterBlockLabel = styled.div`
@@ -37,56 +110,104 @@ export const FilterBlockLabel = styled.div`
 `
 
 export const FilterSearchInput = styled.input`
-  border-radius: 10px;
-  padding: 9px 14px 9px 36px;
-  font-size: 13px;
-  transition: all 0.2s ease;
+  border-radius: 8px;
+  padding: 8px 12px 8px 34px;
+  height: 34px;
+  font-size: 12.5px;
   min-width: 200px;
   max-width: 300px;
-  &::placeholder { font-size: 12px; color: #94a3b8; }
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255,255,255,0.05) url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Ccircle cx="11" cy="11" r="8"/%3E%3Cline x1="21" y1="21" x2="16.65" y2="16.65"/%3E%3C/svg%3E') no-repeat 12px 50%;
-    background-size: 14px;
-    border: 1.5px solid rgba(255,255,255,0.1);
-    color: #e2e8f0;
-    &:hover { background-color: rgba(255,255,255,0.07); border-color: rgba(99,102,241,0.3); }
-    &:focus { outline: none; border-color: rgba(99,102,241,0.5); background-color: rgba(255,255,255,0.07); box-shadow: 0 0 0 4px rgba(99,102,241,0.1); }
-  ` : css`
-    background: #f8fafc url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Ccircle cx="11" cy="11" r="8"/%3E%3Cline x1="21" y1="21" x2="16.65" y2="16.65"/%3E%3C/svg%3E') no-repeat 12px 50%;
-    background-size: 14px;
-    border: 1.5px solid rgba(203,213,225,0.6);
-    color: #0f172a;
-    &:hover { background-color: #ffffff; border-color: rgba(99,102,241,0.2); }
-    &:focus { outline: none; border-color: rgba(99,102,241,0.5); background-color: #ffffff; box-shadow: 0 0 0 4px rgba(99,102,241,0.1); }
-  `}
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  &::placeholder {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04)
+            url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Ccircle cx="11" cy="11" r="8"/%3E%3Cline x1="21" y1="21" x2="16.65" y2="16.65"/%3E%3C/svg%3E')
+            no-repeat 11px 50%;
+          background-size: 13px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #e2e8f0;
+          &:hover {
+            background-color: rgba(255, 255, 255, 0.06);
+            border-color: rgba(37, 99, 235, 0.3);
+          }
+          &:focus {
+            outline: none;
+            border-color: rgba(37, 99, 235, 0.5);
+            background-color: rgba(255, 255, 255, 0.06);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+          }
+        `
+      : css`
+          background: #f8fafc
+            url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Ccircle cx="11" cy="11" r="8"/%3E%3Cline x1="21" y1="21" x2="16.65" y2="16.65"/%3E%3C/svg%3E')
+            no-repeat 11px 50%;
+          background-size: 13px;
+          border: 1px solid rgba(203, 213, 225, 0.6);
+          color: #0f172a;
+          &:hover {
+            background-color: #ffffff;
+            border-color: rgba(37, 99, 235, 0.3);
+          }
+          &:focus {
+            outline: none;
+            border-color: rgba(37, 99, 235, 0.5);
+            background-color: #ffffff;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+          }
+        `}
 `
 
+/* admin 도구 톤 — 1px border, radius 8, hover transform/shadow 제거. */
 export const FilterTriggerButton = styled.button`
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-size: 12px;
+  border-radius: 8px;
+  padding: 7px 12px;
+  height: 34px;
+  font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  svg { color: #6366f1; flex-shrink: 0; transition: all 0.2s ease; }
-  &:hover svg { transform: translateX(2px); }
-  &:focus { outline: none; border-color: rgba(99,102,241,0.5); box-shadow: 0 0 0 4px rgba(99,102,241,0.1); }
-  &:active { transform: scale(0.98); }
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255,255,255,0.05);
-    border: 1.5px solid rgba(255,255,255,0.1);
-    color: #94a3b8;
-    &:hover { border-color: rgba(99,102,241,0.3); background: rgba(255,255,255,0.08); }
-  ` : css`
-    background: #f8fafc;
-    border: 1.5px solid rgba(203,213,225,0.6);
-    color: #1e293b;
-    &:hover { border-color: rgba(99,102,241,0.3); background: #ffffff; box-shadow: 0 2px 6px rgba(99,102,241,0.1); }
-  `}
+  transition: background ${MOTION.fast}, border-color ${MOTION.fast},
+    color ${MOTION.fast};
+  svg {
+    color: ${BRAND.primary};
+    flex-shrink: 0;
+  }
+  &:focus-visible {
+    outline: none;
+    border-color: ${BRAND.primaryBorderHover};
+    box-shadow: ${BRAND.focusRing};
+  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #94a3b8;
+          &:hover {
+            border-color: ${BRAND.primaryBorder};
+            background: rgba(255, 255, 255, 0.06);
+          }
+        `
+      : css`
+          background: #f8fafc;
+          border: 1px solid rgba(203, 213, 225, 0.6);
+          color: #1e293b;
+          &:hover {
+            border-color: ${BRAND.primaryBorder};
+            background: #ffffff;
+          }
+        `}
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 export const FilterCheckbox = styled.label`
@@ -100,7 +221,7 @@ export const FilterCheckbox = styled.label`
     width: 16px;
     height: 16px;
     cursor: pointer;
-    accent-color: #6366f1;
+    accent-color: #2563eb;
   }
 
   span {
@@ -109,7 +230,7 @@ export const FilterCheckbox = styled.label`
     color: ${({ theme }) => theme.mode === 'dark' ? '#94a3b8' : '#475569'};
   }
 
-  &:hover span { color: #6366f1; }
+  &:hover span { color: #2563eb; }
 `
 
 export const FilterChips = styled.div`
@@ -118,61 +239,71 @@ export const FilterChips = styled.div`
   gap: 6px;
 `
 
+/* radius 16 → 6, 그라데이션 → 단색 alpha. 페이지 ActiveFilterChip과 family. */
 export const FilterChip = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px 5px 12px;
-  border-radius: 16px;
+  padding: 4px 8px 4px 10px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(99,102,241,0.15);
-    border: 1px solid rgba(99,102,241,0.3);
-    color: #a5b4fc;
-    button {
-      display: flex; align-items: center; justify-content: center; padding: 2px;
-      background: rgba(99,102,241,0.2); border: none; border-radius: 50%;
-      color: #a5b4fc; cursor: pointer; transition: all 0.2s ease;
-      &:hover { background: rgba(99,102,241,0.35); }
-    }
-  ` : css`
-    background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-    border: 1px solid rgba(99,102,241,0.25);
-    color: #4f46e5;
-    button {
-      display: flex; align-items: center; justify-content: center; padding: 2px;
-      background: rgba(99,102,241,0.15); border: none; border-radius: 50%;
-      color: #6366f1; cursor: pointer; transition: all 0.2s ease;
-      &:hover { background: rgba(99,102,241,0.25); color: #4f46e5; }
-    }
-  `}
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8')};
 
-  span { white-space: nowrap; }
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+    opacity: 0.7;
+    &:hover {
+      opacity: 1;
+      background: rgba(37, 99, 235, 0.16);
+    }
+  }
+
+  span {
+    white-space: nowrap;
+  }
 `
 
 export const FilterResetButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1.5px solid rgba(239,68,68,0.3);
-  border-radius: 10px;
-  padding: 9px 14px;
-  background: rgba(239,68,68,0.05);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 7px 12px;
+  height: 34px;
+  background: rgba(239, 68, 68, 0.06);
   color: #ef4444;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
-  &:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.4); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
+  &:hover {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
+  }
 `
 
 export const FilterDivider = styled.hr`
   border: none;
   height: 1px;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(99,102,241,0.12)'};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(37, 99, 235,0.12)'};
   margin: 8px 0;
 `
 
@@ -208,23 +339,26 @@ export const CenturyList = styled.div`
     padding: 4px 0;
     &::-webkit-scrollbar { height: 4px; }
     &::-webkit-scrollbar-track { background: transparent; }
-    &::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 2px; }
+    &::-webkit-scrollbar-thumb { background: rgba(37, 99, 235,0.2); border-radius: 2px; }
   }
 `
 
+/* 단색 alpha + 1px border, hover translateX/box-shadow 제거. */
 export const CenturyButton = styled.button<{ $active: boolean }>`
-  border-radius: 10px;
-  padding: 12px 14px;
+  border-radius: 8px;
+  padding: 10px 12px;
   text-align: left;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.15s, border-color 0.15s;
   display: flex;
   flex-direction: column;
   gap: 6px;
   position: relative;
   overflow: hidden;
 
-  ${({ $active }) => $active && `
+  ${({ $active }) =>
+    $active &&
+    `
     &::before {
       content: '';
       position: absolute;
@@ -232,35 +366,47 @@ export const CenturyButton = styled.button<{ $active: boolean }>`
       top: 0;
       bottom: 0;
       width: 3px;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      background: #2563eb;
     }
   `}
 
-  &:active { transform: scale(0.98); }
+  @media (max-width: 768px) {
+    flex-shrink: 0;
+    min-width: 140px;
+  }
 
-  @media (max-width: 768px) { flex-shrink: 0; min-width: 140px; }
-
-  ${({ theme, $active }) => theme.mode === 'dark' ? css`
-    background: ${$active ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)'};
-    border: 1.5px solid ${$active ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.07)'};
-    box-shadow: ${$active ? '0 2px 8px rgba(99,102,241,0.15)' : 'none'};
-    &:hover {
-      border-color: rgba(99,102,241,0.35);
-      background: ${$active ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.07)'};
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      transform: translateX(2px);
-    }
-  ` : css`
-    background: ${$active ? 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)' : '#f8fafc'};
-    border: 1.5px solid ${$active ? 'rgba(99,102,241,0.3)' : 'rgba(203,213,225,0.6)'};
-    box-shadow: ${$active ? '0 2px 8px rgba(99,102,241,0.12)' : 'none'};
-    &:hover {
-      border-color: rgba(99,102,241,0.35);
-      background: ${$active ? 'linear-gradient(135deg, rgba(99,102,241,0.18), rgba(168,85,247,0.12))' : 'linear-gradient(135deg, #ffffff 0%, rgba(249,250,251,1) 100%)'};
-      box-shadow: 0 4px 12px rgba(99,102,241,0.12);
-      transform: translateX(2px);
-    }
-  `}
+  ${({ theme, $active }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: ${$active
+            ? 'rgba(37, 99, 235, 0.12)'
+            : 'rgba(255, 255, 255, 0.04)'};
+          border: 1px solid
+            ${$active
+              ? 'rgba(37, 99, 235, 0.35)'
+              : 'rgba(255, 255, 255, 0.07)'};
+          &:hover {
+            border-color: rgba(37, 99, 235, 0.3);
+            background: ${$active
+              ? 'rgba(37, 99, 235, 0.18)'
+              : 'rgba(255, 255, 255, 0.06)'};
+          }
+        `
+      : css`
+          background: ${$active
+            ? 'rgba(37, 99, 235, 0.06)'
+            : '#f8fafc'};
+          border: 1px solid
+            ${$active
+              ? 'rgba(37, 99, 235, 0.3)'
+              : 'rgba(203, 213, 225, 0.6)'};
+          &:hover {
+            border-color: rgba(37, 99, 235, 0.3);
+            background: ${$active
+              ? 'rgba(37, 99, 235, 0.1)'
+              : '#ffffff'};
+          }
+        `}
 `
 
 export const CenturyLabel = styled.div`
@@ -283,13 +429,12 @@ export const CenturyLabel = styled.div`
 
 export const CenturyEventCount = styled.span`
   font-size: 11px;
-  color: #6366f1;
+  color: #2563eb;
   font-weight: 700;
-  padding: 4px 10px;
-  background: rgba(99,102,241,0.12);
-  border-radius: 8px;
+  padding: 3px 8px;
+  background: rgba(37, 99, 235, 0.12);
+  border-radius: 6px;
   align-self: flex-start;
-  box-shadow: 0 1px 2px rgba(99,102,241,0.08);
 `
 
 export const ResultControls = styled.div`
@@ -299,99 +444,116 @@ export const ResultControls = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  border-radius: 12px;
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-  ` : css`
-    background: #fff;
-    border: 1px solid rgba(20,19,34,0.06);
-    box-shadow: 0 2px 8px rgba(15,23,42,0.03);
-  `}
+  border-radius: 8px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+        `
+      : css`
+          background: #fff;
+          border: 1px solid rgba(20, 19, 34, 0.06);
+        `}
 `
 
 export const SortDirectionToggle = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-size: 12px;
+  border-radius: 8px;
+  padding: 7px 12px;
+  height: 34px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
   svg { width: 14px; height: 14px; }
-  &:hover { border-color: rgba(99,102,241,0.4); }
-  &:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: #94a3b8;
-    &:hover { color: #e2e8f0; background: rgba(255,255,255,0.08); }
-  ` : css`
-    background: #fff;
-    border: 1px solid rgba(15,23,42,0.12);
-    color: #1f2937;
-    &:hover { color: #111827; }
-  `}
+  &:hover { border-color: rgba(37, 99, 235, 0.3); }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #94a3b8;
+          &:hover { color: #e2e8f0; background: rgba(255, 255, 255, 0.06); }
+        `
+      : css`
+          background: #fff;
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          color: #1f2937;
+          &:hover { color: #111827; }
+        `}
 `
 
 export const SortSelect = styled.select`
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-size: 13px;
+  border-radius: 8px;
+  padding: 7px 10px;
+  height: 34px;
+  font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
   min-width: 100px;
-  &:focus { outline: none; border-color: #6366f1; }
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255,255,255,0.05);
-    border: 1.5px solid rgba(255,255,255,0.1);
-    color: #e2e8f0;
-    option { background: #1e1e2e; color: #e2e8f0; }
-    &:hover { background: rgba(255,255,255,0.07); border-color: rgba(99,102,241,0.3); }
-  ` : css`
-    background: #f8fafc;
-    border: 1.5px solid rgba(203,213,225,0.6);
-    color: #1e293b;
-    option { background: #ffffff; color: #1f2937; }
-    &:hover { background: #ffffff; border-color: rgba(99,102,241,0.2); }
-  `}
+  transition: background 0.15s, border-color 0.15s;
+  &:focus {
+    outline: none;
+    border-color: rgba(37, 99, 235, 0.5);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #e2e8f0;
+          option { background: #1e1e2e; color: #e2e8f0; }
+          &:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(37, 99, 235, 0.3);
+          }
+        `
+      : css`
+          background: #f8fafc;
+          border: 1px solid rgba(203, 213, 225, 0.6);
+          color: #1e293b;
+          option { background: #ffffff; color: #1f2937; }
+          &:hover {
+            background: #ffffff;
+            border-color: rgba(37, 99, 235, 0.3);
+          }
+        `}
 `
 
 export const ToolbarMeta = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
+  color: #64748b;
 
   span {
-    padding: 6px 12px;
-    background: rgba(99,102,241,0.08);
-    border-radius: 999px;
-    color: #4f46e5;
+    padding: 4px 10px;
+    background: rgba(37, 99, 235, 0.08);
+    border-radius: 6px;
+    color: #1d4ed8;
   }
 `
 
-export const FilterToggle = styled.div`
+/* FilterToggle — 컨테이너 박스 제거. 단순 inline group으로 toolbar의 다른
+ * item들과 같은 평면에 배치. (이전엔 box-in-box-in-box 였음) */
+export const FilterToggle = styled.label`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-radius: 10px;
-  transition: all 0.2s ease;
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255,255,255,0.04);
-    border: 1.5px solid rgba(255,255,255,0.08);
-    &:hover { background: rgba(255,255,255,0.07); }
-  ` : css`
-    background: #f8fafc;
-    border: 1.5px solid rgba(203,213,225,0.6);
-    &:hover { background: #ffffff; }
-  `}
+  gap: 6px;
+  height: 34px;
+  padding: 0 4px;
+  cursor: pointer;
+  user-select: none;
 `
 
 export const FilterToggleLabel = styled.span`
@@ -401,77 +563,174 @@ export const FilterToggleLabel = styled.span`
   color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
 `
 
-export const CenturySelect = styled.select`
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 90px;
-  &:focus { outline: none; border-color: #6366f1; }
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255,255,255,0.05);
-    border: 1.5px solid rgba(255,255,255,0.1);
-    color: #e2e8f0;
-    &:hover { background: rgba(255,255,255,0.07); border-color: rgba(99,102,241,0.3); }
-  ` : css`
-    background: #f8fafc;
-    border: 1.5px solid rgba(203,213,225,0.6);
-    color: #1e293b;
-    &:hover { background: #ffffff; border-color: rgba(99,102,241,0.2); }
-  `}
+/* CenturySelectWrap — icon + select 한 묶음. FilterGroup 안에서 자식으로 동작.
+ * 아이콘 색은 테마 토큰(text.tertiary)으로 정렬. */
+export const CenturySelectWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  height: 100%;
+
+  & > svg {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    flex-shrink: 0;
+  }
 `
 
-export const SortButton = styled.button`
-  border-radius: 10px;
-  padding: 8px 10px;
+export const CenturySelect = styled.select`
+  border-radius: 8px;
+  padding: 7px 10px;
+  height: 34px;
+  font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  width: 36px;
-  height: 36px;
+  min-width: 90px;
+  transition: background 0.15s, border-color 0.15s;
+  &:focus {
+    outline: none;
+    border-color: rgba(37, 99, 235, 0.5);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #e2e8f0;
+          &:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(37, 99, 235, 0.3);
+          }
+        `
+      : css`
+          background: #f8fafc;
+          border: 1px solid rgba(203, 213, 225, 0.6);
+          color: #1e293b;
+          &:hover {
+            background: #ffffff;
+            border-color: rgba(37, 99, 235, 0.3);
+          }
+        `}
+`
+
+/* SortButton — direction 토글 시 같은 아이콘을 transform rotate 180deg로 부드럽게.
+ * 호출처는 $direction prop을 전달해 회전 상태를 제어. */
+export const SortButton = styled.button<{ $direction?: 'asc' | 'desc' }>`
+  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  svg { color: #6366f1; transition: all 0.2s ease; }
-  &:hover svg { color: #4f46e5; }
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(255,255,255,0.05);
-    border: 1.5px solid rgba(255,255,255,0.1);
-    color: #64748b;
-    &:hover { background: rgba(255,255,255,0.08); border-color: rgba(99,102,241,0.3); }
-  ` : css`
-    background: #f8fafc;
-    border: 1.5px solid rgba(203,213,225,0.6);
-    color: #64748b;
-    &:hover { background: #ffffff; border-color: rgba(99,102,241,0.2); }
-  `}
+  transition: background ${MOTION.fast}, border-color ${MOTION.fast};
+  svg {
+    color: ${BRAND.primary};
+    transition: transform ${MOTION.base};
+    transform: rotate(
+      ${({ $direction }) => ($direction === 'asc' ? '180deg' : '0deg')}
+    );
+  }
+  &:hover svg {
+    color: ${BRAND.primaryHover};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: #64748b;
+          &:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: ${BRAND.primaryBorder};
+          }
+        `
+      : css`
+          background: #f8fafc;
+          border: 1px solid rgba(203, 213, 225, 0.6);
+          color: #64748b;
+          &:hover {
+            background: #ffffff;
+            border-color: ${BRAND.primaryBorder};
+          }
+        `}
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    svg {
+      transition: none;
+    }
+  }
 `
 
+/* Switch — admin 도구 톤. 30×18 콤팩트, accent border + subtle bg fill.
+ * 흰 썸 + 그림자 → 둥근 색 점, 그림자 없음. iOS 토글 인상 제거.
+ * focus 표식은 box-shadow halo로 통일 (다른 컨트롤들과 동일). */
 export const Switch = styled.button<{ $active?: boolean }>`
   position: relative;
-  width: 42px;
-  height: 22px;
-  background: ${({ $active }) => $active ? '#6366f1' : '#cbd5e1'};
-  border: none;
-  border-radius: 11px;
+  width: 30px;
+  height: 18px;
+  background: ${({ $active, theme }) =>
+    $active
+      ? BRAND.primarySoftDark
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : 'rgba(15, 23, 42, 0.06)'};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? BRAND.primaryBorderHover
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.1)'
+          : 'rgba(15, 23, 42, 0.12)'};
+  border-radius: 999px;
   cursor: pointer;
-  transition: all 0.25s ease;
   padding: 0;
-  &:hover { background: ${({ $active }) => $active ? '#4f46e5' : '#94a3b8'}; }
-  &:active { transform: scale(0.97); }
+  transition: background ${MOTION.base}, border-color ${MOTION.base};
+
+  &:hover {
+    background: ${({ $active, theme }) =>
+      $active
+        ? BRAND.primaryFillDark
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.1)'
+          : 'rgba(15, 23, 42, 0.1)'};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 export const SwitchThumb = styled.div<{ $active?: boolean }>`
   position: absolute;
-  top: 3px;
-  left: ${({ $active }) => $active ? '23px' : '3px'};
-  width: 18px;
-  height: 18px;
-  background: white;
+  top: 2px;
+  left: ${({ $active }) => ($active ? '14px' : '2px')};
+  width: 12px;
+  height: 12px;
+  background: ${({ $active, theme }) =>
+    $active
+      ? BRAND.primary
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.55)'
+        : 'rgba(15, 23, 42, 0.4)'};
   border-radius: 50%;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: left ${MOTION.base}, background ${MOTION.base};
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 export const ChildSortButtons = styled.div`
@@ -488,10 +747,10 @@ export const ChildSortButton = styled.button<{ $active: boolean }>`
   transition: all 0.15s ease;
   font-size: 11px;
   font-weight: ${({ $active }) => $active ? '600' : '500'};
-  border: 1px solid ${({ $active }) => $active ? '#6366f1' : 'rgba(203,213,225,0.6)'};
+  border: 1px solid ${({ $active }) => $active ? '#2563eb' : 'rgba(203,213,225,0.6)'};
   background: ${({ theme, $active }) => $active
-    ? 'rgba(99,102,241,0.08)'
+    ? 'rgba(37, 99, 235,0.08)'
     : theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
-  color: ${({ $active }) => $active ? '#6366f1' : 'inherit'};
-  &:hover { border-color: #6366f1; background: rgba(99,102,241,0.05); }
+  color: ${({ $active }) => $active ? '#2563eb' : 'inherit'};
+  &:hover { border-color: #2563eb; background: rgba(37, 99, 235,0.05); }
 `
