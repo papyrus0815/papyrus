@@ -62,7 +62,7 @@ export function MapRegionSection({
       }}
     >
       <SectionTabHeader
-        variant="flat"
+        variant="plain"
         title="행정구역"
         description="행정구역, 자연 지리, 인프라를 지도와 목록으로 확인할 수 있습니다."
       />
