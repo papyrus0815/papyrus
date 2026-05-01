@@ -1845,14 +1845,21 @@ export function CabinetsSection({
                       <EmptyStateSpotlight
                         icon={<FiUsers size={30} strokeWidth={1.75} />}
                         title="등록된 행정부가 없습니다"
-                        description="행정부는 정부 수반(내각)용 재임으로만 연결됩니다. 군주 등록은 재위 기록만 남기며 행정부 수반 목록과 섞이지 않습니다. 군주 재위만 있는 경우 이 목록은 비어 있을 수 있고, 재임은 행정조직「역대 수반」에서 확인할 수 있습니다."
+                        description="총리·대통령 등 정부 수반의 임기를 등록하면 행정부가 함께 만들어집니다. 군주 재위는 「역대 수반」 탭에서 별도로 관리되며 이 목록에는 표시되지 않습니다."
                         primaryAction={{
-                          label: '새 수반과 함께 등록',
+                          label: '수반 임기와 함께 행정부 등록',
                           onClick: () => {
                             setRegisterFlow('new')
                             setRegisterCabinetModalOpen(true)
                           },
                           icon: <FiPlus size={16} strokeWidth={2.25} />,
+                        }}
+                        secondaryAction={{
+                          label: '기존 수반 임기 선택',
+                          onClick: () => {
+                            setRegisterFlow('select')
+                            setRegisterCabinetModalOpen(true)
+                          },
                         }}
                       />
                     )}

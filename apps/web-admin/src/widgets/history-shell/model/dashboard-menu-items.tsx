@@ -6,7 +6,6 @@ export type DashboardContentView =
   | 'person'
   | 'legislature'
   | 'military'
-  | 'administration'
   | 'dynasty'
   | 'ethnicity'
 
@@ -49,20 +48,6 @@ const IconMilitary = () => (
     strokeLinejoin="round"
   >
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
-)
-
-const IconAdministration = () => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="2" y="3" width="20" height="14" rx="2" />
-    <path d="M8 21h8M12 17v4" />
   </svg>
 )
 
@@ -127,13 +112,6 @@ export const DASHBOARD_MENU_ITEMS: DashboardMenuItem[] = [
     icon: IconMilitary,
     path: pathKeys.history.dashboardMilitary(),
     matchPath: (p) => /\/history\/dashboard\/military\/?$/.test(p),
-  },
-  {
-    id: 'administration',
-    label: '행정부',
-    icon: IconAdministration,
-    path: pathKeys.history.dashboardAdministration(),
-    matchPath: (p) => /\/history\/dashboard\/administration\/?$/.test(p),
   },
   {
     id: 'dynasty',

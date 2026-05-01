@@ -60,7 +60,6 @@ const DASHBOARD_VIEW_PATTERNS: Array<{
   match: RegExp
 }> = [
   { view: 'person', match: /^\/history\/dashboard\/persons(\/[^/]+)?\/?$/ },
-  { view: 'administration', match: /^\/history\/dashboard\/administration\/?$/ },
   { view: 'dynasty', match: /^\/history\/dashboard\/dynasty\/?$/ },
   { view: 'ethnicity', match: /^\/history\/dashboard\/ethnicity\/?$/ },
   { view: 'legislature', match: /^\/history\/dashboard\/legislature\/?$/ },

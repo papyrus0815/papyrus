@@ -1175,7 +1175,7 @@ export function HistoricalCountryForm({
               {/* 연결된 현대 국가 (다중 선택 지원) */}
               <S.FormField>
                 <S.FormLabel htmlFor="parentModernCountryIds">
-                  연결된 현대 국가 (선택, 여러 개 가능)
+                  연결된 현대 국가 (권장, 여러 개 가능)
                 </S.FormLabel>
                 <S.SelectButton
                   type="button"
@@ -1187,7 +1187,7 @@ export function HistoricalCountryForm({
                     <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
                   </svg>
                 </S.SelectButton>
-                {selectedModernCountries.length > 0 && (
+                {selectedModernCountries.length > 0 ? (
                   <div
                     style={{
                       fontSize: '12px',
@@ -1196,6 +1196,20 @@ export function HistoricalCountryForm({
                     }}
                   >
                     {selectedModernCountries.length}개 국가 선택됨
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      color: '#92400e',
+                      background: '#fef3c7',
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      marginTop: '6px',
+                    }}
+                  >
+                    ⚠️ 미연결 시 이 역사국가에 등록된 인물의 임기·내각이 현대 국가
+                    행정조직 뷰(국가 → 행정부)에서 보이지 않을 수 있습니다.
                   </div>
                 )}
               </S.FormField>

@@ -28,8 +28,6 @@ export const ROUTES = {
     MILITARY_UNITS: 'military-units',
     /** 연대표/대시보드 공통 세그먼트 (인물·연대표 등) */
     DASHBOARD: 'dashboard',
-    /** 대시보드 하위 — 행정부 다국가 비교 */
-    DASHBOARD_ADMINISTRATION: 'administration',
   },
 
   // Genealogy (standalone full-screen)

@@ -14,11 +14,11 @@ export type GovernmentTabMeta = { label: string; hint: string }
 export const GOV_TAB_META: Record<GovernmentContentTab, GovernmentTabMeta> = {
   heads: {
     label: '역대 수반',
-    hint: '국가별 재임 기록과 인물 정보를 조회·수정합니다.',
+    hint: '군주(왕·황제·천황) 재위와 국가원수 임기를 관리합니다. 총리·대통령 등 정부수반은 「행정부」 탭에서.',
   },
   cabinets: {
     label: '행정부',
-    hint: '정권별 행정부와 각료 구성을 관리합니다.',
+    hint: '총리·대통령 등 정부수반의 임기와 각료 구성을 관리합니다. 수반 임기를 등록하면 행정부가 함께 만들어집니다.',
   },
   ministries: {
     label: '중앙부처',

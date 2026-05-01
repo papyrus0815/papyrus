@@ -174,7 +174,7 @@ export default function CountryDetailPage() {
     if (!selectedId) return
     if (hloc.detailTab === 'persons') {
       navigate(
-        `${pathKeys.history.dashboardPersons()}?country=${encodeURIComponent(selectedId)}`,
+        `${pathKeys.history.dashboardPersons()}?countries=${encodeURIComponent(selectedId)}`,
         { replace: true },
       )
     }

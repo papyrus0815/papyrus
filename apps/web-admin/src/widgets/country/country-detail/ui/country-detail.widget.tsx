@@ -291,7 +291,10 @@ function CountryDetailInner({
                       }}
                     >
                       {activeSubTab === 'statistics' && country && (
-                        <CountryDetailDashboard country={country} />
+                        <CountryDetailDashboard
+                          country={country}
+                          onEdit={onEdit}
+                        />
                       )}
 
                       {activeSubTab === 'map' && (
@@ -354,7 +357,7 @@ function CountryDetailInner({
                         </CountryStyles.TabContentPane>
                       )}
 
-                      {/* 인물 탭은 헤더 "인물"로 통합 — 국가별 보기는 /history/dashboard/persons?country=<id>로 이동 */}
+                      {/* 인물 탭은 헤더 "인물"로 통합 — 국가별 보기는 /history/dashboard/persons?countries=<id>로 이동 */}
                     </motion.div>
                   </AnimatePresence>
                 </motion.div>

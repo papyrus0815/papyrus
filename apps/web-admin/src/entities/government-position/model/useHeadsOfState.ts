@@ -19,8 +19,12 @@ import { getPrimaryHeadOfState } from '../../../pages/events/utils/events.utils'
 
 export const useHeadsOfState = (
   events: HistoricalEvent[],
-  personsWithGovPositions: typeof MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS,
-  selectedPositionType: string,
+  /**
+   * 인물 + 직책 임기 데이터. 카탈로그 페이지는 현재 React Query 무한 스크롤 전환 후
+   * 이 데이터를 동시 fetch하지 않아 기본값 `[]`로 호출됨 → 모든 분기는 빈 Map을 반환.
+   */
+  personsWithGovPositions: typeof MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS = [],
+  selectedPositionType: string = '',
   /** false이면 교황 등 전역 수반 제외 */
   showGlobalHeadsOfState: boolean = true,
 ) => {

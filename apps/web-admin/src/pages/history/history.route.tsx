@@ -24,9 +24,6 @@ const lazyCountryDetail: Lazy = async () => {
 const lazyDashboardPersons: Lazy = async () => ({
   Component: (await import('./dashboard/dashboard-persons.page')).default,
 })
-const lazyDashboardAdministration: Lazy = async () => ({
-  Component: (await import('./dashboard/dashboard-administration.page')).default,
-})
 const lazyDashboardSimple: Lazy = async () => ({
   Component: (await import('./dashboard/dashboard-simple.page')).default,
 })
@@ -74,10 +71,6 @@ export const historyPageRoute: RouteObject = {
         {
           path: `${ROUTES.HISTORY.DASHBOARD}/persons/:personId`,
           lazy: lazyDashboardPersons,
-        },
-        {
-          path: `${ROUTES.HISTORY.DASHBOARD}/${ROUTES.HISTORY.DASHBOARD_ADMINISTRATION}`,
-          lazy: lazyDashboardAdministration,
         },
         ...dashboardSimpleRoutes,
 
