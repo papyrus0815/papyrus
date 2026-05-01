@@ -301,7 +301,6 @@ function CountryDetailInner({
                         <MapRegionSection
                           country={country}
                           mapLocation={mapLocation}
-                          mockCities={mockCities}
                           onCityClick={handleCityClick}
                         />
                       )}
