@@ -358,6 +358,13 @@ export class PersonService {
    * @param accountId 로그인 계정 ID — 계정별 행정부·각료 구분용
    */
   async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto, accountId?: string): Promise<any> {
+    // 가드: 수반 임기는 동시에 다른 행정부의 각료(cabinetId)일 수 없음
+    if (
+      dto.cabinetId &&
+      (dto.positionType === 'HEAD_OF_STATE' || dto.positionType === 'HEAD_OF_GOVERNMENT')
+    ) {
+      throw new BadRequestException('수반 임기는 다른 행정부의 각료(cabinetId)로 동시에 설정할 수 없습니다.')
+    }
     const tenure = await this.personRepository.addGovernmentPositionTenure(dto, accountId)
     const person = tenure?.person
     const label = person ? `${personDisplayName(person)} - ${tenure?.title ?? '재임'}` : (tenure?.title ?? '재임 기록')
@@ -378,6 +385,22 @@ export class PersonService {
    * 국가원수/왕위 재임 기록 수정
    */
   async updateGovernmentPositionTenure(id: string, dto: Partial<CreateGovernmentPositionTenureDto>): Promise<any> {
+    // 가드: 행정부의 수반인 임기를 head 계열이 아닌 타입으로 바꾸려 하면 차단 (Cabinet 무결성 보호)
+    if (dto.positionType && dto.positionType !== 'HEAD_OF_STATE' && dto.positionType !== 'HEAD_OF_GOVERNMENT') {
+      const cabinet = await this.personRepository.findCabinetByHeadTenureId(id)
+      if (cabinet) {
+        throw new BadRequestException(
+          '이 임기는 행정부의 수반으로 사용 중입니다. 행정부를 먼저 삭제한 뒤 직위 유형을 변경하세요.',
+        )
+      }
+    }
+    // 가드: 수반 임기는 동시에 다른 행정부의 각료(cabinetId)일 수 없음
+    if (
+      dto.cabinetId &&
+      (dto.positionType === 'HEAD_OF_STATE' || dto.positionType === 'HEAD_OF_GOVERNMENT')
+    ) {
+      throw new BadRequestException('수반 임기는 다른 행정부의 각료(cabinetId)로 동시에 설정할 수 없습니다.')
+    }
     const tenure = await this.personRepository.updateGovernmentPositionTenure(id, dto)
     const person = tenure?.person
     const label = person ? `${personDisplayName(person)} - ${tenure?.title ?? '재임'}` : (tenure?.title ?? '재임 기록')
@@ -591,6 +614,11 @@ export class PersonService {
     const head = await this.personRepository.findTenureById(dto.headTenureId)
     if (!head) {
       throw new NotFoundException('수반 재임을 찾을 수 없습니다.')
+    }
+    // 가드: head는 국가원수(HEAD_OF_STATE) 또는 정부수반(HEAD_OF_GOVERNMENT)이어야 함
+    const headType = (head as any).positionType
+    if (headType !== 'HEAD_OF_STATE' && headType !== 'HEAD_OF_GOVERNMENT') {
+      throw new BadRequestException('행정부의 수반은 국가원수 또는 정부수반 임기여야 합니다.')
     }
     return this.personRepository.createCabinet(dto, accountId)
   }

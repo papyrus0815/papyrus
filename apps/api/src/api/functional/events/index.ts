@@ -21,10 +21,23 @@ export * as permanent from "./permanent/index";
 export * as cabinets from "./cabinets/index";
 
 /**
- * 모든 사건 조회 (페이징 지원)
+ * 모든 사건 조회 (페이징 + 다축 필터).
+ *
+ * 클라이언트 lens 칩(country/hcountry/category/decade/century/quality)을
+ * 1:1로 매핑하기 위한 query 파라미터들. 모두 AND 결합. 누락 검사 플래그는
+ * "true"/"1"만 의미 있음.
  *
  * @param offset 시작 위치 (기본값: 0)
  * @param limit 가져올 개수 (기본값: 20, 최대: 100)
+ * @param countryId (legacy) 단일 국가 — 현대/역사적 양쪽 매칭
+ * @param countryIds 쉼표 구분 현대 국가 id 목록 — 다중 OR
+ * @param historicalCountryIds 쉼표 구분 역사 국가 id 목록 — 다중 OR
+ * @param categoryId EventCategory.id 정확 매칭
+ * @param decade 십년대 시작 연도 (예: "1860") — startDate ∈ [year, year+10)
+ * @param century 세기 (예: "19") — startDate ∈ 해당 세기
+ * @param hasNoDescription "true" 시 description이 null/빈 사건만
+ * @param hasNoCountries "true" 시 countryRelations 비어있는 사건만
+ * @param hasNoKeywords "true" 시 keywords 비어있는 사건만
  * @returns 사건 목록
  * @tag events
  *
@@ -39,11 +52,32 @@ export async function getAllEvents(
   limit?: string,
   createdSinceDays?: string,
   countryId?: string,
+  countryIds?: string,
+  historicalCountryIds?: string,
+  categoryId?: string,
+  decade?: string,
+  century?: string,
+  hasNoDescription?: string,
+  hasNoCountries?: string,
+  hasNoKeywords?: string,
 ): Promise<getAllEvents.Output> {
   return PlainFetcher.fetch(connection, {
     ...getAllEvents.METADATA,
     template: getAllEvents.METADATA.path,
-    path: getAllEvents.path(offset, limit, createdSinceDays, countryId),
+    path: getAllEvents.path(
+      offset,
+      limit,
+      createdSinceDays,
+      countryId,
+      countryIds,
+      historicalCountryIds,
+      categoryId,
+      decade,
+      century,
+      hasNoDescription,
+      hasNoCountries,
+      hasNoKeywords,
+    ),
   });
 }
 export namespace getAllEvents {
@@ -65,6 +99,14 @@ export namespace getAllEvents {
     limit?: string,
     createdSinceDays?: string,
     countryId?: string,
+    countryIds?: string,
+    historicalCountryIds?: string,
+    categoryId?: string,
+    decade?: string,
+    century?: string,
+    hasNoDescription?: string,
+    hasNoCountries?: string,
+    hasNoKeywords?: string,
   ) => {
     const variables: URLSearchParams = new URLSearchParams();
     for (const [key, value] of Object.entries({
@@ -72,6 +114,14 @@ export namespace getAllEvents {
       limit: limit,
       createdSinceDays: createdSinceDays,
       countryId: countryId,
+      countryIds: countryIds,
+      historicalCountryIds: historicalCountryIds,
+      categoryId: categoryId,
+      decade: decade,
+      century: century,
+      hasNoDescription: hasNoDescription,
+      hasNoCountries: hasNoCountries,
+      hasNoKeywords: hasNoKeywords,
     } as any))
       if (undefined === value) continue;
       else if (Array.isArray(value))

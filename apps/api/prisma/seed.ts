@@ -33,10 +33,17 @@ import {
   seedRussiaUnofficialCommittee,
   seedSardiniaItalyMonarchs,
   seedSavoyDynasty,
+  seedJapanMeijiEra,
+  seedJapanPostwar,
+  seedJapanPostwar2,
   seedGermanyEmpireParties,
   seedGermanyReichstagElections,
   seedAustroPrussianWar,
   seedFrancoPrussianWar,
+  seedFirstOpiumWar,
+  seedFirstOpiumWarFigures,
+  seedQianlongEmperor,
+  seedBackfillPersonCountryId,
 } from './seeds'
 
 const options = {
@@ -148,6 +155,9 @@ async function main() {
         // 11-1. 비공식위원회(1801–1803) 4인 + 가문 + 인간관계 시딩
         await seedRussiaUnofficialCommittee(prisma)
 
+        // 11-2. 일본 메이지·다이쇼·쇼와 천황 + 1~10대 내각총리대신 시딩
+        await seedJapanMeijiEra(prisma)
+
         // 12. 독일 제국 정당 시딩
         await seedGermanyEmpireParties(prisma)
 
@@ -162,6 +172,30 @@ async function main() {
 
         // 13-2. 보불전쟁(1870–1871) 시딩 — eventCategory + 역사국가들 + 현대국가(프랑스) 의존
         await seedFrancoPrussianWar(prisma)
+
+        // 13-3. 1차 아편전쟁(1839–1842) 시딩 — eventCategory + 영국 HC + 청나라 HC(인라인 생성)
+        await seedFirstOpiumWar(prisma)
+
+        // 13-4. 1차 아편전쟁 핵심 인물 시딩 — 청 황실(애신각라) + 7인 + PersonEvent 연결
+        await seedFirstOpiumWarFigures(prisma)
+
+        // 13-4-1. 건륭제(청 6대 황제) 시딩 — 애신각라 가문·청나라 HC 의존
+        await seedQianlongEmperor(prisma)
+
+        // 13-6. 일본 전후(1945~1948) 시딩 — 일본 제국·황실 + eventCategory + 현대 일본·미국·영국·중국·소련 hc 의존
+        //  · 일본국 historicalCountry + 일본 제국 → 일본국 transition
+        //  · 정당(진보·자유·사회) + 43~46대 총리 + 4개 내각 + 정당 멤버십 + CabinetPoliticalParty
+        //  · 포츠담선언/항복문서/GHQ점령/일본국헌법 공포·시행 사건
+        await seedJapanPostwar(prisma)
+
+        // 13-7. 일본 전후 2단계(1948~1955) — 47~51대 + 자유민주당 결성(55년 체제)
+        //  · 정당 7건(민주당·국협·민자·자유·개진·일민·자민) + 정당 transition 8건
+        //  · 47대 아시다(신규) + 48~51대 요시다 추가 임기·내각·당적
+        //  · 쇼와전공/샌프란시스코강화/주권회복/자위대 발족/55년 체제 사건
+        await seedJapanPostwar2(prisma)
+
+        // 13-5. Person.countryId 백필 — 인물 시드 모두 끝난 뒤 affiliation 체인으로 NULL 채움
+        await seedBackfillPersonCountryId(prisma)
 
         // 11. 행정 부처 카테고리 시딩 (국방·외교 등)
         await seedAdministrationDepartmentCategories(prisma)

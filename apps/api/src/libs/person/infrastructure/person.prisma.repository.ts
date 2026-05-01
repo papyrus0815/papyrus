@@ -2316,36 +2316,40 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
       return obj
     }
-    const existing = await this.prisma.cabinet.findUnique({
-      where: { headTenureId: dto.headTenureId },
-      include: {
-        headTenure: {
-          include: {
-            person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
-            positionDefinition: true,
-            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
-            regnalEras: REGNAL_ERAS_ORDER,
-          },
+    const cabinetInclude = {
+      headTenure: {
+        include: {
+          person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+          positionDefinition: true,
+          achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+          regnalEras: REGNAL_ERAS_ORDER,
         },
       },
+    } as const
+    const existing = await this.prisma.cabinet.findUnique({
+      where: { headTenureId: dto.headTenureId },
+      include: cabinetInclude,
     })
-    if (existing) return serializeBigInt(existing)
+    if (existing) {
+      // 자동 생성된 Cabinet에 사용자가 입력한 이름이 동기화되도록 반영
+      const wantsName = dto.name != null && dto.name !== ''
+      if (wantsName && existing.name !== dto.name) {
+        const updated = await this.prisma.cabinet.update({
+          where: { id: existing.id },
+          data: { name: dto.name },
+          include: cabinetInclude,
+        })
+        return serializeBigInt(updated)
+      }
+      return serializeBigInt(existing)
+    }
     const cabinet = await this.prisma.cabinet.create({
       data: {
         headTenureId: dto.headTenureId,
         name: dto.name ?? null,
         ...(accountId != null && { accountId }),
       },
-      include: {
-        headTenure: {
-          include: {
-            person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
-            positionDefinition: true,
-            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
-            regnalEras: REGNAL_ERAS_ORDER,
-          },
-        },
-      },
+      include: cabinetInclude,
     })
     return serializeBigInt(cabinet)
   }
