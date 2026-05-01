@@ -8,7 +8,8 @@ import {
   UnderlineTabNav,
 } from '@/shared/ui/underline-tabs'
 
-import { mockAdministrativeRegions } from '../mock'
+import { useAdministrativeDivisions } from '@/entities/country/api.administrative-divisions'
+
 import { MapRegionAdministrativeView } from './map-region-administrative-view'
 import { MapRegionInfrastructureView } from './map-region-infrastructure-view'
 import { MapRegionNatureView } from './map-region-nature-view'
@@ -17,6 +18,7 @@ type ViewMode = 'administrative' | 'nature' | 'infrastructure'
 
 interface MapRegionSectionProps {
   country: {
+    id: string
     latitude?: number | null
     longitude?: number | null
     name: string
@@ -46,6 +48,7 @@ export function MapRegionSection({
   const C = getMapRegionSectionPalette(mode === 'dark')
 
   const [viewMode, setViewMode] = useState<ViewMode>('administrative')
+  const { data: divisions = [] } = useAdministrativeDivisions(country.id)
 
   return (
     <div
@@ -168,7 +171,7 @@ export function MapRegionSection({
                     letterSpacing: '-0.03em',
                   }}
                 >
-                  {mockAdministrativeRegions.level1.length}
+                  {divisions.length}
                   <span
                     style={{
                       fontSize: 14,
