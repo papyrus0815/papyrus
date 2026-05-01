@@ -75,6 +75,16 @@ const TYPE_LABEL: Record<InfrastructureType, string> = {
   port: '항구',
 }
 
+const TYPE_BADGE: Record<
+  InfrastructureType,
+  { label: string; color: string; bg: string }
+> = {
+  highway: { label: '고속도로', color: '#7c2d12', bg: '#fed7aa' },
+  railway: { label: '철도', color: '#5b21b6', bg: '#ede9fe' },
+  airport: { label: '공항', color: '#0c4a6e', bg: '#e0f2fe' },
+  port: { label: '항구', color: '#134e4a', bg: '#ccfbf1' },
+}
+
 function buildSubtitle(item: Infrastructure): string {
   const parts: string[] = []
   if (item.code) parts.push(item.code)
@@ -284,6 +294,7 @@ export function MapRegionInfrastructureView({
         onSelect={() => url.setSelectedId(item.id)}
         title={item.name}
         subtitle={buildSubtitle(item) || TYPE_LABEL[item.type]}
+        typeBadge={url.filter === 'all' ? TYPE_BADGE[item.type] : null}
         onEdit={() => openEdit(item)}
         onDelete={() => setPendingDelete(item)}
       />

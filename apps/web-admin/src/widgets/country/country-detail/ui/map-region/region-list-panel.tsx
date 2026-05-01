@@ -198,6 +198,8 @@ interface RegionListItemProps {
   onEdit?: () => void
   /** 호버 시 노출되는 삭제 버튼 콜백 */
   onDelete?: () => void
+  /** 제목 앞에 표시되는 타입 배지 — 전체 보기에서 산/강 등 시각 구분 */
+  typeBadge?: { label: string; color: string; bg: string } | null
 }
 
 /**
@@ -213,6 +215,7 @@ export function RegionListItem({
   trailing,
   onEdit,
   onDelete,
+  typeBadge,
 }: RegionListItemProps) {
   const hasActions = !!(onEdit || onDelete)
   return (
@@ -246,16 +249,44 @@ export function RegionListItem({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontSize: 14,
-            fontWeight: 600,
-            color: palette.text,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
             marginBottom: subtitle ? 4 : 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            minWidth: 0,
           }}
         >
-          {title}
+          {typeBadge && (
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: typeBadge.color,
+                background: typeBadge.bg,
+                padding: '2px 7px',
+                borderRadius: 5,
+                letterSpacing: '0.02em',
+                flexShrink: 0,
+                lineHeight: 1.4,
+              }}
+            >
+              {typeBadge.label}
+            </span>
+          )}
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: palette.text,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            {title}
+          </div>
         </div>
         {subtitle && (
           <div

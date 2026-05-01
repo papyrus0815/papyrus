@@ -3,9 +3,14 @@
  *
  * 데이터 소스: GET /cities/administrative-divisions?countryId=...
  * 백엔드 응답 = AdministrativeDivision 트리 (최상위 + nested children).
- * 비어 있으면 "등록된 행정구역 없음" 빈 상태 노출.
+ *
+ * UX:
+ *  - 검색 / 정렬 / 키보드 네비 / URL 동기화 — 자연·인프라와 일관
+ *  - level1/level2 드릴다운: admin_level1 쿼리에 부모 ID 기록
  */
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
+
+import { useSearchParams } from 'react-router-dom'
 
 import {
   type AdministrativeDivision,
@@ -14,6 +19,7 @@ import {
 
 import {
   ListEmptyState,
+  ListToolbarRow,
   MapCard,
   MetaCard,
   RegionDetailHeader,
@@ -21,10 +27,19 @@ import {
   RegionListItem,
   RegionListPanel,
   RegionSplitLayout,
+  SearchInput,
+  SortSelect,
+  useListKeyboard,
   useRegionPalette,
 } from './map-region'
 
-type NavLevel = 'level1' | 'level2'
+type AdminSort = 'name' | 'children'
+
+const SORT_OPTIONS = [
+  { value: 'name' as const, label: '이름순' },
+  { value: 'children' as const, label: '하위 구역 많은 순' },
+]
+const SORT_VALUES = ['name', 'children'] as const
 
 interface MapRegionAdministrativeViewProps {
   country: {
@@ -56,11 +71,58 @@ export function MapRegionAdministrativeView({
     country.id,
   )
 
-  const [level, setLevel] = useState<NavLevel>('level1')
-  const [selectedLevel1Id, setSelectedLevel1Id] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
+  // URL 동기화 — admin_q, admin_sort, admin_level1, admin_id
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('admin_q') ?? ''
+  const sort = ((): AdminSort => {
+    const raw = searchParams.get('admin_sort')
+    return raw && (SORT_VALUES as readonly string[]).includes(raw)
+      ? (raw as AdminSort)
+      : 'name'
+  })()
+  const selectedLevel1Id = searchParams.get('admin_level1')
+  const selectedId = searchParams.get('admin_id')
 
+  const updateParam = useCallback(
+    (key: string, value: string | null, defaultValue?: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (
+            value == null ||
+            value === '' ||
+            (defaultValue != null && value === defaultValue)
+          ) {
+            next.delete(key)
+          } else {
+            next.set(key, value)
+          }
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+
+  const setSearch = useCallback(
+    (v: string) => updateParam('admin_q', v),
+    [updateParam],
+  )
+  const setSort = useCallback(
+    (v: AdminSort) => updateParam('admin_sort', v, 'name'),
+    [updateParam],
+  )
+  const setSelectedLevel1Id = useCallback(
+    (v: string | null) => updateParam('admin_level1', v),
+    [updateParam],
+  )
+  const setSelectedId = useCallback(
+    (v: string | null) => updateParam('admin_id', v),
+    [updateParam],
+  )
+
+  // 데이터 가공
   const level1List: AdministrativeDivision[] = divisions
   const level2List: AdministrativeDivision[] = useMemo(() => {
     if (!selectedLevel1Id) return []
@@ -68,14 +130,41 @@ export function MapRegionAdministrativeView({
     return parent?.children ?? []
   }, [level1List, selectedLevel1Id])
 
+  const level: 'level1' | 'level2' = selectedLevel1Id ? 'level2' : 'level1'
   const currentItems = level === 'level1' ? level1List : level2List
-  const filteredItems = useMemo(
-    () =>
-      currentItems.filter((item) =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()),
-      ),
-    [currentItems, searchQuery],
-  )
+
+  const filteredAndSorted = useMemo(() => {
+    let list = currentItems
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      list = list.filter(
+        (item) =>
+          item.name.toLowerCase().includes(q) ||
+          (item.localName ?? '').toLowerCase().includes(q),
+      )
+    }
+    const sorted = [...list]
+    if (sort === 'name') {
+      sorted.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    } else {
+      sorted.sort(
+        (a, b) => (b.children?.length ?? 0) - (a.children?.length ?? 0),
+      )
+    }
+    return sorted
+  }, [currentItems, search, sort])
+
+  // 선택 부모/항목 검증 (URL 직접 접근 대비)
+  useEffect(() => {
+    if (
+      selectedLevel1Id &&
+      !level1List.some((d) => d.id === selectedLevel1Id)
+    ) {
+      // 부모가 사라졌으면 모두 리셋
+      setSelectedLevel1Id(null)
+      setSelectedId(null)
+    }
+  }, [selectedLevel1Id, level1List, setSelectedLevel1Id, setSelectedId])
 
   const reportLocation = (
     division: AdministrativeDivision | null,
@@ -95,7 +184,6 @@ export function MapRegionAdministrativeView({
     if (!region) return
     const hasChildren = (region.children ?? []).length > 0
     if (hasChildren) {
-      setLevel('level2')
       setSelectedLevel1Id(id)
       setSelectedId(id)
     } else {
@@ -110,20 +198,46 @@ export function MapRegionAdministrativeView({
   }
 
   const handleBack = () => {
-    setLevel('level1')
     setSelectedLevel1Id(null)
     setSelectedId(null)
     reportLocation(null)
   }
+
+  // 키보드 네비
+  useListKeyboard({
+    items: filteredAndSorted,
+    selectedId,
+    onSelect: (id) => {
+      if (id === null) {
+        setSelectedId(null)
+        return
+      }
+      // 키보드로 이동 시 자동 드릴다운은 안 하고 선택만
+      if (level === 'level1') {
+        const region = level1List.find((r) => r.id === id)
+        if (!region) return
+        setSelectedId(id)
+        reportLocation(region)
+      } else {
+        const item = level2List.find((d) => d.id === id)
+        if (!item) return
+        setSelectedId(id)
+        reportLocation(item)
+      }
+    },
+  })
 
   const selectedLevel1 = selectedLevel1Id
     ? level1List.find((r) => r.id === selectedLevel1Id) ?? null
     : null
   const selectedDivision: AdministrativeDivision | null = useMemo(() => {
     if (!selectedId) return null
-    if (level === 'level1') return selectedLevel1
+    if (level === 'level1') {
+      return level1List.find((d) => d.id === selectedId) ?? null
+    }
+    if (selectedId === selectedLevel1Id) return selectedLevel1
     return level2List.find((d) => d.id === selectedId) ?? null
-  }, [selectedId, selectedLevel1, level2List, level])
+  }, [selectedId, level, level1List, level2List, selectedLevel1, selectedLevel1Id])
 
   const detailTitle = selectedDivision?.name ?? ''
   const detailSubtitle =
@@ -135,9 +249,23 @@ export function MapRegionAdministrativeView({
 
   const toolbar = (
     <>
+      <ListToolbarRow palette={palette}>
+        <SearchInput
+          palette={palette}
+          value={search}
+          onChange={setSearch}
+          placeholder="이름·현지어로 검색"
+        />
+        <SortSelect
+          palette={palette}
+          value={sort}
+          options={SORT_OPTIONS}
+          onChange={setSort}
+        />
+      </ListToolbarRow>
       <div
         style={{
-          padding: '20px 24px',
+          padding: '12px 16px',
           borderBottom: `1px solid ${palette.border}`,
           display: 'flex',
           alignItems: 'center',
@@ -149,22 +277,23 @@ export function MapRegionAdministrativeView({
           <button
             type="button"
             onClick={handleBack}
-            aria-label="뒤로가기"
+            aria-label="상위 구역으로 돌아가기"
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
+              width: 32,
+              height: 32,
+              borderRadius: 8,
               border: `1px solid ${palette.border}`,
               background: palette.bg,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              flexShrink: 0,
             }}
           >
             <svg
-              width="16"
-              height="16"
+              width="14"
+              height="14"
               viewBox="0 0 24 24"
               fill="none"
               stroke={palette.textSecondary}
@@ -176,10 +305,13 @@ export function MapRegionAdministrativeView({
         )}
         <span
           style={{
-            fontSize: 15,
-            fontWeight: 700,
+            fontSize: 13,
+            fontWeight: 600,
             color: palette.text,
             flex: 1,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}
         >
           {level === 'level1'
@@ -188,40 +320,17 @@ export function MapRegionAdministrativeView({
         </span>
         <span
           style={{
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 600,
             color: palette.primary,
             background: palette.badgeBg,
-            padding: '4px 10px',
-            borderRadius: 8,
+            padding: '3px 8px',
+            borderRadius: 6,
+            flexShrink: 0,
           }}
         >
-          {filteredItems.length}개
+          {filteredAndSorted.length}개
         </span>
-      </div>
-      <div
-        style={{
-          padding: '12px 16px',
-          borderBottom: `1px solid ${palette.border}`,
-        }}
-      >
-        <input
-          type="text"
-          placeholder="검색..."
-          aria-label="행정구역 검색"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '10px 14px',
-            fontSize: 13,
-            border: `1px solid ${palette.border}`,
-            borderRadius: 10,
-            background: palette.bg,
-            color: palette.text,
-            outline: 'none',
-          }}
-        />
       </div>
     </>
   )
@@ -230,16 +339,21 @@ export function MapRegionAdministrativeView({
     if (isLoading) {
       return <ListEmptyState palette={palette} message="불러오는 중..." />
     }
-    if (filteredItems.length === 0) {
-      const message =
-        level1List.length === 0
-          ? '등록된 행정구역이 없습니다'
-          : searchQuery
-            ? '검색 결과가 없습니다'
-            : '하위 구역이 없습니다'
+    if (level1List.length === 0) {
+      return (
+        <ListEmptyState
+          palette={palette}
+          message="등록된 행정구역이 없습니다"
+        />
+      )
+    }
+    if (filteredAndSorted.length === 0) {
+      const message = search.trim()
+        ? `"${search}" 검색 결과가 없습니다`
+        : '하위 구역이 없습니다'
       return <ListEmptyState palette={palette} message={message} />
     }
-    return filteredItems.map((item) => {
+    return filteredAndSorted.map((item) => {
       const subCount = item.children?.length ?? 0
       return (
         <RegionListItem
@@ -300,7 +414,7 @@ export function MapRegionAdministrativeView({
             emptyDescription={
               level1List.length === 0
                 ? '이 국가에는 아직 행정구역 데이터가 등록되지 않았습니다'
-                : ''
+                : '↑↓로 이동, Esc로 선택 해제'
             }
             header={
               selectedDivision ? (

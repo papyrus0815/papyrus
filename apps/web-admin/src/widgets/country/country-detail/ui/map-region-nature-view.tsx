@@ -74,6 +74,16 @@ const TYPE_LABEL: Record<NaturalFeatureType, string> = {
   coast: '해안',
 }
 
+const TYPE_BADGE: Record<
+  NaturalFeatureType,
+  { label: string; color: string; bg: string }
+> = {
+  mountain: { label: '산', color: '#15803d', bg: '#dcfce7' },
+  river: { label: '강', color: '#1d4ed8', bg: '#dbeafe' },
+  lake: { label: '호수', color: '#0e7490', bg: '#cffafe' },
+  coast: { label: '해안', color: '#92400e', bg: '#fef3c7' },
+}
+
 const EMPTY_ICON_BY_TYPE: Record<NaturalFeatureType, string> = {
   mountain: '🏔️',
   river: '🏞️',
@@ -293,6 +303,7 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
         onSelect={() => url.setSelectedId(item.id)}
         title={item.name}
         subtitle={buildSubtitle(item) || TYPE_LABEL[item.type]}
+        typeBadge={url.filter === 'all' ? TYPE_BADGE[item.type] : null}
         onEdit={() => openEdit(item)}
         onDelete={() => setPendingDelete(item)}
       />
