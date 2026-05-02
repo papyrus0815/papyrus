@@ -250,10 +250,27 @@ model AdministrativeDivision {
   /// 상위 행정구역 ID
   parentId String? @map("parent_id") @db.Char(36)
 
+  /// 중심 좌표 — 위도
+  centerLat Decimal? @map("center_lat") @db.Decimal(9, 6)
+
+  /// 중심 좌표 — 경도
+  centerLng Decimal? @map("center_lng") @db.Decimal(9, 6)
+
+  /// 설립일 (구역 신설·승격일)
+  establishedDate DateTime? @map("established_date")
+
+  /// 폐지일 (통합·폐지일)
+  abolishedDate DateTime? @map("abolished_date")
+
+  /// 이전 행정구역 ID (분리·승격 전 모체)
+  predecessorId String? @map("predecessor_id") @db.Char(36)
+
   //--- 관계 필드
   parent              AdministrativeDivision?    @relation("AdminDivHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children            AdministrativeDivision[]   @relation("AdminDivHierarchy")
   adminDivisionConfig CountryAdminDivisionConfig @relation(fields: [adminDivisionId], references: [id], onDelete: Restrict)
+  predecessor         AdministrativeDivision?    @relation("AdminDivSuccession", fields: [predecessorId], references: [id], onDelete: SetNull)
+  successors          AdministrativeDivision[]   @relation("AdminDivSuccession")
 
   homeTown        HomeTown[]
   cities          City[]
@@ -276,6 +293,7 @@ model AdministrativeDivision {
   @@index([countryId], name: "idx_admin_div_countryId")
   @@index([parentId], name: "idx_admin_div_parentId")
   @@index([adminDivisionId], name: "idx_admin_div_typeId")
+  @@index([predecessorId], name: "idx_admin_div_predecessorId")
   @@map("administrative_division")
 }
 

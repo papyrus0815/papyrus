@@ -19,9 +19,98 @@ export type AdministrativeDivision = {
   id: string
   name: string
   localName?: string | null
+  nameMeaning?: string | null
   countryId: string
+  adminDivisionId: string
   parentId?: string | null
+  centerLat?: number | null
+  centerLng?: number | null
+  establishedDate?: string | null
+  abolishedDate?: string | null
+  predecessorId?: string | null
+  cityCount?: number
+  successorCount?: number
   children?: AdministrativeDivision[]
+}
+
+export type AdminDivisionConfig = {
+  id: string
+  countryId: string
+  divisionLevel: number
+  divisionLabel: string
+  description: string | null
+}
+
+export type CreateAdminDivisionConfigInput = {
+  countryId: string
+  divisionLevel: number
+  divisionLabel: string
+  description?: string | null
+}
+
+export type UpdateAdminDivisionConfigInput = {
+  divisionLevel?: number
+  divisionLabel?: string
+  description?: string | null
+}
+
+export type CreateAdministrativeDivisionInput = {
+  countryId: string
+  adminDivisionId: string
+  name: string
+  localName?: string | null
+  nameMeaning?: string | null
+  parentId?: string | null
+  centerLat?: number | null
+  centerLng?: number | null
+  establishedDate?: string | null
+  abolishedDate?: string | null
+  predecessorId?: string | null
+}
+
+export type UpdateAdministrativeDivisionInput = {
+  adminDivisionId?: string
+  name?: string
+  localName?: string | null
+  nameMeaning?: string | null
+  parentId?: string | null
+  centerLat?: number | null
+  centerLng?: number | null
+  establishedDate?: string | null
+  abolishedDate?: string | null
+  predecessorId?: string | null
+}
+
+export type AdministrativeDivisionSearchHit = {
+  id: string
+  name: string
+  localName: string | null
+  countryId: string
+  divisionLevel: number
+  divisionLabel: string
+  parentPath: string[]
+  abolished: boolean
+}
+
+export type BulkCreateAdministrativeDivisionsInput = {
+  countryId: string
+  divisionLabel?: string
+  adminDivisionId?: string
+  divisionLevel: number
+  parentId?: string | null
+  items: Array<{
+    name: string
+    localName?: string | null
+    nameMeaning?: string | null
+    centerLat?: number | null
+    centerLng?: number | null
+  }>
+}
+
+export type BulkCreateResult = {
+  created: number
+  createdItems: Array<{ id: string; name: string }>
+  skipped: Array<{ name: string; reason: string }>
 }
 
 export type PlaceSearchResult = {
@@ -70,6 +159,15 @@ async function fetchCities(params?: {
 const getBaseUrl = () => apiConnection.host || 'http://localhost:8000'
 const getHeaders = () => apiConnection.headers as Record<string, string> | undefined
 
+async function safeReadError(res: Response): Promise<string> {
+  try {
+    const data = await res.json()
+    return (data as { message?: string }).message ?? `요청 실패 (${res.status})`
+  } catch {
+    return `요청 실패 (${res.status})`
+  }
+}
+
 export const cityApi = {
   getAll: async () => fetchCities(),
 
@@ -112,6 +210,136 @@ export const cityApi = {
     } catch {
       return []
     }
+  },
+
+  /** 행정구역 단위(레벨) 조회 */
+  getAdminDivisionConfigs: async (
+    countryId: string,
+  ): Promise<AdminDivisionConfig[]> => {
+    try {
+      const params = new URLSearchParams({ countryId })
+      const res = await fetch(
+        `${getBaseUrl()}/cities/admin-division-configs?${params}`,
+        { headers: getHeaders() },
+      )
+      if (!res.ok) return []
+      return await res.json()
+    } catch {
+      return []
+    }
+  },
+
+  createAdminDivisionConfig: async (
+    input: CreateAdminDivisionConfigInput,
+  ): Promise<AdminDivisionConfig> => {
+    const res = await fetch(`${getBaseUrl()}/cities/admin-division-configs`, {
+      method: 'POST',
+      headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    if (!res.ok) throw new Error(await safeReadError(res))
+    return await res.json()
+  },
+
+  updateAdminDivisionConfig: async (
+    id: string,
+    input: UpdateAdminDivisionConfigInput,
+  ): Promise<AdminDivisionConfig> => {
+    const res = await fetch(
+      `${getBaseUrl()}/cities/admin-division-configs/${id}`,
+      {
+        method: 'PATCH',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      },
+    )
+    if (!res.ok) throw new Error(await safeReadError(res))
+    return await res.json()
+  },
+
+  deleteAdminDivisionConfig: async (id: string): Promise<void> => {
+    const res = await fetch(
+      `${getBaseUrl()}/cities/admin-division-configs/${id}`,
+      { method: 'DELETE', headers: getHeaders() },
+    )
+    if (!res.ok && res.status !== 204) throw new Error(await safeReadError(res))
+  },
+
+  createAdministrativeDivision: async (
+    input: CreateAdministrativeDivisionInput,
+  ): Promise<AdministrativeDivision> => {
+    const res = await fetch(
+      `${getBaseUrl()}/cities/administrative-divisions`,
+      {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      },
+    )
+    if (!res.ok) throw new Error(await safeReadError(res))
+    return await res.json()
+  },
+
+  updateAdministrativeDivision: async (
+    id: string,
+    input: UpdateAdministrativeDivisionInput,
+  ): Promise<AdministrativeDivision> => {
+    const res = await fetch(
+      `${getBaseUrl()}/cities/administrative-divisions/${id}`,
+      {
+        method: 'PATCH',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      },
+    )
+    if (!res.ok) throw new Error(await safeReadError(res))
+    return await res.json()
+  },
+
+  deleteAdministrativeDivision: async (id: string): Promise<void> => {
+    const res = await fetch(
+      `${getBaseUrl()}/cities/administrative-divisions/${id}`,
+      { method: 'DELETE', headers: getHeaders() },
+    )
+    if (!res.ok && res.status !== 204) throw new Error(await safeReadError(res))
+  },
+
+  searchAdministrativeDivisions: async (
+    q: string,
+    countryId: string,
+    limit = 20,
+  ): Promise<AdministrativeDivisionSearchHit[]> => {
+    if (!q || q.trim().length < 1) return []
+    try {
+      const params = new URLSearchParams({
+        q: q.trim(),
+        countryId,
+        limit: String(limit),
+      })
+      const res = await fetch(
+        `${getBaseUrl()}/cities/administrative-divisions/search?${params}`,
+        { headers: getHeaders() },
+      )
+      if (!res.ok) return []
+      return await res.json()
+    } catch {
+      return []
+    }
+  },
+
+  bulkCreateAdministrativeDivisions: async (
+    input: BulkCreateAdministrativeDivisionsInput,
+  ): Promise<BulkCreateResult> => {
+    const res = await fetch(
+      `${getBaseUrl()}/cities/administrative-divisions/bulk`,
+      {
+        method: 'POST',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      },
+    )
+    if (!res.ok) throw new Error(await safeReadError(res))
+    return await res.json()
   },
 
   /** OpenStreetMap Nominatim 장소 검색 (백엔드 프록시) */

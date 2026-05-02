@@ -1,4 +1,4 @@
-import { GoogleMap } from '@/shared/ui/google-map/google-map'
+import { GoogleMap, type MapMarker } from '@/shared/ui/google-map/google-map'
 
 import * as Styled from '../map-region-section.styles'
 import { type RegionPalette } from './use-region-palette'
@@ -9,6 +9,10 @@ interface MapCardProps {
   mapLocation?: { latitude: number; longitude: number; name: string } | null
   /** 좌표가 있을 때 GoogleMap의 zoom — mapLocation이 있으면 가까이, 없으면 국가 단위 */
   zoom?: { withLocation: number; withoutLocation: number }
+  /** 다중 핀 모드 — markers가 비어있지 않으면 mapLocation은 무시 */
+  markers?: MapMarker[]
+  selectedMarkerId?: string | null
+  onMarkerClick?: (id: string) => void
 }
 
 const DEFAULT_ZOOM = { withLocation: 12, withoutLocation: 6 }
@@ -22,13 +26,19 @@ export function MapCard({
   country,
   mapLocation,
   zoom = DEFAULT_ZOOM,
+  markers,
+  selectedMarkerId = null,
+  onMarkerClick,
 }: MapCardProps) {
+  const useMarkers = markers && markers.length > 0
   const location = mapLocation ?? {
     latitude: country.latitude ?? 0,
     longitude: country.longitude ?? 0,
     name: country.name,
   }
-  const hasCoords = country.latitude != null && country.longitude != null
+  const hasCoords = useMarkers
+    ? true
+    : country.latitude != null && country.longitude != null
 
   return (
     <section aria-label="지도">
@@ -45,12 +55,21 @@ export function MapCard({
       >
         {hasCoords ? (
           <div style={{ height: '100%', minHeight: 320 }}>
-            <GoogleMap
-              latitude={location.latitude}
-              longitude={location.longitude}
-              name={location.name}
-              zoom={mapLocation ? zoom.withLocation : zoom.withoutLocation}
-            />
+            {useMarkers ? (
+              <GoogleMap
+                markers={markers}
+                selectedId={selectedMarkerId}
+                onMarkerClick={onMarkerClick}
+                zoom={zoom.withLocation}
+              />
+            ) : (
+              <GoogleMap
+                latitude={location.latitude}
+                longitude={location.longitude}
+                name={location.name}
+                zoom={mapLocation ? zoom.withLocation : zoom.withoutLocation}
+              />
+            )}
           </div>
         ) : (
           <div

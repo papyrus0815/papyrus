@@ -7,6 +7,8 @@ import {
   seedAdmin,
   seedAdministrationDepartmentCategories,
   seedContinents,
+  seedCurrencies,
+  seedLanguages,
   seedCountries,
   seedEventCategories,
   seedGovernmentPositionDefinitions,
@@ -36,6 +38,9 @@ import {
   seedJapanMeijiEra,
   seedJapanPostwar,
   seedJapanPostwar2,
+  seedJapan1872GinzaFire,
+  seedJapan1945ManilaConference,
+  seedTrumanScapAppointment,
   seedGermanyEmpireParties,
   seedGermanyReichstagElections,
   seedAustroPrussianWar,
@@ -48,10 +53,6 @@ import {
   seedJapanGeography,
   seedUsaGeography,
   seedChinaGeography,
-  seedKoreaAdminDivisions,
-  seedJapanAdminDivisions,
-  seedUsaAdminDivisions,
-  seedChinaAdminDivisions,
 } from './seeds'
 
 const options = {
@@ -87,6 +88,10 @@ async function main() {
       case 'development':
         // 1. 대륙 시딩
         const continentMap = await seedContinents(prisma)
+
+        // 1-1. 화폐 / 언어 마스터 시딩 (국가가 currencyId·languageId 참조)
+        await seedCurrencies(prisma)
+        await seedLanguages(prisma)
 
         // 2. 국가 시딩
         await seedCountries(prisma, continentMap)
@@ -202,6 +207,19 @@ async function main() {
         //  · 쇼와전공/샌프란시스코강화/주권회복/자위대 발족/55년 체제 사건
         await seedJapanPostwar2(prisma)
 
+        // 13-8. 1872년 긴자 대화재 + 銀座煉瓦街 재건 — 일본 제국 hc + 오쿠마 인물 의존
+        await seedJapan1872GinzaFire(prisma)
+
+        // 13-9. 1945년 마닐라 사전 회담 — 일본 제국 hc + 회담/조약 카테고리
+        //  · 가와베 도라시로(신규)·맥아더(신규) 인물 인라인 등록
+        //  · Event + 7섹션(논문급) + EventCountryRelation + PersonEvent
+        await seedJapan1945ManilaConference(prisma)
+
+        // 13-10. 1945-08-14 트루먼의 맥아더 SCAP 임명 — 외교 카테고리 + 일본 제국 hc
+        //  · 트루먼·마셜·번스(신규) 인물 등록 / 맥아더·스탈린·시데하라(기존) 활용
+        //  · Event + 8섹션(논문급) + EventCountryRelation 6 + PersonEvent 6
+        await seedTrumanScapAppointment(prisma)
+
         // 13-5. Person.countryId 백필 — 인물 시드 모두 끝난 뒤 affiliation 체인으로 NULL 채움
         await seedBackfillPersonCountryId(prisma)
 
@@ -210,12 +228,6 @@ async function main() {
         await seedJapanGeography(prisma)
         await seedUsaGeography(prisma)
         await seedChinaGeography(prisma)
-
-        // 14-1. 행정구역 — 한국·일본·미국·중국 (CountryAdminDivisionConfig + AdministrativeDivision)
-        await seedKoreaAdminDivisions(prisma)
-        await seedJapanAdminDivisions(prisma)
-        await seedUsaAdminDivisions(prisma)
-        await seedChinaAdminDivisions(prisma)
 
         // 11. 행정 부처 카테고리 시딩 (국방·외교 등)
         await seedAdministrationDepartmentCategories(prisma)
@@ -231,6 +243,8 @@ async function main() {
         // 프로덕션 환경에서는 필수 데이터만 시딩
         console.log('⚠️  프로덕션 환경에서는 최소한의 데이터만 시딩합니다.')
         await seedContinents(prisma)
+        await seedCurrencies(prisma)
+        await seedLanguages(prisma)
         await seedEventCategories(prisma)
         await seedAdministrationDepartmentCategories(prisma)
         await seedAdmin(prisma)
