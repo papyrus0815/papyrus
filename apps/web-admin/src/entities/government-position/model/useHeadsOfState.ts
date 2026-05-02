@@ -4,10 +4,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 
-import {
-  FILTER_ALL,
-  GLOBAL_POSITION_DEFINITION_IDS,
-} from '@/features/event-list/lib'
+import { FILTER_ALL } from '@/features/event-list/lib'
 import {
   HeadOfStateDuringEvent,
   findHeadsOfStateDuringPeriod,
@@ -25,8 +22,6 @@ export const useHeadsOfState = (
    */
   personsWithGovPositions: typeof MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS = [],
   selectedPositionType: string = '',
-  /** false이면 교황 등 전역 수반 제외 */
-  showGlobalHeadsOfState: boolean = true,
 ) => {
   const [eventHeadsOfState, setEventHeadsOfState] = useState<
     Map<string, HeadOfStateDuringEvent[]>
@@ -57,7 +52,6 @@ export const useHeadsOfState = (
         e,
         personsWithGovPositions,
         positionFilter,
-        showGlobalHeadsOfState ? undefined : GLOBAL_POSITION_DEFINITION_IDS,
       )
       if (headsOfState.length > 0) {
         headsOfStateMap.set(event.id, headsOfState)
@@ -73,14 +67,13 @@ export const useHeadsOfState = (
         periodEndExtended,
         personsWithGovPositions,
         positionFilter,
-        showGlobalHeadsOfState ? undefined : GLOBAL_POSITION_DEFINITION_IDS,
       )
       if (periodHeads.length > 0) {
         headsOfStateMap.set('__periodHeads__', periodHeads)
       }
     }
     setEventHeadsOfState(headsOfStateMap)
-  }, [events, personsWithGovPositions, selectedPositionType, showGlobalHeadsOfState])
+  }, [events, personsWithGovPositions, selectedPositionType])
 
   const toggleTenureGroupExpansion = (tenureKey: string) => {
     setExpandedTenureGroups((prev) => {

@@ -102,7 +102,11 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
       </S.SectionHeader>
 
       {images.length === 0 && !adding && (
-        <S.HelperText>아직 이미지가 없습니다.</S.HelperText>
+        <S.EmptyState>
+          <S.EmptyStateLine>
+            아직 이미지가 없습니다. 아래 "+ 이미지 추가" 버튼으로 추가하세요.
+          </S.EmptyStateLine>
+        </S.EmptyState>
       )}
 
       {images.length > 0 && (

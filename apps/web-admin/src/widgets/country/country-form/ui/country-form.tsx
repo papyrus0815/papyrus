@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 
 import { useForm } from 'react-hook-form'
+import { toast } from 'react-hot-toast'
 import { FiBarChart2, FiInfo, FiPlusCircle } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -10,6 +11,8 @@ import {
   type CountryFormData,
 } from '@/entities/country/api'
 import { countrySchema } from '@/entities/country/model/schema'
+import { useCurrencies } from '@/features/currency/use-currencies.hook'
+import { useLanguages } from '@/features/language/use-languages.hook'
 import { uploadImage } from '@/shared/api/upload'
 import { FormInput } from '@/shared/ui/form-input/form-input'
 import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
@@ -253,7 +256,9 @@ const CountryFormModalLayout = styled.div`
  * 국가 폼 Props 인터페이스
  */
 interface CountryFormProps {
-  /** 수정할 국가 정보 (null이면 신규 등록) */
+  /** 폼 모드 */
+  mode: 'create' | 'edit'
+  /** 수정 모드일 때만 의미 있음. create일 땐 null. */
   editing: Country | null
   /** 대륙 옵션 목록 */
   continents: ContinentOption[]
@@ -272,6 +277,7 @@ interface CountryFormProps {
  * - 파일 업로드 (국기, 썸네일)
  */
 export function CountryForm({
+  mode,
   editing,
   continents,
   onClose,
@@ -283,21 +289,23 @@ export function CountryForm({
   /** 썸네일 이미지 미리보기 URL */
   const [thumbnailPreview, setThumbnailPreview] = useState<string>('')
 
-  /** 업로드할 국기 이미지 파일 */
-  const [flagImageFile, setFlagImageFile] = useState<File | null>(null)
-
-  /** 업로드할 썸네일 파일 */
-  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
-
   /** 국기/썸네일 업로드 중 */
   const [imageUploading, setImageUploading] = useState(false)
   const [imageUploadError, setImageUploadError] = useState<string | null>(null)
 
   /** 대륙 선택 모달 표시 여부 */
   const [showContinentModal, setShowContinentModal] = useState(false)
+  /** 화폐 선택 모달 */
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false)
+  /** 언어 선택 모달 */
+  const [showLanguageModal, setShowLanguageModal] = useState(false)
 
   /** 모달일 때 탭 (기본 정보 / 통계 / 추가) */
   const [modalTab, setModalTab] = useState<'basic' | 'stats' | 'extra'>('basic')
+
+  // 마스터 데이터
+  const { data: currencies = [] } = useCurrencies()
+  const { data: languages = [] } = useLanguages()
 
   // ==================== Form Hook 설정 ====================
 
@@ -315,14 +323,17 @@ export function CountryForm({
     watch,
   } = useForm({
     resolver: zodResolver(countrySchema),
-    mode: 'all', // 모든 이벤트에서 검증
-    reValidateMode: 'onChange', // 재검증도 onChange
-    criteriaMode: 'all', // 모든 에러 표시
+    mode: 'onTouched',
+    criteriaMode: 'all',
     shouldUnregister: false,
   })
 
   /** 선택된 대륙 ID */
   const selectedContinentId = watch('continentId')
+  /** 선택된 화폐 ID */
+  const selectedCurrencyId = watch('currencyId')
+  /** 선택된 언어 ID */
+  const selectedLanguageId = watch('languageId')
 
   // ==================== useEffect 훅 ====================
 
@@ -334,54 +345,46 @@ export function CountryForm({
   const editingSyncKey = editing?.id ?? '__new__'
 
   useEffect(() => {
-    if (editing) {
-      // 수정 모드: 기존 데이터로 폼 채우기
-      if (editing.id) {
-        reset({
-          name: editing.name || '',
-          fullName: (editing as any).fullName || '',
-          localName: editing.localName || '',
-          isoCode: editing.isoCode || '',
-          flagEmoji: editing.flagEmoji || '',
-          capital: editing.capital || '',
-          continentId: editing.continentId || '',
-          population: editing.population,
-          areaSqKm: editing.areaSqKm,
-          gdpUsdBn: editing.gdpUsdBn,
-          thumbnailUrl: editing.thumbnailUrl || '',
-          currencyId: editing.currencyId || '',
-          languageId: editing.languageId || '',
-          defaultNameDisplayOrder:
-            (editing as { defaultNameDisplayOrder?: 'korean' | 'western' })
-              .defaultNameDisplayOrder ?? 'korean',
-        })
-        setThumbnailPreview(editing.thumbnailUrl || '')
-      } else {
-        // 생성 모드: 완전히 빈 값으로 초기화
-        reset({
-          name: '',
-          fullName: '',
-          localName: '',
-          isoCode: '',
-          flagEmoji: '',
-          capital: '',
-          continentId: '',
-          population: undefined,
-          areaSqKm: undefined,
-          gdpUsdBn: undefined,
-          thumbnailUrl: '',
-          currencyId: '',
-          languageId: '',
-          defaultNameDisplayOrder: 'korean',
-        })
-        setThumbnailPreview('')
-      }
-      setFlagImageFile(null)
-      setThumbnailFile(null)
+    if (mode === 'edit' && editing?.id) {
+      reset({
+        name: editing.name || '',
+        fullName: (editing as { fullName?: string }).fullName || '',
+        localName: editing.localName || '',
+        isoCode: editing.isoCode || '',
+        flagEmoji: editing.flagEmoji || '',
+        capital: editing.capital || '',
+        continentId: editing.continentId || '',
+        population: editing.population,
+        areaSqKm: editing.areaSqKm,
+        thumbnailUrl: editing.thumbnailUrl || '',
+        currencyId: editing.currencyId || '',
+        languageId: editing.languageId || '',
+        defaultNameDisplayOrder:
+          (editing as { defaultNameDisplayOrder?: 'korean' | 'western' })
+            .defaultNameDisplayOrder ?? 'korean',
+      })
+      setThumbnailPreview(editing.thumbnailUrl || '')
+    } else {
+      reset({
+        name: '',
+        fullName: '',
+        localName: '',
+        isoCode: '',
+        flagEmoji: '',
+        capital: '',
+        continentId: '',
+        population: undefined,
+        areaSqKm: undefined,
+        thumbnailUrl: '',
+        currencyId: '',
+        languageId: '',
+        defaultNameDisplayOrder: 'korean',
+      })
+      setThumbnailPreview('')
     }
     // editing 객체 참조는 제외 — 같은 id인 채로 목록 재조회 등으로 갱신되어도 reset 하지 않음
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editingSyncKey로 편집 세션만 구분
-  }, [editingSyncKey, reset])
+  }, [editingSyncKey, mode, reset])
 
   /** 썸네일 URL 필드 값 감시 */
   const thumbnailUrl = watch('thumbnailUrl')
@@ -402,49 +405,36 @@ export function CountryForm({
 
   /**
    * 국기/썸네일 이미지 업로드 핸들러
-   * - 서버에 업로드 후 thumbnailUrl에만 저장 (국기 = 썸네일, 255자 제한)
+   * - 서버에 업로드 후 thumbnailUrl에 저장
    */
   const handleFlagImageChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setFlagImageFile(file)
     setImageUploadError(null)
     setImageUploading(true)
     try {
       const result = await uploadImage(file, 'countries')
-      const url =
-        (result.url ?? '').length > 255
-          ? (result.url ?? '').slice(0, 255)
-          : (result.url ?? '')
+      const url = result.url ?? ''
+      if (url.length > 255) {
+        const message =
+          '업로드된 이미지 URL이 255자를 초과합니다. 짧은 경로를 사용하는 다른 이미지를 시도해 주세요.'
+        toast.error(message)
+        setImageUploadError(message)
+        setThumbnailPreview('')
+        setValue('thumbnailUrl', '', { shouldValidate: true })
+        return
+      }
       setValue('thumbnailUrl', url, { shouldValidate: true })
-      setThumbnailPreview(result.url ?? '')
+      setThumbnailPreview(url)
     } catch (err) {
       setImageUploadError((err as Error).message)
       setThumbnailPreview('')
       setValue('thumbnailUrl', '')
     } finally {
       setImageUploading(false)
-    }
-  }
-
-  /**
-   * 썸네일 파일 업로드 핸들러
-   * - 파일을 Base64로 변환하여 미리보기 및 폼에 저장
-   * - FileReader API 사용
-   */
-  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setThumbnailFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const result = reader.result as string
-        setThumbnailPreview(result)
-        setValue('thumbnailUrl', result, { shouldValidate: true })
-      }
-      reader.readAsDataURL(file)
+      e.target.value = ''
     }
   }
 
@@ -469,20 +459,17 @@ export function CountryForm({
       currencyId: data.currencyId,
       languageId: data.languageId,
       continentId: data.continentId,
-      gdpUsdBn: data.gdpUsdBn,
       defaultNameDisplayOrder: data.defaultNameDisplayOrder,
     })
   }
 
   /**
    * 국가 이미지(썸네일) 삭제
-   * - 미리보기·폼 값·선택된 파일 초기화
+   * - 미리보기·폼 값 초기화
    */
   const handleDeleteImage = () => {
     setThumbnailPreview('')
     setValue('thumbnailUrl', '', { shouldValidate: true })
-    setFlagImageFile(null)
-    setThumbnailFile(null)
     setImageUploadError(null)
     const input = document.getElementById(
       'flag-image-upload',
@@ -520,16 +507,40 @@ export function CountryForm({
     icon: '🌍',
   }))
 
-  // ==================== 조기 반환 ====================
-
-  /** editing이 null이면 렌더링하지 않음 */
-  if (!editing) return null
+  const handleCurrencySelect = (currencyId: string) => {
+    setValue('currencyId', currencyId, { shouldValidate: true })
+    setShowCurrencyModal(false)
+  }
+  const handleLanguageSelect = (languageId: string) => {
+    setValue('languageId', languageId, { shouldValidate: true })
+    setShowLanguageModal(false)
+  }
+  const getCurrencyLabel = () => {
+    if (!selectedCurrencyId) return '화폐 선택 (선택)'
+    const c = currencies.find((cur) => cur.id === selectedCurrencyId)
+    return c ? `${c.code} — ${c.name}` : '화폐 선택 (선택)'
+  }
+  const getLanguageLabel = () => {
+    if (!selectedLanguageId) return '언어 선택 (선택)'
+    const l = languages.find((lang) => lang.id === selectedLanguageId)
+    return l ? `${l.name} (${l.code})` : '언어 선택 (선택)'
+  }
+  const currencyOptions: SelectOption[] = currencies.map((c) => ({
+    value: c.id,
+    label: `${c.code} — ${c.name}`,
+    icon: c.symbol,
+  }))
+  const languageOptions: SelectOption[] = languages.map((l) => ({
+    value: l.id,
+    label: `${l.name} (${l.code})`,
+    description: l.originalName ?? undefined,
+  }))
 
   // ==================== JSX 렌더링 ====================
 
   const submitLabel = isSubmitting
     ? '처리 중...'
-    : editing.id
+    : mode === 'edit'
       ? '수정 완료'
       : '국가 등록'
 
@@ -573,36 +584,6 @@ export function CountryForm({
           </MapRegionTabButton>
         </MapRegionTabNav>
       )}
-      {/*
-        모달: 이 필드는 탭 밖에 둬서 기본/통계/추가 전환 시에도 언마운트되지 않게 함.
-        (탭 안에만 두면 다른 탭에서 저장 시 제출 payload에서 빠질 수 있음)
-      */}
-      {embedIn === 'modal' && (
-        <S.FormSection>
-          <S.FormField>
-            <S.FormLabel>인물 이름 표시 기본</S.FormLabel>
-            <FormSelectNative
-              {...register('defaultNameDisplayOrder')}
-              className="input-name-order"
-              aria-label="인물 이름 표시 기본 순서"
-            >
-              <option value="korean">동양식 (성 → 이름)</option>
-              <option value="western">서양식 (이름 → 성)</option>
-            </FormSelectNative>
-            <p
-              style={{
-                margin: '8px 0 0',
-                fontSize: 12,
-                color: 'var(--text-secondary, #64748b)',
-                lineHeight: 1.45,
-              }}
-            >
-              이 국가에 소속된 인물을 한 줄로 표시할 때의 기본 순서입니다.
-            </p>
-          </S.FormField>
-        </S.FormSection>
-      )}
-
       {(embedIn !== 'modal' || modalTab === 'basic') && (
         <S.FormSection>
           <S.FormSectionHeader>
@@ -628,7 +609,7 @@ export function CountryForm({
             style={{ marginBottom: embedIn === 'modal' ? undefined : '16px' }}
           >
             <S.FormLabel htmlFor="flag-image-upload">
-              {embedIn === 'modal' ? '대표 이미지' : '국기 이미지 (썸네일)'}
+              {embedIn === 'modal' ? '대표 이미지' : '대표 이미지 (선택)'}
             </S.FormLabel>
             {embedIn === 'modal' ? (
               <div className="thumbnail-right">
@@ -672,6 +653,23 @@ export function CountryForm({
                     <span style={{ fontSize: 13, color: '#64748b' }}>
                       업로드 중…
                     </span>
+                  )}
+                  {thumbnailPreview && !imageUploading && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteImage}
+                      style={{
+                        padding: '6px 10px',
+                        fontSize: 12,
+                        color: '#dc2626',
+                        background: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: 8,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      이미지 삭제
+                    </button>
                   )}
                 </div>
                 <span className="thumbnail-hint">
@@ -740,8 +738,8 @@ export function CountryForm({
                     <S.FileUploadText>
                       {imageUploading
                         ? '업로드 중...'
-                        : flagImageFile
-                          ? flagImageFile.name
+                        : thumbnailPreview
+                          ? '이미지 변경'
                           : '이미지 파일 선택'}
                     </S.FileUploadText>
                   </S.FileUploadLabel>
@@ -771,6 +769,7 @@ export function CountryForm({
                 className="input-name"
                 {...register('name')}
                 placeholder="대한민국"
+                autoFocus={mode === 'create'}
                 $error={!!errors.name}
               />
               {errors.name && (
@@ -794,7 +793,7 @@ export function CountryForm({
             <S.FormLabel>공식 명칭 (풀네임)</S.FormLabel>
             <FormInput
               {...register('fullName')}
-              placeholder="예: 대한민국, 일본국, Republic of Korea"
+              placeholder="예: Republic of Korea"
               $error={!!errors.fullName}
             />
             {errors.fullName && (
@@ -810,6 +809,14 @@ export function CountryForm({
                 placeholder="KR"
                 maxLength={3}
                 style={{ textTransform: 'uppercase' }}
+                onChange={(e) => {
+                  const upper = e.target.value.toUpperCase()
+                  if (e.target.value !== upper) e.target.value = upper
+                  setValue('isoCode', upper, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }}
                 $error={!!errors.isoCode}
               />
               {errors.isoCode && (
@@ -857,35 +864,32 @@ export function CountryForm({
                   <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
                 </svg>
               </S.SelectButton>
-              <input type="hidden" {...register('continentId')} />
               {errors.continentId && (
                 <S.ErrorMessage>{errors.continentId.message}</S.ErrorMessage>
               )}
             </S.FormField>
           </S.FormRow>
-          {embedIn !== 'modal' && (
-            <S.FormField>
-              <S.FormLabel>인물 이름 표시 기본</S.FormLabel>
-              <FormSelectNative
-                {...register('defaultNameDisplayOrder')}
-                className="input-name-order"
-                aria-label="인물 이름 표시 기본 순서"
-              >
-                <option value="korean">동양식 (성 → 이름)</option>
-                <option value="western">서양식 (이름 → 성)</option>
-              </FormSelectNative>
-              <p
-                style={{
-                  margin: '8px 0 0',
-                  fontSize: 12,
-                  color: 'var(--text-secondary, #64748b)',
-                  lineHeight: 1.45,
-                }}
-              >
-                이 국가에 소속된 인물을 한 줄로 표시할 때의 기본 순서입니다.
-              </p>
-            </S.FormField>
-          )}
+          <S.FormField>
+            <S.FormLabel>이름 표기 순서 기본값</S.FormLabel>
+            <FormSelectNative
+              {...register('defaultNameDisplayOrder')}
+              className="input-name-order"
+              aria-label="인물 이름 표기 순서 기본값"
+            >
+              <option value="korean">동양식 (성 → 이름)</option>
+              <option value="western">서양식 (이름 → 성)</option>
+            </FormSelectNative>
+            <p
+              style={{
+                margin: '8px 0 0',
+                fontSize: 12,
+                color: 'var(--text-secondary, #64748b)',
+                lineHeight: 1.45,
+              }}
+            >
+              이 국가에 소속된 인물을 한 줄로 표시할 때의 기본 순서입니다.
+            </p>
+          </S.FormField>
         </S.FormSection>
       )}
 
@@ -903,7 +907,7 @@ export function CountryForm({
             <div>
               <S.FormSectionTitle>통계 정보</S.FormSectionTitle>
               <S.FormSectionDescription>
-                인구, 면적, GDP 등 국가 통계 데이터를 입력하세요
+                인구, 면적 등 국가 통계 데이터를 입력하세요
               </S.FormSectionDescription>
             </div>
           </S.FormSectionHeader>
@@ -935,22 +939,6 @@ export function CountryForm({
               )}
             </S.FormField>
           </S.FormRow>
-          <S.FormRow>
-            <S.FormField>
-              <S.FormLabel>GDP (USD Billion)</S.FormLabel>
-              <FormInput
-                className="input-number"
-                {...register('gdpUsdBn', { valueAsNumber: true })}
-                type="number"
-                step="0.01"
-                placeholder="1630.5"
-                $error={!!errors.gdpUsdBn}
-              />
-              {errors.gdpUsdBn && (
-                <S.ErrorMessage>{errors.gdpUsdBn.message}</S.ErrorMessage>
-              )}
-            </S.FormField>
-          </S.FormRow>
         </S.FormSection>
       )}
 
@@ -974,27 +962,35 @@ export function CountryForm({
           </S.FormSectionHeader>
           <S.FormRow>
             <S.FormField>
-              <S.FormLabel>화폐 ID</S.FormLabel>
-              <FormInput
-                className="input-currency"
-                {...register('currencyId')}
-                placeholder="KRW"
-                maxLength={10}
+              <S.FormLabel>화폐</S.FormLabel>
+              <S.SelectButton
+                type="button"
+                onClick={() => setShowCurrencyModal(true)}
                 $error={!!errors.currencyId}
-              />
+                $hasValue={!!selectedCurrencyId}
+              >
+                <span>{getCurrencyLabel()}</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
+                </svg>
+              </S.SelectButton>
               {errors.currencyId && (
                 <S.ErrorMessage>{errors.currencyId.message}</S.ErrorMessage>
               )}
             </S.FormField>
             <S.FormField>
-              <S.FormLabel>언어 ID</S.FormLabel>
-              <FormInput
-                className="input-language"
-                {...register('languageId')}
-                placeholder="ko"
-                maxLength={10}
+              <S.FormLabel>언어</S.FormLabel>
+              <S.SelectButton
+                type="button"
+                onClick={() => setShowLanguageModal(true)}
                 $error={!!errors.languageId}
-              />
+                $hasValue={!!selectedLanguageId}
+              >
+                <span>{getLanguageLabel()}</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M7 10l5 5 5-5H7z" fill="currentColor" />
+                </svg>
+              </S.SelectButton>
               {errors.languageId && (
                 <S.ErrorMessage>{errors.languageId.message}</S.ErrorMessage>
               )}
@@ -1015,6 +1011,26 @@ export function CountryForm({
       onSelect={handleContinentSelect}
     />
   )
+  const currencySelectModal = (
+    <SelectModal
+      isOpen={showCurrencyModal}
+      onClose={() => setShowCurrencyModal(false)}
+      title="화폐 선택"
+      options={currencyOptions}
+      selectedValue={selectedCurrencyId}
+      onSelect={handleCurrencySelect}
+    />
+  )
+  const languageSelectModal = (
+    <SelectModal
+      isOpen={showLanguageModal}
+      onClose={() => setShowLanguageModal(false)}
+      title="언어 선택"
+      options={languageOptions}
+      selectedValue={selectedLanguageId}
+      onSelect={handleLanguageSelect}
+    />
+  )
 
   if (embedIn === 'modal') {
     return (
@@ -1030,14 +1046,16 @@ export function CountryForm({
         </FormHeader>
         <FormSectionInner>{formBody}</FormSectionInner>
         {continentSelectModal}
+        {currencySelectModal}
+        {languageSelectModal}
       </CountryFormModalLayout>
     )
   }
 
   return (
     <FormSidePanel
-      isOpen={!!editing}
-      title={editing.id ? '국가 수정' : '국가 등록'}
+      isOpen
+      title={mode === 'edit' ? '국가 수정' : '국가 등록'}
       onClose={onClose}
       submitLabel={submitLabel}
       formId="country-form"
@@ -1062,6 +1080,8 @@ export function CountryForm({
     >
       {formBody}
       {continentSelectModal}
+      {currencySelectModal}
+      {languageSelectModal}
     </FormSidePanel>
   )
 }

@@ -10,15 +10,23 @@ import {
   SORT_OPTIONS,
   type SortOption,
 } from '@/features/event-list/lib'
+import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
+import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 
 import type { HistoricalEvent } from '../../../pages/events/create/events.types'
 import { MOCK_POSITION_TYPES } from '../../../entities/event/model/mock-government-positions'
 import { getCenturyFromDate } from '../../../pages/events/utils/events.utils'
 
+/**
+ * countries / historicalCountries는 `filterSummaryChips`의 국가명 lookup에 사용.
+ * 미전달 시 events에서 fallback으로 찾으나 비용이 N(events) — 가능하면 전달 권장.
+ */
 export const useEventFilters = (
   events: HistoricalEvent[],
   dbCategories: EventCategoryDto[],
+  countries: CountryResponseDto[] = [],
+  historicalCountries: HistoricalCountryResponseDto[] = [],
 ) => {
   // ===== 필터 상태 =====
   const [selectedCategory, setSelectedCategory] = useState<
@@ -36,8 +44,6 @@ export const useEventFilters = (
     typeof FILTER_ALL | string
   >(FILTER_ALL)
   const [showFlatView, setShowFlatView] = useState(false)
-  /** 교황 등 전역 수반 표시 (모든 국가에서 다 뜨는 직책). true=표시, false=숨김 */
-  const [showGlobalHeadsOfState, setShowGlobalHeadsOfState] = useState(true)
 
   // ===== 사용 가능한 필터 옵션 =====
   const availableCountries = useMemo(() => {
@@ -89,11 +95,9 @@ export const useEventFilters = (
         })()
         const countryOk =
           selectedCountry === FILTER_ALL ||
-          (event as any).relatedCountries?.some(
-            (country: any) => country.id === selectedCountry,
-          ) ||
-          (event as any).relatedHistoricalCountries?.some(
-            (country: any) => country.id === selectedCountry,
+          event.relatedCountries?.some((c) => c.id === selectedCountry) ||
+          event.relatedHistoricalCountries?.some(
+            (c) => c.id === selectedCountry,
           )
 
         return categoryOk && keywordOk && centuryOk && countryOk
@@ -137,50 +141,67 @@ export const useEventFilters = (
   }, [filteredEvents, sortBy, sortDirection])
 
   // ===== 필터 칩 생성 =====
-  const filterSummaryChips: FilterChip[] = [
-    selectedCategory !== FILTER_ALL && {
-      key: 'category',
-      label: `카테고리 · ${
+  /**
+   * 칩 라벨 — 국가명 lookup은 reference data(countries / historicalCountries)에서
+   * O(N_country)로 한 번. 이전엔 events 풀스캔(N_events × M_relatedCountries)이라
+   * 사건이 늘면 비례해서 무거워졌고, useMemo도 안 걸려 매 렌더 반복됨.
+   */
+  const filterSummaryChips = useMemo<FilterChip[]>(() => {
+    const chips: FilterChip[] = []
+
+    if (selectedCategory !== FILTER_ALL) {
+      const name =
         dbCategories.find((cat) => cat.id === selectedCategory)?.name ||
         '알 수 없음'
-      }`,
-      onClear: () => setSelectedCategory(FILTER_ALL),
-    },
-    selectedCountry !== FILTER_ALL && {
-      key: 'country',
-      label: `국가 · ${(() => {
-        // events에서 해당 국가 정보 찾기
-        for (const event of events) {
-          const country = (event as any).relatedCountries?.find(
-            (c: any) => c.id === selectedCountry,
-          )
-          if (country) return country.name
+      chips.push({
+        key: 'category',
+        label: `카테고리 · ${name}`,
+        onClear: () => setSelectedCategory(FILTER_ALL),
+      })
+    }
 
-          const historicalCountry = (
-            event as any
-          ).relatedHistoricalCountries?.find(
-            (c: any) => c.id === selectedCountry,
-          )
-          if (historicalCountry) return historicalCountry.name
-        }
-        return '알 수 없음'
-      })()}`,
-      onClear: () => setSelectedCountry(FILTER_ALL),
-    },
-    selectedPositionType !== FILTER_ALL && {
-      key: 'positionType',
-      label: `직업 · ${
-        MOCK_POSITION_TYPES.find((type) => type.value === selectedPositionType)
+    if (selectedCountry !== FILTER_ALL) {
+      const modern = countries.find((c) => c.id === selectedCountry)
+      const historical = !modern
+        ? historicalCountries.find((c) => c.id === selectedCountry)
+        : undefined
+      const name = modern?.name ?? historical?.name ?? '알 수 없음'
+      chips.push({
+        key: 'country',
+        label: `국가 · ${name}`,
+        onClear: () => setSelectedCountry(FILTER_ALL),
+      })
+    }
+
+    if (selectedPositionType !== FILTER_ALL) {
+      const label =
+        MOCK_POSITION_TYPES.find((t) => t.value === selectedPositionType)
           ?.label || selectedPositionType
-      }`,
-      onClear: () => setSelectedPositionType(FILTER_ALL),
-    },
-    trimmedKeyword.length > 0 && {
-      key: 'keyword',
-      label: `검색어 · ${trimmedKeyword}`,
-      onClear: () => setKeyword(''),
-    },
-  ].filter((chip): chip is FilterChip => Boolean(chip))
+      chips.push({
+        key: 'positionType',
+        label: `직업 · ${label}`,
+        onClear: () => setSelectedPositionType(FILTER_ALL),
+      })
+    }
+
+    if (trimmedKeyword.length > 0) {
+      chips.push({
+        key: 'keyword',
+        label: `검색어 · ${trimmedKeyword}`,
+        onClear: () => setKeyword(''),
+      })
+    }
+
+    return chips
+  }, [
+    selectedCategory,
+    selectedCountry,
+    selectedPositionType,
+    trimmedKeyword,
+    dbCategories,
+    countries,
+    historicalCountries,
+  ])
 
   const hasActiveFilters = filterSummaryChips.length > 0
 
@@ -193,7 +214,6 @@ export const useEventFilters = (
     setSelectedCentury(FILTER_ALL)
     setSelectedCountry(FILTER_ALL)
     setSelectedPositionType(FILTER_ALL)
-    setShowGlobalHeadsOfState(true)
   }
 
   return {
@@ -206,7 +226,6 @@ export const useEventFilters = (
     selectedCountry,
     selectedPositionType,
     showFlatView,
-    showGlobalHeadsOfState,
 
     // 세터
     setSelectedCategory,
@@ -217,7 +236,6 @@ export const useEventFilters = (
     setSelectedCountry,
     setSelectedPositionType,
     setShowFlatView,
-    setShowGlobalHeadsOfState,
 
     // 계산된 값
     availableCountries,

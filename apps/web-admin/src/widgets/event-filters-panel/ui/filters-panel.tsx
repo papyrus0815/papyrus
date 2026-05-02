@@ -13,7 +13,6 @@ import {
   FiGlobe,
   FiGrid,
   FiLayers,
-  FiUsers,
 } from 'react-icons/fi'
 
 import type { CenturyFilter } from '@/entities/event/model'
@@ -28,8 +27,6 @@ interface FiltersPanelProps {
   selectedPositionType: typeof FILTER_ALL | string
   selectedCentury: CenturyFilter
   showFlatView: boolean
-  /** 교황 등 전역 수반 표시 (모든 국가에서 다 뜨는 직책) */
-  showGlobalHeadsOfState?: boolean
   sortBy: string
   sortDirection: 'asc' | 'desc'
 
@@ -42,7 +39,6 @@ interface FiltersPanelProps {
   onShowCountryModal: () => void
   onShowPositionTypeModal: () => void
   onToggleFlatView: () => void
-  onToggleShowGlobalHeadsOfState?: () => void
   onSelectCentury: (century: CenturyFilter) => void
   onSortChange: (sortBy: string) => void
   onSortDirectionToggle: () => void
@@ -53,7 +49,6 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   selectedCountry,
   selectedCentury,
   showFlatView,
-  showGlobalHeadsOfState = true,
   sortBy,
   sortDirection,
   dbCategories,
@@ -63,7 +58,6 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   onShowCategoryModal,
   onShowCountryModal,
   onToggleFlatView,
-  onToggleShowGlobalHeadsOfState,
   onSelectCentury,
   onSortChange,
   onSortDirectionToggle,
@@ -154,26 +148,6 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
           <Filter.SwitchThumb $active={!showFlatView} />
         </Filter.Switch>
       </Filter.FilterToggle>
-
-      {onToggleShowGlobalHeadsOfState && (
-        <Filter.FilterToggle
-          onClick={onToggleShowGlobalHeadsOfState}
-          title="교황 등 전역 수반(모든 국가에 영향을 미친 인물)을 역대 수반 목록에 표시합니다. 끄면 숨깁니다."
-        >
-          <FiUsers size={12} style={{ color: '#64748b' }} aria-hidden="true" />
-          <Filter.FilterToggleLabel>교황 등 전역</Filter.FilterToggleLabel>
-          <Filter.Switch
-            type="button"
-            $active={showGlobalHeadsOfState}
-            onClick={(e) => {
-              e.stopPropagation()
-              onToggleShowGlobalHeadsOfState()
-            }}
-          >
-            <Filter.SwitchThumb $active={showGlobalHeadsOfState} />
-          </Filter.Switch>
-        </Filter.FilterToggle>
-      )}
     </Filter.FilterBlock>
   )
 }

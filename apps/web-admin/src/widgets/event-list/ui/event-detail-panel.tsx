@@ -44,6 +44,8 @@ import { deleteEvent } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 
+import { EventDiscoveryHub } from './event-discovery-hub'
+
 interface EventDetailPanelProps {
   isLoading: boolean
   selectedEvent: HistoricalEvent | null
@@ -56,6 +58,11 @@ interface EventDetailPanelProps {
   onShowSummary?: (eventId: string) => void
   /** 삭제 후 부모가 캐시 invalidate 하도록 — 미전달 시 fallback으로 reload (기존 동작 유지) */
   onAfterDelete?: (eventId: string) => void
+  /** ── 빈 상태(선택 없음) hub용 데이터 — 모두 optional. 미전달 시 종래 placeholder. */
+  events?: HistoricalEvent[]
+  recentEventIds?: string[]
+  bookmarkIds?: Set<string>
+  filteredEvents?: HistoricalEvent[]
 }
 
 export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
@@ -67,6 +74,10 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   onExpandEvent,
   onShowSummary,
   onAfterDelete,
+  events,
+  recentEventIds,
+  bookmarkIds,
+  filteredEvents,
 }) => {
   const navigate = useNavigate()
   const [descExpanded, setDescExpanded] = useState(false)
@@ -472,6 +483,15 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             </Detail.DetailSection>
           )}
         </Detail.DetailPanelContent>
+      ) : events && onSelectEvent ? (
+        <EventDiscoveryHub
+          events={events}
+          recentEventIds={recentEventIds ?? []}
+          bookmarkIds={bookmarkIds ?? new Set()}
+          filteredEvents={filteredEvents ?? events}
+          dbCategories={dbCategories}
+          onSelectEvent={onSelectEvent}
+        />
       ) : (
         <Detail.DetailPanelEmpty>
           <Detail.DetailPanelEmptyIcon>

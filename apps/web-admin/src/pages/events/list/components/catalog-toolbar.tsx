@@ -40,7 +40,6 @@ interface Props {
   selectedPositionType: string
   selectedCentury: CenturyFilter
   showFlatView: boolean
-  showGlobalHeadsOfState: boolean
   sortBy: SortOption
   sortDirection: 'asc' | 'desc'
   dbCategories: EventCategoryDto[]
@@ -52,7 +51,6 @@ interface Props {
   setShowCountryModal: (v: boolean) => void
   setShowPositionTypeModal: (v: boolean) => void
   toggleShowFlatView: () => void
-  toggleShowGlobalHeadsOfState: () => void
   setSelectedCentury: (v: CenturyFilter) => void
   setSortBy: (v: SortOption) => void
   setSortDirection: React.Dispatch<React.SetStateAction<'asc' | 'desc'>>
@@ -83,7 +81,6 @@ export const CatalogToolbar: React.FC<Props> = ({
   selectedPositionType,
   selectedCentury,
   showFlatView,
-  showGlobalHeadsOfState,
   sortBy,
   sortDirection,
   dbCategories,
@@ -94,7 +91,6 @@ export const CatalogToolbar: React.FC<Props> = ({
   setShowCountryModal,
   setShowPositionTypeModal,
   toggleShowFlatView,
-  toggleShowGlobalHeadsOfState,
   setSelectedCentury,
   setSortBy,
   setSortDirection,
@@ -156,7 +152,6 @@ export const CatalogToolbar: React.FC<Props> = ({
         selectedPositionType={selectedPositionType}
         selectedCentury={selectedCentury}
         showFlatView={showFlatView}
-        showGlobalHeadsOfState={showGlobalHeadsOfState}
         sortBy={sortBy}
         sortDirection={sortDirection}
         dbCategories={dbCategories}
@@ -167,7 +162,6 @@ export const CatalogToolbar: React.FC<Props> = ({
         onShowCountryModal={() => setShowCountryModal(true)}
         onShowPositionTypeModal={() => setShowPositionTypeModal(true)}
         onToggleFlatView={toggleShowFlatView}
-        onToggleShowGlobalHeadsOfState={toggleShowGlobalHeadsOfState}
         onSelectCentury={setSelectedCentury}
         onSortChange={(newSortBy: string) => {
           setSortBy(newSortBy as SortOption)

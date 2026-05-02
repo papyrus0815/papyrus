@@ -76,16 +76,22 @@ export function DetailRail({ sections }: DetailRailProps) {
     <S.Rail>
       <S.RailGroup>
         <S.RailGroupLabel>목차</S.RailGroupLabel>
-        <S.RailNavList>
-          {sections.map((link) => (
-            <S.RailNavItem
-              key={link.id}
-              $active={activeId === link.id}
-              onClick={() => handleNavClick(link.id)}
-            >
-              {link.label}
-            </S.RailNavItem>
-          ))}
+        <S.RailNavList aria-label="섹션 목차">
+          {sections.map((link) => {
+            const isActive = activeId === link.id
+            return (
+              <li key={link.id}>
+                <S.RailNavItem
+                  type="button"
+                  $active={isActive}
+                  aria-current={isActive ? 'location' : undefined}
+                  onClick={() => handleNavClick(link.id)}
+                >
+                  {link.label}
+                </S.RailNavItem>
+              </li>
+            )
+          })}
         </S.RailNavList>
       </S.RailGroup>
     </S.Rail>

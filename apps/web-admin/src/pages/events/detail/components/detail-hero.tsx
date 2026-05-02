@@ -250,8 +250,12 @@ function HeroActors({
  * 시그니처: 검정 1px 헤어라인 룰 + smallcaps tracked eyebrow + 깔끔한 위계.
  * 폰트는 앱 기본(Inter/Pretendard) 그대로 — 세리프 미사용.
  */
+/**
+ * Hero 하단 ActorStrip 구분선. detail-actors.tsx의 editorialRuleColor와 동일하게
+ * hairline 톤으로 낮춤(이전 0.78/0.5는 본문보다 진해 시선 분산이 컸음).
+ */
 const editorialRule = (mode: 'light' | 'dark') =>
-  mode === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(15,23,42,0.78)'
+  mode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.12)'
 
 const ActorStrip = styled.div`
   display: flex;

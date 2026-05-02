@@ -99,11 +99,29 @@ export function InlineRichText({
   )
 }
 
+/**
+ * ReadHost — 본문(rich text) 읽기 컨테이너.
+ * pre-hover 시그널은 여기서 padding/margin을 음수로 상쇄해 background tint를
+ * 본문 흐름과 어긋나지 않게 띄워준다(본문 좌·우 정렬은 그대로 유지).
+ * hover/focus-within에서 미세한 fill로 "이 영역은 클릭해 편집 가능"을 시그널.
+ */
 const ReadHost = styled.div`
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: 4px;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  transition: background 0.16s;
+
+  &:hover,
+  &:focus-within {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : 'rgba(15,23,42,0.025)'};
+  }
 `
 
 const ReadBody = styled.div`

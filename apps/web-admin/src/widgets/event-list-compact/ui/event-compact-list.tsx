@@ -59,6 +59,8 @@ interface EventCompactListProps {
   sortBy: SortOption
   sortDirection: 'asc' | 'desc'
   hasActiveFilters: boolean
+  /** 활성 필터 칩 — 빈 결과 안내에서 어떤 필터가 적용 중인지 보여주는 데 사용 */
+  activeFilterChips?: Array<{ key: string; label: string; onClear: () => void }>
   tenureGroups: TenureGroup[]
   /** 목록 전체 기간(모든 사건 min~max)에 해당하는 국가원수. 해당 기간 사건이 없어도 트럼프 등이 한 번은 보이도록 */
   periodHeadsOfState?: HeadOfStateDuringEvent[]
@@ -93,6 +95,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   sortBy,
   sortDirection,
   hasActiveFilters,
+  activeFilterChips = [],
   tenureGroups,
   periodHeadsOfState = [],
   dbCategories,
@@ -239,18 +242,36 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             <FiFilter size={44} />
           </List.EmptyIcon>
           <List.EmptyContent>
-            <List.EmptyTitle>사건을 찾을 수 없습니다</List.EmptyTitle>
+            <List.EmptyTitle>
+              {events.length === 0
+                ? '아직 등록된 사건이 없습니다'
+                : hasActiveFilters
+                  ? `현재 조건과 일치하는 사건이 없습니다`
+                  : '사건을 찾을 수 없습니다'}
+            </List.EmptyTitle>
             <List.EmptyDescription>
               {events.length === 0
-                ? '아직 등록된 사건이 없습니다. 새로운 사건을 등록해보세요.'
-                : '검색 조건에 맞는 사건이 없습니다. 다른 조건으로 검색해보세요.'}
+                ? '새로운 사건을 등록해보세요.'
+                : hasActiveFilters
+                  ? '아래 활성 필터 중 하나를 해제하거나, 모두 초기화해보세요.'
+                  : '다른 조건으로 검색해보세요.'}
             </List.EmptyDescription>
+            {hasActiveFilters && activeFilterChips.length > 0 && (
+              <ActiveChipsRow>
+                {activeFilterChips.map((chip) => (
+                  <ActiveChip key={chip.key} onClick={chip.onClear}>
+                    <span>{chip.label}</span>
+                    <FiX size={12} aria-hidden="true" />
+                  </ActiveChip>
+                ))}
+              </ActiveChipsRow>
+            )}
           </List.EmptyContent>
           <List.EmptyActions>
             {hasActiveFilters && (
               <List.EmptyResetButton onClick={onResetFilters}>
                 <FiX size={14} />
-                필터 초기화
+                모든 필터 초기화
               </List.EmptyResetButton>
             )}
             {events.length === 0 && (
@@ -506,14 +527,25 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             )
           })}
 
-          {/* 로딩 인디케이터 */}
+          {/* 로딩 / 끝 안내 — 사용자가 "더 있는지" "끝인지" 즉시 알 수 있도록 */}
           {isLoadingMore && (
             <LoadingMoreRow>
               <List.LoadingSpinner />
-              <LoadingMoreText>로딩 중</LoadingMoreText>
+              <LoadingMoreText>더 불러오는 중…</LoadingMoreText>
             </LoadingMoreRow>
           )}
-          {!isLoadingMore && hasMoreData && <ScrollHint>↓</ScrollHint>}
+          {!isLoadingMore && hasMoreData && (
+            <LoadingMoreRow aria-hidden="true">
+              <ScrollHintInline>↓ 스크롤하여 더 보기</ScrollHintInline>
+            </LoadingMoreRow>
+          )}
+          {!isLoadingMore && !hasMoreData && displayedCount > 0 && (
+            <LoadingMoreRow>
+              <EndOfListText>
+                끝까지 봤습니다 · 총 {displayedCount.toLocaleString()}건
+              </EndOfListText>
+            </LoadingMoreRow>
+          )}
         </List.CompactList>
       )}
     </List.CatalogSection>
@@ -553,4 +585,70 @@ const ScrollHint = styled.div`
   font-weight: 500;
   color: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : '#cbd5e1'};
+`
+
+const ScrollHintInline = styled.span`
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: 0.02em;
+`
+
+const ActiveChipsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 14px;
+  max-width: 480px;
+`
+
+const ActiveChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.16)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+
+  svg {
+    opacity: 0.6;
+  }
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+    color: ${({ theme }) => theme.colors.text.primary};
+    svg {
+      opacity: 1;
+    }
+  }
+`
+
+const EndOfListText = styled.span`
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+
+  &::before {
+    content: '·';
+    margin-right: 8px;
+    opacity: 0.5;
+  }
+  &::after {
+    content: '·';
+    margin-left: 8px;
+    opacity: 0.5;
+  }
 `

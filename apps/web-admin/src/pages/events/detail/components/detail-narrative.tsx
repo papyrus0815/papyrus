@@ -57,19 +57,39 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
     })),
   )
 
-  /* server 데이터 변경 시 로컬 state 재동기화 — refetch 후 새 order/내용을 반영.
-     단, 사용자가 편집 중인 row의 내용은 보존하지 않음(mutation onSuccess가 invalidate
-     하므로 사용자가 저장한 값이 곧장 server에 반영되어 충돌은 없다).
-     useEffect로 사이드이펙트 명시 — useMemo 안에서 setState는 React가 경고하는 패턴. */
+  /**
+   * server 데이터 변경 시 로컬 state 재동기화.
+   *
+   * 핵심 원칙은 *키 안정성으로 child component 인스턴스를 보존*하는 것 — InlineText
+   * /InlineRichText의 내부 draft state가 child 자신에게 살아 있으므로, key가 그대로
+   * 유지되면 사용자가 입력 중이던 텍스트가 사라지지 않는다.
+   *
+   * 정책:
+   *  1. 같은 idx의 prev row가 있으면 그 객체(=key)를 그대로 유지. server 값으로
+   *     덮지 않는다 — 사용자가 dirty일 수도, clean일 수도 있는데 어느 쪽이든
+   *     local을 우위로 둔다(외부 동시 편집은 reload로 해결).
+   *  2. server에 새로 추가된 idx >= prev.length 위치의 row는 새 key로 신규 row 생성.
+   *  3. local에만 있는(아직 commit 전인 빈) tail row는 그대로 보존.
+   */
   useEffect(() => {
-    setRows(
-      serverSections.map((s) => ({
-        key: nextKey(),
-        title: s.title ?? '',
-        content: s.content ?? '',
-        sectionType: s.sectionType,
-      })),
-    )
+    setRows((prev) => {
+      const synced: SectionRow[] = serverSections.map((s, idx) => {
+        const prevRow = prev[idx]
+        if (prevRow) return prevRow
+        return {
+          key: nextKey(),
+          title: s.title ?? '',
+          content: s.content ?? '',
+          sectionType: s.sectionType,
+        }
+      })
+      // local에만 있는 tail(아직 commit 안 된 빈 row 등)은 뒤에 그대로 붙임.
+      if (prev.length > serverSections.length) {
+        const localTail = prev.slice(serverSections.length)
+        return [...synced, ...localTail]
+      }
+      return synced
+    })
   }, [serverSections])
 
   /** rows를 server payload로 직렬화 후 patch 호출. */
@@ -150,7 +170,11 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
           )}
         </S.SectionHeader>
         {rows.length === 0 ? (
-          <S.HelperText>아직 전개 섹션이 없습니다. 아래 버튼으로 추가하세요.</S.HelperText>
+          <S.EmptyState>
+            <S.EmptyStateLine>
+              아직 전개 섹션이 없습니다. 아래 버튼으로 추가하세요.
+            </S.EmptyStateLine>
+          </S.EmptyState>
         ) : (
           <SectionStack>
             {rows.map((row, idx) => (

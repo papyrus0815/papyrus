@@ -54,31 +54,39 @@ export const PageInner = styled.div`
 
 /**
  * Body grid — sticky rail + main column.
- * Wide(≥1100px): 200px rail + 1fr main, gap 56
- * Narrow(<1100): single column, rail collapses 위로.
- * `$noRail` true면 main 단일 칼럼(짧은 페이지에서 rail 자동 hide되는 경우).
+ * Wide(≥1101px): 200px rail + 1fr main, gap 56
+ * Narrow(≤1100): single column, rail collapses 위로.
+ *
+ * 이전에는 sections.length<5일 때 `$noRail`로 grid 컬럼을 1fr 단일 + 가운데 정렬로
+ * 바꿨지만, 모듈 활성화에 따라 임계값을 오가며 main 컬럼 위치가 점프하는 jitter가
+ * 발생했다. 지금은 항상 동일한 2-컬럼 grid를 유지하고, rail 컨텐츠 자체는
+ * `DetailRail`이 sections<5에서 null을 반환해 시각적으로만 사라진다 — main 위치는
+ * 절대 흔들리지 않는다.
  */
-export const Body = styled.div<{ $noRail?: boolean }>`
+export const Body = styled.div`
   display: grid;
-  grid-template-columns: ${({ $noRail }) =>
-    $noRail ? 'minmax(0, 1fr)' : '200px minmax(0, 1fr)'};
+  grid-template-columns: 200px minmax(0, 1fr);
   gap: 56px;
   align-items: start;
-  /* rail 숨김 시 main(max-width: 760px)이 좌측에 붙지 않게 가운데 정렬. */
-  justify-items: ${({ $noRail }) => ($noRail ? 'center' : 'stretch')};
   margin-top: 36px;
 
   @media (max-width: 1100px) {
     grid-template-columns: 1fr;
     gap: 24px;
     margin-top: 24px;
-    justify-items: stretch;
   }
 `
 
 export const Main = styled.main`
+  /**
+   * narrative-first 가독폭. 이전에는 760이었으나 내부 SectionBody·HeroSummary·
+   * SummaryHost가 모두 720으로 막혀 있어 narrative(배경·전개·여파)와 그 외
+   * 섹션(actors·network·modules·appendix) 사이에 40px 가로 차이가 발생했음.
+   * Main을 720으로 통일해 모든 섹션이 동일 폭으로 정렬되도록 한다.
+   */
   min-width: 0;
-  max-width: 760px;
+  max-width: 720px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 64px;
@@ -95,6 +103,17 @@ export const Hero = styled.section`
   flex-direction: column;
   gap: 20px;
   padding-bottom: 32px;
+
+  /**
+   * Hero는 Body grid 바깥에서 PageInner 직속으로 렌더되므로 그대로 두면
+   * 좌측이 본문 main column보다 (rail 200 + gap 56 = 256px) 더 왼쪽에서 시작해
+   * 같은 720 폭이라도 우측 끝 위치가 어긋난다. wide 화면에서만 좌측 padding을
+   * 추가해 hero 콘텐츠와 main 섹션의 좌·우 끝을 동시에 정렬한다.
+   * Body의 미디어 브레이크(1100px)와 동일한 임계값을 사용한다.
+   */
+  @media (min-width: 1101px) {
+    padding-left: calc(200px + 56px);
+  }
 `
 
 export const HeroTopRow = styled.div`
@@ -284,22 +303,38 @@ export const RailNavList = styled.ul`
   border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
-export const RailNavItem = styled.li<{ $active: boolean }>`
+/**
+ * RailNavItem — 이전엔 styled.li + onClick(키보드 미접근).
+ * 이제 styled.button으로 바꿔 Tab/Enter/Space로 자연 활성화. 부모 ul 안에서는
+ * 사용 측이 `<li>`로 감싸 list semantics를 유지한다(ul > li > button 구조).
+ */
+export const RailNavItem = styled.button<{ $active: boolean }>`
   position: relative;
+  width: 100%;
   padding: 7px 0 7px 14px;
   margin-left: -1px;
+  font: inherit;
   font-size: 13px;
   font-weight: ${({ $active }) => ($active ? 600 : 400)};
   color: ${({ theme, $active }) =>
     $active ? theme.colors.text.primary : theme.colors.text.tertiary};
+  background: transparent;
+  border: 0;
   border-left: 2px solid
     ${({ theme, $active }) =>
       $active ? ledgerAccent(theme.mode) : 'transparent'};
+  text-align: left;
   cursor: pointer;
   transition: color 0.16s, border-color 0.16s;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 `
 
@@ -541,6 +576,30 @@ export const HelperText = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.6;
+`
+
+/* ───────────────────────── Empty state ───────────────────────── */
+
+/**
+ * 섹션 비어 있을 때 통일 placeholder. text + 옵션 CTA가 한 묶음으로 보이도록.
+ * 회색 italic 한 줄 + 좌측 dashed 강조선. HelperText는 보조 텍스트(에러·hint)
+ * 용도로 둠.
+ */
+export const EmptyState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 0 14px 14px;
+  border-left: 2px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 13px;
+  line-height: 1.6;
+  font-style: italic;
+`
+
+export const EmptyStateLine = styled.span`
+  font-style: italic;
 `
 
 /* ───────────────────────── Accent surfaces ───────────────────────── */

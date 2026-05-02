@@ -70,7 +70,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
 
   // ===== 북마크 / 최근 본 =====
   const { bookmarks, toggleBookmark } = useBookmarks()
-  const { addRecentEvent } = useRecentEvents()
+  const { recentEvents, addRecentEvent } = useRecentEvents()
 
   // ===== Entity: 사건 데이터 =====
   // useEvents는 React Query 무한 스크롤로 전환됨(a1b5b6f85). gov positions 동시 fetch는
@@ -93,7 +93,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     selectedCountry,
     selectedPositionType,
     showFlatView,
-    showGlobalHeadsOfState,
     setSelectedCategory,
     setKeyword,
     setSortBy,
@@ -102,14 +101,13 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setSelectedCountry,
     setSelectedPositionType,
     setShowFlatView,
-    setShowGlobalHeadsOfState,
     availableCenturies,
     filteredEvents,
     sortedEvents,
     filterSummaryChips,
     hasActiveFilters,
     handleResetFilters,
-  } = useEventFilters(events, dbCategories)
+  } = useEventFilters(events, dbCategories, countries, historicalCountries)
 
   // ===== Feature: 계층 / 직책 =====
   const {
@@ -129,7 +127,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     eventHeadsOfState,
     expandedTenureGroups,
     toggleTenureGroupExpansion,
-  } = useHeadsOfState(events, [], selectedPositionType, showGlobalHeadsOfState)
+  } = useHeadsOfState(events, [], selectedPositionType)
 
   const tenureGroups = useTenureGroups(
     flattenedHierarchy,
@@ -344,6 +342,18 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       sortBy={sortBy}
       sortDirection={sortDirection}
       hasActiveFilters={filtersOrSearchActive}
+      activeFilterChips={
+        bookmarksOnly
+          ? [
+              ...filterSummaryChips,
+              {
+                key: 'bookmarks',
+                label: '북마크만',
+                onClear: () => setBookmarksOnly(false),
+              },
+            ]
+          : filterSummaryChips
+      }
       tenureGroups={tenureGroups}
       periodHeadsOfState={eventHeadsOfState.get('__periodHeads__') ?? []}
       dbCategories={dbCategories}
@@ -399,6 +409,11 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       }}
       onShowSummary={openSummary}
       onAfterDelete={handleAfterDelete}
+      // ── Discovery Hub용 데이터 (선택 없을 때만 사용)
+      events={events}
+      recentEventIds={recentEvents}
+      bookmarkIds={bookmarks}
+      filteredEvents={sortedEvents}
     />
   )
 
@@ -413,7 +428,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     selectedPositionType,
     selectedCentury,
     showFlatView,
-    showGlobalHeadsOfState,
     sortBy,
     sortDirection,
     dbCategories,
@@ -424,8 +438,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setShowCountryModal,
     setShowPositionTypeModal,
     toggleShowFlatView: () => setShowFlatView(!showFlatView),
-    toggleShowGlobalHeadsOfState: () =>
-      setShowGlobalHeadsOfState((prev) => !prev),
     setSelectedCentury,
     setSortBy,
     setSortDirection,

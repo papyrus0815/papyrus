@@ -27,6 +27,10 @@ interface PersonSelectModalProps {
   selectedPersonId: string
   onSelect: (personId: string, personName: string) => void
   onClose: () => void
+  /** 표시 목록에서 제외할 인물 ID들 (자기 자신·이미 다른 가족 슬롯에 들어간 인물 등) */
+  excludeIds?: string[]
+  /** 선택 불가 사유 안내 (excludeIds로 결과가 0건일 때 빈 상태에 노출) */
+  excludeReason?: string
 }
 
 type SortOption = 'name' | 'birth-asc' | 'birth-desc'
@@ -36,7 +40,13 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   selectedPersonId,
   onSelect,
   onClose,
+  excludeIds,
+  excludeReason,
 }) => {
+  const excludeSet = useMemo(
+    () => new Set((excludeIds ?? []).filter(Boolean)),
+    [excludeIds],
+  )
   const playClickSound = useClickSound()
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortOption>('name')
@@ -82,7 +92,9 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
 
   // 검색 + 필터링
   const filteredPersons = useMemo(() => {
-    let result = persons
+    let result = excludeSet.size > 0
+      ? persons.filter((p) => !excludeSet.has(p.id))
+      : persons
 
     // 검색어 필터
     const query = searchQuery.toLowerCase().trim()
@@ -149,6 +161,7 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
     return result
   }, [
     persons,
+    excludeSet,
     searchQuery,
     filterCountry,
     filterDynasty,
@@ -348,7 +361,9 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
                     <FiUser size={40} strokeWidth={1.5} />
                   </EmptyIconWrap>
                   <EmptyText>검색 결과가 없습니다</EmptyText>
-                  <EmptySub>필터를 조정하거나 검색어를 변경해 보세요</EmptySub>
+                  <EmptySub>
+                    {excludeReason ?? '필터를 조정하거나 검색어를 변경해 보세요'}
+                  </EmptySub>
                 </EmptyState>
               ) : (
                 filteredPersons.map((person) => {

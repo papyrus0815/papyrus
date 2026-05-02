@@ -179,6 +179,15 @@ export function DetailActors({
           <EditorialRule />
         </EditorialHeader>
 
+        {/* 비어 있을 때 통일 안내 — persons·countries 모두 없을 때만 */}
+        {!hasAnything && (
+          <S.EmptyState>
+            <S.EmptyStateLine>
+              아직 등록된 인물·국가가 없습니다. 아래 버튼으로 추가하세요.
+            </S.EmptyStateLine>
+          </S.EmptyState>
+        )}
+
         {/* 인물 — 세로 리스트, hairline 구분선 */}
         {persons.length > 0 && (
           <PersonList>
@@ -332,11 +341,15 @@ function totals(persons: number, countries: number): string {
 /* ───────────────────────── styles — editorial sans ─────────────── */
 /* NYT 깔끔한 톤(헤어라인 룰 + smallcaps eyebrow + 위계)만 차용. 폰트는 sans 기본. */
 
+/**
+ * 섹션 구분 hr 색상 — 본문 흐름 방해 안 하는 hairline.
+ * 이전엔 0.78/0.5로 본문 글자보다 진해 시선 분산이 컸음. hairline 톤으로 낮춤.
+ */
 const editorialRuleColor = (mode: 'light' | 'dark') =>
-  mode === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(15,23,42,0.78)'
+  mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'
 
 const softRuleColor = (mode: 'light' | 'dark') =>
-  mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.12)'
+  mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'
 
 const mutedTextColor = (mode: 'light' | 'dark') =>
   mode === 'dark' ? 'rgba(255,255,255,0.66)' : 'rgba(15,23,42,0.62)'
@@ -384,10 +397,16 @@ const EditorialKicker = styled.div`
   color: ${({ theme }) => mutedTextColor(theme.mode)};
 `
 
+/**
+ * <hr>의 브라우저 기본 border 렌더링이 styled `border-top`을 덮어 짙게 보이는
+ * 케이스를 방어하기 위해 background+height 방식으로 그린다(border 0).
+ */
 const EditorialRule = styled.hr`
   margin: 14px 0 4px;
-  border: 0;
-  border-top: 1px solid ${({ theme }) => editorialRuleColor(theme.mode)};
+  border: 0 !important;
+  height: 1px;
+  background: ${({ theme }) => editorialRuleColor(theme.mode)};
+  color: transparent;
 `
 
 /* ─── Person list (vertical, hairline separators) ─── */

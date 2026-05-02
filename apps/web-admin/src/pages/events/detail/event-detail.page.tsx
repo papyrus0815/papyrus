@@ -20,6 +20,7 @@ import { SaveStatus } from './components/save-status'
 import * as S from './styles'
 import { useEventDetail } from './use-event-detail'
 import { useEventMutation } from './use-event-mutation'
+import { useUndoablePatch } from './use-undoable-patch'
 
 /**
  * 사건 상세 페이지 — 단일 칼럼 narrative-first.
@@ -36,7 +37,11 @@ const EventDetailPage = () => {
   const { eventId } = useParams<{ eventId: string }>()
   const { event, isLoading, isError, error, enabledModules } = useEventDetail(eventId)
   const mutation = useEventMutation(eventId ?? '')
-  const onPatch = mutation.mutate
+  /**
+   * onPatch — mutation.mutate에 1단계 undo 토스트를 얹은 wrapper.
+   * 모든 인라인 편집은 이 함수를 통해 patch한다 → 직후 5초간 "되돌리기" 토스트.
+   */
+  const onPatch = useUndoablePatch({ event, mutate: mutation.mutate })
 
   /* 마지막 저장 성공 시각 — SaveStatus가 "방금 저장됨" 플래시를 띄우기 위한 트리거. */
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
@@ -129,7 +134,7 @@ const EventDetailPage = () => {
             onPersonClick={onPersonClick}
           />
 
-          <S.Body $noRail={sections.length < 5}>
+          <S.Body>
             <DetailRail sections={sections} />
 
             <S.Main>
@@ -139,6 +144,13 @@ const EventDetailPage = () => {
                 event={event}
                 onPatch={onPatch}
                 onPersonClick={onPersonClick}
+              />
+
+              {/* 모듈 추가 진입점 — 이전에는 페이지 최하단이라 발견성이 낮아 actors 직후로 이동. */}
+              <ModuleAdd
+                event={event}
+                enabledModules={enabledModules}
+                onPatch={onPatch}
               />
 
               {enabledModules.includes('belligerents') && (
@@ -155,12 +167,6 @@ const EventDetailPage = () => {
 
               <DetailNetwork event={event} onPatch={onPatch} />
               <DetailAppendix event={event} onPatch={onPatch} />
-
-              <ModuleAdd
-                event={event}
-                enabledModules={enabledModules}
-                onPatch={onPatch}
-              />
             </S.Main>
           </S.Body>
         </S.PageInner>

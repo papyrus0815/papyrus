@@ -12,16 +12,30 @@
  */
 import styled, { css } from 'styled-components'
 
-import { ledgerAccent } from '@/pages/events/ledger/styles/ledger-tokens'
+import {
+  ledgerAccent,
+  ledgerHairlineStrong,
+} from '@/pages/events/ledger/styles/ledger-tokens'
 
 /**
- * read 모드 본문 — *완전히 정적인 plain text*. hover 효과·클릭 어포던스 X.
- * 편집 진입은 호스트 hover 시 노출되는 ✎/▾ 버튼만이 담당.
- * placeholder 상태만 italic + tertiary 색으로 옅게.
+ * read 모드 본문 — 평소엔 거의 보이지 않는 dashed underline으로 click-to-edit
+ * 어포던스를 상시 노출(hover 전부터 시각 단서). text-decoration이라 layout은
+ * 흔들리지 않는다. 호스트(`[data-edit-host]`) hover/focus 시 또렷해진다.
+ * placeholder 상태는 italic + tertiary 색.
  */
 export const editableSurface = css`
   position: relative;
-  cursor: default;
+  cursor: text;
+  text-decoration: underline dashed
+    ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.16s;
+
+  [data-edit-host]:hover &,
+  [data-edit-host]:focus-within & {
+    text-decoration-color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
 
   &[data-empty='true'] {
     color: ${({ theme }) => theme.colors.text.tertiary};

@@ -115,6 +115,10 @@ export const CATEGORY_COLORS: Partial<
 
 /**
  * 카테고리별 배지 색상 (리스트용)
+ *
+ * NOTE: 영문 슬러그(`'political'` 등)와 한글 이름(`'정치'` 등)을 둘 다 키로
+ * 등록한다. 실제 데이터는 EventCategory의 한글 `name`이지만, 과거 코드 일부가
+ * 영문 슬러그를 가정하고 작성되어 있어 두 형태 모두 매칭되도록 alias 처리.
  */
 export const CATEGORY_BADGE_COLORS: Record<HistoricalEventCategory, string> = {
   military: '#db2777',
@@ -127,6 +131,17 @@ export const CATEGORY_BADGE_COLORS: Record<HistoricalEventCategory, string> = {
   conference: '#2563eb',
   religious: '#fb923c',
   other: '#4b5563',
+  // 한글 alias — DB EventCategory.name과 직접 매칭
+  '전쟁/군사': '#db2777',
+  정치: '#2563eb',
+  경제: '#0ea5e9',
+  사회: '#22c55e',
+  과학기술: '#f97316',
+  문화: '#ec4899',
+  외교: '#2563eb',
+  '회담/조약': '#2563eb',
+  종교: '#fb923c',
+  기타: '#4b5563',
 }
 
 /**
@@ -149,6 +164,17 @@ export const CATEGORY_SOFT_COLORS: Record<
   conference: { rgb: '37, 99, 235', text: '#1d4ed8', textDark: '#93c5fd', sparkEnd: '#60a5fa' },
   religious: { rgb: '251, 146, 60', text: '#c2410c', textDark: '#fdba74', sparkEnd: '#fb923c' },
   other: { rgb: '75, 85, 99', text: '#374151', textDark: '#cbd5e1', sparkEnd: '#94a3b8' },
+  // 한글 alias
+  '전쟁/군사': { rgb: '219, 39, 119', text: '#be185d', textDark: '#f9a8d4', sparkEnd: '#f472b6' },
+  정치: { rgb: '37, 99, 235', text: '#1d4ed8', textDark: '#93c5fd', sparkEnd: '#60a5fa' },
+  경제: { rgb: '14, 165, 233', text: '#0369a1', textDark: '#7dd3fc', sparkEnd: '#38bdf8' },
+  사회: { rgb: '34, 197, 94', text: '#15803d', textDark: '#86efac', sparkEnd: '#4ade80' },
+  과학기술: { rgb: '249, 115, 22', text: '#c2410c', textDark: '#fdba74', sparkEnd: '#fb923c' },
+  문화: { rgb: '236, 72, 153', text: '#be185d', textDark: '#f9a8d4', sparkEnd: '#f472b6' },
+  외교: { rgb: '37, 99, 235', text: '#1d4ed8', textDark: '#93c5fd', sparkEnd: '#60a5fa' },
+  '회담/조약': { rgb: '37, 99, 235', text: '#1d4ed8', textDark: '#93c5fd', sparkEnd: '#60a5fa' },
+  종교: { rgb: '251, 146, 60', text: '#c2410c', textDark: '#fdba74', sparkEnd: '#fb923c' },
+  기타: { rgb: '75, 85, 99', text: '#374151', textDark: '#cbd5e1', sparkEnd: '#94a3b8' },
 }
 
 /**

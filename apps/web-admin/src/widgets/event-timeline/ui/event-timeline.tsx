@@ -39,16 +39,13 @@ import React, {
   useState,
 } from 'react'
 
-import styled, { css } from 'styled-components'
+import styled, { css, keyframes } from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
-import {
-  BRAND,
-  CATEGORY_BADGE_COLORS,
-  MOTION,
-} from '../../../pages/events/styles/theme'
+import { LEDGER_CATEGORY, resolveCategory } from '../../../pages/events/ledger/styles/ledger-tokens'
+import { BRAND, MOTION } from '../../../pages/events/styles/theme'
 import type {
   EventHierarchyNode,
   HistoricalEvent,
@@ -117,6 +114,21 @@ const IMPORTANCE_BAR_HEIGHT: Record<BarData['importance'], number> = {
   normal: 28,
 }
 
+/**
+ * Bar row stacking — 같은 lane에서 시간 겹친 bar들을 row 단위로 분리해 모두 보이게.
+ *  - MAX_BAR_ROWS: lane 안 최대 row 수. 4번째+는 "+N" overflow 배지로 노출.
+ *  - ROW_DELTA: row 간 y 간격(px). LANE_HEIGHT(72) 안에서 3 row가 여유롭게 들어가도록.
+ *  - COMPACT_BAR_HEIGHT: stacking 활성 lane의 bar 높이(작게). 단일 row일 땐 원래 높이 유지.
+ */
+const MAX_BAR_ROWS = 3
+const ROW_DELTA = 18
+const COMPACT_BAR_HEIGHT: Record<BarData['importance'], number> = {
+  critical: 14,
+  major: 12,
+  notable: 10,
+  normal: 10,
+}
+
 /** Milestone 다이아몬드 반지름 — importance에 따라 차등 (critical 7 / major 6 / 그 외 5) */
 const MILESTONE_RADIUS: Record<BarData['importance'], number> = {
   critical: 7,
@@ -126,8 +138,12 @@ const MILESTONE_RADIUS: Record<BarData['importance'], number> = {
 }
 /** Cluster 다이아몬드 — importance와 무관, 묶음 표시용으로 약간 큼 */
 const CLUSTER_RADIUS = 8
-/** 외부 라벨 최소 폭 — 이 값 미만이면 표시 자체를 보류 (음수/오류 방지) */
-const EXT_LABEL_MIN_WIDTH = 24
+/**
+ * 외부 라벨 최소 폭 — 이 값 미만이면 표시 자체를 보류.
+ * CJK 한 글자 = 12px라 *의미 있는 표시 단위*는 3글자+ellipsis(≈ 40px) 이상.
+ * 이전 24px은 한 글자만 잘리고 "…"가 붙는 무의미 라벨이 나와 시선 노이즈였음.
+ */
+const EXT_LABEL_MIN_WIDTH = 40
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RenderItem 타입 — 컴포넌트 외부 hoist (가독성)
@@ -176,18 +192,18 @@ const IMPORTANCE_LABEL: Record<BarData['importance'], string> = {
   normal: '일반',
 }
 
-const KNOWN_CATEGORIES = [
-  'military',
-  'political',
-  'diplomatic',
-  'conference',
-  'economic',
-  'social',
-  'technological',
-  'cultural',
-  'religious',
-  'other',
-] as const
+/**
+ * 카테고리 lane 순서 — DB의 EventCategory와 동기화된 LEDGER_CATEGORY(한글 키)
+ * 기준. 이전엔 'military'/'political' 같은 영문 슬러그였는데, 실제 데이터의
+ * `event.category`는 한글 이름('정치'/'전쟁/군사' 등)이라 매칭이 전혀 되지
+ * 않아 모든 사건이 "기타"로 떨어지던 버그가 있었음.
+ */
+const KNOWN_CATEGORIES = Object.keys(LEDGER_CATEGORY) as Array<
+  keyof typeof LEDGER_CATEGORY
+>
+
+/** 한글 카테고리 이름 → 색상(배지·바·milestone 공통). */
+const categoryColor = (name: string): string => resolveCategory(name).color
 
 /** CJK 한 글자 ≈ 12px, ASCII ≈ 6.5px. truncation 시 가중치 측정으로 정확도 ↑ */
 const CJK_CHAR_PX = 12
@@ -208,6 +224,29 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const tooltipIdRef = useRef(`tl-tooltip-${Math.random().toString(36).slice(2, 9)}`)
+  /**
+   * ScrollHost는 bars.length>0 일 때만 렌더되므로 단순 useRef + useEffect로
+   * ResizeObserver를 한 번만 붙이면 첫 마운트 때 ref가 null이라 영원히 미동작.
+   * (events 비동기 로딩 → 처음엔 EmptyHint 렌더 → 후에 ScrollHost로 교체되지만
+   *  useEffect는 [] deps라 다시 실행 X). callback ref로 ScrollHost가 DOM에 들어
+   * 올 때마다 (재)attach 하도록 만든다. tab 전환 후 데이터가 보이던 증상의 원인.
+   */
+  const observerRef = useRef<ResizeObserver | null>(null)
+  const attachScrollHost = useCallback((el: HTMLDivElement | null) => {
+    observerRef.current?.disconnect()
+    observerRef.current = null
+    scrollRef.current = el
+    if (!el) {
+      setContainerSize({ width: 0, height: 0 })
+      return
+    }
+    const obs = new ResizeObserver((entries) => {
+      const r = entries[0]?.contentRect
+      if (r) setContainerSize({ width: r.width, height: r.height })
+    })
+    obs.observe(el)
+    observerRef.current = obs
+  }, [])
 
   const [tooltip, setTooltip] = useState<{ x: number; y: number; bar: BarData } | null>(null)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
@@ -228,16 +267,12 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     return () => mql.removeEventListener('change', update)
   }, [])
 
-  // ── 컨테이너 크기 측정 ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (!scrollRef.current) return
-    const obs = new ResizeObserver((entries) => {
-      const r = entries[0]?.contentRect
-      if (r) setContainerSize({ width: r.width, height: r.height })
-    })
-    obs.observe(scrollRef.current)
-    return () => obs.disconnect()
-  }, [])
+  /* ── 컨테이너 크기 측정 ────────────────────────────────────────────────
+   * ScrollHost가 DOM에 들어올 때 callback ref(`attachScrollHost`)에서 ResizeObserver
+   * 를 (재)attach 하므로 별도 useEffect 불필요.
+   * (이전 useEffect는 첫 마운트 시 ScrollHost가 EmptyHint로 가려져 ref=null이었던
+   *  경우 다시 실행되지 않아 containerSize가 영원히 0인 버그가 있었음.)
+   */
 
   // ── 막대 데이터 추출 ───────────────────────────────────────────────────
   const allBars = useMemo<BarData[]>(() => {
@@ -311,7 +346,15 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   const renderReady = containerSize.width > 0
   const computePxPerYear = useCallback(
     (forZoom: number, forSpan: number = yearSpan): number => {
-      const innerWidth = Math.max(0, containerSize.width - LANE_LABEL_WIDTH - 16)
+      /**
+       * fit-to-width 시 SVG 우측에 ExternalLabel(최대 EXT_LABEL_MAX_WIDTH+16)이
+       * 위치할 공간을 추가로 비워둬야 마지막 데이터의 라벨이 잘리지 않으면서도
+       * zoom=1 상태에서 가로 스크롤이 생기지 않는다.
+       */
+      const innerWidth = Math.max(
+        0,
+        containerSize.width - LANE_LABEL_WIDTH - 16 - (EXT_LABEL_MAX_WIDTH + 16),
+      )
       const fit = innerWidth > 0 ? innerWidth / forSpan : PIXELS_PER_YEAR_DEFAULT
       const base = Math.max(fit, PIXELS_PER_YEAR_DEFAULT * 0.5)
       return base * forZoom
@@ -325,31 +368,24 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   const timelineWidth = Math.ceil(yearSpan * pixelsPerYear)
 
   // ── 레인 ────────────────────────────────────────────────────────────────
+  /**
+   * lane key/label 모두 한글 카테고리 이름. 알려진(LEDGER_CATEGORY) 카테고리를
+   * 정해진 순서로 먼저 깔고, 데이터에만 있는 미등록 카테고리는 뒤에 append.
+   * dbCategories는 DB에서 받은 사용자 정의 카테고리 fallback 라벨용.
+   */
   const lanes = useMemo<{ key: string; label: string }[]>(() => {
-    const KNOWN_LABEL: Record<string, string> = {
-      military: '전쟁/군사',
-      political: '정치',
-      diplomatic: '외교',
-      conference: '회담/조약',
-      economic: '경제',
-      social: '사회',
-      technological: '과학기술',
-      cultural: '문화',
-      religious: '종교',
-      other: '기타',
-    }
     const present = new Set(allBars.map((b) => b.category))
     const ordered: { key: string; label: string }[] = []
     const seen = new Set<string>()
-    for (const k of KNOWN_CATEGORIES) {
-      ordered.push({ key: k, label: KNOWN_LABEL[k] ?? k })
-      seen.add(k)
+    for (const name of KNOWN_CATEGORIES) {
+      ordered.push({ key: name, label: name })
+      seen.add(name)
     }
     for (const c of present) {
       if (seen.has(c)) continue
       ordered.push({
         key: c,
-        label: dbCategories.find((d) => d.id === c)?.name ?? '기타',
+        label: dbCategories.find((d) => d.name === c)?.name ?? c,
       })
       seen.add(c)
     }
@@ -371,6 +407,15 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   const intrinsicHeight =
     TOP_AXIS_HEIGHT + visibleLanes.length * LANE_HEIGHT + TIMELINE_BOTTOM_PAD
   const totalHeight = Math.max(intrinsicHeight, containerSize.height)
+
+  /**
+   * SVG 우측 padding — 마지막 bar/milestone에 붙는 외부 라벨(ExternalLabel)이
+   * 최대 EXT_LABEL_MAX_WIDTH(140) + 8(gap)만큼 bar 오른쪽으로 뻗어나가는데,
+   * SVG width를 timelineWidth로만 잡으면 그 라벨이 우측에서 잘린다. 약간의
+   * 여유를 두어 마지막 데이터의 라벨까지 모두 보이도록 한다.
+   */
+  const RIGHT_LABEL_PAD = EXT_LABEL_MAX_WIDTH + 16
+  const svgWidth = LANE_LABEL_WIDTH + timelineWidth + RIGHT_LABEL_PAD
 
   // ── 연도 눈금 ───────────────────────────────────────────────────────────
   const ticks = useMemo(() => {
@@ -456,34 +501,55 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     }
   }, [updateViewport, containerSize.width])
 
-  // ── 줌 — Ctrl/⌘+휠 ────────────────────────────────────────────────────
+  // ── 휠 — Ctrl/⌘+휠은 줌, 그 외엔 deltaY를 가로 스크롤로 변환 ───────────────
   const handleWheel = useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
-      if (!e.ctrlKey && !e.metaKey) return
-      e.preventDefault()
       const el = scrollRef.current
       if (!el) return
-      const rect = el.getBoundingClientRect()
-      const pointerX = e.clientX - rect.left
-      // Lane label 영역 위에서 휠 → 클램프해서 음수 year 회피
-      const pointerInTimeline = Math.max(0, pointerX - LANE_LABEL_WIDTH)
-      const yearAtPointer =
-        (el.scrollLeft + pointerInTimeline) / pixelsPerYear + minYear
 
-      const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP
-      const nextZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom * factor))
-      if (nextZoom === zoom) return
+      // Ctrl/Meta + 휠 → 줌
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        const rect = el.getBoundingClientRect()
+        const pointerX = e.clientX - rect.left
+        const pointerInTimeline = Math.max(0, pointerX - LANE_LABEL_WIDTH)
+        const yearAtPointer =
+          (el.scrollLeft + pointerInTimeline) / pixelsPerYear + minYear
 
-      setZoom(nextZoom)
-      // 동일한 helper로 새 pixelsPerYear 계산 (stale 회피)
-      requestAnimationFrame(() => {
-        const el2 = scrollRef.current
-        if (!el2) return
-        const newPx = computePxPerYear(nextZoom)
-        const newScrollLeft =
-          (yearAtPointer - minYear) * newPx - pointerInTimeline
-        el2.scrollLeft = Math.max(0, newScrollLeft)
-      })
+        const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP
+        const nextZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom * factor))
+        if (nextZoom === zoom) return
+
+        setZoom(nextZoom)
+        requestAnimationFrame(() => {
+          const el2 = scrollRef.current
+          if (!el2) return
+          const newPx = computePxPerYear(nextZoom)
+          const newScrollLeft =
+            (yearAtPointer - minYear) * newPx - pointerInTimeline
+          el2.scrollLeft = Math.max(0, newScrollLeft)
+        })
+        return
+      }
+
+      /**
+       * 일반 휠 → 가로 스크롤. 타임라인은 수평 흐름이 주축이라 마우스 휠을
+       * 가로로 흐르게 한다. 단:
+       *  - Shift+휠 / 트랙패드 가로 swipe(deltaX 우세) → 브라우저 네이티브에 맡김
+       *  - 가로 overflow가 없으면(전체가 viewport에 fit) 가로 변환 의미 없음 — 패스
+       *  - 세로 overflow가 있으면 세로 우선 — 휠은 그대로 vertical scroll
+       */
+      if (e.shiftKey) return
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return
+      if (e.deltaY === 0) return
+
+      const hasHScroll = el.scrollWidth > el.clientWidth + 1
+      const hasVScroll = el.scrollHeight > el.clientHeight + 1
+      if (!hasHScroll) return
+      if (hasVScroll) return
+
+      e.preventDefault()
+      el.scrollLeft += e.deltaY
     },
     [zoom, pixelsPerYear, minYear, computePxPerYear],
   )
@@ -620,11 +686,31 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
    *   2) ZOOM_MAX 이하로 클램프 (이미 MAX면 그대로)
    *   3) 줌 적용 후 raf 두 번 (state→render→layout) 후 scroll + focus 첫 사건
    */
+  /**
+   * activatedClusterId — 활성화 직후 ~700ms 동안 클러스터에 펄스 링을 띄워
+   * "눌렸다"는 시각 피드백을 준다(특히 이미 zoom이 충분해서 setZoom 무동작인
+   * 경우에도 사용자가 인지 가능하도록).
+   */
+  const [activatedClusterId, setActivatedClusterId] = useState<string | null>(
+    null,
+  )
+  const activatedTimerRef = useRef<number | null>(null)
+
   const activateCluster = useCallback(
     (cluster: RenderCluster) => {
+      // 1) 펄스 피드백 — zoom 변화와 무관하게 항상 발화
+      if (activatedTimerRef.current != null) {
+        window.clearTimeout(activatedTimerRef.current)
+      }
+      setActivatedClusterId(cluster.id)
+      activatedTimerRef.current = window.setTimeout(() => {
+        setActivatedClusterId((prev) => (prev === cluster.id ? null : prev))
+        activatedTimerRef.current = null
+      }, 700)
+
+      // 2) zoom 계산 — fit-to-cluster (60% viewport 차지)
       const innerWidth = Math.max(0, containerSize.width - LANE_LABEL_WIDTH - 16)
       const span = Math.max(1, cluster.endYear - cluster.startYear)
-      // 목표: cluster가 viewport 60%를 차지하도록
       const desiredPxPerYear = (innerWidth * 0.6) / span
       const basePxPerYear = computePxPerYear(1)
       const fitZoom =
@@ -633,11 +719,10 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
       if (targetZoom !== zoom) setZoom(targetZoom)
 
-      // 두 번 raf — state 적용 + 다음 프레임 layout 보장
+      // 3) 두 번 raf — state 적용 + 다음 프레임 layout 보장 후 scroll/focus
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           scrollToYear(cluster.centerYear)
-          // 풀린 후 cluster 첫 사건에 focus 복귀 — Tab 흐름 유지
           const firstId = cluster.bars[0].id
           const el = svgRef.current?.querySelector<SVGElement>(
             `[data-bar-id="${firstId}"]`,
@@ -665,22 +750,15 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     minimapDragRef.current = false
   }
 
-  // ── viewport culling — 첫 페인트도 추정 범위로 ──────────────────────────
-  const visibleBars = useMemo(() => {
-    if (viewportYears) {
-      const lo = viewportYears.start - 1
-      const hi = viewportYears.end + 1
-      return bars.filter((b) => b.endYear >= lo && b.startYear <= hi)
-    }
-    // 첫 페인트: 추정 viewport — 컨테이너 너비 / pixelsPerYear
-    if (renderReady) {
-      const visibleSpan =
-        (containerSize.width - LANE_LABEL_WIDTH) / pixelsPerYear
-      const hi = minYear + visibleSpan + 1
-      return bars.filter((b) => b.startYear <= hi)
-    }
-    return bars
-  }, [bars, viewportYears, renderReady, containerSize.width, pixelsPerYear, minYear])
+  /**
+   * viewport culling 메모는 더 이상 사용하지 않음 — clustering / external label
+   * placement는 *전역 정렬*이라 viewport로 잘라낸 부분 집합으로 계산하면 같은
+   * milestone들이 viewport 경계에서 클러스터/싱글로 토글되는 시각 jitter가 생겼다.
+   * 또한 viewportYears가 가로 스크롤마다 변해 renderItems 전체가 재계산되며 비용이
+   * 컸다. 클러스터링은 한 번만(`bars`/`pixelsPerYear` 변경 시) 수행하고, viewport
+   * 가시성은 브라우저 SVG paint 단계에 위임한다(전역 RenderItem은 즉시 위치 계산
+   * 결과라 paint 영역 밖이면 자연히 비용 낮음).
+   */
 
   // ── 렌더 파이프라인 — bar / milestone / cluster ─────────────────────────
   /**
@@ -692,17 +770,27 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
    *
    * 외부 라벨 표시 여부는 *같은 lane 내 다음 아이템과의 거리*로 결정 (그리디 placement).
    */
-  const renderItems = useMemo<RenderItem[]>(() => {
-    if (!renderReady) return []
-    // lane별로 시간순 정렬
+  const renderResult = useMemo<{
+    items: RenderItem[]
+    /** 카테고리(=lane key) → 숨겨진(overflow) bar 개수. 라벨 옆 "+N" 표시용 */
+    overflow: Map<string, number>
+    /** 카테고리 → 사용된 bar row 수 (1~MAX_BAR_ROWS). compact 높이 분기에 사용 */
+    laneRows: Map<string, number>
+  }>(() => {
+    if (!renderReady) {
+      return { items: [], overflow: new Map(), laneRows: new Map() }
+    }
+    // lane별로 시간순 정렬 — bars(전역) 기준이라 viewport 변화에 영향 안 받음
     const byLane = new Map<string, BarData[]>()
-    for (const b of visibleBars) {
+    for (const b of bars) {
       const arr = byLane.get(b.category) ?? []
       arr.push(b)
       byLane.set(b.category, arr)
     }
 
     const out: RenderItem[] = []
+    const overflowByLane = new Map<string, number>()
+    const rowsByLane = new Map<string, number>()
 
     for (const [category, arr] of byLane) {
       arr.sort((a, b) => a.startYear - b.startYear)
@@ -757,6 +845,43 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
         }
       }
 
+      /**
+       * Bar row 할당 — 같은 lane 안에서 시간 겹친 bar들을 row 단위로 분리.
+       *  - 그리디 interval scheduling: 시작 시각 순으로 가장 빠르게 비는 row에 배치.
+       *  - row 인덱스가 MAX_BAR_ROWS-1(=2)을 초과하면 *숨김* + overflow 카운트.
+       *  - milestone은 별도 yOffset 처리(이미 위에서) — bar row 할당과 무관.
+       */
+      const barRowOf = new Map<string, number>()
+      const hiddenBarIds = new Set<string>()
+      const barEndsByRow: number[] = []
+      let laneOverflow = 0
+      for (const p of pre) {
+        if (p.kind !== 'bar') continue
+        let assignedRow = -1
+        for (let r = 0; r < barEndsByRow.length; r++) {
+          if (barEndsByRow[r] <= p.x) {
+            assignedRow = r
+            barEndsByRow[r] = p.x + p.w
+            break
+          }
+        }
+        if (assignedRow === -1) {
+          if (barEndsByRow.length < MAX_BAR_ROWS) {
+            assignedRow = barEndsByRow.length
+            barEndsByRow.push(p.x + p.w)
+          } else {
+            // 모든 row가 차 있어 들어갈 자리 없음 → 숨김
+            hiddenBarIds.add(p.bar.id)
+            laneOverflow++
+            continue
+          }
+        }
+        barRowOf.set(p.bar.id, assignedRow)
+      }
+      const usedBarRows = Math.min(MAX_BAR_ROWS, barEndsByRow.length)
+      if (usedBarRows > 0) rowsByLane.set(category, usedBarRows)
+      if (laneOverflow > 0) overflowByLane.set(category, laneOverflow)
+
       // 2단계: milestone 클러스터링 — 연속된 milestone들이 CLUSTER_GAP_PX 이내 CLUSTER_MIN_COUNT개+ 면 묶음
       type Bucket = { items: Pre[]; isCluster: boolean }
       const buckets: Bucket[] = []
@@ -804,9 +929,15 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
             : next.items[0].x
           : Infinity
         const gap = nextStart - myEnd
-        // 라벨 폭 가드 — gap이 작아 labelWidth가 EXT_LABEL_MIN_WIDTH 미만이면 표시 안 함
+        /**
+         * 라벨 폭 가드 — `gap >= MIN_GAP(60)` 그리고 *실제 사용 가능한 폭*이
+         * MIN_WIDTH(40) 이상일 때만 표시. 실 폭은 gap - 8(여백) 안에서 MAX_WIDTH(140)
+         * 이하. 이 조건을 모두 만족할 때만 showExt=true → 의미 없는 1~2글자 라벨이
+         * 시선을 분산하는 케이스 방지.
+         */
         const candidateWidth = Math.min(EXT_LABEL_MAX_WIDTH, gap - 8)
-        const showExt = gap >= EXT_LABEL_MIN_GAP && candidateWidth >= EXT_LABEL_MIN_WIDTH
+        const showExt =
+          gap >= EXT_LABEL_MIN_GAP && candidateWidth >= EXT_LABEL_MIN_WIDTH
         const labelWidth = Math.max(EXT_LABEL_MIN_WIDTH, candidateWidth)
 
         if (b.isCluster) {
@@ -842,13 +973,23 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
               externalLabelWidth: labelWidth,
             })
           } else {
-            const h = IMPORTANCE_BAR_HEIGHT[it.bar.importance]
+            // 숨김 처리된 bar는 렌더 X (overflow 배지로 라벨 영역에서 표시).
+            if (hiddenBarIds.has(it.bar.id)) continue
+            const row = barRowOf.get(it.bar.id) ?? 0
+            const isStacking = usedBarRows > 1
+            const h = isStacking
+              ? COMPACT_BAR_HEIGHT[it.bar.importance]
+              : IMPORTANCE_BAR_HEIGHT[it.bar.importance]
+            // row stacking — used row 수 기준으로 lane 안 균등 분포.
+            //   1 row → laneCenter, 2 rows → ±ROW_DELTA/2, 3 rows → -ROW_DELTA, 0, +ROW_DELTA
+            const rowsBlockHalf = ((usedBarRows - 1) * ROW_DELTA) / 2
+            const myRowCenter = laneCenter - rowsBlockHalf + row * ROW_DELTA
             items.push({
               kind: 'bar',
               id: it.bar.id,
               bar: it.bar,
               x: it.x,
-              y: laneCenter - h / 2,
+              y: myRowCenter - h / 2,
               w: it.w,
               h,
               // 막대 안에 라벨 표시되는 경우(w > 70)는 외부 라벨 안 그림
@@ -861,8 +1002,11 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       out.push(...items)
     }
 
-    return out
-  }, [visibleBars, laneIndex, renderReady, minYear, pixelsPerYear])
+    return { items: out, overflow: overflowByLane, laneRows: rowsByLane }
+  }, [bars, laneIndex, renderReady, minYear, pixelsPerYear])
+
+  const renderItems = renderResult.items
+  const laneBarOverflow = renderResult.overflow
 
   // ── 키보드 ←/→ 같은 lane 시간순 이동 + Home/End ────────────────────────
   const focusBar = useCallback((id: string) => {
@@ -873,7 +1017,46 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   }, [])
 
   /**
-   * Cluster 키보드 — Enter/Space로 활성화, ←/→로 같은 lane 안 인접 RenderItem(bar/milestone/cluster) 이동.
+   * 같은 lane 안에서 ←/→/Home/End로 인접 항목 포커스 이동 — cluster·bar 핸들러
+   * 공통 로직. collection은 같은 카테고리로 미리 필터된 항목. 시간 정렬 후 현재
+   * 인덱스 기준 이동, 위치한 연도로 스크롤.
+   * 반환값: 화살표/Home/End 키로 처리되었으면 true (Enter/Space는 false → 호출자가
+   * activate 분기).
+   */
+  const navigateInLane = <T extends { id: string }>(
+    e: React.KeyboardEvent<SVGElement>,
+    current: T,
+    collection: T[],
+    getYear: (item: T) => number,
+  ): boolean => {
+    if (
+      e.key !== 'ArrowRight' &&
+      e.key !== 'ArrowLeft' &&
+      e.key !== 'Home' &&
+      e.key !== 'End'
+    ) {
+      return false
+    }
+    e.preventDefault()
+    const sorted = collection.slice().sort((a, b) => getYear(a) - getYear(b))
+    const idx = sorted.findIndex((x) => x.id === current.id)
+    if (idx === -1) return true
+    let next: T | undefined
+    if (e.key === 'Home') next = sorted[0]
+    else if (e.key === 'End') next = sorted[sorted.length - 1]
+    else if (e.key === 'ArrowRight')
+      next = sorted[Math.min(idx + 1, sorted.length - 1)]
+    else next = sorted[Math.max(idx - 1, 0)]
+    if (next && next.id !== current.id) {
+      focusBar(next.id)
+      scrollToYear(getYear(next))
+    }
+    return true
+  }
+
+  /**
+   * Cluster 키보드 — Enter/Space로 활성화, ←/→/Home/End로 같은 lane 안 인접
+   * RenderItem(bar/milestone/cluster) 이동.
    */
   const handleClusterKeyDown = (
     e: React.KeyboardEvent<SVGElement>,
@@ -885,33 +1068,14 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       activate()
       return
     }
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End') {
-      e.preventDefault()
-      const sameLane = renderItems
-        .filter((r) =>
-          r.kind === 'cluster'
-            ? r.category === cluster.category
-            : r.bar.category === cluster.category,
-        )
-        .sort((a, c) => {
-          const ax = a.kind === 'bar' ? a.x : a.cx
-          const cx = c.kind === 'bar' ? c.x : c.cx
-          return ax - cx
-        })
-      const idx = sameLane.findIndex((r) => r.id === cluster.id)
-      if (idx === -1) return
-      let next: RenderItem | undefined
-      if (e.key === 'Home') next = sameLane[0]
-      else if (e.key === 'End') next = sameLane[sameLane.length - 1]
-      else if (e.key === 'ArrowRight')
-        next = sameLane[Math.min(idx + 1, sameLane.length - 1)]
-      else next = sameLane[Math.max(idx - 1, 0)]
-      if (next && next.id !== cluster.id) {
-        focusBar(next.id)
-        const targetYear = next.kind === 'cluster' ? next.centerYear : next.bar.startYear
-        scrollToYear(targetYear)
-      }
-    }
+    const sameLane = renderItems.filter((r) =>
+      r.kind === 'cluster'
+        ? r.category === cluster.category
+        : r.bar.category === cluster.category,
+    )
+    navigateInLane(e, cluster, sameLane, (it) =>
+      it.kind === 'cluster' ? it.centerYear : it.bar.startYear,
+    )
   }
 
   const handleBarKeyDown = (e: React.KeyboardEvent<SVGElement>, b: BarData) => {
@@ -920,24 +1084,8 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       onSelectEvent(b.id)
       return
     }
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End') {
-      e.preventDefault()
-      const sameCategory = bars
-        .filter((x) => x.category === b.category)
-        .sort((a, c) => a.startYear - c.startYear)
-      const idx = sameCategory.findIndex((x) => x.id === b.id)
-      if (idx === -1) return
-      let next: BarData | undefined
-      if (e.key === 'Home') next = sameCategory[0]
-      else if (e.key === 'End') next = sameCategory[sameCategory.length - 1]
-      else if (e.key === 'ArrowRight')
-        next = sameCategory[Math.min(idx + 1, sameCategory.length - 1)]
-      else next = sameCategory[Math.max(idx - 1, 0)]
-      if (next && next.id !== b.id) {
-        focusBar(next.id)
-        scrollToYear(next.startYear)
-      }
-    }
+    const sameCategory = bars.filter((x) => x.category === b.category)
+    navigateInLane(e, b, sameCategory, (it) => it.startYear)
   }
 
   // ── 오늘 마커 ───────────────────────────────────────────────────────────
@@ -1017,7 +1165,12 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   }, [exportOpen])
 
   // ── render ──────────────────────────────────────────────────────────────
-  const legendItems = lanes.slice(0, 10)
+  /**
+   * legend는 모든 lane을 노출. 이전엔 10개 슬라이스로 잘랐는데, lane 11개+
+   * 환경에서는 11번째부터 hide/show 토글이 불가능했다(노출만 안 될 뿐 lane은
+   * 살아 있어 데이터 무결성 침해). 카테고리는 동적이므로 모두 표시한다.
+   */
+  const legendItems = lanes
   const anyHidden = hiddenCategories.size > 0
 
   return (
@@ -1155,14 +1308,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                     onMouseEnter={() => setHoveredCategory(lane.key)}
                     onMouseLeave={() => setHoveredCategory(null)}
                   >
-                    <LegendDot
-                      style={{
-                        background:
-                          CATEGORY_BADGE_COLORS[
-                            lane.key as keyof typeof CATEGORY_BADGE_COLORS
-                          ] ?? '#6b7280',
-                      }}
-                    />
+                    <LegendDot style={{ background: categoryColor(lane.key) }} />
                     <span>{lane.label}</span>
                   </LegendItem>
                 )
@@ -1183,16 +1329,30 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
         {bars.length === 0 ? (
           <EmptyHint>
             <EmptyIconBubble aria-hidden="true">∅</EmptyIconBubble>
-            <span>표시할 사건이 없습니다.</span>
-            {anyHidden && (
-              <EmptySubAction onClick={showAllCategories}>
-                숨긴 카테고리 모두 보이기
-              </EmptySubAction>
+            {/**
+             * 빈 상태는 두 케이스를 분기:
+             *  - allBars > 0 이면 사용자가 legend로 모든 카테고리를 hide한 상태
+             *    → "전부 숨겨져 있다 · 모두 보이기" 안내. (이전엔 데이터 없음과
+             *       구분 안 돼 사용자가 새로고침하는 등 혼동했음)
+             *  - allBars === 0 이면 진짜로 표시할 사건이 없음.
+             */}
+            {allBars.length > 0 ? (
+              <>
+                <span>
+                  카테고리 {hiddenCategories.size}개를 숨겨 표시할 사건이
+                  없습니다.
+                </span>
+                <EmptySubAction onClick={showAllCategories}>
+                  숨긴 카테고리 모두 보이기
+                </EmptySubAction>
+              </>
+            ) : (
+              <span>표시할 사건이 없습니다.</span>
             )}
           </EmptyHint>
         ) : (
           <ScrollHost
-            ref={scrollRef}
+            ref={attachScrollHost}
             onWheel={handleWheel}
             onMouseDown={handlePanMouseDown}
             $panning={spaceHeld}
@@ -1201,7 +1361,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
             {renderReady && (
               <SvgRoot
                 ref={svgRef}
-                width={LANE_LABEL_WIDTH + timelineWidth}
+                width={svgWidth}
                 height={totalHeight}
                 role="img"
                 aria-label={`사건 타임라인 — ${bars.length}건, ${minYear}년부터 ${maxYear}년까지`}
@@ -1240,14 +1400,14 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                       <LaneBg
                         x={0}
                         y={yTop}
-                        width={LANE_LABEL_WIDTH + timelineWidth}
+                        width={svgWidth}
                         height={LANE_HEIGHT}
                         $alt={i % 2 === 1}
                         $highlighted={hoveredCategory === lane.key}
                       />
                       <LaneSeparator
                         x1={LANE_LABEL_WIDTH}
-                        x2={LANE_LABEL_WIDTH + timelineWidth}
+                        x2={svgWidth}
                         y1={yTop + LANE_HEIGHT}
                         y2={yTop + LANE_HEIGHT}
                       />
@@ -1257,15 +1417,35 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                       >
                         {truncateLabel(lane.label, 10)}
                       </LaneLabel>
+                      {/* 시간 겹침으로 숨겨진 bar 수 — row stacking이 cap에 도달했을 때만 노출 */}
+                      {(() => {
+                        const overflowCount = laneBarOverflow.get(lane.key) ?? 0
+                        if (overflowCount === 0) return null
+                        return (
+                          <LaneOverflowBadge
+                            transform={`translate(${LANE_LABEL_WIDTH - 24}, ${yTop + LANE_HEIGHT - 14})`}
+                          >
+                            <title>
+                              시간 겹침으로 {overflowCount}건이 더 있습니다 (lane 한계 도달)
+                            </title>
+                            <rect
+                              x={-18}
+                              y={-9}
+                              width={32}
+                              height={14}
+                              rx={7}
+                            />
+                            <text x={-2} y={1} textAnchor="middle">
+                              +{overflowCount}
+                            </text>
+                          </LaneOverflowBadge>
+                        )
+                      })()}
                       <LaneDot
                         cx={12}
                         cy={yTop + LANE_HEIGHT / 2}
                         r={3}
-                        fill={
-                          CATEGORY_BADGE_COLORS[
-                            lane.key as keyof typeof CATEGORY_BADGE_COLORS
-                          ] ?? '#6b7280'
-                        }
+                        fill={categoryColor(lane.key)}
                       />
                     </g>
                   )
@@ -1328,10 +1508,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 <g transform={`translate(${LANE_LABEL_WIDTH}, 0)`} role="list">
                   {renderItems.map((it) => {
                     if (it.kind === 'cluster') {
-                      const color =
-                        CATEGORY_BADGE_COLORS[
-                          it.category as keyof typeof CATEGORY_BADGE_COLORS
-                        ] ?? '#6b7280'
+                      const color = categoryColor(it.category)
                       // 시기 정보 포함 — SR이 위치 인지 가능
                       const sy = Math.round(it.startYear)
                       const ey = Math.round(it.endYear)
@@ -1372,6 +1549,14 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                               stroke={color}
                               strokeWidth={1.5}
                             />
+                            {/* 활성화 직후 ~700ms 펄스 — 사용자에게 "눌렸다" 시각 피드백 */}
+                            {activatedClusterId === it.id && !reducedMotion && (
+                              <ClusterPulseRing
+                                points={`0,${-CLUSTER_RADIUS} ${CLUSTER_RADIUS},0 0,${CLUSTER_RADIUS} ${-CLUSTER_RADIUS},0`}
+                                stroke={color}
+                                pointerEvents="none"
+                              />
+                            )}
                             {/* cluster 안에 선택된 사건 있으면 outline */}
                             {containsSelected && (
                               <polygon
@@ -1402,10 +1587,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                     }
 
                     const b = it.bar
-                    const color =
-                      CATEGORY_BADGE_COLORS[
-                        b.category as keyof typeof CATEGORY_BADGE_COLORS
-                      ] ?? '#6b7280'
+                    const color = categoryColor(b.category)
                     const isActive = selectedEventId === b.id
                     const isFocused = focusedBarId === b.id
                     const dim =
@@ -2175,6 +2357,10 @@ const LaneBg = styled.rect<{ $alt: boolean; $highlighted?: boolean }>`
           : 'rgba(37, 99, 235,0.045)'
         : 'transparent'};
   transition: fill ${MOTION.fast};
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 const LaneSeparator = styled.line`
@@ -2194,6 +2380,32 @@ const LaneLabel = styled.text`
 `
 
 const LaneDot = styled.circle``
+
+/**
+ * 겹침으로 숨겨진 bar 수 표시 — 라벨 영역 우하단 작은 pill.
+ * tertiary 톤이라 시선 분산 최소화.
+ */
+const LaneOverflowBadge = styled.g`
+  pointer-events: auto;
+  cursor: help;
+
+  rect {
+    fill: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+    stroke: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.12)'};
+    stroke-width: 1;
+  }
+
+  text {
+    font-size: 10px;
+    font-weight: 700;
+    fill: ${({ theme }) => theme.colors.text.tertiary};
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    dominant-baseline: middle;
+  }
+`
 
 /**
  * Bar opacity:
@@ -2304,6 +2516,30 @@ const ClusterDiamond = styled.g`
       transition: none;
     }
   }
+`
+
+/**
+ * 클러스터 활성화 직후 700ms 동안 외곽으로 퍼지면서 사라지는 링.
+ * fill 없이 stroke만, scale + opacity 동시 변화.
+ */
+const clusterPulseAnim = keyframes`
+  0% {
+    transform: scale(1);
+    opacity: 0.85;
+    stroke-width: 2;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+    stroke-width: 1;
+  }
+`
+
+const ClusterPulseRing = styled.polygon`
+  fill: none;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: ${clusterPulseAnim} 0.7s ease-out forwards;
 `
 
 const ClusterBadge = styled.rect`

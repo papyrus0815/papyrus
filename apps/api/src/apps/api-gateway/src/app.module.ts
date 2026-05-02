@@ -4,6 +4,8 @@ import { AppController } from './app.controller'
 import { AuthModule } from '../../../libs/auth/infrastructure/auth.module'
 import { CountryModule } from '../../../libs/country/infrastructure/country.module'
 import { ContinentModule } from '../../../libs/continent/infrastructure/continent.module'
+import { CurrencyModule } from '../../../libs/currency/infrastructure/currency.module'
+import { LanguageModule } from '../../../libs/language/infrastructure/language.module'
 import { HistoricalCountryModule } from '../../../libs/historical-country/infrastructure/historical-country.module'
 import { PersonModule } from '../../../libs/person/person.module'
 import { ReligionModule } from '../../../libs/religion/infrastructure/religion.module'
@@ -48,6 +50,8 @@ import {
     AuthModule,
     CountryModule,
     ContinentModule,
+    CurrencyModule,
+    LanguageModule,
     HistoricalCountryModule,
     PersonModule,
     ReligionModule,

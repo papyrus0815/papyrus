@@ -2,7 +2,7 @@
  * 현대 국가 등록/수정 모달 — 역사적 국가·인물 등록 모달과 동일한 디자인
  * 국가 목록 페이지에서 "국가 등록" 선택 시 표시
  */
-import React from 'react'
+import React, { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
@@ -109,8 +109,9 @@ const FormScroll = styled.div`
 export interface CountryFormModalProps {
   isOpen: boolean
   onClose: () => void
-  /** 수정 시 해당 국가, 등록 시 빈 객체 {} 등 */
-  editing: Country | Record<string, never> | null
+  mode: 'create' | 'edit' | null
+  /** 수정 모드일 때만 의미 있음. create일 땐 null. */
+  editing: Country | null
   continents: ContinentOption[]
   onSave: (data: Omit<Country, 'id'> & { id?: string }) => Promise<void>
   onSuccess?: () => void
@@ -119,6 +120,7 @@ export interface CountryFormModalProps {
 export function CountryFormModal({
   isOpen,
   onClose,
+  mode,
   editing,
   continents,
   onSave,
@@ -132,17 +134,20 @@ export function CountryFormModal({
     onClose()
   }
 
-  /** 신규 등록 시 부모의 `editing` 참조를 그대로 쓴다. 매 렌더 `({} as Country)`를 만들면 참조가 바뀌어 폼이 매번 reset 되어 select 등 입력이 유지되지 않는다. */
-  const effectiveEditing =
-    editing && typeof editing === 'object' && 'id' in editing
-      ? (editing as Country)
-      : editing && Object.keys(editing).length === 0
-        ? (editing as Country)
-        : null
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isOpen, onClose])
+
+  const active = isOpen && mode !== null
 
   const content = (
     <AnimatePresence>
-      {isOpen && effectiveEditing !== null && (
+      {active && (
         <Overlay
           key="country-form-modal"
           initial={{ opacity: 0 }}
@@ -162,7 +167,7 @@ export function CountryFormModal({
           >
             <ModalHeader>
               <ModalTitle id="country-form-modal-title">
-                {effectiveEditing?.id ? '국가 수정' : '국가 등록'}
+                {mode === 'edit' ? '국가 수정' : '국가 등록'}
               </ModalTitle>
               <CloseBtn type="button" onClick={onClose} aria-label="닫기">
                 <FiX size={20} />
@@ -170,7 +175,8 @@ export function CountryFormModal({
             </ModalHeader>
             <FormScroll>
               <CountryForm
-                editing={effectiveEditing}
+                mode={mode ?? 'create'}
+                editing={editing}
                 embedIn="modal"
                 continents={continents}
                 onClose={onClose}

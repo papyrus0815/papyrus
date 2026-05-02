@@ -15,16 +15,29 @@ import {
   useUpdateCountry,
 } from '@/features/country/api'
 
+type FormMode = 'create' | 'edit'
+
+interface FormState {
+  mode: FormMode
+  editing: Country | null
+}
+
 export function useCountryFormModal() {
   const createMutation = useCreateCountry()
   const updateMutation = useUpdateCountry()
   const deleteMutation = useDeleteCountry()
 
-  const [editing, setEditing] = useState<Country | null>(null)
+  const [state, setState] = useState<FormState | null>(null)
 
-  const openCreate = useCallback(() => setEditing({} as Country), [])
-  const openEdit = useCallback((country: Country) => setEditing(country), [])
-  const close = useCallback(() => setEditing(null), [])
+  const openCreate = useCallback(
+    () => setState({ mode: 'create', editing: null }),
+    [],
+  )
+  const openEdit = useCallback(
+    (country: Country) => setState({ mode: 'edit', editing: country }),
+    [],
+  )
+  const close = useCallback(() => setState(null), [])
 
   const save = useCallback(
     async (data: Omit<Country, 'id'> & { id?: string }) => {
@@ -59,7 +72,7 @@ export function useCountryFormModal() {
           await createMutation.mutateAsync(payload)
           toast.success('등록되었습니다', { id: loadingToast })
         }
-        setEditing(null)
+        setState(null)
       } catch (error) {
         toast.error(
           (data.id ? '수정 실패: ' : '등록 실패: ') + (error as Error).message,
@@ -85,8 +98,9 @@ export function useCountryFormModal() {
   )
 
   return {
-    editing,
-    isOpen: editing !== null,
+    mode: state?.mode ?? null,
+    editing: state?.editing ?? null,
+    isOpen: state !== null,
     openCreate,
     openEdit,
     close,

@@ -278,6 +278,7 @@ export default function CountryDetailPage() {
       <CountryFormModal
         isOpen={countryForm.isOpen}
         onClose={countryForm.close}
+        mode={countryForm.mode}
         editing={countryForm.editing}
         continents={continents}
         onSave={countryForm.save}

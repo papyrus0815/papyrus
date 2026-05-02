@@ -51,9 +51,7 @@ export default function Layout() {
 
   useCommandPaletteShortcut()
 
-  // 대시보드 BGM 플레이리스트 재생 (로그인 페이지를 제외한 모든 페이지)
-  // 볼륨을 0.1로 설정하여 클릭 사운드가 잘 들리도록 함
-  // 랜덤 재생 활성화
+  // 대시보드 BGM 플레이리스트 (자동 재생 비활성화 — 헤더 컨트롤로 수동 재생만 가능)
   useBgmPlaylist({
     playlist: [
       dashboardBgm,
@@ -66,7 +64,7 @@ export default function Layout() {
       flJapanVillage,
     ],
     initialVolume: 0.1,
-    autoPlay: true,
+    autoPlay: false,
     shuffle: true,
   })
 
