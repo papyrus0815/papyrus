@@ -526,6 +526,29 @@ export function AdminDivisionBulkImportModal({
                   </span>
                 )}
               </div>
+              {progress && (
+                <div
+                  style={{
+                    height: 6,
+                    background: '#e2e8f0',
+                    borderRadius: 999,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${
+                        progress.total > 0
+                          ? Math.round((progress.done / progress.total) * 100)
+                          : 0
+                      }%`,
+                      background: '#6366f1',
+                      transition: 'width 0.2s ease',
+                    }}
+                  />
+                </div>
+              )}
               {parsed.errors.length > 0 && (
                 <ErrorText>{parsed.errors.slice(0, 3).join(' · ')}</ErrorText>
               )}

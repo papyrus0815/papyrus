@@ -271,6 +271,12 @@ export const ErrorMessage = styled.span`
   }
 `
 
+export const FormHelp = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.45;
+`
+
 // ─── 제출 버튼 ────────────────────────────────────────────────────────────────
 
 export const SubmitButton = styled.button`

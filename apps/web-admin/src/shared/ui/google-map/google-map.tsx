@@ -9,6 +9,9 @@ import { useEffect } from 'react'
 
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
+import MarkerClusterGroup from 'react-leaflet-cluster'
 import {
   CircleMarker,
   MapContainer,
@@ -170,8 +173,14 @@ export function GoogleMap({
           autoFit={autoFit}
         />
 
-        {useMarkers
-          ? markers!.map((m) => {
+        {useMarkers ? (
+          <MarkerClusterGroup
+            chunkedLoading
+            spiderfyOnMaxZoom
+            showCoverageOnHover={false}
+            maxClusterRadius={40}
+          >
+            {markers!.map((m) => {
               const isSelected = selectedId === m.id
               if (isSelected) {
                 return (
@@ -204,12 +213,15 @@ export function GoogleMap({
                   <Popup>{m.name}</Popup>
                 </CircleMarker>
               )
-            })
-          : hasSingle && (
-              <Marker position={[Number(latitude), Number(longitude)]}>
-                <Popup>{name}</Popup>
-              </Marker>
-            )}
+            })}
+          </MarkerClusterGroup>
+        ) : (
+          hasSingle && (
+            <Marker position={[Number(latitude), Number(longitude)]}>
+              <Popup>{name}</Popup>
+            </Marker>
+          )
+        )}
       </MapContainer>
     </MapWrapper>
   )

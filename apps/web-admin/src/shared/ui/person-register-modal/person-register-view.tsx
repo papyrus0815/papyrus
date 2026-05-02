@@ -17,13 +17,16 @@ import React, {
 import { toast } from 'react-hot-toast'
 import {
   FiAlertCircle,
+  FiAlertTriangle,
   FiArrowLeft,
   FiCalendar,
   FiCheck,
   FiChevronDown,
   FiChevronRight,
+  FiCopy,
   FiGlobe,
   FiInfo,
+  FiPlus,
   FiTrash2,
   FiUsers,
 } from 'react-icons/fi'
@@ -160,12 +163,18 @@ const ThumbnailRow = styled.div`
   gap: 12px;
 `
 
-const ThumbnailHint = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#94a3b8' : '#64748b'};
-  max-width: 240px;
-  line-height: 1.45;
+const ThumbnailHint = styled.span<{ $accent?: boolean }>`
+  font-size: 13px;
+  color: ${({ $accent, theme }) =>
+    $accent
+      ? '#4f46e5'
+      : theme.mode === 'dark'
+        ? '#94a3b8'
+        : '#64748b'};
+  font-weight: ${({ $accent }) => ($accent ? 600 : 400)};
+  max-width: 260px;
+  line-height: 1.5;
+  transition: color 0.15s ease;
 `
 
 const ThumbnailRemoveBtn = styled.button`
@@ -238,8 +247,8 @@ const LifeSectionGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  padding: 20px 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  width: 100%;
+  min-width: 0;
   @media (max-width: 900px) {
     grid-template-columns: 1fr;
   }
@@ -250,7 +259,7 @@ const LifeBox = styled.section<{ $tone?: 'birth' | 'death' }>`
   border-radius: 14px;
   padding: 16px 18px;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.025)' : '#fafbff'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fafbff'};
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -511,11 +520,6 @@ const AdvancedToggle = styled.button<{ $open: boolean }>`
   }
 `
 
-const AdvancedHint = styled.span`
-  margin-left: 10px;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
 
 // ─── Styled — Sticky save footer ─────────────────────────────────────────────
 
@@ -544,6 +548,15 @@ const FooterStatus = styled.span<{ $tone?: 'info' | 'warn' }>`
     $tone === 'warn'
       ? '#dc2626'
       : theme.colors.text.secondary};
+  flex: 1;
+  min-width: 0;
+`
+
+const FooterActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 `
 
 // ─── Styled — Draft restore banner ───────────────────────────────────────────
@@ -676,6 +689,153 @@ const SpouseNoteTextarea = styled(Textarea)`
   max-width: 540px;
 `
 
+// ─── Styled — Header secondary submit button ─────────────────────────────────
+const HeaderSecondarySubmit = styled(SubmitButton)`
+  background: transparent;
+  color: #4f46e5;
+  border: 1px solid #c7d2fe;
+  box-shadow: none;
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
+    color: #4338ca;
+  }
+`
+
+// ─── Styled — Inline action button (사망지=출생지 복사 등) ────────────────────
+const InlineActionBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s;
+  &:hover:not(:disabled) {
+    color: #4f46e5;
+    border-color: #c7d2fe;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#eef2ff'};
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+`
+
+// ─── Styled — "더보기" toggle for chip overflow ───────────────────────────────
+const ChipMoreBtn = styled.button`
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  border-radius: 999px;
+  cursor: pointer;
+  &:hover {
+    color: #4f46e5;
+    border-color: #c7d2fe;
+  }
+`
+
+// ─── Styled — Top-of-form alert (form-wide error, country stale) ─────────────
+const TopAlert = styled.div<{ $tone?: 'error' | 'warn' }>`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid;
+  font-size: 13px;
+  line-height: 1.45;
+  background: ${({ $tone, theme }) =>
+    $tone === 'warn'
+      ? theme.mode === 'dark'
+        ? 'rgba(234,179,8,0.12)'
+        : '#fffbeb'
+      : theme.mode === 'dark'
+        ? 'rgba(220,38,38,0.12)'
+        : '#fef2f2'};
+  border-color: ${({ $tone }) =>
+    $tone === 'warn' ? '#fcd34d' : '#fecaca'};
+  color: ${({ $tone, theme }) =>
+    $tone === 'warn'
+      ? theme.mode === 'dark'
+        ? '#fde68a'
+        : '#a16207'
+      : '#dc2626'};
+  svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+`
+
+// ─── Styled — Register-another toggle ────────────────────────────────────────
+const RegisterAnotherLabel = styled.label`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  user-select: none;
+  input {
+    width: 14px;
+    height: 14px;
+    accent-color: #6366f1;
+    cursor: pointer;
+  }
+`
+
+// ─── Styled — Person-not-found panel ─────────────────────────────────────────
+const NotFoundPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 64px 24px;
+  text-align: center;
+`
+
+const NotFoundIcon = styled.div`
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(248,113,113,0.18)' : '#fef2f2'};
+  color: #dc2626;
+`
+
+const NotFoundTitle = styled.h3`
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const NotFoundDesc = styled.p`
+  margin: 0;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  max-width: 320px;
+  line-height: 1.5;
+`
+
 // ─── Options ──────────────────────────────────────────────────────────────────
 
 interface SegOption<T extends string> {
@@ -688,16 +848,23 @@ const GENDER_OPTIONS: SegOption<string>[] = [
   { value: 'FEMALE', label: '여성' },
 ]
 
-const DEATH_TYPE_OPTIONS: SegOption<string>[] = [
+/** 자주 사용하는 5개. 나머지는 "더보기"로 접기. */
+const PRIMARY_DEATH_TYPES: SegOption<string>[] = [
   { value: 'NATURAL', label: '자연사' },
   { value: 'ILLNESS', label: '병사' },
   { value: 'ASSASSINATION', label: '암살' },
-  { value: 'EXECUTION', label: '처형' },
   { value: 'BATTLE', label: '전사' },
   { value: 'ACCIDENT', label: '사고사' },
+]
+const EXTRA_DEATH_TYPES: SegOption<string>[] = [
+  { value: 'EXECUTION', label: '처형' },
   { value: 'SUICIDE', label: '자살' },
   { value: 'UNKNOWN', label: '불명' },
   { value: 'OTHER', label: '기타' },
+]
+const DEATH_TYPE_OPTIONS: SegOption<string>[] = [
+  ...PRIMARY_DEATH_TYPES,
+  ...EXTRA_DEATH_TYPES,
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -743,7 +910,8 @@ const formatDateDisplay = (era: Era, y: string, m: string, d: string) => {
 
 /**
  * 출생/사망 날짜로 향년 계산.
- * - BC↔AD 경계는 0년이 없는 역사 통념을 따라 1년 빼서 처리(BC 1 → AD 1 = 만 1세).
+ * - 0년이 없는 역사 통념: BC 1 → AD 1은 만 1세, BC 1 → AD 2 = 만 2세.
+ *   → 부호가 다른 경우 단순 차이에서 1을 빼야 정확.
  * - 월·일이 있으면 사망 시점이 생일 전인지 비교해 만 나이로 보정.
  * - 둘 중 하나라도 미상이거나 미입력이면 null.
  */
@@ -755,9 +923,9 @@ function calcLifespan(
   const by = birth.era === 'BC' ? -birth.year : birth.year
   const dy = death.era === 'BC' ? -death.year : death.year
   let age = dy - by
-  // BC↔AD 경계 보정: 0년이 없으므로 부호가 다르면 1을 빼지 않고, 둘 다 BC면 그대로,
-  // 둘 다 AD면 그대로. 이미 dy-by 차이로 충분.
-  // 단, 실제 생일 전이면 만 나이 -1
+  // 부호가 달라 0년을 건너뛴 만큼(=1년) 보정. 둘 다 같은 era이면 보정 불필요.
+  if (birth.era !== death.era) age -= 1
+  // 실제 생일 전이면 만 나이 -1
   const bm = birth.month
   const dm = death.month
   if (bm && dm) {
@@ -770,6 +938,36 @@ function calcLifespan(
   }
   if (age < 0) return null
   return age
+}
+
+/**
+ * 절대 시각을 "방금 / N분 전 / 오후 3:42" 같은 상대 시간으로 표시.
+ * 1시간 이내는 분 단위, 오늘은 시각, 어제 이상은 날짜 + 시각.
+ */
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now()
+  const diff = now - timestamp
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+  if (diff < 30 * 1000) return '방금'
+  if (diff < hour) {
+    const m = Math.floor(diff / minute)
+    return `${m}분 전`
+  }
+  const date = new Date(timestamp)
+  if (diff < day) {
+    return `오늘 ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
+  }
+  if (diff < 2 * day) {
+    return `어제 ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
+  }
+  return date.toLocaleString('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 // ─── Draft 직렬화 타입 ────────────────────────────────────────────────────────
@@ -898,6 +1096,13 @@ export function PersonRegisterView({
     'basic' | 'affiliation' | 'family'
   >('basic')
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [deathTypeShowMore, setDeathTypeShowMore] = useState(false)
+  /** 신규 등록 시 "또 등록" 모드 — 등록 후 폼만 리셋, onCancel 안 부름 */
+  const [registerAnother, setRegisterAnother] = useState(false)
+  /** 수정 모드에서 인물 로드 실패 — 폼 대신 안내 패널 표시 */
+  const [loadFailed, setLoadFailed] = useState(false)
+  /** 신규 등록 모드에서 폼 강제 reset 트리거. registerAnother 흐름에서 사용. */
+  const [resetCounter, setResetCounter] = useState(0)
   /** 썸네일 파일은 등록·저장 시에만 업로드. 미리보기용 blob URL */
   const [pendingThumbnailFile, setPendingThumbnailFile] = useState<File | null>(
     null,
@@ -1043,6 +1248,16 @@ export function PersonRegisterView({
     return { basic, affiliation, family }
   }, [name, surname, gender, countryId])
 
+  /** 진행도 — 필수 N/4. 사용자가 폼 끝까지 안 가도 진행감을 유지. */
+  const requiredProgress = useMemo(() => {
+    const total = 4
+    const missing =
+      requiredMissingByTab.basic +
+      requiredMissingByTab.affiliation +
+      requiredMissingByTab.family
+    return { filled: total - missing, total }
+  }, [requiredMissingByTab])
+
   /** 탭별 선택 입력 채워짐 인디케이터(✓) — 필수 외 정보가 들어 있는지 */
   const filledByTab = useMemo(() => {
     const basic = !!(
@@ -1131,8 +1346,12 @@ export function PersonRegisterView({
     setIsDirty(false)
     setErrors({})
 
+    setLoadFailed(false)
+
     if (!editPersonId) {
       // 등록 모드 전환 시 폼 초기화
+      setAdvancedOpen(false)
+      setDeathTypeShowMore(false)
       setName('')
       setSurname('')
       setMiddleName('')
@@ -1299,8 +1518,30 @@ export function PersonRegisterView({
         setDeathType((p as any).deathType ?? '')
         setDeathCause((p as any).deathCause ?? '')
         setDeathNote((p as any).deathNote ?? '')
+        // 사망 유형이 EXTRA에 있으면 더보기 자동 펼침 (사용자가 그 칩을 볼 수 있게).
+        const dt = (p as any).deathType ?? ''
+        if (dt && EXTRA_DEATH_TYPES.some((o) => o.value === dt)) {
+          setDeathTypeShowMore(true)
+        }
+        // 군주 필드 또는 이름의 뜻이 채워져 있으면 고급 정보 자동 펼침.
+        if (
+          (p.regnalName && String(p.regnalName).trim()) ||
+          (p.templeName && String(p.templeName).trim()) ||
+          (p.posthumousName && String(p.posthumousName).trim()) ||
+          (p.surnameMeaning && String(p.surnameMeaning).trim()) ||
+          (p.nameMeaning && String(p.nameMeaning).trim()) ||
+          (p.middleNameMeaning && String(p.middleNameMeaning).trim())
+        ) {
+          setAdvancedOpen(true)
+        } else {
+          setAdvancedOpen(false)
+        }
       })
-      .catch(() => toast.error('인물 정보를 불러오지 못했습니다.'))
+      .catch(() => {
+        if (cancelled) return
+        setLoadFailed(true)
+        toast.error('인물 정보를 불러오지 못했습니다.')
+      })
       .finally(() => {
         if (cancelled) return
         setIsLoadingEdit(false)
@@ -1311,7 +1552,7 @@ export function PersonRegisterView({
     return () => {
       cancelled = true
     }
-  }, [editPersonId, initialCountryId])
+  }, [editPersonId, initialCountryId, resetCounter])
 
   useEffect(() => {
     if (!countryId || (!modernCountries.length && !historicalCountries.length))
@@ -1481,7 +1722,9 @@ export function PersonRegisterView({
     setPendingDraftSavedAt(null)
     requestAnimationFrame(() => {
       trackDirtyRef.current = true
-      setIsDirty(true)
+      // 복원 직후엔 dirty=false. 사용자가 복원 후 추가 입력 없이 닫으면
+      // 다시 confirm을 띄울 필요 없음.
+      setIsDirty(false)
     })
     toast.success('임시 저장된 내용을 복원했습니다.')
   }
@@ -1493,11 +1736,43 @@ export function PersonRegisterView({
 
   // ─── 핸들러 ────────────────────────────────────────────────────────────────
   const handleCountrySelect = (c: { id: string; name: string }) => {
+    const prev = countryId
     setCountryId(c.id)
     setCountryName(c.name)
     setShowCountryModal(false)
     clearFieldError('countryId')
     markDirty()
+    // 국가가 바뀌었는데 기존에 입력한 출생지/사망지가 새 국가와 무관할 수 있음.
+    // 자동으로 비우기엔 사용자 의도와 다를 수 있어 안내만 — 사용자가 직접 다시 선택.
+    if (prev && prev !== c.id && (birthPlace || deathPlace)) {
+      toast(
+        '국가가 변경되었습니다. 출생지/사망지가 새 국가와 일치하는지 확인하세요.',
+        { icon: '⚠️' },
+      )
+    }
+  }
+
+  /** "사망함" 라디오 클릭 시 — 출생일이 있고 사망일이 비어 있으면 자동으로 사망일 모달. */
+  const handleDeathStatusToDeceased = () => {
+    setIsAlive(false)
+    setIsDeathDateUnknown(false)
+    markDirty()
+    if (
+      !isEditMode &&
+      birthYear.trim() &&
+      !deathYear.trim()
+    ) {
+      setTimeout(() => setShowDeathDateModal(true), 200)
+    }
+  }
+
+  /** 사망지를 출생지와 동일하게 빠르게 채움. */
+  const handleCopyBirthToDeathPlace = () => {
+    if (!birthPlace) return
+    setDeathPlace(birthPlace)
+    setDeathCityId(birthPlace.cityId ?? '')
+    markDirty()
+    toast.success('출생지를 사망지로 복사했습니다.')
   }
 
   const handleBirthDateSelect = (date: string) => {
@@ -1838,7 +2113,12 @@ export function PersonRegisterView({
         setIsDirty(false)
         draft.discardDraft()
         onSuccess?.(created.id)
-        onCancel()
+        if (registerAnother) {
+          // 폼만 리셋 — 같은 국가에서 인물을 연속 등록하는 흐름.
+          setResetCounter((n) => n + 1)
+        } else {
+          onCancel()
+        }
       }
     } catch (err: any) {
       const base =
@@ -1907,20 +2187,19 @@ export function PersonRegisterView({
             <FiArrowLeft size={18} />
             목록 보기
           </BackButton>
-          <SubmitButton
+          <HeaderSecondarySubmit
             type="submit"
             form="person-register-form"
             disabled={isSubmitting}
           >
             {submitButtonLabel}
-          </SubmitButton>
+          </HeaderSecondarySubmit>
         </FormHeader>
       )}
       {pendingDraftSavedAt && (
         <DraftBanner role="status">
           <span>
-            임시 저장된 내용이 있습니다 ·{' '}
-            {new Date(pendingDraftSavedAt).toLocaleString('ko-KR')}
+            임시 저장된 내용이 있습니다 · {formatRelativeTime(pendingDraftSavedAt)}
           </span>
           <DraftBannerActions>
             <DraftBtn type="button" $primary onClick={restoreDraft}>
@@ -1932,11 +2211,33 @@ export function PersonRegisterView({
           </DraftBannerActions>
         </DraftBanner>
       )}
+      {errors._form && (
+        <TopAlert role="alert" $tone="error">
+          <FiAlertCircle size={16} />
+          <span>{errors._form}</span>
+        </TopAlert>
+      )}
+      {loadFailed && (
+        <NotFoundPanel role="alert">
+          <NotFoundIcon>
+            <FiAlertTriangle size={28} />
+          </NotFoundIcon>
+          <NotFoundTitle>인물을 불러오지 못했습니다</NotFoundTitle>
+          <NotFoundDesc>
+            요청한 인물이 삭제되었거나 권한이 없을 수 있습니다. 잠시 후
+            다시 시도하거나 목록으로 돌아가 주세요.
+          </NotFoundDesc>
+          <SubmitButton type="button" onClick={onCancel}>
+            목록으로
+          </SubmitButton>
+        </NotFoundPanel>
+      )}
       <form
         id="person-register-form"
         onSubmit={handleSubmit}
         onChange={markDirty}
         onInput={markDirty}
+        hidden={loadFailed}
       >
         <LoadingHost>
           {isLoadingEdit && (
@@ -2011,9 +2312,14 @@ export function PersonRegisterView({
                           </svg>
                         )}
                       </ThumbnailPreview>
-                      <ThumbnailHint id="person-thumbnail-hint">
-                        클릭하거나 이미지를 끌어 놓아 업로드. 클립보드 붙여넣기(Cmd/Ctrl+V)도 지원.
-                        {pendingThumbnailFile
+                      <ThumbnailHint
+                        id="person-thumbnail-hint"
+                        $accent={thumbnailDragOver}
+                      >
+                        {thumbnailDragOver
+                          ? '여기에 놓아 업로드'
+                          : '클릭하거나 이미지를 끌어 놓아 업로드. 클립보드 붙여넣기(Cmd/Ctrl+V)도 지원.'}
+                        {pendingThumbnailFile && !thumbnailDragOver
                           ? ' 저장 시 서버에 업로드됩니다.'
                           : ''}
                       </ThumbnailHint>
@@ -2153,9 +2459,11 @@ export function PersonRegisterView({
                   </FieldControl>
                 </FieldRow>
 
-                {/* 출생/사망 영역 박스 */}
-                <LifeSectionGrid>
-                  <LifeBox $tone="birth">
+                {/* 출생/사망 영역 박스 — FieldRow로 감싸 좌측 라벨 정렬 통일 */}
+                <FieldRow>
+                  <FieldLabel>생몰</FieldLabel>
+                  <LifeSectionGrid>
+                    <LifeBox $tone="birth">
                     <LifeBoxTitle>출생</LifeBoxTitle>
                     <SegmentRow>
                       <SegmentBtn
@@ -2210,11 +2518,7 @@ export function PersonRegisterView({
                         role="radio"
                         aria-checked={!isAlive && !isDeathDateUnknown}
                         $active={!isAlive && !isDeathDateUnknown}
-                        onClick={() => {
-                          setIsAlive(false)
-                          setIsDeathDateUnknown(false)
-                          markDirty()
-                        }}
+                        onClick={handleDeathStatusToDeceased}
                       >
                         사망함
                       </SegmentBtn>
@@ -2291,9 +2595,9 @@ export function PersonRegisterView({
                         {errors.death}
                       </FieldError>
                     )}
-                    {/* 사망 유형 (인라인 칩) */}
+                    {/* 사망 유형 — 자주 쓰는 5개 노출, 나머지는 더보기로 접음 */}
                     <SegmentRow role="radiogroup" aria-label="사망 유형">
-                      {DEATH_TYPE_OPTIONS.map((opt) => (
+                      {PRIMARY_DEATH_TYPES.map((opt) => (
                         <SegmentBtn
                           key={opt.value}
                           type="button"
@@ -2302,13 +2606,43 @@ export function PersonRegisterView({
                           $active={deathType === opt.value}
                           disabled={isAlive}
                           onClick={() => {
-                            setDeathType(deathType === opt.value ? '' : opt.value)
+                            setDeathType(
+                              deathType === opt.value ? '' : opt.value,
+                            )
                             markDirty()
                           }}
                         >
                           {opt.label}
                         </SegmentBtn>
                       ))}
+                      {deathTypeShowMore &&
+                        EXTRA_DEATH_TYPES.map((opt) => (
+                          <SegmentBtn
+                            key={opt.value}
+                            type="button"
+                            role="radio"
+                            aria-checked={deathType === opt.value}
+                            $active={deathType === opt.value}
+                            disabled={isAlive}
+                            onClick={() => {
+                              setDeathType(
+                                deathType === opt.value ? '' : opt.value,
+                              )
+                              markDirty()
+                            }}
+                          >
+                            {opt.label}
+                          </SegmentBtn>
+                        ))}
+                      {!deathTypeShowMore && (
+                        <ChipMoreBtn
+                          type="button"
+                          onClick={() => setDeathTypeShowMore(true)}
+                          disabled={isAlive}
+                        >
+                          더보기 +{EXTRA_DEATH_TYPES.length}
+                        </ChipMoreBtn>
+                      )}
                     </SegmentRow>
                     <FormInput
                       value={deathCause}
@@ -2324,7 +2658,8 @@ export function PersonRegisterView({
                       disabled={isAlive}
                     />
                   </LifeBox>
-                </LifeSectionGrid>
+                  </LifeSectionGrid>
+                </FieldRow>
 
                 {/* 고급 정보 — 군주 필드 + 이름의 뜻 */}
                 <AdvancedSection>
@@ -2335,13 +2670,8 @@ export function PersonRegisterView({
                     aria-expanded={advancedOpen}
                   >
                     <FiChevronRight size={14} />
-                    고급 정보 (군주명·시호·이름의 뜻)
+                    고급 정보 — 군주명·시호·이름의 뜻
                   </AdvancedToggle>
-                  {!advancedOpen && (
-                    <AdvancedHint>
-                      필요한 인물(왕·제왕·동아시아 인물 등)에만 노출하세요.
-                    </AdvancedHint>
-                  )}
                   {advancedOpen && (
                     <FormRows>
                       <FieldRowMulti>
@@ -2469,6 +2799,16 @@ export function PersonRegisterView({
                         countryId={countryId || undefined}
                       />
                     </PlaceAutocompleteWrap>
+                    {birthPlace && (
+                      <InlineActionBtn
+                        type="button"
+                        onClick={handleCopyBirthToDeathPlace}
+                        title="출생지를 사망지로 복사"
+                      >
+                        <FiCopy size={12} />
+                        출생지와 동일
+                      </InlineActionBtn>
+                    )}
                   </FieldControl>
                 </FieldRow>
                 <FieldRowMulti>
@@ -2559,6 +2899,8 @@ export function PersonRegisterView({
                           spouseId,
                         ].filter(Boolean)}
                         excludeReason="자기 자신, 어머니·배우자로 지정한 인물은 아버지로 선택할 수 없습니다."
+                        title="아버지 선택"
+                        searchPlaceholder="아버지로 등록할 인물을 검색…"
                       />
                     )}
                   </FieldControl>
@@ -2591,6 +2933,8 @@ export function PersonRegisterView({
                           spouseId,
                         ].filter(Boolean)}
                         excludeReason="자기 자신, 아버지·배우자로 지정한 인물은 어머니로 선택할 수 없습니다."
+                        title="어머니 선택"
+                        searchPlaceholder="어머니로 등록할 인물을 검색…"
                       />
                     )}
                   </FieldControl>
@@ -2623,6 +2967,8 @@ export function PersonRegisterView({
                           motherId,
                         ].filter(Boolean)}
                         excludeReason="자기 자신, 아버지·어머니로 지정한 인물은 배우자로 선택할 수 없습니다."
+                        title="배우자 선택"
+                        searchPlaceholder="배우자로 등록할 인물을 검색…"
                       />
                     )}
                   </FieldControl>
@@ -2654,24 +3000,39 @@ export function PersonRegisterView({
       </form>
 
       {/* sticky footer — 긴 폼 끝에서도 저장 가능 */}
+      {!loadFailed && (
       <StickyFooter>
-        {draft.savedAt ? (
-          <FooterStatus>
-            임시 저장됨 · {new Date(draft.savedAt).toLocaleTimeString('ko-KR')}
-          </FooterStatus>
-        ) : (
-          <FooterStatus $tone={isDirty ? 'warn' : 'info'}>
-            {isDirty ? '저장되지 않은 변경 사항이 있습니다.' : ''}
-          </FooterStatus>
-        )}
-        <SubmitButton
-          type="submit"
-          form="person-register-form"
-          disabled={isSubmitting}
-        >
-          {submitButtonLabel}
-        </SubmitButton>
+        <FooterStatus $tone={isDirty ? 'warn' : 'info'}>
+          {`필수 ${requiredProgress.filled}/${requiredProgress.total} 입력`}
+          {draft.savedAt
+            ? ` · 임시 저장됨 ${formatRelativeTime(draft.savedAt)}`
+            : isDirty
+              ? ' · 저장되지 않은 변경'
+              : ''}
+        </FooterStatus>
+        <FooterActions>
+          {!isEditMode && (
+            <RegisterAnotherLabel>
+              <input
+                type="checkbox"
+                checked={registerAnother}
+                onChange={(e) => setRegisterAnother(e.target.checked)}
+                disabled={isSubmitting}
+              />
+              <FiPlus size={12} />
+              등록 후 폼 유지
+            </RegisterAnotherLabel>
+          )}
+          <SubmitButton
+            type="submit"
+            form="person-register-form"
+            disabled={isSubmitting}
+          >
+            {submitButtonLabel}
+          </SubmitButton>
+        </FooterActions>
       </StickyFooter>
+      )}
 
       <CountrySelectModal
         isOpen={showCountryModal}

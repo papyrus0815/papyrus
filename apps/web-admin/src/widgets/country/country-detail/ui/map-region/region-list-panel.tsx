@@ -299,7 +299,16 @@ export function RegionListItem({
           </div>
         )}
       </div>
-      {hasActions ? (
+      {trailing && hasActions ? (
+        <>
+          {trailing}
+          <ListItemActions
+            palette={palette}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
+        </>
+      ) : hasActions ? (
         <ListItemActions
           palette={palette}
           onEdit={onEdit}

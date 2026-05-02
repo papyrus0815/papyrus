@@ -31,6 +31,10 @@ interface PersonSelectModalProps {
   excludeIds?: string[]
   /** 선택 불가 사유 안내 (excludeIds로 결과가 0건일 때 빈 상태에 노출) */
   excludeReason?: string
+  /** 모달 제목 (예: "아버지 선택") — 미지정 시 "인물 선택" */
+  title?: string
+  /** 검색 placeholder (예: "아버지로 등록할 인물을 검색...") */
+  searchPlaceholder?: string
 }
 
 type SortOption = 'name' | 'birth-asc' | 'birth-desc'
@@ -42,6 +46,8 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   onClose,
   excludeIds,
   excludeReason,
+  title,
+  searchPlaceholder,
 }) => {
   const excludeSet = useMemo(
     () => new Set((excludeIds ?? []).filter(Boolean)),
@@ -196,7 +202,7 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
     <ModalOverlay onClick={onClose}>
       <ModalBox onClick={(e) => e.stopPropagation()}>
         <ModalHeader>
-          <ModalTitle>인물 선택</ModalTitle>
+          <ModalTitle>{title ?? '인물 선택'}</ModalTitle>
           <ModalCloseButton onClick={onClose} aria-label="닫기">
             <FiX size={20} strokeWidth={2.5} />
           </ModalCloseButton>
@@ -208,7 +214,9 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
             <FiSearch size={20} className="search-icon" />
             <SearchInput
               type="text"
-              placeholder="이름 또는 생몰년도로 검색..."
+              placeholder={
+                searchPlaceholder ?? '이름 또는 생몰년도로 검색...'
+              }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               autoFocus

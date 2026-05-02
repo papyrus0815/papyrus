@@ -4,7 +4,7 @@
  * - 페이지마다 중복됐던 편집 상태·저장 핸들러를 한 곳에 모음.
  * - 반환값을 CountryFormModal에 그대로 spread 하면 됨.
  */
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 import { toast } from 'react-hot-toast'
 
@@ -22,12 +22,20 @@ interface FormState {
   editing: Country | null
 }
 
-export function useCountryFormModal() {
+interface UseCountryFormModalOptions {
+  /** 저장 성공 후 호출. id는 저장된 국가의 id, mode는 동작 종류. */
+  onSaved?: (id: string, mode: FormMode) => void
+}
+
+export function useCountryFormModal(opts: UseCountryFormModalOptions = {}) {
   const createMutation = useCreateCountry()
   const updateMutation = useUpdateCountry()
   const deleteMutation = useDeleteCountry()
 
   const [state, setState] = useState<FormState | null>(null)
+  const onSavedRef = useRef(opts.onSaved)
+  // 콜백 참조 최신화 (의존성 배열에 안정적 함수만 두기 위함)
+  onSavedRef.current = opts.onSaved
 
   const openCreate = useCallback(
     () => setState({ mode: 'create', editing: null }),
@@ -62,22 +70,29 @@ export function useCountryFormModal() {
             data as { defaultNameDisplayOrder?: 'korean' | 'western' }
           ).defaultNameDisplayOrder,
         }
+        let savedId: string | undefined
         if (data.id) {
-          await updateMutation.mutateAsync({
+          const res = await updateMutation.mutateAsync({
             id: data.id,
             data: { ...payload, thumbnailUrl: payload.thumbnailUrl ?? '' },
           })
+          savedId = (res as { id?: string })?.id ?? data.id
           toast.success('수정되었습니다', { id: loadingToast })
         } else {
-          await createMutation.mutateAsync(payload)
+          const res = await createMutation.mutateAsync(payload)
+          savedId = (res as { id?: string })?.id
           toast.success('등록되었습니다', { id: loadingToast })
         }
         setState(null)
+        if (savedId) {
+          onSavedRef.current?.(savedId, data.id ? 'edit' : 'create')
+        }
       } catch (error) {
         toast.error(
           (data.id ? '수정 실패: ' : '등록 실패: ') + (error as Error).message,
           { id: loadingToast },
         )
+        throw error
       }
     },
     [createMutation, updateMutation],

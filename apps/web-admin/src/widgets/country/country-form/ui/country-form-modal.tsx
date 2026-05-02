@@ -1,12 +1,11 @@
 /**
- * 현대 국가 등록/수정 모달 — 역사적 국가·인물 등록 모달과 동일한 디자인
- * 국가 목록 페이지에서 "국가 등록" 선택 시 표시
+ * 현대 국가 등록/수정 모달 — 헤더(타이틀 + 필수 인디케이터) / 본문(폼 스크롤) / 푸터(취소·등록).
  */
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiX } from 'react-icons/fi'
-import styled from 'styled-components'
+import { FiCheck, FiX } from 'react-icons/fi'
+import styled, { keyframes } from 'styled-components'
 
 import type { Country } from '@/entities/country/api'
 import type { ContinentOption } from '@/entities/country/api'
@@ -23,10 +22,14 @@ const Overlay = styled(motion.div)`
   background: rgba(0, 0, 0, 0.38);
   z-index: ${Z_INDEX.MODAL_OVERLAY};
   backdrop-filter: blur(10px);
+
+  @media (max-width: 768px) {
+    padding: 0;
+  }
 `
 
 const ModalBox = styled(motion.div)`
-  width: min(1200px, 96vw);
+  width: min(1100px, 96vw);
   height: 90vh;
   max-height: 1200px;
   background: ${({ theme }) =>
@@ -47,23 +50,71 @@ const ModalBox = styled(motion.div)`
   display: flex;
   flex-direction: column;
   overflow: hidden;
+
+  @media (max-width: 768px) {
+    width: 100vw;
+    height: 100vh;
+    max-height: none;
+    border-radius: 0;
+    border: none;
+  }
 `
 
 const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
+  gap: 16px;
+  padding: 18px 24px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-shrink: 0;
 `
 
+const HeaderLeft = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+`
+
 const ModalTitle = styled.h2`
   margin: 0;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
+`
+
+const RequiredChips = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const RequiredChip = styled.span<{ $done: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: ${({ $done, theme }) =>
+    $done
+      ? theme.mode === 'dark'
+        ? 'rgba(34, 197, 94, 0.15)'
+        : '#ecfdf5'
+      : theme.mode === 'dark'
+        ? 'rgba(239, 68, 68, 0.12)'
+        : '#fef2f2'};
+  color: ${({ $done }) => ($done ? '#16a34a' : '#dc2626')};
+  border: 1px solid
+    ${({ $done }) => ($done ? 'rgba(22,163,74,0.25)' : 'rgba(220,38,38,0.2)')};
+
+  svg {
+    flex-shrink: 0;
+  }
 `
 
 const CloseBtn = styled.button`
@@ -81,6 +132,7 @@ const CloseBtn = styled.button`
   transition:
     background 0.2s,
     color 0.2s;
+  flex-shrink: 0;
 
   &:hover {
     background: ${({ theme }) => theme.colors.background.tertiary};
@@ -104,6 +156,90 @@ const FormScroll = styled.div`
     background: ${({ theme }) => theme.colors.border.default};
     border-radius: 3px;
   }
+
+  @media (max-width: 768px) {
+    padding: 16px;
+  }
+`
+
+const ModalFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    padding: 12px 16px;
+  }
+`
+
+const CancelBtn = styled.button`
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
+const SubmitBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    transform 0.05s;
+
+  &:hover:not(:disabled) {
+    opacity: 0.92;
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+`
+
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`
+
+const Spinner = styled.span`
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ${spin} 0.7s linear infinite;
 `
 
 export interface CountryFormModalProps {
@@ -117,6 +253,50 @@ export interface CountryFormModalProps {
   onSuccess?: () => void
 }
 
+/**
+ * 폼 안의 RHF 값을 헤더 인디케이터에서 읽기 위해 form DOM 직접 관찰.
+ * (RHF 컨텍스트를 모달까지 끌어올리지 않기 위함 — 가벼운 통합)
+ */
+function useFormFieldsFilled(
+  active: boolean,
+  fieldNames: string[],
+): Record<string, boolean> {
+  const [filled, setFilled] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    if (!active) {
+      setFilled({})
+      return
+    }
+    const formEl = document.getElementById(
+      'country-form',
+    ) as HTMLFormElement | null
+    if (!formEl) return
+
+    const update = () => {
+      const next: Record<string, boolean> = {}
+      for (const name of fieldNames) {
+        const el = formEl.querySelector(
+          `[name="${name}"]`,
+        ) as HTMLInputElement | null
+        next[name] = !!el?.value?.trim()
+      }
+      setFilled(next)
+    }
+
+    update()
+    const handler = () => update()
+    formEl.addEventListener('input', handler)
+    formEl.addEventListener('change', handler)
+    return () => {
+      formEl.removeEventListener('input', handler)
+      formEl.removeEventListener('change', handler)
+    }
+  }, [active, fieldNames])
+
+  return filled
+}
+
 export function CountryFormModal({
   isOpen,
   onClose,
@@ -126,24 +306,35 @@ export function CountryFormModal({
   onSave,
   onSuccess,
 }: CountryFormModalProps) {
+  const [submitting, setSubmitting] = useState(false)
+
   const handleSave = async (
     data: Omit<Country, 'id'> & { id?: string },
   ) => {
-    await onSave(data)
-    onSuccess?.()
-    onClose()
+    setSubmitting(true)
+    try {
+      await onSave(data)
+      onSuccess?.()
+      onClose()
+    } catch {
+      // 에러 토스트는 useCountryFormModal에서 표시됨. 모달은 열린 상태 유지.
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   useEffect(() => {
     if (!isOpen) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !submitting) onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, submitting])
 
   const active = isOpen && mode !== null
+
+  const filled = useFormFieldsFilled(active, ['name', 'continentId'])
 
   const content = (
     <AnimatePresence>
@@ -153,7 +344,9 @@ export function CountryFormModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
+          onClick={() => {
+            if (!submitting) onClose()
+          }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="country-form-modal-title"
@@ -166,10 +359,25 @@ export function CountryFormModal({
             onClick={(e) => e.stopPropagation()}
           >
             <ModalHeader>
-              <ModalTitle id="country-form-modal-title">
-                {mode === 'edit' ? '국가 수정' : '국가 등록'}
-              </ModalTitle>
-              <CloseBtn type="button" onClick={onClose} aria-label="닫기">
+              <HeaderLeft>
+                <ModalTitle id="country-form-modal-title">
+                  {mode === 'edit' ? '국가 수정' : '국가 등록'}
+                </ModalTitle>
+                <RequiredChips>
+                  <RequiredChip $done={!!filled.name}>
+                    {filled.name && <FiCheck size={11} />}국가명
+                  </RequiredChip>
+                  <RequiredChip $done={!!filled.continentId}>
+                    {filled.continentId && <FiCheck size={11} />}대륙
+                  </RequiredChip>
+                </RequiredChips>
+              </HeaderLeft>
+              <CloseBtn
+                type="button"
+                onClick={onClose}
+                aria-label="닫기"
+                disabled={submitting}
+              >
                 <FiX size={20} />
               </CloseBtn>
             </ModalHeader>
@@ -177,12 +385,31 @@ export function CountryFormModal({
               <CountryForm
                 mode={mode ?? 'create'}
                 editing={editing}
-                embedIn="modal"
                 continents={continents}
-                onClose={onClose}
                 onSave={handleSave}
               />
             </FormScroll>
+            <ModalFooter>
+              <CancelBtn
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+              >
+                취소
+              </CancelBtn>
+              <SubmitBtn
+                type="submit"
+                form="country-form"
+                disabled={submitting}
+              >
+                {submitting && <Spinner />}
+                {submitting
+                  ? '저장 중...'
+                  : mode === 'edit'
+                    ? '수정 완료'
+                    : '국가 등록'}
+              </SubmitBtn>
+            </ModalFooter>
           </ModalBox>
         </Overlay>
       )}

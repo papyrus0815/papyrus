@@ -10,6 +10,52 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 const KEY_PREFIX = 'papyrus:person-register-draft:'
 const SAVE_THROTTLE_MS = 500
+/** 30일 지난 draft는 자동 정리 — 사용자가 시작했다 잊은 폼이 무한 누적되는 걸 방지 */
+const GC_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
+let gcRanThisSession = false
+
+/**
+ * 만료된 draft 키 정리. 세션당 1회만 — 진입 시 첫 useEffect 사이클에 호출.
+ * 잘못된 형식의 키도 함께 정리.
+ */
+function gcExpiredDraftsOnce() {
+  if (gcRanThisSession) return
+  gcRanThisSession = true
+  try {
+    const now = Date.now()
+    const toRemove: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key || !key.startsWith(KEY_PREFIX)) continue
+      try {
+        const raw = localStorage.getItem(key)
+        if (!raw) {
+          toRemove.push(key)
+          continue
+        }
+        const parsed = JSON.parse(raw) as { savedAt?: number }
+        if (
+          typeof parsed?.savedAt !== 'number' ||
+          now - parsed.savedAt > GC_TTL_MS
+        ) {
+          toRemove.push(key)
+        }
+      } catch {
+        toRemove.push(key)
+      }
+    }
+    toRemove.forEach((k) => {
+      try {
+        localStorage.removeItem(k)
+      } catch {
+        // ignore
+      }
+    })
+  } catch {
+    // 접근 차단 등은 조용히 무시.
+  }
+}
 
 export type PersonDraftValue = Record<string, unknown>
 
@@ -106,8 +152,12 @@ export function usePersonDraft<T extends PersonDraftValue>(
     setSavedAt(null)
   }, [key])
 
-  // 언마운트 시 보류 중 타이머 정리. 즉시 저장은 하지 않음 — 사용자가 의도적으로
-  // 페이지를 떠난 경우 굳이 마지막 입력을 강제로 저장할 이유가 없음.
+  // 첫 진입 시 만료 draft 정리 (세션당 1회).
+  useEffect(() => {
+    gcExpiredDraftsOnce()
+  }, [])
+
+  // 언마운트 시 보류 중 타이머 정리.
   useEffect(() => {
     return () => {
       if (timerRef.current) {

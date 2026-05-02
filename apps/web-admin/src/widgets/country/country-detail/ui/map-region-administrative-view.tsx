@@ -122,6 +122,14 @@ function isAbolished(d: AdministrativeDivision): boolean {
   return new Date(d.abolishedDate).getTime() <= Date.now()
 }
 
+function countDescendants(node: AdministrativeDivision): number {
+  let n = 0
+  for (const c of node.children ?? []) {
+    n += 1 + countDescendants(c)
+  }
+  return n
+}
+
 /** 트리 전체 leaf-first 평탄 + 레벨/부모경로 병합 */
 function flattenTree(
   roots: AdministrativeDivision[],
@@ -409,13 +417,6 @@ export function MapRegionAdministrativeView({
     reportLocation(null)
   }
 
-  const handleBack = () => {
-    if (breadcrumb.length === 0) return
-    setPath(pathIds.slice(0, -1))
-    setSelectedId(null)
-    reportLocation(null)
-  }
-
   // 키보드 네비
   useListKeyboard({
     items: sortedRows,
@@ -540,74 +541,91 @@ export function MapRegionAdministrativeView({
       </KpiStrip>
     ) : null
 
-  const breadcrumbBar = mode === 'drill' && (
-    <div
-      style={{
-        padding: '10px 16px',
-        borderBottom: `1px solid ${palette.border}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        flexWrap: 'wrap',
-        fontSize: 12,
-      }}
-    >
-      <BreadcrumbBtn
-        palette={palette}
-        active={breadcrumb.length === 0}
-        onClick={() => handleBreadcrumbClick(-1)}
-      >
-        {country.name}
-      </BreadcrumbBtn>
-      {breadcrumb.map((node, i) => (
-        <span key={node.id} style={{ display: 'inline-flex', gap: 8 }}>
-          <span style={{ color: palette.textSecondary }}>›</span>
-          <BreadcrumbBtn
-            palette={palette}
-            active={i === breadcrumb.length - 1}
-            onClick={() => handleBreadcrumbClick(i)}
-          >
-            {node.name}
-          </BreadcrumbBtn>
-        </span>
-      ))}
-      <span
-        style={{
-          marginLeft: 'auto',
-          fontSize: 11,
-          fontWeight: 600,
-          color: palette.primary,
-          background: palette.badgeBg,
-          padding: '3px 8px',
-          borderRadius: 6,
-        }}
-      >
-        {drillLevel}차 · {sortedRows.length}개
-      </span>
-    </div>
-  )
-
-  const modeChrome = (() => {
+  // 컨텍스트 행 — 모드별로 다르게 (한 행으로 합침)
+  const contextBar = (() => {
     if (mode === 'search') {
       return (
-        <ModeBanner
+        <ContextRow
           palette={palette}
-          label={`"${search}" 전체 검색 (모든 레벨)`}
-          onClear={() => setSearch('')}
+          left={
+            <span style={{ fontSize: 12, fontWeight: 600, color: palette.primary }}>
+              "{search}" 전체 검색
+            </span>
+          }
+          right={
+            <>
+              <CountBadge palette={palette}>{sortedRows.length}개</CountBadge>
+              <ClearLink palette={palette} onClick={() => setSearch('')}>
+                해제
+              </ClearLink>
+            </>
+          }
         />
       )
     }
     if (mode === 'level') {
       const cfg = configs.find((c) => c.divisionLevel === levelFilter)
       return (
-        <ModeBanner
+        <ContextRow
           palette={palette}
-          label={`${levelFilter}차 ${cfg ? `(${cfg.divisionLabel})` : ''} 전체`}
-          onClear={() => setLevelFilter(null)}
+          left={
+            <span style={{ fontSize: 12, fontWeight: 600, color: palette.primary }}>
+              {levelFilter}차{cfg ? ` · ${cfg.divisionLabel}` : ''} 전체
+            </span>
+          }
+          right={
+            <>
+              <CountBadge palette={palette}>{sortedRows.length}개</CountBadge>
+              <ClearLink palette={palette} onClick={() => setLevelFilter(null)}>
+                해제
+              </ClearLink>
+            </>
+          }
         />
       )
     }
-    return null
+    // drill 모드 — breadcrumb (← 버튼 없이, 클릭으로 점프) + 카운트
+    return (
+      <ContextRow
+        palette={palette}
+        left={
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              flexWrap: 'wrap',
+              fontSize: 12,
+            }}
+          >
+            <BreadcrumbBtn
+              palette={palette}
+              active={breadcrumb.length === 0}
+              onClick={() => handleBreadcrumbClick(-1)}
+            >
+              {country.name}
+            </BreadcrumbBtn>
+            {breadcrumb.map((node, i) => (
+              <span key={node.id} style={{ display: 'inline-flex', gap: 6 }}>
+                <span style={{ color: palette.textSecondary }}>›</span>
+                <BreadcrumbBtn
+                  palette={palette}
+                  active={i === breadcrumb.length - 1}
+                  onClick={() => handleBreadcrumbClick(i)}
+                >
+                  {node.name}
+                </BreadcrumbBtn>
+              </span>
+            ))}
+          </div>
+        }
+        right={
+          <CountBadge palette={palette}>
+            {drillLevel}차 · {sortedRows.length}개
+          </CountBadge>
+        }
+      />
+    )
   })()
 
   const toolbar = (
@@ -650,60 +668,7 @@ export function MapRegionAdministrativeView({
           onChange={setSort}
         />
       </ListToolbarRow>
-      {mode === 'drill' && breadcrumb.length > 0 && (
-        <div
-          style={{
-            padding: '8px 16px',
-            borderBottom: `1px solid ${palette.border}`,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}
-        >
-          <button
-            type="button"
-            onClick={handleBack}
-            aria-label="상위 구역으로 돌아가기"
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 8,
-              border: `1px solid ${palette.border}`,
-              background: palette.bg,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={palette.textSecondary}
-              strokeWidth="2.5"
-            >
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: palette.textSecondary,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {currentParent?.name}의 하위
-          </span>
-        </div>
-      )}
-      {breadcrumbBar}
-      {modeChrome}
+      {contextBar}
     </>
   )
 
@@ -720,11 +685,37 @@ export function MapRegionAdministrativeView({
           palette={palette}
           message="등록된 행정구역이 없습니다"
           action={
-            <RegisterButton
-              palette={palette}
-              onClick={openCreate}
-              label="첫 행정구역 등록"
-            />
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 4,
+              }}
+            >
+              <RegisterButton
+                palette={palette}
+                onClick={openCreate}
+                label="첫 행정구역 등록"
+              />
+              <button
+                type="button"
+                onClick={() => setBulkOpen(true)}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  border: 'none',
+                  background: 'transparent',
+                  color: palette.textSecondary,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                또는 일괄 등록 (47개 도도부현·50개 주를 한 번에)
+              </button>
+            </div>
           }
         />
       )
@@ -738,33 +729,41 @@ export function MapRegionAdministrativeView({
           : '하위 구역이 없습니다'
       return <ListEmptyState palette={palette} message={message} />
     }
+    // drill 모드에서는 같은 부모 아래 같은 단위라 배지 중복 — 숨김.
+    // search/level 모드는 다양한 단위가 섞이므로 배지 노출.
+    const showTypeBadge = mode !== 'drill'
     const items = sortedRows.map((row) => {
       const node = findInTree(divisions, row.id)
       const subtitleParts: string[] = []
-      if (row.divisionLabel) subtitleParts.push(row.divisionLabel)
+      if (showTypeBadge && row.divisionLabel)
+        subtitleParts.push(row.divisionLabel)
       if (row.localName) subtitleParts.push(row.localName)
       if (row.parentPath.length > 0)
         subtitleParts.push(row.parentPath.join(' › '))
       const subtitle = subtitleParts.join(' · ') || undefined
 
       return (
-        <RegionListItem
+        <div
           key={row.id}
+          style={{
+            position: 'relative',
+            opacity: row.abolished ? 0.55 : 1,
+            textDecoration: row.abolished ? 'line-through' : 'none',
+            ...(row.abolished
+              ? { borderLeft: '3px solid #94a3b8' }
+              : null),
+          }}
+        >
+        <RegionListItem
           palette={palette}
           selected={selectedId === row.id}
           onSelect={() => handleItemClick(row)}
           title={row.name}
-          subtitle={
-            row.abolished ? (
-              <span style={{ textDecoration: 'line-through' }}>{subtitle}</span>
-            ) : (
-              subtitle
-            )
-          }
+          subtitle={subtitle}
           onEdit={node ? () => openEdit(node) : undefined}
           onDelete={node ? () => setPendingDelete(node) : undefined}
           typeBadge={
-            row.divisionLabel
+            showTypeBadge && row.divisionLabel
               ? {
                   label: row.divisionLabel,
                   color: palette.primary,
@@ -806,6 +805,7 @@ export function MapRegionAdministrativeView({
             </span>
           }
         />
+        </div>
       )
     })
     if (hasMoreSearchResults) {
@@ -1039,11 +1039,14 @@ export function MapRegionAdministrativeView({
       <ConfirmDialog
         isOpen={!!pendingDelete}
         title="행정구역 삭제"
-        message={
-          pendingDelete
-            ? `"${pendingDelete.name}" 항목을 삭제하시겠습니까? 하위 구역도 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.`
-            : ''
-        }
+        message={(() => {
+          if (!pendingDelete) return ''
+          const desc = countDescendants(pendingDelete)
+          if (desc === 0) {
+            return `"${pendingDelete.name}"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
+          }
+          return `"${pendingDelete.name}"과 하위 ${desc}개 구역(총 ${desc + 1}개)이 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.`
+        })()}
         confirmLabel="삭제"
         cancelLabel="취소"
         danger
@@ -1094,13 +1097,13 @@ function BreadcrumbBtn({
   )
 }
 
-interface ModeBannerProps {
+interface ContextRowProps {
   palette: ReturnType<typeof useRegionPalette>
-  label: string
-  onClear: () => void
+  left: React.ReactNode
+  right: React.ReactNode
 }
 
-function ModeBanner({ palette, label, onClear }: ModeBannerProps) {
+function ContextRow({ palette, left, right }: ContextRowProps) {
   return (
     <div
       style={{
@@ -1109,37 +1112,63 @@ function ModeBanner({ palette, label, onClear }: ModeBannerProps) {
         display: 'flex',
         alignItems: 'center',
         gap: 10,
-        background: palette.badgeBg,
       }}
     >
-      <span
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: palette.primary,
-          flex: 1,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {label}
-      </span>
-      <button
-        type="button"
-        onClick={onClear}
-        style={{
-          padding: '4px 10px',
-          fontSize: 11,
-          fontWeight: 600,
-          border: 'none',
-          background: 'transparent',
-          color: palette.primary,
-          cursor: 'pointer',
-        }}
-      >
-        해제
-      </button>
+      <div style={{ flex: 1, minWidth: 0 }}>{left}</div>
+      <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+        {right}
+      </div>
     </div>
+  )
+}
+
+function CountBadge({
+  palette,
+  children,
+}: {
+  palette: ReturnType<typeof useRegionPalette>
+  children: React.ReactNode
+}) {
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        fontWeight: 600,
+        color: palette.primary,
+        background: palette.badgeBg,
+        padding: '3px 8px',
+        borderRadius: 6,
+      }}
+    >
+      {children}
+    </span>
+  )
+}
+
+function ClearLink({
+  palette,
+  onClick,
+  children,
+}: {
+  palette: ReturnType<typeof useRegionPalette>
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '4px 10px',
+        fontSize: 11,
+        fontWeight: 600,
+        border: 'none',
+        background: 'transparent',
+        color: palette.primary,
+        cursor: 'pointer',
+      }}
+    >
+      {children}
+    </button>
   )
 }

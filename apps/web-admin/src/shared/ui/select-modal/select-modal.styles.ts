@@ -160,6 +160,33 @@ export const HeaderExtraWrapper = styled.div`
   padding: 0 24px;
 `
 
+export const SearchWrapper = styled.div`
+  padding: 0 24px 12px;
+`
+
+export const SearchInput = styled.input`
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 10px;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  &:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  }
+`
+
 export const SelectOptionBody = styled.div`
   display: flex;
   flex-direction: column;

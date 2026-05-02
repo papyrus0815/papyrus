@@ -145,6 +145,15 @@ const CLUSTER_RADIUS = 8
  */
 const EXT_LABEL_MIN_WIDTH = 40
 
+/**
+ * Bar 안 라벨 표시 최소 폭. 이전 70 → 80으로 상향:
+ *  - 라벨 내부 패딩(12~18px)을 빼면 실제 글자 영역이 ~58px → CJK 4자 한계,
+ *    truncation이 거의 항상 발동되어 "이름…"으로 잘림.
+ *  - 80px 이면 글자 영역 ≥ 62px → 5자 + ellipsis까지 안전.
+ *  - 임계값 근처에서 zoom 시 inside↔outside 라벨 깜빡임도 자연 감소.
+ */
+const BAR_INSIDE_LABEL_MIN_PX = 80
+
 // ─────────────────────────────────────────────────────────────────────────────
 // RenderItem 타입 — 컴포넌트 외부 hoist (가독성)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -567,11 +576,29 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== ' ') return
+      // Space: panning 모드 진입(Bar focus 시 *선택*용으로 양보).
+      if (e.key === ' ') {
+        if (isInEditableElement(e.target)) return
+        if (isBarFocused) return
+        e.preventDefault()
+        setSpaceHeld(true)
+        return
+      }
+      // 줌 단축키 — `=`/`+` 줌 인, `-`/`_` 줌 아웃, `0` 리셋. 입력창에서는 비활성.
       if (isInEditableElement(e.target)) return
-      if (isBarFocused) return // Bar 선택용 Space — panning 모드 진입 안 함
-      e.preventDefault()
-      setSpaceHeld(true)
+      // 마우스/터치 없는 사용자도 줌 가능하도록 timeline 영역 hover/focus 여부 무관 적용.
+      // Cmd/Ctrl 조합은 OS 단축키와 충돌하므로 plain key만 받음.
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === '=' || e.key === '+') {
+        e.preventDefault()
+        zoomBy(ZOOM_STEP)
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault()
+        zoomBy(1 / ZOOM_STEP)
+      } else if (e.key === '0') {
+        e.preventDefault()
+        resetZoom()
+      }
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === ' ') setSpaceHeld(false)
@@ -634,7 +661,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     }
   }, [])
 
-  // ── 호버/포커스 툴팁 + clamp ────────────────────────────────────────────
+  // ── 호버/포커스 툴팁 + 4면 clamp ─────────────────────────────────────────
   const TOOLTIP_W = 280
   const TOOLTIP_H = 70
   const showTooltip = useCallback((target: SVGGraphicsElement, bar: BarData) => {
@@ -644,14 +671,43 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     const targetRect = target.getBoundingClientRect()
     const rawX = targetRect.left + targetRect.width / 2 - hostRect.left
     const rawY = targetRect.top - hostRect.top - 8
+    // X: 좌·우 양 끝에서 8px 안전 여백
     const x = Math.max(
       TOOLTIP_W / 2 + 8,
       Math.min(hostRect.width - TOOLTIP_W / 2 - 8, rawX),
     )
-    const y = Math.max(TOOLTIP_H + 8, rawY)
+    // Y: 위(TOOLTIP_H + 8 이상) + 아래(host 하단 8px 안쪽)도 클램프 — 이전엔 위만
+    //    클램프되어 마지막 lane 사건에서 툴팁이 viewport 밖으로 나갔다.
+    const y = Math.min(
+      Math.max(TOOLTIP_H + 8, rawY),
+      Math.max(TOOLTIP_H + 8, hostRect.height - 8),
+    )
     setTooltip({ x, y, bar })
   }, [])
   const hideTooltip = useCallback(() => setTooltip(null), [])
+
+  /**
+   * Tooltip 글로벌 dismiss — Escape 키 또는 ScrollHost 바깥 클릭 시 즉시 닫음.
+   * 모바일 터치 후 잔존 / 키보드 사용자가 빠져나갈 길이 없던 케이스 보강.
+   */
+  useEffect(() => {
+    if (!tooltip) return undefined
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') hideTooltip()
+    }
+    const onPointerDown = (e: PointerEvent) => {
+      const host = scrollRef.current
+      if (!host) return
+      if (e.target instanceof Node && host.contains(e.target)) return
+      hideTooltip()
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onPointerDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointerDown, true)
+    }
+  }, [tooltip, hideTooltip])
 
   // ── 미니맵 클릭/드래그 brush ────────────────────────────────────────────
   const minimapRef = useRef<HTMLDivElement | null>(null)
@@ -770,6 +826,24 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
    *
    * 외부 라벨 표시 여부는 *같은 lane 내 다음 아이템과의 거리*로 결정 (그리디 placement).
    */
+  /**
+   * lane(category) → 시간 정렬된 bar 배열. zoom·viewport 변화에 무관하므로 별도
+   * memoize → renderResult에서 매번 sort 안 하도록 분리. (zoom 이벤트 직후
+   * renderResult 재계산은 불가피하지만 sort 비용은 회피.)
+   */
+  const barsSortedByLane = useMemo(() => {
+    const byLane = new Map<string, BarData[]>()
+    for (const b of bars) {
+      const arr = byLane.get(b.category) ?? []
+      arr.push(b)
+      byLane.set(b.category, arr)
+    }
+    for (const [, arr] of byLane) {
+      arr.sort((a, b) => a.startYear - b.startYear)
+    }
+    return byLane
+  }, [bars])
+
   const renderResult = useMemo<{
     items: RenderItem[]
     /** 카테고리(=lane key) → 숨겨진(overflow) bar 개수. 라벨 옆 "+N" 표시용 */
@@ -780,20 +854,12 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     if (!renderReady) {
       return { items: [], overflow: new Map(), laneRows: new Map() }
     }
-    // lane별로 시간순 정렬 — bars(전역) 기준이라 viewport 변화에 영향 안 받음
-    const byLane = new Map<string, BarData[]>()
-    for (const b of bars) {
-      const arr = byLane.get(b.category) ?? []
-      arr.push(b)
-      byLane.set(b.category, arr)
-    }
 
     const out: RenderItem[] = []
     const overflowByLane = new Map<string, number>()
     const rowsByLane = new Map<string, number>()
 
-    for (const [category, arr] of byLane) {
-      arr.sort((a, b) => a.startYear - b.startYear)
+    for (const [category, arr] of barsSortedByLane) {
       const lane = laneIndex.get(category)
       if (lane == null) continue
       const laneCenter = TOP_AXIS_HEIGHT + lane * LANE_HEIGHT + LANE_HEIGHT / 2
@@ -992,8 +1058,8 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
               y: myRowCenter - h / 2,
               w: it.w,
               h,
-              // 막대 안에 라벨 표시되는 경우(w > 70)는 외부 라벨 안 그림
-              showExternalLabel: showExt && it.w <= 70,
+              // 막대 안에 라벨 표시되는 경우(w > BAR_INSIDE_LABEL_MIN_PX)는 외부 라벨 안 그림
+              showExternalLabel: showExt && it.w <= BAR_INSIDE_LABEL_MIN_PX,
               externalLabelWidth: labelWidth,
             })
           }
@@ -1003,7 +1069,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     }
 
     return { items: out, overflow: overflowByLane, laneRows: rowsByLane }
-  }, [bars, laneIndex, renderReady, minYear, pixelsPerYear])
+  }, [barsSortedByLane, laneIndex, renderReady, minYear, pixelsPerYear])
 
   const renderItems = renderResult.items
   const laneBarOverflow = renderResult.overflow
@@ -1635,6 +1701,12 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                       const strokeColor = importantStroke
                         ? color
                         : `${color}80` // 50% alpha
+                      // 색맹 대응 — importance를 색만이 아닌 패턴/내부 마커로 보강:
+                      //   critical: 다이아 안쪽 흰 dot
+                      //   major:    다이아 안쪽 빈 ring
+                      //   notable:  dashed stroke
+                      //   normal:   solid stroke (구분 단서 없음 — 가장 약한 등급)
+                      const dashed = b.importance === 'notable'
                       return (
                         <g key={b.id} role="listitem">
                           <MilestoneShape
@@ -1642,11 +1714,32 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                             fill={`${color}E6`}
                             stroke={strokeColor}
                             strokeWidth={importantStroke ? 1.5 : 1}
+                            strokeDasharray={dashed ? '2 1.5' : undefined}
                             $active={isActive}
                             $dim={dim}
                             $importance={b.importance}
                             {...commonHandlers}
                           />
+                          {b.importance === 'critical' && (
+                            <circle
+                              cx={it.cx}
+                              cy={it.cy}
+                              r={1.6}
+                              fill="#ffffff"
+                              pointerEvents="none"
+                            />
+                          )}
+                          {b.importance === 'major' && (
+                            <circle
+                              cx={it.cx}
+                              cy={it.cy}
+                              r={1.8}
+                              fill="none"
+                              stroke="#ffffff"
+                              strokeWidth={1}
+                              pointerEvents="none"
+                            />
+                          )}
                           {/* focus / active outline — 다이아몬드용 */}
                           {(isFocused || isActive) && (
                             <MilestoneOutline
@@ -1674,7 +1767,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                     const showWedge =
                       b.importance === 'critical' || b.importance === 'major'
                     const dashedBorder = b.importance === 'notable'
-                    const inLabel = it.w > 70
+                    const inLabel = it.w > BAR_INSIDE_LABEL_MIN_PX
                     return (
                       <g key={b.id} role="listitem">
                         <Bar
@@ -2472,7 +2565,10 @@ const MilestoneShape = styled.polygon<{
   }
 `
 
-/* 다이아몬드 active/focus outline — Bar의 ActiveOutline/FocusOutline에 대응 */
+/**
+ * 다이아몬드 active/focus outline — Bar의 ActiveOutline/FocusOutline에 대응.
+ * focus(미선택)는 dashed BRAND.primary 2px, active(선택)는 단색 darker 1.5px.
+ */
 const MilestoneOutline = styled.polygon<{ $active: boolean }>`
   fill: none;
   stroke: ${({ $active, theme }) =>
@@ -2481,8 +2577,9 @@ const MilestoneOutline = styled.polygon<{ $active: boolean }>`
         ? '#ffffff'
         : '#0f172a'
       : BRAND.primary};
-  stroke-width: 1.5;
+  stroke-width: ${({ $active }) => ($active ? 1.5 : 2)};
   stroke-dasharray: ${({ $active }) => ($active ? 'none' : '3 2')};
+  paint-order: stroke;
 `
 
 /**
@@ -2590,12 +2687,16 @@ const ActiveOutline = styled.rect`
   stroke-width: 1.5;
 `
 
-/* Focus outline — 키보드 포커스만 (선택 안 됨) */
+/**
+ * Focus outline — 키보드 포커스만(선택 안 됨). 1.5px이라 잘 안 보였던 케이스를
+ * 보강: stroke 2px + paint-order로 fill 위에 그려 글자/wedge에 가려지지 않게.
+ */
 const FocusOutline = styled.rect`
   fill: none;
   stroke: ${BRAND.primary};
-  stroke-width: 1.5;
+  stroke-width: 2;
   stroke-dasharray: 3 2;
+  paint-order: stroke;
 `
 
 /**

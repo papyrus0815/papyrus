@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import * as S from './select-modal.styles'
@@ -29,6 +29,12 @@ interface SelectModalProps<T = string> {
   selectedValues?: T[]
   /** 추가 헤더 컨텐츠 (예: 전체 해제 버튼) */
   headerExtra?: React.ReactNode
+  /** 검색 입력 표시 (옵션 6개 이상이면 자동 노출 권장) */
+  searchable?: boolean
+  /** 검색 placeholder */
+  searchPlaceholder?: string
+  /** 로딩 상태 — 옵션 fetching 중 */
+  isLoading?: boolean
 }
 
 /**
@@ -67,7 +73,29 @@ export function SelectModal<T = string>({
   multiple = false,
   selectedValues = [],
   headerExtra,
+  searchable,
+  searchPlaceholder = '검색...',
+  isLoading = false,
 }: SelectModalProps<T>) {
+  const [query, setQuery] = useState('')
+
+  // 모달이 닫히면 검색어 초기화
+  useEffect(() => {
+    if (!isOpen) setQuery('')
+  }, [isOpen])
+
+  const showSearch = searchable ?? options.length >= 6
+
+  const filteredOptions = useMemo(() => {
+    if (!query.trim()) return options
+    const q = query.trim().toLowerCase()
+    return options.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(q) ||
+        (opt.description?.toLowerCase().includes(q) ?? false),
+    )
+  }, [options, query])
+
   if (!isOpen) return null
 
   const isSelected = (value: T) => {
@@ -105,15 +133,39 @@ export function SelectModal<T = string>({
 
         {headerExtra && <S.HeaderExtraWrapper>{headerExtra}</S.HeaderExtraWrapper>}
 
+        {showSearch && (
+          <S.SearchWrapper>
+            <S.SearchInput
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={searchPlaceholder}
+              autoFocus
+            />
+          </S.SearchWrapper>
+        )}
+
         <S.SelectModalContent>
-          {options.length === 0 ? (
+          {isLoading ? (
             <S.EmptyState>
-              <S.EmptyIcon>📭</S.EmptyIcon>
-              <S.EmptyTitle>데이터가 없습니다</S.EmptyTitle>
-              <S.EmptyDesc>선택 가능한 항목이 없습니다</S.EmptyDesc>
+              <S.EmptyIcon>⏳</S.EmptyIcon>
+              <S.EmptyTitle>불러오는 중...</S.EmptyTitle>
+              <S.EmptyDesc>잠시만 기다려 주세요</S.EmptyDesc>
+            </S.EmptyState>
+          ) : filteredOptions.length === 0 ? (
+            <S.EmptyState>
+              <S.EmptyIcon>{query ? '🔍' : '📭'}</S.EmptyIcon>
+              <S.EmptyTitle>
+                {query ? '검색 결과 없음' : '데이터가 없습니다'}
+              </S.EmptyTitle>
+              <S.EmptyDesc>
+                {query
+                  ? `"${query}"에 해당하는 항목을 찾지 못했습니다`
+                  : '선택 가능한 항목이 없습니다'}
+              </S.EmptyDesc>
             </S.EmptyState>
           ) : (
-            options.map((option) => (
+            filteredOptions.map((option) => (
               <S.SelectOption
                 key={String(option.value)}
                 $active={isSelected(option.value)}

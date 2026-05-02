@@ -93,7 +93,14 @@ export default function CountryDetailPage() {
 
 
   // 국가 폼 모달 (현대 국가 등록·수정·삭제)
-  const countryForm = useCountryFormModal()
+  // 신규 등록 후에는 새로 만들어진 국가의 상세 페이지로 자동 이동
+  const countryForm = useCountryFormModal({
+    onSaved: (id, savedMode) => {
+      if (savedMode === 'create') {
+        navigate(pathKeys.history.countryDetail(id))
+      }
+    },
+  })
 
   // 역사 국가 폼 모달
   const historicalForm = useHistoricalCountryFormModal()

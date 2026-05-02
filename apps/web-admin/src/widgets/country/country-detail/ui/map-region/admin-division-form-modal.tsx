@@ -15,13 +15,11 @@ import {
   type AdminDivisionConfig,
   type AdministrativeDivision,
   useAdminDivisionConfigs,
-  useAdministrativeDivisionSearch,
   useAdministrativeDivisions,
   useCreateAdminDivisionConfig,
   useCreateAdministrativeDivision,
   useUpdateAdministrativeDivision,
 } from '@/entities/country/api.administrative-divisions'
-import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { type PlaceSearchResult, cityApi } from '@/shared/api/city'
 import { CoordPickerMap } from '@/shared/ui/google-map/coord-picker-map'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
@@ -35,6 +33,7 @@ import {
   ModalTitle,
 } from '@/shared/ui/modal'
 
+import { DivisionAutocomplete } from './division-autocomplete'
 import {
   ErrorText,
   Field,
@@ -162,13 +161,7 @@ export function AdminDivisionFormModal({
   const [establishedPickerOpen, setEstablishedPickerOpen] = useState(false)
   const [abolishedPickerOpen, setAbolishedPickerOpen] = useState(false)
   const [mapPickerOpen, setMapPickerOpen] = useState(false)
-  const [predecessorQuery, setPredecessorQuery] = useState('')
-  const [predecessorOpen, setPredecessorOpen] = useState(false)
-  const debouncedPredecessorQ = useDebouncedValue(predecessorQuery, 250)
-  const predecessorSearch = useAdministrativeDivisionSearch(
-    debouncedPredecessorQ,
-    countryId,
-  )
+  const [mapPickerLarge, setMapPickerLarge] = useState(false)
 
   const editingLevel = editing
     ? allConfigs.find((c) => c.id === editing.adminDivisionId)?.divisionLevel ??
@@ -200,13 +193,6 @@ export function AdminDivisionFormModal({
     [allDivisions, form.parentId],
   )
 
-  const [parentQuery, setParentQuery] = useState('')
-  const [parentOpen, setParentOpen] = useState(false)
-  const debouncedParentQ = useDebouncedValue(parentQuery, 250)
-  const parentSearch = useAdministrativeDivisionSearch(
-    debouncedParentQ,
-    countryId,
-  )
 
   useEffect(() => {
     if (!isOpen) return
@@ -302,6 +288,23 @@ export function AdminDivisionFormModal({
     setCoordCandidates(null)
   }
 
+  /** 서버 에러 메시지를 키워드로 form 필드에 매핑 */
+  const mapServerError = (msg: string): Record<string, string> => {
+    const errs: Record<string, string> = {}
+    if (msg.includes('동일한 이름') || msg.includes('이름의 행정구역')) {
+      errs.name = msg
+    } else if (msg.includes('단위')) {
+      errs.configId = msg
+    } else if (msg.includes('상위') || msg.includes('자기 자신을 상위')) {
+      errs.parentId = msg
+    } else if (msg.includes('이전 행정구역') || msg.includes('predecessor')) {
+      errs.predecessorId = msg
+    } else {
+      errs._global = msg
+    }
+    return errs
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const errs = validate()
@@ -350,7 +353,10 @@ export function AdminDivisionFormModal({
       }
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '저장에 실패했습니다')
+      const msg = err instanceof Error ? err.message : '저장에 실패했습니다'
+      const mapped = mapServerError(msg)
+      setErrors((prev) => ({ ...prev, ...mapped }))
+      toast.error(msg)
     }
   }
 
@@ -371,157 +377,38 @@ export function AdminDivisionFormModal({
           </ModalCloseButton>
         </ModalHeader>
         <ModalBody>
+          {errors._global && (
+            <div
+              style={{
+                padding: '10px 12px',
+                marginBottom: 12,
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: 10,
+                color: '#b91c1c',
+                fontSize: 12,
+                fontWeight: 500,
+              }}
+            >
+              {errors._global}
+            </div>
+          )}
           <FormGrid>
             <FieldFull>
               <Label htmlFor="ad-parent">상위 구역</Label>
-              {selectedParent ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 12px',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: 10,
-                    background: '#f8fafc',
-                    fontSize: 13,
-                  }}
-                >
-                  <span style={{ flex: 1, fontWeight: 600 }}>
-                    {selectedParent.name}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => set('parentId', '')}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#64748b',
-                      cursor: 'pointer',
-                      fontSize: 16,
-                    }}
-                    aria-label="제거"
-                  >
-                    ×
-                  </button>
-                </div>
-              ) : (
-                <div style={{ position: 'relative' }}>
-                  <Input
-                    id="ad-parent"
-                    value={parentQuery}
-                    onChange={(e) => {
-                      setParentQuery(e.target.value)
-                      setParentOpen(true)
-                    }}
-                    onFocus={() => setParentOpen(true)}
-                    onBlur={() => setTimeout(() => setParentOpen(false), 150)}
-                    placeholder="이름으로 검색 — 비워두면 최상위 (1차)"
-                  />
-                  {parentOpen && parentQuery.trim().length > 0 && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        marginTop: 4,
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: 10,
-                        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
-                        zIndex: 10,
-                        maxHeight: 240,
-                        overflowY: 'auto',
-                      }}
-                    >
-                      {parentSearch.isLoading ? (
-                        <div
-                          style={{
-                            padding: '10px 12px',
-                            fontSize: 12,
-                            color: '#64748b',
-                          }}
-                        >
-                          검색 중…
-                        </div>
-                      ) : (parentSearch.data ?? []).length === 0 ? (
-                        <div
-                          style={{
-                            padding: '10px 12px',
-                            fontSize: 12,
-                            color: '#64748b',
-                          }}
-                        >
-                          일치하는 행정구역이 없습니다
-                        </div>
-                      ) : (
-                        (parentSearch.data ?? [])
-                          .filter((h) => h.id !== editing?.id)
-                          .map((hit) => (
-                            <button
-                              key={hit.id}
-                              type="button"
-                              onClick={() => {
-                                set('parentId', hit.id)
-                                setParentQuery('')
-                                setParentOpen(false)
-                              }}
-                              style={{
-                                display: 'block',
-                                width: '100%',
-                                textAlign: 'left',
-                                padding: '8px 12px',
-                                border: 'none',
-                                borderBottom: '1px solid #e2e8f0',
-                                background: 'transparent',
-                                cursor: 'pointer',
-                                fontSize: 12,
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = '#f1f5f9'
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = 'transparent'
-                              }}
-                            >
-                              <div style={{ fontWeight: 600, color: '#0f172a' }}>
-                                {hit.name}
-                                <span
-                                  style={{
-                                    marginLeft: 6,
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    color: '#6366f1',
-                                    background: 'rgba(99,102,241,0.1)',
-                                    padding: '1px 5px',
-                                    borderRadius: 4,
-                                  }}
-                                >
-                                  {hit.divisionLabel}
-                                </span>
-                              </div>
-                              {hit.parentPath.length > 0 && (
-                                <div
-                                  style={{
-                                    color: '#64748b',
-                                    fontSize: 11,
-                                    marginTop: 2,
-                                  }}
-                                >
-                                  {hit.parentPath.join(' › ')}
-                                </div>
-                              )}
-                            </button>
-                          ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+              <DivisionAutocomplete
+                id="ad-parent"
+                countryId={countryId}
+                selected={selectedParent}
+                onChange={(id) => set('parentId', id)}
+                onClear={() => set('parentId', '')}
+                excludeIds={editing ? [editing.id] : []}
+                placeholder="이름으로 검색 — 비워두면 최상위 (1차)"
+              />
               <HintText>
                 상위가 없으면 최상위 (1차) 행정구역으로 등록됩니다.
               </HintText>
+              {errors.parentId && <ErrorText>{errors.parentId}</ErrorText>}
             </FieldFull>
             {selectedParent && (
               <FieldFull>
@@ -669,38 +556,64 @@ export function AdminDivisionFormModal({
                 </div>
               </div>
               {mapPickerOpen && (
-                <CoordPickerMap
-                  lat={
-                    form.centerLat.trim() === ''
-                      ? null
-                      : Number(form.centerLat)
-                  }
-                  lng={
-                    form.centerLng.trim() === ''
-                      ? null
-                      : Number(form.centerLng)
-                  }
-                  onPick={(lat, lng) => {
-                    setForm((prev) => ({
-                      ...prev,
-                      centerLat: String(lat),
-                      centerLng: String(lng),
-                    }))
-                    setErrors((prev) => ({
-                      ...prev,
-                      centerLat: '',
-                      centerLng: '',
-                    }))
-                  }}
-                  fallbackLat={
-                    (countryDetail as { latitude?: number | null } | undefined)
-                      ?.latitude ?? null
-                  }
-                  fallbackLng={
-                    (countryDetail as { longitude?: number | null } | undefined)
-                      ?.longitude ?? null
-                  }
-                />
+                <div>
+                  <CoordPickerMap
+                    lat={
+                      form.centerLat.trim() === ''
+                        ? null
+                        : Number(form.centerLat)
+                    }
+                    lng={
+                      form.centerLng.trim() === ''
+                        ? null
+                        : Number(form.centerLng)
+                    }
+                    onPick={(lat, lng) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        centerLat: String(lat),
+                        centerLng: String(lng),
+                      }))
+                      setErrors((prev) => ({
+                        ...prev,
+                        centerLat: '',
+                        centerLng: '',
+                      }))
+                    }}
+                    fallbackLat={
+                      (countryDetail as { latitude?: number | null } | undefined)
+                        ?.latitude ?? null
+                    }
+                    fallbackLng={
+                      (countryDetail as { longitude?: number | null } | undefined)
+                        ?.longitude ?? null
+                    }
+                    height={mapPickerLarge ? 480 : 220}
+                  />
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      marginTop: 4,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setMapPickerLarge((v) => !v)}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: 11,
+                        fontWeight: 500,
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#6366f1',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {mapPickerLarge ? '⤢ 작게' : '⤡ 크게'}
+                    </button>
+                  </div>
+                </div>
               )}
               <HintText>
                 OpenStreetMap에서 이름으로 검색해 위·경도를 채웁니다. 후보가
@@ -843,167 +756,21 @@ export function AdminDivisionFormModal({
 
             <FieldFull>
               <Label htmlFor="ad-predecessor">이전 행정구역 (모체)</Label>
-              {selectedPredecessor ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 12px',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: 10,
-                    background: '#f8fafc',
-                    fontSize: 13,
-                  }}
-                >
-                  <span style={{ flex: 1, fontWeight: 600 }}>
-                    {selectedPredecessor.name}
-                    {selectedPredecessor.localName ? (
-                      <span
-                        style={{
-                          marginLeft: 6,
-                          color: '#64748b',
-                          fontWeight: 400,
-                        }}
-                      >
-                        — {selectedPredecessor.localName}
-                      </span>
-                    ) : null}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => set('predecessorId', '')}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#64748b',
-                      cursor: 'pointer',
-                      fontSize: 16,
-                    }}
-                    aria-label="제거"
-                  >
-                    ×
-                  </button>
-                </div>
-              ) : (
-                <div style={{ position: 'relative' }}>
-                  <Input
-                    id="ad-predecessor"
-                    value={predecessorQuery}
-                    onChange={(e) => {
-                      setPredecessorQuery(e.target.value)
-                      setPredecessorOpen(true)
-                    }}
-                    onFocus={() => setPredecessorOpen(true)}
-                    onBlur={() =>
-                      setTimeout(() => setPredecessorOpen(false), 150)
-                    }
-                    placeholder="이름으로 검색"
-                  />
-                  {predecessorOpen && predecessorQuery.trim().length > 0 && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        marginTop: 4,
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: 10,
-                        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
-                        zIndex: 10,
-                        maxHeight: 240,
-                        overflowY: 'auto',
-                      }}
-                    >
-                      {predecessorSearch.isLoading ? (
-                        <div
-                          style={{
-                            padding: '10px 12px',
-                            fontSize: 12,
-                            color: '#64748b',
-                          }}
-                        >
-                          검색 중…
-                        </div>
-                      ) : (predecessorSearch.data ?? []).length === 0 ? (
-                        <div
-                          style={{
-                            padding: '10px 12px',
-                            fontSize: 12,
-                            color: '#64748b',
-                          }}
-                        >
-                          일치하는 행정구역이 없습니다
-                        </div>
-                      ) : (
-                        (predecessorSearch.data ?? [])
-                          .filter((h) => h.id !== editing?.id)
-                          .map((hit) => (
-                            <button
-                              key={hit.id}
-                              type="button"
-                              onClick={() => {
-                                set('predecessorId', hit.id)
-                                setPredecessorQuery('')
-                                setPredecessorOpen(false)
-                              }}
-                              style={{
-                                display: 'block',
-                                width: '100%',
-                                textAlign: 'left',
-                                padding: '8px 12px',
-                                border: 'none',
-                                borderBottom: '1px solid #e2e8f0',
-                                background: 'transparent',
-                                cursor: 'pointer',
-                                fontSize: 12,
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = '#f1f5f9'
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = 'transparent'
-                              }}
-                            >
-                              <div style={{ fontWeight: 600, color: '#0f172a' }}>
-                                {hit.name}
-                                <span
-                                  style={{
-                                    marginLeft: 6,
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    color: '#6366f1',
-                                    background: 'rgba(99,102,241,0.1)',
-                                    padding: '1px 5px',
-                                    borderRadius: 4,
-                                  }}
-                                >
-                                  {hit.divisionLabel}
-                                </span>
-                              </div>
-                              {hit.parentPath.length > 0 && (
-                                <div
-                                  style={{
-                                    color: '#64748b',
-                                    fontSize: 11,
-                                    marginTop: 2,
-                                  }}
-                                >
-                                  {hit.parentPath.join(' › ')}
-                                </div>
-                              )}
-                            </button>
-                          ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+              <DivisionAutocomplete
+                id="ad-predecessor"
+                countryId={countryId}
+                selected={selectedPredecessor}
+                onChange={(id) => set('predecessorId', id)}
+                onClear={() => set('predecessorId', '')}
+                excludeIds={editing ? [editing.id] : []}
+                placeholder="이름으로 검색"
+              />
               <HintText>
                 분리·승격으로 신설된 구역이라면 이전 모체를 지정할 수 있습니다.
               </HintText>
+              {errors.predecessorId && (
+                <ErrorText>{errors.predecessorId}</ErrorText>
+              )}
             </FieldFull>
           </FormGrid>
         </ModalBody>
