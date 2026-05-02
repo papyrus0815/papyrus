@@ -41,6 +41,7 @@ import {
   seedJapan1872GinzaFire,
   seedJapan1945ManilaConference,
   seedTrumanScapAppointment,
+  seedPotsdamConference,
   seedGermanyEmpireParties,
   seedGermanyReichstagElections,
   seedAustroPrussianWar,
@@ -219,6 +220,11 @@ async function main() {
         //  · 트루먼·마셜·번스(신규) 인물 등록 / 맥아더·스탈린·시데하라(기존) 활용
         //  · Event + 8섹션(논문급) + EventCountryRelation 6 + PersonEvent 6
         await seedTrumanScapAppointment(prisma)
+
+        // 13-11. 1945-07-17~08-02 포츠담 회담 — 회담/조약 카테고리 + 나치 독일 hc
+        //  · 처칠·애틀리·몰로토프(신규) / 트루먼·번스·스탈린(기존) 활용
+        //  · Event + 8섹션(논문급) + EventCountryRelation 7 + PersonEvent 6
+        await seedPotsdamConference(prisma)
 
         // 13-5. Person.countryId 백필 — 인물 시드 모두 끝난 뒤 affiliation 체인으로 NULL 채움
         await seedBackfillPersonCountryId(prisma)
