@@ -6,11 +6,14 @@ import React, { useMemo, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
+import { toast } from 'react-hot-toast'
 import {
+  FiArrowLeft,
   FiBriefcase,
   FiCalendar,
   FiCheck,
   FiMapPin,
+  FiPlus,
   FiSearch,
   FiUser,
   FiX,
@@ -18,6 +21,7 @@ import {
 import styled from 'styled-components'
 
 import type { PersonResponseDto } from '@/shared/api/persons'
+import { createPerson } from '@/shared/api/persons'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { Z_INDEX } from '@/shared/styles/z-index'
@@ -35,6 +39,13 @@ interface PersonSelectModalProps {
   title?: string
   /** 검색 placeholder (예: "아버지로 등록할 인물을 검색...") */
   searchPlaceholder?: string
+  /**
+   * 인라인 "+ 새 인물 등록" 진입점 활성화. 부모 폼의 현재 국가를 기본값으로 사용.
+   * 미지정이거나 빈 문자열이면 진입점 자체가 노출되지 않음.
+   */
+  defaultCountryId?: string
+  /** 인라인 등록으로 새 인물이 생성된 경우 콜백 — 부모가 로컬 인물 목록을 갱신할 수 있도록. */
+  onCreatedPerson?: (person: PersonResponseDto) => void
 }
 
 type SortOption = 'name' | 'birth-asc' | 'birth-desc'
@@ -48,6 +59,8 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   excludeReason,
   title,
   searchPlaceholder,
+  defaultCountryId,
+  onCreatedPerson,
 }) => {
   const excludeSet = useMemo(
     () => new Set((excludeIds ?? []).filter(Boolean)),
@@ -56,6 +69,82 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   const playClickSound = useClickSound()
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortOption>('name')
+
+  // ─── 인라인 새 인물 등록 ───────────────────────────────────────────────
+  const canCreate = !!defaultCountryId
+  const [createMode, setCreateMode] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newSurname, setNewSurname] = useState('')
+  const [newGender, setNewGender] = useState<'' | 'MALE' | 'FEMALE'>('')
+  const [newBirthYear, setNewBirthYear] = useState('')
+  const [newDeathYear, setNewDeathYear] = useState('')
+  const [creating, setCreating] = useState(false)
+
+  const enterCreate = () => {
+    playClickSound()
+    // 검색어를 이름 필드에 자동 채움 — "검색했는데 못 찾음 → 등록" 흐름 가속.
+    setNewName(searchQuery.trim())
+    setNewSurname('')
+    setNewGender('')
+    setNewBirthYear('')
+    setNewDeathYear('')
+    setCreateMode(true)
+  }
+
+  const exitCreate = () => {
+    if (creating) return
+    setCreateMode(false)
+  }
+
+  const handleCreateSubmit = async () => {
+    if (!defaultCountryId) {
+      toast.error('국가를 먼저 선택해 주세요.')
+      return
+    }
+    if (!newName.trim()) {
+      toast.error('이름을 입력해 주세요.')
+      return
+    }
+    if (!newSurname.trim()) {
+      toast.error('성을 입력해 주세요.')
+      return
+    }
+    if (!newGender) {
+      toast.error('성별을 선택해 주세요.')
+      return
+    }
+    setCreating(true)
+    try {
+      const payload: any = {
+        name: newName.trim(),
+        surname: newSurname.trim(),
+        gender: newGender,
+        countryId: defaultCountryId,
+      }
+      if (newBirthYear.trim()) {
+        const y = parseInt(newBirthYear, 10)
+        if (!isNaN(y) && y >= 1 && y <= 9999) {
+          payload.birth = { era: 'AD', year: y }
+        }
+      }
+      if (newDeathYear.trim()) {
+        const y = parseInt(newDeathYear, 10)
+        if (!isNaN(y) && y >= 1 && y <= 9999) {
+          payload.death = { era: 'AD', year: y }
+        }
+      }
+      const created = await createPerson(payload)
+      toast.success('인물을 등록했습니다.')
+      onCreatedPerson?.(created)
+      const fullName = getPersonDisplayName(created)
+      onSelect(created.id, fullName)
+      onClose()
+    } catch (err: any) {
+      toast.error(err?.message ?? '등록에 실패했습니다.')
+    } finally {
+      setCreating(false)
+    }
+  }
 
   // 필터 상태
   const [filterCountry, setFilterCountry] = useState<string>('')
@@ -202,28 +291,143 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
     <ModalOverlay onClick={onClose}>
       <ModalBox onClick={(e) => e.stopPropagation()}>
         <ModalHeader>
-          <ModalTitle>{title ?? '인물 선택'}</ModalTitle>
+          {createMode ? (
+            <CreateBackBtn type="button" onClick={exitCreate} disabled={creating}>
+              <FiArrowLeft size={16} />
+              검색으로
+            </CreateBackBtn>
+          ) : null}
+          <ModalTitle>
+            {createMode ? '새 인물 등록' : (title ?? '인물 선택')}
+          </ModalTitle>
           <ModalCloseButton onClick={onClose} aria-label="닫기">
             <FiX size={20} strokeWidth={2.5} />
           </ModalCloseButton>
         </ModalHeader>
 
-        {/* 검색 바 */}
-        <SearchSection>
-          <SearchWrapper>
-            <FiSearch size={20} className="search-icon" />
-            <SearchInput
-              type="text"
-              placeholder={
-                searchPlaceholder ?? '이름 또는 생몰년도로 검색...'
-              }
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              autoFocus
-            />
-          </SearchWrapper>
-        </SearchSection>
+        {!createMode && (
+          /* 검색 바 + 새 인물 등록 진입점 */
+          <SearchSection>
+            <SearchWrapper>
+              <FiSearch size={20} className="search-icon" />
+              <SearchInput
+                type="text"
+                placeholder={
+                  searchPlaceholder ?? '이름 또는 생몰년도로 검색...'
+                }
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                autoFocus
+              />
+            </SearchWrapper>
+            {canCreate && (
+              <CreateEntryBtn
+                type="button"
+                onClick={enterCreate}
+                title="DB에 없는 인물을 즉석에서 등록 (skeleton). 상세는 인물 페이지에서 보강."
+              >
+                <FiPlus size={14} />
+                새 인물
+              </CreateEntryBtn>
+            )}
+          </SearchSection>
+        )}
 
+        {createMode ? (
+          <CreateFormBody>
+            <CreateFormHint>
+              필수 정보만 입력해 빠르게 등록합니다. 생몰지·가족·약력 등 상세는 인물 페이지에서 보강할 수 있습니다.
+            </CreateFormHint>
+            <CreateFormGrid>
+              <CreateFormField>
+                <CreateFormLabel>성</CreateFormLabel>
+                <CreateFormInput
+                  type="text"
+                  value={newSurname}
+                  onChange={(e) => setNewSurname(e.target.value)}
+                  placeholder="예: 김"
+                  disabled={creating}
+                  autoFocus
+                />
+              </CreateFormField>
+              <CreateFormField>
+                <CreateFormLabel>이름</CreateFormLabel>
+                <CreateFormInput
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="예: 홍길동"
+                  disabled={creating}
+                />
+              </CreateFormField>
+              <CreateFormField $span={2}>
+                <CreateFormLabel>성별</CreateFormLabel>
+                <CreateFormChips role="radiogroup" aria-label="성별">
+                  <CreateFormChip
+                    type="button"
+                    role="radio"
+                    aria-checked={newGender === 'MALE'}
+                    $active={newGender === 'MALE'}
+                    onClick={() => setNewGender('MALE')}
+                    disabled={creating}
+                  >
+                    남성
+                  </CreateFormChip>
+                  <CreateFormChip
+                    type="button"
+                    role="radio"
+                    aria-checked={newGender === 'FEMALE'}
+                    $active={newGender === 'FEMALE'}
+                    onClick={() => setNewGender('FEMALE')}
+                    disabled={creating}
+                  >
+                    여성
+                  </CreateFormChip>
+                </CreateFormChips>
+              </CreateFormField>
+              <CreateFormField>
+                <CreateFormLabel>출생 연도 (선택)</CreateFormLabel>
+                <CreateFormInput
+                  type="number"
+                  min={1}
+                  max={9999}
+                  value={newBirthYear}
+                  onChange={(e) => setNewBirthYear(e.target.value)}
+                  placeholder="예: 1397"
+                  disabled={creating}
+                />
+              </CreateFormField>
+              <CreateFormField>
+                <CreateFormLabel>사망 연도 (선택)</CreateFormLabel>
+                <CreateFormInput
+                  type="number"
+                  min={1}
+                  max={9999}
+                  value={newDeathYear}
+                  onChange={(e) => setNewDeathYear(e.target.value)}
+                  placeholder="예: 1450"
+                  disabled={creating}
+                />
+              </CreateFormField>
+            </CreateFormGrid>
+            <CreateFormActions>
+              <CreateFormCancelBtn
+                type="button"
+                onClick={exitCreate}
+                disabled={creating}
+              >
+                취소
+              </CreateFormCancelBtn>
+              <CreateFormSubmitBtn
+                type="button"
+                onClick={handleCreateSubmit}
+                disabled={creating}
+              >
+                {creating ? '등록 중…' : '등록 후 이 슬롯에 지정'}
+              </CreateFormSubmitBtn>
+            </CreateFormActions>
+          </CreateFormBody>
+        ) : (
         <SplitModalBody>
           {/* 좌측: 필터 사이드바 */}
           <FilterSidebar>
@@ -428,6 +632,7 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
             </PersonsList>
           </PersonsArea>
         </SplitModalBody>
+        )}
       </ModalBox>
     </ModalOverlay>
   )
@@ -529,7 +734,222 @@ const ModalCloseButton = styled.button`
 `
 
 const SearchSection = styled.div`
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
   padding: 16px 28px 20px;
+  > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+`
+
+const CreateEntryBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4f46e5;
+  background: ${({ theme }) =>
+    theme.colors.alert.info.bg};
+  border: 1px solid ${({ theme }) =>
+    theme.colors.alert.info.border};
+  border-radius: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+  &:hover {
+    color: #fff;
+    background: #6366f1;
+    border-color: #6366f1;
+  }
+`
+
+const CreateBackBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  margin-right: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background 0.15s;
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f1f5f9'};
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
+const CreateFormBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 8px 28px 24px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+`
+
+const CreateFormHint = styled.p`
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.colors.alert.info.bg};
+  border: 1px solid ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#e0e7ff'};
+  border-radius: 12px;
+`
+
+const CreateFormGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const CreateFormField = styled.div<{ $span?: number }>`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  ${({ $span }) =>
+    $span && $span > 1
+      ? `grid-column: span ${$span};`
+      : ''}
+  @media (max-width: 640px) {
+    grid-column: span 1;
+  }
+`
+
+const CreateFormLabel = styled.label`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const CreateFormInput = styled.input`
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 10px;
+  outline: none;
+  &:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  }
+  &:disabled {
+    opacity: 0.6;
+  }
+`
+
+const CreateFormChips = styled.div`
+  display: flex;
+  gap: 6px;
+`
+
+const CreateFormChip = styled.button<{ $active?: boolean }>`
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ $active, theme }) =>
+    $active ? '#fff' : theme.colors.text.secondary};
+  background: ${({ $active, theme }) =>
+    $active
+      ? '#6366f1'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.05)'
+        : '#fff'};
+  border: 1px solid ${({ $active, theme }) =>
+    $active ? '#6366f1' : theme.colors.border.default};
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+  &:hover:not(:disabled) {
+    border-color: ${({ $active }) => ($active ? '#4f46e5' : '#a5b4fc')};
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
+const CreateFormActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  margin-top: 6px;
+`
+
+const CreateFormCancelBtn = styled.button`
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 10px;
+  cursor: pointer;
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8fafc'};
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
+const CreateFormSubmitBtn = styled.button`
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: #6366f1;
+  border: 1px solid #6366f1;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+  &:hover:not(:disabled) {
+    background: #4f46e5;
+    border-color: #4f46e5;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `
 
 const SearchWrapper = styled.div`

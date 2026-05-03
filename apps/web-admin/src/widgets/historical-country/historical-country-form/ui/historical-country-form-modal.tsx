@@ -1,110 +1,12 @@
 /**
- * 역사적 국가 등록/수정 모달 — 인물 등록 모달(PersonRegisterViewModal)과 동일한 디자인
- * 국가 목록·역사적 국가 페이지에서 "역사적 국가 등록" 선택 시 표시
+ * 역사적 국가 등록/수정 모달 — 공용 CountryFormShell 사용 (현대 국가 모달과 외곽 통일).
  */
-import React from 'react'
-import { createPortal } from 'react-dom'
-import { AnimatePresence, motion } from 'framer-motion'
-import { FiX } from 'react-icons/fi'
-import styled from 'styled-components'
+import React, { useState } from 'react'
 
 import type { HistoricalCountry } from '@/entities/historical-country/api'
 import type { TransitionEventType } from '@/shared/api/historical-countries'
-import { Z_INDEX } from '@/shared/styles/z-index'
+import { CountryFormShell } from '@/widgets/country/country-form/ui/country-form-shell'
 import { HistoricalCountryForm } from './historical-country-form'
-
-const Overlay = styled(motion.div)`
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.38);
-  z-index: ${Z_INDEX.MODAL_OVERLAY};
-  backdrop-filter: blur(10px);
-`
-
-const ModalBox = styled(motion.div)`
-  width: min(1200px, 96vw);
-  height: 90vh;
-  max-height: 1200px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(20,20,20,0.92)' : '#fff'};
-  backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  -webkit-backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
-  border-radius: 22px;
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 10px 40px rgba(0,0,0,0.5)'
-      : '0 32px 64px -16px rgba(0,0,0,0.2)'};
-  z-index: ${Z_INDEX.MODAL_CONTENT};
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-`
-
-const ModalHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  flex-shrink: 0;
-`
-
-const ModalTitle = styled.h2`
-  margin: 0;
-  font-size: 19px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.025em;
-`
-
-const CloseBtn = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  transition:
-    background 0.2s,
-    color 0.2s;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.background.tertiary};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const FormScroll = styled.div`
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 24px;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: ${({ theme }) => theme.colors.border.default};
-    border-radius: 3px;
-  }
-`
 
 export interface HistoricalCountryFormModalProps {
   isOpen: boolean
@@ -137,12 +39,26 @@ export function HistoricalCountryFormModal({
   onSave,
   onSuccess,
 }: HistoricalCountryFormModalProps) {
+  const [submitting, setSubmitting] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
+  const [filled, setFilled] = useState<{
+    name?: boolean
+    stateType?: boolean
+  }>({})
+
   const handleSave = async (
     data: Parameters<HistoricalCountryFormModalProps['onSave']>[0],
   ) => {
-    await onSave(data)
-    onSuccess?.()
-    onClose()
+    setSubmitting(true)
+    try {
+      await onSave(data)
+      onSuccess?.()
+      onClose()
+    } catch {
+      // 외부에서 토스트 처리
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const effectiveEditing =
@@ -152,50 +68,55 @@ export function HistoricalCountryFormModal({
         ? ({} as HistoricalCountry)
         : null
 
-  const content = (
-    <AnimatePresence>
-      {isOpen && effectiveEditing !== null && (
-        <Overlay
-          key="historical-country-form-modal"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="historical-country-form-modal-title"
-        >
-          <ModalBox
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.2 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ModalHeader>
-              <ModalTitle id="historical-country-form-modal-title">
-                {effectiveEditing?.id ? '역사적 국가 수정' : '역사적 국가 등록'}
-              </ModalTitle>
-              <CloseBtn type="button" onClick={onClose} aria-label="닫기">
-                <FiX size={20} />
-              </CloseBtn>
-            </ModalHeader>
-            <FormScroll>
-              <HistoricalCountryForm
-                editing={effectiveEditing}
-                embedIn="modal"
-                initialPreset={initialPreset}
-                modernCountries={modernCountries}
-                historicalCountries={historicalCountries}
-                onClose={onClose}
-                onSave={handleSave}
-              />
-            </FormScroll>
-          </ModalBox>
-        </Overlay>
-      )}
-    </AnimatePresence>
-  )
+  React.useEffect(() => {
+    if (!isOpen) {
+      setIsDirty(false)
+      setFilled({})
+    }
+  }, [isOpen])
 
-  return createPortal(content, document.body)
+  const active = isOpen && effectiveEditing !== null
+  const isEdit = !!effectiveEditing?.id
+
+  return (
+    <CountryFormShell
+      isOpen={active}
+      onClose={onClose}
+      title={isEdit ? '역사적 국가 수정' : '역사적 국가 등록'}
+      titleId="historical-country-form-modal-title"
+      formId="historical-country-form"
+      submitting={submitting}
+      isDirty={isDirty}
+      submitLabel={isEdit ? '수정 완료' : '국가 등록'}
+      mode={isEdit ? 'edit' : 'create'}
+      requiredFields={[
+        { label: '국가명(한글)', done: !!filled.name, jumpTarget: 'name' },
+        {
+          label: '국가 형태',
+          done: !!filled.stateType,
+          jumpTarget: 'stateType',
+        },
+      ]}
+      // 역사 모달은 탭이 sectionIndex 역할을 하므로 따로 표시 안 함
+    >
+      {effectiveEditing && (
+        <HistoricalCountryForm
+          editing={effectiveEditing}
+          embedIn="modal"
+          initialPreset={initialPreset}
+          modernCountries={modernCountries}
+          historicalCountries={historicalCountries}
+          onClose={onClose}
+          onSave={handleSave}
+          onDirtyChange={setIsDirty}
+          onValuesChange={(values) =>
+            setFilled({
+              name: !!values.name?.trim(),
+              stateType: !!values.stateType,
+            })
+          }
+        />
+      )}
+    </CountryFormShell>
+  )
 }

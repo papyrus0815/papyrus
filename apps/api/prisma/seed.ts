@@ -42,6 +42,8 @@ import {
   seedJapan1945ManilaConference,
   seedTrumanScapAppointment,
   seedPotsdamConference,
+  seedKoreanWar,
+  seedSanFranciscoTreatyPersons,
   seedGermanyEmpireParties,
   seedGermanyReichstagElections,
   seedAustroPrussianWar,
@@ -225,6 +227,17 @@ async function main() {
         //  · 처칠·애틀리·몰로토프(신규) / 트루먼·번스·스탈린(기존) 활용
         //  · Event + 8섹션(논문급) + EventCountryRelation 7 + PersonEvent 6
         await seedPotsdamConference(prisma)
+
+        // 13-12. 1950-06-25~1953-07-27 한국전쟁(6.25 전쟁) — 전쟁/군사 카테고리
+        //  · DPRK historicalCountry 인라인 등록(country 시드에 미포함)
+        //  · 이승만·김일성·마오쩌둥·펑더화이·리지웨이·애치슨(신규) / 트루먼·맥아더·스탈린(기존)
+        //  · Event + 8섹션(논문급) + EventCountryRelation 7 + PersonEvent 9
+        await seedKoreanWar(prisma)
+
+        // 13-13. 샌프란시스코 강화조약(1951-09-08) — 참여 인물 보강
+        //  · 덜레스·모리슨·그로미코·이케다 하야토(신규) / 요시다·트루먼·애치슨·애틀리·스탈린(기존)
+        //  · 기존 Event(person.japan-postwar2 시드)에 PersonEvent 9건 추가
+        await seedSanFranciscoTreatyPersons(prisma)
 
         // 13-5. Person.countryId 백필 — 인물 시드 모두 끝난 뒤 affiliation 체인으로 NULL 채움
         await seedBackfillPersonCountryId(prisma)

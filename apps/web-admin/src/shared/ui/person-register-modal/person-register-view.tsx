@@ -19,11 +19,10 @@ import {
   FiAlertCircle,
   FiAlertTriangle,
   FiArrowLeft,
-  FiCalendar,
   FiCheck,
   FiChevronDown,
   FiChevronRight,
-  FiCopy,
+  FiClock,
   FiGlobe,
   FiInfo,
   FiTrash2,
@@ -54,16 +53,10 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormInput } from '@/shared/ui/form-input/form-input'
-import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
-import {
-  PlaceSelect as PlaceAutocomplete,
-  type PlaceResult,
-} from '@/shared/ui/place-autocomplete/place-autocomplete'
+import { SelectModal } from '@/shared/ui/select-modal/select-modal'
+import { type PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import {
   BackButton,
-  DateFieldBtn,
-  DateFieldsRow,
-  FOCUS_COLOR,
   FieldControl,
   FieldLabel,
   FieldRow,
@@ -75,11 +68,21 @@ import {
   SubmitButton,
   TabButton,
   TabNavigation,
-  Textarea,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 
-import { FamilyMemberCard } from './family-member-card'
+import {
+  EXTRA_DEATH_TYPES,
+  GENDER_OPTIONS,
+  type PersonDraftSnapshot,
+  buildInitialDate,
+  calcLifespan,
+  formatRelativeTime,
+  parseDateString,
+} from './person-register-view.helpers'
+import { AffiliationSection } from './sections/affiliation-section'
+import { FamilySection } from './sections/family-section'
+import { LifeSection } from './sections/life-section'
 import { usePersonDraft } from './use-person-draft.hook'
 
 // ─── Styled — Thumbnail ───────────────────────────────────────────────────────
@@ -241,69 +244,6 @@ const InlineFields = styled.div<{ $cols?: number }>`
   }
 `
 
-const PlaceAutocompleteWrap = styled.div`
-  max-width: 480px;
-  width: 100%;
-`
-
-// ─── Styled — Boxed birth/death sections ─────────────────────────────────────
-
-/* 생몰 영역 — 박스 폐기. 토글 행 → 메인(날짜·향년) 행 → 사망 상세 행 순서. */
-const LifeStack = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: 100%;
-  min-width: 0;
-`
-
-const LifeMainRow = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 12px;
-  align-items: center;
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const LifeFieldGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-`
-
-const LifeSubLabel = styled.span`
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-`
-
-const LifeDeathDetails = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 0 0;
-  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
-`
-
-/** 향년 — 정보 칩(회색 톤). InlineActionBtn(indigo)과 톤 차별화. */
-const LifespanText = styled.span`
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  padding: 4px 10px;
-  border-radius: 999px;
-  white-space: nowrap;
-`
-
 // ─── Styled — Segmented control (성별·사망유형) ──────────────────────────────
 
 const SegmentRow = styled.div`
@@ -390,82 +330,6 @@ const SegmentBtn = styled.button<{
   }
 `
 
-// ─── Styled — Native select (가문·종교) ──────────────────────────────────────
-
-const NativeSelect = styled.select`
-  width: 100%;
-  max-width: 380px;
-  padding: 10px 14px;
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
-  outline: none;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-  }
-  &:focus-visible {
-    border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
-  }
-`
-
-// ─── Styled — Country/family select trigger button ───────────────────────────
-
-const SelectBtn = styled.button<{ $hasValue?: boolean; $error?: boolean }>`
-  width: 100%;
-  max-width: 380px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 14px;
-  font-size: 14px;
-  color: ${({ $hasValue, theme }) =>
-    $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
-  background: ${({ $error, theme }) =>
-    $error
-      ? theme.mode === 'dark'
-        ? 'rgba(234,67,53,0.15)'
-        : '#fef2f2'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : '#fff'};
-  border: 1px solid
-    ${({ $error, theme }) =>
-      $error ? '#ea4335' : theme.colors.border.default};
-  border-radius: 10px;
-  cursor: pointer;
-  text-align: left;
-  outline: none;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease;
-  &:hover:not(:disabled) {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : '#f9fafb'};
-  }
-  &:focus-visible {
-    border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
-  }
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  span {
-    flex: 1;
-  }
-`
-
 // ─── Styled — Layout wrapper, embed/standalone shared ────────────────────────
 
 const PersonFormLayoutWrap = styled.div`
@@ -485,23 +349,11 @@ const PersonFormLayoutWrap = styled.div`
   ${FieldControl} {
     max-width: 540px;
   }
-  ${DateFieldsRow} {
-    max-width: 540px;
-  }
-  ${DateFieldBtn} {
-    max-width: 100%;
-  }
   ${InlineFields} {
     max-width: 600px;
   }
   ${OriginalNameInputWrap} {
     max-width: 540px;
-  }
-  ${SelectBtn} {
-    max-width: 460px;
-  }
-  ${NativeSelect} {
-    max-width: 460px;
   }
   [data-bio-editor-wrap] ${FieldControl} {
     max-width: 720px;
@@ -533,13 +385,14 @@ const TabBadge = styled.span<{ $tone: 'required' | 'filled' }>`
           background: #dc2626;
         `
       : css`
-          /* ✓는 보조 인디케이터 — 미입력 빨간 배지가 우선이므로 약하게 */
-          color: ${theme.colors.text.tertiary};
-          background: ${theme.mode === 'dark'
-            ? 'rgba(255,255,255,0.08)'
-            : '#f1f5f9'};
+          /* ✓ — 입력 완료 인디케이터. 회색에서 indigo로 격상해 가시성 ↑ */
+          color: #fff;
+          background: #6366f1;
           padding: 0;
           width: 16px;
+          box-shadow: ${theme.mode === 'dark'
+            ? '0 0 0 2px rgba(99,102,241,0.18)'
+            : '0 0 0 2px rgba(99,102,241,0.12)'};
         `}
 `
 
@@ -583,7 +436,7 @@ const AdvancedBody = styled.div`
   padding-left: 12px;
   border-left: 2px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.4)' : '#c7d2fe'};
+      theme.colors.alert.info.border};
 `
 
 
@@ -608,14 +461,64 @@ const StickyFooter = styled.div`
   flex-wrap: wrap;
 `
 
-const FooterStatus = styled.span<{ $tone?: 'info' | 'warn' }>`
-  font-size: 12px;
+/** 푸터 상태 — 진행도 바 + 라벨. 라이브 입력으로 채워짐을 시각화. */
+const FooterProgress = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 160px;
+`
+
+const FooterProgressMeta = styled.div<{ $tone?: 'info' | 'warn' | 'done' }>`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
   color: ${({ $tone, theme }) =>
     $tone === 'warn'
       ? '#dc2626'
-      : theme.colors.text.secondary};
-  flex: 1;
+      : $tone === 'done'
+        ? '#4f46e5'
+        : theme.colors.text.secondary};
+  letter-spacing: 0.01em;
+`
+
+const FooterProgressMetaLabel = styled.span`
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const FooterProgressMetaCount = styled.span`
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+`
+
+const FooterProgressTrack = styled.div`
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#eef2ff'};
+  overflow: hidden;
+`
+
+const FooterProgressFill = styled.div<{ $pct: number; $complete: boolean }>`
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: ${({ $pct }) => $pct}%;
+  border-radius: 999px;
+  background: ${({ $complete }) =>
+    $complete
+      ? 'linear-gradient(90deg, #6366f1 0%, #4f46e5 100%)'
+      : 'linear-gradient(90deg, #818cf8 0%, #6366f1 100%)'};
+  transition:
+    width 0.25s ease,
+    background 0.2s ease;
 `
 
 const FooterActions = styled.div`
@@ -635,10 +538,10 @@ const DraftBanner = styled.div`
   padding: 10px 14px;
   margin: 0 0 8px;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#eef2ff'};
+    theme.colors.alert.info.bg};
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.25)' : '#c7d2fe'};
+      theme.colors.alert.info.border};
   border-radius: 12px;
   font-size: 13px;
   line-height: 1.45;
@@ -748,10 +651,6 @@ const LoadingHost = styled.div`
   position: relative;
 `
 
-const SpouseNoteTextarea = styled(Textarea)`
-  max-width: 540px;
-`
-
 // ─── Styled — Header secondary submit button ─────────────────────────────────
 const HeaderSecondarySubmit = styled(SubmitButton)`
   background: transparent;
@@ -760,60 +659,37 @@ const HeaderSecondarySubmit = styled(SubmitButton)`
   box-shadow: none;
   &:hover:not(:disabled) {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
+      theme.colors.alert.info.bg};
     color: #4338ca;
   }
 `
 
-// ─── Styled — Inline action button (사망지=출생지 복사 등) ────────────────────
-// 액션이라 indigo outline. 정보 칩(NamePreview·LifespanText)은 회색.
-const InlineActionBtn = styled.button`
-  align-self: flex-start;
+// ─── Styled — Undo toast (국가 변경 시 출생/사망지 자동 정리) ────────────────
+const UndoToastBody = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
-  padding: 4px 10px;
+  gap: 12px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const UndoToastButton = styled.button`
+  padding: 4px 12px;
   font-size: 12px;
   font-weight: 600;
   color: #4f46e5;
   background: transparent;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.4)' : '#c7d2fe'};
+  border: 1px solid #c7d2fe;
   border-radius: 999px;
   cursor: pointer;
   transition:
-    color 0.15s,
     background 0.15s,
+    color 0.15s,
     border-color 0.15s;
-  &:hover:not(:disabled) {
+  &:hover {
     color: #fff;
     background: #6366f1;
     border-color: #6366f1;
-  }
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-`
-
-// ─── Styled — "더보기" toggle (ghost 텍스트) ─────────────────────────────────
-const ChipMoreBtn = styled.button`
-  padding: 8px 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 0.15s ease;
-  &:hover {
-    color: #4f46e5;
-  }
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
   }
 `
 
@@ -889,7 +765,7 @@ const NotFoundIcon = styled.div`
   align-items: center;
   justify-content: center;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(234,179,8,0.18)' : '#fffbeb'};
+    theme.colors.alert.warning.bg};
   color: #ca8a04;
 `
 
@@ -908,183 +784,7 @@ const NotFoundDesc = styled.p`
   line-height: 1.5;
 `
 
-// ─── Options ──────────────────────────────────────────────────────────────────
-
-interface SegOption<T extends string> {
-  value: T
-  label: string
-}
-
-const GENDER_OPTIONS: SegOption<string>[] = [
-  { value: 'MALE', label: '남성' },
-  { value: 'FEMALE', label: '여성' },
-]
-
-/** 자주 사용하는 5개. 나머지는 "더보기"로 접기. */
-const PRIMARY_DEATH_TYPES: SegOption<string>[] = [
-  { value: 'NATURAL', label: '자연사' },
-  { value: 'ILLNESS', label: '병사' },
-  { value: 'ASSASSINATION', label: '암살' },
-  { value: 'BATTLE', label: '전사' },
-  { value: 'ACCIDENT', label: '사고사' },
-]
-const EXTRA_DEATH_TYPES: SegOption<string>[] = [
-  { value: 'EXECUTION', label: '처형' },
-  { value: 'SUICIDE', label: '자살' },
-  { value: 'UNKNOWN', label: '불명' },
-  { value: 'OTHER', label: '기타' },
-]
-const DEATH_TYPE_OPTIONS: SegOption<string>[] = [
-  ...PRIMARY_DEATH_TYPES,
-  ...EXTRA_DEATH_TYPES,
-]
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const parseDateString = (date: string) => {
-  const isBC = date.startsWith('-')
-  const normalized = isBC ? date.slice(1) : date
-  const [yearStr, monthStr, dayStr] = normalized.split('-')
-  const year = parseInt(yearStr, 10)
-  const month = parseInt(monthStr, 10)
-  const day = parseInt(dayStr, 10)
-  return { era: (isBC ? 'BC' : 'AD') as Era, year, month, day }
-}
-
-const buildInitialDate = (
-  era: Era,
-  year?: string,
-  month?: string,
-  day?: string,
-) => {
-  if (!year) return undefined
-  const y = parseInt(year, 10)
-  if (isNaN(y)) return undefined
-  const m = month ? parseInt(month, 10) : 1
-  const d = day ? parseInt(day, 10) : 1
-  const yearStr = Math.abs(y).toString().padStart(4, '0')
-  const monthStr = String(m).padStart(2, '0')
-  const dayStr = String(d).padStart(2, '0')
-  return `${era === 'BC' ? '-' : ''}${yearStr}-${monthStr}-${dayStr}`
-}
-
-const formatDateDisplay = (era: Era, y: string, m: string, d: string) => {
-  if (!y.trim()) return '날짜 선택'
-  const year = parseInt(y, 10)
-  if (isNaN(year)) return '날짜 선택'
-  const prefix = era === 'BC' ? `BC ${year}` : `${year}년`
-  const month = m ? parseInt(m, 10) : null
-  const day = d ? parseInt(d, 10) : null
-  if (month && day) return `${prefix} ${month}월 ${day}일`
-  if (month) return `${prefix} ${month}월`
-  return prefix
-}
-
-/**
- * 출생/사망 날짜로 향년 계산.
- * - 0년이 없는 역사 통념: BC 1 → AD 1은 만 1세, BC 1 → AD 2 = 만 2세.
- *   → 부호가 다른 경우 단순 차이에서 1을 빼야 정확.
- * - 월·일이 있으면 사망 시점이 생일 전인지 비교해 만 나이로 보정.
- * - 둘 중 하나라도 미상이거나 미입력이면 null.
- */
-function calcLifespan(
-  birth: { era: Era; year: number; month?: number; day?: number } | null,
-  death: { era: Era; year: number; month?: number; day?: number } | null,
-): number | null {
-  if (!birth || !death) return null
-  const by = birth.era === 'BC' ? -birth.year : birth.year
-  const dy = death.era === 'BC' ? -death.year : death.year
-  let age = dy - by
-  // 부호가 달라 0년을 건너뛴 만큼(=1년) 보정. 둘 다 같은 era이면 보정 불필요.
-  if (birth.era !== death.era) age -= 1
-  // 실제 생일 전이면 만 나이 -1
-  const bm = birth.month
-  const dm = death.month
-  if (bm && dm) {
-    if (dm < bm) age -= 1
-    else if (dm === bm) {
-      const bd = birth.day
-      const dd = death.day
-      if (bd && dd && dd < bd) age -= 1
-    }
-  }
-  if (age < 0) return null
-  return age
-}
-
-/**
- * 절대 시각을 "방금 / N분 전 / 오후 3:42" 같은 상대 시간으로 표시.
- * 1시간 이내는 분 단위, 오늘은 시각, 어제 이상은 날짜 + 시각.
- */
-function formatRelativeTime(timestamp: number): string {
-  const now = Date.now()
-  const diff = now - timestamp
-  const minute = 60 * 1000
-  const hour = 60 * minute
-  const day = 24 * hour
-  if (diff < 30 * 1000) return '방금'
-  if (diff < hour) {
-    const m = Math.floor(diff / minute)
-    return `${m}분 전`
-  }
-  const date = new Date(timestamp)
-  if (diff < day) {
-    return `오늘 ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
-  }
-  if (diff < 2 * day) {
-    return `어제 ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
-  }
-  return date.toLocaleString('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-// ─── Draft 직렬화 타입 ────────────────────────────────────────────────────────
-
-interface PersonDraftSnapshot extends Record<string, unknown> {
-  name: string
-  surname: string
-  middleName: string
-  nameFormat: 'korean' | 'western'
-  originalName: string
-  surnameMeaning: string
-  nameMeaning: string
-  middleNameMeaning: string
-  gender: string
-  isBirthDateUnknown: boolean
-  birthEra: Era
-  birthYear: string
-  birthMonth: string
-  birthDay: string
-  isDeathDateUnknown: boolean
-  isAlive: boolean
-  deathEra: Era
-  deathType: string
-  deathCause: string
-  deathNote: string
-  deathYear: string
-  deathMonth: string
-  deathDay: string
-  countryId: string
-  birthCityId: string
-  deathCityId: string
-  birthPlace: PlaceResult | null
-  deathPlace: PlaceResult | null
-  dynastyId: string
-  religionId: string
-  fatherId: string
-  motherId: string
-  spouseId: string
-  spouseNote: string
-  biography: string
-  profileImageUrl: string
-  regnalName: string
-  templeName: string
-  posthumousName: string
-}
+// 옵션·헬퍼·Draft 타입은 person-register-view.helpers.ts에서 import.
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -1164,13 +864,25 @@ export function PersonRegisterView({
   const [showFatherModal, setShowFatherModal] = useState(false)
   const [showMotherModal, setShowMotherModal] = useState(false)
   const [showSpouseModal, setShowSpouseModal] = useState(false)
+  const [showDynastyModal, setShowDynastyModal] = useState(false)
+  const [showReligionModal, setShowReligionModal] = useState(false)
   const [activeTab, setActiveTab] = useState<
-    'basic' | 'affiliation' | 'family'
+    'basic' | 'life' | 'affiliation' | 'family'
   >('basic')
-  const [advancedOpen, setAdvancedOpen] = useState(false)
+  /** 기본 탭의 "이름의 뜻" 접기 영역 */
+  const [nameMeaningsOpen, setNameMeaningsOpen] = useState(false)
+  /** 생애 탭의 "군주명·묘호·시호" 접기 영역 — 군주가 아닌 인물에겐 영구 무관 */
+  const [monarchTitlesOpen, setMonarchTitlesOpen] = useState(false)
   const [deathTypeShowMore, setDeathTypeShowMore] = useState(false)
   /** 신규 등록 시 "또 등록" 모드 — 등록 후 폼만 리셋, onCancel 안 부름 */
   const [registerAnother, setRegisterAnother] = useState(false)
+  /**
+   * 연속 등록(또 등록) 모드에서 직전 회차에 등록한 인물 — 최대 5명, 최신이 앞.
+   * 가족 탭에서 부/모/배우자 슬롯 위에 후보 칩으로 노출. 가계 일괄 등록을 가속.
+   */
+  const [recentlyRegistered, setRecentlyRegistered] = useState<
+    PersonResponseDto[]
+  >([])
   /** 수정 모드에서 인물 로드 실패 — 폼 대신 안내 패널 표시 */
   const [loadFailed, setLoadFailed] = useState(false)
   /** 신규 등록 모드에서 폼 강제 reset 트리거. registerAnother 흐름에서 사용. */
@@ -1224,13 +936,43 @@ export function PersonRegisterView({
     Array<{ id: string; name: string }>
   >([])
   const [persons, setPersons] = useState<PersonResponseDto[]>([])
+  /**
+   * 수정 모드에서 detail 응답에 임베드된 가족 인물 캐시.
+   * 인물 풀(persons)이 lazy 로드되기 전이라도 가족 카드를 정확히 그리기 위해.
+   */
+  const [editFamilyCache, setEditFamilyCache] = useState<{
+    father?: PersonResponseDto
+    mother?: PersonResponseDto
+    spouse?: PersonResponseDto
+  }>({})
 
-  /** id → 인물 — 가족 카드 렌더용 */
+  /** id → 인물 — 가족 카드 렌더용. persons 풀 + 수정 모드 캐시 합집합. */
   const personById = useMemo(() => {
     const m = new Map<string, PersonResponseDto>()
     persons.forEach((p) => m.set(p.id, p))
+    if (editFamilyCache.father)
+      m.set(editFamilyCache.father.id, editFamilyCache.father)
+    if (editFamilyCache.mother)
+      m.set(editFamilyCache.mother.id, editFamilyCache.mother)
+    if (editFamilyCache.spouse)
+      m.set(editFamilyCache.spouse.id, editFamilyCache.spouse)
     return m
-  }, [persons])
+  }, [persons, editFamilyCache])
+
+  /**
+   * 가족 슬롯별 "최근 등록한 인물" 후보 — 현재 인물 + 이미 다른 슬롯에 들어간 인물을 제외.
+   * 같은 인물을 두 슬롯에 동시 지정할 수 없으므로 모든 슬롯에서 동일 풀을 사용.
+   */
+  const recentCandidates = useMemo(() => {
+    if (recentlyRegistered.length === 0) return []
+    return recentlyRegistered.filter((p) => {
+      if (p.id === editPersonId) return false
+      if (p.id === fatherId) return false
+      if (p.id === motherId) return false
+      if (p.id === spouseId) return false
+      return true
+    })
+  }, [recentlyRegistered, editPersonId, fatherId, motherId, spouseId])
 
   /** countryId → defaultNameDisplayOrder. 이름 미리보기 순서 결정용. */
   const countryNameOrderById = useMemo(() => {
@@ -1315,9 +1057,10 @@ export function PersonRegisterView({
       (name.trim() ? 0 : 1) +
       (surname.trim() ? 0 : 1) +
       (gender ? 0 : 1)
+    const life = 0
     const affiliation = countryId ? 0 : 1
     const family = 0
-    return { basic, affiliation, family }
+    return { basic, life, affiliation, family }
   }, [name, surname, gender, countryId])
 
   /** 진행도 — 필수 N/4. 사용자가 폼 끝까지 안 가도 진행감을 유지. */
@@ -1325,6 +1068,7 @@ export function PersonRegisterView({
     const total = 4
     const missing =
       requiredMissingByTab.basic +
+      requiredMissingByTab.life +
       requiredMissingByTab.affiliation +
       requiredMissingByTab.family
     return { filled: total - missing, total }
@@ -1332,7 +1076,18 @@ export function PersonRegisterView({
 
   /** 탭별 선택 입력 채워짐 인디케이터(✓) — 필수 외 정보가 들어 있는지 */
   const filledByTab = useMemo(() => {
+    // 기본 — 약력·원어·이름의 뜻 (이름·성·성별은 필수, 채움 인디케이터에서 제외)
     const basic = !!(
+      originalName.trim() ||
+      biography.trim() ||
+      surnameMeaning.trim() ||
+      nameMeaning.trim() ||
+      middleNameMeaning.trim() ||
+      profileImageUrl.trim() ||
+      pendingThumbnailFile
+    )
+    // 생애 — 생몰 정보 + 군주 호칭
+    const life = !!(
       birthYear.trim() ||
       deathYear.trim() ||
       isBirthDateUnknown ||
@@ -1340,21 +1095,24 @@ export function PersonRegisterView({
       isAlive ||
       regnalName.trim() ||
       templeName.trim() ||
-      posthumousName.trim() ||
-      surnameMeaning.trim() ||
-      nameMeaning.trim() ||
-      middleNameMeaning.trim()
+      posthumousName.trim()
     )
     const affiliation = !!(
       birthPlace ||
       deathPlace ||
       dynastyId ||
-      religionId ||
-      biography.trim()
+      religionId
     )
     const family = !!(fatherId || motherId || spouseId)
-    return { basic, affiliation, family }
+    return { basic, life, affiliation, family }
   }, [
+    originalName,
+    biography,
+    surnameMeaning,
+    nameMeaning,
+    middleNameMeaning,
+    profileImageUrl,
+    pendingThumbnailFile,
     birthYear,
     deathYear,
     isBirthDateUnknown,
@@ -1363,40 +1121,77 @@ export function PersonRegisterView({
     regnalName,
     templeName,
     posthumousName,
-    surnameMeaning,
-    nameMeaning,
-    middleNameMeaning,
     birthPlace,
     deathPlace,
     dynastyId,
     religionId,
-    biography,
     fatherId,
     motherId,
     spouseId,
   ])
 
-  const dynastyOptions = useMemo(() => dynasties, [dynasties])
-  const religionOptions = useMemo(() => religions, [religions])
+  /** SelectModal 형식 — '선택 안 함' 옵션을 맨 위에 prepend. */
+  const dynastySelectOptions = useMemo(
+    () => [
+      { value: '', label: '선택 안 함' },
+      ...dynasties.map((d) => ({ value: d.id, label: d.name })),
+    ],
+    [dynasties],
+  )
+  const religionSelectOptions = useMemo(
+    () => [
+      { value: '', label: '선택 안 함' },
+      ...religions.map((r) => ({ value: r.id, label: r.name })),
+    ],
+    [religions],
+  )
+  const dynastyLabel = useMemo(
+    () => (dynastyId ? (dynasties.find((d) => d.id === dynastyId)?.name ?? '') : ''),
+    [dynastyId, dynasties],
+  )
+  const religionLabel = useMemo(
+    () => (religionId ? (religions.find((r) => r.id === religionId)?.name ?? '') : ''),
+    [religionId, religions],
+  )
 
   // ─── 데이터 로드 ────────────────────────────────────────────────────────────
+  // 인물 풀(getAllPersons)은 가족 탭/선택 모달에서만 필요해 lazy 로드.
+  // 인물 수가 늘어났을 때 모달 진입 비용을 낮춤.
   useEffect(() => {
     Promise.all([
       getAllCountries(),
       getAllHistoricalCountries(),
       dynastyApi.getAll(),
       getAllReligions(),
-      getAllPersons(),
     ])
-      .then(([modern, historical, dyn, rel, pers]) => {
+      .then(([modern, historical, dyn, rel]) => {
         setModernCountries(modern)
         setHistoricalCountries(historical)
         setDynasties(Array.isArray(dyn) ? dyn : [])
         setReligions(Array.isArray(rel) ? rel : [])
-        setPersons(Array.isArray(pers) ? pers : [])
       })
       .catch(() => {})
   }, [])
+
+  /** 인물 풀이 한 번이라도 로드되었는지 — 같은 모달 인스턴스 내 중복 호출 방지. */
+  const personsLoadedRef = useRef(false)
+  /** 가족 탭이 활성이거나 PersonSelectModal이 열려 있으면 인물 풀 로드. */
+  const needsPersons =
+    activeTab === 'family' ||
+    showFatherModal ||
+    showMotherModal ||
+    showSpouseModal
+  useEffect(() => {
+    if (!needsPersons || personsLoadedRef.current) return
+    personsLoadedRef.current = true
+    getAllPersons()
+      .then((pers) => {
+        setPersons(Array.isArray(pers) ? pers : [])
+      })
+      .catch(() => {
+        personsLoadedRef.current = false
+      })
+  }, [needsPersons])
 
   useEffect(() => {
     // 수정 모드에서는 인물 데이터가 권위 — 부모가 흘려보낸 initialCountryId가 덮어쓰지 않게.
@@ -1422,7 +1217,8 @@ export function PersonRegisterView({
 
     if (!editPersonId) {
       // 등록 모드 전환 시 폼 초기화
-      setAdvancedOpen(false)
+      setNameMeaningsOpen(false)
+      setMonarchTitlesOpen(false)
       setDeathTypeShowMore(false)
       setName('')
       setSurname('')
@@ -1467,6 +1263,7 @@ export function PersonRegisterView({
       setPendingThumbnailFile(null)
       setThumbnailObjectUrl(null)
       setThumbnailMarkedForRemoval(false)
+      setEditFamilyCache({})
       setIsLoadingEdit(false)
       requestAnimationFrame(() => {
         trackDirtyRef.current = true
@@ -1551,6 +1348,12 @@ export function PersonRegisterView({
         setMotherId(p.motherId ?? p.mother?.id ?? '')
         setSpouseId(p.spouseRelations?.[0]?.spouse?.id ?? p.spouseId ?? '')
         setSpouseNote(p.spouseRelations?.[0]?.note ?? '')
+        // detail 응답의 임베디드 인물을 가족 캐시에 보관 — 인물 풀 lazy 로드 전에도 카드 정확.
+        setEditFamilyCache({
+          father: p.father ?? undefined,
+          mother: p.mother ?? undefined,
+          spouse: p.spouseRelations?.[0]?.spouse ?? undefined,
+        })
         if (p.birthYear != null || p.birthDate) {
           if (p.birthYear != null) {
             setBirthEra((p.birthEra as Era) ?? 'AD')
@@ -1595,19 +1398,18 @@ export function PersonRegisterView({
         if (dt && EXTRA_DEATH_TYPES.some((o) => o.value === dt)) {
           setDeathTypeShowMore(true)
         }
-        // 군주 필드 또는 이름의 뜻이 채워져 있으면 고급 정보 자동 펼침.
-        if (
-          (p.regnalName && String(p.regnalName).trim()) ||
-          (p.templeName && String(p.templeName).trim()) ||
-          (p.posthumousName && String(p.posthumousName).trim()) ||
+        // 이름의 뜻이 있으면 기본 탭의 collapse 자동 펼침.
+        const hasNameMeanings =
           (p.surnameMeaning && String(p.surnameMeaning).trim()) ||
           (p.nameMeaning && String(p.nameMeaning).trim()) ||
           (p.middleNameMeaning && String(p.middleNameMeaning).trim())
-        ) {
-          setAdvancedOpen(true)
-        } else {
-          setAdvancedOpen(false)
-        }
+        setNameMeaningsOpen(Boolean(hasNameMeanings))
+        // 군주 호칭이 있으면 생애 탭의 collapse 자동 펼침.
+        const hasMonarchTitles =
+          (p.regnalName && String(p.regnalName).trim()) ||
+          (p.templeName && String(p.templeName).trim()) ||
+          (p.posthumousName && String(p.posthumousName).trim())
+        setMonarchTitlesOpen(Boolean(hasMonarchTitles))
       })
       .catch(() => {
         if (cancelled) return
@@ -1814,28 +1616,79 @@ export function PersonRegisterView({
     setShowCountryModal(false)
     clearFieldError('countryId')
     markDirty()
-    // 국가가 바뀌었는데 기존에 입력한 출생지/사망지가 새 국가와 무관할 수 있음.
-    // 자동으로 비우기엔 사용자 의도와 다를 수 있어 안내만 — 사용자가 직접 다시 선택.
+    // 출생지/사망지는 이전 국가의 도시·행정구역 ID에 묶여 있어 국가가 바뀌면 데이터 정합이 깨짐.
+    // 자동으로 비우고 "되돌리기" 액션을 제공해 실수 회복을 빠르게.
     if (prev && prev !== c.id && (birthPlace || deathPlace)) {
+      const snapshot = {
+        birthPlace,
+        deathPlace,
+        birthCityId,
+        deathCityId,
+      }
+      setBirthPlace(null)
+      setBirthCityId('')
+      setDeathPlace(null)
+      setDeathCityId('')
       toast(
-        '국가가 변경되었습니다. 출생지/사망지가 새 국가와 일치하는지 확인하세요.',
-        { icon: '⚠️' },
+        (t) => (
+          <UndoToastBody>
+            <span>출생지·사망지를 비웠습니다</span>
+            <UndoToastButton
+              type="button"
+              onClick={() => {
+                setBirthPlace(snapshot.birthPlace)
+                setBirthCityId(snapshot.birthCityId)
+                setDeathPlace(snapshot.deathPlace)
+                setDeathCityId(snapshot.deathCityId)
+                toast.dismiss(t.id)
+              }}
+            >
+              되돌리기
+            </UndoToastButton>
+          </UndoToastBody>
+        ),
+        { duration: 6000, icon: '🔄' },
       )
     }
   }
 
-  /** "사망함" 라디오 클릭 시 — 출생일이 있고 사망일이 비어 있으면 자동으로 사망일 모달. */
-  const handleDeathStatusToDeceased = () => {
-    setIsAlive(false)
-    setIsDeathDateUnknown(false)
-    markDirty()
-    if (
-      !isEditMode &&
-      birthYear.trim() &&
-      !deathYear.trim()
-    ) {
-      setTimeout(() => setShowDeathDateModal(true), 200)
+  /**
+   * 사망 상태 3-way 전환 — alive / deceased / unknown.
+   * - alive: 사망일 비움. 사망 상세(유형·원인·메모) 값은 보존(취소 복구용); payload에서 nullify.
+   * - deceased: 사망일 미상=false. 신규 등록 + 출생일 있음 + 사망일 비어 있으면 사망일 모달 자동.
+   * - unknown: 사망일 미상=true, 입력된 사망일 비움.
+   */
+  const setDeathStatus = (status: 'alive' | 'deceased' | 'unknown') => {
+    if (status === 'alive') {
+      if (isAlive) return
+      setIsAlive(true)
+      setIsDeathDateUnknown(false)
+      setDeathYear('')
+      setDeathMonth('')
+      setDeathDay('')
+      clearFieldError('death')
+      markDirty()
+      return
     }
+    if (status === 'deceased') {
+      if (!isAlive && !isDeathDateUnknown) return
+      setIsAlive(false)
+      setIsDeathDateUnknown(false)
+      markDirty()
+      if (!isEditMode && birthYear.trim() && !deathYear.trim()) {
+        setTimeout(() => setShowDeathDateModal(true), 200)
+      }
+      return
+    }
+    // unknown
+    if (!isAlive && isDeathDateUnknown) return
+    setIsAlive(false)
+    setIsDeathDateUnknown(true)
+    setDeathYear('')
+    setDeathMonth('')
+    setDeathDay('')
+    clearFieldError('death')
+    markDirty()
   }
 
   /** 사망지를 출생지와 동일하게 빠르게 채움. */
@@ -1849,13 +1702,29 @@ export function PersonRegisterView({
 
   const handleBirthDateSelect = (date: string) => {
     const { era, year, month, day } = parseDateString(date)
+    const yStr = year.toString()
+    const mStr = month.toString()
+    const dStr = day.toString()
     setBirthEra(era)
-    setBirthYear(year.toString())
-    setBirthMonth(month.toString())
-    setBirthDay(day.toString())
+    setBirthYear(yStr)
+    setBirthMonth(mStr)
+    setBirthDay(dStr)
     setShowBirthDateModal(false)
-    clearFieldError('birth')
     markDirty()
+    // 인라인 검증 — 새 출생일 + 기존 사망일 조합으로 즉시 피드백.
+    const errs = computeBirthDeathErrors(
+      { era, year: yStr, month: mStr, day: dStr, unknown: isBirthDateUnknown },
+      {
+        era: deathEra,
+        year: deathYear,
+        month: deathMonth,
+        day: deathDay,
+        unknown: isDeathDateUnknown,
+        alive: isAlive,
+      },
+    )
+    setOrClearError('birth', errs.birth)
+    setOrClearError('death', errs.death)
     // 신규 등록 시에만 사망일 모달을 자동으로 띄움.
     if (!isDeathDateUnknown && !isAlive && !isEditMode && !deathYear.trim()) {
       setTimeout(() => setShowDeathDateModal(true), 200)
@@ -1864,13 +1733,27 @@ export function PersonRegisterView({
 
   const handleDeathDateSelect = (date: string) => {
     const { era, year, month, day } = parseDateString(date)
+    const yStr = year.toString()
+    const mStr = month.toString()
+    const dStr = day.toString()
     setDeathEra(era)
-    setDeathYear(year.toString())
-    setDeathMonth(month.toString())
-    setDeathDay(day.toString())
+    setDeathYear(yStr)
+    setDeathMonth(mStr)
+    setDeathDay(dStr)
     setShowDeathDateModal(false)
-    clearFieldError('death')
     markDirty()
+    const errs = computeBirthDeathErrors(
+      {
+        era: birthEra,
+        year: birthYear,
+        month: birthMonth,
+        day: birthDay,
+        unknown: isBirthDateUnknown,
+      },
+      { era, year: yStr, month: mStr, day: dStr, unknown: isDeathDateUnknown, alive: isAlive },
+    )
+    setOrClearError('birth', errs.birth)
+    setOrClearError('death', errs.death)
   }
 
   const acceptThumbnailFile = (file: File) => {
@@ -1961,88 +1844,140 @@ export function PersonRegisterView({
     return Number.isInteger(n) && n >= 1 && n <= 9999
   }
 
+  /**
+   * 출생/사망 검증 — 범위, 미래 차단, 사망>=출생 비교를 한 곳에 모음.
+   * validate() submit 경로와 인라인(date select 직후) 경로가 공유.
+   * 인자로 값을 받기 때문에 state setter 직후의 stale state 문제 없음.
+   */
+  const computeBirthDeathErrors = (
+    birth: {
+      era: Era
+      year: string
+      month: string
+      day: string
+      unknown: boolean
+    },
+    death: {
+      era: Era
+      year: string
+      month: string
+      day: string
+      unknown: boolean
+      alive: boolean
+    },
+  ): { birth?: string; death?: string } => {
+    const errs: { birth?: string; death?: string } = {}
+    const today = new Date()
+    const todayVal =
+      today.getFullYear() * 10000 +
+      (today.getMonth() + 1) * 100 +
+      today.getDate()
+
+    // 출생 — 범위 + 미래 차단
+    if (!birth.unknown && birth.year.trim()) {
+      if (!isValidYear(birth.year)) {
+        errs.birth = '출생 연도는 1~9999 범위의 정수여야 합니다.'
+      } else if (birth.era === 'AD') {
+        const by = parseInt(birth.year, 10)
+        const bm = birth.month ? parseInt(birth.month, 10) : 1
+        const bd = birth.day ? parseInt(birth.day, 10) : 1
+        if (by * 10000 + bm * 100 + bd > todayVal) {
+          errs.birth = '출생일은 오늘 이후일 수 없습니다.'
+        }
+      }
+    }
+
+    // 사망 — 범위 + 미래 차단 + 출생일과 비교
+    if (!death.alive && !death.unknown && death.year.trim()) {
+      if (!isValidYear(death.year)) {
+        errs.death = '사망 연도는 1~9999 범위의 정수여야 합니다.'
+      } else if (death.era === 'AD') {
+        const dy = parseInt(death.year, 10)
+        const dm = death.month ? parseInt(death.month, 10) : 1
+        const dd = death.day ? parseInt(death.day, 10) : 1
+        if (dy * 10000 + dm * 100 + dd > todayVal) {
+          errs.death = '사망일은 오늘 이후일 수 없습니다.'
+        }
+      }
+      // 비교 검증 — 둘 다 정상값일 때만
+      if (
+        !errs.birth &&
+        !errs.death &&
+        !birth.unknown &&
+        birth.year.trim() &&
+        isValidYear(birth.year)
+      ) {
+        const by = parseInt(birth.year, 10)
+        const bm = birth.month ? parseInt(birth.month, 10) : 1
+        const bd = birth.day ? parseInt(birth.day, 10) : 1
+        const dy = parseInt(death.year, 10)
+        const dm = death.month ? parseInt(death.month, 10) : 1
+        const dd = death.day ? parseInt(death.day, 10) : 1
+        const birthSign = birth.era === 'BC' ? -1 : 1
+        const deathSign = death.era === 'BC' ? -1 : 1
+        const birthVal = birthSign * (by * 10000 + bm * 100 + bd)
+        const deathVal = deathSign * (dy * 10000 + dm * 100 + dd)
+        if (deathVal < birthVal) {
+          errs.death = '사망일은 출생일 이후여야 합니다.'
+        }
+      }
+    }
+    return errs
+  }
+
+  /** 단일 키 인라인 갱신 — true면 셋, false면 클리어. */
+  const setOrClearError = (key: string, msg: string | undefined) => {
+    setErrors((prev) => {
+      const next = { ...prev }
+      if (msg) next[key] = msg
+      else delete next[key]
+      return next
+    })
+  }
+
+  /** 필수 텍스트 필드 onBlur — 빈 값이면 에러 노출. 입력 시작 시 onChange의 clearFieldError가 클리어. */
+  const handleRequiredTextBlur = (
+    key: 'name' | 'surname',
+    value: string,
+  ) => {
+    if (!value.trim()) {
+      const msg =
+        key === 'name' ? '이름을 입력해주세요.' : '성을 입력해주세요.'
+      setOrClearError(key, msg)
+    }
+  }
+
   const validate = (): boolean => {
     const e: Record<string, string> = {}
     if (!name.trim()) e.name = '이름을 입력해주세요.'
     if (!surname.trim()) e.surname = '성을 입력해주세요.'
     if (!gender) e.gender = '성별을 선택해주세요.'
     if (!countryId) e.countryId = '소속(출생) 국가를 선택해주세요.'
-    if (!isBirthDateUnknown && birthYear.trim() && !isValidYear(birthYear)) {
-      e.birth = '출생 연도는 1~9999 범위의 정수여야 합니다.'
-    }
-    if (
-      !isAlive &&
-      !isDeathDateUnknown &&
-      deathYear.trim() &&
-      !isValidYear(deathYear)
-    ) {
-      e.death = '사망 연도는 1~9999 범위의 정수여야 합니다.'
-    }
-    if (
-      !e.birth &&
-      !e.death &&
-      !isBirthDateUnknown &&
-      !isDeathDateUnknown &&
-      !isAlive &&
-      birthYear.trim() &&
-      deathYear.trim()
-    ) {
-      const by = parseInt(birthYear, 10)
-      const bm = birthMonth ? parseInt(birthMonth, 10) : 1
-      const bd = birthDay ? parseInt(birthDay, 10) : 1
-      const dy = parseInt(deathYear, 10)
-      const dm = deathMonth ? parseInt(deathMonth, 10) : 1
-      const dd = deathDay ? parseInt(deathDay, 10) : 1
-      const birthSign = birthEra === 'BC' ? -1 : 1
-      const deathSign = deathEra === 'BC' ? -1 : 1
-      const birthVal = birthSign * (by * 10000 + bm * 100 + bd)
-      const deathVal = deathSign * (dy * 10000 + dm * 100 + dd)
-      if (deathVal < birthVal) {
-        e.death = '사망일은 출생일 이후여야 합니다.'
-      }
-    }
-    const today = new Date()
-    const todayVal =
-      today.getFullYear() * 10000 +
-      (today.getMonth() + 1) * 100 +
-      today.getDate()
-    if (
-      !e.birth &&
-      !isBirthDateUnknown &&
-      birthEra === 'AD' &&
-      birthYear.trim()
-    ) {
-      const by = parseInt(birthYear, 10)
-      const bm = birthMonth ? parseInt(birthMonth, 10) : 1
-      const bd = birthDay ? parseInt(birthDay, 10) : 1
-      if (by * 10000 + bm * 100 + bd > todayVal) {
-        e.birth = '출생일은 오늘 이후일 수 없습니다.'
-      }
-    }
-    if (
-      !e.death &&
-      !isAlive &&
-      !isDeathDateUnknown &&
-      deathEra === 'AD' &&
-      deathYear.trim()
-    ) {
-      const dy = parseInt(deathYear, 10)
-      const dm = deathMonth ? parseInt(deathMonth, 10) : 1
-      const dd = deathDay ? parseInt(deathDay, 10) : 1
-      if (dy * 10000 + dm * 100 + dd > todayVal) {
-        e.death = '사망일은 오늘 이후일 수 없습니다.'
-      }
-    }
+    const dateErrs = computeBirthDeathErrors(
+      {
+        era: birthEra,
+        year: birthYear,
+        month: birthMonth,
+        day: birthDay,
+        unknown: isBirthDateUnknown,
+      },
+      {
+        era: deathEra,
+        year: deathYear,
+        month: deathMonth,
+        day: deathDay,
+        unknown: isDeathDateUnknown,
+        alive: isAlive,
+      },
+    )
+    if (dateErrs.birth) e.birth = dateErrs.birth
+    if (dateErrs.death) e.death = dateErrs.death
     setErrors(e)
     if (Object.keys(e).length > 0) {
-      const basicFields = [
-        'name',
-        'surname',
-        'gender',
-        'birth',
-        'death',
-      ] as const
+      const basicFields = ['name', 'surname', 'gender'] as const
+      const lifeFields = ['birth', 'death'] as const
       if (basicFields.some((k) => e[k])) setActiveTab('basic')
+      else if (lifeFields.some((k) => e[k])) setActiveTab('life')
       else if (e.countryId) setActiveTab('affiliation')
       return false
     }
@@ -2109,9 +2044,10 @@ export function PersonRegisterView({
       isBirthDateUnknown,
       isDeathDateUnknown,
       isAlive,
-      deathType: deathType || null,
-      deathCause: deathCause.trim() || null,
-      deathNote: deathNote.trim() || null,
+      // 생존중일 때는 사망 상세를 강제로 비움 — UI에서 숨겨도 state에 남아 있을 수 있어 명시 nullify.
+      deathType: isAlive ? null : (deathType || null),
+      deathCause: isAlive ? null : (deathCause.trim() || null),
+      deathNote: isAlive ? null : (deathNote.trim() || null),
     }
     if (!isBirthDateUnknown && birthYear.trim()) {
       const y = parseInt(birthYear, 10)
@@ -2187,6 +2123,15 @@ export function PersonRegisterView({
         onSuccess?.(created.id)
         if (registerAnother) {
           // 폼만 리셋 — 같은 국가에서 인물을 연속 등록하는 흐름.
+          // 직전 등록 인물을 다음 회차의 가족 후보 칩에 노출. 로컬 인물 풀(persons)에도 추가.
+          setRecentlyRegistered((prev) => {
+            const without = prev.filter((p) => p.id !== created.id)
+            return [created, ...without].slice(0, 5)
+          })
+          setPersons((prev) => {
+            if (prev.some((p) => p.id === created.id)) return prev
+            return [...prev, created]
+          })
           setResetCounter((n) => n + 1)
         } else {
           onCancel()
@@ -2215,7 +2160,7 @@ export function PersonRegisterView({
   const tabLabel = (
     icon: React.ReactNode,
     label: string,
-    key: 'basic' | 'affiliation' | 'family',
+    key: 'basic' | 'life' | 'affiliation' | 'family',
   ) => {
     const missing = requiredMissingByTab[key]
     const filled = filledByTab[key]
@@ -2325,6 +2270,13 @@ export function PersonRegisterView({
                 onClick={() => setActiveTab('basic')}
               >
                 {tabLabel(<FiInfo size={16} />, '기본 정보', 'basic')}
+              </TabButton>
+              <TabButton
+                type="button"
+                $active={activeTab === 'life'}
+                onClick={() => setActiveTab('life')}
+              >
+                {tabLabel(<FiClock size={16} />, '생애', 'life')}
               </TabButton>
               <TabButton
                 type="button"
@@ -2438,6 +2390,9 @@ export function PersonRegisterView({
                           setSurname(e.target.value)
                           clearFieldError('surname')
                         }}
+                        onBlur={() =>
+                          handleRequiredTextBlur('surname', surname)
+                        }
                         placeholder="성 (예: 김)"
                         $error={!!errors.surname}
                         aria-invalid={!!errors.surname}
@@ -2452,6 +2407,7 @@ export function PersonRegisterView({
                           setName(e.target.value)
                           clearFieldError('name')
                         }}
+                        onBlur={() => handleRequiredTextBlur('name', name)}
                         placeholder="이름 (예: 홍길동)"
                         $error={!!errors.name}
                         aria-invalid={!!errors.name}
@@ -2531,395 +2487,7 @@ export function PersonRegisterView({
                   </FieldControl>
                 </FieldRow>
 
-                {/* 생몰 — 박스 폐기. 토글 행 → 메인 행 → 사망 상세 행 순서. */}
-                <FieldRow>
-                  <FieldLabel>생몰</FieldLabel>
-                  <LifeStack>
-                    {/* 보조 토글 (ghost) — 미상·생존중. 메인 라디오와 시각 차별화. */}
-                    <SegmentRow role="group" aria-label="생몰 상태">
-                      <SegmentBtn
-                        type="button"
-                        $variant="ghost"
-                        $active={isBirthDateUnknown}
-                        onClick={() => {
-                          setIsBirthDateUnknown((v) => !v)
-                          markDirty()
-                        }}
-                      >
-                        출생일 미상
-                      </SegmentBtn>
-                      <SegmentBtn
-                        type="button"
-                        $variant="ghost"
-                        $active={isAlive}
-                        onClick={() => {
-                          if (isAlive) {
-                            setIsAlive(false)
-                          } else {
-                            setIsAlive(true)
-                            setIsDeathDateUnknown(false)
-                            setDeathYear('')
-                            setDeathMonth('')
-                            setDeathDay('')
-                            clearFieldError('death')
-                          }
-                          markDirty()
-                        }}
-                      >
-                        생존 중
-                      </SegmentBtn>
-                      <SegmentBtn
-                        type="button"
-                        $variant="ghost"
-                        $active={!isAlive && isDeathDateUnknown}
-                        disabled={isAlive}
-                        onClick={() => {
-                          setIsDeathDateUnknown((v) => !v)
-                          markDirty()
-                        }}
-                      >
-                        사망일 미상
-                      </SegmentBtn>
-                    </SegmentRow>
-
-                    {/* 메인 행 — 출생일 / 사망일 / 향년 */}
-                    <LifeMainRow>
-                      <LifeFieldGroup>
-                        <LifeSubLabel>출생</LifeSubLabel>
-                        <DateFieldBtn
-                          type="button"
-                          $hasValue={!!birthYear.trim() && !isBirthDateUnknown}
-                          onClick={() => setShowBirthDateModal(true)}
-                          aria-invalid={!!errors.birth}
-                          disabled={isBirthDateUnknown}
-                          style={
-                            isBirthDateUnknown
-                              ? { opacity: 0.5, cursor: 'not-allowed' }
-                              : undefined
-                          }
-                        >
-                          <FiCalendar size={16} />
-                          <span>
-                            {isBirthDateUnknown
-                              ? '미상'
-                              : formatDateDisplay(
-                                  birthEra,
-                                  birthYear,
-                                  birthMonth,
-                                  birthDay,
-                                )}
-                          </span>
-                          <FiChevronDown size={14} />
-                        </DateFieldBtn>
-                      </LifeFieldGroup>
-                      <LifeFieldGroup>
-                        <LifeSubLabel>사망</LifeSubLabel>
-                        <DateFieldBtn
-                          type="button"
-                          $hasValue={
-                            !!deathYear.trim() &&
-                            !isAlive &&
-                            !isDeathDateUnknown
-                          }
-                          onClick={() =>
-                            !isAlive &&
-                            !isDeathDateUnknown &&
-                            setShowDeathDateModal(true)
-                          }
-                          disabled={isAlive || isDeathDateUnknown}
-                          aria-invalid={!!errors.death}
-                          style={
-                            isAlive || isDeathDateUnknown
-                              ? { opacity: 0.5, cursor: 'not-allowed' }
-                              : undefined
-                          }
-                        >
-                          <FiCalendar size={16} />
-                          <span>
-                            {isAlive
-                              ? '생존 중'
-                              : isDeathDateUnknown
-                                ? '미상'
-                                : formatDateDisplay(
-                                    deathEra,
-                                    deathYear,
-                                    deathMonth,
-                                    deathDay,
-                                  )}
-                          </span>
-                          <FiChevronDown size={14} />
-                        </DateFieldBtn>
-                      </LifeFieldGroup>
-                      {lifespanText && (
-                        <LifeFieldGroup>
-                          <LifeSubLabel>향년</LifeSubLabel>
-                          <LifespanText aria-live="polite">
-                            {lifespanText.replace('향년 ', '')}
-                          </LifespanText>
-                        </LifeFieldGroup>
-                      )}
-                    </LifeMainRow>
-
-                    {(errors.birth || errors.death) && (
-                      <FieldError role="alert">
-                        <FiAlertCircle size={13} />
-                        {errors.birth || errors.death}
-                      </FieldError>
-                    )}
-
-                    {/* 사망 상세 — 사망함 상태(생존중 아님)에서만 노출 */}
-                    {!isAlive && (
-                      <LifeDeathDetails>
-                        <SegmentRow role="radiogroup" aria-label="사망 유형">
-                          {PRIMARY_DEATH_TYPES.map((opt) => (
-                            <SegmentBtn
-                              key={opt.value}
-                              type="button"
-                              role="radio"
-                              aria-checked={deathType === opt.value}
-                              $active={deathType === opt.value}
-                              onClick={() => {
-                                setDeathType(
-                                  deathType === opt.value ? '' : opt.value,
-                                )
-                                markDirty()
-                              }}
-                            >
-                              {opt.label}
-                            </SegmentBtn>
-                          ))}
-                          {deathTypeShowMore &&
-                            EXTRA_DEATH_TYPES.map((opt) => (
-                              <SegmentBtn
-                                key={opt.value}
-                                type="button"
-                                role="radio"
-                                aria-checked={deathType === opt.value}
-                                $active={deathType === opt.value}
-                                onClick={() => {
-                                  setDeathType(
-                                    deathType === opt.value ? '' : opt.value,
-                                  )
-                                  markDirty()
-                                }}
-                              >
-                                {opt.label}
-                              </SegmentBtn>
-                            ))}
-                          {!deathTypeShowMore && (
-                            <ChipMoreBtn
-                              type="button"
-                              onClick={() => setDeathTypeShowMore(true)}
-                            >
-                              더보기 +{EXTRA_DEATH_TYPES.length}
-                            </ChipMoreBtn>
-                          )}
-                        </SegmentRow>
-                        <FormInput
-                          value={deathCause}
-                          onChange={(e) => setDeathCause(e.target.value)}
-                          placeholder="사망 원인 상세 (예: 폐렴 합병증)"
-                        />
-                        <Textarea
-                          value={deathNote}
-                          onChange={(e) => setDeathNote(e.target.value)}
-                          placeholder="사망 메모 (논란·맥락·비고)"
-                          rows={2}
-                        />
-                      </LifeDeathDetails>
-                    )}
-                  </LifeStack>
-                </FieldRow>
-
-                {/* 고급 정보 — 군주 필드 + 이름의 뜻 */}
-                <AdvancedSection>
-                  <AdvancedToggle
-                    type="button"
-                    $open={advancedOpen}
-                    onClick={() => setAdvancedOpen((v) => !v)}
-                    aria-expanded={advancedOpen}
-                  >
-                    <FiChevronRight size={14} />
-                    고급 정보 — 군주명·시호·이름의 뜻
-                  </AdvancedToggle>
-                  {advancedOpen && (
-                    <AdvancedBody>
-                      <FormRows>
-                      <FieldRowMulti>
-                        <FieldLabel htmlFor={fid('regnalName')}>
-                          군주명 · 묘호 · 시호
-                        </FieldLabel>
-                        <FieldControl>
-                          <InlineFields $cols={3}>
-                            <FormInput
-                              id={fid('regnalName')}
-                              value={regnalName}
-                              onChange={(e) => setRegnalName(e.target.value)}
-                              placeholder="군주명/재위명 (예: 세종)"
-                            />
-                            <FormInput
-                              id={fid('templeName')}
-                              value={templeName}
-                              onChange={(e) => setTempleName(e.target.value)}
-                              placeholder="묘호 (예: 세종)"
-                            />
-                            <FormInput
-                              id={fid('posthumousName')}
-                              value={posthumousName}
-                              onChange={(e) =>
-                                setPosthumousName(e.target.value)
-                              }
-                              placeholder="시호"
-                            />
-                          </InlineFields>
-                        </FieldControl>
-                      </FieldRowMulti>
-                      <FieldRowMulti>
-                        <FieldLabel htmlFor={fid('surnameMeaning')}>
-                          성·이름·중간이름의 뜻
-                        </FieldLabel>
-                        <FieldControl>
-                          <InlineFields $cols={3}>
-                            <FormInput
-                              id={fid('surnameMeaning')}
-                              value={surnameMeaning}
-                              onChange={(e) =>
-                                setSurnameMeaning(e.target.value)
-                              }
-                              placeholder="성의 뜻"
-                            />
-                            <FormInput
-                              id={fid('nameMeaning')}
-                              value={nameMeaning}
-                              onChange={(e) => setNameMeaning(e.target.value)}
-                              placeholder="이름의 뜻"
-                            />
-                            <FormInput
-                              id={fid('middleNameMeaning')}
-                              value={middleNameMeaning}
-                              onChange={(e) =>
-                                setMiddleNameMeaning(e.target.value)
-                              }
-                              placeholder="중간이름의 뜻"
-                            />
-                          </InlineFields>
-                        </FieldControl>
-                      </FieldRowMulti>
-                      </FormRows>
-                    </AdvancedBody>
-                  )}
-                </AdvancedSection>
-              </FormRows>
-            )}
-
-            {activeTab === 'affiliation' && (
-              <FormRows>
-                <FieldRow>
-                  <FieldLabel htmlFor={fid('countryId')}>
-                    소속(출생) 국가 <Required>*</Required>
-                  </FieldLabel>
-                  <FieldControl>
-                    <SelectBtn
-                      id={fid('countryId')}
-                      type="button"
-                      $hasValue={!!countryName}
-                      $error={!!errors.countryId}
-                      aria-invalid={!!errors.countryId}
-                      aria-describedby={
-                        errors.countryId ? fid('countryId-err') : undefined
-                      }
-                      onClick={() => setShowCountryModal(true)}
-                    >
-                      <span>{countryName || '국가 선택'}</span>
-                      <FiChevronDown size={18} />
-                    </SelectBtn>
-                    {errors.countryId && (
-                      <FieldError id={fid('countryId-err')} role="alert">
-                        <FiAlertCircle size={13} />
-                        {errors.countryId}
-                      </FieldError>
-                    )}
-                  </FieldControl>
-                </FieldRow>
-                <FieldRow>
-                  <FieldLabel>출생지</FieldLabel>
-                  <FieldControl>
-                    <PlaceAutocompleteWrap>
-                      <PlaceAutocomplete
-                        value={birthPlace}
-                        onChange={(place) => {
-                          setBirthPlace(place)
-                          setBirthCityId(place?.cityId ?? '')
-                          markDirty()
-                        }}
-                        countryId={countryId || undefined}
-                      />
-                    </PlaceAutocompleteWrap>
-                  </FieldControl>
-                </FieldRow>
-                <FieldRow>
-                  <FieldLabel>사망지</FieldLabel>
-                  <FieldControl>
-                    {birthPlace && (
-                      <InlineActionBtn
-                        type="button"
-                        onClick={handleCopyBirthToDeathPlace}
-                        title="출생지를 사망지로 복사"
-                      >
-                        <FiCopy size={12} />
-                        출생지와 동일
-                      </InlineActionBtn>
-                    )}
-                    <PlaceAutocompleteWrap>
-                      <PlaceAutocomplete
-                        value={deathPlace}
-                        onChange={(place) => {
-                          setDeathPlace(place)
-                          setDeathCityId(place?.cityId ?? '')
-                          markDirty()
-                        }}
-                        countryId={countryId || undefined}
-                      />
-                    </PlaceAutocompleteWrap>
-                  </FieldControl>
-                </FieldRow>
-                <FieldRowMulti>
-                  <FieldLabel htmlFor={fid('dynasty')}>가문 · 종교</FieldLabel>
-                  <FieldControl>
-                    <InlineFields $cols={2}>
-                      <NativeSelect
-                        id={fid('dynasty')}
-                        value={dynastyId}
-                        onChange={(e) => {
-                          setDynastyId(e.target.value)
-                          markDirty()
-                        }}
-                      >
-                        <option value="">가문 — 선택 안 함</option>
-                        {dynastyOptions.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.name}
-                          </option>
-                        ))}
-                      </NativeSelect>
-                      <NativeSelect
-                        id={fid('religion')}
-                        value={religionId}
-                        onChange={(e) => {
-                          setReligionId(e.target.value)
-                          markDirty()
-                        }}
-                      >
-                        <option value="">종교 — 선택 안 함</option>
-                        {religionOptions.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name}
-                          </option>
-                        ))}
-                      </NativeSelect>
-                    </InlineFields>
-                  </FieldControl>
-                </FieldRowMulti>
+                {/* 약력 — 인물 정체성을 설명하는 본문. 기본 탭 마지막 영역. */}
                 <FieldRow data-bio-editor-wrap>
                   <FieldLabel>약력</FieldLabel>
                   <FieldControl>
@@ -2938,148 +2506,192 @@ export function PersonRegisterView({
                     />
                   </FieldControl>
                 </FieldRow>
+
+                {/* 이름의 뜻 — 가끔 채워지는 정보. collapse로 숨겨 잡음 ↓ */}
+                <AdvancedSection>
+                  <AdvancedToggle
+                    type="button"
+                    $open={nameMeaningsOpen}
+                    onClick={() => setNameMeaningsOpen((v) => !v)}
+                    aria-expanded={nameMeaningsOpen}
+                  >
+                    <FiChevronRight size={14} />
+                    이름의 뜻
+                  </AdvancedToggle>
+                  {nameMeaningsOpen && (
+                    <AdvancedBody>
+                      <FormRows>
+                        <FieldRowMulti>
+                          <FieldLabel htmlFor={fid('surnameMeaning')}>
+                            성·이름·중간이름의 뜻
+                          </FieldLabel>
+                          <FieldControl>
+                            <InlineFields $cols={3}>
+                              <FormInput
+                                id={fid('surnameMeaning')}
+                                value={surnameMeaning}
+                                onChange={(e) =>
+                                  setSurnameMeaning(e.target.value)
+                                }
+                                placeholder="성의 뜻"
+                              />
+                              <FormInput
+                                id={fid('nameMeaning')}
+                                value={nameMeaning}
+                                onChange={(e) => setNameMeaning(e.target.value)}
+                                placeholder="이름의 뜻"
+                              />
+                              <FormInput
+                                id={fid('middleNameMeaning')}
+                                value={middleNameMeaning}
+                                onChange={(e) =>
+                                  setMiddleNameMeaning(e.target.value)
+                                }
+                                placeholder="중간이름의 뜻"
+                              />
+                            </InlineFields>
+                          </FieldControl>
+                        </FieldRowMulti>
+                      </FormRows>
+                    </AdvancedBody>
+                  )}
+                </AdvancedSection>
               </FormRows>
             )}
 
+            {activeTab === 'life' && (
+              <LifeSection
+                fid={fid}
+                birthEra={birthEra}
+                birthYear={birthYear}
+                birthMonth={birthMonth}
+                birthDay={birthDay}
+                isBirthDateUnknown={isBirthDateUnknown}
+                setIsBirthDateUnknown={setIsBirthDateUnknown}
+                setShowBirthDateModal={setShowBirthDateModal}
+                deathEra={deathEra}
+                deathYear={deathYear}
+                deathMonth={deathMonth}
+                deathDay={deathDay}
+                isAlive={isAlive}
+                isDeathDateUnknown={isDeathDateUnknown}
+                setShowDeathDateModal={setShowDeathDateModal}
+                setDeathStatus={setDeathStatus}
+                deathType={deathType}
+                deathCause={deathCause}
+                deathNote={deathNote}
+                deathTypeShowMore={deathTypeShowMore}
+                setDeathType={setDeathType}
+                setDeathCause={setDeathCause}
+                setDeathNote={setDeathNote}
+                setDeathTypeShowMore={setDeathTypeShowMore}
+                monarchTitlesOpen={monarchTitlesOpen}
+                setMonarchTitlesOpen={setMonarchTitlesOpen}
+                regnalName={regnalName}
+                templeName={templeName}
+                posthumousName={posthumousName}
+                setRegnalName={setRegnalName}
+                setTempleName={setTempleName}
+                setPosthumousName={setPosthumousName}
+                lifespanText={lifespanText}
+                errors={errors}
+                markDirty={markDirty}
+              />
+            )}
+
+            {activeTab === 'affiliation' && (
+              <AffiliationSection
+                fid={fid}
+                countryId={countryId}
+                countryName={countryName}
+                setShowCountryModal={setShowCountryModal}
+                birthPlace={birthPlace}
+                deathPlace={deathPlace}
+                setBirthPlace={setBirthPlace}
+                setDeathPlace={setDeathPlace}
+                setBirthCityId={setBirthCityId}
+                setDeathCityId={setDeathCityId}
+                onCopyBirthToDeathPlace={handleCopyBirthToDeathPlace}
+                dynastyLabel={dynastyLabel}
+                religionLabel={religionLabel}
+                setShowDynastyModal={setShowDynastyModal}
+                setShowReligionModal={setShowReligionModal}
+                errors={errors}
+                markDirty={markDirty}
+              />
+            )}
+
             {activeTab === 'family' && (
-              <FormRows>
-                <FieldRow>
-                  <FieldLabel htmlFor={fid('father')}>아버지</FieldLabel>
-                  <FieldControl>
-                    <FamilyMemberCard
-                      person={fatherPerson}
-                      placeholder="아버지 선택"
-                      onChange={() => setShowFatherModal(true)}
-                      onClear={() => {
-                        setFatherId('')
-                        markDirty()
-                      }}
-                    />
-                    {showFatherModal && (
-                      <PersonSelectModal
-                        persons={persons}
-                        selectedPersonId={fatherId}
-                        onSelect={(id) => {
-                          setFatherId(id)
-                          setShowFatherModal(false)
-                          markDirty()
-                        }}
-                        onClose={() => setShowFatherModal(false)}
-                        excludeIds={[
-                          editPersonId ?? '',
-                          motherId,
-                          spouseId,
-                        ].filter(Boolean)}
-                        excludeReason="자기 자신, 어머니·배우자로 지정한 인물은 아버지로 선택할 수 없습니다."
-                        title="아버지 선택"
-                        searchPlaceholder="아버지로 등록할 인물을 검색…"
-                      />
-                    )}
-                  </FieldControl>
-                </FieldRow>
-                <FieldRow>
-                  <FieldLabel htmlFor={fid('mother')}>어머니</FieldLabel>
-                  <FieldControl>
-                    <FamilyMemberCard
-                      person={motherPerson}
-                      placeholder="어머니 선택"
-                      onChange={() => setShowMotherModal(true)}
-                      onClear={() => {
-                        setMotherId('')
-                        markDirty()
-                      }}
-                    />
-                    {showMotherModal && (
-                      <PersonSelectModal
-                        persons={persons}
-                        selectedPersonId={motherId}
-                        onSelect={(id) => {
-                          setMotherId(id)
-                          setShowMotherModal(false)
-                          markDirty()
-                        }}
-                        onClose={() => setShowMotherModal(false)}
-                        excludeIds={[
-                          editPersonId ?? '',
-                          fatherId,
-                          spouseId,
-                        ].filter(Boolean)}
-                        excludeReason="자기 자신, 아버지·배우자로 지정한 인물은 어머니로 선택할 수 없습니다."
-                        title="어머니 선택"
-                        searchPlaceholder="어머니로 등록할 인물을 검색…"
-                      />
-                    )}
-                  </FieldControl>
-                </FieldRow>
-                <FieldRow>
-                  <FieldLabel htmlFor={fid('spouse')}>배우자</FieldLabel>
-                  <FieldControl>
-                    <FamilyMemberCard
-                      person={spousePerson}
-                      placeholder="배우자 선택 (대표 1명)"
-                      onChange={() => setShowSpouseModal(true)}
-                      onClear={() => {
-                        setSpouseId('')
-                        markDirty()
-                      }}
-                    />
-                    {showSpouseModal && (
-                      <PersonSelectModal
-                        persons={persons}
-                        selectedPersonId={spouseId}
-                        onSelect={(id) => {
-                          setSpouseId(id)
-                          setShowSpouseModal(false)
-                          markDirty()
-                        }}
-                        onClose={() => setShowSpouseModal(false)}
-                        excludeIds={[
-                          editPersonId ?? '',
-                          fatherId,
-                          motherId,
-                        ].filter(Boolean)}
-                        excludeReason="자기 자신, 아버지·어머니로 지정한 인물은 배우자로 선택할 수 없습니다."
-                        title="배우자 선택"
-                        searchPlaceholder="배우자로 등록할 인물을 검색…"
-                      />
-                    )}
-                  </FieldControl>
-                </FieldRow>
-                <FieldRow>
-                  <FieldLabel htmlFor={fid('spouseNote')}>배우자 설명</FieldLabel>
-                  <FieldControl>
-                    <SpouseNoteTextarea
-                      id={fid('spouseNote')}
-                      value={spouseNote}
-                      onChange={(e) => setSpouseNote(e.target.value)}
-                      placeholder="예: 1대 왕비, 재위 기간 중 사망"
-                      disabled={!spouseId}
-                      rows={3}
-                    />
-                  </FieldControl>
-                </FieldRow>
-              </FormRows>
+              <FamilySection
+                fid={fid}
+                fatherId={fatherId}
+                motherId={motherId}
+                spouseId={spouseId}
+                spouseNote={spouseNote}
+                setFatherId={setFatherId}
+                setMotherId={setMotherId}
+                setSpouseId={setSpouseId}
+                setSpouseNote={setSpouseNote}
+                fatherPerson={fatherPerson}
+                motherPerson={motherPerson}
+                spousePerson={spousePerson}
+                showFatherModal={showFatherModal}
+                showMotherModal={showMotherModal}
+                showSpouseModal={showSpouseModal}
+                setShowFatherModal={setShowFatherModal}
+                setShowMotherModal={setShowMotherModal}
+                setShowSpouseModal={setShowSpouseModal}
+                persons={persons}
+                setPersons={setPersons}
+                recentCandidates={recentCandidates}
+                editPersonId={editPersonId}
+                countryId={countryId}
+                markDirty={markDirty}
+              />
             )}
 
           </FormSectionInner>
         </LoadingHost>
       </form>
 
-      {/* sticky footer — 긴 폼 끝에서도 저장 가능 */}
+      {/* sticky footer — 긴 폼 끝에서도 저장 가능. 진행도는 라이브 프로그레스 바로. */}
       {!loadFailed && (
       <StickyFooter>
-        <FooterStatus
-          $tone={isDirty ? 'warn' : 'info'}
-          title={
-            draft.savedAt
-              ? `임시 저장됨 ${formatRelativeTime(draft.savedAt)}`
-              : isDirty
-                ? '저장되지 않은 변경 사항이 있습니다.'
-                : '모든 변경 사항이 저장되었습니다.'
-          }
-        >
-          필수 {requiredProgress.filled}/{requiredProgress.total} 입력
-        </FooterStatus>
+        {(() => {
+          const pct = Math.round(
+            (requiredProgress.filled / Math.max(1, requiredProgress.total)) *
+              100,
+          )
+          const isComplete = requiredProgress.filled >= requiredProgress.total
+          const tone: 'done' | 'warn' | 'info' = isComplete
+            ? 'done'
+            : isDirty
+              ? 'warn'
+              : 'info'
+          const label = isComplete
+            ? '필수 입력 완료'
+            : `필수 ${requiredProgress.filled} / ${requiredProgress.total} 입력`
+          const tip = draft.savedAt
+            ? `임시 저장됨 ${formatRelativeTime(draft.savedAt)}`
+            : isDirty
+              ? '저장되지 않은 변경 사항이 있습니다.'
+              : '모든 변경 사항이 저장되었습니다.'
+          return (
+            <FooterProgress
+              role="status"
+              aria-label={`${label} (${pct}%)`}
+              title={tip}
+            >
+              <FooterProgressMeta $tone={tone}>
+                <FooterProgressMetaLabel>{label}</FooterProgressMetaLabel>
+                <FooterProgressMetaCount>{pct}%</FooterProgressMetaCount>
+              </FooterProgressMeta>
+              <FooterProgressTrack>
+                <FooterProgressFill $pct={pct} $complete={isComplete} />
+              </FooterProgressTrack>
+            </FooterProgress>
+          )
+        })()}
         <FooterActions>
           {!isEditMode && (
             <RegisterAnotherLabel>
@@ -3111,6 +2723,32 @@ export function PersonRegisterView({
         historicalCountries={historicalCountries}
         title="소속 국가 선택"
         selectedCountryId={countryId || undefined}
+      />
+      <SelectModal<string>
+        isOpen={showDynastyModal}
+        onClose={() => setShowDynastyModal(false)}
+        title="가문 선택"
+        options={dynastySelectOptions}
+        selectedValue={dynastyId}
+        onSelect={(value) => {
+          setDynastyId(value)
+          setShowDynastyModal(false)
+          markDirty()
+        }}
+        searchPlaceholder="가문 이름으로 검색…"
+      />
+      <SelectModal<string>
+        isOpen={showReligionModal}
+        onClose={() => setShowReligionModal(false)}
+        title="종교 선택"
+        options={religionSelectOptions}
+        selectedValue={religionId}
+        onSelect={(value) => {
+          setReligionId(value)
+          setShowReligionModal(false)
+          markDirty()
+        }}
+        searchPlaceholder="종교 이름으로 검색…"
       />
       {showBirthDateModal && (
         <DatePickerModal

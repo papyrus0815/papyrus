@@ -12,6 +12,7 @@ import { AnimatePresence } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
 
 import { personKeys } from '@/entities/person/api'
+import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import {
   PersonRegisterModalBox,
   PersonRegisterModalCloseBtn,
@@ -35,9 +36,6 @@ export interface PersonRegisterViewModalProps {
   title?: string
 }
 
-/** 저장되지 않은 변경을 버릴 때 사용자에게 확인 */
-const DIRTY_CONFIRM_MSG = '저장되지 않은 변경 사항이 있습니다. 닫으시겠습니까?'
-
 export function PersonRegisterViewModal({
   isOpen,
   onClose,
@@ -49,6 +47,8 @@ export function PersonRegisterViewModal({
   const queryClient = useQueryClient()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
+  /** dirty 상태에서 닫기 시도 시 띄우는 확인 다이얼로그 */
+  const [discardOpen, setDiscardOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
   /** 모달 열기 직전 포커스를 가졌던 요소 — 닫을 때 복귀 */
@@ -82,9 +82,17 @@ export function PersonRegisterViewModal({
 
   const handleCloseAttempt = useCallback(() => {
     if (isSubmitting) return
-    if (isDirty && !window.confirm(DIRTY_CONFIRM_MSG)) return
+    if (isDirty) {
+      setDiscardOpen(true)
+      return
+    }
     onClose()
   }, [isDirty, isSubmitting, onClose])
+
+  const handleConfirmDiscard = useCallback(() => {
+    setDiscardOpen(false)
+    onClose()
+  }, [onClose])
 
   // ESC 닫기 + Tab 포커스 트랩
   useEffect(() => {
@@ -92,6 +100,11 @@ export function PersonRegisterViewModal({
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
+        // discard 다이얼로그가 열려 있으면 그쪽을 먼저 닫음
+        if (discardOpen) {
+          setDiscardOpen(false)
+          return
+        }
         handleCloseAttempt()
         return
       }
@@ -116,7 +129,7 @@ export function PersonRegisterViewModal({
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [isOpen, handleCloseAttempt])
+  }, [isOpen, handleCloseAttempt, discardOpen])
 
   const handleSuccess = (personId?: string) => {
     queryClient.invalidateQueries({ queryKey: personKeys.all })
@@ -197,5 +210,19 @@ export function PersonRegisterViewModal({
     </AnimatePresence>
   )
 
-  return createPortal(content, document.body)
+  return (
+    <>
+      {createPortal(content, document.body)}
+      <ConfirmDialog
+        isOpen={discardOpen}
+        title="저장되지 않은 변경 사항"
+        message="입력 중인 내용이 사라집니다. 닫으시겠습니까?"
+        confirmLabel="닫기"
+        cancelLabel="계속 편집"
+        danger
+        onConfirm={handleConfirmDiscard}
+        onCancel={() => setDiscardOpen(false)}
+      />
+    </>
+  )
 }

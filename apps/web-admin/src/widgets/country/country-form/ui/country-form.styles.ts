@@ -183,7 +183,7 @@ export const FormLabel = styled.label`
 `
 
 export const RequiredStar = styled.span`
-  color: #dc2626;
+  color: ${({ theme }) => theme.colors.alert.danger.fg};
   font-size: 14px;
   font-weight: 700;
 `
@@ -223,14 +223,29 @@ export const DateDetailRow = styled.div`
   }
 `
 
+/** 에러 메시지 슬라이드 인 + 좌측 빨간 라인 */
 export const ErrorMessage = styled.span`
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #dc2626;
+  color: ${({ theme }) => theme.colors.alert.danger.fg};
   margin-top: 6px;
   font-weight: 500;
+  padding-left: 8px;
+  border-left: 3px solid ${({ theme }) => theme.colors.alert.danger.fg};
+  animation: errorSlideIn 0.18s ease-out;
+
+  @keyframes errorSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 
   &::before {
     content: '';
@@ -293,14 +308,13 @@ export const SubmitButton = styled.button`
 
 export const Select = styled.select<{ $error?: boolean }>`
   border: 1px solid
-    ${({ $error, theme }) => ($error ? '#dc2626' : theme.colors.border.default)};
+    ${({ $error, theme }) =>
+      $error ? theme.colors.alert.danger.fg : theme.colors.border.default};
   border-radius: 12px;
   padding: 12px 16px;
   background: ${({ $error, theme }) =>
     $error
-      ? theme.mode === 'dark'
-        ? 'rgba(220,38,38,0.12)'
-        : '#fef2f2'
+      ? theme.colors.alert.danger.bg
       : theme.mode === 'dark'
         ? 'rgba(255,255,255,0.06)'
         : '#fff'};
@@ -315,11 +329,10 @@ export const Select = styled.select<{ $error?: boolean }>`
 
   &:focus {
     outline: none;
-    border-color: ${({ $error }) => ($error ? '#dc2626' : '#6366f1')};
-    box-shadow: ${({ $error }) =>
-      $error
-        ? '0 0 0 3px rgba(220, 38, 38, 0.12)'
-        : '0 0 0 3px rgba(99, 102, 241, 0.15)'};
+    border-color: ${({ $error, theme }) =>
+      $error ? theme.colors.alert.danger.fg : theme.colors.primary};
+    box-shadow: ${({ $error, theme }) =>
+      $error ? theme.colors.focusRing.danger : theme.colors.focusRing.primary};
   }
 `
 
@@ -333,15 +346,12 @@ export const SelectButton = styled.button<{
   gap: 12px;
   width: 100%;
   border: 1px solid
-    ${({ $error, theme }) => ($error ? '#dc2626' : theme.colors.border.default)};
+    ${({ $error, theme }) =>
+      $error ? theme.colors.alert.danger.fg : theme.colors.border.default};
   border-radius: 12px;
   padding: 12px 16px;
   background: ${({ $error, theme }) =>
-    $error
-      ? theme.mode === 'dark'
-        ? 'rgba(220,38,38,0.12)'
-        : '#fef2f2'
-      : theme.colors.background.primary};
+    $error ? theme.colors.alert.danger.bg : theme.colors.background.primary};
   color: ${({ $hasValue, theme }) =>
     $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
   font-size: 14px;
@@ -367,7 +377,7 @@ export const SelectButton = styled.button<{
 
   &:hover {
     border-color: ${({ $error, theme }) =>
-      $error ? '#dc2626' : theme.colors.border.medium};
+      $error ? theme.colors.alert.danger.fg : theme.colors.border.medium};
     svg {
       opacity: 1;
     }
@@ -375,11 +385,10 @@ export const SelectButton = styled.button<{
 
   &:focus {
     outline: none;
-    border-color: ${({ $error }) => ($error ? '#dc2626' : '#6366f1')};
-    box-shadow: ${({ $error }) =>
-      $error
-        ? '0 0 0 3px rgba(220, 38, 38, 0.12)'
-        : '0 0 0 3px rgba(99, 102, 241, 0.15)'};
+    border-color: ${({ $error, theme }) =>
+      $error ? theme.colors.alert.danger.fg : theme.colors.primary};
+    box-shadow: ${({ $error, theme }) =>
+      $error ? theme.colors.focusRing.danger : theme.colors.focusRing.primary};
   }
 `
 

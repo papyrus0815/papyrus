@@ -91,6 +91,34 @@ const lightColors = {
     blue: 'linear-gradient(135deg, #e0f2fe 0%, #7dd3fc 100%)',
     pink: 'linear-gradient(135deg, #fce7f3 0%, #f9a8d4 100%)',
   },
+  // 상태 알림 (warning/danger/info/success) — bg/fg/border 분리
+  alert: {
+    warning: {
+      bg: '#fef3c7',
+      fg: '#92400e',
+      border: '#fde68a',
+    },
+    danger: {
+      bg: '#fef2f2',
+      fg: '#dc2626',
+      border: '#fecaca',
+    },
+    info: {
+      bg: '#eef2ff',
+      fg: '#4338ca',
+      border: '#c7d2fe',
+    },
+    success: {
+      bg: '#ecfdf5',
+      fg: '#16a34a',
+      border: 'rgba(22,163,74,0.25)',
+    },
+  },
+  // 인풋 focus glow (두 겹 — ring + halo)
+  focusRing: {
+    primary: '0 0 0 3px rgba(99,102,241,0.18), 0 0 16px rgba(99,102,241,0.08)',
+    danger: '0 0 0 3px rgba(220,38,38,0.18), 0 0 16px rgba(220,38,38,0.06)',
+  },
 }
 
 const darkColors = {
@@ -132,10 +160,11 @@ const darkColors = {
     dark: '#3f3f46',
   },
   shadow: {
-    sm: 'rgba(0, 0, 0, 0.45)',
-    md: 'rgba(0, 0, 0, 0.65)',
-    lg: 'rgba(0, 0, 0, 0.8)',
-    xl: 'rgba(0, 0, 0, 0.92)',
+    // 다크모드 그림자 톤다운 — 기존 0.45/0.65/0.8/0.92는 너무 진해서 평면적
+    sm: 'rgba(0, 0, 0, 0.25)',
+    md: 'rgba(0, 0, 0, 0.35)',
+    lg: 'rgba(0, 0, 0, 0.45)',
+    xl: 'rgba(0, 0, 0, 0.55)',
   },
   gradient: {
     primary: 'linear-gradient(135deg, #636af2 0%, #9f7aea 100%)',
@@ -143,6 +172,33 @@ const darkColors = {
     accent: 'linear-gradient(135deg, #30d158 0%, #34c759 100%)',
     blue: 'linear-gradient(135deg, #1a2744 0%, #1e3460 100%)',
     pink: 'linear-gradient(135deg, #3a1628 0%, #561f3c 100%)',
+  },
+  // 상태 알림 (다크모드 — 더 어두운 bg, 밝은 fg)
+  alert: {
+    warning: {
+      bg: 'rgba(250,204,21,0.10)',
+      fg: '#fbbf24',
+      border: 'rgba(250,204,21,0.30)',
+    },
+    danger: {
+      bg: 'rgba(220,38,38,0.10)',
+      fg: '#f87171',
+      border: 'rgba(220,38,38,0.30)',
+    },
+    info: {
+      bg: 'rgba(99,102,241,0.12)',
+      fg: '#a5b4fc',
+      border: 'rgba(99,102,241,0.30)',
+    },
+    success: {
+      bg: 'rgba(34,197,94,0.12)',
+      fg: '#4ade80',
+      border: 'rgba(34,197,94,0.30)',
+    },
+  },
+  focusRing: {
+    primary: '0 0 0 3px rgba(99,106,242,0.22), 0 0 18px rgba(99,106,242,0.12)',
+    danger: '0 0 0 3px rgba(248,113,113,0.22), 0 0 18px rgba(248,113,113,0.08)',
   },
 }
 

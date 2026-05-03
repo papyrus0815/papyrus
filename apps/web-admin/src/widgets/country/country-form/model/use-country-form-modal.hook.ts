@@ -3,12 +3,13 @@
  *
  * - 페이지마다 중복됐던 편집 상태·저장 핸들러를 한 곳에 모음.
  * - 반환값을 CountryFormModal에 그대로 spread 하면 됨.
+ * - 저장 시 RHF 검증 통과 데이터를 API 페이로드로 변환하는 단일 지점.
  */
 import { useCallback, useRef, useState } from 'react'
 
 import { toast } from 'react-hot-toast'
 
-import type { Country } from '@/entities/country/api'
+import type { Country, CountryFormData } from '@/entities/country/api'
 import {
   useCreateCountry,
   useDeleteCountry,
@@ -27,6 +28,25 @@ interface UseCountryFormModalOptions {
   onSaved?: (id: string, mode: FormMode) => void
 }
 
+/** RHF 검증 통과 데이터를 API 페이로드로 변환 (population: bigint string) */
+function toApiPayload(data: CountryFormData) {
+  return {
+    name: data.name,
+    fullName: data.fullName,
+    localName: data.localName,
+    isoCode: data.isoCode,
+    flagEmoji: data.flagEmoji,
+    capital: data.capital,
+    population: data.population != null ? String(data.population) : undefined,
+    areaSqKm: data.areaSqKm,
+    thumbnailUrl: data.thumbnailUrl ?? '',
+    currencyId: data.currencyId,
+    languageId: data.languageId,
+    continentId: data.continentId,
+    defaultNameDisplayOrder: data.defaultNameDisplayOrder,
+  }
+}
+
 export function useCountryFormModal(opts: UseCountryFormModalOptions = {}) {
   const createMutation = useCreateCountry()
   const updateMutation = useUpdateCountry()
@@ -34,7 +54,6 @@ export function useCountryFormModal(opts: UseCountryFormModalOptions = {}) {
 
   const [state, setState] = useState<FormState | null>(null)
   const onSavedRef = useRef(opts.onSaved)
-  // 콜백 참조 최신화 (의존성 배열에 안정적 함수만 두기 위함)
   onSavedRef.current = opts.onSaved
 
   const openCreate = useCallback(
@@ -48,39 +67,23 @@ export function useCountryFormModal(opts: UseCountryFormModalOptions = {}) {
   const close = useCallback(() => setState(null), [])
 
   const save = useCallback(
-    async (data: Omit<Country, 'id'> & { id?: string }) => {
+    async (data: CountryFormData & { id?: string }) => {
       const loadingToast = toast.loading(
         data.id ? '수정하는 중...' : '등록하는 중...',
       )
       try {
-        const payload = {
-          name: data.name,
-          fullName: (data as { fullName?: string }).fullName,
-          localName: data.localName,
-          isoCode: data.isoCode,
-          flagEmoji: data.flagEmoji,
-          capital: data.capital,
-          population: data.population ? String(data.population) : undefined,
-          areaSqKm: data.areaSqKm ? Number(data.areaSqKm) : undefined,
-          thumbnailUrl: data.thumbnailUrl,
-          currencyId: data.currencyId,
-          languageId: data.languageId,
-          continentId: data.continentId,
-          defaultNameDisplayOrder: (
-            data as { defaultNameDisplayOrder?: 'korean' | 'western' }
-          ).defaultNameDisplayOrder,
-        }
+        const payload = toApiPayload(data)
         let savedId: string | undefined
         if (data.id) {
           const res = await updateMutation.mutateAsync({
             id: data.id,
-            data: { ...payload, thumbnailUrl: payload.thumbnailUrl ?? '' },
+            data: payload,
           })
-          savedId = (res as { id?: string })?.id ?? data.id
+          savedId = res.id ?? data.id
           toast.success('수정되었습니다', { id: loadingToast })
         } else {
           const res = await createMutation.mutateAsync(payload)
-          savedId = (res as { id?: string })?.id
+          savedId = res.id
           toast.success('등록되었습니다', { id: loadingToast })
         }
         setState(null)

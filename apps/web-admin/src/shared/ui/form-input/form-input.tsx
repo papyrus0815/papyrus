@@ -2,8 +2,6 @@ import React from 'react'
 
 import styled from 'styled-components'
 
-const FOCUS_COLOR = '#4f46e5'
-
 // ─── Styled primitives ────────────────────────────────────────────────────────
 
 const StyledInput = styled.input<{ $error?: boolean }>`
@@ -13,16 +11,14 @@ const StyledInput = styled.input<{ $error?: boolean }>`
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ $error, theme }) =>
     $error
-      ? theme.mode === 'dark'
-        ? 'rgba(234,67,53,0.15)'
-        : '#fef2f2'
+      ? theme.colors.alert.danger.bg
       : theme.mode === 'dark'
         ? 'rgba(255,255,255,0.08)'
         : '#fff'};
   border: 1px solid
     ${({ $error, theme }) =>
       $error
-        ? '#ea4335'
+        ? theme.colors.alert.danger.fg
         : theme.mode === 'dark'
           ? 'rgba(255,255,255,0.12)'
           : theme.colors.border.default};
@@ -41,26 +37,23 @@ const StyledInput = styled.input<{ $error?: boolean }>`
   &:hover:not(:disabled) {
     border-color: ${({ $error, theme }) =>
       $error
-        ? '#ea4335'
+        ? theme.colors.alert.danger.fg
         : theme.mode === 'dark'
           ? 'rgba(255,255,255,0.2)'
           : theme.colors.border.medium};
     background: ${({ $error, theme }) =>
       $error
-        ? theme.mode === 'dark'
-          ? 'rgba(234,67,53,0.18)'
-          : '#fef2f2'
+        ? theme.colors.alert.danger.bg
         : theme.mode === 'dark'
           ? 'rgba(255,255,255,0.11)'
           : '#fff'};
   }
 
   &:focus {
-    border-color: ${({ $error }) => ($error ? '#ea4335' : FOCUS_COLOR)};
-    box-shadow: ${({ $error }) =>
-      $error
-        ? '0 0 0 3px rgba(234, 67, 53, 0.08)'
-        : '0 0 0 3px rgba(79, 70, 229, 0.08)'};
+    border-color: ${({ $error, theme }) =>
+      $error ? theme.colors.alert.danger.fg : theme.colors.primary};
+    box-shadow: ${({ $error, theme }) =>
+      $error ? theme.colors.focusRing.danger : theme.colors.focusRing.primary};
   }
 
   &:disabled {
@@ -95,16 +88,14 @@ const StyledTextarea = styled.textarea<{
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ $error, theme }) =>
     $error
-      ? theme.mode === 'dark'
-        ? 'rgba(234,67,53,0.15)'
-        : '#fef2f2'
+      ? theme.colors.alert.danger.bg
       : theme.mode === 'dark'
         ? 'rgba(255,255,255,0.08)'
         : '#fff'};
   border: 1px solid
     ${({ $error, theme }) =>
       $error
-        ? '#ea4335'
+        ? theme.colors.alert.danger.fg
         : theme.mode === 'dark'
           ? 'rgba(255,255,255,0.12)'
           : theme.colors.border.default};
@@ -126,26 +117,23 @@ const StyledTextarea = styled.textarea<{
   &:hover:not(:disabled) {
     border-color: ${({ $error, theme }) =>
       $error
-        ? '#ea4335'
+        ? theme.colors.alert.danger.fg
         : theme.mode === 'dark'
           ? 'rgba(255,255,255,0.2)'
           : theme.colors.border.medium};
     background: ${({ $error, theme }) =>
       $error
-        ? theme.mode === 'dark'
-          ? 'rgba(234,67,53,0.18)'
-          : '#fef2f2'
+        ? theme.colors.alert.danger.bg
         : theme.mode === 'dark'
           ? 'rgba(255,255,255,0.11)'
           : '#fff'};
   }
 
   &:focus {
-    border-color: ${({ $error }) => ($error ? '#ea4335' : FOCUS_COLOR)};
-    box-shadow: ${({ $error }) =>
-      $error
-        ? '0 0 0 3px rgba(234, 67, 53, 0.08)'
-        : '0 0 0 3px rgba(79, 70, 229, 0.08)'};
+    border-color: ${({ $error, theme }) =>
+      $error ? theme.colors.alert.danger.fg : theme.colors.primary};
+    box-shadow: ${({ $error, theme }) =>
+      $error ? theme.colors.focusRing.danger : theme.colors.focusRing.primary};
   }
 
   &:disabled {

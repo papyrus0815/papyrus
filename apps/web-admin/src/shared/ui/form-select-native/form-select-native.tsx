@@ -4,7 +4,7 @@ import styled from 'styled-components'
  * 테마(라이트/다크)에 맞춘 네이티브 `<select>`.
  * 모달·폼 공통 — `color-scheme`으로 OS 드롭다운 톤을 맞추고, 화살표는 테마별 SVG.
  */
-export const FormSelectNative = styled.select`
+export const FormSelectNative = styled.select<{ $error?: boolean }>`
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -12,9 +12,15 @@ export const FormSelectNative = styled.select`
   font-size: 15px;
   line-height: 1.45;
   border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background-color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#ffffff'};
+  border: 1px solid
+    ${({ $error, theme }) =>
+      $error ? theme.colors.alert.danger.fg : theme.colors.border.default};
+  background-color: ${({ $error, theme }) =>
+    $error
+      ? theme.colors.alert.danger.bg
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : '#ffffff'};
   color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
   cursor: pointer;
@@ -30,7 +36,10 @@ export const FormSelectNative = styled.select`
 
   &:focus {
     outline: none;
-    border-color: #6366f1;
+    border-color: ${({ $error, theme }) =>
+      $error ? theme.colors.alert.danger.fg : theme.colors.primary};
+    box-shadow: ${({ $error, theme }) =>
+      $error ? theme.colors.focusRing.danger : theme.colors.focusRing.primary};
   }
   &:disabled {
     opacity: 0.6;
