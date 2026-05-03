@@ -16,6 +16,7 @@ import styled, { css } from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
+import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 
 import {
   CATEGORY_BADGE_COLORS,
@@ -129,6 +130,12 @@ export const EventListItem: React.FC<EventListItemProps> = ({
               <TenureSummary>{node.summary}</TenureSummary>
             )}
           </TenureTitleStack>
+          <CountryFlags
+            modern={event.relatedCountries}
+            historical={event.relatedHistoricalCountries}
+            max={2}
+            size="sm"
+          />
           <TenureMeta>{duration}</TenureMeta>
         </TenureInner>
       </List.CompactListItemInTenure>
@@ -142,6 +149,7 @@ export const EventListItem: React.FC<EventListItemProps> = ({
       $tier={tier}
       onClick={onSelect}
       data-event-id={node.id}
+      data-active={isActive ? 'true' : undefined}
     >
       <YearCol>
         <YearLarge $tier={tier}>{startYear}</YearLarge>
@@ -169,11 +177,23 @@ export const EventListItem: React.FC<EventListItemProps> = ({
             {getCategoryName(event.category, dbCategories)}
           </CategoryChip>
           {tier !== 'normal' && (
-            <ImportancePill $tier={tier}>
+            <ImportancePill
+              $tier={tier}
+              role="img"
+              aria-label={
+                tier === 'critical' ? '핵심 사건' : '주요 사건'
+              }
+            >
               {tier === 'critical' ? '핵심' : '주요'}
             </ImportancePill>
           )}
           <Title $tier={tier}>{node.title}</Title>
+          <CountryFlags
+            modern={event.relatedCountries}
+            historical={event.relatedHistoricalCountries}
+            max={2}
+            size="md"
+          />
           {hasChildren && depth === 0 && (
             <Modal.SummaryIconButton
               type="button"
@@ -192,7 +212,9 @@ export const EventListItem: React.FC<EventListItemProps> = ({
           <Summary $tier={tier}>{node.summary}</Summary>
         )}
 
-        <Spark>
+        {/* normal tier는 hover/active 시에만 spark 노출 — 정보 노이즈 ↓.
+         * critical/major는 자기 시기 위치가 *맥락*의 일부라 항상 표시. */}
+        <Spark $tier={tier} aria-hidden={tier === 'normal' ? true : undefined}>
           <SparkRail>
             <SparkBar
               $category={event.category}
@@ -456,11 +478,27 @@ const Summary = styled.p<{ $tier: ImportanceTier }>`
   word-break: break-word;
 `
 
-const Spark = styled.div`
+/* normal tier는 평소 숨김(opacity 0) → 호버/active 시 페이드 인. 공간은 유지해 layout shift 0. */
+const Spark = styled.div<{ $tier: ImportanceTier }>`
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 2px;
+  opacity: ${({ $tier }) => ($tier === 'normal' ? 0 : 1)};
+  transition: opacity 0.15s ease;
+
+  ${({ $tier }) =>
+    $tier === 'normal' &&
+    css`
+      ${RowItem}:hover &,
+      ${RowItem}[data-active='true'] & {
+        opacity: 1;
+      }
+    `}
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 /* 6px·rounded — 4px solid에서 한 단계 폴리시. 라일은 한 톤 옅게(0.05). */

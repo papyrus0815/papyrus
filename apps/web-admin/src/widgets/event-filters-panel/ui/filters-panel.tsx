@@ -2,21 +2,16 @@
  * Event Filters Panel Widget
  * FSD: widgets/event-filters-panel/ui
  *
- * 검색 입력과 활성 필터 chip / reset 버튼은 페이지 레벨에서 다루므로
- * 이 위젯은 카테고리·국가·세기·정렬·토글 등 "필터 트리거"에만 집중한다.
+ * 검색 입력 / 활성 칩 / reset / *정렬·페이지 크기*는 페이지 또는 ViewSwitcherRow가
+ * 담당. 이 위젯은 "데이터 좁히기"인 카테고리·국가·직책·세기 + 표시 토글만.
  */
 import React from 'react'
 
-import {
-  FiArrowDown,
-  FiCalendar,
-  FiGlobe,
-  FiGrid,
-  FiLayers,
-} from 'react-icons/fi'
+import { FiCalendar, FiGlobe, FiGrid, FiLayers, FiUsers } from 'react-icons/fi'
 
 import type { CenturyFilter } from '@/entities/event/model'
 import { FILTER_ALL } from '@/features/event-list/lib'
+import { MOCK_POSITION_TYPES } from '@/entities/event/model/mock-government-positions'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
 import * as Filter from '../../../pages/events/styles/filter.styles'
@@ -27,8 +22,6 @@ interface FiltersPanelProps {
   selectedPositionType: typeof FILTER_ALL | string
   selectedCentury: CenturyFilter
   showFlatView: boolean
-  sortBy: string
-  sortDirection: 'asc' | 'desc'
 
   dbCategories: EventCategoryDto[]
   availableCenturies: number[]
@@ -40,28 +33,29 @@ interface FiltersPanelProps {
   onShowPositionTypeModal: () => void
   onToggleFlatView: () => void
   onSelectCentury: (century: CenturyFilter) => void
-  onSortChange: (sortBy: string) => void
-  onSortDirectionToggle: () => void
 }
 
 export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   selectedCategory,
   selectedCountry,
+  selectedPositionType,
   selectedCentury,
   showFlatView,
-  sortBy,
-  sortDirection,
   dbCategories,
   availableCenturies,
   countries = [],
   historicalCountries = [],
   onShowCategoryModal,
   onShowCountryModal,
+  onShowPositionTypeModal,
   onToggleFlatView,
   onSelectCentury,
-  onSortChange,
-  onSortDirectionToggle,
 }) => {
+  const positionLabel =
+    selectedPositionType === FILTER_ALL
+      ? '직책'
+      : MOCK_POSITION_TYPES.find((p) => p.value === selectedPositionType)
+          ?.label ?? '직책'
   return (
     <Filter.FilterBlock>
       {/* 필터 트리거 5개 — 한 외곽 border로 묶음 (내부 hairline divider) */}
@@ -90,6 +84,15 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
           </span>
         </Filter.FilterTriggerButton>
 
+        {/* 직책 — 역대 수반 직책 필터 */}
+        <Filter.FilterTriggerButton
+          type="button"
+          onClick={onShowPositionTypeModal}
+        >
+          <FiUsers size={13} />
+          <span>{positionLabel}</span>
+        </Filter.FilterTriggerButton>
+
         {/* 세기 — icon은 select prefix 자리에 padding으로 통합 */}
         <Filter.CenturySelectWrap>
           <FiCalendar size={13} aria-hidden="true" />
@@ -111,26 +114,6 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
             ))}
           </Filter.CenturySelect>
         </Filter.CenturySelectWrap>
-
-        {/* 정렬 by */}
-        <Filter.SortSelect
-          value={sortBy}
-          onChange={(e) => onSortChange(e.target.value)}
-          aria-label="정렬 기준"
-        >
-          <option value="recent">최근순</option>
-          <option value="duration">기간순</option>
-        </Filter.SortSelect>
-
-        {/* 정렬 방향 — 단일 아이콘을 transform rotate로 부드럽게 토글 (위치 흔들림 방지) */}
-        <Filter.SortButton
-          type="button"
-          onClick={onSortDirectionToggle}
-          aria-label={sortDirection === 'asc' ? '오름차순' : '내림차순'}
-          $direction={sortDirection}
-        >
-          <FiArrowDown size={14} aria-hidden="true" />
-        </Filter.SortButton>
       </Filter.FilterGroup>
 
       {/* 토글들 — segmented group 외부, inline group */}

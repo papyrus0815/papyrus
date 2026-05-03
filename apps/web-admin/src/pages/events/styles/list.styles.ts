@@ -439,23 +439,36 @@ export const LoadingSpinner = styled.div`
 `
 
 /* 평면 톤 — hover scale/box-shadow 변화 제거. 도트 색만 단색 유지. */
+/* sticky — 긴 목록 스크롤 시 현재 보고 있는 *연도 컨텍스트* 유지.
+ * top: 0 (CompactList의 padding-top 4px 안쪽). z-index 5로 row보다 위. */
 export const YearDivider = styled.button`
   display: flex;
   align-items: center;
   gap: 0;
   margin: 32px 0 24px -70px;
-  padding: 0;
-  background: transparent;
+  padding: 6px 0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(15,15,15,0.92)' : 'rgba(255,255,255,0.92)'};
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   border: none;
   width: calc(100% + 70px);
   cursor: pointer;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+
+  /* 첫 YearDivider는 위쪽 마진이 sticky 진입을 가리지 않도록 0 */
+  &:first-child {
+    margin-top: 0;
+  }
 
   &::before {
     content: '';
     position: absolute;
     left: 32px;
-    transform: translateX(-50%);
+    top: 50%;
+    transform: translate(-50%, -50%);
     width: 14px;
     height: 14px;
     background: ${BRAND.primary};
@@ -477,7 +490,7 @@ export const YearDivider = styled.button`
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    transition: border-color ${MOTION.fast};
+    transition: border-color ${MOTION.fast}, box-shadow ${MOTION.fast};
     ${({ theme }) =>
       theme.mode === 'dark'
         ? css`

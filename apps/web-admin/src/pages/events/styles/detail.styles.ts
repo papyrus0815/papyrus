@@ -795,6 +795,12 @@ export const ActionButton = styled.button<{ $variant: ActionVariant }>`
     box-shadow: ${BRAND.focusRing};
   }
 
+  &:disabled {
+    cursor: default;
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
   ${({ $variant, theme }) => {
     if ($variant === 'primary') {
       // CreateEventButton과 동일한 filled primary

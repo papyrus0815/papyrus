@@ -5,7 +5,15 @@
  * 조립(composition) 레이어. 비즈니스 로직은 features/entities, UI는 widgets/components,
  * 페이지 전용 훅은 ./hooks/* 에 위임한다.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -26,6 +34,38 @@ import { EventCompactList } from '@/widgets/event-list-compact/ui/event-compact-
 import { EventTimeline } from '@/widgets/event-timeline/ui/event-timeline'
 import { EventDetailPanel } from '@/widgets/event-list/ui/event-detail-panel'
 
+/**
+ * 신규 5개 뷰는 lazy import — 사용자가 그 모드를 한 번도 안 열면 코드 안 받음.
+ * 특히 Map은 Leaflet/마커 클러스터 ~150KB.
+ *
+ * 각 모듈은 named export `Event*View`이므로 default 어댑터로 매핑.
+ */
+const EventMapView = lazy(() =>
+  import('@/widgets/event-map-view/ui/event-map-view').then((m) => ({
+    default: m.EventMapView,
+  })),
+)
+const EventGridView = lazy(() =>
+  import('@/widgets/event-grid-view/ui/event-grid-view').then((m) => ({
+    default: m.EventGridView,
+  })),
+)
+const EventDashboardView = lazy(() =>
+  import('@/widgets/event-dashboard-view/ui/event-dashboard-view').then((m) => ({
+    default: m.EventDashboardView,
+  })),
+)
+const EventTreeView = lazy(() =>
+  import('@/widgets/event-tree-view/ui/event-tree-view').then((m) => ({
+    default: m.EventTreeView,
+  })),
+)
+const EventGalleryView = lazy(() =>
+  import('@/widgets/event-gallery-view/ui/event-gallery-view').then((m) => ({
+    default: m.EventGalleryView,
+  })),
+)
+
 import type {
   EventHierarchyNode,
   HistoricalEvent,
@@ -34,6 +74,7 @@ import * as Layout from '../styles/layout.styles'
 import * as PageStyles from '../styles/list-page.styles'
 
 import { CatalogDetailDrawer } from './components/catalog-detail-drawer'
+import { CatalogHeaderStats } from './components/catalog-header-stats'
 import { CatalogMainContent } from './components/catalog-main-content'
 import { CatalogModals } from './components/catalog-modals'
 import { CatalogToolbar } from './components/catalog-toolbar'
@@ -138,7 +179,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   // ===== UI 상태 =====
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const v = searchParams.get('view')
-    return v === VIEW_MODES.LIST ? VIEW_MODES.LIST : VIEW_MODES.TIMELINE
+    const valid = Object.values(VIEW_MODES) as string[]
+    return v && valid.includes(v) ? (v as ViewMode) : VIEW_MODES.TIMELINE
   })
   const [selectedEventId, setSelectedEventId] = useState<string | null>(
     searchParams.get('event'),
@@ -318,7 +360,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setShowSummaryModal(true)
   }, [])
 
-  // ===== 슬롯: 타임라인 / 카드 리스트 / 상세 패널 =====
+  // ===== 슬롯: 7개 뷰 모드 + 상세 패널 =====
   const timelineSlot = (
     <EventTimeline
       flattenedHierarchy={visibleFlattenedHierarchy}
@@ -329,17 +371,82 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     />
   )
 
+  /** lazy 슬롯 fallback — 위젯 chunk 다운로드 동안 유지되는 빈 박스. layout shift 방지. */
+  const lazyFallback = (
+    <PageStyles.LazyViewFallback aria-busy="true" aria-live="polite">
+      <PageStyles.LazyViewSpinner aria-hidden="true" />
+      <span>뷰 불러오는 중…</span>
+    </PageStyles.LazyViewFallback>
+  )
+
+  const mapSlot = (
+    <Suspense fallback={lazyFallback}>
+      <EventMapView
+        flattenedHierarchy={visibleFlattenedHierarchy}
+        events={events}
+        selectedEventId={selectedEventId}
+        onSelectEvent={setSelectedEventId}
+        hasActiveFilters={filtersOrSearchActive}
+        onResetFilters={handleResetAll}
+      />
+    </Suspense>
+  )
+
+  const gridSlot = (
+    <Suspense fallback={lazyFallback}>
+      <EventGridView
+        flattenedHierarchy={visibleFlattenedHierarchy}
+        events={events}
+        selectedEventId={selectedEventId}
+        dbCategories={dbCategories}
+        onSelectEvent={setSelectedEventId}
+      />
+    </Suspense>
+  )
+
+  const dashboardSlot = (
+    <Suspense fallback={lazyFallback}>
+      <EventDashboardView
+        flattenedHierarchy={visibleFlattenedHierarchy}
+        events={events}
+        dbCategories={dbCategories}
+        onSelectEvent={setSelectedEventId}
+      />
+    </Suspense>
+  )
+
+  const treeSlot = (
+    <Suspense fallback={lazyFallback}>
+      <EventTreeView
+        flattenedHierarchy={visibleFlattenedHierarchy}
+        events={events}
+        selectedEventId={selectedEventId}
+        dbCategories={dbCategories}
+        onSelectEvent={setSelectedEventId}
+      />
+    </Suspense>
+  )
+
+  const gallerySlot = (
+    <Suspense fallback={lazyFallback}>
+      <EventGalleryView
+        flattenedHierarchy={visibleFlattenedHierarchy}
+        events={events}
+        selectedEventId={selectedEventId}
+        dbCategories={dbCategories}
+        onSelectEvent={setSelectedEventId}
+      />
+    </Suspense>
+  )
+
   const listSlot = (
     <EventCompactList
       isLoading={isLoading && events.length === 0}
       flattenedHierarchy={visibleFlattenedHierarchy}
       events={events}
-      filteredEvents={filteredEvents}
-      sortedEvents={sortedEvents}
       expandedEventIds={expandedEventIds}
       expandedTenureGroups={expandedTenureGroups}
       selectedEventId={selectedEventId}
-      sortBy={sortBy}
       sortDirection={sortDirection}
       hasActiveFilters={filtersOrSearchActive}
       activeFilterChips={
@@ -357,7 +464,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       tenureGroups={tenureGroups}
       periodHeadsOfState={eventHeadsOfState.get('__periodHeads__') ?? []}
       dbCategories={dbCategories}
-      totalCount={visibleFlattenedHierarchy.length}
       isLoadingMore={isLoading && events.length > 0}
       displayedCount={visibleFlattenedHierarchy.length}
       hasMoreData={hasMore}
@@ -366,20 +472,10 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       onToggleTenureGroupExpansion={toggleTenureGroupExpansion}
       onSelectEvent={setSelectedEventId}
       onShowSummary={openSummary}
-      onSortChange={(newSortBy: string) => {
-        setSortBy(newSortBy as SortOption)
-        if (newSortBy === 'recent' || newSortBy === 'duration') {
-          setSortDirection('desc')
-        }
-      }}
-      onSortDirectionToggle={() => {
-        setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-      }}
       onResetFilters={handleResetAll}
       onToggleBookmark={toggleBookmark}
       onScroll={handleScroll}
       pageSize={pageSize}
-      onPageSizeChange={handlePageSizeChange}
     />
   )
 
@@ -391,6 +487,34 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     },
     [selectedEventId, queryClient],
   )
+
+  // ===== drawer 안 prev/next — visibleFlattenedHierarchy 기준. 끝에서는 undefined =====
+  const selectedIndex = useMemo(() => {
+    if (!selectedEventId) return -1
+    return visibleFlattenedHierarchy.findIndex(
+      (it) => it.node.id === selectedEventId,
+    )
+  }, [selectedEventId, visibleFlattenedHierarchy])
+
+  const onDrawerPrev = useMemo(() => {
+    if (selectedIndex <= 0) return undefined
+    return () => {
+      const prev = visibleFlattenedHierarchy[selectedIndex - 1]
+      if (prev) setSelectedEventId(prev.node.id)
+    }
+  }, [selectedIndex, visibleFlattenedHierarchy])
+
+  const onDrawerNext = useMemo(() => {
+    if (
+      selectedIndex < 0 ||
+      selectedIndex >= visibleFlattenedHierarchy.length - 1
+    )
+      return undefined
+    return () => {
+      const next = visibleFlattenedHierarchy[selectedIndex + 1]
+      if (next) setSelectedEventId(next.node.id)
+    }
+  }, [selectedIndex, visibleFlattenedHierarchy])
 
   const detailPanelSlot = (
     <EventDetailPanel
@@ -409,15 +533,12 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       }}
       onShowSummary={openSummary}
       onAfterDelete={handleAfterDelete}
-      // ── Discovery Hub용 데이터 (선택 없을 때만 사용)
-      events={events}
-      recentEventIds={recentEvents}
-      bookmarkIds={bookmarks}
-      filteredEvents={sortedEvents}
+      onPrev={onDrawerPrev}
+      onNext={onDrawerNext}
     />
   )
 
-  // ===== 묶음 props (toolbar/modals) — 필드가 32/18개라 spread 패턴이 가장 안전 =====
+  // ===== 묶음 props (toolbar/modals) =====
   const toolbarProps = {
     searchInputRef,
     keywordInput,
@@ -428,8 +549,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     selectedPositionType,
     selectedCentury,
     showFlatView,
-    sortBy,
-    sortDirection,
     dbCategories,
     availableCenturies,
     countries,
@@ -439,11 +558,12 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setShowPositionTypeModal,
     toggleShowFlatView: () => setShowFlatView(!showFlatView),
     setSelectedCentury,
-    setSortBy,
-    setSortDirection,
     bookmarksOnly,
     toggleBookmarksOnly: () => setBookmarksOnly((v) => !v),
     bookmarksCount: bookmarks.size,
+    recentEventIds: recentEvents,
+    events,
+    onSelectEvent: setSelectedEventId,
     onExportJson: () =>
       exportEventsAsJson(
         visibleFlattenedHierarchy.map(
@@ -459,6 +579,21 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     activeFilterCount,
     handleResetAll,
   }
+
+  // ===== 표시 옵션 묶음 (CatalogMainContent의 ViewSwitcherRow가 소비) =====
+  const handleSortChange = useCallback(
+    (newSortBy: SortOption) => {
+      setSortBy(newSortBy)
+      if (newSortBy === 'recent' || newSortBy === 'duration') {
+        setSortDirection('desc')
+      }
+    },
+    [setSortBy, setSortDirection],
+  )
+
+  const handleSortDirectionToggle = useCallback(() => {
+    setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+  }, [setSortDirection])
 
   const modalsProps = {
     showCategoryModal,
@@ -500,12 +635,11 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
             <PageStyles.PageHeaderTitle>사건 연대표</PageStyles.PageHeaderTitle>
             <PageStyles.PageHeaderSubtitle>
               {countryId
-                ? '선택한 국가에 연관된 역사적 사건들'
-                : filtersOrSearchActive
-                  ? `${events.length.toLocaleString()}건 중 ${visibleFlattenedHierarchy.length.toLocaleString()}건 표시`
-                  : `등록된 ${events.length.toLocaleString()}건의 역사적 사건을 시간순으로 살펴봅니다`}
+                ? '선택한 국가에 연관된 역사적 사건'
+                : '시대·카테고리·인물로 좁혀 한눈에 살펴봅니다'}
             </PageStyles.PageHeaderSubtitle>
           </PageStyles.PageHeaderTitleGroup>
+          <CatalogHeaderStats events={events} dbCategories={dbCategories} />
         </PageStyles.PageHeader>
       )}
 
@@ -516,8 +650,20 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           viewMode={viewMode}
           setViewMode={setViewMode}
           visibleCount={visibleFlattenedHierarchy.length}
+          totalCount={events.length}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onSortChange={handleSortChange}
+          onSortDirectionToggle={handleSortDirectionToggle}
+          pageSize={pageSize}
+          onPageSizeChange={handlePageSizeChange}
           timelineSlot={timelineSlot}
           listSlot={listSlot}
+          mapSlot={mapSlot}
+          gridSlot={gridSlot}
+          dashboardSlot={dashboardSlot}
+          treeSlot={treeSlot}
+          gallerySlot={gallerySlot}
         />
         <CatalogDetailDrawer
           open={!!selectedEventId}

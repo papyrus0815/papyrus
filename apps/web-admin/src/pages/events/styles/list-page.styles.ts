@@ -2,9 +2,44 @@
  * List Page Shell Styled Components
  * 페이지 헤더 · 탭 · 메인/상세 패널 레이아웃 · 빈 상태 · 삭제 패널 · 단축키 도움말
  */
-import styled from 'styled-components'
+import styled, { keyframes } from 'styled-components'
 
 import { BRAND, MOTION } from './theme'
+
+/** lazy view chunk 다운로드 중 fallback — 화면 점프 없이 자리를 유지 */
+const lazySpinKeyframes = keyframes`
+  to { transform: rotate(360deg); }
+`
+
+export const LazyViewFallback = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 240px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const LazyViewSpinner = styled.span`
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(147, 197, 253, 0.18)'
+        : 'rgba(37, 99, 235, 0.18)'};
+  border-top-color: ${BRAND.primary};
+  animation: ${lazySpinKeyframes} 0.7s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+`
 
 /** 대시보드 등에 임베드 시 페이지 외곽 컨테이너 — 부모가 헤더/패딩을 제공한다고 가정 */
 export const EmbedWrapper = styled.div`

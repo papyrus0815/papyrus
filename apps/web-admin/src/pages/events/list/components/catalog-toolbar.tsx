@@ -1,7 +1,8 @@
 /**
  * 사건 카탈로그 상단 도구바.
  *
- * 검색바 + FiltersPanel + 액션 버튼(북마크/내보내기/도움말/새 사건) + 활성 필터 칩.
+ * 검색바 + FiltersPanel(필터 트리거만) + 액션 버튼 + 활성 칩.
+ * 정렬·페이지 크기는 *표시 옵션*이라 toolbar가 아니라 ViewSwitcherRow가 담당.
  */
 import React from 'react'
 
@@ -15,16 +16,18 @@ import {
 } from 'react-icons/fi'
 
 import type { CenturyFilter, FilterChip } from '@/entities/event/model'
-import type { SortOption } from '@/features/event-list/lib/constants'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { Badge } from '@/shared/ui/badge/badge'
 import { FiltersPanel } from '@/widgets/event-filters-panel/ui/filters-panel'
 
+import type { HistoricalEvent } from '../../create/events.types'
 import * as Layout from '../../styles/layout.styles'
 import * as ToolbarStyles from '../../styles/list-toolbar.styles'
 import { ICON_SIZE } from '../../styles/theme'
+
+import { RecentEventsDropdown } from './recent-events-dropdown'
 
 interface Props {
   // 검색
@@ -40,8 +43,6 @@ interface Props {
   selectedPositionType: string
   selectedCentury: CenturyFilter
   showFlatView: boolean
-  sortBy: SortOption
-  sortDirection: 'asc' | 'desc'
   dbCategories: EventCategoryDto[]
   availableCenturies: number[]
   countries: CountryResponseDto[]
@@ -52,13 +53,16 @@ interface Props {
   setShowPositionTypeModal: (v: boolean) => void
   toggleShowFlatView: () => void
   setSelectedCentury: (v: CenturyFilter) => void
-  setSortBy: (v: SortOption) => void
-  setSortDirection: React.Dispatch<React.SetStateAction<'asc' | 'desc'>>
 
   // 북마크
   bookmarksOnly: boolean
   toggleBookmarksOnly: () => void
   bookmarksCount: number
+
+  // 최근 본 (toolbar dropdown — Discovery Hub 제거 후 진입점)
+  recentEventIds: string[]
+  events: HistoricalEvent[]
+  onSelectEvent: (id: string) => void
 
   // 내보내기 / 도움말 / 새 사건
   onExportJson: () => void
@@ -81,8 +85,6 @@ export const CatalogToolbar: React.FC<Props> = ({
   selectedPositionType,
   selectedCentury,
   showFlatView,
-  sortBy,
-  sortDirection,
   dbCategories,
   availableCenturies,
   countries,
@@ -92,11 +94,12 @@ export const CatalogToolbar: React.FC<Props> = ({
   setShowPositionTypeModal,
   toggleShowFlatView,
   setSelectedCentury,
-  setSortBy,
-  setSortDirection,
   bookmarksOnly,
   toggleBookmarksOnly,
   bookmarksCount,
+  recentEventIds,
+  events,
+  onSelectEvent,
   onExportJson,
   onOpenShortcutHelp,
   onCreateEvent,
@@ -152,8 +155,6 @@ export const CatalogToolbar: React.FC<Props> = ({
         selectedPositionType={selectedPositionType}
         selectedCentury={selectedCentury}
         showFlatView={showFlatView}
-        sortBy={sortBy}
-        sortDirection={sortDirection}
         dbCategories={dbCategories}
         availableCenturies={availableCenturies}
         countries={countries}
@@ -163,18 +164,14 @@ export const CatalogToolbar: React.FC<Props> = ({
         onShowPositionTypeModal={() => setShowPositionTypeModal(true)}
         onToggleFlatView={toggleShowFlatView}
         onSelectCentury={setSelectedCentury}
-        onSortChange={(newSortBy: string) => {
-          setSortBy(newSortBy as SortOption)
-          if (newSortBy === 'recent' || newSortBy === 'duration') {
-            setSortDirection('desc')
-          }
-        }}
-        onSortDirectionToggle={() => {
-          setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-        }}
       />
 
       <ToolbarStyles.ToolbarActions>
+        <RecentEventsDropdown
+          recentEventIds={recentEventIds}
+          events={events}
+          onSelectEvent={onSelectEvent}
+        />
         <ToolbarStyles.ToolbarBtn
           type="button"
           $active={bookmarksOnly}
@@ -208,25 +205,13 @@ export const CatalogToolbar: React.FC<Props> = ({
         </Layout.CreateEventButton>
       </ToolbarStyles.ToolbarActions>
 
-      {/* 활성 필터 chips */}
-      {(activeFilterCount > 0 || hasKeyword) && (
+      {/* 활성 필터 chips — 검색어는 이미 입력창에 표시되므로 칩으로 중복 노출하지 않음 */}
+      {activeFilterCount > 0 && (
         <ToolbarStyles.ActiveFiltersBar>
           <ToolbarStyles.ActiveFilterCount>
             <FiSearch size={ICON_SIZE.xs} />
-            <span>
-              {activeFilterCount + (hasKeyword ? 1 : 0)}개 적용 중
-            </span>
+            <span>{activeFilterCount}개 적용 중</span>
           </ToolbarStyles.ActiveFilterCount>
-          {hasKeyword && (
-            <ToolbarStyles.ActiveFilterChip
-              type="button"
-              onClick={() => setKeywordInput('')}
-              aria-label={`검색어 "${trimmedKeyword}" 제거`}
-            >
-              <span>검색 · {trimmedKeyword}</span>
-              <FiX size={ICON_SIZE.xs} aria-hidden="true" />
-            </ToolbarStyles.ActiveFilterChip>
-          )}
           {filterSummaryChips
             .filter((c) => c.key !== 'keyword')
             .map((chip) => (

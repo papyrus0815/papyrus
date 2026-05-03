@@ -5,8 +5,6 @@
 import React, { useMemo, useState } from 'react'
 
 import {
-  FiArrowDown,
-  FiArrowUp,
   FiChevronDown,
   FiChevronRight,
   FiFilter,
@@ -51,12 +49,9 @@ interface EventCompactListProps {
     parentEvent: HistoricalEvent | null
   }>
   events: HistoricalEvent[]
-  filteredEvents: HistoricalEvent[]
-  sortedEvents: HistoricalEvent[]
   expandedEventIds: Set<string>
   expandedTenureGroups: Set<string>
   selectedEventId: string | null
-  sortBy: SortOption
   sortDirection: 'asc' | 'desc'
   hasActiveFilters: boolean
   /** 활성 필터 칩 — 빈 결과 안내에서 어떤 필터가 적용 중인지 보여주는 데 사용 */
@@ -65,7 +60,6 @@ interface EventCompactListProps {
   /** 목록 전체 기간(모든 사건 min~max)에 해당하는 국가원수. 해당 기간 사건이 없어도 트럼프 등이 한 번은 보이도록 */
   periodHeadsOfState?: HeadOfStateDuringEvent[]
   dbCategories: EventCategoryDto[]
-  totalCount?: number
   isLoadingMore?: boolean
   displayedCount?: number
   hasMoreData?: boolean
@@ -74,32 +68,26 @@ interface EventCompactListProps {
   onToggleTenureGroupExpansion: (tenureKey: string) => void
   onSelectEvent: (eventId: string) => void
   onShowSummary: (eventId: string) => void
-  onSortChange: (sortBy: SortOption) => void
-  onSortDirectionToggle: () => void
   onResetFilters: () => void
   onToggleBookmark?: (eventId: string) => void
   onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
+  /** 로딩 skeleton 갯수 산정에만 사용 — 페이지 크기 컨트롤은 부모(ViewSwitcherRow)에 있음 */
   pageSize?: number
-  onPageSizeChange?: (size: number) => void
 }
 
 export const EventCompactList: React.FC<EventCompactListProps> = ({
   isLoading,
   flattenedHierarchy,
   events,
-  filteredEvents,
-  sortedEvents,
   expandedEventIds,
   expandedTenureGroups,
   selectedEventId,
-  sortBy,
   sortDirection,
   hasActiveFilters,
   activeFilterChips = [],
   tenureGroups,
   periodHeadsOfState = [],
   dbCategories,
-  totalCount,
   isLoadingMore = false,
   displayedCount = 0,
   hasMoreData = false,
@@ -108,13 +96,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   onToggleTenureGroupExpansion,
   onSelectEvent,
   onShowSummary,
-  onSortChange,
-  onSortDirectionToggle,
   onResetFilters,
   onToggleBookmark,
   onScroll,
   pageSize = 20,
-  onPageSizeChange,
 }) => {
   const navigate = useNavigate()
   const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
@@ -194,28 +179,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 
   return (
     <List.CatalogSection>
-      <List.ResultControls>
-        <List.ToolbarMeta>
-          <span>{sortedEvents.length}건</span>
-        </List.ToolbarMeta>
-        {onPageSizeChange && (
-          <div style={{ marginLeft: 'auto' }}>
-            <List.SortSelect
-              value={pageSize}
-              aria-label="페이지 크기"
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
-                onPageSizeChange(Number(e.target.value))
-              }
-              style={{ width: '100px', fontSize: '12px', padding: '8px 10px' }}
-            >
-              <option value={20}>20개</option>
-              <option value={50}>50개</option>
-              <option value={100}>100개</option>
-            </List.SortSelect>
-          </div>
-        )}
-      </List.ResultControls>
-
       {isLoading ? (
         <List.CompactList>
           {[...Array(Math.min(pageSize, 12))].map((_, index) => {
@@ -304,6 +267,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               <React.Fragment key={`year-${currentYear}`}>
                 <List.YearDivider
                   type="button"
+                  aria-expanded={!isYearCollapsed}
+                  aria-label={`${currentYear}년 — 사건 ${yearEventCount}건 ${
+                    isYearCollapsed ? '펼치기' : '접기'
+                  }`}
                   onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.preventDefault()
                     toggleYearCollapse(currentYear)
@@ -312,6 +279,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   <span>
                     <FiChevronDown
                       size={13}
+                      aria-hidden="true"
                       style={{
                         transform: isYearCollapsed
                           ? 'rotate(-90deg)'

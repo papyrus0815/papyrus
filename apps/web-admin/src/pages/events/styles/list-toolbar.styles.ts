@@ -383,75 +383,164 @@ export const ViewSwitcherRow = styled.div`
   align-items: center;
   gap: 16px;
   padding: 0 4px;
+  flex-wrap: wrap;
+
+  @media (max-width: 900px) {
+    gap: 8px;
+  }
 `
 
+/* 7-mode segmented — 각 버튼은 icon + 짧은 라벨. 좁은 화면에선 라벨이 sr-only로 떨어짐.
+ * 겉면에 약한 border + bg로 그룹 시각 정체성 부여 (Linear-style segmented control).
+ *
+ * 모바일(<=720px): 가로 스크롤 + 살짝의 fade hint로 7개가 좁은 폭에서도 접근 가능.
+ * 데스크톱: 자연스럽게 한 줄에 들어감 (라벨이 1280px 이하에서 sr-only로 떨어지므로). */
 export const ViewSegmented = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  padding: 2px;
+  gap: 1px;
+  border-radius: 8px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+        `
+      : css`
+          background: rgba(15, 23, 42, 0.04);
+          border: 1px solid rgba(15, 23, 42, 0.06);
+        `}
+
+  @media (max-width: 720px) {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    & > button {
+      scroll-snap-align: start;
+      flex-shrink: 0;
+    }
+  }
 `
 
+/* 컴팩트 — 각 버튼 28px 높이, icon 13px + 라벨 11.5px.
+ * active는 *살짝 떠오른 inner pill* (배경 흰색 + subtle shadow).
+ * 라벨은 1280px 이하에서 sr-only로 떨어져 7개가 좁은 화면에서도 fit. */
 export const ViewSegment = styled.button<{ $active: boolean }>`
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 5px;
+  padding: 4px 9px;
+  height: 28px;
   border: none;
-  background: transparent;
+  border-radius: 6px;
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: ${({ $active }) => ($active ? 700 : 500)};
   letter-spacing: -0.005em;
   cursor: pointer;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.13)'
+        : '#ffffff'
+      : 'transparent'};
   color: ${({ $active, theme }) =>
     $active ? theme.colors.text.primary : theme.colors.text.tertiary};
-  transition: color ${MOTION.fast};
-
-  /* active 하단 accent line — 버튼 좌우 inset 6px */
-  &::after {
-    content: '';
-    position: absolute;
-    left: 6px;
-    right: 6px;
-    bottom: 0;
-    height: 2px;
-    border-radius: 2px 2px 0 0;
-    background: ${({ $active }) => ($active ? BRAND.primary : 'transparent')};
-    transition: background ${MOTION.base};
-  }
+  box-shadow: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '0 1px 2px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.1)'
+        : '0 1px 2px rgba(15,23,42,0.06), inset 0 0 0 1px rgba(15,23,42,0.03)'
+      : 'none'};
+  transition: background ${MOTION.fast}, color ${MOTION.fast},
+    box-shadow ${MOTION.fast};
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.1)'
+          : '#ffffff'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.04)'
+          : 'rgba(15,23,42,0.04)'};
   }
 
   &:focus-visible {
     outline: none;
     box-shadow: ${BRAND.focusRing};
-    border-radius: 4px;
   }
 
   & > svg {
-    opacity: ${({ $active }) => ($active ? 1 : 0.7)};
+    opacity: ${({ $active }) => ($active ? 1 : 0.75)};
     transition: opacity ${MOTION.fast};
+    flex-shrink: 0;
+  }
+
+  /* 1280px 이하 — 라벨 sr-only로 떨어져 icon만 (7 modes 압축) */
+  & > span.label {
+    @media (max-width: 1280px) {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
     transition: none;
-    &::after {
-      transition: none;
-    }
     & > svg {
       transition: none;
     }
   }
 `
 
-/* 우측 끝 정렬 — 데이터 도구 관습 (Linear/Notion DB) */
+/* "표시 옵션" 그룹 — 정렬 + 방향 + 페이지 크기. ViewSegmented와 ViewMeta 사이.
+ * filter group과 시각 family 분리: 외곽 border 없음, gap만으로 묶음. */
+export const DisplayOptions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  flex-wrap: wrap;
+
+  /* SortSelect / SortButton 모두 height 34 — segmented(약 32~34)와 자연스럽게 정렬 */
+  & > select,
+  & > button {
+    height: 34px;
+  }
+`
+
+/* 우측 끝 정렬 — 데이터 도구 관습 (Linear/Notion DB).
+ * "표시 N · 전체 M" 형태에서 strong은 한 톤 진하게(text.primary). */
 export const ViewMeta = styled.div`
   margin-left: auto;
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `

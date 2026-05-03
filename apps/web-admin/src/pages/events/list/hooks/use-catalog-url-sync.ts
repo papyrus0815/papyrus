@@ -103,8 +103,11 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     if (flat !== showFlatView) setShowFlatView(flat)
 
     const v = searchParams.get('view')
+    const validViews = Object.values(VIEW_MODES) as ViewMode[]
     const nextView: ViewMode =
-      v === VIEW_MODES.LIST ? VIEW_MODES.LIST : VIEW_MODES.TIMELINE
+      v && (validViews as string[]).includes(v)
+        ? (v as ViewMode)
+        : VIEW_MODES.TIMELINE
     if (nextView !== viewMode) setViewMode(nextView)
     // 의도적: 마운트 시·뒤로가기 시 한 번씩 끌어오면 충분. 양방향 동기화는 아래 effect에서.
     // eslint-disable-next-line react-hooks/exhaustive-deps

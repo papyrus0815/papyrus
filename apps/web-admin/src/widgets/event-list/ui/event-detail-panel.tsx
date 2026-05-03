@@ -15,6 +15,8 @@ import {
   FiArrowRight,
   FiBookOpen,
   FiCalendar,
+  FiChevronLeft,
+  FiChevronRight,
   FiEdit2,
   FiGitBranch,
   FiGlobe,
@@ -44,8 +46,6 @@ import { deleteEvent } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 
-import { EventDiscoveryHub } from './event-discovery-hub'
-
 interface EventDetailPanelProps {
   isLoading: boolean
   selectedEvent: HistoricalEvent | null
@@ -58,11 +58,9 @@ interface EventDetailPanelProps {
   onShowSummary?: (eventId: string) => void
   /** 삭제 후 부모가 캐시 invalidate 하도록 — 미전달 시 fallback으로 reload (기존 동작 유지) */
   onAfterDelete?: (eventId: string) => void
-  /** ── 빈 상태(선택 없음) hub용 데이터 — 모두 optional. 미전달 시 종래 placeholder. */
-  events?: HistoricalEvent[]
-  recentEventIds?: string[]
-  bookmarkIds?: Set<string>
-  filteredEvents?: HistoricalEvent[]
+  /** 이전/다음 사건으로 이동 — 키보드(↑↓)와 동등하나 마우스 사용자용. 더 이상 없으면 undefined. */
+  onPrev?: () => void
+  onNext?: () => void
 }
 
 export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
@@ -74,10 +72,8 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   onExpandEvent,
   onShowSummary,
   onAfterDelete,
-  events,
-  recentEventIds,
-  bookmarkIds,
-  filteredEvents,
+  onPrev,
+  onNext,
 }) => {
   const navigate = useNavigate()
   const [descExpanded, setDescExpanded] = useState(false)
@@ -368,6 +364,25 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             )}
 
             <Detail.ActionButtonRow>
+              {/* 이전/다음 사건 — 키보드 ↑↓와 동등. 끝/처음에서는 disabled */}
+              <Detail.ActionButton
+                $variant="ghost"
+                title="이전 사건 (↑)"
+                aria-label="이전 사건"
+                disabled={!onPrev}
+                onClick={() => onPrev?.()}
+              >
+                <FiChevronLeft size={ICON_SIZE.base} aria-hidden="true" />
+              </Detail.ActionButton>
+              <Detail.ActionButton
+                $variant="ghost"
+                title="다음 사건 (↓)"
+                aria-label="다음 사건"
+                disabled={!onNext}
+                onClick={() => onNext?.()}
+              >
+                <FiChevronRight size={ICON_SIZE.base} aria-hidden="true" />
+              </Detail.ActionButton>
               <Detail.ActionButton
                 $variant="ghost"
                 title="공유"
@@ -483,15 +498,6 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             </Detail.DetailSection>
           )}
         </Detail.DetailPanelContent>
-      ) : events && onSelectEvent ? (
-        <EventDiscoveryHub
-          events={events}
-          recentEventIds={recentEventIds ?? []}
-          bookmarkIds={bookmarkIds ?? new Set()}
-          filteredEvents={filteredEvents ?? events}
-          dbCategories={dbCategories}
-          onSelectEvent={onSelectEvent}
-        />
       ) : (
         <Detail.DetailPanelEmpty>
           <Detail.DetailPanelEmptyIcon>
@@ -502,7 +508,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
               사건을 선택해주세요
             </Detail.DetailPanelEmptyTitle>
             <Detail.DetailPanelEmptyDescription>
-              좌측 목록에서 사건을 클릭하여 상세 정보를 확인할 수 있습니다
+              좌측에서 사건을 클릭하면 이 자리에 상세가 표시됩니다.
             </Detail.DetailPanelEmptyDescription>
           </Detail.DetailPanelEmptyContent>
         </Detail.DetailPanelEmpty>
