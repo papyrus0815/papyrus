@@ -10,6 +10,7 @@ import { motion } from 'framer-motion'
 import type { IconType } from 'react-icons'
 import { FiX } from 'react-icons/fi'
 
+import { FILTER_ALL } from '@/features/event-list/lib'
 import * as Modal from '@/pages/events/styles/modal.styles'
 
 interface SelectOption {

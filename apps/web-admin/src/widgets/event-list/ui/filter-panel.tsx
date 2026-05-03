@@ -6,6 +6,7 @@ import React from 'react'
 
 import { FiChevronRight, FiX } from 'react-icons/fi'
 
+import { FILTER_ALL } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
 import type { HistoricalEvent } from '@/pages/events/create/events.types'
