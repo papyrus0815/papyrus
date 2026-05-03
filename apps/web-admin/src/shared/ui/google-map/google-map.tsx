@@ -18,6 +18,7 @@ import {
   Marker,
   Popup,
   TileLayer,
+  Tooltip,
   useMap,
 } from 'react-leaflet'
 import styled from 'styled-components'
@@ -191,6 +192,9 @@ export function GoogleMap({
                       click: () => onMarkerClick?.(m.id),
                     }}
                   >
+                    <Tooltip direction="top" offset={[0, -32]} opacity={0.95}>
+                      {m.name}
+                    </Tooltip>
                     <Popup>{m.name}</Popup>
                   </Marker>
                 )
@@ -210,6 +214,9 @@ export function GoogleMap({
                     click: () => onMarkerClick?.(m.id),
                   }}
                 >
+                  <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
+                    {m.name}
+                  </Tooltip>
                   <Popup>{m.name}</Popup>
                 </CircleMarker>
               )

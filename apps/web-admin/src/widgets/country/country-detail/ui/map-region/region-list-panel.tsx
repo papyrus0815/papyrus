@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 
 import { type RegionPalette } from './use-region-palette'
 
@@ -11,6 +11,8 @@ interface RegionListPanelProps {
   /** 컴팩트(filter pill 사용 뷰)는 maxHeight 제한이 필요 */
   maxHeight?: number
   minHeight?: number
+  /** 스크롤 컨테이너 ref — 가상화 등에서 활용 */
+  scrollRef?: React.RefObject<HTMLDivElement | null>
 }
 
 /**
@@ -23,6 +25,7 @@ export function RegionListPanel({
   children,
   maxHeight,
   minHeight,
+  scrollRef,
 }: RegionListPanelProps) {
   return (
     <div
@@ -40,6 +43,7 @@ export function RegionListPanel({
     >
       {toolbar}
       <div
+        ref={scrollRef}
         style={{
           flex: 1,
           minHeight: 0,
@@ -237,6 +241,9 @@ export function RegionListItem({
         borderLeft: `3px solid ${selected ? palette.primary : 'transparent'}`,
         background: selected ? palette.bgSelected : palette.bg,
         border: `1px solid ${selected ? palette.primary : palette.border}`,
+        boxShadow: selected
+          ? '0 4px 12px rgba(99, 102, 241, 0.18)'
+          : 'none',
         cursor: 'pointer',
         transition: 'all 0.15s ease',
         display: 'flex',
@@ -328,103 +335,159 @@ interface ListItemActionsProps {
 }
 
 function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
+  const [open, setOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      {onEdit && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onEdit()
-          }}
-          aria-label="수정"
-          title="수정"
+    <div
+      ref={wrapperRef}
+      style={{ position: 'relative' }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpen((v) => !v)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false)
+        }}
+        aria-label="더보기"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="더보기"
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 6,
+          border: 'none',
+          background: open ? palette.bgHover : 'transparent',
+          color: palette.textSecondary,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 0,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = palette.bgHover
+        }}
+        onMouseLeave={(e) => {
+          if (!open) e.currentTarget.style.background = 'transparent'
+        }}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <circle cx="5" cy="12" r="1.6" />
+          <circle cx="12" cy="12" r="1.6" />
+          <circle cx="19" cy="12" r="1.6" />
+        </svg>
+      </button>
+      {open && (
+        <ul
+          role="menu"
           style={{
-            width: 28,
-            height: 28,
-            borderRadius: 8,
+            position: 'absolute',
+            right: 0,
+            top: '100%',
+            marginTop: 4,
+            minWidth: 120,
+            padding: '4px 0',
+            margin: 0,
+            listStyle: 'none',
+            background: palette.bg,
             border: `1px solid ${palette.border}`,
-            background: 'transparent',
-            color: palette.textSecondary,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 0,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = palette.bgHover
-            e.currentTarget.style.color = palette.primary
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-            e.currentTarget.style.color = palette.textSecondary
+            borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
+            zIndex: 20,
           }}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z" />
-          </svg>
-        </button>
-      )}
-      {onDelete && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete()
-          }}
-          aria-label="삭제"
-          title="삭제"
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 8,
-            border: `1px solid ${palette.border}`,
-            background: 'transparent',
-            color: palette.textSecondary,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 0,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#fef2f2'
-            e.currentTarget.style.color = '#dc2626'
-            e.currentTarget.style.borderColor = '#fecaca'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-            e.currentTarget.style.color = palette.textSecondary
-            e.currentTarget.style.borderColor = palette.border
-          }}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="3 6 5 6 21 6" />
-            <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
-            <path d="M10 11v6M14 11v6" />
-            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-          </svg>
-        </button>
+          {onEdit && (
+            <li role="none">
+              <button
+                role="menuitem"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setOpen(false)
+                  onEdit()
+                }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '8px 12px',
+                  textAlign: 'left',
+                  border: 'none',
+                  background: 'transparent',
+                  color: palette.text,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = palette.bgHover
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                ✎ 수정
+              </button>
+            </li>
+          )}
+          {onDelete && (
+            <li role="none">
+              <button
+                role="menuitem"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setOpen(false)
+                  onDelete()
+                }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '8px 12px',
+                  textAlign: 'left',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#dc2626',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#fef2f2'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                🗑 삭제
+              </button>
+            </li>
+          )}
+        </ul>
       )}
     </div>
   )

@@ -31,23 +31,6 @@ export const SidePanel = styled.div`
   flex-direction: column;
 `
 
-export const SidePanelHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px 24px 20px 24px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.secondary};
-`
-
-export const SidePanelTitle = styled.h2`
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.2px;
-`
-
 export const CloseButton = styled.button`
   display: flex;
   align-items: center;
@@ -70,18 +53,6 @@ export const CloseButton = styled.button`
   &:active {
     transform: scale(0.95);
   }
-`
-
-export const SidePanelContent = styled.div`
-  flex: 1;
-  overflow-y: auto;
-  padding: 28px 24px;
-`
-
-export const SidePanelFooter = styled.div`
-  padding: 20px 28px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 // ─── 필수 항목 안내 ────────────────────────────────────────────────────────────
@@ -133,10 +104,6 @@ export const RequiredFieldItem = styled.span<{ $completed?: boolean }>`
   text-decoration: ${({ $completed }) =>
     $completed ? 'line-through' : 'none'};
   opacity: ${({ $completed }) => ($completed ? '0.6' : '1')};
-`
-
-export const RequiredFieldCheckbox = styled.div`
-  display: none;
 `
 
 // ─── 폼 레이아웃 ──────────────────────────────────────────────────────────────
@@ -216,7 +183,7 @@ export const FormLabel = styled.label`
 `
 
 export const RequiredStar = styled.span`
-  color: #ea4335;
+  color: #dc2626;
   font-size: 14px;
   font-weight: 700;
 `
@@ -261,13 +228,22 @@ export const ErrorMessage = styled.span`
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #ea4335;
+  color: #dc2626;
   margin-top: 6px;
   font-weight: 500;
 
   &::before {
-    content: '⚠';
-    font-size: 14px;
+    content: '';
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    background-color: currentColor;
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='8' x2='12' y2='12'/><line x1='12' y1='16' x2='12.01' y2='16'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='8' x2='12' y2='12'/><line x1='12' y1='16' x2='12.01' y2='16'/></svg>");
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
   }
 `
 
@@ -317,13 +293,13 @@ export const SubmitButton = styled.button`
 
 export const Select = styled.select<{ $error?: boolean }>`
   border: 1px solid
-    ${({ $error, theme }) => ($error ? '#ea4335' : theme.colors.border.default)};
+    ${({ $error, theme }) => ($error ? '#dc2626' : theme.colors.border.default)};
   border-radius: 12px;
   padding: 12px 16px;
   background: ${({ $error, theme }) =>
     $error
       ? theme.mode === 'dark'
-        ? 'rgba(234,67,53,0.12)'
+        ? 'rgba(220,38,38,0.12)'
         : '#fef2f2'
       : theme.mode === 'dark'
         ? 'rgba(255,255,255,0.06)'
@@ -339,10 +315,10 @@ export const Select = styled.select<{ $error?: boolean }>`
 
   &:focus {
     outline: none;
-    border-color: ${({ $error }) => ($error ? '#ea4335' : '#6366f1')};
+    border-color: ${({ $error }) => ($error ? '#dc2626' : '#6366f1')};
     box-shadow: ${({ $error }) =>
       $error
-        ? '0 0 0 3px rgba(234, 67, 53, 0.1)'
+        ? '0 0 0 3px rgba(220, 38, 38, 0.12)'
         : '0 0 0 3px rgba(99, 102, 241, 0.15)'};
   }
 `
@@ -357,13 +333,13 @@ export const SelectButton = styled.button<{
   gap: 12px;
   width: 100%;
   border: 1px solid
-    ${({ $error, theme }) => ($error ? '#ea4335' : theme.colors.border.default)};
+    ${({ $error, theme }) => ($error ? '#dc2626' : theme.colors.border.default)};
   border-radius: 12px;
   padding: 12px 16px;
   background: ${({ $error, theme }) =>
     $error
       ? theme.mode === 'dark'
-        ? 'rgba(234,67,53,0.12)'
+        ? 'rgba(220,38,38,0.12)'
         : '#fef2f2'
       : theme.colors.background.primary};
   color: ${({ $hasValue, theme }) =>
@@ -391,7 +367,7 @@ export const SelectButton = styled.button<{
 
   &:hover {
     border-color: ${({ $error, theme }) =>
-      $error ? '#ea4335' : theme.colors.border.medium};
+      $error ? '#dc2626' : theme.colors.border.medium};
     svg {
       opacity: 1;
     }
@@ -399,10 +375,10 @@ export const SelectButton = styled.button<{
 
   &:focus {
     outline: none;
-    border-color: ${({ $error }) => ($error ? '#ea4335' : '#6366f1')};
+    border-color: ${({ $error }) => ($error ? '#dc2626' : '#6366f1')};
     box-shadow: ${({ $error }) =>
       $error
-        ? '0 0 0 3px rgba(234, 67, 53, 0.1)'
+        ? '0 0 0 3px rgba(220, 38, 38, 0.12)'
         : '0 0 0 3px rgba(99, 102, 241, 0.15)'};
   }
 `
@@ -430,17 +406,6 @@ export const ThumbnailImage = styled.img`
   box-shadow: 0 4px 12px ${({ theme }) => theme.colors.shadow.md};
 `
 
-export const FlagImagePreview = styled.div`
-  margin-top: 12px;
-  padding: 12px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`
-
 export const FlagImage = styled.img`
   max-width: 100%;
   max-height: 120px;
@@ -449,47 +414,8 @@ export const FlagImage = styled.img`
   box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
 `
 
-export const FileUploadWrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-export const FileUploadLabel = styled.label`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.activeLight};
-  }
-`
-
 export const FileInput = styled.input`
   display: none;
-`
-
-export const FileUploadIcon = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: ${({ theme }) => theme.colors.activeLight};
-  color: ${({ theme }) => theme.colors.primary};
-`
-
-export const FileUploadText = styled.span`
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 /** 공용 Input — FormInput 컴포넌트 직접 re-export */

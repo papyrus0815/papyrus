@@ -8,8 +8,9 @@
  *
  * 좌표가 있는 division은 선택 시 지도가 그쪽으로 이동.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { toast } from 'react-hot-toast'
 import { useSearchParams } from 'react-router-dom'
 
@@ -57,6 +58,7 @@ interface MapRegionAdministrativeViewProps {
   country: {
     id: string
     name: string
+    flagEmoji?: string | null
     latitude?: number | null
     longitude?: number | null
   }
@@ -178,6 +180,7 @@ export function MapRegionAdministrativeView({
   const [pendingDelete, setPendingDelete] =
     useState<AdministrativeDivision | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   // URL 동기화
   const [searchParams, setSearchParams] = useSearchParams()
@@ -367,6 +370,17 @@ export function MapRegionAdministrativeView({
       setSelectedId(null)
     }
   }, [divisions, selectedId, setSelectedId])
+
+  // 키보드/외부 nav 후 viewport에서 선택 항목 보이게
+  useEffect(() => {
+    if (!selectedId) return
+    const el = document.querySelector(
+      `[data-admin-row="${selectedId}"]`,
+    ) as HTMLElement | null
+    if (el) {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [selectedId])
 
   // ===== 레벨 KPI
   const levelCounts = useMemo(() => {
@@ -585,6 +599,16 @@ export function MapRegionAdministrativeView({
       )
     }
     // drill 모드 — breadcrumb (← 버튼 없이, 클릭으로 점프) + 카운트
+    // 깊이 > 3이면 첫 단계 + ... + 마지막 2단계만 (모바일·좁은 패널에서 wrap 방지)
+    const compactBreadcrumb =
+      breadcrumb.length > 3
+        ? [
+            { node: breadcrumb[0]!, idx: 0 },
+            { node: null, idx: -2 } as const,
+            { node: breadcrumb[breadcrumb.length - 2]!, idx: breadcrumb.length - 2 },
+            { node: breadcrumb[breadcrumb.length - 1]!, idx: breadcrumb.length - 1 },
+          ]
+        : breadcrumb.map((node, idx) => ({ node, idx }))
     return (
       <ContextRow
         palette={palette}
@@ -594,8 +618,11 @@ export function MapRegionAdministrativeView({
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              flexWrap: 'wrap',
+              flexWrap: 'nowrap',
               fontSize: 12,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              minWidth: 0,
             }}
           >
             <BreadcrumbBtn
@@ -603,18 +630,34 @@ export function MapRegionAdministrativeView({
               active={breadcrumb.length === 0}
               onClick={() => handleBreadcrumbClick(-1)}
             >
+              {country.flagEmoji ? `${country.flagEmoji} ` : ''}
               {country.name}
             </BreadcrumbBtn>
-            {breadcrumb.map((node, i) => (
-              <span key={node.id} style={{ display: 'inline-flex', gap: 6 }}>
+            {compactBreadcrumb.map((entry) => (
+              <span
+                key={entry.node ? entry.node.id : 'ellipsis'}
+                style={{ display: 'inline-flex', gap: 6, flexShrink: 0 }}
+              >
                 <span style={{ color: palette.textSecondary }}>›</span>
-                <BreadcrumbBtn
-                  palette={palette}
-                  active={i === breadcrumb.length - 1}
-                  onClick={() => handleBreadcrumbClick(i)}
-                >
-                  {node.name}
-                </BreadcrumbBtn>
+                {entry.node ? (
+                  <BreadcrumbBtn
+                    palette={palette}
+                    active={entry.idx === breadcrumb.length - 1}
+                    onClick={() => handleBreadcrumbClick(entry.idx)}
+                  >
+                    {entry.node.name}
+                  </BreadcrumbBtn>
+                ) : (
+                  <span
+                    style={{ color: palette.textSecondary, padding: '2px 4px' }}
+                    title={breadcrumb
+                      .slice(1, -2)
+                      .map((n) => n.name)
+                      .join(' › ')}
+                  >
+                    …
+                  </span>
+                )}
               </span>
             ))}
           </div>
@@ -671,6 +714,89 @@ export function MapRegionAdministrativeView({
       {contextBar}
     </>
   )
+
+  // 가상화 — 큰 리스트(30+)에서 활성. 빈 상태/로딩은 일반 렌더.
+  const showTypeBadge = mode !== 'drill'
+  const isVirtualized = sortedRows.length > 30
+  const virtualizer = useVirtualizer({
+    count: sortedRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 64,
+    overscan: 10,
+  })
+
+  const renderRow = (row: FlatRow) => {
+    const node = findInTree(divisions, row.id)
+    const subtitleParts: string[] = []
+    if (showTypeBadge && row.divisionLabel)
+      subtitleParts.push(row.divisionLabel)
+    if (row.localName) subtitleParts.push(row.localName)
+    if (row.parentPath.length > 0)
+      subtitleParts.push(row.parentPath.join(' › '))
+    const subtitle = subtitleParts.join(' · ') || undefined
+    return (
+      <div
+        data-admin-row={row.id}
+        style={{
+          position: 'relative',
+          opacity: row.abolished ? 0.5 : 1,
+          textDecoration: row.abolished ? 'line-through' : 'none',
+        }}
+      >
+        <RegionListItem
+          palette={palette}
+          selected={selectedId === row.id}
+          onSelect={() => handleItemClick(row)}
+          title={row.name}
+          subtitle={subtitle}
+          onEdit={node ? () => openEdit(node) : undefined}
+          onDelete={node ? () => setPendingDelete(node) : undefined}
+          typeBadge={
+            showTypeBadge && row.divisionLabel
+              ? {
+                  label: row.divisionLabel,
+                  color: palette.primary,
+                  bg: palette.badgeBg,
+                }
+              : null
+          }
+          trailing={
+            <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+              {row.abolished && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: '#ef4444',
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    padding: '2px 6px',
+                    borderRadius: 5,
+                  }}
+                >
+                  폐지
+                </span>
+              )}
+              {row.childrenCount > 0 && (
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: palette.textSecondary,
+                    background: palette.bgSecondary,
+                    padding: '2px 8px',
+                    borderRadius: 6,
+                    flexShrink: 0,
+                  }}
+                >
+                  {row.childrenCount}개
+                </span>
+              )}
+            </span>
+          }
+        />
+      </div>
+    )
+  }
 
   const listContent = (() => {
     if (mode === 'search' && searchQuery.isLoading) {
@@ -729,85 +855,57 @@ export function MapRegionAdministrativeView({
           : '하위 구역이 없습니다'
       return <ListEmptyState palette={palette} message={message} />
     }
-    // drill 모드에서는 같은 부모 아래 같은 단위라 배지 중복 — 숨김.
-    // search/level 모드는 다양한 단위가 섞이므로 배지 노출.
-    const showTypeBadge = mode !== 'drill'
-    const items = sortedRows.map((row) => {
-      const node = findInTree(divisions, row.id)
-      const subtitleParts: string[] = []
-      if (showTypeBadge && row.divisionLabel)
-        subtitleParts.push(row.divisionLabel)
-      if (row.localName) subtitleParts.push(row.localName)
-      if (row.parentPath.length > 0)
-        subtitleParts.push(row.parentPath.join(' › '))
-      const subtitle = subtitleParts.join(' · ') || undefined
-
+    if (isVirtualized) {
       return (
-        <div
-          key={row.id}
-          style={{
-            position: 'relative',
-            opacity: row.abolished ? 0.55 : 1,
-            textDecoration: row.abolished ? 'line-through' : 'none',
-            ...(row.abolished
-              ? { borderLeft: '3px solid #94a3b8' }
-              : null),
-          }}
-        >
-        <RegionListItem
-          palette={palette}
-          selected={selectedId === row.id}
-          onSelect={() => handleItemClick(row)}
-          title={row.name}
-          subtitle={subtitle}
-          onEdit={node ? () => openEdit(node) : undefined}
-          onDelete={node ? () => setPendingDelete(node) : undefined}
-          typeBadge={
-            showTypeBadge && row.divisionLabel
-              ? {
-                  label: row.divisionLabel,
-                  color: palette.primary,
-                  bg: palette.badgeBg,
-                }
-              : null
-          }
-          trailing={
-            <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-              {row.abolished && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: '#ef4444',
-                    background: 'rgba(239, 68, 68, 0.12)',
-                    padding: '2px 6px',
-                    borderRadius: 5,
-                  }}
-                >
-                  폐지
-                </span>
-              )}
-              {row.childrenCount > 0 && (
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: palette.textSecondary,
-                    background: palette.bgSecondary,
-                    padding: '2px 8px',
-                    borderRadius: 6,
-                    flexShrink: 0,
-                  }}
-                >
-                  {row.childrenCount}개
-                </span>
-              )}
-            </span>
-          }
-        />
-        </div>
+        <>
+          <div
+            style={{
+              height: virtualizer.getTotalSize(),
+              position: 'relative',
+              width: '100%',
+            }}
+          >
+            {virtualizer.getVirtualItems().map((vItem) => (
+              <div
+                key={vItem.key}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  transform: `translateY(${vItem.start}px)`,
+                }}
+              >
+                {renderRow(sortedRows[vItem.index]!)}
+              </div>
+            ))}
+          </div>
+          {hasMoreSearchResults && (
+            <button
+              type="button"
+              onClick={() => setSearchLimit((n) => Math.min(200, n + 50))}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '12px',
+                border: 'none',
+                borderTop: `1px solid ${palette.border}`,
+                background: 'transparent',
+                color: palette.primary,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              더 보기 (현재 {sortedRows.length}건 · 최대 200)
+            </button>
+          )}
+        </>
       )
-    })
+    }
+    const items = sortedRows.map((row) => (
+      <div key={row.id}>{renderRow(row)}</div>
+    ))
     if (hasMoreSearchResults) {
       items.push(
         <button
@@ -873,7 +971,11 @@ export function MapRegionAdministrativeView({
         kpiStrip={kpiStrip}
         maxHeight="calc(100vh - 380px)"
         left={
-          <RegionListPanel palette={palette} toolbar={toolbar}>
+          <RegionListPanel
+            palette={palette}
+            toolbar={toolbar}
+            scrollRef={scrollRef}
+          >
             {listContent}
           </RegionListPanel>
         }

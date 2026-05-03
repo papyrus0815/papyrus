@@ -156,7 +156,7 @@ const SuccessIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: #6366f1;
   color: #fff;
   margin-bottom: 4px;
 `

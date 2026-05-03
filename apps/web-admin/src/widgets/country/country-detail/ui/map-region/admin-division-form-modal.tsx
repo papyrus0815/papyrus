@@ -485,7 +485,7 @@ export function AdminDivisionFormModal({
                 id="ad-local"
                 value={form.localName}
                 onChange={(e) => set('localName', e.target.value)}
-                placeholder="예: Gyeonggi-do"
+                placeholder="예: 京畿道, 東京都, Gyeonggi-do"
               />
             </Field>
             <Field>

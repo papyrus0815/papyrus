@@ -22,6 +22,7 @@ interface MapRegionSectionProps {
     latitude?: number | null
     longitude?: number | null
     name: string
+    flagEmoji?: string | null
   }
   mapLocation?: { latitude: number; longitude: number; name: string } | null
   onCityClick: (city: {

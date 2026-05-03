@@ -28,6 +28,7 @@ import * as S from './country-form.styles'
  * (사이드패널 모드는 사용처가 없어 제거됨)
  */
 const CountryFormLayout = styled.div`
+  padding-bottom: 24px;
   ${S.FormSection} {
     margin-top: 0;
     padding: 0;
@@ -41,6 +42,18 @@ const CountryFormLayout = styled.div`
   }
   ${S.FormSectionHeader} {
     margin-bottom: 16px;
+    position: relative;
+    padding-left: 12px;
+  }
+  ${S.FormSectionHeader}::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 3px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
   }
   ${S.FormSectionIcon} {
     display: none;
@@ -65,7 +78,7 @@ const CountryFormLayout = styled.div`
   }
   ${S.FormField} {
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 240px 1fr;
     gap: 24px;
     align-items: start;
     padding: 18px 0;
@@ -99,8 +112,11 @@ const CountryFormLayout = styled.div`
     grid-column: 2;
     grid-row: 2;
     font-size: 12px;
-    color: #dc2626;
     margin-top: 4px;
+  }
+  ${S.FormField} ${S.FormHelp} {
+    grid-column: 2;
+    grid-row: 3;
   }
   ${S.FormField} > div {
     grid-column: 2;
@@ -166,12 +182,7 @@ const CountryFormLayout = styled.div`
     line-height: 1.4;
   }
   ${S.FormHelp} {
-    grid-column: 2;
-    grid-row: 2;
-    font-size: 12px;
-    color: ${({ theme }) => theme.colors.text.secondary};
     margin-top: 6px;
-    line-height: 1.45;
   }
   /* 입력 필드 폭 */
   ${S.FormField} .input-iso {

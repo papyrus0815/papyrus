@@ -26,7 +26,6 @@ import {
   FiCopy,
   FiGlobe,
   FiInfo,
-  FiPlus,
   FiTrash2,
   FiUsers,
 } from 'react-icons/fi'
@@ -128,9 +127,7 @@ const ThumbnailPreview = styled.label<{ $hasImage?: boolean; $dragOver?: boolean
   cursor: pointer;
   transition:
     border-color 0.2s,
-    background 0.2s,
-    transform 0.15s;
-  transform: ${(p) => (p.$dragOver ? 'scale(1.04)' : 'none')};
+    background 0.2s;
   &:hover {
     border-color: rgba(99, 102, 241, 0.6);
     background: ${(p) =>
@@ -183,14 +180,22 @@ const ThumbnailRemoveBtn = styled.button`
   gap: 6px;
   padding: 6px 10px;
   font-size: 12px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f87171' : '#b91c1c')};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(248,113,113,0.12)' : '#fef2f2'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(248,113,113,0.35)' : '#fecaca'};
-  border-radius: 8px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 10px;
   cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+  &:hover:not(:disabled) {
+    color: #dc2626;
+    border-color: #fecaca;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248,113,113,0.1)' : '#fef2f2'};
+  }
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
@@ -243,52 +248,60 @@ const PlaceAutocompleteWrap = styled.div`
 
 // ─── Styled — Boxed birth/death sections ─────────────────────────────────────
 
-const LifeSectionGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+/* 생몰 영역 — 박스 폐기. 토글 행 → 메인(날짜·향년) 행 → 사망 상세 행 순서. */
+const LifeStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   width: 100%;
   min-width: 0;
-  @media (max-width: 900px) {
+`
+
+const LifeMainRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  align-items: center;
+  @media (max-width: 768px) {
     grid-template-columns: 1fr;
   }
 `
 
-const LifeBox = styled.section<{ $tone?: 'birth' | 'death' }>`
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 14px;
-  padding: 16px 18px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fafbff'};
+const LifeFieldGroup = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
+  min-width: 0;
 `
 
-const LifeBoxTitle = styled.h3`
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.01em;
+const LifeSubLabel = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+`
+
+const LifeDeathDetails = styled.div`
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0 0;
+  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
 `
 
+/** 향년 — 정보 칩(회색 톤). InlineActionBtn(indigo)과 톤 차별화. */
 const LifespanText = styled.span`
-  display: inline-block;
-  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.25)' : '#c7d2fe'};
-  padding: 3px 10px;
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  padding: 4px 10px;
   border-radius: 999px;
+  white-space: nowrap;
 `
 
 // ─── Styled — Segmented control (성별·사망유형) ──────────────────────────────
@@ -299,35 +312,78 @@ const SegmentRow = styled.div`
   gap: 6px;
 `
 
-const SegmentBtn = styled.button<{ $active?: boolean; $error?: boolean }>`
+/**
+ * 칩 컨트롤 — variant로 시각 위계 차별화.
+ * - 'solid' (default): 라디오성 선택 (성별·사망상태·사망유형). 활성 시 indigo solid.
+ * - 'ghost': 보조 토글 (출생일 미상). 활성 시 회색 outline.
+ */
+const SegmentBtn = styled.button<{
+  $active?: boolean
+  $error?: boolean
+  $variant?: 'solid' | 'ghost'
+}>`
   padding: 8px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: ${({ $active, theme }) =>
-    $active ? '#fff' : theme.colors.text.secondary};
-  background: ${({ $active, $error, theme }) => {
-    if ($active) return '#6366f1'
-    if ($error)
-      return theme.mode === 'dark' ? 'rgba(220,38,38,0.12)' : '#fef2f2'
-    return theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'
-  }};
-  border: 1px solid
-    ${({ $active, $error, theme }) => {
-      if ($active) return '#6366f1'
-      if ($error) return '#dc2626'
-      return theme.colors.border.default
-    }};
   border-radius: 999px;
   cursor: pointer;
   transition:
     background 0.15s ease,
     color 0.15s ease,
     border-color 0.15s ease;
-  &:hover:not(:disabled) {
-    border-color: ${({ $active }) => ($active ? '#4f46e5' : '#a5b4fc')};
-    color: ${({ $active, theme }) =>
-      $active ? '#fff' : theme.colors.text.primary};
-  }
+  ${({ $variant = 'solid', $active, $error, theme }) => {
+    if ($variant === 'ghost') {
+      return `
+        color: ${
+          $active
+            ? theme.colors.text.primary
+            : theme.colors.text.tertiary
+        };
+        background: ${
+          $active
+            ? theme.mode === 'dark'
+              ? 'rgba(255,255,255,0.08)'
+              : '#f1f5f9'
+            : 'transparent'
+        };
+        border: 1px solid ${
+          $active
+            ? theme.colors.border.medium
+            : theme.colors.border.default
+        };
+        &:hover:not(:disabled) {
+          color: ${theme.colors.text.primary};
+          border-color: ${theme.colors.border.medium};
+        }
+      `
+    }
+    // solid (default)
+    return `
+      color: ${$active ? '#fff' : theme.colors.text.secondary};
+      background: ${
+        $active
+          ? '#6366f1'
+          : $error
+            ? theme.mode === 'dark'
+              ? 'rgba(220,38,38,0.12)'
+              : '#fef2f2'
+            : theme.mode === 'dark'
+              ? 'rgba(255,255,255,0.05)'
+              : '#fff'
+      };
+      border: 1px solid ${
+        $active
+          ? '#6366f1'
+          : $error
+            ? '#dc2626'
+            : theme.colors.border.default
+      };
+      &:hover:not(:disabled) {
+        border-color: ${$active ? '#4f46e5' : '#a5b4fc'};
+        color: ${$active ? '#fff' : theme.colors.text.primary};
+      }
+    `
+  }}
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -339,13 +395,13 @@ const SegmentBtn = styled.button<{ $active?: boolean; $error?: boolean }>`
 const NativeSelect = styled.select`
   width: 100%;
   max-width: 380px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   font-size: 14px;
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 12px;
+  border-radius: 10px;
   outline: none;
   cursor: pointer;
   transition:
@@ -384,7 +440,7 @@ const SelectBtn = styled.button<{ $hasValue?: boolean; $error?: boolean }>`
   border: 1px solid
     ${({ $error, theme }) =>
       $error ? '#ea4335' : theme.colors.border.default};
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
   text-align: left;
   outline: none;
@@ -470,15 +526,18 @@ const TabBadge = styled.span<{ $tone: 'required' | 'filled' }>`
   font-size: 11px;
   font-weight: 700;
   border-radius: 999px;
-  ${({ $tone }) =>
+  ${({ $tone, theme }) =>
     $tone === 'required'
       ? css`
           color: #fff;
           background: #dc2626;
         `
       : css`
-          color: #16a34a;
-          background: rgba(22, 163, 74, 0.15);
+          /* ✓는 보조 인디케이터 — 미입력 빨간 배지가 우선이므로 약하게 */
+          color: ${theme.colors.text.tertiary};
+          background: ${theme.mode === 'dark'
+            ? 'rgba(255,255,255,0.08)'
+            : '#f1f5f9'};
           padding: 0;
           width: 16px;
         `}
@@ -491,33 +550,40 @@ const AdvancedSection = styled.section`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
+/* 박스 테두리 제거 — disclosure 스타일 텍스트 토글로 단순화. */
 const AdvancedToggle = styled.button<{ $open: boolean }>`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 6px;
+  padding: 4px 0;
   margin-bottom: ${({ $open }) => ($open ? '12px' : '0')};
   font-size: 13px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: #4f46e5;
   background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 8px;
+  border: none;
   cursor: pointer;
-  transition:
-    color 0.15s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
+  transition: color 0.15s ease;
   &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.border.medium};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+    color: #4338ca;
+  }
+  &:focus-visible {
+    outline: 2px solid rgba(79, 70, 229, 0.35);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
   svg {
     transition: transform 0.2s ease;
     transform: rotate(${({ $open }) => ($open ? '90deg' : '0deg')});
   }
+`
+
+/* 펼친 본문에 좌측 indigo accent로 시각 그룹화 */
+const AdvancedBody = styled.div`
+  padding-left: 12px;
+  border-left: 2px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.4)' : '#c7d2fe'};
 `
 
 
@@ -567,16 +633,22 @@ const DraftBanner = styled.div`
   justify-content: space-between;
   gap: 12px;
   padding: 10px 14px;
-  margin: 0 0 16px;
+  margin: 0 0 8px;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#eef2ff'};
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.3)' : '#c7d2fe'};
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.25)' : '#c7d2fe'};
   border-radius: 12px;
   font-size: 13px;
+  line-height: 1.45;
   color: ${({ theme }) => theme.colors.text.primary};
   flex-wrap: wrap;
+
+  /* TopAlert와 인접 시 시각 일관성 */
+  & + div[role='alert'] {
+    margin-top: 0;
+  }
 `
 
 const DraftBannerActions = styled.div`
@@ -615,8 +687,8 @@ const DraftBtn = styled.button<{ $primary?: boolean }>`
         `}
 `
 
-// ─── Styled — Name preview chip & lifespan ───────────────────────────────────
-
+// ─── Styled — Name preview chip ──────────────────────────────────────────────
+// 정보 칩(회색 톤). InlineActionBtn(indigo)과 시각 위계 차별화.
 const NamePreview = styled.div`
   display: inline-flex;
   align-items: center;
@@ -624,15 +696,19 @@ const NamePreview = styled.div`
   margin-top: 8px;
   padding: 4px 10px;
   font-size: 12px;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#eef2ff'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
   border-radius: 999px;
 `
 
 const NamePreviewLabel = styled.span`
   font-weight: 700;
-  color: #4f46e5;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 `
 
 // ─── Styled — Field error ────────────────────────────────────────────────────
@@ -646,19 +722,6 @@ const FieldError = styled.span`
   color: #dc2626;
   margin-top: 6px;
   line-height: 1.4;
-  svg {
-    flex-shrink: 0;
-  }
-`
-
-const ErrorText = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #dc2626;
-  margin-top: 12px;
   svg {
     flex-shrink: 0;
   }
@@ -703,28 +766,31 @@ const HeaderSecondarySubmit = styled(SubmitButton)`
 `
 
 // ─── Styled — Inline action button (사망지=출생지 복사 등) ────────────────────
+// 액션이라 indigo outline. 정보 칩(NamePreview·LifespanText)은 회색.
 const InlineActionBtn = styled.button`
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 6px;
+  margin-bottom: 8px;
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: #4f46e5;
   background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.4)' : '#c7d2fe'};
+  border-radius: 999px;
   cursor: pointer;
   transition:
     color 0.15s,
     background 0.15s,
     border-color 0.15s;
   &:hover:not(:disabled) {
-    color: #4f46e5;
-    border-color: #c7d2fe;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#eef2ff'};
+    color: #fff;
+    background: #6366f1;
+    border-color: #6366f1;
   }
   &:disabled {
     opacity: 0.4;
@@ -732,19 +798,22 @@ const InlineActionBtn = styled.button`
   }
 `
 
-// ─── Styled — "더보기" toggle for chip overflow ───────────────────────────────
+// ─── Styled — "더보기" toggle (ghost 텍스트) ─────────────────────────────────
 const ChipMoreBtn = styled.button`
-  padding: 8px 12px;
+  padding: 8px 6px;
   font-size: 12px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
   background: transparent;
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
-  border-radius: 999px;
+  border: none;
   cursor: pointer;
+  transition: color 0.15s ease;
   &:hover {
     color: #4f46e5;
-    border-color: #c7d2fe;
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 `
 
@@ -797,6 +866,9 @@ const RegisterAnotherLabel = styled.label`
     accent-color: #6366f1;
     cursor: pointer;
   }
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 // ─── Styled — Person-not-found panel ─────────────────────────────────────────
@@ -817,8 +889,8 @@ const NotFoundIcon = styled.div`
   align-items: center;
   justify-content: center;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(248,113,113,0.18)' : '#fef2f2'};
-  color: #dc2626;
+    theme.mode === 'dark' ? 'rgba(234,179,8,0.18)' : '#fffbeb'};
+  color: #ca8a04;
 `
 
 const NotFoundTitle = styled.h3`
@@ -2459,15 +2531,15 @@ export function PersonRegisterView({
                   </FieldControl>
                 </FieldRow>
 
-                {/* 출생/사망 영역 박스 — FieldRow로 감싸 좌측 라벨 정렬 통일 */}
+                {/* 생몰 — 박스 폐기. 토글 행 → 메인 행 → 사망 상세 행 순서. */}
                 <FieldRow>
                   <FieldLabel>생몰</FieldLabel>
-                  <LifeSectionGrid>
-                    <LifeBox $tone="birth">
-                    <LifeBoxTitle>출생</LifeBoxTitle>
-                    <SegmentRow>
+                  <LifeStack>
+                    {/* 보조 토글 (ghost) — 미상·생존중. 메인 라디오와 시각 차별화. */}
+                    <SegmentRow role="group" aria-label="생몰 상태">
                       <SegmentBtn
                         type="button"
+                        $variant="ghost"
                         $active={isBirthDateUnknown}
                         onClick={() => {
                           setIsBirthDateUnknown((v) => !v)
@@ -2476,64 +2548,21 @@ export function PersonRegisterView({
                       >
                         출생일 미상
                       </SegmentBtn>
-                    </SegmentRow>
-                    <DateFieldBtn
-                      type="button"
-                      $hasValue={!!birthYear.trim() && !isBirthDateUnknown}
-                      onClick={() => setShowBirthDateModal(true)}
-                      aria-invalid={!!errors.birth}
-                      disabled={isBirthDateUnknown}
-                      style={
-                        isBirthDateUnknown
-                          ? { opacity: 0.5, cursor: 'not-allowed' }
-                          : undefined
-                      }
-                    >
-                      <FiCalendar size={18} />
-                      <span>
-                        {isBirthDateUnknown
-                          ? '미상'
-                          : formatDateDisplay(
-                              birthEra,
-                              birthYear,
-                              birthMonth,
-                              birthDay,
-                            )}
-                      </span>
-                      <FiChevronDown size={16} />
-                    </DateFieldBtn>
-                    {errors.birth && (
-                      <FieldError role="alert">
-                        <FiAlertCircle size={13} />
-                        {errors.birth}
-                      </FieldError>
-                    )}
-                  </LifeBox>
-
-                  <LifeBox $tone="death">
-                    <LifeBoxTitle>사망</LifeBoxTitle>
-                    <SegmentRow role="radiogroup" aria-label="사망 상태">
                       <SegmentBtn
                         type="button"
-                        role="radio"
-                        aria-checked={!isAlive && !isDeathDateUnknown}
-                        $active={!isAlive && !isDeathDateUnknown}
-                        onClick={handleDeathStatusToDeceased}
-                      >
-                        사망함
-                      </SegmentBtn>
-                      <SegmentBtn
-                        type="button"
-                        role="radio"
-                        aria-checked={isAlive}
+                        $variant="ghost"
                         $active={isAlive}
                         onClick={() => {
-                          setIsAlive(true)
-                          setIsDeathDateUnknown(false)
-                          setDeathYear('')
-                          setDeathMonth('')
-                          setDeathDay('')
-                          clearFieldError('death')
+                          if (isAlive) {
+                            setIsAlive(false)
+                          } else {
+                            setIsAlive(true)
+                            setIsDeathDateUnknown(false)
+                            setDeathYear('')
+                            setDeathMonth('')
+                            setDeathDay('')
+                            clearFieldError('death')
+                          }
                           markDirty()
                         }}
                       >
@@ -2541,124 +2570,165 @@ export function PersonRegisterView({
                       </SegmentBtn>
                       <SegmentBtn
                         type="button"
-                        role="radio"
-                        aria-checked={!isAlive && isDeathDateUnknown}
+                        $variant="ghost"
                         $active={!isAlive && isDeathDateUnknown}
+                        disabled={isAlive}
                         onClick={() => {
-                          setIsAlive(false)
-                          setIsDeathDateUnknown(true)
+                          setIsDeathDateUnknown((v) => !v)
                           markDirty()
                         }}
                       >
                         사망일 미상
                       </SegmentBtn>
                     </SegmentRow>
-                    <DateFieldBtn
-                      type="button"
-                      $hasValue={
-                        !!deathYear.trim() && !isAlive && !isDeathDateUnknown
-                      }
-                      onClick={() =>
-                        !isAlive &&
-                        !isDeathDateUnknown &&
-                        setShowDeathDateModal(true)
-                      }
-                      disabled={isAlive || isDeathDateUnknown}
-                      aria-invalid={!!errors.death}
-                      style={
-                        isAlive || isDeathDateUnknown
-                          ? { opacity: 0.5, cursor: 'not-allowed' }
-                          : undefined
-                      }
-                    >
-                      <FiCalendar size={18} />
-                      <span>
-                        {isAlive
-                          ? '생존 중'
-                          : isDeathDateUnknown
-                            ? '미상'
-                            : formatDateDisplay(
-                                deathEra,
-                                deathYear,
-                                deathMonth,
-                                deathDay,
-                              )}
-                      </span>
-                      <FiChevronDown size={16} />
-                    </DateFieldBtn>
-                    {lifespanText && (
-                      <LifespanText aria-live="polite">{lifespanText}</LifespanText>
-                    )}
-                    {errors.death && (
+
+                    {/* 메인 행 — 출생일 / 사망일 / 향년 */}
+                    <LifeMainRow>
+                      <LifeFieldGroup>
+                        <LifeSubLabel>출생</LifeSubLabel>
+                        <DateFieldBtn
+                          type="button"
+                          $hasValue={!!birthYear.trim() && !isBirthDateUnknown}
+                          onClick={() => setShowBirthDateModal(true)}
+                          aria-invalid={!!errors.birth}
+                          disabled={isBirthDateUnknown}
+                          style={
+                            isBirthDateUnknown
+                              ? { opacity: 0.5, cursor: 'not-allowed' }
+                              : undefined
+                          }
+                        >
+                          <FiCalendar size={16} />
+                          <span>
+                            {isBirthDateUnknown
+                              ? '미상'
+                              : formatDateDisplay(
+                                  birthEra,
+                                  birthYear,
+                                  birthMonth,
+                                  birthDay,
+                                )}
+                          </span>
+                          <FiChevronDown size={14} />
+                        </DateFieldBtn>
+                      </LifeFieldGroup>
+                      <LifeFieldGroup>
+                        <LifeSubLabel>사망</LifeSubLabel>
+                        <DateFieldBtn
+                          type="button"
+                          $hasValue={
+                            !!deathYear.trim() &&
+                            !isAlive &&
+                            !isDeathDateUnknown
+                          }
+                          onClick={() =>
+                            !isAlive &&
+                            !isDeathDateUnknown &&
+                            setShowDeathDateModal(true)
+                          }
+                          disabled={isAlive || isDeathDateUnknown}
+                          aria-invalid={!!errors.death}
+                          style={
+                            isAlive || isDeathDateUnknown
+                              ? { opacity: 0.5, cursor: 'not-allowed' }
+                              : undefined
+                          }
+                        >
+                          <FiCalendar size={16} />
+                          <span>
+                            {isAlive
+                              ? '생존 중'
+                              : isDeathDateUnknown
+                                ? '미상'
+                                : formatDateDisplay(
+                                    deathEra,
+                                    deathYear,
+                                    deathMonth,
+                                    deathDay,
+                                  )}
+                          </span>
+                          <FiChevronDown size={14} />
+                        </DateFieldBtn>
+                      </LifeFieldGroup>
+                      {lifespanText && (
+                        <LifeFieldGroup>
+                          <LifeSubLabel>향년</LifeSubLabel>
+                          <LifespanText aria-live="polite">
+                            {lifespanText.replace('향년 ', '')}
+                          </LifespanText>
+                        </LifeFieldGroup>
+                      )}
+                    </LifeMainRow>
+
+                    {(errors.birth || errors.death) && (
                       <FieldError role="alert">
                         <FiAlertCircle size={13} />
-                        {errors.death}
+                        {errors.birth || errors.death}
                       </FieldError>
                     )}
-                    {/* 사망 유형 — 자주 쓰는 5개 노출, 나머지는 더보기로 접음 */}
-                    <SegmentRow role="radiogroup" aria-label="사망 유형">
-                      {PRIMARY_DEATH_TYPES.map((opt) => (
-                        <SegmentBtn
-                          key={opt.value}
-                          type="button"
-                          role="radio"
-                          aria-checked={deathType === opt.value}
-                          $active={deathType === opt.value}
-                          disabled={isAlive}
-                          onClick={() => {
-                            setDeathType(
-                              deathType === opt.value ? '' : opt.value,
-                            )
-                            markDirty()
-                          }}
-                        >
-                          {opt.label}
-                        </SegmentBtn>
-                      ))}
-                      {deathTypeShowMore &&
-                        EXTRA_DEATH_TYPES.map((opt) => (
-                          <SegmentBtn
-                            key={opt.value}
-                            type="button"
-                            role="radio"
-                            aria-checked={deathType === opt.value}
-                            $active={deathType === opt.value}
-                            disabled={isAlive}
-                            onClick={() => {
-                              setDeathType(
-                                deathType === opt.value ? '' : opt.value,
-                              )
-                              markDirty()
-                            }}
-                          >
-                            {opt.label}
-                          </SegmentBtn>
-                        ))}
-                      {!deathTypeShowMore && (
-                        <ChipMoreBtn
-                          type="button"
-                          onClick={() => setDeathTypeShowMore(true)}
-                          disabled={isAlive}
-                        >
-                          더보기 +{EXTRA_DEATH_TYPES.length}
-                        </ChipMoreBtn>
-                      )}
-                    </SegmentRow>
-                    <FormInput
-                      value={deathCause}
-                      onChange={(e) => setDeathCause(e.target.value)}
-                      placeholder="사망 원인 상세 (예: 폐렴 합병증)"
-                      disabled={isAlive}
-                    />
-                    <Textarea
-                      value={deathNote}
-                      onChange={(e) => setDeathNote(e.target.value)}
-                      placeholder="사망 메모 (논란·맥락·비고)"
-                      rows={2}
-                      disabled={isAlive}
-                    />
-                  </LifeBox>
-                  </LifeSectionGrid>
+
+                    {/* 사망 상세 — 사망함 상태(생존중 아님)에서만 노출 */}
+                    {!isAlive && (
+                      <LifeDeathDetails>
+                        <SegmentRow role="radiogroup" aria-label="사망 유형">
+                          {PRIMARY_DEATH_TYPES.map((opt) => (
+                            <SegmentBtn
+                              key={opt.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={deathType === opt.value}
+                              $active={deathType === opt.value}
+                              onClick={() => {
+                                setDeathType(
+                                  deathType === opt.value ? '' : opt.value,
+                                )
+                                markDirty()
+                              }}
+                            >
+                              {opt.label}
+                            </SegmentBtn>
+                          ))}
+                          {deathTypeShowMore &&
+                            EXTRA_DEATH_TYPES.map((opt) => (
+                              <SegmentBtn
+                                key={opt.value}
+                                type="button"
+                                role="radio"
+                                aria-checked={deathType === opt.value}
+                                $active={deathType === opt.value}
+                                onClick={() => {
+                                  setDeathType(
+                                    deathType === opt.value ? '' : opt.value,
+                                  )
+                                  markDirty()
+                                }}
+                              >
+                                {opt.label}
+                              </SegmentBtn>
+                            ))}
+                          {!deathTypeShowMore && (
+                            <ChipMoreBtn
+                              type="button"
+                              onClick={() => setDeathTypeShowMore(true)}
+                            >
+                              더보기 +{EXTRA_DEATH_TYPES.length}
+                            </ChipMoreBtn>
+                          )}
+                        </SegmentRow>
+                        <FormInput
+                          value={deathCause}
+                          onChange={(e) => setDeathCause(e.target.value)}
+                          placeholder="사망 원인 상세 (예: 폐렴 합병증)"
+                        />
+                        <Textarea
+                          value={deathNote}
+                          onChange={(e) => setDeathNote(e.target.value)}
+                          placeholder="사망 메모 (논란·맥락·비고)"
+                          rows={2}
+                        />
+                      </LifeDeathDetails>
+                    )}
+                  </LifeStack>
                 </FieldRow>
 
                 {/* 고급 정보 — 군주 필드 + 이름의 뜻 */}
@@ -2673,7 +2743,8 @@ export function PersonRegisterView({
                     고급 정보 — 군주명·시호·이름의 뜻
                   </AdvancedToggle>
                   {advancedOpen && (
-                    <FormRows>
+                    <AdvancedBody>
+                      <FormRows>
                       <FieldRowMulti>
                         <FieldLabel htmlFor={fid('regnalName')}>
                           군주명 · 묘호 · 시호
@@ -2734,7 +2805,8 @@ export function PersonRegisterView({
                           </InlineFields>
                         </FieldControl>
                       </FieldRowMulti>
-                    </FormRows>
+                      </FormRows>
+                    </AdvancedBody>
                   )}
                 </AdvancedSection>
               </FormRows>
@@ -2788,6 +2860,16 @@ export function PersonRegisterView({
                 <FieldRow>
                   <FieldLabel>사망지</FieldLabel>
                   <FieldControl>
+                    {birthPlace && (
+                      <InlineActionBtn
+                        type="button"
+                        onClick={handleCopyBirthToDeathPlace}
+                        title="출생지를 사망지로 복사"
+                      >
+                        <FiCopy size={12} />
+                        출생지와 동일
+                      </InlineActionBtn>
+                    )}
                     <PlaceAutocompleteWrap>
                       <PlaceAutocomplete
                         value={deathPlace}
@@ -2799,16 +2881,6 @@ export function PersonRegisterView({
                         countryId={countryId || undefined}
                       />
                     </PlaceAutocompleteWrap>
-                    {birthPlace && (
-                      <InlineActionBtn
-                        type="button"
-                        onClick={handleCopyBirthToDeathPlace}
-                        title="출생지를 사망지로 복사"
-                      >
-                        <FiCopy size={12} />
-                        출생지와 동일
-                      </InlineActionBtn>
-                    )}
                   </FieldControl>
                 </FieldRow>
                 <FieldRowMulti>
@@ -2989,12 +3061,6 @@ export function PersonRegisterView({
               </FormRows>
             )}
 
-            {errors._form && (
-              <ErrorText role="alert">
-                <FiAlertCircle size={14} />
-                {errors._form}
-              </ErrorText>
-            )}
           </FormSectionInner>
         </LoadingHost>
       </form>
@@ -3002,13 +3068,17 @@ export function PersonRegisterView({
       {/* sticky footer — 긴 폼 끝에서도 저장 가능 */}
       {!loadFailed && (
       <StickyFooter>
-        <FooterStatus $tone={isDirty ? 'warn' : 'info'}>
-          {`필수 ${requiredProgress.filled}/${requiredProgress.total} 입력`}
-          {draft.savedAt
-            ? ` · 임시 저장됨 ${formatRelativeTime(draft.savedAt)}`
-            : isDirty
-              ? ' · 저장되지 않은 변경'
-              : ''}
+        <FooterStatus
+          $tone={isDirty ? 'warn' : 'info'}
+          title={
+            draft.savedAt
+              ? `임시 저장됨 ${formatRelativeTime(draft.savedAt)}`
+              : isDirty
+                ? '저장되지 않은 변경 사항이 있습니다.'
+                : '모든 변경 사항이 저장되었습니다.'
+          }
+        >
+          필수 {requiredProgress.filled}/{requiredProgress.total} 입력
         </FooterStatus>
         <FooterActions>
           {!isEditMode && (
@@ -3019,7 +3089,6 @@ export function PersonRegisterView({
                 onChange={(e) => setRegisterAnother(e.target.checked)}
                 disabled={isSubmitting}
               />
-              <FiPlus size={12} />
               등록 후 폼 유지
             </RegisterAnotherLabel>
           )}

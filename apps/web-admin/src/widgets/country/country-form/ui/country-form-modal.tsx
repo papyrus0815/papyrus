@@ -33,7 +33,9 @@ const ModalBox = styled(motion.div)`
   height: 90vh;
   max-height: 1200px;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(20,20,20,0.92)' : '#fff'};
+    theme.mode === 'dark'
+      ? 'rgba(20,20,20,0.92)'
+      : 'linear-gradient(180deg, #ffffff 0%, #fafbfc 100%)'};
   backdrop-filter: ${({ theme }) =>
     theme.mode === 'dark' ? 'blur(24px)' : 'none'};
   -webkit-backdrop-filter: ${({ theme }) =>
@@ -41,11 +43,11 @@ const ModalBox = styled(motion.div)`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
-  border-radius: 22px;
+  border-radius: 20px;
   box-shadow: ${({ theme }) =>
     theme.mode === 'dark'
       ? '0 10px 40px rgba(0,0,0,0.5)'
-      : '0 32px 64px -16px rgba(0,0,0,0.2)'};
+      : '0 24px 56px -8px rgba(15, 23, 42, 0.18), 0 4px 12px -4px rgba(15, 23, 42, 0.08)'};
   z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;
   flex-direction: column;
@@ -68,21 +70,25 @@ const ModalHeader = styled.div`
   padding: 18px 24px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    padding: 14px 16px;
+  }
 `
 
 const HeaderLeft = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   min-width: 0;
 `
 
 const ModalTitle = styled.h2`
   margin: 0;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.025em;
+  letter-spacing: -0.01em;
 `
 
 const RequiredChips = styled.div`
@@ -92,25 +98,29 @@ const RequiredChips = styled.div`
   flex-wrap: wrap;
 `
 
+/**
+ * 필수 항목 인디케이터 — 미완료는 회색(중립), 완료는 초록.
+ * 빨강은 위반/실패에만 사용 (검증 에러 등).
+ */
 const RequiredChip = styled.span<{ $done: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
-  padding: 3px 8px;
+  padding: 3px 9px;
   border-radius: 999px;
   background: ${({ $done, theme }) =>
     $done
       ? theme.mode === 'dark'
         ? 'rgba(34, 197, 94, 0.15)'
         : '#ecfdf5'
-      : theme.mode === 'dark'
-        ? 'rgba(239, 68, 68, 0.12)'
-        : '#fef2f2'};
-  color: ${({ $done }) => ($done ? '#16a34a' : '#dc2626')};
+      : 'transparent'};
+  color: ${({ $done, theme }) =>
+    $done ? '#16a34a' : theme.colors.text.secondary};
   border: 1px solid
-    ${({ $done }) => ($done ? 'rgba(22,163,74,0.25)' : 'rgba(220,38,38,0.2)')};
+    ${({ $done, theme }) =>
+      $done ? 'rgba(22,163,74,0.25)' : theme.colors.border.default};
 
   svg {
     flex-shrink: 0;
@@ -165,8 +175,8 @@ const FormScroll = styled.div`
 const ModalFooter = styled.div`
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   padding: 16px 24px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-shrink: 0;
@@ -176,8 +186,41 @@ const ModalFooter = styled.div`
   }
 `
 
+const SubmitBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px -2px rgba(99, 102, 241, 0.35);
+  transition:
+    opacity 0.15s,
+    transform 0.05s,
+    box-shadow 0.15s;
+
+  &:hover:not(:disabled) {
+    opacity: 0.95;
+    box-shadow: 0 6px 18px -2px rgba(99, 102, 241, 0.45);
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: 0 2px 8px -2px rgba(99, 102, 241, 0.35);
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+`
+
 const CancelBtn = styled.button`
-  padding: 9px 18px;
+  padding: 10px 20px;
   font-size: 14px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -195,34 +238,6 @@ const CancelBtn = styled.button`
   }
   &:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
-const SubmitBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 18px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition:
-    opacity 0.15s,
-    transform 0.05s;
-
-  &:hover:not(:disabled) {
-    opacity: 0.92;
-  }
-  &:active:not(:disabled) {
-    transform: translateY(1px);
-  }
-  &:disabled {
-    opacity: 0.55;
     cursor: not-allowed;
   }
 `

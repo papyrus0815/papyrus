@@ -136,6 +136,15 @@ const appRouterConfig = [
         // 메인 레이아웃을 공유하는 라우트 그룹 (정적 임포트로 전환)
         element: <Layout />,
         loader: layoutLoader,
+        /**
+         * layoutLoader는 sessionApi.refresh()를 호출해 매 navigation마다 ms~수백ms
+         * 지연을 만든다. React Router v6/v7은 기본적으로 모든 URL 변경 시 loader를
+         * 재실행하므로, /events → /persons 같은 *layout 내부 이동*에서도 매번
+         * 재실행되어 "URL은 바뀌는데 화면이 안 바뀐다"는 체감 끊김을 만들었다.
+         * Layout group 내부 이동에서는 재검증 생략 → 첫 마운트 시만 인증 확인.
+         * (만료된 세션은 다음 API 호출에서 401로 잡혀 자체 처리.)
+         */
+        shouldRevalidate: () => false,
         children: [
           // 루트: 홈 (Dashboard)
           dashboardRoute,

@@ -92,7 +92,11 @@ const MIN_BAR_WIDTH = 6
 const TIMELINE_BOTTOM_PAD = 20
 
 const ZOOM_MIN = 0.5
-const ZOOM_MAX = 4
+/**
+ * 최대 줌 — 짧은 사건(예: 1~2개월짜리)도 본문 라벨이 잘리지 않고 들어갈 만큼
+ * 충분한 폭이 필요. 400%로는 부족했음.
+ */
+const ZOOM_MAX = 16
 const ZOOM_STEP = 1.4
 
 /**
@@ -105,7 +109,13 @@ const SHORT_BAR_PX = 8
 const CLUSTER_GAP_PX = 5
 const CLUSTER_MIN_COUNT = 5
 const EXT_LABEL_MIN_GAP = 60
-const EXT_LABEL_MAX_WIDTH = 140
+/**
+ * 외부 라벨 최대 폭 — 이전 140은 한국어 12자 안팎까지밖에 못 담아 긴 타이틀
+ * (예: "1872년 긴자 대화재 (메이지 대화재)") 다수가 잘렸다. 220으로 상향 →
+ * 약 18~20자(CJK)까지 노출. fit-to-width 계산도 이 값에 맞춰 우측 padding
+ * 자동 보정.
+ */
+const EXT_LABEL_MAX_WIDTH = 220
 
 const IMPORTANCE_BAR_HEIGHT: Record<BarData['importance'], number> = {
   critical: 44,
@@ -214,9 +224,13 @@ const KNOWN_CATEGORIES = Object.keys(LEDGER_CATEGORY) as Array<
 /** 한글 카테고리 이름 → 색상(배지·바·milestone 공통). */
 const categoryColor = (name: string): string => resolveCategory(name).color
 
-/** CJK 한 글자 ≈ 12px, ASCII ≈ 6.5px. truncation 시 가중치 측정으로 정확도 ↑ */
-const CJK_CHAR_PX = 12
-const ASCII_CHAR_PX = 6.5
+/**
+ * 글자 폭 가중치 — 라벨 font-size 10.5px·weight 600 기준 측정.
+ * 이전엔 CJK 12px로 *과대* 잡아 truncation이 실제보다 1~2자 더 잘랐다.
+ * 10.5로 낮춰 같은 막대 폭에 평균 1자 더 표시 → 의미 있는 글자 수 확보.
+ */
+const CJK_CHAR_PX = 10.5
+const ASCII_CHAR_PX = 6
 const CJK_RE = /[ㄱ-힣一-鿿]/
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1893,8 +1907,11 @@ function truncateLabel(label: string, maxChars: number): string {
 
 /**
  * 막대 안 텍스트 — CJK/ASCII 가중치로 truncation 정확도 ↑.
- * 한국어/한자는 약 12px, 영문은 약 6.5px. 글자 종류 비율로 누적 폭 계산.
+ * 끝에 ellipsis(약 7px) 자리가 남으면 마지막 글자까지 살리고 "…" 추가;
+ * 자리 없으면 한 글자 제거해 "…"가 들어가게. 이전엔 무조건 한 글자 빼서
+ * 평균 1자 더 잘려 보였다.
  */
+const ELLIPSIS_PX = 7
 function truncateBarText(title: string, widthPx: number): string {
   let acc = 0
   let cut = title.length
@@ -1907,7 +1924,13 @@ function truncateBarText(title: string, widthPx: number): string {
     acc += w
   }
   if (cut >= title.length) return title
-  return cut <= 1 ? title.slice(0, 1) : `${title.slice(0, cut - 1)}…`
+  if (cut <= 0) return ''
+  // 마지막 글자(cut-1)까지 표시한 acc로 ellipsis가 들어갈 자리 있는지 확인
+  if (acc + ELLIPSIS_PX <= widthPx) {
+    return `${title.slice(0, cut)}…`
+  }
+  // 자리 없으면 마지막 글자 제거 후 ellipsis
+  return cut === 1 ? title.slice(0, 1) : `${title.slice(0, cut - 1)}…`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
