@@ -34,15 +34,30 @@ export default function RootLayout() {
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen
               name="event/[id]"
-              options={{ title: '사건', headerLargeTitle: false }}
+              options={{
+                title: '사건',
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+                gestureEnabled: true,
+              }}
             />
             <Stack.Screen
               name="person/[id]"
-              options={{ title: '인물', headerLargeTitle: false }}
+              options={{
+                title: '인물',
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+                gestureEnabled: true,
+              }}
             />
             <Stack.Screen
               name="country/[id]"
-              options={{ title: '국가', headerLargeTitle: false }}
+              options={{
+                title: '국가',
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+                gestureEnabled: true,
+              }}
             />
           </Stack>
         </AuthGate>

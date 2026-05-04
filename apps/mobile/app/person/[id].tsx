@@ -33,6 +33,7 @@ import {
   kindToGroup,
   type TimelineGroup,
 } from '@/components/timeline-filter'
+import { TimelineList } from '@/components/timeline-list'
 import { displayName, formatDateString, formatYMD, lifespan, placeText } from '@/lib/format'
 import { lifespanYears, totalReignAndTenureYears } from '@/lib/age-utils'
 import { imageUrl } from '@/lib/image-url'
@@ -48,15 +49,31 @@ type TabKey = 'overview' | 'family' | 'politics' | 'timeline' | 'relations'
 type HumanRelationship = {
   id: string
   relationshipType: string
-  counterpartPerson?: { id: string; name: string; surname?: string | null } | null
-  counterpartPersonId?: string | null
-  description?: string | null
+  fromPersonId: string
+  toPersonId: string
+  otherPerson?: {
+    id: string
+    name: string
+    surname?: string | null
+    nameDisplayOrder?: string | null
+  } | null
+  mentorPerspective?: 'MENTOR' | 'STUDENT' | null
+  subjectivePerspective?: 'MUTUAL' | 'SUBJECT' | 'OTHER'
+  isMutual?: boolean
+  startDate?: string | null
+  endDate?: string | null
+  note?: string | null
+  tags?: string[]
   phases?: Array<{
     id: string
-    status?: string | null
+    label?: string | null
     startDate?: string | null
     endDate?: string | null
     note?: string | null
+    affinityLevel?: number | null
+    trustLevel?: number | null
+    powerDynamic?: number | null
+    formality?: number | null
   }>
 }
 
@@ -320,7 +337,11 @@ export default function PersonDetailScreen() {
 
           <PaneVisible visible={activeTab === 'relations'}>
             {visited.has('relations') && (
-              <RelationsTabPane resource={relations} onRetry={loadRelations} />
+              <RelationsTabPane
+                resource={relations}
+                onRetry={loadRelations}
+                subjectId={id ?? ''}
+              />
             )}
           </PaneVisible>
         </View>
@@ -622,36 +643,7 @@ function TimelineTabPane({
       {filtered.length === 0 ? (
         <EmptyState text="필터 조건에 맞는 항목이 없습니다" />
       ) : (
-        filtered.map((it) => {
-          const dateText =
-            it.endLabel && it.endLabel !== it.dateLabel ? `${it.dateLabel} ~ ${it.endLabel}` : it.dateLabel
-          const Wrapper: any = it.link ? Pressable : View
-          return (
-            <Wrapper
-              key={it.key}
-              style={({ pressed }: { pressed?: boolean }) => [
-                styles.timelineItem,
-                pressed && styles.timelinePressed,
-              ]}
-              onPress={it.link ? () => onPress(it) : undefined}
-            >
-              <View style={styles.timelineDotCol}>
-                <View style={[styles.timelineDot, { backgroundColor: it.color }]} />
-                <View style={styles.timelineLine} />
-              </View>
-              <View style={{ flex: 1, paddingBottom: 12 }}>
-                <Text style={[styles.timelineDate, { color: it.color }]}>{dateText}</Text>
-                <Text style={styles.timelineTitle}>{it.title}</Text>
-                {it.subtitle && <Text style={styles.timelineMeta}>{it.subtitle}</Text>}
-                {it.body && (
-                  <View style={{ marginTop: 4 }}>
-                    <RichText html={it.body} />
-                  </View>
-                )}
-              </View>
-            </Wrapper>
-          )
-        })
+        <TimelineList entries={filtered} onPress={onPress} />
       )}
     </View>
   )
@@ -660,9 +652,11 @@ function TimelineTabPane({
 function RelationsTabPane({
   resource,
   onRetry,
+  subjectId,
 }: {
   resource: Resource<HumanRelationship[]>
   onRetry: () => void
+  subjectId: string
 }) {
   if (resource.loading) return <PaneLoading />
   if (resource.error) return <ErrorBlock message={resource.error} onRetry={onRetry} />
@@ -672,27 +666,41 @@ function RelationsTabPane({
   return (
     <DetailSection title="인간관계">
       {items.map((r) => {
-        const counterId = r.counterpartPerson?.id ?? r.counterpartPersonId
-        const label = r.counterpartPerson ? personLabel(r.counterpartPerson) : `인물 #${counterId ?? '?'}`
-        const typeLabel = relationshipLabel(r.relationshipType)
+        const otherId = r.otherPerson?.id ?? (r.fromPersonId === subjectId ? r.toPersonId : r.fromPersonId)
+        const label = r.otherPerson ? personLabel(r.otherPerson) : null
+        // 멘토 관계는 본인이 스승인지 제자인지에 따라 라벨 변경
+        const baseLabel = relationshipLabel(r.relationshipType)
+        const typeLabel =
+          r.mentorPerspective === 'MENTOR'
+            ? '제자'
+            : r.mentorPerspective === 'STUDENT'
+              ? '스승'
+              : baseLabel
+        const period =
+          r.startDate || r.endDate
+            ? `${formatDateString(r.startDate) ?? '?'} ~ ${formatDateString(r.endDate) ?? '현재'}`
+            : null
         return (
-          <View key={r.id} style={{ marginBottom: 8 }}>
-            {counterId ? (
-              <RelatedLink kind="person" id={counterId} label={label} sublabel={typeLabel} />
+          <View key={r.id} style={{ marginBottom: 10 }}>
+            {label && otherId ? (
+              <RelatedLink kind="person" id={otherId} label={label} sublabel={typeLabel} />
             ) : (
-              <Text style={styles.body}>· {label} ({typeLabel})</Text>
+              <Text style={styles.body}>· ({typeLabel})</Text>
             )}
-            {r.description && (
+            {period && <Text style={styles.timelineMeta}>{period}</Text>}
+            {r.note && (
               <View style={{ marginTop: 4, marginLeft: 8 }}>
-                <RichText html={r.description} />
+                <RichText html={r.note} />
               </View>
             )}
-            {r.phases?.map((p) => (
-              <Text key={p.id} style={styles.timelineMeta}>
-                · {formatDateString(p.startDate) ?? '?'} ~ {formatDateString(p.endDate) ?? '?'}
-                {p.status || p.note ? `: ${p.status ?? p.note}` : ''}
-              </Text>
-            ))}
+            {r.phases?.map((p) => {
+              const range = `${formatDateString(p.startDate) ?? '?'} ~ ${formatDateString(p.endDate) ?? '?'}`
+              return (
+                <Text key={p.id} style={styles.timelineMeta}>
+                  · {range}{p.label ? `: ${p.label}` : ''}{p.note ? ` (${p.note})` : ''}
+                </Text>
+              )
+            })}
           </View>
         )
       })}

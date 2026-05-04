@@ -1,5 +1,8 @@
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAuth } from '@/lib/auth-context'
+import { PageHeader } from '@/components/page-header'
+import { getApiBaseURL } from '@/lib/api'
+import { Tokens } from '@/constants/theme'
 
 export default function SettingsScreen() {
   const { signOut } = useAuth()
@@ -13,23 +16,33 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={styles.section}>
-        <Text style={styles.label}>API 서버</Text>
-        <Text style={styles.value}>{process.env.EXPO_PUBLIC_API_BASE_URL ?? '(미설정)'}</Text>
-      </View>
+      <PageHeader title="설정" />
+      <View style={{ padding: 16, gap: 16 }}>
+        <View style={styles.section}>
+          <Text style={styles.label}>API 서버</Text>
+          <Text style={styles.value}>{getApiBaseURL() ?? '(미설정)'}</Text>
+        </View>
 
-      <Pressable style={styles.logoutBtn} onPress={handleLogout}>
-        <Text style={styles.logoutText}>로그아웃</Text>
-      </Pressable>
+        <Pressable style={styles.logoutBtn} onPress={handleLogout}>
+          <Text style={styles.logoutText}>로그아웃</Text>
+        </Pressable>
+      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, padding: 16, gap: 16 },
-  section: { backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#e2e8f0', gap: 4 },
-  label: { fontSize: 12, color: '#64748b' },
-  value: { fontSize: 14, color: '#0f172a', fontFamily: 'monospace' },
-  logoutBtn: { backgroundColor: '#dc2626', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-  logoutText: { color: '#fff', fontWeight: '600' },
+  root: { flex: 1, backgroundColor: Tokens.surface.canvas },
+  section: {
+    backgroundColor: Tokens.surface.raised,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Tokens.border.subtle,
+    gap: 4,
+  },
+  label: { fontSize: 12, color: Tokens.text.muted },
+  value: { fontSize: 14, color: Tokens.text.primary, fontFamily: 'monospace' },
+  logoutBtn: { backgroundColor: Tokens.accent.red, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+  logoutText: { color: Tokens.text.inverse, fontWeight: '600' },
 })

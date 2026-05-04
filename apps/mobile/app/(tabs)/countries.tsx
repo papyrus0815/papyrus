@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { api } from '@/lib/api'
 import { dateRange } from '@/lib/format'
 import { imageUrl } from '@/lib/image-url'
 import { ListSearchBar } from '@/components/list-search-bar'
+import { PageHeader } from '@/components/page-header'
+import { Tokens } from '@/constants/theme'
 import type { CountryListItem } from '@/lib/dto'
 
 export default function CountriesScreen() {
@@ -53,6 +56,7 @@ export default function CountriesScreen() {
 
   return (
     <View style={styles.root}>
+      <PageHeader title="국가" subtitle={`${filtered.length}개`} />
       <ListSearchBar value={query} onChange={setQuery} placeholder="국가·정권 검색" />
       <FlatList
         data={filtered}
@@ -73,7 +77,13 @@ export default function CountriesScreen() {
               onPress={() => router.push(`/country/${item.id}` as any)}
             >
               {img ? (
-                <Image source={{ uri: img }} style={styles.thumb} />
+                <Image
+                  source={{ uri: img }}
+                  style={styles.thumb}
+                  contentFit="cover"
+                  transition={120}
+                  cachePolicy="memory-disk"
+                />
               ) : (
                 <View style={[styles.thumb, styles.thumbPlaceholder]} />
               )}
@@ -101,22 +111,42 @@ export default function CountriesScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, backgroundColor: Tokens.surface.canvas },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
   empty: { padding: 32, alignItems: 'center' },
-  emptyText: { color: '#94a3b8', fontSize: 14 },
+  emptyText: { color: Tokens.text.soft, fontSize: 14 },
   card: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e2e8f0',
-    flexDirection: 'row', gap: 12, alignItems: 'center',
+    backgroundColor: Tokens.surface.raised,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Tokens.border.subtle,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
   },
-  cardPressed: { backgroundColor: '#f8fafc' },
-  thumb: { width: 56, height: 56, borderRadius: 8, backgroundColor: '#e2e8f0' },
-  thumbPlaceholder: { backgroundColor: '#f1f5f9' },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
-  subtitle: { fontSize: 12, color: '#94a3b8', marginTop: 1 },
-  cardMeta: { fontSize: 12, color: '#64748b', marginTop: 4 },
+  cardPressed: { backgroundColor: Tokens.surface.canvas },
+  thumb: { width: 56, height: 56, borderRadius: 8, backgroundColor: Tokens.border.subtle },
+  thumbPlaceholder: { backgroundColor: Tokens.surface.pressed },
+  cardTitle: { fontSize: 15, fontWeight: '600', color: Tokens.text.primary },
+  subtitle: { fontSize: 12, color: Tokens.text.soft, marginTop: 1 },
+  cardMeta: { fontSize: 12, color: Tokens.text.muted, marginTop: 4 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 4 },
-  tag: { fontSize: 11, color: '#0369a1', backgroundColor: '#e0f2fe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  tagAlt: { fontSize: 11, color: '#475569', backgroundColor: '#f1f5f9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  tag: {
+    fontSize: 11,
+    color: Tokens.accent.blue,
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  tagAlt: {
+    fontSize: 11,
+    color: Tokens.text.secondary,
+    backgroundColor: Tokens.surface.pressed,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
 })

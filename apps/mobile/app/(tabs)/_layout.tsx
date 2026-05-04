@@ -13,12 +13,8 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: true,
+        headerShown: false,
         tabBarButton: HapticTab,
-        headerStyle: { backgroundColor: Tokens.surface.raised },
-        headerTintColor: Tokens.text.primary,
-        headerTitleStyle: { fontWeight: '700' },
-        headerShadowVisible: false,
         sceneStyle: { backgroundColor: Tokens.surface.canvas },
       }}
     >

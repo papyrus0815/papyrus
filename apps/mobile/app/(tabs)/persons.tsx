@@ -17,6 +17,7 @@ import { displayName, lifespan } from '@/lib/format'
 import { imageUrl } from '@/lib/image-url'
 import { ListSearchBar } from '@/components/list-search-bar'
 import { InfluenceTierBadge } from '@/components/influence-tier-badge'
+import { PageHeader } from '@/components/page-header'
 import { setPersonPreview } from '@/lib/preview-cache'
 import { signedYear } from '@/lib/age-utils'
 import { Tokens } from '@/constants/theme'
@@ -209,6 +210,10 @@ export default function PersonsScreen() {
 
   return (
     <View style={styles.root}>
+      <PageHeader
+        title="인물"
+        subtitle={`${sorted.length}명${activeFilterCount > 0 ? ` (필터 ${activeFilterCount}개)` : ''}`}
+      />
       <View style={styles.toolbar}>
         <ListSearchBar value={query} onChange={setQuery} placeholder="이름·왕호·가문·국가" />
         <View style={styles.toolbarRow}>
@@ -253,9 +258,6 @@ export default function PersonsScreen() {
             </Pressable>
           </View>
         </View>
-        <Text style={styles.countLabel}>
-          {sorted.length}명{activeFilterCount > 0 ? ` (필터 ${activeFilterCount}개 적용)` : ''}
-        </Text>
         {showFilters && (
           <FilterPanel
             filterGender={filterGender}
