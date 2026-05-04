@@ -174,12 +174,51 @@ export const DetailPanelHeader = styled.div`
   }
 `
 
+/* 제목 + X 닫기 버튼 row — 제목은 flex-grow, 닫기는 flex-shrink-none */
+export const DetailTitleRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+`
+
 export const DetailTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
   line-height: 1.3;
   color: ${({ theme }) => theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'};
+  flex: 1;
+  min-width: 0;
+`
+
+/* 데스크톱 column 모드에서도 X로 명시적 닫기 — 모바일 drawer 헤더와 동일한 톤 */
+export const DetailCloseButton = styled.button`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-top: -2px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+  }
 `
 
 export const DetailDescription = styled.p`

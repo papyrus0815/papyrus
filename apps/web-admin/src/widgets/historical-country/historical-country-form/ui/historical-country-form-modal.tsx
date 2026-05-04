@@ -44,6 +44,8 @@ export function HistoricalCountryFormModal({
   const [filled, setFilled] = useState<{
     name?: boolean
     stateType?: boolean
+    parentModernCountryIds?: boolean
+    description?: boolean
   }>({})
 
   const handleSave = async (
@@ -83,26 +85,41 @@ export function HistoricalCountryFormModal({
       isOpen={active}
       onClose={onClose}
       title={isEdit ? '역사적 국가 수정' : '역사적 국가 등록'}
+      subtitle={
+        isEdit && effectiveEditing?.name ? effectiveEditing.name : undefined
+      }
       titleId="historical-country-form-modal-title"
       formId="historical-country-form"
       submitting={submitting}
       isDirty={isDirty}
       submitLabel={isEdit ? '수정 완료' : '국가 등록'}
       mode={isEdit ? 'edit' : 'create'}
+      draftEnabled={!isEdit}
       requiredFields={[
-        { label: '국가명(한글)', done: !!filled.name, jumpTarget: 'name' },
+        { label: '국가명', done: !!filled.name, jumpTarget: 'name' },
         {
           label: '국가 형태',
           done: !!filled.stateType,
           jumpTarget: 'stateType',
         },
       ]}
-      // 역사 모달은 탭이 sectionIndex 역할을 하므로 따로 표시 안 함
+      sectionIndex={[
+        {
+          id: 'basic',
+          label: '기본 정보',
+          filled: !!filled.name && !!filled.stateType,
+        },
+        {
+          id: 'relations',
+          label: '관계',
+          filled: !!filled.parentModernCountryIds,
+        },
+        { id: 'narrative', label: '서술', filled: !!filled.description },
+      ]}
     >
       {effectiveEditing && (
         <HistoricalCountryForm
           editing={effectiveEditing}
-          embedIn="modal"
           initialPreset={initialPreset}
           modernCountries={modernCountries}
           historicalCountries={historicalCountries}
@@ -113,6 +130,10 @@ export function HistoricalCountryFormModal({
             setFilled({
               name: !!values.name?.trim(),
               stateType: !!values.stateType,
+              parentModernCountryIds:
+                Array.isArray(values.parentModernCountryIds) &&
+                values.parentModernCountryIds.length > 0,
+              description: !!values.description?.trim(),
             })
           }
         />

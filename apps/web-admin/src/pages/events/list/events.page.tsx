@@ -74,7 +74,6 @@ import * as Layout from '../styles/layout.styles'
 import * as PageStyles from '../styles/list-page.styles'
 
 import { CatalogDetailDrawer } from './components/catalog-detail-drawer'
-import { CatalogHeaderStats } from './components/catalog-header-stats'
 import { CatalogMainContent } from './components/catalog-main-content'
 import { CatalogModals } from './components/catalog-modals'
 import { CatalogToolbar } from './components/catalog-toolbar'
@@ -535,6 +534,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       onAfterDelete={handleAfterDelete}
       onPrev={onDrawerPrev}
       onNext={onDrawerNext}
+      onClose={clearSelectedEvent}
     />
   )
 
@@ -558,6 +558,9 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setShowPositionTypeModal,
     toggleShowFlatView: () => setShowFlatView(!showFlatView),
     setSelectedCentury,
+    onSelectCategory: setSelectedCategory,
+    onSelectCountry: setSelectedCountry,
+    onSelectPositionType: setSelectedPositionType,
     bookmarksOnly,
     toggleBookmarksOnly: () => setBookmarksOnly((v) => !v),
     bookmarksCount: bookmarks.size,
@@ -633,24 +636,29 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
         <PageStyles.PageHeader>
           <PageStyles.PageHeaderTitleGroup>
             <PageStyles.PageHeaderTitle>사건 연대표</PageStyles.PageHeaderTitle>
-            <PageStyles.PageHeaderSubtitle>
-              {countryId
-                ? '선택한 국가에 연관된 역사적 사건'
-                : '시대·카테고리·인물로 좁혀 한눈에 살펴봅니다'}
-            </PageStyles.PageHeaderSubtitle>
+            {countryId && (
+              <PageStyles.PageHeaderSubtitle>
+                선택한 국가에 연관된 역사적 사건
+              </PageStyles.PageHeaderSubtitle>
+            )}
           </PageStyles.PageHeaderTitleGroup>
-          <CatalogHeaderStats events={events} dbCategories={dbCategories} />
         </PageStyles.PageHeader>
       )}
 
       <CatalogToolbar {...toolbarProps} />
 
-      <Layout.CatalogSplit>
+      {/**
+       * 사건 미선택 = 우측 상세 패널 *완전 미렌더* → CatalogSplit이 1-col로 메인 뷰가 풀 폭.
+       * 사건 클릭 시에만 drawer 마운트되어 데스크톱 column 표시 / 모바일 슬라이드인.
+       */}
+      <Layout.CatalogSplit $hasSelection={!!selectedEventId}>
         <CatalogMainContent
           viewMode={viewMode}
           setViewMode={setViewMode}
           visibleCount={visibleFlattenedHierarchy.length}
           totalCount={events.length}
+          events={events}
+          dbCategories={dbCategories}
           sortBy={sortBy}
           sortDirection={sortDirection}
           onSortChange={handleSortChange}
@@ -665,13 +673,15 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           treeSlot={treeSlot}
           gallerySlot={gallerySlot}
         />
-        <CatalogDetailDrawer
-          open={!!selectedEventId}
-          onClose={clearSelectedEvent}
-          title={selectedEvent?.title ?? selectedNode?.title ?? null}
-        >
-          {detailPanelSlot}
-        </CatalogDetailDrawer>
+        {selectedEventId && (
+          <CatalogDetailDrawer
+            open
+            onClose={clearSelectedEvent}
+            title={selectedEvent?.title ?? selectedNode?.title ?? null}
+          >
+            {detailPanelSlot}
+          </CatalogDetailDrawer>
+        )}
       </Layout.CatalogSplit>
     </>
   )

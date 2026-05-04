@@ -22,13 +22,6 @@ export interface CountryFormModalProps {
   onSuccess?: () => void
 }
 
-const SECTION_INDEX = [
-  { id: 'basic', label: '기본 정보' },
-  { id: 'stats', label: '통계 정보' },
-  { id: 'extra', label: '부가 정보' },
-  { id: 'display', label: '표시 설정' },
-]
-
 export function CountryFormModal({
   isOpen,
   onClose,
@@ -42,6 +35,10 @@ export function CountryFormModal({
   const [filled, setFilled] = useState<{
     name?: boolean
     continentId?: boolean
+    population?: boolean
+    areaSqKm?: boolean
+    currencyId?: boolean
+    languageId?: boolean
   }>({})
   const [isDirty, setIsDirty] = useState(false)
 
@@ -73,12 +70,14 @@ export function CountryFormModal({
       isOpen={active}
       onClose={onClose}
       title={mode === 'edit' ? '국가 수정' : '국가 등록'}
+      subtitle={mode === 'edit' && editing?.name ? editing.name : undefined}
       titleId="country-form-modal-title"
       formId="country-form"
       submitting={submitting}
       isDirty={isDirty}
       submitLabel={mode === 'edit' ? '수정 완료' : '국가 등록'}
       mode={mode === 'edit' ? 'edit' : 'create'}
+      draftEnabled={mode === 'create'}
       requiredFields={[
         { label: '국가명', done: !!filled.name, jumpTarget: 'name' },
         {
@@ -87,7 +86,24 @@ export function CountryFormModal({
           jumpTarget: 'continentId',
         },
       ]}
-      sectionIndex={SECTION_INDEX}
+      sectionIndex={[
+        {
+          id: 'basic',
+          label: '기본 정보',
+          filled: !!filled.name && !!filled.continentId,
+        },
+        {
+          id: 'stats',
+          label: '통계 정보',
+          filled: !!filled.population || !!filled.areaSqKm,
+        },
+        {
+          id: 'extra',
+          label: '부가 정보',
+          filled: !!filled.currencyId || !!filled.languageId,
+        },
+        { id: 'display', label: '표시 설정', filled: false },
+      ]}
     >
       <CountryForm
         mode={mode ?? 'create'}
@@ -98,6 +114,10 @@ export function CountryFormModal({
           setFilled({
             name: !!values.name?.trim(),
             continentId: !!values.continentId,
+            population: values.population != null,
+            areaSqKm: values.areaSqKm != null,
+            currencyId: !!values.currencyId,
+            languageId: !!values.languageId,
           })
         }
         onDirtyChange={setIsDirty}

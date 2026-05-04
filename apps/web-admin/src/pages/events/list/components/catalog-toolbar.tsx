@@ -54,6 +54,11 @@ interface Props {
   toggleShowFlatView: () => void
   setSelectedCentury: (v: CenturyFilter) => void
 
+  /** 인라인 팝오버에서 직접 선택 — FILTER_ALL 또는 id */
+  onSelectCategory?: (id: string) => void
+  onSelectCountry?: (id: string) => void
+  onSelectPositionType?: (id: string) => void
+
   // 북마크
   bookmarksOnly: boolean
   toggleBookmarksOnly: () => void
@@ -94,6 +99,9 @@ export const CatalogToolbar: React.FC<Props> = ({
   setShowPositionTypeModal,
   toggleShowFlatView,
   setSelectedCentury,
+  onSelectCategory,
+  onSelectCountry,
+  onSelectPositionType,
   bookmarksOnly,
   toggleBookmarksOnly,
   bookmarksCount,
@@ -159,6 +167,9 @@ export const CatalogToolbar: React.FC<Props> = ({
         availableCenturies={availableCenturies}
         countries={countries}
         historicalCountries={historicalCountries}
+        onSelectCategory={onSelectCategory}
+        onSelectCountry={onSelectCountry}
+        onSelectPositionType={onSelectPositionType}
         onShowCategoryModal={() => setShowCategoryModal(true)}
         onShowCountryModal={() => setShowCountryModal(true)}
         onShowPositionTypeModal={() => setShowPositionTypeModal(true)}

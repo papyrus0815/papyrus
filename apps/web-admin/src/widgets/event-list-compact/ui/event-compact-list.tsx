@@ -103,6 +103,18 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 }) => {
   const navigate = useNavigate()
   const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
+  /** 세기 접기 — 세기 자체를 토글하면 그 안의 모든 년이 표시 안 됨 */
+  const [collapsedCenturies, setCollapsedCenturies] = useState<Set<number>>(
+    new Set(),
+  )
+  const toggleCenturyCollapse = (century: number) => {
+    setCollapsedCenturies((prev) => {
+      const next = new Set(prev)
+      if (next.has(century)) next.delete(century)
+      else next.add(century)
+      return next
+    })
+  }
   /** 재위 년도 그룹 접기 (옛날 디자인: 첫 인물 카드 + "+N명" 펼치기) */
   const [expandedPersonYearGroups, setExpandedPersonYearGroups] = useState<
     Set<string>
@@ -129,53 +141,70 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     })
   }
 
-  const { allYears, eventsByYear, tenureStartYearsSet, tenureEndYearsSet } =
-    useMemo(() => {
-      const eventYears = new Set<number>()
-      const byYear = new Map<
-        number,
-        Array<{
-          node: EventHierarchyNode
-          depth: number
-          parentEvent: HistoricalEvent | null
-        }>
-      >()
-      let lastTopLevelYear: number | null = null
-      flattenedHierarchy.forEach((item) => {
-        const y = new Date(item.node.period.start).getFullYear()
-        if (item.depth === 0) {
-          eventYears.add(y)
-          lastTopLevelYear = y
-        }
-        const year = lastTopLevelYear ?? y
-        if (!byYear.has(year)) byYear.set(year, [])
-        byYear.get(year)!.push(item)
-      })
-      periodHeadsOfState.forEach((h) => {
-        eventYears.add(new Date(h.tenure.startDate).getFullYear())
-        if (h.tenure.endDate)
-          eventYears.add(new Date(h.tenure.endDate).getFullYear())
-      })
-      const tenureStartYearsSet = new Set(
-        periodHeadsOfState.map((h) =>
-          new Date(h.tenure.startDate).getFullYear(),
-        ),
-      )
-      const tenureEndYearsSet = new Set(
-        periodHeadsOfState
-          .filter((h) => h.tenure.endDate)
-          .map((h) => new Date(h.tenure.endDate!).getFullYear()),
-      )
-      const sortedYears = Array.from(eventYears).sort((a, b) => a - b)
-      const orderedYears =
-        sortDirection === 'desc' ? [...sortedYears].reverse() : sortedYears
-      return {
-        allYears: orderedYears,
-        eventsByYear: byYear,
-        tenureStartYearsSet,
-        tenureEndYearsSet,
+  const {
+    allYears,
+    eventsByYear,
+    tenureStartYearsSet,
+    tenureEndYearsSet,
+    centuryCount,
+  } = useMemo(() => {
+    const eventYears = new Set<number>()
+    const byYear = new Map<
+      number,
+      Array<{
+        node: EventHierarchyNode
+        depth: number
+        parentEvent: HistoricalEvent | null
+      }>
+    >()
+    let lastTopLevelYear: number | null = null
+    flattenedHierarchy.forEach((item) => {
+      const y = new Date(item.node.period.start).getFullYear()
+      if (item.depth === 0) {
+        eventYears.add(y)
+        lastTopLevelYear = y
       }
-    }, [flattenedHierarchy, sortDirection, periodHeadsOfState])
+      const year = lastTopLevelYear ?? y
+      if (!byYear.has(year)) byYear.set(year, [])
+      byYear.get(year)!.push(item)
+    })
+    periodHeadsOfState.forEach((h) => {
+      eventYears.add(new Date(h.tenure.startDate).getFullYear())
+      if (h.tenure.endDate)
+        eventYears.add(new Date(h.tenure.endDate).getFullYear())
+    })
+    const tenureStartYearsSet = new Set(
+      periodHeadsOfState.map((h) =>
+        new Date(h.tenure.startDate).getFullYear(),
+      ),
+    )
+    const tenureEndYearsSet = new Set(
+      periodHeadsOfState
+        .filter((h) => h.tenure.endDate)
+        .map((h) => new Date(h.tenure.endDate!).getFullYear()),
+    )
+    const sortedYears = Array.from(eventYears).sort((a, b) => a - b)
+    const orderedYears =
+      sortDirection === 'desc' ? [...sortedYears].reverse() : sortedYears
+
+    /** 세기별 사건 수 — flattenedHierarchy의 depth 0 사건만 집계.
+     *  `Math.floor(year / 100) + 1`이 그 사건의 세기. (1950 → 20세기) */
+    const centuryCount = new Map<number, number>()
+    for (const item of flattenedHierarchy) {
+      if (item.depth !== 0) continue
+      const y = new Date(item.node.period.start).getFullYear()
+      const c = Math.floor(y / 100) + 1
+      centuryCount.set(c, (centuryCount.get(c) ?? 0) + 1)
+    }
+
+    return {
+      allYears: orderedYears,
+      eventsByYear: byYear,
+      tenureStartYearsSet,
+      tenureEndYearsSet,
+      centuryCount,
+    }
+  }, [flattenedHierarchy, sortDirection, periodHeadsOfState])
 
   return (
     <List.CatalogSection>
@@ -256,15 +285,65 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               <OtherHeadsOfStateList otherHeadsOfState={periodHeadsOfState} />
             </>
           )}
-          {allYears.map((currentYear) => {
-            const yearItems = eventsByYear.get(currentYear) ?? []
-            const yearEventCount = yearItems.filter(
-              (item) => item.depth === 0,
-            ).length
-            const isYearCollapsed = collapsedYears.has(currentYear)
+          {(() => {
+            // 이전 행이 어느 세기였는지 추적 — 세기가 바뀌면 헤더 삽입.
+            // map 안에서는 외부 변수 mutation이 어려워 reduce 패턴으로.
+            let prevCentury: number | null = null
+            return allYears.map((currentYear) => {
+              const yearItems = eventsByYear.get(currentYear) ?? []
+              const yearEventCount = yearItems.filter(
+                (item) => item.depth === 0,
+              ).length
+              const isYearCollapsed = collapsedYears.has(currentYear)
 
-            return (
+              const century = Math.floor(currentYear / 100) + 1
+              const isCenturyChange = prevCentury !== century
+              const isCenturyCollapsed = collapsedCenturies.has(century)
+              prevCentury = century
+
+              // 세기 접힘 → 그 세기 안의 년도는 모두 숨김 (헤더만 노출)
+              if (isCenturyCollapsed && !isCenturyChange) return null
+
+              return (
               <React.Fragment key={`year-${currentYear}`}>
+                {isCenturyChange && (
+                  <List.CenturyDivider
+                    type="button"
+                    aria-expanded={!isCenturyCollapsed}
+                    aria-label={`${century}세기 — 사건 ${centuryCount.get(century) ?? 0}건 ${
+                      isCenturyCollapsed ? '펼치기' : '접기'
+                    }`}
+                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                      e.preventDefault()
+                      toggleCenturyCollapse(century)
+                    }}
+                  >
+                    <List.CenturyDividerLabel>
+                      <FiChevronDown
+                        size={14}
+                        aria-hidden="true"
+                        style={{
+                          transform: isCenturyCollapsed
+                            ? 'rotate(-90deg)'
+                            : 'rotate(0deg)',
+                          transition: 'transform 0.3s ease',
+                        }}
+                      />
+                      <span>
+                        {century}세기
+                        <List.CenturyDividerYears>
+                          {' '}({century === 1 ? 1 : (century - 1) * 100 + 1}
+                          –{century * 100})
+                        </List.CenturyDividerYears>
+                      </span>
+                    </List.CenturyDividerLabel>
+                    <List.CenturyDividerCount>
+                      {(centuryCount.get(century) ?? 0).toLocaleString()}건
+                    </List.CenturyDividerCount>
+                  </List.CenturyDivider>
+                )}
+                {isCenturyCollapsed ? null : (
+                  <>
                 <List.YearDivider
                   type="button"
                   aria-expanded={!isYearCollapsed}
@@ -491,9 +570,12 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                     })}
                   </>
                 )}
+                  </>
+                )}
               </React.Fragment>
             )
-          })}
+            })
+          })()}
 
           {/* 로딩 / 끝 안내 — 사용자가 "더 있는지" "끝인지" 즉시 알 수 있도록 */}
           {isLoadingMore && (

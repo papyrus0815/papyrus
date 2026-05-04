@@ -42,202 +42,100 @@ const CountryFormLayout = styled.div`
     gap: 0;
   }
   ${S.FormSection}:not(:first-of-type) {
-    margin-top: 28px;
-    padding-top: 32px;
-    border-top: 1px solid ${({ theme }) => theme.colors.border.default};
+    margin-top: 40px;
   }
   ${S.FormSectionHeader} {
-    margin-bottom: 16px;
-    position: sticky;
-    top: -24px;
-    z-index: 5;
-    padding: 12px 0 12px 12px;
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(20,20,20,0.92)'
-        : 'linear-gradient(180deg, #ffffff 0%, rgba(250,251,252,0.96) 100%)'};
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    transition: background 0.6s ease;
-  }
-  /* 섹션 헤더 hover lift — 마우스 올리면 살짝 강조 */
-  ${S.FormSection}:hover ${S.FormSectionHeader} {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.06)'
-        : 'rgba(99,102,241,0.04)'};
-  }
-  ${S.FormSectionHeader}::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 16px;
-    bottom: 16px;
-    width: 3px;
-    border-radius: 2px;
-    background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
-  }
-  /* 섹션 anchor pulse — 인덱스 클릭 후 도착 시 잠시 highlight */
-  ${S.FormSection}[data-anchor-pulse='true'] ${S.FormSectionHeader} {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.12)'
-        : 'rgba(99,102,241,0.08)'};
-    transition: background 0.6s ease;
+    margin-bottom: 12px;
+    padding: 0;
   }
   ${S.FormSectionIcon} {
     display: none;
   }
   ${S.FormSectionTitle} {
-    font-size: 16px;
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
-    margin: 0 0 4px 0;
-    letter-spacing: -0.01em;
+    font-size: 11px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    margin: 0;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
   ${S.FormSectionDescription} {
-    font-size: 12.5px;
-    color: ${({ theme }) => theme.colors.text.secondary};
-    margin: 0;
-    line-height: 1.5;
+    display: none;
   }
+  /* 필드: top-label (라벨 위, 입력 아래) */
   ${S.FormRow} {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
     padding: 0;
     border: none;
   }
-  ${S.FormField} {
-    display: grid;
-    grid-template-columns: 160px 1fr;
-    gap: 20px;
-    align-items: start;
-    padding: 16px 0;
-    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  }
-  @media (max-width: 768px) {
-    ${S.FormField} {
+  @media (max-width: 640px) {
+    ${S.FormRow} {
       grid-template-columns: 1fr;
-      gap: 8px;
-      padding: 14px 0;
     }
+  }
+  ${S.FormField} {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0;
+    border: none;
+    margin-top: 18px;
+  }
+  ${S.FormField}:first-child,
+  ${S.FormRow} ${S.FormField} {
+    margin-top: 0;
+  }
+  ${S.FormSection} > ${S.FormField}:first-of-type,
+  ${S.FormSection} > ${S.FormRow}:first-of-type {
+    margin-top: 0;
+  }
+  ${S.FormSection} > ${S.FormRow} {
+    margin-top: 18px;
   }
   ${S.FormLabel} {
     font-size: 13px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.primary};
-    padding-top: 10px;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    padding-top: 0;
     margin: 0;
-    grid-column: 1;
-    grid-row: 1;
-    letter-spacing: -0.005em;
   }
   ${S.FormField} input:not([type='hidden']),
   ${S.FormField} button[type='button'],
   ${S.FormField} select,
   ${S.FormField} textarea {
-    grid-column: 2;
-    grid-row: 1;
     min-width: 0;
   }
   ${S.FormField} ${S.ErrorMessage} {
-    grid-column: 2;
-    grid-row: 2;
     font-size: 12px;
-    margin-top: 4px;
-  }
-  ${S.FormField} ${S.FormHelp} {
-    grid-column: 2;
-    grid-row: 3;
-  }
-  ${S.FormField} > div {
-    grid-column: 2;
-  }
-  /* 대표 이미지 — 원형 96px */
-  ${S.FormField}[data-field='thumbnail'] .thumbnail-right {
-    grid-column: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-    min-width: 0;
-  }
-  ${S.FormField}[data-field='thumbnail'] .thumbnail-circle {
-    width: 96px;
-    height: 96px;
-    min-width: 96px;
-    min-height: 96px;
-    max-width: 96px;
-    max-height: 96px;
-    border-radius: 50%;
-    overflow: hidden;
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : 'linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%)'};
-    border: 2px dashed
-      ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'};
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    flex-shrink: 0;
-    transition:
-      border-color 0.2s,
-      background 0.2s,
-      box-shadow 0.2s;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  }
-  ${S.FormField}[data-field='thumbnail'] .thumbnail-circle:hover {
-    border-color: #6366f1;
-  }
-  ${S.FormField}[data-field='thumbnail'] .thumbnail-circle[data-has-image] {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
-    border-color: ${({ theme }) => theme.colors.border.default};
-    border-style: solid;
-  }
-  ${S.FormField}[data-field='thumbnail'] .thumbnail-circle img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  ${S.FormField}[data-field='thumbnail'] .thumbnail-circle svg {
-    color: ${({ theme }) => theme.colors.text.secondary};
-    width: 36px;
-    height: 36px;
-  }
-  ${S.FormField}[data-field='thumbnail'] .thumbnail-hint {
-    font-size: 12px;
-    color: ${({ theme }) => theme.colors.text.secondary};
-    line-height: 1.4;
+    margin-top: 0;
   }
   ${S.FormHelp} {
-    margin-top: 6px;
+    margin-top: 0;
   }
-  /* 입력 필드 폭 */
-  ${S.FormField} .input-iso {
-    max-width: 100px;
+  /* 입력 폭 — 3단계 통일 */
+  ${S.FormField} .input-xs {
+    max-width: 88px;
   }
+  ${S.FormField} .input-sm {
+    max-width: 200px;
+  }
+  ${S.FormField} .input-iso,
   ${S.FormField} .input-flag-emoji {
-    max-width: 96px;
+    max-width: 88px;
+  }
+  ${S.FormField} .input-capital,
+  ${S.FormField} .input-number {
+    max-width: 200px;
   }
   ${S.FormField} .input-name,
   ${S.FormField} .input-local-name {
-    max-width: 480px;
-  }
-  ${S.FormField} .input-capital {
-    max-width: 280px;
-  }
-  ${S.FormField} .input-number {
-    max-width: 220px;
+    max-width: 100%;
   }
   ${S.SelectButton} {
-    padding: 10px 14px;
     font-size: 14px;
-    max-width: 480px;
+    max-width: 100%;
   }
 `
 
@@ -246,14 +144,8 @@ const KoreanShortHint = styled.span`
   display: inline-flex;
   align-items: center;
   font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.04)'
-      : 'rgba(15,23,42,0.04)'};
-  padding: 2px 8px;
-  border-radius: 6px;
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;
 `
 
@@ -278,24 +170,18 @@ const NumberSuffix = styled.span`
   pointer-events: none;
 `
 
-/** ISO 코드에서 표기 순서가 자동 추론됐을 때 표시하는 배지 */
+/** ISO 코드에서 자동 추론된 값임을 표시 */
 const InferredBadge = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-size: 11.5px;
-  font-weight: 500;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.15)' : '#eef2ff'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.3)' : '#c7d2fe'};
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 
   svg {
     flex-shrink: 0;
+    color: ${({ theme }) => theme.colors.alert.success.fg};
   }
 `
 
@@ -569,7 +455,7 @@ export function CountryForm({
             </div>
           </S.FormSectionHeader>
 
-          {/* 대표 이미지 — 공용 ThumbnailUploader (D&D + 호버 액션 + 진행률) */}
+          {/* 대표 이미지 — 미니멀 정사각형 96px */}
           <S.FormField data-field="thumbnail">
             <S.FormLabel htmlFor="flag-image-upload">대표 이미지</S.FormLabel>
             <ThumbnailUploader
@@ -577,8 +463,6 @@ export function CountryForm({
               category="countries"
               inputId="flag-image-upload"
               alt="국가 대표 이미지 미리보기"
-              emptyHint="국기·상징 이미지를 추가 (선택, 정사각형 96×96 권장)"
-              hasImageHint="클릭 또는 드래그하여 이미지 변경 (정사각형 권장)"
               onChange={(url) => {
                 setThumbnailPreview(url)
                 setValue('thumbnailUrl', url, { shouldValidate: true })
@@ -595,6 +479,7 @@ export function CountryForm({
               className="input-name"
               {...register('name')}
               placeholder="대한민국"
+              autoComplete="off"
               autoFocus={mode === 'create'}
               $error={!!errors.name}
             />
@@ -609,7 +494,7 @@ export function CountryForm({
             <FormInput
               className="input-local-name"
               {...register('localName')}
-              placeholder="예: 大韓民國"
+              placeholder="大韓民國"
               $error={!!errors.localName}
             />
             <S.FormHelp>
@@ -625,7 +510,7 @@ export function CountryForm({
             <S.FormLabel>공식 명칭</S.FormLabel>
             <FormInput
               {...register('fullName')}
-              placeholder="예: Republic of Korea"
+              placeholder="Republic of Korea"
               $error={!!errors.fullName}
             />
             <S.FormHelp>
@@ -636,62 +521,61 @@ export function CountryForm({
             )}
           </S.FormField>
 
-          {/* ISO 코드 + 국기 이모지 */}
-          <S.FormField>
-            <S.FormLabel>ISO 코드</S.FormLabel>
-            <FormInput
-              className="input-iso"
-              {...register('isoCode')}
-              placeholder="KR"
-              maxLength={3}
-              style={{ textTransform: 'uppercase' }}
-              onChange={(e) => {
-                const upper = e.target.value.toUpperCase()
-                if (e.target.value !== upper) e.target.value = upper
-                setValue('isoCode', upper, {
-                  shouldValidate: true,
-                  shouldDirty: true,
-                })
-              }}
-              $error={!!errors.isoCode}
-            />
-            <S.FormHelp>ISO 3166-1 alpha-2 (예: KR, JP, US)</S.FormHelp>
-            {errors.isoCode && (
-              <S.ErrorMessage>{errors.isoCode.message}</S.ErrorMessage>
-            )}
-          </S.FormField>
-
-          <S.FormField>
-            <S.FormLabel>국기 이모지</S.FormLabel>
-            <FormInput
-              className="input-flag-emoji"
-              {...register('flagEmoji', {
-                onChange: () => {
-                  flagEmojiTouchedRef.current = true
-                },
-              })}
-              placeholder="🇰🇷"
-              $error={!!errors.flagEmoji}
-            />
-            <S.FormHelp>
-              {!flagEmojiTouchedRef.current && watch('flagEmoji') ? (
-                <InferredBadge>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                  ISO 코드에서 자동 생성됨
-                </InferredBadge>
-              ) : (
-                'ISO 코드 입력 시 자동 생성됩니다 (수정 가능)'
+          {/* ISO 코드 + 국기 한 행 */}
+          <S.FormRow>
+            <S.FormField>
+              <S.FormLabel>ISO 코드</S.FormLabel>
+              <FormInput
+                className="input-xs"
+                {...register('isoCode')}
+                placeholder="KR"
+                maxLength={3}
+                style={{ textTransform: 'uppercase' }}
+                onChange={(e) => {
+                  const upper = e.target.value.toUpperCase()
+                  if (e.target.value !== upper) e.target.value = upper
+                  setValue('isoCode', upper, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }}
+                $error={!!errors.isoCode}
+              />
+              {errors.isoCode && (
+                <S.ErrorMessage>{errors.isoCode.message}</S.ErrorMessage>
               )}
-            </S.FormHelp>
-            {errors.flagEmoji && (
-              <S.ErrorMessage>{errors.flagEmoji.message}</S.ErrorMessage>
-            )}
-          </S.FormField>
+            </S.FormField>
+
+            <S.FormField>
+              <S.FormLabel>국기</S.FormLabel>
+              <FormInput
+                className="input-xs"
+                {...register('flagEmoji', {
+                  onChange: () => {
+                    flagEmojiTouchedRef.current = true
+                  },
+                })}
+                placeholder="🇰🇷"
+                $error={!!errors.flagEmoji}
+              />
+              {!flagEmojiTouchedRef.current && watch('flagEmoji') && (
+                <S.FormHelp>
+                  <InferredBadge>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                      <path
+                        d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                    자동
+                  </InferredBadge>
+                </S.FormHelp>
+              )}
+              {errors.flagEmoji && (
+                <S.ErrorMessage>{errors.flagEmoji.message}</S.ErrorMessage>
+              )}
+            </S.FormField>
+          </S.FormRow>
 
           {/* 수도 */}
           <S.FormField>

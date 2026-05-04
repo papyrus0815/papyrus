@@ -249,6 +249,22 @@ export const ToolbarBtn = styled.button<{ $active?: boolean }>`
   @media (prefers-reduced-motion: reduce) {
     transition: none;
   }
+
+  /* 모바일 — 라벨(span)은 sr-only로 떨어뜨리고 icon만. tooltip(title)은 유지. */
+  @media (max-width: 640px) {
+    padding: 7px 9px;
+    & > span:not([class]) {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+  }
 `
 
 /* TopFilterBar 안에서 인라인으로 흐름 — 가용 폭이 부족하면 wrap.
@@ -388,6 +404,12 @@ export const ViewSwitcherRow = styled.div`
   @media (max-width: 900px) {
     gap: 8px;
   }
+
+  @media (max-width: 640px) {
+    /* 통계 strip은 다음 줄로 자연 wrap — 메타가 한 줄로 강제 압축되지 않게 */
+    gap: 6px 10px;
+    padding: 0 2px;
+  }
 `
 
 /* 7-mode segmented — 각 버튼은 icon + 짧은 라벨. 좁은 화면에선 라벨이 sr-only로 떨어짐.
@@ -430,16 +452,17 @@ export const ViewSegmented = styled.div`
   }
 `
 
-/* 컴팩트 — 각 버튼 28px 높이, icon 13px + 라벨 11.5px.
+/* 컴팩트 — 각 버튼 30px 높이, icon 13px + 라벨 11.5px.
+ * 외곽 padding 2px 포함 시 ViewSegmented 총 34px → DisplayOptions의 select/button과 베이스라인 정렬.
  * active는 *살짝 떠오른 inner pill* (배경 흰색 + subtle shadow).
- * 라벨은 1280px 이하에서 sr-only로 떨어져 7개가 좁은 화면에서도 fit. */
+ * 라벨은 1024px 이하에서 sr-only로 떨어져 7개가 좁은 화면에서도 fit. */
 export const ViewSegment = styled.button<{ $active: boolean }>`
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 4px 9px;
-  height: 28px;
+  height: 30px;
   border: none;
   border-radius: 6px;
   font-family: inherit;
@@ -487,9 +510,10 @@ export const ViewSegment = styled.button<{ $active: boolean }>`
     flex-shrink: 0;
   }
 
-  /* 1280px 이하 — 라벨 sr-only로 떨어져 icon만 (7 modes 압축) */
+  /* 1024px 이하 — 라벨 sr-only로 떨어져 icon만 (7 modes 압축).
+   * 1280px → 1024px로 낮춤: 사이드바 펼친 13~14인치 노트북에서도 라벨 보존. */
   & > span.label {
-    @media (max-width: 1280px) {
+    @media (max-width: 1024px) {
       position: absolute;
       width: 1px;
       height: 1px;
@@ -519,10 +543,17 @@ export const DisplayOptions = styled.div`
   margin-left: 12px;
   flex-wrap: wrap;
 
-  /* SortSelect / SortButton 모두 height 34 — segmented(약 32~34)와 자연스럽게 정렬 */
+  /* SortSelect / SortButton 모두 height 34 — ViewSegmented(2px padding+30px = 34) 와 정확 정렬 */
   & > select,
   & > button {
     height: 34px;
+  }
+
+  /* 페이지 크기 select(SortSelect 내부 두 번째 select)는 "20개"~"100개"로 폭이 좁으므로
+   * 살짝 컴팩트하게. 인라인 style을 styled로 흡수. */
+  & > select:last-of-type {
+    width: 92px;
+    font-size: 12px;
   }
 `
 

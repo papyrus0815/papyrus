@@ -36,6 +36,50 @@ export const DEATH_TYPE_OPTIONS: SegOption<string>[] = [
   ...EXTRA_DEATH_TYPES,
 ]
 
+/**
+ * 사망 유형 카테고리 — 평면 행 13개를 그룹화해 한눈에 찾도록.
+ * 자연 / 외부 / 자해 / 기타 4그룹. UI는 mini-header + 그룹 내 chip stack.
+ */
+export interface DeathTypeGroup {
+  key: string
+  label: string
+  options: SegOption<string>[]
+}
+
+export const DEATH_TYPE_GROUPS: DeathTypeGroup[] = [
+  {
+    key: 'natural',
+    label: '자연',
+    options: [
+      { value: 'NATURAL', label: '자연사' },
+      { value: 'ILLNESS', label: '병사' },
+    ],
+  },
+  {
+    key: 'external',
+    label: '외부 요인',
+    options: [
+      { value: 'ASSASSINATION', label: '암살' },
+      { value: 'BATTLE', label: '전사' },
+      { value: 'ACCIDENT', label: '사고사' },
+      { value: 'EXECUTION', label: '처형' },
+    ],
+  },
+  {
+    key: 'self',
+    label: '자해',
+    options: [{ value: 'SUICIDE', label: '자살' }],
+  },
+  {
+    key: 'other',
+    label: '기타',
+    options: [
+      { value: 'UNKNOWN', label: '불명' },
+      { value: 'OTHER', label: '기타' },
+    ],
+  },
+]
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export const parseDateString = (date: string) => {
@@ -181,7 +225,6 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   motherId: string
   spouseId: string
   spouseNote: string
-  biography: string
   profileImageUrl: string
   regnalName: string
   templeName: string

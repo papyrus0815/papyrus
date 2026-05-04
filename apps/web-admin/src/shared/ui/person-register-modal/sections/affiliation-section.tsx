@@ -168,27 +168,23 @@ export function AffiliationSection({
 // ─── Styled (소속 섹션 — 메인과 형식 동일) ───────────────────────────────────
 
 const PlaceAutocompleteWrap = styled.div`
-  max-width: 480px;
   width: 100%;
 `
 
+/* Top-aligned 패턴 — 비-첫행에만 가벼운 구분선. */
 const FieldRowMulti = styled.div`
-  display: grid;
-  grid-template-columns: minmax(180px, 220px) 1fr;
-  gap: 24px;
-  align-items: start;
-  padding: 20px 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
+  display: block;
+  padding: 18px 0;
+  &:not(:first-child) {
+    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   }
 `
 
 const InlineFields = styled.div<{ $cols?: number }>`
   display: grid;
   grid-template-columns: ${(p) => `repeat(${p.$cols ?? 3}, 1fr)`};
-  gap: 12px;
-  max-width: 600px;
+  gap: 10px;
+  width: 100%;
   & > div {
     min-width: 0;
   }
@@ -197,32 +193,32 @@ const InlineFields = styled.div<{ $cols?: number }>`
   button {
     max-width: 100%;
   }
-  @media (max-width: 768px) {
+  @media (max-width: 640px) {
     grid-template-columns: 1fr;
   }
 `
 
+/** 인물 모달 SelectBtn — FormInput과 동일 톤(r8 + 채움 + hover시 흰배경) */
 const SelectBtn = styled.button<{ $hasValue?: boolean; $error?: boolean }>`
   width: 100%;
-  max-width: 460px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 9px 12px;
   font-size: 14px;
   color: ${({ $hasValue, theme }) =>
     $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
-  background: ${({ $error, theme }) =>
-    $error
-      ? theme.colors.alert.danger.bg
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : '#fff'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   border: 1px solid
     ${({ $error, theme }) =>
-      $error ? '#ea4335' : theme.colors.border.default};
-  border-radius: 10px;
+      $error
+        ? theme.colors.alert.danger.fg
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.08)'
+          : '#e5e7eb'};
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
   outline: none;
@@ -231,13 +227,16 @@ const SelectBtn = styled.button<{ $hasValue?: boolean; $error?: boolean }>`
     background 0.15s ease,
     box-shadow 0.15s ease;
   &:hover:not(:disabled) {
-    border-color: ${({ theme }) => theme.colors.border.medium};
+    border-color: ${({ $error, theme }) =>
+      $error ? theme.colors.alert.danger.fg : theme.colors.border.medium};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : '#f9fafb'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
   }
   &:focus-visible {
     border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
   }
   &:disabled {
     opacity: 0.4;
@@ -256,10 +255,14 @@ const InlineActionBtn = styled.button`
   margin-bottom: 8px;
   padding: 4px 10px;
   font-size: 12px;
-  font-weight: 600;
-  color: #4f46e5;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.primary};
   background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.alert.info.border};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.35)'
+        : 'rgba(99,102,241,0.25)'};
   border-radius: 999px;
   cursor: pointer;
   transition:
@@ -268,8 +271,8 @@ const InlineActionBtn = styled.button`
     border-color 0.15s;
   &:hover:not(:disabled) {
     color: #fff;
-    background: #6366f1;
-    border-color: #6366f1;
+    background: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
   }
   &:disabled {
     opacity: 0.4;
@@ -284,7 +287,7 @@ const FieldError = styled.span`
   gap: 4px;
   font-size: 12px;
   font-weight: 500;
-  color: #dc2626;
+  color: ${({ theme }) => theme.colors.alert.danger.fg};
   margin-top: 6px;
   line-height: 1.4;
   svg {

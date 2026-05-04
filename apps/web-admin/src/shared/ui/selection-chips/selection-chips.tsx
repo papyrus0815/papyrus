@@ -37,27 +37,15 @@ const Chip = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 6px 5px 10px;
+  padding: 4px 4px 4px 10px;
   background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99,102,241,0.12)'
-      : '#eef2ff'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.3)' : '#c7d2fe'};
-  border-radius: 999px;
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 4px;
   font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1;
-  transition: background 0.12s;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.18)'
-        : '#e0e7ff'};
-  }
+  font-weight: 400;
+  line-height: 1.4;
 `
 
 const ChipIcon = styled.span`
@@ -71,25 +59,18 @@ const RemoveBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: none;
-  border-radius: 50%;
+  border-radius: 3px;
   background: transparent;
-  color: inherit;
-  opacity: 0.6;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
-  transition:
-    opacity 0.12s,
-    background 0.12s;
+  transition: color 0.12s;
 
   &:hover {
-    opacity: 1;
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.12)'
-        : 'rgba(67,56,202,0.12)'};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -97,24 +78,21 @@ const AddBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 10px;
+  padding: 4px 10px;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   border: 1px dashed ${({ theme }) => theme.colors.border.default};
-  border-radius: 999px;
+  border-radius: 4px;
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 400;
   cursor: pointer;
   transition:
     border-color 0.12s,
-    color 0.12s,
-    background 0.12s;
+    color 0.12s;
 
   &:hover {
-    color: ${({ theme }) => theme.colors.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.06)' : '#f5f7ff'};
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
   }
 `
 

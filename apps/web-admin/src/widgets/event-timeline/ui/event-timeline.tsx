@@ -39,6 +39,13 @@ import React, {
   useState,
 } from 'react'
 
+import {
+  FiDownload,
+  FiInfo,
+  FiMaximize2,
+  FiMinus,
+  FiPlus,
+} from 'react-icons/fi'
 import styled, { css, keyframes } from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
@@ -91,6 +98,8 @@ const PIXELS_PER_YEAR_DEFAULT = 24
 const MIN_BAR_WIDTH = 6
 const TIMELINE_BOTTOM_PAD = 20
 
+/** Zoom 프리셋 — dropdown에서 선택 가능한 단계 */
+const ZOOM_PRESETS = [0.5, 0.75, 1, 1.5, 2, 4, 8, 16] as const
 const ZOOM_MIN = 0.5
 /**
  * 최대 줌 — 짧은 사건(예: 1~2개월짜리)도 본문 라벨이 잘리지 않고 들어갈 만큼
@@ -107,8 +116,29 @@ const ZOOM_STEP = 1.4
  */
 const SHORT_BAR_PX = 8
 const CLUSTER_GAP_PX = 5
-const CLUSTER_MIN_COUNT = 5
-const EXT_LABEL_MIN_GAP = 60
+/** Cluster 최소 개수 — 5에서 3으로 낮춤. 3~4개 밀집도 시각적으로 겹쳐 구별 어려워 cluster 처리. */
+const CLUSTER_MIN_COUNT = 3
+/**
+ * 줌별 라벨 노출 importance 정책 — 저줌에서도 사건명을 볼 수 있도록 *완화된* 임계값.
+ *
+ * 기본 줌(1.0x)에서 모든 importance(notable 포함)에 라벨이 시도됨. 충돌은
+ * importance-weighted conflict resolution이 처리하므로 *과한 사전 필터*는 불필요.
+ *
+ *  - zoom < 0.5  : critical만 (매우 좁아 시야 우선)
+ *  - 0.5 ~ 0.85  : critical + major
+ *  - >= 0.85     : 모든 importance (notable·normal 포함)
+ */
+const LABEL_IMPORTANCE_TIER: Record<BarData['importance'], number> = {
+  critical: 4,
+  major: 3,
+  notable: 2,
+  normal: 1,
+}
+function labelImportanceMinTier(zoom: number): number {
+  if (zoom < 0.5) return LABEL_IMPORTANCE_TIER.critical
+  if (zoom < 0.85) return LABEL_IMPORTANCE_TIER.major
+  return LABEL_IMPORTANCE_TIER.normal
+}
 /**
  * 외부 라벨 최대 폭 — 이전 140은 한국어 12자 안팎까지밖에 못 담아 긴 타이틀
  * (예: "1872년 긴자 대화재 (메이지 대화재)") 다수가 잘렸다. 220으로 상향 →
@@ -178,6 +208,8 @@ type RenderBar = {
   h: number
   showExternalLabel: boolean
   externalLabelWidth: number
+  /** 0 = 위(기본), 1 = 아래 — staggering 시 충돌 회피 */
+  labelRow: 0 | 1
 }
 type RenderMilestone = {
   kind: 'milestone'
@@ -188,6 +220,7 @@ type RenderMilestone = {
   r: number
   showExternalLabel: boolean
   externalLabelWidth: number
+  labelRow: 0 | 1
 }
 type RenderCluster = {
   kind: 'cluster'
@@ -201,6 +234,9 @@ type RenderCluster = {
   endYear: number
   centerYear: number
   category: string
+  showExternalLabel: boolean
+  externalLabelWidth: number
+  labelRow: 0 | 1
 }
 type RenderItem = RenderBar | RenderMilestone | RenderCluster
 
@@ -277,6 +313,23 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null)
   const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set())
   const [exportOpen, setExportOpen] = useState(false)
+  /** 모양(다이아·네모·wedge) 의미 설명 popover */
+  const [shapeLegendOpen, setShapeLegendOpen] = useState(false)
+  /** Zoom % 드롭다운 — 프리셋(50/75/100/150/200/400/800/1600%) 선택 */
+  const [zoomMenuOpen, setZoomMenuOpen] = useState(false)
+  /**
+   * 핀(pin)된 라벨 set — 사용자가 *Shift+클릭*한 막대들. 자동 라벨 conflict 무관하게 항상 표시.
+   * 일반 클릭은 사건 선택, Shift+클릭은 라벨 토글이라 두 행동을 분리.
+   */
+  const [pinnedLabelIds, setPinnedLabelIds] = useState<Set<string>>(new Set())
+  const togglePinnedLabel = useCallback((id: string) => {
+    setPinnedLabelIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
   const [focusedBarId, setFocusedBarId] = useState<string | null>(null)
   /** Bar에 포커스 있을 때 Space는 선택. 그 외엔 panning 토글로 사용. */
   const [spaceHeld, setSpaceHeld] = useState(false)
@@ -288,6 +341,29 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     update()
     mql.addEventListener('change', update)
     return () => mql.removeEventListener('change', update)
+  }, [])
+
+  /** 첫 진입 onboarding 코치마크 — localStorage 기반 1회만 노출.
+   * SSR 안전(window 가드) + 사용자가 닫으면 다시 안 뜸. */
+  const ONBOARDING_KEY = 'papyrus.timeline.onboarding.v1'
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      if (!window.localStorage.getItem(ONBOARDING_KEY)) {
+        setShowOnboarding(true)
+      }
+    } catch {
+      /* storage disabled — onboarding 생략 */
+    }
+  }, [])
+  const dismissOnboarding = useCallback(() => {
+    setShowOnboarding(false)
+    try {
+      window.localStorage.setItem(ONBOARDING_KEY, '1')
+    } catch {
+      /* noop */
+    }
   }, [])
 
   /* ── 컨테이너 크기 측정 ────────────────────────────────────────────────
@@ -493,8 +569,10 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     return 5
   }, [decadeBuckets.length])
 
-  // ── viewport years 추적 (raf throttle) ─────────────────────────────────
+  // ── viewport years + scrollLeft 추적 (raf throttle) ─────────────────────
   const [viewportYears, setViewportYears] = useState<{ start: number; end: number } | null>(null)
+  /** lane 라벨 sticky용 — SVG 내부 `<g translate(scrollLeft, 0)>`로 좌측 고정 */
+  const [scrollLeft, setScrollLeft] = useState(0)
   const rafIdRef = useRef<number | null>(null)
   const updateViewport = useCallback(() => {
     if (rafIdRef.current != null) return
@@ -510,6 +588,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
         start: Math.max(minYear, start),
         end: Math.min(maxYear, end),
       })
+      setScrollLeft(el.scrollLeft)
     })
   }, [pixelsPerYear, minYear, maxYear])
 
@@ -580,7 +659,132 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   const zoomBy = (factor: number) => {
     setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * factor)))
   }
+
+  /**
+   * 터치 핀치 줌 + 한 손가락 패닝 — 모바일/태블릿 지원.
+   *
+   * 기존 wheel/space-drag/middle-click은 데스크탑 전용. 터치 환경에서는 *완전히 작동 X*.
+   * 이 effect로 scrollRef에 직접 listener를 붙여:
+   *   - pointerType==='touch'만 가로채고 (마우스는 wheel/drag 경로 그대로)
+   *   - 1 pointer  → 가로 패닝(scrollLeft delta)
+   *   - 2 pointer  → 핀치 줌(거리 비율로 zoom 배율)
+   *
+   * touchAction을 none으로 두어 OS의 default 줌·새로고침 제스처 차단.
+   */
+  useEffect(() => {
+    const host = scrollRef.current
+    if (!host) return undefined
+    const pointers = new Map<
+      number,
+      { x: number; y: number; clientX: number; clientY: number }
+    >()
+    let lastSingleX: number | null = null
+    let initialPinchDistance = 0
+    let initialZoom = 1
+
+    const distanceOf = () => {
+      const arr = Array.from(pointers.values())
+      if (arr.length < 2) return 0
+      const dx = arr[0].clientX - arr[1].clientX
+      const dy = arr[0].clientY - arr[1].clientY
+      return Math.hypot(dx, dy)
+    }
+
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return
+      pointers.set(e.pointerId, {
+        x: e.clientX,
+        y: e.clientY,
+        clientX: e.clientX,
+        clientY: e.clientY,
+      })
+      if (pointers.size === 1) {
+        lastSingleX = e.clientX
+      } else if (pointers.size === 2) {
+        initialPinchDistance = distanceOf()
+        initialZoom = zoom
+        lastSingleX = null // 핀치 모드 진입 — single pan 중지
+      }
+      ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    }
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return
+      if (!pointers.has(e.pointerId)) return
+      const prev = pointers.get(e.pointerId)!
+      pointers.set(e.pointerId, {
+        x: prev.x,
+        y: prev.y,
+        clientX: e.clientX,
+        clientY: e.clientY,
+      })
+
+      if (pointers.size === 1 && lastSingleX != null) {
+        // 한 손가락 — 패닝
+        const dx = e.clientX - lastSingleX
+        host.scrollLeft -= dx
+        lastSingleX = e.clientX
+      } else if (pointers.size >= 2 && initialPinchDistance > 0) {
+        // 핀치 — 거리 비율을 zoom 배율로
+        const cur = distanceOf()
+        if (cur > 0) {
+          const ratio = cur / initialPinchDistance
+          const targetZoom = Math.min(
+            ZOOM_MAX,
+            Math.max(ZOOM_MIN, initialZoom * ratio),
+          )
+          setZoom(targetZoom)
+        }
+      }
+    }
+
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return
+      pointers.delete(e.pointerId)
+      if (pointers.size < 2) {
+        initialPinchDistance = 0
+        // 한 손가락 남았으면 그 위치를 기준으로 다시 pan 시작
+        const remaining = Array.from(pointers.values())[0]
+        lastSingleX = remaining ? remaining.clientX : null
+      }
+    }
+
+    host.addEventListener('pointerdown', onDown, { passive: true })
+    host.addEventListener('pointermove', onMove, { passive: true })
+    host.addEventListener('pointerup', onUp, { passive: true })
+    host.addEventListener('pointercancel', onUp, { passive: true })
+    host.addEventListener('pointerleave', onUp, { passive: true })
+
+    return () => {
+      host.removeEventListener('pointerdown', onDown)
+      host.removeEventListener('pointermove', onMove)
+      host.removeEventListener('pointerup', onUp)
+      host.removeEventListener('pointercancel', onUp)
+      host.removeEventListener('pointerleave', onUp)
+    }
+    // zoom 의존: pinch 시작 시점의 initialZoom을 최신화. 매 down에서 캡처하므로 OK
+  }, [zoom])
   const resetZoom = () => setZoom(1)
+
+  /**
+   * Fit-all — 모든 사건이 한 화면에 들어가는 zoom으로.
+   * computePxPerYear가 floor(fit, PIXELS_PER_YEAR_DEFAULT*0.5)를 base로 쓰므로
+   * 데이터 span이 좁으면 zoom=1로 이미 fit. span이 매우 넓으면 zoom<1 필요.
+   */
+  const fitAll = useCallback(() => {
+    const innerWidth = Math.max(
+      0,
+      containerSize.width - LANE_LABEL_WIDTH - 16 - (EXT_LABEL_MAX_WIDTH + 16),
+    )
+    if (innerWidth <= 0 || yearSpan <= 0) return
+    const targetPxPerYear = innerWidth / yearSpan
+    const base = Math.max(targetPxPerYear, PIXELS_PER_YEAR_DEFAULT * 0.5)
+    const targetZoom = targetPxPerYear / base
+    setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, targetZoom)))
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollLeft = 0
+    })
+  }, [containerSize.width, yearSpan])
 
   // ── 드래그 패닝 (Space+드래그 또는 미들 버튼) ──────────────────────────
   const dragStateRef = useRef<{ startX: number; startScrollLeft: number } | null>(null)
@@ -751,6 +955,28 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   )
 
   /**
+   * 외부에서 사건 선택 시(예: list/grid에서 클릭 후 timeline 전환) 해당 막대로
+   * 자동 스크롤. viewport 안에 이미 있으면 무동작.
+   *
+   * 의존성: selectedEventId만. minYear/pxPerYear가 안정될 때까지(첫 마운트)는
+   *   bars/scrollRef가 비어 있을 수 있어 안전 가드.
+   */
+  useEffect(() => {
+    if (!selectedEventId || !renderReady) return
+    const sel = bars.find((b) => b.id === selectedEventId)
+    if (!sel) return
+    const el = scrollRef.current
+    if (!el) return
+    const x = (sel.startYear - minYear) * pixelsPerYear + LANE_LABEL_WIDTH
+    const left = el.scrollLeft
+    const right = left + el.clientWidth
+    // 이미 viewport 안 → 스크롤 생략 (사용자 컨텍스트 유지)
+    if (x >= left + 80 && x <= right - 80) return
+    scrollToYear(sel.startYear)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEventId, renderReady])
+
+  /**
    * Cluster 활성화 — fit-to-cluster:
    *   1) cluster span을 viewport 폭의 약 60%에 맞도록 zoom 계산
    *   2) ZOOM_MAX 이하로 클램프 (이미 MAX면 그대로)
@@ -862,16 +1088,28 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     items: RenderItem[]
     /** 카테고리(=lane key) → 숨겨진(overflow) bar 개수. 라벨 옆 "+N" 표시용 */
     overflow: Map<string, number>
+    /** 카테고리(=lane key) → 숨겨진 bar 객체들. popover에서 목록 표시용 */
+    overflowBars: Map<string, BarData[]>
     /** 카테고리 → 사용된 bar row 수 (1~MAX_BAR_ROWS). compact 높이 분기에 사용 */
     laneRows: Map<string, number>
   }>(() => {
     if (!renderReady) {
-      return { items: [], overflow: new Map(), laneRows: new Map() }
+      return {
+        items: [],
+        overflow: new Map(),
+        overflowBars: new Map(),
+        laneRows: new Map(),
+      }
     }
 
     const out: RenderItem[] = []
     const overflowByLane = new Map<string, number>()
+    const overflowBarsByLane = new Map<string, BarData[]>()
     const rowsByLane = new Map<string, number>()
+
+    /** 줌별 importance 필터 — 라벨 표시 *허용*하는 최소 importance.
+     * 0.85x 이상이면 모든 importance 시도. 충돌은 staggering + conflict resolution이 처리. */
+    const minLabelTier = labelImportanceMinTier(zoom)
 
     for (const [category, arr] of barsSortedByLane) {
       const lane = laneIndex.get(category)
@@ -933,6 +1171,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
        */
       const barRowOf = new Map<string, number>()
       const hiddenBarIds = new Set<string>()
+      const hiddenBarList: BarData[] = []
       const barEndsByRow: number[] = []
       let laneOverflow = 0
       for (const p of pre) {
@@ -952,6 +1191,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
           } else {
             // 모든 row가 차 있어 들어갈 자리 없음 → 숨김
             hiddenBarIds.add(p.bar.id)
+            hiddenBarList.push(p.bar)
             laneOverflow++
             continue
           }
@@ -960,7 +1200,10 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       }
       const usedBarRows = Math.min(MAX_BAR_ROWS, barEndsByRow.length)
       if (usedBarRows > 0) rowsByLane.set(category, usedBarRows)
-      if (laneOverflow > 0) overflowByLane.set(category, laneOverflow)
+      if (laneOverflow > 0) {
+        overflowByLane.set(category, laneOverflow)
+        overflowBarsByLane.set(category, hiddenBarList)
+      }
 
       // 2단계: milestone 클러스터링 — 연속된 milestone들이 CLUSTER_GAP_PX 이내 CLUSTER_MIN_COUNT개+ 면 묶음
       type Bucket = { items: Pre[]; isCluster: boolean }
@@ -992,11 +1235,31 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       }
       flushCluster()
 
-      // 3단계: 그리디 외부 라벨 placement — 다음 bucket까지 거리 ≥ EXT_LABEL_MIN_GAP 이면 표시
-      const items: RenderItem[] = []
+      /**
+       * 3단계: 라벨 placement — 두 패스
+       *  Pass 1: 각 bucket의 baseline showExt(geometry 가드) 계산 + bucket의 대표 importance 추출
+       *  Pass 2:
+       *    - 줌별 importance 필터 적용 (저줌은 critical만)
+       *    - 2-row staggering — 인접 라벨이 같은 row일 때 충돌 검사, 아니면 row 교대로 풀어 더 노출
+       *    - importance-weighted conflict — 충돌 시 더 중요한 bucket이 라벨 차지("steal")
+       */
+      type BucketInfo = {
+        idx: number
+        isCluster: boolean
+        startX: number
+        endX: number
+        importance: BarData['importance']
+        labelWidth: number
+        baselineShow: boolean
+      }
+      const bucketInfos: BucketInfo[] = []
       for (let i = 0; i < buckets.length; i++) {
         const b = buckets[i]
         const next = buckets[i + 1]
+        const myStart =
+          b.isCluster || b.items[0].kind === 'milestone'
+            ? b.items[0].cx - MILESTONE_RADIUS[b.items[0].bar.importance]
+            : b.items[0].x
         const myEnd =
           b.isCluster || b.items[0].kind === 'milestone'
             ? b.items[b.items.length - 1].cx +
@@ -1009,16 +1272,113 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
             : next.items[0].x
           : Infinity
         const gap = nextStart - myEnd
-        /**
-         * 라벨 폭 가드 — `gap >= MIN_GAP(60)` 그리고 *실제 사용 가능한 폭*이
-         * MIN_WIDTH(40) 이상일 때만 표시. 실 폭은 gap - 8(여백) 안에서 MAX_WIDTH(140)
-         * 이하. 이 조건을 모두 만족할 때만 showExt=true → 의미 없는 1~2글자 라벨이
-         * 시선을 분산하는 케이스 방지.
-         */
         const candidateWidth = Math.min(EXT_LABEL_MAX_WIDTH, gap - 8)
-        const showExt =
-          gap >= EXT_LABEL_MIN_GAP && candidateWidth >= EXT_LABEL_MIN_WIDTH
-        const labelWidth = Math.max(EXT_LABEL_MIN_WIDTH, candidateWidth)
+        /**
+         * baselineShow — *최소 표시 가능 폭*만 검사. 이전엔 `gap >= MIN_GAP(60)`도
+         * 함께 봤는데, 2-row staggering이 충돌을 해결하므로 단일 row 가정의
+         * 60px 게이트는 *과도하게 라벨을 차단*했다. (저줌 dense 시기에 모든 라벨 사라짐)
+         * 이제 staggering pass에서 row별 실제 충돌만 검사.
+         */
+        const baselineShow = candidateWidth >= EXT_LABEL_MIN_WIDTH
+        // bucket 대표 importance — 첫 항목 기준(milestone은 단일, bar도 단일)
+        const importance = b.items[0].bar.importance
+        bucketInfos.push({
+          idx: i,
+          isCluster: b.isCluster,
+          startX: myStart,
+          endX: myEnd,
+          importance,
+          labelWidth: Math.max(EXT_LABEL_MIN_WIDTH, candidateWidth),
+          baselineShow,
+        })
+      }
+
+      /**
+       * Pass 2: row 0(위), row 1(아래) 교대로 라벨 배치.
+       * 각 row는 `lastEndX[row]`를 추적 — 라벨이 그 row에 들어가려면
+       * `myStart >= lastEndX[row] + STAGGER_GAP`. 둘 다 안 되면 충돌 → importance 비교로 steal 또는 drop.
+       */
+      const lastLabelEndX = [-Infinity, -Infinity] // row 0(상), row 1(하)
+      const lastLabelOwner: Array<{
+        bucketIdx: number
+        importance: BarData['importance']
+      } | null> = [null, null]
+      const STAGGER_GAP = 6
+      const labelDecision = new Map<
+        number,
+        { show: boolean; row: 0 | 1 }
+      >()
+
+      for (const info of bucketInfos) {
+        if (!info.baselineShow) {
+          labelDecision.set(info.idx, { show: false, row: 0 })
+          continue
+        }
+        // 줌별 importance 필터 (cluster는 통과)
+        if (
+          !info.isCluster &&
+          LABEL_IMPORTANCE_TIER[info.importance] < minLabelTier
+        ) {
+          labelDecision.set(info.idx, { show: false, row: 0 })
+          continue
+        }
+        // row 0/1 충돌 검사 — 어느 한 row라도 비어 있으면 그 row에 배치
+        const fitsRow0 = info.startX >= lastLabelEndX[0] + STAGGER_GAP
+        const fitsRow1 = info.startX >= lastLabelEndX[1] + STAGGER_GAP
+        const labelEnd = info.endX + 4 + info.labelWidth
+
+        if (fitsRow0) {
+          lastLabelEndX[0] = labelEnd
+          lastLabelOwner[0] = {
+            bucketIdx: info.idx,
+            importance: info.importance,
+          }
+          labelDecision.set(info.idx, { show: true, row: 0 })
+        } else if (fitsRow1) {
+          lastLabelEndX[1] = labelEnd
+          lastLabelOwner[1] = {
+            bucketIdx: info.idx,
+            importance: info.importance,
+          }
+          labelDecision.set(info.idx, { show: true, row: 1 })
+        } else {
+          // 두 row 모두 충돌 — importance-weighted steal 시도
+          // 가장 importance 낮은 owner 찾고, 내가 더 중요하면 steal
+          const myTier = LABEL_IMPORTANCE_TIER[info.importance]
+          let weakestRow: 0 | 1 = 0
+          if (
+            lastLabelOwner[1] &&
+            (!lastLabelOwner[0] ||
+              LABEL_IMPORTANCE_TIER[lastLabelOwner[1].importance] <
+                LABEL_IMPORTANCE_TIER[lastLabelOwner[0].importance])
+          ) {
+            weakestRow = 1
+          }
+          const weakest = lastLabelOwner[weakestRow]
+          if (weakest && myTier > LABEL_IMPORTANCE_TIER[weakest.importance]) {
+            // steal: 이전 라벨 hide, 내가 차지
+            labelDecision.set(weakest.bucketIdx, { show: false, row: 0 })
+            lastLabelEndX[weakestRow] = labelEnd
+            lastLabelOwner[weakestRow] = {
+              bucketIdx: info.idx,
+              importance: info.importance,
+            }
+            labelDecision.set(info.idx, { show: true, row: weakestRow })
+          } else {
+            labelDecision.set(info.idx, { show: false, row: 0 })
+          }
+        }
+      }
+
+      // 4단계: render — bucket 별 RenderItem 생성. labelDecision으로 showExternalLabel/labelRow 주입.
+      const items: RenderItem[] = []
+      for (let i = 0; i < buckets.length; i++) {
+        const b = buckets[i]
+        const decision = labelDecision.get(i) ?? { show: false, row: 0 }
+        const showExt = decision.show
+        const info = bucketInfos[i]
+        const labelWidth = info.labelWidth
+        const labelRow = decision.row
 
         if (b.isCluster) {
           const first = b.items[0]
@@ -1038,6 +1398,9 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
             endYear: last.bar.endYear,
             centerYear,
             category,
+            showExternalLabel: showExt,
+            externalLabelWidth: labelWidth,
+            labelRow,
           })
         } else {
           const it = b.items[0]
@@ -1051,6 +1414,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
               r: MILESTONE_RADIUS[it.bar.importance],
               showExternalLabel: showExt,
               externalLabelWidth: labelWidth,
+              labelRow,
             })
           } else {
             // 숨김 처리된 bar는 렌더 X (overflow 배지로 라벨 영역에서 표시).
@@ -1075,6 +1439,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
               // 막대 안에 라벨 표시되는 경우(w > BAR_INSIDE_LABEL_MIN_PX)는 외부 라벨 안 그림
               showExternalLabel: showExt && it.w <= BAR_INSIDE_LABEL_MIN_PX,
               externalLabelWidth: labelWidth,
+              labelRow,
             })
           }
         }
@@ -1082,11 +1447,42 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       out.push(...items)
     }
 
-    return { items: out, overflow: overflowByLane, laneRows: rowsByLane }
-  }, [barsSortedByLane, laneIndex, renderReady, minYear, pixelsPerYear])
+    return {
+      items: out,
+      overflow: overflowByLane,
+      overflowBars: overflowBarsByLane,
+      laneRows: rowsByLane,
+    }
+  }, [barsSortedByLane, laneIndex, renderReady, minYear, pixelsPerYear, zoom])
 
   const renderItems = renderResult.items
   const laneBarOverflow = renderResult.overflow
+  const laneBarOverflowBars = renderResult.overflowBars
+
+  /** 어느 lane의 +N 배지가 popover 열려 있는지 — 한 번에 하나만 */
+  const [overflowPopoverLane, setOverflowPopoverLane] = useState<string | null>(
+    null,
+  )
+
+  /* overflow popover 외부 클릭 + Esc 닫기 */
+  useEffect(() => {
+    if (!overflowPopoverLane) return
+    const onDocDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (t && !(t as Element).closest?.('[data-overflow-popover]')) {
+        setOverflowPopoverLane(null)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOverflowPopoverLane(null)
+    }
+    document.addEventListener('mousedown', onDocDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [overflowPopoverLane])
 
   // ── 키보드 ←/→ 같은 lane 시간순 이동 + Home/End ────────────────────────
   const focusBar = useCallback((id: string) => {
@@ -1170,7 +1566,16 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
   // ── 오늘 마커 ───────────────────────────────────────────────────────────
   const currentYear = new Date().getFullYear()
-  const showToday = currentYear >= minYear && currentYear <= maxYear
+  /**
+   * "오늘" 마커는 *데이터가 현재 시점에 가까울 때만* 의미 있음.
+   *  - currentYear가 데이터 범위 안에 있어야 함
+   *  - AND 데이터의 maxYear가 currentYear-5 이상 (즉 최근 데이터가 있음)
+   * 모든 사건이 100년 전이면 오늘 마커는 화면 우측 끝에 점 하나로 시선만 분산.
+   */
+  const showToday =
+    currentYear >= minYear &&
+    currentYear <= maxYear &&
+    maxYear >= currentYear - 5
   const todayX = (currentYear - minYear) * pixelsPerYear
 
   // ── legend toggle ───────────────────────────────────────────────────────
@@ -1184,10 +1589,71 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   }
   const showAllCategories = () => setHiddenCategories(new Set())
 
-  // ── viewport readout 텍스트 ─────────────────────────────────────────────
+  // ── viewport readout 텍스트 — BC 연도 대응 ──────────────────────────────
   const viewportReadout = viewportYears
-    ? `${Math.round(viewportYears.start)}–${Math.round(viewportYears.end)}`
-    : `${minYear}–${maxYear}`
+    ? `${formatYearLabel(Math.round(viewportYears.start))}–${formatYearLabel(Math.round(viewportYears.end))}`
+    : `${formatYearLabel(minYear)}–${formatYearLabel(maxYear)}`
+
+  /**
+   * Lane별 top 사건 — lane 좌측 라벨 아래 mini text로. 라벨이 다 안 나와도
+   * "이 카테고리 대표 사건" 즉시 인지. critical 우선, 없으면 major, 없으면 첫 항목.
+   */
+  const laneTopBars = useMemo(() => {
+    const byLane = new Map<string, BarData[]>()
+    for (const b of bars) {
+      const arr = byLane.get(b.category) ?? []
+      arr.push(b)
+      byLane.set(b.category, arr)
+    }
+    const out = new Map<string, BarData[]>()
+    for (const [k, arr] of byLane) {
+      const sorted = [...arr].sort((a, b) => {
+        const ta = LABEL_IMPORTANCE_TIER[a.importance]
+        const tb = LABEL_IMPORTANCE_TIER[b.importance]
+        if (ta !== tb) return tb - ta
+        return a.startYear - b.startYear
+      })
+      out.set(k, sorted.slice(0, 2))
+    }
+    return out
+  }, [bars])
+
+  /**
+   * Lane별 decade 밀도 — 라벨이 안 보여도 *어디에 사건이 많은지* 시각 단서.
+   * lane 하단에 5px 밴드로 그라데이션 strip 렌더.
+   */
+  const laneDensity = useMemo(() => {
+    const byLane = new Map<string, { byDecade: Map<number, number>; max: number }>()
+    for (const b of bars) {
+      const decade = Math.floor(b.startYear / 10) * 10
+      let entry = byLane.get(b.category)
+      if (!entry) {
+        entry = { byDecade: new Map(), max: 0 }
+        byLane.set(b.category, entry)
+      }
+      const cur = (entry.byDecade.get(decade) ?? 0) + 1
+      entry.byDecade.set(decade, cur)
+      if (cur > entry.max) entry.max = cur
+    }
+    return byLane
+  }, [bars])
+
+  /**
+   * 현재 viewport 안 critical 사건 — 헤더에 chip으로. 라벨이 충돌해 가려졌어도
+   * "지금 보이는 곳에 어떤 핵심 사건이 있는지" 한눈에 보여줌. 클릭 시 그 사건 선택.
+   */
+  const viewportCriticalBars = useMemo(() => {
+    if (!viewportYears) return [] as BarData[]
+    const { start, end } = viewportYears
+    return bars
+      .filter(
+        (b) =>
+          b.importance === 'critical' &&
+          b.endYear >= start &&
+          b.startYear <= end,
+      )
+      .slice(0, 4)
+  }, [bars, viewportYears])
 
   // ── export ──────────────────────────────────────────────────────────────
   const downloadBlob = (content: string, mime: string, ext: string) => {
@@ -1211,6 +1677,58 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       'image/svg+xml;charset=utf-8',
       'svg',
     )
+    setExportOpen(false)
+  }
+
+  /**
+   * PNG export — SVG를 canvas에 렌더링 후 toBlob.
+   * SVG에 외부 폰트가 들어 있으면 일부 글리프 깨질 수 있음(브라우저 한계).
+   * 라벨이 잘리는 경우 SVG 옵션 권장.
+   */
+  const exportPng = () => {
+    const svg = svgRef.current
+    if (!svg) return
+    const xml = new XMLSerializer().serializeToString(svg)
+    const svgBlob = new Blob(
+      [`<?xml version="1.0" encoding="UTF-8"?>\n${xml}`],
+      { type: 'image/svg+xml;charset=utf-8' },
+    )
+    const url = URL.createObjectURL(svgBlob)
+    const img = new Image()
+    img.onload = () => {
+      const w = svg.clientWidth || svg.viewBox.baseVal.width || 1200
+      const h = svg.clientHeight || svg.viewBox.baseVal.height || 600
+      const dpr = window.devicePixelRatio || 1
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.ceil(w * dpr)
+      canvas.height = Math.ceil(h * dpr)
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        URL.revokeObjectURL(url)
+        return
+      }
+      ctx.scale(dpr, dpr)
+      // 흰 배경으로(다크 모드에서도 인쇄/공유에 적합)
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, w, h)
+      ctx.drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(url)
+      canvas.toBlob((blob) => {
+        if (!blob) return
+        const pngUrl = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = pngUrl
+        a.download = `timeline-${new Date().toISOString().slice(0, 10)}.png`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(pngUrl), 1000)
+      }, 'image/png')
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+    }
+    img.src = url
     setExportOpen(false)
   }
 
@@ -1243,6 +1761,46 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     document.addEventListener('mousedown', onDocDown)
     return () => document.removeEventListener('mousedown', onDocDown)
   }, [exportOpen])
+
+  /* shape legend popover — 외부 클릭 + Esc 닫기 */
+  useEffect(() => {
+    if (!shapeLegendOpen) return
+    const onDocDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (t && !(t as Element).closest?.('[data-shape-legend]')) {
+        setShapeLegendOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShapeLegendOpen(false)
+    }
+    document.addEventListener('mousedown', onDocDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [shapeLegendOpen])
+
+  /* zoom menu — 외부 클릭 + Esc 닫기 */
+  useEffect(() => {
+    if (!zoomMenuOpen) return
+    const onDocDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (t && !(t as Element).closest?.('[data-zoom-menu]')) {
+        setZoomMenuOpen(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setZoomMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [zoomMenuOpen])
 
   // ── render ──────────────────────────────────────────────────────────────
   /**
@@ -1315,43 +1873,107 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
           <CardTitleGroup>
             <CardTitle>사건 타임라인</CardTitle>
             <CardHint>
-              막대 클릭 · ←/→ 이동 · Ctrl+휠 줌 · Space+드래그 패닝
+              막대 클릭 · Shift+클릭 라벨 핀 · ←/→ 이동 · Ctrl+휠 줌 · Space+드래그
             </CardHint>
           </CardTitleGroup>
           <HeaderActions>
-            <ViewportReadout
-              aria-live="polite"
-              aria-atomic="true"
-              title="현재 보이는 연도 범위"
-            >
-              {viewportReadout}
-            </ViewportReadout>
-            <ZoomControls aria-label="확대/축소">
-              <ZoomButton
-                type="button"
-                aria-label="축소"
-                onClick={() => zoomBy(1 / ZOOM_STEP)}
-                disabled={zoom <= ZOOM_MIN + 0.01}
-              >
-                −
-              </ZoomButton>
-              <ZoomReadout
-                onClick={resetZoom}
-                title="원래 크기로 (1×)"
-                aria-label={`현재 확대율 ${Math.round(zoom * 100)}% — 클릭하여 1× 복귀`}
-                aria-live="polite"
-              >
-                {Math.round(zoom * 100)}%
-              </ZoomReadout>
-              <ZoomButton
-                type="button"
-                aria-label="확대"
-                onClick={() => zoomBy(ZOOM_STEP)}
-                disabled={zoom >= ZOOM_MAX - 0.01}
-              >
-                +
-              </ZoomButton>
-            </ZoomControls>
+            <YearJumpInput
+              type="number"
+              defaultValue=""
+              placeholder={viewportReadout}
+              min={minYear}
+              max={maxYear}
+              aria-label={`연도 점프 — 현재 ${viewportReadout}`}
+              title="연도를 입력하고 Enter — 그 시기로 이동"
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === 'Enter') {
+                  const v = parseInt(e.currentTarget.value, 10)
+                  if (!Number.isNaN(v)) {
+                    scrollToYear(v)
+                    e.currentTarget.blur()
+                  }
+                } else if (e.key === 'Escape') {
+                  e.currentTarget.value = ''
+                  e.currentTarget.blur()
+                }
+              }}
+            />
+            <ZoomMenuWrap data-zoom-menu>
+              <ZoomControls aria-label="확대/축소">
+                <ZoomButton
+                  type="button"
+                  aria-label="전체 보기 — 모든 사건이 한 화면에"
+                  title="전체 보기 (Fit)"
+                  onClick={fitAll}
+                >
+                  <FiMaximize2 size={12} aria-hidden="true" />
+                </ZoomButton>
+                <ZoomButton
+                  type="button"
+                  aria-label="축소"
+                  title="축소"
+                  onClick={() => zoomBy(1 / ZOOM_STEP)}
+                  disabled={zoom <= ZOOM_MIN + 0.01}
+                >
+                  <FiMinus size={12} aria-hidden="true" />
+                </ZoomButton>
+                <ZoomReadout
+                  onClick={() => setZoomMenuOpen((v) => !v)}
+                  title="확대율 — 클릭하여 프리셋 선택"
+                  aria-haspopup="menu"
+                  aria-expanded={zoomMenuOpen}
+                  aria-label={`현재 확대율 ${Math.round(zoom * 100)}% — 클릭하여 프리셋 메뉴 열기`}
+                  aria-live="polite"
+                >
+                  {Math.round(zoom * 100)}%
+                </ZoomReadout>
+                <ZoomButton
+                  type="button"
+                  aria-label="확대"
+                  title="확대"
+                  onClick={() => zoomBy(ZOOM_STEP)}
+                  disabled={zoom >= ZOOM_MAX - 0.01}
+                >
+                  <FiPlus size={12} aria-hidden="true" />
+                </ZoomButton>
+              </ZoomControls>
+              {zoomMenuOpen && (
+                <ZoomMenu role="menu" aria-label="확대율 프리셋">
+                  {ZOOM_PRESETS.map((p) => {
+                    const pct = Math.round(p * 100)
+                    const isCurrent =
+                      Math.abs(Math.round(zoom * 100) - pct) < 1
+                    return (
+                      <ZoomMenuItem
+                        key={p}
+                        role="menuitemradio"
+                        aria-checked={isCurrent}
+                        $active={isCurrent}
+                        type="button"
+                        onClick={() => {
+                          setZoom(p)
+                          setZoomMenuOpen(false)
+                        }}
+                      >
+                        {pct}%
+                        {p === 1 && <ZoomMenuHint>기본</ZoomMenuHint>}
+                      </ZoomMenuItem>
+                    )
+                  })}
+                  <ZoomMenuDivider />
+                  <ZoomMenuItem
+                    role="menuitem"
+                    type="button"
+                    onClick={() => {
+                      fitAll()
+                      setZoomMenuOpen(false)
+                    }}
+                  >
+                    전체 보기 (Fit)
+                  </ZoomMenuItem>
+                </ZoomMenu>
+              )}
+            </ZoomMenuWrap>
             <ExportWrap data-export-menu>
               <ExportButton
                 type="button"
@@ -1359,11 +1981,16 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 aria-haspopup="menu"
                 aria-expanded={exportOpen}
                 title="내보내기"
+                aria-label="내보내기"
               >
-                ⤓
+                <FiDownload size={13} aria-hidden="true" />
+                <span>내보내기</span>
               </ExportButton>
               {exportOpen && (
                 <ExportMenu role="menu">
+                  <ExportMenuItem role="menuitem" onClick={exportPng}>
+                    PNG로 내보내기
+                  </ExportMenuItem>
                   <ExportMenuItem role="menuitem" onClick={exportSvg}>
                     SVG로 내보내기
                   </ExportMenuItem>
@@ -1373,6 +2000,83 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 </ExportMenu>
               )}
             </ExportWrap>
+
+            <ShapeLegendWrap data-shape-legend>
+              <ZoomButton
+                type="button"
+                aria-label="모양 범례 — 다이아·네모·wedge 의미"
+                aria-expanded={shapeLegendOpen}
+                aria-haspopup="dialog"
+                title="모양 의미 설명"
+                onClick={() => setShapeLegendOpen((v) => !v)}
+              >
+                <FiInfo size={12} aria-hidden="true" />
+              </ZoomButton>
+              {shapeLegendOpen && (
+                <ShapeLegendPopover role="dialog" aria-label="모양 범례">
+                  <ShapeLegendTitle>모양으로 구분되는 정보</ShapeLegendTitle>
+                  <ShapeLegendRow>
+                    <ShapeLegendIcon aria-hidden="true">
+                      <svg width="20" height="14" viewBox="0 0 20 14">
+                        <rect x="0" y="2" width="20" height="10" rx="2" fill="#2563eb" />
+                      </svg>
+                    </ShapeLegendIcon>
+                    <ShapeLegendText>
+                      <strong>네모</strong>
+                      <span>기간 있는 사건 (현 줌에서 ≥8px)</span>
+                    </ShapeLegendText>
+                  </ShapeLegendRow>
+                  <ShapeLegendRow>
+                    <ShapeLegendIcon aria-hidden="true">
+                      <svg width="20" height="14" viewBox="0 0 20 14">
+                        <polygon points="10,1 18,7 10,13 2,7" fill="#2563eb" />
+                      </svg>
+                    </ShapeLegendIcon>
+                    <ShapeLegendText>
+                      <strong>다이아</strong>
+                      <span>짧은 사건 (단발 또는 줌 아웃 시)</span>
+                    </ShapeLegendText>
+                  </ShapeLegendRow>
+                  <ShapeLegendRow>
+                    <ShapeLegendIcon aria-hidden="true">
+                      <svg width="20" height="14" viewBox="0 0 20 14">
+                        <polygon points="10,0 19,7 10,14 1,7" fill="#2563eb" />
+                        <text
+                          x="10"
+                          y="9.5"
+                          fontSize="6"
+                          fill="#fff"
+                          textAnchor="middle"
+                          fontWeight="700"
+                        >
+                          5+
+                        </text>
+                      </svg>
+                    </ShapeLegendIcon>
+                    <ShapeLegendText>
+                      <strong>큰 다이아</strong>
+                      <span>3개 이상 밀집 — 클릭 시 자동 확대</span>
+                    </ShapeLegendText>
+                  </ShapeLegendRow>
+                  <ShapeLegendRow>
+                    <ShapeLegendIcon aria-hidden="true">
+                      <svg width="20" height="14" viewBox="0 0 20 14">
+                        <rect x="3" y="2" width="17" height="10" rx="2" fill="#2563eb" />
+                        <polygon points="0,2 6,7 0,12" fill="#1e40af" />
+                      </svg>
+                    </ShapeLegendIcon>
+                    <ShapeLegendText>
+                      <strong>좌측 삼각</strong>
+                      <span>핵심·주요 사건 (색맹 보조 표시)</span>
+                    </ShapeLegendText>
+                  </ShapeLegendRow>
+                  <ShapeLegendDivider />
+                  <ShapeLegendHint>
+                    색 = 카테고리 · 높이 = 중요도 · 폭 = 기간
+                  </ShapeLegendHint>
+                </ShapeLegendPopover>
+              )}
+            </ShapeLegendWrap>
             <Legend aria-label="카테고리 색 범례 — 클릭으로 표시/숨김 토글">
               {legendItems.map((lane) => {
                 const hidden = hiddenCategories.has(lane.key)
@@ -1406,6 +2110,54 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
           </HeaderActions>
         </CardHeader>
 
+        {/* viewport 안 critical 사건 chip — 라벨이 가려졌어도 핵심 사건 식별 가능 */}
+        {viewportCriticalBars.length > 0 && (
+          <ViewportCriticalRow
+            role="region"
+            aria-label="현재 보이는 곳의 핵심 사건"
+          >
+            <ViewportCriticalLabel>핵심 사건</ViewportCriticalLabel>
+            {viewportCriticalBars.map((b) => (
+              <ViewportCriticalChip
+                key={b.id}
+                type="button"
+                onClick={() => onSelectEvent(b.id)}
+                title={`${b.title} · ${formatYearLabel(b.startYear)}`}
+              >
+                <ViewportCriticalDot
+                  style={{ background: categoryColor(b.category) }}
+                  aria-hidden="true"
+                />
+                <ViewportCriticalYear>
+                  {formatYearLabel(b.startYear)}
+                </ViewportCriticalYear>
+                <span>{b.title}</span>
+              </ViewportCriticalChip>
+            ))}
+          </ViewportCriticalRow>
+        )}
+
+        {/* 일부 카테고리가 숨겨져 있을 때 알림 띠 — bars > 0 일 때만 (전부 숨김은 EmptyHint 분기) */}
+        {anyHidden && bars.length > 0 && (
+          <HiddenCatStrip role="status" aria-live="polite">
+            <span>
+              카테고리 <strong>{hiddenCategories.size}</strong>개 숨김
+              {(() => {
+                const labels = Array.from(hiddenCategories).slice(0, 3)
+                if (labels.length === 0) return null
+                const more =
+                  hiddenCategories.size > labels.length
+                    ? ` 외 ${hiddenCategories.size - labels.length}개`
+                    : ''
+                return ` · ${labels.join(', ')}${more}`
+              })()}
+            </span>
+            <HiddenCatStripButton type="button" onClick={showAllCategories}>
+              모두 보이기
+            </HiddenCatStripButton>
+          </HiddenCatStrip>
+        )}
+
         {bars.length === 0 ? (
           <EmptyHint>
             <EmptyIconBubble aria-hidden="true">∅</EmptyIconBubble>
@@ -1431,13 +2183,39 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
             )}
           </EmptyHint>
         ) : (
-          <ScrollHost
-            ref={attachScrollHost}
-            onWheel={handleWheel}
-            onMouseDown={handlePanMouseDown}
-            $panning={spaceHeld}
-            tabIndex={-1}
-          >
+          <>
+            {showOnboarding && (
+              <OnboardingTip role="status" aria-live="polite">
+                <OnboardingTipBody>
+                  <OnboardingTipTitle>
+                    💡 타임라인 사용법
+                  </OnboardingTipTitle>
+                  <OnboardingTipList>
+                    <li>
+                      <kbd>Ctrl</kbd> + 휠 — 줌
+                    </li>
+                    <li>
+                      <kbd>Space</kbd> + 드래그 — 이동
+                    </li>
+                    <li>막대 클릭 — 사건 상세</li>
+                  </OnboardingTipList>
+                </OnboardingTipBody>
+                <OnboardingTipDismiss
+                  type="button"
+                  onClick={dismissOnboarding}
+                  aria-label="안내 닫기"
+                >
+                  알겠어요
+                </OnboardingTipDismiss>
+              </OnboardingTip>
+            )}
+            <ScrollHost
+              ref={attachScrollHost}
+              onWheel={handleWheel}
+              onMouseDown={handlePanMouseDown}
+              $panning={spaceHeld}
+              tabIndex={-1}
+            >
             {renderReady && (
               <SvgRoot
                 ref={svgRef}
@@ -1461,7 +2239,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                           $major={major}
                         />
                         <TickLabel x={2} y={TOP_AXIS_HEIGHT - 12}>
-                          {y}
+                          {formatYearLabel(y)}
                         </TickLabel>
                       </g>
                     )
@@ -1485,48 +2263,138 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                         $alt={i % 2 === 1}
                         $highlighted={hoveredCategory === lane.key}
                       />
+                      {/* 밀도 underlay — lane 하단 5px 띠. 사건 0건 decade는 미출력 */}
+                      {(() => {
+                        const dens = laneDensity.get(lane.key)
+                        if (!dens || dens.max === 0) return null
+                        const color = categoryColor(lane.key)
+                        const stripY = yTop + LANE_HEIGHT - 6
+                        return (
+                          <g pointerEvents="none">
+                            {Array.from(dens.byDecade.entries()).map(
+                              ([decade, count]) => {
+                                const x =
+                                  LANE_LABEL_WIDTH +
+                                  (decade - minYear) * pixelsPerYear
+                                const w = 10 * pixelsPerYear
+                                if (w < 1) return null
+                                const opacity = 0.08 + (count / dens.max) * 0.32
+                                return (
+                                  <rect
+                                    key={`d-${lane.key}-${decade}`}
+                                    x={x}
+                                    y={stripY}
+                                    width={w}
+                                    height={4}
+                                    fill={color}
+                                    fillOpacity={opacity}
+                                    rx={1}
+                                  />
+                                )
+                              },
+                            )}
+                          </g>
+                        )
+                      })()}
                       <LaneSeparator
                         x1={LANE_LABEL_WIDTH}
                         x2={svgWidth}
                         y1={yTop + LANE_HEIGHT}
                         y2={yTop + LANE_HEIGHT}
                       />
-                      <LaneLabel
-                        x={LANE_LABEL_WIDTH - 10}
-                        y={yTop + LANE_HEIGHT / 2 + 4}
-                      >
-                        {truncateLabel(lane.label, 10)}
-                      </LaneLabel>
-                      {/* 시간 겹침으로 숨겨진 bar 수 — row stacking이 cap에 도달했을 때만 노출 */}
-                      {(() => {
-                        const overflowCount = laneBarOverflow.get(lane.key) ?? 0
-                        if (overflowCount === 0) return null
-                        return (
-                          <LaneOverflowBadge
-                            transform={`translate(${LANE_LABEL_WIDTH - 24}, ${yTop + LANE_HEIGHT - 14})`}
-                          >
-                            <title>
-                              시간 겹침으로 {overflowCount}건이 더 있습니다 (lane 한계 도달)
-                            </title>
-                            <rect
-                              x={-18}
-                              y={-9}
-                              width={32}
-                              height={14}
-                              rx={7}
-                            />
-                            <text x={-2} y={1} textAnchor="middle">
-                              +{overflowCount}
-                            </text>
-                          </LaneOverflowBadge>
-                        )
-                      })()}
-                      <LaneDot
-                        cx={12}
-                        cy={yTop + LANE_HEIGHT / 2}
-                        r={3}
-                        fill={categoryColor(lane.key)}
-                      />
+                      {/**
+                       * 좌측 라벨 영역 — sticky.
+                       * `translate(${scrollLeft}, 0)`로 viewport 우측 스크롤에 따라 함께 이동 →
+                       * 사용자 시야 기준으로 lane label 영역이 *항상 화면 좌측에 고정*.
+                       *
+                       * 내부 `<LaneLabelBg>`가 막대/라벨이 뒤에서 보이지 않도록 surface 색으로 덮음.
+                       */}
+                      <g transform={`translate(${scrollLeft}, 0)`}>
+                        <LaneLabelBg
+                          x={0}
+                          y={yTop}
+                          width={LANE_LABEL_WIDTH}
+                          height={LANE_HEIGHT}
+                        />
+                        <LaneLabel
+                          x={LANE_LABEL_WIDTH - 10}
+                          y={yTop + LANE_HEIGHT / 2 - 6}
+                        >
+                          {truncateLabel(lane.label, 10)}
+                        </LaneLabel>
+                        {/* lane 카테고리 top 1~2 사건 — 라벨이 다 안 나와도 대표 사건 노출 */}
+                        {(() => {
+                          const tops = laneTopBars.get(lane.key)
+                          if (!tops || tops.length === 0) return null
+                          return tops.map((t, ti) => (
+                            <LaneTopText
+                              key={`${lane.key}-top-${t.id}`}
+                              x={LANE_LABEL_WIDTH - 10}
+                              y={yTop + LANE_HEIGHT / 2 + 8 + ti * 11}
+                              onClick={() => onSelectEvent(t.id)}
+                            >
+                              <title>{t.title}</title>
+                              {truncateLabel(t.title, 12)}
+                            </LaneTopText>
+                          ))
+                        })()}
+                        {/* 시간 겹침으로 숨겨진 bar 수 — row stacking이 cap에 도달했을 때만 노출.
+                         * 클릭 시 popover로 가려진 사건 목록 노출. */}
+                        {(() => {
+                          const overflowCount = laneBarOverflow.get(lane.key) ?? 0
+                          if (overflowCount === 0) return null
+                          return (
+                            <LaneOverflowBadge
+                              transform={`translate(${LANE_LABEL_WIDTH - 24}, ${yTop + LANE_HEIGHT - 14})`}
+                              tabIndex={0}
+                              role="button"
+                              aria-label={`${lane.label} 가려진 사건 ${overflowCount}건 보기`}
+                              onClick={() =>
+                                setOverflowPopoverLane((cur) =>
+                                  cur === lane.key ? null : lane.key,
+                                )
+                              }
+                              onKeyDown={(
+                                e: React.KeyboardEvent<SVGGElement>,
+                              ) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  setOverflowPopoverLane((cur) =>
+                                    cur === lane.key ? null : lane.key,
+                                  )
+                                }
+                              }}
+                            >
+                              <title>
+                                시간 겹침으로 {overflowCount}건이 더 있습니다 — 클릭하여 목록 보기
+                              </title>
+                              <rect
+                                x={-18}
+                                y={-9}
+                                width={32}
+                                height={14}
+                                rx={7}
+                              />
+                              <text x={-2} y={1} textAnchor="middle">
+                                +{overflowCount}
+                              </text>
+                            </LaneOverflowBadge>
+                          )
+                        })()}
+                        <LaneDot
+                          cx={12}
+                          cy={yTop + LANE_HEIGHT / 2}
+                          r={3}
+                          fill={categoryColor(lane.key)}
+                        />
+                        {/* 우측 hairline — 라벨 영역과 timeline 본문의 시각 경계 */}
+                        <LaneLabelDivider
+                          x1={LANE_LABEL_WIDTH}
+                          y1={yTop}
+                          x2={LANE_LABEL_WIDTH}
+                          y2={yTop + LANE_HEIGHT}
+                        />
+                      </g>
                     </g>
                   )
                 })}
@@ -1689,7 +2557,15 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                       'aria-pressed': isActive,
                       'aria-describedby': tooltipIdRef.current,
                       'data-bar-id': b.id,
-                      onClick: () => onSelectEvent(b.id),
+                      onClick: (e: React.MouseEvent<SVGElement>) => {
+                        // Shift+클릭 = 라벨 핀 토글, 일반 클릭 = 사건 선택
+                        if (e.shiftKey) {
+                          e.stopPropagation()
+                          togglePinnedLabel(b.id)
+                          return
+                        }
+                        onSelectEvent(b.id)
+                      },
                       onKeyDown: (e: React.KeyboardEvent<SVGElement>) =>
                         handleBarKeyDown(e, b),
                       onMouseEnter: (e: React.MouseEvent<SVGElement>) =>
@@ -1721,8 +2597,19 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                       //   notable:  dashed stroke
                       //   normal:   solid stroke (구분 단서 없음 — 가장 약한 등급)
                       const dashed = b.importance === 'notable'
+                      // 터치/마우스 hit area를 시각 크기보다 확장 — 다이아몬드는 5~7px라 작음.
+                      // 투명 큰 polygon이 commonHandlers를 받고 visible MilestoneShape는 pointerEvents none.
+                      const hitR = Math.max(r + 6, 12)
+                      const hitPoints = `${it.cx},${it.cy - hitR} ${it.cx + hitR},${it.cy} ${it.cx},${it.cy + hitR} ${it.cx - hitR},${it.cy}`
                       return (
                         <g key={b.id} role="listitem">
+                          <polygon
+                            points={hitPoints}
+                            fill="transparent"
+                            stroke="none"
+                            style={{ cursor: 'pointer' }}
+                            {...commonHandlers}
+                          />
                           <MilestoneShape
                             points={points}
                             fill={`${color}E6`}
@@ -1732,7 +2619,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                             $active={isActive}
                             $dim={dim}
                             $importance={b.importance}
-                            {...commonHandlers}
+                            pointerEvents="none"
                           />
                           {b.importance === 'critical' && (
                             <circle
@@ -1762,12 +2649,21 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                               pointerEvents="none"
                             />
                           )}
-                          {it.showExternalLabel && (
+                          {(it.showExternalLabel || pinnedLabelIds.has(b.id)) && (
                             <ExternalLabel
                               x={it.cx + r + 6}
-                              y={it.cy + 3.5}
+                              /**
+                               * Row 0 = 다이아 옆 vertically centered (원래 위치, 친숙).
+                               * Row 1 = 다이아 아래 14px (충돌 회피용 stagger).
+                               */
+                              y={
+                                it.labelRow === 1
+                                  ? it.cy + r + 14
+                                  : it.cy + 3.5
+                              }
                               aria-hidden="true"
                               onClick={() => onSelectEvent(b.id)}
+                              data-pinned={pinnedLabelIds.has(b.id) ? '1' : undefined}
                             >
                               {truncateBarText(b.title, it.externalLabelWidth)}
                             </ExternalLabel>
@@ -1842,17 +2738,45 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                             {truncateBarText(b.title, it.w - (showWedge ? 18 : 12))}
                           </BarLabel>
                         )}
-                        {/* 막대 안에 라벨 안 들어가면 외부 라벨 시도 */}
-                        {!inLabel && it.showExternalLabel && (
-                          <ExternalLabel
-                            x={it.x + it.w + 6}
-                            y={it.y + it.h / 2 + 3.5}
-                            aria-hidden="true"
-                            onClick={() => onSelectEvent(b.id)}
-                          >
-                            {truncateBarText(b.title, it.externalLabelWidth)}
-                          </ExternalLabel>
-                        )}
+                        {/**
+                         * Critical 단축 라벨 — 80px 미만이라 inLabel 못 들어가지만 24px 이상이고
+                         * critical인 경우 *축약 첫 글자*만 막대 안에 노출. 외부 라벨이 다른 라벨 충돌로
+                         * suppressed돼도 최소한 식별 단서 제공.
+                         */}
+                        {!inLabel &&
+                          b.importance === 'critical' &&
+                          it.w >= 24 && (
+                            <BarLabelCompact
+                              x={it.x + it.w / 2}
+                              y={it.y + it.h / 2 + 3.5}
+                              pointerEvents="none"
+                              aria-hidden="true"
+                            >
+                              {compactCriticalLabel(b.title)}
+                            </BarLabelCompact>
+                          )}
+                        {/* 막대 안에 라벨 안 들어가면 외부 라벨 시도.
+                         * Row 0 = 막대 옆 vertically centered (원래 위치, 친숙).
+                         * Row 1 = 막대 바로 아래 12px (충돌 회피 stagger).
+                         * 핀(Shift+클릭)된 라벨은 conflict 무관하게 항상 표시. */}
+                        {!inLabel &&
+                          (it.showExternalLabel || pinnedLabelIds.has(b.id)) && (
+                            <ExternalLabel
+                              x={it.x + it.w + 6}
+                              y={
+                                it.labelRow === 1
+                                  ? it.y + it.h + 12
+                                  : it.y + it.h / 2 + 3.5
+                              }
+                              aria-hidden="true"
+                              onClick={() => onSelectEvent(b.id)}
+                              data-pinned={
+                                pinnedLabelIds.has(b.id) ? '1' : undefined
+                              }
+                            >
+                              {truncateBarText(b.title, it.externalLabelWidth)}
+                            </ExternalLabel>
+                          )}
                       </g>
                     )
                   })}
@@ -1881,7 +2805,65 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 </TooltipMeta>
               </Tooltip>
             )}
-          </ScrollHost>
+
+            {/* +N 배지 클릭 시 가려진 사건 목록 popover — ScrollHost 안에 절대 위치, 가로 스크롤과 함께 이동 */}
+            {overflowPopoverLane &&
+              (() => {
+                const laneIdx = visibleLanes.findIndex(
+                  (l) => l.key === overflowPopoverLane,
+                )
+                if (laneIdx === -1) return null
+                const yTop = TOP_AXIS_HEIGHT + laneIdx * LANE_HEIGHT
+                const list =
+                  laneBarOverflowBars.get(overflowPopoverLane) ?? []
+                if (list.length === 0) return null
+                return (
+                  <OverflowPopover
+                    data-overflow-popover
+                    role="dialog"
+                    aria-label={`가려진 사건 ${list.length}건`}
+                    style={{
+                      top: `${yTop + LANE_HEIGHT / 2 - 12}px`,
+                      left: `${LANE_LABEL_WIDTH + 8}px`,
+                    }}
+                  >
+                    <OverflowPopoverHeader>
+                      가려진 사건 {list.length}건
+                      <OverflowPopoverClose
+                        type="button"
+                        onClick={() => setOverflowPopoverLane(null)}
+                        aria-label="닫기"
+                      >
+                        ×
+                      </OverflowPopoverClose>
+                    </OverflowPopoverHeader>
+                    <OverflowPopoverList>
+                      {list.slice(0, 20).map((b) => (
+                        <OverflowPopoverItem
+                          key={b.id}
+                          type="button"
+                          onClick={() => {
+                            onSelectEvent(b.id)
+                            setOverflowPopoverLane(null)
+                          }}
+                        >
+                          <OverflowPopoverYear>
+                            {formatYearLabel(b.startYear)}
+                          </OverflowPopoverYear>
+                          <span>{b.title}</span>
+                        </OverflowPopoverItem>
+                      ))}
+                      {list.length > 20 && (
+                        <OverflowPopoverHint>
+                          + {list.length - 20}건 더 있음 — 줌 인해 보세요
+                        </OverflowPopoverHint>
+                      )}
+                    </OverflowPopoverList>
+                  </OverflowPopover>
+                )
+              })()}
+            </ScrollHost>
+          </>
         )}
       </TimelineCard>
     </>
@@ -1891,6 +2873,35 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 // ─────────────────────────────────────────────────────────────────────────────
 // helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Critical 사건의 *축약 첫 글자 라벨* — 막대 폭이 좁아 80px 풀 라벨이 못 들어갈 때
+ * 의미 있는 첫 1~2자만 노출. CJK는 1자, ASCII는 약 2자.
+ *  - "6.25 전쟁" → "6.2"
+ *  - "임진왜란" → "임"
+ *  - "WWII" → "WW"
+ */
+function compactCriticalLabel(title: string): string {
+  if (!title) return ''
+  const trimmed = title.trim()
+  // CJK 시작이면 첫 1자, ASCII 시작이면 첫 2자
+  if (CJK_RE.test(trimmed[0])) return trimmed.slice(0, 1)
+  // 숫자.숫자 패턴(예: "6.25")이면 첫 3자
+  if (/^\d+\.\d/.test(trimmed)) return trimmed.slice(0, 3)
+  return trimmed.slice(0, 2)
+}
+
+/**
+ * 연도 라벨 포맷 — BC/AD 처리.
+ * - y > 0 : "1950" (그대로)
+ * - y === 0 : 그레고리력에서 0년 없음 → "1 BC"로 처리
+ * - y < 0 : "BC 57"
+ */
+function formatYearLabel(y: number): string {
+  if (y > 0) return String(y)
+  if (y === 0) return '1 BC'
+  return `BC ${-y}`
+}
 
 function isInEditableElement(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
@@ -1947,6 +2958,107 @@ const cardBase = css`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(20,19,34,0.08)'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#ffffff'};
+`
+
+/** 첫 진입 코치마크 — TimelineCard 상단 인라인 배너. localStorage 1회 노출 후 dismiss. */
+const OnboardingTip = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 14px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(147, 197, 253, 0.22)'
+        : 'rgba(37, 99, 235, 0.2)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(37, 99, 235, 0.08)'
+      : 'rgba(37, 99, 235, 0.04)'};
+  flex-wrap: wrap;
+`
+
+const OnboardingTipBody = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+`
+
+const OnboardingTipTitle = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const OnboardingTipList = styled.ul`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+      monospace;
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1;
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? `background: rgba(255,255,255,0.08);
+           border: 1px solid rgba(255,255,255,0.12);
+           color: rgba(226, 232, 240, 0.85);`
+        : `background: #ffffff;
+           border: 1px solid rgba(15,23,42,0.12);
+           color: #475569;`}
+  }
+`
+
+const OnboardingTipDismiss = styled.button`
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: ${BRAND.primary};
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background ${MOTION.fast};
+
+  &:hover {
+    background: ${BRAND.primaryHover};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
 `
 
 const MinimapCard = styled.section`
@@ -2121,18 +3233,350 @@ const ZoomReadout = styled.button`
   }
 `
 
+/* zoom % dropdown wrapper — ZoomReadout 외부 감싸 popover 절대 위치 anchor */
+const ZoomMenuWrap = styled.div`
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+`
+
+const ZoomMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 100;
+  min-width: 120px;
+  padding: 4px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? `background: #18181b;
+         border: 1px solid rgba(255,255,255,0.08);
+         box-shadow: 0 12px 32px rgba(0,0,0,0.45);`
+      : `background: #ffffff;
+         border: 1px solid rgba(15,23,42,0.08);
+         box-shadow: 0 12px 32px rgba(15,23,42,0.12);`}
+`
+
+const ZoomMenuItem = styled.button<{ $active?: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(37,99,235,0.18)'
+        : 'rgba(37,99,235,0.08)'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? BRAND.primary : theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15,23,42,0.05)'};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+const ZoomMenuHint = styled.span`
+  font-size: 10px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ZoomMenuDivider = styled.span`
+  height: 1px;
+  margin: 3px 4px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)'};
+`
+
 /* Export 버튼/메뉴 */
 const ExportWrap = styled.div`
   position: relative;
   flex-shrink: 0;
 `
 
+const ShapeLegendWrap = styled.div`
+  position: relative;
+  flex-shrink: 0;
+`
+
+/* 연도 직접 점프 input — placeholder는 현재 viewport 연도 범위.
+ * focus되지 않은 상태에서는 ViewportReadout처럼 보이도록 톤 정렬. */
+const YearJumpInput = styled.input`
+  width: 110px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+  transition: border-color 0.15s, background 0.15s;
+
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    font-weight: 600;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.16)'
+        : 'rgba(15,23,42,0.16)'};
+  }
+
+  &:focus {
+    outline: none;
+    border-color: ${BRAND.primary};
+    box-shadow: ${BRAND.focusRing};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#ffffff'};
+  }
+
+  /* 숫자 input의 spinner 제거 — 좁은 폭에서 시각 노이즈 */
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  & {
+    -moz-appearance: textfield;
+  }
+`
+
+/* viewport 안 critical 사건 chip 행 — CardHeader 바로 아래, 라벨 가려져도 핵심 식별 가능 */
+const ViewportCriticalRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 8px;
+  margin: 0 0 4px;
+  flex-wrap: wrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+`
+
+const ViewportCriticalLabel = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-shrink: 0;
+`
+
+const ViewportCriticalChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+  max-width: 200px;
+
+  & > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover {
+    border-color: ${BRAND.primaryBorderHover};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(37,99,235,0.12)'
+        : 'rgba(37,99,235,0.06)'};
+  }
+`
+
+const ViewportCriticalDot = styled.span`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+`
+
+const ViewportCriticalYear = styled.span`
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-shrink: 0;
+`
+
+/* 일부 카테고리 숨김 알림 — CardHeader 아래, ScrollHost 위 */
+const HiddenCatStrip = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  margin: 0 0 6px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? `background: rgba(245,158,11,0.08);
+         border: 1px solid rgba(245,158,11,0.2);
+         color: #fcd34d;`
+      : `background: rgba(245,158,11,0.06);
+         border: 1px solid rgba(245,158,11,0.18);
+         color: #92400e;`}
+
+  span {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  strong {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+`
+
+const HiddenCatStripButton = styled.button`
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 5px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(245, 158, 11, 0.12);
+  }
+`
+
+const ShapeLegendPopover = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 100;
+  width: 260px;
+  padding: 12px 14px 10px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? `background: #18181b;
+         border: 1px solid rgba(255,255,255,0.08);
+         box-shadow: 0 12px 32px rgba(0,0,0,0.45);`
+      : `background: #ffffff;
+         border: 1px solid rgba(15,23,42,0.08);
+         box-shadow: 0 12px 32px rgba(15,23,42,0.12);`}
+`
+
+const ShapeLegendTitle = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-bottom: 2px;
+`
+
+const ShapeLegendRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`
+
+const ShapeLegendIcon = styled.span`
+  flex-shrink: 0;
+  width: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`
+
+const ShapeLegendText = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+
+  strong {
+    font-size: 12px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  span {
+    font-size: 11px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    line-height: 1.4;
+  }
+`
+
+const ShapeLegendDivider = styled.span`
+  height: 1px;
+  margin: 4px 0 2px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+`
+
+const ShapeLegendHint = styled.div`
+  font-size: 10.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-align: center;
+`
+
 const ExportButton = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
+  gap: 5px;
   height: 26px;
+  padding: 0 10px;
   border-radius: 8px;
   border: 1px solid
     ${({ theme }) =>
@@ -2140,12 +3584,28 @@ const ExportButton = styled.button`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
   cursor: pointer;
   font-family: inherit;
   transition: background ${MOTION.fast}, border-color ${MOTION.fast},
     color ${MOTION.fast};
+
+  /* 1024px 이하 — 라벨 sr-only로 떨어짐 (icon만) */
+  & > span {
+    @media (max-width: 1024px) {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+  }
 
   &:hover {
     background: ${({ theme }) =>
@@ -2216,16 +3676,38 @@ const ExportMenuItem = styled.button`
   }
 `
 
+/* 11+ 카테고리 — 한 줄에 다 안 들어가면 가로 스크롤 (헤더 줄 wrap 방지). */
 const Legend = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 4px 8px;
-  flex-wrap: wrap;
   font-size: 11px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   flex: 0 1 auto;
   max-width: 60%;
   justify-content: flex-end;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.12)'
+        : 'rgba(15,23,42,0.12)'};
+    border-radius: 999px;
+  }
+
+  /* 한 줄 안에서 wrap 안 되게 */
+  & > button {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+  }
 `
 
 const LegendItem = styled.button<{ $dim?: boolean; $hidden?: boolean }>`
@@ -2419,6 +3901,9 @@ const ScrollHost = styled.div<{ $panning?: boolean }>`
   overflow: auto;
   cursor: ${({ $panning }) => ($panning ? 'grab' : 'auto')};
 
+  /* 터치 환경에서 OS 기본 핀치줌·당겨서 새로고침 차단 — 자체 핀치/팬으로 처리 */
+  touch-action: pan-y pinch-zoom;
+
   &::-webkit-scrollbar {
     width: 6px;
     height: 8px;
@@ -2439,6 +3924,120 @@ const SvgRoot = styled.svg`
   &:focus {
     outline: none;
   }
+`
+
+/**
+ * Overflow popover — 가려진 사건 목록.
+ * ScrollHost 안에 절대 위치 → 가로 스크롤과 함께 자연스럽게 이동.
+ * lane 한계로 가려진 사건들이 시간순으로 나열됨 — 클릭 시 그 사건 선택.
+ */
+const OverflowPopover = styled.div`
+  position: absolute;
+  z-index: 50;
+  width: 280px;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? `background: #18181b;
+         border: 1px solid rgba(255,255,255,0.1);
+         box-shadow: 0 12px 32px rgba(0,0,0,0.5);`
+      : `background: #ffffff;
+         border: 1px solid rgba(15,23,42,0.1);
+         box-shadow: 0 12px 32px rgba(15,23,42,0.16);`}
+`
+
+const OverflowPopoverHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)'};
+`
+
+const OverflowPopoverClose = styled.button`
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15,23,42,0.06)'};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const OverflowPopoverList = styled.div`
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 4px;
+`
+
+const OverflowPopoverItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  color: ${({ theme }) => theme.colors.text.primary};
+  transition: background 0.12s;
+
+  & > span {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : 'rgba(15,23,42,0.04)'};
+  }
+`
+
+const OverflowPopoverYear = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  width: 48px;
+`
+
+const OverflowPopoverHint = styled.div`
+  padding: 6px 10px;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-align: center;
 `
 
 const TickLine = styled.line<{ $major?: boolean }>`
@@ -2487,12 +4086,46 @@ const LaneSeparator = styled.line`
   stroke-width: 1;
 `
 
+/**
+ * Lane label sticky 배경 — 우측 스크롤 시 lane label 그룹이 viewport 좌측에 고정될 때
+ * 뒤쪽 막대/density가 *비치지 않도록* 카드 배경색으로 덮음.
+ *
+ * surface는 TimelineCard 배경과 일치 — 다크는 `rgba(255,255,255,0.012)` 같은 미세 알파가
+ * 아닌 *완전 불투명*이어야 가림이 보장. 라이트도 흰색.
+ */
+const LaneLabelBg = styled.rect`
+  fill: ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+`
+
+/* sticky label 그룹의 우측 경계 hairline — 본문과 라벨 영역 시각 분리 */
+const LaneLabelDivider = styled.line`
+  stroke: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.08)'};
+  stroke-width: 1;
+`
+
 const LaneLabel = styled.text`
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
   text-anchor: end;
   fill: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/* lane top 사건 mini text — 카테고리 라벨 아래 작은 글씨로 1~2개 노출.
+ * 클릭 시 해당 사건 선택. truncate(12자)로 좁은 라벨 영역에 fit. */
+const LaneTopText = styled.text`
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-anchor: end;
+  fill: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  transition: fill 0.15s;
+
+  &:hover {
+    fill: ${BRAND.primary};
+  }
 `
 
 const LaneDot = styled.circle``
@@ -2693,6 +4326,14 @@ const ExternalLabel = styled.text`
   stroke-width: 3;
   stroke-linejoin: round;
   cursor: pointer;
+
+  /* Shift+클릭으로 핀된 라벨은 indigo 배경 stroke + bold로 시각 차별화 */
+  &[data-pinned='1'] {
+    font-weight: 800;
+    stroke: ${BRAND.primary};
+    stroke-width: 3.5;
+    fill: #ffffff;
+  }
 `
 
 /* notable importance dashed inner border — normal과 패턴 차등 (색맹 보조) */
@@ -2704,10 +4345,20 @@ const NotableDashed = styled.rect`
 `
 
 /* Active outline — 선택 시 */
+/**
+ * Active outline — 선택된 막대 강조.
+ *  - light: 다크 컬러 stroke
+ *  - dark : 흰색 stroke + 살짝의 outer halo로 다크 배경에서도 또렷하게 (이전 1.5px는 작은 막대에서 불명확)
+ */
 const ActiveOutline = styled.rect`
   fill: none;
   stroke: ${({ theme }) => (theme.mode === 'dark' ? '#ffffff' : '#0f172a')};
-  stroke-width: 1.5;
+  stroke-width: 2;
+  paint-order: stroke;
+  filter: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'drop-shadow(0 0 3px rgba(37, 99, 235, 0.6))'
+      : 'drop-shadow(0 0 2px rgba(37, 99, 235, 0.35))'};
 `
 
 /**
@@ -2773,6 +4424,15 @@ const BarLabel = styled.text`
   font-weight: 600;
   letter-spacing: -0.005em;
   fill: #ffffff;
+`
+
+/* 좁은 critical 막대 안 *축약* 라벨 — 첫 1~3자만 가운데 정렬. */
+const BarLabelCompact = styled.text`
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  fill: #ffffff;
+  text-anchor: middle;
 `
 
 const Tooltip = styled.div`

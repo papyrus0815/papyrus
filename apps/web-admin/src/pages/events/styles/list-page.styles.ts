@@ -53,13 +53,16 @@ export const EmbedWrapper = styled.div`
 `
 
 /* 페이지 헤더 — Embed와 시각 시그너처 통일을 위해 좌측에 indigo accent bar.
- * Title 글꼴 크기로 위계는 유지(19px vs Embed 13px). */
+ * Title 글꼴 크기로 위계는 유지(19px vs Embed 13px).
+ *
+ * v2: 통계 chip을 ViewMeta 자리로 옮기면서 헤더는 Title만 — 실제 align 컨텍스트가
+ * 단순해져 padding 축소. */
 export const PageHeader = styled.div`
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 0 4px 4px 12px;
+  gap: 12px;
+  padding: 2px 4px 2px 12px;
   flex-wrap: wrap;
   position: relative;
 
@@ -68,10 +71,14 @@ export const PageHeader = styled.div`
     position: absolute;
     left: 0;
     top: 4px;
-    bottom: 12px;
+    bottom: 4px;
     width: 3px;
     border-radius: 2px;
     background: ${BRAND.primary};
+  }
+
+  @media (max-width: 640px) {
+    padding: 0 2px 0 10px;
   }
 `
 

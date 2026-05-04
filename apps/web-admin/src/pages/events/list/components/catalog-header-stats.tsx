@@ -1,11 +1,12 @@
 /**
- * 카탈로그 헤더 우측 KPI chip 그룹.
+ * 인라인 통계 스트립 — ViewSwitcherRow의 ViewMeta 자리에 들어가는 한 줄 요약.
  *
- * - 중요도 분포 (핵심·주요·평범) — 색 dot + 숫자
- * - 카테고리 TOP3 — 한국어 라벨 + 건수
+ * 이전엔 PageHeader 우측에 별도 KPI chip 그룹이었으나, 사용자 시선 부담과
+ * ViewMeta(표시/전체 카운트)와의 정보 중복 때문에 한 줄로 융합. 이제 다음과 같이 노출:
  *
- * 카운트는 *전체 등록 사건* 기준 (필터 무관). 페이지에 들어왔을 때 데이터 규모를
- * 한눈에 인지하기 위한 집계.
+ *   표시 1,247건 · 핵심 89 · 주요 234 · 정치 47
+ *
+ * 카테고리는 TOP 1만 표기(과부하 방지). 핵심·주요는 항상 표기, normal은 생략.
  */
 import React, { useMemo } from 'react'
 
@@ -20,100 +21,124 @@ import { CATEGORY_BADGE_COLORS } from '../../styles/theme'
 interface Props {
   events: HistoricalEvent[]
   dbCategories: EventCategoryDto[]
+  /** 현재 필터된 표시 건수 — undefined면 events.length로 폴백 */
+  visibleCount?: number
 }
 
-type Tier = 'critical' | 'major' | 'normal'
+type Tier = 'critical' | 'major'
 
 const TIER_META: Record<Tier, { label: string; color: string }> = {
   critical: { label: '핵심', color: '#2563eb' },
   major: { label: '주요', color: '#f59e0b' },
-  normal: { label: '평범', color: '#94a3b8' },
 }
 
 export const CatalogHeaderStats: React.FC<Props> = ({
   events,
   dbCategories,
+  visibleCount,
 }) => {
-  const { tiers, topCategories } = useMemo(() => {
-    const tierCount: Record<Tier, number> = { critical: 0, major: 0, normal: 0 }
+  const { tiers, topCategory } = useMemo(() => {
+    const tierCount: Record<Tier, number> = { critical: 0, major: 0 }
     const catCount = new Map<string, number>()
 
     for (const e of events) {
       const imp = e.hierarchy?.importance
       if (imp === 'critical') tierCount.critical += 1
       else if (imp === 'major') tierCount.major += 1
-      else tierCount.normal += 1
 
       const k = e.category || 'other'
       catCount.set(k, (catCount.get(k) ?? 0) + 1)
     }
 
-    const top = Array.from(catCount.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([k, c]) => ({
-        key: k,
-        label: getCategoryName(k, dbCategories),
-        count: c,
-        color:
-          CATEGORY_BADGE_COLORS[k as keyof typeof CATEGORY_BADGE_COLORS] ??
-          '#2563eb',
-      }))
+    const top1 = Array.from(catCount.entries())
+      .sort((a, b) => b[1] - a[1])[0]
 
-    return { tiers: tierCount, topCategories: top }
+    return {
+      tiers: tierCount,
+      topCategory: top1
+        ? {
+            key: top1[0],
+            label: getCategoryName(top1[0], dbCategories),
+            count: top1[1],
+            color:
+              CATEGORY_BADGE_COLORS[
+                top1[0] as keyof typeof CATEGORY_BADGE_COLORS
+              ] ?? '#2563eb',
+          }
+        : null,
+    }
   }, [events, dbCategories])
 
   if (events.length === 0) return null
 
+  const total = visibleCount ?? events.length
+
   return (
-    <StatsRow aria-label="등록 사건 통계">
-      {(['critical', 'major', 'normal'] as Tier[]).map((tier) => {
-        if (tiers[tier] === 0) return null
-        const meta = TIER_META[tier]
-        return (
-          <Chip key={tier} title={`${meta.label} ${tiers[tier]}건`}>
-            <Dot style={{ background: meta.color }} aria-hidden="true" />
-            <span>{meta.label}</span>
-            <Count>{tiers[tier].toLocaleString()}</Count>
-          </Chip>
-        )
-      })}
-
-      {topCategories.length > 0 && <Divider aria-hidden="true" />}
-
-      {topCategories.map((c) => (
-        <Chip key={c.key} title={`${c.label} ${c.count}건`}>
-          <Dot style={{ background: c.color }} aria-hidden="true" />
-          <span>{c.label}</span>
-          <Count>{c.count.toLocaleString()}</Count>
-        </Chip>
-      ))}
-    </StatsRow>
+    <Strip aria-label="등록 사건 분포">
+      <Total>
+        <strong>{total.toLocaleString()}</strong>건
+      </Total>
+      {tiers.critical > 0 && (
+        <>
+          <Sep aria-hidden="true">·</Sep>
+          <StatItem title={`핵심 ${tiers.critical}건`}>
+            <Dot style={{ background: TIER_META.critical.color }} />
+            <span>핵심 {tiers.critical.toLocaleString()}</span>
+          </StatItem>
+        </>
+      )}
+      {tiers.major > 0 && (
+        <>
+          <Sep aria-hidden="true">·</Sep>
+          <StatItem title={`주요 ${tiers.major}건`}>
+            <Dot style={{ background: TIER_META.major.color }} />
+            <span>주요 {tiers.major.toLocaleString()}</span>
+          </StatItem>
+        </>
+      )}
+      {topCategory && (
+        <>
+          <Sep aria-hidden="true">·</Sep>
+          <StatItem title={`${topCategory.label} ${topCategory.count}건`}>
+            <Dot style={{ background: topCategory.color }} />
+            <span>
+              {topCategory.label} {topCategory.count.toLocaleString()}
+            </span>
+          </StatItem>
+        </>
+      )}
+    </Strip>
   )
 }
 
-const StatsRow = styled.div`
+const Strip = styled.div`
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const Chip = styled.span`
+const Total = styled.span`
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+    margin-right: 1px;
+  }
+`
+
+const StatItem = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px 4px 8px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
+  gap: 5px;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)'};
 `
 
 const Dot = styled.span`
@@ -123,16 +148,8 @@ const Dot = styled.span`
   flex-shrink: 0;
 `
 
-const Count = styled.span`
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-weight: 700;
-`
-
-const Divider = styled.span`
-  width: 1px;
-  height: 14px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
-  margin: 0 2px;
+const Sep = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.45;
+  user-select: none;
 `

@@ -1,9 +1,11 @@
 /**
  * 카탈로그 메인 영역 (활성 뷰 모드).
  *
- * - 보기 전환(7개 모드) 세그먼트
- * - 표시 옵션: 정렬·정렬 방향·페이지 크기 (필터와 분리된 *display* 컨트롤)
- * - 위젯 슬롯 — 부모(events.page)가 각 모드별 위젯 인스턴스를 만들어 전달
+ * 디자인 원칙
+ *  - **뷰 세그먼트 3+1**: 자주 쓰는 타임라인/목록/지도는 세그먼트 노출, 그 외(격자/통계/트리/갤러리)는
+ *    "더보기 ▾" 드롭다운으로 묶어 시각 부담 감소.
+ *  - **통계 인라인**: 페이지 헤더의 KPI chip을 제거하고 ViewMeta 자리에 한 줄 요약으로 융합.
+ *  - 표시 옵션(정렬·방향·페이지 크기)은 필터와 시각 family 분리.
  *
  * 모드별 슬롯 표:
  *   timeline  → timelineSlot
@@ -16,26 +18,34 @@
  *
  * 상세 패널은 `CatalogDetailDrawer`로 분리.
  */
-import React from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 import {
   FiArrowDown,
   FiBarChart2,
+  FiChevronDown,
   FiClock,
   FiGitBranch,
   FiGrid,
   FiImage,
   FiList,
   FiMapPin,
+  FiMoreHorizontal,
 } from 'react-icons/fi'
+import styled from 'styled-components'
 
 import type { SortOption } from '@/features/event-list/lib'
 import { VIEW_MODES, type ViewMode } from '@/features/event-list/lib'
+import type { EventCategoryDto } from '@/shared/api/event-categories'
 
+import type { HistoricalEvent } from '../../create/events.types'
 import * as Filter from '../../styles/filter.styles'
 import * as List from '../../styles/list.styles'
 import * as PageStyles from '../../styles/list-page.styles'
+import { BRAND, MOTION, SHADOW } from '../../styles/theme'
 import * as ToolbarStyles from '../../styles/list-toolbar.styles'
+
+import { CatalogHeaderStats } from './catalog-header-stats'
 
 interface Props {
   viewMode: ViewMode
@@ -44,6 +54,10 @@ interface Props {
   visibleCount: number
   /** 전체 등록 사건 수 — visibleCount와 다를 때만 보조 표시 */
   totalCount: number
+
+  /** 인라인 통계 strip을 위한 데이터 */
+  events: HistoricalEvent[]
+  dbCategories: EventCategoryDto[]
 
   // 표시 옵션
   sortBy: SortOption
@@ -70,11 +84,16 @@ interface ModeDef {
   icon: React.ReactNode
 }
 
-const MODES: ModeDef[] = [
+/** 자주 쓰는 3개 — 세그먼트 컨트롤로 노출 */
+const PRIMARY_MODES: ModeDef[] = [
   { value: VIEW_MODES.TIMELINE, label: '타임라인', icon: <FiClock size={13} /> },
   { value: VIEW_MODES.LIST, label: '목록', icon: <FiList size={13} /> },
   { value: VIEW_MODES.MAP, label: '지도', icon: <FiMapPin size={13} /> },
-  { value: VIEW_MODES.GRID, label: '연대', icon: <FiGrid size={13} /> },
+]
+
+/** 보조 4개 — "더보기 ▾" 드롭다운에 묶음 */
+const SECONDARY_MODES: ModeDef[] = [
+  { value: VIEW_MODES.GRID, label: '격자', icon: <FiGrid size={13} /> },
   {
     value: VIEW_MODES.DASHBOARD,
     label: '통계',
@@ -89,6 +108,8 @@ export const CatalogMainContent: React.FC<Props> = ({
   setViewMode,
   visibleCount,
   totalCount,
+  events,
+  dbCategories,
   sortBy,
   sortDirection,
   onSortChange,
@@ -132,11 +153,34 @@ export const CatalogMainContent: React.FC<Props> = ({
       activeSlot = timelineSlot
   }
 
+  // ── 더보기 메뉴 ────────────────────────────────────────────────────
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!moreOpen) return
+    const onDocDown = (e: MouseEvent) => {
+      if (!moreRef.current) return
+      if (!moreRef.current.contains(e.target as Node)) setMoreOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreOpen(false)
+    }
+    document.addEventListener('mousedown', onDocDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [moreOpen])
+
+  const activeSecondary = SECONDARY_MODES.find((m) => m.value === viewMode)
+  const moreActive = !!activeSecondary
+
   return (
     <PageStyles.ActiveContent>
       <ToolbarStyles.ViewSwitcherRow>
         <ToolbarStyles.ViewSegmented role="group" aria-label="보기 모드">
-          {MODES.map((mode) => {
+          {PRIMARY_MODES.map((mode) => {
             const active = viewMode === mode.value
             return (
               <ToolbarStyles.ViewSegment
@@ -153,6 +197,65 @@ export const CatalogMainContent: React.FC<Props> = ({
               </ToolbarStyles.ViewSegment>
             )
           })}
+
+          {/* 더보기 — 격자/통계/트리/갤러리 묶음 */}
+          <MoreSegmentWrap ref={moreRef}>
+            <ToolbarStyles.ViewSegment
+              type="button"
+              $active={moreActive}
+              onClick={() => setMoreOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              aria-label={
+                activeSecondary
+                  ? `${activeSecondary.label} 보기 — 다른 보기 선택`
+                  : '다른 보기 모드'
+              }
+              title="다른 보기 모드"
+            >
+              {activeSecondary ? (
+                activeSecondary.icon
+              ) : (
+                <FiMoreHorizontal size={13} />
+              )}
+              <span className="label">
+                {activeSecondary ? activeSecondary.label : '더보기'}
+              </span>
+              <FiChevronDown
+                size={11}
+                aria-hidden="true"
+                style={{
+                  marginLeft: 1,
+                  opacity: 0.7,
+                  transform: moreOpen ? 'rotate(180deg)' : 'rotate(0)',
+                  transition: 'transform 0.15s ease',
+                }}
+              />
+            </ToolbarStyles.ViewSegment>
+            {moreOpen && (
+              <MoreMenu role="menu" aria-label="추가 보기 모드">
+                {SECONDARY_MODES.map((mode) => {
+                  const active = viewMode === mode.value
+                  return (
+                    <MoreMenuItem
+                      key={mode.value}
+                      role="menuitemradio"
+                      aria-checked={active}
+                      $active={active}
+                      type="button"
+                      onClick={() => {
+                        setViewMode(mode.value)
+                        setMoreOpen(false)
+                      }}
+                    >
+                      <span aria-hidden="true">{mode.icon}</span>
+                      <span>{mode.label}</span>
+                    </MoreMenuItem>
+                  )
+                })}
+              </MoreMenu>
+            )}
+          </MoreSegmentWrap>
         </ToolbarStyles.ViewSegmented>
 
         {/* 표시 옵션 — 정렬 + 방향 + 페이지 크기. 필터와 시각 family 분리(border 없음). */}
@@ -162,7 +265,8 @@ export const CatalogMainContent: React.FC<Props> = ({
             onChange={(e) => onSortChange(e.target.value as SortOption)}
             aria-label="정렬 기준"
           >
-            <option value="recent">최근순</option>
+            {/* 'recent'는 내부적으로 startDate 기준 — UI 라벨은 사건 *발생 시기*임을 명확히 */}
+            <option value="recent">시기순</option>
             <option value="duration">기간순</option>
           </Filter.SortSelect>
           <Filter.SortButton
@@ -177,7 +281,6 @@ export const CatalogMainContent: React.FC<Props> = ({
             value={pageSize}
             aria-label="페이지 크기"
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            style={{ width: '92px', fontSize: '12px' }}
           >
             <option value={20}>20개</option>
             <option value={50}>50개</option>
@@ -185,20 +288,120 @@ export const CatalogMainContent: React.FC<Props> = ({
           </List.SortSelect>
         </ToolbarStyles.DisplayOptions>
 
-        <ToolbarStyles.ViewMeta aria-live="polite">
-          {isFiltered ? (
-            <>
-              <strong>{visibleCount.toLocaleString()}</strong>
-              <span aria-hidden="true"> / </span>
-              <span>{totalCount.toLocaleString()}건</span>
-            </>
-          ) : (
-            <strong>{visibleCount.toLocaleString()}건</strong>
+        <MetaArea aria-live="polite">
+          <CatalogHeaderStats
+            events={events}
+            dbCategories={dbCategories}
+            visibleCount={isFiltered ? visibleCount : undefined}
+          />
+          {isFiltered && (
+            <FilteredHint title="필터 적용 — 전체 중 일부만 표시">
+              / 전체 {totalCount.toLocaleString()}건
+            </FilteredHint>
           )}
-        </ToolbarStyles.ViewMeta>
+        </MetaArea>
       </ToolbarStyles.ViewSwitcherRow>
 
       {activeSlot}
     </PageStyles.ActiveContent>
   )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// styled — 더보기 dropdown + 메타 영역
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MoreSegmentWrap = styled.div`
+  position: relative;
+  display: inline-flex;
+`
+
+const MoreMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  min-width: 140px;
+  padding: 4px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? `background: #18181b;
+         border: 1px solid rgba(255,255,255,0.08);
+         box-shadow: ${SHADOW.mdDark};`
+      : `background: #ffffff;
+         border: 1px solid rgba(15,23,42,0.08);
+         box-shadow: ${SHADOW.md};`}
+`
+
+const MoreMenuItem = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? BRAND.primaryFillDark
+        : BRAND.primarySoftHover
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? BRAND.primaryTextOnDark
+        : BRAND.primaryHover
+      : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  text-align: left;
+  transition: background ${MOTION.fast}, color ${MOTION.fast};
+
+  & > span:first-child {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? BRAND.primaryFillDark
+          : BRAND.primarySoftHover
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.05)'
+          : 'rgba(15,23,42,0.04)'};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+const MetaArea = styled.div`
+  margin-left: auto;
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+`
+
+const FilteredHint = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-weight: 500;
+  letter-spacing: -0.005em;
+`

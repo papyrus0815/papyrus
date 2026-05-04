@@ -28,15 +28,9 @@ interface EmptyHintProps {
 const Wrap = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 8px 0;
   margin-top: 6px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.03)'
-      : 'rgba(15,23,42,0.025)'};
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
   font-size: 12.5px;
 `
 
@@ -44,15 +38,8 @@ const IconBox = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
   flex-shrink: 0;
-  border-radius: 8px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99,102,241,0.12)'
-      : '#eef2ff'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Message = styled.span`
@@ -61,34 +48,19 @@ const Message = styled.span`
   line-height: 1.5;
 `
 
-const Action = styled(Link)`
+const linkStyle = `
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 5px 10px 5px 12px;
+  gap: 3px;
   font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.primary};
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 999px;
+  font-weight: 500;
   text-decoration: none;
   cursor: pointer;
-  transition:
-    border-color 0.12s,
-    background 0.12s,
-    transform 0.05s;
+  border: none;
+  background: transparent;
+  padding: 0;
   flex-shrink: 0;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.08)' : '#f5f7ff'};
-  }
-
-  &:active {
-    transform: translateY(1px);
-  }
+  transition: color 0.12s;
 
   svg {
     transition: transform 0.15s;
@@ -98,39 +70,21 @@ const Action = styled(Link)`
   }
 `
 
-const ActionButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 10px 5px 12px;
-  font-size: 12px;
-  font-weight: 600;
+const Action = styled(Link)`
+  ${linkStyle}
   color: ${({ theme }) => theme.colors.primary};
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 999px;
-  cursor: pointer;
-  transition:
-    border-color 0.12s,
-    background 0.12s,
-    transform 0.05s;
-  flex-shrink: 0;
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.08)' : '#f5f7ff'};
+    color: ${({ theme }) => theme.colors.button.hover};
   }
+`
 
-  &:active {
-    transform: translateY(1px);
-  }
+const ActionButton = styled.button`
+  ${linkStyle}
+  color: ${({ theme }) => theme.colors.primary};
 
-  svg {
-    transition: transform 0.15s;
-  }
-  &:hover svg {
-    transform: translateX(2px);
+  &:hover {
+    color: ${({ theme }) => theme.colors.button.hover};
   }
 `
 

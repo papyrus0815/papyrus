@@ -1,15 +1,17 @@
 /**
- * 원형 썸네일 업로더 — 국가/인물/조직 등 공용.
+ * 미니멀 정사각형 썸네일 업로더 — 국가/인물/조직 등 공용.
  *
- * 기능:
- * - 클릭 또는 드래그앤드롭으로 파일 선택
- * - 진행률 표시 (XHR upload progress)
- * - 호버 시 삭제·교체 오버레이
- * - URL 길이 검사 (DB 255자 제한)
+ * 디자인:
+ * - 96×96 정사각형, radius 8px
+ * - 빈 상태: 1px 회색 실선 + 작은 아이콘 + 라벨
+ * - 채워진 상태: 이미지만 표시
+ * - 호버 시: 반투명 오버레이 + 인라인 변경/삭제 텍스트 버튼
+ * - 업로드 중: 단순 spinner (장식 X)
+ * - D&D 지원
  */
 import React, { useRef, useState } from 'react'
 
-import { FiImage, FiTrash2, FiUploadCloud } from 'react-icons/fi'
+import { FiImage } from 'react-icons/fi'
 import styled, { keyframes } from 'styled-components'
 
 import {
@@ -27,18 +29,18 @@ interface ThumbnailUploaderProps {
   category: UploadImageCategory
   /** htmlFor 연결용 input id */
   inputId?: string
-  /** 안내 문구 — 빈 상태일 때 표시 */
-  emptyHint?: string
-  /** 안내 문구 — 이미지 있을 때 */
+  /** 빈 상태 라벨 (기본: "이미지 추가") */
+  emptyLabel?: string
+  /** 채워진 상태 보조 안내 (기본: 표시 안 함) */
   hasImageHint?: string
   /** alt 텍스트 */
   alt?: string
 }
 
 const Wrap = styled.div`
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   align-items: flex-start;
 `
 
@@ -46,65 +48,53 @@ const DropZone = styled.label<{ $hasImage: boolean; $dragOver: boolean }>`
   position: relative;
   width: 96px;
   height: 96px;
-  border-radius: 50%;
+  border-radius: 8px;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  background: ${({ theme, $hasImage }) =>
-    $hasImage
-      ? theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.08)'
-        : '#fff'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : 'linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%)'};
-  border: 2px ${({ $hasImage }) => ($hasImage ? 'solid' : 'dashed')}
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
+  border: 1px solid
     ${({ theme, $dragOver }) =>
-      $dragOver
-        ? '#6366f1'
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.2)'
-          : '#cbd5e1'};
+      $dragOver ? theme.colors.primary : theme.colors.border.default};
   transition:
-    border-color 0.15s,
-    background 0.15s,
-    box-shadow 0.15s,
-    transform 0.05s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    border-color 0.12s ease,
+    background 0.12s ease;
 
   &:hover {
-    border-color: #6366f1;
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12);
+    border-color: ${({ theme }) => theme.colors.border.medium};
   }
-
-  &:active {
-    transform: scale(0.98);
-  }
-
-  ${({ $dragOver }) =>
-    $dragOver &&
-    `
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
-  `}
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
+`
 
-  /* placeholder 아이콘 (이미지 없을 때) */
-  & > svg.placeholder {
-    width: 36px;
-    height: 36px;
-    color: ${({ theme }) => theme.colors.text.secondary};
+/** 빈 상태 placeholder */
+const Placeholder = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  svg {
+    opacity: 0.7;
+  }
+
+  span {
+    font-size: 11.5px;
+    font-weight: 400;
   }
 `
 
-/** 호버 시 위에 뜨는 액션 오버레이 (이미지 있을 때만) */
+/** 호버 오버레이 — 반투명 + 인라인 액션 */
 const HoverOverlay = styled.div`
   position: absolute;
   inset: 0;
@@ -112,76 +102,61 @@ const HoverOverlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 10px;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.12s ease;
 
   ${DropZone}:hover & {
     opacity: 1;
   }
 `
 
-const OverlayBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, 0.92);
-  color: #0f172a;
+const InlineAction = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #fff;
   cursor: pointer;
-  transition:
-    background 0.15s,
-    transform 0.05s;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background 0.1s ease;
 
   &:hover {
-    background: #fff;
-  }
-  &:active {
-    transform: scale(0.92);
+    background: rgba(255, 255, 255, 0.15);
   }
 
   &.danger {
-    color: #dc2626;
+    color: #fca5a5;
   }
 `
 
-/** 진행률 링 — 원형 SVG progress */
-const ProgressRing = styled.svg`
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-  pointer-events: none;
-`
-
+/** 업로드 중 spinner */
 const spin = keyframes`
   to { transform: rotate(360deg); }
 `
 
 const Spinner = styled.span`
   position: absolute;
-  width: 28px;
-  height: 28px;
-  border: 3px solid rgba(255, 255, 255, 0.5);
-  border-top-color: #6366f1;
+  width: 20px;
+  height: 20px;
+  border: 2px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.15)'
+        : 'rgba(15,23,42,0.1)'};
+  border-top-color: ${({ theme }) => theme.colors.primary};
   border-radius: 50%;
   animation: ${spin} 0.7s linear infinite;
 `
 
 const Hint = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.4;
-  max-width: 280px;
 `
 
 const ErrorText = styled.span`
-  font-size: 12px;
-  color: #dc2626;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.alert.danger.fg};
   line-height: 1.4;
 `
 
@@ -194,12 +169,11 @@ export function ThumbnailUploader({
   onChange,
   category,
   inputId = 'thumbnail-uploader',
-  emptyHint = '클릭 또는 드래그하여 이미지 추가 (정사각형 권장)',
-  hasImageHint = '클릭 또는 드래그하여 이미지 변경',
+  emptyLabel = '이미지 추가',
+  hasImageHint,
   alt = '대표 이미지',
 }: ThumbnailUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [progress, setProgress] = useState<number | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -213,16 +187,11 @@ export function ThumbnailUploader({
       return
     }
     setUploading(true)
-    setProgress(0)
     try {
-      // uploadImage는 fetch 기반이라 진행률을 받기 힘들지만, 단순 indeterminate progress로 표시.
-      // (XHR로 바꾸려면 upload.ts 자체 수정 필요 — 현 단계에선 spinner)
       const result = await uploadImage(file, category)
       const url = result.url ?? ''
       if (url.length > 255) {
-        setError(
-          '업로드된 이미지 URL이 255자를 초과합니다. 짧은 경로의 이미지를 사용해주세요.',
-        )
+        setError('이미지 URL이 너무 깁니다. 짧은 경로의 이미지를 사용해주세요.')
         return
       }
       onChange(url)
@@ -230,7 +199,6 @@ export function ThumbnailUploader({
       setError((e as Error).message)
     } finally {
       setUploading(false)
-      setProgress(null)
       if (inputRef.current) inputRef.current.value = ''
     }
   }
@@ -284,58 +252,22 @@ export function ThumbnailUploader({
         {value ? (
           <img src={value} alt={alt} />
         ) : (
-          <FiImage className="placeholder" />
+          <Placeholder>
+            <FiImage size={20} />
+            <span>{emptyLabel}</span>
+          </Placeholder>
         )}
 
         {value && !uploading && (
           <HoverOverlay>
-            <OverlayBtn
-              type="button"
-              onClick={handleReplace}
-              aria-label="이미지 교체"
-              title="이미지 교체"
-            >
-              <FiUploadCloud size={14} />
-            </OverlayBtn>
-            <OverlayBtn
-              type="button"
-              className="danger"
-              onClick={handleDelete}
-              aria-label="이미지 삭제"
-              title="이미지 삭제"
-            >
-              <FiTrash2 size={14} />
-            </OverlayBtn>
+            <InlineAction onClick={handleReplace}>변경</InlineAction>
+            <InlineAction className="danger" onClick={handleDelete}>
+              삭제
+            </InlineAction>
           </HoverOverlay>
         )}
 
-        {uploading && (
-          <>
-            <ProgressRing viewBox="0 0 96 96">
-              <circle
-                cx="48"
-                cy="48"
-                r="44"
-                fill="none"
-                stroke="rgba(99,102,241,0.15)"
-                strokeWidth="4"
-              />
-              {progress != null && (
-                <circle
-                  cx="48"
-                  cy="48"
-                  r="44"
-                  fill="none"
-                  stroke="#6366f1"
-                  strokeWidth="4"
-                  strokeDasharray={`${(progress / 100) * 276.46} 276.46`}
-                  strokeLinecap="round"
-                />
-              )}
-            </ProgressRing>
-            <Spinner />
-          </>
-        )}
+        {uploading && <Spinner />}
       </DropZone>
 
       <HiddenInput
@@ -347,10 +279,8 @@ export function ThumbnailUploader({
         disabled={uploading}
       />
 
-      {!error && (
-        <Hint>{value ? hasImageHint : emptyHint}</Hint>
-      )}
       {error && <ErrorText>{error}</ErrorText>}
+      {!error && hasImageHint && value && <Hint>{hasImageHint}</Hint>}
     </Wrap>
   )
 }

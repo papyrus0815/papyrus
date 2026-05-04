@@ -91,38 +91,37 @@ export function FamilyMemberCard({
 const Card = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 14px;
+  padding: 12px 14px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 12px;
+  border-radius: 10px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
-  max-width: 440px;
+  width: 100%;
 `
 
 const EmptyCard = styled.button`
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 14px;
+  padding: 12px 14px;
   border: 1px dashed ${({ theme }) => theme.colors.border.default};
-  border-radius: 12px;
+  border-radius: 10px;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
   font-size: 14px;
   text-align: left;
   width: 100%;
-  max-width: 440px;
   transition:
     border-color 0.15s ease,
     color 0.15s ease,
     background 0.15s ease;
   &:hover:not(:disabled) {
-    border-color: #6366f1;
+    border-color: ${({ theme }) => theme.colors.primary};
     color: ${({ theme }) => theme.colors.text.primary};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.08)' : '#eef2ff'};
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.06)' : '#f8fafc'};
   }
   &:disabled {
     opacity: 0.5;
@@ -131,17 +130,15 @@ const EmptyCard = styled.button`
 `
 
 const Avatar = styled.div`
-  width: 40px;
-  height: 40px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.08)'
-      : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
   color: ${({ theme }) => theme.colors.text.tertiary};
   flex-shrink: 0;
   img {
@@ -196,18 +193,25 @@ const Actions = styled.div`
 const ChangeBtn = styled.button`
   padding: 6px 10px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   &:hover:not(:disabled) {
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
-    color: #4f46e5;
-    border-color: #c7d2fe;
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.4)'
+        : 'rgba(99,102,241,0.3)'};
   }
   &:disabled {
     opacity: 0.5;
@@ -224,12 +228,15 @@ const RemoveBtn = styled.button`
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: transparent;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
   &:hover:not(:disabled) {
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(248,113,113,0.12)' : '#fef2f2'};
-    color: #dc2626;
+    color: ${({ theme }) => theme.colors.alert.danger.fg};
   }
   &:disabled {
     opacity: 0.4;

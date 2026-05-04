@@ -19,16 +19,13 @@ import {
   FiAlertCircle,
   FiAlertTriangle,
   FiArrowLeft,
-  FiCheck,
+  FiCamera,
   FiChevronDown,
   FiChevronRight,
-  FiClock,
-  FiGlobe,
-  FiInfo,
+  FiRotateCcw,
   FiTrash2,
-  FiUsers,
 } from 'react-icons/fi'
-import styled, { css } from 'styled-components'
+import styled, { keyframes } from 'styled-components'
 
 import { getAllCountries } from '@/shared/api/countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
@@ -50,9 +47,11 @@ import {
   validateImageFile,
 } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormInput } from '@/shared/ui/form-input/form-input'
+import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { type PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import {
@@ -66,13 +65,9 @@ import {
   FormSectionInner,
   Required,
   SubmitButton,
-  TabButton,
-  TabNavigation,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
-import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 
 import {
-  EXTRA_DEATH_TYPES,
   GENDER_OPTIONS,
   type PersonDraftSnapshot,
   buildInitialDate,
@@ -85,70 +80,89 @@ import { FamilySection } from './sections/family-section'
 import { LifeSection } from './sections/life-section'
 import { usePersonDraft } from './use-person-draft.hook'
 
-// ─── Styled — Thumbnail ───────────────────────────────────────────────────────
+// ─── Styled — Profile hero (thumbnail + 이름 미리보기 + 메타칩) ───────────────
+// "데이터 입력"이 아니라 "사람을 만든다"는 인상으로 상단 hero 격상.
+// 좌: 원형 썸네일(드롭존) / 우: namePreview + 국가·향년 칩 + 업로드 hint·삭제
 
-const ThumbnailWrap = styled.div`
-  display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 32px;
-  align-items: start;
-  padding: 20px 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
+const ThumbnailHero = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 4px 0 6px;
+  flex-wrap: wrap;
 `
 
-const ThumbnailPreview = styled.label<{ $hasImage?: boolean; $dragOver?: boolean }>`
-  width: 88px;
-  height: 88px;
+const ThumbnailCircle = styled.label<{
+  $hasImage?: boolean
+  $dragOver?: boolean
+}>`
+  position: relative;
+  width: 104px;
+  height: 104px;
   border-radius: 50%;
   overflow: hidden;
-  background: ${(p) =>
-    p.$dragOver
-      ? p.theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.18)'
-        : '#eef2ff'
-      : p.$hasImage
-        ? 'transparent'
-        : p.theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.06)'
-          : 'rgba(226, 232, 240, 0.6)'};
-  border: 2px
-    ${(p) => (p.$hasImage && !p.$dragOver ? 'solid' : 'dashed')}
-    ${(p) =>
-      p.$dragOver
-        ? '#6366f1'
-        : p.$hasImage
-          ? 'transparent'
-          : 'rgba(99, 102, 241, 0.35)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.04)'
+      : 'linear-gradient(145deg, #f8fafc 0%, #eef2ff 100%)'};
+  border: 1.5px ${({ $hasImage }) => ($hasImage ? 'solid' : 'dashed')}
+    ${({ $dragOver, $hasImage, theme }) =>
+      $dragOver
+        ? theme.colors.primary
+        : $hasImage
+          ? theme.colors.border.medium
+          : theme.mode === 'dark'
+            ? 'rgba(255,255,255,0.18)'
+            : '#cbd5e1'};
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   cursor: pointer;
   transition:
-    border-color 0.2s,
-    background 0.2s;
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+
   &:hover {
-    border-color: rgba(99, 102, 241, 0.6);
-    background: ${(p) =>
-      p.$hasImage
-        ? 'transparent'
-        : p.theme.mode === 'dark'
-          ? 'rgba(99,102,241,0.1)'
-          : 'rgba(226, 232, 240, 0.9)'};
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 0 0 4px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.14)'
+          : 'rgba(99,102,241,0.08)'};
   }
+
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-  svg {
-    color: ${({ theme }) => theme.colors.text.secondary};
-    width: 32px;
-    height: 32px;
+
+  /* 빈 상태 placeholder — 옅은 사람 실루엣 */
+  > svg.placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    width: 30px;
+    height: 30px;
+    opacity: 0.55;
+  }
+
+  /* hover/drag-over 카메라 오버레이 — 클릭/드롭 액션 신호 */
+  > .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.5);
+    color: #fff;
+    opacity: ${({ $dragOver }) => ($dragOver ? 1 : 0)};
+    transition: opacity 0.15s ease;
+    border-radius: 50%;
+  }
+
+  &:hover > .overlay {
+    opacity: 1;
   }
 `
 
@@ -156,51 +170,67 @@ const ThumbnailUploadInput = styled.input`
   display: none;
 `
 
-const ThumbnailRow = styled.div`
+const ThumbnailHeroBody = styled.div`
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const ThumbnailHeroName = styled.div<{ $empty: boolean }>`
+  font-size: ${({ $empty }) => ($empty ? '14px' : '18px')};
+  font-weight: ${({ $empty }) => ($empty ? '400' : '600')};
+  color: ${({ $empty, theme }) =>
+    $empty ? theme.colors.text.tertiary : theme.colors.text.primary};
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+`
+
+const ThumbnailHeroMeta = styled.div`
   display: flex;
   flex-wrap: wrap;
+  gap: 6px;
   align-items: center;
-  gap: 12px;
 `
 
-const ThumbnailHint = styled.span<{ $accent?: boolean }>`
-  font-size: 13px;
-  color: ${({ $accent, theme }) =>
-    $accent
-      ? '#4f46e5'
-      : theme.mode === 'dark'
-        ? '#94a3b8'
-        : '#64748b'};
-  font-weight: ${({ $accent }) => ($accent ? 600 : 400)};
-  max-width: 260px;
-  line-height: 1.5;
-  transition: color 0.15s ease;
-`
-
-const ThumbnailRemoveBtn = styled.button`
+const HeroMetaChip = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 2px 9px;
+  font-size: 11.5px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  border-radius: 999px;
+  letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums;
+`
+
+const ThumbnailHeroHint = styled.div`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1.4;
+`
+
+const ThumbnailHeroRemoveBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
+  border: none;
   cursor: pointer;
-  transition:
-    color 0.15s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
+  transition: color 0.12s;
   &:hover:not(:disabled) {
-    color: #dc2626;
-    border-color: #fecaca;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(248,113,113,0.1)' : '#fef2f2'};
+    color: ${({ theme }) => theme.colors.alert.danger.fg};
   }
   &:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
   }
 `
@@ -212,23 +242,22 @@ const OriginalNameInputWrap = styled.div`
   width: 100%;
 `
 
+/* 상단 정렬 라벨 패턴. 행 구분은 PersonFormLayoutWrap의 border-top 규칙으로. */
 const FieldRowMulti = styled.div`
-  display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 24px;
-  align-items: start;
-  padding: 20px 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
+  display: block;
+  padding: 18px 0;
 `
 
-const InlineFields = styled.div<{ $cols?: number }>`
+/**
+ * 인라인 입력 그룹 — `$template` 우선. 미지정 시 `$cols`개 동등 col(이전 동작).
+ * 의미적 폭 차등(예: 성<이름<중간이름)이 시각 비대칭을 줄여 한눈 파악 ↑.
+ */
+const InlineFields = styled.div<{ $cols?: number; $template?: string }>`
   display: grid;
-  grid-template-columns: ${(p) => `repeat(${p.$cols ?? 3}, 1fr)`};
-  gap: 12px;
-  max-width: ${(p) => (p.$cols === 2 ? '400px' : '560px')};
+  grid-template-columns: ${(p) =>
+    p.$template ?? `repeat(${p.$cols ?? 3}, 1fr)`};
+  gap: 10px;
+  width: 100%;
 
   & > div {
     min-width: 0;
@@ -239,379 +268,326 @@ const InlineFields = styled.div<{ $cols?: number }>`
     max-width: 100%;
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 640px) {
     grid-template-columns: 1fr;
   }
 `
 
-// ─── Styled — Segmented control (성별·사망유형) ──────────────────────────────
+// SegmentRow / SegmentBtn 자체 정의 제거 — 공용 SegmentControl 사용 (위 import)
 
-const SegmentRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-/**
- * 칩 컨트롤 — variant로 시각 위계 차별화.
- * - 'solid' (default): 라디오성 선택 (성별·사망상태·사망유형). 활성 시 indigo solid.
- * - 'ghost': 보조 토글 (출생일 미상). 활성 시 회색 outline.
- */
-const SegmentBtn = styled.button<{
-  $active?: boolean
-  $error?: boolean
-  $variant?: 'solid' | 'ghost'
-}>`
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 999px;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
-  ${({ $variant = 'solid', $active, $error, theme }) => {
-    if ($variant === 'ghost') {
-      return `
-        color: ${
-          $active
-            ? theme.colors.text.primary
-            : theme.colors.text.tertiary
-        };
-        background: ${
-          $active
-            ? theme.mode === 'dark'
-              ? 'rgba(255,255,255,0.08)'
-              : '#f1f5f9'
-            : 'transparent'
-        };
-        border: 1px solid ${
-          $active
-            ? theme.colors.border.medium
-            : theme.colors.border.default
-        };
-        &:hover:not(:disabled) {
-          color: ${theme.colors.text.primary};
-          border-color: ${theme.colors.border.medium};
-        }
-      `
-    }
-    // solid (default)
-    return `
-      color: ${$active ? '#fff' : theme.colors.text.secondary};
-      background: ${
-        $active
-          ? '#6366f1'
-          : $error
-            ? theme.mode === 'dark'
-              ? 'rgba(220,38,38,0.12)'
-              : '#fef2f2'
-            : theme.mode === 'dark'
-              ? 'rgba(255,255,255,0.05)'
-              : '#fff'
-      };
-      border: 1px solid ${
-        $active
-          ? '#6366f1'
-          : $error
-            ? '#dc2626'
-            : theme.colors.border.default
-      };
-      &:hover:not(:disabled) {
-        border-color: ${$active ? '#4f46e5' : '#a5b4fc'};
-        color: ${$active ? '#fff' : theme.colors.text.primary};
-      }
-    `
-  }}
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
-// ─── Styled — Layout wrapper, embed/standalone shared ────────────────────────
+// ─── Styled — Layout wrapper (Top-aligned modern form layout) ────────────────
+// 상단 정렬 라벨 (Linear/Stripe/Notion 류) — 라벨이 위, 컨트롤이 아래.
+// 좌측 라벨 그리드(360px 1fr) 폐기 — 모바일/데스크탑 동일 레이아웃, 라벨 폭 제약 해소.
+// 행 구분은 비-첫행 border-top으로 가볍게 (모든 행 border-bottom 폐기).
 
 const PersonFormLayoutWrap = styled.div`
-  /* 인물 폼은 한 화면에 정보가 많아 라벨을 살짝 좁혀 가용 폭 확보 */
+  /* 정제 톤: top-label, 행 구분선 제거 (margin만으로 분리) */
   ${FieldRow} {
-    grid-template-columns: minmax(180px, 220px) 1fr;
-    @media (max-width: 768px) {
-      grid-template-columns: 1fr;
-    }
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0;
+    border-bottom: none;
+    margin-top: 18px;
   }
+
   ${FieldRowMulti} {
-    grid-template-columns: minmax(180px, 220px) 1fr;
-    @media (max-width: 768px) {
-      grid-template-columns: 1fr;
-    }
+    margin-top: 18px;
   }
+
+  ${ThumbnailHero} {
+    margin-top: 0;
+  }
+
+  ${FieldRow}:first-child,
+  ${FieldRowMulti}:first-child {
+    margin-top: 0;
+  }
+
+  /* 라벨 — country/historical과 동일 (13px 500, secondary) */
+  ${FieldLabel} {
+    display: block;
+    margin: 0;
+    padding-top: 0;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  /* 컨트롤 — 모달 폭이 줄어 max-width 제거, 100% 활용 */
   ${FieldControl} {
-    max-width: 540px;
+    width: 100%;
   }
+
   ${InlineFields} {
-    max-width: 600px;
+    max-width: none;
   }
+
   ${OriginalNameInputWrap} {
-    max-width: 540px;
-  }
-  [data-bio-editor-wrap] ${FieldControl} {
-    max-width: 720px;
+    max-width: none;
   }
 `
 
-// ─── Styled — Tab badges/check marks ─────────────────────────────────────────
+// ─── Styled — Modal tab navigation (인물 모달 전용 — sliding indicator) ──────
+// 미니멀 refined pill 스타일 (Linear/Vercel 류):
+// - 흰(다크: 미세 글래스) pill + indigo 텍스트로 활성 표현
+// - 그라디언트·강한 그림자 폐기 → 정보성 hierarchy 유지, 시각 잡음 ↓
+// - radius 정합: 컨테이너 12 / 버튼 8 / inner padding 4
+// - 폰트 weight 500 통일 (jiggle 방지) — 활성은 색만 변화
+// - sliding indicator는 Framer Motion layoutId 그대로
 
-const TabLabelInner = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+/**
+ * 섹션 헤더 — 17px sentence-case + 1줄 설명.
+ * 11px ALL CAPS 회색 톤은 위계 약하고 정보 잡음 — 본문(14px)보다 큰 sentence case로 격상.
+ * scroll-spy용 data-form-section은 wrapper에 둔다.
+ */
+const SectionHeader = styled.div`
+  margin: 36px 0 12px;
+  &:first-child {
+    margin-top: 4px;
+  }
 `
 
-const TabBadge = styled.span<{ $tone: 'required' | 'filled' }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 6px;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: 999px;
-  ${({ $tone, theme }) =>
-    $tone === 'required'
-      ? css`
-          color: #fff;
-          background: #dc2626;
-        `
-      : css`
-          /* ✓ — 입력 완료 인디케이터. 회색에서 indigo로 격상해 가시성 ↑ */
-          color: #fff;
-          background: #6366f1;
-          padding: 0;
-          width: 16px;
-          box-shadow: ${theme.mode === 'dark'
-            ? '0 0 0 2px rgba(99,102,241,0.18)'
-            : '0 0 0 2px rgba(99,102,241,0.12)'};
-        `}
+const SectionHeaderTitle = styled.h3`
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 `
 
-// ─── Styled — Advanced collapsible section ───────────────────────────────────
+const SectionHeaderDesc = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1.5;
+`
+
+// ─── Styled — Disclosure card (이름의 뜻·군주 호칭 등 옵셔널 입력 그룹) ────────
+// 카드형 disclosure — 그냥 회색 텍스트 chevron보다 "옵셔널 추가 정보 그룹"임을
+// 시각적으로 명확히 전달. hover 시 indigo border로 클릭 가능 신호.
 
 const AdvancedSection = styled.section`
-  padding: 16px 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  margin-top: 14px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff'};
+  overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.border.medium};
+  }
 `
 
-/* 박스 테두리 제거 — disclosure 스타일 텍스트 토글로 단순화. */
 const AdvancedToggle = styled.button<{ $open: boolean }>`
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 0;
-  margin-bottom: ${({ $open }) => ($open ? '12px' : '0')};
-  font-size: 13px;
-  font-weight: 600;
-  color: #4f46e5;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: color 0.15s ease;
+  text-align: left;
+  transition: background 0.15s ease;
+
   &:hover {
-    color: #4338ca;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
   }
   &:focus-visible {
-    outline: 2px solid rgba(79, 70, 229, 0.35);
-    outline-offset: 2px;
-    border-radius: 4px;
+    outline: none;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
   }
+`
+
+const AdvancedToggleIcon = styled.span<{ $open: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  flex-shrink: 0;
+  transition: background 0.15s;
   svg {
-    transition: transform 0.2s ease;
+    transition: transform 0.15s ease;
     transform: rotate(${({ $open }) => ($open ? '90deg' : '0deg')});
   }
 `
 
-/* 펼친 본문에 좌측 indigo accent로 시각 그룹화 */
+const AdvancedToggleBody = styled.span`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const AdvancedToggleTitle = styled.span`
+  font-size: 13.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+  letter-spacing: -0.005em;
+`
+
+const AdvancedToggleDesc = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1.4;
+`
+
+/* 펼친 본문 — 카드 내부 padding + 상단 light divider */
 const AdvancedBody = styled.div`
-  padding-left: 12px;
-  border-left: 2px solid
-    ${({ theme }) =>
-      theme.colors.alert.info.border};
+  padding: 14px 14px 14px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 
-// ─── Styled — Sticky save footer ─────────────────────────────────────────────
-
+/** 페이지 모드 전용 sticky 푸터 — 모달 모드는 Shell이 푸터 담당 */
 const StickyFooter = styled.div`
   position: sticky;
   bottom: 0;
   z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 28px;
-  margin-top: 12px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(15,15,20,0.92)'
-      : 'rgba(255,255,255,0.94)'};
-  backdrop-filter: blur(8px);
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  flex-wrap: wrap;
-`
-
-/** 푸터 상태 — 진행도 바 + 라벨. 라이브 입력으로 채워짐을 시각화. */
-const FooterProgress = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-width: 160px;
-`
-
-const FooterProgressMeta = styled.div<{ $tone?: 'info' | 'warn' | 'done' }>`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ $tone, theme }) =>
-    $tone === 'warn'
-      ? '#dc2626'
-      : $tone === 'done'
-        ? '#4f46e5'
-        : theme.colors.text.secondary};
-  letter-spacing: 0.01em;
-`
-
-const FooterProgressMetaLabel = styled.span`
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-const FooterProgressMetaCount = styled.span`
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-`
-
-const FooterProgressTrack = styled.div`
-  position: relative;
-  height: 4px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#eef2ff'};
-  overflow: hidden;
-`
-
-const FooterProgressFill = styled.div<{ $pct: number; $complete: boolean }>`
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: ${({ $pct }) => $pct}%;
-  border-radius: 999px;
-  background: ${({ $complete }) =>
-    $complete
-      ? 'linear-gradient(90deg, #6366f1 0%, #4f46e5 100%)'
-      : 'linear-gradient(90deg, #818cf8 0%, #6366f1 100%)'};
-  transition:
-    width 0.25s ease,
-    background 0.2s ease;
-`
-
-const FooterActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  padding: 12px 20px;
+  margin-top: 16px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 // ─── Styled — Draft restore banner ───────────────────────────────────────────
+// 단일 줄 미니멀 배너 — 인라인 아이콘 + 제목·시간 한 줄 + 보조/주 액션 위계 분리.
+// 탭의 절제된 디자인과 톤 통일 (그라디언트·강한 shadow 폐기).
 
+const draftBannerSlideIn = keyframes`
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+`
+
+/**
+ * 카드형 draft 배너 — 좌측 2px line은 너무 약해 사용자가 못 보고 새로 입력할 위험.
+ * 옅은 indigo 틴트 카드 + cloud icon으로 "임시 저장된 내용이 있다"는 신호를 강화.
+ */
 const DraftBanner = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 10px 14px;
-  margin: 0 0 8px;
+  margin: 0 0 16px;
   background: ${({ theme }) =>
-    theme.colors.alert.info.bg};
+    theme.mode === 'dark'
+      ? 'rgba(99,102,241,0.08)'
+      : 'rgba(99, 102, 241, 0.05)'};
   border: 1px solid
     ${({ theme }) =>
-      theme.colors.alert.info.border};
-  border-radius: 12px;
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.22)'
+        : 'rgba(99, 102, 241, 0.18)'};
+  border-radius: 10px;
   font-size: 13px;
-  line-height: 1.45;
-  color: ${({ theme }) => theme.colors.text.primary};
-  flex-wrap: wrap;
+  animation: ${draftBannerSlideIn} 0.18s ease;
 
-  /* TopAlert와 인접 시 시각 일관성 */
   & + div[role='alert'] {
     margin-top: 0;
   }
 `
 
+const DraftBannerIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.12)'};
+  color: ${({ theme }) => theme.colors.primary};
+  flex-shrink: 0;
+`
+
+const DraftBannerText = styled.span`
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  > strong {
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  > span {
+    color: ${({ theme }) => theme.colors.text.secondary};
+    font-variant-numeric: tabular-nums;
+  }
+`
+
 const DraftBannerActions = styled.div`
-  display: flex;
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
   flex-shrink: 0;
 `
 
-const DraftBtn = styled.button<{ $primary?: boolean }>`
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  ${({ $primary, theme }) =>
-    $primary
-      ? css`
-          color: #fff;
-          background: #6366f1;
-          border: 1px solid #6366f1;
-          &:hover {
-            background: #4f46e5;
-          }
-        `
-      : css`
-          color: ${theme.colors.text.secondary};
-          background: transparent;
-          border: 1px solid ${theme.colors.border.default};
-          &:hover {
-            color: ${theme.colors.text.primary};
-            background: ${theme.mode === 'dark'
-              ? 'rgba(255,255,255,0.05)'
-              : '#f8fafc'};
-          }
-        `}
-`
-
-// ─── Styled — Name preview chip ──────────────────────────────────────────────
-// 정보 칩(회색 톤). InlineActionBtn(indigo)과 시각 위계 차별화.
-const NamePreview = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 4px 10px;
-  font-size: 12px;
+/** 버리기 — 보조 액션이라 ghost 톤 */
+const DraftDiscardBtn = styled.button`
+  padding: 5px 10px;
+  font-size: 12.5px;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  border-radius: 999px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    color 0.12s,
+    background 0.12s;
+  &:hover {
+    color: ${({ theme }) => theme.colors.alert.danger.fg};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248,113,113,0.08)' : '#fef2f2'};
+  }
 `
 
-const NamePreviewLabel = styled.span`
-  font-weight: 700;
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+/** 복원 — primary action. 카드 안에서 가장 시선 가도록 indigo fill. */
+const DraftRestoreBtn = styled.button`
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  background: ${({ theme }) => theme.colors.primary};
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s;
+  &:hover {
+    background: ${({ theme }) => theme.colors.button.hover};
+  }
 `
 
 // ─── Styled — Field error ────────────────────────────────────────────────────
@@ -621,8 +597,8 @@ const FieldError = styled.span`
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  font-weight: 500;
-  color: #dc2626;
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.alert.danger.fg};
   margin-top: 6px;
   line-height: 1.4;
   svg {
@@ -651,18 +627,6 @@ const LoadingHost = styled.div`
   position: relative;
 `
 
-// ─── Styled — Header secondary submit button ─────────────────────────────────
-const HeaderSecondarySubmit = styled(SubmitButton)`
-  background: transparent;
-  color: #4f46e5;
-  border: 1px solid #c7d2fe;
-  box-shadow: none;
-  &:hover:not(:disabled) {
-    background: ${({ theme }) =>
-      theme.colors.alert.info.bg};
-    color: #4338ca;
-  }
-`
 
 // ─── Styled — Undo toast (국가 변경 시 출생/사망지 자동 정리) ────────────────
 const UndoToastBody = styled.div`
@@ -677,9 +641,13 @@ const UndoToastButton = styled.button`
   padding: 4px 12px;
   font-size: 12px;
   font-weight: 600;
-  color: #4f46e5;
+  color: ${({ theme }) => theme.colors.primary};
   background: transparent;
-  border: 1px solid #c7d2fe;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.4)'
+        : 'rgba(99,102,241,0.3)'};
   border-radius: 999px;
   cursor: pointer;
   transition:
@@ -688,8 +656,8 @@ const UndoToastButton = styled.button`
     border-color 0.15s;
   &:hover {
     color: #fff;
-    background: #6366f1;
-    border-color: #6366f1;
+    background: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
   }
 `
 
@@ -699,51 +667,25 @@ const TopAlert = styled.div<{ $tone?: 'error' | 'warn' }>`
   align-items: flex-start;
   gap: 8px;
   margin: 0 0 16px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid;
-  font-size: 13px;
-  line-height: 1.45;
-  background: ${({ $tone, theme }) =>
-    $tone === 'warn'
-      ? theme.mode === 'dark'
-        ? 'rgba(234,179,8,0.12)'
-        : '#fffbeb'
-      : theme.mode === 'dark'
-        ? 'rgba(220,38,38,0.12)'
-        : '#fef2f2'};
-  border-color: ${({ $tone }) =>
-    $tone === 'warn' ? '#fcd34d' : '#fecaca'};
-  color: ${({ $tone, theme }) =>
-    $tone === 'warn'
-      ? theme.mode === 'dark'
-        ? '#fde68a'
-        : '#a16207'
-      : '#dc2626'};
+  padding: 6px 12px;
+  border: none;
+  border-left: 2px solid
+    ${({ $tone, theme }) =>
+      $tone === 'warn'
+        ? theme.colors.alert.warning.border
+        : theme.colors.alert.danger.border};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12.5px;
+  line-height: 1.5;
+
   svg {
     flex-shrink: 0;
     margin-top: 1px;
-  }
-`
-
-// ─── Styled — Register-another toggle ────────────────────────────────────────
-const RegisterAnotherLabel = styled.label`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  user-select: none;
-  input {
-    width: 14px;
-    height: 14px;
-    accent-color: #6366f1;
-    cursor: pointer;
-  }
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
+    color: ${({ $tone, theme }) =>
+      $tone === 'warn'
+        ? theme.colors.alert.warning.fg
+        : theme.colors.alert.danger.fg};
   }
 `
 
@@ -764,9 +706,8 @@ const NotFoundIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${({ theme }) =>
-    theme.colors.alert.warning.bg};
-  color: #ca8a04;
+  background: ${({ theme }) => theme.colors.alert.warning.bg};
+  color: ${({ theme }) => theme.colors.alert.warning.fg};
 `
 
 const NotFoundTitle = styled.h3`
@@ -800,6 +741,13 @@ export interface PersonRegisterViewProps {
   onSubmittingChange?: (v: boolean) => void
   /** 폼에 미저장 변경이 있는지 부모에게 알림 (닫기 시 경고용) */
   onDirtyChange?: (dirty: boolean) => void
+  /** 필수 필드 채움 변화 — 모달 헤더 인디케이터/사이드 인덱스용 */
+  onValuesChange?: (values: {
+    name: boolean
+    surname: boolean
+    gender: boolean
+    countryId: boolean
+  }) => void
 }
 
 export function PersonRegisterView({
@@ -810,6 +758,7 @@ export function PersonRegisterView({
   editPersonId,
   onSubmittingChange,
   onDirtyChange,
+  onValuesChange,
 }: PersonRegisterViewProps) {
   const isEditMode = Boolean(editPersonId)
   // 기본 정보
@@ -852,7 +801,6 @@ export function PersonRegisterView({
   const [spouseId, setSpouseId] = useState('')
   const [spouseNote, setSpouseNote] = useState('')
   // 기타
-  const [biography, setBiography] = useState('')
   const [profileImageUrl, setProfileImageUrl] = useState('')
   const [regnalName, setRegnalName] = useState('')
   const [templeName, setTempleName] = useState('')
@@ -873,9 +821,15 @@ export function PersonRegisterView({
   const [nameMeaningsOpen, setNameMeaningsOpen] = useState(false)
   /** 생애 탭의 "군주명·묘호·시호" 접기 영역 — 군주가 아닌 인물에겐 영구 무관 */
   const [monarchTitlesOpen, setMonarchTitlesOpen] = useState(false)
-  const [deathTypeShowMore, setDeathTypeShowMore] = useState(false)
-  /** 신규 등록 시 "또 등록" 모드 — 등록 후 폼만 리셋, onCancel 안 부름 */
-  const [registerAnother, setRegisterAnother] = useState(false)
+  /**
+   * 등록 성공 직후 노출하는 다이얼로그 — "다른 인물 이어서 등록할까요?".
+   * 사용자가 "다른 인물 등록"을 누르면 폼만 리셋하고 모달은 유지, "닫기"는 onCancel 호출.
+   * 이전의 "또 등록" 체크박스를 대체 — 사용자가 사용 직전에 분기를 결정해 직관적.
+   */
+  const [showRegisterAgainDialog, setShowRegisterAgainDialog] = useState(false)
+  /** 다이얼로그에 표시할 직전 등록 인물 — 표시 + recentlyRegistered 누적용. */
+  const [lastCreatedPerson, setLastCreatedPerson] =
+    useState<PersonResponseDto | null>(null)
   /**
    * 연속 등록(또 등록) 모드에서 직전 회차에 등록한 인물 — 최대 5명, 최신이 앞.
    * 가족 탭에서 부/모/배우자 슬롯 위에 후보 칩으로 노출. 가계 일괄 등록을 가속.
@@ -922,6 +876,17 @@ export function PersonRegisterView({
   useEffect(() => {
     onDirtyChange?.(isDirty)
   }, [isDirty, onDirtyChange])
+
+  // 모달 헤더 인디케이터/사이드 인덱스용 — 필수 필드 변화 알림
+  useEffect(() => {
+    onValuesChange?.({
+      name: !!name?.trim(),
+      surname: !!surname?.trim(),
+      gender: !!gender,
+      countryId: !!countryId,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onValuesChange는 변경 안 됨 가정
+  }, [name, surname, gender, countryId])
 
   const [modernCountries, setModernCountries] = useState<CountryResponseDto[]>(
     [],
@@ -1079,7 +1044,6 @@ export function PersonRegisterView({
     // 기본 — 약력·원어·이름의 뜻 (이름·성·성별은 필수, 채움 인디케이터에서 제외)
     const basic = !!(
       originalName.trim() ||
-      biography.trim() ||
       surnameMeaning.trim() ||
       nameMeaning.trim() ||
       middleNameMeaning.trim() ||
@@ -1107,7 +1071,6 @@ export function PersonRegisterView({
     return { basic, life, affiliation, family }
   }, [
     originalName,
-    biography,
     surnameMeaning,
     nameMeaning,
     middleNameMeaning,
@@ -1219,7 +1182,6 @@ export function PersonRegisterView({
       // 등록 모드 전환 시 폼 초기화
       setNameMeaningsOpen(false)
       setMonarchTitlesOpen(false)
-      setDeathTypeShowMore(false)
       setName('')
       setSurname('')
       setMiddleName('')
@@ -1229,7 +1191,6 @@ export function PersonRegisterView({
       setNameMeaning('')
       setMiddleNameMeaning('')
       setGender('')
-      setBiography('')
       setProfileImageUrl('')
       setRegnalName('')
       setTempleName('')
@@ -1292,7 +1253,6 @@ export function PersonRegisterView({
         setNameMeaning(p.nameMeaning ?? '')
         setMiddleNameMeaning(p.middleNameMeaning ?? '')
         setGender(p.gender ?? '')
-        setBiography(p.biography ?? '')
         setProfileImageUrl(p.profileImageUrl ?? '')
         setRegnalName(p.regnalName ?? '')
         setTempleName(p.templeName ?? '')
@@ -1393,11 +1353,6 @@ export function PersonRegisterView({
         setDeathType((p as any).deathType ?? '')
         setDeathCause((p as any).deathCause ?? '')
         setDeathNote((p as any).deathNote ?? '')
-        // 사망 유형이 EXTRA에 있으면 더보기 자동 펼침 (사용자가 그 칩을 볼 수 있게).
-        const dt = (p as any).deathType ?? ''
-        if (dt && EXTRA_DEATH_TYPES.some((o) => o.value === dt)) {
-          setDeathTypeShowMore(true)
-        }
         // 이름의 뜻이 있으면 기본 탭의 collapse 자동 펼침.
         const hasNameMeanings =
           (p.surnameMeaning && String(p.surnameMeaning).trim()) ||
@@ -1474,7 +1429,6 @@ export function PersonRegisterView({
       motherId,
       spouseId,
       spouseNote,
-      biography,
       profileImageUrl,
       regnalName,
       templeName,
@@ -1515,7 +1469,6 @@ export function PersonRegisterView({
     motherId,
     spouseId,
     spouseNote,
-    biography,
     profileImageUrl,
     regnalName,
     templeName,
@@ -1588,7 +1541,6 @@ export function PersonRegisterView({
     setMotherId(d.motherId ?? '')
     setSpouseId(d.spouseId ?? '')
     setSpouseNote(d.spouseNote ?? '')
-    setBiography(d.biography ?? '')
     setProfileImageUrl(d.profileImageUrl ?? '')
     setRegnalName(d.regnalName ?? '')
     setTempleName(d.templeName ?? '')
@@ -1609,6 +1561,20 @@ export function PersonRegisterView({
   }
 
   // ─── 핸들러 ────────────────────────────────────────────────────────────────
+  /** 등록 성공 다이얼로그 — "다른 인물 등록" 선택 시 폼 리셋, 모달은 유지. */
+  const handleRegisterAnother = () => {
+    setShowRegisterAgainDialog(false)
+    setLastCreatedPerson(null)
+    setResetCounter((n) => n + 1)
+  }
+
+  /** 등록 성공 다이얼로그 — "닫기" 선택 시 onCancel 호출(모달 닫기/페이지 이동). */
+  const handleClosePostSuccess = () => {
+    setShowRegisterAgainDialog(false)
+    setLastCreatedPerson(null)
+    onCancel()
+  }
+
   const handleCountrySelect = (c: { id: string; name: string }) => {
     const prev = countryId
     setCountryId(c.id)
@@ -1790,15 +1756,14 @@ export function PersonRegisterView({
   // 폼 어디서든 이미지 paste 가능 — 사용자가 클립보드 이미지를 빠르게 붙이도록.
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      // RichTextEditor 내부 paste는 그쪽이 처리 — input/textarea/contenteditable 안이면 무시.
+      // 텍스트 입력 영역(input/textarea/contenteditable) 내부 paste는 무시 — 썸네일 핫키와 충돌 방지.
       const target = e.target as HTMLElement | null
       if (!target) return
       const tag = target.tagName?.toLowerCase()
       if (
         tag === 'input' ||
         tag === 'textarea' ||
-        target.isContentEditable ||
-        target.closest?.('[data-bio-editor-wrap]')
+        target.isContentEditable
       ) {
         return
       }
@@ -2016,7 +1981,6 @@ export function PersonRegisterView({
       nameMeaning: nameMeaning.trim() || null,
       middleNameMeaning: middleNameMeaning.trim() || null,
       gender: gender || null,
-      biography: biography.trim() || null,
       profileImageUrl:
         profileImageField === null
           ? (null as unknown as CreatePersonInput['profileImageUrl'])
@@ -2121,21 +2085,18 @@ export function PersonRegisterView({
         setIsDirty(false)
         draft.discardDraft()
         onSuccess?.(created.id)
-        if (registerAnother) {
-          // 폼만 리셋 — 같은 국가에서 인물을 연속 등록하는 흐름.
-          // 직전 등록 인물을 다음 회차의 가족 후보 칩에 노출. 로컬 인물 풀(persons)에도 추가.
-          setRecentlyRegistered((prev) => {
-            const without = prev.filter((p) => p.id !== created.id)
-            return [created, ...without].slice(0, 5)
-          })
-          setPersons((prev) => {
-            if (prev.some((p) => p.id === created.id)) return prev
-            return [...prev, created]
-          })
-          setResetCounter((n) => n + 1)
-        } else {
-          onCancel()
-        }
+        // 등록 성공 → 사용자에게 후속 액션 다이얼로그로 분기 (이전 "또 등록" 체크박스 대체).
+        // 등록한 인물을 로컬 풀과 직전 등록 칩에 미리 누적 — "다른 인물 등록" 선택 시 즉시 활용.
+        setRecentlyRegistered((prev) => {
+          const without = prev.filter((p) => p.id !== created.id)
+          return [created, ...without].slice(0, 5)
+        })
+        setPersons((prev) => {
+          if (prev.some((p) => p.id === created.id)) return prev
+          return [...prev, created]
+        })
+        setLastCreatedPerson(created)
+        setShowRegisterAgainDialog(true)
       }
     } catch (err: any) {
       const base =
@@ -2154,31 +2115,6 @@ export function PersonRegisterView({
       onSubmittingChange?.(false)
       setUploadingThumbnail(false)
     }
-  }
-
-  // ─── Render helpers ────────────────────────────────────────────────────────
-  const tabLabel = (
-    icon: React.ReactNode,
-    label: string,
-    key: 'basic' | 'life' | 'affiliation' | 'family',
-  ) => {
-    const missing = requiredMissingByTab[key]
-    const filled = filledByTab[key]
-    return (
-      <TabLabelInner>
-        {icon}
-        {label}
-        {missing > 0 ? (
-          <TabBadge $tone="required" aria-label={`미입력 ${missing}건`}>
-            {missing}
-          </TabBadge>
-        ) : filled ? (
-          <TabBadge $tone="filled" aria-label="입력됨">
-            <FiCheck size={11} strokeWidth={3} />
-          </TabBadge>
-        ) : null}
-      </TabLabelInner>
-    )
   }
 
   const fatherPerson = fatherId ? personById.get(fatherId) : undefined
@@ -2204,27 +2140,25 @@ export function PersonRegisterView({
             <FiArrowLeft size={18} />
             목록 보기
           </BackButton>
-          <HeaderSecondarySubmit
-            type="submit"
-            form="person-register-form"
-            disabled={isSubmitting}
-          >
-            {submitButtonLabel}
-          </HeaderSecondarySubmit>
+          {/* 등록 버튼은 하단 sticky footer 한 곳에만 — 중복 제거 */}
         </FormHeader>
       )}
       {pendingDraftSavedAt && (
         <DraftBanner role="status">
-          <span>
-            임시 저장된 내용이 있습니다 · {formatRelativeTime(pendingDraftSavedAt)}
-          </span>
+          <DraftBannerIcon aria-hidden="true">
+            <FiRotateCcw size={14} strokeWidth={2.2} />
+          </DraftBannerIcon>
+          <DraftBannerText>
+            <strong>임시 저장된 내용</strong>
+            <span>· {formatRelativeTime(pendingDraftSavedAt)}</span>
+          </DraftBannerText>
           <DraftBannerActions>
-            <DraftBtn type="button" $primary onClick={restoreDraft}>
-              복원
-            </DraftBtn>
-            <DraftBtn type="button" onClick={dismissDraft}>
+            <DraftDiscardBtn type="button" onClick={dismissDraft}>
               버리기
-            </DraftBtn>
+            </DraftDiscardBtn>
+            <DraftRestoreBtn type="button" onClick={restoreDraft}>
+              복원
+            </DraftRestoreBtn>
           </DraftBannerActions>
         </DraftBanner>
       )}
@@ -2263,126 +2197,113 @@ export function PersonRegisterView({
             </LoadingOverlay>
           )}
           <FormSectionInner aria-busy={isLoadingEdit}>
-            <TabNavigation $hugContent>
-              <TabButton
-                type="button"
-                $active={activeTab === 'basic'}
-                onClick={() => setActiveTab('basic')}
-              >
-                {tabLabel(<FiInfo size={16} />, '기본 정보', 'basic')}
-              </TabButton>
-              <TabButton
-                type="button"
-                $active={activeTab === 'life'}
-                onClick={() => setActiveTab('life')}
-              >
-                {tabLabel(<FiClock size={16} />, '생애', 'life')}
-              </TabButton>
-              <TabButton
-                type="button"
-                $active={activeTab === 'affiliation'}
-                onClick={() => setActiveTab('affiliation')}
-              >
-                {tabLabel(
-                  <FiGlobe size={16} />,
-                  '소속 · 가문',
-                  'affiliation',
-                )}
-              </TabButton>
-              <TabButton
-                type="button"
-                $active={activeTab === 'family'}
-                onClick={() => setActiveTab('family')}
-              >
-                {tabLabel(<FiUsers size={16} />, '가족', 'family')}
-              </TabButton>
-            </TabNavigation>
+            {/* 탭 제거 — 좌측 인덱스(셸의 sectionIndex)로 모든 섹션 한 화면 스크롤 */}
 
-            {activeTab === 'basic' && (
-              <FormRows>
-                <ThumbnailWrap>
-                  <FieldLabel htmlFor="person-thumbnail-upload">
-                    썸네일
-                  </FieldLabel>
-                  <FieldControl>
-                    <ThumbnailRow>
-                      <ThumbnailPreview
-                        htmlFor="person-thumbnail-upload"
-                        $hasImage={!!(thumbnailObjectUrl || profileImageUrl)}
-                        $dragOver={thumbnailDragOver}
-                        onDragEnter={(e) => {
-                          e.preventDefault()
-                          setThumbnailDragOver(true)
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault()
-                          setThumbnailDragOver(true)
-                        }}
-                        onDragLeave={() => setThumbnailDragOver(false)}
-                        onDrop={handleThumbnailDrop}
-                      >
-                        {thumbnailObjectUrl || profileImageUrl ? (
-                          <img
-                            src={
-                              thumbnailObjectUrl ||
-                              getUploadImageUrl(profileImageUrl) ||
-                              profileImageUrl
-                            }
-                            alt="프로필"
-                          />
-                        ) : (
-                          <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                          </svg>
-                        )}
-                      </ThumbnailPreview>
-                      <ThumbnailHint
-                        id="person-thumbnail-hint"
-                        $accent={thumbnailDragOver}
-                      >
-                        {thumbnailDragOver
-                          ? '여기에 놓아 업로드'
-                          : '클릭하거나 이미지를 끌어 놓아 업로드. 클립보드 붙여넣기(Cmd/Ctrl+V)도 지원.'}
-                        {pendingThumbnailFile && !thumbnailDragOver
-                          ? ' 저장 시 서버에 업로드됩니다.'
-                          : ''}
-                      </ThumbnailHint>
-                      {(thumbnailObjectUrl || profileImageUrl.trim()) && (
-                        <ThumbnailRemoveBtn
-                          type="button"
-                          onClick={() => {
-                            handleRemoveThumbnail()
-                            markDirty()
-                          }}
-                          disabled={isSubmitting}
-                          aria-label={
-                            pendingThumbnailFile
-                              ? '선택한 이미지 취소'
-                              : '썸네일 제거'
-                          }
-                        >
-                          <FiTrash2 size={14} />
-                          {pendingThumbnailFile ? '선택 취소' : '썸네일 제거'}
-                        </ThumbnailRemoveBtn>
-                      )}
-                      <ThumbnailUploadInput
-                        id="person-thumbnail-upload"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleThumbnailChange}
-                        disabled={isSubmitting}
-                        aria-describedby="person-thumbnail-hint"
+            <SectionHeader data-form-section="basic">
+              <SectionHeaderTitle>기본 정보</SectionHeaderTitle>
+              <SectionHeaderDesc>
+                인물 식별의 핵심. 성·이름·성별이 필수입니다.
+              </SectionHeaderDesc>
+            </SectionHeader>
+            <FormRows>
+                {/* 인물 hero — 좌: 원형 썸네일(드롭존), 우: 이름 미리보기·국가/향년 칩 */}
+                <ThumbnailHero>
+                  <ThumbnailCircle
+                    htmlFor="person-thumbnail-upload"
+                    $hasImage={!!(thumbnailObjectUrl || profileImageUrl)}
+                    $dragOver={thumbnailDragOver}
+                    onDragEnter={(e) => {
+                      e.preventDefault()
+                      setThumbnailDragOver(true)
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setThumbnailDragOver(true)
+                    }}
+                    onDragLeave={() => setThumbnailDragOver(false)}
+                    onDrop={handleThumbnailDrop}
+                    aria-label="프로필 사진 업로드"
+                  >
+                    {thumbnailObjectUrl || profileImageUrl ? (
+                      <img
+                        src={
+                          thumbnailObjectUrl ||
+                          getUploadImageUrl(profileImageUrl) ||
+                          profileImageUrl
+                        }
+                        alt="프로필"
                       />
-                    </ThumbnailRow>
-                  </FieldControl>
-                </ThumbnailWrap>
+                    ) : (
+                      <svg
+                        className="placeholder"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                      </svg>
+                    )}
+                    <span className="overlay" aria-hidden="true">
+                      <FiCamera size={20} />
+                    </span>
+                  </ThumbnailCircle>
+                  <ThumbnailHeroBody>
+                    <ThumbnailHeroName $empty={!namePreview}>
+                      {namePreview || '이름을 입력해 시작하세요'}
+                    </ThumbnailHeroName>
+                    {(countryName || lifespanText) && (
+                      <ThumbnailHeroMeta>
+                        {countryName && (
+                          <HeroMetaChip>{countryName}</HeroMetaChip>
+                        )}
+                        {lifespanText && (
+                          <HeroMetaChip>{lifespanText}</HeroMetaChip>
+                        )}
+                      </ThumbnailHeroMeta>
+                    )}
+                    <ThumbnailHeroHint id="person-thumbnail-hint">
+                      {thumbnailDragOver
+                        ? '여기에 놓아 업로드'
+                        : '클릭·드래그·붙여넣기(⌘V)로 사진 업로드'}
+                      {pendingThumbnailFile && !thumbnailDragOver
+                        ? ' · 저장 시 업로드'
+                        : ''}
+                    </ThumbnailHeroHint>
+                    {(thumbnailObjectUrl || profileImageUrl.trim()) && (
+                      <ThumbnailHeroRemoveBtn
+                        type="button"
+                        onClick={() => {
+                          handleRemoveThumbnail()
+                          markDirty()
+                        }}
+                        disabled={isSubmitting}
+                        aria-label={
+                          pendingThumbnailFile
+                            ? '선택한 이미지 취소'
+                            : '썸네일 제거'
+                        }
+                      >
+                        <FiTrash2 size={13} />
+                        {pendingThumbnailFile ? '선택 취소' : '썸네일 제거'}
+                      </ThumbnailHeroRemoveBtn>
+                    )}
+                  </ThumbnailHeroBody>
+                  <ThumbnailUploadInput
+                    id="person-thumbnail-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleThumbnailChange}
+                    disabled={isSubmitting}
+                    aria-describedby="person-thumbnail-hint"
+                  />
+                </ThumbnailHero>
 
                 <FieldRow>
                   <FieldLabel htmlFor={fid('surname')}>
                     성 · 이름 <Required>*</Required> · 중간이름
                   </FieldLabel>
                   <FieldControl>
-                    <InlineFields $cols={3}>
+                    <InlineFields $template="minmax(90px, 0.8fr) minmax(140px, 1.4fr) minmax(110px, 1fr)">
                       <FormInput
                         id={fid('surname')}
                         value={surname}
@@ -2393,7 +2314,7 @@ export function PersonRegisterView({
                         onBlur={() =>
                           handleRequiredTextBlur('surname', surname)
                         }
-                        placeholder="성 (예: 김)"
+                        placeholder="김"
                         $error={!!errors.surname}
                         aria-invalid={!!errors.surname}
                         aria-describedby={
@@ -2408,7 +2329,7 @@ export function PersonRegisterView({
                           clearFieldError('name')
                         }}
                         onBlur={() => handleRequiredTextBlur('name', name)}
-                        placeholder="이름 (예: 홍길동)"
+                        placeholder="홍길동"
                         $error={!!errors.name}
                         aria-invalid={!!errors.name}
                         aria-describedby={
@@ -2422,12 +2343,7 @@ export function PersonRegisterView({
                         placeholder="중간이름"
                       />
                     </InlineFields>
-                    {namePreview && (
-                      <NamePreview>
-                        <NamePreviewLabel>표시</NamePreviewLabel>
-                        {namePreview}
-                      </NamePreview>
-                    )}
+                    {/* namePreview는 상단 hero에 표시 */}
                     {(errors.surname || errors.name) && (
                       <FieldError
                         id={errors.surname ? fid('surname-err') : fid('name-err')}
@@ -2448,7 +2364,7 @@ export function PersonRegisterView({
                         id={fid('originalName')}
                         value={originalName}
                         onChange={(e) => setOriginalName(e.target.value)}
-                        placeholder="예: Franklin D. Roosevelt"
+                        placeholder="Franklin D. Roosevelt"
                       />
                     </OriginalNameInputWrap>
                   </FieldControl>
@@ -2459,25 +2375,20 @@ export function PersonRegisterView({
                     성별 <Required>*</Required>
                   </FieldLabel>
                   <FieldControl>
-                    <SegmentRow role="radiogroup" aria-label="성별">
-                      {GENDER_OPTIONS.map((opt) => (
-                        <SegmentBtn
-                          key={opt.value}
-                          type="button"
-                          role="radio"
-                          aria-checked={gender === opt.value}
-                          $active={gender === opt.value}
-                          $error={!!errors.gender}
-                          onClick={() => {
-                            setGender(opt.value)
-                            clearFieldError('gender')
-                            markDirty()
-                          }}
-                        >
-                          {opt.label}
-                        </SegmentBtn>
-                      ))}
-                    </SegmentRow>
+                    <SegmentControl
+                      value={gender || undefined}
+                      onChange={(v) => {
+                        setGender(v)
+                        clearFieldError('gender')
+                        markDirty()
+                      }}
+                      options={GENDER_OPTIONS.map((opt) => ({
+                        value: opt.value,
+                        label: opt.label,
+                      }))}
+                      error={!!errors.gender}
+                      ariaLabel="성별"
+                    />
                     {errors.gender && (
                       <FieldError id={fid('gender-err')} role="alert">
                         <FiAlertCircle size={13} />
@@ -2487,27 +2398,7 @@ export function PersonRegisterView({
                   </FieldControl>
                 </FieldRow>
 
-                {/* 약력 — 인물 정체성을 설명하는 본문. 기본 탭 마지막 영역. */}
-                <FieldRow data-bio-editor-wrap>
-                  <FieldLabel>약력</FieldLabel>
-                  <FieldControl>
-                    <RichTextEditor
-                      value={biography}
-                      onChange={(v) => {
-                        setBiography(v)
-                        markDirty()
-                      }}
-                      showTitle={false}
-                      placeholder="인물의 일생을 설명하는 글 (선택). 서식·이미지를 넣을 수 있습니다."
-                      onImageUpload={async (file) => {
-                        const result = await uploadImage(file, 'persons')
-                        return result.url
-                      }}
-                    />
-                  </FieldControl>
-                </FieldRow>
-
-                {/* 이름의 뜻 — 가끔 채워지는 정보. collapse로 숨겨 잡음 ↓ */}
+                {/* 이름의 뜻 — 옵셔널 정보 disclosure 카드 */}
                 <AdvancedSection>
                   <AdvancedToggle
                     type="button"
@@ -2515,51 +2406,58 @@ export function PersonRegisterView({
                     onClick={() => setNameMeaningsOpen((v) => !v)}
                     aria-expanded={nameMeaningsOpen}
                   >
-                    <FiChevronRight size={14} />
-                    이름의 뜻
+                    <AdvancedToggleIcon $open={nameMeaningsOpen}>
+                      <FiChevronRight size={14} />
+                    </AdvancedToggleIcon>
+                    <AdvancedToggleBody>
+                      <AdvancedToggleTitle>이름의 뜻</AdvancedToggleTitle>
+                      <AdvancedToggleDesc>
+                        성·이름·중간이름의 한자/뜻 (선택)
+                      </AdvancedToggleDesc>
+                    </AdvancedToggleBody>
                   </AdvancedToggle>
                   {nameMeaningsOpen && (
                     <AdvancedBody>
-                      <FormRows>
-                        <FieldRowMulti>
-                          <FieldLabel htmlFor={fid('surnameMeaning')}>
-                            성·이름·중간이름의 뜻
-                          </FieldLabel>
-                          <FieldControl>
-                            <InlineFields $cols={3}>
-                              <FormInput
-                                id={fid('surnameMeaning')}
-                                value={surnameMeaning}
-                                onChange={(e) =>
-                                  setSurnameMeaning(e.target.value)
-                                }
-                                placeholder="성의 뜻"
-                              />
-                              <FormInput
-                                id={fid('nameMeaning')}
-                                value={nameMeaning}
-                                onChange={(e) => setNameMeaning(e.target.value)}
-                                placeholder="이름의 뜻"
-                              />
-                              <FormInput
-                                id={fid('middleNameMeaning')}
-                                value={middleNameMeaning}
-                                onChange={(e) =>
-                                  setMiddleNameMeaning(e.target.value)
-                                }
-                                placeholder="중간이름의 뜻"
-                              />
-                            </InlineFields>
-                          </FieldControl>
-                        </FieldRowMulti>
-                      </FormRows>
+                      <FieldLabel htmlFor={fid('surnameMeaning')}>
+                        성·이름·중간이름의 뜻
+                      </FieldLabel>
+                      <FieldControl>
+                        <InlineFields $cols={3}>
+                          <FormInput
+                            id={fid('surnameMeaning')}
+                            value={surnameMeaning}
+                            onChange={(e) =>
+                              setSurnameMeaning(e.target.value)
+                            }
+                            placeholder="성의 뜻"
+                          />
+                          <FormInput
+                            id={fid('nameMeaning')}
+                            value={nameMeaning}
+                            onChange={(e) => setNameMeaning(e.target.value)}
+                            placeholder="이름의 뜻"
+                          />
+                          <FormInput
+                            id={fid('middleNameMeaning')}
+                            value={middleNameMeaning}
+                            onChange={(e) =>
+                              setMiddleNameMeaning(e.target.value)
+                            }
+                            placeholder="중간이름의 뜻"
+                          />
+                        </InlineFields>
+                      </FieldControl>
                     </AdvancedBody>
                   )}
                 </AdvancedSection>
               </FormRows>
-            )}
 
-            {activeTab === 'life' && (
+            <SectionHeader data-form-section="life">
+              <SectionHeaderTitle>생애</SectionHeaderTitle>
+              <SectionHeaderDesc>
+                출생·사망 기록과 군주 호칭(군주명·묘호·시호).
+              </SectionHeaderDesc>
+            </SectionHeader>
               <LifeSection
                 fid={fid}
                 birthEra={birthEra}
@@ -2580,11 +2478,9 @@ export function PersonRegisterView({
                 deathType={deathType}
                 deathCause={deathCause}
                 deathNote={deathNote}
-                deathTypeShowMore={deathTypeShowMore}
                 setDeathType={setDeathType}
                 setDeathCause={setDeathCause}
                 setDeathNote={setDeathNote}
-                setDeathTypeShowMore={setDeathTypeShowMore}
                 monarchTitlesOpen={monarchTitlesOpen}
                 setMonarchTitlesOpen={setMonarchTitlesOpen}
                 regnalName={regnalName}
@@ -2597,9 +2493,13 @@ export function PersonRegisterView({
                 errors={errors}
                 markDirty={markDirty}
               />
-            )}
 
-            {activeTab === 'affiliation' && (
+            <SectionHeader data-form-section="affiliation">
+              <SectionHeaderTitle>소속 · 가문</SectionHeaderTitle>
+              <SectionHeaderDesc>
+                출생·사망 국가, 도시, 가문, 종교. 국가는 필수입니다.
+              </SectionHeaderDesc>
+            </SectionHeader>
               <AffiliationSection
                 fid={fid}
                 countryId={countryId}
@@ -2619,9 +2519,13 @@ export function PersonRegisterView({
                 errors={errors}
                 markDirty={markDirty}
               />
-            )}
 
-            {activeTab === 'family' && (
+            <SectionHeader data-form-section="family">
+              <SectionHeaderTitle>가족</SectionHeaderTitle>
+              <SectionHeaderDesc>
+                부·모·배우자. 같은 인물을 두 슬롯에 동시 지정할 수 없습니다.
+              </SectionHeaderDesc>
+            </SectionHeader>
               <FamilySection
                 fid={fid}
                 fatherId={fatherId}
@@ -2648,62 +2552,18 @@ export function PersonRegisterView({
                 countryId={countryId}
                 markDirty={markDirty}
               />
-            )}
-
           </FormSectionInner>
         </LoadingHost>
       </form>
 
-      {/* sticky footer — 긴 폼 끝에서도 저장 가능. 진행도는 라이브 프로그레스 바로. */}
-      {!loadFailed && (
-      <StickyFooter>
-        {(() => {
-          const pct = Math.round(
-            (requiredProgress.filled / Math.max(1, requiredProgress.total)) *
-              100,
-          )
-          const isComplete = requiredProgress.filled >= requiredProgress.total
-          const tone: 'done' | 'warn' | 'info' = isComplete
-            ? 'done'
-            : isDirty
-              ? 'warn'
-              : 'info'
-          const label = isComplete
-            ? '필수 입력 완료'
-            : `필수 ${requiredProgress.filled} / ${requiredProgress.total} 입력`
-          const tip = draft.savedAt
-            ? `임시 저장됨 ${formatRelativeTime(draft.savedAt)}`
-            : isDirty
-              ? '저장되지 않은 변경 사항이 있습니다.'
-              : '모든 변경 사항이 저장되었습니다.'
-          return (
-            <FooterProgress
-              role="status"
-              aria-label={`${label} (${pct}%)`}
-              title={tip}
-            >
-              <FooterProgressMeta $tone={tone}>
-                <FooterProgressMetaLabel>{label}</FooterProgressMetaLabel>
-                <FooterProgressMetaCount>{pct}%</FooterProgressMetaCount>
-              </FooterProgressMeta>
-              <FooterProgressTrack>
-                <FooterProgressFill $pct={pct} $complete={isComplete} />
-              </FooterProgressTrack>
-            </FooterProgress>
-          )
-        })()}
-        <FooterActions>
-          {!isEditMode && (
-            <RegisterAnotherLabel>
-              <input
-                type="checkbox"
-                checked={registerAnother}
-                onChange={(e) => setRegisterAnother(e.target.checked)}
-                disabled={isSubmitting}
-              />
-              등록 후 폼 유지
-            </RegisterAnotherLabel>
-          )}
+      {/*
+       * 페이지 모드 전용 sticky 푸터 — 긴 폼 끝에서도 등록 가능.
+       * 모달 모드(embedInCard=false)에서는 wrapper(PersonRegisterViewModal)가
+       * 자체 sticky footer + 등록 버튼을 가지므로 인너 푸터 불필요(중복 제거).
+       * 진행도·"또 등록" 체크박스는 상단 RequiredProgress + 등록 후 다이얼로그로 이전.
+       */}
+      {embedInCard && !loadFailed && (
+        <StickyFooter>
           <SubmitButton
             type="submit"
             form="person-register-form"
@@ -2711,9 +2571,23 @@ export function PersonRegisterView({
           >
             {submitButtonLabel}
           </SubmitButton>
-        </FooterActions>
-      </StickyFooter>
+        </StickyFooter>
       )}
+
+      {/* 등록 성공 후 분기 — "다른 인물 이어서 등록" vs "닫기" */}
+      <ConfirmDialog
+        isOpen={showRegisterAgainDialog}
+        title="인물 등록 완료"
+        message={
+          lastCreatedPerson
+            ? `${getPersonDisplayName(lastCreatedPerson)}을(를) 등록했습니다. 같은 국가에 다른 인물도 이어서 등록할까요?`
+            : '같은 국가에 다른 인물도 이어서 등록할까요?'
+        }
+        confirmLabel="다른 인물 등록"
+        cancelLabel="닫기"
+        onConfirm={handleRegisterAnother}
+        onCancel={handleClosePostSuccess}
+      />
 
       <CountrySelectModal
         isOpen={showCountryModal}

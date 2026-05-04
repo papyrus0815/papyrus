@@ -1,28 +1,13 @@
 /**
- * 인물 등록 뷰 모달 — 등록 버튼 눌렀을 때와 동일한 폼 디자인
- * 대시보드/국가목록 헤더 + 버튼 모달에서 "인물 등록" 선택 시 표시
+ * 인물 등록 뷰 모달 — 공용 CountryFormShell 사용 (현대/역사적 국가 모달과 외곽 통일).
+ * 페이지 임베드(person-edit.page)는 PersonRegisterView 직접 사용.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-
-import { createPortal } from 'react-dom'
+import React, { useEffect, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
-import { AnimatePresence } from 'framer-motion'
-import { FiX } from 'react-icons/fi'
-
 import { personKeys } from '@/entities/person/api'
-import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
-import {
-  PersonRegisterModalBox,
-  PersonRegisterModalCloseBtn,
-  PersonRegisterModalFormScroll,
-  PersonRegisterModalHeader,
-  PersonRegisterModalOverlay,
-  PersonRegisterModalStickyFooter,
-  PersonRegisterModalPrimaryBtn,
-  PersonRegisterModalTitle,
-} from '@/shared/ui/person-register-modal/person-register-modal-shell'
+import { CountryFormShell } from '@/widgets/country/country-form/ui/country-form-shell'
 import { PersonRegisterView } from '@/shared/ui/person-register-modal/person-register-view'
 
 export interface PersonRegisterViewModalProps {
@@ -32,8 +17,10 @@ export interface PersonRegisterViewModalProps {
   onSuccess?: (personId: string) => void
   /** 수정할 인물 ID (없으면 신규 등록) */
   editPersonId?: string | null
-  /** 모달 제목 (기본: 인물 등록) */
+  /** 모달 제목 (기본: 인물 등록 / 인물 수정) */
   title?: string
+  /** 수정 모드 시 헤더 서브타이틀 (편집 중인 인물 이름) */
+  editPersonName?: string
 }
 
 export function PersonRegisterViewModal({
@@ -43,93 +30,25 @@ export function PersonRegisterViewModal({
   onSuccess,
   editPersonId,
   title,
+  editPersonName,
 }: PersonRegisterViewModalProps) {
   const queryClient = useQueryClient()
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
-  /** dirty 상태에서 닫기 시도 시 띄우는 확인 다이얼로그 */
-  const [discardOpen, setDiscardOpen] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const boxRef = useRef<HTMLDivElement>(null)
-  /** 모달 열기 직전 포커스를 가졌던 요소 — 닫을 때 복귀 */
-  const prevFocusRef = useRef<HTMLElement | null>(null)
+  const [filled, setFilled] = useState<{
+    name?: boolean
+    surname?: boolean
+    gender?: boolean
+    countryId?: boolean
+  }>({})
 
-  // 모달 열릴 때마다 스크롤 초기화
+  // 모달 닫힐 때 상태 리셋
   useEffect(() => {
-    if (isOpen && scrollRef.current) {
-      scrollRef.current.scrollTop = 0
-    }
-  }, [isOpen, editPersonId])
-
-  // 포커스 저장/복귀 + 오픈 시 첫 요소에 포커스
-  useEffect(() => {
-    if (!isOpen) return
-    prevFocusRef.current = document.activeElement as HTMLElement | null
-    // 렌더 후 포커스 이동 — 모달 박스 내 첫 포커스 가능 요소
-    const raf = requestAnimationFrame(() => {
-      const box = boxRef.current
-      if (!box) return
-      const focusable = box.querySelector<HTMLElement>(
-        'input:not([disabled]), button:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      )
-      focusable?.focus()
-    })
-    return () => {
-      cancelAnimationFrame(raf)
-      prevFocusRef.current?.focus?.()
+    if (!isOpen) {
+      setIsDirty(false)
+      setFilled({})
     }
   }, [isOpen])
-
-  const handleCloseAttempt = useCallback(() => {
-    if (isSubmitting) return
-    if (isDirty) {
-      setDiscardOpen(true)
-      return
-    }
-    onClose()
-  }, [isDirty, isSubmitting, onClose])
-
-  const handleConfirmDiscard = useCallback(() => {
-    setDiscardOpen(false)
-    onClose()
-  }, [onClose])
-
-  // ESC 닫기 + Tab 포커스 트랩
-  useEffect(() => {
-    if (!isOpen) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        // discard 다이얼로그가 열려 있으면 그쪽을 먼저 닫음
-        if (discardOpen) {
-          setDiscardOpen(false)
-          return
-        }
-        handleCloseAttempt()
-        return
-      }
-      if (e.key === 'Tab' && boxRef.current) {
-        const focusables = Array.from(
-          boxRef.current.querySelectorAll<HTMLElement>(
-            'input:not([disabled]), button:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
-          ),
-        ).filter((el) => el.offsetParent !== null) // 보이는 것만
-        if (focusables.length === 0) return
-        const first = focusables[0]
-        const last = focusables[focusables.length - 1]
-        const active = document.activeElement as HTMLElement | null
-        if (e.shiftKey && active === first) {
-          e.preventDefault()
-          last.focus()
-        } else if (!e.shiftKey && active === last) {
-          e.preventDefault()
-          first.focus()
-        }
-      }
-    }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [isOpen, handleCloseAttempt, discardOpen])
 
   const handleSuccess = (personId?: string) => {
     queryClient.invalidateQueries({ queryKey: personKeys.all })
@@ -144,85 +63,56 @@ export function PersonRegisterViewModal({
     onClose()
   }
 
-  const content = (
-    <AnimatePresence>
-      {isOpen && (
-        <PersonRegisterModalOverlay
-          key="person-register-modal"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={handleCloseAttempt}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="person-register-modal-title"
-        >
-          <PersonRegisterModalBox
-            ref={boxRef}
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.2 }}
-            onClick={(e) => e.stopPropagation()}
-            $height="960px"
-          >
-            <PersonRegisterModalHeader>
-              <PersonRegisterModalTitle id="person-register-modal-title">
-                {title ?? (editPersonId ? '인물 수정' : '인물 등록')}
-              </PersonRegisterModalTitle>
-              <PersonRegisterModalCloseBtn
-                type="button"
-                onClick={handleCloseAttempt}
-                aria-label="닫기"
-              >
-                <FiX size={20} />
-              </PersonRegisterModalCloseBtn>
-            </PersonRegisterModalHeader>
-            <PersonRegisterModalFormScroll ref={scrollRef}>
-              <PersonRegisterView
-                initialCountryId={initialCountryId}
-                editPersonId={editPersonId ?? undefined}
-                onCancel={onClose}
-                onSuccess={handleSuccess}
-                embedInCard={false}
-                onSubmittingChange={setIsSubmitting}
-                onDirtyChange={setIsDirty}
-              />
-            </PersonRegisterModalFormScroll>
-            <PersonRegisterModalStickyFooter>
-              <PersonRegisterModalPrimaryBtn
-                type="submit"
-                form="person-register-form"
-                disabled={isSubmitting}
-              >
-                {isSubmitting
-                  ? editPersonId
-                    ? '저장 중…'
-                    : '등록 중…'
-                  : editPersonId
-                    ? '저장'
-                    : '등록'}
-              </PersonRegisterModalPrimaryBtn>
-            </PersonRegisterModalStickyFooter>
-          </PersonRegisterModalBox>
-        </PersonRegisterModalOverlay>
-      )}
-    </AnimatePresence>
-  )
+  const isEdit = !!editPersonId
 
   return (
-    <>
-      {createPortal(content, document.body)}
-      <ConfirmDialog
-        isOpen={discardOpen}
-        title="저장되지 않은 변경 사항"
-        message="입력 중인 내용이 사라집니다. 닫으시겠습니까?"
-        confirmLabel="닫기"
-        cancelLabel="계속 편집"
-        danger
-        onConfirm={handleConfirmDiscard}
-        onCancel={() => setDiscardOpen(false)}
+    <CountryFormShell
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title ?? (isEdit ? '인물 수정' : '인물 등록')}
+      subtitle={isEdit ? editPersonName : undefined}
+      titleId="person-register-modal-title"
+      formId="person-register-form"
+      submitting={submitting}
+      isDirty={isDirty}
+      submitLabel={isEdit ? '수정 완료' : '인물 등록'}
+      mode={isEdit ? 'edit' : 'create'}
+      draftEnabled={!isEdit}
+      requiredFields={[
+        { label: '성', done: !!filled.surname, jumpTarget: 'surname' },
+        { label: '이름', done: !!filled.name, jumpTarget: 'name' },
+        { label: '성별', done: !!filled.gender, jumpTarget: 'gender' },
+        {
+          label: '국적',
+          done: !!filled.countryId,
+          jumpTarget: 'countryId',
+        },
+      ]}
+      sectionIndex={[
+        {
+          id: 'basic',
+          label: '기본 정보',
+          filled: !!filled.name && !!filled.surname && !!filled.gender,
+        },
+        { id: 'life', label: '생애' },
+        {
+          id: 'affiliation',
+          label: '소속 · 가문',
+          filled: !!filled.countryId,
+        },
+        { id: 'family', label: '가족' },
+      ]}
+    >
+      <PersonRegisterView
+        initialCountryId={initialCountryId}
+        editPersonId={editPersonId ?? undefined}
+        onCancel={onClose}
+        onSuccess={handleSuccess}
+        embedInCard={false}
+        onSubmittingChange={setSubmitting}
+        onDirtyChange={setIsDirty}
+        onValuesChange={setFilled}
       />
-    </>
+    </CountryFormShell>
   )
 }

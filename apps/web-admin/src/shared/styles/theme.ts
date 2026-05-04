@@ -91,33 +91,33 @@ const lightColors = {
     blue: 'linear-gradient(135deg, #e0f2fe 0%, #7dd3fc 100%)',
     pink: 'linear-gradient(135deg, #fce7f3 0%, #f9a8d4 100%)',
   },
-  // 상태 알림 (warning/danger/info/success) — bg/fg/border 분리
+  // 상태 알림 — 톤다운 (좌측 라인 위주, 배경 거의 없음)
   alert: {
     warning: {
-      bg: '#fef3c7',
-      fg: '#92400e',
-      border: '#fde68a',
+      bg: 'transparent',
+      fg: '#b45309',
+      border: '#fbbf24',
     },
     danger: {
-      bg: '#fef2f2',
+      bg: 'transparent',
       fg: '#dc2626',
-      border: '#fecaca',
+      border: '#fca5a5',
     },
     info: {
-      bg: '#eef2ff',
-      fg: '#4338ca',
-      border: '#c7d2fe',
+      bg: 'transparent',
+      fg: '#475569',
+      border: '#cbd5e1',
     },
     success: {
-      bg: '#ecfdf5',
-      fg: '#16a34a',
-      border: 'rgba(22,163,74,0.25)',
+      bg: 'transparent',
+      fg: '#15803d',
+      border: '#86efac',
     },
   },
-  // 인풋 focus glow (두 겹 — ring + halo)
+  // 인풋 focus — 1px ring (halo 제거, Linear 스타일)
   focusRing: {
-    primary: '0 0 0 3px rgba(99,102,241,0.18), 0 0 16px rgba(99,102,241,0.08)',
-    danger: '0 0 0 3px rgba(220,38,38,0.18), 0 0 16px rgba(220,38,38,0.06)',
+    primary: '0 0 0 1px #6366f1',
+    danger: '0 0 0 1px #dc2626',
   },
 }
 
@@ -173,32 +173,32 @@ const darkColors = {
     blue: 'linear-gradient(135deg, #1a2744 0%, #1e3460 100%)',
     pink: 'linear-gradient(135deg, #3a1628 0%, #561f3c 100%)',
   },
-  // 상태 알림 (다크모드 — 더 어두운 bg, 밝은 fg)
+  // 다크모드 상태 알림 — 톤다운
   alert: {
     warning: {
-      bg: 'rgba(250,204,21,0.10)',
+      bg: 'transparent',
       fg: '#fbbf24',
-      border: 'rgba(250,204,21,0.30)',
+      border: 'rgba(250,204,21,0.4)',
     },
     danger: {
-      bg: 'rgba(220,38,38,0.10)',
+      bg: 'transparent',
       fg: '#f87171',
-      border: 'rgba(220,38,38,0.30)',
+      border: 'rgba(248,113,113,0.4)',
     },
     info: {
-      bg: 'rgba(99,102,241,0.12)',
-      fg: '#a5b4fc',
-      border: 'rgba(99,102,241,0.30)',
+      bg: 'transparent',
+      fg: '#94a3b8',
+      border: 'rgba(255,255,255,0.15)',
     },
     success: {
-      bg: 'rgba(34,197,94,0.12)',
+      bg: 'transparent',
       fg: '#4ade80',
-      border: 'rgba(34,197,94,0.30)',
+      border: 'rgba(74,222,128,0.4)',
     },
   },
   focusRing: {
-    primary: '0 0 0 3px rgba(99,106,242,0.22), 0 0 18px rgba(99,106,242,0.12)',
-    danger: '0 0 0 3px rgba(248,113,113,0.22), 0 0 18px rgba(248,113,113,0.08)',
+    primary: '0 0 0 1px #818cf8',
+    danger: '0 0 0 1px #f87171',
   },
 }
 

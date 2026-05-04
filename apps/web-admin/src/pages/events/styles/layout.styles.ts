@@ -124,20 +124,26 @@ export const TopFilterBar = styled.div`
         : 'rgba(20, 19, 34, 0.06)'};
 `
 
-/* detail 패널 폭 — 1400+에서 440px (본문/관계/이미지 충분).
- *   1200~1400: 380px (콤팩트)
- *   <1200: drawer (좌측 main만, 우측 slide-in) */
-export const CatalogSplit = styled.div`
+/**
+ * detail 패널 폭 — 1400+에서 440px / 1200~1400에서 380px / <1200은 drawer.
+ *
+ * `$hasSelection=false`일 땐 *우측 컬럼 자체 미할당* → 메인 뷰 풀 폭.
+ * 사건이 선택되면 컬럼 등장 (CSS transition은 grid-template로 자연스럽게).
+ */
+export const CatalogSplit = styled.div<{ $hasSelection?: boolean }>`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 440px;
-  gap: 20px;
+  grid-template-columns: ${({ $hasSelection }) =>
+    $hasSelection ? 'minmax(0, 1fr) 440px' : 'minmax(0, 1fr)'};
+  gap: ${({ $hasSelection }) => ($hasSelection ? '20px' : '0')};
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  transition: grid-template-columns 0.18s ease, gap 0.18s ease;
 
   @media (max-width: 1400px) {
-    grid-template-columns: minmax(0, 1fr) 380px;
-    gap: 18px;
+    grid-template-columns: ${({ $hasSelection }) =>
+      $hasSelection ? 'minmax(0, 1fr) 380px' : 'minmax(0, 1fr)'};
+    gap: ${({ $hasSelection }) => ($hasSelection ? '18px' : '0')};
   }
 
   @media (max-width: 1200px) {
@@ -148,6 +154,10 @@ export const CatalogSplit = styled.div`
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
     gap: 20px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 `
 

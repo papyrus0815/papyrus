@@ -182,36 +182,44 @@ export const DateFieldBtn = styled.button<{ $hasValue?: boolean }>`
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
+  padding: 9px 12px;
   font-size: 14px;
   color: ${({ $hasValue, theme }) =>
     $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 12px;
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
   outline: none;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
   &:hover {
-    border-color: ${FOCUS_COLOR};
+    border-color: ${({ theme }) => theme.colors.border.medium};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.1)' : '#faf5ff'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
     color: ${({ theme }) => theme.colors.text.primary};
   }
   &:focus-visible {
     border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
   }
   span {
     flex: 1;
   }
   > svg:first-child {
-    color: ${FOCUS_COLOR};
+    color: ${({ theme }) => theme.colors.text.tertiary};
     flex-shrink: 0;
   }
   > svg:last-child {
-    color: ${({ theme }) => theme.colors.text.secondary};
+    color: ${({ theme }) => theme.colors.text.tertiary};
     flex-shrink: 0;
   }
 `
@@ -224,18 +232,24 @@ export const FieldHint = styled.span`
   line-height: 1.4;
 `
 
+/**
+ * 필수 마커 — 라벨 옆에 작은 dot. 라벨이 있다면 시각적으로 균형, 안 보면 그냥 배경.
+ * 텍스트("*"·"필수")는 스크린리더 전용으로 sr-only.
+ */
 export const Required = styled.span`
-  display: inline-block;
-  width: 6px;
-  height: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 5px;
+  height: 5px;
   margin-left: 6px;
   border-radius: 50%;
-  background: #dc2626;
-  vertical-align: 0.2em;
+  background: ${({ theme }) => theme.colors.alert.danger.fg};
+  vertical-align: 0.18em;
+  /* sr-only 텍스트 — "*" 또는 "필수" — 화면엔 dot만 */
   font-size: 0;
   color: transparent;
   overflow: hidden;
-  text-indent: -999px;
 `
 
 /** 공용 Input — FormInput 컴포넌트 직접 re-export */
@@ -279,20 +293,26 @@ export const SelectBtn = styled.button<{
   gap: 10px;
   width: 100%;
   max-width: 380px;
-  padding: 12px 16px;
+  padding: 9px 12px;
   font-size: 14px;
   color: ${({ $hasValue, theme }) =>
     $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   border: 1px solid
-    ${({ $error, theme }) => ($error ? '#ea4335' : theme.colors.border.default)};
-  border-radius: 12px;
+    ${({ $error, theme }) =>
+      $error
+        ? theme.colors.alert.danger.fg
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.08)'
+          : '#e5e7eb'};
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
   outline: none;
   transition:
     border-color 0.15s ease,
+    background 0.15s ease,
     box-shadow 0.15s ease;
   span {
     flex: 1;
@@ -306,14 +326,18 @@ export const SelectBtn = styled.button<{
   }
   &:hover {
     border-color: ${({ $error, theme }) =>
-      $error ? '#ea4335' : theme.colors.border.medium};
+      $error ? theme.colors.alert.danger.fg : theme.colors.border.medium};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
     svg {
       opacity: 1;
     }
   }
   &:focus-visible {
     border-color: ${FOCUS_COLOR};
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
   }
 `
 

@@ -13,7 +13,7 @@ import React, { useEffect, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiCheck, FiEdit2, FiPlus, FiX } from 'react-icons/fi'
+import { FiCheck, FiCloud, FiX } from 'react-icons/fi'
 import styled, { keyframes } from 'styled-components'
 
 import { Z_INDEX } from '@/shared/styles/z-index'
@@ -32,6 +32,8 @@ export interface SectionIndexItem {
   id: string
   /** 인덱스 라벨 */
   label: string
+  /** 채움 여부 — true면 인덱스 좌측에 작은 점 표시 */
+  filled?: boolean
 }
 
 export interface CountryFormShellProps {
@@ -41,6 +43,8 @@ export interface CountryFormShellProps {
   onClose: () => void
   /** 모달 타이틀 */
   title: string
+  /** 타이틀 옆 작은 서브타이틀 (예: 수정 모드의 편집 대상) */
+  subtitle?: string
   /** 모드 — 타이틀 아이콘과 진척률 바 색에 사용 */
   mode?: 'create' | 'edit'
   /** 헤더 인디케이터 (필수 항목 진척률) */
@@ -57,6 +61,8 @@ export interface CountryFormShellProps {
   submitLabel: string
   /** 폼 검증 통과 여부 — false면 부족 항목 안내, 클릭 시 첫 에러로 점프 (disabled 안 함) */
   isValid?: boolean
+  /** 자동 저장(draft) 활성 여부 — true면 푸터에 "자동 저장됨" 표시 */
+  draftEnabled?: boolean
   /** 폼 본문 */
   children: React.ReactNode
   /** aria-labelledby용 id (기본: title-id) */
@@ -77,9 +83,8 @@ const Overlay = styled(motion.div)`
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.38);
+  background: rgba(15, 23, 42, 0.45);
   z-index: ${Z_INDEX.MODAL_OVERLAY};
-  backdrop-filter: blur(10px);
 
   @media (max-width: 768px) {
     padding: 0;
@@ -87,26 +92,19 @@ const Overlay = styled(motion.div)`
 `
 
 const ModalBox = styled(motion.div)`
-  width: min(1100px, 96vw);
+  width: min(960px, 96vw);
   height: 90vh;
   max-height: 1200px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(20,20,20,0.92)'
-      : 'linear-gradient(180deg, #ffffff 0%, #fafbfc 100%)'};
-  backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  -webkit-backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  background: ${({ theme }) => theme.colors.background.primary};
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e5e7eb'};
-  border-radius: 20px;
-  /* 다크모드: 톤다운 그림자 + 1px 화이트 ring으로 깊이감 */
+  border-radius: 12px;
+  /* 단일 그림자만 */
   box-shadow: ${({ theme }) =>
     theme.mode === 'dark'
-      ? '0 24px 60px -12px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)'
-      : '0 24px 56px -8px rgba(15, 23, 42, 0.18), 0 4px 12px -4px rgba(15, 23, 42, 0.08)'};
+      ? '0 16px 32px -12px rgba(0,0,0,0.5)'
+      : '0 16px 32px -8px rgba(15, 23, 42, 0.12)'};
   z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;
   flex-direction: column;
@@ -126,7 +124,7 @@ const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 24px;
+  padding: 18px 24px 16px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-shrink: 0;
 
@@ -135,136 +133,70 @@ const ModalHeader = styled.div`
   }
 `
 
-const HeaderLeft = styled.div`
+const TitleWrap = styled.div`
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
   gap: 10px;
   min-width: 0;
 `
 
+/** 모달 타이틀 — 본문 14px보다 확연히 큰 위계로 격상 (16→20·600→700) */
 const ModalTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.015em;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-`
-
-const RequiredChips = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-`
-
-/** 필수 인디케이터 — 미완료 회색, 완료 초록. 클릭 시 jumpTarget 점프. */
-const RequiredChip = styled(motion.button)<{ $done: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12.5px;
-  font-weight: 500;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: ${({ $done, theme }) =>
-    $done ? theme.colors.alert.success.bg : 'transparent'};
-  color: ${({ $done, theme }) =>
-    $done ? theme.colors.alert.success.fg : theme.colors.text.secondary};
-  border: 1px solid
-    ${({ $done, theme }) =>
-      $done
-        ? theme.colors.alert.success.border
-        : theme.colors.border.default};
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ $done, theme }) =>
-      $done ? theme.colors.alert.success.fg : theme.colors.primary};
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
-  }
-
-  svg {
-    flex-shrink: 0;
-  }
-`
-
-/** 모달 타이틀 좌측 아이콘 박스 (등록=+, 수정=연필) */
-const TitleIcon = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: ${({ theme }) => theme.colors.alert.info.bg};
-  color: ${({ theme }) => theme.colors.alert.info.fg};
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    font-size: 18px;
+  }
 `
 
-/** 헤더 하단 진척률 바 (필수 항목 채움 정도) */
-const ProgressTrack = styled.div`
-  height: 3px;
-  width: 100%;
-  background: ${({ theme }) => theme.colors.border.light};
-  position: relative;
+const Subtitle = styled.span`
+  font-size: 13px;
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   overflow: hidden;
-`
-
-const ProgressFill = styled(motion.div)<{ $complete: boolean }>`
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  background: ${({ $complete, theme }) =>
-    $complete
-      ? `linear-gradient(90deg, ${theme.colors.alert.success.fg}, #22c55e)`
-      : 'linear-gradient(90deg, #6366f1, #8b5cf6)'};
-  border-radius: 0 999px 999px 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 `
 
 const CloseBtn = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: none;
-  border-radius: 12px;
+  border-radius: 6px;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-  transition:
-    background 0.2s,
-    color 0.2s;
+  transition: color 0.12s;
   flex-shrink: 0;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.background.tertiary};
     color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
 /** 본문: 좌측 sticky 인덱스 + 우측 스크롤 컨테이너 */
-const Body = styled.div`
+const Body = styled.div<{ $hasIndex: boolean }>`
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: ${({ $hasIndex }) => ($hasIndex ? '160px 1fr' : '1fr')};
   position: relative;
 
   /* 태블릿: 사이드 인덱스 좁게 (라벨 → 숫자) */
   @media (max-width: 1100px) and (min-width: 769px) {
-    grid-template-columns: 56px 1fr;
+    grid-template-columns: ${({ $hasIndex }) =>
+      $hasIndex ? '48px 1fr' : '1fr'};
   }
 
   @media (max-width: 768px) {
@@ -319,38 +251,20 @@ const InlineSpinner = styled.span`
 
 const SideIndex = styled.nav`
   border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-  padding: 24px 8px 24px 16px;
+  padding: 24px 10px 24px 16px;
   overflow-y: auto;
 
-  /* 태블릿: 라벨을 숫자로 축약 (1, 2, 3, 4) */
+  /* 태블릿: 라벨 숨기고 number badge만 — badge가 시각 anchor */
   @media (max-width: 1100px) and (min-width: 769px) {
-    padding: 24px 4px;
+    padding: 24px 6px;
     [data-section-label] {
       display: none;
-    }
-    [data-section-num] {
-      display: inline-flex !important;
     }
   }
 
   @media (max-width: 768px) {
     display: none;
   }
-`
-
-const SectionNum = styled.span`
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  margin: 0 auto;
 `
 
 const SideIndexList = styled.ul`
@@ -362,59 +276,113 @@ const SideIndexList = styled.ul`
   gap: 2px;
 `
 
+/**
+ * 좌측 인덱스 항목 — number badge + active accent bar.
+ * 5px FilledDot은 안 보여서 폐기, badge 자체가 채움/활성 신호를 모두 담는다.
+ * - badge 색: idle(회색) / filled(연한 indigo fill·indigo 글자) / active(indigo fill·흰 글자)
+ * - active 시 좌측 2px vertical bar로 "여기" 표시 (Linear 패턴)
+ */
 const SideIndexItem = styled.li<{ $active: boolean }>`
   > button {
-    display: block;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     width: 100%;
     text-align: left;
-    padding: 8px 12px;
+    padding: 8px 10px 8px 14px;
     font-size: 13px;
     font-weight: ${({ $active }) => ($active ? 600 : 500)};
+    letter-spacing: -0.005em;
     color: ${({ $active, theme }) =>
-      $active ? theme.colors.primary : theme.colors.text.secondary};
-    background: ${({ $active, theme }) =>
-      $active
-        ? theme.mode === 'dark'
-          ? 'rgba(99,102,241,0.12)'
-          : '#eef2ff'
-        : 'transparent'};
+      $active ? theme.colors.text.primary : theme.colors.text.secondary};
+    background: transparent;
     border: none;
-    border-left: 3px solid
-      ${({ $active, theme }) =>
-        $active ? theme.colors.primary : 'transparent'};
-    border-radius: 0 8px 8px 0;
+    border-radius: 6px;
     cursor: pointer;
     transition:
-      background 0.15s,
-      color 0.15s;
+      color 0.15s ease,
+      background 0.15s ease;
 
     &:hover {
+      color: ${({ theme }) => theme.colors.text.primary};
       background: ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(99,102,241,0.08)'
-          : '#f1f5f9'};
+        theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+    }
+
+    /* active accent bar — 좌측 2px vertical line */
+    &::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 2px;
+      height: ${({ $active }) => ($active ? '60%' : '0')};
+      background: ${({ theme }) => theme.colors.primary};
+      border-radius: 2px;
+      transition: height 0.2s ease;
     }
   }
+
+  @media (max-width: 1100px) and (min-width: 769px) {
+    > button {
+      justify-content: center;
+      padding: 8px 4px;
+    }
+  }
+`
+
+const SideIndexBadge = styled.span<{ $active: boolean; $filled: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+  color: ${({ $active, $filled, theme }) =>
+    $active
+      ? '#fff'
+      : $filled
+        ? theme.colors.primary
+        : theme.colors.text.tertiary};
+  background: ${({ $active, $filled, theme }) =>
+    $active
+      ? theme.colors.primary
+      : $filled
+        ? theme.mode === 'dark'
+          ? 'rgba(99,102,241,0.18)'
+          : '#eef2ff'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.06)'
+          : '#f1f5f9'};
 `
 
 const FormScroll = styled.div`
   min-height: 0;
   overflow-y: auto;
-  padding: 24px 28px;
+  padding: 28px 32px;
 
   &::-webkit-scrollbar {
-    width: 6px;
+    width: 4px;
   }
   &::-webkit-scrollbar-track {
     background: transparent;
   }
   &::-webkit-scrollbar-thumb {
     background: ${({ theme }) => theme.colors.border.default};
-    border-radius: 3px;
+    border-radius: 2px;
   }
 
   @media (max-width: 768px) {
-    padding: 16px;
+    padding: 20px 16px;
   }
 `
 
@@ -423,12 +391,12 @@ const ModalFooter = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 24px;
+  padding: 14px 24px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-shrink: 0;
 
   @media (max-width: 768px) {
-    padding: 12px 16px;
+    padding: 10px 16px;
   }
 `
 
@@ -436,37 +404,27 @@ const SubmitBtn = styled.button<{ $emphasis?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 20px;
+  padding: 9px 18px;
   font-size: 14px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: #fff;
-  background: ${({ $emphasis }) =>
-    $emphasis
-      ? 'linear-gradient(135deg, #818cf8 0%, #6366f1 100%)'
-      : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'};
+  background: ${({ theme }) => theme.colors.primary};
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
-  box-shadow: ${({ $emphasis }) =>
-    $emphasis
-      ? '0 6px 22px -2px rgba(99, 102, 241, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.3)'
-      : '0 4px 14px -2px rgba(99, 102, 241, 0.35)'};
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
   transition:
-    opacity 0.15s,
-    transform 0.05s,
-    box-shadow 0.15s,
-    background 0.2s;
+    background 0.12s ease,
+    box-shadow 0.12s ease,
+    opacity 0.12s ease;
 
   &:hover:not(:disabled) {
-    opacity: 0.95;
-    box-shadow: 0 6px 22px -2px rgba(99, 102, 241, 0.5);
-  }
-  &:active:not(:disabled) {
-    transform: translateY(1px);
-    box-shadow: 0 2px 8px -2px rgba(99, 102, 241, 0.35);
+    background: ${({ theme }) => theme.colors.button.hover};
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
   }
   &:disabled {
-    opacity: 0.55;
+    opacity: 0.5;
     cursor: not-allowed;
     box-shadow: none;
   }
@@ -476,43 +434,97 @@ const FooterStatus = styled.div`
   flex: 1;
   display: flex;
   align-items: center;
+  gap: 14px;
+  min-width: 0;
 `
 
 const FooterButtons = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 `
 
-const FooterHint = styled.span<{ $variant?: 'warning' | 'success' }>`
+/** 필수 진행도 — dot bar(N개 segment) + 텍스트 카운트. text-only보다 시각 anchor. */
+const ProgressGroup = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const ProgressBar = styled.span`
+  display: inline-flex;
+  gap: 3px;
+`
+
+const ProgressSegment = styled.span<{
+  $filled: boolean
+  $complete: boolean
+}>`
+  display: inline-block;
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+  background: ${({ $filled, $complete, theme }) =>
+    $complete
+      ? theme.colors.alert.success.fg
+      : $filled
+        ? theme.colors.primary
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.1)'
+          : '#e5e7eb'};
+  transition: background 0.2s ease;
+`
+
+const ProgressLabel = styled.span<{ $complete: boolean }>`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ $complete, theme }) =>
+    $complete ? theme.colors.alert.success.fg : theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: ${({ $variant, theme }) => {
-    if ($variant === 'warning') return theme.colors.alert.warning.fg
-    if ($variant === 'success') return theme.colors.alert.success.fg
-    return theme.colors.text.tertiary
-  }};
+
+  > svg {
+    flex-shrink: 0;
+  }
+`
+
+/** 자동 저장 표시 — 클라우드 icon + 작은 텍스트 */
+const AutoSaveHint = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  > svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
 `
 
 const CancelBtn = styled.button`
-  padding: 10px 20px;
-  font-size: 14px;
+  padding: 9px 14px;
+  font-size: 13px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: transparent;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition:
-    background 0.15s,
-    color 0.15s;
+    border-color 0.12s,
+    color 0.12s,
+    background 0.12s;
 
   &:hover:not(:disabled) {
-    background: ${({ theme }) => theme.colors.background.tertiary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
     color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
   }
   &:disabled {
     opacity: 0.5;
@@ -540,6 +552,7 @@ export function CountryFormShell({
   isOpen,
   onClose,
   title,
+  subtitle,
   mode,
   requiredFields = [],
   sectionIndex = [],
@@ -548,6 +561,7 @@ export function CountryFormShell({
   isDirty = false,
   submitLabel,
   isValid = true,
+  draftEnabled = false,
   children,
   titleId = 'country-form-shell-title',
 }: CountryFormShellProps) {
@@ -684,25 +698,9 @@ export function CountryFormShell({
     }
   }
 
-  /** 헤더 칩 클릭 → 해당 필드로 점프 + focus + outline pulse */
-  const handleChipJump = (jumpTarget: string) => {
-    const root = scrollRef.current
-    if (!root) return
-    // name 또는 id 매칭
-    const target = root.querySelector<HTMLElement>(
-      `[name="${jumpTarget}"], #${jumpTarget}`,
-    )
-    if (!target) return
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    window.setTimeout(() => {
-      if (typeof target.focus === 'function') target.focus()
-    }, 200)
-  }
-
-  // 진척률 (0~1)
+  // 필수 진척률 (텍스트 표시용)
   const completedCount = requiredFields.filter((f) => f.done).length
   const totalCount = requiredFields.length
-  const progress = totalCount > 0 ? completedCount / totalCount : 0
   const isComplete = totalCount > 0 && completedCount === totalCount
 
   if (!isOpen) return null
@@ -722,10 +720,10 @@ export function CountryFormShell({
         >
           <ModalBox
             ref={modalRef}
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* 스크린리더용 라이브 리전 — 저장 중/완료 알림 */}
@@ -747,84 +745,21 @@ export function CountryFormShell({
               {submitting ? '저장 중입니다' : ''}
             </span>
             <ModalHeader>
-              <HeaderLeft>
-                <ModalTitle id={titleId}>
-                  <TitleIcon aria-hidden>
-                    {mode === 'edit' ? (
-                      <FiEdit2 size={16} />
-                    ) : (
-                      <FiPlus size={18} />
-                    )}
-                  </TitleIcon>
-                  {title}
-                </ModalTitle>
-                {requiredFields.length > 0 && (
-                  <RequiredChips>
-                    {requiredFields.map((f) => (
-                      <RequiredChip
-                        key={f.label}
-                        type="button"
-                        $done={f.done}
-                        onClick={() =>
-                          f.jumpTarget && handleChipJump(f.jumpTarget)
-                        }
-                        title={
-                          f.jumpTarget
-                            ? `${f.label} 필드로 이동`
-                            : undefined
-                        }
-                        layout
-                        animate={
-                          f.done
-                            ? { scale: [1.1, 1] }
-                            : { scale: 1 }
-                        }
-                        transition={{
-                          type: 'spring',
-                          stiffness: 380,
-                          damping: 18,
-                        }}
-                      >
-                        {f.done && <FiCheck size={11} />}
-                        {f.label}
-                      </RequiredChip>
-                    ))}
-                  </RequiredChips>
-                )}
-              </HeaderLeft>
+              <TitleWrap>
+                <ModalTitle id={titleId}>{title}</ModalTitle>
+                {subtitle && <Subtitle>{subtitle}</Subtitle>}
+              </TitleWrap>
               <CloseBtn
                 type="button"
                 onClick={requestClose}
                 aria-label="닫기"
                 disabled={submitting}
               >
-                <FiX size={20} />
+                <FiX size={18} />
               </CloseBtn>
             </ModalHeader>
 
-            {/* 진척률 바 — 필수 항목 채워진 비율 */}
-            {totalCount > 0 && (
-              <ProgressTrack
-                role="progressbar"
-                aria-valuenow={completedCount}
-                aria-valuemin={0}
-                aria-valuemax={totalCount}
-                aria-label={`필수 항목 ${completedCount} / ${totalCount}`}
-              >
-                <ProgressFill
-                  $complete={isComplete}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${progress * 100}%` }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 200,
-                    damping: 26,
-                  }}
-                />
-              </ProgressTrack>
-            )}
-
-            <Body>
+            <Body $hasIndex={sectionIndex.length > 0}>
               {sectionIndex.length > 0 && (
                 <SideIndex aria-label="섹션 인덱스">
                   <SideIndexList>
@@ -838,8 +773,13 @@ export function CountryFormShell({
                           onClick={() => handleIndexClick(item.id)}
                           title={item.label}
                         >
+                          <SideIndexBadge
+                            $active={activeSection === item.id}
+                            $filled={!!item.filled}
+                          >
+                            {idx + 1}
+                          </SideIndexBadge>
                           <span data-section-label>{item.label}</span>
-                          <SectionNum data-section-num>{idx + 1}</SectionNum>
                         </button>
                       </SideIndexItem>
                     ))}
@@ -868,18 +808,43 @@ export function CountryFormShell({
 
             <ModalFooter>
               <FooterStatus>
-                {!isDirty && totalCount === 0 && (
-                  <FooterHint>변경사항 없음</FooterHint>
+                {totalCount > 0 && (
+                  <ProgressGroup
+                    title={
+                      completedCount < totalCount
+                        ? `미완: ${requiredFields
+                            .filter((f) => !f.done)
+                            .map((f) => f.label)
+                            .join(', ')}`
+                        : '필수 항목 모두 입력'
+                    }
+                  >
+                    <ProgressBar
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={totalCount}
+                      aria-valuenow={completedCount}
+                      aria-label={`필수 ${completedCount}/${totalCount}`}
+                    >
+                      {requiredFields.map((f, i) => (
+                        <ProgressSegment
+                          key={i}
+                          $filled={f.done}
+                          $complete={isComplete}
+                        />
+                      ))}
+                    </ProgressBar>
+                    <ProgressLabel $complete={isComplete}>
+                      {isComplete && <FiCheck size={12} />}
+                      필수 {completedCount}/{totalCount}
+                    </ProgressLabel>
+                  </ProgressGroup>
                 )}
-                {totalCount > 0 && completedCount < totalCount && (
-                  <FooterHint $variant="warning">
-                    필수 {totalCount - completedCount}개 항목이 더 필요합니다
-                  </FooterHint>
-                )}
-                {totalCount > 0 && completedCount === totalCount && isDirty && (
-                  <FooterHint $variant="success">
-                    <FiCheck size={12} /> 저장 준비 완료
-                  </FooterHint>
+                {draftEnabled && isDirty && (
+                  <AutoSaveHint title="입력 중인 내용을 자동 저장 중">
+                    <FiCloud size={12} />
+                    자동 저장됨
+                  </AutoSaveHint>
                 )}
               </FooterStatus>
               <FooterButtons>

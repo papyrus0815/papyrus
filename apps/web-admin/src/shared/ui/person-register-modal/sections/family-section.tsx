@@ -83,29 +83,60 @@ export function FamilySection({
   const handleCreatedPerson = (p: PersonResponseDto) =>
     setPersons((prev) => [...prev, p])
 
+  /**
+   * "최근 등록" 후보 — 단일 행으로 카드 상단 1회만. 슬롯 라벨이 chip 우측에 작은 secondary 액션
+   * 으로 따라붙어 "어떤 슬롯에 넣을지" 한 번에 선택 가능. 이전: 슬롯별 3회 반복(시각 잡음).
+   */
+  const renderRecentChips = () => {
+    if (recentCandidates.length === 0) return null
+    return (
+      <RecentChipRow>
+        <RecentChipLabel>최근 등록</RecentChipLabel>
+        {recentCandidates.map((p) => (
+          <RecentChipGroup key={p.id} title={getPersonDisplayName(p)}>
+            <RecentChipName>{getPersonDisplayName(p)}</RecentChipName>
+            <RecentChipActions>
+              <RecentSlotBtn
+                type="button"
+                onClick={() => {
+                  setFatherId(p.id)
+                  markDirty()
+                }}
+              >
+                父
+              </RecentSlotBtn>
+              <RecentSlotBtn
+                type="button"
+                onClick={() => {
+                  setMotherId(p.id)
+                  markDirty()
+                }}
+              >
+                母
+              </RecentSlotBtn>
+              <RecentSlotBtn
+                type="button"
+                onClick={() => {
+                  setSpouseId(p.id)
+                  markDirty()
+                }}
+              >
+                配
+              </RecentSlotBtn>
+            </RecentChipActions>
+          </RecentChipGroup>
+        ))}
+      </RecentChipRow>
+    )
+  }
+
   return (
     <FormRows>
-      <FieldRow>
-        <FieldLabel htmlFor={fid('father')}>아버지</FieldLabel>
-        <FieldControl>
-          {recentCandidates.length > 0 && (
-            <RecentChipRow>
-              <RecentChipLabel>최근 등록</RecentChipLabel>
-              {recentCandidates.map((p) => (
-                <RecentChip
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setFatherId(p.id)
-                    markDirty()
-                  }}
-                  title="이 슬롯에 지정"
-                >
-                  {getPersonDisplayName(p)}
-                </RecentChip>
-              ))}
-            </RecentChipRow>
-          )}
+      {renderRecentChips()}
+      {/* 부 · 모 — 한 쌍의 부모. 2-col grid로 의미적 grouping. */}
+      <FamilyParentsRow>
+        <FamilySlot>
+          <FamilySlotLabel htmlFor={fid('father')}>아버지</FamilySlotLabel>
           <FamilyMemberCard
             person={fatherPerson}
             placeholder="아버지 선택"
@@ -115,49 +146,9 @@ export function FamilySection({
               markDirty()
             }}
           />
-          {showFatherModal && (
-            <PersonSelectModal
-              persons={persons}
-              selectedPersonId={fatherId}
-              onSelect={(id) => {
-                setFatherId(id)
-                setShowFatherModal(false)
-                markDirty()
-              }}
-              onClose={() => setShowFatherModal(false)}
-              excludeIds={[editPersonId ?? '', motherId, spouseId].filter(
-                Boolean,
-              )}
-              excludeReason="자기 자신, 어머니·배우자로 지정한 인물은 아버지로 선택할 수 없습니다."
-              title="아버지 선택"
-              searchPlaceholder="아버지로 등록할 인물을 검색…"
-              defaultCountryId={countryId || undefined}
-              onCreatedPerson={handleCreatedPerson}
-            />
-          )}
-        </FieldControl>
-      </FieldRow>
-      <FieldRow>
-        <FieldLabel htmlFor={fid('mother')}>어머니</FieldLabel>
-        <FieldControl>
-          {recentCandidates.length > 0 && (
-            <RecentChipRow>
-              <RecentChipLabel>최근 등록</RecentChipLabel>
-              {recentCandidates.map((p) => (
-                <RecentChip
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setMotherId(p.id)
-                    markDirty()
-                  }}
-                  title="이 슬롯에 지정"
-                >
-                  {getPersonDisplayName(p)}
-                </RecentChip>
-              ))}
-            </RecentChipRow>
-          )}
+        </FamilySlot>
+        <FamilySlot>
+          <FamilySlotLabel htmlFor={fid('mother')}>어머니</FamilySlotLabel>
           <FamilyMemberCard
             person={motherPerson}
             placeholder="어머니 선택"
@@ -167,49 +158,12 @@ export function FamilySection({
               markDirty()
             }}
           />
-          {showMotherModal && (
-            <PersonSelectModal
-              persons={persons}
-              selectedPersonId={motherId}
-              onSelect={(id) => {
-                setMotherId(id)
-                setShowMotherModal(false)
-                markDirty()
-              }}
-              onClose={() => setShowMotherModal(false)}
-              excludeIds={[editPersonId ?? '', fatherId, spouseId].filter(
-                Boolean,
-              )}
-              excludeReason="자기 자신, 아버지·배우자로 지정한 인물은 어머니로 선택할 수 없습니다."
-              title="어머니 선택"
-              searchPlaceholder="어머니로 등록할 인물을 검색…"
-              defaultCountryId={countryId || undefined}
-              onCreatedPerson={handleCreatedPerson}
-            />
-          )}
-        </FieldControl>
-      </FieldRow>
+        </FamilySlot>
+      </FamilyParentsRow>
+      {/* 배우자 — 별도 행 */}
       <FieldRow>
         <FieldLabel htmlFor={fid('spouse')}>배우자</FieldLabel>
         <FieldControl>
-          {recentCandidates.length > 0 && (
-            <RecentChipRow>
-              <RecentChipLabel>최근 등록</RecentChipLabel>
-              {recentCandidates.map((p) => (
-                <RecentChip
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setSpouseId(p.id)
-                    markDirty()
-                  }}
-                  title="이 슬롯에 지정"
-                >
-                  {getPersonDisplayName(p)}
-                </RecentChip>
-              ))}
-            </RecentChipRow>
-          )}
           <FamilyMemberCard
             person={spousePerson}
             placeholder="배우자 선택 (대표 1명)"
@@ -219,26 +173,6 @@ export function FamilySection({
               markDirty()
             }}
           />
-          {showSpouseModal && (
-            <PersonSelectModal
-              persons={persons}
-              selectedPersonId={spouseId}
-              onSelect={(id) => {
-                setSpouseId(id)
-                setShowSpouseModal(false)
-                markDirty()
-              }}
-              onClose={() => setShowSpouseModal(false)}
-              excludeIds={[editPersonId ?? '', fatherId, motherId].filter(
-                Boolean,
-              )}
-              excludeReason="자기 자신, 아버지·어머니로 지정한 인물은 배우자로 선택할 수 없습니다."
-              title="배우자 선택"
-              searchPlaceholder="배우자로 등록할 인물을 검색…"
-              defaultCountryId={countryId || undefined}
-              onCreatedPerson={handleCreatedPerson}
-            />
-          )}
         </FieldControl>
       </FieldRow>
       <FieldRow>
@@ -248,59 +182,180 @@ export function FamilySection({
             id={fid('spouseNote')}
             value={spouseNote}
             onChange={(e) => setSpouseNote(e.target.value)}
-            placeholder="예: 1대 왕비, 재위 기간 중 사망"
+            placeholder="1대 왕비, 재위 기간 중 사망"
             disabled={!spouseId}
             rows={3}
           />
         </FieldControl>
       </FieldRow>
+      {/* PersonSelectModal — 슬롯별 모달은 그대로(검색·exclude·생성 등 동작 보존) */}
+      {showFatherModal && (
+        <PersonSelectModal
+          persons={persons}
+          selectedPersonId={fatherId}
+          onSelect={(id) => {
+            setFatherId(id)
+            setShowFatherModal(false)
+            markDirty()
+          }}
+          onClose={() => setShowFatherModal(false)}
+          excludeIds={[editPersonId ?? '', motherId, spouseId].filter(Boolean)}
+          excludeReason="자기 자신, 어머니·배우자로 지정한 인물은 아버지로 선택할 수 없습니다."
+          title="아버지 선택"
+          searchPlaceholder="아버지로 등록할 인물을 검색…"
+          defaultCountryId={countryId || undefined}
+          onCreatedPerson={handleCreatedPerson}
+        />
+      )}
+      {showMotherModal && (
+        <PersonSelectModal
+          persons={persons}
+          selectedPersonId={motherId}
+          onSelect={(id) => {
+            setMotherId(id)
+            setShowMotherModal(false)
+            markDirty()
+          }}
+          onClose={() => setShowMotherModal(false)}
+          excludeIds={[editPersonId ?? '', fatherId, spouseId].filter(Boolean)}
+          excludeReason="자기 자신, 아버지·배우자로 지정한 인물은 어머니로 선택할 수 없습니다."
+          title="어머니 선택"
+          searchPlaceholder="어머니로 등록할 인물을 검색…"
+          defaultCountryId={countryId || undefined}
+          onCreatedPerson={handleCreatedPerson}
+        />
+      )}
+      {showSpouseModal && (
+        <PersonSelectModal
+          persons={persons}
+          selectedPersonId={spouseId}
+          onSelect={(id) => {
+            setSpouseId(id)
+            setShowSpouseModal(false)
+            markDirty()
+          }}
+          onClose={() => setShowSpouseModal(false)}
+          excludeIds={[editPersonId ?? '', fatherId, motherId].filter(Boolean)}
+          excludeReason="자기 자신, 아버지·어머니로 지정한 인물은 배우자로 선택할 수 없습니다."
+          title="배우자 선택"
+          searchPlaceholder="배우자로 등록할 인물을 검색…"
+          defaultCountryId={countryId || undefined}
+          onCreatedPerson={handleCreatedPerson}
+        />
+      )}
     </FormRows>
   )
 }
 
 // ─── Styled (가족 섹션 전용) ──────────────────────────────────────────────────
 
+/** 부 · 모 슬롯 — 한 쌍이라 2-col grid로 의미적 grouping. */
+const FamilyParentsRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 8px 0;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+`
+
+const FamilySlot = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+`
+
+const FamilySlotLabel = styled.label`
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/**
+ * 최근 등록 chip — 슬롯별 반복(이전: 3회) → 단일 행에 통합.
+ * 한 인물 chip 옆에 父/母/配 미니 액션이 따라붙어 한 번에 슬롯 지정.
+ */
 const RecentChipRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 10px 12px;
   margin-bottom: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99,102,241,0.06)'
+      : 'rgba(99, 102, 241, 0.04)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.18)'
+        : 'rgba(99, 102, 241, 0.18)'};
+  border-radius: 10px;
 `
 
 const RecentChipLabel = styled.span`
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-right: 2px;
 `
 
-const RecentChip = styled.button`
+const RecentChipGroup = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  max-width: 220px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #4f46e5;
-  background: transparent;
-  border: 1px dashed ${({ theme }) => theme.colors.alert.info.border};
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 999px;
-  cursor: pointer;
+  max-width: 280px;
+`
+
+const RecentChipName = styled.span`
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 160px;
+`
+
+const RecentChipActions = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+`
+
+/** 父/母/配 mini 슬롯 버튼 — 한 인물을 빠르게 슬롯에 꽂는 inline action. */
+const RecentSlotBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
   transition:
     color 0.15s,
-    background 0.15s,
-    border-color 0.15s;
+    background 0.15s;
+
   &:hover {
     color: #fff;
-    background: #6366f1;
-    border-color: #6366f1;
+    background: ${({ theme }) => theme.colors.primary};
   }
 `
 

@@ -28,6 +28,7 @@ import {
   FiTarget,
   FiTrash2,
   FiUsers,
+  FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 
@@ -61,6 +62,8 @@ interface EventDetailPanelProps {
   /** 이전/다음 사건으로 이동 — 키보드(↑↓)와 동등하나 마우스 사용자용. 더 이상 없으면 undefined. */
   onPrev?: () => void
   onNext?: () => void
+  /** 상세 패널 닫기 — 데스크톱 column 모드에서도 X 버튼으로 명시적 닫기 제공 */
+  onClose?: () => void
 }
 
 export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
@@ -74,6 +77,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   onAfterDelete,
   onPrev,
   onNext,
+  onClose,
 }) => {
   const navigate = useNavigate()
   const [descExpanded, setDescExpanded] = useState(false)
@@ -345,7 +349,19 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
         <Detail.DetailPanelContent>
           {/* sticky 헤더 — 제목·summary·액션 */}
           <Detail.DetailPanelHeader>
-            <Detail.DetailTitle>{selectedNode.title}</Detail.DetailTitle>
+            <Detail.DetailTitleRow>
+              <Detail.DetailTitle>{selectedNode.title}</Detail.DetailTitle>
+              {onClose && (
+                <Detail.DetailCloseButton
+                  type="button"
+                  aria-label="상세 닫기"
+                  title="닫기 (Esc)"
+                  onClick={onClose}
+                >
+                  <FiX size={ICON_SIZE.lg} aria-hidden="true" />
+                </Detail.DetailCloseButton>
+              )}
+            </Detail.DetailTitleRow>
             {selectedNode.summary && (
               <Detail.DescriptionWrap>
                 <Detail.DescriptionText $expanded={descExpanded}>

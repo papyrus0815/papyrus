@@ -26,8 +26,7 @@ import {
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
 import {
-  EXTRA_DEATH_TYPES,
-  PRIMARY_DEATH_TYPES,
+  DEATH_TYPE_GROUPS,
   formatDateDisplay,
 } from '../person-register-view.helpers'
 
@@ -54,11 +53,9 @@ export interface LifeSectionProps {
   deathType: string
   deathCause: string
   deathNote: string
-  deathTypeShowMore: boolean
   setDeathType: (v: string) => void
   setDeathCause: (v: string) => void
   setDeathNote: (v: string) => void
-  setDeathTypeShowMore: (v: boolean) => void
   // 군주 호칭
   monarchTitlesOpen: boolean
   setMonarchTitlesOpen: React.Dispatch<React.SetStateAction<boolean>>
@@ -96,11 +93,9 @@ export function LifeSection({
   deathType,
   deathCause,
   deathNote,
-  deathTypeShowMore,
   setDeathType,
   setDeathCause,
   setDeathNote,
-  setDeathTypeShowMore,
   monarchTitlesOpen,
   setMonarchTitlesOpen,
   regnalName,
@@ -168,11 +163,14 @@ export function LifeSection({
             </SegmentBtn>
           </LifeInlineRow>
 
-          {/* 2) 사망 여부 — 3-way 라디오. 가장 중요한 분기. */}
+          {/*
+           * 2) 사망 여부 — 가장 중요한 분기.
+           * 진짜 segmented control(인접 버튼 한 덩어리) — chip과 시각 위계 구별.
+           */}
           <LifeFieldGroup>
             <LifeSubLabel>사망 여부</LifeSubLabel>
-            <SegmentRow role="radiogroup" aria-label="사망 여부">
-              <SegmentBtn
+            <Segmented3Way role="radiogroup" aria-label="사망 여부">
+              <Segmented3WayBtn
                 type="button"
                 role="radio"
                 aria-checked={isAlive}
@@ -180,8 +178,8 @@ export function LifeSection({
                 onClick={() => setDeathStatus('alive')}
               >
                 생존 중
-              </SegmentBtn>
-              <SegmentBtn
+              </Segmented3WayBtn>
+              <Segmented3WayBtn
                 type="button"
                 role="radio"
                 aria-checked={!isAlive && !isDeathDateUnknown}
@@ -189,8 +187,8 @@ export function LifeSection({
                 onClick={() => setDeathStatus('deceased')}
               >
                 사망
-              </SegmentBtn>
-              <SegmentBtn
+              </Segmented3WayBtn>
+              <Segmented3WayBtn
                 type="button"
                 role="radio"
                 aria-checked={!isAlive && isDeathDateUnknown}
@@ -198,8 +196,8 @@ export function LifeSection({
                 onClick={() => setDeathStatus('unknown')}
               >
                 일자 미상
-              </SegmentBtn>
-            </SegmentRow>
+              </Segmented3WayBtn>
+            </Segmented3Way>
           </LifeFieldGroup>
 
           {/* 3) 사망일 — 사망(정상)일 때만. 향년은 둘 다 정상 입력일 때만. */}
@@ -243,52 +241,42 @@ export function LifeSection({
             </FieldError>
           )}
 
-          {/* 4) 사망 상세 — 사망 또는 일자 미상일 때(=생존중 아닐 때). 사망유형 칩은 토글 button(aria-pressed). */}
+          {/*
+           * 4) 사망 상세 — 사망 또는 일자 미상일 때(=생존중 아닐 때).
+           * 13개 평면 chip → 4그룹 mini-header. 그룹 내 chip은 active=indigo fill.
+           * 카테고리화로 사용자가 "사고/외부" 같은 의미를 한눈에 찾도록.
+           */}
           {!isAlive && (
             <LifeDeathDetails>
-              <SegmentRow role="group" aria-label="사망 유형">
-                {PRIMARY_DEATH_TYPES.map((opt) => (
-                  <SegmentBtn
-                    key={opt.value}
-                    type="button"
-                    aria-pressed={deathType === opt.value}
-                    $active={deathType === opt.value}
-                    onClick={() => {
-                      setDeathType(deathType === opt.value ? '' : opt.value)
-                      markDirty()
-                    }}
-                  >
-                    {opt.label}
-                  </SegmentBtn>
+              <DeathTypeGrouped role="group" aria-label="사망 유형">
+                {DEATH_TYPE_GROUPS.map((group) => (
+                  <DeathTypeGroupBox key={group.key}>
+                    <DeathTypeGroupLabel>{group.label}</DeathTypeGroupLabel>
+                    <DeathTypeChips>
+                      {group.options.map((opt) => (
+                        <DeathTypeChip
+                          key={opt.value}
+                          type="button"
+                          aria-pressed={deathType === opt.value}
+                          $active={deathType === opt.value}
+                          onClick={() => {
+                            setDeathType(
+                              deathType === opt.value ? '' : opt.value,
+                            )
+                            markDirty()
+                          }}
+                        >
+                          {opt.label}
+                        </DeathTypeChip>
+                      ))}
+                    </DeathTypeChips>
+                  </DeathTypeGroupBox>
                 ))}
-                {deathTypeShowMore &&
-                  EXTRA_DEATH_TYPES.map((opt) => (
-                    <SegmentBtn
-                      key={opt.value}
-                      type="button"
-                      aria-pressed={deathType === opt.value}
-                      $active={deathType === opt.value}
-                      onClick={() => {
-                        setDeathType(deathType === opt.value ? '' : opt.value)
-                        markDirty()
-                      }}
-                    >
-                      {opt.label}
-                    </SegmentBtn>
-                  ))}
-                {!deathTypeShowMore && (
-                  <ChipMoreBtn
-                    type="button"
-                    onClick={() => setDeathTypeShowMore(true)}
-                  >
-                    더보기 +{EXTRA_DEATH_TYPES.length}
-                  </ChipMoreBtn>
-                )}
-              </SegmentRow>
+              </DeathTypeGrouped>
               <FormInput
                 value={deathCause}
                 onChange={(e) => setDeathCause(e.target.value)}
-                placeholder="사망 원인 상세 (예: 폐렴 합병증)"
+                placeholder="사망 원인 상세"
               />
               <Textarea
                 value={deathNote}
@@ -301,7 +289,7 @@ export function LifeSection({
         </LifeStack>
       </FieldRow>
 
-      {/* 군주 호칭 — 군주가 아닌 인물에겐 무관. collapse로 숨김. */}
+      {/* 군주 호칭 — 군주에게만 적용. 카드형 disclosure로 옵셔널 표시. */}
       <AdvancedSection>
         <AdvancedToggle
           type="button"
@@ -309,40 +297,43 @@ export function LifeSection({
           onClick={() => setMonarchTitlesOpen((v) => !v)}
           aria-expanded={monarchTitlesOpen}
         >
-          <FiChevronRight size={14} />
-          군주 호칭 — 군주명·묘호·시호
+          <AdvancedToggleIcon $open={monarchTitlesOpen}>
+            <FiChevronRight size={14} />
+          </AdvancedToggleIcon>
+          <AdvancedToggleBody>
+            <AdvancedToggleTitle>군주 호칭</AdvancedToggleTitle>
+            <AdvancedToggleDesc>
+              군주명·묘호·시호 (군주에 한해, 선택)
+            </AdvancedToggleDesc>
+          </AdvancedToggleBody>
         </AdvancedToggle>
         {monarchTitlesOpen && (
           <AdvancedBody>
-            <FormRows>
-              <FieldRowMulti>
-                <FieldLabel htmlFor={fid('regnalName')}>
-                  군주명 · 묘호 · 시호
-                </FieldLabel>
-                <FieldControl>
-                  <InlineFields $cols={3}>
-                    <FormInput
-                      id={fid('regnalName')}
-                      value={regnalName}
-                      onChange={(e) => setRegnalName(e.target.value)}
-                      placeholder="군주명/재위명 (예: 세종)"
-                    />
-                    <FormInput
-                      id={fid('templeName')}
-                      value={templeName}
-                      onChange={(e) => setTempleName(e.target.value)}
-                      placeholder="묘호 (예: 세종)"
-                    />
-                    <FormInput
-                      id={fid('posthumousName')}
-                      value={posthumousName}
-                      onChange={(e) => setPosthumousName(e.target.value)}
-                      placeholder="시호"
-                    />
-                  </InlineFields>
-                </FieldControl>
-              </FieldRowMulti>
-            </FormRows>
+            <FieldLabel htmlFor={fid('regnalName')}>
+              군주명 · 묘호 · 시호
+            </FieldLabel>
+            <FieldControl>
+              <InlineFields $cols={3}>
+                <FormInput
+                  id={fid('regnalName')}
+                  value={regnalName}
+                  onChange={(e) => setRegnalName(e.target.value)}
+                  placeholder="군주명·재위명"
+                />
+                <FormInput
+                  id={fid('templeName')}
+                  value={templeName}
+                  onChange={(e) => setTempleName(e.target.value)}
+                  placeholder="묘호"
+                />
+                <FormInput
+                  id={fid('posthumousName')}
+                  value={posthumousName}
+                  onChange={(e) => setPosthumousName(e.target.value)}
+                  placeholder="시호"
+                />
+              </InlineFields>
+            </FieldControl>
           </AdvancedBody>
         )}
       </AdvancedSection>
@@ -375,11 +366,9 @@ const LifeFieldGroup = styled.div`
 `
 
 const LifeSubLabel = styled.span`
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const LifeDeathDetails = styled.div`
@@ -387,19 +376,14 @@ const LifeDeathDetails = styled.div`
   flex-direction: column;
   gap: 10px;
   padding: 12px 0 0;
-  border-top: 1px dashed ${({ theme }) => theme.colors.border.light};
 `
 
 const LifespanText = styled.span`
   display: inline-flex;
   align-items: center;
   font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  padding: 4px 10px;
-  border-radius: 999px;
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   white-space: nowrap;
 `
 
@@ -409,136 +393,258 @@ const SegmentRow = styled.div`
   gap: 6px;
 `
 
+/** 사망 유형 chip — 채움 톤 + active=indigo. 사망 분기 segmented는 별도 컴포넌트 사용. */
 const SegmentBtn = styled.button<{
   $active?: boolean
   $error?: boolean
   $variant?: 'solid' | 'ghost'
 }>`
-  padding: 8px 14px;
+  padding: 7px 12px;
   font-size: 13px;
-  font-weight: 600;
-  border-radius: 999px;
+  font-weight: ${({ $active }) => ($active ? 500 : 400)};
+  border-radius: 8px;
   cursor: pointer;
   transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
-  ${({ $variant = 'solid', $active, $error, theme }) => {
-    if ($variant === 'ghost') {
-      return `
-        color: ${$active ? theme.colors.text.primary : theme.colors.text.tertiary};
-        background: ${
-          $active
-            ? theme.mode === 'dark'
-              ? 'rgba(255,255,255,0.08)'
-              : '#f1f5f9'
-            : 'transparent'
-        };
-        border: 1px solid ${$active ? theme.colors.border.medium : theme.colors.border.default};
-        &:hover:not(:disabled) {
-          color: ${theme.colors.text.primary};
-          border-color: ${theme.colors.border.medium};
-        }
-      `
-    }
-    return `
-      color: ${$active ? '#fff' : theme.colors.text.secondary};
-      background: ${
-        $active
-          ? '#6366f1'
-          : $error
-            ? theme.colors.alert.danger.bg
-            : theme.mode === 'dark'
-              ? 'rgba(255,255,255,0.05)'
-              : '#fff'
-      };
-      border: 1px solid ${$active ? '#6366f1' : $error ? '#dc2626' : theme.colors.border.default};
-      &:hover:not(:disabled) {
-        border-color: ${$active ? '#4f46e5' : '#a5b4fc'};
-        color: ${$active ? '#fff' : theme.colors.text.primary};
-      }
-    `
-  }}
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
+  border: 1px solid
+    ${({ $active, $error, theme }) =>
+      $error
+        ? theme.colors.alert.danger.fg
+        : $active
+          ? theme.colors.primary
+          : theme.colors.border.default};
+
+  &:hover:not(:disabled) {
+    border-color: ${({ $active, $error, theme }) =>
+      $error
+        ? theme.colors.alert.danger.fg
+        : $active
+          ? theme.colors.primary
+          : theme.colors.border.medium};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 `
 
-const ChipMoreBtn = styled.button`
-  padding: 8px 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 0.15s ease;
-  &:hover {
-    color: #4f46e5;
-  }
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+/**
+ * 진짜 segmented control — "사망 여부" 3-way 분기를 단일 덩어리 시각으로.
+ * 인접 button + container fill로 "이건 한 그룹의 분기"임을 강조 (chip과 위계 분리).
+ */
+const Segmented3Way = styled.div`
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  gap: 2px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
+  border-radius: 9px;
+
+  @media (max-width: 480px) {
+    width: 100%;
+    > button {
+      flex: 1;
+    }
   }
 `
 
+const Segmented3WayBtn = styled.button<{ $active?: boolean }>`
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  letter-spacing: -0.005em;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#171727'
+        : '#fff'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  box-shadow: ${({ $active }) =>
+    $active ? '0 1px 2px rgba(15, 23, 42, 0.06)' : 'none'};
+
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+/** 사망 유형 카테고리 그룹 — 4그룹 (자연/외부/자해/기타) */
+const DeathTypeGrouped = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const DeathTypeGroupBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const DeathTypeGroupLabel = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+`
+
+const DeathTypeChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+/** 사망 유형 chip — active=indigo fill + 흰 글자, idle=채움 톤. */
+const DeathTypeChip = styled.button<{ $active?: boolean }>`
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  letter-spacing: -0.005em;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+  color: ${({ $active, theme }) =>
+    $active ? '#fff' : theme.colors.text.secondary};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.colors.primary
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : '#f9fafb'};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.colors.primary
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.08)'
+          : '#e5e7eb'};
+
+  &:hover:not(:disabled) {
+    color: ${({ $active, theme }) =>
+      $active ? '#fff' : theme.colors.text.primary};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.colors.button.hover
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.06)'
+          : '#fff'};
+    border-color: ${({ $active, theme }) =>
+      $active ? theme.colors.button.hover : theme.colors.border.medium};
+  }
+`
+
+/** 카드형 disclosure — person-register-view.tsx와 동일 톤 (옵셔널 정보 그룹) */
 const AdvancedSection = styled.section`
-  padding: 16px 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  margin-top: 14px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff'};
+  overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.border.medium};
+  }
 `
 
 const AdvancedToggle = styled.button<{ $open: boolean }>`
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 0;
-  margin-bottom: ${({ $open }) => ($open ? '12px' : '0')};
-  font-size: 13px;
-  font-weight: 600;
-  color: #4f46e5;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: color 0.15s ease;
+  text-align: left;
+  transition: background 0.15s ease;
+
   &:hover {
-    color: #4338ca;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
   }
   &:focus-visible {
-    outline: 2px solid rgba(79, 70, 229, 0.35);
-    outline-offset: 2px;
-    border-radius: 4px;
+    outline: none;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
   }
+`
+
+const AdvancedToggleIcon = styled.span<{ $open: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  flex-shrink: 0;
   svg {
-    transition: transform 0.2s ease;
+    transition: transform 0.15s ease;
     transform: rotate(${({ $open }) => ($open ? '90deg' : '0deg')});
   }
 `
 
+const AdvancedToggleBody = styled.span`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const AdvancedToggleTitle = styled.span`
+  font-size: 13.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+  letter-spacing: -0.005em;
+`
+
+const AdvancedToggleDesc = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1.4;
+`
+
 const AdvancedBody = styled.div`
-  padding-left: 12px;
-  border-left: 2px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.4)' : '#c7d2fe'};
+  padding: 14px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-const FieldRowMulti = styled.div`
+const InlineFields = styled.div<{ $cols?: number; $template?: string }>`
   display: grid;
-  grid-template-columns: minmax(180px, 220px) 1fr;
-  gap: 24px;
-  align-items: start;
-  padding: 20px 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const InlineFields = styled.div<{ $cols?: number }>`
-  display: grid;
-  grid-template-columns: ${(p) => `repeat(${p.$cols ?? 3}, 1fr)`};
-  gap: 12px;
-  max-width: 600px;
+  grid-template-columns: ${(p) =>
+    p.$template ?? `repeat(${p.$cols ?? 3}, 1fr)`};
+  gap: 10px;
+  width: 100%;
   & > div {
     min-width: 0;
   }
@@ -547,7 +653,7 @@ const InlineFields = styled.div<{ $cols?: number }>`
   button {
     max-width: 100%;
   }
-  @media (max-width: 768px) {
+  @media (max-width: 640px) {
     grid-template-columns: 1fr;
   }
 `
@@ -559,7 +665,7 @@ const FieldError = styled.span`
   gap: 4px;
   font-size: 12px;
   font-weight: 500;
-  color: #dc2626;
+  color: ${({ theme }) => theme.colors.alert.danger.fg};
   margin-top: 6px;
   line-height: 1.4;
   svg {

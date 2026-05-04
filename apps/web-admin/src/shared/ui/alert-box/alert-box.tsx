@@ -24,15 +24,16 @@ const Box = styled.div<{ $variant: AlertVariant }>`
   gap: 8px;
   font-size: 12.5px;
   line-height: 1.5;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: ${({ $variant, theme }) => theme.colors.alert[$variant].bg};
-  color: ${({ $variant, theme }) => theme.colors.alert[$variant].fg};
-  border: 1px solid ${({ $variant, theme }) => theme.colors.alert[$variant].border};
+  padding: 6px 10px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  border-left: 2px solid
+    ${({ $variant, theme }) => theme.colors.alert[$variant].border};
   margin-top: 6px;
 
   strong {
-    font-weight: 700;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -40,9 +41,10 @@ const IconWrap = styled.span`
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
   padding-top: 1px;
+  opacity: 0.7;
 `
 
 export function AlertBox({

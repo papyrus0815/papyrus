@@ -7,16 +7,47 @@ import styled, { css } from 'styled-components'
 import type { HistoricalEventCategory } from '../create/events.types'
 import { BRAND, CATEGORY_BADGE_COLORS, MOTION, SHADOW } from './theme'
 
+/**
+ * 타임라인 레일 — 좌측 gutter(70px) 한가운데(32px)에 1px 수직선.
+ *
+ * `background-attachment: local`로 스크롤 콘텐츠와 함께 흐르도록 함. (fixed/scroll와 달리
+ * 콘텐츠 길이만큼 늘어나서 위/아래 어디로 스크롤해도 레일이 끊기지 않음.)
+ *
+ * Year/Century divider의 도트(left:32px)와 CollapsedPlaceholder::after(left:-38px)가
+ * 모두 이 레일 좌표에 정렬됨 — 시간축의 *눈금*과 *압축 구간*으로 읽힌다.
+ */
 export const CompactList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  /* gap 0 — 사건 분리 신호는 각 Stop의 hairline border-bottom으로 옮김.
+   * 이전 gap:10 + transparent bg 조합은 "윗 사건 Row2"와 "아래 사건 Row1"이
+   * 바로 붙어 보여 사건 단위 인지가 흐려졌음. */
+  gap: 0;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 4px 12px 120px 70px;
   position: relative;
+
+  background-image: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? `linear-gradient(
+          to right,
+          transparent 31px,
+          rgba(147, 197, 253, 0.14) 31px,
+          rgba(147, 197, 253, 0.14) 32px,
+          transparent 32px
+        )`
+      : `linear-gradient(
+          to right,
+          transparent 31px,
+          rgba(37, 99, 235, 0.16) 31px,
+          rgba(37, 99, 235, 0.16) 32px,
+          transparent 32px
+        )`};
+  background-attachment: local;
+  background-repeat: no-repeat;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -439,105 +470,249 @@ export const LoadingSpinner = styled.div`
 `
 
 /* 평면 톤 — hover scale/box-shadow 변화 제거. 도트 색만 단색 유지. */
-/* sticky — 긴 목록 스크롤 시 현재 보고 있는 *연도 컨텍스트* 유지.
- * top: 0 (CompactList의 padding-top 4px 안쪽). z-index 5로 row보다 위. */
+/**
+ * 연도 구분 — 트렌디 톤. dot/ring/chip 모두 제거, 단순 텍스트 + 회색 카운트 + 작은 chevron.
+ * sticky로 현재 연도가 화면 상단에 고정 (top: 38px — CenturyDivider 아래에 stack).
+ */
+/**
+ * 연도 헤더 — 타임라인 *눈금 + 라벨* 형태.
+ *
+ * 풀 블리드 frosted 띠 제거. 좌측 레일(32px)에 외곽선 도트만 두고
+ * "1985년 N건" 라벨은 도트 옆 인라인. sticky로 스크롤 중에도 현재 연도가 위에 붙음.
+ * sticky 시 살짝의 frosted bg로 아래 콘텐츠 occlusion만 방지.
+ */
+/**
+ * 연도 헤더 v2 — 사건 분리 hairline과 시각 구별 강화.
+ *
+ * 변경 핵심:
+ *  - 위쪽 풀 블리드 1px hairline(border-top) → "새 연도 섹션 시작" 명시 시그널
+ *  - 라벨 크기 12 → 14, 솔리드 indigo 도트(이전 outline)로 anchor 강화
+ *  - 위 여백 14 → 22, 아래 여백 2 → 8 — 사건 단위 hairline과 위계 분리
+ */
 export const YearDivider = styled.button`
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0;
-  margin: 32px 0 24px -70px;
-  padding: 6px 0;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(15,15,15,0.92)' : 'rgba(255,255,255,0.92)'};
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  gap: 10px;
+  margin: 22px -12px 8px -38px;
+  padding: 8px 12px 8px 38px;
   border: none;
-  width: calc(100% + 70px);
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(15, 23, 42, 0.08)'};
+  border-radius: 0;
   cursor: pointer;
+  text-align: left;
+  background: transparent;
   position: sticky;
-  top: 0;
+  top: 44px;
   z-index: 5;
+  transition: background 0.15s ease-out;
+  align-self: stretch;
 
-  /* 첫 YearDivider는 위쪽 마진이 sticky 진입을 가리지 않도록 0 */
-  &:first-child {
-    margin-top: 0;
-  }
-
+  /* 레일 위 솔리드 indigo 도트 — 시각 anchor. 이전 outline은 약했음. */
   &::before {
     content: '';
     position: absolute;
-    left: 32px;
+    left: 0;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: 14px;
-    height: 14px;
-    background: ${BRAND.primary};
-    /* 도트 외곽 링 — 표면색에 의존하지 않도록 currentColor 흉내 (alpha) */
-    border: 3px solid
-      ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#ffffff'};
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    z-index: 2;
+    background: ${BRAND.primary};
+    box-shadow: 0 0 0 2.5px
+      ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+    z-index: 1;
+    pointer-events: none;
   }
 
+  /* sticky 시 라벨 쪽만 흐릿한 frosted bg — 본문 텍스트 위에 떠도 가독 유지.
+   * 도트(left:0) 와 padding-left:38 사이는 transparent — 레일이 그대로 보임. */
+  &::after {
+    content: '';
+    position: absolute;
+    left: 38px;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(15, 15, 18, 0.7)'
+        : 'rgba(255, 255, 255, 0.78)'};
+    backdrop-filter: blur(8px) saturate(160%);
+    -webkit-backdrop-filter: blur(8px) saturate(160%);
+    z-index: -1;
+  }
+
+  &:first-child {
+    margin-top: 0;
+    border-top: none;
+  }
+
+  /* span = 라벨 (chevron + 연도 + 카운트) — 도트 옆 인라인 */
   span {
-    margin-left: 60px;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 4px 12px;
-    border-radius: 8px;
-    white-space: nowrap;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    transition: border-color ${MOTION.fast}, box-shadow ${MOTION.fast};
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? css`
-            color: #94a3b8;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-          `
-        : css`
-            color: #475569;
-            background: #ffffff;
-            border: 1px solid rgba(203, 213, 225, 0.5);
-          `}
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    color: ${({ theme }) => theme.colors.text.primary};
 
     svg {
-      color: ${BRAND.primary};
-      font-size: 10px;
+      color: ${({ theme }) => theme.colors.text.tertiary};
       flex-shrink: 0;
     }
   }
 
-  &:hover span {
-    border-color: ${BRAND.primaryBorder};
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.04)'
+        : 'rgba(15, 23, 42, 0.03)'};
   }
 
   &:focus-visible {
     outline: none;
-  }
-  &:focus-visible span {
     box-shadow: ${BRAND.focusRing};
   }
 
   @media (prefers-reduced-motion: reduce) {
-    span {
-      transition: none;
-    }
+    transition: none;
   }
 `
 
+/* 연도 옆 카운트 — chip 제거, 회색 datum-style 숫자 */
 export const CollapsedCount = styled.span`
-  font-size: 10px;
-  font-weight: 600;
-  color: #2563eb;
-  background: rgba(37, 99, 235, 0.1);
-  padding: 2px 6px;
-  border-radius: 6px;
-  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   flex-shrink: 0;
+`
+
+/**
+ * 세기 구분 헤더 — 시대 단위 분리. *Linear/Vercel 스타일*: frosted glass + hairline.
+ *
+ * 디자인 원칙:
+ *  - 그라데이션·강한 indigo 배경 제거 (트렌디 톤)
+ *  - 위계는 *타이포 크기·굵기*로만 (16px 800 weight)
+ *  - 1px hairline 하단 + frosted glass 배경 (sticky 시 자연스러운 부유감)
+ *  - 카운트는 회색 숫자 (chip 외곽 제거)
+ */
+/**
+ * 세기 헤더 — 시대 *분기점* 톤.
+ *
+ * 위/아래 1px hairline 한 쌍으로 시대 경계 분명. 좌측 레일에 큰 솔리드 도트.
+ * 본문 폭 안에서만 hairline (margin -38px 시작 → 풀 블리드 X). frosted bg는 sticky 시 occlusion 방지용.
+ */
+export const CenturyDivider = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 28px -38px 8px -38px;
+  padding: 10px 16px 10px 38px;
+  width: calc(100% + 38px);
+  border: none;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)'};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)'};
+  border-radius: 0;
+  cursor: pointer;
+  text-align: left;
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  ${({ theme }) =>
+    theme.mode === 'dark'
+      ? css`
+          background: rgba(15, 15, 18, 0.78);
+          color: ${theme.colors.text.primary};
+        `
+      : css`
+          background: rgba(255, 255, 255, 0.82);
+          color: ${theme.colors.text.primary};
+        `}
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  transition: background 0.15s ease-out;
+
+  /* 레일(divider padding-box left=rail) 솔리드 큰 도트 — 시대 분기 */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: ${BRAND.primary};
+    box-shadow: 0 0 0 3px
+      ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  &:first-child {
+    margin-top: 0;
+  }
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.05)'
+        : 'rgba(15, 23, 42, 0.03)'};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+export const CenturyDividerLabel = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  svg {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    flex-shrink: 0;
+    align-self: center;
+  }
+`
+
+export const CenturyDividerYears = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+`
+
+/* 카운트 — chip 외곽 제거, 단색 회색 숫자만 (datum-style) */
+export const CenturyDividerCount = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 export const DateDivider = styled.button`
@@ -603,27 +778,46 @@ export const SimpleYearLabel = styled.div`
   color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#94a3b8')};
 `
 
+/**
+ * 접힌 연도 — 타임라인 *압축 구간* 인상.
+ *
+ * 1. 사선 해치 패턴 배경 — "이 구간은 표시되지 않음"을 시각적으로 즉시 인지
+ * 2. 좌측 도트는 레일(left:32px = placeholder 좌측에서 -38px)에 정렬, surface 외곽 링으로 *비어있는* 인상
+ * 3. 도트 → placeholder 연결선은 1px dashed (시간이 흘렀음을 암시)
+ * 4. 컴팩트한 한 줄 — Year/Century divider 사이의 *여백* 대용으로 가볍게
+ */
 export const CollapsedPlaceholder = styled.div`
-  margin: 0 0 16px 0;
-  padding: 16px 20px;
-  border-radius: 12px;
+  margin: 2px 0 6px 0;
+  padding: 8px 14px;
+  border-radius: 8px;
   text-align: center;
   position: relative;
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(37, 99, 235, 0.03);
-          border: 1px dashed rgba(37, 99, 235, 0.15);
+          background-color: rgba(37, 99, 235, 0.025);
+          background-image: repeating-linear-gradient(
+            -45deg,
+            transparent 0,
+            transparent 5px,
+            rgba(147, 197, 253, 0.045) 5px,
+            rgba(147, 197, 253, 0.045) 9px
+          );
+          border: 1px dashed rgba(147, 197, 253, 0.18);
         `
       : css`
-          background: linear-gradient(
-            135deg,
-            rgba(37, 99, 235, 0.03) 0%,
-            rgba(37, 99, 235, 0.02) 100%
+          background-color: rgba(37, 99, 235, 0.02);
+          background-image: repeating-linear-gradient(
+            -45deg,
+            transparent 0,
+            transparent 5px,
+            rgba(37, 99, 235, 0.045) 5px,
+            rgba(37, 99, 235, 0.045) 9px
           );
-          border: 1px dashed rgba(37, 99, 235, 0.2);
+          border: 1px dashed rgba(37, 99, 235, 0.22);
         `}
 
+  /* 레일 → placeholder 연결선 */
   &::before {
     content: '';
     position: absolute;
@@ -631,27 +825,40 @@ export const CollapsedPlaceholder = styled.div`
     top: 50%;
     width: 38px;
     height: 1px;
-    border-top: 1px dashed ${BRAND.primaryBorder};
+    border-top: 1px dashed
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(147, 197, 253, 0.35)'
+          : 'rgba(37, 99, 235, 0.35)'};
   }
 
-  /* 외곽 링은 box-shadow surface color 가정 대신 그냥 단색. */
+  /* 레일 위 *비어있는* 도트 — Year 도트와 같은 톤이지만 한 단계 흐리게.
+   * surface 색 외곽 링으로 도트가 레일 위에 *얹힌* 듯 보이게. */
   &::after {
     content: '';
     position: absolute;
     left: -38px;
     top: 50%;
-    transform: translateY(-50%);
-    width: 6px;
-    height: 6px;
-    background: ${BRAND.primaryBorder};
-    border: 2px solid ${BRAND.primaryBorder};
+    transform: translate(-50%, -50%);
+    width: 7px;
+    height: 7px;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? '#0f0f12' : '#ffffff'};
+    border: 1.5px solid
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(147, 197, 253, 0.4)'
+          : 'rgba(37, 99, 235, 0.4)'};
     border-radius: 50%;
   }
 
   span {
-    font-size: 11px;
+    font-size: 11.5px;
     font-weight: 500;
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#94a3b8')};
+    letter-spacing: -0.005em;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#64748b' : '#94a3b8'};
+    font-variant-numeric: tabular-nums;
   }
 `
 
@@ -960,32 +1167,22 @@ export const SummaryIconButton = styled.button`
   }
 `
 
+/* 목록 뷰 카드 컨테이너 — 타임라인 위젯의 cardBase와 시각 family 통일.
+ * 1px border + 12px radius + theme bg. 내부의 CompactList가 자체 좌측 레일을 그리므로
+ * 별도 ::before 그라데이션 데코는 제거(이중 라인 방지). */
 export const CatalogSection = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 12px;
   height: 100%;
   max-height: calc(100vh - var(--header-height) - 60px);
   overflow: hidden;
   position: relative;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 32px;
-    top: 64px;
-    bottom: 0;
-    width: 2px;
-    background: linear-gradient(
-      180deg,
-      rgba(37, 99, 235, 0.3) 0%,
-      rgba(37, 99, 235, 0.1) 50%,
-      rgba(37, 99, 235, 0.3) 100%
-    );
-    border-radius: 1px;
-    z-index: 0;
-    pointer-events: none;
-  }
+  border-radius: 12px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(20,19,34,0.08)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#ffffff'};
 `
 
 /* 평면 톤 — hover lift 제거. */

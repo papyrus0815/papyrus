@@ -8,19 +8,15 @@ export const FormSelectNative = styled.select<{ $error?: boolean }>`
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 12px 40px 12px 14px;
-  font-size: 15px;
-  line-height: 1.45;
-  border-radius: 8px;
+  padding: 8px 32px 8px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  border-radius: 6px;
   border: 1px solid
     ${({ $error, theme }) =>
       $error ? theme.colors.alert.danger.fg : theme.colors.border.default};
-  background-color: ${({ $error, theme }) =>
-    $error
-      ? theme.colors.alert.danger.bg
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06)'
-        : '#ffffff'};
+  background-color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f9fafb'};
   color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
   cursor: pointer;
@@ -31,11 +27,16 @@ export const FormSelectNative = styled.select<{ $error?: boolean }>`
       ? `url("${chevronDataUri('#a1a1aa')}")`
       : `url("${chevronDataUri('#64748b')}")`};
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 12px 8px;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 
   &:focus {
     outline: none;
+    background-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#fff'};
     border-color: ${({ $error, theme }) =>
       $error ? theme.colors.alert.danger.fg : theme.colors.primary};
     box-shadow: ${({ $error, theme }) =>

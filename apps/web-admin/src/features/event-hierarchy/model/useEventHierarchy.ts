@@ -93,7 +93,7 @@ export const useEventHierarchy = (
             : 0
           comparison = durationA - durationB
         } else {
-          // 최근순 정렬 (기본)
+          // 시기순 정렬 (기본): 시작일 기준
           const dateA = new Date(a.node.period.start).getTime()
           const dateB = new Date(b.node.period.start).getTime()
           comparison = dateA - dateB
@@ -131,7 +131,7 @@ export const useEventHierarchy = (
                 : 0
               comparison = durationA - durationB
             } else {
-              // 최근순 (기본): 시작일 기준
+              // 시기순 (기본): 시작일 기준
               const dateA = new Date(a.period.start).getTime()
               const dateB = new Date(b.period.start).getTime()
               comparison = dateA - dateB

@@ -44,6 +44,8 @@ import {
   seedPotsdamConference,
   seedKoreanWar,
   seedSanFranciscoTreatyPersons,
+  seedPrcFounding,
+  seedKurofune,
   seedGermanyEmpireParties,
   seedGermanyReichstagElections,
   seedAustroPrussianWar,
@@ -238,6 +240,18 @@ async function main() {
         //  · 덜레스·모리슨·그로미코·이케다 하야토(신규) / 요시다·트루먼·애치슨·애틀리·스탈린(기존)
         //  · 기존 Event(person.japan-postwar2 시드)에 PersonEvent 9건 추가
         await seedSanFranciscoTreatyPersons(prisma)
+
+        // 13-14. 1949-10-01 중화인민공화국 수립 — 정치 카테고리
+        //  · 중화민국(ROC) historicalCountry 인라인 등록
+        //  · 저우언라이·류사오치·주더·쑹칭링·천윈·장제스(신규) / 마오·스탈린(기존)
+        //  · Event + 8섹션(논문급) + EventCountryRelation 6 + PersonEvent 8
+        await seedPrcFounding(prisma)
+
+        // 13-15. 1853-07-08 ~ 1854-03-31 쿠로후네 내항 — 외교 카테고리
+        //  · 도쿠가와 막부(에도 막부) historicalCountry 인라인 등록
+        //  · 페리·필모어·이에요시·아베 마사히로·하야시 아키라·도쿠가와 나리아키(신규)
+        //  · Event + 8섹션(논문급) + EventCountryRelation 6 + PersonEvent 6
+        await seedKurofune(prisma)
 
         // 13-5. Person.countryId 백필 — 인물 시드 모두 끝난 뒤 affiliation 체인으로 NULL 채움
         await seedBackfillPersonCountryId(prisma)

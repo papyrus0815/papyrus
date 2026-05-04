@@ -6,50 +6,39 @@ import styled from 'styled-components'
 
 const StyledInput = styled.input<{ $error?: boolean }>`
   width: 100%;
-  padding: 12px 16px;
+  padding: 9px 12px;
   font-size: 14px;
+  line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ $error, theme }) =>
-    $error
-      ? theme.colors.alert.danger.bg
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.08)'
-        : '#fff'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   border: 1px solid
     ${({ $error, theme }) =>
       $error
         ? theme.colors.alert.danger.fg
         : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.12)'
-          : theme.colors.border.default};
-  border-radius: 12px;
+          ? 'rgba(255,255,255,0.08)'
+          : '#e5e7eb'};
+  border-radius: 8px;
   outline: none;
   transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease;
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
   box-sizing: border-box;
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
-  &:hover:not(:disabled) {
+  &:hover:not(:disabled):not(:focus) {
     border-color: ${({ $error, theme }) =>
-      $error
-        ? theme.colors.alert.danger.fg
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.2)'
-          : theme.colors.border.medium};
-    background: ${({ $error, theme }) =>
-      $error
-        ? theme.colors.alert.danger.bg
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.11)'
-          : '#fff'};
+      $error ? theme.colors.alert.danger.fg : theme.colors.border.medium};
   }
 
   &:focus {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
     border-color: ${({ $error, theme }) =>
       $error ? theme.colors.alert.danger.fg : theme.colors.primary};
     box-shadow: ${({ $error, theme }) =>
@@ -63,7 +52,7 @@ const StyledInput = styled.input<{ $error?: boolean }>`
 
   &::-webkit-autofill {
     -webkit-box-shadow: 0 0 0 1000px
-      ${({ theme }) => (theme.mode === 'dark' ? '#1e1e2e' : '#fff')} inset;
+      ${({ theme }) => (theme.mode === 'dark' ? '#1e1e2e' : '#f9fafb')} inset;
     -webkit-text-fill-color: ${({ theme }) => theme.colors.text.primary};
     caret-color: ${({ theme }) => theme.colors.text.primary};
   }
@@ -83,53 +72,41 @@ const StyledTextarea = styled.textarea<{
   $resize?: 'none' | 'vertical' | 'both'
 }>`
   width: 100%;
-  padding: 12px 16px;
+  padding: 10px 12px;
   font-size: 14px;
+  line-height: 1.6;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ $error, theme }) =>
-    $error
-      ? theme.colors.alert.danger.bg
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.08)'
-        : '#fff'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   border: 1px solid
     ${({ $error, theme }) =>
       $error
         ? theme.colors.alert.danger.fg
         : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.12)'
-          : theme.colors.border.default};
-  border-radius: 12px;
+          ? 'rgba(255,255,255,0.08)'
+          : '#e5e7eb'};
+  border-radius: 8px;
   outline: none;
   transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease;
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
   box-sizing: border-box;
   resize: ${({ $resize = 'vertical' }) => $resize};
-  line-height: 1.6;
   font-family: inherit;
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
-  &:hover:not(:disabled) {
+  &:hover:not(:disabled):not(:focus) {
     border-color: ${({ $error, theme }) =>
-      $error
-        ? theme.colors.alert.danger.fg
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.2)'
-          : theme.colors.border.medium};
-    background: ${({ $error, theme }) =>
-      $error
-        ? theme.colors.alert.danger.bg
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.11)'
-          : '#fff'};
+      $error ? theme.colors.alert.danger.fg : theme.colors.border.medium};
   }
 
   &:focus {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
     border-color: ${({ $error, theme }) =>
       $error ? theme.colors.alert.danger.fg : theme.colors.primary};
     box-shadow: ${({ $error, theme }) =>

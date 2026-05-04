@@ -223,48 +223,21 @@ export const DateDetailRow = styled.div`
   }
 `
 
-/** 에러 메시지 슬라이드 인 + 좌측 빨간 라인 */
+/** 에러 메시지 — 미니멀 (텍스트만) */
 export const ErrorMessage = styled.span`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  display: block;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.alert.danger.fg};
   margin-top: 6px;
-  font-weight: 500;
-  padding-left: 8px;
-  border-left: 3px solid ${({ theme }) => theme.colors.alert.danger.fg};
-  animation: errorSlideIn 0.18s ease-out;
+  font-weight: 400;
 
-  @keyframes errorSlideIn {
-    from {
-      opacity: 0;
-      transform: translateY(-3px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  &::before {
-    content: '';
-    flex-shrink: 0;
-    width: 14px;
-    height: 14px;
-    background-color: currentColor;
-    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='8' x2='12' y2='12'/><line x1='12' y1='16' x2='12.01' y2='16'/></svg>");
-    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='8' x2='12' y2='12'/><line x1='12' y1='16' x2='12.01' y2='16'/></svg>");
-    -webkit-mask-repeat: no-repeat;
-    mask-repeat: no-repeat;
-    -webkit-mask-position: center;
-    mask-position: center;
-  }
 `
 
 export const FormHelp = styled.span`
   font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-weight: 400;
+  margin-top: 6px;
   line-height: 1.45;
 `
 
@@ -310,14 +283,10 @@ export const Select = styled.select<{ $error?: boolean }>`
   border: 1px solid
     ${({ $error, theme }) =>
       $error ? theme.colors.alert.danger.fg : theme.colors.border.default};
-  border-radius: 12px;
-  padding: 12px 16px;
-  background: ${({ $error, theme }) =>
-    $error
-      ? theme.colors.alert.danger.bg
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : '#fff'};
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
   color: ${({ theme }) => theme.colors.text.primary};
   font-size: 14px;
   line-height: 1.5;
@@ -348,10 +317,10 @@ export const SelectButton = styled.button<{
   border: 1px solid
     ${({ $error, theme }) =>
       $error ? theme.colors.alert.danger.fg : theme.colors.border.default};
-  border-radius: 12px;
-  padding: 12px 16px;
-  background: ${({ $error, theme }) =>
-    $error ? theme.colors.alert.danger.bg : theme.colors.background.primary};
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   color: ${({ $hasValue, theme }) =>
     $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
   font-size: 14px;

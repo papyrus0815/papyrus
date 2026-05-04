@@ -56,7 +56,6 @@ import {
   personCareerApi,
 } from '@/shared/api/person-career'
 import { type PersonResponseDto, getAllPersons } from '@/shared/api/persons'
-import { getPersonDetailById } from '@/shared/api/persons-detail'
 import {
   TREATY_PARTICIPATION_LABELS,
   TREATY_TYPE_LABELS,
@@ -77,7 +76,6 @@ import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
-import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   calcAgeAtTenure,
   formatPersonLifespan,
@@ -122,7 +120,7 @@ import {
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { SidePanel } from '@/shared/ui/side-panel'
-import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
+import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 
 import { CabinetDetailChrome } from './cabinet-detail-chrome.widget'
 import { CabinetLinkageModal } from './cabinet-linkage-modal.widget'
@@ -444,15 +442,6 @@ export function CabinetsSection({
     useState<RichTextTermTooltipState | null>(null)
   const [historyProseDynastyTooltip, setHistoryProseDynastyTooltip] =
     useState<RichTextDynastyTooltipState | null>(null)
-  const { data: mentionPerson } = useQuery({
-    queryKey: ['person-detail', mentionPersonId],
-    queryFn: () => getPersonDetailById(mentionPersonId!),
-    enabled: !!mentionPersonId,
-  })
-  const mentionPersonName = mentionPerson
-    ? getPersonDisplayName(mentionPerson)
-    : ''
-
   /** 화면 너비별 열 수 — 칸이 너무 쪼그라들지 않게 중간 구간은 3열 */
   const [timelineColumnCount, setTimelineColumnCount] = useState(4)
   useEffect(() => {
@@ -5737,52 +5726,12 @@ export function CabinetsSection({
         </>
       )}
 
-      {/* 인물 상세 모달 (썸네일/엔티티 클릭 시) — 포스트 상세와 동일한 mentionPersonId 패턴 */}
-      <AnimatePresence>
-        {mentionPersonId && (
-          <CabS.PersonViewOverlay
-            key="mention-modal-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            onClick={() => setMentionPersonId(null)}
-            role="presentation"
-          >
-            <CabS.PersonViewModalBox
-              key="mention-modal-panel"
-              initial={{ opacity: 0, y: 20, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.98 }}
-              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ModalHeader>
-                <ModalTitle title={mentionPersonName}>
-                  {mentionPersonName || '인물'}
-                </ModalTitle>
-                <ModalCloseButton
-                  type="button"
-                  onClick={() => setMentionPersonId(null)}
-                  aria-label="닫기"
-                >
-                  <FiX size={20} strokeWidth={2.5} />
-                </ModalCloseButton>
-              </ModalHeader>
-              <CabS.PersonViewModalBody>
-                <PersonDetailPanel
-                  personId={mentionPersonId}
-                  onClose={() => setMentionPersonId(null)}
-                  onEdit={() => setMentionPersonId(null)}
-                  hideHeaderActions
-                  embedInModal
-                  onLinkedPersonClick={setMentionPersonId}
-                />
-              </CabS.PersonViewModalBody>
-            </CabS.PersonViewModalBox>
-          </CabS.PersonViewOverlay>
-        )}
-      </AnimatePresence>
+      {/* 인물 상세 모달 — 공용 위젯 PersonInlineModal (사건 상세와 동일한 모달) */}
+      <PersonInlineModal
+        personId={mentionPersonId}
+        onClose={() => setMentionPersonId(null)}
+        onEdit={() => setMentionPersonId(null)}
+      />
 
       {historyProseTermTooltip && (
         <CabS.HistoryProseTooltipOverlay
