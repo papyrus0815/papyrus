@@ -58,6 +58,7 @@ export type PersonListItem = {
   name: string
   surname?: string | null
   nameDisplayOrder?: string | null
+  regnalName?: string | null
   profileImageUrl?: string | null
   birthEra?: EraStr | null
   birthYear?: number | null

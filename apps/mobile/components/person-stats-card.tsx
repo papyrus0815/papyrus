@@ -8,6 +8,7 @@ import {
 } from '@/lib/person-stats'
 import { DetailSection } from '@/components/detail-section'
 import { RichText } from '@/components/rich-text'
+import { InfluenceTierBadge } from '@/components/influence-tier-badge'
 
 const TONE_COLOR = {
   positive: { bg: '#dcfce7', fg: '#166534' },
@@ -41,12 +42,19 @@ export function PersonStatsCard({
       {(hasAnyStat || hasInfluence) && (
         <DetailSection title="능력치">
           {hasInfluence && (
-            <Bar
-              label="역사적 영향력"
-              short="INF"
-              color="#ea580c"
-              value={influence!}
-            />
+            <View style={{ marginBottom: 8 }}>
+              <View style={styles.influenceHeader}>
+                <Text style={styles.influenceLabel}>역사적 영향력</Text>
+                <InfluenceTierBadge influence={influence} size="sm" />
+              </View>
+              <Bar
+                label="영향력"
+                short="INF"
+                color="#ea580c"
+                value={influence!}
+                showHeader={false}
+              />
+            </View>
           )}
           {hasAnyStat &&
             PERSON_STAT_KEYS.map((key) => {
@@ -86,14 +94,28 @@ export function PersonStatsCard({
   )
 }
 
-function Bar({ label, short, color, value }: { label: string; short: string; color: string; value: number }) {
+function Bar({
+  label,
+  short,
+  color,
+  value,
+  showHeader = true,
+}: {
+  label: string
+  short: string
+  color: string
+  value: number
+  showHeader?: boolean
+}) {
   const pct = Math.max(0, Math.min(100, value))
   return (
     <View style={styles.barRow}>
-      <View style={styles.barHeader}>
-        <Text style={styles.barLabel}>{label}</Text>
-        <Text style={styles.barValue}>{value}</Text>
-      </View>
+      {showHeader && (
+        <View style={styles.barHeader}>
+          <Text style={styles.barLabel}>{label}</Text>
+          <Text style={styles.barValue}>{value}</Text>
+        </View>
+      )}
       <View style={styles.barBg}>
         <View style={[styles.barFill, { width: `${pct}%`, backgroundColor: color }]} />
       </View>
@@ -108,6 +130,8 @@ const styles = StyleSheet.create({
   barLabel: { fontSize: 13, color: '#334155', fontWeight: '500' },
   barValue: { fontSize: 13, color: '#0f172a', fontWeight: '700' },
   barBg: { height: 8, borderRadius: 4, backgroundColor: '#f1f5f9', overflow: 'hidden' },
+  influenceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  influenceLabel: { fontSize: 13, color: '#334155', fontWeight: '600' },
   barFill: { height: '100%', borderRadius: 4 },
   notesLabel: { fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },

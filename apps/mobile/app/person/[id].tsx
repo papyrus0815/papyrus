@@ -18,20 +18,30 @@ import { RelatedLink } from '@/components/related-link'
 import { RichText } from '@/components/rich-text'
 import { TabBar, type TabItem } from '@/components/tab-bar'
 import { PersonStatsCard } from '@/components/person-stats-card'
-import { FamilyTreeView, type FamilyTreeData } from '@/components/family-tree-view'
+import type { FamilyTreeData } from '@/components/family-tree-view'
+import { GenealogySvg } from '@/components/genealogy-svg'
+import { KpiStrip, type KpiEntry } from '@/components/kpi-strip'
+import { FamilyBadges } from '@/components/family-badges'
+import { RegnalTitleRow } from '@/components/regnal-title-row'
+import { DeathInfoCard } from '@/components/death-info-card'
+import { UnifiedTenureCardList } from '@/components/unified-tenure-card'
+import { SameDynastySection } from '@/components/same-dynasty-section'
+import { AdjacentPersons } from '@/components/adjacent-persons'
+import {
+  TimelineFilter,
+  TIMELINE_GROUP_KINDS,
+  kindToGroup,
+  type TimelineGroup,
+} from '@/components/timeline-filter'
 import { displayName, formatDateString, formatYMD, lifespan, placeText } from '@/lib/format'
+import { lifespanYears, totalReignAndTenureYears } from '@/lib/age-utils'
 import { imageUrl } from '@/lib/image-url'
 import { buildPersonTimeline, type ExtraTimelineItem, type TimelineEntry } from '@/lib/timeline-builder'
 import type { PersonStats, PersonTraitAssignment } from '@/lib/person-stats'
 import { getPersonPreview } from '@/lib/preview-cache'
 import { relationshipLabel } from '@/lib/relationship-label'
 import { Tokens } from '@/constants/theme'
-import type {
-  GovernmentPosition,
-  PersonDetail,
-  PersonListItem,
-  SovereignReign,
-} from '@/lib/dto'
+import type { PersonDetail, PersonListItem } from '@/lib/dto'
 
 type TabKey = 'overview' | 'family' | 'politics' | 'timeline' | 'relations'
 
@@ -255,7 +265,13 @@ export default function PersonDetailScreen() {
         stickyHeaderIndices={[1]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Header title={title} subTitle={subTitle} profileImg={profileImg} headerSource={headerSource} />
+        <PersonHero
+          title={title}
+          subTitle={subTitle}
+          profileImg={profileImg}
+          headerSource={headerSource}
+          detail={detail.data}
+        />
         <TabBar tabs={tabs} active={activeTab} onChange={(k) => setActiveTab(k as TabKey)} />
         <View style={styles.tabContent}>
           {detail.loading && !preview && (
@@ -317,48 +333,96 @@ function PaneVisible({ visible, children }: { visible: boolean; children: React.
   return <View style={{ display: visible ? 'flex' : 'none' }}>{children}</View>
 }
 
-function Header({
+function PersonHero({
   title,
   subTitle,
   profileImg,
   headerSource,
+  detail,
 }: {
   title: string
   subTitle: string
   profileImg: string | null
   headerSource: PersonDetail | PersonListItem | null
+  detail: PersonDetail | null
 }) {
+  const kpiItems = useMemo<KpiEntry[]>(() => {
+    if (!detail) return []
+    const list: KpiEntry[] = []
+    if (detail.country?.name) list.push({ key: 'country', label: '국가', value: detail.country.name })
+    if (detail.gender) list.push({ key: 'gender', label: '성별', value: genderLabel(detail.gender) })
+    const span = lifespanYears(detail)
+    if (span != null && span > 0) {
+      list.push({
+        key: 'lifespan',
+        label: '생존',
+        value: detail.isAlive ? `${span}년 (생존)` : `${span}년`,
+      })
+    }
+    const totalReign = totalReignAndTenureYears(detail)
+    if (totalReign != null) {
+      list.push({ key: 'reign', label: '재임·재위', value: `약 ${totalReign}년` })
+    }
+    if (detail.dynasty?.name) list.push({ key: 'dynasty', label: '가문', value: detail.dynasty.name })
+    if (detail.religion?.name) list.push({ key: 'religion', label: '종교', value: detail.religion.name })
+    return list
+  }, [detail])
+
   return (
-    <View style={styles.header}>
-      {profileImg ? (
-        <Image
-          source={{ uri: profileImg }}
-          style={styles.avatar}
-          contentFit="cover"
-          transition={150}
-          cachePolicy="memory-disk"
-        />
-      ) : (
-        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-          <Text style={styles.avatarText}>{title.slice(0, 1)}</Text>
+    <View>
+      <View style={styles.header}>
+        {profileImg ? (
+          <Image
+            source={{ uri: profileImg }}
+            style={styles.avatar}
+            contentFit="cover"
+            transition={150}
+            cachePolicy="memory-disk"
+          />
+        ) : (
+          <View style={[styles.avatar, styles.avatarPlaceholder]}>
+            <Text style={styles.avatarText}>{title.slice(0, 1)}</Text>
+          </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <View style={styles.titleRow}>
+            <Text style={styles.heading} numberOfLines={2}>
+              {title}
+            </Text>
+            {!!headerSource?.country?.flagEmoji && (
+              <Text style={styles.flag}>{headerSource.country.flagEmoji}</Text>
+            )}
+          </View>
+          {!!subTitle && <Text style={styles.subheading}>{subTitle}</Text>}
+          {!!headerSource?.country?.name && (
+            <Text style={styles.subheading}>{headerSource.country.name}</Text>
+          )}
+          {detail && <FamilyBadges data={detail} />}
+        </View>
+      </View>
+      {detail && (
+        <View style={{ paddingHorizontal: 12, paddingTop: 8, backgroundColor: Tokens.surface.raised }}>
+          <RegnalTitleRow
+            regnalName={detail.regnalName}
+            regnalNumber={
+              ((detail.sovereignReigns ?? [])[0]?.regnalNumber ?? null) as number | null
+            }
+            templeName={detail.templeName}
+            posthumousName={detail.posthumousName}
+          />
         </View>
       )}
-      <View style={{ flex: 1 }}>
-        <View style={styles.titleRow}>
-          <Text style={styles.heading} numberOfLines={2}>
-            {title}
-          </Text>
-          {!!headerSource?.country?.flagEmoji && (
-            <Text style={styles.flag}>{headerSource.country.flagEmoji}</Text>
-          )}
-        </View>
-        {!!subTitle && <Text style={styles.subheading}>{subTitle}</Text>}
-        {!!headerSource?.country?.name && (
-          <Text style={styles.subheading}>{headerSource.country.name}</Text>
-        )}
-      </View>
+      {kpiItems.length > 0 && <KpiStrip items={kpiItems} />}
     </View>
   )
+}
+
+function genderLabel(g?: string | null): string {
+  if (!g) return '-'
+  const k = g.toUpperCase()
+  if (k === 'MALE' || k === 'M') return '남'
+  if (k === 'FEMALE' || k === 'F') return '여'
+  return g
 }
 
 function ErrorBlock({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -389,15 +453,18 @@ function OverviewTab({
     adminDivision: data.birthAdminDivision,
     placeText: data.birthPlaceText,
   })
-  const deathPlace = placeText({
-    city: data.deathCity,
-    adminDivision: data.deathAdminDivision,
-    placeText: data.deathPlaceText,
-  })
 
   return (
     <>
+      {data.biography && (
+        <DetailSection title="생애">
+          <RichText html={data.biography} />
+        </DetailSection>
+      )}
+
       <PersonStatsCard stats={stats} traits={traits} influence={data.influence} />
+
+      <DeathInfoCard data={data} />
 
       <DetailSection title="이름">
         <DetailRow label="성" value={data.surname} />
@@ -411,14 +478,6 @@ function OverviewTab({
           <DetailRow label="성 의미" value={data.surnameMeaning} />
           <DetailRow label="이름 의미" value={data.nameMeaning} />
           <DetailRow label="중간 이름" value={data.middleNameMeaning} />
-        </DetailSection>
-      )}
-
-      {(data.regnalName || data.templeName || data.posthumousName) && (
-        <DetailSection title="군주 호칭">
-          <DetailRow label="왕호" value={data.regnalName} />
-          <DetailRow label="묘호" value={data.templeName} />
-          <DetailRow label="시호" value={data.posthumousName} />
         </DetailSection>
       )}
 
@@ -438,28 +497,6 @@ function OverviewTab({
         <DetailRow label="장소" value={birthPlace} />
       </DetailSection>
 
-      <DetailSection title="사망">
-        <DetailRow label="생존" value={data.isAlive ? '생존 중' : null} />
-        <DetailRow
-          label="일자"
-          value={
-            data.isAlive
-              ? null
-              : data.isDeathDateUnknown
-                ? '미상'
-                : formatYMD(data.deathEra, data.deathYear, data.deathMonth, data.deathDay)
-          }
-        />
-        <DetailRow label="장소" value={deathPlace} />
-        <DetailRow label="유형" value={data.deathType} />
-        <DetailRow label="원인" value={data.deathCause} />
-        <DetailRow label="비고" value={data.deathNote} />
-      </DetailSection>
-
-      <DetailSection title="속성">
-        <DetailRow label="성별" value={data.gender} />
-      </DetailSection>
-
       {(data.dynasty || data.religion || data.denomination) && (
         <DetailSection title="소속">
           <DetailRow label="가문/왕조" value={data.dynasty?.name} />
@@ -468,11 +505,7 @@ function OverviewTab({
         </DetailSection>
       )}
 
-      {data.biography && (
-        <DetailSection title="생애">
-          <RichText html={data.biography} />
-        </DetailSection>
-      )}
+      <AdjacentPersons dynastyId={data.dynasty?.id ?? null} currentPersonId={data.id} />
     </>
   )
 }
@@ -498,94 +531,49 @@ function FamilyTab({
     data?.children?.length ||
     data?.siblings?.length
 
-  if (!has) return <EmptyState text="등록된 가족이 없습니다" />
-
-  if (tree) return <FamilyTreeView data={tree} />
-
-  if (!data) return null
   return (
-    <DetailSection title="가족">
-      {data.father && (
-        <RelatedLink kind="person" id={data.father.id} label={personLabel(data.father)} sublabel="아버지" />
-      )}
-      {data.mother && (
-        <RelatedLink kind="person" id={data.mother.id} label={personLabel(data.mother)} sublabel="어머니" />
-      )}
-      {data.spouse && (
-        <RelatedLink kind="person" id={data.spouse.id} label={personLabel(data.spouse)} sublabel="배우자" />
-      )}
-      {data.children?.map((c) => (
-        <RelatedLink key={c.id} kind="person" id={c.id} label={personLabel(c)} sublabel="자녀" />
-      ))}
-      {data.siblings?.map((s) => (
-        <RelatedLink key={s.id} kind="person" id={s.id} label={personLabel(s)} sublabel="형제자매" />
-      ))}
-    </DetailSection>
-  )
-}
+    <>
+      {!has && <EmptyState text="등록된 가족이 없습니다" />}
+      {tree ? (
+        <View style={styles.genealogyWrap}>
+          <GenealogySvg data={tree} />
+        </View>
+      ) : has && data ? (
+        <DetailSection title="가족">
+          {data.father && (
+            <RelatedLink kind="person" id={data.father.id} label={personLabel(data.father)} sublabel="아버지" />
+          )}
+          {data.mother && (
+            <RelatedLink kind="person" id={data.mother.id} label={personLabel(data.mother)} sublabel="어머니" />
+          )}
+          {data.spouse && (
+            <RelatedLink kind="person" id={data.spouse.id} label={personLabel(data.spouse)} sublabel="배우자" />
+          )}
+          {data.children?.map((c) => (
+            <RelatedLink key={c.id} kind="person" id={c.id} label={personLabel(c)} sublabel="자녀" />
+          ))}
+          {data.siblings?.map((s) => (
+            <RelatedLink key={s.id} kind="person" id={s.id} label={personLabel(s)} sublabel="형제자매" />
+          ))}
+        </DetailSection>
+      ) : null}
 
-function periodText(start?: string | null, startPrec?: string | null, end?: string | null, endPrec?: string | null, fallbackEnd?: string) {
-  const startLabel = formatDateString(start, startPrec) ?? '?'
-  const endLabel = end ? formatDateString(end, endPrec) ?? '?' : (fallbackEnd ?? '?')
-  return `${startLabel} ~ ${endLabel}`
+      {data?.dynasty?.id && (
+        <SameDynastySection
+          dynastyId={data.dynasty.id}
+          dynastyName={data.dynasty.name}
+          currentPersonId={data.id}
+        />
+      )}
+    </>
+  )
 }
 
 function PoliticsTab({ data }: { data: PersonDetail }) {
   const reigns = data.sovereignReigns ?? []
   const positions = data.governmentPositions ?? []
   if (!reigns.length && !positions.length) return <EmptyState text="정부 직책·재위 기록 없음" />
-  return (
-    <>
-      {reigns.length > 0 && (
-        <DetailSection title="군주 재위">
-          {reigns.map((r: SovereignReign, i: number) => {
-            const country = r.country?.name ?? r.historicalCountry?.name
-            const period = periodText(r.startDate, null, r.endDate, null, '재위 중')
-            return (
-              <View key={r.id ?? i} style={styles.tenureItem}>
-                <Text style={styles.tenureTitle}>
-                  {r.regnalName ?? country ?? '재위'}
-                  {r.regnalNumber != null ? ` (${r.regnalNumber}대)` : ''}
-                </Text>
-                {country && <Text style={styles.tenureMeta}>{country}</Text>}
-                <Text style={styles.tenureMeta}>{period}</Text>
-                {r.notes && <RichText html={r.notes} />}
-              </View>
-            )
-          })}
-        </DetailSection>
-      )}
-
-      {positions.length > 0 && (
-        <DetailSection title="정부 직책">
-          {positions.map((g: GovernmentPosition, i: number) => {
-            const country = g.country?.name ?? g.historicalCountry?.name
-            const position =
-              g.positionDefinition?.name ??
-              g.positionDefinition?.title ??
-              g.positionName ??
-              g.title ??
-              g.position?.name
-            const period = periodText(
-              g.startDate,
-              g.startDatePrecision,
-              g.endDate,
-              g.endDatePrecision,
-              '재임 중',
-            )
-            return (
-              <View key={g.id ?? i} style={styles.tenureItem}>
-                <Text style={styles.tenureTitle}>{position ?? '직책 미지정'}</Text>
-                {country && <Text style={styles.tenureMeta}>{country}</Text>}
-                <Text style={styles.tenureMeta}>{period}</Text>
-                {g.notes && <RichText html={g.notes} />}
-              </View>
-            )
-          })}
-        </DetailSection>
-      )}
-    </>
-  )
+  return <UnifiedTenureCardList data={data} />
 }
 
 function TimelineTabPane({
@@ -601,42 +589,70 @@ function TimelineTabPane({
   onRetry: () => void
   onPress: (entry: TimelineEntry) => void
 }) {
+  const [active, setActive] = useState<Set<TimelineGroup>>(() => new Set())
+
+  const available = useMemo(() => {
+    const set = new Set<TimelineGroup>()
+    for (const e of entries) set.add(kindToGroup(e.kind))
+    return set
+  }, [entries])
+
+  const filtered = useMemo(() => {
+    if (active.size === 0) return entries
+    return entries.filter((e) => active.has(kindToGroup(e.kind)))
+  }, [entries, active])
+
+  const onToggle = (g: TimelineGroup) => {
+    setActive((prev) => {
+      const next = new Set(prev)
+      if (next.has(g)) next.delete(g)
+      else next.add(g)
+      return next
+    })
+  }
+  const onReset = () => setActive(new Set())
+
   if (resource.loading || !detailReady) return <PaneLoading />
   if (resource.error) return <ErrorBlock message={resource.error} onRetry={onRetry} />
   if (!entries.length) return <EmptyState text="연보 기록 없음" />
 
   return (
     <View>
-      {entries.map((it) => {
-        const dateText =
-          it.endLabel && it.endLabel !== it.dateLabel ? `${it.dateLabel} ~ ${it.endLabel}` : it.dateLabel
-        const Wrapper: any = it.link ? Pressable : View
-        return (
-          <Wrapper
-            key={it.key}
-            style={({ pressed }: { pressed?: boolean }) => [
-              styles.timelineItem,
-              pressed && styles.timelinePressed,
-            ]}
-            onPress={it.link ? () => onPress(it) : undefined}
-          >
-            <View style={styles.timelineDotCol}>
-              <View style={[styles.timelineDot, { backgroundColor: it.color }]} />
-              <View style={styles.timelineLine} />
-            </View>
-            <View style={{ flex: 1, paddingBottom: 12 }}>
-              <Text style={[styles.timelineDate, { color: it.color }]}>{dateText}</Text>
-              <Text style={styles.timelineTitle}>{it.title}</Text>
-              {it.subtitle && <Text style={styles.timelineMeta}>{it.subtitle}</Text>}
-              {it.body && (
-                <View style={{ marginTop: 4 }}>
-                  <RichText html={it.body} />
-                </View>
-              )}
-            </View>
-          </Wrapper>
-        )
-      })}
+      <TimelineFilter available={available} active={active} onToggle={onToggle} onReset={onReset} />
+      {filtered.length === 0 ? (
+        <EmptyState text="필터 조건에 맞는 항목이 없습니다" />
+      ) : (
+        filtered.map((it) => {
+          const dateText =
+            it.endLabel && it.endLabel !== it.dateLabel ? `${it.dateLabel} ~ ${it.endLabel}` : it.dateLabel
+          const Wrapper: any = it.link ? Pressable : View
+          return (
+            <Wrapper
+              key={it.key}
+              style={({ pressed }: { pressed?: boolean }) => [
+                styles.timelineItem,
+                pressed && styles.timelinePressed,
+              ]}
+              onPress={it.link ? () => onPress(it) : undefined}
+            >
+              <View style={styles.timelineDotCol}>
+                <View style={[styles.timelineDot, { backgroundColor: it.color }]} />
+                <View style={styles.timelineLine} />
+              </View>
+              <View style={{ flex: 1, paddingBottom: 12 }}>
+                <Text style={[styles.timelineDate, { color: it.color }]}>{dateText}</Text>
+                <Text style={styles.timelineTitle}>{it.title}</Text>
+                {it.subtitle && <Text style={styles.timelineMeta}>{it.subtitle}</Text>}
+                {it.body && (
+                  <View style={{ marginTop: 4 }}>
+                    <RichText html={it.body} />
+                  </View>
+                )}
+              </View>
+            </Wrapper>
+          )
+        })
+      )}
     </View>
   )
 }
@@ -765,4 +781,13 @@ const styles = StyleSheet.create({
   timelineDate: { fontSize: 12, fontWeight: '700', marginBottom: 2 },
   timelineTitle: { fontSize: 15, fontWeight: '600', color: Tokens.text.primary },
   timelineMeta: { fontSize: 12, color: Tokens.text.muted, marginTop: 2 },
+  genealogyWrap: {
+    backgroundColor: Tokens.surface.raised,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Tokens.border.subtle,
+    paddingVertical: 8,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
 })
