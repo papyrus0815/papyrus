@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { api } from '@/lib/api'
 import { displayName, lifespan } from '@/lib/format'
 import { imageUrl } from '@/lib/image-url'
 import { ListSearchBar } from '@/components/list-search-bar'
+import { setPersonPreview } from '@/lib/preview-cache'
+import { Tokens } from '@/constants/theme'
 import type { PersonListItem } from '@/lib/dto'
 
 export default function PersonsScreen() {
@@ -73,10 +76,19 @@ export default function PersonsScreen() {
           return (
             <Pressable
               style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-              onPress={() => router.push(`/person/${item.id}` as any)}
+              onPress={() => {
+                setPersonPreview(item)
+                router.push(`/person/${item.id}` as any)
+              }}
             >
               {img ? (
-                <Image source={{ uri: img }} style={styles.avatar} />
+                <Image
+                  source={{ uri: img }}
+                  style={styles.avatar}
+                  contentFit="cover"
+                  transition={120}
+                  cachePolicy="memory-disk"
+                />
               ) : (
                 <View style={[styles.avatar, styles.avatarPlaceholder]}>
                   <Text style={styles.avatarInitial}>{name.slice(0, 1)}</Text>
@@ -110,19 +122,32 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
   empty: { padding: 32, alignItems: 'center' },
-  emptyText: { color: '#94a3b8', fontSize: 14 },
+  emptyText: { color: Tokens.text.soft, fontSize: 14 },
   card: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e2e8f0',
-    flexDirection: 'row', gap: 12, alignItems: 'center',
+    backgroundColor: Tokens.surface.raised,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Tokens.border.subtle,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
   },
-  cardPressed: { backgroundColor: '#f8fafc' },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#e2e8f0' },
+  cardPressed: { backgroundColor: Tokens.surface.canvas },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: Tokens.border.subtle },
   avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  avatarInitial: { fontSize: 18, fontWeight: '700', color: '#64748b' },
+  avatarInitial: { fontSize: 18, fontWeight: '700', color: Tokens.text.muted },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#0f172a', flexShrink: 1 },
+  cardTitle: { fontSize: 15, fontWeight: '600', color: Tokens.text.primary, flexShrink: 1 },
   flag: { fontSize: 14 },
-  cardMeta: { fontSize: 12, color: '#64748b' },
+  cardMeta: { fontSize: 12, color: Tokens.text.muted },
   tagRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' },
-  tag: { fontSize: 11, color: '#7c3aed', backgroundColor: '#ede9fe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  tag: {
+    fontSize: 11,
+    color: Tokens.accent.purple,
+    backgroundColor: Tokens.accent.purpleSoft,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
 })

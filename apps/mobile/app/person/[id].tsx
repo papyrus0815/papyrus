@@ -1,6 +1,17 @@
-import { useEffect, useState } from 'react'
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native'
+import { Image } from 'expo-image'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { api } from '@/lib/api'
 import { DetailRow, DetailSection } from '@/components/detail-section'
 import { RelatedLink } from '@/components/related-link'
@@ -8,11 +19,19 @@ import { RichText } from '@/components/rich-text'
 import { TabBar, type TabItem } from '@/components/tab-bar'
 import { PersonStatsCard } from '@/components/person-stats-card'
 import { FamilyTreeView, type FamilyTreeData } from '@/components/family-tree-view'
-import { displayName, formatYMD, lifespan, placeText } from '@/lib/format'
+import { displayName, formatDateString, formatYMD, lifespan, placeText } from '@/lib/format'
 import { imageUrl } from '@/lib/image-url'
 import { buildPersonTimeline, type ExtraTimelineItem, type TimelineEntry } from '@/lib/timeline-builder'
 import type { PersonStats, PersonTraitAssignment } from '@/lib/person-stats'
-import type { PersonDetail } from '@/lib/dto'
+import { getPersonPreview } from '@/lib/preview-cache'
+import { relationshipLabel } from '@/lib/relationship-label'
+import { Tokens } from '@/constants/theme'
+import type {
+  GovernmentPosition,
+  PersonDetail,
+  PersonListItem,
+  SovereignReign,
+} from '@/lib/dto'
 
 type TabKey = 'overview' | 'family' | 'politics' | 'timeline' | 'relations'
 
@@ -22,7 +41,23 @@ type HumanRelationship = {
   counterpartPerson?: { id: string; name: string; surname?: string | null } | null
   counterpartPersonId?: string | null
   description?: string | null
-  phases?: Array<{ id: string; status?: string | null; startDate?: string | null; endDate?: string | null; note?: string | null }>
+  phases?: Array<{
+    id: string
+    status?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    note?: string | null
+  }>
+}
+
+type Resource<T> = {
+  data: T | null
+  loading: boolean
+  error: string | null
+}
+
+function emptyResource<T>(): Resource<T> {
+  return { data: null, loading: false, error: null }
 }
 
 function personLabel(p?: { name: string; surname?: string | null } | null) {
@@ -30,131 +65,313 @@ function personLabel(p?: { name: string; surname?: string | null } | null) {
   return p.surname ? `${p.surname}${p.name}` : p.name
 }
 
-const RELATIONSHIP_LABELS: Record<string, string> = {
-  MENTOR: '스승/제자',
-  FRIEND: '친구',
-  RIVAL: '경쟁자',
-  ALLY: '동맹',
-  ENEMY: '적대',
-  COLLEAGUE: '동료',
-  SUBORDINATE: '상관/부하',
-  PATRON: '후원자',
-  STUDENT: '제자',
-  TEACHER: '스승',
+function errorMessage(err: unknown): string {
+  const e = err as { response?: { data?: { message?: string } }; message?: string }
+  return e?.response?.data?.message ?? e?.message ?? 'failed to load'
 }
 
 export default function PersonDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const [data, setData] = useState<PersonDetail | null>(null)
-  const [extraTimeline, setExtraTimeline] = useState<ExtraTimelineItem[]>([])
-  const [relationships, setRelationships] = useState<HumanRelationship[]>([])
-  const [stats, setStats] = useState<PersonStats | null>(null)
-  const [traits, setTraits] = useState<PersonTraitAssignment[]>([])
-  const [familyTree, setFamilyTree] = useState<FamilyTreeData | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<TabKey>('overview')
+  const router = useRouter()
 
-  useEffect(() => {
-    let cancel = false
-    setLoading(true)
-    Promise.allSettled([
+  const preview = useMemo<PersonListItem | null>(() => (id ? getPersonPreview(id) : null), [id])
+
+  const [detail, setDetail] = useState<Resource<PersonDetail>>(emptyResource)
+  const [stats, setStats] = useState<Resource<PersonStats>>(emptyResource)
+  const [traits, setTraits] = useState<Resource<PersonTraitAssignment[]>>(emptyResource)
+  const [familyTree, setFamilyTree] = useState<Resource<FamilyTreeData>>(emptyResource)
+  const [timeline, setTimeline] = useState<Resource<ExtraTimelineItem[]>>(emptyResource)
+  const [relations, setRelations] = useState<Resource<HumanRelationship[]>>(emptyResource)
+
+  const [activeTab, setActiveTab] = useState<TabKey>('overview')
+  const [visited, setVisited] = useState<Set<TabKey>>(() => new Set(['overview']))
+  const [refreshing, setRefreshing] = useState(false)
+
+  // detail + stats/traits 즉시 fetch (overview에 필요)
+  const loadCore = useCallback(async () => {
+    if (!id) return
+    setDetail({ data: null, loading: true, error: null })
+    setStats({ data: null, loading: true, error: null })
+    setTraits({ data: null, loading: true, error: null })
+    const [d, s, t] = await Promise.allSettled([
       api.get<PersonDetail>(`/persons/${id}/detail`),
-      api.get<ExtraTimelineItem[]>(`/person-life-events/timeline/by-person/${id}`),
-      api.get<HumanRelationship[]>(`/persons/${id}/human-relationships`),
       api.get<PersonStats | null>(`/persons/${id}/my-stats`),
       api.get<PersonTraitAssignment[]>(`/persons/${id}/my-traits`),
-      api.get<FamilyTreeData>(`/persons/${id}/family-tree`),
     ])
-      .then(([detailRes, timelineRes, relRes, statsRes, traitsRes, treeRes]) => {
-        if (cancel) return
-        if (detailRes.status === 'fulfilled') setData(detailRes.value.data)
-        else setError((detailRes.reason as any)?.message ?? 'failed to load')
-        if (timelineRes.status === 'fulfilled') setExtraTimeline(Array.isArray(timelineRes.value.data) ? timelineRes.value.data : [])
-        if (relRes.status === 'fulfilled') setRelationships(Array.isArray(relRes.value.data) ? relRes.value.data : [])
-        if (statsRes.status === 'fulfilled') setStats(statsRes.value.data ?? null)
-        if (traitsRes.status === 'fulfilled') setTraits(Array.isArray(traitsRes.value.data) ? traitsRes.value.data : [])
-        if (treeRes.status === 'fulfilled') setFamilyTree(treeRes.value.data)
-      })
-      .finally(() => {
-        if (!cancel) setLoading(false)
-      })
-    return () => {
-      cancel = true
+    setDetail(
+      d.status === 'fulfilled'
+        ? { data: d.value.data, loading: false, error: null }
+        : { data: null, loading: false, error: errorMessage(d.reason) },
+    )
+    setStats(
+      s.status === 'fulfilled'
+        ? { data: s.value.data ?? null, loading: false, error: null }
+        : { data: null, loading: false, error: errorMessage(s.reason) },
+    )
+    setTraits(
+      t.status === 'fulfilled'
+        ? { data: Array.isArray(t.value.data) ? t.value.data : [], loading: false, error: null }
+        : { data: null, loading: false, error: errorMessage(t.reason) },
+    )
+  }, [id])
+
+  const loadFamilyTree = useCallback(async () => {
+    if (!id) return
+    setFamilyTree({ data: null, loading: true, error: null })
+    try {
+      const res = await api.get<FamilyTreeData>(`/persons/${id}/family-tree`)
+      setFamilyTree({ data: res.data, loading: false, error: null })
+    } catch (err) {
+      setFamilyTree({ data: null, loading: false, error: errorMessage(err) })
     }
   }, [id])
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-      </View>
-    )
-  }
+  const loadTimeline = useCallback(async () => {
+    if (!id) return
+    setTimeline({ data: null, loading: true, error: null })
+    try {
+      const res = await api.get<ExtraTimelineItem[]>(`/person-life-events/timeline/by-person/${id}`)
+      setTimeline({
+        data: Array.isArray(res.data) ? res.data : [],
+        loading: false,
+        error: null,
+      })
+    } catch (err) {
+      setTimeline({ data: null, loading: false, error: errorMessage(err) })
+    }
+  }, [id])
 
-  if (error || !data) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error ?? '데이터 없음'}</Text>
-      </View>
-    )
-  }
+  const loadRelations = useCallback(async () => {
+    if (!id) return
+    setRelations({ data: null, loading: true, error: null })
+    try {
+      const res = await api.get<HumanRelationship[]>(`/persons/${id}/human-relationships`)
+      setRelations({
+        data: Array.isArray(res.data) ? res.data : [],
+        loading: false,
+        error: null,
+      })
+    } catch (err) {
+      setRelations({ data: null, loading: false, error: errorMessage(err) })
+    }
+  }, [id])
 
-  const title = displayName(data)
-  const ls = lifespan(data)
-  const profileImg = imageUrl(data.profileImageUrl)
-  const timelineEntries = buildPersonTimeline(data, extraTimeline)
-  const familyCount =
-    (data.father ? 1 : 0) +
-    (data.mother ? 1 : 0) +
-    (data.spouse ? 1 : 0) +
-    (data.children?.length ?? 0) +
-    (data.siblings?.length ?? 0)
-  const politicsCount = (data.sovereignReigns?.length ?? 0) + (data.governmentPositions?.length ?? 0)
+  useEffect(() => {
+    void loadCore()
+  }, [loadCore])
+
+  // 탭 첫 진입 시 lazy fetch
+  useEffect(() => {
+    if (!visited.has(activeTab)) {
+      setVisited((prev) => {
+        const next = new Set(prev)
+        next.add(activeTab)
+        return next
+      })
+    }
+    if (activeTab === 'family' && !familyTree.data && !familyTree.loading && !familyTree.error) {
+      void loadFamilyTree()
+    }
+    if (activeTab === 'timeline' && !timeline.data && !timeline.loading && !timeline.error) {
+      void loadTimeline()
+    }
+    if (activeTab === 'relations' && !relations.data && !relations.loading && !relations.error) {
+      void loadRelations()
+    }
+  }, [
+    activeTab,
+    visited,
+    familyTree,
+    timeline,
+    relations,
+    loadFamilyTree,
+    loadTimeline,
+    loadRelations,
+  ])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    const tasks: Promise<unknown>[] = [loadCore()]
+    if (visited.has('family')) tasks.push(loadFamilyTree())
+    if (visited.has('timeline')) tasks.push(loadTimeline())
+    if (visited.has('relations')) tasks.push(loadRelations())
+    await Promise.allSettled(tasks)
+    setRefreshing(false)
+  }, [loadCore, loadFamilyTree, loadTimeline, loadRelations, visited])
+
+  const headerSource: PersonDetail | PersonListItem | null = detail.data ?? preview
+  const title = headerSource ? displayName(headerSource) : '...'
+  const subTitle = headerSource ? lifespan(headerSource) : ''
+  const profileImg = headerSource ? imageUrl(headerSource.profileImageUrl) : null
+
+  const onShare = useCallback(() => {
+    if (!headerSource) return
+    const ls = lifespan(headerSource)
+    const country = headerSource.country?.name
+    void Share.share({
+      message: [title, ls, country].filter(Boolean).join(' · '),
+    })
+  }, [headerSource, title])
+
+  const timelineEntries = useMemo(
+    () => (detail.data ? buildPersonTimeline(detail.data, timeline.data ?? []) : []),
+    [detail.data, timeline.data],
+  )
+
+  const familyCount = detail.data
+    ? (detail.data.father ? 1 : 0) +
+      (detail.data.mother ? 1 : 0) +
+      (detail.data.spouse ? 1 : 0) +
+      (detail.data.children?.length ?? 0) +
+      (detail.data.siblings?.length ?? 0)
+    : 0
+  const politicsCount = detail.data
+    ? (detail.data.sovereignReigns?.length ?? 0) + (detail.data.governmentPositions?.length ?? 0)
+    : 0
 
   const tabs: TabItem[] = [
     { key: 'overview', label: '개요' },
     { key: 'family', label: '가족', badge: familyCount },
     { key: 'politics', label: '정치', badge: politicsCount },
     { key: 'timeline', label: '연보', badge: timelineEntries.length },
-    { key: 'relations', label: '관계', badge: relationships.length },
+    { key: 'relations', label: '관계', badge: relations.data?.length ?? 0 },
   ]
 
   return (
     <>
-      <Stack.Screen options={{ title }} />
-      <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
-        <View style={styles.header}>
-          {profileImg ? (
-            <Image source={{ uri: profileImg }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarText}>{title.slice(0, 1)}</Text>
+      <Stack.Screen
+        options={{
+          title,
+          headerRight: () =>
+            headerSource ? (
+              <Pressable onPress={onShare} hitSlop={8} style={{ paddingHorizontal: 4 }}>
+                <Ionicons name="share-outline" size={22} color={Tokens.text.primary} />
+              </Pressable>
+            ) : null,
+        }}
+      />
+      <ScrollView
+        style={{ flex: 1, backgroundColor: Tokens.surface.canvas }}
+        stickyHeaderIndices={[1]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <Header title={title} subTitle={subTitle} profileImg={profileImg} headerSource={headerSource} />
+        <TabBar tabs={tabs} active={activeTab} onChange={(k) => setActiveTab(k as TabKey)} />
+        <View style={styles.tabContent}>
+          {detail.loading && !preview && (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" />
             </View>
           )}
-          <View style={{ flex: 1 }}>
-            <View style={styles.titleRow}>
-              <Text style={styles.heading} numberOfLines={2}>
-                {title}
-              </Text>
-              {data.country?.flagEmoji && <Text style={styles.flag}>{data.country.flagEmoji}</Text>}
-            </View>
-            {!!ls && <Text style={styles.subheading}>{ls}</Text>}
-            {!!data.country?.name && <Text style={styles.subheading}>{data.country.name}</Text>}
-          </View>
+          {detail.error && (
+            <ErrorBlock message={detail.error} onRetry={loadCore} />
+          )}
+
+          {/* 모든 탭은 keep-mounted: 첫 방문 후 데이터/스크롤 보존 */}
+          <PaneVisible visible={activeTab === 'overview'}>
+            {detail.data && (
+              <OverviewTab data={detail.data} stats={stats.data} traits={traits.data ?? []} />
+            )}
+          </PaneVisible>
+
+          <PaneVisible visible={activeTab === 'family'}>
+            {visited.has('family') && (
+              <FamilyTab
+                data={detail.data}
+                resource={familyTree}
+                onRetry={loadFamilyTree}
+              />
+            )}
+          </PaneVisible>
+
+          <PaneVisible visible={activeTab === 'politics'}>
+            {detail.data && <PoliticsTab data={detail.data} />}
+          </PaneVisible>
+
+          <PaneVisible visible={activeTab === 'timeline'}>
+            {visited.has('timeline') && (
+              <TimelineTabPane
+                detailReady={!!detail.data}
+                resource={timeline}
+                entries={timelineEntries}
+                onRetry={loadTimeline}
+                onPress={(it) =>
+                  it.link && router.push(`/${it.link.kind}/${it.link.id}` as any)
+                }
+              />
+            )}
+          </PaneVisible>
+
+          <PaneVisible visible={activeTab === 'relations'}>
+            {visited.has('relations') && (
+              <RelationsTabPane resource={relations} onRetry={loadRelations} />
+            )}
+          </PaneVisible>
         </View>
-
-        <TabBar tabs={tabs} active={activeTab} onChange={(k) => setActiveTab(k as TabKey)} />
-
-        <ScrollView contentContainerStyle={styles.tabContent}>
-          {activeTab === 'overview' && <OverviewTab data={data} stats={stats} traits={traits} />}
-          {activeTab === 'family' && <FamilyTab data={data} tree={familyTree} />}
-          {activeTab === 'politics' && <PoliticsTab data={data} />}
-          {activeTab === 'timeline' && <TimelineTab entries={timelineEntries} />}
-          {activeTab === 'relations' && <RelationsTab items={relationships} />}
-        </ScrollView>
-      </View>
+      </ScrollView>
     </>
+  )
+}
+
+function PaneVisible({ visible, children }: { visible: boolean; children: React.ReactNode }) {
+  return <View style={{ display: visible ? 'flex' : 'none' }}>{children}</View>
+}
+
+function Header({
+  title,
+  subTitle,
+  profileImg,
+  headerSource,
+}: {
+  title: string
+  subTitle: string
+  profileImg: string | null
+  headerSource: PersonDetail | PersonListItem | null
+}) {
+  return (
+    <View style={styles.header}>
+      {profileImg ? (
+        <Image
+          source={{ uri: profileImg }}
+          style={styles.avatar}
+          contentFit="cover"
+          transition={150}
+          cachePolicy="memory-disk"
+        />
+      ) : (
+        <View style={[styles.avatar, styles.avatarPlaceholder]}>
+          <Text style={styles.avatarText}>{title.slice(0, 1)}</Text>
+        </View>
+      )}
+      <View style={{ flex: 1 }}>
+        <View style={styles.titleRow}>
+          <Text style={styles.heading} numberOfLines={2}>
+            {title}
+          </Text>
+          {!!headerSource?.country?.flagEmoji && (
+            <Text style={styles.flag}>{headerSource.country.flagEmoji}</Text>
+          )}
+        </View>
+        {!!subTitle && <Text style={styles.subheading}>{subTitle}</Text>}
+        {!!headerSource?.country?.name && (
+          <Text style={styles.subheading}>{headerSource.country.name}</Text>
+        )}
+      </View>
+    </View>
+  )
+}
+
+function ErrorBlock({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <View style={styles.errorBlock}>
+      <Text style={styles.errorText}>{message}</Text>
+      <Pressable
+        onPress={onRetry}
+        style={({ pressed }) => [styles.retryBtn, pressed && styles.retryPressed]}
+      >
+        <Text style={styles.retryText}>다시 시도</Text>
+      </Pressable>
+    </View>
   )
 }
 
@@ -167,8 +384,16 @@ function OverviewTab({
   stats: PersonStats | null
   traits: PersonTraitAssignment[]
 }) {
-  const birthPlace = placeText({ city: data.birthCity, adminDivision: data.birthAdminDivision, placeText: data.birthPlaceText })
-  const deathPlace = placeText({ city: data.deathCity, adminDivision: data.deathAdminDivision, placeText: data.deathPlaceText })
+  const birthPlace = placeText({
+    city: data.birthCity,
+    adminDivision: data.birthAdminDivision,
+    placeText: data.birthPlaceText,
+  })
+  const deathPlace = placeText({
+    city: data.deathCity,
+    adminDivision: data.deathAdminDivision,
+    placeText: data.deathPlaceText,
+  })
 
   return (
     <>
@@ -252,29 +477,57 @@ function OverviewTab({
   )
 }
 
-function FamilyTab({ data, tree }: { data: PersonDetail; tree: FamilyTreeData | null }) {
+function FamilyTab({
+  data,
+  resource,
+  onRetry,
+}: {
+  data: PersonDetail | null
+  resource: Resource<FamilyTreeData>
+  onRetry: () => void
+}) {
+  if (resource.loading) return <PaneLoading />
+  if (resource.error) return <ErrorBlock message={resource.error} onRetry={onRetry} />
+
+  const tree = resource.data
   const has =
-    data.father || data.mother || data.spouse || data.children?.length || data.siblings?.length || tree
+    tree ||
+    data?.father ||
+    data?.mother ||
+    data?.spouse ||
+    data?.children?.length ||
+    data?.siblings?.length
+
   if (!has) return <EmptyState text="등록된 가족이 없습니다" />
+
+  if (tree) return <FamilyTreeView data={tree} />
+
+  if (!data) return null
   return (
-    <View>
-      {tree ? (
-        <FamilyTreeView data={tree} />
-      ) : (
-        <DetailSection title="가족">
-          {data.father && <RelatedLink kind="person" id={data.father.id} label={personLabel(data.father)} sublabel="아버지" />}
-          {data.mother && <RelatedLink kind="person" id={data.mother.id} label={personLabel(data.mother)} sublabel="어머니" />}
-          {data.spouse && <RelatedLink kind="person" id={data.spouse.id} label={personLabel(data.spouse)} sublabel="배우자" />}
-          {data.children?.map((c) => (
-            <RelatedLink key={c.id} kind="person" id={c.id} label={personLabel(c)} sublabel="자녀" />
-          ))}
-          {data.siblings?.map((s) => (
-            <RelatedLink key={s.id} kind="person" id={s.id} label={personLabel(s)} sublabel="형제자매" />
-          ))}
-        </DetailSection>
+    <DetailSection title="가족">
+      {data.father && (
+        <RelatedLink kind="person" id={data.father.id} label={personLabel(data.father)} sublabel="아버지" />
       )}
-    </View>
+      {data.mother && (
+        <RelatedLink kind="person" id={data.mother.id} label={personLabel(data.mother)} sublabel="어머니" />
+      )}
+      {data.spouse && (
+        <RelatedLink kind="person" id={data.spouse.id} label={personLabel(data.spouse)} sublabel="배우자" />
+      )}
+      {data.children?.map((c) => (
+        <RelatedLink key={c.id} kind="person" id={c.id} label={personLabel(c)} sublabel="자녀" />
+      ))}
+      {data.siblings?.map((s) => (
+        <RelatedLink key={s.id} kind="person" id={s.id} label={personLabel(s)} sublabel="형제자매" />
+      ))}
+    </DetailSection>
   )
+}
+
+function periodText(start?: string | null, startPrec?: string | null, end?: string | null, endPrec?: string | null, fallbackEnd?: string) {
+  const startLabel = formatDateString(start, startPrec) ?? '?'
+  const endLabel = end ? formatDateString(end, endPrec) ?? '?' : (fallbackEnd ?? '?')
+  return `${startLabel} ~ ${endLabel}`
 }
 
 function PoliticsTab({ data }: { data: PersonDetail }) {
@@ -285,9 +538,9 @@ function PoliticsTab({ data }: { data: PersonDetail }) {
     <>
       {reigns.length > 0 && (
         <DetailSection title="군주 재위">
-          {reigns.map((r: any, i: number) => {
+          {reigns.map((r: SovereignReign, i: number) => {
             const country = r.country?.name ?? r.historicalCountry?.name
-            const period = `${r.startDate?.slice(0, 10) ?? '?'} ~ ${r.endDate?.slice(0, 10) ?? '재위 중'}`
+            const period = periodText(r.startDate, null, r.endDate, null, '재위 중')
             return (
               <View key={r.id ?? i} style={styles.tenureItem}>
                 <Text style={styles.tenureTitle}>
@@ -305,10 +558,21 @@ function PoliticsTab({ data }: { data: PersonDetail }) {
 
       {positions.length > 0 && (
         <DetailSection title="정부 직책">
-          {positions.map((g: any, i: number) => {
+          {positions.map((g: GovernmentPosition, i: number) => {
             const country = g.country?.name ?? g.historicalCountry?.name
-            const position = g.positionDefinition?.name ?? g.positionDefinition?.title ?? g.positionName ?? g.position?.name
-            const period = `${g.startDate?.slice(0, 10) ?? '?'} ~ ${g.endDate?.slice(0, 10) ?? '재임 중'}`
+            const position =
+              g.positionDefinition?.name ??
+              g.positionDefinition?.title ??
+              g.positionName ??
+              g.title ??
+              g.position?.name
+            const period = periodText(
+              g.startDate,
+              g.startDatePrecision,
+              g.endDate,
+              g.endDatePrecision,
+              '재임 중',
+            )
             return (
               <View key={g.id ?? i} style={styles.tenureItem}>
                 <Text style={styles.tenureTitle}>{position ?? '직책 미지정'}</Text>
@@ -324,24 +588,37 @@ function PoliticsTab({ data }: { data: PersonDetail }) {
   )
 }
 
-function TimelineTab({ entries }: { entries: TimelineEntry[] }) {
-  const router = useRouter()
+function TimelineTabPane({
+  detailReady,
+  resource,
+  entries,
+  onRetry,
+  onPress,
+}: {
+  detailReady: boolean
+  resource: Resource<ExtraTimelineItem[]>
+  entries: TimelineEntry[]
+  onRetry: () => void
+  onPress: (entry: TimelineEntry) => void
+}) {
+  if (resource.loading || !detailReady) return <PaneLoading />
+  if (resource.error) return <ErrorBlock message={resource.error} onRetry={onRetry} />
   if (!entries.length) return <EmptyState text="연보 기록 없음" />
+
   return (
     <View>
       {entries.map((it) => {
-        const dateText = it.endLabel && it.endLabel !== it.dateLabel
-          ? `${it.dateLabel} ~ ${it.endLabel}`
-          : it.dateLabel
-        const onPress = it.link
-          ? () => router.push(`/${it.link!.kind}/${it.link!.id}` as any)
-          : undefined
-        const Wrapper: any = onPress ? Pressable : View
+        const dateText =
+          it.endLabel && it.endLabel !== it.dateLabel ? `${it.dateLabel} ~ ${it.endLabel}` : it.dateLabel
+        const Wrapper: any = it.link ? Pressable : View
         return (
           <Wrapper
             key={it.key}
-            style={({ pressed }: { pressed?: boolean }) => [styles.timelineItem, pressed && styles.timelinePressed]}
-            onPress={onPress}
+            style={({ pressed }: { pressed?: boolean }) => [
+              styles.timelineItem,
+              pressed && styles.timelinePressed,
+            ]}
+            onPress={it.link ? () => onPress(it) : undefined}
           >
             <View style={styles.timelineDotCol}>
               <View style={[styles.timelineDot, { backgroundColor: it.color }]} />
@@ -364,14 +641,24 @@ function TimelineTab({ entries }: { entries: TimelineEntry[] }) {
   )
 }
 
-function RelationsTab({ items }: { items: HumanRelationship[] }) {
+function RelationsTabPane({
+  resource,
+  onRetry,
+}: {
+  resource: Resource<HumanRelationship[]>
+  onRetry: () => void
+}) {
+  if (resource.loading) return <PaneLoading />
+  if (resource.error) return <ErrorBlock message={resource.error} onRetry={onRetry} />
+  const items = resource.data ?? []
   if (!items.length) return <EmptyState text="등록된 인간관계 없음" />
+
   return (
     <DetailSection title="인간관계">
       {items.map((r) => {
         const counterId = r.counterpartPerson?.id ?? r.counterpartPersonId
         const label = r.counterpartPerson ? personLabel(r.counterpartPerson) : `인물 #${counterId ?? '?'}`
-        const typeLabel = RELATIONSHIP_LABELS[r.relationshipType] ?? r.relationshipType
+        const typeLabel = relationshipLabel(r.relationshipType)
         return (
           <View key={r.id} style={{ marginBottom: 8 }}>
             {counterId ? (
@@ -386,13 +673,22 @@ function RelationsTab({ items }: { items: HumanRelationship[] }) {
             )}
             {r.phases?.map((p) => (
               <Text key={p.id} style={styles.timelineMeta}>
-                · {p.startDate?.slice(0, 10) ?? '?'} ~ {p.endDate?.slice(0, 10) ?? '?'}: {p.status ?? p.note ?? ''}
+                · {formatDateString(p.startDate) ?? '?'} ~ {formatDateString(p.endDate) ?? '?'}
+                {p.status || p.note ? `: ${p.status ?? p.note}` : ''}
               </Text>
             ))}
           </View>
         )
       })}
     </DetailSection>
+  )
+}
+
+function PaneLoading() {
+  return (
+    <View style={styles.center}>
+      <ActivityIndicator />
+    </View>
   )
 }
 
@@ -405,29 +701,68 @@ function EmptyState({ text }: { text: string }) {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  errorText: { color: '#ef4444' },
-  header: { flexDirection: 'row', gap: 12, alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e2e8f0' },
-  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#e2e8f0' },
+  center: { paddingVertical: 32, alignItems: 'center', justifyContent: 'center' },
+  errorBlock: {
+    padding: 16,
+    backgroundColor: Tokens.surface.raised,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Tokens.border.subtle,
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  errorText: { color: Tokens.text.danger, textAlign: 'center' },
+  retryBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    backgroundColor: Tokens.surface.canvas,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Tokens.border.subtle,
+  },
+  retryPressed: { backgroundColor: Tokens.surface.pressed },
+  retryText: { fontSize: 14, color: Tokens.text.primary, fontWeight: '600' },
+  header: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: Tokens.surface.raised,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Tokens.border.subtle,
+  },
+  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: Tokens.border.subtle },
   avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 28, fontWeight: '700', color: '#64748b' },
+  avatarText: { fontSize: 28, fontWeight: '700', color: Tokens.text.muted },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  heading: { fontSize: 22, fontWeight: '700', color: '#0f172a', flexShrink: 1 },
+  heading: { fontSize: 22, fontWeight: '700', color: Tokens.text.primary, flexShrink: 1 },
   flag: { fontSize: 18 },
-  subheading: { fontSize: 13, color: '#64748b', marginTop: 4 },
+  subheading: { fontSize: 13, color: Tokens.text.muted, marginTop: 4 },
   tabContent: { padding: 12 },
-  body: { fontSize: 14, color: '#0f172a', lineHeight: 22 },
+  body: { fontSize: 14, color: Tokens.text.primary, lineHeight: 22 },
   empty: { padding: 32, alignItems: 'center' },
-  emptyText: { color: '#94a3b8', fontSize: 14 },
-  tenureItem: { paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e2e8f0' },
-  tenureTitle: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
-  tenureMeta: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  emptyText: { color: Tokens.text.soft, fontSize: 14 },
+  tenureItem: {
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Tokens.border.subtle,
+  },
+  tenureTitle: { fontSize: 14, fontWeight: '600', color: Tokens.text.primary },
+  tenureMeta: { fontSize: 12, color: Tokens.text.muted, marginTop: 2 },
   timelineItem: { flexDirection: 'row', gap: 10, paddingTop: 4 },
   timelinePressed: { opacity: 0.6 },
   timelineDotCol: { alignItems: 'center', width: 16 },
-  timelineDot: { width: 12, height: 12, borderRadius: 6, marginTop: 4, borderWidth: 2, borderColor: '#fff' },
-  timelineLine: { flex: 1, width: 2, backgroundColor: '#e2e8f0', marginTop: 2 },
+  timelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginTop: 4,
+    borderWidth: 2,
+    borderColor: Tokens.surface.raised,
+  },
+  timelineLine: { flex: 1, width: 2, backgroundColor: Tokens.border.subtle, marginTop: 2 },
   timelineDate: { fontSize: 12, fontWeight: '700', marginBottom: 2 },
-  timelineTitle: { fontSize: 15, fontWeight: '600', color: '#0f172a' },
-  timelineMeta: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  timelineTitle: { fontSize: 15, fontWeight: '600', color: Tokens.text.primary },
+  timelineMeta: { fontSize: 12, color: Tokens.text.muted, marginTop: 2 },
 })

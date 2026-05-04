@@ -75,6 +75,66 @@ export type PersonListItem = {
   influence?: number | null
 }
 
+export type FamilyMember = {
+  id: string
+  name: string
+  surname?: string | null
+  nameDisplayOrder?: string | null
+  regnalName?: string | null
+  gender?: string | null
+  dynasty?: { id: string; name: string } | null
+  birthEra?: EraStr | null
+  birthYear?: number | null
+  birthMonth?: number | null
+  birthDay?: number | null
+  deathEra?: EraStr | null
+  deathYear?: number | null
+  deathMonth?: number | null
+  deathDay?: number | null
+}
+
+export type SovereignReign = {
+  id?: string
+  startDate?: string | null
+  endDate?: string | null
+  regnalName?: string | null
+  regnalNumber?: number | null
+  notes?: string | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
+  historicalCountryId?: string | null
+}
+
+export type GovernmentPosition = {
+  id?: string
+  startDate?: string | null
+  endDate?: string | null
+  startDatePrecision?: string | null
+  endDatePrecision?: string | null
+  notes?: string | null
+  positionType?: string | null
+  title?: string | null
+  positionName?: string | null
+  positionDefinition?: {
+    id?: string
+    title?: string | null
+    titleEn?: string | null
+    name?: string | null
+  } | null
+  position?: { name?: string | null } | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
+}
+
+export type SpouseRelation = {
+  id: string
+  spouseId?: string | null
+  marriageStartDate?: string | null
+  marriageEndDate?: string | null
+  note?: string | null
+  spouse?: { id: string; name: string; surname?: string | null } | null
+}
+
 export type PersonDetail = PersonListItem & {
   middleName?: string | null
   originalName?: string | null
@@ -97,15 +157,16 @@ export type PersonDetail = PersonListItem & {
   deathCause?: string | null
   deathNote?: string | null
   nicknames?: Array<{ id: string; nickname: string; type?: string | null }>
-  father?: { id: string; name: string; surname?: string | null } | null
-  mother?: { id: string; name: string; surname?: string | null } | null
-  spouse?: { id: string; name: string; surname?: string | null } | null
-  children?: Array<{ id: string; name: string; surname?: string | null }>
-  siblings?: Array<{ id: string; name: string; surname?: string | null }>
-  governmentPositions?: any[]
-  sovereignReigns?: any[]
-  events?: any[]
-  humanRelationships?: any[]
+  father?: FamilyMember | null
+  mother?: FamilyMember | null
+  spouse?: FamilyMember | null
+  children?: FamilyMember[]
+  siblings?: FamilyMember[]
+  governmentPositions?: GovernmentPosition[]
+  sovereignReigns?: SovereignReign[]
+  spouseRelations?: SpouseRelation[]
+  events?: unknown[]
+  humanRelationships?: unknown[]
 }
 
 export type CountryListItem = {

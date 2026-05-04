@@ -1,4 +1,5 @@
 import { formatDateString, formatYMD } from './format'
+import { Tokens } from '@/constants/theme'
 import type { PersonDetail } from './dto'
 
 export type TimelineKind =
@@ -15,8 +16,8 @@ export type TimelineKind =
 export type TimelineEntry = {
   key: string
   kind: TimelineKind
-  /** 정렬 키. ISO 또는 YYYY-MM-DD */
-  sortDate: string
+  /** 정렬 키 — year*10000 + month*100 + day. 음수는 BC. null이면 시점 미상 */
+  sortKey: number | null
   /** 표시용 시작일 (이미 포맷팅됨) */
   dateLabel: string
   /** 기간이면 종료일 라벨 */
@@ -31,26 +32,30 @@ export type TimelineEntry = {
   color: string
 }
 
-const KIND_COLOR: Record<TimelineKind, string> = {
-  'ego-birth': '#16a34a',
-  'ego-death': '#dc2626',
-  'marriage': '#ec4899',
-  'reign': '#ca8a04',
-  'tenure': '#0369a1',
-  'life-event': '#7c3aed',
-  'event-participation': '#a855f7',
-  'family-birth': '#86efac',
-  'family-death': '#fca5a5',
+const KIND_COLOR = Tokens.timeline as Record<TimelineKind, string>
+
+/**
+ * BC 음수 연도 포함 정렬 가능한 단일 숫자 키.
+ * year=-220, month=8, day=15 → -220*10000 + 8*100 + 15 = -2199185
+ * year=1945 → 19450815. BC 220이 BC 120보다 작아 앞으로 정렬됨.
+ */
+function ymdKey(year?: number | null, month?: number | null, day?: number | null): number | null {
+  if (year == null) return null
+  const m = month ?? 1
+  const d = day ?? 1
+  return year * 10000 + (year < 0 ? -1 : 1) * (m * 100 + d)
 }
 
-function ymdString(year?: number | null, month?: number | null, day?: number | null) {
-  if (year == null) return ''
-  return `${year < 0 ? '-' : ''}${String(Math.abs(year)).padStart(4, '0')}-${String(month ?? 1).padStart(2, '0')}-${String(day ?? 1).padStart(2, '0')}`
-}
-
-function isoToSort(iso?: string | null) {
-  if (!iso) return ''
-  return iso.slice(0, 10)
+function isoToKey(iso?: string | null): number | null {
+  if (!iso) return null
+  // 음수 연도 ISO(`-0220-08-15`)와 양수 모두 처리
+  const m = iso.match(/^(-?\d{1,4})(?:-(\d{2}))?(?:-(\d{2}))?/)
+  if (!m) return null
+  const y = Number(m[1])
+  const mo = m[2] ? Number(m[2]) : 1
+  const d = m[3] ? Number(m[3]) : 1
+  if (Number.isNaN(y)) return null
+  return y * 10000 + (y < 0 ? -1 : 1) * (mo * 100 + d)
 }
 
 export type ExtraTimelineItem =
@@ -95,7 +100,7 @@ export function buildPersonTimeline(
     items.push({
       key: 'birth',
       kind: 'ego-birth',
-      sortDate: ymdString(detail.birthYear, detail.birthMonth, detail.birthDay),
+      sortKey: ymdKey(detail.birthYear, detail.birthMonth, detail.birthDay),
       dateLabel: birth,
       title: '출생',
       subtitle: detail.birthCity?.name ?? detail.birthAdminDivision?.name ?? detail.birthPlaceText ?? null,
@@ -112,7 +117,7 @@ export function buildPersonTimeline(
       items.push({
         key: 'death',
         kind: 'ego-death',
-        sortDate: ymdString(detail.deathYear, detail.deathMonth, detail.deathDay),
+        sortKey: ymdKey(detail.deathYear, detail.deathMonth, detail.deathDay),
         dateLabel: death,
         title: '사망',
         subtitle: [
@@ -130,15 +135,15 @@ export function buildPersonTimeline(
 
   // 군주 재위
   for (const r of detail.sovereignReigns ?? []) {
-    const sortDate = isoToSort(r.startDate)
-    if (!sortDate) continue
+    const sortKey = isoToKey(r.startDate)
+    if (sortKey == null) continue
     const country = r.country?.name ?? r.historicalCountry?.name
     const startLabel = formatDateString(r.startDate) ?? '?'
     const endLabel = r.endDate ? formatDateString(r.endDate) : '재위 중'
     items.push({
-      key: `reign-${r.id ?? sortDate}`,
+      key: `reign-${r.id ?? sortKey}`,
       kind: 'reign',
-      sortDate,
+      sortKey,
       dateLabel: startLabel,
       endLabel,
       title: r.regnalName ?? '재위',
@@ -151,16 +156,21 @@ export function buildPersonTimeline(
 
   // 정부 직책
   for (const g of detail.governmentPositions ?? []) {
-    const sortDate = isoToSort(g.startDate)
-    if (!sortDate) continue
+    const sortKey = isoToKey(g.startDate)
+    if (sortKey == null) continue
     const country = g.country?.name ?? g.historicalCountry?.name
-    const position = g.positionDefinition?.name ?? g.positionDefinition?.title ?? g.positionName
-    const startLabel = formatDateString(g.startDate) ?? '?'
-    const endLabel = g.endDate ? formatDateString(g.endDate) : '재임 중'
+    const position =
+      g.positionDefinition?.name ??
+      g.positionDefinition?.title ??
+      g.positionName ??
+      g.title ??
+      g.position?.name
+    const startLabel = formatDateString(g.startDate, g.startDatePrecision) ?? '?'
+    const endLabel = g.endDate ? formatDateString(g.endDate, g.endDatePrecision) : '재임 중'
     items.push({
-      key: `tenure-${g.id ?? sortDate}`,
+      key: `tenure-${g.id ?? sortKey}`,
       kind: 'tenure',
-      sortDate,
+      sortKey,
       dateLabel: startLabel,
       endLabel,
       title: position ?? '정부 직책',
@@ -171,7 +181,7 @@ export function buildPersonTimeline(
   }
 
   // 결혼 (PersonSpouse.marriageStartDate)
-  for (const sr of (detail as any).spouseRelations ?? []) {
+  for (const sr of detail.spouseRelations ?? []) {
     if (!sr.marriageStartDate) continue
     const spouseName = sr.spouse?.surname
       ? `${sr.spouse.surname}${sr.spouse.name}`
@@ -179,7 +189,7 @@ export function buildPersonTimeline(
     items.push({
       key: `marriage-${sr.id}`,
       kind: 'marriage',
-      sortDate: isoToSort(sr.marriageStartDate),
+      sortKey: isoToKey(sr.marriageStartDate),
       dateLabel: formatDateString(sr.marriageStartDate) ?? '?',
       endLabel: sr.marriageEndDate ? formatDateString(sr.marriageEndDate) : null,
       title: '혼인',
@@ -191,7 +201,7 @@ export function buildPersonTimeline(
   }
 
   // 가족 이벤트 — 부모/자녀/형제자매 출생·사망 (있는 경우만)
-  const familyMembers: Array<{ p: any; relation: string }> = []
+  const familyMembers: Array<{ p: NonNullable<PersonDetail['father']>; relation: string }> = []
   if (detail.father) familyMembers.push({ p: detail.father, relation: '아버지' })
   if (detail.mother) familyMembers.push({ p: detail.mother, relation: '어머니' })
   for (const c of detail.children ?? []) familyMembers.push({ p: c, relation: '자녀' })
@@ -204,7 +214,7 @@ export function buildPersonTimeline(
       items.push({
         key: `fb-${p.id}`,
         kind: 'family-birth',
-        sortDate: ymdString(p.birthYear, p.birthMonth, p.birthDay),
+        sortKey: ymdKey(p.birthYear, p.birthMonth, p.birthDay),
         dateLabel: formatYMD(p.birthEra, p.birthYear, p.birthMonth, p.birthDay) ?? '?',
         title: `${fm.relation} 출생`,
         subtitle: name,
@@ -216,7 +226,7 @@ export function buildPersonTimeline(
       items.push({
         key: `fd-${p.id}`,
         kind: 'family-death',
-        sortDate: ymdString(p.deathYear, p.deathMonth, p.deathDay),
+        sortKey: ymdKey(p.deathYear, p.deathMonth, p.deathDay),
         dateLabel: formatYMD(p.deathEra, p.deathYear, p.deathMonth, p.deathDay) ?? '?',
         title: `${fm.relation} 사망`,
         subtitle: name,
@@ -232,7 +242,7 @@ export function buildPersonTimeline(
       items.push({
         key: `le-${it.id}`,
         kind: 'life-event',
-        sortDate: isoToSort(it.startDate),
+        sortKey: isoToKey(it.startDate),
         dateLabel: formatDateString(it.startDate, it.startDatePrecision) ?? '시점 미상',
         endLabel: it.endDate ? formatDateString(it.endDate, it.endDatePrecision) : null,
         title: it.title,
@@ -244,7 +254,7 @@ export function buildPersonTimeline(
       items.push({
         key: `ep-${it.id}`,
         kind: 'event-participation',
-        sortDate: isoToSort(it.event.startDate),
+        sortKey: isoToKey(it.event.startDate),
         dateLabel: formatDateString(it.event.startDate, it.event.startDatePrecision) ?? '시점 미상',
         endLabel: it.event.endDate ? formatDateString(it.event.endDate, it.event.endDatePrecision) : null,
         title: it.event.title,
@@ -256,11 +266,11 @@ export function buildPersonTimeline(
     }
   }
 
-  // 정렬: sortDate 오름차순, 빈값은 뒤로
+  // 정렬: sortKey 오름차순, null은 뒤로
   return items.sort((a, b) => {
-    if (!a.sortDate && !b.sortDate) return 0
-    if (!a.sortDate) return 1
-    if (!b.sortDate) return -1
-    return a.sortDate.localeCompare(b.sortDate)
+    if (a.sortKey == null && b.sortKey == null) return 0
+    if (a.sortKey == null) return 1
+    if (b.sortKey == null) return -1
+    return a.sortKey - b.sortKey
   })
 }
