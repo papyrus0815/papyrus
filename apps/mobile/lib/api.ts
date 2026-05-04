@@ -35,6 +35,11 @@ function resolveBaseURL(): string | undefined {
 
 const baseURL = resolveBaseURL()
 
+/** 다른 모듈(imageUrl 등)에서 동일 baseURL 사용 */
+export function getApiBaseURL(): string | undefined {
+  return baseURL
+}
+
 if (!baseURL) {
   console.warn('[api] baseURL을 결정할 수 없습니다 — EXPO_PUBLIC_API_BASE_URL을 설정하세요')
 } else if (__DEV__) {

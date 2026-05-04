@@ -6,6 +6,7 @@ import 'react-native-reanimated'
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { AuthProvider } from '@/lib/auth-context'
 import { AuthGate } from '@/components/auth-gate'
+import { Tokens } from '@/constants/theme'
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -18,12 +19,31 @@ export default function RootLayout() {
     <AuthProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AuthGate>
-          <Stack>
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: Tokens.surface.raised },
+              headerTintColor: Tokens.text.primary,
+              headerTitleStyle: { fontWeight: '700' },
+              headerBackTitle: '뒤로',
+              headerShadowVisible: false,
+              contentStyle: { backgroundColor: Tokens.surface.canvas },
+              animation: 'slide_from_right',
+            }}
+          >
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
-            <Stack.Screen name="event/[id]" options={{ title: '사건' }} />
-            <Stack.Screen name="person/[id]" options={{ title: '인물' }} />
-            <Stack.Screen name="country/[id]" options={{ title: '국가' }} />
+            <Stack.Screen
+              name="event/[id]"
+              options={{ title: '사건', headerLargeTitle: false }}
+            />
+            <Stack.Screen
+              name="person/[id]"
+              options={{ title: '인물', headerLargeTitle: false }}
+            />
+            <Stack.Screen
+              name="country/[id]"
+              options={{ title: '국가', headerLargeTitle: false }}
+            />
           </Stack>
         </AuthGate>
         <StatusBar style="auto" />
