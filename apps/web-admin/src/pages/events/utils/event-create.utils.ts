@@ -14,7 +14,7 @@ export const getApiHost = (): string => {
     return envUrl
   }
 
-  return 'http://localhost:4242'
+  return 'http://localhost:8000'
 }
 
 export const getImageUrl = (url: string): string => {

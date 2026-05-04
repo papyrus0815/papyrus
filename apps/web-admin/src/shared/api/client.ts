@@ -17,7 +17,7 @@ function getApiHost(): string {
   if (envUrl) {
     return envUrl
   }
-  return 'http://localhost:4242'
+  return 'http://localhost:8000'
 }
 
 // API 연결 (host만, 인증 불필요한 경우용)

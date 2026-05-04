@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => ({
   define: {
     'import.meta.env.VITE_API_BASE_URL':
       mode === 'production'
-        ? JSON.stringify('http://localhost:4242')
+        ? JSON.stringify('http://localhost:8000')
         : JSON.stringify(process.env.VITE_API_BASE_URL || ''),
   },
   plugins: [react()],
@@ -88,7 +88,7 @@ export default defineConfig(({ mode }) => ({
     proxy: {
       // 🔧 FIX: /uploads 경로를 백엔드로 프록시 (정적 파일)
       '/uploads': {
-        target: 'http://localhost:4242',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
         ws: true,
@@ -96,7 +96,7 @@ export default defineConfig(({ mode }) => ({
       // 모든 API 요청을 자동으로 백엔드로 프록시 (정적 파일 제외)
       // 정적 파일(.js, .css, .html 등)이나 Vite 내부 요청(/@...)이 아니면 모두 API로 프록시
       '/': {
-        target: getEnvVar('API_ORIGIN', 'http://localhost:4242'),
+        target: getEnvVar('API_ORIGIN', 'http://localhost:8000'),
         changeOrigin: true,
         secure: false,
         // bypass: 정적 파일과 프론트엔드 라우트는 프록시하지 않음

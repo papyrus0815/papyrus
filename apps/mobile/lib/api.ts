@@ -5,13 +5,13 @@ import { getAccessToken, clearTokens } from './auth-storage'
 /**
  * baseURL 결정 우선순위:
  * 1) EXPO_PUBLIC_API_BASE_URL 환경변수 (있으면 그대로 사용 — staging/prod에서 명시적 지정용)
- * 2) __DEV__ 모드: Expo dev server hostUri에서 호스트 추출 + EXPO_PUBLIC_API_PORT(기본 4242)
- *    - iOS 시뮬레이터: hostUri="localhost:8081" → http://localhost:4242
- *    - Android 에뮬레이터: hostUri="10.0.2.2:8081" → http://10.0.2.2:4242
- *    - 실기기 (LAN): hostUri="192.168.x.y:8081" → http://192.168.x.y:4242
+ * 2) __DEV__ 모드: Expo dev server hostUri에서 호스트 추출 + EXPO_PUBLIC_API_PORT(기본 8000)
+ *    - iOS 시뮬레이터: hostUri="localhost:8081" → http://localhost:8000
+ *    - Android 에뮬레이터: hostUri="10.0.2.2:8081" → http://10.0.2.2:8000
+ *    - 실기기 (LAN): hostUri="192.168.x.y:8081" → http://192.168.x.y:8000
  */
 
-const API_PORT = process.env.EXPO_PUBLIC_API_PORT ?? '4242'
+const API_PORT = process.env.EXPO_PUBLIC_API_PORT ?? '8000'
 
 function getDevHost(): string | null {
   const hostUri =

@@ -129,12 +129,12 @@ function getApiBaseUrl(): string {
       (window as any).electron !== undefined)
 
   if (envUrl === '') {
-    if (isElectron) return 'http://localhost:4242'
+    if (isElectron) return 'http://localhost:8000'
     return typeof window !== 'undefined' ? window.location.origin : ''
   }
 
   if (!envUrl || envUrl.trim() === '') {
-    if (isElectron) return 'http://localhost:4242'
+    if (isElectron) return 'http://localhost:8000'
     return typeof window !== 'undefined' ? window.location.origin : ''
   }
 

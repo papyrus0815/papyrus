@@ -21,8 +21,8 @@
         "env": {
           "NODE_ENV": "development",
           "DATABASE_URL": "mysql://papyrus:papyrus@localhost:3307/papyrus",
-          "API_PORT": "4242",
-          "PORT": "4242",
+          "API_PORT": "8000",
+          "PORT": "8000",
           "BIND_HOST": "0.0.0.0",
           "JWT_SECRET": "dev-jwt-secret-key-not-for-production-use-only",
           "JWT_EXPIRES_IN": "15m",
