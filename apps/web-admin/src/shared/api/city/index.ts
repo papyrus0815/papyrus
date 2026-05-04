@@ -156,7 +156,7 @@ async function fetchCities(params?: {
   }
 }
 
-const getBaseUrl = () => apiConnection.host || 'http://localhost:8000'
+const getBaseUrl = () => apiConnection.host || 'http://localhost:4242'
 const getHeaders = () => apiConnection.headers as Record<string, string> | undefined
 
 async function safeReadError(res: Response): Promise<string> {

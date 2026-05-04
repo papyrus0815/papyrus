@@ -109,7 +109,7 @@ await countriesApi.deleteCountry('country-id')
 `.env` 파일에서 API URL 설정:
 
 ```env
-VITE_API_URL=http://localhost:8000
+VITE_API_URL=http://localhost:4242
 ```
 
 ## 🔄 SDK 업데이트
