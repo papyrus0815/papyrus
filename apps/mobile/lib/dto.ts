@@ -74,6 +74,8 @@ export type PersonListItem = {
   country?: { id: string; name: string; flagEmoji?: string | null } | null
   dynasty?: { id: string; name: string } | null
   influence?: number | null
+  biography?: string | null
+  createdAt?: string | null
 }
 
 export type FamilyMember = {
