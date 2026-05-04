@@ -271,9 +271,17 @@ export default function PersonDetailScreen() {
           title,
           headerRight: () =>
             headerSource ? (
-              <Pressable onPress={onShare} hitSlop={8} style={{ paddingHorizontal: 4 }}>
-                <Ionicons name="share-outline" size={22} color={Tokens.text.primary} />
-              </Pressable>
+              <View style={{ flexDirection: 'row', gap: 14 }}>
+                <Pressable
+                  onPress={() => router.push(`/person/edit?id=${id}` as any)}
+                  hitSlop={8}
+                >
+                  <Ionicons name="create-outline" size={22} color={Tokens.text.primary} />
+                </Pressable>
+                <Pressable onPress={onShare} hitSlop={8}>
+                  <Ionicons name="share-outline" size={22} color={Tokens.text.primary} />
+                </Pressable>
+              </View>
             ) : null,
         }}
       />

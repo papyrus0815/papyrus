@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   View,
@@ -213,6 +213,15 @@ export default function PersonsScreen() {
       <PageHeader
         title="인물"
         subtitle={`${sorted.length}명${activeFilterCount > 0 ? ` (필터 ${activeFilterCount}개)` : ''}`}
+        right={
+          <Pressable
+            onPress={() => router.push('/person/edit' as any)}
+            hitSlop={8}
+            style={({ pressed }) => [styles.addBtn, pressed && styles.addBtnPressed]}
+          >
+            <Ionicons name="add" size={22} color={Tokens.text.inverse} />
+          </Pressable>
+        }
       />
       <View style={styles.toolbar}>
         <ListSearchBar value={query} onChange={setQuery} placeholder="이름·왕호·가문·국가" />
@@ -278,9 +287,10 @@ export default function PersonsScreen() {
         )}
       </View>
 
-      <FlatList
-        data={sorted}
+      <SectionList
+        sections={sectionData(sorted)}
         keyExtractor={(it) => String(it.id)}
+        stickySectionHeadersEnabled
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
@@ -288,6 +298,9 @@ export default function PersonsScreen() {
             <Text style={styles.emptyText}>{error ?? '인물이 없습니다'}</Text>
           </View>
         }
+        renderSectionHeader={({ section }) => (
+          <CenturyHeader century={section.century} count={section.data.length} />
+        )}
         renderItem={({ item }) =>
           viewMode === 'cards' ? (
             <CardRow item={item} onPress={() => onItemPress(item, router)} />
@@ -295,7 +308,8 @@ export default function PersonsScreen() {
             <CompactRow item={item} onPress={() => onItemPress(item, router)} />
           )
         }
-        ItemSeparatorComponent={viewMode === 'compact' ? Separator : undefined}
+        ItemSeparatorComponent={viewMode === 'compact' ? Separator : CardSeparator}
+        SectionSeparatorComponent={() => <View style={{ height: 4 }} />}
       />
     </View>
   )
@@ -304,6 +318,44 @@ export default function PersonsScreen() {
 function onItemPress(item: PersonListItem, router: ReturnType<typeof useRouter>) {
   setPersonPreview(item)
   router.push(`/person/${item.id}` as any)
+}
+
+type Section = { century: number | null; data: PersonListItem[] }
+
+/** 세기별 섹션 분할. 섹션은 최신 세기 → 과거 세기 → 미상 순. */
+function sectionData(items: PersonListItem[]): Section[] {
+  const map = new Map<string, Section>()
+  for (const p of items) {
+    const c = centuryOf(p)
+    const key = c === null ? 'unknown' : String(c)
+    let sec = map.get(key)
+    if (!sec) {
+      sec = { century: c, data: [] }
+      map.set(key, sec)
+    }
+    sec.data.push(p)
+  }
+  return [...map.values()].sort((a, b) => {
+    if (a.century === null) return 1
+    if (b.century === null) return -1
+    return b.century - a.century
+  })
+}
+
+function CenturyHeader({ century, count }: { century: number | null; count: number }) {
+  const label =
+    century == null
+      ? '시점 미상'
+      : century < 0
+        ? `BC ${-century}세기`
+        : `${century}세기`
+  return (
+    <View style={styles.centuryHeader}>
+      <Text style={styles.centuryText}>{label}</Text>
+      <View style={styles.centuryLine} />
+      <Text style={styles.centuryCount}>{count}</Text>
+    </View>
+  )
 }
 
 function CardRow({ item, onPress }: { item: PersonListItem; onPress: () => void }) {
@@ -363,6 +415,10 @@ function CompactRow({ item, onPress }: { item: PersonListItem; onPress: () => vo
 
 function Separator() {
   return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: Tokens.border.subtle, marginHorizontal: 12 }} />
+}
+
+function CardSeparator() {
+  return <View style={{ height: 8 }} />
 }
 
 function FilterPanel({
@@ -561,7 +617,36 @@ const styles = StyleSheet.create({
   viewBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   viewBtnActive: { backgroundColor: Tokens.text.primary },
   countLabel: { paddingHorizontal: 12, paddingTop: 6, fontSize: 11, color: Tokens.text.muted },
-  list: { paddingHorizontal: 12, paddingVertical: 8, gap: 8 },
+  list: { paddingHorizontal: 12, paddingVertical: 8 },
+  centuryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    backgroundColor: Tokens.surface.canvas,
+  },
+  centuryText: { fontSize: 14, fontWeight: '700', color: Tokens.text.primary, minWidth: 80 },
+  centuryLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: Tokens.border.subtle },
+  addBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Tokens.text.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addBtnPressed: { opacity: 0.7 },
+  centuryCount: {
+    fontSize: 11,
+    color: Tokens.text.muted,
+    fontWeight: '600',
+    backgroundColor: Tokens.surface.pressed,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    minWidth: 24,
+    textAlign: 'center',
+  },
   empty: { padding: 32, alignItems: 'center' },
   emptyText: { color: Tokens.text.soft, fontSize: 14 },
   card: {

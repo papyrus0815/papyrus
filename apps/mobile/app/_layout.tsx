@@ -51,6 +51,15 @@ export default function RootLayout() {
               }}
             />
             <Stack.Screen
+              name="person/edit"
+              options={{
+                title: '인물 등록',
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+                gestureEnabled: true,
+              }}
+            />
+            <Stack.Screen
               name="country/[id]"
               options={{
                 title: '국가',
@@ -61,7 +70,7 @@ export default function RootLayout() {
             />
           </Stack>
         </AuthGate>
-        <StatusBar style="auto" />
+        <StatusBar style="dark" />
       </ThemeProvider>
     </AuthProvider>
   )
