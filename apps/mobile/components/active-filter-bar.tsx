@@ -1,6 +1,7 @@
+import { useMemo } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { Tokens } from '@/constants/theme'
+import { Radius, Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 
 export type ActiveFilterChip = {
   key: string
@@ -18,6 +19,8 @@ export function ActiveFilterBar({
   chips: ActiveFilterChip[]
   onClearAll?: () => void
 }) {
+  const t = useTokens()
+  const styles = useMemo(() => makeStyles(t), [t])
   if (chips.length === 0) return null
   return (
     <ScrollView
@@ -37,7 +40,7 @@ export function ActiveFilterBar({
             accessibilityLabel={`${c.label} 필터 해제`}
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={14} color={Tokens.text.inverse} />
+            <Ionicons name="close" size={14} color={t.brand.primary} />
           </Pressable>
         </View>
       ))}
@@ -50,27 +53,29 @@ export function ActiveFilterBar({
   )
 }
 
-const styles = StyleSheet.create({
-  scroll: {
-    backgroundColor: Tokens.surface.raised,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Tokens.border.subtle,
-  },
-  row: { gap: 6, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center' },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingLeft: 10,
-    paddingRight: 6,
-    paddingVertical: 4,
-    backgroundColor: Tokens.text.primary,
-    borderRadius: 14,
-  },
-  chipText: { fontSize: 12, fontWeight: '600', color: Tokens.text.inverse },
-  clearAll: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  clearAllText: { fontSize: 12, fontWeight: '600', color: Tokens.text.muted, textDecorationLine: 'underline' },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    scroll: {
+      backgroundColor: t.surface.raised,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.border.subtle,
+    },
+    row: { gap: 6, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, alignItems: 'center' },
+    // outlined 스타일 — 여러 chip이 가로로 늘어설 때 fill 보다 시각 부담 적음
+    chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingLeft: Spacing.md,
+      paddingRight: 6,
+      paddingVertical: Spacing.xs,
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: t.brand.primary,
+      borderRadius: Radius.full,
+    },
+    chipText: { ...Type.captionSm, fontWeight: '600', color: t.brand.primary },
+    clearAll: { paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs },
+    clearAllText: { ...Type.captionSm, fontWeight: '600', color: t.text.muted, textDecorationLine: 'underline' },
+  })
+}

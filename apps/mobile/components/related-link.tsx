@@ -1,10 +1,14 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { memo, useMemo } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
+import { AppPressable } from '@/components/app-pressable'
+import { goByKind } from '@/lib/routes'
+import { Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 
 type Kind = 'person' | 'event' | 'country'
 
-export function RelatedLink({
+export const RelatedLink = memo(function RelatedLink({
   kind,
   id,
   label,
@@ -16,12 +20,17 @@ export function RelatedLink({
   sublabel?: string | null
 }) {
   const router = useRouter()
+  const t = useTokens()
+  const styles = useMemo(() => makeStyles(t), [t])
   return (
-    <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-      onPress={() => router.push(`/${kind}/${id}` as any)}
+    <AppPressable
+      style={styles.row}
+      onPress={() => goByKind(router, kind, id)}
+      accessibilityRole="link"
+      accessibilityLabel={sublabel ? `${label} (${sublabel})` : label}
+      scaleTo={0.985}
     >
-      <View style={{ flex: 1 }}>
+      <View style={styles.body}>
         <Text style={styles.label} numberOfLines={1}>
           {label}
         </Text>
@@ -31,22 +40,24 @@ export function RelatedLink({
           </Text>
         )}
       </View>
-      <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
-    </Pressable>
+      <Ionicons name="chevron-forward" size={16} color={t.text.soft} />
+    </AppPressable>
   )
-}
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    gap: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e2e8f0',
-  },
-  rowPressed: { backgroundColor: '#f8fafc' },
-  label: { fontSize: 14, color: '#0f172a', fontWeight: '500' },
-  sub: { fontSize: 12, color: '#64748b', marginTop: 2 },
 })
+
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.xs,
+      gap: Spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.border.subtle,
+    },
+    body: { flex: 1 },
+    label: { ...Type.bodySm, color: t.text.primary, fontWeight: '500' },
+    sub: { ...Type.captionSm, color: t.text.muted, marginTop: 2 },
+  })
+}

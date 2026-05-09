@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import { ActivityIndicator, View } from 'react-native'
 import { useRouter, useSegments } from 'expo-router'
 import { useAuth } from '@/lib/auth-context'
+import { goHome, goLogin } from '@/lib/routes'
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const { status } = useAuth()
@@ -13,9 +14,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const first = segments[0]
     const inLogin = first === 'login'
     if (status === 'signedOut' && !inLogin) {
-      router.replace('/login')
+      goLogin(router)
     } else if (status === 'signedIn' && inLogin) {
-      router.replace('/')
+      goHome(router)
     }
   }, [status, segments, router])
 

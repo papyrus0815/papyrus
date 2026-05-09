@@ -1,6 +1,7 @@
+import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Tokens } from '@/constants/theme'
+import { Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 
 export function PageHeader({
   title,
@@ -11,10 +12,12 @@ export function PageHeader({
   subtitle?: string
   right?: React.ReactNode
 }) {
+  const t = useTokens()
+  const styles = useMemo(() => makeStyles(t), [t])
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
       <View style={styles.row}>
-        <View style={{ flex: 1 }}>
+        <View style={styles.titleWrap}>
           <Text style={styles.title}>{title}</Text>
           {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         </View>
@@ -24,16 +27,19 @@ export function PageHeader({
   )
 }
 
-const styles = StyleSheet.create({
-  safe: { backgroundColor: Tokens.surface.raised },
-  row: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
-  },
-  title: { fontSize: 28, fontWeight: '800', color: Tokens.text.primary, letterSpacing: -0.4 },
-  subtitle: { fontSize: 13, color: Tokens.text.muted, marginTop: 2 },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    safe: { backgroundColor: t.surface.canvas },
+    row: {
+      paddingHorizontal: Spacing.base,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.md,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: Spacing.md,
+    },
+    titleWrap: { flex: 1 },
+    title: { ...Type.displayXl, color: t.text.primary },
+    subtitle: { ...Type.bodySm, color: t.text.muted, marginTop: 2 },
+  })
+}

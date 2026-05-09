@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { RichText } from './rich-text'
-import { Tokens } from '@/constants/theme'
+import { Radius, Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 import type { TimelineEntry, TimelineKind } from '@/lib/timeline-builder'
 
 const KIND_LABEL: Record<TimelineKind, string> = {
@@ -15,18 +15,6 @@ const KIND_LABEL: Record<TimelineKind, string> = {
   'event-participation': '사건',
   'family-birth': '가족',
   'family-death': '가족',
-}
-
-const KIND_ICON: Record<TimelineKind, keyof typeof Ionicons.glyphMap> = {
-  'ego-birth': 'sparkles',
-  'ego-death': 'flower',
-  marriage: 'heart',
-  reign: 'ribbon',
-  tenure: 'briefcase',
-  'life-event': 'bookmark',
-  'event-participation': 'flag',
-  'family-birth': 'people',
-  'family-death': 'people',
 }
 
 type Group = { year: string; items: TimelineEntry[] }
@@ -44,6 +32,8 @@ export function TimelineList({
   entries: TimelineEntry[]
   onPress: (entry: TimelineEntry) => void
 }) {
+  const t = useTokens()
+  const styles = useMemo(() => makeStyles(t), [t])
   const groups = useMemo<Group[]>(() => {
     const map = new Map<string, TimelineEntry[]>()
     const orderedKeys: string[] = []
@@ -68,8 +58,15 @@ export function TimelineList({
             <Text style={styles.yearCount}>{g.items.length}</Text>
           </View>
           <View style={styles.itemsCol}>
-            {g.items.map((it) => (
-              <Item key={it.key} entry={it} onPress={onPress} />
+            {g.items.map((it, idx) => (
+              <Item
+                key={it.key}
+                entry={it}
+                onPress={onPress}
+                t={t}
+                styles={styles}
+                isLast={idx === g.items.length - 1}
+              />
             ))}
           </View>
         </View>
@@ -81,36 +78,41 @@ export function TimelineList({
 function Item({
   entry,
   onPress,
+  t,
+  styles,
+  isLast,
 }: {
   entry: TimelineEntry
   onPress: (entry: TimelineEntry) => void
+  t: TokenSet
+  styles: ReturnType<typeof makeStyles>
+  isLast: boolean
 }) {
   const dateText =
     entry.endLabel && entry.endLabel !== entry.dateLabel
       ? `${entry.dateLabel} ~ ${entry.endLabel}`
       : entry.dateLabel
-  const Wrapper: any = entry.link ? Pressable : View
-  return (
-    <Wrapper
-      style={({ pressed }: { pressed?: boolean }) => [styles.card, pressed && styles.cardPressed]}
-      onPress={entry.link ? () => onPress(entry) : undefined}
-    >
-      <View style={[styles.iconBubble, { backgroundColor: entry.color }]}>
-        <Ionicons name={KIND_ICON[entry.kind]} size={14} color="#fff" />
+  const dotColor = t.timeline[entry.kind]
+  const titleText = entry.title?.trim() || '(제목 없음)'
+  const a11yLabel = `${KIND_LABEL[entry.kind]}, ${dateText}, ${titleText}`
+  const inner = (
+    <>
+      <View style={styles.rail}>
+        <View style={[styles.dot, { backgroundColor: dotColor }]} />
+        {!isLast && <View style={styles.railLine} />}
       </View>
-      <View style={{ flex: 1, gap: 4 }}>
-        <View style={styles.topRow}>
-          <View style={[styles.kindChip, { backgroundColor: hexAlpha(entry.color, 0.15) }]}>
-            <Text style={[styles.kindChipText, { color: entry.color }]}>{KIND_LABEL[entry.kind]}</Text>
-          </View>
+      <View style={styles.itemBody}>
+        <Text style={styles.title} numberOfLines={3}>
+          {titleText}
+        </Text>
+        <View style={styles.metaRow}>
+          <Text style={[styles.kindText, { color: dotColor }]}>{KIND_LABEL[entry.kind]}</Text>
+          <Text style={styles.metaSep}>·</Text>
           <Text style={styles.date} numberOfLines={1}>{dateText}</Text>
           {entry.link && (
-            <Ionicons name="chevron-forward" size={14} color={Tokens.text.soft} />
+            <Ionicons name="chevron-forward" size={12} color={t.text.soft} />
           )}
         </View>
-        <Text style={styles.title} numberOfLines={2}>
-          {entry.title}
-        </Text>
         {entry.subtitle ? (
           <Text style={styles.subtitle} numberOfLines={2}>
             {entry.subtitle}
@@ -122,69 +124,85 @@ function Item({
           </View>
         ) : null}
       </View>
-    </Wrapper>
+    </>
+  )
+  if (entry.link) {
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        onPress={() => onPress(entry)}
+        accessibilityRole="button"
+        accessibilityLabel={a11yLabel}
+        accessibilityHint="자세히 보기"
+      >
+        {inner}
+      </Pressable>
+    )
+  }
+  return (
+    <View style={styles.row} accessible accessibilityLabel={a11yLabel}>
+      {inner}
+    </View>
   )
 }
 
-/** hex 색상에 알파 적용. #rrggbb만 가정. */
-function hexAlpha(hex: string, alpha: number): string {
-  if (!hex.startsWith('#') || hex.length !== 7) return hex
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    group: { marginBottom: Spacing.lg },
+    yearRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      marginBottom: Spacing.sm,
+    },
+    yearText: {
+      ...Type.titleMd,
+      fontSize: 18,
+      lineHeight: 24,
+      color: t.text.primary,
+      minWidth: 64,
+    },
+    yearLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: t.border.subtle },
+    yearCount: {
+      ...Type.badge,
+      color: t.text.muted,
+      backgroundColor: t.surface.pressed,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: Radius.xs,
+      minWidth: 22,
+      textAlign: 'center',
+    },
+    itemsCol: {},
+    row: {
+      flexDirection: 'row',
+      gap: Spacing.md,
+      paddingVertical: Spacing.sm,
+    },
+    rowPressed: { opacity: 0.6 },
+    rail: {
+      width: 12,
+      alignItems: 'center',
+    },
+    dot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      marginTop: 6,
+    },
+    railLine: {
+      flex: 1,
+      width: 2,
+      backgroundColor: t.border.subtle,
+      marginTop: 4,
+    },
+    itemBody: { flex: 1, gap: Spacing.xxs, paddingBottom: Spacing.xs },
+    title: { ...Type.titleMd, color: t.text.primary },
+    metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+    kindText: { fontSize: 12, fontWeight: '700' },
+    metaSep: { fontSize: 12, color: t.text.soft },
+    date: { fontSize: 12, fontWeight: '600', color: t.text.secondary },
+    subtitle: { fontSize: 13, color: t.text.muted },
+    body: { marginTop: 4 },
+  })
 }
-
-const styles = StyleSheet.create({
-  group: { marginBottom: 16 },
-  yearRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  yearText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Tokens.text.primary,
-    minWidth: 56,
-  },
-  yearLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: Tokens.border.subtle },
-  yearCount: {
-    fontSize: 11,
-    color: Tokens.text.muted,
-    fontWeight: '600',
-    backgroundColor: Tokens.surface.pressed,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 6,
-    minWidth: 20,
-    textAlign: 'center',
-  },
-  itemsCol: { gap: 8 },
-  card: {
-    flexDirection: 'row',
-    gap: 10,
-    padding: 12,
-    backgroundColor: Tokens.surface.raised,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Tokens.border.subtle,
-  },
-  cardPressed: { backgroundColor: Tokens.surface.canvas },
-  iconBubble: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  kindChip: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
-  kindChipText: { fontSize: 10, fontWeight: '700' },
-  date: { flex: 1, fontSize: 12, fontWeight: '600', color: Tokens.text.secondary },
-  title: { fontSize: 14, fontWeight: '600', color: Tokens.text.primary },
-  subtitle: { fontSize: 12, color: Tokens.text.muted },
-  body: { marginTop: 4 },
-})

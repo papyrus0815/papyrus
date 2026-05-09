@@ -1,80 +1,131 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
+import { Ionicons } from '@expo/vector-icons'
+import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
+import * as Haptics from 'expo-haptics'
+import { useQuery } from '@tanstack/react-query'
+import { AppPressable } from '@/components/app-pressable'
+import { InitialAvatar } from '@/components/initial-avatar'
 import { api } from '@/lib/api'
 import { formatDateString } from '@/lib/format'
 import { imageUrl } from '@/lib/image-url'
+import { EmptyState } from '@/components/empty-state'
 import { ListSearchBar } from '@/components/list-search-bar'
+import { ListErrorView } from '@/components/list-error-view'
 import { PageHeader } from '@/components/page-header'
-import { Tokens } from '@/constants/theme'
+import { SearchHistoryChips } from '@/components/search-history-chips'
+import { SkeletonList } from '@/components/skeleton'
+import { useTabScrollToTop } from '@/hooks/use-tab-scroll-to-top'
+import { useSearchHistory } from '@/lib/search-history'
+import { SEARCH_DEBOUNCE_MS, useDebouncedValue } from '@/lib/use-debounced-value'
+import { Elevation, Radius, Spacing, Tokens, Type, useTokens } from '@/constants/theme'
+import { errorMessage } from '@/lib/error'
+import { goEvent, goEventEdit } from '@/lib/routes'
 import type { EventListItem } from '@/lib/dto'
 
 export default function EventsScreen() {
   const router = useRouter()
-  const [items, setItems] = useState<EventListItem[]>([])
+  const t = useTokens()
+  const listRef = useRef<FlatList<EventListItem>>(null)
+  useTabScrollToTop(listRef)
+  const { items: searchHistory, push: pushHistory, remove: removeHistory, clear: clearHistory } =
+    useSearchHistory('events')
   const [query, setQuery] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setError(null)
-    try {
-      const res = await api.get<EventListItem[] | { data?: EventListItem[]; items?: EventListItem[] }>(
-        '/events',
-        { params: { limit: 200 } },
-      )
-      const list = Array.isArray(res.data)
-        ? res.data
-        : res.data.data ?? res.data.items ?? []
-      setItems(list)
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? err?.message ?? 'failed to load')
-    }
-  }, [])
+  const eventsQuery = useQuery({
+    queryKey: ['events', 'list'],
+    queryFn: async () => {
+      const res = await api.get<EventListItem[]>('/events', { params: { limit: 200 } })
+      return Array.isArray(res.data) ? res.data : []
+    },
+  })
 
-  useEffect(() => {
-    load().finally(() => setLoading(false))
-  }, [load])
+  const items = eventsQuery.data ?? []
+  const loading = eventsQuery.isLoading
+  const refreshing = eventsQuery.isRefetching
+  const error = eventsQuery.error ? errorMessage(eventsQuery.error) : null
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }, [load])
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    await eventsQuery.refetch()
+  }, [eventsQuery])
 
+  const load = useCallback(() => {
+    void eventsQuery.refetch()
+  }, [eventsQuery])
+
+  const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS)
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    const q = debouncedQuery.trim().toLowerCase()
     if (!q) return items
     return items.filter((e) =>
       `${e.title ?? ''}${e.description ?? ''}${e.location ?? ''}${e.category?.name ?? ''}${(e.keywords ?? []).join(' ')}`
         .toLowerCase()
         .includes(q),
     )
-  }, [items, query])
+  }, [items, debouncedQuery])
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
+      <View style={styles.root}>
+        <PageHeader title="사건" />
+        <SkeletonList count={6} />
       </View>
     )
   }
 
   return (
     <View style={styles.root}>
-      <PageHeader title="사건" subtitle={`${filtered.length}건`} />
+      <PageHeader
+        title="사건"
+        subtitle={`${filtered.length}건`}
+        right={
+          <AppPressable
+            onPress={() => goEventEdit(router)}
+            accessibilityLabel="사건 등록"
+            accessibilityRole="button"
+            style={styles.addBtn}
+          >
+            <Ionicons name="add" size={22} color={Tokens.brand.onPrimary} />
+          </AppPressable>
+        }
+      />
       <ListSearchBar value={query} onChange={setQuery} placeholder="제목·키워드·장소 검색" />
+      {!query && (
+        <SearchHistoryChips
+          items={searchHistory}
+          onSelect={(q) => setQuery(q)}
+          onRemove={removeHistory}
+          onClear={clearHistory}
+          suggestions={['임진왜란', '갑오개혁', '3.1 운동', '병자호란', '한국전쟁']}
+        />
+      )}
       <FlatList
+        ref={listRef}
         data={filtered}
         keyExtractor={(it) => String(it.id)}
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        keyboardDismissMode="on-drag"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.brand.primary}
+            colors={[t.brand.primary]}
+          />
+        }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>{error ?? '사건이 없습니다'}</Text>
-          </View>
+          error ? (
+            <ListErrorView message={error} onRetry={load} />
+          ) : (
+            <EmptyState
+              icon="time-outline"
+              title={query ? '조건에 맞는 사건 없음' : '사건이 없습니다'}
+              subtitle={query ? '다른 키워드로 검색해보세요' : '등록된 사건이 아직 없어요'}
+            />
+          )
         }
         renderItem={({ item }) => {
           const start = formatDateString(item.startDate, item.startDatePrecision)
@@ -82,35 +133,62 @@ export default function EventsScreen() {
           const range = start || end ? `${start ?? '?'} ~ ${end ?? '?'}` : null
           const thumb = imageUrl(item.thumbnailUrl ?? item.thumbnail)
           return (
-            <Pressable
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-              onPress={() => router.push(`/event/${item.id}` as any)}
+            <AppPressable
+              style={styles.card}
+              onPress={() => {
+                if (query.trim()) pushHistory(query)
+                goEvent(router, item.id)
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={item.title ?? `사건 ${item.id}`}
             >
-              {thumb && (
-                <Image
-                  source={{ uri: thumb }}
-                  style={styles.thumb}
-                  contentFit="cover"
-                  transition={120}
-                  cachePolicy="memory-disk"
+              <View style={styles.heroWrap}>
+                {thumb ? (
+                  <Image
+                    source={{ uri: thumb }}
+                    style={styles.hero}
+                    contentFit="cover"
+                    transition={120}
+                    cachePolicy="memory-disk"
+                  />
+                ) : (
+                  <InitialAvatar
+                    seed={item.id}
+                    initial={(item.title ?? '?').slice(0, 1)}
+                    fontSize={64}
+                    style={styles.hero}
+                  />
+                )}
+                <LinearGradient
+                  colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.4)']}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 0, y: 1 }}
+                  style={styles.heroGradient}
+                  pointerEvents="none"
                 />
-              )}
-              <View style={{ flex: 1, gap: 4 }}>
+                {item.category?.name && (
+                  <View style={styles.heroCategoryBadge}>
+                    <Text style={styles.heroCategoryText}>
+                      {item.category.name}
+                    </Text>
+                  </View>
+                )}
+                {range && <Text style={styles.heroDate}>{range}</Text>}
+              </View>
+              <View style={styles.body}>
                 <Text style={styles.cardTitle} numberOfLines={2}>
                   {item.title ?? `(no title) #${item.id}`}
                 </Text>
-                {range && <Text style={styles.cardMeta}>{range}</Text>}
-                <View style={styles.metaRow}>
-                  {item.category?.name && <Text style={styles.tag}>{item.category.name}</Text>}
-                  {item.location && <Text style={styles.cardMeta} numberOfLines={1}>📍 {item.location}</Text>}
-                </View>
+                {item.location && (
+                  <Text style={styles.cardMeta} numberOfLines={1}>📍 {item.location}</Text>
+                )}
                 {item.description && (
                   <Text style={styles.cardSummary} numberOfLines={2}>
                     {item.description}
                   </Text>
                 )}
               </View>
-            </Pressable>
+            </AppPressable>
           )
         }}
       />
@@ -126,23 +204,64 @@ const styles = StyleSheet.create({
   emptyText: { color: Tokens.text.soft, fontSize: 14 },
   card: {
     backgroundColor: Tokens.surface.raised,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: Tokens.border.subtle,
-    flexDirection: 'row',
-    gap: 12,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    ...Elevation.card,
   },
-  cardPressed: { backgroundColor: Tokens.surface.canvas },
-  thumb: { width: 64, height: 64, borderRadius: 8, backgroundColor: Tokens.border.subtle },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: Tokens.text.primary },
+  cardPressed: { opacity: 0.92 },
+  // hero (사진-우선)
+  heroWrap: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: Tokens.surface.pressed,
+  },
+  hero: { width: '100%', height: '100%' },
+  heroGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '60%',
+  },
+  heroCategoryBadge: {
+    position: 'absolute',
+    top: Spacing.sm,
+    left: Spacing.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  heroCategoryText: { fontSize: 11, fontWeight: '700', color: Tokens.text.primary },
+  heroDate: {
+    position: 'absolute',
+    bottom: Spacing.sm,
+    left: Spacing.sm,
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  body: { padding: Spacing.md, gap: 4 },
+  addBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 9999,
+    backgroundColor: Tokens.brand.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTitle: { ...Type.titleMd, color: Tokens.text.primary },
   cardMeta: { fontSize: 12, color: Tokens.text.muted },
   cardSummary: { fontSize: 13, color: Tokens.text.secondary, marginTop: 2 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   tag: {
     fontSize: 11,
-    color: Tokens.accent.blue,
-    backgroundColor: '#dbeafe',
+    color: Tokens.state.info.fg,
+    backgroundColor: Tokens.state.info.bg,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,

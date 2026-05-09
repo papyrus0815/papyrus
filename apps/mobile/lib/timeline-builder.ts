@@ -134,14 +134,14 @@ export function buildPersonTimeline(
   }
 
   // 군주 재위
-  for (const r of detail.sovereignReigns ?? []) {
+  ;(detail.sovereignReigns ?? []).forEach((r, idx) => {
     const sortKey = isoToKey(r.startDate)
-    if (sortKey == null) continue
+    if (sortKey == null) return
     const country = r.country?.name ?? r.historicalCountry?.name
     const startLabel = formatDateString(r.startDate) ?? '?'
     const endLabel = r.endDate ? formatDateString(r.endDate) : '재위 중'
     items.push({
-      key: `reign-${r.id ?? sortKey}`,
+      key: `reign-${r.id ?? `${sortKey}-${idx}`}`,
       kind: 'reign',
       sortKey,
       dateLabel: startLabel,
@@ -152,12 +152,12 @@ export function buildPersonTimeline(
       color: KIND_COLOR['reign'],
       link: r.historicalCountryId ? { kind: 'country', id: r.historicalCountryId } : null,
     })
-  }
+  })
 
   // 정부 직책
-  for (const g of detail.governmentPositions ?? []) {
+  ;(detail.governmentPositions ?? []).forEach((g, idx) => {
     const sortKey = isoToKey(g.startDate)
-    if (sortKey == null) continue
+    if (sortKey == null) return
     const country = g.country?.name ?? g.historicalCountry?.name
     const position =
       g.positionDefinition?.name ??
@@ -168,7 +168,7 @@ export function buildPersonTimeline(
     const startLabel = formatDateString(g.startDate, g.startDatePrecision) ?? '?'
     const endLabel = g.endDate ? formatDateString(g.endDate, g.endDatePrecision) : '재임 중'
     items.push({
-      key: `tenure-${g.id ?? sortKey}`,
+      key: `tenure-${g.id ?? `${sortKey}-${idx}`}`,
       kind: 'tenure',
       sortKey,
       dateLabel: startLabel,
@@ -178,7 +178,7 @@ export function buildPersonTimeline(
       body: g.notes,
       color: KIND_COLOR['tenure'],
     })
-  }
+  })
 
   // 결혼 (PersonSpouse.marriageStartDate)
   for (const sr of detail.spouseRelations ?? []) {
@@ -201,11 +201,18 @@ export function buildPersonTimeline(
   }
 
   // 가족 이벤트 — 부모/자녀/형제자매 출생·사망 (있는 경우만)
+  // 같은 person.id가 여러 관계로 들어올 가능성이 있어 첫 등장만 유지 (key 충돌 방지)
   const familyMembers: Array<{ p: NonNullable<PersonDetail['father']>; relation: string }> = []
-  if (detail.father) familyMembers.push({ p: detail.father, relation: '아버지' })
-  if (detail.mother) familyMembers.push({ p: detail.mother, relation: '어머니' })
-  for (const c of detail.children ?? []) familyMembers.push({ p: c, relation: '자녀' })
-  for (const s of detail.siblings ?? []) familyMembers.push({ p: s, relation: '형제자매' })
+  const seenFamilyIds = new Set<string>()
+  const pushFamily = (p: NonNullable<PersonDetail['father']> | null | undefined, relation: string) => {
+    if (!p || seenFamilyIds.has(p.id)) return
+    seenFamilyIds.add(p.id)
+    familyMembers.push({ p, relation })
+  }
+  pushFamily(detail.father, '아버지')
+  pushFamily(detail.mother, '어머니')
+  for (const c of detail.children ?? []) pushFamily(c, '자녀')
+  for (const s of detail.siblings ?? []) pushFamily(s, '형제자매')
 
   for (const fm of familyMembers) {
     const p = fm.p
@@ -245,7 +252,7 @@ export function buildPersonTimeline(
         sortKey: isoToKey(it.startDate),
         dateLabel: formatDateString(it.startDate, it.startDatePrecision) ?? '시점 미상',
         endLabel: it.endDate ? formatDateString(it.endDate, it.endDatePrecision) : null,
-        title: it.title,
+        title: it.title?.trim() || '(제목 없음)',
         subtitle: it.category ? `#${it.category}` : null,
         body: it.description,
         color: KIND_COLOR['life-event'],
@@ -257,7 +264,7 @@ export function buildPersonTimeline(
         sortKey: isoToKey(it.event.startDate),
         dateLabel: formatDateString(it.event.startDate, it.event.startDatePrecision) ?? '시점 미상',
         endLabel: it.event.endDate ? formatDateString(it.event.endDate, it.event.endDatePrecision) : null,
-        title: it.event.title,
+        title: it.event.title?.trim() || '(제목 없음)',
         subtitle: it.role ?? null,
         body: it.note,
         color: KIND_COLOR['event-participation'],

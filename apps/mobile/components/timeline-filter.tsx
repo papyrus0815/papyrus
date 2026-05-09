@@ -1,5 +1,6 @@
+import { useMemo } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Tokens } from '@/constants/theme'
+import { Radius, Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 import type { TimelineKind } from '@/lib/timeline-builder'
 
 export type TimelineGroup = 'self' | 'rule' | 'marriage' | 'life' | 'event' | 'family'
@@ -40,6 +41,8 @@ export function TimelineFilter({
   onToggle: (group: TimelineGroup) => void
   onReset: () => void
 }) {
+  const t = useTokens()
+  const styles = useMemo(() => makeStyles(t), [t])
   const groups = (Object.keys(TIMELINE_GROUP_KINDS) as TimelineGroup[]).filter((g) =>
     available.has(g),
   )
@@ -78,19 +81,21 @@ export function TimelineFilter({
   )
 }
 
-const styles = StyleSheet.create({
-  scroll: { marginBottom: 8 },
-  row: { gap: 6, paddingVertical: 4 },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
-    backgroundColor: Tokens.surface.raised,
-    borderWidth: 1,
-    borderColor: Tokens.border.subtle,
-  },
-  chipActive: { backgroundColor: Tokens.text.primary, borderColor: Tokens.text.primary },
-  chipPressed: { opacity: 0.7 },
-  chipText: { fontSize: 12, color: Tokens.text.secondary, fontWeight: '600' },
-  chipTextActive: { color: Tokens.text.inverse },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    scroll: { marginBottom: Spacing.sm },
+    row: { gap: 6, paddingVertical: Spacing.xs },
+    chip: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 6,
+      borderRadius: Radius.full,
+      backgroundColor: t.surface.raised,
+      borderWidth: 1,
+      borderColor: t.border.subtle,
+    },
+    chipActive: { backgroundColor: t.brand.primary, borderColor: t.brand.primary },
+    chipPressed: { opacity: 0.7 },
+    chipText: { ...Type.captionSm, color: t.text.secondary, fontWeight: '600' },
+    chipTextActive: { color: t.brand.onPrimary },
+  })
+}

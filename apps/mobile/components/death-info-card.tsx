@@ -1,8 +1,9 @@
+import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { RichText } from './rich-text'
 import { formatYMD, placeText } from '@/lib/format'
-import { Tokens } from '@/constants/theme'
+import { Radius, Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 import type { PersonDetail } from '@/lib/dto'
 
 const DEATH_TYPE_LABELS: Record<string, string> = {
@@ -23,6 +24,9 @@ function deathTypeLabel(type?: string | null) {
 }
 
 export function DeathInfoCard({ data }: { data: PersonDetail }) {
+  const tokens = useTokens()
+  const styles = useMemo(() => makeStyles(tokens), [tokens])
+
   if (data.isAlive) return null
   const dateLabel = data.isDeathDateUnknown
     ? '미상'
@@ -39,7 +43,7 @@ export function DeathInfoCard({ data }: { data: PersonDetail }) {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Ionicons name="alert-circle-outline" size={18} color={Tokens.text.danger} />
+        <Ionicons name="alert-circle-outline" size={18} color={tokens.state.negative.fg} />
         <Text style={styles.title}>사망 정보</Text>
         {typeLabel && (
           <View style={styles.typeBadge}>
@@ -47,9 +51,9 @@ export function DeathInfoCard({ data }: { data: PersonDetail }) {
           </View>
         )}
       </View>
-      {dateLabel && <MetaRow label="일자" value={dateLabel} />}
-      {place && <MetaRow label="장소" value={place} />}
-      {data.deathCause && <MetaRow label="원인" value={data.deathCause} />}
+      {dateLabel && <MetaRow styles={styles} label="일자" value={dateLabel} />}
+      {place && <MetaRow styles={styles} label="장소" value={place} />}
+      {data.deathCause && <MetaRow styles={styles} label="원인" value={data.deathCause} />}
       {data.deathNote && (
         <View style={{ marginTop: 6 }}>
           <RichText html={data.deathNote} />
@@ -59,7 +63,15 @@ export function DeathInfoCard({ data }: { data: PersonDetail }) {
   )
 }
 
-function MetaRow({ label, value }: { label: string; value: string }) {
+function MetaRow({
+  styles,
+  label,
+  value,
+}: {
+  styles: ReturnType<typeof makeStyles>
+  label: string
+  value: string
+}) {
   return (
     <View style={styles.metaRow}>
       <Text style={styles.metaLabel}>{label}</Text>
@@ -68,21 +80,29 @@ function MetaRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fef2f2',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    marginBottom: 12,
-    gap: 4,
-  },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  title: { fontSize: 13, fontWeight: '700', color: '#991b1b', flex: 1 },
-  typeBadge: { backgroundColor: '#fee2e2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
-  typeBadgeText: { fontSize: 11, color: '#991b1b', fontWeight: '700' },
-  metaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 2 },
-  metaLabel: { width: 60, fontSize: 12, color: '#991b1b', fontWeight: '600' },
-  metaValue: { flex: 1, fontSize: 13, color: '#7f1d1d' },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    // 빨간 카드 → 회색 카드. 위험 신호는 헤더 아이콘만 danger 색으로.
+    card: {
+      backgroundColor: t.surface.raised,
+      borderRadius: Radius.md,
+      padding: Spacing.base,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.border.subtle,
+      marginBottom: Spacing.md,
+      gap: 4,
+    },
+    header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginBottom: Spacing.xs },
+    title: { ...Type.sectionLabel, color: t.text.muted, flex: 1 },
+    typeBadge: {
+      backgroundColor: t.surface.pressed,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: Radius.xs,
+    },
+    typeBadgeText: { ...Type.badge, color: t.text.secondary },
+    metaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md, paddingVertical: 2 },
+    metaLabel: { ...Type.captionSm, width: 60, color: t.text.muted, fontWeight: '600' },
+    metaValue: { ...Type.bodySm, flex: 1, color: t.text.primary },
+  })
+}

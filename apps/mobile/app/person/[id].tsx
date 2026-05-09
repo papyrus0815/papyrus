@@ -1,32 +1,40 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ActivityIndicator,
+  Animated,
   Pressable,
   RefreshControl,
-  ScrollView,
   Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native'
-import { Image } from 'expo-image'
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
+import { BlurView } from 'expo-blur'
+import * as Haptics from 'expo-haptics'
+import RAnimated from 'react-native-reanimated'
+import { useQuery } from '@tanstack/react-query'
+import { useColorScheme } from '@/hooks/use-color-scheme'
+import { useHeroParallax } from '@/hooks/use-hero-parallax'
+import { useBookmarks } from '@/lib/bookmarks'
 import { api } from '@/lib/api'
+import { BookmarkHeart } from '@/components/bookmark-heart'
 import { DetailRow, DetailSection } from '@/components/detail-section'
+import { ExpandableText } from '@/components/expandable-text'
 import { RelatedLink } from '@/components/related-link'
 import { RichText } from '@/components/rich-text'
 import { TabBar, type TabItem } from '@/components/tab-bar'
 import { PersonStatsCard } from '@/components/person-stats-card'
-import type { FamilyTreeData } from '@/components/family-tree-view'
+import type { FamilyTreeData } from '@/lib/family-tree'
 import { GenealogySvg } from '@/components/genealogy-svg'
-import { KpiStrip, type KpiEntry } from '@/components/kpi-strip'
-import { FamilyBadges } from '@/components/family-badges'
-import { RegnalTitleRow } from '@/components/regnal-title-row'
 import { DeathInfoCard } from '@/components/death-info-card'
 import { UnifiedTenureCardList } from '@/components/unified-tenure-card'
 import { SameDynastySection } from '@/components/same-dynasty-section'
 import { AdjacentPersons } from '@/components/adjacent-persons'
+import { PersonHero } from '@/components/person-detail/person-hero'
+import { PaneLoading } from '@/components/pane-loading'
+import { PaneErrorBlock } from '@/components/pane-error-block'
+import { EmptyMessage } from '@/components/empty-message'
 import {
   TimelineFilter,
   TIMELINE_GROUP_KINDS,
@@ -35,13 +43,14 @@ import {
 } from '@/components/timeline-filter'
 import { TimelineList } from '@/components/timeline-list'
 import { displayName, formatDateString, formatYMD, lifespan, placeText } from '@/lib/format'
-import { lifespanYears, totalReignAndTenureYears } from '@/lib/age-utils'
 import { imageUrl } from '@/lib/image-url'
 import { buildPersonTimeline, type ExtraTimelineItem, type TimelineEntry } from '@/lib/timeline-builder'
 import type { PersonStats, PersonTraitAssignment } from '@/lib/person-stats'
 import { getPersonPreview } from '@/lib/preview-cache'
 import { relationshipLabel } from '@/lib/relationship-label'
-import { Tokens } from '@/constants/theme'
+import { Radius, Spacing, Tokens, Type } from '@/constants/theme'
+import { errorMessage } from '@/lib/error'
+import { goByKind, goPersonEdit } from '@/lib/routes'
 import type { PersonDetail, PersonListItem } from '@/lib/dto'
 
 type TabKey = 'overview' | 'family' | 'politics' | 'timeline' | 'relations'
@@ -77,117 +86,79 @@ type HumanRelationship = {
   }>
 }
 
-type Resource<T> = {
-  data: T | null
-  loading: boolean
-  error: string | null
-}
-
-function emptyResource<T>(): Resource<T> {
-  return { data: null, loading: false, error: null }
-}
-
 function personLabel(p?: { name: string; surname?: string | null } | null) {
   if (!p) return '?'
   return p.surname ? `${p.surname}${p.name}` : p.name
 }
 
-function errorMessage(err: unknown): string {
-  const e = err as { response?: { data?: { message?: string } }; message?: string }
-  return e?.response?.data?.message ?? e?.message ?? 'failed to load'
-}
-
 export default function PersonDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const router = useRouter()
+  const colorScheme = useColorScheme()
+  const isDark = colorScheme === 'dark'
+  // Hero parallax용 scrollY 공유값 + 핸들러
+  const { scrollY, onScroll } = useHeroParallax()
+  // 즐겨찾기
+  const { has: isBookmarked, toggle: toggleBookmark } = useBookmarks('persons')
 
   const preview = useMemo<PersonListItem | null>(() => (id ? getPersonPreview(id) : null), [id])
-
-  const [detail, setDetail] = useState<Resource<PersonDetail>>(emptyResource)
-  const [stats, setStats] = useState<Resource<PersonStats>>(emptyResource)
-  const [traits, setTraits] = useState<Resource<PersonTraitAssignment[]>>(emptyResource)
-  const [familyTree, setFamilyTree] = useState<Resource<FamilyTreeData>>(emptyResource)
-  const [timeline, setTimeline] = useState<Resource<ExtraTimelineItem[]>>(emptyResource)
-  const [relations, setRelations] = useState<Resource<HumanRelationship[]>>(emptyResource)
 
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [visited, setVisited] = useState<Set<TabKey>>(() => new Set(['overview']))
   const [refreshing, setRefreshing] = useState(false)
 
-  // detail + stats/traits 즉시 fetch (overview에 필요)
-  const loadCore = useCallback(async () => {
-    if (!id) return
-    setDetail({ data: null, loading: true, error: null })
-    setStats({ data: null, loading: true, error: null })
-    setTraits({ data: null, loading: true, error: null })
-    const [d, s, t] = await Promise.allSettled([
-      api.get<PersonDetail>(`/persons/${id}/detail`),
-      api.get<PersonStats | null>(`/persons/${id}/my-stats`),
-      api.get<PersonTraitAssignment[]>(`/persons/${id}/my-traits`),
-    ])
-    setDetail(
-      d.status === 'fulfilled'
-        ? { data: d.value.data, loading: false, error: null }
-        : { data: null, loading: false, error: errorMessage(d.reason) },
-    )
-    setStats(
-      s.status === 'fulfilled'
-        ? { data: s.value.data ?? null, loading: false, error: null }
-        : { data: null, loading: false, error: errorMessage(s.reason) },
-    )
-    setTraits(
-      t.status === 'fulfilled'
-        ? { data: Array.isArray(t.value.data) ? t.value.data : [], loading: false, error: null }
-        : { data: null, loading: false, error: errorMessage(t.reason) },
-    )
-  }, [id])
-
-  const loadFamilyTree = useCallback(async () => {
-    if (!id) return
-    setFamilyTree({ data: null, loading: true, error: null })
-    try {
+  // detail/stats/traits — overview에 필요해 즉시 fetch. queryKey는 person/edit과 공유.
+  const detailQuery = useQuery({
+    queryKey: ['persons', 'detail', id],
+    queryFn: async () => {
+      const res = await api.get<PersonDetail>(`/persons/${id}/detail`)
+      return res.data
+    },
+    enabled: !!id,
+  })
+  const statsQuery = useQuery({
+    queryKey: ['persons', 'stats', id],
+    queryFn: async () => {
+      const res = await api.get<PersonStats | null>(`/persons/${id}/my-stats`)
+      return res.data ?? null
+    },
+    enabled: !!id,
+  })
+  const traitsQuery = useQuery({
+    queryKey: ['persons', 'traits', id],
+    queryFn: async () => {
+      const res = await api.get<PersonTraitAssignment[]>(`/persons/${id}/my-traits`)
+      return Array.isArray(res.data) ? res.data : []
+    },
+    enabled: !!id,
+  })
+  // family/timeline/relations — 해당 탭이 한 번이라도 방문되면 fetch (lazy)
+  const familyQuery = useQuery({
+    queryKey: ['persons', 'family', id],
+    queryFn: async () => {
       const res = await api.get<FamilyTreeData>(`/persons/${id}/family-tree`)
-      setFamilyTree({ data: res.data, loading: false, error: null })
-    } catch (err) {
-      setFamilyTree({ data: null, loading: false, error: errorMessage(err) })
-    }
-  }, [id])
-
-  const loadTimeline = useCallback(async () => {
-    if (!id) return
-    setTimeline({ data: null, loading: true, error: null })
-    try {
+      return res.data
+    },
+    enabled: !!id && visited.has('family'),
+  })
+  const timelineQuery = useQuery({
+    queryKey: ['persons', 'timeline', id],
+    queryFn: async () => {
       const res = await api.get<ExtraTimelineItem[]>(`/person-life-events/timeline/by-person/${id}`)
-      setTimeline({
-        data: Array.isArray(res.data) ? res.data : [],
-        loading: false,
-        error: null,
-      })
-    } catch (err) {
-      setTimeline({ data: null, loading: false, error: errorMessage(err) })
-    }
-  }, [id])
-
-  const loadRelations = useCallback(async () => {
-    if (!id) return
-    setRelations({ data: null, loading: true, error: null })
-    try {
+      return Array.isArray(res.data) ? res.data : []
+    },
+    enabled: !!id && visited.has('timeline'),
+  })
+  const relationsQuery = useQuery({
+    queryKey: ['persons', 'relations', id],
+    queryFn: async () => {
       const res = await api.get<HumanRelationship[]>(`/persons/${id}/human-relationships`)
-      setRelations({
-        data: Array.isArray(res.data) ? res.data : [],
-        loading: false,
-        error: null,
-      })
-    } catch (err) {
-      setRelations({ data: null, loading: false, error: errorMessage(err) })
-    }
-  }, [id])
+      return Array.isArray(res.data) ? res.data : []
+    },
+    enabled: !!id && visited.has('relations'),
+  })
 
-  useEffect(() => {
-    void loadCore()
-  }, [loadCore])
-
-  // 탭 첫 진입 시 lazy fetch
+  // 탭 첫 진입 시 visited 등록 — useQuery enabled가 자동으로 fetch 트리거
   useEffect(() => {
     if (!visited.has(activeTab)) {
       setVisited((prev) => {
@@ -196,37 +167,25 @@ export default function PersonDetailScreen() {
         return next
       })
     }
-    if (activeTab === 'family' && !familyTree.data && !familyTree.loading && !familyTree.error) {
-      void loadFamilyTree()
-    }
-    if (activeTab === 'timeline' && !timeline.data && !timeline.loading && !timeline.error) {
-      void loadTimeline()
-    }
-    if (activeTab === 'relations' && !relations.data && !relations.loading && !relations.error) {
-      void loadRelations()
-    }
-  }, [
-    activeTab,
-    visited,
-    familyTree,
-    timeline,
-    relations,
-    loadFamilyTree,
-    loadTimeline,
-    loadRelations,
-  ])
+  }, [activeTab, visited])
 
   const onRefresh = useCallback(async () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     setRefreshing(true)
-    const tasks: Promise<unknown>[] = [loadCore()]
-    if (visited.has('family')) tasks.push(loadFamilyTree())
-    if (visited.has('timeline')) tasks.push(loadTimeline())
-    if (visited.has('relations')) tasks.push(loadRelations())
+    const tasks: Promise<unknown>[] = [
+      detailQuery.refetch(),
+      statsQuery.refetch(),
+      traitsQuery.refetch(),
+    ]
+    if (visited.has('family')) tasks.push(familyQuery.refetch())
+    if (visited.has('timeline')) tasks.push(timelineQuery.refetch())
+    if (visited.has('relations')) tasks.push(relationsQuery.refetch())
     await Promise.allSettled(tasks)
     setRefreshing(false)
-  }, [loadCore, loadFamilyTree, loadTimeline, loadRelations, visited])
+  }, [detailQuery, statsQuery, traitsQuery, familyQuery, timelineQuery, relationsQuery, visited])
 
-  const headerSource: PersonDetail | PersonListItem | null = detail.data ?? preview
+  const detailError = detailQuery.error ? errorMessage(detailQuery.error) : null
+  const headerSource: PersonDetail | PersonListItem | null = detailQuery.data ?? preview
   const title = headerSource ? displayName(headerSource) : '...'
   const subTitle = headerSource ? lifespan(headerSource) : ''
   const profileImg = headerSource ? imageUrl(headerSource.profileImageUrl) : null
@@ -240,29 +199,37 @@ export default function PersonDetailScreen() {
     })
   }, [headerSource, title])
 
+  const detailData = detailQuery.data ?? null
   const timelineEntries = useMemo(
-    () => (detail.data ? buildPersonTimeline(detail.data, timeline.data ?? []) : []),
-    [detail.data, timeline.data],
+    () => (detailData ? buildPersonTimeline(detailData, timelineQuery.data ?? []) : []),
+    [detailData, timelineQuery.data],
   )
 
-  const familyCount = detail.data
-    ? (detail.data.father ? 1 : 0) +
-      (detail.data.mother ? 1 : 0) +
-      (detail.data.spouse ? 1 : 0) +
-      (detail.data.children?.length ?? 0) +
-      (detail.data.siblings?.length ?? 0)
-    : 0
-  const politicsCount = detail.data
-    ? (detail.data.sovereignReigns?.length ?? 0) + (detail.data.governmentPositions?.length ?? 0)
-    : 0
+  const { familyCount, politicsCount } = useMemo(() => {
+    if (!detailData) return { familyCount: 0, politicsCount: 0 }
+    return {
+      familyCount:
+        (detailData.father ? 1 : 0) +
+        (detailData.mother ? 1 : 0) +
+        (detailData.spouse ? 1 : 0) +
+        (detailData.children?.length ?? 0) +
+        (detailData.siblings?.length ?? 0),
+      politicsCount:
+        (detailData.sovereignReigns?.length ?? 0) +
+        (detailData.governmentPositions?.length ?? 0),
+    }
+  }, [detailData])
 
-  const tabs: TabItem[] = [
-    { key: 'overview', label: '개요' },
-    { key: 'family', label: '가족', badge: familyCount },
-    { key: 'politics', label: '정치', badge: politicsCount },
-    { key: 'timeline', label: '연보', badge: timelineEntries.length },
-    { key: 'relations', label: '관계', badge: relations.data?.length ?? 0 },
-  ]
+  const tabs: TabItem[] = useMemo(
+    () => [
+      { key: 'overview', label: '개요' },
+      { key: 'family', label: '가족', badge: familyCount },
+      { key: 'politics', label: '정치', badge: politicsCount },
+      { key: 'timeline', label: '연보', badge: timelineEntries.length },
+      { key: 'relations', label: '관계', badge: relationsQuery.data?.length ?? 0 },
+    ],
+    [familyCount, politicsCount, timelineEntries.length, relationsQuery.data?.length],
+  )
 
   return (
     <>
@@ -271,73 +238,111 @@ export default function PersonDetailScreen() {
           title,
           headerRight: () =>
             headerSource ? (
-              <View style={{ flexDirection: 'row', gap: 14 }}>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                {id && (
+                  <BookmarkHeart
+                    active={isBookmarked(id)}
+                    onToggle={() => toggleBookmark(id)}
+                    variant="flat"
+                    size={22}
+                    accessibilityLabel={`${title} 즐겨찾기`}
+                  />
+                )}
                 <Pressable
-                  onPress={() => router.push(`/person/edit?id=${id}` as any)}
+                  onPress={() => goPersonEdit(router, id)}
                   hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="인물 수정"
+                  style={({ pressed }) => [styles.headerIconBtn, pressed && styles.headerIconBtnPressed]}
                 >
-                  <Ionicons name="create-outline" size={22} color={Tokens.text.primary} />
+                  <Ionicons name="create-outline" size={20} color={Tokens.text.primary} />
                 </Pressable>
-                <Pressable onPress={onShare} hitSlop={8}>
-                  <Ionicons name="share-outline" size={22} color={Tokens.text.primary} />
+                <Pressable
+                  onPress={onShare}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="공유"
+                  style={({ pressed }) => [styles.headerIconBtn, pressed && styles.headerIconBtnPressed]}
+                >
+                  <Ionicons name="share-outline" size={20} color={Tokens.text.primary} />
                 </Pressable>
               </View>
             ) : null,
         }}
       />
-      <ScrollView
+      <RAnimated.ScrollView
         style={{ flex: 1, backgroundColor: Tokens.surface.canvas }}
         stickyHeaderIndices={[1]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Tokens.brand.primary}
+            colors={[Tokens.brand.primary]}
+          />
+        }
       >
         <PersonHero
           title={title}
           subTitle={subTitle}
           profileImg={profileImg}
           headerSource={headerSource}
-          detail={detail.data}
+          detail={detailQuery.data ?? null}
+          scrollY={scrollY}
         />
-        <TabBar tabs={tabs} active={activeTab} onChange={(k) => setActiveTab(k as TabKey)} />
+        <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={styles.tabBlur}>
+          <TabBar
+            tabs={tabs}
+            active={activeTab}
+            onChange={(k) => setActiveTab(k as TabKey)}
+            transparent
+          />
+        </BlurView>
         <View style={styles.tabContent}>
-          {detail.loading && !preview && (
-            <View style={styles.center}>
-              <ActivityIndicator size="large" />
-            </View>
-          )}
-          {detail.error && (
-            <ErrorBlock message={detail.error} onRetry={loadCore} />
+          {detailQuery.isLoading && !preview && <PaneLoading />}
+          {detailError && (
+            <PaneErrorBlock message={detailError} onRetry={() => void detailQuery.refetch()} />
           )}
 
           {/* 모든 탭은 keep-mounted: 첫 방문 후 데이터/스크롤 보존 */}
           <PaneVisible visible={activeTab === 'overview'}>
-            {detail.data && (
-              <OverviewTab data={detail.data} stats={stats.data} traits={traits.data ?? []} />
+            {detailQuery.data && (
+              <OverviewTab
+                data={detailQuery.data}
+                stats={statsQuery.data ?? null}
+                traits={traitsQuery.data ?? []}
+              />
             )}
           </PaneVisible>
 
           <PaneVisible visible={activeTab === 'family'}>
             {visited.has('family') && (
               <FamilyTab
-                data={detail.data}
-                resource={familyTree}
-                onRetry={loadFamilyTree}
+                data={detailQuery.data ?? null}
+                familyTree={familyQuery.data ?? null}
+                loading={familyQuery.isLoading}
+                error={familyQuery.error ? errorMessage(familyQuery.error) : null}
+                onRetry={() => void familyQuery.refetch()}
               />
             )}
           </PaneVisible>
 
           <PaneVisible visible={activeTab === 'politics'}>
-            {detail.data && <PoliticsTab data={detail.data} />}
+            {detailQuery.data && <PoliticsTab data={detailQuery.data} />}
           </PaneVisible>
 
           <PaneVisible visible={activeTab === 'timeline'}>
             {visited.has('timeline') && (
               <TimelineTabPane
-                detailReady={!!detail.data}
-                resource={timeline}
+                detailReady={!!detailQuery.data}
+                loading={timelineQuery.isLoading}
+                error={timelineQuery.error ? errorMessage(timelineQuery.error) : null}
                 entries={timelineEntries}
-                onRetry={loadTimeline}
+                onRetry={() => void timelineQuery.refetch()}
                 onPress={(it) =>
-                  it.link && router.push(`/${it.link.kind}/${it.link.id}` as any)
+                  it.link && goByKind(router, it.link.kind, it.link.id)
                 }
               />
             )}
@@ -346,125 +351,38 @@ export default function PersonDetailScreen() {
           <PaneVisible visible={activeTab === 'relations'}>
             {visited.has('relations') && (
               <RelationsTabPane
-                resource={relations}
-                onRetry={loadRelations}
+                items={relationsQuery.data ?? null}
+                loading={relationsQuery.isLoading}
+                error={relationsQuery.error ? errorMessage(relationsQuery.error) : null}
+                onRetry={() => void relationsQuery.refetch()}
                 subjectId={id ?? ''}
               />
             )}
           </PaneVisible>
         </View>
-      </ScrollView>
+      </RAnimated.ScrollView>
     </>
   )
 }
 
 function PaneVisible({ visible, children }: { visible: boolean; children: React.ReactNode }) {
-  return <View style={{ display: visible ? 'flex' : 'none' }}>{children}</View>
-}
-
-function PersonHero({
-  title,
-  subTitle,
-  profileImg,
-  headerSource,
-  detail,
-}: {
-  title: string
-  subTitle: string
-  profileImg: string | null
-  headerSource: PersonDetail | PersonListItem | null
-  detail: PersonDetail | null
-}) {
-  const kpiItems = useMemo<KpiEntry[]>(() => {
-    if (!detail) return []
-    const list: KpiEntry[] = []
-    if (detail.country?.name) list.push({ key: 'country', label: '국가', value: detail.country.name })
-    if (detail.gender) list.push({ key: 'gender', label: '성별', value: genderLabel(detail.gender) })
-    const span = lifespanYears(detail)
-    if (span != null && span > 0) {
-      list.push({
-        key: 'lifespan',
-        label: '생존',
-        value: detail.isAlive ? `${span}년 (생존)` : `${span}년`,
-      })
-    }
-    const totalReign = totalReignAndTenureYears(detail)
-    if (totalReign != null) {
-      list.push({ key: 'reign', label: '재임·재위', value: `약 ${totalReign}년` })
-    }
-    if (detail.dynasty?.name) list.push({ key: 'dynasty', label: '가문', value: detail.dynasty.name })
-    if (detail.religion?.name) list.push({ key: 'religion', label: '종교', value: detail.religion.name })
-    return list
-  }, [detail])
-
+  // 활성 탭만 fade 들어오게. 비활성은 display:none으로 마운트 유지하되 측정/터치 비활성.
+  // (스크롤 위치·내부 상태 보존을 위해 unmount 안 함)
+  const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current
+  useEffect(() => {
+    Animated.timing(opacity, {
+      toValue: visible ? 1 : 0,
+      duration: 160,
+      useNativeDriver: true,
+    }).start()
+  }, [opacity, visible])
   return (
-    <View>
-      <View style={styles.header}>
-        {profileImg ? (
-          <Image
-            source={{ uri: profileImg }}
-            style={styles.avatar}
-            contentFit="cover"
-            transition={150}
-            cachePolicy="memory-disk"
-          />
-        ) : (
-          <View style={[styles.avatar, styles.avatarPlaceholder]}>
-            <Text style={styles.avatarText}>{title.slice(0, 1)}</Text>
-          </View>
-        )}
-        <View style={{ flex: 1 }}>
-          <View style={styles.titleRow}>
-            <Text style={styles.heading} numberOfLines={2}>
-              {title}
-            </Text>
-            {!!headerSource?.country?.flagEmoji && (
-              <Text style={styles.flag}>{headerSource.country.flagEmoji}</Text>
-            )}
-          </View>
-          {!!subTitle && <Text style={styles.subheading}>{subTitle}</Text>}
-          {!!headerSource?.country?.name && (
-            <Text style={styles.subheading}>{headerSource.country.name}</Text>
-          )}
-          {detail && <FamilyBadges data={detail} />}
-        </View>
-      </View>
-      {detail && (
-        <View style={{ paddingHorizontal: 12, paddingTop: 8, backgroundColor: Tokens.surface.raised }}>
-          <RegnalTitleRow
-            regnalName={detail.regnalName}
-            regnalNumber={
-              ((detail.sovereignReigns ?? [])[0]?.regnalNumber ?? null) as number | null
-            }
-            templeName={detail.templeName}
-            posthumousName={detail.posthumousName}
-          />
-        </View>
-      )}
-      {kpiItems.length > 0 && <KpiStrip items={kpiItems} />}
-    </View>
-  )
-}
-
-function genderLabel(g?: string | null): string {
-  if (!g) return '-'
-  const k = g.toUpperCase()
-  if (k === 'MALE' || k === 'M') return '남'
-  if (k === 'FEMALE' || k === 'F') return '여'
-  return g
-}
-
-function ErrorBlock({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <View style={styles.errorBlock}>
-      <Text style={styles.errorText}>{message}</Text>
-      <Pressable
-        onPress={onRetry}
-        style={({ pressed }) => [styles.retryBtn, pressed && styles.retryPressed]}
-      >
-        <Text style={styles.retryText}>다시 시도</Text>
-      </Pressable>
-    </View>
+    <Animated.View
+      style={{ opacity, display: visible ? 'flex' : 'none' }}
+      pointerEvents={visible ? 'auto' : 'none'}
+    >
+      {children}
+    </Animated.View>
   )
 }
 
@@ -487,7 +405,9 @@ function OverviewTab({
     <>
       {data.biography && (
         <DetailSection title="생애">
-          <RichText html={data.biography} />
+          <ExpandableText collapsedLines={6}>
+            <RichText html={data.biography} />
+          </ExpandableText>
         </DetailSection>
       )}
 
@@ -541,17 +461,21 @@ function OverviewTab({
 
 function FamilyTab({
   data,
-  resource,
+  familyTree,
+  loading,
+  error,
   onRetry,
 }: {
   data: PersonDetail | null
-  resource: Resource<FamilyTreeData>
+  familyTree: FamilyTreeData | null
+  loading: boolean
+  error: string | null
   onRetry: () => void
 }) {
-  if (resource.loading) return <PaneLoading />
-  if (resource.error) return <ErrorBlock message={resource.error} onRetry={onRetry} />
+  if (loading) return <PaneLoading />
+  if (error) return <PaneErrorBlock message={error} onRetry={onRetry} />
 
-  const tree = resource.data
+  const tree = familyTree
   const has =
     tree ||
     data?.father ||
@@ -562,7 +486,7 @@ function FamilyTab({
 
   return (
     <>
-      {!has && <EmptyState text="등록된 가족이 없습니다" />}
+      {!has && <EmptyMessage text="등록된 가족이 없습니다" />}
       {tree ? (
         <View style={styles.genealogyWrap}>
           <GenealogySvg data={tree} />
@@ -601,19 +525,21 @@ function FamilyTab({
 function PoliticsTab({ data }: { data: PersonDetail }) {
   const reigns = data.sovereignReigns ?? []
   const positions = data.governmentPositions ?? []
-  if (!reigns.length && !positions.length) return <EmptyState text="정부 직책·재위 기록 없음" />
+  if (!reigns.length && !positions.length) return <EmptyMessage text="정부 직책·재위 기록 없음" />
   return <UnifiedTenureCardList data={data} />
 }
 
 function TimelineTabPane({
   detailReady,
-  resource,
+  loading,
+  error,
   entries,
   onRetry,
   onPress,
 }: {
   detailReady: boolean
-  resource: Resource<ExtraTimelineItem[]>
+  loading: boolean
+  error: string | null
   entries: TimelineEntry[]
   onRetry: () => void
   onPress: (entry: TimelineEntry) => void
@@ -641,15 +567,15 @@ function TimelineTabPane({
   }
   const onReset = () => setActive(new Set())
 
-  if (resource.loading || !detailReady) return <PaneLoading />
-  if (resource.error) return <ErrorBlock message={resource.error} onRetry={onRetry} />
-  if (!entries.length) return <EmptyState text="연보 기록 없음" />
+  if (loading || !detailReady) return <PaneLoading />
+  if (error) return <PaneErrorBlock message={error} onRetry={onRetry} />
+  if (!entries.length) return <EmptyMessage text="연보 기록 없음" />
 
   return (
     <View>
       <TimelineFilter available={available} active={active} onToggle={onToggle} onReset={onReset} />
       {filtered.length === 0 ? (
-        <EmptyState text="필터 조건에 맞는 항목이 없습니다" />
+        <EmptyMessage text="필터 조건에 맞는 항목이 없습니다" />
       ) : (
         <TimelineList entries={filtered} onPress={onPress} />
       )}
@@ -658,22 +584,26 @@ function TimelineTabPane({
 }
 
 function RelationsTabPane({
-  resource,
+  items,
+  loading,
+  error,
   onRetry,
   subjectId,
 }: {
-  resource: Resource<HumanRelationship[]>
+  items: HumanRelationship[] | null
+  loading: boolean
+  error: string | null
   onRetry: () => void
   subjectId: string
 }) {
-  if (resource.loading) return <PaneLoading />
-  if (resource.error) return <ErrorBlock message={resource.error} onRetry={onRetry} />
-  const items = resource.data ?? []
-  if (!items.length) return <EmptyState text="등록된 인간관계 없음" />
+  if (loading) return <PaneLoading />
+  if (error) return <PaneErrorBlock message={error} onRetry={onRetry} />
+  const list = items ?? []
+  if (!list.length) return <EmptyMessage text="등록된 인간관계 없음" />
 
   return (
     <DetailSection title="인간관계">
-      {items.map((r) => {
+      {list.map((r) => {
         const otherId = r.otherPerson?.id ?? (r.fromPersonId === subjectId ? r.toPersonId : r.fromPersonId)
         const label = r.otherPerson ? personLabel(r.otherPerson) : null
         // 멘토 관계는 본인이 스승인지 제자인지에 따라 라벨 변경
@@ -716,94 +646,30 @@ function RelationsTabPane({
   )
 }
 
-function PaneLoading() {
-  return (
-    <View style={styles.center}>
-      <ActivityIndicator />
-    </View>
-  )
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <View style={styles.empty}>
-      <Text style={styles.emptyText}>{text}</Text>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
-  center: { paddingVertical: 32, alignItems: 'center', justifyContent: 'center' },
-  errorBlock: {
-    padding: 16,
-    backgroundColor: Tokens.surface.raised,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Tokens.border.subtle,
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: Tokens.surface.pressed,
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 12,
+    justifyContent: 'center',
   },
-  errorText: { color: Tokens.text.danger, textAlign: 'center' },
-  retryBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    backgroundColor: Tokens.surface.canvas,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Tokens.border.subtle,
-  },
-  retryPressed: { backgroundColor: Tokens.surface.pressed },
-  retryText: { fontSize: 14, color: Tokens.text.primary, fontWeight: '600' },
-  header: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: Tokens.surface.raised,
+  headerIconBtnPressed: { opacity: 0.7 },
+  tabContent: { padding: Spacing.md },
+  tabBlur: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Tokens.border.subtle,
   },
-  avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: Tokens.border.subtle },
-  avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 28, fontWeight: '700', color: Tokens.text.muted },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  heading: { fontSize: 22, fontWeight: '700', color: Tokens.text.primary, flexShrink: 1 },
-  flag: { fontSize: 18 },
-  subheading: { fontSize: 13, color: Tokens.text.muted, marginTop: 4 },
-  tabContent: { padding: 12 },
-  body: { fontSize: 14, color: Tokens.text.primary, lineHeight: 22 },
-  empty: { padding: 32, alignItems: 'center' },
-  emptyText: { color: Tokens.text.soft, fontSize: 14 },
-  tenureItem: {
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Tokens.border.subtle,
-  },
-  tenureTitle: { fontSize: 14, fontWeight: '600', color: Tokens.text.primary },
-  tenureMeta: { fontSize: 12, color: Tokens.text.muted, marginTop: 2 },
-  timelineItem: { flexDirection: 'row', gap: 10, paddingTop: 4 },
-  timelinePressed: { opacity: 0.6 },
-  timelineDotCol: { alignItems: 'center', width: 16 },
-  timelineDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginTop: 4,
-    borderWidth: 2,
-    borderColor: Tokens.surface.raised,
-  },
-  timelineLine: { flex: 1, width: 2, backgroundColor: Tokens.border.subtle, marginTop: 2 },
-  timelineDate: { fontSize: 12, fontWeight: '700', marginBottom: 2 },
-  timelineTitle: { fontSize: 15, fontWeight: '600', color: Tokens.text.primary },
-  timelineMeta: { fontSize: 12, color: Tokens.text.muted, marginTop: 2 },
+  body: { ...Type.bodySm, color: Tokens.text.primary },
+  timelineMeta: { ...Type.captionSm, color: Tokens.text.muted, marginTop: 2 },
   genealogyWrap: {
     backgroundColor: Tokens.surface.raised,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: Tokens.border.subtle,
-    paddingVertical: 8,
-    marginBottom: 12,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.md,
     overflow: 'hidden',
   },
 })

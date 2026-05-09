@@ -1,5 +1,6 @@
+import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Tokens } from '@/constants/theme'
+import { Radius, Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 
 export function RegnalTitleRow({
   regnalName,
@@ -12,11 +13,13 @@ export function RegnalTitleRow({
   templeName?: string | null
   posthumousName?: string | null
 }) {
+  const t = useTokens()
+  const styles = useMemo(() => makeStyles(t), [t])
   if (!regnalName && !templeName && !posthumousName) return null
   return (
     <View style={styles.row}>
       <Text style={styles.crown}>♔</Text>
-      <View style={{ flex: 1, gap: 2 }}>
+      <View style={styles.body}>
         {regnalName ? (
           <Text style={styles.title}>
             {regnalName}
@@ -35,20 +38,21 @@ export function RegnalTitleRow({
   )
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: Tokens.surface.highlight,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Tokens.surface.highlightBorder,
-  },
-  crown: { fontSize: 18, color: Tokens.accent.amber },
-  title: { fontSize: 14, fontWeight: '700', color: Tokens.accent.amber },
-  sub: { fontSize: 12, color: Tokens.text.muted },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      marginTop: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      backgroundColor: t.surface.pressed,
+      borderRadius: Radius.sm,
+    },
+    body: { flex: 1, gap: 2 },
+    crown: { fontSize: 18, color: t.text.secondary },
+    title: { ...Type.titleSm, fontWeight: '700', color: t.text.primary },
+    sub: { ...Type.captionSm, color: t.text.muted },
+  })
+}

@@ -2,9 +2,9 @@ import { useMemo } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import Svg, { G, Line, Rect, Text as SvgText } from 'react-native-svg'
 import { useRouter } from 'expo-router'
-import { Tokens } from '@/constants/theme'
-import { setPersonPreview } from '@/lib/preview-cache'
-import type { FamilyTreeData, FamilyTreePerson } from './family-tree-view'
+import { useTokens, type TokenSet } from '@/constants/theme'
+import { goPerson } from '@/lib/routes'
+import type { FamilyTreeData, FamilyTreePerson } from '@/lib/family-tree'
 
 const CARD_W = 90
 const CARD_H = 64
@@ -60,6 +60,8 @@ function truncate(s: string, max: number) {
 
 export function GenealogySvg({ data }: { data: FamilyTreeData }) {
   const router = useRouter()
+  const t = useTokens()
+  const styles = useMemo(() => makeStyles(t), [t])
   const layout = useMemo(() => buildLayout(data), [data])
   if (!layout) return null
   const { width, height, nodes, edges } = layout
@@ -75,26 +77,38 @@ export function GenealogySvg({ data }: { data: FamilyTreeData }) {
               y1={e.y1}
               x2={e.x2}
               y2={e.y2}
-              stroke={e.kind === 'spouse' ? Tokens.accent.pink : Tokens.text.soft}
+              stroke={e.kind === 'spouse' ? t.accent.pink : t.text.soft}
               strokeWidth={e.kind === 'spouse' ? 1.5 : 1}
               strokeDasharray={e.kind === 'spouse' ? '4,3' : undefined}
             />
           ))}
-          {nodes.map((n) => (
+          {nodes.map((n) => {
+            const personId = n.person.id
+            const a11yLabel = `${n.role ?? ''} ${nameOf(n.person)} ${lifespan(n.person)}`.trim()
+            return (
             <G
               key={n.id}
-              onPress={() => {
-                router.push(`/person/${n.id}` as any)
-              }}
+              onPress={() => goPerson(router, personId)}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={a11yLabel}
             >
+              {/* 탭 hit area 확장: 카드 가장자리 + 6pt 투명 영역 */}
+              <Rect
+                x={n.x - 6}
+                y={n.y - 6}
+                width={CARD_W + 12}
+                height={CARD_H + 12}
+                fill="transparent"
+              />
               <Rect
                 x={n.x}
                 y={n.y}
                 width={CARD_W}
                 height={CARD_H}
                 rx={8}
-                fill={n.ego ? Tokens.surface.highlight : Tokens.surface.raised}
-                stroke={n.ego ? Tokens.surface.highlightBorder : Tokens.border.subtle}
+                fill={n.ego ? t.surface.highlight : t.surface.raised}
+                stroke={n.ego ? t.surface.highlightBorder : t.border.subtle}
                 strokeWidth={1}
                 strokeDasharray={n.half ? '3,3' : undefined}
               />
@@ -103,7 +117,7 @@ export function GenealogySvg({ data }: { data: FamilyTreeData }) {
                   x={n.x + CARD_W / 2}
                   y={n.y + 14}
                   fontSize={9}
-                  fill={Tokens.text.muted}
+                  fill={t.text.muted}
                   textAnchor="middle"
                 >
                   {n.role}
@@ -114,7 +128,7 @@ export function GenealogySvg({ data }: { data: FamilyTreeData }) {
                 y={n.y + 32}
                 fontSize={12}
                 fontWeight="600"
-                fill={Tokens.text.primary}
+                fill={t.text.primary}
                 textAnchor="middle"
               >
                 {truncate(nameOf(n.person), 8)}
@@ -124,30 +138,31 @@ export function GenealogySvg({ data }: { data: FamilyTreeData }) {
                   x={n.x + CARD_W / 2}
                   y={n.y + 50}
                   fontSize={10}
-                  fill={Tokens.text.soft}
+                  fill={t.text.soft}
                   textAnchor="middle"
                 >
                   {lifespan(n.person)}
                 </SvgText>
               )}
             </G>
-          ))}
+            )
+          })}
         </Svg>
-        <Legend />
+        <Legend t={t} styles={styles} />
       </View>
     </ScrollView>
   )
 }
 
-function Legend() {
+function Legend({ t, styles }: { t: TokenSet; styles: ReturnType<typeof makeStyles> }) {
   return (
     <View style={styles.legend}>
       <View style={styles.legendItem}>
-        <View style={[styles.legendDot, { backgroundColor: Tokens.text.soft }]} />
+        <View style={[styles.legendDot, { backgroundColor: t.text.soft }]} />
         <Text style={styles.legendText}>혈연</Text>
       </View>
       <View style={styles.legendItem}>
-        <View style={[styles.legendDot, { backgroundColor: Tokens.accent.pink }]} />
+        <View style={[styles.legendDot, { backgroundColor: t.accent.pink }]} />
         <Text style={styles.legendText}>혼인</Text>
       </View>
       <View style={styles.legendItem}>
@@ -398,21 +413,23 @@ function buildLayout(data: FamilyTreeData): {
   return { width, height, nodes, edges }
 }
 
-const styles = StyleSheet.create({
-  legend: {
-    position: 'absolute',
-    bottom: 6,
-    left: 16,
-    flexDirection: 'row',
-    gap: 12,
-  },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendDashed: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: Tokens.text.soft,
-  },
-  legendText: { fontSize: 10, color: Tokens.text.muted },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    legend: {
+      position: 'absolute',
+      bottom: 6,
+      left: 16,
+      flexDirection: 'row',
+      gap: 12,
+    },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    legendDot: { width: 10, height: 10, borderRadius: 5 },
+    legendDashed: {
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: t.text.soft,
+    },
+    legendText: { fontSize: 10, color: t.text.muted },
+  })
+}

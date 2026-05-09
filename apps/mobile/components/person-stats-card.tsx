@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import {
   PERSON_STAT_KEYS,
@@ -9,12 +10,7 @@ import {
 import { DetailSection } from '@/components/detail-section'
 import { RichText } from '@/components/rich-text'
 import { InfluenceTierBadge } from '@/components/influence-tier-badge'
-
-const TONE_COLOR = {
-  positive: { bg: '#dcfce7', fg: '#166534' },
-  negative: { bg: '#fee2e2', fg: '#991b1b' },
-  neutral: { bg: '#e2e8f0', fg: '#334155' },
-} as const
+import { Radius, Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 
 export function PersonStatsCard({
   stats,
@@ -25,6 +21,17 @@ export function PersonStatsCard({
   traits?: PersonTraitAssignment[] | null
   influence?: number | null
 }) {
+  const tokens = useTokens()
+  const styles = useMemo(() => makeStyles(tokens), [tokens])
+  const toneFor = useMemo(
+    () => ({
+      positive: tokens.state.positive,
+      negative: tokens.state.negative,
+      neutral: tokens.state.neutral,
+    }),
+    [tokens],
+  )
+
   const hasAnyStat = stats != null && PERSON_STAT_KEYS.some((k) => stats[k] != null)
   const hasTraits = (traits?.length ?? 0) > 0
   const hasInfluence = influence != null
@@ -48,9 +55,10 @@ export function PersonStatsCard({
                 <InfluenceTierBadge influence={influence} size="sm" />
               </View>
               <Bar
+                styles={styles}
                 label="영향력"
                 short="INF"
-                color="#ea580c"
+                color={tokens.text.primary}
                 value={influence!}
                 showHeader={false}
               />
@@ -61,7 +69,16 @@ export function PersonStatsCard({
               const meta = PERSON_STAT_META[key]
               const v = stats![key]
               if (v == null) return null
-              return <Bar key={key} label={meta.label} short={meta.short} color={meta.color} value={v} />
+              return (
+                <Bar
+                  key={key}
+                  styles={styles}
+                  label={meta.label}
+                  short={meta.short}
+                  color={tokens.text.primary}
+                  value={v}
+                />
+              )
             })}
           {stats?.notes && (
             <View style={{ marginTop: 8 }}>
@@ -77,7 +94,7 @@ export function PersonStatsCard({
           <View style={styles.tagWrap}>
             {traits!.map((t) => {
               const meta = PERSON_TRAIT_META[t.trait] ?? { label: t.trait, tone: 'neutral' as const }
-              const tone = TONE_COLOR[meta.tone]
+              const tone = toneFor[meta.tone]
               return (
                 <View key={t.id} style={[styles.tag, { backgroundColor: tone.bg }]}>
                   <Text style={[styles.tagText, { color: tone.fg }]}>{meta.label}</Text>
@@ -95,12 +112,13 @@ export function PersonStatsCard({
 }
 
 function Bar({
+  styles,
   label,
-  short,
   color,
   value,
   showHeader = true,
 }: {
+  styles: ReturnType<typeof makeStyles>
   label: string
   short: string
   color: string
@@ -123,19 +141,33 @@ function Bar({
   )
 }
 
-const styles = StyleSheet.create({
-  empty: { color: '#94a3b8', fontSize: 13 },
-  barRow: { marginVertical: 6 },
-  barHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  barLabel: { fontSize: 13, color: '#334155', fontWeight: '500' },
-  barValue: { fontSize: 13, color: '#0f172a', fontWeight: '700' },
-  barBg: { height: 8, borderRadius: 4, backgroundColor: '#f1f5f9', overflow: 'hidden' },
-  influenceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
-  influenceLabel: { fontSize: 13, color: '#334155', fontWeight: '600' },
-  barFill: { height: '100%', borderRadius: 4 },
-  notesLabel: { fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
-  tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  tag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  tagText: { fontSize: 12, fontWeight: '600' },
-  tagIntensity: { fontSize: 11, opacity: 0.7 },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    empty: { ...Type.captionSm, color: t.text.soft },
+    barRow: { marginVertical: Spacing.xs },
+    barHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.xs },
+    barLabel: { ...Type.captionSm, color: t.text.secondary, fontWeight: '500' },
+    barValue: { ...Type.captionSm, color: t.text.primary, fontWeight: '700' },
+    barBg: { height: 8, borderRadius: 4, backgroundColor: t.surface.pressed, overflow: 'hidden' },
+    influenceHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: Spacing.xs,
+    },
+    influenceLabel: { ...Type.captionSm, color: t.text.secondary, fontWeight: '600' },
+    barFill: { height: '100%', borderRadius: 4 },
+    notesLabel: { ...Type.sectionLabel, fontSize: 11, color: t.text.muted, marginBottom: Spacing.xs },
+    tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    tag: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: Radius.full,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    tagText: { ...Type.captionSm, fontWeight: '600' },
+    tagIntensity: { ...Type.badge, opacity: 0.7 },
+  })
+}

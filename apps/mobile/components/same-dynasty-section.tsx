@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { memo, useMemo } from 'react'
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { AppPressable } from '@/components/app-pressable'
 import { useRouter } from 'expo-router'
 import { Image } from 'expo-image'
 import { displayName, lifespan } from '@/lib/format'
@@ -7,9 +8,10 @@ import { imageUrl } from '@/lib/image-url'
 import { signedYear } from '@/lib/age-utils'
 import { useDynastyMembers } from '@/lib/dynasty-cache'
 import { setPersonPreview } from '@/lib/preview-cache'
-import { Tokens } from '@/constants/theme'
+import { goPerson } from '@/lib/routes'
+import { Radius, Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 
-export function SameDynastySection({
+export const SameDynastySection = memo(function SameDynastySection({
   dynastyId,
   dynastyName,
   currentPersonId,
@@ -19,6 +21,8 @@ export function SameDynastySection({
   currentPersonId: string
 }) {
   const router = useRouter()
+  const t = useTokens()
+  const styles = useMemo(() => makeStyles(t), [t])
   const { data: items, loading } = useDynastyMembers(dynastyId)
 
   const sorted = useMemo(() => {
@@ -33,8 +37,8 @@ export function SameDynastySection({
   if (loading) {
     return (
       <View style={styles.section}>
-        <Header dynastyName={dynastyName} count={null} />
-        <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+        <Header dynastyName={dynastyName} count={null} styles={styles} />
+        <View style={styles.loadingWrap}>
           <ActivityIndicator />
         </View>
       </View>
@@ -44,25 +48,22 @@ export function SameDynastySection({
 
   return (
     <View style={styles.section}>
-      <Header dynastyName={dynastyName} count={sorted.length} />
+      <Header dynastyName={dynastyName} count={sorted.length} styles={styles} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {sorted.map((p) => {
           const isCurrent = p.id === currentPersonId
           const img = imageUrl(p.profileImageUrl)
           const name = displayName(p)
           return (
-            <Pressable
+            <AppPressable
               key={p.id}
               disabled={isCurrent}
               onPress={() => {
                 setPersonPreview(p)
-                router.push(`/person/${p.id}` as any)
+                goPerson(router, p.id)
               }}
-              style={({ pressed }) => [
-                styles.card,
-                isCurrent && styles.cardCurrent,
-                pressed && !isCurrent && styles.cardPressed,
-              ]}
+              style={[styles.card, isCurrent && styles.cardCurrent]}
+              haptic={!isCurrent}
             >
               {img ? (
                 <Image
@@ -82,15 +83,23 @@ export function SameDynastySection({
                 <Text style={styles.regnal} numberOfLines={1}>{p.regnalName}</Text>
               ) : null}
               <Text style={styles.years} numberOfLines={1}>{lifespan(p) || '-'}</Text>
-            </Pressable>
+            </AppPressable>
           )
         })}
       </ScrollView>
     </View>
   )
-}
+})
 
-function Header({ dynastyName, count }: { dynastyName?: string | null; count: number | null }) {
+function Header({
+  dynastyName,
+  count,
+  styles,
+}: {
+  dynastyName?: string | null
+  count: number | null
+  styles: ReturnType<typeof makeStyles>
+}) {
   return (
     <View style={styles.header}>
       <Text style={styles.title}>같은 가문 {dynastyName ? `· ${dynastyName}` : ''}</Text>
@@ -99,35 +108,37 @@ function Header({ dynastyName, count }: { dynastyName?: string | null; count: nu
   )
 }
 
-const styles = StyleSheet.create({
-  section: {
-    backgroundColor: Tokens.surface.raised,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: Tokens.border.subtle,
-    marginTop: 12,
-  },
-  header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  title: { fontSize: 12, fontWeight: '700', color: Tokens.text.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  countText: { fontSize: 12, color: Tokens.text.soft },
-  row: { gap: 8, paddingVertical: 4 },
-  card: {
-    width: 96,
-    backgroundColor: Tokens.surface.canvas,
-    borderRadius: 10,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: Tokens.border.subtle,
-    alignItems: 'center',
-    gap: 4,
-  },
-  cardPressed: { backgroundColor: Tokens.surface.pressed },
-  cardCurrent: { backgroundColor: Tokens.surface.highlight, borderColor: Tokens.surface.highlightBorder },
-  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: Tokens.border.subtle },
-  avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  avatarInitial: { fontSize: 18, fontWeight: '700', color: Tokens.text.muted },
-  name: { fontSize: 12, fontWeight: '600', color: Tokens.text.primary, textAlign: 'center' },
-  regnal: { fontSize: 10, color: Tokens.accent.amber, fontWeight: '600' },
-  years: { fontSize: 10, color: Tokens.text.soft },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    section: {
+      backgroundColor: t.surface.raised,
+      borderRadius: Radius.md,
+      padding: Spacing.base,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.border.subtle,
+      marginTop: Spacing.md,
+    },
+    loadingWrap: { paddingVertical: Spacing.base, alignItems: 'center' },
+    header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.sm },
+    title: { ...Type.sectionLabel, color: t.text.muted },
+    countText: { ...Type.captionSm, color: t.text.soft },
+    row: { gap: Spacing.sm, paddingVertical: Spacing.xs },
+    card: {
+      width: 96,
+      backgroundColor: t.surface.raised,
+      borderRadius: Radius.md,
+      padding: Spacing.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.border.subtle,
+      alignItems: 'center',
+      gap: Spacing.xs,
+    },
+    cardCurrent: { backgroundColor: t.surface.highlight, borderColor: t.surface.highlightBorder },
+    avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: t.border.subtle },
+    avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+    avatarInitial: { ...Type.titleSm, fontWeight: '700', color: t.text.muted },
+    name: { ...Type.captionSm, fontWeight: '600', color: t.text.primary, textAlign: 'center' },
+    regnal: { ...Type.badge, color: t.text.primary },
+    years: { ...Type.badge, fontWeight: '500', color: t.text.soft },
+  })
+}

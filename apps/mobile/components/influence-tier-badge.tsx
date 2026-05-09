@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
+import { Radius, Type } from '@/constants/theme'
 import {
   getInfluenceTier,
   getInfluenceTierBg,
@@ -38,12 +39,12 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: Radius.full,
     alignSelf: 'flex-start',
   },
-  badgeSm: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, gap: 4 },
-  label: { fontSize: 12, fontWeight: '700' },
-  labelSm: { fontSize: 10 },
-  value: { fontSize: 12, fontWeight: '700', opacity: 0.7 },
-  valueSm: { fontSize: 10 },
+  badgeSm: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: Radius.full, gap: 4 },
+  label: { ...Type.badge, fontSize: 12, lineHeight: 14 },
+  labelSm: { ...Type.badge },
+  value: { ...Type.badge, fontSize: 12, lineHeight: 14, opacity: 0.7 },
+  valueSm: { ...Type.badge },
 })

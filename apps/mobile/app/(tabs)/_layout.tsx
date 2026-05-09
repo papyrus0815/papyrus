@@ -1,21 +1,27 @@
 import { Tabs } from 'expo-router'
 import React from 'react'
+import { StyleSheet } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 
 import { HapticTab } from '@/components/haptic-tab'
-import { Colors, Tokens } from '@/constants/theme'
-import { useColorScheme } from '@/hooks/use-color-scheme'
+import { useTokens } from '@/constants/theme'
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme()
+  const tokens = useTokens()
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
-        sceneStyle: { backgroundColor: Tokens.surface.canvas },
+        tabBarActiveTintColor: tokens.text.primary,
+        tabBarInactiveTintColor: tokens.text.muted,
+        tabBarStyle: {
+          backgroundColor: tokens.surface.raised,
+          borderTopColor: tokens.border.subtle,
+          borderTopWidth: StyleSheet.hairlineWidth,
+        },
+        sceneStyle: { backgroundColor: tokens.surface.canvas },
       }}
     >
       <Tabs.Screen

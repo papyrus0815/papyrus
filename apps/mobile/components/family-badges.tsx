@@ -1,8 +1,11 @@
+import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { Tokens } from '@/constants/theme'
+import { Radius, Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 import type { PersonDetail } from '@/lib/dto'
 
 export function FamilyBadges({ data }: { data: PersonDetail }) {
+  const t = useTokens()
+  const styles = useMemo(() => makeStyles(t), [t])
   const badges: Array<{ key: string; label: string }> = []
   if (data.father) badges.push({ key: 'father', label: '부' })
   if (data.mother) badges.push({ key: 'mother', label: '모' })
@@ -28,13 +31,15 @@ export function FamilyBadges({ data }: { data: PersonDetail }) {
   )
 }
 
-const styles = StyleSheet.create({
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 },
-  badge: {
-    backgroundColor: Tokens.accent.purpleSoft,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  text: { fontSize: 11, color: Tokens.accent.purple, fontWeight: '600' },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    row: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginTop: Spacing.xs },
+    badge: {
+      backgroundColor: t.surface.pressed,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: Radius.full,
+    },
+    text: { ...Type.badge, color: t.text.secondary },
+  })
+}

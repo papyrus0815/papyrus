@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { RichText } from './rich-text'
 import { formatDateString } from '@/lib/format'
-import { Tokens } from '@/constants/theme'
+import { Radius, Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 import type { GovernmentPosition, PersonDetail, SovereignReign } from '@/lib/dto'
 
 type Item =
@@ -17,6 +17,8 @@ function startMs(item: Item): number {
 }
 
 export function UnifiedTenureCardList({ data }: { data: PersonDetail }) {
+  const tokens = useTokens()
+  const styles = useMemo(() => makeStyles(tokens), [tokens])
   const items = useMemo<Item[]>(() => {
     const list: Item[] = []
     for (const r of data.sovereignReigns ?? []) list.push({ kind: 'reign', data: r })
@@ -30,13 +32,19 @@ export function UnifiedTenureCardList({ data }: { data: PersonDetail }) {
   return (
     <View style={{ gap: 8 }}>
       {items.map((it, i) => (
-        <UnifiedCard key={`${it.kind}-${it.data.id ?? i}`} item={it} />
+        <UnifiedCard key={`${it.kind}-${it.data.id ?? i}`} item={it} styles={styles} />
       ))}
     </View>
   )
 }
 
-function UnifiedCard({ item }: { item: Item }) {
+function UnifiedCard({
+  item,
+  styles,
+}: {
+  item: Item
+  styles: ReturnType<typeof makeStyles>
+}) {
   const isReign = item.kind === 'reign'
   if (isReign) {
     const r = item.data as SovereignReign
@@ -46,15 +54,15 @@ function UnifiedCard({ item }: { item: Item }) {
     return (
       <View style={[styles.card, styles.cardReign]}>
         <View style={styles.topRow}>
-          <KindBadge kind="reign" />
+          <KindBadge kind="reign" styles={styles} />
           <Text style={styles.title} numberOfLines={2}>
             {r.regnalName ?? country ?? '재위'}
             {r.regnalNumber != null ? <Text style={styles.ordinal}> · {r.regnalNumber}대</Text> : null}
           </Text>
         </View>
         <View style={styles.metaRow}>
-          {country && <Chip text={country} />}
-          <Chip text={`${start} ~ ${end}`} muted />
+          {country && <Chip text={country} styles={styles} />}
+          <Chip text={`${start} ~ ${end}`} muted styles={styles} />
         </View>
         {r.notes ? (
           <View style={styles.notes}>
@@ -78,12 +86,12 @@ function UnifiedCard({ item }: { item: Item }) {
   return (
     <View style={[styles.card, styles.cardTenure]}>
       <View style={styles.topRow}>
-        <KindBadge kind="tenure" />
+        <KindBadge kind="tenure" styles={styles} />
         <Text style={styles.title} numberOfLines={2}>{position}</Text>
       </View>
       <View style={styles.metaRow}>
-        {country && <Chip text={country} />}
-        <Chip text={`${start} ~ ${end}`} muted />
+        {country && <Chip text={country} styles={styles} />}
+        <Chip text={`${start} ~ ${end}`} muted styles={styles} />
       </View>
       {g.notes ? (
         <View style={styles.notes}>
@@ -94,7 +102,13 @@ function UnifiedCard({ item }: { item: Item }) {
   )
 }
 
-function KindBadge({ kind }: { kind: 'reign' | 'tenure' }) {
+function KindBadge({
+  kind,
+  styles,
+}: {
+  kind: 'reign' | 'tenure'
+  styles: ReturnType<typeof makeStyles>
+}) {
   const isReign = kind === 'reign'
   return (
     <View style={[styles.kindBadge, isReign ? styles.kindReign : styles.kindTenure]}>
@@ -105,7 +119,15 @@ function KindBadge({ kind }: { kind: 'reign' | 'tenure' }) {
   )
 }
 
-function Chip({ text, muted }: { text: string; muted?: boolean }) {
+function Chip({
+  text,
+  muted,
+  styles,
+}: {
+  text: string
+  muted?: boolean
+  styles: ReturnType<typeof makeStyles>
+}) {
   return (
     <View style={[styles.chip, muted && styles.chipMuted]}>
       <Text style={[styles.chipText, muted && styles.chipTextMuted]}>{text}</Text>
@@ -113,38 +135,42 @@ function Chip({ text, muted }: { text: string; muted?: boolean }) {
   )
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Tokens.surface.raised,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: Tokens.border.subtle,
-    borderLeftWidth: 4,
-    gap: 8,
-  },
-  cardReign: { borderLeftColor: Tokens.accent.amber },
-  cardTenure: { borderLeftColor: Tokens.accent.blue },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { flex: 1, fontSize: 14, fontWeight: '700', color: Tokens.text.primary },
-  ordinal: { fontWeight: '500', color: Tokens.text.muted },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  notes: { marginTop: 4 },
-  kindBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 },
-  kindReign: { backgroundColor: '#fef3c7' },
-  kindTenure: { backgroundColor: '#dbeafe' },
-  kindText: { fontSize: 11, fontWeight: '700' },
-  kindReignText: { color: '#92400e' },
-  kindTenureText: { color: '#1e40af' },
-  chip: {
-    backgroundColor: Tokens.surface.canvas,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: Tokens.border.subtle,
-  },
-  chipMuted: { backgroundColor: 'transparent', borderColor: 'transparent' },
-  chipText: { fontSize: 11, color: Tokens.text.secondary, fontWeight: '500' },
-  chipTextMuted: { color: Tokens.text.muted },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: t.surface.raised,
+      borderRadius: Radius.md,
+      padding: Spacing.base,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.border.subtle,
+      borderLeftWidth: 4,
+      gap: Spacing.sm,
+    },
+    // 재위 카드: 좌측 두꺼운 brand 액센트 바 + 약한 캔버스 톤
+    cardReign: { borderLeftColor: t.brand.primary, borderLeftWidth: 5, backgroundColor: t.surface.canvas },
+    // 재임 카드: 약한 회색 좌측 바
+    cardTenure: { borderLeftColor: t.border.subtle },
+    topRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    title: { ...Type.titleSm, flex: 1, fontWeight: '700', color: t.text.primary },
+    ordinal: { ...Type.captionSm, fontWeight: '500', color: t.text.muted },
+    metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+    notes: { marginTop: Spacing.xs },
+    kindBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: Radius.xs },
+    kindReign: { backgroundColor: t.brand.primary },
+    kindTenure: { backgroundColor: t.surface.pressed },
+    kindText: { ...Type.badge },
+    kindReignText: { color: t.brand.onPrimary },
+    kindTenureText: { color: t.text.secondary },
+    chip: {
+      backgroundColor: t.surface.canvas,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: Radius.xs,
+      borderWidth: 1,
+      borderColor: t.border.subtle,
+    },
+    chipMuted: { backgroundColor: 'transparent', borderColor: 'transparent' },
+    chipText: { ...Type.badge, color: t.text.secondary, fontWeight: '500' },
+    chipTextMuted: { color: t.text.muted },
+  })
+}

@@ -21,14 +21,18 @@ export function getInfluenceTier(influence: number | null | undefined): Influenc
   return null
 }
 
+/**
+ * tier별 글자/배경 — top·high만 amber 톤으로 강조, mid·low는 슬레이트 단조.
+ * 톤이 amber/indigo로 갈리던 문제 정리.
+ */
 export function getInfluenceTierColor(tier: InfluenceTier): string {
   switch (tier) {
     case 'top':
-      return '#d97706'
+      return '#92400e'
     case 'high':
-      return '#f59e0b'
+      return '#a16207'
     case 'mid':
-      return '#6366f1'
+      return '#475569'
     case 'low':
       return '#64748b'
   }
@@ -41,7 +45,7 @@ export function getInfluenceTierBg(tier: InfluenceTier): string {
     case 'high':
       return '#fef9c3'
     case 'mid':
-      return '#e0e7ff'
+      return '#e2e8f0'
     case 'low':
       return '#f1f5f9'
   }

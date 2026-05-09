@@ -1,7 +1,13 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { Tokens } from '@/constants/theme'
+import {
+  BottomSheetBackdrop,
+  BottomSheetModal,
+  BottomSheetView,
+  type BottomSheetBackdropProps,
+} from '@gorhom/bottom-sheet'
+import { Radius, Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 
 export type OptionItem<T extends string> = {
   value: T
@@ -11,7 +17,9 @@ export type OptionItem<T extends string> = {
 }
 
 /**
- * 라디오 선택용 바텀시트. 정렬 옵션 등 한 번에 한 개만 선택.
+ * 라디오 선택용 바텀시트.
+ * - @gorhom/bottom-sheet 기반: 드래그-down dismiss + spring 모션
+ * - dynamic content sizing: 옵션 개수에 맞춰 높이 자동 결정
  */
 export function OptionSheet<T extends string>({
   visible,
@@ -28,90 +36,103 @@ export function OptionSheet<T extends string>({
   onSelect: (value: T) => void
   onClose: () => void
 }) {
+  const t = useTokens()
+  const styles = useMemo(() => makeStyles(t), [t])
+  const ref = useRef<BottomSheetModal>(null)
+
+  // visible prop과 시트 상태 동기화
+  useEffect(() => {
+    if (visible) ref.current?.present()
+    else ref.current?.dismiss()
+  }, [visible])
+
+  const handleDismiss = useCallback(() => {
+    onClose()
+  }, [onClose])
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        opacity={0.5}
+        pressBehavior="close"
+      />
+    ),
+    [],
+  )
+
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={styles.sheetWrap} pointerEvents="box-none">
-        <SafeAreaView edges={['bottom']} style={styles.sheet}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>{title}</Text>
-          {options.map((opt) => {
-            const active = opt.value === selected
-            return (
-              <Pressable
-                key={opt.value}
-                onPress={() => {
-                  onSelect(opt.value)
-                  onClose()
-                }}
-                style={({ pressed }) => [
-                  styles.row,
-                  active && styles.rowActive,
-                  pressed && styles.rowPressed,
-                ]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: active }}
-              >
-                {opt.icon && (
-                  <Ionicons
-                    name={opt.icon}
-                    size={18}
-                    color={active ? Tokens.accent.blue : Tokens.text.muted}
-                  />
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.label, active && styles.labelActive]}>{opt.label}</Text>
-                  {opt.description && <Text style={styles.desc}>{opt.description}</Text>}
-                </View>
-                {active && <Ionicons name="checkmark" size={20} color={Tokens.accent.blue} />}
-              </Pressable>
-            )
-          })}
-        </SafeAreaView>
-      </View>
-    </Modal>
+    <BottomSheetModal
+      ref={ref}
+      onDismiss={handleDismiss}
+      backdropComponent={renderBackdrop}
+      enableDynamicSizing
+      handleIndicatorStyle={styles.handle}
+      backgroundStyle={styles.sheetBg}
+    >
+      <BottomSheetView style={styles.sheetContent}>
+        <Text style={styles.title}>{title}</Text>
+        {options.map((opt) => {
+          const active = opt.value === selected
+          return (
+            <Pressable
+              key={opt.value}
+              onPress={() => {
+                onSelect(opt.value)
+                ref.current?.dismiss()
+              }}
+              style={({ pressed }) => [
+                styles.row,
+                active && styles.rowActive,
+                pressed && styles.rowPressed,
+              ]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: active }}
+            >
+              {opt.icon && (
+                <Ionicons
+                  name={opt.icon}
+                  size={18}
+                  color={active ? t.text.primary : t.text.muted}
+                />
+              )}
+              <View style={styles.rowBody}>
+                <Text style={[styles.label, active && styles.labelActive]}>{opt.label}</Text>
+                {opt.description && <Text style={styles.desc}>{opt.description}</Text>}
+              </View>
+              {active && <Ionicons name="checkmark" size={20} color={t.text.primary} />}
+            </Pressable>
+          )
+        })}
+        {/* SafeArea bottom inset 충분히 — 시트가 indicator 아래에서 끝나도록 */}
+        <View style={styles.safeBottom} />
+      </BottomSheetView>
+    </BottomSheetModal>
   )
 }
 
-const styles = StyleSheet.create({
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheetWrap: { flex: 1, justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: Tokens.surface.raised,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 8,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Tokens.border.subtle,
-    alignSelf: 'center',
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Tokens.text.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  rowActive: { backgroundColor: '#dbeafe' },
-  rowPressed: { backgroundColor: Tokens.surface.canvas },
-  label: { fontSize: 15, color: Tokens.text.primary, fontWeight: '500' },
-  labelActive: { fontWeight: '700', color: Tokens.accent.blue },
-  desc: { fontSize: 12, color: Tokens.text.muted, marginTop: 2 },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    sheetBg: { backgroundColor: t.surface.raised },
+    handle: { backgroundColor: t.border.subtle, width: 36, height: 4 },
+    sheetContent: { paddingHorizontal: Spacing.sm, paddingTop: 0, paddingBottom: 0 },
+    title: { ...Type.sectionLabel, fontSize: 13, color: t.text.muted, paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      borderRadius: Radius.sm,
+    },
+    rowActive: { backgroundColor: t.surface.pressed },
+    rowPressed: { backgroundColor: t.surface.pressed },
+    rowBody: { flex: 1 },
+    label: { ...Type.bodySm, fontSize: 15, color: t.text.primary, fontWeight: '500' },
+    labelActive: { fontWeight: '700', color: t.text.primary },
+    desc: { ...Type.captionSm, color: t.text.muted, marginTop: 2 },
+    safeBottom: { height: Spacing.lg },
+  })
+}

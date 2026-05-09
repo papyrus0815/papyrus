@@ -1,5 +1,6 @@
+import { useMemo } from 'react'
 import { Text, type StyleProp, type TextStyle } from 'react-native'
-import { Tokens } from '@/constants/theme'
+import { useTokens } from '@/constants/theme'
 
 /**
  * query에 일치하는 부분(case-insensitive)을 강조 색으로 표시.
@@ -18,6 +19,17 @@ export function HighlightedText({
   highlightStyle?: StyleProp<TextStyle>
   numberOfLines?: number
 }) {
+  const tokens = useTokens()
+  const defaultHighlight = useMemo<TextStyle>(
+    () => ({
+      // 노란 형광펜 대신 굵게 + underline — 카드 다수에서 깜빡거리지 않음
+      color: tokens.text.primary,
+      fontWeight: '800',
+      textDecorationLine: 'underline',
+    }),
+    [tokens],
+  )
+
   const q = query.trim()
   if (!q) {
     return (
@@ -53,10 +65,4 @@ export function HighlightedText({
       )}
     </Text>
   )
-}
-
-const defaultHighlight: TextStyle = {
-  backgroundColor: '#fef08a',
-  color: Tokens.text.primary,
-  fontWeight: '700',
 }

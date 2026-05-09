@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
-import { Tokens } from '@/constants/theme'
+import { FontFamily, Radius, Spacing, Type, useTokens, type TokenSet } from '@/constants/theme'
 
 export type PickerOption = {
   id: string
@@ -30,6 +30,8 @@ export function PickerModal({
   allowClear?: boolean
   searchPlaceholder?: string
 }) {
+  const t = useTokens()
+  const styles = useMemo(() => makeStyles(t), [t])
   const [query, setQuery] = useState('')
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -47,23 +49,25 @@ export function PickerModal({
         <View style={styles.header}>
           <Text style={styles.title}>{title}</Text>
           <Pressable onPress={onClose} hitSlop={8} style={styles.closeBtn}>
-            <Ionicons name="close" size={22} color={Tokens.text.primary} />
+            <Ionicons name="close" size={22} color={t.text.primary} />
           </Pressable>
         </View>
         <View style={styles.searchWrap}>
-          <Ionicons name="search" size={16} color={Tokens.text.muted} />
+          <Ionicons name="search" size={16} color={t.text.muted} />
           <TextInput
             value={query}
             onChangeText={setQuery}
             placeholder={searchPlaceholder}
-            placeholderTextColor={Tokens.text.soft}
+            placeholderTextColor={t.text.soft}
+            selectionColor={t.brand.primary}
+            cursorColor={t.brand.primary}
             style={styles.searchInput}
             autoCorrect={false}
             autoCapitalize="none"
           />
           {query ? (
             <Pressable onPress={() => setQuery('')} hitSlop={6}>
-              <Ionicons name="close-circle" size={16} color={Tokens.text.soft} />
+              <Ionicons name="close-circle" size={16} color={t.text.soft} />
             </Pressable>
           ) : null}
         </View>
@@ -76,7 +80,7 @@ export function PickerModal({
             style={({ pressed }) => [styles.row, selectedId === null && styles.rowSelected, pressed && styles.rowPressed]}
           >
             <Text style={[styles.rowLabel, selectedId === null && styles.rowLabelSelected]}>(선택 안 함)</Text>
-            {selectedId === null && <Ionicons name="checkmark" size={18} color={Tokens.accent.blue} />}
+            {selectedId === null && <Ionicons name="checkmark" size={18} color={t.text.primary} />}
           </Pressable>
         )}
         <FlatList
@@ -97,14 +101,14 @@ export function PickerModal({
                 }}
                 style={({ pressed }) => [styles.row, sel && styles.rowSelected, pressed && styles.rowPressed]}
               >
-                <View style={{ flex: 1 }}>
+                <View style={styles.rowBody}>
                   <Text style={[styles.rowLabel, sel && styles.rowLabelSelected]}>
                     {item.flagEmoji ? `${item.flagEmoji} ` : ''}
                     {item.label}
                   </Text>
                   {item.sublabel ? <Text style={styles.rowSub}>{item.sublabel}</Text> : null}
                 </View>
-                {sel && <Ionicons name="checkmark" size={18} color={Tokens.accent.blue} />}
+                {sel && <Ionicons name="checkmark" size={18} color={t.text.primary} />}
               </Pressable>
             )
           }}
@@ -114,43 +118,47 @@ export function PickerModal({
   )
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Tokens.surface.raised },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Tokens.border.subtle,
-  },
-  title: { flex: 1, fontSize: 18, fontWeight: '700', color: Tokens.text.primary },
-  closeBtn: { padding: 4 },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Tokens.border.subtle,
-  },
-  searchInput: { flex: 1, fontSize: 14, color: Tokens.text.primary, paddingVertical: 0 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Tokens.border.soft,
-  },
-  rowPressed: { backgroundColor: Tokens.surface.canvas },
-  rowSelected: { backgroundColor: '#dbeafe' },
-  rowLabel: { fontSize: 15, color: Tokens.text.primary, fontWeight: '500' },
-  rowLabelSelected: { fontWeight: '700', color: Tokens.accent.blue },
-  rowSub: { fontSize: 12, color: Tokens.text.muted, marginTop: 2 },
-  empty: { padding: 32, alignItems: 'center' },
-  emptyText: { color: Tokens.text.soft, fontSize: 14 },
-})
+function makeStyles(t: TokenSet) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: t.surface.raised },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: Spacing.base,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.border.subtle,
+    },
+    title: { flex: 1, ...Type.displaySm, color: t.text.primary },
+    closeBtn: { padding: Spacing.xs },
+    searchWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: 10,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.border.subtle,
+    },
+    // TextInput은 lineHeight 적용 시 동작 일그러지므로 fontFamily/fontSize만
+    searchInput: { fontFamily: FontFamily.regular, flex: 1, fontSize: 14, color: t.text.primary, paddingVertical: 0 },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.base,
+      paddingVertical: Spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.border.soft,
+    },
+    rowPressed: { backgroundColor: t.surface.canvas },
+    rowSelected: { backgroundColor: t.surface.pressed },
+    rowBody: { flex: 1 },
+    rowLabel: { ...Type.bodySm, fontSize: 15, color: t.text.primary, fontWeight: '500' },
+    rowLabelSelected: { fontWeight: '700' },
+    rowSub: { ...Type.captionSm, color: t.text.muted, marginTop: 2 },
+    empty: { padding: Spacing.xl, alignItems: 'center' },
+    emptyText: { ...Type.bodySm, color: t.text.soft },
+  })
+}
