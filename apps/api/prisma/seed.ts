@@ -46,12 +46,17 @@ import {
   seedSanFranciscoTreatyPersons,
   seedPrcFounding,
   seedKurofune,
+  seedAnseiEarthquakes,
+  seedAnseiPurge,
   seedGermanyEmpireParties,
   seedGermanyReichstagElections,
   seedAustroPrussianWar,
   seedFrancoPrussianWar,
   seedFirstOpiumWar,
   seedFirstOpiumWarFigures,
+  seedBritishEastIndiaCompanyIndia,
+  seedAmboynaMassacre,
+  seedAngloDutchTreaty1619,
   seedQianlongEmperor,
   seedBackfillPersonCountryId,
   seedKoreaGeography,
@@ -200,6 +205,21 @@ async function main() {
         // 13-4-1. 건륭제(청 6대 황제) 시딩 — 애신각라 가문·청나라 HC 의존
         await seedQianlongEmperor(prisma)
 
+        // 13-4-2. 영국 동인도회사의 인도 진출(1600~1757) 시딩 — eventCategory + 잉글랜드/그레이트브리튼 HC + 무굴 제국 HC(인라인 생성)
+        //  · 부모 사건 + 자식 5(EIC 헌장·수라트·캘커타·카르나틱 전쟁·플라시 전투)
+        //  · EventSection 3 + EventCountryRelation 3
+        //  · 플라시 전투 자식: BelligerentSide 2 + CountryInSide + Casualties + MilitaryDetailsNorm
+        await seedBritishEastIndiaCompanyIndia(prisma)
+
+        // 13-4-3. 암보이나 학살(1623-02-27) 시딩 — eventCategory + 네덜란드 공화국·잉글랜드 왕국 HC 의존
+        //  · 단독 사건 + 4섹션 + EventCountryRelation 2 (네덜란드 INITIATOR / 잉글랜드 VICTIM)
+        await seedAmboynaMassacre(prisma)
+
+        // 13-4-4. 1619 영-네덜란드 방위 조약(1619-07-17) 시딩 — eventCategory(회담/조약) + 잉글랜드/네덜란드 HC
+        //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵 (사용자 편집 보호)
+        //  · 단독 사건 + 4섹션 + EventCountryRelation 2 (잉글랜드·네덜란드 모두 PARTICIPANT/서명국)
+        await seedAngloDutchTreaty1619(prisma)
+
         // 13-6. 일본 전후(1945~1948) 시딩 — 일본 제국·황실 + eventCategory + 현대 일본·미국·영국·중국·소련 hc 의존
         //  · 일본국 historicalCountry + 일본 제국 → 일본국 transition
         //  · 정당(진보·자유·사회) + 43~46대 총리 + 4개 내각 + 정당 멤버십 + CabinetPoliticalParty
@@ -252,6 +272,16 @@ async function main() {
         //  · 페리·필모어·이에요시·아베 마사히로·하야시 아키라·도쿠가와 나리아키(신규)
         //  · Event + 8섹션(논문급) + EventCountryRelation 6 + PersonEvent 6
         await seedKurofune(prisma)
+
+        // 13-16. 1854-12-23 ~ 1855-11-11 안세이 대지진 시리즈 — 사회 카테고리
+        //  · 부모 사건 + 자식 3(도카이·난카이·에도) + 4섹션 + 도쿠가와 막부(VICTIM)
+        //  · 의존: seedKurofune(도쿠가와 막부 hc)
+        await seedAnseiEarthquakes(prisma)
+
+        // 13-17. 1858-09-08 ~ 1859-11-21 안세이 대옥 — 정치 카테고리
+        //  · 단독 사건 + 4섹션 + 도쿠가와 막부(INITIATOR)
+        //  · 의존: seedKurofune(도쿠가와 막부 hc)
+        await seedAnseiPurge(prisma)
 
         // 13-5. Person.countryId 백필 — 인물 시드 모두 끝난 뒤 affiliation 체인으로 NULL 채움
         await seedBackfillPersonCountryId(prisma)

@@ -172,6 +172,21 @@ export class UpdateEventDto {
   relatedHistoricalCountryIds?: string[]
 
   @ApiProperty({
+    description:
+      '메인(주도) 현대 국가 ID — 이 사건의 대표 국가. 저장 시 EventCountryRelation.role=INITIATOR로 마킹되어 Timeline 국가/대륙 모드의 lane 배치에 사용됨.',
+    required: false,
+  })
+  @IsOptional()
+  primaryCountryId?: string
+
+  @ApiProperty({
+    description: '메인(주도) 역사적 국가 ID — 위와 동일 의미, 역사적 국가용',
+    required: false,
+  })
+  @IsOptional()
+  primaryHistoricalCountryId?: string
+
+  @ApiProperty({
     description: '섹션 목록',
     required: false,
     type: 'array',

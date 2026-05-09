@@ -136,7 +136,7 @@ export class EventResponseDto {
   relatedHistoricalCountryIds?: string[]
 
   @ApiProperty({
-    description: '관련 현대 국가 정보 목록',
+    description: '관련 현대 국가 정보 목록 (role: EventCountryRole — INITIATOR/TARGET/PARTICIPANT/...)',
     required: false,
     type: 'array',
     items: {
@@ -145,13 +145,20 @@ export class EventResponseDto {
         id: { type: 'string' },
         name: { type: 'string' },
         flagEmoji: { type: 'string' },
+        role: { type: 'string', nullable: true },
       },
     },
   })
-  relatedCountries?: Array<{ id: string; name: string; flagEmoji?: string }>
+  relatedCountries?: Array<{
+    id: string
+    name: string
+    flagEmoji?: string
+    /** 사건 내 역할 — Timeline 등에서 대표 국가 선정에 사용 */
+    role?: string | null
+  }>
 
   @ApiProperty({
-    description: '관련 역사적 국가 정보 목록',
+    description: '관련 역사적 국가 정보 목록 (role: EventCountryRole)',
     required: false,
     type: 'array',
     items: {
@@ -159,10 +166,15 @@ export class EventResponseDto {
       properties: {
         id: { type: 'string' },
         name: { type: 'string' },
+        role: { type: 'string', nullable: true },
       },
     },
   })
-  relatedHistoricalCountries?: Array<{ id: string; name: string }>
+  relatedHistoricalCountries?: Array<{
+    id: string
+    name: string
+    role?: string | null
+  }>
 
   @ApiProperty({
     description: '관련 인물 목록 — PersonEvent 행. 인물별 role(역할) + note(시점 서술, 장문)',

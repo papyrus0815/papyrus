@@ -91,6 +91,12 @@ export class EventService {
       isPrimary?: boolean
     }>,
     childEventIds?: string[], // 기존 사건을 하위로 연결
+    /**
+     * 메인 국가 — 마킹된 country/historicalCountry는 EventCountryRelation.role=INITIATOR로 저장.
+     * 미지정이면 모두 PARTICIPANT (Timeline은 createdAt 폴백).
+     */
+    primaryCountryId?: string,
+    primaryHistoricalCountryId?: string,
   ): Promise<Event> {
     // 중복 체크
     const existing = await this.events.findByTitle(data.title)
@@ -189,7 +195,7 @@ export class EventService {
       )
     }
 
-    // 관련 국가 연결
+    // 관련 국가 연결 — primary와 일치하는 1개만 INITIATOR, 나머지 PARTICIPANT
     if (relatedCountryIds && relatedCountryIds.length > 0) {
       await Promise.all(
         relatedCountryIds.map((countryId) =>
@@ -197,7 +203,7 @@ export class EventService {
             data: {
               eventId: event.id,
               countryId,
-              role: 'PARTICIPANT', // 기본값: 참여국
+              role: countryId === primaryCountryId ? 'INITIATOR' : 'PARTICIPANT',
             },
           }),
         ),
@@ -211,7 +217,10 @@ export class EventService {
             data: {
               eventId: event.id,
               historicalCountryId,
-              role: 'PARTICIPANT', // 기본값: 참여국
+              role:
+                historicalCountryId === primaryHistoricalCountryId
+                  ? 'INITIATOR'
+                  : 'PARTICIPANT',
             },
           }),
         ),
@@ -296,6 +305,9 @@ export class EventService {
       isPrimary?: boolean
     }>,
     childEventIds?: string[], // 기존 사건을 하위로 연결
+    /** create와 동일 — INITIATOR 마킹 대상 ID */
+    primaryCountryId?: string,
+    primaryHistoricalCountryId?: string,
   ): Promise<Event> {
     // 존재 여부 확인
     await this.getEventById(id)
@@ -325,7 +337,7 @@ export class EventService {
         where: { eventId: id },
       })
 
-      // 새로운 관련 국가 추가
+      // 새로운 관련 국가 추가 — primary와 일치하는 것만 INITIATOR
       if (relatedCountryIds && relatedCountryIds.length > 0) {
         await Promise.all(
           relatedCountryIds.map((countryId) =>
@@ -333,7 +345,8 @@ export class EventService {
               data: {
                 eventId: id,
                 countryId,
-                role: 'PARTICIPANT', // 기본값: 참여국
+                role:
+                  countryId === primaryCountryId ? 'INITIATOR' : 'PARTICIPANT',
               },
             }),
           ),
@@ -347,7 +360,10 @@ export class EventService {
               data: {
                 eventId: id,
                 historicalCountryId,
-                role: 'PARTICIPANT', // 기본값: 참여국
+                role:
+                  historicalCountryId === primaryHistoricalCountryId
+                    ? 'INITIATOR'
+                    : 'PARTICIPANT',
               },
             }),
           ),

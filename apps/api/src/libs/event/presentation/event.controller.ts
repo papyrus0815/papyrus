@@ -73,6 +73,8 @@ export class EventController {
             id: relation.country.id,
             name: relation.country.name,
             flagEmoji: relation.country.flagEmoji,
+            // 사건 내 역할 — Timeline 등에서 대표 국가 선정에 사용 (INITIATOR > TARGET ...)
+            role: relation.role ?? null,
           })
         }
         if (relation.historicalCountryId && relation.historicalCountry) {
@@ -80,6 +82,7 @@ export class EventController {
           relatedHistoricalCountries.push({
             id: relation.historicalCountry.id,
             name: relation.historicalCountry.name,
+            role: relation.role ?? null,
           })
         }
       })
@@ -330,6 +333,8 @@ export class EventController {
             country: true,
             historicalCountry: true,
           },
+          // role 미설정 데이터에서도 lane 배치가 안정적이도록 createdAt 오름차순 — items[0] 결정성 보장
+          orderBy: { createdAt: 'asc' },
         },
         eventSections: {
           orderBy: { order: 'asc' },
@@ -412,6 +417,8 @@ export class EventController {
             country: true,
             historicalCountry: true,
           },
+          // role 미설정 데이터에서도 lane 배치가 안정적이도록 createdAt 오름차순 — items[0] 결정성 보장
+          orderBy: { createdAt: 'asc' },
         },
         eventSections: {
           orderBy: { order: 'asc' },
@@ -526,6 +533,8 @@ export class EventController {
       dto.eventSections,
       dto.eventImages,
       dto.childEventIds, // 🆕 기존 사건을 하위로 연결
+      dto.primaryCountryId,
+      dto.primaryHistoricalCountryId,
     )
 
     // 정규화된 군사 정보 저장
@@ -625,6 +634,8 @@ export class EventController {
       dto.eventSections,
       dto.eventImages,
       dto.childEventIds, // 🆕 기존 사건을 하위로 연결
+      dto.primaryCountryId,
+      dto.primaryHistoricalCountryId,
     )
 
     // 정규화된 군사 정보 저장
