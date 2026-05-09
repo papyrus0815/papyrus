@@ -17,6 +17,7 @@ import {
   FiGlobe,
   FiGrid,
   FiLayers,
+  FiMap,
   FiSearch,
   FiUsers,
 } from 'react-icons/fi'
@@ -25,6 +26,7 @@ import styled from 'styled-components'
 import type { CenturyFilter } from '@/entities/event/model'
 import { FILTER_ALL } from '@/features/event-list/lib'
 import { MOCK_POSITION_TYPES } from '@/entities/event/model/mock-government-positions'
+import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
 import * as Filter from '../../../pages/events/styles/filter.styles'
@@ -33,6 +35,7 @@ import { BRAND, MOTION, SHADOW } from '../../../pages/events/styles/theme'
 interface FiltersPanelProps {
   selectedCategory: typeof FILTER_ALL | string
   selectedCountry: typeof FILTER_ALL | string
+  selectedContinent: typeof FILTER_ALL | string
   selectedPositionType: typeof FILTER_ALL | string
   selectedCentury: CenturyFilter
   showFlatView: boolean
@@ -41,10 +44,12 @@ interface FiltersPanelProps {
   availableCenturies: number[]
   countries?: Array<{ id: string; name: string; flagEmoji?: string }>
   historicalCountries?: Array<{ id: string; name: string }>
+  continents?: ContinentResponseDto[]
 
   /** 인라인 선택 핸들러 — 신규 (모달 우회) */
   onSelectCategory?: (id: typeof FILTER_ALL | string) => void
   onSelectCountry?: (id: typeof FILTER_ALL | string) => void
+  onSelectContinent?: (id: typeof FILTER_ALL | string) => void
   onSelectPositionType?: (id: typeof FILTER_ALL | string) => void
 
   /** 모달 트리거 — "전체 보기"용 fallback */
@@ -58,6 +63,7 @@ interface FiltersPanelProps {
 export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   selectedCategory,
   selectedCountry,
+  selectedContinent,
   selectedPositionType,
   selectedCentury,
   showFlatView,
@@ -65,8 +71,10 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   availableCenturies,
   countries = [],
   historicalCountries = [],
+  continents = [],
   onSelectCategory,
   onSelectCountry,
+  onSelectContinent,
   onSelectPositionType,
   onShowCategoryModal,
   onShowCountryModal,
@@ -92,6 +100,11 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
       : countries.find((c) => c.id === selectedCountry)?.name ||
         historicalCountries.find((c) => c.id === selectedCountry)?.name ||
         '국가'
+
+  const continentLabel =
+    selectedContinent === FILTER_ALL
+      ? '대륙'
+      : continents.find((c) => c.id === selectedContinent)?.name ?? '대륙'
 
   const allCountryOptions = useMemo(
     () => [
@@ -127,6 +140,21 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
           onShowMoreModal={onShowCategoryModal}
           ariaLabel="카테고리 필터"
           searchable={dbCategories.length > 12}
+        />
+
+        {/* 대륙 — 인라인 팝오버 (대륙 → 국가 순으로 좁혀가는 동선) */}
+        <InlineFilterPopover
+          icon={<FiMap size={13} />}
+          label={continentLabel}
+          isActive={selectedContinent !== FILTER_ALL}
+          options={[
+            { id: FILTER_ALL, name: '전체' },
+            ...continents.map((c) => ({ id: c.id, name: c.name })),
+          ]}
+          selectedId={selectedContinent}
+          onSelect={(id) => onSelectContinent?.(id)}
+          ariaLabel="대륙 필터"
+          searchable={continents.length > 12}
         />
 
         {/* 국가 — 인라인 팝오버 (검색 가능, 자주 쓰는 항목 위주) */}

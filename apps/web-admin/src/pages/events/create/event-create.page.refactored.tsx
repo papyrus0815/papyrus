@@ -156,6 +156,10 @@ export const EventCreatePageRefactored: React.FC<
     setRelatedCountryIds,
     relatedHistoricalCountryIds,
     setRelatedHistoricalCountryIds,
+    primaryCountryId,
+    setPrimaryCountryId,
+    primaryHistoricalCountryId,
+    setPrimaryHistoricalCountryId,
     isValid: isBasicInfoValid,
     getDateError,
     calculateDaysDifference,
@@ -365,6 +369,21 @@ export const EventCreatePageRefactored: React.FC<
         if (event.relatedHistoricalCountryIds) {
           setRelatedHistoricalCountryIds(event.relatedHistoricalCountryIds)
         }
+        // 메인 국가 복원 — role==='INITIATOR'인 항목을 찾아 primary state에 세팅
+        // event는 API 응답 (any에 가까운 loose type) — relation은 {id, role, ...} 형태.
+        type CountryRel = { id: string; role?: string | null }
+        const initiatorCountry = (
+          event.relatedCountries as CountryRel[] | undefined
+        )?.find((c) => c.role === 'INITIATOR')
+        if (initiatorCountry) {
+          setPrimaryCountryId(initiatorCountry.id)
+        }
+        const initiatorHist = (
+          event.relatedHistoricalCountries as CountryRel[] | undefined
+        )?.find((c) => c.role === 'INITIATOR')
+        if (initiatorHist) {
+          setPrimaryHistoricalCountryId(initiatorHist.id)
+        }
 
         // 섹션 로드 (새 구조 우선, 레거시 fallback)
         type LoadedSection = { id: string; title: string; content: string }
@@ -563,6 +582,8 @@ export const EventCreatePageRefactored: React.FC<
         tags,
         relatedCountryIds,
         relatedHistoricalCountryIds,
+        primaryCountryId,
+        primaryHistoricalCountryId,
         relatedPersons,
         relatedEventIds,
         sections,
@@ -703,6 +724,10 @@ export const EventCreatePageRefactored: React.FC<
               setRelatedCountryIds={setRelatedCountryIds}
               relatedHistoricalCountryIds={relatedHistoricalCountryIds}
               setRelatedHistoricalCountryIds={setRelatedHistoricalCountryIds}
+              primaryCountryId={primaryCountryId}
+              setPrimaryCountryId={setPrimaryCountryId}
+              primaryHistoricalCountryId={primaryHistoricalCountryId}
+              setPrimaryHistoricalCountryId={setPrimaryHistoricalCountryId}
               availableCountries={availableCountries}
               availableHistoricalCountries={availableHistoricalCountries}
               onOpenCountryModal={() => setShowCountryModal(true)}

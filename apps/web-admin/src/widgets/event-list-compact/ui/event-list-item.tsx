@@ -35,10 +35,34 @@ interface EventListItemProps {
   isInTenureGroup: boolean
   dbCategories: EventCategoryDto[]
   isBookmarked?: boolean
+  /** 활성 검색어 — Title에서 매칭 부분 노란 배경 */
+  searchQuery?: string
   onSelect: () => void
   onToggleExpansion: () => void
   onShowSummary: () => void
   onToggleBookmark?: () => void
+}
+
+/**
+ * 검색어 매칭 부분 강조 — case-insensitive split. 빈 query/매칭 없음 시 그대로 반환.
+ * 한국어·영문 혼합 안전 (lower-case 비교). 정규식 메타 문자 escape.
+ */
+function highlightMatches(text: string, query: string | undefined) {
+  if (!query) return text
+  const q = query.trim()
+  if (!q) return text
+  // regex 메타 escape
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(${escaped})`, 'gi')
+  // String.split with capturing group → 매칭은 홀수 인덱스에 위치
+  const parts = text.split(re)
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <Mark key={i}>{part}</Mark>
+    ) : (
+      <React.Fragment key={i}>{part}</React.Fragment>
+    ),
+  )
 }
 
 type ImportanceTier = 'critical' | 'major' | 'normal'
@@ -81,6 +105,7 @@ export const EventListItem: React.FC<EventListItemProps> = ({
   isInTenureGroup,
   dbCategories,
   isBookmarked = false,
+  searchQuery,
   onSelect,
   onToggleExpansion,
   onShowSummary,
@@ -105,6 +130,16 @@ export const EventListItem: React.FC<EventListItemProps> = ({
       $tenure={isInTenureGroup}
       $categoryColor={categoryColor}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        // 키보드 네비 — Enter/Space로 행 선택. ↑↓ 이동·펼치기는 상위 catalog hook에서 처리
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+      tabIndex={0}
+      role="button"
+      aria-pressed={isActive}
       data-event-id={node.id}
       data-active={isActive ? 'true' : undefined}
     >
@@ -127,7 +162,7 @@ export const EventListItem: React.FC<EventListItemProps> = ({
           )}
 
           <Year $tier={tier}>{startYear}</Year>
-          <Title $tier={tier}>{node.title}</Title>
+          <Title $tier={tier}>{highlightMatches(node.title, searchQuery)}</Title>
 
           {tier !== 'normal' && (
             <ImportanceStars
@@ -175,21 +210,20 @@ export const EventListItem: React.FC<EventListItemProps> = ({
         </Row1>
 
         <Row2>
-          <CategoryDot
-            style={{ background: categoryColor }}
-            aria-hidden="true"
-          />
-          <CategoryLabel>{categoryName}</CategoryLabel>
-          <MetaSep aria-hidden="true">·</MetaSep>
-          <Duration>{duration}</Duration>
-          <Flags>
-            <CountryFlags
-              modern={event.relatedCountries}
-              historical={event.relatedHistoricalCountries}
-              max={3}
-              size="sm"
-            />
-          </Flags>
+          <CategoryLabel style={{ color: categoryColor }}>
+            {categoryName}
+          </CategoryLabel>
+          <MetaPushRight>
+            <Duration>{duration}</Duration>
+            <Flags>
+              <CountryFlags
+                modern={event.relatedCountries}
+                historical={event.relatedHistoricalCountries}
+                max={3}
+                size="sm"
+              />
+            </Flags>
+          </MetaPushRight>
         </Row2>
       </Body>
     </Stop>
@@ -237,16 +271,32 @@ const Stop = styled.div<{
     border-bottom: none;
   }
 
-  /* 활성 상태 좌측 인디고 막대 + 우측 라운드 — 평면 hairline 안에서도 인지 명확. */
+  /* 활성 상태 좌측 인디고 막대(굵게) + 우측 라운드 — 긴 리스트에서도 위치 즉시 인지.
+   * depth>0 행은 좌측 1px vertical guide(box-shadow inset)로 부모-자식 위계 시각화.
+   * 두 효과 모두 box-shadow 스택으로 한 번에 적용 — 덕분에 active 위에 guide도 같이 표시. */
   border-radius: ${({ $active }) => ($active ? '6px' : '0')};
+  box-shadow: ${({ $active, $depth, theme }) => {
+    const shadows: string[] = []
+    if ($depth > 0) {
+      const c =
+        theme.mode === 'dark'
+          ? 'rgba(147, 197, 253, 0.22)'
+          : 'rgba(37, 99, 235, 0.18)'
+      shadows.push(`inset 1px 0 0 0 ${c}`)
+    }
+    if ($active) {
+      shadows.push('inset 4px 0 0 0 #2563eb')
+    }
+    return shadows.length ? shadows.join(', ') : 'none'
+  }};
   ${({ $active }) =>
     $active &&
     css`
-      box-shadow: inset 3px 0 0 0 #2563eb;
       border-bottom-color: transparent;
     `}
 
-  /* 레일 → 행 dashed connector. 레일 위치(left: -38)에서 행 좌측 edge(0)까지. */
+  /* 레일 → 행 connector. solid hairline + 약간 더 진한 톤으로 위계 인지 강화.
+   * 점선 dashed는 깊어질수록 시각 약했음. */
   &::before {
     content: '';
     position: absolute;
@@ -254,19 +304,20 @@ const Stop = styled.div<{
     top: 50%;
     width: ${({ $depth }) => 38 + $depth * 22}px;
     height: 1px;
-    border-top: 1px dashed
+    border-top: 1px solid
       ${({ theme }) =>
         theme.mode === 'dark'
-          ? 'rgba(147, 197, 253, 0.28)'
-          : 'rgba(37, 99, 235, 0.28)'};
+          ? 'rgba(147, 197, 253, 0.45)'
+          : 'rgba(37, 99, 235, 0.35)'};
     pointer-events: none;
   }
 
   /* 레일 위 도트 — 시간축의 정거장.
    *
-   * 색 신호 단일화: 도트는 항상 **카테고리 색**(active와도 색 충돌 없음).
-   * importance는 도트 *크기*(7/9/11px)와 별(★) 글리프로만 표현.
-   * active는 외곽 indigo ring + 흰 가운데로 카테고리 색과 색 충돌 없이 분리. */
+   * 색 신호 단일화: 도트는 항상 **카테고리 색**.
+   * importance는 도트 *크기*(7/9/11px)와 별(★) 글리프로 표현.
+   * active 인식: 카테고리 색 그대로 유지 + 외곽 amber ring(box-shadow)로 색 충돌 회피.
+   *   (이전: 흰 가운데 + indigo border → 카테고리 파란 색과 시각 충돌) */
   &::after {
     content: '';
     position: absolute;
@@ -277,38 +328,38 @@ const Stop = styled.div<{
       $active ? '11px' : $tier === 'critical' ? '9px' : '7px'};
     height: ${({ $active, $tier }) =>
       $active ? '11px' : $tier === 'critical' ? '9px' : '7px'};
-    background: ${({ $active, theme, $categoryColor }) =>
-      $active
-        ? theme.mode === 'dark'
-          ? '#0f0f12'
-          : '#ffffff'
-        : $categoryColor};
-    border: ${({ $active }) =>
-      $active ? '2px solid #2563eb' : 'none'};
+    background: ${({ $categoryColor }) => $categoryColor};
+    border: none;
     border-radius: 50%;
-    box-shadow: 0 0 0 2px
-      ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+    /* 0~2px 흰 separator → 2~4px amber ring(active만) */
+    box-shadow: ${({ $active, theme }) => {
+      const sep = theme.mode === 'dark' ? '#0f0f12' : '#ffffff'
+      return $active
+        ? `0 0 0 2px ${sep}, 0 0 0 4px #f59e0b`
+        : `0 0 0 2px ${sep}`
+    }};
     z-index: 1;
     transition: background 0.14s ease, width 0.14s ease, height 0.14s ease,
-      border 0.14s ease;
+      box-shadow 0.14s ease;
   }
 
-  /* tier별 / active별 bg tint — 단계 분리 분명히 */
+  /* tier별 / active별 bg tint — 활성 행이 hover 행과 명확히 구분되도록 강화. */
   ${({ $active, $tenure, theme }) => {
     const isDark = theme.mode === 'dark'
     if ($active) {
       return css`
         background: ${isDark
-          ? 'rgba(37, 99, 235, 0.12)'
-          : 'rgba(37, 99, 235, 0.06)'};
+          ? 'rgba(37, 99, 235, 0.22)'
+          : 'rgba(37, 99, 235, 0.13)'};
       `
     }
     if ($tenure) {
-      /* tenure 그룹 bg를 인지 가능한 수준으로 강화. 이전 0.015는 거의 안 보였음. */
+      /* tenure 그룹 bg를 인지 가능한 수준으로 강화. 0.025는 거의 안 보였음 →
+       * 0.07/0.09로 올려 묶음이 시각으로도 분명하도록. */
       return css`
         background: ${isDark
-          ? 'rgba(147, 197, 253, 0.04)'
-          : 'rgba(37, 99, 235, 0.025)'};
+          ? 'rgba(147, 197, 253, 0.09)'
+          : 'rgba(37, 99, 235, 0.07)'};
       `
     }
     return css`
@@ -320,11 +371,21 @@ const Stop = styled.div<{
     background: ${({ theme, $active }) =>
       $active
         ? theme.mode === 'dark'
-          ? 'rgba(37, 99, 235, 0.18)'
-          : 'rgba(37, 99, 235, 0.10)'
+          ? 'rgba(37, 99, 235, 0.28)'
+          : 'rgba(37, 99, 235, 0.18)'
         : theme.mode === 'dark'
           ? 'rgba(255, 255, 255, 0.04)'
           : 'rgba(15, 23, 42, 0.03)'};
+  }
+
+  /* 키보드 focus 시각화 — 마우스 click에선 안 뜨고 Tab 순회 시에만 ring */
+  &:focus {
+    outline: none;
+  }
+  &:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: -2px;
+    border-radius: 6px;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -355,7 +416,7 @@ const Row2 = styled.div`
   align-items: center;
   gap: 6px;
   min-width: 0;
-  padding-left: 24px; /* ExpandBtn 16 + gap 8 */
+  padding-left: 28px; /* ExpandBtn 20 + gap 8 — Row1 정렬 맞춤 */
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -371,8 +432,8 @@ const ExpandBtn = styled.button<{ $expanded: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: none;
   background: ${({ theme }) =>
@@ -390,8 +451,8 @@ const ExpandBtn = styled.button<{ $expanded: boolean }>`
 `
 
 const ExpandSpacer = styled.span`
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 `
 
@@ -415,48 +476,59 @@ const Title = styled.span<{ $tier: ImportanceTier }>`
   letter-spacing: -0.01em;
   line-height: 1.3;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* critical/major는 2줄까지 허용 — 긴 한국어 사건명 잘림 완화. normal은 1줄 유지(밀도 보호). */
+  ${({ $tier }) =>
+    $tier === 'normal'
+      ? css`
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        `
+      : css`
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          word-break: keep-all;
+        `}
 `
 
-/* importance — 색 신호 사용 안 함. 별 글리프로만 위계 표현. */
+/* 검색어 매칭 강조 — 노란 배경 + 진한 텍스트. 다크 모드는 amber 톤. */
+const Mark = styled.mark`
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.4)' : '#fef3c7'};
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+`
+
+/* importance — 색 신호 사용 안 함. 별 글리프 톤 다운: dot 크기와 별이 함께 위계 보조하되,
+ * 별이 카테고리 dot보다 강해 시선을 가로채지 않게 muted 색·낮은 opacity. */
 const ImportanceStars = styled.span<{ $tier: ImportanceTier }>`
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  font-size: 9.5px;
+  font-size: 9px;
   letter-spacing: 0.5px;
-  font-weight: 700;
-  color: ${({ theme, $tier }) =>
-    $tier === 'critical'
-      ? theme.mode === 'dark'
-        ? '#cbd5e1'
-        : '#475569'
-      : theme.mode === 'dark'
-        ? 'rgba(203, 213, 225, 0.7)'
-        : '#94a3b8'};
-`
-
-const CategoryDot = styled.span`
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
+  font-weight: 600;
+  opacity: ${({ $tier }) => ($tier === 'critical' ? 0.6 : 0.45)};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const CategoryLabel = styled.span`
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.01em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
   flex-shrink: 0;
+  /* color는 inline style로 카테고리 색 주입 — dot 제거하고 라벨 자체에 색 부여 */
 `
 
-const MetaSep = styled.span`
-  opacity: 0.4;
-  font-size: 11px;
-  user-select: none;
+const MetaPushRight = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
 `
 
 const Duration = styled.span`
@@ -464,6 +536,7 @@ const Duration = styled.span`
   font-weight: 500;
   letter-spacing: -0.005em;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 
   @media (max-width: 600px) {
@@ -474,7 +547,6 @@ const Duration = styled.span`
 const Flags = styled.span`
   display: inline-flex;
   align-items: center;
-  margin-left: 4px;
   flex-shrink: 0;
 `
 
@@ -482,12 +554,12 @@ const IconBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: none;
   background: transparent;
-  border-radius: 4px;
+  border-radius: 6px;
   color: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(15,23,42,0.45)'};
   cursor: pointer;
@@ -508,13 +580,13 @@ const BookmarkBtn = styled.button<{ $bookmarked: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: none;
   background: transparent;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
   color: ${({ theme, $bookmarked }) =>
     $bookmarked
       ? '#f59e0b'

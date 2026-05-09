@@ -1,3 +1,19 @@
+/**
+ * Prisma `EventCountryRole` enum 값 (DB는 대문자, API는 그대로 통과).
+ * Timeline의 대표 국가 선정 우선순위는 picker 헬퍼에서 정의.
+ */
+export type EventCountryRoleValue =
+  | 'INITIATOR'
+  | 'TARGET'
+  | 'PARTICIPANT'
+  | 'ALLY'
+  | 'ADVERSARY'
+  | 'MEDIATOR'
+  | 'OBSERVER'
+  | 'VICTIM'
+  | 'BENEFICIARY'
+  | 'OTHER'
+
 export interface EventHierarchyNode {
   id: string
   title: string
@@ -178,8 +194,19 @@ export interface HistoricalEvent {
   sectionTitles?: string[] // 작성된 섹션 제목 리스트 (deprecated)
   eventSections?: EventSection[] // 사건 섹션 목록 (새 구조)
   eventImages?: EventImage[] // 사건 이미지 목록 (새 구조)
-  relatedCountries?: Array<{ id: string; name: string; flagEmoji?: string }> // 관련 현대 국가
-  relatedHistoricalCountries?: Array<{ id: string; name: string }> // 관련 역사적 국가
+  // 관련 현대 국가 (role: 사건 내 역할 — Timeline 등에서 대표 국가 선정에 사용)
+  relatedCountries?: Array<{
+    id: string
+    name: string
+    flagEmoji?: string
+    role?: EventCountryRoleValue | null
+  }>
+  // 관련 역사적 국가
+  relatedHistoricalCountries?: Array<{
+    id: string
+    name: string
+    role?: EventCountryRoleValue | null
+  }>
   /** 키워드 (동일 사건 매핑/검색용) */
   keywords?: string[] | null
 }

@@ -24,6 +24,7 @@ interface CatalogUrlSyncArgs {
   bookmarksOnly: boolean
   selectedCategory: string
   selectedCountry: string
+  selectedContinent: string
   sortBy: SortOption
   sortDirection: 'asc' | 'desc'
   showFlatView: boolean
@@ -35,6 +36,7 @@ interface CatalogUrlSyncArgs {
   setBookmarksOnly: (v: boolean) => void
   setSelectedCategory: (v: string) => void
   setSelectedCountry: (v: string) => void
+  setSelectedContinent: (v: string) => void
   setSortBy: (v: SortOption) => void
   setSortDirection: (v: 'asc' | 'desc') => void
   setShowFlatView: (v: boolean) => void
@@ -53,6 +55,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     bookmarksOnly,
     selectedCategory,
     selectedCountry,
+    selectedContinent,
     sortBy,
     sortDirection,
     showFlatView,
@@ -62,6 +65,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setBookmarksOnly,
     setSelectedCategory,
     setSelectedCountry,
+    setSelectedContinent,
     setSortBy,
     setSortDirection,
     setShowFlatView,
@@ -90,6 +94,9 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
 
     const country = searchParams.get('country') ?? FILTER_ALL
     if (country !== selectedCountry) setSelectedCountry(country)
+
+    const continent = searchParams.get('continent') ?? FILTER_ALL
+    if (continent !== selectedContinent) setSelectedContinent(continent)
 
     const sort = (searchParams.get('sort') ?? DEFAULT_SORT) as SortOption
     if (sort !== sortBy) setSortBy(sort)
@@ -125,6 +132,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setOrDel('bookmarks', bookmarksOnly ? '1' : null)
     setOrDel('cat', selectedCategory, FILTER_ALL)
     setOrDel('country', selectedCountry, FILTER_ALL)
+    setOrDel('continent', selectedContinent, FILTER_ALL)
     setOrDel('sort', sortBy, DEFAULT_SORT)
     setOrDel('dir', sortDirection, DEFAULT_DIR)
     setOrDel('flat', showFlatView ? '1' : null)
@@ -139,6 +147,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     bookmarksOnly,
     selectedCategory,
     selectedCountry,
+    selectedContinent,
     sortBy,
     sortDirection,
     showFlatView,

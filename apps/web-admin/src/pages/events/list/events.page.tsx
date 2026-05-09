@@ -106,7 +106,9 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   )
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const [pageSize, setPageSize] = useState(20)
+  // 기본 page size 100 — 타임라인 뷰가 한 번에 더 많은 사건을 보여주도록.
+  // 사용자는 toolbar의 page size 컨트롤로 변경 가능.
+  const [pageSize, setPageSize] = useState(100)
 
   // ===== 북마크 / 최근 본 =====
   const { bookmarks, toggleBookmark } = useBookmarks()
@@ -120,8 +122,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     countryId: countryId ?? undefined,
   })
 
-  // ===== 참조 데이터 (카테고리·국가) =====
-  const { dbCategories, countries, historicalCountries } =
+  // ===== 참조 데이터 (카테고리·국가·대륙) =====
+  const { dbCategories, countries, historicalCountries, continents } =
     useCatalogReferenceData()
 
   // ===== Feature: 필터 =====
@@ -131,6 +133,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     sortDirection,
     selectedCentury,
     selectedCountry,
+    selectedContinent,
     selectedPositionType,
     showFlatView,
     setSelectedCategory,
@@ -139,6 +142,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setSortDirection,
     setSelectedCentury,
     setSelectedCountry,
+    setSelectedContinent,
     setSelectedPositionType,
     setShowFlatView,
     availableCenturies,
@@ -147,7 +151,13 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     filterSummaryChips,
     hasActiveFilters,
     handleResetFilters,
-  } = useEventFilters(events, dbCategories, countries, historicalCountries)
+  } = useEventFilters(
+    events,
+    dbCategories,
+    countries,
+    historicalCountries,
+    continents,
+  )
 
   // ===== Feature: 계층 / 직책 =====
   const {
@@ -268,6 +278,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     bookmarksOnly,
     selectedCategory,
     selectedCountry,
+    selectedContinent,
     sortBy,
     sortDirection,
     showFlatView,
@@ -277,6 +288,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setBookmarksOnly,
     setSelectedCategory,
     setSelectedCountry,
+    setSelectedContinent,
     setSortBy,
     setSortDirection,
     setShowFlatView,
@@ -366,6 +378,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       events={events}
       selectedEventId={selectedEventId}
       dbCategories={dbCategories}
+      continents={continents}
+      countries={countries}
       onSelectEvent={setSelectedEventId}
     />
   )
@@ -467,6 +481,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       displayedCount={visibleFlattenedHierarchy.length}
       hasMoreData={hasMore}
       bookmarks={bookmarks}
+      searchQuery={keywordInput}
+      recentEventIds={recentEvents}
       onToggleExpansion={toggleEventExpansion}
       onToggleTenureGroupExpansion={toggleTenureGroupExpansion}
       onSelectEvent={setSelectedEventId}
@@ -546,6 +562,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     isSearchPending,
     selectedCategory,
     selectedCountry,
+    selectedContinent,
     selectedPositionType,
     selectedCentury,
     showFlatView,
@@ -553,6 +570,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     availableCenturies,
     countries,
     historicalCountries,
+    continents,
     setShowCategoryModal,
     setShowCountryModal,
     setShowPositionTypeModal,
@@ -560,6 +578,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setSelectedCentury,
     onSelectCategory: setSelectedCategory,
     onSelectCountry: setSelectedCountry,
+    onSelectContinent: setSelectedContinent,
     onSelectPositionType: setSelectedPositionType,
     bookmarksOnly,
     toggleBookmarksOnly: () => setBookmarksOnly((v) => !v),

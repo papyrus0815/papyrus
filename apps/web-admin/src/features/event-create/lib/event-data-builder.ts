@@ -303,6 +303,9 @@ export const buildEventSubmitData = (params: {
   tags: string[]
   relatedCountryIds: string[]
   relatedHistoricalCountryIds: string[]
+  /** 메인(주도) 국가 — INITIATOR 마킹 대상. 없으면 모두 PARTICIPANT */
+  primaryCountryId?: string | null
+  primaryHistoricalCountryId?: string | null
   relatedPersons: Array<{ personId: string; role: string; note: string }>
   relatedEventIds: string[]
   sections: EventSection[]
@@ -364,6 +367,19 @@ export const buildEventSubmitData = (params: {
     relatedHistoricalCountryIds:
       params.relatedHistoricalCountryIds.length > 0
         ? params.relatedHistoricalCountryIds
+        : undefined,
+    // primary는 선택된 ID 목록 안에 있을 때만 전송. 폼에서 국가 제거됐는데 primary state가 stale이면 무시.
+    primaryCountryId:
+      params.primaryCountryId &&
+      params.relatedCountryIds.includes(params.primaryCountryId)
+        ? params.primaryCountryId
+        : undefined,
+    primaryHistoricalCountryId:
+      params.primaryHistoricalCountryId &&
+      params.relatedHistoricalCountryIds.includes(
+        params.primaryHistoricalCountryId,
+      )
+        ? params.primaryHistoricalCountryId
         : undefined,
     relatedPersons:
       [...params.relatedPersons, ...params.mentionedPersons].length > 0

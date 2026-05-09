@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
-import { useTheme } from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 import {
   FiAlertCircle,
   FiCalendar,
@@ -11,6 +11,7 @@ import {
   FiGlobe,
   FiImage,
   FiShield,
+  FiStar,
   FiTag,
   FiX,
 } from 'react-icons/fi'
@@ -69,6 +70,14 @@ interface BasicInfoSectionProps {
   availableCountries?: CountryResponseDto[]
   availableHistoricalCountries?: HistoricalCountryResponseDto[]
   onOpenCountryModal?: () => void
+  /**
+   * 메인(주도) 국가 — 별 아이콘 토글로 마킹. 저장 시 INITIATOR role로 저장되어
+   * Timeline 국가/대륙 모드의 lane 배치에 사용. 미마킹이면 모두 PARTICIPANT.
+   */
+  primaryCountryId?: string | null
+  setPrimaryCountryId?: (value: string | null) => void
+  primaryHistoricalCountryId?: string | null
+  setPrimaryHistoricalCountryId?: (value: string | null) => void
 
   // 군사 카테고리 전용 필드
   conflictType?: 'battle' | 'war' | 'siege' | 'campaign' | 'skirmish'
@@ -112,6 +121,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   dbCategories,
   relatedCountryIds = [],
   setRelatedCountryIds = () => {},
+  primaryCountryId = null,
+  setPrimaryCountryId = () => {},
+  primaryHistoricalCountryId = null,
+  setPrimaryHistoricalCountryId = () => {},
   relatedHistoricalCountryIds = [],
   setRelatedHistoricalCountryIds = () => {},
   availableCountries = [],
@@ -744,8 +757,25 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     (c) => c.id === countryId,
                   )
                   if (!country) return null
+                  const isPrimary = primaryCountryId === countryId
                   return (
                     <S.SelectedItem key={countryId}>
+                      <PrimaryToggle
+                        type="button"
+                        $active={isPrimary}
+                        title={isPrimary ? '메인 국가 — 클릭하여 해제' : '메인 국가로 지정'}
+                        aria-label={isPrimary ? '메인 국가 해제' : '메인 국가로 지정'}
+                        aria-pressed={isPrimary}
+                        onClick={() => {
+                          playClickSound()
+                          setPrimaryCountryId(isPrimary ? null : countryId)
+                        }}
+                      >
+                        <FiStar
+                          size={12}
+                          fill={isPrimary ? 'currentColor' : 'none'}
+                        />
+                      </PrimaryToggle>
                       <span>
                         {country.flagEmoji} {country.name}
                       </span>
@@ -756,6 +786,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           setRelatedCountryIds(
                             relatedCountryIds.filter((id) => id !== countryId),
                           )
+                          if (isPrimary) setPrimaryCountryId(null)
                         }}
                       >
                         <FiX size={14} />
@@ -768,8 +799,27 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     (c) => c.id === countryId,
                   )
                   if (!country) return null
+                  const isPrimary = primaryHistoricalCountryId === countryId
                   return (
                     <S.SelectedItem key={countryId}>
+                      <PrimaryToggle
+                        type="button"
+                        $active={isPrimary}
+                        title={isPrimary ? '메인 역사적 국가 — 클릭하여 해제' : '메인 역사적 국가로 지정'}
+                        aria-label={isPrimary ? '메인 역사적 국가 해제' : '메인 역사적 국가로 지정'}
+                        aria-pressed={isPrimary}
+                        onClick={() => {
+                          playClickSound()
+                          setPrimaryHistoricalCountryId(
+                            isPrimary ? null : countryId,
+                          )
+                        }}
+                      >
+                        <FiStar
+                          size={12}
+                          fill={isPrimary ? 'currentColor' : 'none'}
+                        />
+                      </PrimaryToggle>
                       <span>🏛️ {country.name}</span>
                       <S.RemoveButton
                         type="button"
@@ -780,6 +830,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                               (id) => id !== countryId,
                             ),
                           )
+                          if (isPrimary) setPrimaryHistoricalCountryId(null)
                         }}
                       >
                         <FiX size={14} />
@@ -791,7 +842,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             )}
             <S.Hint>
               이 사건과 관련된 국가들을 선택하세요 (예: 한국전쟁 → 대한민국,
-              북한, 미국, 중국 등)
+              북한, 미국, 중국 등). 좌측 ★ 별을 눌러 <strong>메인 국가</strong>를 지정하면
+              Timeline의 국가/대륙 모드 lane 배치에 사용됩니다.
             </S.Hint>
           </S.FormField>
         </S.FormRow>
@@ -799,3 +851,42 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     </S.FormSection>
   )
 }
+
+/**
+ * 메인 국가 토글 (★) — 클릭 시 해당 국가를 INITIATOR로 마킹.
+ * 한 번에 하나만 활성 가능 (radio 의미). aria-pressed로 토글 상태 노출.
+ */
+const PrimaryToggle = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin-right: 4px;
+  border: none;
+  border-radius: 4px;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.18)'
+        : 'rgba(245, 158, 11, 0.14)'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? '#f59e0b' : theme.colors.text.tertiary};
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.12)'
+        : 'rgba(245, 158, 11, 0.08)'};
+    color: #f59e0b;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #f59e0b;
+    outline-offset: 1px;
+  }
+`

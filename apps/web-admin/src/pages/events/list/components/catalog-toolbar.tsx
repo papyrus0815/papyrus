@@ -16,6 +16,7 @@ import {
 } from 'react-icons/fi'
 
 import type { CenturyFilter, FilterChip } from '@/entities/event/model'
+import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
@@ -40,6 +41,7 @@ interface Props {
   // 필터 상태 / 설정
   selectedCategory: string
   selectedCountry: string
+  selectedContinent: string
   selectedPositionType: string
   selectedCentury: CenturyFilter
   showFlatView: boolean
@@ -47,6 +49,7 @@ interface Props {
   availableCenturies: number[]
   countries: CountryResponseDto[]
   historicalCountries: HistoricalCountryResponseDto[]
+  continents: ContinentResponseDto[]
 
   setShowCategoryModal: (v: boolean) => void
   setShowCountryModal: (v: boolean) => void
@@ -57,6 +60,7 @@ interface Props {
   /** 인라인 팝오버에서 직접 선택 — FILTER_ALL 또는 id */
   onSelectCategory?: (id: string) => void
   onSelectCountry?: (id: string) => void
+  onSelectContinent?: (id: string) => void
   onSelectPositionType?: (id: string) => void
 
   // 북마크
@@ -87,6 +91,7 @@ export const CatalogToolbar: React.FC<Props> = ({
   isSearchPending = false,
   selectedCategory,
   selectedCountry,
+  selectedContinent,
   selectedPositionType,
   selectedCentury,
   showFlatView,
@@ -94,6 +99,7 @@ export const CatalogToolbar: React.FC<Props> = ({
   availableCenturies,
   countries,
   historicalCountries,
+  continents,
   setShowCategoryModal,
   setShowCountryModal,
   setShowPositionTypeModal,
@@ -101,6 +107,7 @@ export const CatalogToolbar: React.FC<Props> = ({
   setSelectedCentury,
   onSelectCategory,
   onSelectCountry,
+  onSelectContinent,
   onSelectPositionType,
   bookmarksOnly,
   toggleBookmarksOnly,
@@ -160,6 +167,7 @@ export const CatalogToolbar: React.FC<Props> = ({
       <FiltersPanel
         selectedCategory={selectedCategory}
         selectedCountry={selectedCountry}
+        selectedContinent={selectedContinent}
         selectedPositionType={selectedPositionType}
         selectedCentury={selectedCentury}
         showFlatView={showFlatView}
@@ -167,8 +175,10 @@ export const CatalogToolbar: React.FC<Props> = ({
         availableCenturies={availableCenturies}
         countries={countries}
         historicalCountries={historicalCountries}
+        continents={continents}
         onSelectCategory={onSelectCategory}
         onSelectCountry={onSelectCountry}
+        onSelectContinent={onSelectContinent}
         onSelectPositionType={onSelectPositionType}
         onShowCategoryModal={() => setShowCategoryModal(true)}
         onShowCountryModal={() => setShowCountryModal(true)}

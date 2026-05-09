@@ -12,7 +12,7 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import type { SortOption } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
@@ -25,7 +25,7 @@ import type {
 } from '../../../pages/events/create/events.types'
 import { HeadsOfStateYearGroupToggle } from '../../../pages/events/styles/list.styles'
 import * as List from '../../../pages/events/styles/list.styles'
-import * as Skeleton from '../../../pages/events/styles/skeleton.styles'
+import { shimmerAnimation } from '../../../pages/events/styles/shared.styles'
 import {
   OtherHeadsOfStateList,
   TenureGroupFooter,
@@ -64,6 +64,10 @@ interface EventCompactListProps {
   displayedCount?: number
   hasMoreData?: boolean
   bookmarks?: Set<string>
+  /** 사용자 입력 검색어 — Title의 매칭 부분 강조에 사용 */
+  searchQuery?: string
+  /** 최근 본 사건 ID — 필터 결과 0건 빈 상태에서 fallback 추천으로 노출 */
+  recentEventIds?: string[]
   onToggleExpansion: (eventId: string) => void
   onToggleTenureGroupExpansion: (tenureKey: string) => void
   onSelectEvent: (eventId: string) => void
@@ -92,6 +96,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   displayedCount = 0,
   hasMoreData = false,
   bookmarks = new Set(),
+  searchQuery,
+  recentEventIds = [],
   onToggleExpansion,
   onToggleTenureGroupExpansion,
   onSelectEvent,
@@ -211,20 +217,25 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       {isLoading ? (
         <List.CompactList>
           {[...Array(Math.min(pageSize, 12))].map((_, index) => {
+            // 실제 timeline-stop 레이아웃과 동일하게: 좌측 레일 dot + Row1(year/title) + Row2(category/duration)
             const depth = index % 3
+            // 동일 폭 반복 회피 — index 기반 폭으로 자연스러운 다양성
+            const titleW = 50 + ((index * 13) % 30) // 50~80%
+            const categoryW = 60 + ((index * 7) % 40) // 60~100px
             return (
-              <Skeleton.SkeletonListItem key={index} $depth={depth}>
-                <Skeleton.SkeletonThumbnail $depth={depth} />
-                <div style={{ flex: 1, padding: '12px 14px 12px 0' }}>
-                  <Skeleton.SkeletonHeader>
-                    <Skeleton.SkeletonExpandButton />
-                    <Skeleton.SkeletonDot />
-                    <Skeleton.SkeletonTitle />
-                  </Skeleton.SkeletonHeader>
-                  <Skeleton.SkeletonMeta />
-                  <Skeleton.SkeletonSummary />
-                </div>
-              </Skeleton.SkeletonListItem>
+              <SkeletonStop key={index} $depth={depth}>
+                <SkeletonRail aria-hidden="true" />
+                <SkeletonBody>
+                  <SkeletonRow1>
+                    <SkeletonYear />
+                    <SkeletonTitleBar style={{ width: `${titleW}%` }} />
+                  </SkeletonRow1>
+                  <SkeletonRow2>
+                    <SkeletonCategory style={{ width: `${categoryW}px` }} />
+                    <SkeletonDuration />
+                  </SkeletonRow2>
+                </SkeletonBody>
+              </SkeletonStop>
             )
           })}
         </List.CompactList>
@@ -274,6 +285,32 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               </List.EmptyCreateButton>
             )}
           </List.EmptyActions>
+          {/* 필터 결과 0건이지만 사용자가 *최근 본 사건*은 있는 경우 — fallback 추천.
+           * 빈 화면에서 "여기서 갈 곳" 단서 제공. recentEvents는 localStorage 기반 ID. */}
+          {hasActiveFilters && recentEventIds.length > 0 && (() => {
+            const byId = new Map(events.map((e) => [e.id, e]))
+            const fallbackItems = recentEventIds
+              .map((id) => byId.get(id))
+              .filter((e): e is HistoricalEvent => Boolean(e))
+              .slice(0, 5)
+            if (fallbackItems.length === 0) return null
+            return (
+              <FallbackSection>
+                <FallbackHeading>최근 본 사건</FallbackHeading>
+                <FallbackList>
+                  {fallbackItems.map((e) => (
+                    <FallbackItem
+                      key={e.id}
+                      type="button"
+                      onClick={() => onSelectEvent(e.id)}
+                    >
+                      <FallbackTitle>{e.title}</FallbackTitle>
+                    </FallbackItem>
+                  ))}
+                </FallbackList>
+              </FallbackSection>
+            )
+          })()}
         </List.EmptyCatalogState>
       ) : (
         <List.CompactList onScroll={onScroll}>
@@ -550,6 +587,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                             isInTenureGroup={!!isInTenureGroup}
                             dbCategories={dbCategories}
                             isBookmarked={bookmarks.has(node.id)}
+                            searchQuery={searchQuery}
                             onSelect={() => onSelectEvent(node.id)}
                             onToggleExpansion={() => onToggleExpansion(node.id)}
                             onShowSummary={() => onShowSummary(node.id)}
@@ -577,16 +615,25 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             })
           })()}
 
-          {/* 로딩 / 끝 안내 — 사용자가 "더 있는지" "끝인지" 즉시 알 수 있도록 */}
+          {/* 로딩 / 끝 안내 — 사용자가 "어디까지 봤는지·더 있는지·끝인지" 즉시 알 수 있도록.
+           * displayedCount를 모든 상태에 노출해 스크롤 중에도 진행도가 보임. */}
           {isLoadingMore && (
             <LoadingMoreRow>
               <List.LoadingSpinner />
-              <LoadingMoreText>더 불러오는 중…</LoadingMoreText>
+              <LoadingMoreText>
+                {displayedCount > 0
+                  ? `${displayedCount.toLocaleString()}건 표시 · 더 불러오는 중…`
+                  : '더 불러오는 중…'}
+              </LoadingMoreText>
             </LoadingMoreRow>
           )}
           {!isLoadingMore && hasMoreData && (
             <LoadingMoreRow aria-hidden="true">
-              <ScrollHintInline>↓ 스크롤하여 더 보기</ScrollHintInline>
+              <ScrollHintInline>
+                {displayedCount > 0
+                  ? `${displayedCount.toLocaleString()}건 표시 · ↓ 스크롤하여 더 보기`
+                  : '↓ 스크롤하여 더 보기'}
+              </ScrollHintInline>
             </LoadingMoreRow>
           )}
           {!isLoadingMore && !hasMoreData && displayedCount > 0 && (
@@ -606,11 +653,23 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 // styled (theme-aware)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * "이 목록에 포함된 시기의 재임 인물" 라벨 — 시기 컨텍스트를 잡아주는 우두머리 라벨.
+ * 이전엔 그냥 옅은 12px 텍스트로 떠 있어 위계 약했음. 좌측 4px 인디고 막대 + bg tint로 격상.
+ */
 const PeriodHeadsLabel = styled.div`
-  padding: 8px 0 4px;
+  padding: 10px 12px 10px 14px;
+  margin: 0 -12px 4px -12px;
   font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(37, 99, 235, 0.10)'
+      : 'rgba(37, 99, 235, 0.06)'};
+  box-shadow: inset 4px 0 0 0 #2563eb;
+  border-radius: 4px;
 `
 
 const LoadingMoreRow = styled.div`
@@ -701,4 +760,171 @@ const EndOfListText = styled.span`
     margin-left: 8px;
     opacity: 0.5;
   }
+`
+
+/**
+ * 필터 결과 0건 시 fallback 추천 — 최근 본 사건 5개 노출.
+ * 빈 상태가 죽은 화면이 되지 않도록 사용자 행동 단서 제공.
+ */
+const FallbackSection = styled.div`
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+  width: 100%;
+  max-width: 480px;
+`
+
+const FallbackHeading = styled.h4`
+  margin: 0 0 10px 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-transform: uppercase;
+`
+
+const FallbackList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const FallbackItem = styled.button`
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : 'rgba(15,23,42,0.03)'};
+    border-color: rgba(37, 99, 235, 0.32);
+  }
+`
+
+const FallbackTitle = styled.span`
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Skeleton — 실제 timeline-stop 레이아웃과 동일 구조로 렌더되어,
+// 로딩 → 실제 데이터 전환 시 시각 점프 없이 자연스러운 페인트 흐름 유지.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const skeletonBarBg = css`
+  background: linear-gradient(
+    90deg,
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(147, 197, 253, 0.08)'
+        : 'rgba(37, 99, 235, 0.08)'} 0%,
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(147, 197, 253, 0.15)'
+        : 'rgba(37, 99, 235, 0.15)'} 50%,
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(147, 197, 253, 0.08)'
+        : 'rgba(37, 99, 235, 0.08)'} 100%
+  );
+`
+
+const SkeletonStop = styled.div<{ $depth: number }>`
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  padding: 10px 12px 10px 14px;
+  margin-left: ${({ $depth }) => $depth * 22}px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.05)'
+        : 'rgba(15, 23, 42, 0.05)'};
+`
+
+const SkeletonRail = styled.span`
+  position: absolute;
+  left: -38px;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  ${skeletonBarBg}
+  ${shimmerAnimation}
+  box-shadow: 0 0 0 2px
+    ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+  z-index: 1;
+`
+
+const SkeletonBody = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+`
+
+const SkeletonRow1 = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 28px; /* ExpandSpacer 자리 */
+`
+
+const SkeletonYear = styled.span`
+  width: 36px;
+  height: 11px;
+  border-radius: 4px;
+  ${skeletonBarBg}
+  ${shimmerAnimation}
+  flex-shrink: 0;
+`
+
+const SkeletonTitleBar = styled.span`
+  height: 13px;
+  border-radius: 4px;
+  ${skeletonBarBg}
+  ${shimmerAnimation}
+  max-width: 90%;
+`
+
+const SkeletonRow2 = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 28px;
+`
+
+const SkeletonCategory = styled.span`
+  height: 10px;
+  border-radius: 3px;
+  ${skeletonBarBg}
+  ${shimmerAnimation}
+  opacity: 0.7;
+`
+
+const SkeletonDuration = styled.span`
+  margin-left: auto;
+  width: 50px;
+  height: 10px;
+  border-radius: 3px;
+  ${skeletonBarBg}
+  ${shimmerAnimation}
+  opacity: 0.7;
 `

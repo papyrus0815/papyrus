@@ -26,6 +26,14 @@ export const useBasicInfoForm = () => {
   const [relatedCountryIds, setRelatedCountryIds] = useState<string[]>([])
   const [relatedHistoricalCountryIds, setRelatedHistoricalCountryIds] =
     useState<string[]>([])
+  /**
+   * 메인(주도) 국가 — 저장 시 EventCountryRelation.role=INITIATOR로 마킹.
+   * Timeline 국가/대륙 모드의 lane 배치에 사용. 미지정이면 모두 PARTICIPANT.
+   */
+  const [primaryCountryId, setPrimaryCountryId] = useState<string | null>(null)
+  const [primaryHistoricalCountryId, setPrimaryHistoricalCountryId] = useState<
+    string | null
+  >(null)
 
   // 유효성 검증
   const isValid = () => {
@@ -73,6 +81,8 @@ export const useBasicInfoForm = () => {
     keywords,
     relatedCountryIds,
     relatedHistoricalCountryIds,
+    primaryCountryId,
+    primaryHistoricalCountryId,
 
     // 세터
     setTitle,
@@ -93,6 +103,8 @@ export const useBasicInfoForm = () => {
     setKeywords,
     setRelatedCountryIds,
     setRelatedHistoricalCountryIds,
+    setPrimaryCountryId,
+    setPrimaryHistoricalCountryId,
 
     // 유틸리티
     isValid,

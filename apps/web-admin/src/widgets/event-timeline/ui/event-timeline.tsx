@@ -10,8 +10,8 @@
  *  - 색         = 카테고리
  *  - 길이       = 기간 (단발성 minWidth=6px)
  *  - 높이       = importance (44/36/28/28)
- *  - 좌측 wedge = critical/major (색맹 보조 — WCAG 1.4.1)
- *  - dashed border = notable (normal과 시각 차등)
+ *  - dashed border = notable (normal과 시각 차등 — 색맹 보조)
+ *  - critical 안쪽 흰 dot / major 빈 ring (시점 사건 색맹 보조)
  *  - active outline = 선택 시 별도 rect (stroke center-align 회피)
  *  - focus outline = 키보드 포커스만 했을 때도 시각 단서 (rule #7)
  *
@@ -49,11 +49,14 @@ import {
 import styled, { css, keyframes } from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
+import type { ContinentResponseDto } from '@/shared/api/continents'
+import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
 import { LEDGER_CATEGORY, resolveCategory } from '../../../pages/events/ledger/styles/ledger-tokens'
 import { BRAND, MOTION } from '../../../pages/events/styles/theme'
 import type {
+  EventCountryRoleValue,
   EventHierarchyNode,
   HistoricalEvent,
 } from '../../../pages/events/create/events.types'
@@ -73,25 +76,83 @@ interface EventTimelineProps {
   events: HistoricalEvent[]
   selectedEventId: string | null
   dbCategories: EventCategoryDto[]
+  /** lane 축을 카테고리/대륙/국가로 분기하기 위한 참조 데이터 */
+  continents?: ContinentResponseDto[]
+  countries?: CountryResponseDto[]
   onSelectEvent: (id: string) => void
+}
+
+/** lane 축 — 카테고리(기존) · 대륙 · 국가. 색은 항상 카테고리. */
+type GroupBy = 'category' | 'continent' | 'country'
+
+const UNCATEGORIZED_LANE = '기타'
+
+/**
+ * 대표 국가 우선순위 — 사건이 여러 국가에 걸칠 때 *단 하나의* lane으로 보내기 위한 결정 규칙.
+ *
+ *   주도국(INITIATOR) → 대상국(TARGET) → 피해/적대국(VICTIM/ADVERSARY) → 그 외
+ *
+ * 같은 tier 내에서는 입력 순서(API 응답 순서)를 유지. role 미설정 데이터가 많을
+ * 가능성이 있어 fallback으로 *첫 번째 항목*을 사용 — 점진적으로 데이터 정리하면
+ * 자연스럽게 정확도 상승.
+ */
+const ROLE_PRIORITY: Record<EventCountryRoleValue, number> = {
+  INITIATOR: 100,
+  TARGET: 80,
+  VICTIM: 70,
+  ADVERSARY: 65,
+  ALLY: 50,
+  PARTICIPANT: 40,
+  MEDIATOR: 30,
+  BENEFICIARY: 25,
+  OBSERVER: 20,
+  OTHER: 10,
+}
+
+function pickPrimaryByRole<T extends { role?: EventCountryRoleValue | null }>(
+  items: T[] | undefined,
+): T | null {
+  if (!items || items.length === 0) return null
+  let best: T = items[0]
+  let bestScore = best.role ? (ROLE_PRIORITY[best.role] ?? 0) : 0
+  for (let i = 1; i < items.length; i++) {
+    const it = items[i]
+    const score = it.role ? (ROLE_PRIORITY[it.role] ?? 0) : 0
+    if (score > bestScore) {
+      best = it
+      bestScore = score
+    }
+  }
+  return best
 }
 
 interface BarData {
   id: string
   title: string
+  /** 색 인코딩의 기준 — groupBy와 무관하게 *카테고리* 의미 보존 */
   category: string
   importance: 'critical' | 'major' | 'notable' | 'normal'
   startYear: number
   endYear: number
   startDate: string
   endDate: string | null
+  /**
+   * lane 멤버십. *항상 단일 키* — continent/country 모드에서는 대표 국가(role
+   * INITIATOR > TARGET > ... 우선순위)의 lane으로만 배치. 미해결 시
+   * [UNCATEGORIZED_LANE]. 배열 형태는 downstream이 multi-key를 자연스럽게
+   * 처리하므로 (필요 시 향후 보조 lane 표시 등 확장 여지) 그대로 유지.
+   */
+  laneKeys: string[]
+  /** 계층 깊이 — 0=최상위, 1+=자식. 시각 차별화(opacity)·row 우선순위에 사용. */
+  depth: number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const LANE_HEIGHT = 72
+/** lane 높이 — 4-row stacking 여유 확보(이전 72에서 88로 상향). 자식 사건 노출로 lane 밀도 ↑ */
+const LANE_HEIGHT = 88
 const LANE_LABEL_WIDTH = 115
 const TOP_AXIS_HEIGHT = 40
 const PIXELS_PER_YEAR_DEFAULT = 24
@@ -156,17 +217,22 @@ const IMPORTANCE_BAR_HEIGHT: Record<BarData['importance'], number> = {
 
 /**
  * Bar row stacking — 같은 lane에서 시간 겹친 bar들을 row 단위로 분리해 모두 보이게.
- *  - MAX_BAR_ROWS: lane 안 최대 row 수. 4번째+는 "+N" overflow 배지로 노출.
- *  - ROW_DELTA: row 간 y 간격(px). LANE_HEIGHT(72) 안에서 3 row가 여유롭게 들어가도록.
+ *  - MAX_BAR_ROWS: lane 안 최대 row 수. 5번째+는 "+N" overflow 배지로 노출.
+ *  - ROW_DELTA: row 간 y 간격(px). 인접 row 막대가 시각으로 분리되려면
+ *    `ROW_DELTA >= COMPACT_BAR_HEIGHT.critical + 4` (4px 시각 여유).
  *  - COMPACT_BAR_HEIGHT: stacking 활성 lane의 bar 높이(작게). 단일 row일 땐 원래 높이 유지.
+ *
+ * 자식 사건 노출 후 밀도가 늘어 3→4로 row 한도 확장. ROW_DELTA(20)·COMPACT 높이는
+ * 4 row가 LANE_HEIGHT(88) 안에 막대 사이 간격 ≥4px 유지하도록 조정.
+ *  - 4 row 총 span = 3 × 20 = 60. 막대 critical=12 양 끝에 6px씩 → 총 72 < 88 OK.
  */
-const MAX_BAR_ROWS = 3
-const ROW_DELTA = 18
+const MAX_BAR_ROWS = 4
+const ROW_DELTA = 20
 const COMPACT_BAR_HEIGHT: Record<BarData['importance'], number> = {
-  critical: 14,
-  major: 12,
-  notable: 10,
-  normal: 10,
+  critical: 12,
+  major: 10,
+  notable: 8,
+  normal: 8,
 }
 
 /** Milestone 다이아몬드 반지름 — importance에 따라 차등 (critical 7 / major 6 / 그 외 5) */
@@ -183,7 +249,7 @@ const CLUSTER_RADIUS = 8
  * CJK 한 글자 = 12px라 *의미 있는 표시 단위*는 3글자+ellipsis(≈ 40px) 이상.
  * 이전 24px은 한 글자만 잘리고 "…"가 붙는 무의미 라벨이 나와 시선 노이즈였음.
  */
-const EXT_LABEL_MIN_WIDTH = 40
+const EXT_LABEL_MIN_WIDTH = 24
 
 /**
  * Bar 안 라벨 표시 최소 폭. 이전 70 → 80으로 상향:
@@ -208,8 +274,8 @@ type RenderBar = {
   h: number
   showExternalLabel: boolean
   externalLabelWidth: number
-  /** 0 = 위(기본), 1 = 아래 — staggering 시 충돌 회피 */
-  labelRow: 0 | 1
+  /** 0 = 막대 중앙(기본), 1 = 아래, 2 = 위, 3 = 더 아래 — 4-row staggering 시 충돌 회피 */
+  labelRow: 0 | 1 | 2 | 3
 }
 type RenderMilestone = {
   kind: 'milestone'
@@ -220,7 +286,7 @@ type RenderMilestone = {
   r: number
   showExternalLabel: boolean
   externalLabelWidth: number
-  labelRow: 0 | 1
+  labelRow: 0 | 1 | 2 | 3
 }
 type RenderCluster = {
   kind: 'cluster'
@@ -236,7 +302,7 @@ type RenderCluster = {
   category: string
   showExternalLabel: boolean
   externalLabelWidth: number
-  labelRow: 0 | 1
+  labelRow: 0 | 1 | 2 | 3
 }
 type RenderItem = RenderBar | RenderMilestone | RenderCluster
 
@@ -278,8 +344,15 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   events,
   selectedEventId,
   dbCategories,
+  continents = [],
+  countries = [],
   onSelectEvent,
 }) => {
+  /**
+   * lane 그룹 축. UI segmented control이 토글. category가 기본(기존 동작 유지).
+   * 변경 시 lane 폭발(국가 모드)에 대비해 별도 cap을 lanes useMemo에서 적용.
+   */
+  const [groupBy, setGroupBy] = useState<GroupBy>('category')
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const tooltipIdRef = useRef(`tl-tooltip-${Math.random().toString(36).slice(2, 9)}`)
@@ -373,13 +446,33 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
    *  경우 다시 실행되지 않아 containerSize가 영원히 0인 버그가 있었음.)
    */
 
+  /**
+   * country.id → continent.name 매핑 (lane 라벨에 한글 대륙명을 직접 쓰기 위해
+   * id가 아닌 name으로 키잉). country.id → 국가명/플래그 lookup도 함께.
+   */
+  const countryLaneInfo = useMemo(() => {
+    const continentNameById = new Map<string, string>()
+    for (const c of continents) continentNameById.set(c.id, c.name)
+    const countryToContinentName = new Map<string, string>()
+    const countryToLabel = new Map<string, string>()
+    for (const c of countries) {
+      if (c.continentId) {
+        const contName = continentNameById.get(c.continentId)
+        if (contName) countryToContinentName.set(c.id, contName)
+      }
+      countryToLabel.set(c.id, c.flagEmoji ? `${c.flagEmoji} ${c.name}` : c.name)
+    }
+    return { countryToContinentName, countryToLabel }
+  }, [continents, countries])
+
   // ── 막대 데이터 추출 ───────────────────────────────────────────────────
   const allBars = useMemo<BarData[]>(() => {
     const out: BarData[] = []
     const eventById = new Map(events.map((e) => [e.id, e]))
 
     for (const item of flattenedHierarchy) {
-      if (item.depth !== 0) continue
+      // 자식 사건도 동등하게 표시 — 자식도 자기 시점·기간·중요도를 가진 독립 사건.
+      // 같은 lane에서 row stacking이 부모/자식 시각 분리 처리.
       const node = item.node
       const root = eventById.get(node.id) ?? item.parentEvent
       if (!root) continue
@@ -393,19 +486,52 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       const endYear =
         end.getFullYear() + (end.getMonth() + end.getDate() / 31) / 12
       const importance = (node.importance as BarData['importance']) ?? 'normal'
+      const category = root.category || 'other'
+
+      /**
+       * lane 멤버십 — groupBy에 따라 분기. *대표 국가 1개*만 선정해 단일 lane에
+       * 배치한다 (이전 multi-lane 복제는 시각 노이즈 + 카운트 inflation 문제).
+       *
+       *  - category: 색-lane 1:1 동일 (기존)
+       *  - continent: 대표 국가의 대륙 1개. 미해결 = 기타.
+       *  - country: 대표 국가 1개. 역사적 국가는 v1 lane 키만 노출(continentId 부재).
+       */
+      let laneKeys: string[]
+      if (groupBy === 'continent') {
+        const primary = pickPrimaryByRole(root.relatedCountries)
+        const contName = primary
+          ? countryLaneInfo.countryToContinentName.get(primary.id)
+          : undefined
+        laneKeys = [contName ?? UNCATEGORIZED_LANE]
+      } else if (groupBy === 'country') {
+        const primary = pickPrimaryByRole(root.relatedCountries)
+        if (primary) {
+          const label = countryLaneInfo.countryToLabel.get(primary.id) ?? primary.name
+          laneKeys = [label]
+        } else {
+          // 현대 국가 없음 → 역사적 국가 대표라도
+          const histPrimary = pickPrimaryByRole(root.relatedHistoricalCountries)
+          laneKeys = [histPrimary ? histPrimary.name : UNCATEGORIZED_LANE]
+        }
+      } else {
+        laneKeys = [category]
+      }
+
       out.push({
         id: node.id,
         title: node.title,
-        category: root.category || 'other',
+        category,
         importance,
         startYear,
         endYear: Math.max(endYear, startYear),
         startDate: startStr,
         endDate: endStr ?? null,
+        laneKeys,
+        depth: item.depth,
       })
     }
     return out
-  }, [flattenedHierarchy, events])
+  }, [flattenedHierarchy, events, groupBy, countryLaneInfo])
 
   /** 사용자가 legend로 hide한 카테고리는 막대/lane에서 제외 */
   const bars = useMemo(
@@ -468,28 +594,89 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
   // ── 레인 ────────────────────────────────────────────────────────────────
   /**
-   * lane key/label 모두 한글 카테고리 이름. 알려진(LEDGER_CATEGORY) 카테고리를
-   * 정해진 순서로 먼저 깔고, 데이터에만 있는 미등록 카테고리는 뒤에 append.
-   * dbCategories는 DB에서 받은 사용자 정의 카테고리 fallback 라벨용.
+   * lane key/label — groupBy 모드별 분기.
+   *  - category: KNOWN_CATEGORIES(LEDGER_CATEGORY) 순서, 데이터-only 카테고리 append
+   *  - continent: 데이터에서 등장한 대륙 + 기타 (continents 참조 데이터 순서 우선)
+   *  - country: 등장 빈도 desc, 동률은 가나다, 상위 N개 + 기타. 폭발 방지.
+   *
+   * 모든 모드에서 *데이터에 등장한 적 없는* 빈 lane은 표시 X.
    */
+  const COUNTRY_LANE_CAP = 25
   const lanes = useMemo<{ key: string; label: string }[]>(() => {
-    const present = new Set(allBars.map((b) => b.category))
-    const ordered: { key: string; label: string }[] = []
-    const seen = new Set<string>()
-    for (const name of KNOWN_CATEGORIES) {
-      ordered.push({ key: name, label: name })
-      seen.add(name)
+    if (groupBy === 'category') {
+      const present = new Set(allBars.map((b) => b.category))
+      const ordered: { key: string; label: string }[] = []
+      const seen = new Set<string>()
+      for (const name of KNOWN_CATEGORIES) {
+        ordered.push({ key: name, label: name })
+        seen.add(name)
+      }
+      for (const c of present) {
+        if (seen.has(c)) continue
+        ordered.push({
+          key: c,
+          label: dbCategories.find((d) => d.name === c)?.name ?? c,
+        })
+        seen.add(c)
+      }
+      return ordered
     }
-    for (const c of present) {
-      if (seen.has(c)) continue
-      ordered.push({
-        key: c,
-        label: dbCategories.find((d) => d.name === c)?.name ?? c,
+
+    // continent / country 공통: 등장한 lane key를 빈도/사전 순으로 정렬
+    const counts = new Map<string, number>()
+    for (const b of allBars) {
+      for (const k of b.laneKeys) {
+        counts.set(k, (counts.get(k) ?? 0) + 1)
+      }
+    }
+
+    if (groupBy === 'continent') {
+      const present = new Set(counts.keys())
+      const ordered: { key: string; label: string }[] = []
+      const seen = new Set<string>()
+      // 참조 데이터 순서를 우선 (관리자가 정의한 순서를 존중)
+      for (const c of continents) {
+        if (present.has(c.name)) {
+          ordered.push({ key: c.name, label: c.name })
+          seen.add(c.name)
+        }
+      }
+      // 데이터에만 있는 / 미등록 lane (UNCATEGORIZED 포함) 뒤에 append
+      for (const k of present) {
+        if (seen.has(k)) continue
+        if (k === UNCATEGORIZED_LANE) continue
+        ordered.push({ key: k, label: k })
+        seen.add(k)
+      }
+      if (present.has(UNCATEGORIZED_LANE)) {
+        ordered.push({ key: UNCATEGORIZED_LANE, label: UNCATEGORIZED_LANE })
+      }
+      return ordered
+    }
+
+    // country — count desc, tiebreak alphabetical (locale 'ko')
+    const sorted = Array.from(counts.entries())
+      .filter(([k]) => k !== UNCATEGORIZED_LANE)
+      .sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1]
+        return a[0].localeCompare(b[0], 'ko')
       })
-      seen.add(c)
+    const top = sorted.slice(0, COUNTRY_LANE_CAP)
+    const ordered: { key: string; label: string }[] = top.map(([k]) => ({
+      key: k,
+      label: k,
+    }))
+    const overflowed = sorted.length > COUNTRY_LANE_CAP
+    if (overflowed || counts.has(UNCATEGORIZED_LANE)) {
+      ordered.push({
+        key: UNCATEGORIZED_LANE,
+        label: overflowed
+          ? `${UNCATEGORIZED_LANE} (그 외 ${sorted.length - COUNTRY_LANE_CAP}개국)`
+          : UNCATEGORIZED_LANE,
+      })
     }
     return ordered
-  }, [allBars, dbCategories])
+  }, [groupBy, allBars, dbCategories, continents])
 
   /** legend로 숨기지 않은 lane만 그리기 */
   const visibleLanes = useMemo(
@@ -1073,16 +1260,26 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
    */
   const barsSortedByLane = useMemo(() => {
     const byLane = new Map<string, BarData[]>()
+    const hasUncat = laneIndex.has(UNCATEGORIZED_LANE)
     for (const b of bars) {
-      const arr = byLane.get(b.category) ?? []
-      arr.push(b)
-      byLane.set(b.category, arr)
+      // valid lane key만 추림. 모두 cap-out이면 UNCATEGORIZED_LANE 폴백(있을 때만).
+      const valid = b.laneKeys.filter((k) => laneIndex.has(k))
+      const targets = valid.length > 0
+        ? valid
+        : hasUncat
+          ? [UNCATEGORIZED_LANE]
+          : []
+      for (const k of targets) {
+        const arr = byLane.get(k) ?? []
+        arr.push(b)
+        byLane.set(k, arr)
+      }
     }
     for (const [, arr] of byLane) {
       arr.sort((a, b) => a.startYear - b.startYear)
     }
     return byLane
-  }, [bars])
+  }, [bars, laneIndex])
 
   const renderResult = useMemo<{
     items: RenderItem[]
@@ -1111,8 +1308,8 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
      * 0.85x 이상이면 모든 importance 시도. 충돌은 staggering + conflict resolution이 처리. */
     const minLabelTier = labelImportanceMinTier(zoom)
 
-    for (const [category, arr] of barsSortedByLane) {
-      const lane = laneIndex.get(category)
+    for (const [laneKey, arr] of barsSortedByLane) {
+      const lane = laneIndex.get(laneKey)
       if (lane == null) continue
       const laneCenter = TOP_AXIS_HEIGHT + lane * LANE_HEIGHT + LANE_HEIGHT / 2
 
@@ -1123,8 +1320,6 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
         w: number
         cx: number
         kind: 'bar' | 'milestone'
-        /** y offset — 같은 lane 안 milestone 충돌 row 보정 */
-        yOffset: number
       }
       const pre: Pre[] = arr.map((b) => {
         const x = (b.startYear - minYear) * pixelsPerYear
@@ -1132,42 +1327,21 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
         const semanticW = (b.endYear - b.startYear) * pixelsPerYear
         const kind: 'bar' | 'milestone' = semanticW < SHORT_BAR_PX ? 'milestone' : 'bar'
         const cx = kind === 'milestone' ? x + Math.max(2, semanticW / 2) : x
-        return { bar: b, x, w, cx, kind, yOffset: 0 }
+        return { bar: b, x, w, cx, kind }
+      })
+      // 같은 시작 시각이면 부모(depth 낮음) 먼저 — row 0 우선 선점.
+      pre.sort((a, b) => {
+        if (a.x !== b.x) return a.x - b.x
+        return a.bar.depth - b.bar.depth
       })
 
       /**
-       * milestone 충돌 회피 — 같은 lane 안에서 cx 기준으로 너무 가까운(< 18px) 다이아몬드들에
-       * row offset 부여. 클러스터로 묶이지 않은 4개 이하 케이스에서 시각 분리.
-       *   row 0 → offset 0, row 1 → -12, row 2 → +12, row 3 → -22, ...
-       */
-      const milestoneRowEnds: number[] = []
-      for (const p of pre) {
-        if (p.kind !== 'milestone') continue
-        let row = -1
-        for (let i = 0; i < milestoneRowEnds.length; i++) {
-          if (p.cx - milestoneRowEnds[i] >= 18) {
-            row = i
-            break
-          }
-        }
-        if (row === -1) {
-          row = milestoneRowEnds.length
-          milestoneRowEnds.push(p.cx)
-        } else {
-          milestoneRowEnds[row] = p.cx
-        }
-        if (row > 0) {
-          const sign = row % 2 === 0 ? 1 : -1
-          const magnitude = Math.ceil(row / 2) * 12
-          p.yOffset = sign * magnitude
-        }
-      }
-
-      /**
-       * Bar row 할당 — 같은 lane 안에서 시간 겹친 bar들을 row 단위로 분리.
-       *  - 그리디 interval scheduling: 시작 시각 순으로 가장 빠르게 비는 row에 배치.
-       *  - row 인덱스가 MAX_BAR_ROWS-1(=2)을 초과하면 *숨김* + overflow 카운트.
-       *  - milestone은 별도 yOffset 처리(이미 위에서) — bar row 할당과 무관.
+       * 통합 row 할당 — bar/milestone 모두 같은 row 좌표계 공유.
+       * 이전엔 milestone이 별도 yOffset(±12, ±22)로 laneCenter 근처에 배치되어
+       * bar row 1/2(±10)와 시각적으로 겹치는 케이스가 있었음.
+       * 이제 둘 다 동일 ROW_DELTA 간격(20px)에 정렬 → 인접 row끼리 막대 사이 4px 시각 여유 확보.
+       *
+       * milestone hitbox는 8px 폭(시각 6px + 패딩)으로 잡아 너무 가까운 milestone끼리도 row 분리.
        */
       const barRowOf = new Map<string, number>()
       const hiddenBarIds = new Set<string>()
@@ -1175,34 +1349,42 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       const barEndsByRow: number[] = []
       let laneOverflow = 0
       for (const p of pre) {
-        if (p.kind !== 'bar') continue
+        // milestone은 점이지만 충돌 회피 hitbox 8px로 처리(시각 6px + 좌우 1px씩 패딩)
+        const itemStart = p.kind === 'milestone' ? p.cx - 4 : p.x
+        const itemEnd = p.kind === 'milestone' ? p.cx + 4 : p.x + p.w
         let assignedRow = -1
         for (let r = 0; r < barEndsByRow.length; r++) {
-          if (barEndsByRow[r] <= p.x) {
+          if (barEndsByRow[r] <= itemStart) {
             assignedRow = r
-            barEndsByRow[r] = p.x + p.w
+            barEndsByRow[r] = itemEnd
             break
           }
         }
         if (assignedRow === -1) {
           if (barEndsByRow.length < MAX_BAR_ROWS) {
             assignedRow = barEndsByRow.length
-            barEndsByRow.push(p.x + p.w)
+            barEndsByRow.push(itemEnd)
           } else {
-            // 모든 row가 차 있어 들어갈 자리 없음 → 숨김
-            hiddenBarIds.add(p.bar.id)
-            hiddenBarList.push(p.bar)
-            laneOverflow++
-            continue
+            // milestone은 cluster 처리 가능하므로 hidden 처리 안 함 — 다음 단계 클러스터링이 흡수.
+            // bar는 hidden + overflow.
+            if (p.kind === 'bar') {
+              hiddenBarIds.add(p.bar.id)
+              hiddenBarList.push(p.bar)
+              laneOverflow++
+              continue
+            } else {
+              // milestone은 어쩔 수 없이 마지막 row에 강제 배치 (cluster pass에서 묶이길 기대)
+              assignedRow = MAX_BAR_ROWS - 1
+            }
           }
         }
         barRowOf.set(p.bar.id, assignedRow)
       }
       const usedBarRows = Math.min(MAX_BAR_ROWS, barEndsByRow.length)
-      if (usedBarRows > 0) rowsByLane.set(category, usedBarRows)
+      if (usedBarRows > 0) rowsByLane.set(laneKey, usedBarRows)
       if (laneOverflow > 0) {
-        overflowByLane.set(category, laneOverflow)
-        overflowBarsByLane.set(category, hiddenBarList)
+        overflowByLane.set(laneKey, laneOverflow)
+        overflowBarsByLane.set(laneKey, hiddenBarList)
       }
 
       // 2단계: milestone 클러스터링 — 연속된 milestone들이 CLUSTER_GAP_PX 이내 CLUSTER_MIN_COUNT개+ 면 묶음
@@ -1252,24 +1434,31 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
         labelWidth: number
         baselineShow: boolean
       }
+      // pill 바운드 계산 헬퍼 — milestone은 6px, cluster는 +N 텍스트 폭 기반
+      const milestoneHalf = MIN_BAR_WIDTH / 2
+      const clusterHalf = (b: { items: Pre[] }) =>
+        Math.max(28, `+${b.items.length}`.length * 7 + 14) / 2
       const bucketInfos: BucketInfo[] = []
       for (let i = 0; i < buckets.length; i++) {
         const b = buckets[i]
         const next = buckets[i + 1]
-        const myStart =
-          b.isCluster || b.items[0].kind === 'milestone'
-            ? b.items[0].cx - MILESTONE_RADIUS[b.items[0].bar.importance]
+        const myStart = b.isCluster
+          ? (b.items[0].cx + b.items[b.items.length - 1].cx) / 2 - clusterHalf(b)
+          : b.items[0].kind === 'milestone'
+            ? b.items[0].cx - milestoneHalf
             : b.items[0].x
-        const myEnd =
-          b.isCluster || b.items[0].kind === 'milestone'
-            ? b.items[b.items.length - 1].cx +
-              MILESTONE_RADIUS[b.items[0].bar.importance]
+        const myEnd = b.isCluster
+          ? (b.items[0].cx + b.items[b.items.length - 1].cx) / 2 + clusterHalf(b)
+          : b.items[0].kind === 'milestone'
+            ? b.items[0].cx + milestoneHalf
             : b.items[0].x + b.items[0].w
         const nextStart = next
-          ? next.items[0].kind === 'milestone'
-            ? next.items[0].cx -
-              MILESTONE_RADIUS[next.items[0].bar.importance]
-            : next.items[0].x
+          ? next.isCluster
+            ? (next.items[0].cx + next.items[next.items.length - 1].cx) / 2 -
+              clusterHalf(next)
+            : next.items[0].kind === 'milestone'
+              ? next.items[0].cx - milestoneHalf
+              : next.items[0].x
           : Infinity
         const gap = nextStart - myEnd
         const candidateWidth = Math.min(EXT_LABEL_MAX_WIDTH, gap - 8)
@@ -1294,19 +1483,23 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       }
 
       /**
-       * Pass 2: row 0(위), row 1(아래) 교대로 라벨 배치.
+       * Pass 2: row 0(중앙) → 1(아래) → 2(위) → 3(더 아래) 4-row 라벨 배치.
        * 각 row는 `lastEndX[row]`를 추적 — 라벨이 그 row에 들어가려면
-       * `myStart >= lastEndX[row] + STAGGER_GAP`. 둘 다 안 되면 충돌 → importance 비교로 steal 또는 drop.
+       * `myStart >= lastEndX[row] + STAGGER_GAP`. 모두 충돌이면 importance 비교로 steal 또는 drop.
+       *
+       * 빽빽한 시기에 라벨 노출률 ↑ 위해 2-row → 4-row 확장. 빈 row 있으면 그쪽에 우선 배치.
        */
-      const lastLabelEndX = [-Infinity, -Infinity] // row 0(상), row 1(하)
+      type RowIdx = 0 | 1 | 2 | 3
+      const ROW_COUNT: RowIdx[] = [0, 1, 2, 3]
+      const lastLabelEndX = [-Infinity, -Infinity, -Infinity, -Infinity]
       const lastLabelOwner: Array<{
         bucketIdx: number
         importance: BarData['importance']
-      } | null> = [null, null]
+      } | null> = [null, null, null, null]
       const STAGGER_GAP = 6
       const labelDecision = new Map<
         number,
-        { show: boolean; row: 0 | 1 }
+        { show: boolean; row: RowIdx }
       >()
 
       for (const info of bucketInfos) {
@@ -1322,37 +1515,35 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
           labelDecision.set(info.idx, { show: false, row: 0 })
           continue
         }
-        // row 0/1 충돌 검사 — 어느 한 row라도 비어 있으면 그 row에 배치
-        const fitsRow0 = info.startX >= lastLabelEndX[0] + STAGGER_GAP
-        const fitsRow1 = info.startX >= lastLabelEndX[1] + STAGGER_GAP
         const labelEnd = info.endX + 4 + info.labelWidth
-
-        if (fitsRow0) {
-          lastLabelEndX[0] = labelEnd
-          lastLabelOwner[0] = {
+        // 우선순위 순(0→1→2→3)으로 빈 row에 배치
+        let placedRow: RowIdx | null = null
+        for (const r of ROW_COUNT) {
+          if (info.startX >= lastLabelEndX[r] + STAGGER_GAP) {
+            placedRow = r
+            break
+          }
+        }
+        if (placedRow !== null) {
+          lastLabelEndX[placedRow] = labelEnd
+          lastLabelOwner[placedRow] = {
             bucketIdx: info.idx,
             importance: info.importance,
           }
-          labelDecision.set(info.idx, { show: true, row: 0 })
-        } else if (fitsRow1) {
-          lastLabelEndX[1] = labelEnd
-          lastLabelOwner[1] = {
-            bucketIdx: info.idx,
-            importance: info.importance,
-          }
-          labelDecision.set(info.idx, { show: true, row: 1 })
+          labelDecision.set(info.idx, { show: true, row: placedRow })
         } else {
-          // 두 row 모두 충돌 — importance-weighted steal 시도
-          // 가장 importance 낮은 owner 찾고, 내가 더 중요하면 steal
+          // 모든 row 충돌 — importance-weighted steal: 가장 importance 낮은 row 후보 찾기
           const myTier = LABEL_IMPORTANCE_TIER[info.importance]
-          let weakestRow: 0 | 1 = 0
-          if (
-            lastLabelOwner[1] &&
-            (!lastLabelOwner[0] ||
-              LABEL_IMPORTANCE_TIER[lastLabelOwner[1].importance] <
-                LABEL_IMPORTANCE_TIER[lastLabelOwner[0].importance])
-          ) {
-            weakestRow = 1
+          let weakestRow: RowIdx = 0
+          let weakestTier = Infinity
+          for (const r of ROW_COUNT) {
+            const owner = lastLabelOwner[r]
+            if (!owner) continue
+            const t = LABEL_IMPORTANCE_TIER[owner.importance]
+            if (t < weakestTier) {
+              weakestTier = t
+              weakestRow = r
+            }
           }
           const weakest = lastLabelOwner[weakestRow]
           if (weakest && myTier > LABEL_IMPORTANCE_TIER[weakest.importance]) {
@@ -1374,7 +1565,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       const items: RenderItem[] = []
       for (let i = 0; i < buckets.length; i++) {
         const b = buckets[i]
-        const decision = labelDecision.get(i) ?? { show: false, row: 0 }
+        const decision = labelDecision.get(i) ?? { show: false, row: 0 as RowIdx }
         const showExt = decision.show
         const info = bucketInfos[i]
         const labelWidth = info.labelWidth
@@ -1387,9 +1578,14 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
           // startYear 평균 — milestone들의 시점 중심 (endYear는 거의 startYear와 동일)
           const centerYear =
             b.items.reduce((acc, it) => acc + it.bar.startYear, 0) / b.items.length
+          /**
+           * 클러스터 색은 lane key가 아니라 *대표 사건의 카테고리*. continent/country
+           * 모드에서 lane key는 카테고리가 아니므로 그대로 색에 넘기면 fallback color
+           * 가 떨어진다.
+           */
           items.push({
             kind: 'cluster',
-            id: `cluster-${category}-${first.bar.id}`,
+            id: `cluster-${laneKey}-${first.bar.id}`,
             bars: b.items.map((it) => it.bar),
             cx: centerCx,
             cy: laneCenter,
@@ -1397,46 +1593,44 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
             startYear: first.bar.startYear,
             endYear: last.bar.endYear,
             centerYear,
-            category,
+            category: first.bar.category,
             showExternalLabel: showExt,
             externalLabelWidth: labelWidth,
             labelRow,
           })
         } else {
           const it = b.items[0]
+          // 통합 row 좌표 — milestone과 bar 모두 동일 좌표계 공유로 시각 정렬.
+          const rowsBlockHalf = ((usedBarRows - 1) * ROW_DELTA) / 2
+          const itemRow = barRowOf.get(it.bar.id) ?? 0
+          const itemRowCenter =
+            laneCenter - rowsBlockHalf + itemRow * ROW_DELTA
           if (it.kind === 'milestone') {
             items.push({
               kind: 'milestone',
-              id: it.bar.id,
+              id: `${laneKey}-${it.bar.id}`,
               bar: it.bar,
               cx: it.cx,
-              cy: laneCenter + it.yOffset,
+              cy: itemRowCenter,
               r: MILESTONE_RADIUS[it.bar.importance],
               showExternalLabel: showExt,
               externalLabelWidth: labelWidth,
               labelRow,
             })
           } else {
-            // 숨김 처리된 bar는 렌더 X (overflow 배지로 라벨 영역에서 표시).
             if (hiddenBarIds.has(it.bar.id)) continue
-            const row = barRowOf.get(it.bar.id) ?? 0
             const isStacking = usedBarRows > 1
             const h = isStacking
               ? COMPACT_BAR_HEIGHT[it.bar.importance]
               : IMPORTANCE_BAR_HEIGHT[it.bar.importance]
-            // row stacking — used row 수 기준으로 lane 안 균등 분포.
-            //   1 row → laneCenter, 2 rows → ±ROW_DELTA/2, 3 rows → -ROW_DELTA, 0, +ROW_DELTA
-            const rowsBlockHalf = ((usedBarRows - 1) * ROW_DELTA) / 2
-            const myRowCenter = laneCenter - rowsBlockHalf + row * ROW_DELTA
             items.push({
               kind: 'bar',
-              id: it.bar.id,
+              id: `${laneKey}-${it.bar.id}`,
               bar: it.bar,
               x: it.x,
-              y: myRowCenter - h / 2,
+              y: itemRowCenter - h / 2,
               w: it.w,
               h,
-              // 막대 안에 라벨 표시되는 경우(w > BAR_INSIDE_LABEL_MIN_PX)는 외부 라벨 안 그림
               showExternalLabel: showExt && it.w <= BAR_INSIDE_LABEL_MIN_PX,
               externalLabelWidth: labelWidth,
               labelRow,
@@ -1595,48 +1789,33 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     : `${formatYearLabel(minYear)}–${formatYearLabel(maxYear)}`
 
   /**
-   * Lane별 top 사건 — lane 좌측 라벨 아래 mini text로. 라벨이 다 안 나와도
-   * "이 카테고리 대표 사건" 즉시 인지. critical 우선, 없으면 major, 없으면 첫 항목.
-   */
-  const laneTopBars = useMemo(() => {
-    const byLane = new Map<string, BarData[]>()
-    for (const b of bars) {
-      const arr = byLane.get(b.category) ?? []
-      arr.push(b)
-      byLane.set(b.category, arr)
-    }
-    const out = new Map<string, BarData[]>()
-    for (const [k, arr] of byLane) {
-      const sorted = [...arr].sort((a, b) => {
-        const ta = LABEL_IMPORTANCE_TIER[a.importance]
-        const tb = LABEL_IMPORTANCE_TIER[b.importance]
-        if (ta !== tb) return tb - ta
-        return a.startYear - b.startYear
-      })
-      out.set(k, sorted.slice(0, 2))
-    }
-    return out
-  }, [bars])
-
-  /**
    * Lane별 decade 밀도 — 라벨이 안 보여도 *어디에 사건이 많은지* 시각 단서.
    * lane 하단에 5px 밴드로 그라데이션 strip 렌더.
    */
   const laneDensity = useMemo(() => {
     const byLane = new Map<string, { byDecade: Map<number, number>; max: number }>()
+    const hasUncat = laneIndex.has(UNCATEGORIZED_LANE)
     for (const b of bars) {
+      const valid = b.laneKeys.filter((k) => laneIndex.has(k))
+      const targets = valid.length > 0
+        ? valid
+        : hasUncat
+          ? [UNCATEGORIZED_LANE]
+          : []
       const decade = Math.floor(b.startYear / 10) * 10
-      let entry = byLane.get(b.category)
-      if (!entry) {
-        entry = { byDecade: new Map(), max: 0 }
-        byLane.set(b.category, entry)
+      for (const k of targets) {
+        let entry = byLane.get(k)
+        if (!entry) {
+          entry = { byDecade: new Map(), max: 0 }
+          byLane.set(k, entry)
+        }
+        const cur = (entry.byDecade.get(decade) ?? 0) + 1
+        entry.byDecade.set(decade, cur)
+        if (cur > entry.max) entry.max = cur
       }
-      const cur = (entry.byDecade.get(decade) ?? 0) + 1
-      entry.byDecade.set(decade, cur)
-      if (cur > entry.max) entry.max = cur
     }
     return byLane
-  }, [bars])
+  }, [bars, laneIndex])
 
   /**
    * 현재 viewport 안 critical 사건 — 헤더에 chip으로. 라벨이 충돌해 가려졌어도
@@ -1804,11 +1983,34 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
   // ── render ──────────────────────────────────────────────────────────────
   /**
-   * legend는 모든 lane을 노출. 이전엔 10개 슬라이스로 잘랐는데, lane 11개+
-   * 환경에서는 11번째부터 hide/show 토글이 불가능했다(노출만 안 될 뿐 lane은
-   * 살아 있어 데이터 무결성 침해). 카테고리는 동적이므로 모두 표시한다.
+   * legend는 *항상 카테고리 기준*. 색 인코딩 = 카테고리이고, hide 토글은
+   * b.category로 거른다(`hiddenCategories`). groupBy가 continent/country여도
+   * 색 의미와 hide 의미를 일관되게 유지하려면 legend는 lane이 아닌 카테고리를
+   * 노출해야 한다.
+   *
+   * lane 모드일 때는 lanes(=KNOWN_CATEGORIES + 데이터)를 그대로 쓰면 되지만,
+   * continent/country 모드에서는 별도로 데이터 카테고리를 모아 쓴다.
    */
-  const legendItems = lanes
+  const legendItems = useMemo<{ key: string; label: string }[]>(() => {
+    if (groupBy === 'category') return lanes
+    const present = new Set(allBars.map((b) => b.category))
+    const ordered: { key: string; label: string }[] = []
+    const seen = new Set<string>()
+    for (const name of KNOWN_CATEGORIES) {
+      if (present.has(name)) {
+        ordered.push({ key: name, label: name })
+        seen.add(name)
+      }
+    }
+    for (const c of present) {
+      if (seen.has(c)) continue
+      ordered.push({
+        key: c,
+        label: dbCategories.find((d) => d.name === c)?.name ?? c,
+      })
+    }
+    return ordered
+  }, [groupBy, lanes, allBars, dbCategories])
   const anyHidden = hiddenCategories.size > 0
 
   return (
@@ -1877,6 +2079,30 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
             </CardHint>
           </CardTitleGroup>
           <HeaderActions>
+            <GroupByControls
+              role="radiogroup"
+              aria-label="lane 그룹 — 카테고리/대륙/국가"
+            >
+              {(
+                [
+                  { v: 'category', label: '카테고리' },
+                  { v: 'continent', label: '대륙' },
+                  { v: 'country', label: '국가' },
+                ] as Array<{ v: GroupBy; label: string }>
+              ).map(({ v, label }) => (
+                <GroupBySegment
+                  key={v}
+                  type="button"
+                  role="radio"
+                  aria-checked={groupBy === v}
+                  $active={groupBy === v}
+                  onClick={() => setGroupBy(v)}
+                  title={`lane을 ${label}별로 표시`}
+                >
+                  {label}
+                </GroupBySegment>
+              ))}
+            </GroupByControls>
             <YearJumpInput
               type="number"
               defaultValue=""
@@ -2004,7 +2230,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
             <ShapeLegendWrap data-shape-legend>
               <ZoomButton
                 type="button"
-                aria-label="모양 범례 — 다이아·네모·wedge 의미"
+                aria-label="모양 범례 — pill 의미"
                 aria-expanded={shapeLegendOpen}
                 aria-haspopup="dialog"
                 title="모양 의미 설명"
@@ -2018,56 +2244,44 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                   <ShapeLegendRow>
                     <ShapeLegendIcon aria-hidden="true">
                       <svg width="20" height="14" viewBox="0 0 20 14">
-                        <rect x="0" y="2" width="20" height="10" rx="2" fill="#2563eb" />
+                        <rect x="0" y="2" width="20" height="10" rx="5" fill="#2563eb" />
                       </svg>
                     </ShapeLegendIcon>
                     <ShapeLegendText>
-                      <strong>네모</strong>
-                      <span>기간 있는 사건 (현 줌에서 ≥8px)</span>
+                      <strong>긴 pill</strong>
+                      <span>기간 있는 사건 (폭 = 기간)</span>
                     </ShapeLegendText>
                   </ShapeLegendRow>
                   <ShapeLegendRow>
                     <ShapeLegendIcon aria-hidden="true">
                       <svg width="20" height="14" viewBox="0 0 20 14">
-                        <polygon points="10,1 18,7 10,13 2,7" fill="#2563eb" />
+                        <rect x="7" y="2" width="6" height="10" rx="3" fill="#2563eb" />
                       </svg>
                     </ShapeLegendIcon>
                     <ShapeLegendText>
-                      <strong>다이아</strong>
-                      <span>짧은 사건 (단발 또는 줌 아웃 시)</span>
+                      <strong>짧은 pill</strong>
+                      <span>시점 사건 (단발성 또는 줌 아웃 시)</span>
                     </ShapeLegendText>
                   </ShapeLegendRow>
                   <ShapeLegendRow>
                     <ShapeLegendIcon aria-hidden="true">
-                      <svg width="20" height="14" viewBox="0 0 20 14">
-                        <polygon points="10,0 19,7 10,14 1,7" fill="#2563eb" />
+                      <svg width="32" height="14" viewBox="0 0 32 14">
+                        <rect x="0" y="2" width="32" height="10" rx="5" fill="#2563eb" />
                         <text
-                          x="10"
-                          y="9.5"
-                          fontSize="6"
+                          x="16"
+                          y="10"
+                          fontSize="7"
                           fill="#fff"
                           textAnchor="middle"
                           fontWeight="700"
                         >
-                          5+
+                          +5
                         </text>
                       </svg>
                     </ShapeLegendIcon>
                     <ShapeLegendText>
-                      <strong>큰 다이아</strong>
+                      <strong>+N pill</strong>
                       <span>3개 이상 밀집 — 클릭 시 자동 확대</span>
-                    </ShapeLegendText>
-                  </ShapeLegendRow>
-                  <ShapeLegendRow>
-                    <ShapeLegendIcon aria-hidden="true">
-                      <svg width="20" height="14" viewBox="0 0 20 14">
-                        <rect x="3" y="2" width="17" height="10" rx="2" fill="#2563eb" />
-                        <polygon points="0,2 6,7 0,12" fill="#1e40af" />
-                      </svg>
-                    </ShapeLegendIcon>
-                    <ShapeLegendText>
-                      <strong>좌측 삼각</strong>
-                      <span>핵심·주요 사건 (색맹 보조 표시)</span>
                     </ShapeLegendText>
                   </ShapeLegendRow>
                   <ShapeLegendDivider />
@@ -2263,8 +2477,13 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                         $alt={i % 2 === 1}
                         $highlighted={hoveredCategory === lane.key}
                       />
-                      {/* 밀도 underlay — lane 하단 5px 띠. 사건 0건 decade는 미출력 */}
-                      {(() => {
+                      {/**
+                       * 밀도 underlay — lane 하단 5px 띠. 카테고리 색으로 칠하므로
+                       * lane key가 카테고리인 *category 모드에서만* 의미 있음.
+                       * continent/country 모드에선 카테고리가 아닌 키라 fallback
+                       * 회색으로 깔려 노이즈가 됨 → 그 모드에선 미렌더.
+                       */}
+                      {groupBy === 'category' && (() => {
                         const dens = laneDensity.get(lane.key)
                         if (!dens || dens.max === 0) return null
                         const color = categoryColor(lane.key)
@@ -2296,12 +2515,6 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                           </g>
                         )
                       })()}
-                      <LaneSeparator
-                        x1={LANE_LABEL_WIDTH}
-                        x2={svgWidth}
-                        y1={yTop + LANE_HEIGHT}
-                        y2={yTop + LANE_HEIGHT}
-                      />
                       {/**
                        * 좌측 라벨 영역 — sticky.
                        * `translate(${scrollLeft}, 0)`로 viewport 우측 스크롤에 따라 함께 이동 →
@@ -2322,71 +2535,15 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                         >
                           {truncateLabel(lane.label, 10)}
                         </LaneLabel>
-                        {/* lane 카테고리 top 1~2 사건 — 라벨이 다 안 나와도 대표 사건 노출 */}
-                        {(() => {
-                          const tops = laneTopBars.get(lane.key)
-                          if (!tops || tops.length === 0) return null
-                          return tops.map((t, ti) => (
-                            <LaneTopText
-                              key={`${lane.key}-top-${t.id}`}
-                              x={LANE_LABEL_WIDTH - 10}
-                              y={yTop + LANE_HEIGHT / 2 + 8 + ti * 11}
-                              onClick={() => onSelectEvent(t.id)}
-                            >
-                              <title>{t.title}</title>
-                              {truncateLabel(t.title, 12)}
-                            </LaneTopText>
-                          ))
-                        })()}
-                        {/* 시간 겹침으로 숨겨진 bar 수 — row stacking이 cap에 도달했을 때만 노출.
-                         * 클릭 시 popover로 가려진 사건 목록 노출. */}
-                        {(() => {
-                          const overflowCount = laneBarOverflow.get(lane.key) ?? 0
-                          if (overflowCount === 0) return null
-                          return (
-                            <LaneOverflowBadge
-                              transform={`translate(${LANE_LABEL_WIDTH - 24}, ${yTop + LANE_HEIGHT - 14})`}
-                              tabIndex={0}
-                              role="button"
-                              aria-label={`${lane.label} 가려진 사건 ${overflowCount}건 보기`}
-                              onClick={() =>
-                                setOverflowPopoverLane((cur) =>
-                                  cur === lane.key ? null : lane.key,
-                                )
-                              }
-                              onKeyDown={(
-                                e: React.KeyboardEvent<SVGGElement>,
-                              ) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault()
-                                  setOverflowPopoverLane((cur) =>
-                                    cur === lane.key ? null : lane.key,
-                                  )
-                                }
-                              }}
-                            >
-                              <title>
-                                시간 겹침으로 {overflowCount}건이 더 있습니다 — 클릭하여 목록 보기
-                              </title>
-                              <rect
-                                x={-18}
-                                y={-9}
-                                width={32}
-                                height={14}
-                                rx={7}
-                              />
-                              <text x={-2} y={1} textAnchor="middle">
-                                +{overflowCount}
-                              </text>
-                            </LaneOverflowBadge>
-                          )
-                        })()}
-                        <LaneDot
-                          cx={12}
-                          cy={yTop + LANE_HEIGHT / 2}
-                          r={3}
-                          fill={categoryColor(lane.key)}
-                        />
+                        {/* lane key가 카테고리인 모드에서만 색 dot이 의미 있음 */}
+                        {groupBy === 'category' && (
+                          <LaneDot
+                            cx={12}
+                            cy={yTop + LANE_HEIGHT / 2}
+                            r={3}
+                            fill={categoryColor(lane.key)}
+                          />
+                        )}
                         {/* 우측 hairline — 라벨 영역과 timeline 본문의 시각 경계 */}
                         <LaneLabelDivider
                           x1={LANE_LABEL_WIDTH}
@@ -2395,6 +2552,69 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                           y2={yTop + LANE_HEIGHT}
                         />
                       </g>
+                      {/* overflow "+N" 배지 — 빽빽한 시기 가까이 배치(median start year).
+                       * sticky lane label 영역 밖이라 가로 스크롤과 함께 이동.
+                       * 사용자가 dense region 어디인지 즉시 인지. */}
+                      {(() => {
+                        const overflowCount = laneBarOverflow.get(lane.key) ?? 0
+                        if (overflowCount === 0) return null
+                        const hidden =
+                          laneBarOverflowBars.get(lane.key) ?? []
+                        if (hidden.length === 0) return null
+                        // median startYear → 대표 시점
+                        const sorted = hidden
+                          .map((h) => h.startYear)
+                          .slice()
+                          .sort((a, b) => a - b)
+                        const mid = Math.floor(sorted.length / 2)
+                        const medianYear =
+                          sorted.length % 2 === 0
+                            ? (sorted[mid - 1] + sorted[mid]) / 2
+                            : sorted[mid]
+                        const denseX =
+                          LANE_LABEL_WIDTH +
+                          (medianYear - minYear) * pixelsPerYear
+                        return (
+                          <LaneOverflowBadge
+                            transform={`translate(${denseX}, ${yTop + LANE_HEIGHT - 14})`}
+                            tabIndex={0}
+                            role="button"
+                            aria-label={`${lane.label} 가려진 사건 ${overflowCount}건 보기`}
+                            onClick={() =>
+                              setOverflowPopoverLane((cur) =>
+                                cur === lane.key ? null : lane.key,
+                              )
+                            }
+                            onMouseEnter={() =>
+                              setOverflowPopoverLane(lane.key)
+                            }
+                            onKeyDown={(
+                              e: React.KeyboardEvent<SVGGElement>,
+                            ) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                setOverflowPopoverLane((cur) =>
+                                  cur === lane.key ? null : lane.key,
+                                )
+                              }
+                            }}
+                          >
+                            <title>
+                              시간 겹침으로 {overflowCount}건이 더 있습니다 — 클릭하여 목록 보기
+                            </title>
+                            <rect
+                              x={-16}
+                              y={-9}
+                              width={32}
+                              height={14}
+                              rx={7}
+                            />
+                            <text x={0} y={1} textAnchor="middle">
+                              +{overflowCount}
+                            </text>
+                          </LaneOverflowBadge>
+                        )
+                      })()}
                     </g>
                   )
                 })}
@@ -2469,16 +2689,14 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                       const containsSelected =
                         selectedEventId != null &&
                         it.bars.some((b) => b.id === selectedEventId)
-                      // badge width cap — N이 100+이어도 36px 제한
                       const badgeText = `+${it.bars.length}`
-                      const badgeWidth = Math.min(
-                        36,
-                        Math.max(20, badgeText.length * 7 + 8),
-                      )
                       const onActivate = () => activateCluster(it)
+                      // cluster pill — 막대와 동일 시각 언어. badge 텍스트 길이에 따라 폭 조정.
+                      const clusterPillH = 18
+                      const clusterPillW = Math.max(28, badgeText.length * 7 + 14)
                       return (
                         <g key={it.id} role="listitem">
-                          <ClusterDiamond
+                          <ClusterPill
                             data-bar-id={it.id}
                             data-cluster
                             transform={`translate(${it.cx}, ${it.cy})`}
@@ -2491,24 +2709,36 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                               handleClusterKeyDown(e, it, onActivate)
                             }
                           >
-                            <polygon
-                              points={`0,${-CLUSTER_RADIUS} ${CLUSTER_RADIUS},0 0,${CLUSTER_RADIUS} ${-CLUSTER_RADIUS},0`}
+                            <rect
+                              x={-clusterPillW / 2}
+                              y={-clusterPillH / 2}
+                              width={clusterPillW}
+                              height={clusterPillH}
+                              rx={clusterPillH / 2}
                               fill={`${color}E6`}
                               stroke={color}
                               strokeWidth={1.5}
                             />
                             {/* 활성화 직후 ~700ms 펄스 — 사용자에게 "눌렸다" 시각 피드백 */}
                             {activatedClusterId === it.id && !reducedMotion && (
-                              <ClusterPulseRing
-                                points={`0,${-CLUSTER_RADIUS} ${CLUSTER_RADIUS},0 0,${CLUSTER_RADIUS} ${-CLUSTER_RADIUS},0`}
+                              <ClusterPulseRect
+                                x={-clusterPillW / 2}
+                                y={-clusterPillH / 2}
+                                width={clusterPillW}
+                                height={clusterPillH}
+                                rx={clusterPillH / 2}
                                 stroke={color}
                                 pointerEvents="none"
                               />
                             )}
                             {/* cluster 안에 선택된 사건 있으면 outline */}
                             {containsSelected && (
-                              <polygon
-                                points={`0,${-CLUSTER_RADIUS - 3} ${CLUSTER_RADIUS + 3},0 0,${CLUSTER_RADIUS + 3} ${-CLUSTER_RADIUS - 3},0`}
+                              <rect
+                                x={-clusterPillW / 2 - 2}
+                                y={-clusterPillH / 2 - 2}
+                                width={clusterPillW + 4}
+                                height={clusterPillH + 4}
+                                rx={(clusterPillH + 4) / 2}
                                 fill="none"
                                 stroke="currentColor"
                                 strokeWidth={1.5}
@@ -2516,20 +2746,10 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                                 pointerEvents="none"
                               />
                             )}
-                            <ClusterBadge
-                              x={CLUSTER_RADIUS + 2}
-                              y={-9}
-                              width={badgeWidth}
-                              height={14}
-                              rx={7}
-                            />
-                            <ClusterBadgeText
-                              x={CLUSTER_RADIUS + 2 + badgeWidth / 2}
-                              y={1}
-                            >
+                            <ClusterBadgeText x={0} y={1}>
                               {badgeText}
                             </ClusterBadgeText>
-                          </ClusterDiamond>
+                          </ClusterPill>
                         </g>
                       )
                     }
@@ -2582,36 +2802,53 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                     }
 
                     if (it.kind === 'milestone') {
-                      const r = it.r
-                      // 다이아몬드 polygon: top → right → bottom → left
-                      const points = `${it.cx},${it.cy - r} ${it.cx + r},${it.cy} ${it.cx},${it.cy + r} ${it.cx - r},${it.cy}`
+                      // 다이아 → 작은 pill로 통일 (모양 단순화). 시점 사건은 폭 6px.
+                      const pillW = MIN_BAR_WIDTH
+                      const pillH = COMPACT_BAR_HEIGHT[b.importance]
+                      const rectX = it.cx - pillW / 2
+                      const rectY = it.cy - pillH / 2
                       const importantStroke =
                         b.importance === 'critical' || b.importance === 'major'
-                      // 모든 milestone에 stroke — notable/normal은 약한 alpha, important는 진함
                       const strokeColor = importantStroke
                         ? color
-                        : `${color}80` // 50% alpha
+                        : `${color}80`
                       // 색맹 대응 — importance를 색만이 아닌 패턴/내부 마커로 보강:
-                      //   critical: 다이아 안쪽 흰 dot
-                      //   major:    다이아 안쪽 빈 ring
+                      //   critical: pill 안쪽 흰 dot
+                      //   major:    pill 안쪽 빈 ring
                       //   notable:  dashed stroke
-                      //   normal:   solid stroke (구분 단서 없음 — 가장 약한 등급)
+                      //   normal:   solid stroke
                       const dashed = b.importance === 'notable'
-                      // 터치/마우스 hit area를 시각 크기보다 확장 — 다이아몬드는 5~7px라 작음.
-                      // 투명 큰 polygon이 commonHandlers를 받고 visible MilestoneShape는 pointerEvents none.
-                      const hitR = Math.max(r + 6, 12)
-                      const hitPoints = `${it.cx},${it.cy - hitR} ${it.cx + hitR},${it.cy} ${it.cx},${it.cy + hitR} ${it.cx - hitR},${it.cy}`
+                      // hit area 확장 — 작은 pill은 그대로 두면 클릭 어려움
+                      const hitW = Math.max(pillW + 12, 18)
+                      const hitH = Math.max(pillH + 6, 18)
+                      // External label y 위치 (4-row staggering)
+                      const labelY =
+                        it.labelRow === 1
+                          ? it.cy + pillH / 2 + 12
+                          : it.labelRow === 2
+                            ? it.cy - pillH / 2 - 6
+                            : it.labelRow === 3
+                              ? it.cy + pillH / 2 + 24
+                              : it.cy + 3.5
                       return (
-                        <g key={b.id} role="listitem">
-                          <polygon
-                            points={hitPoints}
+                        <g key={it.id} role="listitem">
+                          <rect
+                            x={it.cx - hitW / 2}
+                            y={it.cy - hitH / 2}
+                            width={hitW}
+                            height={hitH}
+                            rx={hitH / 2}
                             fill="transparent"
                             stroke="none"
                             style={{ cursor: 'pointer' }}
                             {...commonHandlers}
                           />
-                          <MilestoneShape
-                            points={points}
+                          <MilestonePill
+                            x={rectX}
+                            y={rectY}
+                            width={pillW}
+                            height={pillH}
+                            rx={pillW / 2}
                             fill={`${color}E6`}
                             stroke={strokeColor}
                             strokeWidth={importantStroke ? 1.5 : 1}
@@ -2619,6 +2856,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                             $active={isActive}
                             $dim={dim}
                             $importance={b.importance}
+                            $depth={b.depth}
                             pointerEvents="none"
                           />
                           {b.importance === 'critical' && (
@@ -2641,26 +2879,21 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                               pointerEvents="none"
                             />
                           )}
-                          {/* focus / active outline — 다이아몬드용 */}
                           {(isFocused || isActive) && (
-                            <MilestoneOutline
-                              points={`${it.cx},${it.cy - r - 3} ${it.cx + r + 3},${it.cy} ${it.cx},${it.cy + r + 3} ${it.cx - r - 3},${it.cy}`}
+                            <MilestoneOutlinePill
+                              x={rectX - 2}
+                              y={rectY - 2}
+                              width={pillW + 4}
+                              height={pillH + 4}
+                              rx={(pillW + 4) / 2}
                               $active={isActive}
                               pointerEvents="none"
                             />
                           )}
                           {(it.showExternalLabel || pinnedLabelIds.has(b.id)) && (
                             <ExternalLabel
-                              x={it.cx + r + 6}
-                              /**
-                               * Row 0 = 다이아 옆 vertically centered (원래 위치, 친숙).
-                               * Row 1 = 다이아 아래 14px (충돌 회피용 stagger).
-                               */
-                              y={
-                                it.labelRow === 1
-                                  ? it.cy + r + 14
-                                  : it.cy + 3.5
-                              }
+                              x={it.cx + pillW / 2 + 6}
+                              y={labelY}
                               aria-hidden="true"
                               onClick={() => onSelectEvent(b.id)}
                               data-pinned={pinnedLabelIds.has(b.id) ? '1' : undefined}
@@ -2674,12 +2907,19 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
                     // it.kind === 'bar'
                     const rx = b.importance === 'critical' ? 7 : 6
-                    const showWedge =
-                      b.importance === 'critical' || b.importance === 'major'
                     const dashedBorder = b.importance === 'notable'
                     const inLabel = it.w > BAR_INSIDE_LABEL_MIN_PX
+                    // External label y 위치 (4-row staggering)
+                    const labelY =
+                      it.labelRow === 1
+                        ? it.y + it.h + 12
+                        : it.labelRow === 2
+                          ? it.y - 4
+                          : it.labelRow === 3
+                            ? it.y + it.h + 24
+                            : it.y + it.h / 2 + 3.5
                     return (
-                      <g key={b.id} role="listitem">
+                      <g key={it.id} role="listitem">
                         <Bar
                           x={it.x}
                           y={it.y}
@@ -2690,6 +2930,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                           $active={isActive}
                           $dim={dim}
                           $importance={b.importance}
+                          $depth={b.depth}
                           {...commonHandlers}
                         />
                         {dashedBorder && (
@@ -2699,13 +2940,6 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                             width={Math.max(0, it.w - 1.5)}
                             height={Math.max(0, it.h - 1.5)}
                             rx={Math.max(0, rx - 1)}
-                            pointerEvents="none"
-                          />
-                        )}
-                        {showWedge && (
-                          <WedgePolygon
-                            points={`${it.x},${it.y + rx} ${it.x + 7},${it.y + it.h / 2} ${it.x},${it.y + it.h - rx}`}
-                            $importance={b.importance}
                             pointerEvents="none"
                           />
                         )}
@@ -2731,11 +2965,11 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                         )}
                         {inLabel && (
                           <BarLabel
-                            x={it.x + (showWedge ? 12 : 6)}
+                            x={it.x + 6}
                             y={it.y + it.h / 2 + 3.5}
                             pointerEvents="none"
                           >
-                            {truncateBarText(b.title, it.w - (showWedge ? 18 : 12))}
+                            {truncateBarText(b.title, it.w - 12)}
                           </BarLabel>
                         )}
                         {/**
@@ -2756,18 +2990,13 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                             </BarLabelCompact>
                           )}
                         {/* 막대 안에 라벨 안 들어가면 외부 라벨 시도.
-                         * Row 0 = 막대 옆 vertically centered (원래 위치, 친숙).
-                         * Row 1 = 막대 바로 아래 12px (충돌 회피 stagger).
+                         * 4-row staggering — 충돌 회피로 노출률 ↑.
                          * 핀(Shift+클릭)된 라벨은 conflict 무관하게 항상 표시. */}
                         {!inLabel &&
                           (it.showExternalLabel || pinnedLabelIds.has(b.id)) && (
                             <ExternalLabel
                               x={it.x + it.w + 6}
-                              y={
-                                it.labelRow === 1
-                                  ? it.y + it.h + 12
-                                  : it.y + it.h / 2 + 3.5
-                              }
+                              y={labelY}
                               aria-hidden="true"
                               onClick={() => onSelectEvent(b.id)}
                               data-pinned={
@@ -3152,6 +3381,67 @@ const ZoomControls = styled.div`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.12)'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+`
+
+/* lane 그룹 토글 (segmented) — ZoomControls와 동일 외형 */
+const GroupByControls = styled.div`
+  display: inline-flex;
+  align-items: stretch;
+  height: 26px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.12)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+`
+
+const GroupBySegment = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: none;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.10)'
+        : '#ffffff'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.colors.text.primary
+      : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: background ${MOTION.fast}, color ${MOTION.fast};
+
+  & + & {
+    border-left: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.08)'
+          : 'rgba(15,23,42,0.08)'};
+  }
+
+  &:hover:not([aria-checked='true']) {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.05)'
+        : 'rgba(15,23,42,0.04)'};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+    z-index: 1;
+  }
 `
 
 const ZoomButton = styled.button`
@@ -4078,14 +4368,6 @@ const LaneBg = styled.rect<{ $alt: boolean; $highlighted?: boolean }>`
   }
 `
 
-const LaneSeparator = styled.line`
-  stroke: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.07)'
-      : 'rgba(15,23,42,0.07)'};
-  stroke-width: 1;
-`
-
 /**
  * Lane label sticky 배경 — 우측 스크롤 시 lane label 그룹이 viewport 좌측에 고정될 때
  * 뒤쪽 막대/density가 *비치지 않도록* 카드 배경색으로 덮음.
@@ -4110,22 +4392,6 @@ const LaneLabel = styled.text`
   letter-spacing: -0.01em;
   text-anchor: end;
   fill: ${({ theme }) => theme.colors.text.secondary};
-`
-
-/* lane top 사건 mini text — 카테고리 라벨 아래 작은 글씨로 1~2개 노출.
- * 클릭 시 해당 사건 선택. truncate(12자)로 좁은 라벨 영역에 fit. */
-const LaneTopText = styled.text`
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-anchor: end;
-  fill: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-  transition: fill 0.15s;
-
-  &:hover {
-    fill: ${BRAND.primary};
-  }
 `
 
 const LaneDot = styled.circle``
@@ -4167,12 +4433,16 @@ const Bar = styled.rect<{
   $active: boolean
   $dim: boolean
   $importance: BarData['importance']
+  $depth: number
 }>`
   cursor: pointer;
   transition: opacity ${MOTION.fast};
-  opacity: ${({ $importance, $dim }) => {
+  opacity: ${({ $importance, $dim, $depth }) => {
     if ($dim) return 0.4
-    return $importance === 'normal' || $importance === 'notable' ? 0.7 : 1
+    const base =
+      $importance === 'normal' || $importance === 'notable' ? 0.7 : 1
+    /* 자식(depth>0) 톤 다운 — 부모/형제 사건과 시각 위계 분리 */
+    return $depth > 0 ? base * 0.65 : base
   }};
 
   &:hover,
@@ -4190,25 +4460,27 @@ const Bar = styled.rect<{
 `
 
 /**
- * Milestone (다이아몬드) — 짧은 사건의 시점 인코딩.
- * Bar와 동일한 opacity/dim/active 의미. 인터랙션 시그너처(focus/hover) 동일.
+ * Milestone pill — 짧은 사건(시점)의 인코딩. 다이아 → 작은 가로 pill로 통일.
+ * Bar와 동일한 opacity/dim/active 의미.
  */
-const MilestoneShape = styled.polygon<{
+const MilestonePill = styled.rect<{
   $active: boolean
   $dim: boolean
   $importance: BarData['importance']
+  $depth: number
 }>`
   cursor: pointer;
   transition: opacity ${MOTION.fast}, stroke-width ${MOTION.fast};
-  opacity: ${({ $importance, $dim }) => {
+  opacity: ${({ $importance, $dim, $depth }) => {
     if ($dim) return 0.4
-    return $importance === 'normal' || $importance === 'notable' ? 0.7 : 1
+    const base =
+      $importance === 'normal' || $importance === 'notable' ? 0.7 : 1
+    return $depth > 0 ? base * 0.65 : base
   }};
 
   &:hover,
   &:focus {
     opacity: 1;
-    /* 작은 점 hover 인식 강화 — stroke 두꺼워짐 */
     stroke-width: 2.5;
   }
 
@@ -4222,10 +4494,10 @@ const MilestoneShape = styled.polygon<{
 `
 
 /**
- * 다이아몬드 active/focus outline — Bar의 ActiveOutline/FocusOutline에 대응.
+ * Milestone pill active/focus outline — Bar의 ActiveOutline/FocusOutline에 대응.
  * focus(미선택)는 dashed BRAND.primary 2px, active(선택)는 단색 darker 1.5px.
  */
-const MilestoneOutline = styled.polygon<{ $active: boolean }>`
+const MilestoneOutlinePill = styled.rect<{ $active: boolean }>`
   fill: none;
   stroke: ${({ $active, theme }) =>
     $active
@@ -4239,19 +4511,19 @@ const MilestoneOutline = styled.polygon<{ $active: boolean }>`
 `
 
 /**
- * Cluster — 같은 lane × 5px 이내 milestone 5개+ 묶음.
- * 다이아몬드 1개 + "+N" badge. 클릭 시 줌 + 점프.
+ * Cluster — 같은 lane × 5px 이내 milestone 3개+ 묶음.
+ * pill 모양 + "+N" 텍스트. 클릭 시 줌 + 점프.
  */
-const ClusterDiamond = styled.g`
+const ClusterPill = styled.g`
   cursor: pointer;
   transition: opacity ${MOTION.fast};
 
-  & polygon {
+  & rect {
     transition: opacity ${MOTION.fast};
   }
 
-  &:hover polygon,
-  &:focus polygon {
+  &:hover rect,
+  &:focus rect {
     opacity: 1;
   }
 
@@ -4259,13 +4531,13 @@ const ClusterDiamond = styled.g`
     outline: none;
   }
 
-  &:focus polygon {
+  &:focus rect {
     stroke-width: 2.5;
   }
 
   @media (prefers-reduced-motion: reduce) {
     transition: none;
-    & polygon {
+    & rect {
       transition: none;
     }
   }
@@ -4288,23 +4560,18 @@ const clusterPulseAnim = keyframes`
   }
 `
 
-const ClusterPulseRing = styled.polygon`
+const ClusterPulseRect = styled.rect`
   fill: none;
   transform-origin: center;
   transform-box: fill-box;
   animation: ${clusterPulseAnim} 0.7s ease-out forwards;
 `
 
-const ClusterBadge = styled.rect`
-  fill: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.9)' : 'rgba(15, 23, 42, 0.85)'};
-`
-
 const ClusterBadgeText = styled.text`
   font-size: 10px;
   font-weight: 700;
   fill: #ffffff;
-  text-anchor: start;
+  text-anchor: middle;
   dominant-baseline: middle;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
@@ -4363,7 +4630,7 @@ const ActiveOutline = styled.rect`
 
 /**
  * Focus outline — 키보드 포커스만(선택 안 됨). 1.5px이라 잘 안 보였던 케이스를
- * 보강: stroke 2px + paint-order로 fill 위에 그려 글자/wedge에 가려지지 않게.
+ * 보강: stroke 2px + paint-order로 fill 위에 그려 글자에 가려지지 않게.
  */
 const FocusOutline = styled.rect`
   fill: none;
@@ -4371,20 +4638,6 @@ const FocusOutline = styled.rect`
   stroke-width: 2;
   stroke-dasharray: 3 2;
   paint-order: stroke;
-`
-
-/**
- * Wedge polygon — 색맹 보조.
- * 라이트 모드: 짙은 검정 alpha
- * 다크 모드: 흰색 alpha (contrast 확보)
- */
-const WedgePolygon = styled.polygon<{ $importance: BarData['importance'] }>`
-  fill: ${({ $importance, theme }) => {
-    const base =
-      theme.mode === 'dark' ? 'rgba(255,255,255,' : 'rgba(15, 23, 42,'
-    const alpha = $importance === 'critical' ? '0.6)' : '0.35)'
-    return base + alpha
-  }};
 `
 
 /* SelectedRangeBg — alpha 강화 + lane highlight 누적 회피 */

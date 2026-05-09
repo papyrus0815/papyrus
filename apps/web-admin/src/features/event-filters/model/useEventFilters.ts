@@ -10,6 +10,7 @@ import {
   SORT_OPTIONS,
   type SortOption,
 } from '@/features/event-list/lib'
+import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
@@ -21,12 +22,16 @@ import { getCenturyFromDate } from '../../../pages/events/utils/events.utils'
 /**
  * countries / historicalCountries는 `filterSummaryChips`의 국가명 lookup에 사용.
  * 미전달 시 events에서 fallback으로 찾으나 비용이 N(events) — 가능하면 전달 권장.
+ *
+ * continents는 (1) 칩 라벨 lookup (2) 대륙 필터 시 country.id → continentId 조인용.
+ * 역사적 국가는 continentId가 없어 v1에서는 대륙 필터 활성 시 제외된다.
  */
 export const useEventFilters = (
   events: HistoricalEvent[],
   dbCategories: EventCategoryDto[],
   countries: CountryResponseDto[] = [],
   historicalCountries: HistoricalCountryResponseDto[] = [],
+  continents: ContinentResponseDto[] = [],
 ) => {
   // ===== 필터 상태 =====
   const [selectedCategory, setSelectedCategory] = useState<
@@ -40,10 +45,25 @@ export const useEventFilters = (
   const [selectedCountry, setSelectedCountry] = useState<
     typeof FILTER_ALL | string
   >(FILTER_ALL)
+  const [selectedContinent, setSelectedContinent] = useState<
+    typeof FILTER_ALL | string
+  >(FILTER_ALL)
   const [selectedPositionType, setSelectedPositionType] = useState<
     typeof FILTER_ALL | string
   >(FILTER_ALL)
   const [showFlatView, setShowFlatView] = useState(false)
+
+  /**
+   * country.id → continentId lookup. 대륙 필터를 cheap하게 적용하기 위해
+   * countries 참조 데이터에서 한 번만 빌드. 미해결(대륙 없음/null) 국가는 키 부재.
+   */
+  const countryContinentMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const c of countries) {
+      if (c.continentId) m.set(c.id, c.continentId)
+    }
+    return m
+  }, [countries])
 
   // ===== 사용 가능한 필터 옵션 =====
   const availableCountries = useMemo(() => {
@@ -99,8 +119,21 @@ export const useEventFilters = (
           event.relatedHistoricalCountries?.some(
             (c) => c.id === selectedCountry,
           )
+        /**
+         * 대륙 필터 — relatedCountries(현대)만 고려. 역사적 국가는 직접
+         * continentId가 없어 v1에서는 제외(향후 HistoricalCountryModernCountry
+         * 조인으로 보강 가능).
+         */
+        const continentOk =
+          selectedContinent === FILTER_ALL ||
+          (event.relatedCountries?.some(
+            (c) => countryContinentMap.get(c.id) === selectedContinent,
+          ) ??
+            false)
 
-        return categoryOk && keywordOk && centuryOk && countryOk
+        return (
+          categoryOk && keywordOk && centuryOk && countryOk && continentOk
+        )
       })
   }, [
     events,
@@ -108,6 +141,8 @@ export const useEventFilters = (
     normalizedKeyword,
     selectedCentury,
     selectedCountry,
+    selectedContinent,
+    countryContinentMap,
   ])
 
   // ===== 이벤트 정렬 =====
@@ -173,6 +208,17 @@ export const useEventFilters = (
       })
     }
 
+    if (selectedContinent !== FILTER_ALL) {
+      const name =
+        continents.find((c) => c.id === selectedContinent)?.name ??
+        '알 수 없음'
+      chips.push({
+        key: 'continent',
+        label: `대륙 · ${name}`,
+        onClear: () => setSelectedContinent(FILTER_ALL),
+      })
+    }
+
     if (selectedPositionType !== FILTER_ALL) {
       const label =
         MOCK_POSITION_TYPES.find((t) => t.value === selectedPositionType)
@@ -196,11 +242,13 @@ export const useEventFilters = (
   }, [
     selectedCategory,
     selectedCountry,
+    selectedContinent,
     selectedPositionType,
     trimmedKeyword,
     dbCategories,
     countries,
     historicalCountries,
+    continents,
   ])
 
   const hasActiveFilters = filterSummaryChips.length > 0
@@ -213,6 +261,7 @@ export const useEventFilters = (
     setSortDirection('desc')
     setSelectedCentury(FILTER_ALL)
     setSelectedCountry(FILTER_ALL)
+    setSelectedContinent(FILTER_ALL)
     setSelectedPositionType(FILTER_ALL)
   }
 
@@ -224,6 +273,7 @@ export const useEventFilters = (
     sortDirection,
     selectedCentury,
     selectedCountry,
+    selectedContinent,
     selectedPositionType,
     showFlatView,
 
@@ -234,6 +284,7 @@ export const useEventFilters = (
     setSortDirection,
     setSelectedCentury,
     setSelectedCountry,
+    setSelectedContinent,
     setSelectedPositionType,
     setShowFlatView,
 
