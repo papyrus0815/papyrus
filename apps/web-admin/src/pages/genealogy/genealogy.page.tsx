@@ -479,7 +479,7 @@ function PersonNodeInner({ data }: NodeProps) {
           $size={sizes.AVATAR}
         >
           {src
-            ? <img src={src} alt={baseName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+            ? <img src={src} alt={baseName} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top center', borderRadius: '50%' }} />
             : <span style={{ fontSize: 22, fontWeight: 700, color: isEgo ? '#fff' : 'var(--node-text, #475569)' }}>{initial}</span>}
         </NodeAvatar>
         {(() => {

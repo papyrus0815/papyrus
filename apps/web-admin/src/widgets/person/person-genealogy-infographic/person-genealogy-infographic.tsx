@@ -2254,7 +2254,10 @@ const AvatarImage = styled.img`
   display: block;
   width: 100%;
   height: 100%;
+  /* 인물 상세 페이지(AvatarButton)와 동일한 크롭 — 초상화 얼굴이 상단에 있는 경우가
+     많아 top center로 잘라 표정·왕관 등 핵심 요소 보존. */
   object-fit: cover;
+  object-position: top center;
 `
 
 /**
