@@ -2486,7 +2486,7 @@ export const EditorColumn = styled.div`
   }
 `
 
-export const SidebarColumn = styled.div`
+export const SidebarColumn = styled.div<{ $mobileOpen?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -2519,8 +2519,86 @@ export const SidebarColumn = styled.div`
     width: 350px;
   }
 
+  /* 1200px 이하: 우측 드로어로 변신 — FAB로 토글 */
   @media (max-width: 1200px) {
-    display: none;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(380px, 92vw);
+    max-height: 100dvh;
+    padding: 16px;
+    z-index: 1100;
+    background: ${({ theme }) => getC(theme).background.content};
+    border-left: 1px solid ${({ theme }) => getC(theme).border.default};
+    box-shadow: -16px 0 48px rgba(0, 0, 0, 0.18);
+    transform: translateX(${({ $mobileOpen }) => ($mobileOpen ? '0' : '100%')});
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: ${({ $mobileOpen }) => ($mobileOpen ? 'auto' : 'none')};
+  }
+`
+
+export const SidebarBackdrop = styled.div<{ $open: boolean }>`
+  display: none;
+  @media (max-width: 1200px) {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1099;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: ${({ $open }) => ($open ? 1 : 0)};
+    pointer-events: ${({ $open }) => ($open ? 'auto' : 'none')};
+    transition: opacity 0.2s ease;
+  }
+`
+
+export const SidebarFab = styled.button`
+  display: none;
+  @media (max-width: 1200px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+    cursor: pointer;
+    z-index: 1098;
+    svg {
+      width: 22px;
+      height: 22px;
+    }
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+`
+
+export const SidebarCloseBtn = styled.button`
+  display: none;
+  @media (max-width: 1200px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-end;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: ${({ theme }) => getC(theme).text.secondary};
+    cursor: pointer;
+    flex-shrink: 0;
+    &:hover {
+      background: ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+    }
   }
 `
 

@@ -94,7 +94,19 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
   const [currentSectionId, setCurrentSectionId] = useState<string | null>(
     sections[0]?.id || null,
   )
+  /** 1200px 이하에서 사이드바 드로어 토글 */
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  /** 드로어 열려있을 때 ESC 키로 닫기 */
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSidebarOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [sidebarOpen])
 
   // 외부 클릭 시 말풍선 닫기
   useEffect(() => {
@@ -172,6 +184,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
   ].slice(0, 5)
 
   return (
+    <>
     <S.ContentLayoutWrapper>
       {/* 에디터 컬럼 */}
       <S.EditorColumn>
@@ -408,8 +421,15 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
         </S.AddSectionButton>
       </S.EditorColumn>
 
-      {/* 사이드바 컬럼 */}
-      <S.SidebarColumn>
+      {/* 사이드바 컬럼 — 1200px 이하에선 우측 드로어로 동작 */}
+      <S.SidebarColumn $mobileOpen={sidebarOpen}>
+        <S.SidebarCloseBtn
+          type="button"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="사이드바 닫기"
+        >
+          <FiX size={18} />
+        </S.SidebarCloseBtn>
         {/* 1. 사건 빠른 정보 */}
         <S.SidebarCard>
           <S.SidebarCardHeader>
@@ -577,5 +597,19 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
         )}
       </S.SidebarColumn>
     </S.ContentLayoutWrapper>
+    <S.SidebarBackdrop
+      $open={sidebarOpen}
+      onClick={() => setSidebarOpen(false)}
+      aria-hidden
+    />
+    <S.SidebarFab
+      type="button"
+      onClick={() => setSidebarOpen((o) => !o)}
+      aria-label={sidebarOpen ? '작성 보조 패널 닫기' : '작성 보조 패널 열기'}
+      aria-expanded={sidebarOpen}
+    >
+      {sidebarOpen ? <FiX size={22} /> : <FiBook size={22} />}
+    </S.SidebarFab>
+    </>
   )
 }
