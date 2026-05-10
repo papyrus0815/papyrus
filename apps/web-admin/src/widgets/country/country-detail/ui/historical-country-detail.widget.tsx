@@ -231,16 +231,37 @@ interface EventDetailData {
   maps?: string[]
 }
 
+/**
+ * 페이지 → 위젯이 받는 URL-동기화 가능한 탭 키 부분집합.
+ *
+ * `HistoricalCountryTab`은 더 많은 탭을 가지지만 URL 매핑은 `CountryDetailTabKey`와
+ * 겹치는 것만 노출 — modern과 어휘 일치를 유지해 페이지 전환·딥링크 동작을 통일한다.
+ */
+type HistoricalSyncedTab =
+  | 'heads'
+  | 'government'
+  | 'elections'
+  | 'laws'
+  | 'ethnicity'
+
 interface HistoricalCountryDetailProps {
   country: UnifiedCountry
   isLoading?: boolean
   onEdit?: (country: UnifiedCountry) => void
   onDelete?: (id: string) => void
-  /** URL 연동: 역대 수반 탭으로 직접 진입 시 */
-  initialTab?: 'heads'
-  /** 탭 변경 시 URL 업데이트용 (heads·선거·투표 등) */
-  onTabChangeToUrl?: (tab: 'heads' | 'elections' | null) => void
+  /** URL 연동: 특정 탭으로 직접 진입 시 (`'dashboard'` 등 historical에 없는 키는 외부에서 매핑 안 됨). */
+  initialTab?: HistoricalSyncedTab
+  /** 탭 변경 시 URL 갱신 콜백 — overview 등으로 돌아갈 땐 null. */
+  onTabChangeToUrl?: (tab: HistoricalSyncedTab | null) => void
 }
+
+const SYNCED_TAB_SET = new Set<HistoricalCountryTab>([
+  'heads',
+  'government',
+  'elections',
+  'laws',
+  'ethnicity',
+])
 
 /**
  * 역사적 국가 상세 페이지
@@ -272,11 +293,11 @@ export function HistoricalCountryDetail({
     () => initialTab ?? 'overview',
   )
 
-  const isHistorical = country.type === 'historical'
-  const historicalCountryId = isHistorical ? country.id : null
+  // 이 위젯은 country-detail.widget이 country.type === 'historical'로 분기 후에만 마운트됨 — id 직접 사용.
+  const historicalCountryId = country.id
   const { data: transitions = [] } = useQuery({
     queryKey: ['historical-country-transitions', historicalCountryId],
-    queryFn: () => getTransitionsByHistoricalCountryId(historicalCountryId!),
+    queryFn: () => getTransitionsByHistoricalCountryId(historicalCountryId),
     enabled: !!historicalCountryId,
   })
   // 이 국가가 후임인 변천 = 탄생 유형 (고려 → 조선 시 조선 입장에서 "계승")
@@ -289,16 +310,19 @@ export function HistoricalCountryDetail({
 
   const handleTabChange = (tab: HistoricalCountryTab) => {
     setActiveTab(tab)
-    if (tab === 'heads') onTabChangeToUrl?.('heads')
-    else if (tab === 'elections') onTabChangeToUrl?.('elections')
-    else onTabChangeToUrl?.(null)
+    // URL과 연동되는 탭만 부모로 전파, 그 외(overview·events·figures 등)는 null로 reset.
+    onTabChangeToUrl?.(
+      SYNCED_TAB_SET.has(tab) ? (tab as HistoricalSyncedTab) : null,
+    )
   }
 
-  // URL에서 직접 진입·뒤로가기 시 탭 동기화
+  // URL에서 직접 진입·뒤로가기 시 탭 동기화 — initialTab이 있으면 그 탭, 없으면 synced 탭에 머물러 있을 때만 overview로 복귀.
   useEffect(() => {
-    if (initialTab === 'heads') setActiveTab('heads')
-    else if (!initialTab)
-      setActiveTab((prev) => (prev === 'heads' ? 'overview' : prev))
+    if (initialTab) {
+      setActiveTab(initialTab)
+      return
+    }
+    setActiveTab((prev) => (SYNCED_TAB_SET.has(prev) ? 'overview' : prev))
   }, [initialTab])
 
   return (

@@ -108,15 +108,25 @@ function CountryDetailInner({
     return <EmptyState />
   }
 
-  // 역사적 국가는 별도 UI로 렌더링
+  // 역사적 국가는 별도 UI로 렌더링.
+  // historical 위젯이 동기화하는 탭 키와 widget tab key가 겹치는 것만 forward —
+  // 'dashboard'/'regions'/'linked-historical'/'treaty'는 historical에 매칭되는 탭이 없어 overview로 폴백.
   if (country.type === 'historical') {
+    const historicalInitialTab =
+      initialDetailTab === 'heads' ||
+      initialDetailTab === 'government' ||
+      initialDetailTab === 'elections' ||
+      initialDetailTab === 'laws' ||
+      initialDetailTab === 'ethnicity'
+        ? initialDetailTab
+        : undefined
     return (
       <HistoricalCountryDetail
         country={country}
         isLoading={isLoading}
         onEdit={onEdit}
         onDelete={onDelete}
-        initialTab={initialDetailTab === 'heads' ? 'heads' : undefined}
+        initialTab={historicalInitialTab}
         onTabChangeToUrl={onDetailTabChange}
       />
     )

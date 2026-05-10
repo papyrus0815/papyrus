@@ -32,10 +32,3 @@ export const Left = styled.div`
   flex: 1;
   min-width: 0;
 `
-
-export const Right = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-`

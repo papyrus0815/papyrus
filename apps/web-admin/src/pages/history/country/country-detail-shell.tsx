@@ -1,18 +1,25 @@
 /**
- * /history/country/:countryId/* 의 공통 셸.
+ * /history/country[/:countryId/*] 의 공통 셸 — React Router의 layout route로 동작.
  *
- * 좌측 리스트, 모바일 UI, 폼 모달은 어떤 탭에서나 동일 — 이 셸이 소유한다.
- * 우측 콘텐츠만 페이지가 render prop으로 주입한다 (탭별 페이지가 EventsTimelineSection /
- * CountryDetail / ... 등으로 분기).
+ * - 좌측 리스트, 모바일 UI, 폼 모달은 어떤 sub-route(events / detail / dashboard / ...)에서나 동일.
+ * - 우측 콘텐츠는 `<Outlet context={...}/>`로 자식 라우트에 위임.
  *
- * 페이지가 직접 가지고 있던 데이터·핸들러·모달 상태를 한 군데로 모은 결과 — 페이지는
- * "어떤 우측을 그릴지"만 결정하면 된다.
+ * Layout route 패턴 덕분에 events ↔ dashboard 같은 sub-route 전환 시 셸이 unmount되지 않음 →
+ * `useHistoryCoreData`/`useCountryFormHandlers` 등 데이터·모달 state 보존, document.title 깜빡임 해소.
+ *
+ * 자식 라우트는 `useCountryDetailShellContext()`로 args를 받는다.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { createGlobalStyle } from 'styled-components'
-import { useNavigate, useParams } from 'react-router-dom'
+import {
+  Outlet,
+  useLocation,
+  useNavigate,
+  useOutletContext,
+  useParams,
+} from 'react-router-dom'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import type { ContinentOption } from '@/entities/country/api'
@@ -35,11 +42,12 @@ const CountryDetailPageGlobalStyle = createGlobalStyle`
   #global-bg { display: none; }
 `
 
-export interface CountryDetailShellRenderArgs {
+export interface CountryDetailShellContext {
   selectedId: string | null
   selectedCountry: UnifiedCountry | undefined
   continents: ContinentOption[]
-  isLoading: boolean
+  /** 핵심 데이터가 아직 로드 중이고 selectedCountry를 못 찾은 상태 */
+  isInitialLoading: boolean
   notFound: boolean
   initialDetailTab: CountryDetailTabKey | undefined
   handleDetailTabChange: (tab: CountryDetailTabKey | null) => void
@@ -48,13 +56,14 @@ export interface CountryDetailShellRenderArgs {
   onDelete: (id: string) => Promise<void>
 }
 
-interface CountryDetailShellProps {
-  /** 우측 콘텐츠 — 탭에 따라 페이지가 결정한다. AnimatePresence로 감싸 페이지 전환 시 페이드. */
-  renderRight: (args: CountryDetailShellRenderArgs) => ReactNode
+/** 자식 라우트가 셸 args를 받는 hook. */
+export function useCountryDetailShellContext(): CountryDetailShellContext {
+  return useOutletContext<CountryDetailShellContext>()
 }
 
-export function CountryDetailShell({ renderRight }: CountryDetailShellProps) {
+export function CountryDetailShell() {
   const navigate = useNavigate()
+  const location = useLocation()
   const params = useParams<{ countryId?: string }>()
   const hloc = useHistoryLocation()
 
@@ -80,11 +89,13 @@ export function CountryDetailShell({ renderRight }: CountryDetailShellProps) {
     return countriesById.get(selectedId)
   }, [countriesById, selectedId])
 
-  // 잘못된 ID — 핵심 데이터가 다 로드됐는데도 못 찾으면 NotFound
   const notFound = !!selectedId && !isCoreDataLoading && !selectedCountry
+  const isInitialLoading =
+    !!selectedId && isCoreDataLoading && !selectedCountry
 
   // 페이지 타이틀 — 다중 탭 식별 향상. unmount/국가 변경 시 이전 타이틀 복원해
   // 다른 페이지로 떠날 때 이전 국가명이 잠깐 남아 있는 잔상 방지.
+  // (Layout route 덕분에 sub-route 전환 시에는 이 effect가 재실행되지 않음 — 깜빡임 없음.)
   useEffect(() => {
     if (!selectedCountry) return
     const prev = document.title
@@ -136,19 +147,17 @@ export function CountryDetailShell({ renderRight }: CountryDetailShellProps) {
     historicalForm.editing?.id,
   ])
 
-  const isLoading = !!selectedId && isCoreDataLoading && !selectedCountry
-
-  const right = renderRight({
+  const context: CountryDetailShellContext = {
     selectedId,
     selectedCountry,
     continents,
-    isLoading,
+    isInitialLoading,
     notFound,
     initialDetailTab,
     handleDetailTabChange,
     onEdit: editFromDetail,
     onDelete: deleteFromDetail,
-  })
+  }
 
   return (
     <>
@@ -167,7 +176,17 @@ export function CountryDetailShell({ renderRight }: CountryDetailShellProps) {
         )}
         right={
           <AnimatePresence initial={false} mode="wait">
-            {right}
+            {/* sub-route 전환마다 motion이 fade — 페이지가 자체 motion wrapper를 갖지 않아도 됨 */}
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              style={{ width: '100%', minHeight: '100%' }}
+            >
+              <Outlet context={context} />
+            </motion.div>
           </AnimatePresence>
         }
       >
@@ -201,3 +220,5 @@ export function CountryDetailShell({ renderRight }: CountryDetailShellProps) {
     </>
   )
 }
+
+export default CountryDetailShell

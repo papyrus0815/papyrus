@@ -7,27 +7,29 @@ import HistoryLayout from '../../widgets/history-layout/history-layout.ui'
  * 🗺️ History 페이지 라우트 설정
  *
  * - 모든 페이지 lazy 로드 (초기 번들 최소화)
- * - 국가 상세만 loader + Component 병렬 로드, 나머지는 Component만
+ * - 국가 상세는 layout route(`CountryDetailShell`) + 하위 콘텐츠 페이지로 분리 —
+ *   sub-route 전환 시 셸·데이터·모달이 보존된다.
  */
 type Lazy = NonNullable<RouteObject['lazy']>
 
-/** 국가 상세 페이지 — loader + Component 병렬 로드 */
-const lazyCountryDetail: Lazy = async () => {
-  const [{ countryLoader }, { default: Component }] = await Promise.all([
+/** 국가 상세 layout 셸 — 좌측 리스트·모달·데이터 보유. loader는 셸에 매달림. */
+const lazyCountryDetailShell: Lazy = async () => {
+  const [{ countryLoader }, { CountryDetailShell }] = await Promise.all([
     import('./country/country.loader'),
-    import('./country/country-detail.page'),
+    import('./country/country-detail-shell'),
   ])
-  return { loader: countryLoader, Component }
+  return { loader: countryLoader, Component: CountryDetailShell }
 }
 
-/** 국가 상세 — events 탭 전용 페이지 (사건 연대표) */
-const lazyCountryDetailEvents: Lazy = async () => {
-  const [{ countryLoader }, { default: Component }] = await Promise.all([
-    import('./country/country.loader'),
-    import('./country/country-detail-events.page'),
-  ])
-  return { loader: countryLoader, Component }
-}
+/** 셸의 자식 — 기본 탭(detail) 콘텐츠. */
+const lazyCountryDetailContent: Lazy = async () => ({
+  Component: (await import('./country/country-detail.page')).default,
+})
+
+/** 셸의 자식 — events 탭 콘텐츠. */
+const lazyCountryDetailEventsContent: Lazy = async () => ({
+  Component: (await import('./country/country-detail-events.page')).default,
+})
 
 /** 대시보드 페이지들 — Component만 lazy 로드 (loader 불필요) */
 const lazyDashboardPersons: Lazy = async () => ({
@@ -50,8 +52,12 @@ const dashboardSimpleRoutes = (
   lazy: lazyDashboardSimple,
 }))
 
-/** 국가 상세 하위 탭 세그먼트 (events는 별도 페이지로 분리됐기에 제외) */
-const countryDetailTabSegments = [
+/**
+ * 셸이 떠받치는 sub-route 자식들. events만 별도 콘텐츠 페이지, 그 외 탭 세그먼트는
+ * 모두 detail 콘텐츠 페이지(`country-detail.page`)로 매핑되어 `CountryDetail` 위젯이
+ * `initialDetailTab`을 보고 적절한 탭을 연다.
+ */
+const countryDetailChildSegments = [
   'dashboard',
   'heads-of-state',
   'persons',
@@ -64,16 +70,20 @@ const countryDetailTabSegments = [
   'ethnicity',
   'treaty',
 ] as const
-const countryDetailRoutes = countryDetailTabSegments.map((seg) => ({
-  path: `${ROUTES.HISTORY.COUNTRY}/:countryId/${seg}`,
-  lazy: lazyCountryDetail,
-}))
 
-/** events 탭은 별도 페이지로 — 같은 셸을 공유하지만 우측 콘텐츠가 EventsTimelineSection */
-const countryDetailEventsRoute = {
-  path: `${ROUTES.HISTORY.COUNTRY}/:countryId/events`,
-  lazy: lazyCountryDetailEvents,
-}
+const countryDetailChildren: RouteObject[] = [
+  // /history/country (no ID) — EmptyState
+  { index: true, lazy: lazyCountryDetailContent },
+  // /history/country/:countryId — 기본 콘텐츠 (탭 미지정 → CountryDetail이 dashboard로 폴백)
+  { path: ':countryId', lazy: lazyCountryDetailContent },
+  // /history/country/:countryId/<segment> — detail 콘텐츠 (CountryDetail 위젯이 탭 매핑)
+  ...countryDetailChildSegments.map((seg) => ({
+    path: `:countryId/${seg}`,
+    lazy: lazyCountryDetailContent,
+  })),
+  // /history/country/:countryId/events — 별도 콘텐츠 페이지
+  { path: ':countryId/events', lazy: lazyCountryDetailEventsContent },
+]
 
 export const historyPageRoute: RouteObject = {
   path: ROUTES.HISTORY.ROOT,
@@ -81,8 +91,12 @@ export const historyPageRoute: RouteObject = {
     {
       element: <HistoryLayout />,
       children: [
-        // /history/country — 좌측 리스트 + 우측 empty state (선택 안내)
-        { path: ROUTES.HISTORY.COUNTRY, lazy: lazyCountryDetail },
+        // /history/country[/:countryId/*] — 셸 layout route + 하위 콘텐츠 라우트
+        {
+          path: ROUTES.HISTORY.COUNTRY,
+          lazy: lazyCountryDetailShell,
+          children: countryDetailChildren,
+        },
 
         // /history/heads-of-state — 역대 수장 통합 비교 (현대·역사 국가 모두)
         { path: ROUTES.HISTORY.HEADS_OF_STATE, lazy: lazyHeadsOfState },
@@ -97,11 +111,6 @@ export const historyPageRoute: RouteObject = {
           lazy: lazyDashboardPersons,
         },
         ...dashboardSimpleRoutes,
-
-        // /history/country/:countryId/* — 국가 상세 (탭별)
-        countryDetailEventsRoute,
-        ...countryDetailRoutes,
-        { path: `${ROUTES.HISTORY.COUNTRY}/:countryId`, lazy: lazyCountryDetail },
 
         // 대륙 / 왕조 / 포스트
         {

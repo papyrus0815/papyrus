@@ -1,5 +1,3 @@
-import React from 'react'
-
 import { UnderlineTabButton } from '@/shared/ui/underline-tabs'
 
 import * as S from './overview-sub-tabs.styles'
@@ -23,8 +21,6 @@ export type OverviewSubTab =
 interface OverviewSubTabsProps {
   activeSubTab: OverviewSubTab
   onSubTabChange: (tab: OverviewSubTab) => void
-  /** 우측에 배치할 액션 (예: 행정조직 탭일 때 카테고리 설정 버튼) */
-  rightSlot?: React.ReactNode
 }
 
 const TAB_LABELS: Array<{ key: OverviewSubTab; label: string }> = [
@@ -38,11 +34,10 @@ const TAB_LABELS: Array<{ key: OverviewSubTab; label: string }> = [
   { key: 'treaty', label: '조약' },
 ]
 
-export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
+export function OverviewSubTabs({
   activeSubTab,
   onSubTabChange,
-  rightSlot,
-}) => {
+}: OverviewSubTabsProps) {
   return (
     <S.Row>
       <S.Left>
@@ -61,7 +56,6 @@ export const OverviewSubTabs: React.FC<OverviewSubTabsProps> = ({
           ))}
         </S.TopUnderlineTabNav>
       </S.Left>
-      <S.Right>{rightSlot}</S.Right>
     </S.Row>
   )
 }
