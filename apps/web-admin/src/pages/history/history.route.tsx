@@ -28,6 +28,11 @@ const lazyDashboardSimple: Lazy = async () => ({
   Component: (await import('./dashboard/dashboard-simple.page')).default,
 })
 
+/** 역대 수장 통합 비교 — Component만 lazy 로드 */
+const lazyHeadsOfState: Lazy = async () => ({
+  Component: (await import('./heads-of-state/heads-of-state.page')).default,
+})
+
 /** 대시보드 URL 세그먼트 → 라우트 생성. 가문은 /dynasty 풀 페이지로 이전. */
 const dashboardSimpleRoutes = (
   ['ethnicity', 'legislature', 'military'] as const
@@ -62,6 +67,9 @@ export const historyPageRoute: RouteObject = {
       children: [
         // /history/country — 좌측 리스트 + 우측 empty state (선택 안내)
         { path: ROUTES.HISTORY.COUNTRY, lazy: lazyCountryDetail },
+
+        // /history/heads-of-state — 역대 수장 통합 비교 (현대·역사 국가 모두)
+        { path: ROUTES.HISTORY.HEADS_OF_STATE, lazy: lazyHeadsOfState },
 
         // /history/dashboard/* — 대시보드 페이지들
         {

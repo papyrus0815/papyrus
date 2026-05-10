@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { FiArrowLeft, FiCalendar, FiMapPin } from 'react-icons/fi'
+import { FiArrowLeft, FiAward, FiCalendar, FiMapPin } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -120,6 +120,7 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
             placeholder="위치"
           />
         </S.HeroMetaItem>
+        <ContemporaryHeadsLink event={event} />
       </S.HeroMeta>
 
       <HeroActors event={event} onPersonClick={onPersonClick} />
@@ -144,6 +145,43 @@ const TitleHost = styled.div`
   line-height: 1.15;
   letter-spacing: -0.018em;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/**
+ * 사건 시작 연도로 「역대 수장 비교」 페이지의 동시대 가이드라인을 자동으로 꽂아 진입.
+ * 사건 startDate가 비어있으면 미렌더.
+ */
+function ContemporaryHeadsLink({ event }: { event: EventDetail }) {
+  const year = extractYear(event.startDate)
+  if (year == null) return null
+  return (
+    <S.HeroMetaItem>
+      <FiAward />
+      <ContemporaryLink
+        to={pathKeys.history.headsOfState(year)}
+        title={`${year}년 시점에 세계 각국이 누구의 통치 아래 있었는지 비교`}
+      >
+        {year}년 동시대 수장 비교
+      </ContemporaryLink>
+    </S.HeroMetaItem>
+  )
+}
+
+function extractYear(input: string | null | undefined): number | null {
+  if (!input) return null
+  const m = input.match(/^(-?\d{1,6})/)
+  if (!m || !m[1]) return null
+  const n = parseInt(m[1], 10)
+  return Number.isFinite(n) ? n : null
+}
+
+const ContemporaryLink = styled(Link)`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.primary};
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
+  }
 `
 
 /* ───────────────── Hero actor strip — NYT editorial ─────────────────

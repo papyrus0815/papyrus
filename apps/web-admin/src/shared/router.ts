@@ -81,6 +81,14 @@ export const pathKeys = {
     dashboardMilitary: () =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.DASHBOARD}/military`,
     continents: () => `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.CONTINENTS}/`,
+    /**
+     * 역대 수장 통합 비교 페이지 — 현대·역사 국가 모두 한 화면에서 비교.
+     * `year` 쿼리는 동시대 가이드라인을 그 시점에 자동으로 꽂는다 (사건 상세 진입용).
+     */
+    headsOfState: (year?: number) =>
+      year != null
+        ? `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.HEADS_OF_STATE}?year=${year}`
+        : `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.HEADS_OF_STATE}`,
   },
 
   // --- Events Routes ---

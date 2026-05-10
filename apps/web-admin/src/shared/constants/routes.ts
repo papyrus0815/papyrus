@@ -28,6 +28,8 @@ export const ROUTES = {
     MILITARY_UNITS: 'military-units',
     /** 연대표/대시보드 공통 세그먼트 (인물·연대표 등) */
     DASHBOARD: 'dashboard',
+    /** 역대 수장 통합 비교 — 현대·역사 국가 모두 한 화면에서 비교 */
+    HEADS_OF_STATE: 'heads-of-state',
   },
 
   // Genealogy (standalone full-screen)

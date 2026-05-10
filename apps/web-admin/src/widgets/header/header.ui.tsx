@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  FiAward,
   FiBell,
   FiGlobe,
   FiLayers,
@@ -351,6 +352,16 @@ const Header: React.FC = () => {
         navigate(pathKeys.history.continents())
       },
       active: location.pathname.startsWith('/history/continents'),
+    },
+    {
+      key: 'heads-of-state',
+      label: '수장 비교',
+      icon: <FiAward size={16} />,
+      onClick: () => {
+        playClickSound()
+        navigate(pathKeys.history.headsOfState())
+      },
+      active: location.pathname.startsWith('/history/heads-of-state'),
     },
   ]
 
