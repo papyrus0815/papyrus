@@ -10,6 +10,24 @@ export const DetailPaneRelative = styled.div`
   flex-direction: column;
 `
 
+/** 국가 전환 시 외곽 fade를 담당하는 motion 래퍼. */
+export const CountrySwapMotion = styled(motion.div)`
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+`
+
+/** 탭 전환 시 내부 fade를 담당하는 motion 래퍼. */
+export const TabSwapMotion = styled(motion.div)`
+  display: flex;
+  flex-direction: column;
+`
+
+/** 상단 OverviewSubTabs를 감싸 sticky 영역에서 압축되지 않도록 하는 래퍼. */
+export const StickyTopBar = styled.div`
+  flex-shrink: 0;
+`
+
 export const AnalyticsDashboard = styled.div`
   display: flex;
   flex-direction: column;

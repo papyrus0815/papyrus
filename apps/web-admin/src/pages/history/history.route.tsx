@@ -1,5 +1,6 @@
-import { redirect, RouteObject } from 'react-router'
+import { redirect, RouteObject, type LoaderFunctionArgs } from 'react-router'
 
+import { pathKeys } from '../../shared/router'
 import { ROUTES } from '../../shared/constants/routes'
 import HistoryLayout from '../../widgets/history-layout/history-layout.ui'
 
@@ -56,11 +57,12 @@ const dashboardSimpleRoutes = (
  * 셸이 떠받치는 sub-route 자식들. events만 별도 콘텐츠 페이지, 그 외 탭 세그먼트는
  * 모두 detail 콘텐츠 페이지(`country-detail.page`)로 매핑되어 `CountryDetail` 위젯이
  * `initialDetailTab`을 보고 적절한 탭을 연다.
+ *
+ * deprecated 세그먼트(persons, heads-of-state)는 별도 loader-only 라우트로 redirect —
+ * 컴포넌트 마운트 후 useEffect redirect 대신 즉시 갈아탄다.
  */
 const countryDetailChildSegments = [
   'dashboard',
-  'heads-of-state',
-  'persons',
   'historical',
   'regions',
   'government',
@@ -70,6 +72,29 @@ const countryDetailChildSegments = [
   'ethnicity',
   'treaty',
 ] as const
+
+/**
+ * /persons → /history/dashboard/persons?countries=<id> redirect.
+ * `?tab=heads`인 경우 (역대 수반 탭이 행정조직으로 통합된 후 잔존) /government로.
+ */
+const personsRedirectLoader = ({ params, request }: LoaderFunctionArgs) => {
+  const countryId = params.countryId
+  if (!countryId) return redirect(pathKeys.history.country())
+  const url = new URL(request.url)
+  if (url.searchParams.get('tab') === 'heads') {
+    return redirect(pathKeys.history.countryGovernment(countryId))
+  }
+  return redirect(
+    `${pathKeys.history.dashboardPersons()}?countries=${encodeURIComponent(countryId)}`,
+  )
+}
+
+/** /heads-of-state → /government redirect (역대 수반 탭은 행정조직 탭으로 통합) */
+const headsOfStateRedirectLoader = ({ params }: LoaderFunctionArgs) => {
+  const countryId = params.countryId
+  if (!countryId) return redirect(pathKeys.history.country())
+  return redirect(pathKeys.history.countryGovernment(countryId))
+}
 
 const countryDetailChildren: RouteObject[] = [
   // /history/country (no ID) — EmptyState
@@ -83,6 +108,9 @@ const countryDetailChildren: RouteObject[] = [
   })),
   // /history/country/:countryId/events — 별도 콘텐츠 페이지
   { path: ':countryId/events', lazy: lazyCountryDetailEventsContent },
+  // deprecated → loader-level redirect (컴포넌트 안 띄우고 즉시 갈아탐)
+  { path: ':countryId/persons', loader: personsRedirectLoader },
+  { path: ':countryId/heads-of-state', loader: headsOfStateRedirectLoader },
 ]
 
 export const historyPageRoute: RouteObject = {

@@ -85,6 +85,22 @@ function CountryDetailInner({
     setActiveSubTab(resolveSubTab(initialDetailTab))
   }, [initialDetailTab])
 
+  // historical 국가 + modern-only 탭 URL(dashboard·regions·linked-historical·treaty)
+  // 진입 시 → base URL로 자동 정리 (URL ↔ 화면 일치 회복).
+  // historical 위젯은 자체 'overview'로 떨어지는데 URL은 modern-only 세그먼트라 불일치 발생.
+  React.useEffect(() => {
+    if (country?.type !== 'historical' || !initialDetailTab) return
+    const modernOnly: ReadonlySet<CountryDetailTabKey> = new Set([
+      'dashboard',
+      'regions',
+      'linked-historical',
+      'treaty',
+    ])
+    if (modernOnly.has(initialDetailTab)) {
+      onDetailTabChange?.(null)
+    }
+  }, [country?.type, country?.id, initialDetailTab, onDetailTabChange])
+
   const handleOverviewSubTabChange = React.useCallback(
     (tab: OverviewSubTab) => {
       setActiveSubTab(tab)
@@ -150,28 +166,24 @@ function CountryDetailInner({
   // 두 개의 의미 있는 애니메이션 레이어:
   //  - 외곽: 국가 전환 (key={country.id}) opacity fade
   //  - 내부: 탭 전환 (key={activeSubTab}) opacity + y fade
-  // 그 외 중간 wrapper는 plain div — 동일 fade를 중복으로 트리거할 이유가 없음.
   return (
     <S.DetailPaneRelative>
       <AnimatePresence mode="wait">
-        <motion.div
+        <S.CountrySwapMotion
           key={`content-${country.id}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          style={{ width: '100%', display: 'flex', flexDirection: 'column' }}
         >
-          <S.AnalyticsDashboard
-            style={{ gap: 0, display: 'flex', flexDirection: 'column' }}
-          >
+          <S.AnalyticsDashboard>
             {/* 스크롤은 외부 DetailPane이 담당 */}
-            <div style={{ flexShrink: 0 }}>
+            <S.StickyTopBar>
               <OverviewSubTabs
                 activeSubTab={activeSubTab}
                 onSubTabChange={handleOverviewSubTabChange}
               />
-            </div>
+            </S.StickyTopBar>
 
             {activeSubTab === 'dashboard' && (
               <CountryDetailHeader
@@ -184,13 +196,12 @@ function CountryDetailInner({
 
             {/* 서브 탭 콘텐츠 — 탭 전환 시에만 opacity+y 페이드 */}
             <AnimatePresence initial={false} mode="wait">
-              <motion.div
+              <S.TabSwapMotion
                 key={activeSubTab}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.32, ease: [0.25, 0.1, 0.25, 1] }}
-                style={{ display: 'flex', flexDirection: 'column' }}
               >
                 {activeSubTab === 'dashboard' && (
                   <CountryDetailDashboard country={country} onEdit={onEdit} />
@@ -249,10 +260,10 @@ function CountryDetailInner({
                 )}
 
                 {/* 인물 탭은 헤더 "인물"로 통합 — 국가별 보기는 /history/dashboard/persons?countries=<id>로 이동 */}
-              </motion.div>
+              </S.TabSwapMotion>
             </AnimatePresence>
           </S.AnalyticsDashboard>
-        </motion.div>
+        </S.CountrySwapMotion>
       </AnimatePresence>
     </S.DetailPaneRelative>
   )

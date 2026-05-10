@@ -1,13 +1,13 @@
 /**
- * `/history/country/:countryId/*` 의 URL ↔ 탭 매핑·네비게이션을 단일 훅으로 캡슐화한다.
+ * `/history/country/:countryId/*` 의 URL ↔ 탭 매핑·네비게이션을 단일 훅으로 캡슐화.
  *
- * - `initialDetailTab`: URL의 `detailTab`을 그대로 위젯에 전달할 수 있도록 변환 (persons/events/heads-of-state는 페이지에서 따로 분기)
+ * - `initialDetailTab`: URL의 `detailTab`을 위젯에 전달할 수 있도록 변환
+ *   (events는 페이지 분리, persons/heads-of-state는 라우터 loader가 redirect)
  * - `handleDetailTabChange`: 위젯 → URL 갱신 (단일 콜백, dashboard 포함 모든 탭 처리)
- * - `redirectFromDeprecatedTabs`: 페이지 마운트 시 deprecated 탭(persons, ?tab=heads)을 신규 URL로 redirect
  */
-import { useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { pathKeys } from '@/shared/router'
 import type { CountryDetailTabKey } from '@/widgets/country/country-detail/ui/country-detail.widget'
@@ -82,44 +82,21 @@ interface RoutingResult {
 }
 
 /**
- * 페이지가 사용하는 라우팅 헬퍼들을 묶음.
+ * 페이지가 사용하는 URL ↔ 탭 매핑 헬퍼.
  *
- * 페이지 마운트 시 deprecated URL(persons / ?tab=heads)에서 신규 URL로 redirect 하는
- * 효과도 같이 트리거 — 두 개의 useEffect가 따로 fire하지 않도록 단일 effect로 통합한다.
+ * deprecated URL(persons, heads-of-state)의 redirect는 라우터 loader 단계에서 처리되므로
+ * 이 hook은 순수 매핑만 담당한다.
  */
 export function useCountryDetailRouting({
   selectedId,
   detailTab,
 }: RoutingArgs): RoutingResult {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
 
-  // ─── deprecated URL → 신규 URL redirect ─────────────────────────────────
-  // /persons + ?tab=heads → /government (역대 수반 탭은 행정조직 탭으로 통합됨)
-  // /persons (그 외) → /history/dashboard/persons?countries=<id> (인물 탭은 헤더 인물 페이지로 통합됨)
-  //
-  // 두 분기를 한 effect에 두어 동일 마운트에서 navigate가 두 번 fire 되지 않도록 한다.
-  useEffect(() => {
-    if (!selectedId) return
-    if (detailTab !== 'persons') return
-
-    if (searchParams.get('tab') === 'heads') {
-      navigate(pathKeys.history.countryGovernment(selectedId), {
-        replace: true,
-      })
-      return
-    }
-
-    navigate(
-      `${pathKeys.history.dashboardPersons()}?countries=${encodeURIComponent(selectedId)}`,
-      { replace: true },
-    )
-  }, [selectedId, detailTab, searchParams, navigate])
-
-  // ─── URL → 위젯 prop ────────────────────────────────────────────────────
+  // URL → 위젯 prop
   const initialDetailTab = urlTabToWidgetTab(detailTab)
 
-  // ─── 위젯 → URL ─────────────────────────────────────────────────────────
+  // 위젯 → URL
   const handleDetailTabChange = useCallback(
     (tab: CountryDetailTabKey | null) => {
       if (!selectedId) return

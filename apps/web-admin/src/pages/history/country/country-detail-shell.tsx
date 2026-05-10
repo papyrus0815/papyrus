@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { createGlobalStyle } from 'styled-components'
+import styled, { createGlobalStyle } from 'styled-components'
 import {
   Outlet,
   useLocation,
@@ -40,6 +40,12 @@ import type { CountryDetailTabKey } from '@/widgets/country/country-detail/ui/co
 const CountryDetailPageGlobalStyle = createGlobalStyle`
   body { background-color: #ffffff; }
   #global-bg { display: none; }
+`
+
+/** sub-route(events ↔ detail) 전환 시 우측 콘텐츠 fade를 담당하는 motion 래퍼. */
+const RouteSwapMotion = styled(motion.div)`
+  width: 100%;
+  min-height: 100%;
 `
 
 export interface CountryDetailShellContext {
@@ -147,17 +153,31 @@ export function CountryDetailShell() {
     historicalForm.editing?.id,
   ])
 
-  const context: CountryDetailShellContext = {
-    selectedId,
-    selectedCountry,
-    continents,
-    isInitialLoading,
-    notFound,
-    initialDetailTab,
-    handleDetailTabChange,
-    onEdit: editFromDetail,
-    onDelete: deleteFromDetail,
-  }
+  // 자식이 effect deps로 context 객체 자체를 참조해도 안정적이도록 useMemo.
+  const context = useMemo<CountryDetailShellContext>(
+    () => ({
+      selectedId,
+      selectedCountry,
+      continents,
+      isInitialLoading,
+      notFound,
+      initialDetailTab,
+      handleDetailTabChange,
+      onEdit: editFromDetail,
+      onDelete: deleteFromDetail,
+    }),
+    [
+      selectedId,
+      selectedCountry,
+      continents,
+      isInitialLoading,
+      notFound,
+      initialDetailTab,
+      handleDetailTabChange,
+      editFromDetail,
+      deleteFromDetail,
+    ],
+  )
 
   return (
     <>
@@ -177,16 +197,15 @@ export function CountryDetailShell() {
         right={
           <AnimatePresence initial={false} mode="wait">
             {/* sub-route 전환마다 motion이 fade — 페이지가 자체 motion wrapper를 갖지 않아도 됨 */}
-            <motion.div
+            <RouteSwapMotion
               key={location.pathname}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25, ease: 'easeInOut' }}
-              style={{ width: '100%', minHeight: '100%' }}
             >
               <Outlet context={context} />
-            </motion.div>
+            </RouteSwapMotion>
           </AnimatePresence>
         }
       >
@@ -221,4 +240,3 @@ export function CountryDetailShell() {
   )
 }
 
-export default CountryDetailShell
