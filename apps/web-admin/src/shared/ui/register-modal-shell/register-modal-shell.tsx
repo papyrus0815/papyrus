@@ -1,6 +1,9 @@
 /**
- * 인물 등록 뷰 모달(PersonRegisterViewModal)과 동일한 시각·레이어 스펙의 셸.
- * 공용 @/shared/ui/modal(glass 16px)과 구분 — 배경/블러/22px/그림자가 다름.
+ * 등록 폼 모달의 공용 셸 — 배경/블러/그림자 톤이 정해진 정제 스타일.
+ * 공용 @/shared/ui/modal(glass 16px)과 구분 — 22px radius·맥시멈 그림자 톤다운.
+ *
+ * 사용처: 인물·군주·정당·내각·관직·역대수반 등 등록 모달이 외곽 통일을 위해 import.
+ * (export 심볼명에 'PersonRegisterModal*' 접두가 남아 있는 건 legacy — 의미는 "등록 모달 공용".)
  */
 import React from 'react'
 

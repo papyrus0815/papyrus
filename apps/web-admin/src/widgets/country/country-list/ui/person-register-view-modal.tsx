@@ -52,10 +52,11 @@ export function PersonRegisterViewModal({
 
   const handleSuccess = (personId?: string) => {
     queryClient.invalidateQueries({ queryKey: personKeys.all })
+    // 가족 노드(부모·자녀·손자녀)에 박힌 profileImageUrl 등이 다른 인물 상세·가계도 캐시에도
+    // 들어가 있으므로 broad invalidate (특정 personId가 아닌 prefix 전체)
+    queryClient.invalidateQueries({ queryKey: ['person-detail'] })
+    queryClient.invalidateQueries({ queryKey: ['person-family-tree'] })
     if (personId) {
-      queryClient.invalidateQueries({
-        queryKey: personKeys.detailFull(personId),
-      })
       queryClient.invalidateQueries({ queryKey: personKeys.detail(personId) })
     }
     setIsDirty(false)
@@ -108,7 +109,6 @@ export function PersonRegisterViewModal({
         editPersonId={editPersonId ?? undefined}
         onCancel={onClose}
         onSuccess={handleSuccess}
-        embedInCard={false}
         onSubmittingChange={setSubmitting}
         onDirtyChange={setIsDirty}
         onValuesChange={setFilled}

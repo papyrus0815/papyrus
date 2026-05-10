@@ -18,14 +18,12 @@ import { toast } from 'react-hot-toast'
 import {
   FiAlertCircle,
   FiAlertTriangle,
-  FiArrowLeft,
   FiCamera,
   FiChevronDown,
   FiChevronRight,
   FiRotateCcw,
   FiTrash2,
 } from 'react-icons/fi'
-import styled, { keyframes } from 'styled-components'
 
 import { getAllCountries } from '@/shared/api/countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
@@ -55,12 +53,9 @@ import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { type PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import {
-  BackButton,
   FieldControl,
   FieldLabel,
   FieldRow,
-  FormCardWrapper,
-  FormHeader,
   FormRows,
   FormSectionInner,
   Required,
@@ -80,650 +75,48 @@ import { FamilySection } from './sections/family-section'
 import { LifeSection } from './sections/life-section'
 import { usePersonDraft } from './use-person-draft.hook'
 
-// ─── Styled — Profile hero (thumbnail + 이름 미리보기 + 메타칩) ───────────────
-// "데이터 입력"이 아니라 "사람을 만든다"는 인상으로 상단 hero 격상.
-// 좌: 원형 썸네일(드롭존) / 우: namePreview + 국가·향년 칩 + 업로드 hint·삭제
-
-const ThumbnailHero = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 4px 0 6px;
-  flex-wrap: wrap;
-`
-
-const ThumbnailCircle = styled.label<{
-  $hasImage?: boolean
-  $dragOver?: boolean
-}>`
-  position: relative;
-  width: 104px;
-  height: 104px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.04)'
-      : 'linear-gradient(145deg, #f8fafc 0%, #eef2ff 100%)'};
-  border: 1.5px ${({ $hasImage }) => ($hasImage ? 'solid' : 'dashed')}
-    ${({ $dragOver, $hasImage, theme }) =>
-      $dragOver
-        ? theme.colors.primary
-        : $hasImage
-          ? theme.colors.border.medium
-          : theme.mode === 'dark'
-            ? 'rgba(255,255,255,0.18)'
-            : '#cbd5e1'};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease,
-    box-shadow 0.15s ease;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    box-shadow: 0 0 0 4px
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(99,102,241,0.14)'
-          : 'rgba(99,102,241,0.08)'};
-  }
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  /* 빈 상태 placeholder — 옅은 사람 실루엣 */
-  > svg.placeholder {
-    color: ${({ theme }) => theme.colors.text.tertiary};
-    width: 30px;
-    height: 30px;
-    opacity: 0.55;
-  }
-
-  /* hover/drag-over 카메라 오버레이 — 클릭/드롭 액션 신호 */
-  > .overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(15, 23, 42, 0.5);
-    color: #fff;
-    opacity: ${({ $dragOver }) => ($dragOver ? 1 : 0)};
-    transition: opacity 0.15s ease;
-    border-radius: 50%;
-  }
-
-  &:hover > .overlay {
-    opacity: 1;
-  }
-`
-
-const ThumbnailUploadInput = styled.input`
-  display: none;
-`
-
-const ThumbnailHeroBody = styled.div`
-  flex: 1;
-  min-width: 200px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const ThumbnailHeroName = styled.div<{ $empty: boolean }>`
-  font-size: ${({ $empty }) => ($empty ? '14px' : '18px')};
-  font-weight: ${({ $empty }) => ($empty ? '400' : '600')};
-  color: ${({ $empty, theme }) =>
-    $empty ? theme.colors.text.tertiary : theme.colors.text.primary};
-  letter-spacing: -0.01em;
-  line-height: 1.25;
-`
-
-const ThumbnailHeroMeta = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-`
-
-const HeroMetaChip = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 9px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  border-radius: 999px;
-  letter-spacing: -0.005em;
-  font-variant-numeric: tabular-nums;
-`
-
-const ThumbnailHeroHint = styled.div`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1.4;
-`
-
-const ThumbnailHeroRemoveBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  font-size: 12px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: color 0.12s;
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.alert.danger.fg};
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
-// ─── Styled — Inline grouping ────────────────────────────────────────────────
-
-const OriginalNameInputWrap = styled.div`
-  max-width: 480px;
-  width: 100%;
-`
-
-/* 상단 정렬 라벨 패턴. 행 구분은 PersonFormLayoutWrap의 border-top 규칙으로. */
-const FieldRowMulti = styled.div`
-  display: block;
-  padding: 18px 0;
-`
-
-/**
- * 인라인 입력 그룹 — `$template` 우선. 미지정 시 `$cols`개 동등 col(이전 동작).
- * 의미적 폭 차등(예: 성<이름<중간이름)이 시각 비대칭을 줄여 한눈 파악 ↑.
- */
-const InlineFields = styled.div<{ $cols?: number; $template?: string }>`
-  display: grid;
-  grid-template-columns: ${(p) =>
-    p.$template ?? `repeat(${p.$cols ?? 3}, 1fr)`};
-  gap: 10px;
-  width: 100%;
-
-  & > div {
-    min-width: 0;
-  }
-  input,
-  select,
-  button {
-    max-width: 100%;
-  }
-
-  @media (max-width: 640px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-// SegmentRow / SegmentBtn 자체 정의 제거 — 공용 SegmentControl 사용 (위 import)
-
-// ─── Styled — Layout wrapper (Top-aligned modern form layout) ────────────────
-// 상단 정렬 라벨 (Linear/Stripe/Notion 류) — 라벨이 위, 컨트롤이 아래.
-// 좌측 라벨 그리드(360px 1fr) 폐기 — 모바일/데스크탑 동일 레이아웃, 라벨 폭 제약 해소.
-// 행 구분은 비-첫행 border-top으로 가볍게 (모든 행 border-bottom 폐기).
-
-const PersonFormLayoutWrap = styled.div`
-  /* 정제 톤: top-label, 행 구분선 제거 (margin만으로 분리) */
-  ${FieldRow} {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 0;
-    border-bottom: none;
-    margin-top: 18px;
-  }
-
-  ${FieldRowMulti} {
-    margin-top: 18px;
-  }
-
-  ${ThumbnailHero} {
-    margin-top: 0;
-  }
-
-  ${FieldRow}:first-child,
-  ${FieldRowMulti}:first-child {
-    margin-top: 0;
-  }
-
-  /* 라벨 — country/historical과 동일 (13px 500, secondary) */
-  ${FieldLabel} {
-    display: block;
-    margin: 0;
-    padding-top: 0;
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.4;
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
-
-  /* 컨트롤 — 모달 폭이 줄어 max-width 제거, 100% 활용 */
-  ${FieldControl} {
-    width: 100%;
-  }
-
-  ${InlineFields} {
-    max-width: none;
-  }
-
-  ${OriginalNameInputWrap} {
-    max-width: none;
-  }
-`
-
-// ─── Styled — Modal tab navigation (인물 모달 전용 — sliding indicator) ──────
-// 미니멀 refined pill 스타일 (Linear/Vercel 류):
-// - 흰(다크: 미세 글래스) pill + indigo 텍스트로 활성 표현
-// - 그라디언트·강한 그림자 폐기 → 정보성 hierarchy 유지, 시각 잡음 ↓
-// - radius 정합: 컨테이너 12 / 버튼 8 / inner padding 4
-// - 폰트 weight 500 통일 (jiggle 방지) — 활성은 색만 변화
-// - sliding indicator는 Framer Motion layoutId 그대로
-
-/**
- * 섹션 헤더 — 17px sentence-case + 1줄 설명.
- * 11px ALL CAPS 회색 톤은 위계 약하고 정보 잡음 — 본문(14px)보다 큰 sentence case로 격상.
- * scroll-spy용 data-form-section은 wrapper에 둔다.
- */
-const SectionHeader = styled.div`
-  margin: 36px 0 12px;
-  &:first-child {
-    margin-top: 4px;
-  }
-`
-
-const SectionHeaderTitle = styled.h3`
-  margin: 0 0 4px;
-  font-size: 17px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.01em;
-  line-height: 1.3;
-`
-
-const SectionHeaderDesc = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1.5;
-`
-
-// ─── Styled — Disclosure card (이름의 뜻·군주 호칭 등 옵셔널 입력 그룹) ────────
-// 카드형 disclosure — 그냥 회색 텍스트 chevron보다 "옵셔널 추가 정보 그룹"임을
-// 시각적으로 명확히 전달. hover 시 indigo border로 클릭 가능 신호.
-
-const AdvancedSection = styled.section`
-  margin-top: 14px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff'};
-  overflow: hidden;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-  }
-`
-
-const AdvancedToggle = styled.button<{ $open: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 14px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.15s ease;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
-  }
-  &:focus-visible {
-    outline: none;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
-  }
-`
-
-const AdvancedToggleIcon = styled.span<{ $open: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  flex-shrink: 0;
-  transition: background 0.15s;
-  svg {
-    transition: transform 0.15s ease;
-    transform: rotate(${({ $open }) => ($open ? '90deg' : '0deg')});
-  }
-`
-
-const AdvancedToggleBody = styled.span`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-`
-
-const AdvancedToggleTitle = styled.span`
-  font-size: 13.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.005em;
-`
-
-const AdvancedToggleDesc = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1.4;
-`
-
-/* 펼친 본문 — 카드 내부 padding + 상단 light divider */
-const AdvancedBody = styled.div`
-  padding: 14px 14px 14px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-
-/** 페이지 모드 전용 sticky 푸터 — 모달 모드는 Shell이 푸터 담당 */
-const StickyFooter = styled.div`
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 20px;
-  margin-top: 16px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-// ─── Styled — Draft restore banner ───────────────────────────────────────────
-// 단일 줄 미니멀 배너 — 인라인 아이콘 + 제목·시간 한 줄 + 보조/주 액션 위계 분리.
-// 탭의 절제된 디자인과 톤 통일 (그라디언트·강한 shadow 폐기).
-
-const draftBannerSlideIn = keyframes`
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-`
-
-/**
- * 카드형 draft 배너 — 좌측 2px line은 너무 약해 사용자가 못 보고 새로 입력할 위험.
- * 옅은 indigo 틴트 카드 + cloud icon으로 "임시 저장된 내용이 있다"는 신호를 강화.
- */
-const DraftBanner = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  margin: 0 0 16px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99,102,241,0.08)'
-      : 'rgba(99, 102, 241, 0.05)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.22)'
-        : 'rgba(99, 102, 241, 0.18)'};
-  border-radius: 10px;
-  font-size: 13px;
-  animation: ${draftBannerSlideIn} 0.18s ease;
-
-  & + div[role='alert'] {
-    margin-top: 0;
-  }
-`
-
-const DraftBannerIcon = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.12)'};
-  color: ${({ theme }) => theme.colors.primary};
-  flex-shrink: 0;
-`
-
-const DraftBannerText = styled.span`
-  flex: 1;
-  min-width: 0;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  letter-spacing: -0.005em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-
-  > strong {
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  > span {
-    color: ${({ theme }) => theme.colors.text.secondary};
-    font-variant-numeric: tabular-nums;
-  }
-`
-
-const DraftBannerActions = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-`
-
-/** 버리기 — 보조 액션이라 ghost 톤 */
-const DraftDiscardBtn = styled.button`
-  padding: 5px 10px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition:
-    color 0.12s,
-    background 0.12s;
-  &:hover {
-    color: ${({ theme }) => theme.colors.alert.danger.fg};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(248,113,113,0.08)' : '#fef2f2'};
-  }
-`
-
-/** 복원 — primary action. 카드 안에서 가장 시선 가도록 indigo fill. */
-const DraftRestoreBtn = styled.button`
-  padding: 5px 12px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #fff;
-  background: ${({ theme }) => theme.colors.primary};
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.12s;
-  &:hover {
-    background: ${({ theme }) => theme.colors.button.hover};
-  }
-`
-
-// ─── Styled — Field error ────────────────────────────────────────────────────
-
-const FieldError = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.alert.danger.fg};
-  margin-top: 6px;
-  line-height: 1.4;
-  svg {
-    flex-shrink: 0;
-  }
-`
-
-// ─── Styled — Loading ────────────────────────────────────────────────────────
-
-const LoadingOverlay = styled.div`
-  position: absolute;
-  inset: 0;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.6)'};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2;
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  backdrop-filter: blur(2px);
-  border-radius: 12px;
-`
-
-const LoadingHost = styled.div`
-  position: relative;
-`
-
-
-// ─── Styled — Undo toast (국가 변경 시 출생/사망지 자동 정리) ────────────────
-const UndoToastBody = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const UndoToastButton = styled.button`
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.primary};
-  background: transparent;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.4)'
-        : 'rgba(99,102,241,0.3)'};
-  border-radius: 999px;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s,
-    border-color 0.15s;
-  &:hover {
-    color: #fff;
-    background: ${({ theme }) => theme.colors.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
-`
-
-// ─── Styled — Top-of-form alert (form-wide error, country stale) ─────────────
-const TopAlert = styled.div<{ $tone?: 'error' | 'warn' }>`
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0 0 16px;
-  padding: 6px 12px;
-  border: none;
-  border-left: 2px solid
-    ${({ $tone, theme }) =>
-      $tone === 'warn'
-        ? theme.colors.alert.warning.border
-        : theme.colors.alert.danger.border};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12.5px;
-  line-height: 1.5;
-
-  svg {
-    flex-shrink: 0;
-    margin-top: 1px;
-    color: ${({ $tone, theme }) =>
-      $tone === 'warn'
-        ? theme.colors.alert.warning.fg
-        : theme.colors.alert.danger.fg};
-  }
-`
-
-// ─── Styled — Person-not-found panel ─────────────────────────────────────────
-const NotFoundPanel = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  padding: 64px 24px;
-  text-align: center;
-`
-
-const NotFoundIcon = styled.div`
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: ${({ theme }) => theme.colors.alert.warning.bg};
-  color: ${({ theme }) => theme.colors.alert.warning.fg};
-`
-
-const NotFoundTitle = styled.h3`
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const NotFoundDesc = styled.p`
-  margin: 0;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  max-width: 320px;
-  line-height: 1.5;
-`
+import {
+  AdvancedBody,
+  AdvancedSection,
+  AdvancedToggle,
+  AdvancedToggleBody,
+  AdvancedToggleDesc,
+  AdvancedToggleIcon,
+  AdvancedToggleTitle,
+  AutoSaveStatus,
+  DraftBanner,
+  DraftBannerActions,
+  DraftBannerIcon,
+  DraftBannerText,
+  DraftDiscardBtn,
+  DraftRestoreBtn,
+  FieldError,
+  FieldRowMulti,
+  HeroMetaChip,
+  InlineFields,
+  LoadingHost,
+  LoadingOverlay,
+  NotFoundDesc,
+  NotFoundIcon,
+  NotFoundPanel,
+  NotFoundTitle,
+  OriginalNameInputWrap,
+  PersonFormLayoutWrap,
+  SectionHeader,
+  SectionHeaderDesc,
+  SectionHeaderTitle,
+  ThumbnailCircle,
+  ThumbnailHero,
+  ThumbnailHeroBody,
+  ThumbnailHeroHint,
+  ThumbnailHeroMeta,
+  ThumbnailHeroName,
+  ThumbnailHeroRemoveBtn,
+  ThumbnailUploadInput,
+  TopAlert,
+  UndoToastBody,
+  UndoToastButton,
+} from './person-register-view.styles'
 
 // 옵션·헬퍼·Draft 타입은 person-register-view.helpers.ts에서 import.
 
@@ -733,8 +126,6 @@ export interface PersonRegisterViewProps {
   initialCountryId?: string | null
   onCancel: () => void
   onSuccess?: (personId: string) => void
-  /** false면 FormCardWrapper 없이 헤더+폼만 렌더 (외부에서 카드로 감쌀 때) */
-  embedInCard?: boolean
   /** 있으면 수정 모드: 해당 인물 로드 후 폼에 채우고 저장 시 update 호출 */
   editPersonId?: string | null
   /** 제출 중 상태 변경 시 부모에게 알림 (외부 하단 버튼 disabled용) */
@@ -748,17 +139,19 @@ export interface PersonRegisterViewProps {
     gender: boolean
     countryId: boolean
   }) => void
+  /** 제출 버튼 라벨이 변할 때 부모에게 알림 (페이지 모드 sticky 푸터 버튼용) */
+  onSubmitLabelChange?: (label: string) => void
 }
 
 export function PersonRegisterView({
   initialCountryId,
   onCancel,
   onSuccess,
-  embedInCard = true,
   editPersonId,
   onSubmittingChange,
   onDirtyChange,
   onValuesChange,
+  onSubmitLabelChange,
 }: PersonRegisterViewProps) {
   const isEditMode = Boolean(editPersonId)
   // 기본 정보
@@ -837,8 +230,17 @@ export function PersonRegisterView({
   const [recentlyRegistered, setRecentlyRegistered] = useState<
     PersonResponseDto[]
   >([])
-  /** 수정 모드에서 인물 로드 실패 — 폼 대신 안내 패널 표시 */
-  const [loadFailed, setLoadFailed] = useState(false)
+  /**
+   * 수정 모드 인물 로드 상태.
+   * - idle: 신규 모드 또는 편집 진입 전
+   * - loading: detail API 호출 중
+   * - loaded: 폼 채움 완료
+   * - error: 로드 실패 → 폼 숨김 + NotFoundPanel
+   */
+  type EditLoadStatus = 'idle' | 'loading' | 'loaded' | 'error'
+  const [editLoadStatus, setEditLoadStatus] = useState<EditLoadStatus>('idle')
+  const isLoadingEdit = editLoadStatus === 'loading'
+  const loadFailed = editLoadStatus === 'error'
   /** 신규 등록 모드에서 폼 강제 reset 트리거. registerAnother 흐름에서 사용. */
   const [resetCounter, setResetCounter] = useState(0)
   /** 썸네일 파일은 등록·저장 시에만 업로드. 미리보기용 blob URL */
@@ -856,10 +258,8 @@ export function PersonRegisterView({
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  /** 편집 모드에서 서버 데이터 로딩 중 여부 */
-  const [isLoadingEdit, setIsLoadingEdit] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
-  const trackDirtyRef = useRef(false)
+  const dirtyTrackingEnabledRef = useRef(false)
   const uidPrefix = useId()
   const fid = useCallback((k: string) => `${uidPrefix}-${k}`, [uidPrefix])
 
@@ -870,22 +270,24 @@ export function PersonRegisterView({
   const draftScopeId = editPersonId ?? 'new'
 
   const markDirty = useCallback(() => {
-    if (trackDirtyRef.current) setIsDirty(true)
+    if (dirtyTrackingEnabledRef.current) setIsDirty(true)
   }, [])
 
   useEffect(() => {
     onDirtyChange?.(isDirty)
   }, [isDirty, onDirtyChange])
 
-  // 모달 헤더 인디케이터/사이드 인덱스용 — 필수 필드 변화 알림
+  // 모달 헤더 인디케이터/사이드 인덱스용 — 필수 필드 변화 알림.
+  // 콜백을 ref에 보관해 deps에서 빼면 lint 비활성화 없이도 안정적.
+  const onValuesChangeRef = useRef(onValuesChange)
+  onValuesChangeRef.current = onValuesChange
   useEffect(() => {
-    onValuesChange?.({
+    onValuesChangeRef.current?.({
       name: !!name?.trim(),
       surname: !!surname?.trim(),
       gender: !!gender,
       countryId: !!countryId,
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onValuesChange는 변경 안 됨 가정
   }, [name, surname, gender, countryId])
 
   const [modernCountries, setModernCountries] = useState<CountryResponseDto[]>(
@@ -1172,13 +574,12 @@ export function PersonRegisterView({
   // ─── 신규/수정 진입 시 폼 초기화 또는 서버 로드 ───────────────────────────
   useEffect(() => {
     setActiveTab('basic')
-    trackDirtyRef.current = false
+    dirtyTrackingEnabledRef.current = false
     setIsDirty(false)
     setErrors({})
 
-    setLoadFailed(false)
-
     if (!editPersonId) {
+      setEditLoadStatus('idle')
       // 등록 모드 전환 시 폼 초기화
       setNameMeaningsOpen(false)
       setMonarchTitlesOpen(false)
@@ -1195,7 +596,11 @@ export function PersonRegisterView({
       setRegnalName('')
       setTempleName('')
       setPosthumousName('')
-      setCountryId(initialCountryId ?? '')
+      // "또 등록" 흐름에서 직전 등록 국가 보존(`preserveCountryIdRef`).
+      // 일반 reset에서는 initialCountryId(부모가 흘린 값)으로 폴백.
+      const nextCountryId = preserveCountryIdRef.current ?? initialCountryId ?? ''
+      preserveCountryIdRef.current = null
+      setCountryId(nextCountryId)
       setCountryName('')
       setBirthCityId('')
       setDeathCityId('')
@@ -1225,15 +630,14 @@ export function PersonRegisterView({
       setThumbnailObjectUrl(null)
       setThumbnailMarkedForRemoval(false)
       setEditFamilyCache({})
-      setIsLoadingEdit(false)
       requestAnimationFrame(() => {
-        trackDirtyRef.current = true
+        dirtyTrackingEnabledRef.current = true
       })
       return
     }
 
     let cancelled = false
-    setIsLoadingEdit(true)
+    setEditLoadStatus('loading')
     setPendingThumbnailFile(null)
     setThumbnailObjectUrl(null)
     setThumbnailMarkedForRemoval(false)
@@ -1365,17 +769,17 @@ export function PersonRegisterView({
           (p.templeName && String(p.templeName).trim()) ||
           (p.posthumousName && String(p.posthumousName).trim())
         setMonarchTitlesOpen(Boolean(hasMonarchTitles))
+        setEditLoadStatus('loaded')
       })
       .catch(() => {
         if (cancelled) return
-        setLoadFailed(true)
+        setEditLoadStatus('error')
         toast.error('인물 정보를 불러오지 못했습니다.')
       })
       .finally(() => {
         if (cancelled) return
-        setIsLoadingEdit(false)
         requestAnimationFrame(() => {
-          trackDirtyRef.current = true
+          dirtyTrackingEnabledRef.current = true
         })
       })
     return () => {
@@ -1506,7 +910,7 @@ export function PersonRegisterView({
     }
     const d = env.data
     // dirty 추적 일시 정지 — 한 번에 setState 채우는 동안.
-    trackDirtyRef.current = false
+    dirtyTrackingEnabledRef.current = false
     setName(d.name ?? '')
     setSurname(d.surname ?? '')
     setMiddleName(d.middleName ?? '')
@@ -1547,7 +951,7 @@ export function PersonRegisterView({
     setPosthumousName(d.posthumousName ?? '')
     setPendingDraftSavedAt(null)
     requestAnimationFrame(() => {
-      trackDirtyRef.current = true
+      dirtyTrackingEnabledRef.current = true
       // 복원 직후엔 dirty=false. 사용자가 복원 후 추가 입력 없이 닫으면
       // 다시 confirm을 띄울 필요 없음.
       setIsDirty(false)
@@ -1561,10 +965,18 @@ export function PersonRegisterView({
   }
 
   // ─── 핸들러 ────────────────────────────────────────────────────────────────
-  /** 등록 성공 다이얼로그 — "다른 인물 등록" 선택 시 폼 리셋, 모달은 유지. */
+  /**
+   * "또 등록" 흐름에서 다음 라운드에 보존할 국가 ID — reset effect가 이 값을 읽어
+   * `initialCountryId` 대신 사용. 사용자가 모달 처음 열 때 initialCountryId가
+   * 비어있어도 직전 등록 국가가 자동으로 유지된다.
+   */
+  const preserveCountryIdRef = useRef<string | null>(null)
+
+  /** 등록 성공 다이얼로그 — "다른 인물 등록" 선택 시 폼 리셋, 모달은 유지(직전 국가 보존). */
   const handleRegisterAnother = () => {
     setShowRegisterAgainDialog(false)
     setLastCreatedPerson(null)
+    preserveCountryIdRef.current = countryId || null
     setResetCounter((n) => n + 1)
   }
 
@@ -1753,10 +1165,13 @@ export function PersonRegisterView({
     if (file) acceptThumbnailFile(file)
   }
 
-  // 폼 어디서든 이미지 paste 가능 — 사용자가 클립보드 이미지를 빠르게 붙이도록.
+  // 폼 영역에서 paste 시 이미지 자동 붙여넣기.
+  // form element 단위로 listen — document 글로벌 listener는 다른 모달이 동시에 열려 있을 때 충돌.
   useEffect(() => {
+    const formEl = formRef.current
+    if (!formEl) return
     const onPaste = (e: ClipboardEvent) => {
-      // 텍스트 입력 영역(input/textarea/contenteditable) 내부 paste는 무시 — 썸네일 핫키와 충돌 방지.
+      // 텍스트 입력 영역(input/textarea/contenteditable) 내부 paste는 무시 — 사용자 텍스트 입력 우선.
       const target = e.target as HTMLElement | null
       if (!target) return
       const tag = target.tagName?.toLowerCase()
@@ -1781,10 +1196,29 @@ export function PersonRegisterView({
         }
       }
     }
-    document.addEventListener('paste', onPaste)
-    return () => document.removeEventListener('paste', onPaste)
+    formEl.addEventListener('paste', onPaste)
+    return () => formEl.removeEventListener('paste', onPaste)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ⌘Enter / Ctrl+Enter — 폼 어디에서나 빠른 제출. 긴 폼이라 푸터까지 마우스 이동 부담 ↓.
+  const formRef = useRef<HTMLFormElement | null>(null)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        const f = formRef.current
+        if (!f) return
+        // submitting/loading 중에는 무시
+        if (isSubmitting || uploadingThumbnail || isLoadingEdit || loadFailed) {
+          return
+        }
+        e.preventDefault()
+        f.requestSubmit()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [isSubmitting, uploadingThumbnail, isLoadingEdit, loadFailed])
 
   const handleRemoveThumbnail = () => {
     if (pendingThumbnailFile) {
@@ -2121,28 +1555,22 @@ export function PersonRegisterView({
   const motherPerson = motherId ? personById.get(motherId) : undefined
   const spousePerson = spouseId ? personById.get(spouseId) : undefined
 
+  // 4가지 상태(업로드 중 / 제출 중 / 수정 / 신규) 중 하나의 라벨을 lookup으로 결정.
   const submitButtonLabel = uploadingThumbnail
     ? '이미지 업로드 중…'
     : isSubmitting
-      ? isEditMode
-        ? '저장 중…'
-        : '등록 중…'
-      : isEditMode
-        ? '저장'
-        : '등록'
+      ? isEditMode ? '저장 중…' : '등록 중…'
+      : isEditMode ? '저장' : '등록'
+
+  // 페이지 wrapper(`PersonRegisterPage`)가 sticky 푸터·뒤로가기 헤더·버튼 라벨을 담당.
+  // 이 컴포넌트는 폼 본체만 렌더한다 — 모달은 CountryFormShell이, 페이지는 wrapper가 외곽을 책임.
+  React.useEffect(() => {
+    onSubmitLabelChange?.(submitButtonLabel)
+  }, [submitButtonLabel, onSubmitLabelChange])
 
   // ─── Render ────────────────────────────────────────────────────────────────
-  const formContent = (
-    <>
-      {embedInCard && (
-        <FormHeader>
-          <BackButton type="button" onClick={onCancel}>
-            <FiArrowLeft size={18} />
-            목록 보기
-          </BackButton>
-          {/* 등록 버튼은 하단 sticky footer 한 곳에만 — 중복 제거 */}
-        </FormHeader>
-      )}
+  return (
+    <PersonFormLayoutWrap>
       {pendingDraftSavedAt && (
         <DraftBanner role="status">
           <DraftBannerIcon aria-hidden="true">
@@ -2184,6 +1612,7 @@ export function PersonRegisterView({
         </NotFoundPanel>
       )}
       <form
+        ref={formRef}
         id="person-register-form"
         onSubmit={handleSubmit}
         onChange={markDirty}
@@ -2557,32 +1986,22 @@ export function PersonRegisterView({
       </form>
 
       {/*
-       * 페이지 모드 전용 sticky 푸터 — 긴 폼 끝에서도 등록 가능.
-       * 모달 모드(embedInCard=false)에서는 wrapper(PersonRegisterViewModal)가
-       * 자체 sticky footer + 등록 버튼을 가지므로 인너 푸터 불필요(중복 제거).
-       * 진행도·"또 등록" 체크박스는 상단 RequiredProgress + 등록 후 다이얼로그로 이전.
+       * 등록 성공 후 분기 — "다른 인물 이어서 등록" vs "닫기".
+       * 메시지는 현재 countryId 채움 여부에 따라 정확히 분기 — preserveCountryIdRef가
+       * 다음 라운드에 country를 유지하지만 초기 등록부터 country가 비었으면 그대로 비어 시작.
        */}
-      {embedInCard && !loadFailed && (
-        <StickyFooter>
-          <SubmitButton
-            type="submit"
-            form="person-register-form"
-            disabled={isSubmitting}
-          >
-            {submitButtonLabel}
-          </SubmitButton>
-        </StickyFooter>
-      )}
-
-      {/* 등록 성공 후 분기 — "다른 인물 이어서 등록" vs "닫기" */}
       <ConfirmDialog
         isOpen={showRegisterAgainDialog}
         title="인물 등록 완료"
-        message={
-          lastCreatedPerson
-            ? `${getPersonDisplayName(lastCreatedPerson)}을(를) 등록했습니다. 같은 국가에 다른 인물도 이어서 등록할까요?`
-            : '같은 국가에 다른 인물도 이어서 등록할까요?'
-        }
+        message={(() => {
+          const nameLabel = lastCreatedPerson
+            ? `${getPersonDisplayName(lastCreatedPerson)}을(를) 등록했습니다. `
+            : ''
+          if (countryId && countryName) {
+            return `${nameLabel}${countryName}에 다른 인물도 이어서 등록할까요?`
+          }
+          return `${nameLabel}다른 인물도 이어서 등록할까요?`
+        })()}
         confirmLabel="다른 인물 등록"
         cancelLabel="닫기"
         onConfirm={handleRegisterAnother}
@@ -2652,12 +2071,6 @@ export function PersonRegisterView({
           title="사망일 선택"
         />
       )}
-    </>
-  )
-
-  return (
-    <PersonFormLayoutWrap>
-      {embedInCard ? <FormCardWrapper>{formContent}</FormCardWrapper> : formContent}
     </PersonFormLayoutWrap>
   )
 }

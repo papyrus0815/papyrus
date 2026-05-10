@@ -116,7 +116,7 @@ import {
   PersonRegisterModalPrimaryBtn,
   PersonRegisterModalStickyFooter,
   PersonRegisterModalTitle,
-} from '@/shared/ui/person-register-modal/person-register-modal-shell'
+} from '@/shared/ui/register-modal-shell/register-modal-shell'
 import {
   CheckboxRow,
   DateFieldBtn,

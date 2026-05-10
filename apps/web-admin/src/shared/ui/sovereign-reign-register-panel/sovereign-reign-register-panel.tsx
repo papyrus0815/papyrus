@@ -25,7 +25,7 @@ import {
   PersonRegisterModalTitle,
   PersonRegisterModalPrimaryBtn,
   PersonRegisterModalCancelBtn,
-} from '@/shared/ui/person-register-modal/person-register-modal-shell'
+} from '@/shared/ui/register-modal-shell/register-modal-shell'
 import {
   FormRows,
   FieldRow,
