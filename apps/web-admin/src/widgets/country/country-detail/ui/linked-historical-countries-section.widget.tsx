@@ -8,7 +8,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
-import { FiArrowRight, FiCheckCircle, FiHome, FiUsers } from 'react-icons/fi'
+import {
+  FiArrowRight,
+  FiCheckCircle,
+  FiHome,
+  FiUsers,
+  FiX,
+} from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -52,6 +58,9 @@ const EMPTY_RELS: {
   relations: HistoricalCountryRelationDto[]
   memberships: HistoricalCountryMembershipDto[]
 } = { transitions: [], relations: [], memberships: [] }
+
+/** 흐름도 카드 최소 폭(%) — 한쪽 연도만 알려진 국가의 클릭 영역 확보용. */
+const MIN_FLOW_WIDTH_PCT = 1.5
 
 /** 연결된 역사적 국가가 없을 때 메시지 — list/flow 모드 공통. */
 const LINKED_EMPTY_MESSAGE =
@@ -311,11 +320,12 @@ const FlowRow = styled.div`
   box-sizing: border-box;
 `
 
-/** 카드: left%·width% = 하단 연도 축과 동일 스케일 (연도 구간 정확히) */
+/** 카드: left%·width% = 하단 연도 축과 동일 스케일 (연도 구간 정확히).
+ * 호출자가 이미 MIN_FLOW_WIDTH_PCT로 클램프하지만, props가 우회될 가능성에 대비한 데드 가드. */
 const FlowCard = styled.button<{ $leftPct: number; $widthPct: number }>`
   position: absolute;
   left: ${(p) => p.$leftPct}%;
-  width: ${(p) => Math.max(0.5, p.$widthPct)}%;
+  width: ${(p) => Math.max(MIN_FLOW_WIDTH_PCT, p.$widthPct)}%;
   top: 0;
   height: 100%;
   padding: 14px 16px;
@@ -346,7 +356,7 @@ const FlowCard = styled.button<{ $leftPct: number; $widthPct: number }>`
 const FlowCardPill = styled.button<{ $leftPct: number; $widthPct: number }>`
   position: absolute;
   left: ${(p) => p.$leftPct}%;
-  width: ${(p) => Math.max(0.5, p.$widthPct)}%;
+  width: ${(p) => Math.max(MIN_FLOW_WIDTH_PCT, p.$widthPct)}%;
   top: 50%;
   transform: translateY(-50%);
   min-height: 40px;
@@ -492,7 +502,10 @@ const FlowFullViewTitle = styled.h2`
 `
 
 const FlowFullViewCloseBtn = styled.button`
-  padding: 8px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
   font-size: 14px;
   font-weight: 600;
   color: #64748b;
@@ -509,6 +522,11 @@ const FlowFullViewCloseBtn = styled.button`
     background: #f1f5f9;
     color: ${TITLE};
     border-color: #cbd5e1;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${MAIN};
+    outline-offset: 2px;
   }
 `
 
@@ -736,8 +754,8 @@ export function LinkedHistoricalCountriesSection({
           if (!h || !yr) return { id, leftPct: 0, widthPct: 0 }
           const leftPct = toPct(yr.startYear)
           const endPct = toPct(yr.endYear)
-          // 클릭 영역 확보 — 한쪽 연도만 알려진 국가(width≈0)도 최소 1.5% 폭으로 보이게.
-          const widthPct = Math.max(1.5, endPct - leftPct)
+          // 클릭 영역 확보 — 한쪽 연도만 알려진 국가(width≈0)도 최소 폭으로 보이게.
+          const widthPct = Math.max(MIN_FLOW_WIDTH_PCT, endPct - leftPct)
           return { id, leftPct, widthPct }
         }),
       ),
@@ -1043,30 +1061,14 @@ export function LinkedHistoricalCountriesSection({
               gap: 20,
             }}
           >
-            <StatCard
-              icon={<FiHome size={24} strokeWidth={2} />}
-              title="연결된 역사적 국가"
-              value={count}
-              unit="개"
-            />
-            <StatCard
-              icon={<FiArrowRight size={24} strokeWidth={2} />}
-              title="변천 관계"
-              value={transitions.length}
-              unit="건"
-            />
-            <StatCard
-              icon={<FiUsers size={24} strokeWidth={2} />}
-              title="수평 관계"
-              value={relations.length}
-              unit="건"
-            />
-            <StatCard
-              icon={<FiCheckCircle size={24} strokeWidth={2} />}
-              title="소속 관계"
-              value={memberships.length}
-              unit="건"
-            />
+            {[
+              { icon: <FiHome size={24} strokeWidth={2} />, title: '연결된 역사적 국가', value: count, unit: '개' },
+              { icon: <FiArrowRight size={24} strokeWidth={2} />, title: '변천 관계', value: transitions.length, unit: '건' },
+              { icon: <FiUsers size={24} strokeWidth={2} />, title: '수평 관계', value: relations.length, unit: '건' },
+              { icon: <FiCheckCircle size={24} strokeWidth={2} />, title: '소속 관계', value: memberships.length, unit: '건' },
+            ].map((s) => (
+              <StatCard key={s.title} icon={s.icon} title={s.title} value={s.value} unit={s.unit} />
+            ))}
           </div>
         </section>
         <section aria-label="연결된 역사적 국가 목록">
@@ -1076,11 +1078,7 @@ export function LinkedHistoricalCountriesSection({
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {list.map((h, idx) => {
-                const rels = countryRelations.get(h.id) ?? {
-                  transitions: [],
-                  relations: [],
-                  memberships: [],
-                }
+                const rels = countryRelations.get(h.id) ?? EMPTY_RELS
                 return (
                   <HistoricalCountryCard
                     key={h.id}
@@ -1271,8 +1269,9 @@ export function LinkedHistoricalCountriesSection({
                               if (!h || !yr) return null
                               const leftPct = toPct(yr.startYear)
                               const endPct = toPct(yr.endYear)
+                              // 한쪽 연도만 알려진 국가도 클릭 가능 폭 확보.
                               const widthPct = Math.max(
-                                0.5,
+                                MIN_FLOW_WIDTH_PCT,
                                 endPct - leftPct,
                               )
                               const spanYears = yr.endYear - yr.startYear
@@ -1282,11 +1281,7 @@ export function LinkedHistoricalCountriesSection({
                               const transition = nextId
                                 ? transitionByEdge.get(`${id}\t${nextId}`)
                                 : null
-                              const rels = countryRelations.get(id) ?? {
-                                transitions: [],
-                                relations: [],
-                                memberships: [],
-                              }
+                              const rels = countryRelations.get(id) ?? EMPTY_RELS
                               const hasPersonalUnionWithNext =
                                 !!nextId &&
                                 !transition &&
@@ -1371,7 +1366,7 @@ export function LinkedHistoricalCountriesSection({
                                           border: `1px solid #c7d2fe`,
                                         }}
                                       >
-                                        🏴
+                                        🏛️
                                       </div>
                                     )}
                                     <div
@@ -1612,7 +1607,9 @@ export function LinkedHistoricalCountriesSection({
               <FlowFullViewCloseBtn
                 type="button"
                 onClick={() => setFlowFullViewOpen(false)}
+                aria-label="전체 보기 닫기 (ESC)"
               >
+                <FiX size={16} />
                 닫기
               </FlowFullViewCloseBtn>
             </FlowFullViewHeader>
@@ -1745,8 +1742,9 @@ export function LinkedHistoricalCountriesSection({
                               if (!h || !yr) return null
                               const leftPct = toPct(yr.startYear)
                               const endPct = toPct(yr.endYear)
+                              // 한쪽 연도만 알려진 국가도 클릭 가능 폭 확보.
                               const widthPct = Math.max(
-                                0.5,
+                                MIN_FLOW_WIDTH_PCT,
                                 endPct - leftPct,
                               )
                               const spanYears = yr.endYear - yr.startYear
@@ -1756,11 +1754,7 @@ export function LinkedHistoricalCountriesSection({
                               const transition = nextId
                                 ? transitionByEdge.get(`${id}\t${nextId}`)
                                 : null
-                              const rels = countryRelations.get(id) ?? {
-                                transitions: [],
-                                relations: [],
-                                memberships: [],
-                              }
+                              const rels = countryRelations.get(id) ?? EMPTY_RELS
                               const hasPersonalUnionWithNext =
                                 !!nextId &&
                                 !transition &&
@@ -2381,7 +2375,7 @@ function HistoricalCountryCard({
                 border: `1px solid #c7d2fe`,
               }}
             >
-              🏴
+              🏛️
             </div>
           )}
           <div style={{ minWidth: 0, flex: 1 }}>
