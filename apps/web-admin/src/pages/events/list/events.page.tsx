@@ -29,6 +29,7 @@ import { VIEW_MODES, type ViewMode } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
 import { pathKeys } from '@/shared/router'
 import { useBookmarks } from '@/shared/hooks/use-bookmarks.hook'
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { useRecentEvents } from '@/shared/hooks/use-recent-events.hook'
 import { EventCompactList } from '@/widgets/event-list-compact/ui/event-compact-list'
 import { EventTimeline } from '@/widgets/event-timeline/ui/event-timeline'
@@ -74,9 +75,12 @@ import * as Layout from '../styles/layout.styles'
 import * as PageStyles from '../styles/list-page.styles'
 
 import { CatalogDetailDrawer } from './components/catalog-detail-drawer'
+import { CatalogEntityFilterModals } from './components/catalog-entity-filter-modals'
 import { CatalogMainContent } from './components/catalog-main-content'
-import { CatalogModals } from './components/catalog-modals'
+import { CatalogOverlayModals } from './components/catalog-overlay-modals'
 import { CatalogToolbar } from './components/catalog-toolbar'
+import { useCatalogEventIndex } from './hooks/use-catalog-event-index'
+import { useCatalogModals } from './hooks/use-catalog-modals'
 import { useCatalogReferenceData } from './hooks/use-catalog-reference-data'
 import {
   useCatalogListNavigation,
@@ -104,7 +108,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   const [bookmarksOnly, setBookmarksOnly] = useState(
     searchParams.get('bookmarks') === '1',
   )
-  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   // 기본 page size 100 — 타임라인 뷰가 한 번에 더 많은 사건을 보여주도록.
   // 사용자는 toolbar의 page size 컨트롤로 변경 가능.
@@ -198,23 +201,31 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   /** 키워드 디바운스 — 입력 자체는 즉시 반영(체감)하되 useEventFilters에 흘려보내는 값만 250ms로 묶음.
    * `isSearchPending`은 디바운스 idle 구간을 toolbar의 spinner로 노출 (UX: 적용됐는지 인지) */
   const [keywordInput, setKeywordInput] = useState(searchParams.get('q') ?? '')
-  const [isSearchPending, setIsSearchPending] = useState(false)
+  const debouncedKeyword = useDebouncedValue(keywordInput, 250)
+  const isSearchPending = debouncedKeyword !== keywordInput
   useEffect(() => {
-    setIsSearchPending(true)
-    const t = window.setTimeout(() => {
-      setKeyword(keywordInput)
-      setIsSearchPending(false)
-    }, 250)
-    return () => window.clearTimeout(t)
+    setKeyword(debouncedKeyword)
     // setKeyword는 useEventFilters 내부의 setter — 안정적
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keywordInput])
+  }, [debouncedKeyword])
 
-  const [showCategoryModal, setShowCategoryModal] = useState(false)
-  const [showCountryModal, setShowCountryModal] = useState(false)
-  const [showPositionTypeModal, setShowPositionTypeModal] = useState(false)
-  const [showSummaryModal, setShowSummaryModal] = useState(false)
-  const [summaryEventId, setSummaryEventId] = useState<string | null>(null)
+  // ===== 모달 상태 묶음 (스크롤 잠금 effect 포함) =====
+  const {
+    shortcutHelpOpen,
+    setShortcutHelpOpen,
+    closeShortcutHelp,
+    openShortcutHelp,
+    showCategoryModal,
+    setShowCategoryModal,
+    showCountryModal,
+    setShowCountryModal,
+    showPositionTypeModal,
+    setShowPositionTypeModal,
+    showSummaryModal,
+    setShowSummaryModal,
+    summaryEventId,
+    openSummary,
+  } = useCatalogModals()
 
   // ===== 사건 선택 시 최근 본 목록에 추가 =====
   useEffect(() => {
@@ -223,51 +234,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     }
   }, [selectedEventId, addRecentEvent])
 
-  // ===== 모달/drawer 열린 동안 body 스크롤 잠금 =====
-  // (drawer/모달은 portal 또는 fixed라 main에 inert를 거는 건 부작용이 큼 — body overflow만 잠금)
-  useEffect(() => {
-    const anyOpen =
-      shortcutHelpOpen ||
-      showSummaryModal ||
-      showCategoryModal ||
-      showCountryModal ||
-      showPositionTypeModal
-    if (!anyOpen) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [
-    shortcutHelpOpen,
-    showSummaryModal,
-    showCategoryModal,
-    showCountryModal,
-    showPositionTypeModal,
-  ])
-
-  /** id → event 빠른 조회 (selectedEvent/selectedNode/summaryNode 검색 O(1)) */
-  const eventByIdMap = useMemo(() => {
-    const m = new Map<string, HistoricalEvent>()
-    for (const e of events) m.set(e.id, e)
-    return m
-  }, [events])
-
-  /** id → hierarchy node + 그것을 담은 root event 매핑 — 재귀 한 번 펼쳐 캐싱 */
-  const nodeIndexMap = useMemo(() => {
-    const m = new Map<
-      string,
-      { node: EventHierarchyNode; rootEvent: HistoricalEvent }
-    >()
-    const visit = (node: EventHierarchyNode, rootEvent: HistoricalEvent) => {
-      m.set(node.id, { node, rootEvent })
-      if (node.children) {
-        for (const c of node.children) visit(c, rootEvent)
-      }
-    }
-    for (const e of events) visit(e.hierarchy, e)
-    return m
-  }, [events])
+  // ===== id 기반 lookup map =====
+  const { eventByIdMap, nodeIndexMap } = useCatalogEventIndex(events)
 
   // ===== URL ↔ 상태 동기화 =====
   useCatalogUrlSync({
@@ -308,7 +276,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   }, [flattenedHierarchy, bookmarksOnly, bookmarks])
 
   // ===== 키보드 단축키 + 리스트 네비게이션 =====
-  const closeShortcutHelp = useCallback(() => setShortcutHelpOpen(false), [])
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), [])
   useCatalogShortcuts({
     searchInputRef,
@@ -366,22 +333,37 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setBookmarksOnly(false)
   }, [handleResetFilters])
 
-  const openSummary = useCallback((eventId: string) => {
-    setSummaryEventId(eventId)
-    setShowSummaryModal(true)
-  }, [])
-
-  // ===== 슬롯: 7개 뷰 모드 + 상세 패널 =====
-  const timelineSlot = (
-    <EventTimeline
-      flattenedHierarchy={visibleFlattenedHierarchy}
-      events={events}
-      selectedEventId={selectedEventId}
-      dbCategories={dbCategories}
-      continents={continents}
-      countries={countries}
-      onSelectEvent={setSelectedEventId}
-    />
+  // ===== 자식으로 전달되는 핸들러 — useCallback으로 ref 안정화 =====
+  const handleExpandEvent = useCallback((eventId: string) => {
+    setExpandedEventIds((prev) => {
+      const next = new Set(prev)
+      next.add(eventId)
+      return next
+    })
+  }, [setExpandedEventIds])
+  const toggleShowFlatView = useCallback(
+    () => setShowFlatView((v) => !v),
+    [setShowFlatView],
+  )
+  const toggleBookmarksOnly = useCallback(
+    () => setBookmarksOnly((v) => !v),
+    [],
+  )
+  const handleCreateEvent = useCallback(
+    () => navigate(pathKeys.events.create()),
+    [navigate],
+  )
+  const handleExportJson = useCallback(
+    () =>
+      exportEventsAsJson(
+        visibleFlattenedHierarchy.map(
+          (it) =>
+            eventByIdMap.get(it.node.id) ??
+            nodeIndexMap.get(it.node.id)?.rootEvent ??
+            null,
+        ),
+      ),
+    [visibleFlattenedHierarchy, eventByIdMap, nodeIndexMap],
   )
 
   /** lazy 슬롯 fallback — 위젯 chunk 다운로드 동안 유지되는 빈 박스. layout shift 방지. */
@@ -392,107 +374,135 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     </PageStyles.LazyViewFallback>
   )
 
-  const mapSlot = (
-    <Suspense fallback={lazyFallback}>
-      <EventMapView
-        flattenedHierarchy={visibleFlattenedHierarchy}
-        events={events}
-        selectedEventId={selectedEventId}
-        onSelectEvent={setSelectedEventId}
-        hasActiveFilters={filtersOrSearchActive}
-        onResetFilters={handleResetAll}
-      />
-    </Suspense>
-  )
-
-  const gridSlot = (
-    <Suspense fallback={lazyFallback}>
-      <EventGridView
-        flattenedHierarchy={visibleFlattenedHierarchy}
-        events={events}
-        selectedEventId={selectedEventId}
-        dbCategories={dbCategories}
-        onSelectEvent={setSelectedEventId}
-      />
-    </Suspense>
-  )
-
-  const dashboardSlot = (
-    <Suspense fallback={lazyFallback}>
-      <EventDashboardView
-        flattenedHierarchy={visibleFlattenedHierarchy}
-        events={events}
-        dbCategories={dbCategories}
-        onSelectEvent={setSelectedEventId}
-      />
-    </Suspense>
-  )
-
-  const treeSlot = (
-    <Suspense fallback={lazyFallback}>
-      <EventTreeView
-        flattenedHierarchy={visibleFlattenedHierarchy}
-        events={events}
-        selectedEventId={selectedEventId}
-        dbCategories={dbCategories}
-        onSelectEvent={setSelectedEventId}
-      />
-    </Suspense>
-  )
-
-  const gallerySlot = (
-    <Suspense fallback={lazyFallback}>
-      <EventGalleryView
-        flattenedHierarchy={visibleFlattenedHierarchy}
-        events={events}
-        selectedEventId={selectedEventId}
-        dbCategories={dbCategories}
-        onSelectEvent={setSelectedEventId}
-      />
-    </Suspense>
-  )
-
-  const listSlot = (
-    <EventCompactList
-      isLoading={isLoading && events.length === 0}
-      flattenedHierarchy={visibleFlattenedHierarchy}
-      events={events}
-      expandedEventIds={expandedEventIds}
-      expandedTenureGroups={expandedTenureGroups}
-      selectedEventId={selectedEventId}
-      sortDirection={sortDirection}
-      hasActiveFilters={filtersOrSearchActive}
-      activeFilterChips={
-        bookmarksOnly
-          ? [
-              ...filterSummaryChips,
-              {
-                key: 'bookmarks',
-                label: '북마크만',
-                onClear: () => setBookmarksOnly(false),
-              },
-            ]
-          : filterSummaryChips
-      }
-      tenureGroups={tenureGroups}
-      periodHeadsOfState={eventHeadsOfState.get('__periodHeads__') ?? []}
-      dbCategories={dbCategories}
-      isLoadingMore={isLoading && events.length > 0}
-      displayedCount={visibleFlattenedHierarchy.length}
-      hasMoreData={hasMore}
-      bookmarks={bookmarks}
-      searchQuery={keywordInput}
-      recentEventIds={recentEvents}
-      onToggleExpansion={toggleEventExpansion}
-      onToggleTenureGroupExpansion={toggleTenureGroupExpansion}
-      onSelectEvent={setSelectedEventId}
-      onShowSummary={openSummary}
-      onResetFilters={handleResetAll}
-      onToggleBookmark={toggleBookmark}
-      onScroll={handleScroll}
-      pageSize={pageSize}
-    />
-  )
+  /**
+   * 활성 viewMode에 해당하는 슬롯 *하나만* 빌드.
+   * 이전엔 7개 슬롯의 React element를 매 렌더마다 모두 생성했으나, 한 번에 하나만 그려지므로
+   * 나머지 6개의 prop computation은 순수 낭비였음. switch로 한 슬롯만 만든다.
+   */
+  let activeSlot: React.ReactNode
+  switch (viewMode) {
+    case VIEW_MODES.MAP:
+      activeSlot = (
+        <Suspense fallback={lazyFallback}>
+          <EventMapView
+            flattenedHierarchy={visibleFlattenedHierarchy}
+            events={events}
+            selectedEventId={selectedEventId}
+            onSelectEvent={setSelectedEventId}
+            hasActiveFilters={filtersOrSearchActive}
+            onResetFilters={handleResetAll}
+          />
+        </Suspense>
+      )
+      break
+    case VIEW_MODES.GRID:
+      activeSlot = (
+        <Suspense fallback={lazyFallback}>
+          <EventGridView
+            flattenedHierarchy={visibleFlattenedHierarchy}
+            events={events}
+            selectedEventId={selectedEventId}
+            dbCategories={dbCategories}
+            onSelectEvent={setSelectedEventId}
+          />
+        </Suspense>
+      )
+      break
+    case VIEW_MODES.DASHBOARD:
+      activeSlot = (
+        <Suspense fallback={lazyFallback}>
+          <EventDashboardView
+            flattenedHierarchy={visibleFlattenedHierarchy}
+            events={events}
+            dbCategories={dbCategories}
+            onSelectEvent={setSelectedEventId}
+          />
+        </Suspense>
+      )
+      break
+    case VIEW_MODES.TREE:
+      activeSlot = (
+        <Suspense fallback={lazyFallback}>
+          <EventTreeView
+            flattenedHierarchy={visibleFlattenedHierarchy}
+            events={events}
+            selectedEventId={selectedEventId}
+            dbCategories={dbCategories}
+            onSelectEvent={setSelectedEventId}
+          />
+        </Suspense>
+      )
+      break
+    case VIEW_MODES.GALLERY:
+      activeSlot = (
+        <Suspense fallback={lazyFallback}>
+          <EventGalleryView
+            flattenedHierarchy={visibleFlattenedHierarchy}
+            events={events}
+            selectedEventId={selectedEventId}
+            dbCategories={dbCategories}
+            onSelectEvent={setSelectedEventId}
+          />
+        </Suspense>
+      )
+      break
+    case VIEW_MODES.LIST:
+      activeSlot = (
+        <EventCompactList
+          isLoading={isLoading && events.length === 0}
+          flattenedHierarchy={visibleFlattenedHierarchy}
+          events={events}
+          expandedEventIds={expandedEventIds}
+          expandedTenureGroups={expandedTenureGroups}
+          selectedEventId={selectedEventId}
+          sortDirection={sortDirection}
+          hasActiveFilters={filtersOrSearchActive}
+          activeFilterChips={
+            bookmarksOnly
+              ? [
+                  ...filterSummaryChips,
+                  {
+                    key: 'bookmarks',
+                    label: '북마크만',
+                    onClear: () => setBookmarksOnly(false),
+                  },
+                ]
+              : filterSummaryChips
+          }
+          tenureGroups={tenureGroups}
+          periodHeadsOfState={eventHeadsOfState.get('__periodHeads__') ?? []}
+          dbCategories={dbCategories}
+          isLoadingMore={isLoading && events.length > 0}
+          displayedCount={visibleFlattenedHierarchy.length}
+          hasMoreData={hasMore}
+          bookmarks={bookmarks}
+          searchQuery={keywordInput}
+          recentEventIds={recentEvents}
+          onToggleExpansion={toggleEventExpansion}
+          onToggleTenureGroupExpansion={toggleTenureGroupExpansion}
+          onSelectEvent={setSelectedEventId}
+          onShowSummary={openSummary}
+          onResetFilters={handleResetAll}
+          onToggleBookmark={toggleBookmark}
+          onScroll={handleScroll}
+          pageSize={pageSize}
+        />
+      )
+      break
+    case VIEW_MODES.TIMELINE:
+    default:
+      activeSlot = (
+        <EventTimeline
+          flattenedHierarchy={visibleFlattenedHierarchy}
+          events={events}
+          selectedEventId={selectedEventId}
+          dbCategories={dbCategories}
+          continents={continents}
+          countries={countries}
+          onSelectEvent={setSelectedEventId}
+        />
+      )
+  }
 
   const handleAfterDelete = useCallback(
     (deletedId: string) => {
@@ -539,13 +549,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       dbCategories={dbCategories}
       eventHeadsOfState={eventHeadsOfState}
       onSelectEvent={setSelectedEventId}
-      onExpandEvent={(eventId) => {
-        setExpandedEventIds((prev) => {
-          const next = new Set(prev)
-          next.add(eventId)
-          return next
-        })
-      }}
+      onExpandEvent={handleExpandEvent}
       onShowSummary={openSummary}
       onAfterDelete={handleAfterDelete}
       onPrev={onDrawerPrev}
@@ -553,6 +557,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       onClose={clearSelectedEvent}
     />
   )
+
 
   // ===== 묶음 props (toolbar/modals) =====
   const toolbarProps = {
@@ -574,29 +579,21 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setShowCategoryModal,
     setShowCountryModal,
     setShowPositionTypeModal,
-    toggleShowFlatView: () => setShowFlatView(!showFlatView),
+    toggleShowFlatView,
     setSelectedCentury,
     onSelectCategory: setSelectedCategory,
     onSelectCountry: setSelectedCountry,
     onSelectContinent: setSelectedContinent,
     onSelectPositionType: setSelectedPositionType,
     bookmarksOnly,
-    toggleBookmarksOnly: () => setBookmarksOnly((v) => !v),
+    toggleBookmarksOnly,
     bookmarksCount: bookmarks.size,
     recentEventIds: recentEvents,
     events,
     onSelectEvent: setSelectedEventId,
-    onExportJson: () =>
-      exportEventsAsJson(
-        visibleFlattenedHierarchy.map(
-          (it) =>
-            eventByIdMap.get(it.node.id) ??
-            nodeIndexMap.get(it.node.id)?.rootEvent ??
-            null,
-        ),
-      ),
-    onOpenShortcutHelp: () => setShortcutHelpOpen(true),
-    onCreateEvent: () => navigate(pathKeys.events.create()),
+    onExportJson: handleExportJson,
+    onOpenShortcutHelp: openShortcutHelp,
+    onCreateEvent: handleCreateEvent,
     filterSummaryChips,
     activeFilterCount,
     handleResetAll,
@@ -617,7 +614,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
   }, [setSortDirection])
 
-  const modalsProps = {
+  const entityFilterModalProps = {
     showCategoryModal,
     setShowCategoryModal,
     dbCategories,
@@ -633,6 +630,9 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setShowPositionTypeModal,
     selectedPositionType,
     setSelectedPositionType,
+  }
+
+  const overlayModalProps = {
     shortcutHelpOpen,
     closeShortcutHelp,
     showSummaryModal,
@@ -684,13 +684,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           onSortDirectionToggle={handleSortDirectionToggle}
           pageSize={pageSize}
           onPageSizeChange={handlePageSizeChange}
-          timelineSlot={timelineSlot}
-          listSlot={listSlot}
-          mapSlot={mapSlot}
-          gridSlot={gridSlot}
-          dashboardSlot={dashboardSlot}
-          treeSlot={treeSlot}
-          gallerySlot={gallerySlot}
+          activeSlot={activeSlot}
         />
         {selectedEventId && (
           <CatalogDetailDrawer
@@ -715,7 +709,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
         </Layout.PageScene>
       )}
 
-      <CatalogModals {...modalsProps} />
+      <CatalogEntityFilterModals {...entityFilterModalProps} />
+      <CatalogOverlayModals {...overlayModalProps} />
     </>
   )
 }

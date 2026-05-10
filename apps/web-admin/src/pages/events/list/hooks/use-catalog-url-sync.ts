@@ -3,8 +3,11 @@
  *
  * - URL → 상태: 마운트 / 뒤로가기 / 딥링크 진입 시 검색 파라미터를 끌어와 반영
  * - 상태 → URL: 사용자가 필터/검색/뷰를 조정하면 URL을 갱신 (replace로 히스토리 부풀림 방지)
+ *
+ * 두 effect 사이의 redundant work 방지를 위해 `lastSelfWriteRef`로 "방금 우리가 쓴 URL"을
+ * 기억해두고, URL → 상태 effect가 그 값과 같으면 짧게 우회한다.
  */
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { useSearchParams } from 'react-router-dom'
 
 import {
@@ -72,6 +75,10 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setViewMode,
   } = args
 
+  /** 우리(state → URL effect)가 마지막으로 쓴 URL serialized 값. 이 값과 동일하면
+   *  URL → state effect가 무의미한 비교 11번을 건너뜀. */
+  const lastSelfWriteRef = useRef<string | null>(null)
+
   /**
    * URL → 상태 단방향 동기화 — 외부 진입(뒤로가기·딥링크) 시 끌어와 반영.
    *
@@ -80,6 +87,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
    * 다른 필터 변경으로 effect가 재실행되면 직전 state가 그대로 남는 버그가 있었음.
    */
   useEffect(() => {
+    if (lastSelfWriteRef.current === searchParams.toString()) return
     const q = searchParams.get('q') ?? ''
     if (q !== keywordInput) setKeywordInput(q)
 
@@ -137,7 +145,9 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setOrDel('dir', sortDirection, DEFAULT_DIR)
     setOrDel('flat', showFlatView ? '1' : null)
     setOrDel('view', viewMode, VIEW_MODES.TIMELINE)
-    if (next.toString() !== searchParams.toString()) {
+    const nextStr = next.toString()
+    if (nextStr !== searchParams.toString()) {
+      lastSelfWriteRef.current = nextStr
       setSearchParams(next, { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

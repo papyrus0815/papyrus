@@ -7,14 +7,8 @@
  *  - **통계 인라인**: 페이지 헤더의 KPI chip을 제거하고 ViewMeta 자리에 한 줄 요약으로 융합.
  *  - 표시 옵션(정렬·방향·페이지 크기)은 필터와 시각 family 분리.
  *
- * 모드별 슬롯 표:
- *   timeline  → timelineSlot
- *   list      → listSlot
- *   map       → mapSlot
- *   grid      → gridSlot
- *   dashboard → dashboardSlot
- *   tree      → treeSlot
- *   gallery   → gallerySlot
+ * 활성 뷰 슬롯은 부모(events.page)가 viewMode에 따라 하나만 빌드해 `activeSlot`으로 넘긴다.
+ * 이렇게 하면 7개 view의 React element를 매 렌더마다 모두 평가하던 비용이 사라진다.
  *
  * 상세 패널은 `CatalogDetailDrawer`로 분리.
  */
@@ -68,14 +62,8 @@ interface Props {
   pageSize: number
   onPageSizeChange: (size: number) => void
 
-  // 7개 모드 슬롯
-  timelineSlot: React.ReactNode
-  listSlot: React.ReactNode
-  mapSlot: React.ReactNode
-  gridSlot: React.ReactNode
-  dashboardSlot: React.ReactNode
-  treeSlot: React.ReactNode
-  gallerySlot: React.ReactNode
+  /** 부모가 viewMode에 따라 빌드해 넘긴 단일 활성 슬롯 */
+  activeSlot: React.ReactNode
 }
 
 interface ModeDef {
@@ -116,42 +104,9 @@ export const CatalogMainContent: React.FC<Props> = ({
   onSortDirectionToggle,
   pageSize,
   onPageSizeChange,
-  timelineSlot,
-  listSlot,
-  mapSlot,
-  gridSlot,
-  dashboardSlot,
-  treeSlot,
-  gallerySlot,
+  activeSlot,
 }) => {
   const isFiltered = visibleCount !== totalCount
-
-  let activeSlot: React.ReactNode
-  switch (viewMode) {
-    case VIEW_MODES.TIMELINE:
-      activeSlot = timelineSlot
-      break
-    case VIEW_MODES.LIST:
-      activeSlot = listSlot
-      break
-    case VIEW_MODES.MAP:
-      activeSlot = mapSlot
-      break
-    case VIEW_MODES.GRID:
-      activeSlot = gridSlot
-      break
-    case VIEW_MODES.DASHBOARD:
-      activeSlot = dashboardSlot
-      break
-    case VIEW_MODES.TREE:
-      activeSlot = treeSlot
-      break
-    case VIEW_MODES.GALLERY:
-      activeSlot = gallerySlot
-      break
-    default:
-      activeSlot = timelineSlot
-  }
 
   // ── 더보기 메뉴 ────────────────────────────────────────────────────
   const [moreOpen, setMoreOpen] = useState(false)

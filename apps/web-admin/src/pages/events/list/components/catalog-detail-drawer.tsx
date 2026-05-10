@@ -12,10 +12,11 @@ import React, { useEffect, useState } from 'react'
 import { FiX } from 'react-icons/fi'
 
 import * as PageStyles from '../../styles/list-page.styles'
-import { ICON_SIZE } from '../../styles/theme'
+import { BREAKPOINTS, ICON_SIZE } from '../../styles/theme'
 import { useFocusTrap } from '../hooks/use-focus-trap'
 
-const MOBILE_BREAKPOINT = 1200
+/** desktop 미만에서는 drawer로 동작 — Layout.CatalogSplit과 같은 분기점을 공유 */
+const DRAWER_BREAKPOINT = BREAKPOINTS.desktop
 
 interface Props {
   open: boolean
@@ -34,7 +35,7 @@ export const CatalogDetailDrawer: React.FC<Props> = ({
   // SSR 안전: window 접근은 effect 안에서만
   const [isMobile, setIsMobile] = useState(false)
   useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
+    const mql = window.matchMedia(`(max-width: ${DRAWER_BREAKPOINT})`)
     const update = () => setIsMobile(mql.matches)
     update()
     mql.addEventListener('change', update)

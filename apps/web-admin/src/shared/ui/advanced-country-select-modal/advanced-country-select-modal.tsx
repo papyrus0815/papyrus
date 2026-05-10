@@ -12,6 +12,14 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
+/**
+ * 호출부에서 "전체 국가" 같은 sentinel 옵션을 첫 항목으로 끼워 넣을 수 있도록
+ * 일부 필드만 strict하게 요구하고 나머지는 optional로 받음.
+ * 모달 내부 렌더는 모든 부가 필드(continent/population 등)를 nullable check함.
+ */
+type ModernCountryOption = Partial<CountryResponseDto> &
+  Pick<CountryResponseDto, 'id' | 'name'>
+
 interface AdvancedCountrySelectModalProps {
   isOpen: boolean
   onClose: () => void
@@ -20,7 +28,7 @@ interface AdvancedCountrySelectModalProps {
     name: string
     isHistorical: boolean
   }) => void
-  modernCountries: CountryResponseDto[]
+  modernCountries: ModernCountryOption[]
   historicalCountries: HistoricalCountryResponseDto[]
   selectedCountryIds: string[] // 복수 선택용
   multiSelect?: boolean

@@ -1,26 +1,19 @@
 /**
- * 카탈로그 모달 컬렉션 — 카테고리 / 국가 / 직책 / 단축키 도움말 / 사건 요약.
+ * 카탈로그 portal/focus-trap overlay 모음 — 단축키 도움말 + 사건 요약.
  *
- * 모든 모달의 표시/숨김은 부모(페이지)가 제어. 단축키 도움말과 요약 모달은
- * portal로 body에 렌더링한다.
+ * 단축키 도움말은 a11y dialog (focus trap + aria-modal + ESC),
+ * 요약 모달은 사건 trees view를 띄우는 dialog. 둘 다 framer-motion으로
+ * exit fade 처리해 portal에 mount/unmount.
  */
 import React from 'react'
 
 import { createPortal } from 'react-dom'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiUsers, FiX } from 'react-icons/fi'
+import { FiX } from 'react-icons/fi'
 
-import { FILTER_ALL } from '@/features/event-list/lib'
-import type { CountryResponseDto } from '@/shared/api/countries'
-import type { EventCategoryDto } from '@/shared/api/event-categories'
-import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
-import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
-import { CategoryModal } from '@/widgets/event-list/ui/category-modal'
-import { SimpleSelectModal } from '@/widgets/event-list/ui/simple-select-modal'
 import { TreeView } from '@/widgets/event-list/ui/tree-view'
 
-import { MOCK_POSITION_TYPES } from '../../../../entities/event/model/mock-government-positions'
 import type { EventHierarchyNode } from '../../create/events.types'
 import * as PageStyles from '../../styles/list-page.styles'
 import * as Modal from '../../styles/modal.styles'
@@ -29,32 +22,9 @@ import { formatDateRange } from '../../utils/events.utils'
 import { useFocusTrap } from '../hooks/use-focus-trap'
 
 interface Props {
-  // 카테고리
-  showCategoryModal: boolean
-  setShowCategoryModal: (v: boolean) => void
-  dbCategories: EventCategoryDto[]
-  selectedCategory: string
-  setSelectedCategory: (v: string) => void
-
-  // 국가
-  showCountryModal: boolean
-  setShowCountryModal: (v: boolean) => void
-  countries: CountryResponseDto[]
-  historicalCountries: HistoricalCountryResponseDto[]
-  selectedCountry: string
-  setSelectedCountry: (v: string) => void
-
-  // 직책
-  showPositionTypeModal: boolean
-  setShowPositionTypeModal: (v: boolean) => void
-  selectedPositionType: string
-  setSelectedPositionType: (v: string) => void
-
-  // 단축키
   shortcutHelpOpen: boolean
   closeShortcutHelp: () => void
 
-  // 요약 모달
   showSummaryModal: boolean
   setShowSummaryModal: (v: boolean) => void
   summaryNode: EventHierarchyNode | null
@@ -63,22 +33,7 @@ interface Props {
 const SHORTCUT_TITLE_ID = 'catalog-shortcut-help-title'
 const SUMMARY_TITLE_ID = 'catalog-summary-title'
 
-export const CatalogModals: React.FC<Props> = ({
-  showCategoryModal,
-  setShowCategoryModal,
-  dbCategories,
-  selectedCategory,
-  setSelectedCategory,
-  showCountryModal,
-  setShowCountryModal,
-  countries,
-  historicalCountries,
-  selectedCountry,
-  setSelectedCountry,
-  showPositionTypeModal,
-  setShowPositionTypeModal,
-  selectedPositionType,
-  setSelectedPositionType,
+export const CatalogOverlayModals: React.FC<Props> = ({
   shortcutHelpOpen,
   closeShortcutHelp,
   showSummaryModal,
@@ -92,52 +47,6 @@ export const CatalogModals: React.FC<Props> = ({
 
   return (
     <>
-      <CategoryModal
-        isOpen={showCategoryModal}
-        onClose={() => setShowCategoryModal(false)}
-        dbCategories={dbCategories}
-        selectedCategory={selectedCategory}
-        onSelect={(categoryId) => {
-          setSelectedCategory(categoryId)
-        }}
-      />
-
-      <AdvancedCountrySelectModal
-        isOpen={showCountryModal}
-        onClose={() => setShowCountryModal(false)}
-        onSelect={(country) => {
-          if (country.id === FILTER_ALL) {
-            setSelectedCountry(FILTER_ALL)
-          } else {
-            setSelectedCountry(country.id)
-          }
-          setShowCountryModal(false)
-        }}
-        modernCountries={[
-          { id: FILTER_ALL, name: '전체 국가', flagEmoji: '🌍' } as any,
-          ...countries,
-        ]}
-        historicalCountries={historicalCountries}
-        title="국가 필터"
-        selectedCountryIds={
-          selectedCountry === FILTER_ALL ? [] : [selectedCountry]
-        }
-        multiSelect={false}
-      />
-
-      <SimpleSelectModal
-        isOpen={showPositionTypeModal}
-        onClose={() => setShowPositionTypeModal(false)}
-        title="역대 수반 직책"
-        selectedValue={selectedPositionType}
-        options={MOCK_POSITION_TYPES}
-        onSelect={(value) => setSelectedPositionType(value)}
-        allLabel="전체 직책"
-        allDescription="모든 역대 수반"
-        Icon={FiUsers}
-      />
-
-      {/* ===== 단축키 도움말 모달 — focus trap + aria-modal + exit fade ===== */}
       <AnimatePresence>
         {shortcutHelpOpen &&
           createPortal(
@@ -235,7 +144,6 @@ export const CatalogModals: React.FC<Props> = ({
           )}
       </AnimatePresence>
 
-      {/* ===== 사건 요약 모달 — focus trap + aria-modal + exit ===== */}
       <AnimatePresence>
         {showSummaryModal &&
           summaryNode &&
