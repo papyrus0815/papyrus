@@ -132,34 +132,6 @@ export const ScrollBody = styled.div`
 
 /* ─── Buttons ───────────────────────────────────────────────────────────── */
 
-export const PrimaryButton = styled.button`
-  padding: 11px 22px;
-  background: ${({ theme }) => theme.colors.primary};
-  color: ${({ theme }) => theme.colors.button.text};
-  border: none;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 2px 8px
-    ${({ theme }) =>
-      isDark(theme.mode) ? 'rgba(99,106,242,0.32)' : 'rgba(99,102,241,0.22)'};
-  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-
-  &:hover:not(:disabled) {
-    background: ${({ theme }) => theme.colors.button.hover};
-    transform: translateY(-1px);
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 2px;
-  }
-  &:disabled {
-    opacity: 0.6;
-    cursor: wait;
-  }
-`
-
 export const SecondaryButton = styled.button`
   display: inline-flex;
   align-items: center;
@@ -186,31 +158,6 @@ export const SecondaryButton = styled.button`
   &:disabled {
     opacity: 0.6;
     cursor: wait;
-  }
-`
-
-export const SubtleButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: transparent;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
-
-  &:hover,
-  &:focus-visible {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => theme.colors.background.tertiary};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 2px;
   }
 `
 
@@ -241,46 +188,7 @@ export const DangerButton = styled.button`
   }
 `
 
-/* ─── Form ──────────────────────────────────────────────────────────────── */
-
-export const FormCard = styled.div`
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-`
-
-export const FormToolbar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  flex-wrap: wrap;
-  gap: 16px;
-`
-
-export const FormToolbarLeft = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 14px;
-`
-
-export const FormTitle = styled.h2`
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.015em;
-`
-
-export const FormBody = styled.div`
-  padding: 24px 28px 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`
+/* ─── Form (모달 본문에 들어가는 필드 그룹) ─────────────────────────────── */
 
 export const FormGroupHeader = styled.h3`
   margin: 24px 0 4px;

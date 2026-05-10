@@ -1,6 +1,7 @@
 /**
- * 가문 등록·수정 폼.
- * 섹션: 기본 정보 / 메타 / 미디어
+ * 가문 등록·수정 폼 — 모달 본문에 들어가는 필드 그룹.
+ * 외부 모달 푸터의 submit 버튼이 `form="<formId>"` 속성으로 submit하므로,
+ * 폼 내부에는 저장 버튼이 없고 onSubmit 만 노출.
  */
 import { useEffect, useId, useRef, useState } from 'react'
 
@@ -15,20 +16,13 @@ import {
   DangerButton,
   DateInput,
   FieldHelpText,
-  FormBody,
-  FormCard,
   FormError,
   FormGroupHeader,
   FormLabel,
   FormRow,
-  FormTitle,
-  FormToolbar,
-  FormToolbarLeft,
   ImagePreviewBox,
-  PrimaryButton,
   RequiredMark,
   SecondaryButton,
-  SubtleButton,
   TextArea,
   TextInput,
 } from './dynasty.styles'
@@ -53,9 +47,9 @@ export type DynastyFormPayload = {
 }
 
 interface Props {
+  /** 외부 submit 버튼이 `form` 속성으로 가리킬 form id */
+  formId: string
   editing: Dynasty | null
-  isSaving: boolean
-  onCancel: () => void
   onSubmit: (data: DynastyFormPayload) => void | Promise<void>
 }
 
@@ -75,7 +69,7 @@ function extractErrorMessage(err: unknown, fallback: string): string {
   return apiMsg || e?.message || fallback
 }
 
-export function DynastyForm({ editing, isSaving, onCancel, onSubmit }: Props) {
+export function DynastyForm({ formId, editing, onSubmit }: Props) {
   const reactId = useId()
   const fieldId = (suffix: string) => `${reactId}-${suffix}`
 
@@ -139,7 +133,8 @@ export function DynastyForm({ editing, isSaving, onCancel, onSubmit }: Props) {
     setError(null)
   }, [editing])
 
-  const handleSave = async () => {
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
     setError(null)
     if (!form.name.trim()) {
       setError('가문명을 입력해주세요.')
@@ -157,26 +152,10 @@ export function DynastyForm({ editing, isSaving, onCancel, onSubmit }: Props) {
   }
 
   return (
-    <FormCard>
-      <FormToolbar>
-        <FormToolbarLeft>
-          <SubtleButton type="button" onClick={onCancel} aria-label="목록으로 돌아가기">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            목록으로
-          </SubtleButton>
-          <FormTitle>{editing ? '가문 수정' : '가문 등록'}</FormTitle>
-        </FormToolbarLeft>
-        <PrimaryButton type="button" onClick={handleSave} disabled={isSaving}>
-          {isSaving ? '저장 중…' : editing ? '저장' : '등록'}
-        </PrimaryButton>
-      </FormToolbar>
+    <form id={formId} onSubmit={handleSave} noValidate>
+      {error && <FormError role="alert">{error}</FormError>}
 
-      <FormBody>
-        {error && <FormError role="alert">{error}</FormError>}
-
-        <FormGroupHeader>기본 정보</FormGroupHeader>
+      <FormGroupHeader>기본 정보</FormGroupHeader>
 
         <FormRow>
           <FormLabel htmlFor={fieldId('name')}>
@@ -400,7 +379,6 @@ export function DynastyForm({ editing, isSaving, onCancel, onSubmit }: Props) {
             )}
           </div>
         </FormRow>
-      </FormBody>
-    </FormCard>
+    </form>
   )
 }

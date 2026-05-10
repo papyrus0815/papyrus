@@ -214,11 +214,7 @@ export function DynastyRow({
                 <Description>{dynasty.description}</Description>
               )}
               <ActionRow>
-                <MembersBtn
-                  type="button"
-                  onClick={onShowMembers}
-                  disabled={memberCount === 0}
-                >
+                <MembersBtn type="button" onClick={onShowMembers}>
                   구성원 인포그래픽
                   {memberCount > 0 && ` · ${memberCount.toLocaleString()}명`}
                 </MembersBtn>

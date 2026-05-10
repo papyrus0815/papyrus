@@ -14,6 +14,7 @@ import {
 } from '@/features/dynasty/use-dynasties.hook'
 import type { Dynasty, DynastyMutationBody } from '@/shared/api/dynasty'
 
+import { DynastyFormModal } from './dynasty-form-modal'
 import { DynastyMembersInfographicModal } from './dynasty-members-infographic-modal'
 import {
   DynastyControls,
@@ -21,7 +22,7 @@ import {
   type StatusFilter,
 } from './ui/dynasty-controls'
 import { DynastyEmptyState } from './ui/dynasty-empty-state'
-import { DynastyForm, type DynastyFormPayload } from './ui/dynasty-form'
+import type { DynastyFormPayload } from './ui/dynasty-form'
 import { DynastyRow, type DynastyDerived } from './ui/dynasty-row'
 import { DynastySkeleton } from './ui/dynasty-skeleton'
 import {
@@ -40,8 +41,6 @@ import {
   StickyHeaderInner,
   TitleCluster,
 } from './ui/dynasty.styles'
-
-type View = 'list' | 'form'
 
 function getYear(date: string | null | undefined): number | null {
   if (!date) return null
@@ -116,7 +115,8 @@ export function DynastySection() {
   const updateDynasty = useUpdateDynasty()
   const deleteDynasty = useDeleteDynasty()
 
-  const [view, setView] = useState<View>('list')
+  // 폼 모달이 열려있을 때 editing이 null이면 신규, 객체면 수정
+  const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Dynasty | null>(null)
   const [membersModal, setMembersModal] = useState<{
     id: string
@@ -174,17 +174,18 @@ export function DynastySection() {
 
   const totalCount = allDerived.length
 
-  const goToList = () => {
-    setView('list')
-    setEditing(null)
+  const closeForm = () => {
+    setFormOpen(false)
+    // 닫기 애니메이션 동안 editing 유지 → AnimatePresence 종료 후 리셋
+    setTimeout(() => setEditing(null), 250)
   }
   const openCreate = () => {
     setEditing(null)
-    setView('form')
+    setFormOpen(true)
   }
   const openEdit = (d: Dynasty) => {
     setEditing(d)
-    setView('form')
+    setFormOpen(true)
   }
   const toggleExpand = (id: string) => {
     setExpandedId((prev) => (prev === id ? null : id))
@@ -210,13 +211,13 @@ export function DynastySection() {
     } else {
       await createDynasty.mutateAsync(payload as DynastyMutationBody)
     }
-    goToList()
+    closeForm()
   }
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('이 가문을 삭제하시겠습니까?')) return
     await deleteDynasty.mutateAsync(id)
-    if (editing?.id === id) goToList()
+    if (editing?.id === id) closeForm()
     if (expandedId === id) setExpandedId(null)
   }
 
@@ -229,7 +230,7 @@ export function DynastySection() {
           <HeaderTopRow>
             <TitleCluster>
               <PageTitle>가문</PageTitle>
-              {view === 'list' && totalCount > 0 && (
+              {totalCount > 0 && (
                 <KpiInlineGroup>
                   <KpiInlineItem>
                     <KpiInlineLabel>등록</KpiInlineLabel>
@@ -252,18 +253,16 @@ export function DynastySection() {
                 </KpiInlineGroup>
               )}
             </TitleCluster>
-            {view === 'list' && (
-              <SecondaryButton type="button" onClick={openCreate} aria-label="새 가문 추가">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                새 가문 추가
-              </SecondaryButton>
-            )}
+            <SecondaryButton type="button" onClick={openCreate} aria-label="새 가문 추가">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              새 가문 추가
+            </SecondaryButton>
           </HeaderTopRow>
 
-          {view === 'list' && totalCount > 0 && (
+          {totalCount > 0 && (
             <DynastyControls
               query={query}
               onQueryChange={setQuery}
@@ -279,14 +278,7 @@ export function DynastySection() {
       </StickyHeader>
 
       <ScrollBody>
-        {view === 'form' ? (
-          <DynastyForm
-            editing={editing}
-            isSaving={isSaving}
-            onCancel={goToList}
-            onSubmit={handleSubmit}
-          />
-        ) : isLoading ? (
+        {isLoading ? (
           <DynastySkeleton />
         ) : isError ? (
           <StatusPanel>
@@ -339,6 +331,14 @@ export function DynastySection() {
           </RowList>
         )}
       </ScrollBody>
+
+      <DynastyFormModal
+        isOpen={formOpen}
+        editing={editing}
+        isSaving={isSaving}
+        onClose={closeForm}
+        onSubmit={handleSubmit}
+      />
 
       {membersModal && (
         <DynastyMembersInfographicModal
