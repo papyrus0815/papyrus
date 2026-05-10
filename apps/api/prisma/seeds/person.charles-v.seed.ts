@@ -451,27 +451,46 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
     if (!dukePos) console.warn('  ⚠️  관직 정의 \'공작\' 미존재 — 재임 스킵')
   }
   if (castileHC && kingPos) {
+    // 카스티야 reign을 두 단계로 분리 (페르난도 5세 패턴과 일관성 유지):
+    //   ① 공동(NULL) jure matris (1516~1555) — 어머니 후아나 1세와 명목 공동 통치
+    //   ② 14대 단독 (1555~1556) — 후아나 사망 후 약 9개월 단독 군주
     REIGNS.push({
       historicalCountryId: castileHC.id,
       historicalCountryName: '카스티야 왕국',
       positionDefinitionId: kingPos.id,
       positionTitle: '국왕',
-      regnalNumber: 15,
-      regnalName: '카를로스 1세',
+      regnalNumber: null,
+      regnalName: '카를로스 1세 (후아나 1세 jure matris 공동 군주)',
       startDate: new Date(1516, 0, 23), // 1516-01-23 외조부 페르난도 2세 사망
-      endDate: new Date(1556, 0, 16), // 1556-01-16 아들 펠리페 2세에게 스페인 양위
+      endDate: new Date(1555, 3, 12), // 1555-04-12 어머니 후아나 1세 사망
+      appointmentMethod: AppointmentMethod.HEREDITARY,
+      endReason: TenureEndReason.OTHER,
+      endReasonDetail:
+        '1555-04-12 어머니 후아나 1세 사망으로 jure matris(어머니 권리) 공동 군주 단계 종결, 단독 군주로 전환.',
+      notes:
+        '1516-01-23 외조부 페르난도 2세 사망으로 카스티야·아라곤·나폴리·시칠리아·사르데냐·신대륙 ' +
+        '왕(스페인어 표기 카를로스 1세 — Carlos I) 즉위. 단 어머니 후아나 1세(13대)가 1555-04-12 ' +
+        '사망 시까지 명목상 공동 군주이므로, 이 시기는 jure matris(어머니 권리) 공동 통치로 등록. ' +
+        '실제 권력은 카를 5세가 약 39년간 단독 행사했지만, 페르난도 5세(이사벨 1세 jure uxoris) ' +
+        '패턴과의 일관성을 위해 NULL slot 공동 군주로 표시.',
+    })
+    REIGNS.push({
+      historicalCountryId: castileHC.id,
+      historicalCountryName: '카스티야 왕국',
+      positionDefinitionId: kingPos.id,
+      positionTitle: '국왕',
+      regnalNumber: 14,
+      regnalName: '카를로스 1세',
+      startDate: new Date(1555, 3, 12), // 1555-04-12 후아나 사망 직후 단독 군주 전환
+      endDate: new Date(1556, 0, 16), // 1556-01-16 아들 펠리페 2세에게 양위
       appointmentMethod: AppointmentMethod.HEREDITARY,
       endReason: TenureEndReason.ABDICATION,
       endReasonDetail:
-        '1556-01-16 아들 펠리페 2세에게 카스티야·아라곤·이탈리아·신대륙 양위. 분할 양위의 두 번째 단계.',
+        '1556-01-16 아들 펠리페 2세에게 카스티야·아라곤·나폴리·시칠리아·사르데냐·이탈리아·신대륙 양위. 분할 양위의 두 번째 단계.',
       notes:
-        '1516-01-23 외조부 페르난도 2세 사망으로 카스티야·아라곤·나폴리·시칠리아·사르데냐·신대륙 ' +
-        '왕(스페인어 표기 카를로스 1세 — Carlos I) 즉위. ' +
-        '단 어머니 후아나 1세(13대)가 1555 사망 시까지 명목상 공동 군주. ' +
-        '실제 통치는 카를 5세가 1516~1556 약 40년간 단독 행사. ' +
-        '재위 중 1519~1521 코르테스의 아즈텍 정복·1532~1533 피사로의 잉카 정복으로 신대륙 영토 폭증, ' +
-        '연간 약 16,000톤 은 본국 유입으로 카를의 황제 활동 자금원. ' +
-        '1556-01-16 아들 펠리페 2세에게 카스티야·아라곤 등 스페인 모든 영토 양위 — 16대 펠리페 2세 즉위.',
+        '1555-04-12 어머니 후아나 1세 사망으로 jure matris 공동 군주 단계 종결, 단독 군주로 전환. ' +
+        '약 9개월간 카스티야 단독 군주 후 1556-01-16 분할 양위로 아들 펠리페 2세(15대)에게 ' +
+        '카스티야·아라곤·이탈리아·신대륙을 양위해 스페인 합스부르크 시대를 출발시켰다.',
     })
   } else {
     if (!castileHC) console.warn('  ⚠️  카스티야 왕국 HC 미존재 — 재임 스킵 (parents 시드 먼저 실행 필요)')
@@ -479,27 +498,29 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
   }
 
   for (const r of REIGNS) {
-    // 기존 재위 레코드 조회 — personId + historicalCountryId 기준
-    // (잘못된 regnalNumber 레코드도 잡아내기 위함)
+    // 기존 재위 레코드 조회 — personId + historicalCountryId + regnalNumber 기준
+    // (한 인물이 같은 HC에 여러 reign — 예: 카를로스 1세 jure matris NULL slot + 14대 단독 — 가능)
     const existingByPerson = await prisma.sovereignReign.findFirst({
-      where: { personId, historicalCountryId: r.historicalCountryId },
+      where: {
+        personId,
+        historicalCountryId: r.historicalCountryId,
+        regnalNumber: r.regnalNumber,
+      },
     })
     if (existingByPerson) {
-      const needsUpdate =
-        existingByPerson.regnalNumber !== r.regnalNumber ||
-        existingByPerson.regnalName !== r.regnalName
+      const needsUpdate = existingByPerson.regnalName !== r.regnalName
       if (needsUpdate) {
         await prisma.sovereignReign.update({
           where: { id: existingByPerson.id },
-          data: { regnalNumber: r.regnalNumber, regnalName: r.regnalName },
+          data: { regnalName: r.regnalName },
         })
         console.log(
-          `  🔧 재임 정정: ${r.historicalCountryName} ${r.regnalName} ${r.regnalNumber}대 ` +
-            `(이전: ${existingByPerson.regnalNumber ?? 'null'}대 / ${existingByPerson.regnalName ?? 'null'})`,
+          `  🔧 재임 정정: ${r.historicalCountryName} ${r.regnalName} ${r.regnalNumber ?? '공동'}대 ` +
+            `(이전 regnalName: ${existingByPerson.regnalName ?? 'null'})`,
         )
       } else {
         console.log(
-          `  ⏭️  재임 스킵 (이미 정확): ${r.historicalCountryName} ${r.regnalName} ${r.regnalNumber}대`,
+          `  ⏭️  재임 스킵 (이미 정확): ${r.historicalCountryName} ${r.regnalName} ${r.regnalNumber ?? '공동'}대`,
         )
       }
       continue

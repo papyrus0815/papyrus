@@ -627,8 +627,10 @@ export async function seedCharlesVParents(prisma: PrismaService): Promise<void> 
       historicalCountryName: '카스티야 왕국',
       positionDefinitionId: kingDef.id,
       positionTitle: '국왕',
-      regnalNumber: 14, // 카스티야 왕국 14대 (HC start=1230 페르난도 3세부터 후아나 1세 다음)
-      regnalName: '펠리페 1세',
+      // 페르난도 5세(이사벨 1세 jure uxoris) 패턴과 일관성을 맞춰 NULL slot 공동 군주로 등록.
+      // 후아나 1세(13대)가 명목상 사망(1555)까지 카스티야 여왕이며 펠리페는 75일 jure uxoris.
+      regnalNumber: null,
+      regnalName: '펠리페 1세 (후아나 1세 jure uxoris 공동 군주)',
       startDate: new Date(1506, 6, 12), // 1506-07-12 비야파필라 합의 후 카스티야 의회(코르테스) 승인
       endDate: new Date(1506, 8, 25), // 1506-09-25 사망
       appointmentMethod: AppointmentMethod.OTHER, // jure uxoris (배우자 권리)

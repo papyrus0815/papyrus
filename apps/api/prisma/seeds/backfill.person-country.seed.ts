@@ -36,6 +36,12 @@ const HC_MODERN_LINKS: Array<{
   { hcName: '아라곤 왕국', modernIsoCodes: ['ES'] },
   { hcName: '합스부르크령 네덜란드', modernIsoCodes: ['NL', 'BE'] },
   { hcName: '포르투갈 왕국', modernIsoCodes: ['PT'] },
+  // 디종 본토(=현대 프랑스) 우선 + 저지대 영지(NL/BE/LU)는 별도 합스부르크령 네덜란드로 분리
+  { hcName: '부르고뉴 공국', modernIsoCodes: ['FR'] },
+  // 신성로마제국 — 핵심 영토는 독일·오스트리아·체코·이탈리아 북부에 걸침
+  { hcName: '신성로마제국', modernIsoCodes: ['DE', 'AT'] },
+  { hcName: '보헤미아 왕국', modernIsoCodes: ['CZ'] },
+  { hcName: '헝가리 왕국', modernIsoCodes: ['HU'] },
 ]
 
 // ── 모던 국가 추론 패턴 ──────────────────────────────────────────────────

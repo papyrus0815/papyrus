@@ -612,14 +612,14 @@ export async function seedFelipeII(prisma: PrismaService): Promise<void> {
   const REIGNS: ReignSpec[] = []
 
   // ① 카스티야 왕국 16대 펠리페 2세
-  // (HC start=1230, ... 13대 후아나 1세 → 14대 펠리페 1세 → 15대 카를로스 1세 → 16대 펠리페 2세)
+  // (HC start=1230, ... 13대 후아나 1세 → 공동 펠리페 1세 NULL(jure uxoris) → 14대 카를로스 1세 → 15대 펠리페 2세)
   if (kingPos) {
     REIGNS.push({
       historicalCountryId: castileHC.id,
       historicalCountryName: '카스티야 왕국',
       positionDefinitionId: kingPos.id,
       positionTitle: '국왕',
-      regnalNumber: 16,
+      regnalNumber: 15,
       regnalName: '펠리페 2세',
       startDate: new Date(1556, 0, 16), // 1556-01-16 부친 카를 5세 양위
       endDate: new Date(1598, 8, 13), // 1598-09-13 사망
