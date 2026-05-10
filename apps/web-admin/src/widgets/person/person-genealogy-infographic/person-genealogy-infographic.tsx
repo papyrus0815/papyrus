@@ -189,6 +189,47 @@ function NodeNameBlock({
   )
 }
 
+/**
+ * NodePerson 카드 — 모든 카드 NODE_W 통일.
+ * 자녀의 배우자, 형제, 기타 NodePerson 입력에 공통 사용.
+ */
+function NodePersonCompactCard({
+  person,
+  role,
+  badge,
+  onPersonClick,
+}: {
+  person: NodePerson
+  role: AvatarRole
+  badge: string
+  onPersonClick?: (id: string) => void
+}) {
+  const tooltip = buildPersonTooltip(person)
+  const clickable = Boolean(onPersonClick && person.id)
+  const handle = () => person.id && onPersonClick?.(person.id)
+  return (
+    <GeoNode
+      $role={role}
+      $clickable={clickable}
+      title={tooltip}
+      {...(clickable
+        ? {
+            role: 'button' as const,
+            tabIndex: 0,
+            onClick: handle,
+            onKeyDown: (e: ReactKeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handle() }
+            },
+          }
+        : {})}
+    >
+      <GeoThumbnail person={person} role={role} />
+      <NodeNameBlock person={person} />
+      <NodeBadge $role={role}>{badge}</NodeBadge>
+    </GeoNode>
+  )
+}
+
 function GeoThumbnail({ person, role }: { person: NodePerson; role: AvatarRole }) {
   const displayName = getPersonDisplayName(person, true)
   const src = resolvePersonThumbnailSrc(person)
@@ -202,7 +243,7 @@ function GeoThumbnail({ person, role }: { person: NodePerson; role: AvatarRole }
           displayInitial(person)
         )}
       </NodeAvatar>
-      <CountryFlag flag={flag} countryName={countryName} size={22} />
+      <CountryFlag flag={flag} countryName={countryName} size={24} />
     </AvatarFrame>
   )
 }
@@ -466,7 +507,8 @@ function AncestorColumn({
   const showParents = showFather || showMother
   const hasBothParents = Boolean(showFather && showMother)
 
-  const compact = depth >= 3
+  // 모든 카드 NODE_W 통일 — 거리/세대 무관 시각 일관성
+  const compact = false
   const role: AvatarRole =
     depth === 1
       ? (path === 'F' ? 'parent' : 'parentAlt')
@@ -554,14 +596,14 @@ function AncestorColumn({
               title={tooltip}
             >
               <AvatarFrame>
-                <AncNodeAvatar $hasImage={Boolean(src)} $deceased={isDeceased}>
+                <NodeAvatar $role={role} $hasImage={Boolean(src)}>
                   {src
                     ? <AvatarImage src={src} alt={`${displayName} 프로필 사진`} loading="lazy" decoding="async" />
                     : initial}
-                </AncNodeAvatar>
+                </NodeAvatar>
                 {(() => {
                   const { flag, countryName } = familyTreePersonFlag(person)
-                  return <CountryFlag flag={flag} countryName={countryName} size={16} />
+                  return <CountryFlag flag={flag} countryName={countryName} size={24} />
                 })()}
               </AvatarFrame>
               <NodeNameWrap>
@@ -576,10 +618,10 @@ function AncestorColumn({
                     )}
                   </NodeRegnalName>
                 )}
-                <AncNodeName>
+                <NodeName>
                   {finalDisplayName}
                   {isDeceased && <DeceasedMark aria-label="사망"> †</DeceasedMark>}
-                </AncNodeName>
+                </NodeName>
                 {lifespan && <NodeMeta>{lifespan}</NodeMeta>}
                 {person.dynasty?.name && <NodeDynasty>{person.dynasty.name}</NodeDynasty>}
               </NodeNameWrap>
@@ -614,10 +656,13 @@ function AncestorColumn({
 function DescendantNode({
   person,
   badge = '손자녀',
+  /** 사촌결혼 — 가계도 안 다른 후손과 결혼한 경우 상대 인물 (UI 마커에 이름 표시) */
+  inMarriageWith,
   onPersonClick,
 }: {
   person: FamilyTreePerson
   badge?: string
+  inMarriageWith?: FamilyTreePerson | null
   onPersonClick?: (id: string) => void
 }) {
   const b = person.birthYear
@@ -640,7 +685,6 @@ function DescendantNode({
   return (
     <GeoNode
       $role="ancestor"
-      $compact
       $clickable={clickable}
       title={tooltip}
       {...(clickable
@@ -655,14 +699,14 @@ function DescendantNode({
         : {})}
     >
       <AvatarFrame>
-        <AncNodeAvatar $hasImage={Boolean(src)} $deceased={isDeceased}>
+        <NodeAvatar $role="ancestor" $hasImage={Boolean(src)}>
           {src
             ? <AvatarImage src={src} alt={`${baseName} 프로필 사진`} loading="lazy" decoding="async" />
             : initial}
-        </AncNodeAvatar>
+        </NodeAvatar>
         {(() => {
           const { flag, countryName } = familyTreePersonFlag(person)
-          return <CountryFlag flag={flag} countryName={countryName} size={16} />
+          return <CountryFlag flag={flag} countryName={countryName} size={24} />
         })()}
       </AvatarFrame>
       <NodeNameWrap>
@@ -677,74 +721,57 @@ function DescendantNode({
             )}
           </NodeRegnalName>
         )}
-        <AncNodeName>
+        <NodeName>
           {displayName}
           {isDeceased && <DeceasedMark aria-label="사망"> †</DeceasedMark>}
-        </AncNodeName>
+        </NodeName>
         {lifespan && <NodeMeta>{lifespan}</NodeMeta>}
         {person.dynasty?.name && <NodeDynasty>{person.dynasty.name}</NodeDynasty>}
       </NodeNameWrap>
       <NodeBadge $role="ancestor">{badge}</NodeBadge>
+      {inMarriageWith && (
+        <InMarriageMark
+          aria-label={`사촌결혼 — ${getPersonDisplayName(inMarriageWith, true)}와 혼인`}
+          title={`사촌결혼 → ${getPersonDisplayName(inMarriageWith, true)}`}
+        >
+          ♥ {getPersonDisplayName(inMarriageWith, true)}
+        </InMarriageMark>
+      )}
     </GeoNode>
   )
 }
 
-// ─── SiblingCompactNode (형제자매 컴팩트 카드) ──────────────────────
+// ─── SiblingNode (형제자매 카드) ────────────────────────────────────
 /**
- * 형제자매 카드 — 본인 카드(NODE_W)보다 작은 ANC_W 컴팩트로 시각 위계 표현.
- * 입력 타입은 NodePerson (PersonDetail에서 내려온 데이터 — birthDate/deathDate Date|string).
+ * 형제자매 카드 — 모든 카드 NODE_W 통일. compact prop은 시그니처 호환을 위해
+ * 받지만 동일 크기로 렌더.
  */
 function SiblingCompactNode({
   person,
   onPersonClick,
 }: {
   person: NodePerson
+  /** @deprecated 모든 카드 통일 — 무시됨 */
+  compact?: boolean
   onPersonClick?: (id: string) => void
 }) {
-  const baseName = getPersonDisplayName(person, true)
-  const displayName = person.illegitimate ? `${baseName}*` : baseName
-  const initial = displayInitial(person)
-  const src = resolvePersonThumbnailSrc(person)
-  const span = lifeSpan(person)
-  const isDeceased = Boolean(person.deathDate)
   const clickable = Boolean(onPersonClick && person.id)
   const handle = () => person.id && onPersonClick?.(person.id)
   const tooltip = buildPersonTooltip(person)
-  const { flag: sibFlag, countryName: sibCountryName } = useNodePersonFlag(person)
+  const interactiveProps = clickable
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onClick: handle,
+        onKeyDown: (e: ReactKeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handle() }
+        },
+      }
+    : {}
   return (
-    <GeoNode
-      $role="sibling"
-      $compact
-      $clickable={clickable}
-      title={tooltip}
-      {...(clickable
-        ? {
-            role: 'button' as const,
-            tabIndex: 0,
-            onClick: handle,
-            onKeyDown: (e: ReactKeyboardEvent) => {
-              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handle() }
-            },
-          }
-        : {})}
-    >
-      <AvatarFrame>
-        <AncNodeAvatar $hasImage={Boolean(src)} $deceased={isDeceased}>
-          {src
-            ? <AvatarImage src={src} alt={`${baseName} 프로필 사진`} loading="lazy" decoding="async" />
-            : initial}
-        </AncNodeAvatar>
-        <CountryFlag flag={sibFlag} countryName={sibCountryName} size={16} />
-      </AvatarFrame>
-      <NodeNameWrap>
-        {person.regnalName && <NodeRegnalName>♛ {person.regnalName}</NodeRegnalName>}
-        <AncNodeName>
-          {displayName}
-          {isDeceased && <DeceasedMark aria-label="사망"> †</DeceasedMark>}
-        </AncNodeName>
-        {span && <NodeMeta>{span}</NodeMeta>}
-        {person.dynasty?.name && <NodeDynasty>{person.dynasty.name}</NodeDynasty>}
-      </NodeNameWrap>
+    <GeoNode $role="sibling" $clickable={clickable} title={tooltip} {...interactiveProps}>
+      <GeoThumbnail person={person} role="sibling" />
+      <NodeNameBlock person={person} />
       <NodeBadge $role="sibling">형제</NodeBadge>
     </GeoNode>
   )
@@ -782,6 +809,7 @@ function SiblingsListModal({
             <SiblingCompactNode
               key={sib.id ?? `sib-modal-${idx}`}
               person={sib}
+              compact
               onPersonClick={(id) => {
                 onClose()
                 onPersonClick?.(id)
@@ -861,6 +889,7 @@ function DescendantSubtree({
   depth,
   maxDepth,
   visited,
+  inMarriageByPersonId,
   onPersonClick,
 }: {
   descendants: FamilyTreePerson[]
@@ -868,6 +897,7 @@ function DescendantSubtree({
   depth: number
   maxDepth: number
   visited: Set<string>
+  inMarriageByPersonId?: Map<string, FamilyTreePerson>
   onPersonClick?: (id: string) => void
 }) {
   if (descendants.length === 0) return null
@@ -886,9 +916,15 @@ function DescendantSubtree({
             : []
           const nextVisited = new Set(visited)
           if (g.id) nextVisited.add(g.id)
+          const inMarriageWith = g.id ? inMarriageByPersonId?.get(g.id) ?? null : null
           return (
             <GrandchildPair key={g.id}>
-              <DescendantNode person={g} badge={badge} onPersonClick={onPersonClick} />
+              <DescendantNode
+                person={g}
+                badge={badge}
+                inMarriageWith={inMarriageWith}
+                onPersonClick={onPersonClick}
+              />
               {next.length > 0 && (
                 <DescendantSubtree
                   descendants={next}
@@ -896,6 +932,7 @@ function DescendantSubtree({
                   depth={depth + 1}
                   maxDepth={maxDepth}
                   visited={nextVisited}
+                  inMarriageByPersonId={inMarriageByPersonId}
                   onPersonClick={onPersonClick}
                 />
               )}
@@ -907,10 +944,10 @@ function DescendantSubtree({
   )
 }
 
-/** N개의 컴팩트 손자녀 카드 위로 T자형 분기선 — 카드 폭 ANC_W 기준으로 정렬 */
+/** N개의 후손 카드 위로 T자형 분기선 — 카드 폭 NODE_W 기준으로 정렬 */
 function ForkToCompactChildren({ count }: { count: number }) {
   const GAP = 12 // GrandchildrenRow gap
-  const W = ANC_W
+  const W = NODE_W
   const totalW = count * W + (count - 1) * GAP
   const xStart = W / 2
   const xEnd = totalW - W / 2
@@ -1023,38 +1060,92 @@ export function PersonGenealogyInfographic({
     return out
   }, [familyTreeData, ftChildrenOf, ftParentsOf, ego.id])
 
-  // 각 부모(=ego의 자녀, 손자녀, …) → 다음 세대 노드 배열 (출생연도 오름차순).
-  // ego·ego의 자녀(=한 깊이 위)는 제외 — 자기 자신이 자기 자손으로 들어가는 건 데이터 오류.
-  const descendantsByParentId = useMemo(() => {
+  /**
+   * 각 부모(=ego의 자녀, 손자녀, …) → 다음 세대 노드 배열 (출생연도 오름차순).
+   *
+   * **사촌결혼 dedupe (H1)**: BFS 순서로 인물별 첫 부모에게만 할당 — 동일 인물이
+   * 양쪽 부모 분기에서 두 번 그려지는 문제 방지. (예: 합스부르크 안나가
+   * 마리아·막시밀리안 2세 양쪽 자녀로 두 번 표시되던 케이스)
+   *
+   * **결혼 마커 (M1)**: 각 후손에 대해 dedupe 후 미할당된 다른 부모가
+   * 가계도 안 다른 후손이면 "내부 결혼"으로 표시 — `inMarriageByPersonId`로
+   * 별도 노출.
+   */
+  const { descendantsByParentId, inMarriageByPersonId } = useMemo(() => {
     const out = new Map<string, FamilyTreePerson[]>()
-    if (!familyTreeData) return out
+    const inMarriage = new Map<string, FamilyTreePerson>()
+    if (!familyTreeData) {
+      return { descendantsByParentId: out, inMarriageByPersonId: inMarriage }
+    }
     const childIds = new Set(childList.map((c) => c.id).filter(Boolean) as string[])
     const excludeIds = new Set<string>([ego.id, ...childIds].filter(Boolean) as string[])
-    // BFS로 ego 후손 그래프 전체에 대해 자녀 맵 생성 (재귀 N세대 렌더에 활용)
+
+    // Phase 1: 후손별 첫 부모 결정 (BFS 출생연도 정렬 순)
+    /** descendantId → primaryParentId (첫 BFS 방문 부모) */
+    const primaryParent = new Map<string, string>()
     const queue: string[] = [...childIds]
     const seen = new Set<string>(childIds)
     while (queue.length > 0) {
       const pid = queue.shift()!
       const childIdsOfP = ftChildrenOf.get(pid) ?? []
       const childNodes = childIdsOfP
-        .filter((cid) => !excludeIds.has(cid))
         .map((cid) => ftNodeMap.get(cid))
         .filter((n): n is FamilyTreePerson => Boolean(n))
+        .filter((n) => !excludeIds.has(n.id))
         .sort((a, b) => {
           const ay = a.birthYear ?? Number.POSITIVE_INFINITY
           const by = b.birthYear ?? Number.POSITIVE_INFINITY
           return ay - by
         })
-      if (childNodes.length > 0) out.set(pid, childNodes)
       for (const cn of childNodes) {
-        if (cn.id && !seen.has(cn.id)) {
-          seen.add(cn.id)
-          queue.push(cn.id)
+        if (!primaryParent.has(cn.id)) {
+          primaryParent.set(cn.id, pid)
+          if (!seen.has(cn.id)) {
+            seen.add(cn.id)
+            queue.push(cn.id)
+          }
         }
       }
     }
-    return out
-  }, [familyTreeData, ftChildrenOf, ftNodeMap, childList, ego.id])
+
+    // Phase 2: descendantsByParentId 빌드 — primary parent 한 명에게만 자녀 할당
+    for (const [descId, primaryPid] of primaryParent) {
+      const node = ftNodeMap.get(descId)
+      if (!node) continue
+      const list = out.get(primaryPid) ?? []
+      list.push(node)
+      out.set(primaryPid, list)
+    }
+    for (const list of out.values()) {
+      list.sort((a, b) => {
+        const ay = a.birthYear ?? Number.POSITIVE_INFINITY
+        const by = b.birthYear ?? Number.POSITIVE_INFINITY
+        return ay - by
+      })
+    }
+
+    // Phase 3: 내부 결혼 마커 — 각 후손의 다른 친부모가 가계도 안 다른 후손이면
+    // 그 두 부모는 "사촌결혼" 관계. dedupe된 다른 부모를 마커로 노출.
+    for (const [descId, primaryPid] of primaryParent) {
+      const allParents = ftParentsOf.get(descId) ?? []
+      for (const otherPid of allParents) {
+        if (otherPid === primaryPid) continue
+        // otherPid가 ego의 후손(=primaryParent map에 있음) 또는 ego의 자녀
+        if (primaryParent.has(otherPid) || childIds.has(otherPid)) {
+          const other = ftNodeMap.get(otherPid)
+          const primary = ftNodeMap.get(primaryPid)
+          if (other && primary) {
+            // 두 부모 모두에 결혼 마커 — UI에서 "사촌결혼: <상대>" 표시
+            if (!inMarriage.has(primaryPid)) inMarriage.set(primaryPid, other)
+            if (!inMarriage.has(otherPid)) inMarriage.set(otherPid, primary)
+          }
+          break
+        }
+      }
+    }
+
+    return { descendantsByParentId: out, inMarriageByPersonId: inMarriage }
+  }, [familyTreeData, ftChildrenOf, ftNodeMap, ftParentsOf, childList, ego.id])
 
   const siblingList = (siblings ?? []).filter(Boolean).slice().sort((a, b) => {
     const ay = birthYearOf(a)
@@ -1386,11 +1477,12 @@ export function PersonGenealogyInfographic({
                     : isLeft(child.spouse) || isRight(child) ? false : true
                   if (childIsLeft) return <div />
                   const spouseNode = (
-                    <GeoNode $role="spouse" {...clickableProps(child.spouse.id)}>
-                      <GeoThumbnail person={child.spouse} role="spouse" />
-                      <NodeNameBlock person={child.spouse} />
-                      <NodeBadge $role="spouse">배우자</NodeBadge>
-                    </GeoNode>
+                    <NodePersonCompactCard
+                      person={child.spouse}
+                      role="spouse"
+                      badge="배우자"
+                      onPersonClick={onPersonClick}
+                    />
                   )
                   const join = (
                     <SpouseJoin aria-hidden>
@@ -1416,6 +1508,7 @@ export function PersonGenealogyInfographic({
                       depth={0}
                       maxDepth={3}
                       visited={new Set([ego.id, childList[0].id].filter(Boolean) as string[])}
+                      inMarriageByPersonId={inMarriageByPersonId}
                       onPersonClick={onPersonClick}
                     />
                   )}
@@ -1428,11 +1521,12 @@ export function PersonGenealogyInfographic({
                     : isLeft(child.spouse) || isRight(child) ? false : true
                   if (!childIsLeft) return <div />
                   const spouseNode = (
-                    <GeoNode $role="spouse" {...clickableProps(child.spouse.id)}>
-                      <GeoThumbnail person={child.spouse} role="spouse" />
-                      <NodeNameBlock person={child.spouse} />
-                      <NodeBadge $role="spouse">배우자</NodeBadge>
-                    </GeoNode>
+                    <NodePersonCompactCard
+                      person={child.spouse}
+                      role="spouse"
+                      badge="배우자"
+                      onPersonClick={onPersonClick}
+                    />
                   )
                   const join = (
                     <SpouseJoin aria-hidden>
@@ -1459,6 +1553,7 @@ export function PersonGenealogyInfographic({
                       depth={0}
                       maxDepth={3}
                       visited={new Set([ego.id, child.id].filter(Boolean) as string[])}
+                      inMarriageByPersonId={inMarriageByPersonId}
                       onPersonClick={onPersonClick}
                     />
                   ) : null
@@ -1481,11 +1576,13 @@ export function PersonGenealogyInfographic({
                     )
                   }
                   const spouseNode = (
-                    <GeoNode key={`${pairKey}-sp-${child.spouse.id ?? 'u'}`} $role="spouse" {...clickableProps(child.spouse.id)}>
-                      <GeoThumbnail person={child.spouse} role="spouse" />
-                      <NodeNameBlock person={child.spouse} />
-                      <NodeBadge $role="spouse">배우자</NodeBadge>
-                    </GeoNode>
+                    <NodePersonCompactCard
+                      key={`${pairKey}-sp-${child.spouse.id ?? 'u'}`}
+                      person={child.spouse}
+                      role="spouse"
+                      badge="배우자"
+                      onPersonClick={onPersonClick}
+                    />
                   )
                   const join = (
                     <SpouseJoin key={`${pairKey}-join`} aria-hidden>
@@ -1497,7 +1594,7 @@ export function PersonGenealogyInfographic({
                   )
                   const childIsLeft = isLeft(child) || isRight(child.spouse) ? true
                     : isLeft(child.spouse) || isRight(child) ? false : true
-                  // 자녀 카드 중심 offset: 왼쪽이면 NODE_W/2, 오른쪽이면 배우자+join 너비만큼 밀림
+                  // 자녀 카드 중심 offset — 모든 카드 NODE_W 통일이므로 양쪽 NODE_W
                   const childOffset = childIsLeft ? NODE_W / 2 : NODE_W + SPOUSE_JOIN_W + NODE_W / 2
                   // 손자녀 서브트리는 자녀 카드 바로 아래에만 위치 (배우자 옆에 정렬)
                   const childWithGrand = (
@@ -1711,8 +1808,8 @@ const SiblingsModalClose = styled.button`
 
 const SiblingsModalGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(${ANC_W}px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(${NODE_W}px, 1fr));
+  gap: 16px;
   padding: 18px;
   overflow-y: auto;
   justify-items: center;
@@ -1727,6 +1824,38 @@ const GeoNodeWithChip = styled.div`
   position: relative;
   display: flex;
   align-items: flex-start;
+`
+
+/**
+ * 사촌결혼 — 가계도 안 다른 후손과 결혼했음을 카드 하단에 표시.
+ * dedupe로 한쪽에만 그려진 자녀의 또 다른 부모를 명시.
+ */
+const InMarriageMark = styled.span`
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  max-width: ${NODE_W - 12}px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(244, 114, 182, 0.18)' : 'rgba(244, 114, 182, 0.10)'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#f9a8d4' : '#be185d'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(244, 114, 182, 0.42)' : 'rgba(244, 114, 182, 0.28)'};
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
 `
 
 const AncestorSiblingChip = styled.button`
@@ -2191,16 +2320,21 @@ const NodeNameWrap = styled.div`
 `
 
 const NodeRegnalName = styled.div`
+  /*
+   * 군주 라벨 — ♛ regnalName + 대수 + 즉위국명. 카드 폭(140~192px)에서 잘리지 않도록
+   * 줄바꿈 허용(normal). 길면 한 줄 → 두 줄로 자연스럽게 wrap.
+   */
   font-size: 11px;
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.3;
   color: ${({ theme }) => theme.colors.warning};
   word-break: keep-all;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
   max-width: 100%;
+  padding: 0 4px;
+  text-align: center;
 `
 
 const RegnalNumber = styled.span`
@@ -2208,6 +2342,7 @@ const RegnalNumber = styled.span`
   font-size: 10px;
   font-weight: 600;
   opacity: 0.85;
+  white-space: nowrap;
 `
 
 const RegnalCountry = styled.span`
@@ -2215,6 +2350,7 @@ const RegnalCountry = styled.span`
   font-size: 10px;
   font-weight: 500;
   opacity: 0.75;
+  white-space: nowrap;
 `
 
 const DeceasedMark = styled.span`
@@ -2272,7 +2408,7 @@ const AncColumnDiv = styled.div`
   flex-direction: column;
   align-items: center;
   flex: 1 1 0;
-  min-width: ${ANC_W}px;
+  min-width: ${NODE_W}px;
 `
 
 /**
