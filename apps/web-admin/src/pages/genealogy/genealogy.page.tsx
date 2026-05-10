@@ -737,6 +737,10 @@ const PageHeader = styled.header`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => theme.colors.background.primary};
   z-index: 10;
+  @media (max-width: 640px) {
+    padding: 0 10px;
+    gap: 8px;
+  }
 `
 
 const BackBtn = styled.button`
@@ -752,9 +756,15 @@ const BackBtn = styled.button`
   padding: 6px 10px;
   border-radius: 8px;
   transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
   &:hover {
     background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f1f5f9'};
     color: ${({ theme }) => theme.colors.text.primary};
+  }
+  @media (max-width: 480px) {
+    span {
+      display: none;
+    }
   }
 `
 
@@ -763,6 +773,10 @@ const HeaderCenter = styled.div`
   align-items: center;
   gap: 8px;
   color: ${({ theme }) => theme.colors.text.secondary};
+  min-width: 0;
+  @media (max-width: 640px) {
+    display: none;
+  }
 `
 
 const HeaderTitle = styled.h1`
@@ -803,6 +817,10 @@ const SearchInput = styled.input`
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.primary};
   width: 140px;
+  min-width: 0;
+  @media (max-width: 640px) {
+    width: 90px;
+  }
 `
 
 const SearchCount = styled.span`
@@ -841,6 +859,10 @@ const NodeCount = styled.span`
   background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
   border-radius: 8px;
   padding: 3px 10px;
+  flex-shrink: 0;
+  @media (max-width: 480px) {
+    display: none;
+  }
 `
 
 const FlowWrap = styled.div`
@@ -852,6 +874,18 @@ const FlowWrap = styled.div`
   .react-flow__controls {
     button {
       border-radius: 8px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    /* 좁은 화면에선 미니맵 노이즈가 큼 — 숨김 */
+    .react-flow__minimap {
+      display: none;
+    }
+    /* 컨트롤 버튼 터치 친화적으로 */
+    .react-flow__controls button {
+      width: 36px;
+      height: 36px;
     }
   }
 `
