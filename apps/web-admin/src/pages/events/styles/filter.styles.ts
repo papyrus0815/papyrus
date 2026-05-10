@@ -36,6 +36,9 @@ export const FilterGroup = styled.div`
   display: inline-flex;
   align-items: stretch;
   height: 34px;
+  @media (max-width: 768px) {
+    min-height: 40px;
+  }
   border-radius: 8px;
   overflow: hidden;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -113,6 +116,9 @@ export const FilterSearchInput = styled.input`
   border-radius: 8px;
   padding: 8px 12px 8px 34px;
   height: 34px;
+  @media (max-width: 768px) {
+    min-height: 40px;
+  }
   font-size: 12.5px;
   min-width: 200px;
   max-width: 300px;
@@ -166,6 +172,9 @@ export const FilterTriggerButton = styled.button`
   border-radius: 8px;
   padding: 7px 12px;
   height: 34px;
+  @media (max-width: 768px) {
+    min-height: 40px;
+  }
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
@@ -283,6 +292,9 @@ export const FilterResetButton = styled.button`
   border-radius: 8px;
   padding: 7px 12px;
   height: 34px;
+  @media (max-width: 768px) {
+    min-height: 40px;
+  }
   background: rgba(239, 68, 68, 0.06);
   color: #ef4444;
   font-size: 12.5px;
@@ -464,6 +476,9 @@ export const SortDirectionToggle = styled.button`
   border-radius: 8px;
   padding: 7px 12px;
   height: 34px;
+  @media (max-width: 768px) {
+    min-height: 40px;
+  }
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
@@ -494,6 +509,9 @@ export const SortSelect = styled.select`
   border-radius: 8px;
   padding: 7px 10px;
   height: 34px;
+  @media (max-width: 768px) {
+    min-height: 40px;
+  }
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
@@ -551,6 +569,9 @@ export const FilterToggle = styled.label`
   align-items: center;
   gap: 6px;
   height: 34px;
+  @media (max-width: 768px) {
+    min-height: 40px;
+  }
   padding: 0 4px;
   cursor: pointer;
   user-select: none;
@@ -582,6 +603,9 @@ export const CenturySelect = styled.select`
   border-radius: 8px;
   padding: 7px 10px;
   height: 34px;
+  @media (max-width: 768px) {
+    min-height: 40px;
+  }
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
@@ -622,6 +646,9 @@ export const SortButton = styled.button<{ $direction?: 'asc' | 'desc' }>`
   cursor: pointer;
   width: 34px;
   height: 34px;
+  @media (max-width: 768px) {
+    min-height: 40px;
+  }
   display: flex;
   align-items: center;
   justify-content: center;

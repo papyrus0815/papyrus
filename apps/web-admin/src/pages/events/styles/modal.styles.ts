@@ -169,6 +169,12 @@ export const SummaryModal = styled.div`
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  @media (max-width: 768px) {
+    width: 100%;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 32px);
+    border-radius: 12px;
+  }
   ${({ theme }) => theme.mode === 'dark' ? css`
     background: rgba(15, 15, 20, 0.97);
     border: 1px solid rgba(255, 255, 255, 0.1);

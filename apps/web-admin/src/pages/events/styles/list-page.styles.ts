@@ -358,7 +358,7 @@ export const DetailPanelHost = styled.div<{ $open: boolean }>`
     top: var(--header-height, 0);
     right: 0;
     bottom: 0;
-    width: min(420px, 100vw);
+    width: min(420px, 92vw);
     z-index: 1100;
     background: ${({ theme }) =>
       theme.mode === 'dark' ? '#171717' : '#ffffff'};
