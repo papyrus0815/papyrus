@@ -7,8 +7,7 @@ import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 
 import { CountryDetailDashboard } from './country-detail-dashboard.widget'
 import { CountryDetailHeader } from './country-detail-header.widget'
-import * as CountryDetailStyles from './country-detail.styles'
-import * as CountryStyles from './country-detail.styles'
+import * as S from './country-detail.styles'
 import { CountryElectionsSection } from './country-elections-section.widget'
 import { CountryLawsSection } from './country-laws-section.widget'
 import { EthnicitySection } from './ethnicity-section.widget'
@@ -74,7 +73,6 @@ function CountryDetailInner({
     longitude: number
     name: string
   } | null>(null)
-  const [categoryModalOpen, setCategoryModalOpen] = useState(false)
 
   // country 변경 시 상태 초기화
   React.useEffect(() => {
@@ -98,9 +96,9 @@ function CountryDetailInner({
   // 우선순위: loading > notFound > empty(미선택). 셋을 명확히 분리해야 사용자가 자신의 상태를 안다.
   if (isLoading && !country) {
     return (
-      <CountryStyles.DetailPaneRelative>
+      <S.DetailPaneRelative>
         <LoadingOverlay message="국가 정보를 불러오는 중..." />
-      </CountryStyles.DetailPaneRelative>
+      </S.DetailPaneRelative>
     )
   }
   if (notFound) {
@@ -110,11 +108,8 @@ function CountryDetailInner({
     return <EmptyState />
   }
 
-  // 역사적 국가인지 확인
-  const isHistoricalCountry = country.type === 'historical'
-
   // 역사적 국가는 별도 UI로 렌더링
-  if (isHistoricalCountry) {
+  if (country.type === 'historical') {
     return (
       <HistoricalCountryDetail
         country={country}
@@ -142,182 +137,133 @@ function CountryDetailInner({
     })
   }
 
+  // 두 개의 의미 있는 애니메이션 레이어:
+  //  - 외곽: 국가 전환 (key={country.id}) opacity fade
+  //  - 내부: 탭 전환 (key={activeSubTab}) opacity + y fade
+  // 그 외 중간 wrapper는 plain div — 동일 fade를 중복으로 트리거할 이유가 없음.
   return (
-    <CountryStyles.DetailPaneRelative>
+    <S.DetailPaneRelative>
       <AnimatePresence mode="wait">
-        {isLoading ? (
-          <LoadingOverlay key="loading" message="국가 정보를 불러오는 중..." />
-        ) : (
-          <motion.div
-            key={`content-${country.id}`}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            style={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
+        <motion.div
+          key={`content-${country.id}`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          style={{ width: '100%', display: 'flex', flexDirection: 'column' }}
+        >
+          <S.AnalyticsDashboard
+            style={{ gap: 0, display: 'flex', flexDirection: 'column' }}
           >
-            <CountryStyles.AnalyticsDashboard
-              as={motion.div}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              style={{
-                gap: 0,
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              {/* 스크롤은 외부 DetailPane이 담당 */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                {/* 대시보드, 역사적 국가, 행정구역, 행정조직 등 — 국가명 컨테이너 위 */}
-                <div style={{ flexShrink: 0 }}>
-                  <OverviewSubTabs
-                    activeSubTab={activeSubTab}
-                    onSubTabChange={handleOverviewSubTabChange}
-                  />
-                </div>
+            {/* 스크롤은 외부 DetailPane이 담당 */}
+            <div style={{ flexShrink: 0 }}>
+              <OverviewSubTabs
+                activeSubTab={activeSubTab}
+                onSubTabChange={handleOverviewSubTabChange}
+              />
+            </div>
 
+            {activeSubTab === 'dashboard' && (
+              <CountryDetailHeader
+                country={country}
+                continentName={continent?.name}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            )}
+
+            {/* 서브 탭 콘텐츠 — 탭 전환 시에만 opacity+y 페이드 */}
+            <AnimatePresence initial={false} mode="wait">
+              <motion.div
+                key={activeSubTab}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.32, ease: [0.25, 0.1, 0.25, 1] }}
+                style={{ display: 'flex', flexDirection: 'column' }}
+              >
                 {activeSubTab === 'dashboard' && (
-                  <CountryDetailHeader
+                  <CountryDetailDashboard country={country} onEdit={onEdit} />
+                )}
+
+                {activeSubTab === 'regions' && (
+                  <MapRegionSection
                     country={country}
-                    continentName={continent?.name}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
+                    mapLocation={mapLocation}
+                    onCityClick={handleCityClick}
                   />
                 )}
 
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
-                  {/* KPI Grid 제거 - 불필요한 공간 낭비 */}
+                {activeSubTab === 'government' && (
+                  <S.TabContentPane>
+                    <GovernmentInfoSection
+                      country={country}
+                      countryId={country.id}
+                      initialContentTab={
+                        initialDetailTab === 'heads' ? 'heads' : undefined
+                      }
+                    />
+                  </S.TabContentPane>
+                )}
 
-                  {/* 서브 탭 콘텐츠 — opacity만 사용해 스르륵 크로스페이드 */}
-                  <AnimatePresence initial={false} mode="wait">
-                    <motion.div
-                      key={activeSubTab}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      transition={{
-                        duration: 0.32,
-                        ease: [0.25, 0.1, 0.25, 1],
-                      }}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                      }}
-                    >
-                      {activeSubTab === 'dashboard' && country && (
-                        <CountryDetailDashboard
-                          country={country}
-                          onEdit={onEdit}
-                        />
-                      )}
+                {activeSubTab === 'ethnicity' && (
+                  <EthnicitySection countryId={country.id} />
+                )}
 
-                      {activeSubTab === 'regions' && (
-                        <MapRegionSection
-                          country={country}
-                          mapLocation={mapLocation}
-                          onCityClick={handleCityClick}
-                        />
-                      )}
+                {activeSubTab === 'linked-historical' && (
+                  <LinkedHistoricalCountriesSection country={country} />
+                )}
 
-                      {activeSubTab === 'government' && (
-                        <CountryStyles.TabContentPane>
-                          <GovernmentInfoSection
-                            country={country}
-                            countryId={country.id}
-                            categoryModalOpen={categoryModalOpen}
-                            onCloseCategoryModal={() =>
-                              setCategoryModalOpen(false)
-                            }
-                            onOpenCategoryModal={() =>
-                              setCategoryModalOpen(true)
-                            }
-                            initialContentTab={
-                              initialDetailTab === 'heads' ? 'heads' : undefined
-                            }
-                          />
-                        </CountryStyles.TabContentPane>
-                      )}
+                {activeSubTab === 'treaty' && (
+                  <TreatySectionWidget country={country} />
+                )}
 
-                      {activeSubTab === 'ethnicity' && (
-                        <EthnicitySection countryId={country.id} />
-                      )}
+                {activeSubTab === 'elections' && (
+                  <S.TabContentPane>
+                    <CountryElectionsSection
+                      countryId={country.id}
+                      linkedHistoricalCountries={
+                        country.historicalCountries?.map((h) => ({
+                          id: h.id,
+                          name: h.name,
+                        })) ?? []
+                      }
+                    />
+                  </S.TabContentPane>
+                )}
 
-                      {activeSubTab === 'linked-historical' && (
-                        <LinkedHistoricalCountriesSection country={country} />
-                      )}
+                {activeSubTab === 'laws' && (
+                  <S.TabContentPane>
+                    <CountryLawsSection countryId={country.id} />
+                  </S.TabContentPane>
+                )}
 
-                      {activeSubTab === 'treaty' && (
-                        <TreatySectionWidget country={country} />
-                      )}
-
-                      {activeSubTab === 'elections' && (
-                        <CountryStyles.TabContentPane>
-                          <CountryElectionsSection
-                            countryId={country.id}
-                            linkedHistoricalCountries={
-                              country.historicalCountries?.map((h) => ({
-                                id: h.id,
-                                name: h.name,
-                              })) ?? []
-                            }
-                          />
-                        </CountryStyles.TabContentPane>
-                      )}
-
-                      {activeSubTab === 'laws' && (
-                        <CountryStyles.TabContentPane>
-                          <CountryLawsSection countryId={country.id} />
-                        </CountryStyles.TabContentPane>
-                      )}
-
-                      {/* 인물 탭은 헤더 "인물"로 통합 — 국가별 보기는 /history/dashboard/persons?countries=<id>로 이동 */}
-                    </motion.div>
-                  </AnimatePresence>
-                </motion.div>
+                {/* 인물 탭은 헤더 "인물"로 통합 — 국가별 보기는 /history/dashboard/persons?countries=<id>로 이동 */}
               </motion.div>
-            </CountryStyles.AnalyticsDashboard>
-          </motion.div>
-        )}
+            </AnimatePresence>
+          </S.AnalyticsDashboard>
+        </motion.div>
       </AnimatePresence>
-    </CountryStyles.DetailPaneRelative>
+    </S.DetailPaneRelative>
   )
 }
 
 function NotFoundState() {
   return (
-    <CountryDetailStyles.EmptyStateContainer
+    <S.EmptyStateContainer
       as={motion.div}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
     >
-      <CountryDetailStyles.EmptyStateBgOrb $x="20%" $y="25%" $size="280px" />
-      <CountryDetailStyles.EmptyStateBgOrb $x="70%" $y="65%" $size="240px" />
-      <CountryDetailStyles.EmptyStateCard
+      <S.EmptyStateBgOrb $x="20%" $y="25%" $size="280px" />
+      <S.EmptyStateBgOrb $x="70%" $y="65%" $size="240px" />
+      <S.EmptyStateCard
         initial={{ y: 8, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
       >
-        <CountryDetailStyles.EmptyStateIllustration>
+        <S.EmptyStateIllustration>
           <svg
             width="120"
             height="120"
@@ -340,38 +286,38 @@ function NotFoundState() {
               strokeLinecap="round"
             />
           </svg>
-        </CountryDetailStyles.EmptyStateIllustration>
-        <CountryDetailStyles.EmptyStateTitle>
+        </S.EmptyStateIllustration>
+        <S.EmptyStateTitle>
           국가를 찾을 수 없습니다
-        </CountryDetailStyles.EmptyStateTitle>
-        <CountryDetailStyles.EmptyStateDescription>
+        </S.EmptyStateTitle>
+        <S.EmptyStateDescription>
           해당 ID의 국가가 삭제되었거나 잘못된 링크일 수 있습니다.
-        </CountryDetailStyles.EmptyStateDescription>
-        <CountryDetailStyles.EmptyStateHint>
+        </S.EmptyStateDescription>
+        <S.EmptyStateHint>
           ← 목록에서 다시 선택
-        </CountryDetailStyles.EmptyStateHint>
-      </CountryDetailStyles.EmptyStateCard>
-    </CountryDetailStyles.EmptyStateContainer>
+        </S.EmptyStateHint>
+      </S.EmptyStateCard>
+    </S.EmptyStateContainer>
   )
 }
 
 function EmptyState() {
   return (
-    <CountryDetailStyles.EmptyStateContainer
+    <S.EmptyStateContainer
       as={motion.div}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
     >
-      <CountryDetailStyles.EmptyStateBgOrb $x="10%" $y="20%" $size="320px" />
-      <CountryDetailStyles.EmptyStateBgOrb $x="75%" $y="60%" $size="280px" />
-      <CountryDetailStyles.EmptyStateBgOrb $x="50%" $y="85%" $size="200px" />
-      <CountryDetailStyles.EmptyStateCard
+      <S.EmptyStateBgOrb $x="10%" $y="20%" $size="320px" />
+      <S.EmptyStateBgOrb $x="75%" $y="60%" $size="280px" />
+      <S.EmptyStateBgOrb $x="50%" $y="85%" $size="200px" />
+      <S.EmptyStateCard
         initial={{ y: 8, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
       >
-        <CountryDetailStyles.EmptyStateIllustration>
+        <S.EmptyStateIllustration>
           <svg
             width="120"
             height="120"
@@ -402,18 +348,18 @@ function EmptyState() {
             />
             <circle cx="60" cy="82" r="3" fill="#fff" />
           </svg>
-        </CountryDetailStyles.EmptyStateIllustration>
-        <CountryDetailStyles.EmptyStateTitle>
+        </S.EmptyStateIllustration>
+        <S.EmptyStateTitle>
           국가를 선택해주세요
-        </CountryDetailStyles.EmptyStateTitle>
-        <CountryDetailStyles.EmptyStateDescription>
+        </S.EmptyStateTitle>
+        <S.EmptyStateDescription>
           왼쪽 목록에서 국가를 선택하면 상세 정보를 볼 수 있습니다
-        </CountryDetailStyles.EmptyStateDescription>
-        <CountryDetailStyles.EmptyStateHint>
+        </S.EmptyStateDescription>
+        <S.EmptyStateHint>
           ← 목록에서 선택
-        </CountryDetailStyles.EmptyStateHint>
-      </CountryDetailStyles.EmptyStateCard>
-    </CountryDetailStyles.EmptyStateContainer>
+        </S.EmptyStateHint>
+      </S.EmptyStateCard>
+    </S.EmptyStateContainer>
   )
 }
 

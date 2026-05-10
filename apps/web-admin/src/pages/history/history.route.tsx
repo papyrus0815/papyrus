@@ -20,6 +20,15 @@ const lazyCountryDetail: Lazy = async () => {
   return { loader: countryLoader, Component }
 }
 
+/** 국가 상세 — events 탭 전용 페이지 (사건 연대표) */
+const lazyCountryDetailEvents: Lazy = async () => {
+  const [{ countryLoader }, { default: Component }] = await Promise.all([
+    import('./country/country.loader'),
+    import('./country/country-detail-events.page'),
+  ])
+  return { loader: countryLoader, Component }
+}
+
 /** 대시보드 페이지들 — Component만 lazy 로드 (loader 불필요) */
 const lazyDashboardPersons: Lazy = async () => ({
   Component: (await import('./dashboard/dashboard-persons.page')).default,
@@ -41,7 +50,7 @@ const dashboardSimpleRoutes = (
   lazy: lazyDashboardSimple,
 }))
 
-/** 국가 상세 하위 탭 세그먼트 */
+/** 국가 상세 하위 탭 세그먼트 (events는 별도 페이지로 분리됐기에 제외) */
 const countryDetailTabSegments = [
   'dashboard',
   'heads-of-state',
@@ -52,7 +61,6 @@ const countryDetailTabSegments = [
   'elections',
   'elections/party/:partyId',
   'laws',
-  'events',
   'ethnicity',
   'treaty',
 ] as const
@@ -60,6 +68,12 @@ const countryDetailRoutes = countryDetailTabSegments.map((seg) => ({
   path: `${ROUTES.HISTORY.COUNTRY}/:countryId/${seg}`,
   lazy: lazyCountryDetail,
 }))
+
+/** events 탭은 별도 페이지로 — 같은 셸을 공유하지만 우측 콘텐츠가 EventsTimelineSection */
+const countryDetailEventsRoute = {
+  path: `${ROUTES.HISTORY.COUNTRY}/:countryId/events`,
+  lazy: lazyCountryDetailEvents,
+}
 
 export const historyPageRoute: RouteObject = {
   path: ROUTES.HISTORY.ROOT,
@@ -85,6 +99,7 @@ export const historyPageRoute: RouteObject = {
         ...dashboardSimpleRoutes,
 
         // /history/country/:countryId/* — 국가 상세 (탭별)
+        countryDetailEventsRoute,
         ...countryDetailRoutes,
         { path: `${ROUTES.HISTORY.COUNTRY}/:countryId`, lazy: lazyCountryDetail },
 

@@ -42,7 +42,11 @@ function urlTabToWidgetTab(
   }
 }
 
-/** 위젯 탭 → URL 빌더 매핑 (없으면 상세 루트로 폴백). */
+/**
+ * 위젯 탭 → URL 빌더 매핑.
+ * - 'dashboard'는 명시적으로 `/dashboard` 세그먼트 — `/`(루트)와 구분.
+ * - null/undefined는 상세 루트(`/`)로 폴백.
+ */
 function tabToPath(countryId: string, tab: CountryDetailTabKey | null): string {
   switch (tab) {
     case 'heads':
@@ -61,6 +65,7 @@ function tabToPath(countryId: string, tab: CountryDetailTabKey | null): string {
     case 'treaty':
       return pathKeys.history.countryTreaty(countryId)
     case 'dashboard':
+      return pathKeys.history.countryDashboard(countryId)
     default:
       return pathKeys.history.countryDetail(countryId)
   }

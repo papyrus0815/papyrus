@@ -38,12 +38,6 @@ export interface GovernmentInfoSectionProps {
   country?: import('@/entities/country/model/unified-types').UnifiedCountry
   /** 국가 ID (있으면 중앙부처 탭에서 API 연동 CRUD) */
   countryId?: string
-  /** 카테고리 모달 열림 (헤더 버튼에서 제어 시 부모에서 전달) */
-  categoryModalOpen?: boolean
-  /** 카테고리 모달 닫기 콜백 */
-  onCloseCategoryModal?: () => void
-  /** 카테고리 모달 열기 콜백 (헤더 우측 버튼용, 부모에서 state 제어 시 전달) */
-  onOpenCategoryModal?: () => void
   /** 부모가 바꿀 때마다 행정조직 서브탭을 이 값으로 맞춤(예: URL·딥링크). `undefined`면 탭 상태를 덮어쓰지 않음 */
   initialContentTab?: GovernmentContentTab
 }
@@ -51,9 +45,6 @@ export interface GovernmentInfoSectionProps {
 export function GovernmentInfoSection({
   country,
   countryId,
-  categoryModalOpen: categoryModalOpenProp,
-  onCloseCategoryModal,
-  onOpenCategoryModal,
   initialContentTab,
 }: GovernmentInfoSectionProps) {
   const queryClient = useQueryClient()
@@ -80,21 +71,9 @@ export function GovernmentInfoSection({
     string | null
   >(null)
 
-  const [categoryModalOpenLocal, setCategoryModalOpenLocal] = useState(false)
-  const categoryModalOpen = categoryModalOpenProp ?? categoryModalOpenLocal
-
-  const closeCategoryModal = () => {
-    onCloseCategoryModal?.()
-    setCategoryModalOpenLocal(false)
-  }
-
-  const openCategoryModal = () => {
-    if (onOpenCategoryModal) {
-      onOpenCategoryModal()
-      return
-    }
-    setCategoryModalOpenLocal(true)
-  }
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false)
+  const closeCategoryModal = () => setCategoryModalOpen(false)
+  const openCategoryModal = () => setCategoryModalOpen(true)
 
   return (
     <>
@@ -119,12 +98,11 @@ export function GovernmentInfoSection({
           title="행정조직"
           description="역대 수반, 행정부, 중앙부처, 행정기구, 직위 정의, 통계를 관리합니다."
           rightSlot={
-            onOpenCategoryModal ? (
-              <AddButton
-                type="button"
-                onClick={onOpenCategoryModal}
-                aria-label="부처 카테고리 설정"
-              >
+            <AddButton
+              type="button"
+              onClick={openCategoryModal}
+              aria-label="부처 카테고리 설정"
+            >
                 <svg
                   width="14"
                   height="14"
@@ -138,9 +116,8 @@ export function GovernmentInfoSection({
                   <circle cx="12" cy="12" r="3" />
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                 </svg>
-                카테고리 설정
-              </AddButton>
-            ) : undefined
+              카테고리 설정
+            </AddButton>
           }
         />
 
