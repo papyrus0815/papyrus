@@ -18,6 +18,7 @@ import {
   FiExternalLink,
   FiFlag,
   FiInfo,
+  FiMapPin,
   FiPlus,
   FiTrash2,
   FiTrendingUp,
@@ -25,7 +26,6 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { useLocation, useNavigate } from 'react-router-dom'
-import styled, { css } from 'styled-components'
 
 import { personKeys } from '@/entities/person/api'
 import type { PersonHumanRelationshipItem } from '@/shared/api/person-human-relationships'
@@ -52,16 +52,11 @@ import {
 import {
   INFLUENCE_ANCHORS,
   getInfluenceTier,
-  getInfluenceTierGradient,
   getInfluenceTierLabel,
-  type InfluenceTier,
 } from '@/shared/lib/influence-tier'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
-import { glassCardMixin } from '@/shared/styles/mixins'
-import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
-import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { SovereignReignRegisterPanel } from '@/shared/ui/sovereign-reign-register-panel/sovereign-reign-register-panel'
 import { PersonLifeEventFormModal } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
@@ -74,6 +69,170 @@ import {
   type ElectionCandidacyDetail,
   PersonPoliticsSection,
 } from '@/widgets/person/person-politics-section/person-politics-section'
+
+import {
+  ActivityGroup,
+  ActivityGroupList,
+  ActivityGroupTitle,
+  AvatarButton,
+  AvatarOverlay,
+  AvatarSpinner,
+  BackToListButton,
+  BioContent,
+  BioDynastyTooltipPopover,
+  BioEditActions,
+  BioEditorWrap,
+  BioEmptyClickable,
+  BioEmptyCta,
+  BioEmptyDesc,
+  BioEmptyHint,
+  BioEmptyTitle,
+  BioMentionModalBack,
+  BioMentionModalBody,
+  BioMentionModalClose,
+  BioMentionModalHeader,
+  BioMentionModalOpenDetail,
+  BioMentionModalOverlay,
+  BioMentionModalPanel,
+  BioMentionModalTitle,
+  BioProse,
+  BioSectionLabel,
+  BioSectionLabelRow,
+  BioTermTooltipOverlay,
+  BioTermTooltipPopover,
+  BioText,
+  CloseBtn,
+  CountMuted,
+  CountryAffiliationChip,
+  CountryAffiliationList,
+  CountryAffiliationName,
+  CountryAffiliationPeriod,
+  CountryAffiliationType,
+  CountryBracket,
+  CountryFlagImg,
+  DeathCauseText,
+  DeathInfoRow,
+  DeathNoteText,
+  DeathTypePill,
+  DeleteButton,
+  DeleteConfirmActions,
+  DeleteConfirmCancelBtn,
+  DeleteConfirmDeleteBtn,
+  DeleteConfirmDesc,
+  DeleteConfirmDialog,
+  DeleteConfirmIconWrap,
+  DeleteConfirmOverlay,
+  DeleteConfirmPersonName,
+  DeleteConfirmTitle,
+  DetailCountryFlagEmoji,
+  DetailCountryName,
+  DetailCountryRow,
+  EmptyState,
+  ErrorDesc,
+  ErrorIcon,
+  ErrorTitle,
+  ErrorWrap,
+  FamilyBadge,
+  FamilyBadgeRow,
+  FoundedDynastyChip,
+  FoundedDynastyRow,
+  FullGenealogyLink,
+  FullGenealogyLinkRow,
+  HeaderActions,
+  HeaderLeft,
+  HeaderRow,
+  HeaderTitleBlock,
+  InfluenceAnchor,
+  InfluenceAnchorRow,
+  InfluenceBar,
+  InfluenceBlock,
+  InfluenceFill,
+  InfluenceSliderInput,
+  InfluenceSliderRow,
+  InfluenceTierLabel,
+  InfluenceValue,
+  InfluenceValueGroup,
+  InlineActions,
+  KpiItem,
+  KpiLabel,
+  KpiLink,
+  KpiStrip,
+  KpiSubValue,
+  KpiValue,
+  LifeCard,
+  LifeCardAge,
+  LifeCardGrid,
+  LifeCardHeader,
+  LifeCardIconWrap,
+  LifeCardLabel,
+  LifeCardRow,
+  LifeCardTitle,
+  LifeCardValue,
+  LoadingText,
+  LoadingWrap,
+  MonarchCrownIcon,
+  MonarchNameLabel,
+  MonarchPositionBadge,
+  MonarchTitleRow,
+  NameMetaBlock,
+  NameMetaLabel,
+  NameMetaOriginal,
+  NameMetaRow,
+  NameMetaValue,
+  NicknameChip,
+  NicknameRow,
+  NicknameType,
+  NicknameValue,
+  OutlineButton,
+  OverviewSectionHeaderRow,
+  OverviewSectionHeading,
+  OverviewSections,
+  PageSubtitle,
+  PageTitle,
+  PageTitleRow,
+  PanelRoot,
+  PrimaryButton,
+  RegisteredByline,
+  SectionCard,
+  SectionCardBio,
+  SectionLabel,
+  SectionLabelRow,
+  SimpleEntryDescription,
+  SimpleEntryHeader,
+  SimpleEntryItem,
+  SimpleEntryList,
+  SimpleEntryPeriod,
+  SimpleEntryRole,
+  SimpleEntrySub,
+  SimpleEntryTitle,
+  Spinner,
+  SpouseDetailHeader,
+  SpouseDetailItem,
+  SpouseDetailList,
+  SpouseDetailName,
+  SpouseDetailNote,
+  SpouseDetailPeriod,
+  TabBtn,
+  TabContent,
+  TabContentArea,
+  TabNav,
+  TenureAddButton,
+  TenureEmpty,
+  TopNavBar,
+  UnifiedActionRow,
+  UnifiedAgeBadge,
+  UnifiedCard,
+  UnifiedCardList,
+  UnifiedCardMain,
+  UnifiedCardTitle,
+  UnifiedCardTopRow,
+  UnifiedEditBtn,
+  UnifiedKindBadge,
+  UnifiedMetaChip,
+  UnifiedMetaRow,
+  UnifiedOrdinal,
+  UnifiedSubRow,
+} from './person-detail-panel.styles'
 
 type TabType = 'overview' | 'genealogy' | 'politics' | 'events'
 
@@ -101,13 +260,77 @@ interface PersonDetailData {
   regnalName?: string | null
   templeName?: string | null
   posthumousName?: string | null
+  preEnthronementTitle?: string | null
+  originalName?: string | null
+  surnameMeaning?: string | null
+  nameMeaning?: string | null
+  middleNameMeaning?: string | null
+  nicknames?: Array<{
+    id?: string
+    nickname?: string | null
+    type?: string | null
+    priority?: number | null
+  }> | null
   createdAt?: string | null
   isAlive?: boolean | null
   influence?: number | null
   isDeathDateUnknown?: boolean | null
   dynastyId?: string | null
   religionId?: string | null
+  denomination?: { id: string; name: string } | null
   countryId?: string | null
+  countryAffiliations?: Array<{
+    id?: string
+    affiliationType?: string | null
+    priority?: number | null
+    startDate?: string | null
+    endDate?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+    country?: { id: string; name: string; isoCode?: string | null; flagEmoji?: string | null; thumbnailUrl?: string | null } | null
+    historicalCountry?: { id: string; name: string } | null
+  }> | null
+  foundedDynasties?: Array<{
+    id?: string
+    name?: string | null
+  }> | null
+  educations?: Array<{
+    id?: string
+    organization?: { id?: string; name?: string | null } | null
+    educationType?: string | null
+    classNumber?: number | null
+    degree?: string | null
+    major?: string | null
+    department?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    status?: string | null
+    notes?: string | null
+  }> | null
+  awards?: Array<{
+    id?: string
+    awardName?: string | null
+    awardingBody?: string | null
+    awardDate?: string | null
+    category?: string | null
+    description?: string | null
+  }> | null
+  careers?: Array<{
+    id?: string
+    /** military / business / academic / religious / artist / athlete / media / legal / medical */
+    kind: string
+    /** 보직·직함·직급 등 카테고리별 라벨 */
+    title?: string | null
+    /** 군 계급 또는 직급 (Job 객체) */
+    rank?: { id?: string; name?: string | null } | null
+    organization?: { id?: string; name?: string | null } | null
+    branch?: string | null
+    department?: string | null
+    termNumber?: number | null
+    startDate?: string | null
+    endDate?: string | null
+    notes?: string | null
+  }> | null
   country?: {
     id: string
     name: string
@@ -146,15 +369,69 @@ interface PersonDetailData {
     dynasty?: { id?: string; name?: string | null } | null;
     birthDate?: string | Date | null; deathDate?: string | Date | null;
   }> | null
-  spouseRelations?: Array<PersonNameFields & {
-    id?: string; gender?: string | null; profileImageUrl?: string | null;
-    profileImages?: { url?: string | null }[] | null;
-    dynasty?: { id?: string; name?: string | null } | null;
-    birthDate?: string | Date | null; deathDate?: string | Date | null;
-    marriageStartDate?: string | null; marriageEndDate?: string | null;
+  spouseRelations?: Array<{
+    id?: string
+    marriageStartDate?: string | null
+    marriageEndDate?: string | null
+    note?: string | null
+    spouse?: (PersonNameFields & {
+      id?: string
+      gender?: string | null
+      profileImageUrl?: string | null
+      profileImages?: { url?: string | null }[] | null
+      dynasty?: { id?: string; name?: string | null } | null
+      birthDate?: string | Date | null
+      deathDate?: string | Date | null
+    }) | null
   }> | null
+  birthCity?: { id: string; name: string } | null
+  deathCity?: { id: string; name: string } | null
+  birthAdminDivision?: { id: string; name: string } | null
+  deathAdminDivision?: { id: string; name: string } | null
+  birthPlaceText?: string | null
+  deathPlaceText?: string | null
   governmentPositions?: unknown[]
   governmentTenures?: unknown[]
+  partyLeaderships?: Array<{
+    id?: string
+    roleTitle?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    party?: { id?: string; name?: string | null; shortName?: string | null } | null
+  }> | null
+  organizationRoles?: Array<{
+    id?: string
+    roleTitle?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    organization?: { id?: string; name?: string | null; shortName?: string | null } | null
+  }> | null
+  militaryCommands?: Array<{
+    id?: string
+    rank?: string | null
+    role?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    unit?: { id?: string; name?: string | null; unitType?: string | null } | null
+  }> | null
+  books?: Array<{
+    id?: string
+    title?: string | null
+    publishedYear?: number | null
+    summary?: string | null
+  }> | null
+  foundedCompanies?: Array<{
+    id?: string
+    name?: string | null
+    foundedAt?: string | null
+    description?: string | null
+  }> | null
+  companies?: Array<{
+    id?: string
+    name?: string | null
+    foundedAt?: string | null
+    description?: string | null
+  }> | null
   sovereignReigns?: Array<{
     id: string
     startDate?: string | null
@@ -747,7 +1024,15 @@ export function PersonDetailPanel({
                 <PageTitle>{fullName}</PageTitle>
               </PageTitleRow>
               {p.country?.name && (
-                <DetailCountryRow>
+                <DetailCountryRow
+                  as="button"
+                  type="button"
+                  onClick={() => {
+                    if (!p.country?.id) return
+                    playClickSound()
+                    navigate(pathKeys.history.countryDetail(p.country.id))
+                  }}
+                >
                   {countryFlagSrc ? (
                     <CountryFlagImg src={countryFlagSrc} alt="" aria-hidden />
                   ) : p.country?.flagEmoji ? (
@@ -766,6 +1051,70 @@ export function PersonDetailPanel({
                 </MonarchTitleRow>
               )}
               <PageSubtitle>{subtitleLifespan}</PageSubtitle>
+              {(() => {
+                const meaningParts = [
+                  p.surname && p.surnameMeaning
+                    ? `${p.surname} ${p.surnameMeaning}`
+                    : null,
+                  p.name && p.nameMeaning
+                    ? `${p.name} ${p.nameMeaning}`
+                    : null,
+                  p.middleName && p.middleNameMeaning
+                    ? `${p.middleName} ${p.middleNameMeaning}`
+                    : null,
+                ].filter(Boolean) as string[]
+                const has =
+                  p.originalName ||
+                  meaningParts.length > 0 ||
+                  p.preEnthronementTitle ||
+                  p.posthumousName
+                if (!has) return null
+                return (
+                  <NameMetaBlock>
+                    {p.originalName && (
+                      <NameMetaRow>
+                        <NameMetaLabel>원어</NameMetaLabel>
+                        <NameMetaOriginal>{p.originalName}</NameMetaOriginal>
+                      </NameMetaRow>
+                    )}
+                    {meaningParts.length > 0 && (
+                      <NameMetaRow>
+                        <NameMetaLabel>뜻</NameMetaLabel>
+                        <NameMetaValue>
+                          {meaningParts.join(' · ')}
+                        </NameMetaValue>
+                      </NameMetaRow>
+                    )}
+                    {p.preEnthronementTitle && (
+                      <NameMetaRow>
+                        <NameMetaLabel>작호</NameMetaLabel>
+                        <NameMetaValue>{p.preEnthronementTitle}</NameMetaValue>
+                      </NameMetaRow>
+                    )}
+                    {p.posthumousName && (
+                      <NameMetaRow>
+                        <NameMetaLabel>시호</NameMetaLabel>
+                        <NameMetaValue>{p.posthumousName}</NameMetaValue>
+                      </NameMetaRow>
+                    )}
+                  </NameMetaBlock>
+                )
+              })()}
+              {p.nicknames && p.nicknames.length > 0 && (() => {
+                const sorted = [...p.nicknames].sort(
+                  (a, b) => (a.priority ?? 999) - (b.priority ?? 999),
+                )
+                return (
+                  <NicknameRow>
+                    {sorted.map((n) => (
+                      <NicknameChip key={n.id ?? n.nickname ?? Math.random()}>
+                        {n.type && <NicknameType>{n.type}</NicknameType>}
+                        <NicknameValue>{n.nickname}</NicknameValue>
+                      </NicknameChip>
+                    ))}
+                  </NicknameRow>
+                )
+              })()}
               {registeredAtLabel && (
                 <RegisteredByline>등록 {registeredAtLabel}</RegisteredByline>
               )}
@@ -787,6 +1136,12 @@ export function PersonDetailPanel({
                     key: 'children',
                     label: `자녀 ${childrenCount}`,
                   })
+                const siblingCount = (p.siblings ?? []).length
+                if (siblingCount > 0)
+                  badges.push({
+                    key: 'siblings',
+                    label: `형제 ${siblingCount}`,
+                  })
                 if (badges.length === 0) return null
                 return (
                   <FamilyBadgeRow>
@@ -805,7 +1160,18 @@ export function PersonDetailPanel({
           {person.country && (
             <KpiItem>
               <KpiLabel>국가</KpiLabel>
-              <KpiValue>{person.country.name}</KpiValue>
+              <KpiValue>
+                <KpiLink
+                  type="button"
+                  onClick={() => {
+                    if (!person.country?.id) return
+                    playClickSound()
+                    navigate(pathKeys.history.countryDetail(person.country.id))
+                  }}
+                >
+                  {person.country.name}
+                </KpiLink>
+              </KpiValue>
             </KpiItem>
           )}
           {(person.gender === 'MALE' || person.gender === 'FEMALE') && (
@@ -864,13 +1230,28 @@ export function PersonDetailPanel({
           {person.dynasty && (
             <KpiItem>
               <KpiLabel>가문</KpiLabel>
-              <KpiValue>{person.dynasty.name}</KpiValue>
+              <KpiValue>
+                <KpiLink
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    navigate(pathKeys.dynasty())
+                  }}
+                >
+                  {person.dynasty.name}
+                </KpiLink>
+              </KpiValue>
             </KpiItem>
           )}
           {person.religion && (
             <KpiItem>
               <KpiLabel>종교</KpiLabel>
-              <KpiValue>{person.religion.name}</KpiValue>
+              <KpiValue>
+                {person.religion.name}
+                {p.denomination?.name && (
+                  <KpiSubValue> · {p.denomination.name}</KpiSubValue>
+                )}
+              </KpiValue>
             </KpiItem>
           )}
           {(() => {
@@ -1214,34 +1595,142 @@ export function PersonDetailPanel({
                   {/* 2.5. 능력치 · 성격 — 영향력과 같은 0–100 평가 메트릭 클러스터 */}
                   <PersonStatsSection personId={person.id} personName={fullName} />
 
-                  {/* 2.6. 사망 정보 — 유형·원인·메모 중 하나라도 있으면 표시 */}
-                  {(p.deathType || p.deathCause || p.deathNote) && (
-                    <section aria-label="사망 정보">
-                      <OverviewSectionHeaderRow>
-                        <OverviewSectionHeading>
-                          <FiAlertTriangle size={14} strokeWidth={2.2} />
-                          <span>사망 정보</span>
-                        </OverviewSectionHeading>
-                      </OverviewSectionHeaderRow>
-                      <DeathInfoBlock>
-                        {(p.deathType || p.deathCause) && (
-                          <DeathInfoRow>
-                            {p.deathType && (
-                              <DeathTypePill>
-                                {DEATH_TYPE_LABELS[p.deathType] ?? p.deathType}
-                              </DeathTypePill>
+                  {/* 2.55. 출생 / 사망 카드 — 좌우 분리. 장소 + 일자 + 사망정보를 함께 묶음 */}
+                  {(() => {
+                    const birthPlace =
+                      p.birthCity?.name ??
+                      p.birthAdminDivision?.name ??
+                      p.birthPlaceText ??
+                      null
+                    const deathPlace =
+                      p.deathCity?.name ??
+                      p.deathAdminDivision?.name ??
+                      p.deathPlaceText ??
+                      null
+                    const hasBirth = !!birthDateStr || !!birthPlace
+                    const hasDeath =
+                      !!deathDateStr ||
+                      !!deathPlace ||
+                      !!p.deathType ||
+                      !!p.deathCause ||
+                      !!p.deathNote
+                    if (!hasBirth && !hasDeath) return null
+                    return (
+                      <LifeCardGrid>
+                        {hasBirth && (
+                          <LifeCard $tone="birth" aria-label="출생 정보">
+                            <LifeCardHeader>
+                              <LifeCardIconWrap $tone="birth">
+                                <FiCalendar size={14} strokeWidth={2.2} />
+                              </LifeCardIconWrap>
+                              <LifeCardTitle>출생</LifeCardTitle>
+                            </LifeCardHeader>
+                            {birthDateStr && (
+                              <LifeCardRow>
+                                <LifeCardLabel>일자</LifeCardLabel>
+                                <LifeCardValue>{birthDateStr}</LifeCardValue>
+                              </LifeCardRow>
                             )}
-                            {p.deathCause && (
-                              <DeathCauseText>{p.deathCause}</DeathCauseText>
+                            {birthPlace && (
+                              <LifeCardRow>
+                                <LifeCardLabel>장소</LifeCardLabel>
+                                <LifeCardValue>{birthPlace}</LifeCardValue>
+                              </LifeCardRow>
                             )}
-                          </DeathInfoRow>
+                          </LifeCard>
                         )}
-                        {p.deathNote && (
-                          <DeathNoteText>{p.deathNote}</DeathNoteText>
+                        {hasDeath && (
+                          <LifeCard $tone="death" aria-label="사망 정보">
+                            <LifeCardHeader>
+                              <LifeCardIconWrap $tone="death">
+                                <FiAlertTriangle size={14} strokeWidth={2.2} />
+                              </LifeCardIconWrap>
+                              <LifeCardTitle>사망</LifeCardTitle>
+                              {ageAtDeath != null && (
+                                <LifeCardAge>향년 {ageAtDeath}세</LifeCardAge>
+                              )}
+                            </LifeCardHeader>
+                            {deathDateStr && (
+                              <LifeCardRow>
+                                <LifeCardLabel>일자</LifeCardLabel>
+                                <LifeCardValue>{deathDateStr}</LifeCardValue>
+                              </LifeCardRow>
+                            )}
+                            {deathPlace && (
+                              <LifeCardRow>
+                                <LifeCardLabel>장소</LifeCardLabel>
+                                <LifeCardValue>{deathPlace}</LifeCardValue>
+                              </LifeCardRow>
+                            )}
+                            {(p.deathType || p.deathCause) && (
+                              <LifeCardRow>
+                                <LifeCardLabel>유형</LifeCardLabel>
+                                <DeathInfoRow>
+                                  {p.deathType && (
+                                    <DeathTypePill>
+                                      {DEATH_TYPE_LABELS[p.deathType] ?? p.deathType}
+                                    </DeathTypePill>
+                                  )}
+                                  {p.deathCause && (
+                                    <DeathCauseText>{p.deathCause}</DeathCauseText>
+                                  )}
+                                </DeathInfoRow>
+                              </LifeCardRow>
+                            )}
+                            {p.deathNote && (
+                              <DeathNoteText>{p.deathNote}</DeathNoteText>
+                            )}
+                          </LifeCard>
                         )}
-                      </DeathInfoBlock>
-                    </section>
-                  )}
+                      </LifeCardGrid>
+                    )
+                  })()}
+
+                  {/* 2.57. 배우자 상세 — 혼인 기간·메모 중 하나라도 있을 때만 표시 */}
+                  {(() => {
+                    const rels = (p.spouseRelations ?? []).filter(
+                      (r) =>
+                        r.note ||
+                        r.marriageStartDate ||
+                        r.marriageEndDate,
+                    )
+                    if (rels.length === 0) return null
+                    return (
+                      <section aria-label="배우자 상세">
+                        <OverviewSectionHeaderRow>
+                          <OverviewSectionHeading>
+                            <FiUsers size={14} strokeWidth={2.2} />
+                            <span>배우자 상세</span>
+                            {rels.length > 1 && <CountMuted>{rels.length}</CountMuted>}
+                          </OverviewSectionHeading>
+                        </OverviewSectionHeaderRow>
+                        <SpouseDetailList>
+                          {rels.map((r, idx) => {
+                            const sp = r.spouse ?? null
+                            const name = sp
+                              ? getPersonDisplayName(sp, true)
+                              : '이름 없음'
+                            const start = formatIsoDateKo(r.marriageStartDate)
+                            const end = formatIsoDateKo(r.marriageEndDate)
+                            const period = [start, end].filter(Boolean).join(' ~ ')
+                            return (
+                              <SpouseDetailItem key={r.id ?? `spouse-${idx}`}>
+                                <SpouseDetailHeader>
+                                  <SpouseDetailName>{name}</SpouseDetailName>
+                                  {period && (
+                                    <SpouseDetailPeriod>{period}</SpouseDetailPeriod>
+                                  )}
+                                </SpouseDetailHeader>
+                                {r.note && (
+                                  <SpouseDetailNote>{r.note}</SpouseDetailNote>
+                                )}
+                              </SpouseDetailItem>
+                            )
+                          })}
+                        </SpouseDetailList>
+                      </section>
+                    )
+                  })()}
 
                   {/* 3. 재임·재위 통합 */}
                   <section aria-label="재임·재위">
@@ -1448,6 +1937,486 @@ export function PersonDetailPanel({
                     reignId={editingReignId}
                   />
 
+                  {/* 3.1. 국가 소속·국적 (다중) */}
+                  {p.countryAffiliations && p.countryAffiliations.length > 0 && (() => {
+                    const TYPE_LABELS: Record<string, string> = {
+                      CITIZENSHIP: '국적',
+                      BIRTH: '출생',
+                      SERVED: '복무',
+                      EXILE: '망명',
+                      RESIDENCE: '거주',
+                      DIPLOMATIC: '외교',
+                    }
+                    const sorted = p.countryAffiliations.slice().sort((a, b) => {
+                      const pa = a.priority ?? 999
+                      const pb = b.priority ?? 999
+                      return pa - pb
+                    })
+                    return (
+                      <section aria-label="국가 소속·국적">
+                        <OverviewSectionHeaderRow>
+                          <OverviewSectionHeading>
+                            <FiFlag size={14} strokeWidth={2.2} />
+                            <span>국가 소속·국적</span>
+                            <CountMuted>{sorted.length}</CountMuted>
+                          </OverviewSectionHeading>
+                        </OverviewSectionHeaderRow>
+                        <CountryAffiliationList>
+                          {sorted.map((aff) => {
+                            const c =
+                              aff.historicalCountry ??
+                              aff.country ??
+                              null
+                            const typeLabel = aff.affiliationType
+                              ? TYPE_LABELS[aff.affiliationType] ??
+                                aff.affiliationType
+                              : '소속'
+                            const start = formatIsoDateKo(aff.startDate)
+                            const end = formatIsoDateKo(aff.endDate)
+                            const period =
+                              start && end
+                                ? `${start} ~ ${end}`
+                                : start
+                                  ? `${start} ~ 현재`
+                                  : null
+                            return (
+                              <CountryAffiliationChip
+                                key={aff.id ?? Math.random()}
+                                $primary={aff.priority === 0}
+                              >
+                                <CountryAffiliationType>{typeLabel}</CountryAffiliationType>
+                                <CountryAffiliationName>
+                                  {c?.name ?? '국가 미상'}
+                                </CountryAffiliationName>
+                                {period && (
+                                  <CountryAffiliationPeriod>{period}</CountryAffiliationPeriod>
+                                )}
+                              </CountryAffiliationChip>
+                            )
+                          })}
+                        </CountryAffiliationList>
+                      </section>
+                    )
+                  })()}
+
+                  {/* 3.2. 시조로 등록된 가문 */}
+                  {p.foundedDynasties && p.foundedDynasties.length > 0 && (
+                    <section aria-label="시조 가문">
+                      <OverviewSectionHeaderRow>
+                        <OverviewSectionHeading>
+                          <FiAward size={14} strokeWidth={2.2} />
+                          <span>시조 가문</span>
+                          {p.foundedDynasties.length > 1 && (
+                            <CountMuted>{p.foundedDynasties.length}</CountMuted>
+                          )}
+                        </OverviewSectionHeading>
+                      </OverviewSectionHeaderRow>
+                      <FoundedDynastyRow>
+                        {p.foundedDynasties.map((d) => (
+                          <FoundedDynastyChip
+                            key={d.id ?? d.name ?? Math.random()}
+                            type="button"
+                            onClick={() => {
+                              playClickSound()
+                              navigate(pathKeys.dynasty())
+                            }}
+                          >
+                            {d.name ?? '이름 없음'}
+                          </FoundedDynastyChip>
+                        ))}
+                      </FoundedDynastyRow>
+                    </section>
+                  )}
+
+                  {/* 3.3. 학력 */}
+                  {p.educations && p.educations.length > 0 && (
+                    <section aria-label="학력">
+                      <OverviewSectionHeaderRow>
+                        <OverviewSectionHeading>
+                          <FiBookOpen size={14} strokeWidth={2.2} />
+                          <span>학력</span>
+                          <CountMuted>{p.educations.length}</CountMuted>
+                        </OverviewSectionHeading>
+                      </OverviewSectionHeaderRow>
+                      <SimpleEntryList>
+                        {p.educations
+                          .slice()
+                          .sort((a, b) => {
+                            const ta = a.startDate ? new Date(a.startDate).getTime() : 0
+                            const tb = b.startDate ? new Date(b.startDate).getTime() : 0
+                            return tb - ta
+                          })
+                          .map((e) => {
+                            const start = formatIsoDateKo(e.startDate)
+                            const end = formatIsoDateKo(e.endDate)
+                            const period =
+                              start && end
+                                ? `${start} ~ ${end}`
+                                : start
+                                  ? `${start} ~ 재학중`
+                                  : null
+                            const subParts = [
+                              e.major,
+                              e.department,
+                              e.classNumber != null ? `${e.classNumber}기` : null,
+                              e.degree,
+                            ].filter(Boolean) as string[]
+                            return (
+                              <SimpleEntryItem key={e.id ?? Math.random()}>
+                                <SimpleEntryHeader>
+                                  <SimpleEntryTitle>
+                                    {e.organization?.name ?? '학교 미상'}
+                                  </SimpleEntryTitle>
+                                  {e.status && (
+                                    <SimpleEntryRole>{e.status}</SimpleEntryRole>
+                                  )}
+                                </SimpleEntryHeader>
+                                {subParts.length > 0 && (
+                                  <SimpleEntryPeriod>
+                                    {subParts.join(' · ')}
+                                  </SimpleEntryPeriod>
+                                )}
+                                {period && (
+                                  <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
+                                )}
+                                {e.notes && (
+                                  <SimpleEntryDescription>{e.notes}</SimpleEntryDescription>
+                                )}
+                              </SimpleEntryItem>
+                            )
+                          })}
+                      </SimpleEntryList>
+                    </section>
+                  )}
+
+                  {/* 3.35. 분야별 경력 */}
+                  {p.careers && p.careers.length > 0 && (() => {
+                    const KIND_LABELS: Record<string, string> = {
+                      military: '군사',
+                      business: '기업',
+                      academic: '학계',
+                      religious: '종교',
+                      artist: '예술',
+                      athlete: '체육',
+                      media: '언론',
+                      legal: '법조',
+                      medical: '의료',
+                    }
+                    const KIND_ORDER: Record<string, number> = {
+                      military: 0, business: 1, academic: 2, religious: 3,
+                      artist: 4, athlete: 5, media: 6, legal: 7, medical: 8,
+                    }
+                    const grouped = p.careers.reduce<Record<string, typeof p.careers>>(
+                      (acc, c) => {
+                        ;(acc[c.kind] ??= []).push(c)
+                        return acc
+                      },
+                      {},
+                    )
+                    const kinds = Object.keys(grouped).sort(
+                      (a, b) => (KIND_ORDER[a] ?? 99) - (KIND_ORDER[b] ?? 99),
+                    )
+                    return (
+                      <section aria-label="분야별 경력">
+                        <OverviewSectionHeaderRow>
+                          <OverviewSectionHeading>
+                            <FiAward size={14} strokeWidth={2.2} />
+                            <span>분야별 경력</span>
+                            <CountMuted>{p.careers.length}</CountMuted>
+                          </OverviewSectionHeading>
+                        </OverviewSectionHeaderRow>
+                        <ActivityGroupList>
+                          {kinds.map((k) => {
+                            const list = grouped[k] ?? []
+                            const sorted = list.slice().sort((a, b) => {
+                              const ta = a.startDate ? new Date(a.startDate).getTime() : 0
+                              const tb = b.startDate ? new Date(b.startDate).getTime() : 0
+                              return tb - ta
+                            })
+                            return (
+                              <ActivityGroup key={k}>
+                                <ActivityGroupTitle>
+                                  {KIND_LABELS[k] ?? k} {list.length}
+                                </ActivityGroupTitle>
+                                <SimpleEntryList>
+                                  {sorted.map((c) => {
+                                    const start = formatIsoDateKo(c.startDate)
+                                    const end = formatIsoDateKo(c.endDate)
+                                    const period =
+                                      start && end
+                                        ? `${start} ~ ${end}`
+                                        : start
+                                          ? `${start} ~ 현재`
+                                          : null
+                                    const titleBits = [
+                                      c.organization?.name,
+                                      c.rank?.name,
+                                      c.title,
+                                    ].filter(Boolean) as string[]
+                                    const subBits = [
+                                      c.branch,
+                                      c.department,
+                                      c.termNumber != null
+                                        ? `${c.termNumber}대`
+                                        : null,
+                                    ].filter(Boolean) as string[]
+                                    return (
+                                      <SimpleEntryItem key={c.id ?? Math.random()}>
+                                        <SimpleEntryHeader>
+                                          <SimpleEntryTitle>
+                                            {titleBits[0] ?? '미상'}
+                                          </SimpleEntryTitle>
+                                          {titleBits.slice(1).map((t, i) => (
+                                            <SimpleEntryRole key={`role-${i}`}>{t}</SimpleEntryRole>
+                                          ))}
+                                        </SimpleEntryHeader>
+                                        {subBits.length > 0 && (
+                                          <SimpleEntryPeriod>{subBits.join(' · ')}</SimpleEntryPeriod>
+                                        )}
+                                        {period && (
+                                          <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
+                                        )}
+                                        {c.notes && (
+                                          <SimpleEntryDescription>{c.notes}</SimpleEntryDescription>
+                                        )}
+                                      </SimpleEntryItem>
+                                    )
+                                  })}
+                                </SimpleEntryList>
+                              </ActivityGroup>
+                            )
+                          })}
+                        </ActivityGroupList>
+                      </section>
+                    )
+                  })()}
+
+                  {/* 3.4. 수상·훈장 */}
+                  {p.awards && p.awards.length > 0 && (
+                    <section aria-label="수상·훈장">
+                      <OverviewSectionHeaderRow>
+                        <OverviewSectionHeading>
+                          <FiAward size={14} strokeWidth={2.2} />
+                          <span>수상·훈장</span>
+                          <CountMuted>{p.awards.length}</CountMuted>
+                        </OverviewSectionHeading>
+                      </OverviewSectionHeaderRow>
+                      <SimpleEntryList>
+                        {p.awards
+                          .slice()
+                          .sort((a, b) => {
+                            const ta = a.awardDate ? new Date(a.awardDate).getTime() : 0
+                            const tb = b.awardDate ? new Date(b.awardDate).getTime() : 0
+                            return tb - ta
+                          })
+                          .map((a) => (
+                            <SimpleEntryItem key={a.id ?? Math.random()}>
+                              <SimpleEntryHeader>
+                                <SimpleEntryTitle>{a.awardName ?? '이름 없음'}</SimpleEntryTitle>
+                                {a.category && (
+                                  <SimpleEntryRole>{a.category}</SimpleEntryRole>
+                                )}
+                              </SimpleEntryHeader>
+                              {(a.awardingBody || a.awardDate) && (
+                                <SimpleEntryPeriod>
+                                  {[
+                                    a.awardingBody,
+                                    formatIsoDateKo(a.awardDate),
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </SimpleEntryPeriod>
+                              )}
+                              {a.description && (
+                                <SimpleEntryDescription>{a.description}</SimpleEntryDescription>
+                              )}
+                            </SimpleEntryItem>
+                          ))}
+                      </SimpleEntryList>
+                    </section>
+                  )}
+
+                  {/* 3.5. 활동·이력 — 저작/창업/조직/군부대 */}
+                  {(() => {
+                    const books = p.books ?? []
+                    const founded = p.foundedCompanies ?? []
+                    const owned = (p.companies ?? []).filter(
+                      (c) => !founded.some((f) => f.id === c.id),
+                    )
+                    const orgRoles = p.organizationRoles ?? []
+                    const milCmds = p.militaryCommands ?? []
+                    const total =
+                      books.length +
+                      founded.length +
+                      owned.length +
+                      orgRoles.length +
+                      milCmds.length
+                    if (total === 0) return null
+                    return (
+                      <section aria-label="활동·이력">
+                        <OverviewSectionHeaderRow>
+                          <OverviewSectionHeading>
+                            <FiBookOpen size={14} strokeWidth={2.2} />
+                            <span>활동·이력</span>
+                            <CountMuted>{total}</CountMuted>
+                          </OverviewSectionHeading>
+                        </OverviewSectionHeaderRow>
+                        <ActivityGroupList>
+                          {books.length > 0 && (
+                            <ActivityGroup>
+                              <ActivityGroupTitle>저작 {books.length}</ActivityGroupTitle>
+                              <SimpleEntryList>
+                                {books.map((b) => (
+                                  <SimpleEntryItem key={b.id ?? Math.random()}>
+                                    <SimpleEntryHeader>
+                                      <SimpleEntryTitle>{b.title ?? '제목 없음'}</SimpleEntryTitle>
+                                      {b.publishedYear && (
+                                        <SimpleEntrySub>{b.publishedYear}년</SimpleEntrySub>
+                                      )}
+                                    </SimpleEntryHeader>
+                                    {b.summary && (
+                                      <SimpleEntryDescription>{b.summary}</SimpleEntryDescription>
+                                    )}
+                                  </SimpleEntryItem>
+                                ))}
+                              </SimpleEntryList>
+                            </ActivityGroup>
+                          )}
+                          {founded.length > 0 && (
+                            <ActivityGroup>
+                              <ActivityGroupTitle>창업 기업 {founded.length}</ActivityGroupTitle>
+                              <SimpleEntryList>
+                                {founded.map((c) => (
+                                  <SimpleEntryItem key={c.id ?? Math.random()}>
+                                    <SimpleEntryHeader>
+                                      <SimpleEntryTitle>{c.name ?? '이름 없음'}</SimpleEntryTitle>
+                                      {c.foundedAt && (
+                                        <SimpleEntrySub>
+                                          {formatIsoDateKo(c.foundedAt)}
+                                        </SimpleEntrySub>
+                                      )}
+                                    </SimpleEntryHeader>
+                                    {c.description && (
+                                      <SimpleEntryDescription>{c.description}</SimpleEntryDescription>
+                                    )}
+                                  </SimpleEntryItem>
+                                ))}
+                              </SimpleEntryList>
+                            </ActivityGroup>
+                          )}
+                          {owned.length > 0 && (
+                            <ActivityGroup>
+                              <ActivityGroupTitle>관련 기업 {owned.length}</ActivityGroupTitle>
+                              <SimpleEntryList>
+                                {owned.map((c) => (
+                                  <SimpleEntryItem key={c.id ?? Math.random()}>
+                                    <SimpleEntryHeader>
+                                      <SimpleEntryTitle>{c.name ?? '이름 없음'}</SimpleEntryTitle>
+                                      {c.foundedAt && (
+                                        <SimpleEntrySub>
+                                          {formatIsoDateKo(c.foundedAt)}
+                                        </SimpleEntrySub>
+                                      )}
+                                    </SimpleEntryHeader>
+                                  </SimpleEntryItem>
+                                ))}
+                              </SimpleEntryList>
+                            </ActivityGroup>
+                          )}
+                          {orgRoles.length > 0 && (
+                            <ActivityGroup>
+                              <ActivityGroupTitle>조직 역할 {orgRoles.length}</ActivityGroupTitle>
+                              <SimpleEntryList>
+                                {orgRoles
+                                  .slice()
+                                  .sort((a, b) => {
+                                    const ta = a.startDate ? new Date(a.startDate).getTime() : 0
+                                    const tb = b.startDate ? new Date(b.startDate).getTime() : 0
+                                    return tb - ta
+                                  })
+                                  .map((o) => {
+                                    const start = formatIsoDateKo(o.startDate)
+                                    const end = formatIsoDateKo(o.endDate)
+                                    const period =
+                                      start && end
+                                        ? `${start} ~ ${end}`
+                                        : start
+                                          ? `${start} ~ 현재`
+                                          : null
+                                    return (
+                                      <SimpleEntryItem key={o.id ?? Math.random()}>
+                                        <SimpleEntryHeader>
+                                          <SimpleEntryTitle>
+                                            {o.organization?.name ?? '조직 미상'}
+                                            {o.organization?.shortName && (
+                                              <SimpleEntrySub>
+                                                {' '}({o.organization.shortName})
+                                              </SimpleEntrySub>
+                                            )}
+                                          </SimpleEntryTitle>
+                                          {o.roleTitle && (
+                                            <SimpleEntryRole>{o.roleTitle}</SimpleEntryRole>
+                                          )}
+                                        </SimpleEntryHeader>
+                                        {period && (
+                                          <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
+                                        )}
+                                      </SimpleEntryItem>
+                                    )
+                                  })}
+                              </SimpleEntryList>
+                            </ActivityGroup>
+                          )}
+                          {milCmds.length > 0 && (
+                            <ActivityGroup>
+                              <ActivityGroupTitle>군부대 지휘 {milCmds.length}</ActivityGroupTitle>
+                              <SimpleEntryList>
+                                {milCmds
+                                  .slice()
+                                  .sort((a, b) => {
+                                    const ta = a.startDate ? new Date(a.startDate).getTime() : 0
+                                    const tb = b.startDate ? new Date(b.startDate).getTime() : 0
+                                    return tb - ta
+                                  })
+                                  .map((m) => {
+                                    const start = formatIsoDateKo(m.startDate)
+                                    const end = formatIsoDateKo(m.endDate)
+                                    const period =
+                                      start && end
+                                        ? `${start} ~ ${end}`
+                                        : start
+                                          ? `${start} ~ 현재`
+                                          : null
+                                    const titleParts = [m.rank, m.role].filter(Boolean) as string[]
+                                    return (
+                                      <SimpleEntryItem key={m.id ?? Math.random()}>
+                                        <SimpleEntryHeader>
+                                          <SimpleEntryTitle>
+                                            {m.unit?.name ?? '부대 미상'}
+                                            {m.unit?.unitType && (
+                                              <SimpleEntrySub>
+                                                {' '}({m.unit.unitType})
+                                              </SimpleEntrySub>
+                                            )}
+                                          </SimpleEntryTitle>
+                                          {titleParts.length > 0 && (
+                                            <SimpleEntryRole>{titleParts.join(' · ')}</SimpleEntryRole>
+                                          )}
+                                        </SimpleEntryHeader>
+                                        {period && (
+                                          <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
+                                        )}
+                                      </SimpleEntryItem>
+                                    )
+                                  })}
+                              </SimpleEntryList>
+                            </ActivityGroup>
+                          )}
+                        </ActivityGroupList>
+                      </section>
+                    )
+                  })()}
+
                   {/* 4. 인간관계 */}
                   <PersonHumanRelationshipsSection
                     personId={person.id}
@@ -1565,6 +2534,53 @@ export function PersonDetailPanel({
                     ).electionCandidacies
                   }
                 />
+                {p.partyLeaderships && p.partyLeaderships.length > 0 && (
+                  <section aria-label="당 지도부 이력">
+                    <SectionLabelRow>
+                      <SectionLabel>당 지도부 이력</SectionLabel>
+                      <CountMuted>{p.partyLeaderships.length}</CountMuted>
+                    </SectionLabelRow>
+                    <SimpleEntryList>
+                      {p.partyLeaderships
+                        .slice()
+                        .sort((a, b) => {
+                          const ta = a.startDate ? new Date(a.startDate).getTime() : 0
+                          const tb = b.startDate ? new Date(b.startDate).getTime() : 0
+                          return tb - ta
+                        })
+                        .map((l) => {
+                          const start = formatIsoDateKo(l.startDate)
+                          const end = formatIsoDateKo(l.endDate)
+                          const period =
+                            start && end
+                              ? `${start} ~ ${end}`
+                              : start
+                                ? `${start} ~ 현재`
+                                : null
+                          return (
+                            <SimpleEntryItem key={l.id ?? Math.random()}>
+                              <SimpleEntryHeader>
+                                <SimpleEntryTitle>
+                                  {l.party?.name ?? '정당 미상'}
+                                  {l.party?.shortName && (
+                                    <SimpleEntrySub>
+                                      {' '}({l.party.shortName})
+                                    </SimpleEntrySub>
+                                  )}
+                                </SimpleEntryTitle>
+                                {l.roleTitle && (
+                                  <SimpleEntryRole>{l.roleTitle}</SimpleEntryRole>
+                                )}
+                              </SimpleEntryHeader>
+                              {period && (
+                                <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
+                              )}
+                            </SimpleEntryItem>
+                          )
+                        })}
+                    </SimpleEntryList>
+                  </section>
+                )}
               </TabContent>
             )}
 
@@ -1860,2218 +2876,3 @@ export function PersonDetailPanel({
     </>
   )
 }
-
-const BioMentionModalOverlay = styled(motion.div)`
-  position: fixed;
-  inset: 0;
-  background: ${OVERLAY_STYLES.BACKGROUND};
-  backdrop-filter: ${OVERLAY_STYLES.BACKDROP_FILTER};
-  -webkit-backdrop-filter: ${OVERLAY_STYLES.BACKDROP_FILTER};
-  z-index: ${Z_INDEX.MODAL_OVERLAY};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 24px;
-  box-sizing: border-box;
-`
-
-const BioMentionModalPanel = styled(motion.div)`
-  /* 공용 glassCardMixin — 다른 모달(공용 ModalBox)과 톤 일치 (다크: rgba(20,20,20,0.92)) */
-  ${({ theme }) => glassCardMixin(theme)}
-  position: relative;
-  border-radius: 24px;
-  width: 100%;
-  max-width: 740px;
-  height: 68vh;
-  min-height: 400px;
-  max-height: 78vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  z-index: ${Z_INDEX.MODAL_CONTENT};
-`
-
-const BioMentionModalHeader = styled.div`
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  padding: 16px 20px 12px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafbfc'};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-const BioMentionModalBack = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  transition:
-    color 0.15s ease,
-    background 0.15s ease;
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => theme.colors.background.tertiary};
-  }
-`
-
-const BioMentionModalTitle = styled.span`
-  flex: 1;
-  min-width: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-const BioMentionModalOpenDetail = styled.a`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 10px;
-  cursor: pointer;
-  text-decoration: none;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99,102,241,0.14)'
-      : 'rgba(99,102,241,0.08)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'};
-  transition:
-    color 0.15s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
-  &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#3730a3')};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.22)'
-        : 'rgba(99,102,241,0.14)'};
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.5)' : 'rgba(99,102,241,0.35)'};
-  }
-  &:active {
-    transform: translateY(1px);
-  }
-`
-
-const BioMentionModalClose = styled.button`
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  border: none;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
-  border-radius: 50%;
-  cursor: pointer;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    color 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease;
-  box-shadow: none;
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => theme.colors.background.tertiary};
-    box-shadow: none;
-  }
-  &:active {
-    transform: scale(0.97);
-  }
-`
-
-const BioMentionModalBody = styled.div`
-  overflow: auto;
-  flex: 1;
-  min-height: 280px;
-  padding: 20px 24px 32px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#ffffff'};
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-  &::-webkit-scrollbar-track {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
-    border-radius: 4px;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : '#cbd5e1'};
-    border-radius: 4px;
-  }
-`
-
-const BioTermTooltipOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: ${Z_INDEX.MODAL_OVERLAY};
-  background: transparent;
-`
-
-const BioTermTooltipPopover = styled.div<{ $x: number; $y: number }>`
-  position: fixed;
-  left: ${({ $x }) => $x}px;
-  top: ${({ $y }) => $y}px;
-  transform: translate(12px, 12px);
-  max-width: 360px;
-  padding: 14px 18px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(30, 30, 30, 0.96)' : '#fff'};
-  border-radius: 12px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
-  box-shadow: none;
-  z-index: ${Z_INDEX.MODAL_CONTENT};
-  font-size: 13px;
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.primary};
-  strong {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 12px;
-    color: #0d9488;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-`
-
-const BioDynastyTooltipPopover = styled.div<{ $x: number; $y: number }>`
-  position: fixed;
-  left: ${({ $x }) => $x}px;
-  top: ${({ $y }) => $y}px;
-  transform: translate(12px, 12px);
-  max-width: 360px;
-  padding: 14px 18px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(30, 30, 30, 0.96)' : '#fff'};
-  border-radius: 12px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
-  box-shadow: none;
-  z-index: ${Z_INDEX.MODAL_CONTENT};
-  font-size: 13px;
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.primary};
-  strong {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 12px;
-    color: #6366f1;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-`
-
-const PanelRoot = styled.div<{ $embed?: boolean }>`
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  min-width: 0;
-  background: transparent;
-
-  @media (max-width: 968px) {
-    padding: ${(p) => (p.$embed ? '0' : '0')};
-  }
-`
-
-const TopNavBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-`
-
-const HeaderRow = styled.header`
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 16px;
-  padding: 36px 32px 28px;
-  border-radius: 20px;
-  margin-bottom: 20px;
-  background: transparent;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
-  box-shadow: none;
-`
-
-const HeaderLeft = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-  width: 100%;
-`
-
-const AvatarButton = styled.button<{ $loading?: boolean }>`
-  position: relative;
-  width: 132px;
-  height: 132px;
-  border-radius: 9999px;
-  overflow: hidden;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 44px;
-  font-weight: 700;
-  cursor: ${({ $loading }) => ($loading ? 'wait' : 'pointer')};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.6)' : '#94a3b8'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  padding: 0;
-  transition: border-color 0.2s;
-
-  &:hover {
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.3)' : '#94a3b8'};
-  }
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: top center;
-  }
-
-  svg {
-    opacity: 0.9;
-  }
-
-  &:hover > span {
-    opacity: 1;
-  }
-`
-
-const AvatarOverlay = styled.span`
-  position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.42);
-  color: #fff;
-  opacity: 0;
-  transition: opacity 0.18s ease;
-  pointer-events: none;
-`
-
-const AvatarSpinner = styled.span`
-  width: 22px;
-  height: 22px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: avatarSpin 0.7s linear infinite;
-  @keyframes avatarSpin {
-    to { transform: rotate(360deg); }
-  }
-`
-
-const HeaderTitleBlock = styled.div`
-  min-width: 0;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-`
-
-const PageTitleRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
-`
-
-const CountryFlagImg = styled.img`
-  width: 22px;
-  height: 15px;
-  object-fit: cover;
-  border-radius: 3px;
-  flex-shrink: 0;
-  box-shadow: none;
-`
-
-const CountryBracket = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 8px;
-  letter-spacing: 0.02em;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.2);
-`
-
-const DetailCountryRow = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 6px;
-  padding: 4px 12px 4px 8px;
-  border-radius: 100px;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.1);
-        `
-      : css`
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-        `}
-`
-
-const DetailCountryFlagEmoji = styled.span`
-  font-size: 16px;
-  line-height: 1;
-  flex-shrink: 0;
-`
-
-const DetailCountryName = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(203,213,225,0.9)' : '#475569'};
-`
-
-const PageTitle = styled.h1`
-  margin: 0;
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  line-height: 1.25;
-  text-align: center;
-  word-break: keep-all;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-  @media (max-width: 640px) {
-    font-size: 19px;
-    white-space: normal;
-  }
-`
-
-const MonarchTitleRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 4px;
-`
-
-const MonarchCrownIcon = styled.span`
-  font-size: 13px;
-  line-height: 1;
-  flex-shrink: 0;
-`
-
-const MonarchNameLabel = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(251,191,36,0.9)' : 'rgba(160,110,0,0.95)'};
-  letter-spacing: 0.02em;
-`
-
-const MonarchPositionBadge = styled.span`
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 7px;
-  border-radius: 100px;
-  letter-spacing: 0.02em;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(251,191,36,0.85)' : 'rgba(140,95,0,0.9)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(251,191,36,0.12)' : 'rgba(251,191,36,0.18)'};
-  border: 1px solid ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(251,191,36,0.25)' : 'rgba(251,191,36,0.4)'};
-`
-
-const PageSubtitleInline = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  font-size: 14px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.secondary : '#64748b'};
-
-  svg {
-    color: #6366f1;
-    flex-shrink: 0;
-  }
-`
-
-const PageSubtitle = styled.p`
-  margin: 8px 0 0;
-  font-size: 13px;
-  line-height: 1.5;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const RegisteredByline = styled.p`
-  margin: 8px 0 0;
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0.03em;
-  font-style: italic;
-  font-family: Georgia, 'Times New Roman', serif;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const BackToListButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 700;
-  border-radius: 12px;
-  cursor: pointer;
-  flex-shrink: 0;
-  color: #6366f1;
-  transition: all 0.2s ease;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(99, 102, 241, 0.3);
-          &:hover {
-            background: rgba(99, 102, 241, 0.12);
-            transform: translateY(-1px);
-          }
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(99, 102, 241, 0.2);
-          &:hover {
-            background: rgba(99, 102, 241, 0.06);
-            border-color: rgba(99, 102, 241, 0.35);
-            transform: translateY(-1px);
-            box-shadow: none;
-          }
-        `}
-`
-
-const OutlineButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 700;
-  border-radius: 12px;
-  cursor: pointer;
-  color: #6366f1;
-  transition: all 0.2s ease;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(99, 102, 241, 0.3);
-          &:hover {
-            background: rgba(99, 102, 241, 0.12);
-            transform: translateY(-1px);
-          }
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(99, 102, 241, 0.2);
-          &:hover {
-            background: rgba(99, 102, 241, 0.06);
-            border-color: rgba(99, 102, 241, 0.35);
-            transform: translateY(-1px);
-            box-shadow: none;
-          }
-        `}
-`
-
-const DeleteButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 700;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          color: rgba(252, 165, 165, 0.9);
-          background: rgba(239, 68, 68, 0.08);
-          border: 1px solid rgba(239, 68, 68, 0.25);
-          &:hover {
-            background: rgba(239, 68, 68, 0.16);
-            border-color: rgba(239, 68, 68, 0.45);
-            transform: translateY(-1px);
-          }
-        `
-      : css`
-          color: #dc2626;
-          background: rgba(239, 68, 68, 0.06);
-          border: 1px solid rgba(239, 68, 68, 0.2);
-          &:hover {
-            background: rgba(239, 68, 68, 0.1);
-            border-color: rgba(239, 68, 68, 0.35);
-            transform: translateY(-1px);
-          }
-        `}
-`
-
-/* ── 삭제 확인 모달 ────────────────────────────────────────────── */
-
-const DeleteConfirmOverlay = styled(motion.div)`
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(8px);
-  z-index: ${Z_INDEX.MODAL_OVERLAY};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-`
-
-const DeleteConfirmDialog = styled(motion.div)`
-  width: 100%;
-  max-width: 380px;
-  border-radius: 20px;
-  padding: 32px 28px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  z-index: ${Z_INDEX.MODAL_CONTENT};
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(28, 28, 32, 0.97);
-          border: 1px solid rgba(239, 68, 68, 0.2);
-          box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(239, 68, 68, 0.15);
-          box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
-        `}
-`
-
-const DeleteConfirmIconWrap = styled.div`
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
-  color: #ef4444;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(239, 68, 68, 0.12);
-          border: 1px solid rgba(239, 68, 68, 0.22);
-        `
-      : css`
-          background: rgba(239, 68, 68, 0.08);
-          border: 1px solid rgba(239, 68, 68, 0.18);
-        `}
-`
-
-const DeleteConfirmTitle = styled.h2`
-  margin: 0 0 6px;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const DeleteConfirmPersonName = styled.p`
-  margin: 0 0 12px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #ef4444;
-`
-
-const DeleteConfirmDesc = styled.p`
-  margin: 0 0 24px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const DeleteConfirmActions = styled.div`
-  display: flex;
-  gap: 10px;
-  width: 100%;
-`
-
-const DeleteConfirmCancelBtn = styled.button`
-  flex: 1;
-  padding: 12px 0;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  &:disabled { opacity: 0.5; cursor: not-allowed; }
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.07);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: ${theme.colors.text.primary};
-          &:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
-        `
-      : css`
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          color: #475569;
-          &:hover:not(:disabled) { background: #e9eef5; }
-        `}
-`
-
-const DeleteConfirmDeleteBtn = styled.button<{ $loading?: boolean }>`
-  flex: 1;
-  padding: 12px 0;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  border: none;
-  background: #ef4444;
-  color: #ffffff;
-  opacity: ${({ $loading }) => ($loading ? 0.7 : 1)};
-  &:disabled { cursor: not-allowed; }
-  &:hover:not(:disabled) {
-    background: #dc2626;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
-  }
-`
-
-/**
- * 인물 핵심 정보 대시보드 — 헤더 아래 한 줄.
- * 카드 중첩 없이, 하나의 줄(divider) 안에서 라벨 위 / 값 아래 형식으로
- * 균등하게 나열. 정보가 적어도 빈약해 보이지 않도록 큰 타이포 + 넉넉한 패딩.
- */
-const KpiStrip = styled.div<{ $compact?: boolean }>`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 0;
-  margin-bottom: 28px;
-  padding: 22px 4px;
-  border-top: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
-`
-
-const KpiItem = styled.div`
-  flex: 1 1 0;
-  min-width: 120px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 4px 18px;
-  text-align: center;
-
-  & + & {
-    border-left: 1px solid
-      ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e2e8f0'};
-  }
-  @media (max-width: 760px) {
-    flex: 1 1 33.333%;
-    min-width: 0;
-    padding: 10px 12px;
-    &:nth-child(3n+1) {
-      border-left: none;
-    }
-  }
-  @media (max-width: 480px) {
-    flex: 1 1 50%;
-    &:nth-child(3n+1) {
-      border-left: 1px solid
-        ${({ theme }) =>
-          theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e2e8f0'};
-    }
-    &:nth-child(2n+1) {
-      border-left: none;
-    }
-  }
-`
-
-const KpiLabel = styled.span`
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.tertiary : '#94a3b8'};
-`
-
-const KpiValue = styled.span`
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.4px;
-  line-height: 1.15;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-  word-break: keep-all;
-`
-
-const SectionLabel = styled.div`
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: #6366f1;
-`
-
-const FullGenealogyLinkRow = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
-`
-
-const FullGenealogyLink = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.07);
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  border-radius: 10px;
-  padding: 8px 14px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
-  &:hover {
-    background: rgba(99, 102, 241, 0.12);
-    border-color: rgba(99, 102, 241, 0.4);
-    transform: translateY(-1px);
-  }
-`
-
-const SectionLabelRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-`
-
-const FamilyBadgeRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-`
-
-const FamilyBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)'};
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.secondary : '#475569'};
-`
-
-/** 개요 탭 섹션 래퍼 — 섹션 간 일관된 수직 리듬 (divider 대체) */
-const OverviewSections = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-`
-
-const OverviewSectionHeaderRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-`
-
-const OverviewSectionHeading = styled.h3`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-  svg {
-    flex-shrink: 0;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-`
-
-const CountMuted = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)'};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
-`
-
-const InlineActions = styled.div`
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-`
-
-const UnifiedActionRow = styled.div`
-  display: inline-flex;
-  gap: 6px;
-`
-
-// ─── 재임·재위 통합 카드 ───────────────────────────────────────
-const UnifiedCardList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`
-
-const unifiedKindColor = {
-  tenure: { base: '#4338ca', softBg: 'rgba(99,102,241,0.1)', text: '#4338ca' },
-  reign: { base: '#0f766e', softBg: 'rgba(20,184,166,0.1)', text: '#0f766e' },
-} as const
-
-const UnifiedCard = styled.div<{ $kind: 'tenure' | 'reign' }>`
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 16px 20px;
-  border-radius: 14px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
-  overflow: hidden;
-  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 16px;
-    bottom: 16px;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: ${({ $kind }) => unifiedKindColor[$kind].base};
-    opacity: 0.85;
-  }
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.18);
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
-  }
-
-  @media (max-width: 560px) {
-    padding: 14px 16px;
-  }
-`
-
-const UnifiedCardMain = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-`
-
-const UnifiedCardTopRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-`
-
-const UnifiedKindBadge = styled.span<{ $kind: 'tenure' | 'reign' }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 3px 9px 3px 8px;
-  border-radius: 999px;
-  background: ${({ $kind }) => unifiedKindColor[$kind].softBg};
-  color: ${({ $kind }) => unifiedKindColor[$kind].text};
-  &::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: ${({ $kind }) => unifiedKindColor[$kind].base};
-    flex-shrink: 0;
-  }
-`
-
-const UnifiedCardTitle = styled.div`
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 14.5px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-  min-width: 0;
-  word-break: break-word;
-`
-
-const UnifiedOrdinal = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
-`
-
-const UnifiedMetaRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-  align-items: center;
-`
-
-const UnifiedMetaChip = styled.span<{ $muted?: boolean }>`
-  font-size: 11.5px;
-  font-weight: 500;
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-variant-numeric: tabular-nums;
-  background: ${({ theme, $muted }) =>
-    $muted
-      ? 'transparent'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.05)'
-        : 'rgba(15,23,42,0.045)'};
-  color: ${({ theme, $muted }) =>
-    $muted ? theme.colors.text.tertiary : theme.colors.text.secondary};
-`
-
-const UnifiedAgeBadge = styled.span`
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.09)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
-`
-
-const UnifiedSubRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-top: 2px;
-`
-
-const UnifiedEditBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
-  ${UnifiedCard}:hover & {
-    opacity: 1;
-  }
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)'};
-    color: ${({ theme }) =>
-      theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-  }
-`
-
-// ─── 영향력 블록 — 티어 색상은 @/shared/lib/influence-tier에서 관리 ───
-const InfluenceBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 4px 2px 2px;
-`
-
-const InfluenceSliderRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-`
-
-const InfluenceSliderInput = styled.input`
-  flex: 1;
-  accent-color: #6366f1;
-`
-
-const InfluenceBar = styled.div`
-  flex: 1;
-  height: 8px;
-  border-radius: 4px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
-  overflow: hidden;
-`
-
-const InfluenceFill = styled.div<{
-  $pct: number
-  $tier: InfluenceTier | null
-}>`
-  height: 100%;
-  width: ${({ $pct }) => Math.max(0, Math.min(100, $pct))}%;
-  background: ${({ $tier }) =>
-    $tier
-      ? getInfluenceTierGradient($tier)
-      : 'linear-gradient(90deg, #cbd5e1 0%, #94a3b8 100%)'};
-  border-radius: 4px;
-  transition:
-    width 0.3s,
-    background 0.3s;
-`
-
-const InfluenceValueGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  min-width: 64px;
-`
-
-const InfluenceValue = styled.span<{ $tier: InfluenceTier | null }>`
-  font-weight: 700;
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-  color: ${({ $tier, theme }) =>
-    $tier === 'top'
-      ? '#b45309'
-      : $tier === 'high'
-        ? '#d97706'
-        : $tier === 'mid'
-          ? '#4f46e5'
-          : $tier === 'low'
-            ? theme.colors.text.secondary
-            : theme.colors.text.tertiary};
-`
-
-const InfluenceTierLabel = styled.span<{ $tier: InfluenceTier }>`
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: ${({ $tier }) =>
-    $tier === 'top'
-      ? '#b45309'
-      : $tier === 'high'
-        ? '#d97706'
-        : $tier === 'mid'
-          ? '#4f46e5'
-          : '#64748b'};
-`
-
-const InfluenceAnchorRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 4px;
-  padding: 0 2px;
-`
-
-const InfluenceAnchor = styled.div<{
-  $active: boolean
-  $tier: InfluenceTier | null
-}>`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  font-size: 10.5px;
-  font-weight: 500;
-  line-height: 1.3;
-  color: ${({ theme, $active, $tier }) => {
-    if (!$active) return theme.colors.text.tertiary
-    if ($tier === 'top') return '#b45309'
-    if ($tier === 'high') return '#d97706'
-    if ($tier === 'mid')
-      return theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'
-    return theme.colors.text.secondary
-  }};
-  b {
-    font-size: 11px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
-`
-
-// ─── 전기 빈 상태 CTA ────────────────────────────────────────
-const BioEmptyClickable = styled.button`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 36px 28px;
-  border-radius: 16px;
-  border: 1px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.12)'
-        : 'rgba(99,102,241,0.2)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.02)'
-      : 'rgba(99,102,241,0.02)'};
-  cursor: pointer;
-  text-align: center;
-  transition: border-color 0.15s, background 0.15s, transform 0.1s;
-
-  &:hover {
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.18)'
-        : 'rgba(99,102,241,0.35)'};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.035)'
-        : 'rgba(99,102,241,0.04)'};
-  }
-  &:active {
-    transform: translateY(1px);
-  }
-`
-
-const BioEmptyTitle = styled.div`
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.secondary : '#475569'};
-`
-
-const BioEmptyDesc = styled.div`
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const BioEmptyCta = styled.span`
-  margin-top: 4px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: #6366f1;
-`
-
-const TenureAddButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 13px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 10px;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.1s ease;
-  color: #6366f1;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(99, 102, 241, 0.08);
-          border: 1px solid rgba(99, 102, 241, 0.25);
-          &:hover {
-            background: rgba(99, 102, 241, 0.14);
-            border-color: rgba(99, 102, 241, 0.45);
-            transform: translateY(-1px);
-          }
-        `
-      : css`
-          background: rgba(99, 102, 241, 0.06);
-          border: 1px solid rgba(99, 102, 241, 0.2);
-          &:hover {
-            background: rgba(99, 102, 241, 0.1);
-            border-color: rgba(99, 102, 241, 0.4);
-            transform: translateY(-1px);
-          }
-        `}
-`
-
-const TenureEmpty = styled.p`
-  margin: 0;
-  padding: 8px 0;
-  font-size: 13px;
-  line-height: 1.6;
-  text-align: left;
-  background: transparent;
-  border: none;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.tertiary : '#94a3b8'};
-  strong {
-    color: ${({ theme }) =>
-      theme.mode === 'dark' ? theme.colors.text.secondary : '#475569'};
-    font-weight: 600;
-  }
-`
-
-/* ── 군주 재위 카드 ──────────────────────────── */
-const ReignCardList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-const ReignCard = styled.div`
-  display: flex;
-  align-items: stretch;
-  border-radius: 14px;
-  overflow: hidden;
-  transition: box-shadow 0.18s ease, transform 0.18s ease;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-          &:hover { background: rgba(255,255,255,0.06); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
-        `
-      : css`
-          background: #fff;
-          border: 1px solid #f1f5f9;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-          &:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-        `}
-`
-
-const ReignCardAccent = styled.div`
-  width: 4px;
-  flex-shrink: 0;
-  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
-`
-
-const ReignCardBody = styled.div`
-  flex: 1;
-  min-width: 0;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const ReignCardTopRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 7px;
-`
-
-const ReignCrownIcon = styled.span`
-  font-size: 14px;
-  line-height: 1;
-  color: #d97706;
-  flex-shrink: 0;
-  filter: drop-shadow(0 1px 2px rgba(217,119,6,0.3));
-`
-
-const ReignCardTitle = styled.div`
-  flex: 1;
-  min-width: 0;
-  font-size: 13.5px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  ${({ theme }) =>
-    theme.mode === 'dark' ? `color: ${theme.colors.text.primary};` : `color: #1e293b;`}
-`
-
-const ReignOrdinal = styled.span`
-  font-size: 11px;
-  font-weight: 600;
-  color: #d97706;
-  background: rgba(217, 119, 6, 0.1);
-  border-radius: 6px;
-  padding: 1px 6px;
-  flex-shrink: 0;
-`
-
-const ReignEditBtn = styled.button`
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: transparent;
-          color: ${theme.colors.text.tertiary};
-          &:hover { background: rgba(255,255,255,0.08); color: ${theme.colors.text.primary}; }
-        `
-      : css`
-          background: transparent;
-          color: #94a3b8;
-          &:hover { background: #f1f5f9; color: #475569; }
-        `}
-`
-
-const ReignCardMetaRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-`
-
-const ReignMetaChip = styled.span<{ $muted?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  font-size: 11.5px;
-  font-weight: 500;
-  border-radius: 6px;
-  padding: 2px 7px;
-  ${({ theme, $muted }) =>
-    theme.mode === 'dark'
-      ? $muted
-        ? `background: rgba(255,255,255,0.05); color: ${theme.colors.text.tertiary};`
-        : `background: rgba(217,119,6,0.12); color: #fbbf24;`
-      : $muted
-        ? `background: #f8fafc; color: #64748b;`
-        : `background: rgba(217,119,6,0.08); color: #92400e;`}
-`
-
-const SectionCard = styled.div`
-  border-radius: 20px;
-  padding: 24px 28px;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow: none;
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(20, 19, 34, 0.08);
-          box-shadow: none;
-        `}
-`
-
-const SectionCardBio = styled.div`
-  background: transparent;
-  padding: 4px 0 150px;
-`
-
-const BioSectionLabelRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-`
-
-const BioSectionLabel = styled.div`
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: #6366f1;
-`
-
-const BioText = styled.div`
-  font-size: 14.5px;
-  line-height: 1.85;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-width: 68ch;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const DeathInfoBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`
-
-const DeathInfoRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-`
-
-const DeathTypePill = styled.span`
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: -0.005em;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.14)' : 'rgba(239, 68, 68, 0.08)'};
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#fca5a5' : '#b91c1c'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.32)' : 'rgba(239, 68, 68, 0.22)'};
-`
-
-const DeathCauseText = styled.span`
-  font-size: 14px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const DeathNoteText = styled.p`
-  margin: 0;
-  font-size: 13.5px;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  max-width: 68ch;
-`
-
-const BioEditorWrap = styled.div`
-  max-width: 680px;
-  margin: 0 auto;
-  width: 100%;
-`
-
-const BioProse = styled.div`
-  max-width: 680px;
-  margin: 0 auto;
-  padding: 0 16px;
-`
-
-/** 전기: 공통 RichTextReadView + 인물 패널만 살짝 좁은 타이포 */
-const BioContent = styled(RichTextReadView)`
-  font-size: 14.5px;
-  line-height: 1.8;
-  word-break: break-word;
-  & p {
-    margin: 0 0 0.75em;
-  }
-  & p:last-child {
-    margin-bottom: 0;
-  }
-`
-
-const BioEditActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-`
-
-const PrimaryButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #ffffff;
-  background: #6366f1;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  box-shadow: none;
-  transition: all 0.2s ease;
-  &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: none;
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
-const BioEmptyHint = styled.p`
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  text-align: center;
-  padding: 4px 0;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const LoadingWrap = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 56px 24px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const Spinner = styled.div`
-  width: 32px;
-  height: 32px;
-  border: 2.5px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.25)'
-        : 'rgba(99, 102, 241, 0.15)'};
-  border-top-color: #6366f1;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-`
-
-const LoadingText = styled.div`
-  font-size: 13px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const ErrorWrap = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 56px 24px;
-  text-align: center;
-`
-
-const ErrorIcon = styled.div`
-  font-size: 40px;
-  opacity: 0.55;
-`
-
-const ErrorTitle = styled.div`
-  font-size: 16px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const ErrorDesc = styled.div`
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const CloseBtn = styled.button`
-  margin-top: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #ffffff;
-  background: #6366f1;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  box-shadow: none;
-  transition: all 0.2s ease;
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: none;
-  }
-`
-
-const HeaderActions = styled.div`
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-shrink: 0;
-`
-
-const TabNav = styled.nav`
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 6px;
-  padding: 10px;
-  margin-bottom: 24px;
-  width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  border-radius: 20px;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow: none;
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(20, 19, 34, 0.08);
-          box-shadow: none;
-        `}
-`
-
-const TabBtn = styled.button<{ $active: boolean }>`
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border: none;
-  font-size: 13px;
-  font-weight: ${({ $active }) => ($active ? '700' : '600')};
-  cursor: pointer;
-  white-space: nowrap;
-  border-radius: 12px;
-  transition: all 0.2s ease;
-
-  ${({ $active, theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          color: ${$active ? '#ffffff' : 'rgba(255,255,255,0.55)'};
-          background: ${$active
-            ? '#6366f1'
-            : 'transparent'};
-          box-shadow: none;
-          svg {
-            flex-shrink: 0;
-            opacity: ${$active ? 1 : 0.7};
-          }
-          &:hover {
-            ${!$active &&
-            css`
-              color: #a5b4fc;
-              background: rgba(99, 102, 241, 0.12);
-            `}
-          }
-        `
-      : css`
-          color: ${$active ? '#ffffff' : '#64748b'};
-          background: ${$active
-            ? '#6366f1'
-            : 'transparent'};
-          box-shadow: none;
-          svg {
-            flex-shrink: 0;
-            opacity: ${$active ? 1 : 0.7};
-          }
-          &:hover {
-            ${!$active &&
-            css`
-              color: #6366f1;
-              background: rgba(99, 102, 241, 0.08);
-            `}
-          }
-        `}
-
-  @media (max-width: 768px) {
-    padding: 9px 14px;
-    font-size: 12px;
-    gap: 6px;
-  }
-`
-
-const TabContentArea = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-`
-
-const TabContent = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-`
-
-const ListBlock = styled.div`
-  border-radius: 20px;
-  overflow: hidden;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow: none;
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(20, 19, 34, 0.08);
-          box-shadow: none;
-        `}
-`
-
-const ListRowGroupLabel = styled.div`
-  padding: 10px 20px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#6366f1')};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.08)'
-      : 'rgba(99, 102, 241, 0.04)'};
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.15)'
-        : 'rgba(99, 102, 241, 0.1)'};
-`
-
-const ListRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 20px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : 'rgba(226, 232, 240, 0.6)'};
-  transition: background 0.15s;
-  &:last-child {
-    border-bottom: none;
-  }
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.03)'
-        : 'rgba(99, 102, 241, 0.04)'};
-  }
-`
-
-const ListRowLabel = styled.div`
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  flex-shrink: 0;
-  min-width: 60px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.tertiary : '#94a3b8'};
-`
-
-const ListRowPrimary = styled.div`
-  font-size: 14px;
-  font-weight: 600;
-  flex: 1;
-  min-width: 0;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-`
-
-const ListRowMeta = styled.div`
-  font-size: 12px;
-  font-weight: 500;
-  flex-shrink: 0;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.secondary : '#64748b'};
-`
-
-const TenureListWrap = styled.div`
-  max-width: 100%;
-`
-
-const TenureList = styled.ul`
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`
-
-const TenureRow = styled.li`
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 20px;
-  border-radius: 12px;
-  transition: all 0.2s ease;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1.5px solid rgba(255, 255, 255, 0.08);
-          &:hover {
-            border-color: rgba(99, 102, 241, 0.35);
-            background: rgba(99, 102, 241, 0.08);
-            transform: translateX(4px);
-          }
-        `
-      : css`
-          background: #fafbfc;
-          border: 1.5px solid #e2e8f0;
-          &:hover {
-            background: #ffffff;
-            border-color: rgba(99, 102, 241, 0.3);
-            transform: translateX(4px);
-            box-shadow: none;
-          }
-        `}
-`
-
-const TenureRowMain = styled.div`
-  min-width: 0;
-  flex: 1;
-`
-
-const TenureRowTitle = styled.div`
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.3;
-  margin-bottom: 8px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-`
-
-const TenureRowMeta = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-  font-size: 12px;
-  font-weight: 500;
-`
-
-const TenureRowMetaItem = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 600;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.07);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          color: ${theme.colors.text.secondary};
-        `
-      : css`
-          background: rgba(99, 102, 241, 0.06);
-          border: 1px solid rgba(99, 102, 241, 0.12);
-          color: #64748b;
-        `}
-`
-
-const TenureRowAgeBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: 8px;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          color: #a5b4fc;
-          background: rgba(99, 102, 241, 0.18);
-          border: 1px solid rgba(99, 102, 241, 0.3);
-        `
-      : css`
-          color: #6366f1;
-          background: rgba(99, 102, 241, 0.1);
-          border: 1px solid rgba(99, 102, 241, 0.2);
-        `}
-`
-
-const TenureRowSub = styled.div`
-  margin-top: 10px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 11.5px;
-  line-height: 1.6;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          color: ${theme.colors.text.tertiary};
-        `
-      : css`
-          background: rgba(99, 102, 241, 0.03);
-          border: 1px solid rgba(99, 102, 241, 0.08);
-          color: #64748b;
-        `}
-
-  span::before {
-    content: '·';
-    margin-right: 4px;
-    opacity: 0.4;
-  }
-  span:first-child::before {
-    content: none;
-  }
-`
-
-const TenureRowEditBtn = styled.button`
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  font-size: 11.5px;
-  font-weight: 700;
-  border-radius: 10px;
-  cursor: pointer;
-  color: #6366f1;
-  transition: all 0.2s ease;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(99, 102, 241, 0.3);
-          &:hover {
-            background: rgba(99, 102, 241, 0.15);
-            transform: translateY(-1px);
-            box-shadow: none;
-          }
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(99, 102, 241, 0.2);
-          &:hover {
-            background: rgba(99, 102, 241, 0.08);
-            transform: translateY(-1px);
-            box-shadow: none;
-          }
-        `}
-`
-
-const TenureSectionCard = styled.div`
-  max-width: 720px;
-  border-radius: 20px;
-  overflow: hidden;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow: none;
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(20, 19, 34, 0.08);
-          box-shadow: none;
-        `}
-`
-
-const TenureSectionLabel = styled.div`
-  padding: 12px 20px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#6366f1')};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.08)'
-      : 'rgba(99, 102, 241, 0.04)'};
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.15)'
-        : 'rgba(99, 102, 241, 0.1)'};
-`
-
-const TenureItem = styled.div`
-  padding: 16px 20px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : 'rgba(226, 232, 240, 0.6)'};
-  transition: background 0.15s;
-  &:last-child {
-    border-bottom: none;
-  }
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.03)'
-        : 'rgba(99, 102, 241, 0.04)'};
-  }
-`
-
-const TenurePositionTitle = styled.div`
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 6px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-`
-
-const TenureMetaRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px 9px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const chipStyles = css`
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 600;
-
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.07);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          color: ${theme.colors.text.secondary};
-        `
-      : css`
-          background: rgba(99, 102, 241, 0.06);
-          border: 1px solid rgba(99, 102, 241, 0.12);
-          color: #64748b;
-        `}
-`
-
-const TenureCountryBadge = styled.span`
-  ${chipStyles}
-`
-
-const TenurePeriod = styled.span`
-  ${chipStyles}
-`
-
-const TenureTerm = styled.span`
-  ${chipStyles}
-`
-
-const TenureSub = styled.div`
-  margin-top: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const EmptyState = styled.div`
-  padding: 40px 24px;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: 16px;
-  border: 1px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.3)'
-        : 'rgba(99, 102, 241, 0.2)'};
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? theme.colors.text.tertiary : '#94a3b8'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.02)'
-      : 'rgba(99, 102, 241, 0.02)'};
-`
-

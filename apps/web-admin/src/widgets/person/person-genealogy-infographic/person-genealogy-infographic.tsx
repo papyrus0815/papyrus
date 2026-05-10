@@ -392,6 +392,126 @@ function AncestorColumn({
   )
 }
 
+// ─── DescendantNode (FamilyTreePerson을 컴팩트 카드로 렌더) ─────────
+/**
+ * 손자녀 카드 — AncestorColumn의 컴팩트 카드 시각과 동일하게 ANC_W/ANC_H 사용.
+ * AncestorColumn처럼 위로 부모(여기서는 자녀=손자녀의 부모)와 fork로 연결되는 ::before은
+ * 상위 GrandchildPair에서 처리.
+ */
+function DescendantNode({
+  person,
+  onPersonClick,
+}: {
+  person: FamilyTreePerson
+  onPersonClick?: (id: string) => void
+}) {
+  const b = person.birthYear
+  const d = person.deathYear
+  const lifespan =
+    b == null && d == null ? null :
+    b != null && d == null ? `${b}–` :
+    b == null && d != null ? `?–${d}` :
+    `${b}–${d}`
+  const src = person.profileImageUrl
+    ? (getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl)
+    : null
+  const displayName = getPersonDisplayName(person, true)
+  const initial = [...displayName.trim()][0] ?? '?'
+  const clickable = Boolean(onPersonClick && person.id)
+  const handle = () => person.id && onPersonClick?.(person.id)
+  return (
+    <GeoNode
+      $role="ancestor"
+      $compact
+      $clickable={clickable}
+      {...(clickable
+        ? {
+            role: 'button' as const,
+            tabIndex: 0,
+            onClick: handle,
+            onKeyDown: (e: ReactKeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handle() }
+            },
+          }
+        : {})}
+    >
+      <AncNodeAvatar $hasImage={Boolean(src)}>
+        {src
+          ? <AvatarImage src={src} alt={`${displayName} 프로필 사진`} loading="lazy" decoding="async" />
+          : initial}
+      </AncNodeAvatar>
+      <NodeNameWrap>
+        {person.regnalName && <NodeRegnalName>♛ {person.regnalName}</NodeRegnalName>}
+        <AncNodeName>{displayName}</AncNodeName>
+        {lifespan && <NodeMeta>{lifespan}</NodeMeta>}
+        {person.dynasty?.name && <NodeDynasty>{person.dynasty.name}</NodeDynasty>}
+      </NodeNameWrap>
+      <NodeBadge $role="ancestor">손자녀</NodeBadge>
+    </GeoNode>
+  )
+}
+
+// ─── GrandchildrenSubtree (자녀 카드 아래 손자녀 세대) ──────────────
+/**
+ * 자녀 카드 바로 아래에 손자녀 세대를 그린다. 윗 세대(조부모/증조부모) 카드와
+ * 같은 컴팩트 GeoNode 스타일을 사용한다.
+ *  - 1명: 단순 수직선(ForkFromOneParent)
+ *  - N명: T-fork (ForkToCompactChildren) + 각 카드 위 수직선(::before)
+ */
+function GrandchildrenSubtree({
+  grandchildren,
+  onPersonClick,
+}: {
+  grandchildren: FamilyTreePerson[]
+  onPersonClick?: (id: string) => void
+}) {
+  if (grandchildren.length === 0) return null
+  return (
+    <GrandchildrenBlock>
+      <GrandchildrenForkTrack>
+        {grandchildren.length > 1
+          ? <ForkToCompactChildren count={grandchildren.length} />
+          : <ForkFromOneParent />}
+      </GrandchildrenForkTrack>
+      <GrandchildrenRow>
+        {grandchildren.map((g) => (
+          <GrandchildPair key={g.id}>
+            <DescendantNode person={g} onPersonClick={onPersonClick} />
+          </GrandchildPair>
+        ))}
+      </GrandchildrenRow>
+    </GrandchildrenBlock>
+  )
+}
+
+/** N개의 컴팩트 손자녀 카드 위로 T자형 분기선 — 카드 폭 ANC_W 기준으로 정렬 */
+function ForkToCompactChildren({ count }: { count: number }) {
+  const GAP = 12 // GrandchildrenRow gap
+  const W = ANC_W
+  const totalW = count * W + (count - 1) * GAP
+  const xStart = W / 2
+  const xEnd = totalW - W / 2
+  const xMid = totalW / 2
+  return (
+    <svg
+      width={totalW}
+      height={28}
+      viewBox={`0 0 ${totalW} 28`}
+      xmlns="http://www.w3.org/2000/svg"
+      preserveAspectRatio="none"
+      aria-hidden
+      style={{ display: 'block', overflow: 'visible', color: 'inherit' }}
+    >
+      <title>손자녀 세대로 이어지는 분기선</title>
+      <path
+        d={`M ${xMid} 0 L ${xMid} 14 M ${xStart} 14 L ${xEnd} 14`}
+        fill="none" stroke="currentColor" strokeWidth="1.75"
+        strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  )
+}
+
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export function PersonGenealogyInfographic({
   ego,
@@ -434,6 +554,43 @@ export function PersonGenealogyInfographic({
   )
 
   const childList = (children ?? []).filter(Boolean)
+
+  // childrenOf 맵: parentId → grandchild ids (familyTreeData 기반)
+  const ftChildrenOf = useMemo(() => {
+    const m = new Map<string, string[]>()
+    if (!familyTreeData) return m
+    for (const e of familyTreeData.edges) {
+      if (e.type === 'parent-child') {
+        const arr = m.get(e.source) ?? []
+        arr.push(e.target)
+        m.set(e.source, arr)
+      }
+    }
+    return m
+  }, [familyTreeData])
+
+  // ego의 각 자녀 → 손자녀 노드 배열 (출생연도 오름차순). egoId·자녀·기타 ego 직계는 제외.
+  const grandchildrenByChild = useMemo(() => {
+    const out = new Map<string, FamilyTreePerson[]>()
+    if (!familyTreeData) return out
+    const childIds = new Set(childList.map((c) => c.id).filter(Boolean) as string[])
+    const excludeIds = new Set<string>([ego.id, ...childIds].filter(Boolean) as string[])
+    for (const cid of childIds) {
+      const grandIds = ftChildrenOf.get(cid) ?? []
+      const grandNodes = grandIds
+        .filter((gid) => !excludeIds.has(gid))
+        .map((gid) => ftNodeMap.get(gid))
+        .filter((n): n is FamilyTreePerson => Boolean(n))
+        .sort((a, b) => {
+          const ay = a.birthYear ?? Number.POSITIVE_INFINITY
+          const by = b.birthYear ?? Number.POSITIVE_INFINITY
+          return ay - by
+        })
+      if (grandNodes.length > 0) out.set(cid, grandNodes)
+    }
+    return out
+  }, [familyTreeData, ftChildrenOf, ftNodeMap, childList, ego.id])
+
   const siblingList = (siblings ?? []).filter(Boolean).slice().sort((a, b) => {
     const ay = birthYearOf(a)
     const by = birthYearOf(b)
@@ -731,12 +888,20 @@ export function PersonGenealogyInfographic({
                   )
                   return <ChildSpouseSlot $reverse>{spouseNode}{join}</ChildSpouseSlot>
                 })()}
-                {/* col 2 (auto) — 자녀 카드: 항상 정중앙, fork 수직선과 일치 */}
-                <GeoNode $role="child" {...clickableProps(childList[0].id)}>
-                  <GeoThumbnail person={childList[0]} role="child" />
-                  <NodeNameBlock person={childList[0]} />
-                  <NodeBadge $role="child">자녀</NodeBadge>
-                </GeoNode>
+                {/* col 2 (auto) — 자녀 카드 + 손자녀 서브트리 */}
+                <ChildNodeColumn>
+                  <GeoNode $role="child" {...clickableProps(childList[0].id)}>
+                    <GeoThumbnail person={childList[0]} role="child" />
+                    <NodeNameBlock person={childList[0]} />
+                    <NodeBadge $role="child">자녀</NodeBadge>
+                  </GeoNode>
+                  {childList[0].id && grandchildrenByChild.has(childList[0].id) && (
+                    <GrandchildrenSubtree
+                      grandchildren={grandchildrenByChild.get(childList[0].id) ?? []}
+                      onPersonClick={onPersonClick}
+                    />
+                  )}
+                </ChildNodeColumn>
                 {/* col 3 (1fr) — 오른쪽 배우자 or 빈 균형 공간 */}
                 {(() => {
                   const child = childList[0]
@@ -766,6 +931,15 @@ export function PersonGenealogyInfographic({
               <ChildrenGrid>
                 {childList.map((child, idx) => {
                   const pairKey = child.id ?? `child-${idx}`
+                  const grands = child.id
+                    ? grandchildrenByChild.get(child.id)
+                    : undefined
+                  const grandSubtree = grands && grands.length > 0 ? (
+                    <GrandchildrenSubtree
+                      grandchildren={grands}
+                      onPersonClick={onPersonClick}
+                    />
+                  ) : null
                   const childNode = (
                     <GeoNode key={`${pairKey}-self`} $role="child" {...clickableProps(child.id)}>
                       <GeoThumbnail person={child} role="child" />
@@ -775,7 +949,14 @@ export function PersonGenealogyInfographic({
                   )
                   if (!child.spouse) {
                     // 배우자 없음: 자녀 카드 중심이 ChildPair 중심
-                    return <ChildPair key={pairKey} $childOffset={NODE_W / 2}>{childNode}</ChildPair>
+                    return (
+                      <ChildPair key={pairKey} $childOffset={NODE_W / 2}>
+                        <ChildNodeColumn>
+                          {childNode}
+                          {grandSubtree}
+                        </ChildNodeColumn>
+                      </ChildPair>
+                    )
                   }
                   const spouseNode = (
                     <GeoNode key={`${pairKey}-sp-${child.spouse.id ?? 'u'}`} $role="spouse" {...clickableProps(child.spouse.id)}>
@@ -796,9 +977,20 @@ export function PersonGenealogyInfographic({
                     : isLeft(child.spouse) || isRight(child) ? false : true
                   // 자녀 카드 중심 offset: 왼쪽이면 NODE_W/2, 오른쪽이면 배우자+join 너비만큼 밀림
                   const childOffset = childIsLeft ? NODE_W / 2 : NODE_W + SPOUSE_JOIN_W + NODE_W / 2
+                  // 손자녀 서브트리는 자녀 카드 바로 아래에만 위치 (배우자 옆에 정렬)
+                  const childWithGrand = (
+                    <ChildNodeColumn>
+                      {childNode}
+                      {grandSubtree}
+                    </ChildNodeColumn>
+                  )
                   return (
                     <ChildPair key={pairKey} $childOffset={childOffset}>
-                      {childIsLeft ? <>{childNode}{join}{spouseNode}</> : <>{spouseNode}{join}{childNode}</>}
+                      <ChildPairRow>
+                        {childIsLeft
+                          ? <>{childWithGrand}{join}{spouseNode}</>
+                          : <>{spouseNode}{join}{childWithGrand}</>}
+                      </ChildPairRow>
                     </ChildPair>
                   )
                 })}
@@ -1057,7 +1249,8 @@ const SiblingIcon = styled.span`
 const SingleChildRow = styled.div`
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  align-items: center;
+  /* 손자녀 서브트리가 있으면 중앙 컬럼이 길어지므로 배우자는 카드 윗부분 정렬 */
+  align-items: start;
   width: 100%;
 `
 
@@ -1089,10 +1282,9 @@ const ChildrenGrid = styled.div`
 const ChildPair = styled.div<{ $childOffset: number }>`
   position: relative;
   display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   flex-shrink: 0;
   flex-grow: 0;
   &::before {
@@ -1102,6 +1294,68 @@ const ChildPair = styled.div<{ $childOffset: number }>`
     top: -20px;
     width: 1.75px;
     height: 20px;
+    transform: translateX(-50%);
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(148,163,184,0.5)' : 'rgba(120,113,108,0.55)'};
+  }
+`
+
+const ChildPairRow = styled.div`
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: center;
+`
+
+const ChildNodeColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+`
+
+const GrandchildrenBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+`
+
+const GrandchildrenForkTrack = styled.div`
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  width: 100%;
+  height: 28px;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(148,163,184,0.5)' : 'rgba(120,113,108,0.55)'};
+`
+
+const GrandchildrenRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  gap: 12px;
+  justify-content: center;
+  align-items: flex-start;
+`
+
+const GrandchildPair = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  flex-grow: 0;
+  &::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: -16px;
+    width: 1.75px;
+    height: 16px;
     transform: translateX(-50%);
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(148,163,184,0.5)' : 'rgba(120,113,108,0.55)'};
