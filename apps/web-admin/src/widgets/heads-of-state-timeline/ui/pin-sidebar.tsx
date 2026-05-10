@@ -180,13 +180,27 @@ export function PinSidebar({
   }
 
   return (
-    <Wrapper ref={wrapperRef as React.RefObject<HTMLElement>}>
+    <Wrapper
+      ref={wrapperRef as React.RefObject<HTMLElement>}
+      data-print-hide
+      aria-label="비교 핀 패널"
+    >
       <Header>
         <HeaderTitle>비교 대상</HeaderTitle>
         <HeaderRight>
           <HeaderCount>
             {rows.length}행 · {rows.reduce((acc, r) => acc + r.segments.length, 0)}개국
           </HeaderCount>
+          {rows.length > 0 && (
+            <SmallIconButton
+              type="button"
+              onClick={() => setAddRowModalOpen(true)}
+              aria-label="새 행 추가"
+              title="새 행 추가"
+            >
+              <FiPlus size={14} />
+            </SmallIconButton>
+          )}
           <CollapseButton
             type="button"
             onClick={() => {

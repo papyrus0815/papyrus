@@ -299,6 +299,7 @@ export function useHeadsOfStateTimelineState() {
     removeRow: pinned.removeRow,
     moveRow: pinned.moveRow,
     reorderRow: pinned.reorderRow,
+    restoreRowAt: pinned.restoreRowAt,
     addSegmentToRow: pinned.addSegmentToRow,
     removeSegmentFromRow: pinned.removeSegmentFromRow,
     clearAll: pinned.clearAll,

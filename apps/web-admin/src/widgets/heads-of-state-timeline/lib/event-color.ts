@@ -12,7 +12,7 @@ export interface EventColorTone {
 
 const PALETTE: { test: RegExp; tone: { light: EventColorTone; dark: EventColorTone } }[] = [
   {
-    test: /전쟁|war|invasion|battle|conflict|침공|침입|혁명|reform/i,
+    test: /전쟁|침공|침입|혁명|반란/,
     tone: {
       light: {
         background: 'rgba(239, 68, 68, 0.12)',
@@ -27,7 +27,7 @@ const PALETTE: { test: RegExp; tone: { light: EventColorTone; dark: EventColorTo
     },
   },
   {
-    test: /외교|조약|treaty|회담|summit|동맹|alliance/i,
+    test: /외교|조약|회담|동맹|협정/,
     tone: {
       light: {
         background: 'rgba(59, 130, 246, 0.12)',
@@ -42,7 +42,7 @@ const PALETTE: { test: RegExp; tone: { light: EventColorTone; dark: EventColorTo
     },
   },
   {
-    test: /선거|election|투표|취임|즉위/i,
+    test: /선거|투표|취임|즉위|대관/,
     tone: {
       light: {
         background: 'rgba(34, 197, 94, 0.12)',
@@ -57,7 +57,7 @@ const PALETTE: { test: RegExp; tone: { light: EventColorTone; dark: EventColorTo
     },
   },
   {
-    test: /경제|금융|economy|financial|panic|crisis|공황|화폐/i,
+    test: /경제|금융|공황|화폐|무역/,
     tone: {
       light: {
         background: 'rgba(245, 158, 11, 0.12)',
@@ -72,7 +72,7 @@ const PALETTE: { test: RegExp; tone: { light: EventColorTone; dark: EventColorTo
     },
   },
   {
-    test: /문화|예술|culture|art|발견|발명|invention|연구/i,
+    test: /문화|예술|발견|발명|연구|종교/,
     tone: {
       light: {
         background: 'rgba(168, 85, 247, 0.12)',

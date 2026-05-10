@@ -180,6 +180,10 @@ const Wrap = styled.div`
   padding: 10px 16px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   background: ${({ theme }) => theme.colors.background.secondary};
+  @media (max-width: 760px) {
+    gap: 8px;
+    padding: 8px 12px;
+  }
 `
 
 const PresetGroup = styled.div`

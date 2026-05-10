@@ -448,6 +448,7 @@ const RowWrapper = styled.div`
   display: flex;
   align-items: stretch;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  transition: height 0.18s ease;
 `
 
 const RowLabel = styled.div`
@@ -496,6 +497,7 @@ const LabelSeparator = styled.span`
 
 const RowTrack = styled.div`
   position: relative;
+  transition: height 0.18s ease;
 `
 
 const Ribbon = styled.div<{ $ongoing: boolean }>`

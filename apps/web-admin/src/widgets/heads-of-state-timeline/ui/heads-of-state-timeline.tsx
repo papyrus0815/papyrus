@@ -32,7 +32,11 @@ import type { TenureBar } from '../lib/normalize-tenures'
 import type { PinnedRow } from '../model/types'
 import { useAllRowsTenures } from '../api/use-all-rows-tenures'
 import { useEventOverlay } from '../model/use-event-overlay'
-import { copyShareUrl, useTimelineUrlSync } from '../model/use-url-sync'
+import {
+  copyShareUrl,
+  readCategoriesFromUrl,
+  useTimelineUrlSync,
+} from '../model/use-url-sync'
 import { useHeadsOfStateTimelineState } from '../model/use-heads-of-state-timeline-state'
 import { useUserPresets } from '../model/use-user-presets'
 import { useCategoryFilter } from '../model/use-category-filter'
@@ -68,57 +72,82 @@ function HeadsOfStateTimelineInner() {
   const userPresets = useUserPresets()
   const categoryFilter = useCategoryFilter()
 
+  // URL `?cat=` 진입 시 한 번만 적용 (이후엔 useTimelineUrlSync가 변경분을 URL로 흘림)
+  const urlCatAppliedRef = useRef(false)
+  useEffect(() => {
+    if (urlCatAppliedRef.current) return
+    urlCatAppliedRef.current = true
+    const fromUrl = readCategoriesFromUrl()
+    if (fromUrl != null) categoryFilter.setFromList(fromUrl)
+  }, [categoryFilter])
+
   const openBarModal = useCallback((bar: TenureBar, row: PinnedRow) => {
     setPreviewBar({ bar, row })
   }, [])
 
-  // 행 제거 직후 5초간 undo 가능 — 마지막 제거 1건만 보관 (단순 stack 회피)
-  const lastRemovedRef = useRef<{ row: PinnedRow; index: number } | null>(null)
+  // 행 제거 직후 5초간 undo 가능 — stack에 push, 가장 최근 것부터 pop.
+  const undoStackRef = useRef<
+    Array<{ row: PinnedRow; index: number; expiresAt: number }>
+  >([])
+  const UNDO_TIMEOUT_MS = 5000
+
+  const purgeExpiredUndo = useCallback(() => {
+    const now = Date.now()
+    undoStackRef.current = undoStackRef.current.filter(
+      (e) => e.expiresAt > now,
+    )
+  }, [])
+
   const handleRemoveRowWithUndo = useCallback(
     (rowId: string) => {
       const idx = state.rows.findIndex((r) => r.rowId === rowId)
       if (idx < 0) return
       const removed = state.rows[idx]!
-      lastRemovedRef.current = { row: removed, index: idx }
+      undoStackRef.current.push({
+        row: removed,
+        index: idx,
+        expiresAt: Date.now() + UNDO_TIMEOUT_MS,
+      })
       state.removeRow(rowId)
-      showToast('info', `"${removed.segments[0]?.name ?? '행'}" 제거됨 — 5초 내 다시 추가 가능`, 5000)
+      const nameLabel =
+        removed.segments.map((s) => s.name).join(' → ') || '행'
+      showToast(
+        'info',
+        `"${nameLabel}" 제거됨 — ⌘Z 로 ${UNDO_TIMEOUT_MS / 1000}초 내 복원`,
+        UNDO_TIMEOUT_MS,
+      )
+      // timeout으로 자동 만료 — ref 정리만, UI는 영향 없음
+      window.setTimeout(purgeExpiredUndo, UNDO_TIMEOUT_MS + 100)
     },
-    [state, showToast],
+    [state, showToast, purgeExpiredUndo],
   )
 
-  // 단축키 ⌘Z / Ctrl+Z 로 마지막 제거 복원
+  // ⌘Z / Ctrl+Z — stack의 마지막 제거를 원래 인덱스에 복원 (계승국 묶음 보존)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const isUndo = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey
+      const isUndo =
+        (e.metaKey || e.ctrlKey) &&
+        e.key.toLowerCase() === 'z' &&
+        !e.shiftKey
       if (!isUndo) return
       const target = e.target as HTMLElement | null
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
-      const last = lastRemovedRef.current
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      )
+        return
+      purgeExpiredUndo()
+      const last = undoStackRef.current.pop()
       if (!last) return
       e.preventDefault()
-      // 정확한 인덱스로 복원이 어려워 (모든 segment를 한 번에 추가 API가 없음) 첫 segment로 추가 후 나머지를 묶는다.
-      const [first, ...rest] = last.row.segments
-      if (!first) return
-      state.addRow({
-        kind: first.kind,
-        countryId: first.countryId,
-        name: first.name,
-        flagEmoji: first.flagEmoji,
-        lifespanStartYear: first.lifespanStartYear,
-        lifespanEndYear: first.lifespanEndYear,
-      })
-      // 동일 rowId 추정은 어려우니 — 추가된 마지막 행 ID로 segment 추가는 다음 tick에 시도
-      requestAnimationFrame(() => {
-        // 새 행은 항상 끝에 추가됨
-        // (state.rows를 다시 읽으려면 selector가 필요한데, addSegmentToRow는 (rowId, segment)이므로
-        //  ref 기반 lookup 대신 단순히 첫 segment만 복원 — 계승국 묶음 복원은 사용자 수동.)
-      })
-      lastRemovedRef.current = null
+      state.restoreRowAt(last.index, last.row)
       showToast('success', '복원되었습니다')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [state, showToast])
+  }, [state, showToast, purgeExpiredUndo])
 
   // 모달이 떠 있는 동안 그 row가 사이드바에서 제거되면 모달도 닫는다 — stale 상태 방지
   useEffect(() => {
@@ -153,6 +182,8 @@ function HeadsOfStateTimelineInner() {
     range: state.range,
     rows: state.rows,
     highlightYear: state.highlightYear,
+    categoryFilter: categoryFilter.asList,
+    isAllCategoriesEnabled: categoryFilter.isAllEnabled,
   })
 
   // 핀 추가 시 토스트로 시각 피드백 — 추가된 row 갯수 차이로 감지
@@ -369,13 +400,25 @@ function HeadsOfStateTimelineInner() {
         <AnimatePresence>
           {previewBar && (
             <PersonPreviewModal
-              key="person-preview"
+              // bar.id를 key로 둬서 다른 막대 클릭 시 컨텐츠 교체가 mount/unmount 사이클을 타게 한다 — 미세한 fade 전환
+              key={previewBar.bar.id}
               bar={previewBar.bar}
               row={previewBar.row}
               onClose={() => setPreviewBar(null)}
-              onOpenDetail={(personId) => {
+              onOpenDetail={(personId, opts) => {
+                if (opts?.openInNewTab && typeof window !== 'undefined') {
+                  // 새 탭으로 열어 비교 상태 유지
+                  window.open(
+                    `/history/dashboard/persons/${personId}?from=heads-of-state`,
+                    '_blank',
+                    'noopener,noreferrer',
+                  )
+                  return
+                }
                 setPreviewBar(null)
-                navigate(`/history/dashboard/persons/${personId}`)
+                navigate(
+                  `/history/dashboard/persons/${personId}?from=heads-of-state`,
+                )
               }}
             />
           )}
@@ -403,8 +446,10 @@ const Wrapper = styled(motion.div)`
   }
 
   @media print {
-    /* 인쇄 시엔 헤더 액션·도움말·사이드바 컨트롤은 숨겨 timeline + 라벨만 보이게 */
-    aside[aria-label*="패널"],
+    /* 인쇄 시엔 사이드바·동시대패널·헤더 액션은 숨기고 timeline + 라벨만 노출 */
+    [data-print-hide] {
+      display: none !important;
+    }
     button[aria-label*="도움말"],
     button[aria-label*="복사"],
     button[aria-label*="저장"],

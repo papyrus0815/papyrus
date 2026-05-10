@@ -21,7 +21,9 @@ export function Legend({ enabled, onToggle, isAllEnabled = true, onReset }: Prop
   const filterable = onToggle != null
   return (
     <Wrap>
-      <SectionLabel>{filterable ? '필터' : '카테고리'}</SectionLabel>
+      <SectionLabel>
+        {filterable ? '카테고리 (클릭하여 토글)' : '카테고리'}
+      </SectionLabel>
       {ORDER.map((id) => {
         const t = CATEGORY_TOKENS[id]
         const tone = t.bar[isDark ? 'dark' : 'light']
@@ -35,6 +37,13 @@ export function Legend({ enabled, onToggle, isAllEnabled = true, onReset }: Prop
             $dim={filterable && !active}
             onClick={filterable ? () => onToggle!(id) : undefined}
             aria-pressed={filterable ? active : undefined}
+            title={
+              filterable
+                ? active
+                  ? `${t.label} 숨기기`
+                  : `${t.label} 보이기`
+                : t.label
+            }
             style={{
               background: tone.background,
               borderColor: tone.border,

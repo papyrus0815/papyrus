@@ -165,6 +165,28 @@ export function usePinnedRows() {
     })
   }, [])
 
+  /** Undo 복원 — 원래 인덱스에 row 전체(계승국 묶음 포함)를 그대로 다시 삽입.
+   *  중복(같은 kind+countryId 가 다른 행에 이미 존재)인 segment는 자동 제외.
+   *  rowId 충돌 가능성을 피해 새 ID 발급 + segment ID도 새로 발급. */
+  const restoreRowAt = useCallback((index: number, row: PinnedRow) => {
+    setRows((prev) => {
+      const exists = new Set(
+        prev.flatMap((r) =>
+          r.segments.map((s) => `${s.kind}:${s.countryId}`),
+        ),
+      )
+      const segments = row.segments
+        .filter((s) => !exists.has(`${s.kind}:${s.countryId}`))
+        .map((s) => ({ ...s, segmentId: makeId() }))
+      if (segments.length === 0) return prev
+      const next = prev.slice()
+      const restored: PinnedRow = { rowId: makeId(), segments }
+      const safeIdx = Math.max(0, Math.min(index, next.length))
+      next.splice(safeIdx, 0, restored)
+      return next
+    })
+  }, [])
+
   /** 외부에서 (URL 등) 일괄 교체 — 영속화는 useEffect가 자동으로 처리 */
   const replaceAll = useCallback((nextRows: PinnedRow[]) => {
     setRows(nextRows)
@@ -228,6 +250,7 @@ export function usePinnedRows() {
     removeSegmentFromRow,
     moveRow,
     reorderRow,
+    restoreRowAt,
     replaceAll,
     reconcile,
     clearAll,

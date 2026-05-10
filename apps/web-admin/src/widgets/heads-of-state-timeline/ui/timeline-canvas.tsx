@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
+
+import { CATEGORY_TOKENS } from '../lib/category-tokens'
 
 import type { PinnedRow, PinnedSegment, YearRange } from '../model/types'
 import type { RowTenuresResult } from '../api/use-all-rows-tenures'
@@ -67,6 +69,8 @@ export function TimelineCanvas({
   categoryFilter,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const theme = useTheme()
+  const isDarkMode = theme?.mode === 'dark'
   const [trackWidth, setTrackWidth] = useState<number>(MIN_TRACK_WIDTH)
   const [hoverYear, setHoverYear] = useState<number | null>(null)
 
@@ -270,6 +274,18 @@ export function TimelineCanvas({
   }
 
   if (rows.length === 0) {
+    const presTone = CATEGORY_TOKENS.PRESIDENT.bar[isDarkMode ? 'dark' : 'light']
+    const monTone = CATEGORY_TOKENS.MONARCH.bar[isDarkMode ? 'dark' : 'light']
+    const presStyle = {
+      background: presTone.background,
+      borderColor: presTone.border,
+      color: presTone.color,
+    }
+    const monStyle = {
+      background: monTone.background,
+      borderColor: monTone.border,
+      color: monTone.color,
+    }
     return (
       <Wrapper>
         <EmptyHero>
@@ -277,24 +293,24 @@ export function TimelineCanvas({
             <SchematicLane>
               <SchematicLabel>🇰🇷 대한민국</SchematicLabel>
               <SchematicTrack>
-                <SchematicBar style={{ left: '10%', width: '24%', background: '#dbeafe', borderColor: '#3b82f6', color: '#1e3a8a' }}>★ 24대</SchematicBar>
-                <SchematicBar style={{ left: '36%', width: '20%', background: '#dbeafe', borderColor: '#3b82f6', color: '#1e3a8a' }}>★ 25대</SchematicBar>
-                <SchematicBar style={{ left: '58%', width: '38%', background: '#dbeafe', borderColor: '#3b82f6', color: '#1e3a8a' }}>★ 26대</SchematicBar>
+                <SchematicBar style={{ left: '10%', width: '24%', ...presStyle }}>★ 24대</SchematicBar>
+                <SchematicBar style={{ left: '36%', width: '20%', ...presStyle }}>★ 25대</SchematicBar>
+                <SchematicBar style={{ left: '58%', width: '38%', ...presStyle }}>★ 26대</SchematicBar>
               </SchematicTrack>
             </SchematicLane>
             <SchematicLane>
               <SchematicLabel>🇺🇸 미국</SchematicLabel>
               <SchematicTrack>
-                <SchematicBar style={{ left: '4%', width: '32%', background: '#dbeafe', borderColor: '#3b82f6', color: '#1e3a8a' }}>★ 44대</SchematicBar>
-                <SchematicBar style={{ left: '38%', width: '32%', background: '#dbeafe', borderColor: '#3b82f6', color: '#1e3a8a' }}>★ 45대</SchematicBar>
-                <SchematicBar style={{ left: '72%', width: '24%', background: '#dbeafe', borderColor: '#3b82f6', color: '#1e3a8a' }}>★ 46대</SchematicBar>
+                <SchematicBar style={{ left: '4%', width: '32%', ...presStyle }}>★ 44대</SchematicBar>
+                <SchematicBar style={{ left: '38%', width: '32%', ...presStyle }}>★ 45대</SchematicBar>
+                <SchematicBar style={{ left: '72%', width: '24%', ...presStyle }}>★ 46대</SchematicBar>
               </SchematicTrack>
             </SchematicLane>
             <SchematicLane>
               <SchematicLabel>🇬🇧 영국</SchematicLabel>
               <SchematicTrack>
-                <SchematicBar style={{ left: '4%', width: '54%', background: '#fef3c7', borderColor: '#f59e0b', color: '#78350f' }}>♛ 엘리자베스 2세</SchematicBar>
-                <SchematicBar style={{ left: '60%', width: '36%', background: '#fef3c7', borderColor: '#f59e0b', color: '#78350f' }}>♛ 찰스 3세</SchematicBar>
+                <SchematicBar style={{ left: '4%', width: '54%', ...monStyle }}>♛ 엘리자베스 2세</SchematicBar>
+                <SchematicBar style={{ left: '60%', width: '36%', ...monStyle }}>♛ 찰스 3세</SchematicBar>
               </SchematicTrack>
             </SchematicLane>
             <SchematicGuide />
@@ -489,7 +505,12 @@ const Wrapper = styled.div`
   min-width: 0;
   overflow: auto;
   background: ${({ theme }) => theme.colors.background.primary};
+  /* drag pan을 위해 기본 텍스트 선택은 막되, 막대 자체는 더블클릭으로 텍스트 선택 가능하게 한다 */
   user-select: none;
+  [data-tenure-bar="1"] {
+    /* 더블클릭하면 user-select 활성 — 막대 안 인물 이름을 복사 가능 */
+    -webkit-user-select: text;
+  }
 `
 
 const UrlLoadingHero = styled.div`

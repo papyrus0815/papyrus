@@ -131,6 +131,7 @@ export function EventOverlay({
             <Pill
               key={it.id}
               type="button"
+              data-tooltip-trigger="1"
               $active={isActive}
               style={{
                 left: it.left,

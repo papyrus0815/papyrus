@@ -2,7 +2,7 @@
  * 가이드라인이 꽂혔을 때 그 시점의 행별 재임자를 한 카드 리스트로 보여주는 우측 패널.
  * 페이지 본질 가치(같은 시점에 누가 있었나) 를 한눈에 전달하기 위한 컴포넌트.
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -66,6 +66,8 @@ function categoryLabel(c: TenureBar['positionCategory']): string {
   return CATEGORY_TOKENS[c].label
 }
 
+type SortMode = 'pin' | 'count' | 'name'
+
 export function ContemporaryPanel({
   highlightYear,
   rows,
@@ -73,10 +75,21 @@ export function ContemporaryPanel({
   onClose,
   onSelectPerson,
 }: Props) {
-  const entries = useMemo(
+  const [sortMode, setSortMode] = useState<SortMode>('pin')
+  const rawEntries = useMemo(
     () => pickContemporary(rows, rowsTenures, highlightYear),
     [rows, rowsTenures, highlightYear],
   )
+  const entries = useMemo(() => {
+    if (sortMode === 'pin') return rawEntries
+    const arr = rawEntries.slice()
+    if (sortMode === 'count') {
+      arr.sort((a, b) => b.bars.length - a.bars.length)
+    } else if (sortMode === 'name') {
+      arr.sort((a, b) => a.rowLabel.localeCompare(b.rowLabel, 'ko'))
+    }
+    return arr
+  }, [rawEntries, sortMode])
   const totalBars = entries.reduce((acc, e) => acc + e.bars.length, 0)
 
   return (
@@ -85,6 +98,8 @@ export function ContemporaryPanel({
       animate={{ width: 280, opacity: 1 }}
       exit={{ width: 0, opacity: 0 }}
       transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+      data-print-hide
+      aria-label="동시대 요약 패널"
     >
       <Header>
         <HeaderTitle>
@@ -100,6 +115,18 @@ export function ContemporaryPanel({
         <strong>{entries.filter((e) => e.bars.length > 0).length}곳</strong>에서{' '}
         <strong>{totalBars}명</strong>
       </Hint>
+      <SortRow>
+        <SortLabel>정렬</SortLabel>
+        <SortBtn $active={sortMode === 'pin'} onClick={() => setSortMode('pin')}>
+          핀 순
+        </SortBtn>
+        <SortBtn $active={sortMode === 'count'} onClick={() => setSortMode('count')}>
+          인물 많은 순
+        </SortBtn>
+        <SortBtn $active={sortMode === 'name'} onClick={() => setSortMode('name')}>
+          가나다순
+        </SortBtn>
+      </SortRow>
       <List>
         {entries.length === 0 && (
           <EmptyHint>핀한 행이 없습니다</EmptyHint>
@@ -259,6 +286,43 @@ const Hint = styled.div`
   strong {
     color: ${({ theme }) => theme.colors.text.primary};
     font-weight: 700;
+  }
+`
+
+const SortRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px 8px;
+  flex-wrap: wrap;
+`
+
+const SortLabel = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-right: 4px;
+`
+
+const SortBtn = styled.button<{ $active: boolean }>`
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
   }
 `
 

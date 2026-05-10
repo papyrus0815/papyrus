@@ -23,28 +23,23 @@ export function useCategoryFilter() {
     writeJSON(KEY, Array.from(enabled))
   }, [enabled])
 
+  /** 토글 — 0개 선택 허용. 사용자가 모든 카테고리를 끄면 timeline은 빈 상태로 유지(의도). */
   const toggle = useCallback((c: PositionTypeCategory) => {
     setEnabled((prev) => {
       const next = new Set(prev)
       if (next.has(c)) next.delete(c)
       else next.add(c)
-      // 0개 선택 방지 — 모두 끄면 전체 켜기로 reset
-      if (next.size === 0) ALL.forEach((x) => next.add(x))
-      return next
-    })
-  }, [])
-
-  const enable = useCallback((c: PositionTypeCategory) => {
-    setEnabled((prev) => {
-      if (prev.has(c)) return prev
-      const next = new Set(prev)
-      next.add(c)
       return next
     })
   }, [])
 
   const reset = useCallback(() => {
     setEnabled(new Set(ALL))
+  }, [])
+
+  /** 외부(URL params)에서 일괄 set — URL ↔ state 동기화용 */
+  const setFromList = useCallback((cats: PositionTypeCategory[]) => {
+    setEnabled(new Set(cats))
   }, [])
 
   const isEnabled = useCallback(
@@ -54,5 +49,14 @@ export function useCategoryFilter() {
 
   const isAllEnabled = enabled.size === ALL.length
 
-  return { enabled, isEnabled, isAllEnabled, toggle, enable, reset }
+  return {
+    enabled,
+    isEnabled,
+    isAllEnabled,
+    toggle,
+    reset,
+    setFromList,
+    /** URL 동기화용 직렬화 */
+    asList: Array.from(enabled),
+  }
 }

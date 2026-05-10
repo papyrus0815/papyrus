@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 
+import type { PositionTypeCategory } from '../lib/normalize-tenures'
 import type { PinnedRow, YearRange } from './types'
 import { rowsToPinsParam } from './use-heads-of-state-timeline-state'
 
@@ -10,12 +11,22 @@ import { rowsToPinsParam } from './use-heads-of-state-timeline-state'
  * 진입 시 URL 파라미터는 timeline-state-hook이 이미 한 번 읽어 초기 상태로 반영했으므로,
  * 이 훅은 그저 "변경 시 URL을 따라가게" 만드는 단방향 sink.
  */
+const ALL_CATEGORIES: PositionTypeCategory[] = [
+  'MONARCH',
+  'PRESIDENT',
+  'PM',
+  'POPE',
+  'OTHER',
+]
+
 export function useTimelineUrlSync(opts: {
   range: YearRange
   rows: PinnedRow[]
   highlightYear: number | null
+  categoryFilter: PositionTypeCategory[]
+  isAllCategoriesEnabled: boolean
 }) {
-  const { range, rows, highlightYear } = opts
+  const { range, rows, highlightYear, categoryFilter, isAllCategoriesEnabled } = opts
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -33,12 +44,61 @@ export function useTimelineUrlSync(opts: {
     } else {
       next.delete('year')
     }
+    // 전체 활성이면 URL 생략 — 기본값과 동일
+    if (isAllCategoriesEnabled) {
+      next.delete('cat')
+    } else {
+      // 짧게: 활성된 것만 카테고리 첫 글자로 (M=MONARCH, P=PRESIDENT, R=PM, O=POPE, X=OTHER)
+      const codes = categoryFilter.map((c) => CAT_CODE[c]).join('')
+      next.set('cat', codes || '_')
+    }
 
     const newSearch = next.toString()
     if (url.search.replace(/^\?/, '') === newSearch) return
     const newUrl = `${url.pathname}${newSearch ? `?${newSearch}` : ''}${url.hash}`
     window.history.replaceState(window.history.state, '', newUrl)
-  }, [range.startYear, range.endYear, rows, highlightYear])
+  }, [
+    range.startYear,
+    range.endYear,
+    rows,
+    highlightYear,
+    categoryFilter,
+    isAllCategoriesEnabled,
+  ])
+}
+
+const CAT_CODE: Record<PositionTypeCategory, string> = {
+  MONARCH: 'M',
+  PRESIDENT: 'P',
+  PM: 'R',
+  POPE: 'O',
+  OTHER: 'X',
+}
+
+/** URL `?cat=MPR` 같은 코드를 카테고리 배열로 — 전체면 ALL_CATEGORIES, 빈 슬래시 `_`이면 빈 배열 */
+export function readCategoriesFromUrl(): PositionTypeCategory[] | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const raw = params.get('cat')
+    if (raw == null) return null
+    if (raw === '_') return []
+    const reverse: Record<string, PositionTypeCategory> = {
+      M: 'MONARCH',
+      P: 'PRESIDENT',
+      R: 'PM',
+      O: 'POPE',
+      X: 'OTHER',
+    }
+    const out: PositionTypeCategory[] = []
+    for (const ch of raw) {
+      const c = reverse[ch.toUpperCase()]
+      if (c && !out.includes(c)) out.push(c)
+    }
+    return out.length > 0 ? out : ALL_CATEGORIES
+  } catch {
+    return null
+  }
 }
 
 /** URL을 클립보드로 복사. 실패 시 `prompt`로 fallback. 결과 메시지 반환 */

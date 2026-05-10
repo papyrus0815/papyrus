@@ -62,6 +62,22 @@ export function HeadsTooltipProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('scroll', onScroll, true)
   }, [state, api])
 
+  // 빠른 마우스 이동으로 mouseleave를 못 받고 tooltip 잔존하는 케이스 방지 —
+  // 호버 가능 요소(`[data-tooltip-trigger]`) 위에 있지 않으면 hide.
+  useEffect(() => {
+    if (!state) return
+    const onMove = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (!target) return
+      const onTrigger =
+        target.closest('[data-tooltip-trigger="1"]') ||
+        target.closest('[data-tenure-bar="1"]')
+      if (!onTrigger) api.hide()
+    }
+    document.addEventListener('mousemove', onMove)
+    return () => document.removeEventListener('mousemove', onMove)
+  }, [state, api])
+
   return (
     <TooltipContext.Provider value={api}>
       {children}

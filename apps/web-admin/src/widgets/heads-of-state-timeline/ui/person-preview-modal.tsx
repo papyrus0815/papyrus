@@ -3,12 +3,12 @@
  * stats-view의 PersonPreviewModal을 참고하되, AdaptedPerson 의존을 제거하고
  * TenureBar(이미 fetch된 재임 기록) + PinnedRow(국가 컨텍스트) + 옵션으로 가져온 Person 상세를 합쳐 표시한다.
  */
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { FiArrowRight, FiX } from 'react-icons/fi'
+import { FiArrowRight, FiExternalLink, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { getPersonById } from '@/shared/api/persons'
@@ -26,10 +26,11 @@ interface Props {
   /** 막대가 속한 행 — 어떤 국가의 직책인지 표시하기 위해 사용 */
   row: PinnedRow | null
   onClose: () => void
-  onOpenDetail: (personId: string) => void
+  onOpenDetail: (personId: string, opts?: { openInNewTab?: boolean }) => void
 }
 
 export function PersonPreviewModal({ bar, row, onClose, onOpenDetail }: Props) {
+  const cardRef = useRef<HTMLDivElement | null>(null)
   // ESC 닫기 + Enter로 상세 열기 — capture 단계로 등록해 timeline-canvas의 ESC(가이드라인 해제)보다 먼저 잡는다
   useEffect(() => {
     if (!bar) return
@@ -40,7 +41,25 @@ export function PersonPreviewModal({ bar, row, onClose, onOpenDetail }: Props) {
       } else if (e.key === 'Enter' && bar.personId) {
         e.preventDefault()
         e.stopPropagation()
-        onOpenDetail(bar.personId)
+        onOpenDetail(bar.personId, { openInNewTab: e.metaKey || e.ctrlKey })
+      } else if (e.key === 'Tab') {
+        // Focus trap — Tab/Shift+Tab이 모달 안에 머무르게 한다
+        const card = cardRef.current
+        if (!card) return
+        const focusables = card.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        )
+        if (focusables.length === 0) return
+        const first = focusables[0]!
+        const last = focusables[focusables.length - 1]!
+        const active = document.activeElement
+        if (e.shiftKey && active === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault()
+          first.focus()
+        }
       }
     }
     document.addEventListener('keydown', onKey, true)
@@ -109,6 +128,7 @@ export function PersonPreviewModal({ bar, row, onClose, onOpenDetail }: Props) {
       aria-label={`${display} 인물 정보`}
     >
       <Card
+        ref={cardRef as any}
         as={motion.div}
         initial={{ opacity: 0, y: 8, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -188,14 +208,31 @@ export function PersonPreviewModal({ bar, row, onClose, onOpenDetail }: Props) {
             닫기
           </SecondaryBtn>
           {bar.personId && (
-            <PrimaryBtn
-              type="button"
-              onClick={() => onOpenDetail(bar.personId!)}
-              autoFocus
-            >
-              상세 보기
-              <FiArrowRight size={14} />
-            </PrimaryBtn>
+            <>
+              <SecondaryBtn
+                type="button"
+                onClick={() =>
+                  onOpenDetail(bar.personId!, { openInNewTab: true })
+                }
+                title="비교 상태 유지하고 새 탭에서 열기"
+                aria-label="새 탭에서 상세 보기"
+              >
+                <FiExternalLink size={14} />
+              </SecondaryBtn>
+              <PrimaryBtn
+                type="button"
+                onClick={(e) =>
+                  onOpenDetail(bar.personId!, {
+                    openInNewTab: e.metaKey || e.ctrlKey,
+                  })
+                }
+                autoFocus
+                title="현재 탭에서 상세 보기 (⌘+클릭: 새 탭)"
+              >
+                상세 보기
+                <FiArrowRight size={14} />
+              </PrimaryBtn>
+            </>
           )}
         </Actions>
       </Card>
