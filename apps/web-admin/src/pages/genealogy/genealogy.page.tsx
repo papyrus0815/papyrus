@@ -31,20 +31,44 @@ import { getPersonFamilyTree, type FamilyTreePerson, type FamilyTreeData } from 
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
-// ─── Layout constants ──────────────────────────────────────────────
-const NODE_W = 164
-const NODE_H = 210
-const H_GAP = 48
-const V_GAP = 100
-const STEP = NODE_W + H_GAP
+// ─── Layout sizes ──────────────────────────────────────────────────
+// 데스크탑/모바일 분기 — 노드 카드와 간격을 viewport에 맞춰 축소.
+// 모바일에선 fitView가 작은 폭에 맞춰 zoom out하므로 카드를 같이 축소해야
+// 화면에 더 많은 세대가 한 눈에 들어옴.
+interface LayoutSizes {
+  NODE_W: number
+  NODE_H: number
+  H_GAP: number
+  V_GAP: number
+  AVATAR: number
+}
 
-// ─── Layout constants (derived) ───────────────────────────────────
-// COUPLE_STEP: minimum horizontal distance between ego and a spouse,
-// ensuring their parent rows (each ±STEP/2 wide) don't overlap.
-// Math: wife_left_parent = wife_x - STEP/2; ego_right_parent = ego_x + STEP/2
-// No-overlap requires: wife_x - STEP/2 ≥ ego_x + STEP/2 + NODE_W + H_GAP
-//   → wife_x ≥ ego_x + STEP + NODE_W + H_GAP = STEP + STEP = 2·STEP
-const COUPLE_STEP = STEP * 2  // 424px
+const DESKTOP_SIZES: LayoutSizes = {
+  NODE_W: 164,
+  NODE_H: 210,
+  H_GAP: 48,
+  V_GAP: 100,
+  AVATAR: 64,
+}
+
+const COMPACT_SIZES: LayoutSizes = {
+  NODE_W: 120,
+  NODE_H: 160,
+  H_GAP: 32,
+  V_GAP: 70,
+  AVATAR: 48,
+}
+
+/**
+ * STEP·COUPLE_STEP 도출:
+ * - STEP = NODE_W + H_GAP — 형제·자식 간 기본 가로 간격
+ * - COUPLE_STEP = 2·STEP — 부부 사이 최소 거리 (양쪽 부모 행 ±STEP/2 폭이 겹치지 않게)
+ *   증명: wife_x ≥ ego_x + STEP/2 + NODE_W + H_GAP + STEP/2 = ego_x + 2·STEP
+ */
+function deriveSteps(s: LayoutSizes) {
+  const STEP = s.NODE_W + s.H_GAP
+  return { STEP, COUPLE_STEP: STEP * 2 }
+}
 
 // ─── Layout algorithm ─────────────────────────────────────────────
 //
@@ -61,8 +85,11 @@ const COUPLE_STEP = STEP * 2  // 424px
 //
 function computeLayout(
   data: FamilyTreeData,
+  sizes: LayoutSizes,
 ): Record<string, { x: number; y: number }> {
   const { nodes, edges, egoId } = data
+  const { NODE_H, V_GAP } = sizes
+  const { STEP, COUPLE_STEP } = deriveSteps(sizes)
 
   // ── A. Adjacency ──────────────────────────────────────────────────
   const childrenOf = new Map<string, string[]>()
@@ -279,14 +306,17 @@ function computeLayout(
 }
 
 // ─── Build React Flow graph ────────────────────────────────────────
-function buildGraph(data: FamilyTreeData): { rfNodes: Node[]; rfEdges: Edge[] } {
-  const positions = computeLayout(data)
+function buildGraph(
+  data: FamilyTreeData,
+  sizes: LayoutSizes,
+): { rfNodes: Node[]; rfEdges: Edge[] } {
+  const positions = computeLayout(data, sizes)
 
   const rfNodes: Node[] = data.nodes.map(p => ({
     id: p.id,
     type: 'personNode',
     position: positions[p.id] ?? { x: 0, y: 0 },
-    data: { person: p, isEgo: p.id === data.egoId },
+    data: { person: p, isEgo: p.id === data.egoId, sizes },
     draggable: true,
   }))
 
@@ -386,7 +416,11 @@ function buildPersonTooltip(p: FamilyTreePerson, displayName: string): string {
 
 // ─── Person Node component ─────────────────────────────────────────
 function PersonNodeInner({ data }: NodeProps) {
-  const { person, isEgo } = data as { person: FamilyTreePerson; isEgo: boolean }
+  const { person, isEgo, sizes } = data as {
+    person: FamilyTreePerson
+    isEgo: boolean
+    sizes: LayoutSizes
+  }
   const navigate = useNavigate()
 
   const baseName = getPersonDisplayName(
@@ -425,6 +459,8 @@ function PersonNodeInner({ data }: NodeProps) {
     <NodeWrap
       $isEgo={isEgo}
       $deceased={isDeceased}
+      $w={sizes.NODE_W}
+      $h={sizes.NODE_H}
       onClick={handleClick}
       title={buildPersonTooltip(person, displayName)}
     >
@@ -436,7 +472,12 @@ function PersonNodeInner({ data }: NodeProps) {
       <Handle type="target" position={Position.Right} id="right-t" style={{ opacity: 0 }} />
 
       <AvatarFrame>
-        <NodeAvatar $isEgo={isEgo} $hasImg={!!src} $deceased={isDeceased}>
+        <NodeAvatar
+          $isEgo={isEgo}
+          $hasImg={!!src}
+          $deceased={isDeceased}
+          $size={sizes.AVATAR}
+        >
           {src
             ? <img src={src} alt={baseName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
             : <span style={{ fontSize: 22, fontWeight: 700, color: isEgo ? '#fff' : 'var(--node-text, #475569)' }}>{initial}</span>}
@@ -445,7 +486,7 @@ function PersonNodeInner({ data }: NodeProps) {
           const flag = person.flag ?? person.sovereignCountry ?? person.country
           if (!flag) return null
           const countryName = (flag as any).countryName ?? (flag as any).name ?? null
-          return <CountryFlag flag={flag} countryName={countryName} size={20} />
+          return <CountryFlag flag={flag} countryName={countryName} size={22} />
         })()}
       </AvatarFrame>
 
@@ -489,6 +530,25 @@ function PersonNodeInner({ data }: NodeProps) {
 
 const nodeTypes = { personNode: PersonNodeInner }
 
+/**
+ * 모바일 폭(<=640px) 매칭 — 노드 크기·간격을 컴팩트로 전환.
+ * SSR 가드 포함 (matchMedia 미존재 환경 대비).
+ */
+function useIsCompactLayout(): boolean {
+  const [isCompact, setIsCompact] = useState(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return false
+    return window.matchMedia('(max-width: 640px)').matches
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia('(max-width: 640px)')
+    const handler = (e: MediaQueryListEvent) => setIsCompact(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return isCompact
+}
+
 // ─── Inner flow component (needs ReactFlowProvider context) ─────────
 function GenealogyFlow({ personId }: { personId: string }) {
   const navigate = useNavigate()
@@ -497,6 +557,8 @@ function GenealogyFlow({ personId }: { personId: string }) {
   const [search, setSearch] = useState('')
   const [matchIndex, setMatchIndex] = useState(0)
   const [exporting, setExporting] = useState(false)
+  const isCompact = useIsCompactLayout()
+  const sizes = isCompact ? COMPACT_SIZES : DESKTOP_SIZES
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['family-tree', personId],
@@ -506,19 +568,19 @@ function GenealogyFlow({ personId }: { personId: string }) {
 
   const { rfNodes, rfEdges } = useMemo(() => {
     if (!data || data.nodes.length === 0) return { rfNodes: [], rfEdges: [] }
-    return buildGraph(data)
-  }, [data])
+    return buildGraph(data, sizes)
+  }, [data, sizes])
 
   const onInit = useCallback(() => {
     setTimeout(() => fitView({ padding: 0.15 }), 100)
   }, [fitView])
 
-  // fitView를 데이터 로드 후에도 재실행 (onInit은 마운트 시 한 번만 실행되므로)
+  // fitView를 데이터 로드 후 / 사이즈 변경 시 재실행
   useEffect(() => {
     if (rfNodes.length === 0) return
     const timer = setTimeout(() => fitView({ padding: 0.15 }), 150)
     return () => clearTimeout(timer)
-  }, [rfNodes.length, fitView])
+  }, [rfNodes, fitView])
 
   const egoName = useMemo(() => {
     if (!data) return ''
@@ -530,9 +592,10 @@ function GenealogyFlow({ personId }: { personId: string }) {
   // 세대 라벨 계산 (D1) — y 좌표를 (NODE_H + V_GAP)으로 나눠 세대 도출
   const generationLabels = useMemo(() => {
     if (rfNodes.length === 0) return [] as Array<{ y: number; label: string }>
+    const rowH = sizes.NODE_H + sizes.V_GAP
     const generations = new Set<number>()
     for (const n of rfNodes) {
-      const gen = Math.round(n.position.y / (NODE_H + V_GAP))
+      const gen = Math.round(n.position.y / rowH)
       generations.add(gen)
     }
     const labelFor = (gen: number): string => {
@@ -546,8 +609,8 @@ function GenealogyFlow({ personId }: { personId: string }) {
     }
     return Array.from(generations)
       .sort((a, b) => a - b)
-      .map((gen) => ({ y: gen * (NODE_H + V_GAP), label: labelFor(gen) }))
-  }, [rfNodes])
+      .map((gen) => ({ y: gen * rowH, label: labelFor(gen) }))
+  }, [rfNodes, sizes])
 
   // 검색 매치 (C3)
   const searchMatches = useMemo(() => {
@@ -566,11 +629,12 @@ function GenealogyFlow({ personId }: { personId: string }) {
     const wrapped = ((idx % searchMatches.length) + searchMatches.length) % searchMatches.length
     const target = searchMatches[wrapped]
     setMatchIndex(wrapped)
-    setCenter(target.position.x + NODE_W / 2, target.position.y + NODE_H / 2, {
-      zoom: 1,
-      duration: 400,
-    })
-  }, [searchMatches, setCenter])
+    setCenter(
+      target.position.x + sizes.NODE_W / 2,
+      target.position.y + sizes.NODE_H / 2,
+      { zoom: 1, duration: 400 },
+    )
+  }, [searchMatches, setCenter, sizes])
 
   // 검색어 바뀌면 첫 매치로 점프
   useEffect(() => {
@@ -928,10 +992,15 @@ const ErrorOverlay = styled.div`
 
 // ─── Node styled components ───────────────────────────────────────
 // 라이트/다크 모드 모두 지원하기 위해 CSS 변수와 prefers-color-scheme 사용
-const NodeWrap = styled.div<{ $isEgo: boolean; $deceased?: boolean }>`
+const NodeWrap = styled.div<{
+  $isEgo: boolean
+  $deceased?: boolean
+  $w?: number
+  $h?: number
+}>`
   position: relative;
-  width: ${NODE_W}px;
-  min-height: ${NODE_H}px;
+  width: ${({ $w }) => $w ?? DESKTOP_SIZES.NODE_W}px;
+  min-height: ${({ $h }) => $h ?? DESKTOP_SIZES.NODE_H}px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -970,8 +1039,15 @@ const NodeWrap = styled.div<{ $isEgo: boolean; $deceased?: boolean }>`
   }
 `
 
-const NodeAvatar = styled.div<{ $isEgo: boolean; $hasImg: boolean; $deceased?: boolean }>`
-  width: 64px; height: 64px; border-radius: 50%;
+const NodeAvatar = styled.div<{
+  $isEgo: boolean
+  $hasImg: boolean
+  $deceased?: boolean
+  $size?: number
+}>`
+  width: ${({ $size }) => $size ?? DESKTOP_SIZES.AVATAR}px;
+  height: ${({ $size }) => $size ?? DESKTOP_SIZES.AVATAR}px;
+  border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; flex-shrink: 0;
   background: ${({ $isEgo, $hasImg }) => $isEgo ? 'rgba(255,255,255,0.25)' : $hasImg ? 'transparent' : 'var(--node-avatar-bg, #f1f5f9)'};
