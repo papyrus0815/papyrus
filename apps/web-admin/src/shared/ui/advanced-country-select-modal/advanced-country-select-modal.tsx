@@ -457,6 +457,10 @@ const ModalBody = styled.div`
   min-height: 0;
   overflow: hidden;
   max-height: calc(68vh - 72px);
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    max-height: none;
+  }
 `
 
 const FilterSidebar = styled.div`
@@ -467,6 +471,13 @@ const FilterSidebar = styled.div`
   display: flex;
   flex-direction: column;
   gap: 28px;
+  @media (max-width: 768px) {
+    border-right: none;
+    border-bottom: 1.5px solid ${({ theme }) => theme.colors.border.light};
+    padding: 16px 16px;
+    gap: 16px;
+    max-height: 40vh;
+  }
 `
 
 const FilterSidebarSection = styled.div`

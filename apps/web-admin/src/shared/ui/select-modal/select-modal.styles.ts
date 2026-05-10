@@ -18,7 +18,7 @@ export const SelectModalOverlay = styled.div`
 export const SelectModal = styled.div`
   width: 480px;
   max-width: 90vw;
-  max-height: 80vh;
+  max-height: min(80vh, calc(100dvh - 80px));
   background: ${({ theme }) => theme.colors.background.primary};
   border-radius: 16px;
   box-shadow: 0 20px 60px ${({ theme }) => theme.colors.shadow.lg};
@@ -27,6 +27,10 @@ export const SelectModal = styled.div`
   flex-direction: column;
   overflow: hidden;
   position: relative;
+  @media (max-width: 480px) {
+    max-width: 100%;
+    border-radius: 12px;
+  }
 `
 
 export const SelectModalHeader = styled.div`

@@ -340,6 +340,12 @@ const ModalContent = styled.div`
   max-height: 85vh;
   display: flex;
   flex-direction: column;
+  @media (max-width: 768px) {
+    max-width: 100%;
+    height: 100%;
+    max-height: calc(100dvh - 24px);
+    border-radius: 12px;
+  }
   box-shadow: ${({ theme }) =>
     theme.mode === 'dark'
       ? '0 10px 40px rgba(0,0,0,0.5)'

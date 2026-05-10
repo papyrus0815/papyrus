@@ -32,6 +32,9 @@ export const ModalOverlay = styled.div`
   align-items: center;
   justify-content: center;
   padding: 24px;
+  @media (max-width: 480px) {
+    padding: 12px;
+  }
 `
 
 // ─── 모달 컨테이너 ────────────────────────────────────────────────────────────
@@ -53,6 +56,10 @@ export const ModalBox = styled.div<{
   flex-direction: column;
   overflow: hidden;
   z-index: ${Z_INDEX.MODAL_CONTENT};
+  @media (max-width: 640px) {
+    max-height: ${({ $maxHeight }) =>
+      $maxHeight ?? 'min(90vh, calc(100dvh - 32px))'};
+  }
 `
 
 /** 넓은 모달 (멀티 컬럼 등) */
@@ -142,4 +149,13 @@ export const ModalFooter = styled.div`
   padding: 16px 24px;
   border-top: 1px solid ${({ theme }) => theme.colors.border.light};
   flex-shrink: 0;
+  @media (max-width: 480px) {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 16px;
+    & > button {
+      width: 100%;
+    }
+  }
 `
