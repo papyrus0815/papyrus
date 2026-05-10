@@ -543,6 +543,17 @@ export function PersonLifeTimelineInfographic({
       const d = parseDate(m.deathDate)
       if (!d) return
       if (hasLifeOverlap(d)) return
+      // 향년 계산 — 출생연도 있으면 사망 시 만 나이 (BC era는 미상으로 처리)
+      const birth = parseDate(m.birthDate)
+      const ageAtDeath =
+        birth && birth.getFullYear() <= d.getFullYear()
+          ? (() => {
+              let age = d.getFullYear() - birth.getFullYear()
+              const md = d.getMonth() - birth.getMonth()
+              if (md < 0 || (md === 0 && d.getDate() < birth.getDate())) age--
+              return age >= 0 ? age : null
+            })()
+          : null
       result.push({
         key: `${rel}-death-${m.id ?? idx}`,
         kind: 'family-death',
@@ -550,6 +561,7 @@ export function PersonLifeTimelineInfographic({
         end: null,
         sortKey: toTs(d),
         title: `${m.name} 사망`,
+        subtitle: ageAtDeath != null ? `향년 ${ageAtDeath}세` : null,
         dateLabel: formatWithPrecision(d, 'day'),
         familyRelation: rel,
         familyPersonId: m.id,
