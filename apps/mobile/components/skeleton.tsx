@@ -1,6 +1,17 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { Animated, StyleSheet, View, type DimensionValue, type ViewStyle } from 'react-native'
+import { useEffect, useMemo } from 'react'
+import { StyleSheet, View, type DimensionValue, type LayoutChangeEvent, type ViewStyle } from 'react-native'
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated'
+import { LinearGradient } from 'expo-linear-gradient'
 import { Elevation, Radius, Spacing, useTokens, type TokenSet } from '@/constants/theme'
+import { useColorScheme } from '@/hooks/use-color-scheme'
+
+const SWEEP_DURATION = 1400
 
 type SkeletonProps = {
   width?: DimensionValue
@@ -10,30 +21,57 @@ type SkeletonProps = {
 }
 
 /**
- * 펄스 애니메이션 스켈레톤 박스. 로딩 중 컨텐츠 모양을 미리 그려 perceived speed ↑.
+ * Shimmer 스켈레톤 박스 — 좌→우로 부드럽게 가로지르는 highlight gradient.
+ * Reanimated로 워클릿에서 translateX 처리. opacity pulse(이전 패턴)보다 앱 느낌.
  */
 export function Skeleton({ width = '100%', height = 16, radius = Radius.xs, style }: SkeletonProps) {
-  const tokens = useTokens()
-  const opacity = useRef(new Animated.Value(0.5)).current
+  const t = useTokens()
+  const isDark = useColorScheme() === 'dark'
+  // 컨테이너 폭을 layout에서 읽어 SharedValue로 전달
+  const containerW = useSharedValue(0)
+  const phase = useSharedValue(0)
 
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.5, duration: 700, useNativeDriver: true }),
-      ]),
+    phase.value = withRepeat(
+      withTiming(1, { duration: SWEEP_DURATION, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      false,
     )
-    loop.start()
-    return () => loop.stop()
-  }, [opacity])
+  }, [phase])
+
+  const animStyle = useAnimatedStyle(() => {
+    // -W에서 시작해 +W로 sweep. 너비 미측정 시 0으로 보일 뿐 깨지지 않음
+    const w = containerW.value || 200
+    return {
+      transform: [{ translateX: -w + phase.value * w * 2 }],
+    }
+  })
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    containerW.value = e.nativeEvent.layout.width
+  }
+
+  // 다크모드는 raised 톤이 base보다 살짝 밝아 그대로 highlight로 사용. 라이트는 흰색에 가까운 raised로.
+  const highlight = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.85)'
 
   return (
-    <Animated.View
+    <View
+      onLayout={onLayout}
       style={[
-        { width, height, borderRadius: radius, backgroundColor: tokens.surface.pressed, opacity },
+        { width, height, borderRadius: radius, backgroundColor: t.surface.pressed, overflow: 'hidden' },
         style,
       ]}
-    />
+    >
+      <Animated.View style={[StyleSheet.absoluteFill, animStyle]}>
+        <LinearGradient
+          colors={['rgba(255,255,255,0)', highlight, 'rgba(255,255,255,0)']}
+          locations={[0, 0.5, 1]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+    </View>
   )
 }
 

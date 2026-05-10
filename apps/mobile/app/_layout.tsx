@@ -8,13 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
 import { QueryClientProvider } from '@tanstack/react-query'
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  useFonts,
-} from '@expo-google-fonts/inter'
+import { useFonts } from 'expo-font'
 import 'react-native-reanimated'
 
 import { useColorScheme } from '@/hooks/use-color-scheme'
@@ -61,11 +55,12 @@ TextInputWithDefaults.defaultProps.maxFontSizeMultiplier =
 export default function RootLayout() {
   const colorScheme = useColorScheme()
   const isDark = colorScheme === 'dark'
+  // Pretendard — 한글 가독성 + iOS 시스템 폰트와 톤 매치. 키 문자열이 그대로 fontFamily 값으로 사용됨.
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
+    Pretendard_400Regular: require('pretendard/dist/public/static/alternative/Pretendard-Regular.ttf'),
+    Pretendard_500Medium: require('pretendard/dist/public/static/alternative/Pretendard-Medium.ttf'),
+    Pretendard_600SemiBold: require('pretendard/dist/public/static/alternative/Pretendard-SemiBold.ttf'),
+    Pretendard_700Bold: require('pretendard/dist/public/static/alternative/Pretendard-Bold.ttf'),
   })
 
   // 폰트가 로드(또는 실패)되면 스플래시 닫기
@@ -114,7 +109,9 @@ function ThemedStack() {
         headerStyle: { backgroundColor: Tokens.surface.raised },
         headerTintColor: Tokens.text.primary,
         headerTitleStyle: { fontWeight: '700', fontFamily: FontFamily.bold },
-        headerBackTitle: '뒤로',
+        // iOS: chevron만, Android: 자체 back arrow — 한글 라벨 제거로 nav 시각 노이즈 ↓
+        headerBackTitle: '',
+        headerBackButtonDisplayMode: 'minimal',
         headerShadowVisible: false,
         contentStyle: { backgroundColor: Tokens.surface.canvas },
         animation: 'slide_from_right',
@@ -122,28 +119,14 @@ function ThemedStack() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="event/[id]"
-        options={{
-          title: '사건',
-          presentation: 'modal',
-          animation: 'slide_from_bottom',
-          gestureEnabled: true,
-        }}
-      />
+      {/* 상세 보기 = drill-down (push). 모달은 작성/편집 폼에만. */}
+      <Stack.Screen name="event/[id]" options={{ title: '사건' }} />
+      <Stack.Screen name="person/[id]" options={{ title: '인물' }} />
+      <Stack.Screen name="country/[id]" options={{ title: '국가' }} />
       <Stack.Screen
         name="event/edit"
         options={{
           title: '사건 등록',
-          presentation: 'modal',
-          animation: 'slide_from_bottom',
-          gestureEnabled: true,
-        }}
-      />
-      <Stack.Screen
-        name="person/[id]"
-        options={{
-          title: '인물',
           presentation: 'modal',
           animation: 'slide_from_bottom',
           gestureEnabled: true,
@@ -158,22 +141,7 @@ function ThemedStack() {
           gestureEnabled: true,
         }}
       />
-      <Stack.Screen
-        name="country/[id]"
-        options={{
-          title: '국가',
-          presentation: 'modal',
-          animation: 'slide_from_bottom',
-          gestureEnabled: true,
-        }}
-      />
-      <Stack.Screen
-        name="bookmarks"
-        options={{
-          title: '즐겨찾기',
-          animation: 'slide_from_right',
-        }}
-      />
+      <Stack.Screen name="bookmarks" options={{ title: '즐겨찾기' }} />
     </Stack>
   )
 }

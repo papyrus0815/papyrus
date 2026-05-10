@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Platform, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
+import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated'
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 import { useQuery } from '@tanstack/react-query'
 import { AppPressable } from '@/components/app-pressable'
 import { InitialAvatar } from '@/components/initial-avatar'
@@ -12,7 +14,6 @@ import { api } from '@/lib/api'
 import { formatDateString } from '@/lib/format'
 import { imageUrl } from '@/lib/image-url'
 import { EmptyState } from '@/components/empty-state'
-import { ListSearchBar } from '@/components/list-search-bar'
 import { ListErrorView } from '@/components/list-error-view'
 import { PageHeader } from '@/components/page-header'
 import { SearchHistoryChips } from '@/components/search-history-chips'
@@ -30,6 +31,16 @@ export default function EventsScreen() {
   const t = useTokens()
   const listRef = useRef<FlatList<EventListItem>>(null)
   useTabScrollToTop(listRef)
+  // iOS는 탭 바가 absolute라 마지막 아이템이 가려지지 않게 직접 패딩
+  const tabBarHeight = useBottomTabBarHeight()
+  const listBottomPad = Platform.OS === 'ios' ? tabBarHeight + Spacing.md : Spacing.md
+  // PageHeader collapse용 scrollY
+  const scrollY = useSharedValue(0)
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y
+    },
+  })
   const { items: searchHistory, push: pushHistory, remove: removeHistory, clear: clearHistory } =
     useSearchHistory('events')
   const [query, setQuery] = useState('')
@@ -81,6 +92,19 @@ export default function EventsScreen() {
       <PageHeader
         title="사건"
         subtitle={`${filtered.length}건`}
+        scrollY={scrollY}
+        search={{ value: query, onChange: setQuery, placeholder: '제목·키워드·장소 검색' }}
+        bottomSlot={
+          !query ? (
+            <SearchHistoryChips
+              items={searchHistory}
+              onSelect={(q) => setQuery(q)}
+              onRemove={removeHistory}
+              onClear={clearHistory}
+              suggestions={['임진왜란', '갑오개혁', '3.1 운동', '병자호란', '한국전쟁']}
+            />
+          ) : null
+        }
         right={
           <AppPressable
             onPress={() => goEventEdit(router)}
@@ -92,22 +116,14 @@ export default function EventsScreen() {
           </AppPressable>
         }
       />
-      <ListSearchBar value={query} onChange={setQuery} placeholder="제목·키워드·장소 검색" />
-      {!query && (
-        <SearchHistoryChips
-          items={searchHistory}
-          onSelect={(q) => setQuery(q)}
-          onRemove={removeHistory}
-          onClear={clearHistory}
-          suggestions={['임진왜란', '갑오개혁', '3.1 운동', '병자호란', '한국전쟁']}
-        />
-      )}
-      <FlatList
+      <Animated.FlatList
         ref={listRef}
         data={filtered}
         keyExtractor={(it) => String(it.id)}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: listBottomPad }]}
         keyboardDismissMode="on-drag"
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

@@ -186,23 +186,26 @@ export const Spacing = {
 } as const;
 export type SpacingToken = keyof typeof Spacing;
 
-/** 단일 elevation — 카드, 검색바, 드롭다운에 사용. */
+/**
+ * 단일 elevation — 카드, 검색바, 드롭다운에 사용.
+ * iOS 네이티브 톤에 맞춰 옅게. 진한 그림자는 "Material 웹" 느낌이라 의도적으로 톤다운.
+ */
 export const Elevation: { card: ViewStyle } = {
   card: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
   },
 };
 
-/** Inter 폰트 패밀리 — `_layout.tsx`에서 useFonts로 로드. */
+/** Pretendard 폰트 패밀리 — `_layout.tsx`에서 useFonts로 로드. 한글·라틴 모두 커버. */
 export const FontFamily = {
-  regular: 'Inter_400Regular',
-  medium: 'Inter_500Medium',
-  semibold: 'Inter_600SemiBold',
-  bold: 'Inter_700Bold',
+  regular: 'Pretendard_400Regular',
+  medium: 'Pretendard_500Medium',
+  semibold: 'Pretendard_600SemiBold',
+  bold: 'Pretendard_700Bold',
 } as const;
 
 /**

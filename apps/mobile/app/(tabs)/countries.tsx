@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Platform, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
+import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated'
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 import { useQuery } from '@tanstack/react-query'
 import { AppPressable } from '@/components/app-pressable'
 import { InitialAvatar } from '@/components/initial-avatar'
@@ -11,7 +13,6 @@ import { api } from '@/lib/api'
 import { dateRange } from '@/lib/format'
 import { imageUrl } from '@/lib/image-url'
 import { EmptyState } from '@/components/empty-state'
-import { ListSearchBar } from '@/components/list-search-bar'
 import { ListErrorView } from '@/components/list-error-view'
 import { PageHeader } from '@/components/page-header'
 import { SearchHistoryChips } from '@/components/search-history-chips'
@@ -28,6 +29,14 @@ export default function CountriesScreen() {
   const router = useRouter()
   const listRef = useRef<FlatList<CountryListItem>>(null)
   useTabScrollToTop(listRef)
+  const tabBarHeight = useBottomTabBarHeight()
+  const listBottomPad = Platform.OS === 'ios' ? tabBarHeight + Spacing.md : Spacing.md
+  const scrollY = useSharedValue(0)
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y
+    },
+  })
   const { items: searchHistory, push: pushHistory, remove: removeHistory, clear: clearHistory } =
     useSearchHistory('countries')
   const [query, setQuery] = useState('')
@@ -74,23 +83,31 @@ export default function CountriesScreen() {
 
   return (
     <View style={styles.root}>
-      <PageHeader title="국가" subtitle={`${filtered.length}개`} />
-      <ListSearchBar value={query} onChange={setQuery} placeholder="국가·정권 검색" />
-      {!query && (
-        <SearchHistoryChips
-          items={searchHistory}
-          onSelect={(q) => setQuery(q)}
-          onRemove={removeHistory}
-          onClear={clearHistory}
-          suggestions={['조선', '고려', '신라', '백제', '고구려', '대한제국']}
-        />
-      )}
-      <FlatList
+      <PageHeader
+        title="국가"
+        subtitle={`${filtered.length}개`}
+        scrollY={scrollY}
+        search={{ value: query, onChange: setQuery, placeholder: '국가·정권 검색' }}
+        bottomSlot={
+          !query ? (
+            <SearchHistoryChips
+              items={searchHistory}
+              onSelect={(q) => setQuery(q)}
+              onRemove={removeHistory}
+              onClear={clearHistory}
+              suggestions={['조선', '고려', '신라', '백제', '고구려', '대한제국']}
+            />
+          ) : null
+        }
+      />
+      <Animated.FlatList
         ref={listRef}
         data={filtered}
         keyExtractor={(it) => String(it.id)}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: listBottomPad }]}
         keyboardDismissMode="on-drag"
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

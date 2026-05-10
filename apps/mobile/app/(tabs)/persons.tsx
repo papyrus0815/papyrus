@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   LayoutAnimation,
+  Platform,
   Pressable,
   RefreshControl,
   SectionList,
@@ -14,11 +15,17 @@ import {
 import { useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
-import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated'
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from 'react-native-reanimated'
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { displayName, lifespan } from '@/lib/format'
-import { ListSearchBar } from '@/components/list-search-bar'
 import { PageHeader } from '@/components/page-header'
 import { OptionSheet, type OptionItem } from '@/components/option-sheet'
 import { ActiveFilterBar, type ActiveFilterChip } from '@/components/active-filter-bar'
@@ -60,6 +67,9 @@ import type {
   ViewMode,
 } from '@/components/persons/types'
 
+// Reanimated가 SectionList의 typed Animated 버전을 export하지 않아 직접 생성. typeof SectionList로 제네릭 보존.
+const AnimatedSectionList = Animated.createAnimatedComponent(SectionList) as unknown as typeof SectionList
+
 const SORT_OPTIONS: OptionItem<SortMode>[] = [
   { value: 'recent', label: '최근 등록순', description: '새로 추가된 인물이 위에', icon: 'time' },
   { value: 'influence-desc', label: '영향력 (높은 순)', description: '역사적 영향력 점수 기준', icon: 'trending-up' },
@@ -75,6 +85,15 @@ export default function PersonsScreen() {
   const listRef = useRef<SectionList<PersonListItem>>(null)
   useTabScrollToTop(listRef)
   const queryClient = useQueryClient()
+  const tabBarHeight = useBottomTabBarHeight()
+  const listBottomPad = Platform.OS === 'ios' ? tabBarHeight + 8 : 8
+  // PageHeader collapse용 scrollY
+  const scrollY = useSharedValue(0)
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y
+    },
+  })
   const [query, setQuery] = useState('')
   const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS)
   const [sort, setSort] = useState<SortMode>('recent')
@@ -292,6 +311,19 @@ export default function PersonsScreen() {
       <PageHeader
         title="인물"
         subtitle={`${sorted.length}명${activeFilterChips.length > 0 ? ` (필터 ${activeFilterChips.length}개)` : ''}`}
+        scrollY={scrollY}
+        search={{ value: query, onChange: setQuery, placeholder: '이름·왕호·가문·국가' }}
+        bottomSlot={
+          !query ? (
+            <SearchHistoryChips
+              items={searchHistory}
+              onSelect={(q) => setQuery(q)}
+              onRemove={removeHistory}
+              onClear={clearHistory}
+              suggestions={['세종', '정조', '광개토대왕', '이순신', '왕건', '주원장']}
+            />
+          ) : null
+        }
         right={
           <Pressable
             onPress={() => goPersonEdit(router)}
@@ -305,29 +337,23 @@ export default function PersonsScreen() {
         }
       />
       <View style={styles.toolbar}>
-        <ListSearchBar value={query} onChange={setQuery} placeholder="이름·왕호·가문·국가" />
-        {!query && (
-          <SearchHistoryChips
-            items={searchHistory}
-            onSelect={(q) => setQuery(q)}
-            onRemove={removeHistory}
-            onClear={clearHistory}
-            suggestions={['세종', '정조', '광개토대왕', '이순신', '왕건', '주원장']}
-          />
-        )}
         <View style={styles.toolbarRow}>
           <Pressable
-            style={styles.toolbarBtn}
+            style={({ pressed }) => [styles.ghostBtn, pressed && styles.ghostBtnPressed]}
             onPress={() => setShowSortSheet(true)}
             accessibilityLabel={`정렬 변경 (현재: ${sortLabel})`}
             accessibilityRole="button"
           >
             <Ionicons name="swap-vertical" size={14} color={Tokens.text.secondary} />
-            <Text style={styles.toolbarBtnText}>{sortLabel}</Text>
+            <Text style={styles.ghostBtnText}>{sortLabel}</Text>
             <Ionicons name="chevron-down" size={12} color={Tokens.text.muted} />
           </Pressable>
           <Pressable
-            style={[styles.toolbarBtn, activeFilterChips.length > 0 && styles.toolbarBtnActive]}
+            style={({ pressed }) => [
+              styles.ghostBtn,
+              activeFilterChips.length > 0 && styles.ghostBtnAccent,
+              pressed && styles.ghostBtnPressed,
+            ]}
             onPress={() => {
               animateNext()
               setShowFilters((v) => !v)
@@ -338,14 +364,23 @@ export default function PersonsScreen() {
             <Ionicons
               name={showFilters ? 'filter' : 'filter-outline'}
               size={14}
-              color={activeFilterChips.length > 0 ? Tokens.brand.onPrimary : Tokens.text.secondary}
+              color={activeFilterChips.length > 0 ? Tokens.brand.primary : Tokens.text.secondary}
             />
-            <Text style={[styles.toolbarBtnText, activeFilterChips.length > 0 && styles.toolbarBtnTextActive]}>
+            <Text
+              style={[
+                styles.ghostBtnText,
+                activeFilterChips.length > 0 && { color: Tokens.brand.primary, fontWeight: '700' },
+              ]}
+            >
               필터{activeFilterChips.length > 0 ? ` ${activeFilterChips.length}` : ''}
             </Text>
           </Pressable>
           <Pressable
-            style={[styles.toolbarBtn, groupCentury && styles.toolbarBtnActive]}
+            style={({ pressed }) => [
+              styles.ghostBtn,
+              groupCentury && styles.ghostBtnAccent,
+              pressed && styles.ghostBtnPressed,
+            ]}
             onPress={() => {
               animateNext()
               setGroupCentury((v) => !v)
@@ -357,27 +392,34 @@ export default function PersonsScreen() {
             <Ionicons
               name="albums"
               size={14}
-              color={groupCentury ? Tokens.brand.onPrimary : Tokens.text.secondary}
+              color={groupCentury ? Tokens.brand.primary : Tokens.text.secondary}
             />
-            <Text style={[styles.toolbarBtnText, groupCentury && styles.toolbarBtnTextActive]}>
+            <Text
+              style={[
+                styles.ghostBtnText,
+                groupCentury && { color: Tokens.brand.primary, fontWeight: '700' },
+              ]}
+            >
               세기
             </Text>
           </Pressable>
           <View style={{ flex: 1 }} />
-          <View style={styles.viewToggle}>
+          {/* iOS UISegmentedControl 톤: 배경 surface.pressed, 활성 segment surface.raised */}
+          <View style={styles.segment}>
             <Pressable
               onPress={() => {
                 animateNext()
                 setViewMode('cards')
               }}
-              style={[styles.viewBtn, viewMode === 'cards' && styles.viewBtnActive]}
+              style={[styles.segmentItem, viewMode === 'cards' && styles.segmentItemActive]}
               accessibilityLabel="카드 뷰"
               accessibilityRole="button"
+              accessibilityState={{ selected: viewMode === 'cards' }}
             >
               <Ionicons
                 name="albums-outline"
-                size={16}
-                color={viewMode === 'cards' ? Tokens.brand.onPrimary : Tokens.text.muted}
+                size={15}
+                color={viewMode === 'cards' ? Tokens.text.primary : Tokens.text.muted}
               />
             </Pressable>
             <Pressable
@@ -385,14 +427,15 @@ export default function PersonsScreen() {
                 animateNext()
                 setViewMode('compact')
               }}
-              style={[styles.viewBtn, viewMode === 'compact' && styles.viewBtnActive]}
+              style={[styles.segmentItem, viewMode === 'compact' && styles.segmentItemActive]}
               accessibilityLabel="콤팩트 뷰"
               accessibilityRole="button"
+              accessibilityState={{ selected: viewMode === 'compact' }}
             >
               <Ionicons
                 name="list-outline"
-                size={16}
-                color={viewMode === 'compact' ? Tokens.brand.onPrimary : Tokens.text.muted}
+                size={15}
+                color={viewMode === 'compact' ? Tokens.text.primary : Tokens.text.muted}
               />
             </Pressable>
           </View>
@@ -469,13 +512,15 @@ export default function PersonsScreen() {
           }
         />
       ) : (
-        <SectionList
+        <AnimatedSectionList
           ref={listRef}
           sections={groupCentury ? groupByCentury(sorted) : [{ century: null, data: sorted }]}
           keyExtractor={(it) => String(it.id)}
           stickySectionHeadersEnabled={groupCentury}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: listBottomPad }]}
           keyboardDismissMode="on-drag"
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -581,30 +626,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 4,
   },
-  toolbarBtn: {
+  // ghost 버튼: 테두리 없이 부드러운 배경, 활성 시 brand 텍스트만 강조
+  ghostBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: Tokens.surface.canvas,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Tokens.border.subtle,
   },
-  toolbarBtnActive: { backgroundColor: Tokens.brand.primary, borderColor: Tokens.brand.primary },
-  toolbarBtnText: { fontSize: 12, fontWeight: '600', color: Tokens.text.secondary },
-  toolbarBtnTextActive: { color: Tokens.brand.onPrimary },
-  viewToggle: {
+  ghostBtnPressed: { backgroundColor: Tokens.surface.pressed },
+  ghostBtnAccent: { backgroundColor: Tokens.surface.pressed },
+  ghostBtnText: { fontSize: 12, fontWeight: '600', color: Tokens.text.secondary },
+  // iOS UISegmentedControl 톤
+  segment: {
     flexDirection: 'row',
-    backgroundColor: Tokens.surface.canvas,
+    backgroundColor: Tokens.surface.pressed,
     borderRadius: 8,
     padding: 2,
-    borderWidth: 1,
-    borderColor: Tokens.border.subtle,
   },
-  viewBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  viewBtnActive: { backgroundColor: Tokens.brand.primary },
+  segmentItem: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  segmentItemActive: {
+    backgroundColor: Tokens.surface.raised,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
   list: { paddingHorizontal: 12, paddingVertical: 8 },
   addBtn: {
     width: 40,
