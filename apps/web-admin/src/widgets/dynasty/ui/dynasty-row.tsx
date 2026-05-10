@@ -8,6 +8,7 @@ import type { Dynasty } from '@/shared/api/dynasty'
 import { getUploadImageUrl } from '@/shared/api/upload'
 
 import { primarySoft } from './dynasty.styles'
+import { HighlightedText } from './text-highlight'
 
 export interface DynastyDerived {
   dynasty: Dynasty
@@ -21,9 +22,13 @@ export interface DynastyDerived {
 
 interface Props {
   derived: DynastyDerived
-  /** 모든 행이 공유하는 전체 시대 범위 */
+  /** 모든 행이 공유하는 시대 범위 (필터 적용된 결과 기준) */
   axisMin: number
   axisMax: number
+  /** 타임라인 막대 노출 여부 — sort='era'일 때만 의미가 있어 외부에서 제어 */
+  showTimeline: boolean
+  /** 검색어 — Name/origin/founder/motto에 highlight */
+  query: string
   isExpanded: boolean
   isDeleting: boolean
   onToggleExpand: () => void
@@ -74,6 +79,8 @@ export function DynastyRow({
   derived,
   axisMin,
   axisMax,
+  showTimeline,
+  query,
   isExpanded,
   isDeleting,
   onToggleExpand,
@@ -133,6 +140,8 @@ export function DynastyRow({
                     ? `${dynasty.name} 가문 상징(문장)`
                     : `${dynasty.name} 썸네일`
                 }
+                loading="lazy"
+                decoding="async"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none'
                 }}
@@ -144,32 +153,36 @@ export function DynastyRow({
 
           <PrimaryCol>
             <NameRow>
-              <Name>{dynasty.name}</Name>
-              {duration != null && (
-                <DurationChip>{duration.toLocaleString()}년{ongoing ? '+' : ''}</DurationChip>
-              )}
-              {memberCount > 0 && (
-                <MemberCountChip
-                  title={`인물 ${memberCount.toLocaleString()}명 등록됨`}
-                  aria-label={`인물 ${memberCount.toLocaleString()}명`}
-                >
-                  <IconUsers />
-                  {memberCount.toLocaleString()}
-                </MemberCountChip>
-              )}
+              <Name>
+                <HighlightedText text={dynasty.name} query={query} />
+              </Name>
+              <ChipGroup>
+                {duration != null && (
+                  <DurationChip>{duration.toLocaleString()}년{ongoing ? '+' : ''}</DurationChip>
+                )}
+                {memberCount > 0 && (
+                  <MemberCountChip
+                    title={`인물 ${memberCount.toLocaleString()}명 등록됨`}
+                    aria-label={`인물 ${memberCount.toLocaleString()}명`}
+                  >
+                    <IconUsers />
+                    {memberCount.toLocaleString()}
+                  </MemberCountChip>
+                )}
+              </ChipGroup>
             </NameRow>
             <MetaLine>
               <MetaEra>{eraText}</MetaEra>
               {dynasty.originPlace && (
                 <MetaItem>
                   <IconOrigin />
-                  {dynasty.originPlace}
+                  <HighlightedText text={dynasty.originPlace} query={query} />
                 </MetaItem>
               )}
               {dynasty.founderText && (
                 <MetaItem>
                   <IconFounder />
-                  {dynasty.founderText}
+                  <HighlightedText text={dynasty.founderText} query={query} />
                 </MetaItem>
               )}
             </MetaLine>
@@ -180,19 +193,21 @@ export function DynastyRow({
           </ChevronWrap>
         </TopLine>
 
-        <TimelineRow title={timelineTitle} aria-hidden>
-          <TimelineTrack>
-            <TimelineBar
-              style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-              $known={knownStart && knownEnd}
-              $dashed={!knownStart || !knownEnd}
-            />
-          </TimelineTrack>
-          <TimelineYears>
-            <span>{startYear ?? '?'}</span>
-            <span>{endYear ?? (ongoing ? '현재' : '?')}</span>
-          </TimelineYears>
-        </TimelineRow>
+        {showTimeline && (
+          <TimelineRow title={timelineTitle} aria-hidden>
+            <TimelineTrack>
+              <TimelineBar
+                style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                $known={knownStart && knownEnd}
+                $dashed={!knownStart || !knownEnd}
+              />
+            </TimelineTrack>
+            <TimelineYears>
+              <span>{startYear ?? '?'}</span>
+              <span>{endYear ?? (ongoing ? '현재' : '?')}</span>
+            </TimelineYears>
+          </TimelineRow>
+        )}
       </RowMain>
 
       <AnimatePresence initial={false}>
@@ -207,11 +222,15 @@ export function DynastyRow({
               {dynasty.motto && (
                 <Motto>
                   <IconQuote />
-                  <span>{dynasty.motto}</span>
+                  <span>
+                    <HighlightedText text={dynasty.motto} query={query} />
+                  </span>
                 </Motto>
               )}
               {dynasty.description && (
-                <Description>{dynasty.description}</Description>
+                <Description>
+                  <HighlightedText text={dynasty.description} query={query} />
+                </Description>
               )}
               <ActionRow>
                 <MembersBtn type="button" onClick={onShowMembers}>
@@ -329,17 +348,32 @@ const PrimaryCol = styled.div`
 `
 
 const NameRow = styled.div`
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px 10px;
   flex-wrap: wrap;
+  /* flex item 의 기본 min-width: auto 를 풀어 Name 의 ellipsis 가 동작하게 함 */
+  min-width: 0;
+  width: 100%;
 `
 
 const Name = styled.span`
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 15.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const ChipGroup = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 `
 
 const DurationChip = styled.span`
@@ -350,6 +384,8 @@ const DurationChip = styled.span`
   background: ${({ theme }) => primarySoft(theme.mode)};
   padding: 2px 8px;
   border-radius: 999px;
+  flex-shrink: 0;
+  white-space: nowrap;
 `
 
 const MemberCountChip = styled.span`
@@ -363,6 +399,8 @@ const MemberCountChip = styled.span`
   background: ${({ theme }) => theme.colors.background.tertiary};
   padding: 2px 8px;
   border-radius: 999px;
+  flex-shrink: 0;
+  white-space: nowrap;
 
   svg {
     color: ${({ theme }) => theme.colors.text.tertiary};

@@ -1,8 +1,11 @@
 /**
  * 가문 섹션 — 풀 페이지 진입점이 사용.
- * 스티키 헤더 + 검색·필터·정렬 + 와이드 행 리스트 + 인라인 확장.
+ * 스티키 헤더(스크롤 시 compact) + 검색·필터·정렬 + 와이드 행 리스트 + 인라인 다중 확장.
+ *
+ * 주의: 행 가상화는 의도적으로 미적용 (현재 데이터 규모: 수 개~수십 개).
+ *       200+ 도달 시 react-virtuoso 등 도입 검토 필요.
  */
-import { useMemo, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import styled from 'styled-components'
 
@@ -17,7 +20,9 @@ import type { Dynasty, DynastyMutationBody } from '@/shared/api/dynasty'
 import { DynastyFormModal } from './dynasty-form-modal'
 import { DynastyMembersInfographicModal } from './dynasty-members-infographic-modal'
 import {
+  defaultDirFor,
   DynastyControls,
+  type SortDir,
   type SortKey,
   type StatusFilter,
 } from './ui/dynasty-controls'
@@ -26,6 +31,8 @@ import type { DynastyFormPayload } from './ui/dynasty-form'
 import { DynastyRow, type DynastyDerived } from './ui/dynasty-row'
 import { DynastySkeleton } from './ui/dynasty-skeleton'
 import {
+  EraGroupCount,
+  EraGroupMarker,
   HeaderTopRow,
   KpiInlineGroup,
   KpiInlineItem,
@@ -82,21 +89,42 @@ function matchesStatus(d: DynastyDerived, status: StatusFilter): boolean {
   return d.endYear != null
 }
 
-function compareBy(sort: SortKey) {
+function compareBy(sort: SortKey, dir: SortDir) {
+  // sort 자연 정렬(asc) 기준으로 비교한 뒤 dir 가 desc 면 부호 반전.
+  // 단, 미상(null) 항목은 dir 와 무관하게 항상 뒤로.
+  const sign = dir === 'desc' ? -1 : 1
   return (a: DynastyDerived, b: DynastyDerived) => {
     if (sort === 'name') {
-      return (a.dynasty.name ?? '').localeCompare(b.dynasty.name ?? '', 'ko')
+      return sign * (a.dynasty.name ?? '').localeCompare(b.dynasty.name ?? '', 'ko')
     }
     if (sort === 'duration') {
-      const da = a.duration ?? -1
-      const db = b.duration ?? -1
-      return db - da
+      const da = a.duration
+      const db = b.duration
+      if (da == null && db == null) return 0
+      if (da == null) return 1
+      if (db == null) return -1
+      return sign * (da - db)
     }
-    // era: oldest first; missing start goes last
-    const sa = a.startYear ?? Number.POSITIVE_INFINITY
-    const sb = b.startYear ?? Number.POSITIVE_INFINITY
-    return sa - sb
+    // era 자연순 = 오래된 순(작은 시작년 먼저)
+    const sa = a.startYear
+    const sb = b.startYear
+    if (sa == null && sb == null) return 0
+    if (sa == null) return 1
+    if (sb == null) return -1
+    return sign * (sa - sb)
   }
+}
+
+/** 시작년도 기준 century 라벨 반환. 미상은 null. */
+function centuryOf(year: number | null): number | null {
+  if (year == null) return null
+  // BC 케이스도 안전하게 처리: -50 → -100년대 (BC 100년대 = -100 ~ -1)
+  return Math.floor(year / 100) * 100
+}
+
+function centuryLabel(century: number): string {
+  if (century >= 0) return `${century}년대`
+  return `BC ${Math.abs(century)}년대`
 }
 
 /** 빈 문자열은 편집 시 null(=clear), 신규 시 undefined(=skip)로. */
@@ -124,8 +152,13 @@ export function DynastySection() {
   } | null>(null)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortKey>('era')
+  const [sortDir, setSortDir] = useState<SortDir>(defaultDirFor('era'))
   const [status, setStatus] = useState<StatusFilter>('all')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  // 다중 expand 허용 — Set 으로 보관
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+  // 스크롤 컨테이너 + 헤더 compact 토글
+  const scrollRootRef = useRef<HTMLDivElement>(null)
+  const [headerCompact, setHeaderCompact] = useState(false)
 
   const list = Array.isArray(dynasties) ? dynasties : []
   const isSaving = createDynasty.isPending || updateDynasty.isPending
@@ -133,35 +166,31 @@ export function DynastySection() {
   // 파생 데이터
   const allDerived = useMemo(() => list.map(deriveOne), [list])
 
-  // 통계 — starts/ends 한 번만 모아서 axisMin/eraSpan/avgDuration 동시 계산
-  const stats = useMemo(() => {
-    const nowYear = new Date().getFullYear()
+  // 전역 통계(KPI 용) — 항상 전체 가문 기준
+  const globalStats = useMemo(() => {
     let minStart: number | null = null
     let maxKnownEnd: number | null = null
-    let maxAxisEnd = nowYear
     let durSum = 0
     let durCount = 0
+    let ongoingCount = 0
+    let endedCount = 0
     for (const d of allDerived) {
       if (d.startYear != null) {
         minStart = minStart == null ? d.startYear : Math.min(minStart, d.startYear)
       }
       if (d.endYear != null) {
         maxKnownEnd = maxKnownEnd == null ? d.endYear : Math.max(maxKnownEnd, d.endYear)
-        maxAxisEnd = Math.max(maxAxisEnd, d.endYear)
       }
       if (d.duration != null) {
         durSum += d.duration
         durCount += 1
       }
+      if (d.ongoing) ongoingCount += 1
+      else if (d.endYear != null) endedCount += 1
     }
-    const axisHasData = minStart != null
-    const range = axisHasData ? maxAxisEnd - minStart! : 0
-    const pad = Math.max(20, Math.round(range * 0.04))
-    const axisMin = axisHasData ? minStart! - pad : 0
-    const axisMax = axisHasData ? maxAxisEnd + pad : nowYear
     const avgDuration = durCount > 0 ? Math.round(durSum / durCount) : null
     const eraSpan = minStart != null ? { min: minStart, max: maxKnownEnd } : null
-    return { axisMin, axisMax, avgDuration, eraSpan }
+    return { avgDuration, eraSpan, ongoingCount, endedCount }
   }, [allDerived])
 
   // 필터 + 정렬
@@ -169,10 +198,73 @@ export function DynastySection() {
     const q = query.trim().toLowerCase()
     return allDerived
       .filter((d) => matchesQuery(d.dynasty, q) && matchesStatus(d, status))
-      .sort(compareBy(sort))
-  }, [allDerived, query, status, sort])
+      .sort(compareBy(sort, sortDir))
+  }, [allDerived, query, status, sort, sortDir])
+
+  // 타임라인 축 — 필터 결과 기준으로 재계산해 막대가 의미있는 너비를 가짐
+  const axis = useMemo(() => {
+    const nowYear = new Date().getFullYear()
+    let minStart: number | null = null
+    let maxAxisEnd = nowYear
+    for (const d of filtered) {
+      if (d.startYear != null) {
+        minStart = minStart == null ? d.startYear : Math.min(minStart, d.startYear)
+      }
+      if (d.endYear != null) maxAxisEnd = Math.max(maxAxisEnd, d.endYear)
+    }
+    if (minStart == null) return { axisMin: 0, axisMax: nowYear }
+    const range = maxAxisEnd - minStart
+    const pad = Math.max(20, Math.round(range * 0.04))
+    return { axisMin: minStart - pad, axisMax: maxAxisEnd + pad }
+  }, [filtered])
 
   const totalCount = allDerived.length
+  const showTimeline = sort === 'era'
+
+  // sort='era' 일 때 century 별 count — 한 번만 집계
+  const centuryCounts = useMemo(() => {
+    if (sort !== 'era') return null
+    const counts = new Map<number, number>()
+    for (const d of filtered) {
+      const c = centuryOf(d.startYear)
+      if (c == null) continue
+      counts.set(c, (counts.get(c) ?? 0) + 1)
+    }
+    return counts
+  }, [filtered, sort])
+
+  // sort 키가 바뀌면 그 키의 자연 방향으로 sortDir 도 재설정 (사용자가 따로 토글하지 않은 경우)
+  const handleSortChange = (next: SortKey) => {
+    setSort(next)
+    setSortDir(defaultDirFor(next))
+  }
+
+  // 스크롤 다운 시 헤더 compact 토글 (60px 이상 스크롤 시)
+  useEffect(() => {
+    const root = scrollRootRef.current
+    if (!root) return
+    const onScroll = () => {
+      setHeaderCompact(root.scrollTop > 60)
+    }
+    onScroll()
+    root.addEventListener('scroll', onScroll, { passive: true })
+    return () => root.removeEventListener('scroll', onScroll)
+  }, [])
+
+  // 데이터/필터 변경 시 더 이상 보이지 않는 expand 항목은 정리
+  useLayoutEffect(() => {
+    setExpandedIds((prev) => {
+      if (prev.size === 0) return prev
+      const visible = new Set(filtered.map((d) => d.dynasty.id))
+      let changed = false
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (visible.has(id)) next.add(id)
+        else changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [filtered])
 
   const closeForm = () => {
     setFormOpen(false)
@@ -188,7 +280,12 @@ export function DynastySection() {
     setFormOpen(true)
   }
   const toggleExpand = (id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id))
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const handleSubmit = async (data: DynastyFormPayload) => {
@@ -218,35 +315,51 @@ export function DynastySection() {
     if (!window.confirm('이 가문을 삭제하시겠습니까?')) return
     await deleteDynasty.mutateAsync(id)
     if (editing?.id === id) closeForm()
-    if (expandedId === id) setExpandedId(null)
+    setExpandedIds((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }
 
   const isFiltering = query.trim().length > 0 || status !== 'all'
 
   return (
-    <SectionRoot>
-      <StickyHeader>
-        <StickyHeaderInner>
+    <SectionRoot ref={scrollRootRef}>
+      <StickyHeader $compact={headerCompact}>
+        <StickyHeaderInner $compact={headerCompact}>
           <HeaderTopRow>
             <TitleCluster>
               <PageTitle>가문</PageTitle>
-              {totalCount > 0 && (
+              {totalCount > 0 && !headerCompact && (
                 <KpiInlineGroup>
                   <KpiInlineItem>
                     <KpiInlineLabel>등록</KpiInlineLabel>
                     <KpiInlineValue>{totalCount.toLocaleString()}</KpiInlineValue>
                   </KpiInlineItem>
-                  {stats.avgDuration != null && (
+                  {(globalStats.ongoingCount > 0 || globalStats.endedCount > 0) && (
                     <KpiInlineItem>
-                      <KpiInlineLabel>평균 존속</KpiInlineLabel>
-                      <KpiInlineValue>{stats.avgDuration.toLocaleString()}년</KpiInlineValue>
+                      <KpiInlineLabel>상태</KpiInlineLabel>
+                      <KpiInlineValue>
+                        진행 {globalStats.ongoingCount.toLocaleString()} · 종료{' '}
+                        {globalStats.endedCount.toLocaleString()}
+                      </KpiInlineValue>
                     </KpiInlineItem>
                   )}
-                  {stats.eraSpan && (
+                  {globalStats.avgDuration != null && (
+                    <KpiInlineItem>
+                      <KpiInlineLabel>평균 존속</KpiInlineLabel>
+                      <KpiInlineValue>
+                        {globalStats.avgDuration.toLocaleString()}년
+                      </KpiInlineValue>
+                    </KpiInlineItem>
+                  )}
+                  {globalStats.eraSpan && (
                     <KpiInlineItem>
                       <KpiInlineLabel>시대</KpiInlineLabel>
                       <KpiInlineValue>
-                        {stats.eraSpan.min} – {stats.eraSpan.max ?? '현재'}
+                        {globalStats.eraSpan.min} – {globalStats.eraSpan.max ?? '현재'}
                       </KpiInlineValue>
                     </KpiInlineItem>
                   )}
@@ -267,7 +380,9 @@ export function DynastySection() {
               query={query}
               onQueryChange={setQuery}
               sort={sort}
-              onSortChange={setSort}
+              onSortChange={handleSortChange}
+              sortDir={sortDir}
+              onSortDirChange={setSortDir}
               status={status}
               onStatusChange={setStatus}
               totalCount={totalCount}
@@ -309,25 +424,51 @@ export function DynastySection() {
           </StatusPanel>
         ) : (
           <RowList>
-            {filtered.map((derived) => (
-              <DynastyRow
-                key={derived.dynasty.id}
-                derived={derived}
-                axisMin={stats.axisMin}
-                axisMax={stats.axisMax}
-                isExpanded={expandedId === derived.dynasty.id}
-                isDeleting={deleteDynasty.isPending}
-                onToggleExpand={() => toggleExpand(derived.dynasty.id)}
-                onEdit={() => openEdit(derived.dynasty)}
-                onDelete={() => handleDelete(derived.dynasty.id)}
-                onShowMembers={() =>
-                  setMembersModal({
-                    id: derived.dynasty.id,
-                    name: derived.dynasty.name,
-                  })
-                }
-              />
-            ))}
+            {filtered.map((derived, idx) => {
+              // sort='era' 일 때 행 사이에 century 마커 — 같은 century 가 묶일 때만 의미
+              const showGroupMarker =
+                sort === 'era' &&
+                derived.startYear != null &&
+                (() => {
+                  const cur = centuryOf(derived.startYear)
+                  if (cur == null) return false
+                  if (idx === 0) return true
+                  const prev = filtered[idx - 1]
+                  const prevCent = centuryOf(prev.startYear)
+                  return prevCent !== cur
+                })()
+              const groupCent = showGroupMarker ? centuryOf(derived.startYear) : null
+              const groupCount =
+                groupCent != null && centuryCounts ? centuryCounts.get(groupCent) ?? 0 : 0
+              return (
+                <Fragment key={derived.dynasty.id}>
+                  {showGroupMarker && groupCent != null && (
+                    <EraGroupMarker>
+                      {centuryLabel(groupCent)}
+                      <EraGroupCount>· {groupCount.toLocaleString()}</EraGroupCount>
+                    </EraGroupMarker>
+                  )}
+                  <DynastyRow
+                    derived={derived}
+                    axisMin={axis.axisMin}
+                    axisMax={axis.axisMax}
+                    showTimeline={showTimeline}
+                    query={query.trim()}
+                    isExpanded={expandedIds.has(derived.dynasty.id)}
+                    isDeleting={deleteDynasty.isPending}
+                    onToggleExpand={() => toggleExpand(derived.dynasty.id)}
+                    onEdit={() => openEdit(derived.dynasty)}
+                    onDelete={() => handleDelete(derived.dynasty.id)}
+                    onShowMembers={() =>
+                      setMembersModal({
+                        id: derived.dynasty.id,
+                        name: derived.dynasty.name,
+                      })
+                    }
+                  />
+                </Fragment>
+              )
+            })}
           </RowList>
         )}
       </ScrollBody>

@@ -30,8 +30,9 @@ export const SectionRoot = styled.div`
   -webkit-overflow-scrolling: touch;
 `
 
-/** 스티키 페이지 헤더 — SectionRoot 스크롤 컨테이너 상단에 고정 */
-export const StickyHeader = styled.div`
+/** 스티키 페이지 헤더 — SectionRoot 스크롤 컨테이너 상단에 고정.
+ * `$compact`: 스크롤 다운 시 KPI 줄을 숨기고 패딩을 축소. */
+export const StickyHeader = styled.div<{ $compact?: boolean }>`
   position: sticky;
   top: 0;
   z-index: 10;
@@ -42,19 +43,26 @@ export const StickyHeader = styled.div`
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+  transition: box-shadow 0.2s ease;
+  ${({ $compact, theme }) =>
+    $compact &&
+    css`
+      box-shadow: 0 4px 12px ${theme.colors.shadow.sm};
+    `}
 `
 
-export const StickyHeaderInner = styled.div`
+export const StickyHeaderInner = styled.div<{ $compact?: boolean }>`
   max-width: 1280px;
   margin: 0 auto;
-  padding: 18px 32px 16px;
+  padding: ${({ $compact }) => ($compact ? '10px 32px' : '18px 32px 16px')};
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: ${({ $compact }) => ($compact ? '8px' : '14px')};
+  transition: padding 0.2s ease, gap 0.2s ease;
 
   @media (max-width: 640px) {
-    padding: 14px 16px 12px;
-    gap: 10px;
+    padding: ${({ $compact }) => ($compact ? '8px 16px' : '14px 16px 12px')};
+    gap: ${({ $compact }) => ($compact ? '6px' : '10px')};
   }
 `
 
@@ -505,6 +513,63 @@ export const RowList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
+`
+
+/** 시대 정렬일 때 행 사이에 들어가는 century 라벨 (1500년대 등) */
+export const EraGroupMarker = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 6px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+
+  &:first-child {
+    margin-top: 0;
+  }
+
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: ${({ theme }) => theme.colors.border.light};
+  }
+`
+
+export const EraGroupCount = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-weight: 500;
+  font-size: 10.5px;
+`
+
+/** 정렬 방향 (오름/내림) 토글 버튼 — SortSelect 옆 */
+export const SortDirToggle = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
 `
 
 export const StatusPanel = styled.div`

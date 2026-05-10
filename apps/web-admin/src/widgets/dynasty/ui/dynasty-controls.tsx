@@ -9,16 +9,18 @@ import {
   SearchWrap,
   SegmentedBtn,
   SegmentedGroup,
+  SortDirToggle,
   SortSelect,
 } from './dynasty.styles'
 
 export type SortKey = 'era' | 'name' | 'duration'
+export type SortDir = 'asc' | 'desc'
 export type StatusFilter = 'all' | 'ongoing' | 'ended'
 
 export const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
-  { value: 'era', label: '시대순 (오래된 순)' },
+  { value: 'era', label: '시대순' },
   { value: 'name', label: '가나다순' },
-  { value: 'duration', label: '존속기간 긴 순' },
+  { value: 'duration', label: '존속기간순' },
 ]
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
@@ -27,15 +29,35 @@ const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'ended', label: '종료' },
 ]
 
+/** 정렬 키별 기본(자연스러운) 방향 — '시대순'은 오래된 순, 나머지는 가/긴 순. */
+const DEFAULT_DIR: Record<SortKey, SortDir> = {
+  era: 'asc',
+  name: 'asc',
+  duration: 'desc',
+}
+
+export function defaultDirFor(sort: SortKey): SortDir {
+  return DEFAULT_DIR[sort]
+}
+
 interface Props {
   query: string
   onQueryChange: (q: string) => void
   sort: SortKey
   onSortChange: (s: SortKey) => void
+  sortDir: SortDir
+  onSortDirChange: (d: SortDir) => void
   status: StatusFilter
   onStatusChange: (s: StatusFilter) => void
   totalCount: number
   filteredCount: number
+}
+
+/** 정렬 방향에 따라 의미 있는 한국어 보조 라벨(기본 라벨 옆에 작게) */
+function sortDirLabel(sort: SortKey, dir: SortDir): string {
+  if (sort === 'era') return dir === 'asc' ? '오래된 순' : '최근 순'
+  if (sort === 'name') return dir === 'asc' ? '가나다 ↑' : '가나다 ↓'
+  return dir === 'desc' ? '긴 순' : '짧은 순'
 }
 
 export function DynastyControls({
@@ -43,6 +65,8 @@ export function DynastyControls({
   onQueryChange,
   sort,
   onSortChange,
+  sortDir,
+  onSortDirChange,
   status,
   onStatusChange,
   totalCount,
@@ -90,7 +114,7 @@ export function DynastyControls({
       <SortSelect
         value={sort}
         onChange={(e) => onSortChange(e.target.value as SortKey)}
-        aria-label="정렬"
+        aria-label="정렬 기준"
       >
         {SORT_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>
@@ -98,6 +122,22 @@ export function DynastyControls({
           </option>
         ))}
       </SortSelect>
+      <SortDirToggle
+        type="button"
+        onClick={() => onSortDirChange(sortDir === 'asc' ? 'desc' : 'asc')}
+        aria-label={`정렬 방향 ${sortDirLabel(sort, sortDir)} (눌러서 반전)`}
+        title={sortDirLabel(sort, sortDir)}
+      >
+        {sortDir === 'asc' ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 6h13M3 12h9M3 18h6M17 18V6m0 0l-3 3m3-3l3 3" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 6h6M3 12h9M3 18h13M17 6v12m0 0l3-3m-3 3l-3-3" />
+          </svg>
+        )}
+      </SortDirToggle>
       <ResultMeta>
         {query.trim() || status !== 'all'
           ? `${filteredCount.toLocaleString()} / ${totalCount.toLocaleString()}`
