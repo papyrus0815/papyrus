@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 
-import { type ContinentOption, type Country } from '@/entities/country/api'
+import { type ContinentOption } from '@/entities/country/api'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 
 import { CountryDetailDashboard } from './country-detail-dashboard.widget'
@@ -20,49 +20,55 @@ import { MapRegionSection } from './map-region-section.widget'
 import { type OverviewSubTab, OverviewSubTabs } from './overview-sub-tabs'
 import { TreatySectionWidget } from './treaty-section.widget'
 
+/**
+ * 국가 상세 위젯이 다루는 탭 키.
+ *
+ * - `OverviewSubTab`(서브 탭) ∪ `'heads'`(역대 수반은 government 탭의 sub-view) 로 구성.
+ * - URL과 어휘 일치 — 페이지 → 위젯으로 그대로 전달, 위젯 → 페이지로 그대로 전달된다.
+ */
+export type CountryDetailTabKey = OverviewSubTab | 'heads'
+
 export interface CountryDetailProps {
   country: UnifiedCountry | null
   continents: ContinentOption[]
   isLoading?: boolean
+  /** URL의 countryId가 어떤 국가에도 매칭되지 않을 때 — NotFound 화면을 보여준다. */
+  notFound?: boolean
   onEdit?: (country: UnifiedCountry) => void
   onDelete?: (id: string) => void
   /** URL 연동: 역대 수반·대시보드·역사적 국가·행정구역·행정조직 등 특정 탭으로 진입 시 */
-  initialDetailTab?:
-    | 'heads'
-    | 'dashboard'
-    | 'linked-historical'
-    | 'regions'
-    | 'government'
-    | 'elections'
-    | 'laws'
-  onDetailTabChange?: (
-    tab:
-      | 'heads'
-      | 'linked-historical'
-      | 'regions'
-      | 'government'
-      | 'elections'
-      | 'laws'
-      | null,
-  ) => void
-  /** 대시보드(overview + statistics) 뷰로 전환 시 URL 갱신용 */
-  onDashboardView?: () => void
+  initialDetailTab?: CountryDetailTabKey
+  /**
+   * 탭 전환 시 URL 갱신 콜백.
+   * `'dashboard'` 포함 — 모든 탭 전환을 단일 콜백으로 처리한다.
+   */
+  onDetailTabChange?: (tab: CountryDetailTabKey | null) => void
 }
 
-/**
- * 국가 상세 페이지 (React.memo로 부모 리렌더 시 불필요한 리렌더 감소)
- */
+/** `initialDetailTab` → 실제 표시할 서브 탭으로 변환. 'heads'는 government 탭의 sub-view라 government로 매핑. */
+function resolveSubTab(
+  initial: CountryDetailTabKey | undefined,
+): OverviewSubTab {
+  if (!initial) return 'dashboard'
+  if (initial === 'heads') return 'government'
+  return initial
+}
+
+/** 국가 상세 페이지 (React.memo로 부모 리렌더 시 불필요한 리렌더 감소) */
+
 function CountryDetailInner({
   country,
   continents,
   isLoading = false,
+  notFound = false,
   onEdit,
   onDelete,
   initialDetailTab,
   onDetailTabChange,
-  onDashboardView,
 }: CountryDetailProps) {
-  const [activeSubTab, setActiveSubTab] = useState<OverviewSubTab>('statistics')
+  const [activeSubTab, setActiveSubTab] = useState<OverviewSubTab>(() =>
+    resolveSubTab(initialDetailTab),
+  )
   const [mapLocation, setMapLocation] = useState<{
     latitude: number
     longitude: number
@@ -75,36 +81,31 @@ function CountryDetailInner({
     setMapLocation(null)
   }, [country?.id])
 
-  // URL 등으로 역대 수반 / 대시보드 / 역사적 국가 / 행정구역 / 행정조직 진입 시 → 해당 탭으로 열기
-  // 인물 탭은 헤더 "인물" 페이지로 통합됐으므로 ?tab=person / persons-list 진입은 대시보드로 폴백됨 (page 계층에서 리다이렉트)
+  // URL 변화 → 탭 동기화. 'heads'는 government 탭 안의 sub-view로 매핑된다.
   React.useEffect(() => {
-    if (initialDetailTab === 'dashboard') {
-      setActiveSubTab('statistics')
-    } else if (initialDetailTab === 'heads') {
-      setActiveSubTab('government')
-    } else if (initialDetailTab === 'regions') {
-      setActiveSubTab('map')
-    } else if (initialDetailTab === 'government') {
-      setActiveSubTab('government')
-    } else if (initialDetailTab === 'elections') {
-      setActiveSubTab('elections')
-    } else if (initialDetailTab === 'laws') {
-      setActiveSubTab('laws')
-    }
+    if (!initialDetailTab) return
+    setActiveSubTab(resolveSubTab(initialDetailTab))
   }, [initialDetailTab])
 
   const handleOverviewSubTabChange = React.useCallback(
     (tab: OverviewSubTab) => {
       setActiveSubTab(tab)
-      if (tab === 'statistics') onDashboardView?.()
-      else if (tab === 'map') onDetailTabChange?.('regions')
-      else if (tab === 'government') onDetailTabChange?.('government')
-      else if (tab === 'elections') onDetailTabChange?.('elections')
-      else if (tab === 'laws') onDetailTabChange?.('laws')
+      onDetailTabChange?.(tab)
     },
-    [onDashboardView, onDetailTabChange],
+    [onDetailTabChange],
   )
 
+  // 우선순위: loading > notFound > empty(미선택). 셋을 명확히 분리해야 사용자가 자신의 상태를 안다.
+  if (isLoading && !country) {
+    return (
+      <CountryStyles.DetailPaneRelative>
+        <LoadingOverlay message="국가 정보를 불러오는 중..." />
+      </CountryStyles.DetailPaneRelative>
+    )
+  }
+  if (notFound) {
+    return <NotFoundState />
+  }
   if (!country) {
     return <EmptyState />
   }
@@ -186,7 +187,7 @@ function CountryDetailInner({
                   />
                 </div>
 
-                {activeSubTab === 'statistics' && (
+                {activeSubTab === 'dashboard' && (
                   <CountryDetailHeader
                     country={country}
                     continentName={continent?.name}
@@ -222,14 +223,14 @@ function CountryDetailInner({
                         flexDirection: 'column',
                       }}
                     >
-                      {activeSubTab === 'statistics' && country && (
+                      {activeSubTab === 'dashboard' && country && (
                         <CountryDetailDashboard
                           country={country}
                           onEdit={onEdit}
                         />
                       )}
 
-                      {activeSubTab === 'map' && (
+                      {activeSubTab === 'regions' && (
                         <MapRegionSection
                           country={country}
                           mapLocation={mapLocation}
@@ -260,7 +261,7 @@ function CountryDetailInner({
                         <EthnicitySection countryId={country.id} />
                       )}
 
-                      {activeSubTab === 'linkedHistorical' && (
+                      {activeSubTab === 'linked-historical' && (
                         <LinkedHistoricalCountriesSection country={country} />
                       )}
 
@@ -298,6 +299,59 @@ function CountryDetailInner({
         )}
       </AnimatePresence>
     </CountryStyles.DetailPaneRelative>
+  )
+}
+
+function NotFoundState() {
+  return (
+    <CountryDetailStyles.EmptyStateContainer
+      as={motion.div}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.25 }}
+    >
+      <CountryDetailStyles.EmptyStateBgOrb $x="20%" $y="25%" $size="280px" />
+      <CountryDetailStyles.EmptyStateBgOrb $x="70%" $y="65%" $size="240px" />
+      <CountryDetailStyles.EmptyStateCard
+        initial={{ y: 8, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+      >
+        <CountryDetailStyles.EmptyStateIllustration>
+          <svg
+            width="120"
+            height="120"
+            viewBox="0 0 120 120"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="60"
+              cy="60"
+              r="42"
+              stroke="#fee2e2"
+              strokeWidth="3"
+              fill="#fef2f2"
+            />
+            <path
+              d="M44 44l32 32M76 44l-32 32"
+              stroke="#ef4444"
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+          </svg>
+        </CountryDetailStyles.EmptyStateIllustration>
+        <CountryDetailStyles.EmptyStateTitle>
+          국가를 찾을 수 없습니다
+        </CountryDetailStyles.EmptyStateTitle>
+        <CountryDetailStyles.EmptyStateDescription>
+          해당 ID의 국가가 삭제되었거나 잘못된 링크일 수 있습니다.
+        </CountryDetailStyles.EmptyStateDescription>
+        <CountryDetailStyles.EmptyStateHint>
+          ← 목록에서 다시 선택
+        </CountryDetailStyles.EmptyStateHint>
+      </CountryDetailStyles.EmptyStateCard>
+    </CountryDetailStyles.EmptyStateContainer>
   )
 }
 

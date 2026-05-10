@@ -33,6 +33,8 @@ export type CountryDetailTab =
   | 'elections'
   | 'laws'
   | 'events'
+  | 'ethnicity'
+  | 'treaty'
   | null
 
 interface HistoryLocation {
@@ -86,6 +88,8 @@ const DETAIL_TAB_PATTERNS: Array<{
   },
   { tab: 'laws', match: /\/history\/country\/[^/]+\/laws\/?$/ },
   { tab: 'events', match: /\/history\/country\/[^/]+\/events\/?$/ },
+  { tab: 'ethnicity', match: /\/history\/country\/[^/]+\/ethnicity\/?$/ },
+  { tab: 'treaty', match: /\/history\/country\/[^/]+\/treaty\/?$/ },
 ]
 
 export function useHistoryLocation(): HistoryLocation {

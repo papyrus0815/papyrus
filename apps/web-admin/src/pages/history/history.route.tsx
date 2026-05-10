@@ -53,6 +53,8 @@ const countryDetailTabSegments = [
   'elections/party/:partyId',
   'laws',
   'events',
+  'ethnicity',
+  'treaty',
 ] as const
 const countryDetailRoutes = countryDetailTabSegments.map((seg) => ({
   path: `${ROUTES.HISTORY.COUNTRY}/:countryId/${seg}`,

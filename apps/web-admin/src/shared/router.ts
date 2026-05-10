@@ -55,6 +55,12 @@ export const pathKeys = {
     /** 국가 상세 내 법령 탭 고유 URL */
     countryLaws: (countryId: string) =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/laws`,
+    /** 국가 상세 내 민족 탭 고유 URL */
+    countryEthnicity: (countryId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/ethnicity`,
+    /** 국가 상세 내 조약 탭 고유 URL */
+    countryTreaty: (countryId: string) =>
+      `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/treaty`,
     /** 선거·투표 탭 내 정당 상세 (목록에서 정당 행 클릭) */
     countryElectionPartyDetail: (countryId: string, partyId: string) =>
       `/${ROUTES.HISTORY.ROOT}/${ROUTES.HISTORY.COUNTRY}/${encodeURIComponent(countryId)}/elections/party/${encodeURIComponent(partyId)}`,

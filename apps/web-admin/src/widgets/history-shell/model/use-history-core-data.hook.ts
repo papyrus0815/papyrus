@@ -12,6 +12,7 @@ import { useMemo } from 'react'
 import { type ContinentOption, type Country } from '@/entities/country/api'
 import {
   type UnifiedCountry,
+  historicalToUnified,
   modernToUnified,
 } from '@/entities/country/model/unified-types'
 import type { HistoricalCountry } from '@/entities/historical-country/api'
@@ -24,6 +25,11 @@ interface HistoryCoreData {
   countries: Country[]
   /** 현대 국가 + (옵션) 역사 국가를 통합한 목록 */
   unifiedCountries: UnifiedCountry[]
+  /**
+   * 모든 국가(현대 + 역사 + 현대의 하위 역사 국가)에 대한 ID → UnifiedCountry 인덱스.
+   * 상세 페이지 진입 시 O(1) 조회를 위해 제공된다.
+   */
+  countriesById: Map<string, UnifiedCountry>
   /** Select·Filter용 대륙 옵션 */
   continents: ContinentOption[]
   /** Raw 역사 국가 API 응답 (CountryListStateProvider가 historical 필터 시 참조) */
@@ -80,9 +86,29 @@ export function useHistoryCoreData(): HistoryCoreData {
     return apiContinents.map((cont) => ({ id: cont.id, name: cont.name }))
   }, [apiContinents])
 
+  // 모든 국가 ID → UnifiedCountry 인덱스 (현대, raw 역사, 현대의 하위 역사 모두 포함)
+  const countriesById = useMemo<Map<string, UnifiedCountry>>(() => {
+    const map = new Map<string, UnifiedCountry>()
+    for (const country of unifiedCountries) {
+      map.set(country.id, country)
+      if (country.type === 'modern' && country.historicalCountries) {
+        for (const hc of country.historicalCountries) {
+          if (!map.has(hc.id)) map.set(hc.id, historicalToUnified(hc))
+        }
+      }
+    }
+    if (apiHistoricalCountries) {
+      for (const hc of apiHistoricalCountries) {
+        if (!map.has(hc.id)) map.set(hc.id, historicalToUnified(hc))
+      }
+    }
+    return map
+  }, [unifiedCountries, apiHistoricalCountries])
+
   return {
     countries,
     unifiedCountries,
+    countriesById,
     continents,
     apiHistoricalCountries,
     apiCountries,
