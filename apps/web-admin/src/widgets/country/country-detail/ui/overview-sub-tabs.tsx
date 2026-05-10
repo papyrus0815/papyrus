@@ -1,3 +1,5 @@
+import { useRef, type KeyboardEvent } from 'react'
+
 import { UnderlineTabButton } from '@/shared/ui/underline-tabs'
 
 import * as S from './overview-sub-tabs.styles'
@@ -34,26 +36,81 @@ const TAB_LABELS: Array<{ key: OverviewSubTab; label: string }> = [
   { key: 'treaty', label: '조약' },
 ]
 
+/** 탭과 패널을 연결하는 ID 생성. 탭은 `tab-<key>`, 패널은 `panel-<key>` 규칙. */
+export function tabId(key: OverviewSubTab): string {
+  return `country-detail-tab-${key}`
+}
+export function panelId(key: OverviewSubTab): string {
+  return `country-detail-panel-${key}`
+}
+
 export function OverviewSubTabs({
   activeSubTab,
   onSubTabChange,
 }: OverviewSubTabsProps) {
+  const listRef = useRef<HTMLDivElement | null>(null)
+
+  /**
+   * 화살표 키 네비게이션 — WAI-ARIA tabs 패턴.
+   * Left/Right로 다음 탭, Home/End로 처음/끝 탭. 활성 변경 후 포커스 이동.
+   */
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (
+      e.key !== 'ArrowLeft' &&
+      e.key !== 'ArrowRight' &&
+      e.key !== 'Home' &&
+      e.key !== 'End'
+    ) {
+      return
+    }
+    e.preventDefault()
+    const idx = TAB_LABELS.findIndex((t) => t.key === activeSubTab)
+    let nextIdx = idx
+    if (e.key === 'ArrowLeft')
+      nextIdx = idx > 0 ? idx - 1 : TAB_LABELS.length - 1
+    else if (e.key === 'ArrowRight')
+      nextIdx = idx < TAB_LABELS.length - 1 ? idx + 1 : 0
+    else if (e.key === 'Home') nextIdx = 0
+    else if (e.key === 'End') nextIdx = TAB_LABELS.length - 1
+    const target = TAB_LABELS[nextIdx]
+    if (!target) return
+    onSubTabChange(target.key)
+    // 다음 렌더에서 새 활성 탭에 포커스
+    requestAnimationFrame(() => {
+      const el = listRef.current?.querySelector<HTMLButtonElement>(
+        `#${CSS.escape(tabId(target.key))}`,
+      )
+      el?.focus()
+    })
+  }
+
   return (
     <S.Row>
       <S.Left>
-        <S.TopUnderlineTabNav role="tablist" aria-label="국가 상세 메인 메뉴">
-          {TAB_LABELS.map(({ key, label }) => (
-            <UnderlineTabButton
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={activeSubTab === key}
-              $active={activeSubTab === key}
-              onClick={() => onSubTabChange(key)}
-            >
-              {label}
-            </UnderlineTabButton>
-          ))}
+        <S.TopUnderlineTabNav
+          ref={listRef}
+          role="tablist"
+          aria-label="국가 상세 메인 메뉴"
+          onKeyDown={handleKeyDown}
+        >
+          {TAB_LABELS.map(({ key, label }) => {
+            const active = activeSubTab === key
+            return (
+              <UnderlineTabButton
+                key={key}
+                id={tabId(key)}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                aria-controls={panelId(key)}
+                tabIndex={active ? 0 : -1}
+                $active={active}
+                onClick={() => onSubTabChange(key)}
+              >
+                {label}
+              </UnderlineTabButton>
+            )
+          })}
         </S.TopUnderlineTabNav>
       </S.Left>
     </S.Row>

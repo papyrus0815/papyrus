@@ -25,6 +25,7 @@ import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import type { ContinentOption } from '@/entities/country/api'
 import { pathKeys } from '@/shared/router'
 import { useRecentCountriesStore } from '@/widgets/command-palette'
+import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 import { CountryFormModal } from '@/widgets/country/country-form/ui/country-form-modal'
 import { CountryList } from '@/widgets/country/country-list/ui/country-list'
 import { CountryMobileUI } from '@/widgets/country/country-mobile-ui/ui/country-mobile-ui'
@@ -204,7 +205,11 @@ export function CountryDetailShell() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25, ease: 'easeInOut' }}
             >
-              <Outlet context={context} />
+              {/* sub-tab 위젯 일부가 거대(elections·cabinets 등) — 단일 throw가 페이지 전체를
+                  날리지 않도록 ErrorBoundary로 격리. 좌측 리스트·모달은 셸이 보존. */}
+              <SmartErrorBoundary>
+                <Outlet context={context} />
+              </SmartErrorBoundary>
             </RouteSwapMotion>
           </AnimatePresence>
         }

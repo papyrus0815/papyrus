@@ -16,7 +16,12 @@ import { HistoricalCountryDetail } from './historical-country-detail.widget'
 import { LinkedHistoricalCountriesSection } from './linked-historical-countries-section.widget'
 import { LoadingOverlay } from './loading-overlay'
 import { MapRegionSection } from './map-region-section.widget'
-import { type OverviewSubTab, OverviewSubTabs } from './overview-sub-tabs'
+import {
+  type OverviewSubTab,
+  OverviewSubTabs,
+  panelId,
+  tabId,
+} from './overview-sub-tabs'
 import { TreatySectionWidget } from './treaty-section.widget'
 
 /**
@@ -198,6 +203,10 @@ function CountryDetailInner({
             <AnimatePresence initial={false} mode="wait">
               <S.TabSwapMotion
                 key={activeSubTab}
+                id={panelId(activeSubTab)}
+                role="tabpanel"
+                aria-labelledby={tabId(activeSubTab)}
+                tabIndex={0}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}

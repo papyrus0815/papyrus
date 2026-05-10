@@ -1,13 +1,10 @@
-import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { type Country, type ContinentOption } from '@/entities/country/api'
-import { type UnifiedCountry } from '@/entities/country/model/unified-types'
+import { FiCheck, FiList, FiPlus, FiSearch, FiX } from 'react-icons/fi'
+
 import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
+
 import * as PageS from './country-mobile-ui.styles'
 import * as ListS from '@/widgets/country/country-list/ui/country-list.styles'
-
-// 두 스타일 모듈을 합쳐서 S.*로 사용 가능하도록
-const S = { ...PageS, ...ListS }
 
 interface CountryMobileUIProps {
   isMobileListOpen: boolean
@@ -15,15 +12,6 @@ interface CountryMobileUIProps {
   selectedId: string | null
   onSelectCountry: (id: string) => void
   onAddCountry: () => void
-  countries?: Country[]
-  filtered?: UnifiedCountry[]
-  continents?: ContinentOption[]
-  query?: string
-  onQueryChange?: (query: string) => void
-  continentFilter?: string
-  onContinentFilterChange?: (filter: string) => void
-  sortBy?: 'name' | 'population' | 'area'
-  onSortByChange?: (sort: 'name' | 'population' | 'area') => void
 }
 
 export function CountryMobileUI({
@@ -33,9 +21,8 @@ export function CountryMobileUI({
   onSelectCountry,
   onAddCountry,
 }: CountryMobileUIProps) {
-  const listState = useCountryListState()
+  // 검색·필터·정렬 등 리스트 상태는 모두 컨텍스트에서 — 데스크톱 리스트와 단일 진실의 원천 공유.
   const {
-    countries,
     filtered,
     continents,
     query,
@@ -44,33 +31,28 @@ export function CountryMobileUI({
     setContinentFilter: onContinentFilterChange,
     sortBy,
     setSortBy: onSortByChange,
-  } = listState
+  } = useCountryListState()
   return (
     <>
       {/* Mobile View Switcher */}
-      <S.MobileViewSwitcher>
-        <S.ViewSwitchButton
-          $active
-          onClick={() => onMobileListOpenChange(true)}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
-          </svg>
+      <PageS.MobileViewSwitcher>
+        <PageS.ViewSwitchButton $active onClick={() => onMobileListOpenChange(true)}>
+          <FiList size={18} />
           목록
-        </S.ViewSwitchButton>
-      </S.MobileViewSwitcher>
+        </PageS.ViewSwitchButton>
+      </PageS.MobileViewSwitcher>
 
       {/* Mobile List Overlay */}
       <AnimatePresence>
         {isMobileListOpen && (
           <>
-            <S.MobileListOverlay
+            <PageS.MobileListOverlay
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => onMobileListOpenChange(false)}
             />
-            <S.MobileListPane
+            <PageS.MobileListPane
               initial={{ opacity: 0, y: '100%' }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: '100%' }}
@@ -78,170 +60,126 @@ export function CountryMobileUI({
               drag="y"
               dragConstraints={{ top: 0, bottom: 0 }}
               dragElastic={0.2}
-              onDragEnd={(e, info) => {
+              onDragEnd={(_e, info: { offset: { y: number } }) => {
                 if (info.offset.y > 150) {
                   onMobileListOpenChange(false)
                 }
               }}
             >
-              <S.MobileListHeader>
-                <S.DragHandle />
-                <S.MobileListTitleRow>
-                  <S.MobileListTitle>메뉴</S.MobileListTitle>
-                  <S.MobileListClose
+              <PageS.MobileListHeader>
+                <PageS.DragHandle />
+                <PageS.MobileListTitleRow>
+                  <PageS.MobileListTitle>메뉴</PageS.MobileListTitle>
+                  <PageS.MobileListClose
                     onClick={() => onMobileListOpenChange(false)}
+                    aria-label="목록 닫기"
                   >
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </S.MobileListClose>
-                </S.MobileListTitleRow>
-                <S.MobileTabBar>
-                  <S.MobileTabButton $active>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <FiX size={22} />
+                  </PageS.MobileListClose>
+                </PageS.MobileListTitleRow>
+                <PageS.MobileTabBar>
+                  <PageS.MobileTabButton $active>
+                    <FiList size={18} />
                     국가 목록
-                    <S.MobileTabBadge>{countries.length}</S.MobileTabBadge>
-                  </S.MobileTabButton>
-                </S.MobileTabBar>
-                <S.MobileActionRow>
-                  <S.MobileAddButton
+                    {/* 배지는 검색·필터 후 결과 수와 일치 — 사용자가 보는 행 수와 동기 */}
+                    <PageS.MobileTabBadge>{filtered.length}</PageS.MobileTabBadge>
+                  </PageS.MobileTabButton>
+                </PageS.MobileTabBar>
+                <PageS.MobileActionRow>
+                  <PageS.MobileAddButton
                     onClick={() => {
                       onAddCountry()
                       onMobileListOpenChange(false)
                     }}
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <FiPlus size={18} />
                     새 국가 등록
-                  </S.MobileAddButton>
-                </S.MobileActionRow>
-                <S.MobileListSearchRow>
-                    <S.MobileSearchWrapper>
-                      <S.SearchIcon>
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                        >
-                          <path
-                            d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
-                            fill="currentColor"
-                          />
-                        </svg>
-                      </S.SearchIcon>
-                      <S.SearchInput
-                        type="text"
-                        placeholder="국가 검색..."
-                        value={query}
-                        onChange={(e) => onQueryChange(e.target.value)}
-                      />
-                      {query && (
-                        <S.ClearButton onClick={() => onQueryChange('')}>
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                          >
-                            <path
-                              d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                              fill="currentColor"
-                            />
-                          </svg>
-                        </S.ClearButton>
-                      )}
-                    </S.MobileSearchWrapper>
-                    <S.MobileFilterRow>
-                      <ListS.FilterSelect
-                        value={continentFilter}
-                        onChange={(e) =>
-                          onContinentFilterChange(e.target.value)
-                        }
-                        $active={!!continentFilter}
-                        aria-label="대륙"
+                  </PageS.MobileAddButton>
+                </PageS.MobileActionRow>
+                <PageS.MobileListSearchRow>
+                  <PageS.MobileSearchWrapper>
+                    <ListS.SearchIcon>
+                      <FiSearch size={18} />
+                    </ListS.SearchIcon>
+                    <ListS.SearchInput
+                      type="text"
+                      placeholder="국가 검색..."
+                      value={query}
+                      onChange={(e) => onQueryChange(e.target.value)}
+                    />
+                    {query && (
+                      <ListS.ClearButton
+                        onClick={() => onQueryChange('')}
+                        aria-label="검색어 지우기"
                       >
-                        <option value="">대륙 전체</option>
-                        {continents.map((continent) => (
-                          <option key={continent.id} value={continent.id}>
-                            {continent.name}
-                          </option>
-                        ))}
-                      </ListS.FilterSelect>
-                      <ListS.FilterSelect
-                        value={sortBy}
-                        onChange={(e) =>
-                          onSortByChange(
-                            e.target.value as 'name' | 'population' | 'area',
-                          )
-                        }
-                        aria-label="정렬"
-                      >
-                        <option value="name">이름순</option>
-                        <option value="population">인구순</option>
-                        <option value="area">면적순</option>
-                      </ListS.FilterSelect>
-                      {(query || continentFilter) && (
-                        <S.MobileClearButton
-                          onClick={() => {
-                            onQueryChange('')
-                            onContinentFilterChange('')
-                          }}
-                        >
-                          초기화
-                        </S.MobileClearButton>
-                      )}
-                    </S.MobileFilterRow>
-                  </S.MobileListSearchRow>
-              </S.MobileListHeader>
-              {(query || continentFilter) && (
-                <S.FilterResultBar>
-                  <S.FilterResultText>
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
+                        <FiX size={14} />
+                      </ListS.ClearButton>
+                    )}
+                  </PageS.MobileSearchWrapper>
+                  <PageS.MobileFilterRow>
+                    <ListS.FilterSelect
+                      value={continentFilter}
+                      onChange={(e) => onContinentFilterChange(e.target.value)}
+                      $active={!!continentFilter}
+                      aria-label="대륙"
                     >
-                      <path
-                        d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                    <S.FilterResultCount>
-                      {filtered.length}
-                    </S.FilterResultCount>
+                      <option value="">대륙 전체</option>
+                      {continents.map((continent) => (
+                        <option key={continent.id} value={continent.id}>
+                          {continent.name}
+                        </option>
+                      ))}
+                    </ListS.FilterSelect>
+                    <ListS.FilterSelect
+                      value={sortBy}
+                      onChange={(e) =>
+                        onSortByChange(
+                          e.target.value as 'name' | 'population' | 'area',
+                        )
+                      }
+                      aria-label="정렬"
+                    >
+                      <option value="name">이름순</option>
+                      <option value="population">인구순</option>
+                      <option value="area">면적순</option>
+                    </ListS.FilterSelect>
+                    {(query || continentFilter) && (
+                      <PageS.MobileClearButton
+                        onClick={() => {
+                          onQueryChange('')
+                          onContinentFilterChange('')
+                        }}
+                      >
+                        초기화
+                      </PageS.MobileClearButton>
+                    )}
+                  </PageS.MobileFilterRow>
+                </PageS.MobileListSearchRow>
+              </PageS.MobileListHeader>
+              {(query || continentFilter) && (
+                <ListS.FilterResultBar>
+                  <ListS.FilterResultText>
+                    <FiCheck size={16} />
+                    <ListS.FilterResultCount>{filtered.length}</ListS.FilterResultCount>
                     개의 국가 발견
-                  </S.FilterResultText>
-                </S.FilterResultBar>
+                  </ListS.FilterResultText>
+                </ListS.FilterResultBar>
               )}
-              <S.ListContainer>
-                <S.VirtualList>
+              <ListS.ListContainer>
+                <ListS.VirtualList>
                   {filtered.length === 0 ? (
-                    <S.EmptyFilterState>
-                      <S.EmptyFilterIcon>🔍</S.EmptyFilterIcon>
-                      <S.EmptyFilterTitle>
+                    <ListS.EmptyFilterState>
+                      <ListS.EmptyFilterIcon>🔍</ListS.EmptyFilterIcon>
+                      <ListS.EmptyFilterTitle>
                         {query
                           ? '일치하는 국가가 없어요'
                           : '등록된 국가가 없어요'}
-                      </S.EmptyFilterTitle>
-                      <S.EmptyFilterText>
+                      </ListS.EmptyFilterTitle>
+                      <ListS.EmptyFilterText>
                         {query && (
                           <>
-                            <strong>"{query}"</strong> 검색어와 일치하는
-                            국가를 찾지 못했어요.
+                            <strong>"{query}"</strong> 검색어와 일치하는 국가를
+                            찾지 못했어요.
                             <br />
                             다른 검색어를 시도하거나 새 국가를 등록해보세요.
                           </>
@@ -259,16 +197,19 @@ export function CountryMobileUI({
                             <br />첫 국가를 등록해서 시작해보세요.
                           </>
                         )}
-                      </S.EmptyFilterText>
-                      <S.EmptyFilterActions>
-                        <S.AddButton onClick={onAddCountry}>
-                          <S.AddButtonIcon>➕</S.AddButtonIcon>새 국가 등록
-                        </S.AddButton>
-                      </S.EmptyFilterActions>
-                    </S.EmptyFilterState>
+                      </ListS.EmptyFilterText>
+                      <ListS.EmptyFilterActions>
+                        <ListS.AddButton onClick={onAddCountry}>
+                          <ListS.AddButtonIcon>
+                            <FiPlus size={14} />
+                          </ListS.AddButtonIcon>
+                          새 국가 등록
+                        </ListS.AddButton>
+                      </ListS.EmptyFilterActions>
+                    </ListS.EmptyFilterState>
                   ) : (
                     filtered.map((country) => (
-                      <S.ListRow
+                      <ListS.ListRow
                         key={country.id}
                         $active={country.id === selectedId}
                         onClick={() => {
@@ -276,45 +217,40 @@ export function CountryMobileUI({
                           onMobileListOpenChange(false)
                         }}
                       >
-                        <S.RowTop>
-                          <S.RowLeft>
-                            <S.RowCheckbox aria-hidden />
-                            <S.StarIcon aria-hidden>☆</S.StarIcon>
-                            <S.FlagBadge>
+                        <ListS.RowTop>
+                          <ListS.RowLeft>
+                            <ListS.FlagBadge>
                               {country.flagEmoji || '🏳️'}
-                            </S.FlagBadge>
-                            <S.TextCol>
-                              <S.CodeText $unread={!country.isoCode}>
+                            </ListS.FlagBadge>
+                            <ListS.TextCol>
+                              <ListS.CodeText $unread={!country.isoCode}>
                                 {country.name}
-                              </S.CodeText>
-                              <S.NameText>
+                              </ListS.CodeText>
+                              <ListS.NameText>
                                 {country.isoCode || '-'} ·{' '}
                                 {country.capital || '수도 미상'}
-                              </S.NameText>
-                            </S.TextCol>
-                          </S.RowLeft>
-                          <S.RowRight>
-                            <S.AttachmentDot aria-hidden />
-                            <S.TimeText>12:34</S.TimeText>
-                          </S.RowRight>
-                        </S.RowTop>
-                        <S.RowBottom>
-                          <S.Meta>
-                            <span>
-                              인구 {country.population?.toLocaleString()}
-                            </span>
-                            <S.Dot />
-                            <span>
-                              면적 {country.areaSqKm?.toLocaleString()}km²
-                            </span>
-                          </S.Meta>
-                        </S.RowBottom>
-                      </S.ListRow>
+                              </ListS.NameText>
+                            </ListS.TextCol>
+                          </ListS.RowLeft>
+                        </ListS.RowTop>
+                        <ListS.RowBottom>
+                          <ListS.Meta>
+                            {country.population != null && (
+                              <span>인구 {country.population.toLocaleString()}</span>
+                            )}
+                            {country.population != null &&
+                              country.areaSqKm != null && <ListS.Dot />}
+                            {country.areaSqKm != null && (
+                              <span>면적 {country.areaSqKm.toLocaleString()}km²</span>
+                            )}
+                          </ListS.Meta>
+                        </ListS.RowBottom>
+                      </ListS.ListRow>
                     ))
                   )}
-                </S.VirtualList>
-              </S.ListContainer>
-            </S.MobileListPane>
+                </ListS.VirtualList>
+              </ListS.ListContainer>
+            </PageS.MobileListPane>
           </>
         )}
       </AnimatePresence>

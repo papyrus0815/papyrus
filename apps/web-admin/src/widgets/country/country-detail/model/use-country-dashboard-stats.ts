@@ -71,10 +71,10 @@ export interface ContinentComparison {
   areaRank: number | null
   /** 표본 총 수 (자국 포함, 대륙 전체) */
   totalCount: number
-  /** 인구 순위 분모 (인구 등록된 국가 수) */
-  populationRankTotal?: number
-  /** 면적 순위 분모 (면적 등록된 국가 수) */
-  areaRankTotal?: number
+  /** 인구 순위 분모 (인구 등록된 국가 수). 비교 불가 시 null. */
+  populationRankTotal: number | null
+  /** 면적 순위 분모 (면적 등록된 국가 수). 비교 불가 시 null. */
+  areaRankTotal: number | null
 }
 
 export interface CurrentCabinetSummary {
@@ -248,18 +248,37 @@ export function useCountryDashboardStats(
     ],
   })
 
+  // 활성 cabinet 중 가장 최신(headTenure.startDate desc)을 명시적으로 선택.
+  // API 응답 순서를 가정하지 않고 정렬 후 첫 항목을 사용 — 정렬 보장 없으면 잘못된 cabinet이
+  // "현 정부"로 표시될 위험.
+  const latestActiveCabinetId = useMemo<string | null>(() => {
+    const list = Array.isArray(cabinetsQuery.data)
+      ? (cabinetsQuery.data as any[])
+      : []
+    if (list.length === 0) return null
+    const now = Date.now()
+    const active = list.filter((c) => {
+      const end = c.headTenure?.endDate
+      if (!end) return true
+      const t = new Date(end).getTime()
+      return !Number.isFinite(t) || t >= now
+    })
+    if (active.length === 0) return null
+    const sorted = [...active].sort((a, b) => {
+      const da = new Date(a.headTenure?.startDate ?? 0).getTime()
+      const db = new Date(b.headTenure?.startDate ?? 0).getTime()
+      return db - da
+    })
+    return (sorted[0] as { id?: string } | undefined)?.id ?? null
+  }, [cabinetsQuery.data])
+
   const currentCabinetTenuresQuery = useQueries({
     queries: [
       {
-        queryKey: [
-          'cabinet-tenures',
-          (cabinetsQuery.data?.[0] as { id?: string } | undefined)?.id,
-        ],
+        queryKey: ['cabinet-tenures', latestActiveCabinetId],
         queryFn: () =>
-          personCareerApi.getTenuresByCabinetId(
-            (cabinetsQuery.data![0] as { id: string }).id,
-          ),
-        enabled: Boolean((cabinetsQuery.data?.[0] as { id?: string })?.id),
+          personCareerApi.getTenuresByCabinetId(latestActiveCabinetId!),
+        enabled: Boolean(latestActiveCabinetId),
         staleTime: 1000 * 60 * 5,
       },
     ],
@@ -297,14 +316,12 @@ export function useCountryDashboardStats(
 
   const recentPersons = useMemo((): RecentPersonItem[] => {
     const list = (personsQuery.data ?? []) as any[]
-    const withDate = list.map((p) => ({
-      ...p,
-      _createdAt: p.createdAt ?? p.created_at ?? '',
-    }))
-    const sorted = [...withDate].sort(
-      (a, b) =>
-        new Date(b._createdAt).getTime() - new Date(a._createdAt).getTime(),
-    )
+    // 한 번의 sort + slice — 이전엔 `.map(spread).sort.slice.map` 4단계였음.
+    const sorted = [...list].sort((a, b) => {
+      const ta = new Date(a.createdAt ?? a.created_at ?? 0).getTime()
+      const tb = new Date(b.createdAt ?? b.created_at ?? 0).getTime()
+      return tb - ta
+    })
     return sorted.slice(0, 10).map((p) => {
       const order =
         p.country?.defaultNameDisplayOrder ??
@@ -326,7 +343,7 @@ export function useCountryDashboardStats(
       return {
         id: p.id ?? '',
         displayName,
-        createdAt: p._createdAt,
+        createdAt: p.createdAt ?? p.created_at ?? '',
         profileImageUrl: p.profileImageUrl ?? p.profile_image_url ?? null,
       }
     })
@@ -483,6 +500,8 @@ export function useCountryDashboardStats(
       populationRank: null,
       areaRank: null,
       totalCount: 0,
+      populationRankTotal: null,
+      areaRankTotal: null,
     }
     if (!country?.continentId) return empty
     const list = Array.isArray(allCountriesQuery.data)
@@ -567,26 +586,11 @@ export function useCountryDashboardStats(
   }, [allCountriesQuery.data, country])
 
   const currentCabinet = useMemo<CurrentCabinetSummary | null>(() => {
+    if (!latestActiveCabinetId) return null
     const list = Array.isArray(cabinetsQuery.data)
       ? (cabinetsQuery.data as any[])
       : []
-    if (list.length === 0) return null
-    // 활성 cabinet만 — headTenure.endDate 가 null/미래여야 함.
-    // 종료된 정부를 "현 정부"로 표시하면 잘못됨.
-    const now = Date.now()
-    const active = list.filter((c) => {
-      const end = c.headTenure?.endDate
-      if (!end) return true
-      const t = new Date(end).getTime()
-      return !Number.isFinite(t) || t >= now
-    })
-    if (active.length === 0) return null
-    const sorted = [...active].sort((a, b) => {
-      const da = new Date(a.headTenure?.startDate ?? 0).getTime()
-      const db = new Date(b.headTenure?.startDate ?? 0).getTime()
-      return db - da
-    })
-    const top = sorted[0]
+    const top = list.find((c) => c?.id === latestActiveCabinetId)
     if (!top) return null
     const ministers = Array.isArray(currentCabinetTenuresQuery.data)
       ? (currentCabinetTenuresQuery.data as any[])
@@ -617,14 +621,20 @@ export function useCountryDashboardStats(
     const partyDistribution = [...partyMap.values()]
       .sort((a, b) => b.count - a.count)
       .slice(0, 5)
+    // 한 인물이 여러 자리를 겸직하면 tenure가 여러 개 — 중복 카운트 방지를 위해 unique person id로 집계.
+    const uniquePersonIds = new Set<string>()
+    for (const m of ministers) {
+      const id = m.person?.id ?? m.personId
+      if (typeof id === 'string' && id) uniquePersonIds.add(id)
+    }
     return {
       cabinetId: top.id,
       name: top.name ?? '현 행정부',
       startDate: top.headTenure?.startDate ?? null,
-      ministerCount: ministers.length,
+      ministerCount: uniquePersonIds.size,
       partyDistribution,
     }
-  }, [cabinetsQuery.data, currentCabinetTenuresQuery.data])
+  }, [latestActiveCabinetId, cabinetsQuery.data, currentCabinetTenuresQuery.data])
 
   const { nextElection, recentElection } = useMemo<{
     nextElection: ElectionSummary | null
