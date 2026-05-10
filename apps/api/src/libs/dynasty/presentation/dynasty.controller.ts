@@ -46,6 +46,7 @@ function toResponseDto(d: DynastyRow): DynastyResponseDto {
     founderText: d.founderText,
     crestImageUrl: d.crestImageUrl,
     motto: d.motto,
+    memberCount: d.memberCount,
     createdAt: d.createdAt.toISOString(),
     updatedAt: d.updatedAt.toISOString(),
   }
@@ -106,8 +107,19 @@ export class DynastyController {
     const d = await this.dynastyService.update(id, {
       name: dto.name,
       description: dto.description,
-      startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-      endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+      // null → 클리어, 문자열 → 새 값, undefined → 변경 없음
+      startDate:
+        dto.startDate === null
+          ? null
+          : dto.startDate
+            ? new Date(dto.startDate)
+            : undefined,
+      endDate:
+        dto.endDate === null
+          ? null
+          : dto.endDate
+            ? new Date(dto.endDate)
+            : undefined,
       thumbnailUrl: dto.thumbnailUrl,
       originPlace: dto.originPlace,
       founderId: dto.founderId,

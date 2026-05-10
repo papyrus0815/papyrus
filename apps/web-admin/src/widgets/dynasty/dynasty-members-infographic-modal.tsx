@@ -2,7 +2,7 @@
  * 가문 구성원 인포그래픽 모달.
  * 통계 스트립 + 검색·정렬·뷰 토글 + Timeline / Grid 뷰.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 
@@ -94,6 +94,24 @@ export function DynastyMembersInfographicModal({
     enabled: isOpen && Boolean(dynastyId),
     staleTime: 60_000,
   })
+
+  // ESC 키로 모달 닫기 + 모달 열려 있는 동안 배경 스크롤 잠금
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKey)
+    return () => {
+      window.removeEventListener('keydown', handleKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [isOpen, onClose])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

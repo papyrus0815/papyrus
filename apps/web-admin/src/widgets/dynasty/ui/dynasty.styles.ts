@@ -476,7 +476,7 @@ export const SearchWrap = styled.div`
 
 export const SearchInput = styled.input`
   width: 100%;
-  padding: 9px 12px 9px 36px;
+  padding: 9px 32px 9px 36px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 10px;
   font-size: 13.5px;
@@ -491,6 +491,73 @@ export const SearchInput = styled.input`
   &:focus {
     border-color: ${({ theme }) => theme.colors.primary};
     box-shadow: 0 0 0 3px ${({ theme }) => primaryGlow(theme.mode)};
+  }
+  /* 네이티브 검색 input 의 X 버튼 숨기기 — 우리가 직접 그림 */
+  &::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+`
+
+export const SearchClearBtn = styled.button`
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.background.tertiary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+`
+
+/** "전체 / 진행 중 / 종료" 같은 세그먼트 토글 그룹 */
+export const SegmentedGroup = styled.div`
+  display: inline-flex;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 9px;
+  overflow: hidden;
+`
+
+export const SegmentedBtn = styled.button<{ $active: boolean }>`
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  background: ${({ $active, theme }) =>
+    $active ? primarySoft(theme.mode) : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  transition: background 0.15s ease, color 0.15s ease;
+  font-variant-numeric: tabular-nums;
+
+  &:hover:not([aria-pressed='true']) {
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: -2px;
+  }
+
+  & + & {
+    border-left: 1px solid ${({ theme }) => theme.colors.border.default};
   }
 `
 

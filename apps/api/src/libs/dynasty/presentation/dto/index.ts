@@ -19,9 +19,12 @@ export interface CreateDynastyDto {
 
 export interface UpdateDynastyDto {
   name?: string
-  description?: string
-  startDate?: string
-  endDate?: string
+  /** `null`이면 설명을 비움. 생략 시 기존값 유지 */
+  description?: string | null
+  /** `null`이면 시작일을 비움. 생략 시 기존값 유지 */
+  startDate?: string | null
+  /** `null`이면 종료일을 비움. 생략 시 기존값 유지 */
+  endDate?: string | null
   /** 새 파일 업로드 후의 `url`. `null`/빈 문자열이면 썸네일만 삭제. 생략 시 기존 유지 */
   thumbnailUrl?: string | null
   originPlace?: string | null
@@ -52,6 +55,8 @@ export interface DynastyResponseDto {
   founderText: string | null
   crestImageUrl: string | null
   motto: string | null
+  /** 이 가문에 속한 인물 수 */
+  memberCount: number
   createdAt: string
   updatedAt: string
 }

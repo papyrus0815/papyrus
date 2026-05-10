@@ -1,10 +1,12 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { dynastyApi } from '@/shared/api/dynasty'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+
+import { dynastyApi, type DynastyMutationBody } from '@/shared/api/dynasty'
 
 export const useDynasties = () => {
   return useQuery({
     queryKey: ['dynasties'],
     queryFn: dynastyApi.getAll,
+    staleTime: 60_000,
   })
 }
 
@@ -31,8 +33,13 @@ export const useUpdateDynasty = () => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
-      dynastyApi.update(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string
+      data: Partial<DynastyMutationBody>
+    }) => dynastyApi.update(id, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['dynasties'] })
       queryClient.invalidateQueries({ queryKey: ['dynasty', variables.id] })
@@ -50,4 +57,3 @@ export const useDeleteDynasty = () => {
     },
   })
 }
-

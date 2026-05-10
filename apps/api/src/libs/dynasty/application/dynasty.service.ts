@@ -74,9 +74,9 @@ export class DynastyService {
     id: string,
     data: {
       name?: string
-      description?: string
-      startDate?: Date
-      endDate?: Date
+      description?: string | null
+      startDate?: Date | null
+      endDate?: Date | null
       /** 새 업로드 경로. `null` 또는 빈 문자열이면 썸네일만 제거. 생략 시 썸네일 유지 */
       thumbnailUrl?: string | null
       originPlace?: string | null

@@ -33,11 +33,11 @@ import {
   TextInput,
 } from './dynasty.styles'
 
-type DynastyExtra = Dynasty & {
-  originPlace?: string | null
-  founderText?: string | null
-  motto?: string | null
-  crestImageUrl?: string | null
+/** 서버 ISO 문자열을 input[type=date]용 YYYY-MM-DD 로 변환 (TZ 변환 없이 앞 10자만 절단). */
+function toDateInputValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  // 서버는 항상 'YYYY-MM-DDT...' 형태로 응답 — Date 객체를 거치면 사용자 TZ 만큼 하루가 밀릴 수 있음
+  return iso.length >= 10 ? iso.slice(0, 10) : ''
 }
 
 export type DynastyFormPayload = {
@@ -102,25 +102,20 @@ export function DynastyForm({ editing, isSaving, onCancel, onSubmit }: Props) {
 
   useEffect(() => {
     if (editing) {
-      const e = editing as DynastyExtra
       setForm({
-        name: e.name ?? '',
-        description: e.description ?? '',
-        startDate: e.startDate
-          ? new Date(e.startDate).toISOString().split('T')[0]
-          : '',
-        endDate: e.endDate
-          ? new Date(e.endDate).toISOString().split('T')[0]
-          : '',
-        originPlace: e.originPlace ?? '',
-        founderText: e.founderText ?? '',
-        motto: e.motto ?? '',
+        name: editing.name ?? '',
+        description: editing.description ?? '',
+        startDate: toDateInputValue(editing.startDate),
+        endDate: toDateInputValue(editing.endDate),
+        originPlace: editing.originPlace ?? '',
+        founderText: editing.founderText ?? '',
+        motto: editing.motto ?? '',
       })
-      const t = e.thumbnailUrl ?? ''
+      const t = editing.thumbnailUrl ?? ''
       thumbInitialRef.current = t
       setThumbPath(t)
       setThumbRemoved(false)
-      const c = e.crestImageUrl ?? ''
+      const c = editing.crestImageUrl ?? ''
       crestInitialRef.current = c
       setCrestPath(c)
       setCrestRemoved(false)

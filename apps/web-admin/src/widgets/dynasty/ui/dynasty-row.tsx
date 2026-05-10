@@ -9,13 +9,6 @@ import { getUploadImageUrl } from '@/shared/api/upload'
 
 import { primarySoft } from './dynasty.styles'
 
-type DynastyExtra = Dynasty & {
-  originPlace?: string | null
-  founderText?: string | null
-  motto?: string | null
-  crestImageUrl?: string | null
-}
-
 export interface DynastyDerived {
   dynasty: Dynasty
   startYear: number | null
@@ -61,6 +54,14 @@ const IconQuote = () => (
     <path d="M9.17 6C5.83 6.67 4 9.17 4 13v5h5v-5H6.5c0-2 .83-3.33 2.67-4L9.17 6zm9 0c-3.34.67-5.17 3.17-5.17 7v5h5v-5h-2.5c0-2 .83-3.33 2.67-4L18.17 6z"/>
   </svg>
 )
+const IconUsers = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+)
 
 function pctOnAxis(year: number, axisMin: number, axisMax: number): number {
   const range = axisMax - axisMin
@@ -81,9 +82,16 @@ export function DynastyRow({
   onShowMembers,
 }: Props) {
   const { dynasty, startYear, endYear, duration, ongoing } = derived
-  const ext = dynasty as DynastyExtra
   const initial = dynasty.name?.trim().slice(0, 1) || '·'
-  const hasCrest = Boolean(ext.crestImageUrl)
+  // 행 좌측 아이콘: crest(문장) 우선, 없으면 thumbnail 로 폴백
+  const symbolUrl = dynasty.crestImageUrl ?? dynasty.thumbnailUrl ?? null
+  const symbolType: 'crest' | 'thumbnail' | null =
+    dynasty.crestImageUrl
+      ? 'crest'
+      : dynasty.thumbnailUrl
+        ? 'thumbnail'
+        : null
+  const memberCount = dynasty.memberCount ?? 0
 
   // 타임라인 위치 계산
   const effectiveStart = startYear ?? axisMin
@@ -99,6 +107,14 @@ export function DynastyRow({
       ? `${startYear ?? '?'} – ${endYear ?? '현재'}`
       : '연도 미상'
 
+  const timelineTitle = (() => {
+    if (startYear == null && endYear == null) return '시기 정보 없음'
+    const left = startYear != null ? String(startYear) : '?'
+    const right = endYear != null ? String(endYear) : ongoing ? '현재' : '?'
+    const dur = duration != null ? ` · ${duration.toLocaleString()}년${ongoing ? '+' : ''}` : ''
+    return `${left} – ${right}${dur}`
+  })()
+
   return (
     <Row $expanded={isExpanded}>
       <RowMain
@@ -108,11 +124,15 @@ export function DynastyRow({
         aria-label={`${dynasty.name} ${isExpanded ? '접기' : '펼치기'}`}
       >
         <TopLine>
-          <Crest>
-            {hasCrest ? (
+          <Crest $contain={symbolType === 'crest'}>
+            {symbolUrl ? (
               <img
-                src={getUploadImageUrl(ext.crestImageUrl!)}
-                alt={`${dynasty.name} 가문 상징(문장)`}
+                src={getUploadImageUrl(symbolUrl)}
+                alt={
+                  symbolType === 'crest'
+                    ? `${dynasty.name} 가문 상징(문장)`
+                    : `${dynasty.name} 썸네일`
+                }
                 onError={(e) => {
                   e.currentTarget.style.display = 'none'
                 }}
@@ -128,19 +148,28 @@ export function DynastyRow({
               {duration != null && (
                 <DurationChip>{duration.toLocaleString()}년{ongoing ? '+' : ''}</DurationChip>
               )}
+              {memberCount > 0 && (
+                <MemberCountChip
+                  title={`인물 ${memberCount.toLocaleString()}명 등록됨`}
+                  aria-label={`인물 ${memberCount.toLocaleString()}명`}
+                >
+                  <IconUsers />
+                  {memberCount.toLocaleString()}
+                </MemberCountChip>
+              )}
             </NameRow>
             <MetaLine>
               <MetaEra>{eraText}</MetaEra>
-              {ext.originPlace && (
+              {dynasty.originPlace && (
                 <MetaItem>
                   <IconOrigin />
-                  {ext.originPlace}
+                  {dynasty.originPlace}
                 </MetaItem>
               )}
-              {ext.founderText && (
+              {dynasty.founderText && (
                 <MetaItem>
                   <IconFounder />
-                  {ext.founderText}
+                  {dynasty.founderText}
                 </MetaItem>
               )}
             </MetaLine>
@@ -151,7 +180,7 @@ export function DynastyRow({
           </ChevronWrap>
         </TopLine>
 
-        <TimelineRow aria-hidden>
+        <TimelineRow title={timelineTitle} aria-hidden>
           <TimelineTrack>
             <TimelineBar
               style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
@@ -175,18 +204,23 @@ export function DynastyRow({
             transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
           >
             <ExpandInner>
-              {ext.motto && (
+              {dynasty.motto && (
                 <Motto>
                   <IconQuote />
-                  <span>{ext.motto}</span>
+                  <span>{dynasty.motto}</span>
                 </Motto>
               )}
               {dynasty.description && (
                 <Description>{dynasty.description}</Description>
               )}
               <ActionRow>
-                <MembersBtn type="button" onClick={onShowMembers}>
+                <MembersBtn
+                  type="button"
+                  onClick={onShowMembers}
+                  disabled={memberCount === 0}
+                >
                   구성원 인포그래픽
+                  {memberCount > 0 && ` · ${memberCount.toLocaleString()}명`}
                 </MembersBtn>
                 <ActionGroup>
                   <ActionBtn type="button" onClick={onEdit}>수정</ActionBtn>
@@ -256,7 +290,7 @@ const TopLine = styled.div`
   gap: 14px;
 `
 
-const Crest = styled.div`
+const Crest = styled.div<{ $contain: boolean }>`
   width: 44px;
   height: 44px;
   flex-shrink: 0;
@@ -269,9 +303,18 @@ const Crest = styled.div`
   overflow: hidden;
 
   img {
-    max-width: 80%;
-    max-height: 80%;
-    object-fit: contain;
+    ${({ $contain }) =>
+      $contain
+        ? css`
+            max-width: 80%;
+            max-height: 80%;
+            object-fit: contain;
+          `
+        : css`
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          `}
   }
 `
 
@@ -311,6 +354,23 @@ const DurationChip = styled.span`
   background: ${({ theme }) => primarySoft(theme.mode)};
   padding: 2px 8px;
   border-radius: 999px;
+`
+
+const MemberCountChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  padding: 2px 8px;
+  border-radius: 999px;
+
+  svg {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
 `
 
 const MetaLine = styled.div`

@@ -1,8 +1,10 @@
 /**
  * 가문 섹션 — 풀 페이지 진입점이 사용.
- * 스티키 헤더 + 검색·정렬 + 와이드 행 리스트 + 인라인 확장.
+ * 스티키 헤더 + 검색·필터·정렬 + 와이드 행 리스트 + 인라인 확장.
  */
 import { useMemo, useState } from 'react'
+
+import styled from 'styled-components'
 
 import {
   useCreateDynasty,
@@ -10,10 +12,14 @@ import {
   useDynasties,
   useUpdateDynasty,
 } from '@/features/dynasty/use-dynasties.hook'
-import type { Dynasty } from '@/shared/api/dynasty'
+import type { Dynasty, DynastyMutationBody } from '@/shared/api/dynasty'
 
 import { DynastyMembersInfographicModal } from './dynasty-members-infographic-modal'
-import { DynastyControls, type SortKey } from './ui/dynasty-controls'
+import {
+  DynastyControls,
+  type SortKey,
+  type StatusFilter,
+} from './ui/dynasty-controls'
 import { DynastyEmptyState } from './ui/dynasty-empty-state'
 import { DynastyForm, type DynastyFormPayload } from './ui/dynasty-form'
 import { DynastyRow, type DynastyDerived } from './ui/dynasty-row'
@@ -37,12 +43,6 @@ import {
 
 type View = 'list' | 'form'
 
-type DynastyExtra = Dynasty & {
-  originPlace?: string | null
-  founderText?: string | null
-  motto?: string | null
-}
-
 function getYear(date: string | null | undefined): number | null {
   if (!date) return null
   const y = new Date(date).getFullYear()
@@ -63,18 +63,24 @@ function deriveOne(d: Dynasty): DynastyDerived {
 
 function matchesQuery(d: Dynasty, q: string): boolean {
   if (!q) return true
-  const ext = d as DynastyExtra
   const haystack = [
     d.name,
     d.description,
-    ext.originPlace,
-    ext.founderText,
-    ext.motto,
+    d.originPlace,
+    d.founderText,
+    d.motto,
   ]
     .filter(Boolean)
     .join(' ')
     .toLowerCase()
   return haystack.includes(q)
+}
+
+function matchesStatus(d: DynastyDerived, status: StatusFilter): boolean {
+  if (status === 'all') return true
+  if (status === 'ongoing') return d.ongoing
+  // 'ended' — 종료년이 명시된 가문만
+  return d.endYear != null
 }
 
 function compareBy(sort: SortKey) {
@@ -94,6 +100,16 @@ function compareBy(sort: SortKey) {
   }
 }
 
+/** 빈 문자열은 편집 시 null(=clear), 신규 시 undefined(=skip)로. */
+function emptyToNullOrUndefined(
+  value: string,
+  editing: boolean,
+): string | null | undefined {
+  const trimmed = value.trim()
+  if (trimmed) return trimmed
+  return editing ? null : undefined
+}
+
 export function DynastySection() {
   const { data: dynasties = [], isLoading, isError, refetch } = useDynasties()
   const createDynasty = useCreateDynasty()
@@ -108,60 +124,55 @@ export function DynastySection() {
   } | null>(null)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortKey>('era')
+  const [status, setStatus] = useState<StatusFilter>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const list = Array.isArray(dynasties) ? dynasties : []
   const isSaving = createDynasty.isPending || updateDynasty.isPending
 
-  // 파생 데이터 + 필터 + 정렬
+  // 파생 데이터
   const allDerived = useMemo(() => list.map(deriveOne), [list])
 
+  // 통계 — starts/ends 한 번만 모아서 axisMin/eraSpan/avgDuration 동시 계산
+  const stats = useMemo(() => {
+    const nowYear = new Date().getFullYear()
+    let minStart: number | null = null
+    let maxKnownEnd: number | null = null
+    let maxAxisEnd = nowYear
+    let durSum = 0
+    let durCount = 0
+    for (const d of allDerived) {
+      if (d.startYear != null) {
+        minStart = minStart == null ? d.startYear : Math.min(minStart, d.startYear)
+      }
+      if (d.endYear != null) {
+        maxKnownEnd = maxKnownEnd == null ? d.endYear : Math.max(maxKnownEnd, d.endYear)
+        maxAxisEnd = Math.max(maxAxisEnd, d.endYear)
+      }
+      if (d.duration != null) {
+        durSum += d.duration
+        durCount += 1
+      }
+    }
+    const axisHasData = minStart != null
+    const range = axisHasData ? maxAxisEnd - minStart! : 0
+    const pad = Math.max(20, Math.round(range * 0.04))
+    const axisMin = axisHasData ? minStart! - pad : 0
+    const axisMax = axisHasData ? maxAxisEnd + pad : nowYear
+    const avgDuration = durCount > 0 ? Math.round(durSum / durCount) : null
+    const eraSpan = minStart != null ? { min: minStart, max: maxKnownEnd } : null
+    return { axisMin, axisMax, avgDuration, eraSpan }
+  }, [allDerived])
+
+  // 필터 + 정렬
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return allDerived
-      .filter(({ dynasty }) => matchesQuery(dynasty, q))
+      .filter((d) => matchesQuery(d.dynasty, q) && matchesStatus(d, status))
       .sort(compareBy(sort))
-  }, [allDerived, query, sort])
+  }, [allDerived, query, status, sort])
 
-  // 시대축 — 모든 가문 통합 범위
-  const { axisMin, axisMax } = useMemo(() => {
-    const starts = allDerived
-      .map((d) => d.startYear)
-      .filter((v): v is number => v != null)
-    const ends = allDerived
-      .map((d) => d.endYear ?? new Date().getFullYear())
-      .filter((v): v is number => v != null)
-    if (starts.length === 0) {
-      return { axisMin: 0, axisMax: new Date().getFullYear() }
-    }
-    const min = Math.min(...starts)
-    const max = Math.max(...ends, new Date().getFullYear())
-    // 약간의 좌우 패딩
-    const pad = Math.max(20, Math.round((max - min) * 0.04))
-    return { axisMin: min - pad, axisMax: max + pad }
-  }, [allDerived])
-
-  // KPI
   const totalCount = allDerived.length
-  const eraSpan = useMemo(() => {
-    const starts = allDerived
-      .map((d) => d.startYear)
-      .filter((v): v is number => v != null)
-    const ends = allDerived
-      .map((d) => d.endYear)
-      .filter((v): v is number => v != null)
-    if (starts.length === 0) return null
-    const min = Math.min(...starts)
-    const max = ends.length ? Math.max(...ends) : null
-    return { min, max }
-  }, [allDerived])
-  const avgDuration = useMemo(() => {
-    const ds = allDerived
-      .map((d) => d.duration)
-      .filter((v): v is number => v != null && v > 0)
-    if (ds.length === 0) return null
-    return Math.round(ds.reduce((s, v) => s + v, 0) / ds.length)
-  }, [allDerived])
 
   const goToList = () => {
     setView('list')
@@ -180,14 +191,16 @@ export function DynastySection() {
   }
 
   const handleSubmit = async (data: DynastyFormPayload) => {
-    const payload: Record<string, unknown> = {
+    const isEditing = Boolean(editing)
+    const empty = (v: string) => emptyToNullOrUndefined(v, isEditing)
+    const payload: Partial<DynastyMutationBody> = {
       name: data.name.trim(),
-      description: data.description.trim() || undefined,
-      startDate: data.startDate.trim() || undefined,
-      endDate: data.endDate.trim() || undefined,
-      originPlace: data.originPlace.trim() || (editing ? null : undefined),
-      founderText: data.founderText.trim() || (editing ? null : undefined),
-      motto: data.motto.trim() || (editing ? null : undefined),
+      description: empty(data.description),
+      startDate: empty(data.startDate),
+      endDate: empty(data.endDate),
+      originPlace: empty(data.originPlace),
+      founderText: empty(data.founderText),
+      motto: empty(data.motto),
     }
     if (data.thumbnailUrl !== undefined) payload.thumbnailUrl = data.thumbnailUrl
     if (data.crestImageUrl !== undefined) payload.crestImageUrl = data.crestImageUrl
@@ -195,7 +208,7 @@ export function DynastySection() {
     if (editing) {
       await updateDynasty.mutateAsync({ id: editing.id, data: payload })
     } else {
-      await createDynasty.mutateAsync(payload as never)
+      await createDynasty.mutateAsync(payload as DynastyMutationBody)
     }
     goToList()
   }
@@ -206,6 +219,8 @@ export function DynastySection() {
     if (editing?.id === id) goToList()
     if (expandedId === id) setExpandedId(null)
   }
+
+  const isFiltering = query.trim().length > 0 || status !== 'all'
 
   return (
     <SectionRoot>
@@ -220,17 +235,17 @@ export function DynastySection() {
                     <KpiInlineLabel>등록</KpiInlineLabel>
                     <KpiInlineValue>{totalCount.toLocaleString()}</KpiInlineValue>
                   </KpiInlineItem>
-                  {avgDuration != null && (
+                  {stats.avgDuration != null && (
                     <KpiInlineItem>
                       <KpiInlineLabel>평균 존속</KpiInlineLabel>
-                      <KpiInlineValue>{avgDuration.toLocaleString()}년</KpiInlineValue>
+                      <KpiInlineValue>{stats.avgDuration.toLocaleString()}년</KpiInlineValue>
                     </KpiInlineItem>
                   )}
-                  {eraSpan && (
+                  {stats.eraSpan && (
                     <KpiInlineItem>
                       <KpiInlineLabel>시대</KpiInlineLabel>
                       <KpiInlineValue>
-                        {eraSpan.min} – {eraSpan.max ?? '현재'}
+                        {stats.eraSpan.min} – {stats.eraSpan.max ?? '현재'}
                       </KpiInlineValue>
                     </KpiInlineItem>
                   )}
@@ -254,6 +269,8 @@ export function DynastySection() {
               onQueryChange={setQuery}
               sort={sort}
               onSortChange={setSort}
+              status={status}
+              onStatusChange={setStatus}
               totalCount={totalCount}
               filteredCount={filtered.length}
             />
@@ -274,26 +291,29 @@ export function DynastySection() {
         ) : isError ? (
           <StatusPanel>
             가문 목록을 불러오지 못했습니다.{' '}
-            <button
-              type="button"
-              onClick={() => refetch()}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'inherit',
-                textDecoration: 'underline',
-                cursor: 'pointer',
-                font: 'inherit',
-              }}
-            >
+            <InlineLinkBtn type="button" onClick={() => refetch()}>
               다시 시도
-            </button>
+            </InlineLinkBtn>
           </StatusPanel>
         ) : totalCount === 0 ? (
           <DynastyEmptyState onCreate={openCreate} />
         ) : filtered.length === 0 ? (
           <StatusPanel>
-            "{query}" 검색과 일치하는 가문이 없습니다.
+            {query.trim() ? `"${query}" 검색과 일치하는 가문이 없습니다.` : '조건에 맞는 가문이 없습니다.'}
+            {isFiltering && (
+              <>
+                {' '}
+                <InlineLinkBtn
+                  type="button"
+                  onClick={() => {
+                    setQuery('')
+                    setStatus('all')
+                  }}
+                >
+                  필터 초기화
+                </InlineLinkBtn>
+              </>
+            )}
           </StatusPanel>
         ) : (
           <RowList>
@@ -301,8 +321,8 @@ export function DynastySection() {
               <DynastyRow
                 key={derived.dynasty.id}
                 derived={derived}
-                axisMin={axisMin}
-                axisMax={axisMax}
+                axisMin={stats.axisMin}
+                axisMax={stats.axisMax}
                 isExpanded={expandedId === derived.dynasty.id}
                 isDeleting={deleteDynasty.isPending}
                 onToggleExpand={() => toggleExpand(derived.dynasty.id)}
@@ -331,3 +351,17 @@ export function DynastySection() {
     </SectionRoot>
   )
 }
+
+/* ── 작은 인라인 버튼 (StatusPanel 안의 "다시 시도", "필터 초기화") ─────── */
+const InlineLinkBtn = styled.button`
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+  }
+`

@@ -5,9 +5,12 @@ export type Dynasty = Awaited<ReturnType<typeof dynastiesApi.getAll>>[number]
 
 export type DynastyMutationBody = {
   name: string
-  description?: string
-  startDate?: string
-  endDate?: string
+  /** `null`이면 설명을 비움. 생략 시 기존값 유지 (편집 시) */
+  description?: string | null
+  /** `null`이면 시작일을 비움. 생략 시 기존값 유지 (편집 시) */
+  startDate?: string | null
+  /** `null`이면 종료일을 비움. 생략 시 기존값 유지 (편집 시) */
+  endDate?: string | null
   thumbnailUrl?: string | null
   originPlace?: string | null
   founderId?: string | null
