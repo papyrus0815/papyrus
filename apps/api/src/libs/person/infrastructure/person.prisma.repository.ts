@@ -1501,6 +1501,122 @@ export class PersonPrismaRepository implements IPersonRepository {
         countryAffiliations: {
           include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
         },
+        // 학력
+        educations: {
+          select: {
+            id: true,
+            educationType: true,
+            classNumber: true,
+            degree: true,
+            major: true,
+            department: true,
+            startDate: true,
+            endDate: true,
+            status: true,
+            notes: true,
+            organization: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        // 수상·훈장
+        awards: {
+          select: {
+            id: true,
+            awardName: true,
+            category: true,
+            awardingBody: true,
+            awardDate: true,
+            description: true,
+          },
+          orderBy: { awardDate: Prisma.SortOrder.desc },
+        },
+        // 시조 가문
+        foundedDynasties: {
+          select: { id: true, name: true },
+        },
+        // 분야별 경력 (9종)
+        militaryCareers: {
+          select: {
+            id: true, branch: true, position: true, termNumber: true,
+            startDate: true, endDate: true, notes: true,
+            rank: { select: { id: true, name: true } },
+            organization: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        businessCareers: {
+          select: {
+            id: true, title: true, level: true,
+            startDate: true, endDate: true, notes: true,
+            position: { select: { id: true, name: true } },
+            organization: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        academicCareers: {
+          select: {
+            id: true, department: true, researchField: true,
+            startDate: true, endDate: true, notes: true,
+            position: { select: { id: true, name: true } },
+            organization: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        religiousCareers: {
+          select: {
+            id: true, title: true,
+            startDate: true, endDate: true, notes: true,
+            position: { select: { id: true, name: true } },
+            organization: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        artistCareers: {
+          select: {
+            id: true,
+            startDate: true, endDate: true, notes: true,
+            position: { select: { id: true, name: true } },
+            organization: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        athleteCareers: {
+          select: {
+            id: true,
+            sport: true, position: true,
+            startDate: true, endDate: true, notes: true,
+            job: { select: { id: true, name: true } },
+            organization: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        mediaCareers: {
+          select: {
+            id: true,
+            startDate: true, endDate: true, notes: true,
+            position: { select: { id: true, name: true } },
+            organization: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        legalCareers: {
+          select: {
+            id: true,
+            startDate: true, endDate: true, notes: true,
+            position: { select: { id: true, name: true } },
+            organization: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
+        medicalCareers: {
+          select: {
+            id: true,
+            startDate: true, endDate: true, notes: true,
+            position: { select: { id: true, name: true } },
+            organization: { select: { id: true, name: true } },
+          },
+          orderBy: { startDate: Prisma.SortOrder.desc },
+        },
     }
     return accountId != null
       ? this.prisma.person.findFirst({ where, include })

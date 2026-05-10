@@ -416,6 +416,12 @@ export class PersonController {
     deathNote: string | null
     isAlive: boolean
     influence: number | null
+    preEnthronementTitle: string | null
+    educations: any[]
+    awards: any[]
+    careers: any[]
+    foundedDynasties: any[]
+    countryAffiliations: any[]
     createdAt: string
     updatedAt: string
   }> {
@@ -515,18 +521,30 @@ export class PersonController {
       deathAdminDivision: person.deathAdminDivision ? { id: person.deathAdminDivision.id, name: person.deathAdminDivision.name } : null,
       dynastyId: person.dynastyId ?? null,
       job: person.job ?? null,
-      countryId: (() => {
-        // CITIZENSHIP priority=0 소속 우선 (역사적 국가 포함)
+      ...(() => {
+        // CITIZENSHIP priority=0 소속을 effective 국가로 도출.
+        // countryId·country 객체가 일치하도록 함께 반환 (Person.countryId 기반 객체와 affiliation이 다른 record일 수 있음).
         const affiliations: any[] = person.countryAffiliations ?? []
         const main = affiliations
           .filter((a: any) => String(a.affiliationType) === 'CITIZENSHIP')
           .sort((a: any, b: any) => (a.priority ?? 999) - (b.priority ?? 999))[0]
-        if (main) return main.historicalCountryId ?? main.countryId ?? null
-        return person.countryId ?? null
+        if (main) {
+          const effectiveCountryId =
+            main.historicalCountryId ?? main.countryId ?? null
+          const effectiveCountryObj =
+            main.historicalCountry ?? main.country ?? person.country ?? null
+          return {
+            countryId: effectiveCountryId,
+            country: serializeBigInt(effectiveCountryObj),
+          }
+        }
+        return {
+          countryId: person.countryId ?? null,
+          country: serializeBigInt(person.country),
+        }
       })(),
       fatherId: person.fatherId ?? null,
       motherId: person.motherId ?? null,
-      country: serializeBigInt(person.country),
       father: person.father != null ? serializeBigInt(person.father) : null,
       mother: person.mother != null ? serializeBigInt(person.mother) : null,
       children: serializeBigInt(children),
@@ -579,6 +597,58 @@ export class PersonController {
       deathNote: (person as any).deathNote ?? null,
       isAlive: person.isAlive ?? false,
       influence: (person as any).influence ?? null,
+      preEnthronementTitle: (person as any).preEnthronementTitle ?? null,
+      educations: serializeBigInt(person.educations ?? []),
+      awards: serializeBigInt(person.awards ?? []),
+      foundedDynasties: serializeBigInt(person.foundedDynasties ?? []),
+      countryAffiliations: serializeBigInt(person.countryAffiliations ?? []),
+      careers: (() => {
+        const out: any[] = []
+        const push = (kind: string, list: any[] | undefined) => {
+          for (const raw of list ?? []) {
+            const c = serializeBigInt(raw) as any
+            // 직급/계급 — military는 rank, athlete는 job, 나머지는 position(Job 관계)
+            const rank =
+              kind === 'military'
+                ? c.rank ?? null
+                : kind === 'athlete'
+                  ? c.job ?? null
+                  : c.position ?? null
+            // 추가 식별 라벨 (군: branch, 학계/언론: department, 운동: sport, 비즈니스: title 등)
+            const title =
+              c.title ??
+              c.position /* athlete의 string 포지션 */ ??
+              c.branch ??
+              c.department ??
+              c.sport ??
+              c.specialization ??
+              null
+            out.push({
+              id: c.id,
+              kind,
+              rank,
+              organization: c.organization ?? null,
+              title,
+              branch: c.branch ?? null,
+              department: c.department ?? null,
+              termNumber: c.termNumber ?? null,
+              startDate: c.startDate ?? null,
+              endDate: c.endDate ?? null,
+              notes: c.notes ?? null,
+            })
+          }
+        }
+        push('military', (person as any).militaryCareers)
+        push('business', (person as any).businessCareers)
+        push('academic', (person as any).academicCareers)
+        push('religious', (person as any).religiousCareers)
+        push('artist', (person as any).artistCareers)
+        push('athlete', (person as any).athleteCareers)
+        push('media', (person as any).mediaCareers)
+        push('legal', (person as any).legalCareers)
+        push('medical', (person as any).medicalCareers)
+        return out
+      })(),
       createdAt: person.createdAt.toISOString(),
       updatedAt: person.updatedAt.toISOString(),
     }

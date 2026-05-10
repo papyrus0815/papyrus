@@ -100,6 +100,12 @@ export namespace getDetailById {
     deathNote: string | null;
     isAlive: boolean;
     influence: number | null;
+    preEnthronementTitle: string | null;
+    educations: any[];
+    awards: any[];
+    careers: any[];
+    foundedDynasties: any[];
+    countryAffiliations: any[];
     createdAt: string;
     updatedAt: string;
   }>;
