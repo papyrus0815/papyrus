@@ -68,6 +68,7 @@ export default function DashboardPersonsPage() {
           storageKey: 'persons-filter-collapsed',
           defaultCollapsed: true,
         }}
+        mobileDetailVisible
         left={({ listCollapsed, toggleListCollapsed }) => (
           <LeftFilterSlot
             view="person"
@@ -135,4 +136,7 @@ export default function DashboardPersonsPage() {
 const DetailWrap = styled.div`
   padding: 36px 32px 48px;
   background: ${({ theme }) => theme.colors.background.primary};
+  @media (max-width: 640px) {
+    padding: 16px 16px 32px;
+  }
 `

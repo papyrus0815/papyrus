@@ -57,6 +57,12 @@ interface HistoryShellProps {
    * e.g. 자식 컬럼 180px 표시 중 → 180. 부모 컬럼 폭은 그대로 유지됨.
    */
   sidebarExtraWidth?: number
+  /**
+   * 모바일(≤1024px)에서 우측(DetailPane)을 보여줄지.
+   * - 기본 false: 페이지가 자체 모바일 UI(예: CountryMobileUI)를 별도 렌더하므로 셸의 우측을 숨김.
+   * - true: 모바일 전용 UI 없이 우측 콘텐츠를 그대로 보여줘야 할 때 (예: 인물 인포그래픽).
+   */
+  mobileDetailVisible?: boolean
   /** Shell 외부로 한 번 감싸고 싶은 추가 요소 (모달 등) — provider 안쪽에 렌더됨 */
   children?: ReactNode
 }
@@ -67,6 +73,7 @@ export function HistoryShell({
   fullScreen = false,
   listCollapsedConfig,
   sidebarExtraWidth,
+  mobileDetailVisible = false,
   children,
 }: HistoryShellProps) {
   const { collapsed, toggle } = useListCollapsed(listCollapsedConfig)
@@ -96,7 +103,7 @@ export function HistoryShell({
             $sidebarExtraWidth={sidebarExtraWidth}
           >
             {resolvedLeft}
-            <S.DetailPane>
+            <S.DetailPane $mobileVisible={mobileDetailVisible}>
               <S.DetailPaneScrollBody>{resolvedRight}</S.DetailPaneScrollBody>
             </S.DetailPane>
           </S.MainGrid>

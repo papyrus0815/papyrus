@@ -54,7 +54,7 @@ export const MainGrid = styled.div<{
   }
 `
 
-export const DetailPane = styled.div`
+export const DetailPane = styled.div<{ $mobileVisible?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -63,7 +63,13 @@ export const DetailPane = styled.div`
   overflow-y: auto;
   border-left: none;
   @media (max-width: 1024px) {
-    display: none;
+    ${({ $mobileVisible }) =>
+      $mobileVisible
+        ? `
+          height: auto;
+          overflow-y: visible;
+        `
+        : `display: none;`}
   }
 `
 
