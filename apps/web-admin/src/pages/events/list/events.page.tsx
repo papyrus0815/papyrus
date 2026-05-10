@@ -16,6 +16,7 @@ import React, {
 } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
+import { FiPlus } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useEvents } from '@/entities/event/model'
@@ -88,6 +89,7 @@ import {
 } from './hooks/use-catalog-keyboard'
 import { useCatalogUrlSync } from './hooks/use-catalog-url-sync'
 import { exportEventsAsJson } from './lib/export-events'
+import { resolveDefaultViewMode } from './lib/resolve-default-view-mode'
 
 export interface EventsCatalogPageProps {
   /** 국가(현대/역사적) ID로 연관 사건만 표시. 미전달 시 전체 사건 */
@@ -189,11 +191,13 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   )
 
   // ===== UI 상태 =====
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const v = searchParams.get('view')
-    const valid = Object.values(VIEW_MODES) as string[]
-    return v && valid.includes(v) ? (v as ViewMode) : VIEW_MODES.TIMELINE
-  })
+  // 디폴트 viewMode 결정: URL 우선 → 모바일이면 LIST → 데스크톱이면 TIMELINE.
+  // 타임라인은 가로 panning이 Space+드래그·Ctrl+휠뿐이라 터치 디바이스에서 사실상 비-인터랙티브 →
+  // 첫 진입을 LIST로 두고, 사용자가 명시적으로 타임라인을 선택하면 그 선택은 URL로 보존됨.
+  // useCatalogUrlSync도 동일 디폴트를 사용해야 첫 마운트 직후 force-overwrite를 피함.
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    resolveDefaultViewMode(searchParams.get('view')),
+  )
   const [selectedEventId, setSelectedEventId] = useState<string | null>(
     searchParams.get('event'),
   )
@@ -293,11 +297,14 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   })
 
   // ===== Pagination: 스크롤 감지 =====
+  // 임계값을 고정 300px → viewport 비율로. 모바일 600px 화면에서 300px 임계는 한 화면의 절반 →
+  // 너무 일찍/자주 트리거됨. clientHeight의 40%(또는 최소 200)면 데스크톱·모바일 모두 자연스러움.
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget
     const scrollBottom =
       target.scrollHeight - target.scrollTop - target.clientHeight
-    if (scrollBottom < 300 && hasMore && !isLoading) {
+    const threshold = Math.max(200, target.clientHeight * 0.4)
+    if (scrollBottom < threshold && hasMore && !isLoading) {
       fetchMoreEvents()
     }
   }
@@ -707,6 +714,17 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
         <Layout.PageScene>
           <Layout.PageWrapper>{content}</Layout.PageWrapper>
         </Layout.PageScene>
+      )}
+
+      {/* 모바일 우하단 FAB — embed 모드에선 부모가 자체 CTA를 가질 가능성이 높아 미렌더 */}
+      {!embed && (
+        <Layout.CreateEventFab
+          type="button"
+          aria-label="새 사건 등록"
+          onClick={handleCreateEvent}
+        >
+          <FiPlus size={24} aria-hidden="true" />
+        </Layout.CreateEventFab>
       )}
 
       <CatalogEntityFilterModals {...entityFilterModalProps} />

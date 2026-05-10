@@ -10,12 +10,10 @@
 import { useEffect, useRef } from 'react'
 import type { useSearchParams } from 'react-router-dom'
 
-import {
-  FILTER_ALL,
-  VIEW_MODES,
-  type ViewMode,
-} from '@/features/event-list/lib'
+import { FILTER_ALL, type ViewMode } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
+
+import { resolveDefaultViewMode } from '../lib/resolve-default-view-mode'
 
 interface CatalogUrlSyncArgs {
   searchParams: URLSearchParams
@@ -117,12 +115,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     const flat = searchParams.get('flat') === '1'
     if (flat !== showFlatView) setShowFlatView(flat)
 
-    const v = searchParams.get('view')
-    const validViews = Object.values(VIEW_MODES) as ViewMode[]
-    const nextView: ViewMode =
-      v && (validViews as string[]).includes(v)
-        ? (v as ViewMode)
-        : VIEW_MODES.TIMELINE
+    const nextView = resolveDefaultViewMode(searchParams.get('view'))
     if (nextView !== viewMode) setViewMode(nextView)
     // 의도적: 마운트 시·뒤로가기 시 한 번씩 끌어오면 충분. 양방향 동기화는 아래 effect에서.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -144,7 +137,9 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setOrDel('sort', sortBy, DEFAULT_SORT)
     setOrDel('dir', sortDirection, DEFAULT_DIR)
     setOrDel('flat', showFlatView ? '1' : null)
-    setOrDel('view', viewMode, VIEW_MODES.TIMELINE)
+    /* 디폴트 viewMode가 디바이스에 따라 다름(모바일 LIST, 데스크톱 TIMELINE)이므로
+     * default 인자 없이 항상 view 키를 명시. URL 공유 시 viewMode 정확히 보존. */
+    setOrDel('view', viewMode)
     const nextStr = next.toString()
     if (nextStr !== searchParams.toString()) {
       lastSelfWriteRef.current = nextStr

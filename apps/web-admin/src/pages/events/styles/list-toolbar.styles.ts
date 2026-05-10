@@ -108,7 +108,8 @@ export const PromSearchInput = styled.input`
   }
 `
 
-/* 검색바 우측의 키 힌트 — 빈 입력일 때만 노출. focus 시 fade out */
+/* 검색바 우측의 키 힌트 — 빈 입력일 때만 노출. focus 시 fade out.
+ * 모바일(<=640px)에선 키보드가 없으므로 렌더 자체를 숨겨 시각 노이즈 제거. */
 export const PromSearchKbd = styled.kbd`
   display: inline-flex;
   align-items: center;
@@ -125,6 +126,11 @@ export const PromSearchKbd = styled.kbd`
   flex-shrink: 0;
   pointer-events: none;
   user-select: none;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
@@ -194,8 +200,14 @@ export const ToolbarActions = styled.div`
 `
 
 /* secondary action 버튼 — *ghost*. 평소엔 border 없음, hover 시 subtle bg.
- * primary action(`+새 사건`)만 강조 색을 가짐. */
-export const ToolbarBtn = styled.button<{ $active?: boolean }>`
+ * primary action(`+새 사건`)만 강조 색을 가짐.
+ *
+ * `$hideOnMobile`: 도움말·JSON 다운로드처럼 모바일 컨텍스트에서 의미가 작은
+ * 버튼은 <=640px에서 렌더 안 함. */
+export const ToolbarBtn = styled.button<{
+  $active?: boolean
+  $hideOnMobile?: boolean
+}>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -250,9 +262,11 @@ export const ToolbarBtn = styled.button<{ $active?: boolean }>`
     transition: none;
   }
 
-  /* 모바일 — 라벨(span)은 sr-only로 떨어뜨리고 icon만. tooltip(title)은 유지. */
+  /* 모바일 — 라벨(span)은 sr-only로 떨어뜨리고 icon만. tooltip(title)은 유지.
+   * 터치 타겟 권장(38~44px)에 맞춰 height/패딩도 키움. */
   @media (max-width: 640px) {
-    padding: 7px 9px;
+    padding: 9px 11px;
+    height: 38px;
     & > span:not([class]) {
       position: absolute;
       width: 1px;
@@ -264,6 +278,12 @@ export const ToolbarBtn = styled.button<{ $active?: boolean }>`
       white-space: nowrap;
       border: 0;
     }
+
+    ${({ $hideOnMobile }) =>
+      $hideOnMobile &&
+      css`
+        display: none;
+      `}
   }
 `
 
@@ -445,6 +465,24 @@ export const ViewSegmented = styled.div`
       display: none;
     }
 
+    /* 우측 가장자리 fade — 가로 스크롤로 더 있음을 시각적으로 안내.
+     * mask는 스크롤 위치와 무관하게 "양 끝 페이드"가 되어 좌측 시작 위치에서도
+     * 살짝 hint, 그러나 그 비용보다 affordance 이득이 큼. */
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 8px,
+      #000 calc(100% - 16px),
+      transparent 100%
+    );
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 8px,
+      #000 calc(100% - 16px),
+      transparent 100%
+    );
+
     & > button {
       scroll-snap-align: start;
       flex-shrink: 0;
@@ -452,7 +490,7 @@ export const ViewSegmented = styled.div`
   }
 `
 
-/* 컴팩트 — 각 버튼 30px 높이, icon 13px + 라벨 11.5px.
+/* 컴팩트 — 각 버튼 30px 높이(모바일 36px), icon 13px + 라벨 11.5px.
  * 외곽 padding 2px 포함 시 ViewSegmented 총 34px → DisplayOptions의 select/button과 베이스라인 정렬.
  * active는 *살짝 떠오른 inner pill* (배경 흰색 + subtle shadow).
  * 라벨은 1024px 이하에서 sr-only로 떨어져 7개가 좁은 화면에서도 fit. */
@@ -524,6 +562,12 @@ export const ViewSegment = styled.button<{ $active: boolean }>`
       white-space: nowrap;
       border: 0;
     }
+  }
+
+  /* 모바일 터치 타겟 — 30 → 36px로 살짝 키움. icon만 보이는 좁은 폭에서도 손가락 적중률 개선. */
+  @media (max-width: 640px) {
+    height: 36px;
+    padding: 6px 11px;
   }
 
   @media (prefers-reduced-motion: reduce) {

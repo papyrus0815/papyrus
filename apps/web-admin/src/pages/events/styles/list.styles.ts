@@ -67,6 +67,28 @@ export const CompactList = styled.div`
   @media (max-width: 768px) {
     max-height: none;
   }
+
+  /* 모바일 — 좌측 70px 패딩(타임라인 가이드 레일용)이 좁은 폭에선
+   * 콘텐츠 영역을 너무 잘라먹는다. padding과 가이드라인 위치를 12px로 동기화. */
+  @media (max-width: 640px) {
+    padding: 4px 10px max(120px, env(safe-area-inset-bottom)) 24px;
+    background-image: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? `linear-gradient(
+            to right,
+            transparent 11px,
+            rgba(147, 197, 253, 0.14) 11px,
+            rgba(147, 197, 253, 0.14) 12px,
+            transparent 12px
+          )`
+        : `linear-gradient(
+            to right,
+            transparent 11px,
+            rgba(37, 99, 235, 0.16) 11px,
+            rgba(37, 99, 235, 0.16) 12px,
+            transparent 12px
+          )`};
+  }
 `
 
 export type ListItemImportance = 'critical' | 'major' | 'normal'

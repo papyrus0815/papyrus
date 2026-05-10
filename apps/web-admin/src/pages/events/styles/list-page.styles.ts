@@ -78,7 +78,7 @@ export const PageHeader = styled.div`
   }
 
   @media (max-width: 640px) {
-    padding: 0 2px 0 10px;
+    padding: 2px 2px 2px 14px;
   }
 `
 
@@ -218,6 +218,10 @@ export const EmptyResults = styled.div`
   gap: 10px;
   padding: 56px 32px;
   text-align: center;
+
+  @media (max-width: 640px) {
+    padding: 36px 16px;
+  }
   margin: 12px;
   border-radius: 12px;
   border: 1px dashed
@@ -370,6 +374,16 @@ export const DetailPanelHost = styled.div<{ $open: boolean }>`
     transform: translateX(${({ $open }) => ($open ? '0' : '100%')});
     transition: transform ${MOTION.drawer};
     pointer-events: ${({ $open }) => ($open ? 'auto' : 'none')};
+    /* drawer 내부 스크롤이 body로 새는 것 방지 (iOS rubber band 포함) */
+    overscroll-behavior: contain;
+  }
+
+  /* 모바일 — drawer를 풀폭으로. 92vw로 8vw만 backdrop 노출하던 이전엔
+   * 정확한 backdrop tap이 어려워 닫기가 사실상 헤더 X 버튼 한 가지뿐이었음. */
+  @media (max-width: 640px) {
+    width: 100vw;
+    width: 100dvw;
+    border-left: none;
   }
 
   @media (max-width: 1200px) and (prefers-reduced-motion: reduce) {

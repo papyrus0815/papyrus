@@ -144,7 +144,7 @@ export const CatalogToolbar: React.FC<Props> = ({
           name="event-search"
           autoComplete="off"
           spellCheck={false}
-          placeholder="사건명, 태그, 인물 검색"
+          placeholder="사건 검색"
           value={keywordInput}
           onChange={(e) => setKeywordInput(e.target.value)}
           aria-label="사건 검색"
@@ -210,6 +210,7 @@ export const CatalogToolbar: React.FC<Props> = ({
           type="button"
           title="현재 필터된 결과를 내보내기"
           onClick={onExportJson}
+          $hideOnMobile
         >
           <FiDownload size={ICON_SIZE.base} />
           <span>JSON</span>
@@ -218,6 +219,7 @@ export const CatalogToolbar: React.FC<Props> = ({
           type="button"
           title="단축키 도움말 (?)"
           onClick={onOpenShortcutHelp}
+          $hideOnMobile
         >
           <FiHelpCircle size={ICON_SIZE.base} />
         </ToolbarStyles.ToolbarBtn>
