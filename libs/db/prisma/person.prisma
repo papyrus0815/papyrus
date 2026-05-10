@@ -167,6 +167,13 @@ model Person {
   /// 이벤트 목록에 생몰년 표시 여부
   showLifespanOnEventList Boolean @default(true) @map("show_lifespan_on_event_list")
 
+  /// 사생아·서출 여부 (가계도 카드에 별표 마커)
+  illegitimate Boolean @default(false) @map("illegitimate")
+
+  /// 어느 결혼에서 태어났는지 (PersonSpouse FK) — 다중 배우자 케이스에서 자녀를 어머니별로 묶기.
+  /// null이면 미상 또는 단일 배우자 케이스로 모호성 없음.
+  parentMarriageId String? @map("parent_marriage_id") @db.Char(36)
+
   //--- 왕/군주 관련 필드 (인물 고유)
   /// 왕호/재위명 (예: Louis, Henry, 선덕)
   /// 주의: 재위 번호는 국가마다 다르므로 GovernmentPositionTenure에 저장
@@ -298,6 +305,7 @@ model Person {
   @@index([countryId], name: "idx_person_countryId")
   @@index([birthCityId], name: "idx_person_birthCityId")
   @@index([deathCityId], name: "idx_person_deathCityId")
+  @@index([parentMarriageId], name: "idx_person_parentMarriageId")
   @@map("person")
 }
 

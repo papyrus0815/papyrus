@@ -1,9 +1,9 @@
 /**
  * 전체 가계도 페이지
  * - @xyflow/react 기반 무한 캔버스
- * - ego 기준 최대 3세대 위 / 2세대 아래 / 형제자매 / 배우자
+ * - ego 기준 최대 N세대 위/아래/형제자매/배우자 (BFS 11단계)
  */
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -19,10 +19,13 @@ import {
   BackgroundVariant,
   useReactFlow,
   ReactFlowProvider,
+  getNodesBounds,
+  getViewportForBounds,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { toPng } from 'html-to-image'
 import styled from 'styled-components'
-import { FiArrowLeft, FiUsers } from 'react-icons/fi'
+import { FiArrowLeft, FiDownload, FiSearch, FiTarget, FiUsers } from 'react-icons/fi'
 
 import { getPersonFamilyTree, type FamilyTreePerson, type FamilyTreeData } from '@/shared/api/persons-family-tree'
 import { getUploadImageUrl } from '@/shared/api/upload'
@@ -289,17 +292,36 @@ function buildGraph(data: FamilyTreeData): { rfNodes: Node[]; rfEdges: Edge[] } 
 
   const rfEdges: Edge[] = data.edges.map((e, i) => {
     const isSpouse = e.type === 'spouse'
+    const inferred = isSpouse && Boolean((e as any).inferred)
+    const marriagePeriod =
+      isSpouse && (e.marriageStartYear != null || e.marriageEndYear != null)
+        ? `${e.marriageStartYear ?? '?'}–${e.marriageEndYear ?? ''}`
+        : null
+    const labelText = isSpouse
+      ? (inferred ? '♡' : (marriagePeriod ? `♥ ${marriagePeriod}` : '♥'))
+      : undefined
     return {
       id: `e-${i}-${e.source}-${e.target}`,
       source: e.source,
       target: e.target,
       type: isSpouse ? 'straight' : 'smoothstep',
       animated: false,
-      label: isSpouse ? '♥' : undefined,
-      labelStyle: isSpouse ? { fill: '#e11d48', fontWeight: 700, fontSize: 14 } : undefined,
+      label: labelText,
+      labelStyle: isSpouse
+        ? {
+            fill: inferred ? '#cbd5e1' : '#e11d48',
+            fontWeight: 700,
+            fontSize: 12,
+          }
+        : undefined,
       labelBgStyle: isSpouse ? { fill: 'transparent' } : undefined,
       style: isSpouse
-        ? { stroke: '#fda4af', strokeWidth: 1.5, strokeDasharray: '4 3' }
+        ? {
+            stroke: inferred ? '#e2e8f0' : '#fda4af',
+            strokeWidth: inferred ? 1 : 1.5,
+            strokeDasharray: inferred ? '2 4' : '4 3',
+            opacity: inferred ? 0.65 : 1,
+          }
         : { stroke: '#94a3b8', strokeWidth: 1.5 },
       markerEnd: isSpouse ? undefined : {
         type: 'arrowclosed' as any,
@@ -313,12 +335,61 @@ function buildGraph(data: FamilyTreeData): { rfNodes: Node[]; rfEdges: Edge[] } 
   return { rfNodes, rfEdges }
 }
 
+// ─── Helpers ────────────────────────────────────────────────────────
+/** 카드 아바타 우하단 작은 국기 뱃지 — emoji > thumbnailUrl > flagcdn(isoCode) 우선순위 */
+function CountryFlag({
+  flag,
+  countryName,
+  size = 18,
+}: {
+  flag: { flagEmoji?: string | null; isoCode?: string | null; thumbnailUrl?: string | null } | null | undefined
+  countryName?: string | null
+  size?: number
+}) {
+  if (!flag) return null
+  const emoji = flag.flagEmoji ?? null
+  const thumb = flag.thumbnailUrl
+    ? (getUploadImageUrl(flag.thumbnailUrl) || flag.thumbnailUrl)
+    : null
+  const flagcdn = flag.isoCode
+    ? `https://flagcdn.com/w40/${flag.isoCode.toLowerCase()}.png`
+    : null
+  const title = countryName ?? undefined
+  if (emoji) {
+    return (
+      <CountryFlagBadge $size={size} title={title} aria-label={countryName ? `${countryName} 국기` : '국기'}>
+        <span aria-hidden style={{ fontSize: `${Math.round(size * 0.85)}px`, lineHeight: 1 }}>{emoji}</span>
+      </CountryFlagBadge>
+    )
+  }
+  const imgSrc = thumb ?? flagcdn
+  if (imgSrc) {
+    return (
+      <CountryFlagBadge $size={size} title={title} aria-label={countryName ? `${countryName} 국기` : '국기'}>
+        <img src={imgSrc} alt="" loading="lazy" decoding="async" />
+      </CountryFlagBadge>
+    )
+  }
+  return null
+}
+
+function buildPersonTooltip(p: FamilyTreePerson, displayName: string): string {
+  const lines: string[] = [`${displayName} — 클릭: 상세 / Shift+클릭: 중심 변경`]
+  if (p.originalName) lines.push(`원어 — ${p.originalName}`)
+  if (p.preEnthronementTitle) lines.push(`작호 — ${p.preEnthronementTitle}`)
+  if (p.templeName) lines.push(`묘호 — ${p.templeName}`)
+  if (p.posthumousName) lines.push(`시호 — ${p.posthumousName}`)
+  if (p.birthPlace) lines.push(`출생 — ${p.birthPlace}`)
+  if (p.deathPlace) lines.push(`사망 — ${p.deathPlace}`)
+  return lines.join('\n')
+}
+
 // ─── Person Node component ─────────────────────────────────────────
 function PersonNodeInner({ data }: NodeProps) {
   const { person, isEgo } = data as { person: FamilyTreePerson; isEgo: boolean }
   const navigate = useNavigate()
 
-  const displayName = getPersonDisplayName(
+  const baseName = getPersonDisplayName(
     {
       name: person.name,
       surname: person.surname,
@@ -327,23 +398,35 @@ function PersonNodeInner({ data }: NodeProps) {
     },
     true,
   )
+  const displayName = person.illegitimate ? `${baseName}*` : baseName
 
   const src = person.profileImageUrl
     ? getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl
     : null
 
-  const initial = [...(displayName.trim() || '?')][0] ?? '?'
+  const initial = [...(baseName.trim() || '?')][0] ?? '?'
 
   const lifeSpan =
     person.birthYear != null || person.deathYear != null
       ? `${person.birthYear ?? '?'}–${person.deathYear ?? ''}`
       : null
+  const isDeceased = person.deathYear != null
+  const handleClick = (ev: React.MouseEvent) => {
+    if (!person.id) return
+    if (ev.shiftKey) {
+      // Shift+클릭: 가계도 중심을 이 인물로 변경 (C2)
+      navigate(`/genealogy/${person.id}/`)
+    } else {
+      navigate(`/persons/${person.id}/`)
+    }
+  }
 
   return (
     <NodeWrap
       $isEgo={isEgo}
-      onClick={() => navigate(`/persons/${person.id}/`)}
-      title={`${displayName} 상세 보기`}
+      $deceased={isDeceased}
+      onClick={handleClick}
+      title={buildPersonTooltip(person, displayName)}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
@@ -352,17 +435,40 @@ function PersonNodeInner({ data }: NodeProps) {
       <Handle type="source" position={Position.Right} id="right" style={{ opacity: 0 }} />
       <Handle type="target" position={Position.Right} id="right-t" style={{ opacity: 0 }} />
 
-      <NodeAvatar $isEgo={isEgo} $hasImg={!!src}>
-        {src
-          ? <img src={src} alt={displayName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-          : <span style={{ fontSize: 22, fontWeight: 700, color: isEgo ? '#fff' : 'var(--node-text, #475569)' }}>{initial}</span>}
-      </NodeAvatar>
+      <AvatarFrame>
+        <NodeAvatar $isEgo={isEgo} $hasImg={!!src} $deceased={isDeceased}>
+          {src
+            ? <img src={src} alt={baseName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+            : <span style={{ fontSize: 22, fontWeight: 700, color: isEgo ? '#fff' : 'var(--node-text, #475569)' }}>{initial}</span>}
+        </NodeAvatar>
+        {(() => {
+          const flag = person.flag ?? person.sovereignCountry ?? person.country
+          if (!flag) return null
+          const countryName = (flag as any).countryName ?? (flag as any).name ?? null
+          return <CountryFlag flag={flag} countryName={countryName} size={20} />
+        })()}
+      </AvatarFrame>
 
       {person.regnalName && (
-        <NodeRegnalName>{person.regnalName}</NodeRegnalName>
+        <NodeRegnalName>
+          ♛ {person.regnalName}
+          {person.sovereignCountry?.regnalNumber != null && (
+            <span style={{ marginLeft: 4, opacity: 0.85, fontWeight: 600, fontSize: '0.85em' }}>
+              {person.sovereignCountry.regnalNumber}대
+            </span>
+          )}
+          {person.sovereignCountry?.name && (
+            <span style={{ marginLeft: 4, opacity: 0.75, fontWeight: 500, fontSize: '0.85em' }}>
+              · {person.sovereignCountry.name}
+            </span>
+          )}
+        </NodeRegnalName>
       )}
 
-      <NodeName $isEgo={isEgo}>{displayName}</NodeName>
+      <NodeName $isEgo={isEgo}>
+        {displayName}
+        {isDeceased && <span style={{ marginLeft: 4, fontWeight: 500, opacity: 0.6 }}>†</span>}
+      </NodeName>
 
       {lifeSpan && <NodeMeta>{lifeSpan}</NodeMeta>}
 
@@ -371,6 +477,10 @@ function PersonNodeInner({ data }: NodeProps) {
       )}
 
       {isEgo && <EgoBadge>본인</EgoBadge>}
+
+      <RecenterHint aria-hidden>
+        <FiTarget size={9} strokeWidth={2.4} />
+      </RecenterHint>
 
       <NodeClickOverlay />
     </NodeWrap>
@@ -382,7 +492,11 @@ const nodeTypes = { personNode: PersonNodeInner }
 // ─── Inner flow component (needs ReactFlowProvider context) ─────────
 function GenealogyFlow({ personId }: { personId: string }) {
   const navigate = useNavigate()
-  const { fitView } = useReactFlow()
+  const { fitView, setCenter } = useReactFlow()
+  const flowWrapRef = useRef<HTMLDivElement>(null)
+  const [search, setSearch] = useState('')
+  const [matchIndex, setMatchIndex] = useState(0)
+  const [exporting, setExporting] = useState(false)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['family-tree', personId],
@@ -413,6 +527,92 @@ function GenealogyFlow({ personId }: { personId: string }) {
     return getPersonDisplayName({ name: ego.name, surname: ego.surname, middleName: ego.middleName, nameDisplayOrder: ego.nameDisplayOrder }, true)
   }, [data])
 
+  // 세대 라벨 계산 (D1) — y 좌표를 (NODE_H + V_GAP)으로 나눠 세대 도출
+  const generationLabels = useMemo(() => {
+    if (rfNodes.length === 0) return [] as Array<{ y: number; label: string }>
+    const generations = new Set<number>()
+    for (const n of rfNodes) {
+      const gen = Math.round(n.position.y / (NODE_H + V_GAP))
+      generations.add(gen)
+    }
+    const labelFor = (gen: number): string => {
+      if (gen === 0) return '본인 세대'
+      const abs = Math.abs(gen)
+      const direction = gen < 0 ? '위' : '아래'
+      const koreanName = gen < 0
+        ? (abs === 1 ? '부모' : abs === 2 ? '조부모' : abs === 3 ? '증조부모' : abs === 4 ? '고조부모' : `${abs}세대 위`)
+        : (abs === 1 ? '자녀' : abs === 2 ? '손자녀' : abs === 3 ? '증손자녀' : `${abs}세대 아래`)
+      return `${gen > 0 ? '+' : '−'}${abs} ${direction} (${koreanName})`
+    }
+    return Array.from(generations)
+      .sort((a, b) => a - b)
+      .map((gen) => ({ y: gen * (NODE_H + V_GAP), label: labelFor(gen) }))
+  }, [rfNodes])
+
+  // 검색 매치 (C3)
+  const searchMatches = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q || rfNodes.length === 0) return [] as Node[]
+    return rfNodes.filter((n) => {
+      const p = (n.data as any)?.person as FamilyTreePerson | undefined
+      if (!p) return false
+      const name = (p.name ?? '') + (p.surname ?? '') + (p.regnalName ?? '') + (p.originalName ?? '')
+      return name.toLowerCase().includes(q)
+    })
+  }, [search, rfNodes])
+
+  const goToMatch = useCallback((idx: number) => {
+    if (searchMatches.length === 0) return
+    const wrapped = ((idx % searchMatches.length) + searchMatches.length) % searchMatches.length
+    const target = searchMatches[wrapped]
+    setMatchIndex(wrapped)
+    setCenter(target.position.x + NODE_W / 2, target.position.y + NODE_H / 2, {
+      zoom: 1,
+      duration: 400,
+    })
+  }, [searchMatches, setCenter])
+
+  // 검색어 바뀌면 첫 매치로 점프
+  useEffect(() => {
+    if (searchMatches.length === 0) return
+    goToMatch(0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search])
+
+  // PNG 내보내기 (C4) — html-to-image로 ReactFlow viewport 캡처
+  const handleExportPng = useCallback(async () => {
+    if (rfNodes.length === 0 || exporting) return
+    const wrap = flowWrapRef.current?.querySelector<HTMLElement>('.react-flow__viewport')
+    const flowEl = flowWrapRef.current?.querySelector<HTMLElement>('.react-flow')
+    if (!wrap || !flowEl) return
+    setExporting(true)
+    try {
+      // 모든 노드가 한 번에 보이도록 viewport 임시 조정
+      const bounds = getNodesBounds(rfNodes)
+      const W = 2400
+      const H = Math.max(1200, Math.round((bounds.height / bounds.width) * W))
+      const vp = getViewportForBounds(bounds, W, H, 0.05, 2, 0.1)
+      const transformBefore = wrap.style.transform
+      wrap.style.transform = `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})`
+      const dataUrl = await toPng(flowEl, {
+        backgroundColor: '#ffffff',
+        width: W,
+        height: H,
+        style: { width: `${W}px`, height: `${H}px` },
+        cacheBust: true,
+      })
+      wrap.style.transform = transformBefore
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `genealogy-${egoName || personId}.png`
+      a.click()
+    } catch (e) {
+      console.error('PNG 내보내기 실패', e)
+    } finally {
+      setExporting(false)
+    }
+  }, [rfNodes, exporting, egoName, personId])
+
   return (
     <PageRoot>
       <PageHeader>
@@ -425,11 +625,33 @@ function GenealogyFlow({ personId }: { personId: string }) {
           <HeaderTitle>전체 가계도{egoName ? ` — ${egoName}` : ''}</HeaderTitle>
         </HeaderCenter>
         <HeaderRight>
+          <SearchWrap>
+            <FiSearch size={13} />
+            <SearchInput
+              type="search"
+              value={search}
+              placeholder="이름·왕호 검색"
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  goToMatch(matchIndex + 1)
+                }
+              }}
+            />
+            {searchMatches.length > 0 && (
+              <SearchCount>{matchIndex + 1}/{searchMatches.length}</SearchCount>
+            )}
+          </SearchWrap>
+          <ExportBtn type="button" onClick={handleExportPng} disabled={exporting || rfNodes.length === 0}>
+            <FiDownload size={13} />
+            <span>{exporting ? '저장 중…' : 'PNG'}</span>
+          </ExportBtn>
           <NodeCount>{data?.nodes.length ?? 0}명</NodeCount>
         </HeaderRight>
       </PageHeader>
 
-      <FlowWrap>
+      <FlowWrap ref={flowWrapRef}>
         {isLoading && (
           <LoadingOverlay>
             <LoadingSpinner />
@@ -450,6 +672,7 @@ function GenealogyFlow({ personId }: { personId: string }) {
           fitView
           minZoom={0.05}
           maxZoom={2}
+          onlyRenderVisibleElements={rfNodes.length > 30}
           proOptions={{ hideAttribution: true }}
         >
           <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#e2e8f0" />
@@ -460,6 +683,21 @@ function GenealogyFlow({ personId }: { personId: string }) {
             position="bottom-left"
           />
         </ReactFlow>
+
+        {/* 세대 라벨 sticky 오버레이 (D1) — 좌측 가장자리 고정 */}
+        <GenerationGuides aria-hidden>
+          {generationLabels.map(({ y, label }) => (
+            <GenerationGuideLine key={y} style={{ top: `calc(50% + ${y}px)` }}>
+              <span>{label}</span>
+            </GenerationGuideLine>
+          ))}
+        </GenerationGuides>
+
+        {data?.truncations && data.truncations.length > 0 && (
+          <TruncationNotice>
+            데이터가 일부 절단되었습니다 — {data.truncations.map((t) => `${t.scope} ${t.took}+`).join(', ')}
+          </TruncationNotice>
+        )}
       </FlowWrap>
     </PageRoot>
   )
@@ -538,6 +776,62 @@ const HeaderTitle = styled.h1`
 const HeaderRight = styled.div`
   display: flex;
   align-items: center;
+  gap: 10px;
+`
+
+const SearchWrap = styled.label`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  &:focus-within {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  }
+`
+
+const SearchInput = styled.input`
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+  width: 140px;
+`
+
+const SearchCount = styled.span`
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+`
+
+const ExportBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.10)' : '#e2e8f0'};
+  }
+  &:disabled { opacity: 0.5; cursor: default; }
 `
 
 const NodeCount = styled.span`
@@ -600,7 +894,7 @@ const ErrorOverlay = styled.div`
 
 // ─── Node styled components ───────────────────────────────────────
 // 라이트/다크 모드 모두 지원하기 위해 CSS 변수와 prefers-color-scheme 사용
-const NodeWrap = styled.div<{ $isEgo: boolean }>`
+const NodeWrap = styled.div<{ $isEgo: boolean; $deceased?: boolean }>`
   position: relative;
   width: ${NODE_W}px;
   min-height: ${NODE_H}px;
@@ -618,7 +912,11 @@ const NodeWrap = styled.div<{ $isEgo: boolean }>`
     : 'var(--node-bg, #fff)'};
   border: ${({ $isEgo }) => $isEgo ? '2px solid #4f46e5' : '1.5px solid var(--node-border, #e2e8f0)'};
   box-shadow: ${({ $isEgo }) => $isEgo ? '0 4px 24px rgba(99,102,241,0.35)' : '0 2px 8px rgba(0,0,0,0.06)'};
-  &:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+  &:hover, &:focus-within, &:active {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    /* 모바일 (C5): hover 대체용 active 처리 */
+  }
 
   @media (prefers-color-scheme: dark) {
     --node-bg: #1e293b;
@@ -638,12 +936,110 @@ const NodeWrap = styled.div<{ $isEgo: boolean }>`
   }
 `
 
-const NodeAvatar = styled.div<{ $isEgo: boolean; $hasImg: boolean }>`
+const NodeAvatar = styled.div<{ $isEgo: boolean; $hasImg: boolean; $deceased?: boolean }>`
   width: 64px; height: 64px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; flex-shrink: 0;
   background: ${({ $isEgo, $hasImg }) => $isEgo ? 'rgba(255,255,255,0.25)' : $hasImg ? 'transparent' : 'var(--node-avatar-bg, #f1f5f9)'};
   border: ${({ $isEgo }) => $isEgo ? '2px solid rgba(255,255,255,0.5)' : '2px solid var(--node-avatar-border, #e2e8f0)'};
+  ${({ $deceased, $hasImg }) =>
+    $deceased && $hasImg ? 'img { filter: grayscale(0.6) opacity(0.85); }' : ''}
+`
+
+const AvatarFrame = styled.div`
+  position: relative;
+  display: inline-flex;
+`
+
+const CountryFlagBadge = styled.span<{ $size: number }>`
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: ${({ $size }) => $size}px;
+  height: ${({ $size }) => $size}px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--node-bg, #fff);
+  border: 1.5px solid var(--node-bg, #fff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  & img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`
+
+const RecenterHint = styled.span`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.12);
+  color: #6366f1;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  ${NodeWrap}:hover & { opacity: 1; }
+`
+
+const GenerationGuides = styled.div`
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+`
+
+const GenerationGuideLine = styled.div`
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 0;
+  border-top: 1px dashed ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.18)' : 'rgba(148, 163, 184, 0.30)'};
+  & > span {
+    display: inline-block;
+    transform: translateY(-50%);
+    margin-left: 12px;
+    padding: 2px 8px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(203, 213, 225, 0.55)' : 'rgba(71, 85, 105, 0.7)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.85)' : 'rgba(248, 250, 252, 0.85)'};
+    border-radius: 4px;
+  }
+`
+
+const TruncationNotice = styled.div`
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80%;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#b45309')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.12)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.45)' : 'rgba(217, 119, 6, 0.35)'};
+  pointer-events: none;
+  z-index: 5;
 `
 
 const NodeRegnalName = styled.div`

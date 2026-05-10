@@ -18,6 +18,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@xyflow/react": "^12.10.2",
+    "html-to-image": "^1.11.13",
     "react-hook-form": "^7.64.0",
     "react-hot-toast": "^2.6.0",
     "recharts": "^3.3.0",

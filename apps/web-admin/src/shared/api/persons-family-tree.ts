@@ -12,18 +12,68 @@ export interface FamilyTreePerson {
   birthYear?: number | null
   deathYear?: number | null
   dynasty?: { id: string; name: string } | null
+  /** 사생아·서출 — UI 별표(*) 마커 */
+  illegitimate?: boolean
+  /** 어떤 결혼에서 태어난 자녀인지 — 다중 배우자 분기용 PersonSpouse FK */
+  parentMarriageId?: string | null
+  // 카드 hover/확장용 메타
+  originalName?: string | null
+  posthumousName?: string | null
+  templeName?: string | null
+  preEnthronementTitle?: string | null
+  birthPlace?: string | null
+  deathPlace?: string | null
+  /** 가장 이른 재임 — 군주 카드 즉위국·재위 번호 + 국기 */
+  sovereignCountry?: {
+    id: string | null
+    name: string | null
+    regnalNumber: number | null
+    flagEmoji?: string | null
+    isoCode?: string | null
+    thumbnailUrl?: string | null
+  } | null
+  /** 일반 인물 카드 국기 — Person.countryId (legacy 주 국적) */
+  country?: {
+    id: string
+    name: string
+    flagEmoji?: string | null
+    isoCode?: string | null
+    thumbnailUrl?: string | null
+  } | null
+  /** UI 편의 — 우선순위(sovereignCountry > country) 적용 결과 */
+  flag?: {
+    countryId: string
+    countryName: string
+    flagEmoji?: string | null
+    isoCode?: string | null
+    thumbnailUrl?: string | null
+  } | null
 }
 
 export interface FamilyTreeEdge {
   source: string
   target: string
   type: 'parent-child' | 'spouse'
+  /** spouse 엣지에만: 결혼 시작/종료 연도 + 메모 */
+  marriageStartYear?: number | null
+  marriageEndYear?: number | null
+  note?: string | null
+  /** spouse 엣지에만: PersonSpouse 미등록 — 자녀의 다른 친부모로 추정된 배우자 */
+  inferred?: boolean
+}
+
+export interface FamilyTreeTruncation {
+  scope: string
+  took: number
+  limit: number
 }
 
 export interface FamilyTreeData {
   egoId: string
   nodes: FamilyTreePerson[]
   edges: FamilyTreeEdge[]
+  /** BFS take 한계로 절단된 항목 — UI에 "외 N명" 표시용 */
+  truncations?: FamilyTreeTruncation[]
 }
 
 export async function getPersonFamilyTree(personId: string): Promise<FamilyTreeData> {

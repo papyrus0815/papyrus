@@ -745,11 +745,12 @@ export function PersonDetailPanel({
     (withDetail = true) =>
       Promise.all([
         ...(withDetail
-          ? [
-              queryClient.invalidateQueries({ queryKey: personKeys.detailFull(personId) }),
-              queryClient.invalidateQueries({ queryKey: personKeys.detail(personId) }),
-            ]
+          ? [queryClient.invalidateQueries({ queryKey: ['persons', personId] })]
           : []),
+        // 모달 스택의 부모 패널 등 다른 personId 상세에도 가족 노드(profileImageUrl 등)가
+        // 박혀 있으므로 person-detail / family-tree 는 항상 broad invalidate
+        queryClient.invalidateQueries({ queryKey: ['person-detail'] }),
+        queryClient.invalidateQueries({ queryKey: ['person-family-tree'] }),
         queryClient.invalidateQueries({ queryKey: personKeys.all }),
         queryClient.invalidateQueries({ queryKey: ['persons-by-country'] }),
         queryClient.invalidateQueries({ queryKey: ['persons-by-dynasty'] }),

@@ -608,12 +608,16 @@ export class PersonController {
           for (const raw of list ?? []) {
             const c = serializeBigInt(raw) as any
             // 직급/계급 — military는 rank, athlete는 job, 나머지는 position(Job 관계)
-            const rank =
+            // Job 모델은 title 필드를 쓰므로 UI 호환을 위해 name으로도 노출.
+            const rawRank =
               kind === 'military'
                 ? c.rank ?? null
                 : kind === 'athlete'
                   ? c.job ?? null
                   : c.position ?? null
+            const rank = rawRank
+              ? { id: rawRank.id, name: rawRank.title ?? rawRank.name ?? null }
+              : null
             // 추가 식별 라벨 (군: branch, 학계/언론: department, 운동: sport, 비즈니스: title 등)
             const title =
               c.title ??

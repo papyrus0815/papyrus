@@ -1539,7 +1539,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true, branch: true, position: true, termNumber: true,
             startDate: true, endDate: true, notes: true,
-            rank: { select: { id: true, name: true } },
+            rank: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
@@ -1548,7 +1548,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true, title: true, level: true,
             startDate: true, endDate: true, notes: true,
-            position: { select: { id: true, name: true } },
+            position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
@@ -1557,7 +1557,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true, department: true, researchField: true,
             startDate: true, endDate: true, notes: true,
-            position: { select: { id: true, name: true } },
+            position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
@@ -1566,7 +1566,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true, title: true,
             startDate: true, endDate: true, notes: true,
-            position: { select: { id: true, name: true } },
+            position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
@@ -1575,7 +1575,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             startDate: true, endDate: true, notes: true,
-            position: { select: { id: true, name: true } },
+            position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
@@ -1585,7 +1585,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             id: true,
             sport: true, position: true,
             startDate: true, endDate: true, notes: true,
-            job: { select: { id: true, name: true } },
+            job: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
@@ -1594,7 +1594,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             startDate: true, endDate: true, notes: true,
-            position: { select: { id: true, name: true } },
+            position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
@@ -1603,7 +1603,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             startDate: true, endDate: true, notes: true,
-            position: { select: { id: true, name: true } },
+            position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
@@ -1612,7 +1612,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             startDate: true, endDate: true, notes: true,
-            position: { select: { id: true, name: true } },
+            position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
@@ -4481,24 +4481,126 @@ export class PersonPrismaRepository implements IPersonRepository {
    * ego → 부모(2세대 위) → 증조부모(3세대 위) → 자녀(1세대 아래) → 손자녀(2세대 아래)
    * + 형제자매, 각 인물의 배우자
    */
-  async findFamilyTree(personId: string, accountId?: string) {
+  /**
+   * 가계도 BFS — ego를 중심으로 11단계 BFS로 부·모 / 조부모(고조부모까지) /
+   * 형제·삼촌·이모·고모·조카 / 자녀·손자녀·증손자녀 / 배우자·처가·시가까지 수집.
+   *
+   * @param accountId — 시그니처 호환을 위해 받지만 가계도는 공개 데이터로 취급해
+   *   필터에 사용하지 않는다. 향후 권한 정책이 정해지면 fetchBatch where 절에 반영.
+   *   (정책 결정: 가계도는 인물 상세 페이지를 본 사람이라면 누구나 조상·후손까지 같이 볼 수 있음)
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async findFamilyTree(personId: string, _accountId?: string) {
     // ── 공통 select ───────────────────────────────────────────────────
+    // 카드 정보 풍부도 (B4·B6·E1)와 결혼 메타(A3·H1)를 위해 확장.
     const PERSON_SELECT = {
       id: true, name: true, surname: true, middleName: true,
       nameDisplayOrder: true, gender: true, regnalName: true,
       profileImageUrl: true, birthDate: true, deathDate: true,
       fatherId: true, motherId: true,
+      // 사생아·서출 플래그 (UI 별표 마커)
+      illegitimate: true,
+      // 어떤 결혼에서 태어난 자녀인지 (다중 배우자 분기에 사용)
+      parentMarriageId: true,
+      // 추가 이름 메타 — 카드 호버/확장에 사용
+      originalName: true,
+      posthumousName: true,
+      templeName: true,
+      preEnthronementTitle: true,
+      // 출생/사망지 라벨
+      birthPlaceText: true, deathPlaceText: true,
+      birthCity: { select: { id: true, name: true } },
+      deathCity: { select: { id: true, name: true } },
+      // 군주 카드 즉위국·재위 번호 (가장 이른 재임 1건)
+      sovereignReigns: {
+        select: {
+          regnalNumber: true,
+          country: {
+            select: {
+              id: true, name: true,
+              flagEmoji: true, isoCode: true, thumbnailUrl: true,
+            },
+          },
+          historicalCountry: {
+            select: {
+              id: true, name: true, thumbnailUrl: true,
+              // 역사 국가는 emoji/isoCode 부재 → 연결된 현대 국가의 깃발로 폴백
+              modernConnections: {
+                take: 1,
+                select: {
+                  modernCountry: {
+                    select: {
+                      id: true, name: true,
+                      flagEmoji: true, isoCode: true, thumbnailUrl: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { startDate: Prisma.SortOrder.asc },
+        take: 1,
+      },
+      // 일반 인물 카드 국기 — Person.countryId (legacy 주 국적)
+      country: {
+        select: {
+          id: true, name: true,
+          flagEmoji: true, isoCode: true, thumbnailUrl: true,
+        },
+      },
       dynasty: { select: { id: true, name: true } },
-      spouseRelationsAsPerson: { select: { spouseId: true } },
-      spouseRelationsAsSpouse: { select: { personId: true } },
-    }
+      // 결혼 메타 — 가계도 spouse 엣지에 결혼 기간/이혼/메모 표시
+      spouseRelationsAsPerson: {
+        select: {
+          spouseId: true,
+          marriageStartDate: true,
+          marriageEndDate: true,
+          note: true,
+        },
+      },
+      spouseRelationsAsSpouse: {
+        select: {
+          personId: true,
+          marriageStartDate: true,
+          marriageEndDate: true,
+          note: true,
+        },
+      },
+    } satisfies Prisma.PersonSelect
 
     const nodeMap        = new Map<string, any>()
     const parentChildSet = new Set<string>()  // "parentId__childId"
-    const spouseSet      = new Set<string>()  // sorted "a__b"
+    /** spouse 엣지 키 → 메타 (정렬된 "a__b"). 첫 번째 등장한 메타를 보존 */
+    const spouseEdgeMeta = new Map<string, {
+      marriageStartYear: number | null
+      marriageEndYear: number | null
+      note: string | null
+    }>()
+    /** truncated 사유 모음 (BFS take 절단 통지) */
+    const truncations: Array<{ scope: string; took: number; limit: number }> = []
 
-    const addPCEdge     = (p: string, c: string) => parentChildSet.add(`${p}__${c}`)
-    const addSpouseEdge = (a: string, b: string) => spouseSet.add([a, b].sort().join('__'))
+    const addPCEdge = (p: string, c: string) => parentChildSet.add(`${p}__${c}`)
+    const yearOfDate = (d: Date | string | null | undefined): number | null => {
+      if (!d) return null
+      const dt = d instanceof Date ? d : new Date(d)
+      const t = dt.getTime()
+      return Number.isNaN(t) ? null : dt.getFullYear()
+    }
+    const addSpouseEdge = (
+      a: string,
+      b: string,
+      meta?: { marriageStartDate?: Date | null; marriageEndDate?: Date | null; note?: string | null },
+    ) => {
+      const key = [a, b].sort().join('__')
+      if (!spouseEdgeMeta.has(key)) {
+        spouseEdgeMeta.set(key, {
+          marriageStartYear: yearOfDate(meta?.marriageStartDate),
+          marriageEndYear: yearOfDate(meta?.marriageEndDate),
+          note: (meta?.note ?? null) as string | null,
+        })
+      }
+    }
 
     const getSpouseIds = (p: any): string[] => [
       ...(p?.spouseRelationsAsPerson ?? []).map((r: any) => r.spouseId  as string),
@@ -4517,9 +4619,44 @@ export class PersonPrismaRepository implements IPersonRepository {
         nodeMap.set(p.id, p)
         if (p.fatherId) addPCEdge(p.fatherId, p.id)
         if (p.motherId) addPCEdge(p.motherId, p.id)
-        for (const r of p.spouseRelationsAsPerson ?? []) addSpouseEdge(p.id, r.spouseId)
-        for (const r of p.spouseRelationsAsSpouse ?? []) addSpouseEdge(p.id, r.personId)
+        for (const r of p.spouseRelationsAsPerson ?? []) {
+          addSpouseEdge(p.id, r.spouseId, r)
+        }
+        for (const r of p.spouseRelationsAsSpouse ?? []) {
+          addSpouseEdge(p.id, r.personId, r)
+        }
       }
+    }
+
+    /** 자녀·형제 등 출생연도 오름차순으로 페치 (정렬 안정성) */
+    const fetchChildrenOf = async (
+      parentIds: string[],
+      opts: { take: number; scope: string; excludeIds?: string[] },
+    ): Promise<string[]> => {
+      if (parentIds.length === 0) return []
+      const where: Prisma.PersonWhereInput = {
+        OR: parentIds.flatMap(pid => [{ fatherId: pid }, { motherId: pid }]),
+      }
+      if (opts.excludeIds && opts.excludeIds.length > 0) {
+        where.NOT = { id: { in: opts.excludeIds } }
+      }
+      // take + 1 로 over-fetch해 절단 여부 판단
+      const rows = await this.prisma.person.findMany({
+        where,
+        select: { id: true },
+        orderBy: [
+          { birthDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+          { id: Prisma.SortOrder.asc },
+        ],
+        take: opts.take + 1,
+      })
+      const truncated = rows.length > opts.take
+      if (truncated) {
+        truncations.push({ scope: opts.scope, took: opts.take, limit: opts.take })
+      }
+      const ids = rows.slice(0, opts.take).map(r => r.id)
+      await fetchBatch(ids)
+      return ids
     }
 
     // ── Step 1: ego ───────────────────────────────────────────────────
@@ -4558,16 +4695,11 @@ export class PersonPrismaRepository implements IPersonRepository {
     }
     await fetchBatch(gggpIds)
 
-    // ── Step 4: ego의 자녀 (ego가 직접 부모인 자녀만) ───────────────────
-    const childQueryConds: Prisma.PersonWhereInput[] = [
-      { fatherId: personId }, { motherId: personId },
-    ]
-    const childRows = await this.prisma.person.findMany({
-      where: { OR: childQueryConds },
-      select: { id: true },
+    // ── Step 4: ego의 자녀 (출생연도순) ──────────────────────────────────
+    const childIds = await fetchChildrenOf([personId], {
+      take: 80,
+      scope: 'children',
     })
-    const childIds = childRows.map(r => r.id)
-    await fetchBatch(childIds)
 
     // ── Step 5: 자녀의 다른 쪽 부모 → 추론 배우자 ─────────────────────
     // ego가 실제로 부모인 자녀에 한해서만 추론한다.
@@ -4577,30 +4709,24 @@ export class PersonPrismaRepository implements IPersonRepository {
     for (const cid of childIds) {
       const child = nodeMap.get(cid)
       if (!child) continue
-      // ego가 이 자녀의 부모인 경우에만 반대편 부모를 추론 배우자로 등록
       const egoIsParent = child.fatherId === personId || child.motherId === personId
       if (!egoIsParent) continue
       if (child.fatherId && child.fatherId !== personId) inferredSpouseIds.push(child.fatherId)
       if (child.motherId && child.motherId !== personId) inferredSpouseIds.push(child.motherId)
     }
     await fetchBatch(inferredSpouseIds)
-    // 추론된 배우자에 대해 spouse 엣지 추가
+    // 추론된 배우자 — PersonSpouse 레코드가 없는 경우만 spouse 엣지 추가 (메타 없음)
     for (const sid of inferredSpouseIds) {
       if (nodeMap.has(sid)) addSpouseEdge(personId, sid)
     }
 
-    // ── Step 6: 명시 배우자의 자녀 (배우자 기준) ─────────────────────
-    // ego 자녀와 겹치지 않는 배우자의 독립 자녀도 포함하여 가계도 완성도 향상
+    // ── Step 6: 명시 배우자의 자녀 ────────────────────────────────────
     if (egoExplicitSpouseIds.length > 0) {
-      const spouseChildConds: Prisma.PersonWhereInput[] = egoExplicitSpouseIds.flatMap(sid => [
-        { fatherId: sid }, { motherId: sid },
-      ])
-      const spouseChildRows = await this.prisma.person.findMany({
-        where: { OR: spouseChildConds, NOT: { id: { in: [personId, ...childIds] } } },
-        select: { id: true },
+      await fetchChildrenOf(egoExplicitSpouseIds, {
         take: 40,
+        scope: 'spouse-children',
+        excludeIds: [personId, ...childIds],
       })
-      await fetchBatch(spouseChildRows.map(r => r.id))
     }
 
     // 모든 실질적 배우자 (명시 + 추론)
@@ -4612,30 +4738,61 @@ export class PersonPrismaRepository implements IPersonRepository {
     ]
 
     // ── Step 7: 형제자매 ─────────────────────────────────────────────
-    const sibOrConds: Prisma.PersonWhereInput[] = egoParentIds.flatMap(pid => [
-      { fatherId: pid }, { motherId: pid },
-    ])
-    if (sibOrConds.length > 0) {
-      const sibRows = await this.prisma.person.findMany({
-        where: { OR: sibOrConds, NOT: { id: personId } },
-        select: { id: true },
-        take: 40,
+    const sibIds = await fetchChildrenOf(egoParentIds, {
+      take: 40,
+      scope: 'siblings',
+      excludeIds: [personId],
+    })
+
+    // ── Step 7b: 부모의 형제자매 (삼촌·이모·고모) ───────────────────
+    const auntsUnclesIds = await fetchChildrenOf(gpIds, {
+      take: 60,
+      scope: 'aunts-uncles',
+      excludeIds: [...egoParentIds],
+    })
+
+    // ── Step 7c: 형제의 자녀 (조카) ─────────────────────────────────
+    if (sibIds.length > 0) {
+      await fetchChildrenOf(sibIds, {
+        take: 80,
+        scope: 'nephews',
       })
-      await fetchBatch(sibRows.map(r => r.id))
     }
 
-    // ── Step 8: 손자녀 ───────────────────────────────────────────────
-    const gcOrConds: Prisma.PersonWhereInput[] = childIds.flatMap(cid => [
-      { fatherId: cid }, { motherId: cid },
-    ])
-    if (gcOrConds.length > 0) {
-      const gcRows = await this.prisma.person.findMany({
-        where: { OR: gcOrConds },
-        select: { id: true },
-        take: 60,
+    // ── Step 7d: 조부모의 형제자매 (=증조부모의 자녀, 종조부·종조모 등) ─
+    if (ggpIds.length > 0) {
+      await fetchChildrenOf(ggpIds, {
+        take: 80,
+        scope: 'grand-aunts-uncles',
+        excludeIds: [...gpIds],
       })
-      await fetchBatch(gcRows.map(r => r.id))
     }
+
+    // ── Step 7e: 증조부모의 형제자매 (=고조부모의 자녀) — 깊은 방계 ─
+    if (gggpIds.length > 0) {
+      await fetchChildrenOf(gggpIds, {
+        take: 80,
+        scope: 'great-grand-aunts-uncles',
+        excludeIds: [...ggpIds],
+      })
+    }
+
+    // ── Step 8: 손자녀 (출생연도순) ────────────────────────────────────
+    const grandchildIds = await fetchChildrenOf(childIds, {
+      take: 80,
+      scope: 'grandchildren',
+    })
+
+    // ── Step 8b: 증손자녀 (손자녀의 자녀) ───────────────────────────
+    if (grandchildIds.length > 0) {
+      await fetchChildrenOf(grandchildIds, {
+        take: 100,
+        scope: 'great-grandchildren',
+      })
+    }
+
+    // 삼촌·이모의 배우자 → 사촌 fetch는 폭발 방지 위해 생략 (요청 시 옵션 활성)
+    void auntsUnclesIds
 
     // ── Step 9: 수집된 모든 인물의 배우자 ────────────────────────────
     const allSpouseIds: string[] = []
@@ -4662,32 +4819,144 @@ export class PersonPrismaRepository implements IPersonRepository {
     await fetchBatch(spouseParentSpouseIds)
 
     // ── 결과 구성 ─────────────────────────────────────────────────────
-    const nodes = [...nodeMap.values()].map(p => ({
-      id:              p.id              as string,
-      name:            p.name            as string,
-      surname:         (p.surname        ?? null) as string | null,
-      middleName:      (p.middleName     ?? null) as string | null,
-      nameDisplayOrder:(p.nameDisplayOrder ?? null) as string | null,
-      gender:          (p.gender         ?? null) as string | null,
-      regnalName:      (p.regnalName     ?? null) as string | null,
-      profileImageUrl: (p.profileImageUrl ?? null) as string | null,
-      birthYear:  p.birthDate  ? (p.birthDate  instanceof Date ? p.birthDate  : new Date(p.birthDate )).getFullYear() : null,
-      deathYear:  p.deathDate  ? (p.deathDate  instanceof Date ? p.deathDate  : new Date(p.deathDate )).getFullYear() : null,
-      dynasty: p.dynasty ? { id: p.dynasty.id as string, name: p.dynasty.name as string } : null,
-    }))
+    const nodes = [...nodeMap.values()].map(p => {
+      const reign = (p.sovereignReigns ?? [])[0] as
+        | {
+            regnalNumber?: number | null
+            country?: {
+              id: string; name: string
+              flagEmoji?: string | null; isoCode?: string | null; thumbnailUrl?: string | null
+            } | null
+            historicalCountry?: {
+              id: string; name: string; thumbnailUrl?: string | null
+              modernConnections?: Array<{
+                modernCountry?: {
+                  id: string; name: string
+                  flagEmoji?: string | null; isoCode?: string | null; thumbnailUrl?: string | null
+                } | null
+              }>
+            } | null
+          }
+        | undefined
+      // 역사 국가 → 연결된 현대 국가 깃발 (emoji 우선 노출)
+      const reignHcModernCountry = reign?.historicalCountry?.modernConnections?.[0]?.modernCountry ?? null
+      // 카드 국기 source 우선순위:
+      //   1. reign.country (modern, 즉위국이 현대국이면)
+      //   2. reign.historicalCountry의 연결 modern country (역사국 emoji 폴백)
+      //   3. reign.historicalCountry 자체 (thumbnail만)
+      //   4. Person.country (legacy 주 국적)
+      const reignCountrySrc =
+        reign?.country
+          ?? reignHcModernCountry
+          ?? reign?.historicalCountry
+          ?? null
+      const personCountrySrc = (p.country ?? null) as {
+        id: string; name: string
+        flagEmoji?: string | null; isoCode?: string | null; thumbnailUrl?: string | null
+      } | null
+      const flagSrc = reignCountrySrc ?? personCountrySrc
+      return {
+        id:              p.id              as string,
+        name:            p.name            as string,
+        surname:         (p.surname        ?? null) as string | null,
+        middleName:      (p.middleName     ?? null) as string | null,
+        nameDisplayOrder:(p.nameDisplayOrder ?? null) as string | null,
+        gender:          (p.gender         ?? null) as string | null,
+        regnalName:      (p.regnalName     ?? null) as string | null,
+        profileImageUrl: (p.profileImageUrl ?? null) as string | null,
+        birthYear:  yearOfDate(p.birthDate),
+        deathYear:  yearOfDate(p.deathDate),
+        dynasty: p.dynasty ? { id: p.dynasty.id as string, name: p.dynasty.name as string } : null,
+        // 사생아·서출 + 어머니별 분기용 결혼 FK
+        illegitimate: Boolean(p.illegitimate),
+        parentMarriageId: (p.parentMarriageId ?? null) as string | null,
+        // 새 메타 필드 (UI 카드 hover/확장에 사용)
+        originalName:         (p.originalName ?? null) as string | null,
+        posthumousName:       (p.posthumousName ?? null) as string | null,
+        templeName:           (p.templeName ?? null) as string | null,
+        preEnthronementTitle: (p.preEnthronementTitle ?? null) as string | null,
+        birthPlace:           (p.birthCity?.name ?? p.birthPlaceText ?? null) as string | null,
+        deathPlace:           (p.deathCity?.name ?? p.deathPlaceText ?? null) as string | null,
+        // 가장 이른 재임 — 군주 카드용 (id/name은 즉위국 자체, flag는 modern 폴백)
+        sovereignCountry: reign
+          ? {
+              id: (reign.country?.id ?? reign.historicalCountry?.id ?? null) as string | null,
+              name: (reign.country?.name ?? reign.historicalCountry?.name ?? null) as string | null,
+              regnalNumber: reign.regnalNumber ?? null,
+              // emoji/iso는 modern country 우선
+              flagEmoji:
+                (reign.country?.flagEmoji ?? reignHcModernCountry?.flagEmoji ?? null) as string | null,
+              isoCode:
+                (reign.country?.isoCode ?? reignHcModernCountry?.isoCode ?? null) as string | null,
+              thumbnailUrl:
+                (reign.country?.thumbnailUrl
+                  ?? reignHcModernCountry?.thumbnailUrl
+                  ?? reign.historicalCountry?.thumbnailUrl
+                  ?? null) as string | null,
+            }
+          : null,
+        // 일반 인물 카드 국기 (legacy 주 국적)
+        country: personCountrySrc
+          ? {
+              id: personCountrySrc.id,
+              name: personCountrySrc.name,
+              flagEmoji: personCountrySrc.flagEmoji ?? null,
+              isoCode: personCountrySrc.isoCode ?? null,
+              thumbnailUrl: personCountrySrc.thumbnailUrl ?? null,
+            }
+          : null,
+        // 카드용 국기 통합 필드 — 우선순위 적용 결과 (UI 편의)
+        flag: flagSrc
+          ? {
+              countryId: flagSrc.id,
+              countryName: flagSrc.name,
+              flagEmoji: ('flagEmoji' in flagSrc ? flagSrc.flagEmoji : null) ?? null,
+              isoCode: ('isoCode' in flagSrc ? flagSrc.isoCode : null) ?? null,
+              thumbnailUrl: ('thumbnailUrl' in flagSrc ? flagSrc.thumbnailUrl : null) ?? null,
+            }
+          : null,
+      }
+    })
 
-    const edges: { source: string; target: string; type: 'parent-child' | 'spouse' }[] = []
+    const edges: Array<{
+      source: string
+      target: string
+      type: 'parent-child' | 'spouse'
+      marriageStartYear?: number | null
+      marriageEndYear?: number | null
+      note?: string | null
+      /** PersonSpouse 레코드가 없고 자녀의 다른 친부모로 추정된 배우자 */
+      inferred?: boolean
+    }> = []
     for (const key of parentChildSet) {
       const [src, tgt] = key.split('__')
       if (nodeMap.has(src) && nodeMap.has(tgt))
         edges.push({ source: src, target: tgt, type: 'parent-child' })
     }
-    for (const key of spouseSet) {
+    for (const [key, meta] of spouseEdgeMeta) {
       const [a, b] = key.split('__')
-      if (nodeMap.has(a) && nodeMap.has(b))
-        edges.push({ source: a, target: b, type: 'spouse' })
+      if (nodeMap.has(a) && nodeMap.has(b)) {
+        const isInferred =
+          meta.marriageStartYear == null &&
+          meta.marriageEndYear == null &&
+          meta.note == null
+        edges.push({
+          source: a,
+          target: b,
+          type: 'spouse',
+          marriageStartYear: meta.marriageStartYear,
+          marriageEndYear: meta.marriageEndYear,
+          note: meta.note,
+          inferred: isInferred,
+        })
+      }
     }
 
-    return { egoId: personId, nodes, edges }
+    return {
+      egoId: personId,
+      nodes,
+      edges,
+      truncations: truncations.length > 0 ? truncations : undefined,
+    }
   }
 }
