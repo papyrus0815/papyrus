@@ -5,11 +5,10 @@
  * - 변천·소속·수평 관계 정보를 모두 표시
  * - 깔끔하고 트렌디한 디자인
  */
-import React, { useMemo, useState } from 'react'
-
-import { useQuery } from '@tanstack/react-query'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
+import { FiArrowRight, FiCheckCircle, FiHome, FiUsers } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -22,12 +21,22 @@ import {
   type HistoricalMembershipRole,
   type HistoricalRelationType,
   type TransitionEventType,
-  getMembershipsByHistoricalCountryIds,
-  getRelationsByHistoricalCountryIds,
-  getTransitionsByHistoricalCountryIds,
 } from '@/shared/api/historical-countries'
 import { pathKeys } from '@/shared/router'
 import * as CountryStyles from '@/widgets/country/country-dashboard/ui/country-dashboard.styles'
+
+import {
+  MEMBERSHIP_ROLE_LABELS,
+  RELATION_TYPE_LABELS,
+  TRANSITION_EVENT_LABELS,
+  TRANSITION_SCOPE_LABELS,
+} from '../model/linked-historical-labels'
+import {
+  getChains,
+  getCountryYearRange,
+  getMainPathAndBranchRows,
+} from '../model/linked-historical-flow-graph'
+import { useLinkedHistoricalData } from '../model/use-linked-historical-data.hook'
 
 /* 행정조직·인물과 동일: 단일 악센트, 회색 톤 */
 const MAIN = '#6366f1'
@@ -35,44 +44,18 @@ const BORDER = '#e5e7eb'
 const MUTED = '#64748b'
 const TITLE = '#0f172a'
 
-const TRANSITION_EVENT_LABELS: Record<string, string> = {
-  FOUNDED: '건국',
-  CONQUEST: '정복',
-  TREATY: '조약',
-  INDEPENDENCE: '독립',
-  UNIFICATION: '통일',
-  UNION: '합병/연합',
-  DISSOLVED: '멸망',
-  SUCCESSION: '계승',
-  SECULARIZATION: '세속화',
-  SPLIT: '분열',
-  OTHER: '기타',
-}
+// 라벨 상수는 ../model/linked-historical-labels로 이동됨
 
-const TRANSITION_SCOPE_LABELS: Record<string, string> = {
-  STATE_SUCCESSION: '국가 계승',
-  REGIME_CHANGE: '정권 교체',
-}
+/** 관계 정보가 비어있을 때의 안정적 fallback — 매 렌더 새 객체 생성 방지. */
+const EMPTY_RELS: {
+  transitions: HistoricalCountryTransitionDto[]
+  relations: HistoricalCountryRelationDto[]
+  memberships: HistoricalCountryMembershipDto[]
+} = { transitions: [], relations: [], memberships: [] }
 
-const RELATION_TYPE_LABELS: Record<HistoricalRelationType, string> = {
-  ALLIANCE: '동맹',
-  WAR: '전쟁',
-  SUZERAIN_VASSAL: '종주-속국',
-  TRIBUTARY: '조공',
-  PERSONAL_UNION: '동군연합',
-}
-
-const MEMBERSHIP_ROLE_LABELS: Record<HistoricalMembershipRole, string> = {
-  COLONY: '식민지',
-  PROTECTORATE: '보호국',
-  DOMINION: '자치령',
-  CONFEDERATION_MEMBER: '연방 구성원',
-  VASSAL_STATE: '속국',
-  ALLY: '동맹',
-  UNION: '연합',
-  SUCCESSION: '계승',
-  OTHER: '기타',
-}
+/** 연결된 역사적 국가가 없을 때 메시지 — list/flow 모드 공통. */
+const LINKED_EMPTY_MESSAGE =
+  '이 현대 국가에 연결된 역사적 국가가 없습니다. 역사적 국가를 등록한 뒤, 해당 국가 편집에서 「연결할 현대 국가」로 이 국가를 지정하면 여기에 표시됩니다.'
 
 const sectionLabelStyle: React.CSSProperties = {
   marginBottom: 18,
@@ -545,250 +528,6 @@ type HistoricalCountryItem = NonNullable<
   NonNullable<UnifiedCountry['historicalCountries']>[number]
 >
 
-/** 국가의 숫자 연도 범위 (BC = 음수). 흐름도 연도 기준 배치용 */
-function getCountryYearRange(
-  h: HistoricalCountryItem,
-): { startYear: number; endYear: number } | null {
-  const toNum = (v: number | null | undefined): number | null => {
-    if (v == null) return null
-    const n = typeof v === 'number' ? v : Number(v)
-    return Number.isFinite(n) ? n : null
-  }
-  const startYear = toNum(h.startYear)
-  const endYear = toNum(h.endYear)
-  const sy =
-    startYear != null
-      ? h.startEra === 'BC'
-        ? -Math.abs(startYear)
-        : Math.abs(startYear)
-      : null
-  const ey =
-    endYear != null
-      ? h.endEra === 'BC'
-        ? -Math.abs(endYear)
-        : Math.abs(endYear)
-      : null
-  if (sy == null && ey == null) return null
-  const s = sy ?? ey!
-  const e = ey ?? sy!
-  return { startYear: s, endYear: e }
-}
-
-/** 연결된 국가 ID 기준 변천·관계·소속 일괄 조회 (배치 API 3회, 로딩 상태 반환) */
-function useLinkedTransitionsRelationsMemberships(linkedIds: string[]): {
-  transitions: HistoricalCountryTransitionDto[]
-  relations: HistoricalCountryRelationDto[]
-  memberships: HistoricalCountryMembershipDto[]
-  isLoading: boolean
-} {
-  const idSet = useMemo(() => new Set(linkedIds), [linkedIds])
-  const { data, isLoading } = useQuery({
-    queryKey: ['historical-country-linked-batch', linkedIds.slice().sort().join(',')],
-    queryFn: async () => {
-      const [transitions, relations, memberships] = await Promise.all([
-        getTransitionsByHistoricalCountryIds(linkedIds),
-        getRelationsByHistoricalCountryIds(linkedIds),
-        getMembershipsByHistoricalCountryIds(linkedIds),
-      ])
-      return { transitions, relations, memberships }
-    },
-    enabled: linkedIds.length > 0,
-  })
-
-  const transitions = useMemo(() => {
-    if (!data?.transitions) return []
-    const seen = new Set<string>()
-    return data.transitions.filter((t) => {
-      if (!idSet.has(t.predecessorId) || !idSet.has(t.successorId)) return false
-      if (seen.has(t.id)) return false
-      seen.add(t.id)
-      return true
-    })
-  }, [data?.transitions, idSet])
-
-  const relations = useMemo(() => {
-    if (!data?.relations) return []
-    const seen = new Set<string>()
-    return data.relations.filter((r) => {
-      if (!idSet.has(r.subjectCountryId) || !idSet.has(r.objectCountryId)) return false
-      if (seen.has(r.id)) return false
-      seen.add(r.id)
-      return true
-    })
-  }, [data?.relations, idSet])
-
-  const memberships = useMemo(() => {
-    if (!data?.memberships) return []
-    const seen = new Set<string>()
-    return data.memberships.filter((m) => {
-      if (!idSet.has(m.historicalCountryId) || !idSet.has(m.memberCountryId)) return false
-      if (seen.has(m.id)) return false
-      seen.add(m.id)
-      return true
-    })
-  }, [data?.memberships, idSet])
-
-  return {
-    transitions,
-    relations,
-    memberships,
-    isLoading,
-  }
-}
-
-/** 한 컴포넌트 내 위상 정렬 (루트→리프) */
-function topologicalOrder(
-  nodeIds: string[],
-  edges: { predecessorId: string; successorId: string }[],
-): string[] {
-  const idSet = new Set(nodeIds)
-  const inDeg = new Map<string, number>()
-  const outEdges = new Map<string, string[]>()
-  nodeIds.forEach((id) => {
-    inDeg.set(id, 0)
-    outEdges.set(id, [])
-  })
-  edges.forEach(({ predecessorId, successorId }) => {
-    if (!idSet.has(predecessorId) || !idSet.has(successorId)) return
-    inDeg.set(successorId, (inDeg.get(successorId) ?? 0) + 1)
-    outEdges.get(predecessorId)!.push(successorId)
-  })
-  const queue = nodeIds.filter((id) => inDeg.get(id) === 0)
-  const order: string[] = []
-  while (queue.length > 0) {
-    const u = queue.shift()!
-    order.push(u)
-    for (const v of outEdges.get(u) ?? []) {
-      const d = (inDeg.get(v) ?? 0) - 1
-      inDeg.set(v, d)
-      if (d === 0) queue.push(v)
-    }
-  }
-  return order.length === nodeIds.length ? order : nodeIds
-}
-
-/** 방향 무시 연결 요소로 묶고, 각 컴포넌트를 위상 정렬해 체인 배열 반환 */
-function getChains(
-  nodeIds: string[],
-  edges: { predecessorId: string; successorId: string }[],
-): string[][] {
-  const idSet = new Set(nodeIds)
-  const adj = new Map<string, string[]>()
-  nodeIds.forEach((id) => adj.set(id, []))
-  edges.forEach(({ predecessorId, successorId }) => {
-    if (!idSet.has(predecessorId) || !idSet.has(successorId)) return
-    adj.get(predecessorId)!.push(successorId)
-    adj.get(successorId)!.push(predecessorId)
-  })
-  const visited = new Set<string>()
-  const components: string[][] = []
-  for (const id of nodeIds) {
-    if (visited.has(id)) continue
-    const stack = [id]
-    const comp: string[] = []
-    while (stack.length > 0) {
-      const u = stack.pop()!
-      if (visited.has(u)) continue
-      visited.add(u)
-      comp.push(u)
-      for (const v of adj.get(u) ?? []) stack.push(v)
-    }
-    if (comp.length > 0) {
-      const edgeSubset = edges.filter(
-        (e) =>
-          idSet.has(e.predecessorId) &&
-          idSet.has(e.successorId) &&
-          comp.includes(e.predecessorId) &&
-          comp.includes(e.successorId),
-      )
-      components.push(topologicalOrder(comp, edgeSubset))
-    }
-  }
-  return components
-}
-
-/**
- * 메인 계보(루트→말단 최장 경로)와 합류 브랜치를 나눔.
- * transitionByEdge가 주어지면 메인 행은 **계승(SUCCESSION)** 변천만으로 구성하고,
- * 멸망(DISSOLVED) 등 다른 유형은 브랜치(위/아래 줄)로 배치해 같은 줄에 잘못 이어져 보이지 않게 함.
- * getNodeEndYear가 주어지면, 동일 길이 계보일 때 **가장 최근(endYear 큰) 계보**를 메인으로 선택해
- * 멸망선이 사라지지 않도록 함.
- */
-function getMainPathAndBranchRows(
-  chain: string[],
-  edges: { predecessorId: string; successorId: string }[],
-  transitionByEdge?: Map<string, HistoricalCountryTransitionDto>,
-  getNodeEndYear?: (id: string) => number | null,
-): string[][] {
-  const idSet = new Set(chain)
-  const inChain = edges.filter(
-    (e) => idSet.has(e.predecessorId) && idSet.has(e.successorId),
-  )
-  // 메인 행: 계승(SUCCESSION) 변천만 사용. 없으면 전체 edge 사용(기존 동작)
-  const inChainForMain = transitionByEdge
-    ? inChain.filter((e) => {
-        const t = transitionByEdge.get(`${e.predecessorId}\t${e.successorId}`)
-        return t?.eventType === 'SUCCESSION'
-      })
-    : inChain
-
-  const successors = new Map<string, string[]>()
-  chain.forEach((id) => successors.set(id, []))
-  inChainForMain.forEach(({ predecessorId, successorId }) => {
-    successors.get(predecessorId)!.push(successorId)
-  })
-  const roots = chain.filter(
-    (id) => !inChainForMain.some((e) => e.successorId === id),
-  )
-  function longestPathFrom(id: string): string[] {
-    const succs = successors.get(id) ?? []
-    if (succs.length === 0) return [id]
-    let best: string[] = [id]
-    for (const s of succs) {
-      const sub = longestPathFrom(s)
-      if (1 + sub.length > best.length) best = [id, ...sub]
-    }
-    return best
-  }
-  let mainPath: string[] = []
-  for (const r of roots) {
-    const path = longestPathFrom(r)
-    if (path.length > mainPath.length) {
-      mainPath = path
-    } else if (
-      path.length === mainPath.length &&
-      path.length > 0 &&
-      getNodeEndYear
-    ) {
-      const pathEnd = getNodeEndYear(path[path.length - 1]) ?? -Infinity
-      const mainEnd = getNodeEndYear(mainPath[mainPath.length - 1]) ?? -Infinity
-      if (pathEnd > mainEnd) mainPath = path
-    }
-  }
-  const mainSet = new Set(mainPath)
-  const branches = chain.filter((id) => !mainSet.has(id))
-  if (branches.length === 0) return [mainPath]
-
-  const branchSet = new Set(branches)
-  const branchSuccessor = new Map<string, string>()
-  inChain.forEach((e) => {
-    if (branchSet.has(e.predecessorId) && branchSet.has(e.successorId))
-      branchSuccessor.set(e.predecessorId, e.successorId)
-  })
-  const hasPredecessorInBranches = new Set(branchSuccessor.values())
-  const branchRoots = branches.filter((b) => !hasPredecessorInBranches.has(b))
-  const branchRows: string[][] = []
-  for (const root of branchRoots) {
-    const row: string[] = []
-    let id: string | undefined = root
-    while (id) {
-      row.push(id)
-      id = branchSuccessor.get(id)
-    }
-    branchRows.push(row)
-  }
-  return [mainPath, ...branchRows]
-}
 
 export function LinkedHistoricalCountriesSection({
   country,
@@ -799,13 +538,23 @@ export function LinkedHistoricalCountriesSection({
   const [viewMode, setViewMode] = useState<'list' | 'flow'>('list')
   const [flowFullViewOpen, setFlowFullViewOpen] = useState(false)
 
+  // 전체 보기 모달 — ESC로 닫기 (키보드 사용자가 갇히지 않도록)
+  useEffect(() => {
+    if (!flowFullViewOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFlowFullViewOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [flowFullViewOpen])
+
   const linkedIds = useMemo(() => list.map((h) => h.id), [list])
   const {
     transitions,
     relations,
     memberships,
     isLoading: isLinkedDataLoading,
-  } = useLinkedTransitionsRelationsMemberships(linkedIds)
+  } = useLinkedHistoricalData(linkedIds)
   const idToCountry = useMemo(() => {
     const m = new Map<string, (typeof list)[0]>()
     list.forEach((h) => m.set(h.id, h))
@@ -987,12 +736,23 @@ export function LinkedHistoricalCountriesSection({
           if (!h || !yr) return { id, leftPct: 0, widthPct: 0 }
           const leftPct = toPct(yr.startYear)
           const endPct = toPct(yr.endYear)
-          const widthPct = Math.max(0.5, endPct - leftPct)
+          // 클릭 영역 확보 — 한쪽 연도만 알려진 국가(width≈0)도 최소 1.5% 폭으로 보이게.
+          const widthPct = Math.max(1.5, endPct - leftPct)
           return { id, leftPct, widthPct }
         }),
       ),
     )
   }, [flowRowsByChain, flowYearRange, idToCountry])
+
+  /** transitions를 predecessorId → transition Map으로 — flowConnectors 빌드 시 O(1) lookup. */
+  const transitionByPredecessor = useMemo(() => {
+    const m = new Map<string, HistoricalCountryTransitionDto>()
+    for (const t of transitions) {
+      // 같은 predecessor가 둘 이상이면 첫 번째만 사용 (이전 동작과 동일).
+      if (!m.has(t.predecessorId)) m.set(t.predecessorId, t)
+    }
+    return m
+  }, [transitions])
 
   /** 브랜치 → 메인 행 연결: fromId/toId 포함 (뱃지·한가닥선·요약용). 계승·동군연합·연방(멤버십) 포함 */
   const flowConnectors = useMemo(() => {
@@ -1022,14 +782,8 @@ export function LinkedHistoricalCountriesSection({
           const fromCenterPct = leftPct + widthPct / 2
           const fromGlobalRow = globalRowOffset + rowIdx
           const toGlobalRow = globalRowOffset + 0
-          const rels = countryRelations.get(branchId) ?? {
-            transitions: [],
-            relations: [],
-            memberships: [],
-          }
-          const successorTransition = transitions.find(
-            (t) => t.predecessorId === branchId,
-          )
+          const rels = countryRelations.get(branchId) ?? EMPTY_RELS
+          const successorTransition = transitionByPredecessor.get(branchId)
           const successorId = successorTransition?.successorId
           if (successorId && mainRowIds.has(successorId)) {
             out.push({
@@ -1089,9 +843,7 @@ export function LinkedHistoricalCountriesSection({
       const mainLayout0 = flowLayout[chainIdx]?.[0] ?? []
       for (let i = 0; i < rows[0].length; i++) {
         const mainId = rows[0][i]
-        const successorTransition = transitions.find(
-          (t) => t.predecessorId === mainId,
-        )
+        const successorTransition = transitionByPredecessor.get(mainId)
         const successorId = successorTransition?.successorId
         if (!successorId || mainRowIds.has(successorId)) continue
         const branchRowIdx = rows.findIndex(
@@ -1116,7 +868,7 @@ export function LinkedHistoricalCountriesSection({
       globalRowOffset += rows.length
     })
     return out
-  }, [flowRowsByChain, flowLayout, transitions, countryRelations])
+  }, [flowRowsByChain, flowLayout, transitionByPredecessor, countryRelations])
 
   /** 메인 행 카드별로 "들어오는" 브랜치 관계 (뱃지용). 계승·동군연합·연방 구성원 포함 */
   const incomingRelationsByMainId = useMemo(() => {
@@ -1238,10 +990,20 @@ export function LinkedHistoricalCountriesSection({
           flexWrap: 'wrap',
         }}
       >
-        <ViewModeTabs role="tablist" aria-label="보기 방식">
+        <ViewModeTabs
+          role="tablist"
+          aria-label="보기 방식"
+          onKeyDown={(e) => {
+            // 화살표 키로 탭 전환 — WAI-ARIA tabs 패턴.
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+            e.preventDefault()
+            setViewMode((v) => (v === 'list' ? 'flow' : 'list'))
+          }}
+        >
           <ViewModeTab
             role="tab"
             aria-selected={viewMode === 'list'}
+            tabIndex={viewMode === 'list' ? 0 : -1}
             $active={viewMode === 'list'}
             onClick={() => setViewMode('list')}
           >
@@ -1250,6 +1012,7 @@ export function LinkedHistoricalCountriesSection({
           <ViewModeTab
             role="tab"
             aria-selected={viewMode === 'flow'}
+            tabIndex={viewMode === 'flow' ? 0 : -1}
             $active={viewMode === 'flow'}
             onClick={() => setViewMode('flow')}
           >
@@ -1263,14 +1026,9 @@ export function LinkedHistoricalCountriesSection({
         </span>
       </div>
 
-      {isLinkedDataLoading && (
-        <LoadingBarTrack role="progressbar" aria-label="데이터 로딩 중">
-          <LoadingBarFill />
-        </LoadingBarTrack>
-      )}
-
+      {/* 로딩 인디케이터는 단일 — 본문 영역의 spinner+text 한 곳만. 상단 progress bar는 중복이라 제거. */}
       {isLinkedDataLoading ? (
-        <LinkedDataLoadingWrap>
+        <LinkedDataLoadingWrap role="status" aria-live="polite">
           <LinkedDataSpinner />
           <span>변천·관계·소속 데이터를 불러오는 중...</span>
         </LinkedDataLoadingWrap>
@@ -1286,81 +1044,25 @@ export function LinkedHistoricalCountriesSection({
             }}
           >
             <StatCard
-              icon={
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
-              }
+              icon={<FiHome size={24} strokeWidth={2} />}
               title="연결된 역사적 국가"
               value={count}
               unit="개"
             />
             <StatCard
-              icon={
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              }
+              icon={<FiArrowRight size={24} strokeWidth={2} />}
               title="변천 관계"
               value={transitions.length}
               unit="건"
             />
             <StatCard
-              icon={
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-              }
+              icon={<FiUsers size={24} strokeWidth={2} />}
               title="수평 관계"
               value={relations.length}
               unit="건"
             />
             <StatCard
-              icon={
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                  <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-              }
+              icon={<FiCheckCircle size={24} strokeWidth={2} />}
               title="소속 관계"
               value={memberships.length}
               unit="건"
@@ -1370,11 +1072,7 @@ export function LinkedHistoricalCountriesSection({
         <section aria-label="연결된 역사적 국가 목록">
           <SectionLabel>역사적 국가 목록</SectionLabel>
           {count === 0 ? (
-            <EmptyCard>
-              이 현대 국가에 연결된 역사적 국가가 없습니다. 역사적 국가를 등록한
-              뒤, 해당 국가 편집에서 「연결할 현대 국가」로 이 국가를 지정하면
-              여기에 표시됩니다.
-            </EmptyCard>
+            <EmptyCard>{LINKED_EMPTY_MESSAGE}</EmptyCard>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {list.map((h, idx) => {
@@ -1441,10 +1139,7 @@ export function LinkedHistoricalCountriesSection({
             )}
           </div>
           {count === 0 ? (
-            <EmptyCard>
-              이 현대 국가에 연결된 역사적 국가가 없습니다. 역사적 국가를 등록한
-              뒤 연결하면 흐름도를 볼 수 있습니다.
-            </EmptyCard>
+            <EmptyCard>{LINKED_EMPTY_MESSAGE}</EmptyCard>
           ) : (
             <div
               style={{
@@ -2638,7 +2333,7 @@ function HistoricalCountryCard({
     <ModernCountryCard
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: idx * 0.04 }}
+      transition={{ delay: Math.min(idx * 0.04, 0.32) }}
     >
       <div
         style={{
