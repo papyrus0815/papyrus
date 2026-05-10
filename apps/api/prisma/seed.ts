@@ -57,6 +57,14 @@ import {
   seedBritishEastIndiaCompanyIndia,
   seedAmboynaMassacre,
   seedAngloDutchTreaty1619,
+  seedGunpowderPlot1605,
+  seedEicFounding1600,
+  seedVocFounding1602,
+  seedFallOfConstantinople1453,
+  seedBankOfAmsterdam1609,
+  seedActOfAbjuration1581,
+  seedCharlesV,
+  seedCharlesVParents,
   seedQianlongEmperor,
   seedBackfillPersonCountryId,
   seedKoreaGeography,
@@ -219,6 +227,54 @@ async function main() {
         //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵 (사용자 편집 보호)
         //  · 단독 사건 + 4섹션 + EventCountryRelation 2 (잉글랜드·네덜란드 모두 PARTICIPANT/서명국)
         await seedAngloDutchTreaty1619(prisma)
+
+        // 13-4-5. 1605 화약 음모 사건(1605-11-05) 시딩 — eventCategory(정치) + 잉글랜드 왕국 HC
+        //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵
+        //  · 단독 사건 + 4섹션(배경/계획·발각/심문·처형/여파) + EventCountryRelation 1 (잉글랜드 VICTIM)
+        await seedGunpowderPlot1605(prisma)
+
+        // 13-4-6. 1600 영국 동인도회사 설립(EIC, 1600-12-31) 시딩 — eventCategory(경제) + 잉글랜드 왕국 HC
+        //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵
+        //  · 단독 사건 + 4섹션(배경/설립/15년 칙허 의미/항해와 후속) + EventCountryRelation 1 (잉글랜드 INITIATOR)
+        //  · 참고: 기존 'EIC의 인도 진출' 부모 사건의 자식 'EIC 헌장 발급'(1600-12-31)과 의미 중첩 — 사용자 요청에 따라 별도 단독 사건으로 등록
+        await seedEicFounding1600(prisma)
+
+        // 13-4-7. 1602 네덜란드 동인도회사 설립(VOC, 1602-03-20) 시딩 — eventCategory(경제) + 네덜란드 공화국 HC
+        //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵
+        //  · 단독 사건 + 4섹션(배경/통합·칙허/거버넌스·자본/항해·해체) + EventCountryRelation 1 (네덜란드 INITIATOR)
+        await seedVocFounding1602(prisma)
+
+        // 13-4-8. 1453 콘스탄티노플 함락(1453-04-06 ~ 05-29) 시딩 — eventCategory(전쟁/군사)
+        //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation/HistoricalCountry는 스킵
+        //  · 동로마 제국·오스만 제국 HC 인라인 생성(둘 다 현대 튀르키예 TR 연결)
+        //  · 단독 사건 + 4섹션(배경/공방전/함락 당일/여파) + EventCountryRelation 2 (오스만 INITIATOR / 동로마 VICTIM)
+        await seedFallOfConstantinople1453(prisma)
+
+        // 13-4-9. 1609 암스테르담 은행 개설(Wisselbank, 1609-01-31) 시딩 — eventCategory(경제) + 네덜란드 공화국 HC
+        //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵
+        //  · 단독 사건 + 4섹션(배경/개설·운영/은행 길더와 금융 혁신/쇠퇴와 유산) + EventCountryRelation 1 (네덜란드 INITIATOR)
+        await seedBankOfAmsterdam1609(prisma)
+
+        // 13-4-10. 1581 단념 선언(Plakkaat van Verlatinghe, 1581-07-26) 시딩 — eventCategory(정치)
+        //  · ⚠️ 기존 데이터 보존 모드: 이미 존재하는 Event/Section/CountryRelation은 스킵
+        //  · 단독 사건 + 4섹션(배경/선언 과정/논거와 7개 주/여파와 유산) + EventCountryRelation 2 (네덜란드 공화국 INITIATOR / 합스부르크령 네덜란드 TARGET)
+        //  · 합스부르크령 네덜란드(endYear=1581) → 네덜란드 공화국(startYear=1581) 전환의 정확한 분기점
+        await seedActOfAbjuration1581(prisma)
+
+        // 13-4-11. 카를 5세(Charles V, 1500~1558) 인물 시딩
+        //  · ⚠️ 기존 데이터 보존 모드: Person/Dynasty/HC/Reign 모두 존재 시 스킵
+        //  · 합스부르크 가문 + 신성로마제국 HC 인라인 생성
+        //  · DynastyRule x2 (합스부르크 → 신성로마제국 1438~1740, 합스부르크령 네덜란드 1482~1581)
+        //  · SovereignReign x1 (신성로마황제 5세 1519~1556 ABDICATION)
+        //  · PersonCountryAffiliation x1 (합스부르크령 네덜란드 CITIZENSHIP)
+        await seedCharlesV(prisma)
+
+        // 13-4-12. 카를 5세 부모: 미남공 필리프(1478~1506) + 후아나(1479~1555) 인물 시딩
+        //  · ⚠️ 기존 데이터 보존 모드: Person/Dynasty/Marriage/Parent-Child 모두 존재 시 스킵
+        //  · 트라스타마라 가문 인라인 생성 (후아나 친정)
+        //  · Person x2 (사망 정보·전기 포함) + PersonStats x2 + PersonSpouse x2
+        //  · 필리프 → 카를 5세 부자 / 후아나 → 카를 5세 모자 관계
+        await seedCharlesVParents(prisma)
 
         // 13-6. 일본 전후(1945~1948) 시딩 — 일본 제국·황실 + eventCategory + 현대 일본·미국·영국·중국·소련 hc 의존
         //  · 일본국 historicalCountry + 일본 제국 → 일본국 transition
