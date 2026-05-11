@@ -2,12 +2,24 @@ import DOMPurify from 'dompurify'
 import type { Config } from 'dompurify'
 
 /**
+ * URL 프로토콜 화이트리스트 — DOMPurify 기본값에 `blob:`만 추가.
+ *
+ * 이전엔 `ALLOW_UNKNOWN_PROTOCOLS: true`로 두어 *모든* 프로토콜을 허용했는데,
+ * 그러면 `<a href="javascript:...">` 같은 페이로드가 sanitize를 통과해 anchor
+ * 클릭 시 실행되는 XSS 경로가 열림. blob: 만 추가 허용하는 것으로 좁힌다.
+ *
+ * 베이스는 DOMPurify 기본 정규식과 동일(http/https/mailto/tel/callto/sms/cid/
+ * xmpp/matrix + 상대경로) — javascript:, vbscript:, data: 는 자동 차단.
+ */
+const RICH_TEXT_ALLOWED_URI_REGEXP =
+  /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|blob):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
+
+/**
  * RichTextEditor(contentEditable)에서 허용하는 마크업만 남깁니다.
  * 붙여넣기·외부에서 주입된 value 로드 시 XSS 완화용.
  */
 const RICH_TEXT_PURIFY_CONFIG: Config = {
-  /* blob: 붙여넣기 등이 잠깐 DOM에 남아도 제거되지 않게 (허용 태그만 쓰므로 script 등은 여전히 차단) */
-  ALLOW_UNKNOWN_PROTOCOLS: true,
+  ALLOWED_URI_REGEXP: RICH_TEXT_ALLOWED_URI_REGEXP,
   ADD_TAGS: [
     'figure',
     'figcaption',

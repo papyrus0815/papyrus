@@ -185,7 +185,7 @@ const ToolbarButton = styled.button.attrs({ type: 'button' })<{
     font-size: 12px;
     font-weight: 500;
     white-space: nowrap;
-    z-index: 100000;
+    z-index: ${Z_INDEX.RICH_TEXT_EDITOR_OVERLAY};
     pointer-events: none;
     animation: tooltipFadeIn 0.15s ease;
   }
@@ -1670,6 +1670,13 @@ function richTableDeleteColumn(cell: HTMLTableCellElement) {
   })
 }
 
+/**
+ * 엔티티 링크 검색 디바운스. 키 누를 때마다 즉시 fetch하면 서버 부하·취소된
+ * 응답 처리가 많아짐. 너무 길면 응답성 저하. `AbortController`로 이전 요청은
+ * 항상 취소되므로 비교적 짧은 값을 둔다.
+ */
+const ENTITY_SEARCH_DEBOUNCE_MS = 280
+
 interface RichTextEditorProps {
   value: string
   onChange: (value: string) => void
@@ -2594,19 +2601,16 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             )
             return
           }
-          if (imageFile.size > 10 * 1024 * 1024) {
-            toast.error('이미지 크기는 10MB 이하여야 합니다.')
+          // validateImageFile은 MIME·확장자·사이즈를 모두 검증한다 — 사이즈 별도 체크 X.
+          try {
+            validateImageFile(imageFile)
+          } catch (err) {
+            toast.error(
+              err instanceof Error ? err.message : '이미지 파일이 아닙니다.',
+            )
             return
           }
           void (async () => {
-            try {
-              validateImageFile(imageFile)
-            } catch (err) {
-              toast.error(
-                err instanceof Error ? err.message : '이미지 파일이 아닙니다.',
-              )
-              return
-            }
             const editor = editorRef.current
             if (!editor) return
             const selection = window.getSelection()
@@ -3070,7 +3074,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     [applyFormat, handleContentChange, updateFormatState],
   )
 
-  // 이미지 업로드
+  // 이미지 업로드 — 툴바 버튼 경로. paste 경로(handlePaste)와 동일한 검증·토스트 정책.
   const handleImageUpload = useCallback(async () => {
     if (!onImageUpload) return
 
@@ -3083,8 +3087,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       const file = input.files?.[0]
       if (!file) return
 
-      if (file.size > 10 * 1024 * 1024) {
-        alert('이미지 크기는 10MB 이하여야 합니다.')
+      // validateImageFile이 MIME·확장자·사이즈를 모두 검증한다.
+      try {
+        validateImageFile(file)
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : '이미지 파일이 아닙니다.',
+        )
         return
       }
 
@@ -3092,7 +3101,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         const rawUrl = await onImageUpload(file)
         const imageUrl = (getUploadImageUrl(rawUrl) || rawUrl || '').trim()
         if (!imageUrl) {
-          alert('이미지 URL을 받지 못했습니다.')
+          toast.error('이미지 URL을 받지 못했습니다.')
           return
         }
         if (!editorRef.current) return
@@ -3118,8 +3127,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       } catch (err) {
         const message =
           err instanceof Error ? err.message : '이미지 업로드에 실패했습니다.'
-        console.error('Image upload error:', err)
-        alert(message)
+        console.error('RichTextEditor button image upload:', err)
+        toast.error(message)
       }
     }
   }, [onImageUpload])
@@ -3321,7 +3330,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }
         })
         .finally(() => setEntityLinkRemoteLoading(false))
-    }, 280)
+    }, ENTITY_SEARCH_DEBOUNCE_MS)
     return () => {
       window.clearTimeout(t)
       ac.abort()
@@ -3715,6 +3724,23 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       }, 100)
     }
   }, [imageCaptionModalVisible])
+
+  /**
+   * 이미지 설명 모달이 열려 있을 때 ESC 전역 단축키.
+   * input의 onKeyDown에도 ESC가 있지만, 사용자가 input에서 포커스를 잃으면
+   * (예: footer 버튼으로 포커스 이동 후) ESC가 안 먹는 회귀를 막는다.
+   */
+  useEffect(() => {
+    if (!imageCaptionModalVisible) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        handleImageCaptionCancel()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [imageCaptionModalVisible, handleImageCaptionCancel])
 
   // 링크 삽입
   const handleSetLink = useCallback(() => {

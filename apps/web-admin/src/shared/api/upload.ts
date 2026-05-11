@@ -144,3 +144,20 @@ export async function uploadImage(
   return response.json()
 }
 
+/**
+ * RichTextEditor `onImageUpload` prop 시그니처 `(file: File) => Promise<string>`에 맞춘
+ * 헬퍼. 각 사용처(elections·persons·events·life-event 등)가 같은 try/catch와
+ * await 패턴을 반복하던 것을 한 곳에 모은다.
+ *
+ * 반환되는 URL은 `getUploadImageUrl`로 절대 URL 정규화까지 마친 값 —
+ * 호스트가 다른 환경(Electron 등)에서도 즉시 표시 가능.
+ */
+export function createRichTextImageUploader(
+  category: UploadImageCategory,
+): (file: File) => Promise<string> {
+  return async (file: File) => {
+    const result = await uploadImage(file, category)
+    return getUploadImageUrl(result.url) || result.url
+  }
+}
+

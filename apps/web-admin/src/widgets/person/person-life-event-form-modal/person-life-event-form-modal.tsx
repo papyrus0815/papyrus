@@ -35,7 +35,7 @@ import {
   deletePersonLifeEvent,
   updatePersonLifeEvent,
 } from '@/shared/api/person-life-events'
-import { uploadImage } from '@/shared/api/upload'
+import { createRichTextImageUploader } from '@/shared/api/upload'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import {
@@ -973,10 +973,7 @@ export function PersonLifeEventFormModal({
                 onChange={setDescription}
                 showTitle={false}
                 placeholder="배경·맥락·인용 등 자유 서술 (선택). Ctrl/⌘+Enter 로 저장"
-                onImageUpload={async (file) => {
-                  const result = await uploadImage(file, 'persons')
-                  return result.url
-                }}
+                onImageUpload={createRichTextImageUploader('persons')}
                 /* 모달 본문 내에서 본문만 내부 스크롤되도록 — Toolbar가 항상 보임 */
                 maxHeight="50vh"
               />

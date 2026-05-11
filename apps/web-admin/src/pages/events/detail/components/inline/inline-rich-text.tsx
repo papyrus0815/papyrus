@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 
 import { FiEdit2 } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { uploadImage } from '@/shared/api/upload'
+import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-read-view'
+import { createRichTextImageUploader } from '@/shared/api/upload'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 
@@ -66,12 +67,12 @@ export function InlineRichText({
   /**
    * 본문 이미지 업로드 — 사건 상세 전용 위젯이라 카테고리는 'events' 고정.
    * RichTextEditor는 onImageUpload prop이 없으면 이미지 삽입을 비활성화하므로
-   * 반드시 forward해야 한다.
+   * 반드시 forward해야 한다. 공용 헬퍼로 try/catch·URL 정규화는 한 곳에 모음.
    */
-  const handleImageUpload = useCallback(async (file: File): Promise<string> => {
-    const result = await uploadImage(file, 'events')
-    return result.url
-  }, [])
+  const handleImageUpload = useMemo(
+    () => createRichTextImageUploader('events'),
+    [],
+  )
 
   if (editing) {
     return (
@@ -97,7 +98,7 @@ export function InlineRichText({
     )
   }
 
-  const isEmpty = !value || !value.replace(/<[^>]*>/g, '').trim()
+  const isEmpty = isVisuallyEmptyRichText(value)
 
   return (
     <ReadHost data-edit-host>
