@@ -8,7 +8,7 @@ import {
 } from 'react'
 
 import { FiEdit2 } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import * as I from './inline.styles'
 
@@ -155,7 +155,11 @@ export function InlineText({
   const isEmpty = !value.trim()
   return (
     <ReadHost className={className} style={style} data-edit-host>
-      <ReadValue as={as} data-empty={isEmpty || undefined}>
+      <ReadValue
+        as={as}
+        $multiline={multiline}
+        data-empty={isEmpty || undefined}
+      >
         {prefix}
         {isEmpty ? placeholder : value}
       </ReadValue>
@@ -176,8 +180,18 @@ const ReadHost = styled.span`
   gap: 0;
 `
 
-const ReadValue = styled.span`
+const ReadValue = styled.span<{ $multiline?: boolean }>`
   ${I.editableSurface}
+  /**
+   * multiline 모드는 textarea로 편집되어 값에 개행 문자가 포함될 수 있다.
+   * 기본 inline span은 개행을 공백 1개로 접어 표시 — read 모드에서도 개행을
+   * 보존하려면 pre-wrap 필요(이 옵션은 줄바꿈 보존 + wrap 정상 동작).
+   */
+  ${({ $multiline }) =>
+    $multiline &&
+    css`
+      white-space: pre-wrap;
+    `}
 `
 
 const EditHost = styled.span`
