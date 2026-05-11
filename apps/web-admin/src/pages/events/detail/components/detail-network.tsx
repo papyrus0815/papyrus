@@ -29,11 +29,7 @@ interface DetailNetworkProps {
 export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const children = (event.childEvents ?? [])
     .slice()
-    .sort((a, b) => {
-      const aTime = a.startDate ? new Date(a.startDate).getTime() : 0
-      const bTime = b.startDate ? new Date(b.startDate).getTime() : 0
-      return aTime - bTime
-    })
+    .sort((a, b) => compareEventStart(a.startDate, b.startDate))
   const keywords = (event.keywords ?? []).filter(
     (k): k is string => typeof k === 'string' && k.trim().length > 0,
   )
@@ -136,6 +132,39 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
       </KeywordsBlock>
     </S.Section>
   )
+}
+
+/**
+ * 사건 시작일 비교 — JS `Date`는 BC(음수 연도) 일부 표기를 NaN으로 떨굼.
+ * Papyrus는 역사 사건을 다루므로 *연·월·일 토큰을 직접 파싱*해 정수 비교한다.
+ * 비교 우선순위: 연도 → 월 → 일. 입력 누락은 가장 뒤로 정렬.
+ */
+function compareEventStart(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): number {
+  const aT = parseEventDateTokens(a)
+  const bT = parseEventDateTokens(b)
+  if (aT == null && bT == null) return 0
+  if (aT == null) return 1
+  if (bT == null) return -1
+  if (aT.year !== bT.year) return aT.year - bT.year
+  if (aT.month !== bT.month) return aT.month - bT.month
+  return aT.day - bT.day
+}
+
+function parseEventDateTokens(
+  input: string | null | undefined,
+): { year: number; month: number; day: number } | null {
+  if (!input) return null
+  // 선택적 부호 + 1~6자리 연도, 월·일은 선택적.
+  const m = input.match(/^(-?\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/)
+  if (!m || !m[1]) return null
+  const year = parseInt(m[1], 10)
+  if (!Number.isFinite(year)) return null
+  const month = m[2] ? parseInt(m[2], 10) : 1
+  const day = m[3] ? parseInt(m[3], 10) : 1
+  return { year, month, day }
 }
 
 const ChildCard = styled(Link)`

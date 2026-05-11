@@ -21,10 +21,17 @@ export function useEventMutation(eventId: string) {
     mutationFn: async (patch: UpdateEventDto) => {
       return updateEvent(eventId, patch)
     },
-    onSuccess: () => {
+    onSuccess: (_data, patch) => {
       queryClient.invalidateQueries({ queryKey: ['event-detail', eventId] })
-      // 목록(ledger/catalog) 캐시도 같이 — 한 사건 수정이 목록 정렬·라벨에 영향
-      queryClient.invalidateQueries({ queryKey: ['events'] })
+      /**
+       * 목록(ledger/catalog) 쪽 캐시는 *목록 표시에 영향 있는 필드*가 바뀌었을 때만
+       * 무효화. 본문(background, aftermath, eventSections 등) patch는 목록에 영향
+       * 없으므로 인라인 편집 빈도가 높은 키스트로크 흐름에서 불필요한 refetch를
+       * 유발하지 않도록 한다.
+       */
+      if (patchAffectsListing(patch)) {
+        queryClient.invalidateQueries({ queryKey: ['events'] })
+      }
     },
     onError: (error: unknown) => {
       const message =
@@ -32,4 +39,20 @@ export function useEventMutation(eventId: string) {
       toast.error(`저장 실패: ${message}`)
     },
   })
+}
+
+const LISTING_FIELDS: ReadonlyArray<keyof UpdateEventDto> = [
+  'title',
+  'startDate',
+  'endDate',
+  'startDatePrecision',
+  'endDatePrecision',
+  'categoryId',
+  'location',
+  'parentEventId',
+  'description',
+]
+
+function patchAffectsListing(patch: UpdateEventDto): boolean {
+  return LISTING_FIELDS.some((k) => k in patch)
 }

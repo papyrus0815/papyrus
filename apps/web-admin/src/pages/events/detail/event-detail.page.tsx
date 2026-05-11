@@ -45,10 +45,17 @@ const EventDetailPage = () => {
 
   /* 마지막 저장 성공 시각 — SaveStatus가 "방금 저장됨" 플래시를 띄우기 위한 트리거. */
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
-  const successCountRef = useRef(0)
+  /**
+   * 직전에 처리한 mutation submit 타임스탬프. mutation.submittedAt은 매 mutate마다
+   * 갱신되므로, 이 값과의 비교로 *새 성공*만 골라낸다.
+   */
+  const lastHandledSubmitAtRef = useRef(0)
   useEffect(() => {
-    if (mutation.isSuccess && mutation.submittedAt !== successCountRef.current) {
-      successCountRef.current = mutation.submittedAt
+    if (
+      mutation.isSuccess &&
+      mutation.submittedAt !== lastHandledSubmitAtRef.current
+    ) {
+      lastHandledSubmitAtRef.current = mutation.submittedAt
       setLastSavedAt(Date.now())
     }
   }, [mutation.isSuccess, mutation.submittedAt])

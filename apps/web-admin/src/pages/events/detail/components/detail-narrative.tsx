@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FiArrowDown, FiArrowUp, FiPlus, FiSettings, FiTrash2 } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -23,9 +23,6 @@ interface SectionRow {
   sectionType?: string
 }
 
-let counter = 0
-const nextKey = () => `s-${Date.now()}-${++counter}`
-
 /**
  * 본문 인라인 편집 — 배경·여파(rich text), eventSections(array) 각각 개별 편집.
  *
@@ -37,6 +34,16 @@ const nextKey = () => `s-${Date.now()}-${++counter}`
  * 배열을 PUT한다. 로컬 state로 배열을 유지하고 변경 시마다 batch로 보낸다.
  */
 export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
+  /**
+   * 클라이언트 임시 키 생성기. 모듈 스코프 mutable counter는 HMR에서 취약하므로
+   * 컴포넌트 인스턴스의 ref로 둔다. Date.now()와 함께라 충돌 위험은 사실상 없음.
+   */
+  const counterRef = useRef(0)
+  const nextKey = useCallback(
+    () => `s-${Date.now()}-${++counterRef.current}`,
+    [],
+  )
+
   /* 배경·여파는 server 값을 그대로 InlineRichText로 — 컴포넌트가 자체 draft 관리. */
   const serverSections = useMemo<EventDetailSection[]>(
     () =>
@@ -60,45 +67,34 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
   /**
    * server 데이터 변경 시 로컬 state 재동기화.
    *
-   * 핵심 원칙은 *키 안정성으로 child component 인스턴스를 보존*하는 것 — InlineText
-   * /InlineRichText의 내부 draft state가 child 자신에게 살아 있으므로, key가 그대로
-   * 유지되면 사용자가 입력 중이던 텍스트가 사라지지 않는다.
+   * 키 안정성으로 child component 인스턴스(InlineText/InlineRichText의 내부 draft
+   * state)를 보존하는 것이 핵심.
    *
-   * 정책:
-   *  1. 같은 idx의 prev row가 있으면 그 객체(=key)를 그대로 유지. server 값으로
-   *     덮지 않는다 — 사용자가 dirty일 수도, clean일 수도 있는데 어느 쪽이든
-   *     local을 우위로 둔다(외부 동시 편집은 reload로 해결).
-   *  2. server에 새로 추가된 idx >= prev.length 위치의 row는 새 key로 신규 row 생성.
-   *  3. local에만 있는(아직 commit 전인 빈) tail row는 그대로 보존.
+   * 정책 — content-aware 매핑:
+   *  1. server row 각각에 대해 *동일한 (title, content, sectionType)* 의 prev row가
+   *     아직 안 쓰였으면 그 prev를 매핑(= key 보존). 매칭 없으면 새 row 생성.
+   *  2. 매핑 순서는 server 순서를 따른다 — 외부 prepend/reorder 시에도
+   *     서버 측 순서가 표시 순서가 됨.
+   *  3. prev 중 매칭 안 된 row(편집 중이라 dirty거나, 아직 commit 안 된 빈 tail)는
+   *     끝에 그대로 append — 사용자 입력 손실 방지.
    */
   useEffect(() => {
-    setRows((prev) => {
-      const synced: SectionRow[] = serverSections.map((s, idx) => {
-        const prevRow = prev[idx]
-        if (prevRow) return prevRow
-        return {
-          key: nextKey(),
-          title: s.title ?? '',
-          content: s.content ?? '',
-          sectionType: s.sectionType,
-        }
-      })
-      // local에만 있는 tail(아직 commit 안 된 빈 row 등)은 뒤에 그대로 붙임.
-      if (prev.length > serverSections.length) {
-        const localTail = prev.slice(serverSections.length)
-        return [...synced, ...localTail]
-      }
-      return synced
-    })
-  }, [serverSections])
+    setRows((prev) => syncRowsWithServer(prev, serverSections, nextKey))
+  }, [serverSections, nextKey])
 
   /** rows를 server payload로 직렬화 후 patch 호출. */
   const commitRows = (next: SectionRow[]) => {
     setRows(next)
+    /**
+     * 빈 row(title·content 모두 비어 있음)는 commit에서 제외.
+     * title이 비어 있더라도 content가 있으면 그대로 전송 — 사용자가 의도적으로
+     * 비워둔 빈 제목을 placeholder 문자열로 강제 치환하지 않는다
+     * (이전엔 '제목 없음'으로 덮어써 데이터 손상 가능했음).
+     */
     const cleaned = next
       .filter((r) => r.title.trim() || r.content.trim())
       .map((r, idx) => ({
-        title: r.title.trim() || '제목 없음',
+        title: r.title.trim(),
         content: r.content,
         order: idx,
         sectionType: r.sectionType ?? 'narrative',
@@ -246,6 +242,49 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
       </S.Section>
     </>
   )
+}
+
+/**
+ * server 응답과 로컬 rows를 content-aware로 매핑.
+ *
+ * 매 server row마다 *내용이 일치하는* prev row를 한 번씩만 가져가 매핑한다.
+ * 매칭 못한 server row는 새 row, 매칭 못한 prev row(편집 중이라 dirty거나
+ * 아직 commit 안 된 빈 row)는 끝에 append.
+ */
+function syncRowsWithServer(
+  prev: SectionRow[],
+  server: EventDetailSection[],
+  nextKey: () => string,
+): SectionRow[] {
+  const prevUsed = new Array<boolean>(prev.length).fill(false)
+  const next: SectionRow[] = []
+
+  for (const s of server) {
+    const sTitle = s.title ?? ''
+    const sContent = s.content ?? ''
+    const sType = s.sectionType
+    let matchedIdx = -1
+    for (let i = 0; i < prev.length; i++) {
+      if (prevUsed[i]) continue
+      const p = prev[i]
+      if (p.title === sTitle && p.content === sContent && p.sectionType === sType) {
+        matchedIdx = i
+        break
+      }
+    }
+    if (matchedIdx >= 0) {
+      prevUsed[matchedIdx] = true
+      next.push(prev[matchedIdx])
+    } else {
+      next.push({ key: nextKey(), title: sTitle, content: sContent, sectionType: sType })
+    }
+  }
+
+  for (let i = 0; i < prev.length; i++) {
+    if (!prevUsed[i]) next.push(prev[i])
+  }
+
+  return next
 }
 
 const SectionStack = styled.div`

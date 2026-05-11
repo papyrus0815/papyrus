@@ -9,6 +9,7 @@ import {
   getAllEventCategories,
 } from '@/shared/api/event-categories'
 import { type UpdateEventDto } from '@/shared/api/events'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
 
 import * as S from '../styles'
@@ -235,7 +236,11 @@ function HeroActors({
                   >
                     <PersonAvatar $hasImage={Boolean(avatar)}>
                       {avatar ? (
-                        <img src={avatar} alt="" loading="lazy" />
+                        <img
+                          src={getUploadImageUrl(avatar) || avatar}
+                          alt=""
+                          loading="lazy"
+                        />
                       ) : (
                         <span>{name.charAt(0)}</span>
                       )}

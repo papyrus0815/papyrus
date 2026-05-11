@@ -9,6 +9,7 @@ import { getAllCountries } from '@/shared/api/countries'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { getAllPersons } from '@/shared/api/persons'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
@@ -74,37 +75,27 @@ export function DetailActors({
     personId: string,
     patch: { role?: string; note?: string },
   ) => {
-    const next = persons.map((p) =>
-      p.personId === personId
-        ? {
-            personId: p.personId,
-            role:
-              patch.role !== undefined
-                ? patch.role.trim() || undefined
-                : p.role ?? undefined,
-            note:
-              patch.note !== undefined
-                ? patch.note.trim() || undefined
-                : p.note ?? undefined,
-          }
-        : {
-            personId: p.personId,
-            role: p.role ?? undefined,
-            note: p.note ?? undefined,
-          },
-    )
+    const next = persons.map((p) => {
+      if (p.personId !== personId) return toPersonPayload(p)
+      return {
+        personId: p.personId,
+        role:
+          patch.role !== undefined
+            ? patch.role.trim() || undefined
+            : p.role ?? undefined,
+        note:
+          patch.note !== undefined
+            ? patch.note.trim() || undefined
+            : p.note ?? undefined,
+      }
+    })
     patchPersons(next)
   }
 
   const removePerson = (personId: string) => {
-    const next = persons
-      .filter((p) => p.personId !== personId)
-      .map((p) => ({
-        personId: p.personId,
-        role: p.role ?? undefined,
-        note: p.note ?? undefined,
-      }))
-    patchPersons(next)
+    patchPersons(
+      persons.filter((p) => p.personId !== personId).map(toPersonPayload),
+    )
   }
 
   const addPerson = (personId: string) => {
@@ -112,15 +103,7 @@ export function DetailActors({
       setPersonModalOpen(false)
       return
     }
-    const next = [
-      ...persons.map((p) => ({
-        personId: p.personId,
-        role: p.role ?? undefined,
-        note: p.note ?? undefined,
-      })),
-      { personId },
-    ]
-    patchPersons(next)
+    patchPersons([...persons.map(toPersonPayload), { personId }])
     setPersonModalOpen(false)
   }
 
@@ -172,11 +155,11 @@ export function DetailActors({
       <S.Section id="actors">
         <EditorialHeader>
           <EditorialEyebrow>
-            Dramatis Personae{hasAnything && <span> · {totals(persons.length, totalCountries)}</span>}
+            행위자{hasAnything && <span> · {totals(persons.length, totalCountries)}</span>}
           </EditorialEyebrow>
           <EditorialTitle>참여 행위자</EditorialTitle>
           <EditorialKicker>이 사건에 등장하거나 관여한 인물·국가</EditorialKicker>
-          <EditorialRule />
+          <EditorialRule role="separator" aria-hidden />
         </EditorialHeader>
 
         {/* 비어 있을 때 통일 안내 — persons·countries 모두 없을 때만 */}
@@ -204,7 +187,11 @@ export function DetailActors({
                   >
                     <PersonAvatar $hasImage={Boolean(avatarUrl)}>
                       {avatarUrl ? (
-                        <img src={avatarUrl} alt="" loading="lazy" />
+                        <img
+                          src={getUploadImageUrl(avatarUrl) || avatarUrl}
+                          alt=""
+                          loading="lazy"
+                        />
                       ) : (
                         <span>{fullName.charAt(0)}</span>
                       )}
@@ -261,7 +248,7 @@ export function DetailActors({
         {/* 국가 — smallcaps 라벨 + 본문 단락 */}
         {(modernCountries.length > 0 || historicalCountries.length > 0) && (
           <NationsBlock>
-            <NationsEyebrow>Nations · 관련국</NationsEyebrow>
+            <NationsEyebrow>관련국</NationsEyebrow>
             <NationsParagraph>
               {modernCountries.map((country, i) => (
                 <NationItem key={country.id}>
@@ -338,6 +325,19 @@ function totals(persons: number, countries: number): string {
   return parts.join(' · ')
 }
 
+/**
+ * UpdateEventDto.relatedPersons 항목 직렬화. null/빈 문자열은 undefined로 정규화해
+ * 서버 `=== undefined` 가드와 정합. update/add/remove 모두 동일 매핑을 쓰므로
+ * 헬퍼로 한 곳에 둔다.
+ */
+function toPersonPayload(p: { personId: string; role?: string | null; note?: string | null }) {
+  return {
+    personId: p.personId,
+    role: p.role ?? undefined,
+    note: p.note ?? undefined,
+  }
+}
+
 /* ───────────────────────── styles — editorial sans ─────────────── */
 /* NYT 깔끔한 톤(헤어라인 룰 + smallcaps eyebrow + 위계)만 차용. 폰트는 sans 기본. */
 
@@ -398,15 +398,13 @@ const EditorialKicker = styled.div`
 `
 
 /**
- * <hr>의 브라우저 기본 border 렌더링이 styled `border-top`을 덮어 짙게 보이는
- * 케이스를 방어하기 위해 background+height 방식으로 그린다(border 0).
+ * <hr>는 브라우저 기본 inset border가 styled `border` 규칙과 충돌해 짙게 보이는
+ * 케이스가 있어 `<div role="separator">`로 둔다 — 시맨틱 분리선 + 커스텀 hairline.
  */
-const EditorialRule = styled.hr`
+const EditorialRule = styled.div`
   margin: 14px 0 4px;
-  border: 0 !important;
   height: 1px;
   background: ${({ theme }) => editorialRuleColor(theme.mode)};
-  color: transparent;
 `
 
 /* ─── Person list (vertical, hairline separators) ─── */
@@ -590,6 +588,15 @@ const RemoveInline = styled.button`
     outline: none;
   }
 
+  /**
+   * 터치/포인터 hover 미지원 환경은 hover-only 진입이 불가하므로 항상 노출.
+   * 키보드 사용자도 :focus-visible로 1.0까지 올라가지만, 발견성을 위해 매체 쿼리로
+   * 보정해 둔다.
+   */
+  @media (hover: none) {
+    opacity: 0.7;
+  }
+
   svg {
     width: 14px;
     height: 14px;
@@ -698,6 +705,11 @@ const NationRemove = styled.button`
     opacity: 1;
     color: ${({ theme }) => theme.colors.error};
     outline: none;
+  }
+
+  /* 터치/포인터 hover 미지원 환경은 항상 노출. */
+  @media (hover: none) {
+    opacity: 0.7;
   }
 `
 
