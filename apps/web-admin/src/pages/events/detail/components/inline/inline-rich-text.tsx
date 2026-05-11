@@ -1,8 +1,9 @@
-import { useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 
 import { FiEdit2 } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { uploadImage } from '@/shared/api/upload'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 
@@ -62,6 +63,16 @@ export function InlineRichText({
     close()
   }
 
+  /**
+   * 본문 이미지 업로드 — 사건 상세 전용 위젯이라 카테고리는 'events' 고정.
+   * RichTextEditor는 onImageUpload prop이 없으면 이미지 삽입을 비활성화하므로
+   * 반드시 forward해야 한다.
+   */
+  const handleImageUpload = useCallback(async (file: File): Promise<string> => {
+    const result = await uploadImage(file, 'events')
+    return result.url
+  }, [])
+
   if (editing) {
     return (
       <>
@@ -72,6 +83,7 @@ export function InlineRichText({
           }}
           placeholder={placeholder}
           maxHeight={maxHeight}
+          onImageUpload={handleImageUpload}
         />
         <I.InlineActionRow>
           <I.InlineCancelBtn type="button" onClick={close}>
