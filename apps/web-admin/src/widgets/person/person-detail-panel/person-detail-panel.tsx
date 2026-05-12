@@ -36,7 +36,11 @@ import {
   type PersonLifeEvent,
   listPersonLifeEvents,
 } from '@/shared/api/person-life-events'
-import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
+import {
+  createRichTextImageUploader,
+  getUploadImageUrl,
+  uploadImage,
+} from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import {
@@ -59,6 +63,7 @@ import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { SovereignReignRegisterPanel } from '@/shared/ui/sovereign-reign-register-panel/sovereign-reign-register-panel'
+import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 import { PersonLifeEventFormModal } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
 import { PersonLifeTimelineInfographic } from '@/widgets/person/person-life-timeline-infographic/person-life-timeline-infographic'
 import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-infographic/person-genealogy-infographic'
@@ -585,6 +590,8 @@ export function PersonDetailPanel({
   const [editingReignId, setEditingReignId] = useState<string | null>(null)
   const [lifeEventModalOpen, setLifeEventModalOpen] = useState(false)
   const [editingLifeEvent, setEditingLifeEvent] = useState<PersonLifeEvent | null>(null)
+  /** 연보의 사건 카드 클릭 시 띄울 사건 인라인 모달 — null이면 닫힘 */
+  const [viewingEventId, setViewingEventId] = useState<string | null>(null)
   /** 저장 직후 하이라이트·스크롤 대상 id (타임라인 인포그래픽에 전달). 0.8초 뒤 자동 해제 */
   const [highlightedLifeEventId, setHighlightedLifeEventId] = useState<string | null>(null)
 
@@ -718,6 +725,18 @@ export function PersonDetailPanel({
     () => ((person as any)?.events ?? []) as any[],
     [person],
   )
+  /**
+   * eventId → 이 인물 시점의 사건 컨텍스트(role/note) 룩업.
+   * EventInlineModal에 넘겨 "이 인물의 역할 — X" 줄을 모달에 표시할 때 사용.
+   */
+  const personEventContextByEventId = useMemo(() => {
+    const m = new Map<string, { role?: string | null; note?: string | null }>()
+    for (const e of timelineEvents) {
+      const eid = e?.event?.id
+      if (eid) m.set(eid, { role: e?.role ?? null, note: e?.note ?? null })
+    }
+    return m
+  }, [timelineEvents])
 
   const modalTopId =
     !embedInModal && personLinkStack.length > 0
@@ -748,9 +767,12 @@ export function PersonDetailPanel({
           ? [queryClient.invalidateQueries({ queryKey: ['persons', personId] })]
           : []),
         // 모달 스택의 부모 패널 등 다른 personId 상세에도 가족 노드(profileImageUrl 등)가
-        // 박혀 있으므로 person-detail / family-tree 는 항상 broad invalidate
+        // 박혀 있으므로 person-detail / family-tree 는 항상 broad invalidate.
+        // 사건 상세의 참여 행위자 리스트도 event-detail 응답에 person.profileImageUrl을
+        // 박아 두므로 함께 무효화해야 썸네일 변경이 즉시 반영된다.
         queryClient.invalidateQueries({ queryKey: ['person-detail'] }),
         queryClient.invalidateQueries({ queryKey: ['person-family-tree'] }),
+        queryClient.invalidateQueries({ queryKey: ['event-detail'] }),
         queryClient.invalidateQueries({ queryKey: personKeys.all }),
         queryClient.invalidateQueries({ queryKey: ['persons-by-country'] }),
         queryClient.invalidateQueries({ queryKey: ['persons-by-dynasty'] }),
@@ -1386,10 +1408,7 @@ export function PersonDetailPanel({
                             onChange={setBiographyDraft}
                             showTitle={false}
                             placeholder="전기(약력)를 입력하세요. 서식·이미지를 넣을 수 있습니다."
-                            onImageUpload={async (file) => {
-                              const result = await uploadImage(file, 'persons')
-                              return result.url
-                            }}
+                            onImageUpload={createRichTextImageUploader('persons')}
                           />
                           <BioEditActions>
                             <OutlineButton
@@ -2659,7 +2678,8 @@ export function PersonDetailPanel({
                         : undefined
                     }
                     onEventClick={(eventId) => {
-                      navigate(pathKeys.events.detail(eventId))
+                      // 페이지 직접 진입 대신 인라인 미리보기 모달 — 빠른 훑어보기 → 필요할 때만 상세로 이동
+                      setViewingEventId(eventId)
                     }}
                   />
                 </section>
@@ -2690,6 +2710,15 @@ export function PersonDetailPanel({
             })
           }
         }}
+      />
+
+      <EventInlineModal
+        eventId={viewingEventId}
+        onClose={() => setViewingEventId(null)}
+        onNavigate={(eventId) => navigate(pathKeys.events.detail(eventId))}
+        personContext={
+          viewingEventId ? personEventContextByEventId.get(viewingEventId) ?? null : null
+        }
       />
 
       <AnimatePresence>
