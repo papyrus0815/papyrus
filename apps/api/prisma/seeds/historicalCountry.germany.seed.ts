@@ -59,7 +59,7 @@ const ENTRIES: HistoricalCountryEntry[] = [
 
   // ── 신성로마제국 계열 ─────────────────────────────────────────────
   {
-    name: '신성 로마 제국',
+    name: '신성로마제국',
     enName: 'Holy Roman Empire',
     description: '962년 오토 1세 대관식으로 시작된 중세 유럽의 복합 제국. 독일 국민의 신성 로마 제국이라고도 불리며, 1806년 나폴레옹의 압박으로 해체되었다.',
     startEra: 'AD', startYear: 962,

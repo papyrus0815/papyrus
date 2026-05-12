@@ -14,9 +14,9 @@
  *    CITIZENSHIP 타입 affiliation 1건 생성.
  *
  *    매칭 우선순위:
- *      ① birthPlaceText 시작 키워드 (조선·일본·에도 막부·미국·영국·청·러시아 제국·포르투갈 등)
- *      ② originalName 패턴 ("of Russia", "of Castile" 등)
- *      ③ surname / dynasty 키워드 (도쿠가와·로마노프·아비스 등)
+ *      (1) birthPlaceText 시작 키워드 (조선·일본·에도 막부·미국·영국·청·러시아 제국·포르투갈 등)
+ *      (2) originalName 패턴 ("of Russia", "of Castile" 등)
+ *      (3) surname / dynasty 키워드 (도쿠가와·로마노프·아비스 등)
  *
  *    추론 실패 시 unresolved로 분류, 로그 출력.
  *

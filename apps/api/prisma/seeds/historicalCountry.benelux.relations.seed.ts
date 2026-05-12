@@ -99,11 +99,11 @@ const MEMBERSHIPS: {
   isLeadingMember?: boolean
 }[] = [
   // ── 신성로마제국 산하 봉건 영방 ────────────────────────────────────
-  { parent: '신성 로마 제국', member: '플랑드르 백국', role: HistoricalMembershipRole.VASSAL_STATE },
-  { parent: '신성 로마 제국', member: '홀란트 백국', role: HistoricalMembershipRole.VASSAL_STATE },
-  { parent: '신성 로마 제국', member: '브라반트 공국', role: HistoricalMembershipRole.VASSAL_STATE },
-  { parent: '신성 로마 제국', member: '리에주 주교후국', role: HistoricalMembershipRole.VASSAL_STATE },
-  { parent: '신성 로마 제국', member: '룩셈부르크 공국', role: HistoricalMembershipRole.VASSAL_STATE },
+  { parent: '신성로마제국', member: '플랑드르 백국', role: HistoricalMembershipRole.VASSAL_STATE },
+  { parent: '신성로마제국', member: '홀란트 백국', role: HistoricalMembershipRole.VASSAL_STATE },
+  { parent: '신성로마제국', member: '브라반트 공국', role: HistoricalMembershipRole.VASSAL_STATE },
+  { parent: '신성로마제국', member: '리에주 주교후국', role: HistoricalMembershipRole.VASSAL_STATE },
+  { parent: '신성로마제국', member: '룩셈부르크 공국', role: HistoricalMembershipRole.VASSAL_STATE },
 
   // ── 부르고뉴령 네덜란드의 구성 영방 (1384~1482) ────────────────────
   { parent: '부르고뉴령 네덜란드', member: '플랑드르 백국', role: HistoricalMembershipRole.UNION, isLeadingMember: true },

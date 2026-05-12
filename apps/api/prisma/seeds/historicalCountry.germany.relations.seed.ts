@@ -19,7 +19,7 @@ const TRANSITIONS: {
   // 프랑크 분열
   { predecessor: '프랑크 왕국', successor: '동프랑크 왕국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 동프랑크 → 신성로마제국 / 독일 왕국
-  { predecessor: '동프랑크 왕국', successor: '신성 로마 제국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '동프랑크 왕국', successor: '신성로마제국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   { predecessor: '동프랑크 왕국', successor: '독일 왕국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 브란덴부르크 → 브란덴부르크-프로이센
   { predecessor: '브란덴부르크 선제후국', successor: '브란덴부르크-프로이센', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
@@ -28,8 +28,8 @@ const TRANSITIONS: {
   // 브란덴부르크-프로이센 → 프로이센 왕국
   { predecessor: '브란덴부르크-프로이센', successor: '프로이센 왕국', eventType: TransitionEventType.FOUNDED, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 신성로마제국 해체 → 라인 연방 / 프로이센 왕국 계속
-  { predecessor: '신성 로마 제국', successor: '라인 연방', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
-  { predecessor: '신성 로마 제국', successor: '프로이센 왕국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '신성로마제국', successor: '라인 연방', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '신성로마제국', successor: '프로이센 왕국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 헤센-카셀 → 헤센 선제후국
   { predecessor: '헤센-카셀 방백령', successor: '헤센 선제후국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 헤센-다름슈타트 → 헤센 대공국
@@ -80,18 +80,18 @@ const MEMBERSHIPS: {
   isLeadingMember?: boolean
 }[] = [
   // 신성로마제국 소속 제후국들
-  { parent: '신성 로마 제국', member: '브란덴부르크 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
-  { parent: '신성 로마 제국', member: '작센 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
-  { parent: '신성 로마 제국', member: '팔츠 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
-  { parent: '신성 로마 제국', member: '바이에른 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
-  { parent: '신성 로마 제국', member: '하노버 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
-  { parent: '신성 로마 제국', member: '헤센-카셀 방백령', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
-  { parent: '신성 로마 제국', member: '헤센-다름슈타트 방백령', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
-  { parent: '신성 로마 제국', member: '뷔르템베르크 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
-  { parent: '신성 로마 제국', member: '바덴 변경백령', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
-  { parent: '신성 로마 제국', member: '뮌스터 주교령', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
-  { parent: '신성 로마 제국', member: '독일 왕국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER, isLeadingMember: true },
-  { parent: '신성 로마 제국', member: '프로이센 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '브란덴부르크 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '작센 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '팔츠 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '바이에른 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '하노버 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '헤센-카셀 방백령', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '헤센-다름슈타트 방백령', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '뷔르템베르크 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '바덴 변경백령', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '뮌스터 주교령', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '독일 왕국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER, isLeadingMember: true },
+  { parent: '신성로마제국', member: '프로이센 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   // 라인 연방 소속
   { parent: '라인 연방', member: '바이에른 왕국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '라인 연방', member: '뷔르템베르크 왕국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
