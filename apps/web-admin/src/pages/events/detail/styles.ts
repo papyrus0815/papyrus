@@ -108,16 +108,25 @@ export const Hero = styled.section`
   flex-direction: column;
   gap: 20px;
   padding-bottom: 32px;
+  width: 100%;
+  /**
+   * Hero 콘텐츠 폭을 Main(720px)과 동일하게 잡고 가운데 정렬.
+   * Main이 grid cell 안에서 margin: auto로 가운데 오므로, Hero도 같은
+   * 시각 좌표(좌측 시작·우측 끝)를 가져야 본문과 정렬이 어긋나지 않는다.
+   */
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
 
   /**
-   * Hero는 Body grid 바깥에서 PageInner 직속으로 렌더되므로 그대로 두면
-   * 좌측이 본문 main column보다 (rail 200 + gap 56 = 256px) 더 왼쪽에서 시작해
-   * 같은 720 폭이라도 우측 끝 위치가 어긋난다. wide 화면에서만 좌측 padding을
-   * 추가해 hero 콘텐츠와 main 섹션의 좌·우 끝을 동시에 정렬한다.
+   * wide 화면에서는 Body grid의 rail(200) + gap(56) = 256px만큼 콘텐츠를
+   * 우측으로 밀어 main column의 좌측 시작 좌표와 정렬한다. max-width는 그
+   * padding을 포함해 늘려 콘텐츠 영역은 여전히 720px를 유지(box-sizing: border-box).
    * Body의 미디어 브레이크(1100px)와 동일한 임계값을 사용한다.
    */
   @media (min-width: 1101px) {
     padding-left: calc(200px + 56px);
+    max-width: calc(720px + 200px + 56px);
   }
 `
 
