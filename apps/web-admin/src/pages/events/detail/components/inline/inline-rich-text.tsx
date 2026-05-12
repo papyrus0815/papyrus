@@ -17,7 +17,11 @@ interface InlineRichTextProps {
   onSave: (next: string) => void
   /** 비어 있을 때 hint */
   placeholder?: string
-  /** RichTextEditor maxHeight */
+  /**
+   * RichTextEditor maxHeight. 사건 상세 본문에서는 기본적으로 *미지정*이어야
+   * 본문 길이만큼 자라고 toolbar는 sticky bottom으로 viewport 하단에 붙음.
+   * 모달 등 부모 스크롤이 제한된 사용처에서만 명시적으로 값을 넘김.
+   */
   maxHeight?: string
 }
 
@@ -34,7 +38,7 @@ export function InlineRichText({
   value,
   onSave,
   placeholder = '본문 작성',
-  maxHeight = '560px',
+  maxHeight,
 }: InlineRichTextProps) {
   const editorId = useId()
   const { editing, open, close } = useInlineEditCoordinator(editorId)
@@ -85,6 +89,12 @@ export function InlineRichText({
             }}
             placeholder={placeholder}
             maxHeight={maxHeight}
+            /**
+             * 본문 길이만큼 자라기 — 짧은 콘텐츠도 큰 빈 카드가 아니라
+             * 본문 한 두 줄+toolbar 정도로 작게. 긴 콘텐츠는 자연스럽게
+             * 자라고 toolbar는 sticky bottom으로 항상 노출.
+             */
+            minHeight="120px"
             onImageUpload={handleImageUpload}
             autoFocus
           />

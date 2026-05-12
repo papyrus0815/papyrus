@@ -275,9 +275,15 @@ const TitleDivider = styled.div`
   margin: 0 28px 8px 28px;
 `
 
-const EditorContent = styled.div<{ $hasTitle?: boolean }>`
+const EditorContent = styled.div<{ $hasTitle?: boolean; $minHeight?: string }>`
   outline: none;
-  min-height: ${({ $hasTitle }) => ($hasTitle ? '280px' : '320px')};
+  /**
+   * minHeight prop이 전달되면 그 값으로 override. InlineRichText처럼 본문
+   * 길이만큼 자라는 인라인 편집에서는 짧은 값(예: 120px)을 주고, 폼·모달
+   * 사용처는 기본값 그대로(280/320)로 둔다.
+   */
+  min-height: ${({ $hasTitle, $minHeight }) =>
+    $minHeight ?? ($hasTitle ? '280px' : '320px')};
   padding: ${({ $hasTitle }) =>
     $hasTitle ? '12px 28px 16px 28px' : '16px 28px'};
   font-size: 15px;
@@ -1707,6 +1713,13 @@ interface RichTextEditorProps {
    */
   maxHeight?: string
   /**
+   * 본문(EditorContent)의 최소 높이. default는 showTitle 여부에 따라
+   * 280/320px. InlineRichText처럼 *본문 길이만큼 자라는* 사용처에서는
+   * "120px" 같은 짧은 값을 전달해 짧은 콘텐츠에서 큰 빈 카드가 보이지
+   * 않도록 한다.
+   */
+  minHeight?: string
+  /**
    * mount 시 본문에 자동 focus + 커서를 끝으로 이동. 인라인 편집 진입 직후
    * 사용자가 별도 클릭 없이 바로 입력할 수 있게 한다(InlineRichText 사용처).
    * 폼 페이지 등 mount 시 focus 도둑질이 부담스러운 경우 false 유지.
@@ -1730,6 +1743,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   showTitle = false,
   documentScope,
   maxHeight,
+  minHeight,
   autoFocus = false,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null)
@@ -3976,6 +3990,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         )}
         <EditorContent
           ref={editorRef}
+          $minHeight={minHeight}
           contentEditable
           role="textbox"
           aria-multiline="true"

@@ -216,7 +216,6 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
                   value={row.content}
                   onSave={(next) => updateSectionField(idx, { content: next })}
                   placeholder="본문"
-                  maxHeight="480px"
                 />
               </SectionItem>
             ))}
