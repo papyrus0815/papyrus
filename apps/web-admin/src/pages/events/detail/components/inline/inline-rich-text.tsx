@@ -77,15 +77,17 @@ export function InlineRichText({
   if (editing) {
     return (
       <>
-        <RichTextEditor
-          value={draft}
-          onChange={(v) => {
-            if (v !== draft) setDraft(v)
-          }}
-          placeholder={placeholder}
-          maxHeight={maxHeight}
-          onImageUpload={handleImageUpload}
-        />
+        <EditHost>
+          <RichTextEditor
+            value={draft}
+            onChange={(v) => {
+              if (v !== draft) setDraft(v)
+            }}
+            placeholder={placeholder}
+            maxHeight={maxHeight}
+            onImageUpload={handleImageUpload}
+          />
+        </EditHost>
         <I.InlineActionRow>
           <I.InlineCancelBtn type="button" onClick={close}>
             취소
@@ -137,9 +139,48 @@ const ReadHost = styled.div`
   }
 `
 
+/**
+ * ReadBody — RichTextReadView를 감싸는 컨테이너.
+ *
+ * 사건 상세 전용 정렬: 읽기 뷰의 본문 typography를 edit 모드 EditorContent와
+ * 동일하게 정렬해 클릭 전후 줄간격·단락 간격이 같게 보이도록 한다.
+ * 공용 RichTextReadView 자체는 신문 톤(1.7/1em)을 유지하고, 이 위젯에 한해
+ * 자손 selector로 덮어쓴다.
+ */
 const ReadBody = styled.div`
   flex: 1;
   min-width: 0;
+  & > [role='region'] {
+    line-height: 1.6;
+    p {
+      margin: 0 0 8px 0;
+    }
+    p:last-child {
+      margin-bottom: 0;
+    }
+  }
+`
+
+/**
+ * EditHost — edit 모드의 RichTextEditor 외곽 spacing을 read 모드와 정렬.
+ *
+ * RichTextEditor의 EditorContainer는 border + box-shadow + 큰 padding으로
+ * "큰 카드"형태로 등장한다. InlineRichText는 사건 상세에서 본문 흐름에 inline
+ * 으로 녹아드는 click-to-edit이라 카드 외곽이 부각되면 클릭 시 위·아래 콘텐츠가
+ * ~34px 점프해 보인다.
+ *
+ * 정책: 시각 외곽은 평탄화(border·shadow off)하되 toolbar의 기능은 유지.
+ * focus-within에서도 외곽 강조 X — placement 정합성 우선.
+ */
+const EditHost = styled.div`
+  & > div:first-child {
+    border-color: transparent;
+    box-shadow: none;
+  }
+  & > div:first-child:focus-within {
+    border-color: transparent;
+    box-shadow: none;
+  }
 `
 
 const Placeholder = styled.span`
