@@ -10,6 +10,7 @@ import { type UpdateEventDto } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { getAllPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
@@ -175,7 +176,12 @@ export function DetailActors({
         {persons.length > 0 && (
           <PersonList>
             {persons.map((person) => {
-              const fullName = person.person?.name ?? '미상'
+              const fullName = person.person
+                ? getPersonDisplayName({
+                    name: person.person.name ?? '',
+                    surname: person.person.surname,
+                  }) || '미상'
+                : '미상'
               const avatarUrl = person.person?.profileImageUrl ?? undefined
               const hasNote = Boolean(person.note && person.note.trim())
               return (
@@ -463,10 +469,11 @@ const PersonAvatar = styled.span<{ $hasImage: boolean }>`
       : theme.mode === 'dark'
       ? 'rgba(255, 255, 255, 0.06)'
       : 'rgba(15, 23, 42, 0.05)'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 20px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  line-height: 1;
   /* 정사각 — editorial photo */
   border-radius: 0;
 
@@ -486,7 +493,7 @@ const PersonAvatar = styled.span<{ $hasImage: boolean }>`
   @media (max-width: 540px) {
     width: 52px;
     height: 52px;
-    font-size: 18px;
+    font-size: 21px;
   }
 `
 

@@ -10,6 +10,7 @@ import {
 } from '@/shared/api/event-categories'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 
 import * as S from '../styles'
@@ -113,14 +114,14 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
             onSave={(patch) => onPatch(patch)}
           />
         </S.HeroMetaItem>
-        <S.HeroMetaItem>
+        <LocationMetaItem title={event.location ?? ''}>
           <FiMapPin />
           <InlineText
             value={event.location ?? ''}
             onSave={(next) => onPatch({ location: next.trim() || undefined })}
             placeholder="위치"
           />
-        </S.HeroMetaItem>
+        </LocationMetaItem>
         <ContemporaryHeadsLink event={event} />
       </S.HeroMeta>
 
@@ -139,6 +140,28 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
     </S.Hero>
   )
 }
+
+/**
+ * 위치 메타 — 야마마궁 같은 긴 위치 표기는 한 줄을 통째로 차지해 다른 메타 항목을
+ * 다음 줄로 밀어내고 HeroMeta wrap 정렬을 흩트린다. 폭을 제한하고 ellipsis 처리.
+ * 풀텍스트는 wrapper의 title 속성으로 hover 시 native tooltip 노출.
+ */
+const LocationMetaItem = styled(S.HeroMetaItem)`
+  max-width: min(440px, 55%);
+  min-width: 0;
+  [data-edit-host] {
+    overflow: hidden;
+    min-width: 0;
+  }
+  [data-edit-host] > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: middle;
+  }
+`
 
 const TitleHost = styled.div`
   font-size: clamp(30px, 4.2vw, 44px);
@@ -226,7 +249,12 @@ function HeroActors({
         <Lineup>
           <PersonInline>
             {persons.map((p, i) => {
-              const name = p.person?.name ?? '미상'
+              const name = p.person
+                ? getPersonDisplayName({
+                    name: p.person.name ?? '',
+                    surname: p.person.surname,
+                  }) || '미상'
+                : '미상'
               const avatar = p.person?.profileImageUrl ?? undefined
               return (
                 <span key={p.id}>
@@ -339,6 +367,8 @@ const PersonInlineButton = styled.button`
   /* avatar(22px)와 이름(14.5px)을 함께 묶은 칩이 본문 줄에 자연스럽게 안기도록.
      baseline로 두면 img가 baseline까지 내려가 위쪽 공백이 비대칭 — middle로 묶음. */
   vertical-align: middle;
+  /* 한 인물 = atomic 토큰 — 줄 끝에서 이름·역할이 갈라지지 않도록. */
+  white-space: nowrap;
 
   &:focus-visible {
     outline: none;
@@ -360,8 +390,12 @@ const PersonAvatar = styled.span<{ $hasImage: boolean }>`
       ? 'rgba(255, 255, 255, 0.1)'
       : 'rgba(15, 23, 42, 0.08)'};
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 10px;
+  /* 22×22 안에서 한글/영문 한 글자가 또렷이 읽히도록. 이전 10px는 한글이
+     사실상 illegible. */
+  font-size: 12px;
   font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
   flex-shrink: 0;
 
   img {

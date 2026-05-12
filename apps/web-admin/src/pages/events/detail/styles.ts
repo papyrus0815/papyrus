@@ -83,10 +83,15 @@ export const Main = styled.main`
    * SummaryHost가 모두 720으로 막혀 있어 narrative(배경·전개·여파)와 그 외
    * 섹션(actors·network·modules·appendix) 사이에 40px 가로 차이가 발생했음.
    * Main을 720으로 통일해 모든 섹션이 동일 폭으로 정렬되도록 한다.
+   *
+   * grid cell(868px 폭)의 *가운데*에 배치해 Hero 콘텐츠 영역의 시각 중앙과
+   * 정렬한다. 이전에는 좌측 정렬이라 Hero(폭 868)와 본문(폭 720) 사이에
+   * 우측으로 148px 비대칭이 보였다.
    */
   min-width: 0;
   max-width: 720px;
   width: 100%;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 64px;
