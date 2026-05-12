@@ -4477,20 +4477,22 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
-   * 전체 가계도 BFS 탐색
-   * ego → 부모(2세대 위) → 증조부모(3세대 위) → 자녀(1세대 아래) → 손자녀(2세대 아래)
-   * + 형제자매, 각 인물의 배우자
-   */
-  /**
-   * 가계도 BFS — ego를 중심으로 11단계 BFS로 부·모 / 조부모(고조부모까지) /
+   * 가계도 BFS — ego를 중심으로 부·모 / 조부모(고조부모까지) /
    * 형제·삼촌·이모·고모·조카 / 자녀·손자녀·증손자녀 / 배우자·처가·시가까지 수집.
    *
    * @param accountId — 시그니처 호환을 위해 받지만 가계도는 공개 데이터로 취급해
    *   필터에 사용하지 않는다. 향후 권한 정책이 정해지면 fetchBatch where 절에 반영.
-   *   (정책 결정: 가계도는 인물 상세 페이지를 본 사람이라면 누구나 조상·후손까지 같이 볼 수 있음)
+   * @param opts.includeCollaterals — false면 방계 친척(7b/7c/7d/7e)을 BFS에서 제외.
+   *   기본 true. 합스부르크·이씨조선급 가계는 방계 호출 비용이 커서 성능·트래픽
+   *   민감한 곳에서 옵트아웃할 수 있다. 끄면 조상 카드의 "형제 N" 칩이 사라진다.
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async findFamilyTree(personId: string, _accountId?: string) {
+  async findFamilyTree(
+    personId: string,
+    _accountId?: string,
+    opts?: { includeCollaterals?: boolean },
+  ) {
+    const includeCollaterals = opts?.includeCollaterals !== false
     // ── 공통 select ───────────────────────────────────────────────────
     // 카드 정보 풍부도 (B4·B6·E1)와 결혼 메타(A3·H1)를 위해 확장.
     const PERSON_SELECT = {
@@ -4607,10 +4609,24 @@ export class PersonPrismaRepository implements IPersonRepository {
       ...(p?.spouseRelationsAsSpouse ?? []).map((r: any) => r.personId as string),
     ]
 
-    /** 아직 nodeMap에 없는 id만 DB에서 가져와 등록 */
-    const fetchBatch = async (ids: string[]): Promise<void> => {
-      const unique = [...new Set(ids)].filter(id => id && !nodeMap.has(id))
+    /**
+     * 아직 nodeMap에 없는 id만 DB에서 가져와 등록.
+     * cap을 지정하면 unique id 수를 cap으로 잘라 fetch — 절단되면 truncations에 scope 기록.
+     * 합스부르크·이씨조선처럼 깊게 연결된 가계에서 Step 9~11의 결혼·인척 batch가
+     * 무제한 부풀지 않도록 사용처에서 명시적 cap을 걸어준다.
+     */
+    const fetchBatch = async (
+      ids: string[],
+      opts?: { cap?: number; scope?: string },
+    ): Promise<void> => {
+      let unique = [...new Set(ids)].filter(id => id && !nodeMap.has(id))
       if (!unique.length) return
+      if (opts?.cap != null && unique.length > opts.cap) {
+        if (opts.scope) {
+          truncations.push({ scope: opts.scope, took: opts.cap, limit: opts.cap })
+        }
+        unique = unique.slice(0, opts.cap)
+      }
       const persons = await this.prisma.person.findMany({
         where: { id: { in: unique } },
         select: PERSON_SELECT,
@@ -4744,37 +4760,41 @@ export class PersonPrismaRepository implements IPersonRepository {
       excludeIds: [personId],
     })
 
-    // ── Step 7b: 부모의 형제자매 (삼촌·이모·고모) ───────────────────
-    const auntsUnclesIds = await fetchChildrenOf(gpIds, {
-      take: 60,
-      scope: 'aunts-uncles',
-      excludeIds: [...egoParentIds],
-    })
-
-    // ── Step 7c: 형제의 자녀 (조카) ─────────────────────────────────
-    if (sibIds.length > 0) {
-      await fetchChildrenOf(sibIds, {
-        take: 80,
-        scope: 'nephews',
+    // ── Step 7b/7c/7d/7e: 방계 친척 ── includeCollaterals=false면 일괄 스킵 ─
+    let auntsUnclesIds: string[] = []
+    if (includeCollaterals) {
+      // 7b: 부모의 형제자매 (삼촌·이모·고모)
+      auntsUnclesIds = await fetchChildrenOf(gpIds, {
+        take: 60,
+        scope: 'aunts-uncles',
+        excludeIds: [...egoParentIds],
       })
-    }
 
-    // ── Step 7d: 조부모의 형제자매 (=증조부모의 자녀, 종조부·종조모 등) ─
-    if (ggpIds.length > 0) {
-      await fetchChildrenOf(ggpIds, {
-        take: 80,
-        scope: 'grand-aunts-uncles',
-        excludeIds: [...gpIds],
-      })
-    }
+      // 7c: 형제의 자녀 (조카)
+      if (sibIds.length > 0) {
+        await fetchChildrenOf(sibIds, {
+          take: 80,
+          scope: 'nephews',
+        })
+      }
 
-    // ── Step 7e: 증조부모의 형제자매 (=고조부모의 자녀) — 깊은 방계 ─
-    if (gggpIds.length > 0) {
-      await fetchChildrenOf(gggpIds, {
-        take: 80,
-        scope: 'great-grand-aunts-uncles',
-        excludeIds: [...ggpIds],
-      })
+      // 7d: 조부모의 형제자매 (=증조부모의 자녀, 종조부·종조모 등)
+      if (ggpIds.length > 0) {
+        await fetchChildrenOf(ggpIds, {
+          take: 80,
+          scope: 'grand-aunts-uncles',
+          excludeIds: [...gpIds],
+        })
+      }
+
+      // 7e: 증조부모의 형제자매 (=고조부모의 자녀) — 깊은 방계
+      if (gggpIds.length > 0) {
+        await fetchChildrenOf(gggpIds, {
+          take: 80,
+          scope: 'great-grand-aunts-uncles',
+          excludeIds: [...ggpIds],
+        })
+      }
     }
 
     // ── Step 8: 손자녀 (출생연도순) ────────────────────────────────────
@@ -4794,29 +4814,31 @@ export class PersonPrismaRepository implements IPersonRepository {
     // 삼촌·이모의 배우자 → 사촌 fetch는 폭발 방지 위해 생략 (요청 시 옵션 활성)
     void auntsUnclesIds
 
-    // ── Step 9: 수집된 모든 인물의 배우자 ────────────────────────────
+    // ── Step 9: 수집된 모든 인물의 배우자 (cap 200) ───────────────────
+    // 4대 조상·방계·후손이 모두 nodeMap에 들어와 있어 부풀 위험이 큰 단계.
+    // cap을 두지 않으면 합스부르크급 가계에서 한번에 수천 행을 페치하게 된다.
     const allSpouseIds: string[] = []
     for (const [, p] of nodeMap) {
       for (const sid of getSpouseIds(p)) allSpouseIds.push(sid)
     }
-    await fetchBatch(allSpouseIds)
+    await fetchBatch(allSpouseIds, { cap: 200, scope: 'all-spouses' })
 
-    // ── Step 10: ego 배우자의 부모 (처가/시가) ────────────────────────
+    // ── Step 10: ego 배우자의 부모 (처가/시가, cap 80) ────────────────
     const spouseParentIds: string[] = []
     for (const sid of allEgoSpouseIds) {
       const s = nodeMap.get(sid)
       if (s?.fatherId) spouseParentIds.push(s.fatherId)
       if (s?.motherId) spouseParentIds.push(s.motherId)
     }
-    await fetchBatch(spouseParentIds)
+    await fetchBatch(spouseParentIds, { cap: 80, scope: 'spouse-parents' })
 
-    // ── Step 11: 배우자 부모의 배우자 (처가/시가 부부쌍) ─────────────
+    // ── Step 11: 배우자 부모의 배우자 (처가/시가 부부쌍, cap 80) ───────
     const spouseParentSpouseIds: string[] = []
     for (const pid of spouseParentIds) {
       const p = nodeMap.get(pid)
       for (const sid of getSpouseIds(p ?? {})) spouseParentSpouseIds.push(sid)
     }
-    await fetchBatch(spouseParentSpouseIds)
+    await fetchBatch(spouseParentSpouseIds, { cap: 80, scope: 'spouse-parent-spouses' })
 
     // ── 결과 구성 ─────────────────────────────────────────────────────
     const nodes = [...nodeMap.values()].map(p => {

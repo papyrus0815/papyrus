@@ -76,9 +76,21 @@ export interface FamilyTreeData {
   truncations?: FamilyTreeTruncation[]
 }
 
-export async function getPersonFamilyTree(personId: string): Promise<FamilyTreeData> {
+export interface GetPersonFamilyTreeOptions {
+  /**
+   * 방계 친척(삼촌·이모·고모·조카·종조부·고종조부 등)을 BFS에 포함할지 여부.
+   * 기본 true — 끄면 응답·DB 비용이 줄지만 조상 카드의 "형제 N" 칩이 사라진다.
+   */
+  includeCollaterals?: boolean
+}
+
+export async function getPersonFamilyTree(
+  personId: string,
+  opts?: GetPersonFamilyTreeOptions,
+): Promise<FamilyTreeData> {
   const conn = getApiConnection()
-  const res = await fetch(`${conn.host}/persons/${personId}/family-tree`, {
+  const qs = opts?.includeCollaterals === false ? '?includeCollaterals=false' : ''
+  const res = await fetch(`${conn.host}/persons/${personId}/family-tree${qs}`, {
     headers: conn.headers as Record<string, string>,
   })
   if (!res.ok) throw new Error(`Family tree fetch failed: ${res.status}`)

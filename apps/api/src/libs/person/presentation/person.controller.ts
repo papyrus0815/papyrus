@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -335,12 +336,21 @@ export class PersonController {
   }
 
   /**
-   * 전체 가계도 그래프 (BFS, ego 기준 3세대 위·2세대 아래)
+   * 전체 가계도 그래프 (BFS, ego 기준 4세대 위·3세대 아래).
+   *
+   * @param includeCollaterals 'false' 또는 '0'이면 방계 친척(삼촌·이모·고모, 조카,
+   *   종조부, 고종조부 등)을 BFS에서 제외해 응답 크기와 쿼리 비용을 줄인다.
+   *   기본 true — 인포그래픽의 "형제 N" 칩이 모든 조상 카드에 표시되려면 필요하다.
    */
   @Get(':id/family-tree')
-  async getFamilyTree(@Param('id') id: string, @Request() req: any): Promise<any> {
+  async getFamilyTree(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Query('includeCollaterals') includeCollaterals?: string,
+  ): Promise<any> {
     const accountId = req.user?.id ?? req.user?.sub ?? undefined
-    return this.personService.getFamilyTree(id, accountId)
+    const flag = includeCollaterals === 'false' || includeCollaterals === '0' ? false : true
+    return this.personService.getFamilyTree(id, accountId, { includeCollaterals: flag })
   }
 
   /**

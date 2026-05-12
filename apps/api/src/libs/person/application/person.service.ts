@@ -171,8 +171,12 @@ export class PersonService {
     return person
   }
 
-  async getFamilyTree(id: string, accountId?: string) {
-    const result = await this.personRepository.findFamilyTree(id, accountId)
+  async getFamilyTree(
+    id: string,
+    accountId?: string,
+    opts?: { includeCollaterals?: boolean },
+  ) {
+    const result = await this.personRepository.findFamilyTree(id, accountId, opts)
     if (!result || result.nodes.length === 0) {
       throw new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${id})`)
     }
