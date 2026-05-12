@@ -143,6 +143,18 @@ const Toolbar = styled.div<{ $bounded?: boolean }>`
         `}
 `
 
+/**
+ * Toolbar 우측 슬롯 — `actions` prop을 받아 저장/취소 같은 명시 액션을
+ * 서식 버튼들과 같은 줄에 둔다. `margin-left: auto`로 우측 정렬.
+ * 좁은 폭에서는 flex-wrap이 받아내 다음 줄로 자연스럽게 넘어감.
+ */
+const ToolbarActions = styled.div`
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+`
+
 const ToolbarButton = styled.button.attrs({ type: 'button' })<{
   $active?: boolean
 }>`
@@ -1725,6 +1737,13 @@ interface RichTextEditorProps {
    * 폼 페이지 등 mount 시 focus 도둑질이 부담스러운 경우 false 유지.
    */
   autoFocus?: boolean
+  /**
+   * Toolbar 우측 끝에 렌더되는 슬롯. InlineRichText처럼 저장/취소 버튼을
+   * 에디터 외부가 아닌 toolbar 안에 두고 싶을 때 사용. toolbar는 maxHeight
+   * 미지정 시 sticky bottom이라 본문이 길어도 viewport 하단에서 항상 노출.
+   * 미전달 시 슬롯 없음(default).
+   */
+  actions?: React.ReactNode
 }
 
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
@@ -1745,6 +1764,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   maxHeight,
   minHeight,
   autoFocus = false,
+  actions,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -4404,6 +4424,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         >
           <FiMinus />
         </ToolbarButton>
+        {actions && <ToolbarActions>{actions}</ToolbarActions>}
       </Toolbar>
       {/* 색상 선택기 — body 포털 (EditorContainer backdrop-filter가 fixed 기준을 바꿔 뷰포트 좌표와 불일치하는 것 방지) */}
       {typeof document !== 'undefined' &&

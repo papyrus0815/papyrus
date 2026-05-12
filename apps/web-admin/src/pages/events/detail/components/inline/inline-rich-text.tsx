@@ -50,23 +50,32 @@ export function InlineRichText({
     setDraft(value)
   }, [editing, value])
 
-  /* Esc — 편집 중 전역 키. */
+  const commit = () => {
+    if (draft !== value) onSave(draft)
+    close()
+  }
+
+  /**
+   * 편집 중 전역 키:
+   *  - Esc: 취소(미저장 변경 폐기 후 닫기)
+   *  - Cmd/Ctrl + Enter: 저장 후 닫기 — 키보드 사용자 진입점.
+   *    contenteditable의 Enter(줄바꿈)와 충돌하지 않도록 modifier 키와 함께만.
+   */
   useEffect(() => {
     if (!editing) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
         close()
+      } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        commit()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [editing, close])
-
-  const commit = () => {
-    if (draft !== value) onSave(draft)
-    close()
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, close, draft, value])
 
   /**
    * 본문 이미지 업로드 — 사건 상세 전용 위젯이라 카테고리는 'events' 고정.
@@ -80,34 +89,40 @@ export function InlineRichText({
 
   if (editing) {
     return (
-      <>
-        <EditHost>
-          <RichTextEditor
-            value={draft}
-            onChange={(v) => {
-              if (v !== draft) setDraft(v)
-            }}
-            placeholder={placeholder}
-            maxHeight={maxHeight}
-            /**
-             * 본문 길이만큼 자라기 — 짧은 콘텐츠도 큰 빈 카드가 아니라
-             * 본문 한 두 줄+toolbar 정도로 작게. 긴 콘텐츠는 자연스럽게
-             * 자라고 toolbar는 sticky bottom으로 항상 노출.
-             */
-            minHeight="120px"
-            onImageUpload={handleImageUpload}
-            autoFocus
-          />
-        </EditHost>
-        <I.InlineActionRow>
-          <I.InlineCancelBtn type="button" onClick={close}>
-            취소
-          </I.InlineCancelBtn>
-          <I.InlineSaveBtn type="button" onClick={commit}>
-            저장
-          </I.InlineSaveBtn>
-        </I.InlineActionRow>
-      </>
+      <EditHost>
+        <RichTextEditor
+          value={draft}
+          onChange={(v) => {
+            if (v !== draft) setDraft(v)
+          }}
+          placeholder={placeholder}
+          maxHeight={maxHeight}
+          /**
+           * 본문 길이만큼 자라기 — 짧은 콘텐츠도 큰 빈 카드가 아니라
+           * 본문 한 두 줄+toolbar 정도로 작게. 긴 콘텐츠는 자연스럽게
+           * 자라고 toolbar는 sticky bottom으로 항상 노출.
+           */
+          minHeight="120px"
+          onImageUpload={handleImageUpload}
+          autoFocus
+          /**
+           * 저장/취소를 Toolbar 우측 슬롯에 통합. 이전엔 RichTextEditor 외부에
+           * 별도 InlineActionRow로 두었는데 본문이 길어지면 사용자가 끝까지
+           * 스크롤해야 닿을 수 있었다. Toolbar는 sticky bottom으로 viewport
+           * 하단에 따라오므로 본문 길이와 무관하게 항상 접근 가능.
+           */
+          actions={
+            <>
+              <I.InlineCancelBtn type="button" onClick={close}>
+                취소
+              </I.InlineCancelBtn>
+              <I.InlineSaveBtn type="button" onClick={commit}>
+                저장
+              </I.InlineSaveBtn>
+            </>
+          }
+        />
+      </EditHost>
     )
   }
 
