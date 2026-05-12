@@ -34,6 +34,12 @@ export function useUndoablePatch({
   mutate,
 }: UseUndoablePatchArgs): (patch: UpdateEventDto) => void {
   const lastToastRef = useRef<string | null>(null)
+  /**
+   * 빠른 연속 patch 시 onSuccess 콜백이 도착하는 순서가 mutate 호출 순서와
+   * 다를 수 있다. 매 mutate마다 seq를 증가시키고, 콜백 안에서 *자기 seq가
+   * 최신인지* 검증해 stale 콜백의 토스트가 최신 inverse를 덮어쓰지 않도록.
+   */
+  const seqRef = useRef(0)
 
   return useCallback(
     (patch: UpdateEventDto) => {
@@ -49,8 +55,12 @@ export function useUndoablePatch({
         lastToastRef.current = null
       }
 
+      const mySeq = ++seqRef.current
+
       mutate(patch, {
         onSuccess: () => {
+          // 더 새로운 mutation이 시작됐다면 이 콜백은 stale — 토스트 생략.
+          if (mySeq !== seqRef.current) return
           const id = toast(
             (t) => (
               <Pill>

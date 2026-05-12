@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { FiPlus, FiX } from 'react-icons/fi'
+import { toast } from 'react-hot-toast'
 import styled from 'styled-components'
 
 import { ledgerHairlineStrong } from '@/pages/events/ledger/styles/ledger-tokens'
@@ -76,6 +77,19 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
   const addImage = () => {
     const url = draft.url.trim()
     if (!url) return
+
+    // URL 검증 — 형식·scheme 화이트리스트. 상대 경로(/uploads/...)는 허용.
+    if (!isAcceptableImageUrl(url)) {
+      toast.error('이미지 URL이 올바르지 않습니다. http(s)// 또는 /uploads/ 경로를 사용하세요.')
+      return
+    }
+
+    // 중복 URL 차단 — 같은 이미지를 두 번 추가하지 않게.
+    if (images.some((img) => img.imageUrl === url)) {
+      toast.error('이미 추가된 이미지입니다.')
+      return
+    }
+
     const next = [
       ...images,
       {
@@ -90,6 +104,21 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
     onPatch({ eventImages: serialize(next) })
     setDraft({ url: '', caption: '', source: '' })
     setAdding(false)
+  }
+
+  /**
+   * 허용 URL 정책:
+   *  - 절대 URL: http:// 또는 https://. javascript:/data:/file: 등은 차단.
+   *  - 상대 경로: `/uploads/...` (서버 업로드 결과).
+   */
+  function isAcceptableImageUrl(value: string): boolean {
+    if (value.startsWith('/uploads/')) return true
+    try {
+      const u = new URL(value)
+      return u.protocol === 'http:' || u.protocol === 'https:'
+    } catch {
+      return false
+    }
   }
 
   return (

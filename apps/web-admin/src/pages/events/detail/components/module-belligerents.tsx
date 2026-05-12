@@ -1,11 +1,15 @@
 import styled from 'styled-components'
 
+import { type UpdateEventDto } from '@/shared/api/events'
+
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 import { MODULE_COLOR } from './module-colors'
+import { ModuleRemoveAction } from './module-remove-action'
 
 interface ModuleBelligerentsProps {
   event: EventDetail
+  onPatch: (patch: UpdateEventDto) => void
 }
 
 /**
@@ -14,7 +18,7 @@ interface ModuleBelligerentsProps {
  * 카드 그리드 대신 *제목 + dl rows + 국가 list*를 진영마다 세로로 쌓는다.
  * 카드 surface가 본문 흐름과 충돌하던 문제 해소 — hairline 구분만으로도 충분.
  */
-export function ModuleBelligerents({ event }: ModuleBelligerentsProps) {
+export function ModuleBelligerents({ event, onPatch }: ModuleBelligerentsProps) {
   const sides = event.belligerents?.sides ?? []
   if (sides.length === 0) return null
 
@@ -26,6 +30,12 @@ export function ModuleBelligerents({ event }: ModuleBelligerentsProps) {
           교전 진영
         </S.SectionTitle>
         <S.SectionSubtitle>{sides.length}개 진영 · 편집은 후속 사이클</S.SectionSubtitle>
+        <S.SectionActions>
+          <ModuleRemoveAction
+            label="교전 진영"
+            onRemove={() => onPatch({ belligerents: null })}
+          />
+        </S.SectionActions>
       </S.SectionHeader>
 
       <Stack>

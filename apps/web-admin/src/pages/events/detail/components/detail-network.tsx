@@ -46,6 +46,15 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     onPatch({ keywords: [...keywords, next] })
   }
 
+  /**
+   * blur로 자동 저장하면 사용자가 입력 도중 다른 곳을 클릭만 해도 미완성 키워드가
+   * 저장되는 부작용이 있었다. blur는 *명시적 cancel*로만 동작 — 저장은 Enter만.
+   */
+  const cancelKeyword = () => {
+    setDraft('')
+    setAdding(false)
+  }
+
   const removeKeyword = (k: string) => {
     onPatch({ keywords: keywords.filter((kw) => kw !== k) })
   }
@@ -109,7 +118,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
               autoFocus
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onBlur={submitKeyword}
+              onBlur={cancelKeyword}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault()
@@ -117,8 +126,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
                 }
                 if (e.key === 'Escape') {
                   e.preventDefault()
-                  setDraft('')
-                  setAdding(false)
+                  cancelKeyword()
                 }
               }}
               placeholder="키워드 입력 후 Enter"

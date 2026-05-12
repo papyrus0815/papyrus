@@ -1706,6 +1706,12 @@ interface RichTextEditorProps {
    * 예: "60vh", "420px"
    */
   maxHeight?: string
+  /**
+   * mount 시 본문에 자동 focus + 커서를 끝으로 이동. 인라인 편집 진입 직후
+   * 사용자가 별도 클릭 없이 바로 입력할 수 있게 한다(InlineRichText 사용처).
+   * 폼 페이지 등 mount 시 focus 도둑질이 부담스러운 경우 false 유지.
+   */
+  autoFocus?: boolean
 }
 
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
@@ -1724,6 +1730,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   showTitle = false,
   documentScope,
   maxHeight,
+  autoFocus = false,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -1750,6 +1757,32 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   useEffect(() => {
     setInternalTitle(title)
   }, [title])
+
+  /**
+   * autoFocus가 켜진 경우 mount 직후 본문 contenteditable에 focus + 커서를
+   * 본문 끝으로 이동. InlineRichText처럼 *명시 액션으로 swap된 후 곧바로
+   * 입력*하는 흐름에서 별도 클릭 단계를 없앤다.
+   */
+  useEffect(() => {
+    if (!autoFocus) return
+    const node = editorRef.current
+    if (!node) return
+    // 다음 프레임에 focus — initial DOM hydration이 끝난 후
+    const t = window.setTimeout(() => {
+      node.focus()
+      try {
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        range.collapse(false)
+        const sel = window.getSelection()
+        sel?.removeAllRanges()
+        sel?.addRange(range)
+      } catch {
+        /* selection API 미지원 시 focus만 */
+      }
+    }, 0)
+    return () => window.clearTimeout(t)
+  }, [autoFocus])
 
   // 엔티티 링크 관련 상태
   const [entityLinkModalVisible, setEntityLinkModalVisible] = useState(false)

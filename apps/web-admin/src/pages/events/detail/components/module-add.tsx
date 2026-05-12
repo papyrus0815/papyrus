@@ -49,17 +49,25 @@ export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  /* 이미 활성화된 모듈은 옵션에서 제외. */
+  /**
+   * 이미 활성화된 모듈은 옵션에서 제외.
+   *
+   * stub은 *모듈 enable만* 시그널하는 빈 값이어야 한다. 이전엔
+   * `casualties: { killed: 0 }`처럼 의미 있어 보이는 값을 박아 둬서,
+   * 사용자가 모듈을 클릭만 하고 떠나면 "전사 0명"이 데이터로 영구화되는
+   * 오염이 있었다. 빈 객체 `{}`도 enabledModules 판정에서는 truthy라
+   * 모듈은 정상적으로 표시되며, 모든 필드는 빈 InlineText로 렌더된다.
+   */
   const allOptions: ModuleOption[] = [
     {
       key: 'casualties',
       label: '사상자·피해',
-      patch: { casualties: { killed: 0 } },
+      patch: { casualties: {} },
     },
     {
       key: 'military-details',
       label: '작전 정보',
-      patch: { militaryDetails: { conflictType: '', combatType: '' } },
+      patch: { militaryDetails: {} },
     },
     {
       key: 'belligerents',
@@ -69,7 +77,8 @@ export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
           ...(event.belligerents ?? {}),
           sides: [
             ...(event.belligerents?.sides ?? []),
-            { name: '진영 1', countries: [] },
+            // 빈 이름으로 시작 — 사용자가 채울 때까지 placeholder만 노출.
+            { name: '', countries: [] },
           ],
         },
       },

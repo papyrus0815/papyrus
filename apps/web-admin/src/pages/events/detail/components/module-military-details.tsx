@@ -4,6 +4,7 @@ import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 import { InlineText } from './inline'
 import { MODULE_COLOR } from './module-colors'
+import { ModuleRemoveAction } from './module-remove-action'
 
 interface ModuleMilitaryDetailsProps {
   event: EventDetail
@@ -59,6 +60,12 @@ export function ModuleMilitaryDetails({
           <S.SectionTitleDot $color={MODULE_COLOR['military-details']} />
           작전 정보
         </S.SectionTitle>
+        <S.SectionActions>
+          <ModuleRemoveAction
+            label="작전 정보"
+            onRemove={() => onPatch({ militaryDetails: null })}
+          />
+        </S.SectionActions>
       </S.SectionHeader>
 
       <S.Definitions>

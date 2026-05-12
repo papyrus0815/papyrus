@@ -7,6 +7,7 @@ import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 import { InlineText } from './inline'
 import { MODULE_COLOR } from './module-colors'
+import { ModuleRemoveAction } from './module-remove-action'
 
 interface ModuleCasualtiesProps {
   event: EventDetail
@@ -72,6 +73,12 @@ export function ModuleCasualties({ event, onPatch }: ModuleCasualtiesProps) {
           <S.SectionTitleDot $color={MODULE_COLOR.casualties} />
           사상자·피해
         </S.SectionTitle>
+        <S.SectionActions>
+          <ModuleRemoveAction
+            label="사상자·피해"
+            onRemove={() => onPatch({ casualties: null })}
+          />
+        </S.SectionActions>
       </S.SectionHeader>
 
       <Stats>

@@ -86,6 +86,7 @@ export function InlineRichText({
             placeholder={placeholder}
             maxHeight={maxHeight}
             onImageUpload={handleImageUpload}
+            autoFocus
           />
         </EditHost>
         <I.InlineActionRow>

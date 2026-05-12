@@ -161,7 +161,7 @@ const EventDetailPage = () => {
               />
 
               {enabledModules.includes('belligerents') && (
-                <ModuleBelligerents event={event} />
+                <ModuleBelligerents event={event} onPatch={onPatch} />
               )}
               {enabledModules.includes('casualties') && (
                 <ModuleCasualties event={event} onPatch={onPatch} />
