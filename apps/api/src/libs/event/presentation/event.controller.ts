@@ -636,6 +636,7 @@ export class EventController {
       dto.childEventIds, // 🆕 기존 사건을 하위로 연결
       dto.primaryCountryId,
       dto.primaryHistoricalCountryId,
+      dto.relatedPersons,
     )
 
     // 정규화된 군사 정보 저장

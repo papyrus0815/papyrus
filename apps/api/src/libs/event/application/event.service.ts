@@ -308,6 +308,12 @@ export class EventService {
     /** create와 동일 — INITIATOR 마킹 대상 ID */
     primaryCountryId?: string,
     primaryHistoricalCountryId?: string,
+    /**
+     * 관련 인물 목록. undefined면 손대지 않음(부분 patch), 빈 배열이면 모두 제거.
+     * 다른 array 필드(eventSections·eventImages·relatedCountryIds 등)와 동일한
+     * delete-and-recreate 패턴.
+     */
+    relatedPersons?: Array<{ personId: string; role?: string; note?: string }>,
   ): Promise<Event> {
     // 존재 여부 확인
     await this.getEventById(id)
@@ -415,6 +421,30 @@ export class EventService {
                 source: image.source,
                 order: image.order !== undefined ? image.order : index,
                 isPrimary: image.isPrimary !== undefined ? image.isPrimary : index === 0,
+              },
+            }),
+          ),
+        )
+      }
+    }
+
+    // PersonEvent 업데이트 — 다른 array 필드와 동일한 delete-and-recreate.
+    // createEvent에는 처리 로직이 있었지만 updateEvent에 누락되어 있어 사용자가
+    // 인라인으로 인물을 추가/제거해도 서버 반영이 안 되던 결함을 보정.
+    if (relatedPersons !== undefined) {
+      await this.prisma.personEvent.deleteMany({
+        where: { eventId: id },
+      })
+
+      if (relatedPersons.length > 0) {
+        await Promise.all(
+          relatedPersons.map((person) =>
+            this.prisma.personEvent.create({
+              data: {
+                personId: person.personId,
+                eventId: id,
+                role: person.role,
+                note: person.note,
               },
             }),
           ),
