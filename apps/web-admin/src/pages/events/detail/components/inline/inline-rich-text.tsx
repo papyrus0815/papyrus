@@ -184,26 +184,17 @@ const ReadBody = styled.div`
 `
 
 /**
- * EditHost — edit 모드의 RichTextEditor 외곽 spacing을 read 모드와 정렬.
+ * EditHost — edit 모드의 RichTextEditor 외곽 wrapper.
  *
- * RichTextEditor의 EditorContainer는 border + box-shadow + 큰 padding으로
- * "큰 카드"형태로 등장한다. InlineRichText는 사건 상세에서 본문 흐름에 inline
- * 으로 녹아드는 click-to-edit이라 카드 외곽이 부각되면 클릭 시 위·아래 콘텐츠가
- * ~34px 점프해 보인다.
+ * 초기 디자인에선 RichTextEditor의 큰 카드(border + shadow)가 read 모드와의
+ * 시각 점프를 만든다고 보고 외곽을 평탄화했었는데, 그 결과 edit 모드에서
+ * 영역 경계가 사라져 "어디까지가 에디터인지" 분간이 안 되는 회귀가 났다.
  *
- * 정책: 시각 외곽은 평탄화(border·shadow off)하되 toolbar의 기능은 유지.
- * focus-within에서도 외곽 강조 X — placement 정합성 우선.
+ * 정책: 외곽 카드를 *그대로 노출* — 편집 모드 시그널을 시각적으로 명확히.
+ * 시각 점프는 ReadBody typography 정렬(line-height 1.6, p margin 8px)과
+ * autoGrow(min-height 120)로 이미 흡수되어 큰 부담 없음.
  */
-const EditHost = styled.div`
-  & > div:first-child {
-    border-color: transparent;
-    box-shadow: none;
-  }
-  & > div:first-child:focus-within {
-    border-color: transparent;
-    box-shadow: none;
-  }
-`
+const EditHost = styled.div``
 
 const Placeholder = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
