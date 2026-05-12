@@ -3,8 +3,9 @@ import styled from 'styled-components'
 export const LoginContainer = styled.div`
   position: relative;
   min-height: 100vh;
-  width: 100vw;
-  overflow: hidden;
+  min-height: 100dvh;
+  width: 100%;
+  overflow-x: hidden;
   background: transparent;
 `
 
@@ -49,7 +50,20 @@ export const ContentContainer = styled.div`
   align-items: center;
   justify-content: center;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 2rem;
+  padding-top: max(2rem, env(safe-area-inset-top));
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+
+  @media (max-width: 768px) {
+    padding: 1.25rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.75rem;
+    align-items: flex-start;
+    padding-top: max(4.5rem, env(safe-area-inset-top));
+  }
 `
 
 export const LoginPanel = styled.div`
@@ -79,7 +93,14 @@ export const LoginPanel = styled.div`
 
   @media (max-width: 768px) {
     padding: 2rem 1.5rem;
-    max-width: 90%;
+    max-width: 100%;
+    gap: 1.5rem;
+  }
+
+  @media (max-width: 480px) {
+    padding: 1.5rem 1.125rem;
+    border-radius: 18px;
+    gap: 1.25rem;
   }
 `
 
@@ -104,6 +125,13 @@ export const SoundController = styled.div`
     right: 1rem;
     padding: 0.5rem 0.75rem;
     gap: 0.5rem;
+  }
+
+  @media (max-width: 480px) {
+    top: max(0.75rem, env(safe-area-inset-top));
+    right: 0.75rem;
+    padding: 0.5rem;
+    gap: 0;
   }
 `
 
@@ -173,5 +201,9 @@ export const VolumeSlider = styled.input`
 
   @media (max-width: 768px) {
     width: 80px;
+  }
+
+  @media (max-width: 480px) {
+    display: none;
   }
 `

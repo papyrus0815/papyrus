@@ -145,6 +145,10 @@ export const LoginForm = styled.form<{
   flex-direction: column;
   gap: 24px;
 
+  @media (max-width: 480px) {
+    gap: 16px;
+  }
+
   ${({ $hasError }) =>
     $hasError &&
     css`
@@ -163,6 +167,10 @@ export const InputGroup = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
+
+  @media (max-width: 480px) {
+    gap: 14px;
+  }
 `
 
 export const InputField = styled.div`
@@ -265,6 +273,12 @@ export const InputIcon = styled.div`
   ${InputWrapper}:focus-within & {
     color: #00beff;
   }
+
+  @media (max-width: 480px) {
+    width: 40px;
+    height: 48px;
+    font-size: 18px;
+  }
 `
 
 export const Input = styled.input`
@@ -277,6 +291,13 @@ export const Input = styled.input`
   color: #f9fafb;
   background: transparent;
   letter-spacing: 0.3px;
+  min-width: 0;
+
+  @media (max-width: 480px) {
+    padding: 14px 12px 14px 0;
+    /* iOS 자동 줌 방지: 16px 이상 */
+    font-size: 16px;
+  }
 
   /* 포커스 문제 해결 */
   pointer-events: auto !important;
@@ -306,6 +327,13 @@ export const PasswordToggle = styled.button`
   transition: all 0.3s ease;
   border-radius: 12px;
   margin-right: 4px;
+  flex-shrink: 0;
+
+  @media (max-width: 480px) {
+    width: 40px;
+    height: 48px;
+    margin-right: 2px;
+  }
 
   &:hover {
     color: #00beff;
@@ -438,6 +466,12 @@ export const SubmitButton = styled(motion.button)<{
   position: relative;
   overflow: hidden;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+
+  @media (max-width: 480px) {
+    padding: 14px 24px;
+    font-size: 15px;
+    border-radius: 14px;
+  }
 
   ${({ $isValid, $isLoading }) => {
     if ($isValid && !$isLoading) {
