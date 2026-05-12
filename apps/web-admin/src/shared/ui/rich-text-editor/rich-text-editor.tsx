@@ -1796,6 +1796,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
    * autoFocus가 켜진 경우 mount 직후 본문 contenteditable에 focus + 커서를
    * 본문 끝으로 이동. InlineRichText처럼 *명시 액션으로 swap된 후 곧바로
    * 입력*하는 흐름에서 별도 클릭 단계를 없앤다.
+   *
+   * `preventScroll: true` — 기본 focus()는 focused element를 viewport에
+   * 보이게 자동 스크롤한다. 사용자가 페이지 중간에서 ✎을 누른 경우 viewport가
+   * RichTextEditor 위치로 점프해 "위로 올라가는" 회귀가 났다. preventScroll로
+   * 차단해 사용자의 현재 스크롤 위치를 유지한다.
    */
   useEffect(() => {
     if (!autoFocus) return
@@ -1803,7 +1808,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     if (!node) return
     // 다음 프레임에 focus — initial DOM hydration이 끝난 후
     const t = window.setTimeout(() => {
-      node.focus()
+      node.focus({ preventScroll: true })
       try {
         const range = document.createRange()
         range.selectNodeContents(node)
