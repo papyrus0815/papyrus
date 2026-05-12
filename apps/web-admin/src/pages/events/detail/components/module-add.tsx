@@ -37,6 +37,13 @@ interface ModuleOption {
 export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement | null>(null)
+  /**
+   * 모듈 추가 직후 *해당 모듈이 enabledModules에 들어오는 순간* 스크롤한다.
+   * 과거엔 80ms 인터벌 + 1.5s 포기로 DOM 등장을 폴링했는데, react-query의
+   * invalidate → refetch → 부모 재렌더 순서를 React 라이프사이클로 직접 듣는
+   * 편이 깔끔. useEffect는 commit 후 동작하므로 DOM 노드는 그 시점에 이미 존재.
+   */
+  const [pendingScrollKey, setPendingScrollKey] = useState<EventDetailModuleKey | null>(null)
 
   /* 외부 클릭 닫기 */
   useEffect(() => {
@@ -48,6 +55,20 @@ export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
+
+  useEffect(() => {
+    if (!pendingScrollKey) return
+    if (!enabledModules.includes(pendingScrollKey)) return
+    const targetId = `module-${pendingScrollKey}`
+    /* 새 module 섹션이 DOM commit된 다음 페인트 프레임에 스크롤 — 레이아웃이
+       다 잡힌 후라 점프가 부드러움. */
+    const raf = window.requestAnimationFrame(() => {
+      const node = document.getElementById(targetId)
+      node?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    setPendingScrollKey(null)
+    return () => window.cancelAnimationFrame(raf)
+  }, [pendingScrollKey, enabledModules])
 
   /**
    * 이미 활성화된 모듈은 옵션에서 제외.
@@ -107,22 +128,8 @@ export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
   const apply = (opt: ModuleOption) => {
     onPatch(opt.patch)
     setOpen(false)
-    /* 모듈이 활성화되어 DOM에 등장하기까지 한 두 프레임 기다리고 스크롤·focus.
-       react-query invalidate → refetch가 비동기라 정확한 타이밍은 모르므로
-       interval 폴링으로 노드 등장하면 바로 동작. 1.5s 후 포기. */
-    const targetId = `module-${opt.key}`
-    const start = Date.now()
-    const tick = () => {
-      const node = document.getElementById(targetId)
-      if (node) {
-        node.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        // 첫 focusable(헤더 또는 그 자체) 가시성만 보장 — 강한 focus 도둑질은 X
-        return
-      }
-      if (Date.now() - start > 1500) return
-      window.setTimeout(tick, 80)
-    }
-    window.setTimeout(tick, 80)
+    /* 다음 refetch에서 enabledModules에 이 키가 포함되면 위의 useEffect가 스크롤. */
+    setPendingScrollKey(opt.key)
   }
 
   return (

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { FiX } from 'react-icons/fi'
+import { FiArrowDown, FiArrowUp, FiSettings, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
@@ -44,6 +44,11 @@ export function DetailActors({
 }: DetailActorsProps) {
   const [personModalOpen, setPersonModalOpen] = useState(false)
   const [countryModalOpen, setCountryModalOpen] = useState(false)
+  /**
+   * 관리 모드 — true일 때만 reorder(↑↓) 버튼이 각 row에 등장한다.
+   * 사용 빈도 낮은 액션을 평소엔 숨겨 read-first 톤을 유지.
+   */
+  const [manageMode, setManageMode] = useState(false)
 
   const persons = event.relatedPersons ?? []
   const modernCountries = event.relatedCountries ?? []
@@ -99,6 +104,21 @@ export function DetailActors({
     )
   }
 
+  /**
+   * 인물 순서 이동 — 서버는 array 순서를 그대로 보존하므로 array를 재정렬해 PUT.
+   * 경계(맨 위에서 ↑, 맨 아래에서 ↓)에서는 호출 자체가 막혀 patch 발송 X.
+   */
+  const movePerson = (personId: string, dir: -1 | 1) => {
+    const idx = persons.findIndex((p) => p.personId === personId)
+    if (idx < 0) return
+    const target = idx + dir
+    if (target < 0 || target >= persons.length) return
+    const next = persons.slice()
+    const [item] = next.splice(idx, 1)
+    next.splice(target, 0, item)
+    patchPersons(next.map(toPersonPayload))
+  }
+
   const addPerson = (personId: string) => {
     if (persons.some((p) => p.personId === personId)) {
       setPersonModalOpen(false)
@@ -119,6 +139,23 @@ export function DetailActors({
       onPatch({
         relatedCountryIds: modernCountries.filter((c) => c.id !== id).map((c) => c.id),
       })
+    }
+  }
+
+  /** 국가 순서 이동 — 현대/역사 각 배열 안에서만 이동. 두 그룹 간 이동은 미지원. */
+  const moveCountry = (id: string, isHistorical: boolean, dir: -1 | 1) => {
+    const arr = isHistorical ? historicalCountries : modernCountries
+    const idx = arr.findIndex((c) => c.id === id)
+    if (idx < 0) return
+    const target = idx + dir
+    if (target < 0 || target >= arr.length) return
+    const next = arr.slice()
+    const [item] = next.splice(idx, 1)
+    next.splice(target, 0, item)
+    if (isHistorical) {
+      onPatch({ relatedHistoricalCountryIds: next.map((c) => c.id) })
+    } else {
+      onPatch({ relatedCountryIds: next.map((c) => c.id) })
     }
   }
 
@@ -160,6 +197,19 @@ export function DetailActors({
           </EditorialEyebrow>
           <EditorialTitle>참여 행위자</EditorialTitle>
           <EditorialKicker>이 사건에 등장하거나 관여한 인물·국가</EditorialKicker>
+          {(persons.length > 1 || totalCountries > 1) && (
+            <ManageRow>
+              <ManageToggle
+                type="button"
+                onClick={() => setManageMode((v) => !v)}
+                $active={manageMode}
+                aria-pressed={manageMode}
+              >
+                <FiSettings />
+                {manageMode ? '관리 끝' : '순서 변경'}
+              </ManageToggle>
+            </ManageRow>
+          )}
           <EditorialRule role="separator" aria-hidden />
         </EditorialHeader>
 
@@ -175,7 +225,7 @@ export function DetailActors({
         {/* 인물 — 세로 리스트, hairline 구분선 */}
         {persons.length > 0 && (
           <PersonList>
-            {persons.map((person) => {
+            {persons.map((person, idx) => {
               const fullName = person.person
                 ? getPersonDisplayName({
                     name: person.person.name ?? '',
@@ -235,13 +285,35 @@ export function DetailActors({
                     </PersonNoteLine>
                   </PersonBody>
 
-                  <RemoveInline
-                    type="button"
-                    onClick={() => removePerson(person.personId)}
-                    aria-label={`${fullName} 제거`}
-                  >
-                    <FiX />
-                  </RemoveInline>
+                  <RowActions>
+                    {manageMode && (
+                      <>
+                        <ReorderBtn
+                          type="button"
+                          onClick={() => movePerson(person.personId, -1)}
+                          disabled={idx === 0}
+                          aria-label={`${fullName} 위로`}
+                        >
+                          <FiArrowUp />
+                        </ReorderBtn>
+                        <ReorderBtn
+                          type="button"
+                          onClick={() => movePerson(person.personId, 1)}
+                          disabled={idx === persons.length - 1}
+                          aria-label={`${fullName} 아래로`}
+                        >
+                          <FiArrowDown />
+                        </ReorderBtn>
+                      </>
+                    )}
+                    <RemoveInline
+                      type="button"
+                      onClick={() => removePerson(person.personId)}
+                      aria-label={`${fullName} 제거`}
+                    >
+                      <FiX />
+                    </RemoveInline>
+                  </RowActions>
                 </PersonRow>
               )
             })}
@@ -263,6 +335,26 @@ export function DetailActors({
                   >
                     {country.name}
                   </CountryLink>
+                  {manageMode && (
+                    <>
+                      <NationReorder
+                        type="button"
+                        onClick={() => moveCountry(country.id, false, -1)}
+                        disabled={i === 0}
+                        aria-label={`${country.name} 앞으로`}
+                      >
+                        <FiArrowUp />
+                      </NationReorder>
+                      <NationReorder
+                        type="button"
+                        onClick={() => moveCountry(country.id, false, 1)}
+                        disabled={i === modernCountries.length - 1}
+                        aria-label={`${country.name} 뒤로`}
+                      >
+                        <FiArrowDown />
+                      </NationReorder>
+                    </>
+                  )}
                   <NationRemove
                     type="button"
                     onClick={() => removeCountry(country.id, false)}
@@ -281,6 +373,26 @@ export function DetailActors({
               {historicalCountries.map((country, i) => (
                 <NationItem key={country.id}>
                   <HistoricalCountryName>{country.name}</HistoricalCountryName>
+                  {manageMode && (
+                    <>
+                      <NationReorder
+                        type="button"
+                        onClick={() => moveCountry(country.id, true, -1)}
+                        disabled={i === 0}
+                        aria-label={`${country.name} 앞으로`}
+                      >
+                        <FiArrowUp />
+                      </NationReorder>
+                      <NationReorder
+                        type="button"
+                        onClick={() => moveCountry(country.id, true, 1)}
+                        disabled={i === historicalCountries.length - 1}
+                        aria-label={`${country.name} 뒤로`}
+                      >
+                        <FiArrowDown />
+                      </NationReorder>
+                    </>
+                  )}
                   <NationRemove
                     type="button"
                     onClick={() => removeCountry(country.id, true)}
@@ -401,6 +513,112 @@ const EditorialKicker = styled.div`
   line-height: 1.5;
   letter-spacing: -0.005em;
   color: ${({ theme }) => mutedTextColor(theme.mode)};
+`
+
+const ManageRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+`
+
+const ManageToggle = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? theme.colors.text.tertiary : softRuleColor(theme.mode)};
+  background: transparent;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.text.primary : mutedTextColor(theme.mode)};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s, border-color 0.14s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+`
+
+const RowActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+`
+
+const ReorderBtn = styled.button`
+  align-self: flex-start;
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
+  border-radius: 4px;
+  background: transparent;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+  cursor: pointer;
+  transition: border-color 0.14s, color 0.14s;
+
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  svg {
+    width: 11px;
+    height: 11px;
+  }
+`
+
+const NationReorder = styled.button`
+  margin-left: 4px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+  cursor: pointer;
+  vertical-align: 1px;
+  transition: color 0.14s, background 0.14s;
+
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  svg {
+    width: 10px;
+    height: 10px;
+  }
 `
 
 /**
@@ -549,15 +767,17 @@ const PersonNoteLine = styled.div<{ $hasContent: boolean }>`
   color: ${({ theme }) => theme.colors.text.primary};
   margin-top: 4px;
 
+  /**
+   * 빈 상태도 항상 placeholder가 보이도록 유지(과거엔 opacity 0 → hover 시 0.7로
+   * 노출했는데, touch/포인터 환경에서는 hover 진입 자체가 없어 "비고 추가"가
+   * 발견되지 않는 문제가 있었음). role 줄과 일관되게 약하게 항상 노출.
+   */
   ${({ $hasContent }) =>
     !$hasContent &&
     css`
-      opacity: 0;
-      transition: opacity 0.16s;
-
-      ${PersonRow}:hover &,
-      &:focus-within {
-        opacity: 0.7;
+      [data-empty='true'] {
+        opacity: 0.55;
+        font-style: italic;
       }
     `}
 `

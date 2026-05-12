@@ -48,15 +48,18 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
 
   const category = resolveCategory(event.category?.name)
 
-  // 부모 사건 체인 — 최상위까지(최대 3단)
+  // 부모 사건 체인 — 표시 가능한 깊이(최대 3단)까지. 더 깊으면 truncated 플래그.
+  const PARENT_CHAIN_CAP = 3
   const parentChain: Array<{ id: string; title: string }> = []
   let cursor = event.parentEvent
   let safety = 0
-  while (cursor && safety < 3) {
+  while (cursor && safety < PARENT_CHAIN_CAP) {
     parentChain.unshift({ id: cursor.id, title: cursor.title })
     cursor = cursor.parentEvent
     safety += 1
   }
+  /* cap을 초과해 아직 부모가 더 남아 있으면 앞에 "..." 인디케이터를 렌더. */
+  const parentChainTruncated = Boolean(cursor)
 
   const categoryOptions: InlineSelectOption[] = categories.map(
     (cat: EventCategoryDto) => ({ value: cat.id, label: cat.name }),
@@ -82,6 +85,9 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
 
         {parentChain.length > 0 && (
           <S.Breadcrumb aria-label="상위 사건">
+            {parentChainTruncated && (
+              <ParentEllipsis title="더 상위 사건이 있습니다">…</ParentEllipsis>
+            )}
             {parentChain.map((parent) => (
               <Link key={parent.id} to={pathKeys.events.detail(parent.id)}>
                 {parent.title}
@@ -532,4 +538,12 @@ const Sep = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
   opacity: 0.5;
   font-size: 13px;
+`
+
+const ParentEllipsis = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  cursor: help;
 `

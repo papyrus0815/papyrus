@@ -60,12 +60,20 @@ export function InlineText({
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
 
-  /* edit 진입 시 draft를 현재 server 값으로 동기화. */
+  /**
+   * edit *진입* 시(만) draft를 현재 server 값으로 동기화.
+   *
+   * 과거엔 deps에 `value`도 있어, 편집 도중 부모가 refetch로 value를 갱신하면
+   * 사용자가 친 draft를 즉시 server 값으로 덮어써 입력 손실이 발생했음.
+   * `wasEditingRef`로 *false → true 전이*만 잡아 진입 시점에만 초기화.
+   */
+  const wasEditingRef = useRef(editing)
   useEffect(() => {
-    if (editing) {
+    if (editing && !wasEditingRef.current) {
       setDraft(value)
       setError(null)
     }
+    wasEditingRef.current = editing
   }, [editing, value])
 
   /* edit 진입 시 자동 focus + 끝 커서. */

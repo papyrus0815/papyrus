@@ -7,7 +7,7 @@
  *   (옛날 상태로의 점프를 방지).
  * - undo 자체는 연쇄 토스트를 띄우지 않음(원본 inverse는 raw `mutate`로 보냄).
  */
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 import { toast } from 'react-hot-toast'
 import styled from 'styled-components'
@@ -40,15 +40,28 @@ export function useUndoablePatch({
    * 최신인지* 검증해 stale 콜백의 토스트가 최신 inverse를 덮어쓰지 않도록.
    */
   const seqRef = useRef(0)
+  /**
+   * `event`를 ref로 잡아 mutate 직전 *그 시점의 최신* 스냅샷에서 inverse를 만든다.
+   *
+   * 과거엔 콜백이 클로저로 잡은 `event`를 사용해, 빠른 연속 patch에서 두 번째
+   * patch의 inverse가 *첫 patch 이전 상태*를 가리키는 문제가 있었음
+   * (react-query refetch가 두 mutate 사이에 완료되지 못해 클로저가 stale).
+   * 결과적으로 "되돌리기" 한 번이 두 patch를 동시에 되돌리는 모양이 됨.
+   */
+  const eventRef = useRef<EventDetail | undefined>(event)
+  useEffect(() => {
+    eventRef.current = event
+  }, [event])
 
   return useCallback(
     (patch: UpdateEventDto) => {
-      if (!event) {
+      const current = eventRef.current
+      if (!current) {
         mutate(patch)
         return
       }
 
-      const inverse = buildInverse(event, patch)
+      const inverse = buildInverse(current, patch)
 
       if (lastToastRef.current) {
         toast.dismiss(lastToastRef.current)
@@ -83,7 +96,7 @@ export function useUndoablePatch({
         },
       })
     },
-    [event, mutate],
+    [mutate],
   )
 }
 

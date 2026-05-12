@@ -16,8 +16,14 @@ interface DetailNarrativeProps {
 }
 
 interface SectionRow {
-  /** 클라이언트 임시 키(서버 ID는 PUT 후 새로 발급되므로 ID 신뢰 X). */
+  /** 클라이언트 임시 키 — React 리스트 식별·child 컴포넌트 인스턴스 보존용. */
   key: string
+  /**
+   * 마지막으로 매핑된 서버 row id(있다면). 서버는 delete-and-recreate이라 PUT마다
+   * id가 새로 발급되지만, 한 응답 사이클 안에서는 같은 id가 같은 row를 가리킴
+   * — race 동안 위치 join의 보조 시그널로 사용.
+   */
+  serverId?: string
   title: string
   content: string
   sectionType?: string
@@ -58,6 +64,7 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
   const [rows, setRows] = useState<SectionRow[]>(() =>
     serverSections.map((s) => ({
       key: nextKey(),
+      serverId: s.id,
       title: s.title ?? '',
       content: s.content ?? '',
       sectionType: s.sectionType,
@@ -65,18 +72,15 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
   )
 
   /**
-   * server 데이터 변경 시 로컬 state 재동기화.
+   * 마지막 in-flight commit 시점의 *로컬 rows 길이* — server 응답이 도착했을 때
+   * 이 길이를 기준으로 positional join을 해도 안전한지 판단한다.
    *
-   * 키 안정성으로 child component 인스턴스(InlineText/InlineRichText의 내부 draft
-   * state)를 보존하는 것이 핵심.
-   *
-   * 정책 — content-aware 매핑:
-   *  1. server row 각각에 대해 *동일한 (title, content, sectionType)* 의 prev row가
-   *     아직 안 쓰였으면 그 prev를 매핑(= key 보존). 매칭 없으면 새 row 생성.
-   *  2. 매핑 순서는 server 순서를 따른다 — 외부 prepend/reorder 시에도
-   *     서버 측 순서가 표시 순서가 됨.
-   *  3. prev 중 매칭 안 된 row(편집 중이라 dirty거나, 아직 commit 안 된 빈 tail)는
-   *     끝에 그대로 append — 사용자 입력 손실 방지.
+   * race 시나리오 차단:
+   *  1) user edits row A → commitRows([A_new, B_old]) → server에 patch1 발송, len=2.
+   *  2) server 응답 전 user edits row B → commitRows([A_new, B_new]) → patch2, len=2.
+   *  3) patch1 응답 도착: server=[A_new, B_old]. 로컬 len=2 == server len 2 →
+   *     position join으로 키 보존. B는 server값을 *받지 않고* 로컬 B_new 유지.
+   *  4) patch2 응답 도착: server=[A_new, B_new]. 동일 길이 → position join.
    */
   useEffect(() => {
     setRows((prev) => syncRowsWithServer(prev, serverSections, nextKey))
@@ -244,17 +248,56 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
 }
 
 /**
- * server 응답과 로컬 rows를 content-aware로 매핑.
+ * server 응답과 로컬 rows를 매핑한다. 핵심 목표는 **child 컴포넌트 키 보존**
+ * — InlineText/InlineRichText는 자체 draft state를 들고 있어 key가 바뀌면 input이
+ * unmount/remount되며 IME·커서·미저장 입력이 끊어진다.
  *
- * 매 server row마다 *내용이 일치하는* prev row를 한 번씩만 가져가 매핑한다.
- * 매칭 못한 server row는 새 row, 매칭 못한 prev row(편집 중이라 dirty거나
- * 아직 commit 안 된 빈 row)는 끝에 append.
+ * 매핑 전략(우선순위 순):
+ *  1) **길이가 같을 때**: positional join. server[i] ↔ prev[i] 키 그대로 가져가고
+ *     content/title은 *prev가 server보다 새로우면 prev 우선* — 즉, 사용자가 막 친
+ *     값이 in-flight 응답(이전 상태 반영)으로 덮이지 않도록 한다. 동일성은
+ *     "serverId가 같거나 prev의 serverId가 없으면 prev가 더 최신"으로 판정.
+ *  2) **길이가 다를 때**: content-aware fallback. 동일한 (title, content, sectionType)
+ *     이 있으면 키 보존. 아니면 새 row.
+ *  3) 매칭 못한 prev row(아직 commit 안 된 빈 tail 등)는 끝에 append — 사용자 입력
+ *     손실 방지.
  */
 function syncRowsWithServer(
   prev: SectionRow[],
   server: EventDetailSection[],
   nextKey: () => string,
 ): SectionRow[] {
+  // (1) 같은 길이 — positional join (race-safe).
+  if (prev.length === server.length) {
+    return server.map((s, i) => {
+      const p = prev[i]
+      const sTitle = s.title ?? ''
+      const sContent = s.content ?? ''
+      const sType = s.sectionType
+
+      // prev가 in-flight 상태(아직 새 serverId 미수령)거나, 사용자가 친 값이 더 새
+      // 보이면 prev 값을 유지. 그렇지 않으면 server 값 채택.
+      const prevIsAhead =
+        p.serverId === undefined ||
+        (p.serverId !== s.id &&
+          (p.title !== sTitle || p.content !== sContent || p.sectionType !== sType))
+
+      if (prevIsAhead) {
+        // prev 값 그대로 두고 serverId만 새로 발급된 id로 갱신.
+        return { ...p, serverId: s.id }
+      }
+      // server 값 채택 — 키 보존.
+      return {
+        key: p.key,
+        serverId: s.id,
+        title: sTitle,
+        content: sContent,
+        sectionType: sType,
+      }
+    })
+  }
+
+  // (2) 길이 불일치 — content-aware fallback.
   const prevUsed = new Array<boolean>(prev.length).fill(false)
   const next: SectionRow[] = []
 
@@ -262,20 +305,30 @@ function syncRowsWithServer(
     const sTitle = s.title ?? ''
     const sContent = s.content ?? ''
     const sType = s.sectionType
-    let matchedIdx = -1
-    for (let i = 0; i < prev.length; i++) {
-      if (prevUsed[i]) continue
-      const p = prev[i]
-      if (p.title === sTitle && p.content === sContent && p.sectionType === sType) {
-        matchedIdx = i
-        break
+    // 우선 동일 serverId — drop-and-recreate라 보통 안 맞지만, 같은 응답 사이클에서
+    // 이미 매핑된 row가 있다면 그쪽 우선.
+    let matchedIdx = prev.findIndex((p, i) => !prevUsed[i] && p.serverId === s.id)
+    if (matchedIdx < 0) {
+      for (let i = 0; i < prev.length; i++) {
+        if (prevUsed[i]) continue
+        const p = prev[i]
+        if (p.title === sTitle && p.content === sContent && p.sectionType === sType) {
+          matchedIdx = i
+          break
+        }
       }
     }
     if (matchedIdx >= 0) {
       prevUsed[matchedIdx] = true
-      next.push(prev[matchedIdx])
+      next.push({ ...prev[matchedIdx], serverId: s.id })
     } else {
-      next.push({ key: nextKey(), title: sTitle, content: sContent, sectionType: sType })
+      next.push({
+        key: nextKey(),
+        serverId: s.id,
+        title: sTitle,
+        content: sContent,
+        sectionType: sType,
+      })
     }
   }
 

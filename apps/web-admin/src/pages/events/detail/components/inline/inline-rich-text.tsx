@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { FiEdit2 } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -44,10 +44,23 @@ export function InlineRichText({
   const { editing, open, close } = useInlineEditCoordinator(editorId)
   const [draft, setDraft] = useState(value)
 
-  /* 편집 진입/종료 모두에서 draft를 server value로 동기화.
-     종료 시(다른 에디터가 가로채거나 취소 시) 미저장 변경을 자동 폐기. */
+  /**
+   * editing 상태 *전이* 시(만) draft를 server value로 동기화.
+   *  - false → true: 새 편집 세션 시작 — 현재 server value로 초기화.
+   *  - true → false: 종료(다른 에디터로의 전환·cancel 등) — 미저장 변경 폐기.
+   *
+   * 과거엔 deps에 `value`도 두어, 편집 도중 부모 refetch로 value가 바뀌면 사용자
+   * 입력이 server 값으로 덮여 사라지는 회귀가 있었다. ref로 *전이*만 감지.
+   * 편집 중이 아닐 때는 value 변경에 맞춰 draft를 따라가 read-view와 일치 보장.
+   */
+  const wasEditingRef = useRef(editing)
   useEffect(() => {
-    setDraft(value)
+    if (editing !== wasEditingRef.current) {
+      setDraft(value)
+    } else if (!editing) {
+      setDraft(value)
+    }
+    wasEditingRef.current = editing
   }, [editing, value])
 
   const commit = () => {

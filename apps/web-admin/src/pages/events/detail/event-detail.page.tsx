@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 
 import { DetailActors } from './components/detail-actors'
 import { DetailAppendix } from './components/detail-appendix'
@@ -60,13 +60,34 @@ const EventDetailPage = () => {
     }
   }, [mutation.isSuccess, mutation.submittedAt])
 
-  /** 인물 클릭 → 같은 페이지에서 인물 상세 모달. 라우팅 X. */
-  const [viewingPersonId, setViewingPersonId] = useState<string | null>(null)
+  /**
+   * 인물 클릭 → 같은 페이지에서 인물 상세 모달.
+   * URL 쿼리(`?person=<id>`)와 sync — 새로고침·공유로도 같은 모달 상태 복원 가능.
+   * 라우트 자체는 안 바꿈(스택 보존).
+   */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const viewingPersonId = searchParams.get('person')
   const onPersonClick = useCallback(
-    (personId: string) => setViewingPersonId(personId),
-    [],
+    (personId: string) => {
+      const next = new URLSearchParams(searchParams)
+      next.set('person', personId)
+      setSearchParams(next, { replace: false })
+    },
+    [searchParams, setSearchParams],
   )
+  const onPersonModalClose = useCallback(() => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('person')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
+  /**
+   * 섹션 목록 — rail에 표시할 anchor + 라벨.
+   *
+   * deps는 `event?.id`로 좁힌다. 인라인 patch가 refetch를 일으킬 때마다 `event`
+   * identity가 바뀌므로 `event` 전체를 deps에 두면 매번 재계산. 섹션 구성은
+   * 사건 id와 enabledModules에만 의존.
+   */
   const sections = useMemo(() => {
     if (!event) return []
     const items: Array<{ id: string; label: string }> = []
@@ -92,11 +113,22 @@ const EventDetailPage = () => {
     items.push({ id: 'appendix', label: '이미지' })
 
     return items
-  }, [event, enabledModules])
+    // event는 *식별자 변경* 시에만 재구성. 다른 필드 변경으로 인한 refetch는 무시.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event?.id, enabledModules])
 
-  // URL hash → 섹션 스크롤 (페이지 진입 시).
+  /**
+   * URL hash → 섹션 스크롤. 사건이 처음 로드된 직후 1회만 실행한다.
+   *
+   * 과거엔 deps에 `event`를 두어 매 patch refetch마다 effect가 재실행 →
+   * 사용자가 hash 섹션에서 편집하던 중 저장 직후 페이지가 위로 점프하는
+   * 회귀가 있었음. 이젠 *사건 id가 바뀐 첫 fetch 완료* 시점에만 동작.
+   */
+  const scrolledHashForEventRef = useRef<string | null>(null)
   useEffect(() => {
     if (!event) return
+    if (scrolledHashForEventRef.current === event.id) return
+    scrolledHashForEventRef.current = event.id
     const hash = window.location.hash.slice(1)
     if (!hash) return
     const target = document.getElementById(hash)
@@ -181,7 +213,7 @@ const EventDetailPage = () => {
 
       <PersonDetailModal
         personId={viewingPersonId}
-        onClose={() => setViewingPersonId(null)}
+        onClose={onPersonModalClose}
       />
     </InlineEditProvider>
   )
