@@ -130,6 +130,10 @@ export function InlineRichText({
  * pre-hover 시그널은 여기서 padding/margin을 음수로 상쇄해 background tint를
  * 본문 흐름과 어긋나지 않게 띄워준다(본문 좌·우 정렬은 그대로 유지).
  * hover/focus-within에서 미세한 fill로 "이 영역은 클릭해 편집 가능"을 시그널.
+ *
+ * 본문이 길어지면 우측 ✎ 버튼이 ReadHost 상단 한 곳에만 있어 사용자가 위로
+ * 스크롤해서 찾아야 했다. 자손 selector로 ✎ 버튼만 sticky로 — 페이지(`S.Page`)
+ * 스크롤 컨테이너 안에서 viewport 상단에 따라온다. 다른 inline 사용처는 영향 X.
  */
 const ReadHost = styled.div`
   position: relative;
@@ -147,6 +151,13 @@ const ReadHost = styled.div`
       theme.mode === 'dark'
         ? 'rgba(255,255,255,0.04)'
         : 'rgba(15,23,42,0.025)'};
+  }
+
+  ${I.InlineEditButton} {
+    position: sticky;
+    /* 헤더 높이(64) + 16px 여유. CSS var fallback 안전. */
+    top: calc(var(--header-height, 64px) + 16px);
+    align-self: flex-start;
   }
 `
 
