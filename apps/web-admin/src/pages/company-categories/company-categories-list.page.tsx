@@ -1,20 +1,12 @@
 import React, { useEffect, useState } from 'react'
 
 import { motion } from 'framer-motion'
-import { FiPlus, FiEdit2, FiTrash2, FiBriefcase, FiTag } from 'react-icons/fi'
+import { FiPlus, FiEdit2, FiTrash2, FiTag, FiArrowLeft } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
-import type { Company, CompanyStatus } from '@/shared/api/company'
-import { companyApi } from '@/shared/api/company'
-
-const STATUS_LABEL: Record<CompanyStatus, string> = {
-  ACTIVE: '활동 중',
-  DISSOLVED: '해산',
-  MERGED: '합병',
-  SUSPENDED: '중단',
-  OTHER: '기타',
-}
+import type { CompanyCategory } from '@/shared/api/company-category'
+import { companyCategoryApi } from '@/shared/api/company-category'
 
 const Page = styled.div`
   padding: 1.5rem 2rem;
@@ -35,6 +27,22 @@ const Subtitle = styled.p`
   font-size: 0.875rem;
   margin-bottom: 1.25rem;
   color: #64748b;
+`
+
+const BackLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+  padding: 0;
+  &:hover {
+    color: #6366f1;
+  }
 `
 
 const Toolbar = styled.div`
@@ -64,7 +72,6 @@ const SearchInput = styled.input`
           &:focus {
             outline: none;
             border-color: rgba(99, 102, 241, 0.5);
-            background: rgba(255, 255, 255, 0.07);
           }
         `
       : css`
@@ -140,7 +147,6 @@ const ListItem = styled.li`
           border: 1px solid rgba(255, 255, 255, 0.08);
           &:hover {
             background: rgba(255, 255, 255, 0.07);
-            border-color: rgba(255, 255, 255, 0.14);
           }
         `
       : css`
@@ -151,20 +157,6 @@ const ListItem = styled.li`
             border-color: #c7d2fe;
           }
         `}
-`
-
-const Thumb = styled.div`
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  overflow: hidden;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
 `
 
 const ItemContent = styled.div`
@@ -181,21 +173,13 @@ const ItemName = styled.div`
   color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
 `
 
-const StatusChip = styled.span<{ $status: CompanyStatus | null }>`
+const SlugChip = styled.code`
   font-size: 0.6875rem;
-  font-weight: 600;
-  padding: 1px 8px;
-  border-radius: 999px;
-  ${({ $status }) =>
-    $status === 'ACTIVE'
-      ? css`
-          background: rgba(34, 197, 94, 0.15);
-          color: #16a34a;
-        `
-      : css`
-          background: rgba(148, 163, 184, 0.2);
-          color: #64748b;
-        `}
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(148, 163, 184, 0.2);
+  color: #64748b;
 `
 
 const ItemMeta = styled.div`
@@ -231,15 +215,15 @@ const LoadingText = styled.p`
   color: #64748b;
 `
 
-export const CompaniesListPage: React.FC = () => {
+export const CompanyCategoriesListPage: React.FC = () => {
   const navigate = useNavigate()
-  const [list, setList] = useState<Company[]>([])
+  const [list, setList] = useState<CompanyCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   const load = () => {
     setLoading(true)
-    companyApi
+    companyCategoryApi
       .getAll()
       .then(setList)
       .catch(() => setList([]))
@@ -256,21 +240,15 @@ export const CompaniesListPage: React.FC = () => {
     return list.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
-        (c.shortName?.toLowerCase().includes(q) ?? false) ||
-        (c.localName?.toLowerCase().includes(q) ?? false),
+        (c.slug?.toLowerCase().includes(q) ?? false),
     )
   }, [list, search])
 
-  const handleCreate = () => navigate('/companies/new')
-  const handleEdit = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (c: CompanyCategory, e: React.MouseEvent) => {
     e.stopPropagation()
-    navigate(`/companies/${id}/edit`)
-  }
-  const handleDelete = async (id: string, name: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!confirm(`'${name}' 기업을 삭제하시겠습니까?`)) return
+    if (!confirm(`'${c.name}' 카테고리를 삭제하시겠습니까?`)) return
     try {
-      await companyApi.delete(id)
+      await companyCategoryApi.delete(c.id)
       load()
     } catch (err) {
       alert(err instanceof Error ? err.message : '삭제에 실패했습니다.')
@@ -279,41 +257,35 @@ export const CompaniesListPage: React.FC = () => {
 
   return (
     <Page>
+      <BackLink onClick={() => navigate('/companies')}>
+        <FiArrowLeft size={14} /> 기업 목록
+      </BackLink>
       <Title>
-        <FiBriefcase size={24} />
-        기업 관리
+        <FiTag size={24} />
+        기업 카테고리 관리
       </Title>
       <Subtitle>
-        기업 마스터 데이터를 등록·수정·삭제합니다. 국가·창립자·조직 등과 연결할 수
-        있습니다.
+        기업 분류 카테고리를 등록·수정·삭제합니다. 계층 구조(상위 카테고리)를 지원합니다.
       </Subtitle>
 
       <Toolbar>
         <SearchInput
           type="text"
-          placeholder="기업명·약칭 검색..."
+          placeholder="카테고리명·슬러그 검색..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <Btn onClick={() => navigate('/company-categories')}>
-            <FiTag size={16} />
-            카테고리 관리
-          </Btn>
-          <Btn $primary onClick={handleCreate}>
-            <FiPlus size={18} />
-            기업 추가
-          </Btn>
-        </div>
+        <Btn $primary onClick={() => navigate('/company-categories/new')}>
+          <FiPlus size={18} />
+          카테고리 추가
+        </Btn>
       </Toolbar>
 
       {loading ? (
         <LoadingText>불러오는 중...</LoadingText>
       ) : filtered.length === 0 ? (
         <EmptyBox>
-          {search
-            ? '검색 결과가 없습니다.'
-            : '등록된 기업이 없습니다. 기업 추가로 등록하세요.'}
+          {search ? '검색 결과가 없습니다.' : '등록된 카테고리가 없습니다.'}
         </EmptyBox>
       ) : (
         <List>
@@ -325,42 +297,33 @@ export const CompaniesListPage: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.02 }}
             >
-              <Thumb>
-                {c.logoUrl ? (
-                  <img
-                    src={c.logoUrl}
-                    alt=""
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                ) : (
-                  '🏢'
-                )}
-              </Thumb>
               <ItemContent>
                 <ItemName>
                   {c.name}
-                  {c.shortName && <span style={{ color: '#94a3b8', fontWeight: 400 }}>({c.shortName})</span>}
-                  {c.status && <StatusChip $status={c.status}>{STATUS_LABEL[c.status]}</StatusChip>}
+                  {c.slug && <SlugChip>{c.slug}</SlugChip>}
                 </ItemName>
                 <ItemMeta>
                   {[
-                    c.country?.name ?? c.historicalCountry?.name,
-                    c.foundedAt ? `설립 ${c.foundedAt.slice(0, 10)}` : null,
+                    c.parent ? `상위: ${c.parent.name}` : null,
+                    c.childrenCount > 0 ? `하위 ${c.childrenCount}` : null,
+                    c.companyCount > 0 ? `기업 ${c.companyCount}` : null,
                   ]
                     .filter(Boolean)
                     .join(' · ') || '—'}
                 </ItemMeta>
               </ItemContent>
               <ItemActions>
-                <Btn type="button" onClick={(ev) => handleEdit(c.id, ev)} title="수정">
-                  <FiEdit2 size={16} />
-                </Btn>
                 <Btn
                   type="button"
-                  $danger
-                  onClick={(ev) => handleDelete(c.id, c.name, ev)}
-                  title="삭제"
+                  onClick={(ev) => {
+                    ev.stopPropagation()
+                    navigate(`/company-categories/${c.id}/edit`)
+                  }}
+                  title="수정"
                 >
+                  <FiEdit2 size={16} />
+                </Btn>
+                <Btn type="button" $danger onClick={(ev) => handleDelete(c, ev)} title="삭제">
                   <FiTrash2 size={16} />
                 </Btn>
               </ItemActions>
