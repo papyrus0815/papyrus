@@ -2260,15 +2260,11 @@ export function PersonDetailPanel({
                   {(() => {
                     const books = p.books ?? []
                     const founded = p.foundedCompanies ?? []
-                    const owned = (p.companies ?? []).filter(
-                      (c) => !founded.some((f) => f.id === c.id),
-                    )
                     const orgRoles = p.organizationRoles ?? []
                     const milCmds = p.militaryCommands ?? []
                     const total =
                       books.length +
                       founded.length +
-                      owned.length +
                       orgRoles.length +
                       milCmds.length
                     if (total === 0) return null
@@ -2319,25 +2315,6 @@ export function PersonDetailPanel({
                                     {c.description && (
                                       <SimpleEntryDescription>{c.description}</SimpleEntryDescription>
                                     )}
-                                  </SimpleEntryItem>
-                                ))}
-                              </SimpleEntryList>
-                            </ActivityGroup>
-                          )}
-                          {owned.length > 0 && (
-                            <ActivityGroup>
-                              <ActivityGroupTitle>관련 기업 {owned.length}</ActivityGroupTitle>
-                              <SimpleEntryList>
-                                {owned.map((c) => (
-                                  <SimpleEntryItem key={c.id ?? Math.random()}>
-                                    <SimpleEntryHeader>
-                                      <SimpleEntryTitle>{c.name ?? '이름 없음'}</SimpleEntryTitle>
-                                      {c.foundedAt && (
-                                        <SimpleEntrySub>
-                                          {formatIsoDateKo(c.foundedAt)}
-                                        </SimpleEntrySub>
-                                      )}
-                                    </SimpleEntryHeader>
                                   </SimpleEntryItem>
                                 ))}
                               </SimpleEntryList>

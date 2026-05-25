@@ -407,7 +407,6 @@ export class PersonController {
     children: any[]
     siblings: any[]
     foundedCompanies: any[]
-    companies: any[]
     books: any[]
     organizationRoles: any[]
     partyLeaderships: any[]
@@ -560,7 +559,6 @@ export class PersonController {
       children: serializeBigInt(children),
       siblings: siblings,
       foundedCompanies: person.foundedCompanies || [],
-      companies: person.Company || [],
       books: person.Book || [],
       organizationRoles: person.OrganizationPersonRole || [],
       partyLeaderships: person.PoliticalPartyLeadership || [],

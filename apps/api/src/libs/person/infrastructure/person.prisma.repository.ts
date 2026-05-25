@@ -1283,14 +1283,6 @@ export class PersonPrismaRepository implements IPersonRepository {
             description: true,
           },
         },
-        Company: {
-          select: {
-            id: true,
-            name: true,
-            foundedAt: true,
-            description: true,
-          },
-        },
         Book: {
           select: {
             id: true,
