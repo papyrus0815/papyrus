@@ -6,7 +6,16 @@ import styled, { css } from 'styled-components'
 
 import type { CompanyStatus, CreateCompanyInput } from '@/shared/api/company'
 import { companyApi } from '@/shared/api/company'
+import { getApiConnection } from '@/shared/api/client'
 import { getAllCountries, type CountryResponseDto } from '@/shared/api/countries'
+import {
+  getAllHistoricalCountries,
+  type HistoricalCountryResponseDto,
+} from '@/shared/api/historical-countries'
+import {
+  getOrganizations,
+  type OrganizationResponseDto,
+} from '@/shared/api/organizations'
 
 const STATUS_OPTIONS: { value: CompanyStatus; label: string }[] = [
   { value: 'ACTIVE', label: '활동 중' },
@@ -167,6 +176,8 @@ type FormState = {
   logoUrl: string
   description: string
   countryId: string
+  historicalCountryId: string
+  organizationId: string
 }
 
 const EMPTY: FormState = {
@@ -180,6 +191,8 @@ const EMPTY: FormState = {
   logoUrl: '',
   description: '',
   countryId: '',
+  historicalCountryId: '',
+  organizationId: '',
 }
 
 export const CompanyFormPage: React.FC = () => {
@@ -189,12 +202,24 @@ export const CompanyFormPage: React.FC = () => {
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [countries, setCountries] = useState<CountryResponseDto[]>([])
+  const [historicalCountries, setHistoricalCountries] = useState<
+    HistoricalCountryResponseDto[]
+  >([])
+  const [organizations, setOrganizations] = useState<OrganizationResponseDto[]>(
+    [],
+  )
   const [form, setForm] = useState<FormState>(EMPTY)
 
   useEffect(() => {
     getAllCountries()
       .then(setCountries)
       .catch(() => setCountries([]))
+    getAllHistoricalCountries()
+      .then(setHistoricalCountries)
+      .catch(() => setHistoricalCountries([]))
+    getOrganizations(getApiConnection())
+      .then(setOrganizations)
+      .catch(() => setOrganizations([]))
   }, [])
 
   useEffect(() => {
@@ -215,6 +240,8 @@ export const CompanyFormPage: React.FC = () => {
             logoUrl: c.logoUrl ?? '',
             description: c.description ?? '',
             countryId: c.countryId ?? '',
+            historicalCountryId: c.historicalCountryId ?? '',
+            organizationId: c.organizationId ?? '',
           })
         }
       })
@@ -240,6 +267,8 @@ export const CompanyFormPage: React.FC = () => {
       logoUrl: form.logoUrl.trim() || null,
       description: form.description.trim() || null,
       countryId: form.countryId || null,
+      historicalCountryId: form.historicalCountryId || null,
+      organizationId: form.organizationId || null,
     }
     try {
       if (isEdit) {
@@ -319,7 +348,7 @@ export const CompanyFormPage: React.FC = () => {
             </select>
           </Row>
           <Row>
-            <label>소속 국가</label>
+            <label>소속 국가 (현대)</label>
             <select
               value={form.countryId}
               onChange={(e) => setForm((p) => ({ ...p, countryId: e.target.value }))}
@@ -328,6 +357,40 @@ export const CompanyFormPage: React.FC = () => {
               {countries.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
+                </option>
+              ))}
+            </select>
+          </Row>
+        </Grid2>
+        <Grid2>
+          <Row>
+            <label>소속 국가 (역사)</label>
+            <select
+              value={form.historicalCountryId}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, historicalCountryId: e.target.value }))
+              }
+            >
+              <option value="">— 없음 —</option>
+              {historicalCountries.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
+              ))}
+            </select>
+          </Row>
+          <Row>
+            <label>연결 조직</label>
+            <select
+              value={form.organizationId}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, organizationId: e.target.value }))
+              }
+            >
+              <option value="">— 없음 —</option>
+              {organizations.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
                 </option>
               ))}
             </select>

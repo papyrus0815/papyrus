@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   FiAward,
   FiBell,
+  FiBriefcase,
   FiGlobe,
   FiLayers,
   FiLogOut,
@@ -360,6 +361,16 @@ const Header: React.FC = () => {
         navigate(pathKeys.headsOfState())
       },
       active: location.pathname.startsWith('/heads-of-state'),
+    },
+    {
+      key: 'companies',
+      label: '기업',
+      icon: <FiBriefcase size={16} />,
+      onClick: () => {
+        playClickSound()
+        navigate('/companies')
+      },
+      active: location.pathname.startsWith('/companies'),
     },
   ]
 
