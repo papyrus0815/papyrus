@@ -2,7 +2,7 @@
  * 🗺️ 애플리케이션 라우트 경로 상수
  *
  * 하나의 루트 객체에서 모든 라우트 경로를 관리합니다.
- * 새로운 페이지 추가 시 이 객체에 섹션을 추가하면 됩니다.
+ * 새로운 페이지 추가 시 이 객체에 항목을 추가하면 됩니다.
  */
 export const ROUTES = {
   // Root & Auth
@@ -15,22 +15,15 @@ export const ROUTES = {
   SETTINGS: 'settings',
   SERVICES: 'services',
 
-  // History
-  HISTORY: {
-    ROOT: 'history',
-    COUNTRY: 'country',
-    CONTINENTS: 'continents',
-    EVENTS: 'events',
-    HISTORICAL_COUNTRY: 'historical-country',
-    PERSONS: 'persons',
-    DYNASTIES: 'dynasties',
-    JOBS: 'jobs',
-    MILITARY_UNITS: 'military-units',
-    /** 연대표/대시보드 공통 세그먼트 (인물·연대표 등) */
-    DASHBOARD: 'dashboard',
-    /** 역대 수장 통합 비교 — 현대·역사 국가 모두 한 화면에서 비교 */
-    HEADS_OF_STATE: 'heads-of-state',
-  },
+  // History 콘텐츠 (전부 top-level로 평탄화)
+  COUNTRY: 'country',
+  CONTINENTS: 'continents',
+  HEADS_OF_STATE: 'heads-of-state',
+  PERSONS_TIMELINE: 'persons-timeline',
+  ETHNICITY: 'ethnicity',
+  LEGISLATURE: 'legislature',
+  MILITARY: 'military',
+  EVENTS: 'events',
 
   // Genealogy (standalone full-screen)
   GENEALOGY: 'genealogy',
@@ -39,5 +32,17 @@ export const ROUTES = {
   PAGE_404: '404',
 } as const
 
-// 하위 호환성을 위한 별칭 (필요시 사용)
-export const HISTORY_PATHS = ROUTES.HISTORY
+/**
+ * 구 `/history/*` 자손이었던 콘텐츠 영역 top-level 프리픽스.
+ * ContentSkeleton 노출·콘텐츠 영역 판별 등 공통 조건에서 사용.
+ * 새 top-level 콘텐츠 라우트 추가 시 여기만 갱신하면 됨.
+ */
+export const CONTENT_AREA_PREFIXES = [
+  `/${ROUTES.COUNTRY}`,
+  `/${ROUTES.CONTINENTS}`,
+  `/${ROUTES.HEADS_OF_STATE}`,
+  `/${ROUTES.PERSONS_TIMELINE}`,
+  `/${ROUTES.ETHNICITY}`,
+  `/${ROUTES.LEGISLATURE}`,
+  `/${ROUTES.MILITARY}`,
+] as const

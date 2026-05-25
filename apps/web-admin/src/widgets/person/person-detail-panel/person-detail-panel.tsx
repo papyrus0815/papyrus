@@ -1053,7 +1053,7 @@ export function PersonDetailPanel({
                   onClick={() => {
                     if (!p.country?.id) return
                     playClickSound()
-                    navigate(pathKeys.history.countryDetail(p.country.id))
+                    navigate(pathKeys.countryDetail(p.country.id))
                   }}
                 >
                   {countryFlagSrc ? (
@@ -1189,7 +1189,7 @@ export function PersonDetailPanel({
                   onClick={() => {
                     if (!person.country?.id) return
                     playClickSound()
-                    navigate(pathKeys.history.countryDetail(person.country.id))
+                    navigate(pathKeys.countryDetail(person.country.id))
                   }}
                 >
                   {person.country.name}

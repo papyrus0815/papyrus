@@ -16,7 +16,12 @@ import { dynastyRoute } from '@/pages/dynasty/dynasty.route'
 import { ethnicitiesRoutes } from '@/pages/ethnicities/ethnicities.route'
 import { organizationsRoutes } from '@/pages/organizations/organizations.route'
 import { eventPageRoute } from '@/pages/events/event-route'
-import { historyPageRoute } from '@/pages/history/history.route'
+import { countryRoute } from '@/pages/country/country.route'
+import { continentsRoute } from '@/pages/continents/continents.route'
+import { headsOfStateRoute } from '@/pages/heads-of-state/heads-of-state.route'
+import { personsTimelineRoutes } from '@/pages/persons-timeline/persons-timeline.route'
+import { timelineViewsRoutes } from '@/pages/timeline-views/timeline-views.route'
+import ContentLayout from '@/widgets/content-layout/content-layout.ui'
 import { layoutLoader } from '@/pages/layout/layout.loader'
 import Layout from '@/pages/layout/layout.ui'
 import { genealogyRoute } from '@/pages/genealogy/genealogy.route'
@@ -26,6 +31,10 @@ import { page404Route } from '@/pages/page-404/page-404.route'
 // history, panels 제거됨 (연관 위젯 파일 정리)
 import { ServiceManagerPage } from '@/pages/services/service-manager.page'
 import { pathKeys } from '@/shared/router'
+import {
+  legacyHistoryRedirectRoute,
+  legacyDynastyRedirectRoutes,
+} from './legacy-redirects'
 
 /**
  * 🚀 클라이언트 사이드 전용 라우터 컴포넌트
@@ -156,10 +165,22 @@ const appRouterConfig = [
           dynastyRoute,
           // 행정기구·조직 라우트
           ...organizationsRoutes,
-          // 민족 라우트
+          // 민족 라우트 (CRUD)
           ...ethnicitiesRoutes,
-          // 히스토리 그룹 하위 라우트
-          historyPageRoute,
+          // 콘텐츠 영역 — 구 /history/* 자손들, 전부 top-level로 평탄화. ContentLayout 셸 공유.
+          {
+            element: <ContentLayout />,
+            children: [
+              countryRoute,
+              continentsRoute,
+              headsOfStateRoute,
+              ...personsTimelineRoutes,
+              ...timelineViewsRoutes,
+            ],
+          },
+          // 레거시 redirect (북마크 흡수용 — 별도 파일에서 관리)
+          legacyHistoryRedirectRoute,
+          ...legacyDynastyRedirectRoutes,
         ],
       },
       {

@@ -1087,7 +1087,7 @@ export function LinkedHistoricalCountriesSection({
                     relations={rels}
                     idToCountry={idToCountry}
                     onDetail={() =>
-                      navigate(pathKeys.history.countryDetail(h.id))
+                      navigate(pathKeys.countryDetail(h.id))
                     }
                   />
                 )
@@ -1309,7 +1309,7 @@ export function LinkedHistoricalCountriesSection({
                                     title={tooltipText}
                                     onClick={() =>
                                       navigate(
-                                        pathKeys.history.countryDetail(h.id),
+                                        pathKeys.countryDetail(h.id),
                                       )
                                     }
                                   >
@@ -1334,7 +1334,7 @@ export function LinkedHistoricalCountriesSection({
                                     title={tooltipText}
                                     onClick={() =>
                                       navigate(
-                                        pathKeys.history.countryDetail(h.id),
+                                        pathKeys.countryDetail(h.id),
                                       )
                                     }
                                   >
@@ -1782,7 +1782,7 @@ export function LinkedHistoricalCountriesSection({
                                       title={tooltipText}
                                       onClick={() =>
                                         navigate(
-                                          pathKeys.history.countryDetail(h.id),
+                                          pathKeys.countryDetail(h.id),
                                         )
                                       }
                                     >
@@ -1812,7 +1812,7 @@ export function LinkedHistoricalCountriesSection({
                                       title={tooltipText}
                                       onClick={() =>
                                         navigate(
-                                          pathKeys.history.countryDetail(h.id),
+                                          pathKeys.countryDetail(h.id),
                                         )
                                       }
                                     >

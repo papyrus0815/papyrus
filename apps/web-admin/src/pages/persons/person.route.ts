@@ -8,7 +8,7 @@ export const personsRoute: RouteObject = {
     {
       // /persons/ → 인물 목록은 history 대시보드에서 관리
       index: true,
-      loader: () => redirect(pathKeys.history.dashboardPersons()),
+      loader: () => redirect(pathKeys.personsTimeline()),
     },
     {
       // /persons/create/

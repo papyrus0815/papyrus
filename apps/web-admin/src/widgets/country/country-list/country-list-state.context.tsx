@@ -1,7 +1,7 @@
 /**
  * 국가 목록 상태 Context
  * - 검색/필터/정렬 상태와 함께 핵심 데이터(현대·역사·대륙)를 한 곳에서 제공
- * - 데이터는 `useHistoryCoreData` 훅을 provider가 내부에서 직접 fetch하여 prop drilling 제거
+ * - 데이터는 `useContentCoreData` 훅을 provider가 내부에서 직접 fetch하여 prop drilling 제거
  * - 입력 시 페이지 전체 리렌더를 피하려고 Context로 격리
  */
 import React, { useMemo, useState } from 'react'
@@ -14,7 +14,7 @@ import type {
 import { historicalToUnified } from '@/entities/country/model/unified-types'
 import type { HistoricalCountry } from '@/entities/historical-country/api'
 import type { CountryResponseDto } from '@/shared/api/countries'
-import { useHistoryCoreData } from '@/widgets/history-shell/model/use-history-core-data.hook'
+import { useContentCoreData } from '@/widgets/content-shell/model/use-content-core-data.hook'
 
 export type SortBy = 'name' | 'population' | 'area'
 
@@ -30,7 +30,7 @@ export interface CountryListStateContextValue {
   setSortBy: (s: SortBy) => void
   // 계산된 목록
   filtered: UnifiedCountry[]
-  // 핵심 데이터 (useHistoryCoreData 제공 값)
+  // 핵심 데이터 (useContentCoreData 제공 값)
   countries: Country[]
   unifiedCountries: UnifiedCountry[]
   continents: ContinentOption[]
@@ -59,7 +59,7 @@ interface ProviderProps {
 }
 
 export function CountryListStateProvider({ children }: ProviderProps) {
-  const core = useHistoryCoreData()
+  const core = useContentCoreData()
   const {
     countries,
     unifiedCountries,

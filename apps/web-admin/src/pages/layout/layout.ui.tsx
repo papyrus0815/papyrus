@@ -17,7 +17,7 @@ import { logError } from '@/shared/ui/error-handler/error-handler.lib'
 import { ErrorHandler } from '@/shared/ui/error-handler/error.handler.ui'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 import DashboardSkeleton from '@/shared/ui/skeleton/dashboard-skeleton.ui'
-import HistorySkeleton from '@/shared/ui/skeleton/history-skeleton.ui'
+import ContentSkeleton from '@/shared/ui/skeleton/content-skeleton.ui'
 import LayoutSkeleton from '@/shared/ui/skeleton/layout-skeleton.ui'
 import {
   CommandPalette,
@@ -26,6 +26,8 @@ import {
 import Header from '@/widgets/header/header.ui'
 
 // Note: Simple layout only, wrapper removed per request
+
+import { CONTENT_AREA_PREFIXES } from '@/shared/constants/routes'
 
 import { type LayoutLoaderData } from './layout.loader'
 
@@ -46,7 +48,9 @@ export default function Layout() {
   const isAuthenticated = !!session || !!token
   const location = useLocation()
 
-  const isPanelsRoute = location.pathname.startsWith('/history')
+  const isPanelsRoute = CONTENT_AREA_PREFIXES.some((p) =>
+    location.pathname.startsWith(p),
+  )
   const isDashboardRoute = location.pathname === '/'
 
   useCommandPaletteShortcut()
@@ -71,7 +75,7 @@ export default function Layout() {
   // 라우트별 적절한 스켈레톤 선택
   const getSkeleton = () => {
     if (isDashboardRoute) return <DashboardSkeleton />
-    if (isPanelsRoute) return <HistorySkeleton />
+    if (isPanelsRoute) return <ContentSkeleton />
     return <LayoutSkeleton showSidebar={false} />
   }
 

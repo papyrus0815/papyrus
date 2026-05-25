@@ -550,7 +550,7 @@ export default function DashboardPage() {
           <ButtonWrapper>
             <CircleButton
               title="역대 수장 비교"
-              onClick={() => navigate(pathKeys.history.headsOfState())}
+              onClick={() => navigate(pathKeys.headsOfState())}
             >
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <path d="M12 2l2.39 6.95H22l-6 4.36 2.3 7.04L12 16l-6.3 4.35L8 13.31 2 8.95h7.61L12 2z" />

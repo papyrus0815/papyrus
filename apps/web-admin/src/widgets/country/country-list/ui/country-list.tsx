@@ -5,7 +5,7 @@ import { FiChevronRight, FiClock, FiMap, FiStar } from 'react-icons/fi'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useRecentCountriesStore } from '@/widgets/command-palette'
-import { SidebarHeader } from '@/widgets/history-shell'
+import { SidebarHeader } from '@/widgets/content-shell'
 
 import {
   getContinentColor,

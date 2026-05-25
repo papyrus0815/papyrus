@@ -38,7 +38,7 @@ import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 
 import {
-  HistoryLayout,
+  ContentLayout,
   HistoryHeader,
   HistoryCount,
   CountText,
@@ -1013,7 +1013,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
                     </div>
                   </SectionTitle>
 
-                  <HistoryLayout>
+                  <ContentLayout>
                     {/* 상단: 연혁 추가 버튼 */}
                     <HistoryHeader>
                       <HistoryCount>
@@ -1200,7 +1200,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
                           })}
                       </HistoryTimeline>
                     )}
-                  </HistoryLayout>
+                  </ContentLayout>
                 </FormContent>
               )}
 

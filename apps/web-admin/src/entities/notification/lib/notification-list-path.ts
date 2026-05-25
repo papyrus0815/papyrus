@@ -12,7 +12,7 @@ export function getNotificationListPath(ownerType: string | undefined): string |
     case 'COUNTRY':
     case 'HISTORICAL_COUNTRY':
     case 'ADMINISTRATION_DEPARTMENT':
-      return pathKeys.history.country()
+      return pathKeys.country()
     case 'EVENT':
       return pathKeys.events.root()
     default:

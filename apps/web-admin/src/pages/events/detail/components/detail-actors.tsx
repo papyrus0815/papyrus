@@ -331,7 +331,7 @@ export function DetailActors({
               {modernCountries.map((country, i) => (
                 <NationItem key={country.id}>
                   <CountryLink
-                    to={pathKeys.history.countryDetail(country.id)}
+                    to={pathKeys.countryDetail(country.id)}
                   >
                     {country.name}
                   </CountryLink>

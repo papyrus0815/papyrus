@@ -188,7 +188,7 @@ function ContemporaryHeadsLink({ event }: { event: EventDetail }) {
     <S.HeroMetaItem>
       <FiAward />
       <ContemporaryLink
-        to={pathKeys.history.headsOfState(year)}
+        to={pathKeys.headsOfState(year)}
         title={`${year}년 시점에 세계 각국이 누구의 통치 아래 있었는지 비교`}
       >
         {year}년 동시대 수장 비교
@@ -298,7 +298,7 @@ function HeroActors({
           <CountryInline>
             {modern.map((c, i) => (
               <span key={c.id}>
-                <CountryName to={pathKeys.history.countryDetail(c.id)}>
+                <CountryName to={pathKeys.countryDetail(c.id)}>
                   {c.name}
                 </CountryName>
                 {i < modern.length - 1 && <CountrySep>·</CountrySep>}

@@ -18,6 +18,7 @@ import {
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { pathKeys } from '@/shared/router'
 import { ToastProvider, useToast } from '@/shared/ui/toast'
 
 import { Legend } from './legend'
@@ -173,7 +174,7 @@ function HeadsOfStateTimelineInner() {
         }
       }
       // 못 찾으면 기존처럼 인물 페이지로 라우팅
-      navigate(`/history/dashboard/persons/${personId}`)
+      navigate(pathKeys.personsTimelineDetail(personId))
     },
     [rowsTenures, state.rows, navigate],
   )
@@ -358,7 +359,9 @@ function HeadsOfStateTimelineInner() {
             onSelectBar={openBarModal}
             onJumpToCountry={(kind, countryId) => {
               if (kind === 'COUNTRY') {
-                navigate(`/history/country/${countryId}/persons`)
+                navigate(
+                  `${pathKeys.personsTimeline()}?countries=${encodeURIComponent(countryId)}`,
+                )
               }
               // 역사적 국가는 별도 진입 경로가 admin에 없을 수 있어 토스트로 안내만
               else {
@@ -366,7 +369,7 @@ function HeadsOfStateTimelineInner() {
               }
             }}
             onSelectEvent={(eventId) => {
-              navigate(`/history/events?selected=${eventId}`)
+              navigate(`${pathKeys.events.root()}?selected=${encodeURIComponent(eventId)}`)
             }}
             onHighlightPeriod={setHighlightPeriod}
             highlightPeriod={highlightPeriod}
@@ -406,19 +409,14 @@ function HeadsOfStateTimelineInner() {
               row={previewBar.row}
               onClose={() => setPreviewBar(null)}
               onOpenDetail={(personId, opts) => {
+                const target = `${pathKeys.personsTimelineDetail(personId)}?from=heads-of-state`
                 if (opts?.openInNewTab && typeof window !== 'undefined') {
                   // 새 탭으로 열어 비교 상태 유지
-                  window.open(
-                    `/history/dashboard/persons/${personId}?from=heads-of-state`,
-                    '_blank',
-                    'noopener,noreferrer',
-                  )
+                  window.open(target, '_blank', 'noopener,noreferrer')
                   return
                 }
                 setPreviewBar(null)
-                navigate(
-                  `/history/dashboard/persons/${personId}?from=heads-of-state`,
-                )
+                navigate(target)
               }}
             />
           )}

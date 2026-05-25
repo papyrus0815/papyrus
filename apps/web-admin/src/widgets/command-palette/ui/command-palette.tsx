@@ -152,7 +152,7 @@ export function CommandPalette() {
   const handleSelect = (item: PaletteItem) => {
     pushRecent(item.id)
     closePalette()
-    navigate(pathKeys.history.countryDetail(item.id))
+    navigate(pathKeys.countryDetail(item.id))
   }
 
   if (!open) return null

@@ -1437,7 +1437,7 @@ export function CountryElectionsSection({
 
   const handlePoliticsViewTab = (tab: 'parties' | 'elections') => {
     if (tab === 'elections' && electionPartyId && routeCountryId) {
-      navigate(pathKeys.history.countryElections(routeCountryId))
+      navigate(pathKeys.countryElections(routeCountryId))
     }
     setPoliticsViewTab(tab)
   }
@@ -4397,7 +4397,7 @@ function ElectionDetailPanel({
                         type="button"
                         onClick={() => {
                           navigate(
-                            pathKeys.history.countryElectionPartyDetail(
+                            pathKeys.countryElectionPartyDetail(
                               partyFullTabCountryId,
                               electionMentionPartyId,
                             ),

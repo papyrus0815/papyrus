@@ -40,7 +40,7 @@ import { pathKeys } from '@/shared/router'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 import { useCommandPaletteStore } from '@/widgets/command-palette'
-import { DASHBOARD_MENU_ITEMS } from '@/widgets/history-shell/model/dashboard-menu-items'
+import { DASHBOARD_MENU_ITEMS } from '@/widgets/content-shell/model/dashboard-menu-items'
 
 import { TopNavBar, type TopNavItemSpec } from './top-nav.ui'
 
@@ -290,10 +290,8 @@ const Header: React.FC = () => {
   useOnClickOutside(userMenuRef, () => setIsUserOpen(false))
   useOnClickOutside(settingsMenuRef, () => setIsSettingsOpen(false))
 
-  // 국가 브라우즈(/history/country)와 국가 상세(/history/country/:id/*)
-  // 모두 "국가" 메뉴를 활성 상태로 표시
-  const isCountryBrowseActive =
-    /^\/history\/country(\/|$)/.test(location.pathname)
+  // 국가 브라우즈(/country)와 국가 상세(/country/:id/*) 모두 "국가" 메뉴를 활성 상태로 표시
+  const isCountryBrowseActive = /^\/country(\/|$)/.test(location.pathname)
 
   const dashboardItemToSpec = (
     item: (typeof DASHBOARD_MENU_ITEMS)[number],
@@ -327,7 +325,7 @@ const Header: React.FC = () => {
       icon: <FiMap size={16} />,
       onClick: () => {
         playClickSound()
-        navigate(pathKeys.history.country())
+        navigate(pathKeys.country())
       },
       active: isCountryBrowseActive,
     },
@@ -349,9 +347,9 @@ const Header: React.FC = () => {
       icon: <FiGlobe size={16} />,
       onClick: () => {
         playClickSound()
-        navigate(pathKeys.history.continents())
+        navigate(pathKeys.continents())
       },
-      active: location.pathname.startsWith('/history/continents'),
+      active: location.pathname.startsWith('/continents'),
     },
     {
       key: 'heads-of-state',
@@ -359,9 +357,9 @@ const Header: React.FC = () => {
       icon: <FiAward size={16} />,
       onClick: () => {
         playClickSound()
-        navigate(pathKeys.history.headsOfState())
+        navigate(pathKeys.headsOfState())
       },
-      active: location.pathname.startsWith('/history/heads-of-state'),
+      active: location.pathname.startsWith('/heads-of-state'),
     },
   ]
 

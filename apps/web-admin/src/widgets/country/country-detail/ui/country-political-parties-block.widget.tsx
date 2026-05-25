@@ -813,7 +813,7 @@ function PartyElectionResultsBlock({
               const goto = () => {
                 if (!el) return
                 navigate(
-                  `${pathKeys.history.countryElections(routeCountryId)}?electionId=${encodeURIComponent(el.id)}`,
+                  `${pathKeys.countryElections(routeCountryId)}?electionId=${encodeURIComponent(el.id)}`,
                 )
               }
               return (
@@ -2065,7 +2065,7 @@ export function CountryPoliticalPartiesBlock({
     onSuccess: () => {
       toast.success('삭제했습니다.')
       invalidate()
-      navigate(pathKeys.history.countryElections(routeCountryId))
+      navigate(pathKeys.countryElections(routeCountryId))
     },
     onError: (e: Error) => toast.error(e.message),
   })
@@ -2094,7 +2094,7 @@ export function CountryPoliticalPartiesBlock({
   }, [selectedPartyId, detailParty?.id])
 
   const goToList = () =>
-    navigate(pathKeys.history.countryElections(routeCountryId))
+    navigate(pathKeys.countryElections(routeCountryId))
 
   // 현대 국가는 연결된 역사 국가 소속 정당도 허용해야 하므로,
   // 이미 올바른 범위로 로드된 parties 목록에 포함 여부로 판단한다.
@@ -2600,7 +2600,7 @@ export function CountryPoliticalPartiesBlock({
                     const tooltip = tooltipParts.join(' · ')
                     const goToDetail = () =>
                       navigate(
-                        pathKeys.history.countryElectionPartyDetail(
+                        pathKeys.countryElectionPartyDetail(
                           routeCountryId,
                           p.id,
                         ),
@@ -2666,7 +2666,7 @@ export function CountryPoliticalPartiesBlock({
                     type="button"
                     onClick={() =>
                       navigate(
-                        pathKeys.history.countryElectionPartyDetail(
+                        pathKeys.countryElectionPartyDetail(
                           routeCountryId,
                           p.id,
                         ),

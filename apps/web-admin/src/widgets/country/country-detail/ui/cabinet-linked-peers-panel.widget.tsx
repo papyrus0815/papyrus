@@ -19,7 +19,7 @@ function territoryName(cab: CabinetListItemDto): string {
 function territoryGovernmentUrl(cab: CabinetListItemDto): string | null {
   const ht = cab.headTenure
   const id = ht?.country?.id ?? ht?.historicalCountry?.id
-  return id ? pathKeys.history.countryGovernment(id) : null
+  return id ? pathKeys.countryGovernment(id) : null
 }
 
 function PeerVisual({

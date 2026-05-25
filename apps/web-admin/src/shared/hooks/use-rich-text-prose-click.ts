@@ -176,7 +176,7 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
           return
         }
         const go = (cid: string) =>
-          navigate(pathKeys.history.countryElectionPartyDetail(cid, partyId))
+          navigate(pathKeys.countryElectionPartyDetail(cid, partyId))
         if (countryIdAttr) {
           go(countryIdAttr)
           return
@@ -213,7 +213,7 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
         const cid = countryLinkEl.getAttribute('data-entity-id')
         if (cid) {
           e.preventDefault()
-          navigate(pathKeys.history.countryDetail(cid))
+          navigate(pathKeys.countryDetail(cid))
         }
         return
       }
@@ -236,7 +236,7 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
             .then((hc) => {
               const first = hc.parentModernCountryIds?.[0]
               if (first)
-                navigate(pathKeys.history.countryHistorical(first))
+                navigate(pathKeys.countryHistorical(first))
               else
                 toast.error(
                   '연결된 현대 국가가 없어 해당 국가의 역사 탭으로 이동할 수 없습니다.',
@@ -267,7 +267,7 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
             .then((u) => {
               const cid = u?.countryId
               if (cid)
-                navigate(pathKeys.history.countryGovernment(cid))
+                navigate(pathKeys.countryGovernment(cid))
               else
                 toast.error(
                   '이 부대에 연결된 현대 국가가 없어 행정조직 탭으로 이동할 수 없습니다.',

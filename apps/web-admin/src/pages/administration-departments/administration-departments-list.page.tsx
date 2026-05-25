@@ -836,7 +836,7 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                                         onClick={() => {
                                           playClickSound()
                                           navigate(
-                                            pathKeys.history.countryGovernment(
+                                            pathKeys.countryGovernment(
                                               selectedDept.countryId,
                                             ),
                                           )
@@ -848,7 +848,7 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                                           ) {
                                             e.preventDefault()
                                             navigate(
-                                              pathKeys.history.countryGovernment(
+                                              pathKeys.countryGovernment(
                                                 selectedDept.countryId,
                                               ),
                                             )

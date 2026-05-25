@@ -67,18 +67,18 @@ export function CountryDetailDashboard({
       ? `${(popNum / areaNum).toFixed(1)} 명/km²`
       : null
 
-  const goEvents = () => navigate(pathKeys.history.countryEvents(country.id))
+  const goEvents = () => navigate(pathKeys.countryEvents(country.id))
   const goEventsCreate = () =>
-    navigate(pathKeys.history.countryEvents(country.id, 'create'))
+    navigate(pathKeys.countryEvents(country.id, 'create'))
   const goGovernment = () =>
-    navigate(pathKeys.history.countryGovernment(country.id))
-  const goRegions = () => navigate(pathKeys.history.countryRegions(country.id))
+    navigate(pathKeys.countryGovernment(country.id))
+  const goRegions = () => navigate(pathKeys.countryRegions(country.id))
   const goPersons = () =>
     navigate(
-      `${pathKeys.history.dashboardPersons()}?countries=${encodeURIComponent(country.id)}`,
+      `${pathKeys.personsTimeline()}?countries=${encodeURIComponent(country.id)}`,
     )
   const goElections = () =>
-    navigate(pathKeys.history.countryElections(country.id))
+    navigate(pathKeys.countryElections(country.id))
 
   const totalActivity = stats.recentActivity.length
   const lineage = country.historicalCountries ?? []

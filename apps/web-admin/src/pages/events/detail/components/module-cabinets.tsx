@@ -69,7 +69,7 @@ export function ModuleCabinets({ event }: ModuleCabinetsProps) {
             <Row key={entry.id}>
               <Main>
                 {countryId ? (
-                  <Link to={pathKeys.history.countryDetail(countryId)}>{label}</Link>
+                  <Link to={pathKeys.countryDetail(countryId)}>{label}</Link>
                 ) : (
                   <span>{label}</span>
                 )}

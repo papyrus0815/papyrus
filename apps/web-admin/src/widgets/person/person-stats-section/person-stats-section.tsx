@@ -89,7 +89,7 @@ export function PersonStatsSection({ personId, personName }: Props) {
                 // C1: stats view의 비교 sub-tab으로 점프 + 자동 추가
                 sessionStorage.setItem('person-stats:pending-compare', personId)
                 setStatsView('stats')
-                navigate(pathKeys.history.dashboardPersons())
+                navigate(pathKeys.personsTimeline())
               }}
               title="능력치 인포그래픽의 비교 view로 이동해 다른 인물과 비교"
             >
