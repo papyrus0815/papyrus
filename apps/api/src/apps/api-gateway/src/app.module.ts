@@ -21,6 +21,7 @@ import { EventCategoryModule } from '../../../libs/event-category/event-category
 import { CityModule } from '../../../libs/city/city.module'
 import { NotificationModule } from '../../../libs/notification/notification.module'
 import { OrganizationModule } from '../../../libs/organization/infrastructure/organization.module'
+import { CompanyModule } from '../../../libs/company/infrastructure/company.module'
 import { UploadModule } from '../../../libs/shared/upload/upload.module'
 import { UploadServeMiddleware } from '../../../libs/shared/upload/upload-serve.middleware'
 import { AdministrationDepartmentModule } from '../../../libs/administration-department/administration-department.module'
@@ -67,6 +68,7 @@ import {
     CityModule,
     NotificationModule,
     OrganizationModule,
+    CompanyModule,
     UploadModule,
     AdministrationDepartmentModule,
     EthnicityModule,
