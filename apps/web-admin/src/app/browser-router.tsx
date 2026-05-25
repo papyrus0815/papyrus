@@ -15,6 +15,7 @@ import { dashboardRoute } from '@/pages/dashboard/dashboard.route'
 import { dynastyRoute } from '@/pages/dynasty/dynasty.route'
 import { ethnicitiesRoutes } from '@/pages/ethnicities/ethnicities.route'
 import { organizationsRoutes } from '@/pages/organizations/organizations.route'
+import { companiesRoutes } from '@/pages/companies/companies.route'
 import { eventPageRoute } from '@/pages/events/event-route'
 import { countryRoute } from '@/pages/country/country.route'
 import { continentsRoute } from '@/pages/continents/continents.route'
@@ -167,6 +168,8 @@ const appRouterConfig = [
           ...organizationsRoutes,
           // 민족 라우트 (CRUD)
           ...ethnicitiesRoutes,
+          // 기업 라우트 (CRUD)
+          ...companiesRoutes,
           // 콘텐츠 영역 — 구 /history/* 자손들, 전부 top-level로 평탄화. ContentLayout 셸 공유.
           {
             element: <ContentLayout />,
