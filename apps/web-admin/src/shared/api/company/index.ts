@@ -12,6 +12,42 @@ export type CompanyRelationSummary = {
   name: string
 }
 
+export type FacilityType =
+  | 'HEADQUARTERS'
+  | 'FACTORY'
+  | 'RND'
+  | 'OFFICE'
+  | 'OTHER'
+
+export type CompanyFacilitySummary = {
+  id: string
+  facilityType: FacilityType | null
+  name: string | null
+  address: string | null
+  openedAt: string | null
+  closedAt: string | null
+  note: string | null
+  city: CompanyRelationSummary | null
+}
+
+export type CompanyHistoryItem = {
+  id: string
+  title: string
+  occurredAt: string | null
+  content: string | null
+  note: string | null
+  order: number | null
+}
+
+export type CompanyCategoryLink = {
+  id: string
+  categoryId: string
+  categoryName: string
+  fromDate: string | null
+  toDate: string | null
+  note: string | null
+}
+
 export type Company = {
   id: string
   name: string
@@ -36,6 +72,13 @@ export type Company = {
   organization: CompanyRelationSummary | null
   createdAt: string
   updatedAt: string
+}
+
+/** 상세 조회 응답 — 요약 관계 + 시설·연혁·카테고리 연결 */
+export type CompanyDetail = Company & {
+  facilities: CompanyFacilitySummary[]
+  histories: CompanyHistoryItem[]
+  categories: CompanyCategoryLink[]
 }
 
 export type CreateCompanyInput = {
@@ -96,8 +139,8 @@ export const companyApi = {
     return Array.isArray(list) ? list : []
   },
 
-  getById: async (id: string): Promise<Company | null> => {
-    const item = await request<Company | null>(
+  getById: async (id: string): Promise<CompanyDetail | null> => {
+    const item = await request<CompanyDetail | null>(
       `/companies/${encodeURIComponent(id)}`,
     )
     return item ?? null

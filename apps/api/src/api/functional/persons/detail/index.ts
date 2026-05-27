@@ -81,7 +81,6 @@ export namespace getDetailById {
     children: any[];
     siblings: any[];
     foundedCompanies: any[];
-    companies: any[];
     books: any[];
     organizationRoles: any[];
     partyLeaderships: any[];

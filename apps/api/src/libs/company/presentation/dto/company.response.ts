@@ -52,3 +52,50 @@ export interface CompanyResponseDto {
   createdAt: string
   updatedAt: string
 }
+
+/** 시설 유형 */
+export type FacilityTypeValue =
+  | 'HEADQUARTERS'
+  | 'FACTORY'
+  | 'RND'
+  | 'OFFICE'
+  | 'OTHER'
+
+/** 기업 시설 요약 (상세 화면용) */
+export interface CompanyFacilitySummary {
+  id: string
+  facilityType: FacilityTypeValue | null
+  name: string | null
+  address: string | null
+  openedAt: string | null
+  closedAt: string | null
+  note: string | null
+  city: CompanyRelationSummary | null
+}
+
+/** 기업 연혁 항목 (상세 화면용) */
+export interface CompanyHistoryItem {
+  id: string
+  title: string
+  occurredAt: string | null
+  content: string | null
+  note: string | null
+  order: number | null
+}
+
+/** 기업-카테고리 연결 (상세 화면용) */
+export interface CompanyCategoryLink {
+  id: string
+  categoryId: string
+  categoryName: string
+  fromDate: string | null
+  toDate: string | null
+  note: string | null
+}
+
+/** 기업 상세 응답 — 요약 응답 + 시설·연혁·카테고리 연결 */
+export interface CompanyDetailResponseDto extends CompanyResponseDto {
+  facilities: CompanyFacilitySummary[]
+  histories: CompanyHistoryItem[]
+  categories: CompanyCategoryLink[]
+}

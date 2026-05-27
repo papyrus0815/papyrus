@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client'
 import {
   CompanyRepository,
   type CompanyWithRelations,
+  type CompanyDetailWithRelations,
 } from '../infrastructure/company.repository'
 import type { CreateCompanyDto, UpdateCompanyDto } from '../presentation/dto'
 
@@ -41,7 +42,7 @@ export class CompanyService {
     return this.companyRepository.findAll()
   }
 
-  async findById(id: string): Promise<CompanyWithRelations> {
+  async findById(id: string): Promise<CompanyDetailWithRelations> {
     const company = await this.companyRepository.findById(id)
     if (!company) {
       throw new NotFoundException(`Company with ID ${id} not found`)

@@ -11,13 +11,18 @@ import {
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { CompanyService } from '../application/company.service'
-import type { CompanyWithRelations } from '../infrastructure/company.repository'
+import type {
+  CompanyWithRelations,
+  CompanyDetailWithRelations,
+} from '../infrastructure/company.repository'
 import {
   CreateCompanyDto,
   UpdateCompanyDto,
   CompanyResponseDto,
+  CompanyDetailResponseDto,
   CompanyRelationSummary,
   CompanyStatusValue,
+  FacilityTypeValue,
 } from './dto'
 
 /**
@@ -35,11 +40,11 @@ export class CompanyController {
     return companies.map((c) => this.toResponse(c))
   }
 
-  /** ID로 기업 조회 */
+  /** ID로 기업 조회 (시설·연혁·카테고리 포함) */
   @Get(':id')
-  async getById(@Param('id') id: string): Promise<CompanyResponseDto> {
+  async getById(@Param('id') id: string): Promise<CompanyDetailResponseDto> {
     const company = await this.companyService.findById(id)
-    return this.toResponse(company)
+    return this.toDetailResponse(company)
   }
 
   /** 기업 생성 */
@@ -97,6 +102,40 @@ export class CompanyController {
       organization: this.toSummary(c.organization),
       createdAt: c.createdAt.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
+    }
+  }
+
+  private toDetailResponse(
+    c: CompanyDetailWithRelations,
+  ): CompanyDetailResponseDto {
+    return {
+      ...this.toResponse(c),
+      facilities: c.facilities.map((f) => ({
+        id: f.id,
+        facilityType: (f.facilityType as FacilityTypeValue | null) ?? null,
+        name: f.name,
+        address: f.address,
+        openedAt: f.openedAt ? f.openedAt.toISOString() : null,
+        closedAt: f.closedAt ? f.closedAt.toISOString() : null,
+        note: f.note,
+        city: this.toSummary(f.city),
+      })),
+      histories: c.CompanyHistory.map((h) => ({
+        id: h.id,
+        title: h.title,
+        occurredAt: h.occurredAt ? h.occurredAt.toISOString() : null,
+        content: h.content,
+        note: h.note,
+        order: h.order,
+      })),
+      categories: c.CompanyCategoryRelation.map((r) => ({
+        id: r.id,
+        categoryId: r.categoryId,
+        categoryName: r.category.name,
+        fromDate: r.fromDate ? r.fromDate.toISOString() : null,
+        toDate: r.toDate ? r.toDate.toISOString() : null,
+        note: r.note,
+      })),
     }
   }
 }
