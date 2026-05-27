@@ -68,6 +68,30 @@ enum EventCountryRole {
   OTHER
 }
 
+/// 사건에서 조직/기업이 가지는 역할
+enum EventOrganizationRole {
+  /// 주체 (사건의 핵심 주체가 된 조직/기업)
+  PRINCIPAL
+  /// 이 사건으로 설립됨
+  FOUNDED
+  /// 이 사건으로 해산·폐업됨
+  DISSOLVED
+  /// 인수자
+  ACQUIRER
+  /// 피인수자
+  ACQUIRED
+  /// 참여
+  PARTICIPANT
+  /// 시공/건설 주체
+  CONTRACTOR
+  /// 수혜
+  BENEFICIARY
+  /// 피해
+  VICTIM
+  /// 기타
+  OTHER
+}
+
 /// 진영 레벨
 enum SideLevel {
   /// 연합 (예: 연합군, 추축국)
@@ -271,11 +295,15 @@ model Event {
   historicalCountryId String?            @map("historical_country_id") @db.Char(36)
   historicalCountry   HistoricalCountry? @relation(fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
-  persons          PersonEvent[]
-  BookEvent        BookEvent[]
-  countryRelations EventCountryRelation[]
-  relatedEvents    EventRelation[]        @relation("EventToRelated")
-  relatedByEvents  EventRelation[]        @relation("RelatedToEvent")
+  persons               PersonEvent[]
+  BookEvent             BookEvent[]
+  countryRelations      EventCountryRelation[]
+  organizationRelations EventOrganizationRelation[]
+  relatedEvents         EventRelation[]             @relation("EventToRelated")
+  relatedByEvents       EventRelation[]             @relation("RelatedToEvent")
+
+  /// 이 사건을 정본으로 참조하는 기업 연혁 항목 (CompanyHistory.eventId)
+  companyHistories CompanyHistory[] @relation("CompanyHistoryEvent")
 
   // 🆕 정규화된 군사 정보
   belligerentSides      BelligerentSide[]
@@ -500,6 +528,43 @@ model EventCountryRelation {
   @@index([countryId], name: "idx_event_country_countryId")
   @@index([historicalCountryId], name: "idx_event_country_histCountryId")
   @@map("event_country_relation")
+}
+
+// ========================
+// 사건 ↔ 조직/기업 관계 (EventCountryRelation 대칭)
+// Company는 Company.organizationId(1:1)로 Organization과 묶이므로 이 표를 통해 사건과 연결된다
+// ========================
+model EventOrganizationRelation {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+
+  /// 조직 FK (기업은 Organization 1:1 다리로 연결)
+  organizationId String @map("organization_id") @db.Char(36)
+
+  /// 사건에서의 역할
+  role EventOrganizationRole
+
+  /// 역할 상세 설명
+  roleDescription String? @map("role_description") @db.Text
+
+  /// 비고
+  note String? @db.Text
+
+  //--- 관계 필드
+  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([eventId, organizationId, role], name: "uniq_event_org_role")
+  @@index([eventId], name: "idx_event_org_eventId")
+  @@index([organizationId], name: "idx_event_org_organizationId")
+  @@map("event_organization_relation")
 }
 
 // ========================

@@ -42,6 +42,22 @@
 /// - 🆕 역사적 사건과 시설의 연결
 
 // ========================
+// 기업 상태
+// ========================
+enum CompanyStatus {
+  /// 활동 중
+  ACTIVE
+  /// 해산·폐지됨
+  DISSOLVED
+  /// 다른 회사에 흡수·합병됨
+  MERGED
+  /// 활동 중단
+  SUSPENDED
+  /// 기타
+  OTHER
+}
+
+// ========================
 // 기업 카테고리
 // ========================
 model CompanyCategory {
@@ -50,6 +66,9 @@ model CompanyCategory {
 
   /// 카테고리 명
   name String @db.VarChar(100)
+
+  /// 슬러그/코드 (URL·외부 참조용)
+  slug String? @unique @db.VarChar(80)
 
   /// 카테고리 설명
   description String?
@@ -66,6 +85,8 @@ model CompanyCategory {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@unique([parentId, name], name: "uniq_company_category_parent_name")
+  @@index([parentId], name: "idx_company_category_parentId")
   @@map("company_category")
 }
 
@@ -73,35 +94,68 @@ model CompanyCategory {
 // 기업
 // ========================
 model Company {
-  /// PK 
+  /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 회사 이름 
+  /// 회사 이름
   name String @db.VarChar(100)
-
-  /// 설립일
-  foundedAt DateTime? @map("founded_at")
+  /// 약칭/티커 (예: EIC, GE)
+  shortName String? @map("short_name") @db.VarChar(50)
+  /// 현지어/원어 명칭
+  localName String? @map("local_name") @db.VarChar(200)
 
   /// 회사 설명
-  description String?
+  description String? @db.Text
+
+  /// 상태
+  status CompanyStatus? @default(ACTIVE)
+
+  /// 설립일
+  foundedAt   DateTime? @map("founded_at")
+  /// 해산/폐업일
+  dissolvedAt DateTime? @map("dissolved_at")
+
+  /// 공식 웹사이트
+  websiteUrl String? @map("website_url") @db.VarChar(255)
+  /// 로고 URL
+  logoUrl String? @map("logo_url") @db.VarChar(255)
+
+  /// 자유 확장
+  extra Json?
 
   //--- 외래키
   /// 창립자
   founderId String? @map("founder_id") @db.Char(36)
-  /// 추가 인물
-  personId  String? @map("person_id") @db.Char(36)
+  /// 현대 국가 소속(국내 기업)
+  countryId String? @map("country_id") @db.Char(36)
+  /// 역사적 국가 소속(예: 동인도회사)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+  /// 본사 위치 도시
+  headquartersCityId String? @map("headquarters_city_id") @db.Char(36)
+  /// 동일 실체의 Organization (BusinessCareer 등 인물 경력과 연결할 때 사용)
+  organizationId String? @unique @map("organization_id") @db.Char(36)
 
   //--- 관계 필드
-  Person                  Person?                   @relation(fields: [personId], references: [id])
-  CompanyHistory          CompanyHistory[]
+  founder           Person?            @relation("FounderToCompany", fields: [founderId], references: [id], onDelete: SetNull)
+  country           Country?           @relation("CompanyCountry", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry HistoricalCountry? @relation("CompanyHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  headquartersCity  City?              @relation("CompanyHeadquartersCity", fields: [headquartersCityId], references: [id], onDelete: SetNull)
+  organization      Organization?      @relation("CompanyOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
+
   facilities              CompanyFacility[]
+  CompanyHistory          CompanyHistory[]
   CompanyCategoryRelation CompanyCategoryRelation[]
-  founder                 Person?                   @relation("FounderToCompany", fields: [founderId], references: [id], onDelete: SetNull)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@unique([name, countryId], name: "uniq_company_name_country")
+  @@index([name], name: "idx_company_name")
+  @@index([status], name: "idx_company_status")
+  @@index([countryId], name: "idx_company_countryId")
+  @@index([historicalCountryId], name: "idx_company_historicalCountryId")
+  @@index([foundedAt], name: "idx_company_foundedAt")
   @@map("company")
 }
 
@@ -156,6 +210,7 @@ model CompanyFacility {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([companyId], name: "idx_company_facility_companyId")
   @@map("company_facility")
 }
 
@@ -222,14 +277,18 @@ model CompanyHistory {
 
   //--- 외래키
   companyId String @map("company_id") @db.Char(36)
+  /// 이 연혁 항목이 중앙 사건(Event)과 동일 실체일 때 연결 (선택)
+  eventId String? @map("event_id") @db.Char(36)
 
   //--- 관계 필드
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  event   Event?  @relation("CompanyHistoryEvent", fields: [eventId], references: [id], onDelete: SetNull)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([eventId], name: "idx_company_history_eventId")
   @@map("company_history")
 }
 
@@ -255,6 +314,14 @@ model CompanyCategoryRelation {
   company  Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   category CompanyCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([companyId, categoryId, fromDate], name: "uniq_company_category_relation_period")
+  @@index([companyId], name: "idx_company_category_relation_companyId")
+  @@index([categoryId], name: "idx_company_category_relation_categoryId")
+  @@index([fromDate], name: "idx_company_category_relation_fromDate")
   @@map("company_category_relation")
 }
 

@@ -211,7 +211,6 @@ model Person {
   deathPlaceText String? @map("death_place_text") @db.VarChar(255)
 
   //--- 관계 필드
-  Company            Company[]
   dynasty            Dynasty?              @relation(fields: [dynastyId], references: [id], onDelete: SetNull)
   religion           Religion?             @relation(fields: [religionId], references: [id], onDelete: SetNull)
   denomination       ReligionDenomination? @relation("DenominationToPerson", fields: [denominationId], references: [id], onDelete: SetNull)

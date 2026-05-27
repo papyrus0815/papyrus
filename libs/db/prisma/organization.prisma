@@ -248,6 +248,13 @@ model Organization {
   /// 이 조직을 소속으로 참조하는 정부 직위 정의 (government.prisma)
   governmentPositionDefinitions GovernmentPositionDefinition[] @relation("GovernmentPositionOrganization")
 
+  /// 동일 실체의 Company (1:1) — BusinessCareer 등은 Organization을 참조하므로
+  /// 기업 도메인(industry.prisma)과 이 필드로 연결한다
+  company Company? @relation("CompanyOrganization")
+
+  /// 이 조직/기업이 참여한 중앙 사건(Event) 관계
+  eventRelations EventOrganizationRelation[]
+
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

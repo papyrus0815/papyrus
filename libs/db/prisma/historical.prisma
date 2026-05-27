@@ -244,6 +244,7 @@ model HistoricalCountry {
   socialPhenomena         SocialPhenomenon[]
   Organizations           Organization[]                  @relation("OrganizationHistoricalCountry")
   organizationMemberships OrganizationCountryMembership[] @relation("OrgMembershipHistoricalCountry")
+  companies               Company[]                       @relation("CompanyHistoricalCountry")
   PoliticalParty          PoliticalParty[]                @relation("PoliticalPartyHistoricalCountry")
   electoralDistricts      ElectoralDistrict[]             @relation("ElectoralDistrictHistoricalCountry")
   elections               Election[]                      @relation("ElectionHistoricalCountry")
