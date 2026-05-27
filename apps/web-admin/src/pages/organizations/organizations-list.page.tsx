@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { FiPlus, FiEdit2, FiTrash2, FiGlobe, FiBriefcase, FiAward, FiX, FiChevronRight } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import { apiConnection } from '@/shared/api/client'
 import type { OrganizationResponseDto, OrganizationType } from '@/shared/api/organizations'
@@ -45,7 +45,9 @@ const ORGANIZATION_TYPE_COLOR: Partial<Record<OrganizationType, { bg: string; co
 
 const Layout = styled.div`
   display: flex;
-  height: calc(100vh - 64px);
+  /* 고정 헤더 아래로 내려 겹침 방지 */
+  margin-top: var(--header-height, 64px);
+  height: calc(100vh - var(--header-height, 64px));
   min-height: 0;
   overflow: hidden;
 `
@@ -55,7 +57,10 @@ const ListPanel = styled.div<{ hasDetail: boolean }>`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  border-right: ${(p) => (p.hasDetail ? '1px solid #e2e8f0' : 'none')};
+  border-right: ${(p) =>
+    p.hasDetail
+      ? `1px solid ${p.theme.colors.border.default}`
+      : 'none'};
   overflow: hidden;
   transition: flex 0.25s ease;
 `
@@ -66,13 +71,13 @@ const DetailPanel = styled.div<{ open: boolean }>`
   display: ${(p) => (p.open ? 'flex' : 'none')};
   flex-direction: column;
   overflow: hidden;
-  background: #fafbfc;
+  background: ${({ theme }) => theme.colors.background.secondary};
 `
 
 const PanelHeader = styled.div`
   padding: 20px 24px 16px;
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -83,7 +88,7 @@ const PanelHeader = styled.div`
 const PanelTitle = styled.h1`
   font-size: 17px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin: 0;
   display: flex;
   align-items: center;
@@ -92,8 +97,8 @@ const PanelTitle = styled.h1`
 
 const Toolbar = styled.div`
   padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #f1f5f9;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -103,37 +108,55 @@ const Toolbar = styled.div`
 
 const Select = styled.select`
   padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   font-size: 13px;
-  background: #fff;
-  color: #374151;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   min-width: 130px;
   cursor: pointer;
-  &:focus { outline: none; border-color: #6366f1; }
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+  option {
+    background: ${({ theme }) => theme.colors.background.primary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const IconBtn = styled.button`
   padding: 7px 12px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
   font-size: 13px;
-  font-weight: 500;
-  color: #374151;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  &:hover { background: #f8fafc; }
+  transition:
+    background 0.18s,
+    color 0.18s,
+    border-color 0.18s;
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+  }
 `
 
 const PrimaryBtn = styled(IconBtn)`
-  border-color: #6366f1;
-  background: #6366f1;
-  color: #fff;
-  font-weight: 600;
-  &:hover { background: #4f46e5; border-color: #4f46e5; }
+  border: none;
+  background: ${({ theme }) => theme.colors.gradient.primary};
+  color: ${({ theme }) => theme.colors.button.text};
+  box-shadow: 0 4px 14px ${({ theme }) => theme.colors.shadow.md};
+  &:hover {
+    color: ${({ theme }) => theme.colors.button.text};
+    box-shadow: 0 6px 18px ${({ theme }) => theme.colors.shadow.lg};
+  }
 `
 
 const CardList = styled.div`
@@ -146,31 +169,37 @@ const CardList = styled.div`
 `
 
 const OrgCard = styled.div<{ selected?: boolean }>`
-  background: ${(p) => (p.selected ? '#f0f4ff' : '#fff')};
-  border: 1.5px solid ${(p) => (p.selected ? '#6366f1' : '#e5e7eb')};
-  border-radius: 12px;
+  background: ${(p) =>
+    p.selected ? p.theme.colors.activeLight : p.theme.colors.background.primary};
+  border: 1.5px solid
+    ${(p) => (p.selected ? p.theme.colors.primary : p.theme.colors.border.default)};
+  border-radius: 14px;
   padding: 14px 16px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
   display: flex;
   align-items: center;
   gap: 12px;
   &:hover {
-    border-color: ${(p) => (p.selected ? '#6366f1' : '#c7d2fe')};
-    background: ${(p) => (p.selected ? '#f0f4ff' : '#f8faff')};
+    transform: translateY(-1px);
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 8px 22px ${({ theme }) => theme.colors.shadow.md};
   }
 `
 
 const OrgCardIcon = styled.div`
   width: 40px;
   height: 40px;
-  border-radius: 10px;
-  background: #f1f5f9;
+  border-radius: 11px;
+  background: ${({ theme }) => theme.colors.background.tertiary};
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 18px;
 `
 
@@ -182,7 +211,7 @@ const OrgCardContent = styled.div`
 const OrgCardName = styled.div`
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -190,7 +219,7 @@ const OrgCardName = styled.div`
 
 const OrgCardMeta = styled.div`
   font-size: 12px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;
@@ -204,13 +233,14 @@ const TypeBadge = styled.span<{ $bg?: string; $color?: string }>`
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  background: ${(p) => p.$bg ?? '#f1f5f9'};
-  color: ${(p) => p.$color ?? '#475569'};
+  background: ${(p) => p.$bg ?? p.theme.colors.background.tertiary};
+  color: ${(p) => p.$color ?? p.theme.colors.text.secondary};
   flex-shrink: 0;
 `
 
 const ChevronIcon = styled.div<{ selected?: boolean }>`
-  color: ${(p) => (p.selected ? '#6366f1' : '#cbd5e1')};
+  color: ${(p) =>
+    p.selected ? p.theme.colors.primary : p.theme.colors.text.tertiary};
   flex-shrink: 0;
   transition: color 0.15s;
 `
@@ -218,8 +248,8 @@ const ChevronIcon = styled.div<{ selected?: boolean }>`
 // Detail panel
 const DetailHeader = styled.div`
   padding: 20px 24px 16px;
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -230,13 +260,13 @@ const DetailHeader = styled.div`
 const DetailTitle = styled.h2`
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin: 0 0 4px;
 `
 
 const DetailSubtitle = styled.div`
   font-size: 13px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
   display: flex;
   align-items: center;
   gap: 6px;
@@ -245,23 +275,29 @@ const DetailSubtitle = styled.div`
 const CloseBtn = styled.button`
   width: 32px;
   height: 32px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #64748b;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  &:hover { background: #f1f5f9; color: #0f172a; }
+  transition:
+    background 0.18s,
+    color 0.18s;
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const DetailTabBar = styled.div`
   display: flex;
   padding: 0 24px;
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
   flex-shrink: 0;
   min-width: 0;
   overflow-x: auto;
@@ -273,7 +309,7 @@ const DetailTabBar = styled.div`
   }
   &::-webkit-scrollbar-thumb {
     border-radius: 999px;
-    background: rgba(15, 23, 42, 0.15);
+    background: ${({ theme }) => theme.colors.border.medium};
   }
 `
 
@@ -282,17 +318,22 @@ const DetailTabBtn = styled.button<{ $active?: boolean }>`
   padding: 12px 16px;
   font-size: 13px;
   font-weight: ${(p) => (p.$active ? 700 : 500)};
-  color: ${(p) => (p.$active ? '#6366f1' : '#64748b')};
+  color: ${(p) =>
+    p.$active ? p.theme.colors.primary : p.theme.colors.text.secondary};
   background: transparent;
   border: none;
-  border-bottom: 2px solid ${(p) => (p.$active ? '#6366f1' : 'transparent')};
+  border-bottom: 2px solid
+    ${(p) => (p.$active ? p.theme.colors.primary : 'transparent')};
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
   white-space: nowrap;
   transition: all 0.15s;
-  &:hover { color: ${(p) => (p.$active ? '#6366f1' : '#374151')}; }
+  &:hover {
+    color: ${(p) =>
+      p.$active ? p.theme.colors.primary : p.theme.colors.text.primary};
+  }
 `
 
 const DetailBody = styled.div`
@@ -316,56 +357,98 @@ const FormField = styled.div`
 const FormLabel = styled.label`
   font-size: 12px;
   font-weight: 600;
-  color: #374151;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const detailFieldStyles = css`
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.primary};
+  transition:
+    border-color 0.18s,
+    box-shadow 0.18s;
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 0 0 3px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.25)'
+          : 'rgba(99, 102, 241, 0.15)'};
+  }
 `
 
 const FormInput = styled.input`
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1.5px solid #e2e8f0;
-  font-size: 14px;
-  color: #0f172a;
-  background: #fff;
-  &:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  ${detailFieldStyles}
 `
 
 const FormTextarea = styled.textarea`
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1.5px solid #e2e8f0;
-  font-size: 14px;
-  color: #0f172a;
-  background: #fff;
+  ${detailFieldStyles}
   resize: vertical;
   min-height: 80px;
-  &:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  font-family: inherit;
 `
 
 const SaveBtn = styled.button`
-  padding: 10px 20px;
-  border-radius: 8px;
+  padding: 0.6rem 1.25rem;
+  border-radius: 12px;
   border: none;
-  background: #6366f1;
-  color: #fff;
+  background: ${({ theme }) => theme.colors.gradient.primary};
+  color: ${({ theme }) => theme.colors.button.text};
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   margin-top: 20px;
-  &:hover { background: #4f46e5; }
+  box-shadow: 0 4px 14px ${({ theme }) => theme.colors.shadow.md};
+  transition:
+    box-shadow 0.18s,
+    transform 0.12s;
+  &:hover {
+    box-shadow: 0 6px 18px ${({ theme }) => theme.colors.shadow.lg};
+  }
+  &:active {
+    transform: scale(0.97);
+  }
 `
 
 const DeleteBtn = styled.button`
-  padding: 10px 20px;
-  border-radius: 8px;
-  border: 1px solid #fecaca;
-  background: #fef2f2;
-  color: #dc2626;
+  padding: 0.6rem 1.25rem;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.colors.alert.danger.border};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.error};
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   margin-top: 20px;
   margin-left: 8px;
-  &:hover { background: #fee2e2; }
+  transition: background 0.18s;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248,113,113,0.12)' : 'rgba(239,68,68,0.06)'};
+  }
+`
+
+const TreeRow = styled.div`
+  padding: 4px 0 4px 8px;
+  border-left: 2px solid ${({ theme }) => theme.colors.border.default};
+`
+
+const TreeName = styled.span`
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const TreeMeta = styled.span`
+  font-size: 0.85rem;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  margin-left: 6px;
 `
 
 // ───────────────────────── Component ─────────────────────────
@@ -484,15 +567,15 @@ export const OrganizationsListPage: React.FC = () => {
   }
 
   const renderTreeNode = (node: any, depth = 0) => (
-    <div key={node.id} style={{ marginLeft: depth * 16, paddingLeft: 8, borderLeft: '2px solid #e0e0e0', padding: '4px 0 4px 8px' }}>
-      <span style={{ fontWeight: 500 }}>{node.name}</span>
-      <span style={{ fontSize: '0.85rem', color: '#666', marginLeft: 6 }}>
+    <TreeRow key={node.id} style={{ marginLeft: depth * 16 }}>
+      <TreeName>{node.name}</TreeName>
+      <TreeMeta>
         {ORGANIZATION_TYPE_LABEL[node.type as OrganizationType] ?? node.type} ·{' '}
         {node.countryId || node.historicalCountryId ? '소속 있음' : '-'}
-      </span>
+      </TreeMeta>
       {node.children?.length > 0 &&
         node.children.map((c: any) => renderTreeNode(c, depth + 1))}
-    </div>
+    </TreeRow>
   )
 
   const getCountryName = (org: OrganizationResponseDto) => {

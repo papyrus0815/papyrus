@@ -913,7 +913,8 @@ function useOnClickOutside<T extends HTMLElement>(
 }
 
 /**
- * 백그라운드 색 넣지마라. 전체 컨테이너에서 적용한다.
+ * 고정(fixed) 헤더 — 반투명 글래스 배경 + 블러로 스크롤 콘텐츠가
+ * 비쳐 보이는 문제를 막고 트렌디한 frosted-glass 룩을 준다.
  */
 const HeaderBar = styled.header`
   position: fixed;
@@ -926,7 +927,11 @@ const HeaderBar = styled.header`
   justify-content: space-between;
   padding: 0 20px;
   z-index: ${Z_INDEX.HEADER};
-  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
+  background: ${({ theme }) => theme.colors.header.primary};
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  box-shadow: 0 1px 2px ${({ theme }) => theme.colors.shadow.sm};
   transition:
     background 0.25s ease,
     border-color 0.25s ease;

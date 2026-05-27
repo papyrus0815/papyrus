@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FiArrowLeft, FiSave, FiUser } from 'react-icons/fi'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import { apiConnection } from '@/shared/api/client'
 import { personCareerApi } from '@/shared/api/person-career'
@@ -35,7 +35,7 @@ const ORGANIZATION_TYPES: { value: OrganizationType; label: string }[] = [
 ]
 
 const Page = styled.div`
-  padding: 24px 20px 48px;
+  padding: calc(var(--header-height, 64px) + 24px) 20px 48px;
   max-width: 640px;
   margin: 0 auto;
 `
@@ -45,123 +45,150 @@ const FormWrap = styled.div`
 const BackButton = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 0 20px;
-  font-size: 15px;
-  color: #666;
+  gap: 6px;
+  padding: 0 0 16px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
   background: none;
   border: none;
   cursor: pointer;
+  transition: color 0.18s;
   &:hover {
-    color: #111;
+    color: ${({ theme }) => theme.colors.primary};
   }
 `
 const FormTitle = styled.h2`
-  margin: 0 0 8px;
-  font-size: 22px;
-  font-weight: 600;
-  color: #111;
+  margin: 0 0 6px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 const FormDesc = styled.p`
   margin: 0 0 24px;
-  font-size: 14px;
-  color: #666;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+const Form = styled.form`
+  padding: 1.5rem;
+  border-radius: 16px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
 `
 const Field = styled.div`
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 `
 const Label = styled.label`
   display: block;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
-  color: #333;
+  color: ${({ theme }) => theme.colors.text.secondary};
   margin-bottom: 6px;
 `
-const Input = styled.input`
+const fieldStyles = css`
   width: 100%;
-  padding: 12px 14px;
-  font-size: 15px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9375rem;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 10px;
   box-sizing: border-box;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  transition:
+    border-color 0.18s,
+    box-shadow 0.18s;
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
   &:focus {
     outline: none;
-    border-color: var(--color-primary);
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 0 0 3px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.25)'
+          : 'rgba(99, 102, 241, 0.15)'};
   }
 `
+const Input = styled.input`
+  ${fieldStyles}
+`
 const Select = styled.select`
-  width: 100%;
-  padding: 12px 14px;
-  font-size: 15px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-  color: #111;
+  ${fieldStyles}
   cursor: pointer;
-  box-sizing: border-box;
-  &:focus {
-    outline: none;
-    border-color: var(--color-primary);
+  option {
+    background: ${({ theme }) => theme.colors.background.primary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 const Textarea = styled.textarea`
-  width: 100%;
-  padding: 12px 14px;
-  font-size: 15px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  min-height: 80px;
+  ${fieldStyles}
+  min-height: 90px;
   resize: vertical;
-  box-sizing: border-box;
   font-family: inherit;
-  &:focus {
-    outline: none;
-    border-color: var(--color-primary);
-  }
 `
 const FormActions = styled.div`
   display: flex;
   gap: 12px;
-  margin-top: 24px;
+  justify-content: flex-end;
+  margin-top: 20px;
 `
 const SubmitBtn = styled.button`
-  padding: 12px 24px;
-  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9375rem;
   font-weight: 600;
-  color: #fff;
-  background: var(--color-primary);
+  color: ${({ theme }) => theme.colors.button.text};
+  background: ${({ theme }) => theme.colors.gradient.primary};
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
+  box-shadow: 0 4px 14px ${({ theme }) => theme.colors.shadow.md};
+  transition:
+    box-shadow 0.18s,
+    transform 0.12s;
   &:hover:not(:disabled) {
-    opacity: 0.9;
+    box-shadow: 0 6px 18px ${({ theme }) => theme.colors.shadow.lg};
+  }
+  &:active {
+    transform: scale(0.97);
   }
 `
 const CancelBtn = styled.button`
-  padding: 12px 24px;
-  font-size: 15px;
-  font-weight: 500;
-  color: #666;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 12px;
   cursor: pointer;
+  transition:
+    background 0.18s,
+    color 0.18s,
+    border-color 0.18s;
   &:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
   }
 `
 const HeadsSection = styled.div`
-  margin-top: 24px;
+  margin-top: 20px;
   padding: 16px 20px;
-  background: #f9f9f9;
-  border-radius: 10px;
-  border: 1px solid #eee;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 const HeadsTitle = styled.h3`
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
-  color: #333;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin: 0 0 10px 0;
   display: flex;
   align-items: center;
@@ -170,11 +197,14 @@ const HeadsTitle = styled.h3`
 const HeadsList = styled.ul`
   margin: 0;
   padding-left: 20px;
-  font-size: 14px;
-  color: #666;
+  font-size: 0.875rem;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.6;
   li {
     margin-bottom: 6px;
+  }
+  strong {
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -338,7 +368,7 @@ export const OrganizationFormPage: React.FC = () => {
         <FormDesc>
           만철·관동군·총독부 등 행정기구를 등록합니다. 소속 국가를 선택하면 해당 국가 상세 → 행정조직 → 행정기구 탭에서 조회됩니다.
         </FormDesc>
-        <form onSubmit={handleSubmit}>
+        <Form onSubmit={handleSubmit}>
           <Field>
             <Label>이름 *</Label>
             <Input
@@ -434,7 +464,7 @@ export const OrganizationFormPage: React.FC = () => {
               취소
             </CancelBtn>
           </FormActions>
-        </form>
+        </Form>
       </FormWrap>
     </Page>
   )
