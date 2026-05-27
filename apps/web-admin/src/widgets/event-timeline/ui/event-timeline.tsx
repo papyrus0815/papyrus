@@ -34,6 +34,7 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -725,21 +726,47 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   }, [minYear, maxYear, pixelsPerYear])
 
   // ── 10년 sparkline ──────────────────────────────────────────────────────
-  const decadeBuckets = useMemo(() => {
-    const map = new Map<number, { count: number; weight: number }>()
+  /**
+   * decade별 카테고리 분포까지 같이 집계 — minimap stacked bar 렌더용.
+   * 이전엔 단일 count/weight만 모아 단색 막대였는데, 카테고리 분포가 보이지 않아
+   * "어느 시기에 어떤 카테고리가 많은지" 한눈에 못 봄. byCategory를 같이 들고
+   * 가서 시간×카테고리 2D 정보를 미니맵에 응축한다.
+   */
+  type DecadeBucket = {
+    decade: number
+    count: number
+    weight: number
+    byCategory: Map<string, number>
+  }
+  const decadeBuckets = useMemo<DecadeBucket[]>(() => {
+    const map = new Map<
+      number,
+      { count: number; weight: number; byCategory: Map<string, number> }
+    >()
     for (const b of bars) {
       const decade = Math.floor(b.startYear / 10) * 10
-      const cur = map.get(decade) ?? { count: 0, weight: 0 }
+      let cur = map.get(decade)
+      if (!cur) {
+        cur = { count: 0, weight: 0, byCategory: new Map() }
+        map.set(decade, cur)
+      }
       cur.count += 1
       cur.weight +=
         b.importance === 'critical' ? 3 : b.importance === 'major' ? 2 : 1
-      map.set(decade, cur)
+      cur.byCategory.set(
+        b.category,
+        (cur.byCategory.get(b.category) ?? 0) + 1,
+      )
     }
     const startDecade = Math.floor(minYear / 10) * 10
     const endDecade = Math.ceil(maxYear / 10) * 10
-    const out: { decade: number; count: number; weight: number }[] = []
+    const out: DecadeBucket[] = []
     for (let d = startDecade; d <= endDecade; d += 10) {
-      const cur = map.get(d) ?? { count: 0, weight: 0 }
+      const cur = map.get(d) ?? {
+        count: 0,
+        weight: 0,
+        byCategory: new Map<string, number>(),
+      }
       out.push({ decade: d, ...cur })
     }
     return out
@@ -1200,7 +1227,19 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
         basePxPerYear > 0 ? desiredPxPerYear / basePxPerYear : ZOOM_MAX
       const targetZoom = Math.min(ZOOM_MAX, Math.max(zoom, fitZoom))
 
-      if (targetZoom !== zoom) setZoom(targetZoom)
+      /**
+       * Zoom 포화 fallback: 이미 zoom이 fit 이상이거나 ZOOM_MAX라 더 풀 수 없으면
+       * overflow와 동일한 UX(목록 popover)로 자동 전환. 사용자가 cluster를 반복
+       * 클릭해도 변화 없던 막힘 지점 해소.
+       */
+      if (targetZoom === zoom) {
+        setOverflowPopoverLane(null) // overflow popover와 동시 X
+        setClusterPopoverId(cluster.id)
+        scrollToYear(cluster.centerYear)
+        return
+      }
+
+      setZoom(targetZoom)
 
       // 3) 두 번 raf — state 적용 + 다음 프레임 layout 보장 후 scroll/focus
       requestAnimationFrame(() => {
@@ -1503,19 +1542,34 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       >()
 
       for (const info of bucketInfos) {
-        if (!info.baselineShow) {
+        /**
+         * critical 단일 사건은 라벨이 *사라지지 않도록* 우대:
+         *  1) baselineShow(폭) 게이트 무시
+         *  2) zoom별 importance 필터 무시(이미 critical은 모든 zoom에서 통과지만 명시)
+         *  3) labelWidth 최소 30px 보장 — 좁아도 ellipsis로라도 표시
+         *  4) row 충돌 시 다른 critical만 아니면 무조건 steal
+         * 저줌(0.5x↓)에서도 핵심 사건이 어디 있는지 한눈에 잡히게 한다.
+         */
+        const isCriticalSingle =
+          !info.isCluster && info.importance === 'critical'
+
+        if (!info.baselineShow && !isCriticalSingle) {
           labelDecision.set(info.idx, { show: false, row: 0 })
           continue
         }
-        // 줌별 importance 필터 (cluster는 통과)
+        // 줌별 importance 필터 (cluster·critical 단일은 통과)
         if (
           !info.isCluster &&
+          !isCriticalSingle &&
           LABEL_IMPORTANCE_TIER[info.importance] < minLabelTier
         ) {
           labelDecision.set(info.idx, { show: false, row: 0 })
           continue
         }
-        const labelEnd = info.endX + 4 + info.labelWidth
+        const effectiveLabelWidth = isCriticalSingle
+          ? Math.max(30, info.labelWidth)
+          : info.labelWidth
+        const labelEnd = info.endX + 4 + effectiveLabelWidth
         // 우선순위 순(0→1→2→3)으로 빈 row에 배치
         let placedRow: RowIdx | null = null
         for (const r of ROW_COUNT) {
@@ -1546,9 +1600,15 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
             }
           }
           const weakest = lastLabelOwner[weakestRow]
-          if (weakest && myTier > LABEL_IMPORTANCE_TIER[weakest.importance]) {
+          // critical은 동등 critical이 아닌 한 무조건 steal (저줌에서도 핵심 라벨 보존)
+          const shouldSteal = !!weakest && (
+            isCriticalSingle
+              ? weakest.importance !== 'critical'
+              : myTier > LABEL_IMPORTANCE_TIER[weakest.importance]
+          )
+          if (shouldSteal) {
             // steal: 이전 라벨 hide, 내가 차지
-            labelDecision.set(weakest.bucketIdx, { show: false, row: 0 })
+            labelDecision.set(weakest!.bucketIdx, { show: false, row: 0 })
             lastLabelEndX[weakestRow] = labelEnd
             lastLabelOwner[weakestRow] = {
               bucketIdx: info.idx,
@@ -1657,18 +1717,33 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   const [overflowPopoverLane, setOverflowPopoverLane] = useState<string | null>(
     null,
   )
+  /**
+   * Cluster popover — cluster를 클릭했는데 zoom이 이미 최대치라 더 풀 수 없을 때
+   * overflow와 동일한 UX(목록)로 fallback. 두 +N 모델이 *막힘 지점*에서 합류.
+   * (사용자 멘탈 모델: "더 확대 안 되면 목록을 보자".)
+   */
+  const [clusterPopoverId, setClusterPopoverId] = useState<string | null>(null)
 
-  /* overflow popover 외부 클릭 + Esc 닫기 */
+  /* overflow / cluster popover 외부 클릭 + Esc 닫기 — 한 번에 하나만 열림 */
   useEffect(() => {
-    if (!overflowPopoverLane) return
+    if (!overflowPopoverLane && !clusterPopoverId) return
     const onDocDown = (e: MouseEvent) => {
       const t = e.target as Node
-      if (t && !(t as Element).closest?.('[data-overflow-popover]')) {
+      if (!t) return
+      const el = t as Element
+      if (
+        !el.closest?.('[data-overflow-popover]') &&
+        !el.closest?.('[data-cluster-popover]')
+      ) {
         setOverflowPopoverLane(null)
+        setClusterPopoverId(null)
       }
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOverflowPopoverLane(null)
+      if (e.key === 'Escape') {
+        setOverflowPopoverLane(null)
+        setClusterPopoverId(null)
+      }
     }
     document.addEventListener('mousedown', onDocDown)
     document.addEventListener('keydown', onKey)
@@ -1676,7 +1751,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       document.removeEventListener('mousedown', onDocDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [overflowPopoverLane])
+  }, [overflowPopoverLane, clusterPopoverId])
 
   // ── 키보드 ←/→ 같은 lane 시간순 이동 + Home/End ────────────────────────
   const focusBar = useCallback((id: string) => {
@@ -1685,6 +1760,70 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     )
     if (el) el.focus()
   }, [])
+
+  /**
+   * Roving tabindex — 모든 막대에 tabIndex=0을 주면 50개+ 막대에서 Tab 키가
+   * 사실상 사용 불가. 포커스된 항목 1개만 0, 나머지는 -1. 첫 진입 시엔
+   * renderItems[0]을 디폴트로. focus 안에서는 ←/→/↑/↓ 화살표로 이동.
+   *
+   * id 기준으로 직접 비교(부모 컴포넌트 재렌더 시에도 안정).
+   */
+  const firstFocusableId = useMemo<string | null>(() => {
+    if (renderItems.length === 0) return null
+    const first = renderItems[0]
+    return first.kind === 'cluster' ? first.id : first.bar.id
+  }, [renderItems])
+
+  const rovingTabIndex = useCallback(
+    (id: string): 0 | -1 =>
+      focusedBarId === id ||
+      (focusedBarId === null && id === firstFocusableId)
+        ? 0
+        : -1,
+    [focusedBarId, firstFocusableId],
+  )
+
+  /**
+   * ↑/↓ — 인접 lane으로 포커스 이동. 현재 항목의 laneKeys[0]을 기준으로
+   * visibleLanes에서 위치 찾고 ±1 lane의 항목 중 가장 가까운 시간 항목 선택.
+   * groupBy=category/continent/country 어느 모드든 lane key 매칭만 일치하면 동작.
+   *
+   * 반환: ↑/↓로 처리됐으면 true.
+   */
+  const navigateBetweenLanes = (
+    e: React.KeyboardEvent<SVGElement>,
+    currentLaneKey: string | null,
+    currentYear: number,
+  ): boolean => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return false
+    e.preventDefault()
+    if (!currentLaneKey) return true
+    const idx = visibleLanes.findIndex((l) => l.key === currentLaneKey)
+    if (idx === -1) return true
+    const dir = e.key === 'ArrowDown' ? 1 : -1
+    const nextIdx = idx + dir
+    if (nextIdx < 0 || nextIdx >= visibleLanes.length) return true
+    const nextLane = visibleLanes[nextIdx]
+    const yearOf = (r: RenderItem): number =>
+      r.kind === 'cluster' ? r.centerYear : r.bar.startYear
+    const laneKeysOf = (r: RenderItem): readonly string[] =>
+      r.kind === 'cluster'
+        ? (r.bars[0]?.laneKeys ?? [])
+        : (r.bar.laneKeys ?? [])
+    const candidates = renderItems.filter((r) =>
+      laneKeysOf(r).includes(nextLane.key),
+    )
+    if (candidates.length === 0) return true
+    candidates.sort(
+      (a, b) =>
+        Math.abs(yearOf(a) - currentYear) - Math.abs(yearOf(b) - currentYear),
+    )
+    const target = candidates[0]
+    const targetId = target.kind === 'cluster' ? target.id : target.bar.id
+    focusBar(targetId)
+    scrollToYear(yearOf(target))
+    return true
+  }
 
   /**
    * 같은 lane 안에서 ←/→/Home/End로 인접 항목 포커스 이동 — cluster·bar 핸들러
@@ -1726,7 +1865,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
   /**
    * Cluster 키보드 — Enter/Space로 활성화, ←/→/Home/End로 같은 lane 안 인접
-   * RenderItem(bar/milestone/cluster) 이동.
+   * RenderItem(bar/milestone/cluster) 이동, ↑/↓로 lane 전환.
    */
   const handleClusterKeyDown = (
     e: React.KeyboardEvent<SVGElement>,
@@ -1738,6 +1877,9 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       activate()
       return
     }
+    // 먼저 ↑/↓ lane 전환 시도
+    const laneKey = cluster.bars[0]?.laneKeys[0] ?? null
+    if (navigateBetweenLanes(e, laneKey, cluster.centerYear)) return
     const sameLane = renderItems.filter((r) =>
       r.kind === 'cluster'
         ? r.category === cluster.category
@@ -1754,6 +1896,9 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       onSelectEvent(b.id)
       return
     }
+    // 먼저 ↑/↓ lane 전환 시도
+    const laneKey = b.laneKeys[0] ?? null
+    if (navigateBetweenLanes(e, laneKey, b.startYear)) return
     const sameCategory = bars.filter((x) => x.category === b.category)
     navigateInLane(e, b, sameCategory, (it) => it.startYear)
   }
@@ -1773,7 +1918,74 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   const todayX = (currentYear - minYear) * pixelsPerYear
 
   // ── legend toggle ───────────────────────────────────────────────────────
+  /**
+   * Lane 점프 완화 — hiddenCategories 토글 시 visibleLanes가 줄어/늘어 SVG
+   * height가 변하면 사용자가 보던 lane이 viewport 밖으로 밀려나는 CLS 발생.
+   * 토글 직전 viewport 상단에 걸친 lane을 anchor로 기억 → 토글 이후 같은 lane이
+   * viewport 같은 y에 오도록 scrollTop 재계산. 토글된 lane이 사라진 경우엔
+   * 가장 가까운 이웃 lane으로 fallback.
+   */
+  const scrollAnchorRef = useRef<{
+    laneKey: string
+    offsetWithinLane: number
+  } | null>(null)
+  const prevVisibleLanesRef = useRef(visibleLanes)
+
+  const captureScrollAnchor = useCallback(() => {
+    const host = scrollRef.current
+    if (!host) return
+    const lanes = prevVisibleLanesRef.current
+    if (lanes.length === 0) return
+    const top = host.scrollTop
+    const laneIdx = Math.max(
+      0,
+      Math.min(
+        lanes.length - 1,
+        Math.floor((top - TOP_AXIS_HEIGHT) / LANE_HEIGHT),
+      ),
+    )
+    const laneTopY = TOP_AXIS_HEIGHT + laneIdx * LANE_HEIGHT
+    scrollAnchorRef.current = {
+      laneKey: lanes[laneIdx].key,
+      offsetWithinLane: top - laneTopY,
+    }
+  }, [])
+
+  // visibleLanes 변동 직후 anchor 복원 (paint 전에)
+  useLayoutEffect(() => {
+    const anchor = scrollAnchorRef.current
+    const host = scrollRef.current
+    if (anchor && host) {
+      let newIdx = visibleLanes.findIndex((l) => l.key === anchor.laneKey)
+      if (newIdx < 0) {
+        // anchor lane이 hide됐다면 prev 위치에 가장 가까운 이웃으로 fallback
+        const prevIdx = prevVisibleLanesRef.current.findIndex(
+          (l) => l.key === anchor.laneKey,
+        )
+        if (prevIdx >= 0) {
+          // prev에서 anchor 다음 lane 중 살아남은 것 찾기
+          for (let i = prevIdx + 1; i < prevVisibleLanesRef.current.length; i++) {
+            const k = prevVisibleLanesRef.current[i].key
+            const j = visibleLanes.findIndex((l) => l.key === k)
+            if (j >= 0) {
+              newIdx = j
+              break
+            }
+          }
+        }
+      }
+      if (newIdx >= 0) {
+        const newTop =
+          TOP_AXIS_HEIGHT + newIdx * LANE_HEIGHT + anchor.offsetWithinLane
+        host.scrollTop = Math.max(0, newTop - anchor.offsetWithinLane)
+      }
+      scrollAnchorRef.current = null
+    }
+    prevVisibleLanesRef.current = visibleLanes
+  }, [visibleLanes])
+
   const toggleCategory = (key: string) => {
+    captureScrollAnchor()
     setHiddenCategories((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
@@ -1781,7 +1993,10 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       return next
     })
   }
-  const showAllCategories = () => setHiddenCategories(new Set())
+  const showAllCategories = () => {
+    captureScrollAnchor()
+    setHiddenCategories(new Set())
+  }
 
   // ── viewport readout 텍스트 — BC 연도 대응 ──────────────────────────────
   const viewportReadout = viewportYears
@@ -2020,7 +2235,9 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
         <CardHeader>
           <CardTitleGroup>
             <CardTitle>사건 분포</CardTitle>
-            <CardHint>10년 단위 · 클릭/드래그 → 그 시기로 이동</CardHint>
+            <CardHint>
+              10년 단위 · 색은 카테고리 · 클릭/드래그 → 그 시기로 이동
+            </CardHint>
           </CardTitleGroup>
         </CardHeader>
         <Minimap
@@ -2032,7 +2249,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
           onPointerCancel={endMinimapDrag}
           onPointerLeave={endMinimapDrag}
         >
-          {decadeBuckets.map(({ decade, count, weight }) => {
+          {decadeBuckets.map(({ decade, count, weight, byCategory }) => {
             const ratio = weight / maxBucketWeight
             const h = Math.max(2, ratio * 78)
             const showLabel =
@@ -2044,6 +2261,15 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
             const inViewport =
               viewportYears !== null &&
               !(decade + 10 < viewportYears.start || decade > viewportYears.end)
+            /**
+             * 카테고리별 stacked segment — count 내림차순으로 안정 정렬해
+             * 큰 카테고리가 아래(시각적 base) 깔리고 작은 카테고리가 위로.
+             * h<4 또는 segment 없을 땐 MinimapBarFill 자체 fallback 색만 보임.
+             */
+            const segments = Array.from(byCategory.entries()).sort(
+              (a, b) => b[1] - a[1],
+            )
+            const showSegments = segments.length > 0 && h >= 4
             return (
               <MinimapBar
                 key={decade}
@@ -2057,7 +2283,19 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                   $inViewport={inViewport}
                   $thin={h < 6}
                   style={{ height: `${h}px` }}
-                />
+                >
+                  {showSegments &&
+                    segments.map(([cat, c]) => (
+                      <MinimapBarSegment
+                        key={cat}
+                        style={{
+                          flexGrow: c,
+                          background: categoryColor(cat),
+                          opacity: inViewport ? 1 : 0.45,
+                        }}
+                      />
+                    ))}
+                </MinimapBarFill>
                 {showLabel ? (
                   <MinimapBarLabel>{decade}</MinimapBarLabel>
                 ) : (
@@ -2373,27 +2611,37 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
         )}
 
         {bars.length === 0 ? (
-          <EmptyHint>
+          <EmptyHint role="status" aria-live="polite">
             <EmptyIconBubble aria-hidden="true">∅</EmptyIconBubble>
             {/**
              * 빈 상태는 두 케이스를 분기:
              *  - allBars > 0 이면 사용자가 legend로 모든 카테고리를 hide한 상태
              *    → "전부 숨겨져 있다 · 모두 보이기" 안내. (이전엔 데이터 없음과
              *       구분 안 돼 사용자가 새로고침하는 등 혼동했음)
-             *  - allBars === 0 이면 진짜로 표시할 사건이 없음.
+             *  - allBars === 0 이면 진짜로 표시할 사건이 없음. 부모의 검색·필터
+             *    상태를 모르므로 일반화된 가이드(목록·지도 뷰로 전환) 제시.
              */}
             {allBars.length > 0 ? (
               <>
-                <span>
-                  카테고리 {hiddenCategories.size}개를 숨겨 표시할 사건이
-                  없습니다.
-                </span>
+                <EmptyTitle>모든 카테고리가 숨겨졌습니다</EmptyTitle>
+                <EmptyDescription>
+                  우측 legend에서{' '}
+                  <strong>{hiddenCategories.size}개</strong> 카테고리를 숨겨
+                  표시할 사건이 없습니다.
+                </EmptyDescription>
                 <EmptySubAction onClick={showAllCategories}>
                   숨긴 카테고리 모두 보이기
                 </EmptySubAction>
               </>
             ) : (
-              <span>표시할 사건이 없습니다.</span>
+              <>
+                <EmptyTitle>이 범위에 표시할 사건이 없습니다</EmptyTitle>
+                <EmptyDescription>
+                  상단 검색·필터를 조정하거나, 목록·지도·갤러리 등 다른 뷰로
+                  전환해 보세요. 데이터가 아직 적재되지 않은 시기일 수도
+                  있습니다.
+                </EmptyDescription>
+              </>
             )}
           </EmptyHint>
         ) : (
@@ -2406,12 +2654,15 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                   </OnboardingTipTitle>
                   <OnboardingTipList>
                     <li>
-                      <kbd>Ctrl</kbd> + 휠 — 줌
+                      <kbd>Ctrl</kbd> + 휠 · 두 손가락 핀치 — 줌
                     </li>
                     <li>
-                      <kbd>Space</kbd> + 드래그 — 이동
+                      <kbd>Space</kbd> + 드래그 · 한 손가락 스와이프 — 이동
                     </li>
-                    <li>막대 클릭 — 사건 상세</li>
+                    <li>
+                      <kbd>Tab</kbd> 후 <kbd>←</kbd>/<kbd>→</kbd> 시간, <kbd>↑</kbd>/<kbd>↓</kbd> 레인
+                    </li>
+                    <li>막대 클릭/탭 — 사건 상세</li>
                   </OnboardingTipList>
                 </OnboardingTipBody>
                 <OnboardingTipDismiss
@@ -2478,15 +2729,18 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                         $highlighted={hoveredCategory === lane.key}
                       />
                       {/**
-                       * 밀도 underlay — lane 하단 5px 띠. 카테고리 색으로 칠하므로
-                       * lane key가 카테고리인 *category 모드에서만* 의미 있음.
-                       * continent/country 모드에선 카테고리가 아닌 키라 fallback
-                       * 회색으로 깔려 노이즈가 됨 → 그 모드에선 미렌더.
+                       * 밀도 underlay — lane 하단 5px 띠. "어디에 사건이 많은지" 시각 단서.
+                       *  - category 모드: 카테고리 색으로 칠해 색·밀도 동시 전달
+                       *  - continent/country 모드: lane key가 카테고리 아님 → 중립 회색
+                       *    (색 의미는 빠지지만 *밀도* 정보는 살아남음 — 이전엔 전혀 안 보였음)
                        */}
-                      {groupBy === 'category' && (() => {
+                      {(() => {
                         const dens = laneDensity.get(lane.key)
                         if (!dens || dens.max === 0) return null
-                        const color = categoryColor(lane.key)
+                        const color =
+                          groupBy === 'category'
+                            ? categoryColor(lane.key)
+                            : '#94a3b8' // slate-400 — 중립색, 다른 색 의미와 충돌 X
                         const stripY = yTop + LANE_HEIGHT - 6
                         return (
                           <g pointerEvents="none">
@@ -2580,19 +2834,22 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                             tabIndex={0}
                             role="button"
                             aria-label={`${lane.label} 가려진 사건 ${overflowCount}건 보기`}
-                            onClick={() =>
+                            onClick={() => {
+                              setClusterPopoverId(null)
                               setOverflowPopoverLane((cur) =>
                                 cur === lane.key ? null : lane.key,
                               )
-                            }
-                            onMouseEnter={() =>
+                            }}
+                            onMouseEnter={() => {
+                              setClusterPopoverId(null)
                               setOverflowPopoverLane(lane.key)
-                            }
+                            }}
                             onKeyDown={(
                               e: React.KeyboardEvent<SVGGElement>,
                             ) => {
                               if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault()
+                                setClusterPopoverId(null)
                                 setOverflowPopoverLane((cur) =>
                                   cur === lane.key ? null : lane.key,
                                 )
@@ -2700,7 +2957,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                             data-bar-id={it.id}
                             data-cluster
                             transform={`translate(${it.cx}, ${it.cy})`}
-                            tabIndex={0}
+                            tabIndex={rovingTabIndex(it.id)}
                             role="button"
                             aria-label={ariaLabel}
                             aria-describedby={tooltipIdRef.current}
@@ -2708,6 +2965,35 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                             onKeyDown={(e) =>
                               handleClusterKeyDown(e, it, onActivate)
                             }
+                            /**
+                             * hover/focus 시 cluster 대표 사건(첫 번째)으로 tooltip 노출.
+                             * 키보드 네비(↑/↓/←/→)로 cluster에 진입했을 때도 무엇이 들어있는지
+                             * 즉시 확인 가능 — 이전엔 cluster에만 tooltip이 빠져 있었음.
+                             * SR은 이미 aria-label로 "N개 사건 모음" 안내됨.
+                             */
+                            onMouseEnter={(e) =>
+                              it.bars[0] &&
+                              showTooltip(
+                                e.currentTarget as SVGGraphicsElement,
+                                it.bars[0],
+                              )
+                            }
+                            onMouseLeave={hideTooltip}
+                            onFocus={(e) => {
+                              setFocusedBarId(it.id)
+                              if (it.bars[0]) {
+                                showTooltip(
+                                  e.currentTarget as SVGGraphicsElement,
+                                  it.bars[0],
+                                )
+                              }
+                            }}
+                            onBlur={() => {
+                              setFocusedBarId((cur) =>
+                                cur === it.id ? null : cur,
+                              )
+                              hideTooltip()
+                            }}
                           >
                             <rect
                               x={-clusterPillW / 2}
@@ -2771,7 +3057,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                       .join(', ')
 
                     const commonHandlers = {
-                      tabIndex: 0,
+                      tabIndex: rovingTabIndex(b.id),
                       role: 'button' as const,
                       'aria-label': ariaLabel,
                       'aria-pressed': isActive,
@@ -3034,6 +3320,66 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 </TooltipMeta>
               </Tooltip>
             )}
+
+            {/**
+             * Cluster popover — zoom 포화 fallback. cluster 위치 바로 아래에 띄움.
+             * overflow popover와 동일한 컴포넌트(시각 일관성), 헤더 카피만 다름.
+             */}
+            {clusterPopoverId &&
+              (() => {
+                const cluster = renderItems.find(
+                  (r): r is RenderCluster =>
+                    r.kind === 'cluster' && r.id === clusterPopoverId,
+                )
+                if (!cluster) return null
+                const list = cluster.bars
+                if (list.length === 0) return null
+                return (
+                  <OverflowPopover
+                    data-cluster-popover
+                    role="dialog"
+                    aria-label={`밀집 사건 ${list.length}건`}
+                    style={{
+                      top: `${cluster.cy + 14}px`,
+                      left: `${LANE_LABEL_WIDTH + cluster.cx}px`,
+                      transform: 'translateX(-50%)',
+                    }}
+                  >
+                    <OverflowPopoverHeader>
+                      밀집 사건 {list.length}건 · 더 확대 불가
+                      <OverflowPopoverClose
+                        type="button"
+                        onClick={() => setClusterPopoverId(null)}
+                        aria-label="닫기"
+                      >
+                        ×
+                      </OverflowPopoverClose>
+                    </OverflowPopoverHeader>
+                    <OverflowPopoverList>
+                      {list.slice(0, 20).map((b) => (
+                        <OverflowPopoverItem
+                          key={b.id}
+                          type="button"
+                          onClick={() => {
+                            onSelectEvent(b.id)
+                            setClusterPopoverId(null)
+                          }}
+                        >
+                          <OverflowPopoverYear>
+                            {formatYearLabel(b.startYear)}
+                          </OverflowPopoverYear>
+                          <span>{b.title}</span>
+                        </OverflowPopoverItem>
+                      ))}
+                      {list.length > 20 && (
+                        <OverflowPopoverHint>
+                          + {list.length - 20}건 더 있음
+                        </OverflowPopoverHint>
+                      )}
+                    </OverflowPopoverList>
+                  </OverflowPopover>
+                )
+              })()}
 
             {/* +N 배지 클릭 시 가려진 사건 목록 popover — ScrollHost 안에 절대 위치, 가로 스크롤과 함께 이동 */}
             {overflowPopoverLane &&
@@ -4151,6 +4497,12 @@ const MinimapBar = styled.button`
   }
 `
 
+/**
+ * 미니맵 한 decade 막대 — 자식 MinimapBarSegment(카테고리별)로 stacked 채움.
+ * segments가 없거나 막대 높이가 너무 낮으면(<4px) fallback 단색이 보임.
+ * - $inViewport: 사용자가 현재 보는 시기면 BRAND.primary fallback / segments는 full opacity
+ * - $thin: 막대가 매우 얇을 때 corner radius 제거(픽셀 더트 방지)
+ */
 const MinimapBarFill = styled.div<{ $inViewport: boolean; $thin: boolean }>`
   width: 100%;
   border-radius: ${({ $thin }) => ($thin ? '0' : '3px 3px 0 0')};
@@ -4161,7 +4513,22 @@ const MinimapBarFill = styled.div<{ $inViewport: boolean; $thin: boolean }>`
         ? 'rgba(255, 255, 255, 0.18)'
         : 'rgba(15, 23, 42, 0.18)'};
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column-reverse;
+  overflow: hidden;
   transition: background ${MOTION.base};
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+/** 카테고리 1개의 stack segment — flexGrow=count로 비율 정해짐 (inline style) */
+const MinimapBarSegment = styled.div`
+  flex-shrink: 1;
+  flex-basis: 0;
+  min-height: 1px;
+  transition: opacity ${MOTION.base};
 
   @media (prefers-reduced-motion: reduce) {
     transition: none;
@@ -4191,8 +4558,10 @@ const ScrollHost = styled.div<{ $panning?: boolean }>`
   overflow: auto;
   cursor: ${({ $panning }) => ($panning ? 'grab' : 'auto')};
 
-  /* 터치 환경에서 OS 기본 핀치줌·당겨서 새로고침 차단 — 자체 핀치/팬으로 처리 */
-  touch-action: pan-y pinch-zoom;
+  /* 터치 환경에서 OS 기본 핀치줌·당겨서 새로고침 차단 — 자체 핀치/팬 핸들러가 처리.
+   * pan-y만 허용해 세로 스크롤은 OS에 양보, 가로 패닝·핀치 줌은 우리가 잡는다.
+   * (이전 pinch-zoom 포함 시 OS와 동시 발동되어 우리 zoom 상태가 미세 어긋났음.) */
+  touch-action: pan-y;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -4751,6 +5120,26 @@ const EmptyIconBubble = styled.div`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoft};
   color: ${BRAND.primary};
+`
+
+const EmptyTitle = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  margin-top: 4px;
+`
+
+const EmptyDescription = styled.div`
+  font-size: 12.5px;
+  line-height: 1.55;
+  max-width: 320px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  strong {
+    color: ${({ theme }) => theme.colors.text.secondary};
+    font-weight: 600;
+  }
 `
 
 const EmptySubAction = styled.button`
