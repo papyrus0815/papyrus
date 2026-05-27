@@ -1,13 +1,13 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 
 import styled, { css } from 'styled-components'
 
 import type { PinnedRow, YearRange } from '../model/types'
-import { toJulianYear, yearToX } from '../lib/time-scale'
+import { yearToX } from '../lib/time-scale'
 import type { SegmentTenuresResult } from '../api/use-segment-tenures'
 import type { TenureBar } from '../lib/normalize-tenures'
 import { sortSegmentsChronologically } from '../lib/sort-segments'
-import { packIntoLanes } from '../lib/lane-pack'
+import { packRowByBands } from '../lib/pack-row-lanes'
 import { ribbonColorFor } from '../lib/ribbon-color'
 import { CATEGORY_TOKENS } from '../lib/category-tokens'
 import { formatYearRange } from '../lib/format-year'
@@ -49,7 +49,7 @@ interface PackedSegment {
   bars: { bar: TenureBar; lane: number }[]
 }
 
-export function TimelineRow({
+function TimelineRowImpl({
   row,
   range,
   width,
@@ -67,31 +67,17 @@ export function TimelineRow({
     [row.segments],
   )
 
-  const packed = useMemo<PackedSegment[]>(() => {
-    return segmentResults.map((res) => {
-      const filtered = categoryFilter
+  const { packed, laneCount } = useMemo(() => {
+    const filteredSegs = segmentResults.map((res) => ({
+      segmentId: res.segmentId,
+      bars: categoryFilter
         ? res.bars.filter((b) => categoryFilter(b.positionCategory))
-        : res.bars
-      const lr = packIntoLanes(filtered, (bar) => ({
-        start: toJulianYear(bar.startDate),
-        end: bar.endDate ? toJulianYear(bar.endDate) : Infinity,
-      }))
-      return {
-        segmentId: res.segmentId,
-        bars: lr.assignments.map((a) => ({ bar: a.item, lane: a.lane })),
-      }
-    })
+        : res.bars,
+    }))
+    return packRowByBands(filteredSegs)
   }, [segmentResults, categoryFilter])
 
-  const maxLane = useMemo(
-    () =>
-      packed.reduce(
-        (acc, seg) => Math.max(acc, ...seg.bars.map((b) => b.lane), 0),
-        0,
-      ),
-    [packed],
-  )
-  const rowHeight = rowHeightFor(maxLane + 1)
+  const rowHeight = rowHeightFor(laneCount)
 
   const isLoading = segmentResults.some((r) => r.isLoading)
   const totalBars = segmentResults.reduce((acc, r) => acc + r.bars.length, 0)
@@ -109,8 +95,8 @@ export function TimelineRow({
     let hi = -Infinity
     for (const r of segmentResults) {
       for (const bar of r.bars) {
-        const s = toJulianYear(bar.startDate)
-        const e = bar.endDate ? toJulianYear(bar.endDate) : new Date().getFullYear()
+        const s = bar.startJulian
+        const e = bar.endJulian ?? new Date().getFullYear()
         if (s < lo) lo = s
         if (e > hi) hi = e
       }
@@ -203,10 +189,17 @@ export function TimelineRow({
   )
 }
 
+/**
+ * 행 단위 props가 그대로면 리렌더를 건너뛴다. 팬·줌으로 `range`만 바뀌는 흔한 경우엔
+ * 어차피 막대를 다시 배치해야 하므로 리렌더되지만, 다른 행의 hover·핀 조작 등으로 인한
+ * 부모 리렌더에는 영향받지 않는다 (segmentResults 참조가 안정적이라 가능).
+ */
+export const TimelineRow = memo(TimelineRowImpl)
+
 function countBarsInRange(bars: TenureBar[], range: YearRange): number {
   return bars.reduce((n, bar) => {
-    const start = toJulianYear(bar.startDate)
-    const end = bar.endDate ? toJulianYear(bar.endDate) : range.endYear
+    const start = bar.startJulian
+    const end = bar.endJulian ?? range.endYear
     return end >= range.startYear && start <= range.endYear ? n + 1 : n
   }, 0)
 }
@@ -284,11 +277,13 @@ function SegmentRibbons({
 function SegmentBars({ packed, range, width, highlightYear, onSelectBar }: SegmentBarsProps) {
   const tooltip = useHeadsTooltip()
 
-  /** ←/→ 키로 인접 막대로 포커스 이동 — DOM 순서 기반 */
+  /** ←/→ 키로 인접 막대로 포커스 이동 — DOM 순서 기반. 다른 위젯 막대로 새지 않게 캔버스로 스코프 한정 */
   const handleArrowNav = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    const scope: ParentNode =
+      e.currentTarget.closest('[data-hos-canvas]') ?? document
     const all = Array.from(
-      document.querySelectorAll<HTMLDivElement>('[data-tenure-bar="1"]'),
+      scope.querySelectorAll<HTMLDivElement>('[data-tenure-bar="1"]'),
     )
     const idx = all.indexOf(e.currentTarget)
     if (idx < 0) return
@@ -302,8 +297,8 @@ function SegmentBars({ packed, range, width, highlightYear, onSelectBar }: Segme
   return (
     <>
       {packed.bars.map(({ bar, lane }) => {
-        const startYear = toJulianYear(bar.startDate)
-        const endYear = bar.endDate ? toJulianYear(bar.endDate) : range.endYear
+        const startYear = bar.startJulian
+        const endYear = bar.endJulian ?? range.endYear
         const x1 = yearToX(startYear, range, width)
         const x2 = yearToX(endYear, range, width)
         const left = Math.min(x1, x2)
@@ -313,7 +308,7 @@ function SegmentBars({ packed, range, width, highlightYear, onSelectBar }: Segme
         const isHighlightedByYear =
           highlightYear != null &&
           startYear <= highlightYear &&
-          (bar.endDate == null || toJulianYear(bar.endDate) >= highlightYear)
+          (bar.endJulian == null || bar.endJulian >= highlightYear)
         const dimmed = highlightYear != null && !isHighlightedByYear
         const ongoing = bar.endDate == null
         const top = ROW_VPAD_TOP + lane * (BAR_HEIGHT + LANE_GAP)

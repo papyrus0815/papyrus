@@ -8,7 +8,6 @@ import { FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { sortSegmentsChronologically } from '../lib/sort-segments'
-import { toJulianYear } from '../lib/time-scale'
 import type { TenureBar } from '../lib/normalize-tenures'
 import { CATEGORY_TOKENS } from '../lib/category-tokens'
 import type { PinnedRow } from '../model/types'
@@ -46,8 +45,8 @@ function pickContemporary(
     if (tenures) {
       for (const seg of tenures.segmentResults) {
         for (const bar of seg.bars) {
-          const s = toJulianYear(bar.startDate)
-          const e = bar.endDate ? toJulianYear(bar.endDate) : Infinity
+          const s = bar.startJulian
+          const e = bar.endJulian ?? Infinity
           if (s <= year && e >= year) bars.push(bar)
         }
       }
@@ -252,8 +251,9 @@ const YearChip = styled.span`
   align-items: center;
   padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(239, 68, 68, 0.12);
-  color: #b91c1c;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.22)' : 'rgba(239, 68, 68, 0.12)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#b91c1c')};
   font-size: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;

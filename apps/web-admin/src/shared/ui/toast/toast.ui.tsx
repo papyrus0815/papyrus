@@ -11,15 +11,27 @@ import { Z_INDEX } from '@/shared/styles/z-index'
 
 type ToastType = 'success' | 'error' | 'info' | 'warning'
 
+/** 토스트 안에 띄우는 인라인 액션 버튼 (예: 실행 취소) */
+interface ToastAction {
+  label: string
+  onClick: () => void
+}
+
 interface Toast {
   id: string
   type: ToastType
   message: string
   duration?: number
+  action?: ToastAction
 }
 
 interface ToastContextValue {
-  showToast: (type: ToastType, message: string, duration?: number) => void
+  showToast: (
+    type: ToastType,
+    message: string,
+    duration?: number,
+    action?: ToastAction,
+  ) => void
   hideToast: (id: string) => void
 }
 
@@ -38,9 +50,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const showToast = useCallback(
-    (type: ToastType, message: string, duration: number = 3000) => {
+    (
+      type: ToastType,
+      message: string,
+      duration: number = 3000,
+      action?: ToastAction,
+    ) => {
       const id = Math.random().toString(36).substring(7)
-      const toast: Toast = { id, type, message, duration }
+      const toast: Toast = { id, type, message, duration, action }
 
       setToasts((prev) => [...prev, toast])
 
@@ -114,6 +131,17 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
     >
       <ToastIcon>{getIcon()}</ToastIcon>
       <ToastMessage>{toast.message}</ToastMessage>
+      {toast.action && (
+        <ToastActionButton
+          $color={getColor()}
+          onClick={() => {
+            toast.action!.onClick()
+            onClose()
+          }}
+        >
+          {toast.action.label}
+        </ToastActionButton>
+      )}
       <ToastClose onClick={onClose}>
         <FaTimes />
       </ToastClose>
@@ -157,6 +185,29 @@ const ToastMessage = styled.div`
   flex: 1;
   font-size: 0.95rem;
   line-height: 1.4;
+`
+
+const ToastActionButton = styled.button<{ $color: string }>`
+  flex-shrink: 0;
+  border: 1px solid ${(props) => props.$color};
+  background: transparent;
+  color: ${(props) => props.$color};
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+
+  &:hover {
+    background: ${(props) => props.$color};
+    color: #fff;
+  }
+  &:focus-visible {
+    outline: 2px solid ${(props) => props.$color};
+    outline-offset: 2px;
+  }
 `
 
 const ToastClose = styled.button`

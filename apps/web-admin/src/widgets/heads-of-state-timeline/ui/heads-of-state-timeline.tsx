@@ -28,7 +28,7 @@ import { TimelineCanvas } from './timeline-canvas'
 import { HeadsTooltipProvider } from './tooltip'
 import { ContemporaryPanel } from './contemporary-panel'
 import { EventSearchModal } from './event-search-modal'
-import { PersonPreviewModal } from './person-preview-modal'
+import { PersonDetailModal } from '@/widgets/person/person-detail-panel/person-detail-modal'
 import type { TenureBar } from '../lib/normalize-tenures'
 import type { PinnedRow } from '../model/types'
 import { useAllRowsTenures } from '../api/use-all-rows-tenures'
@@ -64,10 +64,7 @@ function HeadsOfStateTimelineInner() {
     startYear: number
     endYear: number
   } | null>(null)
-  const [previewBar, setPreviewBar] = useState<{
-    bar: TenureBar
-    row: PinnedRow
-  } | null>(null)
+  const [modalPersonId, setModalPersonId] = useState<string | null>(null)
   const { showToast } = useToast()
   const navigate = useNavigate()
   const userPresets = useUserPresets()
@@ -82,9 +79,13 @@ function HeadsOfStateTimelineInner() {
     if (fromUrl != null) categoryFilter.setFromList(fromUrl)
   }, [categoryFilter])
 
-  const openBarModal = useCallback((bar: TenureBar, row: PinnedRow) => {
-    setPreviewBar({ bar, row })
-  }, [])
+  const openBarModal = useCallback(
+    (bar: TenureBar) => {
+      if (bar.personId) setModalPersonId(bar.personId)
+      else showToast('info', '등록된 인물 정보가 없습니다')
+    },
+    [showToast],
+  )
 
   // 행 제거 직후 5초간 undo 가능 — stack에 push, 가장 최근 것부터 pop.
   const undoStackRef = useRef<
@@ -98,6 +99,16 @@ function HeadsOfStateTimelineInner() {
       (e) => e.expiresAt > now,
     )
   }, [])
+
+  /** stack의 마지막 제거를 원래 인덱스에 복원 (계승국 묶음 보존) — ⌘Z·토스트 버튼 공용 */
+  const restoreLastRemoved = useCallback((): boolean => {
+    purgeExpiredUndo()
+    const last = undoStackRef.current.pop()
+    if (!last) return false
+    state.restoreRowAt(last.index, last.row)
+    showToast('success', '복원되었습니다')
+    return true
+  }, [state, showToast, purgeExpiredUndo])
 
   const handleRemoveRowWithUndo = useCallback(
     (rowId: string) => {
@@ -114,16 +125,17 @@ function HeadsOfStateTimelineInner() {
         removed.segments.map((s) => s.name).join(' → ') || '행'
       showToast(
         'info',
-        `"${nameLabel}" 제거됨 — ⌘Z 로 ${UNDO_TIMEOUT_MS / 1000}초 내 복원`,
+        `"${nameLabel}" 제거됨 (⌘Z)`,
         UNDO_TIMEOUT_MS,
+        { label: '복원', onClick: () => restoreLastRemoved() },
       )
       // timeout으로 자동 만료 — ref 정리만, UI는 영향 없음
       window.setTimeout(purgeExpiredUndo, UNDO_TIMEOUT_MS + 100)
     },
-    [state, showToast, purgeExpiredUndo],
+    [state, showToast, purgeExpiredUndo, restoreLastRemoved],
   )
 
-  // ⌘Z / Ctrl+Z — stack의 마지막 제거를 원래 인덱스에 복원 (계승국 묶음 보존)
+  // ⌘Z / Ctrl+Z — 가장 최근 제거 복원
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const isUndo =
@@ -139,45 +151,16 @@ function HeadsOfStateTimelineInner() {
           target.isContentEditable)
       )
         return
-      purgeExpiredUndo()
-      const last = undoStackRef.current.pop()
-      if (!last) return
-      e.preventDefault()
-      state.restoreRowAt(last.index, last.row)
-      showToast('success', '복원되었습니다')
+      if (restoreLastRemoved()) e.preventDefault()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [state, showToast, purgeExpiredUndo])
+  }, [restoreLastRemoved])
 
-  // 모달이 떠 있는 동안 그 row가 사이드바에서 제거되면 모달도 닫는다 — stale 상태 방지
-  useEffect(() => {
-    if (previewBar == null) return
-    const stillExists = state.rows.some((r) => r.rowId === previewBar.row.rowId)
-    if (!stillExists) setPreviewBar(null)
-  }, [state.rows, previewBar])
-
-  /** ContemporaryPanel·TimelineCanvas 둘 다 같은 모달을 열기 위한 헬퍼 — personId만 있는 경우(동시대 패널)
-   *  rowsTenures를 뒤져 (bar, row)를 복원한다. */
-  const openByPersonId = useCallback(
-    (personId: string) => {
-      for (const rt of rowsTenures) {
-        for (const seg of rt.segmentResults) {
-          const found = seg.bars.find((b) => b.personId === personId)
-          if (found) {
-            const row = state.rows.find((r) => r.rowId === rt.rowId)
-            if (row) {
-              setPreviewBar({ bar: found, row })
-              return
-            }
-          }
-        }
-      }
-      // 못 찾으면 기존처럼 인물 페이지로 라우팅
-      navigate(pathKeys.personsTimelineDetail(personId))
-    },
-    [rowsTenures, state.rows, navigate],
-  )
+  /** ContemporaryPanel·TimelineCanvas 공용 — personId로 인물 상세 모달을 연다. */
+  const openByPersonId = useCallback((personId: string) => {
+    setModalPersonId(personId)
+  }, [])
 
   useTimelineUrlSync({
     range: state.range,
@@ -400,27 +383,10 @@ function HeadsOfStateTimelineInner() {
           alreadyAddedIds={eventOverlay.ids}
           onAddMany={(ids) => ids.forEach(eventOverlay.add)}
         />
-        <AnimatePresence>
-          {previewBar && (
-            <PersonPreviewModal
-              // bar.id를 key로 둬서 다른 막대 클릭 시 컨텐츠 교체가 mount/unmount 사이클을 타게 한다 — 미세한 fade 전환
-              key={previewBar.bar.id}
-              bar={previewBar.bar}
-              row={previewBar.row}
-              onClose={() => setPreviewBar(null)}
-              onOpenDetail={(personId, opts) => {
-                const target = `${pathKeys.personsTimelineDetail(personId)}?from=heads-of-state`
-                if (opts?.openInNewTab && typeof window !== 'undefined') {
-                  // 새 탭으로 열어 비교 상태 유지
-                  window.open(target, '_blank', 'noopener,noreferrer')
-                  return
-                }
-                setPreviewBar(null)
-                navigate(target)
-              }}
-            />
-          )}
-        </AnimatePresence>
+        <PersonDetailModal
+          personId={modalPersonId}
+          onClose={() => setModalPersonId(null)}
+        />
       </Wrapper>
     </HeadsTooltipProvider>
   )

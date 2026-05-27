@@ -74,7 +74,21 @@ export function TimelineCanvas({
   const [trackWidth, setTrackWidth] = useState<number>(MIN_TRACK_WIDTH)
   const [hoverYear, setHoverYear] = useState<number | null>(null)
 
-  // 컨테이너 폭에 맞춰 트랙 폭 계산
+  // scrollRef가 붙는 트랙 Wrapper는 rows가 있을 때만 렌더된다 — 이 전환 시점에
+  // 측정·리스너 effect를 다시 돌려야 하므로 effect 의존성으로 쓴다.
+  const hasRows = rows.length > 0
+
+  // 팬·줌 핸들러가 최신 값을 읽도록 ref로 보관 — 리스너를 매 프레임 재구독하지 않기 위함(#2)
+  const rangeRef = useRef(range)
+  rangeRef.current = range
+  const trackWidthRef = useRef(trackWidth)
+  trackWidthRef.current = trackWidth
+  const labelWidthRef = useRef(labelWidth)
+  labelWidthRef.current = labelWidth
+  const onRangeChangeRef = useRef(onRangeChange)
+  onRangeChangeRef.current = onRangeChange
+
+  // 컨테이너 폭에 맞춰 트랙 폭 계산 — 빈 상태→행 표시 전환 시에도 다시 측정
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
@@ -86,7 +100,7 @@ export function TimelineCanvas({
     const ro = new ResizeObserver(calc)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [labelWidth])
+  }, [labelWidth, hasRows])
 
   // ESC로 가이드라인 해제 — 표준 단축키
   useEffect(() => {
@@ -181,11 +195,16 @@ export function TimelineCanvas({
     }
   }, [isPanning, onRangeChange, trackWidth])
 
-  /** Wheel — 휠은 가로 pan, Ctrl/Cmd+휠은 줌 (anchor: 마우스 좌표) */
+  /** Wheel — 휠은 가로 pan, Ctrl/Cmd+휠은 줌 (anchor: 마우스 좌표).
+   *  최신 range·trackWidth는 ref로 읽어 리스너는 캔버스 마운트당 1회만 구독한다(#2). */
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
+      const range = rangeRef.current
+      const trackWidth = trackWidthRef.current
+      const labelWidth = labelWidthRef.current
+      const onRangeChange = onRangeChangeRef.current
       const wrapRect = el.getBoundingClientRect()
       const xInTrack = e.clientX - wrapRect.left + el.scrollLeft - labelWidth
       const inTrack = xInTrack >= 0 && xInTrack <= trackWidth
@@ -238,7 +257,111 @@ export function TimelineCanvas({
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [range, trackWidth, labelWidth, onRangeChange])
+  }, [hasRows])
+
+  /** Touch — 한 손가락 가로 드래그=pan, 두 손가락=핀치 줌 (#3).
+   *  세로 드래그는 행 스크롤을 위해 네이티브에 양보한다. ref 기반이라 마운트당 1회 구독. */
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    let pan:
+      | { x: number; y: number; startRange: YearRange; axis: 'none' | 'x' | 'y' }
+      | null = null
+    let pinch: { startDist: number; anchorYear: number; startRange: YearRange } | null =
+      null
+
+    const dist = (a: Touch, b: Touch) =>
+      Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+
+    const yearAtClientX = (clientX: number): number => {
+      const range = rangeRef.current
+      const tw = trackWidthRef.current
+      const rect = el.getBoundingClientRect()
+      const xInTrack = clientX - rect.left + el.scrollLeft - labelWidthRef.current
+      const clamped = Math.max(0, Math.min(tw, xInTrack))
+      const span = range.endYear - range.startYear
+      return range.startYear + (clamped / tw) * span
+    }
+
+    const onStart = (e: TouchEvent) => {
+      const t0 = e.touches[0]
+      const t1 = e.touches[1]
+      if (t0 && t1) {
+        pan = null
+        pinch = {
+          startDist: dist(t0, t1),
+          anchorYear: yearAtClientX((t0.clientX + t1.clientX) / 2),
+          startRange: rangeRef.current,
+        }
+      } else if (t0) {
+        pinch = null
+        pan = { x: t0.clientX, y: t0.clientY, startRange: rangeRef.current, axis: 'none' }
+      }
+    }
+
+    const onMove = (e: TouchEvent) => {
+      const t0 = e.touches[0]
+      const t1 = e.touches[1]
+      if (pinch && t0 && t1) {
+        const d = dist(t0, t1)
+        if (d <= 0) return
+        e.preventDefault()
+        const span = pinch.startRange.endYear - pinch.startRange.startYear
+        const nextSpan = Math.max(MIN_SPAN, Math.min(MAX_SPAN, span * (pinch.startDist / d)))
+        const t = (pinch.anchorYear - pinch.startRange.startYear) / span
+        const nextStart = pinch.anchorYear - t * nextSpan
+        onRangeChangeRef.current({
+          startYear: Math.round(nextStart),
+          endYear: Math.round(nextStart + nextSpan),
+        })
+        return
+      }
+      if (pan && t0) {
+        const dx = t0.clientX - pan.x
+        const dy = t0.clientY - pan.y
+        if (pan.axis === 'none') {
+          if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) pan.axis = 'x'
+          else if (Math.abs(dy) > 8) {
+            pan.axis = 'y' // 세로 의도 — 행 스크롤을 네이티브에 양보
+            return
+          } else return
+        }
+        if (pan.axis === 'y') return
+        e.preventDefault()
+        const span = pan.startRange.endYear - pan.startRange.startYear
+        const yearsPerPx = span / trackWidthRef.current
+        const delta = -dx * yearsPerPx
+        onRangeChangeRef.current({
+          startYear: Math.round(pan.startRange.startYear + delta),
+          endYear: Math.round(pan.startRange.endYear + delta),
+        })
+      }
+    }
+
+    const onEnd = (e: TouchEvent) => {
+      const t0 = e.touches[0]
+      if (!t0) {
+        pan = null
+        pinch = null
+      } else {
+        // 핀치 한 손가락 떼면 남은 손가락으로 pan 재시작
+        pinch = null
+        pan = { x: t0.clientX, y: t0.clientY, startRange: rangeRef.current, axis: 'none' }
+      }
+    }
+
+    el.addEventListener('touchstart', onStart, { passive: true })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd, { passive: true })
+    el.addEventListener('touchcancel', onEnd, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+      el.removeEventListener('touchcancel', onEnd)
+    }
+  }, [hasRows])
 
   const handleTrackClick = (e: React.MouseEvent) => {
     if (isPanning) return
@@ -334,6 +457,7 @@ export function TimelineCanvas({
       style={{ cursor: isPanning ? 'grabbing' : 'crosshair' }}
     >
       <ContentWrap
+        data-hos-canvas
         onMouseMove={handleTrackMouseMove}
         onMouseLeave={() => setHoverYear(null)}
         onMouseDown={onPanMouseDown}
@@ -505,6 +629,8 @@ const Wrapper = styled.div`
   min-width: 0;
   overflow: auto;
   background: ${({ theme }) => theme.colors.background.primary};
+  /* 터치: 세로(행 스크롤)는 네이티브에 맡기고 가로 pan·핀치 줌은 JS가 처리(#3) */
+  touch-action: pan-y;
   /* drag pan을 위해 기본 텍스트 선택은 막되, 막대 자체는 더블클릭으로 텍스트 선택 가능하게 한다 */
   user-select: none;
   [data-tenure-bar="1"] {
@@ -685,8 +811,9 @@ const HighlightChip = styled.span`
   gap: 6px;
   padding: 4px 4px 4px 10px;
   border-radius: 999px;
-  background: rgba(239, 68, 68, 0.12);
-  color: #b91c1c;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.22)' : 'rgba(239, 68, 68, 0.12)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#b91c1c')};
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -705,7 +832,7 @@ const ChipReset = styled.button`
   font-weight: 700;
   border: none;
   background: rgba(239, 68, 68, 0.18);
-  color: #b91c1c;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#b91c1c')};
   border-radius: 50%;
   cursor: pointer;
   transition: background 0.15s, transform 0.15s;
