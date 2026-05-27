@@ -97,11 +97,18 @@ async function main() {
     // 스크립트 옵션을 process.argv에 설정
     process.argv = ['node', fullScriptPath, ...scriptOptions]
 
+    // 자기실행 가드(`import.meta.url === file://${process.argv[1]}`)를 가진
+    // 스크립트는 import 시점에 process.argv[1]이 자기 경로로 위조되어 이미
+    // main()을 실행한다. 이 경우 아래에서 script()를 또 부르면 이중 실행되어
+    // (예: dev → concurrently 2벌 → nx serve api 2개 → 8000 EADDRINUSE) 문제가 된다.
+    // 가드가 없는 스크립트만 명시적으로 호출한다.
+    const selfRuns = fs.readFileSync(fullScriptPath, 'utf8').includes('import.meta.url')
+
     console.log(`🚀 실행 중: ${scriptPath}`)
     const scriptModule = await import(pathToFileURL(fullScriptPath).href)
     const script = scriptModule.default || scriptModule
 
-    if (typeof script === 'function') {
+    if (!selfRuns && typeof script === 'function') {
       await script()
     }
   } catch (error) {
