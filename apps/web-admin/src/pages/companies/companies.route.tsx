@@ -1,6 +1,7 @@
 import { RouteObject } from 'react-router-dom'
 
 import { CompaniesListPage } from './companies-list.page'
+import { CompanyDetailPage } from './company-detail.page'
 import { CompanyFormPage } from './company-form.page'
 
 export const companiesRoutes: RouteObject[] = [
@@ -10,6 +11,7 @@ export const companiesRoutes: RouteObject[] = [
       { index: true, element: <CompaniesListPage /> },
       { path: 'new', element: <CompanyFormPage /> },
       { path: ':id/edit', element: <CompanyFormPage /> },
+      { path: ':id', element: <CompanyDetailPage /> },
     ],
   },
 ]

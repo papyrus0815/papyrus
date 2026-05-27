@@ -8,110 +8,146 @@ import type { CompanyCategory } from '@/shared/api/company-category'
 import { companyCategoryApi } from '@/shared/api/company-category'
 
 const Page = styled.div`
-  padding: 1.5rem 2rem;
+  padding: calc(var(--header-height, 64px) + 1.5rem) 2rem 4rem;
   max-width: 640px;
   margin: 0 auto;
 `
 
-const Title = styled.h1`
-  font-size: 1.25rem;
-  margin-bottom: 1rem;
+const Header = styled.header`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
 `
 
-const BackIcon = styled(FiArrowLeft)`
+const BackBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-  color: #64748b;
+  transition:
+    background 0.18s,
+    color 0.18s,
+    border-color 0.18s,
+    transform 0.12s;
+
   &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#0f172a')};
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
   }
+  &:active {
+    transform: scale(0.96);
+  }
+`
+
+const Title = styled.h1`
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const Form = styled.form`
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.1rem;
+  padding: 1.5rem;
+  border-radius: 16px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
 `
 
 const Row = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
 
   label {
-    font-weight: 500;
-    font-size: 0.9rem;
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#374151')};
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 
   input,
   select,
   textarea {
-    padding: 0.5rem 0.75rem;
-    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    border-radius: 10px;
     font-size: 0.875rem;
-    transition: all 0.2s;
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? css`
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #f1f5f9;
-            &:focus {
-              outline: none;
-              border-color: rgba(99, 102, 241, 0.5);
-            }
-          `
-        : css`
-            background: white;
-            border: 1px solid #e5e7eb;
-            color: #0f172a;
-            &:focus {
-              outline: none;
-              border-color: #6366f1;
-            }
-          `}
+    background: ${({ theme }) => theme.colors.background.primary};
+    border: 1px solid ${({ theme }) => theme.colors.border.default};
+    color: ${({ theme }) => theme.colors.text.primary};
+    transition:
+      border-color 0.18s,
+      box-shadow 0.18s;
+
+    &::placeholder {
+      color: ${({ theme }) => theme.colors.text.tertiary};
+    }
+
+    &:focus {
+      outline: none;
+      border-color: ${({ theme }) => theme.colors.primary};
+      box-shadow: 0 0 0 3px
+        ${({ theme }) =>
+          theme.mode === 'dark'
+            ? 'rgba(99, 102, 241, 0.25)'
+            : 'rgba(99, 102, 241, 0.15)'};
+    }
   }
 
   textarea {
-    min-height: 80px;
+    min-height: 90px;
     resize: vertical;
     font-family: inherit;
   }
 
   select option {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#1e1e2e' : 'white')};
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
+    background: ${({ theme }) => theme.colors.background.primary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
 const Hint = styled.p`
   font-size: 12px;
   margin: 0;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Actions = styled.div`
   display: flex;
   gap: 0.75rem;
+  justify-content: flex-end;
   margin-top: 0.5rem;
 `
 
 const Btn = styled.button<{ $primary?: boolean }>`
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
+  padding: 0.6rem 1.1rem;
+  border-radius: 12px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s;
-  &:hover {
-    opacity: 0.9;
+  font-weight: 600;
+  transition:
+    background 0.18s,
+    border-color 0.18s,
+    transform 0.12s,
+    box-shadow 0.18s;
+
+  &:active {
+    transform: scale(0.97);
   }
   &:disabled {
     opacity: 0.6;
@@ -120,26 +156,29 @@ const Btn = styled.button<{ $primary?: boolean }>`
   ${({ theme, $primary }) =>
     $primary
       ? css`
-          background: #6366f1;
-          color: white;
+          background: ${theme.colors.gradient.primary};
+          color: ${theme.colors.button.text};
           border: none;
+          box-shadow: 0 4px 14px ${theme.colors.shadow.md};
+          &:hover:not(:disabled) {
+            box-shadow: 0 6px 18px ${theme.colors.shadow.lg};
+          }
         `
-      : theme.mode === 'dark'
-        ? css`
-            background: rgba(255, 255, 255, 0.06);
-            color: #94a3b8;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-          `
-        : css`
-            background: white;
-            color: #374151;
-            border: 1px solid #e5e7eb;
-          `}
+      : css`
+          background: ${theme.colors.background.primary};
+          color: ${theme.colors.text.secondary};
+          border: 1px solid ${theme.colors.border.default};
+          &:hover {
+            background: ${theme.colors.hover};
+            color: ${theme.colors.text.primary};
+            border-color: ${theme.colors.border.medium};
+          }
+        `}
 `
 
 const LoadingText = styled.p`
   font-size: 14px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export const CompanyCategoryFormPage: React.FC = () => {
@@ -218,10 +257,16 @@ export const CompanyCategoryFormPage: React.FC = () => {
 
   return (
     <Page>
-      <Title>
-        <BackIcon size={20} onClick={() => navigate('/company-categories')} />
-        {isEdit ? '카테고리 수정' : '카테고리 추가'}
-      </Title>
+      <Header>
+        <BackBtn
+          type="button"
+          onClick={() => navigate('/company-categories')}
+          aria-label="목록으로"
+        >
+          <FiArrowLeft size={18} />
+        </BackBtn>
+        <Title>{isEdit ? '카테고리 수정' : '카테고리 추가'}</Title>
+      </Header>
 
       <Form onSubmit={handleSubmit}>
         <Row>

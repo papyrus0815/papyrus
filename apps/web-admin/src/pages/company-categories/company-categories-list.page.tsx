@@ -1,7 +1,14 @@
 import React, { useEffect, useState } from 'react'
 
 import { motion } from 'framer-motion'
-import { FiPlus, FiEdit2, FiTrash2, FiTag, FiArrowLeft } from 'react-icons/fi'
+import {
+  FiPlus,
+  FiEdit2,
+  FiTrash2,
+  FiTag,
+  FiArrowLeft,
+  FiSearch,
+} from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
@@ -9,24 +16,9 @@ import type { CompanyCategory } from '@/shared/api/company-category'
 import { companyCategoryApi } from '@/shared/api/company-category'
 
 const Page = styled.div`
-  padding: 1.5rem 2rem;
+  padding: calc(var(--header-height, 64px) + 1.5rem) 2rem 4rem;
   max-width: 1000px;
   margin: 0 auto;
-`
-
-const Title = styled.h1`
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
-`
-
-const Subtitle = styled.p`
-  font-size: 0.875rem;
-  margin-bottom: 1.25rem;
-  color: #64748b;
 `
 
 const BackLink = styled.button`
@@ -37,12 +29,49 @@ const BackLink = styled.button`
   border: none;
   cursor: pointer;
   font-size: 0.8125rem;
-  color: #64748b;
-  margin-bottom: 0.75rem;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  margin-bottom: 0.875rem;
   padding: 0;
+  transition: color 0.18s;
   &:hover {
-    color: #6366f1;
+    color: ${({ theme }) => theme.colors.primary};
   }
+`
+
+const Header = styled.header`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  margin-bottom: 1.75rem;
+`
+
+const TitleBadge = styled.div`
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: ${({ theme }) => theme.colors.gradient.primary};
+  box-shadow: 0 6px 16px ${({ theme }) => theme.colors.shadow.md};
+`
+
+const Title = styled.h1`
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.25rem;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const Subtitle = styled.p`
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const Toolbar = styled.div`
@@ -50,76 +79,99 @@ const Toolbar = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
   flex-wrap: wrap;
 `
 
+const SearchWrap = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 220px;
+  max-width: 360px;
+
+  svg {
+    position: absolute;
+    left: 12px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    pointer-events: none;
+  }
+`
+
 const SearchInput = styled.input`
-  padding: 0.5rem 0.75rem;
-  border-radius: 8px;
-  min-width: 200px;
+  width: 100%;
+  padding: 0.6rem 0.875rem 0.6rem 2.25rem;
+  border-radius: 12px;
   font-size: 0.875rem;
-  transition: all 0.2s;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: #f1f5f9;
-          &::placeholder {
-            color: #475569;
-          }
-          &:focus {
-            outline: none;
-            border-color: rgba(99, 102, 241, 0.5);
-          }
-        `
-      : css`
-          background: white;
-          border: 1px solid #e5e7eb;
-          color: #0f172a;
-          &:focus {
-            outline: none;
-            border-color: #6366f1;
-          }
-        `}
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  color: ${({ theme }) => theme.colors.text.primary};
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+  }
 `
 
 const Btn = styled.button<{ $primary?: boolean; $danger?: boolean }>`
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  border-radius: 12px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s;
-  &:hover {
-    opacity: 0.9;
+  font-weight: 600;
+  transition:
+    background 0.18s,
+    border-color 0.18s,
+    transform 0.12s,
+    box-shadow 0.18s;
+
+  &:active {
+    transform: scale(0.97);
   }
+
   ${({ theme, $primary, $danger }) => {
-    if ($primary) return css`background: #6366f1; color: white; border: none;`
-    if ($danger && theme.mode === 'dark')
+    if ($primary)
       return css`
-        background: rgba(248, 113, 113, 0.1);
-        color: #f87171;
-        border: 1px solid rgba(248, 113, 113, 0.25);
-      `
-    if (theme.mode === 'dark')
-      return css`
-        background: rgba(255, 255, 255, 0.06);
-        color: #94a3b8;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: ${theme.colors.gradient.primary};
+        color: ${theme.colors.button.text};
+        border: none;
+        box-shadow: 0 4px 14px ${theme.colors.shadow.md};
         &:hover {
-          background: rgba(255, 255, 255, 0.1);
-          color: #e2e8f0;
+          box-shadow: 0 6px 18px ${theme.colors.shadow.lg};
+        }
+      `
+    if ($danger)
+      return css`
+        background: transparent;
+        color: ${theme.colors.error};
+        border: 1px solid ${theme.colors.alert.danger.border};
+        &:hover {
+          background: ${theme.mode === 'dark'
+            ? 'rgba(248,113,113,0.12)'
+            : 'rgba(239,68,68,0.06)'};
         }
       `
     return css`
-      background: white;
-      color: ${$danger ? '#b91c1c' : '#374151'};
-      border: 1px solid ${$danger ? '#fecaca' : '#e5e7eb'};
+      background: ${theme.colors.background.primary};
+      color: ${theme.colors.text.secondary};
+      border: 1px solid ${theme.colors.border.default};
+      &:hover {
+        background: ${theme.colors.hover};
+        color: ${theme.colors.text.primary};
+        border-color: ${theme.colors.border.medium};
+      }
     `
   }}
 `
@@ -136,27 +188,21 @@ const List = styled.ul`
 const ListItem = styled.li`
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  transition: all 0.15s;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          &:hover {
-            background: rgba(255, 255, 255, 0.07);
-          }
-        `
-      : css`
-          background: white;
-          border: 1px solid #e5e7eb;
-          &:hover {
-            background: #f8fafc;
-            border-color: #c7d2fe;
-          }
-        `}
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s,
+    border-color 0.15s;
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 8px 22px ${({ theme }) => theme.colors.shadow.md};
+  }
 `
 
 const ItemContent = styled.div`
@@ -170,22 +216,22 @@ const ItemName = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const SlugChip = styled.code`
   font-size: 0.6875rem;
   font-weight: 500;
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: rgba(148, 163, 184, 0.2);
-  color: #64748b;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const ItemMeta = styled.div`
   font-size: 0.75rem;
-  margin-top: 2px;
-  color: #64748b;
+  margin-top: 3px;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const ItemActions = styled.div`
@@ -194,25 +240,18 @@ const ItemActions = styled.div`
 `
 
 const EmptyBox = styled.div`
-  padding: 48px;
+  padding: 56px 32px;
   text-align: center;
   border-radius: 16px;
   font-size: 14px;
-  color: #64748b;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-        `
-      : css`
-          background: #f8fafc;
-        `}
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
 `
 
 const LoadingText = styled.p`
   font-size: 14px;
-  color: #64748b;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export const CompanyCategoriesListPage: React.FC = () => {
@@ -260,21 +299,29 @@ export const CompanyCategoriesListPage: React.FC = () => {
       <BackLink onClick={() => navigate('/companies')}>
         <FiArrowLeft size={14} /> 기업 목록
       </BackLink>
-      <Title>
-        <FiTag size={24} />
-        기업 카테고리 관리
-      </Title>
-      <Subtitle>
-        기업 분류 카테고리를 등록·수정·삭제합니다. 계층 구조(상위 카테고리)를 지원합니다.
-      </Subtitle>
+      <Header>
+        <TitleBadge>
+          <FiTag size={22} />
+        </TitleBadge>
+        <div>
+          <Title>기업 카테고리 관리</Title>
+          <Subtitle>
+            기업 분류 카테고리를 등록·수정·삭제합니다. 계층 구조(상위
+            카테고리)를 지원합니다.
+          </Subtitle>
+        </div>
+      </Header>
 
       <Toolbar>
-        <SearchInput
-          type="text"
-          placeholder="카테고리명·슬러그 검색..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <SearchWrap>
+          <FiSearch size={16} />
+          <SearchInput
+            type="text"
+            placeholder="카테고리명·슬러그 검색..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </SearchWrap>
         <Btn $primary onClick={() => navigate('/company-categories/new')}>
           <FiPlus size={18} />
           카테고리 추가
