@@ -492,6 +492,10 @@ const LabelSeparator = styled.span`
 
 const RowTrack = styled.div`
   position: relative;
+  /* 자체 쌓임 맥락 — 하이라이트·hover 막대의 z-index(2·3)를 트랙 내부에 가둬,
+     가로 스크롤로 막대가 좌측 국가 라벨(z-index 1) 밑으로 들어갈 때 라벨이 항상 위에 오게 한다.
+     트랙 전체는 z-index 0이라 sticky 헤더(z-index 4)보다 아래로 유지됨. */
+  z-index: 0;
   transition: height 0.18s ease;
 `
 
