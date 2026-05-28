@@ -23,9 +23,16 @@ export const GlobalStyle = createGlobalStyle`
     --glass-blur: 12px;
     --gradient-subtle: radial-gradient(1200px 500px at 10% -10%, rgba(173,70,255,0.06), transparent 50%), radial-gradient(800px 400px at 90% -20%, rgba(90,0,255,0.05), transparent 55%);
   }
-  /* ✍️ 전역 폰트 설정 */
+  /* ✍️ 전역 폰트 설정 — Pretendard Variable 기본 + 시스템 한글 fallback */
 body {
-    font-family: 'Asta Sans', sans-serif;
+    font-family:
+      'Pretendard Variable', Pretendard,
+      -apple-system, BlinkMacSystemFont,
+      'Apple SD Gothic Neo', 'Noto Sans KR',
+      'Inter', 'Segoe UI', Roboto,
+      sans-serif;
+    font-feature-settings: 'ss06', 'ss07';
+    letter-spacing: -0.01em;
     margin: 0;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
