@@ -44,6 +44,7 @@ import {
   seedPotsdamConference,
   seedKoreanWar,
   seedSanFranciscoTreatyPersons,
+  seedSanFranciscoTreatyEnrich,
   seedPrcFounding,
   seedKurofune,
   seedAnseiEarthquakes,
@@ -316,6 +317,12 @@ async function main() {
         //  · 덜레스·모리슨·그로미코·이케다 하야토(신규) / 요시다·트루먼·애치슨·애틀리·스탈린(기존)
         //  · 기존 Event(person.japan-postwar2 시드)에 PersonEvent 9건 추가
         await seedSanFranciscoTreatyPersons(prisma)
+
+        // 13-13b. 샌프란시스코 강화조약 — 보강(섹션 6 + ECR 10 + 인물 6 + 미·일 안보조약 신규 Event)
+        //  · 일본 7인 전권 위원 누락 5명(호시지마·이치마다·도쿠가와 무네요시·토마베치·사토) + 로물로
+        //  · 회의 진행 일별·한국 미초청·서명 거부 3국·영토 조항·안보조약 패키지·학설사 섹션
+        //  · 1951-09-08 미·일 안전보장조약 체결 신규 Event + 4섹션 + EventRelation 2건
+        await seedSanFranciscoTreatyEnrich(prisma)
 
         // 13-14. 1949-10-01 중화인민공화국 수립 — 정치 카테고리
         //  · 중화민국(ROC) historicalCountry 인라인 등록
