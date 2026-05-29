@@ -57,6 +57,8 @@ export function InlineRichText({
   const editorId = useId()
   const { editing, open, close } = useInlineEditCoordinator(editorId)
   const [draft, setDraft] = useState(value)
+  /** RichTextEditor의 flush 함수 — 저장 직전 디바운스 대기분을 즉시 반영. */
+  const editorFlushRef = useRef<(() => string | null) | null>(null)
 
   /* 읽기 모드 .term / 가문 엔티티 클릭 시 뜨는 정의 툴팁(포털). */
   const [termTooltip, setTermTooltip] =
@@ -99,7 +101,10 @@ export function InlineRichText({
   }, [editing, value])
 
   const commit = () => {
-    if (draft !== value) onSave(draft)
+    // 디바운스로 아직 emit되지 않은 마지막 입력까지 즉시 반영(반환값 = 최신 html).
+    const flushed = editorFlushRef.current ? editorFlushRef.current() : null
+    const latest = flushed ?? draft
+    if (latest !== value) onSave(latest)
     close()
   }
 
@@ -143,6 +148,10 @@ export function InlineRichText({
           onChange={(v) => {
             if (v !== draft) setDraft(v)
           }}
+          /* 긴 본문 입력 지연 완화: onChange(무거운 sanitize)를 디바운스.
+             저장 직전 commit()이 editorFlushRef로 마지막 입력을 즉시 반영한다. */
+          debounceMs={200}
+          flushRef={editorFlushRef}
           placeholder={placeholder}
           maxHeight={maxHeight}
           /**

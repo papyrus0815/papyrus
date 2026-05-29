@@ -1590,6 +1590,61 @@ function getOrderedTableCells(table: HTMLTableElement): HTMLTableCellElement[] {
   return out
 }
 
+/** P/DIV 빈 블록 판정 — 미디어/구조 요소 없이 텍스트가 공백(또는 zero-width space)뿐. */
+function isEmptyRichBlock(el: Element | null): el is HTMLElement {
+  if (!el) return false
+  if (el.tagName !== 'P' && el.tagName !== 'DIV') return false
+  if (el.querySelector('img, figure, table, ul, ol, blockquote, pre, hr'))
+    return false
+  return (el.textContent ?? '').replace(/\u200B/g, '').trim() === ''
+}
+
+/**
+ * node 바로 앞의 연속 빈 블록 제거. 본문 뒤 Enter로 만든 빈 줄에 블록(이미지·구분선)을
+ * 넣을 때 execCommand insertHTML이 캐럿 단락을 분할하며 남기는 빈 <p>를 정리한다.
+ */
+function removeEmptyBlocksBefore(node: Element): void {
+  let prev = node.previousElementSibling
+  while (isEmptyRichBlock(prev)) {
+    const toRemove = prev
+    prev = prev.previousElementSibling
+    toRemove.remove()
+  }
+}
+
+/**
+ * 에디터 루트 기준 *문자 오프셋*으로 caret Range를 만든다. innerHTML 전체 교체 후
+ * 캐럿을 복원할 때, 교체 전에 잡아 둔 노드(detached)를 쓰지 않고 텍스트 길이로
+ * 재계산해 안전하게 복원하기 위함.
+ */
+function caretRangeFromCharOffset(
+  root: HTMLElement,
+  target: number,
+): Range | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let remaining = target
+  let last: Text | null = null
+  let node = walker.nextNode()
+  while (node) {
+    const text = node as Text
+    const len = text.data.length
+    if (remaining <= len) {
+      const r = document.createRange()
+      r.setStart(text, remaining)
+      r.collapse(true)
+      return r
+    }
+    remaining -= len
+    last = text
+    node = walker.nextNode()
+  }
+  const r = document.createRange()
+  if (last) r.setStart(last, last.data.length)
+  else r.selectNodeContents(root)
+  r.collapse(false)
+  return r
+}
+
 function insertRichTableAtSelection(
   editor: HTMLElement,
   rows: number,
@@ -1752,6 +1807,17 @@ interface RichTextEditorProps {
    * 미전달 시 슬롯 없음(default).
    */
   actions?: React.ReactNode
+  /**
+   * >0이면 `onChange`(무거운 sanitize 포함)를 이 ms로 디바운스해 긴 본문 입력
+   * 지연을 줄인다. 0(기본)이면 매 입력마다 즉시 emit(기존 동작 — 다른 사용처 영향 없음).
+   * 디바운스를 켜는 사용처는 저장 직전 `flushRef.current?.()`로 마지막 입력을 반영해야 한다.
+   */
+  debounceMs?: number
+  /**
+   * 부모가 대기 중 변경을 즉시 flush하도록 함수를 주입받는 ref(저장 직전 호출).
+   * 반환값 = 최신 sanitized html.
+   */
+  flushRef?: React.MutableRefObject<(() => string | null) | null>
 }
 
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
@@ -1773,6 +1839,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   minHeight,
   autoFocus = false,
   actions,
+  debounceMs = 0,
+  flushRef,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -1897,6 +1965,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
    * innerHTML이 끝없이 어긋나 매 글자마다 innerHTML 전체가 리셋됨)
    */
   const lastEmittedValueRef = useRef<string>('')
+  /** debounceMs>0일 때 대기 중인 emit 타이머 id. */
+  const emitTimerRef = useRef<number | null>(null)
 
   // 에디터 내용 동기화 — 외부에서 value가 바뀐 경우(초기 로드·외부 리셋·복구)에만 DOM 갱신
   useEffect(() => {
@@ -1909,30 +1979,37 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     // 다음 user-input 이후 비교 기준으로 쓰기 위해 sanitize한 값을 기록
     lastEmittedValueRef.current = incoming
 
+    const editor = editorRef.current
     const selection = window.getSelection()
-    const range =
-      selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-    const cursorPosition = range
-      ? {
-          startContainer: range.startContainer,
-          startOffset: range.startOffset,
-        }
-      : null
+    /**
+     * innerHTML을 통째로 교체하면 기존 노드가 detach되어, 교체 전 노드 참조로
+     * setStart하면 throw → 커서 유실됐다. 에디터에 *포커스가 있을 때만* caret의
+     * 문자 오프셋을 기억해 두고, 교체 후 텍스트 길이로 재계산해 복원한다.
+     */
+    const focused =
+      document.activeElement === editor ||
+      editor.contains(document.activeElement)
+    let caretOffset: number | null = null
+    if (
+      focused &&
+      selection &&
+      selection.rangeCount > 0 &&
+      editor.contains(selection.getRangeAt(0).startContainer)
+    ) {
+      const r = selection.getRangeAt(0)
+      const probe = document.createRange()
+      probe.selectNodeContents(editor)
+      probe.setEnd(r.startContainer, r.startOffset)
+      caretOffset = probe.toString().length
+    }
 
-    editorRef.current.innerHTML = newContent
+    editor.innerHTML = newContent
 
-    if (cursorPosition && selection) {
-      try {
-        const newRange = document.createRange()
-        newRange.setStart(
-          cursorPosition.startContainer,
-          cursorPosition.startOffset,
-        )
-        newRange.collapse(true)
+    if (caretOffset != null && selection) {
+      const restored = caretRangeFromCharOffset(editor, caretOffset)
+      if (restored) {
         selection.removeAllRanges()
-        selection.addRange(newRange)
-      } catch {
-        /* 커서 복원 실패 시 무시 */
+        selection.addRange(restored)
       }
     }
   }, [value])
@@ -2505,18 +2582,56 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   }, [])
 
+  /**
+   * 대기 중인 변경을 *즉시* emit. 부모(InlineRichText 등)가 저장 직전 호출해
+   * 디바운스로 지연된 마지막 입력까지 반영한다. 반환값 = 최신 sanitized html.
+   */
+  const flushPendingChange = useCallback((): string | null => {
+    if (!editorRef.current) return null
+    if (emitTimerRef.current != null) {
+      window.clearTimeout(emitTimerRef.current)
+      emitTimerRef.current = null
+    }
+    const html = sanitizeRichTextHtml(editorRef.current.innerHTML)
+    // value-sync effect가 자기가 만든 변경에 반응하지 않도록 — 부모로 흘러간 값과
+    // 같으면 DOM 리셋 안 함.
+    lastEmittedValueRef.current = html
+    onChange(html)
+    return html
+  }, [onChange])
+
   // 내용 변경 핸들러
   const handleContentChange = useCallback(() => {
     if (!editorRef.current) return
-
-    const html = sanitizeRichTextHtml(editorRef.current.innerHTML)
-    // value-sync effect가 자기가 만든 변경에 반응하지 않도록 — 핸들·임시 클래스가
-    // DOM에는 남아 있어도 부모로 흘러간 값과 비교해 같으면 DOM 리셋 안 함.
-    lastEmittedValueRef.current = html
-    onChange(html)
+    // 토글 상태·커서 스크롤은 즉시(가벼움). 무거운 sanitize+onChange만 debounceMs>0이면 디바운스.
     updateFormatState()
     requestAnimationFrame(scrollCursorIntoView)
-  }, [onChange, updateFormatState, scrollCursorIntoView])
+    if (debounceMs > 0) {
+      if (emitTimerRef.current != null) window.clearTimeout(emitTimerRef.current)
+      emitTimerRef.current = window.setTimeout(() => {
+        emitTimerRef.current = null
+        flushPendingChange()
+      }, debounceMs)
+    } else {
+      flushPendingChange()
+    }
+  }, [updateFormatState, scrollCursorIntoView, debounceMs, flushPendingChange])
+
+  // 부모가 저장 직전 등 즉시 flush할 수 있도록 핸들 노출.
+  useEffect(() => {
+    if (flushRef) flushRef.current = flushPendingChange
+    return () => {
+      if (flushRef) flushRef.current = null
+    }
+  }, [flushRef, flushPendingChange])
+
+  // 언마운트 시에만 대기 중 emit 타이머 정리 — 취소된(예: Esc) 편집이 뒤늦게
+  // emit되지 않도록. (deps []라 리렌더로 인한 타이머 조기 해제 없음.)
+  useEffect(() => {
+    return () => {
+      if (emitTimerRef.current != null) window.clearTimeout(emitTimerRef.current)
+    }
+  }, [])
 
   const insertProseHrBlock = useCallback(
     (hrHtml: string) => {
@@ -2524,7 +2639,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       setTablePickerVisible(false)
       if (!editorRef.current) return
       editorRef.current.focus()
+      const hrCountBefore = editorRef.current.querySelectorAll(
+        'hr, .prose-hr',
+      ).length
       document.execCommand('insertHTML', false, `${hrHtml}<p><br></p>`)
+      // 삽입된 구분선 앞에 분할로 남은 빈 <p> 제거 — 이미지 삽입과 동일한 빈 줄 문제.
+      const newHr = editorRef.current.querySelectorAll('hr, .prose-hr')[
+        hrCountBefore
+      ]
+      if (newHr) removeEmptyBlocksBefore(newHr)
       const selection = window.getSelection()
       if (selection && editorRef.current) {
         const allPs = editorRef.current.querySelectorAll('p')
