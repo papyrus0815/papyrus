@@ -13,6 +13,7 @@ import React, {
   useMemo,
   useRef,
   useState,
+  useTransition,
 } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
@@ -197,6 +198,17 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   // useCatalogUrlSync도 동일 디폴트를 사용해야 첫 마운트 직후 force-overwrite를 피함.
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     resolveDefaultViewMode(searchParams.get('view')),
+  )
+  /**
+   * 뷰 전환(시간↔카테고리↔타임라인 등)은 전체 pivot을 같은 events로 다시 그리는
+   * *무거운 동기 재렌더*다(특히 가상화 안 된 뷰). 사용자 클릭은 startTransition으로
+   * 비긴급 처리해 전환 중에도 버튼/UI가 멈추지 않게 한다. URL→state 동기화 경로는
+   * 그대로 raw setViewMode를 사용한다.
+   */
+  const [, startViewTransition] = useTransition()
+  const changeViewMode = useCallback(
+    (next: ViewMode) => startViewTransition(() => setViewMode(next)),
+    [],
   )
   const [selectedEventId, setSelectedEventId] = useState<string | null>(
     searchParams.get('event'),
@@ -680,7 +692,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       <Layout.CatalogSplit $hasSelection={!!selectedEventId}>
         <CatalogMainContent
           viewMode={viewMode}
-          setViewMode={setViewMode}
+          setViewMode={changeViewMode}
           visibleCount={visibleFlattenedHierarchy.length}
           totalCount={events.length}
           events={events}
