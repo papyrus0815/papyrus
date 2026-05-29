@@ -2564,8 +2564,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       editor.focus()
 
       const imageContainer = document.createElement('figure')
-      imageContainer.style.margin = '10px 0'
+      // 기본 가운데 정렬 — 인라인 margin auto(좌우)로 확정. 과거 '10px 0'은 좌우 0이라
+      // CSS·data-align의 가운데 정렬을 덮어써 좌측에 붙던 문제가 있었음(인라인 우선).
+      imageContainer.style.margin = '10px auto'
       imageContainer.style.textAlign = 'center'
+      imageContainer.dataset.align = 'center'
 
       const img = document.createElement('img')
       img.src = imageUrl
@@ -3299,6 +3302,25 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     (align: 'left' | 'center' | 'right') => {
       if (!selectedFigure) return
       selectedFigure.dataset.align = align
+      /**
+       * 정렬을 *인라인 스타일로 확정*한다. figure에 과거 박힌 인라인 margin(예 '10px 0')이
+       * CSS data-align(margin:auto)을 덮어써 가운데 정렬이 안 먹던 문제가 있었으므로,
+       * 인라인을 직접 덮어써 정렬을 결정한다(인라인이 CSS보다 우선 → 항상 적용).
+       */
+      const img = selectedFigure.querySelector('img') as HTMLImageElement | null
+      if (align === 'center') {
+        selectedFigure.style.margin = '10px auto'
+        selectedFigure.style.textAlign = 'center'
+        if (img) img.style.margin = '0 auto'
+      } else if (align === 'left') {
+        selectedFigure.style.margin = '10px auto 10px 0'
+        selectedFigure.style.textAlign = 'left'
+        if (img) img.style.margin = '0'
+      } else {
+        selectedFigure.style.margin = '10px 0 10px auto'
+        selectedFigure.style.textAlign = 'right'
+        if (img) img.style.margin = '0 0 0 auto'
+      }
       dispatchEditorInput()
     },
     [selectedFigure, dispatchEditorInput],
