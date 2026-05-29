@@ -2607,11 +2607,56 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
       rangeRef.current = null
 
+      const isEmptyBlock = (el: Element | null): el is HTMLElement => {
+        if (!el) return false
+        if (el.tagName !== 'P' && el.tagName !== 'DIV') return false
+        // \uBBF8\uB514\uC5B4/\uAD6C\uC870 \uC694\uC18C\uAC00 \uB4E4\uC5B4 \uC788\uC73C\uBA74 \uBE44\uC5B4 \uC788\uC9C0 \uC54A\uC74C.
+        if (el.querySelector('img, figure, table, ul, ol, blockquote, pre, hr'))
+          return false
+        // \u200B = \uACFC\uAC70 \uCE90\uB7FF \uCC98\uB9AC\uB85C \uB0A8\uC558\uC744 \uC218 \uC788\uB294 zero-width space \uC81C\uAC70 \uD6C4 \uD310\uC815.
+        return (el.textContent ?? '').replace(/\u200B/g, '').trim() === ''
+      }
+
       const moveCaretAfter = (node: Node) => {
-        const spaceText = document.createTextNode('\u200B')
-        node.parentNode?.insertBefore(spaceText, node.nextSibling)
+        const fig = node as HTMLElement
+
+        /**
+         * \uBCF8\uBB38 \uB4A4 Enter\uB85C \uB9CC\uB4E0 \uBE48 \uC904\uC5D0 \uC774\uBBF8\uC9C0\uB97C \uB123\uC73C\uBA74 execCommand insertHTML\uC774
+         * \uCE90\uB7FF \uC704\uCE58\uC5D0\uC11C \uB2E8\uB77D\uC744 \uBD84\uD560\uD558\uBA70 figure *\uC55E*\uC5D0 \uBE48 <p>\uB97C \uB0A8\uAE34\uB2E4 \u2192 \uBCF8\uBB38\uACFC
+         * \uC774\uBBF8\uC9C0 \uC0AC\uC774\uAC00 \uBE48 \uC904\uB85C \uBCF4\uC600\uB2E4. figure \uBC14\uB85C \uC55E\uC758 \uBE48 \uBE14\uB85D\uC744 \uC81C\uAC70\uD574 \uADF8
+         * \uACF5\uBC31\uC744 \uC5C6\uC564\uB2E4(\uC5F0\uC18D \uBE48 \uBE14\uB85D\uB3C4 \uD568\uAED8).
+         */
+        let prev = fig.previousElementSibling
+        while (isEmptyBlock(prev)) {
+          const toRemove = prev
+          prev = prev.previousElementSibling
+          toRemove.remove()
+        }
+
+        /**
+         * \uC774\uC5B4\uC11C \uC785\uB825\uD560 \uB2E8\uB77D\uC744 \uCE90\uB7FF \uBAA9\uC801\uC9C0\uB85C. \uB4A4\uC5D0 \uBE48 \uB2E8\uB77D\uC774 \uC774\uBBF8 \uC788\uC73C\uBA74 \uC7AC\uC0AC\uC6A9\uD558\uACE0
+         * (\uC5F0\uC18D \uBE48 \uB2E8\uB77D\uC740 1\uAC1C\uB85C \uCD95\uC18C), \uB0B4\uC6A9 \uC788\uB294 \uBE14\uB85D\uC774\uBA74 \uADF8 \uC2DC\uC791\uC5D0 \uCE90\uB7FF\uC744 \uB450\uC5B4
+         * \uC774\uBBF8\uC9C0 *\uC544\uB798*\uC5D0 \uBD88\uD544\uC694\uD55C \uBE48 \uC904\uC744 \uC0C8\uB85C \uB9CC\uB4E4\uC9C0 \uC54A\uB294\uB2E4. \uB4A4\uAC00 \uBE44\uC5C8\uC73C\uBA74(\uC774\uBBF8\uC9C0\uAC00
+         * \uBB38\uC11C \uB05D) \uC774\uC5B4\uC4F8 \uBE48 \uB2E8\uB77D 1\uAC1C\uB97C \uB9CC\uB4E0\uB2E4.
+         */
+        let trailing = fig.nextElementSibling
+        if (!trailing) {
+          const p = document.createElement('p')
+          p.innerHTML = '<br>'
+          fig.after(p)
+          trailing = p
+        } else if (isEmptyBlock(trailing)) {
+          while (isEmptyBlock(trailing.nextElementSibling)) {
+            trailing.nextElementSibling?.remove()
+          }
+        }
+
         const newRange = document.createRange()
-        newRange.setStart(spaceText, 0)
+        if (trailing.firstChild && !isEmptyBlock(trailing)) {
+          newRange.setStart(trailing.firstChild, 0)
+        } else {
+          newRange.setStart(trailing, 0)
+        }
         newRange.collapse(true)
         const selection = window.getSelection()
         if (selection) {
