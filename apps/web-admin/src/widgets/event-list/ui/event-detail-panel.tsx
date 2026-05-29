@@ -38,6 +38,7 @@ import type {
   HistoricalEvent,
 } from '@/pages/events/create/events.types'
 import * as Detail from '@/pages/events/styles/detail.styles'
+import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import * as Modal from '@/pages/events/styles/modal.styles'
 import * as Skeleton from '@/pages/events/styles/skeleton.styles'
 import { ICON_SIZE } from '@/pages/events/styles/theme'
@@ -456,7 +457,8 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                   </Detail.InfoMutedHint>
                 )}
               </Detail.DetailSectionTitle>
-              <Detail.DetailText>{selectedEvent.background}</Detail.DetailText>
+              {/* 배경은 리치텍스트(HTML) — plain text로 두면 태그가 그대로 노출됨. */}
+              <RichTextReadView html={selectedEvent.background} />
             </Detail.DetailSection>
           )}
 
@@ -470,7 +472,8 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                   </Detail.InfoMutedHint>
                 )}
               </Detail.DetailSectionTitle>
-              <Detail.DetailText>{selectedEvent.aftermath}</Detail.DetailText>
+              {/* 여파도 리치텍스트(HTML) — RichTextReadView로 렌더. */}
+              <RichTextReadView html={selectedEvent.aftermath} />
             </Detail.DetailSection>
           )}
 
