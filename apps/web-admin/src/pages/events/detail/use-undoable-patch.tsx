@@ -10,11 +10,19 @@
 import { useCallback, useEffect, useRef } from 'react'
 
 import { toast } from 'react-hot-toast'
-import styled from 'styled-components'
+import { FiCheck, FiCornerUpLeft } from 'react-icons/fi'
+import styled, { keyframes } from 'styled-components'
 
+import {
+  ledgerAccent,
+  ledgerHairlineStrong,
+} from '@/pages/events/ledger/styles/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 
 import { type EventDetail } from './use-event-detail'
+
+/** "되돌리기" 노출 시간(ms) — 토스트 duration과 소진 타이머 애니메이션이 공유. */
+const UNDO_DURATION_MS = 5000
 
 type Mutate = (
   patch: UpdateEventDto,
@@ -76,21 +84,32 @@ export function useUndoablePatch({
           if (mySeq !== seqRef.current) return
           const id = toast(
             (t) => (
-              <Pill>
-                <Label>저장됨</Label>
-                <UndoBtn
-                  type="button"
-                  onClick={() => {
-                    mutate(inverse)
-                    toast.dismiss(t.id)
-                    lastToastRef.current = null
-                  }}
-                >
-                  되돌리기
-                </UndoBtn>
-              </Pill>
+              <Bar>
+                <Row>
+                  <Status>
+                    <FiCheck aria-hidden />
+                    저장됨
+                  </Status>
+                  <Divider aria-hidden />
+                  <UndoBtn
+                    type="button"
+                    onClick={() => {
+                      mutate(inverse)
+                      toast.dismiss(t.id)
+                      lastToastRef.current = null
+                    }}
+                  >
+                    <FiCornerUpLeft aria-hidden />
+                    되돌리기
+                  </UndoBtn>
+                </Row>
+                {/* 5초 소진 타이머 — undo 기회가 닫히는 시점을 시각화. */}
+                <Track aria-hidden>
+                  <Fill />
+                </Track>
+              </Bar>
             ),
-            { duration: 5000, position: 'bottom-center' },
+            { duration: UNDO_DURATION_MS, position: 'bottom-center' },
           )
           lastToastRef.current = id
         },
@@ -190,35 +209,108 @@ function buildInverse(
 
 /* ───────────────────────── styles ───────────────────────── */
 
-const Pill = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
-  padding: 4px 4px 4px 14px;
+/**
+ * 토스트 콘텐츠 루트. 외곽 pill·blur·그림자는 전역 Toaster(app.tsx)가 입히므로
+ * 여기선 *콘텐츠만*. 가로 패딩을 따로 두지 않아 컨테이너 패딩과 이중으로 겹치지
+ * 않게 한다. 상단 = 상태·액션 행, 하단 = 소진 타이머.
+ */
+const Bar = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
   font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.primary};
+  width: 100%;
 `
 
-const Label = styled.span`
+const Row = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+`
+
+const Status = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
+
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+`
+
+/* 상태(저장됨)와 액션(되돌리기)을 가르는 얇은 세로 hairline. */
+const Divider = styled.span`
+  width: 1px;
+  height: 14px;
+  flex-shrink: 0;
+  background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const UndoBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font: inherit;
-  font-weight: 600;
+  font-weight: 700;
   background: transparent;
   border: 0;
   padding: 4px 10px;
-  margin: 0;
+  margin: -2px 0;
   cursor: pointer;
-  border-radius: 6px;
-  color: ${({ theme }) => theme.colors.primary ?? '#1e40af'};
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  border-radius: 999px;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  transition: background 0.14s;
 
-  &:hover {
-    text-decoration: none;
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  &:hover,
+  &:focus-visible {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'};
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.08)'
+        : 'rgba(15,23,42,0.05)'};
+    outline: none;
+  }
+`
+
+/* 소진 타이머 트랙 — 콘텐츠 폭 안쪽에 두어 pill 곡률과 충돌하지 않는다. */
+const Track = styled.span`
+  display: block;
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.07)'};
+`
+
+const deplete = keyframes`
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+`
+
+const Fill = styled.span`
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  opacity: 0.75;
+  /* duration은 toast duration과 동일(UNDO_DURATION_MS) — 사라지는 순간 0이 되도록. */
+  animation: ${deplete} ${UNDO_DURATION_MS}ms linear forwards;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    opacity: 0.45;
   }
 `
