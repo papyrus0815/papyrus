@@ -399,6 +399,9 @@ const TermContent = styled.div`
   font-size: 13px;
   color: ${({ theme }) => theme.ts!.textSub};
   line-height: 1.6;
+  /* 평문 입력(textarea)이라 줄바꿈을 보존. 긴 토큰은 줄바꿈 허용. */
+  white-space: pre-wrap;
+  word-break: break-word;
 `
 const SecretBadge = styled.span`
   font-size: 10px;
