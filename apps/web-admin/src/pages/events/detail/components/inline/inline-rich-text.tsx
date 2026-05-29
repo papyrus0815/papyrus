@@ -344,7 +344,19 @@ const ReadBody = styled.div`
  * 시각 점프는 ReadBody typography 정렬(line-height 1.6, p margin 8px)과
  * autoGrow(min-height 120)로 이미 흡수되어 큰 부담 없음.
  */
-const EditHost = styled.div``
+const EditHost = styled.div`
+  /**
+   * 인라인 편집 한정 — 에디터 본문(role=textbox) 좌우 padding을 28→12px로 좁혀
+   * *텍스트 칼럼 폭*을 읽기뷰와 맞춘다. 읽기뷰는 우측 ✎ 버튼이 ~26px를 차지해
+   * 본문이 그만큼 좁은데, 편집 모드는 기본 28px padding 탓에 더 좁아 줄바꿈 위치가
+   * 달랐다(같은 자리 토글 시 reflow). 12px면 두 모드의 폭이 ~694px로 일치.
+   * 공용 에디터(포스트·폼)의 28px 기본값은 스코프 밖이라 영향 없음.
+   */
+  [role='textbox'] {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+`
 
 const Placeholder = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
