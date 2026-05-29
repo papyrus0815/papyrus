@@ -3990,6 +3990,53 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     return () => window.removeEventListener('keydown', onKey)
   }, [imageCaptionModalVisible, handleImageCaptionCancel])
 
+  /**
+   * 팝오버/모달이 열려 있을 때의 Esc는 *그 팝오버만* 닫는다.
+   *
+   * capture 단계 단일 핸들러로, 열린 오버레이를 우선순위대로 하나 닫고
+   * stopImmediatePropagation으로 이벤트를 멈춘다. 그러면:
+   *  - 흩어진 개별 Esc 핸들러가 중복 발화하지 않고,
+   *  - 부모(InlineRichText 등)의 window Esc(편집 취소)도 발화하지 않아 에디터가
+   *    통째로 닫히며 입력이 날아가는 문제가 사라진다.
+   * 열린 오버레이가 없으면 그냥 통과시켜 부모의 Esc(편집 취소)가 처리한다.
+   */
+  const handleOverlayEscapeCapture = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (shortcutsHelpVisible) setShortcutsHelpVisible(false)
+      else if (imageCaptionModalVisible) handleImageCaptionCancel()
+      else if (entityLinkModalVisible) setEntityLinkModalVisible(false)
+      else if (termEditModalVisible) setTermEditModalVisible(false)
+      else if (termLinkModalVisible) setTermLinkModalVisible(false)
+      else if (colorPickerVisible) setColorPickerVisible(false)
+      else if (tablePickerVisible) setTablePickerVisible(false)
+      else if (contextMenuVisible) setContextMenuVisible(false)
+      else if (selectedFigure) {
+        setSelectedFigure(null)
+        setImageMenuPos(null)
+      } else return // 열린 오버레이 없음 — 부모 Esc(편집 취소)가 처리하도록 통과.
+      e.preventDefault()
+      e.stopImmediatePropagation()
+    },
+    [
+      shortcutsHelpVisible,
+      imageCaptionModalVisible,
+      handleImageCaptionCancel,
+      entityLinkModalVisible,
+      termEditModalVisible,
+      termLinkModalVisible,
+      colorPickerVisible,
+      tablePickerVisible,
+      contextMenuVisible,
+      selectedFigure,
+    ],
+  )
+  useEffect(() => {
+    window.addEventListener('keydown', handleOverlayEscapeCapture, true)
+    return () =>
+      window.removeEventListener('keydown', handleOverlayEscapeCapture, true)
+  }, [handleOverlayEscapeCapture])
+
   // 링크 삽입
   const handleSetLink = useCallback(() => {
     const selection = window.getSelection()
