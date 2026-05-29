@@ -3,7 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FiArrowDown, FiArrowUp, FiPlus, FiSettings, FiTrash2 } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { ledgerHairlineStrong } from '@/pages/events/ledger/styles/ledger-tokens'
+import {
+  ledgerHairline,
+  ledgerHairlineStrong,
+} from '@/pages/events/ledger/styles/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 
 import * as S from '../styles'
@@ -188,6 +191,7 @@ export function DetailNarrative({
             {rows.map((row, idx) => (
               <SectionItem key={row.key}>
                 <SectionTitleRow>
+                  <SectionIndex aria-hidden>{idx + 1}</SectionIndex>
                   <SectionTitleHost>
                     <InlineText
                       value={row.title}
@@ -356,25 +360,51 @@ const SectionStack = styled.div`
   gap: 14px;
 `
 
+/**
+ * 섹션 경계 명시 — 항목마다 상단 hairline 구분선. 본문에서 제목 서식(큰 글자)을
+ * 써도 "여기서부터 새 섹션"이 또렷하도록. 첫 항목은 위 구분선 생략.
+ */
 const SectionItem = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 4px 0 18px;
-  border: none;
+  padding: 18px 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: transparent;
+
+  &:first-child {
+    border-top: none;
+    padding-top: 4px;
+  }
 `
 
 const SectionTitleRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+`
+
+/**
+ * 순번 마커 — 본문 글자 크기와 무관한 결정적 경계 단서. 번호 + 우측 hairline 룰.
+ */
+const SectionIndex = styled.span`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding-right: 12px;
+  border-right: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const SectionTitleHost = styled.div`
   flex: 1;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 

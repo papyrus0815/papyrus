@@ -308,6 +308,28 @@ const ReadBody = styled.div`
     p:last-child {
       margin-bottom: 0;
     }
+    /**
+     * 본문에서 제목 서식(글자 크기)을 써도 섹션 제목(18px)을 넘지 않도록 캡.
+     * 읽기뷰엔 heading 크기 규칙이 없어 UA 기본값(h1≈30px)이 적용돼, 본문 소제목이
+     * 섹션 제목보다 커지며 경계가 흐려지던 문제를 막는다. 굵기·여백으로만 위계 구분.
+     */
+    h1,
+    h2,
+    h3 {
+      font-weight: 700;
+      line-height: 1.4;
+      margin: 12px 0 6px;
+      letter-spacing: -0.01em;
+    }
+    h1 {
+      font-size: 16.5px;
+    }
+    h2 {
+      font-size: 15.5px;
+    }
+    h3 {
+      font-size: 14.5px;
+    }
   }
 `
 
