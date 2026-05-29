@@ -247,22 +247,11 @@ export const richTextEntityLinkStyles = css`
     &:active {
       transform: translateY(0);
     }
-
-    &::after {
-      content: '🔗';
-      font-size: 9px;
-      margin-left: 4px;
-      opacity: 0.5;
-      transition: opacity 0.2s ease;
-    }
-
-    &:hover::after {
-      opacity: 1;
-    }
   }
 `
 
-/** 읽기 전용 별칭 — 기존 import 호환. 에디터와 동일 스타일을 가리킨다. */
+/** 읽기 전용 별칭 — 기존 import 호환. 에디터와 동일 스타일을 가리킨다.
+ *  단, 🔗 표식은 *편집 어포던스*라 에디터(EditorContent)에서만 추가하고 읽기 뷰엔 미표시. */
 export const richTextReadonlyEntityLinksCss = richTextEntityLinkStyles
 
 /**

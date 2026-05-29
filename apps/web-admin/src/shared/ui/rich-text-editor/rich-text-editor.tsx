@@ -593,6 +593,18 @@ const EditorContent = styled.div<{ $hasTitle?: boolean; $minHeight?: string }>`
   /* 멘션·용어·엔티티 링크 — 읽기 뷰와 공유(richTextEntityLinkStyles) */
   ${richTextEntityLinkStyles}
 
+  /* 🔗 표식은 *편집 중 어포던스* — 에디터에서만 표시(읽기 뷰엔 없음). */
+  .entity-link::after {
+    content: '🔗';
+    font-size: 9px;
+    margin-left: 4px;
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+  }
+  .entity-link:hover::after {
+    opacity: 1;
+  }
+
   /* iOS 메모 스타일 표 */
   table.rich-table {
     border-collapse: collapse;
