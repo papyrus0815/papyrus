@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useParams, useSearchParams } from 'react-router-dom'
 
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
+import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 
 import { DetailActors } from './components/detail-actors'
 import { DetailAppendix } from './components/detail-appendix'
@@ -28,20 +29,52 @@ import { useUndoablePatch } from './use-undoable-patch'
 /**
  * 사건 상세 페이지 — 단일 칼럼 narrative-first.
  *
+ * 데이터 계층(현대화)
+ * - 셸(EventDetailPage)이 ErrorBoundary > Suspense > 본문(EventDetailContent)을 감싼다.
+ * - 본문은 `useEventDetail`(useSuspenseQuery) — 로딩은 Suspense, 에러는 ErrorBoundary로
+ *   위임하므로 본문 코드엔 `isLoading/isError` 분기가 없다.
+ *
  * 디자인 원칙
  * - 사건 = 시간 내러티브 + 행위자 + 카테고리별 모듈 + 연관 네트워크.
- * - 카드 그리드로 분산하지 않는다. 본문은 본문대로, 모듈은 데이터 있을 때만.
- * - 편집은 *click-to-edit* 일원화 — 각 필드를 클릭해 그 자리에서 수정.
- *   페이지 전역 편집 잠금 X (한 번에 한 섹션 강제는 폐기 — UX 마찰만 컸음).
- * - 모든 자식은 단일 `onPatch(UpdateEventDto)` 채널만 본다. 부분 patch는 서버가
- *   `=== undefined` 가드로 처리(event.service.ts).
+ * - 편집은 *click-to-edit* 일원화. 모든 자식은 단일 `onPatch(UpdateEventDto)` 채널만 본다.
  */
 const EventDetailPage = () => {
   const { eventId } = useParams<{ eventId: string }>()
-  const { event, isLoading, isError, error, enabledModules } = useEventDetail(eventId)
-  /* 탭·히스토리 식별 — 사건명을 문서 제목에 반영(로딩 중엔 변경 안 함). */
-  useDocumentTitle(event?.title)
-  const mutation = useEventMutation(eventId ?? '')
+
+  // 라우트상 항상 존재하지만 타입 가드 — 없으면 즉시 안내(훅 호출 전이라 안전).
+  if (!eventId) {
+    return (
+      <S.Page>
+        <S.PageInner>
+          <S.StateBox>
+            <S.ErrorText>잘못된 접근입니다.</S.ErrorText>
+            <S.StateBackLink to={pathKeys.events.root()}>
+              목록으로 돌아가기
+            </S.StateBackLink>
+          </S.StateBox>
+        </S.PageInner>
+      </S.Page>
+    )
+  }
+
+  return (
+    // key={eventId} — 다른 사건으로 이동 시 에러 상태를 리셋.
+    <SmartErrorBoundary key={eventId} FallbackComponent={EventDetailError}>
+      <Suspense fallback={<EventDetailLoading />}>
+        <EventDetailContent eventId={eventId} />
+      </Suspense>
+    </SmartErrorBoundary>
+  )
+}
+
+/* ───────────────────────── 본문(데이터 해소 후) ───────────────────────── */
+
+function EventDetailContent({ eventId }: { eventId: string }) {
+  const { event, enabledModules } = useEventDetail(eventId)
+  /* 탭·히스토리 식별 — 사건명을 문서 제목에 반영. */
+  useDocumentTitle(event.title)
+
+  const mutation = useEventMutation(eventId)
   /**
    * onPatch — mutation.mutate에 1단계 undo 토스트를 얹은 wrapper.
    * 모든 인라인 편집은 이 함수를 통해 patch한다 → 직후 5초간 "되돌리기" 토스트.
@@ -68,7 +101,6 @@ const EventDetailPage = () => {
   /**
    * 인물 클릭 → 같은 페이지에서 인물 상세 모달.
    * URL 쿼리(`?person=<id>`)와 sync — 새로고침·공유로도 같은 모달 상태 복원 가능.
-   * 라우트 자체는 안 바꿈(스택 보존).
    */
   const [searchParams, setSearchParams] = useSearchParams()
   const viewingPersonId = searchParams.get('person')
@@ -88,19 +120,14 @@ const EventDetailPage = () => {
 
   /**
    * 섹션 목록 — rail에 표시할 anchor + 라벨.
-   *
-   * deps는 `event?.id`로 좁힌다. 인라인 patch가 refetch를 일으킬 때마다 `event`
-   * identity가 바뀌므로 `event` 전체를 deps에 두면 매번 재계산. 섹션 구성은
-   * 사건 id와 enabledModules에만 의존.
+   * deps는 `event.id`로 좁힌다. 인라인 patch refetch마다 event identity가 바뀌므로
+   * event 전체를 deps에 두면 매번 재계산 — 섹션 구성은 사건 id·enabledModules에만 의존.
    */
   const sections = useMemo(() => {
-    if (!event) return []
     const items: Array<{ id: string; label: string }> = []
     items.push({ id: 'background', label: '배경' })
     items.push({ id: 'narrative', label: '전개' })
     items.push({ id: 'aftermath', label: '여파' })
-
-    // 행위자는 카테고리 무관하게 거의 모든 사건에 존재 — 보편 정보를 모듈보다 먼저.
     items.push({ id: 'actors', label: '참여 행위자' })
 
     if (enabledModules.includes('belligerents'))
@@ -120,18 +147,14 @@ const EventDetailPage = () => {
     return items
     // event는 *식별자 변경* 시에만 재구성. 다른 필드 변경으로 인한 refetch는 무시.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event?.id, enabledModules])
+  }, [event.id, enabledModules])
 
   /**
-   * URL hash → 섹션 스크롤. 사건이 처음 로드된 직후 1회만 실행한다.
-   *
-   * 과거엔 deps에 `event`를 두어 매 patch refetch마다 effect가 재실행 →
-   * 사용자가 hash 섹션에서 편집하던 중 저장 직후 페이지가 위로 점프하는
-   * 회귀가 있었음. 이젠 *사건 id가 바뀐 첫 fetch 완료* 시점에만 동작.
+   * URL hash → 섹션 스크롤. 사건 id가 바뀐 첫 렌더에서 1회만 실행.
+   * (deps에 event 전체를 두면 매 patch refetch마다 재실행돼 편집 중 위로 점프하는 회귀.)
    */
   const scrolledHashForEventRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!event) return
     if (scrolledHashForEventRef.current === event.id) return
     scrolledHashForEventRef.current = event.id
     const hash = window.location.hash.slice(1)
@@ -139,39 +162,7 @@ const EventDetailPage = () => {
     const target = document.getElementById(hash)
     if (!target) return
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [event])
-
-  if (isLoading) {
-    return (
-      <S.Page>
-        <S.PageInner>
-          <S.StateBox>
-            <S.Spinner />
-            <S.HelperText>사건 정보를 불러오는 중…</S.HelperText>
-          </S.StateBox>
-        </S.PageInner>
-      </S.Page>
-    )
-  }
-
-  if (isError || !event) {
-    const notFound = (error as { status?: number } | null)?.status === 404
-    return (
-      <S.Page>
-        <S.PageInner>
-          <S.StateBox>
-            <S.ErrorText>
-              {notFound ? '사건을 찾을 수 없습니다' : '사건을 불러오지 못했습니다.'}
-            </S.ErrorText>
-            {error && <S.HelperText>{error.message}</S.HelperText>}
-            <S.StateBackLink to={pathKeys.events.root()}>
-              목록으로 돌아가기
-            </S.StateBackLink>
-          </S.StateBox>
-        </S.PageInner>
-      </S.Page>
-    )
-  }
+  }, [event.id])
 
   return (
     <InlineEditProvider>
@@ -200,7 +191,7 @@ const EventDetailPage = () => {
                 onPersonClick={onPersonClick}
               />
 
-              {/* 모듈 추가 진입점 — 이전에는 페이지 최하단이라 발견성이 낮아 actors 직후로 이동. */}
+              {/* 모듈 추가 진입점 — 발견성을 위해 actors 직후로 배치. */}
               <ModuleAdd
                 event={event}
                 enabledModules={enabledModules}
@@ -226,11 +217,42 @@ const EventDetailPage = () => {
         </S.PageInner>
       </S.Page>
 
-      <PersonDetailModal
-        personId={viewingPersonId}
-        onClose={onPersonModalClose}
-      />
+      <PersonDetailModal personId={viewingPersonId} onClose={onPersonModalClose} />
     </InlineEditProvider>
+  )
+}
+
+/* ───────────────────────── Suspense / Error fallback ───────────────────────── */
+
+function EventDetailLoading() {
+  return (
+    <S.Page>
+      <S.PageInner>
+        <S.StateBox>
+          <S.Spinner />
+          <S.HelperText>사건 정보를 불러오는 중…</S.HelperText>
+        </S.StateBox>
+      </S.PageInner>
+    </S.Page>
+  )
+}
+
+function EventDetailError({ error }: { error: Error }) {
+  const notFound = (error as { status?: number }).status === 404
+  return (
+    <S.Page>
+      <S.PageInner>
+        <S.StateBox>
+          <S.ErrorText>
+            {notFound ? '사건을 찾을 수 없습니다' : '사건을 불러오지 못했습니다.'}
+          </S.ErrorText>
+          {error.message && <S.HelperText>{error.message}</S.HelperText>}
+          <S.StateBackLink to={pathKeys.events.root()}>
+            목록으로 돌아가기
+          </S.StateBackLink>
+        </S.StateBox>
+      </S.PageInner>
+    </S.Page>
   )
 }
 

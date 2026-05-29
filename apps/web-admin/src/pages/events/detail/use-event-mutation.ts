@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast'
 
 import { type UpdateEventDto, updateEvent } from '@/shared/api/events'
 
-import { type EventDetail } from './use-event-detail'
+import { type EventDetail, eventKeys } from './use-event-detail'
 
 /**
  * 낙관적으로 캐시에 즉시 반영해도 안전한 *스칼라* 필드.
@@ -51,7 +51,7 @@ const OPTIMISTIC_SCALAR_FIELDS = [
  */
 export function useEventMutation(eventId: string) {
   const queryClient = useQueryClient()
-  const detailKey = ['event-detail', eventId] as const
+  const detailKey = eventKeys.detail(eventId)
   const mutationKey = ['event-detail-mutation', eventId] as const
 
   return useMutation({
@@ -95,7 +95,7 @@ export function useEventMutation(eventId: string) {
        * 유발하지 않도록 한다.
        */
       if (patchAffectsListing(patch)) {
-        queryClient.invalidateQueries({ queryKey: ['events'] })
+        queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
       }
     },
     onError: (error: unknown, _patch, context) => {

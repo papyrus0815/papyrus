@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
+import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
 
 import { getEventById } from '@/shared/api/events'
 
@@ -149,26 +149,44 @@ export type EventDetailModuleKey =
   | 'treaties'
   | 'cabinets'
 
+/**
+ * 사건 캐시 키 — 상세 query·mutation invalidation에서 단일 정의를 공유한다.
+ * (키 문자열을 곳곳에 흩뿌리면 invalidate 누락·불일치가 생기므로 중앙화.)
+ */
+export const eventKeys = {
+  /** 목록(ledger/catalog) 캐시 루트 */
+  lists: () => ['events'] as const,
+  /** 단일 사건 상세 */
+  detail: (eventId: string) => ['event-detail', eventId] as const,
+}
+
+/**
+ * 사건 상세 쿼리 옵션 — useSuspenseQuery뿐 아니라 prefetchQuery/ensureQueryData
+ * (라우트 로더·hover prefetch 등)에서도 그대로 재사용 가능한 단일 정의.
+ */
+export function eventDetailQueryOptions(eventId: string) {
+  return queryOptions({
+    queryKey: eventKeys.detail(eventId),
+    queryFn: () => getEventById(eventId) as unknown as Promise<EventDetail>,
+    staleTime: 30_000,
+  })
+}
+
 export interface UseEventDetailResult {
-  event: EventDetail | undefined
-  isLoading: boolean
-  isError: boolean
-  error: Error | null
+  event: EventDetail
   enabledModules: EventDetailModuleKey[]
 }
 
-export function useEventDetail(eventId: string | undefined): UseEventDetailResult {
-  const query = useQuery({
-    queryKey: ['event-detail', eventId],
-    queryFn: () =>
-      getEventById(eventId as string) as unknown as Promise<EventDetail>,
-    enabled: Boolean(eventId),
-    staleTime: 30_000,
-  })
+/**
+ * 사건 상세 + 표시 가능한 모듈 키.
+ *
+ * Suspense 기반 — 로딩은 상위 `<Suspense>`, 에러는 상위 ErrorBoundary가 처리하므로
+ * 호출부는 항상 *해소된* event를 받는다(`isLoading`/`isError` 분기 불필요).
+ */
+export function useEventDetail(eventId: string): UseEventDetailResult {
+  const { data: event } = useSuspenseQuery(eventDetailQueryOptions(eventId))
 
   const enabledModules = useMemo<EventDetailModuleKey[]>(() => {
-    const event = query.data
-    if (!event) return []
     const keys: EventDetailModuleKey[] = []
     if (event.belligerents?.sides?.length) keys.push('belligerents')
     if (event.casualties) keys.push('casualties')
@@ -176,13 +194,7 @@ export function useEventDetail(eventId: string | undefined): UseEventDetailResul
     if (event.belligerents?.metadata?.treaties?.length) keys.push('treaties')
     if (event.cabinetEvents?.length) keys.push('cabinets')
     return keys
-  }, [query.data])
+  }, [event])
 
-  return {
-    event: query.data,
-    isLoading: query.isLoading,
-    isError: query.isError,
-    error: (query.error as Error | null) ?? null,
-    enabledModules,
-  }
+  return { event, enabledModules }
 }
