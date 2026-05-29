@@ -23,6 +23,7 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { useFormEntities } from '@/entities/event-form/model'
@@ -44,6 +45,7 @@ import {
   useBasicInfoForm,
   useRelationshipsForm,
 } from '@/features/event-form/model'
+import { eventKeys } from '@/pages/events/detail/use-event-detail'
 import { getImageUrl } from '@/pages/events/utils/event-create.utils'
 import {
   type EventResponseDto,
@@ -91,6 +93,7 @@ export const EventCreatePageRefactored: React.FC<
   EventCreatePageRefactoredProps
 > = ({ embed = false, onBack: onBackProp, onSuccess }) => {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { eventId: editEventId } = useParams<{ eventId?: string }>()
   const playClickSound = useClickSound()
 
@@ -599,6 +602,8 @@ export const EventCreatePageRefactored: React.FC<
         keywords,
       })
 
+      // 이동 대상 사건 id — 수정은 editEventId, 생성은 응답 id.
+      let targetId: string | undefined = editEventId
       if (isEditMode && editEventId) {
         await updateEvent(
           editEventId,
@@ -606,15 +611,25 @@ export const EventCreatePageRefactored: React.FC<
         )
         toast.success('사건이 성공적으로 수정되었습니다!')
       } else {
-        await createEvent(eventData as Parameters<typeof createEvent>[0])
+        const created = await createEvent(
+          eventData as Parameters<typeof createEvent>[0],
+        )
+        targetId = created.id
         toast.success('사건이 성공적으로 등록되었습니다!')
       }
 
       // 저장 성공 — 더 이상 dirty 아님 (이탈 경고 비활성화)
       isDirtyRef.current = false
 
+      // 목록 캐시 무효화 — 이후 목록 복귀 시 새/수정 사건이 반영되도록.
+      queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
+
       if (onSuccess) {
         onSuccess()
+      } else if (targetId) {
+        // 등록·수정 후 *해당 사건 상세*로. 등록은 보통 본문·이미지·관계를 이어서
+        // 채우므로, 목록으로 빠지는 것보다 상세로 진입해 작업을 잇는 편이 자연스럽다.
+        navigate(pathKeys.events.detail(targetId), { viewTransition: true })
       } else {
         navigate(pathKeys.events.root())
       }
