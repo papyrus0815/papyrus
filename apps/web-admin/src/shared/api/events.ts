@@ -95,11 +95,27 @@ export async function getAllEvents(
 /**
  * ID로 사건 조회
  */
+/** 조회 실패 사유 구분용 — 페이지가 404(없음/삭제)와 일반 오류를 다르게 안내. */
+export interface EventFetchError extends Error {
+  status?: number
+}
+
 export async function getEventById(id: string): Promise<EventResponseDto> {
   try {
     return await api.events.getEventById(getConnection(), id)
   } catch (error) {
-    throw new Error(`사건 조회 실패: ${error}`)
+    // nestia HttpError는 숫자 status를 갖는다. 404는 삭제/부재로 분기.
+    const status =
+      error && typeof error === 'object' && 'status' in error
+        ? (error as { status?: number }).status
+        : undefined
+    const message =
+      status === 404
+        ? '삭제되었거나 존재하지 않는 사건입니다.'
+        : `사건 조회 실패: ${error}`
+    const e = new Error(message) as EventFetchError
+    e.status = status
+    throw e
   }
 }
 

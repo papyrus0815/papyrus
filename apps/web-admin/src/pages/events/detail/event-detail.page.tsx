@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useParams, useSearchParams } from 'react-router-dom'
 
+import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
+import { pathKeys } from '@/shared/router'
+
 import { DetailActors } from './components/detail-actors'
 import { DetailAppendix } from './components/detail-appendix'
 import { DetailHero } from './components/detail-hero'
@@ -36,6 +39,8 @@ import { useUndoablePatch } from './use-undoable-patch'
 const EventDetailPage = () => {
   const { eventId } = useParams<{ eventId: string }>()
   const { event, isLoading, isError, error, enabledModules } = useEventDetail(eventId)
+  /* 탭·히스토리 식별 — 사건명을 문서 제목에 반영(로딩 중엔 변경 안 함). */
+  useDocumentTitle(event?.title)
   const mutation = useEventMutation(eventId ?? '')
   /**
    * onPatch — mutation.mutate에 1단계 undo 토스트를 얹은 wrapper.
@@ -150,12 +155,18 @@ const EventDetailPage = () => {
   }
 
   if (isError || !event) {
+    const notFound = (error as { status?: number } | null)?.status === 404
     return (
       <S.Page>
         <S.PageInner>
           <S.StateBox>
-            <S.ErrorText>사건을 불러오지 못했습니다.</S.ErrorText>
+            <S.ErrorText>
+              {notFound ? '사건을 찾을 수 없습니다' : '사건을 불러오지 못했습니다.'}
+            </S.ErrorText>
             {error && <S.HelperText>{error.message}</S.HelperText>}
+            <S.StateBackLink to={pathKeys.events.root()}>
+              목록으로 돌아가기
+            </S.StateBackLink>
           </S.StateBox>
         </S.PageInner>
       </S.Page>

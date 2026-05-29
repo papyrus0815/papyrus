@@ -7,6 +7,7 @@
  * - 카드/모듈은 hairline border 위주, fill은 nav성 카드(children grid)에만.
  * - ledger 페이지의 토큰 체계(ledger-tokens.ts)를 그대로 차용해 다크/라이트 일관 유지.
  */
+import { Link } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import {
@@ -175,15 +176,6 @@ export const CategoryChip = styled.span<{ $color: string }>`
   background: ${({ $color }) => withAlpha($color, 0.1)};
   color: ${({ $color }) => $color};
   border: 1px solid ${({ $color }) => withAlpha($color, 0.3)};
-`
-
-export const HeroTitle = styled.h1`
-  font-size: clamp(30px, 4.2vw, 44px);
-  font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.018em;
-  margin: 0;
-  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 export const HeroMeta = styled.div`
@@ -590,6 +582,20 @@ export const HelperText = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.6;
+`
+
+/* 로딩/에러 상태 박스의 행동 링크(예: 목록으로 돌아가기). */
+export const StateBackLink = styled(Link)`
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 `
 
 /* ───────────────────────── Empty state ───────────────────────── */

@@ -176,7 +176,9 @@ const LocationMetaItem = styled(S.HeroMetaItem)`
   }
 `
 
-const TitleHost = styled.div`
+/* 사건 제목 = 페이지 유일 h1(문서 아웃라인·스크린리더 진입점). 안의 편집 span을 감싼다. */
+const TitleHost = styled.h1`
+  margin: 0;
   font-size: clamp(30px, 4.2vw, 44px);
   font-weight: 800;
   line-height: 1.15;
