@@ -78,7 +78,12 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
           <InlineSelect
             value={event.categoryId ?? ''}
             options={categoryOptions}
-            onSave={(next) => onPatch({ categoryId: next || undefined })}
+            /**
+             * 빈 선택 = 카테고리 해제. categoryId는 FK라 ''(빈 문자열)이면 제약을
+             * 위반하므로 null을 보내야 컬럼이 비워진다. undefined는 서버가 '변경 안 함'
+             * 으로 무시(Prisma partial update)하므로 해제가 안 됐다.
+             */
+            onSave={(next) => onPatch({ categoryId: next || null } as UpdateEventDto)}
             placeholder={event.category?.name ?? '미분류'}
           />
         </S.CategoryChip>
@@ -124,7 +129,9 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
           <FiMapPin />
           <InlineText
             value={event.location ?? ''}
-            onSave={(next) => onPatch({ location: next.trim() || undefined })}
+            /* 비우면 빈 문자열을 보내 컬럼을 비운다. `|| undefined`는 서버가 무시해
+               기존 값이 지워지지 않던 버그가 있었음. */
+            onSave={(next) => onPatch({ location: next.trim() })}
             placeholder="위치"
           />
         </LocationMetaItem>
@@ -136,11 +143,11 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
       <SummaryHost>
         <InlineText
           value={event.description ?? ''}
-          onSave={(next) =>
-            onPatch({ description: next.trim() || undefined })
-          }
+          /* 비우면 빈 문자열 전송 → 컬럼 비움(`|| undefined`는 서버가 무시). */
+          onSave={(next) => onPatch({ description: next.trim() })}
           placeholder="요약 — 한두 단락"
           multiline
+          multilineEnter
         />
       </SummaryHost>
     </S.Hero>

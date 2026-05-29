@@ -173,9 +173,14 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
   }
 
   /**
-   * 파일 업로드 — 다중 파일 지원. 각 파일은 *직렬로* 업로드 후 즉시 append.
-   * 병렬로 보내면 onPatch가 빠르게 연달아 호출되며 race가 생길 수 있다(`event` 스냅샷이
-   * 서버 반영 전 stale 상태로 다음 patch에 들어감).
+   * 파일 업로드 — 다중 파일 지원. 각 파일을 *직렬로* 업로드한 뒤, 모두 누적해
+   * 마지막에 한 번만 onPatch한다.
+   *
+   * 과거엔 파일마다 `appendImage`를 호출했는데, `appendImage`가 매번 컴포넌트
+   * 클로저의 `images`(렌더 시점 스냅샷) 위에 1장만 얹어 `[...images, fileN]`을
+   * PUT했다. server는 eventImages를 delete-and-recreate라 두 번째 파일이 첫 파일을
+   * 덮어써, N장을 올려도 *마지막 1장만* 남는 데이터 유실이 있었다. 로컬 누적
+   * 배열(`working`)에 쌓고 1회만 PUT해 해결.
    */
   const handleFiles = async (files: FileList | File[]) => {
     if (uploading) return
@@ -183,22 +188,35 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
     if (list.length === 0) return
     setUploading(true)
     try {
+      let working = images.slice()
+      let appended = false
       for (const file of list) {
         try {
           const result = await uploadImage(file, 'events')
           const url = getUploadImageUrl(result.url) || result.url
-          if (images.some((img) => img.imageUrl === url)) {
+          // 기존 이미지뿐 아니라 *이번 배치에서 이미 추가된* URL과의 중복도 차단.
+          if (working.some((img) => img.imageUrl === url)) {
             toast.error(`이미 추가된 이미지입니다: ${file.name}`)
             continue
           }
-          appendImage({ imageUrl: url })
-          /* 다음 파일이 현재 images snapshot 위에 쌓이도록 — useUndoablePatch 토스트가
-             1건씩 발생하지만 의도된 흐름. */
+          working = [
+            ...working,
+            {
+              id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              imageUrl: url,
+              caption: undefined,
+              source: undefined,
+              order: working.length,
+              isPrimary: working.length === 0, // 첫 이미지는 자동 primary
+            },
+          ]
+          appended = true
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e)
           toast.error(`${file.name}: ${msg}`)
         }
       }
+      if (appended) onPatch({ eventImages: serialize(working) })
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''

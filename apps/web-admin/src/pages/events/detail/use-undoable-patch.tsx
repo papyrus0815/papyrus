@@ -160,6 +160,23 @@ function buildInverse(
         inv[k as string] = prev ?? null
         break
       }
+      /**
+       * nullable 스칼라 — 비어 있던 값으로의 undo는 `undefined`(서버 무시)가 아니라
+       * 빈 값을 *명시 전송*해야 컬럼이 비워진다. 텍스트는 ''(빈 문자열), categoryId는
+       * FK라 null. (예: 빈 상태 → 값 입력을 undo하면 다시 비워져야 함.)
+       */
+      case 'description':
+      case 'location':
+      case 'background':
+      case 'aftermath':
+      case 'warCost': {
+        const prev = (event as unknown as Record<string, unknown>)[k as string]
+        inv[k as string] = prev ?? ''
+        break
+      }
+      case 'categoryId':
+        inv.categoryId = event.categoryId ?? null
+        break
       default:
         // 나머지는 단순 scalar — event에서 같은 키 그대로
         inv[k as string] =

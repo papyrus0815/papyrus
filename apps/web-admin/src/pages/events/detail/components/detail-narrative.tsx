@@ -145,7 +145,8 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
         <S.SectionBody>
           <InlineRichText
             value={event.background ?? ''}
-            onSave={(next) => onPatch({ background: next || undefined })}
+            /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
+            onSave={(next) => onPatch({ background: next })}
             placeholder="사건 직전의 정세·도화선이 된 사건·인물 배치 등"
           />
         </S.SectionBody>
@@ -238,7 +239,8 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
         <S.SectionBody>
           <InlineRichText
             value={event.aftermath ?? ''}
-            onSave={(next) => onPatch({ aftermath: next || undefined })}
+            /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
+            onSave={(next) => onPatch({ aftermath: next })}
             placeholder="사건 직후의 결과·후속 영향·종결 시점의 상태"
           />
         </S.SectionBody>

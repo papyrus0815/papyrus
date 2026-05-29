@@ -235,7 +235,13 @@ export function DetailActors({
               const avatarUrl = person.person?.profileImageUrl ?? undefined
               const hasNote = Boolean(person.note && person.note.trim())
               return (
-                <PersonRow key={person.id}>
+                /**
+                 * key는 join 행 id(person.id)가 아니라 personId. relatedPersons는 서버가
+                 * delete-and-recreate라 저장할 때마다 person.id가 새 UUID로 재발급된다.
+                 * id로 키잉하면 매 저장 직후 모든 행이 unmount/remount되며 인라인 편집의
+                 * 포커스·IME·커서가 끊긴다. personId는 recreate에도 안정적.
+                 */
+                <PersonRow key={person.personId}>
                   <PersonAvatarBtn
                     type="button"
                     onClick={() => onPersonClick(person.personId)}
@@ -281,6 +287,8 @@ export function DetailActors({
                         }
                         placeholder="비고 추가"
                         multiline
+                        /* 여러 줄 비고 — Enter는 줄바꿈, 저장은 blur로. */
+                        multilineEnter
                       />
                     </PersonNoteLine>
                   </PersonBody>
