@@ -43,6 +43,12 @@ interface Column {
   events: HistoricalEvent[]
 }
 
+/**
+ * 컬럼당 카드 렌더 상한. 칸반은 컬럼별 페이지 스크롤이라 한 카테고리에 수백 건이면
+ * DOM이 폭증한다. 상한까지만 그리고 초과분은 "이 카테고리만 보기"(렌즈 좁히기)로 유도.
+ */
+const COLUMN_CARD_CAP = 50
+
 export const CategoryPivot: React.FC<Props> = ({
   events,
   onSelectEvent,
@@ -98,7 +104,7 @@ export const CategoryPivot: React.FC<Props> = ({
             )}
           </ColHead>
           <ColBody>
-            {col.events.map((evt) => {
+            {col.events.slice(0, COLUMN_CARD_CAP).map((evt) => {
               const importance: LedgerImportance = importanceFromHierarchy(
                 evt.hierarchy?.importance,
                 evt.hierarchy?.children?.length ?? 0,
@@ -116,6 +122,22 @@ export const CategoryPivot: React.FC<Props> = ({
                 </Card>
               )
             })}
+            {col.events.length > COLUMN_CARD_CAP &&
+              (col.categoryId ? (
+                <MoreBtn
+                  type="button"
+                  onClick={() =>
+                    onAddCategoryLens(col.categoryId!, col.categoryName)
+                  }
+                >
+                  +{(col.events.length - COLUMN_CARD_CAP).toLocaleString()}건 더 —
+                  이 카테고리만 보기
+                </MoreBtn>
+              ) : (
+                <MoreNote>
+                  +{(col.events.length - COLUMN_CARD_CAP).toLocaleString()}건 더
+                </MoreNote>
+              ))}
           </ColBody>
         </Column>
       ))}
@@ -226,5 +248,32 @@ const CardTitle = styled.span`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+`
+
+/* 컬럼 상한 초과분 안내 CTA — 해당 카테고리로 렌즈를 좁혀 전체를 보게 유도. */
+const MoreBtn = styled.button`
+  margin-top: 2px;
+  padding: 8px 10px;
+  border: 1px dashed ${({ theme }) => ledgerHairline(theme.mode)};
+  border-radius: 6px;
+  background: transparent;
+  ${fontTier('LABEL')}
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.12s, border-color 0.12s;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccentHover(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentHover(theme.mode)};
+  }
+`
+
+const MoreNote = styled.span`
+  margin-top: 2px;
+  padding: 6px 10px;
+  ${fontTier('LABEL')}
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
