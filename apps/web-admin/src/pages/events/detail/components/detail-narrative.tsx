@@ -13,6 +13,8 @@ import { InlineRichText, InlineText } from './inline'
 interface DetailNarrativeProps {
   event: EventDetail
   onPatch: (patch: UpdateEventDto) => void
+  /** 본문 내 인물 멘션/엔티티 링크 클릭 → 페이지 레벨 인물 모달. */
+  onPersonClick?: (personId: string) => void
 }
 
 interface SectionRow {
@@ -39,7 +41,11 @@ interface SectionRow {
  * eventSections는 server가 통째로 delete-and-recreate라 *어떤 변경이든* 전체
  * 배열을 PUT한다. 로컬 state로 배열을 유지하고 변경 시마다 batch로 보낸다.
  */
-export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
+export function DetailNarrative({
+  event,
+  onPatch,
+  onPersonClick,
+}: DetailNarrativeProps) {
   /**
    * 클라이언트 임시 키 생성기. 모듈 스코프 mutable counter는 HMR에서 취약하므로
    * 컴포넌트 인스턴스의 ref로 둔다. Date.now()와 함께라 충돌 위험은 사실상 없음.
@@ -148,6 +154,7 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
             /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
             onSave={(next) => onPatch({ background: next })}
             placeholder="사건 직전의 정세·도화선이 된 사건·인물 배치 등"
+            onPersonClick={onPersonClick}
           />
         </S.SectionBody>
       </S.Section>
@@ -221,6 +228,7 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
                   value={row.content}
                   onSave={(next) => updateSectionField(idx, { content: next })}
                   placeholder="본문"
+                  onPersonClick={onPersonClick}
                 />
               </SectionItem>
             ))}
@@ -242,6 +250,7 @@ export function DetailNarrative({ event, onPatch }: DetailNarrativeProps) {
             /* 비우면 빈 문자열을 보내 컬럼을 비운다(`|| undefined`는 서버가 무시). */
             onSave={(next) => onPatch({ aftermath: next })}
             placeholder="사건 직후의 결과·후속 영향·종결 시점의 상태"
+            onPersonClick={onPersonClick}
           />
         </S.SectionBody>
       </S.Section>

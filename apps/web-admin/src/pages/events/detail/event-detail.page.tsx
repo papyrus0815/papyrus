@@ -177,7 +177,11 @@ const EventDetailPage = () => {
             <DetailRail sections={sections} />
 
             <S.Main>
-              <DetailNarrative event={event} onPatch={onPatch} />
+              <DetailNarrative
+                event={event}
+                onPatch={onPatch}
+                onPersonClick={onPersonClick}
+              />
 
               <DetailActors
                 event={event}

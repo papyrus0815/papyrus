@@ -1,12 +1,20 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
+import { createPortal } from 'react-dom'
 import { FiEdit2 } from 'react-icons/fi'
+import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
+import {
+  type RichTextDynastyTooltipState,
+  type RichTextTermTooltipState,
+  useRichTextTooltipEscape,
+} from '@/shared/hooks/use-rich-text-prose-click'
 import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-read-view'
 import { createRichTextImageUploader } from '@/shared/api/upload'
+import { pathKeys } from '@/shared/router'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
-import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
+import { RichTextProseWithEntityClicks } from '@/shared/ui/rich-text-read-view'
 
 import { useInlineEditCoordinator } from './inline-edit-context'
 import * as I from './inline.styles'
@@ -23,6 +31,11 @@ interface InlineRichTextProps {
    * 모달 등 부모 스크롤이 제한된 사용처에서만 명시적으로 값을 넘김.
    */
   maxHeight?: string
+  /**
+   * 읽기 모드 본문의 인물 멘션/엔티티 링크 클릭 핸들러. 생략 시 인물 상세
+   * 페이지로 navigate. 사건 상세에서는 페이지 레벨 인물 모달을 연결해 동일 UX.
+   */
+  onPersonClick?: (personId: string) => void
 }
 
 /**
@@ -39,10 +52,32 @@ export function InlineRichText({
   onSave,
   placeholder = '본문 작성',
   maxHeight,
+  onPersonClick,
 }: InlineRichTextProps) {
   const editorId = useId()
   const { editing, open, close } = useInlineEditCoordinator(editorId)
   const [draft, setDraft] = useState(value)
+
+  /* 읽기 모드 .term / 가문 엔티티 클릭 시 뜨는 정의 툴팁(포털). */
+  const [termTooltip, setTermTooltip] =
+    useState<RichTextTermTooltipState | null>(null)
+  const [dynastyTooltip, setDynastyTooltip] =
+    useState<RichTextDynastyTooltipState | null>(null)
+  useRichTextTooltipEscape(
+    Boolean(termTooltip),
+    Boolean(dynastyTooltip),
+    () => setTermTooltip(null),
+    () => setDynastyTooltip(null),
+  )
+
+  const navigate = useNavigate()
+  const handlePersonClick = useCallback(
+    (personId: string) => {
+      if (onPersonClick) onPersonClick(personId)
+      else navigate(pathKeys.persons.detail(personId))
+    },
+    [onPersonClick, navigate],
+  )
 
   /**
    * editing 상태 *전이* 시(만) draft를 server value로 동기화.
@@ -144,11 +179,62 @@ export function InlineRichText({
   return (
     <ReadHost data-edit-host>
       <ReadBody data-empty={isEmpty || undefined}>
-        {isEmpty ? <Placeholder>{placeholder}</Placeholder> : <RichTextReadView html={value} />}
+        {isEmpty ? (
+          <Placeholder>{placeholder}</Placeholder>
+        ) : (
+          <RichTextProseWithEntityClicks
+            html={value}
+            onPersonClick={handlePersonClick}
+            setTermTooltip={setTermTooltip}
+            setDynastyTooltip={setDynastyTooltip}
+          />
+        )}
       </ReadBody>
       <I.InlineEditButton type="button" onClick={open} aria-label="편집">
         <FiEdit2 />
       </I.InlineEditButton>
+
+      {termTooltip &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <TipOverlay onClick={() => setTermTooltip(null)}>
+            <TipCard
+              $x={termTooltip.x}
+              $y={termTooltip.y}
+              onClick={(e) => e.stopPropagation()}
+              role="tooltip"
+            >
+              <strong>{termTooltip.name}</strong>
+              <p>
+                {termTooltip.description === null
+                  ? '불러오는 중…'
+                  : termTooltip.description || '(설명 없음)'}
+              </p>
+            </TipCard>
+          </TipOverlay>,
+          document.body,
+        )}
+
+      {dynastyTooltip &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <TipOverlay onClick={() => setDynastyTooltip(null)}>
+            <TipCard
+              $x={dynastyTooltip.x}
+              $y={dynastyTooltip.y}
+              onClick={(e) => e.stopPropagation()}
+              role="tooltip"
+            >
+              <strong>가문 · {dynastyTooltip.name}</strong>
+              <p>
+                {dynastyTooltip.description === null
+                  ? '불러오는 중…'
+                  : dynastyTooltip.description || '(설명 없음)'}
+              </p>
+            </TipCard>
+          </TipOverlay>,
+          document.body,
+        )}
     </ReadHost>
   )
 }
@@ -200,7 +286,12 @@ const ReadHost = styled.div`
 const ReadBody = styled.div`
   flex: 1;
   min-width: 0;
-  & > [role='region'] {
+  /**
+   * RichTextProseWithEntityClicks가 본문 region을 <div role="presentation"> 래퍼로
+   * 한 겹 감싸므로 직계 자식(>)이 아닌 후손 selector로 매칭한다(엔티티 클릭 연결
+   * 전엔 RichTextReadView가 직계라 > 였음).
+   */
+  & [role='region'] {
     line-height: 1.6;
     p {
       margin: 0 0 8px 0;
@@ -227,4 +318,44 @@ const EditHost = styled.div``
 const Placeholder = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-style: italic;
+`
+
+/* 용어·가문 정의 툴팁 — body 포털. 바깥 클릭/ESC로 닫힘. */
+const TipOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+`
+
+const TipCard = styled.div<{ $x: number; $y: number }>`
+  position: fixed;
+  top: ${({ $y }) => $y + 14}px;
+  left: ${({ $x }) => $x}px;
+  transform: translateX(-50%);
+  z-index: 9999;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06)'
+      : '0 12px 32px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)'};
+
+  strong {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  p {
+    margin: 6px 0 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
 `
