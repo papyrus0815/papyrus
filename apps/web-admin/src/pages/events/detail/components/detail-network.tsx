@@ -101,6 +101,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
               <ChildCard
                 key={child.id}
                 to={pathKeys.events.detail(child.id)}
+                viewTransition
                 onMouseEnter={() => prefetchEvent(child.id)}
                 onFocus={() => prefetchEvent(child.id)}
               >

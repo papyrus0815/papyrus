@@ -69,7 +69,7 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
   return (
     <S.Hero>
       <S.HeroTopRow>
-        <BackLink to={pathKeys.events.root()}>
+        <BackLink to={pathKeys.events.root()} viewTransition>
           <FiArrowLeft />
           목록
         </BackLink>
@@ -98,6 +98,7 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
               <Link
                 key={parent.id}
                 to={pathKeys.events.detail(parent.id)}
+                viewTransition
                 onMouseEnter={() => prefetchEvent(parent.id)}
                 onFocus={() => prefetchEvent(parent.id)}
               >

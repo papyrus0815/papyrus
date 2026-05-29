@@ -68,7 +68,8 @@ export const EventRowExpansion: React.FC<Props> = ({ event, onSelectChild }) => 
   const allChildren: EventHierarchyNode[] = event.hierarchy?.children ?? []
   const visibleChildren = allChildren.slice(0, CHILD_LIMIT)
   const overflowChildren = Math.max(0, allChildren.length - visibleChildren.length)
-  const goDetail = () => navigate(pathKeys.events.detail(event.id))
+  const goDetail = () =>
+    navigate(pathKeys.events.detail(event.id), { viewTransition: true })
 
   return (
     <Wrap $color={category.color}>
