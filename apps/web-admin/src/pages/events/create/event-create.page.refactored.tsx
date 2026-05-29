@@ -45,7 +45,7 @@ import {
   useBasicInfoForm,
   useRelationshipsForm,
 } from '@/features/event-form/model'
-import { eventKeys } from '@/pages/events/detail/use-event-detail'
+import { type EventDetail, eventKeys } from '@/pages/events/detail/use-event-detail'
 import { getImageUrl } from '@/pages/events/utils/event-create.utils'
 import {
   type EventResponseDto,
@@ -602,19 +602,20 @@ export const EventCreatePageRefactored: React.FC<
         keywords,
       })
 
-      // 이동 대상 사건 id — 수정은 editEventId, 생성은 응답 id.
+      // 이동 대상 사건 id + 저장 응답(상세 캐시 시딩용).
       let targetId: string | undefined = editEventId
+      let saved: EventResponseDto | undefined
       if (isEditMode && editEventId) {
-        await updateEvent(
+        saved = await updateEvent(
           editEventId,
           eventData as Parameters<typeof updateEvent>[1],
         )
         toast.success('사건이 성공적으로 수정되었습니다!')
       } else {
-        const created = await createEvent(
+        saved = await createEvent(
           eventData as Parameters<typeof createEvent>[0],
         )
-        targetId = created.id
+        targetId = saved.id
         toast.success('사건이 성공적으로 등록되었습니다!')
       }
 
@@ -627,8 +628,23 @@ export const EventCreatePageRefactored: React.FC<
       if (onSuccess) {
         onSuccess()
       } else if (targetId) {
-        // 등록·수정 후 *해당 사건 상세*로. 등록은 보통 본문·이미지·관계를 이어서
-        // 채우므로, 목록으로 빠지는 것보다 상세로 진입해 작업을 잇는 편이 자연스럽다.
+        /**
+         * 등록·수정 후 *해당 사건 상세*로. 등록은 보통 본문·이미지·관계를 이어서
+         * 채우므로 목록으로 빠지는 것보다 상세 진입이 자연스럽다.
+         *
+         * 저장 응답을 상세 쿼리 캐시에 *시딩*해 무로딩으로 즉시 진입시키고, 곧바로
+         * invalidate해 누락됐을 수 있는 derived relation(이름 포함 국가·인물·섹션 등)을
+         * 백그라운드 refetch로 보강한다(그 동안 시딩 데이터를 보여줌 — 스피너 없음).
+         */
+        if (saved) {
+          queryClient.setQueryData(
+            eventKeys.detail(targetId),
+            saved as unknown as EventDetail,
+          )
+          queryClient.invalidateQueries({
+            queryKey: eventKeys.detail(targetId),
+          })
+        }
         navigate(pathKeys.events.detail(targetId), { viewTransition: true })
       } else {
         navigate(pathKeys.events.root())
