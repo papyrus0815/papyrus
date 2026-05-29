@@ -119,6 +119,11 @@ export function InlineRichText({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
+        // 미저장 변경이 있을 때만 확인 — Esc 한 번에 긴 편집이 사고성으로 날아가는 것
+        // 방지. 변경이 없으면 즉시 닫아 기존 빠른 취소 흐름 유지.
+        if (draft !== value && !window.confirm('저장하지 않은 변경을 버릴까요?')) {
+          return
+        }
         close()
       } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
