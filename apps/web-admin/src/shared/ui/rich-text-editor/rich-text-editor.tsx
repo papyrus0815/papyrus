@@ -462,10 +462,18 @@ const EditorContent = styled.div<{ $hasTitle?: boolean; $minHeight?: string }>`
   }
 
   figure {
-    margin: 10px 0;
+    /**
+     * 기본 정렬 = 중앙. 읽기 뷰(richTextReadonlyMediaAndTablesCss)의 figure 기본도
+     * block+중앙이라 이에 맞춘다. 과거 inline-block 기본은 부모 text-align(좌측)을
+     * 따라 좌측에 붙어, 툴바의 기본 표시('center')·읽기 뷰와 어긋났다(이미지를
+     * 넣으면 "중앙정렬"인데 에디터에선 좌측에 보이는 문제). width:fit-content로
+     * 이미지 폭만큼만 차지해 리사이즈 핸들이 이미지에 밀착하도록 유지.
+     */
+    margin: 10px auto;
     text-align: center;
     position: relative;
-    display: inline-block;
+    display: block;
+    width: fit-content;
     max-width: 100%;
 
     img {
