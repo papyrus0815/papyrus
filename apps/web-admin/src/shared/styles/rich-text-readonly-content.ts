@@ -124,47 +124,146 @@ export const richTextReadonlyMediaAndTablesCss = css`
   }
 `
 
-/** 멘션·엔티티 링크·용어 (에디터 .mention / .entity-link / .term) */
-export const richTextReadonlyEntityLinksCss = css`
-  .mention,
-  .entity-link {
-    color: inherit;
-    font-weight: inherit;
+/**
+ * 멘션·용어·엔티티 링크 — 에디터(EditorContent)와 읽기 전용 뷰가 *공유*하는 단일 스타일.
+ * 편집 화면에서 연결한 모양과 결과물(뷰)이 동일하게 보이도록 한곳에서 정의한다.
+ * (과거엔 에디터/뷰가 따로 정의해 인물 멘션·엔티티 링크 모양이 어긋났음 — 드리프트 방지.)
+ */
+export const richTextEntityLinkStyles = css`
+  /* 멘션 스타일 - 타입별 색상 팔레트 */
+  .mention {
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 13px;
     text-decoration: none;
     cursor: pointer;
-    display: inline;
-    padding: 1px 6px;
-    margin: 0 1px;
-    border-radius: 4px;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0, 0, 0, 0.03)'};
-    border: none;
-    transition:
-      background 0.15s ease,
-      color 0.15s ease;
-  }
-  .mention:hover,
-  .entity-link:hover {
-    color: #1d4ed8;
-    background: rgba(29, 78, 216, 0.06);
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(99, 102, 241, 0.1);
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'} !important;
+
+    &:hover {
+      background: rgba(99, 102, 241, 0.18);
+    }
+
+    &[data-type='person'] {
+      background: rgba(99, 102, 241, 0.1);
+      color: ${({ theme }) =>
+        theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'} !important;
+      &:hover {
+        background: rgba(99, 102, 241, 0.18);
+      }
+    }
+    &[data-type='dynasty'] {
+      background: rgba(124, 58, 237, 0.1);
+      color: ${({ theme }) =>
+        theme.mode === 'dark' ? '#c4b5fd' : '#6d28d9'} !important;
+      &:hover {
+        background: rgba(124, 58, 237, 0.18);
+      }
+    }
+    &[data-type='event'] {
+      background: rgba(217, 119, 6, 0.1);
+      color: #b45309 !important;
+      &:hover {
+        background: rgba(217, 119, 6, 0.18);
+      }
+    }
+    &[data-type='country'] {
+      background: rgba(34, 197, 94, 0.1);
+      color: #15803d !important;
+      &:hover {
+        background: rgba(34, 197, 94, 0.18);
+      }
+    }
+    &[data-type='historicalCountry'] {
+      background: rgba(139, 92, 246, 0.1);
+      color: ${({ theme }) =>
+        theme.mode === 'dark' ? '#c4b5fd' : '#6d28d9'} !important;
+      &:hover {
+        background: rgba(139, 92, 246, 0.18);
+      }
+    }
+    &[data-type='militaryUnit'] {
+      background: rgba(239, 68, 68, 0.1);
+      color: #b91c1c !important;
+      &:hover {
+        background: rgba(239, 68, 68, 0.18);
+      }
+    }
   }
 
   .term {
-    color: #0f766e;
-    font-weight: inherit;
+    color: #0d9488;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: help;
+    padding: 0 2px;
+    border-radius: 4px;
+    background: rgba(13, 148, 136, 0.06);
+    &:hover {
+      background: rgba(13, 148, 136, 0.12);
+    }
+  }
+
+  .entity-link {
+    background: linear-gradient(
+      135deg,
+      rgba(245, 158, 11, 0.15),
+      rgba(251, 191, 36, 0.1)
+    );
+    color: #d97706 !important;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 500;
     text-decoration: none;
     cursor: pointer;
-    padding: 0 2px;
-    border-radius: 3px;
-    transition:
-      color 0.15s ease,
-      background 0.15s ease;
-  }
-  .term:hover {
-    color: #0d9488;
-    background: rgba(13, 148, 136, 0.1);
+    transition: all 0.2s ease;
+    border-bottom: 2px solid rgba(245, 158, 11, 0.4);
+    position: relative;
+    display: inline-block;
+    user-select: none;
+    -webkit-user-select: none;
+    white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(245, 158, 11, 0.1);
+
+    &:hover {
+      background: linear-gradient(
+        135deg,
+        rgba(245, 158, 11, 0.25),
+        rgba(251, 191, 36, 0.15)
+      );
+      border-bottom-color: rgba(245, 158, 11, 0.6);
+      color: #b45309 !important;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+
+    &::after {
+      content: '🔗';
+      font-size: 9px;
+      margin-left: 4px;
+      opacity: 0.5;
+      transition: opacity 0.2s ease;
+    }
+
+    &:hover::after {
+      opacity: 1;
+    }
   }
 `
+
+/** 읽기 전용 별칭 — 기존 import 호환. 에디터와 동일 스타일을 가리킨다. */
+export const richTextReadonlyEntityLinksCss = richTextEntityLinkStyles
 
 /**
  * 순서·비순서 목록 — RichTextEditor 본문(`EditorContent`)과 읽기 전용 뷰 동일.
