@@ -14,7 +14,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 
 import * as S from '../styles'
-import { type EventDetail } from '../use-event-detail'
+import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import {
   InlineDateRange,
   InlineSelect,
@@ -40,6 +40,7 @@ interface DetailHeroProps {
  * 부모 사건 브레드크럼은 편집 대상 X (구조 변경은 별도 흐름).
  */
 export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
+  const prefetchEvent = usePrefetchEventDetail()
   const { data: categories = [] } = useQuery({
     queryKey: ['event-categories'],
     queryFn: getAllEventCategories,
@@ -94,7 +95,12 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
               <ParentEllipsis title="더 상위 사건이 있습니다">…</ParentEllipsis>
             )}
             {parentChain.map((parent) => (
-              <Link key={parent.id} to={pathKeys.events.detail(parent.id)}>
+              <Link
+                key={parent.id}
+                to={pathKeys.events.detail(parent.id)}
+                onMouseEnter={() => prefetchEvent(parent.id)}
+                onFocus={() => prefetchEvent(parent.id)}
+              >
                 {parent.title}
               </Link>
             ))}

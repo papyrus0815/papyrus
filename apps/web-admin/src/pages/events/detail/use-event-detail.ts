@@ -1,6 +1,10 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 
-import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
+import {
+  queryOptions,
+  useQueryClient,
+  useSuspenseQuery,
+} from '@tanstack/react-query'
 
 import { getEventById } from '@/shared/api/events'
 
@@ -197,4 +201,24 @@ export function useEventDetail(eventId: string): UseEventDetailResult {
   }, [event])
 
   return { event, enabledModules }
+}
+
+/**
+ * 사건 상세를 *미리* 캐시에 적재하는 prefetch 핸들러를 돌려준다. 상세로 가는 링크의
+ * hover/focus에 붙이면 클릭 시점엔 데이터가 이미 따뜻해져 즉시 렌더된다.
+ *
+ * `prefetchQuery`는 staleTime(30s) 내 캐시가 있으면 자동 no-op이라 hover 반복도 안전.
+ * 전역 QueryClient가 retry:false라 404 같은 실패도 조용히 끝난다(콘솔 경고만).
+ */
+export function usePrefetchEventDetail(): (
+  eventId: string | null | undefined,
+) => void {
+  const queryClient = useQueryClient()
+  return useCallback(
+    (eventId: string | null | undefined) => {
+      if (!eventId) return
+      void queryClient.prefetchQuery(eventDetailQueryOptions(eventId))
+    },
+    [queryClient],
+  )
 }

@@ -13,7 +13,7 @@ import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { pathKeys } from '@/shared/router'
 
 import * as S from '../styles'
-import { type EventDetail } from '../use-event-detail'
+import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 
 interface DetailNetworkProps {
   event: EventDetail
@@ -27,6 +27,7 @@ interface DetailNetworkProps {
  * 키워드는 inline chip — 칩의 ✕로 제거, "+" 인풋으로 추가. 별도 폼 X.
  */
 export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
+  const prefetchEvent = usePrefetchEventDetail()
   const children = (event.childEvents ?? [])
     .slice()
     .sort((a, b) => compareEventStart(a.startDate, b.startDate))
@@ -97,7 +98,12 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
                 child.endDatePrecision,
               )
             return (
-              <ChildCard key={child.id} to={pathKeys.events.detail(child.id)}>
+              <ChildCard
+                key={child.id}
+                to={pathKeys.events.detail(child.id)}
+                onMouseEnter={() => prefetchEvent(child.id)}
+                onFocus={() => prefetchEvent(child.id)}
+              >
                 <ChildBar style={{ background: category.color }} />
                 <ChildBody>
                   <ChildTitle>{child.title}</ChildTitle>

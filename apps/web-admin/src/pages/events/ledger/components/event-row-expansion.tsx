@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom'
 import styled, { keyframes } from 'styled-components'
 
 import { pathKeys } from '@/shared/router'
+import { usePrefetchEventDetail } from '@/pages/events/detail/use-event-detail'
 
 import {
   DIGIT_DISPLAY,
@@ -54,6 +55,7 @@ const startYear = (start?: string | null): number | null => {
 
 export const EventRowExpansion: React.FC<Props> = ({ event, onSelectChild }) => {
   const navigate = useNavigate()
+  const prefetchEvent = usePrefetchEventDetail()
   const category = resolveCategory(event.category)
   const countries = [
     ...(event.relatedHistoricalCountries ?? []).map((item) => ({
@@ -150,6 +152,8 @@ export const EventRowExpansion: React.FC<Props> = ({ event, onSelectChild }) => 
         <Actions>
           <DetailBtn
             type="button"
+            onMouseEnter={() => prefetchEvent(event.id)}
+            onFocus={() => prefetchEvent(event.id)}
             onClick={(evt) => {
               evt.stopPropagation()
               goDetail()
