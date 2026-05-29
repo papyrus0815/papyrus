@@ -182,6 +182,19 @@ const TitleHost = styled.div`
   line-height: 1.15;
   letter-spacing: -0.018em;
   color: ${({ theme }) => theme.colors.text.primary};
+
+  /**
+   * 작은 필드는 상시 dashed underline으로 편집 어포던스를 주지만, 44px 굵은 제목
+   * 밑의 상시 점선은 맞춤법 오류/깨진 링크처럼 보인다. 큰 제목에 한해 점선을
+   * hover/focus에서만 노출(어포던스는 hover 시 ✎ + 점선으로 충분).
+   */
+  [data-edit-host] > span:first-child {
+    text-decoration-line: none;
+  }
+  [data-edit-host]:hover > span:first-child,
+  [data-edit-host]:focus-within > span:first-child {
+    text-decoration-line: underline;
+  }
 `
 
 /**

@@ -191,14 +191,15 @@ export function DetailActors({
   return (
     <>
       <S.Section id="actors">
-        <EditorialHeader>
-          <EditorialEyebrow>
-            행위자{hasAnything && <span> · {totals(persons.length, totalCountries)}</span>}
-          </EditorialEyebrow>
-          <EditorialTitle>참여 행위자</EditorialTitle>
-          <EditorialKicker>이 사건에 등장하거나 관여한 인물·국가</EditorialKicker>
+        <S.SectionHeader>
+          <S.SectionTitle>참여 행위자</S.SectionTitle>
+          {hasAnything && (
+            <S.SectionSubtitle>
+              {totals(persons.length, totalCountries)}
+            </S.SectionSubtitle>
+          )}
           {(persons.length > 1 || totalCountries > 1) && (
-            <ManageRow>
+            <S.SectionActions>
               <ManageToggle
                 type="button"
                 onClick={() => setManageMode((v) => !v)}
@@ -208,10 +209,9 @@ export function DetailActors({
                 <FiSettings />
                 {manageMode ? '관리 끝' : '순서 변경'}
               </ManageToggle>
-            </ManageRow>
+            </S.SectionActions>
           )}
-          <EditorialRule role="separator" aria-hidden />
-        </EditorialHeader>
+        </S.SectionHeader>
 
         {/* 비어 있을 때 통일 안내 — persons·countries 모두 없을 때만 */}
         {!hasAnything && (
@@ -480,54 +480,7 @@ const softRuleColor = (mode: 'light' | 'dark') =>
 const mutedTextColor = (mode: 'light' | 'dark') =>
   mode === 'dark' ? 'rgba(255,255,255,0.66)' : 'rgba(15,23,42,0.62)'
 
-/* ─── Section header (editorial) ─── */
-
-const EditorialHeader = styled.header`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 6px;
-`
-
-const EditorialEyebrow = styled.div`
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-
-  span {
-    font-weight: 500;
-    letter-spacing: 0.12em;
-  }
-`
-
-const EditorialTitle = styled.h2`
-  font-size: 28px;
-  font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.018em;
-  margin: 4px 0 2px;
-  color: ${({ theme }) => theme.colors.text.primary};
-
-  @media (max-width: 640px) {
-    font-size: 23px;
-  }
-`
-
-const EditorialKicker = styled.div`
-  font-style: italic;
-  font-size: 14px;
-  line-height: 1.5;
-  letter-spacing: -0.005em;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-`
-
-const ManageRow = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 4px;
-`
+/* ─── Section header — '순서 변경' 토글(공용 S.SectionHeader 안에 배치) ─── */
 
 const ManageToggle = styled.button<{ $active: boolean }>`
   display: inline-flex;
@@ -627,16 +580,6 @@ const NationReorder = styled.button`
     width: 10px;
     height: 10px;
   }
-`
-
-/**
- * <hr>는 브라우저 기본 inset border가 styled `border` 규칙과 충돌해 짙게 보이는
- * 케이스가 있어 `<div role="separator">`로 둔다 — 시맨틱 분리선 + 커스텀 hairline.
- */
-const EditorialRule = styled.div`
-  margin: 14px 0 4px;
-  height: 1px;
-  background: ${({ theme }) => editorialRuleColor(theme.mode)};
 `
 
 /* ─── Person list (vertical, hairline separators) ─── */

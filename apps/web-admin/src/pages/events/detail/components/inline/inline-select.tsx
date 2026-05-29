@@ -124,6 +124,11 @@ const ChevronTrigger = styled.button`
     outline: none;
   }
 
+  /* 터치/펜 등 hover 미지원 환경 — ▾ 트리거가 영영 안 보이는 문제 방지. */
+  @media (hover: none) {
+    opacity: 0.55;
+  }
+
   svg {
     width: 11px;
     height: 11px;

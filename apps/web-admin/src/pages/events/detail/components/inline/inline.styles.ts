@@ -178,6 +178,14 @@ export const InlineEditButton = styled.button`
     outline: none;
   }
 
+  /**
+   * 터치/펜 등 hover 미지원 환경 — read 텍스트엔 클릭 핸들러가 없어 편집은 ✎로만
+   * 진입하는데, hover로만 드러나면 영영 안 보인다. 상시 옅게 노출해 발견성 보장.
+   */
+  @media (hover: none) {
+    opacity: 0.5;
+  }
+
   svg {
     width: 13px;
     height: 13px;

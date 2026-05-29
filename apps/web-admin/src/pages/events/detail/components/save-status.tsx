@@ -64,9 +64,11 @@ const Pill = styled.div<{ $state: 'pending' | 'saved' }>`
   position: sticky;
   top: 12px;
   z-index: 10;
-  align-self: flex-end;
+  /* 부모(PageInner)가 block이라 inline-flex + align-self로는 우측 정렬이 안 됐다.
+     block-level flex + margin-left:auto + width:fit-content로 우상단에 고정. */
+  display: flex;
+  width: fit-content;
   margin-left: auto;
-  display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
