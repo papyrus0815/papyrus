@@ -24,6 +24,10 @@ import {
   seedSerbiaDynasty,
   seedItalyHistoricalCountries,
   seedItalyHistoricalCountryRelations,
+  seedFranceHistoricalCountries,
+  seedNapoleonIII,
+  seedPalmerston,
+  seedCavour,
   seedBeneluxHistoricalCountries,
   seedBeneluxHistoricalCountryRelations,
   seedBritainMonarchs,
@@ -53,6 +57,7 @@ import {
   seedGermanyReichstagElections,
   seedAustroPrussianWar,
   seedFrancoPrussianWar,
+  seedCrimeanWar,
   seedFirstOpiumWar,
   seedFirstOpiumWarFigures,
   seedBritishEastIndiaCompanyIndia,
@@ -163,8 +168,26 @@ async function main() {
         // 7-5. 베네룩스 역사 국가 계승·소속 관계 시딩
         await seedBeneluxHistoricalCountryRelations(prisma)
 
+        // 7-6. 프랑스 관련 역사 국가 시딩 (서프랑크~제5공화국)
+        await seedFranceHistoricalCountries(prisma)
+
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)
+
+        // 8-1. 나폴레옹 3세 + 가족 + 제2공화국 대통령/제2제국 황제 시딩
+        //  · 의존: seedFranceHistoricalCountries(제1제국·제2공화국·제2제국 HC) + 관직 정의(대통령·황제)
+        //  · 보나파르트 가문 인라인 + Person x5 + 대통령 재임/행정부 + 황제 재위 + 소속/별명/연보/능력치
+        await seedNapoleonIII(prisma)
+
+        // 8-2. 파머스턴 자작(Henry John Temple) — 영국 외무장관·총리 시딩
+        //  · 의존: seedBritainHistoricalCountries(연합왕국·그레이트브리튼 왕국 HC) + 관직 정의(총리)
+        //  · Person x1 + 총리 재임 2건/내각 2건 + 소속국가/별명/연보/능력치
+        await seedPalmerston(prisma)
+
+        // 8-3. 카보우르 백작 — 사르데냐 왕국 총리 / 이탈리아 왕국 초대 총리 시딩
+        //  · 의존: seedItalyHistoricalCountries(사르데냐 왕국·이탈리아 왕국 HC) + 관직 정의(총리)
+        //  · Person x1 + 총리 재임 3건/내각 3건 + 소속국가/별명/연보/능력치
+        await seedCavour(prisma)
 
         // 6. 영국 군주 시딩
         await seedBritainMonarchs(prisma)
@@ -204,6 +227,11 @@ async function main() {
 
         // 13-2. 보불전쟁(1870–1871) 시딩 — eventCategory + 역사국가들 + 현대국가(프랑스) 의존
         await seedFrancoPrussianWar(prisma)
+
+        // 13-2-1. 크림 전쟁(1853–1856) 시딩 — eventCategory + 역사국가(러시아 제국·오스만 제국·
+        //   프랑스 제2제국·연합왕국·사르데냐 왕국) + 인물(나폴레옹 3세·카보우르·파머스턴 등) 의존
+        //   · 부모 + 자식 4(시노프·알마·발라클라바·세바스토폴) + 진영 2 + 군사상세 + PersonEvent
+        await seedCrimeanWar(prisma)
 
         // 13-3. 1차 아편전쟁(1839–1842) 시딩 — eventCategory + 영국 HC + 청나라 HC(인라인 생성)
         await seedFirstOpiumWar(prisma)
@@ -320,7 +348,7 @@ async function main() {
 
         // 13-13b. 샌프란시스코 강화조약 — 보강(섹션 6 + ECR 10 + 인물 6 + 미·일 안보조약 신규 Event)
         //  · 일본 7인 전권 위원 누락 5명(호시지마·이치마다·도쿠가와 무네요시·토마베치·사토) + 로물로
-        //  · 회의 진행 일별·한국 미초청·서명 거부 3국·영토 조항·안보조약 패키지·학설사 섹션
+        //  · 회의 진행 일별·한국 미초청·서명 거부 3국·영토 조항·안보조약 패키지·학계 평가 섹션
         //  · 1951-09-08 미·일 안전보장조약 체결 신규 Event + 4섹션 + EventRelation 2건
         await seedSanFranciscoTreatyEnrich(prisma)
 
