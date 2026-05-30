@@ -5,13 +5,18 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import { sortSegmentsChronologically } from '../lib/sort-segments'
 import type { TenureBar } from '../lib/normalize-tenures'
 import { CATEGORY_TOKENS } from '../lib/category-tokens'
+import { eventToneFor } from '../lib/event-color'
 import type { PinnedRow } from '../model/types'
 import type { RowTenuresResult } from '../api/use-all-rows-tenures'
+import {
+  useContemporaryEvents,
+  type ContemporaryEvent,
+} from '../api/use-contemporary-events'
 
 interface Props {
   highlightYear: number
@@ -20,6 +25,8 @@ interface Props {
   onClose: () => void
   /** 막대 클릭 시 인물 상세로 이동 — 페이지가 핸들러 제공 */
   onSelectPerson?: (personId: string) => void
+  /** 사건 클릭 시 사건 상세로 이동 — 페이지가 핸들러 제공 */
+  onSelectEvent?: (eventId: string) => void
 }
 
 interface MatchEntry {
@@ -73,7 +80,14 @@ export function ContemporaryPanel({
   rowsTenures,
   onClose,
   onSelectPerson,
+  onSelectEvent,
 }: Props) {
+  const theme = useTheme()
+  const isDark = theme?.mode === 'dark'
+  const { events: yearEvents, isLoading: eventsLoading } = useContemporaryEvents(
+    rows,
+    highlightYear,
+  )
   const [sortMode, setSortMode] = useState<SortMode>('pin')
   const rawEntries = useMemo(
     () => pickContemporary(rows, rowsTenures, highlightYear),
@@ -201,8 +215,55 @@ export function ContemporaryPanel({
           )
         })()}
       </List>
+
+      <EventsSection>
+        <EventsHeader>
+          <span>이 해의 사건</span>
+          {yearEvents.length > 0 && <EventsCount>{yearEvents.length}</EventsCount>}
+        </EventsHeader>
+        {eventsLoading ? (
+          <EventsEmpty>불러오는 중…</EventsEmpty>
+        ) : yearEvents.length === 0 ? (
+          <EventsEmpty>핀한 국가의 이 시점 사건이 없습니다</EventsEmpty>
+        ) : (
+          <EventsList>
+            {yearEvents.map((ev) => {
+              const tone = eventToneFor(ev.categoryName, isDark)
+              const clickable = onSelectEvent != null
+              return (
+                <EventItem
+                  key={ev.id}
+                  as={clickable ? 'button' : 'div'}
+                  type={clickable ? 'button' : undefined}
+                  $clickable={clickable}
+                  onClick={clickable ? () => onSelectEvent!(ev.id) : undefined}
+                  style={{ borderLeftColor: tone.border }}
+                >
+                  <EventTitle>{ev.title}</EventTitle>
+                  <EventMeta>
+                    {ev.categoryName && (
+                      <EventCatBadge
+                        style={{ background: tone.background, color: tone.color }}
+                      >
+                        {ev.categoryName}
+                      </EventCatBadge>
+                    )}
+                    <EventYear>{formatEventYears(ev)}</EventYear>
+                  </EventMeta>
+                </EventItem>
+              )
+            })}
+          </EventsList>
+        )}
+      </EventsSection>
     </Wrap>
   )
+}
+
+/** 단일 시점이면 연도 하나, 기간이면 "시작 ~ 끝" */
+function formatEventYears(ev: ContemporaryEvent): string {
+  if (ev.startYear === ev.endYear) return `${formatYear(ev.startYear)}년`
+  return `${formatYear(ev.startYear)} ~ ${formatYear(ev.endYear)}`
 }
 
 const Wrap = styled(motion.aside)`
@@ -480,4 +541,112 @@ const CategoryBadge = styled.span<{ $category: TenureBar['positionCategory'] }>`
     CATEGORY_TOKENS[$category].chip[theme.mode === 'dark' ? 'dark' : 'light'].background};
   color: ${({ $category, theme }) =>
     CATEGORY_TOKENS[$category].chip[theme.mode === 'dark' ? 'dark' : 'light'].color};
+`
+
+/* ── 이 해의 사건 섹션 ─────────────────────────────────────── */
+
+const EventsSection = styled.div`
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const EventsHeader = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EventsCount = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: ${({ theme }) => theme.colors.activeLight};
+  color: ${({ theme }) => theme.colors.primary};
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+`
+
+const EventsEmpty = styled.p`
+  margin: 0;
+  padding: 4px 2px;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EventsList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const EventItem = styled.li<{ $clickable: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
+  transition: background 0.15s, border-color 0.15s;
+  &:hover {
+    background: ${({ $clickable, theme }) =>
+      $clickable ? theme.colors.hover : theme.colors.background.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+`
+
+const EventTitle = styled.div`
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const EventMeta = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+const EventCatBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+`
+
+const EventYear = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `

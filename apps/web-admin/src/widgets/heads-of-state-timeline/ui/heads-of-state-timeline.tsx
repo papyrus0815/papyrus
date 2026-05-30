@@ -372,6 +372,11 @@ function HeadsOfStateTimelineInner() {
                 rowsTenures={rowsTenures}
                 onClose={() => state.setHighlightYear(null)}
                 onSelectPerson={openByPersonId}
+                onSelectEvent={(eventId) => {
+                  navigate(
+                    `${pathKeys.events.root()}?selected=${encodeURIComponent(eventId)}`,
+                  )
+                }}
               />
             )}
           </AnimatePresence>

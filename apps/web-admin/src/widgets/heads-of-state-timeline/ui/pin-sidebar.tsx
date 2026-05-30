@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   FiChevronLeft,
   FiChevronRight,
+  FiChevronsLeft,
+  FiLayers,
   FiLink,
   FiMove,
   FiPlus,
@@ -17,6 +19,7 @@ import { useToast } from '@/shared/ui/toast'
 import type { PinnedRow, PinnedSegment } from '../model/types'
 import { sortSegmentsChronologically } from '../lib/sort-segments'
 import { copyShareUrl } from '../model/use-url-sync'
+import { useRowsLineage } from '../api/use-rows-lineage'
 import { CountrySearchModal } from './country-search-modal'
 
 interface Props {
@@ -59,6 +62,7 @@ export function PinSidebar({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const wrapperRef = useRef<HTMLElement | null>(null)
   const { showToast } = useToast()
+  const { expandableForRow, collapsibleSegmentIdsForRow } = useRowsLineage(rows)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -332,6 +336,51 @@ export function PinSidebar({
                   </SmallIconButton>
                 </RowActions>
               </RowHeader>
+              {(() => {
+                const expandable = expandableForRow(row)
+                const collapsibleIds = collapsibleSegmentIdsForRow(row)
+                if (expandable.length === 0 && collapsibleIds.length === 0)
+                  return null
+                const names = expandable.map((s) => s.name).join(', ')
+                return (
+                  <LineageActions>
+                    {expandable.length > 0 && (
+                      <ExpandLineageButton
+                        type="button"
+                        title={`역사적 전신 국가 추가: ${names}`}
+                        onClick={() => {
+                          expandable.forEach((s) =>
+                            onAddSegmentToRow(row.rowId, s),
+                          )
+                          showToast(
+                            'success',
+                            `계보 ${expandable.length}개를 이 행에 추가했습니다`,
+                          )
+                        }}
+                      >
+                        <FiLayers size={12} /> 계보 펼치기 +{expandable.length}
+                      </ExpandLineageButton>
+                    )}
+                    {collapsibleIds.length > 0 && (
+                      <CollapseLineageButton
+                        type="button"
+                        title="펼친 역사 계보를 이 행에서 제거 (모던 국가는 유지)"
+                        onClick={() => {
+                          collapsibleIds.forEach((sid) =>
+                            onRemoveSegmentFromRow(row.rowId, sid),
+                          )
+                          showToast(
+                            'info',
+                            `계보 ${collapsibleIds.length}개를 닫았습니다`,
+                          )
+                        }}
+                      >
+                        <FiChevronsLeft size={12} /> 계보 닫기
+                      </CollapseLineageButton>
+                    )}
+                  </LineageActions>
+                )
+              })()}
             </RowCard>
           ))}
           {filteredRows.length === 0 && rows.length > 0 && (
@@ -622,6 +671,43 @@ const RowHeader = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
+`
+
+const LineageActions = styled.div`
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+`
+
+const ExpandLineageButton = styled.button`
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => theme.colors.activeLight};
+  }
+`
+
+const CollapseLineageButton = styled(ExpandLineageButton)`
+  border-style: solid;
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => theme.colors.hover};
+  }
 `
 
 const DragHandle = styled.button`
