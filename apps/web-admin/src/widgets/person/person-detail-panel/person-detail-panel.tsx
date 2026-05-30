@@ -495,6 +495,32 @@ const DEATH_TYPE_LABELS: Record<string, string> = {
   OTHER: '기타',
 }
 
+/** 취임(임명) 방식 enum → 한국어 라벨 (AppointmentMethod) */
+const APPOINTMENT_METHOD_LABELS: Record<string, string> = {
+  DIRECT_ELECTION: '직접 선거',
+  INDIRECT_ELECTION: '간접 선거',
+  PARLIAMENTARY_ELECTION: '의회 선출',
+  APPOINTMENT: '임명',
+  HEREDITARY: '세습',
+  COUP: '쿠데타 / 혁명',
+  OTHER: '기타',
+}
+
+/** 재임 종료 사유 enum → 한국어 라벨 (TenureEndReason) */
+const TENURE_END_REASON_LABELS: Record<string, string> = {
+  TERM_COMPLETED: '임기 만료',
+  RESIGNATION: '사임 / 사퇴',
+  ABDICATION: '자진 퇴위',
+  SUCCESSION_TRANSFER: '양위 / 선위',
+  REMOVAL: '폐위 / 해임',
+  IMPEACHMENT: '탄핵',
+  DEATH_IN_OFFICE: '재임 중 사망',
+  OVERTHROWN: '쿠데타 / 혁명으로 축출',
+  WAR_DEFEAT: '전쟁 패배',
+  STATE_DISSOLVED: '국가 멸망',
+  OTHER: '기타',
+}
+
 /**
  * 전기 편집 시 에디터에 넣을 값: 일반 텍스트면 \n → <br> 변환, 이미 HTML이면 그대로.
  * (RichTextEditor는 HTML을 다루므로 평문 개행이 보이지 않음)
@@ -1896,9 +1922,26 @@ export function PersonDetailPanel({
                                   {!isReign &&
                                     (d.appointmentMethod || d.endReason || d.endReasonDetail || d.notes) && (
                                       <UnifiedSubRow>
-                                        {d.appointmentMethod && <span>취임: {d.appointmentMethod}</span>}
+                                        {d.appointmentMethod && (
+                                          <span>
+                                            취임:{' '}
+                                            {APPOINTMENT_METHOD_LABELS[d.appointmentMethod] ??
+                                              d.appointmentMethod}
+                                          </span>
+                                        )}
                                         {(d.endReason || d.endReasonDetail) && (
-                                          <span>퇴임: {d.endReason ?? d.endReasonDetail}</span>
+                                          <span>
+                                            퇴임:{' '}
+                                            {[
+                                              d.endReason
+                                                ? TENURE_END_REASON_LABELS[d.endReason] ??
+                                                  d.endReason
+                                                : null,
+                                              d.endReasonDetail,
+                                            ]
+                                              .filter(Boolean)
+                                              .join(' — ')}
+                                          </span>
                                         )}
                                         {d.notes && <span>{d.notes}</span>}
                                       </UnifiedSubRow>
