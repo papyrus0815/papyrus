@@ -24,6 +24,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useFormEntities } from '@/entities/event-form/model'
 import {
   FORM_STEPS,
+  type NormalizedMilitaryEventResponse,
   buildEventSubmitData,
   buildMilitaryEventData,
   checkBasicInfo,
@@ -31,6 +32,7 @@ import {
   extractMentionsFromHtml,
   getFormSteps,
   getStepTitle,
+  hydrateMilitaryStateFromEvent,
   isDiplomaticCategory,
   isMilitaryCategory,
   validateBasicInfo,
@@ -115,6 +117,22 @@ export const EventCreatePageRefactored: React.FC<
     availablePoliticalParties,
     isLoading: isLoadingEntities,
   } = useFormEntities()
+
+  // 국가 목록을 ref로 최신 유지 — 편집 로드 effect(의존성 [isEditMode, editEventId])가
+  // 비동기 콜백 안에서 항상 최신 목록으로 countryId→표시명을 해석하도록 한다.
+  const availableCountriesRef = React.useRef(availableCountries)
+  availableCountriesRef.current = availableCountries
+  const availableHistoricalCountriesRef = React.useRef(availableHistoricalCountries)
+  availableHistoricalCountriesRef.current = availableHistoricalCountries
+  const resolveCountryName = React.useCallback(
+    (countryId: string, isHistorical: boolean): string => {
+      const list = isHistorical
+        ? availableHistoricalCountriesRef.current
+        : availableCountriesRef.current
+      return list.find((country) => country.id === countryId)?.name ?? ''
+    },
+    [],
+  )
 
   // ===== Feature: Basic Info Form =====
   const {
@@ -398,9 +416,35 @@ export const EventCreatePageRefactored: React.FC<
           }
         }
 
-        // 군사 정보 설정 (간소화)
-        if ('militaryEvent' in event && event.militaryEvent) {
-          setMilitaryEvent(event.militaryEvent)
+        // 군사 정보 복원.
+        //
+        // 응답의 militaryEvent는 백엔드가 (@ts-ignore로) 런타임에만 붙이는 *정규화* 형태라
+        // SDK 타입엔 없다. 군사 폼은 레거시 상태(belligerents 등)를 읽어 렌더링하고 저장 시에도
+        // 레거시 상태에서 재빌드하므로, 정규화 → 레거시 역매핑(hydrateMilitaryStateFromEvent)이
+        // 없으면 편집 화면이 비고 저장에서 빈 값으로 덮어써 군사 데이터가 소실된다.
+        const loadedMilitary = (
+          event as { militaryEvent?: NormalizedMilitaryEventResponse }
+        ).militaryEvent
+        if (loadedMilitary) {
+          setMilitaryEvent(loadedMilitary as MilitaryEvent)
+          const hydrated = hydrateMilitaryStateFromEvent(
+            loadedMilitary,
+            resolveCountryName,
+          )
+          if (hydrated.belligerents.length) {
+            setBelligerents(hydrated.belligerents)
+          }
+          setBelligerentsGraph(hydrated.belligerentsGraph)
+          if (hydrated.militaryDetails) {
+            setMilitaryDetails(hydrated.militaryDetails)
+          }
+          if (Object.keys(hydrated.casualties).length) {
+            setCasualties(hydrated.casualties)
+          }
+        }
+        // warCost는 정규화 militaryEvent가 아니라 최상위 event.warCost로 온다.
+        if (typeof event.warCost === 'string' && event.warCost) {
+          setWarCost(event.warCost)
         }
 
         // 회담 정보 설정

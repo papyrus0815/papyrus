@@ -147,6 +147,40 @@ export const fromParticipationTypeDto = (
 }
 
 /**
+ * 역변환: RelationType DTO → UI (relationTypeMap의 역방향)
+ */
+export const fromRelationTypeDto = (
+  type: string | undefined,
+):
+  | 'allied'
+  | 'cooperation'
+  | 'non-aggression'
+  | 'neutral'
+  | 'enemy'
+  | 'puppet'
+  | 'occupied' => {
+  const map: Record<
+    string,
+    | 'allied'
+    | 'cooperation'
+    | 'non-aggression'
+    | 'neutral'
+    | 'enemy'
+    | 'puppet'
+    | 'occupied'
+  > = {
+    ALLIED: 'allied',
+    COOPERATION: 'cooperation',
+    NON_AGGRESSION: 'non-aggression',
+    NEUTRAL: 'neutral',
+    ENEMY: 'enemy',
+    PUPPET: 'puppet',
+    OCCUPIED: 'occupied',
+  }
+  return (type && map[type]) || 'neutral'
+}
+
+/**
  * 카테고리명 매핑 (영문 → 한글)
  * @deprecated 더 이상 사용하지 않음. DB에서 직접 categoryId 사용
  */
