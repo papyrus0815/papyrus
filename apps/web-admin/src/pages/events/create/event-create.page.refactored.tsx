@@ -635,6 +635,9 @@ export const EventCreatePageRefactored: React.FC<
          * 저장 응답을 상세 쿼리 캐시에 *시딩*해 무로딩으로 즉시 진입시키고, 곧바로
          * invalidate해 누락됐을 수 있는 derived relation(이름 포함 국가·인물·섹션 등)을
          * 백그라운드 refetch로 보강한다(그 동안 시딩 데이터를 보여줌 — 스피너 없음).
+         *
+         * replace: true — 등록/수정 폼을 히스토리에서 치운다. 상세에서 뒤로가기 시
+         * 빈 등록 폼(중복 등록 위험)·수정 폼이 아니라 진입 전 위치(목록 등)로 가도록.
          */
         if (saved) {
           queryClient.setQueryData(
@@ -645,7 +648,10 @@ export const EventCreatePageRefactored: React.FC<
             queryKey: eventKeys.detail(targetId),
           })
         }
-        navigate(pathKeys.events.detail(targetId), { viewTransition: true })
+        navigate(pathKeys.events.detail(targetId), {
+          viewTransition: true,
+          replace: true,
+        })
       } else {
         navigate(pathKeys.events.root())
       }
