@@ -7,17 +7,12 @@
  */
 import React, { useEffect, useMemo, useState } from 'react'
 
-import { createPortal } from 'react-dom'
-
 import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
 import {
   FiCheck,
   FiChevronDown,
   FiFileText,
-  FiGlobe,
-  FiImage,
-  FiPlus,
   FiSave,
   FiSearch,
   FiUsers,
@@ -46,7 +41,6 @@ import {
   useRelationshipsForm,
 } from '@/features/event-form/model'
 import { type EventDetail, eventKeys } from '@/pages/events/detail/use-event-detail'
-import { getImageUrl } from '@/pages/events/utils/event-create.utils'
 import {
   type EventResponseDto,
   createEvent,
@@ -54,12 +48,10 @@ import {
   getEventsByParentId,
   updateEvent,
 } from '@/shared/api/events'
-import { uploadImage } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { pathKeys } from '@/shared/router'
 import type { MilitaryEvent } from '@/shared/types/military-event.types'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
-import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { BasicInfoSection } from '@/widgets/event-form/ui/basic-info-section'
 import { DetailsSection } from '@/widgets/event-form/ui/details-section'
 import { LocationSection } from '@/widgets/event-form/ui/location-section'
@@ -72,7 +64,6 @@ import { formatDateRange } from '../utils/events.utils'
 import { ConferenceEventForm } from './conference-event-form'
 import * as S from './event-create.styles'
 import { CATEGORY_ICON_MAP } from './events.constants'
-import { searchMentionEntities } from '@/shared/lib/mention/mention-system'
 import {
   type BelligerentSide,
   type CasualtyData,
@@ -143,7 +134,6 @@ export const EventCreatePageRefactored: React.FC<
     setCategory,
     thumbnail,
     setThumbnail,
-    thumbnailFile,
     setThumbnailFile,
     location,
     setLocation,
@@ -152,7 +142,6 @@ export const EventCreatePageRefactored: React.FC<
     longitude,
     setLongitude,
     tags,
-    setTags,
     keywords,
     setKeywords,
     relatedCountryIds,
@@ -257,14 +246,6 @@ export const EventCreatePageRefactored: React.FC<
   const [loadedChildEvents, setLoadedChildEvents] = useState<
     EventResponseDto[]
   >([])
-
-  // 멘션 시스템
-  const [mentionState, setMentionState] = useState<{
-    sectionId: string
-    cursorPosition: number
-    searchTerm: string
-    type: 'person' | 'event' | null
-  } | null>(null)
 
   // 사용자가 한 번이라도 제출을 시도했는지 — 제출 전엔 inline 에러 숨김
   const [submitAttempted, setSubmitAttempted] = useState(false)
@@ -508,16 +489,23 @@ export const EventCreatePageRefactored: React.FC<
     category,
     thumbnail,
     location,
+    latitude,
+    longitude,
     keywords,
     relatedCountryIds,
     relatedHistoricalCountryIds,
+    primaryCountryId,
+    primaryHistoricalCountryId,
     parentEventId,
     relatedPersons,
     relatedEventIds,
     sections,
     militaryEvent,
     conferenceEvent,
+    belligerents,
     belligerentsGraph,
+    casualties,
+    militaryDetails,
     warCost,
     childEventIds,
   ])
