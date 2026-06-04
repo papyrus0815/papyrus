@@ -93,6 +93,20 @@ enum PersonCountryAffiliationType {
   OTHER
 }
 
+/// 인물 묶음(그룹) 유형 — N항 집합의 성격
+/// 마오·저우언라이 같은 "같은 세대·같은 묶음"을 표현. 1:1 인간관계(PersonHumanRelationship)와 달리
+/// 여러 인물을 하나의 명명된 묶음으로 큐레이션. 한 인물은 여러 그룹에 속할 수 있음.
+enum PersonGroupType {
+  GENERATION // 세대·코호트 (혁명 1세대, 베이비붐·386·MZ, 스포츠 황금세대, 잃어버린 세대)
+  COHORT     // 기수·동기 (육사 1기, 공채 N기, 입사 동기)
+  FOUNDING   // 창립·창건 (건국의 아버지들, 페이팔 마피아, 공동창업자)
+  FACTION    // 계파·파벌 (하나회, 당내 계파)
+  SCHOOL     // 학파·사조 (프랑크푸르트학파, 시카고학파, 인상파·바우하우스)
+  CIRCLE     // 동인·서클·사단·제자단 (블룸즈버리, 봉준호 사단, 12사도)
+  MOVEMENT   // 운동·진영 (독립운동, 민주화, 환경운동)
+  OTHER      // 기타
+}
+
 // ========================
 // Person
 // ========================
@@ -281,6 +295,12 @@ model Person {
   sovereignReigns          SovereignReign[]           @relation("PersonSovereignReign")
   lifeEvents               PersonLifeEvent[]          @relation("PersonLifeEvents")
   treatySignatories        TreatySignatory[]          @relation("TreatySignatoryPerson")
+  /// 전기(생애 서술) 다중 섹션. EventSection 패턴 미러 — 업데이트 시 통째 delete-and-recreate.
+  biographySections        PersonSection[]            @relation("PersonBiographySections")
+  /// 소속 묶음(세대·계파·동기 등) 멤버십
+  groupMemberships         PersonGroupMembership[]    @relation("PersonGroupMemberships")
+  /// 이 인물이 구심점인 묶음들 (사단·제자단 등)
+  centeredGroups           PersonGroup[]              @relation("PersonGroupCenter")
 
   // 🆕 정규화된 군사 사건 관계
   commandedBelligerentSides BelligerentSide[]
@@ -306,6 +326,40 @@ model Person {
   @@index([deathCityId], name: "idx_person_deathCityId")
   @@index([parentMarriageId], name: "idx_person_parentMarriageId")
   @@map("person")
+}
+
+// ========================
+// PersonSection (인물 전기 본문 섹션)
+// ========================
+/// 인물 전기(생애 서술)를 다중 섹션으로 관리. EventSection 패턴 미러 —
+/// Person 업데이트 시 sections 배열을 통째로 delete-and-recreate.
+model PersonSection {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 인물 FK
+  personId String @map("person_id") @db.Char(36)
+  person   Person @relation("PersonBiographySections", fields: [personId], references: [id], onDelete: Cascade)
+
+  /// 섹션 제목 (예: 생애, 업적, 평가)
+  title String @db.VarChar(500)
+
+  /// 섹션 내용 (HTML)
+  content String @db.Text
+
+  /// 표시 순서
+  order Int @default(0)
+
+  /// 섹션 타입 (선택)
+  sectionType String? @map("section_type") @db.VarChar(100)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([personId], name: "idx_person_section_personId")
+  @@index([personId, order], name: "idx_person_section_personId_order")
+  @@map("person_section")
 }
 
 // ========================
@@ -1427,4 +1481,97 @@ model PersonTraitAssignment {
   @@index([accountId], name: "idx_person_trait_accountId")
   @@index([trait], name: "idx_person_trait_trait")
   @@map("person_trait_assignment")
+}
+
+// ========================
+// PersonGroup (인물 묶음 — 세대·계파·동기)
+// ========================
+/// 여러 인물을 하나의 명명된 묶음으로 표현하는 N항 그룹.
+/// 예: "중국공산당 혁명 1세대"(GENERATION) = 마오쩌둥 + 저우언라이 + 류사오치 …
+/// 1:1 관계(PersonHumanRelationship)와 달리 공유 정체성(이름·설명)을 갖는 집합이며,
+/// 한 인물은 여러 그룹(세대 + 동기 + 학파 …)에 동시에 속할 수 있음.
+model PersonGroup {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 묶음 이름 (예: "중국공산당 혁명 1세대")
+  name String @db.VarChar(150)
+
+  /// 묶음 유형
+  type PersonGroupType
+
+  /// 설명/맥락
+  description String? @db.Text
+
+  /// 세대 순번 (1세대=1). GENERATION에서만 의미, 없으면 NULL
+  generationOrder Int? @map("generation_order")
+
+  /// 전임(이전) 묶음 — 세대 계승 표현용. 예: 2세대.predecessor = 1세대.
+  /// successors는 역방향(보통 0~1개). GENERATION에서 주로 사용.
+  predecessorGroupId String?      @map("predecessor_group_id") @db.Char(36)
+  predecessor        PersonGroup? @relation("PersonGroupSuccession", fields: [predecessorGroupId], references: [id], onDelete: SetNull)
+  successors         PersonGroup[] @relation("PersonGroupSuccession")
+
+  /// 중심 인물 (구심점) — CIRCLE/사단·제자단에서 주로 사용. 예: 봉준호 사단의 봉준호.
+  centerPersonId String? @map("center_person_id") @db.Char(36)
+  centerPerson   Person? @relation("PersonGroupCenter", fields: [centerPersonId], references: [id], onDelete: SetNull)
+
+  /// 연관 현대 국가 (선택, 필터링용)
+  countryId String?  @map("country_id") @db.Char(36)
+  country   Country? @relation("CountryPersonGroups", fields: [countryId], references: [id], onDelete: SetNull)
+
+  /// 목록 표시 정렬 (낮을수록 우선)
+  sortOrder Int? @default(0) @map("sort_order")
+
+  /// 등록 계정 (생성자 추적)
+  accountId String?  @map("account_id") @db.Char(36)
+  account   Account? @relation("AccountPersonGroups", fields: [accountId], references: [id], onDelete: SetNull)
+
+  /// 멤버십
+  members PersonGroupMembership[]
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([type], name: "idx_person_group_type")
+  @@index([countryId], name: "idx_person_group_countryId")
+  @@index([accountId], name: "idx_person_group_accountId")
+  @@index([predecessorGroupId], name: "idx_person_group_predecessorId")
+  @@index([centerPersonId], name: "idx_person_group_centerPersonId")
+  @@map("person_group")
+}
+
+// ========================
+// PersonGroupMembership (묶음-인물 N:M 조인)
+// ========================
+model PersonGroupMembership {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 묶음 FK
+  groupId String      @map("group_id") @db.Char(36)
+  group   PersonGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  /// 인물 FK
+  personId String @map("person_id") @db.Char(36)
+  person   Person @relation("PersonGroupMemberships", fields: [personId], references: [id], onDelete: Cascade)
+
+  /// 그룹 내 역할 라벨 (예: "핵심", "주변", "창립멤버")
+  roleLabel String? @map("role_label") @db.VarChar(100)
+
+  /// 비고
+  note String? @db.Text
+
+  /// 멤버 표시 정렬 (낮을수록 우선)
+  sortOrder Int? @default(0) @map("sort_order")
+
+  //--- 메타데이터
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([groupId, personId], name: "person_group_membership_unique")
+  @@index([groupId], name: "idx_person_group_membership_groupId")
+  @@index([personId], name: "idx_person_group_membership_personId")
+  @@map("person_group_membership")
 }

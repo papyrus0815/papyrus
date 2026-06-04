@@ -85,6 +85,7 @@ model Country {
   ethnicities               Ethnicity[]  @relation("CountryEthnicities")
   persons                   Person[]                         @relation("CountryToPerson")
   personAffiliations        PersonCountryAffiliation[]       @relation("PersonCountryAffiliations")
+  personGroups              PersonGroup[]                    @relation("CountryPersonGroups")
   adminDivisionConfigs      CountryAdminDivisionConfig[]
   administrationDepartments AdministrationDepartment[]       @relation("Country_Department")
   historicalConnections     HistoricalCountryModernCountry[]

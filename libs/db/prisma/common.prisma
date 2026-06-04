@@ -56,6 +56,8 @@ model Account {
   personStats         PersonStats[]           @relation("PersonStatsToAccount")
   /// 이 계정이 인물에 부착한 성격 태그
   personTraitAssignments PersonTraitAssignment[] @relation("PersonTraitsToAccount")
+  /// 이 계정이 등록한 인물 묶음(세대·계파 등)
+  personGroups        PersonGroup[]           @relation("AccountPersonGroups")
 
   @@map("account")
 }
