@@ -195,6 +195,14 @@ export const richTextEntityLinkStyles = css`
         background: rgba(239, 68, 68, 0.18);
       }
     }
+    &[data-type='personGroup'] {
+      background: rgba(99, 102, 241, 0.1);
+      color: ${({ theme }) =>
+        theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'} !important;
+      &:hover {
+        background: rgba(99, 102, 241, 0.18);
+      }
+    }
   }
 
   .term {

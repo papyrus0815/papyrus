@@ -64,6 +64,7 @@ export type MentionEntityType =
   | 'treaty'
   | 'law'
   | 'politicalParty'
+  | 'personGroup'
 
 // 통합 멘션 아이템 타입
 export interface MentionItem {
@@ -375,6 +376,15 @@ export const MENTION_TYPE_CONFIG: Record<
       const s = p.shortName?.trim()
       return s || undefined
     },
+  },
+  personGroup: {
+    label: '집단',
+    icon: FiUsers,
+    color: '#8b5cf6',
+    searchFields: ['name'],
+    getName: (item: unknown) => (item as { name?: string }).name ?? '',
+    getSubtitle: (item: unknown) =>
+      (item as { subtitle?: string }).subtitle || undefined,
   },
 }
 

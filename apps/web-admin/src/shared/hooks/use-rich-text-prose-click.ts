@@ -105,6 +105,24 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
         return
       }
 
+      const groupMentionEl = target.closest(
+        '.mention[data-type="personGroup"]',
+      )
+      const groupLinkEl = target.closest(
+        '.entity-link[data-entity-type="personGroup"]',
+      )
+      const groupEl = groupMentionEl ?? groupLinkEl
+      if (groupEl) {
+        const id =
+          groupEl.getAttribute('data-id') ??
+          groupEl.getAttribute('data-entity-id')
+        if (id) {
+          e.preventDefault()
+          navigate(pathKeys.personGroupDetail(id))
+        }
+        return
+      }
+
       const dynastyMentionEl = target.closest('.mention[data-type="dynasty"]')
       const dynastyLinkEl = target.closest(
         '.entity-link[data-entity-type="dynasty"]',

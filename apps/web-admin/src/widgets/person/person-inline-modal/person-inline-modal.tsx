@@ -9,7 +9,7 @@
  * 단일 책임: "인물 인라인 상세 보기 모달"
  *   - 편집 동작은 부모가 결정 (`onEdit` prop) — 페이지 이동(navigate)이거나 인라인 편집 모드 전환이거나.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -18,6 +18,8 @@ import styled from 'styled-components'
 
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
+import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import {
@@ -77,6 +79,12 @@ export function PersonInlineModal({
     else onClose()
   }
 
+  // 모달 열림 동안 body 스크롤 락 + 패널 내 포커스 트랩
+  const open = !!personId && !!activeId
+  const panelRef = useRef<HTMLDivElement>(null)
+  useBodyScrollLock(open)
+  useFocusTrap(panelRef, open)
+
   return (
     <AnimatePresence>
       {personId && activeId && (
@@ -91,6 +99,10 @@ export function PersonInlineModal({
         >
           <Box
             key="person-inline-modal-panel"
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="person-inline-modal-title"
             initial={{ opacity: 0, y: 20, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -98,7 +110,9 @@ export function PersonInlineModal({
             onClick={(e) => e.stopPropagation()}
           >
             <ModalHeader>
-              <ModalTitle title={titleName}>{titleName || '인물'}</ModalTitle>
+              <ModalTitle id="person-inline-modal-title" title={titleName}>
+                {titleName || '인물'}
+              </ModalTitle>
               <ModalCloseButton
                 type="button"
                 onClick={handleHeaderClose}

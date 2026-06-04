@@ -1661,6 +1661,12 @@ interface RichTextEditorProps {
   entityLinkRemote?: boolean
   /** 정당 검색 한정(선거 탭 등) — 서버에 `countryId`로 전달 */
   entityLinkCountryId?: string
+  /**
+   * 본문에 엔티티 링크를 *삽입한 직후* 호출. 사건 상세에서 인물을 링크하면
+   * 참여 행위자로 자동 등록하는 등, 링크 행위를 부가 사이드이펙트로 잇기 위한 훅.
+   * 본문 저장(commit)과 독립적으로 즉시 발생 — 호출 측에서 타입(person 등) 필터.
+   */
+  onEntityLink?: (item: MentionItem) => void
   title?: string
   onTitleChange?: (title: string) => void
   titlePlaceholder?: string
@@ -1716,6 +1722,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   mentionEntitiesLoading = false,
   entityLinkRemote = true,
   entityLinkCountryId,
+  onEntityLink,
   title = '',
   onTitleChange,
   titlePlaceholder = '제목 없음',
@@ -3576,6 +3583,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       updateFormatState()
       handleContentChange()
 
+      // 링크 삽입을 부가 사이드이펙트(예: 참여 행위자 자동 등록)로 통지.
+      // 본문 commit과 무관하게 즉시 발생 — 타입 필터는 호출 측 책임.
+      onEntityLink?.(item)
+
       // 모달 닫기
       handleCloseEntityLinkModal()
       setSelectedText('')
@@ -3586,6 +3597,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       handleContentChange,
       handleCloseEntityLinkModal,
       updateFormatState,
+      onEntityLink,
     ],
   )
 
@@ -5227,18 +5239,53 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                                     insertEntityLink(item)
                                   }}
                                 >
-                                  {item.icon && (
-                                    <span
-                                      style={{
-                                        color: item.color,
-                                        flexShrink: 0,
-                                      }}
-                                    >
-                                      {React.createElement(item.icon, {
-                                        size: 18,
-                                      })}
-                                    </span>
-                                  )}
+                                  {(() => {
+                                    /* 인물이며 프로필 이미지가 있으면 아바타 썸네일 —
+                                       동명이인 구분에 도움. 없으면 기존 타입 아이콘. */
+                                    const avatarRaw =
+                                      item.type === 'person'
+                                        ? (
+                                            item.data as {
+                                              imageUrl?: string | null
+                                            } | null
+                                          )?.imageUrl
+                                        : undefined
+                                    if (avatarRaw) {
+                                      return (
+                                        <img
+                                          src={
+                                            getUploadImageUrl(avatarRaw) ||
+                                            avatarRaw
+                                          }
+                                          alt=""
+                                          loading="lazy"
+                                          style={{
+                                            width: 28,
+                                            height: 28,
+                                            flexShrink: 0,
+                                            borderRadius: '50%',
+                                            objectFit: 'cover',
+                                            filter: 'grayscale(1)',
+                                          }}
+                                        />
+                                      )
+                                    }
+                                    if (item.icon) {
+                                      return (
+                                        <span
+                                          style={{
+                                            color: item.color,
+                                            flexShrink: 0,
+                                          }}
+                                        >
+                                          {React.createElement(item.icon, {
+                                            size: 18,
+                                          })}
+                                        </span>
+                                      )
+                                    }
+                                    return null
+                                  })()}
                                   <span
                                     style={{
                                       flex: 1,

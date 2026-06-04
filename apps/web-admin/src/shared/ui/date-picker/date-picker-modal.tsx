@@ -1,8 +1,14 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
-import { FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi'
+import {
+  FiChevronLeft,
+  FiChevronRight,
+  FiChevronsLeft,
+  FiChevronsRight,
+  FiX,
+} from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
@@ -23,6 +29,41 @@ interface DatePickerModalProps {
 
 const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토']
 
+/** 일요일=0, 토요일=6 컬럼 구분 — 한국 달력 관습(일 빨강·토 파랑). */
+function weekendKind(weekday: number): 'sun' | 'sat' | undefined {
+  if (weekday === 0) return 'sun'
+  if (weekday === 6) return 'sat'
+  return undefined
+}
+
+/**
+ * year/month/day 정수로 *정확한* Date 생성.
+ *
+ * `new Date(50, 0, 1)`은 50을 1950으로 해석하는 2자리 연도 함정이 있어, 고대(1~99)·
+ * 음수(BC) 연도에서 요일·선택 비교가 틀어진다. setFullYear는 연도를 곧이곧대로 잡으므로
+ * 모든 연도(BC 포함)에서 정확하다.
+ */
+function makeDate(year: number, month: number, day: number): Date {
+  const date = new Date()
+  date.setHours(0, 0, 0, 0)
+  date.setFullYear(year, month, day)
+  return date
+}
+
+/** ISO(음수 BC 포함) 문자열 → Date. 실패 시 null. */
+function parseFlexibleDate(value?: string | null): Date | null {
+  if (!value) return null
+  const neg = value.startsWith('-')
+  const body = neg ? value.slice(1) : value
+  const match = body.match(/^(\d{1,6})-(\d{1,2})-(\d{1,2})/)
+  if (match) {
+    const year = parseInt(match[1], 10) * (neg ? -1 : 1)
+    return makeDate(year, parseInt(match[2], 10) - 1, parseInt(match[3], 10))
+  }
+  const fallback = new Date(value)
+  return Number.isNaN(fallback.getTime()) ? null : fallback
+}
+
 export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   isOpen,
   onClose,
@@ -42,39 +83,102 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   const [yearInputValue, setYearInputValue] = useState('2024')
   const [monthInputValue, setMonthInputValue] = useState('1')
   const [dayInputValue, setDayInputValue] = useState('1')
+  /** 키보드 로빙 포커스 대상 일(day). */
+  const [focusedDay, setFocusedDay] = useState(1)
+  /** '선택 적용' 시 범위 밖 입력에 대한 필드별 안내. */
+  const [inputError, setInputError] = useState<{
+    field: 'year' | 'month' | 'day'
+    message: string
+  } | null>(null)
 
-  const getDaysInMonth = (y: number, m: number) =>
-    new Date(y, m + 1, 0).getDate()
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const focusedCellRef = useRef<HTMLButtonElement | null>(null)
+  /** arrow 키 이동 후에만 day 셀로 포커스를 옮긴다(마우스/타이핑 땐 X). */
+  const shouldFocusDayRef = useRef(false)
+
+  const getDaysInMonth = (year: number, month: number) =>
+    makeDate(year, month + 1, 0).getDate()
 
   useEffect(() => {
     if (isOpen) {
-      const date = initialDate ? new Date(initialDate) : new Date()
-      if (!isNaN(date.getTime())) {
-        setSelectedDate(date)
-        const year = date.getFullYear()
-        const absYear = Math.abs(year)
-        setViewYear(absYear)
-        setYearInputValue(absYear.toString())
-        setIsBCE(year < 0)
-        setViewMonth(date.getMonth())
-        setMonthInputValue(String(date.getMonth() + 1))
-        setDayInputValue(String(date.getDate()))
-      }
+      const date = parseFlexibleDate(initialDate) ?? new Date()
+      setSelectedDate(date)
+      const year = date.getFullYear()
+      const absYear = Math.abs(year)
+      setViewYear(absYear)
+      setYearInputValue(absYear.toString())
+      setIsBCE(year < 0)
+      setViewMonth(date.getMonth())
+      setMonthInputValue(String(date.getMonth() + 1))
+      setDayInputValue(String(date.getDate()))
+      setFocusedDay(date.getDate())
+      setInputError(null)
     }
   }, [isOpen, initialDate])
 
+  /* 열림: 포커스를 모달로 이동 + Escape 닫기 + Tab 트랩. 닫힘: 직전 포커스 복귀. */
+  useEffect(() => {
+    if (!isOpen) return
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    containerRef.current?.focus()
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab' || !containerRef.current) return
+      const focusables = containerRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]):not([tabindex="-1"]), input:not([tabindex="-1"]), [tabindex="0"]',
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKey, true)
+    return () => {
+      document.removeEventListener('keydown', handleKey, true)
+      previouslyFocused?.focus?.()
+    }
+  }, [isOpen, onClose])
+
+  /* arrow 이동 후 해당 day 버튼으로 실제 포커스 이동. */
+  useEffect(() => {
+    if (shouldFocusDayRef.current && focusedCellRef.current) {
+      focusedCellRef.current.focus()
+      shouldFocusDayRef.current = false
+    }
+  }, [focusedDay, viewMonth, viewYear, isBCE])
+
   if (!isOpen) return null
 
+  const actualYear = isBCE ? -viewYear : viewYear
+  const daysInCurrentMonth = getDaysInMonth(actualYear, viewMonth)
+  const focusDay = Math.min(focusedDay, daysInCurrentMonth)
+  /* min/max는 렌더당 한 번만 파싱 — isDateValid가 날짜 셀마다 재파싱하지 않도록. */
+  const minBound = parseFlexibleDate(minDate)
+  const maxBound = parseFlexibleDate(maxDate)
+
   const handleYearInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputError(null)
     const value = e.target.value.replace(/\D/g, '')
     setYearInputValue(value)
     const year = parseInt(value, 10)
     if (!isNaN(year) && year >= 1 && year <= 9999) {
       setViewYear(year)
-      const lastDay = getDaysInMonth(year, viewMonth)
-      const d = Math.min(selectedDate.getDate(), lastDay)
-      setDayInputValue(String(d))
-      setSelectedDate(new Date(isBCE ? -year : year, viewMonth, d))
+      const lastDay = getDaysInMonth(isBCE ? -year : year, viewMonth)
+      const clampedDay = Math.min(selectedDate.getDate(), lastDay)
+      setDayInputValue(String(clampedDay))
+      setSelectedDate(makeDate(isBCE ? -year : year, viewMonth, clampedDay))
     }
   }
 
@@ -93,10 +197,10 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     if (newYear >= 1 && newYear <= 9999) {
       setViewYear(newYear)
       setYearInputValue(newYear.toString())
-      const lastDay = getDaysInMonth(newYear, viewMonth)
-      const d = Math.min(selectedDate.getDate(), lastDay)
-      setDayInputValue(String(d))
-      setSelectedDate(new Date(isBCE ? -newYear : newYear, viewMonth, d))
+      const lastDay = getDaysInMonth(isBCE ? -newYear : newYear, viewMonth)
+      const clampedDay = Math.min(selectedDate.getDate(), lastDay)
+      setDayInputValue(String(clampedDay))
+      setSelectedDate(makeDate(isBCE ? -newYear : newYear, viewMonth, clampedDay))
     }
   }
 
@@ -106,15 +210,16 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   }
 
   const handleMonthInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputError(null)
     const value = e.target.value.replace(/\D/g, '')
     setMonthInputValue(value)
     const num = parseInt(value, 10)
     if (!isNaN(num) && num >= 1 && num <= 12) {
       setViewMonth(num - 1)
-      const lastDay = getDaysInMonth(viewYear, num - 1)
-      const d = Math.min(selectedDate.getDate(), lastDay)
-      setDayInputValue(String(d))
-      setSelectedDate(new Date(isBCE ? -viewYear : viewYear, num - 1, d))
+      const lastDay = getDaysInMonth(actualYear, num - 1)
+      const clampedDay = Math.min(selectedDate.getDate(), lastDay)
+      setDayInputValue(String(clampedDay))
+      setSelectedDate(makeDate(actualYear, num - 1, clampedDay))
     }
   }
 
@@ -128,18 +233,20 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   }
 
   const handleDayInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputError(null)
     const value = e.target.value.replace(/\D/g, '')
     setDayInputValue(value)
     const num = parseInt(value, 10)
-    const lastDay = getDaysInMonth(viewYear, viewMonth)
+    const lastDay = getDaysInMonth(actualYear, viewMonth)
     if (!isNaN(num) && num >= 1 && num <= lastDay) {
-      setSelectedDate(new Date(isBCE ? -viewYear : viewYear, viewMonth, num))
+      setSelectedDate(makeDate(actualYear, viewMonth, num))
+      setFocusedDay(num)
     }
   }
 
   const handleDayInputBlur = () => {
     const num = parseInt(dayInputValue, 10)
-    const lastDay = getDaysInMonth(viewYear, viewMonth)
+    const lastDay = getDaysInMonth(actualYear, viewMonth)
     if (isNaN(num) || num < 1 || num > lastDay) {
       setDayInputValue(String(Math.min(selectedDate.getDate(), lastDay)))
     } else {
@@ -166,58 +273,128 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
 
   const handleDateSelect = (day: number) => {
     playClickSound()
-    setSelectedDate(new Date(isBCE ? -viewYear : viewYear, viewMonth, day))
+    setSelectedDate(makeDate(actualYear, viewMonth, day))
     setDayInputValue(String(day))
+    setFocusedDay(day)
 
-    const actualYear = isBCE ? -viewYear : viewYear
-    let formatted: string
     const absYear = Math.abs(actualYear)
     const yearStr = absYear.toString().padStart(4, '0')
     const monthStr = String(viewMonth + 1).padStart(2, '0')
     const dayStr = String(day).padStart(2, '0')
-
-    if (actualYear < 0) {
-      formatted = `-${yearStr}-${monthStr}-${dayStr}`
-    } else {
-      formatted = `${yearStr}-${monthStr}-${dayStr}`
-    }
+    const formatted =
+      actualYear < 0
+        ? `-${yearStr}-${monthStr}-${dayStr}`
+        : `${yearStr}-${monthStr}-${dayStr}`
 
     onSelect(formatted)
     onClose()
   }
 
   const applyTypedDate = () => {
-    const y = parseInt(yearInputValue, 10)
-    const m = parseInt(monthInputValue, 10)
-    const d = parseInt(dayInputValue, 10)
-    if (isNaN(y) || y < 1 || y > 9999) return
-    if (isNaN(m) || m < 1 || m > 12) return
-    const lastDay = getDaysInMonth(y, m - 1)
-    if (isNaN(d) || d < 1 || d > lastDay) return
-    const actualYear = isBCE ? -y : y
-    const yearStr = y.toString().padStart(4, '0')
-    const monthStr = String(m).padStart(2, '0')
-    const dayStr = String(d).padStart(2, '0')
-    const formatted =
-      actualYear < 0
-        ? `-${yearStr}-${monthStr}-${dayStr}`
-        : `${yearStr}-${monthStr}-${dayStr}`
+    const year = parseInt(yearInputValue, 10)
+    const month = parseInt(monthInputValue, 10)
+    const day = parseInt(dayInputValue, 10)
+    if (isNaN(year) || year < 1 || year > 9999) {
+      setInputError({ field: 'year', message: '년도는 1~9999 사이여야 합니다.' })
+      return
+    }
+    if (isNaN(month) || month < 1 || month > 12) {
+      setInputError({ field: 'month', message: '월은 1~12 사이여야 합니다.' })
+      return
+    }
+    const lastDay = getDaysInMonth(isBCE ? -year : year, month - 1)
+    if (isNaN(day) || day < 1 || day > lastDay) {
+      setInputError({ field: 'day', message: `일은 1~${lastDay} 사이여야 합니다.` })
+      return
+    }
+    setInputError(null)
+    const yearStr = year.toString().padStart(4, '0')
+    const monthStr = String(month).padStart(2, '0')
+    const dayStr = String(day).padStart(2, '0')
+    const formatted = isBCE
+      ? `-${yearStr}-${monthStr}-${dayStr}`
+      : `${yearStr}-${monthStr}-${dayStr}`
     onSelect(formatted)
     onClose()
   }
 
+  const goToToday = () => {
+    playClickSound()
+    setInputError(null)
+    const today = new Date()
+    setIsBCE(false)
+    setViewYear(today.getFullYear())
+    setYearInputValue(String(today.getFullYear()))
+    setViewMonth(today.getMonth())
+    setMonthInputValue(String(today.getMonth() + 1))
+    setDayInputValue(String(today.getDate()))
+    setFocusedDay(today.getDate())
+  }
+
+  /** 달력의 어떤 날짜로 *뷰·포커스*를 동기화(선택은 X). 음수 연도/월·일 오버플로 정규화. */
+  const syncViewToDate = (date: Date) => {
+    const year = date.getFullYear()
+    setIsBCE(year < 0)
+    setViewYear(Math.abs(year))
+    setYearInputValue(Math.abs(year).toString())
+    setViewMonth(date.getMonth())
+    setMonthInputValue(String(date.getMonth() + 1))
+    setFocusedDay(date.getDate())
+    shouldFocusDayRef.current = true
+  }
+
+  const handleGridKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    switch (e.key) {
+      case 'ArrowRight':
+        syncViewToDate(makeDate(actualYear, viewMonth, focusDay + 1))
+        break
+      case 'ArrowLeft':
+        syncViewToDate(makeDate(actualYear, viewMonth, focusDay - 1))
+        break
+      case 'ArrowDown':
+        syncViewToDate(makeDate(actualYear, viewMonth, focusDay + 7))
+        break
+      case 'ArrowUp':
+        syncViewToDate(makeDate(actualYear, viewMonth, focusDay - 7))
+        break
+      case 'PageDown': {
+        const next = makeDate(actualYear, viewMonth + 1, 1)
+        const dim = getDaysInMonth(next.getFullYear(), next.getMonth())
+        syncViewToDate(makeDate(next.getFullYear(), next.getMonth(), Math.min(focusDay, dim)))
+        break
+      }
+      case 'PageUp': {
+        const prev = makeDate(actualYear, viewMonth - 1, 1)
+        const dim = getDaysInMonth(prev.getFullYear(), prev.getMonth())
+        syncViewToDate(makeDate(prev.getFullYear(), prev.getMonth(), Math.min(focusDay, dim)))
+        break
+      }
+      case 'Home':
+        syncViewToDate(makeDate(actualYear, viewMonth, 1))
+        break
+      case 'End':
+        syncViewToDate(makeDate(actualYear, viewMonth, daysInCurrentMonth))
+        break
+      case 'Enter':
+      case ' ':
+        if (isDateValid(focusDay)) handleDateSelect(focusDay)
+        break
+      default:
+        return
+    }
+    e.preventDefault()
+  }
+
   const isDateValid = (day: number | null): boolean => {
     if (day === null) return false
-    if (isBCE) return true
-    const date = new Date(viewYear, viewMonth, day)
-    if (minDate && date < new Date(minDate)) return false
-    if (maxDate && date > new Date(maxDate)) return false
+    const candidate = makeDate(actualYear, viewMonth, day)
+    if (minBound && candidate < minBound) return false
+    if (maxBound && candidate > maxBound) return false
     return true
   }
 
   const isDateSelected = (day: number | null): boolean => {
     if (day === null) return false
-    const actualYear = isBCE ? -viewYear : viewYear
     return (
       selectedDate.getFullYear() === actualYear &&
       selectedDate.getMonth() === viewMonth &&
@@ -226,8 +403,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   }
 
   const isToday = (day: number | null): boolean => {
-    if (day === null) return false
-    if (isBCE) return false
+    if (day === null || isBCE) return false
     const today = new Date()
     return (
       today.getFullYear() === viewYear &&
@@ -236,43 +412,53 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     )
   }
 
+  const dayAriaLabel = (day: number): string =>
+    `${isBCE ? '기원전 ' : ''}${viewYear}년 ${viewMonth + 1}월 ${day}일`
+
   const getCalendarDays = (): (number | null)[] => {
-    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
-    const firstDay = new Date(viewYear, viewMonth, 1).getDay()
-    const days: (number | null)[] = Array(firstDay).fill(null)
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i)
-    }
+    const firstWeekday = makeDate(actualYear, viewMonth, 1).getDay()
+    const days: (number | null)[] = Array(firstWeekday).fill(null)
+    for (let i = 1; i <= daysInCurrentMonth; i++) days.push(i)
     return days
   }
 
   const modal = (
     <Overlay onClick={onClose}>
-      <ModalContainer onClick={(e) => e.stopPropagation()}>
+      <ModalContainer
+        ref={containerRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+      >
         <ModalHeader>
           <ModalTitle>{title}</ModalTitle>
-          <CloseButton onClick={onClose}>
-            <FiX size={20} />
+          <CloseButton onClick={onClose} aria-label="닫기">
+            <FiX size={18} />
           </CloseButton>
         </ModalHeader>
 
-        <ModalContent>
-          <LeftPanel>
-            <SettingSection>
-              <SettingLabel>기원</SettingLabel>
-              <EraSelector>
-                <EraButton $isSelected={!isBCE} onClick={toggleEra}>
-                  AD
-                </EraButton>
-                <EraButton $isSelected={isBCE} onClick={toggleEra}>
-                  BC
-                </EraButton>
-              </EraSelector>
-            </SettingSection>
-
-            <SettingSection>
-              <SettingLabel>날짜 입력</SettingLabel>
-              <YearMonthDayRow>
+        <Body>
+          <TopControls>
+            <EraSelector>
+              <EraButton
+                $isSelected={!isBCE}
+                onClick={toggleEra}
+                aria-pressed={!isBCE}
+              >
+                AD
+              </EraButton>
+              <EraButton
+                $isSelected={isBCE}
+                onClick={toggleEra}
+                aria-pressed={isBCE}
+              >
+                BC
+              </EraButton>
+            </EraSelector>
+            <InputGroup>
+              <UnitField>
                 <ShortInput
                   type="text"
                   inputMode="numeric"
@@ -280,9 +466,15 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                   onChange={handleYearInputChange}
                   onBlur={handleYearInputBlur}
                   onKeyDown={(e) => e.key === 'Enter' && applyTypedDate()}
-                  placeholder="년도"
-                  style={{ flex: 1.2 }}
+                  placeholder="년"
+                  aria-label="년도"
+                  aria-invalid={inputError?.field === 'year'}
+                  $invalid={inputError?.field === 'year'}
+                  style={{ width: 58 }}
                 />
+                <Unit>년</Unit>
+              </UnitField>
+              <UnitField>
                 <ShortInput
                   type="text"
                   inputMode="numeric"
@@ -291,9 +483,15 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                   onBlur={handleMonthInputBlur}
                   onKeyDown={(e) => e.key === 'Enter' && applyTypedDate()}
                   placeholder="월"
+                  aria-label="월"
+                  aria-invalid={inputError?.field === 'month'}
+                  $invalid={inputError?.field === 'month'}
                   maxLength={2}
-                  style={{ width: 48 }}
+                  style={{ width: 36 }}
                 />
+                <Unit>월</Unit>
+              </UnitField>
+              <UnitField>
                 <ShortInput
                   type="text"
                   inputMode="numeric"
@@ -302,59 +500,99 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
                   onBlur={handleDayInputBlur}
                   onKeyDown={(e) => e.key === 'Enter' && applyTypedDate()}
                   placeholder="일"
+                  aria-label="일"
+                  aria-invalid={inputError?.field === 'day'}
+                  $invalid={inputError?.field === 'day'}
                   maxLength={2}
-                  style={{ width: 48 }}
+                  style={{ width: 36 }}
                 />
-              </YearMonthDayRow>
-            </SettingSection>
+                <Unit>일</Unit>
+              </UnitField>
+            </InputGroup>
+          </TopControls>
 
-            <ApplyDateButton
+          {inputError && (
+            <InputErrorText role="alert">{inputError.message}</InputErrorText>
+          )}
+
+          <CalendarHeader>
+            <NavButton onClick={() => handleYearChange(-1)} aria-label="이전 해">
+              <FiChevronsLeft size={18} />
+            </NavButton>
+            <NavButton onClick={() => handleMonthChange(-1)} aria-label="이전 달">
+              <FiChevronLeft size={18} />
+            </NavButton>
+            <CurrentDateDisplay>
+              <DateDisplayText>
+                {isBCE && <EraTag>BC</EraTag>}
+                {viewYear}년 {viewMonth + 1}월
+              </DateDisplayText>
+            </CurrentDateDisplay>
+            <NavButton onClick={() => handleMonthChange(1)} aria-label="다음 달">
+              <FiChevronRight size={18} />
+            </NavButton>
+            <NavButton onClick={() => handleYearChange(1)} aria-label="다음 해">
+              <FiChevronsRight size={18} />
+            </NavButton>
+          </CalendarHeader>
+
+          <CalendarGrid
+            role="grid"
+            aria-label="날짜 선택 달력"
+            onKeyDown={handleGridKeyDown}
+          >
+            {DAY_NAMES.map((day, index) => (
+              <DayNameCell key={day} $weekend={weekendKind(index)}>
+                {day}
+              </DayNameCell>
+            ))}
+            {getCalendarDays().map((day, index) => {
+              if (day === null) return <EmptyCell key={index} aria-hidden />
+              const selected = isDateSelected(day)
+              const valid = isDateValid(day)
+              const today = isToday(day)
+              return (
+                <DayCell
+                  key={index}
+                  ref={day === focusDay ? focusedCellRef : undefined}
+                  type="button"
+                  role="gridcell"
+                  tabIndex={day === focusDay ? 0 : -1}
+                  $isDisabled={!valid}
+                  $isSelected={selected}
+                  $isToday={today}
+                  $weekend={weekendKind(index % 7)}
+                  aria-label={dayAriaLabel(day)}
+                  aria-selected={selected}
+                  aria-current={today ? 'date' : undefined}
+                  aria-disabled={!valid}
+                  onClick={() => {
+                    if (!valid) return
+                    setFocusedDay(day)
+                    handleDateSelect(day)
+                  }}
+                >
+                  {day}
+                </DayCell>
+              )
+            })}
+          </CalendarGrid>
+
+          <Footer>
+            <TodayButton type="button" onClick={goToToday}>
+              오늘
+            </TodayButton>
+            <ApplyButton
               type="button"
               onClick={() => {
                 playClickSound()
                 applyTypedDate()
               }}
             >
-              입력한 날짜로 선택
-            </ApplyDateButton>
-          </LeftPanel>
-
-          <RightPanel>
-            <CalendarHeader>
-              <NavButton onClick={() => handleMonthChange(-1)}>
-                <FiChevronLeft size={18} />
-              </NavButton>
-              <CurrentDateDisplay>
-                <DateDisplayText>
-                  {isBCE && <EraTag>BC</EraTag>}
-                  {viewYear}년 {viewMonth + 1}월
-                </DateDisplayText>
-              </CurrentDateDisplay>
-              <NavButton onClick={() => handleMonthChange(1)}>
-                <FiChevronRight size={18} />
-              </NavButton>
-            </CalendarHeader>
-
-            <CalendarGrid>
-              {DAY_NAMES.map((day) => (
-                <DayNameCell key={day}>{day}</DayNameCell>
-              ))}
-              {getCalendarDays().map((day, index) => (
-                <DayCell
-                  key={index}
-                  $isDisabled={!isDateValid(day)}
-                  $isSelected={isDateSelected(day)}
-                  $isToday={isToday(day)}
-                  onClick={() =>
-                    day && isDateValid(day) && handleDateSelect(day)
-                  }
-                >
-                  {day}
-                </DayCell>
-              ))}
-            </CalendarGrid>
-          </RightPanel>
-        </ModalContent>
+              선택 적용
+            </ApplyButton>
+          </Footer>
+        </Body>
       </ModalContainer>
     </Overlay>
   )
@@ -376,7 +614,10 @@ const Overlay = styled.div`
   align-items: center;
   justify-content: center;
   z-index: ${Z_INDEX.MODAL_OVERLAY};
-  animation: fadeIn 0.2s ease;
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: fadeIn 0.2s ease;
+  }
 
   @keyframes fadeIn {
     from {
@@ -398,18 +639,22 @@ const ModalContainer = styled.div`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
-  border-radius: 20px;
+  border-radius: 18px;
   box-shadow: ${({ theme }) =>
     theme.mode === 'dark'
       ? '0 8px 32px rgba(0,0,0,0.5)'
-      : '0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04)'};
-  width: 90%;
-  max-width: 750px;
-  animation: slideUp 0.3s ease;
+      : '0 12px 40px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.04)'};
+  width: 92%;
+  max-width: 440px;
+  outline: none;
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: slideUp 0.26s ease;
+  }
 
   @keyframes slideUp {
     from {
-      transform: translateY(20px);
+      transform: translateY(16px);
       opacity: 0;
     }
     to {
@@ -423,28 +668,28 @@ const ModalHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 28px;
+  padding: 16px 20px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const ModalTitle = styled.h3`
   margin: 0;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
 `
 
 const CloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
-  border-radius: 10px;
+  border-radius: 9px;
   cursor: pointer;
   transition:
     background 0.2s ease,
@@ -456,51 +701,33 @@ const CloseButton = styled.button`
   }
 `
 
-const ModalContent = styled.div`
-  display: flex;
-  min-height: 420px;
-`
-
-const LeftPanel = styled.div`
-  flex: 0 0 260px;
-  padding: 24px 20px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border-right: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 0 0 0 20px;
-`
-
-const RightPanel = styled.div`
-  flex: 1;
-  padding: 24px 28px;
+const Body = styled.div`
   display: flex;
   flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 18px;
 `
 
-const SettingSection = styled.div`
-  margin-bottom: 24px;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-`
-
-const SettingLabel = styled.div`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  margin-bottom: 10px;
+const TopControls = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
 `
 
 const EraSelector = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-radius: 10px;
 `
 
 const EraButton = styled.button<{ $isSelected: boolean }>`
-  padding: 12px;
-  font-size: 14px;
-  font-weight: 600;
+  padding: 6px 13px;
+  font-size: 13px;
+  font-weight: 700;
   color: ${({ $isSelected, theme }) =>
     $isSelected ? theme.colors.text.primary : theme.colors.text.secondary};
   background: ${({ $isSelected, theme }) =>
@@ -509,55 +736,59 @@ const EraButton = styled.button<{ $isSelected: boolean }>`
         ? 'rgba(255,255,255,0.12)'
         : '#fff'
       : 'transparent'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 12px;
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
   transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    color 0.2s ease;
+    background 0.18s ease,
+    color 0.18s ease;
   box-shadow: ${({ $isSelected }) =>
-    $isSelected ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none'};
+    $isSelected ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'};
 
   &:hover {
-    background: ${({ $isSelected, theme }) =>
-      $isSelected
-        ? theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.15)'
-          : '#fff'
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.06)'
-          : 'rgba(255,255,255,0.6)'};
-    border-color: ${({ theme }) => theme.colors.border.medium};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
-const YearMonthDayRow = styled.div`
+const InputGroup = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: nowrap;
+  gap: 8px;
 `
 
-const ShortInput = styled.input`
-  width: 100%;
-  padding: 12px 16px;
-  font-size: 14px;
+const UnitField = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+`
+
+const Unit = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ShortInput = styled.input<{ $invalid?: boolean }>`
+  padding: 8px 6px;
+  font-size: 13.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 12px;
+  border: 1px solid
+    ${({ $invalid, theme }) =>
+      $invalid ? theme.colors.error : theme.colors.border.default};
+  border-radius: 8px;
   outline: none;
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
   text-align: center;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
 
   &:focus {
-    border-color: #4f46e5;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.08);
+    border-color: ${({ $invalid, theme }) =>
+      $invalid ? theme.colors.error : theme.colors.primary};
+    box-shadow: ${({ theme }) => theme.colors.focusRing?.primary ?? 'none'};
   }
 
   &::placeholder {
@@ -565,54 +796,48 @@ const ShortInput = styled.input`
   }
 `
 
-const ApplyDateButton = styled.button`
-  margin-top: 16px;
-  width: 100%;
-  padding: 12px 24px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #fff;
-  background: #6366f1;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
-
-  &:hover {
-    background: #4f46e5;
-  }
+const InputErrorText = styled.p`
+  margin: -4px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.error};
 `
 
 const CalendarHeader = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
+  gap: 2px;
 `
 
 const NavButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
   border: none;
-  background: ${({ theme }) => theme.colors.background.tertiary};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
-  border-radius: 12px;
+  border-radius: 9px;
   cursor: pointer;
   transition:
-    background 0.2s ease,
-    color 0.2s ease;
+    background 0.18s ease,
+    color 0.18s ease;
 
   &:hover {
-    background: rgba(79, 70, 229, 0.08);
-    color: #4f46e5;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.primary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
   }
 `
 
 const CurrentDateDisplay = styled.div`
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -622,13 +847,13 @@ const DateDisplayText = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const EraTag = styled.span`
-  padding: 4px 8px;
+  padding: 3px 7px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(220,38,38,0.15)' : '#fef2f2'};
   color: #dc2626;
@@ -640,70 +865,126 @@ const EraTag = styled.span`
 const CalendarGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  flex: 1;
+  gap: 3px;
 `
 
-const DayNameCell = styled.div`
+const DayNameCell = styled.div<{ $weekend?: 'sun' | 'sat' }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
+  height: 30px;
   font-size: 11px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  text-transform: uppercase;
+  color: ${({ $weekend, theme }) =>
+    $weekend === 'sun'
+      ? '#dc2626'
+      : $weekend === 'sat'
+        ? '#2563eb'
+        : theme.colors.text.tertiary};
+`
+
+const EmptyCell = styled.div`
+  height: 40px;
 `
 
 const DayCell = styled.button<{
   $isDisabled: boolean
   $isSelected: boolean
   $isToday: boolean
+  $weekend?: 'sun' | 'sat'
 }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 42px;
+  height: 40px;
   border: none;
-  border-radius: 12px;
+  border-radius: 11px;
   font-size: 14px;
-  font-weight: ${({ $isSelected }) => ($isSelected ? '600' : '500')};
-  color: ${({ $isDisabled, $isSelected, theme }) =>
+  font-weight: ${({ $isSelected, $isToday }) =>
+    $isSelected || $isToday ? '700' : '500'};
+  color: ${({ $isDisabled, $isSelected, $isToday, $weekend, theme }) =>
     $isDisabled
       ? theme.colors.border.default
       : $isSelected
         ? '#fff'
-        : theme.colors.text.primary};
-  background: ${({ $isSelected }) => ($isSelected ? '#4f46e5' : 'transparent')};
+        : $isToday
+          ? theme.colors.primary
+          : $weekend === 'sun'
+            ? '#dc2626'
+            : $weekend === 'sat'
+              ? '#2563eb'
+              : theme.colors.text.primary};
+  background: ${({ $isSelected, theme }) =>
+    $isSelected ? theme.colors.primary : 'transparent'};
+  /* 오늘 = 채움 대신 *링*(테두리)으로, 선택(채움)과 위계를 분리. */
+  box-shadow: ${({ $isToday, $isSelected, theme }) =>
+    $isToday && !$isSelected
+      ? `inset 0 0 0 1.5px ${theme.colors.primary}`
+      : 'none'};
   cursor: ${({ $isDisabled }) => ($isDisabled ? 'not-allowed' : 'pointer')};
   transition:
     background 0.15s ease,
-    color 0.15s ease;
-  position: relative;
-
-  ${({ $isToday, $isSelected, theme }) =>
-    $isToday &&
-    !$isSelected &&
-    `
-    background: ${theme.mode === 'dark' ? 'rgba(251,191,36,0.15)' : '#fef3c7'};
-    color: #d97706;
-    font-weight: 600;
-  `}
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 
   &:hover:not(:disabled) {
-    background: ${({ $isSelected, $isDisabled, $isToday }) =>
+    background: ${({ $isSelected, $isDisabled, theme }) =>
       $isSelected
-        ? '#4338ca'
+        ? theme.colors.primary
         : $isDisabled
           ? 'transparent'
-          : $isToday
-            ? undefined
-            : 'rgba(79, 70, 229, 0.08)'};
-    color: ${({ $isSelected, $isDisabled }) =>
-      $isSelected && !$isDisabled ? '#fff' : undefined};
+          : theme.colors.background.tertiary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
   }
 
   &:active:not(:disabled) {
-    transform: scale(0.97);
+    transform: scale(0.96);
+  }
+`
+
+const Footer = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+`
+
+const TodayButton = styled.button`
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const ApplyButton = styled.button`
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: ${({ theme }) => theme.colors.primary};
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: opacity 0.18s ease;
+
+  &:hover {
+    opacity: 0.9;
   }
 `
