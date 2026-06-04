@@ -10,6 +10,18 @@ import {
 
 export { EntityLinkSearchItemDto, EntityLinkSearchResponseDto }
 
+/** 인물 묶음 유형 한국어 라벨 (검색 결과 subtitle용) */
+const GROUP_TYPE_LABEL: Record<string, string> = {
+  GENERATION: '세대·코호트',
+  COHORT: '기수·동기',
+  FOUNDING: '창립·창건',
+  FACTION: '계파·파벌',
+  SCHOOL: '학파·사조',
+  CIRCLE: '동인·사단',
+  MOVEMENT: '운동·진영',
+  OTHER: '집단',
+}
+
 function displayPersonName(p: {
   name: string
   surname: string | null
@@ -59,6 +71,13 @@ export class EntityLinkSearchController {
       ],
     }
 
+    const groupWhere = {
+      AND: [
+        { name: { contains: term } },
+        ...(partyFilter ? [{ countryId: partyFilter }] : []),
+      ],
+    }
+
     const [
       persons,
       events,
@@ -67,6 +86,7 @@ export class EntityLinkSearchController {
       dynasties,
       militaryUnits,
       parties,
+      personGroups,
     ] = await Promise.all([
       this.prisma.person.findMany({
         where: {
@@ -83,6 +103,7 @@ export class EntityLinkSearchController {
           name: true,
           surname: true,
           birthDate: true,
+          profileImageUrl: true,
           country: { select: { defaultNameDisplayOrder: true, isoCode: true } },
         },
       }),
@@ -147,6 +168,12 @@ export class EntityLinkSearchController {
           countryId: true,
         },
       }),
+      this.prisma.personGroup.findMany({
+        where: groupWhere,
+        take: 6,
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, type: true, countryId: true },
+      }),
     ])
 
     const items: EntityLinkSearchItemDto[] = []
@@ -159,6 +186,7 @@ export class EntityLinkSearchController {
         subtitle: p.birthDate
           ? `${p.birthDate.getFullYear()}년`
           : undefined,
+        imageUrl: p.profileImageUrl ?? null,
       })
     }
     for (const e of events) {
@@ -211,6 +239,15 @@ export class EntityLinkSearchController {
         name: pp.name,
         subtitle: pp.shortName?.trim() || undefined,
         countryId: pp.countryId,
+      })
+    }
+    for (const grp of personGroups) {
+      items.push({
+        type: 'personGroup',
+        id: grp.id,
+        name: grp.name,
+        subtitle: GROUP_TYPE_LABEL[grp.type] ?? undefined,
+        countryId: grp.countryId,
       })
     }
 
