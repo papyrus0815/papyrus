@@ -378,6 +378,13 @@ export class PersonController {
     deathDay: number | null
     gender: string | null
     biography: string | null
+    biographySections: Array<{
+      id: string
+      title: string
+      content: string
+      order: number
+      sectionType: string | null
+    }>
     profileImageUrl: string | null
     regnalName: string | null
     templeName: string | null
@@ -510,6 +517,13 @@ export class PersonController {
       deathDay: person.deathDate ? person.deathDate.getDate() : null,
       gender: person.gender,
       biography: person.biography,
+      biographySections: (person.biographySections ?? []).map((s: any) => ({
+        id: s.id,
+        title: s.title ?? '',
+        content: s.content ?? '',
+        order: s.order ?? 0,
+        sectionType: s.sectionType ?? null,
+      })),
       profileImageUrl: person.profileImageUrl,
       regnalName: person.regnalName ?? null,
       templeName: person.templeName ?? null,
@@ -743,6 +757,7 @@ export class PersonController {
         marriageEndDate: s.marriageEndDate ? new Date(s.marriageEndDate) : undefined,
         note: s.note,
       })),
+      countryAffiliations: dto.countryAffiliations,
     }, accountId)
   }
 
@@ -823,6 +838,8 @@ export class PersonController {
         marriageEndDate: s.marriageEndDate ? new Date(s.marriageEndDate) : undefined,
         note: s.note,
       })),
+      countryAffiliations: dto.countryAffiliations,
+      sections: dto.sections,
     }, accountId)
   }
 
@@ -934,5 +951,108 @@ export class PersonController {
   @Post('awards')
   async addAward(@Body() dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto> {
     return this.personService.addAward(dto)
+  }
+
+  // ========================
+  // Career·학력·수상 삭제 엔드포인트
+  // ========================
+
+  /**
+   * 군인 경력 삭제
+   */
+  @Delete('careers/military/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteMilitaryCareer(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteMilitaryCareer(id)
+  }
+
+  /**
+   * 기업인 경력 삭제
+   */
+  @Delete('careers/business/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteBusinessCareer(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteBusinessCareer(id)
+  }
+
+  /**
+   * 학자 경력 삭제
+   */
+  @Delete('careers/academic/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteAcademicCareer(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteAcademicCareer(id)
+  }
+
+  /**
+   * 운동선수 경력 삭제
+   */
+  @Delete('careers/athlete/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteAthleteCareer(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteAthleteCareer(id)
+  }
+
+  /**
+   * 종교인 경력 삭제
+   */
+  @Delete('careers/religious/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteReligiousCareer(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteReligiousCareer(id)
+  }
+
+  /**
+   * 예술가 경력 삭제
+   */
+  @Delete('careers/artist/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteArtistCareer(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteArtistCareer(id)
+  }
+
+  /**
+   * 언론인 경력 삭제
+   */
+  @Delete('careers/media/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteMediaCareer(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteMediaCareer(id)
+  }
+
+  /**
+   * 법조인 경력 삭제
+   */
+  @Delete('careers/legal/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteLegalCareer(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteLegalCareer(id)
+  }
+
+  /**
+   * 의료인 경력 삭제
+   */
+  @Delete('careers/medical/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteMedicalCareer(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteMedicalCareer(id)
+  }
+
+  /**
+   * 학력 삭제
+   */
+  @Delete('educations/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteEducation(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteEducation(id)
+  }
+
+  /**
+   * 수상/훈장 삭제
+   */
+  @Delete('awards/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteAward(@Param('id') id: string): Promise<void> {
+    await this.personService.deleteAward(id)
   }
 }

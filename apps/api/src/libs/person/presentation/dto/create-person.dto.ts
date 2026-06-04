@@ -22,6 +22,75 @@ export class SpouseRelationDto {
 }
 
 /**
+ * 전기(생애 서술) 섹션 DTO (인물 생성/수정 시).
+ * EventSection 패턴 미러 — 저장 시 sections 배열을 통째로 delete-and-recreate.
+ */
+export class BiographySectionDto {
+  @IsString()
+  title!: string
+
+  @IsString()
+  content!: string
+
+  @IsOptional()
+  @IsNumber()
+  order?: number
+
+  @IsOptional()
+  @IsString()
+  sectionType?: string
+}
+
+/**
+ * 국가 소속 유형 (Prisma PersonCountryAffiliationType 미러)
+ */
+export enum CountryAffiliationType {
+  BIRTH_PLACE = 'BIRTH_PLACE',
+  CITIZENSHIP = 'CITIZENSHIP',
+  PRIMARY_RESIDENCE = 'PRIMARY_RESIDENCE',
+  SERVED = 'SERVED',
+  EXILE = 'EXILE',
+  OTHER = 'OTHER',
+}
+
+/**
+ * 국가 소속 DTO (인물 생성/수정 시).
+ * 주 국적(countryId)과 별개로 출생지·복무·망명·이중국적 등 다중 소속을 표현.
+ * 저장 시 (주 국적 priority 0 CITIZENSHIP 제외) 기존 소속을 통째로 delete-and-recreate.
+ * countryId·historicalCountryId 중 하나는 채워야 함.
+ */
+export class CountryAffiliationDto {
+  @IsEnum(CountryAffiliationType)
+  affiliationType!: CountryAffiliationType
+
+  @IsOptional()
+  @IsString()
+  countryId?: string
+
+  @IsOptional()
+  @IsString()
+  historicalCountryId?: string
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string
+
+  /** 우선순위 (낮을수록 우선, 0은 주 국적 슬롯이라 추가 소속은 1 이상 권장) */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  priority?: number
+
+  @IsOptional()
+  @IsString()
+  note?: string
+}
+
+/**
  * 기원 열거형
  */
 export enum Era {
@@ -421,4 +490,23 @@ export class CreatePersonDto {
   @ValidateNested({ each: true })
   @Type(() => SpouseRelationDto)
   spouseRelations?: SpouseRelationDto[]
+
+  /**
+   * 전기(생애 서술) 섹션 목록 (선택, 있으면 기존 삭제 후 일괄 반영)
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BiographySectionDto)
+  sections?: BiographySectionDto[]
+
+  /**
+   * 국가 소속 목록 (선택, 있으면 주 국적 외 소속을 통째로 반영).
+   * 주 국적(countryId)과 별개의 출생지·복무·망명·이중국적 등.
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CountryAffiliationDto)
+  countryAffiliations?: CountryAffiliationDto[]
 }

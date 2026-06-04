@@ -89,6 +89,16 @@ export interface CreatePersonData {
     marriageEndDate?: Date
     note?: string
   }>
+  /** 국가 소속(다중) — 주 국적 외 출생지·복무·망명·이중국적 등 */
+  countryAffiliations?: Array<{
+    affiliationType: string
+    countryId?: string
+    historicalCountryId?: string
+    startDate?: string
+    endDate?: string
+    priority?: number
+    note?: string
+  }>
   /** 등록 계정 ID (개인 정보 플랫폼) */
   accountId?: string
 }
@@ -147,6 +157,23 @@ export interface UpdatePersonData {
     marriageEndDate?: Date
     note?: string
   }>
+  /** 국가 소속(다중) — 주 국적 외 소속. 있으면 주 국적 외 전체 교체 */
+  countryAffiliations?: Array<{
+    affiliationType: string
+    countryId?: string
+    historicalCountryId?: string
+    startDate?: string
+    endDate?: string
+    priority?: number
+    note?: string
+  }>
+  /** 전기(생애 서술) 섹션 — 있으면 기존 전체 삭제 후 일괄 재생성(delete-and-recreate) */
+  sections?: Array<{
+    title: string
+    content: string
+    order?: number
+    sectionType?: string | null
+  }>
 }
 
 /**
@@ -167,6 +194,11 @@ export interface IPersonRepository {
    * 가문별 인물 목록 (person.dynastyId = dynastyId, accountId 무관)
    */
   findPersonsByDynastyId(dynastyId: string): Promise<PersonResponseDto[]>
+
+  /**
+   * 인물 ID 집합으로 인물 카드 목록 조회 (묶음 멤버 표시 등)
+   */
+  findPersonsByIds(ids: string[]): Promise<PersonResponseDto[]>
 
   /**
    * 해당 현대 국가 또는 연결된 역사적 국가에 소속(affiliation)이 있는 인물 조회
@@ -383,5 +415,18 @@ export interface IPersonRepository {
   deletePositionDefinition(id: string): Promise<void>
   addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto>
   addAward(dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto>
+
+  // Career·Education·Award 삭제
+  deleteMilitaryCareer(id: string): Promise<void>
+  deleteBusinessCareer(id: string): Promise<void>
+  deleteAcademicCareer(id: string): Promise<void>
+  deleteAthleteCareer(id: string): Promise<void>
+  deleteReligiousCareer(id: string): Promise<void>
+  deleteArtistCareer(id: string): Promise<void>
+  deleteMediaCareer(id: string): Promise<void>
+  deleteLegalCareer(id: string): Promise<void>
+  deleteMedicalCareer(id: string): Promise<void>
+  deleteEducation(id: string): Promise<void>
+  deleteAward(id: string): Promise<void>
   findAllCareers(personId: string): Promise<AllCareersResponseDto>
 }

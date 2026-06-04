@@ -553,15 +553,6 @@ export class PersonService {
   }
 
   /**
-   * 인물 통합 연보 타임라인 (자유 연보 + 참여 사건).
-   * - PersonLifeEvent (자유 서술형) 와 PersonEvent (참여 사건 + 인물 시점 role/note) 를
-   *   시간순 merge → kind 로 구분된 단일 배열 반환.
-   */
-  async findPersonLifeTimelineByPersonId(personId: string): Promise<any[]> {
-    return this.personRepository.findPersonLifeTimelineByPersonId(personId)
-  }
-
-  /**
    * 인물의 재임 기록만 조회 (수정 페이지 경력 로딩용)
    */
   async findTenuresByPersonId(personId: string): Promise<any[]> {
@@ -862,6 +853,50 @@ export class PersonService {
    */
   async addAward(dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto> {
     return this.personRepository.addAward(dto)
+  }
+
+  async deleteMilitaryCareer(id: string): Promise<void> {
+    return this.personRepository.deleteMilitaryCareer(id)
+  }
+
+  async deleteBusinessCareer(id: string): Promise<void> {
+    return this.personRepository.deleteBusinessCareer(id)
+  }
+
+  async deleteAcademicCareer(id: string): Promise<void> {
+    return this.personRepository.deleteAcademicCareer(id)
+  }
+
+  async deleteAthleteCareer(id: string): Promise<void> {
+    return this.personRepository.deleteAthleteCareer(id)
+  }
+
+  async deleteReligiousCareer(id: string): Promise<void> {
+    return this.personRepository.deleteReligiousCareer(id)
+  }
+
+  async deleteArtistCareer(id: string): Promise<void> {
+    return this.personRepository.deleteArtistCareer(id)
+  }
+
+  async deleteMediaCareer(id: string): Promise<void> {
+    return this.personRepository.deleteMediaCareer(id)
+  }
+
+  async deleteLegalCareer(id: string): Promise<void> {
+    return this.personRepository.deleteLegalCareer(id)
+  }
+
+  async deleteMedicalCareer(id: string): Promise<void> {
+    return this.personRepository.deleteMedicalCareer(id)
+  }
+
+  async deleteEducation(id: string): Promise<void> {
+    return this.personRepository.deleteEducation(id)
+  }
+
+  async deleteAward(id: string): Promise<void> {
+    return this.personRepository.deleteAward(id)
   }
 
   /**

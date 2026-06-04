@@ -106,6 +106,57 @@ const PERSON_INCLUDE_AFFILIATIONS_FOR_NAME: Prisma.PersonCountryAffiliationInclu
     },
   }
 
+/**
+ * 인물 카드(목록·스트립·묶음 멤버 등) 공통 include.
+ * mapToPersonResponse가 기대하는 국가/가문/직업/출생·사망지/재임/재위를 한 벌로 로드.
+ */
+const PERSON_CARD_INCLUDE = {
+  countryAffiliations: {
+    include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+  },
+  country: {
+    select: {
+      id: true,
+      name: true,
+      flagEmoji: true,
+      isoCode: true,
+      defaultNameDisplayOrder: true,
+    },
+  },
+  dynasty: { select: { id: true, name: true } },
+  job: { select: { id: true, title: true } },
+  birthCity: { select: { id: true, name: true } },
+  deathCity: { select: { id: true, name: true } },
+  birthAdminDivision: { select: { id: true, name: true } },
+  deathAdminDivision: { select: { id: true, name: true } },
+  GovernmentTenures: {
+    select: {
+      id: true,
+      positionType: true,
+      title: true,
+      startDate: true,
+      endDate: true,
+      positionDefinition: {
+        select: {
+          id: true,
+          title: true,
+          positionType: true,
+          category: { select: { id: true, name: true, nameEn: true } },
+          organization: { select: { id: true, name: true } },
+        },
+      },
+      country: { select: { id: true, name: true } },
+      historicalCountry: { select: { id: true, name: true } },
+    },
+    orderBy: { startDate: 'desc' as const },
+  },
+  sovereignReigns: {
+    select: { notes: true },
+    take: 1,
+    orderBy: { startDate: 'desc' as const },
+  },
+} satisfies Prisma.PersonInclude
+
 function resolveMandateSourceForCreate(
   dto: CreateGovernmentPositionTenureDto,
 ): TenureMandateSource {
@@ -139,6 +190,33 @@ const TENURE_ACHIEVEMENTS_INCLUDE = {
         id: true,
         title: true,
         description: true,
+        startDate: true,
+        endDate: true,
+        deletedAt: true,
+      },
+    },
+  },
+}
+
+/**
+ * `select` 컨텍스트(인물 상세 findByIdWithRelations)에서 재임·재위 업적을 함께 내려주기 위한 셀렉트.
+ * TENURE_ACHIEVEMENTS_INCLUDE와 동일한 데이터를 select 형태로 노출 — 인물 상세 카드에서 업적 열람·관리에 사용.
+ */
+const TENURE_ACHIEVEMENTS_SELECT = {
+  orderBy: [{ orderNum: 'asc' as const }, { startDate: 'asc' as const }],
+  select: {
+    id: true,
+    title: true,
+    description: true,
+    startDate: true,
+    endDate: true,
+    orderNum: true,
+    showOnEventsPage: true,
+    eventId: true,
+    event: {
+      select: {
+        id: true,
+        title: true,
         startDate: true,
         endDate: true,
         deletedAt: true,
@@ -579,51 +657,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       orderBy: {
         createdAt: 'desc',
       },
-      include: {
-        countryAffiliations: {
-          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
-        },
-        country: {
-          select: {
-            id: true,
-            name: true,
-            flagEmoji: true,
-            isoCode: true,
-            defaultNameDisplayOrder: true,
-          },
-        },
-        dynasty: { select: { id: true, name: true } },
-        job: { select: { id: true, title: true } },
-        birthCity: { select: { id: true, name: true } },
-        deathCity: { select: { id: true, name: true } },
-        birthAdminDivision: { select: { id: true, name: true } },
-        deathAdminDivision: { select: { id: true, name: true } },
-        GovernmentTenures: {
-          select: {
-            id: true,
-            positionType: true,
-            title: true,
-            startDate: true,
-            endDate: true,
-            positionDefinition: {
-              select: {
-                id: true,
-                title: true,
-                positionType: true,
-                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
-              },
-            },
-            country: { select: { id: true, name: true } },
-            historicalCountry: { select: { id: true, name: true } },
-          },
-          orderBy: { startDate: 'desc' },
-        },
-        sovereignReigns: {
-          select: { notes: true },
-          take: 1,
-          orderBy: { startDate: 'desc' as const },
-        },
-      },
+      include: PERSON_CARD_INCLUDE,
     })
     return persons.map((p) => this.mapToPersonResponse(p))
   }
@@ -636,51 +670,19 @@ export class PersonPrismaRepository implements IPersonRepository {
     const persons = await this.prisma.person.findMany({
       where: { countryId },
       orderBy: [{ name: 'asc' }, { surname: 'asc' }],
-      include: {
-        countryAffiliations: {
-          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
-        },
-        country: {
-          select: {
-            id: true,
-            name: true,
-            flagEmoji: true,
-            isoCode: true,
-            defaultNameDisplayOrder: true,
-          },
-        },
-        dynasty: { select: { id: true, name: true } },
-        job: { select: { id: true, title: true } },
-        birthCity: { select: { id: true, name: true } },
-        deathCity: { select: { id: true, name: true } },
-        birthAdminDivision: { select: { id: true, name: true } },
-        deathAdminDivision: { select: { id: true, name: true } },
-        GovernmentTenures: {
-          select: {
-            id: true,
-            positionType: true,
-            title: true,
-            startDate: true,
-            endDate: true,
-            positionDefinition: {
-              select: {
-                id: true,
-                title: true,
-                positionType: true,
-                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
-              },
-            },
-            country: { select: { id: true, name: true } },
-            historicalCountry: { select: { id: true, name: true } },
-          },
-          orderBy: { startDate: 'desc' },
-        },
-        sovereignReigns: {
-          select: { notes: true },
-          take: 1,
-          orderBy: { startDate: 'desc' as const },
-        },
-      },
+      include: PERSON_CARD_INCLUDE,
+    })
+    return persons.map((p) => this.mapToPersonResponse(p))
+  }
+
+  /**
+   * 인물 ID 집합으로 인물 카드 목록 (묶음 멤버 등). 입력 순서는 보장하지 않음.
+   */
+  async findPersonsByIds(ids: string[]): Promise<PersonResponseDto[]> {
+    if (ids.length === 0) return []
+    const persons = await this.prisma.person.findMany({
+      where: { id: { in: ids } },
+      include: PERSON_CARD_INCLUDE,
     })
     return persons.map((p) => this.mapToPersonResponse(p))
   }
@@ -692,52 +694,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     const persons = await this.prisma.person.findMany({
       where: { dynastyId },
       orderBy: [{ name: 'asc' }, { surname: 'asc' }],
-      include: {
-        countryAffiliations: {
-          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
-        },
-        country: {
-          select: {
-            id: true,
-            name: true,
-            flagEmoji: true,
-            isoCode: true,
-            defaultNameDisplayOrder: true,
-          },
-        },
-        dynasty: { select: { id: true, name: true } },
-        job: { select: { id: true, title: true } },
-        birthCity: { select: { id: true, name: true } },
-        deathCity: { select: { id: true, name: true } },
-        birthAdminDivision: { select: { id: true, name: true } },
-        deathAdminDivision: { select: { id: true, name: true } },
-        GovernmentTenures: {
-          select: {
-            id: true,
-            positionType: true,
-            title: true,
-            startDate: true,
-            endDate: true,
-            positionDefinition: {
-              select: {
-                id: true,
-                title: true,
-                positionType: true,
-                category: { select: { id: true, name: true, nameEn: true } },
-                organization: { select: { id: true, name: true } },
-              },
-            },
-            country: { select: { id: true, name: true } },
-            historicalCountry: { select: { id: true, name: true } },
-          },
-          orderBy: { startDate: 'desc' },
-        },
-        sovereignReigns: {
-          select: { notes: true },
-          take: 1,
-          orderBy: { startDate: 'desc' as const },
-        },
-      },
+      include: PERSON_CARD_INCLUDE,
     })
     return persons.map((p) => this.mapToPersonResponse(p))
   }
@@ -775,51 +732,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     const persons = await this.prisma.person.findMany({
       where: { id: { in: personIds } },
       orderBy: [{ name: 'asc' }, { surname: 'asc' }],
-      include: {
-        countryAffiliations: {
-          include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
-        },
-        country: {
-          select: {
-            id: true,
-            name: true,
-            flagEmoji: true,
-            isoCode: true,
-            defaultNameDisplayOrder: true,
-          },
-        },
-        dynasty: { select: { id: true, name: true } },
-        job: { select: { id: true, title: true } },
-        birthCity: { select: { id: true, name: true } },
-        deathCity: { select: { id: true, name: true } },
-        birthAdminDivision: { select: { id: true, name: true } },
-        deathAdminDivision: { select: { id: true, name: true } },
-        GovernmentTenures: {
-          select: {
-            id: true,
-            positionType: true,
-            title: true,
-            startDate: true,
-            endDate: true,
-            positionDefinition: {
-              select: {
-                id: true,
-                title: true,
-                positionType: true,
-                category: { select: { id: true, name: true, nameEn: true } }, organization: { select: { id: true, name: true } },
-              },
-            },
-            country: { select: { id: true, name: true } },
-            historicalCountry: { select: { id: true, name: true } },
-          },
-          orderBy: { startDate: 'desc' },
-        },
-        sovereignReigns: {
-          select: { notes: true },
-          take: 1,
-          orderBy: { startDate: 'desc' as const },
-        },
-      },
+      include: PERSON_CARD_INCLUDE,
     })
     return persons.map((p) => this.mapToPersonResponse(p))
   }
@@ -1462,6 +1375,7 @@ export class PersonPrismaRepository implements IPersonRepository {
                 election: { select: { id: true, name: true, pollDate: true } },
               },
             },
+            achievements: TENURE_ACHIEVEMENTS_SELECT,
           },
           orderBy: {
             startDate: Prisma.SortOrder.desc,
@@ -1480,6 +1394,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
             country: { select: { id: true, name: true } },
             historicalCountry: { select: { id: true, name: true } },
+            achievements: TENURE_ACHIEVEMENTS_SELECT,
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
         },
@@ -1489,6 +1404,10 @@ export class PersonPrismaRepository implements IPersonRepository {
             { sortOrder: Prisma.SortOrder.asc },
             { createdAt: Prisma.SortOrder.asc },
           ],
+        },
+        // 전기(생애 서술) 다중 섹션 — 상세 화면에서 order 순으로 렌더링
+        biographySections: {
+          orderBy: { order: Prisma.SortOrder.asc },
         },
         countryAffiliations: {
           include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
@@ -1644,6 +1563,8 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const spouseRelations = (sanitized as CreatePersonData).spouseRelations
     delete (sanitized as Record<string, unknown>).spouseRelations
+    const countryAffiliations = (sanitized as CreatePersonData).countryAffiliations
+    delete (sanitized as Record<string, unknown>).countryAffiliations
 
     const person = await this.prisma.person.create({
       data: sanitized as Parameters<PrismaService['person']['create']>[0]['data'],
@@ -1670,6 +1591,22 @@ export class PersonPrismaRepository implements IPersonRepository {
           priority: 0,
           historicalCountryId: mainHistoricalId,
         },
+      })
+    }
+
+    // 추가 국가 소속(다중) 일괄 생성 — 주 국적(countryId)과 별개
+    if (countryAffiliations?.length) {
+      await this.prisma.personCountryAffiliation.createMany({
+        data: countryAffiliations.map((a) => ({
+          personId: person.id,
+          affiliationType: a.affiliationType as any,
+          countryId: a.countryId || null,
+          historicalCountryId: a.historicalCountryId || null,
+          startDate: a.startDate ? new Date(a.startDate) : null,
+          endDate: a.endDate ? new Date(a.endDate) : null,
+          priority: a.priority ?? 1,
+          note: a.note || null,
+        })),
       })
     }
 
@@ -1730,6 +1667,10 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     const spouseRelations = (sanitized as UpdatePersonData).spouseRelations
     delete (sanitized as Record<string, unknown>).spouseRelations
+    const countryAffiliations = (sanitized as UpdatePersonData).countryAffiliations
+    delete (sanitized as Record<string, unknown>).countryAffiliations
+    const sections = (sanitized as UpdatePersonData).sections
+    delete (sanitized as Record<string, unknown>).sections
 
     const updateData = { ...sanitized } as Parameters<PrismaService['person']['update']>[0]['data']
 
@@ -1748,6 +1689,22 @@ export class PersonPrismaRepository implements IPersonRepository {
             marriageStartDate: s.marriageStartDate ?? null,
             marriageEndDate: s.marriageEndDate ?? null,
             note: s.note ?? null,
+          })),
+        })
+      }
+    }
+
+    // 전기(생애 서술) 섹션 — EventSection 패턴 미러: 통째 delete-and-recreate
+    if (sections !== undefined) {
+      await this.prisma.personSection.deleteMany({ where: { personId: id } })
+      if (sections.length) {
+        await this.prisma.personSection.createMany({
+          data: sections.map((s, idx) => ({
+            personId: id,
+            title: s.title,
+            content: s.content,
+            order: s.order ?? idx,
+            sectionType: s.sectionType ?? null,
           })),
         })
       }
@@ -1775,6 +1732,30 @@ export class PersonPrismaRepository implements IPersonRepository {
             priority: 0,
             historicalCountryId: mainHistoricalId,
           },
+        })
+      }
+    }
+
+    // 추가 국가 소속(다중) — 주 국적(priority 0 CITIZENSHIP)은 보존하고 나머지 전체 교체
+    if (countryAffiliations !== undefined) {
+      await this.prisma.personCountryAffiliation.deleteMany({
+        where: {
+          personId: id,
+          NOT: { affiliationType: 'CITIZENSHIP' as any, priority: 0 },
+        },
+      })
+      if (countryAffiliations.length) {
+        await this.prisma.personCountryAffiliation.createMany({
+          data: countryAffiliations.map((a) => ({
+            personId: id,
+            affiliationType: a.affiliationType as any,
+            countryId: a.countryId || null,
+            historicalCountryId: a.historicalCountryId || null,
+            startDate: a.startDate ? new Date(a.startDate) : null,
+            endDate: a.endDate ? new Date(a.endDate) : null,
+            priority: a.priority ?? 1,
+            note: a.note || null,
+          })),
         })
       }
     }
@@ -3653,6 +3634,50 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.mapToPersonAwardResponse(award)
   }
 
+  async deleteMilitaryCareer(id: string): Promise<void> {
+    await this.prisma.militaryCareer.delete({ where: { id } })
+  }
+
+  async deleteBusinessCareer(id: string): Promise<void> {
+    await this.prisma.businessCareer.delete({ where: { id } })
+  }
+
+  async deleteAcademicCareer(id: string): Promise<void> {
+    await this.prisma.academicCareer.delete({ where: { id } })
+  }
+
+  async deleteAthleteCareer(id: string): Promise<void> {
+    await this.prisma.athleteCareer.delete({ where: { id } })
+  }
+
+  async deleteReligiousCareer(id: string): Promise<void> {
+    await this.prisma.religiousCareer.delete({ where: { id } })
+  }
+
+  async deleteArtistCareer(id: string): Promise<void> {
+    await this.prisma.artistCareer.delete({ where: { id } })
+  }
+
+  async deleteMediaCareer(id: string): Promise<void> {
+    await this.prisma.mediaCareer.delete({ where: { id } })
+  }
+
+  async deleteLegalCareer(id: string): Promise<void> {
+    await this.prisma.legalCareer.delete({ where: { id } })
+  }
+
+  async deleteMedicalCareer(id: string): Promise<void> {
+    await this.prisma.medicalCareer.delete({ where: { id } })
+  }
+
+  async deleteEducation(id: string): Promise<void> {
+    await this.prisma.personEducation.delete({ where: { id } })
+  }
+
+  async deleteAward(id: string): Promise<void> {
+    await this.prisma.personAward.delete({ where: { id } })
+  }
+
   /**
    * 인물의 재임 기록만 조회 (GovernmentPositionTenure)
    * 수정 페이지에서 경력을 확실히 불러오기 위해 전용 API로 사용
@@ -4133,78 +4158,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         { createdAt: Prisma.SortOrder.asc },
       ],
     })
-  }
-
-  /**
-   * 인물 통합 연보 타임라인.
-   * - PersonLifeEvent (자유 서술형 연보)
-   * - PersonEvent (참여 사건 + 그 사건에 대한 인물 시점의 role/note)
-   * 두 소스를 시간순으로 merge 해 반환.
-   *
-   * 각 항목은 `kind` 필드로 구분:
-   *   - 'life-event'        → PersonLifeEvent 행
-   *   - 'event-participation' → PersonEvent 행 (event 관계 포함)
-   *
-   * 정렬 키: PersonLifeEvent 는 startDate, PersonEvent 는 event.startDate.
-   * 둘 다 null 인 항목은 배열 뒤로 (createdAt 보조 정렬).
-   */
-  async findPersonLifeTimelineByPersonId(personId: string): Promise<any[]> {
-    const [lifeEvents, eventParticipations] = await Promise.all([
-      this.prisma.personLifeEvent.findMany({
-        where: { personId },
-      }),
-      this.prisma.personEvent.findMany({
-        where: { personId },
-        include: {
-          event: {
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              startDate: true,
-              startDatePrecision: true,
-              endDate: true,
-              endDatePrecision: true,
-              location: true,
-              parentEventId: true,
-              categoryId: true,
-              category: { select: { id: true, name: true } },
-            },
-          },
-        },
-      }),
-    ])
-
-    const items: Array<{
-      kind: 'life-event' | 'event-participation'
-      sortKey: number
-      payload: any
-    }> = []
-
-    for (const le of lifeEvents) {
-      const t = le.startDate ? new Date(le.startDate as any).getTime() : Number.POSITIVE_INFINITY
-      items.push({
-        kind: 'life-event',
-        sortKey: t,
-        payload: { kind: 'life-event' as const, ...le },
-      })
-    }
-    for (const pe of eventParticipations) {
-      const startDate = (pe as any).event?.startDate
-      const t = startDate ? new Date(startDate as any).getTime() : Number.POSITIVE_INFINITY
-      items.push({
-        kind: 'event-participation',
-        sortKey: t,
-        payload: { kind: 'event-participation' as const, ...pe },
-      })
-    }
-    items.sort((a, b) => {
-      if (a.sortKey !== b.sortKey) return a.sortKey - b.sortKey
-      // 동일 시점일 땐 life-event 우선 (개인사 → 사건 순)
-      if (a.kind !== b.kind) return a.kind === 'life-event' ? -1 : 1
-      return 0
-    })
-    return items.map((i) => i.payload)
   }
 
   /**

@@ -1,6 +1,6 @@
 import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn, ValidateIf, IsArray, IsInt, Min, Max } from 'class-validator'
 import { Type } from 'class-transformer'
-import { Era, DeathType, DateInfoDto, SpouseRelationDto } from './create-person.dto'
+import { Era, DeathType, DateInfoDto, SpouseRelationDto, BiographySectionDto, CountryAffiliationDto } from './create-person.dto'
 
 /**
  * 인물 수정 DTO
@@ -308,4 +308,22 @@ export class UpdatePersonDto {
   @ValidateNested({ each: true })
   @Type(() => SpouseRelationDto)
   spouseRelations?: SpouseRelationDto[]
+
+  /**
+   * 전기(생애 서술) 섹션 목록 (선택, 있으면 기존 삭제 후 일괄 반영)
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BiographySectionDto)
+  sections?: BiographySectionDto[]
+
+  /**
+   * 국가 소속 목록 (선택, 있으면 주 국적 외 소속을 통째로 교체).
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CountryAffiliationDto)
+  countryAffiliations?: CountryAffiliationDto[]
 }
