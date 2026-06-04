@@ -13,6 +13,7 @@ import { useSessionStore } from '@/entities/session/session.store'
 // FSD 구조에 맞는 static imports (지연 로딩 제거)
 import { dashboardRoute } from '@/pages/dashboard/dashboard.route'
 import { dynastyRoute } from '@/pages/dynasty/dynasty.route'
+import { personGroupsRoutes } from '@/pages/person-groups/person-groups.route'
 import { ethnicitiesRoutes } from '@/pages/ethnicities/ethnicities.route'
 import { organizationsRoutes } from '@/pages/organizations/organizations.route'
 import { companiesRoutes } from '@/pages/companies/companies.route'
@@ -165,6 +166,8 @@ const appRouterConfig = [
           personsRoute,
           // 가문 — 풀 페이지
           dynastyRoute,
+          // 인물 묶음(세대·계파·사단) 허브
+          ...personGroupsRoutes,
           // 행정기구·조직 라우트
           ...organizationsRoutes,
           // 민족 라우트 (CRUD)

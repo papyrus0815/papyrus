@@ -19,6 +19,18 @@ export const pathKeys = {
   /** 가문 풀 페이지 */
   dynasty: () => `/dynasty`,
 
+  /** 인물 묶음(세대·계파·사단) 허브 목록 */
+  personGroups: (params?: { type?: string; countryId?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.type) qs.set('type', params.type)
+    if (params?.countryId) qs.set('countryId', params.countryId)
+    const s = qs.toString()
+    return `/${ROUTES.PERSON_GROUPS}/${s ? `?${s}` : ''}`
+  },
+  /** 인물 묶음 상세 */
+  personGroupDetail: (groupId: string) =>
+    `/${ROUTES.PERSON_GROUPS}/${encodeURIComponent(groupId)}/`,
+
   // --- Country (구 /history/country/*) ---
   country: () => `/${ROUTES.COUNTRY}/`,
   /** 국가 상세 고유 URL (경로 기반) */

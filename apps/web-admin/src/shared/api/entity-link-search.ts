@@ -11,6 +11,8 @@ export type EntityLinkSearchRow = {
   name: string
   subtitle?: string | null
   countryId?: string | null
+  /** 인물 프로필 이미지 — 링크 즉시 행위자 아바타 표시용 */
+  imageUrl?: string | null
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -78,7 +80,7 @@ export function mapEntityLinkRowsToMentionItems(
       data:
         row.type === 'politicalParty'
           ? { id: row.id, countryId: row.countryId ?? null }
-          : { id: row.id },
+          : { id: row.id, imageUrl: row.imageUrl ?? null },
     }
   })
 }

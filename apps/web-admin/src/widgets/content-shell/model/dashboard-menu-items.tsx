@@ -8,6 +8,7 @@ export type DashboardContentView =
   | 'military'
   | 'dynasty'
   | 'ethnicity'
+  | 'personGroup'
 
 export const IconPeople = () => (
   <svg
@@ -81,6 +82,22 @@ const IconEthnicity = () => (
   </svg>
 )
 
+const IconPersonGroup = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.9"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <circle cx="12" cy="7" r="3" />
+    <circle cx="5" cy="17" r="2.5" />
+    <circle cx="19" cy="17" r="2.5" />
+    <path d="M12 10v2M10.5 13l-3 2M13.5 13l3 2" />
+  </svg>
+)
+
 export interface DashboardMenuItem {
   id: DashboardContentView
   label: string
@@ -126,5 +143,12 @@ export const DASHBOARD_MENU_ITEMS: DashboardMenuItem[] = [
     icon: IconEthnicity,
     path: pathKeys.ethnicityTimeline(),
     matchPath: (p) => /^\/ethnicity\/?$/.test(p),
+  },
+  {
+    id: 'personGroup',
+    label: '집단',
+    icon: IconPersonGroup,
+    path: pathKeys.personGroups(),
+    matchPath: (p) => /^\/person-groups(\/.*)?$/.test(p),
   },
 ]

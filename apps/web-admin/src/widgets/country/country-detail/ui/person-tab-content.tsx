@@ -8,6 +8,7 @@ import { type PersonResponseDto as Person } from '@/shared/api/persons'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { PersonList } from './person/person-list'
 import { PersonDetailView } from './person/person-detail-view'
+import { CountryPersonGroupsBlock } from './country-person-groups-block.widget'
 
 interface PersonTabContentProps {
   countryId: string
@@ -138,6 +139,7 @@ export function PersonTabContent({ countryId }: PersonTabContentProps) {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
+        <CountryPersonGroupsBlock countryId={countryId} />
         <PersonList
           persons={persons}
           searchTerm={searchTerm}

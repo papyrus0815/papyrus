@@ -558,6 +558,18 @@ export default function DashboardPage() {
             </CircleButton>
             <ButtonLabel>수장 비교</ButtonLabel>
           </ButtonWrapper>
+
+          <ButtonWrapper>
+            <CircleButton
+              title="집단 (세대·계파·사단)"
+              onClick={() => navigate(pathKeys.personGroups())}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M12 5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM5 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm14 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12 11c-1.6 0-3 .7-3.9 1.8l1.5 1.2c.5-.6 1.4-1 2.4-1s1.9.4 2.4 1l1.5-1.2C15 11.7 13.6 11 12 11z" />
+              </svg>
+            </CircleButton>
+            <ButtonLabel>집단</ButtonLabel>
+          </ButtonWrapper>
         </ButtonContainer>
 
         <TextButton>

@@ -28,6 +28,9 @@ export const ROUTES = {
   // Genealogy (standalone full-screen)
   GENEALOGY: 'genealogy',
 
+  // 인물 묶음 (세대·계파·사단 등) 허브
+  PERSON_GROUPS: 'person-groups',
+
   // Error Pages
   PAGE_404: '404',
 } as const
