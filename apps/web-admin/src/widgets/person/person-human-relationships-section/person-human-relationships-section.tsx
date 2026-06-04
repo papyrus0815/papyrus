@@ -4,14 +4,16 @@
  */
 import {
   type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 
 import { createPortal } from 'react-dom'
-import { Link } from 'react-router-dom'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -28,6 +30,7 @@ import {
   FiUser,
   FiX,
 } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import {
@@ -58,6 +61,7 @@ import {
   listPersonLifeEvents,
 } from '@/shared/api/person-life-events'
 import { type PersonResponseDto, getAllPersons } from '@/shared/api/persons'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormTextarea } from '@/shared/ui/form-input/form-input'
@@ -68,13 +72,20 @@ import {
   PersonRegisterModalFormScroll,
   PersonRegisterModalHeader,
   PersonRegisterModalOverlay,
+  PersonRegisterModalStickyFooter,
   PersonRegisterModalTitle,
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
-
 
 type Props = {
   personId: string
   relationships: PersonHumanRelationshipItem[] | undefined
+  /**
+   * 인물명 링크 클릭 시 호출. 지정되면 일반 좌클릭을 가로채 부모(상세 패널)가
+   * 컨텍스트(좌측 필터·목록)를 유지한 채 인물을 전환하게 한다.
+   * (가족트리·계보 등 다른 인물 클릭과 동일한 동작.)
+   * 미지정 시 기존처럼 `/persons/:id` 단독 페이지로 이동.
+   */
+  onPersonClick?: (personId: string) => void
 }
 
 function normalizeRelationshipType(
@@ -107,6 +118,7 @@ function formatRelationshipApiError(error: unknown): string {
 export function PersonHumanRelationshipsSection({
   personId,
   relationships,
+  onPersonClick,
 }: Props) {
   const queryClient = useQueryClient()
   const rawList = relationships ?? []
@@ -130,6 +142,26 @@ export function PersonHumanRelationshipsSection({
     [list],
   )
 
+  /**
+   * 인물 링크 좌클릭 가로채기. onPersonClick이 있으면 SPA 내비게이션 대신
+   * 부모 콜백으로 인물 전환(필터/목록 컨텍스트 유지). ⌘/Ctrl/Shift+클릭이나
+   * 중클릭은 그대로 둬서 "새 탭으로 단독 페이지 열기"는 유지한다.
+   */
+  const handlePersonLinkClick = useCallback(
+    (e: MouseEvent, targetId: string) => {
+      if (!onPersonClick) return
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+      e.preventDefault()
+      onPersonClick(targetId)
+    },
+    [onPersonClick],
+  )
+
+  // 관계 추가/수정 폼이 열릴 때만 인물 선택용 전체 목록이 필요하므로
+  // 두 상태를 먼저 선언해 쿼리 enabled 게이팅에 사용한다.
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
   const {
     data: persons = [],
     isLoading: personsLoading,
@@ -139,6 +171,8 @@ export function PersonHumanRelationshipsSection({
     queryKey: ['all-persons'],
     queryFn: () => getAllPersons(),
     staleTime: 5 * 60 * 1000,
+    // 폼(추가/수정)이 열려 인물 선택이 필요할 때만 페칭 — 초기 마운트 시 대량 로드 방지
+    enabled: createModalOpen || editingId != null,
   })
 
   const personsExcludingSelf = useMemo(
@@ -146,12 +180,10 @@ export function PersonHumanRelationshipsSection({
     [persons, personId],
   )
 
-  const [createModalOpen, setCreateModalOpen] = useState(false)
   const [personModalOpen, setPersonModalOpen] = useState(false)
-  const [newStartDateModalOpen, setNewStartDateModalOpen] = useState(false)
-  const [newEndDateModalOpen, setNewEndDateModalOpen] = useState(false)
-  const [editStartDateModalOpen, setEditStartDateModalOpen] = useState(false)
-  const [editEndDateModalOpen, setEditEndDateModalOpen] = useState(false)
+  // 등록/수정 폼이 공유하는 RelationshipFormFields 내부 날짜 피커의 오픈 여부.
+  // (한 번에 하나의 폼만 열리므로 단일 플래그로 ESC 게이팅을 처리한다.)
+  const [fieldDateModalOpen, setFieldDateModalOpen] = useState(false)
 
   /** 인라인 확인 다이얼로그 상태 */
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -167,7 +199,6 @@ export function PersonHumanRelationshipsSection({
   const [newStartDate, setNewStartDate] = useState('')
   const [newEndDate, setNewEndDate] = useState('')
 
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [editAffinity, setEditAffinity] = useState<AffinityLevel | null>(0)
   const [editType, setEditType] =
     useState<PersonHumanRelationshipType>('GENERAL')
@@ -205,7 +236,10 @@ export function PersonHumanRelationshipsSection({
       newEndDate !== '' ||
       newTags.length > 0 ||
       newIsMutual !== false ||
-      newSourceIds.length > 0,
+      newSourceIds.length > 0 ||
+      newTrust !== null ||
+      newPower !== null ||
+      newFormality !== null,
     [
       newRelatedId,
       newNote,
@@ -217,6 +251,9 @@ export function PersonHumanRelationshipsSection({
       newTags,
       newIsMutual,
       newSourceIds,
+      newTrust,
+      newPower,
+      newFormality,
     ],
   )
 
@@ -227,7 +264,8 @@ export function PersonHumanRelationshipsSection({
 
   const toIsoDateInput = (iso: string | null): string => {
     if (!iso) return ''
-    return iso.slice(0, 10)
+    // BC는 선행 '-'가 붙은 `-YYYY-MM-DD`(11자)라 slice(0,10)이면 끝자리가 잘린다.
+    return iso.startsWith('-') ? iso.slice(0, 11) : iso.slice(0, 10)
   }
 
   const isEditFormDirty = useMemo(() => {
@@ -246,11 +284,16 @@ export function PersonHumanRelationshipsSection({
     const curTags = [...editTags].sort().join(',')
     if (origTags !== curTags) return true
     if (editIsMutual !== editingRel.isMutual) return true
-    const origSources = [...(editingRel.sources ?? []).map((s) => s.lifeEventId)]
+    const origSources = [
+      ...(editingRel.sources ?? []).map((s) => s.lifeEventId),
+    ]
       .sort()
       .join(',')
     const curSources = [...editSourceIds].sort().join(',')
     if (origSources !== curSources) return true
+    if ((editTrust ?? null) !== (editingRel.trustLevel ?? null)) return true
+    if ((editPower ?? null) !== (editingRel.powerDynamic ?? null)) return true
+    if ((editFormality ?? null) !== (editingRel.formality ?? null)) return true
     return false
   }, [
     editingRel,
@@ -263,6 +306,9 @@ export function PersonHumanRelationshipsSection({
     editTags,
     editIsMutual,
     editSourceIds,
+    editTrust,
+    editPower,
+    editFormality,
   ])
 
   const selectedNewPerson =
@@ -306,8 +352,7 @@ export function PersonHumanRelationshipsSection({
         subjectIsMentor: newType === 'MENTOR' ? newSubjectIsMentor : undefined,
         tags: newTags.length > 0 ? newTags : undefined,
         isMutual: newType === 'GENERAL' ? newIsMutual : undefined,
-        sourceLifeEventIds:
-          newSourceIds.length > 0 ? newSourceIds : undefined,
+        sourceLifeEventIds: newSourceIds.length > 0 ? newSourceIds : undefined,
       })
     },
     onSuccess: () => {
@@ -351,12 +396,40 @@ export function PersonHumanRelationshipsSection({
   const deleteMut = useMutation({
     mutationFn: async (relId: string) =>
       deleteHumanRelationship(personId, relId),
+    /**
+     * 낙관적 삭제 — 부모 person-detail 캐시의 humanRelationships에서 즉시 제거.
+     * 이 컴포넌트는 목록을 자체 쿼리가 아닌 person-detail 응답의
+     * humanRelationships prop으로 받으므로 그 캐시를 직접 갱신한다.
+     */
+    onMutate: async (relId: string) => {
+      const detailKey = ['person-detail', personId]
+      await queryClient.cancelQueries({ queryKey: detailKey })
+      const previous = queryClient.getQueryData(detailKey)
+      queryClient.setQueryData(detailKey, (old: unknown) => {
+        if (!old || typeof old !== 'object') return old
+        const o = old as { humanRelationships?: PersonHumanRelationshipItem[] }
+        if (!Array.isArray(o.humanRelationships)) return old
+        return {
+          ...o,
+          humanRelationships: o.humanRelationships.filter(
+            (r) => r.id !== relId,
+          ),
+        }
+      })
+      return { previous, detailKey }
+    },
+    onError: (error: unknown, _relId, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(context.detailKey, context.previous)
+      }
+      toast.error(formatRelationshipApiError(error))
+    },
     onSuccess: () => {
       toast.success('삭제했습니다.')
-      invalidateDetail()
     },
-    onError: (error: unknown) => {
-      toast.error(formatRelationshipApiError(error))
+    onSettled: () => {
+      // 서버 확정 상태로 최종 동기화 (목록 화면 등 포함)
+      invalidateDetail()
     },
   })
 
@@ -369,8 +442,16 @@ export function PersonHumanRelationshipsSection({
     startDate: string
     endDate: string
     affinityLevel: AffinityLevel | null
+    trustLevel: number | null
+    powerDynamic: number | null
+    formality: number | null
     note: string
   }>(null)
+
+  /** phase 모달 내부 날짜 피커(BC 지원) 오픈 상태 */
+  const [phaseDatePicker, setPhaseDatePicker] = useState<
+    'start' | 'end' | null
+  >(null)
 
   const openPhaseModal = (
     relationshipId: string,
@@ -380,24 +461,55 @@ export function PersonHumanRelationshipsSection({
       relationshipId,
       phaseId: existing?.id ?? null,
       label: existing?.label ?? '',
-      startDate: existing?.startDate?.slice(0, 10) ?? '',
-      endDate: existing?.endDate?.slice(0, 10) ?? '',
+      startDate: toIsoDateInput(existing?.startDate ?? null),
+      endDate: toIsoDateInput(existing?.endDate ?? null),
       affinityLevel:
         (existing?.affinityLevel as AffinityLevel | null | undefined) ?? null,
+      trustLevel: existing?.trustLevel ?? null,
+      powerDynamic: existing?.powerDynamic ?? null,
+      formality: existing?.formality ?? null,
       note: existing?.note ?? '',
     })
   }
 
-  const closePhaseModal = () => setPhaseModal(null)
+  const closePhaseModal = () => {
+    setPhaseModal(null)
+    setPhaseDatePicker(null)
+  }
+
+  // 포커스 온 오픈은 RelModal이 자체 처리(모달 박스로 포커스 이동).
+
+  // ESC로 phase 모달 닫기 (전역 ESC effect는 create/edit/confirm일 때만 동작하므로 별도 처리).
+  useEffect(() => {
+    if (!phaseModal) return
+    const handler = (event: globalThis.KeyboardEvent) => {
+      // 날짜 피커가 열려 있으면 ESC는 그 피커만 닫고 phase 모달은 유지.
+      if (phaseDatePicker) return
+      if (event.key === 'Escape') closePhaseModal()
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [phaseModal, phaseDatePicker])
 
   const phaseSaveMut = useMutation({
     mutationFn: async () => {
       if (!phaseModal) throw new Error('phase 모달 상태 없음')
+      // 날짜 유효성 — 시작 > 종료면 거부
+      if (
+        phaseModal.startDate &&
+        phaseModal.endDate &&
+        phaseModal.startDate > phaseModal.endDate
+      ) {
+        throw new Error('시작일이 종료일보다 늦을 수 없습니다.')
+      }
       const body = {
         label: phaseModal.label.trim() || null,
         startDate: phaseModal.startDate || null,
         endDate: phaseModal.endDate || null,
         affinityLevel: phaseModal.affinityLevel,
+        trustLevel: phaseModal.trustLevel,
+        powerDynamic: phaseModal.powerDynamic,
+        formality: phaseModal.formality,
         note: phaseModal.note.trim() || null,
       }
       if (phaseModal.phaseId) {
@@ -408,11 +520,7 @@ export function PersonHumanRelationshipsSection({
           body,
         )
       }
-      return createRelationshipPhase(
-        personId,
-        phaseModal.relationshipId,
-        body,
-      )
+      return createRelationshipPhase(personId, phaseModal.relationshipId, body)
     },
     onSuccess: () => {
       toast.success('시기를 저장했습니다.')
@@ -427,12 +535,43 @@ export function PersonHumanRelationshipsSection({
   const phaseDeleteMut = useMutation({
     mutationFn: async (args: { relationshipId: string; phaseId: string }) =>
       deleteRelationshipPhase(personId, args.relationshipId, args.phaseId),
+    /**
+     * 낙관적 삭제 — person-detail 캐시의 해당 관계 phases 배열에서 즉시 제거.
+     * 타임라인 칩이 refetch 왕복 없이 바로 사라진다.
+     */
+    onMutate: async (args: { relationshipId: string; phaseId: string }) => {
+      const detailKey = ['person-detail', personId]
+      await queryClient.cancelQueries({ queryKey: detailKey })
+      const previous = queryClient.getQueryData(detailKey)
+      queryClient.setQueryData(detailKey, (old: unknown) => {
+        if (!old || typeof old !== 'object') return old
+        const o = old as { humanRelationships?: PersonHumanRelationshipItem[] }
+        if (!Array.isArray(o.humanRelationships)) return old
+        return {
+          ...o,
+          humanRelationships: o.humanRelationships.map((r) =>
+            r.id === args.relationshipId
+              ? {
+                  ...r,
+                  phases: (r.phases ?? []).filter((p) => p.id !== args.phaseId),
+                }
+              : r,
+          ),
+        }
+      })
+      return { previous, detailKey }
+    },
+    onError: (error: unknown, _args, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(context.detailKey, context.previous)
+      }
+      toast.error(formatRelationshipApiError(error))
+    },
     onSuccess: () => {
       toast.success('시기를 삭제했습니다.')
-      invalidateDetail()
     },
-    onError: (error: unknown) => {
-      toast.error(formatRelationshipApiError(error))
+    onSettled: () => {
+      invalidateDetail()
     },
   })
 
@@ -469,12 +608,7 @@ export function PersonHumanRelationshipsSection({
   }
 
   /** 자식(인물 선택·날짜 피커) 모달이 열려 있으면 부모 ESC 무시 */
-  const childModalOpen =
-    personModalOpen ||
-    newStartDateModalOpen ||
-    newEndDateModalOpen ||
-    editStartDateModalOpen ||
-    editEndDateModalOpen
+  const childModalOpen = personModalOpen || fieldDateModalOpen
 
   /** ESC: 자식 모달 → 확인 다이얼로그 → 등록 모달 → 인라인 편집 순서 */
   useEffect(() => {
@@ -496,8 +630,17 @@ export function PersonHumanRelationshipsSection({
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
+    // isNewFormDirty/isEditFormDirty를 포함해야 폼 입력 후에도 effect가 재구독되어
+    // 최신 closeNewPanel/cancelEdit(=최신 더티 상태 반영)를 ESC가 호출한다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createModalOpen, editingId, confirmDialog, childModalOpen])
+  }, [
+    createModalOpen,
+    editingId,
+    confirmDialog,
+    childModalOpen,
+    isNewFormDirty,
+    isEditFormDirty,
+  ])
 
   const startEdit = (rel: RelRowModel) => {
     setEditingId(rel.id)
@@ -515,7 +658,9 @@ export function PersonHumanRelationshipsSection({
     setEditFormality(rel.formality ?? null)
     // 추가 차원이 하나라도 있으면 고급 섹션 자동 펼침
     setEditAdvancedOpen(
-      rel.trustLevel != null || rel.powerDynamic != null || rel.formality != null,
+      rel.trustLevel != null ||
+        rel.powerDynamic != null ||
+        rel.formality != null,
     )
   }
 
@@ -542,6 +687,74 @@ export function PersonHumanRelationshipsSection({
     setCreateModalOpen(true)
   }
 
+  // ── 공유 폼(RelationshipFormFields)용 values/patch 어댑터 ──
+  // 개별 useState는 그대로 두고, 단일 객체 + patch로 묶어 등록/수정이 같은 입력 UI를
+  // 공유한다. type 변경은 등록=직접 set, 수정=의미변화 확인을 거치므로 patch가 아닌
+  // onTypeChange로 분리한다.
+  const newValues: RelationshipFormValues = {
+    type: newType,
+    affinity: newAffinity,
+    subjectIsMentor: newSubjectIsMentor,
+    isMutual: newIsMutual,
+    note: newNote,
+    startDate: newStartDate,
+    endDate: newEndDate,
+    tags: newTags,
+    sourceIds: newSourceIds,
+    trust: newTrust,
+    power: newPower,
+    formality: newFormality,
+    advancedOpen: newAdvancedOpen,
+  }
+  const patchNew = useCallback((partial: Partial<RelationshipFormValues>) => {
+    if ('affinity' in partial)
+      setNewAffinity(partial.affinity as AffinityLevel | null)
+    if ('subjectIsMentor' in partial)
+      setNewSubjectIsMentor(!!partial.subjectIsMentor)
+    if ('isMutual' in partial) setNewIsMutual(!!partial.isMutual)
+    if ('note' in partial) setNewNote(partial.note ?? '')
+    if ('startDate' in partial) setNewStartDate(partial.startDate ?? '')
+    if ('endDate' in partial) setNewEndDate(partial.endDate ?? '')
+    if ('tags' in partial) setNewTags(partial.tags ?? [])
+    if ('sourceIds' in partial) setNewSourceIds(partial.sourceIds ?? [])
+    if ('trust' in partial) setNewTrust(partial.trust ?? null)
+    if ('power' in partial) setNewPower(partial.power ?? null)
+    if ('formality' in partial) setNewFormality(partial.formality ?? null)
+    if ('advancedOpen' in partial) setNewAdvancedOpen(!!partial.advancedOpen)
+  }, [])
+
+  const editValues: RelationshipFormValues = {
+    type: editType,
+    affinity: editAffinity,
+    subjectIsMentor: editSubjectIsMentor,
+    isMutual: editIsMutual,
+    note: editNote,
+    startDate: editStartDate,
+    endDate: editEndDate,
+    tags: editTags,
+    sourceIds: editSourceIds,
+    trust: editTrust,
+    power: editPower,
+    formality: editFormality,
+    advancedOpen: editAdvancedOpen,
+  }
+  const patchEdit = useCallback((partial: Partial<RelationshipFormValues>) => {
+    if ('affinity' in partial)
+      setEditAffinity(partial.affinity as AffinityLevel | null)
+    if ('subjectIsMentor' in partial)
+      setEditSubjectIsMentor(!!partial.subjectIsMentor)
+    if ('isMutual' in partial) setEditIsMutual(!!partial.isMutual)
+    if ('note' in partial) setEditNote(partial.note ?? '')
+    if ('startDate' in partial) setEditStartDate(partial.startDate ?? '')
+    if ('endDate' in partial) setEditEndDate(partial.endDate ?? '')
+    if ('tags' in partial) setEditTags(partial.tags ?? [])
+    if ('sourceIds' in partial) setEditSourceIds(partial.sourceIds ?? [])
+    if ('trust' in partial) setEditTrust(partial.trust ?? null)
+    if ('power' in partial) setEditPower(partial.power ?? null)
+    if ('formality' in partial) setEditFormality(partial.formality ?? null)
+    if ('advancedOpen' in partial) setEditAdvancedOpen(!!partial.advancedOpen)
+  }, [])
+
   function renderRelationshipCard(rel: RelRowModel) {
     const rt = rel.relationshipType
     const cardVariant = rt === 'MENTOR' ? 'mentor' : 'general'
@@ -564,328 +777,191 @@ export function PersonHumanRelationshipsSection({
         layout
         transition={{ layout: { duration: 0.18, ease: 'easeOut' } }}
       >
-        {editingId === rel.id ? (
-          createPortal(
-            <RelEditOverlay onClick={cancelEdit}>
-              <RelEditBox onClick={(e) => e.stopPropagation()}>
-                <RelEditHeader>
-                  <RelEditTitle>
-                    <span>관계 수정</span>
-                    <RelEditSubject>
-                      {getPersonDisplayName(rel.otherPerson)}
-                    </RelEditSubject>
-                  </RelEditTitle>
-                  <RelEditClose
-                    type="button"
-                    aria-label="닫기"
-                    onClick={cancelEdit}
-                  >
-                    <FiX size={18} />
-                  </RelEditClose>
-                </RelEditHeader>
-                <RelEditBody>
-                  <CleanForm>
-                    <TopTypeToggle
-              role="radiogroup"
-              aria-label="관계 종류"
-              onKeyDown={(event) => {
-                if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-                  event.preventDefault()
-                  requestEditTypeChange('MENTOR')
-                } else if (
-                  event.key === 'ArrowLeft' ||
-                  event.key === 'ArrowUp'
-                ) {
-                  event.preventDefault()
-                  requestEditTypeChange('GENERAL')
-                }
-              }}
+        {/* 카드 본문 — 수정 중에도 카드는 유지되고 수정 모달이 위에 뜬다 */}
+        <RelCardTop>
+          <RelPerson>
+            <RelAvatar $tone={avatarTone}>
+              {rel.otherPerson.profileImageUrl ? (
+                <img
+                  src={
+                    getUploadImageUrl(rel.otherPerson.profileImageUrl) ||
+                    rel.otherPerson.profileImageUrl
+                  }
+                  alt={getPersonDisplayName(rel.otherPerson)}
+                />
+              ) : (
+                <FiUser size={20} strokeWidth={2} />
+              )}
+            </RelAvatar>
+            <RelNameLink
+              to={`/persons/${rel.otherPerson.id}`}
+              onClick={(e) => handlePersonLinkClick(e, rel.otherPerson.id)}
+              title="해당 인물 보기"
             >
-              <TopTypeOption
-                type="button"
-                role="radio"
-                aria-checked={editType === 'GENERAL'}
-                tabIndex={editType === 'GENERAL' ? 0 : -1}
-                $active={editType === 'GENERAL'}
-                onClick={() => requestEditTypeChange('GENERAL')}
+              {getPersonDisplayName(rel.otherPerson)}
+            </RelNameLink>
+          </RelPerson>
+          <RelBadgeGroup>
+            {rt === 'MENTOR' ? (
+              <RelBadge $variant="mentor">
+                {rel.mentorPerspective === 'MENTOR' ? '스승' : '제자'}
+              </RelBadge>
+            ) : (
+              <RelBadge $variant="general">일반 관계</RelBadge>
+            )}
+            {rel.subjectivePerspective === 'OTHER' && (
+              <RelBadge $variant="perspective">
+                {getPersonDisplayName(rel.otherPerson)}의 시점
+              </RelBadge>
+            )}
+            {rel.subjectivePerspective === 'MUTUAL' && (
+              <RelBadge $variant="mutual">양쪽 합의</RelBadge>
+            )}
+          </RelBadgeGroup>
+        </RelCardTop>
+        {affinityValue != null ? (
+          <AffinityInline
+            role="group"
+            aria-label={`친밀도 ${AFFINITY_SPECTRUM[affinityValue]?.label ?? '—'}`}
+            title={AFFINITY_SPECTRUM[affinityValue]?.detail ?? ''}
+          >
+            <AffinityLevelReadDots level={affinityValue} />
+            <AffinityInlineLabel>
+              {AFFINITY_SPECTRUM[affinityValue]?.label ?? '—'}
+            </AffinityInlineLabel>
+            <AffinitySign>
+              {AFFINITY_SPECTRUM[affinityValue]?.short ?? ''}
+            </AffinitySign>
+          </AffinityInline>
+        ) : (
+          <AffinityUnsetLine title="친밀도가 사료에서 확인되지 않거나 의도적으로 입력하지 않음. 0(중립)과는 다름.">
+            <UnknownDot aria-hidden="true" /> 친밀도 기록 없음
+          </AffinityUnsetLine>
+        )}
+        {(rel.trustLevel != null ||
+          rel.powerDynamic != null ||
+          rel.formality != null) && (
+          <ExtraDimRow>
+            {rel.trustLevel != null && (
+              <ExtraDimChip
+                title={`신뢰도: ${TRUST_SPECTRUM[rel.trustLevel].label}`}
               >
-                일반 관계
-              </TopTypeOption>
-              <TopTypeOption
-                type="button"
-                role="radio"
-                aria-checked={editType === 'MENTOR'}
-                tabIndex={editType === 'MENTOR' ? 0 : -1}
-                $active={editType === 'MENTOR'}
-                onClick={() => requestEditTypeChange('MENTOR')}
+                신뢰 {TRUST_SPECTRUM[rel.trustLevel].short}
+              </ExtraDimChip>
+            )}
+            {rel.powerDynamic != null && (
+              <ExtraDimChip
+                title={`권력 비대칭: ${POWER_SPECTRUM[rel.powerDynamic].label} (이 인물 기준)`}
               >
-                멘토 · 스승–제자
-              </TopTypeOption>
-            </TopTypeToggle>
-
-            {editType === 'MENTOR' && (
-              <FormField>
-                <FormFieldLabel>이 인물의 역할</FormFieldLabel>
-                <CompactRolePillRow>
-                  <CompactRolePill $active={editSubjectIsMentor}>
-                    <HiddenRadio
-                      name="edit-mentor-role"
-                      checked={editSubjectIsMentor}
-                      onChange={() => setEditSubjectIsMentor(true)}
-                    />
-                    스승
-                  </CompactRolePill>
-                  <CompactRolePill $active={!editSubjectIsMentor}>
-                    <HiddenRadio
-                      name="edit-mentor-role"
-                      checked={!editSubjectIsMentor}
-                      onChange={() => setEditSubjectIsMentor(false)}
-                    />
-                    제자
-                  </CompactRolePill>
-                </CompactRolePillRow>
-              </FormField>
+                권력 {POWER_SPECTRUM[rel.powerDynamic].short}
+              </ExtraDimChip>
             )}
-
-            {editType === 'GENERAL' && (
-              <FormField>
-                <FormFieldLabel>시점</FormFieldLabel>
-                <PerspectiveToggle>
-                  <UnsetToggleLabel>
-                    <UnsetToggleCheckbox
-                      type="checkbox"
-                      checked={editIsMutual}
-                      onChange={(event) => setEditIsMutual(event.target.checked)}
-                      disabled={updateMut.isPending}
-                    />
-                    <span>
-                      양쪽 합의된 대칭 관계
-                      <PerspectiveHint>
-                        체크 해제 시 이 인물의 시점만 표현
-                      </PerspectiveHint>
-                    </span>
-                  </UnsetToggleLabel>
-                </PerspectiveToggle>
-              </FormField>
+            {rel.formality != null && (
+              <ExtraDimChip
+                title={`격식: ${FORMALITY_SPECTRUM[rel.formality].label}`}
+              >
+                격식 {FORMALITY_SPECTRUM[rel.formality].short}
+              </ExtraDimChip>
             )}
+          </ExtraDimRow>
+        )}
+        {(rel.phases ?? []).length > 0 && (
+          <PhaseTimeline
+            phases={rel.phases ?? []}
+            onEditPhase={(phase) => openPhaseModal(rel.id, phase)}
+            onDeletePhase={(phase) =>
+              setConfirmDialog({
+                message: `"${phase.label || '시기'}"를 삭제할까요?`,
+                onConfirm: () => {
+                  phaseDeleteMut.mutate({
+                    relationshipId: rel.id,
+                    phaseId: phase.id,
+                  })
+                  setConfirmDialog(null)
+                },
+              })
+            }
+          />
+        )}
+        {(rel.startDate || rel.endDate) && (
+          <RelMeta>
+            {formatRelationshipPeriod(rel.startDate, rel.endDate)}
+          </RelMeta>
+        )}
+        {tags.length > 0 && (
+          <TagChipRow aria-label="관계 태그">
+            {tags.map((tag) => (
+              <TagChip key={tag} $tone={RELATIONSHIP_TAG_META[tag].tone}>
+                {RELATIONSHIP_TAG_META[tag].label}
+              </TagChip>
+            ))}
+          </TagChipRow>
+        )}
+        {(rel.sources ?? []).length > 0 && (
+          <SourceChipRow aria-label="근거 사건">
+            <SourceChipLabel>근거</SourceChipLabel>
+            {(rel.sources ?? []).map((s) => (
+              <SourceChipLink
+                key={s.id}
+                to={`/persons/${s.lifeEvent.personId}`}
+                onClick={(e) => handlePersonLinkClick(e, s.lifeEvent.personId)}
+                title={`${s.lifeEvent.title} — ${formatDateDisplay(s.lifeEvent.startDate ?? '')}`}
+              >
+                <FiCalendar size={11} aria-hidden />
+                {s.lifeEvent.title}
+              </SourceChipLink>
+            ))}
+          </SourceChipRow>
+        )}
+        {rel.note ? <RelNote>{rel.note}</RelNote> : null}
+        <RelCardActions>
+          <IconTextBtn type="button" onClick={() => startEdit(rel)}>
+            <FiEdit2 size={14} />
+            수정
+          </IconTextBtn>
+          <IconTextBtn
+            type="button"
+            onClick={() => openPhaseModal(rel.id, null)}
+            title="이 관계의 시기별 변화 추가"
+          >
+            <FiPlus size={14} />
+            시기 추가
+          </IconTextBtn>
+          <IconTextBtn
+            type="button"
+            $danger
+            onClick={() => {
+              const name = getPersonDisplayName(rel.otherPerson)
+              setConfirmDialog({
+                message: `「${name}」와(과)의 관계를 삭제할까요?`,
+                onConfirm: () => {
+                  deleteMut.mutate(rel.id)
+                  setConfirmDialog(null)
+                },
+              })
+            }}
+          >
+            <FiTrash2 size={14} />
+            삭제
+          </IconTextBtn>
+        </RelCardActions>
+      </RelCard>
+    )
+  }
 
-            <FormField>
-              <FormFieldLabel>
-                친밀도
-                <FormFieldHint>
-                  {editType === 'MENTOR'
-                    ? '선택 — 미설정 가능'
-                    : '−2 적대 ~ +2 우호'}
-                </FormFieldHint>
-              </FormFieldLabel>
-              <AffinityBipolarPicker
-                value={editAffinity}
-                onChange={setEditAffinity}
-                allowClear
-                disabled={updateMut.isPending}
-              />
-            </FormField>
-
-            <FormField>
-              <FormFieldLabel>
-                관계 기간 <FormFieldHint>선택</FormFieldHint>
-              </FormFieldLabel>
-              <DateRangeRow>
-                <DateFieldTrigger
-                  type="button"
-                  $hasValue={!!editStartDate}
-                  onClick={() => setEditStartDateModalOpen(true)}
-                  aria-label="시작일 선택"
-                >
-                  <FiCalendar size={14} aria-hidden />
-                  <span>
-                    {editStartDate
-                      ? formatDateDisplay(editStartDate)
-                      : '시작일'}
-                  </span>
-                  {editStartDate && (
-                    <DateClearBtn
-                      as="span"
-                      role="button"
-                      tabIndex={0}
-                      aria-label="시작일 지우기"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setEditStartDate('')
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          setEditStartDate('')
-                        }
-                      }}
-                    >
-                      <FiX size={12} />
-                    </DateClearBtn>
-                  )}
-                </DateFieldTrigger>
-                <DateRangeSep>~</DateRangeSep>
-                <DateFieldTrigger
-                  type="button"
-                  $hasValue={!!editEndDate}
-                  onClick={() => setEditEndDateModalOpen(true)}
-                  aria-label="종료일 선택"
-                >
-                  <FiCalendar size={14} aria-hidden />
-                  <span>
-                    {editEndDate ? formatDateDisplay(editEndDate) : '종료일'}
-                  </span>
-                  {editEndDate && (
-                    <DateClearBtn
-                      as="span"
-                      role="button"
-                      tabIndex={0}
-                      aria-label="종료일 지우기"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setEditEndDate('')
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          setEditEndDate('')
-                        }
-                      }}
-                    >
-                      <FiX size={12} />
-                    </DateClearBtn>
-                  )}
-                </DateFieldTrigger>
-              </DateRangeRow>
-              <DatePickerModal
-                isOpen={editStartDateModalOpen}
-                onClose={() => setEditStartDateModalOpen(false)}
-                onSelect={(date) => {
-                  setEditStartDate(date)
-                  setEditStartDateModalOpen(false)
-                }}
-                initialDate={editStartDate || undefined}
-                maxDate={editEndDate || undefined}
-                title="시작일 선택"
-              />
-              <DatePickerModal
-                isOpen={editEndDateModalOpen}
-                onClose={() => setEditEndDateModalOpen(false)}
-                onSelect={(date) => {
-                  setEditEndDate(date)
-                  setEditEndDateModalOpen(false)
-                }}
-                initialDate={editEndDate || undefined}
-                minDate={editStartDate || undefined}
-                title="종료일 선택"
-              />
-            </FormField>
-
-            <FormField>
-              <FormFieldLabel>
-                태그 <FormFieldHint>다중 선택, 선택</FormFieldHint>
-              </FormFieldLabel>
-              <TagSelector
-                value={editTags}
-                onChange={setEditTags}
-                disabled={updateMut.isPending}
-              />
-              {(() => {
-                const conflict = detectAffinityTagConflict(
-                  editAffinity,
-                  editTags,
-                )
-                return conflict ? (
-                  <ConflictWarning role="status" aria-live="polite">
-                    ⚠ {conflict}
-                  </ConflictWarning>
-                ) : null
-              })()}
-            </FormField>
-
-            {/* 고급 — 추가 차원 (신뢰·권력·격식) */}
-            <AdvancedToggleBtn
-              type="button"
-              onClick={() => setEditAdvancedOpen((v) => !v)}
-              aria-expanded={editAdvancedOpen}
-            >
-              {editAdvancedOpen ? '− 고급 차원 접기' : '+ 고급 차원 (신뢰·권력·격식)'}
-            </AdvancedToggleBtn>
-            {editAdvancedOpen && (
-              <>
-                <FormField>
-                  <FormFieldLabel>
-                    신뢰도{' '}
-                    <FormFieldHint>친밀도와 분리. 미설정 가능</FormFieldHint>
-                  </FormFieldLabel>
-                  <DimensionBipolarPicker
-                    value={editTrust}
-                    onChange={setEditTrust}
-                    spectrum={TRUST_SPECTRUM}
-                    unsetLabel="신뢰도 미설정"
-                    disabled={updateMut.isPending}
-                  />
-                </FormField>
-                <FormField>
-                  <FormFieldLabel>
-                    권력 비대칭{' '}
-                    <FormFieldHint>
-                      이 인물 기준 — 음수: 종속, 0: 대등, 양수: 우위
-                    </FormFieldHint>
-                  </FormFieldLabel>
-                  <DimensionBipolarPicker
-                    value={editPower}
-                    onChange={setEditPower}
-                    spectrum={POWER_SPECTRUM}
-                    unsetLabel="권력 비대칭 미설정"
-                    disabled={updateMut.isPending}
-                  />
-                </FormField>
-                <FormField>
-                  <FormFieldLabel>
-                    격식{' '}
-                    <FormFieldHint>
-                      음수: 격의없음, 양수: 격식·예의
-                    </FormFieldHint>
-                  </FormFieldLabel>
-                  <DimensionBipolarPicker
-                    value={editFormality}
-                    onChange={setEditFormality}
-                    spectrum={FORMALITY_SPECTRUM}
-                    unsetLabel="격식 미설정"
-                    disabled={updateMut.isPending}
-                  />
-                </FormField>
-              </>
-            )}
-
-            <FormField>
-              <FormFieldLabel>
-                근거 사건 <FormFieldHint>두 인물의 연보에서 선택</FormFieldHint>
-              </FormFieldLabel>
-              <SourceSelector
-                subjectPersonId={personId}
-                relatedPersonId={rel.otherPerson.id}
-                value={editSourceIds}
-                onChange={setEditSourceIds}
-                disabled={updateMut.isPending}
-              />
-            </FormField>
-
-            <FormField>
-              <FormFieldLabel>
-                메모 <FormFieldHint>선택</FormFieldHint>
-              </FormFieldLabel>
-              <NoteInput
-                value={editNote}
-                onChange={(event) => setEditNote(event.target.value)}
-                placeholder="기억해둘 메모"
-                rows={2}
-              />
-            </FormField>
-            <SaveRow>
+  return (
+    <>
+      {/* 수정 모달 — 최상위에서 editingRel로 단일 렌더 */}
+      <RelModal
+        open={!!editingRel}
+        title="관계 수정"
+        subtitle={
+          editingRel ? getPersonDisplayName(editingRel.otherPerson) : undefined
+        }
+        onClose={cancelEdit}
+        footer={
+          editingRel ? (
+            <>
               <GhostButton
                 type="button"
                 onClick={cancelEdit}
@@ -896,746 +972,380 @@ export function PersonHumanRelationshipsSection({
               <PrimaryButton
                 type="button"
                 disabled={updateMut.isPending}
-                onClick={() => updateMut.mutate(rel)}
+                onClick={() => updateMut.mutate(editingRel)}
               >
                 {updateMut.isPending ? '저장 중…' : '저장'}
               </PrimaryButton>
-            </SaveRow>
-                  </CleanForm>
-                </RelEditBody>
-              </RelEditBox>
-            </RelEditOverlay>,
-            document.body,
-          )
-        ) : null}
-        {editingId !== rel.id && (
-          <>
-            <RelCardTop>
-              <RelPerson>
-                <RelAvatar $tone={avatarTone}>
-                  <FiUser size={20} strokeWidth={2} />
-                </RelAvatar>
-                <RelNameLink
-                  to={`/persons/${rel.otherPerson.id}`}
-                  title="해당 인물 페이지로 이동"
-                >
-                  {getPersonDisplayName(rel.otherPerson)}
-                </RelNameLink>
-              </RelPerson>
-              <RelBadgeGroup>
-                {rt === 'MENTOR' ? (
-                  <RelBadge $variant="mentor">
-                    {rel.mentorPerspective === 'MENTOR' ? '스승' : '제자'}
-                  </RelBadge>
-                ) : (
-                  <RelBadge $variant="general">일반 관계</RelBadge>
-                )}
-                {rel.subjectivePerspective === 'OTHER' && (
-                  <RelBadge $variant="perspective">
-                    {getPersonDisplayName(rel.otherPerson)}의 시점
-                  </RelBadge>
-                )}
-                {rel.subjectivePerspective === 'MUTUAL' && (
-                  <RelBadge $variant="mutual">양쪽 합의</RelBadge>
-                )}
-              </RelBadgeGroup>
-            </RelCardTop>
-            {affinityValue != null ? (
-              <AffinityInline
-                role="group"
-                aria-label={`친밀도 ${AFFINITY_SPECTRUM[affinityValue]?.label ?? '—'}`}
-                title={AFFINITY_SPECTRUM[affinityValue]?.detail ?? ''}
-              >
-                <AffinityLevelReadDots level={affinityValue} />
-                <AffinityInlineLabel>
-                  {AFFINITY_SPECTRUM[affinityValue]?.label ?? '—'}
-                </AffinityInlineLabel>
-                <AffinitySign>
-                  {AFFINITY_SPECTRUM[affinityValue]?.short ?? ''}
-                </AffinitySign>
-              </AffinityInline>
-            ) : (
-              <AffinityUnsetLine
-                title="친밀도가 사료에서 확인되지 않거나 의도적으로 입력하지 않음. 0(중립)과는 다름."
-              >
-                <UnknownDot aria-hidden="true" /> 친밀도 기록 없음
-              </AffinityUnsetLine>
-            )}
-            {/* 추가 차원 — 입력된 것만 표시 */}
-            {(rel.trustLevel != null ||
-              rel.powerDynamic != null ||
-              rel.formality != null) && (
-              <ExtraDimRow>
-                {rel.trustLevel != null && (
-                  <ExtraDimChip title={`신뢰도: ${TRUST_SPECTRUM[rel.trustLevel].label}`}>
-                    신뢰 {TRUST_SPECTRUM[rel.trustLevel].short}
-                  </ExtraDimChip>
-                )}
-                {rel.powerDynamic != null && (
-                  <ExtraDimChip
-                    title={`권력 비대칭: ${POWER_SPECTRUM[rel.powerDynamic].label} (이 인물 기준)`}
-                  >
-                    권력 {POWER_SPECTRUM[rel.powerDynamic].short}
-                  </ExtraDimChip>
-                )}
-                {rel.formality != null && (
-                  <ExtraDimChip title={`격식: ${FORMALITY_SPECTRUM[rel.formality].label}`}>
-                    격식 {FORMALITY_SPECTRUM[rel.formality].short}
-                  </ExtraDimChip>
-                )}
-              </ExtraDimRow>
-            )}
-            {/* phase 미니 타임라인 — 시기별 친밀도 변화. 칩 클릭 = 편집 */}
-            {(rel.phases ?? []).length > 0 && (
-              <PhaseTimeline
-                phases={rel.phases ?? []}
-                onEditPhase={(phase) => openPhaseModal(rel.id, phase)}
-                onDeletePhase={(phase) =>
-                  setConfirmDialog({
-                    message: `"${phase.label || '시기'}"를 삭제할까요?`,
-                    onConfirm: () => {
-                      phaseDeleteMut.mutate({
-                        relationshipId: rel.id,
-                        phaseId: phase.id,
-                      })
-                      setConfirmDialog(null)
-                    },
-                  })
-                }
-              />
-            )}
-            {(rel.startDate || rel.endDate) && (
-              <RelMeta>
-                {formatRelationshipPeriod(rel.startDate, rel.endDate)}
-              </RelMeta>
-            )}
-            {tags.length > 0 && (
-              <TagChipRow aria-label="관계 태그">
-                {tags.map((tag) => (
-                  <TagChip key={tag} $tone={RELATIONSHIP_TAG_META[tag].tone}>
-                    {RELATIONSHIP_TAG_META[tag].label}
-                  </TagChip>
-                ))}
-              </TagChipRow>
-            )}
-            {(rel.sources ?? []).length > 0 && (
-              <SourceChipRow aria-label="근거 사건">
-                <SourceChipLabel>근거</SourceChipLabel>
-                {(rel.sources ?? []).map((s) => (
-                  <SourceChipLink
-                    key={s.id}
-                    to={`/persons/${s.lifeEvent.personId}`}
-                    title={`${s.lifeEvent.title} — ${formatDateDisplay(s.lifeEvent.startDate ?? '')}`}
-                  >
-                    <FiCalendar size={11} aria-hidden />
-                    {s.lifeEvent.title}
-                  </SourceChipLink>
-                ))}
-              </SourceChipRow>
-            )}
-            {rel.note ? <RelNote>{rel.note}</RelNote> : null}
-            <RelCardActions>
-              <IconTextBtn type="button" onClick={() => startEdit(rel)}>
-                <FiEdit2 size={14} />
-                수정
-              </IconTextBtn>
-              <IconTextBtn
-                type="button"
-                onClick={() => openPhaseModal(rel.id, null)}
-                title="이 관계의 시기별 변화 추가"
-              >
-                <FiPlus size={14} />
-                시기 추가
-              </IconTextBtn>
-              <IconTextBtn
-                type="button"
-                $danger
-                onClick={() => {
-                  const name = getPersonDisplayName(rel.otherPerson)
-                  setConfirmDialog({
-                    message: `「${name}」와(과)의 관계를 삭제할까요?`,
-                    onConfirm: () => {
-                      deleteMut.mutate(rel.id)
-                      setConfirmDialog(null)
-                    },
-                  })
-                }}
-              >
-                <FiTrash2 size={14} />
-                삭제
-              </IconTextBtn>
-            </RelCardActions>
-          </>
+            </>
+          ) : null
+        }
+      >
+        {editingRel && (
+          <CleanForm>
+            <RelationshipFormFields
+              values={editValues}
+              patch={patchEdit}
+              onTypeChange={requestEditTypeChange}
+              subjectPersonId={personId}
+              relatedPersonId={editingRel.otherPerson.id}
+              disabled={updateMut.isPending}
+              affinityAllowClear
+              onDateModalOpenChange={setFieldDateModalOpen}
+              radioName="edit-mentor-role"
+              mentorLabel="스승"
+              notePlaceholder="기억해둘 메모"
+              noteRows={2}
+            />
+          </CleanForm>
         )}
-      </RelCard>
-    )
-  }
+      </RelModal>
 
-  return (
-    <>
-      {createPortal(
-        <AnimatePresence>
-          {createModalOpen && (
-            <PersonRegisterModalOverlay
-              key="human-rel-create-overlay"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="human-rel-create-title"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+      {/* 등록 모달 */}
+      <RelModal
+        open={createModalOpen}
+        title="인간관계 등록"
+        subtitle={
+          selectedNewPerson
+            ? getPersonDisplayName(selectedNewPerson)
+            : undefined
+        }
+        onClose={closeNewPanel}
+        labelledById="human-rel-create-title"
+        footer={
+          <>
+            <GhostButton
+              type="button"
               onClick={closeNewPanel}
+              disabled={createMut.isPending}
             >
-              <PersonRegisterModalBox
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ duration: 0.2 }}
-                $maxWidth="min(560px, 94vw)"
-                $minHeight="auto"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <PersonRegisterModalHeader>
-                  <PersonRegisterModalTitle id="human-rel-create-title">
-                    인간관계 등록
-                  </PersonRegisterModalTitle>
-                  <PersonRegisterModalCloseBtn
+              취소
+            </GhostButton>
+            <PrimaryButton
+              type="submit"
+              form="human-rel-create-form"
+              disabled={createMut.isPending || !newRelatedId}
+            >
+              {createMut.isPending ? '등록 중…' : '등록'}
+            </PrimaryButton>
+          </>
+        }
+      >
+        <form
+          id="human-rel-create-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            createMut.mutate()
+          }}
+        >
+          <CleanForm>
+            {personsError && (
+              <CreateModalFormAlert role="alert">
+                인물 목록을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.
+              </CreateModalFormAlert>
+            )}
+            <RelationshipFormFields
+              values={newValues}
+              patch={patchNew}
+              onTypeChange={setNewType}
+              subjectPersonId={personId}
+              relatedPersonId={newRelatedId || null}
+              disabled={createMut.isPending}
+              affinityAllowClear={newType === 'MENTOR'}
+              onDateModalOpenChange={setFieldDateModalOpen}
+              radioName="new-mentor-role"
+              mentorLabel="스승(멘토)"
+              noteId="human-rel-new-note"
+              relatedPersonSlot={
+                <FormField>
+                  <FormFieldLabel>
+                    상대 인물 <span aria-hidden>*</span>
+                  </FormFieldLabel>
+                  <RelatedPersonTrigger
                     type="button"
-                    aria-label="닫기"
-                    onClick={closeNewPanel}
+                    $hasValue={!!selectedNewPerson}
+                    disabled={personsLoading || !!personsError}
+                    onClick={() => setPersonModalOpen(true)}
+                    aria-label={
+                      selectedNewPerson
+                        ? `${getPersonDisplayName(selectedNewPerson)} 선택됨, 변경하려면 누르기`
+                        : '인물 선택'
+                    }
                   >
-                    <FiX size={20} />
-                  </PersonRegisterModalCloseBtn>
-                </PersonRegisterModalHeader>
-                <PersonRegisterModalFormScroll>
-                  <form
-                    id="human-rel-create-form"
-                    onSubmit={(event) => {
-                      event.preventDefault()
-                      createMut.mutate()
-                    }}
-                  >
-                    <CleanForm>
-                        {personsError && (
-                          <CreateModalFormAlert role="alert">
-                            인물 목록을 불러오지 못했습니다. 새로고침 후 다시
-                            시도해 주세요.
-                          </CreateModalFormAlert>
-                        )}
-
-                        {/* 관계 종류 — 작은 토글 */}
-                        <TopTypeToggle
-                          role="radiogroup"
-                          aria-label="관계 종류 선택"
-                          onKeyDown={(event) => {
-                            if (
-                              event.key === 'ArrowRight' ||
-                              event.key === 'ArrowDown'
-                            ) {
-                              event.preventDefault()
-                              setNewType('MENTOR')
-                            } else if (
-                              event.key === 'ArrowLeft' ||
-                              event.key === 'ArrowUp'
-                            ) {
-                              event.preventDefault()
-                              setNewType('GENERAL')
-                            }
-                          }}
-                        >
-                          <TopTypeOption
-                            type="button"
-                            role="radio"
-                            aria-checked={newType === 'GENERAL'}
-                            tabIndex={newType === 'GENERAL' ? 0 : -1}
-                            $active={newType === 'GENERAL'}
-                            onClick={() => setNewType('GENERAL')}
-                          >
-                            일반 관계
-                          </TopTypeOption>
-                          <TopTypeOption
-                            type="button"
-                            role="radio"
-                            aria-checked={newType === 'MENTOR'}
-                            tabIndex={newType === 'MENTOR' ? 0 : -1}
-                            $active={newType === 'MENTOR'}
-                            onClick={() => setNewType('MENTOR')}
-                          >
-                            멘토 · 스승–제자
-                          </TopTypeOption>
-                        </TopTypeToggle>
-
-                        <FormField>
-                          <FormFieldLabel>
-                            상대 인물 <span aria-hidden>*</span>
-                          </FormFieldLabel>
-                          <RelatedPersonTrigger
-                            type="button"
-                            $hasValue={!!selectedNewPerson}
-                            disabled={personsLoading || !!personsError}
-                            onClick={() => setPersonModalOpen(true)}
-                            aria-label={
-                              selectedNewPerson
-                                ? `${getPersonDisplayName(selectedNewPerson)} 선택됨, 변경하려면 누르기`
-                                : '인물 선택'
-                            }
-                          >
-                            <RelatedPersonAvatar
-                              $hasImage={!!selectedNewPerson?.profileImageUrl}
-                            >
-                              {selectedNewPerson?.profileImageUrl ? (
-                                <img
-                                  src={selectedNewPerson.profileImageUrl}
-                                  alt=""
-                                />
-                              ) : (
-                                <FiUser size={28} strokeWidth={1.6} />
-                              )}
-                            </RelatedPersonAvatar>
-                            <RelatedPersonText>
-                              {selectedNewPerson ? (
-                                <>
-                                  <RelatedPersonName>
-                                    {getPersonDisplayName(selectedNewPerson)}
-                                  </RelatedPersonName>
-                                  <RelatedPersonMeta>
-                                    {formatLifespan(selectedNewPerson) ||
-                                      '생몰년 미상'}
-                                  </RelatedPersonMeta>
-                                </>
-                              ) : (
-                                <>
-                                  <RelatedPersonName $placeholder>
-                                    {personsLoading
-                                      ? '인물 목록 불러오는 중…'
-                                      : '인물 선택'}
-                                  </RelatedPersonName>
-                                  <RelatedPersonMeta>
-                                    클릭해 검색·선택
-                                  </RelatedPersonMeta>
-                                </>
-                              )}
-                            </RelatedPersonText>
-                            <RelatedPersonCaret aria-hidden>
-                              <FiChevronRight size={20} strokeWidth={2} />
-                            </RelatedPersonCaret>
-                          </RelatedPersonTrigger>
-                          {personModalOpen && (
-                            <PersonSelectModal
-                              persons={personsExcludingSelf}
-                              selectedPersonId={newRelatedId}
-                              onSelect={(id) => {
-                                setNewRelatedId(id)
-                                setPersonModalOpen(false)
-                              }}
-                              onClose={() => setPersonModalOpen(false)}
-                            />
-                          )}
-                        </FormField>
-
-                        {newType === 'MENTOR' && (
-                          <FormField>
-                            <FormFieldLabel>이 인물의 역할</FormFieldLabel>
-                            <CompactRolePillRow>
-                              <CompactRolePill $active={newSubjectIsMentor}>
-                                <HiddenRadio
-                                  name="new-mentor-role"
-                                  checked={newSubjectIsMentor}
-                                  onChange={() => setNewSubjectIsMentor(true)}
-                                />
-                                스승(멘토)
-                              </CompactRolePill>
-                              <CompactRolePill $active={!newSubjectIsMentor}>
-                                <HiddenRadio
-                                  name="new-mentor-role"
-                                  checked={!newSubjectIsMentor}
-                                  onChange={() => setNewSubjectIsMentor(false)}
-                                />
-                                제자
-                              </CompactRolePill>
-                            </CompactRolePillRow>
-                          </FormField>
-                        )}
-
-                        {newType === 'GENERAL' && (
-                          <FormField>
-                            <FormFieldLabel>시점</FormFieldLabel>
-                            <PerspectiveToggle>
-                              <UnsetToggleLabel>
-                                <UnsetToggleCheckbox
-                                  type="checkbox"
-                                  checked={newIsMutual}
-                                  onChange={(event) =>
-                                    setNewIsMutual(event.target.checked)
-                                  }
-                                  disabled={createMut.isPending}
-                                />
-                                <span>
-                                  양쪽 합의된 대칭 관계
-                                  <PerspectiveHint>
-                                    체크 해제 시 이 인물의 시점만 표현
-                                  </PerspectiveHint>
-                                </span>
-                              </UnsetToggleLabel>
-                            </PerspectiveToggle>
-                          </FormField>
-                        )}
-
-                        <FormField>
-                          <FormFieldLabel>
-                            친밀도
-                            <FormFieldHint>
-                              {newType === 'MENTOR'
-                                ? '선택 — 미설정 가능'
-                                : '−2 적대 ~ +2 우호'}
-                            </FormFieldHint>
-                          </FormFieldLabel>
-                          <AffinityBipolarPicker
-                            value={newAffinity}
-                            onChange={setNewAffinity}
-                            allowClear={newType === 'MENTOR'}
-                            disabled={createMut.isPending}
-                          />
-                        </FormField>
-
-                        <FormField>
-                          <FormFieldLabel>
-                            관계 기간 <FormFieldHint>선택</FormFieldHint>
-                          </FormFieldLabel>
-                          <DateRangeRow>
-                            <DateFieldTrigger
-                              type="button"
-                              $hasValue={!!newStartDate}
-                              onClick={() => setNewStartDateModalOpen(true)}
-                              aria-label="시작일 선택"
-                            >
-                              <FiCalendar size={14} aria-hidden />
-                              <span>
-                                {newStartDate
-                                  ? formatDateDisplay(newStartDate)
-                                  : '시작일'}
-                              </span>
-                              {newStartDate && (
-                                <DateClearBtn
-                                  as="span"
-                                  role="button"
-                                  tabIndex={0}
-                                  aria-label="시작일 지우기"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    setNewStartDate('')
-                                  }}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter' || event.key === ' ') {
-                                      event.preventDefault()
-                                      event.stopPropagation()
-                                      setNewStartDate('')
-                                    }
-                                  }}
-                                >
-                                  <FiX size={12} />
-                                </DateClearBtn>
-                              )}
-                            </DateFieldTrigger>
-                            <DateRangeSep>~</DateRangeSep>
-                            <DateFieldTrigger
-                              type="button"
-                              $hasValue={!!newEndDate}
-                              onClick={() => setNewEndDateModalOpen(true)}
-                              aria-label="종료일 선택"
-                            >
-                              <FiCalendar size={14} aria-hidden />
-                              <span>
-                                {newEndDate
-                                  ? formatDateDisplay(newEndDate)
-                                  : '종료일'}
-                              </span>
-                              {newEndDate && (
-                                <DateClearBtn
-                                  as="span"
-                                  role="button"
-                                  tabIndex={0}
-                                  aria-label="종료일 지우기"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    setNewEndDate('')
-                                  }}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter' || event.key === ' ') {
-                                      event.preventDefault()
-                                      event.stopPropagation()
-                                      setNewEndDate('')
-                                    }
-                                  }}
-                                >
-                                  <FiX size={12} />
-                                </DateClearBtn>
-                              )}
-                            </DateFieldTrigger>
-                          </DateRangeRow>
-                          <DatePickerModal
-                            isOpen={newStartDateModalOpen}
-                            onClose={() => setNewStartDateModalOpen(false)}
-                            onSelect={(date) => {
-                              setNewStartDate(date)
-                              setNewStartDateModalOpen(false)
-                            }}
-                            initialDate={newStartDate || undefined}
-                            maxDate={newEndDate || undefined}
-                            title="시작일 선택"
-                          />
-                          <DatePickerModal
-                            isOpen={newEndDateModalOpen}
-                            onClose={() => setNewEndDateModalOpen(false)}
-                            onSelect={(date) => {
-                              setNewEndDate(date)
-                              setNewEndDateModalOpen(false)
-                            }}
-                            initialDate={newEndDate || undefined}
-                            minDate={newStartDate || undefined}
-                            title="종료일 선택"
-                          />
-                        </FormField>
-
-                        <FormField>
-                          <FormFieldLabel>
-                            태그 <FormFieldHint>다중 선택, 선택</FormFieldHint>
-                          </FormFieldLabel>
-                          <TagSelector
-                            value={newTags}
-                            onChange={setNewTags}
-                            disabled={createMut.isPending}
-                          />
-                          {(() => {
-                            const conflict = detectAffinityTagConflict(
-                              newAffinity,
-                              newTags,
-                            )
-                            return conflict ? (
-                              <ConflictWarning role="status" aria-live="polite">
-                                ⚠ {conflict}
-                              </ConflictWarning>
-                            ) : null
-                          })()}
-                        </FormField>
-
-                        {/* 고급 — 추가 차원 */}
-                        <AdvancedToggleBtn
-                          type="button"
-                          onClick={() => setNewAdvancedOpen((v) => !v)}
-                          aria-expanded={newAdvancedOpen}
-                        >
-                          {newAdvancedOpen
-                            ? '− 고급 차원 접기'
-                            : '+ 고급 차원 (신뢰·권력·격식)'}
-                        </AdvancedToggleBtn>
-                        {newAdvancedOpen && (
-                          <>
-                            <FormField>
-                              <FormFieldLabel>
-                                신뢰도{' '}
-                                <FormFieldHint>
-                                  친밀도와 분리. 미설정 가능
-                                </FormFieldHint>
-                              </FormFieldLabel>
-                              <DimensionBipolarPicker
-                                value={newTrust}
-                                onChange={setNewTrust}
-                                spectrum={TRUST_SPECTRUM}
-                                unsetLabel="신뢰도 미설정"
-                                disabled={createMut.isPending}
-                              />
-                            </FormField>
-                            <FormField>
-                              <FormFieldLabel>
-                                권력 비대칭{' '}
-                                <FormFieldHint>
-                                  이 인물 기준 — 음수: 종속, 0: 대등, 양수: 우위
-                                </FormFieldHint>
-                              </FormFieldLabel>
-                              <DimensionBipolarPicker
-                                value={newPower}
-                                onChange={setNewPower}
-                                spectrum={POWER_SPECTRUM}
-                                unsetLabel="권력 비대칭 미설정"
-                                disabled={createMut.isPending}
-                              />
-                            </FormField>
-                            <FormField>
-                              <FormFieldLabel>
-                                격식{' '}
-                                <FormFieldHint>
-                                  음수: 격의없음, 양수: 격식·예의
-                                </FormFieldHint>
-                              </FormFieldLabel>
-                              <DimensionBipolarPicker
-                                value={newFormality}
-                                onChange={setNewFormality}
-                                spectrum={FORMALITY_SPECTRUM}
-                                unsetLabel="격식 미설정"
-                                disabled={createMut.isPending}
-                              />
-                            </FormField>
-                          </>
-                        )}
-
-                        <FormField>
-                          <FormFieldLabel>
-                            근거 사건{' '}
-                            <FormFieldHint>
-                              두 인물의 연보에서 선택, 선택
-                            </FormFieldHint>
-                          </FormFieldLabel>
-                          <SourceSelector
-                            subjectPersonId={personId}
-                            relatedPersonId={newRelatedId || null}
-                            value={newSourceIds}
-                            onChange={setNewSourceIds}
-                            disabled={createMut.isPending}
-                          />
-                        </FormField>
-
-                        <FormField>
-                          <FormFieldLabel>
-                            메모 <FormFieldHint>선택</FormFieldHint>
-                          </FormFieldLabel>
-                          <NoteInput
-                            id="human-rel-new-note"
-                            value={newNote}
-                            onChange={(event) => setNewNote(event.target.value)}
-                            placeholder="기억해둘 메모를 입력하세요"
-                            rows={3}
-                          />
-                        </FormField>
-
-                        <CleanFormFooter>
-                          <GhostButton
-                            type="button"
-                            onClick={closeNewPanel}
-                            disabled={createMut.isPending}
-                          >
-                            취소
-                          </GhostButton>
-                          <PrimaryButton
-                            type="submit"
-                            disabled={createMut.isPending || !newRelatedId}
-                          >
-                            {createMut.isPending ? '등록 중…' : '등록'}
-                          </PrimaryButton>
-                      </CleanFormFooter>
-                    </CleanForm>
-                  </form>
-                </PersonRegisterModalFormScroll>
-              </PersonRegisterModalBox>
-            </PersonRegisterModalOverlay>
-          )}
-        </AnimatePresence>,
-        document.body,
-      )}
+                    <RelatedPersonAvatar
+                      $hasImage={!!selectedNewPerson?.profileImageUrl}
+                    >
+                      {selectedNewPerson?.profileImageUrl ? (
+                        <img
+                          src={
+                            getUploadImageUrl(
+                              selectedNewPerson.profileImageUrl,
+                            ) || selectedNewPerson.profileImageUrl
+                          }
+                          alt=""
+                        />
+                      ) : (
+                        <FiUser size={28} strokeWidth={1.6} />
+                      )}
+                    </RelatedPersonAvatar>
+                    <RelatedPersonText>
+                      {selectedNewPerson ? (
+                        <>
+                          <RelatedPersonName>
+                            {getPersonDisplayName(selectedNewPerson)}
+                          </RelatedPersonName>
+                          <RelatedPersonMeta>
+                            {formatLifespan(selectedNewPerson) || '생몰년 미상'}
+                          </RelatedPersonMeta>
+                        </>
+                      ) : (
+                        <>
+                          <RelatedPersonName $placeholder>
+                            {personsLoading
+                              ? '인물 목록 불러오는 중…'
+                              : '인물 선택'}
+                          </RelatedPersonName>
+                          <RelatedPersonMeta>
+                            클릭해 검색·선택
+                          </RelatedPersonMeta>
+                        </>
+                      )}
+                    </RelatedPersonText>
+                    <RelatedPersonCaret aria-hidden>
+                      <FiChevronRight size={20} strokeWidth={2} />
+                    </RelatedPersonCaret>
+                  </RelatedPersonTrigger>
+                  {personModalOpen && (
+                    <PersonSelectModal
+                      persons={personsExcludingSelf}
+                      selectedPersonId={newRelatedId}
+                      onSelect={(id) => {
+                        setNewRelatedId(id)
+                        setPersonModalOpen(false)
+                      }}
+                      onClose={() => setPersonModalOpen(false)}
+                    />
+                  )}
+                </FormField>
+              }
+            />
+          </CleanForm>
+        </form>
+      </RelModal>
 
       {/* 시기별 스냅샷(phase) 추가/편집 모달 */}
-      {phaseModal &&
-        createPortal(
-          <PhaseModalOverlay onClick={closePhaseModal}>
-            <PhaseModalBox onClick={(e) => e.stopPropagation()}>
-              <PhaseModalHeader>
-                <span>
-                  {phaseModal.phaseId ? '시기 편집' : '시기 추가'}
-                </span>
-                <PhaseModalClose
+      <RelModal
+        open={!!phaseModal}
+        title={phaseModal?.phaseId ? '시기 편집' : '시기 추가'}
+        subtitle={
+          phaseModal
+            ? (() => {
+                const phaseRel = list.find(
+                  (row) => row.id === phaseModal.relationshipId,
+                )
+                return phaseRel
+                  ? getPersonDisplayName(phaseRel.otherPerson)
+                  : undefined
+              })()
+            : undefined
+        }
+        onClose={closePhaseModal}
+        maxWidth="min(480px, 94vw)"
+        footer={
+          phaseModal ? (
+            <>
+              <GhostButton type="button" onClick={closePhaseModal}>
+                취소
+              </GhostButton>
+              <PrimaryButton
+                type="button"
+                disabled={phaseSaveMut.isPending}
+                onClick={() => phaseSaveMut.mutate()}
+              >
+                {phaseSaveMut.isPending
+                  ? '저장 중…'
+                  : phaseModal.phaseId
+                    ? '저장'
+                    : '추가'}
+              </PrimaryButton>
+            </>
+          ) : null
+        }
+      >
+        {phaseModal && (
+          <CleanForm>
+            <FormField>
+              <FormFieldLabel>
+                라벨 <FormFieldHint>예: 황태자 시절</FormFieldHint>
+              </FormFieldLabel>
+              <PhaseTextInput
+                type="text"
+                value={phaseModal.label}
+                onChange={(e) =>
+                  setPhaseModal({ ...phaseModal, label: e.target.value })
+                }
+                placeholder="시기 이름"
+                maxLength={120}
+              />
+            </FormField>
+            <FormField>
+              <FormFieldLabel>기간</FormFieldLabel>
+              <DateRangeRow>
+                <DateFieldTrigger
                   type="button"
-                  aria-label="닫기"
-                  onClick={closePhaseModal}
+                  $hasValue={!!phaseModal.startDate}
+                  onClick={() => setPhaseDatePicker('start')}
+                  aria-label="시작일 선택"
                 >
-                  <FiX size={18} />
-                </PhaseModalClose>
-              </PhaseModalHeader>
-              <PhaseModalBody>
-                <FormField>
-                  <FormFieldLabel>
-                    라벨 <FormFieldHint>예: 황태자 시절</FormFieldHint>
-                  </FormFieldLabel>
-                  <PhaseTextInput
-                    type="text"
-                    value={phaseModal.label}
-                    onChange={(e) =>
-                      setPhaseModal({ ...phaseModal, label: e.target.value })
-                    }
-                    placeholder="시기 이름"
-                    maxLength={120}
-                  />
-                </FormField>
-                <FormField>
-                  <FormFieldLabel>기간</FormFieldLabel>
-                  <DateRangeRow>
-                    <PhaseDateInput
-                      type="date"
-                      value={phaseModal.startDate}
-                      onChange={(e) =>
-                        setPhaseModal({
-                          ...phaseModal,
-                          startDate: e.target.value,
-                        })
-                      }
-                    />
-                    <DateRangeSep>~</DateRangeSep>
-                    <PhaseDateInput
-                      type="date"
-                      value={phaseModal.endDate}
-                      onChange={(e) =>
-                        setPhaseModal({
-                          ...phaseModal,
-                          endDate: e.target.value,
-                        })
-                      }
-                    />
-                  </DateRangeRow>
-                </FormField>
-                <FormField>
-                  <FormFieldLabel>
-                    친밀도{' '}
-                    <FormFieldHint>이 시기 동안의 친밀도</FormFieldHint>
-                  </FormFieldLabel>
-                  <AffinityBipolarPicker
-                    value={phaseModal.affinityLevel}
-                    onChange={(v) =>
-                      setPhaseModal({ ...phaseModal, affinityLevel: v })
-                    }
-                    allowClear
-                  />
-                </FormField>
-                <FormField>
-                  <FormFieldLabel>메모</FormFieldLabel>
-                  <PhaseTextarea
-                    rows={3}
-                    value={phaseModal.note}
-                    onChange={(e) =>
-                      setPhaseModal({ ...phaseModal, note: e.target.value })
-                    }
-                    placeholder="이 시기에 대한 추가 설명 (선택)"
-                  />
-                </FormField>
-              </PhaseModalBody>
-              <PhaseModalFooter>
-                <SecondaryButton type="button" onClick={closePhaseModal}>
-                  취소
-                </SecondaryButton>
-                <PrimaryButton
+                  <FiCalendar size={14} aria-hidden />
+                  <span>
+                    {phaseModal.startDate
+                      ? formatDateDisplay(phaseModal.startDate)
+                      : '시작일'}
+                  </span>
+                  {phaseModal.startDate && (
+                    <DateClearBtn
+                      as="span"
+                      role="button"
+                      tabIndex={0}
+                      aria-label="시작일 지우기"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setPhaseModal({ ...phaseModal, startDate: '' })
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          setPhaseModal({ ...phaseModal, startDate: '' })
+                        }
+                      }}
+                    >
+                      <FiX size={12} />
+                    </DateClearBtn>
+                  )}
+                </DateFieldTrigger>
+                <DateRangeSep>~</DateRangeSep>
+                <DateFieldTrigger
                   type="button"
-                  disabled={phaseSaveMut.isPending}
-                  onClick={() => phaseSaveMut.mutate()}
+                  $hasValue={!!phaseModal.endDate}
+                  onClick={() => setPhaseDatePicker('end')}
+                  aria-label="종료일 선택"
                 >
-                  {phaseSaveMut.isPending
-                    ? '저장 중…'
-                    : phaseModal.phaseId
-                      ? '저장'
-                      : '추가'}
-                </PrimaryButton>
-              </PhaseModalFooter>
-            </PhaseModalBox>
-          </PhaseModalOverlay>,
-          document.body,
+                  <FiCalendar size={14} aria-hidden />
+                  <span>
+                    {phaseModal.endDate
+                      ? formatDateDisplay(phaseModal.endDate)
+                      : '종료일'}
+                  </span>
+                  {phaseModal.endDate && (
+                    <DateClearBtn
+                      as="span"
+                      role="button"
+                      tabIndex={0}
+                      aria-label="종료일 지우기"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setPhaseModal({ ...phaseModal, endDate: '' })
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          setPhaseModal({ ...phaseModal, endDate: '' })
+                        }
+                      }}
+                    >
+                      <FiX size={12} />
+                    </DateClearBtn>
+                  )}
+                </DateFieldTrigger>
+              </DateRangeRow>
+              <DatePickerModal
+                isOpen={phaseDatePicker === 'start'}
+                onClose={() => setPhaseDatePicker(null)}
+                onSelect={(date) => {
+                  setPhaseModal({ ...phaseModal, startDate: date })
+                  setPhaseDatePicker(null)
+                }}
+                initialDate={phaseModal.startDate || undefined}
+                maxDate={phaseModal.endDate || undefined}
+                title="시작일 선택"
+              />
+              <DatePickerModal
+                isOpen={phaseDatePicker === 'end'}
+                onClose={() => setPhaseDatePicker(null)}
+                onSelect={(date) => {
+                  setPhaseModal({ ...phaseModal, endDate: date })
+                  setPhaseDatePicker(null)
+                }}
+                initialDate={phaseModal.endDate || undefined}
+                minDate={phaseModal.startDate || undefined}
+                title="종료일 선택"
+              />
+            </FormField>
+            <FormField>
+              <FormFieldLabel>
+                친밀도 <FormFieldHint>이 시기 동안의 친밀도</FormFieldHint>
+              </FormFieldLabel>
+              <AffinityBipolarPicker
+                value={phaseModal.affinityLevel}
+                onChange={(v) =>
+                  setPhaseModal({ ...phaseModal, affinityLevel: v })
+                }
+                allowClear
+              />
+            </FormField>
+            <FormField>
+              <FormFieldLabel>
+                신뢰도 <FormFieldHint>이 시기의 신뢰</FormFieldHint>
+              </FormFieldLabel>
+              <DimensionBipolarPicker
+                value={phaseModal.trustLevel}
+                spectrum={TRUST_SPECTRUM}
+                unsetLabel="신뢰도 미설정"
+                onChange={(v) =>
+                  setPhaseModal({ ...phaseModal, trustLevel: v })
+                }
+              />
+            </FormField>
+            <FormField>
+              <FormFieldLabel>
+                권력 관계 <FormFieldHint>이 인물 기준 우위/종속</FormFieldHint>
+              </FormFieldLabel>
+              <DimensionBipolarPicker
+                value={phaseModal.powerDynamic}
+                spectrum={POWER_SPECTRUM}
+                unsetLabel="권력 관계 미설정"
+                onChange={(v) =>
+                  setPhaseModal({ ...phaseModal, powerDynamic: v })
+                }
+              />
+            </FormField>
+            <FormField>
+              <FormFieldLabel>
+                격식 <FormFieldHint>격의없음/예의·의전</FormFieldHint>
+              </FormFieldLabel>
+              <DimensionBipolarPicker
+                value={phaseModal.formality}
+                spectrum={FORMALITY_SPECTRUM}
+                unsetLabel="격식 미설정"
+                onChange={(v) => setPhaseModal({ ...phaseModal, formality: v })}
+              />
+            </FormField>
+            <FormField>
+              <FormFieldLabel>메모</FormFieldLabel>
+              <PhaseTextarea
+                rows={3}
+                value={phaseModal.note}
+                onChange={(e) =>
+                  setPhaseModal({ ...phaseModal, note: e.target.value })
+                }
+                placeholder="이 시기에 대한 추가 설명 (선택)"
+              />
+            </FormField>
+          </CleanForm>
         )}
+      </RelModal>
 
       <Root>
         <HeaderRow>
@@ -1667,12 +1377,8 @@ export function PersonHumanRelationshipsSection({
             <RelGroupCount>{generalRelationships.length}</RelGroupCount>
           </RelGroupHead>
           {generalRelationships.length === 0 ? (
-            <EmptyCta
-              type="button"
-              onClick={() => openCreateModal('GENERAL')}
-            >
-              <FiPlus size={14} />
-              첫 일반 관계 추가
+            <EmptyCta type="button" onClick={() => openCreateModal('GENERAL')}>
+              <FiPlus size={14} />첫 일반 관계 추가
             </EmptyCta>
           ) : (
             <RelList>
@@ -1685,10 +1391,7 @@ export function PersonHumanRelationshipsSection({
             <RelGroupCount>{mentorRelationships.length}</RelGroupCount>
           </RelGroupHead>
           {mentorRelationships.length === 0 ? (
-            <EmptyCta
-              type="button"
-              onClick={() => openCreateModal('MENTOR')}
-            >
+            <EmptyCta type="button" onClick={() => openCreateModal('MENTOR')}>
               <FiPlus size={14} />첫 멘토 관계 추가
             </EmptyCta>
           ) : (
@@ -1699,41 +1402,510 @@ export function PersonHumanRelationshipsSection({
         </RelListStack>
       </Root>
 
-      {/* 인라인 확인 다이얼로그 */}
-      {confirmDialog &&
-        createPortal(
-          <ConfirmOverlay
-            role="presentation"
-            onClick={() => setConfirmDialog(null)}
-          >
-            <ConfirmDialog
+      {/* 인라인 확인 다이얼로그 — 등록/수정 모달과 동일 스킨(컴팩트) */}
+      {createPortal(
+        <AnimatePresence>
+          {confirmDialog && (
+            <PersonRegisterModalOverlay
               role="dialog"
               aria-modal="true"
-              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setConfirmDialog(null)}
             >
-              <ConfirmMessage>{confirmDialog.message}</ConfirmMessage>
-              <ConfirmActions>
-                <ConfirmCancelBtn
-                  type="button"
-                  onClick={() => setConfirmDialog(null)}
-                >
-                  취소
-                </ConfirmCancelBtn>
-                <ConfirmOkBtn type="button" onClick={confirmDialog.onConfirm}>
-                  확인
-                </ConfirmOkBtn>
-              </ConfirmActions>
-            </ConfirmDialog>
-          </ConfirmOverlay>,
-          document.body,
-        )}
+              <PersonRegisterModalBox
+                initial={{ opacity: 0, scale: 0.96, y: 16 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 16 }}
+                transition={{ duration: 0.18 }}
+                $maxWidth="min(360px, 92vw)"
+                $minHeight="auto"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <ConfirmBody>
+                  <ConfirmMessage>{confirmDialog.message}</ConfirmMessage>
+                  <ConfirmActions>
+                    <GhostButton
+                      type="button"
+                      onClick={() => setConfirmDialog(null)}
+                    >
+                      취소
+                    </GhostButton>
+                    <PrimaryButton
+                      type="button"
+                      onClick={confirmDialog.onConfirm}
+                    >
+                      확인
+                    </PrimaryButton>
+                  </ConfirmActions>
+                </ConfirmBody>
+              </PersonRegisterModalBox>
+            </PersonRegisterModalOverlay>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
 
       {lineageOpen && (
         <MentorLineageModal
           personId={personId}
           onClose={() => setLineageOpen(false)}
+          onPersonClick={onPersonClick}
         />
       )}
+    </>
+  )
+}
+
+/**
+ * 인간관계 섹션 공용 모달 셸 — 등록/수정/시기 모달이 동일한 오버레이·라운드·그림자·
+ * 등장 모션·헤더 타이포·스티키 푸터를 공유한다(register-modal-shell 위에 구축).
+ * 액션 버튼은 스크롤 밖 하단 고정(footer)이라 긴 폼에서도 항상 보인다.
+ */
+function RelModal({
+  open,
+  title,
+  subtitle,
+  onClose,
+  children,
+  footer,
+  maxWidth = 'min(560px, 94vw)',
+  labelledById,
+}: {
+  open: boolean
+  title: string
+  subtitle?: ReactNode
+  onClose: () => void
+  children: ReactNode
+  footer?: ReactNode
+  maxWidth?: string
+  labelledById?: string
+}) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (open) boxRef.current?.focus()
+  }, [open])
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <PersonRegisterModalOverlay
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={labelledById}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        >
+          <PersonRegisterModalBox
+            ref={boxRef}
+            tabIndex={-1}
+            initial={{ opacity: 0, scale: 0.96, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 16 }}
+            transition={{ duration: 0.18 }}
+            $maxWidth={maxWidth}
+            $minHeight="auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <PersonRegisterModalHeader>
+              <RelModalTitleCol>
+                <PersonRegisterModalTitle id={labelledById}>
+                  {title}
+                </PersonRegisterModalTitle>
+                {subtitle ? (
+                  <RelModalSubtitle>{subtitle}</RelModalSubtitle>
+                ) : null}
+              </RelModalTitleCol>
+              <PersonRegisterModalCloseBtn
+                type="button"
+                aria-label="닫기"
+                onClick={onClose}
+              >
+                <FiX size={20} />
+              </PersonRegisterModalCloseBtn>
+            </PersonRegisterModalHeader>
+            <PersonRegisterModalFormScroll>
+              {children}
+            </PersonRegisterModalFormScroll>
+            {footer ? (
+              <PersonRegisterModalStickyFooter
+                style={{ justifyContent: 'flex-end' }}
+              >
+                {footer}
+              </PersonRegisterModalStickyFooter>
+            ) : null}
+          </PersonRegisterModalBox>
+        </PersonRegisterModalOverlay>
+      )}
+    </AnimatePresence>,
+    document.body,
+  )
+}
+
+/** 등록·수정 폼이 공유하는 관계 입력값 묶음 */
+type RelationshipFormValues = {
+  type: PersonHumanRelationshipType
+  affinity: AffinityLevel | null
+  subjectIsMentor: boolean
+  isMutual: boolean
+  note: string
+  startDate: string
+  endDate: string
+  tags: PersonRelationshipTag[]
+  sourceIds: string[]
+  trust: number | null
+  power: number | null
+  formality: number | null
+  advancedOpen: boolean
+}
+
+/**
+ * 등록·수정 공유 폼 본문.
+ * 관계 종류 토글 → (상대 인물 슬롯) → 역할/시점 → 친밀도 → 기간 → 태그 →
+ * 고급 차원 → 근거 사건 → 메모. 값은 단일 `values` + `patch`로 주고받아 두 폼이
+ * 동일 입력 UI를 공유한다(필드 추가/수정 시 한쪽만 고쳐지는 불일치 방지).
+ *
+ * 종류 변경은 등록=직접 set, 수정=의미변화 확인을 거치므로 `patch`가 아닌
+ * `onTypeChange`로 분리한다. 내부 날짜 피커 오픈 상태는 자체 관리하되 부모 ESC
+ * 게이팅을 위해 `onDateModalOpenChange`로 통지한다.
+ */
+function RelationshipFormFields({
+  values,
+  patch,
+  onTypeChange,
+  subjectPersonId,
+  relatedPersonId,
+  disabled = false,
+  affinityAllowClear,
+  relatedPersonSlot,
+  onDateModalOpenChange,
+  radioName,
+  mentorLabel,
+  noteId,
+  noteRows = 3,
+  notePlaceholder = '기억해둘 메모를 입력하세요',
+}: {
+  values: RelationshipFormValues
+  patch: (partial: Partial<RelationshipFormValues>) => void
+  onTypeChange: (next: PersonHumanRelationshipType) => void
+  subjectPersonId: string
+  relatedPersonId: string | null
+  disabled?: boolean
+  affinityAllowClear: boolean
+  relatedPersonSlot?: ReactNode
+  onDateModalOpenChange?: (open: boolean) => void
+  radioName: string
+  mentorLabel: string
+  noteId?: string
+  noteRows?: number
+  notePlaceholder?: string
+}) {
+  const [dateModal, setDateModal] = useState<'start' | 'end' | null>(null)
+  useEffect(() => {
+    onDateModalOpenChange?.(dateModal !== null)
+  }, [dateModal, onDateModalOpenChange])
+  // 폼 언마운트(닫힘) 시 부모의 날짜 모달 플래그가 true로 고착되지 않도록 정리.
+  useEffect(() => () => onDateModalOpenChange?.(false), [onDateModalOpenChange])
+
+  const conflict = detectAffinityTagConflict(values.affinity, values.tags)
+
+  return (
+    <>
+      <TopTypeToggle
+        role="radiogroup"
+        aria-label="관계 종류"
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            event.preventDefault()
+            onTypeChange('MENTOR')
+          } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+            event.preventDefault()
+            onTypeChange('GENERAL')
+          }
+        }}
+      >
+        <TopTypeOption
+          type="button"
+          role="radio"
+          aria-checked={values.type === 'GENERAL'}
+          tabIndex={values.type === 'GENERAL' ? 0 : -1}
+          $active={values.type === 'GENERAL'}
+          onClick={() => onTypeChange('GENERAL')}
+        >
+          일반 관계
+        </TopTypeOption>
+        <TopTypeOption
+          type="button"
+          role="radio"
+          aria-checked={values.type === 'MENTOR'}
+          tabIndex={values.type === 'MENTOR' ? 0 : -1}
+          $active={values.type === 'MENTOR'}
+          onClick={() => onTypeChange('MENTOR')}
+        >
+          멘토 · 스승–제자
+        </TopTypeOption>
+      </TopTypeToggle>
+
+      {relatedPersonSlot}
+
+      {values.type === 'MENTOR' && (
+        <FormField>
+          <FormFieldLabel>이 인물의 역할</FormFieldLabel>
+          <CompactRolePillRow>
+            <CompactRolePill $active={values.subjectIsMentor}>
+              <HiddenRadio
+                name={radioName}
+                checked={values.subjectIsMentor}
+                onChange={() => patch({ subjectIsMentor: true })}
+              />
+              {mentorLabel}
+            </CompactRolePill>
+            <CompactRolePill $active={!values.subjectIsMentor}>
+              <HiddenRadio
+                name={radioName}
+                checked={!values.subjectIsMentor}
+                onChange={() => patch({ subjectIsMentor: false })}
+              />
+              제자
+            </CompactRolePill>
+          </CompactRolePillRow>
+        </FormField>
+      )}
+
+      {values.type === 'GENERAL' && (
+        <FormField>
+          <FormFieldLabel>시점</FormFieldLabel>
+          <PerspectiveToggle>
+            <UnsetToggleLabel>
+              <UnsetToggleCheckbox
+                type="checkbox"
+                checked={values.isMutual}
+                onChange={(event) => patch({ isMutual: event.target.checked })}
+                disabled={disabled}
+              />
+              <span>
+                양쪽 합의된 대칭 관계
+                <PerspectiveHint>
+                  체크 해제 시 이 인물의 시점만 표현
+                </PerspectiveHint>
+              </span>
+            </UnsetToggleLabel>
+          </PerspectiveToggle>
+        </FormField>
+      )}
+
+      <FormField>
+        <FormFieldLabel>
+          친밀도
+          <FormFieldHint>
+            {values.type === 'MENTOR'
+              ? '선택 — 미설정 가능'
+              : '−2 적대 ~ +2 우호'}
+          </FormFieldHint>
+        </FormFieldLabel>
+        <AffinityBipolarPicker
+          value={values.affinity}
+          onChange={(level) => patch({ affinity: level })}
+          allowClear={affinityAllowClear}
+          disabled={disabled}
+        />
+      </FormField>
+
+      <FormField>
+        <FormFieldLabel>
+          관계 기간 <FormFieldHint>선택</FormFieldHint>
+        </FormFieldLabel>
+        <DateRangeRow>
+          <DateFieldTrigger
+            type="button"
+            $hasValue={!!values.startDate}
+            onClick={() => setDateModal('start')}
+            aria-label="시작일 선택"
+          >
+            <FiCalendar size={14} aria-hidden />
+            <span>
+              {values.startDate
+                ? formatDateDisplay(values.startDate)
+                : '시작일'}
+            </span>
+            {values.startDate && (
+              <DateClearBtn
+                as="span"
+                role="button"
+                tabIndex={0}
+                aria-label="시작일 지우기"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  patch({ startDate: '' })
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    patch({ startDate: '' })
+                  }
+                }}
+              >
+                <FiX size={12} />
+              </DateClearBtn>
+            )}
+          </DateFieldTrigger>
+          <DateRangeSep>~</DateRangeSep>
+          <DateFieldTrigger
+            type="button"
+            $hasValue={!!values.endDate}
+            onClick={() => setDateModal('end')}
+            aria-label="종료일 선택"
+          >
+            <FiCalendar size={14} aria-hidden />
+            <span>
+              {values.endDate ? formatDateDisplay(values.endDate) : '종료일'}
+            </span>
+            {values.endDate && (
+              <DateClearBtn
+                as="span"
+                role="button"
+                tabIndex={0}
+                aria-label="종료일 지우기"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  patch({ endDate: '' })
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    patch({ endDate: '' })
+                  }
+                }}
+              >
+                <FiX size={12} />
+              </DateClearBtn>
+            )}
+          </DateFieldTrigger>
+        </DateRangeRow>
+        <DatePickerModal
+          isOpen={dateModal === 'start'}
+          onClose={() => setDateModal(null)}
+          onSelect={(date) => {
+            patch({ startDate: date })
+            setDateModal(null)
+          }}
+          initialDate={values.startDate || undefined}
+          maxDate={values.endDate || undefined}
+          title="시작일 선택"
+        />
+        <DatePickerModal
+          isOpen={dateModal === 'end'}
+          onClose={() => setDateModal(null)}
+          onSelect={(date) => {
+            patch({ endDate: date })
+            setDateModal(null)
+          }}
+          initialDate={values.endDate || undefined}
+          minDate={values.startDate || undefined}
+          title="종료일 선택"
+        />
+      </FormField>
+
+      <FormField>
+        <FormFieldLabel>
+          태그 <FormFieldHint>다중 선택, 선택</FormFieldHint>
+        </FormFieldLabel>
+        <TagSelector
+          value={values.tags}
+          onChange={(tags) => patch({ tags })}
+          disabled={disabled}
+        />
+        {conflict ? (
+          <ConflictWarning role="status" aria-live="polite">
+            ⚠ {conflict}
+          </ConflictWarning>
+        ) : null}
+      </FormField>
+
+      {/* 고급 — 추가 차원 (신뢰·권력·격식) */}
+      <AdvancedToggleBtn
+        type="button"
+        onClick={() => patch({ advancedOpen: !values.advancedOpen })}
+        aria-expanded={values.advancedOpen}
+      >
+        {values.advancedOpen
+          ? '− 고급 차원 접기'
+          : '+ 고급 차원 (신뢰·권력·격식)'}
+      </AdvancedToggleBtn>
+      {values.advancedOpen && (
+        <AdvancedGroup>
+          <FormField>
+            <FormFieldLabel>
+              신뢰도 <FormFieldHint>친밀도와 분리. 미설정 가능</FormFieldHint>
+            </FormFieldLabel>
+            <DimensionBipolarPicker
+              value={values.trust}
+              onChange={(trust) => patch({ trust })}
+              spectrum={TRUST_SPECTRUM}
+              unsetLabel="신뢰도 미설정"
+              disabled={disabled}
+            />
+          </FormField>
+          <FormField>
+            <FormFieldLabel>
+              권력 비대칭{' '}
+              <FormFieldHint>
+                이 인물 기준 — 음수: 종속, 0: 대등, 양수: 우위
+              </FormFieldHint>
+            </FormFieldLabel>
+            <DimensionBipolarPicker
+              value={values.power}
+              onChange={(power) => patch({ power })}
+              spectrum={POWER_SPECTRUM}
+              unsetLabel="권력 비대칭 미설정"
+              disabled={disabled}
+            />
+          </FormField>
+          <FormField>
+            <FormFieldLabel>
+              격식{' '}
+              <FormFieldHint>음수: 격의없음, 양수: 격식·예의</FormFieldHint>
+            </FormFieldLabel>
+            <DimensionBipolarPicker
+              value={values.formality}
+              onChange={(formality) => patch({ formality })}
+              spectrum={FORMALITY_SPECTRUM}
+              unsetLabel="격식 미설정"
+              disabled={disabled}
+            />
+          </FormField>
+        </AdvancedGroup>
+      )}
+
+      <FormField>
+        <FormFieldLabel>
+          근거 사건 <FormFieldHint>두 인물의 연보에서 선택</FormFieldHint>
+        </FormFieldLabel>
+        <SourceSelector
+          subjectPersonId={subjectPersonId}
+          relatedPersonId={relatedPersonId}
+          value={values.sourceIds}
+          onChange={(sourceIds) => patch({ sourceIds })}
+          disabled={disabled}
+        />
+      </FormField>
+
+      <FormField>
+        <FormFieldLabel>
+          메모 <FormFieldHint>선택</FormFieldHint>
+        </FormFieldLabel>
+        <NoteInput
+          id={noteId}
+          value={values.note}
+          onChange={(event) => patch({ note: event.target.value })}
+          placeholder={notePlaceholder}
+          rows={noteRows}
+        />
+      </FormField>
     </>
   )
 }
@@ -1768,7 +1940,10 @@ function AffinityBipolarPicker({
       } else if (event.key === 'End') {
         event.preventDefault()
         onChange(2)
-      } else if (allowClear && (event.key === 'Backspace' || event.key === 'Delete')) {
+      } else if (
+        allowClear &&
+        (event.key === 'Backspace' || event.key === 'Delete')
+      ) {
         event.preventDefault()
         onChange(null)
       }
@@ -1778,10 +1953,18 @@ function AffinityBipolarPicker({
 
   const renderIcon = (step: AffinityLevel, active: boolean) => {
     if (step < 0) {
-      return <FaHeartBroken size={26} aria-hidden style={{ opacity: active ? 1 : 0.55 }} />
+      return (
+        <FaHeartBroken
+          size={26}
+          aria-hidden
+          style={{ opacity: active ? 1 : 0.55 }}
+        />
+      )
     }
     if (step > 0) {
-      return <FaHeart size={26} aria-hidden style={{ opacity: active ? 1 : 0.55 }} />
+      return (
+        <FaHeart size={26} aria-hidden style={{ opacity: active ? 1 : 0.55 }} />
+      )
     }
     return (
       <NeutralDotIcon $active={active} aria-hidden>
@@ -1828,7 +2011,9 @@ function AffinityBipolarPicker({
                 disabled={pickerDisabled}
                 tabIndex={-1}
                 $active={active}
-                $polarity={step < 0 ? 'negative' : step > 0 ? 'positive' : 'neutral'}
+                $polarity={
+                  step < 0 ? 'negative' : step > 0 ? 'positive' : 'neutral'
+                }
                 onClick={() => {
                   if (allowClear && active) {
                     onChange(null)
@@ -1988,7 +2173,9 @@ function SourceSelector({
   }
 
   if (!relatedPersonId) {
-    return <SourceSelectorEmpty>상대 인물을 먼저 선택하세요.</SourceSelectorEmpty>
+    return (
+      <SourceSelectorEmpty>상대 인물을 먼저 선택하세요.</SourceSelectorEmpty>
+    )
   }
   if (subjectLoading || relatedLoading) {
     return <SourceSelectorEmpty>연보 불러오는 중…</SourceSelectorEmpty>
@@ -2054,7 +2241,8 @@ function formatRelationshipPeriod(
   start: string | null,
   end: string | null,
 ): string {
-  if (start && end) return `${formatDateDisplay(start)} ~ ${formatDateDisplay(end)}`
+  if (start && end)
+    return `${formatDateDisplay(start)} ~ ${formatDateDisplay(end)}`
   if (start) return `${formatDateDisplay(start)} ~`
   if (end) return `~ ${formatDateDisplay(end)}`
   return ''
@@ -2082,9 +2270,11 @@ function formatLifespan(p: {
 function MentorLineageModal({
   personId,
   onClose,
+  onPersonClick,
 }: {
   personId: string
   onClose: () => void
+  onPersonClick?: (personId: string) => void
 }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['mentor-lineage', personId],
@@ -2099,6 +2289,7 @@ function MentorLineageModal({
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
+  // 포커스 온 오픈은 RelModal이 자체 처리.
 
   const ancestors = useMemo(
     () =>
@@ -2116,86 +2307,75 @@ function MentorLineageModal({
   )
   const self = data?.nodes.find((n) => n.direction === 'SELF')
 
-  return createPortal(
-    <LineageOverlay role="presentation" onClick={onClose}>
-      <LineageBox
-        role="dialog"
-        aria-modal="true"
-        aria-label="멘토 계보"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <LineageHeader>
-          <LineageTitle>멘토 계보</LineageTitle>
-          <PersonRegisterModalCloseBtn
-            type="button"
-            aria-label="닫기"
-            onClick={onClose}
-          >
-            <FiX size={20} />
-          </PersonRegisterModalCloseBtn>
-        </LineageHeader>
-        <LineageBody>
-          {isLoading && <LineageEmpty>불러오는 중…</LineageEmpty>}
-          {isError && <LineageEmpty>계보를 불러오지 못했습니다.</LineageEmpty>}
-          {data && (
-            <>
-              <LineageColumn>
-                <LineageColumnTitle>
-                  ↑ 스승 ({ancestors.length})
-                </LineageColumnTitle>
-                {ancestors.length === 0 ? (
-                  <LineageEmpty>등록된 스승이 없습니다.</LineageEmpty>
-                ) : (
-                  <LineageList>
-                    {ancestors.map((node) => (
-                      <LineageNode
-                        key={node.person.id}
-                        depth={Math.abs(node.depth)}
-                        person={node.person}
-                        tone="ancestor"
-                      />
-                    ))}
-                  </LineageList>
-                )}
-              </LineageColumn>
-              {self && (
-                <LineageSelfRow>
-                  <LineageSelfBadge>이 인물</LineageSelfBadge>
-                  <LineageSelfName>
-                    {getPersonDisplayName(self.person)}
-                  </LineageSelfName>
-                  {formatLifespan(self.person) && (
-                    <LineageSelfMeta>
-                      {formatLifespan(self.person)}
-                    </LineageSelfMeta>
-                  )}
-                </LineageSelfRow>
+  return (
+    <RelModal
+      open
+      onClose={onClose}
+      title="멘토 계보"
+      maxWidth="min(640px, 94vw)"
+    >
+      <CleanForm>
+        {isLoading && <LineageEmpty>불러오는 중…</LineageEmpty>}
+        {isError && <LineageEmpty>계보를 불러오지 못했습니다.</LineageEmpty>}
+        {data && (
+          <>
+            <LineageColumn>
+              <LineageColumnTitle>
+                ↑ 스승 ({ancestors.length})
+              </LineageColumnTitle>
+              {ancestors.length === 0 ? (
+                <LineageEmpty>등록된 스승이 없습니다.</LineageEmpty>
+              ) : (
+                <LineageList>
+                  {ancestors.map((node) => (
+                    <LineageNode
+                      key={node.person.id}
+                      depth={Math.abs(node.depth)}
+                      person={node.person}
+                      tone="ancestor"
+                      onPersonClick={onPersonClick}
+                    />
+                  ))}
+                </LineageList>
               )}
-              <LineageColumn>
-                <LineageColumnTitle>
-                  ↓ 제자 ({descendants.length})
-                </LineageColumnTitle>
-                {descendants.length === 0 ? (
-                  <LineageEmpty>등록된 제자가 없습니다.</LineageEmpty>
-                ) : (
-                  <LineageList>
-                    {descendants.map((node) => (
-                      <LineageNode
-                        key={node.person.id}
-                        depth={node.depth}
-                        person={node.person}
-                        tone="descendant"
-                      />
-                    ))}
-                  </LineageList>
+            </LineageColumn>
+            {self && (
+              <LineageSelfRow>
+                <LineageSelfBadge>이 인물</LineageSelfBadge>
+                <LineageSelfName>
+                  {getPersonDisplayName(self.person)}
+                </LineageSelfName>
+                {formatLifespan(self.person) && (
+                  <LineageSelfMeta>
+                    {formatLifespan(self.person)}
+                  </LineageSelfMeta>
                 )}
-              </LineageColumn>
-            </>
-          )}
-        </LineageBody>
-      </LineageBox>
-    </LineageOverlay>,
-    document.body,
+              </LineageSelfRow>
+            )}
+            <LineageColumn>
+              <LineageColumnTitle>
+                ↓ 제자 ({descendants.length})
+              </LineageColumnTitle>
+              {descendants.length === 0 ? (
+                <LineageEmpty>등록된 제자가 없습니다.</LineageEmpty>
+              ) : (
+                <LineageList>
+                  {descendants.map((node) => (
+                    <LineageNode
+                      key={node.person.id}
+                      depth={node.depth}
+                      person={node.person}
+                      tone="descendant"
+                      onPersonClick={onPersonClick}
+                    />
+                  ))}
+                </LineageList>
+              )}
+            </LineageColumn>
+          </>
+        )}
+      </CleanForm>
+    </RelModal>
   )
 }
 
@@ -2203,15 +2383,37 @@ function LineageNode({
   depth,
   person,
   tone,
+  onPersonClick,
 }: {
   depth: number
-  person: { id: string; name: string; surname: string | null; nameDisplayOrder: string | null; birthDate: string | null; deathDate: string | null }
+  person: {
+    id: string
+    name: string
+    surname: string | null
+    nameDisplayOrder: string | null
+    birthDate: string | null
+    deathDate: string | null
+  }
   tone: 'ancestor' | 'descendant'
+  onPersonClick?: (personId: string) => void
 }) {
   return (
-    <LineageNodeRow $tone={tone} style={{ marginLeft: `${(depth - 1) * 16}px` }}>
+    <LineageNodeRow
+      $tone={tone}
+      style={{ marginLeft: `${(depth - 1) * 16}px` }}
+    >
       <LineageNodeBullet $tone={tone}>·</LineageNodeBullet>
-      <LineageNodeLink to={`/persons/${person.id}`}>
+      <LineageNodeLink
+        to={`/persons/${person.id}`}
+        onClick={(e) => {
+          // onPersonClick이 있으면 일반 좌클릭을 가로채 컨텍스트(필터·패널) 유지.
+          // ⌘/Ctrl/Shift+클릭·중클릭은 그대로 둬서 새 탭 열기는 유지.
+          if (!onPersonClick) return
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+          e.preventDefault()
+          onPersonClick(person.id)
+        }}
+      >
         {getPersonDisplayName(person)}
       </LineageNodeLink>
       {formatLifespan(person) && (
@@ -2381,7 +2583,6 @@ const HiddenRadio = styled.input.attrs({ type: 'radio' })`
   border: 0;
 `
 
-
 const AffinityWrap = styled.div``
 
 const BipolarPanel = styled.div<{ $dimmed?: boolean }>`
@@ -2480,9 +2681,7 @@ const BipolarCell = styled.button<{
   border: 1.5px solid
     ${({ $active, $polarity, theme }) => {
       if ($active) return polarityColor($polarity).active
-      return theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.08)'
-        : '#e2e8f0'
+      return theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'
     }};
   background: ${({ $active, $polarity, theme }) => {
     if (!$active) {
@@ -2533,7 +2732,6 @@ const NeutralDotIcon = styled.span<{ $active: boolean }>`
   justify-content: center;
 `
 
-
 const AffinityReadDotsRow = styled.div`
   display: flex;
   align-items: center;
@@ -2551,15 +2749,11 @@ const AffinityReadDot = styled.span<{
   flex-shrink: 0;
   background: ${({ $filled, $polarity, theme }) => {
     if (!$filled)
-      return theme.mode === 'dark'
-        ? 'rgba(248, 250, 252, 0.18)'
-        : '#e2e8f0'
+      return theme.mode === 'dark' ? 'rgba(248, 250, 252, 0.18)' : '#e2e8f0'
     return polarityColor($polarity).active
   }};
   box-shadow: ${({ $filled, $polarity }) =>
-    $filled
-      ? `0 0 0 1px ${polarityColor($polarity).active}33`
-      : 'none'};
+    $filled ? `0 0 0 1px ${polarityColor($polarity).active}33` : 'none'};
 `
 
 const AffinitySign = styled.span`
@@ -2604,9 +2798,7 @@ const DateFieldTrigger = styled.button<{ $hasValue: boolean }>`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(0,0,0,0.2)' : '#fff'};
   color: ${({ $hasValue, theme }) =>
-    $hasValue
-      ? theme.colors.text.primary
-      : theme.colors.text.tertiary};
+    $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
   cursor: pointer;
   text-align: left;
   transition:
@@ -2652,7 +2844,9 @@ const DateClearBtn = styled.button`
     theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
     background: ${({ theme }) =>
@@ -2699,9 +2893,7 @@ const RelatedPersonTrigger = styled.button<{ $hasValue: boolean }>`
   &:hover:not(:disabled) {
     transform: translateY(-1px);
     border-color: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.55)'
-        : 'rgba(99,102,241,0.5)'};
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.55)' : 'rgba(99,102,241,0.5)'};
     background: ${({ theme }) =>
       theme.mode === 'dark'
         ? 'rgba(99,102,241,0.12)'
@@ -2754,9 +2946,7 @@ const RelatedPersonName = styled.span<{ $placeholder?: boolean }>`
   font-weight: 600;
   letter-spacing: -0.02em;
   color: ${({ $placeholder, theme }) =>
-    $placeholder
-      ? theme.colors.text.tertiary
-      : theme.colors.text.primary};
+    $placeholder ? theme.colors.text.tertiary : theme.colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2823,22 +3013,38 @@ const GhostButton = styled.button`
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
 `
 
+/** 평면 톤 강조 버튼 — 그라데이션·글로우 없이 토큰 색만 사용해 모달 전반과 정합 */
 const PrimaryButton = styled.button`
   padding: 10px 22px;
   font-size: 13px;
   font-weight: 600;
   border-radius: 10px;
   border: none;
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  background: ${({ theme }) => theme.colors.button.primary};
   color: #fff;
   cursor: pointer;
-  box-shadow: 0 2px 12px rgba(79, 70, 229, 0.35);
+  transition: background 0.15s ease;
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => theme.colors.button.hover};
+  }
   &:disabled {
     opacity: 0.55;
     cursor: not-allowed;
-    box-shadow: none;
   }
 `
 
@@ -2931,30 +3137,11 @@ const RelCard = styled(motion.li)<{ $variant: 'mentor' | 'general' }>`
           background: #fafbfc;
           border: 1px solid ${theme.colors.border.light};
         `}
-  box-shadow: inset 3px 0 0 0
-    ${({ $variant, theme }) =>
-    $variant === 'mentor'
-      ? theme.mode === 'dark'
-        ? 'rgba(167, 139, 250, 0.45)'
-        : 'rgba(139, 92, 246, 0.32)'
-      : theme.mode === 'dark'
-        ? 'rgba(251, 113, 133, 0.42)'
-        : 'rgba(244, 63, 94, 0.3)'};
   &:hover {
-    box-shadow:
-      inset 3px 0 0 0
-        ${({ $variant, theme }) =>
-          $variant === 'mentor'
-            ? theme.mode === 'dark'
-              ? 'rgba(167, 139, 250, 0.55)'
-              : 'rgba(139, 92, 246, 0.4)'
-            : theme.mode === 'dark'
-              ? 'rgba(251, 113, 133, 0.52)'
-              : 'rgba(244, 63, 94, 0.38)'},
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? '0 1px 8px rgba(0, 0, 0, 0.2)'
-          : '0 2px 10px rgba(15, 23, 42, 0.06)'};
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '0 1px 8px rgba(0, 0, 0, 0.2)'
+        : '0 2px 10px rgba(15, 23, 42, 0.06)'};
     border-color: ${({ theme }) =>
       theme.mode === 'dark'
         ? 'rgba(255, 255, 255, 0.1)'
@@ -2985,9 +3172,16 @@ const RelAvatar = styled.div<{
   width: 42px;
   height: 42px;
   border-radius: 12px;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
   color: ${({ $tone }) => {
     if ($tone === 'mentor') return '#7c3aed'
     if ($tone === 'positive') return '#e11d48'
@@ -3020,7 +3214,9 @@ const RelNameLink = styled(Link)`
   color: ${({ theme }) => theme.colors.text.primary};
   text-decoration: none;
   border-bottom: 1px solid transparent;
-  transition: color 0.12s ease, border-color 0.12s ease;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
   &:hover {
     color: #4f46e5;
     border-bottom-color: rgba(79, 70, 229, 0.4);
@@ -3226,6 +3422,17 @@ const AdvancedToggleBtn = styled.button`
   }
 `
 
+/** 고급 차원(신뢰·권력·격식) — 토글 아래 들여쓴 서브 패널로 묶어 위계 표현 */
+const AdvancedGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 0 4px 14px;
+  border-left: 2px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.22)'};
+`
+
 /** 태그-친밀도 충돌 시 비차단 노란 박스 경고 */
 const ConflictWarning = styled.div`
   margin-top: 6px;
@@ -3272,9 +3479,7 @@ const ExtraDimChip = styled.span`
   color: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(199,210,254,0.85)' : '#475569'};
   background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.04)'
-      : 'rgba(99,102,241,0.06)'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(99,102,241,0.06)'};
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
@@ -3386,7 +3591,10 @@ const DimSegmentedBtn = styled.button<{ $active: boolean }>`
   color: ${({ theme, $active }) =>
     $active ? '#4f46e5' : theme.colors.text.secondary};
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
   &:hover:not(:disabled) {
     background: rgba(99, 102, 241, 0.06);
     border-color: rgba(99, 102, 241, 0.4);
@@ -3419,11 +3627,20 @@ function PhaseTimeline({
   onDeletePhase?: (phase: RelationshipPhase) => void
 }) {
   if (phases.length === 0) return null
+  // 시간순 — startDate 오름차순(없으면 뒤로). 동률은 endDate로 보조 정렬.
+  const sortedPhases = [...phases].sort((a, b) => {
+    const sa = a.startDate ? new Date(a.startDate).getTime() : Infinity
+    const sb = b.startDate ? new Date(b.startDate).getTime() : Infinity
+    if (sa !== sb) return sa - sb
+    const ea = a.endDate ? new Date(a.endDate).getTime() : Infinity
+    const eb = b.endDate ? new Date(b.endDate).getTime() : Infinity
+    return ea - eb
+  })
   return (
     <PhaseTimelineRoot>
       <PhaseTimelineLabel>시기별 변화</PhaseTimelineLabel>
       <PhaseTimelineRow>
-        {phases.map((p) => {
+        {sortedPhases.map((p) => {
           const aff = p.affinityLevel
           const tone =
             aff == null
@@ -3444,7 +3661,16 @@ function PhaseTimeline({
               title={[
                 p.label,
                 period,
-                aff != null ? AFFINITY_SPECTRUM[aff].label : '기록 없음',
+                `친밀 ${aff != null ? AFFINITY_SPECTRUM[aff].label : '기록 없음'}`,
+                p.trustLevel != null
+                  ? `신뢰 ${TRUST_SPECTRUM[p.trustLevel].label}`
+                  : null,
+                p.powerDynamic != null
+                  ? `권력 ${POWER_SPECTRUM[p.powerDynamic].label}`
+                  : null,
+                p.formality != null
+                  ? `격식 ${FORMALITY_SPECTRUM[p.formality].label}`
+                  : null,
                 p.note,
               ]
                 .filter(Boolean)
@@ -3459,6 +3685,21 @@ function PhaseTimeline({
                   ? AFFINITY_SPECTRUM[aff].short
                   : AFFINITY_UNKNOWN_META.short}
               </PhaseAffShort>
+              {(p.trustLevel != null ||
+                p.powerDynamic != null ||
+                p.formality != null) && (
+                <PhaseDimShort>
+                  {p.trustLevel != null && (
+                    <span>신{TRUST_SPECTRUM[p.trustLevel].short}</span>
+                  )}
+                  {p.powerDynamic != null && (
+                    <span>권{POWER_SPECTRUM[p.powerDynamic].short}</span>
+                  )}
+                  {p.formality != null && (
+                    <span>격{FORMALITY_SPECTRUM[p.formality].short}</span>
+                  )}
+                </PhaseDimShort>
+              )}
               <PhaseLabel>{p.label || period || '시기'}</PhaseLabel>
               {onDeletePhase && (
                 <PhaseDeleteX
@@ -3494,9 +3735,7 @@ const PhaseTimelineRoot = styled.div`
   padding: 8px 10px;
   border-radius: 10px;
   background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.025)'
-      : 'rgba(15,23,42,0.025)'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(15,23,42,0.025)'};
 `
 
 const PhaseTimelineLabel = styled.div`
@@ -3585,6 +3824,16 @@ const PhaseAffShort = styled.span`
   opacity: 0.85;
 `
 
+/** 칩 본문의 신뢰·권력·격식 보조 표시 — affinity와 구분되게 옅게. */
+const PhaseDimShort = styled.span`
+  display: inline-flex;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+`
+
 const PhaseLabel = styled.span`
   font-size: 11px;
 `
@@ -3601,7 +3850,9 @@ const PhaseDeleteX = styled.span`
   margin-left: 2px;
   opacity: 0.5;
   cursor: pointer;
-  transition: opacity 0.15s, background 0.15s;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
   &:hover {
     opacity: 1;
     background: rgba(239, 68, 68, 0.18);
@@ -3610,168 +3861,6 @@ const PhaseDeleteX = styled.span`
 `
 
 /* 인간관계 수정 모달 — 카드의 인라인 편집을 모달로 승격 */
-const RelEditOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(6px);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-`
-
-const RelEditBox = styled.div`
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(28,28,32,0.96)' : '#fff'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
-  border-radius: 18px;
-  width: 100%;
-  max-width: 560px;
-  max-height: 92vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow:
-    0 24px 64px rgba(15, 23, 42, 0.18),
-    0 2px 6px rgba(15, 23, 42, 0.06);
-`
-
-const RelEditHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-`
-
-const RelEditTitle = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  span:first-child {
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const RelEditSubject = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  letter-spacing: -0.005em;
-`
-
-const RelEditClose = styled.button`
-  background: transparent;
-  border: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  &:hover {
-    background: ${({ theme }) => theme.colors.background.tertiary};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const RelEditBody = styled.div`
-  padding: 16px 20px 18px;
-  overflow-y: auto;
-`
-
-/* phase 추가/편집 모달 */
-const PhaseModalOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(6px);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-`
-
-const PhaseModalBox = styled.div`
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(28,28,32,0.96)' : '#fff'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e5e7eb'};
-  border-radius: 18px;
-  width: 100%;
-  max-width: 480px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow:
-    0 24px 64px rgba(15, 23, 42, 0.18),
-    0 2px 6px rgba(15, 23, 42, 0.06);
-`
-
-const PhaseModalHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const PhaseModalClose = styled.button`
-  background: transparent;
-  border: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  &:hover {
-    background: ${({ theme }) => theme.colors.background.tertiary};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const PhaseModalBody = styled.div`
-  padding: 16px 20px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-`
-
-const PhaseModalFooter = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 20px 16px;
-  border-top: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-`
-
 const PhaseTextInput = styled.input`
   width: 100%;
   padding: 9px 12px;
@@ -3784,15 +3873,13 @@ const PhaseTextInput = styled.input`
   color: ${({ theme }) => theme.colors.text.primary};
   font-size: 13.5px;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
   &:focus {
     border-color: #6366f1;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
   }
-`
-
-const PhaseDateInput = styled(PhaseTextInput).attrs({ type: 'date' })`
-  font-variant-numeric: tabular-nums;
 `
 
 const PhaseTextarea = styled.textarea`
@@ -3812,27 +3899,6 @@ const PhaseTextarea = styled.textarea`
   &:focus {
     border-color: #6366f1;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-  }
-`
-
-const SecondaryButton = styled.button`
-  padding: 9px 16px;
-  border-radius: 10px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.04)'
-        : 'rgba(15,23,42,0.04)'};
-    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -3879,38 +3945,11 @@ const IconTextBtn = styled.button<{ $danger?: boolean }>`
 
 /* ── 인라인 확인 다이얼로그 ─────────────────────────────────────── */
 
-const ConfirmOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(6px);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-`
-
-const ConfirmDialog = styled.div`
-  width: 100%;
-  max-width: 340px;
-  border-radius: 16px;
-  padding: 24px 22px 20px;
+const ConfirmBody = styled.div`
   display: flex;
   flex-direction: column;
   gap: 18px;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(28, 28, 32, 0.98);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55);
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 20px 48px rgba(0, 0, 0, 0.14);
-        `}
+  padding: 22px 22px 18px;
 `
 
 const ConfirmMessage = styled.p`
@@ -3927,40 +3966,22 @@ const ConfirmActions = styled.div`
   justify-content: flex-end;
 `
 
-const ConfirmCancelBtn = styled.button`
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.07);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: ${theme.colors.text.secondary};
-          &:hover { background: rgba(255, 255, 255, 0.12); }
-        `
-      : css`
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          color: #475569;
-          &:hover { background: #e9eef5; }
-        `}
+/* ── 공용 모달 셸(RelModal) 헤더 ─────────────────────────────────── */
+
+const RelModalTitleCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 `
 
-const ConfirmOkBtn = styled.button`
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  border: none;
-  background: #6366f1;
-  color: #ffffff;
-  transition: background 0.15s;
-  &:hover { background: #4f46e5; }
+const RelModalSubtitle = styled.span`
+  font-size: 12px;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 /* ── 모달 폼 레이아웃 (정리된 평면형) ────────────────────────────── */
@@ -4250,61 +4271,6 @@ const SourceChipLink = styled(Link)`
 `
 
 /* ── 멘토 계보 모달 ───────────────────────────────────────── */
-
-const LineageOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(6px);
-  z-index: 9998;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-`
-
-const LineageBox = styled.div`
-  width: 100%;
-  max-width: 640px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  border-radius: 16px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? '#1c1c20' : '#ffffff'};
-  border: 1px solid ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e2e8f0'};
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
-  overflow: hidden;
-`
-
-const LineageHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#eef2f7'};
-`
-
-const LineageTitle = styled.h3`
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const LineageBody = styled.div`
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-`
 
 const LineageColumn = styled.div`
   display: flex;

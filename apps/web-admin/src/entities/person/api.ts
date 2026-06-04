@@ -36,6 +36,9 @@ export function usePersons() {
       const response = await personsApi.getAllPersons()
       return response as Person[]
     },
+    // 전량(+무거운 include) 로드라 마운트마다 재페치하면 비쌈.
+    // 카드→상세→뒤로 네비게이션 동안 캐시 재사용. mutation invalidate로 갱신은 그대로 동작.
+    staleTime: 60_000,
   })
 }
 

@@ -1821,6 +1821,7 @@ export const SimpleEntryList = styled.ul`
 `
 
 export const SimpleEntryItem = styled.li`
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -1831,6 +1832,49 @@ export const SimpleEntryItem = styled.li`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#e2e8f0'};
+
+  &:hover button[data-role='entry-delete'] {
+    opacity: 1;
+  }
+`
+
+/** 학력·경력·수상 항목 우상단 인라인 삭제 버튼 (호버 시 또렷해짐) */
+export const SimpleEntryDeleteBtn = styled.button`
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  opacity: 0.4;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.error};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(248, 113, 113, 0.14)'
+        : 'rgba(239, 68, 68, 0.1)'};
+  }
+
+  &:focus-visible {
+    opacity: 1;
+    outline: 2px solid ${({ theme }) => theme.colors.error};
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
 `
 
 export const SimpleEntryHeader = styled.div`
@@ -2669,3 +2713,468 @@ export const EmptyState = styled.div`
       : 'rgba(99, 102, 241, 0.02)'};
 `
 
+
+// ─── 재임·재위 업적·한일 (인물 상세 카드 내 인라인 / 타임라인 스타일) ───
+type AchKind = 'tenure' | 'reign'
+
+/** 부모 카드(재임=인디고 / 재위=틸)와 연동되는 accent 팔레트 */
+const achAccent = {
+  tenure: {
+    base: '#6366f1',
+    strong: '#4f46e5',
+    line: 'rgba(99,102,241,0.28)',
+    soft: 'rgba(99,102,241,0.1)',
+    softDark: 'rgba(99,102,241,0.18)',
+    text: '#4338ca',
+    textDark: '#a5b4fc',
+    ring: 'rgba(99,102,241,0.18)',
+  },
+  reign: {
+    base: '#14b8a6',
+    strong: '#0d9488',
+    line: 'rgba(20,184,166,0.28)',
+    soft: 'rgba(20,184,166,0.1)',
+    softDark: 'rgba(20,184,166,0.18)',
+    text: '#0f766e',
+    textDark: '#5eead4',
+    ring: 'rgba(20,184,166,0.18)',
+  },
+} as const
+
+export const AchievementSection = styled.div<{ $kind: AchKind }>`
+  --ach-base: ${({ $kind }) => achAccent[$kind].base};
+  --ach-strong: ${({ $kind }) => achAccent[$kind].strong};
+  --ach-line: ${({ $kind }) => achAccent[$kind].line};
+  --ach-soft: ${({ $kind, theme }) =>
+    theme.mode === 'dark' ? achAccent[$kind].softDark : achAccent[$kind].soft};
+  --ach-text: ${({ $kind, theme }) =>
+    theme.mode === 'dark' ? achAccent[$kind].textDark : achAccent[$kind].text};
+  --ach-ring: ${({ $kind }) => achAccent[$kind].ring};
+
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.07)'};
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+`
+
+export const AchievementHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+export const AchievementToggle = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  transition: color 0.15s;
+  &:hover {
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  }
+  svg.ach-trophy {
+    color: var(--ach-base);
+  }
+`
+
+export const AchievementChevron = styled.span<{ $open: boolean }>`
+  display: inline-flex;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  transition: transform 0.2s ease;
+  transform: rotate(${({ $open }) => ($open ? '90deg' : '0deg')});
+`
+
+export const AchievementCount = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 17px;
+  text-align: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ach-soft);
+  color: var(--ach-text);
+`
+
+export const AchievementAddBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--ach-text);
+  background: var(--ach-soft);
+  border: 1px solid transparent;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  &:hover {
+    box-shadow: 0 0 0 3px var(--ach-ring);
+    transform: translateY(-1px);
+  }
+  &:active {
+    transform: translateY(0);
+  }
+`
+
+export const AchievementTimeline = styled(motion.ul)`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+`
+
+export const AchievementNode = styled.li`
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 7px 8px 7px 16px;
+  border-radius: 8px;
+  transition: background 0.15s;
+
+  /* 작은 불릿 (연결선 없음) */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 13px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--ach-base);
+  }
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.025)'};
+  }
+`
+
+export const AchievementRowMain = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+export const AchievementRowTitle = styled.div`
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  word-break: break-word;
+`
+
+export const AchievementRowMeta = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+`
+
+export const AchievementDateChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1.5px 8px;
+  border-radius: 999px;
+  background: var(--ach-soft);
+  color: var(--ach-text);
+  svg {
+    opacity: 0.8;
+  }
+`
+
+export const AchievementEventBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 180px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1.5px 8px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(20,184,166,0.16)' : 'rgba(20,184,166,0.1)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`
+
+export const AchievementHiddenBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1.5px 8px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const AchievementRowDesc = styled.div`
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  word-break: break-word;
+`
+
+export const AchievementRowActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+
+  ${AchievementNode}:hover & {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    opacity: 1;
+  }
+`
+
+export const AchievementIconBtn = styled.button<{ $danger?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  &:hover {
+    background: ${({ theme, $danger }) =>
+      $danger
+        ? 'rgba(239,68,68,0.12)'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.08)'
+          : 'rgba(15,23,42,0.06)'};
+    color: ${({ theme, $danger }) =>
+      $danger
+        ? '#ef4444'
+        : theme.mode === 'dark'
+          ? theme.colors.text.primary
+          : '#0f172a'};
+  }
+`
+
+export const AchievementForm = styled(motion.div)`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 12px;
+  border-radius: 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.025)'};
+`
+
+export const AchievementInput = styled.input`
+  width: 100%;
+  padding: 8px 11px;
+  font-size: 12.5px;
+  border-radius: 9px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0,0,0,0.2)' : '#ffffff'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  transition: border-color 0.15s, box-shadow 0.15s;
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:focus {
+    outline: none;
+    border-color: var(--ach-base);
+    box-shadow: 0 0 0 3px var(--ach-ring);
+  }
+`
+
+export const AchievementTitleInput = styled(AchievementInput)`
+  font-size: 13px;
+  font-weight: 600;
+`
+
+export const AchievementTextarea = styled.textarea`
+  width: 100%;
+  min-height: 58px;
+  resize: vertical;
+  padding: 8px 11px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  font-family: inherit;
+  border-radius: 9px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0,0,0,0.2)' : '#ffffff'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  transition: border-color 0.15s, box-shadow 0.15s;
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  &:focus {
+    outline: none;
+    border-color: var(--ach-base);
+    box-shadow: 0 0 0 3px var(--ach-ring);
+  }
+`
+
+export const AchievementFormRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+`
+
+export const AchievementDateField = styled.label`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  input {
+    width: auto;
+    padding: 6px 9px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    border-radius: 8px;
+    border: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(0,0,0,0.2)' : '#ffffff'};
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+    color-scheme: ${({ theme }) => (theme.mode === 'dark' ? 'dark' : 'light')};
+    transition: border-color 0.15s, box-shadow 0.15s;
+    &:focus {
+      outline: none;
+      border-color: var(--ach-base);
+      box-shadow: 0 0 0 3px var(--ach-ring);
+    }
+  }
+`
+
+export const AchievementCheckboxRow = styled.label`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  user-select: none;
+  input {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--ach-base);
+    cursor: pointer;
+  }
+`
+
+export const AchievementFormActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 7px;
+  margin-top: 1px;
+`
+
+export const AchievementSaveBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 9px;
+  border: none;
+  cursor: pointer;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--ach-base), var(--ach-strong));
+  box-shadow: 0 2px 8px var(--ach-ring);
+  transition: transform 0.1s, box-shadow 0.15s, opacity 0.15s;
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px var(--ach-ring);
+  }
+  &:active {
+    transform: translateY(0);
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+    transform: none;
+    box-shadow: none;
+  }
+`
+
+export const AchievementCancelBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 9px;
+  cursor: pointer;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  transition: background 0.15s, color 0.15s;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  }
+`
+
+export const AchievementEmpty = styled.p`
+  margin: 0;
+  padding: 6px 2px 2px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`

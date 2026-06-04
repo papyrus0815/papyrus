@@ -111,6 +111,22 @@ export const CATEGORY_ICON: Record<
   OTHER: FiTag,
 }
 
+/** 같은 인물의 재임·재위 기록 참조 — 직위성 사실 중복 입력 경고에 사용 (최소 필드만) */
+export interface PositionalRecordRef {
+  id: string
+  title?: string | null
+  startDate?: string | null
+  endDate?: string | null
+}
+
+/** 직위성 카테고리 — 직책·임기는 재임 기록/경력으로 관리하도록 유도 (경고-only) */
+const POSITIONAL_CATEGORIES: PersonLifeEventCategory[] = [
+  'POLITICAL',
+  'MILITARY',
+  'DIPLOMATIC',
+  'CAREER',
+]
+
 export interface PersonLifeEventFormModalProps {
   open: boolean
   personId: string
@@ -123,6 +139,10 @@ export interface PersonLifeEventFormModalProps {
   deathDate?: string | null
   /** 같은 인물의 기존 연보 — 중복 등록 경고·sortOrder 자동 분배에 사용 */
   existingLifeEvents?: PersonLifeEvent[]
+  /** 같은 인물의 재임 기록 — 입력 시점이 재임 기간에 포함되면 중복 경고 (저장은 허용) */
+  existingTenures?: PositionalRecordRef[]
+  /** 같은 인물의 재위 기록 — 입력 시점이 재위 기간에 포함되면 중복 경고 (저장은 허용) */
+  existingReigns?: PositionalRecordRef[]
 }
 
 /** localStorage 드래프트 키 — tabId 포함해 다른 탭과 충돌 방지 */
@@ -192,6 +212,8 @@ export function PersonLifeEventFormModal({
   birthDate,
   deathDate,
   existingLifeEvents,
+  existingTenures,
+  existingReigns,
 }: PersonLifeEventFormModalProps) {
   const queryClient = useQueryClient()
   const [isEdit, setIsEdit] = useState(() => !!lifeEvent)
@@ -452,6 +474,38 @@ export function PersonLifeEventFormModal({
       ? '같은 제목·날짜 연보가 이미 있습니다 — 그래도 등록하시겠어요?'
       : ''
   }, [title, startDate, existingLifeEvents, lifeEventId])
+
+  /** 시작일이 기존 재임·재위 기간에 포함되면 경고 — 같은 직위성 사실을 재임 기록으로
+      이미 관리 중일 수 있음을 알림 (저장은 허용). 직책·임기는 재임 기록이 단일 출처. */
+  const positionalOverlapWarning = useMemo(() => {
+    if (!startDate) return ''
+    const start = new Date(startDate).getTime()
+    if (Number.isNaN(start)) return ''
+    const records = [
+      ...(existingTenures ?? []).map((t) => ({ ...t, kind: '재임' })),
+      ...(existingReigns ?? []).map((r) => ({ ...r, kind: '재위' })),
+    ]
+    const hit = records.find((rec) => {
+      if (!rec.startDate) return false
+      const s = new Date(rec.startDate).getTime()
+      if (Number.isNaN(s)) return false
+      const e = rec.endDate
+        ? new Date(rec.endDate).getTime()
+        : Number.POSITIVE_INFINITY
+      return start >= s && start <= e
+    })
+    if (!hit) return ''
+    const label = hit.title?.trim() || '직위'
+    return `이 시점은 ${hit.kind} 「${label}」 기간입니다 — 직책·임기는 재임 기록으로 관리되는지 확인하세요.`
+  }, [startDate, existingTenures, existingReigns])
+
+  /** 직위성 카테고리(정치·군사·외교·경력) 선택 시 — 재임 기록/경력 등록 권장 안내 (경고-only) */
+  const positionalCategoryHint = useMemo(() => {
+    if (!category) return ''
+    return POSITIONAL_CATEGORIES.includes(category)
+      ? '직책·임기·소속 같은 직위성 사실은 재임 기록 또는 경력으로 등록하면 타임라인에 자동 반영됩니다. 연보는 보조 서술로 활용하세요.'
+      : ''
+  }, [category])
 
   /** 자주 쓰는 카테고리 상위 3개 — 카테고리 그리드에서 첫 줄에 강조 표시
       (조회는 모달 열릴 때 1회로 충분) */
@@ -828,6 +882,9 @@ export function PersonLifeEventFormModal({
               {!dateError && duplicateWarning && (
                 <FieldWarning>{duplicateWarning}</FieldWarning>
               )}
+              {!dateError && positionalOverlapWarning && (
+                <FieldWarning>{positionalOverlapWarning}</FieldWarning>
+              )}
             </DateField>
 
             {/* 카테고리 — roving tabindex 패턴: ←→로 이동, Enter/Space로 선택 */}
@@ -934,6 +991,9 @@ export function PersonLifeEventFormModal({
                   )
                 })}
               </CategoryGrid>
+              {positionalCategoryHint && (
+                <CategoryHintBox>{positionalCategoryHint}</CategoryHintBox>
+              )}
             </Field>
 
             {/* 고급 설정 — sortOrder. 기본은 접힘 */}
@@ -1304,6 +1364,22 @@ const CategoryHint = styled.span`
   text-transform: none;
   letter-spacing: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 직위성 카테고리 선택 시 재임/경력 등록을 권하는 정보성 안내 (경고-amber와 구분되는 indigo 톤) */
+const CategoryHintBox = styled.div`
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#3730a3')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.14)' : 'rgba(99,102,241,0.07)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.2)'};
 `
 
 const CategoryChip = styled.button<{

@@ -8,7 +8,7 @@
  * - "상세로 이동" 버튼으로 인물 상세 페이지 진입(새 탭 클릭도 지원).
  * - ESC: stack pop, 비어있으면 close. capture 단계로 잡아 하위(타임라인 가이드라인 ESC)보다 먼저 처리.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useNavigate } from 'react-router-dom'
 
@@ -19,6 +19,8 @@ import { FiArrowLeft, FiExternalLink, FiX } from 'react-icons/fi'
 import { personKeys } from '@/entities/person/api'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
+import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 
 import { PersonDetailPanel } from './person-detail-panel'
 import {
@@ -84,6 +86,12 @@ export function PersonDetailModal({
   const navigate = useNavigate()
   const targetUrl = topId ? `/persons/${encodeURIComponent(topId)}/` : '#'
 
+  // 모달 열림 동안 body 스크롤 락 + 패널 내 포커스 트랩
+  const open = !!personId && !!topId
+  const panelRef = useRef<HTMLDivElement>(null)
+  useBodyScrollLock(open)
+  useFocusTrap(panelRef, open)
+
   return (
     <AnimatePresence>
       {personId && topId && (
@@ -98,6 +106,10 @@ export function PersonDetailModal({
         >
           <BioMentionModalPanel
             key={`person-detail-${topId}`}
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="person-detail-modal-title"
             initial={{ opacity: 0, y: 20, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -115,7 +127,7 @@ export function PersonDetailModal({
                   이전
                 </BioMentionModalBack>
               )}
-              <BioMentionModalTitle title={topName}>
+              <BioMentionModalTitle id="person-detail-modal-title" title={topName}>
                 {topName || '인물'}
               </BioMentionModalTitle>
               <BioMentionModalOpenDetail

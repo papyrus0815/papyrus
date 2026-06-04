@@ -81,6 +81,8 @@ export interface PersonHumanRelationshipBrief {
   nameDisplayOrder: string | null
   birthDate: string | null
   deathDate: string | null
+  /** 프로필 이미지 URL (없으면 null) — 관계 카드 아바타에 표시 */
+  profileImageUrl?: string | null
 }
 
 /** 한 관계의 시기별 스냅샷 — affinity·trust·power·formality가 시간에 따라 달라지는 변화 기록. */

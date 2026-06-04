@@ -26,6 +26,7 @@ import {
   type PartyMembershipRow,
 } from '@/shared/api/election'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   PersonRegisterModalCancelBtn,
@@ -179,6 +180,10 @@ export function PersonPoliticsSection({
   const [editEnd, setEditEnd] = useState('')
   const [editRole, setEditRole] = useState('')
   const [editNotes, setEditNotes] = useState('')
+  /** 삭제 확인 대상 (당원 소속 행). null이면 다이얼로그 닫힘 */
+  const [deleteTarget, setDeleteTarget] = useState<PartyMembershipRow | null>(
+    null,
+  )
 
   const isMembershipModalOpen = panelOpen || editingId !== null
 
@@ -604,11 +609,8 @@ export function PersonPoliticsSection({
                     type="button"
                     $danger
                     aria-label="삭제"
-                    onClick={() => {
-                      if (window.confirm('이 소속 기록을 삭제할까요?')) {
-                        deleteMut.mutate(membershipRow.id)
-                      }
-                    }}
+                    disabled={deleteMut.isPending}
+                    onClick={() => setDeleteTarget(membershipRow)}
                   >
                     <FiTrash2 size={14} />
                   </IconBtn>
@@ -647,6 +649,39 @@ export function PersonPoliticsSection({
           ))}
         </CandidacyList>
       )}
+
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        danger
+        title="당원 소속 삭제"
+        confirmLabel={deleteMut.isPending ? '삭제 중…' : '삭제'}
+        cancelLabel="취소"
+        message={
+          deleteTarget ? (
+            <>
+              <strong>
+                {deleteTarget.party?.name ?? deleteTarget.partyId}
+              </strong>{' '}
+              소속 기록(
+              {membershipDateToYmd(deleteTarget.startDate) || '—'} ~{' '}
+              {membershipEndDisplay(deleteTarget.endDate)})을(를) 삭제할까요? 이
+              작업은 되돌릴 수 없습니다.
+            </>
+          ) : (
+            ''
+          )
+        }
+        onCancel={() => {
+          if (deleteMut.isPending) return
+          setDeleteTarget(null)
+        }}
+        onConfirm={() => {
+          if (!deleteTarget || deleteMut.isPending) return
+          deleteMut.mutate(deleteTarget.id, {
+            onSettled: () => setDeleteTarget(null),
+          })
+        }}
+      />
     </Root>
   )
 }

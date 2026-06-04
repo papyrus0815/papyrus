@@ -1151,6 +1151,91 @@ export const personCareerApi = {
   },
 
   /**
+   * 학력 삭제
+   */
+  deleteEducation: async (id: string) => {
+    await apiClient.delete(`/persons/educations/${id}`)
+  },
+
+  /**
+   * 수상/훈장 삭제
+   */
+  deleteAward: async (id: string) => {
+    await apiClient.delete(`/persons/awards/${id}`)
+  },
+
+  /**
+   * 군인 경력 삭제
+   */
+  deleteMilitaryCareer: async (id: string) => {
+    await apiClient.delete(`/persons/careers/military/${id}`)
+  },
+
+  /**
+   * 기업인 경력 삭제
+   */
+  deleteBusinessCareer: async (id: string) => {
+    await apiClient.delete(`/persons/careers/business/${id}`)
+  },
+
+  /**
+   * 학자 경력 삭제
+   */
+  deleteAcademicCareer: async (id: string) => {
+    await apiClient.delete(`/persons/careers/academic/${id}`)
+  },
+
+  /**
+   * 운동선수 경력 삭제
+   */
+  deleteAthleteCareer: async (id: string) => {
+    await apiClient.delete(`/persons/careers/athlete/${id}`)
+  },
+
+  /**
+   * 종교인 경력 삭제
+   */
+  deleteReligiousCareer: async (id: string) => {
+    await apiClient.delete(`/persons/careers/religious/${id}`)
+  },
+
+  /**
+   * 예술가 경력 삭제
+   */
+  deleteArtistCareer: async (id: string) => {
+    await apiClient.delete(`/persons/careers/artist/${id}`)
+  },
+
+  /**
+   * 언론인 경력 삭제
+   */
+  deleteMediaCareer: async (id: string) => {
+    await apiClient.delete(`/persons/careers/media/${id}`)
+  },
+
+  /**
+   * 법조인 경력 삭제
+   */
+  deleteLegalCareer: async (id: string) => {
+    await apiClient.delete(`/persons/careers/legal/${id}`)
+  },
+
+  /**
+   * 의료인 경력 삭제
+   */
+  deleteMedicalCareer: async (id: string) => {
+    await apiClient.delete(`/persons/careers/medical/${id}`)
+  },
+
+  /**
+   * kind(military/business/academic/...) 문자열로 적절한 경력 삭제 엔드포인트로 분기.
+   * kind 값이 그대로 URL 세그먼트(컨트롤러 경로)와 일치한다.
+   */
+  deleteCareerByKind: async (kind: string, id: string) => {
+    await apiClient.delete(`/persons/careers/${kind}/${id}`)
+  },
+
+  /**
    * 인물의 모든 경력 조회
    */
   getAllCareers: async (personId: string) => {
