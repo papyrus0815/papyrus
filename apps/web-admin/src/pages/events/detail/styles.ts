@@ -110,6 +110,25 @@ export const Hero = styled.section`
   gap: 20px;
   padding-bottom: 32px;
   width: 100%;
+
+  /**
+   * 진입 페이드업 — 사건 진입(또는 다른 사건으로 이동 시 ErrorBoundary key 리셋으로
+   * 리마운트)마다 1회. 인라인 patch refetch에는 DOM이 유지돼 재생되지 않는다.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    animation: heroRise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes heroRise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
   /**
    * Hero 콘텐츠 폭을 Main(720px)과 동일하게 잡고 가운데 정렬.
    * Main이 grid cell 안에서 margin: auto로 가운데 오므로, Hero도 같은
@@ -479,6 +498,43 @@ export const CardGrid = styled.div<{ $cols?: number }>`
   }
 `
 
+/* ───────────────────────── Module data card ──────────────────────────── */
+
+/**
+ * 모듈의 데이터 묶음(작전 정보·교전 진영 등)을 감싸는 hairline 카드.
+ * 사상자 stat 카드와 동일한 톤 — 좌측 3px 모듈색 액센트 + hover border.
+ * 본문 narrative엔 카드를 쓰지 않는 원칙을 지키되, "수치/표" 성격의 모듈 데이터는
+ * 이 카드로 묶어 본문과 시각적으로 분리한다($accent로 모듈색 주입).
+ */
+export const ModuleDataCard = styled.div<{ $accent: string }>`
+  position: relative;
+  padding: 14px 16px 14px 18px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  border-radius: 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
+  transition: border-color 0.15s, background 0.15s;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 16px;
+    left: 0;
+    width: 3px;
+    height: 16px;
+    border-radius: 0 2px 2px 0;
+    background: ${({ $accent }) => $accent};
+    opacity: 0.55;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.16)'};
+  }
+`
+
 /* ───────────────────────── Definition list (모듈 데이터 표) ──────────── */
 
 /**
@@ -610,16 +666,32 @@ export const EmptyState = styled.div`
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  padding: 12px 0 14px 14px;
+  padding: 14px 0 16px 16px;
   border-left: 2px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 13.5px;
   line-height: 1.6;
-  font-style: italic;
+`
+
+/**
+ * 빈 상태 헤더 — 맥락 아이콘 + 한 줄 안내. 아이콘은 emoji/노드로 전달.
+ * italic은 보조 메타용으로 예약하고, 빈 상태는 또렷한 secondary 텍스트로 발견성 ↑.
+ */
+export const EmptyStateHead = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+`
+
+export const EmptyStateIcon = styled.span`
+  display: inline-flex;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.65;
 `
 
 export const EmptyStateLine = styled.span`
-  font-style: italic;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 /* ───────────────────────── Accent surfaces ───────────────────────── */

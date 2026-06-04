@@ -1,7 +1,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
 
+import { resolveCategory } from '@/pages/events/ledger/styles/ledger-tokens'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
@@ -20,9 +22,10 @@ import { ModuleCasualties } from './components/module-casualties'
 import { ModuleMilitaryDetails } from './components/module-military-details'
 import { ModuleTreaties } from './components/module-treaties'
 import { PersonDetailModal } from './components/person-detail-modal'
+import { ReadingProgress } from './components/reading-progress'
 import { SaveStatus } from './components/save-status'
 import * as S from './styles'
-import { useEventDetail } from './use-event-detail'
+import { type EventDetail, eventKeys, useEventDetail } from './use-event-detail'
 import { useEventMutation } from './use-event-mutation'
 import { useUndoablePatch } from './use-undoable-patch'
 
@@ -74,6 +77,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
   /* 탭·히스토리 식별 — 사건명을 문서 제목에 반영. */
   useDocumentTitle(event.title)
 
+  const queryClient = useQueryClient()
   const mutation = useEventMutation(eventId)
   /**
    * onPatch — mutation.mutate에 1단계 undo 토스트를 얹은 wrapper.
@@ -117,6 +121,70 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     next.delete('person')
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
+
+  /**
+   * 본문에 *인물* 엔티티를 링크하면 참여 행위자로 자동 등록.
+   * - 이미 행위자면 무시(기존 role/note 보존).
+   * - relatedPersons는 delete-and-recreate라 *전체 배열*을 PUT — 기존 항목은
+   *   payload로 직렬화해 함께 보낸다. onPatch 경유라 직후 "되돌리기" 토스트로 취소 가능.
+   * - 본문 편집 commit과 독립적 — 본문을 취소(Esc)해도 이미 등록된 행위자는 유지(정책 A).
+   * - 즉시 표시: mutation의 낙관적 빌더는 신규 인물 이름을 `['persons','all']`
+   *   캐시(행위자 모달 열 때만 적재)에서 찾으므로, 에디터 링크만으론 캐시가 비어
+   *   낙관 갱신이 스킵된다. 에디터가 넘긴 표시명으로 상세 캐시에 직접 써넣어
+   *   링크 즉시(저장·새로고침 없이) 행위자가 뜨도록 한다. 직후 PUT·refetch가 정본 반영.
+   * - race 차단: 기존 목록·중복 판정·PUT 페이로드를 모두 *그 시점 캐시 스냅샷*에서
+   *   도출한다. 렌더 상태(`event.relatedPersons`)는 직전 링크의 낙관 갱신을 아직
+   *   반영하지 못했을 수 있어, 연속 링크 시 먼저 추가한 인물이 delete-and-recreate
+   *   PUT에서 누락될 수 있었다. 낙관 setQueryData는 동기 반영이므로 캐시는 항상 최신.
+   */
+  const onPersonEntityLink = useCallback(
+    (person: { id: string; name: string; imageUrl?: string | null }) => {
+      const detailKey = eventKeys.detail(eventId)
+      const existing =
+        queryClient.getQueryData<EventDetail>(detailKey)?.relatedPersons ??
+        event.relatedPersons ??
+        []
+      if (existing.some((p) => p.personId === person.id)) return
+
+      queryClient.setQueryData<EventDetail>(detailKey, (prev) =>
+        prev
+          ? {
+              ...prev,
+              relatedPersons: [
+                ...(prev.relatedPersons ?? []),
+                {
+                  id: `opt-${person.id}`,
+                  personId: person.id,
+                  role: null,
+                  note: null,
+                  person: {
+                    id: person.id,
+                    name: person.name,
+                    surname: null,
+                    profileImageUrl: person.imageUrl ?? null,
+                  },
+                },
+              ],
+            }
+          : prev,
+      )
+
+      onPatch(
+        {
+          relatedPersons: [
+            ...existing.map((p) => ({
+              personId: p.personId,
+              role: p.role ?? undefined,
+              note: p.note ?? undefined,
+            })),
+            { personId: person.id },
+          ],
+        },
+        { savedLabel: `행위자에 추가 · ${person.name}` },
+      )
+    },
+    [event.relatedPersons, onPatch, queryClient, eventId],
+  )
 
   /**
    * 섹션 목록 — rail에 표시할 anchor + 라벨.
@@ -164,9 +232,14 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [event.id])
 
+  /* Page = 내부 스크롤 컨테이너 — 읽기 진행률 바가 이 ref로 scrollTop을 읽는다. */
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const accentColor = resolveCategory(event.category?.name).color
+
   return (
     <InlineEditProvider>
-      <S.Page>
+      <S.Page ref={scrollRef}>
+        <ReadingProgress targetRef={scrollRef} color={accentColor} />
         <S.PageInner>
           <SaveStatus isPending={mutation.isPending} lastSavedAt={lastSavedAt} />
           <DetailHero
@@ -183,6 +256,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
                 event={event}
                 onPatch={onPatch}
                 onPersonClick={onPersonClick}
+                onPersonEntityLink={onPersonEntityLink}
               />
 
               <DetailActors

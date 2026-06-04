@@ -18,6 +18,16 @@ interface DetailNarrativeProps {
   onPatch: (patch: UpdateEventDto) => void
   /** 본문 내 인물 멘션/엔티티 링크 클릭 → 페이지 레벨 인물 모달. */
   onPersonClick?: (personId: string) => void
+  /**
+   * 본문에 *인물* 엔티티를 링크했을 때 호출 → 참여 행위자 자동 등록.
+   * 페이지가 relatedPersons 병합(중복 무시)을 담당. 표시명·프로필 이미지를 함께
+   * 넘겨 낙관적 갱신이 인물 캐시 적재 없이도 즉시 이름·아바타를 렌더하도록 한다.
+   */
+  onPersonEntityLink?: (person: {
+    id: string
+    name: string
+    imageUrl?: string | null
+  }) => void
 }
 
 interface SectionRow {
@@ -48,7 +58,18 @@ export function DetailNarrative({
   event,
   onPatch,
   onPersonClick,
+  onPersonEntityLink,
 }: DetailNarrativeProps) {
+  /* 본문(배경·여파·섹션) 공통 — 인물 링크 삽입 시에만 행위자 등록으로 잇는다. */
+  const handleEntityLink = useCallback(
+    (item: { type: string; id: string; name: string; data?: unknown }) => {
+      if (item.type !== 'person') return
+      const imageUrl = (item.data as { imageUrl?: string | null } | null)
+        ?.imageUrl
+      onPersonEntityLink?.({ id: item.id, name: item.name, imageUrl })
+    },
+    [onPersonEntityLink],
+  )
   /**
    * 클라이언트 임시 키 생성기. 모듈 스코프 mutable counter는 HMR에서 취약하므로
    * 컴포넌트 인스턴스의 ref로 둔다. Date.now()와 함께라 충돌 위험은 사실상 없음.
@@ -158,6 +179,7 @@ export function DetailNarrative({
             onSave={(next) => onPatch({ background: next })}
             placeholder="사건 직전의 정세·도화선이 된 사건·인물 배치 등"
             onPersonClick={onPersonClick}
+            onEntityLink={handleEntityLink}
           />
         </S.SectionBody>
       </S.Section>
@@ -182,9 +204,12 @@ export function DetailNarrative({
         </S.SectionHeader>
         {rows.length === 0 ? (
           <S.EmptyState>
-            <S.EmptyStateLine>
-              아직 전개 섹션이 없습니다. 아래 버튼으로 추가하세요.
-            </S.EmptyStateLine>
+            <S.EmptyStateHead>
+              <S.EmptyStateIcon aria-hidden>📖</S.EmptyStateIcon>
+              <S.EmptyStateLine>
+                아직 전개 섹션이 없습니다. 아래 <strong>+ 섹션 추가</strong>로 시작하세요.
+              </S.EmptyStateLine>
+            </S.EmptyStateHead>
           </S.EmptyState>
         ) : (
           <SectionStack>
@@ -233,6 +258,7 @@ export function DetailNarrative({
                   onSave={(next) => updateSectionField(idx, { content: next })}
                   placeholder="본문"
                   onPersonClick={onPersonClick}
+                  onEntityLink={handleEntityLink}
                 />
               </SectionItem>
             ))}
@@ -255,6 +281,7 @@ export function DetailNarrative({
             onSave={(next) => onPatch({ aftermath: next })}
             placeholder="사건 직후의 결과·후속 영향·종결 시점의 상태"
             onPersonClick={onPersonClick}
+            onEntityLink={handleEntityLink}
           />
         </S.SectionBody>
       </S.Section>
@@ -376,6 +403,11 @@ const SectionItem = styled.div`
     border-top: none;
     padding-top: 4px;
   }
+
+  @media (max-width: 640px) {
+    gap: 12px;
+    padding: 14px 0;
+  }
 `
 
 const SectionTitleRow = styled.div`
@@ -425,13 +457,21 @@ const ManageBtn = styled.button<{ $danger?: boolean }>`
   color: ${({ theme, $danger }) =>
     $danger ? theme.colors.error : theme.colors.text.secondary};
   cursor: pointer;
-  transition: border-color 0.14s, color 0.14s;
+  transition: border-color 0.14s, color 0.14s, background 0.14s;
 
   &:hover:not(:disabled) {
     border-color: ${({ theme, $danger }) =>
       $danger ? theme.colors.error : theme.colors.text.tertiary};
     color: ${({ theme, $danger }) =>
       $danger ? theme.colors.error : theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
+  }
+
+  &:focus-visible {
+    outline: 2px solid
+      ${({ theme, $danger }) => ($danger ? theme.colors.error : theme.colors.primary)};
+    outline-offset: 1px;
   }
 
   &:disabled {
@@ -460,11 +500,18 @@ const ManageToggle = styled.button<{ $active: boolean }>`
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: color 0.14s, border-color 0.14s;
+  transition: color 0.14s, border-color 0.14s, background 0.14s;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
     border-color: ${({ theme }) => theme.colors.text.tertiary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
   }
 
   svg {
@@ -491,8 +538,15 @@ const AddSectionBtn = styled.button`
   transition: background 0.14s, color 0.14s, border-color 0.14s;
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.text.tertiary};
-    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)'};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
   }
 
   svg {

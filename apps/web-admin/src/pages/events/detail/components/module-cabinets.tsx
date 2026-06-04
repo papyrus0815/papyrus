@@ -87,14 +87,40 @@ export function ModuleCabinets({ event }: ModuleCabinetsProps) {
 const Table = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 `
 
 const Row = styled.div`
+  position: relative;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  padding: 11px 13px 11px 15px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  border-radius: 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
+  transition: border-color 0.15s, background 0.15s;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 13px;
+    left: 0;
+    width: 3px;
+    height: 14px;
+    border-radius: 0 2px 2px 0;
+    background: ${MODULE_COLOR.cabinets};
+    opacity: 0.55;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.16)'};
+  }
 `
 
 const Main = styled.div`

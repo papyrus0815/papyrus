@@ -53,8 +53,8 @@ export const SkeletonListItem = styled.div<{ $depth: number }>`
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'};
   display: flex;
   gap: 0;
-  opacity: 0.6;
-  ${pulseAnimation}
+  /* 컨테이너 pulse 제거 — 자식 bar의 shimmer만으로 로딩 신호. 두 애니메이션이
+     동시에 돌며 생기던 미세 '떨림' 해소(자식 shimmer가 단일 신호 담당). */
   overflow: hidden;
   height: ${({ $depth }) => Math.max(70, 90 - $depth * 10)}px;
 `

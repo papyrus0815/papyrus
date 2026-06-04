@@ -42,7 +42,11 @@ import {
   useBasicInfoForm,
   useRelationshipsForm,
 } from '@/features/event-form/model'
-import { type EventDetail, eventKeys } from '@/pages/events/detail/use-event-detail'
+import {
+  type EventDetail,
+  eventDetailQueryOptions,
+  eventKeys,
+} from '@/pages/events/detail/use-event-detail'
 import {
   type EventResponseDto,
   createEvent,
@@ -585,6 +589,14 @@ export const EventCreatePageRefactored: React.FC<
       }
 
       setIsSubmitting(true)
+      /**
+       * 상세 페이지 코드 청크를 *지금* 데운다 — 라우트(`event-route.ts`)가 lazy
+       * import하는 것과 동일한 청크라, 번들러가 단일 청크로 dedupe한다.
+       * 등록 API와 병렬로 받아두면 저장 직후 navigate가 청크 다운로드로 멈칫하지
+       * 않아, '오버레이→빈 폼 깜빡→상세'로 끊기던 이동이 매끄러워진다
+       * (상세 데이터는 아래에서 캐시 시딩하므로 청크만 데우면 즉시 렌더).
+       */
+      void import('../detail/event-detail.page')
       const { mentionedPersons, mentionedEvents } = extractMentions(sections)
 
       // 카테고리 변경 후 이전 카테고리 데이터가 잔존해도 서버에 보내지 않도록
@@ -658,15 +670,21 @@ export const EventCreatePageRefactored: React.FC<
       queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
 
       if (onSuccess) {
+        // 콜백 경로는 페이지 이동이 없을 수 있어(모달 등) 오버레이를 명시 해제.
+        setIsSubmitting(false)
         onSuccess()
       } else if (targetId) {
         /**
          * 등록·수정 후 *해당 사건 상세*로. 등록은 보통 본문·이미지·관계를 이어서
          * 채우므로 목록으로 빠지는 것보다 상세 진입이 자연스럽다.
          *
-         * 저장 응답을 상세 쿼리 캐시에 *시딩*해 무로딩으로 즉시 진입시키고, 곧바로
-         * invalidate해 누락됐을 수 있는 derived relation(이름 포함 국가·인물·섹션 등)을
-         * 백그라운드 refetch로 보강한다(그 동안 시딩 데이터를 보여줌 — 스피너 없음).
+         * 서버(create/update)가 *조회와 동일한 full-include + 군사정보* 응답을 주므로,
+         * 이 응답 시딩만으로 완전한 상세가 즉시 렌더된다(과거엔 생성 응답에 관계가
+         * 비어, 빈 패널이 먼저 그려졌다가 refetch 도착 시 펑 뜨는 레이아웃 점프가 있었음).
+         *
+         * 진입 직전 ensureQueryData로 권위 데이터를 한 번 더 보장 — 시딩이 신선하면
+         * 무네트워크 즉시 반환, 시딩이 없거나 만료됐으면 GET으로 보강해 *항상 완전한*
+         * 상세로 진입한다(서버 응답 형태 가정에 비의존).
          *
          * replace: true — 등록/수정 폼을 히스토리에서 치운다. 상세에서 뒤로가기 시
          * 빈 등록 폼(중복 등록 위험)·수정 폼이 아니라 진입 전 위치(목록 등)로 가도록.
@@ -676,10 +694,8 @@ export const EventCreatePageRefactored: React.FC<
             eventKeys.detail(targetId),
             saved as unknown as EventDetail,
           )
-          queryClient.invalidateQueries({
-            queryKey: eventKeys.detail(targetId),
-          })
         }
+        await queryClient.ensureQueryData(eventDetailQueryOptions(targetId))
         navigate(pathKeys.events.detail(targetId), {
           viewTransition: true,
           replace: true,
@@ -687,6 +703,9 @@ export const EventCreatePageRefactored: React.FC<
       } else {
         navigate(pathKeys.events.root())
       }
+      // 성공 경로(navigate)는 곧 이 페이지가 언마운트되므로 오버레이를 끄지 않는다.
+      // 여기서 setIsSubmitting(false)를 하면 navigate 커밋 전 '빈 폼'이 한 프레임
+      // 노출돼 깜빡임이 생긴다 → 상세가 마운트되며 오버레이가 자연 소멸하도록 둔다.
     } catch (error) {
       console.error('[EventCreatePage] 사건 저장 실패:', error)
       toast.error(
@@ -694,8 +713,7 @@ export const EventCreatePageRefactored: React.FC<
           error instanceof Error ? error.message : '알 수 없는 오류'
         }`,
       )
-    } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false) // 실패 시엔 폼에 머무르므로 오버레이 해제
     }
   }
 

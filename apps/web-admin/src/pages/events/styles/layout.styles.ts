@@ -162,14 +162,15 @@ export const CreateEventFab = styled.button`
 export const TopFilterBar = styled.div`
   display: flex;
   gap: 10px;
-  padding: 4px 0 12px;
+  /* 상단 8px — 검색바(34px) 위 숨통. 구분선은 한 단계 또렷하게(0.06→0.09). */
+  padding: 8px 0 14px;
   flex-wrap: wrap;
   align-items: center;
   border-bottom: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06)'
-        : 'rgba(20, 19, 34, 0.06)'};
+        ? 'rgba(255, 255, 255, 0.09)'
+        : 'rgba(20, 19, 34, 0.09)'};
 `
 
 /**

@@ -474,6 +474,12 @@ const Grid = styled.div<{ $dragOver: boolean }>`
   border: 1px dashed transparent;
   transition: border-color 0.14s, background 0.14s;
 
+  /* 좁은 화면 — auto-fill이 1열로 떨어져 카드가 과대해지므로 2열 고정. */
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
   ${({ $dragOver, theme }) =>
     $dragOver &&
     css`
@@ -585,12 +591,24 @@ const RemoveImage = styled.button`
   opacity: 0;
   transition: opacity 0.14s, background 0.14s;
 
-  ${ImageCell}:hover & {
+  ${ImageCell}:hover &,
+  ${ImageCell}:focus-within & {
     opacity: 1;
   }
 
   &:hover {
     background: ${({ theme }) => theme.colors.error};
+  }
+
+  &:focus-visible {
+    opacity: 1;
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+
+  /* 터치 기기 — hover가 없으므로 컨트롤을 항상 노출. */
+  @media (hover: none) {
+    opacity: 1;
   }
 
   svg {
@@ -631,7 +649,8 @@ const PrimaryToggle = styled.button<{ $active: boolean }>`
   opacity: ${({ $active }) => ($active ? 1 : 0)};
   transition: opacity 0.14s, background 0.14s;
 
-  ${ImageCell}:hover & {
+  ${ImageCell}:hover &,
+  ${ImageCell}:focus-within & {
     opacity: 1;
   }
 
@@ -644,6 +663,11 @@ const PrimaryToggle = styled.button<{ $active: boolean }>`
     opacity: 1;
     outline: 2px solid #fff;
     outline-offset: 2px;
+  }
+
+  /* 터치 기기 — 별(대표 지정) 토글을 항상 노출. */
+  @media (hover: none) {
+    opacity: 1;
   }
 
   svg {

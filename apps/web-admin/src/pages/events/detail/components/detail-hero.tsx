@@ -3,7 +3,7 @@ import { FiArrowLeft, FiAward, FiCalendar, FiMapPin } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { resolveCategory } from '@/pages/events/ledger/styles/ledger-tokens'
+import { resolveCategory, withAlpha } from '@/pages/events/ledger/styles/ledger-tokens'
 import {
   type EventCategoryDto,
   getAllEventCategories,
@@ -121,6 +121,10 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
         />
       </TitleHost>
 
+      {/* 카테고리 톤 밴드 — 제목과 메타 사이 시각 앵커. 카테고리 색이 옅게
+          좌→우로 흩어지며 페이지 정체성을 한 줄로 표시(밑줄 X, 별도 룰). */}
+      <TitleAccent $color={category.color} aria-hidden />
+
       <S.HeroMeta>
         <S.HeroMetaItem>
           <FiCalendar />
@@ -180,6 +184,38 @@ const LocationMetaItem = styled(S.HeroMetaItem)`
     display: inline-block;
     max-width: 100%;
     vertical-align: middle;
+  }
+`
+
+/**
+ * 제목 아래 카테고리 톤 밴드 — 56px 길이 액센트 룰. 카테고리 색에서 시작해
+ * 투명으로 페이드. Hero flex gap(20px)에서 위쪽으로 당겨 제목에 붙인다.
+ */
+const TitleAccent = styled.div<{ $color: string }>`
+  width: 56px;
+  height: 3px;
+  border-radius: 2px;
+  margin-top: -10px;
+  background: linear-gradient(
+    90deg,
+    ${({ $color }) => $color} 0%,
+    ${({ $color }) => withAlpha($color, 0)} 100%
+  );
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: accentGrow 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: left center;
+  }
+
+  @keyframes accentGrow {
+    from {
+      transform: scaleX(0);
+      opacity: 0;
+    }
+    to {
+      transform: scaleX(1);
+      opacity: 1;
+    }
   }
 `
 

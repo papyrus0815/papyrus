@@ -68,33 +68,35 @@ export function ModuleMilitaryDetails({
         </S.SectionActions>
       </S.SectionHeader>
 
-      <S.Definitions>
-        {FIELDS.map((field) => (
-          <S.DefRow key={field.key}>
-            <S.DefLabel>{field.label}</S.DefLabel>
+      <S.ModuleDataCard $accent={MODULE_COLOR['military-details']}>
+        <S.Definitions>
+          {FIELDS.map((field) => (
+            <S.DefRow key={field.key}>
+              <S.DefLabel>{field.label}</S.DefLabel>
+              <S.DefValue>
+                <InlineText
+                  value={readValue(field.key)}
+                  onSave={(next) => updateField(field.key, next)}
+                  placeholder={`${field.label} 입력`}
+                  multiline
+                />
+              </S.DefValue>
+            </S.DefRow>
+          ))}
+          <S.DefRow>
+            <S.DefLabel>전쟁 비용</S.DefLabel>
             <S.DefValue>
               <InlineText
-                value={readValue(field.key)}
-                onSave={(next) => updateField(field.key, next)}
-                placeholder={`${field.label} 입력`}
-                multiline
+                value={warCost}
+                onSave={(next) =>
+                  onPatch({ warCost: next.trim() || undefined })
+                }
+                placeholder="전쟁 비용 입력"
               />
             </S.DefValue>
           </S.DefRow>
-        ))}
-        <S.DefRow>
-          <S.DefLabel>전쟁 비용</S.DefLabel>
-          <S.DefValue>
-            <InlineText
-              value={warCost}
-              onSave={(next) =>
-                onPatch({ warCost: next.trim() || undefined })
-              }
-              placeholder="전쟁 비용 입력"
-            />
-          </S.DefValue>
-        </S.DefRow>
-      </S.Definitions>
+        </S.Definitions>
+      </S.ModuleDataCard>
     </S.Section>
   )
 }

@@ -216,9 +216,13 @@ export function DetailActors({
         {/* 비어 있을 때 통일 안내 — persons·countries 모두 없을 때만 */}
         {!hasAnything && (
           <S.EmptyState>
-            <S.EmptyStateLine>
-              아직 등록된 인물·국가가 없습니다. 아래 버튼으로 추가하세요.
-            </S.EmptyStateLine>
+            <S.EmptyStateHead>
+              <S.EmptyStateIcon aria-hidden>👥</S.EmptyStateIcon>
+              <S.EmptyStateLine>
+                아직 등록된 인물·국가가 없습니다. 아래 <strong>인물 추가</strong>·
+                <strong>국가 추가</strong>로 시작하세요.
+              </S.EmptyStateLine>
+            </S.EmptyStateHead>
           </S.EmptyState>
         )}
 
@@ -349,7 +353,7 @@ export function DetailActors({
                         type="button"
                         onClick={() => moveCountry(country.id, false, -1)}
                         disabled={i === 0}
-                        aria-label={`${country.name} 앞으로`}
+                        aria-label={`${country.name} 위로`}
                       >
                         <FiArrowUp />
                       </NationReorder>
@@ -357,7 +361,7 @@ export function DetailActors({
                         type="button"
                         onClick={() => moveCountry(country.id, false, 1)}
                         disabled={i === modernCountries.length - 1}
-                        aria-label={`${country.name} 뒤로`}
+                        aria-label={`${country.name} 아래로`}
                       >
                         <FiArrowDown />
                       </NationReorder>
@@ -387,7 +391,7 @@ export function DetailActors({
                         type="button"
                         onClick={() => moveCountry(country.id, true, -1)}
                         disabled={i === 0}
-                        aria-label={`${country.name} 앞으로`}
+                        aria-label={`${country.name} 위로`}
                       >
                         <FiArrowUp />
                       </NationReorder>
@@ -395,7 +399,7 @@ export function DetailActors({
                         type="button"
                         onClick={() => moveCountry(country.id, true, 1)}
                         disabled={i === historicalCountries.length - 1}
-                        aria-label={`${country.name} 뒤로`}
+                        aria-label={`${country.name} 아래로`}
                       >
                         <FiArrowDown />
                       </NationReorder>
@@ -498,11 +502,18 @@ const ManageToggle = styled.button<{ $active: boolean }>`
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: color 0.14s, border-color 0.14s;
+  transition: color 0.14s, border-color 0.14s, background 0.14s;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
     border-color: ${({ theme }) => theme.colors.text.tertiary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
   }
 
   svg {
@@ -538,6 +549,11 @@ const ReorderBtn = styled.button`
     border-color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+
   &:disabled {
     opacity: 0.35;
     cursor: not-allowed;
@@ -571,6 +587,11 @@ const NationReorder = styled.button`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
   }
 
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+
   &:disabled {
     opacity: 0.3;
     cursor: not-allowed;
@@ -597,17 +618,30 @@ const PersonRow = styled.li`
   grid-template-columns: 64px minmax(0, 1fr) auto;
   align-items: start;
   gap: 16px;
-  padding: 18px 0;
+  padding: 18px 12px;
+  margin: 0 -12px;
+  border-radius: 10px;
   border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
+  transition: background 0.15s;
 
   &:last-child {
     border-bottom: none;
   }
 
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
+  }
+
   @media (max-width: 540px) {
     grid-template-columns: 52px minmax(0, 1fr) auto;
     gap: 12px;
-    padding: 14px 0;
+    padding: 14px 12px;
+  }
+
+  @media (max-width: 400px) {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 10px;
   }
 `
 
@@ -663,6 +697,12 @@ const PersonAvatar = styled.span<{ $hasImage: boolean }>`
     width: 52px;
     height: 52px;
     font-size: 21px;
+  }
+
+  @media (max-width: 400px) {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
   }
 `
 
@@ -919,9 +959,14 @@ const AddBtn = styled.button`
     margin-right: 2px;
   }
 
-  &:hover,
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
   &:focus-visible {
     color: ${({ theme }) => theme.colors.text.primary};
-    outline: none;
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 3px;
+    border-radius: 2px;
   }
 `

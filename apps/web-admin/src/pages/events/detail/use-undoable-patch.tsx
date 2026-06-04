@@ -37,10 +37,16 @@ interface UseUndoablePatchArgs {
   mutate: Mutate
 }
 
+/** onPatch 호출 시 그 patch에 한해 저장 토스트 문구를 바꾸기 위한 옵션. */
+export interface PatchOptions {
+  /** 저장 토스트의 상태 문구(기본 "저장됨"). 예: "행위자에 추가 · 나폴레옹 3세". */
+  savedLabel?: string
+}
+
 export function useUndoablePatch({
   event,
   mutate,
-}: UseUndoablePatchArgs): (patch: UpdateEventDto) => void {
+}: UseUndoablePatchArgs): (patch: UpdateEventDto, opts?: PatchOptions) => void {
   const lastToastRef = useRef<string | null>(null)
   /**
    * 빠른 연속 patch 시 onSuccess 콜백이 도착하는 순서가 mutate 호출 순서와
@@ -62,12 +68,14 @@ export function useUndoablePatch({
   }, [event])
 
   return useCallback(
-    (patch: UpdateEventDto) => {
+    (patch: UpdateEventDto, opts?: PatchOptions) => {
       const current = eventRef.current
       if (!current) {
         mutate(patch)
         return
       }
+
+      const savedLabel = opts?.savedLabel ?? '저장됨'
 
       const inverse = buildInverse(current, patch)
 
@@ -88,7 +96,7 @@ export function useUndoablePatch({
                 <Row>
                   <Status>
                     <FiCheck aria-hidden />
-                    저장됨
+                    {savedLabel}
                   </Status>
                   <Divider aria-hidden />
                   <UndoBtn

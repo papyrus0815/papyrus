@@ -211,8 +211,8 @@ export const BRAND = {
   primaryFill: 'rgba(37, 99, 235, 0.16)',
   primaryBorder: 'rgba(37, 99, 235, 0.3)',
   primaryBorderHover: 'rgba(37, 99, 235, 0.5)',
-  /** 키보드 focus halo — 모든 컨트롤 동일하게 사용 */
-  focusRing: '0 0 0 2px rgba(37, 99, 235, 0.18)',
+  /** 키보드 focus halo — 모든 컨트롤 동일하게 사용. 3px·알파 상향으로 WCAG 가시성↑ */
+  focusRing: '0 0 0 3px rgba(37, 99, 235, 0.32)',
   /** dark mode alt */
   primaryTextOnDark: '#93c5fd',
   primarySoftDark: 'rgba(37, 99, 235, 0.14)',

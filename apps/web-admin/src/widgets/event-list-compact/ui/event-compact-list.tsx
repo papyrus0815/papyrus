@@ -26,6 +26,7 @@ import type {
 import { HeadsOfStateYearGroupToggle } from '../../../pages/events/styles/list.styles'
 import * as List from '../../../pages/events/styles/list.styles'
 import { shimmerAnimation } from '../../../pages/events/styles/shared.styles'
+import { BRAND } from '../../../pages/events/styles/theme'
 import {
   OtherHeadsOfStateList,
   TenureGroupFooter,
@@ -618,7 +619,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           {/* 로딩 / 끝 안내 — 사용자가 "어디까지 봤는지·더 있는지·끝인지" 즉시 알 수 있도록.
            * displayedCount를 모든 상태에 노출해 스크롤 중에도 진행도가 보임. */}
           {isLoadingMore && (
-            <LoadingMoreRow>
+            <LoadingMoreRow role="status" aria-live="polite">
               <List.LoadingSpinner />
               <LoadingMoreText>
                 {displayedCount > 0
@@ -637,7 +638,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             </LoadingMoreRow>
           )}
           {!isLoadingMore && !hasMoreData && displayedCount > 0 && (
-            <LoadingMoreRow>
+            <LoadingMoreRow role="status" aria-live="polite">
               <EndOfListText>
                 끝까지 봤습니다 · 총 {displayedCount.toLocaleString()}건
               </EndOfListText>
@@ -740,6 +741,11 @@ const ActiveChip = styled.button`
     svg {
       opacity: 1;
     }
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
   }
 `
 

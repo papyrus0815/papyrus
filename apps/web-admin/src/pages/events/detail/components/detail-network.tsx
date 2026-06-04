@@ -197,15 +197,39 @@ function parseEventDateTokens(
 const ChildCard = styled(Link)`
   display: flex;
   gap: 12px;
-  padding: 4px 0 12px;
+  padding: 12px 14px;
   background: transparent;
-  border: none;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  border-radius: 10px;
   text-decoration: none;
   color: inherit;
-  transition: color 0.16s;
+  transition: color 0.16s, background 0.16s, border-color 0.16s, box-shadow 0.16s;
 
   &:hover {
     color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.02)'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.16)'};
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '0 2px 10px rgba(0,0,0,0.28)'
+        : '0 2px 8px rgba(15,23,42,0.06)'};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+
+  /* 터치 기기 — hover가 없으므로 탭 시 즉각 피드백. */
+  @media (hover: none) {
+    &:active {
+      background: ${({ theme }) =>
+        theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)'};
+    }
   }
 `
 
@@ -302,6 +326,11 @@ const ChipX = styled.button`
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+
   svg {
     width: 11px;
     height: 11px;
@@ -325,6 +354,11 @@ const AddBtn = styled.button`
   &:hover {
     border-color: ${({ theme }) => theme.colors.primary};
     color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
   }
 
   svg {

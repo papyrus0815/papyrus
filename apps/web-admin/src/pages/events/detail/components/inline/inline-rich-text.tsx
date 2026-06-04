@@ -10,6 +10,7 @@ import {
   type RichTextTermTooltipState,
   useRichTextTooltipEscape,
 } from '@/shared/hooks/use-rich-text-prose-click'
+import { type MentionItem } from '@/shared/lib/mention/mention-system'
 import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-read-view'
 import { createRichTextImageUploader } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
@@ -36,6 +37,11 @@ interface InlineRichTextProps {
    * 페이지로 navigate. 사건 상세에서는 페이지 레벨 인물 모달을 연결해 동일 UX.
    */
   onPersonClick?: (personId: string) => void
+  /**
+   * 본문에 엔티티 링크를 삽입한 직후 호출. 사건 상세에서 인물을 링크하면
+   * 참여 행위자로 자동 등록하는 데 사용. 타입 필터는 호출 측에서 처리.
+   */
+  onEntityLink?: (item: MentionItem) => void
 }
 
 /**
@@ -53,6 +59,7 @@ export function InlineRichText({
   placeholder = '본문 작성',
   maxHeight,
   onPersonClick,
+  onEntityLink,
 }: InlineRichTextProps) {
   const editorId = useId()
   const { editing, open, close } = useInlineEditCoordinator(editorId)
@@ -166,6 +173,7 @@ export function InlineRichText({
            */
           minHeight="120px"
           onImageUpload={handleImageUpload}
+          onEntityLink={onEntityLink}
           autoFocus
           /**
            * 저장/취소를 Toolbar 우측 슬롯에 통합. 이전엔 RichTextEditor 외부에

@@ -54,26 +54,28 @@ export function ModuleBelligerents({ event, onPatch }: ModuleBelligerentsProps) 
               </SideHead>
 
               {(side.commander || side.forces || side.description) && (
-                <S.Definitions>
-                  {side.commander && (
-                    <S.DefRow>
-                      <S.DefLabel>지휘관</S.DefLabel>
-                      <S.DefValue>{side.commander}</S.DefValue>
-                    </S.DefRow>
-                  )}
-                  {side.forces && (
-                    <S.DefRow>
-                      <S.DefLabel>병력</S.DefLabel>
-                      <S.DefValue>{side.forces}</S.DefValue>
-                    </S.DefRow>
-                  )}
-                  {side.description && (
-                    <S.DefRow>
-                      <S.DefLabel>비고</S.DefLabel>
-                      <S.DefValue>{side.description}</S.DefValue>
-                    </S.DefRow>
-                  )}
-                </S.Definitions>
+                <S.ModuleDataCard $accent={MODULE_COLOR.belligerents}>
+                  <S.Definitions>
+                    {side.commander && (
+                      <S.DefRow>
+                        <S.DefLabel>지휘관</S.DefLabel>
+                        <S.DefValue>{side.commander}</S.DefValue>
+                      </S.DefRow>
+                    )}
+                    {side.forces && (
+                      <S.DefRow>
+                        <S.DefLabel>병력</S.DefLabel>
+                        <S.DefValue>{side.forces}</S.DefValue>
+                      </S.DefRow>
+                    )}
+                    {side.description && (
+                      <S.DefRow>
+                        <S.DefLabel>비고</S.DefLabel>
+                        <S.DefValue>{side.description}</S.DefValue>
+                      </S.DefRow>
+                    )}
+                  </S.Definitions>
+                </S.ModuleDataCard>
               )}
 
               {countries.length > 0 && (

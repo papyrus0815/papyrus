@@ -1,6 +1,7 @@
 import styled from 'styled-components'
 
 import { formatDateWithPrecision } from '@/pages/events/utils/events.utils'
+import { withAlpha } from '@/pages/events/ledger/styles/ledger-tokens'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
@@ -108,6 +109,9 @@ const TreatyBlock = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* 좌측 모듈색(조약=네이비) 룰 — 여러 조약을 시각 단위로 묶고 사상자 카드와 톤 통일. */
+  padding-left: 16px;
+  border-left: 2px solid ${withAlpha(MODULE_COLOR.treaties, 0.4)};
 `
 
 const TreatyHead = styled.div`

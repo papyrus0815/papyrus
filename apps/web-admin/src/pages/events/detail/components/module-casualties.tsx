@@ -123,14 +123,44 @@ export function ModuleCasualties({ event, onPatch }: ModuleCasualtiesProps) {
 
 const Stats = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 18px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 12px;
 `
 
+/**
+ * Stat 카드 — 라벨-숫자 쌍을 hairline 카드로 승격해 "수치"임을 시각적으로 분리.
+ * 좌측 상단에 모듈 색(군사) 미세 액센트 룰. 빈 값은 카드 안에서 "—"로 일관 표시.
+ */
 const StatCell = styled.div`
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 13px 15px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  border-radius: 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
+  transition: border-color 0.15s, background 0.15s;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 13px;
+    left: 0;
+    width: 3px;
+    height: 14px;
+    border-radius: 0 2px 2px 0;
+    background: ${MODULE_COLOR.casualties};
+    opacity: 0.55;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.16)'};
+  }
 `
 
 const StatLabel = styled.span`
@@ -142,11 +172,12 @@ const StatLabel = styled.span`
 `
 
 const StatValue = styled.span`
-  font-size: 19px;
-  font-weight: 700;
+  font-size: 25px;
+  font-weight: 750;
   color: ${({ theme }) => theme.colors.text.primary};
   font-variant-numeric: tabular-nums slashed-zero;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 `
 
 const NoteRow = styled.div`

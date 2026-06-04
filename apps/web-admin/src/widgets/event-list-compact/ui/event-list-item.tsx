@@ -374,8 +374,8 @@ const Stop = styled.div<{
           ? 'rgba(37, 99, 235, 0.28)'
           : 'rgba(37, 99, 235, 0.18)'
         : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.04)'
-          : 'rgba(15, 23, 42, 0.03)'};
+          ? 'rgba(255, 255, 255, 0.06)'
+          : 'rgba(15, 23, 42, 0.05)'};
   }
 
   /* 키보드 focus 시각화 — 마우스 click에선 안 뜨고 Tab 순회 시에만 ring */
@@ -459,9 +459,12 @@ const ExpandSpacer = styled.span`
 const Year = styled.span<{ $tier: ImportanceTier }>`
   font-size: ${({ $tier }) =>
     $tier === 'critical' ? '13px' : $tier === 'major' ? '12.5px' : '12px'};
-  font-weight: 700;
+  /* 제목이 먼저 읽히도록 연도는 한 단계 톤다운(700→600, secondary→tertiary).
+     tabular-nums로 연도 자릿수 정렬 — 스캔 시 세로 리듬 안정. */
+  font-weight: 600;
   letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   min-width: 36px;
 `
@@ -496,7 +499,7 @@ const Title = styled.span<{ $tier: ImportanceTier }>`
 /* 검색어 매칭 강조 — 노란 배경 + 진한 텍스트. 다크 모드는 amber 톤. */
 const Mark = styled.mark`
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.4)' : '#fef3c7'};
+    theme.mode === 'dark' ? 'rgba(251, 191, 36, 0.5)' : '#fef3c7'};
   color: inherit;
   padding: 0 1px;
   border-radius: 2px;
