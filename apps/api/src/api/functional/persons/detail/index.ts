@@ -52,6 +52,13 @@ export namespace getDetailById {
     deathDay: number | null;
     gender: string | null;
     biography: string | null;
+    biographySections: Array<{
+      id: string;
+      title: string;
+      content: string;
+      order: number;
+      sectionType: string | null;
+    }>;
     profileImageUrl: string | null;
     regnalName: string | null;
     templeName: string | null;
