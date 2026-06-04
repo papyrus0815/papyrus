@@ -63,6 +63,11 @@ export interface CountryFormShellProps {
   isValid?: boolean
   /** 자동 저장(draft) 활성 여부 — true면 푸터에 "자동 저장됨" 표시 */
   draftEnabled?: boolean
+  /**
+   * 높이를 콘텐츠에 맞춤(90vh 고정 해제) — 짧은 폼(예: 필수-먼저 인물 등록)이
+   * 큰 빈 공간 없이 내용만큼만 차지하도록. 미지정 시 기존 90vh 고정.
+   */
+  fitContent?: boolean
   /** 폼 본문 */
   children: React.ReactNode
   /** aria-labelledby용 id (기본: title-id) */
@@ -91,10 +96,12 @@ const Overlay = styled(motion.div)`
   }
 `
 
-const ModalBox = styled(motion.div)`
+const ModalBox = styled(motion.div)<{ $fit?: boolean }>`
   width: min(960px, 96vw);
-  height: 90vh;
-  max-height: 1200px;
+  ${({ $fit }) =>
+    $fit
+      ? `height: auto; max-height: min(90vh, 1200px);`
+      : `height: 90vh; max-height: 1200px;`}
   background: ${({ theme }) => theme.colors.background.primary};
   border: 1px solid
     ${({ theme }) =>
@@ -562,6 +569,7 @@ export function CountryFormShell({
   submitLabel,
   isValid = true,
   draftEnabled = false,
+  fitContent = false,
   children,
   titleId = 'country-form-shell-title',
 }: CountryFormShellProps) {
@@ -720,6 +728,7 @@ export function CountryFormShell({
         >
           <ModalBox
             ref={modalRef}
+            $fit={fitContent}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}

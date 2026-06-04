@@ -20,6 +20,8 @@ import {
   Textarea,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
+import { FONT, RADIUS } from '../_form-primitives'
+
 export interface FamilySectionProps {
   fid: (key: string) => string
   // 가족 슬롯
@@ -295,11 +297,11 @@ const RecentChipRow = styled.div`
       theme.mode === 'dark'
         ? 'rgba(99,102,241,0.18)'
         : 'rgba(99, 102, 241, 0.18)'};
-  border-radius: 10px;
+  border-radius: ${RADIUS.card};
 `
 
 const RecentChipLabel = styled.span`
-  font-size: 11px;
+  font-size: ${FONT.eyebrow};
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
   text-transform: uppercase;
@@ -314,12 +316,12 @@ const RecentChipGroup = styled.div`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 999px;
+  border-radius: ${RADIUS.pill};
   max-width: 280px;
 `
 
 const RecentChipName = styled.span`
-  font-size: 12.5px;
+  font-size: ${FONT.meta};
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.primary};
   white-space: nowrap;

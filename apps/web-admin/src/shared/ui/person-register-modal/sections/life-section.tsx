@@ -12,7 +12,7 @@ import {
   FiChevronDown,
   FiChevronRight,
 } from 'react-icons/fi'
-import styled, { css } from 'styled-components'
+import styled from 'styled-components'
 
 import type { Era } from '@/shared/api/persons'
 import { FormInput } from '@/shared/ui/form-input/form-input'
@@ -25,6 +25,19 @@ import {
   Textarea,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
+import {
+  AdvancedBody,
+  AdvancedSection,
+  AdvancedToggle,
+  AdvancedToggleBody,
+  AdvancedToggleDesc,
+  AdvancedToggleIcon,
+  AdvancedToggleTitle,
+  FONT,
+  FieldError,
+  InlineFields,
+  RADIUS,
+} from '../_form-primitives'
 import {
   DEATH_TYPE_GROUPS,
   formatDateDisplay,
@@ -68,6 +81,13 @@ export interface LifeSectionProps {
   // 파생값(부모에서 계산)
   /** "향년 N세" 라벨 — 둘 다 정상 입력 시에만 truthy */
   lifespanText: string | null
+  /**
+   * 렌더 범위 — 필수-먼저 레이아웃용.
+   * - essentials: 생몰 날짜 + 사망 여부(코어, 늘 노출)
+   * - details: 사망 상세(유형·원인·메모) + 군주 호칭(접힘 영역)
+   * - all(기본): 둘 다
+   */
+  mode?: 'all' | 'essentials' | 'details'
   // 검증·dirty
   errors: Record<string, string>
   markDirty: () => void
@@ -105,15 +125,19 @@ export function LifeSection({
   setTempleName,
   setPosthumousName,
   lifespanText,
+  mode = 'all',
   errors,
   markDirty,
 }: LifeSectionProps) {
+  const showEssentials = mode !== 'details'
+  const showDetails = mode !== 'essentials'
   return (
     <FormRows>
       {/*
-       * 생몰 — 출생 → 사망 여부(주 분기) → 사망일(사망 시) → 사망 상세(사망/일자미상) 순.
+       * 생몰 — 출생 → 사망 여부(주 분기) → 사망일(사망 시) 순. (essentials)
        * "생존중"이 핵심 분기점이라 별도 라디오 그룹으로 격상. 출생일 미상은 출생 영역에 인라인.
        */}
+      {showEssentials && (
       <FieldRow>
         <FieldLabel>생몰</FieldLabel>
         <LifeStack>
@@ -240,13 +264,19 @@ export function LifeSection({
               {errors.birth || errors.death}
             </FieldError>
           )}
+        </LifeStack>
+      </FieldRow>
+      )}
 
-          {/*
-           * 4) 사망 상세 — 사망 또는 일자 미상일 때(=생존중 아닐 때).
-           * 13개 평면 chip → 4그룹 mini-header. 그룹 내 chip은 active=indigo fill.
-           * 카테고리화로 사용자가 "사고/외부" 같은 의미를 한눈에 찾도록.
-           */}
-          {!isAlive && (
+      {/*
+       * 사망 상세 — 사망/일자미상일 때만(=생존중 아닐 때). details 영역.
+       * 13개 평면 chip → 4그룹 mini-header. 그룹 내 chip은 active=indigo fill.
+       * 카테고리화로 사용자가 "사고/외부" 같은 의미를 한눈에 찾도록.
+       */}
+      {showDetails && !isAlive && (
+        <FieldRow>
+          <FieldLabel>사망 상세</FieldLabel>
+          <FieldControl>
             <LifeDeathDetails>
               <DeathTypeGrouped role="group" aria-label="사망 유형">
                 {DEATH_TYPE_GROUPS.map((group) => (
@@ -285,11 +315,12 @@ export function LifeSection({
                 rows={2}
               />
             </LifeDeathDetails>
-          )}
-        </LifeStack>
-      </FieldRow>
+          </FieldControl>
+        </FieldRow>
+      )}
 
-      {/* 군주 호칭 — 군주에게만 적용. 카드형 disclosure로 옵셔널 표시. */}
+      {/* 군주 호칭 — 군주에게만 적용. 카드형 disclosure로 옵셔널 표시. (details) */}
+      {showDetails && (
       <AdvancedSection>
         <AdvancedToggle
           type="button"
@@ -337,6 +368,7 @@ export function LifeSection({
           </AdvancedBody>
         )}
       </AdvancedSection>
+      )}
     </FormRows>
   )
 }
@@ -366,7 +398,7 @@ const LifeFieldGroup = styled.div`
 `
 
 const LifeSubLabel = styled.span`
-  font-size: 12px;
+  font-size: ${FONT.meta};
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
@@ -387,12 +419,6 @@ const LifespanText = styled.span`
   white-space: nowrap;
 `
 
-const SegmentRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
 /** 사망 유형 chip — 채움 톤 + active=indigo. 사망 분기 segmented는 별도 컴포넌트 사용. */
 const SegmentBtn = styled.button<{
   $active?: boolean
@@ -400,9 +426,9 @@ const SegmentBtn = styled.button<{
   $variant?: 'solid' | 'ghost'
 }>`
   padding: 7px 12px;
-  font-size: 13px;
+  font-size: ${FONT.label};
   font-weight: ${({ $active }) => ($active ? 500 : 400)};
-  border-radius: 8px;
+  border-radius: ${RADIUS.control};
   cursor: pointer;
   transition:
     background 0.12s ease,
@@ -500,7 +526,7 @@ const DeathTypeGroupBox = styled.div`
 `
 
 const DeathTypeGroupLabel = styled.span`
-  font-size: 11px;
+  font-size: ${FONT.eyebrow};
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
   letter-spacing: 0.04em;
@@ -516,10 +542,10 @@ const DeathTypeChips = styled.div`
 /** 사망 유형 chip — active=indigo fill + 흰 글자, idle=채움 톤. */
 const DeathTypeChip = styled.button<{ $active?: boolean }>`
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: ${FONT.label};
   font-weight: ${({ $active }) => ($active ? 600 : 500)};
   letter-spacing: -0.005em;
-  border-radius: 8px;
+  border-radius: ${RADIUS.control};
   cursor: pointer;
   white-space: nowrap;
   transition:
@@ -556,119 +582,4 @@ const DeathTypeChip = styled.button<{ $active?: boolean }>`
   }
 `
 
-/** 카드형 disclosure — person-register-view.tsx와 동일 톤 (옵셔널 정보 그룹) */
-const AdvancedSection = styled.section`
-  margin-top: 14px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff'};
-  overflow: hidden;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-  }
-`
-
-const AdvancedToggle = styled.button<{ $open: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 14px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.15s ease;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
-  }
-  &:focus-visible {
-    outline: none;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
-  }
-`
-
-const AdvancedToggleIcon = styled.span<{ $open: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  flex-shrink: 0;
-  svg {
-    transition: transform 0.15s ease;
-    transform: rotate(${({ $open }) => ($open ? '90deg' : '0deg')});
-  }
-`
-
-const AdvancedToggleBody = styled.span`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-`
-
-const AdvancedToggleTitle = styled.span`
-  font-size: 13.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.005em;
-`
-
-const AdvancedToggleDesc = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1.4;
-`
-
-const AdvancedBody = styled.div`
-  padding: 14px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-const InlineFields = styled.div<{ $cols?: number; $template?: string }>`
-  display: grid;
-  grid-template-columns: ${(p) =>
-    p.$template ?? `repeat(${p.$cols ?? 3}, 1fr)`};
-  gap: 10px;
-  width: 100%;
-  & > div {
-    min-width: 0;
-  }
-  input,
-  select,
-  button {
-    max-width: 100%;
-  }
-  @media (max-width: 640px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const FieldError = styled.span`
-  ${() => css``}
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.alert.danger.fg};
-  margin-top: 6px;
-  line-height: 1.4;
-  svg {
-    flex-shrink: 0;
-  }
-`
+// Disclosure 카드·InlineFields·FieldError는 ../_form-primitives에서 import (중복 제거).

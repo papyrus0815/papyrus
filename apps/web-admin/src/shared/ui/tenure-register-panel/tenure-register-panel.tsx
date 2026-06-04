@@ -541,15 +541,15 @@ export function TenureRegisterPanel({
   const panelTitle = isEdit
     ? isMinisterFlow
       ? '각료 수정'
-      : '수반 수정'
+      : '재임 수정'
     : isMinisterFlow
       ? '각료 등록'
-      : '수반 등록'
+      : '재임 등록'
   const submitLabelText = isEdit
     ? '수정 완료'
     : isMinisterFlow
       ? '각료 등록'
-      : '수반 등록'
+      : '재임 등록'
 
   return (
     <FormSidePanel

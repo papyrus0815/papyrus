@@ -79,6 +79,7 @@ export function PersonRegisterViewModal({
       submitLabel={isEdit ? '수정 완료' : '인물 등록'}
       mode={isEdit ? 'edit' : 'create'}
       draftEnabled={!isEdit}
+      fitContent
       requiredFields={[
         { label: '성', done: !!filled.surname, jumpTarget: 'surname' },
         { label: '이름', done: !!filled.name, jumpTarget: 'name' },
@@ -88,20 +89,6 @@ export function PersonRegisterViewModal({
           done: !!filled.countryId,
           jumpTarget: 'countryId',
         },
-      ]}
-      sectionIndex={[
-        {
-          id: 'basic',
-          label: '기본 정보',
-          filled: !!filled.name && !!filled.surname && !!filled.gender,
-        },
-        { id: 'life', label: '생애' },
-        {
-          id: 'affiliation',
-          label: '소속 · 가문',
-          filled: !!filled.countryId,
-        },
-        { id: 'family', label: '가족' },
       ]}
     >
       <PersonRegisterView

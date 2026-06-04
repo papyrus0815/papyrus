@@ -10,6 +10,22 @@ import {
   FieldRow,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
+import { FONT, InlineFields, RADIUS } from './_form-primitives'
+
+// 중복 제거 — disclosure 카드·InlineFields·FieldError는 단일 정의(_form-primitives)에서
+// re-export. person-register-view.tsx의 기존 import 경로를 유지하기 위함.
+export {
+  AdvancedBody,
+  AdvancedSection,
+  AdvancedToggle,
+  AdvancedToggleBody,
+  AdvancedToggleDesc,
+  AdvancedToggleIcon,
+  AdvancedToggleTitle,
+  FieldError,
+  InlineFields,
+} from './_form-primitives'
+
 // ─── Profile hero (thumbnail + 이름 미리보기 + 메타칩) ──────────────────────
 // "데이터 입력"이 아니라 "사람을 만든다"는 인상으로 상단 hero 격상.
 // 좌: 원형 썸네일(드롭존) / 우: namePreview + 국가·향년 칩 + 업로드 hint·삭제
@@ -128,12 +144,12 @@ export const HeroMetaChip = styled.span`
   display: inline-flex;
   align-items: center;
   padding: 2px 9px;
-  font-size: 11.5px;
+  font-size: ${FONT.meta};
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  border-radius: 999px;
+  border-radius: ${RADIUS.pill};
   letter-spacing: -0.005em;
   font-variant-numeric: tabular-nums;
 `
@@ -176,31 +192,6 @@ export const OriginalNameInputWrap = styled.div`
 export const FieldRowMulti = styled.div`
   display: block;
   padding: 18px 0;
-`
-
-/**
- * 인라인 입력 그룹 — `$template` 우선. 미지정 시 `$cols`개 동등 col(이전 동작).
- * 의미적 폭 차등(예: 성<이름<중간이름)이 시각 비대칭을 줄여 한눈 파악 ↑.
- */
-export const InlineFields = styled.div<{ $cols?: number; $template?: string }>`
-  display: grid;
-  grid-template-columns: ${(p) =>
-    p.$template ?? `repeat(${p.$cols ?? 3}, 1fr)`};
-  gap: 10px;
-  width: 100%;
-
-  & > div {
-    min-width: 0;
-  }
-  input,
-  select,
-  button {
-    max-width: 100%;
-  }
-
-  @media (max-width: 640px) {
-    grid-template-columns: 1fr;
-  }
 `
 
 // ─── Layout wrapper (Top-aligned modern form layout) ────────────────────────
@@ -269,7 +260,7 @@ export const SectionHeader = styled.div`
 
 export const SectionHeaderTitle = styled.h3`
   margin: 0 0 4px;
-  font-size: 17px;
+  font-size: ${FONT.title};
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.01em;
@@ -278,95 +269,43 @@ export const SectionHeaderTitle = styled.h3`
 
 export const SectionHeaderDesc = styled.p`
   margin: 0;
-  font-size: 12.5px;
+  font-size: ${FONT.meta};
   color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.5;
 `
 
-// ─── Disclosure card (이름의 뜻·군주 호칭 등 옵셔널 입력 그룹) ────────────────
+// Disclosure 카드(AdvancedSection·Toggle·Body 등)는 _form-primitives에서 정의·re-export.
 
-export const AdvancedSection = styled.section`
-  margin-top: 14px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff'};
-  overflow: hidden;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
+// ─── "더 입력" 토글 (필수 코어와 선택 상세를 가르는 affordance) ───────────────
+// 필수만 채우면 등록 끝 — 상세는 원하는 사람만 펼치게 해 첫인상 부담을 줄인다.
 
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-  }
-`
-
-export const AdvancedToggle = styled.button<{ $open: boolean }>`
+export const MoreToggle = styled.button<{ $open: boolean }>`
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 12px 14px;
-  background: transparent;
-  border: none;
+  margin-top: 20px;
+  padding: 13px 14px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: ${RADIUS.card};
   cursor: pointer;
   text-align: left;
-  transition: background 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 
   &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.06)' : theme.colors.activeLight};
   }
   &:focus-visible {
     outline: none;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
   }
-`
-
-export const AdvancedToggleIcon = styled.span<{ $open: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  flex-shrink: 0;
-  transition: background 0.15s;
-  svg {
-    transition: transform 0.15s ease;
-    transform: rotate(${({ $open }) => ($open ? '90deg' : '0deg')});
-  }
-`
-
-export const AdvancedToggleBody = styled.span`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-`
-
-export const AdvancedToggleTitle = styled.span`
-  font-size: 13.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.005em;
-`
-
-export const AdvancedToggleDesc = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1.4;
-`
-
-/** 펼친 본문 — 카드 내부 padding + 상단 light divider */
-export const AdvancedBody = styled.div`
-  padding: 14px 14px 14px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 /** 페이지 모드 전용 sticky 푸터 — 모달 모드는 Shell이 푸터 담당 */
@@ -416,8 +355,8 @@ export const DraftBanner = styled.div`
       theme.mode === 'dark'
         ? 'rgba(99,102,241,0.22)'
         : 'rgba(99, 102, 241, 0.18)'};
-  border-radius: 10px;
-  font-size: 13px;
+  border-radius: ${RADIUS.card};
+  font-size: ${FONT.label};
   animation: ${draftBannerSlideIn} 0.18s ease;
 
   & + div[role='alert'] {
@@ -431,7 +370,7 @@ export const DraftBannerIcon = styled.span`
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: ${RADIUS.control};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.12)'};
   color: ${({ theme }) => theme.colors.primary};
@@ -470,12 +409,12 @@ export const DraftBannerActions = styled.div`
 /** 버리기 — 보조 액션이라 ghost 톤 */
 export const DraftDiscardBtn = styled.button`
   padding: 5px 10px;
-  font-size: 12.5px;
+  font-size: ${FONT.meta};
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: ${RADIUS.control};
   cursor: pointer;
   transition:
     color 0.12s,
@@ -490,12 +429,12 @@ export const DraftDiscardBtn = styled.button`
 /** 복원 — primary action. 카드 안에서 가장 시선 가도록 indigo fill. */
 export const DraftRestoreBtn = styled.button`
   padding: 5px 12px;
-  font-size: 12.5px;
+  font-size: ${FONT.meta};
   font-weight: 600;
   color: #fff;
   background: ${({ theme }) => theme.colors.primary};
   border: none;
-  border-radius: 6px;
+  border-radius: ${RADIUS.control};
   cursor: pointer;
   transition: background 0.12s;
   &:hover {
@@ -503,21 +442,7 @@ export const DraftRestoreBtn = styled.button`
   }
 `
 
-// ─── Field error ────────────────────────────────────────────────────────────
-
-export const FieldError = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.alert.danger.fg};
-  margin-top: 6px;
-  line-height: 1.4;
-  svg {
-    flex-shrink: 0;
-  }
-`
+// FieldError는 _form-primitives에서 정의·re-export.
 
 // ─── Loading ────────────────────────────────────────────────────────────────
 
@@ -645,7 +570,7 @@ export const AutoSaveStatus = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11.5px;
+  font-size: ${FONT.meta};
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.005em;

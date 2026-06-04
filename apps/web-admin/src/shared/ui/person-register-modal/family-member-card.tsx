@@ -12,6 +12,8 @@ import type { PersonResponseDto } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
+import { RADIUS } from './_form-primitives'
+
 interface FamilyMemberCardProps {
   person: PersonResponseDto | undefined
   onChange: () => void
@@ -94,7 +96,7 @@ const Card = styled.div`
   gap: 14px;
   padding: 12px 14px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
+  border-radius: ${RADIUS.card};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
   width: 100%;
@@ -106,7 +108,7 @@ const EmptyCard = styled.button`
   gap: 14px;
   padding: 12px 14px;
   border: 1px dashed ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
+  border-radius: ${RADIUS.card};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
@@ -198,7 +200,7 @@ const ChangeBtn = styled.button`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f8fafc'};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 6px;
+  border-radius: ${RADIUS.control};
   cursor: pointer;
   transition:
     background 0.15s,
@@ -228,7 +230,7 @@ const RemoveBtn = styled.button`
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: ${RADIUS.control};
   cursor: pointer;
   transition:
     background 0.15s,
