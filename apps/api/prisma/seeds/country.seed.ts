@@ -265,6 +265,15 @@ const COUNTRIES: CountryData[] = [
     areaSqKm: 30528.0,
     continentName: '유럽',
   },
+  {
+    name: '핀란드',
+    localName: 'Suomi',
+    flagEmoji: '🇫🇮',
+    isoCode: 'FI',
+    population: 5563970,
+    areaSqKm: 338455.0,
+    continentName: '유럽',
+  },
   // === Top 30 by population (추가분) ===
   {
     name: '인도',
