@@ -386,20 +386,16 @@ export class EventController {
   }
 
   /**
-   * 사건 상세 조회
+   * 상세 응답 빌더 — GET·생성·수정이 *동일한 full-include + 군사정보*로 응답을
+   * 만들도록 단일화한다. 생성/수정 직후에도 관계(인물·국가·섹션·이미지·카테고리)와
+   * 군사 모듈이 모두 채워진 응답을 돌려줘, 프론트가 응답 시딩만으로 완전한 상세를
+   * 렌더하게 한다(부분 응답 → refetch 도착 시 레이아웃 점프 방지).
    *
-   * @param id 사건 ID
-   * @returns 사건 정보
-   * @tag events
+   * 권한 체크는 호출부 책임 — GET은 조회 권한, create/update는 이미 소유권을 확인했다.
    */
-  @Get(':id')
-  async getEventById(
-    @Param('id') id: string,
-    @Request() req?: any,
-  ): Promise<EventResponseDto> {
-    const userId = req.user?.id // AuthGuard가 이미 인증 체크함
-    
-    // Prisma로 직접 조회하여 category 관계 포함
+  private async loadEventDetail(
+    id: string,
+  ): Promise<{ event: any; response: EventResponseDto } | null> {
     const event = await this.prisma.event.findUnique({
       where: { id },
       include: {
@@ -457,14 +453,7 @@ export class EventController {
         },
       },
     })
-    if (!event) {
-      throw new Error('Event not found')
-    }
-    
-    // 권한 체크: 본인 사건만 조회 가능
-    if (event.createdById !== userId) {
-      throw new Error('본인이 등록한 사건만 조회할 수 있습니다.')
-    }
+    if (!event) return null
 
     // 정규화된 군사 정보 조회
     const militaryEvent = await this.militaryEventService.getMilitaryData(id)
@@ -475,7 +464,34 @@ export class EventController {
       response.militaryEvent = militaryEvent
     }
 
-    return response
+    return { event, response }
+  }
+
+  /**
+   * 사건 상세 조회
+   *
+   * @param id 사건 ID
+   * @returns 사건 정보
+   * @tag events
+   */
+  @Get(':id')
+  async getEventById(
+    @Param('id') id: string,
+    @Request() req?: any,
+  ): Promise<EventResponseDto> {
+    const userId = req.user?.id // AuthGuard가 이미 인증 체크함
+
+    const loaded = await this.loadEventDetail(id)
+    if (!loaded) {
+      throw new Error('Event not found')
+    }
+
+    // 권한 체크: 본인 사건만 조회 가능
+    if (loaded.event.createdById !== userId) {
+      throw new Error('본인이 등록한 사건만 조회할 수 있습니다.')
+    }
+
+    return loaded.response
   }
 
   /**
@@ -563,7 +579,10 @@ export class EventController {
       console.log('⚠️ [Controller] militaryEvent가 없습니다')
     }
 
-    return this.toResponseDto(event)
+    // 모든 관계 + 군사정보가 채워진 *조회와 동일한* 응답으로 반환 — 프론트가 시딩만으로
+    // 완전한 상세를 렌더하도록(부분 응답 → refetch 점프 방지). 폴백: 재조회 실패 시 bare.
+    const loaded = await this.loadEventDetail(event.id)
+    return loaded ? loaded.response : this.toResponseDto(event)
   }
 
   /**
@@ -644,7 +663,9 @@ export class EventController {
       await this.militaryEventService.saveMilitaryData(id, dto.militaryEvent)
     }
 
-    return this.toResponseDto(event)
+    // create와 동일 — 관계·군사정보 포함 full 응답으로 반환(시딩 시 점프 방지).
+    const loaded = await this.loadEventDetail(id)
+    return loaded ? loaded.response : this.toResponseDto(event)
   }
 
   /**
