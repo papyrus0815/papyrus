@@ -17,7 +17,10 @@ import {
   REGIONS,
   REGION_COLORS,
 } from '../model/constants'
-import { usePersonInfographicFilterStore } from '../model/filter.store'
+import {
+  usePersonInfographicFilterStore,
+  useHasActiveFilter,
+} from '../model/filter.store'
 import {
   hasAnyActiveScope,
   isPersonInScopes,
@@ -114,7 +117,10 @@ export function GalaxyView({ people, onOpen }: Props) {
   const clearAllScopes = usePersonInfographicFilterStore(
     (s) => s.clearAllScopes,
   )
+  const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
+  // 점 강조(isActive)·scope 배너는 scope 한정. 빈 결과 CTA는 전체 필터 기준.
   const hasActiveFilter = hasAnyActiveScope(scopes)
+  const hasAnyFilter = useHasActiveFilter()
 
   const isActive = (p: AdaptedPerson): boolean =>
     !hasActiveFilter || isPersonInScopes(p, scopes)
@@ -168,6 +174,80 @@ export function GalaxyView({ people, onOpen }: Props) {
     }
     const visibleRegions = REGIONS.filter((r) => (regionCounts[r] ?? 0) > 0)
 
+    const hasActive = hasAnyActiveScope(scopes)
+    const isActiveP = (p: AdaptedPerson): boolean =>
+      !hasActive || isPersonInScopes(p, scopes)
+
+    // density underlay — 점이 많을 때만 (매 렌더 재계산 방지로 memo 내부에서 1회)
+    const BIN_SIZE = INFOGRAPHIC_DEFAULTS.GALAXY_DENSITY_BIN_SIZE
+    const showDensity =
+      people.length >= INFOGRAPHIC_DEFAULTS.GALAXY_DENSITY_THRESHOLD
+    const densityBins: Array<{ x: number; y: number; intensity: number }> = []
+    if (showDensity) {
+      const dmap = new Map<string, number>()
+      for (const p of people) {
+        const bx = Math.floor(xPos(p.activityYear) / BIN_SIZE)
+        const by = Math.floor(yPos(p.influence) / BIN_SIZE)
+        dmap.set(`${bx}:${by}`, (dmap.get(`${bx}:${by}`) ?? 0) + 1)
+      }
+      let dmax = 1
+      for (const v of dmap.values()) if (v > dmax) dmax = v
+      for (const [k, count] of dmap.entries()) {
+        const [bx, by] = k.split(':').map(Number)
+        densityBins.push({
+          x: bx * BIN_SIZE,
+          y: by * BIN_SIZE,
+          intensity: count / dmax,
+        })
+      }
+    }
+
+    // 라벨 collision 처리 — 영향력 임계 이상 + 활성만 후보, 위/아래 밴드로 배치
+    const labelCandidates = ordered
+      .filter(
+        (p) =>
+          p.influence >= INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_MIN_INFLUENCE &&
+          isActiveP(p),
+      )
+      .map((p) => {
+        const { dx, dy } = deterministicJitter(
+          p.id,
+          INFOGRAPHIC_DEFAULTS.GALAXY_JITTER_RANGE,
+        )
+        return { p, x: xPos(p.activityYear) + dx, y: yPos(p.influence) + dy }
+      })
+      .sort((a, b) => b.p.influence - a.p.influence)
+
+    const placedLabels: Array<{
+      p: AdaptedPerson
+      x: number
+      y: number
+      above: boolean
+    }> = []
+    for (const cand of labelCandidates) {
+      if (placedLabels.length >= INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_MAX) break
+      const collidesAbove = placedLabels.some(
+        (l) =>
+          l.above &&
+          Math.abs(l.x - cand.x) <
+            INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_MIN_X_DIST &&
+          Math.abs(l.y - cand.y) < INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_Y_BAND,
+      )
+      const collidesBelow = placedLabels.some(
+        (l) =>
+          !l.above &&
+          Math.abs(l.x - cand.x) <
+            INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_MIN_X_DIST &&
+          Math.abs(l.y - cand.y) < INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_Y_BAND,
+      )
+      if (!collidesAbove) placedLabels.push({ ...cand, above: true })
+      else if (!collidesBelow) placedLabels.push({ ...cand, above: false })
+    }
+
+    const activeCount = hasActive
+      ? people.filter((p) => isPersonInScopes(p, scopes)).length
+      : people.length
+
     return {
       X_MIN,
       X_MAX,
@@ -177,14 +257,19 @@ export function GalaxyView({ people, onOpen }: Props) {
       ordered,
       regionCounts,
       visibleRegions,
+      densityBins,
+      placedLabels,
+      activeCount,
+      showDensity,
+      BIN_SIZE,
     }
   }, [people, scopes, innerW, innerH])
 
   if (!people.length) {
     return (
       <EmptyState
-        hasActiveFilter={hasActiveFilter}
-        onClearFilters={clearAllScopes}
+        hasActiveFilter={hasAnyFilter}
+        onClearFilters={resetFilters}
       />
     )
   }
@@ -199,79 +284,12 @@ export function GalaxyView({ people, onOpen }: Props) {
     ordered,
     regionCounts,
     visibleRegions,
+    densityBins,
+    placedLabels,
+    activeCount,
+    showDensity,
+    BIN_SIZE,
   } = layout
-
-  // 라벨 collision 처리 — 영향력 임계 이상만 후보, 위/아래 밴드로 배치
-  const labelCandidates = ordered
-    .filter(
-      (p) =>
-        p.influence >= INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_MIN_INFLUENCE &&
-        isActive(p),
-    )
-    .map((p) => {
-      const baseX = xPos(p.activityYear)
-      const baseY = yPos(p.influence)
-      const { dx, dy } = deterministicJitter(
-        p.id,
-        INFOGRAPHIC_DEFAULTS.GALAXY_JITTER_RANGE,
-      )
-      return { p, x: baseX + dx, y: baseY + dy }
-    })
-    .sort((a, b) => b.p.influence - a.p.influence)
-
-  const placedLabels: Array<{
-    p: AdaptedPerson
-    x: number
-    y: number
-    above: boolean
-  }> = []
-  for (const cand of labelCandidates) {
-    if (placedLabels.length >= INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_MAX) break
-    const collidesAbove = placedLabels.some(
-      (l) =>
-        l.above &&
-        Math.abs(l.x - cand.x) < INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_MIN_X_DIST &&
-        Math.abs(l.y - cand.y) < INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_Y_BAND,
-    )
-    const collidesBelow = placedLabels.some(
-      (l) =>
-        !l.above &&
-        Math.abs(l.x - cand.x) < INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_MIN_X_DIST &&
-        Math.abs(l.y - cand.y) < INFOGRAPHIC_DEFAULTS.GALAXY_LABEL_Y_BAND,
-    )
-    if (!collidesAbove) placedLabels.push({ ...cand, above: true })
-    else if (!collidesBelow) placedLabels.push({ ...cand, above: false })
-  }
-
-  const activeCount = hasActiveFilter
-    ? people.filter((p) => isPersonInScopes(p, scopes)).length
-    : people.length
-
-  // density underlay — 점이 많을 때만
-  const showDensity =
-    people.length >= INFOGRAPHIC_DEFAULTS.GALAXY_DENSITY_THRESHOLD
-  const BIN_SIZE = INFOGRAPHIC_DEFAULTS.GALAXY_DENSITY_BIN_SIZE
-  const densityBins: Array<{ x: number; y: number; intensity: number }> = []
-  if (showDensity) {
-    const map = new Map<string, number>()
-    for (const p of people) {
-      const baseX = xPos(p.activityYear)
-      const baseY = yPos(p.influence)
-      const bx = Math.floor(baseX / BIN_SIZE)
-      const by = Math.floor(baseY / BIN_SIZE)
-      map.set(`${bx}:${by}`, (map.get(`${bx}:${by}`) ?? 0) + 1)
-    }
-    let max = 1
-    for (const v of map.values()) if (v > max) max = v
-    for (const [k, count] of map.entries()) {
-      const [bx, by] = k.split(':').map(Number)
-      densityBins.push({
-        x: bx * BIN_SIZE,
-        y: by * BIN_SIZE,
-        intensity: count / max,
-      })
-    }
-  }
 
   const axisStroke = theme.colors.border.default
   const gridStroke = theme.colors.border.light

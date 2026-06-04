@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  FiBriefcase,
   FiCalendar,
   FiCircle,
   FiDownload,
@@ -33,6 +34,7 @@ import { CATEGORY_ICON } from '@/widgets/person/person-life-event-form-modal/per
 type TimelineKind =
   | 'reign'
   | 'tenure'
+  | 'career'
   | 'event'
   | 'life'
   | 'birth'
@@ -85,6 +87,18 @@ interface TenureInput {
   historicalCountry?: { name?: string | null } | null
 }
 
+interface CareerInput {
+  id: string
+  startDate?: string | null
+  endDate?: string | null
+  title?: string | null
+  notes?: string | null
+  /** 분야 라벨 (군사·기업·학계 등) — 상위에서 매핑해 전달 */
+  kindLabel?: string | null
+  organization?: { name?: string | null } | null
+  rank?: { name?: string | null } | null
+}
+
 interface PersonEventInput {
   id: string
   role?: string | null
@@ -115,6 +129,7 @@ export interface PersonLifeTimelineInfographicProps {
   /** 소스 데이터 */
   reigns?: ReignInput[] | null
   tenures?: TenureInput[] | null
+  careers?: CareerInput[] | null
   events?: PersonEventInput[] | null
   lifeEvents: PersonLifeEvent[]
   /** 가족 이벤트 — 부모·배우자·자녀·형제자매의 출생/사망/혼인 */
@@ -209,7 +224,7 @@ function ageAt(d: Date | null, birth: Date | null): number | null {
 
 // ───── 타임라인 노드 ─────
 // ───── 필터 ─────
-type FilterKey = 'life' | 'reign' | 'tenure' | 'event' | 'family'
+type FilterKey = 'life' | 'reign' | 'tenure' | 'career' | 'event' | 'family'
 
 function kindToFilter(kind: TimelineKind): FilterKey | 'ego' {
   if (kind === 'birth' || kind === 'death') return 'ego'
@@ -222,6 +237,7 @@ const FILTER_COLORS = {
   life: '#6366f1',
   reign: '#0f766e',
   tenure: '#4338ca',
+  career: '#b45309',
   event: '#0369a1',
   family: '#0d9488',
 } as const
@@ -230,6 +246,7 @@ const FILTER_OPTIONS: Array<{ key: FilterKey; label: string; color: string }> = 
   { key: 'life', label: '연보', color: FILTER_COLORS.life },
   { key: 'reign', label: '재위', color: FILTER_COLORS.reign },
   { key: 'tenure', label: '재임', color: FILTER_COLORS.tenure },
+  { key: 'career', label: '경력', color: FILTER_COLORS.career },
   { key: 'event', label: '사건', color: FILTER_COLORS.event },
   { key: 'family', label: '가족', color: FILTER_COLORS.family },
 ]
@@ -368,6 +385,7 @@ export function PersonLifeTimelineInfographic({
   isAlive,
   reigns,
   tenures,
+  careers,
   events,
   lifeEvents,
   father,
@@ -452,6 +470,26 @@ export function PersonLifeTimelineInfographic({
         subtitle: t.termNumber != null ? `제${t.termNumber}대` : null,
         dateLabel: formatRange(s, e),
         description: t.notes ?? null,
+        durationDays: diffDays(s, e),
+      })
+    }
+
+    for (const c of careers ?? []) {
+      const s = parseDate(c.startDate)
+      const e = parseDate(c.endDate)
+      const org = c.organization?.name ?? null
+      const pos = c.rank?.name ?? c.title ?? null
+      const head = [org, pos].filter(Boolean).join(' · ')
+      result.push({
+        key: `career-${c.id}`,
+        kind: 'career',
+        start: s,
+        end: e,
+        sortKey: toTs(s),
+        title: head || c.kindLabel || '경력',
+        subtitle: c.kindLabel ?? null,
+        dateLabel: formatRange(s, e),
+        description: c.notes ?? null,
         durationDays: diffDays(s, e),
       })
     }
@@ -657,10 +695,11 @@ export function PersonLifeTimelineInfographic({
       marriage: 2,
       reign: 3,
       tenure: 4,
-      life: 5,
-      event: 6,
-      'family-death': 7,
-      death: 8,
+      career: 5,
+      life: 6,
+      event: 7,
+      'family-death': 8,
+      death: 9,
     }
     filtered.sort((a, b) => {
       if (a.sortKey !== b.sortKey) return a.sortKey - b.sortKey
@@ -676,6 +715,7 @@ export function PersonLifeTimelineInfographic({
     isAlive,
     reigns,
     tenures,
+    careers,
     events,
     lifeEvents,
     father,
@@ -690,6 +730,7 @@ export function PersonLifeTimelineInfographic({
     life: true,
     reign: true,
     tenure: true,
+    career: true,
     event: true,
     family: true,
   })
@@ -937,6 +978,7 @@ export function PersonLifeTimelineInfographic({
                   $hasDuration={
                     (node.kind === 'reign' ||
                       node.kind === 'tenure' ||
+                      node.kind === 'career' ||
                       (node.kind === 'life' && !!node.durationDays)) &&
                     (node.durationDays ?? 0) > 365
                   }
@@ -1049,7 +1091,9 @@ export function PersonLifeTimelineInfographic({
                             ? '재위'
                             : node.kind === 'tenure'
                               ? '재임'
-                              : node.kind === 'event'
+                              : node.kind === 'career'
+                                ? '경력'
+                                : node.kind === 'event'
                                 ? '사건'
                                 : node.kind === 'life'
                                   ? node.category
@@ -1121,6 +1165,7 @@ function NodeIconInner({
   }
   if (kind === 'reign') return <FiStar size={12} strokeWidth={2.5} />
   if (kind === 'tenure') return <FiFlag size={12} strokeWidth={2.5} />
+  if (kind === 'career') return <FiBriefcase size={12} strokeWidth={2.5} />
   if (kind === 'event') return <FiCalendar size={12} strokeWidth={2.5} />
   if (kind === 'family-birth') return <FiUserPlus size={12} strokeWidth={2.5} />
   if (kind === 'family-death') return <FiUserMinus size={12} strokeWidth={2.5} />
@@ -1458,6 +1503,7 @@ const kindColorMap: Record<TimelineKind, { base: string; accent: string }> = {
   death: { base: '#64748b', accent: 'rgba(100,116,139,0.25)' },
   reign: { base: '#0f766e', accent: 'rgba(20,184,166,0.25)' },
   tenure: { base: '#4338ca', accent: 'rgba(99,102,241,0.25)' },
+  career: { base: '#b45309', accent: 'rgba(180,83,9,0.22)' },
   event: { base: '#0369a1', accent: 'rgba(14,165,233,0.25)' },
   life: { base: '#6366f1', accent: 'rgba(99,102,241,0.25)' },
   'family-birth': { base: '#0d9488', accent: 'rgba(13,148,136,0.22)' },

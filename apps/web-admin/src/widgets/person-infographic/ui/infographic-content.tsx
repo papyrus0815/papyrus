@@ -11,7 +11,6 @@ import { FiBarChart2, FiPlus, FiSearch, FiX } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { usePersons } from '@/entities/person/api'
-import type { Person } from '@/entities/person/api'
 import {
   PersonTabSharedHeader,
   PersonTabSharedHeaderLeft,
@@ -22,10 +21,9 @@ import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/perso
 
 import {
   ERAS,
-  adapt,
   yearOfEra,
+  useAdaptedPersons,
   usePersonInfographicFilterStore,
-  type AdaptedPerson,
   type PersonInfographicView,
 } from '@/widgets/person-infographic'
 import { useFilterUrlSync } from '../model/url-sync'
@@ -49,12 +47,11 @@ export function InfographicContent({
   onPersonClick,
 }: InfographicContentProps) {
   useFilterUrlSync()
-  const { data: rawPersons, isLoading } = usePersons()
+  const { isLoading } = usePersons()
+  const allPeople = useAdaptedPersons()
 
   const scopes = usePersonInfographicFilterStore((s) => s.scopes)
-  const clearAllScopes = usePersonInfographicFilterStore(
-    (s) => s.clearAllScopes,
-  )
+  const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
   const view = usePersonInfographicFilterStore((s) => s.view)
   const q = usePersonInfographicFilterStore((s) => s.query)
   const setQ = usePersonInfographicFilterStore((s) => s.setQuery)
@@ -95,13 +92,6 @@ export function InfographicContent({
       return next
     })
   }, [])
-
-  const allPeople = useMemo<AdaptedPerson[]>(() => {
-    if (!rawPersons) return []
-    return (rawPersons as Person[])
-      .map(adapt)
-      .filter((p): p is AdaptedPerson => p !== null)
-  }, [rawPersons])
 
   const filtered = useMemo(() => {
     let arr = allPeople
@@ -236,7 +226,7 @@ export function InfographicContent({
         {!isLoading && filtered.length === 0 && (
           <EmptyState
             hasActiveFilter={hasActiveFilter}
-            onClearFilters={clearAllScopes}
+            onClearFilters={resetFilters}
           />
         )}
 

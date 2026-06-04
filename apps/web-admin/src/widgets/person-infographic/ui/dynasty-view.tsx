@@ -10,7 +10,10 @@ import { glassOrSolidMixin } from '@/shared/styles/mixins'
 
 import type { AdaptedPerson } from '../model/types'
 import { yearOfEra } from '../model/adapt'
-import { usePersonInfographicFilterStore } from '../model/filter.store'
+import {
+  usePersonInfographicFilterStore,
+  useHasActiveFilter,
+} from '../model/filter.store'
 import { makeSortFnWithPinned } from '../model/sort-helpers'
 
 import { EmptyState } from './_shared/empty-state'
@@ -28,9 +31,8 @@ interface Props {
 export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
   const theme = useTheme()
   const sort = usePersonInfographicFilterStore((s) => s.sort)
-  const clearAllScopes = usePersonInfographicFilterStore(
-    (s) => s.clearAllScopes,
-  )
+  const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
+  const hasFilter = useHasActiveFilter()
 
   const { factions, noFaction } = useMemo(() => {
     const byFaction: Record<string, AdaptedPerson[]> = {}
@@ -39,10 +41,19 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
       if (p.faction) (byFaction[p.faction] = byFaction[p.faction] || []).push(p)
       else without.push(p)
     }
-    return {
-      factions: Object.entries(byFaction).sort((a, b) => b[1].length - a[1].length),
-      noFaction: without,
-    }
+    // 연도 범위·대표 국가는 그룹 생성 시 1회 계산 (렌더 본문 spread 제거 — 콜스택/재계산 방지)
+    const factions = Object.entries(byFaction)
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([faction, arr]) => {
+        let minYr = Infinity
+        let maxYr = -Infinity
+        for (const p of arr) {
+          if (p.born < minYr) minYr = p.born
+          if (p.died > maxYr) maxYr = p.died
+        }
+        return { faction, arr, minYr, maxYr, countryName: arr[0]?.country ?? '' }
+      })
+    return { factions, noFaction: without }
   }, [people])
 
   const sortFn = useMemo(
@@ -51,17 +62,14 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
   )
 
   if (!factions.length && !noFaction.length) {
-    return <EmptyState hasActiveFilter onClearFilters={clearAllScopes} />
+    return <EmptyState hasActiveFilter={hasFilter} onClearFilters={resetFilters} />
   }
 
   return (
     <Wrap>
       <SortBar />
-      {factions.map(([faction, arr]) => {
+      {factions.map(({ faction, arr, minYr, maxYr, countryName }) => {
         const sorted = arr.slice().sort(sortFn)
-        const minYr = Math.min(...arr.map((p) => p.born))
-        const maxYr = Math.max(...arr.map((p) => p.died))
-        const countryName = arr[0]?.country ?? ''
         return (
           <Block key={faction}>
             <BlockHdr>

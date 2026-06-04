@@ -140,55 +140,6 @@ export function listPersonLifeEvents(personId: string): Promise<PersonLifeEvent[
   )
 }
 
-/**
- * 통합 연보 타임라인 항목 — kind 로 구분.
- * - 'life-event': 자유 서술형 연보 (PersonLifeEvent)
- * - 'event-participation': 사건 참여 (PersonEvent + 그 인물 시점의 role/note + 사건 정보)
- */
-export type PersonTimelineLifeEventItem = PersonLifeEvent & { kind: 'life-event' }
-
-export interface PersonTimelineEventParticipationItem {
-  kind: 'event-participation'
-  /** PersonEvent 행 PK */
-  id: string
-  personId: string
-  eventId: string
-  /** 그 사건에서의 역할 */
-  role: string | null
-  /** 인물 시점의 사건 서술 (장문) */
-  note: string | null
-  createdAt: string
-  updatedAt: string
-  event: {
-    id: string
-    title: string
-    description: string | null
-    startDate: string | null
-    startDatePrecision: string | null
-    endDate: string | null
-    endDatePrecision: string | null
-    location: string | null
-    parentEventId: string | null
-    categoryId: string | null
-    category: { id: string; name: string } | null
-  }
-}
-
-export type PersonTimelineItem =
-  | PersonTimelineLifeEventItem
-  | PersonTimelineEventParticipationItem
-
-/**
- * 인물 통합 연보 타임라인 — 자유 연보 + 참여 사건 시간순 merge.
- * `kind` 로 항목 구분: 'life-event' | 'event-participation'.
- */
-export function listPersonLifeTimeline(personId: string): Promise<PersonTimelineItem[]> {
-  return requestJson<PersonTimelineItem[]>(
-    `/person-life-events/timeline/by-person/${encodeURIComponent(personId)}`,
-    { method: 'GET' },
-  )
-}
-
 export function createPersonLifeEvent(
   body: CreatePersonLifeEventBody,
 ): Promise<PersonLifeEvent> {

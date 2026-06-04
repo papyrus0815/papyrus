@@ -162,3 +162,23 @@ export function matchesScopes<
   if (scopes.country.length > 0 && !scopes.country.includes(person.country)) return false
   return true
 }
+
+/**
+ * 활성 필터(scope·영향력·생존·검색어) 존재 여부 — 빈 결과의 "필터 초기화" CTA 노출 판정 공통.
+ * 갤럭시/매트릭스의 점 강조(isActive)는 scope 한정이라 별도(hasAnyActiveScope)를 그대로 쓴다.
+ */
+export function useHasActiveFilter(): boolean {
+  return usePersonInfographicFilterStore((s) => {
+    const sc = s.scopes
+    return (
+      sc.era.length +
+        sc.region.length +
+        sc.field.length +
+        sc.country.length +
+        (s.minInfluence > 0 ? 1 : 0) +
+        (s.aliveFilter !== 'all' ? 1 : 0) +
+        (s.query.trim() ? 1 : 0) >
+      0
+    )
+  })
+}

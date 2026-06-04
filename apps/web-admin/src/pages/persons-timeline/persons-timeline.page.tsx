@@ -32,6 +32,19 @@ import {
   PersonInfographicPane,
 } from '@/widgets/person-infographic'
 
+const SCROLL_KEY = 'person-list-scroll'
+
+/** 가장 가까운 스크롤 가능 조상(overflow-y auto/scroll) — 실제 스크롤은 window가 아니라 레이아웃 Content. */
+function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null
+  while (node) {
+    const oy = getComputedStyle(node).overflowY
+    if (oy === 'auto' || oy === 'scroll' || oy === 'overlay') return node
+    node = node.parentElement
+  }
+  return null
+}
+
 export default function DashboardPersonsPage() {
   const navigate = useNavigate()
   const params = useParams<{ personId?: string }>()
@@ -40,19 +53,35 @@ export default function DashboardPersonsPage() {
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
 
-  /** 카드 → 상세 → 뒤로 왔을 때 스크롤 위치 복원 */
-  const scrollKeyRef = useRef<string>('person-list-scroll')
+  /** 카드 → 상세 → 뒤로 왔을 때 스크롤 위치 복원 (실제 스크롤 컨테이너 기준) */
+  const scrollElRef = useRef<HTMLElement | null>(null)
+  const setScrollSentinel = useCallback((node: HTMLDivElement | null) => {
+    if (node) scrollElRef.current = findScrollParent(node)
+  }, [])
+
   useEffect(() => {
-    if (personId) {
-      sessionStorage.setItem(scrollKeyRef.current, String(window.scrollY))
-      return
-    }
-    const saved = sessionStorage.getItem(scrollKeyRef.current)
+    if (personId) return // 상세 화면에서는 추적/복원 안 함
+    const el = scrollElRef.current
+    if (!el) return
+    // 복원
+    const saved = sessionStorage.getItem(SCROLL_KEY)
     if (saved != null) {
       const y = Number(saved)
-      if (Number.isFinite(y)) {
-        requestAnimationFrame(() => window.scrollTo(0, y))
-      }
+      if (Number.isFinite(y)) requestAnimationFrame(() => (el.scrollTop = y))
+    }
+    // 리스트가 떠 있는 동안 위치 추적 (rAF throttle)
+    let raf = 0
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        sessionStorage.setItem(SCROLL_KEY, String(el.scrollTop))
+      })
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      if (raf) cancelAnimationFrame(raf)
     }
   }, [personId])
 
@@ -98,6 +127,7 @@ export default function DashboardPersonsPage() {
               transition={{ duration: 0.2 }}
               style={{ width: '100%', minHeight: '100%' }}
             >
+              <div ref={setScrollSentinel} aria-hidden style={{ height: 0 }} />
               <PersonInfographicPane onPersonClick={handlePersonClick} />
             </motion.div>
           )

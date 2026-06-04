@@ -1,6 +1,7 @@
 export * from './model/constants'
 export * from './model/types'
 export * from './model/adapt'
+export * from './model/use-adapted-persons'
 export * from './model/filter.store'
 export * from './model/sort-helpers'
 export * from './model/century'

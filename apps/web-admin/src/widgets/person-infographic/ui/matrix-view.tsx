@@ -9,7 +9,10 @@ import styled, { useTheme } from 'styled-components'
 import type { AdaptedPerson } from '../model/types'
 import { yearOfEra } from '../model/adapt'
 import { ERAS, INFOGRAPHIC_DEFAULTS } from '../model/constants'
-import { usePersonInfographicFilterStore } from '../model/filter.store'
+import {
+  usePersonInfographicFilterStore,
+  useHasActiveFilter,
+} from '../model/filter.store'
 import { hasAnyActiveScope, isPersonInScopes } from '../model/sort-helpers'
 
 import { EmptyState } from './_shared/empty-state'
@@ -71,7 +74,10 @@ export function MatrixView({ people, onOpen }: Props) {
   const clearAllScopes = usePersonInfographicFilterStore(
     (s) => s.clearAllScopes,
   )
+  const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
+  // 막대 강조는 scope 한정. 빈 결과 CTA는 전체 필터 기준.
   const hasActiveFilter = hasAnyActiveScope(scopes)
+  const hasAnyFilter = useHasActiveFilter()
 
   // 국가별 lane 패킹 — people·showAll·W 변할 때만 재계산
   const grouped = useMemo(() => {
@@ -134,8 +140,8 @@ export function MatrixView({ people, onOpen }: Props) {
   if (!grouped.all.length) {
     return (
       <EmptyState
-        hasActiveFilter={hasActiveFilter}
-        onClearFilters={clearAllScopes}
+        hasActiveFilter={hasAnyFilter}
+        onClearFilters={resetFilters}
         description="국가·시대·분야·영향력 필터를 확인해보세요."
       />
     )

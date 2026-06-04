@@ -14,7 +14,10 @@ import type { AdaptedPerson } from '../model/types'
 import { yearOfEra } from '../model/adapt'
 import { centuryOf, formatYear, type CenturyMeta } from '../model/century'
 import { INFOGRAPHIC_DEFAULTS } from '../model/constants'
-import { usePersonInfographicFilterStore } from '../model/filter.store'
+import {
+  usePersonInfographicFilterStore,
+  useHasActiveFilter,
+} from '../model/filter.store'
 import { makeSortFnWithPinned } from '../model/sort-helpers'
 
 import { EmptyState } from './_shared/empty-state'
@@ -37,9 +40,7 @@ interface Group {
 export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
   const theme = useTheme()
   const sort = usePersonInfographicFilterStore((s) => s.sort)
-  const clearAllScopes = usePersonInfographicFilterStore(
-    (s) => s.clearAllScopes,
-  )
+  const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
   const hasFilter = useHasActiveFilter()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
@@ -60,7 +61,7 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
 
   if (!groups.length) {
     return (
-      <EmptyState hasActiveFilter={hasFilter} onClearFilters={clearAllScopes} />
+      <EmptyState hasActiveFilter={hasFilter} onClearFilters={resetFilters} />
     )
   }
 
@@ -120,22 +121,6 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
       })}
     </Wrap>
   )
-}
-
-function useHasActiveFilter() {
-  return usePersonInfographicFilterStore((s) => {
-    const sc = s.scopes
-    return (
-      sc.era.length +
-        sc.region.length +
-        sc.field.length +
-        sc.country.length +
-        (s.minInfluence > 0 ? 1 : 0) +
-        (s.aliveFilter !== 'all' ? 1 : 0) +
-        (s.query.trim() ? 1 : 0) >
-      0
-    )
-  })
 }
 
 const Wrap = styled.div`

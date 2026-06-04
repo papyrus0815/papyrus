@@ -5,6 +5,7 @@
  * 핀 토글, 군주/국가원수 배지, 분야 태그, 영향력 게이지 포함.
  */
 import type React from 'react'
+import { memo, useMemo } from 'react'
 import styled, { css } from 'styled-components'
 
 import type { AdaptedPerson } from '../../model/types'
@@ -21,7 +22,7 @@ interface PersonCardProps {
   onOpen: (id: string) => void
 }
 
-export function PersonCardItem({
+function PersonCardItemBase({
   p,
   era,
   q,
@@ -29,13 +30,18 @@ export function PersonCardItem({
   onTogglePin,
   onOpen,
 }: PersonCardProps) {
-  const bioTooltip = p.biography
-    ? p.biography
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 240)
-    : undefined
+  // bio 정규식 2회는 biography가 안 바뀌면 재실행 불필요 (카드 다수 + 부모 재정렬 리렌더 누적)
+  const bioTooltip = useMemo(
+    () =>
+      p.biography
+        ? p.biography
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 240)
+        : undefined,
+    [p.biography],
+  )
   return (
     <EraCard $pinned={pinned} title={bioTooltip} onClick={() => onOpen(p.id)}>
       <EraCardThumbWrap $color={era.color}>
@@ -133,6 +139,12 @@ export function PersonCardItem({
     </EraCard>
   )
 }
+
+/**
+ * 부모(시대/왕조 뷰)의 재정렬·핀 토글 시 동일 props 카드의 리렌더 차단.
+ * p(어댑트 캐시)·era(ERAS 상수)·콜백 모두 참조 안정적이라 기본 shallow 비교로 충분.
+ */
+export const PersonCardItem = memo(PersonCardItemBase)
 
 export const EraCardGrid = styled.div`
   display: grid;

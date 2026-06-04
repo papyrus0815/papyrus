@@ -2,11 +2,9 @@ import React, { useCallback, useMemo, useState } from 'react'
 
 import styled, { css } from 'styled-components'
 
-import type { Person } from '@/entities/person/api'
-import { usePersons } from '@/entities/person/api'
 import { scrollbarThinMixin } from '@/shared/styles/mixins'
 
-import { adapt, yearOfEra } from '../model/adapt'
+import { yearOfEra } from '../model/adapt'
 import { ERAS, FIELDS, REGIONS, REGION_COLORS } from '../model/constants'
 import {
   countActiveScopes,
@@ -14,7 +12,7 @@ import {
   usePersonInfographicFilterStore,
   type ScopeKind,
 } from '../model/filter.store'
-import type { AdaptedPerson } from '../model/types'
+import { useAdaptedPersons } from '../model/use-adapted-persons'
 
 /** accordion 상태 — 그룹별 collapsed 여부 localStorage 유지 */
 const COLLAPSED_GROUPS_KEY = 'person-filter-collapsed-groups'
@@ -60,7 +58,7 @@ function useCollapsedGroups() {
  * - LeftFilterSlot 안쪽에서 `view === 'person'`일 때 렌더.
  */
 export function PersonFilterPanel() {
-  const { data: rawPersons } = usePersons()
+  const all = useAdaptedPersons()
 
   const scopes = usePersonInfographicFilterStore((s) => s.scopes)
   const toggleScope = usePersonInfographicFilterStore((s) => s.toggleScope)
@@ -80,13 +78,6 @@ export function PersonFilterPanel() {
   )
   const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
   const { collapsed: groupCollapsed, toggle: toggleGroup } = useCollapsedGroups()
-
-  const all = useMemo<AdaptedPerson[]>(() => {
-    if (!rawPersons) return []
-    return (rawPersons as Person[])
-      .map(adapt)
-      .filter((p): p is AdaptedPerson => p !== null)
-  }, [rawPersons])
 
   const counts = useMemo(() => {
     const era: Record<string, number> = {}
