@@ -95,13 +95,30 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
   const focusedCellRef = useRef<HTMLButtonElement | null>(null)
   /** arrow 키 이동 후에만 day 셀로 포커스를 옮긴다(마우스/타이핑 땐 X). */
   const shouldFocusDayRef = useRef(false)
+  /**
+   * 호출부가 onClose를 인라인 함수로 넘기면(예: `onClose={() => setOpen(false)}`)
+   * 부모 리렌더마다 참조가 바뀐다. 포커스 트랩 effect가 이를 deps로 두면 매 렌더마다
+   * cleanup→재실행되어 containerRef.focus()가 입력 중인 input의 포커스를 빼앗는다.
+   * ref로 최신 onClose만 들고 effect는 isOpen에만 의존하게 한다.
+   */
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   const getDaysInMonth = (year: number, month: number) =>
     makeDate(year, month + 1, 0).getDate()
 
+  /*
+   * 호출부가 initialDate를 매 렌더 새 Date/문자열로 넘기는 경우가 많아(예:
+   * `initialDate={buildInitialDate(...)}`) 객체 정체성으로 deps를 잡으면 부모가
+   * 리렌더될 때마다 effect가 재실행되어 입력 중이던 연/월/일 값을 되돌린다.
+   * 의미 있는 날짜 값(타임스탬프)으로 정규화해 deps에 둔다.
+   */
+  const initialDateParsed = parseFlexibleDate(initialDate)
+  const initialDateKey = initialDateParsed ? initialDateParsed.getTime() : null
+
   useEffect(() => {
     if (isOpen) {
-      const date = parseFlexibleDate(initialDate) ?? new Date()
+      const date = initialDateParsed ?? new Date()
       setSelectedDate(date)
       const year = date.getFullYear()
       const absYear = Math.abs(year)
@@ -114,7 +131,9 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
       setFocusedDay(date.getDate())
       setInputError(null)
     }
-  }, [isOpen, initialDate])
+    // initialDateParsed는 initialDateKey로 정체성을 안정화 — deps에서 제외.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialDateKey])
 
   /* 열림: 포커스를 모달로 이동 + Escape 닫기 + Tab 트랩. 닫힘: 직전 포커스 복귀. */
   useEffect(() => {
@@ -125,7 +144,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (event.key !== 'Tab' || !containerRef.current) return
@@ -149,7 +168,9 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
       document.removeEventListener('keydown', handleKey, true)
       previouslyFocused?.focus?.()
     }
-  }, [isOpen, onClose])
+    // onClose는 onCloseRef로 참조 — deps에서 제외해 매 렌더마다 포커스를 빼앗지 않게 한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
 
   /* arrow 이동 후 해당 day 버튼으로 실제 포커스 이동. */
   useEffect(() => {
