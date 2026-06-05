@@ -9,7 +9,6 @@ export type GlossaryTermDto = {
   description: string | null
   countryId: string | null
   historicalCountryId: string | null
-  postId: string | null
   eventId: string | null
   createdAt: string
   updatedAt: string
@@ -20,8 +19,6 @@ export type CreateGlossaryTermDto = {
   description?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
-  /** 문서 전용: 이 포스트에만 사용 */
-  postId?: string | null
   /** 문서 전용: 이 사건에만 사용 */
   eventId?: string | null
 }
@@ -31,7 +28,6 @@ export type UpdateGlossaryTermDto = {
   description?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
-  postId?: string | null
   eventId?: string | null
 }
 
@@ -58,8 +54,6 @@ async function request<T>(
 export async function getGlossaryTerms(params?: {
   countryId?: string
   historicalCountryId?: string
-  /** 해당 포스트의 전역 + 문서 전용 용어 함께 조회 */
-  postId?: string
   /** 해당 사건의 전역 + 문서 전용 용어 함께 조회 */
   eventId?: string
   q?: string
@@ -68,7 +62,6 @@ export async function getGlossaryTerms(params?: {
   if (params?.countryId) qs.set('countryId', params.countryId)
   if (params?.historicalCountryId)
     qs.set('historicalCountryId', params.historicalCountryId)
-  if (params?.postId) qs.set('postId', params.postId)
   if (params?.eventId) qs.set('eventId', params.eventId)
   if (params?.q) qs.set('q', params.q)
   const query = qs.toString()

@@ -1428,7 +1428,6 @@ const TermLinkNewButton = styled.button<{ $primary?: boolean }>`
 
 /** 포스트/사건 편집 시 해당 문서에만 쓰는 용어(문서 전용) 지원 */
 export type DocumentScope =
-  | { type: 'post'; id: string }
   | { type: 'event'; id: string }
 
 const TABLE_GRID_MAX = 8
@@ -3607,7 +3606,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       try {
         const params: Parameters<typeof getGlossaryTerms>[0] = {}
         if (query) params['q'] = query
-        if (documentScope?.type === 'post') params.postId = documentScope.id
         if (documentScope?.type === 'event') params.eventId = documentScope.id
         const list = await getGlossaryTerms(params)
         setTermLinkResults(list)
@@ -3706,7 +3704,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         description: termLinkNewDesc.trim() || null,
       }
       if (documentScope && termLinkDocumentOnly) {
-        if (documentScope.type === 'post') dto.postId = documentScope.id
         if (documentScope.type === 'event') dto.eventId = documentScope.id
       }
       const term = await createGlossaryTerm(dto)
@@ -3772,7 +3769,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       .then((t) => {
         setTermEditName(t.name)
         setTermEditDesc(t.description ?? '')
-        setTermEditIsDocumentScoped(!!(t.postId || t.eventId))
+        setTermEditIsDocumentScoped(!!t.eventId)
       })
       .catch(() => {
         setTermEditModalVisible(false)
