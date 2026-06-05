@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react'
 
 import { ErrorHandler } from './error.handler.ui'
+import { isFocusRelatedError } from './error-handler.lib'
 
 interface Props {
   children: ReactNode
@@ -26,38 +27,8 @@ export class SmartErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    // focus 관련 에러인지 확인 (더 포괄적으로)
-    const errorMessage = error.message?.toLowerCase() || ''
-    const errorStack = error.stack?.toLowerCase() || ''
-    const errorName = error.name?.toLowerCase() || ''
-
-    const isFocusError =
-      errorMessage.includes('focus') ||
-      errorMessage.includes('focuslock') ||
-      errorMessage.includes('tabindex') ||
-      errorMessage.includes('blur') ||
-      errorMessage.includes('activeElement') ||
-      errorMessage.includes('activeelement') ||
-      errorStack.includes('focus-lock') ||
-      errorStack.includes('focus') ||
-      errorStack.includes('blur') ||
-      errorStack.includes('activeelement') ||
-      errorName.includes('focus') ||
-      // input 관련 에러도 포함
-      (errorMessage.includes('cannot read properties of null') &&
-        (errorStack.includes('focus') ||
-          errorStack.includes('input') ||
-          errorStack.includes('element'))) ||
-      (errorMessage.includes('cannot read property') &&
-        (errorStack.includes('focus') ||
-          errorStack.includes('input') ||
-          errorStack.includes('element'))) ||
-      // React 관련 focus 에러
-      (errorMessage.includes('react') && errorMessage.includes('focus')) ||
-      // 일반적인 DOM 조작 에러
-      (errorMessage.includes('queryselector') && errorStack.includes('focus'))
-
-    if (isFocusError) {
+    // focus 관련 에러는 UI를 띄우지 않고 통과 (단일 기준: isFocusRelatedError)
+    if (isFocusRelatedError(error)) {
       return { hasError: false, error: null }
     }
 
@@ -65,38 +36,8 @@ export class SmartErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // focus 관련 에러인지 다시 확인 (getDerivedStateFromError와 동일한 로직)
-    const errorMessage = error.message?.toLowerCase() || ''
-    const errorStack = error.stack?.toLowerCase() || ''
-    const errorName = error.name?.toLowerCase() || ''
-
-    const isFocusError =
-      errorMessage.includes('focus') ||
-      errorMessage.includes('focuslock') ||
-      errorMessage.includes('tabindex') ||
-      errorMessage.includes('blur') ||
-      errorMessage.includes('activeElement') ||
-      errorMessage.includes('activeelement') ||
-      errorStack.includes('focus-lock') ||
-      errorStack.includes('focus') ||
-      errorStack.includes('blur') ||
-      errorStack.includes('activeelement') ||
-      errorName.includes('focus') ||
-      // input 관련 에러도 포함
-      (errorMessage.includes('cannot read properties of null') &&
-        (errorStack.includes('focus') ||
-          errorStack.includes('input') ||
-          errorStack.includes('element'))) ||
-      (errorMessage.includes('cannot read property') &&
-        (errorStack.includes('focus') ||
-          errorStack.includes('input') ||
-          errorStack.includes('element'))) ||
-      // React 관련 focus 에러
-      (errorMessage.includes('react') && errorMessage.includes('focus')) ||
-      // 일반적인 DOM 조작 에러
-      (errorMessage.includes('queryselector') && errorStack.includes('focus'))
-
-    if (isFocusError) {
+    // getDerivedStateFromError와 동일 기준으로 focus 에러는 보고하지 않음
+    if (isFocusRelatedError(error)) {
       return
     }
 

@@ -1,87 +1,48 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import { Button } from '../button'
 import * as S from './error-handler.styles'
+
+// 진입 애니메이션 표시 지연 / 퇴장 후 액션 실행 지연 (CSS 전환 시간과 맞춤)
+const ENTER_DELAY_MS = 100
+const EXIT_DELAY_MS = 300
 
 // --- 타입 정의 ---
 type ErrorHandlerProps = {
   /** ErrorBoundary로부터 전달받는 에러 객체 */
   error: Error
   /** 컴포넌트 상태를 리셋하고 UI를 다시 렌더링하는 함수 */
-  resetErrorBoundary?: (...args: any[]) => void
+  resetErrorBoundary?: () => void
 }
 
 /**
  * 모던하고 인터랙티브한 에러 핸들러 컴포넌트
  * 사용자 친화적인 에러 UI와 매력적인 애니메이션을 제공합니다.
+ *
+ * focus 관련 에러 필터링은 상위 SmartErrorBoundary가 단일 책임으로 처리하므로,
+ * 이 컴포넌트는 전달받은 에러를 항상 표시한다(여기서 다시 거르지 않음).
  */
 export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
   const [isVisible, setIsVisible] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const isDevelopment = process.env.NODE_ENV === 'development'
 
-  // focus 관련 에러인지 마지막 확인
-  const isFocusRelatedError = () => {
-    const errorMessage = error.message?.toLowerCase() || ''
-    const errorStack = error.stack?.toLowerCase() || ''
-    const errorName = error.name?.toLowerCase() || ''
-
-    return (
-      errorMessage.includes('focus') ||
-      errorMessage.includes('blur') ||
-      errorMessage.includes('activeelement') ||
-      errorMessage.includes('focuslock') ||
-      errorMessage.includes('tabindex') ||
-      errorStack.includes('focus') ||
-      errorStack.includes('blur') ||
-      errorStack.includes('activeelement') ||
-      errorName.includes('focus') ||
-      (errorMessage.includes('cannot read properties of null') &&
-        (errorStack.includes('focus') || errorStack.includes('input'))) ||
-      (errorMessage.includes('cannot read property') &&
-        (errorStack.includes('focus') || errorStack.includes('input')))
-    )
-  }
-
   useEffect(() => {
-    // focus 관련 에러라면 UI를 표시하지 않음
-    if (isFocusRelatedError()) {
-      return
-    }
-
-    const timer = setTimeout(() => setIsVisible(true), 100)
+    const timer = setTimeout(() => setIsVisible(true), ENTER_DELAY_MS)
     return () => clearTimeout(timer)
   }, [error])
 
   const handleReload = () => {
-    // focus 관련 에러라면 새로고침하지 않음
-    if (isFocusRelatedError()) {
-      return
-    }
-
     setIsVisible(false)
-    setTimeout(() => window.location.reload(), 300)
+    setTimeout(() => window.location.reload(), EXIT_DELAY_MS)
   }
 
   const handleRetry = () => {
-    // focus 관련 에러라면 단순히 UI만 닫기
-    if (isFocusRelatedError()) {
-      setIsVisible(false)
-      return
-    }
-
-    if (resetErrorBoundary) {
-      setIsVisible(false)
-      setTimeout(() => resetErrorBoundary(), 300)
-    }
+    if (!resetErrorBoundary) return
+    setIsVisible(false)
+    setTimeout(() => resetErrorBoundary(), EXIT_DELAY_MS)
   }
 
-  const toggleDetails = () => setShowDetails(!showDetails)
-
-  // focus 관련 에러라면 아무것도 렌더링하지 않음
-  if (isFocusRelatedError()) {
-    return null
-  }
+  const toggleDetails = () => setShowDetails((v) => !v)
 
   return (
     <S.Wrapper $isVisible={isVisible}>
@@ -199,7 +160,11 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
               </S.ErrorBadge>
 
               {isDevelopment && (
-                <S.DetailsToggle onClick={toggleDetails}>
+                <S.DetailsToggle
+                  type="button"
+                  onClick={toggleDetails}
+                  aria-expanded={showDetails}
+                >
                   <span>기술 세부사항</span>
                   <S.ChevronIcon $isOpen={showDetails}>
                     <svg viewBox="0 0 24 24" fill="none">

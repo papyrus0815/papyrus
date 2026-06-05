@@ -1,25 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useId, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import styled from 'styled-components'
 import errorIcon from '@/shared/assets/images/status/error.png'
+import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
+import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 
 export interface ErrorModalProps {
   isOpen: boolean
   error: string
   onClose: () => void
-}
-
-// 🚀 이미지 전역 캐시 (한 번만 로드)
-let cachedErrorImage: HTMLImageElement | null = null
-let isImageLoaded = false
-
-// 앱 시작 시 즉시 프리로드
-if (!cachedErrorImage) {
-  cachedErrorImage = new Image()
-  cachedErrorImage.onload = () => {
-    isImageLoaded = true
-  }
-  cachedErrorImage.src = errorIcon
 }
 
 const ModalOverlay = styled(motion.div)`
@@ -160,51 +149,57 @@ const CloseButton = styled.button`
  */
 export const ErrorModal: React.FC<ErrorModalProps> = React.memo(
   ({ isOpen, error, onClose }) => {
-    const [imageLoaded, setImageLoaded] = useState(isImageLoaded)
+    const contentRef = useRef<HTMLDivElement>(null)
+    const titleId = useId()
 
-    // 캐시된 이미지 상태 확인
+    // 모달 떠 있는 동안 body 스크롤 잠금 + 포커스 가두기
+    useBodyScrollLock(isOpen)
+    useFocusTrap(contentRef, isOpen)
+
+    // Escape 키로 닫기
     useEffect(() => {
-      if (isImageLoaded && !imageLoaded) {
-        setImageLoaded(true)
+      if (!isOpen) return
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') onClose()
       }
-    }, [imageLoaded])
-
-    if (!isOpen) return null
+      document.addEventListener('keydown', onKeyDown)
+      return () => document.removeEventListener('keydown', onKeyDown)
+    }, [isOpen, onClose])
 
     return (
       <AnimatePresence>
-        <ModalOverlay
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          onClick={onClose}
-        >
-          <ModalContent
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            transition={{ type: 'spring', damping: 30, stiffness: 400 }}
-            onClick={(e) => e.stopPropagation()}
+        {isOpen && (
+          <ModalOverlay
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
           >
-            <ContentWrapper>
-              <ErrorIcon>
-                <img
-                  src={errorIcon}
-                  alt="에러"
-                  style={{
-                    opacity: 1, // 캐시된 이미지는 항상 즉시 표시
-                  }}
-                />
-              </ErrorIcon>
-              <ErrorTitle>이런, 문제가 생겼도다!</ErrorTitle>
-              <ErrorMessage>{error}</ErrorMessage>
-            </ContentWrapper>
-            <ButtonGroup>
-              <CloseButton onClick={onClose}>알았노라</CloseButton>
-            </ButtonGroup>
-          </ModalContent>
-        </ModalOverlay>
+            <ModalContent
+              ref={contentRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 400 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ContentWrapper>
+                <ErrorIcon>
+                  <img src={errorIcon} alt="" />
+                </ErrorIcon>
+                <ErrorTitle id={titleId}>이런, 문제가 생겼도다!</ErrorTitle>
+                <ErrorMessage>{error}</ErrorMessage>
+              </ContentWrapper>
+              <ButtonGroup>
+                <CloseButton onClick={onClose}>알았노라</CloseButton>
+              </ButtonGroup>
+            </ModalContent>
+          </ModalOverlay>
+        )}
       </AnimatePresence>
     )
   },

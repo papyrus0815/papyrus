@@ -143,6 +143,48 @@ export const Logger = {
 }
 
 // =============================================================================
+//  FOCUS-ERROR DETECTION (single source of truth)
+// =============================================================================
+
+/**
+ * focus/blur 관련 에러인지 판별한다.
+ *
+ * react-focus-lock 등 포커스 제어 라이브러리가 DOM 정리 타이밍에 던지는
+ * 비치명적 에러를 ErrorBoundary·로깅에서 일괄 무시하기 위한 **단일 기준**.
+ * (이전엔 smart-error-boundary와 logError에 동일 로직이 복붙되어 있었음)
+ *
+ * 모든 비교는 소문자로 정규화한 문자열에 대해 수행한다.
+ */
+export function isFocusRelatedError(error: Error): boolean {
+  const message = error.message?.toLowerCase() || ''
+  const stack = error.stack?.toLowerCase() || ''
+  const name = error.name?.toLowerCase() || ''
+
+  return (
+    message.includes('focus') ||
+    message.includes('focuslock') ||
+    message.includes('tabindex') ||
+    message.includes('blur') ||
+    message.includes('activeelement') ||
+    stack.includes('focus-lock') ||
+    stack.includes('focus') ||
+    stack.includes('blur') ||
+    stack.includes('activeelement') ||
+    name.includes('focus') ||
+    (message.includes('cannot read properties of null') &&
+      (stack.includes('focus') ||
+        stack.includes('input') ||
+        stack.includes('element'))) ||
+    (message.includes('cannot read property') &&
+      (stack.includes('focus') ||
+        stack.includes('input') ||
+        stack.includes('element'))) ||
+    (message.includes('react') && message.includes('focus')) ||
+    (message.includes('queryselector') && stack.includes('focus'))
+  )
+}
+
+// =============================================================================
 //  INTEGRATION WRAPPER (for React ErrorBoundary)
 // =============================================================================
 
@@ -158,19 +200,7 @@ export function logError(
   info: { componentStack?: string | null },
 ) {
   // focus 관련 에러는 무시 (react-focus-lock 충돌 방지)
-  const errorMessage = error.message?.toLowerCase() || ''
-  const errorStack = error.stack?.toLowerCase() || ''
-
-  const isFocusError =
-    errorMessage.includes('focus') ||
-    errorMessage.includes('focuslock') ||
-    errorMessage.includes('tabindex') ||
-    errorStack.includes('focus-lock') ||
-    errorStack.includes('focus') ||
-    errorMessage.includes('blur') ||
-    errorMessage.includes('activeElement')
-
-  if (isFocusError) {
+  if (isFocusRelatedError(error)) {
     return
   }
 
