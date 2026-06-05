@@ -101,7 +101,11 @@ export class NestiaApiService {
     try {
       token = useSessionStore.getState().token ?? null
       if (!token) {
-        const persisted = localStorage.getItem('session-storage')
+        // rememberMe 여부에 따라 토큰이 localStorage 또는 sessionStorage에 있을 수 있음
+        // (session.store의 hybridStorage와 동일한 우선순위로 조회)
+        const persisted =
+          localStorage.getItem('session-storage') ??
+          sessionStorage.getItem('session-storage')
         if (persisted) {
           const parsed = JSON.parse(persisted)
           token = (parsed?.state?.token as string) ?? null

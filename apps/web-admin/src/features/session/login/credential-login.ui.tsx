@@ -10,9 +10,11 @@ import { useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
 import { sessionApi } from '@/entities/session/session.api'
-import { useSessionStore } from '@/entities/session/session.store'
+import {
+  setSessionPersistMode,
+  useSessionStore,
+} from '@/entities/session/session.store'
 import { nestiaApiService } from '@/shared/api/api.service'
-import errorIcon from '@/shared/assets/images/status/error.png'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { pathKeys } from '@/shared/router'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -21,15 +23,14 @@ import * as S from './credential-login.styles'
 
 // 🎯 Zod 스키마 정의
 const loginSchema = z.object({
+  // 길이 제약은 서버 정책을 신뢰하고, 클라이언트는 입력 여부와 상한만 검증
   account: z
     .string()
     .min(1, '아이디를 입력해주세요')
-    .min(3, '아이디는 최소 3자 이상이어야 합니다')
     .max(50, '아이디는 50자를 초과할 수 없습니다'),
   password: z
     .string()
     .min(1, '비밀번호를 입력해주세요')
-    .min(4, '비밀번호는 최소 4자 이상이어야 합니다')
     .max(100, '비밀번호는 100자를 초과할 수 없습니다'),
   rememberMe: z.boolean().default(true),
 })
@@ -47,8 +48,10 @@ const getErrorMessage = (error: unknown): string => {
   const err = error as any
 
   // HTTP 상태 코드별 메시지 (보안: 상세 정보 노출 X)
-  if (err?.statusCode) {
-    switch (err.statusCode) {
+  // nestia(@samchon/openapi) HttpError는 status 필드를 노출 (statusCode 아님)
+  const status = err?.status ?? err?.statusCode
+  if (status) {
+    switch (status) {
       case 401:
         // 인증 실패 - 구체적인 이유는 숨김 (보안)
         return '그대의 신원을 확인할 수 없도다. 아이디와 비밀번호를 다시 확인하시게.'
@@ -95,7 +98,6 @@ const CredentialLoginFormComponent = function ({
     handleSubmit,
     formState: { errors, isSubmitting, isValid },
     watch,
-    setError,
     clearErrors,
   } = useForm<LoginFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -131,42 +133,32 @@ const CredentialLoginFormComponent = function ({
     clearErrors()
 
     try {
-      const response = await sessionApi.login({
+      // 응답은 SDK 타입(LoginResponseDto: { accessToken, refreshToken })으로 추론됨
+      const { accessToken } = await sessionApi.login({
         account: data.account,
         password: data.password,
       })
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const responseData = response as any
-      const token = responseData?.accessToken || responseData?.data?.accessToken
+      if (accessToken) {
+        // API 서비스에 토큰 설정 (헤더 동기 반영)
+        nestiaApiService.updateToken(accessToken)
 
-      if (token) {
-        // API 서비스에 토큰 설정
-        nestiaApiService.updateToken(token)
+        // 로그인 상태 유지 여부에 따라 저장소(localStorage/sessionStorage) 결정
+        setSessionPersistMode(data.rememberMe)
 
-        // 세션 스토어에 상태 저장
-        setSession({ token, username: data.account })
+        // 세션 스토어에 상태 저장 (동기)
+        setSession({ token: accessToken, username: data.account })
 
-        // 세션 상태가 안정화될 때까지 잠시 대기
-        await new Promise((resolve) => setTimeout(resolve, 200))
-
-        // 대시보드로 이동
-        setTimeout(() => {
-          navigate(pathKeys.home(), { replace: true })
-        }, 300)
+        // 토큰·헤더가 모두 동기 반영되었으므로 바로 이동
+        navigate(pathKeys.home(), { replace: true })
       } else {
-        setError('root', {
-          type: 'manual',
-          message: '로그인 응답에 토큰이 없습니다',
-        })
+        onError?.(
+          '입장은 허락되었으나 증표를 받지 못하였도다. 잠시 후 다시 시도해보시게.',
+        )
       }
     } catch (caughtError: unknown) {
-      const userFriendlyMessage = getErrorMessage(caughtError)
-
-      // 🚨 에러 모달만 표시 (폼 내부 에러는 표시하지 않음)
-      if (onError) {
-        onError(userFriendlyMessage)
-      }
+      // 🚨 에러는 모달로만 표시 (정규화된 안내 문구)
+      onError?.(getErrorMessage(caughtError))
     }
   }
 
@@ -177,30 +169,6 @@ const CredentialLoginFormComponent = function ({
 
   // 클릭 효과음 재생 함수
   const playClickSound = useClickSound()
-
-  // 🚀 에러 메시지 렌더링
-  const renderErrorAlert = () => {
-    const rootError = errors.root?.message
-    if (!rootError) return null
-
-    return (
-      <S.ErrorAlert
-        as={motion.div}
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        role="alert"
-      >
-        <S.ErrorIcon>
-          <img
-            src={errorIcon}
-            alt="에러"
-            style={{ width: '48px', height: '48px', objectFit: 'contain' }}
-          />
-        </S.ErrorIcon>
-        <S.ErrorMessage>{rootError}</S.ErrorMessage>
-      </S.ErrorAlert>
-    )
-  }
 
   return (
     <>
@@ -245,6 +213,7 @@ const CredentialLoginFormComponent = function ({
                   {...register('account')}
                   placeholder="계정을 입력하세요"
                   autoComplete="username"
+                  autoFocus
                 />
               </S.InputWrapper>
               {errors.account && (

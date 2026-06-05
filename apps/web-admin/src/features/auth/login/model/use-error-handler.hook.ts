@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 export interface UseErrorHandlerReturn {
   errorMessage: string
@@ -15,26 +15,10 @@ export function useErrorHandler(): UseErrorHandlerReturn {
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [isErrorModalOpen, setIsErrorModalOpen] = useState(false)
 
-  // 전역 에러 핸들러 등록
-  useEffect(() => {
-    const handleGlobalError = (event: ErrorEvent) => {
-      const errorMsg = `🚨 에러: ${event.error?.message || event.message || '알 수 없는 오류'}`
-      showError(errorMsg)
-    }
-
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      const errorMsg = `🚨 Promise 오류: ${event.reason?.message || event.reason || '알 수 없는 오류'}`
-      showError(errorMsg)
-    }
-
-    window.addEventListener('error', handleGlobalError)
-    window.addEventListener('unhandledrejection', handleUnhandledRejection)
-
-    return () => {
-      window.removeEventListener('error', handleGlobalError)
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection)
-    }
-  }, [])
+  // NOTE: 과거 window 전역 error/unhandledrejection 핸들러를 등록했으나,
+  // 원본 에러 메시지를 그대로 노출해 정규화된 안내 문구 정책을 무력화하고
+  // 로그인과 무관한 거부까지 모달을 띄우는 문제가 있어 제거함.
+  // 로그인 실패는 onSubmit의 onError 콜백 → showError 경로로만 처리한다.
 
   const showError = (message: string) => {
     setErrorMessage(message)

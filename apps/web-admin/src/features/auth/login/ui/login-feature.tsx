@@ -28,13 +28,7 @@ const LoginFormFeatureComponent: React.FC<LoginFormFeatureProps> = ({
   )
 }
 
-// 메모이제이션을 통한 성능 최적화
-export const LoginFormFeature = React.memo(
-  LoginFormFeatureComponent,
-  (prevProps, nextProps) => {
-    // onError 함수가 변경되지 않았다면 리렌더링 방지
-    return prevProps.onError === nextProps.onError
-  },
-)
+// 메모이제이션을 통한 성능 최적화 (기본 shallow 비교로 충분 — prop은 onError 하나)
+export const LoginFormFeature = React.memo(LoginFormFeatureComponent)
 
 LoginFormFeature.displayName = 'LoginFormFeature'
