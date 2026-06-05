@@ -465,6 +465,15 @@ const COUNTRIES: CountryData[] = [
     continentName: '남아메리카',
   },
   {
+    name: '베네수엘라',
+    localName: 'Venezuela',
+    flagEmoji: '🇻🇪',
+    isoCode: 'VE',
+    population: 28838499,
+    areaSqKm: 916445.0,
+    continentName: '남아메리카',
+  },
+  {
     name: '수단',
     localName: 'السودان',
     flagEmoji: '🇸🇩',
