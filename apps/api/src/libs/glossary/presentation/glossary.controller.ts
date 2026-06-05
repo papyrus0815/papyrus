@@ -31,7 +31,6 @@ export type GlossaryTermResponseDto = {
   description: string | null
   countryId: string | null
   historicalCountryId: string | null
-  postId: string | null
   eventId: string | null
   createdAt: string
   updatedAt: string
@@ -42,8 +41,6 @@ export type CreateGlossaryTermDto = {
   description?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
-  /** 문서 전용: 이 포스트에만 사용 */
-  postId?: string | null
   /** 문서 전용: 이 사건에만 사용 */
   eventId?: string | null
 }
@@ -53,7 +50,6 @@ export type UpdateGlossaryTermDto = {
   description?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
-  postId?: string | null
   eventId?: string | null
 }
 
@@ -63,7 +59,6 @@ function toResponse(row: {
   description: string | null
   countryId: string | null
   historicalCountryId: string | null
-  postId: string | null
   eventId: string | null
   createdAt: Date
   updatedAt: Date
@@ -74,7 +69,6 @@ function toResponse(row: {
     description: row.description ?? null,
     countryId: row.countryId ?? null,
     historicalCountryId: row.historicalCountryId ?? null,
-    postId: row.postId ?? null,
     eventId: row.eventId ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -88,13 +82,12 @@ export class GlossaryController {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * 용어 목록 (선택: countryId / historicalCountryId / q 검색, postId/eventId로 전역+문서전용 함께 조회)
+   * 용어 목록 (선택: countryId / historicalCountryId / q 검색, eventId로 전역+문서전용 함께 조회)
    */
   @Get()
   async list(
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
-    @Query('postId') postId?: string,
     @Query('eventId') eventId?: string,
     @Query('q') q?: string,
   ): Promise<GlossaryTermResponseDto[]> {
@@ -102,20 +95,14 @@ export class GlossaryController {
       countryId?: string | null
       historicalCountryId?: string | null
       name?: { contains: string }
-      OR?: Array<{ postId: null; eventId: null } | { postId: string } | { eventId: string }>
+      OR?: Array<{ eventId: null } | { eventId: string }>
     } = {}
     if (countryId) where.countryId = countryId
     if (historicalCountryId) where.historicalCountryId = historicalCountryId
     if (q && q.trim()) where.name = { contains: q.trim() }
-    if (postId?.trim()) {
-      where.OR = [
-        { postId: null, eventId: null },
-        { postId: postId.trim() },
-      ]
-    }
     if (eventId?.trim()) {
       where.OR = [
-        { postId: null, eventId: null },
+        { eventId: null },
         { eventId: eventId.trim() },
       ]
     }
@@ -147,7 +134,6 @@ export class GlossaryController {
         description: dto.description?.trim() || null,
         countryId: dto.countryId || null,
         historicalCountryId: dto.historicalCountryId || null,
-        postId: dto.postId?.trim() || null,
         eventId: dto.eventId?.trim() || null,
       },
     })
@@ -171,7 +157,6 @@ export class GlossaryController {
         ...(dto.historicalCountryId !== undefined && {
           historicalCountryId: dto.historicalCountryId || null,
         }),
-        ...(dto.postId !== undefined && { postId: dto.postId?.trim() || null }),
         ...(dto.eventId !== undefined && { eventId: dto.eventId?.trim() || null }),
       },
     })

@@ -406,10 +406,6 @@ model GlossaryTerm {
   historicalCountryId String?            @map("historical_country_id") @db.Char(36)
   historicalCountry   HistoricalCountry? @relation("GlossaryTermHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
-  /// 문서 전용: 이 포스트에만 사용 (null이면 전역)
-  postId String? @map("post_id") @db.Char(36)
-  post   Post?   @relation("GlossaryTermPost", fields: [postId], references: [id], onDelete: Cascade)
-
   /// 문서 전용: 이 사건에만 사용 (null이면 전역)
   eventId String? @map("event_id") @db.Char(36)
   event   Event?  @relation("GlossaryTermEvent", fields: [eventId], references: [id], onDelete: Cascade)
@@ -419,7 +415,6 @@ model GlossaryTerm {
 
   @@index([countryId], name: "idx_glossary_term_countryId")
   @@index([historicalCountryId], name: "idx_glossary_term_historicalCountryId")
-  @@index([postId], name: "idx_glossary_term_postId")
   @@index([eventId], name: "idx_glossary_term_eventId")
   @@map("glossary_term")
 }

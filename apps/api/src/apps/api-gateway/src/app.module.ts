@@ -13,9 +13,6 @@ import { DynastyModule } from '../../../libs/dynasty/infrastructure/dynasty.modu
 import { JobModule } from '../../../libs/job/infrastructure/job.module'
 import { JobCategoryModule } from '../../../libs/job-category/infrastructure/job-category.module'
 import { MilitaryUnitModule } from '../../../libs/military/military-unit/infrastructure/military-unit.module'
-import { UserModule } from '../../../libs/user/infrastructure/user.module'
-import { CurationModule } from '../../../libs/curation/infrastructure/curation.module'
-import { SocialModule } from '../../../libs/social/infrastructure/social.module'
 import { EventModule } from '../../../libs/event/infrastructure/event.module'
 import { EventCategoryModule } from '../../../libs/event-category/event-category.module'
 import { CityModule } from '../../../libs/city/city.module'
@@ -60,9 +57,6 @@ import {
     JobModule,
     JobCategoryModule,
     MilitaryUnitModule,
-    UserModule,
-    CurationModule,
-    SocialModule,
     EventModule,
     EventCategoryModule,
     CityModule,

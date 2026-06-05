@@ -9,9 +9,7 @@ import { PlainFetcher } from "@nestia/fetcher/lib/PlainFetcher";
 import type { Primitive } from "typia";
 
 export * as uploads from "./uploads/index";
-export * as users from "./users/index";
 export * as treaties from "./treaties/index";
-export * as social from "./social/index";
 export * as upload from "./upload/index";
 export * as health from "./health/index";
 export * as religions from "./religions/index";
@@ -40,7 +38,6 @@ export * as elections from "./elections/index";
 export * as historical_countries from "./historical_countries/index";
 export * as currencies from "./currencies/index";
 export * as dynasties from "./dynasties/index";
-export * as posts from "./posts/index";
 export * as continents from "./continents/index";
 export * as countries from "./countries/index";
 export * as companies from "./companies/index";
