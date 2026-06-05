@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
-import { useSessionStore } from '@/entities/session'
+import { sessionQueryOptions } from '@/entities/session'
 import { getAllEvents } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
 
@@ -125,7 +125,10 @@ function RecentEvents() {
 }
 
 export default function DashboardPage() {
-  const username = useSessionStore((state) => state.username)
+  // 로그인 시점 username은 영속화되지 않아 새로고침 시 사라진다.
+  // account.me 쿼리에서 표시명을 받아 새로고침 후에도 안정적으로 인사한다.
+  const { data: user } = useQuery(sessionQueryOptions)
+  const displayName = user?.account ?? null
   const navigate = useNavigate()
 
   // 대시보드 마운트 시 전역 배경 숨기기
@@ -149,7 +152,9 @@ export default function DashboardPage() {
       transition={{ duration: 0.5 }}
     >
       <S.CentralContent>
-        {username && <S.Greeting>{username}님, 환영합니다</S.Greeting>}
+        {displayName && (
+          <S.Greeting>{displayName}님, 환영합니다</S.Greeting>
+        )}
 
         <Clock />
 
