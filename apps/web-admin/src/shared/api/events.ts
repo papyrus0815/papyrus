@@ -152,6 +152,38 @@ export async function getEventsCount(
 }
 
 /**
+ * 역사 속 오늘 — start_date의 월·일이 오늘과 같은 사건(연도 무관).
+ * month·day는 사용자 로컬 기준으로 넘긴다(서버 TZ와 어긋남 방지). 1-based month.
+ * 없으면 빈 배열.
+ */
+export async function getEventsOnThisDay(params?: {
+  month?: number
+  day?: number
+  limit?: number
+}): Promise<EventResponseDto[]> {
+  try {
+    const connection = getConnection()
+    const url = new URL(`${connection.host}/events/on-this-day`)
+    const set = (key: string, value: number | undefined) => {
+      if (value === undefined || value === null) return
+      url.searchParams.set(key, String(value))
+    }
+    set('month', params?.month)
+    set('day', params?.day)
+    set('limit', params?.limit)
+
+    const response = await fetch(url.toString(), {
+      headers: (connection.headers ?? {}) as HeadersInit,
+      credentials: 'include',
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return (await response.json()) as EventResponseDto[]
+  } catch (error) {
+    throw new Error(`역사 속 오늘 조회 실패: ${error}`)
+  }
+}
+
+/**
  * ID로 사건 조회
  */
 /** 조회 실패 사유 구분용 — 페이지가 404(없음/삭제)와 일반 오류를 다르게 안내. */

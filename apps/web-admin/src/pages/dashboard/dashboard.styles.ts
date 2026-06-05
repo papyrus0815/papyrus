@@ -177,6 +177,12 @@ export const BottomInner = styled.div`
   gap: 10px;
 `
 
+export const Section = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
 export const SectionHeader = styled.div`
   display: flex;
   align-items: center;

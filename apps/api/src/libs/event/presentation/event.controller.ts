@@ -462,6 +462,80 @@ export class EventController {
   }
 
   /**
+   * 역사 속 오늘 — start_date의 월·일이 오늘과 같은 사건(연도 무관).
+   *
+   * 일(day) 정밀도 사건만 의미가 있어 start_date_precision='day'(또는 null=day로 간주)만 매칭한다.
+   * MySQL DATETIME은 TZ 없이 저장값 그대로라 MONTH()/DAY()가 입력한 달력 날짜를 그대로 반환한다.
+   * 사용자 로컬 기준 '오늘'이 서버와 다를 수 있어, 프론트가 month·day를 넘기면 그것을 우선한다.
+   *
+   * ⚠️ 라우트는 반드시 @Get(':id')보다 먼저 선언 — 아니면 'on-this-day'가 :id로 매칭된다.
+   * @returns 오늘에 해당하는 최상위·미삭제 사건 목록(없으면 빈 배열)
+   * @tag events
+   */
+  @Get('on-this-day')
+  async getEventsOnThisDay(
+    @Query('month') month?: string,
+    @Query('day') day?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: any,
+  ): Promise<EventResponseDto[]> {
+    const userId = req.user?.id || req.user?.sub
+
+    const now = new Date()
+    const parseInRange = (raw: string | undefined, fallback: number, max: number) => {
+      const n = raw != null ? parseInt(raw, 10) : NaN
+      return Number.isNaN(n) || n < 1 || n > max ? fallback : n
+    }
+    const targetMonth = parseInRange(month, now.getMonth() + 1, 12)
+    const targetDay = parseInRange(day, now.getDate(), 31)
+    const take = parseInRange(limit, 6, 50)
+
+    // 월·일 매칭은 Prisma 쿼리 빌더로 불가 → 원시 SQL로 후보 ID만 추린 뒤
+    // 표준 include로 본문을 채운다(toResponseDto 호환).
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM event
+      WHERE parent_event_id IS NULL
+        AND created_by = ${userId}
+        AND deleted_at IS NULL
+        AND start_date IS NOT NULL
+        AND (start_date_precision = 'day' OR start_date_precision IS NULL)
+        AND MONTH(start_date) = ${targetMonth}
+        AND DAY(start_date) = ${targetDay}
+      ORDER BY start_date DESC
+      LIMIT ${take}
+    `
+
+    const ids = rows.map((row) => row.id)
+    if (ids.length === 0) return []
+
+    const events = await this.prisma.event.findMany({
+      where: { id: { in: ids } },
+      include: {
+        category: true,
+        parentEvent: true,
+        childEvents: {
+          include: { category: true, eventSections: true, eventImages: true },
+          orderBy: { startDate: 'asc' },
+        },
+        countryRelations: {
+          include: { country: true, historicalCountry: true },
+          orderBy: { createdAt: 'asc' },
+        },
+        eventSections: { orderBy: { order: 'asc' } },
+        eventImages: { orderBy: { order: 'asc' } },
+      },
+    })
+
+    // 원시 쿼리 정렬(start_date desc) 보존 — findMany의 in 순서는 비결정적
+    const orderIndex = new Map(ids.map((id, index) => [id, index]))
+    events.sort(
+      (a, b) => (orderIndex.get(a.id) ?? 0) - (orderIndex.get(b.id) ?? 0),
+    )
+
+    return events.map((event) => this.toResponseDto(event as any))
+  }
+
+  /**
    * 상위 사건의 하위 사건 목록 조회
    *
    * @param parentEventId 상위 사건 ID

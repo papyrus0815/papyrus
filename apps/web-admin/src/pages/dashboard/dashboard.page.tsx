@@ -1,11 +1,12 @@
 // src/pages/dashboard/dashboard.page.tsx
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 
 import { sessionQueryOptions } from '@/entities/session'
-import { getAllEvents } from '@/shared/api/events'
+import { getAllEvents, getEventsOnThisDay } from '@/shared/api/events'
+import type { EventResponseDto } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
 
 import * as S from './dashboard.styles'
@@ -56,8 +57,38 @@ const PlayIcon = () => (
   </svg>
 )
 
-/** 하단 "최근 사건" 영역 — 실제 최근 등록 사건을 카드로 보여주고 상세로 연결. */
-function RecentEvents() {
+/** 사건 카드 1개 — 클릭 시 상세로 이동. 두 섹션이 공용. */
+function EventCardItem({ event }: { event: EventResponseDto }) {
+  const navigate = useNavigate()
+  const era = eraLabel(event.startDate)
+  const category = event.category?.name
+
+  return (
+    <S.EventCard
+      type="button"
+      onClick={() => navigate(pathKeys.events.detail(event.id))}
+    >
+      <S.EventTitle>{event.title}</S.EventTitle>
+      {(era || category) && (
+        <S.CardMetaRow>
+          {era && <span>{era}</span>}
+          {era && category && <S.MetaDot />}
+          {category && <span>{category}</span>}
+        </S.CardMetaRow>
+      )}
+      {event.description && <S.DescLine>{event.description}</S.DescLine>}
+      <S.CardFooter>
+        <S.OpenChip>
+          <PlayIcon />
+          자세히 보기
+        </S.OpenChip>
+      </S.CardFooter>
+    </S.EventCard>
+  )
+}
+
+/** 최근 등록 사건 — 항상 노출되는 주력 섹션. */
+function RecentEventsSection() {
   const navigate = useNavigate()
 
   const { data, isLoading, isError } = useQuery({
@@ -70,7 +101,7 @@ function RecentEvents() {
   const events = data ?? []
 
   return (
-    <S.BottomInner>
+    <S.Section>
       <S.SectionHeader>
         <S.SectionTitle>최근 사건</S.SectionTitle>
         <S.ViewAllButton
@@ -89,38 +120,47 @@ function RecentEvents() {
         ) : events.length === 0 ? (
           <S.EmptyState>아직 등록된 사건이 없습니다.</S.EmptyState>
         ) : (
-          events.map((event) => {
-            const era = eraLabel(event.startDate)
-            const category = event.category?.name
-            return (
-              <S.EventCard
-                key={event.id}
-                type="button"
-                onClick={() => navigate(pathKeys.events.detail(event.id))}
-              >
-                <S.EventTitle>{event.title}</S.EventTitle>
-                {(era || category) && (
-                  <S.CardMetaRow>
-                    {era && <span>{era}</span>}
-                    {era && category && <S.MetaDot />}
-                    {category && <span>{category}</span>}
-                  </S.CardMetaRow>
-                )}
-                {event.description && (
-                  <S.DescLine>{event.description}</S.DescLine>
-                )}
-                <S.CardFooter>
-                  <S.OpenChip>
-                    <PlayIcon />
-                    자세히 보기
-                  </S.OpenChip>
-                </S.CardFooter>
-              </S.EventCard>
-            )
-          })
+          events.map((event) => <EventCardItem key={event.id} event={event} />)
         )}
       </S.EventGrid>
-    </S.BottomInner>
+    </S.Section>
+  )
+}
+
+/**
+ * 역사 속 오늘 — 오늘 월·일에 해당하는 사건. 보조 섹션이라 결과가 있을 때만 노출하고,
+ * 로딩·에러·빈 결과에서는 아무것도 그리지 않는다(빈 화면 리스크 제거).
+ * month·day는 사용자 로컬 기준으로 넘긴다(서버 TZ 어긋남 방지).
+ */
+function OnThisDaySection() {
+  const today = useMemo(() => {
+    const now = new Date()
+    return { month: now.getMonth() + 1, day: now.getDate() }
+  }, [])
+
+  const { data } = useQuery({
+    queryKey: ['dashboard-on-this-day', today.month, today.day],
+    queryFn: () =>
+      getEventsOnThisDay({ month: today.month, day: today.day, limit: 4 }),
+    staleTime: 1000 * 60 * 30,
+  })
+
+  const events = data ?? []
+  if (events.length === 0) return null
+
+  return (
+    <S.Section>
+      <S.SectionHeader>
+        <S.SectionTitle>
+          역사 속 오늘 · {today.month}월 {today.day}일
+        </S.SectionTitle>
+      </S.SectionHeader>
+      <S.EventGrid>
+        {events.map((event) => (
+          <EventCardItem key={event.id} event={event} />
+        ))}
+      </S.EventGrid>
+    </S.Section>
   )
 }
 
@@ -244,7 +284,12 @@ export default function DashboardPage() {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, delay: 0.2 }}
       >
-        <RecentEvents />
+        <S.BottomInner>
+          {/* 보조: 결과 있을 때만 노출 */}
+          <OnThisDaySection />
+          {/* 주력: 항상 노출 */}
+          <RecentEventsSection />
+        </S.BottomInner>
       </S.BottomContainer>
     </S.DashboardContainer>
   )
