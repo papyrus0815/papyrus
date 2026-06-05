@@ -93,6 +93,65 @@ export async function getAllEvents(
 }
 
 /**
+ * 사건 총 개수 조회 — 현재 사용자의 최상위·미삭제 사건 수(선택 필터 반영).
+ *
+ * getAllEvents는 배열만 반환해 total을 알 수 없어, "전체 N건"이 로드된 수에 불과했다.
+ * 이 엔드포인트로 권위 있는 총량을 받는다. getAllEvents와 동일하게 raw fetch 사용
+ * (별도 SDK 재생성 불필요). 서버 라우트는 `/events/count`.
+ */
+export async function getEventsCount(
+  params?: Pick<
+    GetAllEventsParams,
+    | 'countryId'
+    | 'countryIds'
+    | 'historicalCountryIds'
+    | 'categoryId'
+    | 'decade'
+    | 'century'
+    | 'createdSinceDays'
+    | 'hasNoDescription'
+    | 'hasNoCountries'
+    | 'hasNoKeywords'
+  >,
+): Promise<number> {
+  try {
+    const connection = getConnection()
+    const url = new URL(`${connection.host}/events/count`)
+    const set = (key: string, value: string | number | undefined) => {
+      if (value === undefined || value === null) return
+      url.searchParams.set(key, String(value))
+    }
+    set('countryId', params?.countryId)
+    if (params?.countryIds?.length) {
+      url.searchParams.set('countryIds', params.countryIds.join(','))
+    }
+    if (params?.historicalCountryIds?.length) {
+      url.searchParams.set(
+        'historicalCountryIds',
+        params.historicalCountryIds.join(','),
+      )
+    }
+    set('categoryId', params?.categoryId)
+    set('decade', params?.decade)
+    set('century', params?.century)
+    set('createdSinceDays', params?.createdSinceDays)
+    if (params?.hasNoDescription) url.searchParams.set('hasNoDescription', 'true')
+    if (params?.hasNoCountries) url.searchParams.set('hasNoCountries', 'true')
+    if (params?.hasNoKeywords) url.searchParams.set('hasNoKeywords', 'true')
+
+    const response = await fetch(url.toString(), {
+      headers: (connection.headers ?? {}) as HeadersInit,
+      credentials: 'include',
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = (await response.json()) as { total?: number }
+    return typeof data?.total === 'number' ? data.total : 0
+  } catch (error) {
+    throw new Error(`사건 개수 조회 실패: ${error}`)
+  }
+}
+
+/**
  * ID로 사건 조회
  */
 /** 조회 실패 사유 구분용 — 페이지가 404(없음/삭제)와 일반 오류를 다르게 안내. */

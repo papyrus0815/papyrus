@@ -81,6 +81,16 @@ interface EventTimelineProps {
   continents?: ContinentResponseDto[]
   countries?: CountryResponseDto[]
   onSelectEvent: (id: string) => void
+  /**
+   * 페이지네이션 — 타임라인은 *전 시대를 한 화면에* 보여주는 게 목적이라
+   * 부분 로드(첫 100건)면 "어떤 사건이 있나"가 구조적으로 안 보인다.
+   * hasMore일 때 onLoadMore를 점진 호출해 전체 집합을 채운다.
+   */
+  hasMore?: boolean
+  isFetchingMore?: boolean
+  onLoadMore?: () => void
+  /** 첫 페이지 로딩 중 — 데이터 0과 구분해 "불러오는 중" 표시 (로딩↔빈 상태 혼동 방지) */
+  isLoading?: boolean
 }
 
 /** lane 축 — 카테고리(기존) · 대륙 · 국가. 색은 항상 카테고리. */
@@ -348,6 +358,10 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   continents = [],
   countries = [],
   onSelectEvent,
+  hasMore = false,
+  isFetchingMore = false,
+  onLoadMore,
+  isLoading = false,
 }) => {
   /**
    * lane 그룹 축. UI segmented control이 토글. category가 기본(기존 동작 유지).
@@ -381,10 +395,22 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     observerRef.current = obs
   }, [])
 
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; bar: BarData } | null>(null)
+  const [tooltip, setTooltip] = useState<{
+    x: number
+    y: number
+    bar: BarData
+    /** cluster hover 시 — 묶인 사건들의 제목 미리보기 + 총 개수. 단일 막대면 undefined. */
+    cluster?: { titles: string[]; count: number }
+  } | null>(null)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
   const [zoom, setZoom] = useState(1)
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null)
+  /**
+   * 레일 ↔ 막대 hover 동기화. 레일 행에 hover하면 그 사건 막대만 남기고 나머지를
+   * dim(기존 메커니즘 재사용)해 "목록의 이 사건이 타임라인 어디인지" 즉시 짚어준다.
+   * 반대로 막대에 hover하면 레일에서 같은 행이 강조됨.
+   */
+  const [hoveredBarId, setHoveredBarId] = useState<string | null>(null)
   const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set())
   const [exportOpen, setExportOpen] = useState(false)
   /** 모양(다이아·네모·wedge) 의미 설명 popover */
@@ -416,6 +442,17 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     mql.addEventListener('change', update)
     return () => mql.removeEventListener('change', update)
   }, [])
+
+  /**
+   * 전체 페이지 점진 로드 — 타임라인은 전 시대를 한눈에 보여주는 뷰라 첫 페이지(100건)만
+   * 있으면 "어떤 사건이 있나"가 구조적으로 안 보인다. hasMore인 동안 다음 페이지를 자동 요청.
+   * onLoadMore 내부 가드(중복 fetch 방지)가 있어 deps에서 제외하고 ref로 최신값만 호출.
+   */
+  const onLoadMoreRef = useRef(onLoadMore)
+  onLoadMoreRef.current = onLoadMore
+  useEffect(() => {
+    if (hasMore && !isFetchingMore) onLoadMoreRef.current?.()
+  }, [hasMore, isFetchingMore])
 
   /** 첫 진입 onboarding 코치마크 — localStorage 기반 1회만 노출.
    * SSR 안전(window 가드) + 사용자가 닫으면 다시 안 뜸. */
@@ -697,7 +734,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
   /**
    * SVG 우측 padding — 마지막 bar/milestone에 붙는 외부 라벨(ExternalLabel)이
-   * 최대 EXT_LABEL_MAX_WIDTH(140) + 8(gap)만큼 bar 오른쪽으로 뻗어나가는데,
+   * 최대 EXT_LABEL_MAX_WIDTH(220) + 8(gap)만큼 bar 오른쪽으로 뻗어나가는데,
    * SVG width를 timelineWidth로만 잡으면 그 라벨이 우측에서 잘린다. 약간의
    * 여유를 두어 마지막 데이터의 라벨까지 모두 보이도록 한다.
    */
@@ -849,11 +886,14 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       }
 
       /**
-       * 일반 휠 → 가로 스크롤. 타임라인은 수평 흐름이 주축이라 마우스 휠을
-       * 가로로 흐르게 한다. 단:
+       * 일반 휠 → 가로 스크롤. 타임라인은 수평 흐름이 주축이라 마우스 휠을 가로로 흐르게 한다.
        *  - Shift+휠 / 트랙패드 가로 swipe(deltaX 우세) → 브라우저 네이티브에 맡김
        *  - 가로 overflow가 없으면(전체가 viewport에 fit) 가로 변환 의미 없음 — 패스
-       *  - 세로 overflow가 있으면 세로 우선 — 휠은 그대로 vertical scroll
+       *
+       * [트랩 수정] 이전엔 "세로 overflow가 있으면 세로 우선"이라, lane이 많아 세로 스크롤이
+       * 생기는 (흔한) 상황에서 휠로 가로 이동이 *완전히 막혔다*. 대신 **가로를 우선**하되,
+       * 가로 끝(좌/우)에 도달했고 세로 여백이 남았을 때만 세로로 양보 → 끝까지 가로로 훑은 뒤
+       * 자연스럽게 세로 스크롤로 넘어간다.
        */
       if (e.shiftKey) return
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return
@@ -862,7 +902,14 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       const hasHScroll = el.scrollWidth > el.clientWidth + 1
       const hasVScroll = el.scrollHeight > el.clientHeight + 1
       if (!hasHScroll) return
-      if (hasVScroll) return
+
+      const goingRight = e.deltaY > 0
+      const atLeftEdge = el.scrollLeft <= 0
+      const atRightEdge =
+        el.scrollLeft + el.clientWidth >= el.scrollWidth - 1
+      const wouldOverscroll =
+        (goingRight && atRightEdge) || (!goingRight && atLeftEdge)
+      if (wouldOverscroll && hasVScroll) return // 가로 끝 → 세로 스크롤 양보
 
       e.preventDefault()
       el.scrollLeft += e.deltaY
@@ -1000,6 +1047,62 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     })
   }, [containerSize.width, yearSpan])
 
+  /**
+   * 첫 진입 framing — 1회만.
+   *
+   * 기존 마운트 동작은 zoom=1(= 전 구간을 화면폭에 압축) + scrollLeft 0 이라, 사건이
+   * 빽빽이 뭉쳐 라벨이 거의 안 보이는 *최악의 가독성*으로 시작했다. 대신:
+   *   1) 전체를 화면폭의 ~2.5배로 펼치는 줌으로 시작(라벨 들어갈 여백 확보, 최대 6×)
+   *   2) 가장 밀집한 10년 구간을 화면 중앙에 — "사건이 많은 곳"을 첫 화면으로
+   *
+   * 점진 로드(onLoadMore)로 span이 출렁이는 동안엔 보류하고, 전부 로드돼 span이 안정된
+   * 뒤(또는 페이지네이션이 없을 때) 한 번만 적용 — 로딩 중 reset(>2×)과의 경합 회피.
+   */
+  const INITIAL_VIEW_WIDTH_FACTOR = 2.5
+  const didInitialViewRef = useRef(false)
+  useEffect(() => {
+    if (didInitialViewRef.current) return
+    if (!renderReady || bars.length === 0) return
+    if (hasMore || isFetchingMore) return
+    const innerWidth = Math.max(
+      0,
+      containerSize.width - LANE_LABEL_WIDTH - 16 - (EXT_LABEL_MAX_WIDTH + 16),
+    )
+    if (innerWidth <= 0 || yearSpan <= 0) return
+    didInitialViewRef.current = true
+
+    const fitPxPerYear = innerWidth / yearSpan
+    const base = Math.max(fitPxPerYear, PIXELS_PER_YEAR_DEFAULT * 0.5)
+    const desiredPxPerYear = (innerWidth * INITIAL_VIEW_WIDTH_FACTOR) / yearSpan
+    const targetZoom = Math.min(6, Math.max(1, desiredPxPerYear / base))
+    setZoom(targetZoom)
+
+    const densest = decadeBuckets.reduce(
+      (best, b) => (b.weight > best.weight ? b : best),
+      decadeBuckets[0],
+    )
+    const px = computePxPerYear(targetZoom)
+    requestAnimationFrame(() => {
+      const el = scrollRef.current
+      if (!el || !densest) return
+      const centerX = (densest.decade + 5 - minYear) * px
+      el.scrollLeft = Math.max(
+        0,
+        centerX - el.clientWidth / 2 + LANE_LABEL_WIDTH,
+      )
+    })
+  }, [
+    renderReady,
+    bars.length,
+    hasMore,
+    isFetchingMore,
+    yearSpan,
+    containerSize.width,
+    decadeBuckets,
+    minYear,
+    computePxPerYear,
+  ])
+
   // ── 드래그 패닝 (Space+드래그 또는 미들 버튼) ──────────────────────────
   const dragStateRef = useRef<{ startX: number; startScrollLeft: number } | null>(null)
   /** Bar에 포커스 있으면 Space는 panning 토글이 아닌 *선택*용으로 동작.
@@ -1096,7 +1199,11 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   // ── 호버/포커스 툴팁 + 4면 clamp ─────────────────────────────────────────
   const TOOLTIP_W = 280
   const TOOLTIP_H = 70
-  const showTooltip = useCallback((target: SVGGraphicsElement, bar: BarData) => {
+  const showTooltip = useCallback((
+    target: SVGGraphicsElement,
+    bar: BarData,
+    cluster?: { titles: string[]; count: number },
+  ) => {
     const host = scrollRef.current
     if (!host) return
     const hostRect = host.getBoundingClientRect()
@@ -1114,7 +1221,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       Math.max(TOOLTIP_H + 8, rawY),
       Math.max(TOOLTIP_H + 8, hostRect.height - 8),
     )
-    setTooltip({ x, y, bar })
+    setTooltip({ x, y, bar, cluster })
   }, [])
   const hideTooltip = useCallback(() => setTooltip(null), [])
 
@@ -2033,20 +2140,27 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   }, [bars, laneIndex])
 
   /**
-   * 현재 viewport 안 critical 사건 — 헤더에 chip으로. 라벨이 충돌해 가려졌어도
-   * "지금 보이는 곳에 어떤 핵심 사건이 있는지" 한눈에 보여줌. 클릭 시 그 사건 선택.
+   * 현재 viewport 안 *모든* 사건 — 우측 레일에 시간순 목록으로. 막대 라벨이 충돌·클러스터·
+   * +N으로 가려져도 "지금 보이는 구간에 어떤 사건이 있는지" 이름으로 한눈에 읽게 한다.
+   * 이 레일이 타임라인의 약점(이름 가독성)을 메우는 핵심 장치.
+   *
+   * 정렬: 시작연도 asc → 같은 해는 중요도 desc(critical 먼저). 안전 상한(RAIL_CAP)으로
+   * 자르되 총 개수(total)는 별도 표시 — 잘렸음을 숨기지 않는다.
    */
-  const viewportCriticalBars = useMemo(() => {
-    if (!viewportYears) return [] as BarData[]
+  const RAIL_CAP = 300
+  const viewportBars = useMemo(() => {
+    if (!viewportYears) return { items: [] as BarData[], total: 0 }
     const { start, end } = viewportYears
-    return bars
-      .filter(
-        (b) =>
-          b.importance === 'critical' &&
-          b.endYear >= start &&
-          b.startYear <= end,
+    const matched = bars.filter(
+      (b) => b.endYear >= start && b.startYear <= end,
+    )
+    matched.sort((a, b) => {
+      if (a.startYear !== b.startYear) return a.startYear - b.startYear
+      return (
+        LABEL_IMPORTANCE_TIER[b.importance] - LABEL_IMPORTANCE_TIER[a.importance]
       )
-      .slice(0, 4)
+    })
+    return { items: matched.slice(0, RAIL_CAP), total: matched.length }
   }, [bars, viewportYears])
 
   // ── export ──────────────────────────────────────────────────────────────
@@ -2562,33 +2676,6 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
           </HeaderActions>
         </CardHeader>
 
-        {/* viewport 안 critical 사건 chip — 라벨이 가려졌어도 핵심 사건 식별 가능 */}
-        {viewportCriticalBars.length > 0 && (
-          <ViewportCriticalRow
-            role="region"
-            aria-label="현재 보이는 곳의 핵심 사건"
-          >
-            <ViewportCriticalLabel>핵심 사건</ViewportCriticalLabel>
-            {viewportCriticalBars.map((b) => (
-              <ViewportCriticalChip
-                key={b.id}
-                type="button"
-                onClick={() => onSelectEvent(b.id)}
-                title={`${b.title} · ${formatYearLabel(b.startYear)}`}
-              >
-                <ViewportCriticalDot
-                  style={{ background: categoryColor(b.category) }}
-                  aria-hidden="true"
-                />
-                <ViewportCriticalYear>
-                  {formatYearLabel(b.startYear)}
-                </ViewportCriticalYear>
-                <span>{b.title}</span>
-              </ViewportCriticalChip>
-            ))}
-          </ViewportCriticalRow>
-        )}
-
         {/* 일부 카테고리가 숨겨져 있을 때 알림 띠 — bars > 0 일 때만 (전부 숨김은 EmptyHint 분기) */}
         {anyHidden && bars.length > 0 && (
           <HiddenCatStrip role="status" aria-live="polite">
@@ -2633,6 +2720,14 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                   숨긴 카테고리 모두 보이기
                 </EmptySubAction>
               </>
+            ) : isLoading ? (
+              <>
+                <EmptyTitle>사건 불러오는 중…</EmptyTitle>
+                <EmptyDescription>
+                  타임라인은 전 시대를 한 화면에 보여주기 위해 전체 사건을
+                  불러옵니다. 잠시만 기다려 주세요.
+                </EmptyDescription>
+              </>
             ) : (
               <>
                 <EmptyTitle>이 범위에 표시할 사건이 없습니다</EmptyTitle>
@@ -2657,11 +2752,12 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                       <kbd>Ctrl</kbd> + 휠 · 두 손가락 핀치 — 줌
                     </li>
                     <li>
-                      <kbd>Space</kbd> + 드래그 · 한 손가락 스와이프 — 이동
+                      휠 · <kbd>Space</kbd>+드래그 · 한 손가락 스와이프 — 좌우 이동
                     </li>
                     <li>
                       <kbd>Tab</kbd> 후 <kbd>←</kbd>/<kbd>→</kbd> 시간, <kbd>↑</kbd>/<kbd>↓</kbd> 레인
                     </li>
+                    <li>우측 목록 — 보이는 구간의 사건 한눈에 · 클릭해 선택</li>
                     <li>막대 클릭/탭 — 사건 상세</li>
                   </OnboardingTipList>
                 </OnboardingTipBody>
@@ -2674,6 +2770,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 </OnboardingTipDismiss>
               </OnboardingTip>
             )}
+            <TimelineBody>
             <ScrollHost
               ref={attachScrollHost}
               onWheel={handleWheel}
@@ -2976,6 +3073,10 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                               showTooltip(
                                 e.currentTarget as SVGGraphicsElement,
                                 it.bars[0],
+                                {
+                                  titles: it.bars.map((bb) => bb.title),
+                                  count: it.bars.length,
+                                },
                               )
                             }
                             onMouseLeave={hideTooltip}
@@ -2985,6 +3086,10 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                                 showTooltip(
                                   e.currentTarget as SVGGraphicsElement,
                                   it.bars[0],
+                                  {
+                                    titles: it.bars.map((bb) => bb.title),
+                                    count: it.bars.length,
+                                  },
                                 )
                               }
                             }}
@@ -3045,7 +3150,9 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                     const isActive = selectedEventId === b.id
                     const isFocused = focusedBarId === b.id
                     const dim =
-                      hoveredCategory != null && hoveredCategory !== b.category
+                      (hoveredCategory != null &&
+                        hoveredCategory !== b.category) ||
+                      (hoveredBarId != null && hoveredBarId !== b.id)
                     const importanceLabel = IMPORTANCE_LABEL[b.importance]
                     const ariaLabel = [
                       b.title,
@@ -3074,9 +3181,14 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                       },
                       onKeyDown: (e: React.KeyboardEvent<SVGElement>) =>
                         handleBarKeyDown(e, b),
-                      onMouseEnter: (e: React.MouseEvent<SVGElement>) =>
-                        showTooltip(e.currentTarget as SVGGraphicsElement, b),
-                      onMouseLeave: hideTooltip,
+                      onMouseEnter: (e: React.MouseEvent<SVGElement>) => {
+                        setHoveredBarId(b.id)
+                        showTooltip(e.currentTarget as SVGGraphicsElement, b)
+                      },
+                      onMouseLeave: () => {
+                        setHoveredBarId(null)
+                        hideTooltip()
+                      },
                       onFocus: (e: React.FocusEvent<SVGElement>) => {
                         setFocusedBarId(b.id)
                         showTooltip(e.currentTarget as SVGGraphicsElement, b)
@@ -3305,19 +3417,38 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 role="tooltip"
                 style={{ left: `${tooltip.x}px`, top: `${tooltip.y}px` }}
               >
-                <TooltipTitle>{tooltip.bar.title}</TooltipTitle>
-                <TooltipMeta>
-                  {tooltip.bar.startDate}
-                  {tooltip.bar.endDate &&
-                  tooltip.bar.endDate !== tooltip.bar.startDate
-                    ? ` ~ ${tooltip.bar.endDate}`
-                    : ''}
-                </TooltipMeta>
-                <TooltipMeta>
-                  {getCategoryName(tooltip.bar.category, dbCategories)}
-                  {tooltip.bar.importance !== 'normal' &&
-                    ` · ${IMPORTANCE_LABEL[tooltip.bar.importance]}`}
-                </TooltipMeta>
+                {tooltip.cluster ? (
+                  /* 클러스터 — 묶인 사건들의 제목을 직접 나열해 "여기 뭐가 있나"를 확대 없이 노출 */
+                  <>
+                    <TooltipTitle>
+                      밀집 사건 {tooltip.cluster.count}건
+                    </TooltipTitle>
+                    {tooltip.cluster.titles.slice(0, 5).map((t, i) => (
+                      <TooltipClusterItem key={i}>{t}</TooltipClusterItem>
+                    ))}
+                    {tooltip.cluster.count > 5 && (
+                      <TooltipMeta>
+                        +{tooltip.cluster.count - 5}건 더 · 클릭 시 확대
+                      </TooltipMeta>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <TooltipTitle>{tooltip.bar.title}</TooltipTitle>
+                    <TooltipMeta>
+                      {tooltip.bar.startDate}
+                      {tooltip.bar.endDate &&
+                      tooltip.bar.endDate !== tooltip.bar.startDate
+                        ? ` ~ ${tooltip.bar.endDate}`
+                        : ''}
+                    </TooltipMeta>
+                    <TooltipMeta>
+                      {getCategoryName(tooltip.bar.category, dbCategories)}
+                      {tooltip.bar.importance !== 'normal' &&
+                        ` · ${IMPORTANCE_LABEL[tooltip.bar.importance]}`}
+                    </TooltipMeta>
+                  </>
+                )}
               </Tooltip>
             )}
 
@@ -3438,6 +3569,66 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 )
               })()}
             </ScrollHost>
+            {/**
+             * 사건 레일 — 현재 보이는 연도 구간의 *모든* 사건을 시간순 이름 목록으로.
+             * 막대 라벨이 가려져도 여기서 무슨 사건이 있는지 읽고 클릭해 선택할 수 있다.
+             * 좁은 화면(<860px)에서는 타임라인 폭을 우선해 숨김(EventRail 미디어쿼리).
+             */}
+            <EventRail aria-label="현재 보이는 구간의 사건 목록">
+              <EventRailHeader>
+                <EventRailTitle>이 구간 사건</EventRailTitle>
+                <EventRailCount>
+                  {viewportBars.total.toLocaleString()}건
+                  {(hasMore || isFetchingMore) && (
+                    <EventRailLoading
+                      aria-label="사건 더 불러오는 중"
+                      title="전체 사건 불러오는 중…"
+                    />
+                  )}
+                </EventRailCount>
+              </EventRailHeader>
+              {viewportBars.items.length === 0 ? (
+                <EventRailEmpty>
+                  이 구간에 사건이 없습니다.
+                  <br />
+                  좌우로 이동하거나 축소해 보세요.
+                </EventRailEmpty>
+              ) : (
+                <EventRailList>
+                  {viewportBars.items.map((b) => (
+                    <EventRailRow
+                      key={b.id}
+                      type="button"
+                      $active={b.id === selectedEventId}
+                      $hovered={b.id === hoveredBarId}
+                      onClick={() => onSelectEvent(b.id)}
+                      onMouseEnter={() => setHoveredBarId(b.id)}
+                      onMouseLeave={() => setHoveredBarId(null)}
+                      title={`${b.title} · ${formatYearLabel(b.startYear)}`}
+                    >
+                      <EventRailDot
+                        style={{ background: categoryColor(b.category) }}
+                        aria-hidden="true"
+                      />
+                      <EventRailYear>
+                        {formatYearLabel(b.startYear)}
+                      </EventRailYear>
+                      <EventRailLabel>{b.title}</EventRailLabel>
+                    </EventRailRow>
+                  ))}
+                  {viewportBars.total > viewportBars.items.length && (
+                    <EventRailMore>
+                      +
+                      {(
+                        viewportBars.total - viewportBars.items.length
+                      ).toLocaleString()}
+                      건 더 — 확대하거나 필터로 좁혀 보세요
+                    </EventRailMore>
+                  )}
+                </EventRailList>
+              )}
+            </EventRail>
+            </TimelineBody>
           </>
         )}
       </TimelineCard>
@@ -3698,23 +3889,6 @@ const HeaderActions = styled.div`
   }
 `
 
-/* viewport readout — 현재 보이는 연도 범위 */
-const ViewportReadout = styled.span`
-  display: inline-flex;
-  align-items: center;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 8px;
-  font-size: 11.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.005em;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  flex-shrink: 0;
-`
-
 const ZoomControls = styled.div`
   display: inline-flex;
   align-items: stretch;
@@ -3959,7 +4133,7 @@ const ShapeLegendWrap = styled.div`
 `
 
 /* 연도 직접 점프 input — placeholder는 현재 viewport 연도 범위.
- * focus되지 않은 상태에서는 ViewportReadout처럼 보이도록 톤 정렬. */
+ * focus되지 않은 상태에서는 차분한 readout처럼 보이도록 톤 정렬. */
 const YearJumpInput = styled.input`
   width: 110px;
   height: 28px;
@@ -4010,73 +4184,175 @@ const YearJumpInput = styled.input`
 `
 
 /* viewport 안 critical 사건 chip 행 — CardHeader 바로 아래, 라벨 가려져도 핵심 식별 가능 */
-const ViewportCriticalRow = styled.div`
+/* ── 사건 레일 — ScrollHost 우측, 뷰포트 구간의 모든 사건을 이름으로 ───────────── */
+
+/** ScrollHost(가로 타임라인) + EventRail(세로 목록)을 한 행으로 묶는 컨테이너 */
+const TimelineBody = styled.div`
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px 8px;
-  margin: 0 0 4px;
-  flex-wrap: wrap;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  flex: 1;
+  min-height: 0;
 `
 
-const ViewportCriticalLabel = styled.span`
-  font-size: 10.5px;
+const railSpin = keyframes`
+  to { transform: rotate(360deg); }
+`
+
+const EventRail = styled.aside`
+  flex: 0 0 232px;
+  width: 232px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f1f5f9'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.015)' : 'rgba(15,23,42,0.012)'};
+
+  /* 좁은 화면에서는 가로 타임라인 폭을 우선해 레일을 숨긴다. */
+  @media (max-width: 860px) {
+    display: none;
+  }
+`
+
+const EventRailHeader = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'};
+`
+
+const EventRailTitle = styled.span`
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  flex-shrink: 0;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const ViewportCriticalChip = styled.button`
+const EventRailCount = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px 3px 6px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
-  font-family: inherit;
   font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  flex-shrink: 0;
-  max-width: 200px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
 
-  & > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+const EventRailLoading = styled.span`
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid ${BRAND.primarySoftHover};
+  border-top-color: ${BRAND.primaryFill};
+  animation: ${railSpin} 0.7s linear infinite;
 
-  &:hover {
-    border-color: ${BRAND.primaryBorderHover};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(37,99,235,0.12)'
-        : 'rgba(37,99,235,0.06)'};
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
   }
 `
 
-const ViewportCriticalDot = styled.span`
-  width: 7px;
-  height: 7px;
+const EventRailList = styled.div`
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px;
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: ${BRAND.primarySoftHover};
+    border-radius: 3px;
+  }
+`
+
+const EventRailRow = styled.button<{ $active?: boolean; $hovered?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 7px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ $active, $hovered, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(37,99,235,0.18)'
+        : 'rgba(37,99,235,0.08)'
+      : $hovered
+        ? theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.06)'
+          : 'rgba(15,23,42,0.05)'
+        : 'transparent'};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover {
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(37,99,235,0.22)'
+          : 'rgba(37,99,235,0.1)'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.05)'
+          : 'rgba(15,23,42,0.04)'};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+const EventRailDot = styled.span`
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 `
 
-const ViewportCriticalYear = styled.span`
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+const EventRailYear = styled.span`
   flex-shrink: 0;
+  min-width: 38px;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EventRailLabel = styled.span`
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const EventRailEmpty = styled.div`
+  padding: 18px 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-align: center;
+`
+
+const EventRailMore = styled.div`
+  padding: 8px 9px 4px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 /* 일부 카테고리 숨김 알림 — CardHeader 아래, ScrollHost 위 */
@@ -5094,6 +5370,24 @@ const TooltipMeta = styled.div`
   font-size: 11px;
   color: rgba(255, 255, 255, 0.75);
   font-variant-numeric: tabular-nums;
+`
+
+const TooltipClusterItem = styled.div`
+  font-size: 11.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 8px;
+  position: relative;
+
+  &::before {
+    content: '·';
+    position: absolute;
+    left: 0;
+    color: rgba(255, 255, 255, 0.5);
+  }
 `
 
 const EmptyHint = styled.div`

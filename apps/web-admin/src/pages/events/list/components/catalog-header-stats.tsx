@@ -21,8 +21,10 @@ import { CATEGORY_BADGE_COLORS } from '../../styles/theme'
 interface Props {
   events: HistoricalEvent[]
   dbCategories: EventCategoryDto[]
-  /** 현재 필터된 표시 건수 — undefined면 events.length로 폴백 */
+  /** 현재 필터된 표시 건수 — undefined면 serverTotal/events.length로 폴백 */
   visibleCount?: number
+  /** 서버 권위 총개수 — 미필터 상태에서 "N건"을 로드된 수가 아닌 진짜 총량으로 */
+  serverTotal?: number
 }
 
 type Tier = 'critical' | 'major'
@@ -36,6 +38,7 @@ export const CatalogHeaderStats: React.FC<Props> = ({
   events,
   dbCategories,
   visibleCount,
+  serverTotal,
 }) => {
   const { tiers, topCategory } = useMemo(() => {
     const tierCount: Record<Tier, number> = { critical: 0, major: 0 }
@@ -71,7 +74,8 @@ export const CatalogHeaderStats: React.FC<Props> = ({
 
   if (events.length === 0) return null
 
-  const total = visibleCount ?? events.length
+  // 필터 중이면 표시 건수, 아니면 서버 권위 총량(없으면 로드된 수)
+  const total = visibleCount ?? serverTotal ?? events.length
 
   return (
     <Strip aria-label="등록 사건 분포">

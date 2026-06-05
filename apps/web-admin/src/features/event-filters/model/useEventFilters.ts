@@ -92,49 +92,66 @@ export const useEventFilters = (
   const normalizedKeyword = trimmedKeyword.toLowerCase()
 
   const filteredEvents = useMemo(() => {
-    // ✅ 부모 이벤트만 필터링 (parentEventId가 없는 것만)
+    /** 단일 사건이 현재 필터를 모두 만족하는가 — 루트·자식 공통 술어. */
+    const matches = (event: HistoricalEvent): boolean => {
+      const categoryOk =
+        selectedCategory === FILTER_ALL || event.category === selectedCategory
+      const keywordOk =
+        normalizedKeyword.length === 0 ||
+        event.title.toLowerCase().includes(normalizedKeyword) ||
+        event.description.toLowerCase().includes(normalizedKeyword) ||
+        event.tags.some((tag) => tag.toLowerCase().includes(normalizedKeyword))
+      const centuryOk = (() => {
+        if (selectedCentury === FILTER_ALL) return true
+        const startCentury = getCenturyFromDate(event.startDate)
+        const endCentury = getCenturyFromDate(event.endDate)
+        return (
+          startCentury === selectedCentury || endCentury === selectedCentury
+        )
+      })()
+      const countryOk =
+        selectedCountry === FILTER_ALL ||
+        event.relatedCountries?.some((c) => c.id === selectedCountry) ||
+        event.relatedHistoricalCountries?.some((c) => c.id === selectedCountry)
+      /**
+       * 대륙 필터 — relatedCountries(현대)만 고려. 역사적 국가는 직접
+       * continentId가 없어 v1에서는 제외(향후 HistoricalCountryModernCountry
+       * 조인으로 보강 가능).
+       */
+      const continentOk =
+        selectedContinent === FILTER_ALL ||
+        (event.relatedCountries?.some(
+          (c) => countryContinentMap.get(c.id) === selectedContinent,
+        ) ??
+          false)
+
+      return Boolean(
+        categoryOk && keywordOk && centuryOk && countryOk && continentOk,
+      )
+    }
+
+    /**
+     * 자식 사건도 검색·필터 대상에 포함 — 자식만 매칭돼도 그 *루트*를 결과에 남긴다.
+     * (이전엔 부모만 평가해, 자식 제목으로 검색하면 그 사건이 통째로 사라졌다. 자식은
+     *  루트 펼침으로 도달하므로 루트를 살리면 계층에서 자연히 노출됨.)
+     * 출력은 여전히 루트만 — downstream(hierarchy/flatten)이 의존하는 계약을 유지.
+     */
+    const childrenByParent = new Map<string, HistoricalEvent[]>()
+    for (const e of events) {
+      if (!e.parentEventId) continue
+      const arr = childrenByParent.get(e.parentEventId)
+      if (arr) arr.push(e)
+      else childrenByParent.set(e.parentEventId, [e])
+    }
+    const matchesSelfOrDescendant = (event: HistoricalEvent): boolean => {
+      if (matches(event)) return true
+      const kids = childrenByParent.get(event.id)
+      return kids ? kids.some(matchesSelfOrDescendant) : false
+    }
+
     return events
       .filter((event) => !event.parentEventId)
-      .filter((event) => {
-        const categoryOk =
-          selectedCategory === FILTER_ALL || event.category === selectedCategory
-        const keywordOk =
-          normalizedKeyword.length === 0 ||
-          event.title.toLowerCase().includes(normalizedKeyword) ||
-          event.description.toLowerCase().includes(normalizedKeyword) ||
-          event.tags.some((tag) =>
-            tag.toLowerCase().includes(normalizedKeyword),
-          )
-        const centuryOk = (() => {
-          if (selectedCentury === FILTER_ALL) return true
-          const startCentury = getCenturyFromDate(event.startDate)
-          const endCentury = getCenturyFromDate(event.endDate)
-          return (
-            startCentury === selectedCentury || endCentury === selectedCentury
-          )
-        })()
-        const countryOk =
-          selectedCountry === FILTER_ALL ||
-          event.relatedCountries?.some((c) => c.id === selectedCountry) ||
-          event.relatedHistoricalCountries?.some(
-            (c) => c.id === selectedCountry,
-          )
-        /**
-         * 대륙 필터 — relatedCountries(현대)만 고려. 역사적 국가는 직접
-         * continentId가 없어 v1에서는 제외(향후 HistoricalCountryModernCountry
-         * 조인으로 보강 가능).
-         */
-        const continentOk =
-          selectedContinent === FILTER_ALL ||
-          (event.relatedCountries?.some(
-            (c) => countryContinentMap.get(c.id) === selectedContinent,
-          ) ??
-            false)
-
-        return (
-          categoryOk && keywordOk && centuryOk && countryOk && continentOk
-        )
-      })
+      .filter(matchesSelfOrDescendant)
   }, [
     events,
     selectedCategory,
@@ -219,6 +236,14 @@ export const useEventFilters = (
       })
     }
 
+    if (selectedCentury !== FILTER_ALL) {
+      chips.push({
+        key: 'century',
+        label: `세기 · ${selectedCentury}세기`,
+        onClear: () => setSelectedCentury(FILTER_ALL),
+      })
+    }
+
     if (selectedPositionType !== FILTER_ALL) {
       const label =
         MOCK_POSITION_TYPES.find((t) => t.value === selectedPositionType)
@@ -243,6 +268,7 @@ export const useEventFilters = (
     selectedCategory,
     selectedCountry,
     selectedContinent,
+    selectedCentury,
     selectedPositionType,
     trimmedKeyword,
     dbCategories,

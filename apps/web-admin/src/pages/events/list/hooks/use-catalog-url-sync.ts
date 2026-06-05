@@ -10,6 +10,7 @@
 import { useEffect, useRef } from 'react'
 import type { useSearchParams } from 'react-router-dom'
 
+import type { CenturyFilter } from '@/entities/event/model'
 import { FILTER_ALL, type ViewMode } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
 
@@ -26,10 +27,13 @@ interface CatalogUrlSyncArgs {
   selectedCategory: string
   selectedCountry: string
   selectedContinent: string
+  selectedCentury: CenturyFilter
   sortBy: SortOption
   sortDirection: 'asc' | 'desc'
   showFlatView: boolean
   viewMode: ViewMode
+  /** 페이지 크기 — 표시 선호. 새로고침·공유 시 보존 */
+  pageSize: number
 
   // 세터 (URL → state)
   setKeywordInput: (v: string) => void
@@ -38,11 +42,17 @@ interface CatalogUrlSyncArgs {
   setSelectedCategory: (v: string) => void
   setSelectedCountry: (v: string) => void
   setSelectedContinent: (v: string) => void
+  setSelectedCentury: (v: CenturyFilter) => void
   setSortBy: (v: SortOption) => void
   setSortDirection: (v: 'asc' | 'desc') => void
   setShowFlatView: (v: boolean) => void
   setViewMode: (v: ViewMode) => void
+  setPageSize: (v: number) => void
 }
+
+/** URL에 노출하는 유효 page size — 그 외 값은 기본(100)으로 폴백 */
+const VALID_PAGE_SIZES = [20, 50, 100]
+const DEFAULT_PAGE_SIZE = 100
 
 const DEFAULT_SORT: SortOption = 'recent' as SortOption
 const DEFAULT_DIR: 'asc' | 'desc' = 'desc'
@@ -57,20 +67,24 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     selectedCategory,
     selectedCountry,
     selectedContinent,
+    selectedCentury,
     sortBy,
     sortDirection,
     showFlatView,
     viewMode,
+    pageSize,
     setKeywordInput,
     setSelectedEventId,
     setBookmarksOnly,
     setSelectedCategory,
     setSelectedCountry,
     setSelectedContinent,
+    setSelectedCentury,
     setSortBy,
     setSortDirection,
     setShowFlatView,
     setViewMode,
+    setPageSize,
   } = args
 
   /** 우리(state → URL effect)가 마지막으로 쓴 URL serialized 값. 이 값과 동일하면
@@ -104,6 +118,19 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     const continent = searchParams.get('continent') ?? FILTER_ALL
     if (continent !== selectedContinent) setSelectedContinent(continent)
 
+    const centuryParam = searchParams.get('century')
+    const centuryNum = centuryParam ? Number(centuryParam) : NaN
+    const century: CenturyFilter = Number.isFinite(centuryNum)
+      ? centuryNum
+      : FILTER_ALL
+    if (century !== selectedCentury) setSelectedCentury(century)
+
+    const sizeNum = Number(searchParams.get('size'))
+    const size = VALID_PAGE_SIZES.includes(sizeNum)
+      ? sizeNum
+      : DEFAULT_PAGE_SIZE
+    if (size !== pageSize) setPageSize(size)
+
     const sort = (searchParams.get('sort') ?? DEFAULT_SORT) as SortOption
     if (sort !== sortBy) setSortBy(sort)
 
@@ -134,6 +161,14 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setOrDel('cat', selectedCategory, FILTER_ALL)
     setOrDel('country', selectedCountry, FILTER_ALL)
     setOrDel('continent', selectedContinent, FILTER_ALL)
+    setOrDel(
+      'century',
+      selectedCentury !== FILTER_ALL ? String(selectedCentury) : null,
+    )
+    setOrDel(
+      'size',
+      pageSize !== DEFAULT_PAGE_SIZE ? String(pageSize) : null,
+    )
     setOrDel('sort', sortBy, DEFAULT_SORT)
     setOrDel('dir', sortDirection, DEFAULT_DIR)
     setOrDel('flat', showFlatView ? '1' : null)
@@ -153,9 +188,11 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     selectedCategory,
     selectedCountry,
     selectedContinent,
+    selectedCentury,
     sortBy,
     sortDirection,
     showFlatView,
     viewMode,
+    pageSize,
   ])
 }

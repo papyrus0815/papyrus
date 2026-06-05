@@ -354,6 +354,114 @@ export class EventController {
   }
 
   /**
+   * 사건 총 개수 — 현재 사용자의 최상위·미삭제 사건 수(선택 필터 반영).
+   *
+   * 목록 API(getAllEvents)는 배열만 반환하고 total을 주지 않아, 프론트의 "전체 N건"이
+   * *로드된 수*에 불과했다. 이 엔드포인트로 권위 있는 총량을 노출한다. where 절은
+   * getAllEvents의 서버측 스코프(parentEventId=null · createdById · deletedAt=null + 선택
+   * 필터)와 일치시켜 "전체"의 의미가 목록 페이징 대상과 같도록 한다.
+   *
+   * ⚠️ 라우트는 반드시 @Get(':id')보다 먼저 선언 — 아니면 'count'가 :id로 매칭된다.
+   * @returns { total } 총 개수
+   * @tag events
+   */
+  @Get('count')
+  async getEventsCount(
+    @Query('countryId') countryId?: string,
+    @Query('countryIds') countryIds?: string,
+    @Query('historicalCountryIds') historicalCountryIds?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('decade') decade?: string,
+    @Query('century') century?: string,
+    @Query('createdSinceDays') createdSinceDays?: string,
+    @Query('hasNoDescription') hasNoDescription?: string,
+    @Query('hasNoCountries') hasNoCountries?: string,
+    @Query('hasNoKeywords') hasNoKeywords?: string,
+    @Request() req?: any,
+  ): Promise<{ total: number }> {
+    const userId = req.user?.id || req.user?.sub
+
+    const sinceDays = createdSinceDays ? parseInt(createdSinceDays, 10) : undefined
+    const createdAtGte =
+      sinceDays != null && !Number.isNaN(sinceDays) && sinceDays > 0
+        ? new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
+        : undefined
+    const filterCountryId =
+      countryId && typeof countryId === 'string' && countryId.trim()
+        ? countryId.trim()
+        : undefined
+    const splitIds = (raw?: string): string[] | undefined => {
+      if (!raw) return undefined
+      const parts = raw.split(',').map((part) => part.trim()).filter(Boolean)
+      return parts.length > 0 ? parts : undefined
+    }
+    const countryIdList = splitIds(countryIds)
+    const hCountryIdList = splitIds(historicalCountryIds)
+    const isFlagOn = (raw?: string): boolean => raw === 'true' || raw === '1'
+
+    const dateRange: { gte?: Date; lt?: Date } = {}
+    if (decade) {
+      const decadeNum = parseInt(decade, 10)
+      if (!Number.isNaN(decadeNum)) {
+        dateRange.gte = new Date(`${decadeNum}-01-01T00:00:00.000Z`)
+        dateRange.lt = new Date(`${decadeNum + 10}-01-01T00:00:00.000Z`)
+      }
+    }
+    if (century) {
+      const centuryNum = parseInt(century, 10)
+      if (!Number.isNaN(centuryNum)) {
+        const startYear = (centuryNum - 1) * 100 + 1
+        const endYear = centuryNum * 100 + 1
+        const cGte = new Date(`${startYear}-01-01T00:00:00.000Z`)
+        const cLt = new Date(`${endYear}-01-01T00:00:00.000Z`)
+        dateRange.gte =
+          dateRange.gte && dateRange.gte > cGte ? dateRange.gte : cGte
+        dateRange.lt = dateRange.lt && dateRange.lt < cLt ? dateRange.lt : cLt
+      }
+    }
+
+    let countryRelationsFilter: Record<string, unknown> | undefined
+    if (isFlagOn(hasNoCountries)) {
+      countryRelationsFilter = { none: {} }
+    } else {
+      const countryRelationOr: Array<Record<string, unknown>> = []
+      if (filterCountryId) {
+        countryRelationOr.push({ countryId: filterCountryId })
+        countryRelationOr.push({ historicalCountryId: filterCountryId })
+      }
+      if (countryIdList) {
+        countryRelationOr.push({ countryId: { in: countryIdList } })
+      }
+      if (hCountryIdList) {
+        countryRelationOr.push({ historicalCountryId: { in: hCountryIdList } })
+      }
+      if (countryRelationOr.length > 0) {
+        countryRelationsFilter = { some: { OR: countryRelationOr } }
+      }
+    }
+
+    const total = await this.prisma.event.count({
+      where: {
+        parentEventId: null,
+        createdById: userId,
+        deletedAt: null,
+        ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
+        ...(categoryId && { categoryId }),
+        ...((dateRange.gte || dateRange.lt) && { startDate: dateRange }),
+        ...(countryRelationsFilter && { countryRelations: countryRelationsFilter }),
+        ...(isFlagOn(hasNoDescription) && {
+          OR: [{ description: null }, { description: '' }],
+        }),
+        ...(isFlagOn(hasNoKeywords) && {
+          keywords: { equals: null as any },
+        }),
+      },
+    })
+
+    return { total }
+  }
+
+  /**
    * 상위 사건의 하위 사건 목록 조회
    *
    * @param parentEventId 상위 사건 ID

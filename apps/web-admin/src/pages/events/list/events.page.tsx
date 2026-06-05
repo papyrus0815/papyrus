@@ -16,11 +16,12 @@ import React, {
   useTransition,
 } from 'react'
 
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiPlus } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useEvents } from '@/entities/event/model'
+import { getEventsCount } from '@/shared/api/events'
 import {
   useHeadsOfState,
   useTenureGroups,
@@ -123,9 +124,18 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   // ===== Entity: 사건 데이터 =====
   // useEvents는 React Query 무한 스크롤로 전환됨(a1b5b6f85). gov positions 동시 fetch는
   // 새 hook에서 빠짐 → useHeadsOfState/EventDetailPanel은 기본값 [] 사용.
-  const { events, isLoading, hasMore, fetchMoreEvents } = useEvents({
-    pageSize,
-    countryId: countryId ?? undefined,
+  const { events, isLoading, isFetchingNextPage, hasMore, fetchMoreEvents } =
+    useEvents({
+      pageSize,
+      countryId: countryId ?? undefined,
+    })
+
+  // ===== 권위 총개수 — 헤더 "전체 N건"이 *로드된 수*가 아닌 진짜 총량을 표시하도록 =====
+  // 페이징 응답엔 total이 없어 별도 count 엔드포인트 조회(가벼운 count 쿼리). 실패 시 undefined.
+  const { data: serverTotal } = useQuery({
+    queryKey: ['events-count', countryId ?? null],
+    queryFn: () => getEventsCount({ countryId: countryId ?? undefined }),
+    staleTime: 30_000,
   })
 
   // ===== 참조 데이터 (카테고리·국가·대륙) =====
@@ -263,20 +273,24 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     selectedCategory,
     selectedCountry,
     selectedContinent,
+    selectedCentury,
     sortBy,
     sortDirection,
     showFlatView,
     viewMode,
+    pageSize,
     setKeywordInput,
     setSelectedEventId,
     setBookmarksOnly,
     setSelectedCategory,
     setSelectedCountry,
     setSelectedContinent,
+    setSelectedCentury,
     setSortBy,
     setSortDirection,
     setShowFlatView,
     setViewMode,
+    setPageSize,
   })
 
   // ===== 페이지네이션 핸들러 =====
@@ -519,6 +533,10 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           continents={continents}
           countries={countries}
           onSelectEvent={setSelectedEventId}
+          hasMore={hasMore}
+          isFetchingMore={isFetchingNextPage}
+          onLoadMore={fetchMoreEvents}
+          isLoading={isLoading && events.length === 0}
         />
       )
   }
@@ -695,6 +713,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           setViewMode={changeViewMode}
           visibleCount={visibleFlattenedHierarchy.length}
           totalCount={events.length}
+          serverTotal={serverTotal}
           events={events}
           dbCategories={dbCategories}
           sortBy={sortBy}

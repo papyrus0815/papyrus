@@ -46,8 +46,10 @@ interface Props {
   setViewMode: (v: ViewMode) => void
   /** 현재 필터·북마크가 적용된 *보이는* 항목 수 — 화면 상의 진실 */
   visibleCount: number
-  /** 전체 등록 사건 수 — visibleCount와 다를 때만 보조 표시 */
+  /** 현재까지 로드된 최상위 사건 수 — visibleCount와 다를 때만 보조 표시 */
   totalCount: number
+  /** 서버의 권위 총개수(로드 여부 무관). 있으면 "전체 N건"을 이 값으로 — 로드된 수 과소표시 해소 */
+  serverTotal?: number
 
   /** 인라인 통계 strip을 위한 데이터 */
   events: HistoricalEvent[]
@@ -70,6 +72,21 @@ interface ModeDef {
   value: ViewMode
   label: string
   icon: React.ReactNode
+}
+
+/**
+ * 뷰별 한 줄 역할 안내 — 7개 뷰가 각각 "무엇을 잘 보여주는지" 모호하다는 IA 문제 보완.
+ * 활성 뷰 아래에 캡션으로 노출해, 사용자가 목적에 맞는 뷰를 고르도록 돕는다.
+ */
+const VIEW_HINTS: Record<ViewMode, string> = {
+  [VIEW_MODES.TIMELINE]:
+    '시대별 분포·동시대성 — 막대 길이=기간, 우측 목록으로 사건명 확인',
+  [VIEW_MODES.LIST]: '전체 사건을 시간순으로 훑기 — 세기·연도별 그룹',
+  [VIEW_MODES.MAP]: '지리적 위치 — 좌표가 있는 사건만 표시',
+  [VIEW_MODES.GRID]: '10년 단위 밀집도 — 어느 시대에 사건이 몰렸는지',
+  [VIEW_MODES.DASHBOARD]: '데이터 분포·품질 통계 — 사건 목록이 아닌 집계',
+  [VIEW_MODES.TREE]: '상·하위 사건의 계층 관계',
+  [VIEW_MODES.GALLERY]: '이미지 중심 카드 — 시각적 탐색',
 }
 
 /** 자주 쓰는 3개 — 세그먼트 컨트롤로 노출 */
@@ -96,6 +113,7 @@ export const CatalogMainContent: React.FC<Props> = ({
   setViewMode,
   visibleCount,
   totalCount,
+  serverTotal,
   events,
   dbCategories,
   sortBy,
@@ -107,6 +125,8 @@ export const CatalogMainContent: React.FC<Props> = ({
   activeSlot,
 }) => {
   const isFiltered = visibleCount !== totalCount
+  /** 표시용 권위 총량 — 서버 count가 있으면 그 값, 없으면 로드된 수로 폴백 */
+  const authoritativeTotal = serverTotal ?? totalCount
 
   // ── 더보기 메뉴 ────────────────────────────────────────────────────
   const [moreOpen, setMoreOpen] = useState(false)
@@ -248,14 +268,17 @@ export const CatalogMainContent: React.FC<Props> = ({
             events={events}
             dbCategories={dbCategories}
             visibleCount={isFiltered ? visibleCount : undefined}
+            serverTotal={serverTotal}
           />
           {isFiltered && (
             <FilteredHint title="필터 적용 — 전체 중 일부만 표시">
-              / 전체 {totalCount.toLocaleString()}건
+              / 전체 {authoritativeTotal.toLocaleString()}건
             </FilteredHint>
           )}
         </MetaArea>
       </ToolbarStyles.ViewSwitcherRow>
+
+      <ViewHint role="note">{VIEW_HINTS[viewMode]}</ViewHint>
 
       {activeSlot}
     </PageStyles.ActiveContent>
@@ -343,6 +366,14 @@ const MoreMenuItem = styled.button<{ $active?: boolean }>`
     outline: none;
     box-shadow: ${BRAND.focusRing};
   }
+`
+
+const ViewHint = styled.div`
+  margin: 2px 2px 8px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const MetaArea = styled.div`
