@@ -4,9 +4,10 @@ import { MilitaryEventService } from '../application/military-event.service'
 import { EventPrismaRepository } from './event.prisma.repository'
 import { EventController } from '../presentation/event.controller'
 import { PrismaModule } from '../../shared/database'
+import { NotificationModule } from '../../notification/notification.module'
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, NotificationModule],
   controllers: [EventController],
   providers: [
     EventService,

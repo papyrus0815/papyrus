@@ -10,11 +10,14 @@ import type {
   OrganizationHierarchyEntity,
 } from '../domain/organization.repository'
 import { OrganizationPrismaRepository } from '../infrastructure/organization.prisma.repository'
+import { EventMethod } from '@prisma/client'
+import { NotificationService } from '../../notification/application/notification.service'
 
 @Injectable()
 export class OrganizationService {
   constructor(
     private readonly repository: OrganizationPrismaRepository,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async getById(id: string): Promise<OrganizationEntity> {
@@ -30,7 +33,9 @@ export class OrganizationService {
   }
 
   async create(data: CreateOrganizationData): Promise<OrganizationEntity> {
-    return this.repository.create(data)
+    const org = await this.repository.create(data)
+    await this.notificationService.notifyOrganization(org.name, EventMethod.CREATE, org.id)
+    return org
   }
 
   async update(
@@ -38,12 +43,15 @@ export class OrganizationService {
     data: UpdateOrganizationData,
   ): Promise<OrganizationEntity> {
     await this.getById(id)
-    return this.repository.update(id, data)
+    const org = await this.repository.update(id, data)
+    await this.notificationService.notifyOrganization(org.name, EventMethod.UPDATE, org.id)
+    return org
   }
 
   async delete(id: string): Promise<void> {
-    await this.getById(id)
+    const org = await this.getById(id)
     await this.repository.delete(id)
+    await this.notificationService.notifyOrganization(org.name, EventMethod.DELETE, id)
   }
 
   async getTree(filter: OrganizationListFilter): Promise<OrganizationTreeNode[]> {

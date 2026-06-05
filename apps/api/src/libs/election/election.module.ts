@@ -8,9 +8,10 @@ import { PersonElectionController } from './presentation/person-election.control
 import { CabinetPoliticalPartyController } from './presentation/cabinet-political-party.controller'
 import { LawController } from './presentation/law.controller'
 import { LawTypeController } from './presentation/law-type.controller'
+import { NotificationModule } from '../notification/notification.module'
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, NotificationModule],
   controllers: [
     PoliticalPartyController,
     PoliticalPartyTransitionController,

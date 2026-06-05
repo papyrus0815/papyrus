@@ -12,9 +12,10 @@ import {
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
-import { GovernmentPositionType } from '@prisma/client'
+import { EventMethod, GovernmentPositionType } from '@prisma/client'
 
 import { PrismaService } from '@prisma/prisma.service'
+import { NotificationService } from '../../notification/application/notification.service'
 import { assertLawMatchesPoliticalPartyJurisdiction } from '../domain/law-jurisdiction.util'
 import {
   buildTenureJurisdictionWhere,
@@ -67,7 +68,10 @@ export interface UpdatePoliticalPartyBody {
 @Controller('political-parties')
 @UseGuards(AuthGuard('jwt'))
 export class PoliticalPartyController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   @Get()
   async list(
@@ -425,6 +429,7 @@ export class PoliticalPartyController {
         historicalCountryId: body.historicalCountryId ?? undefined,
       },
     })
+    await this.notificationService.notifyPoliticalParty(row.name, EventMethod.CREATE, row.id)
     return serializeElectionBigInt(row)
   }
 
@@ -455,12 +460,14 @@ export class PoliticalPartyController {
       where: { id },
       data: data as any,
     })
+    await this.notificationService.notifyPoliticalParty(row.name, EventMethod.UPDATE, row.id)
     return serializeElectionBigInt(row)
   }
 
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<any> {
-    await this.prisma.politicalParty.delete({ where: { id } })
+    const row = await this.prisma.politicalParty.delete({ where: { id } })
+    await this.notificationService.notifyPoliticalParty(row.name, EventMethod.DELETE, id)
   }
 
   private async ensureParty(id: string) {

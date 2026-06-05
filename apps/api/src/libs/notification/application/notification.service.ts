@@ -66,6 +66,39 @@ export class NotificationService {
     })
   }
 
+  /** 사건 CRUD 알림 */
+  notifyEvent(entityLabel: string, method: EventMethod, recordId?: string, preview?: string): Promise<NotificationRecord> {
+    return this.create({
+      entityLabel,
+      method,
+      ownerType: AggregateType.EVENT,
+      recordId,
+      preview,
+    })
+  }
+
+  /** 조직 CRUD 알림 */
+  notifyOrganization(entityLabel: string, method: EventMethod, recordId?: string, preview?: string): Promise<NotificationRecord> {
+    return this.create({
+      entityLabel,
+      method,
+      ownerType: AggregateType.ORGANIZATION,
+      recordId,
+      preview,
+    })
+  }
+
+  /** 정당 CRUD 알림 */
+  notifyPoliticalParty(entityLabel: string, method: EventMethod, recordId?: string, preview?: string): Promise<NotificationRecord> {
+    return this.create({
+      entityLabel,
+      method,
+      ownerType: AggregateType.POLITICAL_PARTY,
+      recordId,
+      preview,
+    })
+  }
+
   findMany(options?: { limit?: number; unreadOnly?: boolean }): Promise<NotificationRecord[]> {
     return this.notificationRepository.findMany(options)
   }

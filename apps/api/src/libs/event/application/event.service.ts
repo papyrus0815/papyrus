@@ -6,7 +6,9 @@ import {
 } from '@nestjs/common'
 import { EventRepository } from '../domain/event.repository'
 import { Event } from '../domain/event.entity'
-import { PrismaClient } from '@prisma/client'
+import { AggregateType, EventMethod, PrismaClient } from '@prisma/client'
+import { PointService } from '../../gamification/application/point.service'
+import { NotificationService } from '../../notification/application/notification.service'
 
 @Injectable()
 export class EventService {
@@ -14,6 +16,8 @@ export class EventService {
     @Inject('EventRepository')
     private readonly events: EventRepository,
     private readonly prisma: PrismaClient,
+    private readonly pointService: PointService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
@@ -275,6 +279,10 @@ export class EventService {
       console.log(`✅ ${childEventIds.length}개 사건이 하위 사건으로 연결됨`)
     }
 
+    // 게이미피케이션: 등록자에게 점수 적립 (하위 사건도 각자 적립됨)
+    await this.pointService.awardForCreate(data.createdById, AggregateType.EVENT, event.id)
+    await this.notificationService.notifyEvent(event.title, EventMethod.CREATE, event.id)
+
     return event
   }
 
@@ -476,7 +484,9 @@ export class EventService {
       }
     }
 
-    return this.events.update(id, data)
+    const updated = await this.events.update(id, data)
+    await this.notificationService.notifyEvent(updated.title, EventMethod.UPDATE, updated.id)
+    return updated
   }
 
   /**
@@ -486,9 +496,9 @@ export class EventService {
    * @throws NotFoundException 사건을 찾을 수 없는 경우
    */
   async deleteEvent(id: string, userId?: string): Promise<void> {
-    // 존재 여부 확인
-    await this.getEventById(id)
-    
+    // 존재 여부 확인 (라벨용으로 캡처)
+    const event = await this.getEventById(id)
+
     // 소프트 삭제: deletedAt 설정
     await this.prisma.event.update({
       where: { id },
@@ -497,7 +507,11 @@ export class EventService {
         deletedById: userId || null,
       },
     })
-    
+
+    // 게이미피케이션: 소프트 삭제 시 점수 회수(어뷰징 방지). 복구 시 복원됨.
+    await this.pointService.revokeForRecord(AggregateType.EVENT, id)
+    await this.notificationService.notifyEvent(event.title, EventMethod.DELETE, id)
+
     console.log(`🗑️ 사건 소프트 삭제: ${id} (3일 후 완전 삭제 예정)`)
   }
 
@@ -546,6 +560,9 @@ export class EventService {
       },
     })
     
+    // 게이미피케이션: 복구 시 회수했던 점수 복원
+    await this.pointService.restoreForRecord(AggregateType.EVENT, id)
+
     console.log(`♻️ 사건 복구: ${id}`)
     return restored
   }
@@ -568,6 +585,8 @@ export class EventService {
     
     // 완전 삭제
     await this.events.delete(id)
+    // 게이미피케이션: 소프트 삭제 단계에서 회수됐겠지만, 활성 상태에서 바로 완전삭제된 경우 대비(멱등)
+    await this.pointService.revokeForRecord(AggregateType.EVENT, id)
     console.log(`🔥 사건 완전 삭제: ${id}`)
   }
 }
