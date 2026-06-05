@@ -35,6 +35,7 @@ import { getPlaylistControls } from '@/shared/hooks/use-bgm-playlist.hook'
 import {
   getBgmAudio,
   setGlobalBgmMutedState,
+  subscribeBgmAudio,
   useClickSound,
 } from '@/shared/hooks/use-click-sound.hook'
 import { pathKeys } from '@/shared/router'
@@ -67,9 +68,19 @@ const Header: React.FC = () => {
 
   const [isBellOpen, setIsBellOpen] = useState(false)
 
-  // 마운트 시 1회 로드 — 벨을 열기 전에도 읽지 않음 배지가 보이도록.
+  // 마운트 시 1회 로드 + 탭이 다시 보이거나 포커스될 때 갱신 —
+  // 벨을 열기 전에도 읽지 않음 배지가 최신으로 유지되도록.
   useEffect(() => {
     fetchNotifications()
+    const refetchIfVisible = () => {
+      if (document.visibilityState === 'visible') fetchNotifications()
+    }
+    window.addEventListener('focus', refetchIfVisible)
+    document.addEventListener('visibilitychange', refetchIfVisible)
+    return () => {
+      window.removeEventListener('focus', refetchIfVisible)
+      document.removeEventListener('visibilitychange', refetchIfVisible)
+    }
   }, [fetchNotifications])
 
   // 드롭다운을 열 때마다 최신 상태로 갱신.
@@ -93,98 +104,86 @@ const Header: React.FC = () => {
   // 클릭 효과음 재생 함수
   const playClickSound = useClickSound()
 
-  // 전역 BGM 오디오 인스턴스 가져오기
+  // BGM 오디오 상태 동기화 — 100ms 폴링 대신 오디오 엘리먼트 이벤트를 구독한다.
+  // 트랙마다 new Audio()로 인스턴스가 교체되므로 subscribeBgmAudio로 교체를 감지해
+  // 매번 리스너를 재바인딩한다.
   useEffect(() => {
-    const checkBgmAudio = () => {
-      const bgmAudio = getBgmAudio()
-      if (bgmAudio && bgmAudio !== bgmAudioRef.current) {
-        bgmAudioRef.current = bgmAudio
-        setBgmVolume(bgmAudio.volume)
-        setIsBgmMuted(bgmAudio.volume === 0)
-        setIsBgmPlaying(!bgmAudio.paused)
-      } else if (bgmAudio) {
-        // 재생 상태 동기화
-        setIsBgmPlaying(!bgmAudio.paused)
+    let current: HTMLAudioElement | null = null
+
+    const deriveTrackName = (src: string): string => {
+      if (!src) return ''
+      let path = src
+      try {
+        path = decodeURIComponent(src)
+      } catch {
+        /* 디코딩 실패 시 원본 사용 */
       }
+      const fileName = path.split('/').pop() || ''
+      return fileName.replace(/\.mp3$/i, '') || '알 수 없음'
     }
 
-    // 주기적으로 확인 (BGM이 나중에 로드될 수 있음)
-    const interval = setInterval(checkBgmAudio, 100)
-    checkBgmAudio() // 즉시 한 번 확인
-
-    return () => clearInterval(interval)
-  }, [])
-
-  // 플레이리스트 정보 동기화 (ref를 사용하여 불필요한 리렌더링 방지)
-  const prevIsPlayingRef = useRef(false)
-  const prevCurrentTimeRef = useRef(0)
-  const prevDurationRef = useRef(0)
-  const prevTrackNameRef = useRef('')
-
-  useEffect(() => {
-    const updatePlaylistInfo = () => {
-      const controls = getPlaylistControls()
-      if (!controls) return
-
-      const newIsPlaying = controls.isPlaying
-      const newCurrentTime =
-        typeof controls.currentTime === 'function'
-          ? controls.currentTime()
-          : controls.currentTime
-      const newDuration =
-        typeof controls.duration === 'function'
-          ? controls.duration()
-          : controls.duration
-      const newCurrentTrack =
-        typeof controls.currentTrack === 'function'
-          ? controls.currentTrack()
-          : controls.currentTrack
-
-      // 상태가 실제로 변경된 경우에만 업데이트 (ref 비교)
-      if (prevIsPlayingRef.current !== newIsPlaying) {
-        prevIsPlayingRef.current = newIsPlaying
-        setIsBgmPlaying(newIsPlaying)
-      }
-
-      if (Math.abs(prevCurrentTimeRef.current - newCurrentTime) > 0.1) {
-        prevCurrentTimeRef.current = newCurrentTime
-        setCurrentTime(newCurrentTime)
-      }
-
-      if (Math.abs(prevDurationRef.current - newDuration) > 0.1) {
-        prevDurationRef.current = newDuration
-        setDuration(newDuration)
-      }
-
-      // 트랙 이름 추출 (파일명에서 확장자 제거 및 디코딩)
-      if (newCurrentTrack) {
-        try {
-          // URL 디코딩 (인코딩된 문자 처리)
-          const decodedTrack = decodeURIComponent(newCurrentTrack)
-          // 파일명 추출 및 확장자 제거
-          const fileName = decodedTrack.split('/').pop() || ''
-          const trackName = fileName.replace(/\.mp3$/i, '') || '알 수 없음'
-
-          if (prevTrackNameRef.current !== trackName) {
-            prevTrackNameRef.current = trackName
-            setCurrentTrackName(trackName)
-          }
-        } catch (error) {
-          // 디코딩 실패 시 원본 사용
-          const fileName = newCurrentTrack.split('/').pop() || ''
-          const trackName = fileName.replace(/\.mp3$/i, '') || '알 수 없음'
-          if (prevTrackNameRef.current !== trackName) {
-            prevTrackNameRef.current = trackName
-            setCurrentTrackName(trackName)
-          }
-        }
-      }
+    const syncPlaying = () => setIsBgmPlaying(!!current && !current.paused)
+    const syncTime = () => {
+      if (current) setCurrentTime(current.currentTime || 0)
+    }
+    const syncDuration = () => {
+      if (current)
+        setDuration(Number.isFinite(current.duration) ? current.duration : 0)
+    }
+    const syncTrack = () => {
+      if (current) setCurrentTrackName(deriveTrackName(current.currentSrc))
     }
 
-    const interval = setInterval(updatePlaylistInfo, 100)
-    updatePlaylistInfo() // 즉시 한 번 확인
+    const detach = () => {
+      if (!current) return
+      current.removeEventListener('play', syncPlaying)
+      current.removeEventListener('pause', syncPlaying)
+      current.removeEventListener('ended', syncPlaying)
+      current.removeEventListener('timeupdate', syncTime)
+      current.removeEventListener('durationchange', syncDuration)
+      current.removeEventListener('loadedmetadata', syncDuration)
+      current.removeEventListener('loadeddata', syncTrack)
+      current.removeEventListener('emptied', syncTrack)
+      current = null
+    }
 
-    return () => clearInterval(interval)
+    const attach = (el: HTMLAudioElement) => {
+      if (el === current) {
+        syncPlaying()
+        return
+      }
+      detach()
+      current = el
+      bgmAudioRef.current = el
+      // 초기 상태 1회 동기화 (볼륨/음소거는 이후 사용자 조작이 관리)
+      setBgmVolume(el.volume)
+      setIsBgmMuted(el.volume === 0)
+      syncPlaying()
+      syncDuration()
+      syncTime()
+      syncTrack()
+      el.addEventListener('play', syncPlaying)
+      el.addEventListener('pause', syncPlaying)
+      el.addEventListener('ended', syncPlaying)
+      el.addEventListener('timeupdate', syncTime)
+      el.addEventListener('durationchange', syncDuration)
+      el.addEventListener('loadedmetadata', syncDuration)
+      el.addEventListener('loadeddata', syncTrack)
+      el.addEventListener('emptied', syncTrack)
+    }
+
+    const existing = getBgmAudio()
+    if (existing) attach(existing)
+
+    const unsubscribe = subscribeBgmAudio((el) => {
+      if (el) attach(el)
+      else detach()
+    })
+
+    return () => {
+      unsubscribe()
+      detach()
+    }
   }, [])
 
   // 플레이리스트 컨트롤 핸들러

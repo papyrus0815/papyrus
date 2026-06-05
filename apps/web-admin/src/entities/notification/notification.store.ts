@@ -50,33 +50,28 @@ export const useNotificationStore = create<NotificationState & NotificationActio
   },
 
   markAllRead: async () => {
+    // 낙관적 업데이트: 서버 응답과 무관하게 즉시 읽음 처리 (실패해도 로컬 유지)
+    set((state) => ({
+      messages: state.messages.map((m) => ({ ...m, unread: false })),
+    }))
     try {
       await notificationsApi.markAllRead()
-      set((state) => ({
-        messages: state.messages.map((m) => ({ ...m, unread: false })),
-      }))
     } catch {
-      // optimistic: update local anyway
-      set((state) => ({
-        messages: state.messages.map((m) => ({ ...m, unread: false })),
-      }))
+      // 서버 반영 실패는 무시 — 로컬 상태는 이미 갱신됨
     }
   },
 
   markOneRead: async (id: string) => {
+    // 낙관적 업데이트: 즉시 해당 항목을 읽음 처리 (실패해도 로컬 유지)
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === id ? { ...m, unread: false } : m,
+      ),
+    }))
     try {
       await notificationsApi.markRead(id)
-      set((state) => ({
-        messages: state.messages.map((m) =>
-          m.id === id ? { ...m, unread: false } : m,
-        ),
-      }))
     } catch {
-      set((state) => ({
-        messages: state.messages.map((m) =>
-          m.id === id ? { ...m, unread: false } : m,
-        ),
-      }))
+      // 서버 반영 실패는 무시
     }
   },
 

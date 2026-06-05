@@ -10,6 +10,10 @@ interface UseClickSoundOptions {
 let globalBgmAudioRef: HTMLAudioElement | null = null
 // 전역 음소거 상태 (ducking 효과가 음소거 상태를 유지하기 위해)
 let globalBgmMutedState: boolean = false
+// BGM 오디오 인스턴스 교체를 구독하는 리스너들
+// (트랙마다 new Audio()로 인스턴스가 새로 생성되므로, 구독자가 이벤트를
+//  재바인딩할 수 있도록 알려준다 — 폴링 없이 상태 동기화하기 위함)
+const bgmAudioListeners = new Set<(audio: HTMLAudioElement | null) => void>()
 
 /**
  * 전역 BGM 오디오 인스턴스를 등록하는 함수
@@ -17,6 +21,20 @@ let globalBgmMutedState: boolean = false
  */
 export function registerBgmAudio(audio: HTMLAudioElement | null) {
   globalBgmAudioRef = audio
+  bgmAudioListeners.forEach((listener) => listener(audio))
+}
+
+/**
+ * BGM 오디오 인스턴스가 등록/교체될 때마다 호출되는 리스너를 구독한다.
+ * @returns 구독 해제 함수
+ */
+export function subscribeBgmAudio(
+  listener: (audio: HTMLAudioElement | null) => void,
+): () => void {
+  bgmAudioListeners.add(listener)
+  return () => {
+    bgmAudioListeners.delete(listener)
+  }
 }
 
 /**

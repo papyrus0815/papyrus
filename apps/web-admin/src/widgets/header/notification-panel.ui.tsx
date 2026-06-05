@@ -71,10 +71,10 @@ export function NotificationPanelBody({
           모두 읽음
         </SmallButton>
       </DropdownHeaderRow>
-      <MessageList>
+      <MessageList role="list">
         {showSkeleton &&
           [0, 1, 2].map((i) => (
-            <SkeletonRow key={i}>
+            <SkeletonRow key={i} aria-hidden="true">
               <SkeletonDot />
               <SkeletonBody>
                 <SkeletonLine style={{ width: '45%' }} />
@@ -94,21 +94,19 @@ export function NotificationPanelBody({
         {messages.map((msg) => {
           const typeLabel = getNotificationEntityTypeLabel(msg.ownerType)
           return (
-            <MessageRow
-              key={msg.id}
-              $unread={!!msg.unread}
-              onClick={() => onSelect(msg)}
-            >
-              <UnreadDot $visible={!!msg.unread} />
-              <MessageBody>
-                <MessageTitleRow>
-                  {typeLabel && <EntityTypeChip>{typeLabel}</EntityTypeChip>}
-                  <MessageTitle>{msg.title}</MessageTitle>
-                </MessageTitleRow>
-                {msg.preview && <MessagePreview>{msg.preview}</MessagePreview>}
-                <MessageMeta>{formatMessageTime(msg.time)}</MessageMeta>
-              </MessageBody>
-            </MessageRow>
+            <MessageItem key={msg.id} role="listitem">
+              <MessageRow $unread={!!msg.unread} onClick={() => onSelect(msg)}>
+                <UnreadDot $visible={!!msg.unread} />
+                <MessageBody>
+                  <MessageTitleRow>
+                    {typeLabel && <EntityTypeChip>{typeLabel}</EntityTypeChip>}
+                    <MessageTitle>{msg.title}</MessageTitle>
+                  </MessageTitleRow>
+                  {msg.preview && <MessagePreview>{msg.preview}</MessagePreview>}
+                  <MessageMeta>{formatMessageTime(msg.time)}</MessageMeta>
+                </MessageBody>
+              </MessageRow>
+            </MessageItem>
           )
         })}
       </MessageList>
@@ -206,6 +204,10 @@ const EmptySubtitle = styled.div`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   line-height: 1.5;
+`
+
+const MessageItem = styled.div`
+  list-style: none;
 `
 
 const MessageRow = styled.button<{ $unread: boolean }>`
