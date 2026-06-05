@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -26,8 +26,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
-  getNotificationEntityTypeLabel,
   getNotificationListPath,
+  type NotificationMessage,
   useNotificationStore,
 } from '@/entities/notification'
 import { useSessionStore } from '@/entities/session'
@@ -43,6 +43,7 @@ import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 import { useCommandPaletteStore } from '@/widgets/command-palette'
 import { DASHBOARD_MENU_ITEMS } from '@/widgets/content-shell/model/dashboard-menu-items'
 
+import { NotificationPanelBody } from './notification-panel.ui'
 import { TopNavBar, type TopNavItemSpec } from './top-nav.ui'
 
 // 재생 시간 포맷 (mm:ss)
@@ -53,46 +54,11 @@ const formatTime = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-// 메시지 시간 포맷 (ISO 또는 임의 문자열 → 읽기 쉬운 형식)
-function formatMessageTime(isoOrText: string): string {
-  if (!isoOrText || typeof isoOrText !== 'string') return ''
-  const s = isoOrText.trim()
-  if (!s) return ''
-  const parsed = new Date(s)
-  if (Number.isNaN(parsed.getTime()))
-    return s.length > 20 ? s.slice(0, 16) + '…' : s
-  const now = new Date()
-  const today = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  ).getTime()
-  const yesterday = today - 86400000
-  const t = parsed.getTime()
-  const dateOnly = new Date(
-    parsed.getFullYear(),
-    parsed.getMonth(),
-    parsed.getDate(),
-  ).getTime()
-  if (dateOnly === today) {
-    const h = parsed.getHours()
-    const m = parsed.getMinutes()
-    if (h < 12) return `오전 ${h}:${m.toString().padStart(2, '0')}`
-    if (h === 12) return `오후 12:${m.toString().padStart(2, '0')}`
-    return `오후 ${h - 12}:${m.toString().padStart(2, '0')}`
-  }
-  if (dateOnly === yesterday) return '어제'
-  if (parsed.getFullYear() === now.getFullYear()) {
-    return `${parsed.getMonth() + 1}월 ${parsed.getDate()}일`
-  }
-  return `${parsed.getFullYear()}. ${parsed.getMonth() + 1}. ${parsed.getDate()}`
-}
-
 const Header: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { username, reset } = useSessionStore()
-  const { messages, markAllRead, markOneRead, fetchNotifications } =
+  const { messages, markAllRead, markOneRead, fetchNotifications, isLoading } =
     useNotificationStore()
   const { mode, toggleTheme } = useThemeStore()
   const openCommandPalette = useCommandPaletteStore((s) => s.openPalette)
@@ -101,6 +67,12 @@ const Header: React.FC = () => {
 
   const [isBellOpen, setIsBellOpen] = useState(false)
 
+  // 마운트 시 1회 로드 — 벨을 열기 전에도 읽지 않음 배지가 보이도록.
+  useEffect(() => {
+    fetchNotifications()
+  }, [fetchNotifications])
+
+  // 드롭다운을 열 때마다 최신 상태로 갱신.
   useEffect(() => {
     if (isBellOpen) fetchNotifications()
   }, [isBellOpen, fetchNotifications])
@@ -291,6 +263,21 @@ const Header: React.FC = () => {
   useOnClickOutside(userMenuRef, () => setIsUserOpen(false))
   useOnClickOutside(settingsMenuRef, () => setIsSettingsOpen(false))
 
+  // Escape로 열린 드롭다운 닫기 (데스크톱 메뉴는 모달이 아니므로 포커스 트랩 대신
+  // Escape + 클릭아웃 패턴을 사용)
+  useEffect(() => {
+    const anyOpen = isBellOpen || isUserOpen || isSettingsOpen
+    if (!anyOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setIsBellOpen(false)
+      setIsUserOpen(false)
+      setIsSettingsOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [isBellOpen, isUserOpen, isSettingsOpen])
+
   // 국가 브라우즈(/country)와 국가 상세(/country/:id/*) 모두 "국가" 메뉴를 활성 상태로 표시
   const isCountryBrowseActive = /^\/country(\/|$)/.test(location.pathname)
 
@@ -373,6 +360,23 @@ const Header: React.FC = () => {
       active: location.pathname.startsWith('/companies'),
     },
   ]
+
+  // 알림 클릭: 읽음 처리 후 관련 목록으로 이동하고 항상 패널을 닫는다.
+  const handleSelectNotification = useCallback(
+    (msg: NotificationMessage) => {
+      playClickSound()
+      markOneRead(msg.id)
+      const listPath = getNotificationListPath(msg.ownerType)
+      if (listPath) navigate(listPath)
+      setIsBellOpen(false)
+    },
+    [playClickSound, markOneRead, navigate],
+  )
+
+  const handleMarkAllRead = useCallback(() => {
+    playClickSound()
+    markAllRead()
+  }, [playClickSound, markAllRead])
 
   const unreadCount = messages.filter((item) => item.unread).length
 
@@ -555,65 +559,41 @@ const Header: React.FC = () => {
 
           <div ref={bellMenuRef} style={{ position: 'relative' }}>
             <IconButton
-              aria-label="알림"
+              aria-label={
+                unreadCount > 0
+                  ? `알림, 읽지 않음 ${unreadCount}개`
+                  : '알림'
+              }
+              aria-haspopup="menu"
+              aria-expanded={isBellOpen}
               onClick={() => {
                 playClickSound()
                 setIsBellOpen((prev) => !prev)
               }}
             >
               <FiBell size={18} />
-              {unreadCount > 0 && <Badge>{unreadCount}</Badge>}
+              {unreadCount > 0 && (
+                <Badge>{unreadCount > 99 ? '99+' : unreadCount}</Badge>
+              )}
             </IconButton>
-            <DropdownMenu $isOpen={isBellOpen} style={{ right: 0, width: 320 }}>
-              <DropdownHeaderRow>
-                <DropdownTitle>메시지</DropdownTitle>
-                <SmallButton
-                  type="button"
-                  onClick={() => {
-                    playClickSound()
-                    markAllRead()
-                  }}
+            <AnimatePresence>
+              {isBellOpen && (
+                <BellDropdown
+                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
                 >
-                  모두 읽음
-                </SmallButton>
-              </DropdownHeaderRow>
-              <MessageList>
-                {messages.length === 0 && (
-                  <EmptyNotice>메시지가 없습니다</EmptyNotice>
-                )}
-                {messages.map((msg) => (
-                  <MessageRow
-                    key={msg.id}
-                    $unread={!!msg.unread}
-                    onClick={() => {
-                      playClickSound()
-                      markOneRead(msg.id)
-                      const listPath = getNotificationListPath(msg.ownerType)
-                      if (listPath) {
-                        navigate(listPath)
-                        setIsBellOpen(false)
-                      }
-                    }}
-                  >
-                    <UnreadDot $visible={!!msg.unread} />
-                    <MessageBody>
-                      <MessageTitleRow>
-                        {getNotificationEntityTypeLabel(msg.ownerType) && (
-                          <EntityTypeChip>
-                            {getNotificationEntityTypeLabel(msg.ownerType)}
-                          </EntityTypeChip>
-                        )}
-                        <MessageTitle>{msg.title}</MessageTitle>
-                      </MessageTitleRow>
-                      {msg.preview && (
-                        <MessagePreview>{msg.preview}</MessagePreview>
-                      )}
-                      <MessageMeta>{formatMessageTime(msg.time)}</MessageMeta>
-                    </MessageBody>
-                  </MessageRow>
-                ))}
-              </MessageList>
-            </DropdownMenu>
+                  <NotificationPanelBody
+                    messages={messages}
+                    showTitle
+                    isLoading={isLoading}
+                    onMarkAllRead={handleMarkAllRead}
+                    onSelect={handleSelectNotification}
+                  />
+                </BellDropdown>
+              )}
+            </AnimatePresence>
           </div>
 
           <div ref={userMenuRef} style={{ position: 'relative' }}>
@@ -756,53 +736,12 @@ const Header: React.FC = () => {
                 </MobileCloseButton>
               </ModalHeader>
               <ModalContent>
-                <DropdownHeaderRow>
-                  <SmallButton
-                    type="button"
-                    onClick={() => {
-                      playClickSound()
-                      markAllRead()
-                    }}
-                  >
-                    모두 읽음
-                  </SmallButton>
-                </DropdownHeaderRow>
-                <MessageList>
-                  {messages.length === 0 && (
-                    <EmptyNotice>메시지가 없습니다</EmptyNotice>
-                  )}
-                  {messages.map((msg) => (
-                    <MessageRow
-                      key={msg.id}
-                      $unread={!!msg.unread}
-                      onClick={() => {
-                        playClickSound()
-                        markOneRead(msg.id)
-                        const listPath = getNotificationListPath(msg.ownerType)
-                        if (listPath) {
-                          navigate(listPath)
-                          setIsBellOpen(false)
-                        }
-                      }}
-                    >
-                      <UnreadDot $visible={!!msg.unread} />
-                      <MessageBody>
-                        <MessageTitleRow>
-                          {getNotificationEntityTypeLabel(msg.ownerType) && (
-                            <EntityTypeChip>
-                              {getNotificationEntityTypeLabel(msg.ownerType)}
-                            </EntityTypeChip>
-                          )}
-                          <MessageTitle>{msg.title}</MessageTitle>
-                        </MessageTitleRow>
-                        {msg.preview && (
-                          <MessagePreview>{msg.preview}</MessagePreview>
-                        )}
-                        <MessageMeta>{formatMessageTime(msg.time)}</MessageMeta>
-                      </MessageBody>
-                    </MessageRow>
-                  ))}
-                </MessageList>
+                <NotificationPanelBody
+                  messages={messages}
+                  isLoading={isLoading}
+                  onMarkAllRead={handleMarkAllRead}
+                  onSelect={handleSelectNotification}
+                />
               </ModalContent>
             </MobileModal>
           </>
@@ -1376,183 +1315,29 @@ const SettingsDropdown = styled(DropdownMenu)`
   padding: 20px;
 `
 
-const DropdownHeaderRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 4px 14px;
-  margin-bottom: 4px;
-`
+/**
+ * 벨 알림 드롭다운 — 표시 여부는 AnimatePresence 조건부 마운트로 제어하므로
+ * DropdownMenu의 display 토글 대신 motion 진입/퇴장 애니메이션을 사용한다.
+ * (데스크톱 전용: 모바일은 별도 모달이 처리하므로 여기선 숨김)
+ */
+const BellDropdown = styled(motion.div)`
+  position: absolute;
+  top: 44px;
+  right: 0;
+  width: 320px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 20px;
+  box-shadow:
+    0 20px 50px ${({ theme }) => theme.colors.shadow.lg},
+    0 4px 12px ${({ theme }) => theme.colors.shadow.sm};
+  padding: 12px;
+  transform-origin: top right;
+  z-index: ${Z_INDEX.HEADER};
 
-const DropdownTitle = styled.div`
-  font-size: 14px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const SmallButton = styled.button`
-  height: 34px;
-  padding: 0 14px;
-  border: none;
-  border-radius: 12px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.primary};
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.activeLight};
-    color: ${({ theme }) => theme.colors.button.hover};
+  @media (max-width: 768px) {
+    display: none;
   }
-
-  &:active {
-    background: ${({ theme }) => theme.colors.activeLight};
-  }
-`
-
-const MessageList = styled.div`
-  max-height: 380px;
-  overflow-y: auto;
-  padding: 8px 4px;
-  margin-top: 4px;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: ${({ theme }) => theme.colors.background.primary};
-    border-radius: 6px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: ${({ theme }) => theme.colors.border.default};
-    border-radius: 6px;
-  }
-
-  &::-webkit-scrollbar-thumb:hover {
-    background: ${({ theme }) => theme.colors.border.medium};
-  }
-`
-
-const EmptyNotice = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 52px 28px;
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  text-align: center;
-  gap: 14px;
-  border-radius: 16px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-
-  &::before {
-    content: '🔔';
-    font-size: 44px;
-    opacity: 0.6;
-  }
-`
-
-const MessageRow = styled.button<{ $unread: boolean }>`
-  width: 100%;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px 14px;
-  margin-bottom: 8px;
-  border: none;
-  background: ${({ $unread, theme }) =>
-    $unread ? theme.colors.background.secondary : 'transparent'};
-  border-radius: 16px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s ease;
-  border-left: 4px solid
-    ${({ $unread, theme }) => ($unread ? theme.colors.primary : 'transparent')};
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-
-  &:active {
-    transform: scale(0.99);
-  }
-`
-
-const UnreadDot = styled.span<{ $visible: boolean }>`
-  width: 10px;
-  height: 10px;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: ${({ theme }) => theme.colors.primary};
-  opacity: ${({ $visible }) => ($visible ? 1 : 0)};
-  box-shadow: ${({ $visible, theme }) =>
-    $visible ? `0 0 0 2px ${theme.colors.activeLight}` : 'none'};
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-`
-
-const MessageBody = styled.div`
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`
-
-const MessageTitleRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 2px;
-`
-
-const EntityTypeChip = styled.span`
-  display: inline-block;
-  padding: 5px 10px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.primary};
-  background: ${({ theme }) => theme.colors.activeLight};
-  flex-shrink: 0;
-`
-
-const MessageTitle = styled.div`
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-weight: 600;
-  line-height: 1.45;
-  min-width: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-`
-
-const MessagePreview = styled.div`
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-`
-
-const MessageMeta = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-weight: 500;
 `
 
 const ProfileHeader = styled.div`
