@@ -305,12 +305,18 @@ export function LifeSection({
               </DeathTypeGrouped>
               <FormInput
                 value={deathCause}
-                onChange={(e) => setDeathCause(e.target.value)}
+                onChange={(e) => {
+                  setDeathCause(e.target.value)
+                  markDirty()
+                }}
                 placeholder="사망 원인 상세"
               />
               <Textarea
                 value={deathNote}
-                onChange={(e) => setDeathNote(e.target.value)}
+                onChange={(e) => {
+                  setDeathNote(e.target.value)
+                  markDirty()
+                }}
                 placeholder="사망 메모 (논란·맥락·비고)"
                 rows={2}
               />
@@ -348,19 +354,28 @@ export function LifeSection({
                 <FormInput
                   id={fid('regnalName')}
                   value={regnalName}
-                  onChange={(e) => setRegnalName(e.target.value)}
+                  onChange={(e) => {
+                    setRegnalName(e.target.value)
+                    markDirty()
+                  }}
                   placeholder="군주명·재위명"
                 />
                 <FormInput
                   id={fid('templeName')}
                   value={templeName}
-                  onChange={(e) => setTempleName(e.target.value)}
+                  onChange={(e) => {
+                    setTempleName(e.target.value)
+                    markDirty()
+                  }}
                   placeholder="묘호"
                 />
                 <FormInput
                   id={fid('posthumousName')}
                   value={posthumousName}
-                  onChange={(e) => setPosthumousName(e.target.value)}
+                  onChange={(e) => {
+                    setPosthumousName(e.target.value)
+                    markDirty()
+                  }}
                   placeholder="시호"
                 />
               </InlineFields>

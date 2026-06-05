@@ -4,6 +4,7 @@
  */
 import type { Era } from '@/shared/api/persons'
 import type { PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
+import type { CountryAffiliationRow } from './sections/country-affiliations-section'
 
 // ─── Options ──────────────────────────────────────────────────────────────────
 
@@ -16,6 +17,14 @@ export const GENDER_OPTIONS: SegOption<string>[] = [
   { value: 'MALE', label: '남성' },
   { value: 'FEMALE', label: '여성' },
 ]
+
+/** 필수 필드 에러 메시지 — blur·submit 검증이 동일 문구를 쓰도록 단일 정의. */
+export const REQUIRED_MESSAGES = {
+  name: '이름을 입력해주세요.',
+  surname: '성을 입력해주세요.',
+  gender: '성별을 선택해주세요.',
+  countryId: '소속(출생) 국가를 선택해주세요.',
+} as const
 
 /** 자주 사용하는 5개. 나머지는 "더보기"로 접기. */
 export const PRIMARY_DEATH_TYPES: SegOption<string>[] = [
@@ -215,6 +224,7 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   deathMonth: string
   deathDay: string
   countryId: string
+  countryAffiliations: CountryAffiliationRow[]
   birthCityId: string
   deathCityId: string
   birthPlace: PlaceResult | null

@@ -85,6 +85,70 @@ export function FamilySection({
   const handleCreatedPerson = (p: PersonResponseDto) =>
     setPersons((prev) => [...prev, p])
 
+  /** "최근 등록" 칩의 슬롯 지정 버튼 — 글리프/라벨/setter만 다름. */
+  const recentSlots: ReadonlyArray<{
+    glyph: string
+    label: string
+    setId: (id: string) => void
+  }> = [
+    { glyph: '父', label: '아버지로 지정', setId: setFatherId },
+    { glyph: '母', label: '어머니로 지정', setId: setMotherId },
+    { glyph: '配', label: '배우자로 지정', setId: setSpouseId },
+  ]
+
+  /**
+   * 부/모/배우자 PersonSelectModal — show/exclude/문구만 다른 동일 구조.
+   * 3중 복붙 대신 config로 구동해 exclude 리스트가 서로 어긋나는 실수를 막는다.
+   */
+  const selectSlots: ReadonlyArray<{
+    slot: 'father' | 'mother' | 'spouse'
+    show: boolean
+    setShow: (v: boolean) => void
+    selectedId: string
+    setId: (id: string) => void
+    excludeIds: string[]
+    excludeReason: string
+    title: string
+    searchPlaceholder: string
+  }> = [
+    {
+      slot: 'father',
+      show: showFatherModal,
+      setShow: setShowFatherModal,
+      selectedId: fatherId,
+      setId: setFatherId,
+      excludeIds: [editPersonId ?? '', motherId, spouseId],
+      excludeReason:
+        '자기 자신, 어머니·배우자로 지정한 인물은 아버지로 선택할 수 없습니다.',
+      title: '아버지 선택',
+      searchPlaceholder: '아버지로 등록할 인물을 검색…',
+    },
+    {
+      slot: 'mother',
+      show: showMotherModal,
+      setShow: setShowMotherModal,
+      selectedId: motherId,
+      setId: setMotherId,
+      excludeIds: [editPersonId ?? '', fatherId, spouseId],
+      excludeReason:
+        '자기 자신, 아버지·배우자로 지정한 인물은 어머니로 선택할 수 없습니다.',
+      title: '어머니 선택',
+      searchPlaceholder: '어머니로 등록할 인물을 검색…',
+    },
+    {
+      slot: 'spouse',
+      show: showSpouseModal,
+      setShow: setShowSpouseModal,
+      selectedId: spouseId,
+      setId: setSpouseId,
+      excludeIds: [editPersonId ?? '', fatherId, motherId],
+      excludeReason:
+        '자기 자신, 아버지·어머니로 지정한 인물은 배우자로 선택할 수 없습니다.',
+      title: '배우자 선택',
+      searchPlaceholder: '배우자로 등록할 인물을 검색…',
+    },
+  ]
+
   /**
    * "최근 등록" 후보 — 단일 행으로 카드 상단 1회만. 슬롯 라벨이 chip 우측에 작은 secondary 액션
    * 으로 따라붙어 "어떤 슬롯에 넣을지" 한 번에 선택 가능. 이전: 슬롯별 3회 반복(시각 잡음).
@@ -98,33 +162,20 @@ export function FamilySection({
           <RecentChipGroup key={p.id} title={getPersonDisplayName(p)}>
             <RecentChipName>{getPersonDisplayName(p)}</RecentChipName>
             <RecentChipActions>
-              <RecentSlotBtn
-                type="button"
-                onClick={() => {
-                  setFatherId(p.id)
-                  markDirty()
-                }}
-              >
-                父
-              </RecentSlotBtn>
-              <RecentSlotBtn
-                type="button"
-                onClick={() => {
-                  setMotherId(p.id)
-                  markDirty()
-                }}
-              >
-                母
-              </RecentSlotBtn>
-              <RecentSlotBtn
-                type="button"
-                onClick={() => {
-                  setSpouseId(p.id)
-                  markDirty()
-                }}
-              >
-                配
-              </RecentSlotBtn>
+              {recentSlots.map((slot) => (
+                <RecentSlotBtn
+                  key={slot.glyph}
+                  type="button"
+                  aria-label={`${getPersonDisplayName(p)} ${slot.label}`}
+                  title={slot.label}
+                  onClick={() => {
+                    slot.setId(p.id)
+                    markDirty()
+                  }}
+                >
+                  {slot.glyph}
+                </RecentSlotBtn>
+              ))}
             </RecentChipActions>
           </RecentChipGroup>
         ))}
@@ -190,60 +241,27 @@ export function FamilySection({
           />
         </FieldControl>
       </FieldRow>
-      {/* PersonSelectModal — 슬롯별 모달은 그대로(검색·exclude·생성 등 동작 보존) */}
-      {showFatherModal && (
-        <PersonSelectModal
-          persons={persons}
-          selectedPersonId={fatherId}
-          onSelect={(id) => {
-            setFatherId(id)
-            setShowFatherModal(false)
-            markDirty()
-          }}
-          onClose={() => setShowFatherModal(false)}
-          excludeIds={[editPersonId ?? '', motherId, spouseId].filter(Boolean)}
-          excludeReason="자기 자신, 어머니·배우자로 지정한 인물은 아버지로 선택할 수 없습니다."
-          title="아버지 선택"
-          searchPlaceholder="아버지로 등록할 인물을 검색…"
-          defaultCountryId={countryId || undefined}
-          onCreatedPerson={handleCreatedPerson}
-        />
-      )}
-      {showMotherModal && (
-        <PersonSelectModal
-          persons={persons}
-          selectedPersonId={motherId}
-          onSelect={(id) => {
-            setMotherId(id)
-            setShowMotherModal(false)
-            markDirty()
-          }}
-          onClose={() => setShowMotherModal(false)}
-          excludeIds={[editPersonId ?? '', fatherId, spouseId].filter(Boolean)}
-          excludeReason="자기 자신, 아버지·배우자로 지정한 인물은 어머니로 선택할 수 없습니다."
-          title="어머니 선택"
-          searchPlaceholder="어머니로 등록할 인물을 검색…"
-          defaultCountryId={countryId || undefined}
-          onCreatedPerson={handleCreatedPerson}
-        />
-      )}
-      {showSpouseModal && (
-        <PersonSelectModal
-          persons={persons}
-          selectedPersonId={spouseId}
-          onSelect={(id) => {
-            setSpouseId(id)
-            setShowSpouseModal(false)
-            markDirty()
-          }}
-          onClose={() => setShowSpouseModal(false)}
-          excludeIds={[editPersonId ?? '', fatherId, motherId].filter(Boolean)}
-          excludeReason="자기 자신, 아버지·어머니로 지정한 인물은 배우자로 선택할 수 없습니다."
-          title="배우자 선택"
-          searchPlaceholder="배우자로 등록할 인물을 검색…"
-          defaultCountryId={countryId || undefined}
-          onCreatedPerson={handleCreatedPerson}
-        />
+      {/* PersonSelectModal — 슬롯별 모달(검색·exclude·생성 동작 보존). config 구동. */}
+      {selectSlots.map((slot) =>
+        slot.show ? (
+          <PersonSelectModal
+            key={slot.slot}
+            persons={persons}
+            selectedPersonId={slot.selectedId}
+            onSelect={(id) => {
+              slot.setId(id)
+              slot.setShow(false)
+              markDirty()
+            }}
+            onClose={() => slot.setShow(false)}
+            excludeIds={slot.excludeIds.filter(Boolean)}
+            excludeReason={slot.excludeReason}
+            title={slot.title}
+            searchPlaceholder={slot.searchPlaceholder}
+            defaultCountryId={countryId || undefined}
+            onCreatedPerson={handleCreatedPerson}
+          />
+        ) : null,
       )}
     </FormRows>
   )

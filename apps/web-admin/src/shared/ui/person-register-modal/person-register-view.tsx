@@ -64,6 +64,7 @@ import {
 
 import {
   GENDER_OPTIONS,
+  REQUIRED_MESSAGES,
   type PersonDraftSnapshot,
   buildInitialDate,
   calcLifespan,
@@ -89,7 +90,6 @@ import {
   AdvancedToggleDesc,
   AdvancedToggleIcon,
   AdvancedToggleTitle,
-  AutoSaveStatus,
   DraftBanner,
   DraftBannerActions,
   DraftBannerIcon,
@@ -97,7 +97,6 @@ import {
   DraftDiscardBtn,
   DraftRestoreBtn,
   FieldError,
-  FieldRowMulti,
   HeroMetaChip,
   InlineFields,
   LoadingHost,
@@ -145,6 +144,36 @@ export interface PersonRegisterViewProps {
   }) => void
   /** 제출 버튼 라벨이 변할 때 부모에게 알림 (페이지 모드 sticky 푸터 버튼용) */
   onSubmitLabelChange?: (label: string) => void
+}
+
+/**
+ * 폼 필드 단일 레지스트리용 디스크립터.
+ * snapshot(저장)·reset(초기화)·restore(임시저장 복원)가 모두 이 목록에서 파생되어,
+ * 필드를 추가/삭제할 때 세 곳을 따로 고치다 빠뜨리는 drift를 구조적으로 차단한다.
+ */
+type FormFieldDesc = {
+  key: keyof PersonDraftSnapshot
+  /** 현재 값 읽기 (snapshot 직렬화용) */
+  get: () => unknown
+  /** 기본값으로 초기화 (reset) */
+  reset: () => void
+  /** 직렬화된 raw 값으로 복원 — 누락 시 기본값 (restore) */
+  restore: (raw: unknown) => void
+}
+
+/** 타입세이프 필드 디스크립터 팩토리 — 키별 값 타입을 setter와 묶어 캡처. */
+function makeFormField<K extends keyof PersonDraftSnapshot>(
+  key: K,
+  get: () => PersonDraftSnapshot[K],
+  set: (v: PersonDraftSnapshot[K]) => void,
+  def: PersonDraftSnapshot[K],
+): FormFieldDesc {
+  return {
+    key,
+    get,
+    reset: () => set(def),
+    restore: (raw) => set((raw as PersonDraftSnapshot[K] | undefined) ?? def),
+  }
 }
 
 export function PersonRegisterView({
@@ -219,9 +248,6 @@ export function PersonRegisterView({
   const [showSpouseModal, setShowSpouseModal] = useState(false)
   const [showDynastyModal, setShowDynastyModal] = useState(false)
   const [showReligionModal, setShowReligionModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<
-    'basic' | 'life' | 'affiliation' | 'family'
-  >('basic')
   /** 기본 탭의 "이름의 뜻" 접기 영역 */
   const [nameMeaningsOpen, setNameMeaningsOpen] = useState(false)
   /** 생애 탭의 "군주명·묘호·시호" 접기 영역 — 군주가 아닌 인물에겐 영구 무관 */
@@ -487,83 +513,6 @@ export function PersonRegisterView({
     deathDay,
   ])
 
-  /** 탭별 필수 미입력 카운트 (라이브 — 입력하면 즉시 줄어듦) */
-  const requiredMissingByTab = useMemo(() => {
-    const basic =
-      (name.trim() ? 0 : 1) +
-      (surname.trim() ? 0 : 1) +
-      (gender ? 0 : 1)
-    const life = 0
-    const affiliation = countryId ? 0 : 1
-    const family = 0
-    return { basic, life, affiliation, family }
-  }, [name, surname, gender, countryId])
-
-  /** 진행도 — 필수 N/4. 사용자가 폼 끝까지 안 가도 진행감을 유지. */
-  const requiredProgress = useMemo(() => {
-    const total = 4
-    const missing =
-      requiredMissingByTab.basic +
-      requiredMissingByTab.life +
-      requiredMissingByTab.affiliation +
-      requiredMissingByTab.family
-    return { filled: total - missing, total }
-  }, [requiredMissingByTab])
-
-  /** 탭별 선택 입력 채워짐 인디케이터(✓) — 필수 외 정보가 들어 있는지 */
-  const filledByTab = useMemo(() => {
-    // 기본 — 약력·원어·이름의 뜻 (이름·성·성별은 필수, 채움 인디케이터에서 제외)
-    const basic = !!(
-      originalName.trim() ||
-      surnameMeaning.trim() ||
-      nameMeaning.trim() ||
-      middleNameMeaning.trim() ||
-      profileImageUrl.trim() ||
-      pendingThumbnailFile
-    )
-    // 생애 — 생몰 정보 + 군주 호칭
-    const life = !!(
-      birthYear.trim() ||
-      deathYear.trim() ||
-      isBirthDateUnknown ||
-      isDeathDateUnknown ||
-      isAlive ||
-      regnalName.trim() ||
-      templeName.trim() ||
-      posthumousName.trim()
-    )
-    const affiliation = !!(
-      birthPlace ||
-      deathPlace ||
-      dynastyId ||
-      religionId
-    )
-    const family = !!(fatherId || motherId || spouseId)
-    return { basic, life, affiliation, family }
-  }, [
-    originalName,
-    surnameMeaning,
-    nameMeaning,
-    middleNameMeaning,
-    profileImageUrl,
-    pendingThumbnailFile,
-    birthYear,
-    deathYear,
-    isBirthDateUnknown,
-    isDeathDateUnknown,
-    isAlive,
-    regnalName,
-    templeName,
-    posthumousName,
-    birthPlace,
-    deathPlace,
-    dynastyId,
-    religionId,
-    fatherId,
-    motherId,
-    spouseId,
-  ])
-
   /** SelectModal 형식 — '선택 안 함' 옵션을 맨 위에 prepend. */
   const dynastySelectOptions = useMemo(
     () => [
@@ -609,12 +558,9 @@ export function PersonRegisterView({
 
   /** 인물 풀이 한 번이라도 로드되었는지 — 같은 모달 인스턴스 내 중복 호출 방지. */
   const personsLoadedRef = useRef(false)
-  /** 가족 탭이 활성이거나 PersonSelectModal이 열려 있으면 인물 풀 로드. */
+  /** PersonSelectModal(부·모·배우자)이 열려 있으면 인물 풀 로드. */
   const needsPersons =
-    activeTab === 'family' ||
-    showFatherModal ||
-    showMotherModal ||
-    showSpouseModal
+    showFatherModal || showMotherModal || showSpouseModal
   useEffect(() => {
     if (!needsPersons || personsLoadedRef.current) return
     personsLoadedRef.current = true
@@ -640,9 +586,77 @@ export function PersonRegisterView({
     }
   }, [thumbnailObjectUrl])
 
+  /**
+   * 폼 필드 단일 레지스트리 — snapshot/reset/restore가 모두 여기서 파생.
+   * (countryId의 reset만 "또 등록" 국가 보존 로직이 있어 reset effect에서 별도 처리)
+   */
+  const formFields: FormFieldDesc[] = [
+    makeFormField('name', () => name, setName, ''),
+    makeFormField('surname', () => surname, setSurname, ''),
+    makeFormField('middleName', () => middleName, setMiddleName, ''),
+    makeFormField('nameFormat', () => nameFormat, setNameFormat, 'korean'),
+    makeFormField('originalName', () => originalName, setOriginalName, ''),
+    makeFormField('surnameMeaning', () => surnameMeaning, setSurnameMeaning, ''),
+    makeFormField('nameMeaning', () => nameMeaning, setNameMeaning, ''),
+    makeFormField(
+      'middleNameMeaning',
+      () => middleNameMeaning,
+      setMiddleNameMeaning,
+      '',
+    ),
+    makeFormField('gender', () => gender, setGender, ''),
+    makeFormField(
+      'isBirthDateUnknown',
+      () => isBirthDateUnknown,
+      setIsBirthDateUnknown,
+      false,
+    ),
+    makeFormField('birthEra', () => birthEra, setBirthEra, 'AD'),
+    makeFormField('birthYear', () => birthYear, setBirthYear, ''),
+    makeFormField('birthMonth', () => birthMonth, setBirthMonth, ''),
+    makeFormField('birthDay', () => birthDay, setBirthDay, ''),
+    makeFormField(
+      'isDeathDateUnknown',
+      () => isDeathDateUnknown,
+      setIsDeathDateUnknown,
+      false,
+    ),
+    makeFormField('isAlive', () => isAlive, setIsAlive, false),
+    makeFormField('deathEra', () => deathEra, setDeathEra, 'AD'),
+    makeFormField('deathType', () => deathType, setDeathType, ''),
+    makeFormField('deathCause', () => deathCause, setDeathCause, ''),
+    makeFormField('deathNote', () => deathNote, setDeathNote, ''),
+    makeFormField('deathYear', () => deathYear, setDeathYear, ''),
+    makeFormField('deathMonth', () => deathMonth, setDeathMonth, ''),
+    makeFormField('deathDay', () => deathDay, setDeathDay, ''),
+    makeFormField('countryId', () => countryId, setCountryId, ''),
+    makeFormField(
+      'countryAffiliations',
+      () => countryAffiliations,
+      setCountryAffiliations,
+      [],
+    ),
+    makeFormField('birthCityId', () => birthCityId, setBirthCityId, ''),
+    makeFormField('deathCityId', () => deathCityId, setDeathCityId, ''),
+    makeFormField('birthPlace', () => birthPlace, setBirthPlace, null),
+    makeFormField('deathPlace', () => deathPlace, setDeathPlace, null),
+    makeFormField('dynastyId', () => dynastyId, setDynastyId, ''),
+    makeFormField('religionId', () => religionId, setReligionId, ''),
+    makeFormField('fatherId', () => fatherId, setFatherId, ''),
+    makeFormField('motherId', () => motherId, setMotherId, ''),
+    makeFormField('spouseId', () => spouseId, setSpouseId, ''),
+    makeFormField('spouseNote', () => spouseNote, setSpouseNote, ''),
+    makeFormField('profileImageUrl', () => profileImageUrl, setProfileImageUrl, ''),
+    makeFormField('regnalName', () => regnalName, setRegnalName, ''),
+    makeFormField('templeName', () => templeName, setTempleName, ''),
+    makeFormField('posthumousName', () => posthumousName, setPosthumousName, ''),
+  ]
+  /** snapshot이 deps 없이도 최신 값을 읽도록 ref로 노출 (필드 추가 시 deps 누락 무관). */
+  const formFieldsRef = useRef(formFields)
+  formFieldsRef.current = formFields
+
   // ─── 신규/수정 진입 시 폼 초기화 또는 서버 로드 ───────────────────────────
   useEffect(() => {
-    setActiveTab('basic')
     dirtyTrackingEnabledRef.current = false
     setIsDirty(false)
     setErrors({})
@@ -654,50 +668,16 @@ export function PersonRegisterView({
       setMonarchTitlesOpen(false)
       setMoreOpen(false)
       autoExpandedDetailsRef.current = false
-      setName('')
-      setSurname('')
-      setMiddleName('')
-      setNameFormat('korean')
-      setOriginalName('')
-      setSurnameMeaning('')
-      setNameMeaning('')
-      setMiddleNameMeaning('')
-      setGender('')
-      setProfileImageUrl('')
-      setRegnalName('')
-      setTempleName('')
-      setPosthumousName('')
       // "또 등록" 흐름에서 직전 등록 국가 보존(`preserveCountryIdRef`).
       // 일반 reset에서는 initialCountryId(부모가 흘린 값)으로 폴백.
       const nextCountryId = preserveCountryIdRef.current ?? initialCountryId ?? ''
       preserveCountryIdRef.current = null
-      setCountryId(nextCountryId)
+      // 폼 필드는 레지스트리에서 일괄 초기화 — countryId만 보존 국가로 대체.
+      formFieldsRef.current.forEach((field) =>
+        field.key === 'countryId' ? setCountryId(nextCountryId) : field.reset(),
+      )
+      // 스냅샷 외 transient 상태는 명시 초기화.
       setCountryName('')
-      setCountryAffiliations([])
-      setBirthCityId('')
-      setDeathCityId('')
-      setBirthPlace(null)
-      setDeathPlace(null)
-      setDynastyId('')
-      setReligionId('')
-      setFatherId('')
-      setMotherId('')
-      setSpouseId('')
-      setSpouseNote('')
-      setBirthEra('AD')
-      setBirthYear('')
-      setBirthMonth('')
-      setBirthDay('')
-      setIsBirthDateUnknown(false)
-      setDeathEra('AD')
-      setDeathYear('')
-      setDeathMonth('')
-      setDeathDay('')
-      setIsDeathDateUnknown(false)
-      setIsAlive(false)
-      setDeathType('')
-      setDeathCause('')
-      setDeathNote('')
       setPendingThumbnailFile(null)
       setThumbnailObjectUrl(null)
       setThumbnailMarkedForRemoval(false)
@@ -894,87 +874,12 @@ export function PersonRegisterView({
   }, [countryId, modernCountries, historicalCountries])
 
   // ─── Draft (localStorage) ──────────────────────────────────────────────────
+  // 레지스트리에서 직렬화 — 필드별 deps 나열 없이 항상 최신 값을 읽는다(formFieldsRef).
   const buildDraftSnapshot = useCallback((): PersonDraftSnapshot => {
-    return {
-      name,
-      surname,
-      middleName,
-      nameFormat,
-      originalName,
-      surnameMeaning,
-      nameMeaning,
-      middleNameMeaning,
-      gender,
-      isBirthDateUnknown,
-      birthEra,
-      birthYear,
-      birthMonth,
-      birthDay,
-      isDeathDateUnknown,
-      isAlive,
-      deathEra,
-      deathType,
-      deathCause,
-      deathNote,
-      deathYear,
-      deathMonth,
-      deathDay,
-      countryId,
-      birthCityId,
-      deathCityId,
-      birthPlace,
-      deathPlace,
-      dynastyId,
-      religionId,
-      fatherId,
-      motherId,
-      spouseId,
-      spouseNote,
-      profileImageUrl,
-      regnalName,
-      templeName,
-      posthumousName,
-    }
-  }, [
-    name,
-    surname,
-    middleName,
-    nameFormat,
-    originalName,
-    surnameMeaning,
-    nameMeaning,
-    middleNameMeaning,
-    gender,
-    isBirthDateUnknown,
-    birthEra,
-    birthYear,
-    birthMonth,
-    birthDay,
-    isDeathDateUnknown,
-    isAlive,
-    deathEra,
-    deathType,
-    deathCause,
-    deathNote,
-    deathYear,
-    deathMonth,
-    deathDay,
-    countryId,
-    birthCityId,
-    deathCityId,
-    birthPlace,
-    deathPlace,
-    dynastyId,
-    religionId,
-    fatherId,
-    motherId,
-    spouseId,
-    spouseNote,
-    profileImageUrl,
-    regnalName,
-    templeName,
-    posthumousName,
-  ])
+    const snap: Record<string, unknown> = {}
+    for (const field of formFieldsRef.current) snap[field.key] = field.get()
+    return snap as PersonDraftSnapshot
+  }, [])
 
   const draft = usePersonDraft<PersonDraftSnapshot>({
     scopeId: draftScopeId,
@@ -1008,45 +913,10 @@ export function PersonRegisterView({
     const d = env.data
     // dirty 추적 일시 정지 — 한 번에 setState 채우는 동안.
     dirtyTrackingEnabledRef.current = false
-    setName(d.name ?? '')
-    setSurname(d.surname ?? '')
-    setMiddleName(d.middleName ?? '')
-    setNameFormat(d.nameFormat ?? 'korean')
-    setOriginalName(d.originalName ?? '')
-    setSurnameMeaning(d.surnameMeaning ?? '')
-    setNameMeaning(d.nameMeaning ?? '')
-    setMiddleNameMeaning(d.middleNameMeaning ?? '')
-    setGender(d.gender ?? '')
-    setIsBirthDateUnknown(d.isBirthDateUnknown ?? false)
-    setBirthEra(d.birthEra ?? 'AD')
-    setBirthYear(d.birthYear ?? '')
-    setBirthMonth(d.birthMonth ?? '')
-    setBirthDay(d.birthDay ?? '')
-    setIsDeathDateUnknown(d.isDeathDateUnknown ?? false)
-    setIsAlive(d.isAlive ?? false)
-    setDeathEra(d.deathEra ?? 'AD')
-    setDeathType(d.deathType ?? '')
-    setDeathCause(d.deathCause ?? '')
-    setDeathNote(d.deathNote ?? '')
-    setDeathYear(d.deathYear ?? '')
-    setDeathMonth(d.deathMonth ?? '')
-    setDeathDay(d.deathDay ?? '')
-    setCountryId(d.countryId ?? '')
-    setCountryAffiliations([])
-    setBirthCityId(d.birthCityId ?? '')
-    setDeathCityId(d.deathCityId ?? '')
-    setBirthPlace(d.birthPlace ?? null)
-    setDeathPlace(d.deathPlace ?? null)
-    setDynastyId(d.dynastyId ?? '')
-    setReligionId(d.religionId ?? '')
-    setFatherId(d.fatherId ?? '')
-    setMotherId(d.motherId ?? '')
-    setSpouseId(d.spouseId ?? '')
-    setSpouseNote(d.spouseNote ?? '')
-    setProfileImageUrl(d.profileImageUrl ?? '')
-    setRegnalName(d.regnalName ?? '')
-    setTempleName(d.templeName ?? '')
-    setPosthumousName(d.posthumousName ?? '')
+    // 폼 필드는 레지스트리에서 일괄 복원 (누락 키는 각 필드 기본값).
+    formFieldsRef.current.forEach((field) =>
+      field.restore((d as Record<string, unknown>)[field.key]),
+    )
     setPendingDraftSavedAt(null)
     requestAnimationFrame(() => {
       dirtyTrackingEnabledRef.current = true
@@ -1438,18 +1308,16 @@ export function PersonRegisterView({
     value: string,
   ) => {
     if (!value.trim()) {
-      const msg =
-        key === 'name' ? '이름을 입력해주세요.' : '성을 입력해주세요.'
-      setOrClearError(key, msg)
+      setOrClearError(key, REQUIRED_MESSAGES[key])
     }
   }
 
   const validate = (): boolean => {
     const e: Record<string, string> = {}
-    if (!name.trim()) e.name = '이름을 입력해주세요.'
-    if (!surname.trim()) e.surname = '성을 입력해주세요.'
-    if (!gender) e.gender = '성별을 선택해주세요.'
-    if (!countryId) e.countryId = '소속(출생) 국가를 선택해주세요.'
+    if (!name.trim()) e.name = REQUIRED_MESSAGES.name
+    if (!surname.trim()) e.surname = REQUIRED_MESSAGES.surname
+    if (!gender) e.gender = REQUIRED_MESSAGES.gender
+    if (!countryId) e.countryId = REQUIRED_MESSAGES.countryId
     const dateErrs = computeBirthDeathErrors(
       {
         era: birthEra,
@@ -1470,14 +1338,7 @@ export function PersonRegisterView({
     if (dateErrs.birth) e.birth = dateErrs.birth
     if (dateErrs.death) e.death = dateErrs.death
     setErrors(e)
-    if (Object.keys(e).length > 0) {
-      const basicFields = ['name', 'surname', 'gender'] as const
-      const lifeFields = ['birth', 'death'] as const
-      if (basicFields.some((k) => e[k])) setActiveTab('basic')
-      else if (lifeFields.some((k) => e[k])) setActiveTab('life')
-      else if (e.countryId) setActiveTab('affiliation')
-      return false
-    }
+    if (Object.keys(e).length > 0) return false
     return true
   }
 
