@@ -10,6 +10,10 @@ import type { Primitive } from "typia";
 
 import type { AccountMeResponseDto } from "../../../libs/auth/presentation/dto/account-me.response";
 
+export * as change_password from "./change_password/index";
+export * as display_name from "./display_name/index";
+export * as representative_person from "./representative_person/index";
+
 /**
  * @controller AccountController.me
  * @path GET /account/me

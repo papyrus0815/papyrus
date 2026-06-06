@@ -16,6 +16,8 @@ export * as historical_countries from "./historical_countries/index";
 export * as economic_indicators from "./economic_indicators/index";
 export * as demographic_indicators from "./demographic_indicators/index";
 export * as development_indicators from "./development_indicators/index";
+export * as records from "./records/index";
+export * as export_imports from "./export_imports/index";
 
 /**
  * 모든 국가 조회 (본인 등록분만)

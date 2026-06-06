@@ -14,6 +14,7 @@ import type {
   UpdatePersonDto,
 } from "../../../libs/person/presentation/dto";
 
+export * as infographic from "./infographic/index";
 export * as with_government_positions from "./with_government_positions/index";
 export * as dashboard from "./dashboard/index";
 export * as my_evaluations from "./my_evaluations/index";

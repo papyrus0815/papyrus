@@ -14,6 +14,8 @@ import type {
   UpdateEventDto,
 } from "../../../libs/event/presentation/dto";
 
+export * as count from "./count/index";
+export * as on_this_day from "./on_this_day/index";
 export * as parent from "./parent/index";
 export * as deleted from "./deleted/index";
 export * as restore from "./restore/index";
