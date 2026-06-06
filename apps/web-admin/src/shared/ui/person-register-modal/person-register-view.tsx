@@ -37,6 +37,7 @@ import {
   updatePerson,
 } from '@/shared/api/persons'
 import { type PersonResponseDto, getAllPersons } from '@/shared/api/persons'
+import { onContentRegistered } from '@/entities/gamification'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getAllReligions } from '@/shared/api/religions'
 import {
@@ -90,6 +91,8 @@ import {
   AdvancedToggleDesc,
   AdvancedToggleIcon,
   AdvancedToggleTitle,
+  CoreFieldCell,
+  CoreFieldPair,
   DraftBanner,
   DraftBannerActions,
   DraftBannerIcon,
@@ -108,6 +111,9 @@ import {
   NotFoundTitle,
   OriginalNameInputWrap,
   PersonFormLayoutWrap,
+  SectionHeader,
+  SectionHeaderDesc,
+  SectionHeaderTitle,
   ThumbnailCircle,
   ThumbnailHero,
   ThumbnailHeroBody,
@@ -144,6 +150,13 @@ export interface PersonRegisterViewProps {
   }) => void
   /** 제출 버튼 라벨이 변할 때 부모에게 알림 (페이지 모드 sticky 푸터 버튼용) */
   onSubmitLabelChange?: (label: string) => void
+  /**
+   * 현재 렌더 중인 폼 섹션 목록 — 모달 셸의 좌측 scroll-spy 인덱스용.
+   * "더 입력"이 접히면 상세 섹션은 빠지고, 펼치면 추가된다(없는 앵커 클릭 방지).
+   */
+  onSectionsChange?: (
+    sections: { id: string; label: string; filled?: boolean }[],
+  ) => void
 }
 
 /**
@@ -185,6 +198,7 @@ export function PersonRegisterView({
   onDirtyChange,
   onValuesChange,
   onSubmitLabelChange,
+  onSectionsChange,
 }: PersonRegisterViewProps) {
   const isEditMode = Boolean(editPersonId)
   // 기본 정보
@@ -1489,6 +1503,12 @@ export function PersonRegisterView({
       } else {
         const created = await createPerson(createPayload)
         toast.success('인물이 등록되었습니다.')
+        // 게이미피케이션 즉시 갱신 + 완성도 보너스 피드백 (사진·약력·출생연도)
+        onContentRegistered(
+          (created.profileImageUrl ? 1 : 0) +
+            (created.biography ? 1 : 0) +
+            (created.birthYear != null ? 1 : 0),
+        )
         setIsDirty(false)
         draft.discardDraft()
         onSuccess?.(created.id)
@@ -1540,6 +1560,101 @@ export function PersonRegisterView({
   React.useEffect(() => {
     onSubmitLabelChange?.(submitButtonLabel)
   }, [submitButtonLabel, onSubmitLabelChange])
+
+  /**
+   * 좌측 scroll-spy 인덱스용 섹션 목록 — 본문의 data-form-section 앵커와 id가 일치.
+   * "더 입력"이 접히면 상세 섹션 앵커가 DOM에 없으므로 목록에서도 빼, 클릭해도 안 움직이는
+   * 죽은 항목이 생기지 않게 한다(수정 모드는 상세가 있으면 자동 펼침이라 대부분 노출).
+   */
+  const onSectionsChangeRef = useRef(onSectionsChange)
+  onSectionsChangeRef.current = onSectionsChange
+  /** 직전 emit한 섹션 시그니처 — 타이핑마다 동일 내용을 재전송해 부모를 리렌더하지 않도록. */
+  const lastSectionsKeyRef = useRef('')
+  useEffect(() => {
+    const sections: { id: string; label: string; filled?: boolean }[] = [
+      {
+        id: 'basic',
+        label: '기본 정보',
+        filled: !!surname && !!name && !!gender && !!countryId,
+      },
+      {
+        id: 'life',
+        label: '생몰',
+        filled: !!birthYear || isBirthDateUnknown || !isAlive,
+      },
+    ]
+    if (moreOpen) {
+      sections.push(
+        {
+          id: 'names',
+          label: '이름 상세',
+          filled:
+            !!originalName ||
+            !!surnameMeaning ||
+            !!nameMeaning ||
+            !!middleNameMeaning,
+        },
+        {
+          id: 'death-detail',
+          label: '생애 상세',
+          filled:
+            !!deathType ||
+            !!deathCause ||
+            !!deathNote ||
+            !!regnalName ||
+            !!templeName ||
+            !!posthumousName,
+        },
+        {
+          id: 'affiliation',
+          label: '소속 · 가문',
+          filled:
+            !!birthPlace ||
+            !!deathPlace ||
+            !!dynastyId ||
+            !!religionId ||
+            countryAffiliations.length > 0,
+        },
+        {
+          id: 'family',
+          label: '가족',
+          filled: !!fatherId || !!motherId || !!spouseId,
+        },
+      )
+    }
+    // id·label·filled가 실제로 바뀐 경우에만 부모로 전달 (불필요한 리렌더 차단).
+    const key = sections.map((s) => `${s.id}:${s.filled ? 1 : 0}`).join('|')
+    if (key === lastSectionsKeyRef.current) return
+    lastSectionsKeyRef.current = key
+    onSectionsChangeRef.current?.(sections)
+  }, [
+    moreOpen,
+    surname,
+    name,
+    gender,
+    countryId,
+    birthYear,
+    isBirthDateUnknown,
+    isAlive,
+    originalName,
+    surnameMeaning,
+    nameMeaning,
+    middleNameMeaning,
+    deathType,
+    deathCause,
+    deathNote,
+    regnalName,
+    templeName,
+    posthumousName,
+    birthPlace,
+    deathPlace,
+    dynastyId,
+    religionId,
+    countryAffiliations,
+    fatherId,
+    motherId,
+    spouseId,
+  ])
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
@@ -1603,7 +1718,7 @@ export function PersonRegisterView({
              * 필수-먼저 레이아웃: 코어(사진·이름·성별·국적·생몰)만 늘 노출해
              * "한 명 빠르게 추가"를 15초 작업으로 만든다. 나머지 상세는 MoreToggle로 펼침.
              */}
-            <FormRows>
+            <FormRows data-form-section="basic">
                 {/* 인물 hero — 좌: 원형 썸네일(드롭존), 우: 이름 미리보기·국가/향년 칩 */}
                 <ThumbnailHero>
                   <ThumbnailCircle
@@ -1754,11 +1869,12 @@ export function PersonRegisterView({
                   </FieldControl>
                 </FieldRow>
 
-                <FieldRow>
-                  <FieldLabel htmlFor={fid('gender')}>
-                    성별 <Required>*</Required>
-                  </FieldLabel>
-                  <FieldControl>
+                {/* 성별·국적 — 짧은 코어 컨트롤이라 가로 2열로 묶음 */}
+                <CoreFieldPair>
+                  <CoreFieldCell>
+                    <FieldLabel htmlFor={fid('gender')}>
+                      성별 <Required>*</Required>
+                    </FieldLabel>
                     <SegmentControl
                       value={gender || undefined}
                       onChange={(v) => {
@@ -1779,15 +1895,13 @@ export function PersonRegisterView({
                         {errors.gender}
                       </FieldError>
                     )}
-                  </FieldControl>
-                </FieldRow>
+                  </CoreFieldCell>
 
-                {/* 국적(필수) — 소속 섹션에서 코어로 이관 */}
-                <FieldRow>
-                  <FieldLabel htmlFor={fid('countryId')}>
-                    국적 <Required>*</Required>
-                  </FieldLabel>
-                  <FieldControl>
+                  {/* 국적(필수) — 소속 섹션에서 코어로 이관 */}
+                  <CoreFieldCell>
+                    <FieldLabel htmlFor={fid('countryId')}>
+                      국적 <Required>*</Required>
+                    </FieldLabel>
                     <SelectBtn
                       id={fid('countryId')}
                       type="button"
@@ -1808,11 +1922,12 @@ export function PersonRegisterView({
                         {errors.countryId}
                       </FieldError>
                     )}
-                  </FieldControl>
-                </FieldRow>
+                  </CoreFieldCell>
+                </CoreFieldPair>
               </FormRows>
 
               {/* 생몰 요약 — 출생~사망·생존 여부 (essentials, 늘 노출) */}
+              <div data-form-section="life">
               <LifeSection
                 mode="essentials"
                 fid={fid}
@@ -1849,6 +1964,7 @@ export function PersonRegisterView({
                 errors={errors}
                 markDirty={markDirty}
               />
+              </div>
 
               {/* ===== 선택 상세 토글 ===== */}
               <MoreToggle
@@ -1872,6 +1988,13 @@ export function PersonRegisterView({
 
               {moreOpen && (
                 <>
+                <div data-form-section="names" style={{ marginTop: 28 }}>
+                <SectionHeader>
+                  <SectionHeaderTitle>이름 상세</SectionHeaderTitle>
+                  <SectionHeaderDesc>
+                    이름 원어 · 성·이름·중간이름의 뜻
+                  </SectionHeaderDesc>
+                </SectionHeader>
                 <FormRows>
                 {/* 이름 원어 */}
                 <FieldRow>
@@ -1941,8 +2064,16 @@ export function PersonRegisterView({
                   )}
                 </AdvancedSection>
                 </FormRows>
+                </div>
 
                 {/* 생애 상세 — 사망 유형·원인·메모 + 군주 호칭 (details) */}
+                <div data-form-section="death-detail" style={{ marginTop: 28 }}>
+                <SectionHeader>
+                  <SectionHeaderTitle>생애 상세</SectionHeaderTitle>
+                  <SectionHeaderDesc>
+                    사망 유형·원인·메모 · 군주 호칭
+                  </SectionHeaderDesc>
+                </SectionHeader>
                 <LifeSection
                   mode="details"
                   fid={fid}
@@ -1980,7 +2111,16 @@ export function PersonRegisterView({
                   markDirty={markDirty}
                 />
 
+                </div>
+
                 {/* 소속 · 가문 — 출생/사망지·가문·종교 (국적은 코어) */}
+                <div data-form-section="affiliation" style={{ marginTop: 28 }}>
+                <SectionHeader>
+                  <SectionHeaderTitle>소속 · 가문</SectionHeaderTitle>
+                  <SectionHeaderDesc>
+                    출생·사망지 · 가문 · 종교 · 국가 소속
+                  </SectionHeaderDesc>
+                </SectionHeader>
                 <AffiliationSection
                   fid={fid}
                   countryId={countryId}
@@ -2007,7 +2147,14 @@ export function PersonRegisterView({
                   markDirty={markDirty}
                 />
 
+                </div>
+
                 {/* 가족 — 부·모·배우자 */}
+                <div data-form-section="family" style={{ marginTop: 28 }}>
+                <SectionHeader>
+                  <SectionHeaderTitle>가족</SectionHeaderTitle>
+                  <SectionHeaderDesc>부 · 모 · 배우자</SectionHeaderDesc>
+                </SectionHeader>
                 <FamilySection
                   fid={fid}
                   fatherId={fatherId}
@@ -2034,6 +2181,7 @@ export function PersonRegisterView({
                   countryId={countryId}
                   markDirty={markDirty}
                 />
+                </div>
                 </>
               )}
           </FormSectionInner>

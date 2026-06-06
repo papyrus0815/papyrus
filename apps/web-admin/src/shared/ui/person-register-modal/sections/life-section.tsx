@@ -141,122 +141,139 @@ export function LifeSection({
       <FieldRow>
         <FieldLabel>생몰</FieldLabel>
         <LifeStack>
-          {/* 1) 출생 — 늘 표시. 미상 토글은 인라인. */}
-          <LifeInlineRow>
-            <LifeFieldGroup>
-              <LifeSubLabel>출생일</LifeSubLabel>
-              <DateFieldBtn
-                type="button"
-                $hasValue={!!birthYear.trim() && !isBirthDateUnknown}
-                onClick={() =>
-                  !isBirthDateUnknown && setShowBirthDateModal(true)
-                }
-                aria-invalid={!!errors.birth}
-                disabled={isBirthDateUnknown}
-                style={
-                  isBirthDateUnknown
-                    ? { opacity: 0.5, cursor: 'not-allowed' }
-                    : undefined
-                }
-              >
-                <FiCalendar size={16} />
-                <span>
-                  {isBirthDateUnknown
-                    ? '미상'
-                    : formatDateDisplay(
-                        birthEra,
-                        birthYear,
-                        birthMonth,
-                        birthDay,
-                      )}
-                </span>
-                <FiChevronDown size={14} />
-              </DateFieldBtn>
-            </LifeFieldGroup>
-            <SegmentBtn
-              type="button"
-              $variant="ghost"
-              $active={isBirthDateUnknown}
-              aria-pressed={isBirthDateUnknown}
-              onClick={() => {
-                setIsBirthDateUnknown((v) => !v)
-                markDirty()
-              }}
-            >
-              출생일 미상
-            </SegmentBtn>
-          </LifeInlineRow>
-
           {/*
-           * 2) 사망 여부 — 가장 중요한 분기.
-           * 진짜 segmented control(인접 버튼 한 덩어리) — chip과 시각 위계 구별.
+           * 출생일 · 사망일을 가로 2열로 (앱 공통 date-pair 하우스 스타일).
+           * 출생 열: 날짜 + "출생일 미상" 토글.
+           * 사망 열: 날짜(생존/미상 상태 반영) + 생존/사망/일자미상 3-way + 향년.
+           * <768px에선 LifePairGrid가 1열로 떨어져 자연히 세로 스택.
            */}
-          <LifeFieldGroup>
-            <LifeSubLabel>사망 여부</LifeSubLabel>
-            <Segmented3Way role="radiogroup" aria-label="사망 여부">
-              <Segmented3WayBtn
-                type="button"
-                role="radio"
-                aria-checked={isAlive}
-                $active={isAlive}
-                onClick={() => setDeathStatus('alive')}
-              >
-                생존 중
-              </Segmented3WayBtn>
-              <Segmented3WayBtn
-                type="button"
-                role="radio"
-                aria-checked={!isAlive && !isDeathDateUnknown}
-                $active={!isAlive && !isDeathDateUnknown}
-                onClick={() => setDeathStatus('deceased')}
-              >
-                사망
-              </Segmented3WayBtn>
-              <Segmented3WayBtn
-                type="button"
-                role="radio"
-                aria-checked={!isAlive && isDeathDateUnknown}
-                $active={!isAlive && isDeathDateUnknown}
-                onClick={() => setDeathStatus('unknown')}
-              >
-                일자 미상
-              </Segmented3WayBtn>
-            </Segmented3Way>
-          </LifeFieldGroup>
-
-          {/* 3) 사망일 — 사망(정상)일 때만. 향년은 둘 다 정상 입력일 때만. */}
-          {!isAlive && !isDeathDateUnknown && (
-            <LifeInlineRow>
+          <LifePairGrid>
+            {/* ── 출생 열 ── */}
+            <LifeCol>
               <LifeFieldGroup>
-                <LifeSubLabel>사망일</LifeSubLabel>
+                <LifeSubLabel>출생일</LifeSubLabel>
                 <DateFieldBtn
                   type="button"
-                  $hasValue={!!deathYear.trim()}
-                  onClick={() => setShowDeathDateModal(true)}
-                  aria-invalid={!!errors.death}
+                  $hasValue={!!birthYear.trim() && !isBirthDateUnknown}
+                  onClick={() =>
+                    !isBirthDateUnknown && setShowBirthDateModal(true)
+                  }
+                  aria-invalid={!!errors.birth}
+                  disabled={isBirthDateUnknown}
+                  style={
+                    isBirthDateUnknown
+                      ? { opacity: 0.5, cursor: 'not-allowed' }
+                      : undefined
+                  }
                 >
                   <FiCalendar size={16} />
                   <span>
-                    {formatDateDisplay(
-                      deathEra,
-                      deathYear,
-                      deathMonth,
-                      deathDay,
-                    )}
+                    {isBirthDateUnknown
+                      ? '미상'
+                      : formatDateDisplay(
+                          birthEra,
+                          birthYear,
+                          birthMonth,
+                          birthDay,
+                        )}
                   </span>
                   <FiChevronDown size={14} />
                 </DateFieldBtn>
               </LifeFieldGroup>
+              <SegmentBtn
+                type="button"
+                $variant="ghost"
+                $active={isBirthDateUnknown}
+                aria-pressed={isBirthDateUnknown}
+                onClick={() => {
+                  setIsBirthDateUnknown((v) => !v)
+                  markDirty()
+                }}
+              >
+                출생일 미상
+              </SegmentBtn>
+            </LifeCol>
+
+            {/* ── 사망 열 ── */}
+            <LifeCol>
+              <LifeFieldGroup>
+                <LifeSubLabel>사망일</LifeSubLabel>
+                <DateFieldBtn
+                  type="button"
+                  $hasValue={
+                    !isAlive && !isDeathDateUnknown && !!deathYear.trim()
+                  }
+                  onClick={() =>
+                    !isAlive &&
+                    !isDeathDateUnknown &&
+                    setShowDeathDateModal(true)
+                  }
+                  aria-invalid={!!errors.death}
+                  disabled={isAlive || isDeathDateUnknown}
+                  style={
+                    isAlive || isDeathDateUnknown
+                      ? { opacity: 0.5, cursor: 'not-allowed' }
+                      : undefined
+                  }
+                >
+                  <FiCalendar size={16} />
+                  <span>
+                    {isAlive
+                      ? '생존 중'
+                      : isDeathDateUnknown
+                        ? '일자 미상'
+                        : formatDateDisplay(
+                            deathEra,
+                            deathYear,
+                            deathMonth,
+                            deathDay,
+                          )}
+                  </span>
+                  <FiChevronDown size={14} />
+                </DateFieldBtn>
+              </LifeFieldGroup>
+              {/*
+               * 사망 여부 분기 — 사망일 열에 합쳐 두 날짜를 가로로 나란히 둔다.
+               * 진짜 segmented control(인접 버튼 한 덩어리)로 "한 그룹의 분기"임을 강조.
+               */}
+              <Segmented3Way role="radiogroup" aria-label="사망 여부">
+                <Segmented3WayBtn
+                  type="button"
+                  role="radio"
+                  aria-checked={isAlive}
+                  $active={isAlive}
+                  onClick={() => setDeathStatus('alive')}
+                >
+                  생존 중
+                </Segmented3WayBtn>
+                <Segmented3WayBtn
+                  type="button"
+                  role="radio"
+                  aria-checked={!isAlive && !isDeathDateUnknown}
+                  $active={!isAlive && !isDeathDateUnknown}
+                  onClick={() => {
+                    setDeathStatus('deceased')
+                    // 공용 date-range "시작 후 종료 자동 오픈"과 동일 — 사망일 미입력 시 피커 즉시 노출.
+                    if (!deathYear.trim()) setShowDeathDateModal(true)
+                  }}
+                >
+                  사망
+                </Segmented3WayBtn>
+                <Segmented3WayBtn
+                  type="button"
+                  role="radio"
+                  aria-checked={!isAlive && isDeathDateUnknown}
+                  $active={!isAlive && isDeathDateUnknown}
+                  onClick={() => setDeathStatus('unknown')}
+                >
+                  일자 미상
+                </Segmented3WayBtn>
+              </Segmented3Way>
               {lifespanText && (
-                <LifeFieldGroup>
-                  <LifeSubLabel>향년</LifeSubLabel>
-                  <LifespanText aria-live="polite">
-                    {lifespanText.replace('향년 ', '')}
-                  </LifespanText>
-                </LifeFieldGroup>
+                <LifespanText aria-live="polite">{lifespanText}</LifespanText>
               )}
-            </LifeInlineRow>
-          )}
+            </LifeCol>
+          </LifePairGrid>
 
           {(errors.birth || errors.death) && (
             <FieldError role="alert">
@@ -398,11 +415,25 @@ const LifeStack = styled.div`
   min-width: 0;
 `
 
-const LifeInlineRow = styled.div`
+/** 출생일 · 사망일 가로 2열 — 앱 공통 date-pair(480px)와 동일 폭. 좁은 화면은 1열. */
+const LifePairGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 12px;
+  align-items: start;
+  max-width: 480px;
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+/** 각 날짜 열 — (라벨+버튼) 그룹 아래 토글/분기 컨트롤을 쌓는다. */
+const LifeCol = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
 `
 
 const LifeFieldGroup = styled.div`
@@ -482,19 +513,20 @@ const SegmentBtn = styled.button<{
  * 인접 button + container fill로 "이건 한 그룹의 분기"임을 강조 (chip과 위계 분리).
  */
 const Segmented3Way = styled.div`
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  width: 100%;
   padding: 3px;
   gap: 2px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
   border-radius: 9px;
 
-  @media (max-width: 480px) {
-    width: 100%;
-    > button {
-      flex: 1;
-    }
+  /* 사망 열 폭(=절반)에 맞춰 세 버튼을 균등 분할. */
+  > button {
+    flex: 1;
+    padding-left: 0;
+    padding-right: 0;
   }
 `
 

@@ -41,12 +41,17 @@ export function PersonRegisterViewModal({
     gender?: boolean
     countryId?: boolean
   }>({})
+  // 좌측 scroll-spy 인덱스 — 폼이 "더 입력" 펼침에 따라 동적으로 보고.
+  const [sections, setSections] = useState<
+    { id: string; label: string; filled?: boolean }[]
+  >([])
 
   // 모달 닫힐 때 상태 리셋
   useEffect(() => {
     if (!isOpen) {
       setIsDirty(false)
       setFilled({})
+      setSections([])
     }
   }, [isOpen])
 
@@ -90,6 +95,7 @@ export function PersonRegisterViewModal({
           jumpTarget: 'countryId',
         },
       ]}
+      sectionIndex={sections}
     >
       <PersonRegisterView
         initialCountryId={initialCountryId}
@@ -99,6 +105,7 @@ export function PersonRegisterViewModal({
         onSubmittingChange={setSubmitting}
         onDirtyChange={setIsDirty}
         onValuesChange={setFilled}
+        onSectionsChange={setSections}
       />
     </CountryFormShell>
   )

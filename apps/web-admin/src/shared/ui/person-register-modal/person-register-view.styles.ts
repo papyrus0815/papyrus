@@ -194,6 +194,31 @@ export const FieldRowMulti = styled.div`
   padding: 18px 0;
 `
 
+/**
+ * 짧은 코어 컨트롤(성별·국적)을 가로 2열로 묶어 세로 길이를 줄이고 960px 폭을 활용.
+ * FieldRow가 아니라 자체 margin-top을 가지며, 좁은 화면(<640px)에선 1열로 떨어진다.
+ */
+export const CoreFieldPair = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 16px;
+  align-items: start;
+  margin-top: 18px;
+  max-width: 600px;
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+`
+
+/** CoreFieldPair 안의 라벨+컨트롤 셀 — FieldRow 한 칸과 동일한 세로 스택. */
+export const CoreFieldCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+`
+
 // ─── Layout wrapper (Top-aligned modern form layout) ────────────────────────
 // 상단 정렬 라벨 (Linear/Stripe/Notion 류) — 라벨이 위, 컨트롤이 아래.
 
@@ -231,9 +256,14 @@ export const PersonFormLayoutWrap = styled.div`
     color: ${({ theme }) => theme.colors.text.secondary};
   }
 
-  /* 컨트롤 — 모달 폭이 줄어 max-width 제거, 100% 활용 */
+  /*
+   * 컨트롤 폭 — 960px 모달에서 단일 입력이 ~800px로 늘어지면 라인이 길어 가독성↓.
+   * 생몰(480px)·hero와 톤을 맞춰 ~600px로 캡. 3-필드 인라인은 충분히 넓고,
+   * 단일 텍스트/셀렉트/textarea도 읽기 좋은 라인 길이를 유지.
+   */
   ${FieldControl} {
     width: 100%;
+    max-width: 600px;
   }
 
   ${InlineFields} {
