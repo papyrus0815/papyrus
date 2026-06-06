@@ -16,9 +16,10 @@ import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { PersonService } from '../application/person.service'
 import { 
-  CreatePersonDto, 
-  UpdatePersonDto, 
+  CreatePersonDto,
+  UpdatePersonDto,
   PersonResponseDto,
+  PersonInfographicItemDto,
   CreateMilitaryCareerDto,
   CreateBusinessCareerDto,
   CreateAcademicCareerDto,
@@ -73,6 +74,19 @@ export class PersonController {
   async getAll(@Request() req: any): Promise<PersonResponseDto[]> {
     const accountId = req.user?.id ?? req.user?.sub
     return this.personService.findAll(accountId)
+  }
+
+  /**
+   * 인물 인포그래픽 목록(경량) 조회 — 대시보드 인포그래픽 전용.
+   * adapt()가 쓰는 최소 필드만 내려 전체 목록 payload를 축소한다 (본인 등록분만).
+   * 주의: `:id` 라우트보다 위에 위치해야 함.
+   */
+  @Get('infographic')
+  async getAllForInfographic(
+    @Request() req: any,
+  ): Promise<PersonInfographicItemDto[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.findAllForInfographic(accountId)
   }
 
   /**

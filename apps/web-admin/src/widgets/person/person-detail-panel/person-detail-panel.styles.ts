@@ -1080,18 +1080,6 @@ export const UnifiedCard = styled.div<{ $kind: 'tenure' | 'reign' }>`
   overflow: hidden;
   transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
 
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 16px;
-    bottom: 16px;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: ${({ $kind }) => unifiedKindColor[$kind].base};
-    opacity: 0.85;
-  }
-
   &:hover {
     border-color: rgba(99, 102, 241, 0.18);
     box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
@@ -1188,6 +1176,17 @@ export const UnifiedAgeBadge = styled.span`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.09)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
+`
+
+export const UnifiedReappointBadge = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245,158,11,0.18)' : 'rgba(245,158,11,0.12)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#b45309')};
 `
 
 export const UnifiedSubRow = styled.div`

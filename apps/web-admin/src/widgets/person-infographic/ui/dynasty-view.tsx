@@ -2,7 +2,7 @@
  * VIEW: 왕조별 그룹핑 — faction(가문) 기준.
  * 정렬은 공용 store sort 사용. faction 없는 인물은 "소속 없음"으로 묶음.
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import styled, { useTheme } from 'styled-components'
 
@@ -10,6 +10,7 @@ import { glassOrSolidMixin } from '@/shared/styles/mixins'
 
 import type { AdaptedPerson } from '../model/types'
 import { yearOfEra } from '../model/adapt'
+import { INFOGRAPHIC_DEFAULTS } from '../model/constants'
 import {
   usePersonInfographicFilterStore,
   useHasActiveFilter,
@@ -18,7 +19,6 @@ import { makeSortFnWithPinned } from '../model/sort-helpers'
 
 import { EmptyState } from './_shared/empty-state'
 import { EraCardGrid, PersonCardItem } from './_shared/person-card'
-import { SortBar } from './_shared/sort-bar'
 
 interface Props {
   people: AdaptedPerson[]
@@ -33,6 +33,10 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
   const sort = usePersonInfographicFilterStore((s) => s.sort)
   const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
   const hasFilter = useHasActiveFilter()
+  // 그룹별 펼침 상태 — 기본은 GROUP_TOP_N까지만 렌더(대형 가문·"소속 없음"에서 DOM 폭주 방지)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const toggleExpand = (key: string) =>
+    setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))
 
   const { factions, noFaction } = useMemo(() => {
     const byFaction: Record<string, AdaptedPerson[]> = {}
@@ -67,9 +71,13 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
 
   return (
     <Wrap>
-      <SortBar />
       {factions.map(({ faction, arr, minYr, maxYr, countryName }) => {
         const sorted = arr.slice().sort(sortFn)
+        const isExpanded = !!expanded[faction]
+        const shown = isExpanded
+          ? sorted
+          : sorted.slice(0, INFOGRAPHIC_DEFAULTS.GROUP_TOP_N)
+        const hasMore = sorted.length > INFOGRAPHIC_DEFAULTS.GROUP_TOP_N
         return (
           <Block key={faction}>
             <BlockHdr>
@@ -85,7 +93,7 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
               </BlockCount>
             </BlockHdr>
             <EraCardGrid>
-              {sorted.map((p) => (
+              {shown.map((p) => (
                 <PersonCardItem
                   key={p.id}
                   p={p}
@@ -97,43 +105,63 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
                 />
               ))}
             </EraCardGrid>
+            {hasMore && (
+              <MoreBtn onClick={() => toggleExpand(faction)}>
+                {isExpanded
+                  ? '접기'
+                  : `+ ${sorted.length - INFOGRAPHIC_DEFAULTS.GROUP_TOP_N}명 더보기`}
+              </MoreBtn>
+            )}
           </Block>
         )
       })}
-      {noFaction.length > 0 && (
-        <Block>
-          <BlockHdr>
-            <span
-              style={{
-                fontSize: 16,
-                fontWeight: 600,
-                color: theme.colors.text.secondary,
-              }}
-            >
-              소속 없음
-            </span>
-            <BlockCount style={{ color: theme.colors.text.tertiary }}>
-              {noFaction.length}명
-            </BlockCount>
-          </BlockHdr>
-          <EraCardGrid>
-            {noFaction
-              .slice()
-              .sort(sortFn)
-              .map((p) => (
-                <PersonCardItem
-                  key={p.id}
-                  p={p}
-                  era={yearOfEra(p.activityYear)}
-                  q={q}
-                  pinned={pinned.has(p.id)}
-                  onTogglePin={togglePin}
-                  onOpen={onOpen}
-                />
-              ))}
-          </EraCardGrid>
-        </Block>
-      )}
+      {noFaction.length > 0 &&
+        (() => {
+          const sorted = noFaction.slice().sort(sortFn)
+          const isExpanded = !!expanded['__none__']
+          const shown = isExpanded
+            ? sorted
+            : sorted.slice(0, INFOGRAPHIC_DEFAULTS.GROUP_TOP_N)
+          const hasMore = sorted.length > INFOGRAPHIC_DEFAULTS.GROUP_TOP_N
+          return (
+            <Block>
+              <BlockHdr>
+                <span
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: theme.colors.text.secondary,
+                  }}
+                >
+                  소속 없음
+                </span>
+                <BlockCount style={{ color: theme.colors.text.tertiary }}>
+                  {noFaction.length}명
+                </BlockCount>
+              </BlockHdr>
+              <EraCardGrid>
+                {shown.map((p) => (
+                  <PersonCardItem
+                    key={p.id}
+                    p={p}
+                    era={yearOfEra(p.activityYear)}
+                    q={q}
+                    pinned={pinned.has(p.id)}
+                    onTogglePin={togglePin}
+                    onOpen={onOpen}
+                  />
+                ))}
+              </EraCardGrid>
+              {hasMore && (
+                <MoreBtn onClick={() => toggleExpand('__none__')}>
+                  {isExpanded
+                    ? '접기'
+                    : `+ ${sorted.length - INFOGRAPHIC_DEFAULTS.GROUP_TOP_N}명 더보기`}
+                </MoreBtn>
+              )}
+            </Block>
+          )
+        })()}
     </Wrap>
   )
 }
@@ -169,4 +197,24 @@ const BlockRange = styled.span`
 const BlockCount = styled.span`
   margin-left: auto;
   font-size: 11px;
+`
+
+const MoreBtn = styled.button`
+  margin: 12px auto 0;
+  display: block;
+  padding: 6px 16px;
+  border-radius: 16px;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: background 0.12s, color 0.12s;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f3f4f6'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `

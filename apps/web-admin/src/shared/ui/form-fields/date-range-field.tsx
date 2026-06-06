@@ -71,7 +71,8 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
   const handleStartSelect = (date: string) => {
     onStartChange(date)
     setStartModalOpen(false)
-    if (openEndAfterStart) setEndModalOpen(true)
+    // 퇴임일이 아직 비어 있을 때만 자동 오픈 — 이미 선택했으면 취임일 재수정 시 다시 띄우지 않음
+    if (openEndAfterStart && !endValue) setEndModalOpen(true)
   }
 
   const handleEndSelect = (date: string) => {

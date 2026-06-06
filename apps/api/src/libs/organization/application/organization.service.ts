@@ -12,6 +12,7 @@ import type {
 import { OrganizationPrismaRepository } from '../infrastructure/organization.prisma.repository'
 import { EventMethod } from '@prisma/client'
 import { NotificationService } from '../../notification/application/notification.service'
+import { dateYearRangePreview } from '../../shared/notification-preview.util'
 
 @Injectable()
 export class OrganizationService {
@@ -34,7 +35,12 @@ export class OrganizationService {
 
   async create(data: CreateOrganizationData): Promise<OrganizationEntity> {
     const org = await this.repository.create(data)
-    await this.notificationService.notifyOrganization(org.name, EventMethod.CREATE, org.id)
+    await this.notificationService.notifyOrganization(
+      org.name,
+      EventMethod.CREATE,
+      org.id,
+      dateYearRangePreview(org.foundedDate, org.dissolvedDate),
+    )
     return org
   }
 
@@ -44,14 +50,24 @@ export class OrganizationService {
   ): Promise<OrganizationEntity> {
     await this.getById(id)
     const org = await this.repository.update(id, data)
-    await this.notificationService.notifyOrganization(org.name, EventMethod.UPDATE, org.id)
+    await this.notificationService.notifyOrganization(
+      org.name,
+      EventMethod.UPDATE,
+      org.id,
+      dateYearRangePreview(org.foundedDate, org.dissolvedDate),
+    )
     return org
   }
 
   async delete(id: string): Promise<void> {
     const org = await this.getById(id)
     await this.repository.delete(id)
-    await this.notificationService.notifyOrganization(org.name, EventMethod.DELETE, id)
+    await this.notificationService.notifyOrganization(
+      org.name,
+      EventMethod.DELETE,
+      id,
+      dateYearRangePreview(org.foundedDate, org.dissolvedDate),
+    )
   }
 
   async getTree(filter: OrganizationListFilter): Promise<OrganizationTreeNode[]> {

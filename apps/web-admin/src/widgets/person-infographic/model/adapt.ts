@@ -1,8 +1,11 @@
-import type { Person } from '@/entities/person/api'
+import type { PersonInfographicItem } from '@/entities/person/api'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { COUNTRY_REGION, ERAS, FIELDS } from './constants'
-import type { AdaptedPerson, ReignLite, TenureLite } from './types'
+import type { AdaptedPerson, TenureLite } from './types'
+
+/** 생존/사망연도 미상 시 폴백 기준 — 모듈 로드 1회. (인물마다 new Date() 생성 방지) */
+const CURRENT_YEAR = new Date().getFullYear()
 
 export function getRegion(name?: string | null): string {
   if (!name) return '기타'
@@ -14,33 +17,12 @@ export function getRegion(name?: string | null): string {
 }
 
 /**
- * Person.country(=현대 국가 직결, deprecated 예정)가 비어 있을 때
- * countryAffiliations 체인으로 폴백:
- *   1) affiliation.country.name (현대 국가가 affiliation에 직접)
- *   2) affiliation.historicalCountry.modernConnections[0].modernCountry.name (HC ↔ 모던 링크)
- *   3) affiliation.historicalCountry.name (마지막 — HC 이름 자체)
+ * 소속 국가명 — 경량 엔드포인트가 서버에서 이미 이름 해석
+ * (CITIZENSHIP 소속 → country FK → BIRTH_PLACE, HC↔모던 링크 포함)을 끝내 `country.name`으로 내려준다.
+ * 따라서 클라이언트는 그 값을 그대로 쓴다.
  */
-export function pickCountryName(p: Person): string {
-  const direct = p.country?.name
-  if (direct) return direct
-  const affs = (p.countryAffiliations ?? []) as Array<{
-    country?: { name?: string | null } | null
-    historicalCountry?: {
-      name?: string | null
-      modernConnections?: Array<{ modernCountry?: { name?: string | null } | null }>
-    } | null
-  }>
-  for (const aff of affs) {
-    const fromAffCountry = aff.country?.name
-    if (fromAffCountry) return fromAffCountry
-    const linkedModern = aff.historicalCountry?.modernConnections?.[0]?.modernCountry?.name
-    if (linkedModern) return linkedModern
-  }
-  for (const aff of affs) {
-    const hcName = aff.historicalCountry?.name
-    if (hcName) return hcName
-  }
-  return ''
+export function pickCountryName(p: PersonInfographicItem): string {
+  return p.country?.name ?? ''
 }
 
 const POLITICAL_TYPES = new Set([
@@ -52,10 +34,9 @@ const POLITICAL_TYPES = new Set([
 ])
 
 /** Person → 분야 분류 (FIELDS 상수 기준). */
-export function getField(p: Person): string {
-  const reigns = (p.sovereignReigns ?? []) as ReignLite[]
+export function getField(p: PersonInfographicItem): string {
   const tenures = (p.governmentTenures ?? []) as TenureLite[]
-  if (reigns.length > 0) return '정치'
+  if (p.sovereignReignCount > 0) return '정치'
   const types = tenures.map((t) => t.positionType ?? '')
   if (types.includes('MILITARY_COMMANDER')) return '군사'
   if (types.some((t) => POLITICAL_TYPES.has(t))) return '정치'
@@ -73,25 +54,20 @@ export function yearOfEra(y: number) {
   return ERAS[ERAS.length - 1]
 }
 
-export function adapt(p: Person): AdaptedPerson | null {
+export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
   if (!p.birthYear && !p.deathYear) return null
 
   const born = toYear(p.birthYear, p.birthEra)
-  // deathYear가 있으면 isAlive와 무관하게 그 값을 우선. 둘 다 없으면 currentYear 폴백.
+  // deathYear가 있으면 isAlive와 무관하게 그 값을 우선. 없으면 생존/사망 모두 올해로 폴백(수명 계산 기준).
   const deathYearVal = toYear(p.deathYear, p.deathEra)
   const isAliveFlag = !!p.isAlive
-  const died = deathYearVal !== 0
-    ? deathYearVal
-    : isAliveFlag
-      ? new Date().getFullYear()
-      : new Date().getFullYear()
+  const died = deathYearVal !== 0 ? deathYearVal : CURRENT_YEAR
 
   // 잘못된 입력(NaN/Infinity) 방어 — 시각화가 깨지지 않도록 폐기
   if (!Number.isFinite(born) || !Number.isFinite(died)) return null
 
   const countryName = pickCountryName(p)
   const tenures = (p.governmentTenures ?? []) as TenureLite[]
-  const reigns = (p.sovereignReigns ?? []) as ReignLite[]
   const rawInfluence = p.influence
   const influence =
     typeof rawInfluence === 'number'
@@ -128,7 +104,7 @@ export function adapt(p: Person): AdaptedPerson | null {
     firstTenure?.title ||
     null
 
-  const isMonarch = reigns.length > 0 || !!(regnal && regnal.trim())
+  const isMonarch = p.sovereignReignCount > 0 || !!(regnal && regnal.trim())
   const isHeadOfState = tenures.some(
     (t) =>
       t.positionType === 'HEAD_OF_STATE' ||
@@ -138,6 +114,21 @@ export function adapt(p: Person): AdaptedPerson | null {
   const bioRaw = p.biography
   const biography =
     typeof bioRaw === 'string' && bioRaw.trim() ? bioRaw.trim() : null
+
+  // 검색 대상 결합 — 표시명과 다를 수 있는 원본 이름/성/별호까지 포함해 누락 방지.
+  const searchText = [
+    name,
+    p.name,
+    p.surname,
+    p.middleName,
+    regnal,
+    countryName,
+    p.dynasty?.name,
+    primaryTitle,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
 
   return {
     id: p.id,
@@ -157,6 +148,7 @@ export function adapt(p: Person): AdaptedPerson | null {
     primaryTitle,
     biography,
     isAlive: isAliveFlag,
+    searchText,
   }
 }
 

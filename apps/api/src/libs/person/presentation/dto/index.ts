@@ -1,6 +1,7 @@
 export * from './create-person.dto'
 export * from './update-person.dto'
 export * from './person.response'
+export * from './person-infographic-item.dto'
 export * from './create-career.dto'
 export * from './career.response'
 export * from './government-position-definition.dto'

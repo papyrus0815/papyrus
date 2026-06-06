@@ -11,6 +11,10 @@ import { getApiConnection } from './client'
 export type PersonResponseDto = Awaited<
   ReturnType<typeof personsApi.getAll>
 >[number]
+/** 인포그래픽 목록(경량) 아이템 — adapt가 쓰는 최소 필드만 */
+export type PersonInfographicItemDto = Awaited<
+  ReturnType<typeof personsApi.infographic.getAllForInfographic>
+>[number]
 export type CreatePersonDto = Parameters<typeof personsApi.create>[1]
 export type UpdatePersonDto = Parameters<typeof personsApi.update>[2]
 
@@ -27,6 +31,19 @@ export async function getAllPersons(): Promise<PersonResponseDto[]> {
   } catch (error) {
     throw error
   }
+}
+
+/**
+ * 인포그래픽 목록(경량) 조회 — 대시보드 인포그래픽 전용.
+ * 전체 인물 payload(countryAffiliations·재임 상세 등) 대신 adapt에 필요한 필드만 받음.
+ */
+export async function getInfographicPersons(): Promise<
+  PersonInfographicItemDto[]
+> {
+  const data = await personsApi.infographic.getAllForInfographic(
+    getApiConnection(),
+  )
+  return Array.isArray(data) ? data : []
 }
 
 /**

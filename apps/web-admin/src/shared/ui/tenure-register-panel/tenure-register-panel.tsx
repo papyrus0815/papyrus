@@ -21,6 +21,11 @@ import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
+import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
+import {
+  APPOINTMENT_METHOD_OPTIONS,
+  TENURE_END_REASON_OPTIONS,
+} from '@/shared/lib/tenure-labels'
 import {
   FormRows,
   FieldRow,
@@ -30,6 +35,7 @@ import {
   DateFieldsRow,
   Required,
   Input,
+  Textarea,
   TEXT_PRIMARY,
   TEXT_SECONDARY,
 } from '@/shared/ui/register-form-layout'
@@ -273,6 +279,10 @@ export function TenureRegisterPanel({
   const [endDate, setEndDate] = useState('')
   const [regnalNumber, setRegnalNumber] = useState('')
   const [subTermNumber, setSubTermNumber] = useState('')
+  const [appointmentMethod, setAppointmentMethod] = useState('')
+  const [endReason, setEndReason] = useState('')
+  const [endReasonDetail, setEndReasonDetail] = useState('')
+  const [notes, setNotes] = useState('')
   const [showOnEvents, setShowOnEvents] = useState(true)
   const [cabinetId, setCabinetId] = useState<string | null>(null)
   const [eventAttachModalOpen, setEventAttachModalOpen] = useState(false)
@@ -394,6 +404,11 @@ export function TenureRegisterPanel({
     setStartDate('')
     setEndDate('')
     setRegnalNumber('')
+    setSubTermNumber('')
+    setAppointmentMethod('')
+    setEndReason('')
+    setEndReasonDetail('')
+    setNotes('')
     setShowOnEvents(true)
     setCabinetId(null)
   }
@@ -431,6 +446,10 @@ export function TenureRegisterPanel({
     const num = t.regnalNumber ?? t.termNumber
     setRegnalNumber(num != null ? String(num) : '')
     setSubTermNumber(t.subTermNumber != null ? String(t.subTermNumber) : '')
+    setAppointmentMethod(t.appointmentMethod ?? '')
+    setEndReason(t.endReason ?? '')
+    setEndReasonDetail(t.endReasonDetail ?? '')
+    setNotes(t.notes ?? '')
     setShowOnEvents(t.showPositionInfo !== false)
     setCabinetId(t.cabinetId ?? t.cabinet?.id ?? null)
   }, [open, editingTenure])
@@ -459,6 +478,10 @@ export function TenureRegisterPanel({
       termNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
       subTermNumber: subTermNumber.trim() ? parseInt(subTermNumber, 10) || undefined : undefined,
       regnalNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
+      appointmentMethod: (appointmentMethod || undefined) as any,
+      endReason: (endReason || undefined) as any,
+      endReasonDetail: endReasonDetail.trim() || undefined,
+      notes: notes.trim() || undefined,
       showPositionInfo: showOnEvents,
       cabinetId: cabinetId || undefined,
     }
@@ -476,6 +499,10 @@ export function TenureRegisterPanel({
             termNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
             subTermNumber: subTermNumber.trim() ? parseInt(subTermNumber, 10) || undefined : undefined,
             regnalNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
+            appointmentMethod: (appointmentMethod || undefined) as any,
+            endReason: (endReason || undefined) as any,
+            endReasonDetail: endReasonDetail.trim() || undefined,
+            notes: notes.trim() || undefined,
             showPositionInfo: showOnEvents,
           })
           toast.success('재위 기록이 수정되었습니다.')
@@ -803,6 +830,63 @@ export function TenureRegisterPanel({
                   onChange={(e) => setSubTermNumber(e.target.value)}
                   placeholder="선택 (예: 1기→1, 2기→2)"
                   title="같은 대수 내 복수 임기 구분 (예: 클린턴 42대 1기/2기)"
+                />
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>취임 방식</FieldLabel>
+              <FieldControl>
+                <FormSelectNative
+                  value={appointmentMethod}
+                  onChange={(e) => setAppointmentMethod(e.target.value)}
+                >
+                  <option value="">선택 안 함</option>
+                  {APPOINTMENT_METHOD_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </FormSelectNative>
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>퇴임 사유</FieldLabel>
+              <FieldControl>
+                <FormSelectNative
+                  value={endReason}
+                  onChange={(e) => setEndReason(e.target.value)}
+                >
+                  <option value="">선택 안 함</option>
+                  {TENURE_END_REASON_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </FormSelectNative>
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>퇴임 사유 상세</FieldLabel>
+              <FieldControl>
+                <Input
+                  value={endReasonDetail}
+                  onChange={(e) => setEndReasonDetail(e.target.value)}
+                  placeholder="선택 (예: 12·12 군사반란으로 실각)"
+                />
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>비고</FieldLabel>
+              <FieldControl>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="선택 — 재임 관련 특이사항"
+                  rows={2}
                 />
               </FieldControl>
             </FieldRow>

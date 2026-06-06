@@ -24,8 +24,12 @@ model Account {
   id            String         @id @default(uuid()) @db.Char(36)
   /// 선택한 히어로 (nullable)
   heroId        String?        @map("hero_id")
-  /// 사용자 계정명 (고유)
+  /// 대표 인물(아바타)로 지정한 Person (nullable) — 프로필/리더보드 아바타 소스
+  representativePersonId String? @map("representative_person_id") @db.Char(36)
+  /// 로그인 계정명 (고유, 로그인 ID — 변경 불가 정책)
   username      String         @unique @map("user_name") @db.VarChar(50)
+  /// 표시용 닉네임 (nullable — 없으면 username으로 폴백). 헤더/프로필/리더보드 노출명
+  displayName   String?        @map("display_name") @db.VarChar(30)
   /// 해시된 비밀번호
   passwordHash  String         @map("password_hash") @db.VarChar(255)
   /// 가입 일자
@@ -33,6 +37,8 @@ model Account {
   /// 사용자에 연결된 리프레시 토큰 목록
   refreshTokens RefreshToken[]
   hero          Hero?          @relation(fields: [heroId], references: [id])
+  /// 대표 인물(아바타) 관계
+  representativePerson Person?  @relation("AccountRepresentativePerson", fields: [representativePersonId], references: [id], onDelete: SetNull)
   /// 이 계정이 등록한 인물 (개인 정보 플랫폼: 계정별 소유)
   persons           Person[]            @relation("AccountPersons")
   /// 이 계정이 등록한 역사적 국가
@@ -59,6 +65,17 @@ model Account {
   /// 이 계정이 등록한 인물 묶음(세대·계파 등)
   personGroups        PersonGroup[]           @relation("AccountPersonGroups")
 
+  /// 게이미피케이션: 누적 점수 (PointEntry 합계의 비정규화 캐시)
+  totalPoints Int    @default(0) @map("total_points")
+  /// 게이미피케이션: 현재 등급 코드 (BRONZE/SILVER/GOLD/PLATINUM/DIAMOND)
+  gradeCode   String @default("BRONZE") @map("grade_code") @db.VarChar(20)
+  /// 게이미피케이션: 점수 적립/차감 원장
+  pointEntries PointEntry[]
+  /// 게이미피케이션: 획득한 뱃지
+  accountBadges AccountBadge[]
+
+  /// 리더보드 정렬용 (totalPoints desc)
+  @@index([totalPoints], name: "idx_account_total_points")
   @@map("account")
 }
 
@@ -130,6 +147,13 @@ model Notification {
   method    EventMethod  @map("method")
   /// 리소스 타입 (필터·딥링크·문장 조합용). 예: PERSON → "인물이"
   ownerType AggregateType? @map("owner_type")
+  /// (선택) 변경의 초점이 된 하위 리소스. 있으면 entityLabel 본체 대신
+  /// "{entityLabel}의 {하위라벨}이(가) {동작}되었습니다"로 조합. method가 동작을 결정(CREATE=추가/UPDATE=수정).
+  subResourceType NotificationSubResource? @map("sub_resource_type")
+  /// (선택) 변경을 수행한 계정 ID. 필터·딥링크용.
+  actorAccountId String? @map("actor_account_id") @db.Char(36)
+  /// (선택) 변경을 수행한 계정 표시명 스냅샷(displayName ?? username). 렌더 시 조인 없이 "· 홍길동" 표기.
+  actorName String? @map("actor_name") @db.VarChar(60)
   /// 상세 페이지 이동용 ID
   recordId  String?  @map("record_id") @db.Char(36)
   /// (선택) 부가 설명. 예: 직책명만, 기간, 하위 항목 요약 등

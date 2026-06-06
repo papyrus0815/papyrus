@@ -33,7 +33,13 @@ import {
   FieldControl,
   FieldHint,
   Input,
+  Textarea,
 } from '@/shared/ui/register-form-layout'
+import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
+import {
+  APPOINTMENT_METHOD_OPTIONS,
+  TENURE_END_REASON_OPTIONS,
+} from '@/shared/lib/tenure-labels'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 
 const FORM_ID = 'sovereign-reign-register-form'
@@ -175,6 +181,11 @@ export function SovereignReignRegisterPanel({
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [regnalNumber, setRegnalNumber] = useState('')
+  const [subTermNumber, setSubTermNumber] = useState('')
+  const [appointmentMethod, setAppointmentMethod] = useState('')
+  const [endReason, setEndReason] = useState('')
+  const [endReasonDetail, setEndReasonDetail] = useState('')
+  const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -217,6 +228,11 @@ export function SovereignReignRegisterPanel({
     setStartDate('')
     setEndDate('')
     setRegnalNumber('')
+    setSubTermNumber('')
+    setAppointmentMethod('')
+    setEndReason('')
+    setEndReasonDetail('')
+    setNotes('')
   }
 
   useEffect(() => {
@@ -237,6 +253,11 @@ export function SovereignReignRegisterPanel({
     setStartDate(r.startDate ? r.startDate.slice(0, 10) : '')
     setEndDate(r.endDate ? r.endDate.slice(0, 10) : '')
     setRegnalNumber(r.regnalNumber != null ? String(r.regnalNumber) : '')
+    setSubTermNumber(r.subTermNumber != null ? String(r.subTermNumber) : '')
+    setAppointmentMethod(r.appointmentMethod ?? '')
+    setEndReason(r.endReason ?? '')
+    setEndReasonDetail(r.endReasonDetail ?? '')
+    setNotes(r.notes ?? '')
   }, [open, existingReign])
 
   // 수정 모드에서 모달이 열렸을 때, 저장된 historicalCountryId만 있고
@@ -282,6 +303,11 @@ export function SovereignReignRegisterPanel({
         startDate,
         endDate: endDate || undefined,
         regnalNumber: regnalNumber ? Number(regnalNumber) : undefined,
+        subTermNumber: subTermNumber ? Number(subTermNumber) : undefined,
+        appointmentMethod: (appointmentMethod || undefined) as any,
+        endReason: (endReason || undefined) as any,
+        endReasonDetail: endReasonDetail.trim() || undefined,
+        notes: notes.trim() || undefined,
         regnalName: regnalName.trim() || undefined,
       }
       if (isEdit && reignId) {
@@ -459,6 +485,81 @@ export function SovereignReignRegisterPanel({
                             <FieldHint>
                               한 국가에 같은 대수의 군주는 단 한 명입니다 (예: 표트르 대제 = 러시아 제국 1대).
                             </FieldHint>
+                          </FieldControl>
+                        </FieldRow>
+
+                        {/* 기수 */}
+                        <FieldRow>
+                          <FieldLabel>기수 (선택)</FieldLabel>
+                          <FieldControl>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={subTermNumber}
+                              onChange={(e) => setSubTermNumber(e.target.value)}
+                              placeholder="같은 대 안에서 재위가 나뉠 때 (예: 복위)"
+                            />
+                          </FieldControl>
+                        </FieldRow>
+
+                        {/* 즉위 방식 */}
+                        <FieldRow>
+                          <FieldLabel>즉위 방식</FieldLabel>
+                          <FieldControl>
+                            <FormSelectNative
+                              value={appointmentMethod}
+                              onChange={(e) => setAppointmentMethod(e.target.value)}
+                            >
+                              <option value="">선택 안 함</option>
+                              {APPOINTMENT_METHOD_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </FormSelectNative>
+                          </FieldControl>
+                        </FieldRow>
+
+                        {/* 퇴위 사유 */}
+                        <FieldRow>
+                          <FieldLabel>퇴위 사유</FieldLabel>
+                          <FieldControl>
+                            <FormSelectNative
+                              value={endReason}
+                              onChange={(e) => setEndReason(e.target.value)}
+                            >
+                              <option value="">선택 안 함</option>
+                              {TENURE_END_REASON_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </FormSelectNative>
+                          </FieldControl>
+                        </FieldRow>
+
+                        {/* 퇴위 사유 상세 */}
+                        <FieldRow>
+                          <FieldLabel>퇴위 사유 상세</FieldLabel>
+                          <FieldControl>
+                            <Input
+                              value={endReasonDetail}
+                              onChange={(e) => setEndReasonDetail(e.target.value)}
+                              placeholder="선택 (예: 명예혁명으로 폐위)"
+                            />
+                          </FieldControl>
+                        </FieldRow>
+
+                        {/* 비고 */}
+                        <FieldRow>
+                          <FieldLabel>비고</FieldLabel>
+                          <FieldControl>
+                            <Textarea
+                              value={notes}
+                              onChange={(e) => setNotes(e.target.value)}
+                              placeholder="선택 — 재위 관련 특이사항"
+                              rows={2}
+                            />
                           </FieldControl>
                         </FieldRow>
                       </FormRows>

@@ -16,6 +16,10 @@ interface EmptyStateProps {
   hasActiveFilter?: boolean
   /** 필터 모두 해제 콜백 */
   onClearFilters?: () => void
+  /** 범용 액션 버튼 라벨 (예: "다시 시도") — onAction과 함께 노출 */
+  actionLabel?: ReactNode
+  /** 범용 액션 콜백 (예: 재시도) */
+  onAction?: () => void
 }
 
 export function EmptyState({
@@ -23,6 +27,8 @@ export function EmptyState({
   description,
   hasActiveFilter,
   onClearFilters,
+  actionLabel,
+  onAction,
 }: EmptyStateProps) {
   const finalTitle =
     title ??
@@ -42,6 +48,11 @@ export function EmptyState({
       {hasActiveFilter && onClearFilters && (
         <ClearBtn type="button" onClick={onClearFilters}>
           필터 모두 해제
+        </ClearBtn>
+      )}
+      {actionLabel && onAction && (
+        <ClearBtn type="button" onClick={onAction}>
+          {actionLabel}
         </ClearBtn>
       )}
     </Wrap>

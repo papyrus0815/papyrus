@@ -26,6 +26,7 @@ import {
   type PersonLifeEvent,
   type PersonLifeEventCategory,
 } from '@/shared/api/person-life-events'
+import { TENURE_END_REASON_LABELS } from '@/shared/lib/tenure-labels'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { CATEGORY_ICON } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
@@ -70,6 +71,8 @@ interface ReignInput {
   endDate?: string | null
   notes?: string | null
   regnalNumber?: number | null
+  subTermNumber?: number | null
+  endReason?: string | null
   positionDefinition?: { title?: string | null } | null
   country?: { name?: string | null } | null
   historicalCountry?: { name?: string | null } | null
@@ -82,6 +85,8 @@ interface TenureInput {
   title?: string | null
   notes?: string | null
   termNumber?: number | null
+  subTermNumber?: number | null
+  endReason?: string | null
   positionDefinition?: { title?: string | null } | null
   country?: { name?: string | null } | null
   historicalCountry?: { name?: string | null } | null
@@ -448,9 +453,18 @@ export function PersonLifeTimelineInfographic({
         end: e,
         sortKey: toTs(s),
         title: [country, pos].filter(Boolean).join(' · ') || '재위',
-        subtitle: r.regnalNumber != null ? `${r.regnalNumber}대` : null,
+        subtitle:
+          r.regnalNumber != null
+            ? `${r.regnalNumber}대${r.subTermNumber != null ? ` ${r.subTermNumber}기` : ''}`
+            : null,
         dateLabel: formatRange(s, e),
-        description: r.notes ?? null,
+        description:
+          [
+            r.notes,
+            r.endReason ? `종료: ${TENURE_END_REASON_LABELS[r.endReason] ?? r.endReason}` : null,
+          ]
+            .filter(Boolean)
+            .join('\n') || null,
         durationDays: diffDays(s, e),
       })
     }
@@ -467,9 +481,18 @@ export function PersonLifeTimelineInfographic({
         end: e,
         sortKey: toTs(s),
         title: [country, pos].filter(Boolean).join(' · ') || '재임',
-        subtitle: t.termNumber != null ? `제${t.termNumber}대` : null,
+        subtitle:
+          t.termNumber != null
+            ? `제${t.termNumber}대${t.subTermNumber != null ? ` ${t.subTermNumber}기` : ''}`
+            : null,
         dateLabel: formatRange(s, e),
-        description: t.notes ?? null,
+        description:
+          [
+            t.notes,
+            t.endReason ? `종료: ${TENURE_END_REASON_LABELS[t.endReason] ?? t.endReason}` : null,
+          ]
+            .filter(Boolean)
+            .join('\n') || null,
         durationDays: diffDays(s, e),
       })
     }

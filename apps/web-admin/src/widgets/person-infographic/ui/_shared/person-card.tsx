@@ -43,7 +43,21 @@ function PersonCardItemBase({
     [p.biography],
   )
   return (
-    <EraCard $pinned={pinned} title={bioTooltip} onClick={() => onOpen(p.id)}>
+    <EraCard
+      $pinned={pinned}
+      title={bioTooltip}
+      onClick={() => onOpen(p.id)}
+      role="button"
+      tabIndex={0}
+      aria-label={`${p.name} 상세 보기`}
+      onKeyDown={(e) => {
+        // 카드 전체가 클릭 대상 — 키보드(Enter/Space)로도 열기. Space의 스크롤 기본동작 차단.
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen(p.id)
+        }
+      }}
+    >
       <EraCardThumbWrap $color={era.color}>
         {p.profileImageUrl ? (
           <EraCardThumbImg src={p.profileImageUrl} alt={p.name} loading="lazy" />
@@ -102,7 +116,6 @@ function PersonCardItemBase({
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
           </svg>
         </EraCardPin>
-        <EraCardFieldTag $color={era.color}>{p.field}</EraCardFieldTag>
       </EraCardThumbWrap>
       <EraCardBody>
         <EraName title={p.name}>{highlight(p.name, q)}</EraName>
@@ -121,17 +134,21 @@ function PersonCardItemBase({
             </EraFaction>
           )}
         </EraCountryRow>
-        <EraYear>
-          {p.born < 0 ? `${-p.born}BC` : p.born}
-          {' – '}
-          {p.isAlive ? '현재' : p.died < 0 ? `${-p.died}BC` : p.died}
-          {p.age != null && ` · ${p.age}세`}
-        </EraYear>
+        <EraMetaRow>
+          <EraYear>
+            {p.born < 0 ? `${-p.born}BC` : p.born}
+            {' – '}
+            {p.isAlive ? '현재' : p.died < 0 ? `${-p.died}BC` : p.died}
+            {p.age != null && ` · ${p.age}세`}
+          </EraYear>
+          <EraFieldChip>
+            <EraFieldDot $color={era.color} />
+            {p.field}
+          </EraFieldChip>
+        </EraMetaRow>
         <EraInfluenceRow>
           <EraBarTrack>
-            <EraBarFill
-              style={{ width: p.influence + '%', background: era.color }}
-            />
+            <EraBarFill style={{ width: p.influence + '%' }} />
           </EraBarTrack>
           <EraInfluenceValue>{p.influence}</EraInfluenceValue>
         </EraInfluenceRow>
@@ -159,6 +176,16 @@ const EraCard = styled.div<{ $pinned?: boolean }>`
   display: flex;
   flex-direction: column;
   transition: transform 0.14s, box-shadow 0.14s, background 0.14s;
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: background 0.14s;
+    &:hover {
+      transform: none;
+    }
+  }
   ${({ theme, $pinned }) =>
     theme.mode === 'dark'
       ? css`
@@ -270,17 +297,31 @@ const EraCardPin = styled.button<{ $active: boolean }>`
         `}
 `
 
-const EraCardFieldTag = styled.span<{ $color: string }>`
-  position: absolute;
-  bottom: 6px;
-  right: 6px;
-  font-size: 9px;
+const EraMetaRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+/** 분야 표시 — 사진 위 칼라 태그 대신 본문 내 절제된 칩(시대색 점 + 텍스트). */
+const EraFieldChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 10px;
   font-weight: 600;
-  padding: 3px 7px;
-  border-radius: 10px;
-  background: ${({ $color }) => $color}ee;
-  color: #fff;
-  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: 0.01em;
+`
+
+const EraFieldDot = styled.span<{ $color: string }>`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: ${({ $color }) => $color};
 `
 
 const EraCardBody = styled.div`
@@ -291,8 +332,10 @@ const EraCardBody = styled.div`
 `
 
 const EraName = styled.div`
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
@@ -361,7 +404,12 @@ const EraBarTrack = styled.div`
 const EraBarFill = styled.div`
   height: 100%;
   border-radius: 3px;
+  /* 영향력 값은 길이로 표현 — 색은 시대색과 분리해 중립 액센트(의미 일치) */
+  background: ${({ theme }) => theme.colors.active};
   transition: width 0.3s;
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 const EraInfluenceValue = styled.span`

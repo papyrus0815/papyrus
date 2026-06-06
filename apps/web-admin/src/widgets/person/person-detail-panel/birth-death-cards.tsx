@@ -1,0 +1,121 @@
+/**
+ * 출생 / 사망 카드 — 개요 탭. 좌우 분리하여 장소·일자·사망정보를 묶어 보여준다.
+ * (기존 person-detail-panel.tsx 인라인 IIFE에서 추출 — 순수 표시 컴포넌트)
+ */
+import { FiAlertTriangle, FiCalendar } from 'react-icons/fi'
+
+import { DEATH_TYPE_LABELS } from './helpers'
+import {
+  DeathCauseText,
+  DeathInfoRow,
+  DeathNoteText,
+  DeathTypePill,
+  LifeCard,
+  LifeCardAge,
+  LifeCardGrid,
+  LifeCardHeader,
+  LifeCardIconWrap,
+  LifeCardLabel,
+  LifeCardRow,
+  LifeCardTitle,
+  LifeCardValue,
+} from './person-detail-panel.styles'
+import type { PersonDetailData } from './types'
+
+interface BirthDeathCardsProps {
+  person: PersonDetailData
+  /** formatDateKo 결과 — 빈 문자열이면 미표시 */
+  birthDateStr: string
+  deathDateStr: string
+  ageAtDeath: number | null
+}
+
+export function BirthDeathCards({
+  person: p,
+  birthDateStr,
+  deathDateStr,
+  ageAtDeath,
+}: BirthDeathCardsProps) {
+  const birthPlace =
+    p.birthCity?.name ??
+    p.birthAdminDivision?.name ??
+    p.birthPlaceText ??
+    null
+  const deathPlace =
+    p.deathCity?.name ??
+    p.deathAdminDivision?.name ??
+    p.deathPlaceText ??
+    null
+  const hasBirth = !!birthDateStr || !!birthPlace
+  const hasDeath =
+    !!deathDateStr ||
+    !!deathPlace ||
+    !!p.deathType ||
+    !!p.deathCause ||
+    !!p.deathNote
+  if (!hasBirth && !hasDeath) return null
+
+  return (
+    <LifeCardGrid>
+      {hasBirth && (
+        <LifeCard $tone="birth" aria-label="출생 정보">
+          <LifeCardHeader>
+            <LifeCardIconWrap $tone="birth">
+              <FiCalendar size={14} strokeWidth={2.2} />
+            </LifeCardIconWrap>
+            <LifeCardTitle>출생</LifeCardTitle>
+          </LifeCardHeader>
+          {birthDateStr && (
+            <LifeCardRow>
+              <LifeCardLabel>일자</LifeCardLabel>
+              <LifeCardValue>{birthDateStr}</LifeCardValue>
+            </LifeCardRow>
+          )}
+          {birthPlace && (
+            <LifeCardRow>
+              <LifeCardLabel>장소</LifeCardLabel>
+              <LifeCardValue>{birthPlace}</LifeCardValue>
+            </LifeCardRow>
+          )}
+        </LifeCard>
+      )}
+      {hasDeath && (
+        <LifeCard $tone="death" aria-label="사망 정보">
+          <LifeCardHeader>
+            <LifeCardIconWrap $tone="death">
+              <FiAlertTriangle size={14} strokeWidth={2.2} />
+            </LifeCardIconWrap>
+            <LifeCardTitle>사망</LifeCardTitle>
+            {ageAtDeath != null && <LifeCardAge>향년 {ageAtDeath}세</LifeCardAge>}
+          </LifeCardHeader>
+          {deathDateStr && (
+            <LifeCardRow>
+              <LifeCardLabel>일자</LifeCardLabel>
+              <LifeCardValue>{deathDateStr}</LifeCardValue>
+            </LifeCardRow>
+          )}
+          {deathPlace && (
+            <LifeCardRow>
+              <LifeCardLabel>장소</LifeCardLabel>
+              <LifeCardValue>{deathPlace}</LifeCardValue>
+            </LifeCardRow>
+          )}
+          {(p.deathType || p.deathCause) && (
+            <LifeCardRow>
+              <LifeCardLabel>유형</LifeCardLabel>
+              <DeathInfoRow>
+                {p.deathType && (
+                  <DeathTypePill>
+                    {DEATH_TYPE_LABELS[p.deathType] ?? p.deathType}
+                  </DeathTypePill>
+                )}
+                {p.deathCause && <DeathCauseText>{p.deathCause}</DeathCauseText>}
+              </DeathInfoRow>
+            </LifeCardRow>
+          )}
+          {p.deathNote && <DeathNoteText>{p.deathNote}</DeathNoteText>}
+        </LifeCard>
+      )}
+    </LifeCardGrid>
+  )
+}

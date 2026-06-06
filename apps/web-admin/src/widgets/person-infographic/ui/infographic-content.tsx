@@ -10,13 +10,9 @@ import { motion } from 'framer-motion'
 import { FiBarChart2, FiPlus, FiSearch, FiX } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
-import { usePersons } from '@/entities/person/api'
-import {
-  PersonTabSharedHeader,
-  PersonTabSharedHeaderLeft,
-  PersonTabSharedHeaderRight,
-  PersonTabSharedTitle,
-} from '@/widgets/country/country-detail/ui/country-detail.styles'
+import { usePersonsInfographic } from '@/entities/person/api'
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
+import { PersonTabSharedTitle } from '@/widgets/country/country-detail/ui/country-detail.styles'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 
 import {
@@ -29,7 +25,9 @@ import {
 import { useFilterUrlSync } from '../model/url-sync'
 
 import { DynastyView } from './dynasty-view'
+import { CardGridSkeleton } from './_shared/card-grid-skeleton'
 import { EmptyState } from './_shared/empty-state'
+import { SortBar } from './_shared/sort-bar'
 import { EraStoryView } from './era-story-view'
 import { GalaxyView } from './galaxy-view'
 import { HeaderStats } from './header-stats'
@@ -47,7 +45,7 @@ export function InfographicContent({
   onPersonClick,
 }: InfographicContentProps) {
   useFilterUrlSync()
-  const { isLoading } = usePersons()
+  const { isLoading, isError, refetch } = usePersonsInfographic()
   const allPeople = useAdaptedPersons()
 
   const scopes = usePersonInfographicFilterStore((s) => s.scopes)
@@ -70,8 +68,9 @@ export function InfographicContent({
   )
 
   const [formOpen, setFormOpen] = useState(false)
-  const [editId] = useState<string | null>(null)
-  const [editOpen, setEditOpen] = useState(false)
+
+  // 입력은 즉시 반영(q)하되 무거운 필터/뷰 리렌더는 안정 후에만 — 대량 인물에서 타이핑 랙 완화.
+  const dq = useDebouncedValue(q, 200)
 
   // 통계 차트 접힘 — 기본 접힘. localStorage persist.
   const [statsOpen, setStatsOpen] = useState<boolean>(() => {
@@ -108,18 +107,12 @@ export function InfographicContent({
     if (minInfluence > 0) arr = arr.filter((p) => p.influence >= minInfluence)
     if (aliveFilter === 'alive') arr = arr.filter((p) => p.isAlive)
     else if (aliveFilter === 'dead') arr = arr.filter((p) => !p.isAlive)
-    if (q.trim()) {
-      const qq = q.toLowerCase()
-      arr = arr.filter(
-        (p) =>
-          p.name.toLowerCase().includes(qq) ||
-          p.country.toLowerCase().includes(qq) ||
-          p.faction.toLowerCase().includes(qq) ||
-          (p.primaryTitle?.toLowerCase().includes(qq) ?? false),
-      )
+    if (dq.trim()) {
+      const qq = dq.trim().toLowerCase()
+      arr = arr.filter((p) => p.searchText.includes(qq))
     }
     return arr
-  }, [allPeople, scopes, q, minInfluence, aliveFilter])
+  }, [allPeople, scopes, dq, minInfluence, aliveFilter])
 
   // 활성 scope 라벨 — 단일이면 그 값, 다중이면 "필터링됨". 모두 비면 "전체 인물".
   const totalScopeCount =
@@ -165,25 +158,48 @@ export function InfographicContent({
       transition={{ duration: 0.2 }}
     >
       <Wrap>
-        <PersonTabSharedHeader>
-          <PersonTabSharedHeaderLeft>
+        {/* 스크린리더용 — 필터/검색으로 결과 수가 바뀌면 조용히 안내 (시각적으로 숨김) */}
+        <SrStatus role="status" aria-live="polite">
+          {isError
+            ? '인물 데이터를 불러오지 못했습니다'
+            : isLoading
+              ? '인물 데이터를 불러오는 중'
+              : `${scopeLabel}, ${filtered.length}명`}
+        </SrStatus>
+        <Toolbar>
+          <ToolbarHead>
             <PersonTabSharedTitle>
               {scopeLabel}
               {filtered.length > 0 && (
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 400,
-                    color: 'var(--text-tertiary)',
-                    marginLeft: 10,
-                  }}
-                >
+                <TitleMeta>
                   {filtered.length}명 · 평균 수명 {avgLifespan}년
-                </span>
+                </TitleMeta>
               )}
             </PersonTabSharedTitle>
-          </PersonTabSharedHeaderLeft>
-          <PersonTabSharedHeaderRight>
+          </ToolbarHead>
+
+          <ToolbarMid>
+            <SearchBox>
+              <SearchIconWrap>
+                <FiSearch size={13} />
+              </SearchIconWrap>
+              <SearchInput
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="이름, 국가, 소속 검색…"
+                aria-label="인물 검색"
+              />
+              {q && (
+                <ClearBtn onClick={() => setQ('')} aria-label="검색어 지우기">
+                  <FiX size={13} />
+                </ClearBtn>
+              )}
+            </SearchBox>
+            {/* 정렬은 카드 그리드 뷰(스토리·왕조)에서만 의미 — 동작 패리티 유지 */}
+            {(activeView === 'story' || activeView === 'dynasty') && <SortBar />}
+          </ToolbarMid>
+
+          <ToolbarActions>
             <StatsToggleBtn
               type="button"
               onClick={toggleStats}
@@ -196,34 +212,29 @@ export function InfographicContent({
             <AddPersonBtn onClick={() => setFormOpen(true)}>
               <FiPlus size={14} />새 인물
             </AddPersonBtn>
-          </PersonTabSharedHeaderRight>
-        </PersonTabSharedHeader>
-
-        <SearchRow>
-          <SearchBox>
-            <SearchIconWrap>
-              <FiSearch size={13} />
-            </SearchIconWrap>
-            <SearchInput
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="이름, 국가, 소속 검색…"
-            />
-            {q && (
-              <ClearBtn onClick={() => setQ('')} aria-label="검색어 지우기">
-                <FiX size={13} />
-              </ClearBtn>
-            )}
-          </SearchBox>
-        </SearchRow>
+          </ToolbarActions>
+        </Toolbar>
 
         {!isLoading && filtered.length > 0 && statsOpen && (
           <HeaderStats people={filtered} />
         )}
 
-        {isLoading && <EmptyState title="데이터를 불러오는 중…" />}
+        {isError && (
+          <EmptyState
+            title="인물 데이터를 불러오지 못했어요"
+            description="네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+            actionLabel="다시 시도"
+            onAction={() => refetch()}
+          />
+        )}
 
-        {!isLoading && filtered.length === 0 && (
+        {!isError && isLoading && (
+          <ViewArea>
+            <CardGridSkeleton />
+          </ViewArea>
+        )}
+
+        {!isError && !isLoading && filtered.length === 0 && (
           <EmptyState
             hasActiveFilter={hasActiveFilter}
             onClearFilters={resetFilters}
@@ -242,7 +253,7 @@ export function InfographicContent({
               <EraStoryView
                 people={filtered}
                 onOpen={onPersonClick}
-                q={q}
+                q={dq}
                 pinned={pinned}
                 togglePin={togglePin}
               />
@@ -251,7 +262,7 @@ export function InfographicContent({
               <DynastyView
                 people={filtered}
                 onOpen={onPersonClick}
-                q={q}
+                q={dq}
                 pinned={pinned}
                 togglePin={togglePin}
               />
@@ -280,12 +291,6 @@ export function InfographicContent({
         onClose={() => setFormOpen(false)}
         onSuccess={() => setFormOpen(false)}
       />
-      <PersonRegisterViewModal
-        isOpen={editOpen}
-        onClose={() => setEditOpen(false)}
-        editPersonId={editId}
-        onSuccess={() => setEditOpen(false)}
-      />
     </motion.div>
   )
 }
@@ -303,6 +308,19 @@ const ViewArea = styled.div`
   margin-top: 18px;
 `
 
+/** 시각적으로 숨기되 스크린리더에는 노출되는 라이브 영역. */
+const SrStatus = styled.div`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+`
+
 const Footer = styled.div`
   margin-top: 24px;
   display: flex;
@@ -311,12 +329,41 @@ const Footer = styled.div`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const SearchRow = styled.div`
+const Toolbar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+`
+
+const ToolbarHead = styled.div`
+  flex-shrink: 0;
+  min-width: 0;
+`
+
+const TitleMeta = styled.span`
+  margin-left: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ToolbarMid = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 260px;
+  min-width: 0;
+  flex-wrap: wrap;
+`
+
+const ToolbarActions = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
 `
 
 const SearchBox = styled.div`
@@ -383,11 +430,12 @@ const AddPersonBtn = styled.button`
   font-weight: 600;
   cursor: pointer;
   border: none;
-  background: #6366f1;
-  color: #fff;
-  transition: background 0.14s;
+  /* 테마 액센트 토큰 사용 — empty-state의 기본 버튼과 동일(다크모드 일관성) */
+  background: ${({ theme }) => theme.colors.active};
+  color: ${({ theme }) => theme.colors.background.primary};
+  transition: opacity 0.14s;
   &:hover {
-    background: #4f46e5;
+    opacity: 0.9;
   }
 `
 

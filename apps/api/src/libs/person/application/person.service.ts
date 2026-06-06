@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
-import { AttachmentOwner, EventMethod, PersonHumanRelationshipType, PersonRelationshipTag, PersonTrait } from '@prisma/client'
+import { AggregateType, AttachmentOwner, EventMethod, NotificationSubResource, PersonHumanRelationshipType, PersonRelationshipTag, PersonTrait } from '@prisma/client'
 import {
   IPersonRepository,
   CreatePersonData,
@@ -7,8 +7,12 @@ import {
 } from '../domain/person.repository'
 import { PersonPrismaRepository } from '../infrastructure/person.prisma.repository'
 import { NotificationService } from '../../notification/application/notification.service'
+import { PointService } from '../../gamification/application/point.service'
+import { completenessBonus } from '../../gamification/domain/point.policy'
 import { PrismaService } from '@prisma/prisma.service'
 import { UploadService } from '../../shared/upload/upload.service'
+import { yearRangePreview } from '../../shared/notification-preview.util'
+import { careerItemLabel, educationItemLabel, awardItemLabel } from '../domain/subresource-label.util'
 import {
   CreateMilitaryCareerDto,
   CreateBusinessCareerDto,
@@ -32,6 +36,7 @@ import {
   UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
+  PersonInfographicItemDto,
   MilitaryCareerResponseDto,
   BusinessCareerResponseDto,
   AcademicCareerResponseDto,
@@ -74,6 +79,116 @@ function personDisplayName(p: {
   return [surname, name].filter(Boolean).join(' ').trim() || '이름 없음'
 }
 
+/** 인물 완성도 신호: 프로필 사진 / 약력 / 출생연도 (각 1신호) */
+function personCompletenessBonus(p: {
+  profileImageUrl?: string | null
+  biography?: string | null
+  birthYear?: number | null
+}): number {
+  const signals =
+    (p.profileImageUrl ? 1 : 0) + (p.biography ? 1 : 0) + (p.birthYear != null ? 1 : 0)
+  return completenessBonus(signals)
+}
+
+/**
+ * 인물 수정 알림의 동작·하위 리소스 판정.
+ * - 전기(biography)가 비어있다가 채워짐 → "전기 추가"(CREATE + BIOGRAPHY)
+ * - 기존 전기 내용이 바뀜          → "전기 수정"(UPDATE + BIOGRAPHY)
+ * - 전기 외 필드만 변경(또는 전기 미전달) → 인물 자체 수정(UPDATE, 하위 리소스 없음)
+ * data.biography가 undefined면 부분 수정에서 전기를 손대지 않은 것으로 본다.
+ */
+function describePersonUpdate(
+  existing: { biography?: string | null },
+  data: UpdatePersonData,
+): { method: EventMethod; subResourceType?: NotificationSubResource } {
+  if (data.biography !== undefined) {
+    const before = (existing.biography ?? '').trim()
+    const after = (data.biography ?? '').trim()
+    if (before !== after) {
+      // 비어있다 채움=추가, 채워져있다 바뀜=수정, 채워져있다 비움=삭제
+      if (after === '') {
+        if (before !== '') {
+          return { method: EventMethod.DELETE, subResourceType: NotificationSubResource.BIOGRAPHY }
+        }
+      } else {
+        return {
+          method: before === '' ? EventMethod.CREATE : EventMethod.UPDATE,
+          subResourceType: NotificationSubResource.BIOGRAPHY,
+        }
+      }
+    }
+  }
+  return { method: EventMethod.UPDATE }
+}
+
+/** 비교용 정규화: null/undefined→'', 그 외 trim한 문자열 */
+function normField(v: any): string {
+  return v == null ? '' : String(v).trim()
+}
+
+/**
+ * 인물 수정 시 바뀐 필드 그룹을 한국어로 요약. "이름·생몰년 수정".
+ * data(부분 수정)에 실제로 전달되었고 기존값과 다른 키만 집계. 변경 없으면 undefined.
+ * names(표시명 전/후)가 주어지고 이름이 바뀌었으면 "이름: 옛→새"로 전후 값을 노출한다.
+ * (생몰년·관계·사진 등 다필드/ID 그룹은 가독성을 위해 라벨만 표기)
+ */
+function summarizePersonChanges(
+  existing: any,
+  data: any,
+  names?: { before: string; after: string },
+): string | undefined {
+  const groups: Array<{ label: string; keys: string[] }> = [
+    { label: '이름', keys: ['name', 'surname', 'middleName', 'originalName', 'nameDisplayOrder'] },
+    {
+      label: '생몰년',
+      keys: [
+        'birthEra', 'birthYear', 'birthMonth', 'birthDay',
+        'deathEra', 'deathYear', 'deathMonth', 'deathDay',
+        'isDeathDateUnknown', 'isAlive', 'deathType', 'deathCause', 'deathNote',
+      ],
+    },
+    { label: '전기', keys: ['biography'] },
+    { label: '성별', keys: ['gender'] },
+    { label: '사진', keys: ['profileImageUrl'] },
+    { label: '영향력', keys: ['influence'] },
+    { label: '관계', keys: ['dynastyId', 'religionId', 'denominationId', 'fatherId', 'motherId', 'countryId'] },
+  ]
+  const changed = groups
+    .filter((g) => g.keys.some((k) => data[k] !== undefined && normField(data[k]) !== normField(existing[k])))
+    .map((g) => {
+      if (g.label === '이름' && names && names.before !== names.after) {
+        return `이름: ${names.before} → ${names.after}`
+      }
+      return g.label
+    })
+  return changed.length ? `${changed.join('·')} 수정` : undefined
+}
+
+/** 재임/재위 직위명 — 직접 입력(title) 우선, 없으면 직위 정의(positionDefinition.title) 사용 */
+function tenurePositionTitle(t: any, fallback: string): string {
+  return t?.title || t?.positionDefinition?.title || fallback
+}
+
+/**
+ * 재임/재위 알림 프리뷰 — "제N대 · YYYY. M. D. ~ YYYY. M. D." (종료일 없으면 "~ 재직 중").
+ * startDate는 Date 또는 ISO 문자열일 수 있고, BC/고대 안전을 위해 네이티브 Date 파싱 대신 문자열을 직접 자른다.
+ */
+function tenurePreview(t: any): string | undefined {
+  const fmt = (v: any): string | null => {
+    if (!v) return null
+    const s = v instanceof Date ? v.toISOString() : String(v)
+    const m = s.match(/^(-?\d{1,6})-(\d{1,2})-(\d{1,2})/)
+    if (!m) return null
+    return `${Number(m[1])}. ${Number(m[2])}. ${Number(m[3])}.`
+  }
+  const start = fmt(t?.startDate)
+  if (!start) return undefined
+  const end = fmt(t?.endDate)
+  const period = end ? `${start} ~ ${end}` : `${start} ~ 재직 중`
+  const term = t?.termNumber ? `제${t.termNumber}대 · ` : ''
+  return `${term}${period}`
+}
+
 @Injectable()
 export class PersonService {
   constructor(
@@ -81,6 +196,7 @@ export class PersonService {
     private readonly notificationService: NotificationService,
     private readonly prisma: PrismaService,
     private readonly uploadService: UploadService,
+    private readonly pointService: PointService,
   ) {}
 
   /**
@@ -88,6 +204,15 @@ export class PersonService {
    */
   async findAll(accountId?: string): Promise<PersonResponseDto[]> {
     return this.personRepository.findAll(accountId)
+  }
+
+  /**
+   * 인물 인포그래픽 목록(경량) 조회 — 대시보드 인포그래픽 전용 축소 payload.
+   */
+  async findAllForInfographic(
+    accountId?: string,
+  ): Promise<PersonInfographicItemDto[]> {
+    return this.personRepository.findAllForInfographic(accountId)
   }
 
   /**
@@ -193,6 +318,13 @@ export class PersonService {
       personDisplayName(person),
       EventMethod.CREATE,
       person.id,
+      yearRangePreview(person.birthEra, person.birthYear, person.deathEra, person.deathYear),
+    )
+    await this.pointService.awardForCreate(
+      accountId,
+      AggregateType.PERSON,
+      person.id,
+      personCompletenessBonus(person),
     )
     return person
   }
@@ -208,10 +340,28 @@ export class PersonService {
         : new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${id})`)
     }
     const person = await this.personRepository.update(id, data)
+    const change = describePersonUpdate(existing, data)
+    // 전기 등 하위 리소스 변경이면 제목이 이미 구체적이므로 preview 생략,
+    // 일반 인물 수정이면 바뀐 필드 요약("이름·생몰년 수정"), 그것도 없으면 생몰년 범위.
+    const preview = change.subResourceType
+      ? undefined
+      : summarizePersonChanges(existing, data, {
+          before: personDisplayName(existing),
+          after: personDisplayName(person),
+        }) ?? yearRangePreview(person.birthEra, person.birthYear, person.deathEra, person.deathYear)
     await this.notificationService.notifyPerson(
       personDisplayName(person),
-      EventMethod.UPDATE,
+      change.method,
       person.id,
+      preview,
+      change.subResourceType,
+    )
+    // 수정으로 내용을 채운 경우에도 완성도 보너스 적립(콘텐츠당 1회, 멱등)
+    await this.pointService.awardCompletenessBonus(
+      accountId,
+      AggregateType.PERSON,
+      person.id,
+      personCompletenessBonus(person),
     )
     return person
   }
@@ -285,6 +435,32 @@ export class PersonService {
     await this.notificationService.notifyPerson(
       personDisplayName(person),
       EventMethod.DELETE,
+      id,
+      yearRangePreview(person.birthEra, person.birthYear, person.deathEra, person.deathYear),
+    )
+    await this.pointService.revokeForRecord(AggregateType.PERSON, id)
+  }
+
+  /**
+   * 인물 하위 섹션(경력/학력/수상) 변경 알림.
+   * 컬렉션 항목은 추가·삭제가 잦아 항목마다 CREATE를 쏘면 알림이 도배되므로,
+   * UPDATE + subResourceType으로 발행해 같은 인물·같은 섹션의 미확인 알림을 하나로 병합한다.
+   * → 표시: "{인물}의 경력이 수정되었습니다"
+   */
+  private async notifyPersonSection(
+    personId: string | null | undefined,
+    subResourceType: NotificationSubResource,
+    detail?: string,
+  ): Promise<void> {
+    if (!personId) return
+    const person = await this.personRepository.findById(personId)
+    if (!person) return
+    await this.notificationService.notifyPerson(
+      personDisplayName(person),
+      EventMethod.UPDATE,
+      person.id,
+      detail, // 하위 항목 상세("미국 대통령 · 1789 ~ 1797"). 행위자는 ALS로 자동 기록.
+      subResourceType,
     )
   }
 
@@ -296,63 +472,81 @@ export class PersonService {
    * 군인 경력 추가
    */
   async addMilitaryCareer(dto: CreateMilitaryCareerDto): Promise<MilitaryCareerResponseDto> {
-    return this.personRepository.addMilitaryCareer(dto)
+    const created = await this.personRepository.addMilitaryCareer(dto)
+    await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
+    return created
   }
 
   /**
    * 기업인 경력 추가
    */
   async addBusinessCareer(dto: CreateBusinessCareerDto): Promise<BusinessCareerResponseDto> {
-    return this.personRepository.addBusinessCareer(dto)
+    const created = await this.personRepository.addBusinessCareer(dto)
+    await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
+    return created
   }
 
   /**
    * 학자 경력 추가
    */
   async addAcademicCareer(dto: CreateAcademicCareerDto): Promise<AcademicCareerResponseDto> {
-    return this.personRepository.addAcademicCareer(dto)
+    const created = await this.personRepository.addAcademicCareer(dto)
+    await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
+    return created
   }
 
   /**
    * 운동선수 경력 추가
    */
   async addAthleteCareer(dto: CreateAthleteCareerDto): Promise<AthleteCareerResponseDto> {
-    return this.personRepository.addAthleteCareer(dto)
+    const created = await this.personRepository.addAthleteCareer(dto)
+    await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
+    return created
   }
 
   /**
    * 종교인 경력 추가
    */
   async addReligiousCareer(dto: CreateReligiousCareerDto): Promise<ReligiousCareerResponseDto> {
-    return this.personRepository.addReligiousCareer(dto)
+    const created = await this.personRepository.addReligiousCareer(dto)
+    await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
+    return created
   }
 
   /**
    * 예술가 경력 추가
    */
   async addArtistCareer(dto: CreateArtistCareerDto): Promise<ArtistCareerResponseDto> {
-    return this.personRepository.addArtistCareer(dto)
+    const created = await this.personRepository.addArtistCareer(dto)
+    await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
+    return created
   }
 
   /**
    * 언론인 경력 추가
    */
   async addMediaCareer(dto: CreateMediaCareerDto): Promise<MediaCareerResponseDto> {
-    return this.personRepository.addMediaCareer(dto)
+    const created = await this.personRepository.addMediaCareer(dto)
+    await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
+    return created
   }
 
   /**
    * 법조인 경력 추가
    */
   async addLegalCareer(dto: CreateLegalCareerDto): Promise<LegalCareerResponseDto> {
-    return this.personRepository.addLegalCareer(dto)
+    const created = await this.personRepository.addLegalCareer(dto)
+    await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
+    return created
   }
 
   /**
    * 의료인 경력 추가
    */
   async addMedicalCareer(dto: CreateMedicalCareerDto): Promise<MedicalCareerResponseDto> {
-    return this.personRepository.addMedicalCareer(dto)
+    const created = await this.personRepository.addMedicalCareer(dto)
+    await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
+    return created
   }
 
   /**
@@ -371,8 +565,8 @@ export class PersonService {
     }
     const tenure = await this.personRepository.addGovernmentPositionTenure(dto, accountId)
     const person = tenure?.person
-    const label = person ? `${personDisplayName(person)} - ${tenure?.title ?? '재임'}` : (tenure?.title ?? '재임 기록')
-    await this.notificationService.notifyTenure(label, EventMethod.CREATE, tenure?.personId ?? tenure?.id, tenure?.startDate ? String(tenure.startDate) : undefined)
+    const label = person ? `${personDisplayName(person)} - ${tenurePositionTitle(tenure, '재임')}` : tenurePositionTitle(tenure, '재임 기록')
+    await this.notificationService.notifyTenure(label, EventMethod.CREATE, tenure?.personId ?? tenure?.id, tenurePreview(tenure))
     if (
       tenure &&
       (dto.positionType === 'HEAD_OF_STATE' || dto.positionType === 'HEAD_OF_GOVERNMENT')
@@ -407,8 +601,8 @@ export class PersonService {
     }
     const tenure = await this.personRepository.updateGovernmentPositionTenure(id, dto)
     const person = tenure?.person
-    const label = person ? `${personDisplayName(person)} - ${tenure?.title ?? '재임'}` : (tenure?.title ?? '재임 기록')
-    await this.notificationService.notifyTenure(label, EventMethod.UPDATE, tenure?.personId ?? tenure?.id, tenure?.startDate ? String(tenure.startDate) : undefined)
+    const label = person ? `${personDisplayName(person)} - ${tenurePositionTitle(tenure, '재임')}` : tenurePositionTitle(tenure, '재임 기록')
+    await this.notificationService.notifyTenure(label, EventMethod.UPDATE, tenure?.personId ?? tenure?.id, tenurePreview(tenure))
     return tenure
   }
 
@@ -418,7 +612,7 @@ export class PersonService {
   async deleteGovernmentPositionTenure(id: string): Promise<void> {
     const tenure = await this.personRepository.findTenureById(id)
     const person = tenure?.person
-    const label = person ? `${personDisplayName(person)} - ${tenure?.title ?? '재임'}` : (tenure?.title ?? '재임 기록')
+    const label = person ? `${personDisplayName(person)} - ${tenurePositionTitle(tenure, '재임')}` : tenurePositionTitle(tenure, '재임 기록')
     await this.personRepository.deleteGovernmentPositionTenure(id)
     await this.notificationService.notifyTenure(label, EventMethod.DELETE, tenure?.personId)
   }
@@ -432,7 +626,7 @@ export class PersonService {
       label,
       EventMethod.CREATE,
       row?.personId ?? row?.id,
-      row?.startDate ? String(row.startDate) : undefined,
+      tenurePreview(row),
     )
     return row
   }
@@ -445,7 +639,7 @@ export class PersonService {
       label,
       EventMethod.UPDATE,
       row?.personId ?? row?.id,
-      row?.startDate ? String(row.startDate) : undefined,
+      tenurePreview(row),
     )
     return row
   }
@@ -845,58 +1039,73 @@ export class PersonService {
    * 학력 추가
    */
   async addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto> {
-    return this.personRepository.addEducation(dto)
+    const created = await this.personRepository.addEducation(dto)
+    await this.notifyPersonSection(created.personId, NotificationSubResource.EDUCATION, educationItemLabel(created))
+    return created
   }
 
   /**
    * 수상/훈장 추가
    */
   async addAward(dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto> {
-    return this.personRepository.addAward(dto)
+    const created = await this.personRepository.addAward(dto)
+    await this.notifyPersonSection(created.personId, NotificationSubResource.AWARD, awardItemLabel(created))
+    return created
   }
 
   async deleteMilitaryCareer(id: string): Promise<void> {
-    return this.personRepository.deleteMilitaryCareer(id)
+    const { personId, itemLabel } = await this.personRepository.deleteMilitaryCareer(id)
+    await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   async deleteBusinessCareer(id: string): Promise<void> {
-    return this.personRepository.deleteBusinessCareer(id)
+    const { personId, itemLabel } = await this.personRepository.deleteBusinessCareer(id)
+    await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   async deleteAcademicCareer(id: string): Promise<void> {
-    return this.personRepository.deleteAcademicCareer(id)
+    const { personId, itemLabel } = await this.personRepository.deleteAcademicCareer(id)
+    await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   async deleteAthleteCareer(id: string): Promise<void> {
-    return this.personRepository.deleteAthleteCareer(id)
+    const { personId, itemLabel } = await this.personRepository.deleteAthleteCareer(id)
+    await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   async deleteReligiousCareer(id: string): Promise<void> {
-    return this.personRepository.deleteReligiousCareer(id)
+    const { personId, itemLabel } = await this.personRepository.deleteReligiousCareer(id)
+    await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   async deleteArtistCareer(id: string): Promise<void> {
-    return this.personRepository.deleteArtistCareer(id)
+    const { personId, itemLabel } = await this.personRepository.deleteArtistCareer(id)
+    await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   async deleteMediaCareer(id: string): Promise<void> {
-    return this.personRepository.deleteMediaCareer(id)
+    const { personId, itemLabel } = await this.personRepository.deleteMediaCareer(id)
+    await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   async deleteLegalCareer(id: string): Promise<void> {
-    return this.personRepository.deleteLegalCareer(id)
+    const { personId, itemLabel } = await this.personRepository.deleteLegalCareer(id)
+    await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   async deleteMedicalCareer(id: string): Promise<void> {
-    return this.personRepository.deleteMedicalCareer(id)
+    const { personId, itemLabel } = await this.personRepository.deleteMedicalCareer(id)
+    await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   async deleteEducation(id: string): Promise<void> {
-    return this.personRepository.deleteEducation(id)
+    const { personId, itemLabel } = await this.personRepository.deleteEducation(id)
+    await this.notifyPersonSection(personId, NotificationSubResource.EDUCATION, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   async deleteAward(id: string): Promise<void> {
-    return this.personRepository.deleteAward(id)
+    const { personId, itemLabel } = await this.personRepository.deleteAward(id)
+    await this.notifyPersonSection(personId, NotificationSubResource.AWARD, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   /**

@@ -71,8 +71,11 @@ import {
 } from '@/shared/lib/influence-tier'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 
+import { BirthDeathCards } from './birth-death-cards'
+import { CollapsibleSection } from './collapsible-section'
 import { PersonBiographySections } from './person-biography-sections'
-import { TenureAchievements } from './tenure-achievements'
+import { SpouseDetailSection } from './spouse-detail-section'
+import { TenureReignList } from './tenure-reign-list'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
@@ -132,10 +135,6 @@ import {
   CountryAffiliationType,
   CountryBracket,
   CountryFlagImg,
-  DeathCauseText,
-  DeathInfoRow,
-  DeathNoteText,
-  DeathTypePill,
   DeleteButton,
   DeleteConfirmActions,
   DeleteConfirmCancelBtn,
@@ -181,15 +180,6 @@ import {
   KpiStrip,
   KpiSubValue,
   KpiValue,
-  LifeCard,
-  LifeCardAge,
-  LifeCardGrid,
-  LifeCardHeader,
-  LifeCardIconWrap,
-  LifeCardLabel,
-  LifeCardRow,
-  LifeCardTitle,
-  LifeCardValue,
   LoadingText,
   LoadingWrap,
   MonarchCrownIcon,
@@ -229,12 +219,6 @@ import {
   SimpleEntrySub,
   SimpleEntryTitle,
   Spinner,
-  SpouseDetailHeader,
-  SpouseDetailItem,
-  SpouseDetailList,
-  SpouseDetailName,
-  SpouseDetailNote,
-  SpouseDetailPeriod,
   TabBtn,
   TabContent,
   TabContentArea,
@@ -243,29 +227,21 @@ import {
   TenureEmpty,
   TopNavBar,
   UnifiedActionRow,
-  UnifiedAgeBadge,
-  UnifiedCard,
-  UnifiedCardList,
-  UnifiedCardMain,
-  UnifiedCardTitle,
-  UnifiedCardTopRow,
-  UnifiedEditBtn,
-  UnifiedKindBadge,
-  UnifiedMetaChip,
-  UnifiedMetaRow,
-  UnifiedOrdinal,
-  UnifiedSubRow,
 } from './person-detail-panel.styles'
 
-import type { PersonDetailData, TabType } from './types'
+import type {
+  CombinedTenureItem,
+  PersonDetailData,
+  TabType,
+  TenureLikeRecord,
+} from './types'
 import {
-  APPOINTMENT_METHOD_LABELS,
-  DEATH_TYPE_LABELS,
-  TENURE_END_REASON_LABELS,
   formatDateKo,
   formatIsoDateKo,
   formatPeriod,
-  getAgeAtDate,
+  isoDateSortKey,
+  isoDateToApproxDays,
+  pickGovernmentTenures,
 } from './helpers'
 
 interface PersonDetailPanelProps {
@@ -504,10 +480,7 @@ export function PersonDetailPanel({
     [person],
   )
   const timelineTenures = useMemo(
-    () =>
-      (person?.governmentPositions ??
-        person?.governmentTenures ??
-        []) as any[],
+    () => pickGovernmentTenures(person),
     [person],
   )
   const timelineEvents = useMemo(
@@ -550,6 +523,101 @@ export function PersonDetailPanel({
     }
     return m
   }, [timelineEvents])
+
+  /**
+   * 재임·재위 통합 목록 — startDate 순 정렬 + 연임 판정용 대(ordinal) 카운트.
+   * 매 렌더마다 정렬·Map 구축을 반복하지 않도록 메모이즈 (개요 "재임·재위" 섹션 입력).
+   */
+  const combinedTenures = useMemo(() => {
+    const tenures = pickGovernmentTenures(person)
+    const reigns = person?.sovereignReigns ?? []
+    const base: Array<{ kind: 'tenure' | 'reign'; data: TenureLikeRecord }> = [
+      ...tenures.map((t) => ({ kind: 'tenure' as const, data: t })),
+      ...reigns.map((r) => ({ kind: 'reign' as const, data: r })),
+    ]
+    base.sort((a, b) => {
+      // BC·고대 안전 정렬 (startDate 없는 항목은 맨 뒤로)
+      return isoDateSortKey(a.data.startDate) - isoDateSortKey(b.data.startDate)
+    })
+    // 표시용 대(ordinal): 재위는 regnalNumber 우선, 재임은 termNumber 우선
+    const ordinalOf = (it: { kind: 'tenure' | 'reign'; data: TenureLikeRecord }) =>
+      it.kind === 'reign'
+        ? it.data.regnalNumber ?? it.data.termNumber ?? null
+        : it.data.termNumber ?? it.data.regnalNumber ?? null
+    // 같은 종류·같은 대(ordinal)에 2건 이상이면 연임으로 카운트
+    const termCounts = new Map<string, number>()
+    for (const it of base) {
+      const ord = ordinalOf(it)
+      if (ord == null) continue
+      const key = `${it.kind}:${ord}`
+      termCounts.set(key, (termCounts.get(key) ?? 0) + 1)
+    }
+    const items: CombinedTenureItem[] = base.map((it) => {
+      const ord = ordinalOf(it)
+      const sub = it.data.subTermNumber
+      // 연임 신호: 본인 회차(subTermNumber)가 2 이상이거나, 같은 대가 2건 이상.
+      // subTermNumber 를 함께 보므로 ordinal 이 없어도 연임을 잡아낸다.
+      const isReappointment =
+        (sub != null && sub >= 2) ||
+        (ord != null && (termCounts.get(`${it.kind}:${ord}`) ?? 0) >= 2)
+      return { kind: it.kind, data: it.data, ordinalNum: ord, isReappointment }
+    })
+    return { items, count: items.length }
+  }, [person])
+
+  /**
+   * 재임·재위 총 연수 (KPI). 군주 겸 수반 등 구간이 겹칠 수 있어 interval 병합 후
+   * 합산 — 이중계산 방지. 0 이하이면 null.
+   */
+  const tenureTotalYears = useMemo(() => {
+    const all = combinedTenures.items
+    if (all.length === 0) return null
+    // BC·고대 안전: ms 타임스탬프 대신 부호 있는 근사 일수로 구간을 표현한다.
+    const now = isoDateToApproxDays(new Date().toISOString()) ?? 0
+    const intervals = all
+      .map(({ data }) => {
+        const s = isoDateToApproxDays(data.startDate)
+        if (s == null) return null
+        const e = isoDateToApproxDays(data.endDate) ?? now
+        return [s, Math.max(s, e)] as [number, number]
+      })
+      .filter((iv): iv is [number, number] => iv != null)
+      .sort((a, b) => a[0] - b[0])
+    let totalDays = 0
+    let curStart: number | null = null
+    let curEnd = 0
+    for (const [s, e] of intervals) {
+      if (curStart == null) {
+        curStart = s
+        curEnd = e
+      } else if (s <= curEnd) {
+        curEnd = Math.max(curEnd, e)
+      } else {
+        totalDays += curEnd - curStart
+        curStart = s
+        curEnd = e
+      }
+    }
+    if (curStart != null) totalDays += curEnd - curStart
+    const years = Math.round(totalDays / 365.25)
+    return years > 0 ? years : null
+  }, [combinedTenures])
+
+  /** KPI 배우자 목록 — spouseRelations 우선, 없으면 spouse 단건 폴백 */
+  const kpiSpouses = useMemo(() => {
+    const rels = (person?.spouseRelations ?? []) as NonNullable<
+      PersonDetailData['spouseRelations']
+    >
+    return rels
+      .map((r) => {
+        const sp = r.spouse ?? null
+        return {
+          id: sp?.id as string | undefined,
+          name: sp ? getPersonDisplayName(sp, true) : '',
+        }
+      })
+      .filter((s) => s.name && s.name !== '이름 없음')
+  }, [person])
 
   const modalTopId =
     !embedInModal && personLinkStack.length > 0
@@ -787,9 +855,6 @@ export function PersonDetailPanel({
     p.gender === 'MALE' ? '남' : p.gender === 'FEMALE' ? '여' : (p.gender ?? '—')
 
   const backLabel = closeLabel
-
-  /** API가 governmentPositions 또는 governmentTenures 중 하나로 내려줄 수 있음 */
-  const tenuresList = (p.governmentPositions ?? p.governmentTenures ?? []) as unknown[]
 
   const familyFather = p.father
   const familyMother = p.mother
@@ -1101,28 +1166,12 @@ export function PersonDetailPanel({
               </KpiItem>
             )
           })()}
-          {(() => {
-            // 재임 + 재위 총 연수
-            const allTenures = [
-              ...tenuresList,
-              ...((p.sovereignReigns ?? []) as any[]),
-            ]
-            if (allTenures.length === 0) return null
-            const totalDays = allTenures.reduce((acc, t: any) => {
-              const s = t.startDate ? new Date(t.startDate).getTime() : null
-              const e = t.endDate ? new Date(t.endDate).getTime() : Date.now()
-              if (s == null) return acc
-              return acc + Math.max(0, e - s)
-            }, 0)
-            const years = Math.round(totalDays / (365.25 * 86_400_000))
-            if (years <= 0) return null
-            return (
-              <KpiItem>
-                <KpiLabel>재임·재위 총</KpiLabel>
-                <KpiValue>약 {years}년</KpiValue>
-              </KpiItem>
-            )
-          })()}
+          {tenureTotalYears != null && (
+            <KpiItem>
+              <KpiLabel>재임·재위 총</KpiLabel>
+              <KpiValue>약 {tenureTotalYears}년</KpiValue>
+            </KpiItem>
+          )}
           {person.influence != null && person.influence > 0 && (
             <KpiItem>
               <KpiLabel>영향력</KpiLabel>
@@ -1159,24 +1208,17 @@ export function PersonDetailPanel({
             </KpiItem>
           )}
           {(() => {
-            const rels = (p.spouseRelations ?? []) as any[]
-            const spouses = rels
-              .map((r) => {
-                const sp = r.spouse ?? r
-                return { id: sp?.id as string | undefined, name: getPersonDisplayName(sp, true) }
-              })
-              .filter((s) => s.name && s.name !== '이름 없음')
             const fallbackName = person.spouse
               ? getPersonDisplayName(person.spouse)
               : null
-            const hasAny = spouses.length > 0 || fallbackName
+            const hasAny = kpiSpouses.length > 0 || fallbackName
             if (!hasAny) return null
             return (
               <KpiItem>
-                <KpiLabel>배우자 {spouses.length > 1 ? `(${spouses.length})` : ''}</KpiLabel>
+                <KpiLabel>배우자 {kpiSpouses.length > 1 ? `(${kpiSpouses.length})` : ''}</KpiLabel>
                 <KpiValue>
-                  {spouses.length > 0
-                    ? spouses.map((s, i) => (
+                  {kpiSpouses.length > 0
+                    ? kpiSpouses.map((s, i) => (
                         <span key={s.id ?? `spouse-${i}`}>
                           {i > 0 && ' · '}
                           {s.id ? (
@@ -1284,7 +1326,7 @@ export function PersonDetailPanel({
                     </OverviewSectionHeaderRow>
                     <PersonBiographySections
                       personId={person.id}
-                      sections={(person as any).biographySections}
+                      sections={p.biographySections ?? undefined}
                       legacyBiography={person.biography}
                       onPersonClick={
                         embedInModal
@@ -1429,141 +1471,15 @@ export function PersonDetailPanel({
                   <PersonStatsSection personId={person.id} personName={fullName} />
 
                   {/* 2.55. 출생 / 사망 카드 — 좌우 분리. 장소 + 일자 + 사망정보를 함께 묶음 */}
-                  {(() => {
-                    const birthPlace =
-                      p.birthCity?.name ??
-                      p.birthAdminDivision?.name ??
-                      p.birthPlaceText ??
-                      null
-                    const deathPlace =
-                      p.deathCity?.name ??
-                      p.deathAdminDivision?.name ??
-                      p.deathPlaceText ??
-                      null
-                    const hasBirth = !!birthDateStr || !!birthPlace
-                    const hasDeath =
-                      !!deathDateStr ||
-                      !!deathPlace ||
-                      !!p.deathType ||
-                      !!p.deathCause ||
-                      !!p.deathNote
-                    if (!hasBirth && !hasDeath) return null
-                    return (
-                      <LifeCardGrid>
-                        {hasBirth && (
-                          <LifeCard $tone="birth" aria-label="출생 정보">
-                            <LifeCardHeader>
-                              <LifeCardIconWrap $tone="birth">
-                                <FiCalendar size={14} strokeWidth={2.2} />
-                              </LifeCardIconWrap>
-                              <LifeCardTitle>출생</LifeCardTitle>
-                            </LifeCardHeader>
-                            {birthDateStr && (
-                              <LifeCardRow>
-                                <LifeCardLabel>일자</LifeCardLabel>
-                                <LifeCardValue>{birthDateStr}</LifeCardValue>
-                              </LifeCardRow>
-                            )}
-                            {birthPlace && (
-                              <LifeCardRow>
-                                <LifeCardLabel>장소</LifeCardLabel>
-                                <LifeCardValue>{birthPlace}</LifeCardValue>
-                              </LifeCardRow>
-                            )}
-                          </LifeCard>
-                        )}
-                        {hasDeath && (
-                          <LifeCard $tone="death" aria-label="사망 정보">
-                            <LifeCardHeader>
-                              <LifeCardIconWrap $tone="death">
-                                <FiAlertTriangle size={14} strokeWidth={2.2} />
-                              </LifeCardIconWrap>
-                              <LifeCardTitle>사망</LifeCardTitle>
-                              {ageAtDeath != null && (
-                                <LifeCardAge>향년 {ageAtDeath}세</LifeCardAge>
-                              )}
-                            </LifeCardHeader>
-                            {deathDateStr && (
-                              <LifeCardRow>
-                                <LifeCardLabel>일자</LifeCardLabel>
-                                <LifeCardValue>{deathDateStr}</LifeCardValue>
-                              </LifeCardRow>
-                            )}
-                            {deathPlace && (
-                              <LifeCardRow>
-                                <LifeCardLabel>장소</LifeCardLabel>
-                                <LifeCardValue>{deathPlace}</LifeCardValue>
-                              </LifeCardRow>
-                            )}
-                            {(p.deathType || p.deathCause) && (
-                              <LifeCardRow>
-                                <LifeCardLabel>유형</LifeCardLabel>
-                                <DeathInfoRow>
-                                  {p.deathType && (
-                                    <DeathTypePill>
-                                      {DEATH_TYPE_LABELS[p.deathType] ?? p.deathType}
-                                    </DeathTypePill>
-                                  )}
-                                  {p.deathCause && (
-                                    <DeathCauseText>{p.deathCause}</DeathCauseText>
-                                  )}
-                                </DeathInfoRow>
-                              </LifeCardRow>
-                            )}
-                            {p.deathNote && (
-                              <DeathNoteText>{p.deathNote}</DeathNoteText>
-                            )}
-                          </LifeCard>
-                        )}
-                      </LifeCardGrid>
-                    )
-                  })()}
+                  <BirthDeathCards
+                    person={p}
+                    birthDateStr={birthDateStr}
+                    deathDateStr={deathDateStr}
+                    ageAtDeath={ageAtDeath}
+                  />
 
                   {/* 2.57. 배우자 상세 — 혼인 기간·메모 중 하나라도 있을 때만 표시 */}
-                  {(() => {
-                    const rels = (p.spouseRelations ?? []).filter(
-                      (r) =>
-                        r.note ||
-                        r.marriageStartDate ||
-                        r.marriageEndDate,
-                    )
-                    if (rels.length === 0) return null
-                    return (
-                      <section aria-label="배우자 상세">
-                        <OverviewSectionHeaderRow>
-                          <OverviewSectionHeading>
-                            <FiUsers size={14} strokeWidth={2.2} />
-                            <span>배우자 상세</span>
-                            {rels.length > 1 && <CountMuted>{rels.length}</CountMuted>}
-                          </OverviewSectionHeading>
-                        </OverviewSectionHeaderRow>
-                        <SpouseDetailList>
-                          {rels.map((r, idx) => {
-                            const sp = r.spouse ?? null
-                            const name = sp
-                              ? getPersonDisplayName(sp, true)
-                              : '이름 없음'
-                            const start = formatIsoDateKo(r.marriageStartDate)
-                            const end = formatIsoDateKo(r.marriageEndDate)
-                            const period = [start, end].filter(Boolean).join(' ~ ')
-                            return (
-                              <SpouseDetailItem key={r.id ?? `spouse-${idx}`}>
-                                <SpouseDetailHeader>
-                                  <SpouseDetailName>{name}</SpouseDetailName>
-                                  {period && (
-                                    <SpouseDetailPeriod>{period}</SpouseDetailPeriod>
-                                  )}
-                                </SpouseDetailHeader>
-                                {r.note && (
-                                  <SpouseDetailNote>{r.note}</SpouseDetailNote>
-                                )}
-                              </SpouseDetailItem>
-                            )
-                          })}
-                        </SpouseDetailList>
-                      </section>
-                    )
-                  })()}
+                  <SpouseDetailSection spouseRelations={p.spouseRelations} />
 
                   {/* 3. 재임·재위 통합 */}
                   <section aria-label="재임·재위">
@@ -1571,10 +1487,8 @@ export function PersonDetailPanel({
                       <OverviewSectionHeading>
                         <FiAward size={14} strokeWidth={2.2} />
                         <span>재임·재위</span>
-                        {tenuresList.length + (p.sovereignReigns?.length ?? 0) > 0 && (
-                          <CountMuted>
-                            {tenuresList.length + (p.sovereignReigns?.length ?? 0)}
-                          </CountMuted>
+                        {combinedTenures.count > 0 && (
+                          <CountMuted>{combinedTenures.count}</CountMuted>
                         )}
                       </OverviewSectionHeading>
                       {!embedInModal && (
@@ -1604,173 +1518,29 @@ export function PersonDetailPanel({
                         </UnifiedActionRow>
                       )}
                     </OverviewSectionHeaderRow>
-                    {(() => {
-                      type CombinedItem =
-                        | { kind: 'tenure'; data: any }
-                        | { kind: 'reign'; data: any }
-                      const combined: CombinedItem[] = [
-                        ...tenuresList.map(
-                          (t: any): CombinedItem => ({ kind: 'tenure', data: t }),
-                        ),
-                        ...((p.sovereignReigns ?? []).map(
-                          (r): CombinedItem => ({ kind: 'reign', data: r }),
-                        )),
-                      ]
-                      combined.sort((a, b) => {
-                        const ta = a.data.startDate
-                          ? new Date(a.data.startDate).getTime()
-                          : 0
-                        const tb = b.data.startDate
-                          ? new Date(b.data.startDate).getTime()
-                          : 0
-                        return ta - tb
-                      })
-
-                      if (combined.length === 0) {
-                        return (
-                          <TenureEmpty>
-                            {embedInModal ? (
-                              '등록된 재임·재위 기록이 없습니다.'
-                            ) : (
-                              <>
-                                등록된 재임·재위 기록이 없습니다. 위{' '}
-                                <strong>재임·재위 버튼</strong>으로 추가하세요.
-                              </>
-                            )}
-                          </TenureEmpty>
-                        )
-                      }
-
-                      return (
-                        <UnifiedCardList>
-                          {combined.map((item) => {
-                            const isReign = item.kind === 'reign'
-                            const d = item.data
-                            const posTitle =
-                              d.positionDefinition?.title ?? d.title ?? '직책'
-                            const countryName =
-                              d.historicalCountry?.name ?? d.country?.name ?? null
-                            const startStr = formatIsoDateKo(d.startDate)
-                            const endStr = d.endDate ? formatIsoDateKo(d.endDate) : null
-                            const termNum = d.termNumber ?? d.regnalNumber
-                            const ageAtStart = getAgeAtDate(
-                              person.birthYear,
-                              person.birthMonth,
-                              person.birthDay,
-                              d.startDate,
-                            )
-                            const ageAtEnd = d.endDate
-                              ? getAgeAtDate(
-                                  person.birthYear,
-                                  person.birthMonth,
-                                  person.birthDay,
-                                  d.endDate,
-                                )
-                              : null
-                            const mainTitle = isReign && d.regnalName
-                              ? `${d.regnalName} · ${posTitle}`
-                              : posTitle
-                            return (
-                              <UnifiedCard key={`${item.kind}-${d.id}`} $kind={item.kind}>
-                                <UnifiedCardMain>
-                                  <UnifiedCardTopRow>
-                                    <UnifiedKindBadge $kind={item.kind}>
-                                      {isReign ? '재위' : '재임'}
-                                    </UnifiedKindBadge>
-                                    <UnifiedCardTitle>
-                                      {mainTitle}
-                                      {termNum != null && (
-                                        <UnifiedOrdinal>
-                                          {isReign ? `${termNum}대` : `제${termNum}대`}
-                                        </UnifiedOrdinal>
-                                      )}
-                                    </UnifiedCardTitle>
-                                  </UnifiedCardTopRow>
-                                  <UnifiedMetaRow>
-                                    {countryName && (
-                                      <UnifiedMetaChip>{countryName}</UnifiedMetaChip>
-                                    )}
-                                    {(startStr || endStr) && (
-                                      <UnifiedMetaChip $muted>
-                                        {startStr || '?'} – {endStr ?? '현재'}
-                                      </UnifiedMetaChip>
-                                    )}
-                                    {ageAtStart != null && (
-                                      <UnifiedAgeBadge>
-                                        {ageAtStart}세에 취임
-                                      </UnifiedAgeBadge>
-                                    )}
-                                    {ageAtEnd != null && (
-                                      <UnifiedAgeBadge>
-                                        {ageAtEnd}세에 퇴임
-                                      </UnifiedAgeBadge>
-                                    )}
-                                  </UnifiedMetaRow>
-                                  {!isReign &&
-                                    (d.appointmentMethod || d.endReason || d.endReasonDetail || d.notes) && (
-                                      <UnifiedSubRow>
-                                        {d.appointmentMethod && (
-                                          <span>
-                                            취임:{' '}
-                                            {APPOINTMENT_METHOD_LABELS[d.appointmentMethod] ??
-                                              d.appointmentMethod}
-                                          </span>
-                                        )}
-                                        {(d.endReason || d.endReasonDetail) && (
-                                          <span>
-                                            퇴임:{' '}
-                                            {[
-                                              d.endReason
-                                                ? TENURE_END_REASON_LABELS[d.endReason] ??
-                                                  d.endReason
-                                                : null,
-                                              d.endReasonDetail,
-                                            ]
-                                              .filter(Boolean)
-                                              .join(' — ')}
-                                          </span>
-                                        )}
-                                        {d.notes && <span>{d.notes}</span>}
-                                      </UnifiedSubRow>
-                                    )}
-                                  <TenureAchievements
-                                    hostId={d.id}
-                                    hostKind={item.kind}
-                                    achievements={d.achievements ?? []}
-                                    readOnly={embedInModal}
-                                    onPlayClick={playClickSound}
-                                    onChanged={() => {
-                                      queryClient.invalidateQueries({
-                                        queryKey:
-                                          personKeys.detailFull(personId),
-                                      })
-                                    }}
-                                  />
-                                </UnifiedCardMain>
-                                {!embedInModal && (
-                                  <UnifiedEditBtn
-                                    type="button"
-                                    aria-label="수정"
-                                    onClick={() => {
-                                      playClickSound()
-                                      if (isReign) {
-                                        setEditingReignId(d.id)
-                                        setSovereignReignModalOpen(true)
-                                      } else {
-                                        setEditingTenureId(d.id)
-                                        setTenureModalOpen(true)
-                                      }
-                                    }}
-                                  >
-                                    <FiEdit2 size={12} />
-                                  </UnifiedEditBtn>
-                                )}
-                              </UnifiedCard>
-                            )
-                          })}
-                        </UnifiedCardList>
-                      )
-                    })()}
+                    <TenureReignList
+                      items={combinedTenures.items}
+                      birthYear={person.birthYear}
+                      birthMonth={person.birthMonth}
+                      birthDay={person.birthDay}
+                      deathDateStr={deathDateStr}
+                      isDeceased={isDeceased}
+                      embedInModal={embedInModal}
+                      onPlayClick={playClickSound}
+                      onEditTenure={(id) => {
+                        setEditingTenureId(id)
+                        setTenureModalOpen(true)
+                      }}
+                      onEditReign={(id) => {
+                        setEditingReignId(id)
+                        setSovereignReignModalOpen(true)
+                      }}
+                      onAchievementChanged={() => {
+                        queryClient.invalidateQueries({
+                          queryKey: personKeys.detailFull(personId),
+                        })
+                      }}
+                    />
                   </section>
 
                   <TenureRegisterPanel
@@ -1889,14 +1659,14 @@ export function PersonDetailPanel({
 
                   {/* 3.3. 학력 */}
                   {p.educations && p.educations.length > 0 && (
-                    <section aria-label="학력">
-                      <OverviewSectionHeaderRow>
-                        <OverviewSectionHeading>
-                          <FiBookOpen size={14} strokeWidth={2.2} />
-                          <span>학력</span>
-                          <CountMuted>{p.educations.length}</CountMuted>
-                        </OverviewSectionHeading>
-                      </OverviewSectionHeaderRow>
+                    <CollapsibleSection
+                      storageKey="education"
+                      ariaLabel="학력"
+                      icon={<FiBookOpen size={14} strokeWidth={2.2} />}
+                      title="학력"
+                      count={p.educations.length}
+                      defaultOpen={false}
+                    >
                       <SimpleEntryList>
                         {p.educations
                           .slice()
@@ -1959,7 +1729,7 @@ export function PersonDetailPanel({
                             )
                           })}
                       </SimpleEntryList>
-                    </section>
+                    </CollapsibleSection>
                   )}
 
                   {/* 3.35. 분야별 경력 */}
@@ -1990,14 +1760,14 @@ export function PersonDetailPanel({
                       (a, b) => (KIND_ORDER[a] ?? 99) - (KIND_ORDER[b] ?? 99),
                     )
                     return (
-                      <section aria-label="분야별 경력">
-                        <OverviewSectionHeaderRow>
-                          <OverviewSectionHeading>
-                            <FiAward size={14} strokeWidth={2.2} />
-                            <span>분야별 경력</span>
-                            <CountMuted>{p.careers.length}</CountMuted>
-                          </OverviewSectionHeading>
-                        </OverviewSectionHeaderRow>
+                      <CollapsibleSection
+                        storageKey="careers"
+                        ariaLabel="분야별 경력"
+                        icon={<FiAward size={14} strokeWidth={2.2} />}
+                        title="분야별 경력"
+                        count={p.careers.length}
+                        defaultOpen={false}
+                      >
                         <ActivityGroupList>
                           {kinds.map((k) => {
                             const list = grouped[k] ?? []
@@ -2074,22 +1844,23 @@ export function PersonDetailPanel({
                             )
                           })}
                         </ActivityGroupList>
-                      </section>
+                      </CollapsibleSection>
                     )
                   })()}
 
                   {/* 3.4. 수상·훈장 */}
                   {(!embedInModal || (p.awards && p.awards.length > 0)) && (
-                    <section aria-label="수상·훈장">
-                      <OverviewSectionHeaderRow>
-                        <OverviewSectionHeading>
-                          <FiAward size={14} strokeWidth={2.2} />
-                          <span>수상·훈장</span>
-                          {p.awards && p.awards.length > 0 && (
-                            <CountMuted>{p.awards.length}</CountMuted>
-                          )}
-                        </OverviewSectionHeading>
-                        {!embedInModal && (
+                    <CollapsibleSection
+                      storageKey="awards"
+                      ariaLabel="수상·훈장"
+                      icon={<FiAward size={14} strokeWidth={2.2} />}
+                      title="수상·훈장"
+                      count={
+                        p.awards && p.awards.length > 0 ? p.awards.length : undefined
+                      }
+                      defaultOpen={false}
+                      actions={
+                        !embedInModal && (
                           <UnifiedActionRow>
                             <TenureAddButton
                               type="button"
@@ -2102,8 +1873,9 @@ export function PersonDetailPanel({
                               수상
                             </TenureAddButton>
                           </UnifiedActionRow>
-                        )}
-                      </OverviewSectionHeaderRow>
+                        )
+                      }
+                    >
                       {!p.awards || p.awards.length === 0 ? (
                         <TenureEmpty>
                           등록된 수상·훈장이 없습니다. 위{' '}
@@ -2160,7 +1932,7 @@ export function PersonDetailPanel({
                           ))}
                       </SimpleEntryList>
                       )}
-                    </section>
+                    </CollapsibleSection>
                   )}
 
                   {/* 3.5. 활동·이력 — 저작/창업/조직/군부대 */}
@@ -2176,14 +1948,14 @@ export function PersonDetailPanel({
                       milCmds.length
                     if (total === 0) return null
                     return (
-                      <section aria-label="활동·이력">
-                        <OverviewSectionHeaderRow>
-                          <OverviewSectionHeading>
-                            <FiBookOpen size={14} strokeWidth={2.2} />
-                            <span>활동·이력</span>
-                            <CountMuted>{total}</CountMuted>
-                          </OverviewSectionHeading>
-                        </OverviewSectionHeaderRow>
+                      <CollapsibleSection
+                        storageKey="activities"
+                        ariaLabel="활동·이력"
+                        icon={<FiBookOpen size={14} strokeWidth={2.2} />}
+                        title="활동·이력"
+                        count={total}
+                        defaultOpen={false}
+                      >
                         <ActivityGroupList>
                           {books.length > 0 && (
                             <ActivityGroup>
@@ -2309,7 +2081,7 @@ export function PersonDetailPanel({
                             </ActivityGroup>
                           )}
                         </ActivityGroupList>
-                      </section>
+                      </CollapsibleSection>
                     )
                   })()}
 

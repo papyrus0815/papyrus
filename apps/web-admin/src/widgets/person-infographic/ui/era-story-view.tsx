@@ -22,7 +22,6 @@ import { makeSortFnWithPinned } from '../model/sort-helpers'
 
 import { EmptyState } from './_shared/empty-state'
 import { EraCardGrid, PersonCardItem } from './_shared/person-card'
-import { SortBar } from './_shared/sort-bar'
 
 interface Props {
   people: AdaptedPerson[]
@@ -67,7 +66,6 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
 
   return (
     <Wrap>
-      <SortBar />
       {groups.map(({ meta, arr: rawArr }) => {
         const arr = rawArr.slice().sort(sortFn)
         const isExpanded = !!expanded[meta.key]

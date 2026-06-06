@@ -310,6 +310,9 @@ model Person {
   accountId String? @map("account_id") @db.Char(36)
   account   Account? @relation("AccountPersons", fields: [accountId], references: [id], onDelete: SetNull)
 
+  //--- 이 인물을 대표 아바타로 지정한 계정들 (역관계)
+  representingAccounts Account[] @relation("AccountRepresentativePerson")
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

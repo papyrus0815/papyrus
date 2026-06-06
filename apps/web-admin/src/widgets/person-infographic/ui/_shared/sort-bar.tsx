@@ -57,10 +57,8 @@ const Btn = styled.button<{ $active: boolean }>`
   ${({ $active, theme }) =>
     $active
       ? css`
-          background: ${theme.mode === 'dark'
-            ? 'rgba(99,106,242,0.22)'
-            : '#eef2ff'};
-          color: ${theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'};
+          background: ${theme.colors.activeLight};
+          color: ${theme.colors.active};
           font-weight: 600;
         `
       : css`

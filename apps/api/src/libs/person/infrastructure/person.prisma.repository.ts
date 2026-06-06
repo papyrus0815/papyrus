@@ -16,11 +16,14 @@ import {
   TenureMandateSource,
 } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
+import { serializeBigInt } from '../../shared/serialize.util'
 import {
   IPersonRepository,
   CreatePersonData,
   UpdatePersonData,
+  DeletedSubResource,
 } from '../domain/person.repository'
+import { careerItemLabel, educationItemLabel, awardItemLabel } from '../domain/subresource-label.util'
 import {
   CreateMilitaryCareerDto,
   CreateBusinessCareerDto,
@@ -44,6 +47,7 @@ import {
   UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
+  PersonInfographicItemDto,
   MilitaryCareerResponseDto,
   BusinessCareerResponseDto,
   AcademicCareerResponseDto,
@@ -147,6 +151,44 @@ const PERSON_CARD_INCLUDE = {
       },
       country: { select: { id: true, name: true } },
       historicalCountry: { select: { id: true, name: true } },
+    },
+    orderBy: { startDate: 'desc' as const },
+  },
+  sovereignReigns: {
+    select: { notes: true },
+    take: 1,
+    orderBy: { startDate: 'desc' as const },
+  },
+} satisfies Prisma.PersonInclude
+
+/**
+ * 인물 인포그래픽 목록(경량) 전용 include.
+ * mapToPersonInfographicItem이 쓰는 만큼만 로드 — PERSON_CARD_INCLUDE 대비 job/도시/행정구역을 빼고
+ * 재임은 분류에 필요한 4개 필드(startDate·positionType·title·positionDefinition title/type)로 축소.
+ * countryAffiliations는 서버측 국가명 해석(resolveCountryBlockForName)에 필요해 그대로 로드하되, 응답에는 펼치지 않는다.
+ */
+const PERSON_INFOGRAPHIC_INCLUDE = {
+  countryAffiliations: {
+    include: PERSON_INCLUDE_AFFILIATIONS_FOR_NAME,
+  },
+  country: {
+    select: {
+      id: true,
+      name: true,
+      flagEmoji: true,
+      isoCode: true,
+      defaultNameDisplayOrder: true,
+    },
+  },
+  dynasty: { select: { name: true } },
+  GovernmentTenures: {
+    select: {
+      startDate: true,
+      positionType: true,
+      title: true,
+      positionDefinition: {
+        select: { title: true, positionType: true },
+      },
     },
     orderBy: { startDate: 'desc' as const },
   },
@@ -351,20 +393,6 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   private mapToPersonResponse(person: any): PersonResponseDto {
     // BigInt와 Date를 안전하게 변환
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString() // Date 객체는 ISO 문자열로
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) {
-          result[key] = serializeBigInt(obj[key])
-        }
-        return result
-      }
-      return obj
-    }
 
     return {
       id: person.id,
@@ -434,6 +462,65 @@ export class PersonPrismaRepository implements IPersonRepository {
       createdAt: person.createdAt.toISOString(),
       updatedAt: person.updatedAt.toISOString(),
       accountId: person.accountId ?? undefined,
+    }
+  }
+
+  /**
+   * Prisma Person을 인포그래픽 목록(경량) DTO로 변환.
+   * 국가명은 mapToPersonResponse와 동일하게 resolveCountryBlockForName으로 해석(동작 일치),
+   * regnalName 폴백(재위 notes에서 왕명 파싱)도 동일 규칙 유지.
+   */
+  private mapToPersonInfographicItem(person: any): PersonInfographicItemDto {
+    const countryBlock = this.resolveCountryBlockForName(person)
+    const regnalName =
+      person.regnalName ||
+      (() => {
+        const notes = person.sovereignReigns?.[0]?.notes as
+          | string
+          | null
+          | undefined
+        if (!notes) return null
+        const m =
+          notes.match(/왕명\s*:\s*(.+?)(?:\n|$)/i) ||
+          notes.match(/왕명\s*:\s*(.+)/i)
+        return m ? m[1].trim() : null
+      })() ||
+      null
+
+    return {
+      id: person.id,
+      name: person.name,
+      surname: person.surname ?? null,
+      middleName: person.middleName ?? null,
+      birthEra: person.birthEra as any,
+      birthYear: person.birthDate ? person.birthDate.getFullYear() : null,
+      deathEra: person.deathEra as any,
+      deathYear: person.deathDate ? person.deathDate.getFullYear() : null,
+      isAlive: person.isAlive ?? false,
+      influence: (person as any).influence ?? null,
+      regnalName,
+      profileImageUrl: person.profileImageUrl ?? null,
+      biography: person.biography ?? null,
+      country: countryBlock
+        ? {
+            name: countryBlock.name,
+            isoCode: countryBlock.isoCode,
+            defaultNameDisplayOrder: countryBlock.defaultNameDisplayOrder,
+          }
+        : null,
+      dynasty: person.dynasty ? { name: person.dynasty.name } : null,
+      governmentTenures: (person.GovernmentTenures ?? []).map((t: any) => ({
+        startDate: t.startDate ? t.startDate.toISOString() : null,
+        positionType: t.positionType ?? null,
+        title: t.title ?? null,
+        positionDefinition: t.positionDefinition
+          ? {
+              title: t.positionDefinition.title ?? null,
+              positionType: t.positionDefinition.positionType ?? null,
+            }
+          : null,
+      })),
+      sovereignReignCount: person.sovereignReigns?.length ?? 0,
     }
   }
 
@@ -660,6 +747,19 @@ export class PersonPrismaRepository implements IPersonRepository {
       include: PERSON_CARD_INCLUDE,
     })
     return persons.map((p) => this.mapToPersonResponse(p))
+  }
+
+  async findAllForInfographic(
+    accountId?: string,
+  ): Promise<PersonInfographicItemDto[]> {
+    const persons = await this.prisma.person.findMany({
+      where: accountId != null ? { accountId } : undefined,
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: PERSON_INFOGRAPHIC_INCLUDE,
+    })
+    return persons.map((p) => this.mapToPersonInfographicItem(p))
   }
 
   /**
@@ -1389,6 +1489,11 @@ export class PersonPrismaRepository implements IPersonRepository {
             notes: true,
             regnalName: true,
             regnalNumber: true,
+            termNumber: true,
+            subTermNumber: true,
+            appointmentMethod: true,
+            endReason: true,
+            endReasonDetail: true,
             positionDefinition: {
               select: { id: true, title: true },
             },
@@ -2055,19 +2160,6 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
     
     // BigInt를 문자열로 변환
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) {
-          result[key] = serializeBigInt(obj[key])
-        }
-        return result
-      }
-      return obj
-    }
     
     return serializeBigInt(tenure)
   }
@@ -2137,20 +2229,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
     })
 
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) {
-          result[key] = serializeBigInt(obj[key])
-        }
-        return result
-      }
-      return obj
-    }
 
     return serializeBigInt(tenure)
   }
@@ -2257,18 +2335,6 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   async findCabinetByHeadTenureId(headTenureId: string): Promise<any | null> {
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     const cabinet = await this.prisma.cabinet.findUnique({
       where: { headTenureId },
       include: {
@@ -2289,18 +2355,6 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   async findTenuresByCabinetId(cabinetId: string, accountId?: string): Promise<any[]> {
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     if (accountId != null) {
       const cabinet = await this.prisma.cabinet.findUnique({
         where: { id: cabinetId },
@@ -2326,18 +2380,6 @@ export class PersonPrismaRepository implements IPersonRepository {
     countryId?: string
     historicalCountryId?: string
   }): Promise<any[]> {
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     // 현대국가 조회 시 연결된 하위 역사국가의 행정부도 함께 포함
     let linkedHistoricalIds: string[] = []
     if (params.countryId) {
@@ -2393,18 +2435,6 @@ export class PersonPrismaRepository implements IPersonRepository {
     headTenureId: string
     name?: string | null
   }, accountId?: string): Promise<any> {
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     const cabinetInclude = {
       headTenure: {
         include: {
@@ -2455,18 +2485,6 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (!cabinet) return null
     if (accountId != null && cabinet.accountId != null && cabinet.accountId !== accountId)
       return null
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     const updated = await this.prisma.cabinet.update({
       where: { id: cabinetId },
       data: { ...(dto.name !== undefined && { name: dto.name }) },
@@ -2523,18 +2541,6 @@ export class PersonPrismaRepository implements IPersonRepository {
     accountId: string,
     eventId?: string | null,
   ): Promise<any> {
-    const ser = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(ser)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = ser(obj[key])
-        return result
-      }
-      return obj
-    }
     if (cabinetId === otherCabinetId) {
       throw new Error('같은 행정부는 묶을 수 없습니다.')
     }
@@ -2678,7 +2684,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
         },
       })
-      return ser(updated)
+      return serializeBigInt(updated)
     })
   }
 
@@ -2686,18 +2692,6 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 특정 사건(eventId)을 축으로 묶인 행정부 목록 (다국 행정부 연결 조회)
    */
   async findCabinetsByLinkageEventId(eventId: string): Promise<any[]> {
-    const ser = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(ser)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = ser(obj[key])
-        return result
-      }
-      return obj
-    }
     const list = await this.prisma.cabinet.findMany({
       where: {
         linkageGroup: { eventId },
@@ -2716,7 +2710,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
       },
     })
-    return list.map((c) => ser(c))
+    return list.map((c) => serializeBigInt(c))
   }
 
   /** 이 행정부만 묶음에서 빠짐. 남은 행정부가 없으면 그룹 삭제 */
@@ -2746,18 +2740,6 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 같은 묶음의 다른 행정부 목록 (로그인한 사용자용; accountId는 API 시그니처 호환용).
    */
   async findLinkedCabinets(cabinetId: string, _accountId: string): Promise<any[]> {
-    const ser = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(ser)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = ser(obj[key])
-        return result
-      }
-      return obj
-    }
     const cab = await this.prisma.cabinet.findFirst({
       where: { id: cabinetId },
       select: { linkageGroupId: true },
@@ -2791,7 +2773,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
       },
     })
-    return list.map((c) => ser(c))
+    return list.map((c) => serializeBigInt(c))
   }
 
   /**
@@ -2805,18 +2787,6 @@ export class PersonPrismaRepository implements IPersonRepository {
     limit = 40,
     filter?: { countryId?: string; historicalCountryId?: string },
   ): Promise<any[]> {
-    const ser = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(ser)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = ser(obj[key])
-        return result
-      }
-      return obj
-    }
     const term = q.trim()
     const fc = filter?.countryId?.trim()
     const fh = filter?.historicalCountryId?.trim()
@@ -2924,25 +2894,13 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
       },
     })
-    return list.map((c) => ser(c))
+    return list.map((c) => serializeBigInt(c))
   }
 
   /**
    * 조직(만철, 관동군, 대만총독부 등) 역대 수장 — positionDefinition.organizationId 기준
    */
   async findTenuresByOrganizationId(organizationId: string): Promise<any[]> {
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     const tenures = await this.prisma.governmentPositionTenure.findMany({
       where: {
         positionDefinition: { organizationId },
@@ -2971,18 +2929,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
     })
     if (!tenure) return null
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(tenure)
   }
 
@@ -3014,18 +2960,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         eventId: dto.eventId ?? undefined,
       },
     })
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(achievement)
   }
 
@@ -3128,18 +3062,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       return ca - cb
     })
 
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(merged)
   }
 
@@ -3253,18 +3175,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       this.sortAchievementsForEventsPageMerged(a, b),
     )
 
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(merged)
   }
 
@@ -3294,18 +3204,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: { id: achievementId },
       data,
     })
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(achievement)
   }
 
@@ -3334,18 +3232,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         eventId: dto.eventId ?? undefined,
       },
     })
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(achievement)
   }
 
@@ -3372,18 +3258,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: { id: achievementId },
       data,
     })
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(achievement)
   }
 
@@ -3434,18 +3308,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         changeReason: dto.changeReason?.trim() || null,
       },
     })
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(row)
   }
 
@@ -3465,18 +3327,6 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.endDay !== undefined) data.endDay = dto.endDay
     if (dto.changeReason !== undefined) data.changeReason = dto.changeReason?.trim() || null
     const row = await this.prisma.regnalEra.update({ where: { id }, data })
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(row)
   }
 
@@ -3583,19 +3433,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   private serializeDefinition(row: any): any {
-    const serialize = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serialize)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serialize(obj[key])
-        return result
-      }
-      return obj
-    }
-    return serialize(row)
+    return serializeBigInt(row)
   }
 
   /**
@@ -3634,48 +3472,59 @@ export class PersonPrismaRepository implements IPersonRepository {
     return this.mapToPersonAwardResponse(award)
   }
 
-  async deleteMilitaryCareer(id: string): Promise<void> {
-    await this.prisma.militaryCareer.delete({ where: { id } })
+  async deleteMilitaryCareer(id: string): Promise<DeletedSubResource> {
+    const row = await this.prisma.militaryCareer.delete({ where: { id } })
+    return { personId: row.personId, itemLabel: careerItemLabel(row) ?? null }
   }
 
-  async deleteBusinessCareer(id: string): Promise<void> {
-    await this.prisma.businessCareer.delete({ where: { id } })
+  async deleteBusinessCareer(id: string): Promise<DeletedSubResource> {
+    const row = await this.prisma.businessCareer.delete({ where: { id } })
+    return { personId: row.personId, itemLabel: careerItemLabel(row) ?? null }
   }
 
-  async deleteAcademicCareer(id: string): Promise<void> {
-    await this.prisma.academicCareer.delete({ where: { id } })
+  async deleteAcademicCareer(id: string): Promise<DeletedSubResource> {
+    const row = await this.prisma.academicCareer.delete({ where: { id } })
+    return { personId: row.personId, itemLabel: careerItemLabel(row) ?? null }
   }
 
-  async deleteAthleteCareer(id: string): Promise<void> {
-    await this.prisma.athleteCareer.delete({ where: { id } })
+  async deleteAthleteCareer(id: string): Promise<DeletedSubResource> {
+    const row = await this.prisma.athleteCareer.delete({ where: { id } })
+    return { personId: row.personId, itemLabel: careerItemLabel(row) ?? null }
   }
 
-  async deleteReligiousCareer(id: string): Promise<void> {
-    await this.prisma.religiousCareer.delete({ where: { id } })
+  async deleteReligiousCareer(id: string): Promise<DeletedSubResource> {
+    const row = await this.prisma.religiousCareer.delete({ where: { id } })
+    return { personId: row.personId, itemLabel: careerItemLabel(row) ?? null }
   }
 
-  async deleteArtistCareer(id: string): Promise<void> {
-    await this.prisma.artistCareer.delete({ where: { id } })
+  async deleteArtistCareer(id: string): Promise<DeletedSubResource> {
+    const row = await this.prisma.artistCareer.delete({ where: { id } })
+    return { personId: row.personId, itemLabel: careerItemLabel(row) ?? null }
   }
 
-  async deleteMediaCareer(id: string): Promise<void> {
-    await this.prisma.mediaCareer.delete({ where: { id } })
+  async deleteMediaCareer(id: string): Promise<DeletedSubResource> {
+    const row = await this.prisma.mediaCareer.delete({ where: { id } })
+    return { personId: row.personId, itemLabel: careerItemLabel(row) ?? null }
   }
 
-  async deleteLegalCareer(id: string): Promise<void> {
-    await this.prisma.legalCareer.delete({ where: { id } })
+  async deleteLegalCareer(id: string): Promise<DeletedSubResource> {
+    const row = await this.prisma.legalCareer.delete({ where: { id } })
+    return { personId: row.personId, itemLabel: careerItemLabel(row) ?? null }
   }
 
-  async deleteMedicalCareer(id: string): Promise<void> {
-    await this.prisma.medicalCareer.delete({ where: { id } })
+  async deleteMedicalCareer(id: string): Promise<DeletedSubResource> {
+    const row = await this.prisma.medicalCareer.delete({ where: { id } })
+    return { personId: row.personId, itemLabel: careerItemLabel(row) ?? null }
   }
 
-  async deleteEducation(id: string): Promise<void> {
-    await this.prisma.personEducation.delete({ where: { id } })
+  async deleteEducation(id: string): Promise<DeletedSubResource> {
+    const row = await this.prisma.personEducation.delete({ where: { id } })
+    return { personId: row.personId, itemLabel: educationItemLabel(row) ?? null }
   }
 
-  async deleteAward(id: string): Promise<void> {
-    await this.prisma.personAward.delete({ where: { id } })
+  async deleteAward(id: string): Promise<DeletedSubResource> {
+    const row = await this.prisma.personAward.delete({ where: { id } })
+    return { personId: row.personId, itemLabel: awardItemLabel(row) ?? null }
   }
 
   /**
@@ -3725,18 +3574,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       return db.localeCompare(da)
     })
 
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(merged)
   }
 
@@ -3752,18 +3589,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
       orderBy: [{ election: { pollDate: 'desc' } }, { id: 'desc' }],
     })
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(rows)
   }
 
@@ -3952,18 +3777,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       return db.localeCompare(da)
     })
 
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(merged)
   }
 
@@ -4002,17 +3815,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         regnalEras: REGNAL_ERAS_ORDER,
       },
     })
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(row)
   }
 
@@ -4053,17 +3855,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         regnalEras: REGNAL_ERAS_ORDER,
       },
     })
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(row)
   }
 
@@ -4080,17 +3871,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
     })
     if (!row) return null
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(row)
   }
 
@@ -4230,18 +4010,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       return db.localeCompare(da)
     })
 
-    const serializeBigInt = (obj: any): any => {
-      if (obj === null || obj === undefined) return obj
-      if (typeof obj === 'bigint') return obj.toString()
-      if (obj instanceof Date) return obj.toISOString()
-      if (Array.isArray(obj)) return obj.map(serializeBigInt)
-      if (typeof obj === 'object') {
-        const result: any = {}
-        for (const key in obj) result[key] = serializeBigInt(obj[key])
-        return result
-      }
-      return obj
-    }
     return serializeBigInt(merged)
   }
 

@@ -28,6 +28,7 @@ import {
   PersonAwardResponseDto,
   PersonEducationResponseDto,
   PersonResponseDto,
+  PersonInfographicItemDto,
   ReligiousCareerResponseDto,
   UpdateGovernmentPositionDefinitionDto,
   UpdatePersonLifeEventDto,
@@ -179,11 +180,25 @@ export interface UpdatePersonData {
 /**
  * 인물 Repository 인터페이스
  */
+
+/** 하위 항목 삭제 결과 — 소속 인물 ID와 삭제된 항목 식별 라벨(알림 preview용) */
+export interface DeletedSubResource {
+  personId: string
+  itemLabel: string | null
+}
+
 export interface IPersonRepository {
   /**
    * 인물 목록 조회 (accountId 있으면 해당 계정 소유만)
    */
   findAll(accountId?: string): Promise<PersonResponseDto[]>
+
+  /**
+   * 인물 인포그래픽 목록(경량) 조회 — adapt가 쓰는 최소 필드만 (accountId 있으면 해당 계정 소유만)
+   */
+  findAllForInfographic(
+    accountId?: string,
+  ): Promise<PersonInfographicItemDto[]>
 
   /**
    * 국가별 인물 목록 조회 (countryId 소속 전체, accountId 무관 — 국가 페이지 인물 리스트용)
@@ -416,17 +431,17 @@ export interface IPersonRepository {
   addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto>
   addAward(dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto>
 
-  // Career·Education·Award 삭제
-  deleteMilitaryCareer(id: string): Promise<void>
-  deleteBusinessCareer(id: string): Promise<void>
-  deleteAcademicCareer(id: string): Promise<void>
-  deleteAthleteCareer(id: string): Promise<void>
-  deleteReligiousCareer(id: string): Promise<void>
-  deleteArtistCareer(id: string): Promise<void>
-  deleteMediaCareer(id: string): Promise<void>
-  deleteLegalCareer(id: string): Promise<void>
-  deleteMedicalCareer(id: string): Promise<void>
-  deleteEducation(id: string): Promise<void>
-  deleteAward(id: string): Promise<void>
+  // Career·Education·Award 삭제 — 삭제된 행의 personId·항목 라벨 반환 (하위 섹션 변경 알림용)
+  deleteMilitaryCareer(id: string): Promise<DeletedSubResource>
+  deleteBusinessCareer(id: string): Promise<DeletedSubResource>
+  deleteAcademicCareer(id: string): Promise<DeletedSubResource>
+  deleteAthleteCareer(id: string): Promise<DeletedSubResource>
+  deleteReligiousCareer(id: string): Promise<DeletedSubResource>
+  deleteArtistCareer(id: string): Promise<DeletedSubResource>
+  deleteMediaCareer(id: string): Promise<DeletedSubResource>
+  deleteLegalCareer(id: string): Promise<DeletedSubResource>
+  deleteMedicalCareer(id: string): Promise<DeletedSubResource>
+  deleteEducation(id: string): Promise<DeletedSubResource>
+  deleteAward(id: string): Promise<DeletedSubResource>
   findAllCareers(personId: string): Promise<AllCareersResponseDto>
 }

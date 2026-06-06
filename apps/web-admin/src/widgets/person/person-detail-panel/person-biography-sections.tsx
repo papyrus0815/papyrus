@@ -269,7 +269,6 @@ export function PersonBiographySections({
                   value={row.title}
                   placeholder="섹션 제목 (예: 생애, 업적, 평가)"
                   onChange={(e) => updateField(row.key, { title: e.target.value })}
-                  autoFocus
                 />
               ) : (
                 <SectionTitle>{row.title || '(제목 없음)'}</SectionTitle>
@@ -304,15 +303,6 @@ export function PersonBiographySections({
                     </IconBtn>
                   </>
                 )}
-                {!manageMode && !isEditing && (
-                  <IconBtn
-                    type="button"
-                    title="편집"
-                    onClick={() => beginEdit(row.key)}
-                  >
-                    <FiEdit2 size={14} />
-                  </IconBtn>
-                )}
               </HeadActions>
             </SectionHead>
 
@@ -325,6 +315,9 @@ export function PersonBiographySections({
                     showTitle={false}
                     placeholder="본문을 입력하세요. 서식·이미지·인물 멘션을 넣을 수 있습니다."
                     onImageUpload={createRichTextImageUploader('persons')}
+                    /* 편집 진입 시 본문에 포커스 — preventScroll로 현재 스크롤
+                       위치 유지(네이티브 input autoFocus처럼 위로 점프하지 않음). */
+                    autoFocus
                   />
                   <EditHint>⌘/Ctrl + Enter 저장 · Esc 취소</EditHint>
                   <EditActions>
@@ -344,18 +337,36 @@ export function PersonBiographySections({
                     </PrimaryBtn>
                   </EditActions>
                 </>
-              ) : row.content && isLikelyRichTextHtml(row.content) ? (
-                <RichTextProseWithEntityClicks
-                  html={row.content}
-                  samePersonId={personId}
-                  onPersonClick={onPersonClick}
-                  setTermTooltip={setTermTooltip}
-                  setDynastyTooltip={setDynastyTooltip}
-                />
-              ) : row.content ? (
-                <PlainText>{row.content}</PlainText>
               ) : (
-                <EmptyHint>본문이 없습니다. 편집을 눌러 작성하세요.</EmptyHint>
+                /* 읽기 모드 — 본문 옆에 편집(✎) 버튼을 sticky로 둬서 본문이 길어도
+                   스크롤을 내리는 내내 버튼이 따라온다(사건 상세 InlineRichText와 동일 UX).
+                   관리 모드에서는 순서·삭제 조작만 하므로 편집 버튼은 숨긴다. */
+                <BodyReadHost>
+                  <BodyReadCol>
+                    {row.content && isLikelyRichTextHtml(row.content) ? (
+                      <RichTextProseWithEntityClicks
+                        html={row.content}
+                        samePersonId={personId}
+                        onPersonClick={onPersonClick}
+                        setTermTooltip={setTermTooltip}
+                        setDynastyTooltip={setDynastyTooltip}
+                      />
+                    ) : row.content ? (
+                      <PlainText>{row.content}</PlainText>
+                    ) : (
+                      <EmptyHint>본문이 없습니다. 편집을 눌러 작성하세요.</EmptyHint>
+                    )}
+                  </BodyReadCol>
+                  {!manageMode && (
+                    <StickyEditBtn
+                      type="button"
+                      title="편집"
+                      onClick={() => beginEdit(row.key)}
+                    >
+                      <FiEdit2 size={14} />
+                    </StickyEditBtn>
+                  )}
+                </BodyReadHost>
               )}
             </SectionBody>
           </SectionItem>
@@ -483,6 +494,37 @@ const SectionBody = styled.div`
   font-size: 14px;
   line-height: 1.7;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/** 읽기 본문 + sticky 편집 버튼을 가로로 배치하는 호스트. */
+const BodyReadHost = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+`
+
+const BodyReadCol = styled.div`
+  flex: 1 1 auto;
+  min-width: 0;
+`
+
+/**
+ * 편집(✎) 버튼 — 본문이 길어도 스크롤하는 내내 닿을 수 있도록 sticky.
+ * 전역 고정 헤더(64px) 아래 16px 여유에 고정. 섹션(BodyReadHost) 범위 안에서만
+ * 따라오므로 다음 섹션으로 넘어가면 자연히 그 섹션 버튼으로 교체된다.
+ */
+const StickyEditBtn = styled(IconBtn)`
+  position: sticky;
+  top: calc(var(--header-height, 64px) + 16px);
+  flex: 0 0 auto;
+  align-self: flex-start;
+  /* 본문 위에 떠 있을 때 글자가 비치지 않도록 불투명 배경·테두리. */
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-color: ${({ theme }) => theme.colors.border.default};
+  &:hover:not(:disabled) {
+    border-color: #4f46e5;
+    color: #4f46e5;
+  }
 `
 
 const EditHint = styled.div`

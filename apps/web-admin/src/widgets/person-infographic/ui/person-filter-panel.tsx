@@ -12,6 +12,7 @@ import {
   usePersonInfographicFilterStore,
   type ScopeKind,
 } from '../model/filter.store'
+import type { AdaptedPerson } from '../model/types'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
 
 /** accordion 상태 — 그룹별 collapsed 여부 localStorage 유지 */
@@ -79,20 +80,50 @@ export function PersonFilterPanel() {
   const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
   const { collapsed: groupCollapsed, toggle: toggleGroup } = useCollapsedGroups()
 
+  /**
+   * 패싯 카운트 — 각 카테고리 옵션 수는 **자기 카테고리를 제외한** 다른 활성 필터
+   * (다른 스코프 + 영향력 + 생존)를 반영해 계산한다. 그래서 시대를 고르면 지역·분야·국가 수가
+   * 그 시대 안으로 좁혀지고, 자기 카테고리 안에서는 OR이라 수가 유지된다.
+   * globalRegion/globalField는 "데이터에 한 번이라도 존재하는가"(렌더 여부 판정)용 — 필터 무관.
+   */
   const counts = useMemo(() => {
-    const era: Record<string, number> = {}
-    const region: Record<string, number> = {}
-    const field: Record<string, number> = {}
-    const country: Record<string, number> = {}
-    all.forEach((p) => {
-      const e = yearOfEra(p.activityYear).key
-      era[e] = (era[e] || 0) + 1
-      region[p.region] = (region[p.region] || 0) + 1
-      field[p.field] = (field[p.field] || 0) + 1
-      country[p.country] = (country[p.country] || 0) + 1
-    })
-    return { era, region, field, country, total: all.length }
-  }, [all])
+    const passNonScope = (p: AdaptedPerson) =>
+      (minInfluence <= 0 || (p.influence ?? 0) >= minInfluence) &&
+      (aliveFilter === 'all' ||
+        (aliveFilter === 'alive' ? p.isAlive : !p.isAlive))
+
+    const tallyExcluding = (
+      exclude: ScopeKind,
+      keyFn: (p: AdaptedPerson) => string,
+    ): Record<string, number> => {
+      const sc = { ...scopes, [exclude]: [] }
+      const m: Record<string, number> = {}
+      for (const p of all) {
+        if (!passNonScope(p)) continue
+        if (!matchesScopes(p, sc, (x) => yearOfEra(x.activityYear).key)) continue
+        const k = keyFn(p)
+        m[k] = (m[k] || 0) + 1
+      }
+      return m
+    }
+
+    const globalRegion: Record<string, number> = {}
+    const globalField: Record<string, number> = {}
+    for (const p of all) {
+      globalRegion[p.region] = (globalRegion[p.region] || 0) + 1
+      globalField[p.field] = (globalField[p.field] || 0) + 1
+    }
+
+    return {
+      era: tallyExcluding('era', (p) => yearOfEra(p.activityYear).key),
+      region: tallyExcluding('region', (p) => p.region),
+      field: tallyExcluding('field', (p) => p.field),
+      country: tallyExcluding('country', (p) => p.country),
+      globalRegion,
+      globalField,
+      total: all.length,
+    }
+  }, [all, scopes, minInfluence, aliveFilter])
 
   // 국가 그룹 — 검색어가 없으면 top 14, 있으면 매칭되는 모든 국가
   const [countryQuery, setCountryQuery] = useState('')
@@ -124,7 +155,15 @@ export function PersonFilterPanel() {
   const navAllItem = (
     <NavItem
       $active={isAllActive}
+      role="button"
+      tabIndex={0}
       onClick={() => clearAllScopes()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          clearAllScopes()
+        }
+      }}
     >
       <NavItemLabel>전체 인물</NavItemLabel>
       <NavItemCount>{counts.total}</NavItemCount>
@@ -139,11 +178,30 @@ export function PersonFilterPanel() {
     dot?: string,
   ) => {
     const active = scopes[kind].includes(val)
+    // 0건이면서 선택도 안 된 옵션은 비활성(눌러도 결과 0) — 단 선택된 항목은 해제 위해 항상 조작 가능
+    const disabled = count === 0 && !active
+    const toggle = () => toggleScope(kind, val)
     return (
       <NavItem
         key={kind + val}
         $active={active}
-        onClick={() => toggleScope(kind, val)}
+        $disabled={disabled}
+        role="checkbox"
+        aria-checked={active}
+        aria-disabled={disabled || undefined}
+        aria-label={`${label} ${count}명`}
+        tabIndex={disabled ? -1 : 0}
+        onClick={disabled ? undefined : toggle}
+        onKeyDown={
+          disabled
+            ? undefined
+            : (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  toggle()
+                }
+              }
+        }
       >
         {dot && <NavDot style={{ background: dot }} />}
         <NavItemLabel>{label}</NavItemLabel>
@@ -263,13 +321,14 @@ export function PersonFilterPanel() {
         collapsed={groupCollapsed.region}
         onToggle={toggleGroup}
       >
-        {REGIONS.filter((r) => counts.region[r]).map((r, i) =>
+        {REGIONS.filter((r) => counts.globalRegion[r]).map((r) =>
           scopeNavItem(
             'region',
             r,
             r,
             counts.region[r] || 0,
-            REGION_COLORS[i % REGION_COLORS.length],
+            // 색은 지역 정체성(정규 인덱스) 기준 — 표시 조합이 바뀌어도 같은 지역=같은 색
+            REGION_COLORS[REGIONS.indexOf(r) % REGION_COLORS.length],
           ),
         )}
       </NavGroupAccordion>
@@ -285,7 +344,7 @@ export function PersonFilterPanel() {
         collapsed={groupCollapsed.field}
         onToggle={toggleGroup}
       >
-        {FIELDS.filter((f) => counts.field[f]).map((f) =>
+        {FIELDS.filter((f) => counts.globalField[f]).map((f) =>
           scopeNavItem('field', f, f, counts.field[f] || 0),
         )}
       </NavGroupAccordion>
@@ -567,7 +626,7 @@ function NavGroupAccordion({
   )
 }
 
-const NavItem = styled.div<{ $active?: boolean }>`
+const NavItem = styled.div<{ $active?: boolean; $disabled?: boolean }>`
   display: flex;
   align-items: center;
   gap: 7px;
@@ -577,20 +636,32 @@ const NavItem = styled.div<{ $active?: boolean }>`
   font-size: 13px;
   transition: background 0.12s, color 0.12s;
 
-  ${({ $active, theme }) =>
-    $active
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: -2px;
+  }
+
+  ${({ $active, $disabled, theme }) =>
+    $disabled
       ? css`
-          background: ${theme.colors.activeLight};
-          color: ${theme.colors.active};
-          font-weight: 600;
+          /* 현재 필터 조합에서 0건 — 눌러도 결과 없음. 흐리게 + 조작 불가 */
+          opacity: 0.36;
+          cursor: default;
+          color: ${theme.colors.text.tertiary};
         `
-      : css`
-          color: ${theme.colors.text.secondary};
-          &:hover {
-            background: ${theme.colors.hover};
-            color: ${theme.colors.text.primary};
-          }
-        `}
+      : $active
+        ? css`
+            background: ${theme.colors.activeLight};
+            color: ${theme.colors.active};
+            font-weight: 600;
+          `
+        : css`
+            color: ${theme.colors.text.secondary};
+            &:hover {
+              background: ${theme.colors.hover};
+              color: ${theme.colors.text.primary};
+            }
+          `}
 `
 
 const NavDot = styled.span`

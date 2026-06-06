@@ -24,6 +24,8 @@ export interface AdaptedPerson {
   primaryTitle: string | null
   biography: string | null
   isAlive: boolean
+  /** 검색 매칭용 사전 결합 텍스트 (표시명·원본명·성·국가·소속·직함 lowercase). 매 키 입력 재계산 방지. */
+  searchText: string
 }
 
 /** GovernmentTenureResponse 중 어댑터가 참조하는 최소 필드. */

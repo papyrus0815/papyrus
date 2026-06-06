@@ -1,6 +1,46 @@
 import type { PersonNameFields } from '@/shared/lib/person-display-name'
+import type { BiographySectionData } from './person-biography-sections'
+import type { TenureAchievementItem } from './tenure-achievements'
 
 export type TabType = 'overview' | 'genealogy' | 'politics' | 'events'
+
+/**
+ * 재임(GovernmentTenure)·재위(SovereignReign) 공통 카드 레코드.
+ * 개요 "재임·재위" 섹션이 두 종류를 동일 형태로 렌더하므로 공유 shape으로 정의.
+ */
+export interface TenureLikeRecord {
+  id: string
+  startDate?: string | null
+  endDate?: string | null
+  notes?: string | null
+  /** 재임 통산 대수 / 재위는 termNumber */
+  termNumber?: number | null
+  subTermNumber?: number | null
+  /** 재위 국가별 즉위 서수 */
+  regnalNumber?: number | null
+  regnalName?: string | null
+  appointmentMethod?: string | null
+  endReason?: string | null
+  endReasonDetail?: string | null
+  title?: string | null
+  positionDefinition?: { id?: string; title?: string | null } | null
+  country?: { id?: string; name?: string | null } | null
+  historicalCountry?: { id?: string; name?: string | null } | null
+  achievements?: TenureAchievementItem[] | null
+}
+
+/**
+ * 재임·재위 통합 카드의 표시용 항목.
+ * 정렬·서수·연임 판정을 메모에서 미리 계산해 렌더 컴포넌트는 표시에만 집중한다.
+ */
+export interface CombinedTenureItem {
+  kind: 'tenure' | 'reign'
+  data: TenureLikeRecord
+  /** 표시용 대(ordinal) — 재위는 regnalNumber 우선, 재임은 termNumber 우선 */
+  ordinalNum: number | null
+  /** 연임 여부 — subTermNumber≥2(본인 회차) 또는 같은 대 2건 이상 */
+  isReappointment: boolean
+}
 
 /**
  * 부모/조부모 계보의 말단(leaf) 인물 노드.
@@ -38,6 +78,7 @@ export interface PersonDetailData {
   deathNote?: string | null
   gender?: string | null
   biography?: string | null
+  biographySections?: BiographySectionData[] | null
   profileImageUrl?: string | null
   regnalName?: string | null
   templeName?: string | null
@@ -159,8 +200,13 @@ export interface PersonDetailData {
   deathAdminDivision?: { id: string; name: string } | null
   birthPlaceText?: string | null
   deathPlaceText?: string | null
-  governmentPositions?: unknown[]
-  governmentTenures?: unknown[]
+  /**
+   * 재임 기록. detail 엔드포인트는 `governmentPositions`, 그 외(목록·DTO)는
+   * `governmentTenures` 로 같은 데이터를 다른 이름으로 내려준다. 읽을 땐
+   * `pickGovernmentTenures()` 로 통합 — 직접 분기 금지.
+   */
+  governmentPositions?: TenureLikeRecord[] | null
+  governmentTenures?: TenureLikeRecord[] | null
   partyLeaderships?: Array<{
     id?: string
     roleTitle?: string | null
@@ -201,17 +247,8 @@ export interface PersonDetailData {
     foundedAt?: string | null
     description?: string | null
   }> | null
-  sovereignReigns?: Array<{
-    id: string
-    startDate?: string | null
-    endDate?: string | null
-    notes?: string | null
-    regnalName?: string | null
-    regnalNumber?: number | null
-    positionDefinition?: { id?: string; title?: string | null } | null
-    country?: { id?: string; name?: string | null } | null
-    historicalCountry?: { id?: string; name?: string | null } | null
-  }> | null
+  /** 군주·재위 기록 (SovereignReign). 재임과 동일 카드 shape → TenureLikeRecord 재사용 */
+  sovereignReigns?: TenureLikeRecord[] | null
   humanRelationships?: unknown[]
   events?: unknown[]
   electionCandidacies?: unknown[]
