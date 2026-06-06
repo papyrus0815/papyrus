@@ -152,3 +152,17 @@ enum EventMethod {
   /// 삭제
   DELETE
 }
+
+/// 알림 하위 리소스 구분 (선택).
+/// entityLabel 본체(인물/사건 등)가 아니라 그 안의 특정 하위 항목 변경을 표기할 때 사용.
+/// 예: BIOGRAPHY + CREATE → "{인물}의 전기가 추가되었습니다"
+enum NotificationSubResource {
+  /// 전기/약력
+  BIOGRAPHY
+  /// 경력 (군인/기업인/학자/운동선수/종교인/예술가/언론인/법조인/의료인 등 통합)
+  CAREER
+  /// 학력
+  EDUCATION
+  /// 수상/훈장
+  AWARD
+}

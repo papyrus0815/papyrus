@@ -92,4 +92,23 @@ export const sessionApi = {
     const conn = nestiaApiService.getConnection()
     return api.functional.account.me(conn)
   },
+  async changePassword(body: api.functional.account.change_password.changePassword.Body) {
+    const conn = nestiaApiService.getConnection()
+    return api.functional.account.change_password.changePassword(conn, body)
+  },
+  async changeDisplayName(
+    body: api.functional.account.display_name.updateDisplayName.Body,
+  ) {
+    const conn = nestiaApiService.getConnection()
+    return api.functional.account.display_name.updateDisplayName(conn, body)
+  },
+  async setRepresentativePerson(
+    body: api.functional.account.representative_person.setRepresentativePerson.Body,
+  ) {
+    const conn = nestiaApiService.getConnection()
+    return api.functional.account.representative_person.setRepresentativePerson(
+      conn,
+      body,
+    )
+  },
 }

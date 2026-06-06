@@ -5,6 +5,8 @@ export class AccountEntity {
     public passwordHash: string,
     public heroId: string | null,
     public createdAt: Date,
+    public totalPoints: number = 0,
+    public gradeCode: string = 'BRONZE',
   ) {}
 }
 

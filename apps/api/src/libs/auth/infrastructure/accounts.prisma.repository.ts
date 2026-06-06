@@ -32,8 +32,85 @@ export class AccountsPrismaRepository implements AccountRepository {
           accountRecord.passwordHash,
           accountRecord.heroId ?? null,
           accountRecord.createdAt,
+          accountRecord.totalPoints,
+          accountRecord.gradeCode,
         )
       : null
+  }
+
+  /**
+   * 내 정보(프로필) 조회 — 히어로 정보를 조인해 한 번에 가져온다.
+   * @param id - 계정 ID
+   */
+  async findMeView(id: string) {
+    return this.prisma.account.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        heroId: true,
+        representativePersonId: true,
+        createdAt: true,
+        totalPoints: true,
+        gradeCode: true,
+        representativePerson: {
+          select: { id: true, name: true, profileImageUrl: true },
+        },
+      },
+    })
+  }
+
+  /**
+   * 대표 인물(아바타) 지정/해제. personId가 null이면 해제.
+   * @param id - 계정 ID
+   * @param personId - 대표 인물 ID 또는 null
+   */
+  async updateRepresentativePerson(
+    id: string,
+    personId: string | null,
+  ): Promise<void> {
+    await this.prisma.account.update({
+      where: { id },
+      data: { representativePersonId: personId },
+    })
+  }
+
+  /**
+   * 특정 인물이 해당 계정 소유인지 확인 (대표 인물 지정 시 검증용)
+   * @param personId - 인물 ID
+   * @param accountId - 계정 ID
+   */
+  async isPersonOwnedBy(personId: string, accountId: string): Promise<boolean> {
+    const found = await this.prisma.person.findFirst({
+      where: { id: personId, accountId },
+      select: { id: true },
+    })
+    return !!found
+  }
+
+  /**
+   * 비밀번호 해시 갱신
+   * @param id - 계정 ID
+   * @param passwordHash - 새 비밀번호 해시
+   */
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    await this.prisma.account.update({
+      where: { id },
+      data: { passwordHash },
+    })
+  }
+
+  /**
+   * 표시용 닉네임(displayName) 갱신
+   * @param id - 계정 ID
+   * @param displayName - 새 닉네임
+   */
+  async updateDisplayName(id: string, displayName: string): Promise<void> {
+    await this.prisma.account.update({
+      where: { id },
+      data: { displayName },
+    })
   }
 
   /**

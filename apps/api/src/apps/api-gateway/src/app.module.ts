@@ -1,5 +1,6 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common'
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core'
+import { ScheduleModule } from '@nestjs/schedule'
 import { AppController } from './app.controller'
 import { AuthModule } from '../../../libs/auth/infrastructure/auth.module'
 import { CountryModule } from '../../../libs/country/infrastructure/country.module'
@@ -21,6 +22,7 @@ import { OrganizationModule } from '../../../libs/organization/infrastructure/or
 import { CompanyModule } from '../../../libs/company/infrastructure/company.module'
 import { UploadModule } from '../../../libs/shared/upload/upload.module'
 import { UploadServeMiddleware } from '../../../libs/shared/upload/upload-serve.middleware'
+import { ActorContextInterceptor } from '../../../libs/shared/actor-context.interceptor'
 import { AdministrationDepartmentModule } from '../../../libs/administration-department/administration-department.module'
 import { EthnicityModule } from '../../../libs/ethnicity/ethnicity.module'
 import { GlossaryModule } from '../../../libs/glossary/glossary.module'
@@ -29,6 +31,7 @@ import { ElectionModule } from '../../../libs/election/election.module'
 import { EntityLinkSearchModule } from '../../../libs/entity-link-search/entity-link-search.module'
 import { NaturalFeatureModule } from '../../../libs/natural-feature/natural-feature.module'
 import { InfrastructureModule } from '../../../libs/infrastructure/infrastructure.module'
+import { GamificationModule } from '../../../libs/gamification/gamification.module'
 
 import {
   AppConfigModule,
@@ -43,8 +46,10 @@ import {
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     AppConfigModule,
     PrismaModule,
+    GamificationModule,
     AuthModule,
     CountryModule,
     ContinentModule,
@@ -84,6 +89,11 @@ import {
     {
       provide: APP_INTERCEPTOR,
       useClass: LoggingInterceptor,
+    },
+    // 가드 이후 req.user → 요청 컨텍스트에 행위자 계정 ID 저장 (알림 작성자 표기용)
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ActorContextInterceptor,
     },
     // Nestia SDK와 호환되지 않으므로 TransformInterceptor 비활성화
     // Nestia는 자체적으로 타입 안전한 응답을 제공하므로 추가 래핑 불필요

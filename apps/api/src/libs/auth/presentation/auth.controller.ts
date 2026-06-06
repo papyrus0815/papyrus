@@ -4,6 +4,7 @@ import {
   Res,
   UseGuards,
   Post,
+  Patch,
   Get,
   Body,
   UnauthorizedException,
@@ -18,6 +19,9 @@ import { AccountsPrismaRepository } from '../infrastructure/accounts.prisma.repo
 import type { Response } from 'express'
 import { AppConfigService } from '../../shared/config/config.service'
 import type { AccountMeResponseDto } from './dto/account-me.response'
+import { ChangePasswordDto } from './dto/change-password.dto'
+import { UpdateDisplayNameDto } from './dto/update-display-name.dto'
+import { SetRepresentativePersonDto } from './dto/set-representative-person.dto'
 
 /**
  * 인증 컨트롤러  
@@ -131,13 +135,65 @@ export class AccountController {
     const userId = req.user?.userId;
     if (!userId) return null;
 
-    const account = await this.accountRepository.findById(userId);
+    const account = await this.accountRepository.findMeView(userId);
     if (!account) return null;
 
-    return { 
-      id: account.id, 
-      account: account.username, 
-      heroId: account.heroId 
+    return {
+      id: account.id,
+      account: account.username,
+      displayName: account.displayName,
+      representativePersonId: account.representativePersonId,
+      heroName: account.representativePerson?.name ?? null,
+      heroThumbnail: account.representativePerson?.profileImageUrl ?? null,
+      createdAt: account.createdAt.toISOString(),
+      totalPoints: account.totalPoints,
+      gradeCode: account.gradeCode,
     };
+  }
+
+  @Post('change-password')
+  @ApiOperation({ summary: '비밀번호 변경' })
+  async changePassword(
+    @Req() req: any,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<{ ok: boolean }> {
+    const userId = req.user?.userId;
+    if (!userId) throw new UnauthorizedException();
+
+    await this.authService.changePassword(
+      userId,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+    return { ok: true };
+  }
+
+  @Patch('display-name')
+  @ApiOperation({ summary: '닉네임(표시명) 변경 — 로그인 ID는 불변' })
+  async updateDisplayName(
+    @Req() req: any,
+    @Body() dto: UpdateDisplayNameDto,
+  ): Promise<{ ok: boolean; displayName: string }> {
+    const userId = req.user?.userId;
+    if (!userId) throw new UnauthorizedException();
+
+    const displayName = await this.authService.changeDisplayName(
+      userId,
+      dto.displayName,
+    );
+    return { ok: true, displayName };
+  }
+
+  @Patch('representative-person')
+  @ApiOperation({ summary: '대표 인물(아바타) 지정/해제' })
+  async setRepresentativePerson(
+    @Req() req: any,
+    @Body() dto: SetRepresentativePersonDto,
+  ): Promise<{ ok: boolean }> {
+    const userId = req.user?.userId;
+    if (!userId) throw new UnauthorizedException();
+
+    await this.authService.setRepresentativePerson(userId, dto.personId);
+    return { ok: true };
   }
 }

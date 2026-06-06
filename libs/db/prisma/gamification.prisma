@@ -1,0 +1,88 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                            GAMIFICATION DOMAIN                                ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+///
+/// 사용자의 콘텐츠 등록(인물·사건·국가 등) 활동에 점수를 적립하고 등급을 부여하는 도메인.
+///
+/// 설계 문서: docs/gamification-points-grade-design.md
+///
+/// 핵심:
+/// - PointEntry: 점수 적립/차감 1건 = 1행 (원장/ledger). 삭제 시 음수 행으로 회수.
+/// - Account.totalPoints / gradeCode: PointEntry 합계의 비정규화 캐시.
+/// - 등급(Bronze~Diamond)은 코드 상수로 관리 (point.grade.ts).
+
+/// 점수 적립 사유
+enum PointReason {
+  /// 콘텐츠 등록 적립
+  CREATE_CONTENT
+  /// 완성도 보너스(사진/출처/연보 등) — 2차 과제, enum만 선반영
+  COMPLETENESS_BONUS
+  /// 소프트/하드 삭제로 인한 점수 회수(음수)
+  CONTENT_DELETED
+  /// 운영자 수동 조정
+  ADMIN_ADJUST
+}
+
+/// 점수 원장 — 적립/차감 한 건이 한 행
+model PointEntry {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 점수를 받는(또는 회수당하는) 계정
+  accountId String @map("account_id") @db.Char(36)
+
+  /// 증감 점수 (+적립 / -차감)
+  amount Int
+
+  /// 적립 사유
+  reason PointReason @map("reason")
+
+  /// 대상 콘텐츠 타입 (기존 AggregateType 재사용: PERSON, EVENT, COUNTRY, HISTORICAL_COUNTRY 등)
+  ownerType AggregateType @map("owner_type")
+
+  /// 대상 콘텐츠 PK
+  recordId String? @map("record_id") @db.Char(36)
+
+  /// 적립 시각
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// 대상 콘텐츠가 다루는 시대의 세기 (세기별 리더보드용 비정규화 스냅샷).
+  /// 부호 컨벤션: AD=양수(1701~1800 → 18), BC=음수(BC 100~1 → -1).
+  /// 세기를 매길 수 없는 콘텐츠(현대국가 COUNTRY, 연도 미상)는 null.
+  /// 적립 시점에 콘텐츠 날짜로 산출하며, 콘텐츠 날짜 수정 시 재스탬프된다.
+  contentCentury Int? @map("content_century")
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  /// 동일 (계정·콘텐츠·사유) 조합 중복 적립 차단 — 어뷰징/재시도 1차 방어선
+  @@unique([accountId, ownerType, recordId, reason], name: "uniq_point_action")
+  @@index([accountId], name: "idx_point_entry_account")
+  @@index([ownerType, recordId], name: "idx_point_entry_owner")
+  /// 주간/월간 리더보드의 기간 범위 집계(createdAt >= 기간시작)용
+  @@index([createdAt], name: "idx_point_entry_created_at")
+  /// 세기별 리더보드 집계(contentCentury로 그룹/필터 + 계정별 합산)용
+  @@index([contentCentury, accountId], name: "idx_point_entry_century")
+  @@map("point_entry")
+}
+
+/// 계정이 획득한 뱃지 (영구). 뱃지 정의(기준/라벨)는 코드 상수(badge.policy.ts)로 관리.
+model AccountBadge {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 뱃지를 획득한 계정
+  accountId String @map("account_id") @db.Char(36)
+
+  /// 뱃지 코드 (badge.policy.ts의 BadgeCode와 1:1)
+  badgeCode String @map("badge_code") @db.VarChar(40)
+
+  /// 획득 시각
+  earnedAt DateTime @default(now()) @map("earned_at")
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  /// 동일 뱃지 중복 획득 차단
+  @@unique([accountId, badgeCode], name: "uniq_account_badge")
+  @@index([accountId], name: "idx_account_badge_account")
+  @@map("account_badge")
+}
