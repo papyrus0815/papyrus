@@ -77,7 +77,7 @@ export function HistoricalCountryDetail({
   }
 
   const stateTypeLabel = country ? getStateTypeLabelUtil(country.stateType) : ''
-  const entityKind = country ? (country as { entityKind?: HistoricalEntityKind | null }).entityKind : null
+  const entityKind: HistoricalEntityKind | null = country?.entityKind ?? null
 
   // 로딩 중 (country 변경 중이거나 외부 loading이 true일 때)
   if (isLoading || internalLoading || isCountryChanging) {
@@ -180,11 +180,11 @@ export function HistoricalCountryDetail({
                 <InfoValue>{country.enName}</InfoValue>
               </InfoItem>
             )}
-            {(country as any).nameOrigin && (
+            {country.nameOrigin && (
               <InfoItem style={{ gridColumn: '1 / -1' }}>
                 <InfoLabel>국가명 유래</InfoLabel>
                 <InfoValue style={{ whiteSpace: 'pre-wrap' }}>
-                  {(country as any).nameOrigin}
+                  {country.nameOrigin}
                 </InfoValue>
               </InfoItem>
             )}

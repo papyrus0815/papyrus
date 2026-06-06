@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { invalidateGamification } from '@/entities/gamification'
 import * as historicalCountriesApi from '@/shared/api/historical-countries'
 import type {
   HistoricalCountryResponseDto,
@@ -77,6 +78,9 @@ export function useCreateHistoricalCountry() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: historicalCountryKeys.all })
+      // 모던 국가 응답에 historicalCountries가 임베드되어 함께 갱신
+      queryClient.invalidateQueries({ queryKey: ['countries'] })
+      invalidateGamification(queryClient)
     },
   })
 }
@@ -106,6 +110,8 @@ export function useUpdateHistoricalCountry() {
       queryClient.invalidateQueries({
         queryKey: historicalCountryKeys.detail(variables.id),
       })
+      // 모던 국가 응답에 historicalCountries가 임베드되어 함께 갱신
+      queryClient.invalidateQueries({ queryKey: ['countries'] })
     },
   })
 }
@@ -122,6 +128,8 @@ export function useDeleteHistoricalCountry() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: historicalCountryKeys.all })
+      // 모던 국가 응답에 historicalCountries가 임베드되어 함께 갱신
+      queryClient.invalidateQueries({ queryKey: ['countries'] })
     },
   })
 }

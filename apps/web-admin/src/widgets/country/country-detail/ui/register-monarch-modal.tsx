@@ -15,7 +15,12 @@ import {
   type CreateSovereignReignDto,
 } from '@/shared/api/person-career'
 import { getAllPersons } from '@/shared/api/persons'
-import { FormInput } from '@/shared/ui/form-input/form-input'
+import { FormInput, FormTextarea } from '@/shared/ui/form-input/form-input'
+import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
+import {
+  APPOINTMENT_METHOD_OPTIONS,
+  TENURE_END_REASON_OPTIONS,
+} from '@/shared/lib/tenure-labels'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
@@ -69,6 +74,12 @@ const ModalSelectBtn = styled.button<{ $hasValue?: boolean }>`
 `
 
 const StyledFormInput = styled(FormInput)`
+  padding: 12px 14px;
+  font-size: 15px;
+  border-radius: 8px;
+`
+
+const StyledFormTextarea = styled(FormTextarea)`
   padding: 12px 14px;
   font-size: 15px;
   border-radius: 8px;
@@ -191,6 +202,11 @@ export function RegisterMonarchModal({
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [regnalNumber, setRegnalNumber] = useState('')
+  const [subTermNumber, setSubTermNumber] = useState('')
+  const [appointmentMethod, setAppointmentMethod] = useState('')
+  const [endReason, setEndReason] = useState('')
+  const [endReasonDetail, setEndReasonDetail] = useState('')
+  const [notes, setNotes] = useState('')
   const [showOnEventsPage, setShowOnEventsPage] = useState(true)
 
   const [includeRegnalEra, setIncludeRegnalEra] = useState(false)
@@ -265,6 +281,11 @@ export function RegisterMonarchModal({
     setStartDate('')
     setEndDate('')
     setRegnalNumber('')
+    setSubTermNumber('')
+    setAppointmentMethod('')
+    setEndReason('')
+    setEndReasonDetail('')
+    setNotes('')
     setShowOnEventsPage(true)
     setIncludeRegnalEra(false)
     setEraName('')
@@ -355,9 +376,6 @@ export function RegisterMonarchModal({
       }
     }
 
-    const notesValue = regnalName.trim()
-      ? `왕명: ${regnalName.trim()}`
-      : undefined
     const num =
       regnalNumber.trim() === ''
         ? undefined
@@ -374,7 +392,12 @@ export function RegisterMonarchModal({
       endDate: endDate.trim() || undefined,
       termNumber: num,
       regnalNumber: num,
-      notes: notesValue,
+      subTermNumber: parseOptionalInt(subTermNumber),
+      appointmentMethod: (appointmentMethod || undefined) as CreateSovereignReignDto['appointmentMethod'],
+      endReason: (endReason || undefined) as CreateSovereignReignDto['endReason'],
+      endReasonDetail: endReasonDetail.trim() || undefined,
+      regnalName: regnalName.trim() || undefined,
+      notes: notes.trim() || undefined,
       showPositionInfo: showOnEventsPage,
     }
 
@@ -586,6 +609,76 @@ export function RegisterMonarchModal({
                       역대 순번. 동아시아(제4대)·서양 군주(14세)·교황(266대)
                       등 숫자만 입력
                     </FieldHint>
+                  </FieldControl>
+                </FieldRow>
+
+                <FieldRow>
+                  <FieldLabel>기수</FieldLabel>
+                  <FieldControl>
+                    <StyledFormInput
+                      type="number"
+                      min={1}
+                      value={subTermNumber}
+                      onChange={(e) => setSubTermNumber(e.target.value)}
+                      placeholder="선택 — 같은 대 안에서 재위가 나뉠 때 (예: 복위)"
+                    />
+                  </FieldControl>
+                </FieldRow>
+
+                <FieldRow>
+                  <FieldLabel>즉위 방식</FieldLabel>
+                  <FieldControl>
+                    <FormSelectNative
+                      value={appointmentMethod}
+                      onChange={(e) => setAppointmentMethod(e.target.value)}
+                    >
+                      <option value="">선택 안 함</option>
+                      {APPOINTMENT_METHOD_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </FormSelectNative>
+                  </FieldControl>
+                </FieldRow>
+
+                <FieldRow>
+                  <FieldLabel>퇴위 사유</FieldLabel>
+                  <FieldControl>
+                    <FormSelectNative
+                      value={endReason}
+                      onChange={(e) => setEndReason(e.target.value)}
+                    >
+                      <option value="">선택 안 함</option>
+                      {TENURE_END_REASON_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </FormSelectNative>
+                  </FieldControl>
+                </FieldRow>
+
+                <FieldRow>
+                  <FieldLabel>퇴위 사유 상세</FieldLabel>
+                  <FieldControl>
+                    <StyledFormInput
+                      value={endReasonDetail}
+                      onChange={(e) => setEndReasonDetail(e.target.value)}
+                      placeholder="선택 (예: 명예혁명으로 폐위)"
+                    />
+                  </FieldControl>
+                </FieldRow>
+
+                <FieldRow>
+                  <FieldLabel>비고</FieldLabel>
+                  <FieldControl>
+                    <StyledFormTextarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="선택 — 재위 관련 특이사항"
+                      rows={2}
+                    />
                   </FieldControl>
                 </FieldRow>
 

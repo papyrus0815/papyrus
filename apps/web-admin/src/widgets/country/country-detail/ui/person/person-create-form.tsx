@@ -7,6 +7,7 @@ import {
   type CreatePersonDto as CreatePersonInput,
   type Era,
 } from '@/shared/api/persons'
+import { onContentRegistered } from '@/entities/gamification'
 import { countryApi } from '@/shared/api/country'
 import { dynastyApi } from '@/shared/api/dynasty'
 import { jobApi } from '@/shared/api/job'
@@ -211,7 +212,13 @@ export function PersonCreateForm({
         countryId: formData.countryId || null,
       }
 
-      await createPerson(data)
+      const created = await createPerson(data)
+      // 게이미피케이션 즉시 갱신 + 완성도 보너스 피드백 (사진·약력·출생연도)
+      onContentRegistered(
+        (created.profileImageUrl ? 1 : 0) +
+          (created.biography ? 1 : 0) +
+          (created.birthYear != null ? 1 : 0),
+      )
       onSuccess()
     } catch (error: any) {
       setErrors({

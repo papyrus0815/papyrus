@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { invalidateGamification } from '@/entities/gamification'
 import * as countriesApi from '@/shared/api/countries'
 import type {
   CountryResponseDto,
@@ -6,8 +7,13 @@ import type {
   UpdateCountryDto,
 } from '@/shared/api/countries'
 
-// SDK 타입을 그대로 사용
-export type Country = CountryResponseDto
+// SDK 타입을 그대로 사용.
+// 단, 생성된 SDK(CountryResponseDto)가 일부 신규 응답 필드를 아직 반영하지 못해 보강한다.
+// (백엔드 country.response.ts에는 존재 — SDK 재생성 시 교집합 제거 가능)
+export type Country = CountryResponseDto & {
+  fullName?: string | null
+  defaultNameDisplayOrder?: 'korean' | 'western' | null
+}
 export type CreateCountryData = CreateCountryDto
 export type UpdateCountryData = UpdateCountryDto
 
@@ -30,6 +36,10 @@ export const countryKeys = {
   detail: (id: string) => ['countries', id] as const,
 }
 
+/** 국가는 자주 바뀌지 않는 참조 데이터 — 마운트마다 재조회 방지. */
+const COUNTRY_STALE_TIME = 1000 * 60 * 5 // 5분
+const COUNTRY_GC_TIME = 1000 * 60 * 30 // 30분
+
 /**
  * 모든 국가 목록 조회 훅
  */
@@ -40,6 +50,8 @@ export function useCountries() {
       const response = await countriesApi.getAllCountries()
       return response as Country[]
     },
+    staleTime: COUNTRY_STALE_TIME,
+    gcTime: COUNTRY_GC_TIME,
   })
 }
 
@@ -54,6 +66,8 @@ export function useCountry(id: string) {
       return response as Country
     },
     enabled: !!id,
+    staleTime: COUNTRY_STALE_TIME,
+    gcTime: COUNTRY_GC_TIME,
   })
 }
 
@@ -70,6 +84,7 @@ export function useCreateCountry() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: countryKeys.all })
+      invalidateGamification(queryClient)
     },
   })
 }

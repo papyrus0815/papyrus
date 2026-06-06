@@ -61,7 +61,7 @@ export function modernToUnified(country: Country): UnifiedCountry {
     id: country.id,
     name: country.name,
     type: 'modern',
-    fullName: (country as any).fullName ?? undefined,
+    fullName: country.fullName ?? undefined,
     localName: country.localName,
     isoCode: country.isoCode,
     flagEmoji: country.flagEmoji,
@@ -73,9 +73,7 @@ export function modernToUnified(country: Country): UnifiedCountry {
     latitude: country.latitude,
     longitude: country.longitude,
     historicalCountries: country.historicalCountries,
-    defaultNameDisplayOrder:
-      (country as { defaultNameDisplayOrder?: 'korean' | 'western' | null })
-        .defaultNameDisplayOrder ?? null,
+    defaultNameDisplayOrder: country.defaultNameDisplayOrder ?? null,
   }
 }
 

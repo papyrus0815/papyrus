@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
+
 import { motion } from 'framer-motion'
 
 import type { Country } from '@/entities/country/api'
@@ -27,6 +29,28 @@ export function CountryDetailHeader({
   onDelete,
   rightSlot,
 }: CountryDetailHeaderProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const kebabRef = useRef<HTMLDivElement>(null)
+
+  // 메뉴 열림 상태에서 바깥 클릭·Esc로 닫기
+  useEffect(() => {
+    if (!menuOpen) return
+    const onPointerDown = (e: MouseEvent) => {
+      if (kebabRef.current && !kebabRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [menuOpen])
+
   return (
     <S.HeaderWrapper>
       {/* 헤더 우측 슬롯 (카테고리 설정 등) */}
@@ -132,6 +156,7 @@ export function CountryDetailHeader({
       {/* 케밥 메뉴 */}
       {(onEdit || onDelete) && (
         <S.CompactKebabMenu
+          ref={kebabRef}
           as={motion.div}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -139,16 +164,16 @@ export function CountryDetailHeader({
         >
           <S.KebabButton
             as={motion.button}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="국가 작업 메뉴"
             whileHover={{ scale: 1.1, rotate: 90 }}
             whileTap={{ scale: 0.95 }}
             transition={{ duration: 0.2 }}
             onClick={(e) => {
               e.stopPropagation()
-              const menu = e.currentTarget.nextElementSibling as HTMLElement
-              if (menu) {
-                menu.style.display =
-                  menu.style.display === 'block' ? 'none' : 'block'
-              }
+              setMenuOpen((open) => !open)
             }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -157,17 +182,21 @@ export function CountryDetailHeader({
               <circle cx="12" cy="19" r="1.5" />
             </svg>
           </S.KebabButton>
-          <S.DropdownMenu>
+          <S.DropdownMenu
+            role="menu"
+            style={{ display: menuOpen ? 'block' : 'none' }}
+          >
             {onEdit && (
               <S.DropdownButton
                 as={motion.button}
+                type="button"
+                role="menuitem"
                 whileHover={{ x: 4 }}
                 transition={{ duration: 0.2 }}
                 onClick={(e) => {
                   e.stopPropagation()
+                  setMenuOpen(false)
                   onEdit(country)
-                  const menu = e.currentTarget.parentElement as HTMLElement
-                  if (menu) menu.style.display = 'none'
                 }}
               >
                 <svg
@@ -187,14 +216,15 @@ export function CountryDetailHeader({
             {onDelete && (
               <S.DropdownButton
                 as={motion.button}
+                type="button"
+                role="menuitem"
                 whileHover={{ x: 4 }}
                 transition={{ duration: 0.2 }}
                 $isDelete
                 onClick={(e) => {
                   e.stopPropagation()
+                  setMenuOpen(false)
                   onDelete(country.id)
-                  const menu = e.currentTarget.parentElement as HTMLElement
-                  if (menu) menu.style.display = 'none'
                 }}
               >
                 <svg

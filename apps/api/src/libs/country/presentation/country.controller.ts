@@ -10,6 +10,14 @@ import {
   DemographicIndicatorResponse,
   EconomicIndicatorResponse,
   DevelopmentIndicatorResponse,
+  UpsertEconomicIndicatorDto,
+  UpsertDemographicIndicatorDto,
+  UpsertDevelopmentIndicatorDto,
+  CountryRecordResponse,
+  CreateCountryRecordDto,
+  UpdateCountryRecordDto,
+  ExportImportResponse,
+  UpsertExportImportDto,
 } from './dto'
 import { Country } from '../domain/country.entity'
 import { TypedBody, TypedParam, TypedQuery, TypedRoute } from '@nestia/core'
@@ -302,5 +310,197 @@ export class CountryController {
       query.endYear ? parseInt(query.endYear) : undefined,
       accountId,
     )
+  }
+
+  // ── 지표 쓰기 (upsert / delete) ──────────────────────────────
+
+  /**
+   * 경제 지표 생성/갱신 (countryId+year 기준 upsert)
+   * @tag countries
+   */
+  @TypedRoute.Post(':id/economic-indicators')
+  async upsertEconomicIndicator(
+    @TypedParam('id') id: string,
+    @TypedBody() dto: UpsertEconomicIndicatorDto,
+    @Request() req: any,
+  ): Promise<EconomicIndicatorResponse> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.countryService.upsertEconomicIndicator(id, dto, accountId)
+  }
+
+  /**
+   * 경제 지표 삭제 (해당 연도)
+   * @tag countries
+   */
+  @TypedRoute.Delete(':id/economic-indicators/:year')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteEconomicIndicator(
+    @TypedParam('id') id: string,
+    @TypedParam('year') year: number,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.countryService.deleteEconomicIndicator(id, year, accountId)
+  }
+
+  /**
+   * 인구 지표 생성/갱신 (countryId+year 기준 upsert)
+   * @tag countries
+   */
+  @TypedRoute.Post(':id/demographic-indicators')
+  async upsertDemographicIndicator(
+    @TypedParam('id') id: string,
+    @TypedBody() dto: UpsertDemographicIndicatorDto,
+    @Request() req: any,
+  ): Promise<DemographicIndicatorResponse> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.countryService.upsertDemographicIndicator(id, dto, accountId)
+  }
+
+  /**
+   * 인구 지표 삭제 (해당 연도)
+   * @tag countries
+   */
+  @TypedRoute.Delete(':id/demographic-indicators/:year')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteDemographicIndicator(
+    @TypedParam('id') id: string,
+    @TypedParam('year') year: number,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.countryService.deleteDemographicIndicator(id, year, accountId)
+  }
+
+  /**
+   * 발전 지표 생성/갱신 (countryId+year 기준 upsert)
+   * @tag countries
+   */
+  @TypedRoute.Post(':id/development-indicators')
+  async upsertDevelopmentIndicator(
+    @TypedParam('id') id: string,
+    @TypedBody() dto: UpsertDevelopmentIndicatorDto,
+    @Request() req: any,
+  ): Promise<DevelopmentIndicatorResponse> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.countryService.upsertDevelopmentIndicator(id, dto, accountId)
+  }
+
+  /**
+   * 발전 지표 삭제 (해당 연도)
+   * @tag countries
+   */
+  @TypedRoute.Delete(':id/development-indicators/:year')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteDevelopmentIndicator(
+    @TypedParam('id') id: string,
+    @TypedParam('year') year: number,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.countryService.deleteDevelopmentIndicator(id, year, accountId)
+  }
+
+  // ── 국가 기록 (CountryRecord) CRUD ───────────────────────────
+
+  /**
+   * 국가 기록 목록 조회
+   * @tag countries
+   */
+  @TypedRoute.Get(':id/records')
+  async getCountryRecords(
+    @TypedParam('id') id: string,
+    @Request() req: any,
+  ): Promise<CountryRecordResponse[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.countryService.getCountryRecords(id, accountId)
+  }
+
+  /**
+   * 국가 기록 생성
+   * @tag countries
+   */
+  @TypedRoute.Post(':id/records')
+  async createCountryRecord(
+    @TypedParam('id') id: string,
+    @TypedBody() dto: CreateCountryRecordDto,
+    @Request() req: any,
+  ): Promise<CountryRecordResponse> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.countryService.createCountryRecord(id, dto, accountId)
+  }
+
+  /**
+   * 국가 기록 수정
+   * @tag countries
+   */
+  @TypedRoute.Put(':id/records/:recordId')
+  async updateCountryRecord(
+    @TypedParam('id') id: string,
+    @TypedParam('recordId') recordId: string,
+    @TypedBody() dto: UpdateCountryRecordDto,
+    @Request() req: any,
+  ): Promise<CountryRecordResponse> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.countryService.updateCountryRecord(id, recordId, dto, accountId)
+  }
+
+  /**
+   * 국가 기록 삭제
+   * @tag countries
+   */
+  @TypedRoute.Delete(':id/records/:recordId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteCountryRecord(
+    @TypedParam('id') id: string,
+    @TypedParam('recordId') recordId: string,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.countryService.deleteCountryRecord(id, recordId, accountId)
+  }
+
+  // ── 교역 (ExportImport) CRUD ─────────────────────────────────
+
+  /**
+   * 연도별 교역(수출·수입) 목록 조회
+   * @tag countries
+   */
+  @TypedRoute.Get(':id/export-imports')
+  async getExportImports(
+    @TypedParam('id') id: string,
+    @Request() req: any,
+  ): Promise<ExportImportResponse[]> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.countryService.getExportImports(id, accountId)
+  }
+
+  /**
+   * 교역 생성/갱신 (countryId+year 기준 upsert)
+   * @tag countries
+   */
+  @TypedRoute.Post(':id/export-imports')
+  async upsertExportImport(
+    @TypedParam('id') id: string,
+    @TypedBody() dto: UpsertExportImportDto,
+    @Request() req: any,
+  ): Promise<ExportImportResponse> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.countryService.upsertExportImport(id, dto, accountId)
+  }
+
+  /**
+   * 교역 삭제 (해당 연도)
+   * @tag countries
+   */
+  @TypedRoute.Delete(':id/export-imports/:year')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteExportImport(
+    @TypedParam('id') id: string,
+    @TypedParam('year') year: number,
+    @Request() req: any,
+  ): Promise<void> {
+    const accountId = req.user?.id ?? req.user?.sub
+    await this.countryService.deleteExportImport(id, year, accountId)
   }
 }

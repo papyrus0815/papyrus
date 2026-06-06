@@ -22,6 +22,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query'
+import { onContentRegistered } from '@/entities/gamification'
 import * as historicalCountriesApi from '@/shared/api/historical-countries'
 import type {
   CreateHistoricalCountryDto,
@@ -127,7 +128,7 @@ export function useCreateHistoricalCountry() {
   return useMutation({
     mutationFn: (data: CreateHistoricalCountryDto) =>
       historicalCountriesApi.createHistoricalCountry(data),
-    onSuccess: () => {
+    onSuccess: (created) => {
       // 역사적 국가 목록 갱신 (전체 prefix로 entities/features 모두 반영)
       queryClient.invalidateQueries({
         queryKey: historicalCountryKeys.all,
@@ -135,6 +136,11 @@ export function useCreateHistoricalCountry() {
       // 연대표 페이지의 현대 국가 목록(역사적 국가 중첩) 갱신
       queryClient.invalidateQueries({ queryKey: countryKeys.lists() })
       invalidateLinkedHistoricalByModernCountry(queryClient)
+      // 게이미피케이션 즉시 갱신 + 완성도 보너스 피드백 (썸네일·설명·명칭유래)
+      const h = created as { thumbnailUrl?: string | null; description?: string | null; nameOrigin?: string | null }
+      onContentRegistered(
+        (h?.thumbnailUrl ? 1 : 0) + (h?.description ? 1 : 0) + (h?.nameOrigin ? 1 : 0),
+      )
     },
   })
 }

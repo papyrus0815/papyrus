@@ -66,6 +66,9 @@ function useInvalidateForCountry(countryId: string | undefined) {
     qc.invalidateQueries({
       queryKey: adminDivisionConfigKeys.byCountry(countryId),
     })
+    // 평탄 검색 결과(q/limit별 캐시)는 위 키에 안 걸리므로 prefix로 함께 무효화 —
+    // 생성/수정/삭제 후 검색 모드가 stale 항목을 보여주는 문제 방지.
+    qc.invalidateQueries({ queryKey: ['administrative-divisions/search'] })
   }
 }
 

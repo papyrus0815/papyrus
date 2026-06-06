@@ -35,6 +35,7 @@ import {
   parsePopulation,
 } from './dashboard-panels/format'
 import { GovernmentCard } from './dashboard-panels/government-card'
+import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 
 export interface CountryDetailDashboardProps {
@@ -278,6 +279,13 @@ export function CountryDetailDashboard({
           </S.EmptyHint>
         )}
       </S.Section>
+
+      {country.type === 'modern' && (
+        <IndicatorTrendsSection
+          countryId={country.id}
+          countryName={country.name}
+        />
+      )}
 
       {showPolitics && (
         <S.Section>

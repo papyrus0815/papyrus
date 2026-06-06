@@ -45,6 +45,13 @@ import {
   useRegionPalette,
 } from './map-region'
 import { AdminDivisionBulkImportModal } from './map-region/admin-division-bulk-import-modal'
+import {
+  countDescendants,
+  findInTree,
+  isAbolished,
+  resolvePath,
+  sumSubtree,
+} from './map-region/tree-utils'
 
 type AdminSort = 'name' | 'children'
 
@@ -86,50 +93,6 @@ interface FlatRow {
   abolished: boolean
   centerLat?: number | null
   centerLng?: number | null
-}
-
-/** path를 따라가며 각 단계의 노드를 모은다. 못 찾으면 거기서 멈춤. */
-function resolvePath(
-  roots: AdministrativeDivision[],
-  ids: string[],
-): AdministrativeDivision[] {
-  const result: AdministrativeDivision[] = []
-  let cursor = roots
-  for (const id of ids) {
-    const found = cursor.find((d) => d.id === id)
-    if (!found) break
-    result.push(found)
-    cursor = found.children ?? []
-  }
-  return result
-}
-
-/** 트리 어디든 id로 노드 찾기 */
-function findInTree(
-  roots: AdministrativeDivision[],
-  id: string,
-): AdministrativeDivision | null {
-  for (const node of roots) {
-    if (node.id === id) return node
-    if (node.children?.length) {
-      const f = findInTree(node.children, id)
-      if (f) return f
-    }
-  }
-  return null
-}
-
-function isAbolished(d: AdministrativeDivision): boolean {
-  if (!d.abolishedDate) return false
-  return new Date(d.abolishedDate).getTime() <= Date.now()
-}
-
-function countDescendants(node: AdministrativeDivision): number {
-  let n = 0
-  for (const c of node.children ?? []) {
-    n += 1 + countDescendants(c)
-  }
-  return n
 }
 
 /** 트리 전체 leaf-first 평탄 + 레벨/부모경로 병합 */
@@ -308,8 +271,8 @@ export function MapRegionAdministrativeView({
         parentPath: h.parentPath,
         childrenCount: 0, // 검색 결과엔 children count 없음
         abolished: h.abolished,
-        centerLat: null,
-        centerLng: null,
+        centerLat: h.centerLat ?? null,
+        centerLng: h.centerLng ?? null,
       }))
     }
     if (mode === 'level') {
@@ -1144,10 +1107,29 @@ export function MapRegionAdministrativeView({
         message={(() => {
           if (!pendingDelete) return ''
           const desc = countDescendants(pendingDelete)
-          if (desc === 0) {
-            return `"${pendingDelete.name}"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`
+          const cities = sumSubtree(pendingDelete, (n) => n.cityCount ?? 0)
+          const successors = sumSubtree(
+            pendingDelete,
+            (n) => n.successorCount ?? 0,
+          )
+          const parts: string[] = []
+          parts.push(
+            desc === 0
+              ? `"${pendingDelete.name}"을(를) 삭제합니다.`
+              : `"${pendingDelete.name}"과 하위 ${desc}개 구역(총 ${desc + 1}개)이 함께 삭제됩니다.`,
+          )
+          if (cities > 0) {
+            parts.push(
+              `연결된 도시 ${cities}개의 행정구역 연결이 해제됩니다.`,
+            )
           }
-          return `"${pendingDelete.name}"과 하위 ${desc}개 구역(총 ${desc + 1}개)이 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.`
+          if (successors > 0) {
+            parts.push(
+              `이 구역을 전신(前身)으로 지정한 ${successors}개 구역의 연결도 함께 해제됩니다.`,
+            )
+          }
+          parts.push('이 작업은 되돌릴 수 없습니다.')
+          return parts.join(' ')
         })()}
         confirmLabel="삭제"
         cancelLabel="취소"

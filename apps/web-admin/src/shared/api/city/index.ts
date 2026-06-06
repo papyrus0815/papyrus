@@ -90,6 +90,8 @@ export type AdministrativeDivisionSearchHit = {
   divisionLabel: string
   parentPath: string[]
   abolished: boolean
+  centerLat: number | null
+  centerLng: number | null
 }
 
 export type BulkCreateAdministrativeDivisionsInput = {

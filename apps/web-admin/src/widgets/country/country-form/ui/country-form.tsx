@@ -481,6 +481,8 @@ export function CountryForm({
               placeholder="대한민국"
               autoComplete="off"
               autoFocus={mode === 'create'}
+              aria-required="true"
+              aria-invalid={!!errors.name}
               $error={!!errors.name}
             />
             {errors.name && (
@@ -601,6 +603,8 @@ export function CountryForm({
               {...register('continentId')}
               className="input-continent"
               aria-label="대륙"
+              aria-required="true"
+              aria-invalid={!!errors.continentId}
               $error={!!errors.continentId}
             >
               <option value="">대륙 선택</option>

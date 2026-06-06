@@ -5,7 +5,7 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common'
-import { EventMethod } from '@prisma/client'
+import { AggregateType, EventMethod } from '@prisma/client'
 import {
   CountryRepository,
   HistoricalCountrySimple,
@@ -13,7 +13,27 @@ import {
 import { Country } from '../domain/country.entity'
 import { PrismaClient } from '@prisma/client'
 import { NotificationService } from '../../notification/application/notification.service'
+import { PointService } from '../../gamification/application/point.service'
+import { completenessBonus } from '../../gamification/domain/point.policy'
 import { UploadService } from '../../shared/upload/upload.service'
+import {
+  UpsertEconomicIndicatorDto,
+  UpsertDemographicIndicatorDto,
+  UpsertDevelopmentIndicatorDto,
+  CreateCountryRecordDto,
+  UpdateCountryRecordDto,
+  UpsertExportImportDto,
+} from '../presentation/dto'
+
+/** 국가 완성도 신호: 썸네일 / 수도 / 현지어명 (각 1신호) */
+function countryCompletenessBonus(c: {
+  thumbnailUrl?: string | null
+  capital?: string | null
+  localName?: string | null
+}): number {
+  const signals = (c.thumbnailUrl ? 1 : 0) + (c.capital ? 1 : 0) + (c.localName ? 1 : 0)
+  return completenessBonus(signals)
+}
 
 @Injectable()
 export class CountryService {
@@ -23,6 +43,7 @@ export class CountryService {
     private readonly prisma: PrismaClient,
     private readonly notificationService: NotificationService,
     private readonly uploadService: UploadService,
+    private readonly pointService: PointService,
   ) {}
 
   /**
@@ -84,6 +105,12 @@ export class CountryService {
       country.id,
       country.localName ?? undefined,
     )
+    await this.pointService.awardForCreate(
+      accountId,
+      AggregateType.COUNTRY,
+      country.id,
+      countryCompletenessBonus(country),
+    )
     return country
   }
 
@@ -129,6 +156,12 @@ export class CountryService {
       country.id,
       country.localName ?? undefined,
     )
+    await this.pointService.awardCompletenessBonus(
+      accountId,
+      AggregateType.COUNTRY,
+      country.id,
+      countryCompletenessBonus(country),
+    )
     return country
   }
 
@@ -146,7 +179,10 @@ export class CountryService {
     await this.notificationService.notifyCountry(
       country.name,
       EventMethod.DELETE,
+      id,
+      country.localName ?? undefined,
     )
+    await this.pointService.revokeForRecord(AggregateType.COUNTRY, id)
   }
 
   /**
@@ -386,5 +422,253 @@ export class CountryService {
         ? Number(indicator.mobilePenetration)
         : null,
     }))
+  }
+
+  // ── 지표 쓰기 (upsert / delete) ──────────────────────────────
+
+  /** 소유권 확인 (accountId 있을 때만). */
+  private async assertCountryAccess(countryId: string, accountId?: string) {
+    if (accountId != null) {
+      await this.getCountryById(countryId, accountId)
+    }
+  }
+
+  /** 경제 지표 생성/갱신 (countryId+year 기준). */
+  async upsertEconomicIndicator(
+    countryId: string,
+    dto: UpsertEconomicIndicatorDto,
+    accountId?: string,
+  ) {
+    await this.assertCountryAccess(countryId, accountId)
+    const { year, ...writable } = dto
+    await this.prisma.countryEconomicIndicator.upsert({
+      where: {
+        uniq_economic_indicator_country_year: { countryId, year },
+      },
+      create: { countryId, year, ...writable },
+      update: writable,
+    })
+    return (await this.getEconomicIndicators(countryId, year, year))[0]
+  }
+
+  /** 경제 지표 삭제 (해당 연도). */
+  async deleteEconomicIndicator(
+    countryId: string,
+    year: number,
+    accountId?: string,
+  ): Promise<void> {
+    await this.assertCountryAccess(countryId, accountId)
+    await this.prisma.countryEconomicIndicator.deleteMany({
+      where: { countryId, year },
+    })
+  }
+
+  /** 인구 지표 생성/갱신 (countryId+year 기준). */
+  async upsertDemographicIndicator(
+    countryId: string,
+    dto: UpsertDemographicIndicatorDto,
+    accountId?: string,
+  ) {
+    await this.assertCountryAccess(countryId, accountId)
+    const { year, population, urbanPopulation, ...rest } = dto
+    const writable = {
+      ...rest,
+      population: toBigIntField(population),
+      urbanPopulation: toBigIntField(urbanPopulation),
+    }
+    await this.prisma.countryDemographicIndicator.upsert({
+      where: {
+        uniq_demographic_indicator_country_year: { countryId, year },
+      },
+      create: { countryId, year, ...writable },
+      update: writable,
+    })
+    return (await this.getDemographicIndicators(countryId, year, year))[0]
+  }
+
+  /** 인구 지표 삭제 (해당 연도). */
+  async deleteDemographicIndicator(
+    countryId: string,
+    year: number,
+    accountId?: string,
+  ): Promise<void> {
+    await this.assertCountryAccess(countryId, accountId)
+    await this.prisma.countryDemographicIndicator.deleteMany({
+      where: { countryId, year },
+    })
+  }
+
+  /** 발전 지표 생성/갱신 (countryId+year 기준). */
+  async upsertDevelopmentIndicator(
+    countryId: string,
+    dto: UpsertDevelopmentIndicatorDto,
+    accountId?: string,
+  ) {
+    await this.assertCountryAccess(countryId, accountId)
+    const { year, ...writable } = dto
+    await this.prisma.countryDevelopmentIndicator.upsert({
+      where: {
+        uniq_development_indicator_country_year: { countryId, year },
+      },
+      create: { countryId, year, ...writable },
+      update: writable,
+    })
+    return (await this.getDevelopmentIndicators(countryId, year, year))[0]
+  }
+
+  /** 발전 지표 삭제 (해당 연도). */
+  async deleteDevelopmentIndicator(
+    countryId: string,
+    year: number,
+    accountId?: string,
+  ): Promise<void> {
+    await this.assertCountryAccess(countryId, accountId)
+    await this.prisma.countryDevelopmentIndicator.deleteMany({
+      where: { countryId, year },
+    })
+  }
+
+  // ── 국가 기록 (CountryRecord) CRUD ───────────────────────────
+
+  async getCountryRecords(countryId: string, accountId?: string) {
+    await this.assertCountryAccess(countryId, accountId)
+    const records = await this.prisma.countryRecord.findMany({
+      where: { countryId },
+      orderBy: { recordedAt: 'desc' },
+    })
+    return records.map(serializeCountryRecord)
+  }
+
+  async createCountryRecord(
+    countryId: string,
+    dto: CreateCountryRecordDto,
+    accountId?: string,
+  ) {
+    await this.assertCountryAccess(countryId, accountId)
+    const record = await this.prisma.countryRecord.create({
+      data: {
+        countryId,
+        description: dto.description,
+        recordedAt: dto.recordedAt ? new Date(dto.recordedAt) : undefined,
+      },
+    })
+    return serializeCountryRecord(record)
+  }
+
+  async updateCountryRecord(
+    countryId: string,
+    recordId: string,
+    dto: UpdateCountryRecordDto,
+    accountId?: string,
+  ) {
+    await this.assertCountryAccess(countryId, accountId)
+    const existing = await this.prisma.countryRecord.findFirst({
+      where: { id: recordId, countryId },
+    })
+    if (!existing) {
+      throw new NotFoundException(`Record ${recordId} not found`)
+    }
+    const record = await this.prisma.countryRecord.update({
+      where: { id: recordId },
+      data: {
+        description: dto.description,
+        recordedAt: dto.recordedAt ? new Date(dto.recordedAt) : undefined,
+      },
+    })
+    return serializeCountryRecord(record)
+  }
+
+  async deleteCountryRecord(
+    countryId: string,
+    recordId: string,
+    accountId?: string,
+  ): Promise<void> {
+    await this.assertCountryAccess(countryId, accountId)
+    await this.prisma.countryRecord.deleteMany({
+      where: { id: recordId, countryId },
+    })
+  }
+
+  // ── 교역 (ExportImport) CRUD ─────────────────────────────────
+
+  async getExportImports(countryId: string, accountId?: string) {
+    await this.assertCountryAccess(countryId, accountId)
+    const rows = await this.prisma.exportImport.findMany({
+      where: { countryId },
+      orderBy: { year: 'asc' },
+    })
+    return rows.map(serializeExportImport)
+  }
+
+  async upsertExportImport(
+    countryId: string,
+    dto: UpsertExportImportDto,
+    accountId?: string,
+  ) {
+    await this.assertCountryAccess(countryId, accountId)
+    const { year, exportValue, importValue } = dto
+    const writable = { exportValue, importValue }
+    const row = await this.prisma.exportImport.upsert({
+      where: { uniq_exportImport_country_year: { countryId, year } },
+      create: { countryId, year, ...writable },
+      update: writable,
+    })
+    return serializeExportImport(row)
+  }
+
+  async deleteExportImport(
+    countryId: string,
+    year: number,
+    accountId?: string,
+  ): Promise<void> {
+    await this.assertCountryAccess(countryId, accountId)
+    await this.prisma.exportImport.deleteMany({
+      where: { countryId, year },
+    })
+  }
+}
+
+/** string|null|undefined → BigInt 컬럼 입력값 변환 (undefined는 변경 스킵). */
+function toBigIntField(v?: string | null): bigint | null | undefined {
+  if (v === undefined) return undefined
+  if (v === null || v === '') return null
+  return BigInt(v)
+}
+
+function serializeCountryRecord(record: {
+  id: string
+  countryId: string
+  description: string
+  recordedAt: Date
+  createdAt: Date
+  updatedAt: Date
+}) {
+  return {
+    id: record.id,
+    countryId: record.countryId,
+    description: record.description,
+    recordedAt: record.recordedAt.toISOString(),
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  }
+}
+
+function serializeExportImport(row: {
+  id: string
+  countryId: string
+  year: number
+  exportValue: unknown
+  importValue: unknown
+  createdAt: Date
+  updatedAt: Date
+}) {
+  return {
+    id: row.id,
+    countryId: row.countryId,
+    year: row.year,
+    exportValue: row.exportValue != null ? Number(row.exportValue) : null,
+    importValue: row.importValue != null ? Number(row.importValue) : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   }
 }

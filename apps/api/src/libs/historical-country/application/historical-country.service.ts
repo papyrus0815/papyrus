@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common'
-import { EventMethod } from '@prisma/client'
+import { AggregateType, EventMethod } from '@prisma/client'
 import {
   IHistoricalCountryRepository,
   CreateHistoricalCountryData,
@@ -29,7 +29,20 @@ import { HistoricalCountryTransitionPrismaRepository } from '../infrastructure/h
 import { HistoricalCountryMembershipPrismaRepository } from '../infrastructure/historical-country-membership.prisma.repository'
 import { HistoricalCountryRelationPrismaRepository } from '../infrastructure/historical-country-relation.prisma.repository'
 import { NotificationService } from '../../notification/application/notification.service'
+import { PointService } from '../../gamification/application/point.service'
+import { completenessBonus } from '../../gamification/domain/point.policy'
 import { UploadService } from '../../shared/upload/upload.service'
+
+/** 역사적 국가 완성도 신호: 썸네일 / 설명 / 명칭 유래 (각 1신호) */
+function historicalCompletenessBonus(c: {
+  thumbnailUrl?: string | null
+  description?: string | null
+  nameOrigin?: string | null
+}): number {
+  const signals =
+    (c.thumbnailUrl ? 1 : 0) + (c.description ? 1 : 0) + (c.nameOrigin ? 1 : 0)
+  return completenessBonus(signals)
+}
 
 @Injectable()
 export class HistoricalCountryService {
@@ -45,6 +58,7 @@ export class HistoricalCountryService {
     relationRepository: HistoricalCountryRelationPrismaRepository,
     private readonly notificationService: NotificationService,
     private readonly uploadService: UploadService,
+    private readonly pointService: PointService,
   ) {
     this.repository = repository
     this.transitionRepository = transitionRepository
@@ -121,6 +135,12 @@ export class HistoricalCountryService {
       country.id,
       country.enName ?? undefined,
     )
+    await this.pointService.awardForCreate(
+      accountId,
+      AggregateType.HISTORICAL_COUNTRY,
+      country.id,
+      historicalCompletenessBonus(country),
+    )
     return country
   }
 
@@ -151,6 +171,12 @@ export class HistoricalCountryService {
       country.id,
       country.enName ?? undefined,
     )
+    await this.pointService.awardCompletenessBonus(
+      accountId,
+      AggregateType.HISTORICAL_COUNTRY,
+      country.id,
+      historicalCompletenessBonus(country),
+    )
     return country
   }
 
@@ -169,6 +195,7 @@ export class HistoricalCountryService {
       country.name,
       EventMethod.DELETE,
     )
+    await this.pointService.revokeForRecord(AggregateType.HISTORICAL_COUNTRY, id)
   }
 
   // --- 계승/변천 (Transition)

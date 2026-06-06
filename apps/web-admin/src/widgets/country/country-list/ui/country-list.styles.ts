@@ -785,6 +785,10 @@ export const ListRow = styled.div<{
   position: relative;
   flex-shrink: 0;
   box-sizing: border-box;
+  /* 가상화-라이트: 화면 밖 행은 브라우저가 렌더를 건너뜀.
+     팝오버·컨텍스트 메뉴는 행 바깥(sibling)에 렌더되므로 paint containment에 안 잘림. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 56px;
   /* 행 사이 미세 구분선 */
   box-shadow: inset 0 -1px 0 ${({ theme }) => theme.colors.border.light};
 

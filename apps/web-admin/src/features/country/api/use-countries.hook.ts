@@ -19,6 +19,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { onContentRegistered } from '@/entities/gamification'
 import * as countriesApi from '@/shared/api/countries'
 import type {
   CountryResponseDto,
@@ -60,6 +61,7 @@ export function useCountries() {
     queryKey: countryKeys.lists(),
     queryFn: () => countriesApi.getAllCountries(),
     staleTime: 1000 * 60 * 5, // 5분
+    gcTime: 1000 * 60 * 30, // 30분 — 상세↔목록 왕복 시 캐시 유지
   })
 }
 
@@ -84,6 +86,7 @@ export function useCountry(id: string | undefined) {
     queryFn: () => countriesApi.getCountryById(id!),
     enabled: !!id,
     staleTime: 1000 * 60 * 5, // 5분
+    gcTime: 1000 * 60 * 30, // 30분
   })
 }
 
@@ -107,9 +110,14 @@ export function useCreateCountry() {
 
   return useMutation({
     mutationFn: (data: CreateCountryDto) => countriesApi.createCountry(data),
-    onSuccess: () => {
-      // 목록 갱신
-      queryClient.invalidateQueries({ queryKey: countryKeys.lists() })
+    onSuccess: (created) => {
+      // ['countries'] 프리픽스로 무효화 — entities/country 레이어 캐시까지 함께 갱신
+      queryClient.invalidateQueries({ queryKey: countryKeys.all })
+      // 게이미피케이션 즉시 갱신 + 완성도 보너스 피드백 (썸네일·수도·현지어명)
+      const c = created as { thumbnailUrl?: string | null; capital?: string | null; localName?: string | null }
+      onContentRegistered(
+        (c?.thumbnailUrl ? 1 : 0) + (c?.capital ? 1 : 0) + (c?.localName ? 1 : 0),
+      )
     },
   })
 }
@@ -145,10 +153,9 @@ export function useUpdateCountry() {
           ),
       )
       queryClient.setQueryData(countryKeys.detail(variables.id), updated)
-      queryClient.invalidateQueries({ queryKey: countryKeys.lists() })
-      queryClient.invalidateQueries({
-        queryKey: countryKeys.detail(variables.id),
-      })
+      // ['countries'] 프리픽스로 무효화 — list/detail + entities/country 레이어 캐시까지 함께 갱신
+      queryClient.invalidateQueries({ queryKey: countryKeys.all })
+      // 국가명·표시순서 변경이 인물 표시에 반영되도록 인물 쿼리도 무효화
       queryClient.invalidateQueries({ queryKey: ['persons'] })
       queryClient.invalidateQueries({ queryKey: ['person-detail'] })
       queryClient.invalidateQueries({ queryKey: ['persons-by-country'] })
@@ -177,8 +184,8 @@ export function useDeleteCountry() {
   return useMutation({
     mutationFn: (id: string) => countriesApi.deleteCountry(id),
     onSuccess: () => {
-      // 목록 갱신
-      queryClient.invalidateQueries({ queryKey: countryKeys.lists() })
+      // ['countries'] 프리픽스로 무효화 — entities/country 레이어 캐시까지 함께 갱신
+      queryClient.invalidateQueries({ queryKey: countryKeys.all })
     },
   })
 }

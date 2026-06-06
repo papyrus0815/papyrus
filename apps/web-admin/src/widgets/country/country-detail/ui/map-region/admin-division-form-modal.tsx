@@ -46,6 +46,7 @@ import {
   Required,
   Select,
 } from './form-fields'
+import { findInTree } from './tree-utils'
 
 interface AdminDivisionFormModalProps {
   isOpen: boolean
@@ -113,6 +114,11 @@ function parseCoord(value: string): number | null | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
+/** 레벨별 단위 이름 예시 (안내 문구용) */
+function levelExamples(level: number): string {
+  return level === 1 ? '도, 주' : level === 2 ? '시, 구' : '읍, 면, 동'
+}
+
 /** ISO 날짜 문자열을 한국어로 표시 (BCE 지원) */
 function formatHistoricalDate(iso: string): string {
   if (!iso) return ''
@@ -123,21 +129,6 @@ function formatHistoricalDate(iso: string): string {
   const day = d.getUTCDate()
   const prefix = year < 0 ? 'BCE ' : ''
   return `${prefix}${Math.abs(year)}년 ${month}월 ${day}일`
-}
-
-/** 트리에서 id로 노드 찾기 (predecessor 표시용) */
-function findInTree(
-  roots: AdministrativeDivision[],
-  id: string,
-): AdministrativeDivision | null {
-  for (const node of roots) {
-    if (node.id === id) return node
-    if (node.children?.length) {
-      const f = findInTree(node.children, id)
-      if (f) return f
-    }
-  }
-  return null
 }
 
 export function AdminDivisionFormModal({
@@ -162,15 +153,8 @@ export function AdminDivisionFormModal({
   const [abolishedPickerOpen, setAbolishedPickerOpen] = useState(false)
   const [mapPickerOpen, setMapPickerOpen] = useState(false)
   const [mapPickerLarge, setMapPickerLarge] = useState(false)
-
-  const editingLevel = editing
-    ? allConfigs.find((c) => c.id === editing.adminDivisionId)?.divisionLevel ??
-      defaultLevel
-    : defaultLevel
-
-  const configsForLevel = allConfigs.filter(
-    (c) => c.divisionLevel === editingLevel,
-  )
+  // 점진적 공개: 좌표·시기·모체 등 선택 입력은 기본 접힘. 수정 시 값이 있으면 펼쳐 보여준다.
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   const [form, setForm] = useState<FormState>(() =>
     editing
@@ -193,19 +177,57 @@ export function AdminDivisionFormModal({
     [allDivisions, form.parentId],
   )
 
+  // 등록 레벨은 "선택된 상위"에서 도출한다 — 상위가 있으면 그 레벨 + 1, 없으면 최상위(1차).
+  // 수정 시엔 노드 자신의 레벨로 고정. 사용자가 레벨/단위를 머릿속으로 따로 맞출 필요가 없다.
+  const parentConfig = selectedParent
+    ? allConfigs.find((c) => c.id === selectedParent.adminDivisionId)
+    : null
+  const parentLevel = parentConfig?.divisionLevel ?? null
+  const parentLabel = parentConfig?.divisionLabel ?? null
+  // parentId(원시 값) 기준으로 분기 — 트리 데이터가 늦게 로드돼 selectedParent가
+  // 잠깐 null이어도 레벨이 1로 깜빡이지 않도록, 그 사이엔 defaultLevel을 쓴다.
+  const targetLevel = editing
+    ? allConfigs.find((c) => c.id === editing.adminDivisionId)?.divisionLevel ??
+      defaultLevel
+    : form.parentId
+      ? parentLevel != null
+        ? parentLevel + 1
+        : defaultLevel
+      : 1
+  const configsForLevel = allConfigs.filter(
+    (c) => c.divisionLevel === targetLevel,
+  )
 
   useEffect(() => {
     if (!isOpen) return
     if (editing) {
       setForm(fromExisting(editing, allConfigs))
+      // 기존에 채워진 선택 정보가 있으면 '추가 정보'를 펼친 채로 연다.
+      setShowAdvanced(
+        editing.centerLat != null ||
+          editing.centerLng != null ||
+          !!editing.establishedDate ||
+          !!editing.abolishedDate ||
+          !!editing.predecessorId,
+      )
     } else {
       const auto =
         configsForLevel.length === 1 ? configsForLevel[0]!.id : ''
       setForm({ ...empty(defaultParent?.id ?? null), configId: auto })
+      setShowAdvanced(false)
     }
     setErrors({})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editing])
+
+  // 등록 중 상위를 바꾸면 레벨이 달라지므로, 그 레벨에 맞는 단위로 다시 맞춘다.
+  // (단위가 1개면 자동 선택, 여러 개면 직접 선택, 없으면 새 단위명 입력으로 전환)
+  useEffect(() => {
+    if (!isOpen || editing) return
+    const auto = configsForLevel.length === 1 ? configsForLevel[0]!.id : ''
+    setForm((prev) => ({ ...prev, configId: auto, newConfigLabel: '' }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetLevel])
 
   if (!isOpen) return null
 
@@ -218,16 +240,24 @@ export function AdminDivisionFormModal({
     createDivisionMut.isPending ||
     updateDivisionMut.isPending
 
-  const needsNewConfig =
-    !editing && configsForLevel.length === 0 && form.configId === ''
-
   const validate = (): Record<string, string> => {
     const errs: Record<string, string> = {}
-    if (!form.name.trim()) errs.name = '이름은 필수입니다'
+    const trimmedName = form.name.trim()
+    if (!trimmedName) {
+      errs.name = '이름은 필수입니다'
+    } else {
+      // 같은 상위 아래 이름 중복 — 서버 왕복 전에 즉시 잡는다.
+      const siblings = selectedParent
+        ? selectedParent.children ?? []
+        : allDivisions
+      if (siblings.some((s) => s.id !== editing?.id && s.name === trimmedName)) {
+        errs.name = '같은 상위 안에 같은 이름이 이미 있습니다'
+      }
+    }
     if (!editing) {
       if (configsForLevel.length === 0) {
         if (!form.newConfigLabel.trim())
-          errs.newConfigLabel = `${editingLevel}차 단위명은 필수입니다`
+          errs.newConfigLabel = `${targetLevel}차 단위명은 필수입니다`
       } else {
         if (!form.configId) errs.configId = '단위를 선택하세요'
       }
@@ -337,7 +367,7 @@ export function AdminDivisionFormModal({
         if (!configId) {
           const created = await createConfigMut.mutateAsync({
             countryId,
-            divisionLevel: editingLevel,
+            divisionLevel: targetLevel,
             divisionLabel: form.newConfigLabel.trim(),
           })
           configId = created.id
@@ -360,6 +390,17 @@ export function AdminDivisionFormModal({
     }
   }
 
+  // 컨텍스트 헤더 배지 — "지금 무엇을, 어디에" 한눈에.
+  const countryName =
+    (countryDetail as { name?: string } | undefined)?.name ?? ''
+  const targetUnitLabel =
+    configsForLevel.find((c) => c.id === form.configId)?.divisionLabel ||
+    form.newConfigLabel.trim() ||
+    configsForLevel[0]?.divisionLabel ||
+    `${targetLevel}차`
+  const contextWhere = selectedParent ? `${selectedParent.name} 아래` : '최상위'
+  const contextPath = [countryName, contextWhere].filter(Boolean).join(' › ')
+
   return (
     <ModalOverlay onClick={onClose}>
       <ModalBox
@@ -370,13 +411,37 @@ export function AdminDivisionFormModal({
       >
         <ModalHeader>
           <ModalTitle>
-            {editing ? '행정구역 수정' : `${editingLevel}차 행정구역 등록`}
+            {editing ? '행정구역 수정' : `${targetLevel}차 행정구역 등록`}
           </ModalTitle>
           <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
             <FiX />
           </ModalCloseButton>
         </ModalHeader>
         <ModalBody>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 12px',
+              marginBottom: 12,
+              background: '#eef2ff',
+              border: '1px solid #c7d2fe',
+              borderRadius: 10,
+              fontSize: 12,
+              fontWeight: 500,
+              color: '#3730a3',
+              flexWrap: 'wrap',
+            }}
+          >
+            <FiMapPin size={12} />
+            <span>
+              {contextPath} ·{' '}
+              {editing
+                ? `${editing.name} 수정`
+                : `${targetLevel}차 ${targetUnitLabel} 등록`}
+            </span>
+          </div>
           {errors._global && (
             <div
               style={{
@@ -406,25 +471,17 @@ export function AdminDivisionFormModal({
                 placeholder="이름으로 검색 — 비워두면 최상위 (1차)"
               />
               <HintText>
-                상위가 없으면 최상위 (1차) 행정구역으로 등록됩니다.
+                {selectedParent
+                  ? `'${selectedParent.name}' 아래에 등록합니다.`
+                  : '비워두면 최상위(1차) 행정구역으로 등록됩니다.'}
               </HintText>
               {errors.parentId && <ErrorText>{errors.parentId}</ErrorText>}
             </FieldFull>
-            {selectedParent && (
-              <FieldFull>
-                <HintText>
-                  단위 레벨이 상위(<strong>{
-                    allConfigs.find((c) => c.id === selectedParent.adminDivisionId)
-                      ?.divisionLabel ?? '?'
-                  }</strong>) 바로 아래여야 합니다.
-                </HintText>
-              </FieldFull>
-            )}
 
             {!editing && (
               <FieldFull>
                 <Label htmlFor="ad-config">
-                  단위<Required>*</Required>
+                  행정 단위<Required>*</Required>
                 </Label>
                 {configsForLevel.length > 0 ? (
                   <Select
@@ -432,10 +489,10 @@ export function AdminDivisionFormModal({
                     value={form.configId}
                     onChange={(e) => set('configId', e.target.value)}
                   >
-                    <option value="">단위를 선택하세요</option>
+                    <option value="">단위 선택 (예: 도·시·구)</option>
                     {configsForLevel.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.divisionLabel}
+                        {c.divisionLabel} ({c.divisionLevel}차)
                       </option>
                     ))}
                   </Select>
@@ -444,24 +501,21 @@ export function AdminDivisionFormModal({
                     id="ad-config"
                     value={form.newConfigLabel}
                     onChange={(e) => set('newConfigLabel', e.target.value)}
-                    placeholder={`${editingLevel}차 단위명 (예: ${
-                      editingLevel === 1
-                        ? '도, 주'
-                        : editingLevel === 2
-                        ? '시, 구'
-                        : '읍, 면, 동'
-                    })`}
+                    maxLength={50}
+                    placeholder={`${targetLevel}차 단위 이름 (예: ${levelExamples(targetLevel)})`}
                   />
                 )}
                 {errors.configId && <ErrorText>{errors.configId}</ErrorText>}
                 {errors.newConfigLabel && (
                   <ErrorText>{errors.newConfigLabel}</ErrorText>
                 )}
-                {needsNewConfig && (
-                  <HintText>
-                    이 국가에 {editingLevel}차 단위가 아직 없어 함께 생성됩니다.
-                  </HintText>
-                )}
+                <HintText>
+                  {configsForLevel.length === 0
+                    ? `이 나라엔 아직 ${targetLevel}차 행정 단위가 없어요. 단위 이름을 정하면 함께 만들어집니다.`
+                    : selectedParent
+                      ? `'${parentLabel ?? '상위'}' 바로 아래 단위(${targetLevel}차)로 자동 설정됩니다.`
+                      : `최상위(1차) 단위입니다.`}
+                </HintText>
               </FieldFull>
             )}
 
@@ -473,6 +527,7 @@ export function AdminDivisionFormModal({
                 id="ad-name"
                 value={form.name}
                 onChange={(e) => set('name', e.target.value)}
+                maxLength={100}
                 placeholder="예: 경기도, 도쿄도"
                 autoFocus
               />
@@ -485,6 +540,7 @@ export function AdminDivisionFormModal({
                 id="ad-local"
                 value={form.localName}
                 onChange={(e) => set('localName', e.target.value)}
+                maxLength={100}
                 placeholder="예: 京畿道, 東京都, Gyeonggi-do"
               />
             </Field>
@@ -498,6 +554,41 @@ export function AdminDivisionFormModal({
               />
             </Field>
 
+            <FieldFull>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                aria-expanded={showAdvanced}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  width: '100%',
+                  padding: '9px 12px',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: '#475569',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'inline-block',
+                    transform: showAdvanced ? 'rotate(90deg)' : 'none',
+                    transition: 'transform 0.15s',
+                  }}
+                >
+                  ▸
+                </span>
+                추가 정보 (좌표 · 설립/폐지일 · 이전 행정구역)
+              </button>
+            </FieldFull>
+
+            {showAdvanced && (
+              <>
             <FieldFull>
               <div
                 style={{
@@ -772,6 +863,8 @@ export function AdminDivisionFormModal({
                 <ErrorText>{errors.predecessorId}</ErrorText>
               )}
             </FieldFull>
+              </>
+            )}
           </FormGrid>
         </ModalBody>
         <ModalFooter>

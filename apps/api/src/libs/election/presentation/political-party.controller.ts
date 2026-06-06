@@ -22,6 +22,7 @@ import {
   membershipOverlapsTenure,
 } from '../domain/party-top-leaders.util'
 import { serializeElectionBigInt } from '../election-serialize.util'
+import { dateYearRangePreview } from '../../shared/notification-preview.util'
 
 export interface AddPartyLawBody {
   lawId: string
@@ -429,7 +430,12 @@ export class PoliticalPartyController {
         historicalCountryId: body.historicalCountryId ?? undefined,
       },
     })
-    await this.notificationService.notifyPoliticalParty(row.name, EventMethod.CREATE, row.id)
+    await this.notificationService.notifyPoliticalParty(
+      row.name,
+      EventMethod.CREATE,
+      row.id,
+      row.localName ?? dateYearRangePreview(row.foundedDate),
+    )
     return serializeElectionBigInt(row)
   }
 
@@ -460,14 +466,24 @@ export class PoliticalPartyController {
       where: { id },
       data: data as any,
     })
-    await this.notificationService.notifyPoliticalParty(row.name, EventMethod.UPDATE, row.id)
+    await this.notificationService.notifyPoliticalParty(
+      row.name,
+      EventMethod.UPDATE,
+      row.id,
+      row.localName ?? dateYearRangePreview(row.foundedDate),
+    )
     return serializeElectionBigInt(row)
   }
 
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<any> {
     const row = await this.prisma.politicalParty.delete({ where: { id } })
-    await this.notificationService.notifyPoliticalParty(row.name, EventMethod.DELETE, id)
+    await this.notificationService.notifyPoliticalParty(
+      row.name,
+      EventMethod.DELETE,
+      id,
+      row.localName ?? dateYearRangePreview(row.foundedDate),
+    )
   }
 
   private async ensureParty(id: string) {

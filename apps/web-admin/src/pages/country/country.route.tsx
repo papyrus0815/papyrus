@@ -11,13 +11,10 @@ import { pathKeys } from '../../shared/router'
  */
 type Lazy = NonNullable<RouteObject['lazy']>
 
-/** 국가 상세 layout 셸 — 좌측 리스트·모달·데이터 보유. loader는 셸에 매달림. */
+/** 국가 상세 layout 셸 — 좌측 리스트·모달·데이터 보유. */
 const lazyCountryDetailShell: Lazy = async () => {
-  const [{ countryLoader }, { CountryDetailShell }] = await Promise.all([
-    import('./country.loader'),
-    import('./country-detail-shell'),
-  ])
-  return { loader: countryLoader, Component: CountryDetailShell }
+  const { CountryDetailShell } = await import('./country-detail-shell')
+  return { Component: CountryDetailShell }
 }
 
 /** 셸의 자식 — 기본 탭(detail) 콘텐츠. */
