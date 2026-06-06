@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   FiAward,
@@ -26,11 +27,21 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
-  getNotificationListPath,
+  getNotificationTargetPath,
   type NotificationMessage,
   useNotificationStore,
 } from '@/entities/notification'
-import { useSessionStore } from '@/entities/session'
+import {
+  BadgeList,
+  GradeChip,
+  GradeProgressCard,
+  formatGamiTime,
+  gamificationBadgesQueryOptions,
+  gamificationSummaryQueryOptions,
+  useGamiNotificationStore,
+  useGamificationToasts,
+} from '@/entities/gamification'
+import { sessionQueryOptions, useSessionStore } from '@/entities/session'
 import { getPlaylistControls } from '@/shared/hooks/use-bgm-playlist.hook'
 import {
   getBgmAudio,
@@ -55,10 +66,50 @@ const formatTime = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
+const HeaderGradeSlot = styled.div`
+  display: inline-flex;
+  align-items: center;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+`
+
+const BadgeSection = styled.div`
+  padding: 8px 14px 2px;
+`
+
+const BadgeSectionHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  margin-bottom: 6px;
+`
+
+const BadgeEmpty = styled.div`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1.5;
+`
+
 const Header: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { username, reset } = useSessionStore()
+  const { data: pointSummary } = useQuery(gamificationSummaryQueryOptions)
+  const { data: badges } = useQuery(gamificationBadgesQueryOptions)
+  const { data: account } = useQuery(sessionQueryOptions)
+  const accountId = account?.id ?? null
+  // 화면 표시명: 닉네임(displayName) 우선, 없으면 로그인 ID(store username)로 폴백
+  const shownName = account?.displayName || username || ''
+  const earnedBadges = useMemo(() => (badges ?? []).filter((b) => b.earned), [badges])
+  const gamiItems = useGamiNotificationStore((s) => s.items)
+  const gamiMarkAllRead = useGamiNotificationStore((s) => s.markAllRead)
+  const gamiMarkRead = useGamiNotificationStore((s) => s.markRead)
+  useGamificationToasts()
   const { messages, markAllRead, markOneRead, fetchNotifications, isLoading } =
     useNotificationStore()
   const { mode, toggleTheme } = useThemeStore()
@@ -361,23 +412,51 @@ const Header: React.FC = () => {
   ]
 
   // 알림 클릭: 읽음 처리 후 관련 목록으로 이동하고 항상 패널을 닫는다.
+  // 게이미피케이션 개인 알림(등급/뱃지)을 서버 알림과 합쳐 벨에 표시. 최신 성취가 위로.
+  // 현재 계정 소유 항목만(공유 브라우저 격리).
+  const gamiMessages = useMemo<NotificationMessage[]>(
+    () =>
+      gamiItems
+        .filter((n) => n.accountId === accountId)
+        .map((n) => ({
+          id: n.id,
+          title: n.title,
+          time: formatGamiTime(n.createdAt),
+          unread: !n.read,
+        })),
+    [gamiItems, accountId],
+  )
+  const mergedMessages = useMemo<NotificationMessage[]>(
+    () => [...gamiMessages, ...messages],
+    [gamiMessages, messages],
+  )
+
+  const isGamiId = (id: string) => id.startsWith('grade:') || id.startsWith('badge:')
+
   const handleSelectNotification = useCallback(
     (msg: NotificationMessage) => {
       playClickSound()
+      if (isGamiId(msg.id)) {
+        if (accountId) gamiMarkRead(accountId, msg.id)
+        navigate(pathKeys.leaderboard())
+        setIsBellOpen(false)
+        return
+      }
       markOneRead(msg.id)
-      const listPath = getNotificationListPath(msg.ownerType)
-      if (listPath) navigate(listPath)
+      const targetPath = getNotificationTargetPath(msg.ownerType, msg.recordId)
+      if (targetPath) navigate(targetPath)
       setIsBellOpen(false)
     },
-    [playClickSound, markOneRead, navigate],
+    [playClickSound, markOneRead, gamiMarkRead, accountId, navigate],
   )
 
   const handleMarkAllRead = useCallback(() => {
     playClickSound()
     markAllRead()
-  }, [playClickSound, markAllRead])
+    if (accountId) gamiMarkAllRead(accountId)
+  }, [playClickSound, markAllRead, gamiMarkAllRead, accountId])
 
-  const unreadCount = messages.filter((item) => item.unread).length
+  const unreadCount = mergedMessages.filter((item) => item.unread).length
 
   return (
     <>
@@ -584,7 +663,7 @@ const Header: React.FC = () => {
                   transition={{ duration: 0.15, ease: 'easeOut' }}
                 >
                   <NotificationPanelBody
-                    messages={messages}
+                    messages={mergedMessages}
                     showTitle
                     isLoading={isLoading}
                     onMarkAllRead={handleMarkAllRead}
@@ -595,6 +674,15 @@ const Header: React.FC = () => {
             </AnimatePresence>
           </div>
 
+          {pointSummary && (
+            <HeaderGradeSlot>
+              <GradeChip
+                gradeCode={pointSummary.gradeCode}
+                points={pointSummary.totalPoints}
+              />
+            </HeaderGradeSlot>
+          )}
+
           <div ref={userMenuRef} style={{ position: 'relative' }}>
             <UserButton
               onClick={() => {
@@ -602,18 +690,58 @@ const Header: React.FC = () => {
                 setIsUserOpen((prev) => !prev)
               }}
             >
-              <Avatar>{(username || 'G').charAt(0).toUpperCase()}</Avatar>
+              <Avatar>{(shownName || 'G').charAt(0).toUpperCase()}</Avatar>
             </UserButton>
-            <DropdownMenu $isOpen={isUserOpen} style={{ right: 0, width: 220 }}>
+            <DropdownMenu $isOpen={isUserOpen} style={{ right: 0, width: 240 }}>
               <ProfileHeader>
-                <AvatarLg>{(username || 'G').charAt(0).toUpperCase()}</AvatarLg>
+                <AvatarLg>{(shownName || 'G').charAt(0).toUpperCase()}</AvatarLg>
                 <div>
-                  <ProfileName>{username || '게스트'}</ProfileName>
-                  <ProfileRole>관리자</ProfileRole>
+                  <ProfileName>{shownName || '게스트'}</ProfileName>
+                  <ProfileRole>
+                    <GradeChip
+                      gradeCode={pointSummary?.gradeCode}
+                      points={pointSummary?.totalPoints}
+                    />
+                  </ProfileRole>
                 </div>
               </ProfileHeader>
+              {pointSummary && (
+                <div style={{ padding: '0 14px' }}>
+                  <GradeProgressCard summary={pointSummary} />
+                </div>
+              )}
+              {badges && badges.length > 0 && (
+                <BadgeSection>
+                  <BadgeSectionHead>
+                    <span>뱃지</span>
+                    <span>
+                      {earnedBadges.length}/{badges.length}
+                    </span>
+                  </BadgeSectionHead>
+                  {earnedBadges.length > 0 ? (
+                    <BadgeList badges={earnedBadges} compact />
+                  ) : (
+                    <BadgeEmpty>콘텐츠를 등록하고 첫 뱃지를 획득해보세요!</BadgeEmpty>
+                  )}
+                </BadgeSection>
+              )}
               <Divider />
-              <MenuItem onClick={() => {}}>
+              <MenuItem
+                onClick={() => {
+                  playClickSound()
+                  setIsUserOpen(false)
+                  navigate(pathKeys.leaderboard())
+                }}
+              >
+                <FiAward size={14} /> 리더보드
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  playClickSound()
+                  setIsUserOpen(false)
+                  navigate(pathKeys.profile.root())
+                }}
+              >
                 <FiUser size={14} /> 내 프로필
               </MenuItem>
               <MenuItem
@@ -736,7 +864,7 @@ const Header: React.FC = () => {
               </ModalHeader>
               <ModalContent>
                 <NotificationPanelBody
-                  messages={messages}
+                  messages={mergedMessages}
                   isLoading={isLoading}
                   onMarkAllRead={handleMarkAllRead}
                   onSelect={handleSelectNotification}
@@ -787,10 +915,10 @@ const Header: React.FC = () => {
               <ModalContent>
                 <ProfileHeader>
                   <AvatarLg>
-                    {(username || 'G').charAt(0).toUpperCase()}
+                    {(shownName || 'G').charAt(0).toUpperCase()}
                   </AvatarLg>
                   <div>
-                    <ProfileName>{username || '게스트'}</ProfileName>
+                    <ProfileName>{shownName || '게스트'}</ProfileName>
                     <ProfileRole>관리자</ProfileRole>
                   </div>
                 </ProfileHeader>
@@ -798,16 +926,11 @@ const Header: React.FC = () => {
                 <MenuItem
                   onClick={() => {
                     playClickSound()
+                    setIsUserOpen(false)
+                    navigate(pathKeys.profile.root())
                   }}
                 >
                   <FiUser size={14} /> 내 프로필
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    playClickSound()
-                  }}
-                >
-                  설정
                 </MenuItem>
                 <Divider />
                 <MenuItem
@@ -879,10 +1002,14 @@ const LeftZone = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 `
 
 const CenterZone = styled.div`
   flex: 1;
+  /* flex 아이템 기본 min-width:auto면 내부 nav가 컨텐츠 크기 미만으로 못 줄어
+     좌우 영역을 밀어낸다. 0으로 풀어 nav가 자체 overflow-x로 처리하게 한다. */
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -896,6 +1023,7 @@ const RightZone = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 `
 
 const SearchTrigger = styled.button`

@@ -100,10 +100,15 @@ export function NotificationPanelBody({
                 <MessageBody>
                   <MessageTitleRow>
                     {typeLabel && <EntityTypeChip>{typeLabel}</EntityTypeChip>}
-                    <MessageTitle>{msg.title}</MessageTitle>
+                    <MessageTitle>{String(msg.title ?? '')}</MessageTitle>
                   </MessageTitleRow>
-                  {msg.preview && <MessagePreview>{msg.preview}</MessagePreview>}
-                  <MessageMeta>{formatMessageTime(msg.time)}</MessageMeta>
+                  {msg.preview && (
+                    <MessagePreview>{String(msg.preview)}</MessagePreview>
+                  )}
+                  <MessageMeta>
+                    {formatMessageTime(msg.time)}
+                    {msg.actorName ? ` · ${msg.actorName}` : ''}
+                  </MessageMeta>
                 </MessageBody>
               </MessageRow>
             </MessageItem>

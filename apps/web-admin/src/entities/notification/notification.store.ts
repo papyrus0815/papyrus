@@ -10,6 +10,10 @@ export interface NotificationMessage {
   unread?: boolean
   /** 알림 대상 리소스 타입 (표시용: 인물, 국가 등) */
   ownerType?: string
+  /** 변경을 수행한 사용자 표시명 (없으면 미표시) */
+  actorName?: string
+  /** 알림 대상 레코드 ID (상세 페이지 이동용) */
+  recordId?: string
 }
 
 interface NotificationState {
@@ -40,6 +44,8 @@ export const useNotificationStore = create<NotificationState & NotificationActio
           time: n.time,
           unread: n.unread,
           ownerType: n.ownerType,
+          actorName: n.actorName,
+          recordId: n.recordId,
         })),
       })
     } catch {
