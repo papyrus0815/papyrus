@@ -21,6 +21,69 @@ import { CreateEventDto, UpdateEventDto, EventResponseDto } from './dto'
 import { Event } from '../domain/event.entity'
 import { PrismaClient } from '@prisma/client'
 
+/** 사건 날짜 구조화 파싱 결과 */
+interface ParsedEventDate {
+  /** 저장가능 DateTime — AD 1000~9999일 때만, 그 외(BC·고대)는 null */
+  date: Date | null
+  era: 'BC' | 'AD'
+  year: number
+  month: number
+  day: number
+}
+
+/**
+ * ISO(음수 BC 포함) 날짜 문자열 → 구조화 표현.
+ * MySQL DATETIME은 1000~9999년만 저장 가능하므로, BC·고대(연<1000)는 date=null로 두고
+ * 구조화 필드(era/year/month/day)만 채운다(응답에서 이 필드로 재구성).
+ * 입력이 없거나 파싱 불가면 undefined(필드 미변경 의미).
+ */
+function parseEventDate(iso?: string | null): ParsedEventDate | undefined {
+  if (!iso) return undefined
+  const neg = iso.startsWith('-')
+  const body = neg ? iso.slice(1) : iso
+  const m = body.match(/^(\d{1,6})-(\d{1,2})-(\d{1,2})/)
+  let year: number
+  let month: number
+  let day: number
+  if (m) {
+    year = parseInt(m[1], 10)
+    month = parseInt(m[2], 10)
+    day = parseInt(m[3], 10)
+  } else {
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return undefined
+    year = Math.abs(d.getUTCFullYear())
+    month = d.getUTCMonth() + 1
+    day = d.getUTCDate()
+  }
+  const era: 'BC' | 'AD' = neg ? 'BC' : 'AD'
+  const date =
+    !neg && year >= 1000 && year <= 9999 ? new Date(Date.UTC(year, month - 1, day)) : null
+  return { date, era, year, month, day }
+}
+
+/**
+ * 응답용 날짜 문자열 재구성. 저장 DateTime이 있으면 기존 동작 보존(toISOString),
+ * 없으면 구조화 필드로 ISO(음수=BC) 재구성. 둘 다 없으면 null.
+ */
+function formatEventDate(
+  date: Date | string | null | undefined,
+  era: 'BC' | 'AD' | null | undefined,
+  year: number | null | undefined,
+  month: number | null | undefined,
+  day: number | null | undefined,
+): string | null {
+  if (date) {
+    if (typeof (date as Date).toISOString === 'function') return (date as Date).toISOString()
+    return date as string // 이미 문자열로 들어온 경우
+  }
+  if (year == null) return null
+  const yyyy = String(year).padStart(4, '0')
+  const mm = String(month ?? 1).padStart(2, '0')
+  const dd = String(day ?? 1).padStart(2, '0')
+  return `${era === 'BC' ? '-' : ''}${yyyy}-${mm}-${dd}`
+}
+
 @ApiTags('events')
 @Controller('events')
 @UseGuards(AuthGuard('jwt'))
@@ -92,9 +155,9 @@ export class EventController {
       id: event.id,
       title: event.title,
       description: event.description,
-      startDate: event.startDate?.toISOString ? event.startDate.toISOString() : event.startDate ?? null,
+      startDate: formatEventDate(event.startDate, event.startEra, event.startYear, event.startMonth, event.startDay),
       startDatePrecision: event.startDatePrecision ?? null,
-      endDate: event.endDate?.toISOString ? event.endDate.toISOString() : event.endDate ?? null,
+      endDate: formatEventDate(event.endDate, event.endEra, event.endYear, event.endMonth, event.endDay),
       endDatePrecision: event.endDatePrecision ?? null,
       location: event.location,
       categoryId: event.categoryId,
@@ -110,7 +173,16 @@ export class EventController {
       childEvents: event.childEvents ? event.childEvents.map((child: any) => this.toResponseDto(child)) : undefined,
       keywords: event.keywords != null ? (Array.isArray(event.keywords) ? event.keywords : []) : null,
       cityId: event.cityId,
+      city: event.city
+        ? { id: event.city.id, name: event.city.name }
+        : null,
       administrativeDivisionId: event.administrativeDivisionId,
+      administrativeDivision: event.administrativeDivision
+        ? {
+            id: event.administrativeDivision.id,
+            name: event.administrativeDivision.name,
+          }
+        : null,
       historicalCountryId: event.historicalCountryId,
       eventSections: eventSections,
       eventImages: eventImages,
@@ -582,6 +654,9 @@ export class EventController {
       where: { id },
       include: {
         category: true,
+        // 위치 복원: 편집 폼 PlaceSelect 뱃지에 표시할 이름 (UUID만으론 부족)
+        city: { select: { id: true, name: true } },
+        administrativeDivision: { select: { id: true, name: true } },
         parentEvent: true,
         childEvents: {
           include: {
@@ -703,14 +778,24 @@ export class EventController {
       }
     }
 
+    const startParts = parseEventDate(dto.startDate)
+    const endParts = parseEventDate(dto.endDate)
     const event = await this.eventService.createEvent(
       {
         title: dto.title,
         description: dto.description,
-        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        startDate: startParts ? startParts.date : undefined,
         startDatePrecision: dto.startDatePrecision ?? undefined,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        startEra: startParts?.era,
+        startYear: startParts?.year,
+        startMonth: startParts?.month,
+        startDay: startParts?.day,
+        endDate: endParts ? endParts.date : undefined,
         endDatePrecision: dto.endDatePrecision ?? undefined,
+        endEra: endParts?.era,
+        endYear: endParts?.year,
+        endMonth: endParts?.month,
+        endDay: endParts?.day,
         location: dto.location,
         categoryId: categoryId,
         background: dto.background,
@@ -810,15 +895,25 @@ export class EventController {
       }
     }
 
+    const startPartsU = parseEventDate(dto.startDate)
+    const endPartsU = parseEventDate(dto.endDate)
     const event = await this.eventService.updateEvent(
       id,
       {
         title: dto.title,
         description: dto.description,
-        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        startDate: startPartsU ? startPartsU.date : undefined,
         startDatePrecision: dto.startDatePrecision ?? undefined,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        startEra: startPartsU?.era,
+        startYear: startPartsU?.year,
+        startMonth: startPartsU?.month,
+        startDay: startPartsU?.day,
+        endDate: endPartsU ? endPartsU.date : undefined,
         endDatePrecision: dto.endDatePrecision ?? undefined,
+        endEra: endPartsU?.era,
+        endYear: endPartsU?.year,
+        endMonth: endPartsU?.month,
+        endDay: endPartsU?.day,
         location: dto.location,
         categoryId: categoryId,
         background: dto.background,

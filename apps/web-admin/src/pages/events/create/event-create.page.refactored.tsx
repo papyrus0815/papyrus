@@ -21,6 +21,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { invalidateGamification } from '@/entities/gamification'
 import { useFormEntities } from '@/entities/event-form/model'
 import {
   FORM_STEPS,
@@ -159,10 +160,8 @@ export const EventCreatePageRefactored: React.FC<
     setThumbnailFile,
     location,
     setLocation,
-    latitude,
-    setLatitude,
-    longitude,
-    setLongitude,
+    place,
+    setPlace,
     tags,
     keywords,
     setKeywords,
@@ -348,6 +347,35 @@ export const EventCreatePageRefactored: React.FC<
         }
 
         setLocation(event.location || '')
+        // 위치 복원: DB 참조(city/administrativeDivision)가 있으면 PlaceSelect 뱃지로,
+        // 없고 자유 텍스트만 있으면 직접 입력(manual)으로 되살린다.
+        {
+          const ev = event as unknown as {
+            cityId?: string | null
+            city?: { id: string; name: string } | null
+            administrativeDivisionId?: string | null
+            administrativeDivision?: { id: string; name: string } | null
+            location?: string | null
+          }
+          if (ev.city || ev.administrativeDivision) {
+            const shortName = ev.city?.name ?? ev.administrativeDivision?.name ?? ''
+            setPlace({
+              cityId: ev.cityId ?? undefined,
+              adminDivisionId: ev.administrativeDivisionId ?? undefined,
+              displayName: ev.location || shortName,
+              shortName,
+              region: ev.administrativeDivision?.name,
+            })
+          } else if (ev.location) {
+            setPlace({
+              displayName: ev.location,
+              shortName: ev.location,
+              isManual: true,
+            })
+          } else {
+            setPlace(null)
+          }
+        }
         setKeywords(Array.isArray(event.keywords) ? event.keywords : [])
 
         // 썸네일 로드 (새 구조 우선, 레거시 fallback)
@@ -537,8 +565,7 @@ export const EventCreatePageRefactored: React.FC<
     category,
     thumbnail,
     location,
-    latitude,
-    longitude,
+    place,
     keywords,
     relatedCountryIds,
     relatedHistoricalCountryIds,
@@ -624,6 +651,8 @@ export const EventCreatePageRefactored: React.FC<
         endTime,
         category,
         location,
+        cityId: place?.cityId ?? null,
+        administrativeDivisionId: place?.adminDivisionId ?? null,
         thumbnail,
         parentEventId,
         tags,
@@ -668,6 +697,8 @@ export const EventCreatePageRefactored: React.FC<
 
       // 목록 캐시 무효화 — 이후 목록 복귀 시 새/수정 사건이 반영되도록.
       queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
+      // 게이미피케이션(점수·등급·뱃지) 즉시 갱신 — 등급업/뱃지 토스트가 바로 뜨도록
+      invalidateGamification(queryClient)
 
       if (onSuccess) {
         // 콜백 경로는 페이지 이동이 없을 수 있어(모달 등) 오버레이를 명시 해제.
@@ -1498,12 +1529,9 @@ export const EventCreatePageRefactored: React.FC<
           {/* ===== Widget: Location Section ===== */}
           {currentStep === FORM_STEPS.LOCATION && (
             <LocationSection
-              location={location}
+              place={place}
+              setPlace={setPlace}
               setLocation={setLocation}
-              latitude={latitude}
-              setLatitude={setLatitude}
-              longitude={longitude}
-              setLongitude={setLongitude}
             />
           )}
         </S.FormArea>

@@ -33,6 +33,27 @@ import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { TimePickerModal } from '@/shared/ui/time-picker-modal/time-picker-modal'
 
 /**
+ * 날짜 표시용 포맷 — BC/고대 안전.
+ * 네이티브 `new Date()`는 BC(천문학적 연도번호)·고대(타임존)에서 어긋나므로, ISO 문자열의
+ * 선행 연도 자릿수와 부호를 직접 파싱한다(date-picker `-YYYY-MM-DD` 표기와 일치).
+ */
+function formatEventDateLabel(iso: string): string {
+  const neg = iso.startsWith('-')
+  const body = neg ? iso.slice(1) : iso
+  const m = body.match(/^(\d{1,6})-(\d{1,2})-(\d{1,2})/)
+  if (!m) {
+    const d = new Date(iso)
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+  }
+  const year = parseInt(m[1], 10)
+  const month = parseInt(m[2], 10)
+  const day = parseInt(m[3], 10)
+  return `${neg ? '기원전 ' : ''}${year}년 ${month}월 ${day}일`
+}
+
+/**
  * 이벤트 기본 정보 입력 섹션
  */
 interface BasicInfoSectionProps {
@@ -489,13 +510,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               >
                 <FiCalendar size={14} />
                 <S.DateInputDisplay>
-                  {startDate
-                    ? new Date(startDate).toLocaleDateString('ko-KR', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })
-                    : '날짜 선택'}
+                  {startDate ? formatEventDateLabel(startDate) : '날짜 선택'}
                 </S.DateInputDisplay>
               </S.DateInputWrapper>
               <S.DateInputWrapper
@@ -520,13 +535,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               >
                 <FiCalendar size={14} />
                 <S.DateInputDisplay>
-                  {endDate
-                    ? new Date(endDate).toLocaleDateString('ko-KR', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })
-                    : '날짜 선택'}
+                  {endDate ? formatEventDateLabel(endDate) : '날짜 선택'}
                 </S.DateInputDisplay>
               </S.DateInputWrapper>
               <S.DateInputWrapper

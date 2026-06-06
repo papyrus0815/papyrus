@@ -3,7 +3,6 @@ import { Type } from 'class-transformer'
 import {
   IsString,
   IsOptional,
-  IsDateString,
   IsNotEmpty,
   IsObject,
   ValidateNested,
@@ -23,8 +22,8 @@ export class CreateEventDto {
   @IsOptional()
   description?: string
 
-  @ApiProperty({ description: '시작일', required: false })
-  @IsDateString()
+  @ApiProperty({ description: '시작일 (ISO. BC는 음수 연도 "-0221-01-01" 형태 허용)', required: false })
+  @IsString()
   @IsOptional()
   startDate?: string
 
@@ -34,8 +33,8 @@ export class CreateEventDto {
   @IsIn(['year', 'month', 'day'])
   startDatePrecision?: string
 
-  @ApiProperty({ description: '종료일', required: false })
-  @IsDateString()
+  @ApiProperty({ description: '종료일 (ISO. BC는 음수 연도 "-0221-01-01" 형태 허용)', required: false })
+  @IsString()
   @IsOptional()
   endDate?: string
 

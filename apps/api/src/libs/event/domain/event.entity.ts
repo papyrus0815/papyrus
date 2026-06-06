@@ -5,8 +5,17 @@ export class Event {
   startDate?: Date | null
   /** year | month | day. null이면 day로 간주 */
   startDatePrecision?: string | null
+  /** 시작일 구조화 표현 (BC/고대 지원). 'BC' | 'AD'. */
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
   endDate?: Date | null
   endDatePrecision?: string | null
+  endEra?: 'BC' | 'AD' | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
   location?: string | null
   categoryId?: string | null
   background?: string | null

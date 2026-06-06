@@ -61,8 +61,20 @@ export class EventResponseDto {
   @ApiProperty({ description: '도시 ID', required: false })
   cityId?: string | null
 
+  @ApiProperty({ description: '도시 정보 (편집 폼 위치 복원용)', required: false })
+  city?: {
+    id: string
+    name: string
+  } | null
+
   @ApiProperty({ description: '행정구역 ID', required: false })
   administrativeDivisionId?: string | null
+
+  @ApiProperty({ description: '행정구역 정보 (편집 폼 위치 복원용)', required: false })
+  administrativeDivision?: {
+    id: string
+    name: string
+  } | null
 
   @ApiProperty({ description: '역사적 국가 ID', required: false })
   historicalCountryId?: string | null

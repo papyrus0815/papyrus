@@ -6,10 +6,21 @@
  */
 import type { HistoricalEvent } from '@/entities/event/model'
 
-/** 사건의 시작 연도. 비정상 날짜는 null. */
+/**
+ * 사건의 시작 연도(부호 있는 정수: BC는 음수). 비정상 날짜는 null.
+ *
+ * 네이티브 `new Date()`는 BC/고대 날짜에서 어긋난다(BC는 천문학적 연도번호로 1년 오프셋,
+ * 고대 AD는 타임존으로 −1). 그래서 ISO 문자열의 선행 연도 자릿수와 부호를 직접 파싱한다
+ * (date-picker의 `-YYYY-MM-DD` 표기와 일치). 풀 ISO("...Z")는 폴백으로 네이티브 파싱.
+ */
 export const startYearOf = (evt: HistoricalEvent): number | null => {
   if (!evt.startDate) return null
-  const date = new Date(evt.startDate)
+  const raw = String(evt.startDate)
+  const neg = raw.startsWith('-')
+  const body = neg ? raw.slice(1) : raw
+  const match = body.match(/^(\d{1,6})-/)
+  if (match) return (neg ? -1 : 1) * parseInt(match[1], 10)
+  const date = new Date(raw)
   return Number.isNaN(date.getTime()) ? null : date.getFullYear()
 }
 

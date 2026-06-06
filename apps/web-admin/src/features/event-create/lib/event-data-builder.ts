@@ -513,6 +513,10 @@ export const buildEventSubmitData = (params: {
   endDatePrecision?: 'year' | 'month' | 'day'
   category: string
   location: string
+  /** 등록된 도시 참조 (PlaceSelect DB 선택) */
+  cityId?: string | null
+  /** 등록된 행정구역 참조 (PlaceSelect DB 선택) */
+  administrativeDivisionId?: string | null
   thumbnail: string
   parentEventId: string
   tags: string[]
@@ -573,6 +577,8 @@ export const buildEventSubmitData = (params: {
     // 🔧 FIX: category는 이미 categoryId (cat-military-001)이므로 직접 전달
     categoryId: params.category || undefined,
     location: params.location.trim() || undefined,
+    cityId: params.cityId || undefined,
+    administrativeDivisionId: params.administrativeDivisionId || undefined,
     parentEventId: params.parentEventId || undefined,
     tags: params.tags.length > 0 ? params.tags : undefined,
     relatedCountryIds:

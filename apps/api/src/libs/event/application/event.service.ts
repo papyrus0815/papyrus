@@ -8,7 +8,9 @@ import { EventRepository } from '../domain/event.repository'
 import { Event } from '../domain/event.entity'
 import { AggregateType, EventMethod, PrismaClient } from '@prisma/client'
 import { PointService } from '../../gamification/application/point.service'
+import { completenessBonus } from '../../gamification/domain/point.policy'
 import { NotificationService } from '../../notification/application/notification.service'
+import { yearPreview } from '../../shared/notification-preview.util'
 
 @Injectable()
 export class EventService {
@@ -279,9 +281,23 @@ export class EventService {
       console.log(`✅ ${childEventIds.length}개 사건이 하위 사건으로 연결됨`)
     }
 
-    // 게이미피케이션: 등록자에게 점수 적립 (하위 사건도 각자 적립됨)
-    await this.pointService.awardForCreate(data.createdById, AggregateType.EVENT, event.id)
-    await this.notificationService.notifyEvent(event.title, EventMethod.CREATE, event.id)
+    // 게이미피케이션: 등록자에게 점수 적립 (기본 + 완성도 보너스, 하위 사건도 각자 적립됨)
+    const completenessSignals =
+      (eventImages && eventImages.length > 0 ? 1 : 0) +
+      (eventSections && eventSections.length > 0 ? 1 : 0) +
+      (data.background ? 1 : 0)
+    await this.pointService.awardForCreate(
+      data.createdById,
+      AggregateType.EVENT,
+      event.id,
+      completenessBonus(completenessSignals),
+    )
+    await this.notificationService.notifyEvent(
+      event.title,
+      EventMethod.CREATE,
+      event.id,
+      yearPreview(event.startEra, event.startYear),
+    )
 
     return event
   }
@@ -485,7 +501,12 @@ export class EventService {
     }
 
     const updated = await this.events.update(id, data)
-    await this.notificationService.notifyEvent(updated.title, EventMethod.UPDATE, updated.id)
+    await this.notificationService.notifyEvent(
+      updated.title,
+      EventMethod.UPDATE,
+      updated.id,
+      yearPreview(updated.startEra, updated.startYear),
+    )
     return updated
   }
 
@@ -510,7 +531,12 @@ export class EventService {
 
     // 게이미피케이션: 소프트 삭제 시 점수 회수(어뷰징 방지). 복구 시 복원됨.
     await this.pointService.revokeForRecord(AggregateType.EVENT, id)
-    await this.notificationService.notifyEvent(event.title, EventMethod.DELETE, id)
+    await this.notificationService.notifyEvent(
+      event.title,
+      EventMethod.DELETE,
+      id,
+      yearPreview(event.startEra, event.startYear),
+    )
 
     console.log(`🗑️ 사건 소프트 삭제: ${id} (3일 후 완전 삭제 예정)`)
   }

@@ -249,15 +249,28 @@ model Event {
   /// 개요
   description String? @db.Text
 
-  /// 기간(시작)
+  /// 기간(시작) — AD 1000~9999만 저장 가능(MySQL DATETIME 한계). BC·고대(연<1000)는 null이고
+  /// 아래 구조화 필드(startEra/startYear/...)가 진실. 응답에서는 구조화 필드로 재구성한다.
   startDate DateTime? @map("start_date")
   /// 시작일 정밀도: year(년만), month(년·월), day(년·월·일). null이면 day로 간주
   startDatePrecision String? @map("start_date_precision") @db.VarChar(10)
+
+  /// 시작일 구조화 표현 — BC/고대 지원용(HistoricalCountry와 동일 패턴). startDate와 함께 채워진다.
+  startEra   Era? @map("start_era")
+  startYear  Int? @map("start_year")
+  startMonth Int? @map("start_month")
+  startDay   Int? @map("start_day")
 
   /// 기간(종료)
   endDate DateTime? @map("end_date")
   /// 종료일 정밀도: year(년만), month(년·월), day(년·월·일). null이면 day로 간주
   endDatePrecision String? @map("end_date_precision") @db.VarChar(10)
+
+  /// 종료일 구조화 표현 — BC/고대 지원용. endDate와 함께 채워진다.
+  endEra   Era? @map("end_era")
+  endYear  Int? @map("end_year")
+  endMonth Int? @map("end_month")
+  endDay   Int? @map("end_day")
 
   /// 간단 문자열 위치(자유 텍스트)
   location String? @db.VarChar(255)

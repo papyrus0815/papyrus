@@ -5,6 +5,7 @@
 import { useState } from 'react'
 
 import type { HistoricalEventCategory } from '@/pages/events/create/events.types'
+import type { PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
 
 export const useBasicInfoForm = () => {
   const [title, setTitle] = useState('')
@@ -18,9 +19,10 @@ export const useBasicInfoForm = () => {
   const [category, setCategory] = useState<HistoricalEventCategory | ''>('')
   const [thumbnail, setThumbnail] = useState<string>('')
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
+  // location: 사람이 읽는 위치 라벨(자유 텍스트 또는 DB 선택의 표시명) — DB Event.location 컬럼.
   const [location, setLocation] = useState('')
-  const [latitude, setLatitude] = useState('')
-  const [longitude, setLongitude] = useState('')
+  // place: 등록된 지역 참조(City/AdministrativeDivision) 또는 직접 입력. 위치 폼의 단일 소스.
+  const [place, setPlace] = useState<PlaceResult | null>(null)
   const [tags, setTags] = useState<string[]>([])
   const [keywords, setKeywords] = useState<string[]>([])
   const [relatedCountryIds, setRelatedCountryIds] = useState<string[]>([])
@@ -75,8 +77,7 @@ export const useBasicInfoForm = () => {
     thumbnail,
     thumbnailFile,
     location,
-    latitude,
-    longitude,
+    place,
     tags,
     keywords,
     relatedCountryIds,
@@ -97,8 +98,7 @@ export const useBasicInfoForm = () => {
     setThumbnail,
     setThumbnailFile,
     setLocation,
-    setLatitude,
-    setLongitude,
+    setPlace,
     setTags,
     setKeywords,
     setRelatedCountryIds,
