@@ -54,7 +54,7 @@ export function DetailActors({
   const modernCountries = event.relatedCountries ?? []
   const historicalCountries = event.relatedHistoricalCountries ?? []
 
-  const { data: allPersons = [] } = useQuery({
+  const { data: allPersons = [], isLoading: personsLoading } = useQuery({
     queryKey: ['persons', 'all'],
     queryFn: getAllPersons,
     enabled: personModalOpen,
@@ -119,13 +119,13 @@ export function DetailActors({
     patchPersons(next.map(toPersonPayload))
   }
 
+  /**
+   * 인물 추가 — 모달은 연속 추가(multiSelect)라 여기서 닫지 않는다.
+   * 중복은 모달이 excludeIds로 이미 거르지만, 안전하게 한 번 더 가드.
+   */
   const addPerson = (personId: string) => {
-    if (persons.some((p) => p.personId === personId)) {
-      setPersonModalOpen(false)
-      return
-    }
+    if (persons.some((p) => p.personId === personId)) return
     patchPersons([...persons.map(toPersonPayload), { personId }])
-    setPersonModalOpen(false)
   }
 
   const removeCountry = (id: string, isHistorical: boolean) => {
@@ -431,6 +431,11 @@ export function DetailActors({
           selectedPersonId=""
           onSelect={(id) => addPerson(id)}
           onClose={() => setPersonModalOpen(false)}
+          excludeIds={persons.map((p) => p.personId)}
+          title="참여 인물 추가"
+          searchPlaceholder="이름 또는 생몰년도로 검색..."
+          multiSelect
+          loading={personsLoading}
         />
       )}
       <AdvancedCountrySelectModal

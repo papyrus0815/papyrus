@@ -2,16 +2,17 @@
  * 인물 선택 모달 - 공용 컴포넌트
  * 이름, 생몰년도로 검색 가능
  */
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { createPortal } from 'react-dom'
 
 import { toast } from 'react-hot-toast'
 import {
   FiArrowLeft,
-  FiBriefcase,
   FiCalendar,
   FiCheck,
+  FiLoader,
   FiMapPin,
   FiPlus,
   FiSearch,
@@ -22,7 +23,9 @@ import styled from 'styled-components'
 
 import type { PersonResponseDto } from '@/shared/api/persons'
 import { createPerson } from '@/shared/api/persons'
+import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
@@ -46,6 +49,14 @@ interface PersonSelectModalProps {
   defaultCountryId?: string
   /** 인라인 등록으로 새 인물이 생성된 경우 콜백 — 부모가 로컬 인물 목록을 갱신할 수 있도록. */
   onCreatedPerson?: (person: PersonResponseDto) => void
+  /**
+   * 연속 추가 모드. true면 인물을 골라도 모달이 닫히지 않고, 방금 추가한 인물은
+   * "추가됨"으로 표시되어 중복 선택이 막힌다. 하단 "완료" 버튼으로 닫는다.
+   * 사건 참여자처럼 여러 명을 한 번에 넣는 흐름용. 미지정 시 기존처럼 1건 선택 후 자동 닫힘.
+   */
+  multiSelect?: boolean
+  /** 인물 목록 로딩 중 여부 — 첫 오픈 시 fetch 대기 동안 빈 상태 대신 로더를 노출. */
+  loading?: boolean
 }
 
 type SortOption = 'name' | 'birth-asc' | 'birth-desc'
@@ -61,7 +72,16 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   searchPlaceholder,
   defaultCountryId,
   onCreatedPerson,
+  multiSelect = false,
+  loading = false,
 }) => {
+  // 모달이 떠 있는 동안 배경 스크롤 잠금 (참조 카운트 방식이라 중첩 모달에도 안전).
+  useBodyScrollLock(true)
+
+  // 포커스 트랩 — Tab이 모달 밖으로 새지 않게 가두고, 닫힐 때 직전 포커스 복원.
+  const modalBoxRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(modalBoxRef, true)
+
   const excludeSet = useMemo(
     () => new Set((excludeIds ?? []).filter(Boolean)),
     [excludeIds],
@@ -69,6 +89,18 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   const playClickSound = useClickSound()
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortOption>('name')
+  /**
+   * 연속 추가 모드에서 이번 세션에 추가한 인물 id. 부모 excludeIds가 patch 반영으로
+   * 늦게 갱신돼도 즉시 "추가됨" 피드백을 주고, 갱신 후에도 목록에서 사라지지 않게 유지한다.
+   */
+  const [addedIds, setAddedIds] = useState<Set<string>>(() => new Set())
+
+  /** 키보드 내비게이션 — ↑↓로 이동, Enter로 선택. 현재 강조된 카드 index. */
+  const [activeIndex, setActiveIndex] = useState(0)
+  /** 리스트 스크롤 뷰포트 — 가상 스크롤의 scroll element. */
+  const listViewportRef = useRef<HTMLDivElement>(null)
+  /** 검색 입력 — 포커스 트랩이 초기 포커스를 잡은 뒤 검색창으로 다시 옮긴다. */
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   // ─── 인라인 새 인물 등록 ───────────────────────────────────────────────
   const canCreate = !!defaultCountryId
@@ -146,50 +178,72 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
     }
   }
 
-  // 필터 상태
+  // 필터 상태 (직업 필터는 응답 DTO에 jobId가 없어 항상 빈 옵션이라 제거)
   const [filterCountry, setFilterCountry] = useState<string>('')
   const [filterDynasty, setFilterDynasty] = useState<string>('')
-  const [filterJob, setFilterJob] = useState<string>('')
   const [filterReligion, setFilterReligion] = useState<string>('')
 
-  // 고유 값 추출
-  const uniqueCountries = useMemo(() => {
-    const countries = new Set<string>()
-    persons.forEach((person) => {
-      if (person.countryId) countries.add(person.countryId)
+  /**
+   * 필터 옵션 — id 원문 대신 사람이 읽을 수 있는 이름으로. country/dynasty/religion은
+   * 응답 DTO에 nested { id, name }가 함께 와서 추가 fetch 없이 라벨 맵을 만들 수 있다.
+   */
+  type FilterOption = { id: string; name: string }
+  const dedupeByName = (entries: FilterOption[]): FilterOption[] => {
+    const map = new Map<string, string>()
+    entries.forEach(({ id, name }) => {
+      if (id && !map.has(id)) map.set(id, name)
     })
-    return Array.from(countries)
-  }, [persons])
+    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name, 'ko'),
+    )
+  }
 
-  const uniqueDynasties = useMemo(() => {
-    const dynasties = new Set<string>()
-    persons.forEach((person) => {
-      if (person.dynastyId) dynasties.add(person.dynastyId)
-    })
-    return Array.from(dynasties)
-  }, [persons])
+  const uniqueCountries = useMemo(
+    () =>
+      dedupeByName(
+        persons
+          .filter((p) => p.countryId)
+          .map((p) => ({
+            id: p.countryId as string,
+            name: p.country?.name ?? (p.countryId as string),
+          })),
+      ),
+    [persons],
+  )
 
-  const uniqueJobs = useMemo(() => {
-    const jobs = new Set<string>()
-    persons.forEach((person) => {
-      if (person.jobId) jobs.add(person.jobId)
-    })
-    return Array.from(jobs)
-  }, [persons])
+  const uniqueDynasties = useMemo(
+    () =>
+      dedupeByName(
+        persons
+          .filter((p) => p.dynastyId)
+          .map((p) => ({
+            id: p.dynastyId as string,
+            name: p.dynasty?.name ?? (p.dynastyId as string),
+          })),
+      ),
+    [persons],
+  )
 
-  const uniqueReligions = useMemo(() => {
-    const religions = new Set<string>()
-    persons.forEach((person) => {
-      if (person.religionId) religions.add(person.religionId)
-    })
-    return Array.from(religions)
-  }, [persons])
+  const uniqueReligions = useMemo(
+    () =>
+      dedupeByName(
+        persons
+          .filter((p) => p.religionId)
+          .map((p) => ({
+            id: p.religionId as string,
+            name: p.religion?.name ?? (p.religionId as string),
+          })),
+      ),
+    [persons],
+  )
 
   // 검색 + 필터링
   const filteredPersons = useMemo(() => {
-    let result = excludeSet.size > 0
-      ? persons.filter((p) => !excludeSet.has(p.id))
-      : persons
+    // excludeSet은 숨기되, 이번 세션에 추가한 인물(addedIds)은 "추가됨"으로 계속 노출.
+    let result =
+      excludeSet.size > 0
+        ? persons.filter((p) => !excludeSet.has(p.id) || addedIds.has(p.id))
+        : persons
 
     // 검색어 필터
     const query = searchQuery.toLowerCase().trim()
@@ -225,11 +279,6 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
       result = result.filter((person) => person.dynastyId === filterDynasty)
     }
 
-    // 직업 필터
-    if (filterJob) {
-      result = result.filter((person) => person.jobId === filterJob)
-    }
-
     // 종교 필터
     if (filterReligion) {
       result = result.filter((person) => person.religionId === filterReligion)
@@ -257,39 +306,139 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   }, [
     persons,
     excludeSet,
+    addedIds,
     searchQuery,
     filterCountry,
     filterDynasty,
-    filterJob,
     filterReligion,
     sortBy,
   ])
 
-  const activeFilterCount = [
-    filterCountry,
-    filterDynasty,
-    filterJob,
-    filterReligion,
-  ].filter(Boolean).length
+  const activeFilterCount = [filterCountry, filterDynasty, filterReligion].filter(
+    Boolean,
+  ).length
+
+  /** 필터로 쓸 차원이 하나라도 있는지 — 없으면 사이드바를 숨기고 단일 컬럼으로. */
+  const hasFilters =
+    uniqueCountries.length > 0 ||
+    uniqueDynasties.length > 0 ||
+    uniqueReligions.length > 0
+
+  /**
+   * 가상 스크롤 — 전체 인물 수백~수천 명을 한 번에 렌더하지 않도록.
+   * 카드 높이가 균일해 estimateSize 고정 + measureElement로 미세 변동 보정(국가 모달과 동일 패턴).
+   */
+  const rowVirtualizer = useVirtualizer({
+    count: filteredPersons.length,
+    getScrollElement: () => listViewportRef.current,
+    estimateSize: () => 58,
+    overscan: 10,
+    measureElement:
+      typeof window !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      !navigator.userAgent.includes('Firefox')
+        ? (el) => (el as HTMLElement).getBoundingClientRect().height
+        : undefined,
+  })
 
   const handleSelect = (person: PersonResponseDto) => {
+    if (addedIds.has(person.id)) return
     const fullName = getPersonDisplayName(person)
     playClickSound()
     onSelect(person.id, fullName)
-    onClose()
+    if (multiSelect) {
+      // 모달 유지 — 방금 추가한 인물만 "추가됨"으로 잠그고 다음 선택을 받는다.
+      setAddedIds((prev) => {
+        const next = new Set(prev)
+        next.add(person.id)
+        return next
+      })
+    } else {
+      onClose()
+    }
   }
+
+  // 검색·필터·정렬이 바뀌면 강조 위치를 맨 위로 되돌린다.
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [searchQuery, filterCountry, filterDynasty, filterReligion, sortBy])
+
+  // 강조된 인덱스가 목록 범위를 벗어나면 마지막 항목으로 보정.
+  useEffect(() => {
+    if (activeIndex > filteredPersons.length - 1) {
+      setActiveIndex(Math.max(0, filteredPersons.length - 1))
+    }
+  }, [filteredPersons.length, activeIndex])
+
+  // 강조 카드를 보이는 영역으로 스크롤 (가상 스크롤이라 index로 지정; 이미 보이면 no-op).
+  useEffect(() => {
+    if (filteredPersons.length === 0) return
+    rowVirtualizer.scrollToIndex(activeIndex, { align: 'auto' })
+    // rowVirtualizer는 안정 참조라 deps 제외.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndex, filteredPersons.length])
+
+  /**
+   * 초기 포커스를 검색창으로. 포커스 트랩이 rAF로 첫 focusable(닫기 버튼)을 잡으므로,
+   * 그보다 뒤에 등록된 rAF로 검색창에 다시 포커스해 "열자마자 타이핑" 흐름을 유지한다.
+   */
+  useEffect(() => {
+    if (createMode) return
+    const id = window.requestAnimationFrame(() => searchInputRef.current?.focus())
+    return () => window.cancelAnimationFrame(id)
+  }, [createMode])
+
+  // 키보드: Escape 닫기 + ↑↓ 이동 + Enter 선택. 등록 폼(createMode)에서는 비활성.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // 상위 모달(가족 등록 등) 위에 떠 있을 수 있어 전파를 막아 이 모달만 닫는다.
+        e.stopPropagation()
+        onClose()
+        return
+      }
+      if (createMode) return
+      // 정렬·필터 select 등 네이티브 폼 컨트롤이 포커스면 화살표/Enter를 양보.
+      const tag = (e.target as HTMLElement | null)?.tagName
+      const isFormControl = tag === 'SELECT' || tag === 'TEXTAREA'
+      if (e.key === 'ArrowDown') {
+        if (isFormControl) return
+        e.preventDefault()
+        setActiveIndex((i) => Math.min(i + 1, filteredPersons.length - 1))
+      } else if (e.key === 'ArrowUp') {
+        if (isFormControl) return
+        e.preventDefault()
+        setActiveIndex((i) => Math.max(i - 1, 0))
+      } else if (e.key === 'Enter') {
+        // 버튼·select에 포커스가 있으면 네이티브 동작에 맡겨 이중 실행을 막는다.
+        if (isFormControl || tag === 'BUTTON') return
+        const person = filteredPersons[activeIndex]
+        if (person && !addedIds.has(person.id)) {
+          e.preventDefault()
+          handleSelect(person)
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [createMode, filteredPersons, activeIndex, addedIds, handleSelect, onClose])
 
   const clearAllFilters = () => {
     playClickSound()
     setFilterCountry('')
     setFilterDynasty('')
-    setFilterJob('')
     setFilterReligion('')
   }
 
   const modal = (
     <ModalOverlay onClick={onClose}>
-      <ModalBox onClick={(e) => e.stopPropagation()}>
+      <ModalBox
+        ref={modalBoxRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={createMode ? '새 인물 등록' : (title ?? '인물 선택')}
+        onClick={(e) => e.stopPropagation()}
+      >
         <ModalHeader>
           {createMode ? (
             <CreateBackBtn type="button" onClick={exitCreate} disabled={creating}>
@@ -311,13 +460,13 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
             <SearchWrapper>
               <FiSearch size={20} className="search-icon" />
               <SearchInput
+                ref={searchInputRef}
                 type="text"
                 placeholder={
                   searchPlaceholder ?? '이름 또는 생몰년도로 검색...'
                 }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                autoFocus
               />
             </SearchWrapper>
             {canCreate && (
@@ -428,8 +577,9 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
             </CreateFormActions>
           </CreateFormBody>
         ) : (
-        <SplitModalBody>
-          {/* 좌측: 필터 사이드바 */}
+        <SplitModalBody $noSidebar={!hasFilters}>
+          {/* 좌측: 필터 사이드바 — 필터 차원이 하나도 없으면 숨김 */}
+          {hasFilters && (
           <FilterSidebar>
             <FilterSidebarHeader>
               <span className="label">필터</span>
@@ -437,24 +587,6 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
                 <FilterBadge>{activeFilterCount}</FilterBadge>
               )}
             </FilterSidebarHeader>
-
-            {/* 정렬 */}
-            <FilterGroup>
-              <FilterLabel>정렬</FilterLabel>
-              <FilterSelect
-                value={sortBy}
-                onChange={(e) => {
-                  playClickSound()
-                  setSortBy(e.target.value as SortOption)
-                }}
-              >
-                <option value="name">이름순</option>
-                <option value="birth-asc">출생일 빠른순</option>
-                <option value="birth-desc">출생일 늦은순</option>
-              </FilterSelect>
-            </FilterGroup>
-
-            <FilterDivider />
 
             {/* 국가 필터 */}
             <FilterGroup>
@@ -470,76 +602,58 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
                 }}
               >
                 <option value="">전체</option>
-                {uniqueCountries.map((countryId) => (
-                  <option key={countryId} value={countryId}>
-                    {countryId}
+                {uniqueCountries.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.name}
                   </option>
                 ))}
               </FilterSelect>
             </FilterGroup>
 
             {/* 왕조 필터 */}
-            <FilterGroup>
-              <FilterLabel>
-                <FiCalendar size={12} />
-                왕조
-              </FilterLabel>
-              <FilterSelect
-                value={filterDynasty}
-                onChange={(e) => {
-                  playClickSound()
-                  setFilterDynasty(e.target.value)
-                }}
-              >
-                <option value="">전체</option>
-                {uniqueDynasties.map((dynastyId) => (
-                  <option key={dynastyId} value={dynastyId}>
-                    {dynastyId}
-                  </option>
-                ))}
-              </FilterSelect>
-            </FilterGroup>
-
-            {/* 직업 필터 */}
-            <FilterGroup>
-              <FilterLabel>
-                <FiBriefcase size={12} />
-                직업
-              </FilterLabel>
-              <FilterSelect
-                value={filterJob}
-                onChange={(e) => {
-                  playClickSound()
-                  setFilterJob(e.target.value)
-                }}
-              >
-                <option value="">전체</option>
-                {uniqueJobs.map((jobId) => (
-                  <option key={jobId} value={jobId}>
-                    {jobId}
-                  </option>
-                ))}
-              </FilterSelect>
-            </FilterGroup>
+            {uniqueDynasties.length > 0 && (
+              <FilterGroup>
+                <FilterLabel>
+                  <FiCalendar size={12} />
+                  왕조
+                </FilterLabel>
+                <FilterSelect
+                  value={filterDynasty}
+                  onChange={(e) => {
+                    playClickSound()
+                    setFilterDynasty(e.target.value)
+                  }}
+                >
+                  <option value="">전체</option>
+                  {uniqueDynasties.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.name}
+                    </option>
+                  ))}
+                </FilterSelect>
+              </FilterGroup>
+            )}
 
             {/* 종교 필터 */}
-            <FilterGroup>
-              <FilterLabel>종교</FilterLabel>
-              <FilterSelect
-                value={filterReligion}
-                onChange={(e) => {
-                  playClickSound()
-                  setFilterReligion(e.target.value)
-                }}
-              >
-                <option value="">전체</option>
-                {uniqueReligions.map((religionId) => (
-                  <option key={religionId} value={religionId}>
-                    {religionId}
-                  </option>
-                ))}
-              </FilterSelect>
-            </FilterGroup>
+            {uniqueReligions.length > 0 && (
+              <FilterGroup>
+                <FilterLabel>종교</FilterLabel>
+                <FilterSelect
+                  value={filterReligion}
+                  onChange={(e) => {
+                    playClickSound()
+                    setFilterReligion(e.target.value)
+                  }}
+                >
+                  <option value="">전체</option>
+                  {uniqueReligions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.name}
+                    </option>
+                  ))}
+                </FilterSelect>
+              </FilterGroup>
+            )}
 
             {/* 초기화 버튼 */}
             {activeFilterCount > 0 && (
@@ -552,11 +666,16 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
               </>
             )}
           </FilterSidebar>
+          )}
 
           {/* 우측: 인물 리스트 */}
           <PersonsArea>
             <PersonsHeader>
-              {filteredPersons.length > 0 ? (
+              {loading && persons.length === 0 ? (
+                <ResultCount>
+                  <span className="total">불러오는 중…</span>
+                </ResultCount>
+              ) : filteredPersons.length > 0 ? (
                 <ResultCount>
                   <span className="count">{filteredPersons.length}</span>
                   <span className="total">/ {persons.length}명</span>
@@ -564,10 +683,30 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
               ) : (
                 <EmptyMessage>검색 결과가 없습니다</EmptyMessage>
               )}
+              {/* 정렬 — 국가 모달처럼 리스트 상단에 배치 */}
+              <HeaderSortSelect
+                value={sortBy}
+                aria-label="정렬"
+                onChange={(e) => {
+                  playClickSound()
+                  setSortBy(e.target.value as SortOption)
+                }}
+              >
+                <option value="name">이름순</option>
+                <option value="birth-asc">출생일 빠른순</option>
+                <option value="birth-desc">출생일 늦은순</option>
+              </HeaderSortSelect>
             </PersonsHeader>
 
-            <PersonsList>
-              {filteredPersons.length === 0 ? (
+            <PersonsList ref={listViewportRef}>
+              {loading && persons.length === 0 ? (
+                <LoadingState>
+                  <SpinnerIcon>
+                    <FiLoader size={28} strokeWidth={2} />
+                  </SpinnerIcon>
+                  <EmptyText>인물 목록을 불러오는 중…</EmptyText>
+                </LoadingState>
+              ) : filteredPersons.length === 0 ? (
                 <EmptyState>
                   <EmptyIconWrap>
                     <FiUser size={40} strokeWidth={1.5} />
@@ -578,60 +717,127 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
                   </EmptySub>
                 </EmptyState>
               ) : (
-                filteredPersons.map((person) => {
-                  const fullName = getPersonDisplayName(person)
-                  const isSelected = selectedPersonId === person.id
+                <VirtualSizer style={{ height: rowVirtualizer.getTotalSize() }}>
+                  {rowVirtualizer.getVirtualItems().map((vRow) => {
+                    const index = vRow.index
+                    const person = filteredPersons[index]
+                    if (!person) return null
+                    const fullName = getPersonDisplayName(person)
+                    const isAdded = addedIds.has(person.id)
+                    // 선택 강조는 단일선택 슬롯 전용. '추가됨'은 별도 중립 처리.
+                    const isSelected = !isAdded && selectedPersonId === person.id
+                    const isActive = index === activeIndex
+                    const initial = fullName.trim().charAt(0) || '?'
 
-                  // 생몰년도 포맷팅 (직업·국가는 ID만 있어 카드에는 표시하지 않음)
-                  const birthYear = person.birthYear
-                  const deathYear = person.deathYear
-                  const lifespan =
-                    birthYear || deathYear
-                      ? `${birthYear || '?'} ~ ${deathYear || '현재'}`
-                      : null
+                    // 생몰년도 포맷팅
+                    const birthYear = person.birthYear
+                    const deathYear = person.deathYear
+                    const lifespan =
+                      birthYear || deathYear
+                        ? `${birthYear || '?'} ~ ${deathYear || '현재'}`
+                        : null
+                    const countryName = person.country?.name
+                    const flag = person.country?.flagEmoji
 
-                  return (
-                    <PersonCard
-                      key={person.id}
-                      $selected={isSelected}
-                      onClick={() => handleSelect(person)}
-                    >
-                      <PersonAvatar $selected={isSelected}>
-                        {person.profileImageUrl ? (
-                          <img src={person.profileImageUrl} alt={fullName} />
-                        ) : (
-                          <FiUser size={22} strokeWidth={2} />
-                        )}
-                      </PersonAvatar>
+                    return (
+                      <PersonCard
+                        key={person.id}
+                        data-index={index}
+                        ref={rowVirtualizer.measureElement}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          transform: `translateY(${vRow.start}px)`,
+                        }}
+                        $selected={isSelected}
+                        $added={isAdded}
+                        $active={isActive}
+                        onClick={() => handleSelect(person)}
+                        onMouseEnter={() => setActiveIndex(index)}
+                        disabled={isAdded}
+                        aria-disabled={isAdded}
+                      >
+                        <PersonAvatar $selected={isSelected}>
+                          {person.profileImageUrl ? (
+                            <img src={person.profileImageUrl} alt={fullName} />
+                          ) : (
+                            <AvatarInitial>{initial}</AvatarInitial>
+                          )}
+                        </PersonAvatar>
 
-                      <PersonMainInfo>
-                        <PersonNameRow>
-                          <PersonName>{fullName}</PersonName>
-                          {isSelected ? (
-                            <SelectedBadge>
-                              <FiCheck size={14} strokeWidth={3} />
-                            </SelectedBadge>
-                          ) : null}
-                        </PersonNameRow>
+                        <PersonMainInfo>
+                          <PersonNameRow>
+                            <PersonName>{fullName}</PersonName>
+                            {isAdded ? (
+                              <AddedTag>
+                                <FiCheck size={12} strokeWidth={3} />
+                                추가됨
+                              </AddedTag>
+                            ) : isSelected ? (
+                              <SelectedBadge>
+                                <FiCheck size={14} strokeWidth={3} />
+                              </SelectedBadge>
+                            ) : null}
+                          </PersonNameRow>
 
-                        {lifespan ? (
                           <PersonMetaRow>
-                            <PersonMeta>
-                              <FiCalendar size={11} />
-                              <span>{lifespan}</span>
-                            </PersonMeta>
+                            {lifespan ? (
+                              <PersonMeta>
+                                <FiCalendar size={11} />
+                                <span>{lifespan}</span>
+                              </PersonMeta>
+                            ) : (
+                              <PersonDates $empty>생몰 정보 없음</PersonDates>
+                            )}
+                            {countryName && (
+                              <PersonMeta>
+                                <FiMapPin size={11} />
+                                <span>
+                                  {flag ? `${flag} ` : ''}
+                                  {countryName}
+                                </span>
+                              </PersonMeta>
+                            )}
                           </PersonMetaRow>
-                        ) : (
-                          <PersonDates $empty>생몰 정보 없음</PersonDates>
-                        )}
-                      </PersonMainInfo>
-                    </PersonCard>
-                  )
-                })
+                        </PersonMainInfo>
+                      </PersonCard>
+                    )
+                  })}
+                </VirtualSizer>
               )}
             </PersonsList>
           </PersonsArea>
         </SplitModalBody>
+        )}
+
+        {!createMode && (
+          <ModalFooter>
+            <FooterHint aria-hidden>
+              <kbd>↑</kbd>
+              <kbd>↓</kbd>
+              이동
+              <FooterHintSep>·</FooterHintSep>
+              <kbd>↵</kbd>
+              선택
+              <FooterHintSep>·</FooterHintSep>
+              <kbd>esc</kbd>
+              닫기
+            </FooterHint>
+            {multiSelect && (
+              <FooterRight>
+                <FooterCount>
+                  {addedIds.size > 0
+                    ? `${addedIds.size}명 추가됨`
+                    : '추가할 인물을 선택하세요'}
+                </FooterCount>
+                <FooterDoneBtn type="button" onClick={onClose}>
+                  완료
+                </FooterDoneBtn>
+              </FooterRight>
+            )}
+          </ModalFooter>
         )}
       </ModalBox>
     </ModalOverlay>
@@ -641,6 +847,17 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
 
   return createPortal(modal, document.body)
 }
+
+/**
+ * 인디고 액센트 팔레트 — 앱 테마 primary(#6366f1) 계열을 한 곳에서 관리.
+ * 라이트/다크 동일 톤을 의도해 theme 토큰(다크 primary는 #636af2로 미세하게 다름) 대신
+ * 모듈 상수로 둔다. rgba(99,102,241,α) halo는 alpha가 제각각이라 인라인 유지.
+ */
+const ACCENT = '#6366f1' // 선택·강조 기본
+const ACCENT_STRONG = '#4f46e5' // hover/pressed
+const ACCENT_SOFT = '#818cf8' // 아바타 gradient 보조
+const ACCENT_BORDER = '#c7d2fe' // hover border (indigo-200)
+const ACCENT_TINT = '#eef2ff' // 라이트 선택 배경
 
 // Styled Components — z-index를 상위 모달보다 높게 해 서브 모달에서도 앞에 표시
 const ModalOverlay = styled.div`
@@ -724,8 +941,8 @@ const ModalCloseButton = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.15)' : '#eef2ff'};
-    color: #6366f1;
+    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.15)' : ACCENT_TINT};
+    color: ${ACCENT};
   }
   &:focus-visible {
     outline: none;
@@ -751,7 +968,7 @@ const CreateEntryBtn = styled.button`
   padding: 0 16px;
   font-size: 13px;
   font-weight: 600;
-  color: #4f46e5;
+  color: ${ACCENT_STRONG};
   background: ${({ theme }) =>
     theme.colors.alert.info.bg};
   border: 1px solid ${({ theme }) =>
@@ -765,8 +982,8 @@ const CreateEntryBtn = styled.button`
     border-color 0.15s;
   &:hover {
     color: #fff;
-    background: #6366f1;
-    border-color: #6366f1;
+    background: ${ACCENT};
+    border-color: ${ACCENT};
   }
 `
 
@@ -859,7 +1076,7 @@ const CreateFormInput = styled.input`
   border-radius: 10px;
   outline: none;
   &:focus {
-    border-color: #6366f1;
+    border-color: ${ACCENT};
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
   }
   &:disabled {
@@ -880,12 +1097,12 @@ const CreateFormChip = styled.button<{ $active?: boolean }>`
     $active ? '#fff' : theme.colors.text.secondary};
   background: ${({ $active, theme }) =>
     $active
-      ? '#6366f1'
+      ? ACCENT
       : theme.mode === 'dark'
         ? 'rgba(255,255,255,0.05)'
         : '#fff'};
   border: 1px solid ${({ $active, theme }) =>
-    $active ? '#6366f1' : theme.colors.border.default};
+    $active ? ACCENT : theme.colors.border.default};
   border-radius: 999px;
   cursor: pointer;
   transition:
@@ -893,7 +1110,7 @@ const CreateFormChip = styled.button<{ $active?: boolean }>`
     color 0.15s,
     border-color 0.15s;
   &:hover:not(:disabled) {
-    border-color: ${({ $active }) => ($active ? '#4f46e5' : '#a5b4fc')};
+    border-color: ${({ $active }) => ($active ? ACCENT_STRONG : '#a5b4fc')};
   }
   &:disabled {
     opacity: 0.5;
@@ -935,16 +1152,16 @@ const CreateFormSubmitBtn = styled.button`
   font-size: 13px;
   font-weight: 700;
   color: #fff;
-  background: #6366f1;
-  border: 1px solid #6366f1;
+  background: ${ACCENT};
+  border: 1px solid ${ACCENT};
   border-radius: 10px;
   cursor: pointer;
   transition:
     background 0.15s,
     border-color 0.15s;
   &:hover:not(:disabled) {
-    background: #4f46e5;
-    border-color: #4f46e5;
+    background: ${ACCENT_STRONG};
+    border-color: ${ACCENT_STRONG};
   }
   &:disabled {
     opacity: 0.5;
@@ -966,7 +1183,7 @@ const SearchWrapper = styled.div`
   }
 
   &:focus-within .search-icon {
-    color: #6366f1;
+    color: ${ACCENT};
   }
 `
 
@@ -988,14 +1205,15 @@ const SearchInput = styled.input`
 
   &:focus {
     background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#ffffff'};
-    border-color: #6366f1;
+    border-color: ${ACCENT};
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
   }
 `
 
-const SplitModalBody = styled.div`
+const SplitModalBody = styled.div<{ $noSidebar?: boolean }>`
   display: grid;
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: ${({ $noSidebar }) =>
+    $noSidebar ? '1fr' : '200px 1fr'};
   flex: 1;
   min-height: 0;
   max-height: 56vh;
@@ -1050,7 +1268,7 @@ const FilterBadge = styled.span`
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  background: #6366f1;
+  background: ${ACCENT};
   color: #ffffff;
   font-size: 11px;
   font-weight: 700;
@@ -1074,7 +1292,7 @@ const FilterLabel = styled.label`
   margin-bottom: 8px;
 
   svg {
-    color: #6366f1;
+    color: ${ACCENT};
     opacity: 0.9;
   }
 `
@@ -1093,10 +1311,10 @@ const FilterSelect = styled.select`
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: #c7d2fe;
+    border-color: ${ACCENT_BORDER};
   }
   &:focus {
-    border-color: #6366f1;
+    border-color: ${ACCENT};
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
   }
 `
@@ -1117,15 +1335,15 @@ const ResetFiltersButton = styled.button`
   padding: 10px 12px;
   font-size: 12px;
   font-weight: 600;
-  color: #6366f1;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
+  color: ${ACCENT};
+  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : ACCENT_TINT};
   border: none;
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: #c7d2fe;
+    background: ${ACCENT_BORDER};
     color: #ffffff;
   }
 `
@@ -1137,8 +1355,35 @@ const PersonsArea = styled.div`
 `
 
 const PersonsHeader = styled.div`
-  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const HeaderSortSelect = styled.select`
+  flex-shrink: 0;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#ffffff'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 9px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: ${ACCENT_BORDER};
+  }
+  &:focus {
+    border-color: ${ACCENT};
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+  }
 `
 
 const ResultCount = styled.div`
@@ -1147,7 +1392,7 @@ const ResultCount = styled.div`
   color: ${({ theme }) => theme.colors.text.secondary};
 
   .count {
-    color: #6366f1;
+    color: ${ACCENT};
     font-weight: 700;
   }
   .total {
@@ -1165,10 +1410,7 @@ const EmptyMessage = styled.span`
 const PersonsList = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 18px 28px 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  padding: 10px 20px 18px;
 
   &::-webkit-scrollbar {
     width: 8px;
@@ -1184,6 +1426,12 @@ const PersonsList = styled.div`
   &::-webkit-scrollbar-thumb:hover {
     background: ${({ theme }) => theme.colors.text.tertiary};
   }
+`
+
+/** 가상 스크롤 총 높이를 잡는 relative 컨테이너 — 자식 행은 absolute + translateY. */
+const VirtualSizer = styled.div`
+  position: relative;
+  width: 100%;
 `
 
 const EmptyState = styled.div`
@@ -1221,50 +1469,187 @@ const EmptySub = styled.p`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const PersonCard = styled.button<{ $selected: boolean }>`
+const PersonCard = styled.button<{
+  $selected: boolean
+  $added?: boolean
+  $active?: boolean
+}>`
   width: 100%;
   display: flex;
   align-items: center;
-  padding: 16px 20px;
-  background: ${({ $selected, theme }) =>
+  padding: 9px 12px;
+  background: ${({ $selected, $active, theme }) =>
     $selected
-      ? theme.mode === 'dark' ? 'rgba(99,102,241,0.15)' : '#eef2ff'
-      : theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
+      ? theme.mode === 'dark' ? 'rgba(99,102,241,0.15)' : ACCENT_TINT
+      : $active
+        ? theme.colors.background.secondary
+        : 'transparent'};
   border: 1px solid
-    ${({ $selected, theme }) =>
-      $selected ? '#6366f1' : theme.colors.border.light};
-  border-radius: 14px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    ${({ $selected, $active, theme }) =>
+      $selected ? ACCENT : $active ? ACCENT_BORDER : 'transparent'};
+  border-radius: 10px;
+  cursor: ${({ $added }) => ($added ? 'default' : 'pointer')};
+  opacity: ${({ $added }) => ($added ? 0.6 : 1)};
+  /* transform은 가상 스크롤 위치 지정용 — transition에서 제외해야 스크롤 잼이 없다. */
+  transition:
+    background 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   text-align: left;
   box-shadow: ${({ $selected }) =>
     $selected ? '0 0 0 2px rgba(99, 102, 241, 0.2)' : 'none'};
 
   &:hover {
-    border-color: ${({ $selected }) =>
-      $selected ? '#6366f1' : '#c7d2fe'};
+    border-color: ${({ $selected }) => ($selected ? ACCENT : ACCENT_BORDER)};
     background: ${({ $selected, theme }) =>
       $selected
-        ? theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#eef2ff'
+        ? theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : ACCENT_TINT
         : theme.colors.background.secondary};
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
   }
   &:focus-visible {
     outline: none;
-    border-color: #6366f1;
+    border-color: ${ACCENT};
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+  }
+  &:disabled {
+    pointer-events: none;
+  }
+`
+
+const AddedTag = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  border-radius: 999px;
+  flex-shrink: 0;
+  white-space: nowrap;
+
+  svg {
+    color: #22c55e;
+  }
+`
+
+const LoadingState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 64px 24px;
+`
+
+const SpinnerIcon = styled.div`
+  color: ${ACCENT};
+  display: flex;
+  animation: spin 0.9s linear infinite;
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+`
+
+const ModalFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 24px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.03)'
+      : 'linear-gradient(0deg, #fafbff 0%, #ffffff 100%)'};
+`
+
+const FooterHint = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#ffffff'};
+    border: 1px solid ${({ theme }) => theme.colors.border.default};
+    border-radius: 5px;
+    box-shadow: 0 1px 0 ${({ theme }) => theme.colors.border.default};
+  }
+
+  /* 터치 환경엔 물리 키가 없으니 숨김 */
+  @media (hover: none) {
+    display: none;
+  }
+`
+
+const FooterHintSep = styled.span`
+  margin: 0 3px;
+  opacity: 0.6;
+`
+
+const FooterRight = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+`
+
+const FooterCount = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const FooterDoneBtn = styled.button`
+  padding: 10px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: ${ACCENT};
+  border: 1px solid ${ACCENT};
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+  &:hover {
+    background: ${ACCENT_STRONG};
+    border-color: ${ACCENT_STRONG};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.35);
   }
 `
 
 const PersonAvatar = styled.div<{ $selected?: boolean }>`
-  width: 48px;
-  height: 48px;
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: ${({ $selected, theme }) =>
     $selected
-      ? 'linear-gradient(135deg, #6366f1 0%, #818cf8 100%)'
+      ? `linear-gradient(135deg, ${ACCENT} 0%, ${ACCENT_SOFT} 100%)`
       : theme.mode === 'dark'
         ? 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%)'
         : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'};
@@ -1280,27 +1665,34 @@ const PersonAvatar = styled.div<{ $selected?: boolean }>`
   }
 `
 
+const AvatarInitial = styled.span`
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+`
+
 const PersonMainInfo = styled.div`
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-left: 16px;
+  gap: 2px;
+  margin-left: 12px;
 `
 
 const PersonNameRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 `
 
 const PersonName = styled.div`
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   line-height: 1.3;
 `
 
@@ -1310,7 +1702,7 @@ const SelectedBadge = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #6366f1;
+  background: ${ACCENT};
   color: #ffffff;
   border-radius: 50%;
   flex-shrink: 0;
