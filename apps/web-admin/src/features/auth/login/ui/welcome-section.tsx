@@ -1,5 +1,10 @@
 import React, { useMemo } from 'react'
+
 import * as S from './welcome-section.styles'
+
+/** 환경변수 미설정 시 사용할 기본 앱 표시명 */
+const DEFAULT_APP_TITLE = 'PAPYRUS'
+const APP_TITLE = import.meta.env.VITE_APP_TITLE?.trim() || DEFAULT_APP_TITLE
 
 /**
  * 환영 섹션 컴포넌트
@@ -17,7 +22,7 @@ export const WelcomeSection: React.FC = React.memo(() => {
           color: 'transparent',
         }}
       >
-        CIVILIZATION
+        {APP_TITLE}
       </span>
     ),
     [],

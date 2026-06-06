@@ -1,5 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
+import {
+  AlertTriangleIcon,
+  BrokenLinkIcon,
+  BulbIcon,
+  RefreshIcon,
+  SparkleIcon,
+  TerminalIcon,
+  WifiIcon,
+} from './error-handler.icons'
 import * as S from './error-handler.styles'
 
 // 진입 애니메이션 표시 지연 / 퇴장 후 액션 실행 지연 (CSS 전환 시간과 맞춤)
@@ -25,10 +34,17 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
   const [isVisible, setIsVisible] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const isDevelopment = process.env.NODE_ENV === 'development'
+  const primaryActionRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), ENTER_DELAY_MS)
     return () => clearTimeout(timer)
+  }, [error])
+
+  // 에러 표시 시 포커스를 주요 액션으로 이동.
+  // 키보드/스크린리더 사용자가 (가려진) 이전 페이지에 갇히지 않고 즉시 인지·조작.
+  useEffect(() => {
+    primaryActionRef.current?.focus()
   }, [error])
 
   const handleReload = () => {
@@ -42,7 +58,7 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
     setTimeout(() => resetErrorBoundary(), EXIT_DELAY_MS)
   }
 
-  const toggleDetails = () => setShowDetails((v) => !v)
+  const toggleDetails = () => setShowDetails((prev) => !prev)
 
   return (
     <S.Wrapper $isVisible={isVisible}>
@@ -60,7 +76,9 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
                 <S.RobotMouth />
               </S.RobotHead>
             </S.Robot>
-            <S.HeartIcon>💔</S.HeartIcon>
+            <S.HeartIcon>
+              <BrokenLinkIcon />
+            </S.HeartIcon>
           </S.ErrorIllustration>
         </S.IllustrationContainer>
 
@@ -80,6 +98,7 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
             <S.ActionButtons>
               {resetErrorBoundary && (
                 <S.ActionButton
+                  ref={primaryActionRef}
                   type="button"
                   onClick={handleRetry}
                   $variant="primary"
@@ -107,6 +126,7 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
               )}
 
               <S.ActionButton
+                ref={resetErrorBoundary ? undefined : primaryActionRef}
                 type="button"
                 onClick={handleReload}
                 $variant="secondary"
@@ -136,18 +156,29 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
 
           <S.SidePanel>
             <S.HelpSection>
-              <S.HelpTitle>💡 해결 방안</S.HelpTitle>
+              <S.HelpTitle>
+                <S.TitleIcon>
+                  <BulbIcon />
+                </S.TitleIcon>
+                해결 방안
+              </S.HelpTitle>
               <S.HelpList>
                 <S.HelpItem>
-                  <S.HelpIcon>🔄</S.HelpIcon>
+                  <S.HelpIcon>
+                    <RefreshIcon />
+                  </S.HelpIcon>
                   <span>잠시 후 다시 시도해보시게</span>
                 </S.HelpItem>
                 <S.HelpItem>
-                  <S.HelpIcon>🌐</S.HelpIcon>
+                  <S.HelpIcon>
+                    <WifiIcon />
+                  </S.HelpIcon>
                   <span>네트워크 연결을 확인하시게</span>
                 </S.HelpItem>
                 <S.HelpItem>
-                  <S.HelpIcon>🧹</S.HelpIcon>
+                  <S.HelpIcon>
+                    <SparkleIcon />
+                  </S.HelpIcon>
                   <span>브라우저 기록을 지워보시게</span>
                 </S.HelpItem>
               </S.HelpList>
@@ -155,7 +186,9 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
 
             <S.ErrorInfo>
               <S.ErrorBadge>
-                <S.ErrorIcon>⚠️</S.ErrorIcon>
+                <S.ErrorIcon>
+                  <AlertTriangleIcon />
+                </S.ErrorIcon>
                 {error.name}
               </S.ErrorBadge>
 
@@ -186,7 +219,12 @@ export function ErrorHandler({ error, resetErrorBoundary }: ErrorHandlerProps) {
         {isDevelopment && showDetails && (
           <S.DevDetails $isOpen={showDetails}>
             <S.DevHeader>
-              <S.DevTitle>🔧 기술자를 위한 정보</S.DevTitle>
+              <S.DevTitle>
+                <S.TitleIcon>
+                  <TerminalIcon />
+                </S.TitleIcon>
+                기술자를 위한 정보
+              </S.DevTitle>
             </S.DevHeader>
             <S.DevContent>
               <S.ErrorMessage>{error.message}</S.ErrorMessage>

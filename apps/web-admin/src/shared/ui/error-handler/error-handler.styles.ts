@@ -1,5 +1,14 @@
 import styled, { keyframes, css } from 'styled-components'
 
+import { Z_INDEX } from '@/shared/styles/z-index'
+
+// --- 액센트 토큰 ---
+// 전면 레드 대신 "복구 가능" 톤의 앰버를 단일 액센트로 사용.
+// 표면은 뉴트럴 글래스, 액센트는 상태/주요 액션에만 한정한다.
+const ACCENT = '#f59e0b' // amber-500
+const ACCENT_STRONG = '#d97706' // amber-600
+const ACCENT_GLOW = 'rgba(245, 158, 11, 0.28)'
+
 // --- 키프레임 애니메이션 ---
 const slideUp = keyframes`
   from {
@@ -55,13 +64,16 @@ const slideDown = keyframes`
 export const Wrapper = styled.div.attrs({ role: 'alert' })<{
   $isVisible: boolean
 }>`
-  position: relative;
+  position: fixed;
+  inset: 0;
+  z-index: ${Z_INDEX.LOADING_OVERLAY};
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  /* 카드가 뷰포트보다 길어도(예: dev 스택트레이스) 잘리지 않고 스크롤되도록 */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 24px;
-  overflow: hidden;
   background: linear-gradient(135deg, #0f1115 0%, #12151a 50%, #0b0d11 100%);
 
   opacity: ${({ $isVisible }) => ($isVisible ? 1 : 0)};
@@ -70,16 +82,23 @@ export const Wrapper = styled.div.attrs({ role: 'alert' })<{
   &::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: radial-gradient(
-      circle at 80% 20%,
-      rgba(0, 0, 0, 0.25) 0%,
-      transparent 55%
-    );
+    inset: 0;
+    /* 상단 앰버 글로우 + 우상단 음영으로 단색 배경에 깊이감 부여 */
+    background:
+      radial-gradient(circle at 50% -10%, ${ACCENT_GLOW} 0%, transparent 45%),
+      radial-gradient(circle at 80% 20%, rgba(0, 0, 0, 0.25) 0%, transparent 55%);
     pointer-events: none;
+  }
+
+  /* 전정기관 장애 사용자 배려 — 무한 애니메이션·전환 정지 */
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    &,
+    & * {
+      animation: none !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 `
 
@@ -95,16 +114,22 @@ export const FloatingElements = styled.div`
 
 export const ErrorCard = styled.div<{ $isVisible: boolean }>`
   position: relative;
+  /* margin:auto — 공간이 있으면 중앙 정렬, 부족하면 위 잘림 없이 스크롤 */
+  margin: auto;
   max-width: 600px;
   width: 100%;
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* 단색 배경 위라 backdrop-filter는 효과가 없어 제거하고,
+     실제 면 색 그라데이션 + 강한 그림자로 깊이감을 만든다. */
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.025) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 24px;
   box-shadow:
-    0 25px 50px -12px rgba(0, 0, 0, 0.5),
-    0 8px 32px 0 rgba(0, 0, 0, 0.15);
+    0 24px 60px -16px rgba(0, 0, 0, 0.6),
+    0 4px 16px rgba(0, 0, 0, 0.25);
   overflow: hidden;
   padding: 3rem 2.5rem;
 
@@ -166,7 +191,7 @@ export const Robot = styled.div`
 export const RobotHead = styled.div`
   width: 80px;
   height: 80px;
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  background: linear-gradient(135deg, ${ACCENT} 0%, ${ACCENT_STRONG} 100%);
   border-radius: 16px;
   display: flex;
   align-items: center;
@@ -174,7 +199,7 @@ export const RobotHead = styled.div`
   flex-direction: column;
   gap: 8px;
   box-shadow:
-    0 8px 24px rgba(239, 68, 68, 0.35),
+    0 8px 24px ${ACCENT_GLOW},
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
   animation: ${float} 3s ease-in-out infinite;
 `
@@ -200,9 +225,11 @@ export const RobotMouth = styled.div`
 `
 
 export const HeartIcon = styled.div`
-  font-size: 32px;
+  width: 30px;
+  height: 30px;
+  color: ${ACCENT};
   animation: ${pulse} 2s ease-in-out infinite;
-  filter: drop-shadow(0 4px 8px rgba(239, 68, 68, 0.4));
+  filter: drop-shadow(0 4px 8px ${ACCENT_GLOW});
 `
 
 export const ContentContainer = styled.div`
@@ -224,13 +251,13 @@ export const StatusBadge = styled.div`
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
+  background: linear-gradient(135deg, ${ACCENT} 0%, ${ACCENT_STRONG} 100%);
+  color: #1c1206;
   border-radius: 50px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   width: fit-content;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 4px 12px ${ACCENT_GLOW};
   letter-spacing: 0.3px;
   text-transform: uppercase;
 `
@@ -238,7 +265,7 @@ export const StatusBadge = styled.div`
 export const StatusDot = styled.div`
   width: 6px;
   height: 6px;
-  background: white;
+  background: #1c1206;
   border-radius: 50%;
   animation: ${pulse} 2s ease-in-out infinite;
 `
@@ -291,17 +318,17 @@ export const ActionButton = styled.button<{
   ${({ $variant }) =>
     $variant === 'primary'
       ? css`
-          background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-          color: white;
+          background: linear-gradient(135deg, ${ACCENT} 0%, ${ACCENT_STRONG} 100%);
+          color: #1c1206;
           box-shadow:
-            0 4px 16px rgba(239, 68, 68, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            0 4px 16px ${ACCENT_GLOW},
+            inset 0 1px 0 rgba(255, 255, 255, 0.25);
 
           &:hover {
-            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            background: linear-gradient(135deg, ${ACCENT_STRONG} 0%, #b45309 100%);
             transform: translateY(-2px);
             box-shadow:
-              0 8px 24px rgba(239, 68, 68, 0.4),
+              0 8px 24px ${ACCENT_GLOW},
               inset 0 1px 0 rgba(255, 255, 255, 0.3);
           }
         `
@@ -320,6 +347,12 @@ export const ActionButton = styled.button<{
 
   &:active {
     transform: translateY(0);
+  }
+
+  /* 키보드 포커스 가시화 — 에러 화면은 키보드 의존도가 높음 */
+  &:focus-visible {
+    outline: 2px solid ${ACCENT};
+    outline-offset: 2px;
   }
 `
 
@@ -351,11 +384,23 @@ export const HelpSection = styled.div`
 `
 
 export const HelpTitle = styled.h3`
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
   font-weight: 700;
   color: #f9fafb;
   margin: 0 0 16px 0;
   letter-spacing: 0.3px;
+`
+
+/** 타이틀 앞 인라인 아이콘 슬롯 (전구/터미널) */
+export const TitleIcon = styled.span`
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  color: ${ACCENT};
+  flex-shrink: 0;
 `
 
 export const HelpList = styled.div`
@@ -374,12 +419,12 @@ export const HelpItem = styled.div`
 `
 
 export const HelpIcon = styled.span`
-  font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
+  color: ${ACCENT};
   flex-shrink: 0;
 `
 
@@ -394,16 +439,19 @@ export const ErrorBadge = styled.div`
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
   border-radius: 12px;
-  color: #fca5a5;
+  color: #fcd34d;
   font-size: 13px;
   font-weight: 600;
 `
 
 export const ErrorIcon = styled.span`
-  font-size: 16px;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 `
 
 export const DetailsToggle = styled.button`
@@ -429,6 +477,11 @@ export const DetailsToggle = styled.button`
 
   &:active {
     transform: translateY(0);
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${ACCENT};
+    outline-offset: 2px;
   }
 `
 
@@ -460,6 +513,9 @@ export const DevHeader = styled.div`
 `
 
 export const DevTitle = styled.h3`
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
   font-weight: 700;
   color: #f9fafb;

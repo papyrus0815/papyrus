@@ -31,6 +31,12 @@ export const ROUTES = {
   // 인물 묶음 (세대·계파·사단 등) 허브
   PERSON_GROUPS: 'person-groups',
 
+  // 게이미피케이션 리더보드
+  LEADERBOARD: 'leaderboard',
+
+  // 내 프로필 (계정 정보·등급·뱃지)
+  PROFILE: 'profile',
+
   // Error Pages
   PAGE_404: '404',
 } as const

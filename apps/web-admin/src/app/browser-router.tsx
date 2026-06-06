@@ -28,6 +28,9 @@ import ContentLayout from '@/widgets/content-layout/content-layout.ui'
 import { layoutLoader } from '@/pages/layout/layout.loader'
 import Layout from '@/pages/layout/layout.ui'
 import { genealogyRoute } from '@/pages/genealogy/genealogy.route'
+import { leaderboardRoute } from '@/pages/leaderboard/leaderboard.route'
+import { profileRoute } from '@/pages/profile/profile.route'
+import { publicProfileRoute } from '@/pages/public-profile/public-profile.route'
 import { personsRoute } from '@/pages/persons/person.route'
 import { loginPageRoute } from '@/pages/login/login-page.route'
 import { page404Route } from '@/pages/page-404/page-404.route'
@@ -166,6 +169,12 @@ const appRouterConfig = [
           personsRoute,
           // 가문 — 풀 페이지
           dynastyRoute,
+          // 게이미피케이션 리더보드
+          leaderboardRoute,
+          // 내 프로필 (계정 정보·등급·뱃지)
+          profileRoute,
+          // 공개 프로필 (타 사용자) — /profile/:accountId
+          publicProfileRoute,
           // 인물 묶음(세대·계파·사단) 허브
           ...personGroupsRoutes,
           // 행정기구·조직 라우트

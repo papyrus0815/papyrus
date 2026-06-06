@@ -18,6 +18,11 @@ export const pathKeys = {
   page404: () => `/${ROUTES.PAGE_404}/`,
   /** 가문 풀 페이지 */
   dynasty: () => `/dynasty`,
+  /** 게이미피케이션 리더보드 */
+  leaderboard: () => `/${ROUTES.LEADERBOARD}/`,
+  /** 공개 프로필(타 사용자) */
+  publicProfile: (accountId: string) =>
+    `/${ROUTES.PROFILE}/${encodeURIComponent(accountId)}`,
 
   /** 인물 묶음(세대·계파·사단) 허브 목록 */
   personGroups: (params?: { type?: string; countryId?: string }) => {

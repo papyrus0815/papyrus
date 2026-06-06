@@ -2,7 +2,7 @@ import React from 'react'
 
 import { FiChevronRight, FiFilter } from 'react-icons/fi'
 
-import { usePersons } from '@/entities/person/api'
+import { usePersonsInfographic } from '@/entities/person/api'
 import { PersonFilterPanel } from '@/widgets/person-infographic'
 
 import type { DashboardContentView } from '../model/dashboard-menu-items'
@@ -24,9 +24,9 @@ export function LeftFilterSlot({
   collapsed = false,
   onToggleCollapse,
 }: LeftFilterSlotProps) {
-  // person view에서 count 표시 (PersonFilterPanel과 캐시 공유 — 추가 fetch 없음)
-  const { data: rawPersons } = usePersons()
-  const personCount = (rawPersons as unknown[] | undefined)?.length ?? 0
+  // person view에서 count 표시 (PersonFilterPanel과 경량 인포그래픽 캐시 공유 — 추가 fetch 없음)
+  const { data: rawPersons } = usePersonsInfographic()
+  const personCount = rawPersons?.length ?? 0
 
   if (collapsed) {
     return (
