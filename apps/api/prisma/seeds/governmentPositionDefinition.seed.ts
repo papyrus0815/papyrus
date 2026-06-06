@@ -24,7 +24,7 @@ const DEFINITIONS: {
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '국가주석', titleEn: 'President', titleLocal: '国家主席', rank: 1 },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '최고지도자(라흐바르)', titleEn: 'Supreme Leader (Rahbar)', titleLocal: 'رهبر', rank: 1 },
   // rank 2: 선출·의전 국가원수 / 제국 내 왕급 (신성로마제국 겸직)
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '대통령(연방)', titleEn: 'Federal President', rank: 2 },
+  // '대통령(연방)' 제거 — 일반 '대통령'(rank 1)으로 통합 (positionType 동일, 표시명만 달랐음)
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '선제후', titleEn: 'Prince-Elector', titleLocal: 'Kurfürst', rank: 2 },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '로마왕', titleEn: 'King of the Romans', titleLocal: 'Rex Romanorum', rank: 2 },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '이탈리아왕', titleEn: 'King of Italy', titleLocal: 'Rex Italiae', rank: 2 },
