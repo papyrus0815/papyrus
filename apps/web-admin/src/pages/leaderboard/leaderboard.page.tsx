@@ -21,6 +21,7 @@ import {
   gamificationActivityQueryOptions,
   gamificationBadgesQueryOptions,
   gamificationCenturiesQueryOptions,
+  gamificationCountriesQueryOptions,
   gamificationLeaderboardQueryOptions,
   gamificationSummaryQueryOptions,
   type CenturyFilter,
@@ -58,14 +59,16 @@ export default function LeaderboardPage() {
   const navigate = useNavigate()
   const [period, setPeriod] = useState<LeaderboardPeriod>('all')
   const [century, setCentury] = useState<CenturyFilter>(null)
+  const [country, setCountry] = useState<string | null>(null)
   const { data: summary, isError: summaryError } = useQuery(gamificationSummaryQueryOptions)
   const { data: badges, isError: badgesError } = useQuery(gamificationBadgesQueryOptions)
   const { data: centuries } = useQuery(gamificationCenturiesQueryOptions)
+  const { data: countries } = useQuery(gamificationCountriesQueryOptions)
   const {
     data: leaderboard,
     isLoading,
     isError,
-  } = useQuery(gamificationLeaderboardQueryOptions(100, period, century))
+  } = useQuery(gamificationLeaderboardQueryOptions(100, period, century, country))
   const { data: account } = useQuery(sessionQueryOptions)
   const { data: activity } = useQuery(gamificationActivityQueryOptions(8))
 
@@ -74,7 +77,7 @@ export default function LeaderboardPage() {
   const meInList = !!leaderboard?.some((r) => r.isMe)
   // all-time 전체(기간·세기 미적용)에서만 글로벌 순위 핀 사용. 기간/세기 슬라이스는
   // 백엔드가 해당 조건의 실제 순위로 내 행을 목록에 덧붙여주므로 글로벌 rank를 쓰면 안 됨.
-  const showMyRank = period === 'all' && century == null && !!summary?.rank && !meInList
+  const showMyRank = period === 'all' && century == null && country == null && !!summary?.rank && !meInList
   const earnedCount = badges?.filter((b) => b.earned).length ?? 0
   const podium = leaderboard?.slice(0, 3) ?? []
   const rest = leaderboard?.slice(3) ?? []
@@ -147,6 +150,24 @@ export default function LeaderboardPage() {
             <PanelHeader>
               <PanelTitle>명예의 전당</PanelTitle>
               <Controls>
+                {countries && countries.length > 0 && (
+                  <CenturySelect
+                    value={country ?? 'all'}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setCountry(v === 'all' ? null : v)
+                    }}
+                    aria-label="국가 슬라이스"
+                  >
+                    <option value="all">🏳️ 전체 국가</option>
+                    {countries.map((c) => (
+                      <option key={c.countryId} value={c.countryId}>
+                        {c.name}
+                        {c.historical ? ' (역사)' : ''} ({fmtNum(c.entryCount)})
+                      </option>
+                    ))}
+                  </CenturySelect>
+                )}
                 {centuries && centuries.length > 0 && (
                   <CenturySelect
                     value={century == null ? 'all' : String(century)}
@@ -191,9 +212,11 @@ export default function LeaderboardPage() {
             {isError && <Muted>랭킹을 불러오지 못했습니다.</Muted>}
             {leaderboard && leaderboard.length === 0 && (
               <Muted>
-                {century != null
-                  ? '이 세기에 기여한 사용자가 아직 없습니다. 관련 콘텐츠를 등록하면 첫 주인공이 됩니다!'
-                  : '아직 점수를 획득한 사용자가 없습니다. 첫 등록의 주인공이 되어보세요!'}
+                {country != null
+                  ? '이 국가에 기여한 사용자가 아직 없습니다. 관련 콘텐츠를 등록하면 첫 주인공이 됩니다!'
+                  : century != null
+                    ? '이 세기에 기여한 사용자가 아직 없습니다. 관련 콘텐츠를 등록하면 첫 주인공이 됩니다!'
+                    : '아직 점수를 획득한 사용자가 없습니다. 첫 등록의 주인공이 되어보세요!'}
               </Muted>
             )}
 

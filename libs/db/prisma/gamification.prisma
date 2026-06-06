@@ -52,6 +52,11 @@ model PointEntry {
   /// 적립 시점에 콘텐츠 날짜로 산출하며, 콘텐츠 날짜 수정 시 재스탬프된다.
   contentCentury Int? @map("content_century")
 
+  /// 대상 콘텐츠가 귀속되는 대표 국가 ID (국가별 리더보드/뱃지용 비정규화 스냅샷).
+  /// 현대 국가(Country) 또는 역사 국가(HistoricalCountry)의 PK — 둘은 별개 버킷으로 취급.
+  /// 인물=주 국적, 사건=주도국(INITIATOR), 국가/역사국가=자기 자신. 대표 국가가 없으면 null.
+  contentCountryId String? @map("content_country_id") @db.Char(36)
+
   account Account @relation(fields: [accountId], references: [id])
 
   /// 동일 (계정·콘텐츠·사유) 조합 중복 적립 차단 — 어뷰징/재시도 1차 방어선
@@ -62,6 +67,8 @@ model PointEntry {
   @@index([createdAt], name: "idx_point_entry_created_at")
   /// 세기별 리더보드 집계(contentCentury로 그룹/필터 + 계정별 합산)용
   @@index([contentCentury, accountId], name: "idx_point_entry_century")
+  /// 국가별 리더보드 집계(contentCountryId로 그룹/필터 + 계정별 합산)용
+  @@index([contentCountryId, accountId], name: "idx_point_entry_country")
   @@map("point_entry")
 }
 

@@ -81,6 +81,18 @@ export interface CenturyOptionResponseDto {
   entryCount: number
 }
 
+/** 국가 선택지 한 개 응답 (국가별 리더보드 셀렉터용) */
+export interface CountryOptionResponseDto {
+  /** 국가 ID (현대 Country 또는 역사 HistoricalCountry의 PK) */
+  countryId: string
+  /** 국가명 */
+  name: string
+  /** 역사 국가 여부 */
+  historical: boolean
+  /** 이 국가에 달린 net 기여(등록-회수) 수 */
+  entryCount: number
+}
+
 /** 활동 내역 한 줄 응답 */
 export interface ActivityEntryResponseDto {
   id: string
@@ -134,12 +146,13 @@ export class GamificationController {
   }
 
   @Get('leaderboard')
-  @ApiOperation({ summary: '리더보드 (기간별 all/week/month + 선택적 세기 슬라이스)' })
+  @ApiOperation({ summary: '리더보드 (기간별 all/week/month + 선택적 세기·국가 슬라이스)' })
   async leaderboard(
     @Req() req: any,
     @Query('limit') limit?: string,
     @Query('period') period?: string,
     @Query('century') century?: string,
+    @Query('country') country?: string,
   ): Promise<LeaderboardEntryResponseDto[]> {
     const userId = req.user?.userId ?? req.user?.id
     const n = limit != null ? parseInt(limit, 10) : 20
@@ -153,13 +166,21 @@ export class GamificationController {
       const parsed = parseInt(century, 10)
       if (Number.isFinite(parsed)) c = parsed
     }
-    return this.pointService.getLeaderboard(Number.isFinite(n) && n > 0 ? n : 20, userId, p, c)
+    // 국가 파라미터: Country/HistoricalCountry PK 문자열 | 미지정(전체)
+    const countryId = country != null && country !== '' ? country : undefined
+    return this.pointService.getLeaderboard(Number.isFinite(n) && n > 0 ? n : 20, userId, p, c, countryId)
   }
 
   @Get('centuries')
   @ApiOperation({ summary: '세기별 리더보드 셀렉터용 — 적립이 달린 세기 목록(건수 포함)' })
   async centuries(): Promise<CenturyOptionResponseDto[]> {
     return this.pointService.getAvailableCenturies()
+  }
+
+  @Get('countries')
+  @ApiOperation({ summary: '국가별 리더보드 셀렉터용 — 적립이 달린 국가 목록(건수 포함)' })
+  async countries(): Promise<CountryOptionResponseDto[]> {
+    return this.pointService.getAvailableCountries()
   }
 
   @Get('activity')

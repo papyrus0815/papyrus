@@ -18,6 +18,12 @@ export type BadgeCode =
   | 'COUNTRY_5'
   | 'STREAK_3'
   | 'STREAK_7'
+  | 'COUNTRY_SPECIALIST_10'
+  | 'COUNTRY_SPECIALIST_30'
+  | 'COUNTRY_SPECIALIST_50'
+  | 'CENTURY_SPECIALIST_10'
+  | 'CENTURY_SPECIALIST_30'
+  | 'CENTURY_SPECIALIST_50'
 
 /** 뱃지 평가에 필요한 계정 통계 */
 export interface BadgeStats {
@@ -29,6 +35,10 @@ export interface BadgeStats {
   countByType: Partial<Record<AggregateType, number>>
   /** 현재 연속 등록 일수 */
   streakDays: number
+  /** 단일 국가에 기여한 최대 net 등록 수 (지역 전문가 뱃지용) */
+  maxCountryContribution: number
+  /** 단일 세기에 기여한 최대 net 등록 수 (시대 전문가 뱃지용) */
+  maxCenturyContribution: number
 }
 
 export interface BadgeDef {
@@ -136,6 +146,54 @@ export const BADGE_DEFS: ReadonlyArray<BadgeDef> = [
     color: '#DC2626',
     metric: (s) => s.streakDays,
     target: 7,
+  },
+  {
+    code: 'COUNTRY_SPECIALIST_10',
+    label: '지역 전문가',
+    description: '한 국가에 콘텐츠 10건 등록',
+    color: '#0D9488',
+    metric: (s) => s.maxCountryContribution,
+    target: 10,
+  },
+  {
+    code: 'COUNTRY_SPECIALIST_30',
+    label: '지역 권위자',
+    description: '한 국가에 콘텐츠 30건 등록',
+    color: '#7C3AED',
+    metric: (s) => s.maxCountryContribution,
+    target: 30,
+  },
+  {
+    code: 'COUNTRY_SPECIALIST_50',
+    label: '지역 대가',
+    description: '한 국가에 콘텐츠 50건 등록',
+    color: '#B91C1C',
+    metric: (s) => s.maxCountryContribution,
+    target: 50,
+  },
+  {
+    code: 'CENTURY_SPECIALIST_10',
+    label: '시대 전문가',
+    description: '한 세기에 콘텐츠 10건 등록',
+    color: '#2563EB',
+    metric: (s) => s.maxCenturyContribution,
+    target: 10,
+  },
+  {
+    code: 'CENTURY_SPECIALIST_30',
+    label: '시대 권위자',
+    description: '한 세기에 콘텐츠 30건 등록',
+    color: '#9333EA',
+    metric: (s) => s.maxCenturyContribution,
+    target: 30,
+  },
+  {
+    code: 'CENTURY_SPECIALIST_50',
+    label: '시대 대가',
+    description: '한 세기에 콘텐츠 50건 등록',
+    color: '#C2410C',
+    metric: (s) => s.maxCenturyContribution,
+    target: 50,
   },
 ]
 

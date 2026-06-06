@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { AggregateType, PointReason, Prisma } from '@prisma/client'
+import { AggregateType, EventCountryRole, PointReason, Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import { createPointsFor, gradeForPoints, gradeProgressFor, GradeProgress } from '../domain/point.policy'
 import { BADGE_DEFS, BadgeStats, badgeProgress, earnedBadgeCodes } from '../domain/badge.policy'
@@ -72,6 +72,18 @@ export interface CenturyOption {
   entryCount: number
 }
 
+/** 국가 선택지 한 개 (국가별 리더보드 셀렉터용) */
+export interface CountryOption {
+  /** 국가 ID (현대 Country 또는 역사 HistoricalCountry의 PK) */
+  countryId: string
+  /** 국가명 */
+  name: string
+  /** 역사 국가 여부(현대 Country면 false) */
+  historical: boolean
+  /** 이 국가에 달린 net 기여(등록-회수) 수 */
+  entryCount: number
+}
+
 /** 활동 내역 한 줄 */
 export interface ActivityEntry {
   id: string
@@ -135,9 +147,10 @@ export class PointService {
     if (!accountId) return
     const base = createPointsFor(ownerType)
     const contentCentury = await this.resolveContentCentury(ownerType, recordId)
+    const contentCountryId = await this.resolveContentCountry(ownerType, recordId)
     const data: Prisma.PointEntryCreateManyInput[] = []
     if (base > 0) {
-      data.push({ accountId, ownerType, recordId, reason: PointReason.CREATE_CONTENT, amount: base, contentCentury })
+      data.push({ accountId, ownerType, recordId, reason: PointReason.CREATE_CONTENT, amount: base, contentCentury, contentCountryId })
     }
     if (completenessAmount > 0) {
       data.push({
@@ -147,6 +160,7 @@ export class PointService {
         reason: PointReason.COMPLETENESS_BONUS,
         amount: completenessAmount,
         contentCentury,
+        contentCountryId,
       })
     }
     if (data.length === 0) return
@@ -156,8 +170,9 @@ export class PointService {
       await this.prisma.$transaction(async (tx) => {
         const res = await tx.pointEntry.createMany({ data, skipDuplicates: true })
         changed = res.count > 0
-        // 세기는 record당 동일 — 콘텐츠 날짜가 바뀌었을 수 있어 기존 행까지 최신값으로 정합화.
+        // 세기·국가는 record당 동일 — 콘텐츠 메타가 바뀌었을 수 있어 기존 행까지 최신값으로 정합화.
         await this.stampCenturyForRecord(tx, ownerType, recordId, contentCentury)
+        await this.stampCountryForRecord(tx, ownerType, recordId, contentCountryId)
         if (changed) await this.recalcAccount(tx, accountId)
       })
     } catch (error) {
@@ -194,13 +209,15 @@ export class PointService {
     amount: number,
   ): Promise<boolean> {
     const contentCentury = await this.resolveContentCentury(ownerType, recordId)
+    const contentCountryId = await this.resolveContentCountry(ownerType, recordId)
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.pointEntry.create({
-          data: { accountId, ownerType, recordId, reason, amount, contentCentury },
+          data: { accountId, ownerType, recordId, reason, amount, contentCentury, contentCountryId },
         })
-        // 보너스 적립은 등록·수정 양쪽에서 호출 — 날짜 수정 시 record 전체 세기 재스탬프.
+        // 보너스 적립은 등록·수정 양쪽에서 호출 — 메타 수정 시 record 전체 세기·국가 재스탬프.
         await this.stampCenturyForRecord(tx, ownerType, recordId, contentCentury)
+        await this.stampCountryForRecord(tx, ownerType, recordId, contentCountryId)
         await this.recalcAccount(tx, accountId)
       })
       return true
@@ -223,10 +240,11 @@ export class PointService {
     try {
       const entries = await this.prisma.pointEntry.findMany({
         where: { ownerType, recordId },
-        select: { accountId: true, amount: true, contentCentury: true },
+        select: { accountId: true, amount: true, contentCentury: true, contentCountryId: true },
       })
-      // 세기는 record당 동일 — 기존 행에서 가져와 회수(음수) 행에도 동일하게 박는다(세기별 net 정합).
+      // 세기·국가는 record당 동일 — 기존 행에서 가져와 회수(음수) 행에도 동일하게 박는다(슬라이스별 net 정합).
       const recordCentury = entries.find((e) => e.contentCentury != null)?.contentCentury ?? null
+      const recordCountryId = entries.find((e) => e.contentCountryId != null)?.contentCountryId ?? null
       const netByAccount = new Map<string, number>()
       for (const e of entries) {
         netByAccount.set(e.accountId, (netByAccount.get(e.accountId) ?? 0) + e.amount)
@@ -244,6 +262,7 @@ export class PointService {
                 reason: PointReason.CONTENT_DELETED,
                 amount: -net,
                 contentCentury: recordCentury,
+                contentCountryId: recordCountryId,
               },
             })
             await this.recalcAccount(tx, accountId)
@@ -356,12 +375,14 @@ export class PointService {
     meId?: string,
     period: LeaderboardPeriod = 'all',
     century?: CenturyFilter,
+    country?: string,
   ): Promise<LeaderboardEntry[]> {
     const take = Math.min(Math.max(1, limit), 100)
     const start = startOfPeriod(period)
     const hasCentury = century !== undefined
+    const hasCountry = !!country
 
-    if (!start && !hasCentury) {
+    if (!start && !hasCentury && !hasCountry) {
       const rows = await this.prisma.account.findMany({
         where: { totalPoints: { gt: 0 } },
         orderBy: [{ totalPoints: 'desc' }, { createdAt: 'asc' }],
@@ -388,13 +409,14 @@ export class PointService {
       }))
     }
 
-    // 캐시 미사용 경로: 기간/세기 조건으로 PointEntry 합산
+    // 캐시 미사용 경로: 기간/세기/국가 조건으로 PointEntry 합산
     const centuryWhere = hasCentury
       ? { contentCentury: century === 'unknown' ? null : century }
       : {}
+    const countryWhere = hasCountry ? { contentCountryId: country } : {}
     const sums = await this.prisma.pointEntry.groupBy({
       by: ['accountId'],
-      where: { ...(start ? { createdAt: { gte: start } } : {}), ...centuryWhere },
+      where: { ...(start ? { createdAt: { gte: start } } : {}), ...centuryWhere, ...countryWhere },
       _sum: { amount: true },
     })
     const ranked = sums
@@ -415,7 +437,7 @@ export class PointService {
         where: { id: { in: ids } },
         select: { id: true, username: true, displayName: true, gradeCode: true, representativePerson: { select: { profileImageUrl: true } } },
       }),
-      this.contributionCounts(ids, start, century),
+      this.contributionCounts(ids, start, century, country),
     ])
     const accMap = new Map(accounts.map((a) => [a.id, a]))
 
@@ -482,11 +504,49 @@ export class PointService {
     return dated
   }
 
+  /**
+   * 국가별 리더보드 셀렉터용 — 살아있는 기여가 달린 국가 목록(net>0, 내림차순).
+   * 현대/역사 국가를 모두 포함하며, 이름은 각 테이블에서 해석한다.
+   */
+  async getAvailableCountries(): Promise<CountryOption[]> {
+    const grouped = await this.prisma.pointEntry.groupBy({
+      by: ['contentCountryId', 'reason'],
+      where: {
+        reason: { in: [PointReason.CREATE_CONTENT, PointReason.CONTENT_DELETED] },
+        contentCountryId: { not: null },
+      },
+      _count: { _all: true },
+    })
+    const netById = new Map<string, number>()
+    for (const g of grouped) {
+      if (!g.contentCountryId) continue
+      const sign = g.reason === PointReason.CREATE_CONTENT ? 1 : -1
+      netById.set(g.contentCountryId, (netById.get(g.contentCountryId) ?? 0) + sign * g._count._all)
+    }
+    const ids = [...netById.entries()].filter(([, n]) => n > 0).map(([id]) => id)
+    if (ids.length === 0) return []
+    const [countries, historical] = await Promise.all([
+      this.prisma.country.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+      this.prisma.historicalCountry.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    ])
+    const modernMap = new Map(countries.map((c) => [c.id, c.name]))
+    const histMap = new Map(historical.map((h) => [h.id, h.name]))
+    return ids
+      .map((id) => ({
+        countryId: id,
+        name: modernMap.get(id) ?? histMap.get(id) ?? '(알 수 없음)',
+        historical: !modernMap.has(id) && histMap.has(id),
+        entryCount: netById.get(id) ?? 0,
+      }))
+      .sort((a, b) => b.entryCount - a.entryCount)
+  }
+
   /** 유효 기여 수(적립-회수)를 계정별로 집계 (since/century 지정 시 그 조건으로 한정) */
   private async contributionCounts(
     ids: string[],
     since?: Date | null,
     century?: CenturyFilter,
+    country?: string,
   ): Promise<Map<string, number>> {
     const map = new Map<string, number>()
     if (ids.length === 0) return map
@@ -497,6 +557,7 @@ export class PointService {
         reason: { in: [PointReason.CREATE_CONTENT, PointReason.CONTENT_DELETED] },
         ...(since ? { createdAt: { gte: since } } : {}),
         ...(century !== undefined ? { contentCentury: century === 'unknown' ? null : century } : {}),
+        ...(country ? { contentCountryId: country } : {}),
       },
       _count: { _all: true },
     })
@@ -583,7 +644,7 @@ export class PointService {
 
   /** 뱃지/요약 평가용 계정 통계 (ledger 기반) */
   private async computeStats(accountId: string): Promise<BadgeStats> {
-    const [agg, grouped, createDates] = await Promise.all([
+    const [agg, grouped, createDates, countryGrouped, centuryGrouped] = await Promise.all([
       this.prisma.pointEntry.aggregate({ where: { accountId }, _sum: { amount: true } }),
       this.prisma.pointEntry.groupBy({
         by: ['ownerType', 'reason'],
@@ -599,7 +660,43 @@ export class PointService {
         orderBy: { createdAt: 'desc' },
         take: 400,
       }),
+      this.prisma.pointEntry.groupBy({
+        by: ['contentCountryId', 'reason'],
+        where: {
+          accountId,
+          reason: { in: [PointReason.CREATE_CONTENT, PointReason.CONTENT_DELETED] },
+          contentCountryId: { not: null },
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.pointEntry.groupBy({
+        by: ['contentCentury', 'reason'],
+        where: {
+          accountId,
+          reason: { in: [PointReason.CREATE_CONTENT, PointReason.CONTENT_DELETED] },
+          contentCentury: { not: null },
+        },
+        _count: { _all: true },
+      }),
     ])
+
+    // 단일 국가 최대 net 기여 수 (지역 전문가 뱃지용)
+    const netByCountry = new Map<string, number>()
+    for (const g of countryGrouped) {
+      if (!g.contentCountryId) continue
+      const sign = g.reason === PointReason.CREATE_CONTENT ? 1 : -1
+      netByCountry.set(g.contentCountryId, (netByCountry.get(g.contentCountryId) ?? 0) + sign * g._count._all)
+    }
+    const maxCountryContribution = netByCountry.size ? Math.max(0, ...netByCountry.values()) : 0
+
+    // 단일 세기 최대 net 기여 수 (시대 전문가 뱃지용)
+    const netByCentury = new Map<number, number>()
+    for (const g of centuryGrouped) {
+      if (g.contentCentury == null) continue
+      const sign = g.reason === PointReason.CREATE_CONTENT ? 1 : -1
+      netByCentury.set(g.contentCentury, (netByCentury.get(g.contentCentury) ?? 0) + sign * g._count._all)
+    }
+    const maxCenturyContribution = netByCentury.size ? Math.max(0, ...netByCentury.values()) : 0
 
     const countByType: Partial<Record<AggregateType, number>> = {}
     let createTotal = 0
@@ -621,6 +718,8 @@ export class PointService {
       contributionCount: Math.max(0, createTotal - deleteTotal),
       countByType,
       streakDays: computeStreakDays(createDates.map((d) => d.createdAt)),
+      maxCountryContribution,
+      maxCenturyContribution,
     }
   }
 
@@ -715,6 +814,79 @@ export class PointService {
       await this.prisma.$transaction((tx) => this.stampCenturyForRecord(tx, ownerType, recordId, century))
     } catch (error) {
       this.logger.error(`세기 재스탬프 실패 (${ownerType}/${recordId}): ${String(error)}`)
+    }
+  }
+
+  /**
+   * 콘텐츠의 대표 국가 ID를 산출한다(국가별 리더보드/뱃지 비정규화용).
+   * - PERSON: 주 국적(countryId) → 없으면 최우선(priority) PersonCountryAffiliation의 (현대/역사)국가
+   * - EVENT: 주도국(INITIATOR) → 없으면 첫 관계국 (현대/역사)
+   * - COUNTRY / HISTORICAL_COUNTRY: 자기 자신
+   * - 그 외 / 대표 국가 없음 → null
+   * 현대 국가와 역사 국가는 별개 버킷(서로 다른 PK)으로 취급한다.
+   */
+  private async resolveContentCountry(
+    ownerType: AggregateType,
+    recordId: string | null | undefined,
+  ): Promise<string | null> {
+    if (!recordId) return null
+    try {
+      switch (ownerType) {
+        case AggregateType.PERSON: {
+          const p = await this.prisma.person.findUnique({
+            where: { id: recordId },
+            select: { countryId: true },
+          })
+          if (p?.countryId) return p.countryId
+          const aff = await this.prisma.personCountryAffiliation.findFirst({
+            where: { personId: recordId },
+            orderBy: [{ priority: 'asc' }],
+            select: { countryId: true, historicalCountryId: true },
+          })
+          return aff?.countryId ?? aff?.historicalCountryId ?? null
+        }
+        case AggregateType.EVENT: {
+          const rels = await this.prisma.eventCountryRelation.findMany({
+            where: { eventId: recordId },
+            select: { countryId: true, historicalCountryId: true, role: true },
+          })
+          if (rels.length === 0) return null
+          const primary = rels.find((r) => r.role === EventCountryRole.INITIATOR) ?? rels[0]
+          return primary.countryId ?? primary.historicalCountryId ?? null
+        }
+        case AggregateType.COUNTRY:
+        case AggregateType.HISTORICAL_COUNTRY:
+          return recordId
+        default:
+          return null
+      }
+    } catch (error) {
+      this.logger.error(`국가 산출 실패 (${ownerType}/${recordId}): ${String(error)}`)
+      return null
+    }
+  }
+
+  /** record에 속한 모든 PointEntry의 contentCountryId를 정합화(record당 행 수 적어 무조건 갱신). */
+  private async stampCountryForRecord(
+    tx: Tx,
+    ownerType: AggregateType,
+    recordId: string | null | undefined,
+    countryId: string | null,
+  ): Promise<void> {
+    if (!recordId) return
+    await tx.pointEntry.updateMany({
+      where: { ownerType, recordId },
+      data: { contentCountryId: countryId },
+    })
+  }
+
+  /** 콘텐츠의 국적/관계가 수정됐을 때 국가 스냅샷 재정합(도메인 update 훅에서 호출 가능). */
+  async restampContentCountry(ownerType: AggregateType, recordId: string): Promise<void> {
+    try {
+      const countryId = await this.resolveContentCountry(ownerType, recordId)
+      await this.prisma.$transaction((tx) => this.stampCountryForRecord(tx, ownerType, recordId, countryId))
+    } catch (error) {
+      this.logger.error(`국가 재스탬프 실패 (${ownerType}/${recordId}): ${String(error)}`)
     }
   }
 

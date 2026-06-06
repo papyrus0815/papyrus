@@ -12,6 +12,7 @@ export type LeaderboardPeriod = 'all' | 'week' | 'month'
 export type CenturyOption = api.functional.gamification.centuries.Output[number]
 /** 세기 슬라이스: 정수(AD 양수/BC 음수) | 'unknown'(세기 미상) | null(전체) */
 export type CenturyFilter = number | 'unknown' | null
+export type CountryOption = api.functional.gamification.countries.Output[number]
 
 const noRetryOn401 = (failureCount: number, error: Error) => {
   const status = (error as Error & { status?: number })?.status
@@ -62,13 +63,15 @@ export const gamificationLeaderboardQueryOptions = (
   limit = 20,
   period: LeaderboardPeriod = 'all',
   century: CenturyFilter = null,
+  country: string | null = null,
 ) =>
   queryOptions({
-    queryKey: ['gamification', 'leaderboard', period, limit, century] as const,
+    queryKey: ['gamification', 'leaderboard', period, limit, century, country] as const,
     queryFn: async () => {
       const conn = nestiaApiService.getConnection()
       const centuryArg = century == null ? undefined : String(century)
-      return api.functional.gamification.leaderboard(conn, String(limit), period, centuryArg)
+      const countryArg = country == null ? undefined : country
+      return api.functional.gamification.leaderboard(conn, String(limit), period, centuryArg, countryArg)
     },
     staleTime: 1000 * 60,
     retry: noRetryOn401,
@@ -80,6 +83,17 @@ export const gamificationCenturiesQueryOptions = queryOptions({
   queryFn: async () => {
     const conn = nestiaApiService.getConnection()
     return api.functional.gamification.centuries(conn)
+  },
+  staleTime: 1000 * 60 * 5,
+  retry: noRetryOn401,
+})
+
+/** 국가별 리더보드 셀렉터용 — 적립이 달린 국가 목록(건수 포함, 동적) */
+export const gamificationCountriesQueryOptions = queryOptions({
+  queryKey: ['gamification', 'countries'] as const,
+  queryFn: async () => {
+    const conn = nestiaApiService.getConnection()
+    return api.functional.gamification.countries(conn)
   },
   staleTime: 1000 * 60 * 5,
   retry: noRetryOn401,

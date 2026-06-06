@@ -5,6 +5,7 @@ export {
   gamificationBadgesQueryOptions,
   gamificationLeaderboardQueryOptions,
   gamificationCenturiesQueryOptions,
+  gamificationCountriesQueryOptions,
   gamificationActivityQueryOptions,
   gamificationProfileQueryOptions,
   invalidateGamification,
@@ -18,6 +19,7 @@ export type {
   LeaderboardPeriod,
   CenturyOption,
   CenturyFilter,
+  CountryOption,
 } from './gamification.api'
 export { GradeChip, GradeProgressCard } from './grade-badge.ui'
 export { BadgeList } from './badge-list.ui'
