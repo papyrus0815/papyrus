@@ -795,6 +795,10 @@ export class PersonService {
     return this.personRepository.findTenuresByCabinetId(cabinetId, accountId)
   }
 
+  async findCabinetOverview(cabinetId: string, accountId?: string): Promise<any | null> {
+    return this.personRepository.findCabinetOverview(cabinetId, accountId)
+  }
+
   async findCabinets(params: { countryId?: string; historicalCountryId?: string }): Promise<any[]> {
     return this.personRepository.findCabinets(params)
   }

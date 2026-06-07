@@ -49,6 +49,8 @@ enum GovernmentPositionType {
   HEAD_OF_STATE
   /// 정부수반 (총리, 수상, 영의정 등)
   HEAD_OF_GOVERNMENT
+  /// 국가원수의 부직 (부통령, Vice President 등) — 행정부 각료로 cabinetId에 소속
+  DEPUTY_HEAD_OF_STATE
   /// 왕위 계승자 (왕세자, 황태자, 황태손, Crown Prince 등)
   HEIR_APPARENT
   /// 섭정 (Regent, 대리청정)

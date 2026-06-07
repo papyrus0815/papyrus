@@ -294,6 +294,8 @@ export interface IPersonRepository {
   findSubordinateTenures(headTenureId: string): Promise<any[]>
   findCabinetByHeadTenureId(headTenureId: string): Promise<any | null>
   findTenuresByCabinetId(cabinetId: string, accountId?: string): Promise<any[]>
+  /** 행정부 한눈에 보기 — 수반+각료+여당을 한 번에 (인물 상세 동료 표시용) */
+  findCabinetOverview(cabinetId: string, accountId?: string): Promise<any | null>
   findCabinets(params: {
     countryId?: string
     historicalCountryId?: string

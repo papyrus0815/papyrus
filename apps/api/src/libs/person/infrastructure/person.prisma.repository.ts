@@ -1478,6 +1478,10 @@ export class PersonPrismaRepository implements IPersonRepository {
                 election: { select: { id: true, name: true, pollDate: true } },
               },
             },
+            // 같은 행정부 동료 표시용: 각료면 cabinet(소속), 수반이면 headOfCabinet(수장)
+            cabinetId: true,
+            cabinet: { select: { id: true, name: true } },
+            headOfCabinet: { select: { id: true, name: true } },
             achievements: TENURE_ACHIEVEMENTS_SELECT,
           },
           orderBy: {
@@ -2377,6 +2381,67 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
     })
     return tenures.map((t) => serializeBigInt(t))
+  }
+
+  /**
+   * 행정부 한눈에 보기 — 수반(head) + 각료(members) + 여당/연정(parties)을 한 번에.
+   * 인물 상세의 재임 카드에서 "같은 행정부 동료"를 보여줄 때 사용.
+   * 비공개(계정 소유) 행정부는 소유 계정만 접근 가능.
+   */
+  async findCabinetOverview(cabinetId: string, accountId?: string): Promise<any | null> {
+    const tenureSelect = {
+      id: true,
+      positionType: true,
+      title: true,
+      titleEn: true,
+      termNumber: true,
+      subTermNumber: true,
+      regnalNumber: true,
+      startDate: true,
+      endDate: true,
+      person: {
+        select: {
+          id: true,
+          name: true,
+          surname: true,
+          middleName: true,
+          regnalName: true,
+          profileImageUrl: true,
+          country: {
+            select: { defaultNameDisplayOrder: true, isoCode: true, flagEmoji: true },
+          },
+        },
+      },
+      positionDefinition: { select: { id: true, title: true, rank: true } },
+    } as const
+
+    const cabinet = await this.prisma.cabinet.findUnique({
+      where: { id: cabinetId },
+      select: {
+        id: true,
+        name: true,
+        accountId: true,
+        headTenure: { select: tenureSelect },
+        memberTenures: {
+          orderBy: [{ startDate: Prisma.SortOrder.asc }],
+          select: tenureSelect,
+        },
+        politicalParties: {
+          select: {
+            id: true,
+            role: true,
+            notes: true,
+            party: { select: { id: true, name: true, shortName: true, brandColor: true } },
+          },
+        },
+      },
+    })
+    if (!cabinet) return null
+    if (accountId != null && cabinet.accountId != null && cabinet.accountId !== accountId) {
+      return null
+    }
+    const { accountId: _ownerAccountId, ...rest } = cabinet
+    return serializeBigInt(rest)
   }
 
   async findCabinets(params: {

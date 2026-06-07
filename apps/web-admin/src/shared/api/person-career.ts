@@ -514,6 +514,55 @@ export type CabinetListItemDto = {
   headTenure: GovernmentHeadTenureInCabinetList
 }
 
+/** GET /government-positions/cabinets/:id/overview 의 재임 1건 (수반·각료 공통) */
+export type CabinetOverviewTenure = {
+  id: string
+  positionType?: string | null
+  title?: string | null
+  titleEn?: string | null
+  termNumber?: number | null
+  subTermNumber?: number | null
+  regnalNumber?: number | null
+  startDate?: string | null
+  endDate?: string | null
+  person: {
+    id: string
+    name: string
+    surname?: string | null
+    middleName?: string | null
+    regnalName?: string | null
+    profileImageUrl?: string | null
+    country?: {
+      defaultNameDisplayOrder?: string | null
+      isoCode?: string | null
+      flagEmoji?: string | null
+    } | null
+  }
+  positionDefinition?: { id: string; title?: string | null; rank?: number | null } | null
+}
+
+/** 행정부를 지지한 정당(여당·연정) 1건 */
+export type CabinetOverviewParty = {
+  id: string
+  role: string
+  notes?: string | null
+  party: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  }
+}
+
+/** GET /government-positions/cabinets/:id/overview 응답 — 수반+각료+여당 */
+export type CabinetOverview = {
+  id: string
+  name?: string | null
+  headTenure: CabinetOverviewTenure | null
+  memberTenures: CabinetOverviewTenure[]
+  politicalParties: CabinetOverviewParty[]
+}
+
 /**
  * Person Career API
  */
@@ -899,6 +948,19 @@ export const personCareerApi = {
       `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/tenures`,
     )
     return Array.isArray(response.data) ? response.data : []
+  },
+
+  /**
+   * 행정부 한눈에 보기 — 수반+각료+여당 (인물 상세 "같은 행정부 동료" 표시용)
+   * GET /government-positions/cabinets/:cabinetId/overview
+   */
+  getCabinetOverview: async (
+    cabinetId: string,
+  ): Promise<CabinetOverview | null> => {
+    const response = await apiClient.get(
+      `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/overview`,
+    )
+    return response.data ?? null
   },
 
   /**

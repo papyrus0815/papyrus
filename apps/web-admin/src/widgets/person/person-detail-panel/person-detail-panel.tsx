@@ -1526,6 +1526,8 @@ export function PersonDetailPanel({
                       deathDateStr={deathDateStr}
                       isDeceased={isDeceased}
                       embedInModal={embedInModal}
+                      currentPersonId={personId}
+                      onPersonClick={handlePersonClick}
                       onPlayClick={playClickSound}
                       onEditTenure={(id) => {
                         setEditingTenureId(id)

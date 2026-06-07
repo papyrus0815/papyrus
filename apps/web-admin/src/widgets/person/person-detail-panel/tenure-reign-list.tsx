@@ -28,6 +28,7 @@ import {
   UnifiedReappointBadge,
   UnifiedSubRow,
 } from './person-detail-panel.styles'
+import { CabinetConnections } from './cabinet-connections'
 import { TenureAchievements } from './tenure-achievements'
 import type { CombinedTenureItem } from './types'
 
@@ -40,6 +41,10 @@ interface TenureReignListProps {
   deathDateStr: string
   isDeceased: boolean
   embedInModal: boolean
+  /** 현재 보고 있는 인물 — 같은 행정부 동료 표시에서 본인 강조용 */
+  currentPersonId?: string | null
+  /** 같은 행정부 동료(인물) 클릭 시 이동 */
+  onPersonClick?: (id: string) => void
   onEditTenure: (id: string) => void
   onEditReign: (id: string) => void
   onPlayClick: () => void
@@ -54,6 +59,8 @@ export function TenureReignList({
   deathDateStr,
   isDeceased,
   embedInModal,
+  currentPersonId,
+  onPersonClick,
   onEditTenure,
   onEditReign,
   onPlayClick,
@@ -173,6 +180,16 @@ export function TenureReignList({
                 onPlayClick={onPlayClick}
                 onChanged={onAchievementChanged}
               />
+              {!isReign &&
+                onPersonClick &&
+                (d.headOfCabinet?.id || d.cabinet?.id) && (
+                  <CabinetConnections
+                    cabinetId={(d.headOfCabinet?.id ?? d.cabinet?.id)!}
+                    currentPersonId={currentPersonId}
+                    onPersonClick={onPersonClick}
+                    onToggle={onPlayClick}
+                  />
+                )}
             </UnifiedCardMain>
             {!embedInModal && (
               <UnifiedEditBtn

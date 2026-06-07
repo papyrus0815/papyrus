@@ -345,6 +345,20 @@ export class GovernmentPositionController {
   }
 
   /**
+   * 행정부 한눈에 보기 — 수반·각료·여당을 한 번에. (인물 상세의 "같은 행정부 동료" 표시용)
+   * 비공개(계정 소유) 행정부는 소유 계정만 접근 가능 — 그 외에는 null.
+   */
+  @Get('cabinets/:cabinetId/overview')
+  async getCabinetOverview(
+    @Req() req: Request,
+    @Param('cabinetId') cabinetId: string,
+  ): Promise<any | null> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const overview = await this.personService.findCabinetOverview(cabinetId, accountId)
+    return overview ? serializeBigInt(overview) : null
+  }
+
+  /**
    * 같은 묶음에 속한 다른 행정부 목록 (행정부 단위 다국 연결)
    */
   @UseGuards(AuthGuard('jwt'))

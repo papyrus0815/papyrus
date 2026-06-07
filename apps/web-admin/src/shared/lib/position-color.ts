@@ -24,6 +24,8 @@ export function getPositionColor(
       return '#d97706' // amber — 군주/대통령
     case 'HEAD_OF_GOVERNMENT':
       return '#4f46e5' // indigo — 총리/수상
+    case 'DEPUTY_HEAD_OF_STATE':
+      return '#b45309' // amber-700 — 부통령(국가원수 부직)
     case 'CABINET_MINISTER':
       return '#0891b2' // cyan — 각료
     case 'LEGISLATOR':
@@ -45,6 +47,7 @@ export function getPositionBg(
   const pair: Record<string, [light: string, dark: string]> = {
     HEAD_OF_STATE: ['#fef3c7', 'rgba(217,119,6,0.18)'],
     HEAD_OF_GOVERNMENT: ['#eef2ff', 'rgba(79,70,229,0.18)'],
+    DEPUTY_HEAD_OF_STATE: ['#fef3c7', 'rgba(180,83,9,0.18)'],
     CABINET_MINISTER: ['#ecfeff', 'rgba(8,145,178,0.18)'],
     LEGISLATOR: ['#d1fae5', 'rgba(5,150,105,0.18)'],
     MILITARY_COMMANDER: ['#fee2e2', 'rgba(220,38,38,0.18)'],

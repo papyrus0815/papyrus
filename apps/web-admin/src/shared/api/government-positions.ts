@@ -9,6 +9,7 @@ import { apiConnection } from './client'
 export enum GovernmentPositionType {
   HEAD_OF_STATE = 'HEAD_OF_STATE', // 국가원수
   HEAD_OF_GOVERNMENT = 'HEAD_OF_GOVERNMENT', // 정부수반
+  DEPUTY_HEAD_OF_STATE = 'DEPUTY_HEAD_OF_STATE', // 부통령
   CABINET_MINISTER = 'CABINET_MINISTER', // 각료/장관
   VICE_MINISTER = 'VICE_MINISTER', // 차관
   LEGISLATOR = 'LEGISLATOR', // 의회의원

@@ -27,6 +27,11 @@ export interface TenureLikeRecord {
   country?: { id?: string; name?: string | null } | null
   historicalCountry?: { id?: string; name?: string | null } | null
   achievements?: TenureAchievementItem[] | null
+  /** 각료로 소속된 행정부(같은 행정부 동료 표시용). 재임에만 존재. */
+  cabinetId?: string | null
+  cabinet?: { id: string; name?: string | null } | null
+  /** 이 재임이 수반(대통령·총리)으로 수장인 행정부. 재임에만 존재. */
+  headOfCabinet?: { id: string; name?: string | null } | null
 }
 
 /**
