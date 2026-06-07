@@ -1060,8 +1060,20 @@ export const UnifiedCardList = styled.div`
 `
 
 export const unifiedKindColor = {
-  tenure: { base: '#4338ca', softBg: 'rgba(99,102,241,0.1)', text: '#4338ca' },
-  reign: { base: '#0f766e', softBg: 'rgba(20,184,166,0.1)', text: '#0f766e' },
+  tenure: {
+    base: '#4338ca',
+    softBg: 'rgba(99,102,241,0.1)',
+    softBgDark: 'rgba(99,102,241,0.18)',
+    text: '#4338ca',
+    textDark: '#a5b4fc',
+  },
+  reign: {
+    base: '#0f766e',
+    softBg: 'rgba(20,184,166,0.1)',
+    softBgDark: 'rgba(20,184,166,0.18)',
+    text: '#0f766e',
+    textDark: '#5eead4',
+  },
 } as const
 
 export const UnifiedCard = styled.div<{ $kind: 'tenure' | 'reign' }>`
@@ -1113,8 +1125,14 @@ export const UnifiedKindBadge = styled.span<{ $kind: 'tenure' | 'reign' }>`
   letter-spacing: 0.02em;
   padding: 3px 9px 3px 8px;
   border-radius: 999px;
-  background: ${({ $kind }) => unifiedKindColor[$kind].softBg};
-  color: ${({ $kind }) => unifiedKindColor[$kind].text};
+  background: ${({ $kind, theme }) =>
+    theme.mode === 'dark'
+      ? unifiedKindColor[$kind].softBgDark
+      : unifiedKindColor[$kind].softBg};
+  color: ${({ $kind, theme }) =>
+    theme.mode === 'dark'
+      ? unifiedKindColor[$kind].textDark
+      : unifiedKindColor[$kind].text};
   &::before {
     content: '';
     width: 6px;

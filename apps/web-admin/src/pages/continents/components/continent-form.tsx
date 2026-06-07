@@ -257,7 +257,7 @@ const FormSection = styled.div`
   flex-direction: column;
   gap: 20px;
   padding-bottom: 24px;
-  border-bottom: 1px solid var(--border-color-light);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   &:last-of-type {
     border-bottom: none;
@@ -279,22 +279,22 @@ const FormSectionIcon = styled.div`
   height: 40px;
   flex-shrink: 0;
   border-radius: 10px;
-  background: linear-gradient(135deg, #f0f7ff 0%, #e8f0fe 100%);
-  color: var(--color-primary);
+  background: ${({ theme }) => theme.colors.activeLight};
+  color: ${({ theme }) => theme.colors.primary};
 `
 
 const FormSectionTitle = styled.h3`
   margin: 0 0 4px 0;
   font-size: 16px;
   font-weight: 700;
-  color: #202124;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.2px;
 `
 
 const FormSectionDescription = styled.p`
   margin: 0;
   font-size: 13px;
-  color: #5f6368;
+  color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
 `
 
@@ -313,7 +313,7 @@ const FormField = styled.div`
 const FormLabel = styled.label`
   font-size: 14px;
   font-weight: 600;
-  color: #202124;
+  color: ${({ theme }) => theme.colors.text.primary};
   margin-bottom: 2px;
   display: flex;
   align-items: center;
@@ -321,7 +321,7 @@ const FormLabel = styled.label`
 `
 
 const RequiredStar = styled.span`
-  color: #ea4335;
+  color: ${({ theme }) => theme.colors.error};
   font-size: 14px;
   font-weight: 700;
 `
@@ -331,8 +331,8 @@ const RequiredFieldsNotice = styled.div`
   align-items: center;
   gap: 12px;
   padding: 14px 24px;
-  background: #fff9e6;
-  border-bottom: 2px solid #ffd54f;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-bottom: 2px solid ${({ theme }) => theme.colors.alert.warning.border};
 `
 
 const RequiredFieldsIcon = styled.div`
@@ -342,7 +342,7 @@ const RequiredFieldsIcon = styled.div`
   width: 24px;
   height: 24px;
   flex-shrink: 0;
-  color: #f57c00;
+  color: ${({ theme }) => theme.colors.alert.warning.fg};
   font-size: 18px;
 `
 
@@ -352,12 +352,12 @@ const RequiredFieldsText = styled.div`
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #5f6368;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const RequiredFieldsTitle = styled.span`
   font-weight: 600;
-  color: #f57c00;
+  color: ${({ theme }) => theme.colors.alert.warning.fg};
 `
 
 const RequiredFieldsList = styled.span`
@@ -365,7 +365,8 @@ const RequiredFieldsList = styled.span`
 `
 
 const RequiredFieldItem = styled.span<{ $completed: boolean }>`
-  color: ${({ $completed }) => ($completed ? '#1e8e3e' : 'inherit')};
+  color: ${({ $completed, theme }) =>
+    $completed ? theme.colors.success : 'inherit'};
   text-decoration: ${({ $completed }) =>
     $completed ? 'line-through' : 'none'};
   opacity: ${({ $completed }) => ($completed ? '0.6' : '1')};

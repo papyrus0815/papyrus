@@ -39,6 +39,7 @@ import {
   sessionQueryOptions,
 } from '@/entities/session'
 import { usePersons } from '@/entities/person/api'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { queryClient } from '@/shared/queryClient'
 import { pathKeys } from '@/shared/router'
 import { ToastProvider, useToast } from '@/shared/ui/toast'
@@ -276,7 +277,7 @@ function RepresentativePersonPicker({
 
   const filtered = (persons ?? []).filter((p) => {
     if (!query.trim()) return true
-    const full = `${p.surname ?? ''}${p.name}`.toLowerCase()
+    const full = getPersonDisplayName(p).toLowerCase()
     return full.includes(query.trim().toLowerCase())
   })
 
@@ -337,7 +338,7 @@ function RepresentativePersonPicker({
           </PersonChip>
 
           {filtered.map((p) => {
-            const label = `${p.surname ?? ''}${p.name}`.trim() || p.name
+            const label = getPersonDisplayName(p) || p.name
             return (
               <PersonChip
                 key={p.id}

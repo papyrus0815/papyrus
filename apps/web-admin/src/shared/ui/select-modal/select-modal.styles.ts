@@ -12,6 +12,8 @@ export const SelectModalOverlay = styled.div`
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   z-index: ${Z_INDEX.MODAL_OVERLAY};
 `
 

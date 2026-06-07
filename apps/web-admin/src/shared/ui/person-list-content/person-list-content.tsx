@@ -931,6 +931,30 @@ const ERA_DOT: Record<EraKey, string> = {
   unknown: '#94a3b8',
 }
 
+/** 시대(era)별 그룹 헤더 라벨 — '시대별' 그룹 모드에서 사용 */
+const ERA_LABEL: Record<EraKey, string> = {
+  ancient: '고대 (기원전)',
+  medieval: '중세 (1~10세기)',
+  'early-modern': '근세 (11~19세기)',
+  modern: '근현대 (20세기~)',
+  unknown: '세기 미상',
+}
+
+/** 시대별 그룹 — navigator·히스토그램용 짧은 라벨 */
+const ERA_NAV_LABEL: Record<EraKey, string> = {
+  ancient: '고대',
+  medieval: '중세',
+  'early-modern': '근세',
+  modern: '근현대',
+  unknown: '미상',
+}
+
+/** 세기별 그룹 모드에서 인접 희소 세기를 병합하는 기준 (이 미만이면 같은 시대끼리 병합) */
+const MERGE_THRESHOLD = 4
+
+/** 세기별 그룹 입도 — 'century'=세기 단위(희소 병합), 'era'=거친 5시대 단위 */
+type GroupBy = 'century' | 'era'
+
 const CenturySection = styled.section`
   margin-bottom: 32px;
   &:last-child {
@@ -1072,6 +1096,103 @@ const CenturyCountBadge = styled.span`
   font-weight: 500;
   letter-spacing: 0.01em;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/* ── 시대 그룹 입도 토글 (세기 / 시대) ─────────────────────────────── */
+const GroupByToggle = styled.div`
+  display: inline-flex;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  overflow: hidden;
+`
+
+const GroupByBtn = styled.button<{ $active?: boolean }>`
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  transition: background 0.12s, color 0.12s;
+  &:last-child {
+    border-right: none;
+  }
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  ${({ $active, theme }) =>
+    $active &&
+    css`
+      background: ${theme.colors.activeLight};
+      color: ${theme.colors.active};
+      &:hover {
+        background: ${theme.colors.activeLight};
+        color: ${theme.colors.active};
+      }
+    `}
+`
+
+/* ── 시대 밀도 오버뷰 (세기별 인원 히스토그램) ───────────────────────── */
+const DensityOverview = styled.div`
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 46px;
+  margin-bottom: 18px;
+  padding: 6px 8px 4px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  overflow-x: auto;
+`
+
+const DensityCol = styled.button<{ $era: EraKey }>`
+  flex: 1 1 0;
+  min-width: 5px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.12s;
+  &:hover {
+    opacity: 1;
+  }
+`
+
+const DensityFill = styled.span<{ $era: EraKey; $pct: number }>`
+  display: block;
+  width: 100%;
+  height: ${({ $pct }) => Math.max($pct * 100, 6)}%;
+  border-radius: 3px 3px 1px 1px;
+  background: ${({ $era }) => ERA_DOT[$era]};
+`
+
+/* ── 카드 시대 배지 ──────────────────────────────────────────────── */
+const EraBadge = styled.span<{ $era: EraKey }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: ${({ $era }) => ERA_DOT[$era]};
+  background: ${({ $era }) => `${ERA_DOT[$era]}1f`};
 `
 
 /* ── Horizontal person card ─────────────────────────────────────────── */
@@ -1717,6 +1838,7 @@ export function PersonListContent({
   const [filterCountryIds, setFilterCountryIds] = useState<string[]>([])
   const [expandedModernId, setExpandedModernId] = useState<string | null>(null)
   const [sortMode, setSortMode] = useState<SortMode>('century')
+  const [groupBy, setGroupBy] = useState<GroupBy>('century')
   const [evalFilter, setEvalFilter] = useState<EvalFilter>('all')
   const [filterDynastyId, setFilterDynastyId] = useState<string | null>(null)
   const [filterDeathType, setFilterDeathType] = useState<string | null>(null)
@@ -1729,8 +1851,8 @@ export function PersonListContent({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkEvalOpen, setBulkEvalOpen] = useState(false)
-  // 세기 navigator → 클릭 시 점프할 ref 저장소
-  const centuryRefs = useRef<Map<number, HTMLElement>>(new Map())
+  // 세기/시대 navigator·밀도 바 → 클릭 시 점프할 ref 저장소 (그룹 key 기준)
+  const centuryRefs = useRef<Map<string, HTMLElement>>(new Map())
 
   // 뷰 모드 변경 영구 저장
   useEffect(() => {
@@ -2084,6 +2206,166 @@ export function PersonListContent({
       )
   }, [filteredPersons, sortMode, evalIndex])
 
+  /**
+   * 렌더용 그룹 — personsByCentury(세기 단위 원천)에서 파생.
+   * - 평면 정렬: 헤더 없는 단일 패스스루 그룹
+   * - 세기 그룹(century): 인접한 희소 세기를 같은 시대끼리 병합 (헤더·여백 낭비 제거)
+   * - 시대 그룹(era): 고대/중세/근세/근현대 5개 거친 버킷
+   */
+  const displayGroups = useMemo<
+    Array<{
+      key: string
+      centuries: number[]
+      era: EraKey
+      label: string
+      navLabel: string
+      persons: PersonLike[]
+    }>
+  >(() => {
+    if (sortMode !== 'century') {
+      return personsByCentury.map(([century, list]) => ({
+        key: `flat-${century}`,
+        centuries: [century],
+        era: 'unknown' as EraKey,
+        label: '',
+        navLabel: '',
+        persons: list,
+      }))
+    }
+
+    const centuryLabelOf = (c: number) =>
+      c === CENTURY_UNKNOWN
+        ? '세기 미상'
+        : c < 0
+          ? `기원전 ${-c}세기`
+          : `${c}세기`
+    const centuryNavLabelOf = (c: number) =>
+      c === CENTURY_UNKNOWN ? '미상' : c < 0 ? `BC ${-c}c` : `${c}c`
+
+    if (groupBy === 'era') {
+      const order: EraKey[] = [
+        'modern',
+        'early-modern',
+        'medieval',
+        'ancient',
+        'unknown',
+      ]
+      const byEra = new Map<
+        EraKey,
+        { centuries: number[]; persons: PersonLike[] }
+      >()
+      personsByCentury.forEach(([century, list]) => {
+        const era = getCenturyEra(century)
+        if (!byEra.has(era)) byEra.set(era, { centuries: [], persons: [] })
+        const g = byEra.get(era)!
+        g.centuries.push(century)
+        g.persons.push(...list)
+      })
+      return order
+        .filter((era) => byEra.has(era))
+        .map((era) => {
+          const g = byEra.get(era)!
+          return {
+            key: `era-${era}`,
+            centuries: g.centuries,
+            era,
+            label: ERA_LABEL[era],
+            navLabel: ERA_NAV_LABEL[era],
+            persons: g.persons,
+          }
+        })
+    }
+
+    // 세기 단위 + 희소 병합. personsByCentury는 최신(세기 내림차순)·미상 마지막 순.
+    const groups: Array<{
+      key: string
+      centuries: number[]
+      era: EraKey
+      label: string
+      navLabel: string
+      persons: PersonLike[]
+    }> = []
+    let run: { era: EraKey; centuries: number[]; persons: PersonLike[] } | null =
+      null
+    const flushRun = () => {
+      if (!run) return
+      const cs = run.centuries // 내림차순 유지
+      const hi = cs[0]
+      const lo = cs[cs.length - 1]
+      if (cs.length === 1) {
+        groups.push({
+          key: `c-${hi}`,
+          centuries: cs,
+          era: run.era,
+          label: centuryLabelOf(hi),
+          navLabel: centuryNavLabelOf(hi),
+          persons: run.persons,
+        })
+      } else {
+        groups.push({
+          key: `c-${hi}_${lo}`,
+          centuries: cs,
+          era: run.era,
+          label: hi < 0 ? `기원전 ${-hi}~${-lo}세기` : `${hi}~${lo}세기`,
+          navLabel: hi < 0 ? `BC ${-hi}~${-lo}c` : `${hi}~${lo}c`,
+          persons: run.persons,
+        })
+      }
+      run = null
+    }
+    personsByCentury.forEach(([century, list]) => {
+      const era = getCenturyEra(century)
+      const dense = list.length >= MERGE_THRESHOLD || century === CENTURY_UNKNOWN
+      if (dense) {
+        flushRun()
+        groups.push({
+          key: `c-${century}`,
+          centuries: [century],
+          era,
+          label: centuryLabelOf(century),
+          navLabel: centuryNavLabelOf(century),
+          persons: list,
+        })
+        return
+      }
+      if (run && run.era === era) {
+        run.centuries.push(century)
+        run.persons.push(...list)
+      } else {
+        flushRun()
+        run = { era, centuries: [century], persons: [...list] }
+      }
+    })
+    flushRun()
+    return groups
+  }, [personsByCentury, sortMode, groupBy])
+
+  /** 밀도 오버뷰용 세기별 인원 (오래된→최신 = 좌→우 타임라인). 세기 정렬일 때만. */
+  const densityData = useMemo(() => {
+    if (sortMode !== 'century') return [] as Array<{
+      century: number
+      count: number
+      pct: number
+      era: EraKey
+    }>
+    const known = personsByCentury.filter(([c]) => c !== CENTURY_UNKNOWN)
+    const asc = [...known].sort(([a], [b]) => a - b)
+    const max = asc.reduce((m, [, l]) => Math.max(m, l.length), 1)
+    return asc.map(([c, l]) => ({
+      century: c,
+      count: l.length,
+      pct: l.length / max,
+      era: getCenturyEra(c),
+    }))
+  }, [personsByCentury, sortMode])
+
+  /** 세기 번호 → 렌더 그룹 key (밀도 바·navigator 점프 시 병합된 그룹으로 스크롤) */
+  const centuryToGroupKey = useMemo(() => {
+    const m = new Map<number, string>()
+    displayGroups.forEach((g) => g.centuries.forEach((c) => m.set(c, g.key)))
+    return m
+  }, [displayGroups])
+
   useEffect(() => {
     onViewChange?.(selectedPersonId ? 'detail' : 'list')
   }, [selectedPersonId, onViewChange])
@@ -2285,6 +2567,31 @@ export function PersonListContent({
                     </option>
                   ))}
                 </SortSelect>
+                {sortMode === 'century' && (
+                  <GroupByToggle
+                    role="group"
+                    aria-label="시대 그룹 입도"
+                  >
+                    <GroupByBtn
+                      type="button"
+                      $active={groupBy === 'century'}
+                      aria-pressed={groupBy === 'century'}
+                      onClick={() => setGroupBy('century')}
+                      title="세기 단위 (희소 세기는 자동 병합)"
+                    >
+                      세기
+                    </GroupByBtn>
+                    <GroupByBtn
+                      type="button"
+                      $active={groupBy === 'era'}
+                      aria-pressed={groupBy === 'era'}
+                      onClick={() => setGroupBy('era')}
+                      title="고대·중세·근세·근현대 5시대 단위"
+                    >
+                      시대
+                    </GroupByBtn>
+                  </GroupByToggle>
+                )}
                 {!hideCreateButton && (
                   <CreateButton
                     type="button"
@@ -2637,21 +2944,45 @@ export function PersonListContent({
             ) : (
               <ListWithNavWrap>
               <ListScrollArea>
-                {personsByCentury.map(([century, list]) => {
-                  const era = getCenturyEra(century)
+                {/* 시대 밀도 오버뷰 — 세기별 인원 히스토그램 (좌:오래된 → 우:최신) */}
+                {sortMode === 'century' && densityData.length > 1 && (
+                  <DensityOverview aria-label="세기별 인원 밀도">
+                    {densityData.map((d) => {
+                      const label =
+                        d.century < 0
+                          ? `기원전 ${-d.century}세기`
+                          : `${d.century}세기`
+                      return (
+                        <DensityCol
+                          key={`density-${d.century}`}
+                          type="button"
+                          $era={d.era}
+                          title={`${label} · ${d.count}명`}
+                          onClick={() => {
+                            const key = centuryToGroupKey.get(d.century)
+                            const el = key && centuryRefs.current.get(key)
+                            if (el)
+                              el.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start',
+                              })
+                          }}
+                        >
+                          <DensityFill $era={d.era} $pct={d.pct} />
+                        </DensityCol>
+                      )
+                    })}
+                  </DensityOverview>
+                )}
+                {displayGroups.map((group) => {
+                  const { era, label: centuryLabel, persons: list } = group
                   const isFlatSort = sortMode !== 'century'
-                  const centuryLabel =
-                    century === CENTURY_UNKNOWN
-                      ? '세기 미상'
-                      : century < 0
-                        ? `기원전 ${-century}세기`
-                        : `${century}세기`
                   return (
                   <CenturySection
-                    key={`${sortMode}-${century}`}
+                    key={`${sortMode}-${groupBy}-${group.key}`}
                     ref={(el) => {
-                      if (el) centuryRefs.current.set(century, el)
-                      else centuryRefs.current.delete(century)
+                      if (el) centuryRefs.current.set(group.key, el)
+                      else centuryRefs.current.delete(group.key)
                     }}
                   >
                     {!isFlatSort && <CenturySeparator $era={era} />}
@@ -2713,6 +3044,21 @@ export function PersonListContent({
                         // ── infographic card data ──────────────────────
                         const birthYear = person.birthYear ?? person.birth_year
                         const deathYear = person.deathYear ?? person.death_year
+                        // 카드 시대 배지 — 출생 세기 기준. 평면 정렬에서도 시대 식별
+                        const cardCentury = getCentury(
+                          birthYear ?? undefined,
+                          (person.birthEra ?? person.birth_era) ?? undefined,
+                        )
+                        const cardEra =
+                          cardCentury != null
+                            ? getCenturyEra(cardCentury)
+                            : null
+                        const cardEraLabel =
+                          cardCentury != null
+                            ? cardCentury < 0
+                              ? `BC ${-cardCentury}C`
+                              : `${cardCentury}C`
+                            : null
                         const ageAtDeath =
                           birthYear != null &&
                           deathYear != null &&
@@ -2824,6 +3170,14 @@ export function PersonListContent({
                                 )}
                                 {person.gender === 'FEMALE' && (
                                   <GenderBadge $gender="FEMALE">♀ 여</GenderBadge>
+                                )}
+                                {cardEra && cardEraLabel && (
+                                  <EraBadge
+                                    $era={cardEra}
+                                    title={`${cardEraLabel} · ${ERA_NAV_LABEL[cardEra]}`}
+                                  >
+                                    {cardEraLabel}
+                                  </EraBadge>
                                 )}
                                 {evalSummary?.hasEvaluation && (
                                   <EvalPinBtn
@@ -2957,23 +3311,17 @@ export function PersonListContent({
                   )
                 })}
               </ListScrollArea>
-              {/* 세기 navigator — 세기별 정렬일 때만 노출, 95명+ 빠른 점프 */}
-              {sortMode === 'century' && personsByCentury.length > 1 && (
+              {/* 세기/시대 navigator — 세기별 정렬일 때만 노출, 95명+ 빠른 점프 */}
+              {sortMode === 'century' && displayGroups.length > 1 && (
                 <CenturyNav aria-label="세기 navigator">
-                  {personsByCentury.map(([century, list]) => {
-                    const era = getCenturyEra(century)
-                    const label =
-                      century === CENTURY_UNKNOWN
-                        ? '미상'
-                        : century < 0
-                          ? `BC ${-century}c`
-                          : `${century}c`
+                  {displayGroups.map((group) => {
+                    const { era, navLabel: label, persons: list } = group
                     return (
                       <CenturyNavBtn
-                        key={`nav-${century}`}
+                        key={`nav-${group.key}`}
                         type="button"
                         onClick={() => {
-                          const el = centuryRefs.current.get(century)
+                          const el = centuryRefs.current.get(group.key)
                           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
                         }}
                         title={`${label} (${list.length}명)`}

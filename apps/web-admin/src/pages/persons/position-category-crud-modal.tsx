@@ -29,6 +29,7 @@ import { Z_INDEX } from '@/shared/styles/z-index'
 const POSITION_TYPE_OPTIONS: SelectOption<string>[] = [
   { value: 'HEAD_OF_STATE', label: '국가 원수' },
   { value: 'HEAD_OF_GOVERNMENT', label: '정부 수반' },
+  { value: 'DEPUTY_HEAD_OF_STATE', label: '부통령' },
   { value: 'HEIR_APPARENT', label: '왕세자·세자' },
   { value: 'REGENT', label: '섭정' },
   { value: 'CABINET_MINISTER', label: '각료/장관' },

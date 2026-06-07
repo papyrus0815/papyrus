@@ -59,6 +59,8 @@ import {
   FieldRow,
   FormRows,
   FormSectionInner,
+  NameOrderControl,
+  NameOrderLabel,
   Required,
   SubmitButton,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
@@ -76,6 +78,7 @@ import { SelectBtn } from './_form-primitives'
 import { AffiliationSection } from './sections/affiliation-section'
 import {
   CountryAffiliationsSection,
+  hasAffiliationDateError,
   makeAffiliationRow,
   type CountryAffiliationRow,
 } from './sections/country-affiliations-section'
@@ -205,7 +208,10 @@ export function PersonRegisterView({
   const [name, setName] = useState('')
   const [surname, setSurname] = useState('')
   const [middleName, setMiddleName] = useState('')
-  const [nameFormat, setNameFormat] = useState<'korean' | 'western'>('korean')
+  // 'auto' = 소속 국가 기본 순서 따름(저장 시 null). korean/western은 개인 오버라이드.
+  const [nameFormat, setNameFormat] = useState<'auto' | 'korean' | 'western'>(
+    'auto',
+  )
   const [originalName, setOriginalName] = useState('')
   const [surnameMeaning, setSurnameMeaning] = useState('')
   const [nameMeaning, setNameMeaning] = useState('')
@@ -326,9 +332,9 @@ export function PersonRegisterView({
    * 편집 모드 등으로 상세 필드에 값이 차면 "더 입력" 영역을 1회 자동 펼침.
    * (값이 있는데 접혀 있어 "비어 보이는" 오해를 막음 — 사용자가 닫으면 다시 안 열림)
    */
-  useEffect(() => {
-    if (autoExpandedDetailsRef.current) return
-    const hasDetail =
+  /** 상세 필드(이름원어/뜻·사망상세·군주·소속·가족) 중 하나라도 값이 있는지. */
+  const hasDetailValues = useMemo(
+    () =>
       !!originalName ||
       !!surnameMeaning ||
       !!nameMeaning ||
@@ -346,31 +352,36 @@ export function PersonRegisterView({
       !!fatherId ||
       !!motherId ||
       !!spouseId ||
-      !!spouseNote
-    if (hasDetail) {
+      !!spouseNote,
+    [
+      originalName,
+      surnameMeaning,
+      nameMeaning,
+      middleNameMeaning,
+      deathType,
+      deathCause,
+      deathNote,
+      regnalName,
+      templeName,
+      posthumousName,
+      birthPlace,
+      deathPlace,
+      dynastyId,
+      religionId,
+      fatherId,
+      motherId,
+      spouseId,
+      spouseNote,
+    ],
+  )
+
+  useEffect(() => {
+    if (autoExpandedDetailsRef.current) return
+    if (hasDetailValues) {
       setMoreOpen(true)
       autoExpandedDetailsRef.current = true
     }
-  }, [
-    originalName,
-    surnameMeaning,
-    nameMeaning,
-    middleNameMeaning,
-    deathType,
-    deathCause,
-    deathNote,
-    regnalName,
-    templeName,
-    posthumousName,
-    birthPlace,
-    deathPlace,
-    dynastyId,
-    religionId,
-    fatherId,
-    motherId,
-    spouseId,
-    spouseNote,
-  ])
+  }, [hasDetailValues])
 
   /** draft 복원 배너 — 진입 시 1회만 평가, 사용자 응답 후 사라짐. */
   const [pendingDraftSavedAt, setPendingDraftSavedAt] = useState<number | null>(
@@ -469,9 +480,11 @@ export function PersonRegisterView({
   /** 폼이 표시할 이름 미리보기 — 국가의 표시 순서 기준. */
   const namePreview = useMemo(() => {
     if (!name.trim() && !surname.trim() && !middleName.trim()) return ''
+    // 개인 오버라이드가 있으면 우선, 'auto'면 국가 기본(없으면 동양식).
     const order =
-      countryNameOrderById.get(countryId) ??
-      (nameFormat === 'western' ? 'western' : 'korean')
+      nameFormat !== 'auto'
+        ? nameFormat
+        : (countryNameOrderById.get(countryId) ?? 'korean')
     return getPersonDisplayName(
       {
         name,
@@ -608,7 +621,7 @@ export function PersonRegisterView({
     makeFormField('name', () => name, setName, ''),
     makeFormField('surname', () => surname, setSurname, ''),
     makeFormField('middleName', () => middleName, setMiddleName, ''),
-    makeFormField('nameFormat', () => nameFormat, setNameFormat, 'korean'),
+    makeFormField('nameFormat', () => nameFormat, setNameFormat, 'auto'),
     makeFormField('originalName', () => originalName, setOriginalName, ''),
     makeFormField('surnameMeaning', () => surnameMeaning, setSurnameMeaning, ''),
     makeFormField('nameMeaning', () => nameMeaning, setNameMeaning, ''),
@@ -714,9 +727,11 @@ export function PersonRegisterView({
         setSurname(p.surname ?? '')
         setMiddleName(p.middleName ?? '')
         setNameFormat(
-          (p.nameDisplayOrder === 'western' ? 'western' : 'korean') as
-            | 'korean'
-            | 'western',
+          p.nameDisplayOrder === 'western'
+            ? 'western'
+            : p.nameDisplayOrder === 'korean'
+              ? 'korean'
+              : 'auto',
         )
         setOriginalName(p.originalName ?? '')
         setSurnameMeaning(p.surnameMeaning ?? '')
@@ -1035,7 +1050,9 @@ export function PersonRegisterView({
       setIsAlive(false)
       setIsDeathDateUnknown(false)
       markDirty()
-      if (!isEditMode && birthYear.trim() && !deathYear.trim()) {
+      // 사망 전환 + 사망일 미입력이면 피커 자동 노출(신규 등록 한정 — 편집 중엔 깜짝 모달 방지).
+      // 자동 오픈 로직은 여기 한 곳에만 둔다(life-section onClick 중복 제거).
+      if (!isEditMode && !deathYear.trim()) {
         setTimeout(() => setShowDeathDateModal(true), 200)
       }
       return
@@ -1185,13 +1202,32 @@ export function PersonRegisterView({
 
   // ⌘Enter / Ctrl+Enter — 폼 어디에서나 빠른 제출. 긴 폼이라 푸터까지 마우스 이동 부담 ↓.
   const formRef = useRef<HTMLFormElement | null>(null)
+  // 날짜·국가·인물·가문·종교 선택 모달 또는 등록완료 다이얼로그가 떠 있으면
+  // ⌘Enter가 그 모달의 입력 중 폼을 제출해버리지 않도록 단축키를 막는다.
+  const anyModalOpen =
+    showCountryModal ||
+    showBirthDateModal ||
+    showDeathDateModal ||
+    showFatherModal ||
+    showMotherModal ||
+    showSpouseModal ||
+    showDynastyModal ||
+    showReligionModal ||
+    affCountryPickerRow !== null ||
+    showRegisterAgainDialog
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         const f = formRef.current
         if (!f) return
-        // submitting/loading 중에는 무시
-        if (isSubmitting || uploadingThumbnail || isLoadingEdit || loadFailed) {
+        // submitting/loading 중 또는 하위 모달이 열려 있으면 무시
+        if (
+          isSubmitting ||
+          uploadingThumbnail ||
+          isLoadingEdit ||
+          loadFailed ||
+          anyModalOpen
+        ) {
           return
         }
         e.preventDefault()
@@ -1200,7 +1236,7 @@ export function PersonRegisterView({
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [isSubmitting, uploadingThumbnail, isLoadingEdit, loadFailed])
+  }, [isSubmitting, uploadingThumbnail, isLoadingEdit, loadFailed, anyModalOpen])
 
   const handleRemoveThumbnail = () => {
     if (pendingThumbnailFile) {
@@ -1317,10 +1353,7 @@ export function PersonRegisterView({
   }
 
   /** 필수 텍스트 필드 onBlur — 빈 값이면 에러 노출. 입력 시작 시 onChange의 clearFieldError가 클리어. */
-  const handleRequiredTextBlur = (
-    key: 'name' | 'surname',
-    value: string,
-  ) => {
+  const handleRequiredTextBlur = (key: 'name', value: string) => {
     if (!value.trim()) {
       setOrClearError(key, REQUIRED_MESSAGES[key])
     }
@@ -1328,8 +1361,8 @@ export function PersonRegisterView({
 
   const validate = (): boolean => {
     const e: Record<string, string> = {}
+    // 성(surname)은 외자·단일명·성 미상 인물을 위해 선택. 이름·성별·국적만 필수.
     if (!name.trim()) e.name = REQUIRED_MESSAGES.name
-    if (!surname.trim()) e.surname = REQUIRED_MESSAGES.surname
     if (!gender) e.gender = REQUIRED_MESSAGES.gender
     if (!countryId) e.countryId = REQUIRED_MESSAGES.countryId
     const dateErrs = computeBirthDeathErrors(
@@ -1351,6 +1384,12 @@ export function PersonRegisterView({
     )
     if (dateErrs.birth) e.birth = dateErrs.birth
     if (dateErrs.death) e.death = dateErrs.death
+    // 국가 소속 행의 기간 역전(종료<시작)은 서버로 잘못 전송되므로 제출 차단.
+    // 해당 행은 "더 입력 → 소속·가문" 안에 있으니 접혀 있으면 펼쳐 인라인 오류를 보이게 한다.
+    if (hasAffiliationDateError(countryAffiliations)) {
+      e._form = '국가 소속의 기간을 확인해주세요. 종료일이 시작일보다 빠른 행이 있습니다.'
+      setMoreOpen(true)
+    }
     setErrors(e)
     if (Object.keys(e).length > 0) return false
     return true
@@ -1382,7 +1421,8 @@ export function PersonRegisterView({
       name: name.trim(),
       surname: surname.trim() || null,
       middleName: middleName.trim() || null,
-      nameDisplayOrder: nameFormat,
+      // 'auto'면 null로 저장 → 소속 국가 기본 순서를 따른다.
+      nameDisplayOrder: nameFormat === 'auto' ? null : nameFormat,
       originalName: originalName.trim() || null,
       surnameMeaning: surnameMeaning.trim() || null,
       nameMeaning: nameMeaning.trim() || null,
@@ -1462,7 +1502,19 @@ export function PersonRegisterView({
   // ─── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!validate()) return
+    if (!validate()) {
+      // 검증 실패 시 첫 오류 필드(aria-invalid)로 스크롤·포커스 — 긴 폼에서 놓치지 않도록.
+      requestAnimationFrame(() => {
+        const el = formRef.current?.querySelector<HTMLElement>(
+          '[aria-invalid="true"]',
+        )
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.focus?.()
+        }
+      })
+      return
+    }
     setIsSubmitting(true)
     onSubmittingChange?.(true)
     let profileImageUploadedThisSubmit = false
@@ -1498,8 +1550,10 @@ export function PersonRegisterView({
         toast.success('인물 정보가 수정되었습니다.')
         setIsDirty(false)
         draft.discardDraft()
-        onSuccess?.(editPersonId)
-        onCancel()
+        // onSuccess가 닫기/이동을 책임진다(모달=onClose, 페이지=상세로 이동).
+        // 둘 다 호출하면 페이지 모드에서 상세 이동 직후 navigate(-1)로 되돌아가는 이중 내비게이션이 생김.
+        if (onSuccess) onSuccess(editPersonId)
+        else onCancel()
       } else {
         const created = await createPerson(createPayload)
         toast.success('인물이 등록되었습니다.')
@@ -1575,7 +1629,8 @@ export function PersonRegisterView({
       {
         id: 'basic',
         label: '기본 정보',
-        filled: !!surname && !!name && !!gender && !!countryId,
+        // 성(surname)은 선택이라 완료 판정에서 제외 — 이름·성별·국적만.
+        filled: !!name && !!gender && !!countryId,
       },
       {
         id: 'life',
@@ -1596,9 +1651,9 @@ export function PersonRegisterView({
         },
         {
           id: 'death-detail',
+          // 사망 유형은 생몰(코어)로 이동 — 여기 완료 판정은 원인·메모·군주 호칭만.
           label: '생애 상세',
           filled:
-            !!deathType ||
             !!deathCause ||
             !!deathNote ||
             !!regnalName ||
@@ -1820,19 +1875,8 @@ export function PersonRegisterView({
                       <FormInput
                         id={fid('surname')}
                         value={surname}
-                        onChange={(e) => {
-                          setSurname(e.target.value)
-                          clearFieldError('surname')
-                        }}
-                        onBlur={() =>
-                          handleRequiredTextBlur('surname', surname)
-                        }
+                        onChange={(e) => setSurname(e.target.value)}
                         placeholder="김"
-                        $error={!!errors.surname}
-                        aria-invalid={!!errors.surname}
-                        aria-describedby={
-                          errors.surname ? fid('surname-err') : undefined
-                        }
                       />
                       <FormInput
                         id={fid('name')}
@@ -1856,16 +1900,40 @@ export function PersonRegisterView({
                         placeholder="중간이름"
                       />
                     </InlineFields>
-                    {/* namePreview는 상단 hero에 표시 */}
-                    {(errors.surname || errors.name) && (
-                      <FieldError
-                        id={errors.surname ? fid('surname-err') : fid('name-err')}
-                        role="alert"
-                      >
+                    {/* namePreview는 상단 hero에 표시. 성·중간이름은 선택, 이름만 필수. */}
+                    {errors.name && (
+                      <FieldError id={fid('name-err')} role="alert">
                         <FiAlertCircle size={13} />
-                        {errors.surname || errors.name}
+                        {errors.name}
                       </FieldError>
                     )}
+                    {/* 표시 순서 — 기본은 국가 설정 따름, 필요 시 개인 단위로 오버라이드 */}
+                    <NameOrderControl>
+                      <NameOrderLabel htmlFor={fid('nameFormat')}>
+                        표시 순서
+                      </NameOrderLabel>
+                      <SegmentControl
+                        value={nameFormat}
+                        onChange={(v) => {
+                          setNameFormat(v as 'auto' | 'korean' | 'western')
+                          markDirty()
+                        }}
+                        options={[
+                          {
+                            value: 'auto',
+                            label: `국가 기본 (${
+                              (countryNameOrderById.get(countryId) ??
+                                'korean') === 'western'
+                                ? '이름·성'
+                                : '성·이름'
+                            })`,
+                          },
+                          { value: 'korean', label: '성·이름' },
+                          { value: 'western', label: '이름·성' },
+                        ]}
+                        ariaLabel="이름 표시 순서"
+                      />
+                    </NameOrderControl>
                   </FieldControl>
                 </FieldRow>
 
@@ -2071,7 +2139,7 @@ export function PersonRegisterView({
                 <SectionHeader>
                   <SectionHeaderTitle>생애 상세</SectionHeaderTitle>
                   <SectionHeaderDesc>
-                    사망 유형·원인·메모 · 군주 호칭
+                    사망 원인·메모 · 군주 호칭
                   </SectionHeaderDesc>
                 </SectionHeader>
                 <LifeSection

@@ -18,6 +18,7 @@ import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
+import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
@@ -36,8 +37,6 @@ import {
   Required,
   Input,
   Textarea,
-  TEXT_PRIMARY,
-  TEXT_SECONDARY,
 } from '@/shared/ui/register-form-layout'
 
 /** 폼 필드: 세로 배치, 넉넉한 여백 */
@@ -58,7 +57,7 @@ const SidebarFormWrap = styled.div`
     padding-top: 0;
     font-size: 13px;
     font-weight: 600;
-    color: #475569;
+    color: ${({ theme }) => theme.colors.text.secondary};
     letter-spacing: -0.01em;
   }
   ${FieldControl} {
@@ -77,11 +76,13 @@ const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 12px;
   padding: 13px 16px;
-  background: #fafafa;
-  color: ${({ $hasValue }) => ($hasValue ? '#0f172a' : '#94a3b8')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fafafa'};
+  color: ${({ $hasValue, theme }) =>
+    $hasValue ? theme.colors.text.primary : theme.colors.text.tertiary};
   font-size: 14px;
   line-height: 1.45;
   font-weight: 500;
@@ -99,28 +100,49 @@ const SelectTriggerButton = styled.button<{ $hasValue?: boolean }>`
   }
   svg {
     flex-shrink: 0;
-    color: #94a3b8;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     transition: color 0.2s, transform 0.2s;
   }
   &:hover {
-    background: #f4f4f5;
-    border-color: #e4e4e7;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f4f4f5'};
+    border-color: ${({ theme }) => theme.colors.border.medium};
     svg {
-      color: #64748b;
+      color: ${({ theme }) => theme.colors.text.secondary};
       transform: translateY(1px);
     }
   }
   &:focus {
-    background: #fff;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    background: ${({ theme }) => theme.colors.background.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 0 0 3px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(99, 106, 242, 0.22)'
+          : 'rgba(99, 102, 241, 0.12)'};
   }
 `
 
 const OTHER_POSITION_VALUE = 'OTHER'
 
+/**
+ * 내장 직책 — 직책 정의(GovernmentPositionDefinition)를 미리 만들지 않아도
+ * 재임 등록에서 바로 고를 수 있는 항목. positionType이 자동 지정된다.
+ * (예: 부통령은 어느 나라든 공통이라 정의 없이 선택 가능하게 둔다.)
+ */
+const BUILTIN_POSITIONS = [
+  {
+    value: '__BUILTIN_DEPUTY_HEAD_OF_STATE__',
+    label: '부통령',
+    positionType: 'DEPUTY_HEAD_OF_STATE',
+    title: '부통령',
+    titleEn: 'Vice President',
+  },
+] as const
+
 /** 각료 등록 플로우에서 선택 가능한 직위 타입 (수반·의원·군인 등 제외) */
 const MINISTER_POSITION_TYPES = new Set([
+  'DEPUTY_HEAD_OF_STATE',
   'CABINET_MINISTER',
   'VICE_MINISTER',
   'OTHER',
@@ -130,14 +152,14 @@ const MINISTER_POSITION_TYPES = new Set([
 const RequiredNoticeWrap = styled.div`
   margin: 0 26px 0;
   padding: 12px 18px;
-  background: #f8fafc;
+  background: ${({ theme }) => theme.colors.background.secondary};
   border-radius: 12px;
   font-size: 13px;
-  color: #475569;
+  color: ${({ theme }) => theme.colors.text.secondary};
 
   .required-title {
     font-weight: 600;
-    color: #334155;
+    color: ${({ theme }) => theme.colors.text.primary};
     margin-right: 6px;
   }
   .required-list {
@@ -147,7 +169,7 @@ const RequiredNoticeWrap = styled.div`
     transition: color 0.2s, opacity 0.2s;
   }
   .required-item.completed {
-    color: #059669;
+    color: ${({ theme }) => theme.colors.success};
     text-decoration: line-through;
     opacity: 0.85;
   }
@@ -160,10 +182,13 @@ const PersonInfoBar = styled.div`
   gap: 16px;
   margin-bottom: 28px;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? theme.colors.background.secondary
+      : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'};
   border-radius: 14px;
   font-size: 15px;
-  color: ${TEXT_PRIMARY};
+  color: ${({ theme }) => theme.colors.text.primary};
   font-weight: 500;
 `
 const PersonThumbnail = styled.div`
@@ -172,18 +197,66 @@ const PersonThumbnail = styled.div`
   border-radius: 14px;
   flex-shrink: 0;
   overflow: hidden;
-  background: #fff;
+  background: ${({ theme }) => theme.colors.background.primary};
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  color: ${({ theme }) => theme.colors.text.secondary};
+  box-shadow: 0 1px 2px ${({ theme }) => theme.colors.shadow.sm};
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
+`
+
+const PersonPrimaryLabel = styled.span`
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-weight: 400;
+`
+
+const EventAttachButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.16)' : '#eff6ff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.4)' : '#bfdbfe'};
+  border-radius: 6px;
+  color: ${({ theme }) => theme.colors.primary};
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+`
+
+/** 직책 "직접 입력" — 선택 트리거에 시각적으로 종속되는 중첩 그룹 */
+const ManualEntryGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-left: 2px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-radius: 0 10px 10px 0;
+`
+const ManualEntryCaption = styled.div`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: -0.01em;
+`
+const ManualEntryField = styled.label`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const CheckboxLabelRow = styled.div`
@@ -199,7 +272,7 @@ const CheckboxLabelRow = styled.div`
   }
   label {
     font-size: 14px;
-    color: ${TEXT_PRIMARY};
+    color: ${({ theme }) => theme.colors.text.primary};
     cursor: pointer;
     font-weight: 500;
   }
@@ -216,7 +289,7 @@ const DeleteButton = styled.button`
   padding: 10px 16px;
   font-size: 13px;
   font-weight: 600;
-  color: #dc2626;
+  color: ${({ theme }) => theme.colors.error};
   background: transparent;
   border: none;
   border-radius: 10px;
@@ -224,8 +297,11 @@ const DeleteButton = styled.button`
   transition: background 0.2s, color 0.2s;
 
   &:hover:not(:disabled) {
-    background: #fef2f2;
-    color: #b91c1c;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 69, 58, 0.16)'
+        : 'rgba(239, 68, 68, 0.08)'};
+    color: ${({ theme }) => theme.colors.error};
   }
   &:disabled {
     opacity: 0.5;
@@ -239,8 +315,14 @@ const InlineMessage = styled.div<{ $variant?: 'loading' | 'error' }>`
   font-size: 13px;
   margin-bottom: 20px;
   font-weight: 500;
-  background: ${(p) => (p.$variant === 'error' ? '#fef2f2' : '#f1f5f9')};
-  color: ${(p) => (p.$variant === 'error' ? '#b91c1c' : '#475569')};
+  background: ${({ $variant, theme }) =>
+    $variant === 'error'
+      ? theme.mode === 'dark'
+        ? 'rgba(255, 69, 58, 0.12)'
+        : '#fef2f2'
+      : theme.colors.background.tertiary};
+  color: ${({ $variant, theme }) =>
+    $variant === 'error' ? theme.colors.error : theme.colors.text.secondary};
 `
 
 export interface TenureRegisterPanelProps {
@@ -273,6 +355,8 @@ export function TenureRegisterPanel({
   const [countryId, setCountryId] = useState('')
   const [historicalCountryId, setHistoricalCountryId] = useState<string | null>(null)
   const [positionDefinitionId, setPositionDefinitionId] = useState<string | null>(null)
+  /** 내장 직책(부통령 등) 선택 시 positionType 강제 지정용. 정의·기타 선택 시 null */
+  const [presetPositionType, setPresetPositionType] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [titleEn, setTitleEn] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -286,6 +370,7 @@ export function TenureRegisterPanel({
   const [showOnEvents, setShowOnEvents] = useState(true)
   const [cabinetId, setCabinetId] = useState<string | null>(null)
   const [eventAttachModalOpen, setEventAttachModalOpen] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [countryModalOpen, setCountryModalOpen] = useState(false)
   const [historicalCountryModalOpen, setHistoricalCountryModalOpen] = useState(false)
@@ -356,7 +441,8 @@ export function TenureRegisterPanel({
   const selectedDef = positionDefinitionId
     ? (positionDefinitions as any[]).find((d: any) => d.id === positionDefinitionId)
     : null
-  const positionType = selectedDef?.positionType ?? editingTenure?.positionType ?? 'OTHER'
+  const positionType =
+    selectedDef?.positionType ?? presetPositionType ?? editingTenure?.positionType ?? 'OTHER'
 
   /** 각료 추가로 열렸을 때는 각료/차관/기타만 표시 (수반·의원·군인 등 제외) */
   const isMinisterFlowForFilter = !tenureId && initialCabinetId != null
@@ -371,26 +457,45 @@ export function TenureRegisterPanel({
       value: d.id,
       label: d.title ?? d.name ?? d.id ?? '직책',
     }))
-    return [...byDef, { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' }]
+    // 이미 같은 positionType의 정의가 있으면 내장 항목은 중복 노출하지 않음
+    const definedTypes = new Set(defs.map((d: any) => d.positionType))
+    const builtins = BUILTIN_POSITIONS.filter(
+      (b) => !definedTypes.has(b.positionType),
+    ).map((b) => ({ value: b.value, label: b.label }))
+    return [...byDef, ...builtins, { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' }]
   }, [positionDefinitions, isMinisterFlowForFilter])
 
   const positionTitleLabel =
     positionDefinitionId == null
-      ? (title.trim() ? `기타: ${title}` : '직책 선택')
+      ? presetPositionType
+        ? title.trim() || '직책 선택'
+        : title.trim()
+          ? `기타: ${title}`
+          : '직책 선택'
       : (selectedDef?.title ?? selectedDef?.name ?? (title || '직책 선택'))
 
   const handlePositionSelect = (value: string) => {
     setPositionModalOpen(false)
+    const builtin = BUILTIN_POSITIONS.find((b) => b.value === value)
+    if (builtin) {
+      setPositionDefinitionId(null)
+      setTitle(builtin.title)
+      setTitleEn(builtin.titleEn)
+      setPresetPositionType(builtin.positionType)
+      return
+    }
     if (value === OTHER_POSITION_VALUE) {
       setPositionDefinitionId(null)
       setTitle('')
       setTitleEn('')
+      setPresetPositionType(null)
     } else {
       const def = (positionDefinitions as any[]).find((d: any) => d.id === value)
       if (def) {
         setPositionDefinitionId(def.id)
         setTitle(def.title ?? def.name ?? '')
         setTitleEn(def.titleEn ?? def.title_en ?? '')
+        setPresetPositionType(null)
       }
     }
   }
@@ -399,6 +504,7 @@ export function TenureRegisterPanel({
     setCountryId('')
     setHistoricalCountryId(null)
     setPositionDefinitionId(null)
+    setPresetPositionType(null)
     setTitle('')
     setTitleEn('')
     setStartDate('')
@@ -417,6 +523,7 @@ export function TenureRegisterPanel({
     if (!open) {
       resetForm()
       setPersonImageError(false)
+      setDeleteConfirmOpen(false)
     }
   }, [open])
 
@@ -438,7 +545,11 @@ export function TenureRegisterPanel({
     const t = editingTenure as any
     setCountryId(t.countryId ?? t.country?.id ?? '')
     setHistoricalCountryId(t.historicalCountryId ?? t.historicalCountry?.id ?? null)
-    setPositionDefinitionId(t.positionDefinitionId ?? t.positionDefinition?.id ?? null)
+    const hydratedDefId = t.positionDefinitionId ?? t.positionDefinition?.id ?? null
+    setPositionDefinitionId(hydratedDefId)
+    // 정의 없이 내장 직책(부통령 등) 타입으로 저장된 재임이면 preset 복원 → 라벨·선택 표시 유지
+    const builtinForType = BUILTIN_POSITIONS.find((b) => b.positionType === t.positionType)
+    setPresetPositionType(!hydratedDefId && builtinForType ? builtinForType.positionType : null)
     setTitle(t.title ?? t.positionDefinition?.title ?? '')
     setTitleEn(t.titleEn ?? '')
     setStartDate(t.startDate ? (typeof t.startDate === 'string' ? t.startDate.split('T')[0] : '') : '')
@@ -456,14 +567,19 @@ export function TenureRegisterPanel({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!personId || !startDate.trim()) {
-      toast.error('국가·직책·취임일을 입력해 주세요.')
+    if (!personId) return
+    if (!countryId) {
+      toast.error('국가를 선택해 주세요.')
       return
     }
     const def = selectedDef as any
     const titleValue = def?.title ?? title.trim()
     if (!titleValue) {
       toast.error('직책을 선택하거나 직접 입력해 주세요.')
+      return
+    }
+    if (!startDate.trim()) {
+      toast.error('취임일을 입력해 주세요.')
       return
     }
     const payload = {
@@ -530,7 +646,7 @@ export function TenureRegisterPanel({
 
   const handleDelete = async () => {
     if (!tenureId) return
-    if (!window.confirm('이 재임 기록을 삭제하시겠습니까?')) return
+    setDeleteConfirmOpen(false)
     setSubmitting(true)
     try {
       if (editingIsSovereign) {
@@ -620,7 +736,7 @@ export function TenureRegisterPanel({
             <span style={{ fontWeight: 500 }}>
               {getPersonDisplayName(personDetail)}
               {personDetail.primaryLabel && (
-                <span style={{ color: TEXT_SECONDARY, fontWeight: 400 }}> · {personDetail.primaryLabel}</span>
+                <PersonPrimaryLabel> · {personDetail.primaryLabel}</PersonPrimaryLabel>
               )}
             </span>
           </PersonInfoBar>
@@ -655,263 +771,274 @@ export function TenureRegisterPanel({
 
           <SidebarFormWrap>
             <FormRows>
-                <FieldRow>
+              <FieldRow>
                 <FieldLabel>
                   국가 <Required aria-label="필수" />
                 </FieldLabel>
-              <FieldControl>
-                <SelectTriggerButton
-                  type="button"
-                  onClick={() => setCountryModalOpen(true)}
-                  $hasValue={!!countryId}
-                >
-                  <span>
-                    {countryId
-                      ? (countries as any[]).find((c: any) => c.id === countryId)?.name ??
-                        (countries as any[]).find((c: any) => c.id === countryId)?.localName ??
-                        '선택됨'
-                      : '국가 선택'}
-                  </span>
-                  <FiChevronDown size={20} />
-                </SelectTriggerButton>
-              </FieldControl>
-            </FieldRow>
-
-            {countryId && historicalCountries.length > 0 && (
-              <FieldRow>
-                <FieldLabel>역사적 국가 (선택)</FieldLabel>
                 <FieldControl>
                   <SelectTriggerButton
                     type="button"
-                    onClick={() => setHistoricalCountryModalOpen(true)}
-                    $hasValue={!!historicalCountryId}
+                    onClick={() => setCountryModalOpen(true)}
+                    $hasValue={!!countryId}
                   >
                     <span>
-                      {historicalCountryId
-                        ? (historicalCountries as any[]).find((h: any) => h.id === historicalCountryId)?.name ?? '역사적 국가'
-                        : '현대 국가 기준'}
+                      {countryId
+                        ? (countries as any[]).find((c: any) => c.id === countryId)?.name ??
+                          (countries as any[]).find((c: any) => c.id === countryId)?.localName ??
+                          '선택됨'
+                        : '국가 선택'}
                     </span>
                     <FiChevronDown size={20} />
                   </SelectTriggerButton>
                 </FieldControl>
               </FieldRow>
-            )}
 
-            <FieldRow>
-              <FieldLabel>
-                직책명 <Required aria-label="필수" />
-              </FieldLabel>
-              <FieldControl>
-                <SelectTriggerButton
-                  type="button"
-                  onClick={() => setPositionModalOpen(true)}
-                  $hasValue={!!positionDefinitionId || !!title.trim()}
-                >
-                  <span>{positionTitleLabel}</span>
-                  <FiChevronDown size={20} />
-                </SelectTriggerButton>
-                {(cabinetId || initialCabinetId) && (
-                  <FieldHint style={{ marginTop: 6 }}>
-                    부처를 미리 등록하지 않아도 <strong>기타 (직접 입력)</strong>으로 직위명(예: 국방장관, 외무대신)을 넣을 수 있습니다.
-                  </FieldHint>
-                )}
-              </FieldControl>
-            </FieldRow>
+              {countryId && historicalCountries.length > 0 && (
+                <FieldRow>
+                  <FieldLabel>역사적 국가 (선택)</FieldLabel>
+                  <FieldControl>
+                    <SelectTriggerButton
+                      type="button"
+                      onClick={() => setHistoricalCountryModalOpen(true)}
+                      $hasValue={!!historicalCountryId}
+                    >
+                      <span>
+                        {historicalCountryId
+                          ? (historicalCountries as any[]).find((h: any) => h.id === historicalCountryId)?.name ?? '역사적 국가'
+                          : '현대 국가 기준'}
+                      </span>
+                      <FiChevronDown size={20} />
+                    </SelectTriggerButton>
+                  </FieldControl>
+                </FieldRow>
+              )}
 
-            {(countryId || historicalCountryId) && cabinetOptions.length > 0 && (
               <FieldRow>
-                <FieldLabel>소속 행정부 (선택)</FieldLabel>
+                <FieldLabel>
+                  직책명 <Required aria-label="필수" />
+                </FieldLabel>
                 <FieldControl>
                   <SelectTriggerButton
                     type="button"
-                    onClick={() => setCabinetModalOpen(true)}
-                    $hasValue={!!cabinetId}
+                    onClick={() => setPositionModalOpen(true)}
+                    $hasValue={!!positionDefinitionId || !!title.trim()}
                   >
-                    <span>
-                      {cabinetId
-                        ? cabinetOptions.find((o) => o.value === cabinetId)?.label ?? '선택됨'
-                        : '행정부 선택 (각료인 경우)'}
-                    </span>
+                    <span>{positionTitleLabel}</span>
                     <FiChevronDown size={20} />
                   </SelectTriggerButton>
+                  {(cabinetId || initialCabinetId) && (
+                    <FieldHint style={{ marginTop: 6 }}>
+                      부처를 미리 등록하지 않아도 <strong>기타 (직접 입력)</strong>으로 직위명(예: 국방장관, 외무대신)을 넣을 수 있습니다.
+                    </FieldHint>
+                  )}
+                  {/* 정의를 고르지 않은 경우(기타·내장 직책·정의 없음)에만 직접 입력 — 선택 트리거에 종속 */}
+                  {!positionDefinitionId && (
+                    <ManualEntryGroup>
+                      <ManualEntryCaption>직접 입력</ManualEntryCaption>
+                      <ManualEntryField>
+                        한글 직책명
+                        <Input
+                          value={title}
+                          onChange={(e) => setTitle(e.target.value)}
+                          placeholder="예: 최고지도자"
+                        />
+                      </ManualEntryField>
+                      <ManualEntryField>
+                        영문 직책명 (선택)
+                        <Input
+                          value={titleEn}
+                          onChange={(e) => setTitleEn(e.target.value)}
+                          placeholder="예: Supreme Leader"
+                        />
+                      </ManualEntryField>
+                    </ManualEntryGroup>
+                  )}
                 </FieldControl>
               </FieldRow>
-            )}
 
-            {(cabinetId || initialCabinetId) && (
+              {(countryId || historicalCountryId) && cabinetOptions.length > 0 && (
+                <FieldRow>
+                  <FieldLabel>소속 행정부 (선택)</FieldLabel>
+                  <FieldControl>
+                    <SelectTriggerButton
+                      type="button"
+                      onClick={() => setCabinetModalOpen(true)}
+                      $hasValue={!!cabinetId}
+                    >
+                      <span>
+                        {cabinetId
+                          ? cabinetOptions.find((o) => o.value === cabinetId)?.label ?? '선택됨'
+                          : '행정부 선택 (각료인 경우)'}
+                      </span>
+                      <FiChevronDown size={20} />
+                    </SelectTriggerButton>
+                  </FieldControl>
+                </FieldRow>
+              )}
+
+              {(cabinetId || initialCabinetId) && (
+                <FieldRow>
+                  <FieldLabel>관련 사건</FieldLabel>
+                  <FieldControl>
+                    <EventAttachButton
+                      type="button"
+                      onClick={() => setEventAttachModalOpen(true)}
+                    >
+                      <FiLink size={13} />
+                      이 행정부에 사건 등록·연결
+                    </EventAttachButton>
+                    <FieldHint style={{ marginTop: 6 }}>
+                      재임 중 일어난 사건을 새로 만들거나 기존 사건을 이 행정부와 연결합니다. 같은 사건을 다른 행정부에서도 다시 연결할 수 있습니다.
+                    </FieldHint>
+                  </FieldControl>
+                </FieldRow>
+              )}
+
+              <DateRangeField
+                label="취임일 · 퇴임일"
+                required
+                startValue={startDate}
+                endValue={endDate}
+                onStartChange={setStartDate}
+                onEndChange={setEndDate}
+                startPlaceholder="취임일"
+                endPlaceholder="퇴임일 (선택)"
+                openEndAfterStart
+              />
+            </FormRows>
+          </SidebarFormWrap>
+        </S.FormSection>
+
+        <S.FormSection>
+          <S.FormSectionHeader>
+            <S.FormSectionIcon>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h12v2H3v-2z"
+                  fill="currentColor"
+                />
+              </svg>
+            </S.FormSectionIcon>
+            <div>
+              <S.FormSectionTitle>임기 상세</S.FormSectionTitle>
+              <S.FormSectionDescription>
+                대수·취임 방식·퇴임 사유 등 부가 정보 (모두 선택)
+              </S.FormSectionDescription>
+            </div>
+          </S.FormSectionHeader>
+
+          <SidebarFormWrap>
+            <FormRows>
               <FieldRow>
-                <FieldLabel>관련 사건</FieldLabel>
+                <FieldLabel>대수/재위번호</FieldLabel>
                 <FieldControl>
-                  <button
-                    type="button"
-                    onClick={() => setEventAttachModalOpen(true)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '8px 12px',
-                      background: '#eff6ff',
-                      border: '1px solid #bfdbfe',
-                      borderRadius: 6,
-                      color: '#1d4ed8',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <FiLink size={13} />
-                    이 행정부에 사건 등록·연결
-                  </button>
-                  <FieldHint style={{ marginTop: 6 }}>
-                    재임 중 일어난 사건을 새로 만들거나 기존 사건을 이 행정부와 연결합니다. 같은 사건을 다른 행정부에서도 다시 연결할 수 있습니다.
-                  </FieldHint>
-                </FieldControl>
-              </FieldRow>
-            )}
-
-            {(!positionDefinitionId || (positionDefinitions as any[]).length === 0) && (
-              <>
-                <FieldRow>
-                  <FieldLabel>직책명 (직접 입력)</FieldLabel>
-                  <FieldControl>
-                    <Input
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="예: 최고지도자"
-                    />
-                  </FieldControl>
-                </FieldRow>
-                <FieldRow>
-                  <FieldLabel>직책명 (영문)</FieldLabel>
-                  <FieldControl>
-                    <Input
-                      value={titleEn}
-                      onChange={(e) => setTitleEn(e.target.value)}
-                      placeholder="예: Supreme Leader"
-                    />
-                  </FieldControl>
-                </FieldRow>
-              </>
-            )}
-
-            <DateRangeField
-              label="취임일 · 퇴임일"
-              required
-              startValue={startDate}
-              endValue={endDate}
-              onStartChange={setStartDate}
-              onEndChange={setEndDate}
-              startPlaceholder="취임일"
-              endPlaceholder="퇴임일 (선택)"
-              openEndAfterStart
-            />
-
-            <FieldRow>
-              <FieldLabel>대수/재위번호</FieldLabel>
-              <FieldControl>
-                <Input
-                  type="number"
-                  min={1}
-                  value={regnalNumber}
-                  onChange={(e) => setRegnalNumber(e.target.value)}
-                  placeholder="선택"
-                  title="역대 순번"
-                />
-              </FieldControl>
-            </FieldRow>
-
-            <FieldRow>
-              <FieldLabel>기수</FieldLabel>
-              <FieldControl>
-                <Input
-                  type="number"
-                  min={1}
-                  value={subTermNumber}
-                  onChange={(e) => setSubTermNumber(e.target.value)}
-                  placeholder="선택 (예: 1기→1, 2기→2)"
-                  title="같은 대수 내 복수 임기 구분 (예: 클린턴 42대 1기/2기)"
-                />
-              </FieldControl>
-            </FieldRow>
-
-            <FieldRow>
-              <FieldLabel>취임 방식</FieldLabel>
-              <FieldControl>
-                <FormSelectNative
-                  value={appointmentMethod}
-                  onChange={(e) => setAppointmentMethod(e.target.value)}
-                >
-                  <option value="">선택 안 함</option>
-                  {APPOINTMENT_METHOD_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </FormSelectNative>
-              </FieldControl>
-            </FieldRow>
-
-            <FieldRow>
-              <FieldLabel>퇴임 사유</FieldLabel>
-              <FieldControl>
-                <FormSelectNative
-                  value={endReason}
-                  onChange={(e) => setEndReason(e.target.value)}
-                >
-                  <option value="">선택 안 함</option>
-                  {TENURE_END_REASON_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </FormSelectNative>
-              </FieldControl>
-            </FieldRow>
-
-            <FieldRow>
-              <FieldLabel>퇴임 사유 상세</FieldLabel>
-              <FieldControl>
-                <Input
-                  value={endReasonDetail}
-                  onChange={(e) => setEndReasonDetail(e.target.value)}
-                  placeholder="선택 (예: 12·12 군사반란으로 실각)"
-                />
-              </FieldControl>
-            </FieldRow>
-
-            <FieldRow>
-              <FieldLabel>비고</FieldLabel>
-              <FieldControl>
-                <Textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="선택 — 재임 관련 특이사항"
-                  rows={2}
-                />
-              </FieldControl>
-            </FieldRow>
-
-            <FieldRow>
-              <FieldLabel>연대표에 표시</FieldLabel>
-              <FieldControl>
-                <CheckboxLabelRow>
-                  <input
-                    type="checkbox"
-                    id="tenure-show-on-events"
-                    checked={showOnEvents}
-                    onChange={(e) => setShowOnEvents(e.target.checked)}
+                  <Input
+                    type="number"
+                    min={1}
+                    value={regnalNumber}
+                    onChange={(e) => setRegnalNumber(e.target.value)}
+                    placeholder="선택"
+                    title="역대 순번"
                   />
-                  <label htmlFor="tenure-show-on-events">사건 목록에 포함</label>
-                </CheckboxLabelRow>
-              </FieldControl>
-            </FieldRow>
+                </FieldControl>
+              </FieldRow>
+
+              <FieldRow>
+                <FieldLabel>기수</FieldLabel>
+                <FieldControl>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={subTermNumber}
+                    onChange={(e) => setSubTermNumber(e.target.value)}
+                    placeholder="선택 (예: 1기→1, 2기→2)"
+                    title="같은 대수 내 복수 임기 구분 (예: 클린턴 42대 1기/2기)"
+                  />
+                </FieldControl>
+              </FieldRow>
+
+              <FieldRow>
+                <FieldLabel>취임 방식</FieldLabel>
+                <FieldControl>
+                  <FormSelectNative
+                    value={appointmentMethod}
+                    onChange={(e) => setAppointmentMethod(e.target.value)}
+                  >
+                    <option value="">선택 안 함</option>
+                    {APPOINTMENT_METHOD_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </FormSelectNative>
+                </FieldControl>
+              </FieldRow>
+
+              <FieldRow>
+                <FieldLabel>퇴임 사유</FieldLabel>
+                <FieldControl>
+                  <FormSelectNative
+                    value={endReason}
+                    onChange={(e) => setEndReason(e.target.value)}
+                  >
+                    <option value="">선택 안 함</option>
+                    {TENURE_END_REASON_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </FormSelectNative>
+                </FieldControl>
+              </FieldRow>
+
+              <FieldRow>
+                <FieldLabel>퇴임 사유 상세</FieldLabel>
+                <FieldControl>
+                  <Input
+                    value={endReasonDetail}
+                    onChange={(e) => setEndReasonDetail(e.target.value)}
+                    placeholder="선택 (예: 12·12 군사반란으로 실각)"
+                  />
+                </FieldControl>
+              </FieldRow>
+
+              <FieldRow>
+                <FieldLabel>비고</FieldLabel>
+                <FieldControl>
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="선택 — 재임 관련 특이사항"
+                    rows={2}
+                  />
+                </FieldControl>
+              </FieldRow>
+
+              <FieldRow>
+                <FieldLabel>연대표에 표시</FieldLabel>
+                <FieldControl>
+                  <CheckboxLabelRow>
+                    <input
+                      type="checkbox"
+                      id="tenure-show-on-events"
+                      checked={showOnEvents}
+                      onChange={(e) => setShowOnEvents(e.target.checked)}
+                    />
+                    <label htmlFor="tenure-show-on-events">사건 목록에 포함</label>
+                  </CheckboxLabelRow>
+                </FieldControl>
+              </FieldRow>
             </FormRows>
           </SidebarFormWrap>
         </S.FormSection>
 
         {(isEdit && (
           <FormActions>
-            <DeleteButton type="button" onClick={handleDelete} disabled={submitting}>
+            <DeleteButton
+              type="button"
+              onClick={() => setDeleteConfirmOpen(true)}
+              disabled={submitting}
+            >
               삭제
             </DeleteButton>
           </FormActions>
@@ -969,7 +1096,13 @@ export function TenureRegisterPanel({
         onClose={() => setPositionModalOpen(false)}
         title="직책명 선택"
         options={positionTitleOptions}
-        selectedValue={positionDefinitionId ?? OTHER_POSITION_VALUE}
+        selectedValue={
+          positionDefinitionId ??
+          (presetPositionType
+            ? BUILTIN_POSITIONS.find((b) => b.positionType === presetPositionType)
+                ?.value ?? OTHER_POSITION_VALUE
+            : OTHER_POSITION_VALUE)
+        }
         onSelect={handlePositionSelect}
       />
 
@@ -995,6 +1128,16 @@ export function TenureRegisterPanel({
           }}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={deleteConfirmOpen}
+        title={editingIsSovereign ? '재위 기록 삭제' : '재임 기록 삭제'}
+        message={`이 ${editingIsSovereign ? '재위' : '재임'} 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.`}
+        confirmLabel={submitting ? '삭제 중…' : '삭제'}
+        danger
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+      />
     </FormSidePanel>
   )
 }

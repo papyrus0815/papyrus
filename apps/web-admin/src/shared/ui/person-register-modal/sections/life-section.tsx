@@ -160,11 +160,6 @@ export function LifeSection({
                   }
                   aria-invalid={!!errors.birth}
                   disabled={isBirthDateUnknown}
-                  style={
-                    isBirthDateUnknown
-                      ? { opacity: 0.5, cursor: 'not-allowed' }
-                      : undefined
-                  }
                 >
                   <FiCalendar size={16} />
                   <span>
@@ -210,11 +205,6 @@ export function LifeSection({
                   }
                   aria-invalid={!!errors.death}
                   disabled={isAlive || isDeathDateUnknown}
-                  style={
-                    isAlive || isDeathDateUnknown
-                      ? { opacity: 0.5, cursor: 'not-allowed' }
-                      : undefined
-                  }
                 >
                   <FiCalendar size={16} />
                   <span>
@@ -251,11 +241,7 @@ export function LifeSection({
                   role="radio"
                   aria-checked={!isAlive && !isDeathDateUnknown}
                   $active={!isAlive && !isDeathDateUnknown}
-                  onClick={() => {
-                    setDeathStatus('deceased')
-                    // 공용 date-range "시작 후 종료 자동 오픈"과 동일 — 사망일 미입력 시 피커 즉시 노출.
-                    if (!deathYear.trim()) setShowDeathDateModal(true)
-                  }}
+                  onClick={() => setDeathStatus('deceased')}
                 >
                   사망
                 </Segmented3WayBtn>
@@ -286,40 +272,48 @@ export function LifeSection({
       )}
 
       {/*
-       * 사망 상세 — 사망/일자미상일 때만(=생존중 아닐 때). details 영역.
+       * 사망 유형(사인) — 사망/일자미상일 때만(=생존중 아닐 때). essentials 영역.
+       * 암살·전사·처형은 역사 인물의 핵심 사실이라 "더 입력"을 펼치지 않아도 보이게 코어로 올림.
+       * 원인 상세·메모는 details(아래)에 유지 — 유형 칩이 두 번 그려지지 않도록 details에선 제외.
        * 13개 평면 chip → 4그룹 mini-header. 그룹 내 chip은 active=indigo fill.
-       * 카테고리화로 사용자가 "사고/외부" 같은 의미를 한눈에 찾도록.
        */}
+      {showEssentials && !isAlive && (
+        <FieldRow>
+          <FieldLabel>사망 유형</FieldLabel>
+          <FieldControl>
+            <DeathTypeGrouped role="group" aria-label="사망 유형">
+              {DEATH_TYPE_GROUPS.map((group) => (
+                <DeathTypeGroupBox key={group.key}>
+                  <DeathTypeGroupLabel>{group.label}</DeathTypeGroupLabel>
+                  <DeathTypeChips>
+                    {group.options.map((opt) => (
+                      <DeathTypeChip
+                        key={opt.value}
+                        type="button"
+                        aria-pressed={deathType === opt.value}
+                        $active={deathType === opt.value}
+                        onClick={() => {
+                          setDeathType(deathType === opt.value ? '' : opt.value)
+                          markDirty()
+                        }}
+                      >
+                        {opt.label}
+                      </DeathTypeChip>
+                    ))}
+                  </DeathTypeChips>
+                </DeathTypeGroupBox>
+              ))}
+            </DeathTypeGrouped>
+          </FieldControl>
+        </FieldRow>
+      )}
+
+      {/* 사망 상세 — 원인·메모. details 영역(유형은 essentials로 분리). */}
       {showDetails && !isAlive && (
         <FieldRow>
           <FieldLabel>사망 상세</FieldLabel>
           <FieldControl>
             <LifeDeathDetails>
-              <DeathTypeGrouped role="group" aria-label="사망 유형">
-                {DEATH_TYPE_GROUPS.map((group) => (
-                  <DeathTypeGroupBox key={group.key}>
-                    <DeathTypeGroupLabel>{group.label}</DeathTypeGroupLabel>
-                    <DeathTypeChips>
-                      {group.options.map((opt) => (
-                        <DeathTypeChip
-                          key={opt.value}
-                          type="button"
-                          aria-pressed={deathType === opt.value}
-                          $active={deathType === opt.value}
-                          onClick={() => {
-                            setDeathType(
-                              deathType === opt.value ? '' : opt.value,
-                            )
-                            markDirty()
-                          }}
-                        >
-                          {opt.label}
-                        </DeathTypeChip>
-                      ))}
-                    </DeathTypeChips>
-                  </DeathTypeGroupBox>
-                ))}
-              </DeathTypeGrouped>
               <FormInput
                 value={deathCause}
                 onChange={(e) => {

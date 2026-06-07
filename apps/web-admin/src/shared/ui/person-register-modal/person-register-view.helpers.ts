@@ -23,7 +23,7 @@ export const REQUIRED_MESSAGES = {
   name: '이름을 입력해주세요.',
   surname: '성을 입력해주세요.',
   gender: '성별을 선택해주세요.',
-  countryId: '소속(출생) 국가를 선택해주세요.',
+  countryId: '국적을 선택해주세요.',
 } as const
 
 /** 자주 사용하는 5개. 나머지는 "더보기"로 접기. */
@@ -203,7 +203,7 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   name: string
   surname: string
   middleName: string
-  nameFormat: 'korean' | 'western'
+  nameFormat: 'auto' | 'korean' | 'western'
   originalName: string
   surnameMeaning: string
   nameMeaning: string

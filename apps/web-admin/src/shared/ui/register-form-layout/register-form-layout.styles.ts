@@ -199,7 +199,7 @@ export const DateFieldBtn = styled.button<{ $hasValue?: boolean }>`
     border-color 0.15s ease,
     background 0.15s ease,
     box-shadow 0.15s ease;
-  &:hover {
+  &:hover:not(:disabled) {
     border-color: ${({ theme }) => theme.colors.border.medium};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
@@ -210,6 +210,10 @@ export const DateFieldBtn = styled.button<{ $hasValue?: boolean }>`
     box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
   span {
     flex: 1;
@@ -230,6 +234,21 @@ export const FieldHint = styled.span`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.4;
+`
+
+/** 이름 표시 순서 컨트롤 — 이름 입력 아래 보조 줄. 작은 라벨 + 세그먼트. */
+export const NameOrderControl = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+`
+
+export const NameOrderLabel = styled.label`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 /**

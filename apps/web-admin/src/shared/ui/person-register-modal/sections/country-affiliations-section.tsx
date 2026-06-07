@@ -84,6 +84,18 @@ function rowError(row: CountryAffiliationRow): string | null {
   return null
 }
 
+/**
+ * 제출 차단용 — 종료일이 시작일보다 빠른 행이 하나라도 있으면 true.
+ * (국가 미선택 행은 buildPayload가 조용히 걸러내므로 차단 대상에서 제외 — 인라인 경고만)
+ */
+export function hasAffiliationDateError(
+  rows: CountryAffiliationRow[],
+): boolean {
+  return rows.some(
+    (r) => !!r.startDate && !!r.endDate && r.startDate > r.endDate,
+  )
+}
+
 export interface CountryAffiliationsSectionProps {
   fid: (key: string) => string
   rows: CountryAffiliationRow[]
@@ -161,6 +173,12 @@ export function CountryAffiliationsSection({
               {rows.map((row, idx) => {
                 const err = rowError(row)
                 const missingCountry = hasDataButNoCountry(row)
+                // 제출 차단 대상(종료<시작)인 행만 날짜 버튼에 aria-invalid 표시 —
+                // 제출 실패 시 폼의 첫 [aria-invalid] 스크롤이 이 행을 잡도록.
+                const dateInvalid =
+                  !!row.startDate &&
+                  !!row.endDate &&
+                  row.startDate > row.endDate
                 return (
                   <RowCard key={row.key} $invalid={!!err}>
                     <RowTop>
@@ -209,6 +227,7 @@ export function CountryAffiliationsSection({
                         type="button"
                         $hasValue={!!row.startDate}
                         aria-label={`소속 ${idx + 1} 시작일 선택`}
+                        aria-invalid={dateInvalid}
                         onClick={() => openDateModal(row.key, 'startDate')}
                       >
                         <FiCalendar size={13} />
@@ -219,6 +238,7 @@ export function CountryAffiliationsSection({
                         type="button"
                         $hasValue={!!row.endDate}
                         aria-label={`소속 ${idx + 1} 종료일 선택`}
+                        aria-invalid={dateInvalid}
                         onClick={() => openDateModal(row.key, 'endDate')}
                       >
                         <FiCalendar size={13} />

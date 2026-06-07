@@ -127,12 +127,12 @@ const Panel = styled.div<{ $width?: number }>`
   bottom: 0;
   width: min(${(p) => p.$width ?? 600}px, calc(100% - 20px));
   max-height: 100vh;
-  background: #ffffff;
+  background: ${({ theme }) => theme.colors.background.primary};
   z-index: ${Z_INDEX.DRAWER_CONTENT};
   display: flex;
   flex-direction: column;
   border-radius: 16px 0 0 16px;
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.06);
+  box-shadow: -8px 0 32px ${({ theme }) => theme.colors.shadow.lg};
 `
 
 const Header = styled.div`
@@ -147,7 +147,7 @@ const Title = styled.h2`
   margin: 0;
   font-size: 19px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.04em;
   line-height: 1.25;
 `
@@ -159,15 +159,15 @@ const CloseButton = styled.button`
   width: 40px;
   height: 40px;
   border: none;
-  background: #f8fafc;
-  color: #64748b;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   border-radius: 12px;
   transition: background 0.2s, color 0.2s, transform 0.15s;
 
   &:hover {
-    background: #f1f5f9;
-    color: #334155;
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   &:active {
     transform: scale(0.96);
@@ -188,11 +188,11 @@ const Content = styled.div`
     background: transparent;
   }
   &::-webkit-scrollbar-thumb {
-    background: #e2e8f0;
+    background: ${({ theme }) => theme.colors.border.default};
     border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: #cbd5e1;
+    background: ${({ theme }) => theme.colors.border.medium};
   }
 `
 

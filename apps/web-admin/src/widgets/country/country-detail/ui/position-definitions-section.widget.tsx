@@ -43,6 +43,7 @@ import {
 const POSITION_TYPE_OPTIONS: SelectOption<string>[] = [
   { value: 'HEAD_OF_STATE', label: '국가 원수' },
   { value: 'HEAD_OF_GOVERNMENT', label: '정부 수반' },
+  { value: 'DEPUTY_HEAD_OF_STATE', label: '부통령' },
   { value: 'HEIR_APPARENT', label: '왕세자·세자' },
   { value: 'REGENT', label: '섭정' },
   { value: 'CABINET_MINISTER', label: '각료/장관' },
@@ -59,6 +60,7 @@ const POSITION_TYPE_OPTIONS: SelectOption<string>[] = [
 const POSITION_TYPE_COLOR: Record<string, { bg: string; text: string; border: string }> = {
   HEAD_OF_STATE:      { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
   HEAD_OF_GOVERNMENT: { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' },
+  DEPUTY_HEAD_OF_STATE: { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' },
   HEIR_APPARENT:      { bg: '#f3e8ff', text: '#6b21a8', border: '#e9d5ff' },
   REGENT:             { bg: '#fce7f3', text: '#9d174d', border: '#fbcfe8' },
   CABINET_MINISTER:   { bg: '#d1fae5', text: '#065f46', border: '#a7f3d0' },

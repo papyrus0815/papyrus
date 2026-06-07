@@ -397,9 +397,14 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({
         syncViewToDate(makeDate(actualYear, viewMonth, daysInCurrentMonth))
         break
       case 'Enter':
-      case ' ':
         if (isDateValid(focusDay)) handleDateSelect(focusDay)
         break
+      // Space는 핸들러(keydown)가 아니라 day 셀(<button>)의 네이티브 활성화(keyup)에 맡긴다.
+      // keydown에서 선택·닫기하면, 닫힌 뒤 포커스가 트리거 버튼으로 복귀한 상태에서
+      // 뒤따르는 Space keyup이 그 버튼을 눌러(출생→사망 자동연쇄 시 트리거=출생일 버튼)
+      // 출생일 모달이 의도치 않게 재오픈된다. keyup 선택은 후속 이벤트가 없어 안전.
+      case ' ':
+        return
       default:
         return
     }

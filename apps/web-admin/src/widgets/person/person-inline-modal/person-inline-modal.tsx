@@ -143,6 +143,8 @@ const Overlay = styled(motion.div)`
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   z-index: ${Z_INDEX.MODAL_OVERLAY};
   display: flex;
   align-items: flex-start;

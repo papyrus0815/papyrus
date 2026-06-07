@@ -20,6 +20,8 @@ export const PersonRegisterModalOverlay = styled(motion.div)`
   justify-content: center;
   padding: 24px;
   background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   z-index: ${Z_INDEX.MODAL_OVERLAY};
 `
 

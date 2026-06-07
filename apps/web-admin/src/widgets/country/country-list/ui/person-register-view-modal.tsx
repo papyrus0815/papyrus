@@ -86,7 +86,6 @@ export function PersonRegisterViewModal({
       draftEnabled={!isEdit}
       fitContent
       requiredFields={[
-        { label: '성', done: !!filled.surname, jumpTarget: 'surname' },
         { label: '이름', done: !!filled.name, jumpTarget: 'name' },
         { label: '성별', done: !!filled.gender, jumpTarget: 'gender' },
         {
