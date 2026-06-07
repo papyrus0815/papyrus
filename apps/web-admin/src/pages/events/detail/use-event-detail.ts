@@ -6,6 +6,7 @@ import {
   useSuspenseQuery,
 } from '@tanstack/react-query'
 
+import { type NormalizedMilitaryEventResponse } from '@/features/event-create/lib'
 import { getEventById } from '@/shared/api/events'
 
 /**
@@ -69,40 +70,6 @@ export interface EventDetailCabinetEvent {
   cabinet: Record<string, unknown>
 }
 
-export interface EventDetailBelligerentSide {
-  name: string
-  countries: Array<Record<string, unknown>>
-  commander?: string
-  commanderPersonId?: string
-  forces?: string
-  deployedUnits?: string[]
-  weaponsUsed?: string[]
-  description?: string
-  parentSideId?: string
-  level?: 'coalition' | 'country' | 'force'
-}
-
-export interface EventDetailTreaty {
-  id: string
-  name: string
-  signDate: string
-  expiryDate?: string
-  violationDate?: string
-  signatories: string[]
-  type: string
-  terms: string[]
-  description?: string
-}
-
-export interface EventDetailBelligerents {
-  sides: EventDetailBelligerentSide[]
-  metadata?: {
-    countryRelations?: Array<Record<string, unknown>>
-    treaties?: EventDetailTreaty[]
-    alliances?: Array<Record<string, unknown>>
-  }
-}
-
 export interface EventDetail {
   id: string
   title: string
@@ -131,9 +98,14 @@ export interface EventDetail {
   relatedCountries?: EventDetailCountryRef[]
   relatedHistoricalCountries?: EventDetailHistoricalCountryRef[]
   relatedPersons?: EventDetailPerson[]
-  belligerents?: EventDetailBelligerents | null
-  casualties?: Record<string, unknown> | null
-  militaryDetails?: Record<string, unknown> | null
+  /**
+   * 정규화 군사 정보 — 서버 응답에 런타임 전용으로 실려온다(SDK 타입엔 없어 @ts-ignore로
+   * 주입됨). 상세 군사 모듈(교전 진영·사상자·작전 정보)의 *단일 정본*. 과거의 legacy
+   * belligerents/casualties/militaryDetails 필드는 서버가 내려주지도 저장하지도 않아
+   * 제거했다. 편집은 항상 이 전체 객체를 재구성해 `onPatch({ militaryEvent })`로 보낸다
+   * (saveMilitaryData가 전체 삭제-재생성이므로 부분 전송 금지).
+   */
+  militaryEvent?: NormalizedMilitaryEventResponse | null
   warCost?: string | null
   cabinetEvents?: EventDetailCabinetEvent[]
   createdAt?: string
@@ -150,7 +122,6 @@ export type EventDetailModuleKey =
   | 'belligerents'
   | 'casualties'
   | 'military-details'
-  | 'treaties'
   | 'cabinets'
 
 /**
@@ -192,10 +163,10 @@ export function useEventDetail(eventId: string): UseEventDetailResult {
 
   const enabledModules = useMemo<EventDetailModuleKey[]>(() => {
     const keys: EventDetailModuleKey[] = []
-    if (event.belligerents?.sides?.length) keys.push('belligerents')
-    if (event.casualties) keys.push('casualties')
-    if (event.militaryDetails) keys.push('military-details')
-    if (event.belligerents?.metadata?.treaties?.length) keys.push('treaties')
+    const mil = event.militaryEvent
+    if (mil?.belligerentSides?.length) keys.push('belligerents')
+    if (mil?.casualties?.length) keys.push('casualties')
+    if (mil?.militaryDetails) keys.push('military-details')
     if (event.cabinetEvents?.length) keys.push('cabinets')
     return keys
   }, [event])

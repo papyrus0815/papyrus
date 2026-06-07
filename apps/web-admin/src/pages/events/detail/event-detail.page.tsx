@@ -20,7 +20,6 @@ import { ModuleBelligerents } from './components/module-belligerents'
 import { ModuleCabinets } from './components/module-cabinets'
 import { ModuleCasualties } from './components/module-casualties'
 import { ModuleMilitaryDetails } from './components/module-military-details'
-import { ModuleTreaties } from './components/module-treaties'
 import { PersonDetailModal } from './components/person-detail-modal'
 import { ReadingProgress } from './components/reading-progress'
 import { SaveStatus } from './components/save-status'
@@ -204,8 +203,6 @@ function EventDetailContent({ eventId }: { eventId: string }) {
       items.push({ id: 'module-casualties', label: '사상자' })
     if (enabledModules.includes('military-details'))
       items.push({ id: 'module-military-details', label: '작전 정보' })
-    if (enabledModules.includes('treaties'))
-      items.push({ id: 'module-treaties', label: '조약' })
     if (enabledModules.includes('cabinets'))
       items.push({ id: 'module-cabinets', label: '관련 행정부' })
 
@@ -281,7 +278,6 @@ function EventDetailContent({ eventId }: { eventId: string }) {
               {enabledModules.includes('military-details') && (
                 <ModuleMilitaryDetails event={event} onPatch={onPatch} />
               )}
-              {enabledModules.includes('treaties') && <ModuleTreaties event={event} />}
               {enabledModules.includes('cabinets') && <ModuleCabinets event={event} />}
 
               <DetailNetwork event={event} onPatch={onPatch} />

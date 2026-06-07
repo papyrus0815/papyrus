@@ -28,6 +28,8 @@ import {
   ledgerScrim,
   lensKindColor,
 } from '../styles/ledger-tokens'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
+
 import type { LensChip } from '../types/lens'
 import type { HistoricalEvent } from '@/entities/event/model'
 
@@ -59,8 +61,7 @@ const MAX_CATEGORY_RESULTS = 3
 
 const eventStartYear = (evt: HistoricalEvent): number | null => {
   if (!evt.startDate) return null
-  const date = new Date(evt.startDate)
-  return Number.isNaN(date.getTime()) ? null : date.getFullYear()
+  return parseIsoDateParts(evt.startDate)?.year ?? null
 }
 
 export const CommandPalette: React.FC<Props> = ({

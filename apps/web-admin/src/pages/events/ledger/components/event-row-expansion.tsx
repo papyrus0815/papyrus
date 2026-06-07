@@ -14,6 +14,7 @@ import { FiArrowRight, FiExternalLink, FiMapPin, FiTag } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled, { keyframes } from 'styled-components'
 
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 import { usePrefetchEventDetail } from '@/pages/events/detail/use-event-detail'
 
@@ -49,8 +50,7 @@ const CHILD_LIMIT = 8
 
 const startYear = (start?: string | null): number | null => {
   if (!start) return null
-  const date = new Date(start)
-  return Number.isNaN(date.getTime()) ? null : date.getFullYear()
+  return parseIsoDateParts(start)?.year ?? null
 }
 
 export const EventRowExpansion: React.FC<Props> = ({ event, onSelectChild }) => {

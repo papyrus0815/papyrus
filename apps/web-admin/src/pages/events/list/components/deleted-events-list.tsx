@@ -6,6 +6,7 @@ import React from 'react'
 
 import { useNavigate } from 'react-router-dom'
 
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 
 import type { HistoricalEvent } from '../../create/events.types'
@@ -39,7 +40,7 @@ export const DeletedEventsListPanel: React.FC<Props> = ({ deletedEvents }) => {
               <PageStyles.DeletedEventTitle>{d.title}</PageStyles.DeletedEventTitle>
               <PageStyles.DeletedEventMeta>
                 {d.startDate
-                  ? new Date(d.startDate).getFullYear() + '년'
+                  ? (parseIsoDateParts(d.startDate)?.year ?? '?') + '년'
                   : '날짜 미정'}
                 {d.category ? ` · ${d.category}` : ''}
               </PageStyles.DeletedEventMeta>

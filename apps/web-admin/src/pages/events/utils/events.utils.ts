@@ -1,6 +1,7 @@
 /**
  * 이벤트 유틸리티 함수들
  */
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import type { HeadOfStateDuringEvent } from '@/shared/api/government-positions'
 
 import type {
@@ -14,8 +15,9 @@ import type {
 export function getCenturyFromDate(dateString?: string): number | null {
   if (!dateString) return null
 
-  const year = new Date(dateString).getFullYear()
-  return Math.ceil(year / 100)
+  const parts = parseIsoDateParts(dateString)
+  if (!parts) return null
+  return Math.ceil(parts.year / 100)
 }
 
 /**
@@ -44,11 +46,9 @@ export function formatDateWithPrecision(
   dateStr: string,
   precision?: string | null,
 ): string {
-  const date = new Date(dateStr)
-  if (Number.isNaN(date.getTime())) return dateStr
-  const y = date.getFullYear()
-  const m = date.getMonth() + 1
-  const d = date.getDate()
+  const parts = parseIsoDateParts(dateStr)
+  if (!parts) return dateStr
+  const { year: y, month: m, day: d } = parts
   const prec = precision === 'year' || precision === 'month' ? precision : 'day'
   if (prec === 'year') return `${y}년`
   if (prec === 'month') return `${y}년 ${m}월`
@@ -74,8 +74,9 @@ export function formatDateRange(
  * 타임라인용 날짜 포맷
  */
 export function formatTimelineDate(dateString: string): string {
-  const date = new Date(dateString)
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+  const parts = parseIsoDateParts(dateString)
+  if (!parts) return dateString
+  return `${parts.year}.${String(parts.month).padStart(2, '0')}.${String(parts.day).padStart(2, '0')}`
 }
 
 /**

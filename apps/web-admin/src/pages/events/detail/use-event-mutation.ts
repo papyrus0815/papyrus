@@ -231,6 +231,16 @@ function buildOptimisticEvent(
     changed = true
   }
 
+  /**
+   * militaryEvent — patch가 *전체* 정규화 객체를 담으므로(saveMilitaryData가 전체
+   * 삭제-재생성) 그대로 캐시에 반영하면 enabledModules·각 모듈이 refetch 전에 즉시
+   * 갱신된다. 응답 형태와 patch 형태가 동일(NormalizedMilitaryEventResponse)이라 무변환.
+   */
+  if ('militaryEvent' in patch) {
+    next.militaryEvent = p.militaryEvent as EventDetail['militaryEvent']
+    changed = true
+  }
+
   return changed ? next : null
 }
 

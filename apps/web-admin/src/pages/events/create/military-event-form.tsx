@@ -4,6 +4,7 @@
 import React, { useState } from 'react'
 
 import { FormInput as Input, FormTextarea as TextArea } from '@/shared/ui/form-input/form-input'
+import { isoToDateInput, isoToTimeInput } from '@/shared/lib/iso-date'
 
 import {
   FiCalendar,
@@ -1260,34 +1261,12 @@ export const MilitaryEventForm: React.FC<MilitaryEventFormProps> = ({
     setCountryModalOpen(true)
   }
 
-  // 날짜/시간 헬퍼 함수
-  const getDateFromISO = (isoString?: string): string => {
-    if (!isoString) return ''
-    try {
-      const date = new Date(isoString)
-      if (isNaN(date.getTime())) return ''
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      return `${year}-${month}-${day}`
-    } catch {
-      return ''
-    }
-  }
+  // 날짜/시간 헬퍼 함수 — 저장은 UTC 자정 기준이므로 네이티브 로컬 게터를 쓰면
+  // UTC 음수 오프셋 지역에서 날짜가 하루 빠지고(getDate) 시간이 오프셋만큼 밀린다
+  // (getHours). 문자열에서 직접 추출해 타임존 무관하게 한다.
+  const getDateFromISO = (isoString?: string): string => isoToDateInput(isoString)
 
-  const getTimeFromISO = (isoString?: string): string => {
-    if (!isoString) return ''
-    try {
-      const date = new Date(isoString)
-      if (isNaN(date.getTime())) return ''
-      const hours = date.getHours().toString().padStart(2, '0')
-      const minutes = date.getMinutes().toString().padStart(2, '0')
-      if (hours === '00' && minutes === '00') return ''
-      return `${hours}:${minutes}`
-    } catch {
-      return ''
-    }
-  }
+  const getTimeFromISO = (isoString?: string): string => isoToTimeInput(isoString)
 
   const combineDateTime = (
     date: string,

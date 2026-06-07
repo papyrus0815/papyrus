@@ -1,10 +1,9 @@
 /**
  * 모듈 추가 — 빈 모듈 발견을 위한 dropdown.
  *
- * 사상자/작전 정보/교전 진영은 stub 데이터로 즉시 추가. 추가 후 사용자가 각 모듈에서
- * inline-edit으로 채움(현재는 read-only이라 후속 작업에서 모듈별 inline-edit 추가 필요).
+ * 사상자/작전 정보/교전 진영은 정규화 militaryEvent에 빈 stub을 추가해 즉시 활성화하고,
+ * 사용자가 각 모듈에서 inline-edit으로 채운다(buildMilitaryPatch로 전체 재구성 저장).
  *
- * 조약(treaties)은 belligerents.metadata 트리 아래라 merge 필요 — 별도 사이클.
  * 행정부(cabinets)는 cabinet-events API 분리 — 별도 사이클.
  */
 import { useEffect, useRef, useState } from 'react'
@@ -15,6 +14,7 @@ import styled from 'styled-components'
 import { ledgerHairlineStrong } from '@/pages/events/ledger/styles/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 
+import { buildMilitaryPatch } from '../military-edit'
 import { type EventDetail } from '../use-event-detail'
 import {
   type EventDetailModuleKey,
@@ -83,26 +83,32 @@ export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
     {
       key: 'casualties',
       label: '사상자·피해',
-      patch: { casualties: {} },
+      // 빈 진영 행 1개로 모듈만 활성화 — 값은 inline-edit으로 채움.
+      patch: buildMilitaryPatch(event, (draft) => ({
+        ...draft,
+        casualties: [...draft.casualties, { sideName: '' }],
+      })),
     },
     {
       key: 'military-details',
       label: '작전 정보',
-      patch: { militaryDetails: {} },
+      // 빈 객체로 모듈만 활성화(truthy) — 필드는 inline-edit으로 채움.
+      patch: buildMilitaryPatch(event, (draft) => ({
+        ...draft,
+        militaryDetails: { ...(draft.militaryDetails ?? {}) },
+      })),
     },
     {
       key: 'belligerents',
       label: '교전 진영',
-      patch: {
-        belligerents: {
-          ...(event.belligerents ?? {}),
-          sides: [
-            ...(event.belligerents?.sides ?? []),
-            // 빈 이름으로 시작 — 사용자가 채울 때까지 placeholder만 노출.
-            { name: '', countries: [] },
-          ],
-        },
-      },
+      patch: buildMilitaryPatch(event, (draft) => ({
+        ...draft,
+        belligerentSides: [
+          ...draft.belligerentSides,
+          // 빈 이름으로 시작 — 사용자가 채울 때까지 placeholder만 노출.
+          { name: '', countries: [] },
+        ],
+      })),
     },
   ]
 
@@ -110,12 +116,6 @@ export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
 
   /* 후속 작업이라 dropdown에 disabled로 노출 — 사용자가 무엇이 가능할지 알도록. */
   const deferredOptions: Array<{ label: string; reason: string }> = []
-  if (!enabledModules.includes('treaties')) {
-    deferredOptions.push({
-      label: '조약',
-      reason: '교전 진영 추가 후 가능',
-    })
-  }
   if (!enabledModules.includes('cabinets')) {
     deferredOptions.push({
       label: '관련 행정부',

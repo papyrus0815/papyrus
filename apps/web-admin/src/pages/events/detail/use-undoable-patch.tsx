@@ -180,11 +180,13 @@ function buildInverse(
        * 서버가 컬럼을 비울 수 있다(서버는 `=== undefined` 가드라 undefined는 무시).
        * 객체가 있던 상태로 되돌릴 때는 원래 객체 그대로.
        */
-      case 'belligerents':
-      case 'casualties':
-      case 'militaryDetails': {
-        const prev = (event as unknown as Record<string, unknown>)[k as string]
-        inv[k as string] = prev ?? null
+      /**
+       * 정규화 군사 정보 — 전체 객체를 보낸다. 원래 비어 있었으면(undefined/null)
+       * 빈 객체 `{}`를 *명시 전송*해야 서버가 모두 비운다(saveMilitaryData는 truthy일
+       * 때만 동작 — null은 무시되어 데이터가 남는다).
+       */
+      case 'militaryEvent': {
+        inv.militaryEvent = (event.militaryEvent ?? {}) as UpdateEventDto['militaryEvent']
         break
       }
       /**

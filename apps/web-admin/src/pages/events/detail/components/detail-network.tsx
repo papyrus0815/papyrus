@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { FiPlus, FiX } from 'react-icons/fi'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -8,9 +9,14 @@ import {
   ledgerHairlineStrong,
   resolveCategory,
 } from '@/pages/events/ledger/styles/ledger-tokens'
-import { type UpdateEventDto } from '@/shared/api/events'
+import {
+  type EventResponseDto,
+  type UpdateEventDto,
+  getAllEvents,
+} from '@/shared/api/events'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { pathKeys } from '@/shared/router'
+import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
@@ -37,6 +43,54 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
 
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
+
+  /* 상위·하위 사건 연결 모달 — 열릴 때만 전체 사건 목록을 적재. */
+  const [parentModalOpen, setParentModalOpen] = useState(false)
+  const [childModalOpen, setChildModalOpen] = useState(false)
+  const { data: allEvents = [], isLoading: eventsLoading } = useQuery({
+    queryKey: ['events', 'all-for-link'],
+    queryFn: () => getAllEvents({ limit: 300 }),
+    enabled: parentModalOpen || childModalOpen,
+    staleTime: 60_000,
+  })
+
+  const childIds = children.map((c) => c.id)
+
+  /* 선택 옵션 — 자기 자신 제외. (getAllEvents는 최상위 사건만 반환.) */
+  const eventOptions = useMemo<SelectOption[]>(
+    () =>
+      (allEvents as EventResponseDto[])
+        .filter((e) => e.id !== event.id)
+        .map((e) => ({
+          value: e.id,
+          label: e.title,
+          description: e.startDate ?? undefined,
+        })),
+    [allEvents, event.id],
+  )
+
+  /**
+   * 하위 사건 연결 — 서버는 childEventIds를 받으면 *기존 연결을 모두 해제 후 재설정*하므로
+   * 항상 전체 목록을 보낸다. 토글식: 이미 자식이면 제거, 아니면 추가.
+   */
+  const toggleChild = (childId: string) => {
+    const next = childIds.includes(childId)
+      ? childIds.filter((id) => id !== childId)
+      : [...childIds, childId]
+    onPatch({ childEventIds: next })
+  }
+
+  const removeChild = (childId: string) => {
+    onPatch({ childEventIds: childIds.filter((id) => id !== childId) })
+  }
+
+  /** 상위 사건 지정/변경/해제. 해제는 null을 명시 전송해야 FK가 비워진다. */
+  const setParent = (parentId: string | null) => {
+    onPatch({ parentEventId: parentId } as UpdateEventDto)
+    setParentModalOpen(false)
+  }
+
+  const parentEvent = event.parentEvent
 
   const submitKeyword = () => {
     const next = draft.trim()
@@ -85,37 +139,82 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
         )}
       </S.SectionHeader>
 
-      {children.length > 0 && (
-        <S.CardGrid $cols={2}>
-          {children.map((child) => {
-            const category = resolveCategory(child.category?.name)
-            const dateLabel =
-              child.startDate &&
-              formatDateRange(
-                child.startDate,
-                child.endDate ?? undefined,
-                child.startDatePrecision,
-                child.endDatePrecision,
-              )
-            return (
-              <ChildCard
-                key={child.id}
-                to={pathKeys.events.detail(child.id)}
+      {/* 상위 사건 — 지정/변경/해제 */}
+      <HierBlock>
+        <KeywordsLabel>상위 사건</KeywordsLabel>
+        <HierRow>
+          {parentEvent ? (
+            <>
+              <ParentLink
+                to={pathKeys.events.detail(parentEvent.id)}
                 viewTransition
-                onMouseEnter={() => prefetchEvent(child.id)}
-                onFocus={() => prefetchEvent(child.id)}
+                onMouseEnter={() => prefetchEvent(parentEvent.id)}
               >
-                <ChildBar style={{ background: category.color }} />
-                <ChildBody>
-                  <ChildTitle>{child.title}</ChildTitle>
-                  {dateLabel && <ChildMeta>{dateLabel}</ChildMeta>}
-                  {child.description && <ChildDesc>{child.description}</ChildDesc>}
-                </ChildBody>
-              </ChildCard>
-            )
-          })}
-        </S.CardGrid>
-      )}
+                {parentEvent.title}
+              </ParentLink>
+              <TextBtn type="button" onClick={() => setParentModalOpen(true)}>
+                변경
+              </TextBtn>
+              <TextBtn type="button" onClick={() => setParent(null)}>
+                해제
+              </TextBtn>
+            </>
+          ) : (
+            <AddBtn type="button" onClick={() => setParentModalOpen(true)}>
+              <FiPlus /> 상위 사건 지정
+            </AddBtn>
+          )}
+        </HierRow>
+      </HierBlock>
+
+      {/* 하위 사건 — 카드 그리드 + 추가/제거 */}
+      <HierBlock>
+        <KeywordsLabel>하위 사건</KeywordsLabel>
+        {children.length > 0 && (
+          <S.CardGrid $cols={2}>
+            {children.map((child) => {
+              const category = resolveCategory(child.category?.name)
+              const dateLabel =
+                child.startDate &&
+                formatDateRange(
+                  child.startDate,
+                  child.endDate ?? undefined,
+                  child.startDatePrecision,
+                  child.endDatePrecision,
+                )
+              return (
+                <ChildCardWrap key={child.id}>
+                  <ChildCard
+                    to={pathKeys.events.detail(child.id)}
+                    viewTransition
+                    onMouseEnter={() => prefetchEvent(child.id)}
+                    onFocus={() => prefetchEvent(child.id)}
+                  >
+                    <ChildBar style={{ background: category.color }} />
+                    <ChildBody>
+                      <ChildTitle>{child.title}</ChildTitle>
+                      {dateLabel && <ChildMeta>{dateLabel}</ChildMeta>}
+                      {child.description && (
+                        <ChildDesc>{child.description}</ChildDesc>
+                      )}
+                    </ChildBody>
+                  </ChildCard>
+                  <RemoveChildBtn
+                    type="button"
+                    onClick={() => removeChild(child.id)}
+                    aria-label={`${child.title} 하위 연결 해제`}
+                  >
+                    <FiX />
+                  </RemoveChildBtn>
+                </ChildCardWrap>
+              )
+            })}
+          </S.CardGrid>
+        )}
+        <AddBtn type="button" onClick={() => setChildModalOpen(true)}>
+          <FiPlus /> 하위 사건 추가
+        </AddBtn>
+      </HierBlock>
 
       <KeywordsBlock>
         <KeywordsLabel>키워드</KeywordsLabel>
@@ -157,6 +256,30 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
           )}
         </KeywordsRow>
       </KeywordsBlock>
+
+      <SelectModal
+        isOpen={parentModalOpen}
+        onClose={() => setParentModalOpen(false)}
+        title="상위 사건 지정"
+        options={eventOptions}
+        selectedValue={event.parentEventId ?? undefined}
+        onSelect={(id) => setParent(id)}
+        searchable
+        searchPlaceholder="사건명으로 검색..."
+        isLoading={eventsLoading}
+      />
+      <SelectModal
+        isOpen={childModalOpen}
+        onClose={() => setChildModalOpen(false)}
+        title="하위 사건 추가"
+        options={eventOptions}
+        multiple
+        selectedValues={childIds}
+        onSelect={(id) => toggleChild(id)}
+        searchable
+        searchPlaceholder="사건명으로 검색..."
+        isLoading={eventsLoading}
+      />
     </S.Section>
   )
 }
@@ -193,6 +316,94 @@ function parseEventDateTokens(
   const day = m[3] ? parseInt(m[3], 10) : 1
   return { year, month, day }
 }
+
+const HierBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const HierRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+`
+
+const ParentLink = styled(Link)`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    outline: none;
+  }
+`
+
+const TextBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  transition: color 0.14s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const ChildCardWrap = styled.div`
+  position: relative;
+
+  /* 카드 호버 시 제거 버튼 노출 — wrap 안의 유일한 button. */
+  &:hover button {
+    opacity: 0.7;
+  }
+`
+
+const RemoveChildBtn = styled.button`
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.14s, color 0.14s;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    color: ${({ theme }) => theme.colors.error};
+    outline: none;
+  }
+
+  @media (hover: none) {
+    opacity: 0.7;
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+`
 
 const ChildCard = styled(Link)`
   display: flex;

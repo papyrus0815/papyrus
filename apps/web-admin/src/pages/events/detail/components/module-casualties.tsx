@@ -1,8 +1,13 @@
+import { FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { type UpdateEventDto } from '@/shared/api/events'
-import { formatCompactNumber } from '@/pages/events/utils/events.utils'
 
+import {
+  type CasualtyShape,
+  buildMilitaryPatch,
+  getMilitary,
+} from '../military-edit'
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 import { InlineText } from './inline'
@@ -15,55 +20,41 @@ interface ModuleCasualtiesProps {
 }
 
 /**
- * 사상자 — `casualties` 응답이 `any | null`이라 형태가 가변.
- * 알려진 키(killed/wounded/missing/captured/civilian/total) 모두를 그리드로 노출.
- * 숫자/문자 모두 받되, parseInt 가능한 문자열은 number로 저장(서버 정규화).
+ * 사상자·피해 — 정규화 militaryEvent.casualties(진영별 행)의 편집 가능 뷰.
  *
- * 큰 숫자(인적 피해)는 본문에서 *통계 그리드*로 강조 — 다른 모듈의 dl과 차별화해
- * "수치"임을 시각적으로 분리.
+ * 정규화 모델은 진영명 + 전사(totalKilled) + 부상(totalWounded)만 저장한다(서버
+ * CasualtiesData). 진영 단위로 행을 추가/제거하고 각 값을 InlineText로 편집한다.
  */
-const KNOWN_FIELDS: Array<{ key: string; label: string }> = [
-  { key: 'killed', label: '전사' },
-  { key: 'wounded', label: '부상' },
-  { key: 'missing', label: '실종' },
-  { key: 'captured', label: '포로' },
-  { key: 'civilian', label: '민간인' },
-  { key: 'total', label: '합계' },
-]
-
 export function ModuleCasualties({ event, onPatch }: ModuleCasualtiesProps) {
-  const data = (event.casualties as Record<string, unknown> | null | undefined) ?? {}
+  const rows = getMilitary(event).casualties ?? []
 
-  const readValue = (key: string): string => {
-    const raw = data[key]
-    if (raw === undefined || raw === null) return ''
-    if (typeof raw === 'number') return String(raw)
-    if (typeof raw === 'string') return raw
-    return ''
+  const updateRow = (idx: number, patch: Partial<CasualtyShape>) => {
+    onPatch(
+      buildMilitaryPatch(event, (draft) => ({
+        ...draft,
+        casualties: draft.casualties.map((c, i) =>
+          i === idx ? { ...c, ...patch } : c,
+        ),
+      })),
+    )
   }
 
-  const updateField = (key: string, next: string) => {
-    const trimmed = next.trim()
-    const merged: Record<string, unknown> = { ...data }
-    if (trimmed) {
-      const num = Number(trimmed.replace(/[, ]/g, ''))
-      merged[key] = Number.isFinite(num) && /^[\d, ]+$/.test(trimmed) ? num : trimmed
-    } else {
-      delete merged[key]
-    }
-    onPatch({ casualties: merged })
+  const addRow = () => {
+    onPatch(
+      buildMilitaryPatch(event, (draft) => ({
+        ...draft,
+        casualties: [...draft.casualties, { sideName: '' }],
+      })),
+    )
   }
 
-  const note = typeof data.note === 'string' ? data.note : ''
-
-  /* read-mode 표시값 — 숫자는 compact 포맷, 문자는 그대로. 빈 값은 InlineText
-     placeholder가 처리. 통계 그리드는 항상 모든 필드 노출(빈 값 포함). */
-  const formatDisplay = (key: string): string => {
-    const raw = data[key]
-    if (raw === undefined || raw === null) return ''
-    if (typeof raw === 'number') return formatCompactNumber(raw)
-    if (typeof raw === 'string') return raw
-    return ''
+  const removeRow = (idx: number) => {
+    onPatch(
+      buildMilitaryPatch(event, (draft) => ({
+        ...draft,
+        casualties: draft.casualties.filter((_, i) => i !== idx),
+      })),
+    )
   }
 
   return (
@@ -76,125 +67,167 @@ export function ModuleCasualties({ event, onPatch }: ModuleCasualtiesProps) {
         <S.SectionActions>
           <ModuleRemoveAction
             label="사상자·피해"
-            onRemove={() => onPatch({ casualties: null })}
+            onRemove={() =>
+              onPatch(
+                buildMilitaryPatch(event, (draft) => ({
+                  ...draft,
+                  casualties: [],
+                })),
+              )
+            }
           />
         </S.SectionActions>
       </S.SectionHeader>
 
-      <Stats>
-        {KNOWN_FIELDS.map((field) => (
-          <StatCell key={field.key}>
-            <StatLabel>{field.label}</StatLabel>
-            <StatValue>
-              {/* InlineText는 read 모드에서 raw 문자열을 보여주지만, 숫자 시각 강조
-                  를 위해 현재 표시값을 별도 InlineText의 value prop으로 전달.
-                  편집 진입 시 raw(숫자 그대로)를 보여주려면 별도 swap 필요 — 우선
-                  compact 포맷이 그대로 input에 들어가도 사용자 입장에서 큰 문제 없음. */}
+      <Rows>
+        {rows.map((row, idx) => (
+          <Row key={idx}>
+            <SideNameCell>
               <InlineText
-                value={formatDisplay(field.key) || readValue(field.key)}
-                onSave={(next) => updateField(field.key, next)}
+                value={row.sideName ?? ''}
+                onSave={(next) => updateRow(idx, { sideName: next.trim() })}
+                placeholder={`진영 ${idx + 1}`}
+              />
+            </SideNameCell>
+            <NumCell>
+              <NumLabel>전사</NumLabel>
+              <InlineText
+                value={row.totalKilled ?? ''}
+                onSave={(next) =>
+                  updateRow(idx, { totalKilled: next.trim() || undefined })
+                }
                 placeholder="—"
               />
-            </StatValue>
-          </StatCell>
+            </NumCell>
+            <NumCell>
+              <NumLabel>부상</NumLabel>
+              <InlineText
+                value={row.totalWounded ?? ''}
+                onSave={(next) =>
+                  updateRow(idx, { totalWounded: next.trim() || undefined })
+                }
+                placeholder="—"
+              />
+            </NumCell>
+            <RemoveBtn
+              type="button"
+              onClick={() => removeRow(idx)}
+              aria-label="행 제거"
+            >
+              <FiX />
+            </RemoveBtn>
+          </Row>
         ))}
-      </Stats>
+      </Rows>
 
-      <NoteRow>
-        <StatLabel>비고</StatLabel>
-        <NoteValue>
-          <InlineText
-            value={note}
-            onSave={(next) => {
-              const trimmed = next.trim()
-              const merged: Record<string, unknown> = { ...data }
-              if (trimmed) merged.note = trimmed
-              else delete merged.note
-              onPatch({ casualties: merged })
-            }}
-            placeholder="추가 설명"
-            multiline
-          />
-        </NoteValue>
-      </NoteRow>
+      <AddBtn type="button" onClick={addRow}>
+        <FiPlus /> 진영 피해 추가
+      </AddBtn>
     </S.Section>
   )
 }
 
-const Stats = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: 12px;
-`
-
-/**
- * Stat 카드 — 라벨-숫자 쌍을 hairline 카드로 승격해 "수치"임을 시각적으로 분리.
- * 좌측 상단에 모듈 색(군사) 미세 액센트 룰. 빈 값은 카드 안에서 "—"로 일관 표시.
- */
-const StatCell = styled.div`
-  position: relative;
+const Rows = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 13px 15px;
+  gap: 10px;
+`
+
+const Row = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
-  border-radius: 12px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
-  transition: border-color 0.15s, background 0.15s;
+  border-radius: 10px;
 
-  &::before {
-    content: '';
-    position: absolute;
-    top: 13px;
-    left: 0;
-    width: 3px;
-    height: 14px;
-    border-radius: 0 2px 2px 0;
-    background: ${MODULE_COLOR.casualties};
-    opacity: 0.55;
-  }
-
-  &:hover {
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.16)'};
+  @media (max-width: 520px) {
+    grid-template-columns: 1fr 1fr auto;
   }
 `
 
-const StatLabel = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  text-transform: uppercase;
-`
-
-const StatValue = styled.span`
-  font-size: 25px;
-  font-weight: 750;
+const SideNameCell = styled.div`
+  font-size: 14px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
-  font-variant-numeric: tabular-nums slashed-zero;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+
+  @media (max-width: 520px) {
+    grid-column: 1 / -1;
+  }
 `
 
-const NoteRow = styled.div`
+const NumCell = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.08)'
-        : 'rgba(15,23,42,0.08)'};
+  gap: 2px;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const NoteValue = styled.span`
-  font-size: 13.5px;
-  line-height: 1.6;
+const NumLabel = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RemoveBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.14s, background 0.14s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.error};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+  }
+
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+`
+
+const AddBtn = styled.button`
+  align-self: flex-start;
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(15,23,42,0.2)'};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s, border-color 0.14s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
 `

@@ -1,6 +1,8 @@
 /**
  * EventCreatePage 유틸리티 함수
  */
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
+
 import type { HistoricalEventCategory } from './create/events.types'
 
 export const getApiHost = (): string => {
@@ -43,15 +45,9 @@ export const mapCategoryNameToType = (
 
 export const formatDateForDisplay = (dateString: string): string => {
   if (!dateString) return ''
-  try {
-    const date = new Date(dateString)
-    const year = date.getFullYear()
-    const month = date.getMonth() + 1
-    const day = date.getDate()
-    return `${year}년 ${month}월 ${day}일`
-  } catch {
-    return dateString
-  }
+  const parts = parseIsoDateParts(dateString)
+  if (!parts) return dateString
+  return `${parts.year}년 ${parts.month}월 ${parts.day}일`
 }
 
 export const calculateDaysDifference = (

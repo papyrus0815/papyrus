@@ -16,6 +16,8 @@ import styled from 'styled-components'
 
 import { CategoryDot } from '@/shared/ui/category-dot/category-dot'
 
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
+
 import type { HistoricalEvent } from '../../create/events.types'
 import * as ToolbarStyles from '../../styles/list-toolbar.styles'
 import { ICON_SIZE } from '../../styles/theme'
@@ -81,7 +83,7 @@ export const RecentEventsDropdown: React.FC<Props> = ({
         <Menu role="menu" aria-label="최근 본 사건">
           <MenuLabel>최근 본 사건</MenuLabel>
           {items.map((evt) => {
-            const year = new Date(evt.startDate).getFullYear()
+            const year = parseIsoDateParts(evt.startDate)?.year
             return (
               <MenuItem
                 key={evt.id}
@@ -96,7 +98,7 @@ export const RecentEventsDropdown: React.FC<Props> = ({
                 <ItemText>
                   <ItemTitle>{evt.title}</ItemTitle>
                   <ItemMeta>
-                    {Number.isFinite(year) ? `${year}년` : ''}
+                    {year != null ? `${year}년` : ''}
                     {evt.category ? ` · ${evt.category}` : ''}
                   </ItemMeta>
                 </ItemText>

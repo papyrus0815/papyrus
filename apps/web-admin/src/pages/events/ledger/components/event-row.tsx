@@ -18,6 +18,8 @@ import React from 'react'
 import { FiChevronRight, FiGitBranch } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
+
 import {
   DIGIT_DISPLAY,
   IMPORTANCE_BAR_HEIGHT,
@@ -62,8 +64,7 @@ const startYearOf = (evt: HistoricalEvent | EventHierarchyNode): number | null =
   const start =
     'startDate' in evt ? evt.startDate : evt.period?.start
   if (!start) return null
-  const date = new Date(start)
-  return Number.isNaN(date.getTime()) ? null : date.getFullYear()
+  return parseIsoDateParts(start)?.year ?? null
 }
 
 const VISIBLE_COUNTRIES = 3

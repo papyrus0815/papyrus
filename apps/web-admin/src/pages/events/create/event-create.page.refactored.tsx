@@ -1,23 +1,17 @@
 /**
- * Event Create Page - FSD Refactored
- * FSD: pages/events/create
+ * Event Create Page — BASIC 전용 최소 등록 폼.
  *
- * 이 페이지는 조립(composition) 레이어로, 비즈니스 로직은 features/entities에,
- * UI 컴포넌트는 widgets에 위임합니다.
+ * 정책: 등록은 *기본 정보*(사건명·기간·카테고리·썸네일·키워드·관련 국가)만 받고,
+ * 나머지(본문·참여 인물·군사 모듈·상위/하위 사건 등)는 모두 *상세 페이지에서 인라인*으로
+ * 등록한다. 과거의 거대한 다단계 폼(군사/외교/관계/위치 스텝)은 상세 인라인 편집으로
+ * 대체되어 제거되었다.
+ *
+ * 저장 직후 해당 사건 상세로 이동해 사용자가 곧바로 내용을 이어 채우도록 유도한다.
  */
 import React, { useEffect, useMemo, useState } from 'react'
 
-import { motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
-import {
-  FiCheck,
-  FiChevronDown,
-  FiFileText,
-  FiSave,
-  FiSearch,
-  FiUsers,
-  FiX,
-} from 'react-icons/fi'
+import { FiSave } from 'react-icons/fi'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 
@@ -25,24 +19,13 @@ import { invalidateGamification } from '@/entities/gamification'
 import { useFormEntities } from '@/entities/event-form/model'
 import {
   FORM_STEPS,
-  type NormalizedMilitaryEventResponse,
   buildEventSubmitData,
-  buildMilitaryEventData,
   checkBasicInfo,
-  extractMentions,
-  extractMentionsFromHtml,
   getFormSteps,
   getStepTitle,
-  hydrateMilitaryStateFromEvent,
-  isDiplomaticCategory,
-  isMilitaryCategory,
   validateBasicInfo,
 } from '@/features/event-create/lib'
-import { type EventSection, type FormStep } from '@/features/event-create/model'
-import {
-  useBasicInfoForm,
-  useRelationshipsForm,
-} from '@/features/event-form/model'
+import { useBasicInfoForm } from '@/features/event-form/model'
 import {
   type EventDetail,
   eventDetailQueryOptions,
@@ -52,31 +35,15 @@ import {
   type EventResponseDto,
   createEvent,
   getEventById,
-  getEventsByParentId,
   updateEvent,
 } from '@/shared/api/events'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { pathKeys } from '@/shared/router'
-import type { MilitaryEvent } from '@/shared/types/military-event.types'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
 import { BasicInfoSection } from '@/widgets/event-form/ui/basic-info-section'
-import { DetailsSection } from '@/widgets/event-form/ui/details-section'
-import { LocationSection } from '@/widgets/event-form/ui/location-section'
-import { EventCabinetsSection } from '@/widgets/event-form/ui/event-cabinets-section'
 import { StepNavigation } from '@/widgets/event-form/ui/step-navigation'
 
-import type { EventBelligerentsGraph } from '../types/belligerents-graph.types'
-import type { ConferenceEvent } from '../types/conference-event.types'
-import { formatDateRange } from '../utils/events.utils'
-import { ConferenceEventForm } from './conference-event-form'
 import * as S from './event-create.styles'
-import { CATEGORY_ICON_MAP } from './events.constants'
-import {
-  type BelligerentSide,
-  type CasualtyData,
-  type MilitaryConflictDetails,
-  MilitaryEventForm,
-} from './military-event-form'
 
 export interface EventCreatePageRefactoredProps {
   /** 대시보드 등 임베드 시: 전체 화면 레이아웃 없음, onBack/onSuccess 사용 */
@@ -108,36 +75,11 @@ export const EventCreatePageRefactored: React.FC<
     goBack()
   }
 
-  // 편집 모드 감지
   const isEditMode = Boolean(editEventId)
 
   // ===== Entity: Form Entities Data =====
-  const {
-    availablePersons,
-    availableCountries,
-    availableHistoricalCountries,
-    dbCategories,
-    availableMilitaryUnits,
-    availableEvents,
-    availablePoliticalParties,
-    isLoading: isLoadingEntities,
-  } = useFormEntities()
-
-  // 국가 목록을 ref로 최신 유지 — 편집 로드 effect(의존성 [isEditMode, editEventId])가
-  // 비동기 콜백 안에서 항상 최신 목록으로 countryId→표시명을 해석하도록 한다.
-  const availableCountriesRef = React.useRef(availableCountries)
-  availableCountriesRef.current = availableCountries
-  const availableHistoricalCountriesRef = React.useRef(availableHistoricalCountries)
-  availableHistoricalCountriesRef.current = availableHistoricalCountries
-  const resolveCountryName = React.useCallback(
-    (countryId: string, isHistorical: boolean): string => {
-      const list = isHistorical
-        ? availableHistoricalCountriesRef.current
-        : availableCountriesRef.current
-      return list.find((country) => country.id === countryId)?.name ?? ''
-    },
-    [],
-  )
+  const { availableCountries, availableHistoricalCountries, dbCategories } =
+    useFormEntities()
 
   // ===== Feature: Basic Info Form =====
   const {
@@ -159,10 +101,6 @@ export const EventCreatePageRefactored: React.FC<
     setThumbnail,
     setThumbnailFile,
     location,
-    setLocation,
-    place,
-    setPlace,
-    tags,
     keywords,
     setKeywords,
     relatedCountryIds,
@@ -178,211 +116,71 @@ export const EventCreatePageRefactored: React.FC<
     calculateDaysDifference,
   } = useBasicInfoForm()
 
-  // ===== Feature: Relationships Form =====
-  const {
-    parentEventId,
-    setParentEventId,
-    parentEventSearch,
-    setParentEventSearch,
-    showParentEventList,
-    setShowParentEventList,
-    parentEventData,
-    parentEventSelectorRef,
-    filteredParentEvents,
-    relatedPersons,
-    setRelatedPersons,
-    personSearch,
-    setPersonSearch,
-    showPersonList,
-    setShowPersonList,
-    personSelectorRef,
-    filteredPersons,
-    relatedEventIds,
-    setRelatedEventIds,
-    relatedEventSearch,
-    setRelatedEventSearch,
-    showRelatedEventList,
-    setShowRelatedEventList,
-    relatedEventSelectorRef,
-    filteredRelatedEvents,
-  } = useRelationshipsForm(availableEvents, availablePersons)
-
   // ===== Page State =====
-  const [currentStep, setCurrentStep] = useState<FormStep>(FORM_STEPS.BASIC)
   const [isLoadingEvent, setIsLoadingEvent] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showCountryModal, setShowCountryModal] = useState(false)
-  // Unsaved changes 추적 — submit 시 false로 전환되어 경고 안 뜨게 함
+  const [submitAttempted, setSubmitAttempted] = useState(false)
   const isDirtyRef = React.useRef(false)
-  // 편집 모드: 초기 로드 직후엔 dirty 아님 (사용자 입력만 dirty 처리)
   const skipNextDirtyRef = React.useRef(false)
 
-  // 군사 카테고리 전용 필드
-  const [militaryEvent, setMilitaryEvent] = useState<MilitaryEvent>({
-    belligerentSides: [],
-    relations: [],
-    militaryDetails: {
-      conflictType: undefined,
-      combatTypes: [],
-    },
-    casualties: [],
-    warCost: '',
-  })
-
-  // 레거시 구조 (하위 호환성)
-  const [belligerents, setBelligerents] = useState<BelligerentSide[]>([])
-  const [belligerentsGraph, setBelligerentsGraph] =
-    useState<EventBelligerentsGraph>({
-      countries: [],
-      relations: [],
-    })
-  const [casualties, setCasualties] = useState<{
-    [sideId: string]: CasualtyData
-  }>({})
-  const [militaryDetails, setMilitaryDetails] =
-    useState<MilitaryConflictDetails>({
-      type: 'battle',
-      combatType: ['land'],
-      outcome: '',
-    })
-  const [warCost, setWarCost] = useState('')
-
-  // 회담/외교 카테고리 전용 필드
-  const [conferenceEvent, setConferenceEvent] = useState<ConferenceEvent>({
-    participants: [],
-    treaties: [],
-    countryTerms: [],
-  })
-
-  // 섹션 기반 내용 작성
-  const [sections, setSections] = useState<EventSection[]>([
-    { id: '1', title: 'Part 1', content: '', mentions: [] },
-  ])
-
-  // 🆕 하위 사건 선택 (기존 사건 연결)
-  const [childEventIds, setChildEventIds] = useState<string[]>([])
-  const [childEventSearch, setChildEventSearch] = useState('')
-  const [showChildEventList, setShowChildEventList] = useState(false)
-  const childEventSelectorRef = React.useRef<HTMLDivElement>(null)
-  const [loadedChildEvents, setLoadedChildEvents] = useState<
-    EventResponseDto[]
+  /**
+   * BASIC 섹션의 군사 카테고리 빠른 입력(분쟁/전투 유형) 자리표시 — 최소 폼에서는
+   * 저장하지 않고 상세 작전 정보 모듈에서 등록한다. 위젯 props 호환을 위한 로컬 state.
+   */
+  const [conflictType, setConflictType] = useState<
+    'battle' | 'campaign' | 'war' | 'siege' | 'skirmish' | undefined
+  >(undefined)
+  const [combatTypes, setCombatTypes] = useState<
+    Array<'land' | 'naval' | 'air'>
   >([])
 
-  // 사용자가 한 번이라도 제출을 시도했는지 — 제출 전엔 inline 에러 숨김
-  const [submitAttempted, setSubmitAttempted] = useState(false)
   const validation = useMemo(
     () => checkBasicInfo({ title, startDate, endDate }),
     [title, startDate, endDate],
   )
 
-  // 폼 단계
-  const steps = useMemo(() => getFormSteps(category), [category])
+  // 단일 스텝(BASIC)만 노출 — 나머지는 상세에서 등록.
+  const steps = useMemo(
+    () => getFormSteps(category).filter((s) => s.id === FORM_STEPS.BASIC),
+    [category],
+  )
 
-  // 편집 모드일 때 기존 데이터 로드
+  // 편집 모드: 기본 정보만 로드 (본문·군사·관계 등은 상세에서 편집).
   useEffect(() => {
     if (!isEditMode || !editEventId) return
-
-    // editEventId가 빠르게 바뀔 때(예: 뒤로/앞으로) 이전 요청 결과로 덮어쓰지
-    // 못하도록 mounted 플래그로 가드. AbortController가 없는 SDK 호출이라
-    // 응답 자체는 막을 수 없지만 setState는 차단함.
     let cancelled = false
     setIsLoadingEvent(true)
 
     const loadEvent = async () => {
       try {
-        // 본 사건 + 하위 사건 목록을 병렬로 받음 (두 호출은 서로 의존 없음).
-        // 어느 한쪽이 실패해도 가능한 한 다른 쪽 결과는 반영하기 위해 allSettled.
-        const [eventResult, childResult] = await Promise.allSettled([
-          getEventById(editEventId),
-          getEventsByParentId(editEventId),
-        ])
+        const event = await getEventById(editEventId)
         if (cancelled) return
 
-        // 하위 사건 결과 처리
-        if (childResult.status === 'fulfilled') {
-          setLoadedChildEvents(childResult.value)
-          setChildEventIds(childResult.value.map((c) => c.id))
-        } else {
-          console.error(
-            '[EventCreatePage] 하위 사건 로드 실패:',
-            childResult.reason,
-          )
-          setLoadedChildEvents([])
-          setChildEventIds([])
-        }
-
-        // 메인 사건 실패 시 알림 후 종료
-        if (eventResult.status !== 'fulfilled') {
-          throw eventResult.reason
-        }
-        const event = eventResult.value
-
-        // 기본 정보 설정
         setTitle(event.title)
         setDescription(event.description || '')
 
-        // ISO 문자열에서 날짜·시간 분리. 자정(00:00)도 명시 입력으로 인정 —
-        // 원본 ISO에 시간 부분이 있으면 그대로 시간 필드에 채워, 자정 시작
-        // 사건이 다음 저장에서 시간 정보 손실되지 않게 함.
         const splitDateTime = (
           iso: string,
         ): { date: string; time: string } => {
           const date = iso.split('T')[0] || ''
           const m = iso.match(/T(\d{2}):(\d{2})/)
-          // 원본 문자열에 시간이 명시돼 있을 때만 time을 채움. 시간 부분이
-          // 없는 ISO("YYYY-MM-DD")는 시간 미입력으로 처리.
           return { date, time: m ? `${m[1]}:${m[2]}` : '' }
         }
-
         if (event.startDate) {
           const { date, time } = splitDateTime(event.startDate)
           setStartDate(date)
           if (time) setStartTime(time)
         }
-
         if (event.endDate) {
           const { date, time } = splitDateTime(event.endDate)
           setEndDate(date)
           if (time) setEndTime(time)
         }
 
-        setLocation(event.location || '')
-        // 위치 복원: DB 참조(city/administrativeDivision)가 있으면 PlaceSelect 뱃지로,
-        // 없고 자유 텍스트만 있으면 직접 입력(manual)으로 되살린다.
-        {
-          const ev = event as unknown as {
-            cityId?: string | null
-            city?: { id: string; name: string } | null
-            administrativeDivisionId?: string | null
-            administrativeDivision?: { id: string; name: string } | null
-            location?: string | null
-          }
-          if (ev.city || ev.administrativeDivision) {
-            const shortName = ev.city?.name ?? ev.administrativeDivision?.name ?? ''
-            setPlace({
-              cityId: ev.cityId ?? undefined,
-              adminDivisionId: ev.administrativeDivisionId ?? undefined,
-              displayName: ev.location || shortName,
-              shortName,
-              region: ev.administrativeDivision?.name,
-            })
-          } else if (ev.location) {
-            setPlace({
-              displayName: ev.location,
-              shortName: ev.location,
-              isManual: true,
-            })
-          } else {
-            setPlace(null)
-          }
-        }
         setKeywords(Array.isArray(event.keywords) ? event.keywords : [])
 
-        // 썸네일 로드 (새 구조 우선, 레거시 fallback)
-        type LoadedImage = {
-          imageUrl: string
-          isPrimary?: boolean
-        }
+        type LoadedImage = { imageUrl: string; isPrimary?: boolean }
         const eventImages = event.eventImages as LoadedImage[] | undefined
         if (eventImages && eventImages.length > 0) {
           const primaryImage = eventImages.find((img) => img.isPrimary)
@@ -391,145 +189,22 @@ export const EventCreatePageRefactored: React.FC<
           setThumbnail(event.thumbnail)
         }
 
-        // 🔧 FIX: 카테고리는 ID를 저장해야 함
-        if (event.categoryId) {
-          setCategory(event.categoryId)
-        }
+        if (event.categoryId) setCategory(event.categoryId)
 
-        // 관련 국가 로드
-        if (event.relatedCountryIds) {
+        if (event.relatedCountryIds)
           setRelatedCountryIds(event.relatedCountryIds)
-        }
-        if (event.relatedHistoricalCountryIds) {
+        if (event.relatedHistoricalCountryIds)
           setRelatedHistoricalCountryIds(event.relatedHistoricalCountryIds)
-        }
-        // 메인 국가 복원 — role==='INITIATOR'인 항목을 찾아 primary state에 세팅
-        // event는 API 응답 (any에 가까운 loose type) — relation은 {id, role, ...} 형태.
+
         type CountryRel = { id: string; role?: string | null }
-        const initiatorCountry = (
+        const initiator = (
           event.relatedCountries as CountryRel[] | undefined
         )?.find((c) => c.role === 'INITIATOR')
-        if (initiatorCountry) {
-          setPrimaryCountryId(initiatorCountry.id)
-        }
+        if (initiator) setPrimaryCountryId(initiator.id)
         const initiatorHist = (
           event.relatedHistoricalCountries as CountryRel[] | undefined
         )?.find((c) => c.role === 'INITIATOR')
-        if (initiatorHist) {
-          setPrimaryHistoricalCountryId(initiatorHist.id)
-        }
-
-        // 섹션 로드 (새 구조 우선, 레거시 fallback)
-        type LoadedSection = { id: string; title: string; content: string }
-        const eventSections = event.eventSections as
-          | LoadedSection[]
-          | undefined
-        if (eventSections && eventSections.length > 0) {
-          // 본문 HTML에서 entity-link 멘션 복원 — 편집 후 저장 시 멘션
-          // 메타데이터(relatedPersons/relatedEventIds)가 사라지지 않도록 함
-          const loadedSections = eventSections.map((section) => ({
-            id: section.id,
-            title: section.title,
-            content: section.content,
-            mentions: extractMentionsFromHtml(section.content),
-          }))
-          setSections(loadedSections)
-        } else if (event.sections) {
-          // 레거시 구조
-          if (
-            typeof event.sections === 'object' &&
-            !Array.isArray(event.sections)
-          ) {
-            if (event.sections.items && Array.isArray(event.sections.items)) {
-              setSections(event.sections.items)
-            }
-          } else if (Array.isArray(event.sections)) {
-            setSections(event.sections)
-          }
-        }
-
-        // 군사 정보 복원.
-        //
-        // 응답의 militaryEvent는 백엔드가 (@ts-ignore로) 런타임에만 붙이는 *정규화* 형태라
-        // SDK 타입엔 없다. 군사 폼은 레거시 상태(belligerents 등)를 읽어 렌더링하고 저장 시에도
-        // 레거시 상태에서 재빌드하므로, 정규화 → 레거시 역매핑(hydrateMilitaryStateFromEvent)이
-        // 없으면 편집 화면이 비고 저장에서 빈 값으로 덮어써 군사 데이터가 소실된다.
-        const loadedMilitary = (
-          event as { militaryEvent?: NormalizedMilitaryEventResponse }
-        ).militaryEvent
-        if (loadedMilitary) {
-          setMilitaryEvent(loadedMilitary as MilitaryEvent)
-          const hydrated = hydrateMilitaryStateFromEvent(
-            loadedMilitary,
-            resolveCountryName,
-          )
-          if (hydrated.belligerents.length) {
-            setBelligerents(hydrated.belligerents)
-          }
-          setBelligerentsGraph(hydrated.belligerentsGraph)
-          if (hydrated.militaryDetails) {
-            setMilitaryDetails(hydrated.militaryDetails)
-          }
-          if (Object.keys(hydrated.casualties).length) {
-            setCasualties(hydrated.casualties)
-          }
-        }
-        // warCost는 정규화 militaryEvent가 아니라 최상위 event.warCost로 온다.
-        if (typeof event.warCost === 'string' && event.warCost) {
-          setWarCost(event.warCost)
-        }
-
-        // 회담 정보 설정
-        if ('conferenceEvent' in event && event.conferenceEvent) {
-          setConferenceEvent(event.conferenceEvent)
-        }
-
-        // 상위 사건 로드
-        if (event.parentEventId) {
-          setParentEventId(event.parentEventId)
-          if (event.parentEvent?.title) {
-            setParentEventSearch(event.parentEvent.title)
-          }
-        }
-
-        // 관련 인물 로드 (PersonEvent 행 → relatedPersons 폼 형태로 매핑)
-        if (
-          'relatedPersons' in event &&
-          Array.isArray(
-            (event as { relatedPersons?: unknown }).relatedPersons,
-          )
-        ) {
-          const rp = (
-            event as {
-              relatedPersons?: Array<{
-                personId: string
-                role?: string | null
-                note?: string | null
-              }>
-            }
-          ).relatedPersons
-          if (rp) {
-            setRelatedPersons(
-              rp.map((p) => ({
-                personId: p.personId,
-                role: p.role ?? '',
-                note: p.note ?? '',
-              })),
-            )
-          }
-        }
-
-        // 관련 사건 ID 로드 (relatedEventIds — 평면 배열로 들어오는 경우)
-        if (
-          'relatedEventIds' in event &&
-          Array.isArray(
-            (event as { relatedEventIds?: unknown }).relatedEventIds,
-          )
-        ) {
-          setRelatedEventIds(
-            (event as { relatedEventIds?: string[] }).relatedEventIds ?? [],
-          )
-        }
+        if (initiatorHist) setPrimaryHistoricalCountryId(initiatorHist.id)
 
         if (!cancelled) toast.success('사건 정보를 불러왔습니다')
       } catch (error) {
@@ -548,7 +223,7 @@ export const EventCreatePageRefactored: React.FC<
     }
   }, [isEditMode, editEventId])
 
-  // 폼 입력 추적 — 첫 렌더와 편집 모드 로딩 직후엔 dirty 처리하지 않음
+  // 폼 입력 추적 — 첫 렌더와 편집 로딩 직후엔 dirty 처리 안 함.
   useEffect(() => {
     if (skipNextDirtyRef.current) {
       skipNextDirtyRef.current = false
@@ -564,83 +239,36 @@ export const EventCreatePageRefactored: React.FC<
     endTime,
     category,
     thumbnail,
-    location,
-    place,
     keywords,
     relatedCountryIds,
     relatedHistoricalCountryIds,
     primaryCountryId,
     primaryHistoricalCountryId,
-    parentEventId,
-    relatedPersons,
-    relatedEventIds,
-    sections,
-    militaryEvent,
-    conferenceEvent,
-    belligerents,
-    belligerentsGraph,
-    casualties,
-    militaryDetails,
-    warCost,
-    childEventIds,
   ])
 
-  // 편집 모드 로딩이 끝나면 다음 렌더의 dirty 갱신 한 번 무시
   useEffect(() => {
-    if (!isLoadingEvent) {
-      skipNextDirtyRef.current = true
-    }
+    if (!isLoadingEvent) skipNextDirtyRef.current = true
   }, [isLoadingEvent])
 
-  // beforeunload — 새로고침/탭 닫기 시 경고
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (!isDirtyRef.current) return
       e.preventDefault()
-      // 최신 브라우저는 사용자 메시지를 무시하지만 기본 경고는 띄움
       e.returnValue = ''
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
-  // 제출 처리
   const handleSubmit = async () => {
-    if (isSubmitting) return // 중복 제출 방지
+    if (isSubmitting) return
     setSubmitAttempted(true)
     try {
-      if (!validateBasicInfo({ title, startDate })) {
-        // 첫 단계로 되돌려 inline 에러를 보여줌
-        setCurrentStep(FORM_STEPS.BASIC)
-        return
-      }
+      if (!validateBasicInfo({ title, startDate })) return
 
       setIsSubmitting(true)
-      /**
-       * 상세 페이지 코드 청크를 *지금* 데운다 — 라우트(`event-route.ts`)가 lazy
-       * import하는 것과 동일한 청크라, 번들러가 단일 청크로 dedupe한다.
-       * 등록 API와 병렬로 받아두면 저장 직후 navigate가 청크 다운로드로 멈칫하지
-       * 않아, '오버레이→빈 폼 깜빡→상세'로 끊기던 이동이 매끄러워진다
-       * (상세 데이터는 아래에서 캐시 시딩하므로 청크만 데우면 즉시 렌더).
-       */
+      // 상세 페이지 청크를 미리 데워 저장 직후 이동이 매끄럽도록.
       void import('../detail/event-detail.page')
-      const { mentionedPersons, mentionedEvents } = extractMentions(sections)
-
-      // 카테고리 변경 후 이전 카테고리 데이터가 잔존해도 서버에 보내지 않도록
-      // 카테고리별로 한 번 더 게이팅. (UI 상으로는 보존돼서, 카테고리를 다시
-      // 군사/외교로 되돌리면 입력값이 살아남음.)
-      const isMilitary = isMilitaryCategory(category)
-      const isDiplomatic = isDiplomaticCategory(category)
-
-      const finalMilitaryEvent = isMilitary
-        ? buildMilitaryEventData(category, {
-            belligerents,
-            belligerentsGraph,
-            militaryDetails,
-            casualties,
-            warCost,
-          })
-        : undefined
 
       const eventData = buildEventSubmitData({
         title: title.trim(),
@@ -651,31 +279,26 @@ export const EventCreatePageRefactored: React.FC<
         endTime,
         category,
         location,
-        cityId: place?.cityId ?? null,
-        administrativeDivisionId: place?.adminDivisionId ?? null,
         thumbnail,
-        parentEventId,
-        tags,
+        parentEventId: '',
+        tags: [],
         relatedCountryIds,
         relatedHistoricalCountryIds,
         primaryCountryId,
         primaryHistoricalCountryId,
-        relatedPersons,
-        relatedEventIds,
-        sections,
-        militaryEvent: finalMilitaryEvent,
-        conferenceEvent: isDiplomatic ? conferenceEvent : undefined,
-        belligerentsGraph: isMilitary
-          ? belligerentsGraph
-          : { countries: [], relations: [] },
-        warCost: isMilitary ? warCost : '',
-        mentionedPersons,
-        mentionedEvents,
-        childEventIds, // 하위 사건 연결 (기존 사건)
+        relatedPersons: [],
+        relatedEventIds: [],
+        sections: [],
+        militaryEvent: undefined,
+        conferenceEvent: undefined,
+        belligerentsGraph: { countries: [], relations: [] },
+        warCost: '',
+        mentionedPersons: [],
+        mentionedEvents: [],
+        childEventIds: [],
         keywords,
       })
 
-      // 이동 대상 사건 id + 저장 응답(상세 캐시 시딩용).
       let targetId: string | undefined = editEventId
       let saved: EventResponseDto | undefined
       if (isEditMode && editEventId) {
@@ -685,41 +308,19 @@ export const EventCreatePageRefactored: React.FC<
         )
         toast.success('사건이 성공적으로 수정되었습니다!')
       } else {
-        saved = await createEvent(
-          eventData as Parameters<typeof createEvent>[0],
-        )
+        saved = await createEvent(eventData as Parameters<typeof createEvent>[0])
         targetId = saved.id
-        toast.success('사건이 성공적으로 등록되었습니다!')
+        toast.success('사건이 등록되었습니다. 상세에서 내용을 이어서 등록하세요.')
       }
 
-      // 저장 성공 — 더 이상 dirty 아님 (이탈 경고 비활성화)
       isDirtyRef.current = false
-
-      // 목록 캐시 무효화 — 이후 목록 복귀 시 새/수정 사건이 반영되도록.
       queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
-      // 게이미피케이션(점수·등급·뱃지) 즉시 갱신 — 등급업/뱃지 토스트가 바로 뜨도록
       invalidateGamification(queryClient)
 
       if (onSuccess) {
-        // 콜백 경로는 페이지 이동이 없을 수 있어(모달 등) 오버레이를 명시 해제.
         setIsSubmitting(false)
         onSuccess()
       } else if (targetId) {
-        /**
-         * 등록·수정 후 *해당 사건 상세*로. 등록은 보통 본문·이미지·관계를 이어서
-         * 채우므로 목록으로 빠지는 것보다 상세 진입이 자연스럽다.
-         *
-         * 서버(create/update)가 *조회와 동일한 full-include + 군사정보* 응답을 주므로,
-         * 이 응답 시딩만으로 완전한 상세가 즉시 렌더된다(과거엔 생성 응답에 관계가
-         * 비어, 빈 패널이 먼저 그려졌다가 refetch 도착 시 펑 뜨는 레이아웃 점프가 있었음).
-         *
-         * 진입 직전 ensureQueryData로 권위 데이터를 한 번 더 보장 — 시딩이 신선하면
-         * 무네트워크 즉시 반환, 시딩이 없거나 만료됐으면 GET으로 보강해 *항상 완전한*
-         * 상세로 진입한다(서버 응답 형태 가정에 비의존).
-         *
-         * replace: true — 등록/수정 폼을 히스토리에서 치운다. 상세에서 뒤로가기 시
-         * 빈 등록 폼(중복 등록 위험)·수정 폼이 아니라 진입 전 위치(목록 등)로 가도록.
-         */
         if (saved) {
           queryClient.setQueryData(
             eventKeys.detail(targetId),
@@ -734,9 +335,6 @@ export const EventCreatePageRefactored: React.FC<
       } else {
         navigate(pathKeys.events.root())
       }
-      // 성공 경로(navigate)는 곧 이 페이지가 언마운트되므로 오버레이를 끄지 않는다.
-      // 여기서 setIsSubmitting(false)를 하면 navigate 커밋 전 '빈 폼'이 한 프레임
-      // 노출돼 깜빡임이 생긴다 → 상세가 마운트되며 오버레이가 자연 소멸하도록 둔다.
     } catch (error) {
       console.error('[EventCreatePage] 사건 저장 실패:', error)
       toast.error(
@@ -744,23 +342,21 @@ export const EventCreatePageRefactored: React.FC<
           error instanceof Error ? error.message : '알 수 없는 오류'
         }`,
       )
-      setIsSubmitting(false) // 실패 시엔 폼에 머무르므로 오버레이 해제
+      setIsSubmitting(false)
     }
   }
 
   const content = (
     <>
-    <S.ContentWrapper>
-        {/* ===== Widget: Step Navigation ===== */}
+      <S.ContentWrapper>
         <StepNavigation
           steps={steps}
-          currentStep={currentStep}
-          setCurrentStep={setCurrentStep}
+          currentStep={FORM_STEPS.BASIC}
+          setCurrentStep={() => {}}
           playClickSound={playClickSound}
           onBack={handleBack}
         />
 
-        {/* 우측: 폼 */}
         <S.FormArea aria-busy={isLoadingEvent || isSubmitting}>
           {(isLoadingEvent || isSubmitting) && (
             <S.FormOverlay role="status" aria-live="polite">
@@ -776,7 +372,7 @@ export const EventCreatePageRefactored: React.FC<
           )}
           <S.FormAreaHeader>
             <S.FormAreaTitle>
-              {getStepTitle(currentStep, category)}
+              {getStepTitle(FORM_STEPS.BASIC, category)}
             </S.FormAreaTitle>
             <div style={{ display: 'flex', gap: '8px' }}>
               <S.ActionButton
@@ -786,9 +382,7 @@ export const EventCreatePageRefactored: React.FC<
                   playClickSound()
                   handleSubmit()
                 }}
-                disabled={
-                  !isBasicInfoValid() || isSubmitting || isLoadingEvent
-                }
+                disabled={!isBasicInfoValid() || isSubmitting || isLoadingEvent}
                 title={
                   isLoadingEvent
                     ? '사건 정보를 불러오는 중'
@@ -815,729 +409,54 @@ export const EventCreatePageRefactored: React.FC<
             </div>
           </S.FormAreaHeader>
 
-          {/* ===== Widget: Basic Info Section ===== */}
-          {currentStep === FORM_STEPS.BASIC && (
-            <BasicInfoSection
-              title={title}
-              setTitle={setTitle}
-              description={description}
-              setDescription={setDescription}
-              startDate={startDate}
-              setStartDate={setStartDate}
-              startTime={startTime}
-              setStartTime={setStartTime}
-              endDate={endDate}
-              setEndDate={setEndDate}
-              endTime={endTime}
-              setEndTime={setEndTime}
-              category={category}
-              setCategory={setCategory}
-              thumbnail={thumbnail}
-              setThumbnail={setThumbnail}
-              setThumbnailFile={setThumbnailFile}
-              keywords={keywords}
-              setKeywords={setKeywords}
-              dbCategories={dbCategories}
-              relatedCountryIds={relatedCountryIds}
-              setRelatedCountryIds={setRelatedCountryIds}
-              relatedHistoricalCountryIds={relatedHistoricalCountryIds}
-              setRelatedHistoricalCountryIds={setRelatedHistoricalCountryIds}
-              primaryCountryId={primaryCountryId}
-              setPrimaryCountryId={setPrimaryCountryId}
-              primaryHistoricalCountryId={primaryHistoricalCountryId}
-              setPrimaryHistoricalCountryId={setPrimaryHistoricalCountryId}
-              availableCountries={availableCountries}
-              availableHistoricalCountries={availableHistoricalCountries}
-              onOpenCountryModal={() => setShowCountryModal(true)}
-              conflictType={militaryDetails.type}
-              setConflictType={(type) =>
-                setMilitaryDetails({ ...militaryDetails, type })
-              }
-              combatTypes={militaryDetails.combatType}
-              setCombatTypes={(types) =>
-                setMilitaryDetails({ ...militaryDetails, combatType: types })
-              }
-              playClickSound={playClickSound}
-              getDateError={getDateError}
-              calculateDaysDifference={calculateDaysDifference}
-              titleError={
-                submitAttempted ? validation.fields.title : undefined
-              }
-              startDateError={
-                submitAttempted ? validation.fields.startDate : undefined
-              }
-              endDateError={
-                // 종료일 < 시작일 에러는 사용자가 인지하기 좋게 즉시 노출
-                validation.fields.endDate
-              }
-            />
-          )}
-
-          {/* 🆕 하위 사건 선택 (기존 사건 연결) */}
-          {currentStep === FORM_STEPS.RELATIONSHIPS && (
-            <S.FormSection
-              as={motion.div}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.1 }}
-            >
-              <S.FormRow>
-                <S.FormLabel>하위 사건</S.FormLabel>
-                <S.FormField>
-                  <S.ParentEventSelector ref={childEventSelectorRef}>
-                    <S.ParentEventInputWrapper>
-                      <FiSearch size={16} />
-                      <S.ParentEventInput
-                        type="text"
-                        placeholder="하위 사건으로 추가할 사건 검색..."
-                        value={childEventSearch}
-                        onChange={(e) => {
-                          setChildEventSearch(e.target.value)
-                          setShowChildEventList(true)
-                        }}
-                        onFocus={() => setShowChildEventList(true)}
-                      />
-                      <S.ToggleButton
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setShowChildEventList(!showChildEventList)
-                        }}
-                      >
-                        <FiChevronDown
-                          size={16}
-                          style={{
-                            transform: showChildEventList
-                              ? 'rotate(180deg)'
-                              : 'rotate(0deg)',
-                            transition: 'transform 0.2s',
-                          }}
-                        />
-                      </S.ToggleButton>
-                    </S.ParentEventInputWrapper>
-                    {showChildEventList && (
-                      <S.ParentEventList>
-                        {availableEvents
-                          .filter((event) =>
-                            event.title
-                              .toLowerCase()
-                              .includes(childEventSearch.toLowerCase()),
-                          )
-                          .filter((event) => event.id !== editEventId)
-                          .filter((event) => !event.parentEventId)
-                          .map((event) => {
-                            const isSelected = childEventIds.includes(event.id)
-                            return (
-                              <S.ParentEventItem
-                                key={event.id}
-                                $selected={isSelected}
-                                onClick={() => {
-                                  playClickSound()
-                                  if (isSelected) {
-                                    setChildEventIds((prev) =>
-                                      prev.filter((id) => id !== event.id),
-                                    )
-                                  } else {
-                                    setChildEventIds((prev) => [
-                                      ...prev,
-                                      event.id,
-                                    ])
-                                  }
-                                }}
-                              >
-                                {isSelected && <FiCheck size={14} />}
-                                <span>{event.title}</span>
-                                {event.startDate && (
-                                  <S.ParentEventDate>
-                                    {new Date(event.startDate).getFullYear()}
-                                  </S.ParentEventDate>
-                                )}
-                              </S.ParentEventItem>
-                            )
-                          })}
-                      </S.ParentEventList>
-                    )}
-                  </S.ParentEventSelector>
-                  {childEventIds.length > 0 && (
-                    <S.SelectedEventsList>
-                      {childEventIds.map((eventId) => {
-                        // availableEvents와 loadedChildEvents 모두에서 찾기
-                        const event =
-                          availableEvents.find((e) => e.id === eventId) ||
-                          loadedChildEvents.find((e) => e.id === eventId)
-                        return (
-                          <S.SelectedEventInfo key={eventId}>
-                            <FiCheck size={14} />
-                            <span>
-                              {event?.title || `알 수 없음 (${eventId})`}
-                            </span>
-                            <S.ClearButton
-                              type="button"
-                              onClick={() => {
-                                playClickSound()
-                                setChildEventIds((prev) =>
-                                  prev.filter((id) => id !== eventId),
-                                )
-                              }}
-                            >
-                              <FiX size={12} />
-                            </S.ClearButton>
-                          </S.SelectedEventInfo>
-                        )
-                      })}
-                    </S.SelectedEventsList>
-                  )}
-                  <S.Hint>
-                    💡 <strong>하위 사건 연결 안내:</strong>
-                    <br />
-                    • 기존 등록된 사건들 중에서 선택하여 이 사건의 하위 사건으로
-                    연결할 수 있습니다
-                    <br />
-                    • 여러 개의 사건을 선택할 수 있습니다
-                    <br />• 예시: "제2차 세계대전"에 "폴란드 침공", "노르망디
-                    상륙작전" 등을 연결
-                  </S.Hint>
-                </S.FormField>
-              </S.FormRow>
-            </S.FormSection>
-          )}
-
-          {/* 관계 설정: 상위 사건, 관련 인물, 관련 사건 */}
-          {currentStep === FORM_STEPS.RELATIONSHIPS && (
-            <S.FormSection
-              as={motion.div}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.2 }}
-            >
-              {/* 상위 사건 */}
-              <S.FormRow>
-                <S.FormLabel>상위 사건</S.FormLabel>
-                <S.FormField>
-                  <S.ParentEventSelector ref={parentEventSelectorRef}>
-                    <S.ParentEventInputWrapper>
-                      <FiSearch size={16} />
-                      <S.ParentEventInput
-                        type="text"
-                        placeholder="상위 사건 검색..."
-                        value={parentEventSearch}
-                        onChange={(e) => {
-                          setParentEventSearch(e.target.value)
-                          setShowParentEventList(true)
-                        }}
-                        onFocus={() => setShowParentEventList(true)}
-                      />
-                      {parentEventId && (
-                        <S.ClearButton
-                          type="button"
-                          onClick={() => {
-                            playClickSound()
-                            setParentEventId('')
-                            setParentEventSearch('')
-                          }}
-                        >
-                          <FiX size={14} />
-                        </S.ClearButton>
-                      )}
-                      <S.ToggleButton
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setShowParentEventList(!showParentEventList)
-                        }}
-                      >
-                        <FiChevronDown
-                          size={16}
-                          style={{
-                            transform: showParentEventList
-                              ? 'rotate(180deg)'
-                              : 'rotate(0deg)',
-                            transition: 'transform 0.2s ease',
-                          }}
-                        />
-                      </S.ToggleButton>
-                    </S.ParentEventInputWrapper>
-                    {showParentEventList && (
-                      <S.ParentEventList>
-                        {filteredParentEvents.length > 0 ? (
-                          filteredParentEvents.map((event) => (
-                            <S.ParentEventItem
-                              key={event.id}
-                              $selected={parentEventId === event.id}
-                              onClick={() => {
-                                playClickSound()
-                                setParentEventId(event.id)
-                                setParentEventSearch(event.title)
-                                setShowParentEventList(false)
-                              }}
-                            >
-                              <S.ParentEventIcon
-                                $category={event.category?.name || 'other'}
-                              >
-                                {React.createElement(
-                                  event.category?.name
-                                    ? CATEGORY_ICON_MAP[event.category.name] ||
-                                        FiFileText
-                                    : FiFileText,
-                                  {
-                                    size: 16,
-                                  },
-                                )}
-                              </S.ParentEventIcon>
-                              <S.ParentEventInfo>
-                                <S.ParentEventTitle>
-                                  {event.title}
-                                </S.ParentEventTitle>
-                                <S.ParentEventMeta>
-                                  {event.category?.name || '카테고리 없음'} ·{' '}
-                                  {event.startDate
-                                    ? formatDateRange(
-                                        event.startDate,
-                                        event.endDate || undefined,
-                                      )
-                                    : '날짜 없음'}
-                                </S.ParentEventMeta>
-                              </S.ParentEventInfo>
-                              {parentEventId === event.id && (
-                                <FiCheck size={16} color="#22c55e" />
-                              )}
-                            </S.ParentEventItem>
-                          ))
-                        ) : (
-                          <S.EmptyState>
-                            <FiSearch size={24} />
-                            <p>검색 결과가 없습니다</p>
-                          </S.EmptyState>
-                        )}
-                      </S.ParentEventList>
-                    )}
-                  </S.ParentEventSelector>
-                  {parentEventId && (
-                    <S.SelectedEventInfo>
-                      <FiCheck size={14} />
-                      <span>
-                        선택됨:{' '}
-                        {
-                          availableEvents.find((e) => e.id === parentEventId)
-                            ?.title
-                        }
-                      </span>
-                    </S.SelectedEventInfo>
-                  )}
-                  <S.Hint>
-                    이 사건이 다른 사건의 하위 사건인 경우 상위 사건을
-                    선택하세요 (예: 노르망디 상륙작전 → 제2차 세계 대전)
-                  </S.Hint>
-                </S.FormField>
-              </S.FormRow>
-
-              {/* 관련 인물 */}
-              <S.FormRow>
-                <S.FormLabel>관련 인물</S.FormLabel>
-                <S.FormField>
-                  <S.PersonSelector ref={personSelectorRef}>
-                    <S.ParentEventInputWrapper>
-                      <FiSearch size={16} />
-                      <S.ParentEventInput
-                        type="text"
-                        placeholder="인물 검색..."
-                        value={personSearch}
-                        onChange={(e) => {
-                          setPersonSearch(e.target.value)
-                          setShowPersonList(true)
-                        }}
-                        onFocus={() => setShowPersonList(true)}
-                      />
-                      <S.ToggleButton
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setShowPersonList(!showPersonList)
-                        }}
-                      >
-                        <FiChevronDown
-                          size={16}
-                          style={{
-                            transform: showPersonList
-                              ? 'rotate(180deg)'
-                              : 'rotate(0deg)',
-                            transition: 'transform 0.2s ease',
-                          }}
-                        />
-                      </S.ToggleButton>
-                    </S.ParentEventInputWrapper>
-                    {showPersonList && (
-                      <S.ParentEventList>
-                        {filteredPersons.length > 0 ? (
-                          filteredPersons.map((person) => {
-                            const isSelected = relatedPersons.some(
-                              (p) => p.personId === person.id,
-                            )
-                            return (
-                              <S.ParentEventItem
-                                key={person.id}
-                                $selected={isSelected}
-                                onClick={() => {
-                                  playClickSound()
-                                  if (isSelected) {
-                                    setRelatedPersons((prev) =>
-                                      prev.filter(
-                                        (p) => p.personId !== person.id,
-                                      ),
-                                    )
-                                  } else {
-                                    setRelatedPersons((prev) => [
-                                      ...prev,
-                                      {
-                                        personId: person.id,
-                                        role: '',
-                                        note: '',
-                                      },
-                                    ])
-                                  }
-                                  setShowPersonList(false)
-                                  setPersonSearch('')
-                                }}
-                              >
-                                <S.ParentEventIcon $category="political">
-                                  <FiUsers size={16} />
-                                </S.ParentEventIcon>
-                                <S.ParentEventInfo>
-                                  <S.ParentEventTitle>
-                                    {person.name || '이름 없음'}
-                                  </S.ParentEventTitle>
-                                  <S.ParentEventMeta>
-                                    {person.birthYear
-                                      ? `${person.birthYear}년`
-                                      : '정보 없음'}
-                                  </S.ParentEventMeta>
-                                </S.ParentEventInfo>
-                                {isSelected && (
-                                  <FiCheck size={16} color="#22c55e" />
-                                )}
-                              </S.ParentEventItem>
-                            )
-                          })
-                        ) : (
-                          <S.EmptyState>
-                            <FiSearch size={24} />
-                            <p>검색 결과가 없습니다</p>
-                          </S.EmptyState>
-                        )}
-                      </S.ParentEventList>
-                    )}
-                  </S.PersonSelector>
-                  {relatedPersons.length > 0 && (
-                    <S.SelectedPersonsList>
-                      {relatedPersons.map((person) => {
-                        const personData = availablePersons.find(
-                          (p) => p.id === person.personId,
-                        )
-                        return (
-                          <S.SelectedPersonItem key={person.personId}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <strong>{personData?.name || '이름 없음'}</strong>
-                              <S.Input
-                                type="text"
-                                placeholder="역할 (예: 총사령관, 외교관)"
-                                value={person.role}
-                                onChange={(e) => {
-                                  setRelatedPersons((prev) =>
-                                    prev.map((p) =>
-                                      p.personId === person.personId
-                                        ? { ...p, role: e.target.value }
-                                        : p,
-                                    ),
-                                  )
-                                }}
-                                style={{ marginTop: '8px', fontSize: '12px' }}
-                              />
-                              <S.Textarea
-                                placeholder="이 인물 시점의 사건 메모 — 인물 연보에 그대로 표시됩니다 (예: 1군단 사령관으로 노르망디 작전 지휘 / 다리 부상 후 영국 송환)"
-                                value={person.note}
-                                onChange={(e) => {
-                                  setRelatedPersons((prev) =>
-                                    prev.map((p) =>
-                                      p.personId === person.personId
-                                        ? { ...p, note: e.target.value }
-                                        : p,
-                                    ),
-                                  )
-                                }}
-                                rows={3}
-                                style={{ marginTop: '6px', fontSize: '12px' }}
-                              />
-                            </div>
-                            <S.ClearButton
-                              type="button"
-                              onClick={() => {
-                                playClickSound()
-                                setRelatedPersons((prev) =>
-                                  prev.filter(
-                                    (p) => p.personId !== person.personId,
-                                  ),
-                                )
-                              }}
-                            >
-                              <FiX size={14} />
-                            </S.ClearButton>
-                          </S.SelectedPersonItem>
-                        )
-                      })}
-                    </S.SelectedPersonsList>
-                  )}
-                  <S.Hint>이 사건과 관련된 주요 인물을 추가하세요</S.Hint>
-                </S.FormField>
-              </S.FormRow>
-
-              {/* 관련 사건 */}
-              <S.FormRow>
-                <S.FormLabel>관련 사건</S.FormLabel>
-                <S.FormField>
-                  <S.ParentEventSelector ref={relatedEventSelectorRef}>
-                    <S.ParentEventInputWrapper>
-                      <FiSearch size={16} />
-                      <S.ParentEventInput
-                        type="text"
-                        placeholder="관련 사건 검색..."
-                        value={relatedEventSearch}
-                        onChange={(e) => {
-                          setRelatedEventSearch(e.target.value)
-                          setShowRelatedEventList(true)
-                        }}
-                        onFocus={() => setShowRelatedEventList(true)}
-                      />
-                      <S.ToggleButton
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setShowRelatedEventList(!showRelatedEventList)
-                        }}
-                      >
-                        <FiChevronDown
-                          size={16}
-                          style={{
-                            transform: showRelatedEventList
-                              ? 'rotate(180deg)'
-                              : 'rotate(0deg)',
-                            transition: 'transform 0.2s ease',
-                          }}
-                        />
-                      </S.ToggleButton>
-                    </S.ParentEventInputWrapper>
-                    {showRelatedEventList && (
-                      <S.ParentEventList>
-                        {filteredRelatedEvents.length > 0 ? (
-                          filteredRelatedEvents.map((event) => {
-                            const isSelected = relatedEventIds.includes(
-                              event.id,
-                            )
-                            return (
-                              <S.ParentEventItem
-                                key={event.id}
-                                $selected={isSelected}
-                                onClick={() => {
-                                  playClickSound()
-                                  if (isSelected) {
-                                    setRelatedEventIds((prev) =>
-                                      prev.filter((id) => id !== event.id),
-                                    )
-                                  } else {
-                                    setRelatedEventIds((prev) => [
-                                      ...prev,
-                                      event.id,
-                                    ])
-                                  }
-                                  setShowRelatedEventList(false)
-                                  setRelatedEventSearch('')
-                                }}
-                              >
-                                <S.ParentEventIcon
-                                  $category={event.category?.name || 'other'}
-                                >
-                                  {React.createElement(
-                                    event.category?.name
-                                      ? CATEGORY_ICON_MAP[
-                                          event.category.name
-                                        ] || FiFileText
-                                      : FiFileText,
-                                    {
-                                      size: 16,
-                                    },
-                                  )}
-                                </S.ParentEventIcon>
-                                <S.ParentEventInfo>
-                                  <S.ParentEventTitle>
-                                    {event.title}
-                                  </S.ParentEventTitle>
-                                  <S.ParentEventMeta>
-                                    {event.category?.name || '카테고리 없음'} ·{' '}
-                                    {event.startDate
-                                      ? formatDateRange(
-                                          event.startDate,
-                                          event.endDate || undefined,
-                                        )
-                                      : '날짜 없음'}
-                                  </S.ParentEventMeta>
-                                </S.ParentEventInfo>
-                                {isSelected && (
-                                  <FiCheck size={16} color="#22c55e" />
-                                )}
-                              </S.ParentEventItem>
-                            )
-                          })
-                        ) : (
-                          <S.EmptyState>
-                            <FiSearch size={24} />
-                            <p>검색 결과가 없습니다</p>
-                          </S.EmptyState>
-                        )}
-                      </S.ParentEventList>
-                    )}
-                  </S.ParentEventSelector>
-                  {relatedEventIds.length > 0 && (
-                    <S.SelectedEventsList>
-                      {relatedEventIds.map((eventId) => {
-                        const event = availableEvents.find(
-                          (e) => e.id === eventId,
-                        )
-                        return (
-                          <S.SelectedEventInfo key={eventId}>
-                            <FiCheck size={14} />
-                            <span>{event?.title || '알 수 없음'}</span>
-                            <S.ClearButton
-                              type="button"
-                              onClick={() => {
-                                playClickSound()
-                                setRelatedEventIds((prev) =>
-                                  prev.filter((id) => id !== eventId),
-                                )
-                              }}
-                              style={{ marginLeft: '8px' }}
-                            >
-                              <FiX size={12} />
-                            </S.ClearButton>
-                          </S.SelectedEventInfo>
-                        )
-                      })}
-                    </S.SelectedEventsList>
-                  )}
-                  <S.Hint>
-                    상위 사건 외에 연관된 다른 사건들을 추가하세요
-                  </S.Hint>
-                </S.FormField>
-              </S.FormRow>
-            </S.FormSection>
-          )}
-
-          {/* ===== Widget: Military Event Form ===== */}
-          {currentStep === FORM_STEPS.MILITARY &&
-            isMilitaryCategory(category) && (
-              <S.FormSection
-                as={motion.div}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <MilitaryEventForm
-                  militaryEvent={militaryEvent}
-                  setMilitaryEvent={setMilitaryEvent}
-                  belligerents={belligerents}
-                  setBelligerents={setBelligerents}
-                  casualties={casualties}
-                  setCasualties={setCasualties}
-                  militaryDetails={militaryDetails}
-                  setMilitaryDetails={setMilitaryDetails}
-                  warCost={warCost}
-                  setWarCost={setWarCost}
-                  availableCountries={availableCountries}
-                  availableHistoricalCountries={availableHistoricalCountries}
-                  availableMilitaryUnits={availableMilitaryUnits}
-                  availablePersons={availablePersons}
-                  parentEvent={
-                    parentEventData &&
-                    parentEventData.belligerents &&
-                    typeof parentEventData.belligerents === 'object' &&
-                    'sides' in parentEventData.belligerents &&
-                    Array.isArray(parentEventData.belligerents.sides)
-                      ? {
-                          id: parentEventData.id,
-                          title: parentEventData.title,
-                          belligerents: {
-                            sides: parentEventData.belligerents
-                              .sides as BelligerentSide[],
-                          },
-                        }
-                      : undefined
-                  }
-                  belligerentsGraph={belligerentsGraph}
-                  setBelligerentsGraph={setBelligerentsGraph}
-                />
-              </S.FormSection>
-            )}
-
-          {/* ===== Widget: Conference Event Form ===== */}
-          {currentStep === FORM_STEPS.MILITARY &&
-            isDiplomaticCategory(category) && (
-              <S.FormSection
-                as={motion.div}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <ConferenceEventForm
-                  conferenceEvent={conferenceEvent}
-                  setConferenceEvent={setConferenceEvent}
-                  availableCountries={availableCountries}
-                  availableHistoricalCountries={availableHistoricalCountries}
-                  availablePersons={availablePersons}
-                />
-              </S.FormSection>
-            )}
-
-          {/* ===== Widget: Details Section ===== */}
-          {currentStep === FORM_STEPS.DETAILS && (
-            <DetailsSection
-              sections={sections}
-              setSections={setSections}
-              availablePersons={availablePersons}
-              availableEvents={availableEvents}
-              availableCountries={availableCountries}
-              availableHistoricalCountries={availableHistoricalCountries}
-              availableMilitaryUnits={availableMilitaryUnits}
-              availablePoliticalParties={availablePoliticalParties}
-              mentionEntitiesLoading={isLoadingEntities}
-              playClickSound={playClickSound}
-              eventTitle={title}
-              eventStartDate={startDate}
-              eventEndDate={endDate}
-              eventCategory={category}
-              eventLocation={location}
-              eventThumbnail={thumbnail}
-            />
-          )}
-
-          {/* ===== 관련 행정부 (CabinetEvent N:M) — 편집 모드에서만 ===== */}
-          {currentStep === FORM_STEPS.DETAILS && isEditMode && editEventId && (
-            <EventCabinetsSection
-              eventId={editEventId}
-              relatedCountryIds={relatedCountryIds}
-              relatedHistoricalCountryIds={relatedHistoricalCountryIds}
-            />
-          )}
-
-          {/* ===== Widget: Location Section ===== */}
-          {currentStep === FORM_STEPS.LOCATION && (
-            <LocationSection
-              place={place}
-              setPlace={setPlace}
-              setLocation={setLocation}
-            />
-          )}
+          <BasicInfoSection
+            title={title}
+            setTitle={setTitle}
+            description={description}
+            setDescription={setDescription}
+            startDate={startDate}
+            setStartDate={setStartDate}
+            startTime={startTime}
+            setStartTime={setStartTime}
+            endDate={endDate}
+            setEndDate={setEndDate}
+            endTime={endTime}
+            setEndTime={setEndTime}
+            category={category}
+            setCategory={setCategory}
+            thumbnail={thumbnail}
+            setThumbnail={setThumbnail}
+            setThumbnailFile={setThumbnailFile}
+            keywords={keywords}
+            setKeywords={setKeywords}
+            dbCategories={dbCategories}
+            relatedCountryIds={relatedCountryIds}
+            setRelatedCountryIds={setRelatedCountryIds}
+            relatedHistoricalCountryIds={relatedHistoricalCountryIds}
+            setRelatedHistoricalCountryIds={setRelatedHistoricalCountryIds}
+            primaryCountryId={primaryCountryId}
+            setPrimaryCountryId={setPrimaryCountryId}
+            primaryHistoricalCountryId={primaryHistoricalCountryId}
+            setPrimaryHistoricalCountryId={setPrimaryHistoricalCountryId}
+            availableCountries={availableCountries}
+            availableHistoricalCountries={availableHistoricalCountries}
+            onOpenCountryModal={() => setShowCountryModal(true)}
+            conflictType={conflictType}
+            setConflictType={setConflictType}
+            combatTypes={combatTypes}
+            setCombatTypes={setCombatTypes}
+            playClickSound={playClickSound}
+            getDateError={getDateError}
+            calculateDaysDifference={calculateDaysDifference}
+            titleError={submitAttempted ? validation.fields.title : undefined}
+            startDateError={
+              submitAttempted ? validation.fields.startDate : undefined
+            }
+            endDateError={validation.fields.endDate}
+          />
         </S.FormArea>
       </S.ContentWrapper>
 
-      {/* 국가 선택 모달 - 인물 페이지와 동일한 스타일 */}
       <AdvancedCountrySelectModal
         isOpen={showCountryModal}
         onClose={() => setShowCountryModal(false)}
