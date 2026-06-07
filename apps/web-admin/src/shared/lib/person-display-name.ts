@@ -1,7 +1,7 @@
 /**
  * 인물 이름 표시용 타입
- * - 표시 순서는 현재 **소속 국가(`country.defaultNameDisplayOrder`)만** 사용한다.
- * - 인물의 `nameDisplayOrder` 컬럼은 나중에 예외 처리용으로 남겨 두고, UI 표시에는 쓰지 않는다.
+ * 표시 순서 우선순위: 인물 개인 `nameDisplayOrder`(예외 오버라이드) → 소속 국가
+ * `country.defaultNameDisplayOrder`(또는 페이지가 넘긴 옵션) → 기본(동양식 성+이름).
  */
 export type PersonNameFields = {
   name: string
@@ -9,7 +9,7 @@ export type PersonNameFields = {
   middleName?: string | null
   /** 군주명 (재위명). 있으면 UI에서 별도 표시 */
   regnalName?: string | null
-  /** 사용 안 함(표시). 국가 기본만 사용 */
+  /** 개인 표시 순서 오버라이드. 설정 시 국가 기본보다 우선 */
   nameDisplayOrder?: string | null
   country?: {
     defaultNameDisplayOrder?: string | null
@@ -30,10 +30,16 @@ function resolveOrder(
   p: PersonNameFields,
   options?: GetPersonDisplayNameOptions,
 ): 'western' | 'korean' {
+  // 1. 개인 오버라이드 (가장 구체적 — 귀화·혼합·예외 인물)
+  const fromPerson = p.nameDisplayOrder
+  if (fromPerson === 'western') return 'western'
+  if (fromPerson === 'korean') return 'korean'
+  // 2. 페이지가 넘긴 국가 옵션 (목록에 person.country가 없을 때)
   const fromOption = options?.countryDefaultNameDisplayOrder
   if (fromOption !== undefined && fromOption !== null) {
     return fromOption === 'western' ? 'western' : 'korean'
   }
+  // 3. 소속 국가 기본
   const fromCountry = p.country?.defaultNameDisplayOrder
   if (fromCountry === 'western') return 'western'
   if (fromCountry === 'korean') return 'korean'

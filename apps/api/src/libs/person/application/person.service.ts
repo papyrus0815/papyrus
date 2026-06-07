@@ -62,18 +62,21 @@ import {
 /**
  * 인물 도메인 서비스
  */
-/** 인물 표시명: 국가 `defaultNameDisplayOrder`, null·미설정은 DB 주석과 동일하게 동양식 (인물 nameDisplayOrder 미사용) */
+/** 인물 표시명: 개인 nameDisplayOrder → 국가 defaultNameDisplayOrder → 동양식(기본). 프론트 getPersonDisplayName과 우선순위 일치 */
 function personDisplayName(p: {
   name?: string | null
   surname?: string | null
+  nameDisplayOrder?: string | null
   country?: { defaultNameDisplayOrder?: string | null; isoCode?: string | null } | null
 }): string {
   const name = p.name ?? ''
   const surname = p.surname ?? ''
-  const d = p.country?.defaultNameDisplayOrder
+  const personOrder = p.nameDisplayOrder
+  const countryOrder = p.country?.defaultNameDisplayOrder
   let order: 'western' | 'korean'
-  if (d === 'western') order = 'western'
-  else if (d === 'korean') order = 'korean'
+  if (personOrder === 'western' || personOrder === 'korean') order = personOrder
+  else if (countryOrder === 'western') order = 'western'
+  else if (countryOrder === 'korean') order = 'korean'
   else order = 'korean'
   if (order === 'western') return [name, surname].filter(Boolean).join(' ').trim() || '이름 없음'
   return [surname, name].filter(Boolean).join(' ').trim() || '이름 없음'

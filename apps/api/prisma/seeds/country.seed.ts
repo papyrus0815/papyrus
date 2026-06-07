@@ -12,6 +12,17 @@ export interface CountryData {
   continentName: string
 }
 
+/**
+ * 성(姓)을 먼저 쓰는 문화권 ISO 코드.
+ * 여기 속하면 korean(성+이름), 나머지는 모두 western(이름+성)으로 표시.
+ * 개별 인물 예외는 Person.nameDisplayOrder로 오버라이드한다.
+ */
+const FAMILY_NAME_FIRST_ISO = new Set(['KR', 'JP', 'CN', 'VN'])
+
+function nameOrderFor(isoCode: string): 'korean' | 'western' {
+  return FAMILY_NAME_FIRST_ISO.has(isoCode) ? 'korean' : 'western'
+}
+
 const COUNTRIES: CountryData[] = [
   {
     name: '대한민국',
@@ -634,6 +645,7 @@ export async function seedCountries(
         areaSqKm: country.areaSqKm,
         continentId: continentId,
         accountId: ACCOUNT_ID,
+        defaultNameDisplayOrder: nameOrderFor(country.isoCode),
       },
       create: {
         name: country.name,
@@ -644,6 +656,7 @@ export async function seedCountries(
         areaSqKm: country.areaSqKm,
         continentId: continentId,
         accountId: ACCOUNT_ID,
+        defaultNameDisplayOrder: nameOrderFor(country.isoCode),
       },
     })
     console.log(`  ✅ 국가 생성됨: ${created.name}`)
