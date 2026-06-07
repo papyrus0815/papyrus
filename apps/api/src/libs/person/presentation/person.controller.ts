@@ -522,13 +522,14 @@ export class PersonController {
         priority: n.priority ?? null,
       })),
       birthEra: person.birthEra as any,
-      birthYear: person.birthDate ? person.birthDate.getFullYear() : null,
-      birthMonth: person.birthDate ? person.birthDate.getMonth() + 1 : null,
-      birthDay: person.birthDate ? person.birthDate.getDate() : null,
+      // birthDate는 UTC 자정 저장 — UTC getter로 읽어야 입력일이 그대로 복원된다(-1일 방지).
+      birthYear: person.birthDate ? person.birthDate.getUTCFullYear() : null,
+      birthMonth: person.birthDate ? person.birthDate.getUTCMonth() + 1 : null,
+      birthDay: person.birthDate ? person.birthDate.getUTCDate() : null,
       deathEra: person.deathEra as any,
-      deathYear: person.deathDate ? person.deathDate.getFullYear() : null,
-      deathMonth: person.deathDate ? person.deathDate.getMonth() + 1 : null,
-      deathDay: person.deathDate ? person.deathDate.getDate() : null,
+      deathYear: person.deathDate ? person.deathDate.getUTCFullYear() : null,
+      deathMonth: person.deathDate ? person.deathDate.getUTCMonth() + 1 : null,
+      deathDay: person.deathDate ? person.deathDate.getUTCDate() : null,
       gender: person.gender,
       biography: person.biography,
       biographySections: (person.biographySections ?? []).map((s: any) => ({
@@ -822,9 +823,12 @@ export class PersonController {
       deathDate,
       isBirthDateUnknown: dto.isBirthDateUnknown,
       isDeathDateUnknown: dto.isDeathDateUnknown,
-      deathType: dto.deathType ?? null,
-      deathCause: dto.deathCause ?? null,
-      deathNote: dto.deathNote ?? null,
+      // PATCH 의미 — 보내지 않은 필드(undefined)는 변경 없음으로 둔다.
+      // `?? null`로 강제하면 전기·프로필 등 부분 업데이트 시 사망 상세가 지워진다.
+      // (등록 폼은 생존중 전환 시 명시적 null을 보내므로 "비우기"는 그대로 동작)
+      deathType: dto.deathType,
+      deathCause: dto.deathCause,
+      deathNote: dto.deathNote,
       isAlive: dto.isAlive,
       influence: dto.influence,
       gender: dto.gender,

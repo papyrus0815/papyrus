@@ -405,13 +405,16 @@ export class PersonPrismaRepository implements IPersonRepository {
       nameMeaning: person.nameMeaning ?? null,
       middleNameMeaning: person.middleNameMeaning ?? null,
       birthEra: person.birthEra as any,
-      birthYear: person.birthDate ? person.birthDate.getFullYear() : null,
-      birthMonth: person.birthDate ? person.birthDate.getMonth() + 1 : null,
-      birthDay: person.birthDate ? person.birthDate.getDate() : null,
+      // birthDate는 controller에서 `new Date("YYYY-MM-DD")` = UTC 자정으로 저장하므로
+      // 로컬 getter(getDate 등)로 읽으면 런타임 TZ가 UTC보다 뒤일 때 하루가 밀린다(-1일).
+      // 저장과 동일하게 UTC getter로 읽어 입력한 날짜를 그대로 복원한다.
+      birthYear: person.birthDate ? person.birthDate.getUTCFullYear() : null,
+      birthMonth: person.birthDate ? person.birthDate.getUTCMonth() + 1 : null,
+      birthDay: person.birthDate ? person.birthDate.getUTCDate() : null,
       deathEra: person.deathEra as any,
-      deathYear: person.deathDate ? person.deathDate.getFullYear() : null,
-      deathMonth: person.deathDate ? person.deathDate.getMonth() + 1 : null,
-      deathDay: person.deathDate ? person.deathDate.getDate() : null,
+      deathYear: person.deathDate ? person.deathDate.getUTCFullYear() : null,
+      deathMonth: person.deathDate ? person.deathDate.getUTCMonth() + 1 : null,
+      deathDay: person.deathDate ? person.deathDate.getUTCDate() : null,
       gender: person.gender,
       biography: person.biography,
       profileImageUrl: person.profileImageUrl,
@@ -493,9 +496,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       surname: person.surname ?? null,
       middleName: person.middleName ?? null,
       birthEra: person.birthEra as any,
-      birthYear: person.birthDate ? person.birthDate.getFullYear() : null,
+      birthYear: person.birthDate ? person.birthDate.getUTCFullYear() : null,
       deathEra: person.deathEra as any,
-      deathYear: person.deathDate ? person.deathDate.getFullYear() : null,
+      deathYear: person.deathDate ? person.deathDate.getUTCFullYear() : null,
       isAlive: person.isAlive ?? false,
       influence: (person as any).influence ?? null,
       regnalName,
@@ -4300,7 +4303,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       if (!d) return null
       const dt = d instanceof Date ? d : new Date(d)
       const t = dt.getTime()
-      return Number.isNaN(t) ? null : dt.getFullYear()
+      // birthDate는 UTC 자정 저장 — 연도도 UTC 기준으로 읽어 연초 경계에서 -1년 안 되게.
+      return Number.isNaN(t) ? null : dt.getUTCFullYear()
     }
     const addSpouseEdge = (
       a: string,
