@@ -1,50 +1,33 @@
 # Papyrus Mobile — Claude 작업 가이드
 
-## 디자인 시스템
+## 정체성
 
-토큰은 `constants/theme.ts`에 정의. **새 컴포넌트는 무조건 토큰 사용** — 매직넘버·하드코딩 색상 금지.
+이 앱은 **web-admin을 띄우는 얇은 WebView 셸**이다. 화면 로직·디자인·데이터는 전부 `apps/web-admin`에 있고, 모바일은 그것을 네이티브 컨테이너로 감싸기만 한다.
 
-| 카테고리 | 토큰 | 비고 |
-|---|---|---|
-| 색 | `useTokens()` 훅 (다크모드 반응) 또는 `Tokens` 정적 (라이트 고정·레거시) | 슬레이트 톤 |
-| 라운드 | `Radius.{none, xs, sm, md, lg, xl, full}` | 버튼 sm·카드 md·검색바/아이콘 full |
-| 간격 | `Spacing.{xxs, xs, sm, md, base, lg, xl, xxl, section}` | 4px 베이스 + 2px micro |
-| 타이포 | `Type.{displayXl, displayLg, displayMd, displaySm, titleMd, titleSm, bodyMd, bodySm, ..., buttonMd, ...}` | 14단 스케일 |
-| 폰트 | `FontFamily.{regular, medium, semibold, bold}` | Inter VF (`_layout.tsx`에서 로드) |
-| 쉐도우 | `Elevation.card` | 단일 티어 |
+- 기능을 추가/수정하려면 **web-admin을 고친다.** mobile에 화면을 만들지 않는다.
+- mobile에서 손볼 일: WebView 동작(로딩/에러/뒤로가기/파일업로드/딥링크), 스플래시·아이콘, 빌드 설정.
 
-### 컴포넌트 작성 패턴
+## 구조
 
-다크모드 대응이 필요한 컴포넌트는 `useTokens()` + `useMemo(() => makeStyles(t), [t])` 패턴:
-
-```ts
-function MyCard() {
-  const t = useTokens()
-  const styles = useMemo(() => makeStyles(t), [t])
-  return <View style={styles.card}>...</View>
-}
-function makeStyles(t: TokenSet) {
-  return StyleSheet.create({
-    card: {
-      backgroundColor: t.surface.raised,
-      borderRadius: Radius.md,
-      padding: Spacing.lg,
-    },
-  })
-}
+```
+app/_layout.tsx   Stack (headerShown:false) — index 한 화면만
+app/index.tsx     WebView 셸 (로딩 오버레이 · 에러+재시도 · Android back · 파일업로드)
+lib/web-url.ts    로드할 web-admin URL 결정 (lib/api.ts 패턴 재사용)
 ```
 
-## 작업 규칙
+## URL 결정 (`lib/web-url.ts`)
 
-- **라우팅**: 화면 이동은 `lib/routes.ts` 헬퍼만 (`router.push` 직접 호출 X)
-- **데이터 fetch**: 새 fetch는 `useQuery({ queryKey: [...], queryFn })` 권장. 키 컨벤션: `['persons','list']`, `['persons','detail',id]` 등. mutation 후 `queryClient.setQueryData` 또는 `invalidateQueries`
-- **에러 표시**: `errorMessage()` + `ListErrorView` (retry 포함) 또는 `EmptyState`
-- **폼**: dirty 가드 (`usePreventRemove` from `@react-navigation/native`) — 저장 성공 시 baseline 갱신해 가드 우회
-- **a11y**: 작은 터치 타겟에 `hitSlop`, 아이콘 버튼에 `accessibilityLabel`, primary CTA `minHeight: 48`
-- **검색 디바운스**: `useDebouncedValue(query, SEARCH_DEBOUNCE_MS)`
-- **햅틱**: 결정적 순간 (저장 success/error, 삭제 warning, long-press impact)
-- **즐겨찾기·검색 history**: `useBookmarks(scope)`, `useSearchHistory(scope)` (AsyncStorage)
+1. `EXPO_PUBLIC_WEB_URL` 있으면 그대로 (staging/prod 배포 URL)
+2. `__DEV__`: Expo dev server 호스트 자동 감지 + `EXPO_PUBLIC_WEB_PORT`(기본 3000, web-admin vite 포트)
+
+dev에서 web-admin이 떠 있어야 한다: 루트에서 `npm run serve:web-admin` (포트 3000).
+
+## 주의
+
+- http dev 서버 로드를 위해 `app.json`의 android `usesCleartextTraffic:true`, WebView `mixedContentMode:"always"` 필요 — 빼지 말 것.
+- 외부 도메인 링크는 시스템 브라우저로 보내고, web-admin 내부 SPA 라우팅은 WebView가 처리.
+- **App Store 리젝 주의**: 순수 WebView 래퍼는 Apple 가이드라인 4.2에 걸릴 수 있음. 스토어 배포 시 네이티브 기능(푸시 등) 보강 검토.
 
 ## SDK·API
 
-루트 `CLAUDE.md`의 Prisma·SDK 가이드도 함께 적용됩니다.
+루트 `CLAUDE.md`의 Prisma·SDK 가이드도 함께 적용. 단, 모바일은 API를 직접 호출하지 않는다(web-admin이 호출).
