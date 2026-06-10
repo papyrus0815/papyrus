@@ -51,6 +51,75 @@ export function parseIsoDateParts(value?: string | null): IsoDateParts | null {
   }
 }
 
+/**
+ * 부호 있는 연도 → 세기 (BC는 *음수* 세기).
+ * 양수: 1~100년 → 1세기, 101~200 → 2세기, 1900 → 19, 2000 → 20.
+ * BC(음수·0): 1~100 BC → -1세기, 101~200 BC → -2세기 (연도 0은 천문학적으로 1 BC).
+ *
+ * 기존엔 `Math.ceil(year/100)`만 써서 (1) BC·연도0이 0/-0(falsy)이 돼 truthy 가드에
+ * 누락되고 (2) 목록·대시보드의 `floor(year/100)+1`과 끝자리 00년에서 1세기 어긋났다.
+ * 이 함수를 단일 출처로 모든 뷰가 공유한다.
+ */
+export function getCentury(year: number): number {
+  if (year > 0) return Math.ceil(year / 100)
+  return -Math.ceil(Math.abs(year) / 100) || -1
+}
+
+/** ISO 문자열 → 세기(BC 음수). 파싱 불가면 null. TZ 안전. */
+export function getCenturyFromIso(value?: string | null): number | null {
+  const p = parseIsoDateParts(value)
+  if (!p) return null
+  return getCentury(p.year)
+}
+
+/** 부호 있는 연도 → 10년대(decade) 시작 연도. 예: 1995 → 1990, -44 → -50. */
+export function getDecade(year: number): number {
+  return Math.floor(year / 10) * 10
+}
+
+/**
+ * ISO 문자열 → 시간순 정렬용 정수 키. BC(음수 연도)까지 안정 정렬.
+ * 부호연도×10000 + 월×100 + 일. 파싱 불가면 null.
+ *
+ * 네이티브 `new Date(iso).getTime()`은 BC 형식(`-0044-..`)에서 부호 소실/오연도/NaN을
+ * 내 정렬을 뒤섞었다. 정수 키 비교로 대체한다.
+ */
+export function dateSortKey(value?: string | null): number | null {
+  const p = parseIsoDateParts(value)
+  if (!p) return null
+  return p.year * 10000 + p.month * 100 + p.day
+}
+
+/**
+ * 시간순 비교자(오름차순). 파싱 불가(미상)는 *항상 뒤로* 보낸다(방향 무관).
+ * 내림차순이 필요하면 호출부에서 결과 부호를 뒤집되, 미상은 별도로 뒤에 두는 게 보통이라
+ * 방향까지 고려하려면 `compareByDate(a, b, dir)`를 쓰라.
+ */
+export function compareByDate(
+  aIso?: string | null,
+  bIso?: string | null,
+  direction: 'asc' | 'desc' = 'asc',
+): number {
+  const a = dateSortKey(aIso)
+  const b = dateSortKey(bIso)
+  if (a === null && b === null) return 0
+  if (a === null) return 1 // 미상은 항상 뒤
+  if (b === null) return -1
+  const cmp = a - b
+  return direction === 'asc' ? cmp : -cmp
+}
+
+/** start~end ISO의 연 단위 기간. end 없거나 어느 쪽이든 파싱 불가면 0. BC 지원. */
+export function isoYearSpan(
+  start?: string | null,
+  end?: string | null,
+): number {
+  const s = parseIsoDateParts(start)
+  const e = parseIsoDateParts(end)
+  if (!s || !e) return 0
+  return e.year - s.year
+}
+
 /** ISO 문자열 → "YYYY-MM-DD"(BC는 "-YYYY-MM-DD"). 파싱 불가면 ''. 타임존 무관. */
 export function isoToDateInput(value?: string | null): string {
   const p = parseIsoDateParts(value)

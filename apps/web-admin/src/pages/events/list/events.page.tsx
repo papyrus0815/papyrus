@@ -17,15 +17,12 @@ import React, {
 } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiPlus } from 'react-icons/fi'
+import { FiAlertTriangle, FiPlus, FiRefreshCw } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useEvents } from '@/entities/event/model'
 import { getEventsCount } from '@/shared/api/events'
-import {
-  useHeadsOfState,
-  useTenureGroups,
-} from '@/entities/government-position/model'
+import { eventKeys } from '@/pages/events/detail/use-event-detail'
 import { useEventFilters } from '@/features/event-filters/model'
 import { useEventHierarchy } from '@/features/event-hierarchy/model'
 import { VIEW_MODES, type ViewMode } from '@/features/event-list/lib'
@@ -122,18 +119,24 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   const { recentEvents, addRecentEvent } = useRecentEvents()
 
   // ===== Entity: 사건 데이터 =====
-  // useEvents는 React Query 무한 스크롤로 전환됨(a1b5b6f85). gov positions 동시 fetch는
-  // 새 hook에서 빠짐 → useHeadsOfState/EventDetailPanel은 기본값 [] 사용.
-  const { events, isLoading, isFetchingNextPage, hasMore, fetchMoreEvents } =
-    useEvents({
-      pageSize,
-      countryId: countryId ?? undefined,
-    })
+  // useEvents는 React Query 무한 스크롤로 전환됨(a1b5b6f85).
+  const {
+    events,
+    isLoading,
+    isFetchingNextPage,
+    isError,
+    hasMore,
+    fetchMoreEvents,
+    refetch: refetchEvents,
+  } = useEvents({
+    pageSize,
+    countryId: countryId ?? undefined,
+  })
 
   // ===== 권위 총개수 — 헤더 "전체 N건"이 *로드된 수*가 아닌 진짜 총량을 표시하도록 =====
   // 페이징 응답엔 total이 없어 별도 count 엔드포인트 조회(가벼운 count 쿼리). 실패 시 undefined.
   const { data: serverTotal } = useQuery({
-    queryKey: ['events-count', countryId ?? null],
+    queryKey: [...eventKeys.count(), countryId ?? null],
     queryFn: () => getEventsCount({ countryId: countryId ?? undefined }),
     staleTime: 30_000,
   })
@@ -150,7 +153,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     selectedCentury,
     selectedCountry,
     selectedContinent,
-    selectedPositionType,
     showFlatView,
     setSelectedCategory,
     setKeyword,
@@ -159,10 +161,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setSelectedCentury,
     setSelectedCountry,
     setSelectedContinent,
-    setSelectedPositionType,
     setShowFlatView,
     availableCenturies,
-    filteredEvents,
     sortedEvents,
     filterSummaryChips,
     hasActiveFilters,
@@ -187,18 +187,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     showFlatView,
     sortBy,
     sortDirection,
-  )
-
-  const {
-    eventHeadsOfState,
-    expandedTenureGroups,
-    toggleTenureGroupExpansion,
-  } = useHeadsOfState(events, [], selectedPositionType)
-
-  const tenureGroups = useTenureGroups(
-    flattenedHierarchy,
-    eventHeadsOfState,
-    events,
   )
 
   // ===== UI 상태 =====
@@ -245,8 +233,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     setShowCategoryModal,
     showCountryModal,
     setShowCountryModal,
-    showPositionTypeModal,
-    setShowPositionTypeModal,
     showSummaryModal,
     setShowSummaryModal,
     summaryEventId,
@@ -386,18 +372,26 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     () => navigate(pathKeys.events.create()),
     [navigate],
   )
-  const handleExportJson = useCallback(
-    () =>
-      exportEventsAsJson(
-        visibleFlattenedHierarchy.map(
-          (it) =>
-            eventByIdMap.get(it.node.id) ??
-            nodeIndexMap.get(it.node.id)?.rootEvent ??
-            null,
-        ),
-      ),
-    [visibleFlattenedHierarchy, eventByIdMap, nodeIndexMap],
-  )
+  const handleExportJson = useCallback(() => {
+    const exported = visibleFlattenedHierarchy.map(
+      (it) =>
+        eventByIdMap.get(it.node.id) ??
+        nodeIndexMap.get(it.node.id)?.rootEvent ??
+        null,
+    )
+    // 현재 화면은 로드·필터된 일부만 → 전체보다 적으면 부분 내보내기임을 확인.
+    const exportedCount = exported.filter(Boolean).length
+    if (
+      typeof serverTotal === 'number' &&
+      exportedCount < serverTotal &&
+      !window.confirm(
+        `전체 ${serverTotal.toLocaleString()}건 중 현재 로드·필터된 ${exportedCount.toLocaleString()}건만 내보냅니다. 계속할까요?`,
+      )
+    ) {
+      return
+    }
+    exportEventsAsJson(exported)
+  }, [visibleFlattenedHierarchy, eventByIdMap, nodeIndexMap, serverTotal])
 
   /** lazy 슬롯 fallback — 위젯 chunk 다운로드 동안 유지되는 빈 박스. layout shift 방지. */
   const lazyFallback = (
@@ -449,6 +443,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
             events={events}
             dbCategories={dbCategories}
             onSelectEvent={setSelectedEventId}
+            serverTotal={serverTotal}
           />
         </Suspense>
       )
@@ -486,7 +481,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           flattenedHierarchy={visibleFlattenedHierarchy}
           events={events}
           expandedEventIds={expandedEventIds}
-          expandedTenureGroups={expandedTenureGroups}
           selectedEventId={selectedEventId}
           sortDirection={sortDirection}
           hasActiveFilters={filtersOrSearchActive}
@@ -502,17 +496,14 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
                 ]
               : filterSummaryChips
           }
-          tenureGroups={tenureGroups}
-          periodHeadsOfState={eventHeadsOfState.get('__periodHeads__') ?? []}
           dbCategories={dbCategories}
           isLoadingMore={isLoading && events.length > 0}
           displayedCount={visibleFlattenedHierarchy.length}
           hasMoreData={hasMore}
           bookmarks={bookmarks}
-          searchQuery={keywordInput}
+          searchQuery={debouncedKeyword}
           recentEventIds={recentEvents}
           onToggleExpansion={toggleEventExpansion}
-          onToggleTenureGroupExpansion={toggleTenureGroupExpansion}
           onSelectEvent={setSelectedEventId}
           onShowSummary={openSummary}
           onResetFilters={handleResetAll}
@@ -544,8 +535,11 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   const handleAfterDelete = useCallback(
     (deletedId: string) => {
       // 선택 해제 + React Query 캐시 invalidate (페이지 reload 회피)
+      // 목록(['events'])과 헤더 총개수(['events-count']) 모두 무효화 — 안 하면
+      // 삭제 후 헤더 "전체 N건"이 staleTime 동안 옛 값을 유지.
       if (selectedEventId === deletedId) setSelectedEventId(null)
-      queryClient.invalidateQueries({ queryKey: ['events'] })
+      queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: eventKeys.count() })
     },
     [selectedEventId, queryClient],
   )
@@ -584,7 +578,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       selectedEvent={selectedEvent}
       selectedNode={selectedNode}
       dbCategories={dbCategories}
-      eventHeadsOfState={eventHeadsOfState}
       onSelectEvent={setSelectedEventId}
       onExpandEvent={handleExpandEvent}
       onShowSummary={openSummary}
@@ -605,7 +598,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     selectedCategory,
     selectedCountry,
     selectedContinent,
-    selectedPositionType,
     selectedCentury,
     showFlatView,
     dbCategories,
@@ -615,13 +607,11 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     continents,
     setShowCategoryModal,
     setShowCountryModal,
-    setShowPositionTypeModal,
     toggleShowFlatView,
     setSelectedCentury,
     onSelectCategory: setSelectedCategory,
     onSelectCountry: setSelectedCountry,
     onSelectContinent: setSelectedContinent,
-    onSelectPositionType: setSelectedPositionType,
     bookmarksOnly,
     toggleBookmarksOnly,
     bookmarksCount: bookmarks.size,
@@ -663,10 +653,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     historicalCountries,
     selectedCountry,
     setSelectedCountry,
-    showPositionTypeModal,
-    setShowPositionTypeModal,
-    selectedPositionType,
-    setSelectedPositionType,
   }
 
   const overlayModalProps = {
@@ -703,11 +689,29 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
 
       <CatalogToolbar {...toolbarProps} />
 
-      {/**
-       * 사건 미선택 = 우측 상세 패널 *완전 미렌더* → CatalogSplit이 1-col로 메인 뷰가 풀 폭.
-       * 사건 클릭 시에만 drawer 마운트되어 데스크톱 column 표시 / 모바일 슬라이드인.
-       */}
-      <Layout.CatalogSplit $hasSelection={!!selectedEventId}>
+      {isError && events.length === 0 ? (
+        <PageStyles.ErrorBanner role="alert">
+          <FiAlertTriangle size={32} aria-hidden="true" />
+          <PageStyles.ErrorBannerTitle>
+            사건을 불러오지 못했습니다
+          </PageStyles.ErrorBannerTitle>
+          <PageStyles.ErrorBannerDesc>
+            네트워크 또는 서버 오류일 수 있습니다. 잠시 후 다시 시도해 주세요.
+          </PageStyles.ErrorBannerDesc>
+          <PageStyles.ErrorRetryButton
+            type="button"
+            onClick={() => refetchEvents()}
+          >
+            <FiRefreshCw size={14} aria-hidden="true" />
+            다시 시도
+          </PageStyles.ErrorRetryButton>
+        </PageStyles.ErrorBanner>
+      ) : (
+        /**
+         * 사건 미선택 = 우측 상세 패널 *완전 미렌더* → CatalogSplit이 1-col로 메인 뷰가 풀 폭.
+         * 사건 클릭 시에만 drawer 마운트되어 데스크톱 column 표시 / 모바일 슬라이드인.
+         */
+        <Layout.CatalogSplit $hasSelection={!!selectedEventId}>
         <CatalogMainContent
           viewMode={viewMode}
           setViewMode={changeViewMode}
@@ -733,7 +737,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
             {detailPanelSlot}
           </CatalogDetailDrawer>
         )}
-      </Layout.CatalogSplit>
+        </Layout.CatalogSplit>
+      )}
     </>
   )
 

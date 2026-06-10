@@ -29,6 +29,7 @@ import { getCategoryName } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { CategoryDot } from '@/shared/ui/category-dot/category-dot'
 import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
+import { getCenturyFromIso } from '@/shared/lib/iso-date'
 
 import { BRAND, CATEGORY_BADGE_COLORS } from '../../../pages/events/styles/theme'
 import type {
@@ -36,17 +37,16 @@ import type {
   HistoricalEvent,
 } from '../../../pages/events/create/events.types'
 
-interface FlatItem {
-  node: EventHierarchyNode
-  depth: number
-  parentEvent: HistoricalEvent | null
-}
+/** useEventHierarchy 출력 계약 단일화 — 각 뷰의 중복 선언 제거 */
+type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
 
 interface Props {
   flattenedHierarchy: FlatItem[]
   events: HistoricalEvent[]
   dbCategories: EventCategoryDto[]
   onSelectEvent: (id: string) => void
+  /** 서버 권위 총개수 — 로드된 수보다 크면 통계가 부분 집계임을 경고 */
+  serverTotal?: number
 }
 
 export const EventDashboardView: React.FC<Props> = ({
@@ -54,6 +54,7 @@ export const EventDashboardView: React.FC<Props> = ({
   events,
   dbCategories,
   onSelectEvent,
+  serverTotal,
 }) => {
   const stats = useMemo(() => {
     const eventById = new Map<string, HistoricalEvent>()
@@ -90,9 +91,10 @@ export const EventDashboardView: React.FC<Props> = ({
       const cat = evt.category || 'other'
       byCategory.set(cat, (byCategory.get(cat) ?? 0) + 1)
 
-      const year = new Date(item.node.period.start).getFullYear()
-      const century = Math.floor(year / 100) + 1
-      byCentury.set(century, (byCentury.get(century) ?? 0) + 1)
+      const century = getCenturyFromIso(item.node.period.start)
+      if (century !== null) {
+        byCentury.set(century, (byCentury.get(century) ?? 0) + 1)
+      }
 
       if (item.node.importance === 'critical') tierCount.critical += 1
       else if (item.node.importance === 'major') tierCount.major += 1
@@ -212,8 +214,18 @@ export const EventDashboardView: React.FC<Props> = ({
     )
   }
 
+  const isPartial =
+    typeof serverTotal === 'number' && events.length < serverTotal
+
   return (
     <Host>
+      {isPartial && (
+        <PartialDataBanner role="status">
+          현재 로드된 {events.length.toLocaleString()}건 기준 집계입니다 (전체{' '}
+          {serverTotal!.toLocaleString()}건). 목록/타임라인에서 더 불러오면
+          통계가 갱신됩니다.
+        </PartialDataBanner>
+      )}
       <Grid>
         {/* 중요도 분포 — 짧은 칩 행 */}
         <Card>
@@ -291,7 +303,9 @@ export const EventDashboardView: React.FC<Props> = ({
                       aria-hidden="true"
                     />
                   </CenturyTrack>
-                  <CenturyLabel>{row.century}C</CenturyLabel>
+                  <CenturyLabel>
+                    {row.century < 0 ? `기원전 ${Math.abs(row.century)}C` : `${row.century}C`}
+                  </CenturyLabel>
                   <CenturyCount>{row.count}</CenturyCount>
                 </CenturyBar>
               )
@@ -439,6 +453,19 @@ const Host = styled.div`
   min-height: 0;
   overflow: auto;
   padding: 4px 4px 80px;
+`
+
+/** 부분 로드 통계 경고 — 전수 통계로 오인하지 않도록 */
+const PartialDataBanner = styled.div`
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245,158,11,0.1)' : 'rgba(245,158,11,0.08)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  line-height: 1.5;
 `
 
 const Grid = styled.div`

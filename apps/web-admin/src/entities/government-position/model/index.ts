@@ -3,5 +3,5 @@
  * FSD: entities/government-position/model
  */
 
-export { useHeadsOfState, useTenureGroups } from './useHeadsOfState'
+export { useHeadsOfState } from './useHeadsOfState'
 

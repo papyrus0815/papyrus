@@ -11,15 +11,7 @@ import type { RefObject } from 'react'
 import type { useNavigate } from 'react-router-dom'
 
 import { pathKeys } from '@/shared/router'
-
-import type { EventHierarchyNode } from '../../create/events.types'
-
-/** useEventHierarchy의 flattenedHierarchy 항목 타입 (export되어 있지 않아 여기서 재선언) */
-type FlattenedHierarchyItem = {
-  node: EventHierarchyNode
-  depth: number
-  parentEvent: unknown
-}
+import type { FlattenedHierarchyItem } from '@/features/event-hierarchy/model'
 
 const isInEditableElement = (target: EventTarget | null): boolean => {
   const el = target as HTMLElement | null

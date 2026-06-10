@@ -3,7 +3,7 @@
  */
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
-import type { HistoricalEventCategory } from './create/events.types'
+import type { HistoricalEventCategory } from '../create/events.types'
 
 export const getApiHost = (): string => {
   const envUrl = import.meta.env.VITE_API_BASE_URL

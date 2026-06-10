@@ -144,7 +144,7 @@ export const FilterSearchInput = styled.input`
             outline: none;
             border-color: rgba(37, 99, 235, 0.5);
             background-color: rgba(255, 255, 255, 0.06);
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+            box-shadow: ${BRAND.focusRing};
           }
         `
       : css`
@@ -162,7 +162,7 @@ export const FilterSearchInput = styled.input`
             outline: none;
             border-color: rgba(37, 99, 235, 0.5);
             background-color: #ffffff;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+            box-shadow: ${BRAND.focusRing};
           }
         `}
 `
@@ -487,7 +487,7 @@ export const SortDirectionToggle = styled.button`
   &:hover { border-color: rgba(37, 99, 235, 0.3); }
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+    box-shadow: ${BRAND.focusRing};
   }
   ${({ theme }) =>
     theme.mode === 'dark'
@@ -520,7 +520,7 @@ export const SortSelect = styled.select`
   &:focus {
     outline: none;
     border-color: rgba(37, 99, 235, 0.5);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+    box-shadow: ${BRAND.focusRing};
   }
   ${({ theme }) =>
     theme.mode === 'dark'
@@ -614,7 +614,7 @@ export const CenturySelect = styled.select`
   &:focus {
     outline: none;
     border-color: rgba(37, 99, 235, 0.5);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+    box-shadow: ${BRAND.focusRing};
   }
   ${({ theme }) =>
     theme.mode === 'dark'

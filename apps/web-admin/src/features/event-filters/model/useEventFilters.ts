@@ -14,10 +14,13 @@ import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
+import { dateSortKey, isoYearSpan } from '@/shared/lib/iso-date'
 
 import type { HistoricalEvent } from '../../../pages/events/create/events.types'
-import { MOCK_POSITION_TYPES } from '../../../entities/event/model/mock-government-positions'
-import { getCenturyFromDate } from '../../../pages/events/utils/events.utils'
+import {
+  formatCenturyLabel,
+  getCenturyFromDate,
+} from '../../../pages/events/utils/events.utils'
 
 /**
  * countries / historicalCountries는 `filterSummaryChips`의 국가명 lookup에 사용.
@@ -46,9 +49,6 @@ export const useEventFilters = (
     typeof FILTER_ALL | string
   >(FILTER_ALL)
   const [selectedContinent, setSelectedContinent] = useState<
-    typeof FILTER_ALL | string
-  >(FILTER_ALL)
-  const [selectedPositionType, setSelectedPositionType] = useState<
     typeof FILTER_ALL | string
   >(FILTER_ALL)
   const [showFlatView, setShowFlatView] = useState(false)
@@ -81,8 +81,8 @@ export const useEventFilters = (
     events.forEach((event) => {
       const startCentury = getCenturyFromDate(event.startDate)
       const endCentury = getCenturyFromDate(event.endDate)
-      if (startCentury) centuries.add(startCentury)
-      if (endCentury) centuries.add(endCentury)
+      if (startCentury !== null) centuries.add(startCentury)
+      if (endCentury !== null) centuries.add(endCentury)
     })
     return Array.from(centuries).sort((a, b) => a - b)
   }, [events])
@@ -91,16 +91,34 @@ export const useEventFilters = (
   const trimmedKeyword = keyword.trim()
   const normalizedKeyword = trimmedKeyword.toLowerCase()
 
+  /**
+   * parentEventId → 직계 자식 맵. events에만 의존하므로 필터(카테고리·키워드·세기)
+   * 변경 시 재구축되지 않도록 filteredEvents에서 분리한다.
+   */
+  const childrenByParent = useMemo(() => {
+    const m = new Map<string, HistoricalEvent[]>()
+    for (const e of events) {
+      if (!e.parentEventId) continue
+      const arr = m.get(e.parentEventId)
+      if (arr) arr.push(e)
+      else m.set(e.parentEventId, [e])
+    }
+    return m
+  }, [events])
+
   const filteredEvents = useMemo(() => {
     /** 단일 사건이 현재 필터를 모두 만족하는가 — 루트·자식 공통 술어. */
     const matches = (event: HistoricalEvent): boolean => {
       const categoryOk =
-        selectedCategory === FILTER_ALL || event.category === selectedCategory
+        selectedCategory === FILTER_ALL ||
+        event.categoryId === selectedCategory
       const keywordOk =
         normalizedKeyword.length === 0 ||
         event.title.toLowerCase().includes(normalizedKeyword) ||
         event.description.toLowerCase().includes(normalizedKeyword) ||
-        event.tags.some((tag) => tag.toLowerCase().includes(normalizedKeyword))
+        (event.keywords ?? []).some((kw) =>
+          kw.toLowerCase().includes(normalizedKeyword),
+        )
       const centuryOk = (() => {
         if (selectedCentury === FILTER_ALL) return true
         const startCentury = getCenturyFromDate(event.startDate)
@@ -136,13 +154,6 @@ export const useEventFilters = (
      *  루트 펼침으로 도달하므로 루트를 살리면 계층에서 자연히 노출됨.)
      * 출력은 여전히 루트만 — downstream(hierarchy/flatten)이 의존하는 계약을 유지.
      */
-    const childrenByParent = new Map<string, HistoricalEvent[]>()
-    for (const e of events) {
-      if (!e.parentEventId) continue
-      const arr = childrenByParent.get(e.parentEventId)
-      if (arr) arr.push(e)
-      else childrenByParent.set(e.parentEventId, [e])
-    }
     const matchesSelfOrDescendant = (event: HistoricalEvent): boolean => {
       if (matches(event)) return true
       const kids = childrenByParent.get(event.id)
@@ -154,6 +165,7 @@ export const useEventFilters = (
       .filter(matchesSelfOrDescendant)
   }, [
     events,
+    childrenByParent,
     selectedCategory,
     normalizedKeyword,
     selectedCentury,
@@ -166,23 +178,25 @@ export const useEventFilters = (
   const sortedEvents = useMemo(() => {
     const eventsCopy = [...filteredEvents]
 
+    // BC(음수 연도)·미상 날짜를 안정 정렬하기 위해 네이티브 Date 대신 정수 키를 쓴다.
+    // 미상(키 null)은 항상 맨 끝(NEGATIVE_INFINITY)로 보내 NaN 비교의 무작위성을 제거.
+    const startKey = (e: HistoricalEvent) =>
+      dateSortKey(e.startDate) ?? Number.NEGATIVE_INFINITY
+
     const sorted = eventsCopy.sort((eventA, eventB) => {
       let comparison = 0
 
       switch (sortBy) {
-        case 'recent':
-          comparison =
-            new Date(eventA.startDate).getTime() -
-            new Date(eventB.startDate).getTime()
-          break
         case 'duration':
+          // stats.durationInYears는 transformer가 항상 0으로 채워 무의미 →
+          // start~end 연 단위 기간으로 직접 계산(BC 지원).
           comparison =
-            eventA.stats.durationInYears - eventB.stats.durationInYears
+            isoYearSpan(eventA.startDate, eventA.endDate) -
+            isoYearSpan(eventB.startDate, eventB.endDate)
           break
+        case 'recent':
         default:
-          comparison =
-            new Date(eventA.startDate).getTime() -
-            new Date(eventB.startDate).getTime()
+          comparison = startKey(eventA) - startKey(eventB)
           break
       }
 
@@ -239,19 +253,8 @@ export const useEventFilters = (
     if (selectedCentury !== FILTER_ALL) {
       chips.push({
         key: 'century',
-        label: `세기 · ${selectedCentury}세기`,
+        label: `세기 · ${formatCenturyLabel(selectedCentury)}`,
         onClear: () => setSelectedCentury(FILTER_ALL),
-      })
-    }
-
-    if (selectedPositionType !== FILTER_ALL) {
-      const label =
-        MOCK_POSITION_TYPES.find((t) => t.value === selectedPositionType)
-          ?.label || selectedPositionType
-      chips.push({
-        key: 'positionType',
-        label: `직업 · ${label}`,
-        onClear: () => setSelectedPositionType(FILTER_ALL),
       })
     }
 
@@ -269,7 +272,6 @@ export const useEventFilters = (
     selectedCountry,
     selectedContinent,
     selectedCentury,
-    selectedPositionType,
     trimmedKeyword,
     dbCategories,
     countries,
@@ -288,7 +290,6 @@ export const useEventFilters = (
     setSelectedCentury(FILTER_ALL)
     setSelectedCountry(FILTER_ALL)
     setSelectedContinent(FILTER_ALL)
-    setSelectedPositionType(FILTER_ALL)
   }
 
   return {
@@ -300,7 +301,6 @@ export const useEventFilters = (
     selectedCentury,
     selectedCountry,
     selectedContinent,
-    selectedPositionType,
     showFlatView,
 
     // 세터
@@ -311,7 +311,6 @@ export const useEventFilters = (
     setSelectedCentury,
     setSelectedCountry,
     setSelectedContinent,
-    setSelectedPositionType,
     setShowFlatView,
 
     // 계산된 값

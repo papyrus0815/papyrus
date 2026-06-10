@@ -53,8 +53,6 @@ interface EventDetailPanelProps {
   selectedEvent: HistoricalEvent | null
   selectedNode: EventHierarchyNode | null
   dbCategories: EventCategoryDto[]
-  /** events.page에서 정의 — 이벤트별 국가 원수 맵. 현재 미사용이지만 후속 기능 대비 prop 보존 (optional) */
-  eventHeadsOfState?: Map<string, unknown[]>
   onSelectEvent?: (eventId: string) => void
   onExpandEvent?: (eventId: string) => void
   onShowSummary?: (eventId: string) => void
@@ -162,7 +160,8 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
     setConfirmDeleteOpen(false)
     try {
       await deleteEvent(selectedNode.id)
-      toast.success('사건이 삭제되었습니다. (3일 간 복구 가능)')
+      // 관리자 UI에 복구 동선이 없으므로 '복구 가능'을 약속하지 않는다.
+      toast.success('사건이 삭제되었습니다.')
       if (onAfterDelete) {
         onAfterDelete(selectedNode.id)
       } else {
@@ -540,7 +539,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
           <>
             이 사건을 삭제하시겠습니까?
             <br />
-            3일 간 보관되며, 이후 자동으로 완전히 삭제됩니다.
+            삭제 후에는 목록에서 복구할 수 없습니다.
           </>
         }
         confirmLabel="삭제"

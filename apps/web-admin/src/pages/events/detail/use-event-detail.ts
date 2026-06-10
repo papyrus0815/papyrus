@@ -133,6 +133,8 @@ export const eventKeys = {
   lists: () => ['events'] as const,
   /** 단일 사건 상세 */
   detail: (eventId: string) => ['event-detail', eventId] as const,
+  /** 헤더 "전체 N건" 권위 총개수 — 생성·수정·삭제 시 lists()와 함께 무효화할 것 */
+  count: () => ['events-count'] as const,
 }
 
 /**

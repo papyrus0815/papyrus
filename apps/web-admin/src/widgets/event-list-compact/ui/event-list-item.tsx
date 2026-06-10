@@ -18,6 +18,7 @@ import styled, { css } from 'styled-components'
 import { getCategoryName } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
+import { type IsoDateParts, parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import { CATEGORY_BADGE_COLORS } from '../../../pages/events/styles/theme'
 import type {
@@ -32,15 +33,18 @@ interface EventListItemProps {
   isExpanded: boolean
   hasChildren: boolean
   isActive: boolean
-  isInTenureGroup: boolean
   dbCategories: EventCategoryDto[]
   isBookmarked?: boolean
   /** 활성 검색어 — Title에서 매칭 부분 노란 배경 */
   searchQuery?: string
-  onSelect: () => void
-  onToggleExpansion: () => void
-  onShowSummary: () => void
-  onToggleBookmark?: () => void
+  /**
+   * id 기반 콜백 — 상위(CompactList)가 *안정* 참조를 그대로 넘길 수 있어 React.memo가
+   * 실효를 낸다(행마다 인라인 화살표를 만들면 memo가 매번 무력화됨).
+   */
+  onSelect: (id: string) => void
+  onToggleExpansion: (id: string) => void
+  onShowSummary: (id: string) => void
+  onToggleBookmark?: (id: string) => void
 }
 
 /**
@@ -75,34 +79,46 @@ const tierFromNode = (
   return 'normal'
 }
 
-const formatDuration = (start: Date, end: Date | null) => {
-  if (!end || start.getTime() === end.getTime()) return '1일'
-  const diffDays = Math.ceil(
-    Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
+/**
+ * 기간 포맷 — ISO 구성요소(부호 연도 포함) 기반 borrow 차분. BC 음수 연도에서도
+ * NaN 없이 동작한다(네이티브 Date는 `-0044-..`를 Invalid Date로 만들어 기간이 깨졌음).
+ * 월/일 borrow는 30일 근사 — 일 단위 정밀도가 필요한 화면이 아니므로 충분.
+ */
+const formatDuration = (
+  start: IsoDateParts | null,
+  end: IsoDateParts | null,
+): string => {
+  if (!start) return ''
+  if (
+    !end ||
+    (end.year === start.year &&
+      end.month === start.month &&
+      end.day === start.day)
   )
-  if (diffDays >= 365) {
-    const years = Math.floor(diffDays / 365)
-    const remDays = diffDays % 365
-    const months = Math.floor(remDays / 30)
-    if (months > 0) return `${years}년 ${months}개월`
-    return `${years}년`
+    return '1일'
+  let years = end.year - start.year
+  let months = end.month - start.month
+  let days = end.day - start.day
+  if (days < 0) {
+    months -= 1
+    days += 30
   }
-  if (diffDays >= 30) {
-    const months = Math.floor(diffDays / 30)
-    const days = diffDays % 30
-    return days > 0 ? `${months}개월 ${days}일` : `${months}개월`
+  if (months < 0) {
+    years -= 1
+    months += 12
   }
-  return `${diffDays}일`
+  if (years > 0) return months > 0 ? `${years}년 ${months}개월` : `${years}년`
+  if (months > 0) return days > 0 ? `${months}개월 ${days}일` : `${months}개월`
+  return `${Math.max(1, days)}일`
 }
 
-export const EventListItem: React.FC<EventListItemProps> = ({
+const EventListItemImpl: React.FC<EventListItemProps> = ({
   node,
   event,
   depth,
   isExpanded,
   hasChildren,
   isActive,
-  isInTenureGroup,
   dbCategories,
   isBookmarked = false,
   searchQuery,
@@ -112,10 +128,14 @@ export const EventListItem: React.FC<EventListItemProps> = ({
   onToggleBookmark,
 }) => {
   const tier = tierFromNode(node.importance)
-  const start = new Date(node.period.start)
-  const end = node.period.end ? new Date(node.period.end) : null
-  const startYear = start.getFullYear()
-  const duration = formatDuration(start, end)
+  const startParts = parseIsoDateParts(node.period.start)
+  const endParts = node.period.end ? parseIsoDateParts(node.period.end) : null
+  const startYear = startParts
+    ? startParts.year < 0
+      ? `기원전 ${Math.abs(startParts.year)}`
+      : startParts.year
+    : '미상'
+  const duration = formatDuration(startParts, endParts)
   const categoryName = getCategoryName(event.category, dbCategories)
   const categoryColor =
     CATEGORY_BADGE_COLORS[
@@ -127,14 +147,13 @@ export const EventListItem: React.FC<EventListItemProps> = ({
       $active={isActive}
       $depth={depth}
       $tier={tier}
-      $tenure={isInTenureGroup}
       $categoryColor={categoryColor}
-      onClick={onSelect}
+      onClick={() => onSelect(node.id)}
       onKeyDown={(e) => {
         // 키보드 네비 — Enter/Space로 행 선택. ↑↓ 이동·펼치기는 상위 catalog hook에서 처리
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          onSelect()
+          onSelect(node.id)
         }
       }}
       tabIndex={0}
@@ -150,7 +169,7 @@ export const EventListItem: React.FC<EventListItemProps> = ({
               type="button"
               onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                 e.stopPropagation()
-                onToggleExpansion()
+                onToggleExpansion(node.id)
               }}
               $expanded={isExpanded}
               aria-label={isExpanded ? '접기' : '하위 사건 펼치기'}
@@ -181,7 +200,7 @@ export const EventListItem: React.FC<EventListItemProps> = ({
                 type="button"
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                   e.stopPropagation()
-                  onShowSummary()
+                  onShowSummary(node.id)
                 }}
                 title="사건 요약 보기"
                 aria-label="사건 요약 보기"
@@ -194,7 +213,7 @@ export const EventListItem: React.FC<EventListItemProps> = ({
                 type="button"
                 onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                   e.stopPropagation()
-                  onToggleBookmark()
+                  onToggleBookmark(node.id)
                 }}
                 $bookmarked={isBookmarked}
                 title={isBookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
@@ -230,6 +249,12 @@ export const EventListItem: React.FC<EventListItemProps> = ({
   )
 }
 
+/**
+ * React.memo — 부모(CompactList) 1회 리렌더에 전 행이 재조정되던 비용 차단.
+ * props가 모두 원시값/안정 콜백이라 얕은 비교로 충분(콜백은 상위에서 useCallback 안정화).
+ */
+export const EventListItem = React.memo(EventListItemImpl)
+
 // ─────────────────────────────────────────────────────────────────────────────
 // styled — Timeline stop (2-row)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -238,14 +263,12 @@ export const EventListItem: React.FC<EventListItemProps> = ({
  * 타임라인 정거장(row) — 2단 구성 컨테이너.
  * - 좌측 레일(CompactList의 left:32px)에 dot + connector를 ::before/::after로 그림.
  * - depth>0 행은 들여쓰기되며 connector가 길어져 들여쓴 양만큼 확장.
- * - tenure 그룹 내에서는 미세한 bg tint로 묶음 시각화.
  * - active state: **좌측 4px 색 막대 + 미세 bg tint**(색 신호 단일화).
  */
 const Stop = styled.div<{
   $active: boolean
   $depth: number
   $tier: ImportanceTier
-  $tenure: boolean
   $categoryColor: string
 }>`
   position: relative;
@@ -343,23 +366,14 @@ const Stop = styled.div<{
       box-shadow 0.14s ease;
   }
 
-  /* tier별 / active별 bg tint — 활성 행이 hover 행과 명확히 구분되도록 강화. */
-  ${({ $active, $tenure, theme }) => {
+  /* active별 bg tint — 활성 행이 hover 행과 명확히 구분되도록 강화. */
+  ${({ $active, theme }) => {
     const isDark = theme.mode === 'dark'
     if ($active) {
       return css`
         background: ${isDark
           ? 'rgba(37, 99, 235, 0.22)'
           : 'rgba(37, 99, 235, 0.13)'};
-      `
-    }
-    if ($tenure) {
-      /* tenure 그룹 bg를 인지 가능한 수준으로 강화. 0.025는 거의 안 보였음 →
-       * 0.07/0.09로 올려 묶음이 시각으로도 분명하도록. */
-      return css`
-        background: ${isDark
-          ? 'rgba(147, 197, 253, 0.09)'
-          : 'rgba(37, 99, 235, 0.07)'};
       `
     }
     return css`

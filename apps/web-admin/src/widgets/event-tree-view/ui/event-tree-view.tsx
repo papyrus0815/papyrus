@@ -18,16 +18,22 @@ import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import { ImportancePill } from '@/shared/ui/importance-pill/importance-pill'
 
+import { BRAND } from '../../../pages/events/styles/theme'
 import type {
   EventHierarchyNode,
   HistoricalEvent,
 } from '../../../pages/events/create/events.types'
 
-interface FlatItem {
-  node: EventHierarchyNode
-  depth: number
-  parentEvent: HistoricalEvent | null
-}
+/** 모든 클릭 컨트롤 공통 포커스 링 — theme.ts의 '모든 컨트롤 동일' 규약 준수 */
+const focusVisible = `
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`
+
+/** useEventHierarchy 출력 계약 단일화 — 각 뷰의 중복 선언 제거 */
+type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
 
 interface Props {
   flattenedHierarchy: FlatItem[]
@@ -323,6 +329,7 @@ const ToolbarBtn = styled.button`
         : 'rgba(15,23,42,0.04)'};
     color: ${({ theme }) => theme.colors.text.primary};
   }
+  ${focusVisible}
 `
 
 const RootCard = styled.div<{ $active: boolean }>`
@@ -362,6 +369,7 @@ const RootHeader = styled.button<{ $active: boolean }>`
         ? 'rgba(255,255,255,0.04)'
         : 'rgba(15,23,42,0.025)'};
   }
+  ${focusVisible}
 `
 
 const RootYear = styled.span`
@@ -445,6 +453,7 @@ const NodeRow = styled.button<{ $active: boolean }>`
         ? 'rgba(255,255,255,0.04)'
         : 'rgba(15,23,42,0.04)'};
   }
+  ${focusVisible}
 `
 
 const ToggleBtn = styled.button`
@@ -465,6 +474,7 @@ const ToggleBtn = styled.button`
     background: rgba(37, 99, 235, 0.16);
     color: #2563eb;
   }
+  ${focusVisible}
 `
 
 const ToggleSpacer = styled.span`

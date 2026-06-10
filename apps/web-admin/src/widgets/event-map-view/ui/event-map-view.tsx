@@ -26,11 +26,8 @@ import type {
   HistoricalEvent,
 } from '../../../pages/events/create/events.types'
 
-interface FlatItem {
-  node: EventHierarchyNode
-  depth: number
-  parentEvent: HistoricalEvent | null
-}
+/** useEventHierarchy 출력 계약 단일화 — 각 뷰의 중복 선언 제거 */
+type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
 
 interface Props {
   flattenedHierarchy: FlatItem[]

@@ -42,7 +42,6 @@ interface Props {
   selectedCategory: string
   selectedCountry: string
   selectedContinent: string
-  selectedPositionType: string
   selectedCentury: CenturyFilter
   showFlatView: boolean
   dbCategories: EventCategoryDto[]
@@ -53,7 +52,6 @@ interface Props {
 
   setShowCategoryModal: (v: boolean) => void
   setShowCountryModal: (v: boolean) => void
-  setShowPositionTypeModal: (v: boolean) => void
   toggleShowFlatView: () => void
   setSelectedCentury: (v: CenturyFilter) => void
 
@@ -61,7 +59,6 @@ interface Props {
   onSelectCategory?: (id: string) => void
   onSelectCountry?: (id: string) => void
   onSelectContinent?: (id: string) => void
-  onSelectPositionType?: (id: string) => void
 
   // 북마크
   bookmarksOnly: boolean
@@ -92,7 +89,6 @@ export const CatalogToolbar: React.FC<Props> = ({
   selectedCategory,
   selectedCountry,
   selectedContinent,
-  selectedPositionType,
   selectedCentury,
   showFlatView,
   dbCategories,
@@ -102,13 +98,11 @@ export const CatalogToolbar: React.FC<Props> = ({
   continents,
   setShowCategoryModal,
   setShowCountryModal,
-  setShowPositionTypeModal,
   toggleShowFlatView,
   setSelectedCentury,
   onSelectCategory,
   onSelectCountry,
   onSelectContinent,
-  onSelectPositionType,
   bookmarksOnly,
   toggleBookmarksOnly,
   bookmarksCount,
@@ -168,7 +162,6 @@ export const CatalogToolbar: React.FC<Props> = ({
         selectedCategory={selectedCategory}
         selectedCountry={selectedCountry}
         selectedContinent={selectedContinent}
-        selectedPositionType={selectedPositionType}
         selectedCentury={selectedCentury}
         showFlatView={showFlatView}
         dbCategories={dbCategories}
@@ -179,10 +172,8 @@ export const CatalogToolbar: React.FC<Props> = ({
         onSelectCategory={onSelectCategory}
         onSelectCountry={onSelectCountry}
         onSelectContinent={onSelectContinent}
-        onSelectPositionType={onSelectPositionType}
         onShowCategoryModal={() => setShowCategoryModal(true)}
         onShowCountryModal={() => setShowCountryModal(true)}
-        onShowPositionTypeModal={() => setShowPositionTypeModal(true)}
         onToggleFlatView={toggleShowFlatView}
         onSelectCentury={setSelectedCentury}
       />
@@ -218,10 +209,10 @@ export const CatalogToolbar: React.FC<Props> = ({
         <ToolbarStyles.ToolbarBtn
           type="button"
           title="단축키 도움말 (?)"
+          aria-label="단축키 도움말"
           onClick={onOpenShortcutHelp}
-          $hideOnMobile
         >
-          <FiHelpCircle size={ICON_SIZE.base} />
+          <FiHelpCircle size={ICON_SIZE.base} aria-hidden="true" />
         </ToolbarStyles.ToolbarBtn>
         <Layout.CreateEventButton onClick={onCreateEvent}>
           <FiPlus size={ICON_SIZE.md} />새 사건 등록

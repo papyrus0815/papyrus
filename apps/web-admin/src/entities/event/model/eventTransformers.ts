@@ -56,7 +56,7 @@ export const transformEventsFromApi = (
     title: evt.title,
     summary: evt.description ?? '',
     period: {
-      start: evt.startDate ?? new Date().toISOString(),
+      start: evt.startDate ?? '',
       end: evt.endDate ?? undefined,
     },
     importance: 'notable' as const,
@@ -90,7 +90,7 @@ export const transformEventsFromApi = (
       category: evtCategoryName as HistoricalEventCategory,
       categoryId: evtCategoryId,
       description: evt.description ?? '',
-      startDate: evt.startDate ?? new Date().toISOString(),
+      startDate: evt.startDate ?? '',
       endDate: evt.endDate ?? undefined,
       location: evt.location ?? undefined,
       tags: [],

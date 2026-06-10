@@ -634,3 +634,56 @@ export const ShortcutList = styled.ul`
         : 'inset 0 -1px 0 rgba(15,23,42,0.04)'};
   }
 `
+
+/**
+ * 사건 fetch 실패 배너 — events=[]를 '사건 없음'으로 오인시키지 않도록 명시적 오류 + 재시도.
+ */
+export const ErrorBanner = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 260px;
+  padding: 32px 20px;
+  text-align: center;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const ErrorBannerTitle = styled.div`
+  font-size: 15px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+export const ErrorBannerDesc = styled.div`
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const ErrorRetryButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 8px;
+  background: ${BRAND.primary};
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background ${MOTION.fast};
+
+  &:hover {
+    background: ${BRAND.primaryHover};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
+`

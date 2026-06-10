@@ -149,6 +149,8 @@ export interface HistoricalEvent {
     | 'economic-crisis'
     | 'diplomatic-conflict'
   category: HistoricalEventCategory
+  /** DB 카테고리 ID — 필터·칩의 안정 매칭용(category는 표시 이름). transformer가 항상 채움. */
+  categoryId?: string
   description: string
   startDate: string
   /** year | month | day. 표시 시 년만/년·월/년·월·일 구분 */

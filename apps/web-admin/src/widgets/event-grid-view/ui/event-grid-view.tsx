@@ -22,18 +22,16 @@ import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import { ImportancePill } from '@/shared/ui/importance-pill/importance-pill'
+import { getDecade, parseIsoDateParts } from '@/shared/lib/iso-date'
 
-import { CATEGORY_BADGE_COLORS } from '../../../pages/events/styles/theme'
+import { BRAND, CATEGORY_BADGE_COLORS } from '../../../pages/events/styles/theme'
 import type {
   EventHierarchyNode,
   HistoricalEvent,
 } from '../../../pages/events/create/events.types'
 
-interface FlatItem {
-  node: EventHierarchyNode
-  depth: number
-  parentEvent: HistoricalEvent | null
-}
+/** useEventHierarchy 출력 계약 단일화 — 각 뷰의 중복 선언 제거 */
+type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
 
 interface Props {
   flattenedHierarchy: FlatItem[]
@@ -70,8 +68,9 @@ export const EventGridView: React.FC<Props> = ({
   const globalMaxByDecade = useMemo(() => {
     const m = new Map<number, number>()
     for (const e of events) {
-      const y = new Date(e.startDate).getFullYear()
-      const d = Math.floor(y / 10) * 10
+      const p = parseIsoDateParts(e.startDate)
+      if (!p) continue
+      const d = getDecade(p.year)
       m.set(d, (m.get(d) ?? 0) + 1)
     }
     let max = 0
@@ -88,8 +87,9 @@ export const EventGridView: React.FC<Props> = ({
       if (item.depth !== 0) continue
       const evt = eventById.get(item.node.id)
       if (!evt) continue
-      const year = new Date(item.node.period.start).getFullYear()
-      const decade = Math.floor(year / 10) * 10
+      const p = parseIsoDateParts(item.node.period.start)
+      if (!p) continue
+      const decade = getDecade(p.year)
       let cell = groups.get(decade)
       if (!cell) {
         cell = {
@@ -268,7 +268,7 @@ const Card = styled.button<{ $heat: number }>`
 
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+    box-shadow: ${BRAND.focusRing};
   }
 
   @media (prefers-reduced-motion: reduce) {

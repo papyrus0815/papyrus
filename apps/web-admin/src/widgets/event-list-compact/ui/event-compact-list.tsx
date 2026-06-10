@@ -6,7 +6,6 @@ import React, { useMemo, useState } from 'react'
 
 import {
   FiChevronDown,
-  FiChevronRight,
   FiFilter,
   FiPlus,
   FiX,
@@ -16,31 +15,17 @@ import styled, { css } from 'styled-components'
 
 import type { SortOption } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
-import type { HeadOfStateDuringEvent } from '@/shared/api/government-positions'
+import { getCentury, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 
 import type {
   EventHierarchyNode,
   HistoricalEvent,
 } from '../../../pages/events/create/events.types'
-import { HeadsOfStateYearGroupToggle } from '../../../pages/events/styles/list.styles'
 import * as List from '../../../pages/events/styles/list.styles'
 import { shimmerAnimation } from '../../../pages/events/styles/shared.styles'
 import { BRAND } from '../../../pages/events/styles/theme'
-import {
-  OtherHeadsOfStateList,
-  TenureGroupFooter,
-  TenureGroupHeader,
-} from '../../tenure-group/ui'
 import { EventListItem } from './event-list-item'
-
-interface TenureGroup {
-  headOfState: any
-  otherHeadsOfState: any[]
-  eventIds: string[]
-  startIndex: number
-  endIndex: number
-}
 
 interface EventCompactListProps {
   isLoading: boolean
@@ -51,15 +36,11 @@ interface EventCompactListProps {
   }>
   events: HistoricalEvent[]
   expandedEventIds: Set<string>
-  expandedTenureGroups: Set<string>
   selectedEventId: string | null
   sortDirection: 'asc' | 'desc'
   hasActiveFilters: boolean
   /** 활성 필터 칩 — 빈 결과 안내에서 어떤 필터가 적용 중인지 보여주는 데 사용 */
   activeFilterChips?: Array<{ key: string; label: string; onClear: () => void }>
-  tenureGroups: TenureGroup[]
-  /** 목록 전체 기간(모든 사건 min~max)에 해당하는 국가원수. 해당 기간 사건이 없어도 트럼프 등이 한 번은 보이도록 */
-  periodHeadsOfState?: HeadOfStateDuringEvent[]
   dbCategories: EventCategoryDto[]
   isLoadingMore?: boolean
   displayedCount?: number
@@ -70,7 +51,6 @@ interface EventCompactListProps {
   /** 최근 본 사건 ID — 필터 결과 0건 빈 상태에서 fallback 추천으로 노출 */
   recentEventIds?: string[]
   onToggleExpansion: (eventId: string) => void
-  onToggleTenureGroupExpansion: (tenureKey: string) => void
   onSelectEvent: (eventId: string) => void
   onShowSummary: (eventId: string) => void
   onResetFilters: () => void
@@ -85,13 +65,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   flattenedHierarchy,
   events,
   expandedEventIds,
-  expandedTenureGroups,
   selectedEventId,
   sortDirection,
   hasActiveFilters,
   activeFilterChips = [],
-  tenureGroups,
-  periodHeadsOfState = [],
   dbCategories,
   isLoadingMore = false,
   displayedCount = 0,
@@ -100,7 +77,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   searchQuery,
   recentEventIds = [],
   onToggleExpansion,
-  onToggleTenureGroupExpansion,
   onSelectEvent,
   onShowSummary,
   onResetFilters,
@@ -122,20 +98,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       return next
     })
   }
-  /** 재위 년도 그룹 접기 (옛날 디자인: 첫 인물 카드 + "+N명" 펼치기) */
-  const [expandedPersonYearGroups, setExpandedPersonYearGroups] = useState<
-    Set<string>
-  >(new Set())
-
-  const togglePersonYearGroup = (key: string) => {
-    setExpandedPersonYearGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-
   const toggleYearCollapse = (year: number) => {
     setCollapsedYears((prev) => {
       const newSet = new Set(prev)
@@ -148,13 +110,14 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     })
   }
 
-  const {
-    allYears,
-    eventsByYear,
-    tenureStartYearsSet,
-    tenureEndYearsSet,
-    centuryCount,
-  } = useMemo(() => {
+  /** id→event O(1) 조회 — 행마다 events.find로 선형 탐색하던 핫패스 제거 */
+  const eventById = useMemo(() => {
+    const m = new Map<string, HistoricalEvent>()
+    for (const e of events) m.set(e.id, e)
+    return m
+  }, [events])
+
+  const { allYears, eventsByYear, centuryCount } = useMemo(() => {
     const eventYears = new Set<number>()
     const byYear = new Map<
       number,
@@ -166,52 +129,41 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     >()
     let lastTopLevelYear: number | null = null
     flattenedHierarchy.forEach((item) => {
-      const y = new Date(item.node.period.start).getFullYear()
+      // BC·고대 날짜 안전 파싱(네이티브 Date 금지). 파싱 실패(연도 미상)는 직전
+      // 상위 사건 연도 그룹에 흡수 — NaN 키를 만들지 않는다.
+      const parsedYear = parseIsoDateParts(item.node.period.start)?.year ?? null
       if (item.depth === 0) {
-        eventYears.add(y)
-        lastTopLevelYear = y
+        if (parsedYear !== null) {
+          eventYears.add(parsedYear)
+          lastTopLevelYear = parsedYear
+        }
       }
-      const year = lastTopLevelYear ?? y
+      const year = parsedYear ?? lastTopLevelYear
+      if (year === null) return
       if (!byYear.has(year)) byYear.set(year, [])
       byYear.get(year)!.push(item)
     })
-    periodHeadsOfState.forEach((h) => {
-      eventYears.add(new Date(h.tenure.startDate).getFullYear())
-      if (h.tenure.endDate)
-        eventYears.add(new Date(h.tenure.endDate).getFullYear())
-    })
-    const tenureStartYearsSet = new Set(
-      periodHeadsOfState.map((h) =>
-        new Date(h.tenure.startDate).getFullYear(),
-      ),
-    )
-    const tenureEndYearsSet = new Set(
-      periodHeadsOfState
-        .filter((h) => h.tenure.endDate)
-        .map((h) => new Date(h.tenure.endDate!).getFullYear()),
-    )
     const sortedYears = Array.from(eventYears).sort((a, b) => a - b)
     const orderedYears =
       sortDirection === 'desc' ? [...sortedYears].reverse() : sortedYears
 
     /** 세기별 사건 수 — flattenedHierarchy의 depth 0 사건만 집계.
-     *  `Math.floor(year / 100) + 1`이 그 사건의 세기. (1950 → 20세기) */
+     *  getCentury(year)로 BC 음수 세기까지 정합(1950 → 20세기). */
     const centuryCount = new Map<number, number>()
     for (const item of flattenedHierarchy) {
       if (item.depth !== 0) continue
-      const y = new Date(item.node.period.start).getFullYear()
-      const c = Math.floor(y / 100) + 1
+      const y = parseIsoDateParts(item.node.period.start)?.year ?? null
+      if (y === null) continue
+      const c = getCentury(y)
       centuryCount.set(c, (centuryCount.get(c) ?? 0) + 1)
     }
 
     return {
       allYears: orderedYears,
       eventsByYear: byYear,
-      tenureStartYearsSet,
-      tenureEndYearsSet,
       centuryCount,
     }
-  }, [flattenedHierarchy, sortDirection, periodHeadsOfState])
+  }, [flattenedHierarchy, sortDirection])
 
   return (
     <List.CatalogSection>
@@ -314,15 +266,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           })()}
         </List.EmptyCatalogState>
       ) : (
-        <List.CompactList onScroll={onScroll}>
-          {periodHeadsOfState.length > 0 && (
-            <>
-              <PeriodHeadsLabel>
-                이 목록에 포함된 시기의 재임 인물
-              </PeriodHeadsLabel>
-              <OtherHeadsOfStateList otherHeadsOfState={periodHeadsOfState} />
-            </>
-          )}
+        <List.CompactList
+          onScroll={onScroll}
+          role="list"
+          aria-label={`사건 목록 (${displayedCount.toLocaleString()}건)`}
+        >
           {(() => {
             // 이전 행이 어느 세기였는지 추적 — 세기가 바뀌면 헤더 삽입.
             // map 안에서는 외부 변수 mutation이 어려워 reduce 패턴으로.
@@ -334,10 +282,25 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               ).length
               const isYearCollapsed = collapsedYears.has(currentYear)
 
-              const century = Math.floor(currentYear / 100) + 1
+              const century = getCentury(currentYear)
               const isCenturyChange = prevCentury !== century
               const isCenturyCollapsed = collapsedCenturies.has(century)
               prevCentury = century
+
+              // 세기 라벨/범위 — getCentury 정의(양수 ceil, 음수 BC)에 맞춰 BC 안전.
+              // 양수 c: (c-1)*100+1 ~ c*100 (예: 20세기 → 1901~2000, 1세기 → 1~100)
+              // 음수 c(BC): |c|세기 = (|c|-1)*100+1 ~ |c|*100 BC
+              const absCentury = Math.abs(century)
+              const centuryLabel =
+                century < 0
+                  ? `기원전 ${absCentury}세기`
+                  : `${century}세기`
+              const centuryRangeFrom = absCentury === 1 ? 1 : (absCentury - 1) * 100 + 1
+              const centuryRangeTo = absCentury * 100
+              const centuryRangeLabel =
+                century < 0
+                  ? `기원전 ${centuryRangeTo}–${centuryRangeFrom}`
+                  : `${centuryRangeFrom}–${centuryRangeTo}`
 
               // 세기 접힘 → 그 세기 안의 년도는 모두 숨김 (헤더만 노출)
               if (isCenturyCollapsed && !isCenturyChange) return null
@@ -348,7 +311,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   <List.CenturyDivider
                     type="button"
                     aria-expanded={!isCenturyCollapsed}
-                    aria-label={`${century}세기 — 사건 ${centuryCount.get(century) ?? 0}건 ${
+                    aria-label={`${centuryLabel} — 사건 ${centuryCount.get(century) ?? 0}건 ${
                       isCenturyCollapsed ? '펼치기' : '접기'
                     }`}
                     onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -368,10 +331,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                         }}
                       />
                       <span>
-                        {century}세기
+                        {centuryLabel}
                         <List.CenturyDividerYears>
-                          {' '}({century === 1 ? 1 : (century - 1) * 100 + 1}
-                          –{century * 100})
+                          {' '}({centuryRangeLabel})
                         </List.CenturyDividerYears>
                       </span>
                     </List.CenturyDividerLabel>
@@ -418,193 +380,33 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   </List.CollapsedPlaceholder>
                 ) : (
                   <>
-                    {/* 재위 년도가 같은 취임: 옛날 디자인 = 첫 인물 카드 + "+N명" 접기/펼치기 */}
-                    {(() => {
-                      const headsStartInYear = periodHeadsOfState.filter(
-                        (h) =>
-                          new Date(h.tenure.startDate).getFullYear() ===
-                          currentYear,
-                      )
-                      if (headsStartInYear.length === 0) return null
-                      const primary = headsStartInYear[0]
-                      const others = headsStartInYear.slice(1)
-                      const startKey = `start-${currentYear}`
-                      const isStartExpanded =
-                        expandedPersonYearGroups.has(startKey)
-                      return (
-                        <List.HeadsOfStateYearGroup
-                          key={`start-${currentYear}`}
-                        >
-                          <TenureGroupHeader
-                            headOfState={primary}
-                            otherHeadsOfState={others}
-                            isExpanded={isStartExpanded}
-                            onToggleExpansion={() =>
-                              togglePersonYearGroup(startKey)
-                            }
-                            startYear={currentYear}
-                          />
-                          {others.length > 0 && isStartExpanded && (
-                            <OtherHeadsOfStateList otherHeadsOfState={others} />
-                          )}
-                        </List.HeadsOfStateYearGroup>
-                      )
-                    })()}
-                    {/* 재위 년도가 같은 퇴임: 접기 시 요약행, 펼치면 푸터 목록 */}
-                    {(() => {
-                      const headsEndInYear = periodHeadsOfState.filter(
-                        (h) =>
-                          h.tenure.endDate &&
-                          new Date(h.tenure.endDate).getFullYear() ===
-                            currentYear,
-                      )
-                      if (headsEndInYear.length === 0) return null
-                      const endKey = `end-${currentYear}`
-                      const isEndExpanded = expandedPersonYearGroups.has(endKey)
-                      return (
-                        <List.HeadsOfStateYearGroup key={`end-${currentYear}`}>
-                          {headsEndInYear.length === 1 ? (
-                            <TenureGroupFooter
-                              headOfState={headsEndInYear[0]}
-                              endYear={currentYear}
-                            />
-                          ) : (
-                            <>
-                              <HeadsOfStateYearGroupToggle
-                                type="button"
-                                onClick={() => togglePersonYearGroup(endKey)}
-                              >
-                                <FiChevronRight
-                                  size={12}
-                                  style={{
-                                    transform: isEndExpanded
-                                      ? 'rotate(90deg)'
-                                      : 'rotate(0deg)',
-                                    transition: 'transform 0.2s ease',
-                                  }}
-                                />
-                                {currentYear}년 퇴임{' '}
-                                <List.CollapsedCount>
-                                  {headsEndInYear.length}명
-                                </List.CollapsedCount>
-                              </HeadsOfStateYearGroupToggle>
-                              {isEndExpanded &&
-                                headsEndInYear.map((head) => (
-                                  <TenureGroupFooter
-                                    key={`period-end-${head.person.id}-${head.tenure.endDate}`}
-                                    headOfState={head}
-                                    endYear={currentYear}
-                                  />
-                                ))}
-                            </>
-                          )}
-                        </List.HeadsOfStateYearGroup>
-                      )
-                    })()}
                     {yearItems.map(({ node, depth, parentEvent }) => {
                       const hasChildren = Boolean(
                         node.children && node.children.length > 0,
                       )
                       const isExpanded = expandedEventIds.has(node.id)
-                      const event =
-                        events.find((e) => e.id === node.id) ?? parentEvent
+                      const event = eventById.get(node.id) ?? parentEvent
                       if (!event) return null
 
-                      const tenureGroup =
-                        depth === 0
-                          ? tenureGroups.find((group) =>
-                              group.eventIds.includes(node.id),
-                            )
-                          : null
-                      const isGroupStart =
-                        tenureGroup &&
-                        tenureGroup.eventIds[0] === node.id &&
-                        depth === 0
-                      const isGroupEnd =
-                        tenureGroup &&
-                        tenureGroup.eventIds[
-                          tenureGroup.eventIds.length - 1
-                        ] === node.id &&
-                        depth === 0
-                      const tenureStartYear = tenureGroup?.headOfState.tenure
-                        .startDate
-                        ? new Date(
-                            tenureGroup.headOfState.tenure.startDate,
-                          ).getFullYear()
-                        : null
-                      const tenureEndYear = tenureGroup?.headOfState.tenure
-                        .endDate
-                        ? new Date(
-                            tenureGroup.headOfState.tenure.endDate,
-                          ).getFullYear()
-                        : null
-                      const isInTenureGroup = tenureGroup && depth === 0
-                      const tenureKey = tenureGroup
-                        ? `${tenureGroup.headOfState.person.id}-${tenureGroup.headOfState.tenure.startDate}`
-                        : ''
-                      const showHeaderAtEvent =
-                        isGroupStart &&
-                        tenureGroup &&
-                        (tenureStartYear == null ||
-                          !tenureStartYearsSet.has(tenureStartYear))
-                      const showFooterAtEvent =
-                        isGroupEnd &&
-                        tenureGroup &&
-                        tenureEndYear != null &&
-                        !tenureEndYearsSet.has(tenureEndYear)
-
                       return (
-                        <React.Fragment key={node.id}>
-                          {showHeaderAtEvent && tenureGroup && (
-                            <>
-                              <TenureGroupHeader
-                                headOfState={tenureGroup.headOfState}
-                                otherHeadsOfState={
-                                  tenureGroup.otherHeadsOfState
-                                }
-                                isExpanded={expandedTenureGroups.has(tenureKey)}
-                                onToggleExpansion={() =>
-                                  onToggleTenureGroupExpansion(tenureKey)
-                                }
-                                startYear={tenureStartYear}
-                              />
-                              {tenureGroup.otherHeadsOfState?.length > 0 &&
-                                expandedTenureGroups.has(tenureKey) && (
-                                  <OtherHeadsOfStateList
-                                    otherHeadsOfState={
-                                      tenureGroup.otherHeadsOfState
-                                    }
-                                  />
-                                )}
-                            </>
-                          )}
-                          <EventListItem
-                            node={node}
-                            event={event}
-                            depth={depth}
-                            isExpanded={isExpanded}
-                            hasChildren={hasChildren}
-                            isActive={selectedEventId === node.id}
-                            isInTenureGroup={!!isInTenureGroup}
-                            dbCategories={dbCategories}
-                            isBookmarked={bookmarks.has(node.id)}
-                            searchQuery={searchQuery}
-                            onSelect={() => onSelectEvent(node.id)}
-                            onToggleExpansion={() => onToggleExpansion(node.id)}
-                            onShowSummary={() => onShowSummary(node.id)}
-                            onToggleBookmark={
-                              onToggleBookmark
-                                ? () => onToggleBookmark(node.id)
-                                : undefined
-                            }
-                          />
-                          {showFooterAtEvent && tenureGroup && (
-                            <TenureGroupFooter
-                              headOfState={tenureGroup.headOfState}
-                              endYear={tenureEndYear}
-                            />
-                          )}
-                        </React.Fragment>
+                        <EventListItem
+                          key={node.id}
+                          node={node}
+                          event={event}
+                          depth={depth}
+                          isExpanded={isExpanded}
+                          hasChildren={hasChildren}
+                          isActive={selectedEventId === node.id}
+                          dbCategories={dbCategories}
+                          isBookmarked={bookmarks.has(node.id)}
+                          searchQuery={searchQuery}
+                          // 안정 참조 전달 — 행마다 새 화살표를 만들지 않아 EventListItem의
+                          // React.memo가 실효. id는 EventListItem이 node.id로 직접 전달.
+                          onSelect={onSelectEvent}
+                          onToggleExpansion={onToggleExpansion}
+                          onShowSummary={onShowSummary}
+                          onToggleBookmark={onToggleBookmark}
+                        />
                       )
                     })}
                   </>
@@ -653,25 +455,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 // ─────────────────────────────────────────────────────────────────────────────
 // styled (theme-aware)
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * "이 목록에 포함된 시기의 재임 인물" 라벨 — 시기 컨텍스트를 잡아주는 우두머리 라벨.
- * 이전엔 그냥 옅은 12px 텍스트로 떠 있어 위계 약했음. 좌측 4px 인디고 막대 + bg tint로 격상.
- */
-const PeriodHeadsLabel = styled.div`
-  padding: 10px 12px 10px 14px;
-  margin: 0 -12px 4px -12px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: -0.005em;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(37, 99, 235, 0.10)'
-      : 'rgba(37, 99, 235, 0.06)'};
-  box-shadow: inset 4px 0 0 0 #2563eb;
-  border-radius: 4px;
-`
 
 const LoadingMoreRow = styled.div`
   padding: 40px;

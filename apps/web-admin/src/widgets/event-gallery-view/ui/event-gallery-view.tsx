@@ -19,6 +19,7 @@ import { CategoryDot } from '@/shared/ui/category-dot/category-dot'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import { ImportancePill } from '@/shared/ui/importance-pill/importance-pill'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import { CATEGORY_BADGE_COLORS } from '../../../pages/events/styles/theme'
 import type {
@@ -26,11 +27,8 @@ import type {
   HistoricalEvent,
 } from '../../../pages/events/create/events.types'
 
-interface FlatItem {
-  node: EventHierarchyNode
-  depth: number
-  parentEvent: HistoricalEvent | null
-}
+/** useEventHierarchy 출력 계약 단일화 — 각 뷰의 중복 선언 제거 */
+type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
 
 interface Props {
   flattenedHierarchy: FlatItem[]
@@ -90,7 +88,12 @@ export const EventGalleryView: React.FC<Props> = ({
 
       <Grid>
         {cards.map(({ event, node }) => {
-          const startYear = new Date(node.period.start).getFullYear()
+          const yp = parseIsoDateParts(node.period.start)
+          const startYear = yp
+            ? yp.year < 0
+              ? `기원전 ${Math.abs(yp.year)}`
+              : `${yp.year}`
+            : '연도 미상'
           const heroUrl = event.visuals?.heroImageUrl
           const catColor =
             CATEGORY_BADGE_COLORS[

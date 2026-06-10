@@ -2,7 +2,7 @@
  * 카테고리 선택 모달
  * FSD: widgets/event-list/ui
  */
-import React from 'react'
+import React, { useRef } from 'react'
 
 import { createPortal } from 'react-dom'
 
@@ -12,6 +12,7 @@ import { FiX } from 'react-icons/fi'
 import { extractCategoryKey } from '@/features/event-create/lib'
 import { FILTER_ALL } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
+import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 
 import {
   CATEGORY_ICON_MAP,
@@ -35,6 +36,9 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   selectedCategory,
   onSelect,
 }) => {
+  const panelRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(panelRef, isOpen)
+
   if (!isOpen) return null
 
   return createPortal(
@@ -47,6 +51,14 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       />
       <Modal.Modal>
         <motion.div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="category-modal-title"
+          tabIndex={-1}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') onClose()
+          }}
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2 }}
@@ -58,15 +70,18 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
           }}
         >
           <Modal.ModalHeader>
-            <Modal.ModalTitle>카테고리 선택</Modal.ModalTitle>
-            <Modal.ModalClose onClick={onClose}>
-              <FiX size={20} />
+            <Modal.ModalTitle id="category-modal-title">
+              카테고리 선택
+            </Modal.ModalTitle>
+            <Modal.ModalClose onClick={onClose} aria-label="카테고리 선택 닫기">
+              <FiX size={20} aria-hidden="true" />
             </Modal.ModalClose>
           </Modal.ModalHeader>
           <Modal.ModalContent>
             {/* 전체 카테고리 */}
             <Modal.ModalOption
               $active={selectedCategory === FILTER_ALL}
+              aria-pressed={selectedCategory === FILTER_ALL}
               onClick={() => {
                 onSelect(FILTER_ALL)
                 onClose()
@@ -93,6 +108,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 <Modal.ModalOption
                   key={dbCat.id}
                   $active={selectedCategory === dbCat.id}
+                  aria-pressed={selectedCategory === dbCat.id}
                   onClick={() => {
                     onSelect(dbCat.id)
                     onClose()

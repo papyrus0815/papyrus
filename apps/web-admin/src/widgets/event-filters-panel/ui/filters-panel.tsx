@@ -3,9 +3,9 @@
  * FSD: widgets/event-filters-panel/ui
  *
  * 검색 입력 / 활성 칩 / reset / *정렬·페이지 크기*는 페이지 또는 ViewSwitcherRow가
- * 담당. 이 위젯은 "데이터 좁히기"인 카테고리·국가·직책·세기 + 표시 토글만.
+ * 담당. 이 위젯은 "데이터 좁히기"인 카테고리·국가·세기 + 표시 토글만.
  *
- * v2 — 인라인 팝오버: 카테고리·국가·직책 모두 클릭 시 *드롭다운 리스트*로 즉시 선택 가능.
+ * v2 — 인라인 팝오버: 카테고리·국가 모두 클릭 시 *드롭다운 리스트*로 즉시 선택 가능.
  * 항목이 많으면 popover 내부 검색 박스 노출. 기존 모달 진입은 "전체 보기" 풋터에서.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
@@ -19,13 +19,11 @@ import {
   FiLayers,
   FiMap,
   FiSearch,
-  FiUsers,
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type { CenturyFilter } from '@/entities/event/model'
 import { FILTER_ALL } from '@/features/event-list/lib'
-import { MOCK_POSITION_TYPES } from '@/entities/event/model/mock-government-positions'
 import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
@@ -36,7 +34,6 @@ interface FiltersPanelProps {
   selectedCategory: typeof FILTER_ALL | string
   selectedCountry: typeof FILTER_ALL | string
   selectedContinent: typeof FILTER_ALL | string
-  selectedPositionType: typeof FILTER_ALL | string
   selectedCentury: CenturyFilter
   showFlatView: boolean
 
@@ -50,12 +47,10 @@ interface FiltersPanelProps {
   onSelectCategory?: (id: typeof FILTER_ALL | string) => void
   onSelectCountry?: (id: typeof FILTER_ALL | string) => void
   onSelectContinent?: (id: typeof FILTER_ALL | string) => void
-  onSelectPositionType?: (id: typeof FILTER_ALL | string) => void
 
   /** 모달 트리거 — "전체 보기"용 fallback */
   onShowCategoryModal: () => void
   onShowCountryModal: () => void
-  onShowPositionTypeModal: () => void
   onToggleFlatView: () => void
   onSelectCentury: (century: CenturyFilter) => void
 }
@@ -64,7 +59,6 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   selectedCategory,
   selectedCountry,
   selectedContinent,
-  selectedPositionType,
   selectedCentury,
   showFlatView,
   dbCategories,
@@ -75,19 +69,11 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
   onSelectCategory,
   onSelectCountry,
   onSelectContinent,
-  onSelectPositionType,
   onShowCategoryModal,
   onShowCountryModal,
-  onShowPositionTypeModal,
   onToggleFlatView,
   onSelectCentury,
 }) => {
-  const positionLabel =
-    selectedPositionType === FILTER_ALL
-      ? '직책'
-      : MOCK_POSITION_TYPES.find((p) => p.value === selectedPositionType)
-          ?.label ?? '직책'
-
   const categoryLabel =
     selectedCategory === FILTER_ALL
       ? '카테고리'
@@ -174,21 +160,6 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
           maxVisible={50}
         />
 
-        {/* 직책 — 인라인 팝오버 */}
-        <InlineFilterPopover
-          icon={<FiUsers size={13} />}
-          label={positionLabel}
-          isActive={selectedPositionType !== FILTER_ALL}
-          options={[
-            { id: FILTER_ALL, name: '전체' },
-            ...MOCK_POSITION_TYPES.map((p) => ({ id: p.value, name: p.label })),
-          ]}
-          selectedId={selectedPositionType}
-          onSelect={(id) => onSelectPositionType?.(id)}
-          onShowMoreModal={onShowPositionTypeModal}
-          ariaLabel="직책 필터"
-        />
-
         {/* 세기 — icon은 select prefix 자리에 padding으로 통합 */}
         <Filter.CenturySelectWrap>
           <FiCalendar size={13} aria-hidden="true" />
@@ -205,7 +176,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
             <option value="all">전체</option>
             {availableCenturies.map((century) => (
               <option key={century} value={century}>
-                {century}C
+                {century < 0 ? `기원전 ${Math.abs(century)}세기` : `${century}세기`}
               </option>
             ))}
           </Filter.CenturySelect>

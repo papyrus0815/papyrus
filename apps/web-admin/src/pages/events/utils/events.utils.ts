@@ -1,7 +1,7 @@
 /**
  * 이벤트 유틸리티 함수들
  */
-import { parseIsoDateParts } from '@/shared/lib/iso-date'
+import { getCenturyFromIso, parseIsoDateParts } from '@/shared/lib/iso-date'
 import type { HeadOfStateDuringEvent } from '@/shared/api/government-positions'
 
 import type {
@@ -10,27 +10,30 @@ import type {
 } from '../create/events.types'
 
 /**
- * 세기 계산
+ * 세기 계산 — shared/lib/iso-date의 단일 출처(BC 음수 세기·연도0·끝자리 00년 정합)에 위임.
  */
 export function getCenturyFromDate(dateString?: string): number | null {
-  if (!dateString) return null
-
-  const parts = parseIsoDateParts(dateString)
-  if (!parts) return null
-  return Math.ceil(parts.year / 100)
+  return getCenturyFromIso(dateString)
 }
 
 /**
- * 세기 레이블 포맷
+ * 세기 레이블 포맷. 음수 세기는 기원전(BC)으로 표기.
  */
 export function formatCenturyLabel(century: number): string {
+  if (century < 0) return `기원전 ${Math.abs(century)}세기`
   return `${century}세기`
 }
 
 /**
- * 세기 범위 포맷
+ * 세기 범위 포맷. 음수 세기(BC)도 지원.
  */
 export function formatCenturyRange(century: number): string {
+  if (century < 0) {
+    const c = Math.abs(century)
+    const startYear = c * 100 // 예: -1세기 → 100~1 BC
+    const endYear = (c - 1) * 100 + 1
+    return `기원전 ${startYear}~${endYear}`
+  }
   const startYear = (century - 1) * 100 + 1
   const endYear = century * 100
   return `${startYear}~${endYear}`

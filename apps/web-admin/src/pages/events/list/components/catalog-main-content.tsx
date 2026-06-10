@@ -179,7 +179,7 @@ export const CatalogMainContent: React.FC<Props> = ({
               type="button"
               $active={moreActive}
               onClick={() => setMoreOpen((v) => !v)}
-              aria-haspopup="menu"
+              aria-haspopup="true"
               aria-expanded={moreOpen}
               aria-label={
                 activeSecondary
@@ -208,14 +208,15 @@ export const CatalogMainContent: React.FC<Props> = ({
               />
             </ToolbarStyles.ViewSegment>
             {moreOpen && (
-              <MoreMenu role="menu" aria-label="추가 보기 모드">
+              // role="group" + aria-pressed 버튼 그룹 — 선언만 하고 키보드 메뉴
+              // 내비(화살표 로빙)를 구현하지 않던 menu 패턴 대신 실제 Tab 동작과 일치.
+              <MoreMenu role="group" aria-label="추가 보기 모드">
                 {SECONDARY_MODES.map((mode) => {
                   const active = viewMode === mode.value
                   return (
                     <MoreMenuItem
                       key={mode.value}
-                      role="menuitemradio"
-                      aria-checked={active}
+                      aria-pressed={active}
                       $active={active}
                       type="button"
                       onClick={() => {
@@ -254,12 +255,13 @@ export const CatalogMainContent: React.FC<Props> = ({
           </Filter.SortButton>
           <List.SortSelect
             value={pageSize}
-            aria-label="페이지 크기"
+            aria-label="한 번에 불러올 사건 수"
+            title="한 번에 불러올 사건 수 (스크롤 시 추가 로드)"
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
           >
-            <option value={20}>20개</option>
-            <option value={50}>50개</option>
-            <option value={100}>100개</option>
+            <option value={20}>20개씩</option>
+            <option value={50}>50개씩</option>
+            <option value={100}>100개씩</option>
           </List.SortSelect>
         </ToolbarStyles.DisplayOptions>
 
@@ -271,8 +273,8 @@ export const CatalogMainContent: React.FC<Props> = ({
             serverTotal={serverTotal}
           />
           {isFiltered && (
-            <FilteredHint title="필터 적용 — 전체 중 일부만 표시">
-              / 전체 {authoritativeTotal.toLocaleString()}건
+            <FilteredHint title="등록된 전체 사건 수(필터 적용 전). 카테고리·세기·검색 필터는 이 값에 반영되지 않음.">
+              / 등록 전체 {authoritativeTotal.toLocaleString()}건
             </FilteredHint>
           )}
         </MetaArea>

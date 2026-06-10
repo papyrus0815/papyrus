@@ -80,6 +80,18 @@ export const useEvents = (options: UseEventsOptions = {}) => {
       return allPages.length * pageSize
     },
     staleTime: 30_000, // 30초 — 같은 렌즈로 재방문 시 즉시 표시
+    // 전역 queryClient는 retry:false라 일시 오류 시 영구 실패 → 사건 목록은
+    // 5xx/네트워크 오류만 2회 재시도하고 4xx(클라 오류)는 즉시 실패시킨다.
+    retry: (failureCount, error) => {
+      const status =
+        (error as { status?: number; response?: { status?: number } })
+          ?.status ??
+        (error as { response?: { status?: number } })?.response?.status
+      if (typeof status === 'number' && status >= 400 && status < 500) {
+        return false
+      }
+      return failureCount < 2
+    },
   })
 
   const events: HistoricalEvent[] = useMemo(() => {
@@ -95,6 +107,8 @@ export const useEvents = (options: UseEventsOptions = {}) => {
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     isFetchingNextPage: query.isFetchingNextPage,
+    isError: query.isError,
+    error: query.error,
     hasMore: query.hasNextPage ?? false,
     fetchMoreEvents: () => {
       if (query.hasNextPage && !query.isFetchingNextPage) {

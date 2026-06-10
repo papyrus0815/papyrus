@@ -1,7 +1,7 @@
 /**
  * 카탈로그 모달/오버레이 상태 묶음.
  *
- * 카테고리 / 국가 / 직책 / 요약 / 단축키 도움말 — 모달 5개의 open 상태와
+ * 카테고리 / 국가 / 요약 / 단축키 도움말 — 모달들의 open 상태와
  * body overflow lock effect, 자주 쓰는 helper(openSummary 등)를 한곳에 모음.
  */
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } from 'react'
@@ -16,8 +16,6 @@ export interface CatalogModalsState {
   setShowCategoryModal: Dispatch<SetStateAction<boolean>>
   showCountryModal: boolean
   setShowCountryModal: Dispatch<SetStateAction<boolean>>
-  showPositionTypeModal: boolean
-  setShowPositionTypeModal: Dispatch<SetStateAction<boolean>>
 
   showSummaryModal: boolean
   setShowSummaryModal: Dispatch<SetStateAction<boolean>>
@@ -29,7 +27,6 @@ export function useCatalogModals(): CatalogModalsState {
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showCountryModal, setShowCountryModal] = useState(false)
-  const [showPositionTypeModal, setShowPositionTypeModal] = useState(false)
   const [showSummaryModal, setShowSummaryModal] = useState(false)
   const [summaryEventId, setSummaryEventId] = useState<string | null>(null)
 
@@ -42,8 +39,7 @@ export function useCatalogModals(): CatalogModalsState {
       shortcutHelpOpen ||
       showSummaryModal ||
       showCategoryModal ||
-      showCountryModal ||
-      showPositionTypeModal
+      showCountryModal
     if (!anyOpen) return
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -55,7 +51,6 @@ export function useCatalogModals(): CatalogModalsState {
     showSummaryModal,
     showCategoryModal,
     showCountryModal,
-    showPositionTypeModal,
   ])
 
   const closeShortcutHelp = useCallback(() => setShortcutHelpOpen(false), [])
@@ -74,8 +69,6 @@ export function useCatalogModals(): CatalogModalsState {
     setShowCategoryModal,
     showCountryModal,
     setShowCountryModal,
-    showPositionTypeModal,
-    setShowPositionTypeModal,
     showSummaryModal,
     setShowSummaryModal,
     summaryEventId,

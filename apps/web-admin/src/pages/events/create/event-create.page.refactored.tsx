@@ -315,6 +315,10 @@ export const EventCreatePageRefactored: React.FC<
 
       isDirtyRef.current = false
       queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
+      if (!isEditMode) {
+        // 신규 생성만 총개수를 늘림 → 헤더 "전체 N건" 무효화 (수정은 개수 불변)
+        queryClient.invalidateQueries({ queryKey: eventKeys.count() })
+      }
       invalidateGamification(queryClient)
 
       if (onSuccess) {

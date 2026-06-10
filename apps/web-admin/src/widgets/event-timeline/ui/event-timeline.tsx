@@ -66,11 +66,8 @@ import type {
 // types
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface FlatItem {
-  node: EventHierarchyNode
-  depth: number
-  parentEvent: HistoricalEvent | null
-}
+/** useEventHierarchy 출력 계약 단일화 — 각 뷰의 중복 선언 제거 */
+type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
 
 interface EventTimelineProps {
   flattenedHierarchy: FlatItem[]
@@ -450,9 +447,31 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
    */
   const onLoadMoreRef = useRef(onLoadMore)
   onLoadMoreRef.current = onLoadMore
+  /**
+   * 자동 연쇄 로드 상한 — 이전엔 hasMore가 false가 될 때까지 전 테이블을 무한 자동
+   * fetch해, 사건 수가 많으면 매 페이지마다 변환·필터·flatten·bars 재빌드가 폭주했다.
+   * 상한까지만 자동 로드하고, 이후엔 사용자가 '더 보기'로 다음 배치를 명시 요청한다.
+   * 대부분의 데이터셋(≤상한×pageSize)은 동작이 동일하다.
+   */
+  const AUTO_LOAD_MAX_BATCHES = 25
+  const autoLoadCountRef = useRef(0)
+  const [autoLoadCapped, setAutoLoadCapped] = useState(false)
   useEffect(() => {
-    if (hasMore && !isFetchingMore) onLoadMoreRef.current?.()
+    if (!hasMore || isFetchingMore) return
+    if (autoLoadCountRef.current >= AUTO_LOAD_MAX_BATCHES) {
+      setAutoLoadCapped(true)
+      return
+    }
+    autoLoadCountRef.current += 1
+    onLoadMoreRef.current?.()
   }, [hasMore, isFetchingMore])
+
+  /** 수동 '더 보기' — 다음 배치 자동 로드를 다시 허용하고 즉시 한 페이지 요청 */
+  const handleManualLoadMore = () => {
+    autoLoadCountRef.current = 0
+    setAutoLoadCapped(false)
+    onLoadMoreRef.current?.()
+  }
 
   /** 첫 진입 onboarding 코치마크 — localStorage 기반 1회만 노출.
    * SSR 안전(window 가드) + 사용자가 닫으면 다시 안 뜸. */
@@ -3579,11 +3598,21 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 <EventRailTitle>이 구간 사건</EventRailTitle>
                 <EventRailCount>
                   {viewportBars.total.toLocaleString()}건
-                  {(hasMore || isFetchingMore) && (
-                    <EventRailLoading
-                      aria-label="사건 더 불러오는 중"
-                      title="전체 사건 불러오는 중…"
-                    />
+                  {autoLoadCapped && hasMore && !isFetchingMore ? (
+                    <EventRailMoreBtn
+                      type="button"
+                      onClick={handleManualLoadMore}
+                      title="다음 사건 더 불러오기"
+                    >
+                      더 보기
+                    </EventRailMoreBtn>
+                  ) : (
+                    (hasMore || isFetchingMore) && (
+                      <EventRailLoading
+                        aria-label="사건 더 불러오는 중"
+                        title="전체 사건 불러오는 중…"
+                      />
+                    )
                   )}
                 </EventRailCount>
               </EventRailHeader>
@@ -4253,6 +4282,30 @@ const EventRailLoading = styled.span`
 
   @media (prefers-reduced-motion: reduce) {
     animation: none;
+  }
+`
+
+/** 자동 로드 상한 도달 시 다음 배치를 불러오는 수동 버튼 */
+const EventRailMoreBtn = styled.button`
+  margin-left: 6px;
+  padding: 1px 8px;
+  border: 1px solid ${BRAND.primarySoftHover};
+  border-radius: 999px;
+  background: transparent;
+  color: ${BRAND.primary};
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+
+  &:hover {
+    background: ${BRAND.primarySoftHover};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
   }
 `
 

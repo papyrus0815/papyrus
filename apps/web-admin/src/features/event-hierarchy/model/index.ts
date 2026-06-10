@@ -4,4 +4,5 @@
  */
 
 export { useEventHierarchy } from './useEventHierarchy'
+export type { FlattenedHierarchyItem } from './useEventHierarchy'
 

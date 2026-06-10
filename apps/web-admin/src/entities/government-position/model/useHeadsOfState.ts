@@ -2,7 +2,7 @@
  * Government Position Entity - Heads of State Hook
  * FSD: entities/government-position/model
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { FILTER_ALL } from '@/features/event-list/lib'
 import {
@@ -11,16 +11,13 @@ import {
 } from '@/shared/api/government-positions'
 
 import type { HistoricalEvent } from '../../../pages/events/create/events.types'
-import { MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS } from '../../event/model/mock-government-positions'
-import { getPrimaryHeadOfState } from '../../../pages/events/utils/events.utils'
 
 export const useHeadsOfState = (
   events: HistoricalEvent[],
   /**
-   * 인물 + 직책 임기 데이터. 카탈로그 페이지는 현재 React Query 무한 스크롤 전환 후
-   * 이 데이터를 동시 fetch하지 않아 기본값 `[]`로 호출됨 → 모든 분기는 빈 Map을 반환.
+   * 인물 + 직책 임기 데이터(governmentPositions 포함). 미전달 시 빈 배열 → 빈 Map 반환.
    */
-  personsWithGovPositions: typeof MOCK_PERSONS_WITH_GOVERNMENT_POSITIONS = [],
+  personsWithGovPositions: any[] = [],
   selectedPositionType: string = '',
 ) => {
   const [eventHeadsOfState, setEventHeadsOfState] = useState<
@@ -92,94 +89,4 @@ export const useHeadsOfState = (
     expandedTenureGroups,
     toggleTenureGroupExpansion,
   }
-}
-
-/**
- * 국가 원수 집권 기간별로 사건 그룹핑
- */
-export const useTenureGroups = (
-  flattenedHierarchy: Array<{
-    node: any
-    depth: number
-    parentEvent: HistoricalEvent | null
-  }>,
-  eventHeadsOfState: Map<string, HeadOfStateDuringEvent[]>,
-  events: HistoricalEvent[],
-) => {
-  return useMemo(() => {
-    const groups: Array<{
-      headOfState: HeadOfStateDuringEvent
-      otherHeadsOfState: HeadOfStateDuringEvent[]
-      eventIds: string[]
-      startIndex: number
-      endIndex: number
-    }> = []
-
-    // depth 0인 사건들만 처리
-    const topLevelEvents = flattenedHierarchy.filter((item) => item.depth === 0)
-
-    topLevelEvents.forEach((item, index) => {
-      const headsOfState = eventHeadsOfState.get(item.node.id)
-      if (!headsOfState || headsOfState.length === 0) return
-
-      // 현재 노드의 이벤트 찾기
-      const event =
-        events.find((e) => e.id === item.node.id) ?? item.parentEvent
-      if (!event) return
-
-      // 우선순위로 가장 중요한 국가 원수 1명 선택
-      const primaryHead = getPrimaryHeadOfState(headsOfState, event)
-      const otherHeads = headsOfState.filter(
-        (headOfState) =>
-          headOfState.person.id !== primaryHead.person.id ||
-          headOfState.tenure.startDate !== primaryHead.tenure.startDate,
-      )
-
-      // 이미 이 국가 원수의 그룹이 있는지 확인
-      let existingGroup = groups.find(
-        (group) =>
-          group.headOfState.person.id === primaryHead.person.id &&
-          group.headOfState.tenure.startDate === primaryHead.tenure.startDate,
-      )
-
-      if (existingGroup) {
-        // 기존 그룹에 사건 추가
-        existingGroup.eventIds.push(item.node.id)
-        existingGroup.endIndex = index
-        // 다른 국가 원수들 병합 (중복 제거)
-        otherHeads.forEach((otherHead) => {
-          const exists = existingGroup!.otherHeadsOfState.some(
-            (existing) =>
-              existing.person.id === otherHead.person.id &&
-              existing.tenure.startDate === otherHead.tenure.startDate,
-          )
-          if (!exists) {
-            existingGroup!.otherHeadsOfState.push(otherHead)
-          }
-        })
-      } else {
-        // 새 그룹 생성
-        groups.push({
-          headOfState: primaryHead,
-          otherHeadsOfState: otherHeads,
-          eventIds: [item.node.id],
-          startIndex: index,
-          endIndex: index,
-        })
-      }
-    })
-
-    // 한 인물·한 재임 = 한 그룹 유지 (연속 분할 제거). eventIds를 사건 시작일 기준 시간순 정렬 → 첫 사건=취임 연도, 마지막=퇴임 연도
-    groups.forEach((group) => {
-      group.eventIds.sort((idA, idB) => {
-        const eventA = events.find((e) => e.id === idA)
-        const eventB = events.find((e) => e.id === idB)
-        const dateA = eventA?.startDate ?? ''
-        const dateB = eventB?.startDate ?? ''
-        return dateA.localeCompare(dateB)
-      })
-    })
-
-    return groups
-  }, [flattenedHierarchy, eventHeadsOfState, events])
 }
