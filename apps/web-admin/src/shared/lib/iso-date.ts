@@ -120,6 +120,32 @@ export function isoYearSpan(
   return e.year - s.year
 }
 
+/**
+ * start~end ISO의 일(day) 단위 기간(절댓값). end 없거나 어느 쪽이든 파싱 불가면 null.
+ * 부호 연도를 그대로 `setUTCFullYear`에 넣어 프롤렙틱 그레고리력으로 계산한다 —
+ * 양 끝점을 동일하게 해석하므로 BC·고대 연도에서도 차이는 정확하다(isoYearSpan과 동일 규약).
+ *
+ * 네이티브 `new Date('-0220-01-01')`은 4자리 음수 연도를 Invalid Date(NaN)로 만들어
+ * 일수 계산을 깨뜨리므로 직접 구성한다.
+ */
+export function isoDaySpan(
+  start?: string | null,
+  end?: string | null,
+): number | null {
+  const startParts = parseIsoDateParts(start)
+  const endParts = parseIsoDateParts(end)
+  if (!startParts || !endParts) return null
+  const toUtcMs = (parts: IsoDateParts): number => {
+    const date = new Date(0)
+    date.setUTCFullYear(parts.year, parts.month - 1, parts.day)
+    date.setUTCHours(0, 0, 0, 0)
+    return date.getTime()
+  }
+  return Math.ceil(
+    Math.abs(toUtcMs(endParts) - toUtcMs(startParts)) / 86_400_000,
+  )
+}
+
 /** ISO 문자열 → "YYYY-MM-DD"(BC는 "-YYYY-MM-DD"). 파싱 불가면 ''. 타임존 무관. */
 export function isoToDateInput(value?: string | null): string {
   const p = parseIsoDateParts(value)

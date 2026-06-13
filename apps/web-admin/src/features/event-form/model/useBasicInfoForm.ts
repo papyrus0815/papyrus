@@ -5,7 +5,7 @@
 import { useState } from 'react'
 
 import type { HistoricalEventCategory } from '@/pages/events/create/events.types'
-import type { PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
+import { compareByDate, isoDaySpan } from '@/shared/lib/iso-date'
 
 export const useBasicInfoForm = () => {
   const [title, setTitle] = useState('')
@@ -21,8 +21,6 @@ export const useBasicInfoForm = () => {
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
   // location: 사람이 읽는 위치 라벨(자유 텍스트 또는 DB 선택의 표시명) — DB Event.location 컬럼.
   const [location, setLocation] = useState('')
-  // place: 등록된 지역 참조(City/AdministrativeDivision) 또는 직접 입력. 위치 폼의 단일 소스.
-  const [place, setPlace] = useState<PlaceResult | null>(null)
   const [tags, setTags] = useState<string[]>([])
   const [keywords, setKeywords] = useState<string[]>([])
   const [relatedCountryIds, setRelatedCountryIds] = useState<string[]>([])
@@ -37,30 +35,27 @@ export const useBasicInfoForm = () => {
     string | null
   >(null)
 
-  // 유효성 검증
+  // 유효성 검증 — BC/고대 날짜는 네이티브 Date 비교 시 NaN이 되므로 iso-date 유틸 사용.
   const isValid = () => {
     const hasTitle = title.trim().length > 0
     const hasStartDate = startDate.length > 0
     const isDateValid =
-      !endDate || !startDate || new Date(endDate) >= new Date(startDate)
+      !endDate || !startDate || compareByDate(startDate, endDate) <= 0
     return hasTitle && hasStartDate && isDateValid
   }
 
   // 날짜 에러 메시지
   const getDateError = (): string | null => {
-    if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+    if (startDate && endDate && compareByDate(startDate, endDate) > 0) {
       return '종료일은 시작일보다 이후여야 합니다'
     }
     return null
   }
 
-  // 날짜 차이 계산
+  // 날짜 차이 계산 (BC/고대 포함 TZ 안전)
   const calculateDaysDifference = (): number | null => {
     if (!startDate || !endDate) return null
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    const diffTime = Math.abs(end.getTime() - start.getTime())
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return isoDaySpan(startDate, endDate)
   }
 
   return {
@@ -77,7 +72,6 @@ export const useBasicInfoForm = () => {
     thumbnail,
     thumbnailFile,
     location,
-    place,
     tags,
     keywords,
     relatedCountryIds,
@@ -98,7 +92,6 @@ export const useBasicInfoForm = () => {
     setThumbnail,
     setThumbnailFile,
     setLocation,
-    setPlace,
     setTags,
     setKeywords,
     setRelatedCountryIds,

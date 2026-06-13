@@ -10,7 +10,6 @@
  */
 import React, { useEffect, useMemo, useState } from 'react'
 
-import { toast } from 'react-hot-toast'
 import { FiArrowLeft, FiSave } from 'react-icons/fi'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -38,6 +37,7 @@ import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { pathKeys } from '@/shared/router'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { BasicInfoSection } from '@/widgets/event-form/ui/basic-info-section'
 
 import * as S from './event-create.styles'
@@ -265,11 +265,11 @@ export const EventCreatePageRefactored: React.FC<
         )?.find((c) => c.role === 'INITIATOR')
         if (initiatorHist) setPrimaryHistoricalCountryId(initiatorHist.id)
 
-        if (!cancelled) toast.success('사건 정보를 불러왔습니다')
+        if (!cancelled) notify.success('사건 정보를 불러왔습니다')
       } catch (error) {
         if (!cancelled) {
           console.error('[EventCreatePage] 사건 로드 실패:', error)
-          toast.error('사건 정보를 불러오는데 실패했습니다')
+          notify.error('사건 정보를 불러오는데 실패했습니다')
         }
       } finally {
         if (!cancelled) setIsLoadingEvent(false)
@@ -370,11 +370,11 @@ export const EventCreatePageRefactored: React.FC<
           editEventId,
           eventData as Parameters<typeof updateEvent>[1],
         )
-        toast.success('사건이 성공적으로 수정되었습니다!')
+        notify.success('사건이 성공적으로 수정되었습니다!')
       } else {
         saved = await createEvent(eventData as Parameters<typeof createEvent>[0])
         targetId = saved.id
-        toast.success('사건이 등록되었습니다. 상세에서 내용을 이어서 등록하세요.')
+        notify.success('사건이 등록되었습니다. 상세에서 내용을 이어서 등록하세요.')
       }
 
       isDirtyRef.current = false
@@ -405,7 +405,7 @@ export const EventCreatePageRefactored: React.FC<
       }
     } catch (error) {
       console.error('[EventCreatePage] 사건 저장 실패:', error)
-      toast.error(
+      notify.error(
         `사건 ${isEditMode ? '수정' : '등록'}에 실패했습니다: ${
           error instanceof Error ? error.message : '알 수 없는 오류'
         }`,
@@ -442,7 +442,6 @@ export const EventCreatePageRefactored: React.FC<
                   playClickSound()
                   handleBack()
                 }}
-                style={{ padding: '10px 16px' }}
               >
                 <FiArrowLeft size={16} />
                 이전

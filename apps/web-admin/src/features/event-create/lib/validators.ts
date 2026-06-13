@@ -2,7 +2,8 @@
  * 이벤트 생성/수정 시 유효성 검증 함수들
  * FSD: features/event-create/lib
  */
-import { toast } from 'react-hot-toast'
+import { compareByDate } from '@/shared/lib/iso-date'
+import { notify } from '@/shared/ui/toast'
 
 /**
  * 기본 정보 유효성 검증 결과 — 어느 필드가 왜 막혔는지 사용자에게 표시할 수 있도록 구조화.
@@ -26,13 +27,14 @@ export const checkBasicInfo = (data: {
   if (!data.startDate) {
     fields.startDate = '시작일을 선택해주세요.'
   }
-  // 종료일이 시작일보다 이전이면 inline 에러 — 제출 시점 toast만으론 잡기 어려움
-  if (data.startDate && data.endDate) {
-    const start = new Date(data.startDate)
-    const end = new Date(data.endDate)
-    if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && end < start) {
-      fields.endDate = '종료일은 시작일보다 이후여야 합니다.'
-    }
+  // 종료일이 시작일보다 이전이면 inline 에러 — 제출 시점 toast만으론 잡기 어려움.
+  // BC/고대 날짜는 네이티브 Date가 NaN이 되므로 iso-date 유틸로 비교.
+  if (
+    data.startDate &&
+    data.endDate &&
+    compareByDate(data.startDate, data.endDate) > 0
+  ) {
+    fields.endDate = '종료일은 시작일보다 이후여야 합니다.'
   }
   const ok = Object.keys(fields).length === 0
   return {
@@ -51,7 +53,7 @@ export const validateBasicInfo = (data: {
 }): boolean => {
   const result = checkBasicInfo(data)
   if (!result.ok && result.firstError) {
-    toast.error(result.firstError)
+    notify.error(result.firstError)
   }
   return result.ok
 }
@@ -65,11 +67,9 @@ export const validateDateRange = (
 ): boolean => {
   if (!endDate) return true
 
-  const start = new Date(startDate)
-  const end = new Date(endDate)
-
-  if (end < start) {
-    toast.error('종료일은 시작일보다 이후여야 합니다.')
+  // BC/고대 날짜 안전 비교 (네이티브 Date는 음수 연도에서 NaN)
+  if (compareByDate(startDate, endDate) > 0) {
+    notify.error('종료일은 시작일보다 이후여야 합니다.')
     return false
   }
 

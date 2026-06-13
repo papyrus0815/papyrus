@@ -8,6 +8,7 @@ import {
   getCentury,
   getCenturyFromIso,
   getDecade,
+  isoDaySpan,
   isoYearSpan,
   parseIsoDateParts,
 } from './iso-date'
@@ -111,5 +112,31 @@ describe('isoYearSpan', () => {
   it('end 없거나 파싱 불가면 0', () => {
     expect(isoYearSpan('1939-09-01', undefined)).toBe(0)
     expect(isoYearSpan('', '1945-01-01')).toBe(0)
+  })
+})
+
+describe('isoDaySpan', () => {
+  it('AD 일수', () => {
+    expect(isoDaySpan('2024-01-01', '2024-01-11')).toBe(10)
+  })
+
+  it('BC(음수) 동일 시대 일수 — 네이티브 Date NaN 회귀 방지', () => {
+    // new Date('-0220-01-01')은 Invalid Date(NaN)라 일수 계산이 깨졌었다.
+    expect(isoDaySpan('-0220-01-01', '-0220-01-11')).toBe(10)
+  })
+
+  it('순서 무관(절댓값)', () => {
+    expect(isoDaySpan('2024-01-11', '2024-01-01')).toBe(10)
+  })
+
+  it('BC→AD 횡단도 유한 양수', () => {
+    const span = isoDaySpan('-0050-01-01', '0050-01-01')
+    expect(span).not.toBeNull()
+    expect(span as number).toBeGreaterThan(36000) // ~100년
+  })
+
+  it('end 없거나 파싱 불가면 null', () => {
+    expect(isoDaySpan('2024-01-01', undefined)).toBeNull()
+    expect(isoDaySpan('', '2024-01-01')).toBeNull()
   })
 })

@@ -10,17 +10,12 @@ import {
   FiFileText,
   FiGlobe,
   FiImage,
-  FiShield,
   FiStar,
   FiTag,
   FiX,
 } from 'react-icons/fi'
 
-import {
-  extractCategoryKey,
-  isDiplomaticCategory,
-  isMilitaryCategory,
-} from '@/features/event-create/lib'
+import { extractCategoryKey } from '@/features/event-create/lib'
 import * as S from '@/pages/events/create/event-create.styles'
 import { CATEGORY_ICON_MAP } from '@/pages/events/create/events.constants'
 import type { HistoricalEventCategory } from '@/pages/events/create/events.types'
@@ -31,6 +26,7 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 import { uploadImage } from '@/shared/api/upload'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { TimePickerModal } from '@/shared/ui/time-picker-modal/time-picker-modal'
+import { notify } from '@/shared/ui/toast'
 
 /**
  * 날짜 표시용 포맷 — BC/고대 안전.
@@ -100,14 +96,6 @@ interface BasicInfoSectionProps {
   primaryHistoricalCountryId?: string | null
   setPrimaryHistoricalCountryId?: (value: string | null) => void
 
-  // 군사 카테고리 전용 필드
-  conflictType?: 'battle' | 'war' | 'siege' | 'campaign' | 'skirmish'
-  setConflictType?: (
-    value: 'battle' | 'war' | 'siege' | 'campaign' | 'skirmish',
-  ) => void
-  combatTypes?: ('land' | 'naval' | 'air')[]
-  setCombatTypes?: (value: ('land' | 'naval' | 'air')[]) => void
-
   // UI 상태
   playClickSound: () => void
   getDateError: () => string | null
@@ -151,10 +139,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   availableCountries = [],
   availableHistoricalCountries = [],
   onOpenCountryModal,
-  conflictType,
-  setConflictType,
-  combatTypes = [],
-  setCombatTypes,
   playClickSound,
   getDateError,
   calculateDaysDifference,
@@ -165,8 +149,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
-  const combatTypeSectionRef = useRef<HTMLDivElement>(null)
-  const hasScrolledRef = useRef(false) // 스크롤 여부 추적
   const [isStartDateModalOpen, setIsStartDateModalOpen] = useState(false)
   const [isEndDateModalOpen, setIsEndDateModalOpen] = useState(false)
   const [isStartTimeModalOpen, setIsStartTimeModalOpen] = useState(false)
@@ -222,28 +204,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     skipKeywordSyncRef.current = false
   }, [keywords])
 
-  // 전쟁/군사 카테고리 선택 시 자동 스크롤 (최초 1회만)
-  useEffect(() => {
-    if (
-      isMilitaryCategory(category) &&
-      combatTypeSectionRef.current &&
-      !hasScrolledRef.current
-    ) {
-      setTimeout(() => {
-        combatTypeSectionRef.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-        })
-      }, 100)
-      hasScrolledRef.current = true
-    }
-
-    // 카테고리가 군사가 아니게 변경되면 스크롤 플래그 리셋
-    if (!isMilitaryCategory(category)) {
-      hasScrolledRef.current = false
-    }
-  }, [category])
-
   return (
     <S.FormSection
       as={motion.div}
@@ -251,97 +211,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3 }}
     >
-      {/* 썸네일 이미지 */}
-      <S.FormRow>
-        <S.FormLabel>썸네일 이미지</S.FormLabel>
-        <S.FormField>
-          {thumbnail ? (
-            <S.ThumbnailPreview
-              onClick={() => {
-                playClickSound()
-                thumbnailInputRef.current?.click()
-              }}
-            >
-              <S.ThumbnailImage
-                src={getImageUrl(thumbnail)}
-                alt="썸네일 미리보기"
-                onError={() => {
-                  if (thumbnail.startsWith('blob:')) {
-                    URL.revokeObjectURL(thumbnail)
-                  }
-                }}
-              />
-              <S.ThumbnailDeleteButton
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  playClickSound()
-                  if (thumbnail.startsWith('blob:')) {
-                    URL.revokeObjectURL(thumbnail)
-                  }
-                  setThumbnail('')
-                  setThumbnailFile(null)
-                  if (thumbnailInputRef.current) {
-                    thumbnailInputRef.current.value = ''
-                  }
-                }}
-              >
-                <FiX size={16} />
-              </S.ThumbnailDeleteButton>
-            </S.ThumbnailPreview>
-          ) : (
-            <S.ThumbnailUploadArea>
-              <FiImage size={32} />
-              <p>썸네일 이미지를 업로드하세요</p>
-              <S.UploadButton
-                type="button"
-                onClick={() => {
-                  playClickSound()
-                  thumbnailInputRef.current?.click()
-                }}
-              >
-                이미지 업로드
-              </S.UploadButton>
-            </S.ThumbnailUploadArea>
-          )}
-          <input
-            ref={thumbnailInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={async (e) => {
-              const file = e.target.files?.[0]
-              if (!file) return
-
-              if (file.size > 10 * 1024 * 1024) {
-                alert('파일 크기는 10MB를 초과할 수 없습니다.')
-                return
-              }
-
-              if (thumbnail && thumbnail.startsWith('blob:')) {
-                URL.revokeObjectURL(thumbnail)
-              }
-
-              const previewUrl = URL.createObjectURL(file)
-              setThumbnail(previewUrl)
-              setThumbnailFile(file)
-
-              try {
-                const result = await uploadImage(file, 'events')
-                URL.revokeObjectURL(previewUrl)
-                setThumbnail(result.url)
-              } catch {
-                alert('썸네일 업로드에 실패했습니다.')
-                URL.revokeObjectURL(previewUrl)
-                setThumbnail('')
-                setThumbnailFile(null)
-              }
-            }}
-          />
-          <S.Hint>사건 목록에 표시될 대표 이미지를 등록하세요</S.Hint>
-        </S.FormField>
-      </S.FormRow>
-
       {/* 사건명 */}
       <S.FormRow>
         <S.FormLabel htmlFor="event-form-title">
@@ -368,113 +237,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               역사적 사건의 정식 명칭을 입력하세요
             </S.Hint>
           )}
-        </S.FormField>
-      </S.FormRow>
-
-      {/* 개요 설명 */}
-      <S.FormRow>
-        <S.FormLabel>개요 설명</S.FormLabel>
-        <S.FormField>
-          <S.Textarea
-            placeholder="사건에 대한 간단한 설명을 입력하세요"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-          />
-          <S.Hint>사건의 핵심 내용을 요약해주세요</S.Hint>
-        </S.FormField>
-      </S.FormRow>
-
-      {/* 키워드: 내 사건 ↔ 타인 사건 매칭용 */}
-      <S.FormRow>
-        <S.FormLabel>
-          <FiTag
-            size={14}
-            style={{ marginRight: 6, verticalAlign: 'middle' }}
-          />
-          키워드
-        </S.FormLabel>
-        <S.FormField>
-          <S.Input
-            type="text"
-            placeholder="키워드 입력 후 엔터 (쉼표로 여러 개 가능, 최대 20개·각 30자)"
-            value={keywordInput}
-            onChange={(e) => setKeywordInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return
-              if ((e.nativeEvent as KeyboardEvent).isComposing) return
-              e.preventDefault()
-              addKeywordsFromInput()
-            }}
-          />
-          {keywordValidationMsg && (
-            <p
-              style={{
-                marginTop: 6,
-                fontSize: 12,
-                color: 'var(--error-color, #c53030)',
-              }}
-            >
-              {keywordValidationMsg}
-            </p>
-          )}
-          {keywords.length > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 6,
-                marginTop: 8,
-              }}
-            >
-              {keywords.map((k) => (
-                <span
-                  key={k}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    padding: '4px 10px',
-                    background: isDark
-                      ? 'rgba(255,255,255,0.08)'
-                      : '#e5e7eb',
-                    color: isDark ? '#e5e7eb' : '#1f2937',
-                    border: `1px solid ${
-                      isDark ? 'rgba(255,255,255,0.14)' : '#d1d5db'
-                    }`,
-                    borderRadius: 6,
-                    fontSize: 13,
-                    fontWeight: 500,
-                  }}
-                >
-                  {k}
-                  <button
-                    type="button"
-                    onClick={() => setKeywords(keywords.filter((x) => x !== k))}
-                    style={{
-                      padding: 0,
-                      marginLeft: 2,
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      lineHeight: 1,
-                      color: isDark ? '#a1a1aa' : '#6b7280',
-                    }}
-                    aria-label={`${k} 제거`}
-                  >
-                    <FiX size={12} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-          <S.Hint>
-            <strong>내가 등록한 사건</strong>과{' '}
-            <strong>타인이 등록한 사건</strong>을 나중에 매칭할 때 사용합니다.
-            같은 역사적 사건을 가리키는 대표 키워드(인명, 사건명, 연도 등)를
-            넣어두면, 추후 검색·매칭으로 서로 연결할 수 있습니다. 입력 후 엔터로
-            추가, ×로 제거.
-          </S.Hint>
         </S.FormField>
       </S.FormRow>
 
@@ -602,93 +364,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       {/* 카테고리 */}
       <S.FormRow>
         <S.FormLabel>
-          <div>카테고리</div>
+          <div>
+            카테고리<OptionalTag>(선택)</OptionalTag>
+          </div>
         </S.FormLabel>
         <S.FormField>
-          {/* 전쟁/군사 카테고리 선택 시 전투 유형 및 양상 선택 */}
-          {isMilitaryCategory(category) &&
-            setConflictType &&
-            setCombatTypes && (
-              <S.CombatTypeSection>
-                {/* 전투 유형 */}
-                <S.FormLabel style={{ marginBottom: '12px' }}>
-                  <div>전투 유형</div>
-                  <S.RequiredBadge>필수</S.RequiredBadge>
-                </S.FormLabel>
-                <S.Hint style={{ marginBottom: '12px' }}>
-                  사건의 규모와 성격에 맞는 전투 유형을 선택하세요
-                </S.Hint>
-                <S.ConflictTypeGrid>
-                  {[
-                    { value: 'battle' as const, icon: '⚔️', label: '전투' },
-                    { value: 'war' as const, icon: '🌍', label: '전쟁' },
-                    { value: 'siege' as const, icon: '🏰', label: '공성전' },
-                    { value: 'campaign' as const, icon: '🎯', label: '작전' },
-                    {
-                      value: 'skirmish' as const,
-                      icon: '💥',
-                      label: '소규모 교전',
-                    },
-                  ].map((type) => (
-                    <S.ConflictTypeButton
-                      key={type.value}
-                      type="button"
-                      $selected={conflictType === type.value}
-                      onClick={() => {
-                        playClickSound()
-                        setConflictType(type.value)
-                      }}
-                    >
-                      <S.ConflictTypeIcon
-                        $selected={conflictType === type.value}
-                      >
-                        {type.icon}
-                      </S.ConflictTypeIcon>
-                      <S.ConflictTypeLabel>{type.label}</S.ConflictTypeLabel>
-                    </S.ConflictTypeButton>
-                  ))}
-                </S.ConflictTypeGrid>
-
-                {/* 전투 양상 */}
-                <S.FormLabel
-                  style={{ marginBottom: '12px', marginTop: '32px' }}
-                >
-                  <div>전투 양상</div>
-                  <S.OptionalBadge>복수 선택 가능</S.OptionalBadge>
-                </S.FormLabel>
-                <S.Hint style={{ marginBottom: '12px' }}>
-                  해당 사건의 전투 양상을 선택하세요 (지상전, 해전, 공중전 등)
-                </S.Hint>
-                <S.CombatTypeGrid>
-                  {[
-                    { value: 'land' as const, icon: '🪖', label: '지상전' },
-                    { value: 'naval' as const, icon: '⚓', label: '해전' },
-                    { value: 'air' as const, icon: '✈️', label: '공중전' },
-                  ].map((type) => (
-                    <S.CombatTypeButton
-                      key={type.value}
-                      type="button"
-                      $selected={combatTypes.includes(type.value)}
-                      onClick={() => {
-                        playClickSound()
-                        const updated = combatTypes.includes(type.value)
-                          ? combatTypes.filter((t) => t !== type.value)
-                          : [...combatTypes, type.value]
-                        setCombatTypes(updated)
-                      }}
-                    >
-                      <S.CombatTypeIcon
-                        $selected={combatTypes.includes(type.value)}
-                      >
-                        {type.icon}
-                      </S.CombatTypeIcon>
-                      <S.CombatTypeLabel>{type.label}</S.CombatTypeLabel>
-                    </S.CombatTypeButton>
-                  ))}
-                </S.CombatTypeGrid>
-              </S.CombatTypeSection>
-            )}
-
           {dbCategories.length > 0 ? (
             <S.CategoryGrid>
               {dbCategories.map((dbCat) => {
@@ -708,8 +388,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       setCategory(isSelected ? '' : categoryId)
                     }}
                   >
-                    <S.CategoryIcon $category={categoryKey}>
-                      <Icon size={20} />
+                    <S.CategoryIcon
+                      $category={categoryKey}
+                      $selected={isSelected}
+                    >
+                      <Icon size={18} />
                     </S.CategoryIcon>
                     <S.CategoryLabel>{categoryName}</S.CategoryLabel>
                     {isSelected && (
@@ -743,10 +426,214 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         </S.FormField>
       </S.FormRow>
 
+      {/* 개요 설명 */}
+      <S.FormRow>
+        <S.FormLabel>
+          개요 설명<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <S.Textarea
+            placeholder="사건에 대한 간단한 설명을 입력하세요"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+          />
+          <S.Hint>사건의 핵심 내용을 요약해주세요</S.Hint>
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 키워드: 내 사건 ↔ 타인 사건 매칭용 */}
+      <S.FormRow>
+        <S.FormLabel>
+          <FiTag
+            size={14}
+            style={{ marginRight: 6, verticalAlign: 'middle' }}
+          />
+          키워드<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <S.Input
+            type="text"
+            placeholder="키워드 입력 후 엔터 (쉼표로 여러 개 가능, 최대 20개·각 30자)"
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return
+              if ((e.nativeEvent as KeyboardEvent).isComposing) return
+              e.preventDefault()
+              addKeywordsFromInput()
+            }}
+          />
+          {keywordValidationMsg && (
+            <p
+              style={{
+                marginTop: 6,
+                fontSize: 12,
+                color: 'var(--error-color, #c53030)',
+              }}
+            >
+              {keywordValidationMsg}
+            </p>
+          )}
+          {keywords.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 6,
+                marginTop: 8,
+              }}
+            >
+              {keywords.map((k) => (
+                <span
+                  key={k}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '4px 10px',
+                    background: isDark
+                      ? 'rgba(255,255,255,0.08)'
+                      : '#e5e7eb',
+                    color: isDark ? '#e5e7eb' : '#1f2937',
+                    border: `1px solid ${
+                      isDark ? 'rgba(255,255,255,0.14)' : '#d1d5db'
+                    }`,
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 500,
+                  }}
+                >
+                  {k}
+                  <button
+                    type="button"
+                    onClick={() => setKeywords(keywords.filter((x) => x !== k))}
+                    style={{
+                      padding: 0,
+                      marginLeft: 2,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      lineHeight: 1,
+                      color: isDark ? '#a1a1aa' : '#6b7280',
+                    }}
+                    aria-label={`${k} 제거`}
+                  >
+                    <FiX size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <S.Hint>
+            <strong>내가 등록한 사건</strong>과{' '}
+            <strong>타인이 등록한 사건</strong>을 나중에 매칭할 때 사용합니다.
+            같은 역사적 사건을 가리키는 대표 키워드(인명, 사건명, 연도 등)를
+            넣어두면, 추후 검색·매칭으로 서로 연결할 수 있습니다. 입력 후 엔터로
+            추가, ×로 제거.
+          </S.Hint>
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 썸네일 이미지 */}
+      <S.FormRow>
+        <S.FormLabel>
+          썸네일 이미지<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          {thumbnail ? (
+            <S.ThumbnailPreview
+              onClick={() => {
+                playClickSound()
+                thumbnailInputRef.current?.click()
+              }}
+            >
+              <S.ThumbnailImage
+                src={getImageUrl(thumbnail)}
+                alt="썸네일 미리보기"
+                onError={() => {
+                  if (thumbnail.startsWith('blob:')) {
+                    URL.revokeObjectURL(thumbnail)
+                  }
+                }}
+              />
+              <S.ThumbnailDeleteButton
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  playClickSound()
+                  if (thumbnail.startsWith('blob:')) {
+                    URL.revokeObjectURL(thumbnail)
+                  }
+                  setThumbnail('')
+                  setThumbnailFile(null)
+                  if (thumbnailInputRef.current) {
+                    thumbnailInputRef.current.value = ''
+                  }
+                }}
+              >
+                <FiX size={16} />
+              </S.ThumbnailDeleteButton>
+            </S.ThumbnailPreview>
+          ) : (
+            <S.ThumbnailUploadArea>
+              <FiImage size={32} />
+              <p>썸네일 이미지를 업로드하세요</p>
+              <S.UploadButton
+                type="button"
+                onClick={() => {
+                  playClickSound()
+                  thumbnailInputRef.current?.click()
+                }}
+              >
+                이미지 업로드
+              </S.UploadButton>
+            </S.ThumbnailUploadArea>
+          )}
+          <input
+            ref={thumbnailInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+
+              if (file.size > 10 * 1024 * 1024) {
+                toast.error('파일 크기는 10MB를 초과할 수 없습니다.')
+                return
+              }
+
+              if (thumbnail && thumbnail.startsWith('blob:')) {
+                URL.revokeObjectURL(thumbnail)
+              }
+
+              const previewUrl = URL.createObjectURL(file)
+              setThumbnail(previewUrl)
+              setThumbnailFile(file)
+
+              try {
+                const result = await uploadImage(file, 'events')
+                URL.revokeObjectURL(previewUrl)
+                setThumbnail(result.url)
+              } catch {
+                toast.error('썸네일 업로드에 실패했습니다.')
+                URL.revokeObjectURL(previewUrl)
+                setThumbnail('')
+                setThumbnailFile(null)
+              }
+            }}
+          />
+          <S.Hint>사건 목록에 표시될 대표 이미지를 등록하세요</S.Hint>
+        </S.FormField>
+      </S.FormRow>
+
       {/* 관련 국가 */}
       {onOpenCountryModal && (
         <S.FormRow>
-          <S.FormLabel>관련 국가</S.FormLabel>
+          <S.FormLabel>
+            관련 국가<OptionalTag>(선택)</OptionalTag>
+          </S.FormLabel>
           <S.FormField>
             <S.AddButton
               type="button"
@@ -860,6 +747,14 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     </S.FormSection>
   )
 }
+
+/** 선택(비필수) 필드 라벨 옆 표기 — 필수(*)와 시각적으로 구분 */
+const OptionalTag = styled.span`
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
 
 /**
  * 메인 국가 토글 (★) — 클릭 시 해당 국가를 INITIATOR로 마킹.

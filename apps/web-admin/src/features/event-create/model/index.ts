@@ -4,7 +4,4 @@
  */
 
 export * from './use-event-basic-info'
-export * from './use-military-event-state'
-export * from './use-conference-event'
-export * from './use-event-relationships'
 export * from './use-event-ui-state'
