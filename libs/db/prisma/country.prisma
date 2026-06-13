@@ -87,6 +87,7 @@ model Country {
   personAffiliations        PersonCountryAffiliation[]       @relation("PersonCountryAffiliations")
   personGroups              PersonGroup[]                    @relation("CountryPersonGroups")
   adminDivisionConfigs      CountryAdminDivisionConfig[]
+  adminDivisionSchemes      AdminDivisionScheme[]            @relation("CountryAdminDivisionSchemes")
   administrationDepartments AdministrationDepartment[]       @relation("Country_Department")
   historicalConnections     HistoricalCountryModernCountry[]
   Law                       Law[]
@@ -197,14 +198,64 @@ model ExportImport {
 }
 
 // ========================
+// AdminDivisionScheme (행정구역 체계 — 시기별 편제)
+// ========================
+/// 한 국가의 행정구역 편제 단위 (예: 조선 팔도제 1413–1895, 23부제 1895–1896, 13도제 1896–1910).
+/// 구역·단위 설정이 체계에 소속되어 시기별 등록과 국가 간 비교의 기준이 된다.
+/// 현대 국가(countryId) 또는 역사적 국가(historicalCountryId) 소속 — 둘 중 하나만 설정.
+model AdminDivisionScheme {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 현대 국가 ID
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 ID
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 체계 이름 (예: 팔도제, 13도제, 50주 체제)
+  name String @db.VarChar(100)
+
+  /// 설명
+  description String? @db.Text
+
+  /// 시행 시작일 (NULL이면 미상)
+  startDate DateTime? @map("start_date")
+
+  /// 시행 종료일 (NULL이면 현행)
+  endDate DateTime? @map("end_date")
+
+  //--- 관계 필드
+  country           Country?           @relation("CountryAdminDivisionSchemes", fields: [countryId], references: [id], onDelete: Cascade)
+  historicalCountry HistoricalCountry? @relation("HistoricalCountryAdminDivisionSchemes", fields: [historicalCountryId], references: [id], onDelete: Cascade)
+  divisions         AdministrativeDivision[]
+  configs           CountryAdminDivisionConfig[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_admin_div_scheme_countryId")
+  @@index([historicalCountryId], name: "idx_admin_div_scheme_historicalCountryId")
+  @@map("admin_division_scheme")
+}
+
+// ========================
 // CountryAdminDivisionConfig
 // ========================
+/// 현대 국가(countryId) 또는 역사적 국가(historicalCountryId) 소속 — 둘 중 하나만 설정.
 model CountryAdminDivisionConfig {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 국가 ID
-  countryId String @map("country_id") @db.Char(36)
+  /// 현대 국가 ID
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 ID (조선 팔도의 '도' 등)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 소속 체계 (시기별 편제). NULL이면 체계 공용
+  schemeId String? @map("scheme_id") @db.Char(36)
 
   /// 행정구역 레벨
   divisionLevel Int @map("division_level")
@@ -216,14 +267,21 @@ model CountryAdminDivisionConfig {
   description String?
 
   //--- 관계 필드
-  country                 Country                  @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  country                 Country?                 @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  historicalCountry       HistoricalCountry?       @relation("AdminDivConfigHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: Restrict)
+  scheme                  AdminDivisionScheme?     @relation(fields: [schemeId], references: [id], onDelete: Cascade)
   administrativeDivisions AdministrativeDivision[]
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@unique([countryId, divisionLevel])
+  // 체계가 다르면 같은 레벨이라도 다른 단위 허용 (예: 팔도제 1차=도, 23부제 1차=부).
+  // schemeId NULL(공용)의 레벨 중복은 서비스 레이어 dup 체크가 막는다 (MySQL unique는 NULL 중복 허용).
+  @@unique([countryId, schemeId, divisionLevel])
+  @@unique([historicalCountryId, schemeId, divisionLevel])
+  @@index([historicalCountryId], name: "idx_admin_div_config_historicalCountryId")
+  @@index([schemeId], name: "idx_admin_div_config_schemeId")
   @@map("country_admin_division_config")
 }
 
@@ -243,11 +301,17 @@ model AdministrativeDivision {
   /// 명칭 뜻
   nameMeaning String? @map("name_meaning") @db.Text
 
-  /// 국가 ID
-  countryId String @map("country_id") @db.Char(36)
+  /// 현대 국가 ID (역사적 국가 소속이면 null)
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 ID (조선 팔도 등. 현대 국가 소속이면 null)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
   /// 국가별 지방자치단체 구성 ID
   adminDivisionId String @map("admin_division_id") @db.Char(36)
+
+  /// 소속 체계 (시기별 편제 — 예: 팔도제). NULL이면 체계 미지정
+  schemeId String? @map("scheme_id") @db.Char(36)
 
   /// 상위 행정구역 ID
   parentId String? @map("parent_id") @db.Char(36)
@@ -268,6 +332,8 @@ model AdministrativeDivision {
   predecessorId String? @map("predecessor_id") @db.Char(36)
 
   //--- 관계 필드
+  historicalCountry   HistoricalCountry?         @relation("AdminDivHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: Cascade)
+  scheme              AdminDivisionScheme?       @relation(fields: [schemeId], references: [id], onDelete: SetNull)
   parent              AdministrativeDivision?    @relation("AdminDivHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children            AdministrativeDivision[]   @relation("AdminDivHierarchy")
   adminDivisionConfig CountryAdminDivisionConfig @relation(fields: [adminDivisionId], references: [id], onDelete: Restrict)
@@ -292,11 +358,46 @@ model AdministrativeDivision {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  /// 서술 섹션 (제목 있는 다중 본문 — 사건의 EventSection과 동일 패턴)
+  sections AdministrativeDivisionSection[]
+
   @@index([countryId], name: "idx_admin_div_countryId")
+  @@index([historicalCountryId], name: "idx_admin_div_historicalCountryId")
+  @@index([schemeId], name: "idx_admin_div_schemeId")
   @@index([parentId], name: "idx_admin_div_parentId")
   @@index([adminDivisionId], name: "idx_admin_div_typeId")
   @@index([predecessorId], name: "idx_admin_div_predecessorId")
   @@map("administrative_division")
+}
+
+// ========================
+// AdministrativeDivisionSection (행정구역 서술 섹션)
+// ========================
+/// 행정구역의 제목 있는 서술 섹션 — 역사·지리·행정 변천 등을 장(章) 단위로 서술.
+/// 수정은 EventSection과 동일하게 전체 배열 delete-and-recreate.
+model AdministrativeDivisionSection {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 행정구역 FK
+  administrativeDivisionId String                 @map("administrative_division_id") @db.Char(36)
+  administrativeDivision   AdministrativeDivision @relation(fields: [administrativeDivisionId], references: [id], onDelete: Cascade)
+
+  /// 섹션 제목
+  title String @db.VarChar(500)
+
+  /// 섹션 내용 (리치 텍스트 HTML)
+  content String @db.Text
+
+  /// 표시 순서
+  order Int @default(0)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([administrativeDivisionId, order], name: "idx_admin_div_section_divId_order")
+  @@map("administrative_division_section")
 }
 
 // ========================
