@@ -50,8 +50,8 @@ TextareaGroup.displayName = 'TextareaGroup';
 const StyledTextarea = styled.textarea`
   width: 100%;
   min-height: 100px;
-  padding: ${({ theme }) => theme.spacing.small};
-  font-size: ${({ theme }) => theme.fontSize.medium};
+  padding: ${({ theme }) => theme.spacing.sm};
+  font-size: ${({ theme }) => theme.fontSize.md};
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.borderRadius};
   resize: vertical;

@@ -94,7 +94,8 @@ function RecentEventsSection() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['dashboard-recent-events'],
     // createdSinceDays를 크게 주면 서버가 createdAt desc(최근 등록순)로 정렬한다.
-    queryFn: () => getAllEvents({ limit: 4, createdSinceDays: 36500 }),
+    // 하단 영역이 가운데 화면과 겹치지 않도록 2개(한 줄)만 노출한다.
+    queryFn: () => getAllEvents({ limit: 2, createdSinceDays: 36500 }),
     staleTime: 1000 * 60,
   })
 
@@ -141,7 +142,7 @@ function OnThisDaySection() {
   const { data } = useQuery({
     queryKey: ['dashboard-on-this-day', today.month, today.day],
     queryFn: () =>
-      getEventsOnThisDay({ month: today.month, day: today.day, limit: 4 }),
+      getEventsOnThisDay({ month: today.month, day: today.day, limit: 2 }),
     staleTime: 1000 * 60 * 30,
   })
 

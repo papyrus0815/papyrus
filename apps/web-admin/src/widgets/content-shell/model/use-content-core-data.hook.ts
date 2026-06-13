@@ -67,7 +67,7 @@ export function useContentCoreData(): HistoryCoreData {
         (country as { defaultNameDisplayOrder?: 'korean' | 'western' | null })
           .defaultNameDisplayOrder ?? undefined,
       historicalCountries: (country.historicalCountries || []).sort(
-        (a: HistoricalCountry, b: HistoricalCountry) => {
+        (a, b) => {
           const aYear = a.endYear || a.startYear || 0
           const bYear = b.endYear || b.startYear || 0
           return bYear - aYear

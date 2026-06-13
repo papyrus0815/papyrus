@@ -85,7 +85,7 @@ export async function getOrganizations(
   if (params?.historicalCountryId)
     url.searchParams.set('historicalCountryId', params.historicalCountryId)
   if (params?.type) url.searchParams.set('type', params.type)
-  const res = await fetch(url.toString(), { headers: conn.headers ?? {}, credentials: 'include' })
+  const res = await fetch(url.toString(), { headers: (conn.headers ?? {}) as HeadersInit, credentials: 'include' })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -99,7 +99,7 @@ export async function getOrganizationsTree(
   if (params?.historicalCountryId)
     url.searchParams.set('historicalCountryId', params.historicalCountryId)
   if (params?.type) url.searchParams.set('type', params.type)
-  const res = await fetch(url.toString(), { headers: conn.headers ?? {}, credentials: 'include' })
+  const res = await fetch(url.toString(), { headers: (conn.headers ?? {}) as HeadersInit, credentials: 'include' })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -109,7 +109,7 @@ export async function getOrganizationById(
   id: string,
 ): Promise<OrganizationResponseDto> {
   const res = await fetch(`${base(conn)}/organizations/${id}`, {
-    headers: conn.headers ?? {},
+    headers: (conn.headers ?? {}) as HeadersInit,
     credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
@@ -151,7 +151,7 @@ export async function deleteOrganization(
 ): Promise<void> {
   const res = await fetch(`${base(conn)}/organizations/${id}`, {
     method: 'DELETE',
-    headers: conn.headers ?? {},
+    headers: (conn.headers ?? {}) as HeadersInit,
     credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
@@ -195,7 +195,7 @@ export async function removeOrganizationHierarchy(
 ): Promise<void> {
   const res = await fetch(
     `${base(conn)}/organizations/hierarchy/${parentId}/${childId}`,
-    { method: 'DELETE', headers: conn.headers ?? {}, credentials: 'include' },
+    { method: 'DELETE', headers: (conn.headers ?? {}) as HeadersInit, credentials: 'include' },
   )
   if (!res.ok) throw new Error(await res.text())
 }

@@ -6,16 +6,24 @@
     "allowJs": false,
     "strict": true,
     "noEmit": true,
+    // @api 별칭이 apps/api DTO 소스를 끌어오므로 api와 동일한 데코레이터 설정 필요
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "baseUrl": ".",
     "module": "ESNext",
     "moduleResolution": "Node",
     "resolveJsonModule": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@api": ["../apps/api/src/api/index.ts"],
-      "@api/*": ["../apps/api/src/api/*"],
-      "@papyrus/api-sdk": ["../libs/api-sdk/src/index.ts"]
+      "@api": ["../../apps/api/src/api/index.ts"],
+      "@api/*": ["../../apps/api/src/api/*"],
+      "@papyrus/api-sdk": ["../../libs/api-sdk/src/index.ts"],
+      // @api 경유로 편입되는 api 소스가 사용하는 별칭 (tsconfig.base.json과 동일, 상대경로만 보정)
+      "@prisma/prisma.service": ["../../apps/api/prisma/prisma.service"],
+      "@prisma/config": ["../../apps/api/prisma/prisma.config"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  // src/shared/api/sdk는 과거 nestia SDK 사본(미사용 데드 코드) — 깨진 상대 import가 많아 타입체크에서 제외
+  "exclude": ["src/shared/api/sdk"]
 }

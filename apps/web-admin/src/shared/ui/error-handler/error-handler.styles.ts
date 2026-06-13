@@ -209,11 +209,11 @@ export const RobotEye = styled.div<{ $isBlinking?: boolean; $delay?: number }>`
   height: 10px;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 50%;
-  ${({ $isBlinking }) =>
+  ${({ $isBlinking, $delay = 0 }) =>
     $isBlinking &&
     css`
       animation: ${pulse} 2s ease-in-out infinite;
-      animation-delay: ${({ $delay = 0 }) => $delay}s;
+      animation-delay: ${$delay}s;
     `}
 `
 

@@ -48,7 +48,9 @@ export const MainGrid = styled.div<{
   }
 
   @media (max-width: 1024px) {
-    grid-template-columns: 1fr;
+    /* minmax(0, 1fr) — 1fr만 쓰면 트랙이 내용물 min-content(탭 바 등) 아래로
+       줄지 않아 페이지 전체가 옆으로 늘어나 가로 스크롤이 생긴다 */
+    grid-template-columns: minmax(0, 1fr);
     row-gap: 12px;
     padding: 0;
   }

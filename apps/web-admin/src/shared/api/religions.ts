@@ -76,7 +76,7 @@ export async function updateReligion(
  */
 export async function deleteReligion(id: string): Promise<void> {
   try {
-    await religionsApi.$delete(apiConnection, id)
+    await religionsApi._delete(apiConnection, id)
   } catch (error) {
     throw error
   }
