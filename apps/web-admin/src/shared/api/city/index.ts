@@ -15,13 +15,53 @@ export type City = {
   updatedAt?: string
 }
 
+/**
+ * 행정구역 소속 — 현대 국가(countryId) 또는 역사적 국가(historicalCountryId) 중 하나.
+ */
+export type DivisionOwner =
+  | { countryId: string; historicalCountryId?: undefined }
+  | { historicalCountryId: string; countryId?: undefined }
+
+/** 행정구역 체계 (시기별 편제 — 예: 팔도제 1413–1895) */
+export type AdminDivisionScheme = {
+  id: string
+  countryId: string | null
+  historicalCountryId: string | null
+  name: string
+  description: string | null
+  startDate: string | null
+  endDate: string | null
+  divisionCount: number
+  /** 전체 목록(all) 조회 시 소속 국가 표시명 */
+  ownerName?: string | null
+}
+
+export type CreateAdminDivisionSchemeInput = {
+  countryId?: string | null
+  historicalCountryId?: string | null
+  name: string
+  description?: string | null
+  startDate?: string | null
+  endDate?: string | null
+}
+
+export type UpdateAdminDivisionSchemeInput = {
+  name?: string
+  description?: string | null
+  startDate?: string | null
+  endDate?: string | null
+}
+
 export type AdministrativeDivision = {
   id: string
   name: string
   localName?: string | null
   nameMeaning?: string | null
-  countryId: string
+  countryId: string | null
+  historicalCountryId?: string | null
   adminDivisionId: string
+  /** 소속 체계 ID. NULL이면 체계 미지정 */
+  schemeId?: string | null
   parentId?: string | null
   centerLat?: number | null
   centerLng?: number | null
@@ -35,14 +75,19 @@ export type AdministrativeDivision = {
 
 export type AdminDivisionConfig = {
   id: string
-  countryId: string
+  countryId: string | null
+  historicalCountryId?: string | null
+  /** 소속 체계 ID. NULL이면 체계 공용 */
+  schemeId?: string | null
   divisionLevel: number
   divisionLabel: string
   description: string | null
 }
 
 export type CreateAdminDivisionConfigInput = {
-  countryId: string
+  countryId?: string | null
+  historicalCountryId?: string | null
+  schemeId?: string | null
   divisionLevel: number
   divisionLabel: string
   description?: string | null
@@ -55,8 +100,10 @@ export type UpdateAdminDivisionConfigInput = {
 }
 
 export type CreateAdministrativeDivisionInput = {
-  countryId: string
+  countryId?: string | null
+  historicalCountryId?: string | null
   adminDivisionId: string
+  schemeId?: string | null
   name: string
   localName?: string | null
   nameMeaning?: string | null
@@ -68,11 +115,29 @@ export type CreateAdministrativeDivisionInput = {
   predecessorId?: string | null
 }
 
+/** 행정구역 서술 섹션 (제목 있는 다중 본문) */
+export type AdminDivisionSection = {
+  id: string
+  title: string
+  content: string
+  order: number
+}
+
+export type AdminDivisionSectionInput = {
+  title: string
+  content: string
+  order?: number
+}
+
 export type UpdateAdministrativeDivisionInput = {
   adminDivisionId?: string
+  /** 소속 체계 변경 — null이면 해제 */
+  schemeId?: string | null
   name?: string
   localName?: string | null
   nameMeaning?: string | null
+  /** 서술 섹션 전체 교체 — undefined면 유지 */
+  sections?: AdminDivisionSectionInput[]
   parentId?: string | null
   centerLat?: number | null
   centerLng?: number | null
@@ -85,7 +150,9 @@ export type AdministrativeDivisionSearchHit = {
   id: string
   name: string
   localName: string | null
-  countryId: string
+  countryId: string | null
+  historicalCountryId?: string | null
+  schemeId?: string | null
   divisionLevel: number
   divisionLabel: string
   parentPath: string[]
@@ -95,7 +162,9 @@ export type AdministrativeDivisionSearchHit = {
 }
 
 export type BulkCreateAdministrativeDivisionsInput = {
-  countryId: string
+  countryId?: string | null
+  historicalCountryId?: string | null
+  schemeId?: string | null
   divisionLabel?: string
   adminDivisionId?: string
   divisionLevel: number
@@ -199,11 +268,21 @@ export const cityApi = {
     }
   },
 
-  /** 행정구역 목록 조회 */
-  getAdministrativeDivisions: async (countryId?: string): Promise<AdministrativeDivision[]> => {
+  /** 행정구역 목록 조회 — 현대 국가 ID(string) 또는 owner 객체. schemeId로 체계 필터 */
+  getAdministrativeDivisions: async (
+    owner?: string | DivisionOwner,
+    schemeId?: string | null,
+  ): Promise<AdministrativeDivision[]> => {
     try {
       const params = new URLSearchParams()
-      if (countryId) params.set('countryId', countryId)
+      if (typeof owner === 'string') {
+        params.set('countryId', owner)
+      } else if (owner?.countryId) {
+        params.set('countryId', owner.countryId)
+      } else if (owner?.historicalCountryId) {
+        params.set('historicalCountryId', owner.historicalCountryId)
+      }
+      if (schemeId) params.set('schemeId', schemeId)
       const res = await fetch(`${getBaseUrl()}/cities/administrative-divisions?${params}`, {
         headers: getHeaders(),
       })
@@ -214,12 +293,21 @@ export const cityApi = {
     }
   },
 
-  /** 행정구역 단위(레벨) 조회 */
+  /** 행정구역 단위(레벨) 조회 — schemeId 지정 시 체계 전용 + 공용 함께 */
   getAdminDivisionConfigs: async (
-    countryId: string,
+    owner: string | DivisionOwner,
+    schemeId?: string | null,
   ): Promise<AdminDivisionConfig[]> => {
     try {
-      const params = new URLSearchParams({ countryId })
+      const params = new URLSearchParams()
+      if (typeof owner === 'string') {
+        params.set('countryId', owner)
+      } else if (owner.countryId) {
+        params.set('countryId', owner.countryId)
+      } else if (owner.historicalCountryId) {
+        params.set('historicalCountryId', owner.historicalCountryId)
+      }
+      if (schemeId) params.set('schemeId', schemeId)
       const res = await fetch(
         `${getBaseUrl()}/cities/admin-division-configs?${params}`,
         { headers: getHeaders() },
@@ -229,6 +317,66 @@ export const cityApi = {
     } catch {
       return []
     }
+  },
+
+  /** 행정구역 체계 목록 (owner 기준 또는 all=전체) */
+  getAdminDivisionSchemes: async (
+    owner: DivisionOwner | 'all',
+  ): Promise<AdminDivisionScheme[]> => {
+    try {
+      const params = new URLSearchParams()
+      if (owner === 'all') {
+        params.set('all', 'true')
+      } else if (owner.countryId) {
+        params.set('countryId', owner.countryId)
+      } else if (owner.historicalCountryId) {
+        params.set('historicalCountryId', owner.historicalCountryId)
+      }
+      const res = await fetch(
+        `${getBaseUrl()}/cities/admin-division-schemes?${params}`,
+        { headers: getHeaders() },
+      )
+      if (!res.ok) return []
+      return await res.json()
+    } catch {
+      return []
+    }
+  },
+
+  createAdminDivisionScheme: async (
+    input: CreateAdminDivisionSchemeInput,
+  ): Promise<AdminDivisionScheme> => {
+    const res = await fetch(`${getBaseUrl()}/cities/admin-division-schemes`, {
+      method: 'POST',
+      headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    if (!res.ok) throw new Error(await safeReadError(res))
+    return await res.json()
+  },
+
+  updateAdminDivisionScheme: async (
+    id: string,
+    input: UpdateAdminDivisionSchemeInput,
+  ): Promise<AdminDivisionScheme> => {
+    const res = await fetch(
+      `${getBaseUrl()}/cities/admin-division-schemes/${id}`,
+      {
+        method: 'PATCH',
+        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      },
+    )
+    if (!res.ok) throw new Error(await safeReadError(res))
+    return await res.json()
+  },
+
+  deleteAdminDivisionScheme: async (id: string): Promise<void> => {
+    const res = await fetch(
+      `${getBaseUrl()}/cities/admin-division-schemes/${id}`,
+      { method: 'DELETE', headers: getHeaders() },
+    )
+    if (!res.ok && res.status !== 204) throw new Error(await safeReadError(res))
   },
 
   createAdminDivisionConfig: async (
@@ -306,18 +454,42 @@ export const cityApi = {
     if (!res.ok && res.status !== 204) throw new Error(await safeReadError(res))
   },
 
+  /**
+   * 행정구역 서술 섹션 조회 (order 순).
+   * 실패를 []로 삼키면 React Query가 "섹션 없음"을 성공으로 캐시해
+   * 다음 편집이 전체 배열 PATCH로 기존 서술을 지워버린다 — 반드시 throw.
+   */
+  getAdministrativeDivisionSections: async (
+    id: string,
+  ): Promise<AdminDivisionSection[]> => {
+    const res = await fetch(
+      `${getBaseUrl()}/cities/administrative-divisions/${id}/sections`,
+      { headers: getHeaders() },
+    )
+    if (!res.ok) throw new Error(await safeReadError(res))
+    return await res.json()
+  },
+
   searchAdministrativeDivisions: async (
     q: string,
-    countryId: string,
+    owner: string | DivisionOwner,
     limit = 20,
+    schemeId?: string | null,
   ): Promise<AdministrativeDivisionSearchHit[]> => {
     if (!q || q.trim().length < 1) return []
     try {
       const params = new URLSearchParams({
         q: q.trim(),
-        countryId,
         limit: String(limit),
       })
+      if (typeof owner === 'string') {
+        params.set('countryId', owner)
+      } else if (owner.countryId) {
+        params.set('countryId', owner.countryId)
+      } else if (owner.historicalCountryId) {
+        params.set('historicalCountryId', owner.historicalCountryId)
+      }
+      if (schemeId) params.set('schemeId', schemeId)
       const res = await fetch(
         `${getBaseUrl()}/cities/administrative-divisions/search?${params}`,
         { headers: getHeaders() },

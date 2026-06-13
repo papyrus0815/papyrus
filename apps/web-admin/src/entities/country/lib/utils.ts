@@ -6,7 +6,7 @@ import type { Country } from '../api'
 export function getSummaryMetrics(list: Country[]) {
   const totalCount = list.length
   const totalPopulation = list.reduce((acc, country) => {
-    const pop = country.population ? parseInt(country.population, 10) : 0
+    const pop = country.population ? parseInt(String(country.population), 10) : 0
     return acc + pop
   }, 0)
   const totalArea = list.reduce(
@@ -24,8 +24,8 @@ export function getSummaryMetrics(list: Country[]) {
   )
 
   const mostPopulousCountry = list.reduce((max, country) => {
-    const currentPop = country.population ? parseInt(country.population, 10) : 0
-    const maxPop = max.population ? parseInt(max.population, 10) : 0
+    const currentPop = country.population ? parseInt(String(country.population), 10) : 0
+    const maxPop = max.population ? parseInt(String(max.population), 10) : 0
     return currentPop > maxPop ? country : max
   }, list[0] || null)
 

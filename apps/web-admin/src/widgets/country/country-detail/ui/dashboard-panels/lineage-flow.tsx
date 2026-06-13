@@ -1,5 +1,3 @@
-import type { HistoricalCountry } from '@/entities/historical-country/api'
-
 import * as S from '../country-detail-dashboard.styles'
 
 interface LineageNode {
@@ -14,18 +12,24 @@ interface HistoricalCountryYearShape {
   endYear?: number | null
 }
 
-function getYears(h: HistoricalCountry): {
+/** 전체/경량 역사 국가 DTO 공통 — 여기서 실제로 쓰는 필드만 요구 */
+type LineageSource = {
+  id: string
+  name?: string | null
+} & HistoricalCountryYearShape
+
+function getYears(h: LineageSource): {
   start: number | null
   end: number | null
 } {
-  const shape = h as unknown as HistoricalCountryYearShape
+  const shape = h as HistoricalCountryYearShape
   return {
     start: shape.startYear ?? null,
     end: shape.endYear ?? null,
   }
 }
 
-function toNode(h: HistoricalCountry): LineageNode {
+function toNode(h: LineageSource): LineageNode {
   const { start, end } = getYears(h)
   const yearsLabel =
     start == null && end == null ? null : `${start ?? ''}–${end ?? ''}`
@@ -38,8 +42,8 @@ function toNode(h: HistoricalCountry): LineageNode {
 }
 
 export interface LineageFlowProps {
-  /** 시간순 정렬 전 historical countries */
-  historicalCountries: HistoricalCountry[]
+  /** 시간순 정렬 전 historical countries (전체/경량 DTO 모두 허용) */
+  historicalCountries: LineageSource[]
   /** 현재 국가 노드(연결의 마지막) */
   currentName: string
 }

@@ -2,15 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
 
-import type { Country } from '@/entities/country/api'
+import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 
 import { CountryFlag } from '../../shared'
 import * as S from './country-detail.styles'
 
 interface CountryDetailHeaderProps {
-  country: Country
+  country: UnifiedCountry
   continentName?: string
-  onEdit?: (country: Country) => void
+  onEdit?: (country: UnifiedCountry) => void
   onDelete?: (id: string) => void
   /** 헤더 우측에 배치할 액션 (예: 카테고리 설정 버튼) */
   rightSlot?: React.ReactNode

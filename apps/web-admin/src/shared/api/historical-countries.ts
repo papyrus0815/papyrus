@@ -160,7 +160,7 @@ export async function getTransitionsByHistoricalCountryId(
   const path = `/historical-countries/${encodeURIComponent(historicalCountryId)}/transitions`
   const res = await fetch(`${conn.host}${path}`, {
     method: 'GET',
-    headers: { ...conn.headers },
+    headers: { ...conn.headers } as HeadersInit,
     credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
@@ -216,7 +216,7 @@ export async function deleteHistoricalCountryTransition(
   const path = `/historical-countries/transitions/${encodeURIComponent(transitionId)}`
   const res = await fetch(`${conn.host}${path}`, {
     method: 'DELETE',
-    headers: { ...conn.headers },
+    headers: { ...conn.headers } as HeadersInit,
     credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
@@ -272,7 +272,7 @@ export async function getMembershipsByHistoricalCountryId(
   const path = `/historical-countries/${encodeURIComponent(historicalCountryId)}/memberships`
   const res = await fetch(`${conn.host}${path}`, {
     method: 'GET',
-    headers: { ...conn.headers },
+    headers: { ...conn.headers } as HeadersInit,
     credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
@@ -319,7 +319,7 @@ export async function deleteHistoricalCountryMembership(
   const path = `/historical-countries/memberships/${encodeURIComponent(membershipId)}`
   const res = await fetch(`${conn.host}${path}`, {
     method: 'DELETE',
-    headers: { ...conn.headers },
+    headers: { ...conn.headers } as HeadersInit,
     credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
@@ -368,7 +368,7 @@ export async function getRelationsByHistoricalCountryId(
   const path = `/historical-countries/${encodeURIComponent(historicalCountryId)}/relations`
   const res = await fetch(`${conn.host}${path}`, {
     method: 'GET',
-    headers: { ...conn.headers },
+    headers: { ...conn.headers } as HeadersInit,
     credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
@@ -385,7 +385,7 @@ export async function getTransitionsByHistoricalCountryIds(
   const ids = historicalCountryIds.join(',')
   const res = await fetch(
     `${conn.host}/historical-countries/by-ids/transitions?ids=${encodeURIComponent(ids)}`,
-    { method: 'GET', headers: { ...conn.headers }, credentials: 'include' },
+    { method: 'GET', headers: { ...conn.headers } as HeadersInit, credentials: 'include' },
   )
   if (!res.ok) throw new Error(await res.text())
   const data = (await res.json()) as any
@@ -400,7 +400,7 @@ export async function getMembershipsByHistoricalCountryIds(
   const ids = historicalCountryIds.join(',')
   const res = await fetch(
     `${conn.host}/historical-countries/by-ids/memberships?ids=${encodeURIComponent(ids)}`,
-    { method: 'GET', headers: { ...conn.headers }, credentials: 'include' },
+    { method: 'GET', headers: { ...conn.headers } as HeadersInit, credentials: 'include' },
   )
   if (!res.ok) throw new Error(await res.text())
   const data = (await res.json()) as any
@@ -415,7 +415,7 @@ export async function getRelationsByHistoricalCountryIds(
   const ids = historicalCountryIds.join(',')
   const res = await fetch(
     `${conn.host}/historical-countries/by-ids/relations?ids=${encodeURIComponent(ids)}`,
-    { method: 'GET', headers: { ...conn.headers }, credentials: 'include' },
+    { method: 'GET', headers: { ...conn.headers } as HeadersInit, credentials: 'include' },
   )
   if (!res.ok) throw new Error(await res.text())
   const data = (await res.json()) as any
@@ -461,7 +461,7 @@ export async function deleteHistoricalCountryRelation(
   const path = `/historical-countries/relations/${encodeURIComponent(relationId)}`
   const res = await fetch(`${conn.host}${path}`, {
     method: 'DELETE',
-    headers: { ...conn.headers },
+    headers: { ...conn.headers } as HeadersInit,
     credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())

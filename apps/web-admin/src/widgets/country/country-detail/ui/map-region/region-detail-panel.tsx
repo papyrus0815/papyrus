@@ -99,6 +99,19 @@ export function RegionDetailPanel({
               {children}
             </div>
           )}
+          {/* 스크롤 힌트 — 내용이 더 있으면 하단이 살짝 사라지듯 페이드.
+              내용이 짧으면 빈 배경 위 그라데이션이라 보이지 않는다. */}
+          <div
+            aria-hidden
+            style={{
+              position: 'sticky',
+              bottom: -24,
+              height: 32,
+              margin: '0 -24px -24px',
+              background: `linear-gradient(to bottom, transparent, ${palette.bg})`,
+              pointerEvents: 'none',
+            }}
+          />
         </div>
       )}
     </div>

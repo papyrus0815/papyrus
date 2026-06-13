@@ -55,7 +55,8 @@ export function PersonRegisterViewModal({
     }
   }, [isOpen])
 
-  const handleSuccess = (personId?: string) => {
+  /** 인물 관련 캐시 무효화 — create 직후(onCreated)와 저장 완료(handleSuccess) 공용. */
+  const invalidatePersonCaches = (personId?: string) => {
     queryClient.invalidateQueries({ queryKey: personKeys.all })
     // 가족 노드(부모·자녀·손자녀)에 박힌 profileImageUrl 등이 다른 인물 상세·가계도 캐시에도
     // 들어가 있으므로 broad invalidate (특정 personId가 아닌 prefix 전체)
@@ -64,6 +65,19 @@ export function PersonRegisterViewModal({
     if (personId) {
       queryClient.invalidateQueries({ queryKey: personKeys.detail(personId) })
     }
+  }
+
+  /**
+   * create 직후 — 캐시만 무효화하고 모달은 유지.
+   * 여기서 닫으면 폼 안의 "다른 인물 이어서 등록" 다이얼로그가 그려지기 전에 언마운트됨.
+   * 닫기는 다이얼로그 응답 후 handleSuccess(닫기 선택) 또는 onClose(취소)로 실행.
+   */
+  const handleCreated = (personId: string) => {
+    invalidatePersonCaches(personId)
+  }
+
+  const handleSuccess = (personId?: string) => {
+    invalidatePersonCaches(personId)
     setIsDirty(false)
     onSuccess?.(personId ?? '')
     onClose()
@@ -101,6 +115,7 @@ export function PersonRegisterViewModal({
         editPersonId={editPersonId ?? undefined}
         onCancel={onClose}
         onSuccess={handleSuccess}
+        onCreated={handleCreated}
         onSubmittingChange={setSubmitting}
         onDirtyChange={setIsDirty}
         onValuesChange={setFilled}

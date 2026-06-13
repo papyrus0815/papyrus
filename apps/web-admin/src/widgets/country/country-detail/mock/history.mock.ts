@@ -14,6 +14,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '-037-01-01' },
     countryId: 'goguryeo',
     type: 'establishment',
+    scale: 'major',
     participants: [
       { type: 'person', id: 'jumong', name: '주몽', role: '건국자' },
     ],
@@ -30,6 +31,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '391-01-01', end: '413-12-31' },
     countryId: 'goguryeo',
     type: 'war',
+    scale: 'major',
     participants: [
       { type: 'person', id: 'gwanggaeto', name: '광개토대왕', role: '통치자' },
     ],
@@ -49,6 +51,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '668-01-01' },
     countryId: 'silla',
     type: 'war',
+    scale: 'major',
     participants: [
       { type: 'country', id: 'silla', name: '신라', role: '통일 주도' },
       { type: 'country', id: 'tang', name: '당나라', role: '동맹국' },
@@ -71,6 +74,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '918-06-15' },
     countryId: 'goryeo',
     type: 'establishment',
+    scale: 'major',
     participants: [
       { type: 'person', id: 'wang-geon', name: '왕건 (태조)', role: '건국자' },
     ],
@@ -88,6 +92,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1231-01-01', end: '1259-12-31' },
     countryId: 'goryeo',
     type: 'war',
+    scale: 'major',
     participants: [
       { type: 'country', id: 'goryeo', name: '고려', role: '방어자' },
       { type: 'country', id: 'mongol', name: '몽골 제국', role: '침략자' },
@@ -107,6 +112,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1236-01-01', end: '1251-12-31' },
     countryId: 'goryeo',
     type: 'cultural',
+    scale: 'major',
     participants: [
       { type: 'organization', id: 'goryeo-buddhism', name: '고려 불교계', role: '제작 주체' },
     ],
@@ -126,6 +132,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1392-07-17' },
     countryId: 'joseon',
     type: 'establishment',
+    scale: 'major',
     participants: [
       { type: 'person', id: 'yi-seong-gye', name: '이성계 (태조)', role: '건국자' },
     ],
@@ -143,6 +150,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1443-01-01' },
     countryId: 'joseon',
     type: 'cultural',
+    scale: 'major',
     participants: [
       { type: 'person', id: 'sejong', name: '세종대왕', role: '창제자' },
     ],
@@ -302,6 +310,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1866-10-01', end: '1866-11-01' },
     countryId: 'joseon',
     type: 'war',
+    scale: 'major',
     participants: [
       { type: 'country', id: 'joseon', name: '조선', role: '방어자' },
       { type: 'country', id: 'france', name: '프랑스', role: '침략자' },
@@ -320,6 +329,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1871-06-01', end: '1871-07-01' },
     countryId: 'joseon',
     type: 'war',
+    scale: 'major',
     participants: [
       { type: 'country', id: 'joseon', name: '조선', role: '방어자' },
       { type: 'country', id: 'usa', name: '미국', role: '침략자' },
@@ -338,6 +348,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1876-02-26' },
     countryId: 'joseon',
     type: 'treaty',
+    scale: 'major',
     participants: [
       { type: 'country', id: 'joseon', name: '조선', role: '강압 체결국' },
       { type: 'country', id: 'japan', name: '일본 제국', role: '주도국' },
@@ -358,6 +369,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1884-12-04', end: '1884-12-06' },
     countryId: 'joseon',
     type: 'revolution',
+    scale: 'major',
     participants: [
       { type: 'person', id: 'kim-ok-gyun', name: '김옥균', role: '주도자' },
       { type: 'organization', id: 'gaehwadang', name: '개화당', role: '주도 세력' },
@@ -376,6 +388,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1894-01-01', end: '1895-03-01' },
     countryId: 'joseon',
     type: 'revolution',
+    scale: 'major',
     participants: [
       { type: 'person', id: 'jeon-bong-jun', name: '전봉준', role: '지도자' },
       { type: 'organization', id: 'donghak', name: '동학교도', role: '주도 세력' },
@@ -395,6 +408,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1894-07-01', end: '1896-02-01' },
     countryId: 'joseon',
     type: 'reform',
+    scale: 'major',
     participants: [
       { type: 'organization', id: 'reform-government', name: '개혁 정부', role: '추진 주체' },
     ],
@@ -414,6 +428,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1897-10-12' },
     countryId: 'korean-empire',
     type: 'establishment',
+    scale: 'major',
     participants: [
       { type: 'person', id: 'gojong', name: '고종', role: '황제' },
     ],
@@ -431,6 +446,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1910-08-29' },
     countryId: 'korean-empire',
     type: 'treaty',
+    scale: 'major',
     participants: [
       { type: 'country', id: 'korean-empire', name: '대한제국', role: '강압 체결국' },
       { type: 'country', id: 'japan-empire', name: '일본 제국', role: '병합 주도국' },
@@ -451,6 +467,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1919-03-01', end: '1919-04-30' },
     countryId: 'korea-under-japan',
     type: 'revolution',
+    scale: 'major',
     participants: [
       { type: 'organization', id: 'independence-activists', name: '독립운동가', role: '주도' },
     ],
@@ -469,6 +486,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1919-04-11' },
     countryId: 'provisional-government',
     type: 'establishment',
+    scale: 'major',
     participants: [
       { type: 'person', id: 'yi-seung-man', name: '이승만', role: '초대 대통령' },
       { type: 'person', id: 'kim-gu', name: '김구', role: '주석' },
@@ -489,6 +507,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1945-08-15' },
     countryId: 'korea',
     type: 'establishment',
+    scale: 'major',
     participants: [
       { type: 'country', id: 'usa', name: '미국', role: '해방 주도' },
       { type: 'country', id: 'soviet', name: '소련', role: '해방 참여' },
@@ -507,6 +526,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1948-08-15' },
     countryId: 'south-korea',
     type: 'establishment',
+    scale: 'major',
     participants: [
       { type: 'person', id: 'yi-seung-man', name: '이승만', role: '초대 대통령' },
     ],
@@ -524,6 +544,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1950-06-25', end: '1953-07-27' },
     countryId: 'south-korea',
     type: 'war',
+    scale: 'major',
     participants: [
       { type: 'country', id: 'south-korea', name: '대한민국', role: '방어자' },
       { type: 'country', id: 'north-korea', name: '북한', role: '침략자' },
@@ -545,6 +566,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1960-04-19' },
     countryId: 'south-korea',
     type: 'revolution',
+    scale: 'major',
     participants: [
       { type: 'organization', id: 'students', name: '학생', role: '주도' },
     ],
@@ -562,6 +584,7 @@ export const mockHistoricalEvents: HistoricalEvent[] = [
     date: { start: '1987-06-10', end: '1987-06-29' },
     countryId: 'south-korea',
     type: 'revolution',
+    scale: 'major',
     participants: [
       { type: 'organization', id: 'citizens', name: '시민', role: '주도' },
     ],

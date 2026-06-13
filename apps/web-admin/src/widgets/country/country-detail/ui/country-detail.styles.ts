@@ -463,6 +463,8 @@ export const CompactKebabMenu = styled.div`
 export const HeaderWrapper = styled.div`
   position: relative;
   width: 100%;
+  /* 히어로 하단이 본문(빠른 작업 바 등)과 붙어 보이지 않게 숨 쉴 공간 확보 */
+  margin-bottom: 24px;
 `
 
 /** 헤더 우측 액션 (카테고리 설정 버튼 등) */

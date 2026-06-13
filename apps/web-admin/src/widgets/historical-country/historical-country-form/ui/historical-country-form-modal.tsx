@@ -23,7 +23,7 @@ export interface HistoricalCountryFormModalProps {
       parentModernCountryIds?: string[]
       parentHistoricalCountryIds?: string[]
       transitionEventType?: TransitionEventType
-      transitionScope?: string | null
+      transitionScope?: 'STATE_SUCCESSION' | 'REGIME_CHANGE' | null
     },
   ) => Promise<void>
   onSuccess?: () => void

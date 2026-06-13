@@ -184,6 +184,9 @@ export function CountryDetailShell() {
     <>
       <CountryDetailPageGlobalStyle />
       <ContentShell
+        /* 모바일(≤1024px)에서 상세 페인 노출 — 없으면 display:none으로 국가 상세 전체가 빈 화면.
+           국가 목록은 CountryMobileUI 오버레이("목록" 칩)가 담당한다. */
+        mobileDetailVisible
         left={({ listCollapsed, toggleListCollapsed }) => (
           <CountryList
             selectedId={selectedId}

@@ -52,7 +52,7 @@ function CountryListInner({
   onToggleCollapse,
 }: CountryListProps) {
   const {
-    countries,
+    unifiedCountries,
     filtered,
     continents,
     query,
@@ -133,7 +133,8 @@ function CountryListInner({
   const quickAccessItems = React.useMemo(() => {
     if (hasFilterActive) return { pinned: [], recent: [] }
     const flatById = new Map<string, UnifiedCountry>()
-    for (const c of countries) {
+    // UnifiedCountry 목록 사용 — Country에는 type 판별 필드가 없어 역사 국가 분기가 동작하지 않음
+    for (const c of unifiedCountries) {
       flatById.set(c.id, c)
       if (c.type === 'modern' && c.historicalCountries) {
         for (const h of c.historicalCountries) {
@@ -153,7 +154,7 @@ function CountryListInner({
       .filter((c): c is UnifiedCountry => !!c)
       .slice(0, 5)
     return { pinned, recent }
-  }, [hasFilterActive, countries, pinnedIds, recentIds])
+  }, [hasFilterActive, unifiedCountries, pinnedIds, recentIds])
 
   // 대륙별로 그룹화 (현대 국가만; continentId 기준). 과거만 선택 시 단일 그룹으로 플랫 목록
   const groupedByContinent = React.useMemo(() => {
@@ -331,9 +332,9 @@ function CountryListInner({
               <SidebarHeader
                 title="국가 목록"
                 count={
-                  hasFilterActive && filtered.length !== countries.length
-                    ? `${filtered.length}/${countries.length}`
-                    : countries.length
+                  hasFilterActive && filtered.length !== unifiedCountries.length
+                    ? `${filtered.length}/${unifiedCountries.length}`
+                    : unifiedCountries.length
                 }
                 action={
                   <CountryListAddMenu
@@ -393,7 +394,7 @@ function CountryListInner({
                             tabIndex={-1}
                             onKeyDown={handleListKeyDown}
                           >
-                            {isLoading && countries.length === 0 ? (
+                            {isLoading && unifiedCountries.length === 0 ? (
                               <CountryListSkeleton />
                             ) : filtered.length === 0 ? (
                               <CountryListEmpty

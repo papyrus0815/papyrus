@@ -5,6 +5,7 @@
  * 각각 중복 정의돼 있던 findInTree 등을 한곳으로 모았다.
  */
 import type { AdministrativeDivision } from '@/entities/country/api.administrative-divisions'
+import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 
 /** path(ids)를 따라가며 각 단계의 노드를 모은다. 못 찾으면 거기서 멈춤. */
 export function resolvePath(
@@ -37,10 +38,12 @@ export function findInTree(
   return null
 }
 
-/** 폐지일이 지난 구역인지 */
+/** 폐지일이 지난 구역인지. 네이티브 Date는 기원전(음수 연도) 문자열을 NaN으로 떨궈 못 쓴다 */
 export function isAbolished(d: AdministrativeDivision): boolean {
-  if (!d.abolishedDate) return false
-  return new Date(d.abolishedDate).getTime() <= Date.now()
+  const abolished = dateSortKey(d.abolishedDate)
+  if (abolished == null) return false
+  const today = dateSortKey(new Date().toISOString())
+  return today != null && abolished <= today
 }
 
 /** 직·간접 하위 구역 개수 */
@@ -60,4 +63,23 @@ export function sumSubtree(
   let total = pick(node)
   for (const c of node.children ?? []) total += sumSubtree(c, pick)
   return total
+}
+
+/**
+ * 체계 시행 기간 표시 — "1413–1895" / "1896–현행" / "기원전 412–기원전 330" / "기간 미상".
+ * 네이티브 Date는 BC 형식("-0412-…")을 NaN으로 떨궈서 parseIsoDateParts로 직접 파싱.
+ */
+export function formatYearRange(
+  startIso: string | null | undefined,
+  endIso: string | null | undefined,
+): string {
+  if (!startIso && !endIso) return '기간 미상'
+  const year = (iso: string) => {
+    const p = parseIsoDateParts(iso)
+    if (!p) return '?'
+    return p.year < 0 ? `기원전 ${Math.abs(p.year)}` : String(p.year)
+  }
+  const s = startIso ? year(startIso) : '?'
+  const e = endIso ? year(endIso) : '현행'
+  return `${s}–${e}`
 }

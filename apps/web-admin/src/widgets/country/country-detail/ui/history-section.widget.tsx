@@ -614,10 +614,13 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
             {selectedCountryId !== 'all' && (
               <div style={{ marginBottom: '40px' }}>
                 {(() => {
-                  const selectedCountry = succession.predecessorCountries.find(
-                    (countryItem) => countryItem.id === selectedCountryId,
-                  )
-                  if (!selectedCountry) return null
+                  const selectedCountryFound =
+                    succession.predecessorCountries.find(
+                      (countryItem) => countryItem.id === selectedCountryId,
+                    )
+                  if (!selectedCountryFound) return null
+                  // 파일이 거대해 TS 흐름 분석(CFA)이 비활성화됨 — 바로 위에서 undefined를 걸렀으므로 단언 사용
+                  const selectedCountry = selectedCountryFound!
 
                   const countryEvents = majorEventsByCountry.length
 
@@ -865,8 +868,8 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                         </div>
                       </div>
 
-                      {selectedCountry.culturalAchievements &&
-                        selectedCountry.culturalAchievements.length > 0 && (
+                      {(selectedCountry.culturalAchievements?.length ?? 0) >
+                        0 && (
                           <div
                             style={{
                               background: 'white',
@@ -891,7 +894,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                                 gap: '8px',
                               }}
                             >
-                              {selectedCountry.culturalAchievements.map(
+                              {(selectedCountry.culturalAchievements ?? []).map(
                                 (achievement, achievementIndex) => (
                                   <div
                                     key={achievementIndex}
@@ -1096,10 +1099,12 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
             </button>
 
             {(() => {
-              const period = timeline.periods.find(
+              const periodFound = timeline.periods.find(
                 (periodItem) => periodItem.id === selectedPeriod,
               )
-              if (!period) return null
+              if (!periodFound) return null
+              // 파일이 거대해 TS 흐름 분석(CFA)이 비활성화됨 — 바로 위에서 undefined를 걸렀으므로 단언 사용
+              const period = periodFound!
 
               return (
                 <div>

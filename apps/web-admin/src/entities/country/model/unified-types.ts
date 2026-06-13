@@ -5,6 +5,9 @@
 import type { Country } from '../api'
 import type { HistoricalCountry } from '@/entities/historical-country/api'
 
+/** 현대 국가 응답에 포함되는 하위 역사 국가(경량 DTO) 항목 타입 */
+type CountryHistoricalEntry = NonNullable<Country['historicalCountries']>[number]
+
 /**
  * 국가 타입 구분
  */
@@ -28,16 +31,19 @@ export interface UnifiedCountry {
   isoCode?: string | null
   flagEmoji?: string | null
   capital?: string | null
-  population?: string | null
+  population?: string | number | null
   areaSqKm?: number | null
   continentId?: string | null
   latitude?: number | null
   longitude?: number | null
+  // 헤더 배지 표시용 (modernToUnified는 현재 채우지 않음 — 값 없으면 미표시)
+  currencyId?: string | null
+  languageId?: string | null
   /** 인물 이름 표시 순서 (현대 국가) */
   defaultNameDisplayOrder?: 'korean' | 'western' | null
 
-  // 역사적 국가 목록 (현대 국가에만 존재)
-  historicalCountries?: HistoricalCountry[]
+  // 역사적 국가 목록 (현대 국가에만 존재) — 서버는 경량 DTO로 내려줌
+  historicalCountries?: CountryHistoricalEntry[]
 
   // 역사적 국가 전용 필드
   enName?: string | null
@@ -81,14 +87,15 @@ export function modernToUnified(country: Country): UnifiedCountry {
  * 역사적 국가를 통합 타입으로 변환
  */
 export function historicalToUnified(
-  country: HistoricalCountry,
+  country: HistoricalCountry | CountryHistoricalEntry,
 ): UnifiedCountry {
   return {
     id: country.id,
     name: country.name,
     type: 'historical',
     enName: country.enName,
-    description: country.description,
+    // description은 전체 DTO에만, latitude/longitude는 경량 DTO에만 존재
+    description: 'description' in country ? country.description : undefined,
     thumbnailUrl: country.thumbnailUrl,
     stateType: country.stateType,
     startYear: country.startYear,
@@ -99,8 +106,8 @@ export function historicalToUnified(
     endMonth: country.endMonth,
     endDay: country.endDay,
     endEra: country.endEra,
-    latitude: country.latitude,
-    longitude: country.longitude,
+    latitude: 'latitude' in country ? country.latitude : undefined,
+    longitude: 'longitude' in country ? country.longitude : undefined,
   }
 }
 

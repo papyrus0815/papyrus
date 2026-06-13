@@ -340,6 +340,7 @@ interface HistoricalCountryFormProps {
       parentModernCountryIds?: string[]
       parentHistoricalCountryIds?: string[]
       transitionEventType?: TransitionEventType
+      transitionScope?: 'STATE_SUCCESSION' | 'REGIME_CHANGE' | null
     },
   ) => Promise<void>
   /** RHF dirty 상태 변경 콜백 — 모달 close 가드 */
@@ -597,9 +598,12 @@ export function HistoricalCountryForm({
     const payload: Omit<HistoricalCountry, 'id' | 'createdAt' | 'updatedAt'> & {
       id?: string
       parentModernCountryIds?: string[]
+      /** 변천 전환 성격 — 후임 역사 국가 연결 시에만 포함 */
+      transitionScope?: 'STATE_SUCCESSION' | 'REGIME_CHANGE'
     } = {
       name: data.name,
-      enName: data.enName,
+      // RHF 기본값이 ''라 빈 입력은 null로 정규화 (빈 문자열 저장 방지)
+      enName: data.enName?.trim() || null,
       nameOrigin: data.nameOrigin || null,
       description: data.description || null,
       history: data.history || null,

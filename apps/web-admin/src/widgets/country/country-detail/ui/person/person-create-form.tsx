@@ -59,11 +59,11 @@ export function PersonCreateForm({
     name: '',
     surname: '',
     gender: '',
-    birthEra: 'AD',
+    birthEra: 'AD' as Era,
     birthYear: '',
     birthMonth: '',
     birthDay: '',
-    deathEra: 'AD',
+    deathEra: 'AD' as Era,
     deathYear: '',
     deathMonth: '',
     deathDay: '',
@@ -198,18 +198,19 @@ export function PersonCreateForm({
         deathDate = `${year}-${month || '01'}-${day || '01'}`
       }
 
+      // 생성(POST) 페이로드 — CreatePersonDto는 null 미허용이므로 빈 값은 키 생략(undefined)
       const data: CreatePersonInput = {
         name: formData.name.trim(),
-        surname: formData.surname.trim() || null,
-        gender: formData.gender || null,
-        birthEra: formData.birthYear ? formData.birthEra : null,
-        birthDate: birthDate,
-        deathEra: formData.deathYear ? formData.deathEra : null,
-        deathDate: deathDate,
-        biography: formData.biography.trim() || null,
+        surname: formData.surname.trim() || undefined,
+        gender: formData.gender || undefined,
+        birthEra: formData.birthYear ? formData.birthEra : undefined,
+        birthDate: birthDate ?? undefined,
+        deathEra: formData.deathYear ? formData.deathEra : undefined,
+        deathDate: deathDate ?? undefined,
+        biography: formData.biography.trim() || undefined,
         influence: formData.influence !== '' ? parseInt(formData.influence, 10) : undefined,
-        profileImageUrl: formData.profileImageUrl.trim() || null,
-        countryId: formData.countryId || null,
+        profileImageUrl: formData.profileImageUrl.trim() || undefined,
+        countryId: formData.countryId || undefined,
       }
 
       const created = await createPerson(data)

@@ -10,9 +10,11 @@ import type {
 // SDK 타입을 그대로 사용.
 // 단, 생성된 SDK(CountryResponseDto)가 일부 신규 응답 필드를 아직 반영하지 못해 보강한다.
 // (백엔드 country.response.ts에는 존재 — SDK 재생성 시 교집합 제거 가능)
-export type Country = CountryResponseDto & {
+export type Country = Omit<CountryResponseDto, 'population'> & {
   fullName?: string | null
   defaultNameDisplayOrder?: 'korean' | 'western' | null
+  /** API 원본은 string|null, 목록 변환(useContentCoreData)은 number로 정규화 — 양쪽 허용 */
+  population?: string | number | null
 }
 export type CreateCountryData = CreateCountryDto
 export type UpdateCountryData = UpdateCountryDto

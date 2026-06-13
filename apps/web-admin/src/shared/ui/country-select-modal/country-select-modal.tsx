@@ -19,6 +19,7 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { FiCheck, FiGlobe, FiSearch, FiX } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
+import { useContinents } from '@/features/continent/use-continents.hook'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
@@ -59,6 +60,7 @@ type CountrySortField =
 function filterCountryList(
   countries: (CountryResponseDto | HistoricalCountryResponseDto)[],
   queryTrimmed: string,
+  continentNameById: Map<string, string>,
 ): (CountryResponseDto | HistoricalCountryResponseDto)[] {
   if (!queryTrimmed) return countries
   const query = queryTrimmed.toLowerCase()
@@ -69,7 +71,7 @@ function filterCountryList(
       country.name,
       modern.localName,
       modern.isoCode,
-      (modern as { continent?: string }).continent,
+      modern.continentId ? continentNameById.get(modern.continentId) : undefined,
       historical.enName,
     ]
     return candidates.some((value) =>
@@ -85,6 +87,7 @@ function sortCountryList(
   countryType: CountryType,
   sortBy: CountrySortField,
   sortOrder: 'asc' | 'desc',
+  continentNameById: Map<string, string>,
 ): (CountryResponseDto | HistoricalCountryResponseDto)[] {
   const mult = sortOrder === 'asc' ? 1 : -1
   return [...list].sort((a, b) => {
@@ -98,10 +101,12 @@ function sortCountryList(
         return mult * va.localeCompare(vb)
       }
       if (sortBy === 'continent') {
-        const va = (ma as { continent?: string }).continent ?? ''
-        const vb = (mb as { continent?: string }).continent ?? ''
+        const va =
+          (ma.continentId ? continentNameById.get(ma.continentId) : '') ?? ''
+        const vb =
+          (mb.continentId ? continentNameById.get(mb.continentId) : '') ?? ''
         return (
-          mult * va.localeCompare(vb) ||
+          mult * va.localeCompare(vb, 'ko') ||
           mult * ma.name.localeCompare(mb.name, 'ko')
         )
       }
@@ -180,15 +185,29 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
 
   const deferredSearch = useDeferredValue(searchQuery.trim())
 
+  // 대륙 이름 표시용 — CountryResponseDto에는 continentId만 있어 이름은 대륙 목록에서 매핑
+  const { data: continentList } = useContinents()
+  const continentNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    ;(continentList ?? []).forEach((continent) => {
+      map.set(continent.id, continent.name)
+    })
+    return map
+  }, [continentList])
+
   const filteredModernCountries = useMemo(() => {
     if (!isOpen) return []
-    return filterCountryList(modernCountries, deferredSearch)
-  }, [isOpen, modernCountries, deferredSearch])
+    return filterCountryList(modernCountries, deferredSearch, continentNameById)
+  }, [isOpen, modernCountries, deferredSearch, continentNameById])
 
   const filteredHistoricalCountries = useMemo(() => {
     if (!isOpen) return []
-    return filterCountryList(historicalCountries, deferredSearch)
-  }, [isOpen, historicalCountries, deferredSearch])
+    return filterCountryList(
+      historicalCountries,
+      deferredSearch,
+      continentNameById,
+    )
+  }, [isOpen, historicalCountries, deferredSearch, continentNameById])
 
   const displayCountries = useMemo(() => {
     if (!isOpen) return []
@@ -196,7 +215,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
       countryType === 'modern'
         ? filteredModernCountries
         : filteredHistoricalCountries
-    return sortCountryList(list, countryType, sortBy, sortOrder)
+    return sortCountryList(list, countryType, sortBy, sortOrder, continentNameById)
   }, [
     isOpen,
     countryType,
@@ -204,6 +223,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
     filteredHistoricalCountries,
     sortBy,
     sortOrder,
+    continentNameById,
   ])
 
   const scrollViewportRef = useRef<HTMLDivElement>(null)
@@ -456,6 +476,10 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
                       const isSelected = multiSelect
                         ? selectedCountryIds.includes(country.id)
                         : selectedCountryId === country.id
+                      const continentId =
+                        countryType === 'modern'
+                          ? (country as CountryResponseDto).continentId
+                          : null
                       return (
                         <CountryGridCard
                           key={country.id}
@@ -463,6 +487,11 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
                           countryType={countryType}
                           isSelected={isSelected}
                           onPick={handleSelect}
+                          continentName={
+                            continentId
+                              ? continentNameById.get(continentId)
+                              : undefined
+                          }
                         />
                       )
                     })}
@@ -1119,6 +1148,7 @@ const CountryGridCard = memo(
     countryType,
     isSelected,
     onPick,
+    continentName,
   }: {
     country: CountryResponseDto | HistoricalCountryResponseDto
     countryType: CountryType
@@ -1127,6 +1157,7 @@ const CountryGridCard = memo(
       c: CountryResponseDto | HistoricalCountryResponseDto,
       isHistorical: boolean,
     ) => void
+    continentName?: string | null
   }) {
     const modern = country as CountryResponseDto
     const historical = country as HistoricalCountryResponseDto
@@ -1175,11 +1206,7 @@ const CountryGridCard = memo(
               {modern.isoCode && (
                 <CardMetaRow>ISO {modern.isoCode}</CardMetaRow>
               )}
-              {(modern as { continent?: string }).continent && (
-                <CardMetaRow>
-                  {(modern as { continent?: string }).continent}
-                </CardMetaRow>
-              )}
+              {continentName && <CardMetaRow>{continentName}</CardMetaRow>}
               {modern.capital && (
                 <CardMetaRow>수도 {modern.capital}</CardMetaRow>
               )}

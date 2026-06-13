@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom'
 import { pathKeys } from '@/shared/router'
 import type { CountryDetailTabKey } from '@/widgets/country/country-detail/ui/country-detail.widget'
 
-import type { CountryDetailTab } from './use-history-location.hook'
+import type { CountryDetailTab } from './use-content-location.hook'
 
 /** URL 경로상 detailTab → 위젯 initialDetailTab 매핑. */
 function urlTabToWidgetTab(

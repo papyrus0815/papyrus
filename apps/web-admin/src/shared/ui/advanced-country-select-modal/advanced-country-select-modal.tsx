@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { FiCheck, FiGlobe, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { useContinents } from '@/features/continent/use-continents.hook'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
@@ -15,7 +16,7 @@ import { Z_INDEX } from '@/shared/styles/z-index'
 /**
  * 호출부에서 "전체 국가" 같은 sentinel 옵션을 첫 항목으로 끼워 넣을 수 있도록
  * 일부 필드만 strict하게 요구하고 나머지는 optional로 받음.
- * 모달 내부 렌더는 모든 부가 필드(continent/population 등)를 nullable check함.
+ * 모달 내부 렌더는 모든 부가 필드(continentId/population 등)를 nullable check함.
  */
 type ModernCountryOption = Partial<CountryResponseDto> &
   Pick<CountryResponseDto, 'id' | 'name'>
@@ -48,6 +49,8 @@ export const AdvancedCountrySelectModal: React.FC<
   title = '국가 선택',
 }) => {
   const playClick = useClickSound()
+  // 대륙 이름 표시용 — CountryResponseDto에는 continentId만 있어 이름은 대륙 목록에서 매핑
+  const { data: continentList } = useContinents()
   const [countryType, setCountryType] = useState<'modern' | 'historical'>(
     'modern',
   )
@@ -73,16 +76,28 @@ export const AdvancedCountrySelectModal: React.FC<
     }
   }, [countryType, sortBy])
 
-  // 대륙 목록 추출
+  // continentId → 대륙 이름 매핑
+  const continentNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    ;(continentList ?? []).forEach((continent) => {
+      map.set(continent.id, continent.name)
+    })
+    return map
+  }, [continentList])
+
+  // 대륙 목록 추출 (현대 국가가 실제 속한 대륙만)
   const continents = useMemo(() => {
     const continentSet = new Set<string>()
     modernCountries.forEach((country) => {
-      if (country.continent) {
-        continentSet.add(country.continent)
+      const continentName = country.continentId
+        ? continentNameById.get(country.continentId)
+        : undefined
+      if (continentName) {
+        continentSet.add(continentName)
       }
     })
     return Array.from(continentSet).sort()
-  }, [modernCountries])
+  }, [modernCountries, continentNameById])
 
   // 필터링 + 정렬된 국가 목록
   const filteredCountries = useMemo(() => {
@@ -95,9 +110,12 @@ export const AdvancedCountrySelectModal: React.FC<
         .includes(countrySearchTerm.toLowerCase())
 
       if (countryType === 'modern') {
+        const continentId = (country as ModernCountryOption).continentId
+        const continentName = continentId
+          ? continentNameById.get(continentId)
+          : undefined
         const matchesContinent =
-          selectedContinent === 'all' ||
-          (country as CountryResponseDto).continent === selectedContinent
+          selectedContinent === 'all' || continentName === selectedContinent
         return matchesSearch && matchesContinent
       }
 
@@ -118,10 +136,12 @@ export const AdvancedCountrySelectModal: React.FC<
           return mult * va.localeCompare(vb)
         }
         if (sortBy === 'continent') {
-          const va = (ma as { continent?: string }).continent ?? ''
-          const vb = (mb as { continent?: string }).continent ?? ''
+          const va =
+            (ma.continentId ? continentNameById.get(ma.continentId) : '') ?? ''
+          const vb =
+            (mb.continentId ? continentNameById.get(mb.continentId) : '') ?? ''
           return (
-            mult * va.localeCompare(vb) ||
+            mult * va.localeCompare(vb, 'ko') ||
             mult * ma.name.localeCompare(mb.name, 'ko')
           )
         }
@@ -158,6 +178,7 @@ export const AdvancedCountrySelectModal: React.FC<
     historicalCountries,
     countrySearchTerm,
     selectedContinent,
+    continentNameById,
     sortBy,
     sortOrder,
   ])
@@ -306,6 +327,9 @@ export const AdvancedCountrySelectModal: React.FC<
                 const isSelected = selectedCountryIds.includes(country.id)
                 const modern = country as CountryResponseDto
                 const historical = country as HistoricalCountryResponseDto
+                const continentName = modern.continentId
+                  ? continentNameById.get(modern.continentId)
+                  : undefined
                 return (
                   <CountryCard
                     key={country.id}
@@ -323,10 +347,8 @@ export const AdvancedCountrySelectModal: React.FC<
                           {modern.isoCode && (
                             <CardMetaRow>ISO {modern.isoCode}</CardMetaRow>
                           )}
-                          {(modern as { continent?: string }).continent && (
-                            <CardMetaRow>
-                              {(modern as { continent?: string }).continent}
-                            </CardMetaRow>
+                          {continentName && (
+                            <CardMetaRow>{continentName}</CardMetaRow>
                           )}
                           {modern.capital && (
                             <CardMetaRow>수도 {modern.capital}</CardMetaRow>

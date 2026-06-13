@@ -6,6 +6,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import {
   type AdministrativeDivision,
+  type DivisionOwner,
   useAdministrativeDivisionSearch,
 } from '@/entities/country/api.administrative-divisions'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
@@ -14,7 +15,10 @@ import { Input } from './form-fields'
 
 interface DivisionAutocompleteProps {
   id?: string
-  countryId: string
+  /** 검색 대상 소속 — 현대(countryId) 또는 역사(historicalCountryId) 국가 */
+  owner: DivisionOwner
+  /** 지정 시 그 체계 소속 구역만 검색 (상위 구역 선택 등 체계 일치가 필요한 곳) */
+  schemeId?: string | null
   /** 선택된 행정구역 — null이면 입력창, 있으면 chip */
   selected: AdministrativeDivision | null
   onChange: (id: string) => void
@@ -26,7 +30,8 @@ interface DivisionAutocompleteProps {
 
 export function DivisionAutocomplete({
   id,
-  countryId,
+  owner,
+  schemeId,
   selected,
   onChange,
   onClear,
@@ -39,7 +44,7 @@ export function DivisionAutocomplete({
   const [open, setOpen] = useState(false)
   const [activeIdx, setActiveIdx] = useState(0)
   const debouncedQ = useDebouncedValue(query, 250)
-  const search = useAdministrativeDivisionSearch(debouncedQ, countryId)
+  const search = useAdministrativeDivisionSearch(debouncedQ, owner, 50, schemeId)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const hits = useMemo(

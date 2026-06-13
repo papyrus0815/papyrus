@@ -32,8 +32,12 @@ export const dynastyApi = {
     return await dynastiesApi.getById(apiConnection, id)
   },
 
+  // 로컬 타입은 null 허용(해제 의도) — 서버 CreateDynastyDto와의 차이는 단언으로 통과
   create: async (data: DynastyMutationBody) => {
-    return await dynastiesApi.create(apiConnection, data)
+    return await dynastiesApi.create(
+      apiConnection,
+      data as Parameters<typeof dynastiesApi.create>[1],
+    )
   },
 
   update: async (id: string, data: Partial<DynastyMutationBody>) => {
@@ -41,6 +45,6 @@ export const dynastyApi = {
   },
 
   delete: async (id: string) => {
-    await dynastiesApi.$delete(apiConnection, id)
+    await dynastiesApi._delete(apiConnection, id)
   },
 }
