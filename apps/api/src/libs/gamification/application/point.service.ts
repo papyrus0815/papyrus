@@ -185,6 +185,50 @@ export class PointService {
   }
 
   /**
+   * 일괄 등록 적립 — 같은 타입의 여러 record를 원장 일괄 삽입 + 재계산·뱃지 평가 1회로 처리.
+   * record별 awardForCreate 반복은 트랜잭션·계정 재계산·뱃지 평가가 N회 돌아
+   * 일괄 등록(수십 건)의 응답을 수 초씩 늦춘다. 멱등성은 동일(unique + skipDuplicates).
+   */
+  async awardForCreateMany(
+    accountId: string | null | undefined,
+    ownerType: AggregateType,
+    recordIds: string[],
+  ): Promise<void> {
+    if (!accountId || recordIds.length === 0) return
+    const base = createPointsFor(ownerType)
+    if (base <= 0) return
+    const data: Prisma.PointEntryCreateManyInput[] = []
+    for (const recordId of recordIds) {
+      const contentCentury = await this.resolveContentCentury(ownerType, recordId)
+      const contentCountryId = await this.resolveContentCountry(ownerType, recordId)
+      data.push({
+        accountId,
+        ownerType,
+        recordId,
+        reason: PointReason.CREATE_CONTENT,
+        amount: base,
+        contentCentury,
+        contentCountryId,
+      })
+    }
+
+    let changed = false
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const res = await tx.pointEntry.createMany({ data, skipDuplicates: true })
+        changed = res.count > 0
+        if (changed) await this.recalcAccount(tx, accountId)
+      })
+    } catch (error) {
+      this.logger.error(
+        `일괄 점수 적립 실패 (account=${accountId}, ${ownerType} x${recordIds.length}): ${String(error)}`,
+      )
+      return
+    }
+    if (changed) await this.evaluateBadges(accountId)
+  }
+
+  /**
    * 완성도 보너스 적립 — 콘텐츠를 충실히 채운 경우 추가 점수.
    * 도메인 서비스가 신호 개수로 계산한 amount를 넘긴다. 등록·수정 모두에서 호출 가능
    * (unique 제약으로 콘텐츠당 1회만 적립되어 멱등). amount<=0이면 무시.
@@ -276,6 +320,85 @@ export class PointService {
       }
     } catch (error) {
       this.logger.error(`점수 회수 조회 실패 (${ownerType}/${recordId}): ${String(error)}`)
+    }
+  }
+
+  /**
+   * 일괄 회수 — 하위 트리 cascade 삭제처럼 여러 record를 한 번에 회수.
+   * record별 revokeForRecord 반복은 조회·트랜잭션·재계산이 N회 돌므로,
+   * 원장 일괄 조회 → (record, 계정)별 net 산출 → 회수 행 일괄 삽입 + 계정당 재계산 1회로 묶는다.
+   */
+  async revokeForRecordMany(
+    ownerType: AggregateType,
+    recordIds: string[],
+  ): Promise<void> {
+    if (recordIds.length === 0) return
+    try {
+      const entries = await this.prisma.pointEntry.findMany({
+        where: { ownerType, recordId: { in: recordIds } },
+        select: {
+          recordId: true,
+          accountId: true,
+          amount: true,
+          contentCentury: true,
+          contentCountryId: true,
+        },
+      })
+      if (entries.length === 0) return
+
+      interface Slot {
+        recordId: string
+        accountId: string
+        net: number
+        century: number | null
+        countryId: string | null
+      }
+      const byKey = new Map<string, Slot>()
+      for (const e of entries) {
+        if (!e.recordId) continue
+        const key = `${e.recordId}|${e.accountId}`
+        const slot =
+          byKey.get(key) ??
+          ({
+            recordId: e.recordId,
+            accountId: e.accountId,
+            net: 0,
+            century: null,
+            countryId: null,
+          } satisfies Slot)
+        slot.net += e.amount
+        slot.century = slot.century ?? e.contentCentury ?? null
+        slot.countryId = slot.countryId ?? e.contentCountryId ?? null
+        byKey.set(key, slot)
+      }
+
+      const data: Prisma.PointEntryCreateManyInput[] = []
+      const accounts = new Set<string>()
+      for (const slot of byKey.values()) {
+        if (slot.net <= 0) continue
+        accounts.add(slot.accountId)
+        data.push({
+          accountId: slot.accountId,
+          ownerType,
+          recordId: slot.recordId,
+          reason: PointReason.CONTENT_DELETED,
+          amount: -slot.net,
+          contentCentury: slot.century,
+          contentCountryId: slot.countryId,
+        })
+      }
+      if (data.length === 0) return
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.pointEntry.createMany({ data, skipDuplicates: true })
+        for (const accountId of accounts) {
+          await this.recalcAccount(tx, accountId)
+        }
+      })
+    } catch (error) {
+      this.logger.error(
+        `일괄 점수 회수 실패 (${ownerType} x${recordIds.length}): ${String(error)}`,
+      )
     }
   }
 
@@ -775,6 +898,13 @@ export class PointService {
           })
           return h ? centuryFromYearEra(h.startYear, h.startEra) : null
         }
+        case AggregateType.ADMINISTRATIVE_DIVISION: {
+          const d = await this.prisma.administrativeDivision.findUnique({
+            where: { id: recordId },
+            select: { establishedDate: true },
+          })
+          return d ? centuryFromDateEra(d.establishedDate, null) : null
+        }
         default:
           // COUNTRY(현대국가) 및 그 외 타입은 세기를 매기지 않음.
           return null
@@ -857,6 +987,13 @@ export class PointService {
         case AggregateType.COUNTRY:
         case AggregateType.HISTORICAL_COUNTRY:
           return recordId
+        case AggregateType.ADMINISTRATIVE_DIVISION: {
+          const d = await this.prisma.administrativeDivision.findUnique({
+            where: { id: recordId },
+            select: { countryId: true, historicalCountryId: true },
+          })
+          return d?.countryId ?? d?.historicalCountryId ?? null
+        }
         default:
           return null
       }

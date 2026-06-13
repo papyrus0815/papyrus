@@ -89,6 +89,8 @@ const CREATE_POINTS: Partial<Record<AggregateType, number>> = {
   [AggregateType.COUNTRY]: 30,
   [AggregateType.HISTORICAL_COUNTRY]: 30,
   [AggregateType.EVENT]: 20,
+  // 행정구역 — 단위가 작고 일괄 등록이 흔해 낮게 책정
+  [AggregateType.ADMINISTRATIVE_DIVISION]: 10,
 }
 
 /** 해당 콘텐츠 타입의 등록 적립 점수 (없으면 0) */

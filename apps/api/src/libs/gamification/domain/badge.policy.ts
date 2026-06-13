@@ -16,6 +16,8 @@ export type BadgeCode =
   | 'PERSON_10'
   | 'EVENT_10'
   | 'COUNTRY_5'
+  | 'DIVISION_10'
+  | 'DIVISION_50'
   | 'STREAK_3'
   | 'STREAK_7'
   | 'COUNTRY_SPECIALIST_10'
@@ -130,6 +132,22 @@ export const BADGE_DEFS: ReadonlyArray<BadgeDef> = [
     color: '#A855F7',
     metric: (s) => typeCount(s, AggregateType.COUNTRY) + typeCount(s, AggregateType.HISTORICAL_COUNTRY),
     target: 5,
+  },
+  {
+    code: 'DIVISION_10',
+    label: '강역 답사가',
+    description: '행정구역 10개 등록',
+    color: '#059669',
+    metric: (s) => typeCount(s, AggregateType.ADMINISTRATIVE_DIVISION),
+    target: 10,
+  },
+  {
+    code: 'DIVISION_50',
+    label: '여지도 편찬자',
+    description: '행정구역 50개 등록',
+    color: '#B45309',
+    metric: (s) => typeCount(s, AggregateType.ADMINISTRATIVE_DIVISION),
+    target: 50,
   },
   {
     code: 'STREAK_3',
