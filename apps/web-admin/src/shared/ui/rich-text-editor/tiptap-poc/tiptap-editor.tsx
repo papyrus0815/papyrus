@@ -17,6 +17,7 @@ import { Placeholder } from '@tiptap/extension-placeholder'
 import { TableKit } from '@tiptap/extension-table'
 
 import { EntityLinkNode } from './entity-link-node'
+import { FigureNode } from './figure-node'
 
 interface TiptapEditorProps {
   value: string
@@ -39,8 +40,9 @@ export function TiptapEditor({
       Placeholder.configure({ placeholder }),
       // TableKit = Table + TableRow + TableHeader + TableCell 번들(v3). resizable 컬럼.
       TableKit.configure({ table: { resizable: true } }),
-      // 커스텀 도메인 확장 — 기존 entity-link HTML과 호환되는 멘션 노드.
+      // 커스텀 도메인 확장 — 기존 HTML과 호환되는 멘션/figure 노드.
       EntityLinkNode,
+      FigureNode,
     ],
     content: value,
     onUpdate: ({ editor: instance }) => onChange(instance.getHTML()),
@@ -147,6 +149,23 @@ export function TiptapEditor({
           }
         >
           🔗
+        </button>
+        <button
+          type="button"
+          aria-label="이미지 삽입"
+          onClick={() =>
+            editor
+              .chain()
+              .focus()
+              .insertFigure({
+                src: 'https://example.com/x.png',
+                alt: '예시',
+                caption: '캡션 예시',
+              })
+              .run()
+          }
+        >
+          🖼
         </button>
       </div>
       <EditorContent editor={editor} />

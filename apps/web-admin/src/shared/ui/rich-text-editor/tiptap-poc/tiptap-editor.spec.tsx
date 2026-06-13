@@ -71,6 +71,30 @@ describe('TiptapEditor (TipTap 마이그레이션 PoC)', () => {
     expect(span?.textContent).toBe('나폴레옹')
   })
 
+  it('이미지 삽입 버튼이 figure(img+figcaption) 블록 노드를 삽입한다', () => {
+    render(<TiptapEditor value="<p>텍스트</p>" onChange={() => undefined} />)
+    fireEvent.click(screen.getByLabelText('이미지 삽입'))
+    const figure = document.querySelector('.ProseMirror figure')
+    expect(figure).not.toBeNull()
+    expect(figure?.querySelector('img')?.getAttribute('src')).toBe(
+      'https://example.com/x.png',
+    )
+    expect(figure?.querySelector('figcaption')?.textContent).toBe('캡션 예시')
+  })
+
+  it('기존 figure HTML을 파싱·렌더한다(블록 노드 라운드트립)', () => {
+    const html =
+      '<figure><img src="https://ex.com/a.jpg" alt="설명">' +
+      '<figcaption>옛 캡션</figcaption></figure>'
+    render(<TiptapEditor value={html} onChange={() => undefined} />)
+    const figure = document.querySelector('.ProseMirror figure')
+    expect(figure).not.toBeNull()
+    expect(figure?.querySelector('img')?.getAttribute('src')).toBe(
+      'https://ex.com/a.jpg',
+    )
+    expect(figure?.querySelector('figcaption')?.textContent).toBe('옛 캡션')
+  })
+
   it('value prop이 바뀌면 본문이 동기화된다', () => {
     const { rerender } = render(
       <TiptapEditor value="<p>처음</p>" onChange={() => undefined} />,
