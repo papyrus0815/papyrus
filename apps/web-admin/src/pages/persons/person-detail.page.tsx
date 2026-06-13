@@ -17,6 +17,7 @@ export default function PersonDetailPage() {
     <Root>
       <PersonDetailPanel
         personId={personId}
+        syncDocumentTitle
         onClose={() => navigate(-1)}
         onEdit={(id) => {
           setEditingPersonId(id)

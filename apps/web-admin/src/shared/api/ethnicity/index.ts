@@ -30,7 +30,8 @@ export type UpdateEthnicityInput = {
 
 async function request<T>(
   path: string,
-  options?: RequestInit & { method?: string; body?: unknown },
+  // RequestInit['body'](BodyInit)와 교차되면 객체 body 전달이 막히므로 body를 분리해 unknown으로 받음
+  options?: Omit<RequestInit, 'body'> & { method?: string; body?: unknown },
 ): Promise<T> {
   const conn = getApiConnection()
   const url = `${conn.host}${path}`

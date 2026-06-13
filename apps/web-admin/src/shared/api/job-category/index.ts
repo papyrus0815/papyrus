@@ -38,6 +38,6 @@ export const jobCategoryApi = {
   },
 
   delete: async (id: string) => {
-    await jobCategoriesApi.$delete(apiConnection, id)
+    await jobCategoriesApi._delete(apiConnection, id)
   },
 }

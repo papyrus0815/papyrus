@@ -6,7 +6,7 @@
  *   · 서버 DTO가 @IsDateString(ISO, AD)이라 BC 확장연도(`-YYYY-...`)는 저장 불가 →
  *     모달에서 BC를 고르면 차단·안내한다. (BC 지원은 백엔드 date 포맷 완화가 선행돼야 함)
  */
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 import { FiPlus, FiTrash2, FiChevronDown, FiCalendar, FiAlertCircle } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -33,6 +33,11 @@ export type CountryAffiliationRow = {
   startDate?: string
   endDate?: string
   note?: string
+  /**
+   * 우선순위 — 폼 편집 UI는 없지만 수정 왕복 시 보존(미보존 시 서버가 전부 1로 평탄화).
+   * 0은 주 국적 슬롯이라 이 행 목록에는 들어오지 않음.
+   */
+  priority?: number
 }
 
 /** Prisma PersonCountryAffiliationType 미러 — 라벨은 상세 패널과 통일 */
@@ -49,12 +54,17 @@ export const AFFILIATION_TYPE_OPTIONS: ReadonlyArray<{
 ]
 
 let rowSeq = 0
+/**
+ * 행 key 발급 — 모듈 카운터에 랜덤 suffix를 더해, draft 복원으로 이전 세션의 키가
+ * 그대로 들어와도(스냅샷에 key 직렬화됨) 새 행과 충돌하지 않게 한다.
+ * key가 중복되면 patchRow/removeRow가 두 행에 같이 적용되는 오동작이 생김.
+ */
 export function makeAffiliationRow(
   partial?: Partial<CountryAffiliationRow>,
 ): CountryAffiliationRow {
   rowSeq += 1
   return {
-    key: `aff-${rowSeq}`,
+    key: `aff-${rowSeq}-${Math.random().toString(36).slice(2, 8)}`,
     affiliationType: 'CITIZENSHIP',
     countryLabel: '',
     ...partial,
@@ -102,6 +112,8 @@ export interface CountryAffiliationsSectionProps {
   setRows: React.Dispatch<React.SetStateAction<CountryAffiliationRow[]>>
   /** 행의 국가 선택 모달 열기 (부모가 공용 CountrySelectModal 제어) */
   onPickCountry: (rowKey: string) => void
+  /** 시작/종료일 피커 열림 여부 보고 — 부모의 ⌘Enter 제출 가드(anyModalOpen)에 포함용 */
+  onDateModalOpenChange?: (open: boolean) => void
   markDirty: () => void
 }
 
@@ -110,6 +122,7 @@ export function CountryAffiliationsSection({
   rows,
   setRows,
   onPickCountry,
+  onDateModalOpenChange,
   markDirty,
 }: CountryAffiliationsSectionProps) {
   /** 현재 열려 있는 날짜 모달 대상 (행 key + 어떤 필드). null이면 닫힘. */
@@ -117,6 +130,13 @@ export function CountryAffiliationsSection({
     rowKey: string
     field: 'startDate' | 'endDate'
   } | null>(null)
+
+  // 열림/닫힘의 모든 경로(선택·취소·BC 차단)를 한 곳에서 부모에 보고.
+  // cleanup으로 섹션 언마운트("더 입력" 접힘 등) 시에도 닫힘으로 복원.
+  useEffect(() => {
+    onDateModalOpenChange?.(dateModal !== null)
+    return () => onDateModalOpenChange?.(false)
+  }, [dateModal, onDateModalOpenChange])
   /** BC 선택 차단 안내를 띄울 행 key */
   const [bcBlockedRow, setBcBlockedRow] = useState<string | null>(null)
 

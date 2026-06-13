@@ -170,7 +170,7 @@ export const personApi = {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        ...(conn.headers?.Authorization && { Authorization: conn.headers.Authorization }),
+        ...(typeof conn.headers?.Authorization === 'string' && { Authorization: conn.headers.Authorization }),
       },
       credentials: 'include',
     })
@@ -187,7 +187,7 @@ export const personApi = {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        ...(conn.headers?.Authorization && { Authorization: conn.headers.Authorization }),
+        ...(typeof conn.headers?.Authorization === 'string' && { Authorization: conn.headers.Authorization }),
       },
       credentials: 'include',
     })
@@ -202,12 +202,20 @@ export const personApi = {
     return (result as any)?.data ?? result
   },
 
+  // 로컬 Input 타입은 null 허용(클리어 의도) — 서버 DTO와의 차이는 단언으로 통과 (SDK 재생성 시 재검토)
   create: async (data: CreatePersonInput) => {
-    return await personsApi.create(getApiConnection(), data)
+    return await personsApi.create(
+      getApiConnection(),
+      data as Parameters<typeof personsApi.create>[1],
+    )
   },
 
   update: async (id: string, data: UpdatePersonInput) => {
-    return await personsApi.update(getApiConnection(), id, data)
+    return await personsApi.update(
+      getApiConnection(),
+      id,
+      data as Parameters<typeof personsApi.update>[2],
+    )
   },
 
   delete: async (id: string) => {

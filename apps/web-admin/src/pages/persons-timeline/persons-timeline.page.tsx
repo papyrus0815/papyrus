@@ -111,6 +111,7 @@ export default function DashboardPersonsPage() {
               <PersonDetailPanel
                 key={personId}
                 personId={personId}
+                syncDocumentTitle
                 onClose={() => navigate(pathKeys.personsTimeline())}
                 onEdit={(id) => {
                   setEditingPersonId(id)

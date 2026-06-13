@@ -200,6 +200,7 @@ export interface CreateGovernmentPositionTenureDto {
   positionType:
     | 'HEAD_OF_STATE'
     | 'HEAD_OF_GOVERNMENT'
+    | 'DEPUTY_HEAD_OF_STATE' // 부원수 — 서버 DTO(create-career.dto.ts)와 동기화
     | 'HEIR_APPARENT'
     | 'REGENT'
     | 'CABINET_MINISTER'
@@ -256,6 +257,34 @@ export interface CreateGovernmentPositionTenureDto {
   electionCandidacyId?: string | null
 }
 
+/**
+ * 재임 수정(PUT) 전용 DTO — 수정 모드에서 *비운 값은 명시적 null(해제)*로 전송한다.
+ * 키 없음(undefined)은 기존 값 유지. 서버 repository가 null=해제를 지원
+ * (endDate·cabinetId·termNumber·subTermNumber·regnalNumber·notes·appointmentMethod·endReason·endReasonDetail).
+ */
+export type UpdateGovernmentPositionTenureDto = Partial<
+  Omit<
+    CreateGovernmentPositionTenureDto,
+    | 'endDate'
+    | 'termNumber'
+    | 'subTermNumber'
+    | 'regnalNumber'
+    | 'appointmentMethod'
+    | 'endReason'
+    | 'endReasonDetail'
+    | 'notes'
+  >
+> & {
+  endDate?: string | null
+  termNumber?: number | null
+  subTermNumber?: number | null
+  regnalNumber?: number | null
+  appointmentMethod?: CreateGovernmentPositionTenureDto['appointmentMethod'] | null
+  endReason?: CreateGovernmentPositionTenureDto['endReason'] | null
+  endReasonDetail?: string | null
+  notes?: string | null
+}
+
 /** 군주·재위 전용 (SovereignReign API) — 행정부 재임과 별도 테이블 */
 export interface CreateSovereignReignDto {
   personId: string
@@ -272,6 +301,30 @@ export interface CreateSovereignReignDto {
   endReasonDetail?: string
   notes?: string
   showPositionInfo?: boolean
+}
+
+/** 재위 수정(PUT) 전용 DTO — 비운 값은 명시적 null(해제), 키 없음은 유지 (재임과 동일 계약) */
+export type UpdateSovereignReignDto = Partial<
+  Omit<
+    CreateSovereignReignDto,
+    | 'endDate'
+    | 'termNumber'
+    | 'subTermNumber'
+    | 'regnalNumber'
+    | 'appointmentMethod'
+    | 'endReason'
+    | 'endReasonDetail'
+    | 'notes'
+  >
+> & {
+  endDate?: string | null
+  termNumber?: number | null
+  subTermNumber?: number | null
+  regnalNumber?: number | null
+  appointmentMethod?: CreateSovereignReignDto['appointmentMethod'] | null
+  endReason?: CreateSovereignReignDto['endReason'] | null
+  endReasonDetail?: string | null
+  notes?: string | null
 }
 
 /**
@@ -650,11 +703,11 @@ export const personCareerApi = {
   },
 
   /**
-   * 국가원수/왕위 재임 기록 수정
+   * 국가원수/왕위 재임 기록 수정 — null 필드는 해제(클리어) 의미
    */
   updateGovernmentPositionTenure: async (
     id: string,
-    dto: Partial<CreateGovernmentPositionTenureDto>,
+    dto: UpdateGovernmentPositionTenureDto,
   ) => {
     const response = await apiClient.put(
       `/government-positions/tenures/${id}`,
@@ -678,9 +731,10 @@ export const personCareerApi = {
     return response.data
   },
 
+  /** 군주 재위 수정 — null 필드는 해제(클리어) 의미 */
   updateSovereignReign: async (
     id: string,
-    dto: Partial<CreateSovereignReignDto>,
+    dto: UpdateSovereignReignDto,
   ) => {
     const response = await apiClient.put(
       `/government-positions/sovereign-reigns/${encodeURIComponent(id)}`,

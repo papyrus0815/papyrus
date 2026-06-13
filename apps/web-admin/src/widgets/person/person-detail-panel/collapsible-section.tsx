@@ -130,7 +130,8 @@ const ToggleButton = styled.button`
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
   &:hover {
-    color: ${({ theme }) => theme.colors.primary?.main ?? '#4338ca'};
+    /* theme.colors.primary는 문자열 토큰 */
+    color: ${({ theme }) => theme.colors.primary ?? '#4338ca'};
   }
 `
 

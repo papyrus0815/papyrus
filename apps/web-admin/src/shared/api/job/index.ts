@@ -41,7 +41,7 @@ export const jobApi = {
   },
 
   delete: async (id: string) => {
-    await jobsApi.$delete(apiConnection, id)
+    await jobsApi._delete(apiConnection, id)
   },
 }
 

@@ -68,7 +68,7 @@ export async function updateJob(
  */
 export async function deleteJob(id: string): Promise<void> {
   try {
-    await jobsApi.$delete(apiConnection, id)
+    await jobsApi._delete(apiConnection, id)
   } catch (error) {
     throw error
   }

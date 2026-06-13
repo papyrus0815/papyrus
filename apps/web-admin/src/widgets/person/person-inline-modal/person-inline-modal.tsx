@@ -143,14 +143,25 @@ const Overlay = styled(motion.div)`
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   z-index: ${Z_INDEX.MODAL_OVERLAY};
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding: 32px 16px;
   overflow-y: auto;
+
+  /* blur는 콘텐츠 조상이 아닌 별도 레이어(::before)로 분리.
+     Overlay 자체에 backdrop-filter를 걸면 내부 비포털 fixed 요소
+     (용어 툴팁·중첩 오버레이)의 containing block이 Overlay로 바뀌어
+     작은 뷰포트에서 스크롤 시 좌표가 어긋난다. */
+  &::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    pointer-events: none;
+  }
 `
 
 const Box = styled(motion.div)`

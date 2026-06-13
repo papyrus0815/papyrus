@@ -15,11 +15,85 @@ export type PersonResponseDto = Awaited<
 export type PersonInfographicItemDto = Awaited<
   ReturnType<typeof personsApi.infographic.getAllForInfographic>
 >[number]
-export type CreatePersonDto = Parameters<typeof personsApi.create>[1]
-export type UpdatePersonDto = Parameters<typeof personsApi.update>[2]
+/** SDK 원시 입력 타입 (Primitive<서버 DTO>) — 외부에는 아래 완화 타입을 노출 */
+type SdkCreatePersonDto = Parameters<typeof personsApi.create>[1]
+type SdkUpdatePersonDto = Parameters<typeof personsApi.update>[2]
 
-// Era 타입 추출 (CreatePersonDto에서)
-export type Era = NonNullable<CreatePersonDto['birthEra']>
+/** 기원 — 폼 상태와 호환되는 문자열 리터럴 (서버 Era enum 미러) */
+export type Era = 'BC' | 'AD'
+
+/** 서버 DateInfoDto 미러 — era는 문자열 리터럴 */
+export interface DateInfoInput {
+  era: Era
+  year: number
+  month?: number
+  day?: number
+}
+
+/** 서버 SpouseRelationDto 미러 — note는 런타임에서 null 수용(@IsOptional) */
+export interface SpouseRelationInput {
+  spouseId: string
+  marriageStartDate?: string
+  marriageEndDate?: string
+  note?: string | null
+}
+
+/** 서버 CountryAffiliationDto 미러 — affiliationType은 폼 호환 string */
+export interface CountryAffiliationInput {
+  affiliationType: string
+  countryId?: string
+  historicalCountryId?: string
+  startDate?: string
+  endDate?: string
+  /** 우선순위 (낮을수록 우선, 0은 주 국적 슬롯 — 추가 소속은 1 이상) */
+  priority?: number
+  note?: string
+}
+
+/**
+ * 입력 payload 완화 필드 — 서버 class-validator가 런타임에 null을 수용(@IsOptional/@ValidateIf)
+ * 하거나, enum·중첩 DTO가 폼 상태(string 리터럴)와 어긋나는 필드만 골라 완화.
+ * null = 명시적 해제(수정) 또는 빈값 저장 의도. PATCH 계약: undefined = 변경 없음, null = 해제.
+ */
+interface RelaxedPersonInputFields {
+  surname?: string | null
+  middleName?: string | null
+  gender?: string | null
+  profileImageUrl?: string | null
+  regnalName?: string | null
+  templeName?: string | null
+  posthumousName?: string | null
+  deathType?: string | null
+  birthEra?: Era
+  deathEra?: Era
+  /** 수정 시 null = 출생일·기원(birthDate·birthEra) 해제 */
+  birth?: DateInfoInput | null
+  /** 수정 시 null = 사망일·기원(deathDate·deathEra) 해제 */
+  death?: DateInfoInput | null
+  spouseRelations?: SpouseRelationInput[]
+  countryAffiliations?: CountryAffiliationInput[]
+  sections?: Array<{
+    title: string
+    content: string
+    order?: number
+    sectionType?: string | null
+  }>
+}
+
+/**
+ * 프론트 입력 타입 — SDK Primitive 타입에서 위 필드만 완화.
+ * SDK 타입과의 차이는 호출부 단언으로 통과 (shared/api/person/index.ts와 동일 패턴).
+ */
+export type CreatePersonDto = Omit<
+  SdkCreatePersonDto,
+  keyof RelaxedPersonInputFields
+> &
+  RelaxedPersonInputFields
+export type UpdatePersonDto = Omit<
+  SdkUpdatePersonDto,
+  keyof RelaxedPersonInputFields
+> &
+  RelaxedPersonInputFields
 
 /**
  * 모든 인물 조회
@@ -95,7 +169,11 @@ export async function createPerson(
   data: CreatePersonDto,
 ): Promise<PersonResponseDto> {
   try {
-    const response = (await personsApi.create(getApiConnection(), data)) as any
+    // 완화 타입(null 허용)과 SDK Primitive 타입의 차이는 단언으로 통과 — 런타임은 class-validator가 수용.
+    const response = (await personsApi.create(
+      getApiConnection(),
+      data as unknown as SdkCreatePersonDto,
+    )) as any
     return response.data || response
   } catch (error) {
     throw error
@@ -113,7 +191,7 @@ export async function updatePerson(
     const response = (await personsApi.update(
       getApiConnection(),
       id,
-      data,
+      data as unknown as SdkUpdatePersonDto,
     )) as any
     return response.data || response
   } catch (error) {

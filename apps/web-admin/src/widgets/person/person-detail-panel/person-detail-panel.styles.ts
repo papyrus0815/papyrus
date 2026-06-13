@@ -1138,7 +1138,11 @@ export const UnifiedKindBadge = styled.span<{ $kind: 'tenure' | 'reign' }>`
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: ${({ $kind }) => unifiedKindColor[$kind].base};
+    /* 다크모드: base(진한 색)는 어두운 칩 위에서 저대비 — 텍스트와 동일 토큰 사용 */
+    background: ${({ $kind, theme }) =>
+      theme.mode === 'dark'
+        ? unifiedKindColor[$kind].textDark
+        : unifiedKindColor[$kind].base};
     flex-shrink: 0;
   }
 `
