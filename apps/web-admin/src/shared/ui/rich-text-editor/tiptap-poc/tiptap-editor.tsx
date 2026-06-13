@@ -14,6 +14,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import { StarterKit } from '@tiptap/starter-kit'
 import { Image } from '@tiptap/extension-image'
 import { Placeholder } from '@tiptap/extension-placeholder'
+import { TableKit } from '@tiptap/extension-table'
 
 interface TiptapEditorProps {
   value: string
@@ -34,6 +35,8 @@ export function TiptapEditor({
       Color,
       Image,
       Placeholder.configure({ placeholder }),
+      // TableKit = Table + TableRow + TableHeader + TableCell 번들(v3). resizable 컬럼.
+      TableKit.configure({ table: { resizable: true } }),
     ],
     content: value,
     onUpdate: ({ editor: instance }) => onChange(instance.getHTML()),
@@ -109,6 +112,19 @@ export function TiptapEditor({
           onClick={() => editor.chain().focus().toggleCode().run()}
         >
           {'</>'}
+        </button>
+        <button
+          type="button"
+          aria-label="표 삽입"
+          onClick={() =>
+            editor
+              .chain()
+              .focus()
+              .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+              .run()
+          }
+        >
+          ▦
         </button>
       </div>
       <EditorContent editor={editor} />

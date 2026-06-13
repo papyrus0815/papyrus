@@ -40,6 +40,13 @@ describe('TiptapEditor (TipTap 마이그레이션 PoC)', () => {
     }).not.toThrow()
   })
 
+  it('표 삽입 버튼이 ProseMirror 본문에 표를 추가한다', () => {
+    render(<TiptapEditor value="<p>텍스트</p>" onChange={() => undefined} />)
+    expect(document.querySelector('.ProseMirror table')).toBeNull()
+    fireEvent.click(screen.getByLabelText('표 삽입'))
+    expect(document.querySelector('.ProseMirror table')).not.toBeNull()
+  })
+
   it('value prop이 바뀌면 본문이 동기화된다', () => {
     const { rerender } = render(
       <TiptapEditor value="<p>처음</p>" onChange={() => undefined} />,
