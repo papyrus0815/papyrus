@@ -47,6 +47,30 @@ describe('TiptapEditor (TipTap 마이그레이션 PoC)', () => {
     expect(document.querySelector('.ProseMirror table')).not.toBeNull()
   })
 
+  it('엔티티 연결 버튼이 entity-link 노드를 삽입한다(커스텀 도메인 확장)', () => {
+    render(<TiptapEditor value="<p>텍스트</p>" onChange={() => undefined} />)
+    expect(
+      document.querySelector('.ProseMirror span.entity-link'),
+    ).toBeNull()
+    fireEvent.click(screen.getByLabelText('엔티티 연결'))
+    const span = document.querySelector('.ProseMirror span.entity-link')
+    expect(span).not.toBeNull()
+    expect(span?.getAttribute('data-entity-type')).toBe('person')
+    expect(span?.getAttribute('data-entity-id')).toBe('1')
+    expect(span?.textContent).toBe('나폴레옹')
+  })
+
+  it('기존 entity-link HTML을 파싱·렌더한다(라운드트립 호환)', () => {
+    const html =
+      '<p>황제 <span class="entity-link" data-entity-type="person" ' +
+      'data-entity-id="42" data-entity-name="나폴레옹 보나파르트">나폴레옹</span> 등장</p>'
+    render(<TiptapEditor value={html} onChange={() => undefined} />)
+    const span = document.querySelector('.ProseMirror span.entity-link')
+    expect(span).not.toBeNull()
+    expect(span?.getAttribute('data-entity-id')).toBe('42')
+    expect(span?.textContent).toBe('나폴레옹')
+  })
+
   it('value prop이 바뀌면 본문이 동기화된다', () => {
     const { rerender } = render(
       <TiptapEditor value="<p>처음</p>" onChange={() => undefined} />,
