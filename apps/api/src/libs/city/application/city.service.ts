@@ -1,13 +1,24 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
+import { AggregateType, EventMethod } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
+
+import { PointService } from '../../gamification/application/point.service'
+import { completenessBonus } from '../../gamification/domain/point.policy'
+import { NotificationService } from '../../notification/application/notification.service'
+import { getActorAccountId } from '../../shared/actor-context'
 
 import type {
   AdminDivisionConfigResponseDto,
+  AdminDivisionSchemeResponseDto,
+  AdminDivisionSectionResponseDto,
   AdministrativeDivisionResponseDto,
+  CreateAdminDivisionSchemeBody,
+  UpdateAdminDivisionSchemeBody,
   AdministrativeDivisionSearchResult,
   BulkCreateAdministrativeDivisionsBody,
   BulkCreateResult,
@@ -20,6 +31,14 @@ import type {
 } from '../presentation/city.controller'
 
 /**
+ * 행정구역 소속 — 현대 국가(countryId) 또는 역사적 국가(historicalCountryId) 중 정확히 하나.
+ */
+type DivisionOwner = {
+  countryId: string | null
+  historicalCountryId: string | null
+}
+
+/**
  * City / AdministrativeDivision 도메인 비즈니스 로직.
  *
  * 컨트롤러(CityController)는 HTTP 매핑만 담당하고, 모든 검증·트랜잭션·쿼리는 여기에 모은다.
@@ -27,7 +46,56 @@ import type {
  */
 @Injectable()
 export class CityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+    private readonly pointService: PointService,
+  ) {}
+
+  /**
+   * 행정구역 완성도 신호 수 — 현지어 명칭·명칭 뜻·좌표·설립일.
+   * 채울수록 보너스 점수 (PointService가 콘텐츠당 1회 멱등 처리).
+   */
+  private divisionCompletenessSignals(row: {
+    localName?: string | null
+    nameMeaning?: string | null
+    centerLat?: unknown | null
+    centerLng?: unknown | null
+    establishedDate?: Date | null
+  }): number {
+    return [
+      !!row.localName,
+      !!row.nameMeaning,
+      row.centerLat != null && row.centerLng != null,
+      !!row.establishedDate,
+    ].filter(Boolean).length
+  }
+
+  /** body의 countryId/historicalCountryId에서 소속을 결정 — 정확히 하나만 허용 */
+  private resolveOwner(body: {
+    countryId?: string | null
+    historicalCountryId?: string | null
+  }): DivisionOwner {
+    const countryId = body.countryId ?? null
+    const historicalCountryId = body.historicalCountryId ?? null
+    if (!countryId === !historicalCountryId) {
+      throw new ConflictException(
+        'countryId 또는 historicalCountryId 중 정확히 하나를 지정해야 합니다.',
+      )
+    }
+    return { countryId, historicalCountryId }
+  }
+
+  /** 두 행정구역/단위가 같은 소속(국가)인지 비교 */
+  private isSameOwner(
+    a: { countryId: string | null; historicalCountryId: string | null },
+    b: { countryId: string | null; historicalCountryId: string | null },
+  ): boolean {
+    return (
+      (a.countryId ?? null) === (b.countryId ?? null) &&
+      (a.historicalCountryId ?? null) === (b.historicalCountryId ?? null)
+    )
+  }
 
   /**
    * 행정구역 트리 조회 (N-depth, 모든 자손 포함)
@@ -37,9 +105,16 @@ export class CityService {
    */
   async getAdministrativeDivisions(
     countryId?: string,
+    historicalCountryId?: string,
+    schemeId?: string,
   ): Promise<AdministrativeDivisionResponseDto[]> {
+    const ownerWhere = countryId
+      ? { countryId }
+      : historicalCountryId
+        ? { historicalCountryId }
+        : {}
     const rows = await this.prisma.administrativeDivision.findMany({
-      where: countryId ? { countryId } : undefined,
+      where: { ...ownerWhere, ...(schemeId ? { schemeId } : {}) },
       orderBy: { name: 'asc' },
       include: {
         _count: {
@@ -67,8 +142,10 @@ export class CityService {
       name: string
       localName: string | null
       nameMeaning: string | null
-      countryId: string
+      countryId: string | null
+      historicalCountryId?: string | null
       adminDivisionId: string
+      schemeId?: string | null
       parentId: string | null
       centerLat: { toString(): string } | null
       centerLng: { toString(): string } | null
@@ -84,8 +161,10 @@ export class CityService {
       name: row.name,
       localName: row.localName ?? null,
       nameMeaning: row.nameMeaning ?? null,
-      countryId: row.countryId,
+      countryId: row.countryId ?? null,
+      historicalCountryId: row.historicalCountryId ?? null,
       adminDivisionId: row.adminDivisionId,
+      schemeId: row.schemeId ?? null,
       parentId: row.parentId ?? null,
       centerLat: row.centerLat != null ? Number(row.centerLat) : null,
       centerLng: row.centerLng != null ? Number(row.centerLng) : null,
@@ -105,12 +184,12 @@ export class CityService {
    * parentId가 검증되는 것과 동일한 기준을 predecessor에도 적용한다.
    *
    * @param predecessorId 검증할 이전 행정구역 ID (없으면 통과)
-   * @param countryId 현재 행정구역의 국가
+   * @param owner 현재 행정구역의 소속 국가
    * @param selfId 수정 중인 행정구역 자신의 ID (생성 시 undefined)
    */
   private async validatePredecessor(
     predecessorId: string | null | undefined,
-    countryId: string,
+    owner: DivisionOwner,
     selfId?: string,
   ): Promise<void> {
     if (!predecessorId) return
@@ -125,23 +204,34 @@ export class CityService {
     if (!predecessor) {
       throw new NotFoundException('이전 행정구역을 찾을 수 없습니다.')
     }
-    if (predecessor.countryId !== countryId) {
+    if (!this.isSameOwner(predecessor, owner)) {
       throw new ConflictException('이전 행정구역의 국가가 일치하지 않습니다.')
     }
   }
 
-  /** 국가별 행정구역 단위(레벨) 설정 조회 */
+  /**
+   * 국가별 행정구역 단위(레벨) 설정 조회.
+   * schemeId가 있으면 그 체계 전용 + 체계 공용(schemeId NULL)을 함께 반환.
+   */
   async getAdminDivisionConfigs(
     countryId?: string,
+    historicalCountryId?: string,
+    schemeId?: string,
   ): Promise<AdminDivisionConfigResponseDto[]> {
-    if (!countryId) return []
+    if (!countryId && !historicalCountryId) return []
+    const ownerWhere = countryId ? { countryId } : { historicalCountryId }
     const list = await this.prisma.countryAdminDivisionConfig.findMany({
-      where: { countryId },
+      where: {
+        ...ownerWhere,
+        ...(schemeId ? { OR: [{ schemeId }, { schemeId: null }] } : {}),
+      },
       orderBy: { divisionLevel: 'asc' },
     })
     return list.map((c) => ({
       id: c.id,
-      countryId: c.countryId,
+      countryId: c.countryId ?? null,
+      historicalCountryId: c.historicalCountryId ?? null,
+      schemeId: c.schemeId ?? null,
       divisionLevel: c.divisionLevel,
       divisionLabel: c.divisionLabel,
       description: c.description ?? null,
@@ -152,8 +242,15 @@ export class CityService {
   async createAdminDivisionConfig(
     body: CreateAdminDivisionConfigBody,
   ): Promise<AdminDivisionConfigResponseDto> {
+    const owner = this.resolveOwner(body)
+    if (body.schemeId) await this.validateScheme(body.schemeId, owner)
+    // 중복 검사는 같은 체계 범위 안에서만 — 체계가 다르면 같은 레벨 허용
     const dup = await this.prisma.countryAdminDivisionConfig.findFirst({
-      where: { countryId: body.countryId, divisionLevel: body.divisionLevel },
+      where: {
+        ...owner,
+        schemeId: body.schemeId ?? null,
+        divisionLevel: body.divisionLevel,
+      },
     })
     if (dup) {
       throw new ConflictException(
@@ -162,7 +259,8 @@ export class CityService {
     }
     const row = await this.prisma.countryAdminDivisionConfig.create({
       data: {
-        countryId: body.countryId,
+        ...owner,
+        schemeId: body.schemeId ?? undefined,
         divisionLevel: body.divisionLevel,
         divisionLabel: body.divisionLabel,
         description: body.description ?? undefined,
@@ -170,10 +268,209 @@ export class CityService {
     })
     return {
       id: row.id,
-      countryId: row.countryId,
+      countryId: row.countryId ?? null,
+      historicalCountryId: row.historicalCountryId ?? null,
+      schemeId: row.schemeId ?? null,
       divisionLevel: row.divisionLevel,
       divisionLabel: row.divisionLabel,
       description: row.description ?? null,
+    }
+  }
+
+  /** schemeId 검증 — 존재 + 소속 국가 일치 */
+  private async validateScheme(
+    schemeId: string,
+    owner: DivisionOwner,
+  ): Promise<void> {
+    const scheme = await this.prisma.adminDivisionScheme.findUnique({
+      where: { id: schemeId },
+    })
+    if (!scheme) throw new NotFoundException('체계를 찾을 수 없습니다.')
+    if (!this.isSameOwner(scheme, owner)) {
+      throw new ConflictException('체계의 국가가 일치하지 않습니다.')
+    }
+  }
+
+  /** 행정구역 체계 목록 (all=true면 전체 + 소속 국가 표시명) */
+  async getAdminDivisionSchemes(
+    countryId?: string,
+    historicalCountryId?: string,
+    all = false,
+  ): Promise<AdminDivisionSchemeResponseDto[]> {
+    if (!all && !countryId && !historicalCountryId) return []
+    const rows = await this.prisma.adminDivisionScheme.findMany({
+      where: all
+        ? {}
+        : countryId
+          ? { countryId }
+          : { historicalCountryId },
+      orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
+      include: {
+        _count: { select: { divisions: true } },
+        country: { select: { name: true } },
+        historicalCountry: { select: { name: true } },
+      },
+    })
+    return rows.map((r) => ({
+      id: r.id,
+      countryId: r.countryId ?? null,
+      historicalCountryId: r.historicalCountryId ?? null,
+      name: r.name,
+      description: r.description ?? null,
+      startDate: r.startDate ? r.startDate.toISOString() : null,
+      endDate: r.endDate ? r.endDate.toISOString() : null,
+      divisionCount: r._count.divisions,
+      ownerName: r.country?.name ?? r.historicalCountry?.name ?? null,
+    }))
+  }
+
+  /**
+   * 체계 시행일 파싱 — 빈 값이면 null.
+   * MySQL DATETIME은 기원전(음수 연도)을 저장할 수 없어 명시적으로 거부한다.
+   */
+  private parseSchemeDate(
+    value: string | null | undefined,
+    label: string,
+  ): Date | null {
+    if (!value) return null
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    if (trimmed.startsWith('-')) {
+      throw new BadRequestException(
+        `${label}에 기원전 날짜는 저장할 수 없습니다 — 비워 두세요.`,
+      )
+    }
+    const date = new Date(trimmed)
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException(`${label} 형식이 올바르지 않습니다.`)
+    }
+    return date
+  }
+
+  /** 체계 이름 정리 — 공백뿐인 이름 거부 */
+  private normalizeSchemeName(name: string): string {
+    const trimmed = name.trim()
+    if (!trimmed) {
+      throw new BadRequestException('체계 이름을 입력해 주세요.')
+    }
+    return trimmed
+  }
+
+  /** 시행 시작일 <= 종료일 검증 */
+  private assertSchemeDateRange(
+    startDate: Date | null,
+    endDate: Date | null,
+  ): void {
+    if (startDate && endDate && startDate > endDate) {
+      throw new BadRequestException('시행 종료일은 시작일 이후여야 합니다.')
+    }
+  }
+
+  /** 행정구역 체계 생성 */
+  async createAdminDivisionScheme(
+    body: CreateAdminDivisionSchemeBody,
+  ): Promise<AdminDivisionSchemeResponseDto> {
+    const owner = this.resolveOwner(body)
+    const startDate = this.parseSchemeDate(body.startDate, '시행 시작일')
+    const endDate = this.parseSchemeDate(body.endDate, '시행 종료일')
+    this.assertSchemeDateRange(startDate, endDate)
+    const row = await this.prisma.adminDivisionScheme.create({
+      data: {
+        ...owner,
+        name: this.normalizeSchemeName(body.name),
+        description: body.description ?? undefined,
+        startDate: startDate ?? undefined,
+        endDate: endDate ?? undefined,
+      },
+    })
+    await this.notificationService.notifyAdministrativeDivision(
+      `${row.name} 체계`,
+      EventMethod.CREATE,
+      row.id,
+    )
+    return {
+      id: row.id,
+      countryId: row.countryId ?? null,
+      historicalCountryId: row.historicalCountryId ?? null,
+      name: row.name,
+      description: row.description ?? null,
+      startDate: row.startDate ? row.startDate.toISOString() : null,
+      endDate: row.endDate ? row.endDate.toISOString() : null,
+      divisionCount: 0,
+    }
+  }
+
+  /** 행정구역 체계 수정 */
+  async updateAdminDivisionScheme(
+    id: string,
+    body: UpdateAdminDivisionSchemeBody,
+  ): Promise<AdminDivisionSchemeResponseDto> {
+    const current = await this.prisma.adminDivisionScheme.findUnique({
+      where: { id },
+    })
+    if (!current) throw new NotFoundException('체계를 찾을 수 없습니다.')
+    // 변경 후 시행 기간이 유효한지 — 한쪽만 바뀌어도 기존 값과 교차 검증
+    const nextStartDate =
+      body.startDate !== undefined
+        ? this.parseSchemeDate(body.startDate, '시행 시작일')
+        : current.startDate
+    const nextEndDate =
+      body.endDate !== undefined
+        ? this.parseSchemeDate(body.endDate, '시행 종료일')
+        : current.endDate
+    this.assertSchemeDateRange(nextStartDate, nextEndDate)
+    const row = await this.prisma.adminDivisionScheme.update({
+      where: { id },
+      data: {
+        ...(body.name != null && { name: this.normalizeSchemeName(body.name) }),
+        ...(body.description !== undefined && {
+          description: body.description,
+        }),
+        ...(body.startDate !== undefined && { startDate: nextStartDate }),
+        ...(body.endDate !== undefined && { endDate: nextEndDate }),
+      },
+      include: { _count: { select: { divisions: true } } },
+    })
+    await this.notificationService.notifyAdministrativeDivision(
+      `${row.name} 체계`,
+      EventMethod.UPDATE,
+      row.id,
+    )
+    return {
+      id: row.id,
+      countryId: row.countryId ?? null,
+      historicalCountryId: row.historicalCountryId ?? null,
+      name: row.name,
+      description: row.description ?? null,
+      startDate: row.startDate ? row.startDate.toISOString() : null,
+      endDate: row.endDate ? row.endDate.toISOString() : null,
+      divisionCount: row._count.divisions,
+    }
+  }
+
+  /** 행정구역 체계 삭제 — 소속 구역이나 체계 전용 단위가 있으면 거부 */
+  async deleteAdminDivisionScheme(id: string): Promise<void> {
+    const divCount = await this.prisma.administrativeDivision.count({
+      where: {
+        OR: [{ schemeId: id }, { adminDivisionConfig: { schemeId: id } }],
+      },
+    })
+    if (divCount > 0) {
+      throw new ConflictException(
+        `이 체계에 등록된 행정구역이 ${divCount}개 있어 삭제할 수 없습니다. 먼저 구역을 삭제하거나 다른 체계로 옮기세요.`,
+      )
+    }
+    const row = await this.prisma.adminDivisionScheme.findUnique({
+      where: { id },
+      select: { name: true },
+    })
+    await this.prisma.adminDivisionScheme.delete({ where: { id } })
+    if (row) {
+      await this.notificationService.notifyAdministrativeDivision(
+        `${row.name} 체계`,
+        EventMethod.DELETE,
+        id,
+      )
     }
   }
 
@@ -191,9 +488,12 @@ export class CityService {
       body.divisionLevel != null &&
       body.divisionLevel !== current.divisionLevel
     ) {
+      // 중복 검사는 같은 체계 범위 안에서만 — 생성 경로와 동일 (수정으로 체계는 못 바꿈)
       const dup = await this.prisma.countryAdminDivisionConfig.findFirst({
         where: {
           countryId: current.countryId,
+          historicalCountryId: current.historicalCountryId,
+          schemeId: current.schemeId ?? null,
           divisionLevel: body.divisionLevel,
           NOT: { id },
         },
@@ -215,7 +515,8 @@ export class CityService {
     })
     return {
       id: row.id,
-      countryId: row.countryId,
+      countryId: row.countryId ?? null,
+      historicalCountryId: row.historicalCountryId ?? null,
       divisionLevel: row.divisionLevel,
       divisionLabel: row.divisionLabel,
       description: row.description ?? null,
@@ -249,13 +550,18 @@ export class CityService {
   async createAdministrativeDivision(
     body: CreateAdministrativeDivisionBody,
   ): Promise<AdministrativeDivisionResponseDto> {
+    const owner = this.resolveOwner(body)
+    if (body.schemeId) await this.validateScheme(body.schemeId, owner)
     const config = await this.prisma.countryAdminDivisionConfig.findUnique({
       where: { id: body.adminDivisionId },
     })
     if (!config) throw new NotFoundException('단위를 찾을 수 없습니다.')
-    if (config.countryId !== body.countryId) {
+    if (!this.isSameOwner(config, owner)) {
       throw new ConflictException('단위의 국가가 일치하지 않습니다.')
     }
+
+    // 체계 결정 — 명시값 우선, 미지정이면 부모의 체계를 상속 (트리 한 그루 = 한 체계)
+    let effectiveSchemeId: string | null = body.schemeId ?? null
 
     if (body.parentId) {
       const parent = await this.prisma.administrativeDivision.findUnique({
@@ -264,12 +570,19 @@ export class CityService {
       })
       if (!parent)
         throw new NotFoundException('상위 행정구역을 찾을 수 없습니다.')
-      if (parent.countryId !== body.countryId) {
+      if (!this.isSameOwner(parent, owner)) {
         throw new ConflictException('상위 행정구역의 국가가 일치하지 않습니다.')
       }
       if (parent.adminDivisionConfig.divisionLevel + 1 !== config.divisionLevel) {
         throw new ConflictException(
           `상위(${parent.adminDivisionConfig.divisionLevel}차) 바로 아래 단위는 ${parent.adminDivisionConfig.divisionLevel + 1}차여야 합니다.`,
+        )
+      }
+      if (body.schemeId == null) {
+        effectiveSchemeId = parent.schemeId ?? null
+      } else if ((parent.schemeId ?? null) !== body.schemeId) {
+        throw new ConflictException(
+          '상위 행정구역과 같은 체계에 속해야 합니다.',
         )
       }
     } else {
@@ -281,9 +594,18 @@ export class CityService {
       }
     }
 
+    // 체계 전용 단위는 같은 체계의 행정구역에만 사용 가능 (공용 단위는 어디서나 가능)
+    if (config.schemeId != null && config.schemeId !== effectiveSchemeId) {
+      throw new ConflictException(
+        '단위의 체계가 일치하지 않습니다. 같은 체계(또는 공용) 단위를 사용하세요.',
+      )
+    }
+
+    // 중복 검사는 같은 체계 범위 안에서만 — 다른 체계의 동명 구역(예: 팔도제/13도제의 경기도) 허용
     const dup = await this.prisma.administrativeDivision.findFirst({
       where: {
-        countryId: body.countryId,
+        ...owner,
+        schemeId: effectiveSchemeId ?? null,
         parentId: body.parentId ?? null,
         name: body.name,
       },
@@ -294,12 +616,13 @@ export class CityService {
       )
     }
 
-    await this.validatePredecessor(body.predecessorId, body.countryId)
+    await this.validatePredecessor(body.predecessorId, owner)
 
     const row = await this.prisma.administrativeDivision.create({
       data: {
-        countryId: body.countryId,
+        ...owner,
         adminDivisionId: body.adminDivisionId,
+        schemeId: effectiveSchemeId ?? undefined,
         name: body.name,
         localName: body.localName ?? undefined,
         nameMeaning: body.nameMeaning ?? undefined,
@@ -315,6 +638,19 @@ export class CityService {
         predecessorId: body.predecessorId ?? undefined,
       },
     })
+
+    await this.notificationService.notifyAdministrativeDivision(
+      row.name,
+      EventMethod.CREATE,
+      row.id,
+    )
+    await this.pointService.awardForCreate(
+      getActorAccountId(),
+      AggregateType.ADMINISTRATIVE_DIVISION,
+      row.id,
+      completenessBonus(this.divisionCompletenessSignals(row)),
+    )
+
     return this.toAdminDivisionDto(row as any, [])
   }
 
@@ -325,12 +661,19 @@ export class CityService {
     q?: string,
     countryId?: string,
     limitStr?: string,
+    historicalCountryId?: string,
+    schemeId?: string,
   ): Promise<AdministrativeDivisionSearchResult[]> {
     if (!q || q.trim().length < 1) return []
     const limit = Math.min(200, Math.max(1, Number(limitStr) || 20))
     const rows = await this.prisma.administrativeDivision.findMany({
       where: {
-        ...(countryId ? { countryId } : {}),
+        ...(countryId
+          ? { countryId }
+          : historicalCountryId
+            ? { historicalCountryId }
+            : {}),
+        ...(schemeId ? { schemeId } : {}),
         OR: [
           { name: { contains: q.trim() } },
           { localName: { contains: q.trim() } },
@@ -381,7 +724,9 @@ export class CityService {
         id: r.id,
         name: r.name,
         localName: r.localName ?? null,
-        countryId: r.countryId,
+        countryId: r.countryId ?? null,
+        historicalCountryId: r.historicalCountryId ?? null,
+        schemeId: r.schemeId ?? null,
         divisionLevel: r.adminDivisionConfig.divisionLevel,
         divisionLabel: r.adminDivisionConfig.divisionLabel,
         parentPath: path,
@@ -405,6 +750,12 @@ export class CityService {
     if (!body.items?.length)
       return { created: 0, createdItems: [], skipped: [] }
 
+    const owner = this.resolveOwner(body)
+    if (body.schemeId) await this.validateScheme(body.schemeId, owner)
+
+    // 체계 결정 — 명시값 우선, 미지정이면 부모의 체계를 상속
+    let effectiveSchemeId: string | null = body.schemeId ?? null
+
     // 부모 검증
     if (body.parentId) {
       const parent = await this.prisma.administrativeDivision.findUnique({
@@ -413,12 +764,19 @@ export class CityService {
       })
       if (!parent)
         throw new NotFoundException('상위 행정구역을 찾을 수 없습니다.')
-      if (parent.countryId !== body.countryId) {
+      if (!this.isSameOwner(parent, owner)) {
         throw new ConflictException('상위 행정구역의 국가가 일치하지 않습니다.')
       }
       if (parent.adminDivisionConfig.divisionLevel + 1 !== body.divisionLevel) {
         throw new ConflictException(
           `상위(${parent.adminDivisionConfig.divisionLevel}차) 바로 아래 단위는 ${parent.adminDivisionConfig.divisionLevel + 1}차여야 합니다.`,
+        )
+      }
+      if (body.schemeId == null) {
+        effectiveSchemeId = parent.schemeId ?? null
+      } else if ((parent.schemeId ?? null) !== body.schemeId) {
+        throw new ConflictException(
+          '상위 행정구역과 같은 체계에 속해야 합니다.',
         )
       }
     } else if (body.divisionLevel !== 1) {
@@ -429,13 +787,14 @@ export class CityService {
 
     // 단위 결정 + 항목 생성을 한 트랜잭션으로 묶는다.
     // (자동 생성한 config나 일부 항목만 남고 나머지가 실패하는 부분 커밋 방지)
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 단위 결정 — adminDivisionId 우선, 없으면 (countryId, divisionLevel)로 찾고, 그래도 없으면 새로 만듦
       let configId = body.adminDivisionId ?? null
       if (!configId) {
         const existing = await tx.countryAdminDivisionConfig.findFirst({
           where: {
-            countryId: body.countryId,
+            ...owner,
+            schemeId: effectiveSchemeId,
             divisionLevel: body.divisionLevel,
           },
         })
@@ -444,7 +803,8 @@ export class CityService {
         } else if (body.divisionLabel?.trim()) {
           const created = await tx.countryAdminDivisionConfig.create({
             data: {
-              countryId: body.countryId,
+              ...owner,
+              schemeId: effectiveSchemeId ?? undefined,
               divisionLevel: body.divisionLevel,
               divisionLabel: body.divisionLabel.trim(),
             },
@@ -460,18 +820,25 @@ export class CityService {
           where: { id: configId },
         })
         if (!cfg) throw new NotFoundException('단위를 찾을 수 없습니다.')
-        if (cfg.countryId !== body.countryId) {
+        if (!this.isSameOwner(cfg, owner)) {
           throw new ConflictException('단위의 국가가 일치하지 않습니다.')
         }
         if (cfg.divisionLevel !== body.divisionLevel) {
           throw new ConflictException('단위 레벨이 일치하지 않습니다.')
         }
+        // 체계 전용 단위는 같은 체계의 행정구역에만 사용 가능 (공용 단위는 어디서나 가능)
+        if (cfg.schemeId != null && cfg.schemeId !== effectiveSchemeId) {
+          throw new ConflictException(
+            '단위의 체계가 일치하지 않습니다. 같은 체계(또는 공용) 단위를 사용하세요.',
+          )
+        }
       }
 
-      // 같은 부모 아래의 기존 이름 모음 — 중복 검사용
+      // 같은 부모·같은 체계 아래의 기존 이름 모음 — 중복 검사용
       const existingSiblings = await tx.administrativeDivision.findMany({
         where: {
-          countryId: body.countryId,
+          ...owner,
+          schemeId: effectiveSchemeId ?? null,
           parentId: body.parentId ?? null,
         },
         select: { name: true },
@@ -499,8 +866,9 @@ export class CityService {
         seen.add(name)
         const row = await tx.administrativeDivision.create({
           data: {
-            countryId: body.countryId,
+            ...owner,
             adminDivisionId: configId!,
+            schemeId: effectiveSchemeId ?? undefined,
             parentId: body.parentId ?? undefined,
             name,
             localName: item.localName ?? undefined,
@@ -514,6 +882,27 @@ export class CityService {
 
       return { created: createdItems.length, createdItems, skipped }
     })
+
+    // 알림(요약 1건) + 항목별 점수 적립 — 트랜잭션 커밋 후에만
+    if (result.createdItems.length > 0) {
+      const first = result.createdItems[0]!
+      const label =
+        result.createdItems.length === 1
+          ? first.name
+          : `${first.name} 외 ${result.createdItems.length - 1}개`
+      await this.notificationService.notifyAdministrativeDivision(
+        label,
+        EventMethod.CREATE,
+        first.id,
+      )
+      await this.pointService.awardForCreateMany(
+        getActorAccountId(),
+        AggregateType.ADMINISTRATIVE_DIVISION,
+        result.createdItems.map((item) => item.id),
+      )
+    }
+
+    return result
   }
 
   /** 행정구역 수정 */
@@ -537,7 +926,7 @@ export class CityService {
         where: { id: body.adminDivisionId },
       })
       if (!newConfig) throw new NotFoundException('단위를 찾을 수 없습니다.')
-      if (newConfig.countryId !== current.countryId) {
+      if (!this.isSameOwner(newConfig, current)) {
         throw new ConflictException('단위의 국가가 일치하지 않습니다.')
       }
       // 레벨이 바뀌면 자식들의 (부모레벨+1=자식레벨) 불변식이 깨진다.
@@ -560,6 +949,8 @@ export class CityService {
     // 부모 변경 시 검증
     const nextParentId =
       body.parentId === undefined ? current.parentId : body.parentId
+    const nextSchemeId =
+      body.schemeId !== undefined ? body.schemeId : (current.schemeId ?? null)
     if (nextParentId === id) {
       throw new ConflictException('자기 자신을 상위로 지정할 수 없습니다.')
     }
@@ -570,7 +961,7 @@ export class CityService {
       })
       if (!parent)
         throw new NotFoundException('상위 행정구역을 찾을 수 없습니다.')
-      if (parent.countryId !== current.countryId) {
+      if (!this.isSameOwner(parent, current)) {
         throw new ConflictException('상위 행정구역의 국가가 일치하지 않습니다.')
       }
       if (
@@ -581,8 +972,23 @@ export class CityService {
           `상위(${parent.adminDivisionConfig.divisionLevel}차) 바로 아래 단위는 ${parent.adminDivisionConfig.divisionLevel + 1}차여야 합니다.`,
         )
       }
+      if ((parent.schemeId ?? null) !== (nextSchemeId ?? null)) {
+        throw new ConflictException(
+          '상위 행정구역과 같은 체계에 속해야 합니다. 최상위 구역의 체계를 바꾸면 하위가 함께 이동합니다.',
+        )
+      }
     } else if (nextConfig.divisionLevel !== 1) {
       throw new ConflictException('상위가 없는 행정구역은 1차 단위여야 합니다.')
+    }
+
+    // 체계 전용 단위는 (변경 후) 같은 체계의 행정구역에만 사용 가능 (공용 단위는 어디서나 가능)
+    if (
+      nextConfig.schemeId != null &&
+      nextConfig.schemeId !== (nextSchemeId ?? null)
+    ) {
+      throw new ConflictException(
+        '단위의 체계가 일치하지 않습니다. 같은 체계(또는 공용) 단위를 사용하세요.',
+      )
     }
 
     const nextName = body.name ?? current.name
@@ -590,9 +996,12 @@ export class CityService {
       nextName !== current.name ||
       (body.parentId !== undefined && nextParentId !== current.parentId)
     ) {
+      // 중복 검사는 (변경 후) 같은 체계 범위 안에서만 — 다른 체계의 동명 구역 허용
       const dup = await this.prisma.administrativeDivision.findFirst({
         where: {
           countryId: current.countryId,
+          historicalCountryId: current.historicalCountryId,
+          schemeId: nextSchemeId ?? null,
           parentId: nextParentId ?? null,
           name: nextName,
           NOT: { id },
@@ -606,42 +1015,169 @@ export class CityService {
     }
 
     if (body.predecessorId !== undefined) {
-      await this.validatePredecessor(body.predecessorId, current.countryId, id)
+      await this.validatePredecessor(
+        body.predecessorId,
+        {
+          countryId: current.countryId,
+          historicalCountryId: current.historicalCountryId,
+        },
+        id,
+      )
     }
 
-    const row = await this.prisma.administrativeDivision.update({
-      where: { id },
-      data: {
-        ...(body.name != null && { name: body.name }),
-        ...(body.localName !== undefined && { localName: body.localName }),
-        ...(body.nameMeaning !== undefined && { nameMeaning: body.nameMeaning }),
-        ...(body.parentId !== undefined && { parentId: body.parentId }),
-        ...(body.adminDivisionId != null && {
-          adminDivisionId: body.adminDivisionId,
-        }),
-        ...(body.centerLat !== undefined && { centerLat: body.centerLat }),
-        ...(body.centerLng !== undefined && { centerLng: body.centerLng }),
-        ...(body.establishedDate !== undefined && {
-          establishedDate: body.establishedDate
-            ? new Date(body.establishedDate)
-            : null,
-        }),
-        ...(body.abolishedDate !== undefined && {
-          abolishedDate: body.abolishedDate
-            ? new Date(body.abolishedDate)
-            : null,
-        }),
-        ...(body.predecessorId !== undefined && {
-          predecessorId: body.predecessorId,
-        }),
-      },
+    if (body.schemeId != null) {
+      await this.validateScheme(body.schemeId, {
+        countryId: current.countryId,
+        historicalCountryId: current.historicalCountryId,
+      })
+    }
+
+    // 본체 수정 + 체계 변경 하위 동반 이동 + 섹션 교체를 한 트랜잭션으로 —
+    // 중간 실패 시 한 트리가 두 체계에 걸치거나 섹션만 유실되는 부분 커밋 방지
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.administrativeDivision.update({
+        where: { id },
+        data: {
+          ...(body.name != null && { name: body.name }),
+          ...(body.localName !== undefined && { localName: body.localName }),
+          ...(body.nameMeaning !== undefined && {
+            nameMeaning: body.nameMeaning,
+          }),
+          ...(body.parentId !== undefined && { parentId: body.parentId }),
+          ...(body.adminDivisionId != null && {
+            adminDivisionId: body.adminDivisionId,
+          }),
+          ...(body.centerLat !== undefined && { centerLat: body.centerLat }),
+          ...(body.centerLng !== undefined && { centerLng: body.centerLng }),
+          ...(body.establishedDate !== undefined && {
+            establishedDate: body.establishedDate
+              ? new Date(body.establishedDate)
+              : null,
+          }),
+          ...(body.abolishedDate !== undefined && {
+            abolishedDate: body.abolishedDate
+              ? new Date(body.abolishedDate)
+              : null,
+          }),
+          ...(body.predecessorId !== undefined && {
+            predecessorId: body.predecessorId,
+          }),
+          ...(body.schemeId !== undefined && { schemeId: body.schemeId }),
+        },
+      })
+
+      // 체계 변경 시 하위 트리 전체 동반 이동 — 한 트리가 두 체계에 걸치지 않도록
+      if (
+        body.schemeId !== undefined &&
+        (body.schemeId ?? null) !== (current.schemeId ?? null)
+      ) {
+        let frontier: string[] = [id]
+        while (frontier.length > 0) {
+          const children = await tx.administrativeDivision.findMany({
+            where: { parentId: { in: frontier } },
+            select: { id: true },
+          })
+          if (children.length === 0) break
+          const ids = children.map((c) => c.id)
+          await tx.administrativeDivision.updateMany({
+            where: { id: { in: ids } },
+            data: { schemeId: body.schemeId },
+          })
+          frontier = ids
+        }
+      }
+
+      // 서술 섹션 전체 교체 — EventSection과 동일한 delete-and-recreate
+      if (body.sections !== undefined) {
+        await tx.administrativeDivisionSection.deleteMany({
+          where: { administrativeDivisionId: id },
+        })
+        if (body.sections.length > 0) {
+          await tx.administrativeDivisionSection.createMany({
+            data: body.sections.map((s, index) => ({
+              administrativeDivisionId: id,
+              title: s.title,
+              content: s.content,
+              order: s.order !== undefined ? s.order : index,
+            })),
+          })
+        }
+      }
+
+      return updated
     })
+
+    await this.notificationService.notifyAdministrativeDivision(
+      row.name,
+      EventMethod.UPDATE,
+      row.id,
+    )
+    // 수정으로 필드를 채웠으면 완성도 보너스 (콘텐츠당 1회 멱등)
+    await this.pointService.awardCompletenessBonus(
+      getActorAccountId(),
+      AggregateType.ADMINISTRATIVE_DIVISION,
+      id,
+      completenessBonus(this.divisionCompletenessSignals(row)),
+    )
+    // 설립일이 바뀌면 세기별 리더보드 귀속도 다시 스탬프
+    if (body.establishedDate !== undefined) {
+      await this.pointService.restampContentCentury(
+        AggregateType.ADMINISTRATIVE_DIVISION,
+        id,
+      )
+    }
+
     return this.toAdminDivisionDto(row as any, [])
   }
 
-  /** 행정구역 삭제 (자식은 cascade로 함께 삭제됨) */
+  /** 행정구역 서술 섹션 조회 (order 순) */
+  async getAdministrativeDivisionSections(
+    id: string,
+  ): Promise<AdminDivisionSectionResponseDto[]> {
+    const rows = await this.prisma.administrativeDivisionSection.findMany({
+      where: { administrativeDivisionId: id },
+      orderBy: { order: 'asc' },
+    })
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      content: r.content,
+      order: r.order,
+    }))
+  }
+
+  /** 행정구역 삭제 (자식은 cascade로 함께 삭제됨 — 하위 포함 점수 회수) */
   async deleteAdministrativeDivision(id: string): Promise<void> {
+    const root = await this.prisma.administrativeDivision.findUnique({
+      where: { id },
+      select: { id: true, name: true },
+    })
+    if (!root) throw new NotFoundException('행정구역을 찾을 수 없습니다.')
+
+    // cascade로 함께 지워질 하위 ID를 미리 수집 (점수 회수 대상)
+    const allIds: string[] = [id]
+    let frontier: string[] = [id]
+    while (frontier.length > 0) {
+      const children = await this.prisma.administrativeDivision.findMany({
+        where: { parentId: { in: frontier } },
+        select: { id: true },
+      })
+      if (children.length === 0) break
+      frontier = children.map((c) => c.id)
+      allIds.push(...frontier)
+    }
+
     await this.prisma.administrativeDivision.delete({ where: { id } })
+
+    await this.notificationService.notifyAdministrativeDivision(
+      root.name,
+      EventMethod.DELETE,
+      id,
+    )
+    await this.pointService.revokeForRecordMany(
+      AggregateType.ADMINISTRATIVE_DIVISION,
+      allIds,
+    )
   }
 
   /** DB 도시 검색 (이름 부분 일치) */

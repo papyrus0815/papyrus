@@ -22,12 +22,12 @@ export class UpdateHistoricalCountryDto {
   name?: string
 
   /**
-   * 국가명 (영문)
+   * 국가명 (영문). null이면 비움
    * @example "Joseon"
    */
   @IsOptional()
   @IsString()
-  enName?: string
+  enName?: string | null
 
   /**
    * 국가명 유래 (어원·명칭 유래 설명)

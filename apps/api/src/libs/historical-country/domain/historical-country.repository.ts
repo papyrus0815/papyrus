@@ -44,7 +44,7 @@ export interface CreateHistoricalCountryData {
  */
 export interface UpdateHistoricalCountryData {
   name?: string
-  enName?: string
+  enName?: string | null
   nameOrigin?: string | null
   description?: string | null
   history?: string | null
