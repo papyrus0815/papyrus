@@ -10,6 +10,8 @@ export interface NotificationMessage {
   unread?: boolean
   /** 알림 대상 리소스 타입 (표시용: 인물, 국가 등) */
   ownerType?: string
+  /** 변경의 초점이 된 하위 리소스 (보조 칩: 전기·경력 등) */
+  subResourceType?: string
   /** 변경을 수행한 사용자 표시명 (없으면 미표시) */
   actorName?: string
   /** 알림 대상 레코드 ID (상세 페이지 이동용) */
@@ -37,15 +39,16 @@ export const useNotificationStore = create<NotificationState & NotificationActio
     try {
       const list = await notificationsApi.getList()
       set({
-        messages: list.map((n) => ({
-          id: n.id,
-          title: n.title,
-          preview: n.preview,
-          time: n.time,
-          unread: n.unread,
-          ownerType: n.ownerType,
-          actorName: n.actorName,
-          recordId: n.recordId,
+        messages: list.map((item) => ({
+          id: item.id,
+          title: item.title,
+          preview: item.preview,
+          time: item.time,
+          unread: item.unread,
+          ownerType: item.ownerType,
+          subResourceType: item.subResourceType,
+          actorName: item.actorName,
+          recordId: item.recordId,
         })),
       })
     } catch {
@@ -58,7 +61,7 @@ export const useNotificationStore = create<NotificationState & NotificationActio
   markAllRead: async () => {
     // 낙관적 업데이트: 서버 응답과 무관하게 즉시 읽음 처리 (실패해도 로컬 유지)
     set((state) => ({
-      messages: state.messages.map((m) => ({ ...m, unread: false })),
+      messages: state.messages.map((message) => ({ ...message, unread: false })),
     }))
     try {
       await notificationsApi.markAllRead()
@@ -70,8 +73,8 @@ export const useNotificationStore = create<NotificationState & NotificationActio
   markOneRead: async (id: string) => {
     // 낙관적 업데이트: 즉시 해당 항목을 읽음 처리 (실패해도 로컬 유지)
     set((state) => ({
-      messages: state.messages.map((m) =>
-        m.id === id ? { ...m, unread: false } : m,
+      messages: state.messages.map((message) =>
+        message.id === id ? { ...message, unread: false } : message,
       ),
     }))
     try {

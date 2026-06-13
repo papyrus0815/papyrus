@@ -95,6 +95,17 @@ export class NotificationService {
     })
   }
 
+  /** 행정구역(구역·체계) CRUD 알림 */
+  notifyAdministrativeDivision(entityLabel: string, method: EventMethod, recordId?: string, preview?: string): Promise<NotificationRecord> {
+    return this.create({
+      entityLabel,
+      method,
+      ownerType: AggregateType.ADMINISTRATIVE_DIVISION,
+      recordId,
+      preview,
+    })
+  }
+
   /** 사건 CRUD 알림 */
   notifyEvent(entityLabel: string, method: EventMethod, recordId?: string, preview?: string): Promise<NotificationRecord> {
     return this.create({
@@ -128,15 +139,22 @@ export class NotificationService {
     })
   }
 
+  /** 공유 피드 — read 여부는 요청 계정(ALS) 기준으로 계산. */
   findMany(options?: { limit?: number; unreadOnly?: boolean }): Promise<NotificationRecord[]> {
-    return this.notificationRepository.findMany(options)
+    return this.notificationRepository.findMany(getActorAccountId(), options)
   }
 
+  /** 요청 계정 기준 읽음 처리 (비로그인/시스템 컨텍스트면 무시). */
   markRead(id: string): Promise<void> {
-    return this.notificationRepository.markRead(id)
+    const accountId = getActorAccountId()
+    if (!accountId) return Promise.resolve()
+    return this.notificationRepository.markRead(accountId, id)
   }
 
+  /** 요청 계정 기준 모두 읽음 (다른 계정 상태엔 영향 없음). */
   markAllRead(): Promise<void> {
-    return this.notificationRepository.markAllRead()
+    const accountId = getActorAccountId()
+    if (!accountId) return Promise.resolve()
+    return this.notificationRepository.markAllRead(accountId)
   }
 }

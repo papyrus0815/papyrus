@@ -2,43 +2,11 @@ import styled, { keyframes } from 'styled-components'
 
 import {
   getNotificationEntityTypeLabel,
+  getNotificationSubResourceLabel,
   type NotificationMessage,
 } from '@/entities/notification'
 
-// 메시지 시간 포맷 (ISO 또는 임의 문자열 → 읽기 쉬운 형식)
-function formatMessageTime(isoOrText: string): string {
-  if (!isoOrText || typeof isoOrText !== 'string') return ''
-  const text = isoOrText.trim()
-  if (!text) return ''
-  const parsed = new Date(text)
-  if (Number.isNaN(parsed.getTime()))
-    return text.length > 20 ? text.slice(0, 16) + '…' : text
-  const now = new Date()
-  const today = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  ).getTime()
-  const yesterday = today - 86400000
-  const dateOnly = new Date(
-    parsed.getFullYear(),
-    parsed.getMonth(),
-    parsed.getDate(),
-  ).getTime()
-  if (dateOnly === today) {
-    const hours = parsed.getHours()
-    const minutes = parsed.getMinutes()
-    const mm = minutes.toString().padStart(2, '0')
-    if (hours < 12) return `오전 ${hours}:${mm}`
-    if (hours === 12) return `오후 12:${mm}`
-    return `오후 ${hours - 12}:${mm}`
-  }
-  if (dateOnly === yesterday) return '어제'
-  if (parsed.getFullYear() === now.getFullYear()) {
-    return `${parsed.getMonth() + 1}월 ${parsed.getDate()}일`
-  }
-  return `${parsed.getFullYear()}. ${parsed.getMonth() + 1}. ${parsed.getDate()}`
-}
+// 시간 문자열은 서버(또는 게이미피케이션)에서 이미 사람이 읽기 좋은 형태로 포맷되어 오므로 그대로 표시한다.
 
 interface NotificationPanelBodyProps {
   messages: NotificationMessage[]
@@ -94,6 +62,7 @@ export function NotificationPanelBody({
 
         {messages.map((msg) => {
           const typeLabel = getNotificationEntityTypeLabel(msg.ownerType)
+          const subLabel = getNotificationSubResourceLabel(msg.subResourceType)
           return (
             <MessageItem key={msg.id} role="listitem">
               <MessageRow $unread={!!msg.unread} onClick={() => onSelect(msg)}>
@@ -101,13 +70,14 @@ export function NotificationPanelBody({
                 <MessageBody>
                   <MessageTitleRow>
                     {typeLabel && <EntityTypeChip>{typeLabel}</EntityTypeChip>}
+                    {subLabel && <SubResourceChip>{subLabel}</SubResourceChip>}
                     <MessageTitle>{String(msg.title ?? '')}</MessageTitle>
                   </MessageTitleRow>
                   {msg.preview && (
                     <MessagePreview>{String(msg.preview)}</MessagePreview>
                   )}
                   <MessageMeta>
-                    {formatMessageTime(msg.time)}
+                    {msg.time}
                     {msg.actorName ? ` · ${msg.actorName}` : ''}
                   </MessageMeta>
                 </MessageBody>
@@ -320,6 +290,18 @@ const EntityTypeChip = styled.span`
   font-weight: 600;
   color: ${({ theme }) => theme.colors.primary};
   background: ${({ theme }) => theme.colors.activeLight};
+  flex-shrink: 0;
+`
+
+// 하위 리소스(전기·경력 등) 보조 칩 — 기본 엔티티 칩보다 옅게.
+const SubResourceChip = styled.span`
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.secondary};
   flex-shrink: 0;
 `
 

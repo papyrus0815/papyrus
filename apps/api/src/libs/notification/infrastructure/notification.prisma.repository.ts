@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
-import { EventMethod, NotificationSubResource } from '@prisma/client'
+import { AggregateType, EventMethod, NotificationSubResource } from '@prisma/client'
 import type { CreateNotificationData, INotificationRepository, NotificationRecord } from '../domain/notification.repository'
 
 @Injectable()
@@ -12,9 +12,10 @@ export class NotificationPrismaRepository implements INotificationRepository {
   private static readonly RETENTION_MAX_DAYS = 90
 
   async create(data: CreateNotificationData): Promise<NotificationRecord> {
-    // 옵션 1) 같은 레코드의 미확인 수정 알림이 이미 있으면 새 행 대신 시간·내용만 갱신해 목록 도배 방지.
-    //         CREATE/DELETE는 항상 개별 생성하고, 사용자가 한 번 읽은 뒤의 수정은 다시 새 알림으로 뜬다.
+    // 옵션 1) 같은 레코드의 "아직 아무도 안 읽은" 수정 알림이 있으면 새 행 대신 시간·내용만 갱신해 목록 도배 방지.
+    //         CREATE/DELETE는 항상 개별 생성하고, 누군가 한 번 읽은 뒤의 수정은 다시 새 알림으로 떠 재고지된다.
     //         단, 하위 리소스(subResourceType)가 다르면 별개 변경이므로 합치지 않는다. (예: "전기 수정" vs "인물 수정")
+    //         (전역 read 플래그 → 개인별 읽음 전환에 따라 "read:false"를 "reads:none(아무도 안 읽음)"으로 일반화)
     if (data.method === EventMethod.UPDATE && data.recordId && data.ownerType) {
       const existing = await this.prisma.notification.findFirst({
         where: {
@@ -22,7 +23,7 @@ export class NotificationPrismaRepository implements INotificationRepository {
           recordId: data.recordId,
           ownerType: data.ownerType,
           subResourceType: data.subResourceType ?? null,
-          read: false,
+          reads: { none: {} },
         },
         orderBy: { createdAt: 'desc' },
       })
@@ -39,7 +40,7 @@ export class NotificationPrismaRepository implements INotificationRepository {
             createdAt: new Date(),
           },
         })
-        return this.toRecord(updated)
+        return this.toRecord(updated, false)
       }
     }
 
@@ -57,11 +58,12 @@ export class NotificationPrismaRepository implements INotificationRepository {
       },
     })
 
-    return this.toRecord(row)
+    return this.toRecord(row, false)
   }
 
   /**
-   * 옵션 3) 보존 정책: 읽은 알림은 30일, 안 읽었어도 90일 경과분 삭제.
+   * 옵션 3) 보존 정책: 누군가 읽은 알림은 30일, 안 읽었어도 90일 경과분 삭제.
+   * notification_read 행은 FK(onDelete: Cascade)로 함께 정리된다.
    * cron(NotificationCleanupTask)에서 주기 호출. 삭제된 행 수를 반환.
    */
   async prune(): Promise<number> {
@@ -71,7 +73,7 @@ export class NotificationPrismaRepository implements INotificationRepository {
     const { count } = await this.prisma.notification.deleteMany({
       where: {
         OR: [
-          { read: true, createdAt: { lt: readBefore } },
+          { createdAt: { lt: readBefore }, reads: { some: {} } },
           { createdAt: { lt: maxBefore } },
         ],
       },
@@ -79,55 +81,77 @@ export class NotificationPrismaRepository implements INotificationRepository {
     return count
   }
 
-  async findMany(options?: { limit?: number; unreadOnly?: boolean }): Promise<NotificationRecord[]> {
+  async findMany(
+    accountId: string | undefined,
+    options?: { limit?: number; unreadOnly?: boolean },
+  ): Promise<NotificationRecord[]> {
     const limit = options?.limit ?? 100
     const rows = await this.prisma.notification.findMany({
-      where: options?.unreadOnly ? { read: false } : undefined,
+      // unreadOnly: 해당 계정이 아직 안 읽은 것만 (계정 미상이면 전체)
+      where: options?.unreadOnly && accountId ? { reads: { none: { accountId } } } : undefined,
       orderBy: { createdAt: 'desc' },
       take: limit,
+      // 조회 계정의 읽음 기록만 함께 가져와 read 여부 판정 (없으면 미읽음)
+      include: accountId
+        ? { reads: { where: { accountId }, select: { notificationId: true } } }
+        : undefined,
     })
-    return rows.map((r) => this.toRecord(r))
-  }
-
-  async markRead(id: string): Promise<void> {
-    await this.prisma.notification.update({
-      where: { id },
-      data: { read: true },
-    })
-  }
-
-  async markAllRead(): Promise<void> {
-    await this.prisma.notification.updateMany({
-      data: { read: true },
+    return rows.map((row) => {
+      const read = accountId ? ((row as { reads?: unknown[] }).reads?.length ?? 0) > 0 : false
+      return this.toRecord(row, read)
     })
   }
 
-  private toRecord(row: {
-    id: string
-    entityLabel: string
-    method: EventMethod
-    ownerType: string | null
-    subResourceType: NotificationSubResource | null
-    actorAccountId: string | null
-    actorName: string | null
-    recordId: string | null
-    preview: string | null
-    title: string | null
-    read: boolean
-    createdAt: Date
-  }): NotificationRecord {
+  /** 해당 계정의 읽음 기록을 upsert — 이미 읽었어도 멱등(에러 없음). */
+  async markRead(accountId: string, id: string): Promise<void> {
+    await this.prisma.notificationRead.upsert({
+      where: { notificationId_accountId: { notificationId: id, accountId } },
+      create: { notificationId: id, accountId },
+      update: {},
+    })
+  }
+
+  /** 해당 계정이 아직 안 읽은 알림 전부에 읽음 기록 삽입 (다른 계정 상태엔 영향 없음). */
+  async markAllRead(accountId: string): Promise<void> {
+    const unread = await this.prisma.notification.findMany({
+      where: { reads: { none: { accountId } } },
+      select: { id: true },
+    })
+    if (unread.length === 0) return
+    await this.prisma.notificationRead.createMany({
+      data: unread.map((notification) => ({ notificationId: notification.id, accountId })),
+      skipDuplicates: true,
+    })
+  }
+
+  private toRecord(
+    row: {
+      id: string
+      entityLabel: string
+      method: EventMethod
+      ownerType: string | null
+      subResourceType: NotificationSubResource | null
+      actorAccountId: string | null
+      actorName: string | null
+      recordId: string | null
+      preview: string | null
+      title: string | null
+      createdAt: Date
+    },
+    read: boolean,
+  ): NotificationRecord {
     return {
       id: row.id,
       entityLabel: row.entityLabel,
       method: row.method as EventMethod,
-      ownerType: row.ownerType as any,
+      ownerType: row.ownerType as AggregateType | null,
       subResourceType: row.subResourceType,
       actorAccountId: row.actorAccountId,
       actorName: row.actorName,
       recordId: row.recordId,
       preview: row.preview,
       title: row.title,
-      read: row.read,
+      read,
       createdAt: row.createdAt,
     }
   }

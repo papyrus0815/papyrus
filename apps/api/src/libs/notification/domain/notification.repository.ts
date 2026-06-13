@@ -26,13 +26,17 @@ export interface NotificationRecord {
   recordId: string | null
   preview: string | null
   title: string | null
+  /** 조회 계정 기준 읽음 여부 (공유 피드 + 개인별 읽음). 계정 미상이면 false. */
   read: boolean
   createdAt: Date
 }
 
 export interface INotificationRepository {
   create(data: CreateNotificationData): Promise<NotificationRecord>
-  findMany(options?: { limit?: number; unreadOnly?: boolean }): Promise<NotificationRecord[]>
-  markRead(id: string): Promise<void>
-  markAllRead(): Promise<void>
+  /** accountId 기준으로 각 알림의 read 여부를 계산. unreadOnly는 해당 계정이 안 읽은 것만. */
+  findMany(accountId: string | undefined, options?: { limit?: number; unreadOnly?: boolean }): Promise<NotificationRecord[]>
+  /** 해당 계정의 읽음 기록 upsert (멱등). */
+  markRead(accountId: string, id: string): Promise<void>
+  /** 해당 계정이 아직 안 읽은 모든 알림을 읽음 처리. */
+  markAllRead(accountId: string): Promise<void>
 }

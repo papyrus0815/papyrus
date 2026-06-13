@@ -24,6 +24,8 @@ export interface NotificationItem {
   time: string
   unread: boolean
   ownerType?: string
+  /** 변경의 초점이 된 하위 리소스(예: BIOGRAPHY). 보조 칩 표시용. */
+  subResourceType?: string
   /** 변경을 수행한 사용자 표시명 */
   actorName?: string
   recordId?: string

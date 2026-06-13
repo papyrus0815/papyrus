@@ -20,6 +20,8 @@ export function getNotificationTargetPath(
       return recordId ? pathKeys.countryDetail(recordId) : pathKeys.country()
     case 'HISTORICAL_COUNTRY':
     case 'ADMINISTRATION_DEPARTMENT':
+    // 행정구역 상세는 국가 컨텍스트(countryId)가 필요해 recordId만으로 딥링크 불가 — 국가 목록으로 폴백
+    case 'ADMINISTRATIVE_DIVISION':
       return pathKeys.country()
     default:
       return null

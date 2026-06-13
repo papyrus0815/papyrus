@@ -160,13 +160,33 @@ model Notification {
   preview   String?  @db.VarChar(500)
   /// (선택) 서버에서 이미 조합한 완성 문장. 넣으면 클라이언트는 이걸 우선 표시
   title     String?  @db.VarChar(255)
-  read      Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
+
+  /// 계정별 읽음 기록 (공유 피드 + 개인별 읽음). 해당 계정의 행이 있으면 "읽음".
+  reads NotificationRead[]
 
   @@index([createdAt], name: "idx_notification_created_at")
   @@index([ownerType], name: "idx_notification_owner_type")
-  @@index([read], name: "idx_notification_read")
+  /// 수정 알림 병합(dedup) 조회용: (recordId, ownerType, method)로 최근 미읽음 UPDATE 탐색
+  @@index([recordId, ownerType, method], name: "idx_notification_dedup")
   @@map("notification")
+}
+
+/// 알림 계정별 읽음 상태 (공유 피드를 개인별로 읽음 처리).
+/// 행 존재 = 그 계정이 해당 알림을 읽음. 부재 = 미읽음.
+/// 한 명이 읽어도 다른 관리자의 미읽음 상태는 유지된다.
+model NotificationRead {
+  /// 읽은 알림 ID
+  notificationId String   @map("notification_id") @db.Char(36)
+  /// 읽은 계정 ID (Account.id — 관계는 actorAccountId와 동일하게 느슨하게 둠)
+  accountId      String   @map("account_id") @db.Char(36)
+  /// 읽은 시각
+  readAt         DateTime @default(now()) @map("read_at")
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@id([notificationId, accountId])
+  @@index([accountId], name: "idx_notification_read_account")
+  @@map("notification_read")
 }
 
 // ========================
