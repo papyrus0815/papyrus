@@ -501,7 +501,7 @@ const CenturySelect = styled.select`
   font-weight: 700;
   padding: 6px 28px 6px 12px;
   border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.colors.border?.primary ?? 'rgba(0,0,0,0.12)'};
+  border: 1px solid ${({ theme }) => theme.colors.border?.default ?? 'rgba(0,0,0,0.12)'};
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ theme }) => theme.colors.background.primary}
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23888' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E")

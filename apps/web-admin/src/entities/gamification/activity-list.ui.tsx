@@ -16,6 +16,7 @@ const OWNER_LABEL: Record<string, string> = {
   COUNTRY: '국가',
   HISTORICAL_COUNTRY: '역사적 국가',
   EVENT: '사건',
+  ADMINISTRATIVE_DIVISION: '행정구역',
 }
 
 function fmtTime(iso: string): string {
