@@ -19,6 +19,7 @@ import { TableKit } from '@tiptap/extension-table'
 import { EntityLinkNode } from './entity-link-node'
 import { FigureNode } from './figure-node'
 import { ResizableImageNode } from './resizable-image-node'
+import { TermLinkNode } from './term-link-node'
 
 interface TiptapEditorProps {
   value: string
@@ -43,6 +44,7 @@ export function TiptapEditor({
       TableKit.configure({ table: { resizable: true } }),
       // 커스텀 도메인 확장 — 기존 HTML과 호환되는 멘션/figure 노드 + React NodeView.
       EntityLinkNode,
+      TermLinkNode,
       FigureNode,
       ResizableImageNode,
     ],
@@ -151,6 +153,23 @@ export function TiptapEditor({
           }
         >
           🔗
+        </button>
+        <button
+          type="button"
+          aria-label="용어 연결"
+          onClick={() =>
+            editor
+              .chain()
+              .focus()
+              .insertTermLink({
+                termId: 't1',
+                termName: '봉건제',
+                label: '봉건',
+              })
+              .run()
+          }
+        >
+          📖
         </button>
         <button
           type="button"

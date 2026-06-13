@@ -71,6 +71,26 @@ describe('TiptapEditor (TipTap 마이그레이션 PoC)', () => {
     expect(span?.textContent).toBe('나폴레옹')
   })
 
+  it('용어 연결 버튼이 term 노드를 삽입한다(엔티티와 동형 패턴)', () => {
+    render(<TiptapEditor value="<p>텍스트</p>" onChange={() => undefined} />)
+    fireEvent.click(screen.getByLabelText('용어 연결'))
+    const span = document.querySelector('.ProseMirror span.term')
+    expect(span).not.toBeNull()
+    expect(span?.getAttribute('data-term-id')).toBe('t1')
+    expect(span?.textContent).toBe('봉건')
+  })
+
+  it('기존 term HTML을 파싱·렌더한다(라운드트립)', () => {
+    const html =
+      '<p>중세 <span class="term" data-term-id="99" ' +
+      'data-term-name="봉건제">봉건</span> 사회</p>'
+    render(<TiptapEditor value={html} onChange={() => undefined} />)
+    const span = document.querySelector('.ProseMirror span.term')
+    expect(span).not.toBeNull()
+    expect(span?.getAttribute('data-term-id')).toBe('99')
+    expect(span?.textContent).toBe('봉건')
+  })
+
   it('이미지 삽입 버튼이 figure(img+figcaption) 블록 노드를 삽입한다', () => {
     render(<TiptapEditor value="<p>텍스트</p>" onChange={() => undefined} />)
     fireEvent.click(screen.getByLabelText('이미지 삽입'))
