@@ -18,6 +18,7 @@ import { TableKit } from '@tiptap/extension-table'
 
 import { EntityLinkNode } from './entity-link-node'
 import { FigureNode } from './figure-node'
+import { ResizableImageNode } from './resizable-image-node'
 
 interface TiptapEditorProps {
   value: string
@@ -40,9 +41,10 @@ export function TiptapEditor({
       Placeholder.configure({ placeholder }),
       // TableKit = Table + TableRow + TableHeader + TableCell 번들(v3). resizable 컬럼.
       TableKit.configure({ table: { resizable: true } }),
-      // 커스텀 도메인 확장 — 기존 HTML과 호환되는 멘션/figure 노드.
+      // 커스텀 도메인 확장 — 기존 HTML과 호환되는 멘션/figure 노드 + React NodeView.
       EntityLinkNode,
       FigureNode,
+      ResizableImageNode,
     ],
     content: value,
     onUpdate: ({ editor: instance }) => onChange(instance.getHTML()),
@@ -166,6 +168,22 @@ export function TiptapEditor({
           }
         >
           🖼
+        </button>
+        <button
+          type="button"
+          aria-label="리사이즈 이미지"
+          onClick={() =>
+            editor
+              .chain()
+              .focus()
+              .insertResizableImage({
+                src: 'https://example.com/r.png',
+                width: 200,
+              })
+              .run()
+          }
+        >
+          ↔
         </button>
       </div>
       <EditorContent editor={editor} />

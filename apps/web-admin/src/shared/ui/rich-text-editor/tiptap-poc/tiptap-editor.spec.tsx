@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom'
 
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { TiptapEditor } from './tiptap-editor'
 
@@ -93,6 +93,48 @@ describe('TiptapEditor (TipTap 마이그레이션 PoC)', () => {
       'https://ex.com/a.jpg',
     )
     expect(figure?.querySelector('figcaption')?.textContent).toBe('옛 캡션')
+  })
+
+  it('리사이즈 이미지: React NodeView 마운트 + 버튼으로 너비 속성 변경', async () => {
+    render(<TiptapEditor value="" onChange={() => undefined} />)
+    fireEvent.click(screen.getByLabelText('리사이즈 이미지'))
+    // ReactNodeViewRenderer는 비동기 마운트 → waitFor로 대기.
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-testid="resizable-image"]'),
+      ).not.toBeNull(),
+    )
+    const imgWidth = () =>
+      (
+        document.querySelector(
+          '[data-testid="resizable-image"] img',
+        ) as HTMLImageElement
+      ).style.width
+    expect(imgWidth()).toBe('200px')
+    // 인터랙티브: NodeView의 "넓게" 버튼이 width 속성을 변경(드래그 없이 핵심 실증)
+    fireEvent.click(screen.getByLabelText('넓게'))
+    await waitFor(() => expect(imgWidth()).toBe('250px'))
+  })
+
+  it('기존 data-resizable img를 파싱한다(width 보존, NodeView 렌더)', async () => {
+    render(
+      <TiptapEditor
+        value='<p><img data-resizable src="https://ex.com/i.png" style="width:300px"></p>'
+        onChange={() => undefined}
+      />,
+    )
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-testid="resizable-image"]'),
+      ).not.toBeNull(),
+    )
+    expect(
+      (
+        document.querySelector(
+          '[data-testid="resizable-image"] img',
+        ) as HTMLImageElement
+      ).style.width,
+    ).toBe('300px')
   })
 
   it('value prop이 바뀌면 본문이 동기화된다', () => {
