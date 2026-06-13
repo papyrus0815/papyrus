@@ -4,6 +4,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { TiptapEditor } from './tiptap-editor'
 
+// jsdom은 elementFromPoint 미구현 — TipTap/ProseMirror v3.26가 마운트 시 호출하므로 폴리필.
+if (!document.elementFromPoint) {
+  document.elementFromPoint = () => null
+}
+
 describe('TiptapEditor (TipTap 마이그레이션 PoC)', () => {
   it('크래시 없이 마운트되고 ProseMirror 본문을 렌더한다', () => {
     render(<TiptapEditor value="" onChange={() => undefined} />)
