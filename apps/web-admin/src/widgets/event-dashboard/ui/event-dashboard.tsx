@@ -103,12 +103,12 @@ const DashboardGrid = styled.div`
   }
 `
 
-const DashboardCard = styled.div<{ $gradient: string }>`
+const DashboardCard = styled.div<{ $gradient?: string }>`
   display: flex;
   align-items: center;
   gap: 20px;
   padding: 24px 28px;
-  background: ${({ $gradient }) => $gradient};
+  background: ${({ $gradient }) => $gradient ?? 'transparent'};
   border-radius: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
@@ -136,13 +136,13 @@ const DashboardCard = styled.div<{ $gradient: string }>`
   }
 `
 
-const CardIcon = styled.div`
+const CardIcon = styled.div<{ $color?: string }>`
   display: flex;
   align-items: center;
   justify-content: center;
   width: 56px;
   height: 56px;
-  background: rgba(255, 255, 255, 0.25);
+  background: ${({ $color }) => $color ?? 'rgba(255, 255, 255, 0.25)'};
   color: #ffffff;
   border-radius: 14px;
   flex-shrink: 0;

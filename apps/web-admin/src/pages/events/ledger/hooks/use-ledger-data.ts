@@ -149,7 +149,13 @@ export function useLedgerData(
 
   const countryDict = useMemo<CountryDict>(() => {
     const byId = new Map<string, { id: string; name: string; flagEmoji?: string }>()
-    for (const item of countries) byId.set(item.id, item)
+    // DTO의 flagEmoji는 null 가능 — 사전 타입(string|undefined)에 맞춰 정규화
+    for (const item of countries)
+      byId.set(item.id, {
+        id: item.id,
+        name: item.name,
+        flagEmoji: item.flagEmoji ?? undefined,
+      })
     return { byId }
   }, [countries])
 

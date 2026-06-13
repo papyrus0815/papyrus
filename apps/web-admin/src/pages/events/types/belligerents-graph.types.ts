@@ -117,6 +117,8 @@ export interface BelligerentCountry {
   countryName: string
   isHistorical: boolean
   flagEmoji?: string
+  /** 국기/썸네일 이미지 URL (시각화 표시용 — 빌더가 채우지 않으면 undefined) */
+  thumbnailUrl?: string | null
   
   // 군사 정보
   commander?: string

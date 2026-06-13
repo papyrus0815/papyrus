@@ -324,6 +324,8 @@ function HeroActors({
                 ? getPersonDisplayName({
                     name: p.person.name ?? '',
                     surname: p.person.surname,
+                    nameDisplayOrder: p.person.nameDisplayOrder,
+                    country: p.person.country,
                   }) || '미상'
                 : '미상'
               const avatar = p.person?.profileImageUrl ?? undefined

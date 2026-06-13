@@ -37,34 +37,61 @@ export function ModuleBelligerents({ event, onPatch }: ModuleBelligerentsProps) 
   /** 국가 추가 모달 대상 진영 index — null이면 닫힘. */
   const [countryModalSide, setCountryModalSide] = useState<number | null>(null)
 
+  /* 칩에 이름·국기를 그리려면 모달 열기 전에도 국가 목록이 필요 — 참조된 종류만 로드. */
+  const chipRefs = sides.flatMap((side) => side.countries ?? [])
+  const hasModernChip = chipRefs.some(
+    (ref) => !ref.historicalCountryId && !!ref.countryId,
+  )
+  const hasHistoricalChip = chipRefs.some((ref) => !!ref.historicalCountryId)
+
   const { data: allModern = [] } = useQuery({
     queryKey: ['countries', 'all'],
     queryFn: getAllCountries,
-    enabled: countryModalSide !== null,
+    enabled: countryModalSide !== null || hasModernChip,
     staleTime: 5 * 60_000,
   })
   const { data: allHistorical = [] } = useQuery({
     queryKey: ['historical-countries', 'all'],
     queryFn: getAllHistoricalCountries,
-    enabled: countryModalSide !== null,
+    enabled: countryModalSide !== null || hasHistoricalChip,
     staleTime: 5 * 60_000,
   })
 
-  /* 국가 id → 표시명 — 캐시가 있으면 이름, 없으면 빈 문자열(읽기 시 fallback). */
-  const nameOf = useMemo(() => {
+  /* 국가 id → 표시 정보(이름·국기) — 캐시가 없으면 일반명 fallback. */
+  const countryDisplayOf = useMemo(() => {
+    type ChipCountry = {
+      id: string
+      name: string
+      flagEmoji?: string | null
+      thumbnailUrl?: string | null
+    }
     const modern = new Map(
-      (allModern as Array<{ id: string; name: string }>).map((c) => [c.id, c.name]),
+      (allModern as ChipCountry[]).map((country) => [country.id, country]),
     )
     const historical = new Map(
-      (allHistorical as Array<{ id: string; name: string }>).map((c) => [
-        c.id,
-        c.name,
-      ]),
+      (allHistorical as ChipCountry[]).map((country) => [country.id, country]),
     )
-    return (countryId?: string, historicalId?: string): string => {
-      if (historicalId) return historical.get(historicalId) ?? '역사 국가'
-      if (countryId) return modern.get(countryId) ?? '국가'
-      return '미상'
+    return (
+      countryId?: string,
+      historicalId?: string,
+    ): { name: string; flagEmoji: string | null; thumbnailUrl: string | null } => {
+      if (historicalId) {
+        const matched = historical.get(historicalId)
+        return {
+          name: matched?.name ?? '역사 국가',
+          flagEmoji: null,
+          thumbnailUrl: matched?.thumbnailUrl ?? null,
+        }
+      }
+      if (countryId) {
+        const matched = modern.get(countryId)
+        return {
+          name: matched?.name ?? '국가',
+          flagEmoji: matched?.flagEmoji ?? null,
+          thumbnailUrl: matched?.thumbnailUrl ?? null,
+        }
+      }
+      return { name: '미상', flagEmoji: null, thumbnailUrl: null }
     }
   }, [allModern, allHistorical])
 
@@ -238,20 +265,37 @@ export function ModuleBelligerents({ event, onPatch }: ModuleBelligerentsProps) 
               </S.ModuleDataCard>
 
               <CountryList>
-                {countries.map((country, cidx) => (
-                  <CountryItem key={cidx}>
-                    <CountryName>
-                      {nameOf(country.countryId, country.historicalCountryId)}
-                    </CountryName>
-                    <CountryRemove
-                      type="button"
-                      onClick={() => removeCountry(idx, cidx)}
-                      aria-label="국가 제거"
-                    >
-                      <FiX />
-                    </CountryRemove>
-                  </CountryItem>
-                ))}
+                {countries.map((country, cidx) => {
+                  const display = countryDisplayOf(
+                    country.countryId,
+                    country.historicalCountryId,
+                  )
+                  return (
+                    <CountryItem key={cidx}>
+                      {display.flagEmoji ? (
+                        <CountryFlagEmoji aria-hidden>
+                          {display.flagEmoji}
+                        </CountryFlagEmoji>
+                      ) : display.thumbnailUrl ? (
+                        <CountryFlagImage
+                          src={display.thumbnailUrl}
+                          alt=""
+                          onError={(event) => {
+                            event.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      ) : null}
+                      <CountryName>{display.name}</CountryName>
+                      <CountryRemove
+                        type="button"
+                        onClick={() => removeCountry(idx, cidx)}
+                        aria-label="국가 제거"
+                      >
+                        <FiX />
+                      </CountryRemove>
+                    </CountryItem>
+                  )
+                })}
                 <AddCountryBtn
                   type="button"
                   onClick={() => setCountryModalSide(idx)}
@@ -357,6 +401,21 @@ const CountryItem = styled.span`
   font-size: 12.5px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CountryFlagEmoji = styled.span`
+  margin-right: 4px;
+  font-size: 13px;
+  line-height: 1;
+`
+
+const CountryFlagImage = styled.img`
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
 `
 
 const CountryName = styled.span``

@@ -269,7 +269,7 @@ export async function deleteEvent(id: string): Promise<void> {
  */
 export async function getDeletedEvents(): Promise<EventResponseDto[]> {
   try {
-    return await api.events.deleted.list(getConnection())
+    return await api.events.deleted.list.getDeletedEvents(getConnection())
   } catch (error) {
     throw error
   }
@@ -280,7 +280,7 @@ export async function getDeletedEvents(): Promise<EventResponseDto[]> {
  */
 export async function restoreEvent(id: string): Promise<EventResponseDto> {
   try {
-    return await api.events.$id(id).restore(getConnection())
+    return await api.events.restore.restoreEvent(getConnection(), id)
   } catch (error) {
     throw error
   }
@@ -291,7 +291,7 @@ export async function restoreEvent(id: string): Promise<EventResponseDto> {
  */
 export async function permanentlyDeleteEvent(id: string): Promise<void> {
   try {
-    await api.events.$id(id).permanent.deleteEvent(getConnection())
+    await api.events.permanent.permanentlyDeleteEvent(getConnection(), id)
   } catch (error) {
     throw error
   }

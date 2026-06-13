@@ -31,6 +31,6 @@ export const militaryUnitApi = {
   },
 
   delete: async (id: string) => {
-    await militaryUnitsApi.$delete(apiConnection, id)
+    await militaryUnitsApi._delete(apiConnection, id)
   },
 }

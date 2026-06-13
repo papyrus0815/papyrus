@@ -39,7 +39,7 @@ interface FiltersPanelProps {
 
   dbCategories: EventCategoryDto[]
   availableCenturies: number[]
-  countries?: Array<{ id: string; name: string; flagEmoji?: string }>
+  countries?: Array<{ id: string; name: string; flagEmoji?: string | null }>
   historicalCountries?: Array<{ id: string; name: string }>
   continents?: ContinentResponseDto[]
 
@@ -97,7 +97,7 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
       ...countries.map((c) => ({
         id: c.id,
         name: c.name,
-        prefix: c.flagEmoji,
+        prefix: c.flagEmoji ?? undefined,
       })),
       ...historicalCountries.map((c) => ({
         id: c.id,

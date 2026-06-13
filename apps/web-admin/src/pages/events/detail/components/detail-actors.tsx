@@ -234,6 +234,8 @@ export function DetailActors({
                 ? getPersonDisplayName({
                     name: person.person.name ?? '',
                     surname: person.person.surname,
+                    nameDisplayOrder: person.person.nameDisplayOrder,
+                    country: person.person.country,
                   }) || '미상'
                 : '미상'
               const avatarUrl = person.person?.profileImageUrl ?? undefined

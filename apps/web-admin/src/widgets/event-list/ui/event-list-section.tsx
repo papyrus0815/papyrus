@@ -120,7 +120,8 @@ export const EventListSection: React.FC<EventListSectionProps> = ({
           <List.SortDirectionToggle
             type="button"
             onClick={() =>
-              setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+              // prop은 단순 setter 시그니처 — 업데이터 함수 대신 현재 값으로 계산
+              setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
             }
           >
             {sortDirection === 'asc' ? <FiArrowUp /> : <FiArrowDown />}

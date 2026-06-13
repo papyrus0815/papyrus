@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type JSX,
   type KeyboardEvent,
   type ReactNode,
   useEffect,
