@@ -204,6 +204,13 @@ export class EventController {
                   name: pe.person.name ?? null,
                   surname: pe.person.surname ?? null,
                   profileImageUrl: pe.person.profileImageUrl ?? null,
+                  nameDisplayOrder: pe.person.nameDisplayOrder ?? null,
+                  country: pe.person.country
+                    ? {
+                        defaultNameDisplayOrder:
+                          pe.person.country.defaultNameDisplayOrder ?? null,
+                      }
+                    : null,
                 }
               : null,
           }))
@@ -688,6 +695,9 @@ export class EventController {
                 name: true,
                 surname: true,
                 profileImageUrl: true,
+                // 이름 표시 순서: 개인 오버라이드 → 국가 기본 → 동양식(성→이름)
+                nameDisplayOrder: true,
+                country: { select: { defaultNameDisplayOrder: true } },
               },
             },
           },

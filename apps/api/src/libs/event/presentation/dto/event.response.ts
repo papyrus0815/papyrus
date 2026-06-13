@@ -205,6 +205,10 @@ export class EventResponseDto {
       name?: string | null
       surname?: string | null
       profileImageUrl?: string | null
+      /** 개인 이름 표시 순서 오버라이드 (korean=성→이름, western=이름→성) */
+      nameDisplayOrder?: string | null
+      /** 소속 국가 기본 이름 표시 순서 — 개인 오버라이드 없을 때 사용 */
+      country?: { defaultNameDisplayOrder?: string | null } | null
     } | null
   }>
 
