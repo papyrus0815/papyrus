@@ -8,11 +8,11 @@ import {
 // 메시지 시간 포맷 (ISO 또는 임의 문자열 → 읽기 쉬운 형식)
 function formatMessageTime(isoOrText: string): string {
   if (!isoOrText || typeof isoOrText !== 'string') return ''
-  const s = isoOrText.trim()
-  if (!s) return ''
-  const parsed = new Date(s)
+  const text = isoOrText.trim()
+  if (!text) return ''
+  const parsed = new Date(text)
   if (Number.isNaN(parsed.getTime()))
-    return s.length > 20 ? s.slice(0, 16) + '…' : s
+    return text.length > 20 ? text.slice(0, 16) + '…' : text
   const now = new Date()
   const today = new Date(
     now.getFullYear(),
@@ -26,11 +26,12 @@ function formatMessageTime(isoOrText: string): string {
     parsed.getDate(),
   ).getTime()
   if (dateOnly === today) {
-    const h = parsed.getHours()
-    const m = parsed.getMinutes()
-    if (h < 12) return `오전 ${h}:${m.toString().padStart(2, '0')}`
-    if (h === 12) return `오후 12:${m.toString().padStart(2, '0')}`
-    return `오후 ${h - 12}:${m.toString().padStart(2, '0')}`
+    const hours = parsed.getHours()
+    const minutes = parsed.getMinutes()
+    const mm = minutes.toString().padStart(2, '0')
+    if (hours < 12) return `오전 ${hours}:${mm}`
+    if (hours === 12) return `오후 12:${mm}`
+    return `오후 ${hours - 12}:${mm}`
   }
   if (dateOnly === yesterday) return '어제'
   if (parsed.getFullYear() === now.getFullYear()) {

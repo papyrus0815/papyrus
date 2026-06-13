@@ -127,14 +127,13 @@ export function UserMenu({
         </BadgeSection>
       )}
       <Divider />
-      <MenuItem role="menuitem" onClick={() => goTo(pathKeys.leaderboard())}>
+      <MenuItem onClick={() => goTo(pathKeys.leaderboard())}>
         <FiAward size={14} /> 리더보드
       </MenuItem>
-      <MenuItem role="menuitem" onClick={() => goTo(pathKeys.profile.root())}>
+      <MenuItem onClick={() => goTo(pathKeys.profile.root())}>
         <FiUser size={14} /> 내 프로필
       </MenuItem>
       <MenuItem
-        role="menuitem"
         onClick={() => {
           playClickSound()
           onClose()
@@ -144,7 +143,7 @@ export function UserMenu({
         설정
       </MenuItem>
       <Divider />
-      <MenuItem role="menuitem" onClick={handleLogout}>
+      <MenuItem onClick={handleLogout}>
         <FiLogOut size={14} /> 로그아웃
       </MenuItem>
     </>
@@ -176,7 +175,7 @@ export function UserMenu({
 
         <AnimatePresence>
           {isOpen && (
-            <UserPanel role="menu" {...DROPDOWN_MOTION}>
+            <UserPanel {...DROPDOWN_MOTION}>
               {body}
             </UserPanel>
           )}

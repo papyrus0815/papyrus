@@ -2,15 +2,21 @@
  * 모바일 내비게이션 위젯 — 햄버거 버튼 + 전체 메뉴 모달.
  * 데스크톱 중앙 내비(TopNavBar)와 동일한 항목을 모바일에서 모달로 제공한다.
  */
+import { useRef } from 'react'
+
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { FiMenu, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
+import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
+import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 import {
   MobileCloseButton,
+  MOBILE_QUERY,
   MODAL_MOTION,
   ModalHeader,
   ModalTitle,
@@ -33,6 +39,12 @@ export function MobileNav({
   items,
   playClickSound,
 }: MobileNavProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const isMobile = useMediaQuery(MOBILE_QUERY)
+  const active = isOpen && isMobile
+  useBodyScrollLock(active)
+  useFocusTrap(panelRef, active)
+
   return (
     <>
       <MobileMenuButton
@@ -50,7 +62,7 @@ export function MobileNav({
           {isOpen && (
             <>
               <MobileOverlay {...OVERLAY_MOTION} onClick={onClose} />
-              <MobileMenuModal {...MODAL_MOTION}>
+              <MobileMenuModal ref={panelRef} {...MODAL_MOTION}>
                 <ModalHeader>
                   <ModalTitle>메뉴</ModalTitle>
                   <MobileCloseButton

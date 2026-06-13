@@ -2,14 +2,20 @@
  * 헤더 위젯 공용 프리미티브 — 데스크톱 드롭다운과 모바일 모달이 같은
  * 스타일/모션을 공유하도록 한곳에 모은다. (알림 벨·유저 메뉴·사운드 설정 공통)
  */
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
+import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
+import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
+
+/** 모바일 모달 레이아웃이 적용되는 뷰포트(헤더의 모바일 분기와 동일) */
+export const MOBILE_QUERY = '(max-width: 768px)'
 
 /** 아바타 이니셜 — 표시명 첫 글자(대문자), 없으면 게스트 'G' */
 export const getAvatarInitial = (name: string | undefined | null): string =>
@@ -295,12 +301,20 @@ export function MobileModalShell({
   playClickSound,
   children,
 }: MobileModalShellProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  // 모달은 데스크톱에서도 portal로 렌더되지만 CSS로 숨겨진다(드롭다운과 isOpen 공유).
+  // 스크롤 락/포커스 트랩은 실제 모바일 레이아웃일 때만 걸어야 데스크톱이 안 잠긴다.
+  const isMobile = useMediaQuery(MOBILE_QUERY)
+  const active = isOpen && isMobile
+  useBodyScrollLock(active)
+  useFocusTrap(panelRef, active)
+
   return createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
           <ModalOverlay {...OVERLAY_MOTION} onClick={onClose} />
-          <MobileModal {...MODAL_MOTION}>
+          <MobileModal ref={panelRef} {...MODAL_MOTION}>
             <ModalHeader>
               <ModalTitle>{title}</ModalTitle>
               <MobileCloseButton

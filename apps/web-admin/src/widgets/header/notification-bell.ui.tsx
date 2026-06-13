@@ -159,7 +159,7 @@ export function NotificationBell({
 
       <AnimatePresence>
         {isOpen && (
-          <BellPanel role="menu" {...DROPDOWN_MOTION}>
+          <BellPanel {...DROPDOWN_MOTION}>
             <NotificationPanelBody
               messages={mergedMessages}
               showTitle

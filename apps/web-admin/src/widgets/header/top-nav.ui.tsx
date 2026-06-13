@@ -18,6 +18,7 @@ export function TopNavBar({ items }: { items: TopNavItemSpec[] }) {
           key={item.key}
           onClick={item.onClick}
           aria-current={item.active ? 'page' : undefined}
+          aria-label={item.label}
           title={item.label}
         >
           <TopIcon>{item.icon}</TopIcon>

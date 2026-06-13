@@ -84,7 +84,7 @@ export function SoundSettings({
 
       <AnimatePresence>
         {isOpen && (
-          <SettingsPanel role="menu" {...DROPDOWN_MOTION}>
+          <SettingsPanel {...DROPDOWN_MOTION}>
             <SettingsHeader>
               <SettingsTitle>사운드 설정</SettingsTitle>
             </SettingsHeader>
