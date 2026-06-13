@@ -16,6 +16,8 @@ import {
   unlinkCabinetFromEvent,
   updateCabinetEventLink,
 } from '@/shared/api/cabinet-events'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { CabinetEventAttachModal } from './cabinet-event-attach-modal'
 
 const ROLE_OPTIONS: CabinetEventRole[] = ['ORIGIN', 'PARTY', 'MEDIATOR', 'AFFECTED']
@@ -269,18 +271,25 @@ export function CabinetEventsSection({ cabinetId }: CabinetEventsSectionProps) {
       reload()
     } catch (e) {
       console.error(e)
-      alert('역할 변경에 실패했습니다.')
+      notify.error('역할 변경에 실패했습니다.')
     }
   }
 
   const onUnlink = async (link: CabinetEventLink) => {
-    if (!confirm('이 사건과의 연결을 해제할까요?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 사건과의 연결을 해제할까요?',
+        danger: true,
+      }))
+    )
+      return
     try {
       await unlinkCabinetFromEvent(link.eventId, link.cabinetId)
       reload()
     } catch (e) {
       console.error(e)
-      alert('연결 해제에 실패했습니다.')
+      notify.error('연결 해제에 실패했습니다.')
     }
   }
 

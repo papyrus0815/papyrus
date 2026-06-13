@@ -7,6 +7,7 @@ import {
   useUpdateCountryRecord,
   useDeleteCountryRecord,
 } from '@/entities/country/api.records'
+import { confirm } from '@/shared/ui/confirm-dialog'
 
 import * as S from './styles'
 
@@ -64,7 +65,14 @@ export function RecordsPanel({ countryId }: Props) {
   }
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('이 기록을 삭제할까요?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 기록을 삭제할까요?',
+        danger: true,
+      }))
+    )
+      return
     try {
       await deleteMut.mutateAsync(id)
       toast.success('삭제됨')

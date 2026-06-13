@@ -8,8 +8,12 @@
  * 개선 사항:
  *  1) 서버 동기화 — sections prop이 갱신되면(다른 진입점/탭 편집, 저장 후 refetch)
  *     로컬 rows를 race-safe하게 재동기화(detail-narrative의 syncRowsWithServer 미러).
- *  2) 저장 효율 — 순서변경·삭제·드래그는 디바운스로 PUT을 1회로 합치고, seq 가드로
- *     out-of-order 응답이 토스트/저장상태를 덮지 않게 한다. 명시 저장은 즉시 flush.
+ *     personId가 바뀌면(key 없이 인스턴스가 재사용되는 호출부) rows·편집 상태를
+ *     강제 리셋해 이전 인물의 전기가 새지 않게 한다.
+ *  2) 저장 효율 — 순서변경·삭제·드래그는 디바운스로 PUT을 1회로 합치고, PUT은
+ *     직렬화(in-flight 체이닝)해 out-of-order delete-and-recreate가 서버에 옛
+ *     상태를 남기지 않게 한다. 명시 저장은 즉시 flush, pending 디바운스는
+ *     인물 전환·언마운트 시 폐기하지 않고 해당 인물 앞으로 flush.
  *  3) sectionType — 생애/업적/평가/일화 타입을 부여(아이콘·칩), 빈 상태 템플릿 제공.
  *  4) 읽기 UX — 섹션 3개 이상이면 목차(TOC)로 점프, 관리 모드에서 드래그로 순서변경.
  */
@@ -41,6 +45,7 @@ import type {
 import { createRichTextImageUploader } from '@/shared/api/upload'
 import { updatePerson } from '@/shared/api/persons'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextProseWithEntityClicks } from '@/shared/ui/rich-text-read-view'
 
@@ -113,6 +118,39 @@ function toRows(
   return []
 }
 
+/** 마지막 persist 시점의 row 스냅샷 — sync의 '이후 수정(dirty)' 판정 기준선. */
+type RowSnapshot = {
+  title: string
+  content: string
+  sectionType: string | null
+}
+
+function snapshotRows(rows: Row[]): Map<string, RowSnapshot> {
+  const map = new Map<string, RowSnapshot>()
+  for (const r of rows) {
+    map.set(r.key, {
+      title: r.title,
+      content: r.content,
+      sectionType: r.sectionType ?? null,
+    })
+  }
+  return map
+}
+
+/** 마지막 persist 기준선 대비 로컬 수정 여부 — 기준선에 없으면 이후 생긴 row로 본다. */
+function isRowDirtySince(
+  row: Row,
+  lastPersisted: Map<string, RowSnapshot>,
+): boolean {
+  const snap = lastPersisted.get(row.key)
+  if (!snap) return true
+  return (
+    snap.title !== row.title ||
+    snap.content !== row.content ||
+    snap.sectionType !== (row.sectionType ?? null)
+  )
+}
+
 /**
  * server 응답과 로컬 rows를 매핑한다. 핵심 목표는 RichTextEditor 인스턴스 키 보존과
  * in-flight 편집/저장이 이전 상태 응답으로 덮이지 않게 하는 것
@@ -120,10 +158,19 @@ function toRows(
  *
  *  1) 길이가 같을 때: positional join. prev가 더 새(serverId 미수령 또는 값이 다름)면
  *     prev 유지(serverId만 갱신), 아니면 server 값 채택. 키는 항상 보존.
- *  2) 길이가 다를 때: (title,content,sectionType) 동일 매칭으로 키 보존, 못 맞춘
- *     prev row(아직 commit 안 된 빈/편집 중 tail 등)는 끝에 append — 입력 손실 방지.
+ *  2) 길이가 다를 때: (title,content,sectionType) 동일 매칭으로 키 보존. 못 맞춘
+ *     prev row는 보존 근거가 있는 것(편집 중·아직 미persist 신규·마지막 persist
+ *     이후 수정)만 끝에 append — 입력 손실 방지. 그 외(마지막 persist 그대로)는
+ *     다른 탭 저장 등으로 서버에서 사라진 row이므로 드롭해 중복 부활을 막는다.
  */
-function syncRowsWithServer(prev: Row[], server: Row[]): Row[] {
+function syncRowsWithServer(
+  prev: Row[],
+  server: Row[],
+  local: {
+    editingKey: string | null
+    lastPersisted: Map<string, RowSnapshot>
+  },
+): Row[] {
   if (prev.length === server.length) {
     return server.map((s, i) => {
       const p = prev[i]
@@ -167,7 +214,18 @@ function syncRowsWithServer(prev: Row[], server: Row[]): Row[] {
     }
   }
   for (let i = 0; i < prev.length; i++) {
-    if (!prevUsed[i]) next.push(prev[i])
+    if (prevUsed[i]) continue
+    const p = prev[i]
+    // 미매칭 prev는 보존 근거가 있는 것만 append: 편집 중 / 아직 미persist 신규
+    // (serverId 없음) / 마지막 persist 이후 수정. 그 외는 다른 탭 저장 등으로
+    // 서버에서 사라진 row — append하면 중복 부활하므로 드롭(서버 상태 채택).
+    if (
+      p.key === local.editingKey ||
+      p.serverId === undefined ||
+      isRowDirtySince(p, local.lastPersisted)
+    ) {
+      next.push(p)
+    }
   }
   return next
 }
@@ -214,54 +272,114 @@ export function PersonBiographySections({
   /** 섹션 DOM 노드 — 목차 점프 scrollIntoView 대상. */
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
-  /* ── 서버 동기화 ──────────────────────────────────────────────
-     sections prop이 바뀌면(저장 후 refetch, 다른 진입점 편집) 로컬 rows를
-     race-safe하게 재동기화. 편집 중 막 친 값은 prevIsAhead 판정으로 보존. */
+  /* ── 저장·동기화용 ref ──────────────────────────────────────── */
+  /** 현재 rows의 주인 personId — flush·재전송이 다른 인물로 교차 저장되지 않게 추적. */
+  const personIdRef = useRef(personId)
+  /** rows 리셋 세대 — 인물 전환(A→B→A 왕복)을 가로지른 in-flight 응답이
+      리셋 직후의 rows·기준선을 옛 세대의 키로 덮지 않게 가드. */
+  const rowsGenRef = useRef(0)
+  /** 현재 편집 중 row key 미러 — sync 판정에서 최신값 참조용. */
+  const editingKeyRef = useRef<string | null>(null)
   useEffect(() => {
-    const serverRows = toRows(sections, legacyBiography)
-    setRows((prev) => syncRowsWithServer(prev, serverRows))
-    // legacyBiography는 sections와 함께 바뀌지 않으므로 의존성에서 제외(시드용).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections])
+    editingKeyRef.current = editingKey
+  }, [editingKey])
 
-  /* ── 저장(디바운스 + seq 가드) ─────────────────────────────── */
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const persistSeqRef = useRef(0)
   /** 디바운스 flush 시 읽을 최신 rows. */
   const latestRowsRef = useRef<Row[]>(rows)
   useEffect(() => {
     latestRowsRef.current = rows
   }, [rows])
+  /** in-flight PUT promise — 직렬화용. 진행 중이면 새 전송 대신 pending에 합친다. */
+  const inFlightRef = useRef<Promise<void> | null>(null)
+  /** in-flight 중 들어온 저장 요청 — 인물당 최신 1건만 유지(삽입 순서대로 재전송).
+      인물 전환 직전 flush 분이 새 인물의 변경에 밀려 유실되지 않게 personId별로 관리.
+      rows는 큐잉 시점 캡처본, gen은 그 시점의 rows 세대. */
+  const pendingPersistRef = useRef<Map<string, { rows: Row[]; gen: number }>>(
+    new Map(),
+  )
+  /** 마지막 persist 성공 시점 row 스냅샷 — sync의 '이후 수정(dirty)' 판정 기준선.
+      persist 전에는 마운트·인물 전환 시점의 서버 상태가 기준선. */
+  const lastPersistedRef = useRef<Map<string, RowSnapshot> | null>(null)
+  if (lastPersistedRef.current == null) {
+    lastPersistedRef.current = snapshotRows(rows)
+  }
 
+  /* ── 저장(직렬화 + 디바운스) ───────────────────────────────────
+     PUT은 한 번에 하나만 전송(체이닝). 진행 중에 새 저장이 오면 pending에
+     인물당 최신 캡처본으로 합쳐 두고 완료 후 1회만 재전송 — 동시 PUT이 서버의
+     delete-and-recreate를 out-of-order로 타며 옛 상태를 남기는 lost update를
+     차단한다. personId는 클로저가 아닌 호출 시점 인자로 받아 교차 저장 방지. */
   const doPersist = useCallback(
-    async (rowsToSave: Row[]) => {
-      const seq = ++persistSeqRef.current
-      setSaving(true)
-      try {
-        const cleaned = rowsToSave
-          .filter((r) => r.title.trim() || r.content.trim())
-          .map((r, idx) => ({
-            title: r.title.trim(),
-            content: r.content,
-            order: idx,
-            sectionType: r.sectionType ?? null,
-          }))
-        await updatePerson(personId, { sections: cleaned })
-        await queryClient.invalidateQueries({
-          queryKey: personKeys.detailFull(personId),
-        })
-        // 더 늦은 저장이 이미 시작됐다면 이 응답은 무시(out-of-order 가드).
-        if (seq === persistSeqRef.current) toast.success('전기가 저장되었습니다.')
-      } catch (err) {
-        if (seq === persistSeqRef.current)
-          toast.error(
-            err instanceof Error ? err.message : '전기 저장에 실패했습니다.',
-          )
-      } finally {
-        if (seq === persistSeqRef.current) setSaving(false)
+    (targetPersonId: string, rowsToSave: Row[]) => {
+      const gen = rowsGenRef.current
+      if (inFlightRef.current != null) {
+        pendingPersistRef.current.set(targetPersonId, { rows: rowsToSave, gen })
+        return
       }
+      const runChain = async (
+        firstPersonId: string,
+        firstRows: Row[],
+        firstGen: number,
+      ) => {
+        let curPersonId = firstPersonId
+        let curRows = firstRows
+        let curGen = firstGen
+        for (;;) {
+          setSaving(true)
+          try {
+            const cleaned = curRows
+              .filter((r) => r.title.trim() || r.content.trim())
+              .map((r, idx) => ({
+                title: r.title.trim(),
+                content: r.content,
+                order: idx,
+                sectionType: r.sectionType ?? null,
+              }))
+            await updatePerson(curPersonId, { sections: cleaned })
+            // dirty 기준선 갱신 — 현재 인물·현재 rows 세대 분만(전환 직전 flush나
+            // A→B→A 왕복을 가로지른 응답이 리셋된 기준선을 옛 세대 키로 덮지 않게).
+            if (
+              curPersonId === personIdRef.current &&
+              curGen === rowsGenRef.current
+            )
+              lastPersistedRef.current = snapshotRows(curRows)
+            // 같은 인물의 더 늦은 저장이 대기 중이면 이 응답은 stale —
+            // 무효화(불필요 refetch)도 토스트도 생략.
+            if (!pendingPersistRef.current.has(curPersonId)) {
+              await queryClient.invalidateQueries({
+                queryKey: personKeys.detailFull(curPersonId),
+              })
+              if (!pendingPersistRef.current.has(curPersonId))
+                toast.success('전기가 저장되었습니다.')
+            }
+          } catch (err) {
+            if (!pendingPersistRef.current.has(curPersonId))
+              toast.error(
+                err instanceof Error ? err.message : '전기 저장에 실패했습니다.',
+              )
+          } finally {
+            if (pendingPersistRef.current.size === 0) setSaving(false)
+          }
+          const it = pendingPersistRef.current.entries().next()
+          if (it.done) return
+          const [pendingPersonId, pendingEntry] = it.value
+          pendingPersistRef.current.delete(pendingPersonId)
+          curPersonId = pendingPersonId
+          // 항상 큐잉 시점 캡처본으로 재전송 — latestRowsRef는 A→B→A 왕복 시
+          // stale 캐시로 리셋돼 있을 수 있어 채택하면 flush된 변경(삭제 등)이
+          // 조용히 역전된다. 그 사이 추가 변경은 각자의 디바운스/저장이 다시
+          // doPersist를 호출해 pending에 최신본으로 합쳐지므로 유실되지 않는다.
+          curRows = pendingEntry.rows
+          curGen = pendingEntry.gen
+        }
+      }
+      const flight = runChain(targetPersonId, rowsToSave, gen).finally(() => {
+        inFlightRef.current = null
+      })
+      inFlightRef.current = flight
     },
-    [personId, queryClient],
+    [queryClient],
   )
 
   /** 명시 저장(편집 완료) — 디바운스 타이머를 취소하고 즉시 전송. */
@@ -271,7 +389,7 @@ export function PersonBiographySections({
         clearTimeout(persistTimerRef.current)
         persistTimerRef.current = null
       }
-      void doPersist(next)
+      doPersist(personIdRef.current, next)
     },
     [doPersist],
   )
@@ -283,17 +401,74 @@ export function PersonBiographySections({
       if (persistTimerRef.current != null) clearTimeout(persistTimerRef.current)
       persistTimerRef.current = setTimeout(() => {
         persistTimerRef.current = null
-        void doPersist(latestRowsRef.current)
+        doPersist(personIdRef.current, latestRowsRef.current)
       }, STRUCTURAL_PERSIST_DELAY)
     },
     [doPersist],
   )
 
+  /* ── 인물 전환 대응 ───────────────────────────────────────────
+     key 없이 personId만 바뀌는 호출부(상세 페이지 라우트 재사용, 위젯의 제자리
+     교체 등)에서도 이전 인물의 rows·편집 상태가 새 인물로 새지 않도록 컴포넌트
+     내부에서 처리한다. pending 디바운스 PUT은 폐기하지 않고 이전 인물 앞으로
+     즉시 flush — 교차 저장과 변경 유실을 모두 차단. */
+  useEffect(() => {
+    if (personIdRef.current === personId) return
+    const prevPersonId = personIdRef.current
+    personIdRef.current = personId
+    // ① 이전 인물의 pending 구조 변경을 이전 인물 id로 즉시 flush.
+    if (persistTimerRef.current != null) {
+      clearTimeout(persistTimerRef.current)
+      persistTimerRef.current = null
+      doPersist(prevPersonId, latestRowsRef.current)
+    }
+    // ② rows를 새 인물의 서버 상태로 강제 리셋. 레거시 시드는 리마운트와 동일하게
+    //    항상 재적용 — 키 없는 호출부에서 재방문해도 서버에 남아 있는 레거시 전기가
+    //    빈 상태로 보이지 않게. 삭제된 시드의 refetch 부활 차단은 sync의
+    //    toRows(sections, null)이 담당하므로 여기서 따로 기록하지 않는다.
+    rowsGenRef.current += 1
+    const nextRows = toRows(sections, legacyBiography)
+    latestRowsRef.current = nextRows
+    lastPersistedRef.current = snapshotRows(nextRows)
+    setRows(nextRows)
+    // ③ 편집·관리·드래그 상태 초기화.
+    setEditingKey(null)
+    editingKeyRef.current = null
+    setManageMode(false)
+    setDragKey(null)
+    setDropKey(null)
+    // sections·legacyBiography는 personId와 같은 응답으로 함께 내려옴 — personId만 본다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personId])
+
+  /* ── 서버 동기화 ──────────────────────────────────────────────
+     sections prop이 바뀌면(저장 후 refetch, 다른 진입점 편집) 로컬 rows를
+     race-safe하게 재동기화. 편집 중 막 친 값은 prevIsAhead 판정으로 보존.
+     레거시 시드는 비교 대상에서 제외(toRows(sections, null)) — 마지막 섹션
+     삭제로 sections가 [S1]→[]로 바뀔 때 옛 레거시 원문이 부활하지 않게. */
+  useEffect(() => {
+    const serverRows = toRows(sections, null)
+    setRows((prev) =>
+      syncRowsWithServer(prev, serverRows, {
+        editingKey: editingKeyRef.current,
+        lastPersisted: lastPersistedRef.current ?? new Map(),
+      }),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections])
+
+  /* 언마운트 시 pending 디바운스 PUT은 폐기하지 않고 flush — 삭제·순서변경 직후
+     탭 전환(AnimatePresence 언마운트)·패널 닫기로 변경이 조용히 유실되지 않게.
+     personIdRef는 latestRowsRef의 rows와 항상 같은 인물을 가리킨다(마운트·전환 시 갱신). */
   useEffect(
     () => () => {
-      if (persistTimerRef.current != null) clearTimeout(persistTimerRef.current)
+      if (persistTimerRef.current != null) {
+        clearTimeout(persistTimerRef.current)
+        persistTimerRef.current = null
+        doPersist(personIdRef.current, latestRowsRef.current)
+      }
     },
-    [],
+    [doPersist],
   )
 
   const updateField = useCallback((key: string, patch: Partial<Row>) => {
@@ -410,7 +585,7 @@ export function PersonBiographySections({
    */
   useEffect(() => {
     if (editingKey == null) return
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = async (e: KeyboardEvent) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         if (!saving) saveSection(editingKey)
@@ -421,7 +596,14 @@ export function PersonBiographySections({
           ? row.title !== editInitialRef.current.title ||
             row.content !== editInitialRef.current.content
           : false
-        if (dirty && !window.confirm('저장하지 않은 변경을 버릴까요?')) return
+        if (
+          dirty &&
+          !(await confirm({
+            title: '확인',
+            message: '저장하지 않은 변경을 버릴까요?',
+          }))
+        )
+          return
         cancelEdit()
       }
     }

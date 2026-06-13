@@ -43,6 +43,7 @@ import {
   formatPersonLifespan,
 } from '@/shared/lib/tenure-person-utils'
 import { useThemeStore } from '@/shared/styles/theme.store'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
@@ -965,11 +966,13 @@ export function HeadsOfStateSection({
     const row = tenures.find((t: any) => t.id === editingTenureId) as any
     const isSov = row?.recordKind === 'SOVEREIGN_REIGN'
     if (
-      !window.confirm(
-        isSov
+      !(await confirm({
+        title: '삭제 확인',
+        message: isSov
           ? '이 재위 기록을 삭제하시겠습니까?'
           : '이 재임 기록을 삭제하시겠습니까?',
-      )
+        danger: true,
+      }))
     )
       return
     try {
@@ -1182,7 +1185,14 @@ export function HeadsOfStateSection({
     tenureId: string,
     achievementId: string,
   ) => {
-    if (!window.confirm('이 업적을 삭제하시겠습니까?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 업적을 삭제하시겠습니까?',
+        danger: true,
+      }))
+    )
+      return
     const hostRow = tenures.find((t: any) => t.id === tenureId) as any
     const achievementHostIsSovereign = hostRow?.recordKind === 'SOVEREIGN_REIGN'
     try {
@@ -1348,7 +1358,14 @@ export function HeadsOfStateSection({
   }
 
   const handleDeleteRegnalEra = async (eraId: string) => {
-    if (!window.confirm('이 연호를 삭제하시겠습니까?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 연호를 삭제하시겠습니까?',
+        danger: true,
+      }))
+    )
+      return
     try {
       await personCareerApi.deleteRegnalEra(eraId)
       if (editingRegnalEraId === eraId) resetRegnalEraForm()

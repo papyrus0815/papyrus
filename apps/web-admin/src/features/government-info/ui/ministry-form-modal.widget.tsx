@@ -23,6 +23,7 @@ import {
 } from '@/shared/ui/modal/modal.styles'
 import type { SelectOption } from '@/shared/ui/select-modal/select-modal'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
+import { notify } from '@/shared/ui/toast'
 import { isDefenseRelatedCategory } from '@/shared/lib/ministry-department/ministry-department-utils'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import {
@@ -164,7 +165,7 @@ export function MinistryFormModal({
                       thumbnailUrl: res.url,
                     }))
                   } catch (err) {
-                    alert(
+                    notify.error(
                       err instanceof Error
                         ? err.message
                         : '이미지 업로드에 실패했습니다.',

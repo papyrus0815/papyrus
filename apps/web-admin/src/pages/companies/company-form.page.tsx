@@ -19,6 +19,7 @@ import {
 } from '@/shared/api/organizations'
 import { getAllPersons, type PersonResponseDto } from '@/shared/api/persons'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { notify } from '@/shared/ui/toast'
 
 const STATUS_OPTIONS: { value: CompanyStatus; label: string }[] = [
   { value: 'ACTIVE', label: '활동 중' },
@@ -597,7 +598,7 @@ export const CompanyFormPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name.trim()) {
-      alert('기업명을 입력해주세요.')
+      notify.error('기업명을 입력해주세요.')
       return
     }
     setSaving(true)
@@ -625,7 +626,7 @@ export const CompanyFormPage: React.FC = () => {
       }
       navigate('/companies')
     } catch (err) {
-      alert(err instanceof Error ? err.message : '저장에 실패했습니다.')
+      notify.error(err instanceof Error ? err.message : '저장에 실패했습니다.')
     } finally {
       setSaving(false)
     }

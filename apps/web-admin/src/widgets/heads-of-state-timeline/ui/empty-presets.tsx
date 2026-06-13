@@ -7,7 +7,7 @@
  */
 import styled from 'styled-components'
 
-import { useToast } from '@/shared/ui/toast'
+import { notify } from '@/shared/ui/toast'
 
 import {
   optionToSegment,
@@ -89,7 +89,6 @@ function findOption(
 
 export function EmptyPresets({ onPickMany }: Props) {
   const { options, isLoading } = useCountryOptions(true)
-  const { showToast } = useToast()
 
   const handlePick = (preset: PresetSpec) => {
     if (isLoading) return
@@ -98,12 +97,11 @@ export function EmptyPresets({ onPickMany }: Props) {
       .map((m) => findOption(options, m))
       .filter((opt): opt is CountryOption => opt != null)
     if (matched.length === 0) {
-      showToast('error', `${preset.label} — 매칭되는 국가가 없습니다`)
+      notify.error(`${preset.label} — 매칭되는 국가가 없습니다`)
       return
     }
     if (matched.length < expected) {
-      showToast(
-        'warning',
+      notify.warning(
         `${preset.label} — ${expected}개 중 ${matched.length}개만 매칭`,
       )
     }

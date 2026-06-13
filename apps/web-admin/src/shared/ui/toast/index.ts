@@ -1,1 +1,2 @@
-export { ToastProvider, useToast } from './toast.ui'
+export { notify, TOAST_DURATION } from './notify'
+export type { ToastActionConfig } from './notify'

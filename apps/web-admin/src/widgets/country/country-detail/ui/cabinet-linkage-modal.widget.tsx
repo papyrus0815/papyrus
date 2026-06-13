@@ -16,6 +16,7 @@ import {
   personCareerApi,
 } from '@/shared/api/person-career'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import {
@@ -984,11 +985,14 @@ export function CabinetLinkageModal({
                     <button
                       type="button"
                       disabled={leavingId === cab.id || busy}
-                      onClick={() => {
+                      onClick={async () => {
                         if (
-                          window.confirm(
-                            '이 행정부를 묶음에서 제외할까요? (해당 행정부만 빠집니다.)',
-                          )
+                          await confirm({
+                            title: '삭제 확인',
+                            message:
+                              '이 행정부를 묶음에서 제외할까요? (해당 행정부만 빠집니다.)',
+                            danger: true,
+                          })
                         )
                           void handleLeave(cab.id)
                       }}
@@ -1018,11 +1022,14 @@ export function CabinetLinkageModal({
               <button
                 type="button"
                 disabled={leavingId === cabinetId || busy}
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
-                      '이 행정부(지금 보고 있는 행정부)만 묶음에서 빠질까요?',
-                    )
+                    await confirm({
+                      title: '삭제 확인',
+                      message:
+                        '이 행정부(지금 보고 있는 행정부)만 묶음에서 빠질까요?',
+                      danger: true,
+                    })
                   )
                     void handleLeave(cabinetId)
                 }}

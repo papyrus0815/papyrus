@@ -16,6 +16,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { FiCheck, FiCloud, FiX } from 'react-icons/fi'
 import styled, { keyframes } from 'styled-components'
 
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 export interface RequiredFieldChip {
@@ -582,12 +583,13 @@ export function CountryFormShell({
   )
 
   /** 변경사항 있을 때 닫기 가드 */
-  const requestClose = () => {
+  const requestClose = async () => {
     if (submitting) return
     if (isDirty) {
-      const ok = window.confirm(
-        '저장하지 않은 변경사항이 있습니다. 정말 닫으시겠습니까?',
-      )
+      const ok = await confirm({
+        title: '확인',
+        message: '저장하지 않은 변경사항이 있습니다. 정말 닫으시겠습니까?',
+      })
       if (!ok) return
     }
     onClose()

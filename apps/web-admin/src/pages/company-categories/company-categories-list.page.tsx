@@ -14,6 +14,8 @@ import styled, { css } from 'styled-components'
 
 import type { CompanyCategory } from '@/shared/api/company-category'
 import { companyCategoryApi } from '@/shared/api/company-category'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 const Page = styled.div`
   padding: calc(var(--header-height, 64px) + 1.5rem) 2rem 4rem;
@@ -285,12 +287,19 @@ export const CompanyCategoriesListPage: React.FC = () => {
 
   const handleDelete = async (c: CompanyCategory, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm(`'${c.name}' 카테고리를 삭제하시겠습니까?`)) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: `'${c.name}' 카테고리를 삭제하시겠습니까?`,
+        danger: true,
+      }))
+    )
+      return
     try {
       await companyCategoryApi.delete(c.id)
       load()
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제에 실패했습니다.')
+      notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다.')
     }
   }
 

@@ -5,6 +5,7 @@ import { FiLayers, FiPlus, FiEdit2, FiTrash2, FiAward, FiChevronRight } from 're
 import { toast } from 'react-hot-toast'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import type { AdministrationDepartmentCategory } from '@/shared/api/administration-department'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { PositionDefinitionsSection } from '@/widgets/country/country-detail/ui/position-definitions-section.widget'
 
 export const DepartmentCategoriesPage: React.FC = () => {
@@ -62,7 +63,14 @@ export const DepartmentCategoriesPage: React.FC = () => {
   }
 
   const handleDeleteCategory = async (cat: AdministrationDepartmentCategory) => {
-    if (!window.confirm(`"${cat.name}" 카테고리를 삭제하시겠습니까?`)) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: `"${cat.name}" 카테고리를 삭제하시겠습니까?`,
+        danger: true,
+      }))
+    )
+      return
     try {
       await administrationDepartmentApi.deleteCategory(cat.id)
       toast.success('삭제되었습니다.')

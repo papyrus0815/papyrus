@@ -22,6 +22,7 @@ import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { notify } from '@/shared/ui/toast'
 
 const ORGANIZATION_TYPES: { value: OrganizationType; label: string }[] = [
   { value: 'GOVERNMENT_AGENCY', label: '정부기관/행정기구' },
@@ -326,20 +327,20 @@ export const OrganizationFormPage: React.FC = () => {
     e.preventDefault()
     playClickSound()
     if (!form.name.trim()) {
-      alert('이름을 입력하세요.')
+      notify.error('이름을 입력하세요.')
       return
     }
     try {
       if (isEdit) {
         await updateOrganization(apiConnection, id!, form)
-        alert('수정되었습니다.')
+        notify.success('수정되었습니다.')
       } else {
         await createOrganization(apiConnection, form)
-        alert('등록되었습니다.')
+        notify.success('등록되었습니다.')
       }
       navigate('/organizations')
     } catch (err: any) {
-      alert(err?.message || '저장 실패')
+      notify.error(err?.message || '저장 실패')
     }
   }
 

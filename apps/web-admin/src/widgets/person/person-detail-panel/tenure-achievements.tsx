@@ -22,6 +22,7 @@ import {
 } from 'react-icons/fi'
 
 import { personCareerApi } from '@/shared/api/person-career'
+import { confirm } from '@/shared/ui/confirm-dialog'
 
 import { formatIsoDateKo } from './helpers'
 import {
@@ -193,7 +194,14 @@ export function TenureAchievements({
   }
 
   const handleDelete = async (achievementId: string) => {
-    if (!window.confirm('이 업적을 삭제하시겠습니까?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 업적을 삭제하시겠습니까?',
+        danger: true,
+      }))
+    )
+      return
     onPlayClick?.()
     try {
       if (isReign) {

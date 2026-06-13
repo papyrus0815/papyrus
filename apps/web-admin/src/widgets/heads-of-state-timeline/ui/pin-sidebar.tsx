@@ -14,7 +14,8 @@ import {
 } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
-import { useToast } from '@/shared/ui/toast'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 import type { PinnedRow, PinnedSegment } from '../model/types'
 import { sortSegmentsChronologically } from '../lib/sort-segments'
@@ -61,7 +62,6 @@ export function PinSidebar({
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const wrapperRef = useRef<HTMLElement | null>(null)
-  const { showToast } = useToast()
   const { expandableForRow, collapsibleSegmentIdsForRow } = useRowsLineage(rows)
 
   useEffect(() => {
@@ -82,12 +82,17 @@ export function PinSidebar({
   }, [rows.length])
 
   const handleCopyUrl = async () => {
-    const r = await copyShareUrl()
-    showToast(r.ok ? 'success' : 'error', r.message)
+    const result = await copyShareUrl()
+    if (result.ok) notify.success(result.message)
+    else notify.error(result.message)
   }
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     if (rows.length === 0) return
-    const ok = window.confirm('핀한 모든 행을 비울까요?')
+    const ok = await confirm({
+      title: '삭제 확인',
+      message: '핀한 모든 행을 비울까요?',
+      danger: true,
+    })
     if (!ok) return
     onClearAll()
   }
@@ -352,8 +357,7 @@ export function PinSidebar({
                           expandable.forEach((s) =>
                             onAddSegmentToRow(row.rowId, s),
                           )
-                          showToast(
-                            'success',
+                          notify.success(
                             `계보 ${expandable.length}개를 이 행에 추가했습니다`,
                           )
                         }}
@@ -369,8 +373,7 @@ export function PinSidebar({
                           collapsibleIds.forEach((sid) =>
                             onRemoveSegmentFromRow(row.rowId, sid),
                           )
-                          showToast(
-                            'info',
+                          notify.info(
                             `계보 ${collapsibleIds.length}개를 닫았습니다`,
                           )
                         }}

@@ -2,6 +2,7 @@ import { FiTrash2 } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { ledgerHairlineStrong } from '@/pages/events/ledger/styles/ledger-tokens'
+import { confirm } from '@/shared/ui/confirm-dialog'
 
 interface ModuleRemoveActionProps {
   /** 모듈 한국어 라벨 — confirm 다이얼로그 안내 문구에 사용. */
@@ -21,10 +22,12 @@ interface ModuleRemoveActionProps {
  * 끼우지 않는다(이후 디자인 시스템에 confirm 표준이 정해지면 일괄 교체).
  */
 export function ModuleRemoveAction({ label, onRemove }: ModuleRemoveActionProps) {
-  const handleClick = () => {
-    const ok = window.confirm(
-      `${label} 모듈을 제거합니다. 안에 있던 입력은 모두 사라집니다. 계속할까요?`,
-    )
+  const handleClick = async () => {
+    const ok = await confirm({
+      title: '삭제 확인',
+      message: `${label} 모듈을 제거합니다. 안에 있던 입력은 모두 사라집니다. 계속할까요?`,
+      danger: true,
+    })
     if (ok) onRemove()
   }
   return (

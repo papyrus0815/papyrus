@@ -7,6 +7,7 @@ import styled, { css } from 'styled-components'
 import type { Ethnicity } from '@/shared/api/ethnicity'
 import { ethnicityApi } from '@/shared/api/ethnicity'
 import { uploadImage, validateImageFile } from '@/shared/api/upload'
+import { notify } from '@/shared/ui/toast'
 
 const Page = styled.div`
   padding: 1.5rem 2rem;
@@ -171,7 +172,7 @@ export const EthnicityFormPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.name.trim()) { alert('민족명을 입력해주세요.'); return }
+    if (!form.name.trim()) { notify.error('민족명을 입력해주세요.'); return }
     setSaving(true)
     try {
       if (isEdit) {
@@ -193,7 +194,7 @@ export const EthnicityFormPage: React.FC = () => {
       }
       navigate('/ethnicities')
     } catch (err) {
-      alert(err instanceof Error ? err.message : '저장에 실패했습니다.')
+      notify.error(err instanceof Error ? err.message : '저장에 실패했습니다.')
     } finally {
       setSaving(false)
     }
@@ -207,7 +208,7 @@ export const EthnicityFormPage: React.FC = () => {
       const result = await uploadImage(file)
       setForm((prev) => ({ ...prev, thumbnailUrl: result.url }))
     } catch (err) {
-      alert(err instanceof Error ? err.message : '업로드에 실패했습니다.')
+      notify.error(err instanceof Error ? err.message : '업로드에 실패했습니다.')
     }
   }
 

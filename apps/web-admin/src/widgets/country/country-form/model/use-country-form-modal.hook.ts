@@ -10,6 +10,7 @@ import { useCallback, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 
 import type { Country, CountryFormData } from '@/entities/country/api'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import {
   useCreateCountry,
   useDeleteCountry,
@@ -103,7 +104,14 @@ export function useCountryFormModal(opts: UseCountryFormModalOptions = {}) {
 
   const remove = useCallback(
     async (id: string, name: string) => {
-      if (!window.confirm(`"${name}"을(를) 삭제하시겠습니까?`)) return
+      if (
+        !(await confirm({
+          title: '삭제 확인',
+          message: `"${name}"을(를) 삭제하시겠습니까?`,
+          danger: true,
+        }))
+      )
+        return
       const loadingToast = toast.loading('삭제하는 중...')
       try {
         await deleteMutation.mutateAsync(id)

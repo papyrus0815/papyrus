@@ -36,9 +36,10 @@ import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 import {
-  ContentLayout,
   HistoryHeader,
   HistoryCount,
   CountText,
@@ -210,7 +211,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
       setFormData((prev) => ({
         ...prev,
         name: dept.name,
-        countryId: dept.countryId,
+        countryId: dept.countryId ?? '',
         parentId: dept.parentId ?? '',
         description: dept.description ?? '',
       }))
@@ -286,9 +287,15 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
     setMinisterFormVisible(true)
   }
 
-  const handleDeleteMinister = (index: number) => {
+  const handleDeleteMinister = async (index: number) => {
     playClickSound()
-    if (confirm('이 장관을 삭제하시겠습니까?')) {
+    if (
+      await confirm({
+        title: '삭제 확인',
+        message: '이 장관을 삭제하시겠습니까?',
+        danger: true,
+      })
+    ) {
       setMinisters(ministers.filter((_, idx) => idx !== index))
     }
   }
@@ -297,19 +304,19 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
     playClickSound()
 
     if (!ministerPersonId) {
-      alert('인물을 선택해주세요.')
+      notify.error('인물을 선택해주세요.')
       return
     }
     if (!ministerPosition) {
-      alert('직위를 선택해주세요.')
+      notify.error('직위를 선택해주세요.')
       return
     }
     if (!ministerStartDate) {
-      alert('취임일을 입력해주세요.')
+      notify.error('취임일을 입력해주세요.')
       return
     }
     if (!ministerIsCurrent && !ministerEndDate) {
-      alert('퇴임일을 입력하거나 현재 재임 중을 체크해주세요.')
+      notify.error('퇴임일을 입력하거나 현재 재임 중을 체크해주세요.')
       return
     }
 
@@ -370,9 +377,15 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
     setHistoryFormVisible(true)
   }
 
-  const handleDeleteHistory = (id: string) => {
+  const handleDeleteHistory = async (id: string) => {
     playClickSound()
-    if (confirm('이 연혁을 삭제하시겠습니까?')) {
+    if (
+      await confirm({
+        title: '삭제 확인',
+        message: '이 연혁을 삭제하시겠습니까?',
+        danger: true,
+      })
+    ) {
       setHistoryEvents(historyEvents.filter(h => h.id !== id))
     }
   }
@@ -381,11 +394,11 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
     playClickSound()
 
     if (!historyDate) {
-      alert('날짜를 선택해주세요.')
+      notify.error('날짜를 선택해주세요.')
       return
     }
     if (!historyTitle.trim()) {
-      alert('제목을 입력해주세요.')
+      notify.error('제목을 입력해주세요.')
       return
     }
 
@@ -429,12 +442,12 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
     playClickSound()
 
     if (!formData.name.trim()) {
-      alert('부처명을 입력해주세요.')
+      notify.error('부처명을 입력해주세요.')
       return
     }
 
     if (!formData.countryId) {
-      alert('국가를 선택해주세요.')
+      notify.error('국가를 선택해주세요.')
       return
     }
 
@@ -456,7 +469,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
       await invalidateAdministrationDepartmentQueries(queryClient)
       navigate('/administration-departments')
     } catch (err) {
-      alert(err instanceof Error ? err.message : '저장에 실패했습니다')
+      notify.error(err instanceof Error ? err.message : '저장에 실패했습니다')
     }
   }
 
@@ -1277,13 +1290,14 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
         <CountrySelectModal
           isOpen={countryModalOpen}
           onClose={() => setCountryModalOpen(false)}
-          onSelectCountry={(country) => {
-            const flag = 'flagEmoji' in country ? country.flagEmoji : '🌏'
+          onSelect={(country) => {
+            // 모달은 {id, name, isHistorical}만 전달 — 국기는 현대 국가 목록에서 보강
+            const matched = modernCountries.find((c) => c.id === country.id)
             setFormData({
               ...formData,
               countryId: country.id,
               countryName: country.name,
-              countryFlag: flag || '🌏',
+              countryFlag: matched?.flagEmoji || '🌏',
             })
             setCountryModalOpen(false)
           }}

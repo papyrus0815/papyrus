@@ -21,6 +21,7 @@ import {
   getLaws,
   updateLaw,
 } from '@/shared/api/election'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import {
   EmptyStateFeatureCard,
   EmptyStateFill,
@@ -596,11 +597,13 @@ export function CountryLawsSection({
                           type="button"
                           $variant="danger"
                           disabled={deleteMut.isPending}
-                          onClick={() => {
+                          onClick={async () => {
                             if (
-                              window.confirm(
-                                `「${row.name}」을(를) 삭제할까요? 선거·정당에 연결된 경우 연결도 함께 해제됩니다.`,
-                              )
+                              await confirm({
+                                title: '삭제 확인',
+                                message: `「${row.name}」을(를) 삭제할까요? 선거·정당에 연결된 경우 연결도 함께 해제됩니다.`,
+                                danger: true,
+                              })
                             )
                               deleteMut.mutate(row.id)
                           }}

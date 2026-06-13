@@ -45,6 +45,7 @@ import {
   type CabinetListItemDto,
 } from '@/shared/api/person-career'
 import { uploadImage } from '@/shared/api/upload'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -1423,9 +1424,12 @@ const TreatyDetail: React.FC<{
 
   const handleDeleteTreaty = async () => {
     if (
-      !confirm(
-        '이 조약을 삭제하시겠습니까? 모든 서명국, 조항, 이미지가 함께 삭제됩니다.',
-      )
+      !(await confirm({
+        title: '삭제 확인',
+        message:
+          '이 조약을 삭제하시겠습니까? 모든 서명국, 조항, 이미지가 함께 삭제됩니다.',
+        danger: true,
+      }))
     )
       return
     try {
@@ -1439,7 +1443,14 @@ const TreatyDetail: React.FC<{
   }
 
   const handleDeleteSignatory = async (id: string) => {
-    if (!confirm('이 서명국 정보를 삭제하시겠습니까?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 서명국 정보를 삭제하시겠습니까?',
+        danger: true,
+      }))
+    )
+      return
     try {
       await treatyApi.removeSignatory(id)
       invalidateTreaty()
@@ -1450,7 +1461,14 @@ const TreatyDetail: React.FC<{
   }
 
   const handleDeleteTerm = async (id: string) => {
-    if (!confirm('이 조항을 삭제하시겠습니까?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 조항을 삭제하시겠습니까?',
+        danger: true,
+      }))
+    )
+      return
     try {
       await treatyApi.removeTerm(id)
       invalidateTreaty()
@@ -1485,7 +1503,14 @@ const TreatyDetail: React.FC<{
   }
 
   const handleDeleteImage = async (id: string) => {
-    if (!confirm('이 이미지를 삭제하시겠습니까?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 이미지를 삭제하시겠습니까?',
+        danger: true,
+      }))
+    )
+      return
     try {
       await treatyApi.removeImage(id)
       invalidateTreaty()

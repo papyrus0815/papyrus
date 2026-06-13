@@ -84,6 +84,7 @@ import { pathKeys } from '@/shared/router'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
@@ -1067,7 +1068,14 @@ export function CabinetsSection({
     tenureId: string,
     achievementId: string,
   ) => {
-    if (!window.confirm('이 히스토리를 삭제하시겠습니까?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 히스토리를 삭제하시겠습니까?',
+        danger: true,
+      }))
+    )
+      return
     try {
       await personCareerApi.deleteTenureAchievement(tenureId, achievementId)
       if (selectedHistoryId === achievementId) {
@@ -1341,9 +1349,12 @@ export function CabinetsSection({
   ) => {
     e.stopPropagation()
     if (
-      !window.confirm(
-        '이 행정부와 수반 재임, 소속 각료 재임을 모두 삭제합니다. 계속할까요?',
-      )
+      !(await confirm({
+        title: '삭제 확인',
+        message:
+          '이 행정부와 수반 재임, 소속 각료 재임을 모두 삭제합니다. 계속할까요?',
+        danger: true,
+      }))
     )
       return
     setDeletingCabinetId(cabinetId)

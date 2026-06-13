@@ -12,6 +12,7 @@ import {
   useUpsertDevelopmentIndicator,
   useDeleteDevelopmentIndicator,
 } from '@/entities/country/api.indicators'
+import { confirm } from '@/shared/ui/confirm-dialog'
 
 import { INDICATOR_META, type IndicatorType } from './field-configs'
 import * as S from './styles'
@@ -114,7 +115,14 @@ export function IndicatorEditorPanel({ countryId, type }: Props) {
   }
 
   const handleDelete = async (year: number) => {
-    if (!window.confirm(`${year}년 ${meta.label} 지표를 삭제할까요?`)) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: `${year}년 ${meta.label} 지표를 삭제할까요?`,
+        danger: true,
+      }))
+    )
+      return
     try {
       await removeFn(year)
       toast.success('삭제됨')

@@ -8,6 +8,8 @@ import styled, { css } from 'styled-components'
 import type { Ethnicity } from '@/shared/api/ethnicity'
 import { ethnicityApi } from '@/shared/api/ethnicity'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 const Page = styled.div`
   padding: 1.5rem 2rem;
@@ -222,13 +224,20 @@ export const EthnicitiesListPage: React.FC = () => {
   }
   const handleDelete = async (id: string, name: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm(`'${name}' 민족을 삭제하시겠습니까?`)) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: `'${name}' 민족을 삭제하시겠습니까?`,
+        danger: true,
+      }))
+    )
+      return
     try {
       await ethnicityApi.delete(id)
       if (selectedId === id) setSelectedId(null)
       load()
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제에 실패했습니다.')
+      notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다.')
     }
   }
 

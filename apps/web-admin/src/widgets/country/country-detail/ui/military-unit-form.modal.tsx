@@ -59,6 +59,7 @@ import {
   SidePanelFormTabBarWrap,
 } from '@/shared/ui/side-panel-form'
 import { SidePanel } from '@/shared/ui/side-panel'
+import { notify } from '@/shared/ui/toast'
 
 const MAIN = '#6366f1'
 const MAIN_HOVER = '#4f46e5'
@@ -505,7 +506,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       setNotableBattles(u.notableBattles || '')
       setHonors(u.honors || '')
     } catch {
-      alert('군부대 정보를 불러오는데 실패했습니다.')
+      notify.error('군부대 정보를 불러오는데 실패했습니다.')
       onClose()
     } finally {
       setLoading(false)
@@ -516,7 +517,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     e.preventDefault()
 
     if (!name.trim()) {
-      alert('군부대명을 입력해주세요.')
+      notify.error('군부대명을 입력해주세요.')
       setActiveTab('basic')
       return
     }
@@ -549,15 +550,15 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       setLoading(true)
       if (isEdit && editingUnitId) {
         await militaryUnitApi.update(editingUnitId, data)
-        alert('군부대가 수정되었습니다.')
+        notify.success('군부대가 수정되었습니다.')
       } else {
         await militaryUnitApi.create(data)
-        alert('군부대가 생성되었습니다.')
+        notify.success('군부대가 생성되었습니다.')
       }
       onSaved?.()
       onClose()
     } catch {
-      alert('군부대 저장에 실패했습니다.')
+      notify.error('군부대 저장에 실패했습니다.')
     } finally {
       setLoading(false)
     }
@@ -1207,8 +1208,12 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
           const historicalCountry = historicalCountries.find(
             (c) => c.id === country.id,
           )
+          // 역사 국가 DTO에는 flagEmoji가 없음(런타임에도 미제공) — 구조적 접근으로 안전 처리
           const flagEmoji =
-            modernCountry?.flagEmoji || historicalCountry?.flagEmoji || '🏳️'
+            modernCountry?.flagEmoji ||
+            (historicalCountry as { flagEmoji?: string } | undefined)
+              ?.flagEmoji ||
+            '🏳️'
 
           setCountryId(country.id)
           setCountryName(country.name)

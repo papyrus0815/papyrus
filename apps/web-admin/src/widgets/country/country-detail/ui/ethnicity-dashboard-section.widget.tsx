@@ -12,6 +12,7 @@ import {
 } from '@/features/ethnicity/use-ethnicities.hook'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import type { Ethnicity } from '@/shared/api/ethnicity'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import {
   PillTabButton,
   PillTabNav,
@@ -97,7 +98,14 @@ export function EthnicityDashboardSection() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('이 민족을 삭제하시겠습니까?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 민족을 삭제하시겠습니까?',
+        danger: true,
+      }))
+    )
+      return
     await deleteEthnicity.mutateAsync(id)
     if (editing?.id === id) goToList()
   }

@@ -18,6 +18,7 @@ import {
   linkCabinetToEvent,
 } from '@/shared/api/cabinet-events'
 import { createEvent, getAllEvents, EventResponseDto } from '@/shared/api/events'
+import { notify } from '@/shared/ui/toast'
 
 const ROLE_OPTIONS: CabinetEventRole[] = ['ORIGIN', 'PARTY', 'MEDIATOR', 'AFFECTED']
 
@@ -162,7 +163,7 @@ export function CabinetEventAttachModal({
       await onAttached()
     } catch (e) {
       console.error(e)
-      alert('사건 연결에 실패했습니다.')
+      notify.error('사건 연결에 실패했습니다.')
     } finally {
       setSubmitting(false)
     }

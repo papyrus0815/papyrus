@@ -22,6 +22,7 @@ import {
   deleteMyEvaluation,
   upsertMyEvaluation,
 } from '@/shared/api/person-stats'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import {
   ModalBody,
   ModalBox,
@@ -142,9 +143,16 @@ export function PersonStatsEditModal({
   const isDeleting = deleteMut.isPending
   const isBusy = isSaving || isDeleting
 
-  const requestClose = useCallback(() => {
+  const requestClose = useCallback(async () => {
     if (isBusy) return
-    if (isDirty && !window.confirm('변경 사항이 저장되지 않았습니다. 닫을까요?')) return
+    if (
+      isDirty &&
+      !(await confirm({
+        title: '확인',
+        message: '변경 사항이 저장되지 않았습니다. 닫을까요?',
+      }))
+    )
+      return
     onClose()
   }, [isDirty, isBusy, onClose])
 
@@ -188,7 +196,14 @@ export function PersonStatsEditModal({
   }
 
   const handleDelete = async () => {
-    if (!window.confirm('나의 능력치 평가와 성격 태그를 모두 제거할까요?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '나의 능력치 평가와 성격 태그를 모두 제거할까요?',
+        danger: true,
+      }))
+    )
+      return
     try {
       await deleteMut.mutateAsync()
       await invalidateAll()

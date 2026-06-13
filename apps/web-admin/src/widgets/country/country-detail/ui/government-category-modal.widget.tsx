@@ -11,6 +11,7 @@ import { administrationDepartmentApi } from '@/shared/api/administration-departm
 import { invalidateAdministrationDepartmentQueries } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
+import { confirm } from '@/shared/ui/confirm-dialog'
 
 import {
   CategoryBtnRow,
@@ -126,9 +127,12 @@ export function GovernmentCategoryModal({
 
   const deleteCategoryById = async (id: string) => {
     if (
-      !confirm(
-        '이 카테고리를 삭제하시겠습니까? 해당 카테고리를 쓰는 부처는 카테고리가 해제됩니다.',
-      )
+      !(await confirm({
+        title: '삭제 확인',
+        message:
+          '이 카테고리를 삭제하시겠습니까? 해당 카테고리를 쓰는 부처는 카테고리가 해제됩니다.',
+        danger: true,
+      }))
     )
       return
     try {

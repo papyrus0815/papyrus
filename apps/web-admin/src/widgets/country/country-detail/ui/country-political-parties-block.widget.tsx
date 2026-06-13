@@ -43,6 +43,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   EmptyStateFeatureCard,
@@ -1412,8 +1413,14 @@ function PartyLineageBlock({
                         type="button"
                         disabled={saveMut.isPending || delMut.isPending}
                         aria-label="계보 연결 삭제"
-                        onClick={() => {
-                          if (window.confirm('이 계보 연결을 삭제할까요?'))
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: '삭제 확인',
+                              message: '이 계보 연결을 삭제할까요?',
+                              danger: true,
+                            })
+                          )
                             delMut.mutate(row.id)
                         }}
                       >
@@ -1502,8 +1509,14 @@ function PartyLineageBlock({
                         type="button"
                         disabled={saveMut.isPending || delMut.isPending}
                         aria-label="계보 연결 삭제"
-                        onClick={() => {
-                          if (window.confirm('이 계보 연결을 삭제할까요?'))
+                        onClick={async () => {
+                          if (
+                            await confirm({
+                              title: '삭제 확인',
+                              message: '이 계보 연결을 삭제할까요?',
+                              danger: true,
+                            })
+                          )
                             delMut.mutate(row.id)
                         }}
                       >
@@ -2186,11 +2199,13 @@ export function CountryPoliticalPartiesBlock({
                     $variant="danger"
                     title="정당 삭제"
                     aria-label="정당 삭제"
-                    onClick={() => {
+                    onClick={async () => {
                       if (
-                        window.confirm(
-                          `"${detailParty.name}" 정당을 삭제할까요? (선거·소속 등에서 참조 중이면 실패할 수 있습니다.)`,
-                        )
+                        await confirm({
+                          title: '삭제 확인',
+                          message: `"${detailParty.name}" 정당을 삭제할까요? (선거·소속 등에서 참조 중이면 실패할 수 있습니다.)`,
+                          danger: true,
+                        })
                       )
                         deleteMut.mutate(detailParty.id)
                     }}

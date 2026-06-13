@@ -16,6 +16,7 @@ import {
   useUpdateDynasty,
 } from '@/features/dynasty/use-dynasties.hook'
 import type { Dynasty, DynastyMutationBody } from '@/shared/api/dynasty'
+import { confirm } from '@/shared/ui/confirm-dialog'
 
 import { DynastyFormModal } from './dynasty-form-modal'
 import { DynastyMembersInfographicModal } from './dynasty-members-infographic-modal'
@@ -312,7 +313,14 @@ export function DynastySection() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('이 가문을 삭제하시겠습니까?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 가문을 삭제하시겠습니까?',
+        danger: true,
+      }))
+    )
+      return
     await deleteDynasty.mutateAsync(id)
     if (editing?.id === id) closeForm()
     setExpandedIds((prev) => {

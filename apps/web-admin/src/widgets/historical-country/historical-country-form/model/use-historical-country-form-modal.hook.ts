@@ -10,6 +10,7 @@ import { useCallback, useState } from 'react'
 import { toast } from 'react-hot-toast'
 
 import type { HistoricalCountry } from '@/entities/historical-country/api'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import {
   useCreateHistoricalCountry,
   useDeleteHistoricalCountry,
@@ -29,6 +30,8 @@ export type HistoricalCountrySavePayload = Omit<
   parentModernCountryIds?: string[]
   parentHistoricalCountryIds?: string[]
   transitionEventType?: string
+  /** 후임 연결 시 전환 성격 (국가 교체 vs 정권 교체) */
+  transitionScope?: 'STATE_SUCCESSION' | 'REGIME_CHANGE' | null
 }
 
 export function useHistoricalCountryFormModal() {
@@ -68,8 +71,11 @@ export function useHistoricalCountryFormModal() {
       try {
         const shared = {
           name: data.name,
-          enName: data.enName,
+          // Update DTO는 null=비움, Create DTO는 null 미허용(아래에서 undefined로 생략)
+          enName: data.enName ?? null,
+          nameOrigin: data.nameOrigin ?? null,
           description: data.description ?? null,
+          history: data.history ?? null,
           thumbnailUrl: data.thumbnailUrl ?? null,
           startEra: data.startEra ?? null,
           startYear: data.startYear ?? null,
@@ -80,17 +86,23 @@ export function useHistoricalCountryFormModal() {
           endMonth: data.endMonth ?? null,
           endDay: data.endDay ?? null,
           stateType: data.stateType,
+          entityKind: data.entityKind ?? null,
           parentModernCountryIds: data.parentModernCountryIds,
           parentHistoricalCountryIds: data.parentHistoricalCountryIds,
           transitionEventType: data.transitionEventType,
+          transitionScope: data.transitionScope ?? null,
         }
         if (data.id) {
           await updateMutation.mutateAsync({ id: data.id, data: shared })
           toast.success('수정되었습니다', { id: loadingToast })
         } else {
+          // CreateHistoricalCountryDto는 일부 필드 null 미허용 — undefined로 생략
           await createMutation.mutateAsync({
             ...shared,
+            enName: shared.enName ?? undefined,
+            nameOrigin: shared.nameOrigin ?? undefined,
             description: shared.description ?? undefined,
+            history: shared.history ?? undefined,
             thumbnailUrl: shared.thumbnailUrl ?? undefined,
             startEra: shared.startEra ?? undefined,
             startYear: shared.startYear ?? undefined,
@@ -116,7 +128,14 @@ export function useHistoricalCountryFormModal() {
 
   const remove = useCallback(
     async (id: string): Promise<boolean> => {
-      if (!confirm('정말 삭제하시겠습니까?')) return false
+      if (
+        !(await confirm({
+          title: '삭제 확인',
+          message: '정말 삭제하시겠습니까?',
+          danger: true,
+        }))
+      )
+        return false
       const loadingToast = toast.loading('삭제하는 중...')
       try {
         await deleteMutation.mutateAsync(id)

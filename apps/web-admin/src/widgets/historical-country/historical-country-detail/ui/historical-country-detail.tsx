@@ -10,6 +10,7 @@ import {
   getStateTypeLabel as getStateTypeLabelUtil,
 } from '@/entities/historical-country/lib/utils'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { Spinner } from '@/shared/ui/spinner'
 
 interface HistoricalCountryDetailProps {
@@ -147,8 +148,14 @@ export function HistoricalCountryDetail({
           </ActionButton>
           <ActionButton
             $variant="delete"
-            onClick={() => {
-              if (confirm(`정말로 "${country.name}"을(를) 삭제하시겠습니까?`)) {
+            onClick={async () => {
+              if (
+                await confirm({
+                  title: '삭제 확인',
+                  message: `정말로 "${country.name}"을(를) 삭제하시겠습니까?`,
+                  danger: true,
+                })
+              ) {
                 onDelete(country.id)
               }
             }}

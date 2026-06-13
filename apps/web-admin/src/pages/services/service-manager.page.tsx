@@ -11,7 +11,7 @@ import {
   FaSync,
   FaFileAlt,
 } from 'react-icons/fa'
-import { ToastProvider, useToast } from '@/shared/ui/toast'
+import { notify } from '@/shared/ui/toast'
 import { Z_INDEX, OVERLAY_STYLES } from '@/shared/styles/z-index'
 
 // 타입 정의
@@ -32,12 +32,36 @@ interface ServiceStatus {
   allReady: boolean
 }
 
+// Electron 호스트(service-manager)가 노출하는 window.electron.service 브리지 타입 선언
+// (브라우저 단독 실행 시에는 존재하지 않음 — 호출부는 try/catch로 보호됨)
+declare global {
+  interface Window {
+    electron: {
+      service: {
+        getStatus: () => Promise<ServiceStatus>
+        startAll: () => Promise<void>
+        stopAll: () => Promise<void>
+        restart: () => Promise<void>
+        startDocker: () => Promise<void>
+        stopDocker: () => Promise<void>
+        startApi: () => Promise<void>
+        stopApi: () => Promise<void>
+        getMySQLLogs: (lines: number) => Promise<string>
+        getContainerLogs: (
+          containerName: string,
+          lines: number,
+        ) => Promise<string>
+        getApiLogs: (lines: number) => Promise<string>
+      }
+    }
+  }
+}
+
 function ServiceManagerPageContent() {
   const [status, setStatus] = useState<ServiceStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedLog, setSelectedLog] = useState<string | null>(null)
   const [logContent, setLogContent] = useState('')
-  const { showToast } = useToast()
 
   // 서비스 상태 조회
   const fetchStatus = async () => {
@@ -45,7 +69,7 @@ function ServiceManagerPageContent() {
       const newStatus = await window.electron.service.getStatus()
       setStatus(newStatus)
     } catch (error) {
-      showToast('error', '서비스 상태 조회 실패')
+      notify.error('서비스 상태 조회 실패')
     }
   }
 
@@ -63,13 +87,13 @@ function ServiceManagerPageContent() {
   // 서비스 제어 함수들
   const handleStartAll = async () => {
     setLoading(true)
-    showToast('info', '모든 서비스를 시작하는 중...')
+    notify.info('모든 서비스를 시작하는 중...')
     try {
       await window.electron.service.startAll()
       await fetchStatus()
-      showToast('success', '모든 서비스가 시작되었습니다!')
+      notify.success('모든 서비스가 시작되었습니다!')
     } catch (error) {
-      showToast('error', '서비스 시작에 실패했습니다')
+      notify.error('서비스 시작에 실패했습니다')
     } finally {
       setLoading(false)
     }
@@ -77,13 +101,13 @@ function ServiceManagerPageContent() {
 
   const handleStopAll = async () => {
     setLoading(true)
-    showToast('info', '모든 서비스를 중지하는 중...')
+    notify.info('모든 서비스를 중지하는 중...')
     try {
       await window.electron.service.stopAll()
       await fetchStatus()
-      showToast('success', '모든 서비스가 중지되었습니다')
+      notify.success('모든 서비스가 중지되었습니다')
     } catch (error) {
-      showToast('error', '서비스 중지에 실패했습니다')
+      notify.error('서비스 중지에 실패했습니다')
     } finally {
       setLoading(false)
     }
@@ -91,13 +115,13 @@ function ServiceManagerPageContent() {
 
   const handleRestart = async () => {
     setLoading(true)
-    showToast('info', '서비스를 재시작하는 중...')
+    notify.info('서비스를 재시작하는 중...')
     try {
       await window.electron.service.restart()
       await fetchStatus()
-      showToast('success', '서비스가 재시작되었습니다!')
+      notify.success('서비스가 재시작되었습니다!')
     } catch (error) {
-      showToast('error', '서비스 재시작에 실패했습니다')
+      notify.error('서비스 재시작에 실패했습니다')
     } finally {
       setLoading(false)
     }
@@ -105,13 +129,13 @@ function ServiceManagerPageContent() {
 
   const handleStartDocker = async () => {
     setLoading(true)
-    showToast('info', 'Docker 컨테이너를 시작하는 중...')
+    notify.info('Docker 컨테이너를 시작하는 중...')
     try {
       await window.electron.service.startDocker()
       await fetchStatus()
-      showToast('success', 'Docker 컨테이너가 시작되었습니다!')
+      notify.success('Docker 컨테이너가 시작되었습니다!')
     } catch (error) {
-      showToast('error', 'Docker 시작에 실패했습니다')
+      notify.error('Docker 시작에 실패했습니다')
     } finally {
       setLoading(false)
     }
@@ -119,13 +143,13 @@ function ServiceManagerPageContent() {
 
   const handleStopDocker = async () => {
     setLoading(true)
-    showToast('info', 'Docker 컨테이너를 중지하는 중...')
+    notify.info('Docker 컨테이너를 중지하는 중...')
     try {
       await window.electron.service.stopDocker()
       await fetchStatus()
-      showToast('success', 'Docker 컨테이너가 중지되었습니다')
+      notify.success('Docker 컨테이너가 중지되었습니다')
     } catch (error) {
-      showToast('error', 'Docker 중지에 실패했습니다')
+      notify.error('Docker 중지에 실패했습니다')
     } finally {
       setLoading(false)
     }
@@ -133,13 +157,13 @@ function ServiceManagerPageContent() {
 
   const handleStartApi = async () => {
     setLoading(true)
-    showToast('info', 'API 서버를 시작하는 중...')
+    notify.info('API 서버를 시작하는 중...')
     try {
       await window.electron.service.startApi()
       await fetchStatus()
-      showToast('success', 'API 서버가 시작되었습니다!')
+      notify.success('API 서버가 시작되었습니다!')
     } catch (error) {
-      showToast('error', 'API 시작에 실패했습니다')
+      notify.error('API 시작에 실패했습니다')
     } finally {
       setLoading(false)
     }
@@ -147,13 +171,13 @@ function ServiceManagerPageContent() {
 
   const handleStopApi = async () => {
     setLoading(true)
-    showToast('info', 'API 서버를 중지하는 중...')
+    notify.info('API 서버를 중지하는 중...')
     try {
       await window.electron.service.stopApi()
       await fetchStatus()
-      showToast('success', 'API 서버가 중지되었습니다')
+      notify.success('API 서버가 중지되었습니다')
     } catch (error) {
-      showToast('error', 'API 중지에 실패했습니다')
+      notify.error('API 중지에 실패했습니다')
     } finally {
       setLoading(false)
     }
@@ -383,13 +407,8 @@ function ServiceManagerPageContent() {
   )
 }
 
-// 메인 export: ToastProvider로 래핑
 export function ServiceManagerPage() {
-  return (
-    <ToastProvider>
-      <ServiceManagerPageContent />
-    </ToastProvider>
-  )
+  return <ServiceManagerPageContent />
 }
 
 // Styled Components

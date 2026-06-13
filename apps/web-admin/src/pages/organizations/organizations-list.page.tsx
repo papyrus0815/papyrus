@@ -16,6 +16,8 @@ import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { PositionDefinitionsSection } from '@/widgets/country/country-detail/ui/position-definitions-section.widget'
 
 const ORGANIZATION_TYPE_LABEL: Record<OrganizationType, string> = {
@@ -537,14 +539,21 @@ export const OrganizationsListPage: React.FC = () => {
   }
 
   const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`"${name}" 조직을 삭제하시겠습니까?`)) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: `"${name}" 조직을 삭제하시겠습니까?`,
+        danger: true,
+      }))
+    )
+      return
     playClickSound()
     try {
       await deleteOrganization(apiConnection, id)
       if (selectedOrg?.id === id) setSelectedOrg(null)
       loadOrganizations()
     } catch {
-      alert('삭제 실패')
+      notify.error('삭제 실패')
     }
   }
 
@@ -560,9 +569,9 @@ export const OrganizationsListPage: React.FC = () => {
       })
       setSelectedOrg(updated)
       loadOrganizations()
-      alert('저장되었습니다.')
+      notify.success('저장되었습니다.')
     } catch {
-      alert('저장에 실패했습니다.')
+      notify.error('저장에 실패했습니다.')
     }
   }
 

@@ -28,6 +28,7 @@ import { useEventHierarchy } from '@/features/event-hierarchy/model'
 import { VIEW_MODES, type ViewMode } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
 import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { useBookmarks } from '@/shared/hooks/use-bookmarks.hook'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { useRecentEvents } from '@/shared/hooks/use-recent-events.hook'
@@ -372,7 +373,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     () => navigate(pathKeys.events.create()),
     [navigate],
   )
-  const handleExportJson = useCallback(() => {
+  const handleExportJson = useCallback(async () => {
     const exported = visibleFlattenedHierarchy.map(
       (it) =>
         eventByIdMap.get(it.node.id) ??
@@ -384,9 +385,10 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     if (
       typeof serverTotal === 'number' &&
       exportedCount < serverTotal &&
-      !window.confirm(
-        `전체 ${serverTotal.toLocaleString()}건 중 현재 로드·필터된 ${exportedCount.toLocaleString()}건만 내보냅니다. 계속할까요?`,
-      )
+      !(await confirm({
+        title: '확인',
+        message: `전체 ${serverTotal.toLocaleString()}건 중 현재 로드·필터된 ${exportedCount.toLocaleString()}건만 내보냅니다. 계속할까요?`,
+      }))
     ) {
       return
     }

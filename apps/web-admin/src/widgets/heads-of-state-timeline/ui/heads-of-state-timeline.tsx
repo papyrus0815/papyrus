@@ -19,7 +19,7 @@ import {
 import styled from 'styled-components'
 
 import { pathKeys } from '@/shared/router'
-import { ToastProvider, useToast } from '@/shared/ui/toast'
+import { notify } from '@/shared/ui/toast'
 
 import { Legend } from './legend'
 import { PinSidebar } from './pin-sidebar'
@@ -44,14 +44,7 @@ import { useCategoryFilter } from '../model/use-category-filter'
 import { downloadComparisonJson, printComparison } from '../lib/export'
 
 export function HeadsOfStateTimeline() {
-  // 앱 루트 레벨에 ToastProvider가 항상 있는 것은 아니므로(다른 페이지는 자체적으로 사용)
-  // 이 위젯이 사용하는 토스트가 깨지지 않게 페이지 단위로 감싼다. 중첩되어도 React Context 가
-  // 가까운 Provider를 우선하므로 안전.
-  return (
-    <ToastProvider>
-      <HeadsOfStateTimelineInner />
-    </ToastProvider>
-  )
+  return <HeadsOfStateTimelineInner />
 }
 
 function HeadsOfStateTimelineInner() {
@@ -65,7 +58,6 @@ function HeadsOfStateTimelineInner() {
     endYear: number
   } | null>(null)
   const [modalPersonId, setModalPersonId] = useState<string | null>(null)
-  const { showToast } = useToast()
   const navigate = useNavigate()
   const userPresets = useUserPresets()
   const categoryFilter = useCategoryFilter()
@@ -82,9 +74,9 @@ function HeadsOfStateTimelineInner() {
   const openBarModal = useCallback(
     (bar: TenureBar) => {
       if (bar.personId) setModalPersonId(bar.personId)
-      else showToast('info', '등록된 인물 정보가 없습니다')
+      else notify.info('등록된 인물 정보가 없습니다')
     },
-    [showToast],
+    [],
   )
 
   // 행 제거 직후 5초간 undo 가능 — stack에 push, 가장 최근 것부터 pop.
@@ -106,9 +98,9 @@ function HeadsOfStateTimelineInner() {
     const last = undoStackRef.current.pop()
     if (!last) return false
     state.restoreRowAt(last.index, last.row)
-    showToast('success', '복원되었습니다')
+    notify.success('복원되었습니다')
     return true
-  }, [state, showToast, purgeExpiredUndo])
+  }, [state, purgeExpiredUndo])
 
   const handleRemoveRowWithUndo = useCallback(
     (rowId: string) => {
@@ -123,16 +115,15 @@ function HeadsOfStateTimelineInner() {
       state.removeRow(rowId)
       const nameLabel =
         removed.segments.map((s) => s.name).join(' → ') || '행'
-      showToast(
-        'info',
+      notify.action(
         `"${nameLabel}" 제거됨 (⌘Z)`,
-        UNDO_TIMEOUT_MS,
         { label: '복원', onClick: () => restoreLastRemoved() },
+        { type: 'info', duration: UNDO_TIMEOUT_MS },
       )
       // timeout으로 자동 만료 — ref 정리만, UI는 영향 없음
       window.setTimeout(purgeExpiredUndo, UNDO_TIMEOUT_MS + 100)
     },
-    [state, showToast, purgeExpiredUndo, restoreLastRemoved],
+    [state, purgeExpiredUndo, restoreLastRemoved],
   )
 
   // ⌘Z / Ctrl+Z — 가장 최근 제거 복원
@@ -176,21 +167,22 @@ function HeadsOfStateTimelineInner() {
     const diff = state.rows.length - prevRowsLen.current
     if (diff > 0 && prevRowsLen.current > 0) {
       // 0→1 첫 핀은 자동 fit 동작 자체가 시각 피드백이라 토스트 생략, 추가 핀만 알림
-      showToast('success', `${diff}개 행 추가됨`)
+      notify.success(`${diff}개 행 추가됨`)
     }
     prevRowsLen.current = state.rows.length
-  }, [state.rows.length, showToast])
+  }, [state.rows.length])
 
   const totalCountries = state.rows.reduce((acc, r) => acc + r.segments.length, 0)
 
   const handleCopyUrl = async () => {
-    const r = await copyShareUrl()
-    showToast(r.ok ? 'success' : 'error', r.message)
+    const result = await copyShareUrl()
+    if (result.ok) notify.success(result.message)
+    else notify.error(result.message)
   }
 
   const handleDownload = () => {
     if (state.rows.length === 0) {
-      showToast('warning', '저장할 핀이 없습니다')
+      notify.warning('저장할 핀이 없습니다')
       return
     }
     downloadComparisonJson({
@@ -199,7 +191,7 @@ function HeadsOfStateTimelineInner() {
       highlightYear: state.highlightYear,
       eventOverlayIds: eventOverlay.ids,
     })
-    showToast('success', 'JSON 파일로 저장됨')
+    notify.success('JSON 파일로 저장됨')
   }
   const handlePrint = () => {
     printComparison()
@@ -303,7 +295,7 @@ function HeadsOfStateTimelineInner() {
           userPresets={userPresets.list}
           onSaveUserPreset={(label, range) => {
             userPresets.add(label, range)
-            showToast('success', `"${label}" 저장됨`)
+            notify.success(`"${label}" 저장됨`)
           }}
           onRemoveUserPreset={userPresets.remove}
         />
@@ -348,7 +340,7 @@ function HeadsOfStateTimelineInner() {
               }
               // 역사적 국가는 별도 진입 경로가 admin에 없을 수 있어 토스트로 안내만
               else {
-                showToast('info', '역사적 국가의 인물 등록은 별도 페이지에서 가능합니다')
+                notify.info('역사적 국가의 인물 등록은 별도 페이지에서 가능합니다')
               }
             }}
             onSelectEvent={(eventId) => {
@@ -359,7 +351,7 @@ function HeadsOfStateTimelineInner() {
             isApplyingUrlPins={state.isApplyingUrlPins}
             onRemoveEvent={(id) => {
               eventOverlay.remove(id)
-              showToast('info', '사건을 오버레이에서 제거했습니다')
+              notify.info('사건을 오버레이에서 제거했습니다')
             }}
             categoryFilter={categoryFilter.isEnabled}
           />

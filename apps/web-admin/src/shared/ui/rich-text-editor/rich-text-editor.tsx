@@ -25,6 +25,7 @@ import {
 } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { getUploadImageUrl, validateImageFile } from '@/shared/api/upload'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import {
   PROSE_HR_HTML,
   proseHrSmallStyles,
@@ -2353,9 +2354,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const handleDeleteTermEdit = useCallback(async () => {
     if (!termEditId || !editorRef.current) return
     if (
-      !window.confirm(
-        '이 설명을 삭제할까요? 문구는 본문에 남고, 설명(툴팁)만 제거됩니다.',
-      )
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 설명을 삭제할까요? 문구는 본문에 남고, 설명(툴팁)만 제거됩니다.',
+        danger: true,
+      }))
     )
       return
     setTermEditLoading(true)
@@ -2615,11 +2618,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     [handleContentChange, updateFormatState],
   )
 
-  const handleDeleteRichTable = useCallback(() => {
+  const handleDeleteRichTable = useCallback(async () => {
     if (!editorRef.current) return
     const cell = getTableCellFromSelection(editorRef.current)
     if (!cell) return
-    if (!window.confirm('표를 삭제할까요?')) return
+    if (!(await confirm({ title: '삭제 확인', message: '표를 삭제할까요?', danger: true })))
+      return
     editorRef.current.focus()
     const table = cell.closest('table')
     if (!table?.parentNode) return

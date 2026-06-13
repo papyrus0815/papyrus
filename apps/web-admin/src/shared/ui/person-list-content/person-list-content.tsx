@@ -28,6 +28,7 @@ import { PERSON_TRAIT_META } from '@/shared/api/person-stats'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { usePersonEvaluationIndex } from '@/shared/lib/person-evaluation-index'
 import { getPositionBg, getPositionColor } from '@/shared/lib/position-color'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { BORDER_COLOR, FOCUS_COLOR } from '@/shared/ui/register-form-layout'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
@@ -916,8 +917,10 @@ type EraKey = 'ancient' | 'medieval' | 'early-modern' | 'modern' | 'unknown'
 
 function getCenturyEra(century: number): EraKey {
   if (century === CENTURY_UNKNOWN) return 'unknown'
-  if (century < 0) return 'ancient'
-  if (century <= 10) return 'medieval'
+  // 경계는 통념·인포그래픽 ERAS(고대 ~500, 중세 500~1500)와 일치:
+  // 고대 = 기원전~서기 5세기, 중세 = 6~15세기, 근세 = 16~19세기, 근현대 = 20세기~
+  if (century <= 5) return 'ancient'
+  if (century <= 15) return 'medieval'
   if (century <= 19) return 'early-modern'
   return 'modern'
 }
@@ -933,9 +936,9 @@ const ERA_DOT: Record<EraKey, string> = {
 
 /** 시대(era)별 그룹 헤더 라벨 — '시대별' 그룹 모드에서 사용 */
 const ERA_LABEL: Record<EraKey, string> = {
-  ancient: '고대 (기원전)',
-  medieval: '중세 (1~10세기)',
-  'early-modern': '근세 (11~19세기)',
+  ancient: '고대 (기원전~5세기)',
+  medieval: '중세 (6~15세기)',
+  'early-modern': '근세 (16~19세기)',
   modern: '근현대 (20세기~)',
   unknown: '세기 미상',
 }
@@ -1168,14 +1171,21 @@ const DensityCol = styled.button<{ $era: EraKey }>`
   &:hover {
     opacity: 1;
   }
+  /* 인물 없는 세기(빈 막대) — 클릭 대상 아님 */
+  &:disabled {
+    cursor: default;
+    opacity: 0.85;
+  }
 `
 
-const DensityFill = styled.span<{ $era: EraKey; $pct: number }>`
+const DensityFill = styled.span<{ $era: EraKey; $pct: number; $empty?: boolean }>`
   display: block;
   width: 100%;
-  height: ${({ $pct }) => Math.max($pct * 100, 6)}%;
+  height: ${({ $pct, $empty }) =>
+    $empty ? '2px' : `${Math.max($pct * 100, 6)}%`};
   border-radius: 3px 3px 1px 1px;
-  background: ${({ $era }) => ERA_DOT[$era]};
+  background: ${({ $era, $empty }) =>
+    $empty ? 'rgba(148, 163, 184, 0.35)' : ERA_DOT[$era]};
 `
 
 /* ── 카드 시대 배지 ──────────────────────────────────────────────── */
@@ -1882,9 +1892,11 @@ export function PersonListContent({
       .map((id) => persons.find((p) => p.id === id))
       .filter((p): p is PersonLike => p != null)
     if (
-      !window.confirm(
-        `선택된 ${ids.length}명의 인물을 삭제할까요? (등록 정보·관계·평가 모두 함께 제거됩니다)\n\n삭제 후 5초 내에 토스트의 "되돌리기" 버튼으로 복원할 수 있습니다.`,
-      )
+      !(await confirm({
+        title: '삭제 확인',
+        message: `선택된 ${ids.length}명의 인물을 삭제할까요? (등록 정보·관계·평가 모두 함께 제거됩니다)\n\n삭제 후 5초 내에 토스트의 "되돌리기" 버튼으로 복원할 수 있습니다.`,
+        danger: true,
+      }))
     )
       return
     setBulkDeleting(true)
@@ -2302,12 +2314,26 @@ export function PersonListContent({
           persons: run.persons,
         })
       } else {
+        // 범위 라벨은 오래된 쪽 먼저(한국어 관례 '15~19세기') — 화면 그룹 순서(최신→과거)와 별개.
+        // ancient가 기원전~서기 5세기를 포괄하므로 BC/AD 혼합 run도 처리.
+        const label =
+          hi < 0
+            ? `기원전 ${-lo}~${-hi}세기`
+            : lo < 0
+              ? `기원전 ${-lo}세기~${hi}세기`
+              : `${lo}~${hi}세기`
+        const navLabel =
+          hi < 0
+            ? `BC ${-lo}~${-hi}c`
+            : lo < 0
+              ? `BC ${-lo}c~${hi}c`
+              : `${lo}~${hi}c`
         groups.push({
           key: `c-${hi}_${lo}`,
           centuries: cs,
           era: run.era,
-          label: hi < 0 ? `기원전 ${-hi}~${-lo}세기` : `${hi}~${lo}세기`,
-          navLabel: hi < 0 ? `BC ${-hi}~${-lo}c` : `${hi}~${lo}c`,
+          label,
+          navLabel,
           persons: run.persons,
         })
       }
@@ -2349,14 +2375,32 @@ export function PersonListContent({
       era: EraKey
     }>
     const known = personsByCentury.filter(([c]) => c !== CENTURY_UNKNOWN)
-    const asc = [...known].sort(([a], [b]) => a - b)
-    const max = asc.reduce((m, [, l]) => Math.max(m, l.length), 1)
-    return asc.map(([c, l]) => ({
-      century: c,
-      count: l.length,
-      pct: l.length / max,
-      era: getCenturyEra(c),
-    }))
+    if (known.length === 0)
+      return [] as Array<{
+        century: number
+        count: number
+        pct: number
+        era: EraKey
+      }>
+    const counts = new Map(known.map(([c, l]) => [c, l.length]))
+    const centuries = [...counts.keys()]
+    const min = Math.min(...centuries)
+    const max = Math.max(...centuries)
+    const peak = Math.max(...counts.values(), 1)
+    // min~max 사이 빈 세기도 0명 막대로 채움 — 등간격 막대에서 비연속 구간이
+    // 연속처럼 보여 시대 밀도 분포를 오독하는 것 방지.
+    const out: Array<{
+      century: number
+      count: number
+      pct: number
+      era: EraKey
+    }> = []
+    for (let c = min; c <= max; c++) {
+      if (c === 0) continue // 0세기는 없음 (기원전 1세기 다음은 서기 1세기)
+      const count = counts.get(c) ?? 0
+      out.push({ century: c, count, pct: count / peak, era: getCenturyEra(c) })
+    }
+    return out
   }, [personsByCentury, sortMode])
 
   /** 세기 번호 → 렌더 그룹 key (밀도 바·navigator 점프 시 병합된 그룹으로 스크롤) */
@@ -2958,6 +3002,7 @@ export function PersonListContent({
                           type="button"
                           $era={d.era}
                           title={`${label} · ${d.count}명`}
+                          disabled={d.count === 0}
                           onClick={() => {
                             const key = centuryToGroupKey.get(d.century)
                             const el = key && centuryRefs.current.get(key)
@@ -2968,7 +3013,11 @@ export function PersonListContent({
                               })
                           }}
                         >
-                          <DensityFill $era={d.era} $pct={d.pct} />
+                          <DensityFill
+                            $era={d.era}
+                            $pct={d.pct}
+                            $empty={d.count === 0}
+                          />
                         </DensityCol>
                       )
                     })}

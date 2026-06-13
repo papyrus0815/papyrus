@@ -11,18 +11,15 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
 import { toast } from 'react-hot-toast'
-import { FiSave } from 'react-icons/fi'
+import { FiArrowLeft, FiSave } from 'react-icons/fi'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { invalidateGamification } from '@/entities/gamification'
 import { useFormEntities } from '@/entities/event-form/model'
 import {
-  FORM_STEPS,
   buildEventSubmitData,
   checkBasicInfo,
-  getFormSteps,
-  getStepTitle,
   validateBasicInfo,
 } from '@/features/event-create/lib'
 import { useBasicInfoForm } from '@/features/event-form/model'
@@ -40,8 +37,8 @@ import {
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { pathKeys } from '@/shared/router'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { BasicInfoSection } from '@/widgets/event-form/ui/basic-info-section'
-import { StepNavigation } from '@/widgets/event-form/ui/step-navigation'
 
 import * as S from './event-create.styles'
 
@@ -54,6 +51,76 @@ export interface EventCreatePageRefactoredProps {
   onSuccess?: () => void
 }
 
+/** 편집 로드 시 서버에서 받은 이미지(보존 대상 — 캡션·출처·정렬 포함) */
+interface LoadedEventImage {
+  imageUrl: string
+  caption?: string
+  source?: string
+  order?: number
+  isPrimary?: boolean
+}
+
+/**
+ * 편집 저장용 eventImages payload 구성.
+ *
+ * BASIC 폼은 썸네일(대표) 한 장만 다루므로, 서버에서 로드한 전체 이미지를 토대로
+ * **비대표 이미지와 캡션/출처를 보존**하면서 대표 슬롯만 현재 썸네일로 교체한다.
+ * 백엔드 updateEvent는 `eventImages !== undefined`면 전량 삭제·재생성하므로,
+ * 이 보존이 없으면 상세에서 추가한 이미지가 기본 정보 수정만으로 소실된다.
+ *
+ * @returns buildEventSubmitData에 넘길 배열. `undefined`면 thumbnail 기본 동작에 위임.
+ */
+function buildPreservedEventImages(
+  loaded: LoadedEventImage[] | null,
+  thumbnail: string,
+): Array<{
+  imageUrl: string
+  caption?: string
+  source?: string
+  order: number
+  isPrimary: boolean
+}> | undefined {
+  // 로드된 이미지가 없으면(신규에 가까운 편집) thumbnail 기본 동작에 맡긴다.
+  if (!loaded || loaded.length === 0) return undefined
+
+  const originalPrimary = loaded.find((img) => img.isPrimary) ?? loaded[0]
+  const others = loaded.filter((img) => img !== originalPrimary)
+
+  const result: Array<{
+    imageUrl: string
+    caption?: string
+    source?: string
+    order: number
+    isPrimary: boolean
+  }> = []
+
+  // 대표 슬롯: 현재 썸네일. URL이 원본 대표와 같으면 캡션/출처도 보존.
+  if (thumbnail) {
+    const sameAsOriginal = originalPrimary.imageUrl === thumbnail
+    result.push({
+      imageUrl: thumbnail,
+      caption: sameAsOriginal ? originalPrimary.caption : undefined,
+      source: sameAsOriginal ? originalPrimary.source : undefined,
+      order: 0,
+      isPrimary: true,
+    })
+  }
+
+  // 비대표 이미지: 캡션/출처 그대로 보존(대표 제거 시 첫 장 승격 없이 갤러리 유지).
+  others.forEach((img, index) => {
+    result.push({
+      imageUrl: img.imageUrl,
+      caption: img.caption,
+      source: img.source,
+      order: result.length + index,
+      isPrimary: false,
+    })
+  })
+
+  // 결과가 비면(썸네일 제거 + 비대표 없음) thumbnail 기본 동작에 위임.
+  return result.length > 0 ? result : undefined
+}
+
 export const EventCreatePageRefactored: React.FC<
   EventCreatePageRefactoredProps
 > = ({ embed = false, onBack: onBackProp, onSuccess }) => {
@@ -63,12 +130,13 @@ export const EventCreatePageRefactored: React.FC<
   const playClickSound = useClickSound()
 
   const goBack = onBackProp ?? (() => navigate(pathKeys.events.root()))
-  const handleBack = () => {
+  const handleBack = async () => {
     if (
       isDirtyRef.current &&
-      !window.confirm(
-        '저장하지 않은 변경 사항이 있습니다. 페이지를 떠나시겠습니까?',
-      )
+      !(await confirm({
+        title: '확인',
+        message: '저장하지 않은 변경 사항이 있습니다. 페이지를 떠나시겠습니까?',
+      }))
     ) {
       return
     }
@@ -123,27 +191,16 @@ export const EventCreatePageRefactored: React.FC<
   const [submitAttempted, setSubmitAttempted] = useState(false)
   const isDirtyRef = React.useRef(false)
   const skipNextDirtyRef = React.useRef(false)
-
   /**
-   * BASIC 섹션의 군사 카테고리 빠른 입력(분쟁/전투 유형) 자리표시 — 최소 폼에서는
-   * 저장하지 않고 상세 작전 정보 모듈에서 등록한다. 위젯 props 호환을 위한 로컬 state.
+   * 편집 모드에서 서버가 돌려준 전체 eventImages(캡션·출처·비대표 이미지 포함)를 보관.
+   * 저장 시 폼은 썸네일(대표) 한 장만 다루므로, 이 배열을 토대로 비대표 이미지와
+   * 캡션/출처를 보존하면서 썸네일만 교체해야 상세에서 추가한 이미지가 소실되지 않는다.
    */
-  const [conflictType, setConflictType] = useState<
-    'battle' | 'campaign' | 'war' | 'siege' | 'skirmish' | undefined
-  >(undefined)
-  const [combatTypes, setCombatTypes] = useState<
-    Array<'land' | 'naval' | 'air'>
-  >([])
+  const loadedImagesRef = React.useRef<LoadedEventImage[] | null>(null)
 
   const validation = useMemo(
     () => checkBasicInfo({ title, startDate, endDate }),
     [title, startDate, endDate],
-  )
-
-  // 단일 스텝(BASIC)만 노출 — 나머지는 상세에서 등록.
-  const steps = useMemo(
-    () => getFormSteps(category).filter((s) => s.id === FORM_STEPS.BASIC),
-    [category],
   )
 
   // 편집 모드: 기본 정보만 로드 (본문·군사·관계 등은 상세에서 편집).
@@ -180,8 +237,10 @@ export const EventCreatePageRefactored: React.FC<
 
         setKeywords(Array.isArray(event.keywords) ? event.keywords : [])
 
-        type LoadedImage = { imageUrl: string; isPrimary?: boolean }
-        const eventImages = event.eventImages as LoadedImage[] | undefined
+        const eventImages = event.eventImages as
+          | LoadedEventImage[]
+          | undefined
+        loadedImagesRef.current = eventImages ?? []
         if (eventImages && eventImages.length > 0) {
           const primaryImage = eventImages.find((img) => img.isPrimary)
           setThumbnail(primaryImage?.imageUrl || eventImages[0].imageUrl || '')
@@ -297,6 +356,11 @@ export const EventCreatePageRefactored: React.FC<
         mentionedEvents: [],
         childEventIds: [],
         keywords,
+        // 편집 시 상세에서 추가한 이미지·캡션을 보존하며 썸네일만 교체.
+        // 신규는 undefined → buildEventSubmitData가 thumbnail로 단일 이미지 구성.
+        eventImages: isEditMode
+          ? buildPreservedEventImages(loadedImagesRef.current, thumbnail)
+          : undefined,
       })
 
       let targetId: string | undefined = editEventId
@@ -353,14 +417,6 @@ export const EventCreatePageRefactored: React.FC<
   const content = (
     <>
       <S.ContentWrapper>
-        <StepNavigation
-          steps={steps}
-          currentStep={FORM_STEPS.BASIC}
-          setCurrentStep={() => {}}
-          playClickSound={playClickSound}
-          onBack={handleBack}
-        />
-
         <S.FormArea aria-busy={isLoadingEvent || isSubmitting}>
           {(isLoadingEvent || isSubmitting) && (
             <S.FormOverlay role="status" aria-live="polite">
@@ -376,9 +432,21 @@ export const EventCreatePageRefactored: React.FC<
           )}
           <S.FormAreaHeader>
             <S.FormAreaTitle>
-              {getStepTitle(FORM_STEPS.BASIC, category)}
+              {isEditMode ? '사건 수정' : '사건 등록'}
             </S.FormAreaTitle>
             <div style={{ display: 'flex', gap: '8px' }}>
+              <S.ActionButton
+                type="button"
+                $variant="secondary"
+                onClick={() => {
+                  playClickSound()
+                  handleBack()
+                }}
+                style={{ padding: '10px 16px' }}
+              >
+                <FiArrowLeft size={16} />
+                이전
+              </S.ActionButton>
               <S.ActionButton
                 type="button"
                 $variant="primary"
@@ -445,10 +513,6 @@ export const EventCreatePageRefactored: React.FC<
             availableCountries={availableCountries}
             availableHistoricalCountries={availableHistoricalCountries}
             onOpenCountryModal={() => setShowCountryModal(true)}
-            conflictType={conflictType}
-            setConflictType={setConflictType}
-            combatTypes={combatTypes}
-            setCombatTypes={setCombatTypes}
             playClickSound={playClickSound}
             getDateError={getDateError}
             calculateDaysDifference={calculateDaysDifference}

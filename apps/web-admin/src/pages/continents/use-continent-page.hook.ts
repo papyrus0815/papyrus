@@ -19,6 +19,7 @@ import {
   useUpdateContinent,
 } from '@/features/continent/use-continents.hook'
 import { useCountries } from '@/features/country/api'
+import { confirm } from '@/shared/ui/confirm-dialog'
 
 export type ContinentStats = {
   realArea: number
@@ -77,7 +78,13 @@ export function useContinentPage() {
    * 대륙 삭제 핸들러
    */
   const handleDelete = async (id: string, name: string) => {
-    if (window.confirm(`"${name}"을(를) 삭제하시겠습니까?`)) {
+    if (
+      await confirm({
+        title: '삭제 확인',
+        message: `"${name}"을(를) 삭제하시겠습니까?`,
+        danger: true,
+      })
+    ) {
       const loadingToast = toast.loading('삭제하는 중...')
       try {
         await deleteMutation.mutateAsync(id)

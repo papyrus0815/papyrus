@@ -43,6 +43,8 @@ import type { HistoricalCountryResponseDto } from '@/shared/api/historical-count
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { PositionDefinitionsSection } from '@/widgets/country/country-detail/ui/position-definitions-section.widget'
 
 type DetailTab = 'basic' | 'organization' | 'history' | 'location' | 'positions'
@@ -117,7 +119,8 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
     })
     return departments.map((d) => ({
       ...d,
-      countryName: byCountryId[d.countryId] ?? d.countryId,
+      // countryId가 null인 부처는 국가명 빈 문자열로 표시
+      countryName: d.countryId ? (byCountryId[d.countryId] ?? d.countryId) : '',
     }))
   }, [departments, modernCountries, historicalCountries])
 
@@ -134,7 +137,9 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
   // 국가별 통계
   const departmentsByCountry = departmentsWithCountryName.reduce(
     (acc, dept) => {
-      acc[dept.countryId] = (acc[dept.countryId] || 0) + 1
+      if (dept.countryId) {
+        acc[dept.countryId] = (acc[dept.countryId] || 0) + 1
+      }
       return acc
     },
     {} as Record<string, number>,
@@ -152,13 +157,20 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
 
   const handleDelete = async (id: string, name: string) => {
     playClickSound()
-    if (!confirm(`'${name}' 부처를 삭제하시겠습니까?`)) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: `'${name}' 부처를 삭제하시겠습니까?`,
+        danger: true,
+      }))
+    )
+      return
     try {
       await administrationDepartmentApi.delete(id)
       if (selectedDepartment === id) setSelectedDepartment(null)
       await invalidateAdministrationDepartmentQueries(queryClient)
     } catch (e) {
-      alert(e instanceof Error ? e.message : '삭제에 실패했습니다')
+      notify.error(e instanceof Error ? e.message : '삭제에 실패했습니다')
     }
   }
 
@@ -834,6 +846,7 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                                         role="button"
                                         tabIndex={0}
                                         onClick={() => {
+                                          if (!selectedDept.countryId) return
                                           playClickSound()
                                           navigate(
                                             pathKeys.countryGovernment(
@@ -847,6 +860,7 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                                             e.key === ' '
                                           ) {
                                             e.preventDefault()
+                                            if (!selectedDept.countryId) return
                                             navigate(
                                               pathKeys.countryGovernment(
                                                 selectedDept.countryId,
@@ -1056,7 +1070,7 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
         <CountrySelectModal
           isOpen={countryModalOpen}
           onClose={() => setCountryModalOpen(false)}
-          onSelectCountry={(country) => {
+          onSelect={(country) => {
             setFilterCountry(country.id)
             setFilterCountryName(country.name)
             setCountryModalOpen(false)

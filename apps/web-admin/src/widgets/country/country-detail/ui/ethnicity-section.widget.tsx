@@ -6,6 +6,7 @@ import type { Ethnicity } from '@/shared/api/ethnicity'
 import { ethnicityApi } from '@/shared/api/ethnicity'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
+import { notify } from '@/shared/ui/toast'
 
 const sectionLabelStyle: React.CSSProperties = {
   marginBottom: 18,
@@ -98,7 +99,7 @@ export function EthnicitySection({
       loadList()
       setEditModalOpen(false)
     } catch (e) {
-      alert(e instanceof Error ? e.message : '저장에 실패했습니다.')
+      notify.error(e instanceof Error ? e.message : '저장에 실패했습니다.')
     } finally {
       setSaving(false)
     }

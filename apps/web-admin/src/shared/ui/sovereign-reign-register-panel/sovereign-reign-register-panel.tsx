@@ -13,6 +13,7 @@ import styled from 'styled-components'
 
 import { useHistoricalCountriesByModernCountry, useCountries } from '@/features/country/api'
 import { personCareerApi } from '@/shared/api/person-career'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import {
@@ -329,7 +330,14 @@ export function SovereignReignRegisterPanel({
 
   const handleDelete = async () => {
     if (!reignId || deleting) return
-    if (!window.confirm('이 재위 기록을 삭제하시겠습니까?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 재위 기록을 삭제하시겠습니까?',
+        danger: true,
+      }))
+    )
+      return
     setDeleting(true)
     try {
       await personCareerApi.deleteSovereignReign(reignId)
@@ -467,6 +475,7 @@ export function SovereignReignRegisterPanel({
                               renderControlOnly
                               startPickerTitle="재위 시작일"
                               endPickerTitle="재위 종료일"
+                              blockBc
                             />
                           </FieldControl>
                         </FieldRow>

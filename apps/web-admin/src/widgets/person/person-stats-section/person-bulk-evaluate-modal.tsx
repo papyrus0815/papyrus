@@ -23,6 +23,7 @@ import {
   PERSON_TRAIT_ORDER,
   upsertMyEvaluation,
 } from '@/shared/api/person-stats'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import {
   ModalBody,
   ModalBox,
@@ -117,9 +118,16 @@ export function PersonBulkEvaluateModal({ open, personIds, onClose }: Props) {
     },
   })
 
-  const requestClose = useCallback(() => {
+  const requestClose = useCallback(async () => {
     if (saveMut.isPending) return
-    if (isDirty && !window.confirm('변경 사항이 저장되지 않았습니다. 닫을까요?')) return
+    if (
+      isDirty &&
+      !(await confirm({
+        title: '확인',
+        message: '변경 사항이 저장되지 않았습니다. 닫을까요?',
+      }))
+    )
+      return
     onClose()
   }, [isDirty, saveMut.isPending, onClose])
 

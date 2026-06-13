@@ -14,6 +14,9 @@ import type {
 } from '@/shared/api/administration-department'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
+
 import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import {
   buildDepartmentDescription,
@@ -129,11 +132,11 @@ export function useMinistriesTab({
   const submitMinistryForm = useCallback(() => {
     if (!effectiveCountryId) return
     if (!ministryForm.name.trim()) {
-      alert('부처명을 입력해주세요.')
+      notify.error('부처명을 입력해주세요.')
       return
     }
     if (!ministryForm.categoryId?.trim()) {
-      alert('카테고리를 선택해주세요.')
+      notify.error('카테고리를 선택해주세요.')
       return
     }
     const category = categoriesList.find(
@@ -172,7 +175,7 @@ export function useMinistriesTab({
           loadMinistries()
         })
         .catch((err) =>
-          alert(err instanceof Error ? err.message : '수정에 실패했습니다'),
+          notify.error(err instanceof Error ? err.message : '수정에 실패했습니다'),
         )
     } else {
       administrationDepartmentApi
@@ -185,7 +188,7 @@ export function useMinistriesTab({
           loadMinistries()
         })
         .catch((err) =>
-          alert(err instanceof Error ? err.message : '등록에 실패했습니다'),
+          notify.error(err instanceof Error ? err.message : '등록에 실패했습니다'),
         )
     }
   }, [
@@ -198,13 +201,13 @@ export function useMinistriesTab({
   ])
 
   const handleMinistryDelete = useCallback(
-    (dept: AdministrationDepartment) => {
+    async (dept: AdministrationDepartment) => {
       const sub = countDescendantsInDepartmentTree(dept.id, ministriesList)
       const msg =
         sub > 0
           ? `"${dept.name}"을(를) 삭제하면 하위 기관 ${sub}개도 함께 삭제됩니다. 계속하시겠습니까?`
           : `"${dept.name}" 부처를 삭제하시겠습니까?`
-      if (confirm(msg)) {
+      if (await confirm({ title: '삭제 확인', message: msg, danger: true })) {
         void administrationDepartmentApi.delete(dept.id).then(() => {
           setMinistryBrowseDepartment((prev) =>
             prev?.id === dept.id ? null : prev,

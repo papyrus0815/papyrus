@@ -6,6 +6,7 @@ import {
   useUpsertExportImport,
   useDeleteExportImport,
 } from '@/entities/country/api.trade'
+import { confirm } from '@/shared/ui/confirm-dialog'
 
 import * as S from './styles'
 
@@ -64,7 +65,14 @@ export function TradePanel({ countryId }: Props) {
   }
 
   const handleDelete = async (year: number) => {
-    if (!window.confirm(`${year}년 교역 데이터를 삭제할까요?`)) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: `${year}년 교역 데이터를 삭제할까요?`,
+        danger: true,
+      }))
+    )
+      return
     try {
       await deleteMut.mutateAsync(year)
       toast.success('삭제됨')

@@ -24,6 +24,7 @@ import type {
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import type { GovernmentPositionDefinition } from '@/shared/api/government-positions'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 const POSITION_TYPE_OPTIONS: SelectOption<string>[] = [
@@ -380,7 +381,14 @@ export function PositionCategoryCrudModal({
   }
 
   const handleDelete = async (id: string, title: string) => {
-    if (!window.confirm(`"${title}" 관직 정의를 삭제하시겠습니까?`)) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: `"${title}" 관직 정의를 삭제하시겠습니까?`,
+        danger: true,
+      }))
+    )
+      return
     try {
       await personCareerApi.deletePositionDefinition(id)
       toast.success('삭제되었습니다.')

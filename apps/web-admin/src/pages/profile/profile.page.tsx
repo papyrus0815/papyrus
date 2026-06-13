@@ -42,7 +42,7 @@ import { usePersons } from '@/entities/person/api'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { queryClient } from '@/shared/queryClient'
 import { pathKeys } from '@/shared/router'
-import { ToastProvider, useToast } from '@/shared/ui/toast'
+import { notify } from '@/shared/ui/toast'
 
 /** ISO 날짜 → "2024.03.11" */
 function formatDate(iso?: string): string {
@@ -69,13 +69,8 @@ function extractErrorMessage(err: unknown, fallback: string): string {
   return raw.length < 100 ? raw : fallback
 }
 
-// 메인 export: ToastProvider로 래핑 (전역 Provider가 없어 페이지별로 감싼다)
 export default function ProfilePage() {
-  return (
-    <ToastProvider>
-      <ProfileContent />
-    </ToastProvider>
-  )
+  return <ProfileContent />
 }
 
 function ProfileContent() {
@@ -234,7 +229,6 @@ function ProfileContent() {
 
 /** 계정 ID + 복사 버튼 */
 function CopyableId({ id }: { id: string }) {
-  const { showToast } = useToast()
   const [copied, setCopied] = useState(false)
   const handleCopy = async () => {
     if (!id) return
@@ -243,7 +237,7 @@ function CopyableId({ id }: { id: string }) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      showToast('error', '계정 ID 복사에 실패했습니다.')
+      notify.error('계정 ID 복사에 실패했습니다.')
     }
   }
   return (
@@ -264,7 +258,6 @@ function RepresentativePersonPicker({
 }: {
   currentPersonId: string | null
 }) {
-  const { showToast } = useToast()
   const { data: persons, isLoading } = usePersons()
 
   const [selected, setSelected] = useState<string | null>(currentPersonId)
@@ -276,9 +269,14 @@ function RepresentativePersonPicker({
   }, [currentPersonId])
 
   const filtered = (persons ?? []).filter((p) => {
-    if (!query.trim()) return true
+    const q = query.trim().toLowerCase()
+    if (!q) return true
     const full = getPersonDisplayName(p).toLowerCase()
-    return full.includes(query.trim().toLowerCase())
+    // 표시명은 공백 조인("김 구")이므로 무공백 입력("김구")도 매칭되게 공백 제거 비교 병행
+    return (
+      full.includes(q) ||
+      full.replace(/\s+/g, '').includes(q.replace(/\s+/g, ''))
+    )
   })
 
   const changed = selected !== currentPersonId
@@ -290,9 +288,9 @@ function RepresentativePersonPicker({
     try {
       await sessionApi.setRepresentativePerson({ personId: selected })
       queryClient.invalidateQueries({ queryKey: sessionKeys.currentUser() })
-      showToast('success', '대표 인물이 변경되었습니다.')
+      notify.success('대표 인물이 변경되었습니다.')
     } catch (err) {
-      showToast('error', extractErrorMessage(err, '대표 인물 변경에 실패했습니다.'))
+      notify.error(extractErrorMessage(err, '대표 인물 변경에 실패했습니다.'))
     } finally {
       setSubmitting(false)
     }
@@ -371,8 +369,6 @@ function RepresentativePersonPicker({
 
 /** 닉네임(표시명) 변경 폼 — 로그인 ID와 무관 */
 function DisplayNameForm({ currentName }: { currentName: string }) {
-  const { showToast } = useToast()
-
   const [value, setValue] = useState(currentName)
   const [submitting, setSubmitting] = useState(false)
 
@@ -394,9 +390,9 @@ function DisplayNameForm({ currentName }: { currentName: string }) {
     try {
       await sessionApi.changeDisplayName({ displayName: trimmed })
       queryClient.invalidateQueries({ queryKey: sessionKeys.currentUser() })
-      showToast('success', '닉네임이 변경되었습니다.')
+      notify.success('닉네임이 변경되었습니다.')
     } catch (err) {
-      showToast('error', extractErrorMessage(err, '닉네임 변경에 실패했습니다.'))
+      notify.error(extractErrorMessage(err, '닉네임 변경에 실패했습니다.'))
     } finally {
       setSubmitting(false)
     }
@@ -432,7 +428,6 @@ function DisplayNameForm({ currentName }: { currentName: string }) {
 
 /** 비밀번호 변경 폼 */
 function PasswordForm() {
-  const { showToast } = useToast()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -452,12 +447,12 @@ function PasswordForm() {
         currentPassword: current,
         newPassword: next,
       })
-      showToast('success', '비밀번호가 변경되었습니다.')
+      notify.success('비밀번호가 변경되었습니다.')
       setCurrent('')
       setNext('')
       setConfirm('')
     } catch (err) {
-      showToast('error', extractErrorMessage(err, '비밀번호 변경에 실패했습니다.'))
+      notify.error(extractErrorMessage(err, '비밀번호 변경에 실패했습니다.'))
     } finally {
       setSubmitting(false)
     }

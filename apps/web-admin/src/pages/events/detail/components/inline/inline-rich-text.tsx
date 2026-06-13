@@ -14,6 +14,7 @@ import { type MentionItem } from '@/shared/lib/mention/mention-system'
 import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-read-view'
 import { createRichTextImageUploader } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextProseWithEntityClicks } from '@/shared/ui/rich-text-read-view'
 
@@ -123,12 +124,18 @@ export function InlineRichText({
    */
   useEffect(() => {
     if (!editing) return
-    const onKey = (e: KeyboardEvent) => {
+    const onKey = async (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
         // 미저장 변경이 있을 때만 확인 — Esc 한 번에 긴 편집이 사고성으로 날아가는 것
         // 방지. 변경이 없으면 즉시 닫아 기존 빠른 취소 흐름 유지.
-        if (draft !== value && !window.confirm('저장하지 않은 변경을 버릴까요?')) {
+        if (
+          draft !== value &&
+          !(await confirm({
+            title: '확인',
+            message: '저장하지 않은 변경을 버릴까요?',
+          }))
+        ) {
           return
         }
         close()

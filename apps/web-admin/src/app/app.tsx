@@ -15,6 +15,7 @@ import { queryClient } from '@/shared/queryClient'
 import { useBackgroundStore } from '@/shared/store/background.store'
 import { getTheme } from '@/shared/styles/theme'
 import { useThemeStore } from '@/shared/styles/theme.store'
+import { ConfirmHost } from '@/shared/ui/confirm-dialog'
 import { EnvConfigModal } from '@/shared/ui/env-config-modal/env-config-modal.ui'
 import { logError } from '@/shared/ui/error-handler/error-handler.lib'
 import { ErrorHandler } from '@/shared/ui/error-handler/error.handler.ui'
@@ -273,6 +274,8 @@ export default function App() {
             />
             {/* Toast 알림 */}
             <ThemedToaster />
+            {/* 명령형 confirm() 호스트 (window.confirm 대체) */}
+            <ConfirmHost />
             {/* 환경 변수 설정 모달 */}
             {showModal && (
               <EnvConfigModal

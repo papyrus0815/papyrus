@@ -13,6 +13,7 @@ import {
   removeCabinetPoliticalParty,
 } from '@/shared/api/election'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
+import { confirm } from '@/shared/ui/confirm-dialog'
 
 import { CabinetPartyLinkModal } from './cabinet-party-link-modal'
 import { labelCabinetPartyRole } from './cabinets-section.helpers'
@@ -137,9 +138,13 @@ export function CabinetPoliticalPartiesBlock({
                       title="연결 해제"
                       disabled={removeMut.isPending}
                       aria-label={`${name} 연결 해제`}
-                      onClick={() => {
+                      onClick={async () => {
                         if (
-                          !window.confirm(`「${name}」 정당 연결을 해제할까요?`)
+                          !(await confirm({
+                            title: '삭제 확인',
+                            message: `「${name}」 정당 연결을 해제할까요?`,
+                            danger: true,
+                          }))
                         )
                           return
                         removeMut.mutate(link.id)

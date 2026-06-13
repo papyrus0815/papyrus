@@ -21,6 +21,7 @@ import { toast } from 'react-hot-toast'
 import { personCareerApi } from '@/shared/api/person-career'
 import type { CreateGovernmentPositionDefinitionDto } from '@/shared/api/person-career'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import type { GovernmentPositionDefinition } from '@/shared/api/government-positions'
 import {
@@ -442,7 +443,14 @@ export function PositionDefinitionsSection({
   }
 
   const handleDelete = async (id: string, title: string) => {
-    if (!window.confirm(`"${title}" 직위 정의를 삭제하시겠습니까?`)) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: `"${title}" 직위 정의를 삭제하시겠습니까?`,
+        danger: true,
+      }))
+    )
+      return
     try {
       await personCareerApi.deletePositionDefinition(id)
       toast.success('삭제되었습니다.')

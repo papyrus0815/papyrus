@@ -6,6 +6,7 @@ import styled, { css } from 'styled-components'
 
 import type { CompanyCategory } from '@/shared/api/company-category'
 import { companyCategoryApi } from '@/shared/api/company-category'
+import { notify } from '@/shared/ui/toast'
 
 const Page = styled.div`
   padding: calc(var(--header-height, 64px) + 1.5rem) 2rem 4rem;
@@ -224,7 +225,7 @@ export const CompanyCategoryFormPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name.trim()) {
-      alert('카테고리명을 입력해주세요.')
+      notify.error('카테고리명을 입력해주세요.')
       return
     }
     setSaving(true)
@@ -242,7 +243,7 @@ export const CompanyCategoryFormPage: React.FC = () => {
       }
       navigate('/company-categories')
     } catch (err) {
-      alert(err instanceof Error ? err.message : '저장에 실패했습니다.')
+      notify.error(err instanceof Error ? err.message : '저장에 실패했습니다.')
     } finally {
       setSaving(false)
     }

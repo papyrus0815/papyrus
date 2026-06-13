@@ -29,6 +29,7 @@ import {
   type PersonGroupType,
 } from '@/shared/api/person-groups'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import {
   GroupTypeBadge,
@@ -584,11 +585,13 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
                                   type="button"
                                   $danger
                                   title="묶음 삭제"
-                                  onClick={() => {
+                                  onClick={async () => {
                                     if (
-                                      window.confirm(
-                                        `“${g.name}” 묶음을 삭제할까요? 모든 멤버십이 함께 제거됩니다.`,
-                                      )
+                                      await confirm({
+                                        title: '삭제 확인',
+                                        message: `“${g.name}” 묶음을 삭제할까요? 모든 멤버십이 함께 제거됩니다.`,
+                                        danger: true,
+                                      })
                                     ) {
                                       deleteGroupMutation.mutate(g.id)
                                     }

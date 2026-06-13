@@ -7,6 +7,8 @@ import { administrationDepartmentApi } from '@/shared/api/administration-departm
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 /** 부처에 연결된 직위의 역대 장관(재임) 목록 — API로 조회 */
 export function DepartmentTenuresBlock({
@@ -183,7 +185,7 @@ export function DepartmentEventsBlock({
 
   const handleSaveEvent = async () => {
     if (!eventForm.title.trim()) {
-      alert('제목을 입력해주세요.')
+      notify.error('제목을 입력해주세요.')
       return
     }
     try {
@@ -195,7 +197,7 @@ export function DepartmentEventsBlock({
           eventType: eventForm.eventType as AdministrationDepartmentEventType,
           description: eventForm.description?.trim() || null,
         })
-        alert('수정되었습니다.')
+        notify.success('수정되었습니다.')
       } else {
         await administrationDepartmentApi.createEvent({
           departmentId,
@@ -205,7 +207,7 @@ export function DepartmentEventsBlock({
           eventType: eventForm.eventType as AdministrationDepartmentEventType,
           description: eventForm.description?.trim() || null,
         })
-        alert('등록되었습니다.')
+        notify.success('등록되었습니다.')
       }
       invalidate()
       setShowAddForm(false)
@@ -218,7 +220,7 @@ export function DepartmentEventsBlock({
         description: null,
       })
     } catch (err) {
-      alert(err instanceof Error ? err.message : '저장에 실패했습니다.')
+      notify.error(err instanceof Error ? err.message : '저장에 실패했습니다.')
     }
   }
 
@@ -515,8 +517,14 @@ export function DepartmentEventsBlock({
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (confirm('이 사건을 삭제하시겠습니까?'))
+                          onClick={async () => {
+                            if (
+                              await confirm({
+                                title: '삭제 확인',
+                                message: '이 사건을 삭제하시겠습니까?',
+                                danger: true,
+                              })
+                            )
                               administrationDepartmentApi
                                 .deleteEvent(deptEvent.id)
                                 .then(invalidate)

@@ -28,6 +28,8 @@ import styled, { css, keyframes } from 'styled-components'
 
 import type { Company, CompanyStatus } from '@/shared/api/company'
 import { companyApi } from '@/shared/api/company'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 type StatusMeta = { label: string; color: string; bg: string }
 
@@ -198,12 +200,19 @@ export const CompaniesListPage: React.FC = () => {
   }
   const handleDelete = async (id: string, name: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm(`'${name}' 기업을 삭제하시겠습니까?`)) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: `'${name}' 기업을 삭제하시겠습니까?`,
+        danger: true,
+      }))
+    )
+      return
     try {
       await companyApi.delete(id)
       load()
     } catch (err) {
-      alert(err instanceof Error ? err.message : '삭제에 실패했습니다.')
+      notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다.')
     }
   }
 

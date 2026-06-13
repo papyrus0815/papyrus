@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getAllPersons } from '@/shared/api/persons'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   BackButton as SharedBackButton,
@@ -675,7 +676,14 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
 
   const handleDelete = async () => {
     if (!editingId) return
-    if (!window.confirm('이 전역 수반 기록을 삭제하시겠습니까?')) return
+    if (
+      !(await confirm({
+        title: '삭제 확인',
+        message: '이 전역 수반 기록을 삭제하시겠습니까?',
+        danger: true,
+      }))
+    )
+      return
     try {
       if (editingRecordKind === 'SOVEREIGN_REIGN') {
         await personCareerApi.deleteSovereignReign(editingId)
