@@ -670,7 +670,7 @@ export class CreateGovernmentPositionTenureDto {
   personId!: string
 
   @IsString()
-  positionType!: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT' | 'HEIR_APPARENT' | 'REGENT' | 'CABINET_MINISTER' | 'VICE_MINISTER' | 'LEGISLATOR' | 'JUDICIARY' | 'LOCAL_GOVERNMENT' | 'SPECIAL_POSITION' | 'MILITARY_COMMANDER' | 'ROYAL_NOBLE_TITLE' | 'OTHER' // 직위 타입
+  positionType!: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT' | 'DEPUTY_HEAD_OF_STATE' | 'HEIR_APPARENT' | 'REGENT' | 'CABINET_MINISTER' | 'VICE_MINISTER' | 'LEGISLATOR' | 'JUDICIARY' | 'LOCAL_GOVERNMENT' | 'SPECIAL_POSITION' | 'MILITARY_COMMANDER' | 'ROYAL_NOBLE_TITLE' | 'OTHER' // 직위 타입 (Prisma GovernmentPositionType 미러)
 
   /** 직위명 — positionDefinitionId가 있으면 생략(정의에서 표시), 기타 직접 입력 시 필수 */
   @IsOptional()
@@ -697,40 +697,41 @@ export class CreateGovernmentPositionTenureDto {
   @IsString()
   positionDefinitionId?: string // 직위 정의 ID (선택사항)
 
+  // 아래 선택 필드들은 수정(Partial) 시 null = 명시적 해제, undefined = 변경 없음
   @IsOptional()
   @IsNumber()
-  termNumber?: number // 대수 (제20대)
+  termNumber?: number | null // 대수 (제20대) — 공식 통산 대수, 없으면 null
 
   @IsOptional()
   @IsNumber()
-  subTermNumber?: number // 기수 (1기, 2기 — 같은 대수 내 복수 임기 구분)
+  subTermNumber?: number | null // 기수 (1기, 2기 — 같은 대수 내 복수 임기 구분)
 
   @IsOptional()
   @IsNumber()
-  regnalNumber?: number // 재위번호 (루이 14세의 "14")
+  regnalNumber?: number | null // 재위번호 (루이 14세의 "14")
 
   @IsDateString()
-  startDate!: string // 취임일 (필수)
+  startDate!: string // 취임일 (필수) — BC('-' 시작) 불가 (재임 모델에 era 컬럼 없음)
 
   @IsOptional()
   @IsDateString()
-  endDate?: string // 퇴임일
+  endDate?: string | null // 퇴임일 — BC('-' 시작) 불가
 
   @IsOptional()
   @IsString()
-  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'OTHER'
+  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'OTHER' | null
 
   @IsOptional()
   @IsString()
-  endReason?: 'TERM_COMPLETED' | 'RESIGNATION' | 'ABDICATION' | 'SUCCESSION_TRANSFER' | 'REMOVAL' | 'IMPEACHMENT' | 'DEATH_IN_OFFICE' | 'OVERTHROWN' | 'WAR_DEFEAT' | 'STATE_DISSOLVED' | 'OTHER'
+  endReason?: 'TERM_COMPLETED' | 'RESIGNATION' | 'ABDICATION' | 'SUCCESSION_TRANSFER' | 'REMOVAL' | 'IMPEACHMENT' | 'DEATH_IN_OFFICE' | 'OVERTHROWN' | 'WAR_DEFEAT' | 'STATE_DISSOLVED' | 'OTHER' | null
 
   @IsOptional()
   @IsString()
-  endReasonDetail?: string
+  endReasonDetail?: string | null
 
   @IsOptional()
   @IsString()
-  notes?: string
+  notes?: string | null
 
   @IsOptional()
   @IsNumber()
@@ -776,40 +777,41 @@ export class CreateSovereignReignDto {
   @IsString()
   positionDefinitionId?: string
 
+  // 아래 선택 필드들은 수정(Partial) 시 null = 명시적 해제, undefined = 변경 없음
   @IsOptional()
   @IsNumber()
-  termNumber?: number
+  termNumber?: number | null
 
   @IsOptional()
   @IsNumber()
-  subTermNumber?: number
+  subTermNumber?: number | null
 
   @IsOptional()
   @IsNumber()
-  regnalNumber?: number
+  regnalNumber?: number | null
 
   @IsDateString()
-  startDate!: string
+  startDate!: string // BC('-' 시작) 불가 (재위 모델에 era 컬럼 없음)
 
   @IsOptional()
   @IsDateString()
-  endDate?: string
+  endDate?: string | null // BC('-' 시작) 불가
 
   @IsOptional()
   @IsString()
-  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'OTHER'
+  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'OTHER' | null
 
   @IsOptional()
   @IsString()
-  endReason?: 'TERM_COMPLETED' | 'RESIGNATION' | 'ABDICATION' | 'SUCCESSION_TRANSFER' | 'REMOVAL' | 'IMPEACHMENT' | 'DEATH_IN_OFFICE' | 'OVERTHROWN' | 'WAR_DEFEAT' | 'STATE_DISSOLVED' | 'OTHER'
+  endReason?: 'TERM_COMPLETED' | 'RESIGNATION' | 'ABDICATION' | 'SUCCESSION_TRANSFER' | 'REMOVAL' | 'IMPEACHMENT' | 'DEATH_IN_OFFICE' | 'OVERTHROWN' | 'WAR_DEFEAT' | 'STATE_DISSOLVED' | 'OTHER' | null
 
   @IsOptional()
   @IsString()
-  endReasonDetail?: string
+  endReasonDetail?: string | null
 
   @IsOptional()
   @IsString()
-  notes?: string
+  notes?: string | null
 
   /** 왕호/재위명 (예: 빅토리아, 루이 14세) */
   @IsOptional()

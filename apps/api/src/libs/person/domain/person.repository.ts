@@ -43,13 +43,17 @@ export interface CreatePersonData {
   name: string
   middleName?: string
   surname?: string
-  nameDisplayOrder?: 'korean' | 'western'
+  /** null·미지정이면 개인 설정 미저장(국가 기본값 폴백) */
+  nameDisplayOrder?: 'korean' | 'western' | null
   originalName?: string | null
   surnameMeaning?: string | null
   nameMeaning?: string | null
   middleNameMeaning?: string | null
+  /** 크기값(양수) 연도의 UTC 자정 — BC 여부는 birthEra/deathEra에 별도 기록 */
   birthDate?: Date
   deathDate?: Date
+  birthEra?: 'BC' | 'AD'
+  deathEra?: 'BC' | 'AD'
   isBirthDateUnknown?: boolean
   isDeathDateUnknown?: boolean
   deathType?: string | null
@@ -111,13 +115,17 @@ export interface UpdatePersonData {
   name?: string
   middleName?: string
   surname?: string
-  nameDisplayOrder?: 'korean' | 'western'
+  /** null = 개인 설정 해제(국가 기본값 폴백), undefined = 변경 없음 */
+  nameDisplayOrder?: 'korean' | 'western' | null
   originalName?: string | null
   surnameMeaning?: string | null
   nameMeaning?: string | null
   middleNameMeaning?: string | null
-  birthDate?: Date
-  deathDate?: Date
+  /** 크기값(양수) 연도의 UTC 자정 — BC 여부는 birthEra/deathEra에 별도 기록. null = 해제 */
+  birthDate?: Date | null
+  deathDate?: Date | null
+  birthEra?: 'BC' | 'AD' | null
+  deathEra?: 'BC' | 'AD' | null
   isBirthDateUnknown?: boolean
   isDeathDateUnknown?: boolean
   deathType?: string | null
@@ -134,15 +142,15 @@ export interface UpdatePersonData {
   regnalName?: string
   templeName?: string
   posthumousName?: string
-  // 관계
-  dynastyId?: string
-  religionId?: string
+  // 관계 — null = 명시적 해제, undefined = 변경 없음
+  dynastyId?: string | null
+  religionId?: string | null
   denominationId?: string
-  fatherId?: string
-  motherId?: string
+  fatherId?: string | null
+  motherId?: string | null
   countryId?: string
-  birthCityId?: string
-  deathCityId?: string
+  birthCityId?: string | null
+  deathCityId?: string | null
   /** 출생지 행정구역 ID — 도시 없이 행정구역만 저장 */
   birthAdminDivisionId?: string
   /** 사망지 행정구역 ID — 도시 없이 행정구역만 저장 */

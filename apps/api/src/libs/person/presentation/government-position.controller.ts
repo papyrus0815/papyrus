@@ -42,6 +42,19 @@ const serializeBigInt = (obj: any): any => {
   return obj
 }
 
+/**
+ * 재임·재위 날짜의 BC('-' 시작) 문자열 명시 거부.
+ * 생몰일과 달리 재임 모델(GovernmentPositionTenure/SovereignReign)에는 era 컬럼이 없어 BC를 표현할 수 없고,
+ * 네이티브 Date 파싱 시 음수 부호가 조용히 무시돼 AD로 둔갑 저장되므로 400으로 막는다.
+ */
+function assertNoBcTenureDates(dto: { startDate?: string | null; endDate?: string | null }): void {
+  for (const v of [dto.startDate, dto.endDate]) {
+    if (typeof v === 'string' && v.trim().startsWith('-')) {
+      throw new BadRequestException('재임·재위 날짜는 기원전(BC) 날짜를 지원하지 않습니다.')
+    }
+  }
+}
+
 export interface CreateCabinetBody {
   headTenureId: string
   name?: string | null
@@ -424,6 +437,7 @@ export class GovernmentPositionController {
    */
   @Post('tenures')
   async addTenure(@Req() req: Request, @Body() dto: CreateGovernmentPositionTenureDto): Promise<any> {
+    assertNoBcTenureDates(dto)
     const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const result = await this.personService.addGovernmentPositionTenure(dto, accountId)
     return serializeBigInt(result)
@@ -437,6 +451,7 @@ export class GovernmentPositionController {
     @Param('id') id: string,
     @Body() dto: Partial<CreateGovernmentPositionTenureDto>
   ): Promise<any> {
+    assertNoBcTenureDates(dto)
     const result = await this.personService.updateGovernmentPositionTenure(id, dto)
     return serializeBigInt(result)
   }
@@ -452,6 +467,7 @@ export class GovernmentPositionController {
   /** 군주·재위 전용 기록 추가 (SovereignReign — 행정부와 별도 테이블) */
   @Post('sovereign-reigns')
   async addSovereignReign(@Req() req: Request, @Body() dto: CreateSovereignReignDto): Promise<any> {
+    assertNoBcTenureDates(dto)
     const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const result = await this.personService.addSovereignReign(dto, accountId)
     return serializeBigInt(result)
@@ -462,6 +478,7 @@ export class GovernmentPositionController {
     @Param('id') id: string,
     @Body() dto: Partial<CreateSovereignReignDto>,
   ): Promise<any> {
+    assertNoBcTenureDates(dto)
     const result = await this.personService.updateSovereignReign(id, dto)
     return serializeBigInt(result)
   }

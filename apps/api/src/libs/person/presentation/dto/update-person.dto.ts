@@ -28,11 +28,13 @@ export class UpdatePersonDto {
   surname?: string
 
   /**
-   * 이름 표시 순서: korean(성+이름), western(이름+성)
+   * 이름 표시 순서: korean(성+이름), western(이름+성).
+   * null이면 개인 설정 해제(국가 기본값으로 폴백 — 개인>국가>기본 우선순위)
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsIn(['korean', 'western'])
-  nameDisplayOrder?: 'korean' | 'western'
+  nameDisplayOrder?: 'korean' | 'western' | null
 
   /**
    * 원어 이름 (선택). null이면 저장된 값 삭제
@@ -67,12 +69,13 @@ export class UpdatePersonDto {
   middleNameMeaning?: string | null
 
   /**
-   * 출생 정보 (객체 형식)
+   * 출생 정보 (객체 형식). null이면 출생일·출생 기원(birthDate·birthEra) 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @ValidateNested()
   @Type(() => DateInfoDto)
-  birth?: DateInfoDto
+  birth?: DateInfoDto | null
 
   /**
    * 출생 기원 (BC/AD)
@@ -96,12 +99,13 @@ export class UpdatePersonDto {
   isBirthDateUnknown?: boolean
 
   /**
-   * 사망 정보 (객체 형식)
+   * 사망 정보 (객체 형식). null이면 사망일·사망 기원(deathDate·deathEra) 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @ValidateNested()
   @Type(() => DateInfoDto)
-  death?: DateInfoDto
+  death?: DateInfoDto | null
 
   /**
    * 사망 기원 (BC/AD)
@@ -215,18 +219,20 @@ export class UpdatePersonDto {
   posthumousName?: string
 
   /**
-   * 가문 ID (선택)
+   * 가문 ID (선택). null이면 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  dynastyId?: string
+  dynastyId?: string | null
 
   /**
-   * 종교 ID (선택)
+   * 종교 ID (선택). null이면 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  religionId?: string
+  religionId?: string | null
 
   /**
    * 교파 ID (선택)
@@ -236,18 +242,20 @@ export class UpdatePersonDto {
   denominationId?: string
 
   /**
-   * 아버지 ID (선택)
+   * 아버지 ID (선택). null이면 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  fatherId?: string
+  fatherId?: string | null
 
   /**
-   * 어머니 ID (선택)
+   * 어머니 ID (선택). null이면 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  motherId?: string
+  motherId?: string | null
 
   /**
    * 국가 ID (선택)
@@ -257,18 +265,20 @@ export class UpdatePersonDto {
   countryId?: string
 
   /**
-   * 출생지 도시 ID (선택)
+   * 출생지 도시 ID (선택). null이면 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  birthCityId?: string
+  birthCityId?: string | null
 
   /**
-   * 사망지 도시 ID (선택)
+   * 사망지 도시 ID (선택). null이면 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  deathCityId?: string
+  deathCityId?: string | null
 
   /**
    * 출생지 행정구역 ID (선택) — 도시 없이 행정구역만 저장할 때

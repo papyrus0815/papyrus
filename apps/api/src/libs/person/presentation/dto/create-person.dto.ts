@@ -192,12 +192,14 @@ export class CreatePersonDto {
   surname?: string
 
   /**
-   * 이름 표시 순서: korean(성+이름), western(이름+성)
+   * 이름 표시 순서: korean(성+이름), western(이름+성).
+   * null·미지정이면 개인 설정을 저장하지 않음(국가 기본값 폴백 — 개인>국가>기본 우선순위)
    * @example "western"
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsIn(['korean', 'western'])
-  nameDisplayOrder?: 'korean' | 'western'
+  nameDisplayOrder?: 'korean' | 'western' | null
 
   /**
    * 원어 이름 (Original Name). null 가능 (빈값 저장 시)

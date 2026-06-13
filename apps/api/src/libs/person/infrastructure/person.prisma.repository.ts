@@ -288,7 +288,8 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   /**
    * 인물 create/update 시 FK 필드 정리.
-   * 빈 문자열('')·null·undefined인 FK는 객체에서 제거해 Prisma에 전달하지 않음 → country_id 등 FK 위반 방지.
+   * 빈 문자열('')·undefined인 FK는 객체에서 제거해 Prisma에 전달하지 않음 → country_id 등 FK 위반 방지.
+   * null은 '명시적 해제'이므로 그대로 통과시켜 Prisma가 NULL로 지우게 한다 (undefined = 변경 없음).
    */
   private sanitizePersonFkFields<T extends CreatePersonData | UpdatePersonData>(data: T): T {
     const fkKeys = [
@@ -306,7 +307,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     const out = { ...data } as T & Record<string, unknown>
     for (const key of fkKeys) {
       const v = out[key]
-      if (v === '' || v == null) delete out[key]
+      if (v === '' || v === undefined) delete out[key]
     }
     return out as T
   }

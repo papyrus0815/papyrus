@@ -59,6 +59,38 @@ export interface PersonCountByModernCountry {
 }
 
 /**
+ * 생몰일 구조화 값(크기값 연도 + 월/일) → UTC 자정 Date.
+ * 네이티브 Date 문자열 파싱은 BC 부호가 조용히 무시되고(`new Date('-500-01-01')` → AD 500),
+ * 1000년 미만 연도는 로컬 TZ로 해석돼 일·연 경계가 밀리므로 사용 금지.
+ * era(BC/AD)는 별도로 birthEra/deathEra 컬럼에 기록한다 — MySQL DATETIME에 음수 연도는 저장하지 않는다.
+ */
+function buildUtcDateFromParts(year: number, month?: number, day?: number): Date {
+  const d = new Date(Date.UTC(2000, (month || 1) - 1, day || 1))
+  d.setUTCFullYear(year)
+  return d
+}
+
+/**
+ * 'YYYY-MM-DD'(BC는 '-' 접두) 생몰일 문자열 → era + 크기값 UTC Date.
+ * 문자열 직접 파싱(네이티브 Date 파싱 금지). 파싱 불가하면 undefined(필드 무시).
+ */
+function parsePersonDateString(iso: string): { era: 'BC' | 'AD'; date: Date } | undefined {
+  const neg = iso.startsWith('-')
+  const m = (neg ? iso.slice(1) : iso).match(/^(\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/)
+  if (!m) return undefined
+  const year = parseInt(m[1], 10)
+  if (!year) return undefined
+  return {
+    era: neg ? 'BC' : 'AD',
+    date: buildUtcDateFromParts(
+      year,
+      m[2] ? parseInt(m[2], 10) : undefined,
+      m[3] ? parseInt(m[3], 10) : undefined,
+    ),
+  }
+}
+
+/**
  * 인물 관리 컨트롤러 (개인 정보 플랫폼: 로그인한 계정 소유 데이터만)
  */
 @ApiTags('persons')
@@ -701,32 +733,38 @@ export class PersonController {
   @Post()
   async create(@Body() dto: CreatePersonDto, @Request() req: any): Promise<PersonResponseDto> {
     const accountId = req.user?.id ?? req.user?.sub
-    // birth/death 객체에서 날짜 문자열로 변환
+    // birth/death 구조화 값 → era 컬럼 + 크기값 UTC 날짜 (네이티브 문자열 파싱 금지 — BC가 AD로 둔갑)
     let birthDate: Date | undefined
     let deathDate: Date | undefined
+    let birthEra: 'BC' | 'AD' | undefined
+    let deathEra: 'BC' | 'AD' | undefined
 
     if (dto.birth) {
-      // birth 객체가 있으면 이를 사용
+      // birth 객체가 있으면 이를 사용 — era는 birthEra 컬럼에, 날짜는 양수 크기값 연도로 저장
       const { era, year, month, day } = dto.birth
-      const yearStr = era === 'BC' ? `-${year}` : `${year}`
-      const monthStr = (month || 1).toString().padStart(2, '0')
-      const dayStr = (day || 1).toString().padStart(2, '0')
-      birthDate = new Date(`${yearStr}-${monthStr}-${dayStr}`)
+      birthDate = buildUtcDateFromParts(year, month, day)
+      birthEra = era
     } else if (dto.birthDate) {
-      // birthDate 문자열이 있으면 사용
-      birthDate = new Date(dto.birthDate)
+      // birthDate 문자열이 있으면 사용 ('-' 접두면 BC)
+      const parsed = parsePersonDateString(dto.birthDate)
+      if (parsed) {
+        birthDate = parsed.date
+        birthEra = parsed.era === 'BC' ? 'BC' : ((dto.birthEra as 'BC' | 'AD' | undefined) ?? parsed.era)
+      }
     }
 
     if (dto.death) {
       // death 객체가 있으면 이를 사용
       const { era, year, month, day } = dto.death
-      const yearStr = era === 'BC' ? `-${year}` : `${year}`
-      const monthStr = (month || 1).toString().padStart(2, '0')
-      const dayStr = (day || 1).toString().padStart(2, '0')
-      deathDate = new Date(`${yearStr}-${monthStr}-${dayStr}`)
+      deathDate = buildUtcDateFromParts(year, month, day)
+      deathEra = era
     } else if (dto.deathDate) {
-      // deathDate 문자열이 있으면 사용
-      deathDate = new Date(dto.deathDate)
+      // deathDate 문자열이 있으면 사용 ('-' 접두면 BC)
+      const parsed = parsePersonDateString(dto.deathDate)
+      if (parsed) {
+        deathDate = parsed.date
+        deathEra = parsed.era === 'BC' ? 'BC' : ((dto.deathEra as 'BC' | 'AD' | undefined) ?? parsed.era)
+      }
     }
 
     return this.personService.create({
@@ -740,6 +778,8 @@ export class PersonController {
       middleNameMeaning: dto.middleNameMeaning,
       birthDate,
       deathDate,
+      birthEra,
+      deathEra,
       isBirthDateUnknown: dto.isBirthDateUnknown,
       isDeathDateUnknown: dto.isDeathDateUnknown,
       deathType: dto.deathType ?? null,
@@ -786,28 +826,52 @@ export class PersonController {
     @Request() req: any,
   ): Promise<PersonResponseDto> {
     const accountId = req.user?.id ?? req.user?.sub
-    // birth/death 객체에서 날짜 문자열로 변환
-    let birthDate: Date | undefined
-    let deathDate: Date | undefined
+    // birth/death 처리 — undefined = 변경 없음, null = 명시적 해제(birthDate·birthEra 동시 클리어).
+    // 구조화 값 → era 컬럼 + 크기값 UTC 날짜 (네이티브 문자열 파싱 금지 — BC가 AD로 둔갑)
+    let birthDate: Date | null | undefined
+    let deathDate: Date | null | undefined
+    let birthEra: 'BC' | 'AD' | null | undefined
+    let deathEra: 'BC' | 'AD' | null | undefined
 
-    if (dto.birth) {
+    if (dto.birth === null) {
+      birthDate = null
+      birthEra = null
+    } else if (dto.birth) {
       const { era, year, month, day } = dto.birth
-      const yearStr = era === 'BC' ? `-${year}` : `${year}`
-      const monthStr = (month || 1).toString().padStart(2, '0')
-      const dayStr = (day || 1).toString().padStart(2, '0')
-      birthDate = new Date(`${yearStr}-${monthStr}-${dayStr}`)
+      birthDate = buildUtcDateFromParts(year, month, day)
+      birthEra = era
     } else if (dto.birthDate) {
-      birthDate = new Date(dto.birthDate)
+      const parsed = parsePersonDateString(dto.birthDate)
+      if (parsed) {
+        birthDate = parsed.date
+        birthEra = parsed.era === 'BC' ? 'BC' : ((dto.birthEra as 'BC' | 'AD' | undefined) ?? parsed.era)
+      }
     }
 
-    if (dto.death) {
+    if (dto.death === null) {
+      deathDate = null
+      deathEra = null
+    } else if (dto.death) {
       const { era, year, month, day } = dto.death
-      const yearStr = era === 'BC' ? `-${year}` : `${year}`
-      const monthStr = (month || 1).toString().padStart(2, '0')
-      const dayStr = (day || 1).toString().padStart(2, '0')
-      deathDate = new Date(`${yearStr}-${monthStr}-${dayStr}`)
+      deathDate = buildUtcDateFromParts(year, month, day)
+      deathEra = era
     } else if (dto.deathDate) {
-      deathDate = new Date(dto.deathDate)
+      const parsed = parsePersonDateString(dto.deathDate)
+      if (parsed) {
+        deathDate = parsed.date
+        deathEra = parsed.era === 'BC' ? 'BC' : ((dto.deathEra as 'BC' | 'AD' | undefined) ?? parsed.era)
+      }
+    }
+
+    // 이중 안전장치 — '출생일 미상'/'생존 중'/'사망일 미상' 전환 시 날짜·era를 함께 클리어해
+    // isAlive=true인데 deathDate가 남는 모순 상태를 방지한다.
+    if (dto.isBirthDateUnknown === true) {
+      birthDate = null
+      birthEra = null
+    }
+    if (dto.isAlive === true || dto.isDeathDateUnknown === true) {
+      deathDate = null
+      deathEra = null
     }
 
     return this.personService.update(id, {
@@ -821,6 +885,8 @@ export class PersonController {
       middleNameMeaning: dto.middleNameMeaning,
       birthDate,
       deathDate,
+      birthEra,
+      deathEra,
       isBirthDateUnknown: dto.isBirthDateUnknown,
       isDeathDateUnknown: dto.isDeathDateUnknown,
       // PATCH 의미 — 보내지 않은 필드(undefined)는 변경 없음으로 둔다.
