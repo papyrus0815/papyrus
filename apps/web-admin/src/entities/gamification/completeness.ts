@@ -1,6 +1,5 @@
-import toast from 'react-hot-toast'
-
 import { queryClient } from '@/shared/queryClient'
+import { notify } from '@/shared/ui/toast'
 
 import { invalidateGamification } from './gamification.api'
 
@@ -18,6 +17,6 @@ export function onContentRegistered(completenessSignals: number): void {
   invalidateGamification(queryClient)
   if (completenessSignals > 0) {
     const pts = completenessSignals * COMPLETENESS_SIGNAL_POINTS
-    toast(`✨ 알차게 채워 +${pts} 완성도 보너스!`, { icon: '📝', duration: 4000 })
+    notify.show(`✨ 알차게 채워 +${pts} 완성도 보너스!`, { icon: '📝', duration: 4000 })
   }
 }

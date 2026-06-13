@@ -600,7 +600,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               if (!file) return
 
               if (file.size > 10 * 1024 * 1024) {
-                toast.error('파일 크기는 10MB를 초과할 수 없습니다.')
+                notify.error('파일 크기는 10MB를 초과할 수 없습니다.')
                 return
               }
 
@@ -617,7 +617,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 URL.revokeObjectURL(previewUrl)
                 setThumbnail(result.url)
               } catch {
-                toast.error('썸네일 업로드에 실패했습니다.')
+                notify.error('썸네일 업로드에 실패했습니다.')
                 URL.revokeObjectURL(previewUrl)
                 setThumbnail('')
                 setThumbnailFile(null)

@@ -7,8 +7,6 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 
-import { toast } from 'react-hot-toast'
-
 import {
   type Infrastructure,
   type InfrastructureType,
@@ -16,6 +14,7 @@ import {
   useInfrastructures,
 } from '@/entities/country/api.infrastructure'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 import {
   FilterPill,
@@ -211,11 +210,11 @@ export function MapRegionInfrastructureView({
     if (!pendingDelete) return
     try {
       await deleteMut.mutateAsync(pendingDelete.id)
-      toast.success('인프라 항목을 삭제했습니다')
+      notify.success('인프라 항목을 삭제했습니다')
       if (url.selectedId === pendingDelete.id) url.setSelectedId(null)
       setPendingDelete(null)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '삭제에 실패했습니다')
+      notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다')
     }
   }
 

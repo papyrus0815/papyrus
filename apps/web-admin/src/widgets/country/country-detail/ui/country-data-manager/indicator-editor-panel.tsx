@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { toast } from 'react-hot-toast'
 
 import {
   useEconomicIndicators,
@@ -13,6 +12,7 @@ import {
   useDeleteDevelopmentIndicator,
 } from '@/entities/country/api.indicators'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 import { INDICATOR_META, type IndicatorType } from './field-configs'
 import * as S from './styles'
@@ -84,7 +84,7 @@ export function IndicatorEditorPanel({ countryId, type }: Props) {
   const handleSave = async () => {
     const year = parseInt(yearInput, 10)
     if (!Number.isInteger(year)) {
-      toast.error('연도를 정확히 입력하세요')
+      notify.error('연도를 정확히 입력하세요')
       return
     }
     const dto: { year: number } & Record<string, unknown> = { year }
@@ -99,7 +99,7 @@ export function IndicatorEditorPanel({ countryId, type }: Props) {
       } else {
         const n = Number(raw)
         if (Number.isNaN(n)) {
-          toast.error(`${f.label}: 숫자를 입력하세요`)
+          notify.error(`${f.label}: 숫자를 입력하세요`)
           return
         }
         dto[f.key] = n
@@ -107,10 +107,10 @@ export function IndicatorEditorPanel({ countryId, type }: Props) {
     }
     try {
       await upsertFn(dto)
-      toast.success(`${year}년 ${meta.label} 지표 저장됨`)
+      notify.success(`${year}년 ${meta.label} 지표 저장됨`)
       reset()
     } catch {
-      toast.error('저장 실패')
+      notify.error('저장 실패')
     }
   }
 
@@ -125,10 +125,10 @@ export function IndicatorEditorPanel({ countryId, type }: Props) {
       return
     try {
       await removeFn(year)
-      toast.success('삭제됨')
+      notify.success('삭제됨')
       if (editingYear === year) reset()
     } catch {
-      toast.error('삭제 실패')
+      notify.error('삭제 실패')
     }
   }
 

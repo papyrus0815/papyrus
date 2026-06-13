@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { FiSlash, FiX } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
 import styled, { css } from 'styled-components'
 
 import {
@@ -34,6 +33,7 @@ import {
   ModalSubtitle,
   ModalTitle,
 } from '@/shared/ui/modal'
+import { notify } from '@/shared/ui/toast'
 
 type Props = {
   open: boolean
@@ -160,11 +160,11 @@ export function PersonBulkEvaluateModal({ open, personIds, onClose }: Props) {
         queryClient.invalidateQueries({ queryKey: ['person-stats', id] })
         queryClient.invalidateQueries({ queryKey: ['person-traits', id] })
       })
-      if (failed === 0) toast.success(`${success}명에게 평가를 적용했습니다.`)
-      else toast.error(`${success}명 성공, ${failed}명 실패`)
+      if (failed === 0) notify.success(`${success}명에게 평가를 적용했습니다.`)
+      else notify.error(`${success}명 성공, ${failed}명 실패`)
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '저장 실패')
+      notify.error(err instanceof Error ? err.message : '저장 실패')
     }
   }
 

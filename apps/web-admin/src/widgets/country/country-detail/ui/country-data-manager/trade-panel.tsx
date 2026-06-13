@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { toast } from 'react-hot-toast'
 
 import {
   useExportImports,
@@ -7,6 +6,7 @@ import {
   useDeleteExportImport,
 } from '@/entities/country/api.trade'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 import * as S from './styles'
 
@@ -48,7 +48,7 @@ export function TradePanel({ countryId }: Props) {
   const handleSave = async () => {
     const year = parseInt(yearInput, 10)
     if (!Number.isInteger(year)) {
-      toast.error('연도를 정확히 입력하세요')
+      notify.error('연도를 정확히 입력하세요')
       return
     }
     try {
@@ -57,10 +57,10 @@ export function TradePanel({ countryId }: Props) {
         exportValue: parseNum(exportValue),
         importValue: parseNum(importValue),
       })
-      toast.success(`${year}년 교역 저장됨`)
+      notify.success(`${year}년 교역 저장됨`)
       reset()
     } catch {
-      toast.error('저장 실패')
+      notify.error('저장 실패')
     }
   }
 
@@ -75,10 +75,10 @@ export function TradePanel({ countryId }: Props) {
       return
     try {
       await deleteMut.mutateAsync(year)
-      toast.success('삭제됨')
+      notify.success('삭제됨')
       if (editingYear === year) reset()
     } catch {
-      toast.error('삭제 실패')
+      notify.error('삭제 실패')
     }
   }
 

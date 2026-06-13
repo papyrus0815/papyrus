@@ -17,11 +17,11 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { FiX } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
 
 import { useCountry } from '@/entities/country/api'
 import {
   type AdminDivisionConfig,
+  type DivisionOwner,
   useAdminDivisionConfigs,
   useBulkCreateAdministrativeDivisions,
   useCreateAdminDivisionConfig,
@@ -36,6 +36,7 @@ import {
   ModalOverlay,
   ModalTitle,
 } from '@/shared/ui/modal'
+import { notify } from '@/shared/ui/toast'
 
 import {
   ErrorText,
@@ -51,7 +52,10 @@ import {
 
 interface BulkImportModalProps {
   isOpen: boolean
-  countryId: string
+  /** 소속 — 현대(countryId) 또는 역사(historicalCountryId) 국가 */
+  owner: DivisionOwner
+  /** 활성 체계 — 지정 시 모든 항목이 이 체계 소속으로 등록됨 */
+  schemeId?: string | null
   defaultLevel: number
   defaultParent: { id: string; name: string } | null
   onClose: () => void
@@ -154,15 +158,17 @@ function parseTree(text: string): ParseResult {
 
 export function AdminDivisionBulkImportModal({
   isOpen,
-  countryId,
+  owner,
+  schemeId = null,
   defaultLevel,
   defaultParent,
   onClose,
 }: BulkImportModalProps) {
-  const { data: configs = [] } = useAdminDivisionConfigs(countryId)
-  const { data: countryDetail } = useCountry(countryId)
-  const bulkMut = useBulkCreateAdministrativeDivisions(countryId)
-  const createConfigMut = useCreateAdminDivisionConfig(countryId)
+  const { data: configs = [] } = useAdminDivisionConfigs(owner, schemeId)
+  // 역사적 국가 소속이면 countryId가 없어 자동으로 비활성화된다 (enabled: !!id)
+  const { data: countryDetail } = useCountry(owner.countryId ?? '')
+  const bulkMut = useBulkCreateAdministrativeDivisions(owner)
+  const createConfigMut = useCreateAdminDivisionConfig(owner)
 
   const [text, setText] = useState('')
   /** 깊이별 (= defaultLevel + d) 단위 ID 또는 새 라벨. key = depth(0-based). */
@@ -217,7 +223,7 @@ export function AdminDivisionBulkImportModal({
 
   const handleAutofillAll = async () => {
     if (parsed.flat.length === 0) {
-      toast.error('먼저 항목을 입력하세요')
+      notify.error('먼저 항목을 입력하세요')
       return
     }
     const isoCode = (countryDetail as { isoCode?: string } | undefined)
@@ -269,7 +275,7 @@ export function AdminDivisionBulkImportModal({
     setText(parsed.roots.flatMap(rebuild).join('\n'))
     setProgress(null)
     setAutoFilling(false)
-    toast.success(`좌표 자동 채움: ${filled}건 / ${parsed.flat.length}`)
+    notify.success(`좌표 자동 채움: ${filled}건 / ${parsed.flat.length}`)
   }
 
   /** 각 깊이의 단위 ID 결정 — 없으면 새로 생성 */
@@ -281,7 +287,8 @@ export function AdminDivisionBulkImportModal({
         result.set(depth, state.configId)
       } else if (state.newLabel.trim()) {
         const created = await createConfigMut.mutateAsync({
-          countryId,
+          ...owner,
+          schemeId: schemeId ?? undefined,
           divisionLevel: defaultLevel + depth,
           divisionLabel: state.newLabel.trim(),
         })
@@ -323,7 +330,8 @@ export function AdminDivisionBulkImportModal({
       for (const group of batch) {
         if (group.nodes.length === 0) continue
         const result = await bulkMut.mutateAsync({
-          countryId,
+          ...owner,
+          schemeId: schemeId ?? undefined,
           adminDivisionId: depthConfigs.get(group.depth)!,
           divisionLevel: defaultLevel + group.depth,
           parentId: group.parentId,
@@ -363,17 +371,17 @@ export function AdminDivisionBulkImportModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (parsed.flat.length === 0) {
-      toast.error('등록할 항목이 없습니다')
+      notify.error('등록할 항목이 없습니다')
       return
     }
     try {
       const depthConfigs = await ensureConfigs()
       const { totalCreated, totalSkipped } = await submitTree(depthConfigs)
       const note = totalSkipped > 0 ? ` · 스킵 ${totalSkipped}건` : ''
-      toast.success(`${totalCreated}건 등록${note}`)
+      notify.success(`${totalCreated}건 등록${note}`)
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '등록에 실패했습니다')
+      notify.error(err instanceof Error ? err.message : '등록에 실패했습니다')
     }
   }
 

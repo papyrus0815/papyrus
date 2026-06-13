@@ -4,8 +4,7 @@ import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { motion } from 'framer-motion'
-import { toast } from 'react-hot-toast'
-import { FiGrid, FiInfo, FiPlus, FiSearch, FiX } from 'react-icons/fi'
+import { FiAward, FiGrid, FiInfo, FiPlus, FiSearch, FiX } from 'react-icons/fi'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import {
   ORGANIZATION_SCOPE_OPTIONS,
@@ -41,6 +40,7 @@ import {
   ModalOverlay,
   ModalTitle,
 } from '@/shared/ui/modal/modal.styles'
+import { notify } from '@/shared/ui/toast'
 import { PositionDefinitionsSection } from '@/widgets/country/country-detail/ui/position-definitions-section.widget'
 
 import {
@@ -823,7 +823,7 @@ export function GovernmentOrganizationsTab({
                             editingOrganization.id,
                             body,
                           )
-                          toast.success('수정되었습니다.')
+                          notify.success('수정되었습니다.')
                           if (
                             selectedOrganization?.id ===
                             editingOrganization.id
@@ -835,7 +835,7 @@ export function GovernmentOrganizationsTab({
                           }
                         } else {
                           await createOrganization(apiConnection, body)
-                          toast.success('등록되었습니다.')
+                          notify.success('등록되었습니다.')
                         }
                         queryClient.invalidateQueries({
                           queryKey: [
@@ -851,7 +851,7 @@ export function GovernmentOrganizationsTab({
                             ? err.message
                             : '저장에 실패했습니다.'
                         setOrganizationModalError(msg)
-                        toast.error(msg)
+                        notify.error(msg)
                       } finally {
                         setOrganizationModalSubmitting(false)
                       }

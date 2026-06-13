@@ -18,7 +18,6 @@ import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { toast } from 'react-hot-toast'
 import { FaHeart, FaHeartBroken } from 'react-icons/fa'
 import {
   FiBookOpen,
@@ -75,6 +74,7 @@ import {
   PersonRegisterModalStickyFooter,
   PersonRegisterModalTitle,
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
+import { notify } from '@/shared/ui/toast'
 
 type Props = {
   personId: string
@@ -356,13 +356,13 @@ export function PersonHumanRelationshipsSection({
       })
     },
     onSuccess: () => {
-      toast.success('저장했습니다.')
+      notify.success('저장했습니다.')
       setCreateModalOpen(false)
       resetNewForm()
       invalidateDetail()
     },
     onError: (error: unknown) => {
-      toast.error(formatRelationshipApiError(error))
+      notify.error(formatRelationshipApiError(error))
     },
   })
 
@@ -384,12 +384,12 @@ export function PersonHumanRelationshipsSection({
         sourceLifeEventIds: editSourceIds,
       }),
     onSuccess: () => {
-      toast.success('저장했습니다.')
+      notify.success('저장했습니다.')
       setEditingId(null)
       invalidateDetail()
     },
     onError: (error: unknown) => {
-      toast.error(formatRelationshipApiError(error))
+      notify.error(formatRelationshipApiError(error))
     },
   })
 
@@ -422,10 +422,10 @@ export function PersonHumanRelationshipsSection({
       if (context?.previous !== undefined) {
         queryClient.setQueryData(context.detailKey, context.previous)
       }
-      toast.error(formatRelationshipApiError(error))
+      notify.error(formatRelationshipApiError(error))
     },
     onSuccess: () => {
-      toast.success('삭제했습니다.')
+      notify.success('삭제했습니다.')
     },
     onSettled: () => {
       // 서버 확정 상태로 최종 동기화 (목록 화면 등 포함)
@@ -523,12 +523,12 @@ export function PersonHumanRelationshipsSection({
       return createRelationshipPhase(personId, phaseModal.relationshipId, body)
     },
     onSuccess: () => {
-      toast.success('시기를 저장했습니다.')
+      notify.success('시기를 저장했습니다.')
       closePhaseModal()
       invalidateDetail()
     },
     onError: (error: unknown) => {
-      toast.error(formatRelationshipApiError(error))
+      notify.error(formatRelationshipApiError(error))
     },
   })
 
@@ -565,10 +565,10 @@ export function PersonHumanRelationshipsSection({
       if (context?.previous !== undefined) {
         queryClient.setQueryData(context.detailKey, context.previous)
       }
-      toast.error(formatRelationshipApiError(error))
+      notify.error(formatRelationshipApiError(error))
     },
     onSuccess: () => {
-      toast.success('시기를 삭제했습니다.')
+      notify.success('시기를 삭제했습니다.')
     },
     onSettled: () => {
       invalidateDetail()
@@ -1094,7 +1094,13 @@ export function PersonHumanRelationshipsSection({
                             {getPersonDisplayName(selectedNewPerson)}
                           </RelatedPersonName>
                           <RelatedPersonMeta>
-                            {formatLifespan(selectedNewPerson) || '생몰년 미상'}
+                            {/* 목록 DTO 타입에는 생몰일이 없으나 런타임 응답에는 포함될 수 있음 */}
+                            {formatLifespan(
+                              selectedNewPerson as {
+                                birthDate?: string | null
+                                deathDate?: string | null
+                              },
+                            ) || '생몰년 미상'}
                           </RelatedPersonMeta>
                         </>
                       ) : (

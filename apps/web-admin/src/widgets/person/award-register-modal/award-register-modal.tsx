@@ -10,7 +10,6 @@
  */
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import { FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -25,6 +24,7 @@ import {
   ModalSubtitle,
   ModalTitle,
 } from '@/shared/ui/modal'
+import { notify } from '@/shared/ui/toast'
 
 export interface AwardRegisterModalProps {
   open: boolean
@@ -86,13 +86,13 @@ export function AwardRegisterModal({
         description: description.trim() || undefined,
       })
       queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
-      toast.success('수상·훈장이 등록되었습니다.')
+      notify.success('수상·훈장이 등록되었습니다.')
       onSuccess?.()
       onClose()
     } catch (err) {
       const message =
         err instanceof Error && err.message ? err.message : '저장에 실패했습니다.'
-      toast.error(message)
+      notify.error(message)
     } finally {
       setSubmitting(false)
     }

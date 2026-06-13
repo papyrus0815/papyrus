@@ -3,7 +3,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import {
   FiActivity,
   FiAward,
@@ -49,6 +48,7 @@ import {
   ModalTitle,
 } from '@/shared/ui/modal'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
+import { notify } from '@/shared/ui/toast'
 
 type DatePrecision = 'year' | 'month' | 'day'
 const DATE_PRECISIONS: DatePrecision[] = ['day', 'month', 'year']
@@ -595,7 +595,7 @@ export function PersonLifeEventFormModal({
           sortOrder: sortForSave,
         })
         savedId = updated?.id ?? lifeEventId
-        toast.success('연보가 수정되었습니다.')
+        notify.success('연보가 수정되었습니다.')
       } else {
         const created = await createPersonLifeEvent({
           personId,
@@ -609,7 +609,7 @@ export function PersonLifeEventFormModal({
           sortOrder: sortForSave ?? undefined,
         })
         savedId = created?.id
-        toast.success('연보가 등록되었습니다.')
+        notify.success('연보가 등록되었습니다.')
       }
       clearDraft()
       invalidate()
@@ -649,7 +649,7 @@ export function PersonLifeEventFormModal({
         err instanceof Error && err.message
           ? err.message
           : '저장에 실패했습니다.'
-      toast.error(message)
+      notify.error(message)
     } finally {
       setSubmitting(false)
     }
@@ -661,7 +661,7 @@ export function PersonLifeEventFormModal({
     setDeleting(true)
     try {
       await deletePersonLifeEvent(lifeEventId)
-      toast.success('연보가 삭제되었습니다.')
+      notify.success('연보가 삭제되었습니다.')
       clearDraft()
       invalidate()
       onSuccess?.()
@@ -671,7 +671,7 @@ export function PersonLifeEventFormModal({
         err instanceof Error && err.message
           ? err.message
           : '삭제에 실패했습니다.'
-      toast.error(message)
+      notify.error(message)
     } finally {
       setDeleting(false)
     }
@@ -689,7 +689,7 @@ export function PersonLifeEventFormModal({
     // title·category·precision은 유지 — 반복 패턴 입력 가속
     initialSnapshotRef.current = '' // 복제 후는 기본적으로 dirty
     clearDraft()
-    toast.success('복제 모드 — 날짜·설명만 새로 입력하세요.')
+    notify.success('복제 모드 — 날짜·설명만 새로 입력하세요.')
   }
 
   if (!open) return null

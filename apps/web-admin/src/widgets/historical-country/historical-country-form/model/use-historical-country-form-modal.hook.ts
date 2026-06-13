@@ -7,10 +7,9 @@
  */
 import { useCallback, useState } from 'react'
 
-import { toast } from 'react-hot-toast'
-
 import type { HistoricalCountry } from '@/entities/historical-country/api'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import {
   useCreateHistoricalCountry,
   useDeleteHistoricalCountry,
@@ -65,7 +64,7 @@ export function useHistoricalCountryFormModal() {
 
   const save = useCallback(
     async (data: HistoricalCountrySavePayload) => {
-      const loadingToast = toast.loading(
+      const loadingToast = notify.loading(
         data.id ? '수정하는 중...' : '등록하는 중...',
       )
       try {
@@ -94,7 +93,7 @@ export function useHistoricalCountryFormModal() {
         }
         if (data.id) {
           await updateMutation.mutateAsync({ id: data.id, data: shared })
-          toast.success('수정되었습니다', { id: loadingToast })
+          notify.success('수정되었습니다', { id: loadingToast })
         } else {
           // CreateHistoricalCountryDto는 일부 필드 null 미허용 — undefined로 생략
           await createMutation.mutateAsync({
@@ -113,11 +112,11 @@ export function useHistoricalCountryFormModal() {
             endMonth: shared.endMonth ?? undefined,
             endDay: shared.endDay ?? undefined,
           })
-          toast.success('등록되었습니다', { id: loadingToast })
+          notify.success('등록되었습니다', { id: loadingToast })
         }
         close()
       } catch (error) {
-        toast.error(
+        notify.error(
           (data.id ? '수정 실패: ' : '등록 실패: ') + (error as Error).message,
           { id: loadingToast },
         )
@@ -136,13 +135,13 @@ export function useHistoricalCountryFormModal() {
         }))
       )
         return false
-      const loadingToast = toast.loading('삭제하는 중...')
+      const loadingToast = notify.loading('삭제하는 중...')
       try {
         await deleteMutation.mutateAsync(id)
-        toast.success('삭제되었습니다', { id: loadingToast })
+        notify.success('삭제되었습니다', { id: loadingToast })
         return true
       } catch (err) {
-        toast.error('삭제 실패: ' + (err as Error).message, {
+        notify.error('삭제 실패: ' + (err as Error).message, {
           id: loadingToast,
         })
         return false

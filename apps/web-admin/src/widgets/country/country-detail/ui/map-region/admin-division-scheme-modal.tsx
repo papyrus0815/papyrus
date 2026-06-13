@@ -6,7 +6,6 @@
 import { useEffect, useState } from 'react'
 
 import { FiX } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
 
 import {
   type AdminDivisionScheme,
@@ -27,6 +26,7 @@ import {
   ModalOverlay,
   ModalTitle,
 } from '@/shared/ui/modal'
+import { notify } from '@/shared/ui/toast'
 
 import {
   Field,
@@ -131,7 +131,7 @@ export function AdminDivisionSchemeModal({
             endDate: endDate || null,
           },
         })
-        toast.success('체계를 수정했습니다')
+        notify.success('체계를 수정했습니다')
       } else {
         const created = await createMut.mutateAsync({
           ...owner,
@@ -140,14 +140,14 @@ export function AdminDivisionSchemeModal({
           startDate: startDate || null,
           endDate: endDate || null,
         })
-        toast.success('체계를 등록했습니다')
+        notify.success('체계를 등록했습니다')
         onCreated?.(created.id)
       }
       onClose()
     } catch (err) {
       const msg = err instanceof Error ? err.message : '저장에 실패했습니다'
       setError(msg)
-      toast.error(msg)
+      notify.error(msg)
     }
   }
 
@@ -163,12 +163,12 @@ export function AdminDivisionSchemeModal({
       return
     try {
       await deleteMut.mutateAsync(editing.id)
-      toast.success('체계를 삭제했습니다')
+      notify.success('체계를 삭제했습니다')
       onClose()
     } catch (err) {
       const msg = err instanceof Error ? err.message : '삭제에 실패했습니다'
       setError(msg)
-      toast.error(msg)
+      notify.error(msg)
     }
   }
 

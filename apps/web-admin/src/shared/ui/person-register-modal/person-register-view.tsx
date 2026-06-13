@@ -14,7 +14,6 @@ import React, {
   useState,
 } from 'react'
 
-import { toast } from 'react-hot-toast'
 import {
   FiAlertCircle,
   FiAlertTriangle,
@@ -32,6 +31,8 @@ import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import {
   type CreatePersonDto as CreatePersonInput,
+  type UpdatePersonDto as UpdatePersonInput,
+  type SpouseRelationInput,
   type Era,
   createPerson,
   updatePerson,
@@ -64,6 +65,7 @@ import {
   Required,
   SubmitButton,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
+import { notify } from '@/shared/ui/toast'
 
 import {
   GENDER_OPTIONS,
@@ -138,6 +140,13 @@ export interface PersonRegisterViewProps {
   initialCountryId?: string | null
   onCancel: () => void
   onSuccess?: (personId: string) => void
+  /**
+   * create 성공 직후 호출 — 캐시 무효화 등 부수효과 전용.
+   * 여기서 모달을 닫거나 페이지를 이동하면 "다른 인물 이어서 등록" 다이얼로그가
+   * 그려지기 전에 폼이 언마운트되므로 절대 닫기/이동을 하면 안 된다.
+   * 닫기/이동은 다이얼로그 응답 후 onSuccess(닫기 선택) 또는 onCancel로 실행된다.
+   */
+  onCreated?: (personId: string) => void
   /** 있으면 수정 모드: 해당 인물 로드 후 폼에 채우고 저장 시 update 호출 */
   editPersonId?: string | null
   /** 제출 중 상태 변경 시 부모에게 알림 (외부 하단 버튼 disabled용) */
@@ -196,6 +205,7 @@ export function PersonRegisterView({
   initialCountryId,
   onCancel,
   onSuccess,
+  onCreated,
   editPersonId,
   onSubmittingChange,
   onDirtyChange,
@@ -254,6 +264,15 @@ export function PersonRegisterView({
   const [motherId, setMotherId] = useState('')
   const [spouseId, setSpouseId] = useState('')
   const [spouseNote, setSpouseNote] = useState('')
+  /**
+   * 수정 모드에서 서버에 저장돼 있던 배우자 관계 전체(payload 형태).
+   * 폼은 첫 관계의 배우자·메모만 편집하므로, 결혼 시작/종료일과 둘째 이후 배우자를
+   * 여기 보존했다가 저장 시 그대로 왕복시킨다 — 서버는 배열 수신 시 통째 교체(delete-and-recreate)라
+   * 보존하지 않으면 결혼일·다중 배우자가 무경고 유실됨.
+   */
+  const [editSpouseRelations, setEditSpouseRelations] = useState<
+    SpouseRelationInput[]
+  >([])
   // 기타
   const [profileImageUrl, setProfileImageUrl] = useState('')
   const [regnalName, setRegnalName] = useState('')
@@ -470,9 +489,11 @@ export function PersonRegisterView({
       m.set(c.id, order === 'western' ? 'western' : 'korean')
     })
     historicalCountries.forEach((c) => {
-      const order = (c as { defaultNameDisplayOrder?: string | null })
-        .defaultNameDisplayOrder
-      m.set(c.id, order === 'western' ? 'western' : 'korean')
+      // HistoricalCountry에는 자체 표시순서 필드가 없음 — 서버 해석(resolveCountryBlockForName)과
+      // 동일하게 연결된 현대 국가(modernConnections[0] = parentModernCountryIds[0])의 기본값을 따른다.
+      const parentId = c.parentModernCountryIds?.[0]
+      const parentOrder = parentId ? m.get(parentId) : undefined
+      m.set(c.id, parentOrder ?? 'korean')
     })
     return m
   }, [modernCountries, historicalCountries])
@@ -704,11 +725,23 @@ export function PersonRegisterView({
         field.key === 'countryId' ? setCountryId(nextCountryId) : field.reset(),
       )
       // 스냅샷 외 transient 상태는 명시 초기화.
-      setCountryName('')
+      // countryName은 보존된 countryId가 있으면 즉시 재계산 — countryId 값이 동일하면
+      // 이름 조회 effect(deps: countryId)가 재실행되지 않아 버튼이 '국가 선택'으로 비어 보임.
+      setCountryName(
+        nextCountryId
+          ? (modernCountries.find((country) => country.id === nextCountryId)
+              ?.name ??
+              historicalCountries.find(
+                (country) => country.id === nextCountryId,
+              )?.name ??
+              '')
+          : '',
+      )
       setPendingThumbnailFile(null)
       setThumbnailObjectUrl(null)
       setThumbnailMarkedForRemoval(false)
       setEditFamilyCache({})
+      setEditSpouseRelations([])
       requestAnimationFrame(() => {
         dirtyTrackingEnabledRef.current = true
       })
@@ -765,6 +798,8 @@ export function PersonRegisterView({
                   : undefined,
                 endDate: a.endDate ? String(a.endDate).slice(0, 10) : undefined,
                 note: a.note ?? undefined,
+                // 정렬 메타 — 폼에 편집 UI는 없지만 보존해 왕복(미보존 시 서버가 전부 1로 재기록).
+                priority: a.priority ?? undefined,
               }),
             ),
         )
@@ -816,8 +851,19 @@ export function PersonRegisterView({
         setReligionId(p.religionId ?? '')
         setFatherId(p.fatherId ?? p.father?.id ?? '')
         setMotherId(p.motherId ?? p.mother?.id ?? '')
-        setSpouseId(p.spouseRelations?.[0]?.spouse?.id ?? p.spouseId ?? '')
-        setSpouseNote(p.spouseRelations?.[0]?.note ?? '')
+        // 배우자 관계 전체(결혼 시작/종료일·둘째 이후 배우자 포함)를 payload 형태로 보존 —
+        // 저장 시 그대로 왕복시켜 통째 교체(deleteMany→createMany)에 의한 유실을 막는다.
+        const spouseRels: SpouseRelationInput[] = (p.spouseRelations ?? [])
+          .filter((rel: any) => rel?.spouse?.id)
+          .map((rel: any) => ({
+            spouseId: String(rel.spouse.id),
+            marriageStartDate: rel.marriageStartDate ?? undefined,
+            marriageEndDate: rel.marriageEndDate ?? undefined,
+            note: rel.note ?? null,
+          }))
+        setEditSpouseRelations(spouseRels)
+        setSpouseId(spouseRels[0]?.spouseId ?? p.spouseId ?? '')
+        setSpouseNote(spouseRels[0]?.note ?? '')
         // detail 응답의 임베디드 인물을 가족 캐시에 보관 — 인물 풀 lazy 로드 전에도 카드 정확.
         setEditFamilyCache({
           father: p.father ?? undefined,
@@ -880,7 +926,7 @@ export function PersonRegisterView({
       .catch(() => {
         if (cancelled) return
         setEditLoadStatus('error')
-        toast.error('인물 정보를 불러오지 못했습니다.')
+        notify.error('인물 정보를 불러오지 못했습니다.')
       })
       .finally(() => {
         if (cancelled) return
@@ -953,7 +999,7 @@ export function PersonRegisterView({
       // 다시 confirm을 띄울 필요 없음.
       setIsDirty(false)
     })
-    toast.success('임시 저장된 내용을 복원했습니다.')
+    notify.success('임시 저장된 내용을 복원했습니다.')
   }
 
   const dismissDraft = () => {
@@ -977,11 +1023,17 @@ export function PersonRegisterView({
     setResetCounter((n) => n + 1)
   }
 
-  /** 등록 성공 다이얼로그 — "닫기" 선택 시 onCancel 호출(모달 닫기/페이지 이동). */
+  /**
+   * 등록 성공 다이얼로그 — "닫기" 선택 시 비로소 닫기/이동 실행.
+   * onSuccess가 있으면 위임(모달=닫기, 페이지=등록 인물 상세 이동), 없으면 onCancel.
+   * create 직후에는 onCreated(캐시 무효화 전용)만 호출되므로 다이얼로그가 살아 있다.
+   */
   const handleClosePostSuccess = () => {
     setShowRegisterAgainDialog(false)
+    const createdId = lastCreatedPerson?.id
     setLastCreatedPerson(null)
-    onCancel()
+    if (createdId && onSuccess) onSuccess(createdId)
+    else onCancel()
   }
 
   const handleCountrySelect = (c: { id: string; name: string }) => {
@@ -1004,7 +1056,7 @@ export function PersonRegisterView({
       setBirthCityId('')
       setDeathPlace(null)
       setDeathCityId('')
-      toast(
+      notify.show(
         (t) => (
           <UndoToastBody>
             <span>출생지·사망지를 비웠습니다</span>
@@ -1015,7 +1067,7 @@ export function PersonRegisterView({
                 setBirthCityId(snapshot.birthCityId)
                 setDeathPlace(snapshot.deathPlace)
                 setDeathCityId(snapshot.deathCityId)
-                toast.dismiss(t.id)
+                notify.dismiss(t.id)
               }}
             >
               되돌리기
@@ -1074,7 +1126,7 @@ export function PersonRegisterView({
     setDeathPlace(birthPlace)
     setDeathCityId(birthPlace.cityId ?? '')
     markDirty()
-    toast.success('출생지를 사망지로 복사했습니다.')
+    notify.success('출생지를 사망지로 복사했습니다.')
   }
 
   const handleBirthDateSelect = (date: string) => {
@@ -1144,7 +1196,7 @@ export function PersonRegisterView({
       setThumbnailMarkedForRemoval(false)
       markDirty()
     } catch (err) {
-      toast.error(
+      notify.error(
         err instanceof Error ? err.message : '이미지를 선택할 수 없습니다.',
       )
     }
@@ -1202,6 +1254,8 @@ export function PersonRegisterView({
 
   // ⌘Enter / Ctrl+Enter — 폼 어디에서나 빠른 제출. 긴 폼이라 푸터까지 마우스 이동 부담 ↓.
   const formRef = useRef<HTMLFormElement | null>(null)
+  /** 소속(affiliation) 행의 시작/종료일 피커 열림 여부 — 자식 섹션이 콜백으로 보고. */
+  const [affDateModalOpen, setAffDateModalOpen] = useState(false)
   // 날짜·국가·인물·가문·종교 선택 모달 또는 등록완료 다이얼로그가 떠 있으면
   // ⌘Enter가 그 모달의 입력 중 폼을 제출해버리지 않도록 단축키를 막는다.
   const anyModalOpen =
@@ -1214,6 +1268,7 @@ export function PersonRegisterView({
     showDynastyModal ||
     showReligionModal ||
     affCountryPickerRow !== null ||
+    affDateModalOpen ||
     showRegisterAgainDialog
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1330,10 +1385,10 @@ export function PersonRegisterView({
         const dy = parseInt(death.year, 10)
         const dm = death.month ? parseInt(death.month, 10) : 1
         const dd = death.day ? parseInt(death.day, 10) : 1
-        const birthSign = birth.era === 'BC' ? -1 : 1
-        const deathSign = death.era === 'BC' ? -1 : 1
-        const birthVal = birthSign * (by * 10000 + bm * 100 + bd)
-        const deathVal = deathSign * (dy * 10000 + dm * 100 + dd)
+        // 부호는 연도에만 적용(iso-date.ts dateSortKey와 동일: 부호연도×10000 + 월×100 + 일).
+        // 합성 키 전체에 -1을 곱하면 같은 BC 연도 안에서 월·일 순서가 뒤집힌다.
+        const birthVal = (birth.era === 'BC' ? -by : by) * 10000 + bm * 100 + bd
+        const deathVal = (death.era === 'BC' ? -dy : dy) * 10000 + dm * 100 + dd
         if (deathVal < birthVal) {
           errs.death = '사망일은 출생일 이후여야 합니다.'
         }
@@ -1405,6 +1460,38 @@ export function PersonRegisterView({
   }, [])
 
   // ─── Payload ───────────────────────────────────────────────────────────────
+  /**
+   * 배우자 관계 payload.
+   * - 신규: 첫 배우자 입력이 있으면 단건, 없으면 미전송(undefined).
+   * - 수정: 서버가 배열 수신 시 통째 교체(deleteMany→createMany)하므로 hydration에 보존한
+   *   전체 관계(결혼 시작/종료일·둘째 이후 배우자)를 그대로 왕복시키고,
+   *   폼이 편집하는 첫 관계만 교체한다. 이미 관계가 있던 인물을 고르면 결혼일은 유지.
+   */
+  const buildSpouseRelations = (): SpouseRelationInput[] | undefined => {
+    const note = spouseNote.trim() || null
+    if (!isEditMode) {
+      return spouseId ? [{ spouseId, note }] : undefined
+    }
+    // 첫 슬롯을 비웠으면 첫 관계만 제거, 나머지(둘째 이후)는 무손실 유지.
+    if (!spouseId) return editSpouseRelations.slice(1)
+    // 보존 관계 중 같은 인물이 있으면 그 결혼일을 승계 (첫 관계 교체·순서 변경 모두 커버).
+    const preserved = editSpouseRelations.find(
+      (relation) => relation.spouseId === spouseId,
+    )
+    return [
+      {
+        spouseId,
+        marriageStartDate: preserved?.marriageStartDate,
+        marriageEndDate: preserved?.marriageEndDate,
+        note,
+      },
+      // 중복 행 방지 — 첫 슬롯에 들어간 인물은 나머지 목록에서 제외.
+      ...editSpouseRelations
+        .slice(1)
+        .filter((relation) => relation.spouseId !== spouseId),
+    ]
+  }
+
   const buildPayload = (
     uploadedProfileUrl?: string,
     options?: { clearProfileImage?: boolean },
@@ -1447,6 +1534,8 @@ export function PersonRegisterView({
                 historicalCountryId: r.historicalCountryId,
                 startDate: r.startDate,
                 endDate: r.endDate,
+                // 정렬 메타 왕복 — 미전송 시 서버가 전부 1로 재기록(평탄화)함.
+                priority: r.priority,
                 note: r.note,
               }))
           : undefined,
@@ -1460,12 +1549,8 @@ export function PersonRegisterView({
       religionId: religionId || undefined,
       fatherId: fatherId || undefined,
       motherId: motherId || undefined,
-      // 수정 모드에서 배우자를 비웠을 때는 빈 배열로 보내 명시적 제거. 신규는 undefined.
-      spouseRelations: spouseId
-        ? [{ spouseId, note: spouseNote.trim() || null }]
-        : isEditMode
-          ? []
-          : undefined,
+      // 신규: 첫 배우자만 / 수정: 보존된 전체 관계를 왕복(첫 관계만 교체, 비우면 첫 관계 제거).
+      spouseRelations: buildSpouseRelations(),
       isBirthDateUnknown,
       isDeathDateUnknown,
       isAlive,
@@ -1502,11 +1587,14 @@ export function PersonRegisterView({
   // ─── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // 재진입 가드 — 버튼 disabled·⌘Enter 가드와 별개로 핸들러 자체에서도 이중 제출 차단.
+    if (isSubmitting || uploadingThumbnail) return
     if (!validate()) {
-      // 검증 실패 시 첫 오류 필드(aria-invalid)로 스크롤·포커스 — 긴 폼에서 놓치지 않도록.
+      // 검증 실패 시 첫 오류 필드로 스크롤·포커스 — 긴 폼에서 놓치지 않도록.
+      // (성별 SegmentControl처럼 aria-invalid를 렌더하지 않는 컨트롤은 data-field-error로 매칭)
       requestAnimationFrame(() => {
         const el = formRef.current?.querySelector<HTMLElement>(
-          '[aria-invalid="true"]',
+          '[aria-invalid="true"], [data-field-error="true"]',
         )
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -1546,8 +1634,23 @@ export function PersonRegisterView({
           ? { ...payload, profileImageUrl: undefined }
           : payload
       if (isEditMode && editPersonId) {
-        await updatePerson(editPersonId, payload)
-        toast.success('인물 정보가 수정되었습니다.')
+        // 수정 모드: 비운 FK·생몰일은 명시적 null로 전송해 서버에서 해제.
+        // (PATCH 계약: undefined = 변경 없음 — 키를 생략하면 기존 값이 남아 재진입 시 부활)
+        const updatePayload: UpdatePersonInput = {
+          ...payload,
+          dynastyId: dynastyId || null,
+          religionId: religionId || null,
+          fatherId: fatherId || null,
+          motherId: motherId || null,
+          birthCityId: birthCityId || null,
+          deathCityId: deathCityId || null,
+          // 날짜가 비워졌으면(미상·생존 전환 포함) null = 해제.
+          // isAlive·isDeathDateUnknown 플래그 수신 시 서버도 함께 클리어(이중 안전장치).
+          birth: payload.birth ?? null,
+          death: payload.death ?? null,
+        }
+        await updatePerson(editPersonId, updatePayload)
+        notify.success('인물 정보가 수정되었습니다.')
         setIsDirty(false)
         draft.discardDraft()
         // onSuccess가 닫기/이동을 책임진다(모달=onClose, 페이지=상세로 이동).
@@ -1556,7 +1659,7 @@ export function PersonRegisterView({
         else onCancel()
       } else {
         const created = await createPerson(createPayload)
-        toast.success('인물이 등록되었습니다.')
+        notify.success('인물이 등록되었습니다.')
         // 게이미피케이션 즉시 갱신 + 완성도 보너스 피드백 (사진·약력·출생연도)
         onContentRegistered(
           (created.profileImageUrl ? 1 : 0) +
@@ -1565,7 +1668,10 @@ export function PersonRegisterView({
         )
         setIsDirty(false)
         draft.discardDraft()
-        onSuccess?.(created.id)
+        // 캐시 무효화 전용 콜백 — onSuccess를 여기서 부르면 호출부가 모달을 닫거나 페이지를
+        // 이동시켜 아래 다이얼로그가 그려지기 전에 폼이 언마운트된다. 닫기/이동은
+        // 다이얼로그 응답 후(handleClosePostSuccess)에 실행.
+        onCreated?.(created.id)
         // 등록 성공 → 사용자에게 후속 액션 다이얼로그로 분기 (이전 "또 등록" 체크박스 대체).
         // 등록한 인물을 로컬 풀과 직전 등록 칩에 미리 누적 — "다른 인물 등록" 선택 시 즉시 활용.
         setRecentlyRegistered((prev) => {
@@ -1590,7 +1696,7 @@ export function PersonRegisterView({
             : ' 이미지는 업로드되었습니다. 등록을 다시 시도해 주세요.'
           : ''
       setErrors((prev) => ({ ...prev, _form: base + extra }))
-      toast.error(base + extra)
+      notify.error(base + extra)
     } finally {
       setIsSubmitting(false)
       onSubmittingChange?.(false)
@@ -1943,20 +2049,27 @@ export function PersonRegisterView({
                     <FieldLabel htmlFor={fid('gender')}>
                       성별 <Required>*</Required>
                     </FieldLabel>
-                    <SegmentControl
-                      value={gender || undefined}
-                      onChange={(v) => {
-                        setGender(v)
-                        clearFieldError('gender')
-                        markDirty()
-                      }}
-                      options={GENDER_OPTIONS.map((opt) => ({
-                        value: opt.value,
-                        label: opt.label,
-                      }))}
-                      error={!!errors.gender}
-                      ariaLabel="성별"
-                    />
+                    {/* SegmentControl은 aria-invalid를 렌더하지 않음 — 제출 실패 시 첫 오류
+                        스크롤 셀렉터가 잡을 수 있게 래퍼에 data-field-error를 단다. */}
+                    <div
+                      data-field-error={errors.gender ? 'true' : undefined}
+                      tabIndex={errors.gender ? -1 : undefined}
+                    >
+                      <SegmentControl
+                        value={gender || undefined}
+                        onChange={(v) => {
+                          setGender(v)
+                          clearFieldError('gender')
+                          markDirty()
+                        }}
+                        options={GENDER_OPTIONS.map((opt) => ({
+                          value: opt.value,
+                          label: opt.label,
+                        }))}
+                        error={!!errors.gender}
+                        ariaLabel="성별"
+                      />
+                    </div>
                     {errors.gender && (
                       <FieldError id={fid('gender-err')} role="alert">
                         <FiAlertCircle size={13} />
@@ -2212,6 +2325,7 @@ export function PersonRegisterView({
                   rows={countryAffiliations}
                   setRows={setCountryAffiliations}
                   onPickCountry={(rowKey) => setAffCountryPickerRow(rowKey)}
+                  onDateModalOpenChange={setAffDateModalOpen}
                   markDirty={markDirty}
                 />
 

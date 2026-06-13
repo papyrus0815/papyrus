@@ -9,7 +9,6 @@
 import { useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { toast } from 'react-hot-toast'
 import {
   FiAward,
   FiCalendar,
@@ -23,6 +22,7 @@ import {
 
 import { personCareerApi } from '@/shared/api/person-career'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 import { formatIsoDateKo } from './helpers'
 import {
@@ -150,7 +150,7 @@ export function TenureAchievements({
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      toast.error('제목을 입력하세요.')
+      notify.error('제목을 입력하세요.')
       return
     }
     const dto = {
@@ -172,19 +172,19 @@ export function TenureAchievements({
         } else {
           await personCareerApi.updateTenureAchievement(hostId, editingId, dto)
         }
-        toast.success('업적이 수정되었습니다.')
+        notify.success('업적이 수정되었습니다.')
       } else {
         if (isReign) {
           await personCareerApi.createSovereignReignAchievement(hostId, dto)
         } else {
           await personCareerApi.createTenureAchievement(hostId, dto)
         }
-        toast.success('업적·한일이 등록되었습니다.')
+        notify.success('업적·한일이 등록되었습니다.')
       }
       resetForm()
       onChanged()
     } catch (err: any) {
-      toast.error(
+      notify.error(
         err?.message ??
           (editingId ? '수정에 실패했습니다.' : '등록에 실패했습니다.'),
       )
@@ -213,10 +213,10 @@ export function TenureAchievements({
         await personCareerApi.deleteTenureAchievement(hostId, achievementId)
       }
       if (editingId === achievementId) resetForm()
-      toast.success('업적이 삭제되었습니다.')
+      notify.success('업적이 삭제되었습니다.')
       onChanged()
     } catch (err: any) {
-      toast.error(err?.message ?? '삭제에 실패했습니다.')
+      notify.error(err?.message ?? '삭제에 실패했습니다.')
     }
   }
 

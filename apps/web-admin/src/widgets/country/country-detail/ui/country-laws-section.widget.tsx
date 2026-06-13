@@ -2,7 +2,6 @@ import React, { useCallback, useId, useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { toast } from 'react-hot-toast'
 import {
   FiBook,
   FiChevronRight,
@@ -22,6 +21,7 @@ import {
   updateLaw,
 } from '@/shared/api/election'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import {
   EmptyStateFeatureCard,
   EmptyStateFill,
@@ -339,9 +339,9 @@ export function CountryLawsSection({
       setNewLawTypeName('')
       setLawTypeAddOpen(false)
       if (created?.id) setLawTypeId(created.id)
-      toast.success('법 분류를 추가했습니다.')
+      notify.success('법 분류를 추가했습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const createMut = useMutation({
@@ -350,9 +350,9 @@ export function CountryLawsSection({
       invalidate()
       setEditorOpen(false)
       resetEditorForm()
-      toast.success('법령을 등록했습니다.')
+      notify.success('법령을 등록했습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const updateMut = useMutation({
@@ -362,18 +362,18 @@ export function CountryLawsSection({
       invalidate()
       setEditorOpen(false)
       resetEditorForm()
-      toast.success('저장했습니다.')
+      notify.success('저장했습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteLaw(id),
     onSuccess: () => {
       invalidate()
-      toast.success('삭제했습니다.')
+      notify.success('삭제했습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const openCreate = () => {
@@ -397,21 +397,21 @@ export function CountryLawsSection({
 
   const submitLawForm = () => {
     if (!name.trim()) {
-      toast.error('명칭을 입력하세요.')
+      notify.error('명칭을 입력하세요.')
       return
     }
     const article = parseClauseDigits(articleInput)
     const paragraph = parseClauseDigits(paragraphInput)
     if (articleInput.trim() !== '' && article == null) {
-      toast.error('조 번호는 1 이상의 숫자만 입력할 수 있습니다.')
+      notify.error('조 번호는 1 이상의 숫자만 입력할 수 있습니다.')
       return
     }
     if (paragraphInput.trim() !== '' && paragraph == null) {
-      toast.error('항 번호는 1 이상의 숫자만 입력할 수 있습니다.')
+      notify.error('항 번호는 1 이상의 숫자만 입력할 수 있습니다.')
       return
     }
     if (paragraph != null && article == null) {
-      toast.error('항을 입력하려면 조 번호를 먼저 입력하세요.')
+      notify.error('항을 입력하려면 조 번호를 먼저 입력하세요.')
       return
     }
 

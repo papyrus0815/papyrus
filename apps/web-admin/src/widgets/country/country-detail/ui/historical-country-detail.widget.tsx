@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback, useRef } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import styled from 'styled-components'
 import { useThemeStore } from '@/shared/styles/theme.store'
 
@@ -46,8 +45,10 @@ import { CountryLawsSection } from './country-laws-section.widget'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { LoadingOverlay } from './loading-overlay'
+import { MapRegionAdministrativeView } from './map-region-administrative-view'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view/rich-text-read-view'
+import { notify } from '@/shared/ui/toast'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import {
   STATE_TYPE_COLORS,
@@ -136,6 +137,7 @@ export type HistoricalCountryTab =
   | 'events' // 주요 사건 (메인)
   | 'figures' // 주요 인물
   | 'heads' // 수장 (국왕, 황제 등)
+  | 'regions' // 행정구역 (조선 팔도 등)
   | 'government' // 행정조직 (관직 정의, 행정기구)
   | 'elections' // 선거·투표 (역사 국가 맥락)
   | 'laws' // 법령 카탈로그
@@ -239,6 +241,7 @@ interface EventDetailData {
  */
 type HistoricalSyncedTab =
   | 'heads'
+  | 'regions'
   | 'government'
   | 'elections'
   | 'laws'
@@ -257,6 +260,7 @@ interface HistoricalCountryDetailProps {
 
 const SYNCED_TAB_SET = new Set<HistoricalCountryTab>([
   'heads',
+  'regions',
   'government',
   'elections',
   'laws',
@@ -387,6 +391,9 @@ export function HistoricalCountryDetail({
                   )}
                   {activeTab === 'heads' && (
                     <HeadsOfStateSection country={country} />
+                  )}
+                  {activeTab === 'regions' && (
+                    <HistoricalRegionsSection country={country} />
                   )}
                   {activeTab === 'government' && (
                     <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 14 }}>
@@ -647,6 +654,7 @@ function HistoricalCountryTabs({
     { id: 'events', label: '주요 사건' },
     { id: 'figures', label: '인물' },
     { id: 'heads', label: '역대 수반' },
+    { id: 'regions', label: '행정구역' },
     { id: 'government', label: '행정조직' },
     { id: 'elections', label: '선거·투표' },
     { id: 'laws', label: '법령' },
@@ -723,10 +731,10 @@ function HistoricalOverviewSection({
       console.log('[OverviewSave] onSuccess description =', description, '/ saved =', saved)
       setSavedDescription(saved)
       setIsEditorOpen(false)
-      toast.success('개요가 저장되었습니다.')
+      notify.success('개요가 저장되었습니다.')
     },
     onError: () => {
-      toast.error('저장 중 오류가 발생했습니다.')
+      notify.error('저장 중 오류가 발생했습니다.')
     },
   })
 
@@ -2611,6 +2619,52 @@ function SuccessionRow({
 // ============================================
 // 영토 변천 섹션
 // ============================================
+
+// ============================================
+// 행정구역 섹션 — 현대 국가와 동일한 등록/드릴다운 UI를 historicalCountryId 소속으로 사용
+// ============================================
+
+function HistoricalRegionsSection({ country }: { country: UnifiedCountry }) {
+  const [mapLocation, setMapLocation] = useState<{
+    latitude: number
+    longitude: number
+    name: string
+  } | null>(null)
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 24,
+        padding: '28px 32px 48px',
+        minHeight: 'calc(100vh - 300px)',
+      }}
+    >
+      <MapRegionAdministrativeView
+        country={{
+          id: country.id,
+          name: country.name,
+          latitude: country.latitude ?? null,
+          longitude: country.longitude ?? null,
+        }}
+        owner={{ historicalCountryId: country.id }}
+        mapLocation={mapLocation}
+        onCityClick={(loc) => {
+          if (!loc.id) {
+            setMapLocation(null)
+            return
+          }
+          setMapLocation({
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            name: loc.name,
+          })
+        }}
+      />
+    </div>
+  )
+}
 
 function TerritorySection({ country }: { country: UnifiedCountry }) {
   return (

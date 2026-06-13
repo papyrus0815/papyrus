@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 
-import { toast } from 'react-hot-toast'
 import { FiGrid, FiX } from 'react-icons/fi'
 import { ThemeProvider, useTheme } from 'styled-components'
 
@@ -12,6 +11,7 @@ import { invalidateAdministrationDepartmentQueries } from '@/shared/lib/ministry
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 import {
   CategoryBtnRow,
@@ -96,7 +96,7 @@ export function GovernmentCategoryModal({
 
   const saveCategoryForm = async () => {
     if (!categoryForm.name.trim()) {
-      toast.error('카테고리명을 입력해주세요.')
+      notify.error('카테고리명을 입력해주세요.')
       return
     }
     setCategoryFormSaving(true)
@@ -106,20 +106,20 @@ export function GovernmentCategoryModal({
           name: categoryForm.name.trim(),
           nameEn: categoryForm.nameEn.trim() || null,
         })
-        toast.success('카테고리가 수정되었습니다.')
+        notify.success('카테고리가 수정되었습니다.')
       } else {
         await administrationDepartmentApi.createCategory({
           name: categoryForm.name.trim(),
           nameEn: categoryForm.nameEn.trim() || null,
         })
-        toast.success('카테고리가 추가되었습니다.')
+        notify.success('카테고리가 추가되었습니다.')
       }
       await loadCategoryModalList()
       await invalidateAdministrationDepartmentQueries(queryClient)
       setEditingCategoryId(null)
       setCategoryForm({ name: '', nameEn: '' })
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '저장에 실패했습니다.')
+      notify.error(e instanceof Error ? e.message : '저장에 실패했습니다.')
     } finally {
       setCategoryFormSaving(false)
     }
@@ -137,7 +137,7 @@ export function GovernmentCategoryModal({
       return
     try {
       await administrationDepartmentApi.deleteCategory(id)
-      toast.success('카테고리가 삭제되었습니다.')
+      notify.success('카테고리가 삭제되었습니다.')
       await loadCategoryModalList()
       await invalidateAdministrationDepartmentQueries(queryClient)
       if (editingCategoryId === id) {
@@ -145,7 +145,7 @@ export function GovernmentCategoryModal({
         setCategoryForm({ name: '', nameEn: '' })
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '삭제에 실패했습니다.')
+      notify.error(e instanceof Error ? e.message : '삭제에 실패했습니다.')
     }
   }
 

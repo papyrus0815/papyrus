@@ -29,6 +29,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { usePersonEvaluationIndex } from '@/shared/lib/person-evaluation-index'
 import { getPositionBg, getPositionColor } from '@/shared/lib/position-color'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { BORDER_COLOR, FOCUS_COLOR } from '@/shared/ui/register-form-layout'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
@@ -1905,20 +1906,19 @@ export function PersonListContent({
       const results = await Promise.allSettled(ids.map((id) => deletePerson(id)))
       const successIds = ids.filter((_, i) => results[i]!.status === 'fulfilled')
       const failed = results.length - successIds.length
-      const { toast } = await import('react-hot-toast')
       if (failed > 0) {
-        toast.error(`${successIds.length}명 삭제 성공, ${failed}명 실패`)
+        notify.error(`${successIds.length}명 삭제 성공, ${failed}명 실패`)
       } else {
         // C3: 5초 Undo — 토스트의 버튼 클릭 시 삭제된 인물을 재등록
-        toast(
+        notify.show(
           (t) => (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
               <span>{successIds.length}명을 삭제했습니다.</span>
               <button
                 type="button"
                 onClick={async () => {
-                  toast.dismiss(t.id)
-                  const undoToastId = toast.loading('복원 중…')
+                  notify.dismiss(t.id)
+                  const undoToastId = notify.loading('복원 중…')
                   try {
                     const { createPerson } = await import('@/shared/api/persons')
                     const restored = targetPersons.filter((p) => successIds.includes(p.id))
@@ -1939,14 +1939,14 @@ export function PersonListContent({
                         }),
                       ),
                     )
-                    toast.dismiss(undoToastId)
-                    toast.success('복원되었습니다 (관계·평가 등 부속 정보는 유실).')
+                    notify.dismiss(undoToastId)
+                    notify.success('복원되었습니다 (관계·평가 등 부속 정보는 유실).')
                     if (invalidateKeys.length > 0) {
                       queryClient.invalidateQueries({ queryKey: invalidateKeys as string[] })
                     }
                   } catch (err) {
-                    toast.dismiss(undoToastId)
-                    toast.error('복원 실패')
+                    notify.dismiss(undoToastId)
+                    notify.error('복원 실패')
                   }
                 }}
                 style={{

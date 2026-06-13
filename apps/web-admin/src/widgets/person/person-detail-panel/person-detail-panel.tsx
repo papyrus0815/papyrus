@@ -14,7 +14,6 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { toast } from 'react-hot-toast'
 import {
   FiAlertTriangle,
   FiArrowLeft,
@@ -53,6 +52,7 @@ import {
 import { pathKeys } from '@/shared/router'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
+import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 import {
   type RichTextDynastyTooltipState,
@@ -81,8 +81,10 @@ import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { SovereignReignRegisterPanel } from '@/shared/ui/sovereign-reign-register-panel/sovereign-reign-register-panel'
+import { notify } from '@/shared/ui/toast'
 import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 import { AwardRegisterModal } from '@/widgets/person/award-register-modal/award-register-modal'
+import { CareerRegisterModal } from '@/widgets/person/career-register-modal/career-register-modal'
 import { PersonLifeEventFormModal } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
 import { PersonLifeTimelineInfographic } from '@/widgets/person/person-life-timeline-infographic/person-life-timeline-infographic'
 import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-infographic/person-genealogy-infographic'
@@ -259,6 +261,12 @@ interface PersonDetailPanelProps {
    * (자식 패널에서 또 모달을 열지 않음)
    */
   onLinkedPersonClick?: (personId: string) => void
+  /**
+   * true면 로드된 인물 이름을 브라우저 탭 제목(<title>)에 반영한다.
+   * 풀페이지 라우트(인물 상세/타임라인)에서만 켠다 — 모달·임베드에서 켜면
+   * 뒤 페이지의 제목을 덮어쓰므로 기본 false.
+   */
+  syncDocumentTitle?: boolean
 }
 
 export function PersonDetailPanel({
@@ -269,6 +277,7 @@ export function PersonDetailPanel({
   hideHeaderActions = false,
   embedInModal = false,
   onLinkedPersonClick,
+  syncDocumentTitle = false,
 }: PersonDetailPanelProps) {
   const playClickSound = useClickSound()
   const queryClient = useQueryClient()
@@ -340,6 +349,7 @@ export function PersonDetailPanel({
   const [lifeEventModalOpen, setLifeEventModalOpen] = useState(false)
   const [editingLifeEvent, setEditingLifeEvent] = useState<PersonLifeEvent | null>(null)
   const [awardModalOpen, setAwardModalOpen] = useState(false)
+  const [careerModalOpen, setCareerModalOpen] = useState(false)
   /** 연보의 사건 카드 클릭 시 띄울 사건 인라인 모달 — null이면 닫힘 */
   const [viewingEventId, setViewingEventId] = useState<string | null>(null)
   /** 저장 직후 하이라이트·스크롤 대상 id (타임라인 인포그래픽에 전달). 0.8초 뒤 자동 해제 */
@@ -391,6 +401,14 @@ export function PersonDetailPanel({
     queryFn: () => getPersonDetailById(personId) as Promise<PersonDetailData>,
     enabled: !!personId,
   })
+
+  // 풀페이지 라우트에서만(syncDocumentTitle) 탭 제목을 인물 이름으로 채운다.
+  // 훅은 early return 이전에 무조건 호출하고, 끌 땐 null을 넘겨 무시시킨다.
+  useDocumentTitle(
+    syncDocumentTitle && person
+      ? getPersonDisplayName(person as unknown as PersonNameFields)
+      : null,
+  )
 
   /**
    * 영향력 낙관적 표시값 (React 19 useOptimistic).
@@ -700,9 +718,9 @@ export function PersonDetailPanel({
         const result = await uploadImage(file, 'persons')
         await updatePerson(personId, { profileImageUrl: result.url })
         await invalidatePersonCaches(true)
-        toast.success('프로필 사진이 변경되었습니다.')
+        notify.success('프로필 사진이 변경되었습니다.')
       } catch (err) {
-        toast.error(
+        notify.error(
           err instanceof Error ? err.message : '사진 업로드에 실패했습니다.',
         )
       } finally {
@@ -717,11 +735,11 @@ export function PersonDetailPanel({
     try {
       await deletePerson(personId)
       await invalidatePersonCaches(false)
-      toast.success('인물이 삭제되었습니다.')
+      notify.success('인물이 삭제되었습니다.')
       setDeleteConfirmOpen(false)
       onClose()
     } catch (err) {
-      toast.error(
+      notify.error(
         err instanceof Error ? err.message : '인물 삭제에 실패했습니다.',
       )
     } finally {
@@ -747,10 +765,10 @@ export function PersonDetailPanel({
       await queryClient.invalidateQueries({
         queryKey: personKeys.detailFull(personId),
       })
-      toast.success(`'${entryDeleteTarget.label}' 항목을 삭제했습니다.`)
+      notify.success(`'${entryDeleteTarget.label}' 항목을 삭제했습니다.`)
       setEntryDeleteTarget(null)
     } catch (err) {
-      toast.error(
+      notify.error(
         err instanceof Error ? err.message : '삭제에 실패했습니다.',
       )
     } finally {
@@ -1377,11 +1395,11 @@ export function PersonDetailPanel({
                                   // 성공 시에만 편집 모드 종료 — 실패하면 편집 모드·
                                   // influenceDraft를 그대로 유지해 즉시 재시도 가능.
                                   setEditingInfluence(false)
-                                  toast.success('영향력이 저장되었습니다.')
+                                  notify.success('영향력이 저장되었습니다.')
                                 } catch (err) {
                                   // 편집 모드 유지(닫지 않음). 낙관적 값은 트랜지션
                                   // 종료 후 base(person.influence)로 자연 수렴.
-                                  toast.error(
+                                  notify.error(
                                     err instanceof Error
                                       ? err.message
                                       : '영향력 저장에 실패했습니다.',
@@ -1735,7 +1753,8 @@ export function PersonDetailPanel({
                   )}
 
                   {/* 3.35. 분야별 경력 */}
-                  {p.careers && p.careers.length > 0 && (() => {
+                  {(!embedInModal || (p.careers && p.careers.length > 0)) && (() => {
+                    const careers = p.careers ?? []
                     const KIND_LABELS: Record<string, string> = {
                       military: '군사',
                       business: '기업',
@@ -1751,7 +1770,7 @@ export function PersonDetailPanel({
                       military: 0, business: 1, academic: 2, religious: 3,
                       artist: 4, athlete: 5, media: 6, legal: 7, medical: 8,
                     }
-                    const grouped = p.careers.reduce<Record<string, typeof p.careers>>(
+                    const grouped = careers.reduce<Record<string, typeof careers>>(
                       (acc, c) => {
                         ;(acc[c.kind] ??= []).push(c)
                         return acc
@@ -1767,9 +1786,31 @@ export function PersonDetailPanel({
                         ariaLabel="분야별 경력"
                         icon={<FiAward size={14} strokeWidth={2.2} />}
                         title="분야별 경력"
-                        count={p.careers.length}
+                        count={careers.length > 0 ? careers.length : undefined}
                         defaultOpen={false}
+                        actions={
+                          !embedInModal && (
+                            <UnifiedActionRow>
+                              <TenureAddButton
+                                type="button"
+                                onClick={() => {
+                                  playClickSound()
+                                  setCareerModalOpen(true)
+                                }}
+                              >
+                                <FiPlus size={12} />
+                                경력
+                              </TenureAddButton>
+                            </UnifiedActionRow>
+                          )
+                        }
                       >
+                        {careers.length === 0 ? (
+                          <TenureEmpty>
+                            등록된 경력이 없습니다. 위 <strong>경력 버튼</strong>으로
+                            추가하세요.
+                          </TenureEmpty>
+                        ) : (
                         <ActivityGroupList>
                           {kinds.map((k) => {
                             const list = grouped[k] ?? []
@@ -1846,6 +1887,7 @@ export function PersonDetailPanel({
                             )
                           })}
                         </ActivityGroupList>
+                        )}
                       </CollapsibleSection>
                     )
                   })()}
@@ -2388,6 +2430,12 @@ export function PersonDetailPanel({
         open={awardModalOpen}
         personId={person.id}
         onClose={() => setAwardModalOpen(false)}
+      />
+
+      <CareerRegisterModal
+        open={careerModalOpen}
+        personId={person.id}
+        onClose={() => setCareerModalOpen(false)}
       />
 
       <EventInlineModal

@@ -4,7 +4,6 @@
 import { useEffect, useState } from 'react'
 
 import { FiX } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
 
 import {
   type Infrastructure,
@@ -21,6 +20,7 @@ import {
   ModalOverlay,
   ModalTitle,
 } from '@/shared/ui/modal'
+import { notify } from '@/shared/ui/toast'
 
 import {
   ErrorText,
@@ -189,14 +189,14 @@ export function InfrastructureFormModal({
     try {
       if (editing) {
         await updateMut.mutateAsync({ id: editing.id, data: payload })
-        toast.success('인프라 항목을 수정했습니다')
+        notify.success('인프라 항목을 수정했습니다')
       } else {
         await createMut.mutateAsync({ countryId, ...payload })
-        toast.success('인프라 항목을 등록했습니다')
+        notify.success('인프라 항목을 등록했습니다')
       }
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '저장에 실패했습니다')
+      notify.error(err instanceof Error ? err.message : '저장에 실패했습니다')
     }
   }
 

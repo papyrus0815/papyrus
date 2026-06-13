@@ -17,7 +17,6 @@ import {
   FiPlus,
   FiTrash2,
 } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
 
 import {
   type AdminDivisionSection,
@@ -37,6 +36,7 @@ import type { UpdateAdministrativeDivisionInput } from '@/shared/api/city'
 import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { notify } from '@/shared/ui/toast'
 
 import { DivisionAutocomplete } from './division-autocomplete'
 import { findInTree, formatYearRange } from './tree-utils'
@@ -67,9 +67,9 @@ function useSaveDivision(owner: DivisionOwner, divisionId: string): SaveApi {
     updateMut.mutate(
       { id: divisionId, input: patch },
       {
-        onSuccess: () => toast.success(successMsg),
+        onSuccess: () => notify.success(successMsg),
         onError: (err) =>
-          toast.error(
+          notify.error(
             err instanceof Error ? err.message : '저장에 실패했습니다',
           ),
       },
@@ -457,7 +457,7 @@ export function DivisionDetailFields({
     const est = dateSortKey(nextEstablished)
     const ab = dateSortKey(nextAbolished)
     if (est != null && ab != null && est > ab) {
-      toast.error('폐지일은 설립일 이후여야 합니다')
+      notify.error('폐지일은 설립일 이후여야 합니다')
       return false
     }
     return true
@@ -841,7 +841,7 @@ function DivisionNarrativeSections({
   const commitRows = (next: NarrativeRow[]) => {
     // 서버 섹션을 아직 못 받았으면(로딩/오류) 전체 배열 PATCH가 기존 서술을 지울 수 있음
     if (!sectionsReady) {
-      toast.error('서술을 불러오는 중입니다 — 잠시 후 다시 시도하세요')
+      notify.error('서술을 불러오는 중입니다 — 잠시 후 다시 시도하세요')
       return
     }
     setRows(next)

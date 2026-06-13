@@ -4,7 +4,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { FiDownload, FiUpload } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
 import {
   Bar,
   BarChart,
@@ -29,6 +28,7 @@ import {
   upsertMyEvaluation,
 } from '@/shared/api/person-stats'
 import type { PersonEvaluationSummary } from '@/shared/lib/person-evaluation-index'
+import { notify } from '@/shared/ui/toast'
 import type { AdaptedPerson } from '../../model/types'
 
 import { ChartShell, EmptyHint, traitToneBg, traitToneFg } from './shared'
@@ -100,9 +100,9 @@ export function OverviewPane({
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      toast.success(`${data.stats.length}건의 stats + ${data.traits.length}건의 태그를 내보냈습니다.`)
+      notify.success(`${data.stats.length}건의 stats + ${data.traits.length}건의 태그를 내보냈습니다.`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '내보내기 실패')
+      notify.error(err instanceof Error ? err.message : '내보내기 실패')
     }
   }
 
@@ -164,10 +164,10 @@ export function OverviewPane({
       }
       await queryClient.invalidateQueries({ queryKey: ['my-evaluations'] })
       setImportStatus(`완료 — 성공 ${success}명, 실패 ${failed}명`)
-      toast.success(`${success}명 평가를 가져왔습니다.${failed > 0 ? ` (${failed}명 실패)` : ''}`)
+      notify.success(`${success}명 평가를 가져왔습니다.${failed > 0 ? ` (${failed}명 실패)` : ''}`)
     } catch (err) {
       setImportStatus('파싱 또는 처리 실패')
-      toast.error(
+      notify.error(
         err instanceof Error ? `가져오기 실패: ${err.message}` : '가져오기 실패',
       )
     } finally {

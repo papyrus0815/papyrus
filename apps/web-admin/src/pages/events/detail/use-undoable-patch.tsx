@@ -9,7 +9,6 @@
  */
 import { useCallback, useEffect, useRef } from 'react'
 
-import { toast } from 'react-hot-toast'
 import { FiCheck, FiCornerUpLeft } from 'react-icons/fi'
 import styled, { keyframes } from 'styled-components'
 
@@ -18,6 +17,7 @@ import {
   ledgerHairlineStrong,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
+import { notify } from '@/shared/ui/toast'
 
 import { type EventDetail } from './use-event-detail'
 
@@ -80,7 +80,7 @@ export function useUndoablePatch({
       const inverse = buildInverse(current, patch)
 
       if (lastToastRef.current) {
-        toast.dismiss(lastToastRef.current)
+        notify.dismiss(lastToastRef.current)
         lastToastRef.current = null
       }
 
@@ -90,7 +90,7 @@ export function useUndoablePatch({
         onSuccess: () => {
           // 더 새로운 mutation이 시작됐다면 이 콜백은 stale — 토스트 생략.
           if (mySeq !== seqRef.current) return
-          const id = toast(
+          const id = notify.show(
             (t) => (
               <Bar>
                 <Row>
@@ -103,7 +103,7 @@ export function useUndoablePatch({
                     type="button"
                     onClick={() => {
                       mutate(inverse)
-                      toast.dismiss(t.id)
+                      notify.dismiss(t.id)
                       lastToastRef.current = null
                     }}
                   >

@@ -8,12 +8,12 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { FiMapPin, FiX } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
 
 import { useCountry } from '@/entities/country/api'
 import {
   type AdminDivisionConfig,
   type AdministrativeDivision,
+  type DivisionOwner,
   useAdminDivisionConfigs,
   useAdministrativeDivisions,
   useCreateAdminDivisionConfig,
@@ -32,6 +32,7 @@ import {
   ModalOverlay,
   ModalTitle,
 } from '@/shared/ui/modal'
+import { notify } from '@/shared/ui/toast'
 
 import { DivisionAutocomplete } from './division-autocomplete'
 import {
@@ -50,7 +51,20 @@ import { findInTree } from './tree-utils'
 
 interface AdminDivisionFormModalProps {
   isOpen: boolean
-  countryId: string
+  /** 소속 — 현대(countryId) 또는 역사(historicalCountryId) 국가 */
+  owner: DivisionOwner
+  /** 활성 체계 — 지정 시 새 구역·단위가 이 체계 소속으로 등록됨 */
+  schemeId?: string | null
+  schemeName?: string | null
+  /**
+   * 헤더·좌표 폴백용 국가 표시 정보.
+   * 역사적 국가는 모달이 직접 조회할 수 없어 호출 측에서 내려준다 (현대 국가는 생략 가능).
+   */
+  countryDisplay?: {
+    name?: string
+    latitude?: number | null
+    longitude?: number | null
+  }
   /** 수정 시 채워진 데이터, 등록 시 null */
   editing: AdministrativeDivision | null
   /** 등록 시 대상 레벨 (1, 2, ...). 수정 시 무시 (editing 기준). */
@@ -133,18 +147,25 @@ function formatHistoricalDate(iso: string): string {
 
 export function AdminDivisionFormModal({
   isOpen,
-  countryId,
+  owner,
+  schemeId = null,
+  schemeName = null,
+  countryDisplay,
   editing,
   defaultLevel,
   defaultParent,
   onClose,
 }: AdminDivisionFormModalProps) {
-  const { data: allConfigs = [] } = useAdminDivisionConfigs(countryId)
-  const { data: allDivisions = [] } = useAdministrativeDivisions(countryId)
-  const { data: countryDetail } = useCountry(countryId)
-  const createConfigMut = useCreateAdminDivisionConfig(countryId)
-  const createDivisionMut = useCreateAdministrativeDivision(countryId)
-  const updateDivisionMut = useUpdateAdministrativeDivision(countryId)
+  const { data: allConfigs = [] } = useAdminDivisionConfigs(owner, schemeId)
+  const { data: allDivisions = [] } = useAdministrativeDivisions(
+    owner,
+    schemeId,
+  )
+  // 역사적 국가 소속이면 countryId가 없어 자동으로 비활성화된다 (enabled: !!id)
+  const { data: countryDetail } = useCountry(owner.countryId ?? '')
+  const createConfigMut = useCreateAdminDivisionConfig(owner)
+  const createDivisionMut = useCreateAdministrativeDivision(owner)
+  const updateDivisionMut = useUpdateAdministrativeDivision(owner)
   const [autoFilling, setAutoFilling] = useState(false)
   const [coordCandidates, setCoordCandidates] = useState<
     PlaceSearchResult[] | null
@@ -285,7 +306,7 @@ export function AdminDivisionFormModal({
   const handleAutofillCoords = async () => {
     const q = form.name.trim()
     if (!q) {
-      toast.error('이름을 먼저 입력하세요')
+      notify.error('이름을 먼저 입력하세요')
       return
     }
     setAutoFilling(true)
@@ -294,12 +315,12 @@ export function AdminDivisionFormModal({
         ?.isoCode
       const results = await cityApi.searchPlaces(q, isoCode)
       if (results.length === 0) {
-        toast.error(`"${q}" 위치를 찾을 수 없습니다`)
+        notify.error(`"${q}" 위치를 찾을 수 없습니다`)
         return
       }
       setCoordCandidates(results.slice(0, 5))
     } catch (err) {
-      toast.error(
+      notify.error(
         err instanceof Error ? err.message : '좌표 검색에 실패했습니다',
       )
     } finally {
@@ -314,7 +335,7 @@ export function AdminDivisionFormModal({
       centerLng: hit.lng.toFixed(6),
     }))
     setErrors((prev) => ({ ...prev, centerLat: '', centerLng: '' }))
-    toast.success(`좌표 채움: ${hit.shortName}`)
+    notify.success(`좌표 채움: ${hit.shortName}`)
     setCoordCandidates(null)
   }
 
@@ -361,45 +382,51 @@ export function AdminDivisionFormModal({
             ...optionalFields,
           },
         })
-        toast.success('행정구역을 수정했습니다')
+        notify.success('행정구역을 수정했습니다')
       } else {
         let configId = form.configId
         if (!configId) {
           const created = await createConfigMut.mutateAsync({
-            countryId,
+            ...owner,
+            schemeId: schemeId ?? undefined,
             divisionLevel: targetLevel,
             divisionLabel: form.newConfigLabel.trim(),
           })
           configId = created.id
         }
         await createDivisionMut.mutateAsync({
-          countryId,
+          ...owner,
+          schemeId: schemeId ?? undefined,
           adminDivisionId: configId,
           name: form.name.trim(),
           parentId: form.parentId || null,
           ...optionalFields,
         })
-        toast.success('행정구역을 등록했습니다')
+        notify.success('행정구역을 등록했습니다')
       }
       onClose()
     } catch (err) {
       const msg = err instanceof Error ? err.message : '저장에 실패했습니다'
       const mapped = mapServerError(msg)
       setErrors((prev) => ({ ...prev, ...mapped }))
-      toast.error(msg)
+      notify.error(msg)
     }
   }
 
   // 컨텍스트 헤더 배지 — "지금 무엇을, 어디에" 한눈에.
   const countryName =
-    (countryDetail as { name?: string } | undefined)?.name ?? ''
+    (countryDetail as { name?: string } | undefined)?.name ??
+    countryDisplay?.name ??
+    ''
   const targetUnitLabel =
     configsForLevel.find((c) => c.id === form.configId)?.divisionLabel ||
     form.newConfigLabel.trim() ||
     configsForLevel[0]?.divisionLabel ||
     `${targetLevel}차`
   const contextWhere = selectedParent ? `${selectedParent.name} 아래` : '최상위'
-  const contextPath = [countryName, contextWhere].filter(Boolean).join(' › ')
+  const contextPath = [countryName, schemeName ?? undefined, contextWhere]
+    .filter(Boolean)
+    .join(' › ')
 
   return (
     <ModalOverlay onClick={onClose}>
@@ -463,7 +490,8 @@ export function AdminDivisionFormModal({
               <Label htmlFor="ad-parent">상위 구역</Label>
               <DivisionAutocomplete
                 id="ad-parent"
-                countryId={countryId}
+                owner={owner}
+                schemeId={schemeId}
                 selected={selectedParent}
                 onChange={(id) => set('parentId', id)}
                 onClear={() => set('parentId', '')}
@@ -673,11 +701,15 @@ export function AdminDivisionFormModal({
                     }}
                     fallbackLat={
                       (countryDetail as { latitude?: number | null } | undefined)
-                        ?.latitude ?? null
+                        ?.latitude ??
+                      countryDisplay?.latitude ??
+                      null
                     }
                     fallbackLng={
                       (countryDetail as { longitude?: number | null } | undefined)
-                        ?.longitude ?? null
+                        ?.longitude ??
+                      countryDisplay?.longitude ??
+                      null
                     }
                     height={mapPickerLarge ? 480 : 220}
                   />
@@ -849,7 +881,7 @@ export function AdminDivisionFormModal({
               <Label htmlFor="ad-predecessor">이전 행정구역 (모체)</Label>
               <DivisionAutocomplete
                 id="ad-predecessor"
-                countryId={countryId}
+                owner={owner}
                 selected={selectedPredecessor}
                 onChange={(id) => set('predecessorId', id)}
                 onClear={() => set('predecessorId', '')}

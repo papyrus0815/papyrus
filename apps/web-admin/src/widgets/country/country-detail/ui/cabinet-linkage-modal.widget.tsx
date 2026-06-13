@@ -5,7 +5,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import { FiGlobe, FiSearch, FiX } from 'react-icons/fi'
 
 import { getAllCountries } from '@/shared/api/countries'
@@ -17,6 +16,7 @@ import {
 } from '@/shared/api/person-career'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import {
@@ -273,7 +273,7 @@ export function CabinetLinkageModal({
   const handleLink = async (otherId: string) => {
     const eid = effectiveEventId
     if (!eid) {
-      toast.error(
+      notify.error(
         '연결할 사건이 필요합니다. 재임 기록에 사건을 연결하거나 아래에서 사건을 고르세요.',
       )
       return
@@ -281,11 +281,11 @@ export function CabinetLinkageModal({
     setLinkingId(otherId)
     try {
       await personCareerApi.linkCabinetWithOther(cabinetId, otherId, eid)
-      toast.success('같은 묶음으로 연결했습니다.')
+      notify.success('같은 묶음으로 연결했습니다.')
       setSearch('')
       invalidate()
     } catch (e: unknown) {
-      toast.error(getApiErrorMessage(e, '연결에 실패했습니다.'))
+      notify.error(getApiErrorMessage(e, '연결에 실패했습니다.'))
     } finally {
       setLinkingId(null)
     }
@@ -295,10 +295,10 @@ export function CabinetLinkageModal({
     setLeavingId(targetCabinetId)
     try {
       await personCareerApi.leaveCabinetLinkage(targetCabinetId)
-      toast.success('묶음에서 제외했습니다.')
+      notify.success('묶음에서 제외했습니다.')
       invalidate()
     } catch (e: unknown) {
-      toast.error(getApiErrorMessage(e, '묶음 해제에 실패했습니다.'))
+      notify.error(getApiErrorMessage(e, '묶음 해제에 실패했습니다.'))
     } finally {
       setLeavingId(null)
     }

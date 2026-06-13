@@ -19,7 +19,6 @@ import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { toast } from 'react-hot-toast'
 import {
   FiCalendar,
   FiChevronDown,
@@ -86,6 +85,7 @@ import { useThemeStore } from '@/shared/styles/theme.store'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
@@ -983,9 +983,9 @@ export function CabinetsSection({
       })
       setEditingHistoryContent(false)
       setHistoryDraftContent('')
-      toast.success('저장되었습니다.')
+      notify.success('저장되었습니다.')
     } catch {
-      toast.error('저장에 실패했습니다.')
+      notify.error('저장에 실패했습니다.')
     } finally {
       setHistoryContentSaving(false)
     }
@@ -993,7 +993,7 @@ export function CabinetsSection({
 
   const saveHistoryMeta = async (tenureId: string, achievementId: string) => {
     if (!historyMetaTitle.trim()) {
-      toast.error('제목을 입력해 주세요.')
+      notify.error('제목을 입력해 주세요.')
       return
     }
     setHistoryMetaSaving(true)
@@ -1010,9 +1010,9 @@ export function CabinetsSection({
         queryKey: ['cabinet-tenures', selectedCabinetId],
       })
       setEditingHistoryMeta(false)
-      toast.success('저장되었습니다.')
+      notify.success('저장되었습니다.')
     } catch {
-      toast.error('저장에 실패했습니다.')
+      notify.error('저장에 실패했습니다.')
     } finally {
       setHistoryMetaSaving(false)
     }
@@ -1021,7 +1021,7 @@ export function CabinetsSection({
   const submitMinisterHistory = async () => {
     if (!historyTargetTenure) return
     if (!historyTitle.trim()) {
-      toast.error('히스토리 제목을 입력해 주세요.')
+      notify.error('히스토리 제목을 입력해 주세요.')
       return
     }
 
@@ -1038,7 +1038,7 @@ export function CabinetsSection({
         historyTargetTenure.id,
         payload,
       )
-      toast.success('히스토리가 등록되었습니다.')
+      notify.success('히스토리가 등록되었습니다.')
 
       queryClient.invalidateQueries({
         queryKey: ['cabinet-tenures', selectedCabinetId],
@@ -1048,7 +1048,7 @@ export function CabinetsSection({
       })
       resetHistoryForm()
     } catch (e: any) {
-      toast.error(
+      notify.error(
         e?.response?.data?.message ??
           e?.message ??
           '히스토리 저장에 실패했습니다.',
@@ -1092,9 +1092,9 @@ export function CabinetsSection({
       queryClient.invalidateQueries({
         queryKey: ['cabinets-by-country', countryId, historicalCountryId],
       })
-      toast.success('히스토리가 삭제되었습니다.')
+      notify.success('히스토리가 삭제되었습니다.')
     } catch (e: any) {
-      toast.error(
+      notify.error(
         e?.response?.data?.message ??
           e?.message ??
           '히스토리 삭제에 실패했습니다.',
@@ -1128,11 +1128,11 @@ export function CabinetsSection({
       : null
     const titleValue = def?.title ?? ministerFormTitle.trim()
     if (!titleValue) {
-      toast.error('직위를 선택하거나 직접 입력해 주세요.')
+      notify.error('직위를 선택하거나 직접 입력해 주세요.')
       return
     }
     if (!ministerFormStartDate.trim()) {
-      toast.error('취임일을 입력해 주세요.')
+      notify.error('취임일을 입력해 주세요.')
       return
     }
     setMinisterFormSubmitting(true)
@@ -1163,7 +1163,7 @@ export function CabinetsSection({
         endDate: ministerFormEndDate || undefined,
         termNumber,
       })
-      toast.success('각료가 등록되었습니다.')
+      notify.success('각료가 등록되었습니다.')
       setPersonSelectOpen(false)
       setAddMinisterCabinet(null)
       queryClient.invalidateQueries({
@@ -1171,7 +1171,7 @@ export function CabinetsSection({
       })
       queryClient.invalidateQueries({ queryKey: ['cabinet-tenures'] })
     } catch (e: any) {
-      toast.error(
+      notify.error(
         e?.response?.data?.message ?? e?.message ?? '등록에 실패했습니다.',
       )
     } finally {
@@ -1211,7 +1211,7 @@ export function CabinetsSection({
     setRegisterCabinetSubmitting(true)
     try {
       await personCareerApi.createCabinet({ headTenureId: tenure.id })
-      toast.success('행정부가 등록되었습니다.')
+      notify.success('행정부가 등록되었습니다.')
       setRegisterCabinetModalOpen(false)
       setRegisterFlow('select')
       queryClient.invalidateQueries({
@@ -1220,7 +1220,7 @@ export function CabinetsSection({
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ?? e?.message ?? '등록에 실패했습니다.'
-      toast.error(msg)
+      notify.error(msg)
     } finally {
       setRegisterCabinetSubmitting(false)
     }
@@ -1261,14 +1261,14 @@ export function CabinetsSection({
   /** 새 수반 재임 생성 후 행정부까지 한 번에 등록 */
   const handleRegisterNewHeadAndCabinet = async () => {
     if (!newHeadPersonId || !newHeadPositionDefId || !newHeadStartDate.trim()) {
-      toast.error('인물, 직위, 취임일을 입력해주세요.')
+      notify.error('인물, 직위, 취임일을 입력해주세요.')
       return
     }
     const def = headPositionOptions.find(
       (d: any) => d.id === newHeadPositionDefId,
     )
     if (!def) {
-      toast.error('직위를 선택해주세요.')
+      notify.error('직위를 선택해주세요.')
       return
     }
     const termNumParsed = newHeadTermNumber.trim()
@@ -1320,7 +1320,7 @@ export function CabinetsSection({
         headTenureId: created.id,
         name: newCabinetName.trim() || null,
       })
-      toast.success('수반 재임과 행정부가 등록되었습니다.')
+      notify.success('수반 재임과 행정부가 등록되었습니다.')
       setRegisterCabinetModalOpen(false)
       setRegisterFlow('select')
       resetNewHeadForm()
@@ -1337,7 +1337,7 @@ export function CabinetsSection({
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ?? e?.message ?? '등록에 실패했습니다.'
-      toast.error(msg)
+      notify.error(msg)
     } finally {
       setRegisterCabinetSubmitting(false)
     }
@@ -1360,7 +1360,7 @@ export function CabinetsSection({
     setDeletingCabinetId(cabinetId)
     try {
       await personCareerApi.deleteCabinet(cabinetId)
-      toast.success('행정부가 삭제되었습니다.')
+      notify.success('행정부가 삭제되었습니다.')
       if (selectedCabinetId === cabinetId) {
         setSelectedCabinetId(null)
         setCabinetView('list')
@@ -1376,7 +1376,7 @@ export function CabinetsSection({
         ],
       })
     } catch (err: any) {
-      toast.error(
+      notify.error(
         err?.response?.data?.message ?? err?.message ?? '삭제에 실패했습니다.',
       )
     } finally {
@@ -1461,13 +1461,13 @@ export function CabinetsSection({
               ),
             }),
       })
-      toast.success('저장되었습니다.')
+      notify.success('저장되었습니다.')
       setEditingTenureInfo(null)
       queryClient.invalidateQueries({
         queryKey: ['cabinets-by-country', countryId, historicalCountryId],
       })
     } catch (err: any) {
-      toast.error(
+      notify.error(
         err?.response?.data?.message ?? err?.message ?? '저장에 실패했습니다.',
       )
     } finally {
@@ -1480,7 +1480,7 @@ export function CabinetsSection({
     const cabinetId = editingCabinet.id
     const headTenureId = editingCabinet.headTenure?.id
     if (!headTenureId) {
-      toast.error('수반 재임 정보가 없습니다.')
+      notify.error('수반 재임 정보가 없습니다.')
       return
     }
     setUpdatingCabinetId(cabinetId)
@@ -1531,7 +1531,7 @@ export function CabinetsSection({
         countryId: newCountryId ?? undefined,
         historicalCountryId: newHistoricalCountryId ?? undefined,
       })
-      toast.success('행정부가 수정되었습니다.')
+      notify.success('행정부가 수정되었습니다.')
       closeEditCabinetModal()
       queryClient.invalidateQueries({
         queryKey: ['cabinets-by-country', countryId, historicalCountryId],
@@ -1544,7 +1544,7 @@ export function CabinetsSection({
         ],
       })
     } catch (err: any) {
-      toast.error(
+      notify.error(
         err?.response?.data?.message ?? err?.message ?? '수정에 실패했습니다.',
       )
     } finally {

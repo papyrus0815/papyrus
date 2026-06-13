@@ -10,7 +10,6 @@
  */
 import React, { useState } from 'react'
 
-import { toast } from 'react-hot-toast'
 import {
   FiArrowRight,
   FiBookOpen,
@@ -47,6 +46,7 @@ import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { deleteEvent } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 interface EventDetailPanelProps {
   isLoading: boolean
@@ -133,7 +133,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
 
     try {
       await navigator.clipboard.writeText(url)
-      toast.success('링크가 복사되었습니다')
+      notify.success('링크가 복사되었습니다')
     } catch {
       // clipboard 미지원 / permission denied → input fallback
       const ta = document.createElement('textarea')
@@ -145,9 +145,9 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
       ta.select()
       try {
         document.execCommand('copy')
-        toast.success('링크가 복사되었습니다')
+        notify.success('링크가 복사되었습니다')
       } catch {
-        toast.error('링크 복사에 실패했습니다')
+        notify.error('링크 복사에 실패했습니다')
       } finally {
         document.body.removeChild(ta)
       }
@@ -161,7 +161,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
     try {
       await deleteEvent(selectedNode.id)
       // 관리자 UI에 복구 동선이 없으므로 '복구 가능'을 약속하지 않는다.
-      toast.success('사건이 삭제되었습니다.')
+      notify.success('사건이 삭제되었습니다.')
       if (onAfterDelete) {
         onAfterDelete(selectedNode.id)
       } else {
@@ -169,7 +169,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
         window.location.reload()
       }
     } catch {
-      toast.error('사건 삭제에 실패했습니다.')
+      notify.error('사건 삭제에 실패했습니다.')
     }
   }
 

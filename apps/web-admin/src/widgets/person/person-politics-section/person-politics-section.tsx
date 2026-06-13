@@ -14,7 +14,6 @@ import {
 } from 'react-icons/fi'
 import { useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { toast } from 'react-hot-toast'
 
 import {
   createPartyMembership,
@@ -44,6 +43,7 @@ import {
   Input,
   Textarea,
 } from '@/shared/ui/register-form-layout'
+import { notify } from '@/shared/ui/toast'
 import { PoliticalPartyRegisterViewModal } from '@/widgets/country/country-list/ui/political-party-register-view-modal'
 /** 인물 상세 API의 선거 후보 요약 (상세 패널과 공유) */
 export type ElectionCandidacyDetail = {
@@ -214,14 +214,14 @@ export function PersonPoliticsSection({
         notes: editNotes.trim() || null,
       }),
     onSuccess: () => {
-      toast.success('저장했습니다.')
+      notify.success('저장했습니다.')
       setPanelOpen(false)
       setEditingId(null)
       resetForm()
       invalidatePerson()
     },
     onError: (e: unknown) => {
-      toast.error(e instanceof Error ? e.message : String(e))
+      notify.error(e instanceof Error ? e.message : String(e))
     },
   })
 
@@ -238,25 +238,25 @@ export function PersonPoliticsSection({
         notes: editNotes.trim() || null,
       }),
     onSuccess: () => {
-      toast.success('저장했습니다.')
+      notify.success('저장했습니다.')
       setPanelOpen(false)
       setEditingId(null)
       resetForm()
       invalidatePerson()
     },
     onError: (e: unknown) => {
-      toast.error(e instanceof Error ? e.message : String(e))
+      notify.error(e instanceof Error ? e.message : String(e))
     },
   })
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => deletePartyMembership(personId, id),
     onSuccess: () => {
-      toast.success('삭제했습니다.')
+      notify.success('삭제했습니다.')
       invalidatePerson()
     },
     onError: (e: unknown) => {
-      toast.error(e instanceof Error ? e.message : String(e))
+      notify.error(e instanceof Error ? e.message : String(e))
     },
   })
 

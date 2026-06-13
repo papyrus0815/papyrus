@@ -1,7 +1,6 @@
 import React from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import {
   FiCalendar,
   FiChevronDown,
@@ -53,6 +52,7 @@ import {
 } from '@/shared/ui/register-form-layout'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { SidePanel } from '@/shared/ui/side-panel'
+import { notify } from '@/shared/ui/toast'
 import { CABINET_SECTION_MAIN as MAIN } from './cabinets-section.constants'
 import { getPersonName } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
@@ -349,12 +349,12 @@ export function TreatyLinkModal({
 
   const handleLink = async () => {
     if (!selectedTreatyForLink) {
-      toast.error('목록에서 조약을 선택하세요.')
+      notify.error('목록에서 조약을 선택하세요.')
       return
     }
     const row = signatoryRows[0]
     if (!row || (!row.countryId && !row.historicalCountryId)) {
-      toast.error('서명국 정보를 확인하세요.')
+      notify.error('서명국 정보를 확인하세요.')
       return
     }
     setLinking(true)
@@ -377,10 +377,10 @@ export function TreatyLinkModal({
           ...payload,
         })
       }
-      toast.success(`'${treaty.name}' 조약에 연결되었습니다.`)
+      notify.success(`'${treaty.name}' 조약에 연결되었습니다.`)
       await onLinked()
     } catch (e) {
-      toast.error(getApiErrorMessage(e, '조약 연결에 실패했습니다.'))
+      notify.error(getApiErrorMessage(e, '조약 연결에 실패했습니다.'))
     } finally {
       setLinking(false)
     }
@@ -389,18 +389,18 @@ export function TreatyLinkModal({
   const handleCreate = async () => {
     if (!name.trim()) {
       setNewSubTab('basic')
-      toast.error('조약명을 입력하세요.')
+      notify.error('조약명을 입력하세요.')
       return
     }
     if (!signDate.trim()) {
       setNewSubTab('dates')
-      toast.error('서명일을 선택하세요.')
+      notify.error('서명일을 선택하세요.')
       return
     }
     for (const row of signatoryRows) {
       if (!row.countryId && !row.historicalCountryId) {
         setNewSubTab('signatory')
-        toast.error(
+        notify.error(
           '각 서명국에 국가를 선택하세요. (다자 조약은 서명국 행을 여러 개 추가하세요)',
         )
         return
@@ -434,12 +434,12 @@ export function TreatyLinkModal({
           ...rowToApiPayload(row),
         })),
       })
-      toast.success(
+      notify.success(
         `조약이 등록되었습니다. 서명국 ${signatoryRows.length}건이 저장되었습니다.`,
       )
       await onLinked()
     } catch (e) {
-      toast.error(getApiErrorMessage(e, '등록 중 오류가 발생했습니다.'))
+      notify.error(getApiErrorMessage(e, '등록 중 오류가 발생했습니다.'))
     } finally {
       setCreating(false)
     }

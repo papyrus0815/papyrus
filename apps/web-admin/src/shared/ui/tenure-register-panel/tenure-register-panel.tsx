@@ -9,16 +9,20 @@ import { CabinetEventAttachModal } from '@/widgets/country/country-detail/ui/cab
 import styled from 'styled-components'
 
 import * as S from '@/shared/ui/form-styles'
-import { toast } from 'react-hot-toast'
 
 import { useCountries } from '@/features/country/api'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api'
-import { personCareerApi } from '@/shared/api/person-career'
+import {
+  personCareerApi,
+  type CreateGovernmentPositionTenureDto,
+} from '@/shared/api/person-career'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
@@ -147,6 +151,22 @@ const MINISTER_POSITION_TYPES = new Set([
   'VICE_MINISTER',
   'OTHER',
 ])
+
+/**
+ * 레거시 notes 인코딩("왕명: X") 분리 — 역대 수반·계보·행정부 위젯이 이 줄을
+ * 정규식으로 파싱해 왕명을 표시하므로(cabinets-section.helpers 등), 비고 자유 편집으로
+ * 깨지지 않게 읽기 전용으로 떼어내고 저장 시 재결합한다.
+ */
+const LEGACY_REGNAL_NOTE_RE = /^[ \t]*왕명[ \t]*:[ \t]*\S.*$/m
+
+function splitLegacyRegnalNote(raw: string): { regnalLine: string; rest: string } {
+  const m = raw.match(LEGACY_REGNAL_NOTE_RE)
+  if (!m || m.index == null) return { regnalLine: '', rest: raw }
+  const rest = (raw.slice(0, m.index) + raw.slice(m.index + m[0].length))
+    .replace(/\n{2,}/g, '\n')
+    .replace(/^\n+|\n+$/g, '')
+  return { regnalLine: m[0].trim(), rest }
+}
 
 /** 필수 항목 안내 래퍼 — 깔끔한 톤 */
 const RequiredNoticeWrap = styled.div`
@@ -361,12 +381,15 @@ export function TenureRegisterPanel({
   const [titleEn, setTitleEn] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [regnalNumber, setRegnalNumber] = useState('')
+  /** 대수(termNumber, 일반 재임) 또는 재위번호(regnalNumber, 군주 재위) — recordKind에 따라 한쪽에만 기록 */
+  const [ordinalNumber, setOrdinalNumber] = useState('')
   const [subTermNumber, setSubTermNumber] = useState('')
   const [appointmentMethod, setAppointmentMethod] = useState('')
   const [endReason, setEndReason] = useState('')
   const [endReasonDetail, setEndReasonDetail] = useState('')
   const [notes, setNotes] = useState('')
+  /** 레거시 notes의 "왕명: X" 줄 — 읽기 전용으로 분리 표시, 저장 시 비고와 재결합 */
+  const [legacyRegnalNote, setLegacyRegnalNote] = useState('')
   const [showOnEvents, setShowOnEvents] = useState(true)
   const [cabinetId, setCabinetId] = useState<string | null>(null)
   const [eventAttachModalOpen, setEventAttachModalOpen] = useState(false)
@@ -379,9 +402,10 @@ export function TenureRegisterPanel({
   const [personImageError, setPersonImageError] = useState(false)
 
   const { data: countries = [] } = useCountries()
-  const { data: historicalCountries = [] } = useHistoricalCountriesByModernCountry(
-    open ? countryId : '',
-  )
+  // isSuccess 가드 — isFetched는 fetch가 에러로 끝나도 true가 돼 기본값 []로
+  // belongs 검사가 돌아 역사국가 연결이 잘못 해제된다. 성공 응답일 때만 검사.
+  const { data: historicalCountries = [], isSuccess: historicalCountriesLoaded } =
+    useHistoricalCountriesByModernCountry(open ? countryId : '')
   const { data: positionDefinitions = [] } = useQuery({
     queryKey: ['position-definitions-tenure', countryId, historicalCountryId],
     queryFn: () =>
@@ -407,8 +431,9 @@ export function TenureRegisterPanel({
       const head = c.headTenure
       const personName = head?.person?.name ?? head?.person?.surname ?? '이름 없음'
       const posTitle = head?.positionDefinition?.title ?? head?.title ?? c.name ?? '행정부'
-      const start = head?.startDate ? new Date(head.startDate).getFullYear() : ''
-      const end = head?.endDate ? new Date(head.endDate).getFullYear() : '현재'
+      // 연도는 문자열에서 직접 추출(TZ 안전) — getFullYear()는 UTC 서쪽 타임존에서 1월 1일 시작 임기를 전년도로 보여준다
+      const start = head?.startDate ? parseIsoDateParts(head.startDate)?.year ?? '' : ''
+      const end = head?.endDate ? parseIsoDateParts(head.endDate)?.year ?? '' : '현재'
       const range = start && end ? ` (${start}~${end})` : ''
       return {
         value: c.id,
@@ -443,6 +468,10 @@ export function TenureRegisterPanel({
     : null
   const positionType =
     selectedDef?.positionType ?? presetPositionType ?? editingTenure?.positionType ?? 'OTHER'
+
+  /** 수반 계열 직책 — 자신이 행정부의 수장이므로 소속 행정부(cabinetId) 동시 지정 시 백엔드가 400으로 거부 */
+  const isHeadPositionType =
+    positionType === 'HEAD_OF_STATE' || positionType === 'HEAD_OF_GOVERNMENT'
 
   /** 각료 추가로 열렸을 때는 각료/차관/기타만 표시 (수반·의원·군인 등 제외) */
   const isMinisterFlowForFilter = !tenureId && initialCabinetId != null
@@ -509,12 +538,13 @@ export function TenureRegisterPanel({
     setTitleEn('')
     setStartDate('')
     setEndDate('')
-    setRegnalNumber('')
+    setOrdinalNumber('')
     setSubTermNumber('')
     setAppointmentMethod('')
     setEndReason('')
     setEndReasonDetail('')
     setNotes('')
+    setLegacyRegnalNote('')
     setShowOnEvents(true)
     setCabinetId(null)
   }
@@ -540,6 +570,27 @@ export function TenureRegisterPanel({
     setPersonImageError(false)
   }, [personDetail?.id])
 
+  /**
+   * 국가 재선택 시 역사적 국가를 무조건 비우지 않고, 새 국가 소속이 아닐 때만 해제.
+   * (역사국가 전용 행을 수정하다 현대 국가를 골랐을 때 historicalCountryId가
+   * 조용히 NULL로 덮여 연결이 파괴되던 문제 방지)
+   */
+  useEffect(() => {
+    if (!open || !countryId || !historicalCountryId) return
+    // 성공적으로 받아온 목록일 때만 해제 — 조회 에러 시(데이터 기본값 [])
+    // belongs=false로 오판해 연결을 조용히 파괴하면 안 됨
+    if (!historicalCountriesLoaded) return
+    const belongs = (historicalCountries as any[]).some(
+      (h: any) => h.id === historicalCountryId,
+    )
+    if (!belongs) setHistoricalCountryId(null)
+  }, [open, countryId, historicalCountryId, historicalCountriesLoaded, historicalCountries])
+
+  /** 수반 직책 선택 시 소속 행정부 지정 불가(백엔드 400) — 선택돼 있던 행정부는 자동 해제 */
+  useEffect(() => {
+    if (isHeadPositionType && cabinetId) setCabinetId(null)
+  }, [isHeadPositionType, cabinetId])
+
   useEffect(() => {
     if (!open || !editingTenure) return
     const t = editingTenure as any
@@ -554,13 +605,18 @@ export function TenureRegisterPanel({
     setTitleEn(t.titleEn ?? '')
     setStartDate(t.startDate ? (typeof t.startDate === 'string' ? t.startDate.split('T')[0] : '') : '')
     setEndDate(t.endDate ? (typeof t.endDate === 'string' ? t.endDate.split('T')[0] : '') : '')
-    const num = t.regnalNumber ?? t.termNumber
-    setRegnalNumber(num != null ? String(num) : '')
+    // 대수/재위번호 분리: 재위(SOVEREIGN_REIGN)는 regnalNumber, 일반 재임은 termNumber만 사용
+    // (교차 폴백 금지 — 저장 시 반대편 필드로 값이 옮겨가는 오염 방지)
+    const num = t.recordKind === 'SOVEREIGN_REIGN' ? t.regnalNumber : t.termNumber
+    setOrdinalNumber(num != null ? String(num) : '')
     setSubTermNumber(t.subTermNumber != null ? String(t.subTermNumber) : '')
     setAppointmentMethod(t.appointmentMethod ?? '')
     setEndReason(t.endReason ?? '')
     setEndReasonDetail(t.endReasonDetail ?? '')
-    setNotes(t.notes ?? '')
+    // 레거시 "왕명: X" 줄은 비고에서 분리(읽기 전용) — 실수로 지워 위젯 왕명 표시가 깨지는 것 방지
+    const { regnalLine, rest } = splitLegacyRegnalNote(t.notes ?? '')
+    setLegacyRegnalNote(regnalLine)
+    setNotes(rest)
     setShowOnEvents(t.showPositionInfo !== false)
     setCabinetId(t.cabinetId ?? t.cabinet?.id ?? null)
   }, [open, editingTenure])
@@ -568,20 +624,36 @@ export function TenureRegisterPanel({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!personId) return
-    if (!countryId) {
-      toast.error('국가를 선택해 주세요.')
+    // 역사국가 전용 행(countryId NULL)도 수정 가능해야 함 — 둘 중 하나만 있으면 통과
+    if (!countryId && !historicalCountryId) {
+      notify.error('국가를 선택해 주세요.')
       return
     }
     const def = selectedDef as any
     const titleValue = def?.title ?? title.trim()
     if (!titleValue) {
-      toast.error('직책을 선택하거나 직접 입력해 주세요.')
+      notify.error('직책을 선택하거나 직접 입력해 주세요.')
       return
     }
     if (!startDate.trim()) {
-      toast.error('취임일을 입력해 주세요.')
+      notify.error('취임일을 입력해 주세요.')
       return
     }
+    // 기간 역전 차단 — YYYY-MM-DD 문자열 사전순 비교로 충분 (BC는 피커에서 차단됨)
+    if (endDate && endDate < startDate) {
+      notify.error('퇴임일이 취임일보다 빠를 수 없습니다.')
+      return
+    }
+    /** 수정 모드: 비운 값은 명시적 null(해제) 전송 — undefined면 서버가 기존 값을 유지해 silent no-op */
+    const emptyAs = isEdit && tenureId ? null : undefined
+    const parsedOrdinal = ordinalNumber.trim()
+      ? parseInt(ordinalNumber, 10) || emptyAs
+      : emptyAs
+    const parsedSubTerm = subTermNumber.trim()
+      ? parseInt(subTermNumber, 10) || emptyAs
+      : emptyAs
+    // 레거시 "왕명: X" 줄은 저장 시 비고 앞에 재결합 — 위젯들의 왕명 파싱 보존
+    const combinedNotes = [legacyRegnalNote, notes.trim()].filter(Boolean).join('\n')
     const payload = {
       positionType: (positionType as any) ?? 'OTHER',
       positionDefinitionId: positionDefinitionId || undefined,
@@ -590,16 +662,16 @@ export function TenureRegisterPanel({
       countryId: historicalCountryId ? undefined : (countryId || undefined),
       historicalCountryId: historicalCountryId || undefined,
       startDate,
-      endDate: endDate || undefined,
-      termNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
-      subTermNumber: subTermNumber.trim() ? parseInt(subTermNumber, 10) || undefined : undefined,
-      regnalNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
-      appointmentMethod: (appointmentMethod || undefined) as any,
-      endReason: (endReason || undefined) as any,
-      endReasonDetail: endReasonDetail.trim() || undefined,
-      notes: notes.trim() || undefined,
+      endDate: endDate || emptyAs,
+      // 일반 재임은 termNumber(공식 통산 대수)만 기록 — regnalNumber(군주 재위번호)에 이중 기록하지 않음
+      termNumber: parsedOrdinal,
+      subTermNumber: parsedSubTerm,
+      appointmentMethod: (appointmentMethod || emptyAs) as any,
+      endReason: (endReason || emptyAs) as any,
+      endReasonDetail: endReasonDetail.trim() || emptyAs,
+      notes: combinedNotes || emptyAs,
       showPositionInfo: showOnEvents,
-      cabinetId: cabinetId || undefined,
+      cabinetId: cabinetId || emptyAs,
     }
     setSubmitting(true)
     try {
@@ -611,34 +683,35 @@ export function TenureRegisterPanel({
             historicalCountryId: historicalCountryId || undefined,
             positionDefinitionId: positionDefinitionId || undefined,
             startDate,
-            endDate: endDate || undefined,
-            termNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
-            subTermNumber: subTermNumber.trim() ? parseInt(subTermNumber, 10) || undefined : undefined,
-            regnalNumber: regnalNumber.trim() ? parseInt(regnalNumber, 10) || undefined : undefined,
-            appointmentMethod: (appointmentMethod || undefined) as any,
-            endReason: (endReason || undefined) as any,
-            endReasonDetail: endReasonDetail.trim() || undefined,
-            notes: notes.trim() || undefined,
+            endDate: endDate || null,
+            // 재위(SOVEREIGN_REIGN)는 regnalNumber(재위번호)만 기록 — termNumber(통산 대수)는 보내지 않음
+            regnalNumber: parsedOrdinal ?? null,
+            subTermNumber: parsedSubTerm ?? null,
+            appointmentMethod: (appointmentMethod || null) as any,
+            endReason: (endReason || null) as any,
+            endReasonDetail: endReasonDetail.trim() || null,
+            notes: combinedNotes || null,
             showPositionInfo: showOnEvents,
           })
-          toast.success('재위 기록이 수정되었습니다.')
+          notify.success('재위 기록이 수정되었습니다.')
         } else {
           await personCareerApi.updateGovernmentPositionTenure(tenureId, payload)
-          toast.success('재임 기록이 수정되었습니다.')
+          notify.success('재임 기록이 수정되었습니다.')
         }
       } else {
         await personCareerApi.addGovernmentPositionTenure({
           ...payload,
           personId,
-        })
-        toast.success('재임 기록이 추가되었습니다.')
+          // 생성 모드에서는 emptyAs === undefined 라 null이 실제로 들어가지 않음
+        } as CreateGovernmentPositionTenureDto)
+        notify.success('재임 기록이 추가되었습니다.')
       }
       onClose()
       queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
       queryClient.invalidateQueries({ queryKey: ['person-tenures', personId] })
       onSuccess?.()
     } catch (err: any) {
-      toast.error(err?.message || '저장에 실패했습니다.')
+      notify.error(err?.message || '저장에 실패했습니다.')
     } finally {
       setSubmitting(false)
     }
@@ -651,17 +724,17 @@ export function TenureRegisterPanel({
     try {
       if (editingIsSovereign) {
         await personCareerApi.deleteSovereignReign(tenureId)
-        toast.success('재위 기록이 삭제되었습니다.')
+        notify.success('재위 기록이 삭제되었습니다.')
       } else {
         await personCareerApi.deleteGovernmentPositionTenure(tenureId)
-        toast.success('재임 기록이 삭제되었습니다.')
+        notify.success('재임 기록이 삭제되었습니다.')
       }
       onClose()
       queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
       queryClient.invalidateQueries({ queryKey: ['person-tenures', personId] })
       onSuccess?.()
     } catch (err: any) {
-      toast.error(err?.message || '삭제에 실패했습니다.')
+      notify.error(err?.message || '삭제에 실패했습니다.')
     } finally {
       setSubmitting(false)
     }
@@ -671,11 +744,12 @@ export function TenureRegisterPanel({
     submitting ||
     (isEdit && !!tenureId && !editingTenure) ||
     !personId ||
-    !countryId ||
+    // 역사국가 전용 행(countryId NULL) 수정 잠금 방지 — 둘 중 하나만 있으면 됨
+    (!countryId && !historicalCountryId) ||
     (!(selectedDef as any)?.title && !title.trim()) ||
     !startDate.trim()
 
-  const hasCountry = !!countryId
+  const hasCountry = !!countryId || !!historicalCountryId
   const hasPosition = !!(selectedDef as any)?.title || !!title.trim()
   const hasStartDate = !!startDate.trim()
 
@@ -793,7 +867,8 @@ export function TenureRegisterPanel({
                 </FieldControl>
               </FieldRow>
 
-              {countryId && historicalCountries.length > 0 && (
+              {/* 역사국가 전용 행(countryId NULL) 수정 시에도 기존 선택이 보이도록 historicalCountryId 단독으로도 렌더 */}
+              {((countryId && historicalCountries.length > 0) || historicalCountryId) && (
                 <FieldRow>
                   <FieldLabel>역사적 국가 (선택)</FieldLabel>
                   <FieldControl>
@@ -804,7 +879,9 @@ export function TenureRegisterPanel({
                     >
                       <span>
                         {historicalCountryId
-                          ? (historicalCountries as any[]).find((h: any) => h.id === historicalCountryId)?.name ?? '역사적 국가'
+                          ? (historicalCountries as any[]).find((h: any) => h.id === historicalCountryId)?.name ??
+                            (editingTenure as any)?.historicalCountry?.name ??
+                            '역사적 국가'
                           : '현대 국가 기준'}
                       </span>
                       <FiChevronDown size={20} />
@@ -856,7 +933,8 @@ export function TenureRegisterPanel({
                 </FieldControl>
               </FieldRow>
 
-              {(countryId || historicalCountryId) && cabinetOptions.length > 0 && (
+              {/* 수반 직책은 cabinetId 동시 지정 시 백엔드 400 — 필드 자체를 숨겨 사전 차단 */}
+              {!isHeadPositionType && (countryId || historicalCountryId) && cabinetOptions.length > 0 && (
                 <FieldRow>
                   <FieldLabel>소속 행정부 (선택)</FieldLabel>
                   <FieldControl>
@@ -904,6 +982,8 @@ export function TenureRegisterPanel({
                 startPlaceholder="취임일"
                 endPlaceholder="퇴임일 (선택)"
                 openEndAfterStart
+                blockBc
+                clearableEnd
               />
             </FormRows>
           </SidebarFormWrap>
@@ -930,15 +1010,20 @@ export function TenureRegisterPanel({
           <SidebarFormWrap>
             <FormRows>
               <FieldRow>
-                <FieldLabel>대수/재위번호</FieldLabel>
+                {/* 재위(SOVEREIGN_REIGN) 수정은 재위번호(regnalNumber), 일반 재임은 대수(termNumber) — 이중 기록 금지 */}
+                <FieldLabel>{editingIsSovereign ? '재위번호' : '대수'}</FieldLabel>
                 <FieldControl>
                   <Input
                     type="number"
                     min={1}
-                    value={regnalNumber}
-                    onChange={(e) => setRegnalNumber(e.target.value)}
-                    placeholder="선택"
-                    title="역대 순번"
+                    value={ordinalNumber}
+                    onChange={(e) => setOrdinalNumber(e.target.value)}
+                    placeholder={editingIsSovereign ? '선택 (예: 루이 14세 → 14)' : '선택 (예: 제20대 → 20)'}
+                    title={
+                      editingIsSovereign
+                        ? '서양 군주 재위번호'
+                        : '공식 통산 대수 — 없으면 비워두기'
+                    }
                   />
                 </FieldControl>
               </FieldRow>
@@ -1005,6 +1090,12 @@ export function TenureRegisterPanel({
               <FieldRow>
                 <FieldLabel>비고</FieldLabel>
                 <FieldControl>
+                  {legacyRegnalNote && (
+                    <FieldHint style={{ marginBottom: 6 }}>
+                      <strong>{legacyRegnalNote}</strong> — 왕명 표시용 자동 기록(읽기 전용, 저장 시 유지).
+                      왕명 변경은 군주 등록 화면에서 하세요.
+                    </FieldHint>
+                  )}
                   <Textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -1060,13 +1151,14 @@ export function TenureRegisterPanel({
         selectedCountryId={countryId || ''}
         onSelect={({ id }) => {
           setCountryId(id || '')
-          setHistoricalCountryId(null)
+          // historicalCountryId는 여기서 무조건 null로 덮지 않음 — 새 국가 소속이
+          // 아닐 때만 effect에서 해제 (역사국가 연결의 조용한 파괴 방지)
           setPositionDefinitionId(null)
           setCountryModalOpen(false)
         }}
       />
 
-      {countryId && historicalCountries.length > 0 && (
+      {((countryId && historicalCountries.length > 0) || historicalCountryId) && (
         <CountrySearchModal
           isOpen={historicalCountryModalOpen}
           onClose={() => setHistoricalCountryModalOpen(false)}
@@ -1124,7 +1216,7 @@ export function TenureRegisterPanel({
           onClose={() => setEventAttachModalOpen(false)}
           onAttached={() => {
             setEventAttachModalOpen(false)
-            toast.success('사건이 이 행정부에 연결되었습니다.')
+            notify.success('사건이 이 행정부에 연결되었습니다.')
           }}
         />
       )}

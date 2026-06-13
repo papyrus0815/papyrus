@@ -5,7 +5,6 @@ import React, { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import { FiInfo, FiPlus, FiX } from 'react-icons/fi'
 
 import {
@@ -18,6 +17,7 @@ import {
 } from '@/shared/api/election'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
+import { notify } from '@/shared/ui/toast'
 import {
   ModalBody,
   ModalBox,
@@ -133,13 +133,13 @@ export function CabinetPartyLinkModal({
       })
     },
     onSuccess: () => {
-      toast.success('정당을 연결했습니다.')
+      notify.success('정당을 연결했습니다.')
       void queryClient.invalidateQueries({
         queryKey: ['cabinet-political-parties', cabinetId],
       })
       onClose()
     },
-    onError: (error: unknown) => toast.error(getApiErrorMessage(error)),
+    onError: (error: unknown) => notify.error(getApiErrorMessage(error)),
   })
 
   const canSubmit =

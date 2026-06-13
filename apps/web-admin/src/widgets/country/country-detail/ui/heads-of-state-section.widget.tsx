@@ -7,7 +7,6 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { toast } from 'react-hot-toast'
 import {
   FiArrowLeft,
   FiAward,
@@ -81,6 +80,7 @@ import {
   SelectModal,
   type SelectOption,
 } from '@/shared/ui/select-modal/select-modal'
+import { notify } from '@/shared/ui/toast'
 
 import {
   adminTenureHintFromRow,
@@ -814,7 +814,7 @@ export function HeadsOfStateSection({
     const hasDefinition = !!selectedPositionDefinitionId
     const hasTitle = title.trim() !== ''
     if (!selectedPersonId || (!hasDefinition && !hasTitle) || !startDate) {
-      toast.error('인물, 직책명(또는 기타 직접 입력), 취임일을 입력해주세요.')
+      notify.error('인물, 직책명(또는 기타 직접 입력), 취임일을 입력해주세요.')
       return
     }
     setIsSubmitting(true)
@@ -887,17 +887,17 @@ export function HeadsOfStateSection({
             editingTenureId,
             sovereignPayload,
           )
-          toast.success('재위 기록이 수정되었습니다.')
+          notify.success('재위 기록이 수정되었습니다.')
         } else {
           await personCareerApi.updateGovernmentPositionTenure(
             editingTenureId,
             tenurePayload,
           )
-          toast.success('재임 기록이 수정되었습니다.')
+          notify.success('재임 기록이 수정되었습니다.')
         }
       } else if (useSovereignPath) {
         await personCareerApi.addSovereignReign(sovereignPayload)
-        toast.success('재위 기록이 추가되었습니다.')
+        notify.success('재위 기록이 추가되었습니다.')
         queryClient.invalidateQueries({
           queryKey: ['cabinets-by-country', countryId, historicalCountryId],
         })
@@ -922,13 +922,13 @@ export function HeadsOfStateSection({
         if (createCabinetWithTenure && isHeadType && created?.id) {
           try {
             await personCareerApi.createCabinet({ headTenureId: created.id })
-            toast.success('재임 기록과 행정부가 등록되었습니다.')
+            notify.success('재임 기록과 행정부가 등록되었습니다.')
           } catch (cabinetErr: any) {
-            toast.success('재임 기록이 추가되었습니다.')
-            toast.error(cabinetErr?.message ?? '행정부 생성에 실패했습니다.')
+            notify.success('재임 기록이 추가되었습니다.')
+            notify.error(cabinetErr?.message ?? '행정부 생성에 실패했습니다.')
           }
         } else {
-          toast.success('재임 기록이 추가되었습니다.')
+          notify.success('재임 기록이 추가되었습니다.')
         }
         queryClient.invalidateQueries({
           queryKey: ['cabinets-by-country', countryId, historicalCountryId],
@@ -939,7 +939,7 @@ export function HeadsOfStateSection({
       refetch()
       setView('list')
     } catch (err: any) {
-      toast.error(err?.message || '저장에 실패했습니다.')
+      notify.error(err?.message || '저장에 실패했습니다.')
     } finally {
       setIsSubmitting(false)
     }
@@ -978,16 +978,16 @@ export function HeadsOfStateSection({
     try {
       if (isSov) {
         await personCareerApi.deleteSovereignReign(editingTenureId)
-        toast.success('재위 기록이 삭제되었습니다.')
+        notify.success('재위 기록이 삭제되었습니다.')
       } else {
         await personCareerApi.deleteGovernmentPositionTenure(editingTenureId)
-        toast.success('재임 기록이 삭제되었습니다.')
+        notify.success('재임 기록이 삭제되었습니다.')
       }
       resetForm()
       setView('list')
       refetch()
     } catch (err: any) {
-      toast.error(err?.message || '삭제에 실패했습니다.')
+      notify.error(err?.message || '삭제에 실패했습니다.')
     }
   }
 
@@ -1128,7 +1128,7 @@ export function HeadsOfStateSection({
   const handleAchievementSubmit = async () => {
     const tenureId = achievementTenureId ?? editingTenureId
     if (!tenureId || !achievementTitle.trim()) {
-      toast.error('제목을 입력하세요.')
+      notify.error('제목을 입력하세요.')
       return
     }
     const hostRow = tenures.find((t: any) => t.id === tenureId) as any
@@ -1156,20 +1156,20 @@ export function HeadsOfStateSection({
             dto,
           )
         }
-        toast.success('업적이 수정되었습니다.')
+        notify.success('업적이 수정되었습니다.')
       } else if (achievementIsSovereign) {
         await personCareerApi.createSovereignReignAchievement(tenureId, dto)
-        toast.success('업적·한일이 등록되었습니다.')
+        notify.success('업적·한일이 등록되었습니다.')
       } else {
         await personCareerApi.createTenureAchievement(tenureId, dto)
-        toast.success('업적·한일이 등록되었습니다.')
+        notify.success('업적·한일이 등록되었습니다.')
       }
       resetAchievementForm()
       queryClient.invalidateQueries({
         queryKey: ['tenures-by-country', countryId, historicalCountryId],
       })
     } catch (err: any) {
-      toast.error(
+      notify.error(
         err?.message ??
           (editingAchievementId
             ? '수정에 실패했습니다.'
@@ -1205,12 +1205,12 @@ export function HeadsOfStateSection({
         await personCareerApi.deleteTenureAchievement(tenureId, achievementId)
       }
       if (editingAchievementId === achievementId) resetAchievementForm()
-      toast.success('업적이 삭제되었습니다.')
+      notify.success('업적이 삭제되었습니다.')
       queryClient.invalidateQueries({
         queryKey: ['tenures-by-country', countryId, historicalCountryId],
       })
     } catch (err: any) {
-      toast.error(err?.message ?? '삭제에 실패했습니다.')
+      notify.error(err?.message ?? '삭제에 실패했습니다.')
     }
   }
 
@@ -1250,17 +1250,17 @@ export function HeadsOfStateSection({
   const handleRegnalEraSubmit = async () => {
     if (!editingTenureId) return
     if (!regnalEraName.trim()) {
-      toast.error('연호명을 입력하세요.')
+      notify.error('연호명을 입력하세요.')
       return
     }
     const sy = parseInt(regnalEraStartYear.trim(), 10)
     if (!Number.isFinite(sy) || sy < 1) {
-      toast.error('시작 연도는 1 이상의 숫자로 입력하세요.')
+      notify.error('시작 연도는 1 이상의 숫자로 입력하세요.')
       return
     }
     const hostRow = tenures.find((t: any) => t.id === editingTenureId) as any
     if (!tenureRowSupportsRegnalEras(hostRow)) {
-      toast.error('이 재임에는 연호를 붙일 수 없습니다.')
+      notify.error('이 재임에는 연호를 붙일 수 없습니다.')
       return
     }
     const sm = parseOptionalMdPart(regnalEraStartMonth)
@@ -1275,7 +1275,7 @@ export function HeadsOfStateSection({
     ): boolean => {
       if (raw.trim() === '') return true
       if (v === undefined) {
-        toast.error(`${label}은(는) 올바른 숫자여야 합니다.`)
+        notify.error(`${label}은(는) 올바른 숫자여야 합니다.`)
         return false
       }
       return true
@@ -1286,19 +1286,19 @@ export function HeadsOfStateSection({
     if (!checkMd('종료 월', em, regnalEraEndMonth)) return
     if (!checkMd('종료 일', ed, regnalEraEndDay)) return
     if (sm != null && (sm < 1 || sm > 12)) {
-      toast.error('시작 월은 1–12 사이여야 합니다.')
+      notify.error('시작 월은 1–12 사이여야 합니다.')
       return
     }
     if (sd != null && (sd < 1 || sd > 31)) {
-      toast.error('시작 일은 1–31 사이여야 합니다.')
+      notify.error('시작 일은 1–31 사이여야 합니다.')
       return
     }
     if (em != null && (em < 1 || em > 12)) {
-      toast.error('종료 월은 1–12 사이여야 합니다.')
+      notify.error('종료 월은 1–12 사이여야 합니다.')
       return
     }
     if (ed != null && (ed < 1 || ed > 31)) {
-      toast.error('종료 일은 1–31 사이여야 합니다.')
+      notify.error('종료 일은 1–31 사이여야 합니다.')
       return
     }
 
@@ -1329,7 +1329,7 @@ export function HeadsOfStateSection({
           changeReason: base.changeReason,
         }
         await personCareerApi.updateRegnalEra(editingRegnalEraId, patch)
-        toast.success('연호가 수정되었습니다.')
+        notify.success('연호가 수정되었습니다.')
       } else {
         const isSovereign = hostRow?.recordKind === 'SOVEREIGN_REIGN'
         if (isSovereign) {
@@ -1340,7 +1340,7 @@ export function HeadsOfStateSection({
         } else {
           await personCareerApi.createRegnalEra(editingTenureId, base)
         }
-        toast.success('연호가 등록되었습니다.')
+        notify.success('연호가 등록되었습니다.')
       }
       resetRegnalEraForm()
       queryClient.invalidateQueries({
@@ -1351,7 +1351,7 @@ export function HeadsOfStateSection({
         err?.response?.data?.message ??
         err?.message ??
         (editingRegnalEraId ? '수정에 실패했습니다.' : '등록에 실패했습니다.')
-      toast.error(msg)
+      notify.error(msg)
     } finally {
       setRegnalEraSubmitting(false)
     }
@@ -1369,12 +1369,12 @@ export function HeadsOfStateSection({
     try {
       await personCareerApi.deleteRegnalEra(eraId)
       if (editingRegnalEraId === eraId) resetRegnalEraForm()
-      toast.success('연호가 삭제되었습니다.')
+      notify.success('연호가 삭제되었습니다.')
       queryClient.invalidateQueries({
         queryKey: ['tenures-by-country', countryId, historicalCountryId],
       })
     } catch (err: any) {
-      toast.error(err?.message ?? '삭제에 실패했습니다.')
+      notify.error(err?.message ?? '삭제에 실패했습니다.')
     }
   }
 

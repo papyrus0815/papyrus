@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
 
-import { toast } from 'react-hot-toast'
 import type { NavigateFunction } from 'react-router-dom'
 
 import { dynastyApi } from '@/shared/api/dynasty'
@@ -9,6 +8,7 @@ import { getHistoricalCountryById } from '@/shared/api/historical-countries'
 import { militaryUnitApi } from '@/shared/api/military-unit'
 import { politicalPartyApi } from '@/shared/api/political-party'
 import { pathKeys } from '@/shared/router'
+import { notify } from '@/shared/ui/toast'
 
 export type RichTextTermTooltipState = {
   termId: string
@@ -97,7 +97,7 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
         if (id) {
           e.preventDefault()
           if (samePersonId != null && id === samePersonId) {
-            toast('현재 보고 있는 인물입니다.', { icon: 'ℹ️' })
+            notify.show('현재 보고 있는 인물입니다.', { icon: 'ℹ️' })
             return
           }
           onPersonClick(id)
@@ -175,7 +175,7 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
         const countryIdAttr = partyLinkEl.getAttribute('data-entity-country-id')
         if (onPoliticalPartyClick) {
           if (samePoliticalPartyId != null && partyId === samePoliticalPartyId) {
-            toast('현재 보고 있는 정당입니다.', { icon: 'ℹ️' })
+            notify.show('현재 보고 있는 정당입니다.', { icon: 'ℹ️' })
             return
           }
           if (countryIdAttr) {
@@ -190,7 +190,7 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
                 countryId: p.countryId ?? null,
               }),
             )
-            .catch(() => toast.error('정당 정보를 불러올 수 없습니다.'))
+            .catch(() => notify.error('정당 정보를 불러올 수 없습니다.'))
           return
         }
         const go = (cid: string) =>
@@ -204,11 +204,11 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
           .then((p) => {
             if (p.countryId) go(p.countryId)
             else
-              toast.error(
+              notify.error(
                 '이 정당에 연결된 현대 국가가 없어 해당 국가 화면으로 이동할 수 없습니다.',
               )
           })
-          .catch(() => toast.error('정당 정보를 불러올 수 없습니다.'))
+          .catch(() => notify.error('정당 정보를 불러올 수 없습니다.'))
         return
       }
 
@@ -256,12 +256,12 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
               if (first)
                 navigate(pathKeys.countryHistorical(first))
               else
-                toast.error(
+                notify.error(
                   '연결된 현대 국가가 없어 해당 국가의 역사 탭으로 이동할 수 없습니다.',
                 )
             })
             .catch(() =>
-              toast.error('역사적 국가 정보를 불러올 수 없습니다.'),
+              notify.error('역사적 국가 정보를 불러올 수 없습니다.'),
             )
         }
         return
@@ -287,11 +287,11 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
               if (cid)
                 navigate(pathKeys.countryGovernment(cid))
               else
-                toast.error(
+                notify.error(
                   '이 부대에 연결된 현대 국가가 없어 행정조직 탭으로 이동할 수 없습니다.',
                 )
             })
-            .catch(() => toast.error('군부대 정보를 불러올 수 없습니다.'))
+            .catch(() => notify.error('군부대 정보를 불러올 수 없습니다.'))
         }
         return
       }

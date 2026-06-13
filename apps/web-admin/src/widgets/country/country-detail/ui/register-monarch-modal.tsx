@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 
 import { AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import { FiChevronDown, FiInfo, FiSave, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -50,6 +49,7 @@ import {
   SelectModal,
   type SelectOption,
 } from '@/shared/ui/select-modal/select-modal'
+import { notify } from '@/shared/ui/toast'
 
 /** 인물 등록 모달 `SelectBtn`과 동일 스펙 */
 const ModalSelectBtn = styled.button<{ $hasValue?: boolean }>`
@@ -267,7 +267,7 @@ export function RegisterMonarchModal({
   const selectedPerson = useMemo(() => {
     if (!selectedPersonId) return null
     return (
-      (allPersonsForModal as { id: string }[]).find(
+      allPersonsForModal.find(
         (personRow) => personRow.id === selectedPersonId,
       ) ?? null
     )
@@ -353,25 +353,25 @@ export function RegisterMonarchModal({
       !startDate.trim() ||
       !selectedPositionDefinition
     ) {
-      toast.error('인물, 직책명, 취임일을 입력해 주세요.')
+      notify.error('인물, 직책명, 취임일을 입력해 주세요.')
       return
     }
     const defOk = headOfStatePositionOptions.some(
       (posDef) => posDef.id === selectedPositionDefinitionId,
     )
     if (!defOk) {
-      toast.error('국가 원수 직위 정의만 등록할 수 있습니다.')
+      notify.error('국가 원수 직위 정의만 등록할 수 있습니다.')
       return
     }
 
     if (includeRegnalEra) {
       if (!eraName.trim() || !eraStartYear.trim()) {
-        toast.error('연호를 쓰려면 연호명과 시작 연도를 입력하세요.')
+        notify.error('연호를 쓰려면 연호명과 시작 연도를 입력하세요.')
         return
       }
       const dto = buildRegnalEraDto()
       if (!dto) {
-        toast.error('연호 날짜(연·월·일)를 올바르게 입력하세요.')
+        notify.error('연호 날짜(연·월·일)를 올바르게 입력하세요.')
         return
       }
     }
@@ -380,7 +380,8 @@ export function RegisterMonarchModal({
       regnalNumber.trim() === ''
         ? undefined
         : parseInt(regnalNumber.trim(), 10) || undefined
-    const payload: CreateSovereignReignDto = {
+    // 서버 CreateSovereignReignDto에는 regnalName이 있으나 래퍼 타입(person-career.ts)에 누락 — 교차 타입으로 보강
+    const payload: CreateSovereignReignDto & { regnalName?: string } = {
       personId: selectedPersonId,
       positionDefinitionId: selectedPositionDefinition.id,
       countryId: selectedAffinityHistoricalId
@@ -420,7 +421,7 @@ export function RegisterMonarchModal({
         )
       }
 
-      toast.success(
+      notify.success(
         includeRegnalEra && eraDto
           ? '군주 재위와 연호가 등록되었습니다.'
           : '군주(국가 원수) 재임이 등록되었습니다.',
@@ -443,7 +444,7 @@ export function RegisterMonarchModal({
           : caught instanceof Error
             ? caught.message
             : '등록에 실패했습니다.'
-      toast.error(msg)
+      notify.error(msg)
     } finally {
       setSubmitting(false)
     }
@@ -547,7 +548,7 @@ export function RegisterMonarchModal({
                   hint="재임 기록에 연결할 인물을 선택하세요."
                   value={selectedPersonId}
                   selectedPerson={selectedPerson}
-                  persons={allPersonsForModal as { id: string }[]}
+                  persons={allPersonsForModal}
                   isModalOpen={personSelectModalOpen}
                   onModalOpenChange={setPersonSelectModalOpen}
                   onSelect={setSelectedPersonId}

@@ -8,11 +8,11 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { toast } from 'react-hot-toast'
 import styled from 'styled-components'
 import type { ContinentResponseDto } from '@/shared/api/continents'
 import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
 import { FormInput } from '@/shared/ui/form-input/form-input'
+import { notify } from '@/shared/ui/toast'
 
 interface ContinentFormProps {
   isOpen: boolean
@@ -78,7 +78,7 @@ export function ContinentForm({
     e.preventDefault()
 
     if (!formData.name.trim()) {
-      toast.error('대륙명을 입력해주세요')
+      notify.error('대륙명을 입력해주세요')
 
       return
     }

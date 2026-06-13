@@ -9,7 +9,7 @@
  */
 import React, { useEffect, useRef } from 'react'
 
-import toast from 'react-hot-toast'
+import { notify } from '@/shared/ui/toast'
 
 import { CommandPalette } from './components/command-palette'
 import { EmptyState } from './components/empty-state'
@@ -82,7 +82,7 @@ export const EventsLedgerPage: React.FC<EventsLedgerPageProps> = ({
       const wasKnown = prevEventIdsRef.current.has(expandedEventId)
       if (!inCurrent && wasKnown) {
         setExpandedEventId(null)
-        toast('현재 렌즈 조건에서 해당 사건이 보이지 않아 닫았어요.', {
+        notify.show('현재 렌즈 조건에서 해당 사건이 보이지 않아 닫았어요.', {
           icon: 'ℹ️',
           duration: 3000,
         })

@@ -6,7 +6,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { toast } from 'react-hot-toast'
 import {
   FiCalendar,
   FiChevronDown,
@@ -44,6 +43,7 @@ import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   EmptyStateFeatureCard,
@@ -1321,7 +1321,7 @@ function PartyLineageBlock({
       })
     },
     onSuccess: (_, variables) => {
-      toast.success(
+      notify.success(
         variables.editingId ? '계보를 수정했습니다.' : '계보를 연결했습니다.',
       )
       closeLineageModal()
@@ -1329,18 +1329,18 @@ function PartyLineageBlock({
         queryKey: ['political-party-lineage', partyId],
       })
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const delMut = useMutation({
     mutationFn: (id: string) => politicalPartyApi.deleteTransition(id),
     onSuccess: () => {
-      toast.success('삭제했습니다.')
+      notify.success('삭제했습니다.')
       queryClient.invalidateQueries({
         queryKey: ['political-party-lineage', partyId],
       })
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const others = parties.filter((p) => p.id !== partyId)
@@ -1641,11 +1641,11 @@ function PartyLineageBlock({
                         if (!lineageEditingId && !lineageOtherPartyId) {
                           const msg = '연결할 정당을 선택하세요.'
                           setLineagePartyError(msg)
-                          toast.error(msg)
+                          notify.error(msg)
                           return
                         }
                         if (lineageConfirmNotes.length > 4000) {
-                          toast.error('메모는 4000자 이하여야 합니다.')
+                          notify.error('메모는 4000자 이하여야 합니다.')
                           return
                         }
                         setLineagePartyError(null)
@@ -2047,11 +2047,11 @@ export function CountryPoliticalPartiesBlock({
     mutationFn: (body: CreatePoliticalPartyInput) =>
       politicalPartyApi.create(body),
     onSuccess: () => {
-      toast.success('정당을 등록했습니다.')
+      notify.success('정당을 등록했습니다.')
       setModal(null)
       invalidate()
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const updateMut = useMutation({
@@ -2063,24 +2063,24 @@ export function CountryPoliticalPartiesBlock({
       body: CreatePoliticalPartyInput
     }) => politicalPartyApi.update(id, body),
     onSuccess: (_row, variables) => {
-      toast.success('저장했습니다.')
+      notify.success('저장했습니다.')
       setModal(null)
       invalidate()
       queryClient.invalidateQueries({
         queryKey: ['political-parties', 'detail', variables.id],
       })
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => politicalPartyApi.delete(id),
     onSuccess: () => {
-      toast.success('삭제했습니다.')
+      notify.success('삭제했습니다.')
       invalidate()
       navigate(pathKeys.countryElections(routeCountryId))
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const saveDescriptionMut = useMutation({
@@ -2089,7 +2089,7 @@ export function CountryPoliticalPartiesBlock({
         description: normalizeRichTextForSave(html),
       }),
     onSuccess: () => {
-      toast.success('설명을 저장했습니다.')
+      notify.success('설명을 저장했습니다.')
       invalidate()
       if (selectedPartyId) {
         queryClient.invalidateQueries({
@@ -2098,7 +2098,7 @@ export function CountryPoliticalPartiesBlock({
       }
       setEditingPartyDescription(false)
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   useEffect(() => {
@@ -2811,11 +2811,11 @@ function PartyFormModal({
       setLogoUploading(true)
       const result = await uploadImage(file, 'political-parties')
       setLogoUrl(result.url)
-      toast.success('이미지를 올렸습니다.')
+      notify.success('이미지를 올렸습니다.')
     } catch (unknownError) {
       const message =
         unknownError instanceof Error ? unknownError.message : '업로드 실패'
-      toast.error(message)
+      notify.error(message)
     } finally {
       setLogoUploading(false)
     }
@@ -2840,7 +2840,7 @@ function PartyFormModal({
         setLogoUrl(row.logoUrl ?? '')
         setBrandColor(row.brandColor ?? '')
       })
-      .catch((err: Error) => toast.error(err.message))
+      .catch((err: Error) => notify.error(err.message))
     return () => {
       cancelled = true
     }
@@ -2849,7 +2849,7 @@ function PartyFormModal({
   const submit = () => {
     const parsedColor = normalizeBrandColorInput(brandColor)
     if (brandColor.trim() && !parsedColor) {
-      toast.error('브랜드 컬러는 #RRGGBB 형식(예: #e11d48)이거나 비워 두세요.')
+      notify.error('브랜드 컬러는 #RRGGBB 형식(예: #e11d48)이거나 비워 두세요.')
       return
     }
     const scope =
@@ -2872,7 +2872,7 @@ function PartyFormModal({
       ...scope,
     }
     if (!body.name) {
-      toast.error('정당 명칭을 입력하세요.')
+      notify.error('정당 명칭을 입력하세요.')
       return
     }
     if (mode === 'create') onSubmitCreate(body)
@@ -3081,7 +3081,7 @@ function PartyFormModal({
                       for (const piece of t) {
                         if (next.includes(piece)) continue
                         if (next.length >= 40) {
-                          toast.error('키워드는 최대 40개까지입니다.')
+                          notify.error('키워드는 최대 40개까지입니다.')
                           return
                         }
                         next.push(piece)

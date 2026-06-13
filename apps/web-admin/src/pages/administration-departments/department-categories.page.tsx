@@ -2,10 +2,10 @@ import React, { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 import { FiLayers, FiPlus, FiEdit2, FiTrash2, FiAward, FiChevronRight } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import type { AdministrationDepartmentCategory } from '@/shared/api/administration-department'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { PositionDefinitionsSection } from '@/widgets/country/country-detail/ui/position-definitions-section.widget'
 
 export const DepartmentCategoriesPage: React.FC = () => {
@@ -47,18 +47,18 @@ export const DepartmentCategoriesPage: React.FC = () => {
     try {
       if (editingCategory) {
         await administrationDepartmentApi.updateCategory(editingCategory.id, payload)
-        toast.success('카테고리가 수정되었습니다.')
+        notify.success('카테고리가 수정되었습니다.')
         if (selectedCategory?.id === editingCategory.id) {
           setSelectedCategory({ ...editingCategory, ...payload })
         }
       } else {
         await administrationDepartmentApi.createCategory(payload)
-        toast.success('카테고리가 등록되었습니다.')
+        notify.success('카테고리가 등록되었습니다.')
       }
       refetch()
       setShowCategoryForm(false)
     } catch (err: any) {
-      toast.error(err?.message || '저장에 실패했습니다.')
+      notify.error(err?.message || '저장에 실패했습니다.')
     }
   }
 
@@ -73,11 +73,11 @@ export const DepartmentCategoriesPage: React.FC = () => {
       return
     try {
       await administrationDepartmentApi.deleteCategory(cat.id)
-      toast.success('삭제되었습니다.')
+      notify.success('삭제되었습니다.')
       if (selectedCategory?.id === cat.id) setSelectedCategory(null)
       refetch()
     } catch (err: any) {
-      toast.error(err?.message || '삭제에 실패했습니다.')
+      notify.error(err?.message || '삭제에 실패했습니다.')
     }
   }
 

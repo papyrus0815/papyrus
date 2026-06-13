@@ -7,7 +7,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { createPortal } from 'react-dom'
 
-import { toast } from 'react-hot-toast'
 import {
   FiArrowLeft,
   FiCalendar,
@@ -28,6 +27,7 @@ import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { notify } from '@/shared/ui/toast'
 
 interface PersonSelectModalProps {
   persons: PersonResponseDto[]
@@ -130,19 +130,19 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
 
   const handleCreateSubmit = async () => {
     if (!defaultCountryId) {
-      toast.error('국가를 먼저 선택해 주세요.')
+      notify.error('국가를 먼저 선택해 주세요.')
       return
     }
     if (!newName.trim()) {
-      toast.error('이름을 입력해 주세요.')
+      notify.error('이름을 입력해 주세요.')
       return
     }
     if (!newSurname.trim()) {
-      toast.error('성을 입력해 주세요.')
+      notify.error('성을 입력해 주세요.')
       return
     }
     if (!newGender) {
-      toast.error('성별을 선택해 주세요.')
+      notify.error('성별을 선택해 주세요.')
       return
     }
     setCreating(true)
@@ -166,13 +166,13 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
         }
       }
       const created = await createPerson(payload)
-      toast.success('인물을 등록했습니다.')
+      notify.success('인물을 등록했습니다.')
       onCreatedPerson?.(created)
       const fullName = getPersonDisplayName(created)
       onSelect(created.id, fullName)
       onClose()
     } catch (err: any) {
-      toast.error(err?.message ?? '등록에 실패했습니다.')
+      notify.error(err?.message ?? '등록에 실패했습니다.')
     } finally {
       setCreating(false)
     }

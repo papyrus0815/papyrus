@@ -11,7 +11,6 @@ import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import { FiEdit2, FiPlus, FiTrash2, FiUserPlus, FiX } from 'react-icons/fi'
 import styled, { type DefaultTheme } from 'styled-components'
 
@@ -31,6 +30,7 @@ import {
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { notify } from '@/shared/ui/toast'
 import {
   GroupTypeBadge,
   GroupTypeChips,
@@ -129,7 +129,7 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
         memberPersonIds: [personId],
       }),
     onSuccess: () => {
-      toast.success('묶음을 만들었습니다.')
+      notify.success('묶음을 만들었습니다.')
       setName('')
       setGenerationOrder('')
       setDescription('')
@@ -137,19 +137,19 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
       setCenterName('')
       invalidate()
     },
-    onError: () => toast.error('묶음 생성에 실패했습니다.'),
+    onError: () => notify.error('묶음 생성에 실패했습니다.'),
   })
 
   const joinMutation = useMutation({
     mutationFn: (groupId: string) => addPersonGroupMember(groupId, { personId }),
     onSuccess: () => {
-      toast.success('묶음에 추가했습니다.')
+      notify.success('묶음에 추가했습니다.')
       setExistingGroupId('')
       setJoinSearch('')
       invalidate()
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : '추가에 실패했습니다.'),
+      notify.error(e instanceof Error ? e.message : '추가에 실패했습니다.'),
   })
 
   const updateGroupMutation = useMutation({
@@ -167,24 +167,24 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
         centerPersonId: form.centerPersonId || null,
       }),
     onSuccess: () => {
-      toast.success('묶음을 수정했습니다.')
+      notify.success('묶음을 수정했습니다.')
       setEditingGroupId(null)
       setEditForm(null)
       invalidate()
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : '수정에 실패했습니다.'),
+      notify.error(e instanceof Error ? e.message : '수정에 실패했습니다.'),
   })
 
   const addMemberMutation = useMutation({
     mutationFn: ({ groupId, memberId }: { groupId: string; memberId: string }) =>
       addPersonGroupMember(groupId, { personId: memberId }),
     onSuccess: () => {
-      toast.success('멤버를 추가했습니다.')
+      notify.success('멤버를 추가했습니다.')
       invalidate()
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : '멤버 추가에 실패했습니다.'),
+      notify.error(e instanceof Error ? e.message : '멤버 추가에 실패했습니다.'),
   })
 
   const updateMemberMutation = useMutation({
@@ -198,7 +198,7 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
       roleLabel: string | null
     }) => updatePersonGroupMember(groupId, membershipId, { roleLabel }),
     onSuccess: () => invalidate(),
-    onError: () => toast.error('역할 저장에 실패했습니다.'),
+    onError: () => notify.error('역할 저장에 실패했습니다.'),
   })
 
   const removeMemberMutation = useMutation({
@@ -211,17 +211,17 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
     }) => removePersonGroupMember(groupId, membershipId),
     onSuccess: () => invalidate(),
     onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : '멤버 제거에 실패했습니다.'),
+      notify.error(e instanceof Error ? e.message : '멤버 제거에 실패했습니다.'),
   })
 
   const deleteGroupMutation = useMutation({
     mutationFn: (groupId: string) => deletePersonGroup(groupId),
     onSuccess: () => {
-      toast.success('묶음을 삭제했습니다.')
+      notify.success('묶음을 삭제했습니다.')
       invalidate()
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : '묶음 삭제에 실패했습니다.'),
+      notify.error(e instanceof Error ? e.message : '묶음 삭제에 실패했습니다.'),
   })
 
   const startEdit = (groupId: string) => {

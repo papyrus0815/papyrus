@@ -16,12 +16,11 @@ import {
   FiLayers,
   FiAward,
 } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
-
 import { personCareerApi } from '@/shared/api/person-career'
 import type { CreateGovernmentPositionDefinitionDto } from '@/shared/api/person-career'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import type { GovernmentPositionDefinition } from '@/shared/api/government-positions'
 import {
@@ -424,21 +423,21 @@ export function PositionDefinitionsSection({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.title.trim()) {
-      toast.error('직위명을 입력해주세요.')
+      notify.error('직위명을 입력해주세요.')
       return
     }
     try {
       if (editingId) {
         await personCareerApi.updatePositionDefinition(editingId, form)
-        toast.success('수정되었습니다.')
+        notify.success('수정되었습니다.')
       } else {
         await personCareerApi.createPositionDefinition(form)
-        toast.success('등록되었습니다.')
+        notify.success('등록되었습니다.')
       }
       refetch()
       setView('list')
     } catch (err: any) {
-      toast.error(err?.message || '저장에 실패했습니다.')
+      notify.error(err?.message || '저장에 실패했습니다.')
     }
   }
 
@@ -453,10 +452,10 @@ export function PositionDefinitionsSection({
       return
     try {
       await personCareerApi.deletePositionDefinition(id)
-      toast.success('삭제되었습니다.')
+      notify.success('삭제되었습니다.')
       refetch()
     } catch (err: any) {
-      toast.error(err?.message || '삭제에 실패했습니다.')
+      notify.error(err?.message || '삭제에 실패했습니다.')
     }
   }
 

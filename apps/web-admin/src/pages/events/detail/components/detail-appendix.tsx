@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { FiPlus, FiStar, FiUploadCloud, FiX } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
 import styled, { css } from 'styled-components'
 
 import { ledgerHairlineStrong } from '@/pages/events/ledger/styles/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
+import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
@@ -134,13 +134,13 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
 
     // URL 검증 — 형식·scheme 화이트리스트. 상대 경로(/uploads/...)는 허용.
     if (!isAcceptableImageUrl(url)) {
-      toast.error('이미지 URL이 올바르지 않습니다. http(s):// 또는 /uploads/ 경로를 사용하세요.')
+      notify.error('이미지 URL이 올바르지 않습니다. http(s):// 또는 /uploads/ 경로를 사용하세요.')
       return
     }
 
     // 중복 URL 차단 — 같은 이미지를 두 번 추가하지 않게.
     if (images.some((img) => img.imageUrl === url)) {
-      toast.error('이미 추가된 이미지입니다.')
+      notify.error('이미 추가된 이미지입니다.')
       return
     }
 
@@ -196,7 +196,7 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
           const url = getUploadImageUrl(result.url) || result.url
           // 기존 이미지뿐 아니라 *이번 배치에서 이미 추가된* URL과의 중복도 차단.
           if (working.some((img) => img.imageUrl === url)) {
-            toast.error(`이미 추가된 이미지입니다: ${file.name}`)
+            notify.error(`이미 추가된 이미지입니다: ${file.name}`)
             continue
           }
           working = [
@@ -213,7 +213,7 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
           appended = true
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e)
-          toast.error(`${file.name}: ${msg}`)
+          notify.error(`${file.name}: ${msg}`)
         }
       }
       if (appended) onPatch({ eventImages: serialize(working) })

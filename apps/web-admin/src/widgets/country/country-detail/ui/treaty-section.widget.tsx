@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { toast } from 'react-hot-toast'
 import {
   FiChevronLeft,
   FiEdit2,
@@ -46,6 +45,7 @@ import {
 } from '@/shared/api/person-career'
 import { uploadImage } from '@/shared/api/upload'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -942,11 +942,11 @@ const TreatyCreateModal: React.FC<{
 
   const handleSubmit = async () => {
     if (!name.trim() || !signDate.trim()) {
-      toast.error('조약명과 서명일은 필수입니다.')
+      notify.error('조약명과 서명일은 필수입니다.')
       return
     }
     if (!sigCountryId && !sigHistoricalCountryId) {
-      toast.error('이 조약에 포함될 국가(현대 또는 역사)를 선택하세요.')
+      notify.error('이 조약에 포함될 국가(현대 또는 역사)를 선택하세요.')
       return
     }
     setSubmitting(true)
@@ -974,10 +974,10 @@ const TreatyCreateModal: React.FC<{
         ],
       }
       const created = await treatyApi.create(dto)
-      toast.success('조약이 등록되었습니다.')
+      notify.success('조약이 등록되었습니다.')
       onCreated(created.id)
     } catch (e) {
-      toast.error(getApiErrorMessage(e, '등록 중 오류가 발생했습니다.'))
+      notify.error(getApiErrorMessage(e, '등록 중 오류가 발생했습니다.'))
     } finally {
       setSubmitting(false)
     }
@@ -1222,7 +1222,7 @@ const TreatyEditModal: React.FC<{
 
   const handleSubmit = async () => {
     if (!name.trim() || !signDate.trim()) {
-      toast.error('조약명과 서명일은 필수입니다.')
+      notify.error('조약명과 서명일은 필수입니다.')
       return
     }
     setSubmitting(true)
@@ -1241,10 +1241,10 @@ const TreatyEditModal: React.FC<{
         background: background.trim() || null,
         aftermath: aftermath.trim() || null,
       })
-      toast.success('조약이 수정되었습니다.')
+      notify.success('조약이 수정되었습니다.')
       onSaved()
     } catch (e) {
-      toast.error(getApiErrorMessage(e, '수정 중 오류가 발생했습니다.'))
+      notify.error(getApiErrorMessage(e, '수정 중 오류가 발생했습니다.'))
     } finally {
       setSubmitting(false)
     }
@@ -1434,11 +1434,11 @@ const TreatyDetail: React.FC<{
       return
     try {
       await treatyApi.remove(treatyId)
-      toast.success('조약이 삭제되었습니다.')
+      notify.success('조약이 삭제되었습니다.')
       onInvalidate()
       onBack()
     } catch (e) {
-      toast.error(getApiErrorMessage(e, '삭제 중 오류가 발생했습니다.'))
+      notify.error(getApiErrorMessage(e, '삭제 중 오류가 발생했습니다.'))
     }
   }
 
@@ -1454,9 +1454,9 @@ const TreatyDetail: React.FC<{
     try {
       await treatyApi.removeSignatory(id)
       invalidateTreaty()
-      toast.success('서명국이 삭제되었습니다.')
+      notify.success('서명국이 삭제되었습니다.')
     } catch (e) {
-      toast.error(getApiErrorMessage(e, '삭제 중 오류가 발생했습니다.'))
+      notify.error(getApiErrorMessage(e, '삭제 중 오류가 발생했습니다.'))
     }
   }
 
@@ -1472,9 +1472,9 @@ const TreatyDetail: React.FC<{
     try {
       await treatyApi.removeTerm(id)
       invalidateTreaty()
-      toast.success('조항이 삭제되었습니다.')
+      notify.success('조항이 삭제되었습니다.')
     } catch (e) {
-      toast.error(getApiErrorMessage(e, '삭제 중 오류가 발생했습니다.'))
+      notify.error(getApiErrorMessage(e, '삭제 중 오류가 발생했습니다.'))
     }
   }
 
@@ -1492,9 +1492,9 @@ const TreatyDetail: React.FC<{
       }
       await treatyApi.addImage(dto)
       invalidateTreaty()
-      toast.success('이미지가 추가되었습니다.')
+      notify.success('이미지가 추가되었습니다.')
     } catch (err) {
-      toast.error(
+      notify.error(
         getApiErrorMessage(err, '이미지 업로드 중 오류가 발생했습니다.'),
       )
     } finally {
@@ -1514,9 +1514,9 @@ const TreatyDetail: React.FC<{
     try {
       await treatyApi.removeImage(id)
       invalidateTreaty()
-      toast.success('이미지가 삭제되었습니다.')
+      notify.success('이미지가 삭제되었습니다.')
     } catch (e) {
-      toast.error(getApiErrorMessage(e, '삭제 중 오류가 발생했습니다.'))
+      notify.error(getApiErrorMessage(e, '삭제 중 오류가 발생했습니다.'))
     }
   }
 
@@ -1966,7 +1966,7 @@ const AddSignatoryModal: React.FC<{
 
   const handleSubmit = async () => {
     if (!countryId && !historicalCountryId) {
-      toast.error('현대 국가 또는 역사적 국가를 선택하세요.')
+      notify.error('현대 국가 또는 역사적 국가를 선택하세요.')
       return
     }
     setSubmitting(true)
@@ -1982,10 +1982,10 @@ const AddSignatoryModal: React.FC<{
         signedAt: signedAt || null,
         note: note || null,
       })
-      toast.success('서명국이 추가되었습니다.')
+      notify.success('서명국이 추가되었습니다.')
       onAdded()
     } catch (e) {
-      toast.error(getApiErrorMessage(e, '추가 중 오류가 발생했습니다.'))
+      notify.error(getApiErrorMessage(e, '추가 중 오류가 발생했습니다.'))
     } finally {
       setSubmitting(false)
     }
@@ -2190,7 +2190,7 @@ const EditSignatoryModal: React.FC<{
 
   const handleSubmit = async () => {
     if (!countryId && !historicalCountryId) {
-      toast.error('현대 국가 또는 역사적 국가를 선택하세요.')
+      notify.error('현대 국가 또는 역사적 국가를 선택하세요.')
       return
     }
     setSubmitting(true)
@@ -2205,10 +2205,10 @@ const EditSignatoryModal: React.FC<{
         signedAt: signedAt || null,
         note: note || null,
       })
-      toast.success('서명국 정보가 저장되었습니다.')
+      notify.success('서명국 정보가 저장되었습니다.')
       onSaved()
     } catch (e) {
-      toast.error(getApiErrorMessage(e, '저장 중 오류가 발생했습니다.'))
+      notify.error(getApiErrorMessage(e, '저장 중 오류가 발생했습니다.'))
     } finally {
       setSubmitting(false)
     }
@@ -2378,7 +2378,7 @@ const AddTermModal: React.FC<{
 
   const handleSubmit = async () => {
     if (!content.trim()) {
-      toast.error('조항 내용을 입력하세요.')
+      notify.error('조항 내용을 입력하세요.')
       return
     }
     setSubmitting(true)
@@ -2390,10 +2390,10 @@ const AddTermModal: React.FC<{
         content: content.trim(),
         isSecret,
       })
-      toast.success('조항이 추가되었습니다.')
+      notify.success('조항이 추가되었습니다.')
       onAdded()
     } catch (e) {
-      toast.error(getApiErrorMessage(e, '추가 중 오류가 발생했습니다.'))
+      notify.error(getApiErrorMessage(e, '추가 중 오류가 발생했습니다.'))
     } finally {
       setSubmitting(false)
     }

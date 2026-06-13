@@ -9,7 +9,6 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
-import { toast } from 'react-hot-toast'
 import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import {
@@ -20,6 +19,7 @@ import {
 } from '@/features/continent/use-continents.hook'
 import { useCountries } from '@/features/country/api'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 export type ContinentStats = {
   realArea: number
@@ -85,12 +85,12 @@ export function useContinentPage() {
         danger: true,
       })
     ) {
-      const loadingToast = toast.loading('삭제하는 중...')
+      const loadingToast = notify.loading('삭제하는 중...')
       try {
         await deleteMutation.mutateAsync(id)
-        toast.success('삭제되었습니다', { id: loadingToast })
+        notify.success('삭제되었습니다', { id: loadingToast })
       } catch (err) {
-        toast.error('삭제 실패: ' + (err as Error).message, {
+        notify.error('삭제 실패: ' + (err as Error).message, {
           id: loadingToast,
         })
       }
@@ -109,14 +109,14 @@ export function useContinentPage() {
    * 대륙 생성 핸들러
    */
   const handleCreate = async (data: any) => {
-    const loadingToast = toast.loading('대륙을 등록하는 중...')
+    const loadingToast = notify.loading('대륙을 등록하는 중...')
     try {
       await createMutation.mutateAsync(data)
-      toast.success('대륙이 추가되었습니다!', { id: loadingToast })
+      notify.success('대륙이 추가되었습니다!', { id: loadingToast })
       setShowSidebar(false)
       setEditingContinent(null)
     } catch (error) {
-      toast.error('대륙 추가 실패: ' + (error as Error).message, {
+      notify.error('대륙 추가 실패: ' + (error as Error).message, {
         id: loadingToast,
       })
     }
@@ -128,17 +128,17 @@ export function useContinentPage() {
   const handleUpdate = async (data: any) => {
     if (!editingContinent) return
 
-    const loadingToast = toast.loading('대륙을 수정하는 중...')
+    const loadingToast = notify.loading('대륙을 수정하는 중...')
     try {
       await updateMutation.mutateAsync({
         id: editingContinent.id,
         data,
       })
-      toast.success('대륙이 수정되었습니다!', { id: loadingToast })
+      notify.success('대륙이 수정되었습니다!', { id: loadingToast })
       setShowSidebar(false)
       setEditingContinent(null)
     } catch (error) {
-      toast.error('대륙 수정 실패: ' + (error as Error).message, {
+      notify.error('대륙 수정 실패: ' + (error as Error).message, {
         id: loadingToast,
       })
     }

@@ -3,9 +3,9 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 
 import { type UpdateEventDto, updateEvent } from '@/shared/api/events'
+import { notify } from '@/shared/ui/toast'
 
 import {
   type EventDetail,
@@ -108,7 +108,7 @@ export function useEventMutation(eventId: string) {
       }
       const message =
         error instanceof Error ? error.message : '알 수 없는 오류'
-      toast.error(`저장 실패: ${message}`)
+      notify.error(`저장 실패: ${message}`)
     },
   })
 }
@@ -153,7 +153,7 @@ function buildOptimisticEvent(
 
   for (const k of OPTIMISTIC_SCALAR_FIELDS) {
     if (k in patch) {
-      ;(next as Record<string, unknown>)[k] = p[k]
+      ;(next as unknown as Record<string, unknown>)[k] = p[k]
       changed = true
     }
   }
@@ -306,6 +306,8 @@ function resolvePersons(
         name?: string | null
         surname?: string | null
         profileImageUrl?: string | null
+        nameDisplayOrder?: string | null
+        country?: { defaultNameDisplayOrder?: string | null } | null
       }>)
     : []
   const out: EventDetailPerson[] = []
@@ -320,6 +322,13 @@ function resolvePersons(
           name: a.name,
           surname: a.surname,
           profileImageUrl: a.profileImageUrl,
+          nameDisplayOrder: a.nameDisplayOrder ?? null,
+          country: a.country
+            ? {
+                defaultNameDisplayOrder:
+                  a.country.defaultNameDisplayOrder ?? null,
+              }
+            : null,
         }
       else return null
     }

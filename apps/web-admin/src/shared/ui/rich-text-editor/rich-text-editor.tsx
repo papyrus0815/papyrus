@@ -7,7 +7,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
-import { toast } from 'react-hot-toast'
 import styled, { css } from 'styled-components'
 
 import {
@@ -26,6 +25,7 @@ import {
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { getUploadImageUrl, validateImageFile } from '@/shared/api/upload'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import {
   PROSE_HR_HTML,
   proseHrSmallStyles,
@@ -1387,7 +1387,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         if (imageFile) {
           e.preventDefault()
           if (!onImageUpload) {
-            toast.error(
+            notify.error(
               '이 필드는 이미지 업로드를 쓰지 않습니다. 이미지는 사진·썸네일 등 업로드가 있는 항목에서 넣어 주세요.',
             )
             return
@@ -1396,7 +1396,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           try {
             validateImageFile(imageFile)
           } catch (err) {
-            toast.error(
+            notify.error(
               err instanceof Error ? err.message : '이미지 파일이 아닙니다.',
             )
             return
@@ -1422,7 +1422,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               const rawUrl = await onImageUpload(imageFile)
               const imageUrl = (getUploadImageUrl(rawUrl) || rawUrl || '').trim()
               if (!imageUrl) {
-                toast.error('이미지 URL을 받지 못했습니다.')
+                notify.error('이미지 URL을 받지 못했습니다.')
                 return
               }
               insertFigureAtCaret(
@@ -1436,7 +1436,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                   ? err.message
                   : '이미지 업로드에 실패했습니다.'
               console.error('RichTextEditor paste image upload:', err)
-              toast.error(message)
+              notify.error(message)
             }
           })()
           return
@@ -1863,7 +1863,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       try {
         validateImageFile(file)
       } catch (err) {
-        toast.error(
+        notify.error(
           err instanceof Error ? err.message : '이미지 파일이 아닙니다.',
         )
         return
@@ -1873,7 +1873,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         const rawUrl = await onImageUpload(file)
         const imageUrl = (getUploadImageUrl(rawUrl) || rawUrl || '').trim()
         if (!imageUrl) {
-          toast.error('이미지 URL을 받지 못했습니다.')
+          notify.error('이미지 URL을 받지 못했습니다.')
           return
         }
         if (!editorRef.current) return
@@ -1900,7 +1900,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         const message =
           err instanceof Error ? err.message : '이미지 업로드에 실패했습니다.'
         console.error('RichTextEditor button image upload:', err)
-        toast.error(message)
+        notify.error(message)
       }
     }
   }, [onImageUpload])
@@ -2034,7 +2034,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const handleOpenEntityLinkModal = useCallback(() => {
     setContextMenuVisible(false)
     if (!entityLinkUsable) {
-      toast.error(
+      notify.error(
         '이 편집기에서는 엔티티 연결을 쓸 수 없습니다. 서버 검색을 켜거나(기본) 인물·사건 목록을 넘겨 주세요.',
       )
       return

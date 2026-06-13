@@ -3,12 +3,12 @@ import { FiPlus, FiCalendar, FiChevronRight, FiChevronDown, FiArrowLeft, FiSave,
 import styled, { css } from 'styled-components'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { toast } from 'react-hot-toast'
 
 import { personCareerApi } from '@/shared/api/person-career'
 import { getAllPersons } from '@/shared/api/persons'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   BackButton as SharedBackButton,
@@ -612,19 +612,19 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedPersonId || !startDate) {
-      toast.error('인물, 취임일을 입력해주세요.')
+      notify.error('인물, 취임일을 입력해주세요.')
       return
     }
     if (!isOtherPosition && !selectedPositionDefId) {
-      toast.error('직책을 선택해주세요.')
+      notify.error('직책을 선택해주세요.')
       return
     }
     if (isOtherPosition && !title.trim()) {
-      toast.error('기타 선택 시 직책명을 입력해주세요.')
+      notify.error('기타 선택 시 직책명을 입력해주세요.')
       return
     }
     if (headsPositionDefs.length === 0) {
-      toast.error('관직 정의가 등록되어 있지 않습니다. 시드를 실행한 뒤 다시 시도해 주세요.')
+      notify.error('관직 정의가 등록되어 있지 않습니다. 시드를 실행한 뒤 다시 시도해 주세요.')
       return
     }
     setIsSubmitting(true)
@@ -656,19 +656,19 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
             notes: notesValue,
             showPositionInfo: showOnEventsPage,
           })
-          toast.success('수정되었습니다.')
+          notify.success('수정되었습니다.')
         } else {
           await personCareerApi.updateGovernmentPositionTenure(editingId, payload)
-          toast.success('수정되었습니다.')
+          notify.success('수정되었습니다.')
         }
       } else {
         await personCareerApi.addGovernmentPositionTenure(payload)
-        toast.success('등록되었습니다.')
+        notify.success('등록되었습니다.')
       }
       queryClient.invalidateQueries({ queryKey: ['global-tenures'] })
       handleBack()
     } catch (err: any) {
-      toast.error(err?.message || '저장에 실패했습니다.')
+      notify.error(err?.message || '저장에 실패했습니다.')
     } finally {
       setIsSubmitting(false)
     }
@@ -690,11 +690,11 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
       } else {
         await personCareerApi.deleteGovernmentPositionTenure(editingId)
       }
-      toast.success('삭제되었습니다.')
+      notify.success('삭제되었습니다.')
       queryClient.invalidateQueries({ queryKey: ['global-tenures'] })
       handleBack()
     } catch (err: any) {
-      toast.error(err?.message || '삭제에 실패했습니다.')
+      notify.error(err?.message || '삭제에 실패했습니다.')
     }
   }
 

@@ -7,7 +7,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import { FiChevronDown, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -42,6 +41,7 @@ import {
   TENURE_END_REASON_OPTIONS,
 } from '@/shared/lib/tenure-labels'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
+import { notify } from '@/shared/ui/toast'
 
 const FORM_ID = 'sovereign-reign-register-form'
 
@@ -313,16 +313,16 @@ export function SovereignReignRegisterPanel({
       }
       if (isEdit && reignId) {
         await personCareerApi.updateSovereignReign(reignId, dto)
-        toast.success('군주 재위가 수정되었습니다.')
+        notify.success('군주 재위가 수정되었습니다.')
       } else {
         await personCareerApi.addSovereignReign(dto)
-        toast.success('군주 재위가 등록되었습니다.')
+        notify.success('군주 재위가 등록되었습니다.')
       }
       queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
       onSuccess?.()
       onClose()
     } catch {
-      toast.error('저장에 실패했습니다.')
+      notify.error('저장에 실패했습니다.')
     } finally {
       setSubmitting(false)
     }
@@ -341,12 +341,12 @@ export function SovereignReignRegisterPanel({
     setDeleting(true)
     try {
       await personCareerApi.deleteSovereignReign(reignId)
-      toast.success('재위 기록이 삭제되었습니다.')
+      notify.success('재위 기록이 삭제되었습니다.')
       queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
       onSuccess?.()
       onClose()
     } catch {
-      toast.error('삭제에 실패했습니다.')
+      notify.error('삭제에 실패했습니다.')
     } finally {
       setDeleting(false)
     }

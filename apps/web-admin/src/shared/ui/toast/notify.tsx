@@ -52,6 +52,15 @@ function loading(message: string, opts?: ToastOptions) {
   return toast.loading(message, opts)
 }
 
+/**
+ * 제네릭 토스트 — 커스텀 아이콘/이모지나 JSX 콘텐츠, `(t) => JSX` 렌더 함수가
+ * 필요한 고급 케이스용. react-hot-toast `toast()`의 얇은 passthrough(반환값은 토스트 id).
+ * 단순 의미 토스트는 success/error/info/warning을 쓴다.
+ */
+function show(content: Parameters<typeof toast>[0], opts?: ToastOptions) {
+  return toast(content, opts)
+}
+
 function dismiss(id?: string) {
   toast.dismiss(id)
 }
@@ -111,6 +120,7 @@ export const notify = {
   info,
   warning,
   loading,
+  show,
   action,
   promise,
   dismiss,

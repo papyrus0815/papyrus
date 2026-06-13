@@ -20,7 +20,6 @@ import {
   FiUserPlus,
   FiX,
 } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
 import styled from 'styled-components'
 
 import type { Person } from '@/shared/api/person'
@@ -40,6 +39,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { notify } from '@/shared/ui/toast'
 import {
   GroupTypeBadge,
   GroupTypeChips,
@@ -134,24 +134,24 @@ export default function PersonGroupDetailPage() {
         centerPersonId: form.centerPersonId || null,
       }),
     onSuccess: () => {
-      toast.success('수정했습니다.')
+      notify.success('수정했습니다.')
       setEditing(false)
       setEditForm(null)
       invalidate()
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : '수정 실패'),
+      notify.error(e instanceof Error ? e.message : '수정 실패'),
   })
 
   const addMemberMutation = useMutation({
     mutationFn: (personId: string) =>
       addPersonGroupMember(groupId, { personId }),
     onSuccess: () => {
-      toast.success('멤버를 추가했습니다.')
+      notify.success('멤버를 추가했습니다.')
       invalidate()
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : '추가 실패'),
+      notify.error(e instanceof Error ? e.message : '추가 실패'),
   })
   const updateMemberMutation = useMutation({
     mutationFn: ({
@@ -162,23 +162,23 @@ export default function PersonGroupDetailPage() {
       roleLabel: string | null
     }) => updatePersonGroupMember(groupId, membershipId, { roleLabel }),
     onSuccess: invalidate,
-    onError: () => toast.error('역할 저장 실패'),
+    onError: () => notify.error('역할 저장 실패'),
   })
   const removeMemberMutation = useMutation({
     mutationFn: (membershipId: string) =>
       removePersonGroupMember(groupId, membershipId),
     onSuccess: invalidate,
-    onError: () => toast.error('제거 실패'),
+    onError: () => notify.error('제거 실패'),
   })
   const deleteGroupMutation = useMutation({
     mutationFn: () => deletePersonGroup(groupId),
     onSuccess: () => {
-      toast.success('삭제했습니다.')
+      notify.success('삭제했습니다.')
       void queryClient.invalidateQueries({ queryKey: ['person-groups-all'] })
       navigate(pathKeys.personGroups())
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof Error ? e.message : '삭제 실패'),
+      notify.error(e instanceof Error ? e.message : '삭제 실패'),
   })
 
   const startEdit = () => {

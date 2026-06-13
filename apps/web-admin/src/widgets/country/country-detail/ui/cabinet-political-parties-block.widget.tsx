@@ -5,7 +5,6 @@
 import React, { useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import { FiPlus, FiTrash2, FiUsers } from 'react-icons/fi'
 
 import {
@@ -14,6 +13,7 @@ import {
 } from '@/shared/api/election'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 import { CabinetPartyLinkModal } from './cabinet-party-link-modal'
 import { labelCabinetPartyRole } from './cabinets-section.helpers'
@@ -51,12 +51,12 @@ export function CabinetPoliticalPartiesBlock({
     mutationFn: (linkId: string) =>
       removeCabinetPoliticalParty(cabinetId, linkId),
     onSuccess: () => {
-      toast.success('연결을 해제했습니다.')
+      notify.success('연결을 해제했습니다.')
       void queryClient.invalidateQueries({
         queryKey: ['cabinet-political-parties', cabinetId],
       })
     },
-    onError: (error: unknown) => toast.error(getApiErrorMessage(error)),
+    onError: (error: unknown) => notify.error(getApiErrorMessage(error)),
   })
 
   const loading = linksPending

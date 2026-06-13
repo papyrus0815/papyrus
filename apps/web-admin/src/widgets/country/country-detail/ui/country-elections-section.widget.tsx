@@ -9,7 +9,6 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 
-import { toast } from 'react-hot-toast'
 import {
   FiBarChart2,
   FiCalendar,
@@ -44,6 +43,7 @@ import {
   type ElectionListRow,
   type ElectionPartyResultDto,
   LEGISLATURE_CLOSURE_KIND_OPTIONS,
+  type LegislatureTermClosureKind,
   NOMINATION_TYPE_OPTIONS,
   type PartyResultComparisonRowDto,
   type PoliticalPartyRow,
@@ -133,6 +133,7 @@ import {
 import { RichTextProseWithEntityClicks } from '@/shared/ui/rich-text-read-view'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
+import { notify } from '@/shared/ui/toast'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
 import { MapRegionTabButton } from './map-region-section.styles'
@@ -1608,9 +1609,9 @@ export function CountryElectionsSection({
       invalidate()
       setSelectedId(row.id)
       setElectionModal(null)
-      toast.success('저장되었습니다.')
+      notify.success('저장되었습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   /** 선거 설명 정본이 연결 사건(Event)에 있을 때 — election.description 대신 event 수정 */
@@ -1622,9 +1623,9 @@ export function CountryElectionsSection({
     },
     onSuccess: () => {
       invalidate()
-      toast.success('저장되었습니다.')
+      notify.success('저장되었습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const delElectionMut = useMutation({
@@ -1632,9 +1633,9 @@ export function CountryElectionsSection({
     onSuccess: () => {
       invalidate()
       setSelectedId(null)
-      toast.success('삭제되었습니다.')
+      notify.success('삭제되었습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const saveCandidacyMut = useMutation({
@@ -1651,9 +1652,9 @@ export function CountryElectionsSection({
     onSuccess: () => {
       invalidate()
       setCandidacyModal(null)
-      toast.success('후보가 저장되었습니다.')
+      notify.success('후보가 저장되었습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const delCandidacyMut = useMutation({
@@ -1661,9 +1662,9 @@ export function CountryElectionsSection({
       deleteElectionCandidacy(p.electionId, p.candidacyId),
     onSuccess: () => {
       invalidate()
-      toast.success('후보 행이 삭제되었습니다.')
+      notify.success('후보 행이 삭제되었습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const resultMut = useMutation({
@@ -1675,9 +1676,9 @@ export function CountryElectionsSection({
     onSuccess: () => {
       invalidate()
       setResultModal(null)
-      toast.success('득표가 반영되었습니다.')
+      notify.success('득표가 반영되었습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const ballotCreateMut = useMutation({
@@ -1688,9 +1689,9 @@ export function CountryElectionsSection({
       }),
     onSuccess: () => {
       invalidate()
-      toast.success('투표 안이 추가되었습니다.')
+      notify.success('투표 안이 추가되었습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const ballotRenameMut = useMutation({
@@ -1698,9 +1699,9 @@ export function CountryElectionsSection({
       updateBallotOption(p.electionId, p.optionId, { label: p.label }),
     onSuccess: () => {
       invalidate()
-      toast.success('투표 안 이름이 저장되었습니다.')
+      notify.success('투표 안 이름이 저장되었습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const ballotDelMut = useMutation({
@@ -1708,9 +1709,9 @@ export function CountryElectionsSection({
       deleteBallotOption(p.electionId, p.optionId),
     onSuccess: () => {
       invalidate()
-      toast.success('삭제되었습니다.')
+      notify.success('삭제되었습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const ballotResultMut = useMutation({
@@ -1722,9 +1723,9 @@ export function CountryElectionsSection({
     onSuccess: () => {
       invalidate()
       setBallotResultModal(null)
-      toast.success('집계가 반영되었습니다.')
+      notify.success('집계가 반영되었습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const partyResultMut = useMutation({
@@ -1736,9 +1737,9 @@ export function CountryElectionsSection({
     onSuccess: () => {
       invalidate()
       setPartyResultModal(null)
-      toast.success('정당 집계가 저장되었습니다.')
+      notify.success('정당 집계가 저장되었습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   const partyResultDelMut = useMutation({
@@ -1746,9 +1747,9 @@ export function CountryElectionsSection({
       deleteElectionPartyResult(p.electionId, p.partyId),
     onSuccess: () => {
       invalidate()
-      toast.success('정당 집계를 삭제했습니다.')
+      notify.success('정당 집계를 삭제했습니다.')
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => notify.error(e.message),
   })
 
   /** 목록 필터 — 탭 전환에도 유지 (컴포넌트 마운트 유지 중) */
@@ -2062,7 +2063,7 @@ export function CountryElectionsSection({
                       선거를 선택하세요
                     </ElectionDetailEmptyTitle>
                   </ElectionDetailEmptyCard>
-                ) : detailLoading || !detailMatchesSelection ? (
+                ) : detailLoading || !detailMatchesSelection || !detail ? (
                   <ElectionDetailEmptyCard>
                     <ElectionDetailEmptyTitle>
                       불러오는 중…
@@ -3822,7 +3823,7 @@ function ElectionDetailPanel({
                 onClick={() => {
                   const t = ballotLabel.trim()
                   if (!t) {
-                    toast.error('안 제목을 입력하세요.')
+                    notify.error('안 제목을 입력하세요.')
                     return
                   }
                   const nextSortOrder =
@@ -3902,7 +3903,7 @@ function ElectionDetailPanel({
                                 onClick={async () => {
                                   const nextLabel = editingBallotLabel.trim()
                                   if (!nextLabel) {
-                                    toast.error('안 제목을 입력하세요.')
+                                    notify.error('안 제목을 입력하세요.')
                                     return
                                   }
                                   try {
@@ -4799,7 +4800,7 @@ function ElectionFormModal({
             onClick={() => {
               const turnoutParsed = parseOptionalPercent0to100(voterTurnout)
               if (turnoutParsed === 'invalid') {
-                toast.error(
+                notify.error(
                   '투표율(참여)은 0~100 사이 숫자(소수 첫째 자리까지)이거나 비워 두세요.',
                 )
                 return
@@ -4807,13 +4808,13 @@ function ElectionFormModal({
               const totalSeatsParsed =
                 parseOptionalNonNegativeInt(totalSeatsStr)
               if (totalSeatsParsed === 'invalid') {
-                toast.error('총 의석은 0 이상의 정수이거나 비워 두세요.')
+                notify.error('총 의석은 0 이상의 정수이거나 비워 두세요.')
                 return
               }
               const convOrdinalParsed =
                 parseOptionalNonNegativeInt(convOrdinalStr)
               if (convOrdinalParsed === 'invalid') {
-                toast.error('회차(숫자)는 0 이상의 정수이거나 비워 두세요.')
+                notify.error('회차(숫자)는 0 이상의 정수이거나 비워 두세요.')
                 return
               }
               const iso = `${pollDate}T12:00:00.000Z`
@@ -4836,7 +4837,10 @@ function ElectionFormModal({
                 scopeHistoricalCountryId,
               )
               const resultingKindVal =
-                resultingClosureKind.trim() === '' ? null : resultingClosureKind
+                resultingClosureKind.trim() === ''
+                  ? null
+                  : // select 옵션이 LEGISLATURE_CLOSURE_KIND_OPTIONS로 한정되므로 안전
+                    (resultingClosureKind as LegislatureTermClosureKind)
               const chronologyExtra = {
                 pollEndDate: pollEndIso,
                 convocationOrdinal: convOrdinalParsed,
@@ -5412,12 +5416,12 @@ function CandidacyFormModal({
           onClick={() => {
             const ballotOrderParsed = parseOptionalNonNegativeInt(ballotOrder)
             if (ballotOrderParsed === 'invalid') {
-              toast.error('기표 순서는 0 이상의 정수이거나 비워 두세요.')
+              notify.error('기표 순서는 0 이상의 정수이거나 비워 두세요.')
               return
             }
             const listRankParsed = parseOptionalNonNegativeInt(listRank)
             if (listRankParsed === 'invalid') {
-              toast.error('비례 순번은 0 이상의 정수이거나 비워 두세요.')
+              notify.error('비례 순번은 0 이상의 정수이거나 비워 두세요.')
               return
             }
             const body: Parameters<typeof createElectionCandidacy>[1] = {
@@ -5583,24 +5587,24 @@ function ResultFormModal({
           onClick={() => {
             const votesParsed = parseOptionalVotesDigits(votes)
             if (votesParsed === 'invalid') {
-              toast.error('득표수는 숫자만 입력하거나 비워 두세요.')
+              notify.error('득표수는 숫자만 입력하거나 비워 두세요.')
               return
             }
             const pctParsed = parseOptionalPercent0to100(pct)
             if (pctParsed === 'invalid') {
-              toast.error(
+              notify.error(
                 '득표율은 0~100 사이 숫자(소수 첫째 자리까지)이거나 비워 두세요.',
               )
               return
             }
             const rankParsed = parseOptionalNonNegativeInt(rank)
             if (rankParsed === 'invalid') {
-              toast.error('순위는 0 이상의 정수이거나 비워 두세요.')
+              notify.error('순위는 0 이상의 정수이거나 비워 두세요.')
               return
             }
             const seatsParsed = parseOptionalNonNegativeInt(seatsWon)
             if (seatsParsed === 'invalid') {
-              toast.error('의석 수는 0 이상의 정수이거나 비워 두세요.')
+              notify.error('의석 수는 0 이상의 정수이거나 비워 두세요.')
               return
             }
             onSubmit({
@@ -5728,12 +5732,12 @@ function BallotResultFormModal({
           onClick={() => {
             const votesParsed = parseOptionalVotesDigits(votes)
             if (votesParsed === 'invalid') {
-              toast.error('득표수는 숫자만 입력하거나 비워 두세요.')
+              notify.error('득표수는 숫자만 입력하거나 비워 두세요.')
               return
             }
             const pctParsed = parseOptionalPercent0to100(pct)
             if (pctParsed === 'invalid') {
-              toast.error(
+              notify.error(
                 '득표율은 0~100 사이 숫자(소수 첫째 자리까지)이거나 비워 두세요.',
               )
               return
@@ -5912,26 +5916,26 @@ function PartyResultFormModal({
   const handleAutoFillPct = useCallback(() => {
     const sanitized = votes.replace(/[\s,]/g, '')
     if (!/^\d+$/.test(sanitized) || sanitized === '') {
-      toast.error('득표수를 먼저 입력하세요.')
+      notify.error('득표수를 먼저 입력하세요.')
       return
     }
     let mine: bigint
     try {
       mine = BigInt(sanitized)
     } catch {
-      toast.error('득표수를 숫자로 입력하세요.')
+      notify.error('득표수를 숫자로 입력하세요.')
       return
     }
     const total = otherVotesSum + mine
     if (total <= 0n) {
-      toast.error('다른 정당의 득표 데이터가 없어 계산할 수 없습니다.')
+      notify.error('다른 정당의 득표 데이터가 없어 계산할 수 없습니다.')
       return
     }
     // BigInt 나눗셈 정밀도 유지: 천 배 곱해 정수 나눗셈 후 소수 자리 복원
     const ratioThousandths = Number((mine * 100000n) / total) / 1000
     const rounded = Math.round(ratioThousandths * 10) / 10
     setPct(String(rounded))
-    toast.success(
+    notify.success(
       `자동 계산: 득표 합 ${total.toLocaleString('ko-KR')} 기준 ${rounded}% 적용.`,
     )
   }, [votes, otherVotesSum])
@@ -5958,24 +5962,24 @@ function PartyResultFormModal({
             const targetPartyId =
               mode === 'edit' ? initialRow!.partyId : partyId
             if (!targetPartyId) {
-              toast.error('정당을 선택하세요.')
+              notify.error('정당을 선택하세요.')
               return
             }
             const votesParsed = parseOptionalVotesDigits(votes)
             if (votesParsed === 'invalid') {
-              toast.error('득표수는 숫자만 입력하거나 비워 두세요.')
+              notify.error('득표수는 숫자만 입력하거나 비워 두세요.')
               return
             }
             const pctParsed = parseOptionalPercent0to100(pct)
             if (pctParsed === 'invalid') {
-              toast.error(
+              notify.error(
                 '득표율은 0~100 사이 숫자(소수 첫째 자리까지)이거나 비워 두세요.',
               )
               return
             }
             const seatsParsed = parseOptionalNonNegativeInt(seats)
             if (seatsParsed === 'invalid') {
-              toast.error('의석은 0 이상의 정수이거나 비워 두세요.')
+              notify.error('의석은 0 이상의 정수이거나 비워 두세요.')
               return
             }
             onSubmit(targetPartyId, {

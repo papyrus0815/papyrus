@@ -7,7 +7,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { FiSlash, FiTrash2, FiX } from 'react-icons/fi'
-import { toast } from 'react-hot-toast'
 import styled, { css } from 'styled-components'
 
 import {
@@ -33,6 +32,7 @@ import {
   ModalSubtitle,
   ModalTitle,
 } from '@/shared/ui/modal'
+import { notify } from '@/shared/ui/toast'
 
 type Props = {
   open: boolean
@@ -188,10 +188,10 @@ export function PersonStatsEditModal({
     try {
       await saveMut.mutateAsync()
       await invalidateAll()
-      toast.success('평가를 저장했습니다.')
+      notify.success('평가를 저장했습니다.')
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '저장 실패')
+      notify.error(err instanceof Error ? err.message : '저장 실패')
     }
   }
 
@@ -207,10 +207,10 @@ export function PersonStatsEditModal({
     try {
       await deleteMut.mutateAsync()
       await invalidateAll()
-      toast.success('평가를 삭제했습니다.')
+      notify.success('평가를 삭제했습니다.')
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '삭제 실패')
+      notify.error(err instanceof Error ? err.message : '삭제 실패')
     }
   }
 

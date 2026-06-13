@@ -12,14 +12,13 @@ import {
   useState,
 } from 'react'
 
-import { toast } from 'react-hot-toast'
-
 import {
   fetchEntityLinkSearch,
   mapEntityLinkRowsToMentionItems,
 } from '@/shared/api/entity-link-search'
 import type { MentionItem } from '@/shared/lib/mention/mention-system'
 import { searchMentionEntities } from '@/shared/lib/mention/mention-system'
+import { notify } from '@/shared/ui/toast'
 
 import type { MentionExtensionProps } from '../rich-text-editor'
 
@@ -115,7 +114,7 @@ export function useEntityLinkSearch({
               'name' in err &&
               (err as { name: string }).name === 'AbortError')
           if (aborted) return
-          toast.error('서버 검색에 실패했습니다. 로컬 목록으로 다시 시도합니다.')
+          notify.error('서버 검색에 실패했습니다. 로컬 목록으로 다시 시도합니다.')
           if (mentionEntities) {
             runClientSearch(query)
           } else {

@@ -7,8 +7,6 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 
-import { toast } from 'react-hot-toast'
-
 import {
   type NaturalFeature,
   type NaturalFeatureType,
@@ -16,6 +14,7 @@ import {
   useNaturalFeatures,
 } from '@/entities/country/api.natural-feature'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 import {
   FilterPill,
@@ -220,11 +219,11 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
     if (!pendingDelete) return
     try {
       await deleteMut.mutateAsync(pendingDelete.id)
-      toast.success('자연 지리 항목을 삭제했습니다')
+      notify.success('자연 지리 항목을 삭제했습니다')
       if (url.selectedId === pendingDelete.id) url.setSelectedId(null)
       setPendingDelete(null)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '삭제에 실패했습니다')
+      notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다')
     }
   }
 

@@ -11,29 +11,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { toast } from 'react-hot-toast'
 import { useSearchParams } from 'react-router-dom'
 
 import {
   type AdminDivisionConfig,
+  type AdminDivisionScheme,
   type AdministrativeDivision,
+  type DivisionOwner,
   useAdminDivisionConfigs,
+  useAdminDivisionSchemes,
   useAdministrativeDivisionSearch,
   useAdministrativeDivisions,
   useDeleteAdministrativeDivision,
 } from '@/entities/country/api.administrative-divisions'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 import {
   AdminDivisionFormModal,
   KpiChip,
   KpiStrip,
   ListEmptyState,
-  ListToolbarRow,
   MapCard,
-  MetaCard,
-  RegionDetailHeader,
   RegionDetailPanel,
   RegionListItem,
   RegionListPanel,
@@ -44,10 +44,17 @@ import {
   useListKeyboard,
   useRegionPalette,
 } from './map-region'
+import {
+  DivisionDetailFields,
+  DivisionDetailHeaderInline,
+} from './map-region/division-detail-fields'
 import { AdminDivisionBulkImportModal } from './map-region/admin-division-bulk-import-modal'
+import { AdminDivisionSchemeModal } from './map-region/admin-division-scheme-modal'
+import { SchemeComparePanel } from './map-region/scheme-compare-panel'
 import {
   countDescendants,
   findInTree,
+  formatYearRange,
   isAbolished,
   resolvePath,
   sumSubtree,
@@ -69,6 +76,11 @@ interface MapRegionAdministrativeViewProps {
     latitude?: number | null
     longitude?: number | null
   }
+  /**
+   * 행정구역 소속 — 생략하면 현대 국가({ countryId: country.id })로 간주.
+   * 역사적 국가 상세에서는 { historicalCountryId: country.id }를 전달한다.
+   */
+  owner?: DivisionOwner
   mapLocation?: { latitude: number; longitude: number; name: string } | null
   onCityClick: (city: {
     id: string
@@ -91,6 +103,7 @@ interface FlatRow {
   parentPath: string[]
   childrenCount: number
   abolished: boolean
+  schemeId?: string | null
   centerLat?: number | null
   centerLng?: number | null
 }
@@ -116,6 +129,7 @@ function flattenTree(
         parentPath: path,
         childrenCount: n.children?.length ?? 0,
         abolished: isAbolished(n),
+        schemeId: n.schemeId ?? null,
         centerLat: n.centerLat ?? null,
         centerLng: n.centerLng ?? null,
       })
@@ -128,21 +142,22 @@ function flattenTree(
 
 export function MapRegionAdministrativeView({
   country,
+  owner: ownerProp,
   mapLocation: externalMapLocation,
   onCityClick,
 }: MapRegionAdministrativeViewProps) {
+  const owner: DivisionOwner = ownerProp ?? { countryId: country.id }
   const palette = useRegionPalette()
-  const { data: divisions = [], isLoading } = useAdministrativeDivisions(
-    country.id,
-  )
-  const { data: configs = [] } = useAdminDivisionConfigs(country.id)
-  const deleteMut = useDeleteAdministrativeDivision(country.id)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<AdministrativeDivision | null>(null)
   const [pendingDelete, setPendingDelete] =
     useState<AdministrativeDivision | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
+  const [schemeModalOpen, setSchemeModalOpen] = useState(false)
+  const [schemeEditing, setSchemeEditing] =
+    useState<AdminDivisionScheme | null>(null)
+  const [compareOpen, setCompareOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // URL 동기화
@@ -166,20 +181,45 @@ export function MapRegionAdministrativeView({
     const n = Number(raw)
     return Number.isFinite(n) && n > 0 ? n : null
   })()
+  /** 활성 체계 ID — null이면 전체(체계 미지정 포함) 보기 */
+  const activeSchemeId = searchParams.get('admin_scheme')
 
-  const updateParam = useCallback(
-    (key: string, value: string | null, defaultValue?: string) => {
+  // ===== 데이터 (체계 필터 반영)
+  const { data: divisions = [], isLoading } = useAdministrativeDivisions(
+    owner,
+    activeSchemeId,
+  )
+  const { data: configs = [] } = useAdminDivisionConfigs(owner, activeSchemeId)
+  const { data: schemes = [], isSuccess: schemesLoaded } =
+    useAdminDivisionSchemes(owner)
+  const deleteMut = useDeleteAdministrativeDivision(owner)
+
+  // 여러 파라미터를 한 번의 setSearchParams로 적용한다.
+  // react-router의 setSearchParams는 함수형 업데이터라도 "현재 렌더의 searchParams"를
+  // 기준으로 동작해(nextInit(new URLSearchParams(searchParams))), 한 핸들러에서 여러 번
+  // 동기 호출하면 서로의 변경을 못 보고 마지막 navigate만 살아남는다. 그래서 복합 동작
+  // (선택+드릴, 검색해제+경로이동 등)은 반드시 이 함수로 한 번에 묶어야 한다.
+  const updateParams = useCallback(
+    (
+      updates: Array<{
+        key: string
+        value: string | null
+        defaultValue?: string
+      }>,
+    ) => {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev)
-          if (
-            value == null ||
-            value === '' ||
-            (defaultValue != null && value === defaultValue)
-          ) {
-            next.delete(key)
-          } else {
-            next.set(key, value)
+          for (const { key, value, defaultValue } of updates) {
+            if (
+              value == null ||
+              value === '' ||
+              (defaultValue != null && value === defaultValue)
+            ) {
+              next.delete(key)
+            } else {
+              next.set(key, value)
+            }
           }
           return next
         },
@@ -187,6 +227,13 @@ export function MapRegionAdministrativeView({
       )
     },
     [setSearchParams],
+  )
+
+  const updateParam = useCallback(
+    (key: string, value: string | null, defaultValue?: string) => {
+      updateParams([{ key, value, defaultValue }])
+    },
+    [updateParams],
   )
 
   const setSearch = useCallback(
@@ -209,6 +256,29 @@ export function MapRegionAdministrativeView({
     (n: number | null) => updateParam('admin_level', n == null ? null : String(n)),
     [updateParam],
   )
+  /** 체계 전환 — 드릴 경로·선택은 새 체계 트리와 무관하므로 함께 초기화 */
+  const setActiveScheme = useCallback(
+    (id: string | null) =>
+      updateParams([
+        { key: 'admin_scheme', value: id },
+        { key: 'admin_path', value: null },
+        { key: 'admin_id', value: null },
+      ]),
+    [updateParams],
+  )
+
+  // 삭제 등으로 사라진 체계가 URL에 남아 있으면 정리.
+  // 로딩/오류 중(빈 placeholder)에는 판단 보류 — 단, 조회가 성공했는데 목록이
+  // 비어 있으면(마지막 체계 삭제) 그것도 stale이므로 함께 정리한다.
+  useEffect(() => {
+    if (!activeSchemeId || !schemesLoaded) return
+    if (!schemes.some((s) => s.id === activeSchemeId)) {
+      setActiveScheme(null)
+    }
+  }, [activeSchemeId, schemes, schemesLoaded, setActiveScheme])
+
+  const activeScheme =
+    schemes.find((s) => s.id === activeSchemeId) ?? null
 
   // ===== 모드 결정
   const mode: 'search' | 'level' | 'drill' =
@@ -251,8 +321,9 @@ export function MapRegionAdministrativeView({
   }, [debouncedSearch, country.id])
   const searchQuery = useAdministrativeDivisionSearch(
     mode === 'search' ? debouncedSearch : '',
-    country.id,
+    owner,
     searchLimit,
+    activeSchemeId,
   )
   const hasMoreSearchResults =
     mode === 'search' &&
@@ -271,6 +342,7 @@ export function MapRegionAdministrativeView({
         parentPath: h.parentPath,
         childrenCount: 0, // 검색 결과엔 children count 없음
         abolished: h.abolished,
+        schemeId: h.schemeId ?? null,
         centerLat: h.centerLat ?? null,
         centerLng: h.centerLng ?? null,
       }))
@@ -290,6 +362,7 @@ export function MapRegionAdministrativeView({
         parentPath: breadcrumb.map((b) => b.name),
         childrenCount: n.children?.length ?? 0,
         abolished: isAbolished(n),
+        schemeId: n.schemeId ?? null,
         centerLat: n.centerLat ?? null,
         centerLng: n.centerLng ?? null,
       }
@@ -329,10 +402,14 @@ export function MapRegionAdministrativeView({
   )
 
   useEffect(() => {
+    // 로딩 중에는 트리가 비어 있으므로 건드리지 않는다 —
+    // 딥링크/새로고침으로 admin_id가 URL에 있을 때, 데이터가 도착하기 전에
+    // 선택을 지워버리면 상세 패널이 빈 상태로 남는다.
+    if (isLoading) return
     if (selectedId && !findInTree(divisions, selectedId)) {
       setSelectedId(null)
     }
-  }, [divisions, selectedId, setSelectedId])
+  }, [isLoading, divisions, selectedId, setSelectedId])
 
   // 키보드/외부 nav 후 viewport에서 선택 항목 보이게
   useEffect(() => {
@@ -380,17 +457,26 @@ export function MapRegionAdministrativeView({
   }
 
   const handleItemClick = (row: FlatRow) => {
-    setSelectedId(row.id)
     const node = findInTree(divisions, row.id)
+    // 자식이 있으면 드릴(경로 push) + 선택을 한 번에 — 분리 호출 시 admin_id가 덮어써짐
+    const drilling = mode === 'drill' && (node?.children ?? []).length > 0
+    updateParams([
+      { key: 'admin_id', value: row.id },
+      ...(drilling
+        ? [{ key: 'admin_path', value: [...pathIds, row.id].join(',') }]
+        : []),
+    ])
     reportLocation(node)
-    if (mode === 'drill' && (node?.children ?? []).length > 0) {
-      setPath([...pathIds, row.id])
-    }
   }
 
   const handleBreadcrumbClick = (index: number) => {
-    setPath(index < 0 ? [] : pathIds.slice(0, index + 1))
-    setSelectedId(null)
+    updateParams([
+      {
+        key: 'admin_path',
+        value: (index < 0 ? [] : pathIds.slice(0, index + 1)).join(','),
+      },
+      { key: 'admin_id', value: null },
+    ])
     reportLocation(null)
   }
 
@@ -426,13 +512,17 @@ export function MapRegionAdministrativeView({
     if (!pendingDelete) return
     try {
       await deleteMut.mutateAsync(pendingDelete.id)
-      toast.success('행정구역을 삭제했습니다')
+      notify.success('행정구역을 삭제했습니다')
+      const updates: Array<{ key: string; value: string | null }> = []
       const idx = pathIds.indexOf(pendingDelete.id)
-      if (idx >= 0) setPath(pathIds.slice(0, idx))
-      if (selectedId === pendingDelete.id) setSelectedId(null)
+      if (idx >= 0)
+        updates.push({ key: 'admin_path', value: pathIds.slice(0, idx).join(',') })
+      if (selectedId === pendingDelete.id)
+        updates.push({ key: 'admin_id', value: null })
+      if (updates.length) updateParams(updates)
       setPendingDelete(null)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : '삭제에 실패했습니다')
+      notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다')
     }
   }
 
@@ -464,8 +554,6 @@ export function MapRegionAdministrativeView({
     [sortedRows],
   )
 
-  const childCount = selectedDivision?.children?.length ?? 0
-
   // ===== 디테일 패널 부모 체인
   const selectedParentChain = useMemo(() => {
     if (!selectedDivision) return [] as Array<{ id: string; name: string }>
@@ -490,13 +578,116 @@ export function MapRegionAdministrativeView({
       cursor = cursor.parentId ? findInTree(divisions, cursor.parentId) : null
     }
     chain.push(...targetParents)
-    setSearch('')
-    setLevelFilter(null)
-    setPath(chain)
-    setSelectedId(id)
+    updateParams([
+      { key: 'admin_q', value: null },
+      { key: 'admin_level', value: null },
+      { key: 'admin_path', value: chain.join(',') },
+      { key: 'admin_id', value: id },
+    ])
     const node = findInTree(divisions, id)
     reportLocation(node)
   }
+
+  // ===== 체계(시기별 편제) 선택 바
+  const schemeBar = (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 6,
+        padding: '10px 14px',
+        marginBottom: 10,
+        background: palette.bg,
+        border: `1px solid ${palette.border}`,
+        borderRadius: 12,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 11.5,
+          fontWeight: 700,
+          color: palette.textSecondary,
+          marginRight: 4,
+          letterSpacing: '0.04em',
+        }}
+      >
+        체계
+      </span>
+      <SchemeChip
+        palette={palette}
+        active={!activeSchemeId}
+        onClick={() => setActiveScheme(null)}
+      >
+        전체
+      </SchemeChip>
+      {schemes.map((s) => (
+        <SchemeChip
+          key={s.id}
+          palette={palette}
+          active={activeSchemeId === s.id}
+          onClick={() => setActiveScheme(s.id)}
+          onEdit={
+            activeSchemeId === s.id
+              ? () => {
+                  setSchemeEditing(s)
+                  setSchemeModalOpen(true)
+                }
+              : undefined
+          }
+        >
+          {s.name}
+          <span
+            style={{
+              marginLeft: 5,
+              fontWeight: 500,
+              opacity: 0.75,
+              fontSize: 11,
+            }}
+          >
+            {formatYearRange(s.startDate, s.endDate)} · {s.divisionCount}
+          </span>
+        </SchemeChip>
+      ))}
+      <button
+        type="button"
+        onClick={() => {
+          setSchemeEditing(null)
+          setSchemeModalOpen(true)
+        }}
+        style={{
+          padding: '5px 10px',
+          fontSize: 12,
+          fontWeight: 600,
+          border: `1px dashed ${palette.border}`,
+          background: 'transparent',
+          color: palette.textSecondary,
+          borderRadius: 9,
+          cursor: 'pointer',
+        }}
+      >
+        + 체계 등록
+      </button>
+      <span style={{ flex: 1 }} />
+      <button
+        type="button"
+        onClick={() => setCompareOpen(true)}
+        style={{
+          padding: '5px 11px',
+          fontSize: 12,
+          fontWeight: 600,
+          border: `1px solid ${palette.border}`,
+          background: palette.bg,
+          color: palette.primary,
+          borderRadius: 9,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        ⇄ 체계 비교
+      </button>
+    </div>
+  )
 
   // KPI strip
   const kpiStrip =
@@ -634,46 +825,61 @@ export function MapRegionAdministrativeView({
     )
   })()
 
+  // 좁은 좌측 패널(360px)에 검색·정렬·버튼을 한 줄로 욱여넣으면 검색창이
+  // 뭉개진다 — 검색은 첫 줄 전체, 정렬·등록 액션은 둘째 줄로 분리.
   const toolbar = (
     <>
-      <ListToolbarRow
-        palette={palette}
-        rightSlot={
-          <div style={{ display: 'inline-flex', gap: 6 }}>
-            <button
-              type="button"
-              onClick={() => setBulkOpen(true)}
-              style={{
-                padding: '7px 10px',
-                fontSize: 12,
-                fontWeight: 600,
-                border: `1px solid ${palette.border}`,
-                background: palette.bg,
-                color: palette.text,
-                borderRadius: 10,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              일괄 등록
-            </button>
-            <RegisterButton palette={palette} onClick={openCreate} />
-          </div>
-        }
+      <div
+        style={{
+          padding: '12px 16px 8px',
+          background: palette.bg,
+          flexShrink: 0,
+        }}
       >
         <SearchInput
           palette={palette}
           value={search}
           onChange={setSearch}
-          placeholder="이름·현지어 (전체 트리에서 검색)"
+          placeholder="이름·현지어 검색"
         />
+      </div>
+      <div
+        style={{
+          padding: '0 16px 12px',
+          borderBottom: `1px solid ${palette.border}`,
+          background: palette.bg,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          flexShrink: 0,
+        }}
+      >
         <SortSelect
           palette={palette}
           value={sort}
           options={SORT_OPTIONS}
           onChange={setSort}
         />
-      </ListToolbarRow>
+        <span style={{ flex: 1 }} />
+        <button
+          type="button"
+          onClick={() => setBulkOpen(true)}
+          style={{
+            padding: '7px 10px',
+            fontSize: 12,
+            fontWeight: 600,
+            border: `1px solid ${palette.border}`,
+            background: palette.bg,
+            color: palette.text,
+            borderRadius: 10,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          일괄 등록
+        </button>
+        <RegisterButton palette={palette} onClick={openCreate} />
+      </div>
       {contextBar}
     </>
   )
@@ -688,6 +894,12 @@ export function MapRegionAdministrativeView({
     overscan: 10,
   })
 
+  const schemeNameById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const s of schemes) m.set(s.id, s.name)
+    return m
+  }, [schemes])
+
   const renderRow = (row: FlatRow) => {
     const node = findInTree(divisions, row.id)
     const subtitleParts: string[] = []
@@ -696,6 +908,11 @@ export function MapRegionAdministrativeView({
     if (row.localName) subtitleParts.push(row.localName)
     if (row.parentPath.length > 0)
       subtitleParts.push(row.parentPath.join(' › '))
+    // "전체" 보기에서는 어느 체계 소속인지 구분이 안 되므로 체계명을 부제목에 병기
+    if (!activeSchemeId && row.schemeId) {
+      const schemeName = schemeNameById.get(row.schemeId)
+      if (schemeName) subtitleParts.push(schemeName)
+    }
     const subtitle = subtitleParts.join(' · ') || undefined
     return (
       <div
@@ -906,13 +1123,19 @@ export function MapRegionAdministrativeView({
       ? null
       : { id: currentParent.id, name: currentParent.name }
 
-  const detailSubtitle = (() => {
-    if (!selectedDivision) return country.name
-    const labelCfg = configsById.get(selectedDivision.adminDivisionId)
-    const parts: string[] = [country.name]
-    if (labelCfg) parts.push(labelCfg.divisionLabel)
-    return parts.join(' · ')
-  })()
+  const detailUnitLabel = selectedDivision
+    ? configsById.get(selectedDivision.adminDivisionId)?.divisionLabel ?? null
+    : null
+
+  if (compareOpen) {
+    return (
+      <SchemeComparePanel
+        palette={palette}
+        initialLeftSchemeId={activeSchemeId}
+        onClose={() => setCompareOpen(false)}
+      />
+    )
+  }
 
   return (
     <>
@@ -930,8 +1153,12 @@ export function MapRegionAdministrativeView({
 
       <RegionSplitLayout
         ariaLabel="행정구역"
-        sectionLabel="행정구역"
-        kpiStrip={kpiStrip}
+        kpiStrip={
+          <>
+            {schemeBar}
+            {kpiStrip}
+          </>
+        }
         maxHeight="calc(100vh - 380px)"
         left={
           <RegionListPanel
@@ -958,10 +1185,12 @@ export function MapRegionAdministrativeView({
             }
             header={
               selectedDivision ? (
-                <RegionDetailHeader
+                <DivisionDetailHeaderInline
                   palette={palette}
-                  title={selectedDivision.name}
-                  subtitle={detailSubtitle}
+                  owner={owner}
+                  division={selectedDivision}
+                  countryName={country.name}
+                  unitLabel={detailUnitLabel}
                 />
               ) : null
             }
@@ -983,10 +1212,12 @@ export function MapRegionAdministrativeView({
                   palette={palette}
                   active={false}
                   onClick={() => {
-                    setSearch('')
-                    setLevelFilter(null)
-                    setPath([])
-                    setSelectedId(null)
+                    updateParams([
+                      { key: 'admin_q', value: null },
+                      { key: 'admin_level', value: null },
+                      { key: 'admin_path', value: null },
+                      { key: 'admin_id', value: null },
+                    ])
                     reportLocation(null)
                   }}
                 >
@@ -1009,71 +1240,15 @@ export function MapRegionAdministrativeView({
                 ))}
               </div>
             )}
-            {selectedDivision?.localName && (
-              <MetaCard
+            {selectedDivision && (
+              <DivisionDetailFields
+                // 구역이 바뀌면 리마운트 — 이전 구역의 서술 draft 상태가 새 구역으로
+                // 새어 들어가 전체 배열 PATCH로 엉뚱한 구역에 저장되는 사고 방지
+                key={selectedDivision.id}
                 palette={palette}
-                label="현지어 명칭"
-                value={selectedDivision.localName}
-              />
-            )}
-            {selectedDivision?.nameMeaning && (
-              <MetaCard
-                palette={palette}
-                label="명칭 뜻"
-                value={selectedDivision.nameMeaning}
-              />
-            )}
-            {childCount > 0 && (
-              <MetaCard
-                palette={palette}
-                label="하위 구역"
-                value={`${childCount}개`}
-              />
-            )}
-            {selectedDivision?.centerLat != null &&
-              selectedDivision?.centerLng != null && (
-                <MetaCard
-                  palette={palette}
-                  label="중심 좌표"
-                  value={`${Number(selectedDivision.centerLat).toFixed(4)}, ${Number(selectedDivision.centerLng).toFixed(4)}`}
-                />
-              )}
-            {selectedDivision?.establishedDate && (
-              <MetaCard
-                palette={palette}
-                label="설립일"
-                value={selectedDivision.establishedDate.slice(0, 10)}
-              />
-            )}
-            {selectedDivision?.abolishedDate && (
-              <MetaCard
-                palette={palette}
-                label="폐지일"
-                value={selectedDivision.abolishedDate.slice(0, 10)}
-              />
-            )}
-            {selectedDivision?.predecessorId && (
-              <MetaCard
-                palette={palette}
-                label="이전 행정구역"
-                value={
-                  findInTree(divisions, selectedDivision.predecessorId)?.name ??
-                  '—'
-                }
-              />
-            )}
-            {(selectedDivision?.successorCount ?? 0) > 0 && (
-              <MetaCard
-                palette={palette}
-                label="후계 구역"
-                value={`${selectedDivision!.successorCount}개`}
-              />
-            )}
-            {(selectedDivision?.cityCount ?? 0) > 0 && (
-              <MetaCard
-                palette={palette}
-                label="등록된 도시"
-                value={`${selectedDivision!.cityCount}개`}
+                owner={owner}
+                division={selectedDivision}
+                divisions={divisions}
               />
             )}
           </RegionDetailPanel>
@@ -1082,16 +1257,35 @@ export function MapRegionAdministrativeView({
 
       <AdminDivisionFormModal
         isOpen={formOpen}
-        countryId={country.id}
+        owner={owner}
+        schemeId={activeSchemeId}
+        schemeName={activeScheme?.name ?? null}
+        countryDisplay={{
+          name: country.name,
+          latitude: country.latitude ?? null,
+          longitude: country.longitude ?? null,
+        }}
         editing={editing}
         defaultLevel={formDefaultLevel}
         defaultParent={formDefaultParent}
         onClose={closeForm}
       />
 
+      <AdminDivisionSchemeModal
+        isOpen={schemeModalOpen}
+        owner={owner}
+        editing={schemeEditing}
+        onClose={() => {
+          setSchemeModalOpen(false)
+          setSchemeEditing(null)
+        }}
+        onCreated={(id) => setActiveScheme(id)}
+      />
+
       <AdminDivisionBulkImportModal
         isOpen={bulkOpen}
-        countryId={country.id}
+        owner={owner}
+        schemeId={activeSchemeId}
         defaultLevel={mode === 'drill' ? drillLevel : 1}
         defaultParent={
           mode === 'drill' && currentParent
@@ -1138,6 +1332,68 @@ export function MapRegionAdministrativeView({
         onCancel={() => setPendingDelete(null)}
       />
     </>
+  )
+}
+
+interface SchemeChipProps {
+  palette: ReturnType<typeof useRegionPalette>
+  active: boolean
+  onClick: () => void
+  /** 활성 칩에만 노출되는 편집 트리거 */
+  onEdit?: () => void
+  children: React.ReactNode
+}
+
+/** 체계 선택 칩 — 활성 칩은 강조 + ✎ 편집 버튼 */
+function SchemeChip({
+  palette,
+  active,
+  onClick,
+  onEdit,
+  children,
+}: SchemeChipProps) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        style={{
+          padding: '5px 11px',
+          fontSize: 12,
+          fontWeight: 600,
+          borderRadius: 9,
+          border: `1px solid ${active ? palette.primary : palette.border}`,
+          background: active ? palette.badgeBg : 'transparent',
+          color: active ? palette.primary : palette.text,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {children}
+      </button>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label="체계 편집"
+          title="체계 편집"
+          style={{
+            width: 22,
+            height: 22,
+            padding: 0,
+            border: 'none',
+            borderRadius: 5,
+            background: 'transparent',
+            color: palette.textSecondary,
+            cursor: 'pointer',
+            fontSize: 12,
+          }}
+        >
+          ✎
+        </button>
+      )}
+    </span>
   )
 }
 

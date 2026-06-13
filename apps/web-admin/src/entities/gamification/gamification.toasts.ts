@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
 
 import { sessionQueryOptions } from '@/entities/session'
+import { notify } from '@/shared/ui/toast'
 
 import {
   gamificationBadgesQueryOptions,
@@ -44,7 +44,7 @@ export function useGamificationToasts(): void {
       const up = GRADE_ORDER.indexOf(grade) > GRADE_ORDER.indexOf(prev)
       if (up) {
         const msg = `🎉 등급 상승! ${gradeMeta(grade).label} 달성`
-        toast.success(msg, { duration: 5000 })
+        notify.success(msg, { duration: 5000 })
         addGamiNotification({ id: `grade:${grade}`, accountId, title: msg, createdAt: Date.now() })
       }
       localStorage.setItem(key, grade)
@@ -71,7 +71,7 @@ export function useGamificationToasts(): void {
     const fresh = badges.filter((b) => b.earned && !prevSet.has(b.code))
     for (const b of fresh) {
       const msg = `🏅 새 뱃지 획득: ${b.label}`
-      toast.success(msg, { duration: 5000 })
+      notify.success(msg, { duration: 5000 })
       addGamiNotification({ id: `badge:${b.code}`, accountId, title: msg, createdAt: Date.now() })
     }
     if (fresh.length > 0) {

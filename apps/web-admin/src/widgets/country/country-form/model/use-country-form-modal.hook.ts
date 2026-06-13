@@ -7,10 +7,9 @@
  */
 import { useCallback, useRef, useState } from 'react'
 
-import { toast } from 'react-hot-toast'
-
 import type { Country, CountryFormData } from '@/entities/country/api'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import {
   useCreateCountry,
   useDeleteCountry,
@@ -69,7 +68,7 @@ export function useCountryFormModal(opts: UseCountryFormModalOptions = {}) {
 
   const save = useCallback(
     async (data: CountryFormData & { id?: string }) => {
-      const loadingToast = toast.loading(
+      const loadingToast = notify.loading(
         data.id ? '수정하는 중...' : '등록하는 중...',
       )
       try {
@@ -81,18 +80,18 @@ export function useCountryFormModal(opts: UseCountryFormModalOptions = {}) {
             data: payload,
           })
           savedId = res.id ?? data.id
-          toast.success('수정되었습니다', { id: loadingToast })
+          notify.success('수정되었습니다', { id: loadingToast })
         } else {
           const res = await createMutation.mutateAsync(payload)
           savedId = res.id
-          toast.success('등록되었습니다', { id: loadingToast })
+          notify.success('등록되었습니다', { id: loadingToast })
         }
         setState(null)
         if (savedId) {
           onSavedRef.current?.(savedId, data.id ? 'edit' : 'create')
         }
       } catch (error) {
-        toast.error(
+        notify.error(
           (data.id ? '수정 실패: ' : '등록 실패: ') + (error as Error).message,
           { id: loadingToast },
         )
@@ -112,12 +111,12 @@ export function useCountryFormModal(opts: UseCountryFormModalOptions = {}) {
         }))
       )
         return
-      const loadingToast = toast.loading('삭제하는 중...')
+      const loadingToast = notify.loading('삭제하는 중...')
       try {
         await deleteMutation.mutateAsync(id)
-        toast.success('삭제되었습니다', { id: loadingToast })
+        notify.success('삭제되었습니다', { id: loadingToast })
       } catch (err) {
-        toast.error('삭제 실패: ' + (err as Error).message, { id: loadingToast })
+        notify.error('삭제 실패: ' + (err as Error).message, { id: loadingToast })
       }
     },
     [deleteMutation],

@@ -3,7 +3,6 @@
  */
 import React, { useEffect, useMemo, useState } from 'react'
 
-import { toast } from 'react-hot-toast'
 import {
   FiArrowLeft,
   FiCalendar,
@@ -56,6 +55,7 @@ import {
   TabNavigation,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
+import { notify } from '@/shared/ui/toast'
 
 const CategoryChip = styled.button<{ $active?: boolean }>`
   padding: 10px 18px;
@@ -746,7 +746,7 @@ export function EventCreateFormDashboard({
             err instanceof Error
               ? err.message
               : '사건 정보를 불러오지 못했습니다.'
-          toast.error(msg)
+          notify.error(msg)
           setFormError(
             msg.includes('본인')
               ? '본인이 등록한 사건만 수정할 수 있습니다.'
@@ -828,17 +828,17 @@ export function EventCreateFormDashboard({
           editEventId,
           eventData as Parameters<typeof updateEvent>[1],
         )
-        toast.success('사건이 수정되었습니다.')
+        notify.success('사건이 수정되었습니다.')
       } else {
         await createEvent(eventData as Parameters<typeof createEvent>[0])
-        toast.success('사건이 등록되었습니다.')
+        notify.success('사건이 등록되었습니다.')
       }
       onSuccess()
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : '사건 등록에 실패했습니다.'
       setFormError(msg)
-      toast.error(msg)
+      notify.error(msg)
     } finally {
       setIsSaving(false)
     }
@@ -941,9 +941,9 @@ export function EventCreateFormDashboard({
         ...prev,
         { imageUrl: res.url, order: prev.length, isPrimary: prev.length === 0 },
       ])
-      toast.success('이미지가 추가되었습니다.')
+      notify.success('이미지가 추가되었습니다.')
     } catch (err) {
-      toast.error(
+      notify.error(
         err instanceof Error ? err.message : '이미지 업로드에 실패했습니다.',
       )
     } finally {

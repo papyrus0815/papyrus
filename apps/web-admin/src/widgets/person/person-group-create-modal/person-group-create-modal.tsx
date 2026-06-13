@@ -7,7 +7,6 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import { FiPlus, FiX } from 'react-icons/fi'
 import styled, { type DefaultTheme } from 'styled-components'
 
@@ -20,6 +19,7 @@ import {
 } from '@/shared/api/person-groups'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { notify } from '@/shared/ui/toast'
 import { GroupTypeChips } from '@/widgets/person/person-group-ui/group-type-ui'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
@@ -73,11 +73,11 @@ export function PersonGroupCreateModal({
         memberPersonIds: members.map((m) => m.id),
       }),
     onSuccess: (group) => {
-      toast.success('묶음을 만들었습니다.')
+      notify.success('묶음을 만들었습니다.')
       void queryClient.invalidateQueries({ queryKey: ['person-groups-all'] })
       onCreated(group)
     },
-    onError: () => toast.error('묶음 생성에 실패했습니다.'),
+    onError: () => notify.error('묶음 생성에 실패했습니다.'),
   })
 
   const handleSelect = (id: string, pname: string) => {

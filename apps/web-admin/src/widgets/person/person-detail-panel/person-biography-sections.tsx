@@ -20,7 +20,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
 import {
   FiArrowDown,
   FiArrowUp,
@@ -48,6 +47,7 @@ import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextProseWithEntityClicks } from '@/shared/ui/rich-text-read-view'
+import { notify } from '@/shared/ui/toast'
 
 export type BiographySectionData = {
   id?: string
@@ -351,11 +351,11 @@ export function PersonBiographySections({
                 queryKey: personKeys.detailFull(curPersonId),
               })
               if (!pendingPersistRef.current.has(curPersonId))
-                toast.success('전기가 저장되었습니다.')
+                notify.success('전기가 저장되었습니다.')
             }
           } catch (err) {
             if (!pendingPersistRef.current.has(curPersonId))
-              toast.error(
+              notify.error(
                 err instanceof Error ? err.message : '전기 저장에 실패했습니다.',
               )
           } finally {

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { toast } from 'react-hot-toast'
 
 import {
   useCountryRecords,
@@ -8,6 +7,7 @@ import {
   useDeleteCountryRecord,
 } from '@/entities/country/api.records'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 
 import * as S from './styles'
 
@@ -39,7 +39,7 @@ export function RecordsPanel({ countryId }: Props) {
 
   const handleSave = async () => {
     if (!description.trim()) {
-      toast.error('기록 내용을 입력하세요')
+      notify.error('기록 내용을 입력하세요')
       return
     }
     const recordedAtIso = recordedAt
@@ -57,10 +57,10 @@ export function RecordsPanel({ countryId }: Props) {
           recordedAt: recordedAtIso,
         })
       }
-      toast.success('저장됨')
+      notify.success('저장됨')
       reset()
     } catch {
-      toast.error('저장 실패')
+      notify.error('저장 실패')
     }
   }
 
@@ -75,10 +75,10 @@ export function RecordsPanel({ countryId }: Props) {
       return
     try {
       await deleteMut.mutateAsync(id)
-      toast.success('삭제됨')
+      notify.success('삭제됨')
       if (editingId === id) reset()
     } catch {
-      toast.error('삭제 실패')
+      notify.error('삭제 실패')
     }
   }
 
