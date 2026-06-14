@@ -12,6 +12,7 @@ import {
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 
 import { Input } from './form-fields'
+import { useRegionPalette } from './use-region-palette'
 
 interface DivisionAutocompleteProps {
   id?: string
@@ -39,6 +40,7 @@ export function DivisionAutocomplete({
   placeholder = '이름으로 검색',
 }: DivisionAutocompleteProps) {
   const reactId = useId()
+  const palette = useRegionPalette()
   const listboxId = `${id ?? reactId}-listbox`
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -65,9 +67,10 @@ export function DivisionAutocomplete({
           alignItems: 'center',
           gap: 8,
           padding: '8px 12px',
-          border: '1px solid #cbd5e1',
+          border: `1px solid ${palette.borderMedium}`,
           borderRadius: 10,
-          background: '#f8fafc',
+          background: palette.bgSecondary,
+          color: palette.text,
           fontSize: 13,
         }}
       >
@@ -77,7 +80,7 @@ export function DivisionAutocomplete({
             <span
               style={{
                 marginLeft: 6,
-                color: '#64748b',
+                color: palette.textSecondary,
                 fontWeight: 400,
               }}
             >
@@ -91,7 +94,7 @@ export function DivisionAutocomplete({
           style={{
             background: 'transparent',
             border: 'none',
-            color: '#64748b',
+            color: palette.textSecondary,
             cursor: 'pointer',
             fontSize: 16,
           }}
@@ -166,10 +169,12 @@ export function DivisionAutocomplete({
             padding: 0,
             marginTop: 4,
             listStyle: 'none',
-            background: '#ffffff',
-            border: '1px solid #cbd5e1',
+            background: palette.bg,
+            border: `1px solid ${palette.borderMedium}`,
             borderRadius: 10,
-            boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
+            boxShadow: palette.isDark
+              ? '0 8px 24px rgba(0, 0, 0, 0.5)'
+              : '0 8px 24px rgba(15, 23, 42, 0.08)',
             zIndex: 10,
             maxHeight: 240,
             overflowY: 'auto',
@@ -180,7 +185,7 @@ export function DivisionAutocomplete({
               style={{
                 padding: '10px 12px',
                 fontSize: 12,
-                color: '#64748b',
+                color: palette.textSecondary,
               }}
             >
               검색 중…
@@ -190,7 +195,7 @@ export function DivisionAutocomplete({
               style={{
                 padding: '10px 12px',
                 fontSize: 12,
-                color: '#64748b',
+                color: palette.textSecondary,
               }}
             >
               일치하는 행정구역이 없습니다
@@ -215,20 +220,20 @@ export function DivisionAutocomplete({
                   style={{
                     padding: '8px 12px',
                     cursor: 'pointer',
-                    borderBottom: '1px solid #e2e8f0',
+                    borderBottom: `1px solid ${palette.divider}`,
                     fontSize: 12,
-                    background: active ? '#f1f5f9' : 'transparent',
+                    background: active ? palette.bgHover : 'transparent',
                   }}
                 >
-                  <div style={{ fontWeight: 600, color: '#0f172a' }}>
+                  <div style={{ fontWeight: 600, color: palette.text }}>
                     {hit.name}
                     <span
                       style={{
                         marginLeft: 6,
                         fontSize: 10,
                         fontWeight: 600,
-                        color: '#6366f1',
-                        background: 'rgba(99,102,241,0.1)',
+                        color: palette.badgeText,
+                        background: palette.badgeBg,
                         padding: '1px 5px',
                         borderRadius: 4,
                       }}
@@ -239,7 +244,7 @@ export function DivisionAutocomplete({
                   {hit.parentPath.length > 0 && (
                     <div
                       style={{
-                        color: '#64748b',
+                        color: palette.textSecondary,
                         fontSize: 11,
                         marginTop: 2,
                       }}

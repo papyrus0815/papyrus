@@ -49,6 +49,7 @@ import {
   Required,
   Select,
 } from './form-fields'
+import { useRegionPalette } from './use-region-palette'
 
 interface BulkImportModalProps {
   isOpen: boolean
@@ -164,6 +165,7 @@ export function AdminDivisionBulkImportModal({
   defaultParent,
   onClose,
 }: BulkImportModalProps) {
+  const palette = useRegionPalette()
   const { data: configs = [] } = useAdminDivisionConfigs(owner, schemeId)
   // 역사적 국가 소속이면 countryId가 없어 자동으로 비활성화된다 (enabled: !!id)
   const { data: countryDetail } = useCountry(owner.countryId ?? '')
@@ -472,8 +474,8 @@ export function AdminDivisionBulkImportModal({
                     padding: '5px 10px',
                     fontSize: 11,
                     fontWeight: 600,
-                    border: '1px solid #6366f1',
-                    color: '#6366f1',
+                    border: `1px solid ${palette.primary}`,
+                    color: palette.primary,
                     background: 'transparent',
                     borderRadius: 8,
                     cursor:
@@ -498,7 +500,9 @@ export function AdminDivisionBulkImportModal({
                   fontFamily:
                     'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                   borderRadius: 10,
-                  border: '1px solid #cbd5e1',
+                  border: `1px solid ${palette.borderMedium}`,
+                  background: palette.bg,
+                  color: palette.text,
                   resize: 'vertical',
                   outline: 'none',
                 }}
@@ -538,7 +542,7 @@ export function AdminDivisionBulkImportModal({
                 <div
                   style={{
                     height: 6,
-                    background: '#e2e8f0',
+                    background: palette.divider,
                     borderRadius: 999,
                     overflow: 'hidden',
                   }}
@@ -551,7 +555,7 @@ export function AdminDivisionBulkImportModal({
                           ? Math.round((progress.done / progress.total) * 100)
                           : 0
                       }%`,
-                      background: '#6366f1',
+                      background: palette.primary,
                       transition: 'width 0.2s ease',
                     }}
                   />

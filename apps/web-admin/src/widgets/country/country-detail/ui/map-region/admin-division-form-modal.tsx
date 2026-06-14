@@ -48,6 +48,7 @@ import {
   Select,
 } from './form-fields'
 import { findInTree } from './tree-utils'
+import { type RegionPalette, useRegionPalette } from './use-region-palette'
 
 interface AdminDivisionFormModalProps {
   isOpen: boolean
@@ -156,6 +157,7 @@ export function AdminDivisionFormModal({
   defaultParent,
   onClose,
 }: AdminDivisionFormModalProps) {
+  const palette = useRegionPalette()
   const { data: allConfigs = [] } = useAdminDivisionConfigs(owner, schemeId)
   const { data: allDivisions = [] } = useAdministrativeDivisions(
     owner,
@@ -452,12 +454,12 @@ export function AdminDivisionFormModal({
               gap: 6,
               padding: '8px 12px',
               marginBottom: 12,
-              background: '#eef2ff',
-              border: '1px solid #c7d2fe',
+              background: palette.badgeBg,
+              border: `1px solid ${palette.badgeBorder}`,
               borderRadius: 10,
               fontSize: 12,
               fontWeight: 500,
-              color: '#3730a3',
+              color: palette.badgeText,
               flexWrap: 'wrap',
             }}
           >
@@ -477,7 +479,7 @@ export function AdminDivisionFormModal({
                 background: 'rgba(239, 68, 68, 0.08)',
                 border: '1px solid rgba(239, 68, 68, 0.3)',
                 borderRadius: 10,
-                color: '#b91c1c',
+                color: palette.isDark ? '#fca5a5' : '#b91c1c',
                 fontSize: 12,
                 fontWeight: 500,
               }}
@@ -595,9 +597,9 @@ export function AdminDivisionFormModal({
                   padding: '9px 12px',
                   fontSize: 12.5,
                   fontWeight: 600,
-                  color: '#475569',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  color: palette.textSecondary,
+                  background: palette.bgSecondary,
+                  border: `1px solid ${palette.border}`,
                   borderRadius: 10,
                   cursor: 'pointer',
                 }}
@@ -638,9 +640,9 @@ export function AdminDivisionFormModal({
                       padding: '5px 10px',
                       fontSize: 11,
                       fontWeight: 600,
-                      border: '1px solid #6366f1',
-                      color: mapPickerOpen ? '#ffffff' : '#6366f1',
-                      background: mapPickerOpen ? '#6366f1' : 'transparent',
+                      border: `1px solid ${palette.primary}`,
+                      color: mapPickerOpen ? '#ffffff' : palette.primary,
+                      background: mapPickerOpen ? palette.primary : 'transparent',
                       borderRadius: 8,
                       cursor: 'pointer',
                     }}
@@ -658,8 +660,8 @@ export function AdminDivisionFormModal({
                       padding: '5px 10px',
                       fontSize: 11,
                       fontWeight: 600,
-                      border: '1px solid #6366f1',
-                      color: '#6366f1',
+                      border: `1px solid ${palette.primary}`,
+                      color: palette.primary,
                       background: 'transparent',
                       borderRadius: 8,
                       cursor:
@@ -729,7 +731,7 @@ export function AdminDivisionFormModal({
                         fontWeight: 500,
                         border: 'none',
                         background: 'transparent',
-                        color: '#6366f1',
+                        color: palette.primary,
                         cursor: 'pointer',
                       }}
                     >
@@ -746,7 +748,7 @@ export function AdminDivisionFormModal({
                 <div
                   style={{
                     marginTop: 6,
-                    border: '1px solid #cbd5e1',
+                    border: `1px solid ${palette.borderMedium}`,
                     borderRadius: 10,
                     overflow: 'hidden',
                   }}
@@ -754,10 +756,10 @@ export function AdminDivisionFormModal({
                   <div
                     style={{
                       padding: '6px 12px',
-                      background: '#f1f5f9',
+                      background: palette.bgHover,
                       fontSize: 11,
                       fontWeight: 600,
-                      color: '#475569',
+                      color: palette.textSecondary,
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
@@ -771,7 +773,7 @@ export function AdminDivisionFormModal({
                         background: 'transparent',
                         border: 'none',
                         fontSize: 11,
-                        color: '#64748b',
+                        color: palette.textSecondary,
                         cursor: 'pointer',
                       }}
                     >
@@ -789,24 +791,24 @@ export function AdminDivisionFormModal({
                         textAlign: 'left',
                         padding: '8px 12px',
                         border: 'none',
-                        borderTop: '1px solid #e2e8f0',
-                        background: '#ffffff',
+                        borderTop: `1px solid ${palette.divider}`,
+                        background: palette.bg,
                         cursor: 'pointer',
                         fontSize: 12,
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#f8fafc'
+                        e.currentTarget.style.background = palette.bgHover
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#ffffff'
+                        e.currentTarget.style.background = palette.bg
                       }}
                     >
-                      <div style={{ fontWeight: 600, color: '#0f172a' }}>
+                      <div style={{ fontWeight: 600, color: palette.text }}>
                         {hit.shortName}
                       </div>
                       <div
                         style={{
-                          color: '#64748b',
+                          color: palette.textSecondary,
                           fontSize: 11,
                           marginTop: 2,
                           overflow: 'hidden',
@@ -818,7 +820,7 @@ export function AdminDivisionFormModal({
                       </div>
                       <div
                         style={{
-                          color: '#94a3b8',
+                          color: palette.textMuted,
                           fontSize: 11,
                           marginTop: 2,
                         }}
@@ -858,6 +860,7 @@ export function AdminDivisionFormModal({
             <Field>
               <Label>설립일</Label>
               <DateButton
+                palette={palette}
                 onClick={() => setEstablishedPickerOpen(true)}
                 value={form.establishedDate}
                 onClear={() => set('establishedDate', '')}
@@ -867,6 +870,7 @@ export function AdminDivisionFormModal({
             <Field>
               <Label>폐지일</Label>
               <DateButton
+                palette={palette}
                 onClick={() => setAbolishedPickerOpen(true)}
                 value={form.abolishedDate}
                 onClear={() => set('abolishedDate', '')}
@@ -934,13 +938,20 @@ export function AdminDivisionFormModal({
 }
 
 interface DateButtonProps {
+  palette: RegionPalette
   onClick: () => void
   value: string
   onClear: () => void
   placeholder: string
 }
 
-function DateButton({ onClick, value, onClear, placeholder }: DateButtonProps) {
+function DateButton({
+  palette,
+  onClick,
+  value,
+  onClear,
+  placeholder,
+}: DateButtonProps) {
   return (
     <div style={{ display: 'flex', gap: 6 }}>
       <button
@@ -952,10 +963,10 @@ function DateButton({ onClick, value, onClear, placeholder }: DateButtonProps) {
           fontSize: 13,
           fontWeight: value ? 600 : 400,
           textAlign: 'left',
-          border: '1px solid #cbd5e1',
+          border: `1px solid ${palette.borderMedium}`,
           borderRadius: 10,
-          background: '#ffffff',
-          color: value ? '#0f172a' : '#94a3b8',
+          background: palette.bg,
+          color: value ? palette.text : palette.textMuted,
           cursor: 'pointer',
         }}
       >
@@ -968,10 +979,10 @@ function DateButton({ onClick, value, onClear, placeholder }: DateButtonProps) {
           aria-label="지우기"
           style={{
             padding: '0 10px',
-            border: '1px solid #cbd5e1',
+            border: `1px solid ${palette.borderMedium}`,
             borderRadius: 10,
-            background: '#ffffff',
-            color: '#64748b',
+            background: palette.bg,
+            color: palette.textSecondary,
             cursor: 'pointer',
             fontSize: 16,
           }}

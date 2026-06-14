@@ -38,6 +38,7 @@ import {
   Label,
   Required,
 } from './form-fields'
+import { type RegionPalette, useRegionPalette } from './use-region-palette'
 
 interface SchemeModalProps {
   isOpen: boolean
@@ -74,6 +75,7 @@ export function AdminDivisionSchemeModal({
   onClose,
   onCreated,
 }: SchemeModalProps) {
+  const palette = useRegionPalette()
   const createMut = useCreateAdminDivisionScheme(owner)
   const updateMut = useUpdateAdminDivisionScheme(owner)
   const deleteMut = useDeleteAdminDivisionScheme(owner)
@@ -195,7 +197,7 @@ export function AdminDivisionSchemeModal({
                 background: 'rgba(239, 68, 68, 0.08)',
                 border: '1px solid rgba(239, 68, 68, 0.3)',
                 borderRadius: 10,
-                color: '#b91c1c',
+                color: palette.isDark ? '#fca5a5' : '#b91c1c',
                 fontSize: 12,
                 fontWeight: 500,
               }}
@@ -225,6 +227,7 @@ export function AdminDivisionSchemeModal({
             <Field>
               <Label>시행 시작</Label>
               <SchemeDateButton
+                palette={palette}
                 value={startDate}
                 placeholder="시작일 선택"
                 onClick={() => setStartPickerOpen(true)}
@@ -234,6 +237,7 @@ export function AdminDivisionSchemeModal({
             <Field>
               <Label>시행 종료</Label>
               <SchemeDateButton
+                palette={palette}
                 value={endDate}
                 placeholder="종료일 선택 (비우면 현행)"
                 onClick={() => setEndPickerOpen(true)}
@@ -258,7 +262,10 @@ export function AdminDivisionSchemeModal({
               type="button"
               onClick={handleDelete}
               disabled={submitting}
-              style={{ marginRight: 'auto', color: '#dc2626' }}
+              style={{
+                marginRight: 'auto',
+                color: palette.isDark ? '#fca5a5' : '#dc2626',
+              }}
             >
               삭제
             </FooterBtn>
@@ -297,11 +304,13 @@ export function AdminDivisionSchemeModal({
 }
 
 function SchemeDateButton({
+  palette,
   value,
   placeholder,
   onClick,
   onClear,
 }: {
+  palette: RegionPalette
   value: string
   placeholder: string
   onClick: () => void
@@ -318,10 +327,10 @@ function SchemeDateButton({
           fontSize: 13,
           fontWeight: value ? 600 : 400,
           textAlign: 'left',
-          border: '1px solid #cbd5e1',
+          border: `1px solid ${palette.borderMedium}`,
           borderRadius: 10,
-          background: '#ffffff',
-          color: value ? '#0f172a' : '#94a3b8',
+          background: palette.bg,
+          color: value ? palette.text : palette.textMuted,
           cursor: 'pointer',
         }}
       >
@@ -334,10 +343,10 @@ function SchemeDateButton({
           aria-label="지우기"
           style={{
             padding: '0 10px',
-            border: '1px solid #cbd5e1',
+            border: `1px solid ${palette.borderMedium}`,
             borderRadius: 10,
-            background: '#ffffff',
-            color: '#64748b',
+            background: palette.bg,
+            color: palette.textSecondary,
             cursor: 'pointer',
             fontSize: 16,
           }}
