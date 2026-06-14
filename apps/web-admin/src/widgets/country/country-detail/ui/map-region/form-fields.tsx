@@ -71,6 +71,15 @@ export const Input = styled.input`
 export const Select = styled.select`
   ${inputBase}
   cursor: pointer;
+  /* 네이티브 select가 다크모드에서 흰 배경으로 고정되는 것 방지 —
+     닫힌 컨트롤·OS 드롭다운 톤을 테마에 맞춘다 (전역 color-scheme만으론 부족). */
+  color-scheme: ${({ theme }) => (theme.mode === 'dark' ? 'dark' : 'light')};
+
+  option {
+    background-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#18181b' : '#ffffff'};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 export const CheckboxRow = styled.label`
