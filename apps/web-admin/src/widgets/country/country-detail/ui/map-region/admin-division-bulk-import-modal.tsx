@@ -16,8 +16,6 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 
-import { FiX } from 'react-icons/fi'
-
 import { useCountry } from '@/entities/country/api'
 import {
   type AdminDivisionConfig,
@@ -27,15 +25,7 @@ import {
   useCreateAdminDivisionConfig,
 } from '@/entities/country/api.administrative-divisions'
 import { type PlaceSearchResult, cityApi } from '@/shared/api/city'
-import {
-  ModalBody,
-  ModalBox,
-  ModalCloseButton,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  ModalTitle,
-} from '@/shared/ui/modal'
+import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
 import {
@@ -228,8 +218,7 @@ export function AdminDivisionBulkImportModal({
       notify.error('먼저 항목을 입력하세요')
       return
     }
-    const isoCode = (countryDetail as { isoCode?: string } | undefined)
-      ?.isoCode
+    const isoCode = (countryDetail as { isoCode?: string } | undefined)?.isoCode
     setAutoFilling(true)
     setProgress({
       label: '좌표 검색',
@@ -267,7 +256,8 @@ export function AdminDivisionBulkImportModal({
     const rebuild = (node: ParsedNode): string[] => {
       const indent = '  '.repeat(node.depth)
       const parts = [node.name]
-      if (node.localName || node.centerLat != null) parts.push(node.localName ?? '')
+      if (node.localName || node.centerLat != null)
+        parts.push(node.localName ?? '')
       if (node.centerLat != null && node.centerLng != null) {
         parts.push(`${node.centerLat},${node.centerLng}`)
       }
@@ -350,9 +340,7 @@ export function AdminDivisionBulkImportModal({
         setProgress({ label: '등록', done: doneSoFar, total: totalNodes })
 
         // 자식이 있는 노드 → name으로 매핑해 다음 큐에 enqueue
-        const idByName = new Map(
-          result.createdItems.map((c) => [c.name, c.id]),
-        )
+        const idByName = new Map(result.createdItems.map((c) => [c.name, c.id]))
         for (const node of group.nodes) {
           if (node.children.length === 0) continue
           const parentId = idByName.get(node.name)
@@ -387,24 +375,14 @@ export function AdminDivisionBulkImportModal({
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <ModalOverlay onClick={onClose}>
-      <ModalBox
-        $maxWidth="680px"
-        onClick={(e) => e.stopPropagation()}
-        as="form"
-        onSubmit={handleSubmit}
-      >
-        <ModalHeader>
-          <ModalTitle>
-            행정구역 일괄 등록 {isTreeMode ? '(트리 모드)' : ''}
-          </ModalTitle>
-          <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
-            <FiX />
-          </ModalCloseButton>
-        </ModalHeader>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`행정구역 일괄 등록 ${isTreeMode ? '(트리 모드)' : ''}`}
+      maxWidth="680px"
+    >
+      <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
         <ModalBody>
           <FormGrid>
             {defaultParent && (
@@ -583,7 +561,7 @@ export function AdminDivisionBulkImportModal({
             {submitting ? '저장 중…' : `${parsed.flat.length}건 등록`}
           </FooterBtn>
         </ModalFooter>
-      </ModalBox>
-    </ModalOverlay>
+      </form>
+    </Modal>
   )
 }

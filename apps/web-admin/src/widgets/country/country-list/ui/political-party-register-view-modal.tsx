@@ -1,21 +1,13 @@
 /**
- * 정당 등록/수정 모달 — 인물 등록 모달(PersonRegisterViewModal)과 동일한 셸·애니메이션
+ * 정당 등록/수정 모달 — 인물 등록 모달(PersonRegisterViewModal)과 동일한 셸·애니메이션.
+ * 동작(Esc·스크롤락·포커스·aria)은 공용 `<RegisterModal>`이 담당.
  */
 import React from 'react'
 
-import { createPortal } from 'react-dom'
-
-import { AnimatePresence } from 'framer-motion'
-import { FiX } from 'react-icons/fi'
-
+import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 import {
-  PersonRegisterModalBox,
-  PersonRegisterModalCloseBtn,
   PersonRegisterModalFormDesc,
   PersonRegisterModalFormScroll,
-  PersonRegisterModalHeader,
-  PersonRegisterModalOverlay,
-  PersonRegisterModalTitle,
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
 
 export interface PoliticalPartyRegisterViewModalProps {
@@ -39,51 +31,22 @@ export function PoliticalPartyRegisterViewModal({
   modalMaxWidth,
   children,
 }: PoliticalPartyRegisterViewModalProps) {
-  const content = (
-    <AnimatePresence>
-      {isOpen && (
-        <PersonRegisterModalOverlay
-          key="political-party-register-modal"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="political-party-register-modal-title"
-        >
-          <PersonRegisterModalBox
-            $minHeight={modalMinHeight}
-            $maxWidth={modalMaxWidth}
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.2 }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <PersonRegisterModalHeader>
-              <PersonRegisterModalTitle id="political-party-register-modal-title">
-                {title}
-              </PersonRegisterModalTitle>
-              <PersonRegisterModalCloseBtn
-                type="button"
-                onClick={onClose}
-                aria-label="닫기"
-              >
-                <FiX size={20} />
-              </PersonRegisterModalCloseBtn>
-            </PersonRegisterModalHeader>
-            <PersonRegisterModalFormScroll>
-              {description ? (
-                <PersonRegisterModalFormDesc>{description}</PersonRegisterModalFormDesc>
-              ) : null}
-              {children}
-            </PersonRegisterModalFormScroll>
-          </PersonRegisterModalBox>
-        </PersonRegisterModalOverlay>
-      )}
-    </AnimatePresence>
+  return (
+    <RegisterModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      maxWidth={modalMaxWidth}
+      minHeight={modalMinHeight}
+    >
+      <PersonRegisterModalFormScroll>
+        {description ? (
+          <PersonRegisterModalFormDesc>
+            {description}
+          </PersonRegisterModalFormDesc>
+        ) : null}
+        {children}
+      </PersonRegisterModalFormScroll>
+    </RegisterModal>
   )
-
-  return createPortal(content, document.body)
 }

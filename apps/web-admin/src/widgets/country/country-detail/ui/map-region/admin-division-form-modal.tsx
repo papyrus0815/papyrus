@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 
-import { FiMapPin, FiX } from 'react-icons/fi'
+import { FiMapPin } from 'react-icons/fi'
 
 import { useCountry } from '@/entities/country/api'
 import {
@@ -21,17 +21,9 @@ import {
   useUpdateAdministrativeDivision,
 } from '@/entities/country/api.administrative-divisions'
 import { type PlaceSearchResult, cityApi } from '@/shared/api/city'
-import { CoordPickerMap } from '@/shared/ui/google-map/coord-picker-map'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
-import {
-  ModalBody,
-  ModalBox,
-  ModalCloseButton,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  ModalTitle,
-} from '@/shared/ui/modal'
+import { CoordPickerMap } from '@/shared/ui/google-map/coord-picker-map'
+import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
 import { DivisionAutocomplete } from './division-autocomplete'
@@ -188,15 +180,12 @@ export function AdminDivisionFormModal({
 
   const selectedPredecessor = useMemo(
     () =>
-      form.predecessorId
-        ? findInTree(allDivisions, form.predecessorId)
-        : null,
+      form.predecessorId ? findInTree(allDivisions, form.predecessorId) : null,
     [allDivisions, form.predecessorId],
   )
 
   const selectedParent = useMemo(
-    () =>
-      form.parentId ? findInTree(allDivisions, form.parentId) : null,
+    () => (form.parentId ? findInTree(allDivisions, form.parentId) : null),
     [allDivisions, form.parentId],
   )
 
@@ -210,8 +199,8 @@ export function AdminDivisionFormModal({
   // parentId(원시 값) 기준으로 분기 — 트리 데이터가 늦게 로드돼 selectedParent가
   // 잠깐 null이어도 레벨이 1로 깜빡이지 않도록, 그 사이엔 defaultLevel을 쓴다.
   const targetLevel = editing
-    ? allConfigs.find((c) => c.id === editing.adminDivisionId)?.divisionLevel ??
-      defaultLevel
+    ? (allConfigs.find((c) => c.id === editing.adminDivisionId)
+        ?.divisionLevel ?? defaultLevel)
     : form.parentId
       ? parentLevel != null
         ? parentLevel + 1
@@ -234,8 +223,7 @@ export function AdminDivisionFormModal({
           !!editing.predecessorId,
       )
     } else {
-      const auto =
-        configsForLevel.length === 1 ? configsForLevel[0]!.id : ''
+      const auto = configsForLevel.length === 1 ? configsForLevel[0]!.id : ''
       setForm({ ...empty(defaultParent?.id ?? null), configId: auto })
       setShowAdvanced(false)
     }
@@ -251,8 +239,6 @@ export function AdminDivisionFormModal({
     setForm((prev) => ({ ...prev, configId: auto, newConfigLabel: '' }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetLevel])
-
-  if (!isOpen) return null
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -271,9 +257,11 @@ export function AdminDivisionFormModal({
     } else {
       // 같은 상위 아래 이름 중복 — 서버 왕복 전에 즉시 잡는다.
       const siblings = selectedParent
-        ? selectedParent.children ?? []
+        ? (selectedParent.children ?? [])
         : allDivisions
-      if (siblings.some((s) => s.id !== editing?.id && s.name === trimmedName)) {
+      if (
+        siblings.some((s) => s.id !== editing?.id && s.name === trimmedName)
+      ) {
         errs.name = '같은 상위 안에 같은 이름이 이미 있습니다'
       }
     }
@@ -431,21 +419,13 @@ export function AdminDivisionFormModal({
     .join(' › ')
 
   return (
-    <ModalOverlay onClick={onClose}>
-      <ModalBox
-        $maxWidth="560px"
-        onClick={(e) => e.stopPropagation()}
-        as="form"
-        onSubmit={handleSubmit}
-      >
-        <ModalHeader>
-          <ModalTitle>
-            {editing ? '행정구역 수정' : `${targetLevel}차 행정구역 등록`}
-          </ModalTitle>
-          <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
-            <FiX />
-          </ModalCloseButton>
-        </ModalHeader>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editing ? '행정구역 수정' : `${targetLevel}차 행정구역 등록`}
+      maxWidth="560px"
+    >
+      <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
         <ModalBody>
           <div
             style={{
@@ -619,286 +599,299 @@ export function AdminDivisionFormModal({
 
             {showAdvanced && (
               <>
-            <FieldFull>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                }}
-              >
-                <Label as="span">중심 좌표</Label>
-                <div style={{ display: 'inline-flex', gap: 6 }}>
-                  <button
-                    type="button"
-                    onClick={() => setMapPickerOpen((v) => !v)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '5px 10px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      border: `1px solid ${palette.primary}`,
-                      color: mapPickerOpen ? '#ffffff' : palette.primary,
-                      background: mapPickerOpen ? palette.primary : 'transparent',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {mapPickerOpen ? '지도 닫기' : '🗺 지도에서 선택'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAutofillCoords}
-                    disabled={autoFilling || !form.name.trim()}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '5px 10px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      border: `1px solid ${palette.primary}`,
-                      color: palette.primary,
-                      background: 'transparent',
-                      borderRadius: 8,
-                      cursor:
-                        autoFilling || !form.name.trim()
-                          ? 'not-allowed'
-                          : 'pointer',
-                      opacity: autoFilling || !form.name.trim() ? 0.5 : 1,
-                    }}
-                  >
-                    <FiMapPin size={11} />
-                    {autoFilling ? '검색 중…' : '이름으로 자동 채우기'}
-                  </button>
-                </div>
-              </div>
-              {mapPickerOpen && (
-                <div>
-                  <CoordPickerMap
-                    lat={
-                      form.centerLat.trim() === ''
-                        ? null
-                        : Number(form.centerLat)
-                    }
-                    lng={
-                      form.centerLng.trim() === ''
-                        ? null
-                        : Number(form.centerLng)
-                    }
-                    onPick={(lat, lng) => {
-                      setForm((prev) => ({
-                        ...prev,
-                        centerLat: String(lat),
-                        centerLng: String(lng),
-                      }))
-                      setErrors((prev) => ({
-                        ...prev,
-                        centerLat: '',
-                        centerLng: '',
-                      }))
-                    }}
-                    fallbackLat={
-                      (countryDetail as { latitude?: number | null } | undefined)
-                        ?.latitude ??
-                      countryDisplay?.latitude ??
-                      null
-                    }
-                    fallbackLng={
-                      (countryDetail as { longitude?: number | null } | undefined)
-                        ?.longitude ??
-                      countryDisplay?.longitude ??
-                      null
-                    }
-                    height={mapPickerLarge ? 480 : 220}
-                  />
+                <FieldFull>
                   <div
                     style={{
                       display: 'flex',
-                      justifyContent: 'flex-end',
-                      marginTop: 4,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setMapPickerLarge((v) => !v)}
-                      style={{
-                        padding: '4px 8px',
-                        fontSize: 11,
-                        fontWeight: 500,
-                        border: 'none',
-                        background: 'transparent',
-                        color: palette.primary,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {mapPickerLarge ? '⤢ 작게' : '⤡ 크게'}
-                    </button>
-                  </div>
-                </div>
-              )}
-              <HintText>
-                OpenStreetMap에서 이름으로 검색해 위·경도를 채웁니다. 후보가
-                여러 개면 골라야 합니다.
-              </HintText>
-              {coordCandidates && coordCandidates.length > 0 && (
-                <div
-                  style={{
-                    marginTop: 6,
-                    border: `1px solid ${palette.borderMedium}`,
-                    borderRadius: 10,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: '6px 12px',
-                      background: palette.bgHover,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: palette.textSecondary,
-                      display: 'flex',
+                      alignItems: 'center',
                       justifyContent: 'space-between',
-                      alignItems: 'center',
+                      gap: 8,
                     }}
                   >
-                    <span>후보를 선택하세요</span>
-                    <button
-                      type="button"
-                      onClick={() => setCoordCandidates(null)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        fontSize: 11,
-                        color: palette.textSecondary,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      취소
-                    </button>
+                    <Label as="span">중심 좌표</Label>
+                    <div style={{ display: 'inline-flex', gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => setMapPickerOpen((v) => !v)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '5px 10px',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          border: `1px solid ${palette.primary}`,
+                          color: mapPickerOpen ? '#ffffff' : palette.primary,
+                          background: mapPickerOpen
+                            ? palette.primary
+                            : 'transparent',
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {mapPickerOpen ? '지도 닫기' : '🗺 지도에서 선택'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAutofillCoords}
+                        disabled={autoFilling || !form.name.trim()}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '5px 10px',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          border: `1px solid ${palette.primary}`,
+                          color: palette.primary,
+                          background: 'transparent',
+                          borderRadius: 8,
+                          cursor:
+                            autoFilling || !form.name.trim()
+                              ? 'not-allowed'
+                              : 'pointer',
+                          opacity: autoFilling || !form.name.trim() ? 0.5 : 1,
+                        }}
+                      >
+                        <FiMapPin size={11} />
+                        {autoFilling ? '검색 중…' : '이름으로 자동 채우기'}
+                      </button>
+                    </div>
                   </div>
-                  {coordCandidates.map((hit) => (
-                    <button
-                      key={hit.placeId}
-                      type="button"
-                      onClick={() => pickCandidate(hit)}
+                  {mapPickerOpen && (
+                    <div>
+                      <CoordPickerMap
+                        lat={
+                          form.centerLat.trim() === ''
+                            ? null
+                            : Number(form.centerLat)
+                        }
+                        lng={
+                          form.centerLng.trim() === ''
+                            ? null
+                            : Number(form.centerLng)
+                        }
+                        onPick={(lat, lng) => {
+                          setForm((prev) => ({
+                            ...prev,
+                            centerLat: String(lat),
+                            centerLng: String(lng),
+                          }))
+                          setErrors((prev) => ({
+                            ...prev,
+                            centerLat: '',
+                            centerLng: '',
+                          }))
+                        }}
+                        fallbackLat={
+                          (
+                            countryDetail as
+                              | { latitude?: number | null }
+                              | undefined
+                          )?.latitude ??
+                          countryDisplay?.latitude ??
+                          null
+                        }
+                        fallbackLng={
+                          (
+                            countryDetail as
+                              | { longitude?: number | null }
+                              | undefined
+                          )?.longitude ??
+                          countryDisplay?.longitude ??
+                          null
+                        }
+                        height={mapPickerLarge ? 480 : 220}
+                      />
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'flex-end',
+                          marginTop: 4,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setMapPickerLarge((v) => !v)}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: 11,
+                            fontWeight: 500,
+                            border: 'none',
+                            background: 'transparent',
+                            color: palette.primary,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {mapPickerLarge ? '⤢ 작게' : '⤡ 크게'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <HintText>
+                    OpenStreetMap에서 이름으로 검색해 위·경도를 채웁니다. 후보가
+                    여러 개면 골라야 합니다.
+                  </HintText>
+                  {coordCandidates && coordCandidates.length > 0 && (
+                    <div
                       style={{
-                        display: 'block',
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '8px 12px',
-                        border: 'none',
-                        borderTop: `1px solid ${palette.divider}`,
-                        background: palette.bg,
-                        cursor: 'pointer',
-                        fontSize: 12,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = palette.bgHover
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = palette.bg
+                        marginTop: 6,
+                        border: `1px solid ${palette.borderMedium}`,
+                        borderRadius: 10,
+                        overflow: 'hidden',
                       }}
                     >
-                      <div style={{ fontWeight: 600, color: palette.text }}>
-                        {hit.shortName}
-                      </div>
                       <div
                         style={{
+                          padding: '6px 12px',
+                          background: palette.bgHover,
+                          fontSize: 11,
+                          fontWeight: 600,
                           color: palette.textSecondary,
-                          fontSize: 11,
-                          marginTop: 2,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
                         }}
                       >
-                        {hit.displayName}
+                        <span>후보를 선택하세요</span>
+                        <button
+                          type="button"
+                          onClick={() => setCoordCandidates(null)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            fontSize: 11,
+                            color: palette.textSecondary,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          취소
+                        </button>
                       </div>
-                      <div
-                        style={{
-                          color: palette.textMuted,
-                          fontSize: 11,
-                          marginTop: 2,
-                        }}
-                      >
-                        {hit.lat.toFixed(4)}, {hit.lng.toFixed(4)}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </FieldFull>
-            <Field>
-              <Label htmlFor="ad-lat">위도</Label>
-              <Input
-                id="ad-lat"
-                type="number"
-                step="0.000001"
-                value={form.centerLat}
-                onChange={(e) => set('centerLat', e.target.value)}
-                placeholder="-90 ~ 90"
-              />
-              {errors.centerLat && <ErrorText>{errors.centerLat}</ErrorText>}
-            </Field>
-            <Field>
-              <Label htmlFor="ad-lng">경도</Label>
-              <Input
-                id="ad-lng"
-                type="number"
-                step="0.000001"
-                value={form.centerLng}
-                onChange={(e) => set('centerLng', e.target.value)}
-                placeholder="-180 ~ 180"
-              />
-              {errors.centerLng && <ErrorText>{errors.centerLng}</ErrorText>}
-            </Field>
+                      {coordCandidates.map((hit) => (
+                        <button
+                          key={hit.placeId}
+                          type="button"
+                          onClick={() => pickCandidate(hit)}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '8px 12px',
+                            border: 'none',
+                            borderTop: `1px solid ${palette.divider}`,
+                            background: palette.bg,
+                            cursor: 'pointer',
+                            fontSize: 12,
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = palette.bgHover
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = palette.bg
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, color: palette.text }}>
+                            {hit.shortName}
+                          </div>
+                          <div
+                            style={{
+                              color: palette.textSecondary,
+                              fontSize: 11,
+                              marginTop: 2,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {hit.displayName}
+                          </div>
+                          <div
+                            style={{
+                              color: palette.textMuted,
+                              fontSize: 11,
+                              marginTop: 2,
+                            }}
+                          >
+                            {hit.lat.toFixed(4)}, {hit.lng.toFixed(4)}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </FieldFull>
+                <Field>
+                  <Label htmlFor="ad-lat">위도</Label>
+                  <Input
+                    id="ad-lat"
+                    type="number"
+                    step="0.000001"
+                    value={form.centerLat}
+                    onChange={(e) => set('centerLat', e.target.value)}
+                    placeholder="-90 ~ 90"
+                  />
+                  {errors.centerLat && (
+                    <ErrorText>{errors.centerLat}</ErrorText>
+                  )}
+                </Field>
+                <Field>
+                  <Label htmlFor="ad-lng">경도</Label>
+                  <Input
+                    id="ad-lng"
+                    type="number"
+                    step="0.000001"
+                    value={form.centerLng}
+                    onChange={(e) => set('centerLng', e.target.value)}
+                    placeholder="-180 ~ 180"
+                  />
+                  {errors.centerLng && (
+                    <ErrorText>{errors.centerLng}</ErrorText>
+                  )}
+                </Field>
 
-            <Field>
-              <Label>설립일</Label>
-              <DateButton
-                palette={palette}
-                onClick={() => setEstablishedPickerOpen(true)}
-                value={form.establishedDate}
-                onClear={() => set('establishedDate', '')}
-                placeholder="설립일 선택 (BCE 지원)"
-              />
-            </Field>
-            <Field>
-              <Label>폐지일</Label>
-              <DateButton
-                palette={palette}
-                onClick={() => setAbolishedPickerOpen(true)}
-                value={form.abolishedDate}
-                onClear={() => set('abolishedDate', '')}
-                placeholder="폐지일 선택"
-              />
-              {errors.abolishedDate && (
-                <ErrorText>{errors.abolishedDate}</ErrorText>
-              )}
-            </Field>
+                <Field>
+                  <Label>설립일</Label>
+                  <DateButton
+                    palette={palette}
+                    onClick={() => setEstablishedPickerOpen(true)}
+                    value={form.establishedDate}
+                    onClear={() => set('establishedDate', '')}
+                    placeholder="설립일 선택 (BCE 지원)"
+                  />
+                </Field>
+                <Field>
+                  <Label>폐지일</Label>
+                  <DateButton
+                    palette={palette}
+                    onClick={() => setAbolishedPickerOpen(true)}
+                    value={form.abolishedDate}
+                    onClear={() => set('abolishedDate', '')}
+                    placeholder="폐지일 선택"
+                  />
+                  {errors.abolishedDate && (
+                    <ErrorText>{errors.abolishedDate}</ErrorText>
+                  )}
+                </Field>
 
-            <FieldFull>
-              <Label htmlFor="ad-predecessor">이전 행정구역 (모체)</Label>
-              <DivisionAutocomplete
-                id="ad-predecessor"
-                owner={owner}
-                selected={selectedPredecessor}
-                onChange={(id) => set('predecessorId', id)}
-                onClear={() => set('predecessorId', '')}
-                excludeIds={editing ? [editing.id] : []}
-                placeholder="이름으로 검색"
-              />
-              <HintText>
-                분리·승격으로 신설된 구역이라면 이전 모체를 지정할 수 있습니다.
-              </HintText>
-              {errors.predecessorId && (
-                <ErrorText>{errors.predecessorId}</ErrorText>
-              )}
-            </FieldFull>
+                <FieldFull>
+                  <Label htmlFor="ad-predecessor">이전 행정구역 (모체)</Label>
+                  <DivisionAutocomplete
+                    id="ad-predecessor"
+                    owner={owner}
+                    selected={selectedPredecessor}
+                    onChange={(id) => set('predecessorId', id)}
+                    onClear={() => set('predecessorId', '')}
+                    excludeIds={editing ? [editing.id] : []}
+                    placeholder="이름으로 검색"
+                  />
+                  <HintText>
+                    분리·승격으로 신설된 구역이라면 이전 모체를 지정할 수
+                    있습니다.
+                  </HintText>
+                  {errors.predecessorId && (
+                    <ErrorText>{errors.predecessorId}</ErrorText>
+                  )}
+                </FieldFull>
               </>
             )}
           </FormGrid>
@@ -911,29 +904,29 @@ export function AdminDivisionFormModal({
             {submitting ? '저장 중…' : editing ? '수정' : '등록'}
           </FooterBtn>
         </ModalFooter>
-      </ModalBox>
 
-      <DatePickerModal
-        isOpen={establishedPickerOpen}
-        onClose={() => setEstablishedPickerOpen(false)}
-        onSelect={(date) => {
-          set('establishedDate', date)
-          setEstablishedPickerOpen(false)
-        }}
-        initialDate={form.establishedDate || undefined}
-        title="설립일 선택"
-      />
-      <DatePickerModal
-        isOpen={abolishedPickerOpen}
-        onClose={() => setAbolishedPickerOpen(false)}
-        onSelect={(date) => {
-          set('abolishedDate', date)
-          setAbolishedPickerOpen(false)
-        }}
-        initialDate={form.abolishedDate || undefined}
-        title="폐지일 선택"
-      />
-    </ModalOverlay>
+        <DatePickerModal
+          isOpen={establishedPickerOpen}
+          onClose={() => setEstablishedPickerOpen(false)}
+          onSelect={(date) => {
+            set('establishedDate', date)
+            setEstablishedPickerOpen(false)
+          }}
+          initialDate={form.establishedDate || undefined}
+          title="설립일 선택"
+        />
+        <DatePickerModal
+          isOpen={abolishedPickerOpen}
+          onClose={() => setAbolishedPickerOpen(false)}
+          onSelect={(date) => {
+            set('abolishedDate', date)
+            setAbolishedPickerOpen(false)
+          }}
+          initialDate={form.abolishedDate || undefined}
+          title="폐지일 선택"
+        />
+      </form>
+    </Modal>
   )
 }
 

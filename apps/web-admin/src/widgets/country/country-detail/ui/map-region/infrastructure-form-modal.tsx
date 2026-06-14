@@ -3,23 +3,13 @@
  */
 import { useEffect, useState } from 'react'
 
-import { FiX } from 'react-icons/fi'
-
 import {
   type Infrastructure,
   type InfrastructureType,
   useCreateInfrastructure,
   useUpdateInfrastructure,
 } from '@/entities/country/api.infrastructure'
-import {
-  ModalBody,
-  ModalBox,
-  ModalCloseButton,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  ModalTitle,
-} from '@/shared/ui/modal'
+import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
 import {
@@ -160,8 +150,6 @@ export function InfrastructureFormModal({
     setErrors({})
   }, [isOpen, editing, defaultType])
 
-  if (!isOpen) return null
-
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
@@ -204,21 +192,13 @@ export function InfrastructureFormModal({
   const showCapacity = form.type === 'airport' || form.type === 'port'
 
   return (
-    <ModalOverlay onClick={onClose}>
-      <ModalBox
-        $maxWidth="560px"
-        onClick={(e) => e.stopPropagation()}
-        as="form"
-        onSubmit={handleSubmit}
-      >
-        <ModalHeader>
-          <ModalTitle>
-            {editing ? '인프라 항목 수정' : '인프라 항목 등록'}
-          </ModalTitle>
-          <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
-            <FiX />
-          </ModalCloseButton>
-        </ModalHeader>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editing ? '인프라 항목 수정' : '인프라 항목 등록'}
+      maxWidth="560px"
+    >
+      <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
         <ModalBody>
           <FormGrid>
             <Field>
@@ -354,9 +334,7 @@ export function InfrastructureFormModal({
                 onChange={(e) => set('openedYear', e.target.value)}
                 placeholder="예: 2001"
               />
-              {errors.openedYear && (
-                <ErrorText>{errors.openedYear}</ErrorText>
-              )}
+              {errors.openedYear && <ErrorText>{errors.openedYear}</ErrorText>}
             </Field>
 
             <FieldFull>
@@ -375,7 +353,7 @@ export function InfrastructureFormModal({
             {submitting ? '저장 중…' : editing ? '수정' : '등록'}
           </FooterBtn>
         </ModalFooter>
-      </ModalBox>
-    </ModalOverlay>
+      </form>
+    </Modal>
   )
 }

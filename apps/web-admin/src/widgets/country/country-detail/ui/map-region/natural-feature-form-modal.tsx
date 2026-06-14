@@ -7,23 +7,13 @@
  */
 import { useEffect, useState } from 'react'
 
-import { FiX } from 'react-icons/fi'
-
 import {
   type NaturalFeature,
   type NaturalFeatureType,
   useCreateNaturalFeature,
   useUpdateNaturalFeature,
 } from '@/entities/country/api.natural-feature'
-import {
-  ModalBody,
-  ModalBox,
-  ModalCloseButton,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  ModalTitle,
-} from '@/shared/ui/modal'
+import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
 import {
@@ -157,8 +147,6 @@ export function NaturalFeatureFormModal({
     setErrors({})
   }, [isOpen, editing, defaultType])
 
-  if (!isOpen) return null
-
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
@@ -177,13 +165,13 @@ export function NaturalFeatureFormModal({
       latitude: parseNumber(form.latitude) ?? null,
       longitude: parseNumber(form.longitude) ?? null,
       heightM:
-        form.type === 'mountain' ? parseNumber(form.heightM) ?? null : null,
+        form.type === 'mountain' ? (parseNumber(form.heightM) ?? null) : null,
       lengthKm:
         form.type === 'river' || form.type === 'coast'
-          ? parseNumber(form.lengthKm) ?? null
+          ? (parseNumber(form.lengthKm) ?? null)
           : null,
       areaSqKm:
-        form.type === 'lake' ? parseNumber(form.areaSqKm) ?? null : null,
+        form.type === 'lake' ? (parseNumber(form.areaSqKm) ?? null) : null,
       isProtected: form.isProtected,
     }
 
@@ -206,21 +194,13 @@ export function NaturalFeatureFormModal({
   const showArea = form.type === 'lake'
 
   return (
-    <ModalOverlay onClick={onClose}>
-      <ModalBox
-        $maxWidth="560px"
-        onClick={(e) => e.stopPropagation()}
-        as="form"
-        onSubmit={handleSubmit}
-      >
-        <ModalHeader>
-          <ModalTitle>
-            {editing ? '자연 지리 항목 수정' : '자연 지리 항목 등록'}
-          </ModalTitle>
-          <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
-            <FiX />
-          </ModalCloseButton>
-        </ModalHeader>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editing ? '자연 지리 항목 수정' : '자연 지리 항목 등록'}
+      maxWidth="560px"
+    >
+      <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
         <ModalBody>
           <FormGrid>
             <Field>
@@ -370,7 +350,7 @@ export function NaturalFeatureFormModal({
             {submitting ? '저장 중…' : editing ? '수정' : '등록'}
           </FooterBtn>
         </ModalFooter>
-      </ModalBox>
-    </ModalOverlay>
+      </form>
+    </Modal>
   )
 }

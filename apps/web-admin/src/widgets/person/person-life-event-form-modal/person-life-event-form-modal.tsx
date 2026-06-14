@@ -2,7 +2,9 @@
  * 인물 연보 등록/수정 모달 — 공용 Modal 프리미티브 기반
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
 import { useQueryClient } from '@tanstack/react-query'
+
 import {
   FiActivity,
   FiAward,
@@ -38,12 +40,11 @@ import { createRichTextImageUploader } from '@/shared/api/upload'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import {
+  Modal,
   ModalBody,
-  ModalBox,
   ModalCloseButton,
   ModalFooter,
   ModalHeader,
-  ModalOverlay,
   ModalSubtitle,
   ModalTitle,
 } from '@/shared/ui/modal'
@@ -91,25 +92,23 @@ function descriptionToEditorValue(raw: string | null | undefined): string {
   return raw.replace(/\n/g, '<br>')
 }
 
-export const CATEGORY_ICON: Record<
-  PersonLifeEventCategory,
-  typeof FiBookOpen
-> = {
-  EDUCATION: FiBookOpen,
-  TRAVEL: FiCompass,
-  PUBLICATION: FiEdit3,
-  EXILE: FiFlag,
-  AWARD: FiAward,
-  PERSONAL: FiHeart,
-  CAREER: FiBriefcase,
-  MILITARY: FiShield,
-  POLITICAL: FiTarget,
-  DIPLOMATIC: FiGlobe,
-  RELIGIOUS: FiStar,
-  HEALTH: FiActivity,
-  FAMILY: FiHome,
-  OTHER: FiTag,
-}
+export const CATEGORY_ICON: Record<PersonLifeEventCategory, typeof FiBookOpen> =
+  {
+    EDUCATION: FiBookOpen,
+    TRAVEL: FiCompass,
+    PUBLICATION: FiEdit3,
+    EXILE: FiFlag,
+    AWARD: FiAward,
+    PERSONAL: FiHeart,
+    CAREER: FiBriefcase,
+    MILITARY: FiShield,
+    POLITICAL: FiTarget,
+    DIPLOMATIC: FiGlobe,
+    RELIGIOUS: FiStar,
+    HEALTH: FiActivity,
+    FAMILY: FiHome,
+    OTHER: FiTag,
+  }
 
 /** 같은 인물의 재임·재위 기록 참조 — 직위성 사실 중복 입력 경고에 사용 (최소 필드만) */
 export interface PositionalRecordRef {
@@ -146,7 +145,11 @@ export interface PersonLifeEventFormModalProps {
 }
 
 /** localStorage 드래프트 키 — tabId 포함해 다른 탭과 충돌 방지 */
-function draftKey(personId: string, lifeEventId: string | undefined, tabId: string) {
+function draftKey(
+  personId: string,
+  lifeEventId: string | undefined,
+  tabId: string,
+) {
   return `draft:life-event:${personId}:${lifeEventId ?? 'new'}:${tabId}`
 }
 
@@ -217,7 +220,9 @@ export function PersonLifeEventFormModal({
 }: PersonLifeEventFormModalProps) {
   const queryClient = useQueryClient()
   const [isEdit, setIsEdit] = useState(() => !!lifeEvent)
-  const [lifeEventId, setLifeEventId] = useState<string | undefined>(lifeEvent?.id)
+  const [lifeEventId, setLifeEventId] = useState<string | undefined>(
+    lifeEvent?.id,
+  )
 
   const [title, setTitle] = useState('')
   const [titleTouched, setTitleTouched] = useState(false)
@@ -393,9 +398,7 @@ export function PersonLifeEventFormModal({
 
   const clearDraft = useCallback(() => {
     try {
-      localStorage.removeItem(
-        draftKey(personId, lifeEventId, tabIdRef.current),
-      )
+      localStorage.removeItem(draftKey(personId, lifeEventId, tabIdRef.current))
     } catch {
       /* 무시 */
     }
@@ -410,15 +413,6 @@ export function PersonLifeEventFormModal({
       onClose()
     }
   }, [isDirty, clearDraft, onClose])
-
-  useEffect(() => {
-    if (!open) return
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') requestClose()
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [open, requestClose])
 
   const accent = useMemo(() => {
     if (!category) return null
@@ -519,19 +513,19 @@ export function PersonLifeEventFormModal({
   }, [open])
 
   const canSubmit =
-    title.trim().length > 0 &&
-    !dateError &&
-    !submitting &&
-    !deleting
-  const disabledReason = submitting || deleting
-    ? ''
-    : title.trim().length === 0
-      ? '제목을 입력하세요.'
-      : dateError || ''
+    title.trim().length > 0 && !dateError && !submitting && !deleting
+  const disabledReason =
+    submitting || deleting
+      ? ''
+      : title.trim().length === 0
+        ? '제목을 입력하세요.'
+        : dateError || ''
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
-    queryClient.invalidateQueries({ queryKey: ['person-life-events', personId] })
+    queryClient.invalidateQueries({
+      queryKey: ['person-life-events', personId],
+    })
   }
 
   /**
@@ -600,7 +594,9 @@ export function PersonLifeEventFormModal({
         const created = await createPersonLifeEvent({
           personId,
           title: title.trim(),
-          category: (category || undefined) as PersonLifeEventCategory | undefined,
+          category: (category || undefined) as
+            | PersonLifeEventCategory
+            | undefined,
           description: descriptionForSave ?? undefined,
           startDate: startDate || undefined,
           startDatePrecision: startDate ? startPrecision : undefined,
@@ -692,45 +688,49 @@ export function PersonLifeEventFormModal({
     notify.success('복제 모드 — 날짜·설명만 새로 입력하세요.')
   }
 
-  if (!open) return null
-
   const formId = 'person-life-event-form'
 
   return (
-    <ModalOverlay onClick={requestClose}>
-      <ModalBox
-        $maxWidth="760px"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="person-life-event-form-title"
+    <>
+      <Modal
+        isOpen={open}
+        onClose={requestClose}
+        maxWidth="760px"
+        ariaLabelledBy="person-life-event-form-title"
+        header={
+          <>
+            <AccentStripe $color={accent?.base ?? null} />
+            <ModalHeader>
+              <div>
+                <ModalTitle id="person-life-event-form-title">
+                  {isEdit ? '연보 수정' : '새 연보'}
+                </ModalTitle>
+                <ModalSubtitle>
+                  인물이 이 해에 무엇을 했는지 자유 서술로 기록하세요.
+                </ModalSubtitle>
+              </div>
+              {isEdit && (
+                <HeaderActionBtn
+                  type="button"
+                  onClick={handleDuplicate}
+                  title="복제하여 새로 만들기"
+                  aria-label="복제하여 새로 만들기"
+                >
+                  <FiCopy size={15} strokeWidth={2.2} />
+                  <span>복제</span>
+                </HeaderActionBtn>
+              )}
+              <ModalCloseButton
+                type="button"
+                onClick={requestClose}
+                aria-label="닫기"
+              >
+                <FiX />
+              </ModalCloseButton>
+            </ModalHeader>
+          </>
+        }
       >
-        <AccentStripe $color={accent?.base ?? null} />
-        <ModalHeader>
-          <div>
-            <ModalTitle id="person-life-event-form-title">
-              {isEdit ? '연보 수정' : '새 연보'}
-            </ModalTitle>
-            <ModalSubtitle>
-              인물이 이 해에 무엇을 했는지 자유 서술로 기록하세요.
-            </ModalSubtitle>
-          </div>
-          {isEdit && (
-            <HeaderActionBtn
-              type="button"
-              onClick={handleDuplicate}
-              title="복제하여 새로 만들기"
-              aria-label="복제하여 새로 만들기"
-            >
-              <FiCopy size={15} strokeWidth={2.2} />
-              <span>복제</span>
-            </HeaderActionBtn>
-          )}
-          <ModalCloseButton type="button" onClick={requestClose} aria-label="닫기">
-            <FiX />
-          </ModalCloseButton>
-        </ModalHeader>
-
         <form
           id={formId}
           onSubmit={handleSubmit}
@@ -774,7 +774,9 @@ export function PersonLifeEventFormModal({
                           | PersonLifeEventCategory
                           | '',
                       )
-                      setDescription(descriptionToEditorValue(lifeEvent.description))
+                      setDescription(
+                        descriptionToEditorValue(lifeEvent.description),
+                      )
                       setStartDate(
                         lifeEvent.startDate
                           ? lifeEvent.startDate.slice(0, 10)
@@ -784,7 +786,8 @@ export function PersonLifeEventFormModal({
                         lifeEvent.endDate ? lifeEvent.endDate.slice(0, 10) : '',
                       )
                       setStartPrecision(
-                        (lifeEvent.startDatePrecision as DatePrecision) ?? 'day',
+                        (lifeEvent.startDatePrecision as DatePrecision) ??
+                          'day',
                       )
                       setEndPrecision(
                         (lifeEvent.endDatePrecision as DatePrecision) ?? 'day',
@@ -975,9 +978,10 @@ export function PersonLifeEventFormModal({
                           setCategory(PERSON_LIFE_EVENT_CATEGORIES[next])
                           // 포커스 이동 — roving tabindex
                           const parent = e.currentTarget.parentElement
-                          const btn = parent?.querySelectorAll<HTMLButtonElement>(
-                            'button[role="radio"]',
-                          )[next]
+                          const btn =
+                            parent?.querySelectorAll<HTMLButtonElement>(
+                              'button[role="radio"]',
+                            )[next]
                           btn?.focus()
                         } else if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
@@ -1094,14 +1098,15 @@ export function PersonLifeEventFormModal({
             </SaveBtn>
           </ModalFooter>
         </form>
-      </ModalBox>
+      </Modal>
 
       <ConfirmDialog
         isOpen={confirmDeleteOpen}
         title="연보 삭제"
         message={
           <>
-            이 연보 기록을 <strong>삭제</strong>하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+            이 연보 기록을 <strong>삭제</strong>하시겠습니까? 이 작업은 되돌릴
+            수 없습니다.
           </>
         }
         confirmLabel="삭제"
@@ -1124,7 +1129,7 @@ export function PersonLifeEventFormModal({
         }}
         onCancel={() => setConfirmCloseOpen(false)}
       />
-    </ModalOverlay>
+    </>
   )
 }
 
@@ -1148,7 +1153,10 @@ const HeaderActionBtn = styled.button`
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
   &:hover {
     background: ${({ theme }) => theme.colors.background.tertiary};
@@ -1170,7 +1178,9 @@ const DraftBanner = styled.div`
     theme.mode === 'dark' ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)'};
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.35)' : 'rgba(99,102,241,0.22)'};
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.35)'
+        : 'rgba(99,102,241,0.22)'};
   & > span {
     display: inline-flex;
     align-items: center;
@@ -1185,7 +1195,9 @@ const DraftBannerBtn = styled.button`
   background: transparent;
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.35)' : 'rgba(99,102,241,0.25)'};
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.35)'
+        : 'rgba(99,102,241,0.25)'};
   border-radius: 999px;
   cursor: pointer;
   color: inherit;
@@ -1232,7 +1244,6 @@ const AdvancedToggle = styled.button`
   }
 `
 
-
 const Field = styled.div`
   display: flex;
   flex-direction: column;
@@ -1272,7 +1283,10 @@ const inputReset = css`
   font-size: 14px;
   font-weight: 500;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background 0.15s;
 
   &:focus {
     border-color: #6366f1;
@@ -1395,7 +1409,11 @@ const CategoryChip = styled.button<{
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s,
+    transform 0.1s;
   white-space: nowrap;
   ${({ $active, $color, $soft, theme }) =>
     $active
@@ -1464,7 +1482,9 @@ const SegmentedBtn = styled.button<{ $active: boolean }>`
   font-weight: 600;
   border-radius: 7px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
@@ -1499,7 +1519,10 @@ const baseBtn = css`
   border-radius: 12px;
   border: none;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, transform 0.1s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.1s;
   &:disabled {
     opacity: 0.55;
     cursor: not-allowed;
@@ -1539,9 +1562,7 @@ const CancelBtn = styled.button`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
   &:hover:not(:disabled) {
     background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.04)'
-        : 'rgba(15,23,42,0.04)'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'};
   }
 `
 

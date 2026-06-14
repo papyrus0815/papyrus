@@ -1,3 +1,7 @@
+export { Modal } from './modal'
+export type { ModalProps } from './modal'
+export { useModalBehavior } from './use-modal-behavior.hook'
+export type { UseModalBehaviorOptions } from './use-modal-behavior.hook'
 export {
   ModalOverlay,
   ModalBox,

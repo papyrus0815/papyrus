@@ -13,11 +13,9 @@ import {
   useState,
 } from 'react'
 
-import { createPortal } from 'react-dom'
-
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { FaHeart, FaHeartBroken } from 'react-icons/fa'
 import {
   FiBookOpen,
@@ -65,12 +63,11 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormTextarea } from '@/shared/ui/form-input/form-input'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 import {
-  PersonRegisterModalBox,
   PersonRegisterModalCloseBtn,
   PersonRegisterModalFormScroll,
   PersonRegisterModalHeader,
-  PersonRegisterModalOverlay,
   PersonRegisterModalStickyFooter,
   PersonRegisterModalTitle,
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
@@ -1409,49 +1406,26 @@ export function PersonHumanRelationshipsSection({
       </Root>
 
       {/* 인라인 확인 다이얼로그 — 등록/수정 모달과 동일 스킨(컴팩트) */}
-      {createPortal(
-        <AnimatePresence>
-          {confirmDialog && (
-            <PersonRegisterModalOverlay
-              role="dialog"
-              aria-modal="true"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setConfirmDialog(null)}
-            >
-              <PersonRegisterModalBox
-                initial={{ opacity: 0, scale: 0.96, y: 16 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: 16 }}
-                transition={{ duration: 0.18 }}
-                $maxWidth="min(360px, 92vw)"
-                $minHeight="auto"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <ConfirmBody>
-                  <ConfirmMessage>{confirmDialog.message}</ConfirmMessage>
-                  <ConfirmActions>
-                    <GhostButton
-                      type="button"
-                      onClick={() => setConfirmDialog(null)}
-                    >
-                      취소
-                    </GhostButton>
-                    <PrimaryButton
-                      type="button"
-                      onClick={confirmDialog.onConfirm}
-                    >
-                      확인
-                    </PrimaryButton>
-                  </ConfirmActions>
-                </ConfirmBody>
-              </PersonRegisterModalBox>
-            </PersonRegisterModalOverlay>
-          )}
-        </AnimatePresence>,
-        document.body,
-      )}
+      <RegisterModal
+        isOpen={!!confirmDialog}
+        onClose={() => setConfirmDialog(null)}
+        closeOnEsc={false}
+        trapFocus={false}
+        maxWidth="min(360px, 92vw)"
+        minHeight="auto"
+      >
+        <ConfirmBody>
+          <ConfirmMessage>{confirmDialog?.message}</ConfirmMessage>
+          <ConfirmActions>
+            <GhostButton type="button" onClick={() => setConfirmDialog(null)}>
+              취소
+            </GhostButton>
+            <PrimaryButton type="button" onClick={confirmDialog?.onConfirm}>
+              확인
+            </PrimaryButton>
+          </ConfirmActions>
+        </ConfirmBody>
+      </RegisterModal>
 
       {lineageOpen && (
         <MentorLineageModal
@@ -1488,65 +1462,40 @@ function RelModal({
   maxWidth?: string
   labelledById?: string
 }) {
-  const boxRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (open) boxRef.current?.focus()
-  }, [open])
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <PersonRegisterModalOverlay
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={labelledById}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-        >
-          <PersonRegisterModalBox
-            ref={boxRef}
-            tabIndex={-1}
-            initial={{ opacity: 0, scale: 0.96, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 16 }}
-            transition={{ duration: 0.18 }}
-            $maxWidth={maxWidth}
-            $minHeight="auto"
-            onClick={(event) => event.stopPropagation()}
+  return (
+    <RegisterModal
+      isOpen={open}
+      onClose={onClose}
+      closeOnEsc={false}
+      trapFocus={false}
+      maxWidth={maxWidth}
+      minHeight="auto"
+      ariaLabelledBy={labelledById}
+      header={
+        <PersonRegisterModalHeader>
+          <RelModalTitleCol>
+            <PersonRegisterModalTitle id={labelledById}>
+              {title}
+            </PersonRegisterModalTitle>
+            {subtitle ? <RelModalSubtitle>{subtitle}</RelModalSubtitle> : null}
+          </RelModalTitleCol>
+          <PersonRegisterModalCloseBtn
+            type="button"
+            aria-label="닫기"
+            onClick={onClose}
           >
-            <PersonRegisterModalHeader>
-              <RelModalTitleCol>
-                <PersonRegisterModalTitle id={labelledById}>
-                  {title}
-                </PersonRegisterModalTitle>
-                {subtitle ? (
-                  <RelModalSubtitle>{subtitle}</RelModalSubtitle>
-                ) : null}
-              </RelModalTitleCol>
-              <PersonRegisterModalCloseBtn
-                type="button"
-                aria-label="닫기"
-                onClick={onClose}
-              >
-                <FiX size={20} />
-              </PersonRegisterModalCloseBtn>
-            </PersonRegisterModalHeader>
-            <PersonRegisterModalFormScroll>
-              {children}
-            </PersonRegisterModalFormScroll>
-            {footer ? (
-              <PersonRegisterModalStickyFooter
-                style={{ justifyContent: 'flex-end' }}
-              >
-                {footer}
-              </PersonRegisterModalStickyFooter>
-            ) : null}
-          </PersonRegisterModalBox>
-        </PersonRegisterModalOverlay>
-      )}
-    </AnimatePresence>,
-    document.body,
+            <FiX size={20} />
+          </PersonRegisterModalCloseBtn>
+        </PersonRegisterModalHeader>
+      }
+    >
+      <PersonRegisterModalFormScroll>{children}</PersonRegisterModalFormScroll>
+      {footer ? (
+        <PersonRegisterModalStickyFooter style={{ justifyContent: 'flex-end' }}>
+          {footer}
+        </PersonRegisterModalStickyFooter>
+      ) : null}
+    </RegisterModal>
   )
 }
 

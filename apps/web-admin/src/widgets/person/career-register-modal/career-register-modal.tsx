@@ -11,29 +11,23 @@
  * 생성 전용 — 수정/삭제는 기존 인물 상세 카드의 삭제 버튼으로 처리(수상 모달과 동일).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
 import { createPortal } from 'react-dom'
+
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+
 import { FiChevronDown, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { getApiConnection } from '@/shared/api/client'
-import { jobApi, type Job } from '@/shared/api/job'
+import { type Job, jobApi } from '@/shared/api/job'
 import {
-  getOrganizations,
   type OrganizationType,
+  getOrganizations,
 } from '@/shared/api/organizations'
 import { personCareerApi } from '@/shared/api/person-career'
 import { Z_INDEX } from '@/shared/styles/z-index'
-import {
-  ModalBody,
-  ModalBox,
-  ModalCloseButton,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  ModalSubtitle,
-  ModalTitle,
-} from '@/shared/ui/modal'
+import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
 export type CareerKind =
@@ -88,7 +82,12 @@ const KIND_CONFIG: Record<CareerKind, KindConfig> = {
     extras: [
       { key: 'branch', label: '군종', placeholder: '예: 육군, 해군, 공군' },
       { key: 'position', label: '보직', placeholder: '예: 사령관, 참모장' },
-      { key: 'termNumber', label: '대수', placeholder: '예: 32', type: 'number' },
+      {
+        key: 'termNumber',
+        label: '대수',
+        placeholder: '예: 32',
+        type: 'number',
+      },
     ],
     submit: (dto) => personCareerApi.addMilitaryCareer(dto as never),
   },
@@ -100,7 +99,11 @@ const KIND_CONFIG: Record<CareerKind, KindConfig> = {
     orgRequired: true,
     extras: [
       { key: 'department', label: '학과·부서', placeholder: '예: 물리학과' },
-      { key: 'researchField', label: '연구 분야', placeholder: '예: 입자물리학' },
+      {
+        key: 'researchField',
+        label: '연구 분야',
+        placeholder: '예: 입자물리학',
+      },
     ],
     submit: (dto) => personCareerApi.addAcademicCareer(dto as never),
   },
@@ -138,7 +141,12 @@ const KIND_CONFIG: Record<CareerKind, KindConfig> = {
     extras: [
       { key: 'sport', label: '종목', placeholder: '예: 축구' },
       { key: 'position', label: '포지션', placeholder: '예: 공격수' },
-      { key: 'jerseyNumber', label: '등번호', placeholder: '예: 7', type: 'number' },
+      {
+        key: 'jerseyNumber',
+        label: '등번호',
+        placeholder: '예: 7',
+        type: 'number',
+      },
     ],
     submit: (dto) => personCareerApi.addAthleteCareer(dto as never),
   },
@@ -173,7 +181,11 @@ const KIND_CONFIG: Record<CareerKind, KindConfig> = {
     orgLabel: '병원·기관',
     orgRequired: false,
     extras: [
-      { key: 'specialization', label: '전문 분야', placeholder: '예: 심장외과' },
+      {
+        key: 'specialization',
+        label: '전문 분야',
+        placeholder: '예: 심장외과',
+      },
       { key: 'department', label: '진료과', placeholder: '예: 외과' },
     ],
     submit: (dto) => personCareerApi.addMedicalCareer(dto as never),
@@ -315,17 +327,6 @@ export function CareerRegisterModal({
     setSubmitting(false)
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [open, onClose])
-
-  if (!open) return null
-
   const dateRangeInvalid =
     startDate.length > 0 && endDate.length > 0 && endDate < startDate
 
@@ -376,7 +377,9 @@ export function CareerRegisterModal({
       }
     } catch (err) {
       const message =
-        err instanceof Error && err.message ? err.message : '저장에 실패했습니다.'
+        err instanceof Error && err.message
+          ? err.message
+          : '저장에 실패했습니다.'
       notify.error(message)
     } finally {
       setSubmitting(false)
@@ -389,152 +392,137 @@ export function CareerRegisterModal({
   }
 
   return (
-    <ModalOverlay onClick={onClose}>
-      <ModalBox
-        $maxWidth="600px"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="career-register-title"
-      >
-        <ModalHeader>
-          <div>
-            <ModalTitle id="career-register-title">경력 등록</ModalTitle>
-            <ModalSubtitle>
-              분야를 고르고 조직·직급을 선택하세요. 조직이 목록에 없으면 조직
-              관리에서 먼저 등록해야 합니다.
-            </ModalSubtitle>
-          </div>
-          <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
-            <FiX />
-          </ModalCloseButton>
-        </ModalHeader>
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      title="경력 등록"
+      subtitle="분야를 고르고 조직·직급을 선택하세요. 조직이 목록에 없으면 조직 관리에서 먼저 등록해야 합니다."
+      maxWidth="600px"
+    >
+      <form onSubmit={handleSubmit}>
+        <ModalBody>
+          <Field>
+            <Label>
+              분야 <Required>*</Required>
+            </Label>
+            <KindGrid role="radiogroup" aria-label="경력 분야">
+              {KIND_ORDER.map((kindValue) => (
+                <KindChip
+                  key={kindValue}
+                  type="button"
+                  role="radio"
+                  aria-checked={kind === kindValue}
+                  $active={kind === kindValue}
+                  onClick={() => handleKindChange(kindValue)}
+                >
+                  {KIND_CONFIG[kindValue].label}
+                </KindChip>
+              ))}
+            </KindGrid>
+          </Field>
 
-        <form onSubmit={handleSubmit}>
-          <ModalBody>
-            <Field>
-              <Label>
-                분야 <Required>*</Required>
-              </Label>
-              <KindGrid role="radiogroup" aria-label="경력 분야">
-                {KIND_ORDER.map((kindValue) => (
-                  <KindChip
-                    key={kindValue}
-                    type="button"
-                    role="radio"
-                    aria-checked={kind === kindValue}
-                    $active={kind === kindValue}
-                    onClick={() => handleKindChange(kindValue)}
-                  >
-                    {KIND_CONFIG[kindValue].label}
-                  </KindChip>
-                ))}
-              </KindGrid>
-            </Field>
+          <Field>
+            <Label>
+              {cfg.orgLabel} {cfg.orgRequired && <Required>*</Required>}
+            </Label>
+            <SearchPicker
+              value={organizationId}
+              onChange={setOrganizationId}
+              options={orgOptions}
+              loading={orgsLoading}
+              placeholder="조직명으로 검색"
+            />
+          </Field>
 
-            <Field>
-              <Label>
-                {cfg.orgLabel} {cfg.orgRequired && <Required>*</Required>}
-              </Label>
-              <SearchPicker
-                value={organizationId}
-                onChange={setOrganizationId}
-                options={orgOptions}
-                loading={orgsLoading}
-                placeholder="조직명으로 검색"
-              />
-            </Field>
+          <Field>
+            <Label>
+              {cfg.positionLabel} <Required>*</Required>
+            </Label>
+            <SearchPicker
+              value={positionId}
+              onChange={setPositionId}
+              options={jobOptions}
+              loading={jobsLoading}
+              placeholder={cfg.positionPlaceholder}
+            />
+          </Field>
 
-            <Field>
-              <Label>
-                {cfg.positionLabel} <Required>*</Required>
-              </Label>
-              <SearchPicker
-                value={positionId}
-                onChange={setPositionId}
-                options={jobOptions}
-                loading={jobsLoading}
-                placeholder={cfg.positionPlaceholder}
-              />
-            </Field>
-
-            {cfg.extras.length > 0 && (
-              <TwoCol>
-                {cfg.extras.map((field) => (
-                  <Field key={`${kind}-${field.key}`}>
-                    <Label>{field.label}</Label>
-                    <TextInput
-                      type={field.type === 'number' ? 'number' : 'text'}
-                      value={extras[field.key] ?? ''}
-                      onChange={(event) =>
-                        setExtras((prev) => ({
-                          ...prev,
-                          [field.key]: event.target.value,
-                        }))
-                      }
-                      placeholder={field.placeholder}
-                      maxLength={200}
-                    />
-                  </Field>
-                ))}
-              </TwoCol>
-            )}
-
+          {cfg.extras.length > 0 && (
             <TwoCol>
-              <Field>
-                <Label>시작일</Label>
-                <TextInput
-                  type="date"
-                  value={startDate}
-                  onChange={(event) => setStartDate(event.target.value)}
-                />
-              </Field>
-              <Field>
-                <Label>종료일</Label>
-                <TextInput
-                  type="date"
-                  value={endDate}
-                  onChange={(event) => setEndDate(event.target.value)}
-                />
-              </Field>
+              {cfg.extras.map((field) => (
+                <Field key={`${kind}-${field.key}`}>
+                  <Label>{field.label}</Label>
+                  <TextInput
+                    type={field.type === 'number' ? 'number' : 'text'}
+                    value={extras[field.key] ?? ''}
+                    onChange={(event) =>
+                      setExtras((prev) => ({
+                        ...prev,
+                        [field.key]: event.target.value,
+                      }))
+                    }
+                    placeholder={field.placeholder}
+                    maxLength={200}
+                  />
+                </Field>
+              ))}
             </TwoCol>
+          )}
 
-            {dateRangeInvalid && (
-              <FieldErrorText role="alert">
-                종료일이 시작일보다 빠릅니다.
-              </FieldErrorText>
-            )}
-
+          <TwoCol>
             <Field>
-              <Label>비고</Label>
-              <TextArea
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="경력 관련 메모 (선택)"
-                rows={3}
+              <Label>시작일</Label>
+              <TextInput
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
               />
             </Field>
-          </ModalBody>
+            <Field>
+              <Label>종료일</Label>
+              <TextInput
+                type="date"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
+              />
+            </Field>
+          </TwoCol>
 
-          <ModalFooter>
-            <Spacer />
-            <CancelBtn type="button" onClick={onClose} disabled={submitting}>
-              취소
-            </CancelBtn>
-            <ContinueBtn
-              type="button"
-              onClick={() => void submitCareer(true)}
-              disabled={!canSubmit}
-            >
-              등록 후 계속
-            </ContinueBtn>
-            <SaveBtn type="submit" disabled={!canSubmit}>
-              {submitting ? '저장 중…' : '등록'}
-            </SaveBtn>
-          </ModalFooter>
-        </form>
-      </ModalBox>
-    </ModalOverlay>
+          {dateRangeInvalid && (
+            <FieldErrorText role="alert">
+              종료일이 시작일보다 빠릅니다.
+            </FieldErrorText>
+          )}
+
+          <Field>
+            <Label>비고</Label>
+            <TextArea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="경력 관련 메모 (선택)"
+              rows={3}
+            />
+          </Field>
+        </ModalBody>
+
+        <ModalFooter>
+          <Spacer />
+          <CancelBtn type="button" onClick={onClose} disabled={submitting}>
+            취소
+          </CancelBtn>
+          <ContinueBtn
+            type="button"
+            onClick={() => void submitCareer(true)}
+            disabled={!canSubmit}
+          >
+            등록 후 계속
+          </ContinueBtn>
+          <SaveBtn type="submit" disabled={!canSubmit}>
+            {submitting ? '저장 중…' : '등록'}
+          </SaveBtn>
+        </ModalFooter>
+      </form>
+    </Modal>
   )
 }
 
@@ -577,7 +565,7 @@ function SearchPicker({
   const listRef = useRef<HTMLDivElement>(null)
 
   const selected = value
-    ? options.find((option) => option.id === value) ?? null
+    ? (options.find((option) => option.id === value) ?? null)
     : null
 
   const filtered = useMemo(() => {
@@ -674,7 +662,7 @@ function SearchPicker({
           role="combobox"
           aria-expanded={openList}
           aria-autocomplete="list"
-          value={openList ? query : selected?.name ?? ''}
+          value={openList ? query : (selected?.name ?? '')}
           onChange={(event) => {
             setQuery(event.target.value)
             setHighlightIndex(0)
@@ -738,7 +726,9 @@ function SearchPicker({
                   </PickerItem>
                 ))}
                 {hiddenCount > 0 && (
-                  <PickerHint>외 {hiddenCount}건 — 검색어로 좁혀보세요.</PickerHint>
+                  <PickerHint>
+                    외 {hiddenCount}건 — 검색어로 좁혀보세요.
+                  </PickerHint>
                 )}
               </>
             )}
@@ -789,7 +779,10 @@ const KindChip = styled.button<{ $active: boolean }>`
   font-weight: 700;
   border-radius: 999px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   border: 1px solid
     ${({ $active, theme }) =>
       $active
@@ -825,7 +818,7 @@ const TextInput = styled.input`
   ${fieldBase}
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
   color: ${({ theme }) =>
@@ -917,8 +910,7 @@ const PickerDropdown = styled.div`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? '#1e2230' : '#fff'};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1e2230' : '#fff')};
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
 `
 

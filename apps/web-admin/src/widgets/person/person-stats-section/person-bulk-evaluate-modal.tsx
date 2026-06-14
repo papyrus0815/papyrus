@@ -8,31 +8,24 @@
  * 주의: 빈 슬라이더(미평가)는 N으로 보내지 않고 NULL 유지.
  *       즉, 선택된 인물의 기존 점수를 *덮어쓰지 않음*. 명시적으로 점수를 매긴 축만 적용.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { FiSlash, FiX } from 'react-icons/fi'
+
+import { FiSlash } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import {
-  type PersonStatKey,
-  type PersonTrait,
   PERSON_STAT_KEYS,
   PERSON_STAT_META,
   PERSON_TRAIT_META,
   PERSON_TRAIT_ORDER,
+  type PersonStatKey,
+  type PersonTrait,
   upsertMyEvaluation,
 } from '@/shared/api/person-stats'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import {
-  ModalBody,
-  ModalBox,
-  ModalCloseButton,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  ModalSubtitle,
-  ModalTitle,
-} from '@/shared/ui/modal'
+import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
 type Props = {
@@ -65,7 +58,6 @@ export function PersonBulkEvaluateModal({ open, personIds, onClose }: Props) {
   const [draftTraits, setDraftTraits] = useState<TraitDraft>(new Map())
   const [draftNotes, setDraftNotes] = useState('')
   const [overrideExisting, setOverrideExisting] = useState(false)
-  const firstFocusRef = useRef<HTMLButtonElement | null>(null)
 
   // open 토글 시 초기화
   useEffect(() => {
@@ -131,26 +123,6 @@ export function PersonBulkEvaluateModal({ open, personIds, onClose }: Props) {
     onClose()
   }, [isDirty, saveMut.isPending, onClose])
 
-  // ESC
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        requestClose()
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [open, requestClose])
-
-  // 첫 진입 포커스
-  useEffect(() => {
-    if (!open) return
-    const t = window.setTimeout(() => firstFocusRef.current?.focus(), 60)
-    return () => window.clearTimeout(t)
-  }, [open])
-
   const handleSave = async () => {
     try {
       const { success, failed } = await saveMut.mutateAsync()
@@ -168,7 +140,10 @@ export function PersonBulkEvaluateModal({ open, personIds, onClose }: Props) {
     }
   }
 
-  const traitsByTone: Record<'positive' | 'neutral' | 'negative', PersonTrait[]> = {
+  const traitsByTone: Record<
+    'positive' | 'neutral' | 'negative',
+    PersonTrait[]
+  > = {
     positive: [],
     neutral: [],
     negative: [],
@@ -177,155 +152,155 @@ export function PersonBulkEvaluateModal({ open, personIds, onClose }: Props) {
     traitsByTone[PERSON_TRAIT_META[trait].tone].push(trait)
   })
 
-  if (!open) return null
-
   return (
-    <ModalOverlay onClick={requestClose}>
-      <ModalBox
-        onClick={(e) => e.stopPropagation()}
-        $maxWidth="640px"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="bulk-eval-modal-title"
-      >
-        <ModalHeader>
-          <div>
-            <ModalTitle id="bulk-eval-modal-title">선택된 {personIds.length}명에 일괄 평가 적용</ModalTitle>
-            <ModalSubtitle>
-              점수를 매긴 축만 적용됩니다. 비워둔 축은 기존 값 유지.
-            </ModalSubtitle>
-          </div>
-          <ModalCloseButton ref={firstFocusRef} type="button" onClick={requestClose} aria-label="닫기">
-            <FiX />
-          </ModalCloseButton>
-        </ModalHeader>
-
-        <ModalBody>
-          <SectionLabel>능력치 (선택적)</SectionLabel>
-          <StatGrid>
-            {PERSON_STAT_KEYS.map((key) => {
-              const value = draftStats[key]
-              const isNull = value === null
-              const meta = PERSON_STAT_META[key]
-              return (
-                <StatRow key={key} $disabled={isNull}>
-                  <StatLabel>
-                    <StatLabelDot style={{ background: meta.color }} />
-                    {meta.label}
-                  </StatLabel>
-                  <StatSlider
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={value ?? 0}
-                    disabled={isNull}
-                    onChange={(e) =>
-                      setDraftStats((d) => ({ ...d, [key]: Number(e.target.value) }))
+    <Modal
+      isOpen={open}
+      onClose={requestClose}
+      title={`선택된 ${personIds.length}명에 일괄 평가 적용`}
+      subtitle="점수를 매긴 축만 적용됩니다. 비워둔 축은 기존 값 유지."
+      maxWidth="640px"
+    >
+      <ModalBody>
+        <SectionLabel>능력치 (선택적)</SectionLabel>
+        <StatGrid>
+          {PERSON_STAT_KEYS.map((key) => {
+            const value = draftStats[key]
+            const isNull = value === null
+            const meta = PERSON_STAT_META[key]
+            return (
+              <StatRow key={key} $disabled={isNull}>
+                <StatLabel>
+                  <StatLabelDot style={{ background: meta.color }} />
+                  {meta.label}
+                </StatLabel>
+                <StatSlider
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={value ?? 0}
+                  disabled={isNull}
+                  onChange={(e) =>
+                    setDraftStats((d) => ({
+                      ...d,
+                      [key]: Number(e.target.value),
+                    }))
+                  }
+                  style={{ accentColor: meta.color }}
+                />
+                <StatNumberInput
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={value ?? ''}
+                  placeholder="—"
+                  disabled={isNull}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    if (raw === '') {
+                      setDraftStats((d) => ({ ...d, [key]: null }))
+                    } else {
+                      const v = Math.max(0, Math.min(100, Number(raw)))
+                      setDraftStats((d) => ({ ...d, [key]: v }))
                     }
-                    style={{ accentColor: meta.color }}
-                  />
-                  <StatNumberInput
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={value ?? ''}
-                    placeholder="—"
-                    disabled={isNull}
-                    onChange={(e) => {
-                      const raw = e.target.value
-                      if (raw === '') {
-                        setDraftStats((d) => ({ ...d, [key]: null }))
-                      } else {
-                        const v = Math.max(0, Math.min(100, Number(raw)))
-                        setDraftStats((d) => ({ ...d, [key]: v }))
+                  }}
+                />
+                <NullToggle
+                  type="button"
+                  $active={isNull}
+                  onClick={() =>
+                    setDraftStats((d) => ({ ...d, [key]: isNull ? 50 : null }))
+                  }
+                  title={isNull ? '점수 부여' : '비활성화 (기존 점수 유지)'}
+                >
+                  <FiSlash size={12} />
+                </NullToggle>
+              </StatRow>
+            )
+          })}
+        </StatGrid>
+
+        <SectionLabel>
+          성격 태그 (선택적)
+          <SectionLabelHint>{draftTraits.size}개 선택됨</SectionLabelHint>
+        </SectionLabel>
+        <TraitGroups>
+          {(['positive', 'neutral', 'negative'] as const).map((tone) => (
+            <TraitGroup key={tone}>
+              <TraitGroupTitle $tone={tone}>
+                {TRAIT_TONE_LABEL[tone]}
+              </TraitGroupTitle>
+              <TraitChipRow>
+                {traitsByTone[tone].map((trait) => {
+                  const meta = PERSON_TRAIT_META[trait]
+                  const active = draftTraits.has(trait)
+                  return (
+                    <TraitToggle
+                      key={trait}
+                      type="button"
+                      $active={active}
+                      $tone={meta.tone}
+                      onClick={() =>
+                        setDraftTraits((prev) => {
+                          const next = new Map(prev)
+                          if (next.has(trait)) next.delete(trait)
+                          else next.set(trait, null)
+                          return next
+                        })
                       }
-                    }}
-                  />
-                  <NullToggle
-                    type="button"
-                    $active={isNull}
-                    onClick={() =>
-                      setDraftStats((d) => ({ ...d, [key]: isNull ? 50 : null }))
-                    }
-                    title={isNull ? '점수 부여' : '비활성화 (기존 점수 유지)'}
-                  >
-                    <FiSlash size={12} />
-                  </NullToggle>
-                </StatRow>
-              )
-            })}
-          </StatGrid>
+                    >
+                      {meta.label}
+                    </TraitToggle>
+                  )
+                })}
+              </TraitChipRow>
+            </TraitGroup>
+          ))}
+        </TraitGroups>
 
-          <SectionLabel>
-            성격 태그 (선택적)
-            <SectionLabelHint>{draftTraits.size}개 선택됨</SectionLabelHint>
-          </SectionLabel>
-          <TraitGroups>
-            {(['positive', 'neutral', 'negative'] as const).map((tone) => (
-              <TraitGroup key={tone}>
-                <TraitGroupTitle $tone={tone}>{TRAIT_TONE_LABEL[tone]}</TraitGroupTitle>
-                <TraitChipRow>
-                  {traitsByTone[tone].map((trait) => {
-                    const meta = PERSON_TRAIT_META[trait]
-                    const active = draftTraits.has(trait)
-                    return (
-                      <TraitToggle
-                        key={trait}
-                        type="button"
-                        $active={active}
-                        $tone={meta.tone}
-                        onClick={() =>
-                          setDraftTraits((prev) => {
-                            const next = new Map(prev)
-                            if (next.has(trait)) next.delete(trait)
-                            else next.set(trait, null)
-                            return next
-                          })
-                        }
-                      >
-                        {meta.label}
-                      </TraitToggle>
-                    )
-                  })}
-                </TraitChipRow>
-              </TraitGroup>
-            ))}
-          </TraitGroups>
+        <SectionLabel>메모 (선택적)</SectionLabel>
+        <NotesArea
+          rows={2}
+          value={draftNotes}
+          onChange={(e) => setDraftNotes(e.target.value)}
+          placeholder="공통 평가 메모"
+        />
 
-          <SectionLabel>메모 (선택적)</SectionLabel>
-          <NotesArea
-            rows={2}
-            value={draftNotes}
-            onChange={(e) => setDraftNotes(e.target.value)}
-            placeholder="공통 평가 메모"
+        <OverrideRow>
+          <input
+            id="bulk-override"
+            type="checkbox"
+            checked={overrideExisting}
+            onChange={(e) => setOverrideExisting(e.target.checked)}
           />
+          <label htmlFor="bulk-override">
+            <strong>강제 덮어쓰기</strong> — 비워둔 축도 NULL로, 태그도 빈
+            set으로 적용 (선택 인물의 기존 평가가 *완전히* 본 폼 내용으로
+            교체됨)
+          </label>
+        </OverrideRow>
+      </ModalBody>
 
-          <OverrideRow>
-            <input
-              id="bulk-override"
-              type="checkbox"
-              checked={overrideExisting}
-              onChange={(e) => setOverrideExisting(e.target.checked)}
-            />
-            <label htmlFor="bulk-override">
-              <strong>강제 덮어쓰기</strong> — 비워둔 축도 NULL로, 태그도 빈 set으로 적용
-              (선택 인물의 기존 평가가 *완전히* 본 폼 내용으로 교체됨)
-            </label>
-          </OverrideRow>
-        </ModalBody>
-
-        <ModalFooter>
-          <DirtyHint>{isDirty ? '변경 사항 있음' : '비어 있음 — 적용할 내용 없음'}</DirtyHint>
-          <GhostBtn type="button" onClick={requestClose} disabled={saveMut.isPending}>
-            취소
-          </GhostBtn>
-          <PrimaryBtn type="button" onClick={handleSave} disabled={saveMut.isPending || !isDirty}>
-            {saveMut.isPending ? '저장 중…' : `${personIds.length}명에 적용`}
-          </PrimaryBtn>
-        </ModalFooter>
-      </ModalBox>
-    </ModalOverlay>
+      <ModalFooter>
+        <DirtyHint>
+          {isDirty ? '변경 사항 있음' : '비어 있음 — 적용할 내용 없음'}
+        </DirtyHint>
+        <GhostBtn
+          type="button"
+          onClick={requestClose}
+          disabled={saveMut.isPending}
+        >
+          취소
+        </GhostBtn>
+        <PrimaryBtn
+          type="button"
+          onClick={handleSave}
+          disabled={saveMut.isPending || !isDirty}
+        >
+          {saveMut.isPending ? '저장 중…' : `${personIds.length}명에 적용`}
+        </PrimaryBtn>
+      </ModalFooter>
+    </Modal>
   )
 }
 
@@ -349,7 +324,8 @@ const SectionLabelHint = styled.span`
   font-weight: 500;
   text-transform: none;
   letter-spacing: 0;
-  color: ${({ theme }) => theme.colors.text.tertiary ?? theme.colors.text.secondary};
+  color: ${({ theme }) =>
+    theme.colors.text.tertiary ?? theme.colors.text.secondary};
 `
 
 const StatGrid = styled.div`
@@ -445,12 +421,28 @@ const traitToneFg: Record<'positive' | 'neutral' | 'negative', string> = {
   negative: '#9f1239',
 }
 const traitToneBg = (tone: 'positive' | 'negative' | 'neutral') => {
-  if (tone === 'positive') return { fg: '#0e7490', bg: 'rgba(207, 250, 254, 0.7)', border: 'rgba(103, 232, 249, 0.5)' }
-  if (tone === 'negative') return { fg: '#9f1239', bg: 'rgba(255, 228, 230, 0.85)', border: 'rgba(251, 113, 133, 0.45)' }
-  return { fg: '#475569', bg: 'rgba(241, 245, 249, 0.85)', border: 'rgba(148, 163, 184, 0.4)' }
+  if (tone === 'positive')
+    return {
+      fg: '#0e7490',
+      bg: 'rgba(207, 250, 254, 0.7)',
+      border: 'rgba(103, 232, 249, 0.5)',
+    }
+  if (tone === 'negative')
+    return {
+      fg: '#9f1239',
+      bg: 'rgba(255, 228, 230, 0.85)',
+      border: 'rgba(251, 113, 133, 0.45)',
+    }
+  return {
+    fg: '#475569',
+    bg: 'rgba(241, 245, 249, 0.85)',
+    border: 'rgba(148, 163, 184, 0.4)',
+  }
 }
 
-const TraitGroupTitle = styled.div<{ $tone: 'positive' | 'neutral' | 'negative' }>`
+const TraitGroupTitle = styled.div<{
+  $tone: 'positive' | 'neutral' | 'negative'
+}>`
   font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
@@ -464,7 +456,10 @@ const TraitChipRow = styled.div`
   gap: 6px;
 `
 
-const TraitToggle = styled.button<{ $active: boolean; $tone: 'positive' | 'negative' | 'neutral' }>`
+const TraitToggle = styled.button<{
+  $active: boolean
+  $tone: 'positive' | 'negative' | 'neutral'
+}>`
   min-width: 56px;
   font-size: 11.5px;
   font-weight: 600;

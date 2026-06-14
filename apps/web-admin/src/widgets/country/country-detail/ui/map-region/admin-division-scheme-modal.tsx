@@ -5,8 +5,6 @@
  */
 import { useEffect, useState } from 'react'
 
-import { FiX } from 'react-icons/fi'
-
 import {
   type AdminDivisionScheme,
   type DivisionOwner,
@@ -17,15 +15,7 @@ import {
 import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
-import {
-  ModalBody,
-  ModalBox,
-  ModalCloseButton,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  ModalTitle,
-} from '@/shared/ui/modal'
+import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
 import {
@@ -97,8 +87,6 @@ export function AdminDivisionSchemeModal({
     setError('')
   }, [isOpen, editing])
 
-  if (!isOpen) return null
-
   const submitting =
     createMut.isPending || updateMut.isPending || deleteMut.isPending
 
@@ -109,7 +97,10 @@ export function AdminDivisionSchemeModal({
       return
     }
     // 백엔드가 기원전 날짜를 저장하지 못함(DATETIME) — 400 나기 전에 막는다
-    if ((startDate && isBceDate(startDate)) || (endDate && isBceDate(endDate))) {
+    if (
+      (startDate && isBceDate(startDate)) ||
+      (endDate && isBceDate(endDate))
+    ) {
       setError('기원전 날짜는 체계 시행일로 저장할 수 없습니다')
       return
     }
@@ -175,19 +166,13 @@ export function AdminDivisionSchemeModal({
   }
 
   return (
-    <ModalOverlay onClick={onClose}>
-      <ModalBox
-        $maxWidth="480px"
-        onClick={(e) => e.stopPropagation()}
-        as="form"
-        onSubmit={handleSubmit}
-      >
-        <ModalHeader>
-          <ModalTitle>{editing ? '체계 수정' : '행정구역 체계 등록'}</ModalTitle>
-          <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
-            <FiX />
-          </ModalCloseButton>
-        </ModalHeader>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editing ? '체계 수정' : '행정구역 체계 등록'}
+      maxWidth="480px"
+    >
+      <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
         <ModalBody>
           {error && (
             <div
@@ -277,7 +262,7 @@ export function AdminDivisionSchemeModal({
             {submitting ? '저장 중…' : editing ? '수정' : '등록'}
           </FooterBtn>
         </ModalFooter>
-      </ModalBox>
+      </form>
 
       <DatePickerModal
         isOpen={startPickerOpen}
@@ -299,7 +284,7 @@ export function AdminDivisionSchemeModal({
         initialDate={endDate || undefined}
         title="시행 종료일 선택"
       />
-    </ModalOverlay>
+    </Modal>
   )
 }
 

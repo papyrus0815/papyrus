@@ -1,14 +1,6 @@
 import { useState } from 'react'
 
-import {
-  ModalBody,
-  ModalBoxWide,
-  ModalCloseButton,
-  ModalHeader,
-  ModalOverlay,
-  ModalSubtitle,
-  ModalTitle,
-} from '@/shared/ui/modal'
+import { Modal, ModalBody } from '@/shared/ui/modal'
 
 import { INDICATOR_META, type IndicatorType } from './field-configs'
 import { IndicatorEditorPanel } from './indicator-editor-panel'
@@ -48,66 +40,57 @@ export function CountryDataManagerModal({
   onClose,
 }: Props) {
   const [tab, setTab] = useState<MainTab>('indicators')
-  const [indicatorType, setIndicatorType] =
-    useState<IndicatorType>('economic')
-
-  if (!open) return null
+  const [indicatorType, setIndicatorType] = useState<IndicatorType>('economic')
 
   return (
-    <ModalOverlay onClick={onClose}>
-      <ModalBoxWide onClick={(e) => e.stopPropagation()}>
-        <ModalHeader>
-          <div>
-            <ModalTitle>국가 데이터 관리</ModalTitle>
-            <ModalSubtitle>{countryName} · 지표 · 교역 · 기록</ModalSubtitle>
-          </div>
-          <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
-            ✕
-          </ModalCloseButton>
-        </ModalHeader>
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      title="국가 데이터 관리"
+      subtitle={`${countryName} · 지표 · 교역 · 기록`}
+      size="wide"
+    >
+      <ModalBody>
+        <S.TabBar role="tablist">
+          {MAIN_TABS.map((t) => (
+            <S.TabButton
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
+              $active={tab === t.key}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </S.TabButton>
+          ))}
+        </S.TabBar>
 
-        <ModalBody>
-          <S.TabBar role="tablist">
-            {MAIN_TABS.map((t) => (
-              <S.TabButton
-                key={t.key}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.key}
-                $active={tab === t.key}
-                onClick={() => setTab(t.key)}
-              >
-                {t.label}
-              </S.TabButton>
-            ))}
-          </S.TabBar>
+        {tab === 'indicators' && (
+          <>
+            <S.SubTabBar>
+              {INDICATOR_TYPES.map((it) => (
+                <S.Chip
+                  key={it}
+                  type="button"
+                  $active={indicatorType === it}
+                  onClick={() => setIndicatorType(it)}
+                >
+                  {INDICATOR_META[it].label}
+                </S.Chip>
+              ))}
+            </S.SubTabBar>
+            <IndicatorEditorPanel
+              key={indicatorType}
+              countryId={countryId}
+              type={indicatorType}
+            />
+          </>
+        )}
 
-          {tab === 'indicators' && (
-            <>
-              <S.SubTabBar>
-                {INDICATOR_TYPES.map((it) => (
-                  <S.Chip
-                    key={it}
-                    type="button"
-                    $active={indicatorType === it}
-                    onClick={() => setIndicatorType(it)}
-                  >
-                    {INDICATOR_META[it].label}
-                  </S.Chip>
-                ))}
-              </S.SubTabBar>
-              <IndicatorEditorPanel
-                key={indicatorType}
-                countryId={countryId}
-                type={indicatorType}
-              />
-            </>
-          )}
-
-          {tab === 'trade' && <TradePanel countryId={countryId} />}
-          {tab === 'records' && <RecordsPanel countryId={countryId} />}
-        </ModalBody>
-      </ModalBoxWide>
-    </ModalOverlay>
+        {tab === 'trade' && <TradePanel countryId={countryId} />}
+        {tab === 'records' && <RecordsPanel countryId={countryId} />}
+      </ModalBody>
+    </Modal>
   )
 }

@@ -4,12 +4,8 @@
  * 기존 단일 SelectModal은 클릭 즉시 닫혀 다국 비교용으로는 한 번에 한 명만 핀하기 위해 N번 모달을 열어야 했다.
  * 이 모달은 검색·체크박스 다중 선택·"N개 추가" 푸터로 동작 — 한 번 열기로 여러 국가를 핀할 수 있다.
  */
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ChangeEvent,
-} from 'react'
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
+
 import { createPortal } from 'react-dom'
 
 import { motion } from 'framer-motion'
@@ -17,12 +13,13 @@ import { FiCheck, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { useModalBehavior } from '@/shared/ui/modal'
 
+import type { PinnedSegment } from '../model/types'
 import {
   optionToSegment,
   useCountryOptions,
 } from '../model/use-country-options'
-import type { PinnedSegment } from '../model/types'
 
 interface Props {
   isOpen: boolean
@@ -55,20 +52,13 @@ export function CountrySearchModal({
     }
   }, [isOpen])
 
-  // ESC로 닫기
-  useEffect(() => {
-    if (!isOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        onClose()
-      }
-    }
-    document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
-  }, [isOpen, onClose])
+  // Esc 닫기 · 스크롤락 · 초기 포커스 · focus trap · 포커스 복원 (공용 동작 레이어)
+  const containerRef = useRef<HTMLDivElement>(null)
+  useModalBehavior({ isOpen, onClose, containerRef })
 
-  const [kindFilter, setKindFilter] = useState<'ALL' | 'COUNTRY' | 'HISTORICAL'>('ALL')
+  const [kindFilter, setKindFilter] = useState<
+    'ALL' | 'COUNTRY' | 'HISTORICAL'
+  >('ALL')
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -134,7 +124,7 @@ export function CountrySearchModal({
     onClose()
   }
 
-  const renderRow = (opt: typeof options[number]) => {
+  const renderRow = (opt: (typeof options)[number]) => {
     const isPinned = alreadyPinnedSet.has(opt.optionId)
     const isSelected = selectedIds.has(opt.optionId)
     return (
@@ -175,6 +165,11 @@ export function CountrySearchModal({
     >
       <Modal
         as={motion.div}
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
@@ -196,20 +191,34 @@ export function CountrySearchModal({
           <SearchInput
             type="search"
             value={query}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+              setQuery(e.target.value)
+            }
             placeholder="국가명·시대·ISO·영문명 (예: 조선, USA, 1900)"
             autoFocus
           />
         </SearchRow>
 
         <FilterRow>
-          <FilterChip $active={kindFilter === 'ALL'} onClick={() => setKindFilter('ALL')} type="button">
+          <FilterChip
+            $active={kindFilter === 'ALL'}
+            onClick={() => setKindFilter('ALL')}
+            type="button"
+          >
             전체 ({counts.COUNTRY + counts.HISTORICAL})
           </FilterChip>
-          <FilterChip $active={kindFilter === 'COUNTRY'} onClick={() => setKindFilter('COUNTRY')} type="button">
+          <FilterChip
+            $active={kindFilter === 'COUNTRY'}
+            onClick={() => setKindFilter('COUNTRY')}
+            type="button"
+          >
             현대 ({counts.COUNTRY})
           </FilterChip>
-          <FilterChip $active={kindFilter === 'HISTORICAL'} onClick={() => setKindFilter('HISTORICAL')} type="button">
+          <FilterChip
+            $active={kindFilter === 'HISTORICAL'}
+            onClick={() => setKindFilter('HISTORICAL')}
+            type="button"
+          >
             역사 ({counts.HISTORICAL})
           </FilterChip>
         </FilterRow>
@@ -359,7 +368,10 @@ const FilterChip = styled.button<{ $active: boolean }>`
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
   &:hover {
     border-color: ${({ theme }) => theme.colors.primary};
     color: ${({ theme }) => theme.colors.primary};
@@ -467,7 +479,9 @@ const Row = styled.button<{ $disabled: boolean; $selected: boolean }>`
   border-radius: 10px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
   margin-bottom: 2px;
   opacity: ${({ $disabled }) => ($disabled ? 0.45 : 1)};
   cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
@@ -476,12 +490,16 @@ const Row = styled.button<{ $disabled: boolean; $selected: boolean }>`
       $disabled
         ? 'transparent'
         : $selected
-        ? theme.colors.activeLight
-        : theme.colors.hover};
+          ? theme.colors.activeLight
+          : theme.colors.hover};
   }
 `
 
-const Checkbox = styled.span<{ $checked: boolean; $disabled: boolean; $hide?: boolean }>`
+const Checkbox = styled.span<{
+  $checked: boolean
+  $disabled: boolean
+  $hide?: boolean
+}>`
   width: 18px;
   height: 18px;
   border-radius: 4px;
@@ -575,7 +593,9 @@ const ConfirmBtn = styled.button`
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.15s, background 0.15s;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
   &:hover:not(:disabled) {
     background: ${({ theme }) => theme.colors.button.hover};
   }
@@ -584,4 +604,3 @@ const ConfirmBtn = styled.button`
     cursor: not-allowed;
   }
 `
-

@@ -1,21 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 
-import { AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
-import { FiChevronDown, FiInfo, FiSave, FiX } from 'react-icons/fi'
+
+import { FiChevronDown, FiInfo, FiSave } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api'
 import {
-  personCareerApi,
   type CreateRegnalEraDto,
   type CreateSovereignReignDto,
+  personCareerApi,
 } from '@/shared/api/person-career'
 import { getAllPersons } from '@/shared/api/persons'
-import { FormInput, FormTextarea } from '@/shared/ui/form-input/form-input'
-import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
 import {
   APPOINTMENT_METHOD_OPTIONS,
   TENURE_END_REASON_OPTIONS,
@@ -23,20 +20,8 @@ import {
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
-import {
-  PersonRegisterModalBox,
-  PersonRegisterModalCancelBtn,
-  PersonRegisterModalCloseBtn,
-  PersonRegisterModalField,
-  PersonRegisterModalFormDesc,
-  PersonRegisterModalFormScroll,
-  PersonRegisterModalHeader,
-  PersonRegisterModalLabel,
-  PersonRegisterModalOverlay,
-  PersonRegisterModalPrimaryBtn,
-  PersonRegisterModalStickyFooter,
-  PersonRegisterModalTitle,
-} from '@/shared/ui/register-modal-shell/register-modal-shell'
+import { FormInput, FormTextarea } from '@/shared/ui/form-input/form-input'
+import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
 import {
   FieldControl,
   FieldHint,
@@ -45,6 +30,16 @@ import {
   FormRows,
   Required,
 } from '@/shared/ui/register-form-layout'
+import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
+import {
+  PersonRegisterModalCancelBtn,
+  PersonRegisterModalField,
+  PersonRegisterModalFormDesc,
+  PersonRegisterModalFormScroll,
+  PersonRegisterModalLabel,
+  PersonRegisterModalPrimaryBtn,
+  PersonRegisterModalStickyFooter,
+} from '@/shared/ui/register-modal-shell/register-modal-shell'
 import {
   SelectModal,
   type SelectOption,
@@ -337,11 +332,11 @@ export function RegisterMonarchModal({
       eraName: eraName.trim(),
       eraNameEn: eraNameEn.trim() || null,
       startYear: sy,
-      startMonth: eraStartMonth.trim() === '' ? null : sm ?? null,
-      startDay: eraStartDay.trim() === '' ? null : sd ?? null,
-      endYear: eraEndYear.trim() === '' ? null : ey ?? null,
-      endMonth: eraEndMonth.trim() === '' ? null : em ?? null,
-      endDay: eraEndDay.trim() === '' ? null : ed ?? null,
+      startMonth: eraStartMonth.trim() === '' ? null : (sm ?? null),
+      startDay: eraStartDay.trim() === '' ? null : (sd ?? null),
+      endYear: eraEndYear.trim() === '' ? null : (ey ?? null),
+      endMonth: eraEndMonth.trim() === '' ? null : (em ?? null),
+      endDay: eraEndDay.trim() === '' ? null : (ed ?? null),
       changeReason: eraChangeReason.trim() || null,
     }
   }
@@ -394,8 +389,10 @@ export function RegisterMonarchModal({
       termNumber: num,
       regnalNumber: num,
       subTermNumber: parseOptionalInt(subTermNumber),
-      appointmentMethod: (appointmentMethod || undefined) as CreateSovereignReignDto['appointmentMethod'],
-      endReason: (endReason || undefined) as CreateSovereignReignDto['endReason'],
+      appointmentMethod: (appointmentMethod ||
+        undefined) as CreateSovereignReignDto['appointmentMethod'],
+      endReason: (endReason ||
+        undefined) as CreateSovereignReignDto['endReason'],
       endReasonDetail: endReasonDetail.trim() || undefined,
       regnalName: regnalName.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -456,397 +453,356 @@ export function RegisterMonarchModal({
     !!startDate.trim() &&
     headOfStatePositionOptions.length > 0
 
-  const content = (
-    <AnimatePresence>
-      {isOpen && (
-        <PersonRegisterModalOverlay
-          key="monarch-register-overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={close}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="monarch-modal-title"
-        >
-          <PersonRegisterModalBox
-            key="monarch-register-box"
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.2 }}
-            onClick={(e) => e.stopPropagation()}
-            $maxWidth="min(880px, 96vw)"
-            $minHeight="auto"
-          >
-            <PersonRegisterModalHeader>
-              <PersonRegisterModalTitle id="monarch-modal-title">
-                군주 등록
-              </PersonRegisterModalTitle>
-              <PersonRegisterModalCloseBtn
-                type="button"
-                onClick={close}
-                aria-label="닫기"
-                disabled={submitting}
-              >
-                <FiX size={20} />
-              </PersonRegisterModalCloseBtn>
-            </PersonRegisterModalHeader>
+  return (
+    <>
+      <RegisterModal
+        isOpen={isOpen}
+        onClose={close}
+        title="군주 등록"
+        maxWidth="min(880px, 96vw)"
+        minHeight="auto"
+      >
+        <PersonRegisterModalFormScroll>
+          <PersonRegisterModalFormDesc>
+            행정부(내각)를 만들지 않습니다. 국가 원수 재위 기간만 등록합니다.
+          </PersonRegisterModalFormDesc>
 
-            <PersonRegisterModalFormScroll>
-              <PersonRegisterModalFormDesc>
-                행정부(내각)를 만들지 않습니다. 국가 원수 재위 기간만
-                등록합니다.
+          {headOfStatePositionOptions.length === 0 && (
+            <WarningBox>
+              <FiInfo size={20} />
+              <span>
+                이 국가 범위에 <strong>국가 원수</strong> 직위 정의가 없습니다.
+                국가 상세의 직위 정의에서 먼저 추가해 주세요.
+              </span>
+            </WarningBox>
+          )}
+
+          <FormRows>
+            {!isHistorical && hasSubordinateHistorical && (
+              <FieldRow>
+                <FieldLabel>소속 국가</FieldLabel>
+                <FieldControl>
+                  <ModalSelectBtn
+                    type="button"
+                    onClick={() => setAffinityCountryModalOpen(true)}
+                    $hasValue
+                  >
+                    <span>
+                      {selectedAffinityHistoricalId
+                        ? ((
+                            subordinateHistorical as {
+                              id: string
+                              name: string
+                            }[]
+                          ).find(
+                            (hist) => hist.id === selectedAffinityHistoricalId,
+                          )?.name ?? '역사적 국가')
+                        : `현대 국가 (현재: ${country.name})`}
+                    </span>
+                    <FiChevronDown size={20} />
+                  </ModalSelectBtn>
+                  <FieldHint>
+                    현대 국가 또는 연결된 하위 역사적 국가 중 하나를 선택하세요.
+                  </FieldHint>
+                </FieldControl>
+              </FieldRow>
+            )}
+
+            <PersonSelectField
+              label="인물"
+              required
+              hint="재임 기록에 연결할 인물을 선택하세요."
+              value={selectedPersonId}
+              selectedPerson={selectedPerson}
+              persons={allPersonsForModal}
+              isModalOpen={personSelectModalOpen}
+              onModalOpenChange={setPersonSelectModalOpen}
+              onSelect={setSelectedPersonId}
+              placeholder="인물 선택"
+            />
+
+            <FieldRow>
+              <FieldLabel>
+                직책명 <Required aria-label="필수" />
+              </FieldLabel>
+              <FieldControl>
+                <ModalSelectBtn
+                  type="button"
+                  onClick={() => setPositionTitleModalOpen(true)}
+                  $hasValue={selectedPositionDefinitionId != null}
+                  disabled={headOfStatePositionOptions.length === 0}
+                >
+                  <span>{positionTitleLabel}</span>
+                  <FiChevronDown size={20} />
+                </ModalSelectBtn>
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>왕명</FieldLabel>
+              <FieldControl>
+                <StyledFormInput
+                  value={regnalName}
+                  onChange={(e) => setRegnalName(e.target.value)}
+                  placeholder="예: 세종, 루이 14세, 강희"
+                />
+              </FieldControl>
+            </FieldRow>
+
+            <DateRangeField
+              label="취임일 · 퇴임일"
+              required
+              startValue={startDate}
+              endValue={endDate}
+              onStartChange={setStartDate}
+              onEndChange={setEndDate}
+              startPlaceholder="취임일"
+              endPlaceholder="퇴임일 (선택)"
+              openEndAfterStart
+            />
+
+            <FieldRow>
+              <FieldLabel>대수/재위번호</FieldLabel>
+              <FieldControl>
+                <StyledFormInput
+                  type="number"
+                  min={1}
+                  value={regnalNumber}
+                  onChange={(e) => setRegnalNumber(e.target.value)}
+                  placeholder="예: 4 (세종), 14 (루이 14세), 266 (프란치스코)"
+                  title="역대 순번"
+                />
+                <FieldHint>
+                  역대 순번. 동아시아(제4대)·서양 군주(14세)·교황(266대) 등
+                  숫자만 입력
+                </FieldHint>
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>기수</FieldLabel>
+              <FieldControl>
+                <StyledFormInput
+                  type="number"
+                  min={1}
+                  value={subTermNumber}
+                  onChange={(e) => setSubTermNumber(e.target.value)}
+                  placeholder="선택 — 같은 대 안에서 재위가 나뉠 때 (예: 복위)"
+                />
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>즉위 방식</FieldLabel>
+              <FieldControl>
+                <FormSelectNative
+                  value={appointmentMethod}
+                  onChange={(e) => setAppointmentMethod(e.target.value)}
+                >
+                  <option value="">선택 안 함</option>
+                  {APPOINTMENT_METHOD_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </FormSelectNative>
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>퇴위 사유</FieldLabel>
+              <FieldControl>
+                <FormSelectNative
+                  value={endReason}
+                  onChange={(e) => setEndReason(e.target.value)}
+                >
+                  <option value="">선택 안 함</option>
+                  {TENURE_END_REASON_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </FormSelectNative>
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>퇴위 사유 상세</FieldLabel>
+              <FieldControl>
+                <StyledFormInput
+                  value={endReasonDetail}
+                  onChange={(e) => setEndReasonDetail(e.target.value)}
+                  placeholder="선택 (예: 명예혁명으로 폐위)"
+                />
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>비고</FieldLabel>
+              <FieldControl>
+                <StyledFormTextarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="선택 — 재위 관련 특이사항"
+                  rows={2}
+                />
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>사건 페이지 노출</FieldLabel>
+              <FieldControl>
+                <CheckboxRow style={{ marginBottom: 0 }}>
+                  <input
+                    type="checkbox"
+                    id="monarch-register-show-on-events"
+                    checked={showOnEventsPage}
+                    onChange={(e) => setShowOnEventsPage(e.target.checked)}
+                  />
+                  <label htmlFor="monarch-register-show-on-events">
+                    연대표·사건 목록에 표시
+                  </label>
+                </CheckboxRow>
+                <FieldHint>역대 수반 토글 시 목록에 포함됩니다.</FieldHint>
+              </FieldControl>
+            </FieldRow>
+
+            <PersonRegisterModalField style={{ marginTop: 8 }}>
+              <CheckboxRow>
+                <input
+                  type="checkbox"
+                  id="monarch-include-era"
+                  checked={includeRegnalEra}
+                  onChange={(e) => setIncludeRegnalEra(e.target.checked)}
+                />
+                <label htmlFor="monarch-include-era">
+                  연호 함께 등록 (元号·일본 연호 등)
+                </label>
+              </CheckboxRow>
+              <PersonRegisterModalFormDesc style={{ marginBottom: 16 }}>
+                체크 후 연호명·시작 연도를 입력하면 재위 저장 직후 같은 재위에
+                연호가 붙습니다.
               </PersonRegisterModalFormDesc>
 
-              {headOfStatePositionOptions.length === 0 && (
-                <WarningBox>
-                  <FiInfo size={20} />
-                  <span>
-                    이 국가 범위에 <strong>국가 원수</strong> 직위 정의가
-                    없습니다. 국가 상세의 직위 정의에서 먼저 추가해 주세요.
-                  </span>
-                </WarningBox>
-              )}
-
-              <FormRows>
-                {!isHistorical && hasSubordinateHistorical && (
-                  <FieldRow>
-                    <FieldLabel>소속 국가</FieldLabel>
-                    <FieldControl>
-                      <ModalSelectBtn
-                        type="button"
-                        onClick={() => setAffinityCountryModalOpen(true)}
-                        $hasValue
-                      >
-                        <span>
-                          {selectedAffinityHistoricalId
-                            ? (
-                                subordinateHistorical as {
-                                  id: string
-                                  name: string
-                                }[]
-                              ).find(
-                                (hist) =>
-                                  hist.id === selectedAffinityHistoricalId,
-                              )?.name ?? '역사적 국가'
-                            : `현대 국가 (현재: ${country.name})`}
-                        </span>
-                        <FiChevronDown size={20} />
-                      </ModalSelectBtn>
-                      <FieldHint>
-                        현대 국가 또는 연결된 하위 역사적 국가 중 하나를
-                        선택하세요.
-                      </FieldHint>
-                    </FieldControl>
-                  </FieldRow>
-                )}
-
-                <PersonSelectField
-                  label="인물"
-                  required
-                  hint="재임 기록에 연결할 인물을 선택하세요."
-                  value={selectedPersonId}
-                  selectedPerson={selectedPerson}
-                  persons={allPersonsForModal}
-                  isModalOpen={personSelectModalOpen}
-                  onModalOpenChange={setPersonSelectModalOpen}
-                  onSelect={setSelectedPersonId}
-                  placeholder="인물 선택"
-                />
-
-                <FieldRow>
-                  <FieldLabel>
-                    직책명 <Required aria-label="필수" />
-                  </FieldLabel>
-                  <FieldControl>
-                    <ModalSelectBtn
-                      type="button"
-                      onClick={() => setPositionTitleModalOpen(true)}
-                      $hasValue={selectedPositionDefinitionId != null}
-                      disabled={headOfStatePositionOptions.length === 0}
-                    >
-                      <span>{positionTitleLabel}</span>
-                      <FiChevronDown size={20} />
-                    </ModalSelectBtn>
-                  </FieldControl>
-                </FieldRow>
-
-                <FieldRow>
-                  <FieldLabel>왕명</FieldLabel>
-                  <FieldControl>
-                    <StyledFormInput
-                      value={regnalName}
-                      onChange={(e) => setRegnalName(e.target.value)}
-                      placeholder="예: 세종, 루이 14세, 강희"
-                    />
-                  </FieldControl>
-                </FieldRow>
-
-                <DateRangeField
-                  label="취임일 · 퇴임일"
-                  required
-                  startValue={startDate}
-                  endValue={endDate}
-                  onStartChange={setStartDate}
-                  onEndChange={setEndDate}
-                  startPlaceholder="취임일"
-                  endPlaceholder="퇴임일 (선택)"
-                  openEndAfterStart
-                />
-
-                <FieldRow>
-                  <FieldLabel>대수/재위번호</FieldLabel>
-                  <FieldControl>
-                    <StyledFormInput
-                      type="number"
-                      min={1}
-                      value={regnalNumber}
-                      onChange={(e) => setRegnalNumber(e.target.value)}
-                      placeholder="예: 4 (세종), 14 (루이 14세), 266 (프란치스코)"
-                      title="역대 순번"
-                    />
-                    <FieldHint>
-                      역대 순번. 동아시아(제4대)·서양 군주(14세)·교황(266대)
-                      등 숫자만 입력
-                    </FieldHint>
-                  </FieldControl>
-                </FieldRow>
-
-                <FieldRow>
-                  <FieldLabel>기수</FieldLabel>
-                  <FieldControl>
-                    <StyledFormInput
-                      type="number"
-                      min={1}
-                      value={subTermNumber}
-                      onChange={(e) => setSubTermNumber(e.target.value)}
-                      placeholder="선택 — 같은 대 안에서 재위가 나뉠 때 (예: 복위)"
-                    />
-                  </FieldControl>
-                </FieldRow>
-
-                <FieldRow>
-                  <FieldLabel>즉위 방식</FieldLabel>
-                  <FieldControl>
-                    <FormSelectNative
-                      value={appointmentMethod}
-                      onChange={(e) => setAppointmentMethod(e.target.value)}
-                    >
-                      <option value="">선택 안 함</option>
-                      {APPOINTMENT_METHOD_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </FormSelectNative>
-                  </FieldControl>
-                </FieldRow>
-
-                <FieldRow>
-                  <FieldLabel>퇴위 사유</FieldLabel>
-                  <FieldControl>
-                    <FormSelectNative
-                      value={endReason}
-                      onChange={(e) => setEndReason(e.target.value)}
-                    >
-                      <option value="">선택 안 함</option>
-                      {TENURE_END_REASON_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </FormSelectNative>
-                  </FieldControl>
-                </FieldRow>
-
-                <FieldRow>
-                  <FieldLabel>퇴위 사유 상세</FieldLabel>
-                  <FieldControl>
-                    <StyledFormInput
-                      value={endReasonDetail}
-                      onChange={(e) => setEndReasonDetail(e.target.value)}
-                      placeholder="선택 (예: 명예혁명으로 폐위)"
-                    />
-                  </FieldControl>
-                </FieldRow>
-
-                <FieldRow>
-                  <FieldLabel>비고</FieldLabel>
-                  <FieldControl>
-                    <StyledFormTextarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="선택 — 재위 관련 특이사항"
-                      rows={2}
-                    />
-                  </FieldControl>
-                </FieldRow>
-
-                <FieldRow>
-                  <FieldLabel>사건 페이지 노출</FieldLabel>
-                  <FieldControl>
-                    <CheckboxRow style={{ marginBottom: 0 }}>
-                      <input
-                        type="checkbox"
-                        id="monarch-register-show-on-events"
-                        checked={showOnEventsPage}
-                        onChange={(e) =>
-                          setShowOnEventsPage(e.target.checked)
-                        }
-                      />
-                      <label htmlFor="monarch-register-show-on-events">
-                        연대표·사건 목록에 표시
-                      </label>
-                    </CheckboxRow>
-                    <FieldHint>
-                      역대 수반 토글 시 목록에 포함됩니다.
-                    </FieldHint>
-                  </FieldControl>
-                </FieldRow>
-
-                <PersonRegisterModalField style={{ marginTop: 8 }}>
-                  <CheckboxRow>
+              {includeRegnalEra && (
+                <>
+                  <PersonRegisterModalLabel>
+                    연호명 (필수)
+                  </PersonRegisterModalLabel>
+                  <StyledFormInput
+                    value={eraName}
+                    onChange={(e) => setEraName(e.target.value)}
+                    placeholder="예: 昭和, 康熙"
+                    style={{ marginBottom: 16 }}
+                  />
+                  <PersonRegisterModalLabel>
+                    영문·로마자 (선택)
+                  </PersonRegisterModalLabel>
+                  <StyledFormInput
+                    value={eraNameEn}
+                    onChange={(e) => setEraNameEn(e.target.value)}
+                    placeholder="예: Shōwa, Kangxi"
+                    style={{ marginBottom: 16 }}
+                  />
+                  <PersonRegisterModalLabel>
+                    시작: 연도(필수) · 월 · 일
+                  </PersonRegisterModalLabel>
+                  <EraYmdRow style={{ marginBottom: 16 }}>
                     <input
-                      type="checkbox"
-                      id="monarch-include-era"
-                      checked={includeRegnalEra}
-                      onChange={(e) => setIncludeRegnalEra(e.target.checked)}
+                      type="number"
+                      min={1}
+                      value={eraStartYear}
+                      onChange={(e) => setEraStartYear(e.target.value)}
+                      placeholder="연도"
                     />
-                    <label htmlFor="monarch-include-era">
-                      연호 함께 등록 (元号·일본 연호 등)
-                    </label>
-                  </CheckboxRow>
-                  <PersonRegisterModalFormDesc style={{ marginBottom: 16 }}>
-                    체크 후 연호명·시작 연도를 입력하면 재위 저장 직후 같은
-                    재위에 연호가 붙습니다.
-                  </PersonRegisterModalFormDesc>
+                    <input
+                      type="number"
+                      min={1}
+                      max={12}
+                      value={eraStartMonth}
+                      onChange={(e) => setEraStartMonth(e.target.value)}
+                      placeholder="월"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={eraStartDay}
+                      onChange={(e) => setEraStartDay(e.target.value)}
+                      placeholder="일"
+                    />
+                  </EraYmdRow>
+                  <PersonRegisterModalLabel>
+                    종료: 연도 · 월 · 일 (선택)
+                  </PersonRegisterModalLabel>
+                  <EraYmdRow style={{ marginBottom: 8 }}>
+                    <input
+                      type="number"
+                      min={1}
+                      value={eraEndYear}
+                      onChange={(e) => setEraEndYear(e.target.value)}
+                      placeholder="연도"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={12}
+                      value={eraEndMonth}
+                      onChange={(e) => setEraEndMonth(e.target.value)}
+                      placeholder="월"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={eraEndDay}
+                      onChange={(e) => setEraEndDay(e.target.value)}
+                      placeholder="일"
+                    />
+                  </EraYmdRow>
+                  <FieldHint style={{ marginBottom: 16 }}>
+                    종료를 비우면 재위 종료까지로 해석해 표시할 수 있습니다.
+                  </FieldHint>
+                  <PersonRegisterModalLabel>
+                    변경 사유 (선택)
+                  </PersonRegisterModalLabel>
+                  <StyledFormInput
+                    value={eraChangeReason}
+                    onChange={(e) => setEraChangeReason(e.target.value)}
+                    placeholder="예: 즉위, 개원"
+                  />
+                </>
+              )}
+            </PersonRegisterModalField>
+          </FormRows>
+        </PersonRegisterModalFormScroll>
 
-                  {includeRegnalEra && (
-                    <>
-                      <PersonRegisterModalLabel>연호명 (필수)</PersonRegisterModalLabel>
-                      <StyledFormInput
-                        value={eraName}
-                        onChange={(e) => setEraName(e.target.value)}
-                        placeholder="예: 昭和, 康熙"
-                        style={{ marginBottom: 16 }}
-                      />
-                      <PersonRegisterModalLabel>
-                        영문·로마자 (선택)
-                      </PersonRegisterModalLabel>
-                      <StyledFormInput
-                        value={eraNameEn}
-                        onChange={(e) => setEraNameEn(e.target.value)}
-                        placeholder="예: Shōwa, Kangxi"
-                        style={{ marginBottom: 16 }}
-                      />
-                      <PersonRegisterModalLabel>
-                        시작: 연도(필수) · 월 · 일
-                      </PersonRegisterModalLabel>
-                      <EraYmdRow style={{ marginBottom: 16 }}>
-                        <input
-                          type="number"
-                          min={1}
-                          value={eraStartYear}
-                          onChange={(e) => setEraStartYear(e.target.value)}
-                          placeholder="연도"
-                        />
-                        <input
-                          type="number"
-                          min={1}
-                          max={12}
-                          value={eraStartMonth}
-                          onChange={(e) => setEraStartMonth(e.target.value)}
-                          placeholder="월"
-                        />
-                        <input
-                          type="number"
-                          min={1}
-                          max={31}
-                          value={eraStartDay}
-                          onChange={(e) => setEraStartDay(e.target.value)}
-                          placeholder="일"
-                        />
-                      </EraYmdRow>
-                      <PersonRegisterModalLabel>
-                        종료: 연도 · 월 · 일 (선택)
-                      </PersonRegisterModalLabel>
-                      <EraYmdRow style={{ marginBottom: 8 }}>
-                        <input
-                          type="number"
-                          min={1}
-                          value={eraEndYear}
-                          onChange={(e) => setEraEndYear(e.target.value)}
-                          placeholder="연도"
-                        />
-                        <input
-                          type="number"
-                          min={1}
-                          max={12}
-                          value={eraEndMonth}
-                          onChange={(e) => setEraEndMonth(e.target.value)}
-                          placeholder="월"
-                        />
-                        <input
-                          type="number"
-                          min={1}
-                          max={31}
-                          value={eraEndDay}
-                          onChange={(e) => setEraEndDay(e.target.value)}
-                          placeholder="일"
-                        />
-                      </EraYmdRow>
-                      <FieldHint style={{ marginBottom: 16 }}>
-                        종료를 비우면 재위 종료까지로 해석해 표시할 수 있습니다.
-                      </FieldHint>
-                      <PersonRegisterModalLabel>
-                        변경 사유 (선택)
-                      </PersonRegisterModalLabel>
-                      <StyledFormInput
-                        value={eraChangeReason}
-                        onChange={(e) => setEraChangeReason(e.target.value)}
-                        placeholder="예: 즉위, 개원"
-                      />
-                    </>
-                  )}
-                </PersonRegisterModalField>
-              </FormRows>
-            </PersonRegisterModalFormScroll>
-
-            <PersonRegisterModalStickyFooter>
-              <PersonRegisterModalCancelBtn
-                type="button"
-                onClick={resetForm}
-                disabled={submitting}
-              >
-                초기화
-              </PersonRegisterModalCancelBtn>
-              <PersonRegisterModalPrimaryBtn
-                type="button"
-                disabled={submitting || !canSave}
-                onClick={() => handleSave()}
-              >
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 8,
-                  }}
-                >
-                  <FiSave size={16} />
-                  {submitting ? '저장 중…' : '저장'}
-                </span>
-              </PersonRegisterModalPrimaryBtn>
-            </PersonRegisterModalStickyFooter>
-          </PersonRegisterModalBox>
-        </PersonRegisterModalOverlay>
-      )}
-    </AnimatePresence>
-  )
-
-  return createPortal(
-    <>
-      {content}
+        <PersonRegisterModalStickyFooter>
+          <PersonRegisterModalCancelBtn
+            type="button"
+            onClick={resetForm}
+            disabled={submitting}
+          >
+            초기화
+          </PersonRegisterModalCancelBtn>
+          <PersonRegisterModalPrimaryBtn
+            type="button"
+            disabled={submitting || !canSave}
+            onClick={() => handleSave()}
+          >
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <FiSave size={16} />
+              {submitting ? '저장 중…' : '저장'}
+            </span>
+          </PersonRegisterModalPrimaryBtn>
+        </PersonRegisterModalStickyFooter>
+      </RegisterModal>
       <SelectModal
         isOpen={isOpen && positionTitleModalOpen}
         onClose={() => setPositionTitleModalOpen(false)}
@@ -891,7 +847,6 @@ export function RegisterMonarchModal({
           onSelect={({ id }) => setSelectedAffinityHistoricalId(id || null)}
         />
       )}
-    </>,
-    document.body,
+    </>
   )
 }

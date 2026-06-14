@@ -9,21 +9,13 @@
  * 인물 상세 카드의 삭제 버튼으로 처리.
  */
 import { useEffect, useState } from 'react'
+
 import { useQueryClient } from '@tanstack/react-query'
-import { FiX } from 'react-icons/fi'
+
 import styled from 'styled-components'
 
 import { personCareerApi } from '@/shared/api/person-career'
-import {
-  ModalBody,
-  ModalBox,
-  ModalCloseButton,
-  ModalFooter,
-  ModalHeader,
-  ModalOverlay,
-  ModalSubtitle,
-  ModalTitle,
-} from '@/shared/ui/modal'
+import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
 export interface AwardRegisterModalProps {
@@ -59,17 +51,6 @@ export function AwardRegisterModal({
     setSubmitting(false)
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [open, onClose])
-
-  if (!open) return null
-
   const canSubmit = awardName.trim().length > 0 && !submitting
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -91,7 +72,9 @@ export function AwardRegisterModal({
       onClose()
     } catch (err) {
       const message =
-        err instanceof Error && err.message ? err.message : '저장에 실패했습니다.'
+        err instanceof Error && err.message
+          ? err.message
+          : '저장에 실패했습니다.'
       notify.error(message)
     } finally {
       setSubmitting(false)
@@ -99,95 +82,82 @@ export function AwardRegisterModal({
   }
 
   return (
-    <ModalOverlay onClick={onClose}>
-      <ModalBox
-        $maxWidth="560px"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="award-register-title"
-      >
-        <ModalHeader>
-          <div>
-            <ModalTitle id="award-register-title">수상·훈장 등록</ModalTitle>
-            <ModalSubtitle>받은 상·훈장을 기록하세요.</ModalSubtitle>
-          </div>
-          <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
-            <FiX />
-          </ModalCloseButton>
-        </ModalHeader>
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      title="수상·훈장 등록"
+      subtitle="받은 상·훈장을 기록하세요."
+    >
+      <form onSubmit={handleSubmit}>
+        <ModalBody>
+          <Field>
+            <Label>
+              수상명 <Required>*</Required>
+            </Label>
+            <TextInput
+              type="text"
+              value={awardName}
+              onChange={(e) => setAwardName(e.target.value)}
+              placeholder="예: 노벨 물리학상, 무공훈장, 올림픽 금메달"
+              maxLength={200}
+              autoFocus
+            />
+          </Field>
 
-        <form onSubmit={handleSubmit}>
-          <ModalBody>
+          <TwoCol>
             <Field>
-              <Label>
-                수상명 <Required>*</Required>
-              </Label>
+              <Label>분야</Label>
               <TextInput
                 type="text"
-                value={awardName}
-                onChange={(e) => setAwardName(e.target.value)}
-                placeholder="예: 노벨 물리학상, 무공훈장, 올림픽 금메달"
-                maxLength={200}
-                autoFocus
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="예: 물리학상, 100m"
+                maxLength={120}
               />
             </Field>
-
-            <TwoCol>
-              <Field>
-                <Label>분야</Label>
-                <TextInput
-                  type="text"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  placeholder="예: 물리학상, 100m"
-                  maxLength={120}
-                />
-              </Field>
-              <Field>
-                <Label>수상일</Label>
-                <TextInput
-                  type="date"
-                  value={awardDate}
-                  onChange={(e) => setAwardDate(e.target.value)}
-                />
-              </Field>
-            </TwoCol>
-
             <Field>
-              <Label>수여 기관</Label>
+              <Label>수상일</Label>
               <TextInput
-                type="text"
-                value={awardingBody}
-                onChange={(e) => setAwardingBody(e.target.value)}
-                placeholder="예: 스웨덴 왕립과학원, 국방부"
-                maxLength={200}
+                type="date"
+                value={awardDate}
+                onChange={(e) => setAwardDate(e.target.value)}
               />
             </Field>
+          </TwoCol>
 
-            <Field>
-              <Label>설명</Label>
-              <TextArea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="수상 배경·공적 등 (선택)"
-                rows={4}
-              />
-            </Field>
-          </ModalBody>
+          <Field>
+            <Label>수여 기관</Label>
+            <TextInput
+              type="text"
+              value={awardingBody}
+              onChange={(e) => setAwardingBody(e.target.value)}
+              placeholder="예: 스웨덴 왕립과학원, 국방부"
+              maxLength={200}
+            />
+          </Field>
 
-          <ModalFooter>
-            <Spacer />
-            <CancelBtn type="button" onClick={onClose} disabled={submitting}>
-              취소
-            </CancelBtn>
-            <SaveBtn type="submit" disabled={!canSubmit}>
-              {submitting ? '저장 중…' : '등록'}
-            </SaveBtn>
-          </ModalFooter>
-        </form>
-      </ModalBox>
-    </ModalOverlay>
+          <Field>
+            <Label>설명</Label>
+            <TextArea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="수상 배경·공적 등 (선택)"
+              rows={4}
+            />
+          </Field>
+        </ModalBody>
+
+        <ModalFooter>
+          <Spacer />
+          <CancelBtn type="button" onClick={onClose} disabled={submitting}>
+            취소
+          </CancelBtn>
+          <SaveBtn type="submit" disabled={!canSubmit}>
+            {submitting ? '저장 중…' : '등록'}
+          </SaveBtn>
+        </ModalFooter>
+      </form>
+    </Modal>
   )
 }
 
@@ -233,7 +203,7 @@ const TextInput = styled.input`
   ${fieldBase}
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e2e8f0'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
   color: ${({ theme }) =>
