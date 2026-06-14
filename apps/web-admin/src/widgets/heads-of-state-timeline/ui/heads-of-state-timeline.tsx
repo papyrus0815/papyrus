@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 
 import { AnimatePresence, motion } from 'framer-motion'
@@ -18,7 +19,10 @@ import {
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { getAllPersons } from '@/shared/api/persons'
 import { pathKeys } from '@/shared/router'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { notify } from '@/shared/ui/toast'
 
 import { Legend } from './legend'
@@ -31,7 +35,7 @@ import { EventSearchModal } from './event-search-modal'
 import { LeaderQuickView } from './leader-quick-view'
 import { PersonDetailModal } from '@/widgets/person/person-detail-panel/person-detail-modal'
 import type { TenureBar } from '../lib/normalize-tenures'
-import type { PinnedRow } from '../model/types'
+import type { PinnedRow, PinnedSegment } from '../model/types'
 import { useAllRowsTenures } from '../api/use-all-rows-tenures'
 import { useEventOverlay } from '../model/use-event-overlay'
 import {
@@ -77,6 +81,39 @@ function HeadsOfStateTimelineInner() {
   const openBarQuickView = useCallback((bar: TenureBar) => {
     setQuickViewBar(bar)
   }, [])
+
+  // ── 수반 등록 인플레이스: 핀 행의 국가 맥락 → 인물 선택 → 공유 등록 패널 ──
+  const [registerSegment, setRegisterSegment] = useState<PinnedSegment | null>(
+    null,
+  )
+  const [registerPersonId, setRegisterPersonId] = useState<string | null>(null)
+  const [personPickerOpen, setPersonPickerOpen] = useState(false)
+  const [tenurePanelOpen, setTenurePanelOpen] = useState(false)
+
+  const { data: registerPersons, isLoading: registerPersonsLoading } = useQuery({
+    queryKey: ['persons', 'all'],
+    queryFn: getAllPersons,
+    enabled: personPickerOpen,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const handleRegisterHead = useCallback((segment: PinnedSegment) => {
+    setRegisterSegment(segment)
+    setRegisterPersonId(null)
+    setPersonPickerOpen(true)
+  }, [])
+
+  const closeRegisterFlow = useCallback(() => {
+    setTenurePanelOpen(false)
+    setPersonPickerOpen(false)
+    setRegisterPersonId(null)
+    setRegisterSegment(null)
+  }, [])
+
+  const registerCountryId =
+    registerSegment?.kind === 'COUNTRY' ? registerSegment.countryId : undefined
+  const registerHistoricalCountryId =
+    registerSegment?.kind === 'HISTORICAL' ? registerSegment.countryId : null
 
   // 행 제거 직후 5초간 undo 가능 — stack에 push, 가장 최근 것부터 pop.
   const undoStackRef = useRef<
@@ -319,6 +356,7 @@ function HeadsOfStateTimelineInner() {
             onAddSegmentToRow={state.addSegmentToRow}
             onRemoveSegmentFromRow={state.removeSegmentFromRow}
             onClearAll={state.clearAll}
+            onRegisterHead={handleRegisterHead}
           />
           <TimelineCanvas
             rows={state.rows}
@@ -388,6 +426,30 @@ function HeadsOfStateTimelineInner() {
           onClose={() => setQuickViewBar(null)}
           onOpenPerson={openByPersonId}
         />
+        {personPickerOpen && (
+          <PersonSelectModal
+            persons={registerPersons ?? []}
+            selectedPersonId={registerPersonId ?? ''}
+            loading={registerPersonsLoading}
+            title="수반 등록 — 인물 선택"
+            defaultCountryId={registerCountryId}
+            onSelect={(personId) => {
+              setRegisterPersonId(personId)
+              setPersonPickerOpen(false)
+              setTenurePanelOpen(true)
+            }}
+            onClose={() => setPersonPickerOpen(false)}
+          />
+        )}
+        {registerPersonId && (
+          <TenureRegisterPanel
+            personId={registerPersonId}
+            open={tenurePanelOpen}
+            onClose={closeRegisterFlow}
+            initialCountryId={registerCountryId}
+            initialHistoricalCountryId={registerHistoricalCountryId}
+          />
+        )}
       </Wrapper>
     </HeadsTooltipProvider>
   )

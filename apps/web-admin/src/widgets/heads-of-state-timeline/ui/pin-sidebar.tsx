@@ -10,6 +10,7 @@ import {
   FiPlus,
   FiSearch,
   FiTrash2,
+  FiUserPlus,
   FiX,
 } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
@@ -36,6 +37,8 @@ interface Props {
   ) => void
   onRemoveSegmentFromRow: (rowId: string, segmentId: string) => void
   onClearAll: () => void
+  /** 이 행의 국가에 수반(재임)을 바로 등록 — 인물 선택 → 등록 패널 흐름을 부모가 연다 */
+  onRegisterHead: (segment: PinnedSegment) => void
 }
 
 const EMPTY_HINT = '오른쪽 빈 화면의 추천 조합으로 시작하거나, 직접 추가할 수 있습니다.'
@@ -50,6 +53,7 @@ export function PinSidebar({
   onAddSegmentToRow,
   onRemoveSegmentFromRow,
   onClearAll,
+  onRegisterHead,
 }: Props) {
   const [addRowModalOpen, setAddRowModalOpen] = useState(false)
   const [addSegmentRowId, setAddSegmentRowId] = useState<string | null>(null)
@@ -323,6 +327,21 @@ export function PinSidebar({
                   ))}
                 </RowSegments>
                 <RowActions>
+                  <SmallIconButton
+                    type="button"
+                    aria-label="이 국가에 수반 등록"
+                    title="이 국가에 수반(재임) 등록"
+                    onClick={() => {
+                      const sorted = sortSegmentsChronologically(row.segments)
+                      const target =
+                        row.segments.find((seg) => seg.kind === 'COUNTRY') ??
+                        sorted[sorted.length - 1] ??
+                        row.segments[0]
+                      if (target) onRegisterHead(target)
+                    }}
+                  >
+                    <FiUserPlus size={14} />
+                  </SmallIconButton>
                   <SmallIconButton
                     type="button"
                     aria-label="이 행에 계승국 추가"
