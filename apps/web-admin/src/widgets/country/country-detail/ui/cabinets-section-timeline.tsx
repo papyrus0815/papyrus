@@ -1,4 +1,4 @@
-import { FiHome, FiUser } from 'react-icons/fi'
+import { FiAward, FiHome, FiUser } from 'react-icons/fi'
 
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 
@@ -76,6 +76,8 @@ export function TlItem({
   thumbOnEnd = false,
   /** 세로 타임라인 등에서 군주 썸네일 배지 숨김 */
   hideMonarchBadge = false,
+  /** 수반 업적·한일 건수 — >0이면 메타행에 배지 표시 */
+  achievementCount = 0,
 }: {
   thumbUrl: string | null
   personName: string
@@ -88,6 +90,7 @@ export function TlItem({
   thumbRingColor?: string | null
   thumbOnEnd?: boolean
   hideMonarchBadge?: boolean
+  achievementCount?: number
   /** 전체 보기 등에서 소속 역사국가·현대국가 구분용 한 줄 */
   territoryLabel?: string | null
   reignEraLine?: string | null
@@ -215,6 +218,22 @@ export function TlItem({
             <CabS.TlItemAgeNote $color={C.iconColor}>
               취임 {ageAtStart}세
             </CabS.TlItemAgeNote>
+          )}
+          {achievementCount > 0 && (
+            <span
+              title={`업적·한일 ${achievementCount}건 기록됨`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
+                fontSize: 11,
+                fontWeight: 700,
+                color: posPillColor,
+              }}
+            >
+              <FiAward size={11} strokeWidth={2.2} aria-hidden />업적{' '}
+              {achievementCount}
+            </span>
           )}
         </CabS.TlItemMetaRow>
         {birthPlace && (

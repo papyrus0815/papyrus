@@ -2227,6 +2227,11 @@ export function CabinetsSection({
                                         reignEraLine:
                                           cardReignLineOnly ?? undefined,
                                         hideMonarchBadge: true as const,
+                                        achievementCount: Array.isArray(
+                                          head?.achievements,
+                                        )
+                                          ? head.achievements.length
+                                          : 0,
                                         isDark,
                                       }
                                       const cellPadStyle =

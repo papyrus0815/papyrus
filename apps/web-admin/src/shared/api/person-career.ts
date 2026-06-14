@@ -539,6 +539,8 @@ export type GovernmentHeadTenureInCabinetList = {
   recordKind?: 'TENURE' | 'SOVEREIGN_REIGN'
   person?: GovernmentCabinetTenureItem['person']
   positionDefinition?: GovernmentCabinetTenureItem['positionDefinition']
+  /** 수반 업적·한일 — GET /government-positions/cabinets 응답에 포함됨 */
+  achievements?: GovernmentTenureAchievementItem[]
   country?: {
     id: string
     name: string
