@@ -1,3 +1,4 @@
+export { AdminDivisionConfigModal } from './admin-division-config-modal'
 export { AdminDivisionFormModal } from './admin-division-form-modal'
 export { InfrastructureFormModal } from './infrastructure-form-modal'
 export { KpiChip, KpiStrip } from './kpi-strip'

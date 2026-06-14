@@ -29,6 +29,7 @@ import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
 import {
+  AdminDivisionConfigModal,
   AdminDivisionFormModal,
   KpiChip,
   KpiStrip,
@@ -158,6 +159,7 @@ export function MapRegionAdministrativeView({
   const [schemeEditing, setSchemeEditing] =
     useState<AdminDivisionScheme | null>(null)
   const [compareOpen, setCompareOpen] = useState(false)
+  const [configModalOpen, setConfigModalOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // URL 동기화
@@ -669,6 +671,23 @@ export function MapRegionAdministrativeView({
         + 체계 등록
       </button>
       <span style={{ flex: 1 }} />
+      <button
+        type="button"
+        onClick={() => setConfigModalOpen(true)}
+        style={{
+          padding: '5px 11px',
+          fontSize: 12,
+          fontWeight: 600,
+          border: `1px solid ${palette.border}`,
+          background: palette.bg,
+          color: palette.textSecondary,
+          borderRadius: 9,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        ⚙ 단위 관리
+      </button>
       <button
         type="button"
         onClick={() => setCompareOpen(true)}
@@ -1280,6 +1299,14 @@ export function MapRegionAdministrativeView({
           setSchemeEditing(null)
         }}
         onCreated={(id) => setActiveScheme(id)}
+      />
+
+      <AdminDivisionConfigModal
+        isOpen={configModalOpen}
+        owner={owner}
+        schemeId={activeSchemeId}
+        schemeName={activeScheme?.name ?? null}
+        onClose={() => setConfigModalOpen(false)}
       />
 
       <AdminDivisionBulkImportModal
