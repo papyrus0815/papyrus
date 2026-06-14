@@ -28,6 +28,7 @@ import { TimelineCanvas } from './timeline-canvas'
 import { HeadsTooltipProvider } from './tooltip'
 import { ContemporaryPanel } from './contemporary-panel'
 import { EventSearchModal } from './event-search-modal'
+import { LeaderQuickView } from './leader-quick-view'
 import { PersonDetailModal } from '@/widgets/person/person-detail-panel/person-detail-modal'
 import type { TenureBar } from '../lib/normalize-tenures'
 import type { PinnedRow } from '../model/types'
@@ -71,13 +72,11 @@ function HeadsOfStateTimelineInner() {
     if (fromUrl != null) categoryFilter.setFromList(fromUrl)
   }, [categoryFilter])
 
-  const openBarModal = useCallback(
-    (bar: TenureBar) => {
-      if (bar.personId) setModalPersonId(bar.personId)
-      else notify.info('등록된 인물 정보가 없습니다')
-    },
-    [],
-  )
+  // 막대 클릭 → 업적 빠른보기 카드(가벼움). 전체 인물 상세는 카드의 버튼으로 한 번 더.
+  const [quickViewBar, setQuickViewBar] = useState<TenureBar | null>(null)
+  const openBarQuickView = useCallback((bar: TenureBar) => {
+    setQuickViewBar(bar)
+  }, [])
 
   // 행 제거 직후 5초간 undo 가능 — stack에 push, 가장 최근 것부터 pop.
   const undoStackRef = useRef<
@@ -331,7 +330,7 @@ function HeadsOfStateTimelineInner() {
             rowsTenures={rowsTenures}
             onRemoveRow={handleRemoveRowWithUndo}
             events={eventOverlay.events}
-            onSelectBar={openBarModal}
+            onSelectBar={openBarQuickView}
             onJumpToCountry={(kind, countryId) => {
               if (kind === 'COUNTRY') {
                 navigate(
@@ -383,6 +382,11 @@ function HeadsOfStateTimelineInner() {
         <PersonDetailModal
           personId={modalPersonId}
           onClose={() => setModalPersonId(null)}
+        />
+        <LeaderQuickView
+          bar={quickViewBar}
+          onClose={() => setQuickViewBar(null)}
+          onOpenPerson={openByPersonId}
         />
       </Wrapper>
     </HeadsTooltipProvider>
