@@ -34,6 +34,7 @@ import {
   type RegnalEraDto,
   personCareerApi,
 } from '@/shared/api/person-career'
+import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { getAllPersons, getPersonsByTenureCountry } from '@/shared/api/persons'
 import { uploadImage } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -652,10 +653,8 @@ export function HeadsOfStateSection({
   }, [positionDefinitions])
 
   const refetch = () => {
-    queryClient.invalidateQueries({
-      queryKey: ['tenures-by-country', countryId, historicalCountryId],
-    })
-    queryClient.invalidateQueries({ queryKey: ['global-tenures'] })
+    invalidateTenureQueries(queryClient)
+    // 직책 정의 목록은 tenure 캐시군에 속하지 않아 별도 무효화
     queryClient.invalidateQueries({
       queryKey: ['position-definitions', countryId, historicalCountryId],
     })
@@ -898,16 +897,7 @@ export function HeadsOfStateSection({
       } else if (useSovereignPath) {
         await personCareerApi.addSovereignReign(sovereignPayload)
         notify.success('재위 기록이 추가되었습니다.')
-        queryClient.invalidateQueries({
-          queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-        })
-        queryClient.invalidateQueries({
-          queryKey: [
-            'tenures-by-country-for-cabinet',
-            countryId,
-            historicalCountryId,
-          ],
-        })
+        // 아래 refetch()가 invalidateTenureQueries로 전 surface 무효화
       } else {
         const created = (await personCareerApi.addGovernmentPositionTenure(
           tenurePayload,
@@ -930,9 +920,6 @@ export function HeadsOfStateSection({
         } else {
           notify.success('재임 기록이 추가되었습니다.')
         }
-        queryClient.invalidateQueries({
-          queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-        })
       }
       resetForm()
       setEditingTenureId(null)
@@ -1165,9 +1152,7 @@ export function HeadsOfStateSection({
         notify.success('업적·한일이 등록되었습니다.')
       }
       resetAchievementForm()
-      queryClient.invalidateQueries({
-        queryKey: ['tenures-by-country', countryId, historicalCountryId],
-      })
+      invalidateTenureQueries(queryClient)
     } catch (err: any) {
       notify.error(
         err?.message ??
@@ -1206,9 +1191,7 @@ export function HeadsOfStateSection({
       }
       if (editingAchievementId === achievementId) resetAchievementForm()
       notify.success('업적이 삭제되었습니다.')
-      queryClient.invalidateQueries({
-        queryKey: ['tenures-by-country', countryId, historicalCountryId],
-      })
+      invalidateTenureQueries(queryClient)
     } catch (err: any) {
       notify.error(err?.message ?? '삭제에 실패했습니다.')
     }
@@ -1343,9 +1326,7 @@ export function HeadsOfStateSection({
         notify.success('연호가 등록되었습니다.')
       }
       resetRegnalEraForm()
-      queryClient.invalidateQueries({
-        queryKey: ['tenures-by-country', countryId, historicalCountryId],
-      })
+      invalidateTenureQueries(queryClient)
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ??
@@ -1370,9 +1351,7 @@ export function HeadsOfStateSection({
       await personCareerApi.deleteRegnalEra(eraId)
       if (editingRegnalEraId === eraId) resetRegnalEraForm()
       notify.success('연호가 삭제되었습니다.')
-      queryClient.invalidateQueries({
-        queryKey: ['tenures-by-country', countryId, historicalCountryId],
-      })
+      invalidateTenureQueries(queryClient)
     } catch (err: any) {
       notify.error(err?.message ?? '삭제에 실패했습니다.')
     }

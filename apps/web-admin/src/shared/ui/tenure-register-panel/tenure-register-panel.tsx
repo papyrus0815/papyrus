@@ -16,6 +16,7 @@ import {
   personCareerApi,
   type CreateGovernmentPositionTenureDto,
 } from '@/shared/api/person-career'
+import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getUploadImageUrl } from '@/shared/api/upload'
@@ -707,8 +708,7 @@ export function TenureRegisterPanel({
         notify.success('재임 기록이 추가되었습니다.')
       }
       onClose()
-      queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
-      queryClient.invalidateQueries({ queryKey: ['person-tenures', personId] })
+      invalidateTenureQueries(queryClient, { personId })
       onSuccess?.()
     } catch (err: any) {
       notify.error(err?.message || '저장에 실패했습니다.')
@@ -730,8 +730,7 @@ export function TenureRegisterPanel({
         notify.success('재임 기록이 삭제되었습니다.')
       }
       onClose()
-      queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
-      queryClient.invalidateQueries({ queryKey: ['person-tenures', personId] })
+      invalidateTenureQueries(queryClient, { personId })
       onSuccess?.()
     } catch (err: any) {
       notify.error(err?.message || '삭제에 실패했습니다.')

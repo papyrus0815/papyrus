@@ -12,6 +12,7 @@ import styled from 'styled-components'
 
 import { useHistoricalCountriesByModernCountry, useCountries } from '@/features/country/api'
 import { personCareerApi } from '@/shared/api/person-career'
+import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
@@ -318,7 +319,7 @@ export function SovereignReignRegisterPanel({
         await personCareerApi.addSovereignReign(dto)
         notify.success('군주 재위가 등록되었습니다.')
       }
-      queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+      invalidateTenureQueries(queryClient, { personId })
       onSuccess?.()
       onClose()
     } catch {
@@ -342,7 +343,7 @@ export function SovereignReignRegisterPanel({
     try {
       await personCareerApi.deleteSovereignReign(reignId)
       notify.success('재위 기록이 삭제되었습니다.')
-      queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+      invalidateTenureQueries(queryClient, { personId })
       onSuccess?.()
       onClose()
     } catch {

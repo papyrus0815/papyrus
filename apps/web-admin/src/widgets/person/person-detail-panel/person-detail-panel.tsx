@@ -37,6 +37,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { personKeys } from '@/entities/person/api'
 import type { PersonHumanRelationshipItem } from '@/shared/api/person-human-relationships'
 import { personCareerApi } from '@/shared/api/person-career'
+import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { deletePerson, updatePerson } from '@/shared/api/persons'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getPersonFamilyTree } from '@/shared/api/persons-family-tree'
@@ -1556,9 +1557,8 @@ export function PersonDetailPanel({
                         setSovereignReignModalOpen(true)
                       }}
                       onAchievementChanged={() => {
-                        queryClient.invalidateQueries({
-                          queryKey: personKeys.detailFull(personId),
-                        })
+                        // 업적은 행정부·수장 비교 화면에도 박혀 있어 함께 무효화
+                        invalidateTenureQueries(queryClient, { personId })
                       }}
                     />
                   </section>

@@ -54,6 +54,7 @@ import {
   type TenureAchievementByEventLinkRow,
   personCareerApi,
 } from '@/shared/api/person-career'
+import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { type PersonResponseDto, getAllPersons } from '@/shared/api/persons'
 import {
   TREATY_PARTICIPATION_LABELS,
@@ -975,12 +976,7 @@ export function CabinetsSection({
       await personCareerApi.updateTenureAchievement(tenureId, achievementId, {
         description: description.trim() || undefined,
       })
-      queryClient.invalidateQueries({
-        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['cabinet-tenures', selectedCabinetId],
-      })
+      invalidateTenureQueries(queryClient)
       setEditingHistoryContent(false)
       setHistoryDraftContent('')
       notify.success('저장되었습니다.')
@@ -1003,12 +999,7 @@ export function CabinetsSection({
         startDate: historyMetaStartDate || undefined,
         endDate: historyMetaEndDate || undefined,
       })
-      queryClient.invalidateQueries({
-        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['cabinet-tenures', selectedCabinetId],
-      })
+      invalidateTenureQueries(queryClient)
       setEditingHistoryMeta(false)
       notify.success('저장되었습니다.')
     } catch {
@@ -1040,12 +1031,7 @@ export function CabinetsSection({
       )
       notify.success('히스토리가 등록되었습니다.')
 
-      queryClient.invalidateQueries({
-        queryKey: ['cabinet-tenures', selectedCabinetId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-      })
+      invalidateTenureQueries(queryClient)
       resetHistoryForm()
     } catch (e: any) {
       notify.error(
@@ -1086,12 +1072,7 @@ export function CabinetsSection({
         setSelectedHeadHistoryId(null)
         setEditingHistoryContent(false)
       }
-      queryClient.invalidateQueries({
-        queryKey: ['cabinet-tenures', selectedCabinetId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-      })
+      invalidateTenureQueries(queryClient)
       notify.success('히스토리가 삭제되었습니다.')
     } catch (e: any) {
       notify.error(
@@ -1166,10 +1147,7 @@ export function CabinetsSection({
       notify.success('각료가 등록되었습니다.')
       setPersonSelectOpen(false)
       setAddMinisterCabinet(null)
-      queryClient.invalidateQueries({
-        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-      })
-      queryClient.invalidateQueries({ queryKey: ['cabinet-tenures'] })
+      invalidateTenureQueries(queryClient)
     } catch (e: any) {
       notify.error(
         e?.response?.data?.message ?? e?.message ?? '등록에 실패했습니다.',
@@ -1214,9 +1192,7 @@ export function CabinetsSection({
       notify.success('행정부가 등록되었습니다.')
       setRegisterCabinetModalOpen(false)
       setRegisterFlow('select')
-      queryClient.invalidateQueries({
-        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-      })
+      invalidateTenureQueries(queryClient)
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ?? e?.message ?? '등록에 실패했습니다.'
@@ -1242,21 +1218,8 @@ export function CabinetsSection({
   }, [])
 
   const invalidateAfterMonarchRegister = useCallback(() => {
-    queryClient.invalidateQueries({
-      queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-    })
-    queryClient.invalidateQueries({
-      queryKey: [
-        'tenures-by-country-for-cabinet',
-        countryId,
-        historicalCountryId,
-      ],
-    })
-    queryClient.invalidateQueries({
-      queryKey: ['tenures-by-country', countryId, historicalCountryId],
-    })
-    queryClient.invalidateQueries({ queryKey: ['global-tenures'] })
-  }, [queryClient, countryId, historicalCountryId])
+    invalidateTenureQueries(queryClient)
+  }, [queryClient])
 
   /** 새 수반 재임 생성 후 행정부까지 한 번에 등록 */
   const handleRegisterNewHeadAndCabinet = async () => {
@@ -1324,16 +1287,7 @@ export function CabinetsSection({
       setRegisterCabinetModalOpen(false)
       setRegisterFlow('select')
       resetNewHeadForm()
-      queryClient.invalidateQueries({
-        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: [
-          'tenures-by-country-for-cabinet',
-          countryId,
-          historicalCountryId,
-        ],
-      })
+      invalidateTenureQueries(queryClient)
     } catch (e: any) {
       const msg =
         e?.response?.data?.message ?? e?.message ?? '등록에 실패했습니다.'
@@ -1365,16 +1319,7 @@ export function CabinetsSection({
         setSelectedCabinetId(null)
         setCabinetView('list')
       }
-      queryClient.invalidateQueries({
-        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: [
-          'tenures-by-country-for-cabinet',
-          countryId,
-          historicalCountryId,
-        ],
-      })
+      invalidateTenureQueries(queryClient)
     } catch (err: any) {
       notify.error(
         err?.response?.data?.message ?? err?.message ?? '삭제에 실패했습니다.',
@@ -1463,9 +1408,7 @@ export function CabinetsSection({
       })
       notify.success('저장되었습니다.')
       setEditingTenureInfo(null)
-      queryClient.invalidateQueries({
-        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-      })
+      invalidateTenureQueries(queryClient)
     } catch (err: any) {
       notify.error(
         err?.response?.data?.message ?? err?.message ?? '저장에 실패했습니다.',
@@ -1533,16 +1476,7 @@ export function CabinetsSection({
       })
       notify.success('행정부가 수정되었습니다.')
       closeEditCabinetModal()
-      queryClient.invalidateQueries({
-        queryKey: ['cabinets-by-country', countryId, historicalCountryId],
-      })
-      queryClient.invalidateQueries({
-        queryKey: [
-          'tenures-by-country-for-cabinet',
-          countryId,
-          historicalCountryId,
-        ],
-      })
+      invalidateTenureQueries(queryClient)
     } catch (err: any) {
       notify.error(
         err?.response?.data?.message ?? err?.message ?? '수정에 실패했습니다.',
