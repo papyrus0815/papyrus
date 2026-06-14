@@ -658,6 +658,24 @@ export class PersonService {
     await this.notificationService.notifyTenure(label, EventMethod.DELETE, row?.personId)
   }
 
+  /** 재임 1건 + 업적 조회 (없으면 404) */
+  async getTenureWithAchievements(id: string): Promise<any> {
+    const tenure = await this.personRepository.findTenureById(id)
+    if (!tenure) {
+      throw new NotFoundException('재임 기록을 찾을 수 없습니다.')
+    }
+    return tenure
+  }
+
+  /** 재위 1건 + 업적 조회 (없으면 404) */
+  async getSovereignReignWithAchievements(id: string): Promise<any> {
+    const row = await this.personRepository.findSovereignReignById(id)
+    if (!row) {
+      throw new NotFoundException('재위 기록을 찾을 수 없습니다.')
+    }
+    return row
+  }
+
   /**
    * 연보 start/end 날짜 범위 검증 — endDate < startDate 금지.
    * 두 값이 모두 있을 때만 검사(각각 null 허용).

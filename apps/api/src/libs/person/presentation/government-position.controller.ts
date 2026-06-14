@@ -464,6 +464,12 @@ export class GovernmentPositionController {
     await this.personService.deleteGovernmentPositionTenure(id)
   }
 
+  /** 재임 1건 + 업적 조회 (수장 비교 등 읽기 팝오버용) */
+  @Get('tenures/:id/with-achievements')
+  async getTenureWithAchievements(@Param('id') id: string): Promise<any> {
+    return this.personService.getTenureWithAchievements(id)
+  }
+
   /** 군주·재위 전용 기록 추가 (SovereignReign — 행정부와 별도 테이블) */
   @Post('sovereign-reigns')
   async addSovereignReign(@Req() req: Request, @Body() dto: CreateSovereignReignDto): Promise<any> {
@@ -486,6 +492,12 @@ export class GovernmentPositionController {
   @Delete('sovereign-reigns/:id')
   async deleteSovereignReign(@Param('id') id: string): Promise<void> {
     await this.personService.deleteSovereignReign(id)
+  }
+
+  /** 재위 1건 + 업적 조회 (수장 비교 등 읽기 팝오버용) */
+  @Get('sovereign-reigns/:id/with-achievements')
+  async getSovereignReignWithAchievements(@Param('id') id: string): Promise<any> {
+    return this.personService.getSovereignReignWithAchievements(id)
   }
 
   @Post('sovereign-reigns/:sovereignReignId/achievements')

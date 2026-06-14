@@ -749,6 +749,22 @@ export const personCareerApi = {
     )
   },
 
+  /** 재임 1건 + 업적 조회 (수장 비교 읽기 팝오버 등 — 지연 로드용) */
+  getTenureWithAchievements: async (id: string) => {
+    const response = await apiClient.get(
+      `/government-positions/tenures/${encodeURIComponent(id)}/with-achievements`,
+    )
+    return response.data
+  },
+
+  /** 재위 1건 + 업적 조회 (수장 비교 읽기 팝오버 등 — 지연 로드용) */
+  getSovereignReignWithAchievements: async (id: string) => {
+    const response = await apiClient.get(
+      `/government-positions/sovereign-reigns/${encodeURIComponent(id)}/with-achievements`,
+    )
+    return response.data
+  },
+
   createRegnalEraForSovereignReign: async (
     sovereignReignId: string,
     dto: CreateRegnalEraDto,

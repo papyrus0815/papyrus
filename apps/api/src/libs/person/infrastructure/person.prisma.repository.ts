@@ -3937,6 +3937,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       include: {
         positionDefinition: true,
         person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
       },
     })
     if (!row) return null
