@@ -40,6 +40,8 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { categorizePosition } from '@/entities/government-position/model/categorize'
+import type { PositionCategory } from '@/entities/government-position/model/types'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { type AdministrativeDivision, cityApi } from '@/shared/api/city'
 import { getAllCountries } from '@/shared/api/countries'
@@ -183,6 +185,43 @@ import { RegisterMonarchModal } from './register-monarch-modal'
 import { TenureHistoryHorizTimeline } from './tenure-history-horiz-timeline'
 import { TreatyLinkModal } from './treaty-link-modal'
 import { CabinetEventsSection } from './cabinet-events-section.widget'
+
+/** 행정부 수반 직위 유형 필터의 라벨·노출 순서 */
+const CABINET_CATEGORY_LABEL: Record<PositionCategory, string> = {
+  PRESIDENT: '대통령',
+  PM: '총리',
+  MONARCH: '군주',
+  POPE: '교황',
+  OTHER: '기타',
+}
+const CABINET_CATEGORY_ORDER: PositionCategory[] = [
+  'PRESIDENT',
+  'PM',
+  'MONARCH',
+  'POPE',
+  'OTHER',
+]
+
+/** 행정부 수반(재임) 한 건의 직위 분류 — 단일 출처 categorizePosition에 위임 */
+function cabinetHeadCategory(
+  head:
+    | {
+        positionType?: string | null
+        positionDefinition?: { positionType?: string | null; title?: string | null } | null
+        title?: string | null
+        appointmentMethod?: string | null
+        recordKind?: string | null
+      }
+    | null
+    | undefined,
+): PositionCategory {
+  return categorizePosition({
+    kind: head?.recordKind,
+    positionType: head?.positionType ?? head?.positionDefinition?.positionType,
+    positionTitle: head?.positionDefinition?.title ?? head?.title,
+    appointmentMethod: head?.appointmentMethod,
+  })
+}
 
 /** 업적 API 호출 시: 묶음으로 병합된 항목은 실제 소유 재임 ID 사용 */
 function tenureIdForAchievement(
@@ -519,6 +558,10 @@ export function CabinetsSection({
   const [cabinetSearchQuery, setCabinetSearchQuery] = useState('')
   /** 국가 필터: '' = 전체, countryId = 현대국가, historicalCountryId = 하위 역사국가 */
   const [cabinetCountryFilter, setCabinetCountryFilter] = useState<string>('')
+  /** 직위 유형 필터(대통령/총리/…) — ''이면 전체 */
+  const [cabinetCategoryFilter, setCabinetCategoryFilter] = useState<
+    PositionCategory | ''
+  >('')
   const [ministerSearchQuery, setMinisterSearchQuery] = useState('')
   const [selectedMinisterId, setSelectedMinisterId] = useState<string | null>(
     null,
@@ -611,18 +654,37 @@ export function CabinetsSection({
     [sortedCabinets],
   )
 
-  const filteredCabinets = useMemo(() => {
-    let list = executiveCabinetsSorted
+  const countryFilteredCabinets = useMemo(() => {
+    if (!cabinetCountryFilter) return executiveCabinetsSorted
+    return executiveCabinetsSorted.filter((cabinet) => {
+      const head = cabinet.headTenure
+      if (cabinetCountryFilter === countryId) {
+        return head?.countryId === countryId && !head?.historicalCountryId
+      }
+      return head?.historicalCountryId === cabinetCountryFilter
+    })
+  }, [executiveCabinetsSorted, cabinetCountryFilter, countryId])
 
-    // 국가 필터
-    if (cabinetCountryFilter) {
-      list = list.filter((c: any) => {
-        const head = c.headTenure
-        if (cabinetCountryFilter === countryId) {
-          return head?.countryId === countryId && !head?.historicalCountryId
-        }
-        return head?.historicalCountryId === cabinetCountryFilter
-      })
+  /** 직위 유형 탭: 현재 국가 범위에 실제 존재하는 분류만 노출(전체는 별도) */
+  const cabinetCategoryOptions = useMemo(() => {
+    const present = new Set<PositionCategory>()
+    for (const cabinet of countryFilteredCabinets) {
+      present.add(cabinetHeadCategory(cabinet.headTenure))
+    }
+    return CABINET_CATEGORY_ORDER.filter((category) =>
+      present.has(category),
+    ).map((category) => ({ category, label: CABINET_CATEGORY_LABEL[category] }))
+  }, [countryFilteredCabinets])
+
+  const filteredCabinets = useMemo(() => {
+    let list = countryFilteredCabinets
+
+    // 직위 유형 필터 (대통령/총리/…)
+    if (cabinetCategoryFilter) {
+      list = list.filter(
+        (cabinet) =>
+          cabinetHeadCategory(cabinet.headTenure) === cabinetCategoryFilter,
+      )
     }
 
     const q = cabinetSearchQuery.trim().toLowerCase()
@@ -679,10 +741,9 @@ export function CabinetsSection({
       )
     })
   }, [
-    executiveCabinetsSorted,
+    countryFilteredCabinets,
+    cabinetCategoryFilter,
     cabinetSearchQuery,
-    cabinetCountryFilter,
-    countryId,
     country.name,
     countryTenures,
     cabinetTimelineCountryScope,
@@ -1701,6 +1762,37 @@ export function CabinetsSection({
                       </CabS.CabCountryFilterTabs>
                     )}
 
+                  {cabinetCategoryOptions.length > 1 && (
+                    <CabS.CabCountryFilterTabs
+                      role="tablist"
+                      aria-label="직위 유형 필터"
+                    >
+                      {[
+                        {
+                          category: '' as PositionCategory | '',
+                          label: '전체',
+                        },
+                        ...cabinetCategoryOptions,
+                      ].map((tab) => {
+                        const active = cabinetCategoryFilter === tab.category
+                        return (
+                          <CabS.CabCountryFilterTab
+                            key={tab.category || 'all'}
+                            type="button"
+                            role="tab"
+                            aria-selected={active}
+                            $active={active}
+                            onClick={() =>
+                              setCabinetCategoryFilter(tab.category)
+                            }
+                          >
+                            {tab.label}
+                          </CabS.CabCountryFilterTab>
+                        )
+                      })}
+                    </CabS.CabCountryFilterTabs>
+                  )}
+
                   <CabS.CabListControlsRow>
                     <CabS.CabListSearchBox>
                       <CabS.CabListSearchIcon aria-hidden>
@@ -1761,7 +1853,9 @@ export function CabinetsSection({
               {timelineCabinetsMerged.length === 0 ? (
                 <CabS.CabListBody>
                   <EmptyStateFill>
-                    {cabinetSearchQuery.trim() || cabinetCountryFilter ? (
+                    {cabinetSearchQuery.trim() ||
+                    cabinetCountryFilter ||
+                    cabinetCategoryFilter ? (
                       <EmptyStateSpotlight
                         icon={<FiSearch size={30} strokeWidth={1.75} />}
                         title="검색 결과가 없습니다"
@@ -1771,6 +1865,7 @@ export function CabinetsSection({
                           onClick: () => {
                             setCabinetSearchQuery('')
                             setCabinetCountryFilter('')
+                            setCabinetCategoryFilter('')
                           },
                           icon: <FiX size={14} />,
                         }}
