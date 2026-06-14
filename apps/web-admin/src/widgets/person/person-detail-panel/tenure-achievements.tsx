@@ -24,7 +24,7 @@ import { personCareerApi } from '@/shared/api/person-career'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
-import { formatIsoDateKo } from './helpers'
+import { compareTenureAchievementsByOrder, formatIsoDateKo } from './helpers'
 import {
   AchievementAddBtn,
   AchievementCancelBtn,
@@ -95,12 +95,7 @@ export function TenureAchievements({
   onChanged,
   onPlayClick,
 }: TenureAchievementsProps) {
-  const list = [...(achievements ?? [])].sort((a, b) => {
-    const oa = a.orderNum ?? 0
-    const ob = b.orderNum ?? 0
-    if (oa !== ob) return oa - ob
-    return (a.startDate ?? '').localeCompare(b.startDate ?? '')
-  })
+  const list = [...(achievements ?? [])].sort(compareTenureAchievementsByOrder)
 
   const [expanded, setExpanded] = useState(false)
   const [formOpen, setFormOpen] = useState(false)

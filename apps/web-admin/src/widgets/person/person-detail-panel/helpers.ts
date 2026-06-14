@@ -86,6 +86,23 @@ export function isoDateToApproxDays(iso: string | null | undefined): number | nu
   return astroYear * 365.25 + (p.month - 1) * 30.4375 + p.day
 }
 
+/**
+ * 인물 상세 업적 목록 정렬 비교자 — orderNum 오름차순, 동률이면 startDate 문자열 비교.
+ *
+ * 행정부 타임라인의 `compareTenureAchievementsChronological`는 startDate만 보고 정렬한다.
+ * 두 화면의 정렬 기준이 다른 것은 *의도된 차이*이므로, 렌더러를 통합할 때
+ * variant별로 이 차이를 보존해야 한다. (achievement-renderers-divergence.spec.ts 참고)
+ */
+export function compareTenureAchievementsByOrder(
+  left: { orderNum?: number | null; startDate?: string | null },
+  right: { orderNum?: number | null; startDate?: string | null },
+): number {
+  const leftOrder = left.orderNum ?? 0
+  const rightOrder = right.orderNum ?? 0
+  if (leftOrder !== rightOrder) return leftOrder - rightOrder
+  return (left.startDate ?? '').localeCompare(right.startDate ?? '')
+}
+
 /** 사망 유형 enum → 한국어 라벨 */
 export const DEATH_TYPE_LABELS: Record<string, string> = {
   NATURAL: '자연사',
