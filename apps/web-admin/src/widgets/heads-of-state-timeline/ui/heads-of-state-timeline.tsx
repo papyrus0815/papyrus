@@ -21,7 +21,9 @@ import styled from 'styled-components'
 
 import { getAllPersons } from '@/shared/api/persons'
 import { pathKeys } from '@/shared/router'
+import { Modal, ModalBody } from '@/shared/ui/modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { SovereignReignRegisterPanel } from '@/shared/ui/sovereign-reign-register-panel/sovereign-reign-register-panel'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { notify } from '@/shared/ui/toast'
 
@@ -82,13 +84,17 @@ function HeadsOfStateTimelineInner() {
     setQuickViewBar(bar)
   }, [])
 
-  // ── 수반 등록 인플레이스: 핀 행의 국가 맥락 → 인물 선택 → 공유 등록 패널 ──
+  // ── 수반/군주 등록 인플레이스: 국가 맥락 → 등록 유형 → 인물 선택 → 공유 등록 패널 ──
   const [registerSegment, setRegisterSegment] = useState<PinnedSegment | null>(
     null,
   )
+  const [registerKind, setRegisterKind] = useState<'tenure' | 'reign' | null>(
+    null,
+  )
   const [registerPersonId, setRegisterPersonId] = useState<string | null>(null)
+  const [kindChoiceOpen, setKindChoiceOpen] = useState(false)
   const [personPickerOpen, setPersonPickerOpen] = useState(false)
-  const [tenurePanelOpen, setTenurePanelOpen] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
 
   const { data: registerPersons, isLoading: registerPersonsLoading } = useQuery({
     queryKey: ['persons', 'all'],
@@ -99,15 +105,24 @@ function HeadsOfStateTimelineInner() {
 
   const handleRegisterHead = useCallback((segment: PinnedSegment) => {
     setRegisterSegment(segment)
+    setRegisterKind(null)
     setRegisterPersonId(null)
+    setKindChoiceOpen(true)
+  }, [])
+
+  const chooseRegisterKind = useCallback((kind: 'tenure' | 'reign') => {
+    setRegisterKind(kind)
+    setKindChoiceOpen(false)
     setPersonPickerOpen(true)
   }, [])
 
   const closeRegisterFlow = useCallback(() => {
-    setTenurePanelOpen(false)
+    setPanelOpen(false)
     setPersonPickerOpen(false)
+    setKindChoiceOpen(false)
     setRegisterPersonId(null)
     setRegisterSegment(null)
+    setRegisterKind(null)
   }, [])
 
   const registerCountryId =
@@ -426,25 +441,66 @@ function HeadsOfStateTimelineInner() {
           onClose={() => setQuickViewBar(null)}
           onOpenPerson={openByPersonId}
         />
+        {kindChoiceOpen && (
+          <Modal
+            isOpen
+            onClose={closeRegisterFlow}
+            size="narrow"
+            title="등록 유형 선택"
+            subtitle="이 국가에 무엇을 등록할까요?"
+          >
+            <ModalBody>
+              <KindChoiceRow>
+                <KindChoiceButton
+                  type="button"
+                  onClick={() => chooseRegisterKind('tenure')}
+                >
+                  <strong>재임 (수반)</strong>
+                  <span>대통령·총리 등 행정부 수반</span>
+                </KindChoiceButton>
+                <KindChoiceButton
+                  type="button"
+                  onClick={() => chooseRegisterKind('reign')}
+                >
+                  <strong>재위 (군주)</strong>
+                  <span>국왕·황제 등 군주</span>
+                </KindChoiceButton>
+              </KindChoiceRow>
+            </ModalBody>
+          </Modal>
+        )}
         {personPickerOpen && (
           <PersonSelectModal
             persons={registerPersons ?? []}
             selectedPersonId={registerPersonId ?? ''}
             loading={registerPersonsLoading}
-            title="수반 등록 — 인물 선택"
+            title={
+              registerKind === 'reign'
+                ? '군주 등록 — 인물 선택'
+                : '수반 등록 — 인물 선택'
+            }
             defaultCountryId={registerCountryId}
             onSelect={(personId) => {
               setRegisterPersonId(personId)
               setPersonPickerOpen(false)
-              setTenurePanelOpen(true)
+              setPanelOpen(true)
             }}
             onClose={() => setPersonPickerOpen(false)}
           />
         )}
-        {registerPersonId && (
+        {registerPersonId && registerKind === 'tenure' && (
           <TenureRegisterPanel
             personId={registerPersonId}
-            open={tenurePanelOpen}
+            open={panelOpen}
+            onClose={closeRegisterFlow}
+            initialCountryId={registerCountryId}
+            initialHistoricalCountryId={registerHistoricalCountryId}
+          />
+        )}
+        {registerPersonId && registerKind === 'reign' && (
+          <SovereignReignRegisterPanel
+            personId={registerPersonId}
+            open={panelOpen}
             onClose={closeRegisterFlow}
             initialCountryId={registerCountryId}
             initialHistoricalCountryId={registerHistoricalCountryId}
@@ -632,4 +688,37 @@ const Body = styled.div`
   display: flex;
   align-items: stretch;
   position: relative;
+`
+
+const KindChoiceRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const KindChoiceButton = styled.button`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 14px 16px;
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  strong {
+    font-size: 14px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  span {
+    font-size: 12px;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => theme.colors.activeLight};
+  }
 `

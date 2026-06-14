@@ -329,8 +329,8 @@ export function PinSidebar({
                 <RowActions>
                   <SmallIconButton
                     type="button"
-                    aria-label="이 국가에 수반 등록"
-                    title="이 국가에 수반(재임) 등록"
+                    aria-label="이 국가에 수반·군주 등록"
+                    title="이 국가에 수반(재임)·군주(재위) 등록"
                     onClick={() => {
                       const sorted = sortSegmentsChronologically(row.segments)
                       const target =

@@ -164,6 +164,9 @@ export interface SovereignReignRegisterPanelProps {
   onSuccess?: () => void
   /** 수정 시 재위 ID */
   reignId?: string | null
+  /** 생성 시 국가 prefill (수장 비교 등 in-place 등록용) */
+  initialCountryId?: string
+  initialHistoricalCountryId?: string | null
 }
 
 export function SovereignReignRegisterPanel({
@@ -172,6 +175,8 @@ export function SovereignReignRegisterPanel({
   onClose,
   onSuccess,
   reignId,
+  initialCountryId,
+  initialHistoricalCountryId,
 }: SovereignReignRegisterPanelProps) {
   const queryClient = useQueryClient()
   const isEdit = !!reignId
@@ -261,6 +266,15 @@ export function SovereignReignRegisterPanel({
     setEndReasonDetail(r.endReasonDetail ?? '')
     setNotes(r.notes ?? '')
   }, [open, existingReign])
+
+  // 생성 모드: 열릴 때 prefill된 국가를 1회 적용 (in-place 등록)
+  useEffect(() => {
+    if (!open || reignId) return
+    if (initialCountryId !== undefined) setCountryId(initialCountryId)
+    if (initialHistoricalCountryId !== undefined) {
+      setHistoricalCountryId(initialHistoricalCountryId ?? null)
+    }
+  }, [open, reignId, initialCountryId, initialHistoricalCountryId])
 
   // 수정 모드에서 모달이 열렸을 때, 저장된 historicalCountryId만 있고
   // 연결된 modern countryId가 없으면 historical 목록 쿼리가 비어 있어 lookup이 실패한다.
