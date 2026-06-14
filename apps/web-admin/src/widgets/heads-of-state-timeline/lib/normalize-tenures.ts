@@ -6,9 +6,14 @@
  * `country-detail`의 dedup 로직과 동일한 기준(인물ID + 시작일 같으면 SovereignReign 우선)으로 합친다.
  */
 
+import { categorizePosition } from '@/entities/government-position/model/categorize'
+import { regnalNameFromNotes } from '@/entities/government-position/model/regnal-name'
+import type { PositionCategory } from '@/entities/government-position/model/types'
+
 import { toJulianYear } from './time-scale'
 
-export type PositionTypeCategory = 'MONARCH' | 'PRESIDENT' | 'PM' | 'POPE' | 'OTHER'
+/** 분류 타입은 엔티티 단일 출처(PositionCategory)의 별칭 — 기존 import 경로 유지용 */
+export type PositionTypeCategory = PositionCategory
 
 /**
  * `getTenuresByCountry` 가 돌려주는 원시 레코드의 — 이 위젯이 읽는 — 필드만 추린 타입.
@@ -61,14 +66,6 @@ export interface TenureBar {
   endJulian: number | null
 }
 
-const REGNAL_RE = /왕명\s*:\s*([^\n]+)/i
-
-function getRegnalNameFromNotes(notes: string | null | undefined): string | null {
-  if (!notes) return null
-  const m = notes.match(REGNAL_RE)
-  return m ? m[1]!.trim() : null
-}
-
 function getPositionType(t: RawTenureRecord): string | null {
   return t.positionType ?? t.positionDefinition?.positionType ?? null
 }
@@ -105,60 +102,14 @@ function getPersonName(t: RawTenureRecord): string | null {
   return name || surname || null
 }
 
-/**
- * 분류 우선순위:
- *  1) 교황·칼리프 등 비국가 직책 — title 매칭으로 잡음 (POPE)
- *  2) SOVEREIGN_REIGN(재위 전용 테이블) → 무조건 MONARCH (조선 왕·로마 황제·교황 빠짐)
- *  3) ROYAL_NOBLE_TITLE → MONARCH (왕세자·대공 등)
- *  4) HEAD_OF_GOVERNMENT → PM
- *  5) HEAD_OF_STATE 는 appointmentMethod·title로 분기:
- *       - HEREDITARY/SUCCESSION/COUP                → MONARCH
- *       - DIRECT/INDIRECT/PARLIAMENTARY ELECTION    → PRESIDENT
- *       - title 매칭(대통령/President/주석/Chairman) → PRESIDENT
- *       - title 매칭(국왕/King/황제/Emperor/천황·女王) → MONARCH
- *       - 그 외                                      → OTHER
- *  6) 위 어디에도 안 잡히면 OTHER.
- */
-function categorize(t: RawTenureRecord): PositionTypeCategory {
-  const title = getPositionTitle(t) ?? ''
-
-  // 1) 교황은 비국가 직책으로 별도 색 — 군주 분기 전에 잡아야 ROYAL_NOBLE_TITLE 등으로 빠지지 않음
-  if (/교황|Pope/i.test(title)) return 'POPE'
-
-  // 2) 재위 전용 기록 — SovereignReign 테이블엔 군주만 들어옴
-  if (t.recordKind === 'SOVEREIGN_REIGN') return 'MONARCH'
-
-  const pt = getPositionType(t)
-
-  // 3·4) 명백한 분기
-  if (pt === 'ROYAL_NOBLE_TITLE') return 'MONARCH'
-  if (pt === 'HEAD_OF_GOVERNMENT') return 'PM'
-
-  // 5) HEAD_OF_STATE — 임명 방식 + 제목 둘 다 보고 결정
-  if (pt === 'HEAD_OF_STATE') {
-    const method = t.appointmentMethod ?? ''
-    if (
-      method === 'HEREDITARY' ||
-      method === 'SUCCESSION' ||
-      method === 'COUP'
-    ) {
-      return 'MONARCH'
-    }
-    if (
-      method === 'DIRECT_ELECTION' ||
-      method === 'INDIRECT_ELECTION' ||
-      method === 'PARLIAMENTARY_ELECTION'
-    ) {
-      return 'PRESIDENT'
-    }
-    if (/대통령|President|주석|Chairman|총통/i.test(title)) return 'PRESIDENT'
-    if (/국왕|왕\b|King|Queen|Emperor|황제|천황|여왕|Tsar|Czar|Sultan|Caliph|술탄|칼리프/i.test(title)) {
-      return 'MONARCH'
-    }
-    return 'OTHER'
-  }
-
-  return 'OTHER'
+/** 직책 분류 — 엔티티 단일 출처(categorizePosition)에 위임 */
+function categorize(tenure: RawTenureRecord): PositionTypeCategory {
+  return categorizePosition({
+    kind: tenure.recordKind,
+    positionType: getPositionType(tenure),
+    positionTitle: getPositionTitle(tenure),
+    appointmentMethod: tenure.appointmentMethod,
+  })
 }
 
 function ordinalOf(t: RawTenureRecord): number | null {
@@ -211,7 +162,7 @@ export function normalizeTenures(rawList: unknown): TenureBar[] {
       const recordKind: 'TENURE' | 'SOVEREIGN_REIGN' =
         t.recordKind === 'SOVEREIGN_REIGN' ? 'SOVEREIGN_REIGN' : 'TENURE'
       const regnalName =
-        t.regnalName?.trim() || getRegnalNameFromNotes(t.notes) || null
+        t.regnalName?.trim() || regnalNameFromNotes(t.notes) || null
       const startDate = t.startDate as string
       const endDate = t.endDate ?? null
       return {
