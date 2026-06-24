@@ -2,12 +2,13 @@
  * VIEW: 국가 × 연도 매트릭스.
  * 가로 = 생몰 연도, 색 = 시대. 국가별로 lane 패킹.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import styled, { useTheme } from 'styled-components'
 
 import type { AdaptedPerson } from '../model/types'
-import { yearOfEra } from '../model/adapt'
+import { bornForPlot, diedForPlot } from '../model/adapt'
+import { formatYear } from '../model/century'
 import { ERAS, INFOGRAPHIC_DEFAULTS } from '../model/constants'
 import {
   usePersonInfographicFilterStore,
@@ -79,6 +80,14 @@ export function MatrixView({ people, onOpen }: Props) {
   const hasActiveFilter = hasAnyActiveScope(scopes)
   const hasAnyFilter = useHasActiveFilter()
 
+  // 안정 참조 — hover(setHover)로 인한 리렌더마다 새로 만들면
+  // memo(MatrixLaneLabels)의 O(n²) 라벨 충돌 계산이 매 프레임 재실행됨.
+  const isActive = useCallback(
+    (person: AdaptedPerson) =>
+      !hasActiveFilter || isPersonInScopes(person, scopes),
+    [hasActiveFilter, scopes],
+  )
+
   // 국가별 lane 패킹 — people·showAll·W 변할 때만 재계산
   const grouped = useMemo(() => {
     const byCountry: Record<string, AdaptedPerson[]> = {}
@@ -92,18 +101,20 @@ export function MatrixView({ people, onOpen }: Props) {
     let minY = Infinity
     let maxY = -Infinity
     for (const p of people) {
-      if (p.born < minY) minY = p.born
-      if (p.died > maxY) maxY = p.died
+      const bornY = bornForPlot(p)
+      const diedY = diedForPlot(p)
+      if (bornY < minY) minY = bornY
+      if (diedY > maxY) maxY = diedY
     }
     const rng = Math.max(1, maxY - minY)
     const yearX = (y: number) => ((y - minY) / rng) * W
 
     const packed = visible.map(([c, arr]) => {
-      const sorted = [...arr].sort((a, b) => a.born - b.born)
+      const sorted = [...arr].sort((a, b) => bornForPlot(a) - bornForPlot(b))
       const lanes: number[] = []
       const placed = sorted.map((p) => {
-        const x1 = yearX(p.born)
-        const x2 = Math.max(x1 + 3, yearX(p.died))
+        const x1 = yearX(bornForPlot(p))
+        const x2 = Math.max(x1 + 3, yearX(diedForPlot(p)))
         let lane = lanes.findIndex((rightX) => rightX + GAP_PX <= x1)
         if (lane === -1) {
           lanes.push(x2)
@@ -148,9 +159,6 @@ export function MatrixView({ people, onOpen }: Props) {
   }
 
   const { packed, totalRowH, minY, maxY, yearX, ticks, hiddenCount } = grouped
-
-  const isActive = (p: AdaptedPerson) =>
-    !hasActiveFilter || isPersonInScopes(p, scopes)
 
   const gridLine = theme.colors.border.light
   const tickLine = theme.colors.border.default
@@ -307,7 +315,7 @@ export function MatrixView({ people, onOpen }: Props) {
                 >
                   {placed.map(({ p, x1, x2, lane }) => {
                     const yy = lane * LANE_H + BAR_TOP_OFFSET
-                    const era = yearOfEra(p.activityYear)
+                    const era = p.era
                     const active = isActive(p)
                     const isHoveredLane =
                       hoveredBar?.country === c && hoveredBar?.lane === lane
@@ -320,7 +328,9 @@ export function MatrixView({ people, onOpen }: Props) {
                       <button
                         key={p.id}
                         type="button"
-                        aria-label={`${p.name} ${p.born}-${p.died}`}
+                        aria-label={`${p.name} ${
+                          p.born == null ? '?' : formatYear(p.born)
+                        }–${p.died == null ? '?' : formatYear(p.died)}`}
                         onClick={() => {
                           setSelectedId(p.id)
                           setPreviewPerson(p)
@@ -414,7 +424,9 @@ export function MatrixView({ people, onOpen }: Props) {
  * lane 단위 라벨 collision 처리 — 선택·호버 인물 우선 표시.
  * matrix 본체에서 IIFE로 인라인하던 로직을 분리하여 가독성 회복.
  */
-function MatrixLaneLabels({
+// memo — placed/isActive(안정)/selectedId/hoveredId 가 안 바뀌면 hover 툴팁 이동 시
+// 재렌더·라벨 충돌 재계산을 건너뛴다.
+const MatrixLaneLabels = memo(function MatrixLaneLabels({
   placed,
   isActive,
   selectedId,
@@ -567,7 +579,7 @@ function MatrixLaneLabels({
       })}
     </>
   )
-}
+})
 
 const Scroll = styled.div`
   overflow-x: auto;

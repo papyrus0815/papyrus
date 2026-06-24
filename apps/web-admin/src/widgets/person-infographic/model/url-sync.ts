@@ -9,8 +9,11 @@
  *  - store 변경 시: store → URL (replaceState)
  *  - URL이 외부에서 바뀌면 (브라우저 뒤로가기 등) → store에 반영
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
+
+import { useHistoricalCountries } from '@/entities/historical-country/api'
+import { useCountries } from '@/features/country/api'
 
 import type {
   AliveFilter,
@@ -51,6 +54,21 @@ export function useFilterUrlSync(): void {
   const aliveFilter = usePersonInfographicFilterStore((s) => s.aliveFilter)
   const minInfluence = usePersonInfographicFilterStore((s) => s.minInfluence)
   const sort = usePersonInfographicFilterStore((s) => s.sort)
+
+  // 국가 scope 식별자 정규화용 id→이름 맵.
+  // 외부 진입(국가 상세 "이 나라 인물 보기" 등)은 ?countries=<국가UUID>로 들어오는데,
+  // 실제 필터/패널은 국가 "이름"을 키로 쓴다(경량 인물 DTO에 country.id가 없음).
+  // 두 목록 모두 ContentShell이 이미 로드(react-query 캐시)하므로 추가 요청 없음.
+  const { data: countries } = useCountries()
+  const { data: historicalCountries } = useHistoricalCountries()
+  const idToCountryName = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const country of countries ?? [])
+      if (country?.id && country?.name) map.set(country.id, country.name)
+    for (const country of historicalCountries ?? [])
+      if (country?.id && country?.name) map.set(country.id, country.name)
+    return map
+  }, [countries, historicalCountries])
 
   const initializedRef = useRef(false)
 
@@ -99,7 +117,10 @@ export function useFilterUrlSync(): void {
       const era = parseList(searchParams.get('era'))
       const region = parseList(searchParams.get('region'))
       const field = parseList(searchParams.get('field'))
-      const country = parseList(searchParams.get('countries'))
+      // 외부 진입의 국가 UUID는 이름으로 정규화(맵 미로드 시 원값 유지 → 로드 후 재수렴).
+      const country = parseList(searchParams.get('countries')).map(
+        (value) => idToCountryName.get(value) ?? value,
+      )
       if (
         !eqList(era, scopes.era) ||
         !eqList(region, scopes.region) ||
@@ -113,7 +134,7 @@ export function useFilterUrlSync(): void {
 
     if (Object.keys(patch).length > 0) setMany(patch)
     initializedRef.current = true
-  }, [searchParams, setMany])
+  }, [searchParams, setMany, idToCountryName])
 
   // store → URL : 값 변경 시 replaceState
   useEffect(() => {

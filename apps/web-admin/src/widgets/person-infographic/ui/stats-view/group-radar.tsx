@@ -33,6 +33,7 @@ import {
   LegendDot,
   LegendItem,
   LegendName,
+  useChartTheme,
 } from './shared'
 
 type GroupKey = 'country' | 'faction'
@@ -52,6 +53,7 @@ interface Props {
 }
 
 export function GroupRadarPane({ evaluated, evalIndex }: Props) {
+  const chart = useChartTheme()
   const [groupKey, setGroupKey] = useState<GroupKey>('faction')
   const [topN, setTopN] = useState<number>(5)
 
@@ -142,9 +144,9 @@ export function GroupRadarPane({ evaluated, evalIndex }: Props) {
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={radarData} outerRadius="80%">
                 <PolarGrid stroke="rgba(148,163,184,0.4)" />
-                <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: '#475569', fontWeight: 600 }} />
+                <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: chart.axisLabel, fontWeight: 600 }} />
                 <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #e2e8f0' }} />
+                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: `1px solid ${chart.border}` }} />
                 {groups.map((g, i) => (
                   <Radar
                     key={g.name}

@@ -4,7 +4,6 @@ import styled, { css } from 'styled-components'
 
 import { scrollbarThinMixin } from '@/shared/styles/mixins'
 
-import { yearOfEra } from '../model/adapt'
 import { ERAS, FIELDS, REGIONS, REGION_COLORS } from '../model/constants'
 import {
   countActiveScopes,
@@ -100,7 +99,7 @@ export function PersonFilterPanel() {
       const m: Record<string, number> = {}
       for (const p of all) {
         if (!passNonScope(p)) continue
-        if (!matchesScopes(p, sc, (x) => yearOfEra(x.activityYear).key)) continue
+        if (!matchesScopes(p, sc, (x) => x.era.key)) continue
         const k = keyFn(p)
         m[k] = (m[k] || 0) + 1
       }
@@ -115,7 +114,7 @@ export function PersonFilterPanel() {
     }
 
     return {
-      era: tallyExcluding('era', (p) => yearOfEra(p.activityYear).key),
+      era: tallyExcluding('era', (p) => p.era.key),
       region: tallyExcluding('region', (p) => p.region),
       field: tallyExcluding('field', (p) => p.field),
       country: tallyExcluding('country', (p) => p.country),
@@ -137,7 +136,7 @@ export function PersonFilterPanel() {
   // 사이드바 필터만 적용한 결과 수. query는 panel 외부에서 관리.
   const filteredCount = useMemo(() => {
     let arr = all.filter((p) =>
-      matchesScopes(p, scopes, (x) => yearOfEra(x.activityYear).key),
+      matchesScopes(p, scopes, (x) => x.era.key),
     )
     if (minInfluence > 0)
       arr = arr.filter((p) => (p.influence ?? 0) >= minInfluence)
@@ -399,6 +398,8 @@ export function PersonFilterPanel() {
             step={5}
             value={minInfluence}
             onChange={(e) => setMinInfluence(Number(e.target.value))}
+            aria-label="최소 영향력"
+            aria-valuetext={minInfluence === 0 ? '전체' : `${minInfluence} 이상`}
           />
           {minInfluence > 0 && (
             <NavSliderResetBtn

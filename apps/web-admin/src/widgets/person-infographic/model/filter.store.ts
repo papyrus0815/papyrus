@@ -102,13 +102,14 @@ export const usePersonInfographicFilterStore =
               ? state.pinned.filter((x) => x !== id)
               : [...state.pinned, id],
           })),
+        // 필터(scope·영향력·생존·검색어)만 해제 — sort는 표시 환경설정이라 보존
+        // (useHasActiveFilter가 sort를 필터로 세지 않으므로 CTA 의미와 일치)
         resetFilters: () =>
           set({
             scopes: EMPTY_SCOPES,
             minInfluence: 0,
             aliveFilter: 'all',
             query: '',
-            sort: 'influence',
           }),
       }),
       {

@@ -2,7 +2,7 @@ import type { PersonInfographicItem } from '@/entities/person/api'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { COUNTRY_REGION, ERAS, FIELDS } from './constants'
-import type { AdaptedPerson, TenureLite } from './types'
+import type { AdaptedPerson } from './types'
 
 /** 생존/사망연도 미상 시 폴백 기준 — 모듈 로드 1회. (인물마다 new Date() 생성 방지) */
 const CURRENT_YEAR = new Date().getFullYear()
@@ -35,7 +35,7 @@ const POLITICAL_TYPES = new Set([
 
 /** Person → 분야 분류 (FIELDS 상수 기준). */
 export function getField(p: PersonInfographicItem): string {
-  const tenures = (p.governmentTenures ?? []) as TenureLite[]
+  const tenures = p.governmentTenures ?? []
   if (p.sovereignReignCount > 0) return '정치'
   const types = tenures.map((t) => t.positionType ?? '')
   if (types.includes('MILITARY_COMMANDER')) return '군사'
@@ -44,30 +44,33 @@ export function getField(p: PersonInfographicItem): string {
   return FIELDS[FIELDS.length - 1]
 }
 
-export function toYear(y?: number | null, era?: string | null): number {
-  if (!y) return 0
+/** 연도+표기 → 부호 연도. 미상(0/null)은 명시적으로 null (이전엔 0으로 폴백돼 '서기 0년'으로 오염). */
+export function toYear(y?: number | null, era?: string | null): number | null {
+  if (!y) return null
   return era === 'BC' ? -y : y
 }
 
 export function yearOfEra(y: number) {
   for (const e of ERAS) if (y >= e.from && y < e.to) return e
-  return ERAS[ERAS.length - 1]
+  // 범위 밖: ERAS(-800~2100) 이전은 가장 이른 시대(고대), 그 외(미래)는 마지막 시대.
+  // (이전엔 양끝 모두 마지막='당대'로 떨어져 고대 인물이 현대로 오분류·오채색됐음)
+  return y < ERAS[0].from ? ERAS[0] : ERAS[ERAS.length - 1]
 }
 
 export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
   if (!p.birthYear && !p.deathYear) return null
 
+  // 생몰연도는 미상이면 null (양수/음수 부호로 BC/AD 구분). 0 매직값 폐기.
   const born = toYear(p.birthYear, p.birthEra)
-  // deathYear가 있으면 isAlive와 무관하게 그 값을 우선. 없으면 생존/사망 모두 올해로 폴백(수명 계산 기준).
-  const deathYearVal = toYear(p.deathYear, p.deathEra)
+  const died = toYear(p.deathYear, p.deathEra)
   const isAliveFlag = !!p.isAlive
-  const died = deathYearVal !== 0 ? deathYearVal : CURRENT_YEAR
 
   // 잘못된 입력(NaN/Infinity) 방어 — 시각화가 깨지지 않도록 폐기
-  if (!Number.isFinite(born) || !Number.isFinite(died)) return null
+  if (born != null && !Number.isFinite(born)) return null
+  if (died != null && !Number.isFinite(died)) return null
 
   const countryName = pickCountryName(p)
-  const tenures = (p.governmentTenures ?? []) as TenureLite[]
+  const tenures = p.governmentTenures ?? []
   const rawInfluence = p.influence
   const influence =
     typeof rawInfluence === 'number'
@@ -83,18 +86,28 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
     p.name ||
     '이름 없음'
 
-  // 시대 분류용 활동연도: 재임 시작연도 평균 → 없으면 생몰 중간값
+  // 시대 분류용 활동연도: 재임 시작연도 평균 → 없으면 알려진 생몰값 평균.
+  // (상단 가드로 born·died 중 최소 하나는 non-null 이라 분모 0 불가)
+  // BC/고대 안전: 네이티브 Date(로컬 TZ) 대신 ISO 문자열 선두 연도를 직접 파싱.
+  // (음수 확장연도 "-YYYYYY-..."도 parseInt가 부호 포함 처리 → 서버 birthYear 추출과 일치)
   const tenureYears = tenures
-    .map((t) => (t.startDate ? new Date(t.startDate).getFullYear() : null))
+    .map((t) => (t.startDate ? parseInt(t.startDate, 10) : null))
     .filter((y): y is number => y !== null && !isNaN(y))
+  // 생몰 둘 다 알면 중간값, 하나만 알면 그 값. (상단 가드로 최소 하나는 non-null)
+  const lifeMidpoint =
+    born != null && died != null ? (born + died) / 2 : born ?? died ?? 0
   const activityYear = tenureYears.length
     ? tenureYears.reduce((a, b) => a + b, 0) / tenureYears.length
-    : (born + died) / 2
+    : lifeMidpoint
+  const era = yearOfEra(activityYear)
 
+  // 수명: 생몰 둘 다 알 때만 정확. 출생만 알고 생존 중이면 현재 나이. 그 외(미상)는 null.
   const age =
-    p.birthYear && (p.deathYear || isAliveFlag)
+    born != null && died != null
       ? Math.max(0, Math.abs(died - born))
-      : null
+      : born != null && isAliveFlag
+        ? Math.max(0, CURRENT_YEAR - born)
+        : null
 
   const regnal = p.regnalName
   const firstTenure = tenures[0]
@@ -136,6 +149,7 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
     born,
     died,
     activityYear,
+    era,
     age,
     region: getRegion(countryName),
     country: countryName || '미상',
@@ -152,9 +166,12 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
   }
 }
 
-/** 이름 해시 → hue (썸네일 폴백 그라데이션용) */
-export function hueFrom(str: string): number {
-  let h = 0
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 360
-  return h
+/** 타임라인 배치용 시작연도 — 출생 미상이면 활동연도로 대체(항상 finite). */
+export function bornForPlot(p: AdaptedPerson): number {
+  return p.born ?? p.activityYear
+}
+
+/** 타임라인 배치용 종료연도 — 사망 미상이면 생존자는 현재, 그 외엔 활동연도. */
+export function diedForPlot(p: AdaptedPerson): number {
+  return p.died ?? (p.isAlive ? CURRENT_YEAR : p.activityYear)
 }

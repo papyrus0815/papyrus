@@ -9,7 +9,8 @@ import styled, { useTheme } from 'styled-components'
 import { glassOrSolidMixin } from '@/shared/styles/mixins'
 
 import type { AdaptedPerson } from '../model/types'
-import { yearOfEra } from '../model/adapt'
+import { bornForPlot, diedForPlot } from '../model/adapt'
+import { formatYear } from '../model/century'
 import { INFOGRAPHIC_DEFAULTS } from '../model/constants'
 import {
   usePersonInfographicFilterStore,
@@ -52,8 +53,10 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
         let minYr = Infinity
         let maxYr = -Infinity
         for (const p of arr) {
-          if (p.born < minYr) minYr = p.born
-          if (p.died > maxYr) maxYr = p.died
+          const bornY = bornForPlot(p)
+          const diedY = diedForPlot(p)
+          if (bornY < minYr) minYr = bornY
+          if (diedY > maxYr) maxYr = diedY
         }
         return { faction, arr, minYr, maxYr, countryName: arr[0]?.country ?? '' }
       })
@@ -65,14 +68,27 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
     [pinned, sort],
   )
 
+  // 정렬은 people/sort/pinned 변할 때만 — expanded(더보기) 토글 등 다른 리렌더에서 재정렬 방지
+  const sortedFactions = useMemo(
+    () =>
+      factions.map((group) => ({
+        ...group,
+        sorted: group.arr.slice().sort(sortFn),
+      })),
+    [factions, sortFn],
+  )
+  const sortedNoFaction = useMemo(
+    () => noFaction.slice().sort(sortFn),
+    [noFaction, sortFn],
+  )
+
   if (!factions.length && !noFaction.length) {
     return <EmptyState hasActiveFilter={hasFilter} onClearFilters={resetFilters} />
   }
 
   return (
     <Wrap>
-      {factions.map(({ faction, arr, minYr, maxYr, countryName }) => {
-        const sorted = arr.slice().sort(sortFn)
+      {sortedFactions.map(({ faction, arr, minYr, maxYr, countryName, sorted }) => {
         const isExpanded = !!expanded[faction]
         const shown = isExpanded
           ? sorted
@@ -85,8 +101,7 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
                 {faction}
               </BlockTitle>
               <BlockRange style={{ color: theme.colors.text.tertiary }}>
-                {countryName} · {minYr < 0 ? `${-minYr}BC` : minYr}–
-                {maxYr < 0 ? `${-maxYr}BC` : maxYr}
+                {countryName} · {formatYear(minYr)}–{formatYear(maxYr)}
               </BlockRange>
               <BlockCount style={{ color: theme.colors.text.tertiary }}>
                 {arr.length}명
@@ -97,7 +112,7 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
                 <PersonCardItem
                   key={p.id}
                   p={p}
-                  era={yearOfEra(p.activityYear)}
+                  era={p.era}
                   q={q}
                   pinned={pinned.has(p.id)}
                   onTogglePin={togglePin}
@@ -117,7 +132,7 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
       })}
       {noFaction.length > 0 &&
         (() => {
-          const sorted = noFaction.slice().sort(sortFn)
+          const sorted = sortedNoFaction
           const isExpanded = !!expanded['__none__']
           const shown = isExpanded
             ? sorted
@@ -144,7 +159,7 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
                   <PersonCardItem
                     key={p.id}
                     p={p}
-                    era={yearOfEra(p.activityYear)}
+                    era={p.era}
                     q={q}
                     pinned={pinned.has(p.id)}
                     onTogglePin={togglePin}

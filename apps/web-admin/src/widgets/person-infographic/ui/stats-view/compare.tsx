@@ -23,7 +23,7 @@ import {
 import type { PersonEvaluationSummary } from '@/shared/lib/person-evaluation-index'
 import type { AdaptedPerson } from '../../model/types'
 
-import { ChartShell, EmptyHint } from './shared'
+import { ChartShell, EmptyHint, useChartTheme } from './shared'
 
 const PALETTE = ['#6366f1', '#dc2626', '#0891b2', '#7c3aed', '#f59e0b']
 
@@ -35,6 +35,7 @@ interface Props {
 }
 
 export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Props) {
+  const chart = useChartTheme()
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -61,6 +62,7 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
     return list.filter((p) => !selectedIds.includes(p.id)).slice(0, 30)
   }, [evaluated, searchQuery, selectedIds])
 
+  // 계열 키는 id로 — 동명이인을 추가해도 서로 덮어쓰지 않도록(표시명은 Radar name에).
   const radarData = useMemo(() => {
     return PERSON_STAT_KEYS.map((key) => {
       const row: Record<string, string | number> = {
@@ -69,13 +71,11 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
       for (const id of selectedIds) {
         const stats = evalIndex.get(id)?.stats
         if (!stats) continue
-        const v = stats[key]
-        const personName = people.find((p) => p.id === id)?.name ?? id.slice(0, 6)
-        row[personName] = v ?? 0
+        row[id] = stats[key] ?? 0
       }
       return row
     })
-  }, [selectedIds, evalIndex, people])
+  }, [selectedIds, evalIndex])
 
   const selectedPersons = useMemo(
     () =>
@@ -143,14 +143,14 @@ export function ComparePane({ people, evaluated, evalIndex, onPersonClick }: Pro
           <ResponsiveContainer width="100%" height="100%">
             <RadarChart data={radarData} outerRadius="80%">
               <PolarGrid stroke="rgba(148,163,184,0.4)" />
-              <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: '#475569', fontWeight: 600 }} />
+              <PolarAngleAxis dataKey="axis" tick={{ fontSize: 12, fill: chart.axisLabel, fontWeight: 600 }} />
               <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-              <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #e2e8f0' }} />
+              <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: `1px solid ${chart.border}` }} />
               {selectedPersons.map((p, i) => (
                 <Radar
                   key={p.id}
                   name={p.name}
-                  dataKey={p.name}
+                  dataKey={p.id}
                   stroke={PALETTE[i % PALETTE.length]}
                   fill={PALETTE[i % PALETTE.length]}
                   fillOpacity={0.16}

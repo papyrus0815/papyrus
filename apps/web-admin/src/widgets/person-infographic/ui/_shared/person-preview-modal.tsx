@@ -1,17 +1,18 @@
 /**
  * 매트릭스 막대 클릭 시 뜨는 인물 프리뷰 — "상세 보기"로 이동.
- * ESC, backdrop, X 로 닫힘. Enter는 상세로 이동.
+ * ESC·backdrop·X 로 닫힘. 초기 포커스는 '상세 보기'(Enter로 이동), 포커스 트랩 적용.
  */
-import { useEffect } from 'react'
+import { useRef } from 'react'
 import { createPortal } from 'react-dom'
 
 import { FiArrowRight, FiX } from 'react-icons/fi'
 import styled, { useTheme } from 'styled-components'
 
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { useModalBehavior } from '@/shared/ui/modal'
 
 import type { AdaptedPerson } from '../../model/types'
-import { yearOfEra } from '../../model/adapt'
+import { formatYear } from '../../model/century'
 
 interface Props {
   person: AdaptedPerson | null
@@ -21,21 +22,15 @@ interface Props {
 
 export function PersonPreviewModal({ person, onClose, onOpenDetail }: Props) {
   const theme = useTheme()
-
-  useEffect(() => {
-    if (!person) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-      else if (e.key === 'Enter') onOpenDetail(person.id)
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [person, onClose, onOpenDetail])
+  const cardRef = useRef<HTMLDivElement>(null)
+  // Esc 닫기 + 포커스 트랩 + 초기 포커스(PrimaryBtn autoFocus 존중) + 닫을 때 트리거로 복원 + 스크롤 락.
+  // (이전엔 전역 Enter 핸들러가 '닫기' 버튼 포커스 시에도 항상 상세 이동을 트리거)
+  useModalBehavior({ isOpen: !!person, onClose, containerRef: cardRef })
 
   if (!person) return null
-  const era = yearOfEra(person.activityYear)
-  const born = person.born < 0 ? `${-person.born}BC` : String(person.born)
-  const died = person.died < 0 ? `${-person.died}BC` : String(person.died)
+  const era = person.era
+  const born = person.born == null ? '?' : formatYear(person.born)
+  const died = person.died == null ? '?' : formatYear(person.died)
   const age = person.age != null ? `${person.age}세` : null
 
   return createPortal(
@@ -45,7 +40,7 @@ export function PersonPreviewModal({ person, onClose, onOpenDetail }: Props) {
       aria-modal="true"
       aria-label={`${person.name} 인물 정보`}
     >
-      <Card onClick={(e) => e.stopPropagation()}>
+      <Card ref={cardRef} onClick={(e) => e.stopPropagation()}>
         <Close type="button" onClick={onClose} aria-label="닫기">
           <FiX size={18} />
         </Close>

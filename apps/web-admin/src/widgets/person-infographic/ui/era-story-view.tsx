@@ -36,6 +36,15 @@ interface Group {
   arr: AdaptedPerson[]
 }
 
+/** 출생연도 미상 인물 전용 그룹 — 항상 맨 끝(sortKey=+∞). */
+const UNKNOWN_CENTURY: CenturyMeta = {
+  key: 'unknown',
+  label: '연도 미상',
+  from: 0,
+  to: 0,
+  sortKey: Number.POSITIVE_INFINITY,
+}
+
 export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
   const theme = useTheme()
   const sort = usePersonInfographicFilterStore((s) => s.sort)
@@ -46,7 +55,7 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
   const groups: Group[] = useMemo(() => {
     const map: Record<string, Group> = {}
     for (const p of people) {
-      const meta = centuryOf(p.born)
+      const meta = p.born == null ? UNKNOWN_CENTURY : centuryOf(p.born)
       if (!map[meta.key]) map[meta.key] = { meta, arr: [] }
       map[meta.key].arr.push(p)
     }
@@ -58,6 +67,16 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
     [pinned, sort],
   )
 
+  // 그룹별 정렬은 people/sort/pinned 변할 때만 — expanded(더보기) 토글 등 다른 리렌더에서 재정렬 방지
+  const sortedGroups = useMemo(
+    () =>
+      groups.map((group) => ({
+        meta: group.meta,
+        arr: group.arr.slice().sort(sortFn),
+      })),
+    [groups, sortFn],
+  )
+
   if (!groups.length) {
     return (
       <EmptyState hasActiveFilter={hasFilter} onClearFilters={resetFilters} />
@@ -66,23 +85,27 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
 
   return (
     <Wrap>
-      {groups.map(({ meta, arr: rawArr }) => {
-        const arr = rawArr.slice().sort(sortFn)
+      {sortedGroups.map(({ meta, arr }) => {
         const isExpanded = !!expanded[meta.key]
         const shown = isExpanded
           ? arr
           : arr.slice(0, INFOGRAPHIC_DEFAULTS.GROUP_TOP_N)
         const hasMore = arr.length > INFOGRAPHIC_DEFAULTS.GROUP_TOP_N
-        const headerColor = yearOfEra((meta.from + meta.to) / 2).color
+        const isUnknown = meta.key === 'unknown'
+        const headerColor = isUnknown
+          ? theme.colors.text.tertiary
+          : yearOfEra((meta.from + meta.to) / 2).color
         return (
           <Block key={meta.key}>
             <BlockHdr>
               <BlockTitle style={{ color: headerColor }}>
                 {meta.label}
               </BlockTitle>
-              <BlockRange style={{ color: theme.colors.text.tertiary }}>
-                {formatYear(meta.from)} — {formatYear(meta.to)}
-              </BlockRange>
+              {!isUnknown && (
+                <BlockRange style={{ color: theme.colors.text.tertiary }}>
+                  {formatYear(meta.from)} — {formatYear(meta.to)}
+                </BlockRange>
+              )}
               <BlockCount style={{ color: theme.colors.text.tertiary }}>
                 {arr.length}명
               </BlockCount>
@@ -92,7 +115,7 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
                 <PersonCardItem
                   key={p.id}
                   p={p}
-                  era={yearOfEra(p.activityYear)}
+                  era={p.era}
                   q={q}
                   pinned={pinned.has(p.id)}
                   onTogglePin={togglePin}

@@ -1,5 +1,4 @@
 import type { AdaptedPerson } from './types'
-import { yearOfEra } from './adapt'
 import type { MultiScopes, PersonSortKey } from './filter.store'
 
 export const SORT_OPTIONS: Array<[PersonSortKey, string]> = [
@@ -9,10 +8,22 @@ export const SORT_OPTIONS: Array<[PersonSortKey, string]> = [
   ['deathYear', '사망연도'],
 ]
 
+/** 연도 미상(null)은 방향과 무관하게 항상 뒤로 보낸다. */
+function cmpYear(
+  yearA: number | null,
+  yearB: number | null,
+  dir: 'asc' | 'desc',
+) {
+  if (yearA == null && yearB == null) return 0
+  if (yearA == null) return 1
+  if (yearB == null) return -1
+  return dir === 'asc' ? yearA - yearB : yearB - yearA
+}
+
 function compareBy(sort: PersonSortKey, a: AdaptedPerson, b: AdaptedPerson) {
   if (sort === 'name') return a.name.localeCompare(b.name)
-  if (sort === 'year') return a.born - b.born
-  if (sort === 'deathYear') return b.died - a.died
+  if (sort === 'year') return cmpYear(a.born, b.born, 'asc')
+  if (sort === 'deathYear') return cmpYear(a.died, b.died, 'desc')
   return b.influence - a.influence
 }
 
@@ -37,10 +48,7 @@ export function isPersonInScopes(
   p: AdaptedPerson,
   scopes: MultiScopes,
 ): boolean {
-  if (scopes.era.length > 0) {
-    const eraKey = yearOfEra(p.activityYear).key
-    if (!scopes.era.includes(eraKey)) return false
-  }
+  if (scopes.era.length > 0 && !scopes.era.includes(p.era.key)) return false
   if (scopes.region.length > 0 && !scopes.region.includes(p.region)) return false
   if (scopes.field.length > 0 && !scopes.field.includes(p.field)) return false
   if (scopes.country.length > 0 && !scopes.country.includes(p.country)) return false

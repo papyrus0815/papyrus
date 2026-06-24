@@ -1,5 +1,5 @@
 /**
- * 능력치 개요 sub-tab — A(leaderboard) + B(평가 패턴) + B2(시대 추이) + B4(사망 유형) + G(진행률).
+ * 능력치 개요 sub-tab — A(leaderboard) + B(평가 패턴) + B2(시대 추이) + G(진행률).
  */
 import { useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -16,7 +16,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import styled, { css } from 'styled-components'
+import styled, { css, useTheme } from 'styled-components'
 
 import {
   type PersonStatKey,
@@ -40,31 +40,6 @@ interface Props {
   onPersonClick: (id: string) => void
 }
 
-/** 사망 유형 enum → 한국어 라벨 */
-const DEATH_TYPE_LABELS: Record<string, string> = {
-  NATURAL: '자연사',
-  ILLNESS: '병사',
-  ASSASSINATION: '암살',
-  EXECUTION: '처형',
-  BATTLE: '전사',
-  ACCIDENT: '사고사',
-  SUICIDE: '자살',
-  UNKNOWN: '불명',
-  OTHER: '기타',
-}
-
-const DEATH_TYPE_COLOR: Record<string, string> = {
-  NATURAL: '#10b981',
-  ILLNESS: '#0891b2',
-  ASSASSINATION: '#dc2626',
-  EXECUTION: '#9f1239',
-  BATTLE: '#f59e0b',
-  ACCIDENT: '#7c3aed',
-  SUICIDE: '#475569',
-  UNKNOWN: '#94a3b8',
-  OTHER: '#94a3b8',
-}
-
 /** 출생년 → 세기 키 (음수=BC). 출생년 없으면 null */
 function centuryOf(person: AdaptedPerson): number | null {
   if (person.born == null) return null
@@ -77,6 +52,10 @@ export function OverviewPane({
   evalIndex,
   onPersonClick,
 }: Props) {
+  const theme = useTheme()
+  // recharts 축/툴팁 색은 테마 토큰으로 — 다크모드에서 하드코딩 회색·연한 보더가 안 보이던 문제 보정
+  const axisTickColor = theme.colors.text.tertiary
+  const tooltipBorder = `1px solid ${theme.colors.border.default}`
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [importing, setImporting] = useState(false)
@@ -270,24 +249,6 @@ export function OverviewPane({
     })
   }, [evaluated, evalIndex])
 
-  // B4. 사망 유형 분포 (전체 인물, 평가 무관)
-  const deathTypeDist = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const p of people as Array<AdaptedPerson & { deathType?: string | null }>) {
-      const dt = p.deathType
-      if (!dt) continue
-      counts.set(dt, (counts.get(dt) ?? 0) + 1)
-    }
-    return Array.from(counts.entries())
-      .map(([type, count]) => ({
-        type,
-        label: DEATH_TYPE_LABELS[type] ?? type,
-        count,
-        color: DEATH_TYPE_COLOR[type] ?? '#94a3b8',
-      }))
-      .sort((a, b) => b.count - a.count)
-  }, [people])
-
   // A. 트레이트 빈도 (top 12)
   const traitFrequency = useMemo(() => {
     const counts = new Map<PersonTrait, number>()
@@ -367,10 +328,10 @@ export function OverviewPane({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={axisAverages} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-              <XAxis dataKey="axis" tick={{ fontSize: 11, fill: '#64748b' }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#64748b' }} width={28} />
+              <XAxis dataKey="axis" tick={{ fontSize: 11, fill: axisTickColor }} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: axisTickColor }} width={28} />
               <Tooltip
-                contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #e2e8f0' }}
+                contentStyle={{ borderRadius: 8, fontSize: 12, border: tooltipBorder }}
                 formatter={(v: number) => [`${v}점`, '평균']}
               />
               <Bar dataKey="avg" radius={[6, 6, 0, 0]}>
@@ -402,9 +363,9 @@ export function OverviewPane({
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={eraTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-                <XAxis dataKey="century" tick={{ fontSize: 11, fill: '#64748b' }} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#64748b' }} width={28} />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #e2e8f0' }} />
+                <XAxis dataKey="century" tick={{ fontSize: 11, fill: axisTickColor }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: axisTickColor }} width={28} />
+                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: tooltipBorder }} />
                 {PERSON_STAT_KEYS.map((key) => (
                   <Line
                     key={key}
@@ -540,30 +501,6 @@ export function OverviewPane({
         {importStatus && <ImportStatusText>{importStatus}</ImportStatusText>}
       </Card>
 
-      {/* B4. 사망 유형 분포 */}
-      <Card>
-        <CardTitle>사망 유형 분포</CardTitle>
-        <CardHint>사망 유형이 기록된 인물 (전체 인물 기준)</CardHint>
-        {deathTypeDist.length === 0 ? (
-          <EmptyHint>사망 유형이 기록된 인물이 없습니다.</EmptyHint>
-        ) : (
-          <ChartShell $h={Math.max(180, deathTypeDist.length * 28)}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={deathTypeDist} layout="vertical" margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} />
-                <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} width={60} />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #e2e8f0' }} />
-                <Bar dataKey="count" radius={[0, 6, 6, 0]}>
-                  {deathTypeDist.map((d, i) => (
-                    <Cell key={i} fill={d.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartShell>
-        )}
-      </Card>
     </Grid>
   )
 }

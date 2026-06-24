@@ -70,7 +70,7 @@ export function HeaderStats({ people }: { people: AdaptedPerson[] }) {
         Math.max(0, Math.floor((p.activityYear - MIN_Y) / binW)),
       )
       bins[i]++
-      const eraKey = yearOfEra(p.activityYear).key
+      const eraKey = p.era.key
       eraC[eraKey] = (eraC[eraKey] || 0) + 1
       regC[p.region] = (regC[p.region] || 0) + 1
       fieldC[p.field] = (fieldC[p.field] || 0) + 1

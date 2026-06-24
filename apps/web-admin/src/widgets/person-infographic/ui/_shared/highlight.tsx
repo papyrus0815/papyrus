@@ -24,4 +24,8 @@ export const HLMark = styled.mark`
   color: inherit;
   padding: 0 1px;
   border-radius: 2px;
+  /* 색상 외 단서 — 색맹·저대비 환경에서도 매칭 구간이 구분되도록 */
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 `

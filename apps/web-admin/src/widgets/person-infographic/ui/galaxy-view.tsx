@@ -5,12 +5,11 @@
  * 색 = 지역(대륙), 시대 = 배경 영역.
  * 같은 좌표 인물은 결정적 jitter 로 분산.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import styled, { useTheme } from 'styled-components'
 
 import type { AdaptedPerson } from '../model/types'
-import { yearOfEra } from '../model/adapt'
 import {
   ERAS,
   INFOGRAPHIC_DEFAULTS,
@@ -72,6 +71,31 @@ export function GalaxyView({ people, onOpen }: Props) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [W, setW] = useState(900)
+
+  // hover 툴팁 위치는 rAF로 코얼레스 — 매 픽셀 setState로 전체 점이 리렌더되는 것 완화.
+  const hoverRafRef = useRef(0)
+  const pendingHoverRef = useRef<{
+    p: AdaptedPerson
+    x: number
+    y: number
+  } | null>(null)
+  const setHoverThrottled = useCallback(
+    (next: { p: AdaptedPerson; x: number; y: number }) => {
+      pendingHoverRef.current = next
+      if (hoverRafRef.current) return
+      hoverRafRef.current = requestAnimationFrame(() => {
+        hoverRafRef.current = 0
+        if (pendingHoverRef.current) setHover(pendingHoverRef.current)
+      })
+    },
+    [],
+  )
+  useEffect(
+    () => () => {
+      if (hoverRafRef.current) cancelAnimationFrame(hoverRafRef.current)
+    },
+    [],
+  )
   const [vh, setVh] = useState(
     typeof window === 'undefined' ? 800 : window.innerHeight,
   )
@@ -530,11 +554,14 @@ export function GalaxyView({ people, onOpen }: Props) {
                 style={{ cursor: 'pointer' }}
                 onClick={() => onOpen(p.id)}
                 onMouseEnter={(e) => {
-                  setHover({ p, x: e.clientX, y: e.clientY })
                   setHoveredId(p.id)
+                  setHoverThrottled({ p, x: e.clientX, y: e.clientY })
                 }}
-                onMouseMove={(e) => setHover({ p, x: e.clientX, y: e.clientY })}
+                onMouseMove={(e) =>
+                  setHoverThrottled({ p, x: e.clientX, y: e.clientY })
+                }
                 onMouseLeave={() => {
+                  pendingHoverRef.current = null
                   setHover(null)
                   setHoveredId(null)
                 }}

@@ -9,6 +9,7 @@ import { memo, useMemo } from 'react'
 import styled, { css } from 'styled-components'
 
 import type { AdaptedPerson } from '../../model/types'
+import { formatYear } from '../../model/century'
 import { highlight } from './highlight'
 
 type EraConf = { color: string; lbl: string }
@@ -42,6 +43,21 @@ function PersonCardItemBase({
         : undefined,
     [p.biography],
   )
+  // 카드 핵심 정보를 스크린리더 이름에 포함 (배지·생몰·영향력이 시각에만 의존하던 문제 보강)
+  const ariaLabel = [
+    p.name,
+    p.isMonarch ? '군주' : p.isHeadOfState ? '국가원수' : null,
+    p.country && p.country !== '미상' ? p.country : null,
+    p.field,
+    `생몰 ${p.born == null ? '미상' : formatYear(p.born)}–${
+      p.isAlive ? '현재' : p.died == null ? '미상' : formatYear(p.died)
+    }`,
+    `영향력 ${p.influence}`,
+    '상세 보기',
+  ]
+    .filter(Boolean)
+    .join(', ')
+
   return (
     <EraCard
       $pinned={pinned}
@@ -49,7 +65,7 @@ function PersonCardItemBase({
       onClick={() => onOpen(p.id)}
       role="button"
       tabIndex={0}
-      aria-label={`${p.name} 상세 보기`}
+      aria-label={ariaLabel}
       onKeyDown={(e) => {
         // 카드 전체가 클릭 대상 — 키보드(Enter/Space)로도 열기. Space의 스크롤 기본동작 차단.
         if (e.key === 'Enter' || e.key === ' ') {
@@ -136,9 +152,9 @@ function PersonCardItemBase({
         </EraCountryRow>
         <EraMetaRow>
           <EraYear>
-            {p.born < 0 ? `${-p.born}BC` : p.born}
+            {p.born == null ? '?' : formatYear(p.born)}
             {' – '}
-            {p.isAlive ? '현재' : p.died < 0 ? `${-p.died}BC` : p.died}
+            {p.isAlive ? '현재' : p.died == null ? '?' : formatYear(p.died)}
             {p.age != null && ` · ${p.age}세`}
           </EraYear>
           <EraFieldChip>

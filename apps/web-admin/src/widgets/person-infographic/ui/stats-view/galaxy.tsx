@@ -41,6 +41,7 @@ import {
   LegendDot,
   LegendItem,
   LegendName,
+  useChartTheme,
 } from './shared'
 
 const KMEANS_PALETTE = [
@@ -56,6 +57,7 @@ interface Props {
 type ColorMode = 'top' | 'kmeans'
 
 export function GalaxyPane({ evaluated, evalIndex, onPersonClick }: Props) {
+  const chart = useChartTheme()
   const [colorMode, setColorMode] = useState<ColorMode>('top')
   const [k, setK] = useState<number>(4)
 
@@ -243,39 +245,39 @@ export function GalaxyPane({ evaluated, evalIndex, onPersonClick }: Props) {
                 <XAxis
                   type="number"
                   dataKey="x"
-                  tick={{ fontSize: 10, fill: '#94a3b8' }}
+                  tick={{ fontSize: 10, fill: chart.tick }}
                   label={{
                     value: `PC1 — ${loadingHint.pc1} (${explained.pc1}%)`,
                     position: 'insideBottom',
                     offset: -16,
                     fontSize: 12,
-                    fill: '#475569',
+                    fill: chart.axisLabel,
                   }}
                 />
                 <YAxis
                   type="number"
                   dataKey="y"
-                  tick={{ fontSize: 10, fill: '#94a3b8' }}
+                  tick={{ fontSize: 10, fill: chart.tick }}
                   label={{
                     value: `PC2 — ${loadingHint.pc2} (${explained.pc2}%)`,
                     angle: -90,
                     position: 'insideLeft',
                     offset: 0,
                     fontSize: 12,
-                    fill: '#475569',
+                    fill: chart.axisLabel,
                   }}
                 />
                 <ZAxis type="number" dataKey="influence" range={[60, 280]} />
                 <Tooltip
                   cursor={{ strokeDasharray: '3 3' }}
-                  contentStyle={{ borderRadius: 10, fontSize: 12, border: '1px solid #e2e8f0', padding: 10 }}
+                  contentStyle={{ borderRadius: 10, fontSize: 12, border: `1px solid ${chart.border}`, padding: 10 }}
                   content={({ active, payload }) => {
                     if (!active || !payload || !payload[0]) return null
                     const d: any = payload[0].payload
                     return (
-                      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 10, fontSize: 12, minWidth: 200 }}>
+                      <div style={{ background: chart.tooltipBg, color: chart.text, border: `1px solid ${chart.border}`, borderRadius: 10, padding: 10, fontSize: 12, minWidth: 200 }}>
                         <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.name}</div>
-                        <div style={{ color: '#64748b', fontSize: 11, marginBottom: 6 }}>
+                        <div style={{ color: chart.tooltipText, fontSize: 11, marginBottom: 6 }}>
                           {d.country}{d.faction ? ` · ${d.faction}` : ''} · 영향력 {d.influence}
                         </div>
                         {/* C4: 6축 미니 표 */}

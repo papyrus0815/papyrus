@@ -5,7 +5,7 @@
 import styled, { css, useTheme } from 'styled-components'
 
 import type { AdaptedPerson } from '../../model/types'
-import { yearOfEra } from '../../model/adapt'
+import { formatYear } from '../../model/century'
 
 interface PersonHoverTooltipProps {
   person: AdaptedPerson
@@ -31,7 +31,7 @@ export function PersonHoverTooltip({
       {p.profileImageUrl ? (
         <Img src={p.profileImageUrl} alt={p.name} />
       ) : (
-        <ImgPh $color={yearOfEra(p.activityYear).color}>
+        <ImgPh $color={p.era.color}>
           <svg viewBox="0 0 24 24" fill="currentColor" width={22} height={22}>
             <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
           </svg>
@@ -67,8 +67,8 @@ export function PersonHoverTooltip({
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          {p.born < 0 ? `${-p.born}BC` : p.born} –{' '}
-          {p.died < 0 ? `${-p.died}BC` : p.died} · 영향력 {p.influence}
+          {p.born == null ? '?' : formatYear(p.born)} –{' '}
+          {p.died == null ? '?' : formatYear(p.died)} · 영향력 {p.influence}
         </div>
       </div>
     </Wrap>

@@ -4,7 +4,23 @@
  * 5개 sub-tab(개요·매트릭스·그룹·갤럭시·비교)이 공유하는 컴포넌트만 모음.
  * sub-tab 전용은 각 파일 내부에 둠.
  */
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
+
+/**
+ * recharts 축/라벨/툴팁의 인라인 색을 테마 토큰으로 — 다크모드에서 하드코딩 회색·
+ * 흰 배경 툴팁이 안 보이던 문제 보정. (recharts는 styled prop을 못 받아 값으로 주입)
+ */
+export function useChartTheme() {
+  const theme = useTheme()
+  return {
+    tick: theme.colors.text.tertiary,
+    axisLabel: theme.colors.text.secondary,
+    border: theme.colors.border.default,
+    tooltipBg: theme.colors.background.primary,
+    tooltipText: theme.colors.text.tertiary,
+    text: theme.colors.text.primary,
+  }
+}
 
 export const EmptyHint = styled.div`
   padding: 32px 16px;

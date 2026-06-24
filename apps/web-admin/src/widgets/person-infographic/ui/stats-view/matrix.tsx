@@ -33,6 +33,7 @@ import {
   ControlsRow,
   CountHint,
   EmptyHint,
+  useChartTheme,
 } from './shared'
 
 interface Props {
@@ -60,6 +61,7 @@ function quadrantLabels(xAxis: string, yAxis: string): {
 }
 
 export function MatrixPane({ evaluated, evalIndex, onPersonClick }: Props) {
+  const chart = useChartTheme()
   const [xKey, setXKey] = useState<PersonStatKey>('politics')
   const [yKey, setYKey] = useState<PersonStatKey>('military')
 
@@ -92,12 +94,22 @@ export function MatrixPane({ evaluated, evalIndex, onPersonClick }: Props) {
   const yMeta = PERSON_STAT_META[yKey]
   const labels = quadrantLabels(xMeta.label, yMeta.label)
 
+  // 같은 능력치를 두 축에 고르면 무의미한 대각선이 되므로 충돌 시 기존 값과 스왑
+  const handleXChange = (next: PersonStatKey) => {
+    if (next === yKey) setYKey(xKey)
+    setXKey(next)
+  }
+  const handleYChange = (next: PersonStatKey) => {
+    if (next === xKey) setXKey(yKey)
+    setYKey(next)
+  }
+
   return (
     <Wrap>
       <ControlsRow>
         <ControlGroup>
           <ControlLabel>X축</ControlLabel>
-          <ControlSelect value={xKey} onChange={(e) => setXKey(e.target.value as PersonStatKey)}>
+          <ControlSelect value={xKey} onChange={(e) => handleXChange(e.target.value as PersonStatKey)}>
             {PERSON_STAT_KEYS.map((k) => (
               <option key={k} value={k}>{PERSON_STAT_META[k].label}</option>
             ))}
@@ -105,7 +117,7 @@ export function MatrixPane({ evaluated, evalIndex, onPersonClick }: Props) {
         </ControlGroup>
         <ControlGroup>
           <ControlLabel>Y축</ControlLabel>
-          <ControlSelect value={yKey} onChange={(e) => setYKey(e.target.value as PersonStatKey)}>
+          <ControlSelect value={yKey} onChange={(e) => handleYChange(e.target.value as PersonStatKey)}>
             {PERSON_STAT_KEYS.map((k) => (
               <option key={k} value={k}>{PERSON_STAT_META[k].label}</option>
             ))}
@@ -123,9 +135,9 @@ export function MatrixPane({ evaluated, evalIndex, onPersonClick }: Props) {
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.18)" />
               {/* B1. 사분면 의미 라벨 — 4구역 자동 표기 */}
               <ReferenceArea x1={50} x2={100} y1={50} y2={100} fill="rgba(99,102,241,0.04)" stroke="none" label={{ value: labels.topRight, position: 'insideTopRight', fill: '#6366f1', fontSize: 11, fontWeight: 700 }} />
-              <ReferenceArea x1={0} x2={50} y1={50} y2={100} fill="rgba(99,102,241,0.02)" stroke="none" label={{ value: labels.topLeft, position: 'insideTopLeft', fill: '#94a3b8', fontSize: 11, fontWeight: 600 }} />
-              <ReferenceArea x1={50} x2={100} y1={0} y2={50} fill="rgba(99,102,241,0.02)" stroke="none" label={{ value: labels.bottomRight, position: 'insideBottomRight', fill: '#94a3b8', fontSize: 11, fontWeight: 600 }} />
-              <ReferenceArea x1={0} x2={50} y1={0} y2={50} fill="rgba(0,0,0,0.02)" stroke="none" label={{ value: labels.bottomLeft, position: 'insideBottomLeft', fill: '#94a3b8', fontSize: 11, fontWeight: 600 }} />
+              <ReferenceArea x1={0} x2={50} y1={50} y2={100} fill="rgba(99,102,241,0.02)" stroke="none" label={{ value: labels.topLeft, position: 'insideTopLeft', fill: chart.tick, fontSize: 11, fontWeight: 600 }} />
+              <ReferenceArea x1={50} x2={100} y1={0} y2={50} fill="rgba(99,102,241,0.02)" stroke="none" label={{ value: labels.bottomRight, position: 'insideBottomRight', fill: chart.tick, fontSize: 11, fontWeight: 600 }} />
+              <ReferenceArea x1={0} x2={50} y1={0} y2={50} fill="rgba(0,0,0,0.02)" stroke="none" label={{ value: labels.bottomLeft, position: 'insideBottomLeft', fill: chart.tick, fontSize: 11, fontWeight: 600 }} />
               <ReferenceLine x={50} stroke="rgba(148,163,184,0.4)" strokeDasharray="4 2" />
               <ReferenceLine y={50} stroke="rgba(148,163,184,0.4)" strokeDasharray="4 2" />
               <XAxis
@@ -133,21 +145,21 @@ export function MatrixPane({ evaluated, evalIndex, onPersonClick }: Props) {
                 dataKey="x"
                 domain={[0, 100]}
                 name={xMeta.label}
-                tick={{ fontSize: 11, fill: '#64748b' }}
-                label={{ value: xMeta.label, position: 'insideBottom', offset: -16, fontSize: 12, fill: '#475569' }}
+                tick={{ fontSize: 11, fill: chart.tick }}
+                label={{ value: xMeta.label, position: 'insideBottom', offset: -16, fontSize: 12, fill: chart.axisLabel }}
               />
               <YAxis
                 type="number"
                 dataKey="y"
                 domain={[0, 100]}
                 name={yMeta.label}
-                tick={{ fontSize: 11, fill: '#64748b' }}
-                label={{ value: yMeta.label, angle: -90, position: 'insideLeft', offset: 0, fontSize: 12, fill: '#475569' }}
+                tick={{ fontSize: 11, fill: chart.tick }}
+                label={{ value: yMeta.label, angle: -90, position: 'insideLeft', offset: 0, fontSize: 12, fill: chart.axisLabel }}
               />
               <ZAxis type="number" dataKey="influence" range={[60, 280]} />
               <Tooltip
                 cursor={{ strokeDasharray: '3 3' }}
-                contentStyle={{ borderRadius: 8, fontSize: 12, border: '1px solid #e2e8f0' }}
+                contentStyle={{ borderRadius: 8, fontSize: 12, border: `1px solid ${chart.border}` }}
                 formatter={(value, name) => {
                   if (name === 'influence') return [`영향력 ${value}`, '']
                   return [value, name]

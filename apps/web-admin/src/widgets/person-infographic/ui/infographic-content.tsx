@@ -4,7 +4,7 @@
  * 6개 뷰(matrix/galaxy/story/dynasty/stats)는 각자 별도 파일.
  * 필터·뷰·정렬 상태는 zustand store + URL 쿼리 동기화로 공유.
  */
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { motion } from 'framer-motion'
 import { FiBarChart2, FiPlus, FiSearch, FiX } from 'react-icons/fi'
@@ -15,13 +15,12 @@ import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { PersonTabSharedTitle } from '@/widgets/country/country-detail/ui/country-detail.styles'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 
+import { ERAS } from '../model/constants'
 import {
-  ERAS,
-  yearOfEra,
-  useAdaptedPersons,
   usePersonInfographicFilterStore,
   type PersonInfographicView,
-} from '@/widgets/person-infographic'
+} from '../model/filter.store'
+import { useAdaptedPersons } from '../model/use-adapted-persons'
 import { useFilterUrlSync } from '../model/url-sync'
 
 import { DynastyView } from './dynasty-view'
@@ -51,8 +50,11 @@ export function InfographicContent({
   const scopes = usePersonInfographicFilterStore((s) => s.scopes)
   const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
   const view = usePersonInfographicFilterStore((s) => s.view)
-  const q = usePersonInfographicFilterStore((s) => s.query)
-  const setQ = usePersonInfographicFilterStore((s) => s.setQuery)
+  const storeQuery = usePersonInfographicFilterStore((s) => s.query)
+  const setStoreQuery = usePersonInfographicFilterStore((s) => s.setQuery)
+  // 검색 입력은 로컬 state로 즉시 반영하고, 디바운스된 값만 store(→URL)에 커밋.
+  // (이전엔 키 입력마다 store.query→url-sync가 URL을 replaceState로 갱신해 history 스팸)
+  const [searchInput, setSearchInput] = useState(storeQuery)
   const minInfluence = usePersonInfographicFilterStore((s) => s.minInfluence)
   const aliveFilter = usePersonInfographicFilterStore((s) => s.aliveFilter)
   const pinnedList = usePersonInfographicFilterStore((s) => s.pinned)
@@ -69,8 +71,18 @@ export function InfographicContent({
 
   const [formOpen, setFormOpen] = useState(false)
 
-  // 입력은 즉시 반영(q)하되 무거운 필터/뷰 리렌더는 안정 후에만 — 대량 인물에서 타이핑 랙 완화.
-  const dq = useDebouncedValue(q, 200)
+  // 무거운 필터/뷰는 디바운스된 검색어로만 갱신 — 대량 인물 타이핑 랙 완화.
+  const dq = useDebouncedValue(searchInput, 200)
+
+  // 디바운스된 검색어만 store(→URL·필터)에 커밋
+  useEffect(() => {
+    if (dq !== storeQuery) setStoreQuery(dq)
+  }, [dq, storeQuery, setStoreQuery])
+
+  // 외부에서 store.query가 바뀌면(URL 진입·필터 초기화) 입력칸 동기화
+  useEffect(() => {
+    setSearchInput((cur) => (cur === storeQuery ? cur : storeQuery))
+  }, [storeQuery])
 
   // 통계 차트 접힘 — 기본 접힘. localStorage persist.
   const [statsOpen, setStatsOpen] = useState<boolean>(() => {
@@ -95,9 +107,7 @@ export function InfographicContent({
   const filtered = useMemo(() => {
     let arr = allPeople
     if (scopes.era.length > 0)
-      arr = arr.filter((p) =>
-        scopes.era.includes(yearOfEra(p.activityYear).key),
-      )
+      arr = arr.filter((p) => scopes.era.includes(p.era.key))
     if (scopes.region.length > 0)
       arr = arr.filter((p) => scopes.region.includes(p.region))
     if (scopes.field.length > 0)
@@ -132,11 +142,12 @@ export function InfographicContent({
             '필터링됨'
         : `${totalScopeCount}개 필터 적용됨`
 
-  const avgLifespan = filtered.length
-    ? Math.round(
-        filtered.reduce((s, p) => s + Math.abs(p.died - p.born), 0) /
-          filtered.length,
-      )
+  // 평균 수명: 생몰이 모두 확인돼 age가 산출된 인물만 집계(미상 born=0 오염 제거).
+  const knownAges = filtered
+    .map((p) => p.age)
+    .filter((age): age is number => age != null)
+  const avgLifespan = knownAges.length
+    ? Math.round(knownAges.reduce((sum, age) => sum + age, 0) / knownAges.length)
     : 0
 
   // 'cards' 이외의 뷰만 이 컴포넌트가 다룸. (cards 뷰는 PersonInfographicPane이 분기.)
@@ -147,11 +158,14 @@ export function InfographicContent({
     totalScopeCount > 0 ||
     minInfluence > 0 ||
     aliveFilter !== 'all' ||
-    !!q.trim()
+    !!dq.trim()
 
   return (
     <motion.div
       key="infographic"
+      id="person-view-panel"
+      role="tabpanel"
+      aria-labelledby={`person-view-tab-${activeView}`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -172,7 +186,8 @@ export function InfographicContent({
               {scopeLabel}
               {filtered.length > 0 && (
                 <TitleMeta>
-                  {filtered.length}명 · 평균 수명 {avgLifespan}년
+                  {filtered.length}명
+                  {avgLifespan > 0 && ` · 평균 수명 ${avgLifespan}년`}
                 </TitleMeta>
               )}
             </PersonTabSharedTitle>
@@ -184,13 +199,16 @@ export function InfographicContent({
                 <FiSearch size={13} />
               </SearchIconWrap>
               <SearchInput
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="이름, 국가, 소속 검색…"
                 aria-label="인물 검색"
               />
-              {q && (
-                <ClearBtn onClick={() => setQ('')} aria-label="검색어 지우기">
+              {searchInput && (
+                <ClearBtn
+                  onClick={() => setSearchInput('')}
+                  aria-label="검색어 지우기"
+                >
                   <FiX size={13} />
                 </ClearBtn>
               )}
