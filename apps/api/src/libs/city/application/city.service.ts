@@ -244,17 +244,19 @@ export class CityService {
   ): Promise<AdminDivisionConfigResponseDto> {
     const owner = this.resolveOwner(body)
     if (body.schemeId) await this.validateScheme(body.schemeId, owner)
-    // 중복 검사는 같은 체계 범위 안에서만 — 체계가 다르면 같은 레벨 허용
+    // 중복 검사는 같은 체계 + 같은 (레벨, 라벨)에 한정 — 같은 레벨이라도 라벨이 다르면 공존 허용
+    // (예: 미국 2차에 '카운티'와 '통합시'(NYC)가 함께 존재)
     const dup = await this.prisma.countryAdminDivisionConfig.findFirst({
       where: {
         ...owner,
         schemeId: body.schemeId ?? null,
         divisionLevel: body.divisionLevel,
+        divisionLabel: body.divisionLabel,
       },
     })
     if (dup) {
       throw new ConflictException(
-        `해당 국가에 ${body.divisionLevel}차 단위가 이미 존재합니다.`,
+        `해당 국가의 ${body.divisionLevel}차에 '${body.divisionLabel}' 단위가 이미 존재합니다.`,
       )
     }
     const row = await this.prisma.countryAdminDivisionConfig.create({
@@ -484,23 +486,27 @@ export class CityService {
     })
     if (!current) throw new NotFoundException('단위를 찾을 수 없습니다.')
 
+    // (레벨, 라벨) 쌍 기준 중복 검사 — 레벨/라벨 어느 쪽이 바뀌든 충돌 방지
+    const nextLevel = body.divisionLevel ?? current.divisionLevel
+    const nextLabel = body.divisionLabel ?? current.divisionLabel
     if (
-      body.divisionLevel != null &&
-      body.divisionLevel !== current.divisionLevel
+      nextLevel !== current.divisionLevel ||
+      nextLabel !== current.divisionLabel
     ) {
-      // 중복 검사는 같은 체계 범위 안에서만 — 생성 경로와 동일 (수정으로 체계는 못 바꿈)
+      // 같은 체계 범위 안에서만 (수정으로 체계는 못 바꿈)
       const dup = await this.prisma.countryAdminDivisionConfig.findFirst({
         where: {
           countryId: current.countryId,
           historicalCountryId: current.historicalCountryId,
           schemeId: current.schemeId ?? null,
-          divisionLevel: body.divisionLevel,
+          divisionLevel: nextLevel,
+          divisionLabel: nextLabel,
           NOT: { id },
         },
       })
       if (dup) {
         throw new ConflictException(
-          `해당 국가에 ${body.divisionLevel}차 단위가 이미 존재합니다.`,
+          `해당 국가의 ${nextLevel}차에 '${nextLabel}' 단위가 이미 존재합니다.`,
         )
       }
     }
@@ -788,32 +794,52 @@ export class CityService {
     // 단위 결정 + 항목 생성을 한 트랜잭션으로 묶는다.
     // (자동 생성한 config나 일부 항목만 남고 나머지가 실패하는 부분 커밋 방지)
     const result = await this.prisma.$transaction(async (tx) => {
-      // 단위 결정 — adminDivisionId 우선, 없으면 (countryId, divisionLevel)로 찾고, 그래도 없으면 새로 만듦
+      // 단위 결정 — adminDivisionId 우선. 없으면 라벨로 (레벨,라벨) 매칭/생성,
+      // 라벨도 없으면 해당 레벨 단위가 유일할 때만 자동 선택(복수면 모호 → 명시 요구).
       let configId = body.adminDivisionId ?? null
       if (!configId) {
-        const existing = await tx.countryAdminDivisionConfig.findFirst({
-          where: {
-            ...owner,
-            schemeId: effectiveSchemeId,
-            divisionLevel: body.divisionLevel,
-          },
-        })
-        if (existing) {
-          configId = existing.id
-        } else if (body.divisionLabel?.trim()) {
-          const created = await tx.countryAdminDivisionConfig.create({
-            data: {
+        const label = body.divisionLabel?.trim()
+        if (label) {
+          const existing = await tx.countryAdminDivisionConfig.findFirst({
+            where: {
               ...owner,
-              schemeId: effectiveSchemeId ?? undefined,
+              schemeId: effectiveSchemeId,
               divisionLevel: body.divisionLevel,
-              divisionLabel: body.divisionLabel.trim(),
+              divisionLabel: label,
             },
           })
-          configId = created.id
+          configId =
+            existing?.id ??
+            (
+              await tx.countryAdminDivisionConfig.create({
+                data: {
+                  ...owner,
+                  schemeId: effectiveSchemeId ?? undefined,
+                  divisionLevel: body.divisionLevel,
+                  divisionLabel: label,
+                },
+              })
+            ).id
         } else {
-          throw new ConflictException(
-            '단위 ID 또는 단위명(divisionLabel)이 필요합니다.',
-          )
+          const atLevel = await tx.countryAdminDivisionConfig.findMany({
+            where: {
+              ...owner,
+              schemeId: effectiveSchemeId,
+              divisionLevel: body.divisionLevel,
+            },
+            take: 2,
+          })
+          if (atLevel.length === 1) {
+            configId = atLevel[0]!.id
+          } else if (atLevel.length === 0) {
+            throw new ConflictException(
+              '단위 ID 또는 단위명(divisionLabel)이 필요합니다.',
+            )
+          } else {
+            throw new ConflictException(
+              `${body.divisionLevel}차에 단위가 여러 개입니다. adminDivisionId 또는 divisionLabel로 단위를 지정하세요.`,
+            )
+          }
         }
       } else {
         const cfg = await tx.countryAdminDivisionConfig.findUnique({

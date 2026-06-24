@@ -276,10 +276,12 @@ model CountryAdminDivisionConfig {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // 체계가 다르면 같은 레벨이라도 다른 단위 허용 (예: 팔도제 1차=도, 23부제 1차=부).
-  // schemeId NULL(공용)의 레벨 중복은 서비스 레이어 dup 체크가 막는다 (MySQL unique는 NULL 중복 허용).
-  @@unique([countryId, schemeId, divisionLevel])
-  @@unique([historicalCountryId, schemeId, divisionLevel])
+  // 같은 레벨에 복수 단위 타입 허용 (예: 미국 2차 = 카운티 + 통합시(NYC) + 독립시).
+  // 유일성은 (국가, 체계, 레벨, 라벨)까지 봐야 동일 레벨의 서로 다른 단위가 공존 가능.
+  // 체계가 다르면 같은 레벨·같은 라벨도 별개(팔도제 1차=도 vs 23부제 1차=부).
+  // schemeId NULL(공용)의 (레벨,라벨) 중복은 서비스 레이어 dup 체크가 막는다 (MySQL unique는 NULL 중복 허용).
+  @@unique([countryId, schemeId, divisionLevel, divisionLabel])
+  @@unique([historicalCountryId, schemeId, divisionLevel, divisionLabel])
   @@index([historicalCountryId], name: "idx_admin_div_config_historicalCountryId")
   @@index([schemeId], name: "idx_admin_div_config_schemeId")
   @@map("country_admin_division_config")
