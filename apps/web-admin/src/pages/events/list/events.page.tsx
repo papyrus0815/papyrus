@@ -91,6 +91,9 @@ import { useCatalogUrlSync } from './hooks/use-catalog-url-sync'
 import { exportEventsAsJson } from './lib/export-events'
 import { resolveDefaultViewMode } from './lib/resolve-default-view-mode'
 
+/** 집중(넓게) 보기 선택 영속 키 — 세션 간 유지. 모듈 스코프(렌더마다 재생성 회피). */
+const WIDE_MODE_KEY = 'papyrus.events.wideMode'
+
 export interface EventsCatalogPageProps {
   /** 국가(현대/역사적) ID로 연관 사건만 표시. 미전달 시 전체 사건 */
   countryId?: string | null
@@ -114,6 +117,35 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   // 기본 page size 100 — 타임라인 뷰가 한 번에 더 많은 사건을 보여주도록.
   // 사용자는 toolbar의 page size 컨트롤로 변경 가능.
   const [pageSize, setPageSize] = useState(100)
+
+  // ===== 집중(넓게) 보기 =====
+  // 페이지 헤더·뷰 힌트·타임라인 미니맵을 접어 콘텐츠 본문에 세로 공간(~250px)을 양보.
+  // 토글 1회로 켜고 끄며 선택은 localStorage에 영속(다음 방문에도 유지).
+  const [wideMode, setWideMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      const saved = window.localStorage.getItem(WIDE_MODE_KEY)
+      if (saved === '1') return true
+      if (saved === '0') return false
+      // 미설정(최초 방문) — 짧은 뷰포트(노트북류, < 860px)면 자동으로 집중 모드로
+      // 시작해 첫 진입 가독성을 확보. 큰 모니터(≥ 860px)는 미니맵을 유지.
+      // 사용자가 토글하면 '1'/'0'이 저장돼 이후엔 그 선택이 항상 우선.
+      return window.innerHeight < 860
+    } catch {
+      return false
+    }
+  })
+  const toggleWideMode = useCallback(() => {
+    setWideMode((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(WIDE_MODE_KEY, next ? '1' : '0')
+      } catch {
+        /* storage 비활성 — 세션 내 토글만 동작 */
+      }
+      return next
+    })
+  }, [])
 
   // ===== 북마크 / 최근 본 =====
   const { bookmarks, toggleBookmark } = useBookmarks()
@@ -530,6 +562,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           isFetchingMore={isFetchingNextPage}
           onLoadMore={fetchMoreEvents}
           isLoading={isLoading && events.length === 0}
+          wideMode={wideMode}
         />
       )
   }
@@ -667,7 +700,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
 
   const content = (
     <>
-      {embed ? (
+      {/* 집중(넓게) 보기에선 페이지 헤더를 접어 본문에 높이 양보 */}
+      {wideMode ? null : embed ? (
         <PageStyles.EmbedHeader>
           연대표
           {countryId && (
@@ -728,6 +762,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           onSortDirectionToggle={handleSortDirectionToggle}
           pageSize={pageSize}
           onPageSizeChange={handlePageSizeChange}
+          wideMode={wideMode}
+          onToggleWideMode={toggleWideMode}
           activeSlot={activeSlot}
         />
         {selectedEventId && (

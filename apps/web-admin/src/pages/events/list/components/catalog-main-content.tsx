@@ -24,6 +24,8 @@ import {
   FiImage,
   FiList,
   FiMapPin,
+  FiMaximize2,
+  FiMinimize2,
   FiMoreHorizontal,
 } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -63,6 +65,13 @@ interface Props {
 
   pageSize: number
   onPageSizeChange: (size: number) => void
+
+  /**
+   * 집중(넓게) 보기 — 상단 페이지 헤더·뷰 힌트·미니맵을 접어 콘텐츠(특히 타임라인)에
+   * 세로 공간을 양보한다. 상태는 페이지가 소유(localStorage 영속).
+   */
+  wideMode: boolean
+  onToggleWideMode: () => void
 
   /** 부모가 viewMode에 따라 빌드해 넘긴 단일 활성 슬롯 */
   activeSlot: React.ReactNode
@@ -122,6 +131,8 @@ export const CatalogMainContent: React.FC<Props> = ({
   onSortDirectionToggle,
   pageSize,
   onPageSizeChange,
+  wideMode,
+  onToggleWideMode,
   activeSlot,
 }) => {
   const isFiltered = visibleCount !== totalCount
@@ -265,6 +276,27 @@ export const CatalogMainContent: React.FC<Props> = ({
           </List.SortSelect>
         </ToolbarStyles.DisplayOptions>
 
+        {/* 집중(넓게) 보기 토글 — 어느 뷰에서도 항상 보이도록 ViewSwitcherRow에 둠.
+            (특히 타임라인은 미니맵 접기로 ~166px를 본문에 양보) */}
+        <ToolbarStyles.ToolbarBtn
+          type="button"
+          $active={wideMode}
+          onClick={onToggleWideMode}
+          aria-pressed={wideMode}
+          title={
+            wideMode
+              ? '기본 보기 — 접은 상단 영역 다시 표시'
+              : '넓게 보기 — 상단 영역(헤더·미니맵 등)을 접어 콘텐츠를 최대화'
+          }
+        >
+          {wideMode ? (
+            <FiMinimize2 size={13} aria-hidden="true" />
+          ) : (
+            <FiMaximize2 size={13} aria-hidden="true" />
+          )}
+          <span>{wideMode ? '기본' : '넓게'}</span>
+        </ToolbarStyles.ToolbarBtn>
+
         <MetaArea aria-live="polite">
           <CatalogHeaderStats
             events={events}
@@ -280,7 +312,7 @@ export const CatalogMainContent: React.FC<Props> = ({
         </MetaArea>
       </ToolbarStyles.ViewSwitcherRow>
 
-      <ViewHint role="note">{VIEW_HINTS[viewMode]}</ViewHint>
+      {!wideMode && <ViewHint role="note">{VIEW_HINTS[viewMode]}</ViewHint>}
 
       {activeSlot}
     </PageStyles.ActiveContent>

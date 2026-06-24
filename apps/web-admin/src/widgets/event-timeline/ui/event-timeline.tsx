@@ -88,6 +88,11 @@ interface EventTimelineProps {
   onLoadMore?: () => void
   /** 첫 페이지 로딩 중 — 데이터 0과 구분해 "불러오는 중" 표시 (로딩↔빈 상태 혼동 방지) */
   isLoading?: boolean
+  /**
+   * 집중(넓게) 보기 — 상단 "사건 분포" 미니맵 카드를 접어 타임라인 본문에
+   * 그 높이(~166px)를 양보한다. 페이지가 소유하는 상태로, 토글은 ViewSwitcherRow에 있다.
+   */
+  wideMode?: boolean
 }
 
 /** lane 축 — 카테고리(기존) · 대륙 · 국가. 색은 항상 카테고리. */
@@ -359,6 +364,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   isFetchingMore = false,
   onLoadMore,
   isLoading = false,
+  wideMode = false,
 }) => {
   /**
    * lane 그룹 축. UI segmented control이 토글. category가 기본(기존 동작 유지).
@@ -2363,7 +2369,8 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 
   return (
     <>
-      {/* ═══ 카드 1: 사건 분포 ═══ */}
+      {/* ═══ 카드 1: 사건 분포 — 집중(넓게) 보기에선 접어 타임라인에 높이 양보 ═══ */}
+      {!wideMode && (
       <MinimapCard>
         <CardHeader>
           <CardTitleGroup>
@@ -2439,6 +2446,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
           })}
         </Minimap>
       </MinimapCard>
+      )}
 
       {/* ═══ 카드 2: 사건 타임라인 ═══ */}
       <TimelineCard>
