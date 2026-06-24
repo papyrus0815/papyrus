@@ -99,12 +99,8 @@ export type UpdatePersonDto = Omit<
  * 모든 인물 조회
  */
 export async function getAllPersons(): Promise<PersonResponseDto[]> {
-  try {
-    const response = (await personsApi.getAll(getApiConnection())) as any
-    return response.data || response
-  } catch (error) {
-    throw error
-  }
+  const response = (await personsApi.getAll(getApiConnection())) as any
+  return response.data || response
 }
 
 /**
@@ -130,36 +126,28 @@ export async function getPersonsByTenureCountry(params: {
   const { countryId, historicalCountryId } = params
   if (!countryId && !historicalCountryId) return []
   const conn = getApiConnection()
-  try {
-    if (countryId) {
-      const data =
-        await governmentPositions.countries.persons.getPersonsByCountryId(
-          conn,
-          countryId,
-        )
-      return Array.isArray(data) ? data : []
-    }
+  if (countryId) {
     const data =
-      await governmentPositions.historical_countries.persons.getPersonsByHistoricalCountryId(
+      await governmentPositions.countries.persons.getPersonsByCountryId(
         conn,
-        historicalCountryId!,
+        countryId,
       )
     return Array.isArray(data) ? data : []
-  } catch (error) {
-    throw error
   }
+  const data =
+    await governmentPositions.historical_countries.persons.getPersonsByHistoricalCountryId(
+      conn,
+      historicalCountryId!,
+    )
+  return Array.isArray(data) ? data : []
 }
 
 /**
  * 인물 상세 조회
  */
 export async function getPersonById(id: string): Promise<PersonResponseDto> {
-  try {
-    const response = (await personsApi.getById(getApiConnection(), id)) as any
-    return response.data || response
-  } catch (error) {
-    throw error
-  }
+  const response = (await personsApi.getById(getApiConnection(), id)) as any
+  return response.data || response
 }
 
 /**
@@ -168,16 +156,12 @@ export async function getPersonById(id: string): Promise<PersonResponseDto> {
 export async function createPerson(
   data: CreatePersonDto,
 ): Promise<PersonResponseDto> {
-  try {
-    // 완화 타입(null 허용)과 SDK Primitive 타입의 차이는 단언으로 통과 — 런타임은 class-validator가 수용.
-    const response = (await personsApi.create(
-      getApiConnection(),
-      data as unknown as SdkCreatePersonDto,
-    )) as any
-    return response.data || response
-  } catch (error) {
-    throw error
-  }
+  // 완화 타입(null 허용)과 SDK Primitive 타입의 차이는 단언으로 통과 — 런타임은 class-validator가 수용.
+  const response = (await personsApi.create(
+    getApiConnection(),
+    data as unknown as SdkCreatePersonDto,
+  )) as any
+  return response.data || response
 }
 
 /**
@@ -187,43 +171,31 @@ export async function updatePerson(
   id: string,
   data: UpdatePersonDto,
 ): Promise<PersonResponseDto> {
-  try {
-    const response = (await personsApi.update(
-      getApiConnection(),
-      id,
-      data as unknown as SdkUpdatePersonDto,
-    )) as any
-    return response.data || response
-  } catch (error) {
-    throw error
-  }
+  const response = (await personsApi.update(
+    getApiConnection(),
+    id,
+    data as unknown as SdkUpdatePersonDto,
+  )) as any
+  return response.data || response
 }
 
 /**
  * 인물 삭제
  */
 export async function deletePerson(id: string): Promise<void> {
-  try {
-    await personsApi._delete(getApiConnection(), id)
-  } catch (error) {
-    throw error
-  }
+  await personsApi._delete(getApiConnection(), id)
 }
 
 /**
  * 모든 인물 조회 (정부 직책 포함) — SDK
  */
 export async function getAllPersonsWithGovernmentPositions(): Promise<any[]> {
-  try {
-    const conn = getApiConnection()
-    const data =
-      await personsApi.with_government_positions.getAllWithGovernmentPositions(
-        conn,
-      )
-    return Array.isArray(data) ? data : []
-  } catch (error) {
-    throw error
-  }
+  const conn = getApiConnection()
+  const data =
+    await personsApi.with_government_positions.getAllWithGovernmentPositions(
+      conn,
+    )
+  return Array.isArray(data) ? data : []
 }
 
 export type ModernCountryPersonCountRow = {
