@@ -36,7 +36,7 @@ export const CabinetModalBox = styled(ModalBox)`
   max-width: 920px;
   min-height: 520px;
   max-height: 90vh;
-  border-radius: 20px;
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
   overflow: hidden;

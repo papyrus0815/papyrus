@@ -31,7 +31,7 @@ export const BioMentionModalPanel = styled(motion.div)`
   /* 공용 glassCardMixin — 다른 모달(공용 ModalBox)과 톤 일치 (다크: rgba(20,20,20,0.92)) */
   ${({ theme }) => glassCardMixin(theme)}
   position: relative;
-  border-radius: 24px;
+  border-radius: 16px;
   width: 100%;
   max-width: 740px;
   height: 68vh;

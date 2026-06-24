@@ -10,6 +10,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
 
+import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 export const PersonRegisterModalOverlay = styled(motion.div)`
@@ -36,6 +37,7 @@ export const PersonRegisterModalBox = styled(motion.div)<{
    */
   $height?: string
 }>`
+  ${({ theme }) => glassCardMixin(theme)}
   width: ${({ $maxWidth }) => $maxWidth ?? 'min(960px, 96vw)'};
   max-height: 90vh;
   ${({ $height, $minHeight }) =>
@@ -47,20 +49,11 @@ export const PersonRegisterModalBox = styled(motion.div)<{
       : `
     min-height: ${$minHeight ?? '560px'};
   `}
-  border-radius: 12px;
+  border-radius: 16px;
   z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e5e7eb'};
-  /* 단일 그림자 — 톤다운 */
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 16px 32px -12px rgba(0,0,0,0.5)'
-      : '0 16px 32px -8px rgba(15, 23, 42, 0.12)'};
 `
 
 export const PersonRegisterModalHeader = styled.div`

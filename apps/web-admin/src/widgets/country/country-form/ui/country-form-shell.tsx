@@ -17,6 +17,7 @@ import { FiCheck, FiCloud, FiX } from 'react-icons/fi'
 import styled, { keyframes } from 'styled-components'
 
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 export interface RequiredFieldChip {
@@ -100,21 +101,13 @@ const Overlay = styled(motion.div)`
 `
 
 const ModalBox = styled(motion.div)<{ $fit?: boolean }>`
+  ${({ theme }) => glassCardMixin(theme)}
   width: min(960px, 96vw);
   ${({ $fit }) =>
     $fit
       ? `height: auto; max-height: min(90vh, 1200px);`
       : `height: 90vh; max-height: 1200px;`}
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#e5e7eb'};
-  border-radius: 12px;
-  /* 단일 그림자만 */
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 16px 32px -12px rgba(0,0,0,0.5)'
-      : '0 16px 32px -8px rgba(15, 23, 42, 0.12)'};
+  border-radius: 16px;
   z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;
   flex-direction: column;

@@ -218,7 +218,7 @@ const Panel = styled.div`
   height: 90vh;
   display: flex;
   flex-direction: column;
-  border-radius: 20px;
+  border-radius: 16px;
   overflow: hidden;
   z-index: ${Z_INDEX.MODAL_CONTENT};
 `

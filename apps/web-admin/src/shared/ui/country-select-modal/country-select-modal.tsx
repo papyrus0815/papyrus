@@ -23,6 +23,7 @@ import { useContinents } from '@/features/continent/use-continents.hook'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { glassCardMixin } from '@/shared/styles/mixins'
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 import {
   AddButton,
@@ -551,6 +552,7 @@ const Overlay = styled.div`
 
 /** 국가 상세 폼 카드·대시보드 카드와 동일한 톤 */
 const ModalContainer = styled.div`
+  ${({ theme }) => glassCardMixin(theme)}
   width: 100%;
   max-width: min(1240px, 96vw);
   /* max-height만 있으면 flex 자식(flex:1)이 세로 공간을 못 받아 목록이 쪼그라듦 */
@@ -565,7 +567,7 @@ const ModalContainer = styled.div`
       max-height: min(98dvh, 1800px);
     }
   `}
-  border-radius: 20px;
+  border-radius: 16px;
   animation: modalUp 0.26s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   @keyframes modalUp {
     from {
@@ -581,18 +583,6 @@ const ModalContainer = styled.div`
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
-
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
-
-  ${({ theme }) =>
-    theme.mode === 'dark' &&
-    css`
-      box-shadow:
-        0 12px 40px ${theme.colors.shadow.md},
-        0 0 0 1px ${theme.colors.border.default} inset;
-    `}
 `
 
 const ModalHeader = styled.div`

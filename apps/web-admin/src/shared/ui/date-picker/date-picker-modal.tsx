@@ -12,6 +12,7 @@ import {
 import styled from 'styled-components'
 
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 interface DatePickerModalProps {
@@ -656,20 +657,8 @@ const Overlay = styled.div`
 `
 
 const ModalContainer = styled.div`
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(25,25,25,0.92)' : '#fff'};
-  backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  -webkit-backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
-  border-radius: 18px;
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 8px 32px rgba(0,0,0,0.5)'
-      : '0 12px 40px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.04)'};
+  ${({ theme }) => glassCardMixin(theme)}
+  border-radius: 16px;
   width: 92%;
   max-width: 440px;
   outline: none;

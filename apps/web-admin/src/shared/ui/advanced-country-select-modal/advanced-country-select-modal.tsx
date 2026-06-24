@@ -11,6 +11,7 @@ import { useContinents } from '@/features/continent/use-continents.hook'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 /**
@@ -423,25 +424,13 @@ const Modal = styled.div`
 `
 
 const ModalContent = styled.div`
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(20,20,20,0.92)' : '#ffffff'};
-  backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  -webkit-backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
+  ${({ theme }) => glassCardMixin(theme)}
   border-radius: 16px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'transparent'};
   width: 92%;
   max-width: 1000px;
   max-height: 68vh;
   display: flex;
   flex-direction: column;
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 20px 60px rgba(0,0,0,0.6)'
-      : '0 20px 60px rgba(0, 0, 0, 0.3)'};
 `
 
 const ModalHeader = styled.div`

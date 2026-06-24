@@ -26,6 +26,7 @@ import type { GovernmentPositionDefinition } from '@/shared/api/government-posit
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { glassCardMixin } from '@/shared/styles/mixins'
 
 const POSITION_TYPE_OPTIONS: SelectOption<string>[] = [
   { value: 'HEAD_OF_STATE', label: '국가 원수' },
@@ -55,9 +56,8 @@ const Overlay = styled.div`
   padding: 24px;
 `
 const ModalCard = styled.div`
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  ${({ theme }) => glassCardMixin(theme)}
+  border-radius: 16px;
   max-width: 720px;
   width: 100%;
   max-height: 90vh;

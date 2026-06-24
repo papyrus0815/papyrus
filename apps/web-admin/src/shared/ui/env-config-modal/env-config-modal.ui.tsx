@@ -1,6 +1,7 @@
 import React from 'react'
 import styled from 'styled-components'
 import { Z_INDEX, OVERLAY_STYLES } from '@/shared/styles/z-index'
+import { glassCardMixin } from '@/shared/styles/mixins'
 
 const ModalOverlay = styled.div`
   position: fixed;
@@ -17,12 +18,11 @@ const ModalOverlay = styled.div`
 `
 
 const ModalContent = styled.div`
-  background: white;
+  ${({ theme }) => glassCardMixin(theme)}
   padding: 2rem;
-  border-radius: 8px;
+  border-radius: 16px;
   max-width: 500px;
   width: 90%;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
 `
 
 const Title = styled.h2`

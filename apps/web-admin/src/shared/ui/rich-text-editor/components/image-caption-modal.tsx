@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom'
 import { FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 const Overlay = styled.div`
@@ -26,19 +27,8 @@ const Overlay = styled.div`
 `
 
 const ModalCard = styled.div`
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(30,30,30,0.9)' : '#fff'};
-  backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
-  -webkit-backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(20px)' : 'none'};
-  border-radius: 20px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
-  box-shadow:
-    0 4px 20px rgba(0, 0, 0, 0.08),
-    0 1px 3px rgba(0, 0, 0, 0.04);
+  ${({ theme }) => glassCardMixin(theme)}
+  border-radius: 16px;
   width: 90%;
   max-width: 480px;
   overflow: hidden;

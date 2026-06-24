@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import styled from 'styled-components'
 import { FiClock, FiX, FiCheck } from 'react-icons/fi'
+import { glassCardMixin } from '@/shared/styles/mixins'
 
 interface TimePickerModalProps {
   isOpen: boolean
@@ -174,13 +175,12 @@ const Overlay = styled.div`
 `
 
 const ModalContainer = styled.div`
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'white')};
+  ${({ theme }) => glassCardMixin(theme)}
   border-radius: 16px;
   width: 420px;
   max-width: 90%;
   max-height: 90vh;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   animation: slideUp 0.3s ease-out;
 
   @keyframes slideUp {

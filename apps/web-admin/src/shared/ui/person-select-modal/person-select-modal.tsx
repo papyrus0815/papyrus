@@ -26,6 +26,7 @@ import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { notify } from '@/shared/ui/toast'
 
@@ -880,14 +881,8 @@ const ModalOverlay = styled.div`
 `
 
 const ModalBox = styled.div`
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(20,20,20,0.92)' : '#ffffff'};
-  backdrop-filter: ${({ theme }) => theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  -webkit-backdrop-filter: ${({ theme }) => theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  border-radius: 20px;
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
-  box-shadow: ${({ theme }) => theme.mode === 'dark'
-    ? '0 20px 60px rgba(0,0,0,0.6)'
-    : '0 20px 60px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04)'};
+  ${({ theme }) => glassCardMixin(theme)}
+  border-radius: 16px;
   width: 100%;
   max-width: 920px;
   max-height: 82vh;

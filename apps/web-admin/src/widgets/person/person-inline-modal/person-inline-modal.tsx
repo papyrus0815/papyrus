@@ -169,7 +169,7 @@ const Box = styled(motion.div)`
   max-width: 900px;
   width: 100%;
   max-height: 88vh;
-  border-radius: 20px;
+  border-radius: 16px;
   z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;
   flex-direction: column;

@@ -340,7 +340,7 @@ export function CabinetLinkageModal({
         $maxHeight="min(720px, 92vh)"
         onClick={(e) => e.stopPropagation()}
         style={{
-          borderRadius: 20,
+          borderRadius: 16,
           border: isDark
             ? '1px solid rgba(255,255,255,0.08)'
             : '1px solid rgba(15,23,42,0.06)',

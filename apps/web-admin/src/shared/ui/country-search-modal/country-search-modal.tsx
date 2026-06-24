@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom'
 import { FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 export interface CountryOption {
@@ -324,15 +325,7 @@ const Modal = styled.div`
 `
 
 const ModalContent = styled.div`
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(20,20,20,0.92)' : '#fff'};
-  backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  -webkit-backdrop-filter: ${({ theme }) =>
-    theme.mode === 'dark' ? 'blur(24px)' : 'none'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e5e7eb'};
+  ${({ theme }) => glassCardMixin(theme)}
   border-radius: 16px;
   width: 100%;
   max-width: 900px;
@@ -346,10 +339,6 @@ const ModalContent = styled.div`
     max-height: calc(100dvh - 24px);
     border-radius: 12px;
   }
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 10px 40px rgba(0,0,0,0.5)'
-      : '0 20px 60px rgba(0,0,0,0.15)'};
   z-index: ${Z_INDEX.MODAL_CONTENT + 2};
   animation: slideUp 0.25s ease-out;
   @keyframes slideUp {

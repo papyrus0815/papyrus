@@ -4,6 +4,8 @@
  */
 import styled, { css } from 'styled-components'
 
+import { glassCardMixin } from '@/shared/styles/mixins'
+
 import { BRAND, MOTION, SHADOW } from './theme'
 
 export const ModalOverlay = styled.div`
@@ -17,11 +19,12 @@ export const ModalOverlay = styled.div`
 
 /* Modal — radius 24 → 14 (admin 톤), shadow는 토큰 사용. */
 export const Modal = styled.div`
+  ${({ theme }) => glassCardMixin(theme)}
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  border-radius: 14px;
+  border-radius: 16px;
   z-index: 1001;
   width: 90%;
   max-width: 480px;
@@ -29,17 +32,6 @@ export const Modal = styled.div`
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(20, 20, 28, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: ${SHADOW.modalDark};
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-  ` : css`
-    background: #ffffff;
-    border: 1px solid rgba(20, 19, 34, 0.06);
-    box-shadow: ${SHADOW.modal};
-  `}
 `
 
 export const ModalHeader = styled.div`
@@ -157,11 +149,12 @@ export const ModalOptionIcon = styled.div`
 `
 
 export const SummaryModal = styled.div`
+  ${({ theme }) => glassCardMixin(theme)}
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  border-radius: 14px;
+  border-radius: 16px;
   z-index: 1001;
   width: 90%;
   max-width: 1000px;
@@ -175,17 +168,6 @@ export const SummaryModal = styled.div`
     max-height: calc(100dvh - 32px);
     border-radius: 12px;
   }
-  ${({ theme }) => theme.mode === 'dark' ? css`
-    background: rgba(15, 15, 20, 0.97);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: ${SHADOW.modalDark};
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-  ` : css`
-    background: #ffffff;
-    border: 1px solid rgba(20, 19, 34, 0.06);
-    box-shadow: ${SHADOW.modal};
-  `}
 `
 
 export const SummarySubtitle = styled.p`

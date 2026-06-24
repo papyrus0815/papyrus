@@ -1,6 +1,6 @@
 import styled from 'styled-components'
 import { Z_INDEX } from '@/shared/styles/z-index'
-import { scrollbarThinMixin } from '@/shared/styles/mixins'
+import { scrollbarThinMixin, glassCardMixin } from '@/shared/styles/mixins'
 
 export const SelectModalOverlay = styled.div`
   position: fixed;
@@ -18,12 +18,11 @@ export const SelectModalOverlay = styled.div`
 `
 
 export const SelectModal = styled.div`
+  ${({ theme }) => glassCardMixin(theme)}
   width: 480px;
   max-width: 90vw;
   max-height: min(80vh, calc(100dvh - 80px));
-  background: ${({ theme }) => theme.colors.background.primary};
   border-radius: 16px;
-  box-shadow: 0 20px 60px ${({ theme }) => theme.colors.shadow.lg};
   z-index: ${Z_INDEX.MODAL_CONTENT};
   display: flex;
   flex-direction: column;
