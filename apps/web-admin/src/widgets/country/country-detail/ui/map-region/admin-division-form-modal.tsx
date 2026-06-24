@@ -411,8 +411,9 @@ export function AdminDivisionFormModal({
   const targetUnitLabel =
     configsForLevel.find((c) => c.id === form.configId)?.divisionLabel ||
     form.newConfigLabel.trim() ||
-    configsForLevel[0]?.divisionLabel ||
-    `${targetLevel}차`
+    // 같은 레벨에 단위가 여럿일 수 있으므로 미선택 시 임의 단위로 단정하지 않는다.
+    (configsForLevel.length === 1 ? configsForLevel[0]?.divisionLabel : '') ||
+    `${targetLevel}차 단위`
   const contextWhere = selectedParent ? `${selectedParent.name} 아래` : '최상위'
   const contextPath = [countryName, schemeName ?? undefined, contextWhere]
     .filter(Boolean)
@@ -522,9 +523,11 @@ export function AdminDivisionFormModal({
                 <HintText>
                   {configsForLevel.length === 0
                     ? `이 나라엔 아직 ${targetLevel}차 행정 단위가 없어요. 단위 이름을 정하면 함께 만들어집니다.`
-                    : selectedParent
-                      ? `'${parentLabel ?? '상위'}' 바로 아래 단위(${targetLevel}차)로 자동 설정됩니다.`
-                      : `최상위(1차) 단위입니다.`}
+                    : configsForLevel.length > 1
+                      ? `${targetLevel}차에 단위가 여러 개입니다 — 등록할 단위를 선택하세요. (예: 카운티 vs 통합시)`
+                      : selectedParent
+                        ? `'${parentLabel ?? '상위'}' 바로 아래 단위(${targetLevel}차)입니다.`
+                        : `최상위(1차) 단위입니다.`}
                 </HintText>
               </FieldFull>
             )}

@@ -2,9 +2,9 @@
  * 지도 및 지역 — 행정구역 전용 뷰.
  *
  * 표시 모드 (mode):
- *  - search: admin_q가 있으면 → 서버 측 평탄 검색 (모든 깊이) + 부모 경로
+ *  - search: division_q가 있으면 → 서버 측 평탄 검색 (모든 깊이) + 부모 경로
  *  - level:  레벨 KPI 칩으로 단일 레벨만 (트리 flatten)
- *  - drill:  기본 — admin_path로 임의 깊이 drill
+ *  - drill:  기본 — division_path로 임의 깊이 drill
  *
  * 좌표가 있는 division은 선택 시 지도가 그쪽으로 이동.
  */
@@ -164,27 +164,37 @@ export function MapRegionAdministrativeView({
 
   // URL 동기화
   const [searchParams, setSearchParams] = useSearchParams()
-  const search = searchParams.get('admin_q') ?? ''
+  const search = searchParams.get('division_q') ?? ''
   const sort = ((): AdminSort => {
-    const raw = searchParams.get('admin_sort')
+    const raw = searchParams.get('division_sort')
     return raw && (SORT_VALUES as readonly string[]).includes(raw)
       ? (raw as AdminSort)
       : 'name'
   })()
-  const pathRaw = searchParams.get('admin_path') ?? ''
+  const pathRaw = searchParams.get('division_path') ?? ''
   const pathIds = useMemo(
     () => (pathRaw ? pathRaw.split(',').filter(Boolean) : []),
     [pathRaw],
   )
-  const selectedId = searchParams.get('admin_id')
-  const levelFilter = ((): number | null => {
-    const raw = searchParams.get('admin_level')
-    if (!raw) return null
-    const n = Number(raw)
-    return Number.isFinite(n) && n > 0 ? n : null
+  const selectedId = searchParams.get('division_id')
+  // division_level 파라미터는 "2"(레벨만) 또는 "2:통합시"(레벨+단위라벨) 형식.
+  // 같은 레벨에 복수 단위가 존재할 수 있어, 단위 라벨까지 봐야 칩/필터가 정확히 구분된다.
+  const { levelFilter, unitLabelFilter } = ((): {
+    levelFilter: number | null
+    unitLabelFilter: string | null
+  } => {
+    const raw = searchParams.get('division_level')
+    if (!raw) return { levelFilter: null, unitLabelFilter: null }
+    const sep = raw.indexOf(':')
+    const lvlRaw = sep >= 0 ? raw.slice(0, sep) : raw
+    const label = sep >= 0 ? raw.slice(sep + 1) : ''
+    const parsedLevel = Number(lvlRaw)
+    if (!Number.isFinite(parsedLevel) || parsedLevel <= 0)
+      return { levelFilter: null, unitLabelFilter: null }
+    return { levelFilter: parsedLevel, unitLabelFilter: label || null }
   })()
   /** 활성 체계 ID — null이면 전체(체계 미지정 포함) 보기 */
-  const activeSchemeId = searchParams.get('admin_scheme')
+  const activeSchemeId = searchParams.get('division_scheme')
 
   // ===== 데이터 (체계 필터 반영)
   const { data: divisions = [], isLoading } = useAdministrativeDivisions(
@@ -239,32 +249,33 @@ export function MapRegionAdministrativeView({
   )
 
   const setSearch = useCallback(
-    (v: string) => updateParam('admin_q', v),
+    (v: string) => updateParam('division_q', v),
     [updateParam],
   )
   const setSort = useCallback(
-    (v: AdminSort) => updateParam('admin_sort', v, 'name'),
+    (v: AdminSort) => updateParam('division_sort', v, 'name'),
     [updateParam],
   )
   const setPath = useCallback(
-    (ids: string[]) => updateParam('admin_path', ids.join(',')),
+    (ids: string[]) => updateParam('division_path', ids.join(',')),
     [updateParam],
   )
   const setSelectedId = useCallback(
-    (v: string | null) => updateParam('admin_id', v),
+    (v: string | null) => updateParam('division_id', v),
     [updateParam],
   )
-  const setLevelFilter = useCallback(
-    (n: number | null) => updateParam('admin_level', n == null ? null : String(n)),
+  // 값은 "레벨:단위라벨"(예: "2:통합시") 또는 null(해제). KpiChip이 그대로 넘겨준다.
+  const setUnitFilter = useCallback(
+    (raw: string | null) => updateParam('division_level', raw),
     [updateParam],
   )
   /** 체계 전환 — 드릴 경로·선택은 새 체계 트리와 무관하므로 함께 초기화 */
   const setActiveScheme = useCallback(
     (id: string | null) =>
       updateParams([
-        { key: 'admin_scheme', value: id },
-        { key: 'admin_path', value: null },
-        { key: 'admin_id', value: null },
+        { key: 'division_scheme', value: id },
+        { key: 'division_path', value: null },
+        { key: 'division_id', value: null },
       ]),
     [updateParams],
   )
@@ -350,7 +361,11 @@ export function MapRegionAdministrativeView({
       }))
     }
     if (mode === 'level') {
-      return flat.filter((r) => r.divisionLevel === levelFilter)
+      return flat.filter(
+        (r) =>
+          r.divisionLevel === levelFilter &&
+          (unitLabelFilter == null || r.divisionLabel === unitLabelFilter),
+      )
     }
     // drill
     return drillItems.map<FlatRow>((n) => {
@@ -374,6 +389,7 @@ export function MapRegionAdministrativeView({
     searchQuery.data,
     flat,
     levelFilter,
+    unitLabelFilter,
     drillItems,
     configsById,
     drillLevel,
@@ -405,7 +421,7 @@ export function MapRegionAdministrativeView({
 
   useEffect(() => {
     // 로딩 중에는 트리가 비어 있으므로 건드리지 않는다 —
-    // 딥링크/새로고침으로 admin_id가 URL에 있을 때, 데이터가 도착하기 전에
+    // 딥링크/새로고침으로 division_id가 URL에 있을 때, 데이터가 도착하기 전에
     // 선택을 지워버리면 상세 패널이 빈 상태로 남는다.
     if (isLoading) return
     if (selectedId && !findInTree(divisions, selectedId)) {
@@ -424,23 +440,25 @@ export function MapRegionAdministrativeView({
     }
   }, [selectedId])
 
-  // ===== 레벨 KPI
+  // ===== 단위 타입 KPI — 같은 레벨에 복수 단위(예: 2차 카운티+통합시)가 있으므로
+  // 레벨이 아니라 (레벨, 라벨) 쌍으로 집계해 단위 타입별 칩을 만든다.
   const levelCounts = useMemo(() => {
-    const counts = new Map<number, number>()
+    const counts = new Map<
+      string,
+      { level: number; label: string; count: number }
+    >()
     for (const r of flat) {
-      counts.set(r.divisionLevel, (counts.get(r.divisionLevel) ?? 0) + 1)
+      const label = r.divisionLabel || `${r.divisionLevel}차`
+      const key = `${r.divisionLevel}:${label}`
+      const cur = counts.get(key)
+      if (cur) cur.count += 1
+      else counts.set(key, { level: r.divisionLevel, label, count: 1 })
     }
-    return Array.from(counts.entries())
-      .map(([level, count]) => {
-        const cfg = configs.find((c) => c.divisionLevel === level)
-        return {
-          level,
-          count,
-          label: cfg?.divisionLabel ?? `${level}차`,
-        }
-      })
-      .sort((a, b) => a.level - b.level)
-  }, [flat, configs])
+    // 레벨 오름차순, 동일 레벨은 개수 많은 단위 먼저
+    return Array.from(counts.values()).sort(
+      (a, b) => a.level - b.level || b.count - a.count,
+    )
+  }, [flat])
 
   const reportLocation = (division: AdministrativeDivision | null) => {
     onCityClick({
@@ -460,12 +478,12 @@ export function MapRegionAdministrativeView({
 
   const handleItemClick = (row: FlatRow) => {
     const node = findInTree(divisions, row.id)
-    // 자식이 있으면 드릴(경로 push) + 선택을 한 번에 — 분리 호출 시 admin_id가 덮어써짐
+    // 자식이 있으면 드릴(경로 push) + 선택을 한 번에 — 분리 호출 시 division_id가 덮어써짐
     const drilling = mode === 'drill' && (node?.children ?? []).length > 0
     updateParams([
-      { key: 'admin_id', value: row.id },
+      { key: 'division_id', value: row.id },
       ...(drilling
-        ? [{ key: 'admin_path', value: [...pathIds, row.id].join(',') }]
+        ? [{ key: 'division_path', value: [...pathIds, row.id].join(',') }]
         : []),
     ])
     reportLocation(node)
@@ -474,10 +492,10 @@ export function MapRegionAdministrativeView({
   const handleBreadcrumbClick = (index: number) => {
     updateParams([
       {
-        key: 'admin_path',
+        key: 'division_path',
         value: (index < 0 ? [] : pathIds.slice(0, index + 1)).join(','),
       },
-      { key: 'admin_id', value: null },
+      { key: 'division_id', value: null },
     ])
     reportLocation(null)
   }
@@ -518,9 +536,9 @@ export function MapRegionAdministrativeView({
       const updates: Array<{ key: string; value: string | null }> = []
       const idx = pathIds.indexOf(pendingDelete.id)
       if (idx >= 0)
-        updates.push({ key: 'admin_path', value: pathIds.slice(0, idx).join(',') })
+        updates.push({ key: 'division_path', value: pathIds.slice(0, idx).join(',') })
       if (selectedId === pendingDelete.id)
-        updates.push({ key: 'admin_id', value: null })
+        updates.push({ key: 'division_id', value: null })
       if (updates.length) updateParams(updates)
       setPendingDelete(null)
     } catch (err) {
@@ -581,10 +599,10 @@ export function MapRegionAdministrativeView({
     }
     chain.push(...targetParents)
     updateParams([
-      { key: 'admin_q', value: null },
-      { key: 'admin_level', value: null },
-      { key: 'admin_path', value: chain.join(',') },
-      { key: 'admin_id', value: id },
+      { key: 'division_q', value: null },
+      { key: 'division_level', value: null },
+      { key: 'division_path', value: chain.join(',') },
+      { key: 'division_id', value: id },
     ])
     const node = findInTree(divisions, id)
     reportLocation(node)
@@ -712,19 +730,24 @@ export function MapRegionAdministrativeView({
   const kpiStrip =
     levelCounts.length > 0 ? (
       <KpiStrip palette={palette} totalCount={flat.length}>
-        {levelCounts.map((lc) => (
-          <KpiChip
-            key={lc.level}
-            palette={palette}
-            filterValue={String(lc.level)}
-            currentFilter={levelFilter == null ? 'all' : String(levelFilter)}
-            onFilterChange={(v) =>
-              setLevelFilter(v === 'all' ? null : Number(v))
-            }
-            label={`${lc.level}차 ${lc.label ? `· ${lc.label}` : ''}`}
-            count={lc.count}
-          />
-        ))}
+        {levelCounts.map((lc) => {
+          const fv = `${lc.level}:${lc.label}`
+          return (
+            <KpiChip
+              key={fv}
+              palette={palette}
+              filterValue={fv}
+              currentFilter={
+                levelFilter == null
+                  ? 'all'
+                  : `${levelFilter}:${unitLabelFilter ?? ''}`
+              }
+              onFilterChange={(v) => setUnitFilter(v === 'all' ? null : v)}
+              label={`${lc.level}차 · ${lc.label}`}
+              count={lc.count}
+            />
+          )
+        })}
       </KpiStrip>
     ) : null
 
@@ -751,19 +774,19 @@ export function MapRegionAdministrativeView({
       )
     }
     if (mode === 'level') {
-      const cfg = configs.find((c) => c.divisionLevel === levelFilter)
       return (
         <ContextRow
           palette={palette}
           left={
             <span style={{ fontSize: 12, fontWeight: 600, color: palette.primary }}>
-              {levelFilter}차{cfg ? ` · ${cfg.divisionLabel}` : ''} 전체
+              {levelFilter}차
+              {unitLabelFilter ? ` · ${unitLabelFilter}` : ''} 전체
             </span>
           }
           right={
             <>
               <CountBadge palette={palette}>{sortedRows.length}개</CountBadge>
-              <ClearLink palette={palette} onClick={() => setLevelFilter(null)}>
+              <ClearLink palette={palette} onClick={() => setUnitFilter(null)}>
                 해제
               </ClearLink>
             </>
@@ -1232,10 +1255,10 @@ export function MapRegionAdministrativeView({
                   active={false}
                   onClick={() => {
                     updateParams([
-                      { key: 'admin_q', value: null },
-                      { key: 'admin_level', value: null },
-                      { key: 'admin_path', value: null },
-                      { key: 'admin_id', value: null },
+                      { key: 'division_q', value: null },
+                      { key: 'division_level', value: null },
+                      { key: 'division_path', value: null },
+                      { key: 'division_id', value: null },
                     ])
                     reportLocation(null)
                   }}

@@ -1,3 +1,5 @@
+import { HttpError } from '@nestia/fetcher'
+
 import * as citiesApi from '@api/functional/cities'
 
 import { getApiConnection, apiConnection } from '../client'
@@ -239,6 +241,26 @@ async function safeReadError(res: Response): Promise<string> {
   }
 }
 
+/**
+ * SDK 호출 에러를 사용자용 메시지로 정규화한다.
+ * nestia HttpError.message는 응답 본문 원문(JSON 문자열)이라 그대로 노출하면
+ * "{"message":...}" 같은 날 문자열이 토스트에 뜬다 → NestJS의 message 필드만 추출.
+ */
+function toFriendlyError(error: unknown): Error {
+  if (error instanceof HttpError) {
+    const body = error.toJSON<{ message?: string | string[] }>().message
+    const raw =
+      body && typeof body === 'object' ? body.message : (body as unknown)
+    const msg = Array.isArray(raw)
+      ? raw.join(', ')
+      : typeof raw === 'string'
+        ? raw
+        : ''
+    return new Error(msg || `요청 실패 (${error.status})`)
+  }
+  return error instanceof Error ? error : new Error(String(error))
+}
+
 export const cityApi = {
   getAll: async () => fetchCities(),
 
@@ -346,112 +368,118 @@ export const cityApi = {
   createAdminDivisionScheme: async (
     input: CreateAdminDivisionSchemeInput,
   ): Promise<AdminDivisionScheme> => {
-    const res = await fetch(`${getBaseUrl()}/cities/admin-division-schemes`, {
-      method: 'POST',
-      headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    })
-    if (!res.ok) throw new Error(await safeReadError(res))
-    return await res.json()
+    try {
+      return await citiesApi.admin_division_schemes.createAdminDivisionScheme(
+        getApiConnection(),
+        input,
+      )
+    } catch (error) {
+      throw toFriendlyError(error)
+    }
   },
 
   updateAdminDivisionScheme: async (
     id: string,
     input: UpdateAdminDivisionSchemeInput,
   ): Promise<AdminDivisionScheme> => {
-    const res = await fetch(
-      `${getBaseUrl()}/cities/admin-division-schemes/${id}`,
-      {
-        method: 'PATCH',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      },
-    )
-    if (!res.ok) throw new Error(await safeReadError(res))
-    return await res.json()
+    try {
+      return await citiesApi.admin_division_schemes.updateAdminDivisionScheme(
+        getApiConnection(),
+        id,
+        input,
+      )
+    } catch (error) {
+      throw toFriendlyError(error)
+    }
   },
 
   deleteAdminDivisionScheme: async (id: string): Promise<void> => {
-    const res = await fetch(
-      `${getBaseUrl()}/cities/admin-division-schemes/${id}`,
-      { method: 'DELETE', headers: getHeaders() },
-    )
-    if (!res.ok && res.status !== 204) throw new Error(await safeReadError(res))
+    try {
+      await citiesApi.admin_division_schemes.deleteAdminDivisionScheme(
+        getApiConnection(),
+        id,
+      )
+    } catch (error) {
+      throw toFriendlyError(error)
+    }
   },
 
   createAdminDivisionConfig: async (
     input: CreateAdminDivisionConfigInput,
   ): Promise<AdminDivisionConfig> => {
-    const res = await fetch(`${getBaseUrl()}/cities/admin-division-configs`, {
-      method: 'POST',
-      headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    })
-    if (!res.ok) throw new Error(await safeReadError(res))
-    return await res.json()
+    try {
+      return await citiesApi.admin_division_configs.createAdminDivisionConfig(
+        getApiConnection(),
+        input,
+      )
+    } catch (error) {
+      throw toFriendlyError(error)
+    }
   },
 
   updateAdminDivisionConfig: async (
     id: string,
     input: UpdateAdminDivisionConfigInput,
   ): Promise<AdminDivisionConfig> => {
-    const res = await fetch(
-      `${getBaseUrl()}/cities/admin-division-configs/${id}`,
-      {
-        method: 'PATCH',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      },
-    )
-    if (!res.ok) throw new Error(await safeReadError(res))
-    return await res.json()
+    try {
+      return await citiesApi.admin_division_configs.updateAdminDivisionConfig(
+        getApiConnection(),
+        id,
+        input,
+      )
+    } catch (error) {
+      throw toFriendlyError(error)
+    }
   },
 
   deleteAdminDivisionConfig: async (id: string): Promise<void> => {
-    const res = await fetch(
-      `${getBaseUrl()}/cities/admin-division-configs/${id}`,
-      { method: 'DELETE', headers: getHeaders() },
-    )
-    if (!res.ok && res.status !== 204) throw new Error(await safeReadError(res))
+    try {
+      await citiesApi.admin_division_configs.deleteAdminDivisionConfig(
+        getApiConnection(),
+        id,
+      )
+    } catch (error) {
+      throw toFriendlyError(error)
+    }
   },
 
   createAdministrativeDivision: async (
     input: CreateAdministrativeDivisionInput,
   ): Promise<AdministrativeDivision> => {
-    const res = await fetch(
-      `${getBaseUrl()}/cities/administrative-divisions`,
-      {
-        method: 'POST',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      },
-    )
-    if (!res.ok) throw new Error(await safeReadError(res))
-    return await res.json()
+    try {
+      return await citiesApi.administrative_divisions.createAdministrativeDivision(
+        getApiConnection(),
+        input,
+      )
+    } catch (error) {
+      throw toFriendlyError(error)
+    }
   },
 
   updateAdministrativeDivision: async (
     id: string,
     input: UpdateAdministrativeDivisionInput,
   ): Promise<AdministrativeDivision> => {
-    const res = await fetch(
-      `${getBaseUrl()}/cities/administrative-divisions/${id}`,
-      {
-        method: 'PATCH',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      },
-    )
-    if (!res.ok) throw new Error(await safeReadError(res))
-    return await res.json()
+    try {
+      return await citiesApi.administrative_divisions.updateAdministrativeDivision(
+        getApiConnection(),
+        id,
+        input,
+      )
+    } catch (error) {
+      throw toFriendlyError(error)
+    }
   },
 
   deleteAdministrativeDivision: async (id: string): Promise<void> => {
-    const res = await fetch(
-      `${getBaseUrl()}/cities/administrative-divisions/${id}`,
-      { method: 'DELETE', headers: getHeaders() },
-    )
-    if (!res.ok && res.status !== 204) throw new Error(await safeReadError(res))
+    try {
+      await citiesApi.administrative_divisions.deleteAdministrativeDivision(
+        getApiConnection(),
+        id,
+      )
+    } catch (error) {
+      throw toFriendlyError(error)
+    }
   },
 
   /**
@@ -504,16 +532,14 @@ export const cityApi = {
   bulkCreateAdministrativeDivisions: async (
     input: BulkCreateAdministrativeDivisionsInput,
   ): Promise<BulkCreateResult> => {
-    const res = await fetch(
-      `${getBaseUrl()}/cities/administrative-divisions/bulk`,
-      {
-        method: 'POST',
-        headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      },
-    )
-    if (!res.ok) throw new Error(await safeReadError(res))
-    return await res.json()
+    try {
+      return await citiesApi.administrative_divisions.bulk.bulkCreateAdministrativeDivisions(
+        getApiConnection(),
+        input,
+      )
+    } catch (error) {
+      throw toFriendlyError(error)
+    }
   },
 
   /** OpenStreetMap Nominatim 장소 검색 (백엔드 프록시) */
