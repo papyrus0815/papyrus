@@ -435,9 +435,12 @@ const EmptyState = styled.div`
   align-items: center;
   justify-content: center;
   padding: 100px 40px;
-  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#1d1d1d'
+      : 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)'};
   border-radius: 20px;
-  border: 2px dashed #e5e7eb;
+  border: 2px dashed ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   text-align: center;
 `
 
@@ -445,24 +448,27 @@ const EmptyIcon = styled.div`
   width: 72px;
   height: 72px;
   border-radius: 18px;
-  background: linear-gradient(135deg, #fff 0%, #fafafa 100%);
-  border: 2px solid #e5e7eb;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#212121'
+      : 'linear-gradient(135deg, #fff 0%, #fafafa 100%)'};
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 20px;
-  color: #9ca3af;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#9ca3af')};
 `
 
 const EmptyTitle = styled.h3`
   font-size: 18px;
   font-weight: 600;
-  color: #374151;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')};
   margin: 0 0 8px 0;
 `
 
 const EmptyDesc = styled.p`
-  color: #9ca3af;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#9ca3af')};
   font-size: 14px;
   font-weight: 500;
   margin: 0;
@@ -479,11 +485,19 @@ const Pagination = styled.div`
 
 const PaginationButton = styled.button<{ disabled?: boolean }>`
   padding: 12px 24px;
-  border: ${({ disabled }) => (disabled ? '2px solid #f3f4f6' : 'none')};
+  border: ${({ disabled, theme }) =>
+    disabled
+      ? `2px solid ${theme.mode === 'dark' ? '#2a2a2a' : '#f3f4f6'}`
+      : 'none'};
   border-radius: 12px;
-  background: ${({ disabled }) =>
-    disabled ? '#fafbfc' : 'linear-gradient(135deg, #ad46ff 0%, #9146ff 100%)'};
-  color: ${({ disabled }) => (disabled ? '#d1d5db' : 'white')};
+  background: ${({ disabled, theme }) =>
+    disabled
+      ? theme.mode === 'dark'
+        ? '#1d1d1d'
+        : '#fafbfc'
+      : 'linear-gradient(135deg, #ad46ff 0%, #9146ff 100%)'};
+  color: ${({ disabled, theme }) =>
+    disabled ? (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db') : 'white'};
   font-size: 15px;
   font-weight: 600;
   cursor: ${({ disabled }) => (disabled ? 'not-allowed' : 'pointer')};
@@ -504,7 +518,10 @@ const PaginationInfo = styled.div`
   min-width: 100px;
   text-align: center;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #f3e8ff 0%, #e9d1ff 100%);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(173, 70, 255, 0.12)'
+      : 'linear-gradient(135deg, #f3e8ff 0%, #e9d1ff 100%)'};
   border-radius: 12px;
   border: 2px solid rgba(173, 70, 255, 0.2);
 `
@@ -528,7 +545,7 @@ const Modal = styled.div`
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: white;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'white')};
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   z-index: 10001;
@@ -542,14 +559,14 @@ const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #f1f5f9;
-  background: #fafbfc;
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafbfc')};
 `
 
 const ModalTitle = styled.h3`
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin: 0;
 `
 
@@ -562,13 +579,13 @@ const ModalClose = styled.button`
   background: transparent;
   border: none;
   border-radius: 8px;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    background: #f1f5f9;
-    color: #0f172a;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   }
 `
 
@@ -585,7 +602,12 @@ const ModalOption = styled.button<{ $active?: boolean }>`
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
-  background: ${({ $active }) => ($active ? '#f3e8ff' : 'transparent')};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(173, 70, 255, 0.12)'
+        : '#f3e8ff'
+      : 'transparent'};
   border: ${({ $active }) => ($active ? '2px solid #ad46ff' : 'none')};
   border-radius: 12px;
   cursor: pointer;
@@ -593,7 +615,14 @@ const ModalOption = styled.button<{ $active?: boolean }>`
   margin-bottom: 4px;
 
   &:hover {
-    background: ${({ $active }) => ($active ? '#f3e8ff' : '#fafbfc')};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(173, 70, 255, 0.12)'
+          : '#f3e8ff'
+        : theme.mode === 'dark'
+          ? '#1d1d1d'
+          : '#fafbfc'};
   }
 `
 
@@ -602,7 +631,7 @@ const ModalOptionText = styled.div`
   text-align: left;
   font-size: 15px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
 `
 
 const ModalOptionCheck = styled.div`

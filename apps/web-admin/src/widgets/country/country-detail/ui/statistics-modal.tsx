@@ -1,6 +1,7 @@
 import React from 'react'
 import styled from 'styled-components'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useThemeStore } from '@/shared/styles/theme.store'
 import {
   LineChart,
   Line,
@@ -37,6 +38,8 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({
   countryId,
   type,
 }) => {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const [data, setData] = React.useState<
     Array<{
       year: string
@@ -357,11 +360,11 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({
                           >
                             <CartesianGrid
                               strokeDasharray="3 3"
-                              stroke="#e8eaed"
+                              stroke={isDark ? '#2a2a2a' : '#e8eaed'}
                             />
                             <XAxis
                               type="number"
-                              stroke="#5f6368"
+                              stroke={isDark ? '#a1a1aa' : '#5f6368'}
                               style={{ fontSize: '12px' }}
                               tickFormatter={(value) =>
                                 formatNumber(Math.abs(value))
@@ -370,15 +373,17 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({
                             <YAxis
                               dataKey="ageGroup"
                               type="category"
-                              stroke="#5f6368"
+                              stroke={isDark ? '#a1a1aa' : '#5f6368'}
                               style={{ fontSize: '12px' }}
                               axisLine={false}
                               tickLine={false}
                             />
                             <Tooltip
                               contentStyle={{
-                                backgroundColor: '#ffffff',
-                                border: '1px solid #e8eaed',
+                                backgroundColor: isDark ? '#212121' : '#ffffff',
+                                border: isDark
+                                  ? '1px solid #2a2a2a'
+                                  : '1px solid #e8eaed',
                                 borderRadius: '8px',
                                 fontSize: '12px',
                                 padding: '10px 12px',
@@ -505,22 +510,24 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({
                             </defs>
                             <CartesianGrid
                               strokeDasharray="3 3"
-                              stroke="#f1f3f4"
+                              stroke={isDark ? '#2a2a2a' : '#f1f3f4'}
                             />
                             <XAxis
                               dataKey="year"
-                              stroke="#5f6368"
+                              stroke={isDark ? '#a1a1aa' : '#5f6368'}
                               style={{ fontSize: '12px', fontWeight: 500 }}
                             />
                             <YAxis
-                              stroke="#5f6368"
+                              stroke={isDark ? '#a1a1aa' : '#5f6368'}
                               style={{ fontSize: '12px', fontWeight: 500 }}
                               tickFormatter={formatValue}
                             />
                             <Tooltip
                               contentStyle={{
-                                backgroundColor: '#ffffff',
-                                border: '1px solid #e8eaed',
+                                backgroundColor: isDark ? '#212121' : '#ffffff',
+                                border: isDark
+                                  ? '1px solid #2a2a2a'
+                                  : '1px solid #e8eaed',
                                 borderRadius: '8px',
                                 fontSize: '12px',
                                 padding: '10px 12px',
@@ -653,22 +660,24 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({
                             </defs>
                             <CartesianGrid
                               strokeDasharray="3 3"
-                              stroke="#f1f3f4"
+                              stroke={isDark ? '#2a2a2a' : '#f1f3f4'}
                             />
                             <XAxis
                               dataKey="year"
-                              stroke="#5f6368"
+                              stroke={isDark ? '#a1a1aa' : '#5f6368'}
                               style={{ fontSize: '12px', fontWeight: 500 }}
                             />
                             <YAxis
-                              stroke="#5f6368"
+                              stroke={isDark ? '#a1a1aa' : '#5f6368'}
                               style={{ fontSize: '12px', fontWeight: 500 }}
                               tickFormatter={formatValue}
                             />
                             <Tooltip
                               contentStyle={{
-                                backgroundColor: '#ffffff',
-                                border: '1px solid #e8eaed',
+                                backgroundColor: isDark ? '#212121' : '#ffffff',
+                                border: isDark
+                                  ? '1px solid #2a2a2a'
+                                  : '1px solid #e8eaed',
                                 borderRadius: '8px',
                                 fontSize: '12px',
                                 padding: '10px 12px',
@@ -725,22 +734,24 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({
                           <LineChart data={data}>
                             <CartesianGrid
                               strokeDasharray="3 3"
-                              stroke="#f1f3f4"
+                              stroke={isDark ? '#2a2a2a' : '#f1f3f4'}
                             />
                             <XAxis
                               dataKey="year"
-                              stroke="#5f6368"
+                              stroke={isDark ? '#a1a1aa' : '#5f6368'}
                               style={{ fontSize: '12px', fontWeight: 500 }}
                             />
                             <YAxis
-                              stroke="#5f6368"
+                              stroke={isDark ? '#a1a1aa' : '#5f6368'}
                               style={{ fontSize: '12px', fontWeight: 500 }}
                               tickFormatter={(value) => value.toFixed(1) + '%'}
                             />
                             <Tooltip
                               contentStyle={{
-                                backgroundColor: '#ffffff',
-                                border: '1px solid #e8eaed',
+                                backgroundColor: isDark ? '#212121' : '#ffffff',
+                                border: isDark
+                                  ? '1px solid #2a2a2a'
+                                  : '1px solid #e8eaed',
                                 borderRadius: '8px',
                                 fontSize: '12px',
                                 padding: '10px 12px',
@@ -799,7 +810,7 @@ const Overlay = styled.div`
 `
 
 const ModalContainer = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border-radius: 16px;
   width: 90%;
   max-width: 1200px;
@@ -813,18 +824,22 @@ const ModalContainer = styled.div`
 
 const ModalHeader = styled.div`
   padding: 24px;
-  border-bottom: 1px solid #e8eaed;
+  border-bottom: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#212121'
+      : 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)'};
 `
 
 const ModalTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   letter-spacing: -0.01em;
 `
 
@@ -838,12 +853,13 @@ const CloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   transition: all 0.2s ease;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: #202124;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   }
 `
 
@@ -851,23 +867,23 @@ const ModalBody = styled.div`
   flex: 1;
   overflow-y: auto;
   padding: 24px;
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
 
   &::-webkit-scrollbar {
     width: 6px;
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f3f4;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f3f4')};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #dadce0;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#dadce0')};
     border-radius: 3px;
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: #bfbfbf;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#52525b' : '#bfbfbf')};
   }
 `
 
@@ -883,7 +899,8 @@ const LoadingContainer = styled.div`
 const LoadingSpinner = styled.div`
   width: 48px;
   height: 48px;
-  border: 4px solid #e8eaed;
+  border: 4px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
   border-top-color: #4285f4;
   border-radius: 50%;
   animation: spin 0.8s ease-in-out infinite;
@@ -897,7 +914,7 @@ const LoadingSpinner = styled.div`
 
 const LoadingText = styled.div`
   font-size: 14px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   font-weight: 500;
 `
 
@@ -908,15 +925,17 @@ const YearSelectorContainer = styled.div`
   gap: 20px;
   margin-bottom: 28px;
   padding: 16px 20px;
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border-radius: 12px;
-  border: 1px solid #e8ebed;
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8ebed')};
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 `
 
 const YearArrowButton = styled.button`
-  background: #ffffff;
-  border: 1px solid #e8ebed;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8ebed')};
   width: 36px;
   height: 36px;
   border-radius: 8px;
@@ -924,13 +943,14 @@ const YearArrowButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   transition: all 0.2s ease;
 
   &:hover:not(:disabled) {
-    background: #f8f9fa;
-    border-color: #dadce0;
-    color: #202124;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f8f9fa')};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#3f3f46' : '#dadce0'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   }
 
   &:disabled {
@@ -947,7 +967,7 @@ const YearDisplayWrapper = styled.div`
 `
 
 const YearDisplay = styled.button`
-  background: #202124;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#202124')};
   color: #ffffff;
   border: none;
   padding: 10px 24px;
@@ -961,7 +981,7 @@ const YearDisplay = styled.button`
   transition: all 0.2s ease;
 
   &:hover {
-    background: #5f6368;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#5f6368')};
   }
 
   svg {
@@ -975,8 +995,9 @@ const YearDropdown = styled.div`
   top: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
-  background: #ffffff;
-  border: 1px solid #e8eaed;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   max-height: 280px;
@@ -990,11 +1011,11 @@ const YearDropdown = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f3f4;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f3f4')};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #dadce0;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#dadce0')};
     border-radius: 3px;
   }
 `
@@ -1002,8 +1023,18 @@ const YearDropdown = styled.div`
 const YearOption = styled.button<{ $active: boolean }>`
   width: 100%;
   padding: 8px 12px;
-  background: ${(props) => (props.$active ? '#202124' : 'transparent')};
-  color: ${(props) => (props.$active ? '#ffffff' : '#5f6368')};
+  background: ${(props) =>
+    props.$active
+      ? props.theme.mode === 'dark'
+        ? '#2a2a2a'
+        : '#202124'
+      : 'transparent'};
+  color: ${(props) =>
+    props.$active
+      ? '#ffffff'
+      : props.theme.mode === 'dark'
+        ? '#a1a1aa'
+        : '#5f6368'};
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -1013,7 +1044,14 @@ const YearOption = styled.button<{ $active: boolean }>`
   text-align: left;
 
   &:hover {
-    background: ${(props) => (props.$active ? '#202124' : '#f8f9fa')};
+    background: ${(props) =>
+      props.$active
+        ? props.theme.mode === 'dark'
+          ? '#2a2a2a'
+          : '#202124'
+        : props.theme.mode === 'dark'
+          ? '#2a2a2a'
+          : '#f8f9fa'};
   }
 `
 
@@ -1034,10 +1072,11 @@ const GenderStatsGrid = styled.div`
 `
 
 const SimpleStatCard = styled.div<{ $highlight?: boolean }>`
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   padding: 20px 22px;
   border-radius: 12px;
-  border: 1px solid ${(props) => (props.$highlight ? '#e8ebed' : '#e8ebed')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8ebed')};
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1058,7 +1097,7 @@ const StatIcon = styled.div<{ $highlight?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   transition: all 0.2s ease;
 
   svg {
@@ -1067,14 +1106,14 @@ const StatIcon = styled.div<{ $highlight?: boolean }>`
   }
 
   ${SimpleStatCard}:hover & {
-    color: #202124;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   }
 `
 
 const StatLabel = styled.div<{ $highlight?: boolean }>`
   font-size: 11px;
   font-weight: 500;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   text-transform: uppercase;
   letter-spacing: 0.5px;
 `
@@ -1090,7 +1129,7 @@ const StatValue = styled.div<{
     if (props.positive !== undefined) {
       return props.positive ? '#10b981' : '#ef4444'
     }
-    return '#202124'
+    return props.theme.mode === 'dark' ? '#f5f5f5' : '#202124'
   }};
 `
 
@@ -1102,23 +1141,24 @@ const SectionTitle = styled.h3`
   margin: 0 0 16px 0;
   font-size: 15px;
   font-weight: 600;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   display: flex;
   align-items: center;
   gap: 8px;
 
   svg {
-    color: #5f6368;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
     width: 18px;
     height: 18px;
   }
 `
 
 const PyramidChartContainer = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   padding: 20px;
   border-radius: 12px;
-  border: 1px solid #e8ebed;
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8ebed')};
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 `
 
@@ -1138,10 +1178,11 @@ const StatsGrid = styled.div`
 `
 
 const StatCard = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   padding: 18px 20px;
   border-radius: 12px;
-  border: 1px solid #e8ebed;
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8ebed')};
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1159,10 +1200,11 @@ const ChartSection = styled.div`
 `
 
 const ChartContainer = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   padding: 20px;
   border-radius: 12px;
-  border: 1px solid #e8ebed;
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8ebed')};
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   margin-top: 16px;
 `

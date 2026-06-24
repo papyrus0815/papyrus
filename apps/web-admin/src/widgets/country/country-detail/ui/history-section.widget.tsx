@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 
 import type { Country } from '@/entities/country/api'
 
+import { useThemeStore } from '@/shared/styles/theme.store'
+
 import { mockHistoryData } from '../mock'
 import type { HistoricalEvent, HistoricalPeriod } from '../mock/history-types'
 
@@ -16,6 +18,8 @@ interface HistorySectionProps {
 }
 
 export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const [activeView] = useState<'events'>('events')
   const [selectedPeriod, setSelectedPeriod] = useState<string | null>(null)
   const [selectedCountryId, setSelectedCountryId] = useState<string>('all') // 선택된 국가
@@ -1653,8 +1657,12 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                   borderColor:
                     eventTypeFilter === 'all' ? '#8b5cf6' : '#e5e7eb',
                   borderRadius: '8px',
-                  background: eventTypeFilter === 'all' ? '#f3e8ff' : 'white',
-                  color: eventTypeFilter === 'all' ? '#7c3aed' : '#6b7280',
+                  background: eventTypeFilter === 'all'
+                    ? (isDark ? 'rgba(99,102,241,0.12)' : '#f3e8ff')
+                    : (isDark ? '#212121' : 'white'),
+                  color: eventTypeFilter === 'all'
+                    ? '#7c3aed'
+                    : (isDark ? '#a1a1aa' : '#6b7280'),
                   fontWeight: eventTypeFilter === 'all' ? '600' : '400',
                   cursor: 'pointer',
                   fontSize: '14px',
@@ -1679,16 +1687,16 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                     borderColor:
                       eventTypeFilter === type
                         ? getEventTypeColor(type)
-                        : '#e5e7eb',
+                        : (isDark ? '#2a2a2a' : '#e5e7eb'),
                     borderRadius: '8px',
                     background:
                       eventTypeFilter === type
                         ? `${getEventTypeColor(type)}20`
-                        : 'white',
+                        : (isDark ? '#212121' : 'white'),
                     color:
                       eventTypeFilter === type
                         ? getEventTypeColor(type)
-                        : '#6b7280',
+                        : (isDark ? '#a1a1aa' : '#6b7280'),
                     fontWeight: eventTypeFilter === type ? '600' : '400',
                     cursor: 'pointer',
                     fontSize: '14px',
@@ -1717,13 +1725,13 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                     <motion.div
                       whileHover={{ x: 5 }}
                       style={{
-                        background: 'white',
+                        background: isDark ? '#212121' : 'white',
                         borderRadius: '12px',
                         padding: '20px',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                         border: hasSubEvents
                           ? '2px solid #8b5cf6'
-                          : '2px solid #e5e7eb',
+                          : (isDark ? '2px solid #2a2a2a' : '2px solid #e5e7eb'),
                       }}
                     >
                       <div style={{ display: 'flex', gap: '16px' }}>
@@ -1778,7 +1786,10 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                               </span>
                             )}
                             <span
-                              style={{ fontSize: '13px', color: '#6b7280' }}
+                              style={{
+                                fontSize: '13px',
+                                color: isDark ? '#a1a1aa' : '#6b7280',
+                              }}
                             >
                               {formatDate(event.date.start)}
                               {event.date.end &&
@@ -1804,7 +1815,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                             style={{
                               margin: '0 0 10px 0',
                               fontSize: '13px',
-                              color: '#6b7280',
+                              color: isDark ? '#a1a1aa' : '#6b7280',
                             }}
                           >
                             {event.nameEn}
@@ -1814,7 +1825,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                             style={{
                               margin: '0 0 10px 0',
                               fontSize: '14px',
-                              color: '#4b5563',
+                              color: isDark ? '#d1d5db' : '#4b5563',
                               lineHeight: '1.5',
                             }}
                           >
@@ -1827,7 +1838,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                               alignItems: 'center',
                               gap: '16px',
                               fontSize: '12px',
-                              color: '#6b7280',
+                              color: isDark ? '#a1a1aa' : '#6b7280',
                             }}
                           >
                             <div>📍 {event.location}</div>
@@ -1865,7 +1876,9 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                               height: '40px',
                               borderRadius: '8px',
                               border: '2px solid #8b5cf6',
-                              background: isExpanded ? '#8b5cf6' : 'white',
+                              background: isExpanded
+                                ? '#8b5cf6'
+                                : (isDark ? '#212121' : 'white'),
                               color: isExpanded ? 'white' : '#8b5cf6',
                               fontSize: '20px',
                               cursor: 'pointer',
@@ -1889,7 +1902,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                             style={{
                               display: 'flex',
                               alignItems: 'center',
-                              color: '#9ca3af',
+                              color: isDark ? '#71717a' : '#9ca3af',
                               fontSize: '24px',
                               cursor: 'pointer',
                             }}
@@ -1926,11 +1939,13 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                               setEventImageIndex(0)
                             }}
                             style={{
-                              background: '#f9fafb',
+                              background: isDark ? '#1d1d1d' : '#f9fafb',
                               borderRadius: '8px',
                               padding: '16px',
                               marginBottom: '8px',
-                              border: '2px solid #e5e7eb',
+                              border: isDark
+                                ? '2px solid #2a2a2a'
+                                : '2px solid #e5e7eb',
                               cursor: 'pointer',
                               display: 'flex',
                               gap: '12px',
@@ -1963,8 +1978,8 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                                 <span
                                   style={{
                                     padding: '3px 8px',
-                                    background: '#e5e7eb',
-                                    color: '#374151',
+                                    background: isDark ? '#2a2a2a' : '#e5e7eb',
+                                    color: isDark ? '#d1d5db' : '#374151',
                                     borderRadius: '4px',
                                     fontSize: '10px',
                                     fontWeight: '600',
@@ -1973,7 +1988,10 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                                   세부
                                 </span>
                                 <span
-                                  style={{ fontSize: '12px', color: '#6b7280' }}
+                                  style={{
+                                    fontSize: '12px',
+                                    color: isDark ? '#a1a1aa' : '#6b7280',
+                                  }}
                                 >
                                   {formatDate(subEvent.date.start)}
                                 </span>
@@ -1984,7 +2002,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                                   margin: '0 0 4px 0',
                                   fontSize: '16px',
                                   fontWeight: '600',
-                                  color: '#1f2937',
+                                  color: isDark ? '#f5f5f5' : '#1f2937',
                                 }}
                               >
                                 {subEvent.name}
@@ -1994,7 +2012,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                                 style={{
                                   margin: 0,
                                   fontSize: '13px',
-                                  color: '#6b7280',
+                                  color: isDark ? '#a1a1aa' : '#6b7280',
                                   lineHeight: '1.4',
                                 }}
                               >
@@ -2006,7 +2024,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                               style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                color: '#9ca3af',
+                                color: isDark ? '#71717a' : '#9ca3af',
                                 fontSize: '18px',
                               }}
                             >
@@ -2038,8 +2056,8 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                 padding: '8px 16px',
                 border: 'none',
                 borderRadius: '8px',
-                background: '#f3f4f6',
-                color: '#374151',
+                background: isDark ? '#2a2a2a' : '#f3f4f6',
+                color: isDark ? '#d1d5db' : '#374151',
                 fontWeight: '600',
                 cursor: 'pointer',
                 marginBottom: '20px',
@@ -2249,7 +2267,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
             {/* 사건 설명 */}
             <div
               style={{
-                background: 'white',
+                background: isDark ? '#212121' : 'white',
                 borderRadius: '12px',
                 padding: '24px',
                 marginBottom: '20px',
@@ -2261,7 +2279,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                   fontSize: '18px',
                   fontWeight: 'bold',
                   marginBottom: '12px',
-                  color: '#1f2937',
+                  color: isDark ? '#f5f5f5' : '#1f2937',
                 }}
               >
                 개요
@@ -2269,7 +2287,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
               <p
                 style={{
                   fontSize: '15px',
-                  color: '#374151',
+                  color: isDark ? '#d1d5db' : '#374151',
                   lineHeight: '1.7',
                   margin: 0,
                 }}
@@ -2281,7 +2299,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
             {/* 역사적 의의 */}
             <div
               style={{
-                background: 'white',
+                background: isDark ? '#212121' : 'white',
                 borderRadius: '12px',
                 padding: '24px',
                 marginBottom: '20px',
@@ -2317,7 +2335,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                     fontSize: '18px',
                     fontWeight: 'bold',
                     margin: 0,
-                    color: '#1f2937',
+                    color: isDark ? '#f5f5f5' : '#1f2937',
                   }}
                 >
                   역사적 의의
@@ -2326,7 +2344,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
               <p
                 style={{
                   fontSize: '15px',
-                  color: '#4b5563',
+                  color: isDark ? '#d1d5db' : '#4b5563',
                   lineHeight: '1.7',
                   margin: 0,
                 }}
@@ -2339,12 +2357,12 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
             {selectedEvent.impact && (
               <div
                 style={{
-                  background: 'white',
+                  background: isDark ? '#212121' : 'white',
                   borderRadius: '12px',
                   padding: '24px',
                   marginBottom: '20px',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                  border: '2px solid #e5e7eb',
+                  border: isDark ? '2px solid #2a2a2a' : '2px solid #e5e7eb',
                 }}
               >
                 <div
@@ -2360,7 +2378,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                       width: '32px',
                       height: '32px',
                       borderRadius: '8px',
-                      background: '#f3f4f6',
+                      background: isDark ? '#2a2a2a' : '#f3f4f6',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -2374,7 +2392,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                       fontSize: '18px',
                       fontWeight: 'bold',
                       margin: 0,
-                      color: '#1f2937',
+                      color: isDark ? '#f5f5f5' : '#1f2937',
                     }}
                   >
                     영향
@@ -2383,7 +2401,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                 <p
                   style={{
                     fontSize: '15px',
-                    color: '#4b5563',
+                    color: isDark ? '#d1d5db' : '#4b5563',
                     lineHeight: '1.7',
                     margin: 0,
                   }}
@@ -2397,7 +2415,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
             {selectedEvent.casualties && (
               <div
                 style={{
-                  background: 'white',
+                  background: isDark ? '#212121' : 'white',
                   borderRadius: '12px',
                   padding: '24px',
                   marginBottom: '20px',
@@ -2441,7 +2459,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                 <p
                   style={{
                     fontSize: '15px',
-                    color: '#4b5563',
+                    color: isDark ? '#d1d5db' : '#4b5563',
                     lineHeight: '1.7',
                     margin: 0,
                   }}
@@ -2455,7 +2473,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
             {selectedEvent.subEvents && selectedEvent.subEvents.length > 0 && (
               <div
                 style={{
-                  background: 'white',
+                  background: isDark ? '#212121' : 'white',
                   borderRadius: '12px',
                   padding: '24px',
                   marginBottom: '20px',
@@ -2468,7 +2486,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                     fontSize: '18px',
                     fontWeight: 'bold',
                     marginBottom: '16px',
-                    color: '#1f2937',
+                    color: isDark ? '#f5f5f5' : '#1f2937',
                   }}
                 >
                   📂 세부 사건 ({selectedEvent.subEvents.length}개)
@@ -2485,8 +2503,10 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                         }}
                         style={{
                           padding: '16px',
-                          background: '#f9fafb',
-                          border: '2px solid #e5e7eb',
+                          background: isDark ? '#1d1d1d' : '#f9fafb',
+                          border: isDark
+                            ? '2px solid #2a2a2a'
+                            : '2px solid #e5e7eb',
                           borderRadius: '8px',
                           cursor: 'pointer',
                           display: 'flex',
@@ -2520,8 +2540,8 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                             <span
                               style={{
                                 padding: '3px 8px',
-                                background: '#e5e7eb',
-                                color: '#374151',
+                                background: isDark ? '#2a2a2a' : '#e5e7eb',
+                                color: isDark ? '#d1d5db' : '#374151',
                                 borderRadius: '4px',
                                 fontSize: '10px',
                                 fontWeight: '600',
@@ -2530,7 +2550,10 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                               세부
                             </span>
                             <span
-                              style={{ fontSize: '12px', color: '#6b7280' }}
+                              style={{
+                                fontSize: '12px',
+                                color: isDark ? '#a1a1aa' : '#6b7280',
+                              }}
                             >
                               {formatDate(subEvent.date.start)}
                             </span>
@@ -2539,17 +2562,27 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                             style={{
                               fontSize: '15px',
                               fontWeight: '600',
-                              color: '#1f2937',
+                              color: isDark ? '#f5f5f5' : '#1f2937',
                               marginBottom: '4px',
                             }}
                           >
                             {subEvent.name}
                           </div>
-                          <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                          <div
+                            style={{
+                              fontSize: '13px',
+                              color: isDark ? '#a1a1aa' : '#6b7280',
+                            }}
+                          >
                             {subEvent.description}
                           </div>
                         </div>
-                        <div style={{ color: '#9ca3af', fontSize: '18px' }}>
+                        <div
+                          style={{
+                            color: isDark ? '#71717a' : '#9ca3af',
+                            fontSize: '18px',
+                          }}
+                        >
                           →
                         </div>
                       </motion.div>
@@ -2563,7 +2596,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
             {selectedEvent.participants.length > 0 && (
               <div
                 style={{
-                  background: 'white',
+                  background: isDark ? '#212121' : 'white',
                   borderRadius: '12px',
                   padding: '24px',
                   marginBottom: '20px',
@@ -2575,7 +2608,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                     fontSize: '18px',
                     fontWeight: 'bold',
                     marginBottom: '16px',
-                    color: '#1f2937',
+                    color: isDark ? '#f5f5f5' : '#1f2937',
                   }}
                 >
                   참여자
@@ -2594,15 +2627,17 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                         key={participantIndex}
                         style={{
                           padding: '12px',
-                          background: '#f9fafb',
-                          border: '1px solid #e5e7eb',
+                          background: isDark ? '#1d1d1d' : '#f9fafb',
+                          border: isDark
+                            ? '1px solid #2a2a2a'
+                            : '1px solid #e5e7eb',
                           borderRadius: '8px',
                         }}
                       >
                         <div
                           style={{
                             fontSize: '11px',
-                            color: '#6b7280',
+                            color: isDark ? '#a1a1aa' : '#6b7280',
                             marginBottom: '4px',
                           }}
                         >
@@ -2616,13 +2651,18 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                           style={{
                             fontSize: '15px',
                             fontWeight: '600',
-                            color: '#1f2937',
+                            color: isDark ? '#f5f5f5' : '#1f2937',
                             marginBottom: '2px',
                           }}
                         >
                           {participant.name}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: isDark ? '#a1a1aa' : '#6b7280',
+                          }}
+                        >
                           {participant.role}
                         </div>
                       </div>
@@ -2636,7 +2676,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
             {selectedEvent.relatedEvents.length > 0 && (
               <div
                 style={{
-                  background: 'white',
+                  background: isDark ? '#212121' : 'white',
                   borderRadius: '12px',
                   padding: '24px',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
@@ -2647,7 +2687,7 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                     fontSize: '18px',
                     fontWeight: 'bold',
                     marginBottom: '16px',
-                    color: '#1f2937',
+                    color: isDark ? '#f5f5f5' : '#1f2937',
                   }}
                 >
                   관련 사건
@@ -2669,8 +2709,10 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                         }}
                         style={{
                           padding: '16px',
-                          background: '#f9fafb',
-                          border: '2px solid #e5e7eb',
+                          background: isDark ? '#1d1d1d' : '#f9fafb',
+                          border: isDark
+                            ? '2px solid #2a2a2a'
+                            : '2px solid #e5e7eb',
                           borderRadius: '8px',
                           cursor: 'pointer',
                           display: 'flex',
@@ -2700,7 +2742,10 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                               {getEventTypeLabel(relatedEvent.type)}
                             </span>
                             <span
-                              style={{ fontSize: '12px', color: '#6b7280' }}
+                              style={{
+                                fontSize: '12px',
+                                color: isDark ? '#a1a1aa' : '#6b7280',
+                              }}
                             >
                               {formatDate(relatedEvent.date.start)}
                             </span>
@@ -2709,13 +2754,18 @@ export const HistorySection = ({ selectedCountry }: HistorySectionProps) => {
                             style={{
                               fontSize: '15px',
                               fontWeight: '600',
-                              color: '#1f2937',
+                              color: isDark ? '#f5f5f5' : '#1f2937',
                             }}
                           >
                             {relatedEvent.name}
                           </div>
                         </div>
-                        <div style={{ color: '#9ca3af', fontSize: '18px' }}>
+                        <div
+                          style={{
+                            color: isDark ? '#71717a' : '#9ca3af',
+                            fontSize: '18px',
+                          }}
+                        >
                           →
                         </div>
                       </motion.div>

@@ -38,35 +38,35 @@ const Header = styled.div`
 const Title = styled.h3`
   font-size: 14px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111827')};
   margin: 0;
 `
 const Count = styled.span`
   font-size: 12px;
-  color: #6b7280;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
 `
 const AddBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 6px 10px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f3f4f6')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   border-radius: 6px;
-  color: #374151;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')};
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   &:hover {
-    background: #e5e7eb;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#e5e7eb')};
   }
 `
 const Empty = styled.div`
   padding: 24px;
   text-align: center;
-  color: #9ca3af;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#9ca3af')};
   font-size: 13px;
-  border: 1px dashed #e5e7eb;
+  border: 1px dashed ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   border-radius: 8px;
 `
 const List = styled.ul`
@@ -82,9 +82,9 @@ const Card = styled.li`
   align-items: flex-start;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   border-radius: 8px;
-  background: #fff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
 `
 const CardBody = styled.div`
   flex: 1;
@@ -93,13 +93,13 @@ const CardBody = styled.div`
 const CardTitle = styled.div`
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111827')};
   margin-bottom: 4px;
   word-break: keep-all;
 `
 const CardMeta = styled.div`
   font-size: 11px;
-  color: #6b7280;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
   display: flex;
   gap: 8px;
   align-items: center;
@@ -107,21 +107,21 @@ const CardMeta = styled.div`
 const RoleSelect = styled.select`
   padding: 4px 6px;
   font-size: 11px;
-  border: 1px solid #d1d5db;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
   border-radius: 4px;
-  background: #fff;
-  color: #374151;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')};
 `
 const IconBtn = styled.button`
   padding: 6px;
   background: transparent;
   border: none;
-  color: #9ca3af;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#9ca3af')};
   cursor: pointer;
   border-radius: 4px;
   &:hover {
     color: #ef4444;
-    background: #fef2f2;
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(239,68,68,0.12)' : '#fef2f2')};
   }
 `
 
@@ -136,7 +136,7 @@ const Overlay = styled.div`
   z-index: 1000;
 `
 const Modal = styled.div`
-  background: #fff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
   border-radius: 12px;
   width: min(560px, 92vw);
   max-height: 84vh;
@@ -150,19 +150,19 @@ const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 16px 18px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
 `
 const ModalTitle = styled.h4`
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #111827;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111827')};
 `
 const CloseBtn = styled.button`
   background: transparent;
   border: none;
   cursor: pointer;
-  color: #6b7280;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
   padding: 4px;
 `
 const ModalBody = styled.div`
@@ -171,7 +171,7 @@ const ModalBody = styled.div`
 `
 const ModalFooter = styled.div`
   padding: 12px 18px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -179,7 +179,7 @@ const ModalFooter = styled.div`
 const SearchInput = styled.input`
   width: 100%;
   padding: 9px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
   border-radius: 6px;
   font-size: 13px;
   margin-bottom: 12px;
@@ -190,24 +190,25 @@ const ResultList = styled.ul`
   margin: 0;
   max-height: 240px;
   overflow-y: auto;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   border-radius: 6px;
 `
 const ResultItem = styled.li<{ $selected?: boolean }>`
   padding: 10px 12px;
   font-size: 12px;
   cursor: pointer;
-  border-bottom: 1px solid #f3f4f6;
-  background: ${(p) => (p.$selected ? '#eff6ff' : 'transparent')};
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f3f4f6')};
+  background: ${({ $selected, theme }) =>
+    $selected ? (theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eff6ff') : 'transparent'};
   &:hover {
-    background: #f9fafb;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f9fafb')};
   }
 `
 const FieldLabel = styled.label`
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: #374151;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')};
   margin: 12px 0 6px;
 `
 const PrimaryBtn = styled.button`
@@ -227,9 +228,9 @@ const PrimaryBtn = styled.button`
 const GhostBtn = styled.button`
   padding: 8px 14px;
   background: transparent;
-  border: 1px solid #d1d5db;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
   border-radius: 6px;
-  color: #374151;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')};
   font-size: 13px;
   cursor: pointer;
 `

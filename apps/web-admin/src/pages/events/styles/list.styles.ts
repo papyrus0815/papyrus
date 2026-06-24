@@ -782,7 +782,7 @@ export const DateDivider = styled.button`
 
     svg {
       transition: transform 0.2s ease;
-      color: #94a3b8;
+      color: ${({ theme }) => theme.mode === 'dark' ? '#71717a' : '#94a3b8'};
     }
   }
 

@@ -174,7 +174,7 @@ const Overlay = styled.div`
 `
 
 const ModalContainer = styled.div`
-  background: white;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'white')};
   border-radius: 16px;
   width: 420px;
   max-width: 90%;
@@ -200,7 +200,7 @@ const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
 `
 
 const HeaderLeft = styled.div`
@@ -224,14 +224,14 @@ const ModalTitle = styled.h3`
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
 `
 
 const CloseButton = styled.button`
   background: none;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   padding: 8px;
   display: flex;
   align-items: center;
@@ -240,8 +240,8 @@ const CloseButton = styled.button`
   transition: all 0.2s;
 
   &:hover {
-    background: #f1f5f9;
-    color: #0f172a;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   }
 `
 
@@ -256,9 +256,12 @@ const TimeDisplay = styled.div`
   gap: 8px;
   margin-bottom: 24px;
   padding: 16px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#212121'
+      : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'};
   border-radius: 12px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
 `
 
 const TimeValue = styled.div`
@@ -273,7 +276,7 @@ const TimeValue = styled.div`
 const TimeSeparator = styled.div`
   font-size: 48px;
   font-weight: 700;
-  color: #94a3b8;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
 `
 
 const PickersContainer = styled.div`
@@ -292,14 +295,14 @@ const PickerLabel = styled.div`
   text-align: center;
   font-size: 14px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   margin-bottom: 8px;
 `
 
 const ScrollContainer = styled.div`
   height: 200px;
   overflow-y: auto;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
   border-radius: 8px;
   padding: 4px;
 
@@ -308,16 +311,16 @@ const ScrollContainer = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f5f9;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
     border-radius: 3px;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
     border-radius: 3px;
 
     &:hover {
-      background: #94a3b8;
+      background: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
     }
   }
 `
@@ -330,7 +333,12 @@ const TimeItem = styled.button<{ $selected: boolean }>`
     props.$selected
       ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'
       : 'transparent'};
-  color: ${(props) => (props.$selected ? 'white' : '#475569')};
+  color: ${(props) =>
+    props.$selected
+      ? 'white'
+      : props.theme.mode === 'dark'
+        ? '#d1d5db'
+        : '#475569'};
   font-size: 16px;
   font-weight: ${(props) => (props.$selected ? '600' : '400')};
   font-family: 'Courier New', monospace;
@@ -343,21 +351,23 @@ const TimeItem = styled.button<{ $selected: boolean }>`
     background: ${(props) =>
       props.$selected
         ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)'
-        : '#f1f5f9'};
+        : props.theme.mode === 'dark'
+          ? '#2a2a2a'
+          : '#f1f5f9'};
   }
 `
 
 const QuickSelectSection = styled.div`
   padding: 16px;
-  background: #f8fafc;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8fafc')};
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
 `
 
 const QuickSelectLabel = styled.div`
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   margin-bottom: 10px;
 `
 
@@ -369,19 +379,19 @@ const QuickSelectButtons = styled.div`
 
 const QuickButton = styled.button`
   padding: 6px 12px;
-  border: 1.5px solid #cbd5e1;
-  background: white;
+  border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'white')};
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: #475569;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#475569')};
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
     border-color: #6366f1;
     color: #6366f1;
-    background: #f0f1ff;
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : '#f0f1ff')};
   }
 `
 
@@ -390,18 +400,18 @@ const ModalFooter = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
-  background: #f8fafc;
+  border-top: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8fafc')};
 `
 
 const ClearButton = styled.button`
   padding: 10px 16px;
-  border: 1.5px solid #e5e7eb;
-  background: white;
+  border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'white')};
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   cursor: pointer;
   transition: all 0.2s;
 
@@ -419,17 +429,17 @@ const ButtonGroup = styled.div`
 
 const CancelButton = styled.button`
   padding: 10px 20px;
-  border: 1.5px solid #cbd5e1;
-  background: white;
+  border: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'white')};
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #475569;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#475569')};
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    background: #f1f5f9;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
   }
 `
 

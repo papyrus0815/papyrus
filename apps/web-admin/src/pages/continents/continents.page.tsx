@@ -15,10 +15,13 @@ import styled from 'styled-components'
 import type { ContinentResponseDto } from '@/shared/api/continents'
 import { ActionMenu } from '@/shared/ui/action-menu/action-menu'
 import { Z_INDEX, OVERLAY_STYLES } from '@/shared/styles/z-index'
+import { useThemeStore } from '@/shared/styles/theme.store'
 import { useContinentPage } from './use-continent-page.hook'
 import { ContinentForm } from './components/continent-form'
 
 export default function ContinentsPage() {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const {
     // Data
     continents,
@@ -236,7 +239,12 @@ export default function ContinentsPage() {
                   const stats = continentStats[continent.id]
                   return (
                     <tr key={continent.id}>
-                      <Td style={{ textAlign: 'center', color: '#999' }}>
+                      <Td
+                        style={{
+                          textAlign: 'center',
+                          color: isDark ? '#71717a' : '#999',
+                        }}
+                      >
                         {index + 1}
                       </Td>
                       <Td>
@@ -375,7 +383,7 @@ const Wrap = styled.div`
   width: 100%;
   min-height: 100vh;
   padding: 72px 24px 24px;
-  background: #fff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
 `
 
 const Header = styled.div`
@@ -397,13 +405,13 @@ const Title = styled.h1`
   margin: 0;
   font-size: 22px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#1a1a1a')};
   letter-spacing: -0.5px;
 `
 
 const Stats = styled.div`
   font-size: 13px;
-  color: #999;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#999')};
   font-weight: 500;
 `
 
@@ -414,9 +422,10 @@ const AddButton = styled.button`
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 600;
-  color: #1a1a1a;
-  background: #fff;
-  border: 1.5px solid #e0e0e0;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#1a1a1a')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1.5px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e0e0e0')};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -426,8 +435,9 @@ const AddButton = styled.button`
   }
 
   &:hover {
-    border-color: #1a1a1a;
-    background: #fafafa;
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#f5f5f5' : '#1a1a1a'};
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafafa')};
   }
 
   &:active {
@@ -439,7 +449,7 @@ const LoadingMessage = styled.div`
   text-align: center;
   padding: 80px 48px;
   font-size: 14px;
-  color: #999;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#999')};
 `
 
 const ErrorState = styled.div`
@@ -461,14 +471,14 @@ const ErrorTitle = styled.h3`
   margin: 0 0 8px 0;
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#1a1a1a')};
   letter-spacing: -0.3px;
 `
 
 const ErrorDesc = styled.p`
   margin: 0 0 32px 0;
   font-size: 14px;
-  color: #666;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
   max-width: 400px;
   line-height: 1.6;
 `
@@ -498,8 +508,9 @@ const RetryButton = styled.button`
 `
 
 const TableWrap = styled.div`
-  background: #fff;
-  border: 1px solid #e0e0e0;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e0e0e0')};
   border-radius: 12px;
   overflow: hidden;
 
@@ -536,7 +547,7 @@ const MobileListPane = styled.div`
     left: 0;
     right: 0;
     bottom: 0;
-    background: #fff;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
     border-radius: 20px 20px 0 0;
     z-index: 1004;
     overflow: hidden;
@@ -547,7 +558,8 @@ const MobileListPane = styled.div`
 const DragHandle = styled.div`
   width: 40px;
   height: 4px;
-  background: rgba(0, 0, 0, 0.2);
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'};
   border-radius: 2px;
   margin: 8px auto 4px;
   cursor: grab;
@@ -555,7 +567,8 @@ const DragHandle = styled.div`
 
   &:active {
     cursor: grabbing;
-    background: rgba(0, 0, 0, 0.3);
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)'};
   }
 `
 
@@ -564,8 +577,13 @@ const MobileListHeader = styled.div`
   flex-direction: column;
   gap: 12px;
   padding: 0 20px 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#212121'
+      : 'linear-gradient(180deg, #fafbfc 0%, #fff 100%)'};
   flex-shrink: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 `
@@ -580,7 +598,7 @@ const MobileListTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   letter-spacing: -0.02em;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
@@ -594,14 +612,15 @@ const MobileListClose = styled.button`
   height: 32px;
   border: none;
   background: transparent;
-  color: #70757a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#70757a')};
   cursor: pointer;
   border-radius: 10px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
-    background: rgba(0, 0, 0, 0.06);
-    color: #202124;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   }
 
   &:active {
@@ -627,7 +646,8 @@ const MobileListContent = styled.div`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.2);
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'};
     border-radius: 3px;
   }
 
@@ -637,8 +657,9 @@ const MobileListContent = styled.div`
 `
 
 const MobileListItem = styled.div`
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   border-radius: 12px;
   padding: 16px;
   display: flex;
@@ -657,7 +678,8 @@ const MobileListItemHeader = styled.div`
   align-items: center;
   gap: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f0f0f0')};
 `
 
 const MobileListItemIndex = styled.div`
@@ -677,7 +699,7 @@ const MobileListItemIndex = styled.div`
 const MobileListItemName = styled.div`
   font-size: 16px;
   font-weight: 700;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   flex: 1;
 `
 
@@ -689,13 +711,13 @@ const MobileListItemBody = styled.div`
 
 const MobileListItemInfo = styled.div`
   font-size: 13px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   display: flex;
   gap: 8px;
 
   span {
     font-weight: 600;
-    color: #70757a;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#70757a')};
     min-width: 50px;
   }
 `
@@ -705,16 +727,32 @@ const MobileListItemActions = styled.div`
   gap: 8px;
   margin-top: 8px;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f0f0f0')};
 `
 
 const MobileListActionButton = styled.button<{ $variant?: 'danger' }>`
   flex: 1;
   padding: 10px 16px;
   border: 1px solid
-    ${(props) => (props.$variant === 'danger' ? '#ef4444' : '#e5e7eb')};
-  background: ${(props) => (props.$variant === 'danger' ? '#fef2f2' : '#fff')};
-  color: ${(props) => (props.$variant === 'danger' ? '#dc2626' : '#202124')};
+    ${(props) =>
+      props.$variant === 'danger'
+        ? '#ef4444'
+        : props.theme.mode === 'dark'
+          ? '#2a2a2a'
+          : '#e5e7eb'};
+  background: ${(props) =>
+    props.$variant === 'danger'
+      ? '#fef2f2'
+      : props.theme.mode === 'dark'
+        ? '#212121'
+        : '#fff'};
+  color: ${(props) =>
+    props.$variant === 'danger'
+      ? '#dc2626'
+      : props.theme.mode === 'dark'
+        ? '#f5f5f5'
+        : '#202124'};
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
@@ -723,9 +761,17 @@ const MobileListActionButton = styled.button<{ $variant?: 'danger' }>`
 
   &:hover:not(:disabled) {
     background: ${(props) =>
-      props.$variant === 'danger' ? '#fee2e2' : '#f9fafb'};
+      props.$variant === 'danger'
+        ? '#fee2e2'
+        : props.theme.mode === 'dark'
+          ? '#1d1d1d'
+          : '#f9fafb'};
     border-color: ${(props) =>
-      props.$variant === 'danger' ? '#dc2626' : '#d1d5db'};
+      props.$variant === 'danger'
+        ? '#dc2626'
+        : props.theme.mode === 'dark'
+          ? '#3f3f46'
+          : '#d1d5db'};
   }
 
   &:active:not(:disabled) {
@@ -757,18 +803,20 @@ const Th = styled.th`
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: #666;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #fafafa;
+  border-bottom: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e0e0e0')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafafa')};
 `
 
 const Td = styled.td`
   padding: 16px;
   font-size: 14px;
-  color: #1a1a1a;
-  border-bottom: 1px solid #f0f0f0;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#1a1a1a')};
+  border-bottom: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f0f0f0')};
 
   &:first-child {
     font-weight: 500;
@@ -787,17 +835,17 @@ const DataCell = styled.div`
 
 const RealValue = styled.div`
   font-weight: 500;
-  color: #1a1a1a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#1a1a1a')};
 `
 
 const DbValue = styled.div`
   font-size: 12px;
-  color: #999;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#999')};
   font-style: italic;
   cursor: help;
 
   &:hover {
-    color: #666;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
   }
 `
 
@@ -822,14 +870,14 @@ const EmptyTitle = styled.h3`
   margin: 0 0 8px 0;
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#1a1a1a')};
   letter-spacing: -0.3px;
 `
 
 const EmptyDesc = styled.p`
   margin: 0 0 32px 0;
   font-size: 14px;
-  color: #666;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
   max-width: 320px;
   line-height: 1.6;
 `
@@ -841,9 +889,10 @@ const EmptyButton = styled.button`
   padding: 10px 24px;
   font-size: 14px;
   font-weight: 600;
-  color: #1a1a1a;
-  background: #fff;
-  border: 1.5px solid #e0e0e0;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#1a1a1a')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1.5px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e0e0e0')};
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -853,8 +902,9 @@ const EmptyButton = styled.button`
   }
 
   &:hover {
-    border-color: #1a1a1a;
-    background: #fafafa;
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#f5f5f5' : '#1a1a1a'};
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafafa')};
   }
 
   &:active {

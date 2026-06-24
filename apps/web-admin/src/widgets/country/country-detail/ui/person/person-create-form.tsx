@@ -720,7 +720,8 @@ const Container = styled.div`
 
 const ProgressBar = styled.div`
   padding: 20px 0 16px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
 `
 
 const ProgressInfo = styled.div`
@@ -733,7 +734,7 @@ const ProgressInfo = styled.div`
 const ProgressTitle = styled.h2`
   font-size: 18px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin: 0;
 `
 
@@ -743,7 +744,7 @@ const ProgressSteps = styled.div`
   gap: 12px;
   font-size: 14px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
 `
 
 const ProgressBadge = styled.span`
@@ -757,7 +758,7 @@ const ProgressBadge = styled.span`
 
 const ProgressTrack = styled.div`
   height: 4px;
-  background: #f1f5f9;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
   border-radius: 999px;
   overflow: hidden;
 `
@@ -811,7 +812,8 @@ const StepSection = styled.div`
 
 const SectionCard = styled.div`
   padding: 24px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
 
   &:last-child {
     border-bottom: none;
@@ -825,13 +827,13 @@ const CardHeader = styled.div`
 const CardTitle = styled.h3`
   font-size: 16px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin: 0 0 6px 0;
 `
 
 const CardDesc = styled.p`
   font-size: 13px;
-  color: #94a3b8;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   margin: 0;
 `
 
@@ -854,7 +856,7 @@ const FormGroup = styled.div<{ $error?: boolean }>`
 const Label = styled.label`
   font-size: 13px;
   font-weight: 700;
-  color: #475569;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#475569')};
   text-transform: uppercase;
   letter-spacing: 0.3px;
 `
@@ -866,16 +868,18 @@ const Required = styled.span`
 const Input = styled.input`
   height: 48px;
   padding: 0 16px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
   border-radius: 10px;
   font-size: 15px;
   font-weight: 500;
-  color: #0f172a;
-  background: #fff;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fff')};
   transition: all 0.2s;
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1'};
   }
 
   &:focus {
@@ -885,30 +889,33 @@ const Input = styled.input`
   }
 
   &:disabled {
-    background: #f8fafc;
-    color: #cbd5e1;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? '#1d1d1d' : '#f8fafc'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
     cursor: not-allowed;
   }
 
   &::placeholder {
-    color: #cbd5e1;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
   }
 `
 
 const Select = styled.select`
   height: 48px;
   padding: 0 16px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
   border-radius: 10px;
   font-size: 15px;
   font-weight: 500;
-  color: #0f172a;
-  background: #fff;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fff')};
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1'};
   }
 
   &:focus {
@@ -933,7 +940,7 @@ const DateGroup = styled.div<{ $flex?: boolean }>`
 const SmallLabel = styled.label`
   font-size: 11px;
   font-weight: 700;
-  color: #94a3b8;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   text-transform: uppercase;
 `
 
@@ -950,18 +957,20 @@ const DateInput = styled(Input)`
 
 const TextArea = styled.textarea`
   padding: 16px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
   border-radius: 10px;
   font-size: 15px;
-  color: #0f172a;
-  background: #fff;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fff')};
   font-family: inherit;
   line-height: 1.6;
   resize: vertical;
   transition: all 0.2s;
 
   &:hover {
-    border-color: #cbd5e1;
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1'};
   }
 
   &:focus {
@@ -971,7 +980,7 @@ const TextArea = styled.textarea`
   }
 
   &::placeholder {
-    color: #cbd5e1;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
   }
 `
 
@@ -984,14 +993,15 @@ const ErrorMsg = styled.span`
 const CharCount = styled.div<{ $limit: boolean }>`
   text-align: right;
   font-size: 12px;
-  color: ${({ $limit }) => ($limit ? '#dc2626' : '#94a3b8')};
+  color: ${({ $limit, theme }) =>
+    $limit ? '#dc2626' : theme.mode === 'dark' ? '#71717a' : '#94a3b8'};
   font-weight: 600;
   margin-top: 8px;
 `
 
 const InfoBox = styled.div`
   padding: 14px 16px;
-  background: #f8fafc;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8fafc')};
   border-left: 3px solid #64748b;
   border-radius: 6px;
   margin-top: 16px;
@@ -999,7 +1009,7 @@ const InfoBox = styled.div`
 
 const InfoText = styled.p`
   font-size: 13px;
-  color: #475569;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#475569')};
   font-weight: 500;
   margin: 0;
   line-height: 1.5;
@@ -1037,7 +1047,8 @@ const BottomNav = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 20px 0;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
   gap: 12px;
 `
 
@@ -1053,17 +1064,29 @@ const NavButton = styled.button<{ $primary?: boolean; $secondary?: boolean }>`
   height: 48px;
   padding: 0 28px;
   border: 2px solid
-    ${({ $primary, $secondary }) =>
-      $primary ? '#10b981' : $secondary ? '#e2e8f0' : '#0f172a'};
+    ${({ $primary, $secondary, theme }) =>
+      $primary
+        ? '#10b981'
+        : $secondary
+          ? theme.mode === 'dark'
+            ? '#2a2a2a'
+            : '#e2e8f0'
+          : '#0f172a'};
   border-radius: 12px;
-  background: ${({ $primary, $secondary }) =>
+  background: ${({ $primary, $secondary, theme }) =>
     $primary
       ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
       : $secondary
-        ? '#fff'
+        ? theme.mode === 'dark'
+          ? '#212121'
+          : '#fff'
         : 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)'};
-  color: ${({ $primary, $secondary }) =>
-    $primary || !$secondary ? '#fff' : '#64748b'};
+  color: ${({ $primary, $secondary, theme }) =>
+    $primary || !$secondary
+      ? '#fff'
+      : theme.mode === 'dark'
+        ? '#a1a1aa'
+        : '#64748b'};
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
@@ -1076,11 +1099,13 @@ const NavButton = styled.button<{ $primary?: boolean; $secondary?: boolean }>`
         : 'none'};
 
   &:hover:not(:disabled) {
-    background: ${({ $primary, $secondary }) =>
+    background: ${({ $primary, $secondary, theme }) =>
       $primary
         ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
         : $secondary
-          ? '#f8fafc'
+          ? theme.mode === 'dark'
+            ? '#2a2a2a'
+            : '#f8fafc'
           : 'linear-gradient(135deg, #1e293b 0%, #334155 100%)'};
     transform: translateY(-2px);
     box-shadow: ${({ $primary, $secondary }) =>
@@ -1098,8 +1123,12 @@ const NavButton = styled.button<{ $primary?: boolean; $secondary?: boolean }>`
   }
 
   svg {
-    stroke: ${({ $primary, $secondary }) =>
-      $primary || !$secondary ? '#fff' : '#64748b'};
+    stroke: ${({ $primary, $secondary, theme }) =>
+      $primary || !$secondary
+        ? '#fff'
+        : theme.mode === 'dark'
+          ? '#a1a1aa'
+          : '#64748b'};
   }
 `
 

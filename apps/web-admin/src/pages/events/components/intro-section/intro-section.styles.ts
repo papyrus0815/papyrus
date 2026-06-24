@@ -26,20 +26,22 @@ export const HighlightRow = styled.div`
 export const Highlight = styled.div`
   padding: 10px;
   border-radius: 10px;
-  background: #f8fafc;
-  border: 1px solid rgba(99, 102, 241, 0.08);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8fafc')};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)'};
   display: flex;
   flex-direction: column;
   gap: 3px;
 
   strong {
     font-size: 15px;
-    color: #111827;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111827')};
   }
 
   span {
     font-size: 10px;
-    color: #6b7280;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
   }
 `
 
@@ -63,8 +65,9 @@ export const CategoryCard = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #ffffff;
-  border: 1px solid #e4e7ec;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e4e7ec')};
   box-shadow: 0 4px 16px rgba(15, 17, 29, 0.06);
 `
 
@@ -94,18 +97,18 @@ export const CategoryTitle = styled.span`
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #475569;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#475569')};
   font-weight: 600;
 `
 
 export const CategoryCount = styled.strong`
   font-size: 20px;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
 `
 
 export const CategoryTagline = styled.span`
   font-size: 11px;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   line-height: 1.4;
 `
 
@@ -113,8 +116,10 @@ export const CategoryTagline = styled.span`
 export const SkeletonHighlight = styled.div`
   padding: 10px;
   border-radius: 10px;
-  background: #f8fafc;
-  border: 1px solid rgba(99, 102, 241, 0.08);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8fafc')};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.08)'};
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -127,8 +132,9 @@ export const SkeletonCategoryCard = styled.div`
   display: flex;
   align-items: center;
   gap: 14px;
-  background: #ffffff;
-  border: 1px solid #e4e7ec;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e4e7ec')};
   box-shadow: 0 6px 20px rgba(15, 17, 29, 0.06);
   ${pulseAnimation}
 `

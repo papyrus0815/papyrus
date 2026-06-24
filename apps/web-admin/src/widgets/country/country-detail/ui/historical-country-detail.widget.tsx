@@ -93,7 +93,8 @@ const CompactStrip = styled.div`
   margin-top: 6px;
   margin-bottom: 0;
   padding: 6px 0;
-  border-bottom: 1px solid var(--border-color-light, #e5e7eb);
+  border-bottom: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'var(--border-color-light, #e5e7eb)')};
   min-height: 0;
 `
 const CompactBadge = styled.div`
@@ -102,16 +103,16 @@ const CompactBadge = styled.div`
   gap: 4px;
   padding: 4px 10px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid #e5e7eb;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'rgba(255, 255, 255, 0.95)')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   font-size: 11px;
-  color: #6b7280;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   & span:last-child {
     font-size: 12px;
-    color: #111827;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111827')};
     font-weight: 700;
     text-transform: none;
     letter-spacing: -0.01em;
@@ -296,6 +297,8 @@ export function HistoricalCountryDetail({
   const [activeTab, setActiveTab] = useState<HistoricalCountryTab>(
     () => initialTab ?? 'overview',
   )
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
 
   // 이 위젯은 country-detail.widget이 country.type === 'historical'로 분기 후에만 마운트됨 — id 직접 사용.
   const historicalCountryId = country.id
@@ -396,7 +399,7 @@ export function HistoricalCountryDetail({
                     <HistoricalRegionsSection country={country} />
                   )}
                   {activeTab === 'government' && (
-                    <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 14 }}>
+                    <div style={{ padding: 32, textAlign: 'center', color: isDark ? '#a1a1aa' : '#64748b', fontSize: 14 }}>
                       행정조직 정보는 현대 국가 상세에서 확인할 수 있습니다.
                     </div>
                   )}
@@ -1029,6 +1032,8 @@ function OverviewStatChip({
 // ============================================
 
 function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null)
   const [selectedEventType, setSelectedEventType] = useState<string>('all')
   const [eventDetailTab, setEventDetailTab] = useState<
@@ -1290,11 +1295,11 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
       <div
         style={{
           padding: '48px',
-          background: '#fafafa',
+          background: isDark ? '#1d1d1d' : '#fafafa',
           minHeight: 'calc(100vh - 300px)',
         }}
       >
-        <EmptyState message="주요 사건 정보가 없습니다" />
+        <EmptyState message="주요 사건 정보가 없습니다" isDark={isDark} />
       </div>
     )
   }
@@ -1308,6 +1313,7 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
         onTabChange={setEventDetailTab}
         onBack={() => setSelectedEvent(null)}
         colorSet={getEventTypeColor(currentEventDetail.type)}
+        isDark={isDark}
       />
     )
   }
@@ -1317,15 +1323,15 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
     <div
       style={{
         padding: '48px',
-        background: '#fafafa',
+        background: isDark ? '#1d1d1d' : '#fafafa',
         minHeight: 'calc(100vh - 300px)',
       }}
     >
       {/* 타임라인 컨테이너 */}
       <div
         style={{
-          background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-          border: '1px solid #e2e8f0',
+          background: isDark ? '#212121' : 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+          border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
           borderRadius: '14px',
           overflow: 'hidden',
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
@@ -1334,12 +1340,12 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = 'translateY(-2px)'
-          e.currentTarget.style.borderColor = '#cbd5e1'
+          e.currentTarget.style.borderColor = isDark ? '#3f3f46' : '#cbd5e1'
           e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.1)'
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = 'translateY(0)'
-          e.currentTarget.style.borderColor = '#e2e8f0'
+          e.currentTarget.style.borderColor = isDark ? '#2a2a2a' : '#e2e8f0'
           e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'
         }}
       >
@@ -1350,15 +1356,15 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '20px 24px',
-            borderBottom: '2px solid #f1f5f9',
-            background: '#ffffff',
+            borderBottom: `2px solid ${isDark ? '#2a2a2a' : '#f1f5f9'}`,
+            background: isDark ? '#212121' : '#ffffff',
           }}
         >
           <h3
             style={{
               fontSize: '16px',
               fontWeight: 800,
-              color: '#0f172a',
+              color: isDark ? '#f5f5f5' : '#0f172a',
               margin: 0,
               letterSpacing: '-0.02em',
             }}
@@ -1374,9 +1380,9 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                 background:
                   selectedEventType === 'all'
                     ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
-                    : '#fff',
-                color: selectedEventType === 'all' ? '#fff' : '#64748b',
-                border: `2px solid ${selectedEventType === 'all' ? '#1e293b' : '#e5e7eb'}`,
+                    : isDark ? '#212121' : '#fff',
+                color: selectedEventType === 'all' ? '#fff' : isDark ? '#a1a1aa' : '#64748b',
+                border: `2px solid ${selectedEventType === 'all' ? '#1e293b' : isDark ? '#2a2a2a' : '#e5e7eb'}`,
                 borderRadius: '10px',
                 cursor: 'pointer',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -1405,10 +1411,10 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                     background:
                       selectedEventType === type
                         ? `linear-gradient(135deg, ${colorSet.bg} 0%, ${colorSet.bg}dd 100%)`
-                        : '#fff',
+                        : isDark ? '#212121' : '#fff',
                     color:
-                      selectedEventType === type ? colorSet.text : '#64748b',
-                    border: `2px solid ${selectedEventType === type ? colorSet.border : '#e5e7eb'}`,
+                      selectedEventType === type ? colorSet.text : isDark ? '#a1a1aa' : '#64748b',
+                    border: `2px solid ${selectedEventType === type ? colorSet.border : isDark ? '#2a2a2a' : '#e5e7eb'}`,
                     borderRadius: '10px',
                     cursor: 'pointer',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -1431,8 +1437,8 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                   }}
                   onMouseLeave={(e) => {
                     if (selectedEventType !== type) {
-                      e.currentTarget.style.borderColor = '#e5e7eb'
-                      e.currentTarget.style.backgroundColor = '#fff'
+                      e.currentTarget.style.borderColor = isDark ? '#2a2a2a' : '#e5e7eb'
+                      e.currentTarget.style.backgroundColor = isDark ? '#212121' : '#fff'
                       e.currentTarget.style.transform = 'translateY(0)'
                     }
                   }}
@@ -1460,7 +1466,7 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
               top: '12px',
               bottom: '12px',
               width: '2px',
-              background: '#e2e8f0',
+              background: isDark ? '#2a2a2a' : '#e2e8f0',
               borderRadius: '1px',
             }}
           />
@@ -1508,7 +1514,7 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                         height: '10px',
                         borderRadius: '50%',
                         background: colorSet.border,
-                        border: '3px solid #ffffff',
+                        border: `3px solid ${isDark ? '#212121' : '#ffffff'}`,
                         boxShadow: `0 0 0 2px ${colorSet.border}`,
                         zIndex: 2,
                       }}
@@ -1519,7 +1525,7 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                       style={{
                         fontSize: '18px',
                         fontWeight: 800,
-                        color: '#0f172a',
+                        color: isDark ? '#f5f5f5' : '#0f172a',
                         marginBottom: '8px',
                         letterSpacing: '-0.02em',
                       }}
@@ -1557,8 +1563,8 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                       }
                     }}
                     style={{
-                      background: '#ffffff',
-                      border: '1px solid #f1f5f9',
+                      background: isDark ? '#212121' : '#ffffff',
+                      border: `1px solid ${isDark ? '#2a2a2a' : '#f1f5f9'}`,
                       borderRadius: '12px',
                       padding: '20px 24px',
                       cursor: hasDetail ? 'pointer' : 'default',
@@ -1569,13 +1575,15 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                     onMouseEnter={(e) => {
                       e.currentTarget.style.borderColor = colorSet.border
                       e.currentTarget.style.boxShadow = `0 6px 20px ${colorSet.border}25`
-                      e.currentTarget.style.background = `linear-gradient(135deg, #ffffff 0%, ${colorSet.bg}25 100%)`
+                      e.currentTarget.style.background = isDark
+                        ? '#2a2a2a'
+                        : `linear-gradient(135deg, #ffffff 0%, ${colorSet.bg}25 100%)`
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#f1f5f9'
+                      e.currentTarget.style.borderColor = isDark ? '#2a2a2a' : '#f1f5f9'
                       e.currentTarget.style.boxShadow =
                         '0 1px 3px rgba(0, 0, 0, 0.03)'
-                      e.currentTarget.style.background = '#ffffff'
+                      e.currentTarget.style.background = isDark ? '#212121' : '#ffffff'
                     }}
                   >
                     <div
@@ -1590,7 +1598,7 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                           style={{
                             fontSize: '16px',
                             fontWeight: 800,
-                            color: '#0f172a',
+                            color: isDark ? '#f5f5f5' : '#0f172a',
                             marginBottom: '10px',
                             lineHeight: '1.5',
                             letterSpacing: '-0.02em',
@@ -1601,7 +1609,7 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                         <div
                           style={{
                             fontSize: '14px',
-                            color: '#64748b',
+                            color: isDark ? '#a1a1aa' : '#64748b',
                             lineHeight: '1.7',
                           }}
                         >
@@ -1645,8 +1653,9 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                   width: '100px',
                   height: '100px',
                   borderRadius: '50%',
-                  background:
-                    'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                  background: isDark
+                    ? '#2a2a2a'
+                    : 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1658,7 +1667,7 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                   height="44"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#64748b"
+                  stroke={isDark ? '#a1a1aa' : '#64748b'}
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -1672,7 +1681,7 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                   style={{
                     fontSize: '18px',
                     fontWeight: 800,
-                    color: '#0f172a',
+                    color: isDark ? '#f5f5f5' : '#0f172a',
                     margin: '0 0 10px 0',
                     letterSpacing: '-0.02em',
                   }}
@@ -1682,7 +1691,7 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
                 <p
                   style={{
                     fontSize: '14px',
-                    color: '#64748b',
+                    color: isDark ? '#a1a1aa' : '#64748b',
                     lineHeight: '1.8',
                     margin: 0,
                   }}
@@ -1703,6 +1712,8 @@ function HistoricalEventsSection({ country }: { country: UnifiedCountry }) {
 // ============================================
 
 function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const getMockDataKey = (name: string): 'joseon' | 'goryeo' | null => {
     if (name.includes('조선')) return 'joseon'
     if (name.includes('고려')) return 'goryeo'
@@ -1717,11 +1728,11 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
       <div
         style={{
           padding: '48px',
-          background: '#fafafa',
+          background: isDark ? '#1d1d1d' : '#fafafa',
           minHeight: 'calc(100vh - 300px)',
         }}
       >
-        <EmptyState message="주요 인물 정보가 없습니다" />
+        <EmptyState message="주요 인물 정보가 없습니다" isDark={isDark} />
       </div>
     )
   }
@@ -1730,7 +1741,7 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
     <div
       style={{
         padding: '48px',
-        background: '#fafafa',
+        background: isDark ? '#1d1d1d' : '#fafafa',
         minHeight: 'calc(100vh - 300px)',
       }}
     >
@@ -1754,8 +1765,8 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
             }}
             whileHover={{ scale: 1.02, y: -4 }}
             style={{
-              background: '#ffffff',
-              border: '1px solid #f1f5f9',
+              background: isDark ? '#212121' : '#ffffff',
+              border: `1px solid ${isDark ? '#2a2a2a' : '#f1f5f9'}`,
               borderRadius: '14px',
               overflow: 'hidden',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -1763,11 +1774,11 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#cbd5e1'
+              e.currentTarget.style.borderColor = isDark ? '#3f3f46' : '#cbd5e1'
               e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.1)'
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#f1f5f9'
+              e.currentTarget.style.borderColor = isDark ? '#2a2a2a' : '#f1f5f9'
               e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'
             }}
           >
@@ -1778,8 +1789,9 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
                   width: '100%',
                   height: '240px',
                   overflow: 'hidden',
-                  background:
-                    'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                  background: isDark
+                    ? '#2a2a2a'
+                    : 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
                   position: 'relative',
                 }}
               >
@@ -1802,7 +1814,7 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
                   style={{
                     fontSize: '20px',
                     fontWeight: 800,
-                    color: '#0f172a',
+                    color: isDark ? '#f5f5f5' : '#0f172a',
                     margin: '0 0 6px 0',
                     letterSpacing: '-0.02em',
                   }}
@@ -1813,7 +1825,7 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
                   <p
                     style={{
                       fontSize: '13px',
-                      color: '#94a3b8',
+                      color: isDark ? '#71717a' : '#94a3b8',
                       margin: '0 0 8px 0',
                       fontWeight: 600,
                     }}
@@ -1866,7 +1878,7 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
                 style={{
                   fontSize: '14px',
                   lineHeight: '1.7',
-                  color: '#64748b',
+                  color: isDark ? '#a1a1aa' : '#64748b',
                   marginBottom: '18px',
                 }}
               >
@@ -1880,7 +1892,7 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
                     style={{
                       fontSize: '12px',
                       fontWeight: 700,
-                      color: '#94a3b8',
+                      color: isDark ? '#71717a' : '#94a3b8',
                       marginBottom: '10px',
                       textTransform: 'uppercase',
                       letterSpacing: '0.05em',
@@ -1905,9 +1917,9 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
                             alignItems: 'flex-start',
                             gap: '10px',
                             padding: '10px 12px',
-                            background: '#fafbfc',
+                            background: isDark ? '#1d1d1d' : '#fafbfc',
                             borderRadius: '8px',
-                            border: '1px solid #f1f5f9',
+                            border: `1px solid ${isDark ? '#2a2a2a' : '#f1f5f9'}`,
                           }}
                         >
                           <div
@@ -1923,7 +1935,7 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
                           <span
                             style={{
                               fontSize: '13px',
-                              color: '#475569',
+                              color: isDark ? '#d1d5db' : '#475569',
                               lineHeight: '1.6',
                               flex: 1,
                             }}
@@ -1948,6 +1960,8 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
 // ============================================
 
 function SuccessionSection({ country }: { country: UnifiedCountry }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const queryClient = useQueryClient()
   const [addOpen, setAddOpen] = useState(false)
   const [form, setForm] = useState<{
@@ -1998,8 +2012,8 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
 
   if (!isHistorical) {
     return (
-      <div style={{ padding: 48, background: '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
-        <EmptyState message="계승 관계는 역사적 국가에서만 조회·등록할 수 있습니다." />
+      <div style={{ padding: 48, background: isDark ? '#1d1d1d' : '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
+        <EmptyState message="계승 관계는 역사적 국가에서만 조회·등록할 수 있습니다." isDark={isDark} />
       </div>
     )
   }
@@ -2008,7 +2022,7 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
     <div
       style={{
         padding: '32px 48px 48px',
-        background: '#fafafa',
+        background: isDark ? '#1d1d1d' : '#fafafa',
         minHeight: 'calc(100vh - 300px)',
       }}
     >
@@ -2022,7 +2036,7 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
           gap: 16,
         }}
       >
-        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>
+        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: isDark ? '#f5f5f5' : '#0f172a' }}>
           계승·변천 관계
         </h3>
         <button
@@ -2044,11 +2058,12 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
       </div>
 
       {isLoading ? (
-        <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>불러오는 중…</div>
+        <div style={{ padding: 48, textAlign: 'center', color: isDark ? '#a1a1aa' : '#64748b' }}>불러오는 중…</div>
       ) : transitions.length === 0 ? (
         <EmptyState
           message="등록된 계승·변천 관계가 없습니다"
           description="전임 국가 → 후임 국가, 이벤트 유형(계승·정복 등), 날짜를 등록할 수 있습니다."
+          isDark={isDark}
         />
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -2059,6 +2074,7 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
               currentCountryName={country.name}
               onDelete={() => deleteMutation.mutate(t.id)}
               isDeleting={deleteMutation.isPending}
+              isDark={isDark}
             />
           ))}
         </ul>
@@ -2079,9 +2095,9 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
         >
           <div
             style={{
-              background: '#fff',
+              background: isDark ? '#212121' : '#fff',
               borderRadius: 20,
-              border: '1px solid #e5e7eb',
+              border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`,
               boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
               padding: 24,
               width: '90%',
@@ -2089,14 +2105,14 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: '#111827' }}>
+            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: isDark ? '#f5f5f5' : '#111827' }}>
               계승·변천 추가
             </h4>
-            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b' }}>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: isDark ? '#a1a1aa' : '#64748b' }}>
               전임: <strong>{country.name}</strong> → 후임 국가 선택
             </p>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>
                 후임 국가
               </label>
               <select
@@ -2105,10 +2121,11 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
                 style={{
                   width: '100%',
                   padding: '12px 16px',
-                  border: '1px solid #e5e7eb',
+                  border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`,
                   borderRadius: 12,
                   fontSize: 14,
-                  color: '#111827',
+                  color: isDark ? '#f5f5f5' : '#111827',
+                  background: isDark ? '#1d1d1d' : '#fff',
                 }}
               >
                 <option value="">선택</option>
@@ -2122,7 +2139,7 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
               </select>
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>
                 유형
               </label>
               <select
@@ -2131,10 +2148,11 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
                 style={{
                   width: '100%',
                   padding: '12px 16px',
-                  border: '1px solid #e5e7eb',
+                  border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`,
                   borderRadius: 12,
                   fontSize: 14,
-                  color: '#111827',
+                  color: isDark ? '#f5f5f5' : '#111827',
+                  background: isDark ? '#1d1d1d' : '#fff',
                 }}
               >
                 {(Object.keys(TRANSITION_EVENT_LABELS) as TransitionEventType[]).map((k) => (
@@ -2144,7 +2162,7 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
                 ))}
               </select>
             </div>
-            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: isDark ? '#a1a1aa' : '#6b7280', marginBottom: 16 }}>
               변천 날짜는 후임 국가의 존속 시작 시점을 참조합니다.
             </div>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
@@ -2153,12 +2171,12 @@ function SuccessionSection({ country }: { country: UnifiedCountry }) {
                 onClick={() => setAddOpen(false)}
                 style={{
                   padding: '12px 24px',
-                  border: '1px solid #e5e7eb',
+                  border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`,
                   borderRadius: 12,
                   fontSize: 14,
                   fontWeight: 600,
-                  color: '#64748b',
-                  background: '#fff',
+                  color: isDark ? '#a1a1aa' : '#64748b',
+                  background: isDark ? '#212121' : '#fff',
                   cursor: 'pointer',
                 }}
               >
@@ -2210,6 +2228,8 @@ const RELATION_TYPE_LABELS: Record<HistoricalRelationType, string> = {
 }
 
 function MembershipSection({ country }: { country: UnifiedCountry }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const queryClient = useQueryClient()
   const [addOpen, setAddOpen] = useState(false)
   const [editingMembership, setEditingMembership] = useState<HistoricalCountryMembershipDto | null>(null)
@@ -2293,35 +2313,35 @@ function MembershipSection({ country }: { country: UnifiedCountry }) {
 
   if (!isHistorical) {
     return (
-      <div style={{ padding: 48, background: '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
-        <EmptyState message="소속·구성 관계는 역사적 국가에서만 조회·등록할 수 있습니다." />
+      <div style={{ padding: 48, background: isDark ? '#1d1d1d' : '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
+        <EmptyState message="소속·구성 관계는 역사적 국가에서만 조회·등록할 수 있습니다." isDark={isDark} />
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '32px 48px 48px', background: '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
+    <div style={{ padding: '32px 48px 48px', background: isDark ? '#1d1d1d' : '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
-        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>소속·구성 관계</h3>
+        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: isDark ? '#f5f5f5' : '#0f172a' }}>소속·구성 관계</h3>
         <button type="button" onClick={() => setAddOpen(true)} style={{ padding: '10px 20px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
           소속 추가
         </button>
       </div>
-      <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b' }}>
+      <p style={{ margin: '0 0 16px', fontSize: 13, color: isDark ? '#a1a1aa' : '#64748b' }}>
         신성로마제국–제후국, 종주국–속국 등 상위·하위 관계를 등록합니다.
       </p>
       {isLoading ? (
-        <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>불러오는 중…</div>
+        <div style={{ padding: 48, textAlign: 'center', color: isDark ? '#a1a1aa' : '#64748b' }}>불러오는 중…</div>
       ) : memberships.length === 0 ? (
-        <EmptyState message="등록된 소속·구성 관계가 없습니다" description="상위 국가–하위 국가, 역할(속국·연방 구성원 등)을 등록할 수 있습니다." />
+        <EmptyState message="등록된 소속·구성 관계가 없습니다" description="상위 국가–하위 국가, 역할(속국·연방 구성원 등)을 등록할 수 있습니다." isDark={isDark} />
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {memberships.map((m) => (
-            <li key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14 }}>
-              <span style={{ fontWeight: 600, color: '#0f172a' }}>{m.parentName ?? '(상위)'}</span>
-              <span style={{ color: '#94a3b8' }}>—</span>
-              <span style={{ fontWeight: 600, color: '#0f172a' }}>{m.memberName ?? '(하위)'}</span>
-              <span style={{ padding: '4px 10px', background: '#f1f5f9', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#4f46e5' }}>
+            <li key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', background: isDark ? '#212121' : '#fff', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 14 }}>
+              <span style={{ fontWeight: 600, color: isDark ? '#f5f5f5' : '#0f172a' }}>{m.parentName ?? '(상위)'}</span>
+              <span style={{ color: isDark ? '#71717a' : '#94a3b8' }}>—</span>
+              <span style={{ fontWeight: 600, color: isDark ? '#f5f5f5' : '#0f172a' }}>{m.memberName ?? '(하위)'}</span>
+              <span style={{ padding: '4px 10px', background: isDark ? '#2a2a2a' : '#f1f5f9', borderRadius: 8, fontSize: 12, fontWeight: 600, color: isDark ? '#a5b4fc' : '#4f46e5' }}>
                 {MEMBERSHIP_ROLE_LABELS[m.role] ?? m.role}
               </span>
               {m.isLeadingMember && (
@@ -2341,14 +2361,14 @@ function MembershipSection({ country }: { country: UnifiedCountry }) {
       )}
       {editingMembership && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setEditingMembership(null)}>
-          <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e5e7eb', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 24, width: '90%', maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
-            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: '#111827' }}>소속·구성 수정</h4>
-            <p style={{ margin: '0 0 16px', fontSize: 14, color: '#64748b' }}>
+          <div style={{ background: isDark ? '#212121' : '#fff', borderRadius: 20, border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 24, width: '90%', maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: isDark ? '#f5f5f5' : '#111827' }}>소속·구성 수정</h4>
+            <p style={{ margin: '0 0 16px', fontSize: 14, color: isDark ? '#a1a1aa' : '#64748b' }}>
               {editingMembership.parentName ?? '(상위)'} — {editingMembership.memberName ?? '(하위)'}
             </p>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>역할</label>
-              <select value={editForm.role} onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value as HistoricalMembershipRole }))} style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827' }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>역할</label>
+              <select value={editForm.role} onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value as HistoricalMembershipRole }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
                 {(Object.keys(MEMBERSHIP_ROLE_LABELS) as HistoricalMembershipRole[]).map((k) => (
                   <option key={k} value={k}>{MEMBERSHIP_ROLE_LABELS[k]}</option>
                 ))}
@@ -2356,14 +2376,14 @@ function MembershipSection({ country }: { country: UnifiedCountry }) {
             </div>
             {(editForm.role === 'CONFEDERATION_MEMBER' || editForm.role === 'UNION') && (
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: '#374151', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: isDark ? '#d1d5db' : '#374151', cursor: 'pointer' }}>
                   <input type="checkbox" checked={editForm.isLeadingMember} onChange={(e) => setEditForm((f) => ({ ...f, isLeadingMember: e.target.checked }))} />
                   주축(주도국)
                 </label>
               </div>
             )}
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setEditingMembership(null)} style={{ padding: '12px 24px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#64748b', background: '#fff', cursor: 'pointer' }}>취소</button>
+              <button type="button" onClick={() => setEditingMembership(null)} style={{ padding: '12px 24px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, fontWeight: 600, color: isDark ? '#a1a1aa' : '#64748b', background: isDark ? '#212121' : '#fff', cursor: 'pointer' }}>취소</button>
               <button type="button" onClick={handleEditSubmit} disabled={updateMutation.isPending} style={{ padding: '12px 24px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#fff', background: '#6366f1', cursor: 'pointer' }}>
                 {updateMutation.isPending ? '저장 중…' : '저장'}
               </button>
@@ -2373,18 +2393,18 @@ function MembershipSection({ country }: { country: UnifiedCountry }) {
       )}
       {addOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setAddOpen(false)}>
-          <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e5e7eb', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 24, width: '90%', maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
-            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: '#111827' }}>소속·구성 추가</h4>
+          <div style={{ background: isDark ? '#212121' : '#fff', borderRadius: 20, border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 24, width: '90%', maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: isDark ? '#f5f5f5' : '#111827' }}>소속·구성 추가</h4>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>이 국가의 위치</label>
-              <select value={form.asParent ? 'parent' : 'member'} onChange={(e) => setForm((f) => ({ ...f, asParent: e.target.value === 'parent' }))} style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827' }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>이 국가의 위치</label>
+              <select value={form.asParent ? 'parent' : 'member'} onChange={(e) => setForm((f) => ({ ...f, asParent: e.target.value === 'parent' }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
                 <option value="parent">상위 (이 국가가 포함하는 하위 국가 추가)</option>
                 <option value="member">하위 (이 국가가 소속된 상위 국가 추가)</option>
               </select>
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>{form.asParent ? '하위 국가' : '상위 국가'}</label>
-              <select value={form.otherCountryId} onChange={(e) => setForm((f) => ({ ...f, otherCountryId: e.target.value }))} style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827' }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>{form.asParent ? '하위 국가' : '상위 국가'}</label>
+              <select value={form.otherCountryId} onChange={(e) => setForm((f) => ({ ...f, otherCountryId: e.target.value }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
                 <option value="">선택</option>
                 {historicalCountries.filter((c) => c.id !== historicalCountryId).map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -2392,8 +2412,8 @@ function MembershipSection({ country }: { country: UnifiedCountry }) {
               </select>
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>역할</label>
-              <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as HistoricalMembershipRole }))} style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827' }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>역할</label>
+              <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as HistoricalMembershipRole }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
                 {(Object.keys(MEMBERSHIP_ROLE_LABELS) as HistoricalMembershipRole[]).map((k) => (
                   <option key={k} value={k}>{MEMBERSHIP_ROLE_LABELS[k]}</option>
                 ))}
@@ -2401,15 +2421,15 @@ function MembershipSection({ country }: { country: UnifiedCountry }) {
             </div>
             {(form.role === 'CONFEDERATION_MEMBER' || form.role === 'UNION') && (
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: '#374151', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: isDark ? '#d1d5db' : '#374151', cursor: 'pointer' }}>
                   <input type="checkbox" checked={form.isLeadingMember} onChange={(e) => setForm((f) => ({ ...f, isLeadingMember: e.target.checked }))} />
                   주축(주도국)
                 </label>
-                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>연방·연합 내에서 주도적 역할을 한 구성원 (예: 독일 제국 내 프로이센)</p>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: isDark ? '#a1a1aa' : '#64748b' }}>연방·연합 내에서 주도적 역할을 한 구성원 (예: 독일 제국 내 프로이센)</p>
               </div>
             )}
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setAddOpen(false)} style={{ padding: '12px 24px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#64748b', background: '#fff', cursor: 'pointer' }}>취소</button>
+              <button type="button" onClick={() => setAddOpen(false)} style={{ padding: '12px 24px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, fontWeight: 600, color: isDark ? '#a1a1aa' : '#64748b', background: isDark ? '#212121' : '#fff', cursor: 'pointer' }}>취소</button>
               <button type="button" onClick={handleAddSubmit} disabled={!form.otherCountryId || createMutation.isPending} style={{ padding: '12px 24px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#fff', background: '#6366f1', cursor: 'pointer' }}>
                 {createMutation.isPending ? '등록 중…' : '등록'}
               </button>
@@ -2422,6 +2442,8 @@ function MembershipSection({ country }: { country: UnifiedCountry }) {
 }
 
 function RelationSection({ country }: { country: UnifiedCountry }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const queryClient = useQueryClient()
   const [addOpen, setAddOpen] = useState(false)
   const [form, setForm] = useState<{
@@ -2473,36 +2495,36 @@ function RelationSection({ country }: { country: UnifiedCountry }) {
 
   if (!isHistorical) {
     return (
-      <div style={{ padding: 48, background: '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
-        <EmptyState message="국가 관계는 역사적 국가에서만 조회·등록할 수 있습니다." />
+      <div style={{ padding: 48, background: isDark ? '#1d1d1d' : '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
+        <EmptyState message="국가 관계는 역사적 국가에서만 조회·등록할 수 있습니다." isDark={isDark} />
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '32px 48px 48px', background: '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
+    <div style={{ padding: '32px 48px 48px', background: isDark ? '#1d1d1d' : '#fafafa', minHeight: 'calc(100vh - 300px)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
-        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>국가 관계</h3>
+        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: isDark ? '#f5f5f5' : '#0f172a' }}>국가 관계</h3>
         <button type="button" onClick={() => setAddOpen(true)} style={{ padding: '10px 20px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
           관계 추가
         </button>
       </div>
-      <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748b' }}>
+      <p style={{ margin: '0 0 16px', fontSize: 13, color: isDark ? '#a1a1aa' : '#64748b' }}>
         한·중 조공·책봉, 동맹, 전쟁 등 수평적 관계를 등록합니다.
       </p>
       {isLoading ? (
-        <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>불러오는 중…</div>
+        <div style={{ padding: 48, textAlign: 'center', color: isDark ? '#a1a1aa' : '#64748b' }}>불러오는 중…</div>
       ) : relations.length === 0 ? (
-        <EmptyState message="등록된 국가 관계가 없습니다" description="조공·책봉, 동맹, 전쟁, 종주국-속국, 동군연합 등을 등록할 수 있습니다." />
+        <EmptyState message="등록된 국가 관계가 없습니다" description="조공·책봉, 동맹, 전쟁, 종주국-속국, 동군연합 등을 등록할 수 있습니다." isDark={isDark} />
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {relations.map((r) => (
-            <li key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14 }}>
-              <span style={{ fontWeight: 600, color: '#0f172a' }}>{r.subjectCountryName ?? '(주체)'}</span>
-              <span style={{ color: '#94a3b8' }}>—</span>
-              <span style={{ padding: '4px 10px', background: '#f1f5f9', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#4f46e5' }}>{RELATION_TYPE_LABELS[r.relationType] ?? r.relationType}</span>
-              <span style={{ color: '#94a3b8' }}>—</span>
-              <span style={{ fontWeight: 600, color: '#0f172a' }}>{r.objectCountryName ?? '(대상)'}</span>
+            <li key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 20px', background: isDark ? '#212121' : '#fff', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 14 }}>
+              <span style={{ fontWeight: 600, color: isDark ? '#f5f5f5' : '#0f172a' }}>{r.subjectCountryName ?? '(주체)'}</span>
+              <span style={{ color: isDark ? '#71717a' : '#94a3b8' }}>—</span>
+              <span style={{ padding: '4px 10px', background: isDark ? '#2a2a2a' : '#f1f5f9', borderRadius: 8, fontSize: 12, fontWeight: 600, color: isDark ? '#a5b4fc' : '#4f46e5' }}>{RELATION_TYPE_LABELS[r.relationType] ?? r.relationType}</span>
+              <span style={{ color: isDark ? '#71717a' : '#94a3b8' }}>—</span>
+              <span style={{ fontWeight: 600, color: isDark ? '#f5f5f5' : '#0f172a' }}>{r.objectCountryName ?? '(대상)'}</span>
               <button type="button" onClick={() => deleteMutation.mutate(r.id)} disabled={deleteMutation.isPending} style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: 12, color: '#dc2626', background: 'transparent', border: '1px solid #fecaca', borderRadius: 8, cursor: 'pointer' }}>
                 삭제
               </button>
@@ -2512,18 +2534,18 @@ function RelationSection({ country }: { country: UnifiedCountry }) {
       )}
       {addOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setAddOpen(false)}>
-          <div style={{ background: '#fff', borderRadius: 20, border: '1px solid #e5e7eb', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 24, width: '90%', maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
-            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: '#111827' }}>국가 관계 추가</h4>
+          <div style={{ background: isDark ? '#212121' : '#fff', borderRadius: 20, border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, boxShadow: '0 4px 20px rgba(0,0,0,0.08)', padding: 24, width: '90%', maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+            <h4 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: isDark ? '#f5f5f5' : '#111827' }}>국가 관계 추가</h4>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>이 국가의 위치</label>
-              <select value={form.asSubject ? 'subject' : 'object'} onChange={(e) => setForm((f) => ({ ...f, asSubject: e.target.value === 'subject' }))} style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827' }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>이 국가의 위치</label>
+              <select value={form.asSubject ? 'subject' : 'object'} onChange={(e) => setForm((f) => ({ ...f, asSubject: e.target.value === 'subject' }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
                 <option value="subject">주체 (이 국가 → 상대 국가)</option>
                 <option value="object">대상 (상대 국가 → 이 국가)</option>
               </select>
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>상대 국가</label>
-              <select value={form.otherCountryId} onChange={(e) => setForm((f) => ({ ...f, otherCountryId: e.target.value }))} style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827' }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>상대 국가</label>
+              <select value={form.otherCountryId} onChange={(e) => setForm((f) => ({ ...f, otherCountryId: e.target.value }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
                 <option value="">선택</option>
                 {historicalCountries.filter((c) => c.id !== historicalCountryId).map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -2531,15 +2553,15 @@ function RelationSection({ country }: { country: UnifiedCountry }) {
               </select>
             </div>
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}>관계 유형</label>
-              <select value={form.relationType} onChange={(e) => setForm((f) => ({ ...f, relationType: e.target.value as HistoricalRelationType }))} style={{ width: '100%', padding: '12px 16px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, color: '#111827' }}>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151' }}>관계 유형</label>
+              <select value={form.relationType} onChange={(e) => setForm((f) => ({ ...f, relationType: e.target.value as HistoricalRelationType }))} style={{ width: '100%', padding: '12px 16px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, color: isDark ? '#f5f5f5' : '#111827', background: isDark ? '#1d1d1d' : '#fff' }}>
                 {(Object.keys(RELATION_TYPE_LABELS) as HistoricalRelationType[]).map((k) => (
                   <option key={k} value={k}>{RELATION_TYPE_LABELS[k]}</option>
                 ))}
               </select>
             </div>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setAddOpen(false)} style={{ padding: '12px 24px', border: '1px solid #e5e7eb', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#64748b', background: '#fff', cursor: 'pointer' }}>취소</button>
+              <button type="button" onClick={() => setAddOpen(false)} style={{ padding: '12px 24px', border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`, borderRadius: 12, fontSize: 14, fontWeight: 600, color: isDark ? '#a1a1aa' : '#64748b', background: isDark ? '#212121' : '#fff', cursor: 'pointer' }}>취소</button>
               <button type="button" onClick={handleAddSubmit} disabled={!form.otherCountryId || createMutation.isPending} style={{ padding: '12px 24px', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 600, color: '#fff', background: '#6366f1', cursor: 'pointer' }}>
                 {createMutation.isPending ? '등록 중…' : '등록'}
               </button>
@@ -2556,11 +2578,13 @@ function SuccessionRow({
   currentCountryName,
   onDelete,
   isDeleting,
+  isDark,
 }: {
   transition: HistoricalCountryTransitionDto
   currentCountryName: string
   onDelete: () => void
   isDeleting: boolean
+  isDark: boolean
 }) {
   const fromName = transition.predecessorName ?? '(전임)'
   const toName = transition.successorName ?? '(후임)'
@@ -2574,27 +2598,27 @@ function SuccessionRow({
         alignItems: 'center',
         gap: 16,
         padding: '16px 20px',
-        background: '#fff',
-        border: '1px solid #e5e7eb',
+        background: isDark ? '#212121' : '#fff',
+        border: `1px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`,
         borderRadius: 14,
       }}
     >
-      <span style={{ fontWeight: 600, color: '#0f172a' }}>{fromName}</span>
-      <span style={{ color: '#94a3b8' }}>→</span>
-      <span style={{ fontWeight: 600, color: '#0f172a' }}>{toName}</span>
+      <span style={{ fontWeight: 600, color: isDark ? '#f5f5f5' : '#0f172a' }}>{fromName}</span>
+      <span style={{ color: isDark ? '#71717a' : '#94a3b8' }}>→</span>
+      <span style={{ fontWeight: 600, color: isDark ? '#f5f5f5' : '#0f172a' }}>{toName}</span>
       <span
         style={{
           padding: '4px 10px',
-          background: '#f1f5f9',
+          background: isDark ? '#2a2a2a' : '#f1f5f9',
           borderRadius: 8,
           fontSize: 12,
           fontWeight: 600,
-          color: '#4f46e5',
+          color: isDark ? '#a5b4fc' : '#4f46e5',
         }}
       >
         {eventLabel}
       </span>
-      <span style={{ fontSize: 13, color: '#64748b' }}>{dateStr}</span>
+      <span style={{ fontSize: 13, color: isDark ? '#a1a1aa' : '#64748b' }}>{dateStr}</span>
       <button
         type="button"
         onClick={onDelete}
@@ -2667,17 +2691,20 @@ function HistoricalRegionsSection({ country }: { country: UnifiedCountry }) {
 }
 
 function TerritorySection({ country }: { country: UnifiedCountry }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   return (
     <div
       style={{
         padding: '48px',
-        background: '#fafafa',
+        background: isDark ? '#1d1d1d' : '#fafafa',
         minHeight: 'calc(100vh - 300px)',
       }}
     >
       <EmptyState
         message="영토 변천 정보가 준비 중입니다"
         description="역사적 지도와 영토 확장/축소 정보가 표시됩니다"
+        isDark={isDark}
       />
     </div>
   )
@@ -2688,6 +2715,8 @@ function TerritorySection({ country }: { country: UnifiedCountry }) {
 // ============================================
 
 function CultureSection({ country }: { country: UnifiedCountry }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const getMockDataKey = (name: string): 'joseon' | 'goryeo' | null => {
     if (name.includes('조선')) return 'joseon'
     if (name.includes('고려')) return 'goryeo'
@@ -2702,11 +2731,11 @@ function CultureSection({ country }: { country: UnifiedCountry }) {
       <div
         style={{
           padding: '48px',
-          background: '#fafafa',
+          background: isDark ? '#1d1d1d' : '#fafafa',
           minHeight: 'calc(100vh - 300px)',
         }}
       >
-        <EmptyState message="문화 유산 정보가 없습니다" />
+        <EmptyState message="문화 유산 정보가 없습니다" isDark={isDark} />
       </div>
     )
   }
@@ -2715,7 +2744,7 @@ function CultureSection({ country }: { country: UnifiedCountry }) {
     <div
       style={{
         padding: '48px',
-        background: '#fafafa',
+        background: isDark ? '#1d1d1d' : '#fafafa',
         minHeight: 'calc(100vh - 300px)',
       }}
     >
@@ -2739,8 +2768,8 @@ function CultureSection({ country }: { country: UnifiedCountry }) {
             }}
             whileHover={{ scale: 1.02, y: -4 }}
             style={{
-              background: '#ffffff',
-              border: '1px solid #f1f5f9',
+              background: isDark ? '#212121' : '#ffffff',
+              border: `1px solid ${isDark ? '#2a2a2a' : '#f1f5f9'}`,
               borderRadius: '14px',
               overflow: 'hidden',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -2748,11 +2777,11 @@ function CultureSection({ country }: { country: UnifiedCountry }) {
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#cbd5e1'
+              e.currentTarget.style.borderColor = isDark ? '#3f3f46' : '#cbd5e1'
               e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.1)'
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#f1f5f9'
+              e.currentTarget.style.borderColor = isDark ? '#2a2a2a' : '#f1f5f9'
               e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'
             }}
           >
@@ -2763,8 +2792,9 @@ function CultureSection({ country }: { country: UnifiedCountry }) {
                   width: '100%',
                   height: '220px',
                   overflow: 'hidden',
-                  background:
-                    'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                  background: isDark
+                    ? '#2a2a2a'
+                    : 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
                   position: 'relative',
                 }}
               >
@@ -2805,7 +2835,7 @@ function CultureSection({ country }: { country: UnifiedCountry }) {
                   style={{
                     fontSize: '18px',
                     fontWeight: 800,
-                    color: '#0f172a',
+                    color: isDark ? '#f5f5f5' : '#0f172a',
                     margin: '0 0 6px 0',
                     letterSpacing: '-0.02em',
                   }}
@@ -2831,7 +2861,7 @@ function CultureSection({ country }: { country: UnifiedCountry }) {
                 style={{
                   fontSize: '14px',
                   lineHeight: '1.7',
-                  color: '#64748b',
+                  color: isDark ? '#a1a1aa' : '#64748b',
                   marginBottom: '16px',
                 }}
               >
@@ -2886,9 +2916,11 @@ function CultureSection({ country }: { country: UnifiedCountry }) {
 function EmptyState({
   message,
   description,
+  isDark = false,
 }: {
   message: string
   description?: string
+  isDark?: boolean
 }) {
   return (
     <div
@@ -2898,8 +2930,8 @@ function EmptyState({
         alignItems: 'center',
         gap: '20px',
         padding: '80px 40px',
-        background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-        border: '1px solid #e2e8f0',
+        background: isDark ? '#212121' : 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+        border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
         borderRadius: '14px',
         textAlign: 'center',
       }}
@@ -2909,7 +2941,7 @@ function EmptyState({
           width: '100px',
           height: '100px',
           borderRadius: '50%',
-          background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+          background: isDark ? '#2a2a2a' : 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -2921,7 +2953,7 @@ function EmptyState({
           height="44"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#64748b"
+          stroke={isDark ? '#a1a1aa' : '#64748b'}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -2936,7 +2968,7 @@ function EmptyState({
           style={{
             fontSize: '18px',
             fontWeight: 800,
-            color: '#0f172a',
+            color: isDark ? '#f5f5f5' : '#0f172a',
             marginBottom: '8px',
             letterSpacing: '-0.02em',
           }}
@@ -2944,7 +2976,7 @@ function EmptyState({
           {message}
         </div>
         {description && (
-          <div style={{ fontSize: '14px', color: '#64748b' }}>
+          <div style={{ fontSize: '14px', color: isDark ? '#a1a1aa' : '#64748b' }}>
             {description}
           </div>
         )}
@@ -2957,17 +2989,19 @@ function InfoCard({
   label,
   value,
   color,
+  isDark = false,
 }: {
   label: string
   value: string
   color: string
+  isDark?: boolean
 }) {
   return (
     <div
       style={{
         padding: '24px',
-        background: '#ffffff',
-        border: '1px solid #f1f5f9',
+        background: isDark ? '#212121' : '#ffffff',
+        border: `1px solid ${isDark ? '#2a2a2a' : '#f1f5f9'}`,
         borderRadius: '14px',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         cursor: 'pointer',
@@ -2978,12 +3012,12 @@ function InfoCard({
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = `0 8px 24px ${color}20`
         e.currentTarget.style.transform = 'translateY(-2px)'
-        e.currentTarget.style.borderColor = '#cbd5e1'
+        e.currentTarget.style.borderColor = isDark ? '#3f3f46' : '#cbd5e1'
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'
         e.currentTarget.style.transform = 'translateY(0)'
-        e.currentTarget.style.borderColor = '#f1f5f9'
+        e.currentTarget.style.borderColor = isDark ? '#2a2a2a' : '#f1f5f9'
       }}
     >
       {/* 좌측 컬러 라인 */}
@@ -3002,7 +3036,7 @@ function InfoCard({
         <div
           style={{
             fontSize: '12px',
-            color: '#94a3b8',
+            color: isDark ? '#71717a' : '#94a3b8',
             marginBottom: '8px',
             fontWeight: 700,
             textTransform: 'uppercase',
@@ -3015,7 +3049,7 @@ function InfoCard({
           style={{
             fontSize: '22px',
             fontWeight: 800,
-            color: '#0f172a',
+            color: isDark ? '#f5f5f5' : '#0f172a',
             letterSpacing: '-0.02em',
           }}
         >
@@ -3038,6 +3072,7 @@ interface EventDetailViewProps {
   ) => void
   onBack: () => void
   colorSet: { bg: string; text: string; border: string }
+  isDark: boolean
 }
 
 function EventDetailView({
@@ -3046,6 +3081,7 @@ function EventDetailView({
   onTabChange,
   onBack,
   colorSet,
+  isDark,
 }: EventDetailViewProps) {
   const tabs = [
     { id: 'overview' as const, label: '개요' },
@@ -3062,7 +3098,7 @@ function EventDetailView({
     <div
       style={{
         padding: '48px',
-        background: '#fafafa',
+        background: isDark ? '#1d1d1d' : '#fafafa',
         minHeight: 'calc(100vh - 300px)',
       }}
     >
@@ -3071,10 +3107,10 @@ function EventDetailView({
         onClick={onBack}
         style={{
           padding: '10px 20px',
-          background: '#fff',
-          border: '2px solid #e5e7eb',
+          background: isDark ? '#212121' : '#fff',
+          border: `2px solid ${isDark ? '#2a2a2a' : '#e5e7eb'}`,
           borderRadius: '10px',
-          color: '#64748b',
+          color: isDark ? '#a1a1aa' : '#64748b',
           cursor: 'pointer',
           fontSize: '13px',
           fontWeight: 700,
@@ -3090,7 +3126,7 @@ function EventDetailView({
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = 'translateX(0)'
-          e.currentTarget.style.borderColor = '#e5e7eb'
+          e.currentTarget.style.borderColor = isDark ? '#2a2a2a' : '#e5e7eb'
         }}
       >
         <svg
@@ -3264,8 +3300,8 @@ function EventDetailView({
       {/* 탭 네비게이션 */}
       <div
         style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
+          background: isDark ? '#212121' : '#ffffff',
+          border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
           borderRadius: '14px',
           padding: '8px',
           marginBottom: '24px',
@@ -3284,7 +3320,7 @@ function EventDetailView({
                 activeTab === tab.id
                   ? `linear-gradient(135deg, ${colorSet.bg} 0%, ${colorSet.bg}dd 100%)`
                   : 'transparent',
-              color: activeTab === tab.id ? colorSet.text : '#64748b',
+              color: activeTab === tab.id ? colorSet.text : isDark ? '#a1a1aa' : '#64748b',
               border:
                 activeTab === tab.id
                   ? `2px solid ${colorSet.border}`
@@ -3297,7 +3333,7 @@ function EventDetailView({
             }}
             onMouseEnter={(e) => {
               if (activeTab !== tab.id) {
-                e.currentTarget.style.background = '#f1f5f9'
+                e.currentTarget.style.background = isDark ? '#2a2a2a' : '#f1f5f9'
               }
             }}
             onMouseLeave={(e) => {
@@ -3321,19 +3357,19 @@ function EventDetailView({
           transition={{ duration: 0.2 }}
         >
           {activeTab === 'overview' && (
-            <EventOverviewTab event={event} colorSet={colorSet} />
+            <EventOverviewTab event={event} colorSet={colorSet} isDark={isDark} />
           )}
           {activeTab === 'subevents' && (
-            <SubEventsTab subEvents={event.subEvents} colorSet={colorSet} />
+            <SubEventsTab subEvents={event.subEvents} colorSet={colorSet} isDark={isDark} />
           )}
           {activeTab === 'persons' && (
-            <PersonsTab persons={event.persons} colorSet={colorSet} />
+            <PersonsTab persons={event.persons} colorSet={colorSet} isDark={isDark} />
           )}
           {activeTab === 'military' && (
-            <MilitaryTab units={event.militaryUnits} colorSet={colorSet} />
+            <MilitaryTab units={event.militaryUnits} colorSet={colorSet} isDark={isDark} />
           )}
           {activeTab === 'strategy' && (
-            <StrategyTab strategies={event.strategies} colorSet={colorSet} />
+            <StrategyTab strategies={event.strategies} colorSet={colorSet} isDark={isDark} />
           )}
         </motion.div>
       </AnimatePresence>
@@ -3345,19 +3381,21 @@ function EventDetailView({
 function EventOverviewTab({
   event,
   colorSet,
+  isDark,
 }: {
   event: EventDetailData
   colorSet: { bg: string; text: string; border: string }
+  isDark: boolean
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* 배경 */}
-      <Section title="배경" colorSet={colorSet}>
+      <Section title="배경" colorSet={colorSet} isDark={isDark}>
         <p
           style={{
             fontSize: '15px',
             lineHeight: '1.8',
-            color: '#475569',
+            color: isDark ? '#d1d5db' : '#475569',
             margin: 0,
           }}
         >
@@ -3366,12 +3404,12 @@ function EventOverviewTab({
       </Section>
 
       {/* 설명 */}
-      <Section title="경과" colorSet={colorSet}>
+      <Section title="경과" colorSet={colorSet} isDark={isDark}>
         <p
           style={{
             fontSize: '15px',
             lineHeight: '1.8',
-            color: '#475569',
+            color: isDark ? '#d1d5db' : '#475569',
             margin: 0,
           }}
         >
@@ -3380,12 +3418,12 @@ function EventOverviewTab({
       </Section>
 
       {/* 결과 */}
-      <Section title="결과" colorSet={colorSet}>
+      <Section title="결과" colorSet={colorSet} isDark={isDark}>
         <p
           style={{
             fontSize: '15px',
             lineHeight: '1.8',
-            color: '#475569',
+            color: isDark ? '#d1d5db' : '#475569',
             margin: 0,
           }}
         >
@@ -3394,12 +3432,12 @@ function EventOverviewTab({
       </Section>
 
       {/* 의의 */}
-      <Section title="역사적 의의" colorSet={colorSet}>
+      <Section title="역사적 의의" colorSet={colorSet} isDark={isDark}>
         <p
           style={{
             fontSize: '15px',
             lineHeight: '1.8',
-            color: '#475569',
+            color: isDark ? '#d1d5db' : '#475569',
             margin: 0,
           }}
         >
@@ -3408,7 +3446,7 @@ function EventOverviewTab({
       </Section>
 
       {/* 교전 세력 */}
-      <Section title="교전 세력" colorSet={colorSet}>
+      <Section title="교전 세력" colorSet={colorSet} isDark={isDark}>
         <div
           style={{
             display: 'grid',
@@ -3421,8 +3459,8 @@ function EventOverviewTab({
               key={index}
               style={{
                 padding: '24px',
-                background: '#fafbfc',
-                border: '1px solid #e2e8f0',
+                background: isDark ? '#1d1d1d' : '#fafbfc',
+                border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
                 borderRadius: '12px',
               }}
             >
@@ -3430,7 +3468,7 @@ function EventOverviewTab({
                 style={{
                   fontSize: '16px',
                   fontWeight: 700,
-                  color: '#0f172a',
+                  color: isDark ? '#f5f5f5' : '#0f172a',
                   marginBottom: '16px',
                 }}
               >
@@ -3440,14 +3478,14 @@ function EventOverviewTab({
                 <div
                   style={{
                     fontSize: '12px',
-                    color: '#94a3b8',
+                    color: isDark ? '#71717a' : '#94a3b8',
                     marginBottom: '6px',
                     fontWeight: 600,
                   }}
                 >
                   참전 국가
                 </div>
-                <div style={{ fontSize: '14px', color: '#475569' }}>
+                <div style={{ fontSize: '14px', color: isDark ? '#d1d5db' : '#475569' }}>
                   {side.countries.join(', ')}
                 </div>
               </div>
@@ -3455,14 +3493,14 @@ function EventOverviewTab({
                 <div
                   style={{
                     fontSize: '12px',
-                    color: '#94a3b8',
+                    color: isDark ? '#71717a' : '#94a3b8',
                     marginBottom: '6px',
                     fontWeight: 600,
                   }}
                 >
                   주요 지휘관
                 </div>
-                <div style={{ fontSize: '14px', color: '#475569' }}>
+                <div style={{ fontSize: '14px', color: isDark ? '#d1d5db' : '#475569' }}>
                   {side.leaders.join(', ')}
                 </div>
               </div>
@@ -3473,7 +3511,7 @@ function EventOverviewTab({
 
       {/* 통계 */}
       {event.statistics.totalCasualties && (
-        <Section title="전쟁 통계" colorSet={colorSet}>
+        <Section title="전쟁 통계" colorSet={colorSet} isDark={isDark}>
           <div
             style={{
               display: 'grid',
@@ -3484,11 +3522,13 @@ function EventOverviewTab({
             <StatCard
               label="총 인명 피해"
               value={event.statistics.totalCasualties}
+              isDark={isDark}
             />
             {event.statistics.territoriesChanged && (
               <StatCard
                 label="영토 변화"
                 value={event.statistics.territoriesChanged}
+                isDark={isDark}
               />
             )}
             {event.statistics.economicImpact && (
@@ -3508,9 +3548,11 @@ function EventOverviewTab({
 function SubEventsTab({
   subEvents,
   colorSet,
+  isDark,
 }: {
   subEvents: SubEvent[]
   colorSet: { bg: string; text: string; border: string }
+  isDark: boolean
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -3521,8 +3563,8 @@ function SubEventsTab({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: index * 0.1 }}
           style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
+            background: isDark ? '#212121' : '#ffffff',
+            border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
             borderRadius: '14px',
             padding: '28px',
           }}
@@ -3540,7 +3582,7 @@ function SubEventsTab({
                 style={{
                   fontSize: '20px',
                   fontWeight: 800,
-                  color: '#0f172a',
+                  color: isDark ? '#f5f5f5' : '#0f172a',
                   margin: '0 0 8px 0',
                 }}
               >
@@ -3551,7 +3593,7 @@ function SubEventsTab({
                   display: 'flex',
                   gap: '12px',
                   fontSize: '13px',
-                  color: '#64748b',
+                  color: isDark ? '#a1a1aa' : '#64748b',
                   fontWeight: 600,
                 }}
               >
@@ -3583,7 +3625,7 @@ function SubEventsTab({
             style={{
               fontSize: '15px',
               lineHeight: '1.8',
-              color: '#475569',
+              color: isDark ? '#d1d5db' : '#475569',
               marginBottom: '20px',
             }}
           >
@@ -3593,7 +3635,7 @@ function SubEventsTab({
           <div
             style={{
               padding: '20px',
-              background: '#fafbfc',
+              background: isDark ? '#1d1d1d' : '#fafbfc',
               borderRadius: '12px',
               marginBottom: '16px',
             }}
@@ -3602,7 +3644,7 @@ function SubEventsTab({
               style={{
                 fontSize: '13px',
                 fontWeight: 700,
-                color: '#94a3b8',
+                color: isDark ? '#71717a' : '#94a3b8',
                 marginBottom: '8px',
                 textTransform: 'uppercase',
               }}
@@ -3613,7 +3655,7 @@ function SubEventsTab({
               style={{
                 fontSize: '14px',
                 lineHeight: '1.7',
-                color: '#475569',
+                color: isDark ? '#d1d5db' : '#475569',
                 margin: 0,
               }}
             >
@@ -3633,18 +3675,21 @@ function SubEventsTab({
                 <CasualtyCard
                   label="아군 피해"
                   value={subEvent.casualties.allies}
+                  isDark={isDark}
                 />
               )}
               {subEvent.casualties.enemies && (
                 <CasualtyCard
                   label="적군 피해"
                   value={subEvent.casualties.enemies}
+                  isDark={isDark}
                 />
               )}
               {subEvent.casualties.civilians && (
                 <CasualtyCard
                   label="민간인 피해"
                   value={subEvent.casualties.civilians}
+                  isDark={isDark}
                 />
               )}
             </div>
@@ -3659,9 +3704,11 @@ function SubEventsTab({
 function PersonsTab({
   persons,
   colorSet,
+  isDark,
 }: {
   persons: EventPerson[]
   colorSet: { bg: string; text: string; border: string }
+  isDark: boolean
 }) {
   const getSideColor = (side: string) => {
     const colors = {
@@ -3694,8 +3741,8 @@ function PersonsTab({
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: index * 0.08 }}
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: isDark ? '#212121' : '#ffffff',
+              border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
               borderRadius: '14px',
               overflow: 'hidden',
             }}
@@ -3705,8 +3752,9 @@ function PersonsTab({
                 style={{
                   width: '100%',
                   height: '200px',
-                  background:
-                    'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                  background: isDark
+                    ? '#2a2a2a'
+                    : 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
                 }}
               >
                 <img
@@ -3729,7 +3777,7 @@ function PersonsTab({
                   style={{
                     fontSize: '20px',
                     fontWeight: 800,
-                    color: '#0f172a',
+                    color: isDark ? '#f5f5f5' : '#0f172a',
                     margin: 0,
                   }}
                 >
@@ -3752,7 +3800,7 @@ function PersonsTab({
               <p
                 style={{
                   fontSize: '14px',
-                  color: '#64748b',
+                  color: isDark ? '#a1a1aa' : '#64748b',
                   marginBottom: '20px',
                   fontWeight: 600,
                 }}
@@ -3766,7 +3814,7 @@ function PersonsTab({
                     style={{
                       fontSize: '12px',
                       fontWeight: 700,
-                      color: '#94a3b8',
+                      color: isDark ? '#71717a' : '#94a3b8',
                       marginBottom: '10px',
                       textTransform: 'uppercase',
                     }}
@@ -3787,7 +3835,7 @@ function PersonsTab({
                           display: 'flex',
                           gap: '10px',
                           padding: '10px',
-                          background: '#fafbfc',
+                          background: isDark ? '#1d1d1d' : '#fafbfc',
                           borderRadius: '8px',
                         }}
                       >
@@ -3804,7 +3852,7 @@ function PersonsTab({
                         <span
                           style={{
                             fontSize: '13px',
-                            color: '#475569',
+                            color: isDark ? '#d1d5db' : '#475569',
                             lineHeight: '1.6',
                           }}
                         >
@@ -3827,9 +3875,11 @@ function PersonsTab({
 function MilitaryTab({
   units,
   colorSet,
+  isDark,
 }: {
   units: MilitaryUnit[]
   colorSet: { bg: string; text: string; border: string }
+  isDark: boolean
 }) {
   return (
     <div
@@ -3846,8 +3896,8 @@ function MilitaryTab({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: index * 0.1 }}
           style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
+            background: isDark ? '#212121' : '#ffffff',
+            border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
             borderRadius: '14px',
             padding: '28px',
           }}
@@ -3865,7 +3915,7 @@ function MilitaryTab({
                 style={{
                   fontSize: '20px',
                   fontWeight: 800,
-                  color: '#0f172a',
+                  color: isDark ? '#f5f5f5' : '#0f172a',
                   margin: '0 0 8px 0',
                 }}
               >
@@ -3874,7 +3924,7 @@ function MilitaryTab({
               <p
                 style={{
                   fontSize: '14px',
-                  color: '#64748b',
+                  color: isDark ? '#a1a1aa' : '#64748b',
                   margin: 0,
                   fontWeight: 600,
                 }}
@@ -3900,10 +3950,10 @@ function MilitaryTab({
           <div
             style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
           >
-            <InfoRow label="규모" value={unit.size} />
-            <InfoRow label="지휘관" value={unit.commander} />
+            <InfoRow label="규모" value={unit.size} isDark={isDark} />
+            <InfoRow label="지휘관" value={unit.commander} isDark={isDark} />
             {unit.casualties && (
-              <InfoRow label="손실" value={unit.casualties} />
+              <InfoRow label="손실" value={unit.casualties} isDark={isDark} />
             )}
           </div>
         </motion.div>
@@ -3916,9 +3966,11 @@ function MilitaryTab({
 function StrategyTab({
   strategies,
   colorSet,
+  isDark,
 }: {
   strategies: Strategy[]
   colorSet: { bg: string; text: string; border: string }
+  isDark: boolean
 }) {
   const getOutcomeColor = (outcome: string) => {
     const colors = {
@@ -3955,8 +4007,8 @@ function StrategyTab({
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: isDark ? '#212121' : '#ffffff',
+              border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
               borderRadius: '14px',
               padding: '28px',
             }}
@@ -3974,7 +4026,7 @@ function StrategyTab({
                   style={{
                     fontSize: '20px',
                     fontWeight: 800,
-                    color: '#0f172a',
+                    color: isDark ? '#f5f5f5' : '#0f172a',
                     margin: '0 0 8px 0',
                   }}
                 >
@@ -3984,7 +4036,7 @@ function StrategyTab({
                   <p
                     style={{
                       fontSize: '13px',
-                      color: '#64748b',
+                      color: isDark ? '#a1a1aa' : '#64748b',
                       margin: 0,
                       fontWeight: 600,
                     }}
@@ -4011,7 +4063,7 @@ function StrategyTab({
               style={{
                 fontSize: '15px',
                 lineHeight: '1.8',
-                color: '#475569',
+                color: isDark ? '#d1d5db' : '#475569',
                 margin: 0,
               }}
             >
@@ -4029,16 +4081,18 @@ function Section({
   title,
   children,
   colorSet,
+  isDark,
 }: {
   title: string
   children: React.ReactNode
   colorSet: { bg: string; text: string; border: string }
+  isDark: boolean
 }) {
   return (
     <div
       style={{
-        background: '#ffffff',
-        border: '1px solid #e2e8f0',
+        background: isDark ? '#212121' : '#ffffff',
+        border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
         borderRadius: '14px',
         padding: '28px',
       }}
@@ -4060,20 +4114,20 @@ function Section({
   )
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, isDark = false }: { label: string; value: string; isDark?: boolean }) {
   return (
     <div
       style={{
         padding: '20px',
-        background: '#fafbfc',
+        background: isDark ? '#1d1d1d' : '#fafbfc',
         borderRadius: '12px',
-        border: '1px solid #e2e8f0',
+        border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
       }}
     >
       <div
         style={{
           fontSize: '12px',
-          color: '#94a3b8',
+          color: isDark ? '#71717a' : '#94a3b8',
           marginBottom: '6px',
           fontWeight: 700,
           textTransform: 'uppercase',
@@ -4081,27 +4135,27 @@ function StatCard({ label, value }: { label: string; value: string }) {
       >
         {label}
       </div>
-      <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+      <div style={{ fontSize: '16px', fontWeight: 800, color: isDark ? '#f5f5f5' : '#0f172a' }}>
         {value}
       </div>
     </div>
   )
 }
 
-function CasualtyCard({ label, value }: { label: string; value: string }) {
+function CasualtyCard({ label, value, isDark = false }: { label: string; value: string; isDark?: boolean }) {
   return (
     <div
       style={{
         padding: '16px',
-        background: '#fafbfc',
+        background: isDark ? '#1d1d1d' : '#fafbfc',
         borderRadius: '10px',
-        border: '1px solid #e2e8f0',
+        border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
       }}
     >
       <div
         style={{
           fontSize: '11px',
-          color: '#94a3b8',
+          color: isDark ? '#71717a' : '#94a3b8',
           marginBottom: '4px',
           fontWeight: 700,
           textTransform: 'uppercase',
@@ -4109,14 +4163,14 @@ function CasualtyCard({ label, value }: { label: string; value: string }) {
       >
         {label}
       </div>
-      <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+      <div style={{ fontSize: '15px', fontWeight: 800, color: isDark ? '#f5f5f5' : '#0f172a' }}>
         {value}
       </div>
     </div>
   )
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, isDark = false }: { label: string; value: string; isDark?: boolean }) {
   return (
     <div
       style={{
@@ -4124,14 +4178,14 @@ function InfoRow({ label, value }: { label: string; value: string }) {
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '12px',
-        background: '#fafbfc',
+        background: isDark ? '#1d1d1d' : '#fafbfc',
         borderRadius: '8px',
       }}
     >
-      <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 700 }}>
+      <span style={{ fontSize: '13px', color: isDark ? '#71717a' : '#94a3b8', fontWeight: 700 }}>
         {label}
       </span>
-      <span style={{ fontSize: '14px', color: '#0f172a', fontWeight: 600 }}>
+      <span style={{ fontSize: '14px', color: isDark ? '#f5f5f5' : '#0f172a', fontWeight: 600 }}>
         {value}
       </span>
     </div>

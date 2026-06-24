@@ -302,7 +302,7 @@ export const FlagCircle = styled.img`
   height: 120px;
   border-radius: 50%;
   object-fit: cover;
-  border: 4px solid #ffffff;
+  border: 4px solid ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.12),
     0 0 0 1px rgba(0, 0, 0, 0.05);
@@ -324,8 +324,9 @@ export const FlagCirclePlaceholder = styled.div`
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border: 4px solid #ffffff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#212121' : 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)'};
+  border: 4px solid ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.12),
     0 0 0 1px rgba(0, 0, 0, 0.05);
@@ -508,7 +509,7 @@ export const SectionTitle = styled.h2`
   padding: 0 0 20px 0;
   font-size: 40px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   letter-spacing: -0.04em;
   display: flex;
   align-items: center;
@@ -668,6 +669,12 @@ export const PersonInnerPillBtn = styled.button<{ $active?: boolean }>`
               : theme.colors.background.secondary};
           }
         `}
+
+  /* 키보드 포커스 표시 (role=tab 조작 대상 — WCAG 2.4.7) */
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+  }
 `
 
 /**
@@ -849,8 +856,8 @@ export const FlagPlaceholder = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fafbfc;
-  border: 1px solid #e5e7eb;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafbfc')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 `
@@ -870,14 +877,14 @@ export const CountryTitleWrapper = styled.div``
 
 export const CountryTitle = styled(motion.h1)`
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin: 0;
   line-height: 1.1;
   letter-spacing: -0.03em;
 `
 
 export const CountryLocalName = styled(motion.p)`
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   margin: 12px 0 0 0;
   font-weight: 500;
 `
@@ -1005,7 +1012,7 @@ export const DensityValue = styled.div`
 
 export const DensityUnit = styled.span`
   font-size: 14px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   margin-left: 4px;
 `
 
@@ -1050,14 +1057,14 @@ export const MapPlaceholder = styled.div`
 `
 
 export const MapPlaceholderText = styled.span`
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   font-size: 14px;
   font-weight: 500;
 `
 
 // Historical Country Panel
 export const HistoricalCountryPanel = styled.div`
-  background: #fff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -1074,14 +1081,14 @@ export const HistoricalCountryHeader = styled.div`
 export const HistoricalCountryTitle = styled.h3`
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   margin: 0;
   letter-spacing: 0.3px;
 `
 
 export const HistoricalCountryCount = styled.span`
   font-size: 12px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
 `
 
 export const HistoricalCountryList = styled.div`
@@ -1097,13 +1104,13 @@ export const HistoricalCountryItem = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 12px;
-  background: #f8f9fa;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8f9fa')};
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.2s;
 
   &:hover {
-    background: #e8eaed;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
   }
 `
 
@@ -1114,28 +1121,28 @@ export const HistoricalCountryInfo = styled.div`
 export const HistoricalCountryName = styled.div`
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   margin-bottom: 4px;
 `
 
 export const HistoricalCountryDate = styled.div`
   font-size: 12px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
 `
 
 export const HistoricalCountryType = styled.div`
   font-size: 11px;
-  color: #5f6368;
-  background: #fff;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
   padding: 4px 8px;
   border-radius: 4px;
-  border: 1px solid #dadce0;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#dadce0')};
 `
 
 export const HistoricalCountryEmpty = styled.div`
   text-align: center;
   padding: 40px 20px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   font-size: 14px;
 `
 
@@ -1147,7 +1154,7 @@ export const ChartBarContainer = styled.div`
   height: 180px;
   gap: 8px;
   padding-bottom: 10px;
-  border-bottom: 1px solid #dadce0;
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#dadce0')};
 `
 
 export const ChartBarWrapper = styled.div`
@@ -1179,7 +1186,7 @@ export const ChartBarValue = styled.span`
 export const ChartEmpty = styled.div`
   text-align: center;
   width: 100%;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
 `
 
 export const ChartLabelContainer = styled.div`
@@ -1192,7 +1199,7 @@ export const ChartLabelContainer = styled.div`
 export const ChartLabel = styled.div`
   flex: 1;
   font-size: 10px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1231,7 +1238,7 @@ export const DonutChartInner = styled.div`
   width: 70px;
   height: 70px;
   border-radius: 50%;
-  background: #fff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
 `
 
 export const DonutLegend = styled.div`
@@ -1255,12 +1262,12 @@ export const DonutLegendColor = styled.div<{ $color: string }>`
 
 export const DonutLegendLabel = styled.span`
   font-size: 12px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
 `
 
 export const DonutLegendValue = styled.span`
   font-size: 12px;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   font-weight: 500;
 `
 
@@ -1273,8 +1280,8 @@ export const DonutLegendLeft = styled.div`
 export const LineChartContainer = styled.div`
   height: 150px;
   position: relative;
-  border-bottom: 1px solid #dadce0;
-  border-left: 1px solid #dadce0;
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#dadce0')};
+  border-left: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#dadce0')};
 `
 
 export const LineChartSvg = styled.svg`
@@ -1291,7 +1298,7 @@ export const LineChartLabels = styled.div`
 
 export const LineChartLabel = styled.span`
   font-size: 10px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
 `
 
 // Historical Country Section (bottom)
@@ -1313,7 +1320,7 @@ export const HistoricalCountrySectionTitle = styled.h3`
 
 export const HistoricalCountrySectionCount = styled.span`
   font-size: 11px;
-  color: #999;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#999')};
 `
 
 export const HistoricalCountryGrid = styled.div`
@@ -1323,15 +1330,15 @@ export const HistoricalCountryGrid = styled.div`
 `
 
 export const HistoricalCountryCard = styled.div`
-  background: #fff;
-  border: 1px solid #f0f0f0;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f0f0f0')};
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    background: #fafafa;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafafa')};
   }
 `
 
@@ -1357,7 +1364,7 @@ export const HistoricalCountryCardPlaceholder = styled.div`
 
 export const HistoricalCountryCardPlaceholderText = styled.span`
   font-size: 12px;
-  color: #ccc;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#ccc')};
 `
 
 export const HistoricalCountryCardContent = styled.div`
@@ -1373,7 +1380,7 @@ export const HistoricalCountryCardTitle = styled.h4`
 
 export const HistoricalCountryCardEnName = styled.p`
   font-size: 12px;
-  color: #999;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#999')};
   margin-bottom: 8px;
 `
 
@@ -1394,13 +1401,13 @@ export const HistoricalCountryCardType = styled.span`
 
 export const HistoricalCountryCardDate = styled.span`
   font-size: 11px;
-  color: #999;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#999')};
 `
 
 export const MilitaryPlaceholder = styled.div`
   padding: 40px;
   text-align: center;
-  color: #999;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#999')};
 `
 
 // Info Table Panel (지도 우측)
@@ -1814,10 +1821,10 @@ export const AnalyticsBadges = styled.div`
 
 export const SimpleBadge = styled.div`
   padding: 4px 12px;
-  background: #f1f3f4;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f1f3f4')};
   border-radius: 12px;
   font-size: 12px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   font-weight: 500;
 `
 
@@ -1837,7 +1844,7 @@ export const InfoBadge = styled.div`
     0 1px 2px rgba(0, 0, 0, 0.02);
 
   &:hover {
-    background: #ffffff;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
     border-color: rgba(99, 102, 241, 0.35);
     box-shadow:
       0 4px 16px rgba(99, 102, 241, 0.1),
@@ -2142,7 +2149,7 @@ export const LeaderInfoRow = styled.div`
 `
 
 export const LeaderInfoLabel = styled.span`
-  color: #9ca3af;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#9ca3af')};
 `
 
 export const LeaderInfoValue = styled.span`
@@ -2152,7 +2159,7 @@ export const LeaderInfoValue = styled.span`
 
 // Cities Panel (기존 - 필요시 사용)
 export const CitiesPanel = styled.div`
-  background: #fff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -2162,21 +2169,21 @@ export const CitiesPanel = styled.div`
 
 export const CitiesPanelHeader = styled.div`
   padding: 16px 20px;
-  border-bottom: 1px solid #e8eaed;
-  background: #fff;
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
 `
 
 export const CitiesPanelTitle = styled.h3`
   margin: 0;
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   display: flex;
   align-items: center;
   gap: 8px;
 
   svg {
-    color: #5f6368;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   }
 `
 
@@ -2190,11 +2197,11 @@ export const CitiesPanelContent = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f3f4;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f1f3f4')};
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #dadce0;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#dadce0')};
     border-radius: 3px;
   }
 `
@@ -2204,14 +2211,14 @@ export const CityCard = styled.div`
   align-items: center;
   gap: 16px;
   padding: 16px;
-  background: #fff;
-  border: 1px solid #e8eaed;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
   border-radius: 8px;
   margin-bottom: 8px;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: #dadce0;
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#dadce0')};
     box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15);
   }
 
@@ -2245,7 +2252,7 @@ export const CityInfo = styled.div`
 export const CityName = styled.div`
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
 `
 
 export const CityMeta = styled.div`
@@ -2260,10 +2267,10 @@ export const CityMetaItem = styled.div`
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
 
   svg {
-    color: #80868b;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#80868b')};
   }
 `
 
@@ -2281,19 +2288,19 @@ export const EventListContainer = styled.div`
 export const EventListHeader = styled.div`
   text-align: center;
   padding-bottom: 16px;
-  border-bottom: 1px solid #e8eaed;
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
 `
 
 export const EventListTitle = styled.h2`
   font-size: 24px;
   font-weight: 600;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   margin: 0 0 8px 0;
 `
 
 export const EventListSubtitle = styled.p`
   font-size: 14px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   margin: 0;
 `
 
@@ -2310,8 +2317,8 @@ export const EventListGrid = styled.div`
 
 // Event List Card - Matching List Design
 export const EventListCard = styled.div`
-  background: #ffffff;
-  border: 1px solid #eceff2;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#eceff2')};
   border-radius: 10px;
   padding: 18px;
   cursor: pointer;
@@ -2324,7 +2331,7 @@ export const EventListCard = styled.div`
 
   &:hover {
     transform: translateY(-1px);
-    border-color: #dadce0;
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#dadce0')};
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   }
 `
@@ -2339,7 +2346,7 @@ export const EventListCardHeader = styled.div`
 export const EventListCardTitle = styled.h3`
   font-size: 18px;
   font-weight: 600;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   margin: 0;
   line-height: 1.3;
   flex: 1;
@@ -2359,13 +2366,13 @@ export const EventCategoryBadge = styled.span`
 
 export const EventListCardDate = styled.div`
   font-size: 13px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   font-weight: 500;
 `
 
 export const EventListCardDescription = styled.p`
   font-size: 14px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   line-height: 1.6;
   margin: 0;
   display: -webkit-box;
@@ -2379,23 +2386,23 @@ export const EventListCardFooter = styled.div`
   justify-content: space-between;
   align-items: center;
   padding-top: 12px;
-  border-top: 1px solid #f1f3f4;
+  border-top: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f3f4')};
   margin-top: auto;
 `
 
 export const EventRoleBadge = styled.span`
   padding: 4px 10px;
-  background: #f8f9fa;
-  border: 1px solid #e8eaed;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8f9fa')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
   border-radius: 8px;
   font-size: 12px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   font-weight: 500;
 `
 
 export const TimelineCount = styled.span`
   font-size: 12px;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -2425,10 +2432,10 @@ export const EventDetailBackButton = styled.button`
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: #f8f9fa;
-  border: 1px solid #e8eaed;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8f9fa')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
   border-radius: 8px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -2436,8 +2443,8 @@ export const EventDetailBackButton = styled.button`
   align-self: flex-start;
 
   &:hover {
-    background: #e8eaed;
-    color: #202124;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   }
 
   svg {
@@ -2447,8 +2454,9 @@ export const EventDetailBackButton = styled.button`
 `
 
 export const EventDetailHeader = styled.div`
-  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
-  border: 1px solid #e8eaed;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#212121' : 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)'};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
   border-radius: 12px;
   padding: 24px;
   display: flex;
@@ -2466,7 +2474,7 @@ export const EventDetailTitleRow = styled.div`
 export const EventDetailTitle = styled.h1`
   font-size: 28px;
   font-weight: 700;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   margin: 0;
   line-height: 1.2;
   flex: 1;
@@ -2474,13 +2482,13 @@ export const EventDetailTitle = styled.h1`
 
 export const EventDetailDate = styled.div`
   font-size: 14px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   font-weight: 500;
 `
 
 export const EventDetailDescription = styled.p`
   font-size: 15px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   line-height: 1.6;
   margin: 0;
 `
@@ -2489,7 +2497,7 @@ export const EventDetailDescription = styled.p`
 export const TimelineSectionTitle = styled.h2`
   font-size: 18px;
   font-weight: 600;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   margin: 24px 0 16px 0;
   display: flex;
   align-items: center;
@@ -2519,7 +2527,7 @@ export const TimelineMarkerDot = styled.div`
   width: 16px;
   height: 16px;
   background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
-  border: 3px solid #fff;
+  border: 3px solid ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
   border-radius: 50%;
   box-shadow: 0 0 0 2px #4285f4;
 `
@@ -2531,13 +2539,17 @@ export const TimelineMarkerLine = styled.div`
   transform: translateX(-50%);
   width: 2px;
   height: calc(100% + 24px);
-  background: linear-gradient(180deg, #4285f4 0%, #e8eaed 100%);
+  background: linear-gradient(
+    180deg,
+    #4285f4 0%,
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')} 100%
+  );
 `
 
 export const TimelineContent = styled.div`
   flex: 1;
-  background: #fff;
-  border: 1px solid #e8eaed;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
   border-radius: 12px;
   padding: 20px;
   display: flex;
@@ -2546,7 +2558,7 @@ export const TimelineContent = styled.div`
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: #dadce0;
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#dadce0')};
     box-shadow: 0 2px 8px rgba(60, 64, 67, 0.1);
   }
 `
@@ -2567,24 +2579,24 @@ export const TimelineLocation = styled.div`
 
 export const TimelineDate = styled.div`
   font-size: 12px;
-  color: #80868b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#80868b')};
   font-weight: 500;
   padding: 4px 10px;
-  background: #f8f9fa;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8f9fa')};
   border-radius: 8px;
 `
 
 export const TimelineTitle = styled.h3`
   font-size: 16px;
   font-weight: 600;
-  color: #202124;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   margin: 0;
   line-height: 1.4;
 `
 
 export const TimelineDescription = styled.p`
   font-size: 14px;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   line-height: 1.6;
   margin: 0;
 `
@@ -2622,7 +2634,7 @@ export const HistoricalCountryBadge = styled.div`
 // 타임라인 클릭 힌트
 export const TimelineClickHint = styled.div`
   font-size: 12px;
-  color: #666;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
   margin-top: 8px;
   font-weight: 500;
   opacity: 0.7;
@@ -2990,7 +3002,7 @@ export const PremiumPercentageBadge = styled.div<{ positive?: boolean }>`
   font-size: 11px;
   font-weight: 600;
   margin: 0;
-  color: #6b7280;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
 
   svg {
     width: 10px;

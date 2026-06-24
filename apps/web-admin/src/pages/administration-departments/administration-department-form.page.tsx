@@ -24,6 +24,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { useThemeStore } from '@/shared/styles/theme.store'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { invalidateAdministrationDepartmentQueries } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import type { CountryResponseDto } from '@/shared/api/countries'
@@ -86,6 +87,8 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const playClickSound = useClickSound()
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const isEditMode = id && id !== 'new'
 
   const [activeCategory, setActiveCategory] = useState<CategoryType>('basic')
@@ -801,7 +804,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
                                     <div
                                       style={{
                                         fontSize: '11px',
-                                        color: '#64748b',
+                                        color: isDark ? '#a1a1aa' : '#64748b',
                                         marginTop: '2px',
                                       }}
                                     >
@@ -1517,13 +1520,16 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
 // Styled Components
 const PageWrapper = styled.div`
   min-height: 100vh;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#1d1d1d'
+      : 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'};
   padding-top: var(--header-height, 64px);
 `
 
 const PageHeader = styled.div`
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.05));
-  border-bottom: 2px solid rgba(226, 232, 240, 1);
+  border-bottom: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
   padding: 24px 40px;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -1574,7 +1580,7 @@ const BackButton = styled.button`
   align-items: center;
   gap: 10px;
   padding: 12px 20px;
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border: 2px solid rgba(99, 102, 241, 0.2);
   border-radius: 12px;
   color: #6366f1;
@@ -1635,7 +1641,7 @@ const HeaderTitle = styled.h1`
   margin: 0;
   font-size: 24px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   letter-spacing: -0.5px;
 
   @media (max-width: 640px) {
@@ -1647,7 +1653,7 @@ const HeaderSubtitle = styled.p`
   margin: 0;
   font-size: 14px;
   font-weight: 500;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
 
   @media (max-width: 640px) {
     font-size: 13px;
@@ -1669,9 +1675,9 @@ const ContentLayout = styled.div`
 `
 
 const CategorySidebar = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border-radius: 16px;
-  border: 2px solid rgba(226, 232, 240, 1);
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
   padding: 16px;
   height: fit-content;
   position: sticky;
@@ -1694,7 +1700,7 @@ const CategoryHeader = styled.div`
   padding: 12px;
   font-size: 13px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1719,8 +1725,12 @@ const CategoryItem = styled.button<{ $active: boolean }>`
       ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.08))'
       : 'transparent'};
   border: 2px solid
-    ${({ $active }) =>
-      $active ? 'rgba(99, 102, 241, 0.3)' : 'rgba(226, 232, 240, 0.5)'};
+    ${({ $active, theme }) =>
+      $active
+        ? 'rgba(99, 102, 241, 0.3)'
+        : theme.mode === 'dark'
+          ? '#2a2a2a'
+          : 'rgba(226, 232, 240, 0.5)'};
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -1752,11 +1762,14 @@ const CategoryIcon = styled.div<{ $active: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${({ $active }) =>
+  background: ${({ $active, theme }) =>
     $active
       ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-      : 'rgba(226, 232, 240, 0.5)'};
-  color: ${({ $active }) => ($active ? '#ffffff' : '#64748b')};
+      : theme.mode === 'dark'
+        ? '#2a2a2a'
+        : 'rgba(226, 232, 240, 0.5)'};
+  color: ${({ $active, theme }) =>
+    $active ? '#ffffff' : theme.mode === 'dark' ? '#a1a1aa' : '#64748b'};
   border-radius: 10px;
   flex-shrink: 0;
   transition: all 0.3s ease;
@@ -1770,14 +1783,14 @@ const CategoryContent = styled.div`
 const CategoryLabel = styled.div`
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin-bottom: 2px;
 `
 
 const CategoryDescription = styled.div`
   font-size: 11px;
   font-weight: 500;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
 `
 
 const ActiveIndicator = styled.div`
@@ -1792,9 +1805,9 @@ const ActiveIndicator = styled.div`
 `
 
 const FormArea = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border-radius: 20px;
-  border: 2px solid rgba(226, 232, 240, 1);
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
   overflow: hidden;
 `
@@ -1830,14 +1843,14 @@ const SectionTitle = styled.div`
     margin: 0;
     font-size: 22px;
     font-weight: 800;
-    color: #0f172a;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
     letter-spacing: -0.5px;
   }
 
   p {
     margin: 4px 0 0;
     font-size: 14px;
-    color: #64748b;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   }
 `
 
@@ -1861,7 +1874,7 @@ const FormGroup = styled.div`
 const Label = styled.label`
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1892,15 +1905,15 @@ const Input = styled.input`
   padding: 14px 14px 14px 44px;
   font-size: 14px;
   font-weight: 500;
-  color: #0f172a;
-  background: #ffffff;
-  border: 2px solid rgba(226, 232, 240, 1);
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
   border-radius: 12px;
   outline: none;
   transition: all 0.3s ease;
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   }
 
   &:hover {
@@ -1922,8 +1935,8 @@ const SelectButton = styled.button`
   padding: 14px 16px;
   font-size: 14px;
   font-weight: 600;
-  color: #64748b;
-  background: #ffffff;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border: 2px dashed rgba(99, 102, 241, 0.3);
   border-radius: 12px;
   cursor: pointer;
@@ -1978,7 +1991,7 @@ const CountryFlag = styled.div`
   align-items: center;
   justify-content: center;
   font-size: 28px;
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border-radius: 10px;
   flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -1992,7 +2005,7 @@ const CountryInfo = styled.div`
 const CountryName = styled.div`
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin-bottom: 2px;
 `
 
@@ -2039,7 +2052,7 @@ const ParentInfo = styled.div`
 const ParentName = styled.div`
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin-bottom: 2px;
 `
 
@@ -2096,11 +2109,14 @@ const CheckboxIcon = styled.div<{ $checked: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${({ $checked }) =>
+  background: ${({ $checked, theme }) =>
     $checked
       ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-      : 'rgba(226, 232, 240, 0.5)'};
-  color: ${({ $checked }) => ($checked ? '#ffffff' : '#64748b')};
+      : theme.mode === 'dark'
+        ? '#2a2a2a'
+        : 'rgba(226, 232, 240, 0.5)'};
+  color: ${({ $checked, theme }) =>
+    $checked ? '#ffffff' : theme.mode === 'dark' ? '#a1a1aa' : '#64748b'};
   border-radius: 10px;
   flex-shrink: 0;
   transition: all 0.3s ease;
@@ -2120,7 +2136,7 @@ const CheckboxLabel = styled.label`
   cursor: pointer;
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
 
   input[type='checkbox'] {
     width: 20px;
@@ -2133,7 +2149,7 @@ const CheckboxLabel = styled.label`
 const CheckboxHint = styled.div`
   font-size: 12px;
   font-weight: 500;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   line-height: 1.5;
 `
 
@@ -2142,18 +2158,18 @@ const Textarea = styled.textarea`
   padding: 14px 16px;
   font-size: 14px;
   font-weight: 500;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   font-family: inherit;
   line-height: 1.7;
   resize: vertical;
-  background: #ffffff;
-  border: 2px solid rgba(226, 232, 240, 1);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
   border-radius: 12px;
   outline: none;
   transition: all 0.3s ease;
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   }
 
   &:hover {
@@ -2170,7 +2186,7 @@ const Textarea = styled.textarea`
 const Hint = styled.span`
   font-size: 12px;
   font-weight: 500;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   line-height: 1.5;
 `
 
@@ -2203,7 +2219,7 @@ const InfoContent = styled.div`
 const InfoTitle = styled.div`
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin-bottom: 6px;
 `
 
@@ -2211,7 +2227,7 @@ const InfoText = styled.p`
   margin: 0;
   font-size: 13px;
   font-weight: 500;
-  color: #475569;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#475569')};
   line-height: 1.6;
 `
 
@@ -2220,8 +2236,8 @@ const FormActions = styled.div`
   gap: 14px;
   justify-content: flex-end;
   padding: 28px 40px;
-  background: rgba(248, 250, 252, 0.8);
-  border-top: 2px solid rgba(226, 232, 240, 1);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : 'rgba(248, 250, 252, 0.8)')};
+  border-top: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
 
   @media (max-width: 768px) {
     padding: 20px;
@@ -2242,13 +2258,20 @@ const ActionButton = styled.button<{
   cursor: pointer;
   transition: all 0.3s ease;
   border: 2px solid
-    ${({ $variant }) =>
-      $variant === 'primary' ? '#6366f1' : 'rgba(226, 232, 240, 1)'};
-  background: ${({ $variant }) =>
+    ${({ $variant, theme }) =>
+      $variant === 'primary'
+        ? '#6366f1'
+        : theme.mode === 'dark'
+          ? '#2a2a2a'
+          : 'rgba(226, 232, 240, 1)'};
+  background: ${({ $variant, theme }) =>
     $variant === 'primary'
       ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
-      : '#ffffff'};
-  color: ${({ $variant }) => ($variant === 'primary' ? '#ffffff' : '#64748b')};
+      : theme.mode === 'dark'
+        ? '#212121'
+        : '#ffffff'};
+  color: ${({ $variant, theme }) =>
+    $variant === 'primary' ? '#ffffff' : theme.mode === 'dark' ? '#a1a1aa' : '#64748b'};
   box-shadow: ${({ $variant }) =>
     $variant === 'primary'
       ? '0 8px 20px rgba(99, 102, 241, 0.3)'
@@ -2295,7 +2318,7 @@ const ModalOverlay = styled.div`
 `
 
 const ModalBox = styled.div`
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border-radius: 20px;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
   width: 100%;
@@ -2310,14 +2333,14 @@ const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 24px 28px;
-  border-bottom: 2px solid rgba(226, 232, 240, 1);
+  border-bottom: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
 `
 
 const ModalTitle = styled.h3`
   margin: 0;
   font-size: 20px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
 `
 
 const ModalCloseButton = styled.button`
@@ -2326,8 +2349,8 @@ const ModalCloseButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(148, 163, 184, 0.08);
-  color: #94a3b8;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(148, 163, 184, 0.08)')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   border: none;
   border-radius: 10px;
   cursor: pointer;
@@ -2349,7 +2372,7 @@ const ModalContent = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: rgba(226, 232, 240, 0.3);
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 0.3)')};
   }
 
   &::-webkit-scrollbar-thumb {
@@ -2365,11 +2388,11 @@ const DeptOption = styled.button`
   gap: 12px;
   padding: 14px 16px;
   background: transparent;
-  border: 2px solid rgba(226, 232, 240, 0.6);
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 0.6)')};
   border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   cursor: pointer;
   transition: all 0.2s ease;
   margin-bottom: 8px;
@@ -2404,9 +2427,9 @@ const MinisterSplitLayout = styled.div`
 `
 
 const MinisterListPanel = styled.div`
-  border: 2px solid rgba(226, 232, 240, 1);
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
   border-radius: 12px;
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -2419,7 +2442,7 @@ const MinisterListHeader = styled.div`
   justify-content: space-between;
   padding: 16px 20px;
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.03));
-  border-bottom: 2px solid rgba(226, 232, 240, 1);
+  border-bottom: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
 `
 
 const MinisterListTitle = styled.div`
@@ -2428,7 +2451,7 @@ const MinisterListTitle = styled.div`
   gap: 8px;
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
 `
 
 const CountBadge = styled.span`
@@ -2477,14 +2500,14 @@ const EmptyState = styled.div`
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  color: #cbd5e1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#cbd5e1')};
   flex: 1;
 
   p {
     margin: 16px 0 0;
     font-size: 14px;
     font-weight: 600;
-    color: #94a3b8;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   }
 `
 
@@ -2499,7 +2522,7 @@ const MinistersList = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: rgba(226, 232, 240, 0.3);
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 0.3)')};
   }
 
   &::-webkit-scrollbar-thumb {
@@ -2519,15 +2542,23 @@ const MinisterCard = styled.div<{ $current: boolean; $selected: boolean }>`
   gap: 12px;
   padding: 12px;
   margin-bottom: 8px;
-  background: ${({ $current, $selected }) =>
+  background: ${({ $current, $selected, theme }) =>
     $selected
       ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.08))'
       : $current
         ? 'rgba(99, 102, 241, 0.05)'
-        : '#ffffff'};
+        : theme.mode === 'dark'
+          ? '#212121'
+          : '#ffffff'};
   border: 1.5px solid
-    ${({ $current, $selected }) =>
-      $selected ? '#6366f1' : $current ? 'rgba(99, 102, 241, 0.3)' : 'rgba(226, 232, 240, 1)'};
+    ${({ $current, $selected, theme }) =>
+      $selected
+        ? '#6366f1'
+        : $current
+          ? 'rgba(99, 102, 241, 0.3)'
+          : theme.mode === 'dark'
+            ? '#2a2a2a'
+            : 'rgba(226, 232, 240, 1)'};
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -2582,7 +2613,7 @@ const MinisterNameRow = styled.div`
 const MinisterName = styled.div`
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2610,7 +2641,7 @@ const PositionBadge = styled.span`
 const MinisterPeriod = styled.div`
   font-size: 12px;
   font-weight: 500;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2651,9 +2682,21 @@ const IconButton = styled.button<{ $danger?: boolean }>`
 
 const MinisterFormPanel = styled.div<{ $visible: boolean }>`
   border: 2px solid
-    ${({ $visible }) => ($visible ? 'rgba(99, 102, 241, 0.3)' : 'rgba(226, 232, 240, 1)')};
+    ${({ $visible, theme }) =>
+      $visible
+        ? 'rgba(99, 102, 241, 0.3)'
+        : theme.mode === 'dark'
+          ? '#2a2a2a'
+          : 'rgba(226, 232, 240, 1)'};
   border-radius: 12px;
-  background: ${({ $visible }) => ($visible ? '#ffffff' : '#f8fafc')};
+  background: ${({ $visible, theme }) =>
+    $visible
+      ? theme.mode === 'dark'
+        ? '#212121'
+        : '#ffffff'
+      : theme.mode === 'dark'
+        ? '#1d1d1d'
+        : '#f8fafc'};
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -2664,10 +2707,10 @@ const MinisterFormPanel = styled.div<{ $visible: boolean }>`
 const MinisterFormHeader = styled.div`
   padding: 20px 24px;
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.03));
-  border-bottom: 2px solid rgba(226, 232, 240, 1);
+  border-bottom: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
   font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
 `
 
 const MinisterFormContent = styled.div`
@@ -2683,7 +2726,7 @@ const MinisterFormContent = styled.div`
   }
 
   &::-webkit-scrollbar-track {
-    background: rgba(226, 232, 240, 0.3);
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 0.3)')};
   }
 
   &::-webkit-scrollbar-thumb {
@@ -2698,13 +2741,13 @@ const EmptyFormState = styled.div`
   align-items: center;
   justify-content: center;
   flex: 1;
-  color: #cbd5e1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#cbd5e1')};
 
   p {
     margin: 16px 0 0;
     font-size: 14px;
     font-weight: 600;
-    color: #94a3b8;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   }
 `
 
@@ -2717,7 +2760,7 @@ const FormField = styled.div`
 const FieldLabel = styled.div`
   font-size: 14px;
   font-weight: 700;
-  color: #334155;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#334155')};
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2728,7 +2771,7 @@ const MinisterFormActions = styled.div`
   gap: 12px;
   padding-top: 20px;
   margin-top: auto;
-  border-top: 2px solid rgba(226, 232, 240, 1);
+  border-top: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
 `
 
 const FormRow = styled.div`
@@ -2785,9 +2828,9 @@ const OrderInput = styled.input`
   padding: 10px 12px;
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   text-align: center;
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border: 2px solid rgba(99, 102, 241, 0.2);
   border-radius: 10px;
   outline: none;
@@ -2800,7 +2843,7 @@ const OrderInput = styled.input`
 `
 
 const Placeholder = styled.span`
-  color: #94a3b8;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
 `
 
 const Checkbox = styled.input`
@@ -2819,15 +2862,15 @@ const CancelButton = styled.button`
   padding: 12px 20px;
   font-size: 14px;
   font-weight: 700;
-  color: #64748b;
-  background: #ffffff;
-  border: 2px solid rgba(226, 232, 240, 1);
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : 'rgba(226, 232, 240, 1)')};
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.3s ease;
 
   &:hover {
-    background: #f8fafc;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f8fafc')};
     border-color: rgba(99, 102, 241, 0.3);
   }
 

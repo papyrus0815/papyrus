@@ -13,14 +13,14 @@ export const HistoryHeader = styled.div`
   justify-content: space-between;
   padding: 16px 20px;
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.03));
-  border: 2px solid rgba(226, 232, 240, 1);
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 1)')};
   border-radius: 12px;
 `
 
 export const HistoryCount = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   display: flex;
   align-items: center;
   gap: 6px;
@@ -46,13 +46,13 @@ export const HistoryFormHeader = styled.div`
   justify-content: space-between;
   padding: 18px 24px;
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.05));
-  border-bottom: 2px solid rgba(226, 232, 240, 1);
+  border-bottom: 2px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 1)')};
 
   h3 {
     margin: 0;
     font-size: 16px;
     font-weight: 700;
-    color: #0f172a;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   }
 `
 
@@ -67,7 +67,7 @@ export const HistoryFormActions = styled.div`
   display: flex;
   gap: 12px;
   padding-top: 20px;
-  border-top: 2px solid rgba(226, 232, 240, 1);
+  border-top: 2px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 1)')};
 `
 
 export const HistoryTimeline = styled.div`
@@ -114,7 +114,7 @@ export const TimelineDot = styled.div<{ $color: string }>`
   align-items: center;
   justify-content: center;
   background: ${({ $color }) => $color};
-  border: 4px solid #ffffff;
+  border: 4px solid ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border-radius: 50%;
   font-size: 18px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -130,8 +130,8 @@ export const TimelineDot = styled.div<{ $color: string }>`
 `
 
 export const TimelineContent = styled.div`
-  background: #ffffff;
-  border: 2px solid rgba(226, 232, 240, 1);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 1)')};
   border-radius: 14px;
   padding: 20px;
   transition: all 0.3s ease;
@@ -184,7 +184,7 @@ export const TimelineTitle = styled.h3`
   margin: 0 0 10px;
   font-size: 17px;
   font-weight: 800;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   letter-spacing: -0.3px;
 `
 
@@ -192,7 +192,7 @@ export const TimelineDescription = styled.p`
   margin: 0 0 16px;
   font-size: 14px;
   font-weight: 500;
-  color: #475569;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#475569')};
   line-height: 1.7;
   white-space: pre-wrap;
 `
@@ -201,7 +201,7 @@ export const TimelineActions = styled.div`
   display: flex;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid rgba(226, 232, 240, 0.8);
+  border-top: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 0.8)')};
 `
 
 export const HistoryTypeOption = styled.button<{ $color: string }>`
@@ -211,11 +211,11 @@ export const HistoryTypeOption = styled.button<{ $color: string }>`
   gap: 14px;
   padding: 16px 18px;
   background: transparent;
-  border: 2px solid rgba(226, 232, 240, 0.6);
+  border: 2px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 0.6)')};
   border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   cursor: pointer;
   transition: all 0.3s ease;
   margin-bottom: 10px;

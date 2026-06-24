@@ -169,8 +169,11 @@ const FilterRow = styled.div`
   align-items: center;
   gap: 10px;
   padding: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
-  border: 1px solid #dadce0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#212121'
+      : 'linear-gradient(180deg, #ffffff 0%, #fafbfc 100%)'};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#dadce0')};
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
   flex-wrap: wrap;
@@ -219,7 +222,7 @@ const SearchIcon = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   pointer-events: none;
   z-index: 1;
 `
@@ -228,19 +231,19 @@ const SearchInput = styled.input`
   width: 100%;
   height: 40px;
   padding: 0 36px 0 40px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   border-radius: 8px;
   font-size: 14px;
-  color: #202124;
-  background: #ffffff;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#ffffff')};
   transition: all 0.2s ease;
 
   &::placeholder {
-    color: #9aa0a6;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#9aa0a6')};
   }
 
   &:hover {
-    border-color: #d1d5db;
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   }
 
@@ -277,17 +280,17 @@ const ClearButton = styled.button`
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #5f6368;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   cursor: pointer;
   transition: all 0.2s ease;
 
   &:hover {
-    background: #f1f3f4;
-    color: #202124;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f3f4')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
   }
 
   &:active {
-    background: #e8eaed;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e8eaed')};
     transform: scale(0.95);
   }
 `
@@ -298,12 +301,22 @@ const FilterButton = styled.button<{ $active?: boolean }>`
   gap: 8px;
   height: 40px;
   padding: 0 14px;
-  border: 1px solid ${({ $active }) => ($active ? '#ad46ff' : '#e5e7eb')};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? '#ad46ff' : theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb'};
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: ${({ $active }) => ($active ? '#ad46ff' : '#5f6368')};
-  background: ${({ $active }) => ($active ? '#f3e8ff' : '#ffffff')};
+  color: ${({ $active, theme }) =>
+    $active ? '#ad46ff' : theme.mode === 'dark' ? '#a1a1aa' : '#5f6368'};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(173, 70, 255, 0.12)'
+        : '#f3e8ff'
+      : theme.mode === 'dark'
+        ? '#212121'
+        : '#ffffff'};
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
@@ -312,7 +325,8 @@ const FilterButton = styled.button<{ $active?: boolean }>`
 
   &:hover {
     border-color: #ad46ff;
-    background: #f3e8ff;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(173, 70, 255, 0.12)' : '#f3e8ff'};
     color: #ad46ff;
   }
 
@@ -344,12 +358,12 @@ const ClearAllFiltersButton = styled.button`
   gap: 6px;
   height: 40px;
   padding: 0 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #5f6368;
-  background: #ffffff;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
@@ -367,9 +381,10 @@ const ClearAllFiltersButton = styled.button`
   }
 
   &:hover {
-    color: #202124;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#202124')};
     border-color: #ad46ff;
-    background: #f3e8ff;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(173, 70, 255, 0.12)' : '#f3e8ff'};
   }
 
   &:active {

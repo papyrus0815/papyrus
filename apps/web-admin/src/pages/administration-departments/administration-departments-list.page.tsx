@@ -1094,7 +1094,7 @@ const PageWrapper = styled.div`
   height: calc(100vh - var(--header-height));
   padding: 24px;
   overflow-y: auto;
-  background: #f8fafc;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8fafc')};
 
   @media (max-width: 768px) {
     padding: 16px;
@@ -1138,13 +1138,13 @@ const HeaderText = styled.div`
     margin: 0;
     font-size: 28px;
     font-weight: 700;
-    color: #0f172a;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   }
 
   p {
     margin: 4px 0 0;
     font-size: 14px;
-    color: #64748b;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   }
 `
 
@@ -1199,8 +1199,10 @@ const SplitLayout = styled.div`
 const LeftPanel = styled.div`
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(20, 19, 34, 0.08)'};
   border-radius: 20px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
   overflow: hidden;
@@ -1215,7 +1217,10 @@ const LeftPanel = styled.div`
 const FilterBar = styled.div`
   padding: 20px;
   border-bottom: 1.5px solid rgba(99, 102, 241, 0.1);
-  background: linear-gradient(135deg, #fafbfc 0%, #f8fafc 100%);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#212121'
+      : 'linear-gradient(135deg, #fafbfc 0%, #f8fafc 100%)'};
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1249,7 +1254,7 @@ const SearchWrapper = styled.div`
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border: 1.5px solid rgba(99, 102, 241, 0.12);
   border-radius: 10px;
   transition: all 0.2s ease;
@@ -1270,11 +1275,11 @@ const SearchInput = styled.input`
   border: none;
   outline: none;
   font-size: 14px;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   background: transparent;
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   }
 `
 
@@ -1306,9 +1311,14 @@ const FilterButton = styled.button<{ $active?: boolean }>`
   padding: 10px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: ${({ $active }) => ($active ? '#ffffff' : '#64748b')};
-  background: ${({ $active }) =>
-    $active ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : '#ffffff'};
+  color: ${({ $active, theme }) =>
+    $active ? '#ffffff' : theme.mode === 'dark' ? '#a1a1aa' : '#64748b'};
+  background: ${({ $active, theme }) =>
+    $active
+      ? 'linear-gradient(135deg, #6366f1, #8b5cf6)'
+      : theme.mode === 'dark'
+        ? '#212121'
+        : '#ffffff'};
   border: 1.5px solid
     ${({ $active }) =>
       $active ? 'rgba(99, 102, 241, 0.4)' : 'rgba(99, 102, 241, 0.12)'};
@@ -1354,8 +1364,8 @@ const SortSelect = styled.select`
   padding: 10px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
-  background: #ffffff;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border: 1.5px solid rgba(99, 102, 241, 0.12);
   border-radius: 10px;
   cursor: pointer;
@@ -1378,7 +1388,7 @@ const ResultCount = styled.div`
   gap: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   padding: 0 2px;
 
   strong {
@@ -1427,20 +1437,20 @@ const EmptyListState = styled.div`
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  color: #cbd5e1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#cbd5e1')};
 
   p {
     margin: 16px 0 0;
     font-size: 15px;
     font-weight: 600;
-    color: #94a3b8;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   }
 `
 
 const HintText = styled.span`
   margin-top: 8px;
   font-size: 13px;
-  color: #cbd5e1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#cbd5e1')};
   text-align: center;
   max-width: 280px;
   line-height: 1.5;
@@ -1498,7 +1508,7 @@ const ListItemContent = styled.div`
 const ListItemTitle = styled.div`
   font-size: 15px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin-bottom: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1529,7 +1539,7 @@ const ParentTag = styled.span`
   gap: 4px;
   font-size: 11px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   padding: 3px 8px;
   background: rgba(100, 116, 139, 0.1);
   border-radius: 6px;
@@ -1575,8 +1585,10 @@ const RightPanel = styled.div`
 
 // 개별 카드 컨테이너
 const DetailCard = styled.div`
-  background: #ffffff;
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(20, 19, 34, 0.08)'};
   border-radius: 20px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
   overflow: hidden;
@@ -1584,7 +1596,10 @@ const DetailCard = styled.div`
 
 const DetailCardHeader = styled.div`
   padding: 24px;
-  background: linear-gradient(135deg, #fafbfc, #f8fafc);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#212121'
+      : 'linear-gradient(135deg, #fafbfc, #f8fafc)'};
   border-bottom: 1.5px solid rgba(99, 102, 241, 0.1);
   display: flex;
   align-items: center;
@@ -1606,7 +1621,7 @@ const IconActionButton = styled.button<{ $danger?: boolean }>`
   border: 1.5px solid
     ${({ $danger }) =>
       $danger ? 'rgba(239, 68, 68, 0.2)' : 'rgba(99, 102, 241, 0.2)'};
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   color: ${({ $danger }) => ($danger ? '#ef4444' : '#6366f1')};
   border-radius: 10px;
   cursor: pointer;
@@ -1632,8 +1647,10 @@ const TabNavigation = styled.div`
   display: flex;
   gap: 8px;
   padding: 16px;
-  background: #ffffff;
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(20, 19, 34, 0.08)'};
   border-radius: 20px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
   width: 100%;
@@ -1663,7 +1680,8 @@ const TabButton = styled.button<{ $active: boolean }>`
   padding: 12px 16px;
   font-size: 13px;
   font-weight: 600;
-  color: ${({ $active }) => ($active ? '#ffffff' : '#64748b')};
+  color: ${({ $active, theme }) =>
+    $active ? '#ffffff' : theme.mode === 'dark' ? '#a1a1aa' : '#64748b'};
   background: ${({ $active }) =>
     $active ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'transparent'};
   border: none;
@@ -1722,7 +1740,7 @@ const DetailTitle = styled.h2`
   margin: 0;
   font-size: 24px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1731,7 +1749,7 @@ const DetailTitle = styled.h2`
 const DetailSubtitle = styled.div`
   margin-top: 6px;
   font-size: 14px;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1776,7 +1794,7 @@ const HierarchyValue = styled.div`
   gap: 10px;
   font-size: 15px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   padding: 14px 16px;
   background: linear-gradient(
     135deg,
@@ -1809,12 +1827,13 @@ const HierarchyListItem = styled.div`
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: #fafbfc;
-  border: 1px solid #e2e8f0;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafbfc')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
   border-radius: 10px;
   font-size: 14px;
   font-weight: 500;
-  color: #334155;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#334155')};
   transition: all 0.2s ease;
 
   svg {
@@ -1823,7 +1842,7 @@ const HierarchyListItem = styled.div`
   }
 
   &:hover {
-    background: #ffffff;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
     border-color: rgba(99, 102, 241, 0.3);
     transform: translateX(4px);
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
@@ -1842,13 +1861,13 @@ const HistoryItem = styled.div`
   display: flex;
   gap: 16px;
   padding: 16px 18px;
-  background: #fafbfc;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafbfc')};
   border-left: 3px solid #6366f1;
   border-radius: 10px;
   transition: all 0.2s ease;
 
   &:hover {
-    background: #ffffff;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
     border-left-width: 5px;
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
     transform: translateX(2px);
@@ -1865,7 +1884,7 @@ const HistoryYear = styled.div`
 const HistoryContent = styled.div`
   font-size: 14px;
   font-weight: 500;
-  color: #334155;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#334155')};
   line-height: 1.6;
 `
 
@@ -1876,23 +1895,26 @@ const MapPlaceholder = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #fafbfc, #f8fafc);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#212121'
+      : 'linear-gradient(135deg, #fafbfc, #f8fafc)'};
   border: 2px dashed rgba(99, 102, 241, 0.2);
   border-radius: 16px;
-  color: #cbd5e1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#cbd5e1')};
   margin: 20px;
 
   p {
     margin: 16px 0 8px;
     font-size: 15px;
     font-weight: 600;
-    color: #94a3b8;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   }
 `
 
 const MapNote = styled.div`
   font-size: 12px;
-  color: #cbd5e1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#cbd5e1')};
   text-align: center;
   max-width: 320px;
   line-height: 1.6;
@@ -1903,11 +1925,14 @@ const CardSectionTitle = styled.h3`
   padding: 18px 24px;
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   display: flex;
   align-items: center;
   gap: 10px;
-  background: linear-gradient(135deg, #fafbfc, #f8fafc);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#212121'
+      : 'linear-gradient(135deg, #fafbfc, #f8fafc)'};
   border-bottom: 1.5px solid rgba(99, 102, 241, 0.1);
 
   svg {
@@ -1930,8 +1955,9 @@ const InfoGrid = styled.div`
 
 const InfoCard = styled.div`
   padding: 16px 18px;
-  background: #fafbfc;
-  border: 1.5px solid #e2e8f0;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafbfc')};
+  border: 1.5px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
   border-radius: 10px;
   transition: all 0.2s ease;
 
@@ -1954,7 +1980,7 @@ const InfoCardLabel = styled.div`
 const InfoCardValue = styled.div`
   font-size: 15px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   line-height: 1.5;
 `
 
@@ -1964,8 +1990,8 @@ const DescriptionBox = styled.div`
   margin: 24px;
   font-size: 14px;
   line-height: 1.8;
-  color: #334155;
-  background: #fafbfc;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#334155')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafbfc')};
   border-left: 4px solid #6366f1;
   border-radius: 10px;
   transition: all 0.2s ease;
@@ -1985,7 +2011,7 @@ const DetailActionButton = styled.button<{ $danger?: boolean }>`
   font-size: 14px;
   font-weight: 600;
   color: ${({ $danger }) => ($danger ? '#ef4444' : '#6366f1')};
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border: 1.5px solid
     ${({ $danger }) => ($danger ? '#fecaca' : 'rgba(99, 102, 241, 0.2)')};
   border-radius: 8px;
@@ -2005,17 +2031,19 @@ const EmptyDetailState = styled.div`
   align-items: center;
   justify-content: center;
   padding: 120px 20px;
-  background: #ffffff;
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(20, 19, 34, 0.08)'};
   border-radius: 20px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
-  color: #cbd5e1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#cbd5e1')};
 
   p {
     margin: 20px 0 0;
     font-size: 16px;
     font-weight: 600;
-    color: #94a3b8;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   }
 `
 
@@ -2061,13 +2089,13 @@ const InfoBoxContent = styled.div`
 const InfoBoxTitle = styled.div`
   font-size: 13px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin-bottom: 4px;
 `
 
 const InfoBoxText = styled.div`
   font-size: 12px;
-  color: #475569;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#475569')};
   line-height: 1.6;
 `
 
@@ -2140,21 +2168,30 @@ const OrgMemberCard = styled.div<{ $isHead?: boolean; $compact?: boolean }>`
   gap: ${({ $compact }) => ($compact ? '10px' : '14px')};
   padding: ${({ $isHead, $compact }) =>
     $isHead ? '20px' : $compact ? '12px 14px' : '16px'};
-  background: ${({ $isHead }) =>
+  background: ${({ $isHead, theme }) =>
     $isHead
       ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.08))'
-      : '#fafbfc'};
+      : theme.mode === 'dark'
+        ? '#1d1d1d'
+        : '#fafbfc'};
   border: 1.5px solid
-    ${({ $isHead }) => ($isHead ? 'rgba(99, 102, 241, 0.3)' : '#e2e8f0')};
+    ${({ $isHead, theme }) =>
+      $isHead
+        ? 'rgba(99, 102, 241, 0.3)'
+        : theme.mode === 'dark'
+          ? '#2a2a2a'
+          : '#e2e8f0'};
   border-radius: 12px;
   transition: all 0.2s ease;
   cursor: pointer;
 
   &:hover {
-    background: ${({ $isHead }) =>
+    background: ${({ $isHead, theme }) =>
       $isHead
         ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.1))'
-        : '#ffffff'};
+        : theme.mode === 'dark'
+          ? '#212121'
+          : '#ffffff'};
     border-color: rgba(99, 102, 241, 0.4);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
@@ -2185,7 +2222,7 @@ const OrgMemberInfo = styled.div`
 const OrgMemberName = styled.div`
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2203,7 +2240,7 @@ const OrgMemberPosition = styled.div`
 const OrgMemberPeriod = styled.div`
   font-size: 11px;
   font-weight: 500;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
 `
 
 const MoreMembersCard = styled.div`
@@ -2257,8 +2294,12 @@ const MilitaryUnitCard = styled.div`
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  background: linear-gradient(135deg, #fafbfc, #f8fafc);
-  border: 1.5px solid #e2e8f0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '#212121'
+      : 'linear-gradient(135deg, #fafbfc, #f8fafc)'};
+  border: 1.5px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
   border-radius: 16px;
   transition: all 0.2s ease;
   cursor: pointer;
@@ -2267,7 +2308,10 @@ const MilitaryUnitCard = styled.div`
     border-color: rgba(239, 68, 68, 0.4);
     box-shadow: 0 8px 20px rgba(239, 68, 68, 0.12);
     transform: translateY(-4px);
-    background: linear-gradient(135deg, #ffffff, #fefefe);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '#212121'
+        : 'linear-gradient(135deg, #ffffff, #fefefe)'};
   }
 `
 
@@ -2311,7 +2355,7 @@ const MilitaryUnitInfo = styled.div`
 const MilitaryUnitName = styled.div`
   font-size: 17px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2331,7 +2375,8 @@ const MilitaryUnitDetails = styled.div`
   flex-direction: column;
   gap: 10px;
   padding-top: 12px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e2e8f0')};
 `
 
 const MilitaryUnitDetailRow = styled.div`
@@ -2344,7 +2389,7 @@ const MilitaryUnitDetailRow = styled.div`
 const MilitaryUnitDetailLabel = styled.div`
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   text-transform: uppercase;
   letter-spacing: 0.5px;
 `
@@ -2352,6 +2397,6 @@ const MilitaryUnitDetailLabel = styled.div`
 const MilitaryUnitDetailValue = styled.div`
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   text-align: right;
 `

@@ -20,6 +20,7 @@ import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getStateTypeLabel } from '@/entities/historical-country/lib/utils'
+import { useThemeStore } from '@/shared/styles/theme.store'
 import {
   type HistoricalCountryMembershipDto,
   type HistoricalCountryRelationDto,
@@ -77,7 +78,13 @@ const sectionLabelStyle: React.CSSProperties = {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div style={sectionLabelStyle}>{children}</div>
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
+  return (
+    <div style={{ ...sectionLabelStyle, color: isDark ? '#a1a1aa' : '#64748b' }}>
+      {children}
+    </div>
+  )
 }
 
 function formatPeriod(h: {
@@ -100,8 +107,9 @@ function formatPeriod(h: {
 
 /* 행정조직 StatCard와 동일: 흰 배경, 테두리, 아이콘만 악센트 */
 const StatCardWrap = styled.div`
-  background: #ffffff;
-  border: 1px solid ${BORDER};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
   border-radius: 16px;
   padding: 22px;
   display: flex;
@@ -115,7 +123,7 @@ const StatCardWrap = styled.div`
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
-    border-color: #d1d5db;
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
   }
 `
 
@@ -130,6 +138,8 @@ function StatCard({
   value: string | number
   unit: string
 }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   return (
     <StatCardWrap>
       <div
@@ -137,7 +147,7 @@ function StatCard({
           width: 44,
           height: 44,
           borderRadius: 12,
-          background: '#f3f4f6',
+          background: isDark ? '#2a2a2a' : '#f3f4f6',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -151,7 +161,7 @@ function StatCard({
         <div
           style={{
             fontSize: 11,
-            color: MUTED,
+            color: isDark ? '#a1a1aa' : MUTED,
             marginBottom: 4,
             fontWeight: 600,
             letterSpacing: '0.04em',
@@ -172,14 +182,20 @@ function StatCard({
             style={{
               fontSize: 24,
               fontWeight: 700,
-              color: TITLE,
+              color: isDark ? '#f5f5f5' : TITLE,
               letterSpacing: '-0.03em',
               lineHeight: 1.2,
             }}
           >
             {value}
           </span>
-          <span style={{ fontSize: 13, fontWeight: 500, color: MUTED }}>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 500,
+              color: isDark ? '#a1a1aa' : MUTED,
+            }}
+          >
             {unit}
           </span>
         </div>
@@ -195,7 +211,7 @@ const ViewModeTabs = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px;
-  background: #f1f5f9;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
   border-radius: 20px;
   width: fit-content;
   &::-webkit-scrollbar {
@@ -208,8 +224,10 @@ const ViewModeTab = styled.button<{ $active?: boolean }>`
   padding: 10px 18px;
   border-radius: 14px;
   border: none;
-  background: ${(p) => (p.$active ? '#ffffff' : 'transparent')};
-  color: ${(p) => (p.$active ? '#4f46e5' : '#64748b')};
+  background: ${({ $active, theme }) =>
+    $active ? (theme.mode === 'dark' ? '#212121' : '#ffffff') : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? '#4f46e5' : theme.mode === 'dark' ? '#a1a1aa' : '#64748b'};
   font-size: 13px;
   font-weight: ${(p) => (p.$active ? '600' : '500')};
   cursor: pointer;
@@ -217,15 +235,23 @@ const ViewModeTab = styled.button<{ $active?: boolean }>`
   white-space: nowrap;
   box-shadow: ${(p) => (p.$active ? '0 2px 8px rgba(79, 70, 229, 0.12)' : 'none')};
   &:hover {
-    color: ${(p) => (p.$active ? '#4f46e5' : '#475569')};
-    background: ${(p) => (p.$active ? '#ffffff' : 'rgba(255,255,255,0.6)')};
+    color: ${({ $active, theme }) =>
+      $active ? '#4f46e5' : theme.mode === 'dark' ? '#d1d5db' : '#475569'};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? '#212121'
+          : '#ffffff'
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.08)'
+          : 'rgba(255,255,255,0.6)'};
   }
 `
 
 const LoadingBarTrack = styled.div`
   height: 4px;
   width: 100%;
-  background: #e5e7eb;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   border-radius: 2px;
   overflow: hidden;
 `
@@ -255,7 +281,7 @@ const LinkedDataLoadingWrap = styled.div`
   justify-content: center;
   min-height: 200px;
   gap: 16px;
-  color: ${MUTED};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : MUTED)};
   font-size: 14px;
   font-weight: 500;
 `
@@ -329,8 +355,9 @@ const FlowCard = styled.button<{ $leftPct: number; $widthPct: number }>`
   top: 0;
   height: 100%;
   padding: 14px 16px;
-  background: #ffffff;
-  border: 1px solid ${BORDER};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
   cursor: pointer;
@@ -361,8 +388,9 @@ const FlowCardPill = styled.button<{ $leftPct: number; $widthPct: number }>`
   transform: translateY(-50%);
   min-height: 40px;
   padding: 8px 12px;
-  background: #ffffff;
-  border: 1px solid ${BORDER};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
   border-radius: 10px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
   cursor: pointer;
@@ -379,7 +407,8 @@ const FlowCardPill = styled.button<{ $leftPct: number; $widthPct: number }>`
 
   &:hover {
     border-color: #c7d2fe;
-    background: #f5f3ff;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#f5f3ff'};
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
   }
 `
@@ -393,7 +422,8 @@ const FlowConnector = styled.div<{ $leftPct: number }>`
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #eef2ff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
   border: 1px solid #c7d2fe;
   display: flex;
   align-items: center;
@@ -439,7 +469,7 @@ const FlowBottomAxisLabel = styled.span<{ $leftPct: number }>`
   bottom: 0;
   font-size: 12px;
   font-weight: 600;
-  color: ${MUTED};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : MUTED)};
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 `
@@ -451,7 +481,8 @@ const RelationBadge = styled.span`
   color: #4f46e5;
   padding: 4px 10px;
   border-radius: 8px;
-  background: #eef2ff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
   white-space: nowrap;
 `
 
@@ -475,7 +506,7 @@ const FlowFullViewModal = styled.div`
   max-width: 100%;
   height: 100%;
   max-height: 100%;
-  background: #ffffff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   display: flex;
@@ -490,15 +521,16 @@ const FlowFullViewHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid ${BORDER};
-  background: #fafafa;
+  border-bottom: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafafa')};
 `
 
 const FlowFullViewTitle = styled.h2`
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: ${TITLE};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : TITLE)};
 `
 
 const FlowFullViewCloseBtn = styled.button`
@@ -508,9 +540,10 @@ const FlowFullViewCloseBtn = styled.button`
   padding: 8px 14px;
   font-size: 14px;
   font-weight: 600;
-  color: #64748b;
-  background: #ffffff;
-  border: 1px solid ${BORDER};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
   border-radius: 10px;
   cursor: pointer;
   transition:
@@ -519,9 +552,9 @@ const FlowFullViewCloseBtn = styled.button`
     border-color 0.2s;
 
   &:hover {
-    background: #f1f5f9;
-    color: ${TITLE};
-    border-color: #cbd5e1;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : TITLE)};
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#cbd5e1')};
   }
 
   &:focus-visible {
@@ -551,6 +584,8 @@ export function LinkedHistoricalCountriesSection({
   country,
 }: LinkedHistoricalCountriesSectionProps) {
   const navigate = useNavigate()
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const list = country.historicalCountries ?? []
   const count = list.length
   const [viewMode, setViewMode] = useState<'list' | 'flow'>('list')
@@ -982,7 +1017,7 @@ export function LinkedHistoricalCountriesSection({
         flexDirection: 'column',
         gap: 32,
         padding: '36px 32px 48px',
-        background: '#ffffff',
+        background: isDark ? '#212121' : '#ffffff',
         flex: viewMode === 'flow' ? '0 0 auto' : 1,
         minHeight: viewMode === 'flow' ? 'auto' : 0,
         position: 'relative',
@@ -1037,7 +1072,13 @@ export function LinkedHistoricalCountriesSection({
             흐름도
           </ViewModeTab>
         </ViewModeTabs>
-        <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>
+        <span
+          style={{
+            fontSize: 13,
+            color: isDark ? '#a1a1aa' : '#64748b',
+            fontWeight: 500,
+          }}
+        >
           {viewMode === 'list'
             ? '연결된 역사적 국가를 카드 목록으로 볼 수 있습니다.'
             : '전임·계승 국가 변천을 한눈에 볼 수 있습니다.'}
@@ -1126,7 +1167,7 @@ export function LinkedHistoricalCountriesSection({
                   fontSize: 13,
                   fontWeight: 600,
                   color: '#4f46e5',
-                  background: '#eef2ff',
+                  background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
                   border: '1px solid #c7d2fe',
                   borderRadius: 10,
                   cursor: 'pointer',
@@ -1235,11 +1276,11 @@ export function LinkedHistoricalCountriesSection({
                                     marginBottom: -4,
                                     fontSize: 10,
                                     fontWeight: 600,
-                                    color: '#64748b',
-                                    background: '#f8fafc',
+                                    color: isDark ? '#a1a1aa' : '#64748b',
+                                    background: isDark ? '#1d1d1d' : '#f8fafc',
                                     padding: '3px 8px',
                                     borderRadius: 6,
-                                    border: '1px solid #e2e8f0',
+                                    border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
                                     whiteSpace: 'nowrap',
                                     boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                                   }}
@@ -1317,7 +1358,7 @@ export function LinkedHistoricalCountriesSection({
                                       style={{
                                         fontSize: 13,
                                         fontWeight: 600,
-                                        color: TITLE,
+                                        color: isDark ? '#f5f5f5' : TITLE,
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
                                         whiteSpace: 'nowrap',
@@ -1347,7 +1388,7 @@ export function LinkedHistoricalCountriesSection({
                                           height: 44,
                                           borderRadius: 10,
                                           objectFit: 'cover',
-                                          border: `1px solid ${BORDER}`,
+                                          border: `1px solid ${isDark ? '#2a2a2a' : BORDER}`,
                                           flexShrink: 0,
                                         }}
                                       />
@@ -1357,7 +1398,9 @@ export function LinkedHistoricalCountriesSection({
                                           width: 44,
                                           height: 44,
                                           borderRadius: 10,
-                                          background: '#eef2ff',
+                                          background: isDark
+                                            ? 'rgba(99,102,241,0.12)'
+                                            : '#eef2ff',
                                           display: 'flex',
                                           alignItems: 'center',
                                           justifyContent: 'center',
@@ -1380,7 +1423,7 @@ export function LinkedHistoricalCountriesSection({
                                         style={{
                                           fontSize: 14,
                                           fontWeight: 700,
-                                          color: TITLE,
+                                          color: isDark ? '#f5f5f5' : TITLE,
                                           letterSpacing: '-0.02em',
                                           overflow: 'hidden',
                                           textOverflow: 'ellipsis',
@@ -1411,7 +1454,7 @@ export function LinkedHistoricalCountriesSection({
                                               })
                                               return Array.from(byEventType.entries()).map(([eventType, list]) => (
                                                 <div key={eventType} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                                                  <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginRight: 2 }}>
+                                                  <span style={{ fontSize: 10, fontWeight: 700, color: isDark ? '#a1a1aa' : '#64748b', marginRight: 2 }}>
                                                     {TRANSITION_EVENT_LABELS[eventType as TransitionEventType] ?? '계승'}
                                                   </span>
                                                   {list.map((s) => (
@@ -1423,7 +1466,7 @@ export function LinkedHistoricalCountriesSection({
                                                         fontSize: 10,
                                                         fontWeight: 600,
                                                         color: '#4f46e5',
-                                                        background: '#eef2ff',
+                                                        background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
                                                         padding: '2px 6px',
                                                         borderRadius: 4,
                                                         border: '1px solid #c7d2fe',
@@ -1437,7 +1480,7 @@ export function LinkedHistoricalCountriesSection({
                                             })()}
                                             {incoming.personalUnion.length > 0 && (
                                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                                                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginRight: 2 }}>동군연합</span>
+                                                <span style={{ fontSize: 10, fontWeight: 700, color: isDark ? '#a1a1aa' : '#64748b', marginRight: 2 }}>동군연합</span>
                                                 {incoming.personalUnion.map((bid) => (
                                                   <span
                                                     key={`p-${bid}`}
@@ -1447,7 +1490,7 @@ export function LinkedHistoricalCountriesSection({
                                                       fontSize: 10,
                                                       fontWeight: 600,
                                                       color: '#6366f1',
-                                                      background: '#f5f3ff',
+                                                      background: isDark ? 'rgba(99,102,241,0.12)' : '#f5f3ff',
                                                       padding: '2px 6px',
                                                       borderRadius: 4,
                                                       border: '1px solid #ddd6fe',
@@ -1460,7 +1503,7 @@ export function LinkedHistoricalCountriesSection({
                                             )}
                                             {incoming.membership.length > 0 && (
                                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                                                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginRight: 2 }}>소속·연방</span>
+                                                <span style={{ fontSize: 10, fontWeight: 700, color: isDark ? '#a1a1aa' : '#64748b', marginRight: 2 }}>소속·연방</span>
                                                 {incoming.membership.map(
                                                   ({ id: bid, role, isLeadingMember }) => (
                                                     <span
@@ -1470,11 +1513,11 @@ export function LinkedHistoricalCountriesSection({
                                                         flexShrink: 0,
                                                         fontSize: 10,
                                                         fontWeight: 600,
-                                                        color: isLeadingMember ? '#b45309' : '#64748b',
-                                                        background: isLeadingMember ? '#fef3c7' : '#f1f5f9',
+                                                        color: isLeadingMember ? '#b45309' : isDark ? '#a1a1aa' : '#64748b',
+                                                        background: isLeadingMember ? '#fef3c7' : isDark ? '#2a2a2a' : '#f1f5f9',
                                                         padding: '2px 6px',
                                                         borderRadius: 4,
-                                                        border: `1px solid ${isLeadingMember ? '#fcd34d' : '#e2e8f0'}`,
+                                                        border: `1px solid ${isLeadingMember ? '#fcd34d' : isDark ? '#2a2a2a' : '#e2e8f0'}`,
                                                       }}
                                                     >
                                                       {idToCountry.get(bid)?.name ?? bid}
@@ -1491,7 +1534,7 @@ export function LinkedHistoricalCountriesSection({
                                         style={{
                                           marginTop: 4,
                                           fontSize: 12,
-                                          color: MUTED,
+                                          color: isDark ? '#a1a1aa' : MUTED,
                                           fontWeight: 500,
                                         }}
                                       >
@@ -1711,11 +1754,11 @@ export function LinkedHistoricalCountriesSection({
                                     marginBottom: -4,
                                     fontSize: 10,
                                     fontWeight: 600,
-                                    color: '#64748b',
-                                    background: '#f8fafc',
+                                    color: isDark ? '#a1a1aa' : '#64748b',
+                                    background: isDark ? '#1d1d1d' : '#f8fafc',
                                     padding: '3px 8px',
                                     borderRadius: 6,
-                                    border: '1px solid #e2e8f0',
+                                    border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
                                     whiteSpace: 'nowrap',
                                     boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                                   }}
@@ -1790,7 +1833,7 @@ export function LinkedHistoricalCountriesSection({
                                         style={{
                                           fontSize: 13,
                                           fontWeight: 600,
-                                          color: TITLE,
+                                          color: isDark ? '#f5f5f5' : TITLE,
                                         }}
                                       >
                                         {h.name}
@@ -1798,7 +1841,7 @@ export function LinkedHistoricalCountriesSection({
                                       <span
                                         style={{
                                           fontSize: 11,
-                                          color: MUTED,
+                                          color: isDark ? '#a1a1aa' : MUTED,
                                         }}
                                       >
                                         {periodText}
@@ -1841,7 +1884,7 @@ export function LinkedHistoricalCountriesSection({
                                               width: 32,
                                               height: 20,
                                               borderRadius: 4,
-                                              background: BORDER,
+                                              background: isDark ? '#2a2a2a' : BORDER,
                                               display: 'inline-block',
                                             }}
                                           />
@@ -1853,6 +1896,7 @@ export function LinkedHistoricalCountriesSection({
                                             overflow: 'hidden',
                                             textOverflow: 'ellipsis',
                                             whiteSpace: 'nowrap',
+                                            color: isDark ? '#f5f5f5' : 'inherit',
                                           }}
                                         >
                                           {h.name}
@@ -1913,7 +1957,7 @@ export function LinkedHistoricalCountriesSection({
                                                       style={{
                                                         fontSize: 10,
                                                         fontWeight: 700,
-                                                        color: '#64748b',
+                                                        color: isDark ? '#a1a1aa' : '#64748b',
                                                         marginRight: 2,
                                                       }}
                                                     >
@@ -1930,7 +1974,7 @@ export function LinkedHistoricalCountriesSection({
                                                           fontSize: 10,
                                                           fontWeight: 600,
                                                           color: '#4f46e5',
-                                                          background: '#eef2ff',
+                                                          background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
                                                           padding: '2px 6px',
                                                           borderRadius: 4,
                                                           border: '1px solid #c7d2fe',
@@ -1957,7 +2001,7 @@ export function LinkedHistoricalCountriesSection({
                                                   style={{
                                                     fontSize: 10,
                                                     fontWeight: 700,
-                                                    color: '#64748b',
+                                                    color: isDark ? '#a1a1aa' : '#64748b',
                                                     marginRight: 2,
                                                   }}
                                                 >
@@ -1972,7 +2016,7 @@ export function LinkedHistoricalCountriesSection({
                                                         fontSize: 10,
                                                         fontWeight: 600,
                                                         color: '#6366f1',
-                                                        background: '#f5f3ff',
+                                                        background: isDark ? 'rgba(99,102,241,0.12)' : '#f5f3ff',
                                                         padding: '2px 6px',
                                                         borderRadius: 4,
                                                         border: '1px solid #ddd6fe',
@@ -1998,7 +2042,7 @@ export function LinkedHistoricalCountriesSection({
                                                   style={{
                                                     fontSize: 10,
                                                     fontWeight: 700,
-                                                    color: '#64748b',
+                                                    color: isDark ? '#a1a1aa' : '#64748b',
                                                     marginRight: 2,
                                                   }}
                                                 >
@@ -2012,11 +2056,11 @@ export function LinkedHistoricalCountriesSection({
                                                         flexShrink: 0,
                                                         fontSize: 10,
                                                         fontWeight: 600,
-                                                        color: '#64748b',
-                                                        background: '#f1f5f9',
+                                                        color: isDark ? '#a1a1aa' : '#64748b',
+                                                        background: isDark ? '#2a2a2a' : '#f1f5f9',
                                                         padding: '2px 6px',
                                                         borderRadius: 4,
-                                                        border: '1px solid #e2e8f0',
+                                                        border: `1px solid ${isDark ? '#2a2a2a' : '#e2e8f0'}`,
                                                       }}
                                                     >
                                                       {idToCountry.get(m.id)
@@ -2032,7 +2076,7 @@ export function LinkedHistoricalCountriesSection({
                                       <div
                                         style={{
                                           fontSize: 11,
-                                          color: MUTED,
+                                          color: isDark ? '#a1a1aa' : MUTED,
                                           marginTop: 2,
                                         }}
                                       >
@@ -2161,6 +2205,8 @@ function FlowCardRelations({
   idToCountry: Map<string, HistoricalCountryItem>
   currentId: string
 }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const hasAny =
     rels.transitions.length > 0 ||
     rels.relations.length > 0 ||
@@ -2172,18 +2218,18 @@ function FlowCardRelations({
       style={{
         marginTop: 12,
         paddingTop: 12,
-        borderTop: `1px solid ${BORDER}`,
+        borderTop: `1px solid ${isDark ? '#2a2a2a' : BORDER}`,
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
         fontSize: 12,
-        color: MUTED,
+        color: isDark ? '#a1a1aa' : MUTED,
       }}
     >
       <div
         style={{
           fontWeight: 600,
-          color: TITLE,
+          color: isDark ? '#f5f5f5' : TITLE,
           fontSize: 11,
           letterSpacing: '0.04em',
           textTransform: 'uppercase',
@@ -2193,7 +2239,7 @@ function FlowCardRelations({
       </div>
       {rels.transitions.length > 0 && (
         <div>
-          <span style={{ fontWeight: 600, color: MUTED }}>변천 </span>
+          <span style={{ fontWeight: 600, color: isDark ? '#a1a1aa' : MUTED }}>변천 </span>
           {rels.transitions.map((t) => {
             const isIncoming = t.successorId === currentId
             const otherId = isIncoming ? t.predecessorId : t.successorId
@@ -2221,7 +2267,7 @@ function FlowCardRelations({
       )}
       {rels.relations.length > 0 && (
         <div>
-          <span style={{ fontWeight: 600, color: MUTED }}>수평 관계 </span>
+          <span style={{ fontWeight: 600, color: isDark ? '#a1a1aa' : MUTED }}>수평 관계 </span>
           {rels.relations.map((r) => {
             const otherId =
               r.subjectCountryId === currentId
@@ -2246,7 +2292,7 @@ function FlowCardRelations({
       )}
       {rels.memberships.length > 0 && (
         <div>
-          <span style={{ fontWeight: 600, color: MUTED }}>소속 </span>
+          <span style={{ fontWeight: 600, color: isDark ? '#a1a1aa' : MUTED }}>소속 </span>
           {rels.memberships.map((m) => {
             const isParent = m.historicalCountryId === currentId
             const otherName = isParent ? m.memberName : m.parentName
@@ -2269,12 +2315,13 @@ function FlowCardRelations({
 }
 
 const EmptyCard = styled.div`
-  background: #fafafa;
-  border: 1px solid ${BORDER};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafafa')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
   border-radius: 16px;
   padding: 56px 48px;
   text-align: center;
-  color: ${MUTED};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : MUTED)};
   font-size: 15px;
   line-height: 1.65;
   font-weight: 500;
@@ -2282,8 +2329,9 @@ const EmptyCard = styled.div`
 
 /** 목록용 국가 카드 — 행정조직 카드와 동일 톤 */
 const ModernCountryCard = styled(motion.div)`
-  background: #ffffff;
-  border: 1px solid ${BORDER};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#ffffff')};
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : BORDER)};
   border-radius: 16px;
   padding: 28px;
   box-shadow:
@@ -2295,7 +2343,7 @@ const ModernCountryCard = styled(motion.div)`
     border-color 0.2s ease;
 
   &:hover {
-    border-color: #d1d5db;
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
     transform: translateY(-2px);
   }
@@ -2318,6 +2366,8 @@ function HistoricalCountryCard({
   idToCountry: Map<string, HistoricalCountryItem>
   onDetail: () => void
 }) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const totalRels =
     relations.transitions.length +
     relations.relations.length +
@@ -2356,7 +2406,7 @@ function HistoricalCountryCard({
                 height: 64,
                 borderRadius: 14,
                 objectFit: 'cover',
-                border: `1px solid ${BORDER}`,
+                border: `1px solid ${isDark ? '#2a2a2a' : BORDER}`,
                 flexShrink: 0,
               }}
             />
@@ -2366,7 +2416,7 @@ function HistoricalCountryCard({
                 width: 64,
                 height: 64,
                 borderRadius: 14,
-                background: '#eef2ff',
+                background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -2384,7 +2434,7 @@ function HistoricalCountryCard({
                 margin: 0,
                 fontSize: 20,
                 fontWeight: 800,
-                color: '#0f172a',
+                color: isDark ? '#f5f5f5' : '#0f172a',
                 letterSpacing: '-0.03em',
               }}
             >
@@ -2395,7 +2445,7 @@ function HistoricalCountryCard({
                 style={{
                   margin: '6px 0 0',
                   fontSize: 14,
-                  color: '#64748b',
+                  color: isDark ? '#a1a1aa' : '#64748b',
                   fontWeight: 500,
                 }}
               >
@@ -2416,7 +2466,7 @@ function HistoricalCountryCard({
                   fontSize: 12,
                   fontWeight: 600,
                   color: '#4f46e5',
-                  background: '#eef2ff',
+                  background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
                   padding: '4px 10px',
                   borderRadius: 8,
                 }}
@@ -2428,7 +2478,7 @@ function HistoricalCountryCard({
               <span
                 style={{
                   fontSize: 13,
-                  color: '#64748b',
+                  color: isDark ? '#a1a1aa' : '#64748b',
                   fontWeight: 500,
                 }}
               >
@@ -2478,21 +2528,23 @@ function HistoricalCountryCard({
             gap: 8,
             padding: '10px 18px',
             borderRadius: 12,
-            border: `1px solid ${BORDER}`,
-            background: '#fff',
+            border: `1px solid ${isDark ? '#2a2a2a' : BORDER}`,
+            background: isDark ? '#212121' : '#fff',
             color: '#4f46e5',
             cursor: 'pointer',
             fontSize: 13,
             fontWeight: 600,
             flexShrink: 0,
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#eef2ff'
-            e.currentTarget.style.borderColor = '#c7d2fe'
+          onMouseEnter={(event) => {
+            event.currentTarget.style.background = isDark
+              ? 'rgba(99,102,241,0.12)'
+              : '#eef2ff'
+            event.currentTarget.style.borderColor = '#c7d2fe'
           }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#fff'
-            e.currentTarget.style.borderColor = BORDER
+          onMouseLeave={(event) => {
+            event.currentTarget.style.background = isDark ? '#212121' : '#fff'
+            event.currentTarget.style.borderColor = isDark ? '#2a2a2a' : BORDER
           }}
         >
           상세 보기

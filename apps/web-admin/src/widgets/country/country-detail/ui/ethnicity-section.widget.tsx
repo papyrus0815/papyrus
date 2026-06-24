@@ -5,18 +5,19 @@ import { useNavigate } from 'react-router-dom'
 import type { Ethnicity } from '@/shared/api/ethnicity'
 import { ethnicityApi } from '@/shared/api/ethnicity'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { useThemeStore } from '@/shared/styles/theme.store'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 
-const sectionLabelStyle: React.CSSProperties = {
+const sectionLabelStyle = (isDark: boolean): React.CSSProperties => ({
   marginBottom: 18,
   fontSize: 12,
   fontWeight: 600,
-  color: '#64748b',
+  color: isDark ? '#a1a1aa' : '#64748b',
   lineHeight: 1.4,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
-}
+})
 
 export interface EthnicitySectionProps {
   /** 현대 국가 ID (있으면 해당 국가 구성 민족 조회·설정) */
@@ -34,6 +35,8 @@ export function EthnicitySection({
   historicalCountryId,
 }: EthnicitySectionProps) {
   const navigate = useNavigate()
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const [list, setList] = useState<Ethnicity[]>([])
   const [allEthnicities, setAllEthnicities] = useState<Ethnicity[]>([])
   const [loading, setLoading] = useState(false)
@@ -108,7 +111,7 @@ export function EthnicitySection({
   if (!entityId) {
     return (
       <div style={{ padding: '36px 32px 48px' }}>
-        <p style={{ color: '#64748b', fontSize: 14 }}>
+        <p style={{ color: isDark ? '#a1a1aa' : '#64748b', fontSize: 14 }}>
           국가를 선택하면 구성 민족을 관리할 수 있습니다.
         </p>
       </div>
@@ -141,7 +144,7 @@ export function EthnicitySection({
               margin: 0,
               fontSize: 26,
               fontWeight: 800,
-              color: '#0f172a',
+              color: isDark ? '#f5f5f5' : '#0f172a',
               letterSpacing: '-0.04em',
               lineHeight: 1.25,
             }}
@@ -152,7 +155,7 @@ export function EthnicitySection({
             style={{
               margin: '10px 0 0',
               fontSize: 15,
-              color: '#64748b',
+              color: isDark ? '#a1a1aa' : '#64748b',
               lineHeight: 1.55,
               maxWidth: 540,
               fontWeight: 500,
@@ -180,9 +183,9 @@ export function EthnicitySection({
               gap: 8,
               padding: '10px 18px',
               borderRadius: 12,
-              border: '1px solid #e5e7eb',
-              background: '#fff',
-              color: '#374151',
+              border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
+              background: isDark ? '#212121' : '#fff',
+              color: isDark ? '#d1d5db' : '#374151',
               cursor: 'pointer',
               fontSize: 13,
               fontWeight: 600,
@@ -213,18 +216,20 @@ export function EthnicitySection({
       </header>
 
       <section aria-label="구성 민족 목록">
-        <div style={sectionLabelStyle}>구성 민족</div>
+        <div style={sectionLabelStyle(isDark)}>구성 민족</div>
         {loading ? (
-          <p style={{ color: '#64748b', fontSize: 14 }}>불러오는 중...</p>
+          <p style={{ color: isDark ? '#a1a1aa' : '#64748b', fontSize: 14 }}>
+            불러오는 중...
+          </p>
         ) : list.length === 0 ? (
           <div
             style={{
               padding: 32,
               textAlign: 'center',
-              background: '#f8fafc',
+              background: isDark ? '#1d1d1d' : '#f8fafc',
               borderRadius: 16,
-              border: '1px dashed #e2e8f0',
-              color: '#64748b',
+              border: isDark ? '1px dashed #2a2a2a' : '1px dashed #e2e8f0',
+              color: isDark ? '#a1a1aa' : '#64748b',
               fontSize: 14,
             }}
           >
@@ -247,9 +252,9 @@ export function EthnicitySection({
                   alignItems: 'center',
                   gap: 12,
                   padding: 14,
-                  background: '#fff',
+                  background: isDark ? '#212121' : '#fff',
                   borderRadius: 14,
-                  border: '1px solid #e5e7eb',
+                  border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                 }}
               >
@@ -261,7 +266,7 @@ export function EthnicitySection({
                       borderRadius: 10,
                       overflow: 'hidden',
                       flexShrink: 0,
-                      background: '#f1f5f9',
+                      background: isDark ? '#2a2a2a' : '#f1f5f9',
                     }}
                   >
                     <img
@@ -280,8 +285,9 @@ export function EthnicitySection({
                       width: 44,
                       height: 44,
                       borderRadius: 10,
-                      background:
-                        'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+                      background: isDark
+                        ? 'rgba(99,102,241,0.12)'
+                        : 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
                       flexShrink: 0,
                       display: 'flex',
                       alignItems: 'center',
@@ -294,13 +300,21 @@ export function EthnicitySection({
                 )}
                 <div style={{ minWidth: 0 }}>
                   <div
-                    style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}
+                    style={{
+                      fontWeight: 600,
+                      color: isDark ? '#f5f5f5' : '#0f172a',
+                      fontSize: 14,
+                    }}
                   >
                     {e.name}
                   </div>
                   {e.nameLocal && (
                     <div
-                      style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}
+                      style={{
+                        fontSize: 12,
+                        color: isDark ? '#a1a1aa' : '#64748b',
+                        marginTop: 2,
+                      }}
                     >
                       {e.nameLocal}
                     </div>
@@ -338,8 +352,9 @@ export function EthnicitySection({
               style={{
                 padding: '8px 16px',
                 borderRadius: 10,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
+                border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
+                background: isDark ? '#212121' : '#fff',
+                color: isDark ? '#d1d5db' : undefined,
                 cursor: 'pointer',
                 fontSize: 13,
               }}

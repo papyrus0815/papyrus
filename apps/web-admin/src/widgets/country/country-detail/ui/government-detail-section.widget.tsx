@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import { useThemeStore } from '@/shared/styles/theme.store'
+
 import { mockGovernmentData } from '../mock'
 import type {
   Agency,
@@ -18,6 +20,8 @@ type SelectedOrg = {
  * 정부 행정조직 섹션 위젯
  */
 export function GovernmentInfoSection() {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const [filter, setFilter] = useState<OrgFilter>('all')
   const [selectedOrg, setSelectedOrg] = useState<SelectedOrg>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -103,8 +107,8 @@ export function GovernmentInfoSection() {
         {/* 검색창 */}
         <div
           style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
+            background: isDark ? '#212121' : '#ffffff',
+            border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
             borderRadius: '12px',
             padding: '12px 16px',
             display: 'flex',
@@ -117,7 +121,7 @@ export function GovernmentInfoSection() {
             height="18"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#94a3b8"
+            stroke={isDark ? '#71717a' : '#94a3b8'}
             strokeWidth="2"
           >
             <circle cx="11" cy="11" r="8" />
@@ -133,7 +137,8 @@ export function GovernmentInfoSection() {
               border: 'none',
               outline: 'none',
               fontSize: '14px',
-              color: '#0f172a',
+              background: 'transparent',
+              color: isDark ? '#f5f5f5' : '#0f172a',
             }}
           />
         </div>
@@ -180,12 +185,23 @@ export function GovernmentInfoSection() {
                 border:
                   filter === filterItem.key
                     ? '1px solid #8b5cf6'
-                    : '1px solid #e2e8f0',
+                    : isDark
+                      ? '1px solid #2a2a2a'
+                      : '1px solid #e2e8f0',
                 background:
                   filter === filterItem.key
-                    ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
-                    : '#ffffff',
-                color: filter === filterItem.key ? '#8b5cf6' : '#64748b',
+                    ? isDark
+                      ? 'rgba(99,102,241,0.12)'
+                      : 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
+                    : isDark
+                      ? '#212121'
+                      : '#ffffff',
+                color:
+                  filter === filterItem.key
+                    ? '#8b5cf6'
+                    : isDark
+                      ? '#a1a1aa'
+                      : '#64748b',
                 fontSize: '13px',
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -196,14 +212,22 @@ export function GovernmentInfoSection() {
               }}
               onMouseEnter={(e) => {
                 if (filter !== filterItem.key) {
-                  e.currentTarget.style.borderColor = '#cbd5e1'
-                  e.currentTarget.style.background = '#f8fafc'
+                  e.currentTarget.style.borderColor = isDark
+                    ? '#3f3f46'
+                    : '#cbd5e1'
+                  e.currentTarget.style.background = isDark
+                    ? '#2a2a2a'
+                    : '#f8fafc'
                 }
               }}
               onMouseLeave={(e) => {
                 if (filter !== filterItem.key) {
-                  e.currentTarget.style.borderColor = '#e2e8f0'
-                  e.currentTarget.style.background = '#ffffff'
+                  e.currentTarget.style.borderColor = isDark
+                    ? '#2a2a2a'
+                    : '#e2e8f0'
+                  e.currentTarget.style.background = isDark
+                    ? '#212121'
+                    : '#ffffff'
                 }
               }}
             >
@@ -211,8 +235,18 @@ export function GovernmentInfoSection() {
               <span
                 style={{
                   fontSize: '11px',
-                  background: filter === filterItem.key ? '#8b5cf6' : '#e2e8f0',
-                  color: filter === filterItem.key ? '#ffffff' : '#64748b',
+                  background:
+                    filter === filterItem.key
+                      ? '#8b5cf6'
+                      : isDark
+                        ? '#2a2a2a'
+                        : '#e2e8f0',
+                  color:
+                    filter === filterItem.key
+                      ? '#ffffff'
+                      : isDark
+                        ? '#a1a1aa'
+                        : '#64748b',
                   padding: '2px 6px',
                   borderRadius: '10px',
                   fontWeight: 700,
@@ -245,26 +279,40 @@ export function GovernmentInfoSection() {
                 padding: '14px',
                 background:
                   selectedOrg?.id === ministry.id
-                    ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
-                    : '#ffffff',
+                    ? isDark
+                      ? 'rgba(99,102,241,0.12)'
+                      : 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
+                    : isDark
+                      ? '#212121'
+                      : '#ffffff',
                 border:
                   selectedOrg?.id === ministry.id
                     ? '2px solid #8b5cf6'
-                    : '1px solid #e2e8f0',
+                    : isDark
+                      ? '1px solid #2a2a2a'
+                      : '1px solid #e2e8f0',
                 borderRadius: '10px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
                 if (selectedOrg?.id !== ministry.id) {
-                  e.currentTarget.style.borderColor = '#cbd5e1'
-                  e.currentTarget.style.background = '#f8fafc'
+                  e.currentTarget.style.borderColor = isDark
+                    ? '#3f3f46'
+                    : '#cbd5e1'
+                  e.currentTarget.style.background = isDark
+                    ? '#2a2a2a'
+                    : '#f8fafc'
                 }
               }}
               onMouseLeave={(e) => {
                 if (selectedOrg?.id !== ministry.id) {
-                  e.currentTarget.style.borderColor = '#e2e8f0'
-                  e.currentTarget.style.background = '#ffffff'
+                  e.currentTarget.style.borderColor = isDark
+                    ? '#2a2a2a'
+                    : '#e2e8f0'
+                  e.currentTarget.style.background = isDark
+                    ? '#212121'
+                    : '#ffffff'
                 }
               }}
             >
@@ -293,7 +341,7 @@ export function GovernmentInfoSection() {
                     style={{
                       fontSize: '14px',
                       fontWeight: 700,
-                      color: '#0f172a',
+                      color: isDark ? '#f5f5f5' : '#0f172a',
                     }}
                   >
                     {ministry.name}
@@ -304,7 +352,7 @@ export function GovernmentInfoSection() {
                     fontSize: '11px',
                     fontWeight: 600,
                     color: '#8b5cf6',
-                    background: '#f5f3ff',
+                    background: isDark ? 'rgba(99,102,241,0.12)' : '#f5f3ff',
                     padding: '3px 8px',
                     borderRadius: '4px',
                   }}
@@ -315,7 +363,7 @@ export function GovernmentInfoSection() {
               <div
                 style={{
                   fontSize: '12px',
-                  color: '#64748b',
+                  color: isDark ? '#a1a1aa' : '#64748b',
                   marginLeft: '24px',
                 }}
               >
@@ -335,26 +383,40 @@ export function GovernmentInfoSection() {
                 padding: '14px',
                 background:
                   selectedOrg?.id === body.id
-                    ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
-                    : '#ffffff',
+                    ? isDark
+                      ? 'rgba(99,102,241,0.12)'
+                      : 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
+                    : isDark
+                      ? '#212121'
+                      : '#ffffff',
                 border:
                   selectedOrg?.id === body.id
                     ? '2px solid #8b5cf6'
-                    : '1px solid #e2e8f0',
+                    : isDark
+                      ? '1px solid #2a2a2a'
+                      : '1px solid #e2e8f0',
                 borderRadius: '10px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
                 if (selectedOrg?.id !== body.id) {
-                  e.currentTarget.style.borderColor = '#cbd5e1'
-                  e.currentTarget.style.background = '#f8fafc'
+                  e.currentTarget.style.borderColor = isDark
+                    ? '#3f3f46'
+                    : '#cbd5e1'
+                  e.currentTarget.style.background = isDark
+                    ? '#2a2a2a'
+                    : '#f8fafc'
                 }
               }}
               onMouseLeave={(e) => {
                 if (selectedOrg?.id !== body.id) {
-                  e.currentTarget.style.borderColor = '#e2e8f0'
-                  e.currentTarget.style.background = '#ffffff'
+                  e.currentTarget.style.borderColor = isDark
+                    ? '#2a2a2a'
+                    : '#e2e8f0'
+                  e.currentTarget.style.background = isDark
+                    ? '#212121'
+                    : '#ffffff'
                 }
               }}
             >
@@ -384,7 +446,7 @@ export function GovernmentInfoSection() {
                     style={{
                       fontSize: '14px',
                       fontWeight: 700,
-                      color: '#0f172a',
+                      color: isDark ? '#f5f5f5' : '#0f172a',
                     }}
                   >
                     {body.name}
@@ -395,7 +457,7 @@ export function GovernmentInfoSection() {
                     fontSize: '11px',
                     fontWeight: 600,
                     color: '#8b5cf6',
-                    background: '#f5f3ff',
+                    background: isDark ? 'rgba(99,102,241,0.12)' : '#f5f3ff',
                     padding: '3px 8px',
                     borderRadius: '4px',
                   }}
@@ -406,7 +468,7 @@ export function GovernmentInfoSection() {
               <div
                 style={{
                   fontSize: '12px',
-                  color: '#64748b',
+                  color: isDark ? '#a1a1aa' : '#64748b',
                   marginLeft: '24px',
                 }}
               >
@@ -424,26 +486,40 @@ export function GovernmentInfoSection() {
                 padding: '14px',
                 background:
                   selectedOrg?.id === agency.id
-                    ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
-                    : '#ffffff',
+                    ? isDark
+                      ? 'rgba(99,102,241,0.12)'
+                      : 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
+                    : isDark
+                      ? '#212121'
+                      : '#ffffff',
                 border:
                   selectedOrg?.id === agency.id
                     ? '2px solid #8b5cf6'
-                    : '1px solid #e2e8f0',
+                    : isDark
+                      ? '1px solid #2a2a2a'
+                      : '1px solid #e2e8f0',
                 borderRadius: '10px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
                 if (selectedOrg?.id !== agency.id) {
-                  e.currentTarget.style.borderColor = '#cbd5e1'
-                  e.currentTarget.style.background = '#f8fafc'
+                  e.currentTarget.style.borderColor = isDark
+                    ? '#3f3f46'
+                    : '#cbd5e1'
+                  e.currentTarget.style.background = isDark
+                    ? '#2a2a2a'
+                    : '#f8fafc'
                 }
               }}
               onMouseLeave={(e) => {
                 if (selectedOrg?.id !== agency.id) {
-                  e.currentTarget.style.borderColor = '#e2e8f0'
-                  e.currentTarget.style.background = '#ffffff'
+                  e.currentTarget.style.borderColor = isDark
+                    ? '#2a2a2a'
+                    : '#e2e8f0'
+                  e.currentTarget.style.background = isDark
+                    ? '#212121'
+                    : '#ffffff'
                 }
               }}
             >
@@ -475,7 +551,7 @@ export function GovernmentInfoSection() {
                     style={{
                       fontSize: '14px',
                       fontWeight: 700,
-                      color: '#0f172a',
+                      color: isDark ? '#f5f5f5' : '#0f172a',
                     }}
                   >
                     {agency.name}
@@ -486,7 +562,7 @@ export function GovernmentInfoSection() {
                     fontSize: '11px',
                     fontWeight: 600,
                     color: '#8b5cf6',
-                    background: '#f5f3ff',
+                    background: isDark ? 'rgba(99,102,241,0.12)' : '#f5f3ff',
                     padding: '3px 8px',
                     borderRadius: '4px',
                   }}
@@ -497,7 +573,7 @@ export function GovernmentInfoSection() {
               <div
                 style={{
                   fontSize: '12px',
-                  color: '#64748b',
+                  color: isDark ? '#a1a1aa' : '#64748b',
                   marginLeft: '24px',
                 }}
               >
@@ -515,26 +591,40 @@ export function GovernmentInfoSection() {
                 padding: '14px',
                 background:
                   selectedOrg?.id === local.id
-                    ? 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
-                    : '#ffffff',
+                    ? isDark
+                      ? 'rgba(99,102,241,0.12)'
+                      : 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
+                    : isDark
+                      ? '#212121'
+                      : '#ffffff',
                 border:
                   selectedOrg?.id === local.id
                     ? '2px solid #8b5cf6'
-                    : '1px solid #e2e8f0',
+                    : isDark
+                      ? '1px solid #2a2a2a'
+                      : '1px solid #e2e8f0',
                 borderRadius: '10px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
               onMouseEnter={(e) => {
                 if (selectedOrg?.id !== local.id) {
-                  e.currentTarget.style.borderColor = '#cbd5e1'
-                  e.currentTarget.style.background = '#f8fafc'
+                  e.currentTarget.style.borderColor = isDark
+                    ? '#3f3f46'
+                    : '#cbd5e1'
+                  e.currentTarget.style.background = isDark
+                    ? '#2a2a2a'
+                    : '#f8fafc'
                 }
               }}
               onMouseLeave={(e) => {
                 if (selectedOrg?.id !== local.id) {
-                  e.currentTarget.style.borderColor = '#e2e8f0'
-                  e.currentTarget.style.background = '#ffffff'
+                  e.currentTarget.style.borderColor = isDark
+                    ? '#2a2a2a'
+                    : '#e2e8f0'
+                  e.currentTarget.style.background = isDark
+                    ? '#212121'
+                    : '#ffffff'
                 }
               }}
             >
@@ -564,7 +654,7 @@ export function GovernmentInfoSection() {
                     style={{
                       fontSize: '14px',
                       fontWeight: 700,
-                      color: '#0f172a',
+                      color: isDark ? '#f5f5f5' : '#0f172a',
                     }}
                   >
                     {local.name}
@@ -575,7 +665,7 @@ export function GovernmentInfoSection() {
                     fontSize: '11px',
                     fontWeight: 600,
                     color: '#8b5cf6',
-                    background: '#f5f3ff',
+                    background: isDark ? 'rgba(99,102,241,0.12)' : '#f5f3ff',
                     padding: '3px 8px',
                     borderRadius: '4px',
                   }}
@@ -586,7 +676,7 @@ export function GovernmentInfoSection() {
               <div
                 style={{
                   fontSize: '12px',
-                  color: '#64748b',
+                  color: isDark ? '#a1a1aa' : '#64748b',
                   marginLeft: '24px',
                 }}
               >
@@ -602,8 +692,8 @@ export function GovernmentInfoSection() {
         <div
           style={{
             width: '70%',
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
+            background: isDark ? '#212121' : '#ffffff',
+            border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
             borderRadius: '16px',
             padding: '32px',
             overflowY: 'auto',
@@ -615,6 +705,7 @@ export function GovernmentInfoSection() {
             imageIndex={imageIndex}
             setImageIndex={setImageIndex}
             onClose={() => setSelectedOrg(null)}
+            isDark={isDark}
           />
         </div>
       )}
@@ -629,12 +720,14 @@ function OrganizationDetail({
   imageIndex,
   setImageIndex,
   onClose,
+  isDark,
 }: {
   data: Ministry | ConstitutionalBody | Agency | LocalGovernment
   type: 'ministry' | 'constitutional' | 'agency' | 'local'
   imageIndex: number
   setImageIndex: (index: number) => void
   onClose: () => void
+  isDark: boolean
 }) {
   return (
     <div>
@@ -648,8 +741,8 @@ function OrganizationDetail({
           width: '32px',
           height: '32px',
           borderRadius: '50%',
-          border: '1px solid #e2e8f0',
-          background: '#ffffff',
+          border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
+          background: isDark ? '#212121' : '#ffffff',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
@@ -657,10 +750,10 @@ function OrganizationDetail({
           transition: 'all 0.2s',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#f8fafc'
+          e.currentTarget.style.background = isDark ? '#2a2a2a' : '#f8fafc'
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = '#ffffff'
+          e.currentTarget.style.background = isDark ? '#212121' : '#ffffff'
         }}
       >
         <svg
@@ -668,7 +761,7 @@ function OrganizationDetail({
           height="16"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#64748b"
+          stroke={isDark ? '#a1a1aa' : '#64748b'}
           strokeWidth="2"
         >
           <line x1="18" y1="6" x2="6" y2="18" />
@@ -682,7 +775,7 @@ function OrganizationDetail({
           style={{
             fontSize: '28px',
             fontWeight: 800,
-            color: '#0f172a',
+            color: isDark ? '#f5f5f5' : '#0f172a',
             marginBottom: '8px',
           }}
         >
@@ -706,7 +799,7 @@ function OrganizationDetail({
                 alignItems: 'center',
                 gap: '6px',
                 fontSize: '14px',
-                color: '#64748b',
+                color: isDark ? '#a1a1aa' : '#64748b',
               }}
             >
               <svg
@@ -730,7 +823,7 @@ function OrganizationDetail({
                 alignItems: 'center',
                 gap: '6px',
                 fontSize: '14px',
-                color: '#64748b',
+                color: isDark ? '#a1a1aa' : '#64748b',
               }}
             >
               <svg
@@ -753,7 +846,7 @@ function OrganizationDetail({
               alignItems: 'center',
               gap: '6px',
               fontSize: '14px',
-              color: '#64748b',
+              color: isDark ? '#a1a1aa' : '#64748b',
             }}
           >
             <svg
@@ -786,7 +879,7 @@ function OrganizationDetail({
               borderRadius: '12px',
               overflow: 'hidden',
               marginBottom: '12px',
-              border: '1px solid #e2e8f0',
+              border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
             }}
           >
             <img
@@ -926,7 +1019,7 @@ function OrganizationDetail({
             style={{
               fontSize: '20px',
               fontWeight: 700,
-              color: '#0f172a',
+              color: isDark ? '#f5f5f5' : '#0f172a',
               marginBottom: '20px',
               display: 'flex',
               alignItems: 'center',
@@ -956,9 +1049,9 @@ function OrganizationDetail({
                   display: 'flex',
                   gap: '16px',
                   padding: '16px',
-                  background: getEventColor(event.type),
+                  background: getEventColor(event.type, isDark),
                   borderRadius: '10px',
-                  border: `1px solid ${getEventBorderColor(event.type)}`,
+                  border: `1px solid ${getEventBorderColor(event.type, isDark)}`,
                 }}
               >
                 <div
@@ -992,7 +1085,7 @@ function OrganizationDetail({
                     style={{
                       fontSize: '16px',
                       fontWeight: 700,
-                      color: '#0f172a',
+                      color: isDark ? '#f5f5f5' : '#0f172a',
                       marginBottom: '6px',
                     }}
                   >
@@ -1001,7 +1094,7 @@ function OrganizationDetail({
                   <p
                     style={{
                       fontSize: '14px',
-                      color: '#475569',
+                      color: isDark ? '#d1d5db' : '#475569',
                       lineHeight: '1.6',
                       margin: 0,
                     }}
@@ -1022,7 +1115,7 @@ function OrganizationDetail({
             style={{
               fontSize: '20px',
               fontWeight: 700,
-              color: '#0f172a',
+              color: isDark ? '#f5f5f5' : '#0f172a',
               marginBottom: '20px',
               display: 'flex',
               alignItems: 'center',
@@ -1063,7 +1156,9 @@ function OrganizationDetail({
                   paddingBottom: '20px',
                   borderBottom:
                     idx < (data as any).timeline.length - 1
-                      ? '1px solid #f1f5f9'
+                      ? isDark
+                        ? '1px solid #2a2a2a'
+                        : '1px solid #f1f5f9'
                       : 'none',
                 }}
               >
@@ -1083,8 +1178,9 @@ function OrganizationDetail({
                   style={{
                     display: 'inline-block',
                     padding: '4px 10px',
-                    background:
-                      'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                    background: isDark
+                      ? 'rgba(99,102,241,0.12)'
+                      : 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
                     borderRadius: '6px',
                     marginBottom: '8px',
                   }}
@@ -1102,7 +1198,7 @@ function OrganizationDetail({
                 <p
                   style={{
                     fontSize: '14px',
-                    color: '#334155',
+                    color: isDark ? '#d1d5db' : '#334155',
                     fontWeight: 600,
                     margin: 0,
                   }}
@@ -1113,7 +1209,7 @@ function OrganizationDetail({
                   <p
                     style={{
                       fontSize: '13px',
-                      color: '#64748b',
+                      color: isDark ? '#a1a1aa' : '#64748b',
                       marginTop: '4px',
                       marginLeft: '12px',
                     }}
@@ -1134,7 +1230,7 @@ function OrganizationDetail({
             style={{
               fontSize: '20px',
               fontWeight: 700,
-              color: '#0f172a',
+              color: isDark ? '#f5f5f5' : '#0f172a',
               marginBottom: '20px',
               display: 'flex',
               alignItems: 'center',
@@ -1157,10 +1253,12 @@ function OrganizationDetail({
           </h3>
           <div
             style={{
-              background: 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
+              background: isDark
+                ? '#1d1d1d'
+                : 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
               borderRadius: '12px',
               padding: '24px',
-              border: '1px solid #e5e5e5',
+              border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e5e5',
             }}
           >
             {/* 예산 그래프 */}
@@ -1170,7 +1268,7 @@ function OrganizationDetail({
                   style={{
                     fontSize: '16px',
                     fontWeight: 700,
-                    color: '#0f172a',
+                    color: isDark ? '#f5f5f5' : '#0f172a',
                     marginBottom: '16px',
                   }}
                 >
@@ -1230,7 +1328,7 @@ function OrganizationDetail({
                           style={{
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: '#64748b',
+                            color: isDark ? '#a1a1aa' : '#64748b',
                           }}
                         >
                           {stat.year}
@@ -1249,7 +1347,7 @@ function OrganizationDetail({
                   style={{
                     fontSize: '16px',
                     fontWeight: 700,
-                    color: '#0f172a',
+                    color: isDark ? '#f5f5f5' : '#0f172a',
                     marginBottom: '16px',
                   }}
                 >
@@ -1309,7 +1407,7 @@ function OrganizationDetail({
                           style={{
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: '#64748b',
+                            color: isDark ? '#a1a1aa' : '#64748b',
                           }}
                         >
                           {stat.year}
@@ -1328,7 +1426,7 @@ function OrganizationDetail({
                   style={{
                     fontSize: '16px',
                     fontWeight: 700,
-                    color: '#0f172a',
+                    color: isDark ? '#f5f5f5' : '#0f172a',
                     marginBottom: '16px',
                   }}
                 >
@@ -1388,7 +1486,7 @@ function OrganizationDetail({
                           style={{
                             fontSize: '12px',
                             fontWeight: 600,
-                            color: '#64748b',
+                            color: isDark ? '#a1a1aa' : '#64748b',
                           }}
                         >
                           {stat.year}
@@ -1410,7 +1508,7 @@ function OrganizationDetail({
             style={{
               fontSize: '20px',
               fontWeight: 700,
-              color: '#0f172a',
+              color: isDark ? '#f5f5f5' : '#0f172a',
               marginBottom: '16px',
               display: 'flex',
               alignItems: 'center',
@@ -1433,12 +1531,14 @@ function OrganizationDetail({
           <div
             style={{
               padding: '20px',
-              background: 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
+              background: isDark
+                ? '#1d1d1d'
+                : 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
               borderRadius: '12px',
               fontSize: '15px',
-              color: '#475569',
+              color: isDark ? '#d1d5db' : '#475569',
               lineHeight: '1.8',
-              border: '1px solid #e5e5e5',
+              border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e5e5',
             }}
           >
             {(data as any).history}
@@ -1447,7 +1547,7 @@ function OrganizationDetail({
       )}
 
       {/* 나머지 기본 정보들 */}
-      <BasicInfo data={data} type={type} />
+      <BasicInfo data={data} type={type} isDark={isDark} />
     </div>
   )
 }
@@ -1456,17 +1556,19 @@ function OrganizationDetail({
 function BasicInfo({
   data,
   type,
+  isDark,
 }: {
   data: Ministry | ConstitutionalBody | Agency | LocalGovernment
   type: 'ministry' | 'constitutional' | 'agency' | 'local'
+  isDark: boolean
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* 기본 정보 카드 */}
       <div
         style={{
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
+          background: isDark ? '#212121' : '#ffffff',
+          border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
           borderRadius: '12px',
           padding: '24px',
         }}
@@ -1475,7 +1577,7 @@ function BasicInfo({
           style={{
             fontSize: '18px',
             fontWeight: 700,
-            color: '#0f172a',
+            color: isDark ? '#f5f5f5' : '#0f172a',
             marginBottom: '16px',
           }}
         >
@@ -1489,19 +1591,23 @@ function BasicInfo({
           }}
         >
           {'employees' in data && (
-            <InfoItem label="소속 인원" value={data.employees} />
+            <InfoItem label="소속 인원" value={data.employees} isDark={isDark} />
           )}
           {'budget' in data && (
-            <InfoItem label="예산 규모" value={data.budget} />
+            <InfoItem label="예산 규모" value={data.budget} isDark={isDark} />
           )}
           {'members' in data && (
-            <InfoItem label="구성원" value={data.members} />
+            <InfoItem label="구성원" value={data.members} isDark={isDark} />
           )}
           {'population' in data && (
-            <InfoItem label="인구" value={data.population} />
+            <InfoItem label="인구" value={data.population} isDark={isDark} />
           )}
           {'districts' in data && (
-            <InfoItem label="자치구/시군" value={`${data.districts}개`} />
+            <InfoItem
+              label="자치구/시군"
+              value={`${data.districts}개`}
+              isDark={isDark}
+            />
           )}
         </div>
       </div>
@@ -1510,8 +1616,8 @@ function BasicInfo({
       {'responsibilities' in data && data.responsibilities && (
         <div
           style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
+            background: isDark ? '#212121' : '#ffffff',
+            border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
             borderRadius: '12px',
             padding: '24px',
           }}
@@ -1520,7 +1626,7 @@ function BasicInfo({
             style={{
               fontSize: '18px',
               fontWeight: 700,
-              color: '#0f172a',
+              color: isDark ? '#f5f5f5' : '#0f172a',
               marginBottom: '16px',
             }}
           >
@@ -1532,12 +1638,15 @@ function BasicInfo({
                 key={idx}
                 style={{
                   padding: '10px 16px',
-                  background:
-                    'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
-                  border: '1px solid #e9d5ff',
+                  background: isDark
+                    ? 'rgba(99,102,241,0.12)'
+                    : 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                  border: isDark
+                    ? '1px solid rgba(139,92,246,0.3)'
+                    : '1px solid #e9d5ff',
                   borderRadius: '8px',
                   fontSize: '14px',
-                  color: '#7c3aed',
+                  color: isDark ? '#a5b4fc' : '#7c3aed',
                   fontWeight: 600,
                 }}
               >
@@ -1554,8 +1663,8 @@ function BasicInfo({
         data.departments.length > 0 && (
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: isDark ? '#212121' : '#ffffff',
+              border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
               borderRadius: '12px',
               padding: '24px',
             }}
@@ -1564,7 +1673,7 @@ function BasicInfo({
               style={{
                 fontSize: '18px',
                 fontWeight: 700,
-                color: '#0f172a',
+                color: isDark ? '#f5f5f5' : '#0f172a',
                 marginBottom: '16px',
               }}
             >
@@ -1582,13 +1691,14 @@ function BasicInfo({
                   key={idx}
                   style={{
                     padding: '12px 16px',
-                    background:
-                      'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
+                    background: isDark
+                      ? '#1d1d1d'
+                      : 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
                     borderRadius: '8px',
                     fontSize: '14px',
-                    color: '#334155',
+                    color: isDark ? '#d1d5db' : '#334155',
                     fontWeight: 600,
-                    border: '1px solid #e5e5e5',
+                    border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e5e5',
                   }}
                 >
                   • {dept}
@@ -1602,8 +1712,8 @@ function BasicInfo({
       {'agencies' in data && data.agencies && data.agencies.length > 0 && (
         <div
           style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
+            background: isDark ? '#212121' : '#ffffff',
+            border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
             borderRadius: '12px',
             padding: '24px',
           }}
@@ -1612,7 +1722,7 @@ function BasicInfo({
             style={{
               fontSize: '18px',
               fontWeight: 700,
-              color: '#0f172a',
+              color: isDark ? '#f5f5f5' : '#0f172a',
               marginBottom: '16px',
             }}
           >
@@ -1626,13 +1736,14 @@ function BasicInfo({
                 key={idx}
                 style={{
                   padding: '12px 16px',
-                  background:
-                    'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
+                  background: isDark
+                    ? '#1d1d1d'
+                    : 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
                   borderRadius: '8px',
                   fontSize: '14px',
-                  color: '#334155',
+                  color: isDark ? '#d1d5db' : '#334155',
                   fontWeight: 600,
-                  border: '1px solid #e5e5e5',
+                  border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e5e5',
                 }}
               >
                 • {agency}
@@ -1648,8 +1759,8 @@ function BasicInfo({
         data.mainProjects.length > 0 && (
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: isDark ? '#212121' : '#ffffff',
+              border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
               borderRadius: '12px',
               padding: '24px',
             }}
@@ -1658,7 +1769,7 @@ function BasicInfo({
               style={{
                 fontSize: '18px',
                 fontWeight: 700,
-                color: '#0f172a',
+                color: isDark ? '#f5f5f5' : '#0f172a',
                 marginBottom: '16px',
               }}
             >
@@ -1672,13 +1783,14 @@ function BasicInfo({
                   key={idx}
                   style={{
                     padding: '12px 16px',
-                    background:
-                      'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
+                    background: isDark
+                      ? '#1d1d1d'
+                      : 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
                     borderRadius: '8px',
                     fontSize: '14px',
-                    color: '#334155',
+                    color: isDark ? '#d1d5db' : '#334155',
                     fontWeight: 600,
-                    border: '1px solid #e5e5e5',
+                    border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e5e5',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '12px',
@@ -1714,8 +1826,8 @@ function BasicInfo({
         data.keyDecisions.length > 0 && (
           <div
             style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
+              background: isDark ? '#212121' : '#ffffff',
+              border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
               borderRadius: '12px',
               padding: '24px',
             }}
@@ -1724,7 +1836,7 @@ function BasicInfo({
               style={{
                 fontSize: '18px',
                 fontWeight: 700,
-                color: '#0f172a',
+                color: isDark ? '#f5f5f5' : '#0f172a',
                 marginBottom: '16px',
               }}
             >
@@ -1738,13 +1850,14 @@ function BasicInfo({
                   key={idx}
                   style={{
                     padding: '12px 16px',
-                    background:
-                      'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
+                    background: isDark
+                      ? '#1d1d1d'
+                      : 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
                     borderRadius: '8px',
                     fontSize: '14px',
-                    color: '#334155',
+                    color: isDark ? '#d1d5db' : '#334155',
                     fontWeight: 600,
-                    border: '1px solid #e5e5e5',
+                    border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e5e5',
                   }}
                 >
                   • {decision}
@@ -1758,8 +1871,8 @@ function BasicInfo({
       {'services' in data && data.services && data.services.length > 0 && (
         <div
           style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
+            background: isDark ? '#212121' : '#ffffff',
+            border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
             borderRadius: '12px',
             padding: '24px',
           }}
@@ -1768,7 +1881,7 @@ function BasicInfo({
             style={{
               fontSize: '18px',
               fontWeight: 700,
-              color: '#0f172a',
+              color: isDark ? '#f5f5f5' : '#0f172a',
               marginBottom: '16px',
             }}
           >
@@ -1782,13 +1895,14 @@ function BasicInfo({
                 key={idx}
                 style={{
                   padding: '12px 16px',
-                  background:
-                    'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
+                  background: isDark
+                    ? '#1d1d1d'
+                    : 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)',
                   borderRadius: '8px',
                   fontSize: '14px',
-                  color: '#334155',
+                  color: isDark ? '#d1d5db' : '#334155',
                   fontWeight: 600,
-                  border: '1px solid #e5e5e5',
+                  border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e5e5',
                 }}
               >
                 • {service}
@@ -1802,8 +1916,8 @@ function BasicInfo({
       {((data as any).location || (data as any).website) && (
         <div
           style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
+            background: isDark ? '#212121' : '#ffffff',
+            border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
             borderRadius: '12px',
             padding: '24px',
           }}
@@ -1812,7 +1926,7 @@ function BasicInfo({
             style={{
               fontSize: '18px',
               fontWeight: 700,
-              color: '#0f172a',
+              color: isDark ? '#f5f5f5' : '#0f172a',
               marginBottom: '16px',
             }}
           >
@@ -1836,7 +1950,12 @@ function BasicInfo({
                   <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
                   <circle cx="12" cy="10" r="3" />
                 </svg>
-                <span style={{ fontSize: '14px', color: '#475569' }}>
+                <span
+                  style={{
+                    fontSize: '14px',
+                    color: isDark ? '#d1d5db' : '#475569',
+                  }}
+                >
                   {(data as any).location}
                 </span>
               </div>
@@ -1880,20 +1999,34 @@ function BasicInfo({
 }
 
 // 정보 항목 컴포넌트
-function InfoItem({ label, value }: { label: string; value: string }) {
+function InfoItem({
+  label,
+  value,
+  isDark,
+}: {
+  label: string
+  value: string
+  isDark: boolean
+}) {
   return (
     <div>
       <div
         style={{
           fontSize: '12px',
-          color: '#94a3b8',
+          color: isDark ? '#71717a' : '#94a3b8',
           marginBottom: '6px',
           fontWeight: 600,
         }}
       >
         {label}
       </div>
-      <div style={{ fontSize: '16px', color: '#0f172a', fontWeight: 700 }}>
+      <div
+        style={{
+          fontSize: '16px',
+          color: isDark ? '#f5f5f5' : '#0f172a',
+          fontWeight: 700,
+        }}
+      >
         {value}
       </div>
     </div>
@@ -1901,7 +2034,23 @@ function InfoItem({ label, value }: { label: string; value: string }) {
 }
 
 // 이벤트 타입별 배경색
-function getEventColor(type: string) {
+function getEventColor(type: string, isDark: boolean) {
+  if (isDark) {
+    switch (type) {
+      case 'establishment':
+        return 'rgba(139,92,246,0.12)'
+      case 'reform':
+        return 'rgba(59,130,246,0.12)'
+      case 'achievement':
+        return 'rgba(16,185,129,0.12)'
+      case 'crisis':
+        return 'rgba(239,68,68,0.12)'
+      case 'merger':
+        return 'rgba(245,158,11,0.12)'
+      default:
+        return '#1d1d1d'
+    }
+  }
   switch (type) {
     case 'establishment':
       return 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)'
@@ -1919,7 +2068,23 @@ function getEventColor(type: string) {
 }
 
 // 이벤트 타입별 테두리 색
-function getEventBorderColor(type: string) {
+function getEventBorderColor(type: string, isDark: boolean) {
+  if (isDark) {
+    switch (type) {
+      case 'establishment':
+        return 'rgba(139,92,246,0.3)'
+      case 'reform':
+        return 'rgba(59,130,246,0.3)'
+      case 'achievement':
+        return 'rgba(16,185,129,0.3)'
+      case 'crisis':
+        return 'rgba(239,68,68,0.3)'
+      case 'merger':
+        return 'rgba(245,158,11,0.3)'
+      default:
+        return '#2a2a2a'
+    }
+  }
   switch (type) {
     case 'establishment':
       return '#e9d5ff'

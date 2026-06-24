@@ -55,7 +55,7 @@ const Overlay = styled.div`
   padding: 24px;
 `
 const ModalCard = styled.div`
-  background: #fff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
   max-width: 720px;
@@ -71,24 +71,24 @@ const ModalHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#eee')};
 `
 const ModalTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #111;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111')};
 `
 const CloseBtn = styled.button`
   padding: 8px;
   background: none;
   border: none;
   border-radius: 8px;
-  color: #666;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
   cursor: pointer;
   &:hover {
-    background: #eee;
-    color: #111;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#eee')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111')};
   }
 `
 const ModalBody = styled.div`
@@ -106,7 +106,7 @@ const ListTitle = styled.h3`
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#333')};
 `
 const AddButton = styled.button`
   display: inline-flex;
@@ -133,26 +133,26 @@ const GroupTitle = styled.div`
   color: var(--color-primary);
   margin-bottom: 8px;
   padding-bottom: 4px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#eee')};
 `
 const Row = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: #fafafa;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#fafafa')};
   border-radius: 6px;
   margin-bottom: 4px;
-  border: 1px solid #eee;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#eee')};
 `
 const RowTitle = styled.div`
   font-weight: 600;
   font-size: 15px;
-  color: #111;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111')};
 `
 const RowMeta = styled.div`
   font-size: 12px;
-  color: #666;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
   margin-top: 2px;
 `
 const RowActions = styled.div`
@@ -166,16 +166,16 @@ const IconButton = styled.button`
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  color: #666;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
   &:hover {
-    background: #eee;
-    color: #111;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#eee')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111')};
   }
 `
 const EmptyState = styled.div`
   text-align: center;
   padding: 32px 16px;
-  color: #888;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#888')};
   font-size: 14px;
 `
 const BackButton = styled.button`
@@ -184,24 +184,24 @@ const BackButton = styled.button`
   gap: 8px;
   padding: 0 0 16px;
   font-size: 14px;
-  color: #666;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
   background: none;
   border: none;
   cursor: pointer;
   &:hover {
-    color: #111;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111')};
   }
 `
 const FormTitle = styled.h3`
   margin: 0 0 8px;
   font-size: 18px;
   font-weight: 600;
-  color: #111;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111')};
 `
 const FormDesc = styled.p`
   margin: 0 0 20px;
   font-size: 13px;
-  color: #666;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
 `
 const Field = styled.div`
   margin-bottom: 16px;
@@ -210,14 +210,14 @@ const Label = styled.label`
   display: block;
   font-size: 12px;
   font-weight: 600;
-  color: #333;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#333')};
   margin-bottom: 6px;
 `
 const Input = styled.input`
   width: 100%;
   padding: 10px 12px;
   font-size: 14px;
-  border: 1px solid #ddd;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#ddd')};
   border-radius: 8px;
   &:focus {
     outline: none;
@@ -231,9 +231,16 @@ const SelectBtn = styled.button<{ $hasValue?: boolean }>`
   justify-content: space-between;
   padding: 10px 12px;
   font-size: 14px;
-  color: ${(p) => (p.$hasValue ? '#111' : '#999')};
-  background: #fff;
-  border: 1px solid #ddd;
+  color: ${(props) =>
+    props.theme.mode === 'dark'
+      ? props.$hasValue
+        ? '#f5f5f5'
+        : '#71717a'
+      : props.$hasValue
+        ? '#111'
+        : '#999'};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#ddd')};
   border-radius: 8px;
   cursor: pointer;
   text-align: left;
@@ -267,9 +274,9 @@ const CancelBtn = styled.button`
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 500;
-  color: #666;
-  background: #fff;
-  border: 1px solid #ddd;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#666')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#ddd')};
   border-radius: 8px;
   cursor: pointer;
   &:hover {

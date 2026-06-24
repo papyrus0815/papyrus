@@ -6,10 +6,13 @@ import { administrationDepartmentApi } from '@/shared/api/administration-departm
 import type { AdministrationDepartmentCategory } from '@/shared/api/administration-department'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
+import { useThemeStore } from '@/shared/styles/theme.store'
 import { PositionDefinitionsSection } from '@/widgets/country/country-detail/ui/position-definitions-section.widget'
 
 export const DepartmentCategoriesPage: React.FC = () => {
   const queryClient = useQueryClient()
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const [selectedCategory, setSelectedCategory] = useState<AdministrationDepartmentCategory | null>(null)
   const [editingCategory, setEditingCategory] = useState<AdministrationDepartmentCategory | null>(null)
   const [showCategoryForm, setShowCategoryForm] = useState(false)
@@ -177,7 +180,7 @@ export const DepartmentCategoriesPage: React.FC = () => {
               />
             ) : (
               <EmptyRight>
-                <FiAward size={48} style={{ color: '#e2e8f0' }} />
+                <FiAward size={48} style={{ color: isDark ? '#2a2a2a' : '#e2e8f0' }} />
                 <p>좌측에서 카테고리를 선택하면<br />해당 카테고리의 직위 정의를 관리할 수 있습니다.</p>
               </EmptyRight>
             )}
@@ -190,7 +193,7 @@ export const DepartmentCategoriesPage: React.FC = () => {
 
 const PageWrapper = styled.div`
   padding: 24px;
-  background: #f8fafc;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8fafc')};
   min-height: calc(100vh - var(--header-height, 60px));
 `
 
@@ -225,8 +228,8 @@ const HeaderIcon = styled.div`
 `
 
 const HeaderText = styled.div`
-  h1 { margin: 0; font-size: 28px; font-weight: 700; color: #0f172a; }
-  p { margin: 4px 0 0; font-size: 14px; color: #64748b; }
+  h1 { margin: 0; font-size: 28px; font-weight: 700; color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')}; }
+  p { margin: 4px 0 0; font-size: 14px; color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')}; }
 `
 
 const SplitLayout = styled.div`
@@ -241,8 +244,8 @@ const SplitLayout = styled.div`
 `
 
 const LeftPanel = styled.div`
-  background: #fff;
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(20, 19, 34, 0.08)')};
   border-radius: 20px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
   overflow: hidden;
@@ -254,14 +257,14 @@ const ListHeader = styled.div`
   justify-content: space-between;
   padding: 20px;
   border-bottom: 1.5px solid rgba(99, 102, 241, 0.1);
-  background: linear-gradient(135deg, #fafbfc, #f8fafc);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : 'linear-gradient(135deg, #fafbfc, #f8fafc)')};
 `
 
 const ListTitle = styled.h2`
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
 `
 
 const AddBtn = styled.button`
@@ -272,7 +275,7 @@ const AddBtn = styled.button`
   font-size: 13px;
   font-weight: 600;
   color: #4f46e5;
-  background: #eef2ff;
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff')};
   border: 1px solid #c7d2fe;
   border-radius: 10px;
   cursor: pointer;
@@ -284,13 +287,13 @@ const CategoryForm = styled.form`
   flex-direction: column;
   gap: 10px;
   padding: 16px 20px;
-  border-bottom: 1px solid #f3f4f6;
-  background: #f8fafc;
+  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#f3f4f6')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#1d1d1d' : '#f8fafc')};
 `
 
 const CategoryInput = styled.input`
   padding: 10px 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   border-radius: 10px;
   font-size: 14px;
   outline: none;
@@ -323,9 +326,9 @@ const CancelBtn = styled.button`
   padding: 8px 16px;
   font-size: 13px;
   font-weight: 600;
-  color: #64748b;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
   border-radius: 10px;
   cursor: pointer;
 `
@@ -359,7 +362,7 @@ const CategoryItemMain = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #0f172a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   font-size: 14px;
   font-weight: 600;
   svg { color: #6366f1; flex-shrink: 0; }
@@ -368,7 +371,7 @@ const CategoryItemMain = styled.div`
 const SubText = styled.div`
   font-size: 12px;
   font-weight: 400;
-  color: #64748b;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#64748b')};
   margin-top: 2px;
 `
 
@@ -389,11 +392,11 @@ const IconBtn = styled.button<{ $danger?: boolean }>`
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  color: #94a3b8;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   transition: background 0.15s, color 0.15s;
   &:hover {
-    background: ${(p) => p.$danger ? '#fee2e2' : '#f1f5f9'};
-    color: ${(p) => p.$danger ? '#dc2626' : '#0f172a'};
+    background: ${(p) => p.$danger ? '#fee2e2' : (p.theme.mode === 'dark' ? '#2a2a2a' : '#f1f5f9')};
+    color: ${(p) => p.$danger ? '#dc2626' : (p.theme.mode === 'dark' ? '#f5f5f5' : '#0f172a')};
   }
 `
 
@@ -403,12 +406,12 @@ const Empty = styled.div`
   justify-content: center;
   padding: 48px 20px;
   font-size: 14px;
-  color: #94a3b8;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
 `
 
 const RightPanel = styled.div`
-  background: #fff;
-  border: 1px solid rgba(20, 19, 34, 0.08);
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(20, 19, 34, 0.08)')};
   border-radius: 20px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
   padding: 28px;
@@ -425,7 +428,7 @@ const EmptyRight = styled.div`
   p {
     margin: 0;
     font-size: 15px;
-    color: #94a3b8;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
     line-height: 1.6;
   }
 `

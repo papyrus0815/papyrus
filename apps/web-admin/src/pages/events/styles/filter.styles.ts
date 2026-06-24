@@ -125,7 +125,7 @@ export const FilterSearchInput = styled.input`
   transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
   &::placeholder {
     font-size: 12px;
-    color: #94a3b8;
+    color: ${({ theme }) => theme.mode === 'dark' ? '#71717a' : '#94a3b8'};
   }
   ${({ theme }) =>
     theme.mode === 'dark'
@@ -552,7 +552,7 @@ export const ToolbarMeta = styled.div`
   gap: 8px;
   font-size: 12.5px;
   font-weight: 600;
-  color: #64748b;
+  color: ${({ theme }) => theme.mode === 'dark' ? '#a1a1aa' : '#64748b'};
 
   span {
     padding: 4px 10px;

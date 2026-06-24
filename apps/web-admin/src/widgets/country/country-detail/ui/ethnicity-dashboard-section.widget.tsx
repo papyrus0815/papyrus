@@ -13,6 +13,7 @@ import {
 import { getUploadImageUrl } from '@/shared/api/upload'
 import type { Ethnicity } from '@/shared/api/ethnicity'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { useThemeStore } from '@/shared/styles/theme.store'
 import {
   PillTabButton,
   PillTabNav,
@@ -21,6 +22,8 @@ import {
 const MAIN = '#6366f1'
 
 export function EthnicityDashboardSection() {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
   const { data: ethnicities = [], isLoading } = useEthnicities()
   const createEthnicity = useCreateEthnicity()
   const updateEthnicity = useUpdateEthnicity()
@@ -119,7 +122,7 @@ export function EthnicityDashboardSection() {
         flexDirection: 'column',
         gap: 32,
         padding: '36px 32px 48px',
-        background: '#ffffff',
+        background: isDark ? '#212121' : '#ffffff',
         minHeight: 'calc(100vh - 200px)',
         position: 'relative',
       }}
@@ -140,7 +143,7 @@ export function EthnicityDashboardSection() {
               margin: 0,
               fontSize: 26,
               fontWeight: 800,
-              color: '#0f172a',
+              color: isDark ? '#f5f5f5' : '#0f172a',
               letterSpacing: '-0.04em',
               lineHeight: 1.25,
             }}
@@ -151,7 +154,7 @@ export function EthnicityDashboardSection() {
             style={{
               margin: '10px 0 0',
               fontSize: 15,
-              color: '#64748b',
+              color: isDark ? '#a1a1aa' : '#64748b',
               lineHeight: 1.55,
               maxWidth: 540,
               fontWeight: 500,
@@ -171,9 +174,9 @@ export function EthnicityDashboardSection() {
               gap: 8,
               padding: '10px 18px',
               borderRadius: 12,
-              border: '1px solid #e5e7eb',
-              background: '#fff',
-              color: '#374151',
+              border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
+              background: isDark ? '#212121' : '#fff',
+              color: isDark ? '#d1d5db' : '#374151',
               cursor: 'pointer',
               fontSize: 13,
               fontWeight: 600,
@@ -202,16 +205,16 @@ export function EthnicityDashboardSection() {
             gap: 28,
             flexWrap: 'wrap',
             padding: '20px 28px',
-            background: '#fff',
+            background: isDark ? '#212121' : '#fff',
             borderRadius: 16,
-            border: '1px solid #e5e7eb',
+            border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>등록 민족</span>
-            <span style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.03em' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: isDark ? '#a1a1aa' : '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' }}>등록 민족</span>
+            <span style={{ fontSize: 20, fontWeight: 700, color: isDark ? '#f5f5f5' : '#0f172a', letterSpacing: '-0.03em' }}>
               {list.length}
-              <span style={{ fontSize: 14, fontWeight: 500, color: '#64748b', marginLeft: 2 }}>개</span>
+              <span style={{ fontSize: 14, fontWeight: 500, color: isDark ? '#a1a1aa' : '#64748b', marginLeft: 2 }}>개</span>
             </span>
           </div>
         </div>
@@ -222,11 +225,11 @@ export function EthnicityDashboardSection() {
           <>
             <div
               style={{
-                background: '#fff',
+                background: isDark ? '#212121' : '#fff',
                 borderRadius: 20,
                 overflow: 'hidden',
-                border: '1px solid #e5e7eb',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
+                boxShadow: isDark ? '0 1px 3px rgba(255,255,255,0.08)' : '0 1px 3px rgba(0,0,0,0.04)',
               }}
             >
               <div
@@ -235,8 +238,8 @@ export function EthnicityDashboardSection() {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '24px 28px',
-                  background: '#fff',
-                  borderBottom: '1px solid #f3f4f6',
+                  background: isDark ? '#212121' : '#fff',
+                  borderBottom: isDark ? '1px solid #2a2a2a' : '1px solid #f3f4f6',
                   flexWrap: 'wrap',
                   gap: 16,
                 }}
@@ -252,7 +255,7 @@ export function EthnicityDashboardSection() {
                       padding: '8px 14px',
                       fontSize: 13,
                       fontWeight: 600,
-                      color: '#64748b',
+                      color: isDark ? '#a1a1aa' : '#64748b',
                       background: 'transparent',
                       border: 'none',
                       borderRadius: 12,
@@ -260,11 +263,11 @@ export function EthnicityDashboardSection() {
                       transition: 'color 0.2s, background 0.2s',
                     }}
                     onMouseOver={(e) => {
-                      e.currentTarget.style.color = '#475569'
-                      e.currentTarget.style.background = '#f1f5f9'
+                      e.currentTarget.style.color = isDark ? '#d1d5db' : '#475569'
+                      e.currentTarget.style.background = isDark ? '#2a2a2a' : '#f1f5f9'
                     }}
                     onMouseOut={(e) => {
-                      e.currentTarget.style.color = '#64748b'
+                      e.currentTarget.style.color = isDark ? '#a1a1aa' : '#64748b'
                       e.currentTarget.style.background = 'transparent'
                     }}
                   >
@@ -273,7 +276,7 @@ export function EthnicityDashboardSection() {
                     </svg>
                     목록으로
                   </button>
-                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#111827', letterSpacing: '-0.025em' }}>
+                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: isDark ? '#f5f5f5' : '#111827', letterSpacing: '-0.025em' }}>
                     {editing ? '민족 수정' : '민족 등록'}
                   </h2>
                 </div>
@@ -318,8 +321,8 @@ export function EthnicityDashboardSection() {
                   </div>
                 )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>썸네일</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: isDark ? '1px solid #2a2a2a' : '1px solid #f3f4f6' }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151', paddingTop: 10 }}>썸네일</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <input
                       type="text"
@@ -330,16 +333,16 @@ export function EthnicityDashboardSection() {
                         width: '100%',
                         maxWidth: 380,
                         padding: '12px 16px',
-                        border: '1px solid #e5e7eb',
+                        border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
                         borderRadius: 12,
                         fontSize: 14,
-                        color: '#111827',
-                        background: '#fff',
+                        color: isDark ? '#f5f5f5' : '#111827',
+                        background: isDark ? '#1d1d1d' : '#fff',
                         outline: 'none',
                       }}
                     />
                     {form.thumbnailUrl && (
-                      <div style={{ marginTop: 4, width: '100%', maxWidth: 280, aspectRatio: '16/10', borderRadius: 14, overflow: 'hidden', background: '#fafafa' }}>
+                      <div style={{ marginTop: 4, width: '100%', maxWidth: 280, aspectRatio: '16/10', borderRadius: 14, overflow: 'hidden', background: isDark ? '#1d1d1d' : '#fafafa' }}>
                         <img
                           src={getUploadImageUrl(form.thumbnailUrl)}
                           alt=""
@@ -353,8 +356,8 @@ export function EthnicityDashboardSection() {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: isDark ? '1px solid #2a2a2a' : '1px solid #f3f4f6' }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151', paddingTop: 10 }}>
                     민족명 <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -367,19 +370,19 @@ export function EthnicityDashboardSection() {
                         width: '100%',
                         maxWidth: 380,
                         padding: '12px 16px',
-                        border: '1px solid #e5e7eb',
+                        border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
                         borderRadius: 12,
                         fontSize: 14,
-                        color: '#111827',
-                        background: '#fff',
+                        color: isDark ? '#f5f5f5' : '#111827',
+                        background: isDark ? '#1d1d1d' : '#fff',
                         outline: 'none',
                       }}
                     />
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>현지명 / 원어명</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: isDark ? '1px solid #2a2a2a' : '1px solid #f3f4f6' }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151', paddingTop: 10 }}>현지명 / 원어명</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <input
                       type="text"
@@ -390,19 +393,19 @@ export function EthnicityDashboardSection() {
                         width: '100%',
                         maxWidth: 380,
                         padding: '12px 16px',
-                        border: '1px solid #e5e7eb',
+                        border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
                         borderRadius: 12,
                         fontSize: 14,
-                        color: '#111827',
-                        background: '#fff',
+                        color: isDark ? '#f5f5f5' : '#111827',
+                        background: isDark ? '#1d1d1d' : '#fff',
                         outline: 'none',
                       }}
                     />
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>상위 민족</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0', borderBottom: isDark ? '1px solid #2a2a2a' : '1px solid #f3f4f6' }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151', paddingTop: 10 }}>상위 민족</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <select
                       value={form.parentId}
@@ -411,11 +414,11 @@ export function EthnicityDashboardSection() {
                         width: '100%',
                         maxWidth: 380,
                         padding: '12px 16px',
-                        border: '1px solid #e5e7eb',
+                        border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
                         borderRadius: 12,
                         fontSize: 14,
-                        color: '#111827',
-                        background: '#fff',
+                        color: isDark ? '#f5f5f5' : '#111827',
+                        background: isDark ? '#1d1d1d' : '#fff',
                         outline: 'none',
                       }}
                     >
@@ -431,7 +434,7 @@ export function EthnicityDashboardSection() {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 24, alignItems: 'start', padding: '20px 0' }}>
-                  <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', paddingTop: 10 }}>설명</label>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: isDark ? '#d1d5db' : '#374151', paddingTop: 10 }}>설명</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <textarea
                       value={form.description}
@@ -442,11 +445,11 @@ export function EthnicityDashboardSection() {
                         width: '100%',
                         maxWidth: 440,
                         padding: '12px 16px',
-                        border: '1px solid #e5e7eb',
+                        border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
                         borderRadius: 12,
                         fontSize: 14,
-                        color: '#111827',
-                        background: '#fff',
+                        color: isDark ? '#f5f5f5' : '#111827',
+                        background: isDark ? '#1d1d1d' : '#fff',
                         resize: 'vertical',
                         minHeight: 72,
                         outline: 'none',
@@ -460,19 +463,19 @@ export function EthnicityDashboardSection() {
         ) : (
           <>
             <div style={{ marginBottom: 28 }}>
-              <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>민족 현황</h3>
-              <p style={{ margin: '6px 0 0', fontSize: 14, color: '#64748b', fontWeight: 500 }}>등록된 민족 목록입니다. 수정·삭제는 카드에서 할 수 있습니다.</p>
+              <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: isDark ? '#f5f5f5' : '#0f172a', letterSpacing: '-0.02em' }}>민족 현황</h3>
+              <p style={{ margin: '6px 0 0', fontSize: 14, color: isDark ? '#a1a1aa' : '#64748b', fontWeight: 500 }}>등록된 민족 목록입니다. 수정·삭제는 카드에서 할 수 있습니다.</p>
             </div>
             {isLoading ? (
               <div
                 style={{
                   padding: 56,
                   textAlign: 'center',
-                  color: '#6b7280',
+                  color: isDark ? '#a1a1aa' : '#6b7280',
                   fontSize: 14,
-                  background: '#f9fafb',
+                  background: isDark ? '#1d1d1d' : '#f9fafb',
                   borderRadius: 16,
-                  border: '1px solid #e5e7eb',
+                  border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
                 }}
               >
                 불러오는 중…
@@ -489,10 +492,10 @@ export function EthnicityDashboardSection() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   padding: '64px 40px 72px',
-                  background: '#ffffff',
+                  background: isDark ? '#212121' : '#ffffff',
                   borderRadius: 20,
-                  border: '1px solid #f1f5f9',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                  border: isDark ? '1px solid #2a2a2a' : '1px solid #f1f5f9',
+                  boxShadow: isDark ? '0 1px 3px rgba(255,255,255,0.08)' : '0 1px 3px rgba(0,0,0,0.04)',
                   overflow: 'hidden',
                 }}
               >
@@ -512,9 +515,9 @@ export function EthnicityDashboardSection() {
                   }}
                 />
                 <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>등록된 민족이 없습니다</h3>
-                  <p style={{ margin: '10px 0 0', fontSize: 14, color: '#64748b', maxWidth: 300, lineHeight: 1.55, fontWeight: 500 }}>
-                    위 <strong style={{ color: '#475569', fontWeight: 600 }}>새 민족 추가</strong> 버튼을 눌러 첫 민족을 등록해 보세요.
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: isDark ? '#f5f5f5' : '#0f172a', letterSpacing: '-0.02em' }}>등록된 민족이 없습니다</h3>
+                  <p style={{ margin: '10px 0 0', fontSize: 14, color: isDark ? '#a1a1aa' : '#64748b', maxWidth: 300, lineHeight: 1.55, fontWeight: 500 }}>
+                    위 <strong style={{ color: isDark ? '#d1d5db' : '#475569', fontWeight: 600 }}>새 민족 추가</strong> 버튼을 눌러 첫 민족을 등록해 보세요.
                   </p>
                 </div>
               </motion.div>
@@ -524,13 +527,13 @@ export function EthnicityDashboardSection() {
                   <div
                     key={e.id}
                     style={{
-                      background: '#fff',
+                      background: isDark ? '#212121' : '#fff',
                       borderRadius: 16,
                       minHeight: 200,
                       overflow: 'hidden',
                       display: 'flex',
                       flexDirection: 'column',
-                      border: '1px solid #e5e7eb',
+                      border: isDark ? '1px solid #2a2a2a' : '1px solid #e5e7eb',
                     }}
                   >
                     <div style={{ flex: 1, padding: '24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -550,11 +553,11 @@ export function EthnicityDashboardSection() {
                               width: 72,
                               height: 72,
                               borderRadius: 14,
-                              background: 'linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%)',
+                              background: isDark ? '#2a2a2a' : 'linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              color: '#94a3b8',
+                              color: isDark ? '#71717a' : '#94a3b8',
                               fontSize: 28,
                             }}
                           >
@@ -562,14 +565,14 @@ export function EthnicityDashboardSection() {
                           </div>
                         )}
                         <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
-                          <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.3 }}>{e.name}</div>
-                          {e.nameLocal && <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>{e.nameLocal}</div>}
-                          {e.parent && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>상위: {e.parent.name}</div>}
+                          <div style={{ fontSize: 18, fontWeight: 700, color: isDark ? '#f5f5f5' : '#0f172a', letterSpacing: '-0.02em', lineHeight: 1.3 }}>{e.name}</div>
+                          {e.nameLocal && <div style={{ fontSize: 13, color: isDark ? '#a1a1aa' : '#64748b', marginTop: 4 }}>{e.nameLocal}</div>}
+                          {e.parent && <div style={{ fontSize: 12, color: isDark ? '#71717a' : '#94a3b8', marginTop: 6 }}>상위: {e.parent.name}</div>}
                           {e.description && (
                             <div
                               style={{
                                 fontSize: 13,
-                                color: '#64748b',
+                                color: isDark ? '#a1a1aa' : '#64748b',
                                 marginTop: 10,
                                 lineHeight: 1.5,
                                 display: '-webkit-box',
@@ -591,11 +594,11 @@ export function EthnicityDashboardSection() {
                             padding: '10px 18px',
                             fontSize: 13,
                             cursor: 'pointer',
-                            border: '1px solid #e2e8f0',
+                            border: isDark ? '1px solid #2a2a2a' : '1px solid #e2e8f0',
                             borderRadius: 12,
-                            background: '#fff',
+                            background: isDark ? '#212121' : '#fff',
                             fontWeight: 600,
-                            color: '#475569',
+                            color: isDark ? '#d1d5db' : '#475569',
                           }}
                         >
                           수정
