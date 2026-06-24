@@ -8,13 +8,15 @@
  * - backdrop 클릭 + ESC로 닫힘
  * - 데스크톱에서는 자동으로 안 보이게 (호출 측이 미디어 쿼리로 트리거 숨기는 것이 권장)
  */
-import React, { useEffect } from 'react'
+import React, { useEffect, useId, useRef } from 'react'
 
 import { createPortal } from 'react-dom'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
 import styled from 'styled-components'
+
+import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 
 interface SidebarSheetProps {
   open: boolean
@@ -29,6 +31,11 @@ export function SidebarSheet({
   title,
   children,
 }: SidebarSheetProps) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+  // 포커스 트랩 + 초기 포커스 이동 + 닫을 때 트리거로 복원
+  useFocusTrap(panelRef, open)
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -56,15 +63,17 @@ export function SidebarSheet({
             onClick={onClose}
           />
           <Panel
+            ref={panelRef}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 280 }}
             role="dialog"
             aria-modal="true"
+            aria-labelledby={titleId}
           >
             <Header>
-              <Title>{title ?? '필터'}</Title>
+              <Title id={titleId}>{title ?? '필터'}</Title>
               <CloseBtn type="button" onClick={onClose} aria-label="닫기">
                 <FiX size={18} />
               </CloseBtn>

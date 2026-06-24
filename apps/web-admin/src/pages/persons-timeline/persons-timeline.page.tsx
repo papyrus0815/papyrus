@@ -28,8 +28,10 @@ import {
 } from '@/widgets/content-shell'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 import {
+  countActiveScopes,
   PersonFilterPanel,
   PersonInfographicPane,
+  usePersonInfographicFilterStore,
 } from '@/widgets/person-infographic'
 
 const SCROLL_KEY = 'person-list-scroll'
@@ -53,6 +55,15 @@ export default function DashboardPersonsPage() {
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
 
+  // 모바일 필터 트리거 배지용 — 활성 필터 개수 (scope + 영향력 + 생존 + 검색어)
+  const activeFilterCount = usePersonInfographicFilterStore(
+    (state) =>
+      countActiveScopes(state.scopes) +
+      (state.minInfluence > 0 ? 1 : 0) +
+      (state.aliveFilter !== 'all' ? 1 : 0) +
+      (state.query.trim() ? 1 : 0),
+  )
+
   /** 카드 → 상세 → 뒤로 왔을 때 스크롤 위치 복원 (실제 스크롤 컨테이너 기준) */
   const scrollElRef = useRef<HTMLElement | null>(null)
   const setScrollSentinel = useCallback((node: HTMLDivElement | null) => {
@@ -63,12 +74,29 @@ export default function DashboardPersonsPage() {
     if (personId) return // 상세 화면에서는 추적/복원 안 함
     const el = scrollElRef.current
     if (!el) return
-    // 복원
+
+    // 복원 — 비동기 콘텐츠(react-query + 페이드인)로 높이가 늦게 차므로,
+    // 목표 위치까지 스크롤 가능해질 때까지 몇 프레임 재시도 후 클램프.
+    // (필터로 리스트가 짧아졌으면 maxTop으로 클램프돼 바닥 튐/0 초기화를 방지)
+    let restoreRaf = 0
+    let cancelled = false
     const saved = sessionStorage.getItem(SCROLL_KEY)
-    if (saved != null) {
-      const y = Number(saved)
-      if (Number.isFinite(y)) requestAnimationFrame(() => (el.scrollTop = y))
+    const target = saved != null ? Number(saved) : NaN
+    if (Number.isFinite(target) && target > 0) {
+      let attempts = 0
+      const tryRestore = () => {
+        if (cancelled) return
+        const maxTop = el.scrollHeight - el.clientHeight
+        if (maxTop < target && attempts < 20) {
+          attempts += 1
+          restoreRaf = requestAnimationFrame(tryRestore)
+          return
+        }
+        el.scrollTop = Math.min(target, Math.max(0, maxTop))
+      }
+      restoreRaf = requestAnimationFrame(tryRestore)
     }
+
     // 리스트가 떠 있는 동안 위치 추적 (rAF throttle)
     let raf = 0
     const onScroll = () => {
@@ -80,6 +108,8 @@ export default function DashboardPersonsPage() {
     }
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => {
+      cancelled = true
+      if (restoreRaf) cancelAnimationFrame(restoreRaf)
       el.removeEventListener('scroll', onScroll)
       if (raf) cancelAnimationFrame(raf)
     }
@@ -140,9 +170,16 @@ export default function DashboardPersonsPage() {
           <SidebarSheetTrigger
             type="button"
             onClick={() => setMobileFilterOpen(true)}
-            aria-label="필터 열기"
+            aria-label={
+              activeFilterCount > 0
+                ? `필터 열기, ${activeFilterCount}개 적용 중`
+                : '필터 열기'
+            }
           >
             <FiFilter size={20} />
+            {activeFilterCount > 0 && (
+              <FilterCountBadge aria-hidden>{activeFilterCount}</FilterCountBadge>
+            )}
           </SidebarSheetTrigger>
           <SidebarSheet
             open={mobileFilterOpen}
@@ -170,4 +207,23 @@ const DetailWrap = styled.div`
   @media (max-width: 640px) {
     padding: 16px 16px 32px;
   }
+`
+
+/** 모바일 필터 트리거 우상단 — 활성 필터 개수 배지 */
+const FilterCountBadge = styled.span`
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: ${({ theme }) => theme.colors.active};
+  color: ${({ theme }) => theme.colors.background.primary};
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.background.primary};
 `
