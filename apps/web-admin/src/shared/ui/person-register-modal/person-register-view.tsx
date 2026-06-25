@@ -52,7 +52,6 @@ import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-sel
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormInput } from '@/shared/ui/form-input/form-input'
 import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
-import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { type PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import {
   FieldControl,
@@ -284,8 +283,6 @@ export function PersonRegisterView({
   const [showFatherModal, setShowFatherModal] = useState(false)
   const [showMotherModal, setShowMotherModal] = useState(false)
   const [showSpouseModal, setShowSpouseModal] = useState(false)
-  const [showDynastyModal, setShowDynastyModal] = useState(false)
-  const [showReligionModal, setShowReligionModal] = useState(false)
   /** 기본 탭의 "이름의 뜻" 접기 영역 */
   const [nameMeaningsOpen, setNameMeaningsOpen] = useState(false)
   /** 생애 탭의 "군주명·묘호·시호" 접기 영역 — 군주가 아닌 인물에겐 영구 무관 */
@@ -574,14 +571,6 @@ export function PersonRegisterView({
       ...religions.map((r) => ({ value: r.id, label: r.name })),
     ],
     [religions],
-  )
-  const dynastyLabel = useMemo(
-    () => (dynastyId ? (dynasties.find((d) => d.id === dynastyId)?.name ?? '') : ''),
-    [dynastyId, dynasties],
-  )
-  const religionLabel = useMemo(
-    () => (religionId ? (religions.find((r) => r.id === religionId)?.name ?? '') : ''),
-    [religionId, religions],
   )
 
   // ─── 데이터 로드 ────────────────────────────────────────────────────────────
@@ -1268,8 +1257,6 @@ export function PersonRegisterView({
     showFatherModal ||
     showMotherModal ||
     showSpouseModal ||
-    showDynastyModal ||
-    showReligionModal ||
     affCountryPickerRow !== null ||
     affDateModalOpen ||
     showRegisterAgainDialog
@@ -2325,7 +2312,6 @@ export function PersonRegisterView({
                 <div data-form-section="affiliation">
                 <CoreSectionLabel>소속 · 가문</CoreSectionLabel>
                 <AffiliationSection
-                  fid={fid}
                   countryId={countryId}
                   birthPlace={birthPlace}
                   deathPlace={deathPlace}
@@ -2334,10 +2320,12 @@ export function PersonRegisterView({
                   setBirthCityId={setBirthCityId}
                   setDeathCityId={setDeathCityId}
                   onCopyBirthToDeathPlace={handleCopyBirthToDeathPlace}
-                  dynastyLabel={dynastyLabel}
-                  religionLabel={religionLabel}
-                  setShowDynastyModal={setShowDynastyModal}
-                  setShowReligionModal={setShowReligionModal}
+                  dynastyOptions={dynastySelectOptions}
+                  religionOptions={religionSelectOptions}
+                  dynastyValue={dynastyId}
+                  religionValue={religionId}
+                  onDynastyChange={setDynastyId}
+                  onReligionChange={setReligionId}
                   markDirty={markDirty}
                 />
 
@@ -2446,32 +2434,6 @@ export function PersonRegisterView({
         modernCountries={modernCountries}
         historicalCountries={historicalCountries}
         title="소속 국가 선택"
-      />
-      <SelectModal<string>
-        isOpen={showDynastyModal}
-        onClose={() => setShowDynastyModal(false)}
-        title="가문 선택"
-        options={dynastySelectOptions}
-        selectedValue={dynastyId}
-        onSelect={(value) => {
-          setDynastyId(value)
-          setShowDynastyModal(false)
-          markDirty()
-        }}
-        searchPlaceholder="가문 이름으로 검색…"
-      />
-      <SelectModal<string>
-        isOpen={showReligionModal}
-        onClose={() => setShowReligionModal(false)}
-        title="종교 선택"
-        options={religionSelectOptions}
-        selectedValue={religionId}
-        onSelect={(value) => {
-          setReligionId(value)
-          setShowReligionModal(false)
-          markDirty()
-        }}
-        searchPlaceholder="종교 이름으로 검색…"
       />
       {showBirthDateModal && (
         <DatePickerModal

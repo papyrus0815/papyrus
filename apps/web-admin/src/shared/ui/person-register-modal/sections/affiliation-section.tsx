@@ -5,7 +5,7 @@
  */
 import React from 'react'
 
-import { FiChevronDown, FiCopy } from 'react-icons/fi'
+import { FiCopy } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
@@ -19,10 +19,13 @@ import {
   FormRows,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
-import { FONT, InlineFields, RADIUS, SelectBtn } from '../_form-primitives'
+import { FONT, InlineFields, RADIUS } from '../_form-primitives'
+import {
+  InlineSearchSelect,
+  type SearchOption,
+} from './inline-search-select'
 
 export interface AffiliationSectionProps {
-  fid: (key: string) => string
   /** 출생지/사망지 자동완성의 국가 스코프 (국적 선택은 코어에서 처리) */
   countryId: string
   // 출생지/사망지
@@ -34,16 +37,17 @@ export interface AffiliationSectionProps {
   setDeathCityId: (id: string) => void
   /** 출생지를 사망지로 복사하는 핸들러 — 부모가 토스트까지 처리 */
   onCopyBirthToDeathPlace: () => void
-  // 가문/종교
-  dynastyLabel: string
-  religionLabel: string
-  setShowDynastyModal: (v: boolean) => void
-  setShowReligionModal: (v: boolean) => void
+  // 가문/종교 — 인라인 검색 콤보박스(모달 대신)
+  dynastyOptions: SearchOption[]
+  religionOptions: SearchOption[]
+  dynastyValue: string
+  religionValue: string
+  onDynastyChange: (value: string) => void
+  onReligionChange: (value: string) => void
   markDirty: () => void
 }
 
 export function AffiliationSection({
-  fid,
   countryId,
   birthPlace,
   deathPlace,
@@ -52,10 +56,12 @@ export function AffiliationSection({
   setBirthCityId,
   setDeathCityId,
   onCopyBirthToDeathPlace,
-  dynastyLabel,
-  religionLabel,
-  setShowDynastyModal,
-  setShowReligionModal,
+  dynastyOptions,
+  religionOptions,
+  dynastyValue,
+  religionValue,
+  onDynastyChange,
+  onReligionChange,
   markDirty,
 }: AffiliationSectionProps) {
   return (
@@ -103,27 +109,29 @@ export function AffiliationSection({
         </FieldControl>
       </FieldRow>
       <FieldRowMulti>
-        <FieldLabel htmlFor={fid('dynasty')}>가문 · 종교</FieldLabel>
+        <FieldLabel>가문 · 종교</FieldLabel>
         <FieldControl>
           <InlineFields $cols={2}>
-            <SelectBtn
-              id={fid('dynasty')}
-              type="button"
-              $hasValue={!!dynastyLabel}
-              onClick={() => setShowDynastyModal(true)}
-            >
-              <span>{dynastyLabel || '가문 선택'}</span>
-              <FiChevronDown size={16} />
-            </SelectBtn>
-            <SelectBtn
-              id={fid('religion')}
-              type="button"
-              $hasValue={!!religionLabel}
-              onClick={() => setShowReligionModal(true)}
-            >
-              <span>{religionLabel || '종교 선택'}</span>
-              <FiChevronDown size={16} />
-            </SelectBtn>
+            <InlineSearchSelect
+              ariaLabel="가문"
+              options={dynastyOptions}
+              value={dynastyValue}
+              onChange={(next) => {
+                onDynastyChange(next)
+                markDirty()
+              }}
+              placeholder="가문 검색·선택"
+            />
+            <InlineSearchSelect
+              ariaLabel="종교"
+              options={religionOptions}
+              value={religionValue}
+              onChange={(next) => {
+                onReligionChange(next)
+                markDirty()
+              }}
+              placeholder="종교 검색·선택"
+            />
           </InlineFields>
         </FieldControl>
       </FieldRowMulti>
