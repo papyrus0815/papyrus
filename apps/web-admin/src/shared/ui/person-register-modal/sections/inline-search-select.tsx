@@ -5,7 +5,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
-import { FiChevronDown, FiX } from 'react-icons/fi'
+import { FiChevronDown, FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { Z_INDEX } from '@/shared/styles/z-index'
@@ -23,6 +23,11 @@ interface InlineSearchSelectProps {
   onChange: (value: string) => void
   placeholder?: string
   ariaLabel: string
+  /** 드롭다운에 보일 최대 결과 수(긴 목록 캡). 미지정 시 전체. */
+  limit?: number
+  /** 지정 시 드롭다운 하단에 "+ 새로 만들기" 액션 노출 — 목록에 없으면 생성 분기. */
+  onCreateNew?: () => void
+  createLabel?: string
 }
 
 export function InlineSearchSelect({
@@ -31,6 +36,9 @@ export function InlineSearchSelect({
   onChange,
   placeholder,
   ariaLabel,
+  limit,
+  onCreateNew,
+  createLabel = '새로 만들기',
 }: InlineSearchSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -47,9 +55,11 @@ export function InlineSearchSelect({
   const filtered = useMemo(() => {
     const list = options.filter((option) => option.value)
     const text = query.trim().toLowerCase()
-    if (!text) return list
-    return list.filter((option) => option.label.toLowerCase().includes(text))
-  }, [options, query])
+    const matched = text
+      ? list.filter((option) => option.label.toLowerCase().includes(text))
+      : list
+    return limit ? matched.slice(0, limit) : matched
+  }, [options, query, limit])
 
   useEffect(() => {
     if (!open) return
@@ -128,23 +138,36 @@ export function InlineSearchSelect({
       </InputBox>
       {open && (
         <Dropdown role="listbox" aria-label={ariaLabel}>
-          {filtered.length === 0 ? (
+          {filtered.length === 0 && !onCreateNew && (
             <Empty>검색 결과 없음</Empty>
-          ) : (
-            filtered.map((option, index) => (
-              <Option
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={option.value === value}
-                $active={index === active}
-                $selected={option.value === value}
-                onMouseEnter={() => setActive(index)}
-                onClick={() => choose(option.value)}
-              >
-                {option.label}
-              </Option>
-            ))
+          )}
+          {filtered.map((option, index) => (
+            <Option
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              $active={index === active}
+              $selected={option.value === value}
+              onMouseEnter={() => setActive(index)}
+              onClick={() => choose(option.value)}
+            >
+              {option.label}
+            </Option>
+          ))}
+          {onCreateNew && (
+            <CreateRow
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onCreateNew()
+                setOpen(false)
+                setQuery('')
+              }}
+            >
+              <FiPlus size={14} />
+              {createLabel}
+            </CreateRow>
           )}
         </Dropdown>
       )}
@@ -256,4 +279,24 @@ const Empty = styled.div`
   font-size: ${FONT.meta};
   color: ${({ theme }) => theme.colors.text.tertiary};
   text-align: center;
+`
+
+const CreateRow = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  font-size: ${FONT.label};
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.active};
+  background: transparent;
+  border: none;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  cursor: pointer;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(99,102,241,0.10)' : '#eef2ff'};
+  }
 `

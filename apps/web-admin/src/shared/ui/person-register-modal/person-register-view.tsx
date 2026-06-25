@@ -461,6 +461,12 @@ export function PersonRegisterView({
     return m
   }, [persons, editFamilyCache])
 
+  /** 가족 인라인 검색 옵션 원천 — 인물 풀 + 수정 모드 편집 캐시 합집합(즉시 표시). */
+  const knownPersons = useMemo(
+    () => Array.from(personById.values()),
+    [personById],
+  )
+
   /**
    * 가족 슬롯별 "최근 등록한 인물" 후보 — 현재 인물 + 이미 다른 슬롯에 들어간 인물을 제외.
    * 같은 인물을 두 슬롯에 동시 지정할 수 없으므로 모든 슬롯에서 동일 풀을 사용.
@@ -594,9 +600,9 @@ export function PersonRegisterView({
 
   /** 인물 풀이 한 번이라도 로드되었는지 — 같은 모달 인스턴스 내 중복 호출 방지. */
   const personsLoadedRef = useRef(false)
-  /** PersonSelectModal(부·모·배우자)이 열려 있으면 인물 풀 로드. */
+  /** 상세(가족 인라인 검색) 펼치거나 "+ 새 인물" 모달 열 때 인물 풀 로드. */
   const needsPersons =
-    showFatherModal || showMotherModal || showSpouseModal
+    moreOpen || showFatherModal || showMotherModal || showSpouseModal
   useEffect(() => {
     if (!needsPersons || personsLoadedRef.current) return
     personsLoadedRef.current = true
@@ -1694,9 +1700,6 @@ export function PersonRegisterView({
     }
   }
 
-  const fatherPerson = fatherId ? personById.get(fatherId) : undefined
-  const motherPerson = motherId ? personById.get(motherId) : undefined
-  const spousePerson = spouseId ? personById.get(spouseId) : undefined
 
   // 4가지 상태(업로드 중 / 제출 중 / 수정 / 신규) 중 하나의 라벨을 lookup으로 결정.
   const submitButtonLabel = uploadingThumbnail
@@ -2355,15 +2358,13 @@ export function PersonRegisterView({
                   setMotherId={setMotherId}
                   setSpouseId={setSpouseId}
                   setSpouseNote={setSpouseNote}
-                  fatherPerson={fatherPerson}
-                  motherPerson={motherPerson}
-                  spousePerson={spousePerson}
                   showFatherModal={showFatherModal}
                   showMotherModal={showMotherModal}
                   showSpouseModal={showSpouseModal}
                   setShowFatherModal={setShowFatherModal}
                   setShowMotherModal={setShowMotherModal}
                   setShowSpouseModal={setShowSpouseModal}
+                  knownPersons={knownPersons}
                   persons={persons}
                   setPersons={setPersons}
                   recentCandidates={recentCandidates}

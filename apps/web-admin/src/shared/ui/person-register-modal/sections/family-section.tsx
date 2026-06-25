@@ -10,7 +10,6 @@ import styled from 'styled-components'
 
 import type { PersonResponseDto } from '@/shared/api/persons'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { FamilyMemberCard } from '@/shared/ui/person-register-modal/family-member-card'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import {
   FieldControl,
@@ -21,6 +20,10 @@ import {
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
 import { FONT, RADIUS } from '../_form-primitives'
+import {
+  InlineSearchSelect,
+  type SearchOption,
+} from './inline-search-select'
 
 export interface FamilySectionProps {
   fid: (key: string) => string
@@ -33,18 +36,16 @@ export interface FamilySectionProps {
   setMotherId: (id: string) => void
   setSpouseId: (id: string) => void
   setSpouseNote: (note: string) => void
-  // 카드 렌더용 인물 — 부모에서 personById.get(...)로 해소된 결과
-  fatherPerson: PersonResponseDto | undefined
-  motherPerson: PersonResponseDto | undefined
-  spousePerson: PersonResponseDto | undefined
-  // PersonSelectModal 표시 상태
+  // PersonSelectModal 표시 상태(= "+ 새 인물" 생성 분기)
   showFatherModal: boolean
   showMotherModal: boolean
   showSpouseModal: boolean
   setShowFatherModal: (v: boolean) => void
   setShowMotherModal: (v: boolean) => void
   setShowSpouseModal: (v: boolean) => void
-  // PersonSelectModal에 넘길 데이터
+  /** 인라인 검색 옵션 원천 — 인물 풀 + 수정 모드 편집 캐시 합집합(즉시 표시) */
+  knownPersons: PersonResponseDto[]
+  // PersonSelectModal에 넘길 데이터(검색·"+ 새 인물" 생성)
   persons: PersonResponseDto[]
   setPersons: React.Dispatch<React.SetStateAction<PersonResponseDto[]>>
   /** "최근 등록한 인물" — 또 등록 모드 + 슬롯/현재 인물 제외 */
@@ -66,15 +67,13 @@ export function FamilySection({
   setMotherId,
   setSpouseId,
   setSpouseNote,
-  fatherPerson,
-  motherPerson,
-  spousePerson,
   showFatherModal,
   showMotherModal,
   showSpouseModal,
   setShowFatherModal,
   setShowMotherModal,
   setShowSpouseModal,
+  knownPersons,
   persons,
   setPersons,
   recentCandidates,
@@ -84,6 +83,15 @@ export function FamilySection({
 }: FamilySectionProps) {
   const handleCreatedPerson = (p: PersonResponseDto) =>
     setPersons((prev) => [...prev, p])
+
+  /** 인물 풀 → 콤보 옵션(슬롯별 exclude 적용). */
+  const personOptions = (excludeIds: string[]): SearchOption[] =>
+    knownPersons
+      .filter((person) => !excludeIds.includes(person.id))
+      .map((person) => ({
+        value: person.id,
+        label: getPersonDisplayName(person),
+      }))
 
   /** "최근 등록" 칩의 슬롯 지정 버튼 — 글리프/라벨/setter만 다름. */
   const recentSlots: ReadonlyArray<{
@@ -189,42 +197,54 @@ export function FamilySection({
       {/* 부 · 모 — 한 쌍의 부모. 2-col grid로 의미적 grouping. */}
       <FamilyParentsRow>
         <FamilySlot>
-          <FamilySlotLabel htmlFor={fid('father')}>아버지</FamilySlotLabel>
-          <FamilyMemberCard
-            person={fatherPerson}
-            placeholder="아버지 선택"
-            onChange={() => setShowFatherModal(true)}
-            onClear={() => {
-              setFatherId('')
+          <FamilySlotLabel>아버지</FamilySlotLabel>
+          <InlineSearchSelect
+            ariaLabel="아버지"
+            placeholder="아버지 검색·선택"
+            options={personOptions([editPersonId ?? '', motherId, spouseId])}
+            value={fatherId}
+            onChange={(id) => {
+              setFatherId(id)
               markDirty()
             }}
+            onCreateNew={() => setShowFatherModal(true)}
+            createLabel="새 인물 등록"
+            limit={30}
           />
         </FamilySlot>
         <FamilySlot>
-          <FamilySlotLabel htmlFor={fid('mother')}>어머니</FamilySlotLabel>
-          <FamilyMemberCard
-            person={motherPerson}
-            placeholder="어머니 선택"
-            onChange={() => setShowMotherModal(true)}
-            onClear={() => {
-              setMotherId('')
+          <FamilySlotLabel>어머니</FamilySlotLabel>
+          <InlineSearchSelect
+            ariaLabel="어머니"
+            placeholder="어머니 검색·선택"
+            options={personOptions([editPersonId ?? '', fatherId, spouseId])}
+            value={motherId}
+            onChange={(id) => {
+              setMotherId(id)
               markDirty()
             }}
+            onCreateNew={() => setShowMotherModal(true)}
+            createLabel="새 인물 등록"
+            limit={30}
           />
         </FamilySlot>
       </FamilyParentsRow>
       {/* 배우자 — 별도 행 */}
       <FieldRow>
-        <FieldLabel htmlFor={fid('spouse')}>배우자</FieldLabel>
+        <FieldLabel>배우자</FieldLabel>
         <FieldControl>
-          <FamilyMemberCard
-            person={spousePerson}
-            placeholder="배우자 선택 (대표 1명)"
-            onChange={() => setShowSpouseModal(true)}
-            onClear={() => {
-              setSpouseId('')
+          <InlineSearchSelect
+            ariaLabel="배우자"
+            placeholder="배우자 검색·선택 (대표 1명)"
+            options={personOptions([editPersonId ?? '', fatherId, motherId])}
+            value={spouseId}
+            onChange={(id) => {
+              setSpouseId(id)
               markDirty()
             }}
+            onCreateNew={() => setShowSpouseModal(true)}
+            createLabel="새 인물 등록"
+            limit={30}
           />
         </FieldControl>
       </FieldRow>
