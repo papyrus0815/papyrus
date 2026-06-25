@@ -17,6 +17,7 @@ import { FiCheck, FiCloud, FiX } from 'react-icons/fi'
 import styled, { keyframes } from 'styled-components'
 
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
@@ -116,6 +117,8 @@ const ModalBox = styled(motion.div)<{ $fit?: boolean }>`
   @media (max-width: 768px) {
     width: 100vw;
     height: 100vh;
+    /* 모바일 주소창 영역만큼 푸터 버튼이 잘리던 문제 — dvh로 실제 보이는 높이에 맞춤 */
+    height: 100dvh;
     max-height: none;
     border-radius: 0;
     border: none;
@@ -447,11 +450,27 @@ const FooterButtons = styled.div`
   gap: 8px;
 `
 
-/** 필수 진행도 — dot bar(N개 segment) + 텍스트 카운트. text-only보다 시각 anchor. */
-const ProgressGroup = styled.span`
+/** 필수 진행도 — dot bar(N개 segment) + 텍스트 카운트. text-only보다 시각 anchor.
+ *  미완 상태에선 button으로 렌더돼 첫 미완 필수 항목으로 점프(죽은 어포던스 해소). */
+const ProgressGroup = styled.span<{ $clickable?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  ${({ $clickable }) =>
+    $clickable
+      ? `
+    appearance: none;
+    border: none;
+    background: none;
+    padding: 2px 4px;
+    margin: 0 -4px;
+    font: inherit;
+    cursor: pointer;
+    border-radius: 6px;
+    &:hover { opacity: 0.8; }
+    &:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+  `
+      : ''}
 `
 
 const ProgressBar = styled.span`
@@ -575,13 +594,19 @@ export function CountryFormShell({
     sectionIndex[0]?.id ?? null,
   )
 
+  // 모달 열려 있는 동안 배경(body) 스크롤 락 — 모바일 스크롤 체이닝/닫기 점프 방지
+  useBodyScrollLock(isOpen)
+
   /** 변경사항 있을 때 닫기 가드 */
   const requestClose = async () => {
     if (submitting) return
     if (isDirty) {
       const ok = await confirm({
         title: '확인',
-        message: '저장하지 않은 변경사항이 있습니다. 정말 닫으시겠습니까?',
+        // draft 활성(신규 등록)이면 임시저장되므로 문구를 정합 — '저장 안 됨' 모순 제거
+        message: draftEnabled
+          ? '입력 내용은 임시 저장되어 다음에 이어서 작성할 수 있습니다. 닫으시겠습니까?'
+          : '저장하지 않은 변경사항이 있습니다. 정말 닫으시겠습니까?',
       })
       if (!ok) return
     }
@@ -703,10 +728,30 @@ export function CountryFormShell({
     }
   }
 
+  /** 푸터 진행도 클릭 → 첫 미완 필수 항목으로 스크롤·포커스 */
+  const handleRequiredJump = () => {
+    const root = scrollRef.current
+    if (!root) return
+    const firstIncomplete = requiredFields.find((f) => !f.done && f.jumpTarget)
+    const jump = firstIncomplete?.jumpTarget
+    if (!jump) return
+    const target = root.querySelector<HTMLElement>(
+      `[name="${jump}"], [data-jump-target="${jump}"], [data-form-section="${jump}"], #${jump}`,
+    )
+    if (!target) return
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (typeof target.focus === 'function') {
+      window.setTimeout(() => target.focus(), 200)
+    }
+  }
+
   // 필수 진척률 (텍스트 표시용)
   const completedCount = requiredFields.filter((f) => f.done).length
   const totalCount = requiredFields.length
   const isComplete = totalCount > 0 && completedCount === totalCount
+  // 미완 + 점프 대상이 있을 때만 진행도를 클릭 가능한 버튼으로
+  const canJumpRequired =
+    !isComplete && requiredFields.some((f) => !f.done && f.jumpTarget)
 
   if (!isOpen) return null
 
@@ -816,6 +861,13 @@ export function CountryFormShell({
               <FooterStatus>
                 {totalCount > 0 && (
                   <ProgressGroup
+                    as={canJumpRequired ? 'button' : undefined}
+                    type={canJumpRequired ? 'button' : undefined}
+                    $clickable={canJumpRequired}
+                    onClick={canJumpRequired ? handleRequiredJump : undefined}
+                    aria-label={
+                      canJumpRequired ? '미완성 필수 항목으로 이동' : undefined
+                    }
                     title={
                       completedCount < totalCount
                         ? `미완: ${requiredFields

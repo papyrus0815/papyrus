@@ -36,7 +36,7 @@ import {
   FONT,
   FieldError,
   InlineFields,
-  RADIUS,
+  segmentToggleMixin,
 } from '../_form-primitives'
 import {
   DEATH_TYPE_GROUPS,
@@ -277,7 +277,9 @@ export function LifeSection({
        * 원인 상세·메모는 details(아래)에 유지 — 유형 칩이 두 번 그려지지 않도록 details에선 제외.
        * 13개 평면 chip → 4그룹 mini-header. 그룹 내 chip은 active=indigo fill.
        */}
-      {showEssentials && !isAlive && (
+      {showEssentials &&
+        !isAlive &&
+        (!!deathType || !!deathYear.trim() || isDeathDateUnknown) && (
         <FieldRow>
           <FieldLabel>사망 유형</FieldLabel>
           <FieldControl>
@@ -465,41 +467,7 @@ const SegmentBtn = styled.button<{
   $error?: boolean
   $variant?: 'solid' | 'ghost'
 }>`
-  padding: 7px 12px;
-  font-size: ${FONT.label};
-  font-weight: ${({ $active }) => ($active ? 500 : 400)};
-  border-radius: ${RADIUS.control};
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease,
-    border-color 0.12s ease;
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
-  border: 1px solid
-    ${({ $active, $error, theme }) =>
-      $error
-        ? theme.colors.alert.danger.fg
-        : $active
-          ? theme.colors.primary
-          : theme.colors.border.default};
-
-  &:hover:not(:disabled) {
-    border-color: ${({ $active, $error, theme }) =>
-      $error
-        ? theme.colors.alert.danger.fg
-        : $active
-          ? theme.colors.primary
-          : theme.colors.border.medium};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  ${({ theme, $active, $error }) => segmentToggleMixin(theme, $active, $error)}
 `
 
 /**
@@ -510,47 +478,21 @@ const Segmented3Way = styled.div`
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 3px;
-  gap: 2px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
-  border-radius: 9px;
+  gap: 6px;
 
   /* 사망 열 폭(=절반)에 맞춰 세 버튼을 균등 분할. */
   > button {
     flex: 1;
-    padding-left: 0;
-    padding-right: 0;
   }
 `
 
 const Segmented3WayBtn = styled.button<{ $active?: boolean }>`
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: ${({ $active }) => ($active ? 600 : 500)};
-  letter-spacing: -0.005em;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease;
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? '#171727'
-        : '#fff'
-      : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.secondary};
-  box-shadow: ${({ $active }) =>
-    $active ? '0 1px 2px rgba(15, 23, 42, 0.06)' : 'none'};
-
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
+  ${({ theme, $active }) => segmentToggleMixin(theme, $active)}
+  /* 균등 분할 컬럼이라 좌우 패딩을 줄여 좁은 폭에서도 라벨이 잘리지 않게 */
+  padding-left: 8px;
+  padding-right: 8px;
+  text-align: center;
+  justify-content: center;
 `
 
 /** 사망 유형 카테고리 그룹 — 4그룹 (자연/외부/자해/기타) */
@@ -580,47 +522,9 @@ const DeathTypeChips = styled.div`
   gap: 6px;
 `
 
-/** 사망 유형 chip — active=indigo fill + 흰 글자, idle=채움 톤. */
+/** 사망 유형 chip — 모달 공용 토글 규약(active=연한 indigo 채움 + indigo 텍스트/보더). */
 const DeathTypeChip = styled.button<{ $active?: boolean }>`
-  padding: 6px 12px;
-  font-size: ${FONT.label};
-  font-weight: ${({ $active }) => ($active ? 600 : 500)};
-  letter-spacing: -0.005em;
-  border-radius: ${RADIUS.control};
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
-  color: ${({ $active, theme }) =>
-    $active ? '#fff' : theme.colors.text.secondary};
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.colors.primary
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.04)'
-        : '#f9fafb'};
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active
-        ? theme.colors.primary
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.08)'
-          : '#e5e7eb'};
-
-  &:hover:not(:disabled) {
-    color: ${({ $active, theme }) =>
-      $active ? '#fff' : theme.colors.text.primary};
-    background: ${({ $active, theme }) =>
-      $active
-        ? theme.colors.button.hover
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.06)'
-          : '#fff'};
-    border-color: ${({ $active, theme }) =>
-      $active ? theme.colors.button.hover : theme.colors.border.medium};
-  }
+  ${({ theme, $active }) => segmentToggleMixin(theme, $active)}
 `
 
 // Disclosure 카드·InlineFields·FieldError는 ../_form-primitives에서 import (중복 제거).

@@ -9,7 +9,9 @@
  *
  * 사용처는 모두 이 파일에서 import — 값 변경은 한 곳에서만.
  */
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
+
+import type { DefaultTheme } from 'styled-components'
 
 // ─── 디자인 토큰 (이 모달 전용 canon) ────────────────────────────────────────
 
@@ -30,6 +32,64 @@ export const FONT = {
   title: '16px', // 섹션 타이틀
   hero: '18px', // hero 이름
 } as const
+
+/**
+ * 토글/세그먼트/칩 단일 규약 — 모달 내 모든 "한 줄 선택" 컨트롤(성별·표시순서·
+ * 생존/사망/미상·출생일 미상·사망유형)이 같은 시각 언어를 쓰도록 한 곳에 모음.
+ * 이전엔 컨트롤마다 active가 indigo 보더 / indigo 솔리드 채움+흰글자 / 흰 트레이+
+ * 그림자로 제각각이라 "조잡"했다 → active = 연한 indigo 채움(activeLight) + indigo
+ * 텍스트/보더 한 가지로 통일, radius·font·focus는 토큰으로 고정.
+ */
+export function segmentToggleMixin(
+  theme: DefaultTheme,
+  active?: boolean,
+  error?: boolean,
+) {
+  return css`
+    padding: 7px 12px;
+    font-size: ${FONT.label};
+    font-weight: ${active ? 600 : 500};
+    line-height: 1.2;
+    border-radius: ${RADIUS.control};
+    cursor: pointer;
+    white-space: nowrap;
+    outline: none;
+    transition:
+      background 0.12s ease,
+      color 0.12s ease,
+      border-color 0.12s ease,
+      box-shadow 0.12s ease;
+    color: ${active ? theme.colors.active : theme.colors.text.secondary};
+    background: ${active
+      ? theme.colors.activeLight
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.03)'
+        : '#f9fafb'};
+    border: 1px solid
+      ${error
+        ? theme.colors.alert.danger.fg
+        : active
+          ? theme.colors.primary
+          : theme.colors.border.default};
+
+    &:hover:not(:disabled) {
+      border-color: ${error
+        ? theme.colors.alert.danger.fg
+        : active
+          ? theme.colors.primary
+          : theme.colors.border.medium};
+      color: ${theme.colors.text.primary};
+    }
+    &:focus-visible {
+      border-color: ${theme.colors.primary};
+      box-shadow: ${theme.colors.focusRing.primary};
+    }
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  `
+}
 
 // ─── Inline 입력 그룹 ─────────────────────────────────────────────────────────
 

@@ -22,6 +22,8 @@ import React from 'react'
 
 import styled from 'styled-components'
 
+import { segmentToggleMixin } from '../person-register-modal/_form-primitives'
+
 export interface SegmentOption<V extends string = string> {
   value: V
   label: React.ReactNode
@@ -45,41 +47,7 @@ const Wrap = styled.div`
 `
 
 const Btn = styled.button<{ $active?: boolean; $error?: boolean }>`
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: ${({ $active }) => ($active ? 500 : 400)};
-  border-radius: 6px;
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    color 0.12s ease,
-    border-color 0.12s ease;
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
-  border: 1px solid
-    ${({ $active, $error, theme }) =>
-      $error
-        ? theme.colors.alert.danger.fg
-        : $active
-          ? theme.colors.primary
-          : theme.colors.border.default};
-
-  &:hover:not(:disabled) {
-    border-color: ${({ $active, $error, theme }) =>
-      $error
-        ? theme.colors.alert.danger.fg
-        : $active
-          ? theme.colors.primary
-          : theme.colors.border.medium};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  ${({ theme, $active, $error }) => segmentToggleMixin(theme, $active, $error)}
 `
 
 export function SegmentControl<V extends string = string>({

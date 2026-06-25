@@ -959,7 +959,9 @@ export function PersonRegisterView({
   const draft = usePersonDraft<PersonDraftSnapshot>({
     scopeId: draftScopeId,
     getSnapshot: buildDraftSnapshot,
-    enabled: isDirty && !isSubmitting,
+    // 임시저장은 신규 등록 전용 — 수정 모드에서 옛 draft가 되살아나 서버 데이터를
+    // 덮어쓰는 위험 차단(셸 draftEnabled={!isEdit} 정책과 일치).
+    enabled: !isEditMode && isDirty && !isSubmitting,
   })
 
   // dirty 변경 시 throttled save 트리거
@@ -970,6 +972,8 @@ export function PersonRegisterView({
   // 진입 시(또는 수정 데이터 로딩 후) 저장된 draft 발견되면 배너 표시
   const draftPeekedRef = useRef<string | null>(null)
   useEffect(() => {
+    // 수정 모드는 draft 비활성 — 옛 임시본 배너/복원으로 서버 데이터를 덮지 않게 skip.
+    if (isEditMode) return
     if (isLoadingEdit) return
     if (draftPeekedRef.current === draftScopeId) return
     draftPeekedRef.current = draftScopeId
@@ -977,7 +981,7 @@ export function PersonRegisterView({
     if (env && env.savedAt) {
       setPendingDraftSavedAt(env.savedAt)
     }
-  }, [draftScopeId, isLoadingEdit, draft])
+  }, [draftScopeId, isLoadingEdit, draft, isEditMode])
 
   const restoreDraft = () => {
     const env = draft.peekDraft()
@@ -1740,8 +1744,14 @@ export function PersonRegisterView({
       },
       {
         id: 'life',
+        // 실제 의미 있는 입력(출생/사망 날짜 또는 미상)일 때만 채움 — 이전엔 isAlive
+        // 기본 false 때문에 `!isAlive`가 항상 true라 입력 0인데도 '생몰 완료'로 떴다.
         label: '생몰',
-        filled: !!birthYear || isBirthDateUnknown || !isAlive,
+        filled:
+          !!birthYear ||
+          isBirthDateUnknown ||
+          !!deathYear ||
+          isDeathDateUnknown,
       },
     ]
     if (moreOpen) {
@@ -1797,6 +1807,8 @@ export function PersonRegisterView({
     birthYear,
     isBirthDateUnknown,
     isAlive,
+    deathYear,
+    isDeathDateUnknown,
     originalName,
     surnameMeaning,
     nameMeaning,
@@ -1974,7 +1986,7 @@ export function PersonRegisterView({
 
                 <FieldRow>
                   <FieldLabel htmlFor={fid('surname')}>
-                    성 · 이름 <Required>*</Required> · 중간이름
+                    성 · 이름 · 중간이름<Required>*</Required>
                   </FieldLabel>
                   <FieldControl>
                     <InlineFields $template="minmax(90px, 0.8fr) minmax(140px, 1.4fr) minmax(110px, 1fr)">
@@ -2047,7 +2059,7 @@ export function PersonRegisterView({
                 <CoreFieldPair>
                   <CoreFieldCell>
                     <FieldLabel htmlFor={fid('gender')}>
-                      성별 <Required>*</Required>
+                      성별<Required>*</Required>
                     </FieldLabel>
                     {/* SegmentControl은 aria-invalid를 렌더하지 않음 — 제출 실패 시 첫 오류
                         스크롤 셀렉터가 잡을 수 있게 래퍼에 data-field-error를 단다. */}
@@ -2081,7 +2093,7 @@ export function PersonRegisterView({
                   {/* 국적(필수) — 소속 섹션에서 코어로 이관 */}
                   <CoreFieldCell>
                     <FieldLabel htmlFor={fid('countryId')}>
-                      국적 <Required>*</Required>
+                      국적<Required>*</Required>
                     </FieldLabel>
                     <SelectBtn
                       id={fid('countryId')}

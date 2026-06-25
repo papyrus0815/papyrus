@@ -892,6 +892,15 @@ const ModalBox = styled.div`
   z-index: ${Z_INDEX.MODAL_CONTENT};
   animation: slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 
+  /* 모바일: 부모 풀스크린 폼 위에 작은 카드로 뜨지 않게 풀스크린 통일 */
+  @media (max-width: 768px) {
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+  }
+
   @keyframes slideUp {
     from {
       transform: translateY(20px) scale(0.99);

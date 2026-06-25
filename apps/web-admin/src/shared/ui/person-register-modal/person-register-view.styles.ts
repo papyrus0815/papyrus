@@ -43,15 +43,15 @@ export const ThumbnailCircle = styled.label<{
   $dragOver?: boolean
 }>`
   position: relative;
-  width: 104px;
-  height: 104px;
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
   overflow: hidden;
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(255,255,255,0.04)'
       : 'linear-gradient(145deg, #f8fafc 0%, #eef2ff 100%)'};
-  border: 1.5px ${({ $hasImage }) => ($hasImage ? 'solid' : 'dashed')}
+  border: 1px ${({ $hasImage }) => ($hasImage ? 'solid' : 'dashed')}
     ${({ $dragOver, $hasImage, theme }) =>
       $dragOver
         ? theme.colors.primary
@@ -72,11 +72,6 @@ export const ThumbnailCircle = styled.label<{
 
   &:hover {
     border-color: ${({ theme }) => theme.colors.primary};
-    box-shadow: 0 0 0 4px
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(99,102,241,0.14)'
-          : 'rgba(99,102,241,0.08)'};
   }
 
   img {

@@ -65,6 +65,11 @@ const StyledInput = styled.input<{ $error?: boolean }>`
       margin: 0;
     }
   }
+
+  /* iOS는 16px 미만 입력 포커스 시 화면을 자동 확대 — 모바일에서 16px로 막음 */
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
 `
 
 const StyledTextarea = styled.textarea<{
@@ -94,6 +99,11 @@ const StyledTextarea = styled.textarea<{
   box-sizing: border-box;
   resize: ${({ $resize = 'vertical' }) => $resize};
   font-family: inherit;
+
+  /* iOS 포커스 자동 확대 방지 (16px 미만 줌) */
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
