@@ -2137,6 +2137,10 @@ export function PersonRegisterView({
                 isBirthDateUnknown={isBirthDateUnknown}
                 setIsBirthDateUnknown={setIsBirthDateUnknown}
                 setShowBirthDateModal={setShowBirthDateModal}
+                setBirthEra={setBirthEra}
+                setBirthYear={setBirthYear}
+                setBirthMonth={setBirthMonth}
+                setBirthDay={setBirthDay}
                 deathEra={deathEra}
                 deathYear={deathYear}
                 deathMonth={deathMonth}
@@ -2144,6 +2148,10 @@ export function PersonRegisterView({
                 isAlive={isAlive}
                 isDeathDateUnknown={isDeathDateUnknown}
                 setShowDeathDateModal={setShowDeathDateModal}
+                setDeathEra={setDeathEra}
+                setDeathYear={setDeathYear}
+                setDeathMonth={setDeathMonth}
+                setDeathDay={setDeathDay}
                 setDeathStatus={setDeathStatus}
                 deathType={deathType}
                 deathCause={deathCause}
@@ -2275,6 +2283,10 @@ export function PersonRegisterView({
                   isBirthDateUnknown={isBirthDateUnknown}
                   setIsBirthDateUnknown={setIsBirthDateUnknown}
                   setShowBirthDateModal={setShowBirthDateModal}
+                  setBirthEra={setBirthEra}
+                  setBirthYear={setBirthYear}
+                  setBirthMonth={setBirthMonth}
+                  setBirthDay={setBirthDay}
                   deathEra={deathEra}
                   deathYear={deathYear}
                   deathMonth={deathMonth}
@@ -2282,6 +2294,10 @@ export function PersonRegisterView({
                   isAlive={isAlive}
                   isDeathDateUnknown={isDeathDateUnknown}
                   setShowDeathDateModal={setShowDeathDateModal}
+                  setDeathEra={setDeathEra}
+                  setDeathYear={setDeathYear}
+                  setDeathMonth={setDeathMonth}
+                  setDeathDay={setDeathDay}
                   setDeathStatus={setDeathStatus}
                   deathType={deathType}
                   deathCause={deathCause}

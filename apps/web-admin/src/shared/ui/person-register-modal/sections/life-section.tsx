@@ -8,8 +8,6 @@ import React from 'react'
 
 import {
   FiAlertCircle,
-  FiCalendar,
-  FiChevronDown,
   FiChevronRight,
 } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -17,7 +15,6 @@ import styled from 'styled-components'
 import type { Era } from '@/shared/api/persons'
 import { FormInput } from '@/shared/ui/form-input/form-input'
 import {
-  DateFieldBtn,
   FieldControl,
   FieldLabel,
   FieldRow,
@@ -38,10 +35,8 @@ import {
   InlineFields,
   segmentToggleMixin,
 } from '../_form-primitives'
-import {
-  DEATH_TYPE_GROUPS,
-  formatDateDisplay,
-} from '../person-register-view.helpers'
+import { DEATH_TYPE_GROUPS } from '../person-register-view.helpers'
+import { InlineDateField } from './inline-date-field'
 
 export interface LifeSectionProps {
   fid: (key: string) => string
@@ -53,6 +48,10 @@ export interface LifeSectionProps {
   isBirthDateUnknown: boolean
   setIsBirthDateUnknown: React.Dispatch<React.SetStateAction<boolean>>
   setShowBirthDateModal: (v: boolean) => void
+  setBirthEra: (era: Era) => void
+  setBirthYear: (value: string) => void
+  setBirthMonth: (value: string) => void
+  setBirthDay: (value: string) => void
   // 사망
   deathEra: Era
   deathYear: string
@@ -61,6 +60,10 @@ export interface LifeSectionProps {
   isAlive: boolean
   isDeathDateUnknown: boolean
   setShowDeathDateModal: (v: boolean) => void
+  setDeathEra: (era: Era) => void
+  setDeathYear: (value: string) => void
+  setDeathMonth: (value: string) => void
+  setDeathDay: (value: string) => void
   setDeathStatus: (status: 'alive' | 'deceased' | 'unknown') => void
   // 사망 상세
   deathType: string
@@ -102,6 +105,10 @@ export function LifeSection({
   isBirthDateUnknown,
   setIsBirthDateUnknown,
   setShowBirthDateModal,
+  setBirthEra,
+  setBirthYear,
+  setBirthMonth,
+  setBirthDay,
   deathEra,
   deathYear,
   deathMonth,
@@ -109,6 +116,10 @@ export function LifeSection({
   isAlive,
   isDeathDateUnknown,
   setShowDeathDateModal,
+  setDeathEra,
+  setDeathYear,
+  setDeathMonth,
+  setDeathDay,
   setDeathStatus,
   deathType,
   deathCause,
@@ -151,28 +162,33 @@ export function LifeSection({
             <LifeCol>
               <LifeFieldGroup>
                 <LifeSubLabel>출생일</LifeSubLabel>
-                <DateFieldBtn
-                  type="button"
-                  $hasValue={!!birthYear.trim() && !isBirthDateUnknown}
-                  onClick={() =>
-                    !isBirthDateUnknown && setShowBirthDateModal(true)
-                  }
-                  aria-invalid={!!errors.birth}
+                <InlineDateField
+                  ariaLabel="출생일"
+                  era={birthEra}
+                  year={birthYear}
+                  month={birthMonth}
+                  day={birthDay}
+                  onEra={(era) => {
+                    setBirthEra(era)
+                    markDirty()
+                  }}
+                  onYear={(value) => {
+                    setBirthYear(value)
+                    markDirty()
+                  }}
+                  onMonth={(value) => {
+                    setBirthMonth(value)
+                    markDirty()
+                  }}
+                  onDay={(value) => {
+                    setBirthDay(value)
+                    markDirty()
+                  }}
+                  onOpenPicker={() => setShowBirthDateModal(true)}
                   disabled={isBirthDateUnknown}
-                >
-                  <FiCalendar size={16} />
-                  <span>
-                    {isBirthDateUnknown
-                      ? '미상'
-                      : formatDateDisplay(
-                          birthEra,
-                          birthYear,
-                          birthMonth,
-                          birthDay,
-                        )}
-                  </span>
-                  <FiChevronDown size={14} />
-                </DateFieldBtn>
+                  disabledLabel="미상"
+                  error={!!errors.birth}
+                />
               </LifeFieldGroup>
               <SegmentBtn
                 type="button"
@@ -192,34 +208,33 @@ export function LifeSection({
             <LifeCol>
               <LifeFieldGroup>
                 <LifeSubLabel>사망일</LifeSubLabel>
-                <DateFieldBtn
-                  type="button"
-                  $hasValue={
-                    !isAlive && !isDeathDateUnknown && !!deathYear.trim()
-                  }
-                  onClick={() =>
-                    !isAlive &&
-                    !isDeathDateUnknown &&
-                    setShowDeathDateModal(true)
-                  }
-                  aria-invalid={!!errors.death}
+                <InlineDateField
+                  ariaLabel="사망일"
+                  era={deathEra}
+                  year={deathYear}
+                  month={deathMonth}
+                  day={deathDay}
+                  onEra={(era) => {
+                    setDeathEra(era)
+                    markDirty()
+                  }}
+                  onYear={(value) => {
+                    setDeathYear(value)
+                    markDirty()
+                  }}
+                  onMonth={(value) => {
+                    setDeathMonth(value)
+                    markDirty()
+                  }}
+                  onDay={(value) => {
+                    setDeathDay(value)
+                    markDirty()
+                  }}
+                  onOpenPicker={() => setShowDeathDateModal(true)}
                   disabled={isAlive || isDeathDateUnknown}
-                >
-                  <FiCalendar size={16} />
-                  <span>
-                    {isAlive
-                      ? '생존 중'
-                      : isDeathDateUnknown
-                        ? '일자 미상'
-                        : formatDateDisplay(
-                            deathEra,
-                            deathYear,
-                            deathMonth,
-                            deathDay,
-                          )}
-                  </span>
-                  <FiChevronDown size={14} />
-                </DateFieldBtn>
+                  disabledLabel={isAlive ? '생존 중' : '일자 미상'}
+                  error={!!errors.death}
+                />
               </LifeFieldGroup>
               {/*
                * 사망 여부 분기 — 사망일 열에 합쳐 두 날짜를 가로로 나란히 둔다.
