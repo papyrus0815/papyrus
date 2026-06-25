@@ -139,7 +139,6 @@ export function LifeSection({
        */}
       {showEssentials && (
       <FieldRow>
-        <FieldLabel>생몰</FieldLabel>
         <LifeStack>
           {/*
            * 출생일 · 사망일을 가로 2열로 (앱 공통 date-pair 하우스 스타일).

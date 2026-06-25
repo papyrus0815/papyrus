@@ -225,6 +225,19 @@ export const CoreDivider = styled.div`
   margin: 24px 0;
 `
 
+/**
+ * 코어 블록 eyebrow 라벨(이름/신원/생몰) — 작은 대문자 톤으로 필드 라벨(13px)과
+ * 위계를 분리해 "섹션 마커"임을 알린다. DeathTypeGroupLabel과 동일 시각 언어.
+ */
+export const CoreSectionLabel = styled.div`
+  font-size: ${FONT.eyebrow};
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-bottom: 10px;
+`
+
 // ─── Layout wrapper (Top-aligned modern form layout) ────────────────────────
 // 상단 정렬 라벨 (Linear/Stripe/Notion 류) — 라벨이 위, 컨트롤이 아래.
 

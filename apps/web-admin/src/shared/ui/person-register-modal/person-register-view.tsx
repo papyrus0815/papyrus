@@ -99,6 +99,7 @@ import {
   CoreFieldCell,
   CoreDivider,
   CoreFieldPair,
+  CoreSectionLabel,
   DraftBanner,
   DraftBannerActions,
   DraftBannerIcon,
@@ -1893,6 +1894,7 @@ export function PersonRegisterView({
              * "한 명 빠르게 추가"를 15초 작업으로 만든다. 나머지 상세는 MoreToggle로 펼침.
              */}
             <FormRows data-form-section="basic">
+                <CoreSectionLabel>이름</CoreSectionLabel>
                 {/* 인물 hero — 좌: 원형 썸네일(드롭존), 우: 이름 미리보기·국가/향년 칩 */}
                 <ThumbnailHero>
                   <ThumbnailCircle
@@ -2058,6 +2060,7 @@ export function PersonRegisterView({
 
                 <CoreDivider />
 
+                <CoreSectionLabel>신원</CoreSectionLabel>
                 {/* 성별·국적 — 짧은 코어 컨트롤이라 가로 2열로 묶음 */}
                 <CoreFieldPair>
                   <CoreFieldCell>
@@ -2126,6 +2129,7 @@ export function PersonRegisterView({
 
               {/* 생몰 요약 — 출생~사망·생존 여부 (essentials, 늘 노출) */}
               <div data-form-section="life">
+              <CoreSectionLabel>생몰</CoreSectionLabel>
               <LifeSection
                 mode="essentials"
                 fid={fid}
