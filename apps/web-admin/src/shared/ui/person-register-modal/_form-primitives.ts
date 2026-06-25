@@ -191,20 +191,12 @@ export const SelectBtn = styled.button<{
 
 // ─── Disclosure 카드 (이름의 뜻·군주 호칭 등 옵셔널 입력 그룹) ─────────────────
 
+/**
+ * 2차 disclosure(이름의 뜻·군주 호칭) — 카드 보더/배경을 없앤 경량 텍스트 토글.
+ * '더 입력' 카드 안에서 또 카드가 겹치던 '카드-인-카드' 조잡함을 1겹으로 낮춤.
+ */
 export const AdvancedSection = styled.section`
-  margin-top: 16px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: ${RADIUS.card};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fff'};
-  overflow: hidden;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-  }
+  margin-top: 8px;
 `
 
 export const AdvancedToggle = styled.button<{ $open: boolean }>`
@@ -212,21 +204,20 @@ export const AdvancedToggle = styled.button<{ $open: boolean }>`
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 12px 14px;
+  padding: 8px 0;
   background: transparent;
   border: none;
   cursor: pointer;
   text-align: left;
-  transition: background 0.15s ease;
+  border-radius: ${RADIUS.control};
+  transition: color 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   &:focus-visible {
     outline: none;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f1f5f9'};
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
   }
 `
 
@@ -269,8 +260,7 @@ export const AdvancedToggleDesc = styled.span`
   line-height: 1.4;
 `
 
-/** 펼친 본문 — 카드 내부 padding + 상단 light divider */
+/** 펼친 본문 — 카드 제거에 맞춰 보더 없이 약간의 상하 여백만 */
 export const AdvancedBody = styled.div`
-  padding: 14px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding: 10px 0 4px;
 `

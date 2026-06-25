@@ -112,7 +112,7 @@ export function AffiliationSection({
               $hasValue={!!dynastyLabel}
               onClick={() => setShowDynastyModal(true)}
             >
-              <span>{dynastyLabel || '가문 — 선택'}</span>
+              <span>{dynastyLabel || '가문 선택'}</span>
               <FiChevronDown size={16} />
             </SelectBtn>
             <SelectBtn
@@ -121,7 +121,7 @@ export function AffiliationSection({
               $hasValue={!!religionLabel}
               onClick={() => setShowReligionModal(true)}
             >
-              <span>{religionLabel || '종교 — 선택'}</span>
+              <span>{religionLabel || '종교 선택'}</span>
               <FiChevronDown size={16} />
             </SelectBtn>
           </InlineFields>

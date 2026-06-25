@@ -118,9 +118,6 @@ import {
   NotFoundTitle,
   OriginalNameInputWrap,
   PersonFormLayoutWrap,
-  SectionHeader,
-  SectionHeaderDesc,
-  SectionHeaderTitle,
   ThumbnailCircle,
   ThumbnailHero,
   ThumbnailHeroBody,
@@ -2190,13 +2187,9 @@ export function PersonRegisterView({
 
               {moreOpen && (
                 <>
-                <div data-form-section="names" style={{ marginTop: 28 }}>
-                <SectionHeader>
-                  <SectionHeaderTitle>이름 상세</SectionHeaderTitle>
-                  <SectionHeaderDesc>
-                    이름 원어 · 성·이름·중간이름의 뜻
-                  </SectionHeaderDesc>
-                </SectionHeader>
+                <CoreDivider />
+                <div data-form-section="names">
+                <CoreSectionLabel>이름 상세</CoreSectionLabel>
                 <FormRows>
                 {/* 이름 원어 */}
                 <FieldRow>
@@ -2269,13 +2262,9 @@ export function PersonRegisterView({
                 </div>
 
                 {/* 생애 상세 — 사망 유형·원인·메모 + 군주 호칭 (details) */}
-                <div data-form-section="death-detail" style={{ marginTop: 28 }}>
-                <SectionHeader>
-                  <SectionHeaderTitle>생애 상세</SectionHeaderTitle>
-                  <SectionHeaderDesc>
-                    사망 원인·메모 · 군주 호칭
-                  </SectionHeaderDesc>
-                </SectionHeader>
+                <CoreDivider />
+                <div data-form-section="death-detail">
+                <CoreSectionLabel>생애 상세</CoreSectionLabel>
                 <LifeSection
                   mode="details"
                   fid={fid}
@@ -2316,13 +2305,9 @@ export function PersonRegisterView({
                 </div>
 
                 {/* 소속 · 가문 — 출생/사망지·가문·종교 (국적은 코어) */}
-                <div data-form-section="affiliation" style={{ marginTop: 28 }}>
-                <SectionHeader>
-                  <SectionHeaderTitle>소속 · 가문</SectionHeaderTitle>
-                  <SectionHeaderDesc>
-                    출생·사망지 · 가문 · 종교 · 국가 소속
-                  </SectionHeaderDesc>
-                </SectionHeader>
+                <CoreDivider />
+                <div data-form-section="affiliation">
+                <CoreSectionLabel>소속 · 가문</CoreSectionLabel>
                 <AffiliationSection
                   fid={fid}
                   countryId={countryId}
@@ -2353,11 +2338,9 @@ export function PersonRegisterView({
                 </div>
 
                 {/* 가족 — 부·모·배우자 */}
-                <div data-form-section="family" style={{ marginTop: 28 }}>
-                <SectionHeader>
-                  <SectionHeaderTitle>가족</SectionHeaderTitle>
-                  <SectionHeaderDesc>부 · 모 · 배우자</SectionHeaderDesc>
-                </SectionHeader>
+                <CoreDivider />
+                <div data-form-section="family">
+                <CoreSectionLabel>가족</CoreSectionLabel>
                 <FamilySection
                   fid={fid}
                   fatherId={fatherId}
