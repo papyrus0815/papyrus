@@ -101,11 +101,12 @@ export function useEventMutation(eventId: string) {
         queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
       }
     },
-    onError: (error: unknown, _patch, context) => {
-      // 낙관적 반영 롤백 — 스냅샷이 있을 때만.
-      if (context?.previous) {
-        queryClient.setQueryData(detailKey, context.previous)
-      }
+    onError: (error: unknown) => {
+      // 낙관 스냅샷(previous) 통째 복원은 그 사이 성공한 *다른* 패치까지 덮어
+      // 무증상 데이터 손실을 부른다(인라인 자동저장은 여러 patch가 동시 in-flight
+      // 가능: A시작→B성공→A실패 시 B가 사라짐). 서버 정본으로 재동기화해 실패분만
+      // 되돌리고 이미 저장된 변경은 보존한다.
+      queryClient.invalidateQueries({ queryKey: detailKey })
       const message =
         error instanceof Error ? error.message : '알 수 없는 오류'
       notify.error(`저장 실패: ${message}`)

@@ -330,7 +330,9 @@ function HeroActors({
                 : '미상'
               const avatar = p.person?.profileImageUrl ?? undefined
               return (
-                <span key={p.id}>
+                // detail-actors와 동일하게 personId로 키잉 — 관계 행 id(p.id)는
+                // 저장 후 refetch에서 바뀌어 hero 행이 불필요하게 remount된다.
+                <span key={p.personId}>
                   <PersonInlineButton
                     type="button"
                     onClick={() => onPersonClick(p.personId)}

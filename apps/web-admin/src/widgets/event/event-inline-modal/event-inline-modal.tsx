@@ -8,7 +8,7 @@
  * 사건 데이터는 `getEventById`로 별도 fetch — 연보 데이터(`PersonEventInput`)는 카드 표시용
  * 최소 필드만 들고 있어서 카테고리/장소/설명 등 모달에 필요한 풍부한 정보가 없다.
  */
-import { useEffect } from 'react'
+import { useRef } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -18,6 +18,7 @@ import styled from 'styled-components'
 import { getEventById } from '@/shared/api/events'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { glassCardMixin } from '@/shared/styles/mixins'
+import { useModalBehavior } from '@/shared/ui/modal/use-modal-behavior.hook'
 import {
   ModalBody,
   ModalCloseButton,
@@ -50,15 +51,11 @@ export function EventInlineModal({
   onNavigate,
   personContext,
 }: EventInlineModalProps) {
-  // ESC 닫기
-  useEffect(() => {
-    if (!eventId) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [eventId, onClose])
+  // 공용 모달 동작 — Esc 닫기·포커스 트랩·바디 스크롤락·초기 포커스·트리거 복원·
+  // aria-modal 일괄. (이전엔 Esc만 수동 구현해 Tab이 배경으로 새고 닫은 뒤 포커스가
+  // 안 돌아왔다.)
+  const panelRef = useRef<HTMLDivElement>(null)
+  useModalBehavior({ isOpen: !!eventId, onClose, containerRef: panelRef })
 
   const { data: event, isLoading } = useQuery({
     queryKey: ['event-detail', eventId],
@@ -91,12 +88,14 @@ export function EventInlineModal({
         >
           <Box
             key="event-inline-modal-panel"
+            ref={panelRef}
             initial={{ opacity: 0, y: 20, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
             role="dialog"
+            aria-modal="true"
             aria-label="사건 상세 미리보기"
           >
             <ModalHeader>

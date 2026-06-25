@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { FiCheck, FiEdit2 } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -41,31 +41,65 @@ export function InlineDateRange({
   onSave,
 }: InlineDateRangeProps) {
   const [editing, setEditing] = useState(false)
+  // 편집은 로컬 draft에 모았다가 '완료' 시 한 번의 onSave로 커밋한다.
+  // (이전엔 날짜를 누르는 즉시 onSave가 나가 시작·종료를 둘 다 고치면 mutation 2회,
+  //  undo 토스트 2개가 생기고 되돌리기 한 번이 종료일만 복구했다.)
+  const [draftStart, setDraftStart] = useState(startDate ?? '')
+  const [draftEnd, setDraftEnd] = useState(endDate ?? '')
+
+  // edit 진입(false→true) 시에만 draft를 현재 server 값으로 동기화.
+  const wasEditingRef = useRef(editing)
+  useEffect(() => {
+    if (editing && !wasEditingRef.current) {
+      setDraftStart(startDate ?? '')
+      setDraftEnd(endDate ?? '')
+    }
+    wasEditingRef.current = editing
+  }, [editing, startDate, endDate])
+
+  const commit = () => {
+    const patch: DateRangePatch = {}
+    // 달력은 일 단위까지 고르지만, 사료적으로 연/월만 아는 사건의 기존 정밀도를
+    // 임의로 'day'로 덮지 않는다 — 기존 정밀도를 보존하고, 정밀도가 없던 필드에
+    // 새 값이 들어온 경우에만 'day'로 둔다(거짓 정밀도 영속화 방지).
+    if (draftStart !== (startDate ?? '')) {
+      patch.startDate = draftStart
+      patch.startDatePrecision =
+        (startDatePrecision as DatePrecision | null) ?? 'day'
+    }
+    if (draftEnd !== (endDate ?? '')) {
+      patch.endDate = draftEnd
+      patch.endDatePrecision =
+        (endDatePrecision as DatePrecision | null) ?? 'day'
+    }
+    if (Object.keys(patch).length > 0) onSave(patch)
+    setEditing(false)
+  }
 
   if (editing) {
     return (
-      <EditRow>
+      <EditRow
+        onKeyDown={(event) => {
+          // Esc — 미저장 draft 폐기 후 읽기 모드 복귀(다른 inline 요소와 일관).
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            setEditing(false)
+          }
+        }}
+      >
         <DateRangeField
           renderControlOnly
-          startValue={startDate ?? ''}
-          endValue={endDate ?? ''}
-          onStartChange={(date) =>
-            onSave({ startDate: date, startDatePrecision: 'day' })
-          }
-          onEndChange={(date) =>
-            onSave({ endDate: date, endDatePrecision: 'day' })
-          }
+          startValue={draftStart}
+          endValue={draftEnd}
+          onStartChange={(date) => setDraftStart(date)}
+          onEndChange={(date) => setDraftEnd(date)}
           startPlaceholder="시작일"
           endPlaceholder="종료일 (선택)"
           startPickerTitle="시작 일자 선택"
           endPickerTitle="종료 일자 선택"
           openEndAfterStart={false}
         />
-        <DoneButton
-          type="button"
-          onClick={() => setEditing(false)}
-          aria-label="기간 편집 완료"
-        >
+        <DoneButton type="button" onClick={commit} aria-label="기간 편집 완료">
           <FiCheck />
           완료
         </DoneButton>

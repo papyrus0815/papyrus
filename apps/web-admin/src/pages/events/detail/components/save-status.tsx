@@ -32,24 +32,33 @@ export function SaveStatus({ isPending, lastSavedAt }: SaveStatusProps) {
   }, [lastSavedAt])
 
   const visible = isPending || savedFlash
-  if (!visible) return null
 
+  // 라이브 리전 컨테이너는 idle에도 항상 마운트 — 노드가 콘텐츠 변경 *이전부터*
+  // 존재해야 스크린리더가 '저장 중/방금 저장됨' 갱신을 읽는다. (이전엔 visible 시점에
+  // 노드+텍스트가 동시 생성돼 다수 SR이 고지하지 못했다.) 시각적 Pill만 조건부 렌더.
   return (
-    <Pill aria-live="polite" $state={isPending ? 'pending' : 'saved'}>
-      {isPending ? (
-        <>
-          <SpinIcon><FiLoader /></SpinIcon>
-          <span>저장 중…</span>
-        </>
-      ) : (
-        <>
-          <FiCheck />
-          <span>방금 저장됨</span>
-        </>
+    <StatusLive aria-live="polite" aria-atomic="true">
+      {visible && (
+        <Pill $state={isPending ? 'pending' : 'saved'}>
+          {isPending ? (
+            <>
+              <SpinIcon><FiLoader /></SpinIcon>
+              <span>저장 중…</span>
+            </>
+          ) : (
+            <>
+              <FiCheck />
+              <span>방금 저장됨</span>
+            </>
+          )}
+        </Pill>
       )}
-    </Pill>
+    </StatusLive>
   )
 }
+
+/* idle에도 항상 마운트되는 빈 라이브 리전 래퍼 (레이아웃 영향 없음). */
+const StatusLive = styled.div``
 
 const fadeIn = keyframes`
   from { opacity: 0; transform: translateY(-4px); }

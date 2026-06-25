@@ -91,11 +91,18 @@ export function InlineText({
     }
   }, [editing])
 
-  const commit = () => {
+  const commit = (viaBlur = false) => {
     const validation = validate?.(draft) ?? null
     if (validation) {
+      if (viaBlur) {
+        // blur 경로에서 강제 re-focus하면 잘못된 값(빈 제목 등)을 둔 채 다른 곳을
+        // 클릭/Tab할 때 포커스가 input으로 되돌아와 필드를 영영 못 떠나는 트랩이 된다.
+        // blur 시엔 변경을 폐기하고 읽기 모드로 복귀 — 키보드 사용자도 빠져나갈 수 있다.
+        cancel()
+        return
+      }
       setError(validation)
-      // input에 다시 focus 유지
+      // 명시 저장(Enter) 경로에서만 input에 다시 focus 유지
       inputRef.current?.focus()
       return
     }
@@ -135,7 +142,7 @@ export function InlineText({
               setDraft(e.target.value)
               if (error) setError(null)
             }}
-            onBlur={commit}
+            onBlur={() => commit(true)}
             onKeyDown={onKey}
             rows={3}
             data-invalid={error ? 'true' : undefined}
@@ -151,7 +158,7 @@ export function InlineText({
               setDraft(e.target.value)
               if (error) setError(null)
             }}
-            onBlur={commit}
+            onBlur={() => commit(true)}
             onKeyDown={onKey}
             data-invalid={error ? 'true' : undefined}
           />

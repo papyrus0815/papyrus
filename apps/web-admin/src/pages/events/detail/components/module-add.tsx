@@ -45,15 +45,22 @@ export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
    */
   const [pendingScrollKey, setPendingScrollKey] = useState<EventDetailModuleKey | null>(null)
 
-  /* 외부 클릭 닫기 */
+  /* 외부 클릭 + Esc 닫기 */
   useEffect(() => {
     if (!open) return
-    const handler = (e: MouseEvent) => {
+    const onPointer = (event: MouseEvent) => {
       if (!ref.current) return
-      if (!ref.current.contains(e.target as Node)) setOpen(false)
+      if (!ref.current.contains(event.target as Node)) setOpen(false)
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
   }, [open])
 
   useEffect(() => {
@@ -134,7 +141,12 @@ export function ModuleAdd({ event, enabledModules, onPatch }: ModuleAddProps) {
 
   return (
     <Host ref={ref}>
-      <Trigger type="button" onClick={() => setOpen((v) => !v)}>
+      <Trigger
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
         <FiPlus />
         모듈 추가
         <FiChevronDown />

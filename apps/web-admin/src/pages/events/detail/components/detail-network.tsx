@@ -49,7 +49,9 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const [childModalOpen, setChildModalOpen] = useState(false)
   const { data: allEvents = [], isLoading: eventsLoading } = useQuery({
     queryKey: ['events', 'all-for-link'],
-    queryFn: () => getAllEvents({ limit: 300 }),
+    // 서버가 take=min(limit,100)으로 캡하므로 300은 100으로 잘린다 — 캡에 맞춰 명시.
+    // TODO: 사건 100건 초과 시 연결 후보가 잘리므로 서버사이드 검색/페이지네이션 필요.
+    queryFn: () => getAllEvents({ limit: 100 }),
     enabled: parentModalOpen || childModalOpen,
     staleTime: 60_000,
   })
@@ -410,9 +412,7 @@ const ChildCard = styled(Link)`
   gap: 12px;
   padding: 12px 14px;
   background: transparent;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   border-radius: 10px;
   text-decoration: none;
   color: inherit;

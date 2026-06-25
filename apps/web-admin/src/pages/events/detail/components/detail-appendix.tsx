@@ -317,7 +317,12 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
                 type="button"
                 onClick={(e) => {
                   lightboxTriggerRef.current = e.currentTarget
-                  setLightbox({ src: image.imageUrl, caption: image.caption })
+                  // 썸네일과 동일하게 API origin을 붙여 정규화 — raw '/uploads/...'
+                  // 상대경로를 그대로 src에 넣으면 확대 시 web-admin origin 기준 404.
+                  setLightbox({
+                    src: getUploadImageUrl(image.imageUrl) || image.imageUrl,
+                    caption: image.caption,
+                  })
                 }}
               >
                 <img

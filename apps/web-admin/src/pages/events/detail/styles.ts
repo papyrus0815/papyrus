@@ -509,9 +509,7 @@ export const CardGrid = styled.div<{ $cols?: number }>`
 export const ModuleDataCard = styled.div<{ $accent: string }>`
   position: relative;
   padding: 14px 16px 14px 18px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   border-radius: 12px;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};

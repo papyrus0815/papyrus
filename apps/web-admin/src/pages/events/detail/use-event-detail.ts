@@ -167,15 +167,20 @@ export interface UseEventDetailResult {
 export function useEventDetail(eventId: string): UseEventDetailResult {
   const { data: event } = useSuspenseQuery(eventDetailQueryOptions(eventId))
 
+  // event 전체를 deps로 두면 매 patch/refetch마다 새 배열을 만들어 하위 sections
+  // memo까지 무효화된다. 모듈 활성 여부만 결정하는 원시값으로 deps를 좁힌다.
+  const belligerentCount = event.militaryEvent?.belligerentSides?.length ?? 0
+  const casualtyCount = event.militaryEvent?.casualties?.length ?? 0
+  const hasMilitaryDetails = Boolean(event.militaryEvent?.militaryDetails)
+  const cabinetCount = event.cabinetEvents?.length ?? 0
   const enabledModules = useMemo<EventDetailModuleKey[]>(() => {
     const keys: EventDetailModuleKey[] = []
-    const mil = event.militaryEvent
-    if (mil?.belligerentSides?.length) keys.push('belligerents')
-    if (mil?.casualties?.length) keys.push('casualties')
-    if (mil?.militaryDetails) keys.push('military-details')
-    if (event.cabinetEvents?.length) keys.push('cabinets')
+    if (belligerentCount) keys.push('belligerents')
+    if (casualtyCount) keys.push('casualties')
+    if (hasMilitaryDetails) keys.push('military-details')
+    if (cabinetCount) keys.push('cabinets')
     return keys
-  }, [event])
+  }, [belligerentCount, casualtyCount, hasMilitaryDetails, cabinetCount])
 
   return { event, enabledModules }
 }

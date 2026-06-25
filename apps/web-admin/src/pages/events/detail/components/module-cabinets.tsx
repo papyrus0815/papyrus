@@ -63,7 +63,8 @@ export function ModuleCabinets({ event }: ModuleCabinetsProps) {
           const countryId = headTenure?.country?.id ?? null
 
           const labelParts = [countryName, cabinetName, personName].filter(Boolean)
-          const label = labelParts.join(' · ') || (cabinet.id as string)
+          // 표시할 이름이 하나도 없으면 cabinet UUID를 노출하는 대신 사람이 읽는 placeholder.
+          const label = labelParts.join(' · ') || '내각 정보 미상'
 
           return (
             <Row key={entry.id}>

@@ -120,6 +120,7 @@ export function ModuleMilitaryDetails({
                     key={ct.value}
                     type="button"
                     $active={combatTypes.includes(ct.value)}
+                    aria-pressed={combatTypes.includes(ct.value)}
                     onClick={() => toggleCombatType(ct.value)}
                   >
                     {ct.label}
