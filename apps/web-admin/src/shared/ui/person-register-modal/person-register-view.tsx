@@ -97,6 +97,7 @@ import {
   AdvancedToggleIcon,
   AdvancedToggleTitle,
   CoreFieldCell,
+  CoreDivider,
   CoreFieldPair,
   DraftBanner,
   DraftBannerActions,
@@ -2055,6 +2056,8 @@ export function PersonRegisterView({
                   </FieldControl>
                 </FieldRow>
 
+                <CoreDivider />
+
                 {/* 성별·국적 — 짧은 코어 컨트롤이라 가로 2열로 묶음 */}
                 <CoreFieldPair>
                   <CoreFieldCell>
@@ -2118,6 +2121,8 @@ export function PersonRegisterView({
                   </CoreFieldCell>
                 </CoreFieldPair>
               </FormRows>
+
+              <CoreDivider />
 
               {/* 생몰 요약 — 출생~사망·생존 여부 (essentials, 늘 노출) */}
               <div data-form-section="life">

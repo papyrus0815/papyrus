@@ -198,7 +198,8 @@ export const CoreFieldPair = styled.div`
   grid-template-columns: 1fr 1fr;
   gap: 18px 16px;
   align-items: start;
-  margin-top: 18px;
+  /* 상단 간격은 앞의 CoreDivider가 제공(이중 마진 방지) */
+  margin-top: 0;
   max-width: 600px;
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
@@ -210,8 +211,18 @@ export const CoreFieldPair = styled.div`
 export const CoreFieldCell = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+`
+
+/**
+ * 코어 블록 구분선 — 이름 / 신원 / 생몰을 옅은 hairline으로 끊어 "서류 항목" 리듬.
+ * 섹션 헤더 없이 divider만으로 그룹 경계를 만들어 과하지 않게.
+ */
+export const CoreDivider = styled.div`
+  height: 1px;
+  background: ${({ theme }) => theme.colors.border.light};
+  margin: 24px 0;
 `
 
 // ─── Layout wrapper (Top-aligned modern form layout) ────────────────────────
@@ -221,10 +232,10 @@ export const PersonFormLayoutWrap = styled.div`
   ${FieldRow} {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     padding: 0;
     border-bottom: none;
-    margin-top: 18px;
+    margin-top: 20px;
   }
 
   ${FieldRowMulti} {
