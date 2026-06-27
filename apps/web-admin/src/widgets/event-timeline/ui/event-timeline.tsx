@@ -2929,46 +2929,9 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                           </g>
                         )
                       })()}
-                      {/**
-                       * 좌측 라벨 영역 — sticky.
-                       * `translate(${scrollLeft}, 0)`로 viewport 우측 스크롤에 따라 함께 이동 →
-                       * 사용자 시야 기준으로 lane label 영역이 *항상 화면 좌측에 고정*.
-                       *
-                       * 내부 `<LaneLabelBg>`가 막대/라벨이 뒤에서 보이지 않도록 surface 색으로 덮음.
-                       */}
-                      <g
-                        data-lane-sticky
-                        transform={`translate(${scrollLeftRef.current}, 0)`}
-                      >
-                        <LaneLabelBg
-                          x={0}
-                          y={yTop}
-                          width={LANE_LABEL_WIDTH}
-                          height={LANE_HEIGHT}
-                        />
-                        <LaneLabel
-                          x={LANE_LABEL_WIDTH - 10}
-                          y={yTop + LANE_HEIGHT / 2 - 6}
-                        >
-                          {truncateLabel(lane.label, 10)}
-                        </LaneLabel>
-                        {/* lane key가 카테고리인 모드에서만 색 dot이 의미 있음 */}
-                        {groupBy === 'category' && (
-                          <LaneDot
-                            cx={12}
-                            cy={yTop + LANE_HEIGHT / 2}
-                            r={3}
-                            fill={categoryColor(lane.key)}
-                          />
-                        )}
-                        {/* 우측 hairline — 라벨 영역과 timeline 본문의 시각 경계 */}
-                        <LaneLabelDivider
-                          x1={LANE_LABEL_WIDTH}
-                          y1={yTop}
-                          x2={LANE_LABEL_WIDTH}
-                          y2={yTop + LANE_HEIGHT}
-                        />
-                      </g>
+                      {/* 좌측 sticky 라벨 영역은 *마크보다 위*에 그려야 가려지지 않으므로
+                       * 마크 그룹 뒤(StickyLaneLabels)로 분리해 렌더한다. (여기 LaneBg는
+                       * 마크 *뒤* 배경이라 그대로 둔다.) */}
                       {/* overflow "+N" 배지 — 빽빽한 시기 가까이 배치(median start year).
                        * sticky lane label 영역 밖이라 가로 스크롤과 함께 이동.
                        * 사용자가 dense region 어디인지 즉시 인지. */}
@@ -3490,6 +3453,51 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                               </>
                             )
                           })()}
+                      </g>
+                    )
+                  })}
+                </g>
+                {/**
+                 * 좌측 카테고리 라벨 — *마크 그룹보다 위* 레이어로 분리. 가로 스크롤 시 마크가
+                 * 좌측 컬럼 밑으로 들어와도 LaneLabelBg(surface 색)가 덮어 가린다.
+                 * (이전엔 lane 그룹 안에 있어 마크가 *위로 겹쳐* 라벨을 가렸음.)
+                 * transform은 syncLaneLabels가 스크롤 시 직접 DOM으로 갱신(재렌더 없음).
+                 */}
+                <g>
+                  {visibleLanes.map((lane, laneIdx) => {
+                    const yTop = TOP_AXIS_HEIGHT + laneIdx * LANE_HEIGHT
+                    return (
+                      <g
+                        key={`sticky-${lane.key}`}
+                        data-lane-sticky
+                        transform={`translate(${scrollLeftRef.current}, 0)`}
+                      >
+                        <LaneLabelBg
+                          x={0}
+                          y={yTop}
+                          width={LANE_LABEL_WIDTH}
+                          height={LANE_HEIGHT}
+                        />
+                        <LaneLabel
+                          x={LANE_LABEL_WIDTH - 10}
+                          y={yTop + LANE_HEIGHT / 2 - 6}
+                        >
+                          {truncateLabel(lane.label, 10)}
+                        </LaneLabel>
+                        {groupBy === 'category' && (
+                          <LaneDot
+                            cx={12}
+                            cy={yTop + LANE_HEIGHT / 2}
+                            r={3}
+                            fill={categoryColor(lane.key)}
+                          />
+                        )}
+                        <LaneLabelDivider
+                          x1={LANE_LABEL_WIDTH}
+                          y1={yTop}
+                          x2={LANE_LABEL_WIDTH}
+                          y2={yTop + LANE_HEIGHT}
+                        />
                       </g>
                     )
                   })}
