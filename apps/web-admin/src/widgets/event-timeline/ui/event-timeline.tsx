@@ -221,32 +221,32 @@ function labelImportanceMinTier(zoom: number): number {
  */
 const EXT_LABEL_MAX_WIDTH = 220
 
-const IMPORTANCE_BAR_HEIGHT: Record<BarData['importance'], number> = {
-  critical: 44,
-  major: 36,
-  notable: 28,
-  normal: 28,
-}
+/**
+ * 외부 라벨 *목표 폭* — 노출 여부/폭을 더 이상 "다음 마크까지의 간격"으로 제한하지
+ * 않는다(촘촘한 구간에서 라벨이 통째로 사라지던 근본 원인). 대신 이 고정 폭을 기준으로
+ * 잡고, 같은 row 안 수평 충돌만 staggering이 막아 *다른 row + 리더선*으로 분산한다.
+ * → 한 수평 구간에 (row 수)만큼 라벨이 겹쳐 표시되며 모두 읽을 수 있다.
+ * gap이 더 넓으면 최대 EXT_LABEL_MAX_WIDTH까지 늘린다.
+ */
+const LABEL_TARGET_WIDTH = 104
+
+/**
+ * 막대·마일스톤 공통 높이 — *항상 동일*. 이전엔 중요도(28~44)와 밀집 여부(8~12)에 따라
+ * 두께가 크게 널뛰어("어떤 건 두껍고 어떤 건 얇고") 타임라인이 산만했다. 이제 기간은
+ * 가로폭, 중요도는 내부 마커(핵심=흰 점·주요=링)·notable dashed로만 인코딩하고 높이는
+ * 통일한다 — 단일 row든 4-row 밀집이든 동일 두께.
+ */
+const BAR_HEIGHT = 16
 
 /**
  * Bar row stacking — 같은 lane에서 시간 겹친 bar들을 row 단위로 분리해 모두 보이게.
  *  - MAX_BAR_ROWS: lane 안 최대 row 수. 5번째+는 "+N" overflow 배지로 노출.
- *  - ROW_DELTA: row 간 y 간격(px). 인접 row 막대가 시각으로 분리되려면
- *    `ROW_DELTA >= COMPACT_BAR_HEIGHT.critical + 4` (4px 시각 여유).
- *  - COMPACT_BAR_HEIGHT: stacking 활성 lane의 bar 높이(작게). 단일 row일 땐 원래 높이 유지.
+ *  - ROW_DELTA: row 간 y 간격(px). 막대 높이(BAR_HEIGHT)보다 커야 인접 row가 분리됨.
  *
- * 자식 사건 노출 후 밀도가 늘어 3→4로 row 한도 확장. ROW_DELTA(20)·COMPACT 높이는
- * 4 row가 LANE_HEIGHT(88) 안에 막대 사이 간격 ≥4px 유지하도록 조정.
- *  - 4 row 총 span = 3 × 20 = 60. 막대 critical=12 양 끝에 6px씩 → 총 72 < 88 OK.
+ * 4 row 총 span = 3 × 20(ROW_DELTA) = 60, + 막대 16 = 76 < LANE_HEIGHT(88). 간격 4px.
  */
 const MAX_BAR_ROWS = 4
 const ROW_DELTA = 20
-const COMPACT_BAR_HEIGHT: Record<BarData['importance'], number> = {
-  critical: 12,
-  major: 10,
-  notable: 8,
-  normal: 8,
-}
 
 /** Milestone 다이아몬드 반지름 — importance에 따라 차등 (critical 7 / major 6 / 그 외 5) */
 const MILESTONE_RADIUS: Record<BarData['importance'], number> = {
@@ -257,21 +257,6 @@ const MILESTONE_RADIUS: Record<BarData['importance'], number> = {
 }
 /** Cluster 다이아몬드 — importance와 무관, 묶음 표시용으로 약간 큼 */
 const CLUSTER_RADIUS = 8
-/**
- * 외부 라벨 최소 폭 — 이 값 미만이면 표시 자체를 보류.
- * CJK 한 글자 = 12px라 *의미 있는 표시 단위*는 3글자+ellipsis(≈ 40px) 이상.
- * 이전 24px은 한 글자만 잘리고 "…"가 붙는 무의미 라벨이 나와 시선 노이즈였음.
- */
-const EXT_LABEL_MIN_WIDTH = 24
-
-/**
- * Bar 안 라벨 표시 최소 폭. 이전 70 → 80으로 상향:
- *  - 라벨 내부 패딩(12~18px)을 빼면 실제 글자 영역이 ~58px → CJK 4자 한계,
- *    truncation이 거의 항상 발동되어 "이름…"으로 잘림.
- *  - 80px 이면 글자 영역 ≥ 62px → 5자 + ellipsis까지 안전.
- *  - 임계값 근처에서 zoom 시 inside↔outside 라벨 깜빡임도 자연 감소.
- */
-const BAR_INSIDE_LABEL_MIN_PX = 80
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RenderItem 타입 — 컴포넌트 외부 hoist (가독성)
@@ -1632,14 +1617,22 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
               : next.items[0].x
           : Infinity
         const gap = nextStart - myEnd
-        const candidateWidth = Math.min(EXT_LABEL_MAX_WIDTH, gap - 8)
         /**
-         * baselineShow — *최소 표시 가능 폭*만 검사. 이전엔 `gap >= MIN_GAP(60)`도
-         * 함께 봤는데, 2-row staggering이 충돌을 해결하므로 단일 row 가정의
-         * 60px 게이트는 *과도하게 라벨을 차단*했다. (저줌 dense 시기에 모든 라벨 사라짐)
-         * 이제 staggering pass에서 row별 실제 충돌만 검사.
+         * 라벨 폭 — *다음 마크까지의 간격*에 묶지 않는다. 이전엔 `candidateWidth =
+         * min(220, gap-8)` 이라 마크가 촘촘하면 폭이 24px 미만으로 떨어져 라벨이 *통째로*
+         * 사라졌다(사용자: "사건이 뭔지 안 보인다"). 이제 고정 목표 폭(LABEL_TARGET_WIDTH)
+         * 으로 잡고, 같은 row 안 수평 충돌만 아래 staggering 루프가 막는다 → 라벨은 다른
+         * row로 분산되고 리더선으로 마크에 연결된다. gap이 더 넓으면 그만큼 늘린다.
          */
-        const baselineShow = candidateWidth >= EXT_LABEL_MIN_WIDTH
+        const labelWidth = Math.min(
+          EXT_LABEL_MAX_WIDTH,
+          Math.max(LABEL_TARGET_WIDTH, gap - 8),
+        )
+        /**
+         * baselineShow — 더 이상 폭으로 사전 차단하지 않는다(항상 배치 *시도*). 실제 노출은
+         * staggering 루프의 row 충돌/중요도 steal이 결정한다. critical은 종전처럼 우대.
+         */
+        const baselineShow = true
         // bucket 대표 importance — 첫 항목 기준(milestone은 단일, bar도 단일)
         const importance = b.items[0].bar.importance
         bucketInfos.push({
@@ -1648,7 +1641,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
           startX: myStart,
           endX: myEnd,
           importance,
-          labelWidth: Math.max(EXT_LABEL_MIN_WIDTH, candidateWidth),
+          labelWidth,
           baselineShow,
         })
       }
@@ -1661,19 +1654,33 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
        * 빽빽한 시기에 라벨 노출률 ↑ 위해 2-row → 4-row 확장. 빈 row 있으면 그쪽에 우선 배치.
        */
       type RowIdx = 0 | 1 | 2 | 3
-      const ROW_COUNT: RowIdx[] = [0, 1, 2, 3]
+      /**
+       * 라벨 행 — *2행만*(막대 아래=0, 위=1). 이전 4행은 밀집 구간에서 라벨을 욱여넣어
+       * 서로·마크와 겹쳤다(가독성↓). 2행으로 줄이면 한 수평 구간에 최대 2개만 노출되고
+       * 위/아래로 확실히 분리된다 — 못 들어간 사건은 라벨 없이 점으로 두고 호버·우측
+       * 목록·확대로 확인. (희소 구간은 어차피 충돌이 없어 그대로 다 보임.)
+       */
+      const ROW_COUNT: RowIdx[] = [0, 1]
       const lastLabelEndX = [-Infinity, -Infinity, -Infinity, -Infinity]
       const lastLabelOwner: Array<{
         bucketIdx: number
         importance: BarData['importance']
       } | null> = [null, null, null, null]
-      const STAGGER_GAP = 6
+      const STAGGER_GAP = 10
       const labelDecision = new Map<
         number,
         { show: boolean; row: RowIdx }
       >()
 
       for (const info of bucketInfos) {
+        /**
+         * 클러스터는 인라인 라벨을 그리지 않는다(+N 배지만). 따라서 라벨 row를 점유하지
+         * 않고 양보 → 그 자리를 *실제 사건* 라벨이 쓰게 한다.
+         */
+        if (info.isCluster) {
+          labelDecision.set(info.idx, { show: false, row: 0 })
+          continue
+        }
         /**
          * critical 단일 사건은 라벨이 *사라지지 않도록* 우대:
          *  1) baselineShow(폭) 게이트 무시
@@ -1811,10 +1818,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
             })
           } else {
             if (hiddenBarIds.has(it.bar.id)) continue
-            const isStacking = usedBarRows > 1
-            const h = isStacking
-              ? COMPACT_BAR_HEIGHT[it.bar.importance]
-              : IMPORTANCE_BAR_HEIGHT[it.bar.importance]
+            const h = BAR_HEIGHT
             items.push({
               kind: 'bar',
               id: `${laneKey}-${it.bar.id}`,
@@ -1823,7 +1827,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
               y: itemRowCenter - h / 2,
               w: it.w,
               h,
-              showExternalLabel: showExt && it.w <= BAR_INSIDE_LABEL_MIN_PX,
+              showExternalLabel: showExt,
               externalLabelWidth: labelWidth,
               labelRow,
             })
@@ -3229,7 +3233,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                     if (it.kind === 'milestone') {
                       // 다이아 → 작은 pill로 통일 (모양 단순화). 시점 사건은 폭 6px.
                       const pillW = MIN_BAR_WIDTH
-                      const pillH = COMPACT_BAR_HEIGHT[b.importance]
+                      const pillH = BAR_HEIGHT
                       const rectX = it.cx - pillW / 2
                       const rectY = it.cy - pillH / 2
                       const importantStroke =
@@ -3246,15 +3250,11 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                       // hit area 확장 — 작은 pill은 그대로 두면 클릭 어려움
                       const hitW = Math.max(pillW + 12, 18)
                       const hitH = Math.max(pillH + 6, 18)
-                      // External label y 위치 (4-row staggering)
+                      // External label y 위치 — 2행(아래=row 0 / 위=row 1). 마크와 확실히 분리.
                       const labelY =
                         it.labelRow === 1
-                          ? it.cy + pillH / 2 + 12
-                          : it.labelRow === 2
-                            ? it.cy - pillH / 2 - 6
-                            : it.labelRow === 3
-                              ? it.cy + pillH / 2 + 24
-                              : it.cy + 3.5
+                          ? it.cy - pillH / 2 - 6
+                          : it.cy + pillH / 2 + 11
                       return (
                         <g key={it.id} role="listitem">
                           <rect
@@ -3315,17 +3315,46 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                               pointerEvents="none"
                             />
                           )}
-                          {(it.showExternalLabel || pinnedLabelIds.has(b.id)) && (
-                            <ExternalLabel
-                              x={it.cx + pillW / 2 + 6}
-                              y={labelY}
-                              aria-hidden="true"
-                              onClick={() => onSelectEvent(b.id)}
-                              data-pinned={pinnedLabelIds.has(b.id) ? '1' : undefined}
-                            >
-                              {truncateBarText(b.title, it.externalLabelWidth)}
-                            </ExternalLabel>
-                          )}
+                          {(() => {
+                            /**
+                             * hover/선택 사건은 라벨을 *항상* 그래프 위에 크게(이름 식별 우선).
+                             * labelRow가 0이 아니면(세로로 비켜 배치) 마크와 리더선으로 연결.
+                             */
+                            const isEmph = isActive || hoveredBarId === b.id
+                            const showLabel =
+                              it.showExternalLabel ||
+                              pinnedLabelIds.has(b.id) ||
+                              isEmph
+                            if (!showLabel) return null
+                            const labelX = it.cx + pillW / 2 + 6
+                            return (
+                              <>
+                                <LeaderLine
+                                  x1={it.cx + pillW / 2}
+                                  y1={it.cy}
+                                  x2={labelX}
+                                  y2={labelY - 3}
+                                />
+                                <ExternalLabel
+                                  x={labelX}
+                                  y={labelY}
+                                  aria-hidden="true"
+                                  onClick={() => onSelectEvent(b.id)}
+                                  data-pinned={
+                                    pinnedLabelIds.has(b.id) ? '1' : undefined
+                                  }
+                                  data-emph={isEmph ? '1' : undefined}
+                                >
+                                  {truncateBarText(
+                                    b.title,
+                                    isEmph
+                                      ? EXT_LABEL_MAX_WIDTH
+                                      : it.externalLabelWidth,
+                                  )}
+                                </ExternalLabel>
+                              </>
+                            )
+                          })()}
                         </g>
                       )
                     }
@@ -3333,16 +3362,11 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                     // it.kind === 'bar'
                     const rx = b.importance === 'critical' ? 7 : 6
                     const dashedBorder = b.importance === 'notable'
-                    const inLabel = it.w > BAR_INSIDE_LABEL_MIN_PX
-                    // External label y 위치 (4-row staggering)
+                    // External label y 위치 — 2행(아래=row 0 / 위=row 1). 마크와 확실히 분리.
                     const labelY =
                       it.labelRow === 1
-                        ? it.y + it.h + 12
-                        : it.labelRow === 2
-                          ? it.y - 4
-                          : it.labelRow === 3
-                            ? it.y + it.h + 24
-                            : it.y + it.h / 2 + 3.5
+                        ? it.y - 5
+                        : it.y + it.h + 12
                     return (
                       <g key={it.id} role="listitem">
                         <Bar
@@ -3388,49 +3412,49 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                             pointerEvents="none"
                           />
                         )}
-                        {inLabel && (
-                          <BarLabel
-                            x={it.x + 6}
-                            y={it.y + it.h / 2 + 3.5}
-                            pointerEvents="none"
-                          >
-                            {truncateBarText(b.title, it.w - 12)}
-                          </BarLabel>
-                        )}
-                        {/**
-                         * Critical 단축 라벨 — 80px 미만이라 inLabel 못 들어가지만 24px 이상이고
-                         * critical인 경우 *축약 첫 글자*만 막대 안에 노출. 외부 라벨이 다른 라벨 충돌로
-                         * suppressed돼도 최소한 식별 단서 제공.
-                         */}
-                        {!inLabel &&
-                          b.importance === 'critical' &&
-                          it.w >= 24 && (
-                            <BarLabelCompact
-                              x={it.x + it.w / 2}
-                              y={it.y + it.h / 2 + 3.5}
-                              pointerEvents="none"
-                              aria-hidden="true"
-                            >
-                              {compactCriticalLabel(b.title)}
-                            </BarLabelCompact>
-                          )}
-                        {/* 막대 안에 라벨 안 들어가면 외부 라벨 시도.
-                         * 4-row staggering — 충돌 회피로 노출률 ↑.
-                         * 핀(Shift+클릭)된 라벨은 conflict 무관하게 항상 표시. */}
-                        {!inLabel &&
-                          (it.showExternalLabel || pinnedLabelIds.has(b.id)) && (
-                            <ExternalLabel
-                              x={it.x + it.w + 6}
-                              y={labelY}
-                              aria-hidden="true"
-                              onClick={() => onSelectEvent(b.id)}
-                              data-pinned={
-                                pinnedLabelIds.has(b.id) ? '1' : undefined
-                              }
-                            >
-                              {truncateBarText(b.title, it.externalLabelWidth)}
-                            </ExternalLabel>
-                          )}
+                        {/* 라벨은 *항상 막대 밖*에 표시(안/밖 혼재 제거 — 가독성).
+                         * 4-row staggering으로 충돌 회피 + 리더선으로 마크에 연결.
+                         * 핀(Shift+클릭)·hover·선택은 conflict 무관하게 항상 표시. */}
+                        {(() => {
+                            /**
+                             * hover/선택 사건은 라벨을 *항상* 그래프 위에 크게(이름 식별 우선).
+                             * 세로로 비켜 배치(labelRow≠0)되면 마크와 리더선으로 연결.
+                             */
+                            const isEmph = isActive || hoveredBarId === b.id
+                            const showLabel =
+                              it.showExternalLabel ||
+                              pinnedLabelIds.has(b.id) ||
+                              isEmph
+                            if (!showLabel) return null
+                            const labelX = it.x + it.w + 6
+                            return (
+                              <>
+                                <LeaderLine
+                                  x1={it.x + it.w}
+                                  y1={it.y + it.h / 2}
+                                  x2={labelX}
+                                  y2={labelY - 3}
+                                />
+                                <ExternalLabel
+                                  x={labelX}
+                                  y={labelY}
+                                  aria-hidden="true"
+                                  onClick={() => onSelectEvent(b.id)}
+                                  data-pinned={
+                                    pinnedLabelIds.has(b.id) ? '1' : undefined
+                                  }
+                                  data-emph={isEmph ? '1' : undefined}
+                                >
+                                  {truncateBarText(
+                                    b.title,
+                                    isEmph
+                                      ? EXT_LABEL_MAX_WIDTH
+                                      : it.externalLabelWidth,
+                                  )}
+                                </ExternalLabel>
+                              </>
+                            )
+                          })()}
                       </g>
                     )
                   })}
@@ -3676,23 +3700,6 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
 // ─────────────────────────────────────────────────────────────────────────────
 // helpers
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Critical 사건의 *축약 첫 글자 라벨* — 막대 폭이 좁아 80px 풀 라벨이 못 들어갈 때
- * 의미 있는 첫 1~2자만 노출. CJK는 1자, ASCII는 약 2자.
- *  - "6.25 전쟁" → "6.2"
- *  - "임진왜란" → "임"
- *  - "WWII" → "WW"
- */
-function compactCriticalLabel(title: string): string {
-  if (!title) return ''
-  const trimmed = title.trim()
-  // CJK 시작이면 첫 1자, ASCII 시작이면 첫 2자
-  if (CJK_RE.test(trimmed[0])) return trimmed.slice(0, 1)
-  // 숫자.숫자 패턴(예: "6.25")이면 첫 3자
-  if (/^\d+\.\d/.test(trimmed)) return trimmed.slice(0, 3)
-  return trimmed.slice(0, 2)
-}
 
 /**
  * 연도 라벨 포맷 — BC/AD 처리.
@@ -5307,6 +5314,25 @@ const ExternalLabel = styled.text`
     stroke-width: 3.5;
     fill: #ffffff;
   }
+
+  /* hover/선택된 사건 — 그래프 위에 이름을 더 크고 또렷하게(식별 우선) */
+  &[data-emph='1'] {
+    font-size: 12px;
+    font-weight: 800;
+    fill: ${({ theme }) => (theme.mode === 'dark' ? '#ffffff' : '#0f172a')};
+    stroke-width: 4;
+  }
+`
+
+/**
+ * 리더선 — 세로로 비켜 배치된 외부 라벨을 그 마크에 연결(어느 사건의 이름인지 모호 제거).
+ * 라벨 충돌이 잦은 촘촘한 구간에서 staggering으로 분산된 라벨의 귀속을 시각적으로 고정한다.
+ */
+const LeaderLine = styled.line`
+  stroke: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.32)' : 'rgba(15,23,42,0.24)'};
+  stroke-width: 1;
+  pointer-events: none;
 `
 
 /* notable importance dashed inner border — normal과 패턴 차등 (색맹 보조) */
@@ -5376,22 +5402,6 @@ const TodayLabelText = styled.text`
   fill: #ffffff;
   text-anchor: middle;
   letter-spacing: -0.005em;
-`
-
-const BarLabel = styled.text`
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  fill: #ffffff;
-`
-
-/* 좁은 critical 막대 안 *축약* 라벨 — 첫 1~3자만 가운데 정렬. */
-const BarLabelCompact = styled.text`
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 0;
-  fill: #ffffff;
-  text-anchor: middle;
 `
 
 const Tooltip = styled.div`
