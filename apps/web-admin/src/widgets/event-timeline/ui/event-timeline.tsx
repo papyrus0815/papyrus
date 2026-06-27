@@ -240,13 +240,18 @@ const BAR_HEIGHT = 16
 
 /**
  * Bar row stacking — 같은 lane에서 시간 겹친 bar들을 row 단위로 분리해 모두 보이게.
- *  - MAX_BAR_ROWS: lane 안 최대 row 수. 5번째+는 "+N" overflow 배지로 노출.
+ *  - MAX_BAR_ROWS: lane 안 최대 row 수. 초과분은 "+N" overflow 배지로 노출.
  *  - ROW_DELTA: row 간 y 간격(px). 막대 높이(BAR_HEIGHT)보다 커야 인접 row가 분리됨.
+ *  - ROW_OFFSET_STEPS: row index → 세로 오프셋 스텝(× ROW_DELTA). **row 0 = lane 중앙**
+ *    (좌측 섹션 라벨과 정렬), 이후 아래(+1)·위(-1)로 번갈아 펼친다. 고립 마크는 대부분
+ *    row 0이라 중앙에 와 라벨과 맞는다. (이전엔 블록을 중앙정렬해 row 0이 *상단*에 떠,
+ *    얇은 막대에서 "타임라인이 위로 올라온다"는 어긋남이 보였음.)
  *
- * 4 row 총 span = 3 × 20(ROW_DELTA) = 60, + 막대 16 = 76 < LANE_HEIGHT(88). 간격 4px.
+ * 3 row: 중앙·±20. 막대 16 → ±28 범위, LANE_HEIGHT(88) 중앙 기준 ±44 안에 라벨 여유까지 확보.
  */
-const MAX_BAR_ROWS = 4
+const MAX_BAR_ROWS = 3
 const ROW_DELTA = 20
+const ROW_OFFSET_STEPS = [0, 1, -1, 2, -2]
 
 /** Milestone 다이아몬드 반지름 — importance에 따라 차등 (critical 7 / major 6 / 그 외 5) */
 const MILESTONE_RADIUS: Record<BarData['importance'], number> = {
@@ -830,39 +835,66 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     return 5
   }, [decadeBuckets.length])
 
-  // ── viewport years + scrollLeft 추적 (raf throttle) ─────────────────────
+  // ── 가로 스크롤 처리 — 라벨 sticky(직접 DOM) + viewport(정지 후 갱신) ──────────
+  /**
+   * 가로 스크롤 중엔 *React state를 건드리지 않는다*. 이전엔 매 프레임 setScrollLeft +
+   * setViewportYears로 전체 SVG가 재렌더돼, 좌측 lane 라벨이 네이티브 스크롤을 못 따라가
+   * "덜덜덜" 떨리고 프레임이 끊겼다.
+   *   - lane 라벨: scrollLeft를 ref로만 들고, 스크롤 이벤트에서 `[data-lane-sticky]` <g>의
+   *     transform을 직접 동기 갱신 → 떨림 없이 좌측 고정, 재렌더 0.
+   *   - viewportYears(레일·연도 읽기값·미니맵 하이라이트): 스크롤 *정지 후* 한 번만 갱신.
+   */
   const [viewportYears, setViewportYears] = useState<{ start: number; end: number } | null>(null)
-  /** lane 라벨 sticky용 — SVG 내부 `<g translate(scrollLeft, 0)>`로 좌측 고정 */
-  const [scrollLeft, setScrollLeft] = useState(0)
-  const rafIdRef = useRef<number | null>(null)
-  const updateViewport = useCallback(() => {
-    if (rafIdRef.current != null) return
-    rafIdRef.current = requestAnimationFrame(() => {
-      rafIdRef.current = null
-      const el = scrollRef.current
-      if (!el) return
-      const visibleLeft = Math.max(0, el.scrollLeft - LANE_LABEL_WIDTH)
-      const visibleRight = el.scrollLeft + el.clientWidth - LANE_LABEL_WIDTH
-      const start = visibleLeft / pixelsPerYear + minYear
-      const end = visibleRight / pixelsPerYear + minYear
-      setViewportYears({
-        start: Math.max(minYear, start),
-        end: Math.min(maxYear, end),
-      })
-      setScrollLeft(el.scrollLeft)
+  const scrollLeftRef = useRef(0)
+  const settleTimerRef = useRef<number | null>(null)
+
+  const syncLaneLabels = useCallback(() => {
+    const el = scrollRef.current
+    const svg = svgRef.current
+    if (!el || !svg) return
+    scrollLeftRef.current = el.scrollLeft
+    const transform = `translate(${el.scrollLeft}, 0)`
+    svg
+      .querySelectorAll('[data-lane-sticky]')
+      .forEach((node) => node.setAttribute('transform', transform))
+  }, [])
+
+  const settleViewport = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const visibleLeft = Math.max(0, el.scrollLeft - LANE_LABEL_WIDTH)
+    const visibleRight = el.scrollLeft + el.clientWidth - LANE_LABEL_WIDTH
+    const start = visibleLeft / pixelsPerYear + minYear
+    const end = visibleRight / pixelsPerYear + minYear
+    setViewportYears({
+      start: Math.max(minYear, start),
+      end: Math.min(maxYear, end),
     })
   }, [pixelsPerYear, minYear, maxYear])
 
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    updateViewport()
-    el.addEventListener('scroll', updateViewport, { passive: true })
-    return () => {
-      el.removeEventListener('scroll', updateViewport)
-      if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current)
+    syncLaneLabels()
+    settleViewport()
+    const onScroll = () => {
+      syncLaneLabels() // 동기: 라벨이 스크롤을 즉시 따라감(재렌더 없음)
+      if (settleTimerRef.current != null) {
+        window.clearTimeout(settleTimerRef.current)
+      }
+      settleTimerRef.current = window.setTimeout(() => {
+        settleTimerRef.current = null
+        settleViewport()
+      }, 120)
     }
-  }, [updateViewport, containerSize.width])
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      if (settleTimerRef.current != null) {
+        window.clearTimeout(settleTimerRef.current)
+      }
+    }
+  }, [syncLaneLabels, settleViewport, containerSize.width])
 
   // ── 휠 — Ctrl/⌘+휠은 줌, 그 외엔 deltaY를 가로 스크롤로 변환 ───────────────
   const handleWheel = useCallback(
@@ -1800,10 +1832,10 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
         } else {
           const it = b.items[0]
           // 통합 row 좌표 — milestone과 bar 모두 동일 좌표계 공유로 시각 정렬.
-          const rowsBlockHalf = ((usedBarRows - 1) * ROW_DELTA) / 2
+          // row 0 = lane 중앙(라벨 정렬), 겹친 마크만 아래/위로 번갈아 (ROW_OFFSET_STEPS).
           const itemRow = barRowOf.get(it.bar.id) ?? 0
           const itemRowCenter =
-            laneCenter - rowsBlockHalf + itemRow * ROW_DELTA
+            laneCenter + (ROW_OFFSET_STEPS[itemRow] ?? 0) * ROW_DELTA
           if (it.kind === 'milestone') {
             items.push({
               kind: 'milestone',
@@ -2904,7 +2936,10 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                        *
                        * 내부 `<LaneLabelBg>`가 막대/라벨이 뒤에서 보이지 않도록 surface 색으로 덮음.
                        */}
-                      <g transform={`translate(${scrollLeft}, 0)`}>
+                      <g
+                        data-lane-sticky
+                        transform={`translate(${scrollLeftRef.current}, 0)`}
+                      >
                         <LaneLabelBg
                           x={0}
                           y={yTop}
