@@ -1,0 +1,190 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                              WALLET DOMAIN                                    ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+///
+/// 구매형 가상재화(파피) 도메인. 기존 게이미피케이션 점수(PointEntry)와 의도적으로 분리.
+/// 점수 = "명예"(기여 지표), 파피 = "돈"(현금성) — 회계/법규/삭감정책 수준이 다르므로
+/// 같은 원장에 섞지 않는다. 단, PointEntry의 검증된 원장 패턴(트랜잭션 원자성 · 멱등 unique ·
+/// 비정규화 캐시 재계산)은 그대로 차용한다.
+///
+/// 설계 문서: docs/papy-virtual-currency-design.md
+///
+/// 핵심:
+/// - WalletLedger: 파피 입출 1건 = 1행 (append-only 원장). 환불/취소는 행 삭제가 아니라
+///   반대부호 역분개(REFUND_REVERSAL)행으로 처리 — 감사 무결성 보존.
+/// - Account.papyBalance: WalletLedger 합계의 비정규화 캐시 (totalPoints 패턴과 동일).
+/// - ShopItem / UserItem: 코스메틱 상품 카탈로그 / 보유(인벤토리).
+/// - 모든 거래는 idempotencyKey unique로 이중과금/이중차감 1차 차단.
+
+/// 파피 거래 사유
+enum WalletReason {
+  /// 실결제 충전 (Phase 1 — PG 연동)
+  PURCHASE_TOPUP
+  /// 운영자 수동 지급 (Phase 0)
+  ADMIN_GRANT
+  /// 프로모션 코드 교환 (Phase 0)
+  PROMO_CODE
+  /// 적립 포인트 → 파피 단방향 환전 (Phase 0, 토글 가능)
+  POINT_EXCHANGE
+  /// 상품 구매 소비 (음수)
+  CONSUME
+  /// 환불/취소 역분개 (원거래의 반대부호 행)
+  REFUND_REVERSAL
+  /// 운영자 보정 (역분개 권장)
+  ADMIN_ADJUST
+}
+
+/// 코스메틱 상품 카테고리 (능력치·랭킹 무관, 순수 외형)
+enum ItemCategory {
+  /// 아바타 프레임 (프로필/리더보드/헤더 아바타 테두리·그림자)
+  AVATAR_FRAME
+  /// 닉네임 색상
+  NICKNAME_COLOR
+  /// 등급 칩 테마
+  GRADE_THEME
+  /// 뱃지 테두리
+  BADGE_FRAME
+  /// 프로필 배경/테마
+  PROFILE_THEME
+}
+
+/// 파피 원장 — 입출 한 건이 한 행 (append-only). 삭제 금지, 취소는 역분개행으로.
+model WalletLedger {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 파피를 받는(또는 차감당하는) 계정
+  accountId String @map("account_id") @db.Char(36)
+
+  /// 증감 파피 (+충전/환불 / -소비). 정수.
+  amount Int
+
+  /// 거래 사유
+  reason WalletReason @map("reason")
+
+  /// 멱등성 키 — 충전/소비/환불 재시도·중복 차단.
+  /// 예: "ADMIN:{uuid}", "PROMO:{code}:{accountId}", "CONSUME:{requestId}", "REVERSAL:{ledgerId}".
+  idempotencyKey String @map("idempotency_key") @db.VarChar(120)
+
+  /// 역분개(취소/환불) 시 원거래 WalletLedger.id를 가리킴 (느슨한 감사 포인터, FK 아님).
+  reversalOfId String? @map("reversal_of_id") @db.Char(36)
+
+  /// 소비(CONSUME) 거래 시 대상 상품 스냅샷 (느슨한 참조 — 분석/감사용).
+  relatedItemId String? @map("related_item_id") @db.Char(36)
+
+  /// 운영자 지급/보정 시 수행 계정 ID (actor-context의 getActorAccountId, 느슨한 참조).
+  actorAccountId String? @map("actor_account_id") @db.Char(36)
+
+  /// 거래 시각
+  createdAt DateTime @default(now()) @map("created_at")
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  /// 동일 거래 중복 방지(계정별 멱등) — 이중충전/이중과금/이중환불 1차 방어선.
+  /// 계정 격리: 서로 다른 계정이 우연히 같은 requestId를 써도 충돌하지 않는다.
+  @@unique([accountId, idempotencyKey], name: "uniq_wallet_idem")
+  @@index([accountId], name: "idx_wallet_ledger_account")
+  @@index([reason], name: "idx_wallet_ledger_reason")
+  @@index([createdAt], name: "idx_wallet_ledger_created_at")
+  @@map("wallet_ledger")
+}
+
+/// 코스메틱 상품 카탈로그 (SKU 단위). 가격은 파피(pricePapy).
+model ShopItem {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 상품 카테고리
+  category ItemCategory @map("category")
+
+  /// SKU 코드 (고유, 안정 식별자)
+  code String @unique @map("code") @db.VarChar(80)
+
+  /// 표시 이름
+  name String @map("name") @db.VarChar(120)
+
+  /// 가격 (파피)
+  pricePapy Int @map("price_papy")
+
+  /// 카테고리별 외형 정의 (JSON). 예) AVATAR_FRAME: { borderColor, borderWidth, shadowColor },
+  /// NICKNAME_COLOR: { lightValue, darkValue }, PROFILE_THEME: { bgGradient, bgImageUrl } 등.
+  payload Json?
+
+  /// 썸네일 이미지 경로
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(500)
+
+  /// 판매 활성 여부 (false면 신규 구매 불가, 기존 보유는 유지)
+  isActive Boolean @default(true) @map("is_active")
+
+  /// 진열 정렬 순서
+  sortOrder Int @default(0) @map("sort_order")
+
+  /// 등록 시각
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// 이 상품을 보유한 사용자 목록
+  ownerships UserItem[]
+
+  @@index([category], name: "idx_shop_item_category")
+  @@map("shop_item")
+}
+
+/// 사용자 보유 코스메틱 (인벤토리/소유). 구매 시 1행 생성.
+model UserItem {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 보유 계정
+  accountId String @map("account_id") @db.Char(36)
+
+  /// 보유 상품
+  itemId String @map("item_id") @db.Char(36)
+
+  /// 구매 시 차감(CONSUME) WalletLedger 행 (느슨한 참조 — 감사용).
+  ledgerId String? @map("ledger_id") @db.Char(36)
+
+  /// 현재 장착(적용) 여부. 같은 카테고리당 하나만 장착(서비스 레이어에서 강제).
+  equipped Boolean @default(false) @map("equipped")
+
+  /// 구매 시각
+  purchasedAt DateTime @default(now()) @map("purchased_at")
+
+  account Account  @relation(fields: [accountId], references: [id])
+  item    ShopItem @relation(fields: [itemId], references: [id])
+
+  /// 동일 상품 중복 구매 차단
+  @@unique([accountId, itemId], name: "uniq_user_item")
+  @@index([accountId], name: "idx_user_item_account")
+  @@map("user_item")
+}
+
+/// 프로모션 코드 카탈로그 (Phase 0 충전 경로). 코드 1개 = 정해진 파피 지급량.
+/// 계정별 1회 교환은 WalletLedger.idempotencyKey("PROMO:{code}:{accountId}") unique로,
+/// 전체 발급 한도는 redeemedCount/maxRedemptions 비교로 서비스에서 제어.
+model PromoCode {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 교환 코드 (고유, 대소문자 정규화는 서비스에서)
+  code String @unique @map("code") @db.VarChar(60)
+
+  /// 지급 파피
+  papyAmount Int @map("papy_amount")
+
+  /// 전체 교환 한도 (null = 무제한)
+  maxRedemptions Int? @map("max_redemptions")
+
+  /// 누적 교환 횟수 (캐시)
+  redeemedCount Int @default(0) @map("redeemed_count")
+
+  /// 만료 시각 (null = 무기한)
+  expiresAt DateTime? @map("expires_at")
+
+  /// 활성 여부
+  isActive Boolean @default(true) @map("is_active")
+
+  /// 등록 시각
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("promo_code")
+}
