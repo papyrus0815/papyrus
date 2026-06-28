@@ -1,0 +1,26 @@
+/// 콘텐츠 댓글 (폴리모픽). 우선 사건(EVENT) 대상이며, 추후 인물·국가 등으로 무비용 확장.
+/// PointEntry/ActionLog와 동일한 ownerType(AggregateType)+recordId 패턴 — 대상 엔티티에 FK를 두지 않는다.
+model Comment {
+  id              String        @id @default(uuid()) @db.Char(36)
+
+  /// 대상 콘텐츠 타입 (현재 EVENT)
+  ownerType       AggregateType @map("owner_type")
+  /// 대상 콘텐츠 PK (Event.id 등)
+  recordId        String        @map("record_id") @db.Char(36)
+
+  /// 작성 계정
+  authorAccountId String        @map("author_account_id") @db.Char(36)
+  /// 본문
+  content         String        @db.Text
+
+  /// 소프트삭제 — 회수 대신 비표시(작성자 본인 또는 대상 콘텐츠 소유자가 삭제)
+  deletedAt       DateTime?     @map("deleted_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  author          Account       @relation(fields: [authorAccountId], references: [id])
+
+  @@index([ownerType, recordId], name: "idx_comment_target")
+  @@index([authorAccountId], name: "idx_comment_author")
+  @@map("comment")
+}
