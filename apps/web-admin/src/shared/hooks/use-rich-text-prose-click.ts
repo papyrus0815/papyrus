@@ -224,6 +224,18 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
         return
       }
 
+      const companyLinkEl = target.closest(
+        '.entity-link[data-entity-type="company"]',
+      )
+      if (companyLinkEl) {
+        const companyId = companyLinkEl.getAttribute('data-entity-id')
+        if (companyId) {
+          e.preventDefault()
+          navigate(pathKeys.companies.detail(companyId))
+        }
+        return
+      }
+
       const countryLinkEl = target.closest(
         '.entity-link[data-entity-type="country"]',
       )

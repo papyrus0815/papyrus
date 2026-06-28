@@ -20,6 +20,10 @@ export const pathKeys = {
   dynasty: () => `/dynasty`,
   /** 게이미피케이션 리더보드 */
   leaderboard: () => `/${ROUTES.LEADERBOARD}/`,
+  /** 파피 상점 (지갑·구매) */
+  shop: () => '/shop/',
+  /** 유물관 (수집·진열) */
+  collection: () => '/collection/',
   /** 공개 프로필(타 사용자) */
   publicProfile: (accountId: string) =>
     `/${ROUTES.PROFILE}/${encodeURIComponent(accountId)}`,
@@ -123,6 +127,12 @@ export const pathKeys = {
     create: () => '/persons/create/',
     edit: (personId: string) => `/persons/${personId}/edit/`,
     detail: (personId: string) => `/persons/${personId}/`,
+  },
+
+  // --- Companies Routes ---
+  companies: {
+    root: () => '/companies/',
+    detail: (companyId: string) => `/companies/${companyId}/`,
   },
 
   // --- Genealogy ---

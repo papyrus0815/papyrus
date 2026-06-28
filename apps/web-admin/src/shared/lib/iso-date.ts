@@ -164,3 +164,38 @@ export function isoToTimeInput(value?: string | null): string {
   if (p.hour === 0 && p.minute === 0) return ''
   return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`
 }
+
+/**
+ * 단일 날짜를 정밀도에 맞게 포맷 (년만 알 때, 년·월만 알 때 등).
+ * BC/연도0/끝자리 정합은 parseIsoDateParts에 위임 — 네이티브 Date 파싱 금지.
+ *
+ * (이전엔 pages/events/utils에 있던 것을 공용 inline-edit/날짜표시가 함께 쓰도록
+ *  단일 출처를 여기로 옮김. events.utils는 이 함수를 re-export.)
+ */
+export function formatDateWithPrecision(
+  dateStr: string,
+  precision?: string | null,
+): string {
+  const parts = parseIsoDateParts(dateStr)
+  if (!parts) return dateStr
+  const { year, month, day } = parts
+  const prec = precision === 'year' || precision === 'month' ? precision : 'day'
+  if (prec === 'year') return `${year}년`
+  if (prec === 'month') return `${year}년 ${month}월`
+  return `${year}년 ${month}월 ${day}일`
+}
+
+/**
+ * 날짜 범위 포맷 (정밀도 지원: 년만/년·월/년·월·일).
+ */
+export function formatDateRange(
+  start: string,
+  end?: string,
+  startPrecision?: string | null,
+  endPrecision?: string | null,
+): string {
+  const startStr = formatDateWithPrecision(start, startPrecision)
+  if (!end) return startStr
+  const endStr = formatDateWithPrecision(end, endPrecision)
+  return `${startStr} ~ ${endStr}`
+}

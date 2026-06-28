@@ -29,6 +29,8 @@ import { layoutLoader } from '@/pages/layout/layout.loader'
 import Layout from '@/pages/layout/layout.ui'
 import { genealogyRoute } from '@/pages/genealogy/genealogy.route'
 import { leaderboardRoute } from '@/pages/leaderboard/leaderboard.route'
+import { walletRoute } from '@/pages/wallet/wallet.route'
+import { collectionRoute } from '@/pages/collection/collection.route'
 import { profileRoute } from '@/pages/profile/profile.route'
 import { publicProfileRoute } from '@/pages/public-profile/public-profile.route'
 import { personsRoute } from '@/pages/persons/person.route'
@@ -171,6 +173,10 @@ const appRouterConfig = [
           dynastyRoute,
           // 게이미피케이션 리더보드
           leaderboardRoute,
+          // 파피 상점 (지갑·구매)
+          walletRoute,
+          // 유물관 (수집·진열)
+          collectionRoute,
           // 내 프로필 (계정 정보·등급·뱃지)
           profileRoute,
           // 공개 프로필 (타 사용자) — /profile/:accountId
