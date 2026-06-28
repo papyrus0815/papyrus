@@ -1,0 +1,98 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                             ARTIFACT DOMAIN                                   ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+///
+/// 역사 유물 수집(싸이월드 미니룸 analog). 파피로 유물을 구매해 프로필 진열장에 전시한다.
+/// 코스메틱(ShopItem/UserItem, 외형)과 의도적으로 분리 — 유물은 "수집물"(진열·세트·레어도)이며,
+/// 핵심 차별점은 실제 백과 엔티티(AggregateType linkedType + linkedId)에 폴리모픽 링크해
+/// "수집 = 탐험 = 학습" 루프를 만드는 것이다(PointEntry/Attachment 폴리모픽 패턴 차용).
+///
+/// 구매는 파피 경제(WalletService.spend — 조건부 차감 + CONSUME 원장 + 멱등)를 재사용한다.
+/// 설계 문서: docs/historical-artifact-collection-design.md
+
+/// 유물 희귀도
+enum ArtifactRarity {
+  /// 일반
+  COMMON
+  /// 보물
+  RARE
+  /// 국보급(전설)
+  LEGENDARY
+}
+
+/// 역사 유물 카탈로그 (수집 대상)
+model Artifact {
+  id            String         @id @default(uuid()) @db.Char(36)
+
+  /// 유물명 (예: "거북선", "훈민정음 해례본")
+  name          String         @db.VarChar(150)
+
+  /// 시대 라벨 (예: "조선 16세기")
+  era           String?        @db.VarChar(60)
+
+  /// 세기 스냅샷 (세기별 컬렉션/필터용 — PointEntry.contentCentury 컨벤션: AD 양수/BC 음수/null)
+  contentCentury Int?          @map("content_century")
+
+  /// 연결된 실제 백과 엔티티 타입 (폴리모픽 — 클릭 시 백과 딥링크). null이면 링크 없음.
+  linkedType    AggregateType? @map("linked_type")
+  /// 연결된 엔티티 PK
+  linkedId      String?        @map("linked_id") @db.Char(36)
+
+  /// 희귀도
+  rarity        ArtifactRarity @default(COMMON)
+
+  /// 가격 (파피)
+  pricePapy     Int            @map("price_papy")
+
+  /// 대표 이미지
+  imageUrl      String?        @map("image_url") @db.VarChar(500)
+
+  /// 설명/유래
+  description   String?        @db.Text
+
+  /// 세트 묶음 키 (예: "JOSEON_ROYAL"). 같은 setKey 유물을 다 모으면 완성(보상은 Phase B).
+  setKey        String?        @map("set_key") @db.VarChar(80)
+
+  /// 판매 활성 여부
+  isActive      Boolean        @default(true) @map("is_active")
+  /// 진열 정렬 순서
+  sortOrder     Int            @default(0) @map("sort_order")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  owners        UserArtifact[]
+
+  @@index([setKey], name: "idx_artifact_set")
+  @@index([rarity], name: "idx_artifact_rarity")
+  @@index([linkedType, linkedId], name: "idx_artifact_linked")
+  @@index([contentCentury], name: "idx_artifact_century")
+  @@map("artifact")
+}
+
+/// 사용자 보유 유물 (수집/진열). 유물 1종은 계정당 1개(컬렉션).
+model UserArtifact {
+  id           String   @id @default(uuid()) @db.Char(36)
+
+  /// 보유 계정
+  accountId    String   @map("account_id") @db.Char(36)
+  /// 보유 유물
+  artifactId   String   @map("artifact_id") @db.Char(36)
+
+  /// 구매 시 차감(CONSUME) WalletLedger 행 (느슨한 참조 — 감사용)
+  ledgerId     String?  @map("ledger_id") @db.Char(36)
+
+  /// 진열장 노출 여부 (미니룸 좌표 배치는 Phase B)
+  displayed    Boolean  @default(true)
+  /// 진열 순서
+  displayOrder Int      @default(0) @map("display_order")
+
+  /// 획득 시각
+  acquiredAt   DateTime @default(now()) @map("acquired_at")
+
+  account      Account  @relation(fields: [accountId], references: [id])
+  artifact     Artifact @relation(fields: [artifactId], references: [id])
+
+  /// 동일 유물 중복 보유 차단 (수집물 = 1종 1개)
+  @@unique([accountId, artifactId], name: "uniq_user_artifact")
+  @@index([accountId], name: "idx_user_artifact_account")
+  @@map("user_artifact")
+}
