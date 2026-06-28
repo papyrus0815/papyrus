@@ -11,7 +11,10 @@ import { useEffect, useRef, useState } from 'react'
 import { FiChevronDown, FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { ledgerHairlineStrong } from '@/pages/events/ledger/styles/ledger-tokens'
+import {
+  ledgerAccentSubtle,
+  ledgerHairlineStrong,
+} from '@/pages/events/ledger/styles/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 
 import { buildMilitaryPatch } from '../military-edit'
@@ -220,7 +223,10 @@ const Menu = styled.div`
   border-radius: 8px;
   background: ${({ theme }) => theme.colors.background.primary};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 8px 24px rgba(0, 0, 0, 0.5)'
+      : '0 8px 24px rgba(15, 23, 42, 0.08)'};
 `
 
 const MenuItem = styled.button`
@@ -238,7 +244,7 @@ const MenuItem = styled.button`
   transition: background 0.12s;
 
   &:hover:not(:disabled) {
-    background: rgba(99, 102, 241, 0.06);
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   }
 
   &:disabled {

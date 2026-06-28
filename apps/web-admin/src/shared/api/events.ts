@@ -20,6 +20,18 @@ export type UpdateEventDto = Parameters<typeof api.events.updateEvent>[2]
 // 인증 토큰이 포함된 연결 사용 (POST/PUT/DELETE 시 401 방지)
 const getConnection = () => nestiaApiService.getConnection()
 
+/** 방문(놀러가기)용 사건 카드 (제목·날짜·카테고리, 읽기전용) */
+export type VisitedEventCard = Awaited<
+  ReturnType<typeof api.events.by_account.getEventsByAccount>
+>[number]
+
+/** 방문(놀러가기): 타 계정이 등록한 사건 카드 목록 — GET /events/by-account/:accountId */
+export async function getEventsByAccount(
+  accountId: string,
+): Promise<VisitedEventCard[]> {
+  return api.events.by_account.getEventsByAccount(getConnection(), accountId)
+}
+
 /**
  * 모든 사건 조회 (페이징 + 다축 필터).
  * 클라이언트 lens 칩(country/hcountry/category/decade/century/quality)을

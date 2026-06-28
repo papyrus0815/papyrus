@@ -128,6 +128,17 @@ export class NotificationService {
     })
   }
 
+  /** 기업 CRUD 알림 (Company는 Organization 1:1 확장이나 알림 owner는 COMPANY로 구분) */
+  notifyCompany(entityLabel: string, method: EventMethod, recordId?: string, preview?: string): Promise<NotificationRecord> {
+    return this.create({
+      entityLabel,
+      method,
+      ownerType: AggregateType.COMPANY,
+      recordId,
+      preview,
+    })
+  }
+
   /** 정당 CRUD 알림 */
   notifyPoliticalParty(entityLabel: string, method: EventMethod, recordId?: string, preview?: string): Promise<NotificationRecord> {
     return this.create({

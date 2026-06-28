@@ -18,8 +18,7 @@ interface ModuleRemoveActionProps {
  * 백엔드 직접 개입 필요). 각 모듈 헤더에 작은 제거 액션을 두어 클라이언트에서
  * `onPatch({ moduleKey: null })`로 비활성화할 수 있게 한다.
  *
- * native confirm은 admin 도구의 작은 위험 액션에는 충분 — 별도 dialog 시스템을
- * 끼우지 않는다(이후 디자인 시스템에 confirm 표준이 정해지면 일괄 교체).
+ * 파괴적 액션이라 표준 명령형 `confirm`(@/shared/ui/confirm-dialog)으로 한 번 확인받는다.
  */
 export function ModuleRemoveAction({ label, onRemove }: ModuleRemoveActionProps) {
   const handleClick = async () => {

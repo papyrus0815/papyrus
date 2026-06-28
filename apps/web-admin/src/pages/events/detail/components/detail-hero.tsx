@@ -10,6 +10,7 @@ import {
 } from '@/shared/api/event-categories'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 
@@ -118,6 +119,9 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
           }
           placeholder="사건명 입력"
           as="span"
+          /* 긴 제목은 textarea로 줄바꿈 표시 — Enter는 여전히 저장(Shift+Enter 줄바꿈). */
+          multiline
+          multilineEnter={false}
         />
       </TitleHost>
 
@@ -263,11 +267,8 @@ function ContemporaryHeadsLink({ event }: { event: EventDetail }) {
 }
 
 function extractYear(input: string | null | undefined): number | null {
-  if (!input) return null
-  const m = input.match(/^(-?\d{1,6})/)
-  if (!m || !m[1]) return null
-  const n = parseInt(m[1], 10)
-  return Number.isFinite(n) ? n : null
+  // 캐논 파서에 위임 — BC 음수·타임존 안전성을 단일 출처(parseIsoDateParts)로 공유.
+  return parseIsoDateParts(input)?.year ?? null
 }
 
 const ContemporaryLink = styled(Link)`

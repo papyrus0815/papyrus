@@ -6,6 +6,8 @@ import styled, { css } from 'styled-components'
 import { ledgerHairlineStrong } from '@/pages/events/ledger/styles/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getUploadImageUrl, uploadImage } from '@/shared/api/upload'
+import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
+import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
@@ -38,28 +40,21 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  /* lightbox 열릴 때 trigger 저장 → 닫힐 때 focus 복원. */
-  const lightboxTriggerRef = useRef<HTMLElement | null>(null)
-  const lightboxCloseRef = useRef<HTMLButtonElement | null>(null)
-
-  /* Esc로 lightbox 닫기 + 열릴 때 close 버튼 focus, 닫힐 때 trigger 복원. */
+  /**
+   * lightbox는 공용 모달 토대(useFocusTrap·useBodyScrollLock)로 포커스 트랩·스크롤락을
+   * 위임한다(canon: 모달 재구현 금지). useFocusTrap이 진입 포커스 이동·Tab 순환·닫힘 시
+   * 트리거 포커스 복원까지 담당하므로, 여기선 Esc 닫기만 직접 처리한다.
+   */
+  const lightboxRef = useRef<HTMLDivElement | null>(null)
+  useFocusTrap(lightboxRef, Boolean(lightbox))
+  useBodyScrollLock(Boolean(lightbox))
   useEffect(() => {
     if (!lightbox) return undefined
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setLightbox(null)
+    const onKey = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key === 'Escape') setLightbox(null)
     }
     window.addEventListener('keydown', onKey)
-    /* 다음 프레임에 close 버튼으로 focus 이동 — Tab이 lightbox 안에서 시작. */
-    const focusTimer = window.setTimeout(() => {
-      lightboxCloseRef.current?.focus()
-    }, 0)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      window.clearTimeout(focusTimer)
-      /* 닫힘 직후 원래 trigger로 focus 복원. */
-      lightboxTriggerRef.current?.focus()
-      lightboxTriggerRef.current = null
-    }
+    return () => window.removeEventListener('keydown', onKey)
   }, [lightbox])
 
   /**
@@ -315,8 +310,7 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
             <ImageCell key={image.id}>
               <ImageButton
                 type="button"
-                onClick={(e) => {
-                  lightboxTriggerRef.current = e.currentTarget
+                onClick={() => {
                   // 썸네일과 동일하게 API origin을 붙여 정규화 — raw '/uploads/...'
                   // 상대경로를 그대로 src에 넣으면 확대 시 web-admin origin 기준 404.
                   setLightbox({
@@ -329,6 +323,7 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
                   src={getUploadImageUrl(image.imageUrl) || image.imageUrl}
                   alt={image.caption ?? ''}
                   loading="lazy"
+                  decoding="async"
                 />
               </ImageButton>
               <CaptionEdit onClick={(e) => e.stopPropagation()}>
@@ -445,13 +440,13 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
 
       {lightbox && (
         <Lightbox
+          ref={lightboxRef}
           onClick={() => setLightbox(null)}
           role="dialog"
           aria-modal="true"
           aria-label="이미지 미리보기"
         >
           <LightboxClose
-            ref={lightboxCloseRef}
             type="button"
             onClick={(e) => {
               e.stopPropagation()
@@ -462,7 +457,11 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
             <FiX />
           </LightboxClose>
           {/* image/caption 클릭은 닫기로 전파 — Lightbox onClick이 처리. */}
-          <LightboxImage src={lightbox.src} alt={lightbox.caption ?? ''} />
+          <LightboxImage
+            src={lightbox.src}
+            alt={lightbox.caption ?? ''}
+            decoding="async"
+          />
           {lightbox.caption && <LightboxCaption>{lightbox.caption}</LightboxCaption>}
         </Lightbox>
       )}

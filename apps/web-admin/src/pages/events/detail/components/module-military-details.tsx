@@ -41,6 +41,7 @@ const TEXT_FIELDS: Array<{ key: keyof MilitaryDetailsShape; label: string }> = [
   { key: 'strategy', label: '전략' },
   { key: 'outcome', label: '결과' },
   { key: 'territoryChanges', label: '영토 변화' },
+  { key: 'treaty', label: '강화·조약' },
   { key: 'strategicImpact', label: '전략적 영향' },
 ]
 

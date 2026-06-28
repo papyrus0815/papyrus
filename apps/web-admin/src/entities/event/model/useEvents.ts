@@ -8,17 +8,30 @@
  */
 import { useMemo } from 'react'
 
-import { useInfiniteQuery } from '@tanstack/react-query'
+import { queryOptions, useInfiniteQuery } from '@tanstack/react-query'
 
 import {
   type GetAllEventsParams,
   getAllEvents,
+  getEventsByAccount,
 } from '@/shared/api/events'
 
 import { transformEventsFromApi } from './eventTransformers'
 import type { HistoricalEvent } from './types'
 
 const DEFAULT_PAGE_SIZE = 50
+
+/**
+ * 방문(놀러가기): 타 계정이 등록한 사건 카드 목록 (읽기전용).
+ * 방(공개 프로필)의 "등록 사건관" 섹션에서 사용.
+ */
+export const visitedEventsQueryOptions = (accountId: string) =>
+  queryOptions({
+    queryKey: ['events', 'by-account', accountId] as const,
+    queryFn: () => getEventsByAccount(accountId),
+    staleTime: 60_000,
+    enabled: !!accountId,
+  })
 
 export interface UseEventsOptions
   extends Omit<GetAllEventsParams, 'offset' | 'limit'> {

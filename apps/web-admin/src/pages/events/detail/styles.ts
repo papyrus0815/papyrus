@@ -224,16 +224,6 @@ export const HeroMetaItem = styled.span`
   }
 `
 
-/* RichTextReadView가 div를 렌더하므로 div로 둔다. */
-export const HeroSummary = styled.div`
-  font-size: 16.5px;
-  font-weight: 400;
-  line-height: 1.65;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  margin: 4px 0 0;
-  max-width: 720px;
-`
-
 export const HeroActions = styled.div`
   display: flex;
   gap: 8px;

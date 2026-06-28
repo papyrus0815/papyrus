@@ -2,6 +2,11 @@
  * 이벤트 유틸리티 함수들
  */
 import { getCenturyFromIso, parseIsoDateParts } from '@/shared/lib/iso-date'
+// 날짜 정밀도 포맷의 단일 출처는 shared/lib/iso-date로 이동 — 기존 import 경로 보존을 위해 re-export.
+export {
+  formatDateWithPrecision,
+  formatDateRange,
+} from '@/shared/lib/iso-date'
 import type { HeadOfStateDuringEvent } from '@/shared/api/government-positions'
 
 import type {
@@ -41,37 +46,6 @@ export function formatCenturyRange(century: number): string {
 
 /** 날짜 정밀도: year(년만), month(년·월), day(년·월·일) */
 export type DatePrecision = 'year' | 'month' | 'day'
-
-/**
- * 단일 날짜를 정밀도에 맞게 포맷 (년만 알 때, 년·월만 알 때 등)
- */
-export function formatDateWithPrecision(
-  dateStr: string,
-  precision?: string | null,
-): string {
-  const parts = parseIsoDateParts(dateStr)
-  if (!parts) return dateStr
-  const { year: y, month: m, day: d } = parts
-  const prec = precision === 'year' || precision === 'month' ? precision : 'day'
-  if (prec === 'year') return `${y}년`
-  if (prec === 'month') return `${y}년 ${m}월`
-  return `${y}년 ${m}월 ${d}일`
-}
-
-/**
- * 날짜 범위 포맷 (정밀도 지원: 년만/년·월/년·월·일)
- */
-export function formatDateRange(
-  start: string,
-  end?: string,
-  startPrecision?: string | null,
-  endPrecision?: string | null,
-): string {
-  const startStr = formatDateWithPrecision(start, startPrecision)
-  if (!end) return startStr
-  const endStr = formatDateWithPrecision(end, endPrecision)
-  return `${startStr} ~ ${endStr}`
-}
 
 /**
  * 타임라인용 날짜 포맷

@@ -10,6 +10,8 @@ export interface CreateNotificationData {
   actorAccountId?: string
   /** 행위자 표시명 스냅샷 (선택). NotificationService가 actorAccountId로 채움. */
   actorName?: string
+  /** 수신 대상 계정 (선택). 지정 시 해당 계정 피드에만 노출(타겟 알림). 미지정=전역 공유피드. */
+  recipientAccountId?: string
   recordId?: string
   preview?: string
   title?: string

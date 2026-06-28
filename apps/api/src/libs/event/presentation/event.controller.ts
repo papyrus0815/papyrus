@@ -12,6 +12,9 @@ import {
   Request,
   Patch,
   UseGuards,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common'
 import { AuthGuard } from '@nestjs/passport'
 import { ApiTags } from '@nestjs/swagger'
@@ -82,6 +85,16 @@ function formatEventDate(
   const mm = String(month ?? 1).padStart(2, '0')
   const dd = String(day ?? 1).padStart(2, '0')
   return `${era === 'BC' ? '-' : ''}${yyyy}-${mm}-${dd}`
+}
+
+/** 방문(놀러가기)용 사건 카드 — 제목·날짜·카테고리만(상세·본문·하위사건·이미지 미개방, 읽기전용) */
+export interface VisitedEventCardDto {
+  id: string
+  title: string
+  startEra: string | null
+  startYear: number | null
+  startDate: string | null
+  categoryName: string | null
 }
 
 @ApiTags('events')
@@ -635,11 +648,11 @@ export class EventController {
     })
     
     if (!parentEvent) {
-      throw new Error('상위 사건을 찾을 수 없습니다.')
+      throw new NotFoundException('상위 사건을 찾을 수 없습니다.')
     }
-    
+
     if (parentEvent.createdById !== userId) {
-      throw new Error('본인이 등록한 사건의 하위 사건만 조회할 수 있습니다.')
+      throw new ForbiddenException('본인이 등록한 사건의 하위 사건만 조회할 수 있습니다.')
     }
     
     const events = await this.eventService.getEventsByParentId(parentEventId)
@@ -741,6 +754,42 @@ export class EventController {
    * @returns 사건 정보
    * @tag events
    */
+  /**
+   * 방문(놀러가기): 타 계정이 등록한 사건 목록(카드, 읽기전용).
+   * 보수 노출 — 카드 레벨만(제목·날짜·카테고리). 본문·하위사건·이미지·행위자 미개방.
+   * 최상위(parentEventId=null)·미삭제만. 편집/삭제 액션은 프론트 viewerIsOwner로 숨김.
+   * 주의: `:id` 라우트보다 위에 위치해야 함 (NestJS 라우트 매칭 순서).
+   */
+  @Get('by-account/:accountId')
+  async getEventsByAccount(
+    @Param('accountId') accountId: string,
+    @Query('limit') limit?: string,
+  ): Promise<VisitedEventCardDto[]> {
+    const parsedLimit = parseInt(limit ?? '', 10)
+    const take = Number.isNaN(parsedLimit) ? 60 : Math.min(Math.max(parsedLimit, 1), 100)
+    const rows = await this.prisma.event.findMany({
+      where: { createdById: accountId, parentEventId: null, deletedAt: null },
+      take,
+      orderBy: { startDate: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        startDate: true,
+        startEra: true,
+        startYear: true,
+        category: { select: { name: true } },
+      },
+    })
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      startEra: row.startEra ?? null,
+      startYear: row.startYear ?? null,
+      startDate: row.startDate ? row.startDate.toISOString() : null,
+      categoryName: row.category?.name ?? null,
+    }))
+  }
+
   @Get(':id')
   async getEventById(
     @Param('id') id: string,
@@ -750,12 +799,12 @@ export class EventController {
 
     const loaded = await this.loadEventDetail(id)
     if (!loaded) {
-      throw new Error('Event not found')
+      throw new NotFoundException('사건을 찾을 수 없습니다.')
     }
 
     // 권한 체크: 본인 사건만 조회 가능
     if (loaded.event.createdById !== userId) {
-      throw new Error('본인이 등록한 사건만 조회할 수 있습니다.')
+      throw new ForbiddenException('본인이 등록한 사건만 조회할 수 있습니다.')
     }
 
     return loaded.response
@@ -887,11 +936,11 @@ export class EventController {
     })
     
     if (!existingEvent) {
-      throw new Error('사건을 찾을 수 없습니다.')
+      throw new NotFoundException('사건을 찾을 수 없습니다.')
     }
     
     if (existingEvent.createdById !== userId) {
-      throw new Error('본인이 등록한 사건만 수정할 수 있습니다.')
+      throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
     }
     
     // categoryName이 제공되면 categoryId로 변환 (우선순위: categoryName > categoryId)
@@ -978,11 +1027,11 @@ export class EventController {
     })
     
     if (!existingEvent) {
-      throw new Error('사건을 찾을 수 없습니다.')
+      throw new NotFoundException('사건을 찾을 수 없습니다.')
     }
     
     if (existingEvent.createdById !== userId) {
-      throw new Error('본인이 등록한 사건만 삭제할 수 있습니다.')
+      throw new ForbiddenException('본인이 등록한 사건만 삭제할 수 있습니다.')
     }
     
     await this.eventService.deleteEvent(id, userId)
@@ -1039,8 +1088,8 @@ export class EventController {
   ): Promise<any[]> {
     const userId = req.user?.id
     const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
-    if (!event) throw new Error('Event not found')
-    if (event.createdById !== userId) throw new Error('본인이 등록한 사건만 조회할 수 있습니다.')
+    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
+    if (event.createdById !== userId) throw new ForbiddenException('본인이 등록한 사건만 조회할 수 있습니다.')
 
     const rows = await this.prisma.cabinetEvent.findMany({
       where: { eventId: id },
@@ -1074,10 +1123,10 @@ export class EventController {
   ): Promise<any> {
     const userId = req.user?.id
     const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
-    if (!event) throw new Error('Event not found')
-    if (event.createdById !== userId) throw new Error('본인이 등록한 사건만 수정할 수 있습니다.')
+    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
+    if (event.createdById !== userId) throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
 
-    if (!body?.cabinetId) throw new Error('cabinetId가 필요합니다.')
+    if (!body?.cabinetId) throw new BadRequestException('cabinetId가 필요합니다.')
 
     const created = await this.prisma.cabinetEvent.upsert({
       where: { cabinetId_eventId: { cabinetId: body.cabinetId, eventId: id } },
@@ -1116,8 +1165,8 @@ export class EventController {
   ): Promise<any> {
     const userId = req.user?.id
     const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
-    if (!event) throw new Error('Event not found')
-    if (event.createdById !== userId) throw new Error('본인이 등록한 사건만 수정할 수 있습니다.')
+    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
+    if (event.createdById !== userId) throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
 
     return this.prisma.cabinetEvent.update({
       where: { cabinetId_eventId: { cabinetId, eventId: id } },
@@ -1140,8 +1189,8 @@ export class EventController {
   ): Promise<void> {
     const userId = req.user?.id
     const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
-    if (!event) throw new Error('Event not found')
-    if (event.createdById !== userId) throw new Error('본인이 등록한 사건만 수정할 수 있습니다.')
+    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
+    if (event.createdById !== userId) throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
 
     await this.prisma.cabinetEvent.deleteMany({ where: { cabinetId, eventId: id } })
   }

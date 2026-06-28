@@ -62,11 +62,18 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const eventOptions = useMemo<SelectOption[]>(
     () =>
       (allEvents as EventResponseDto[])
-        .filter((e) => e.id !== event.id)
-        .map((e) => ({
-          value: e.id,
-          label: e.title,
-          description: e.startDate ?? undefined,
+        .filter((evt) => evt.id !== event.id)
+        .map((evt) => ({
+          value: evt.id,
+          label: evt.title,
+          description: evt.startDate
+            ? formatDateRange(
+                evt.startDate,
+                evt.endDate ?? undefined,
+                evt.startDatePrecision,
+                evt.endDatePrecision,
+              )
+            : undefined,
         })),
     [allEvents, event.id],
   )
@@ -239,13 +246,14 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onBlur={handleBlur}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
+              onKeyDown={(keyEvent) => {
+                // IME 조합 중 Enter는 조합 확정 — 키워드 조기 커밋 방지.
+                if (keyEvent.key === 'Enter' && !keyEvent.nativeEvent.isComposing) {
+                  keyEvent.preventDefault()
                   submitKeyword()
                 }
-                if (e.key === 'Escape') {
-                  e.preventDefault()
+                if (keyEvent.key === 'Escape') {
+                  keyEvent.preventDefault()
                   cancelKeyword()
                 }
               }}

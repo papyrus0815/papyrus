@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
 
 import { resolveCategory } from '@/pages/events/ledger/styles/ledger-tokens'
+import { CommentSection } from '@/entities/comment'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
@@ -208,11 +209,14 @@ function EventDetailContent({ eventId }: { eventId: string }) {
 
     items.push({ id: 'network', label: '연관' })
     items.push({ id: 'appendix', label: '이미지' })
+    // 댓글은 최상위 사건만 — 백엔드가 하위 사건(parentEventId≠null)엔 댓글을 노출/허용하지
+    // 않으므로(스코프 불일치 시 빈-상태 오인·작성 404), 하위 사건에선 섹션 자체를 숨긴다.
+    if (!event.parentEventId) items.push({ id: 'comments', label: '댓글' })
 
     return items
-    // event는 *식별자 변경* 시에만 재구성. 다른 필드 변경으로 인한 refetch는 무시.
+    // event는 *식별자 변경* 시에만 재구성. parentEventId는 위계 변경이라 의도적으로 포함.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event.id, enabledModules])
+  }, [event.id, event.parentEventId, enabledModules])
 
   /**
    * URL hash → 섹션 스크롤. 사건 id가 바뀐 첫 렌더에서 1회만 실행.
@@ -234,7 +238,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
   const accentColor = resolveCategory(event.category?.name).color
 
   return (
-    <InlineEditProvider>
+    <InlineEditProvider imageCategory="events">
       <S.Page ref={scrollRef}>
         <ReadingProgress targetRef={scrollRef} color={accentColor} />
         <S.PageInner>
@@ -282,6 +286,15 @@ function EventDetailContent({ eventId }: { eventId: string }) {
 
               <DetailNetwork event={event} onPatch={onPatch} />
               <DetailAppendix event={event} onPatch={onPatch} />
+
+              {!event.parentEventId && (
+                <S.Section id="comments">
+                  <S.SectionHeader>
+                    <S.SectionTitle>댓글</S.SectionTitle>
+                  </S.SectionHeader>
+                  <CommentSection ownerType="EVENT" recordId={eventId} />
+                </S.Section>
+              )}
             </S.Main>
           </S.Body>
         </S.PageInner>

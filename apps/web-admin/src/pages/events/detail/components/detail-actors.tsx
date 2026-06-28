@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { FiArrowDown, FiArrowUp, FiSettings, FiX } from 'react-icons/fi'
@@ -16,12 +16,13 @@ import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 
 import * as S from '../styles'
+import { type PatchOptions } from '../use-undoable-patch'
 import { type EventDetail } from '../use-event-detail'
 import { InlineText } from './inline'
 
 interface DetailActorsProps {
   event: EventDetail
-  onPatch: (patch: UpdateEventDto) => void
+  onPatch: (patch: UpdateEventDto, opts?: PatchOptions) => void
   /** 인물 클릭 시 상세 모달 오픈. 페이지 레벨 단일 모달이 처리. */
   onPersonClick: (personId: string) => void
 }
@@ -99,8 +100,22 @@ export function DetailActors({
   }
 
   const removePerson = (personId: string) => {
-    patchPersons(
-      persons.filter((p) => p.personId !== personId).map(toPersonPayload),
+    const removed = persons.find((person) => person.personId === personId)
+    const removedName = removed?.person
+      ? getPersonDisplayName({
+          name: removed.person.name ?? '',
+          surname: removed.person.surname,
+          nameDisplayOrder: removed.person.nameDisplayOrder,
+          country: removed.person.country,
+        }) || '인물'
+      : '인물'
+    onPatch(
+      {
+        relatedPersons: persons
+          .filter((person) => person.personId !== personId)
+          .map(toPersonPayload),
+      },
+      { savedLabel: `행위자 제거 · ${removedName}` },
     )
   }
 
@@ -129,16 +144,26 @@ export function DetailActors({
   }
 
   const removeCountry = (id: string, isHistorical: boolean) => {
+    const countryList = isHistorical ? historicalCountries : modernCountries
+    const removedName = countryList.find((country) => country.id === id)?.name ?? '국가'
     if (isHistorical) {
-      onPatch({
-        relatedHistoricalCountryIds: historicalCountries
-          .filter((c) => c.id !== id)
-          .map((c) => c.id),
-      })
+      onPatch(
+        {
+          relatedHistoricalCountryIds: historicalCountries
+            .filter((country) => country.id !== id)
+            .map((country) => country.id),
+        },
+        { savedLabel: `관련국 제거 · ${removedName}` },
+      )
     } else {
-      onPatch({
-        relatedCountryIds: modernCountries.filter((c) => c.id !== id).map((c) => c.id),
-      })
+      onPatch(
+        {
+          relatedCountryIds: modernCountries
+            .filter((country) => country.id !== id)
+            .map((country) => country.id),
+        },
+        { savedLabel: `관련국 제거 · ${removedName}` },
+      )
     }
   }
 
@@ -187,6 +212,15 @@ export function DetailActors({
   const totalCountries = modernCountries.length + historicalCountries.length
   const hasAnything =
     persons.length > 0 || totalCountries > 0
+  /** 순서 변경 토글은 행이 2개 이상일 때만 의미가 있다. */
+  const canManage = persons.length > 1 || totalCountries > 1
+  /**
+   * 항목을 1개 이하로 지우면 토글 버튼이 사라지는데, manageMode가 true로 남으면
+   * reorder 액션이 갇힌 채 끌 길이 없다. 토글이 사라지는 시점에 모드도 해제.
+   */
+  useEffect(() => {
+    if (!canManage && manageMode) setManageMode(false)
+  }, [canManage, manageMode])
 
   return (
     <>
@@ -198,7 +232,7 @@ export function DetailActors({
               {totals(persons.length, totalCountries)}
             </S.SectionSubtitle>
           )}
-          {(persons.length > 1 || totalCountries > 1) && (
+          {canManage && (
             <S.SectionActions>
               <ManageToggle
                 type="button"
@@ -273,19 +307,21 @@ export function DetailActors({
                     >
                       {fullName}
                     </PersonNameBtn>
-                    <PersonRoleLine onClick={(e) => e.stopPropagation()}>
+                    <PersonRoleLine>
                       <InlineText
                         value={person.role ?? ''}
                         onSave={(next) =>
                           updatePerson(person.personId, { role: next })
                         }
                         placeholder="역할 추가"
+                        validate={(next) =>
+                          next.length > 100
+                            ? '역할은 100자 이내로 입력하세요'
+                            : null
+                        }
                       />
                     </PersonRoleLine>
-                    <PersonNoteLine
-                      $hasContent={hasNote}
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <PersonNoteLine $hasContent={hasNote}>
                       <InlineText
                         value={person.note ?? ''}
                         onSave={(next) =>

@@ -3,7 +3,7 @@
  * FSD: entities/event/model
  */
 
-export { useEvents } from './useEvents'
+export { useEvents, visitedEventsQueryOptions } from './useEvents'
 export type { UseEventsOptions } from './useEvents'
 export { transformEventsFromApi } from './eventTransformers'
 export type {

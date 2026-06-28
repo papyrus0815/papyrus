@@ -23,6 +23,9 @@ export class NotificationPrismaRepository implements INotificationRepository {
           recordId: data.recordId,
           ownerType: data.ownerType,
           subResourceType: data.subResourceType ?? null,
+          // 수신자 단위로 dedup 격리 — 전역(null)과 타겟 알림이 교차 병합되지 않도록.
+          // 현재 데이터는 전부 null이라 무회귀이며, 향후 타겟 UPDATE 알림의 누수를 선차단한다.
+          recipientAccountId: data.recipientAccountId ?? null,
           reads: { none: {} },
         },
         orderBy: { createdAt: 'desc' },
@@ -52,6 +55,7 @@ export class NotificationPrismaRepository implements INotificationRepository {
         subResourceType: data.subResourceType ?? undefined,
         actorAccountId: data.actorAccountId ?? undefined,
         actorName: data.actorName ?? undefined,
+        recipientAccountId: data.recipientAccountId ?? undefined,
         recordId: data.recordId ?? undefined,
         preview: data.preview ?? undefined,
         title: data.title ?? undefined,
@@ -86,9 +90,16 @@ export class NotificationPrismaRepository implements INotificationRepository {
     options?: { limit?: number; unreadOnly?: boolean },
   ): Promise<NotificationRecord[]> {
     const limit = options?.limit ?? 100
+    // 수신 필터: 전역(recipientAccountId=null) + 내 타겟 알림만. 계정 미상이면 전역만.
+    const recipientFilter = accountId
+      ? { OR: [{ recipientAccountId: null }, { recipientAccountId: accountId }] }
+      : { recipientAccountId: null }
     const rows = await this.prisma.notification.findMany({
-      // unreadOnly: 해당 계정이 아직 안 읽은 것만 (계정 미상이면 전체)
-      where: options?.unreadOnly && accountId ? { reads: { none: { accountId } } } : undefined,
+      where: {
+        ...recipientFilter,
+        // unreadOnly: 해당 계정이 아직 안 읽은 것만 (계정 미상이면 미적용)
+        ...(options?.unreadOnly && accountId ? { reads: { none: { accountId } } } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: limit,
       // 조회 계정의 읽음 기록만 함께 가져와 read 여부 판정 (없으면 미읽음)
@@ -114,7 +125,11 @@ export class NotificationPrismaRepository implements INotificationRepository {
   /** 해당 계정이 아직 안 읽은 알림 전부에 읽음 기록 삽입 (다른 계정 상태엔 영향 없음). */
   async markAllRead(accountId: string): Promise<void> {
     const unread = await this.prisma.notification.findMany({
-      where: { reads: { none: { accountId } } },
+      // 내가 볼 수 있는(전역 + 내 타겟) 미읽음만 — 남의 타겟 알림에 읽음 행을 만들지 않음
+      where: {
+        reads: { none: { accountId } },
+        OR: [{ recipientAccountId: null }, { recipientAccountId: accountId }],
+      },
       select: { id: true },
     })
     if (unread.length === 0) return

@@ -3,6 +3,7 @@ import {
   Inject,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common'
 import { EventRepository } from '../domain/event.repository'
 import { Event } from '../domain/event.entity'
@@ -568,11 +569,11 @@ export class EventService {
     })
     
     if (!event) {
-      throw new Error('사건을 찾을 수 없습니다.')
+      throw new NotFoundException('사건을 찾을 수 없습니다.')
     }
-    
+
     if (event.createdById !== userId) {
-      throw new Error('본인이 삭제한 사건만 복구할 수 있습니다.')
+      throw new ForbiddenException('본인이 삭제한 사건만 복구할 수 있습니다.')
     }
     
     const restored = await this.prisma.event.update({
@@ -602,11 +603,11 @@ export class EventService {
     })
     
     if (!event) {
-      throw new Error('사건을 찾을 수 없습니다.')
+      throw new NotFoundException('사건을 찾을 수 없습니다.')
     }
-    
+
     if (event.createdById !== userId) {
-      throw new Error('본인이 삭제한 사건만 완전히 삭제할 수 있습니다.')
+      throw new ForbiddenException('본인이 삭제한 사건만 완전히 삭제할 수 있습니다.')
     }
     
     // 완전 삭제

@@ -8,6 +8,7 @@ import {
   ledgerHairlineStrong,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
+import { confirm } from '@/shared/ui/confirm-dialog'
 
 import * as S from '../styles'
 import { type EventDetail, type EventDetailSection } from '../use-event-detail'
@@ -150,7 +151,20 @@ export function DetailNarrative({
     commitRows(next)
   }
 
-  const removeSection = (idx: number) => {
+  const removeSection = async (idx: number) => {
+    const row = rows[idx]
+    // 내용이 있는 섹션은 무확인 파괴를 막는다(빈 섹션은 즉시 제거).
+    const hasContent = Boolean(
+      row && (row.title.trim() || row.content.replace(/<[^>]*>/g, '').trim()),
+    )
+    if (hasContent) {
+      const ok = await confirm({
+        title: '섹션 삭제',
+        message: '이 섹션을 삭제할까요? 입력한 내용이 사라집니다.',
+        danger: true,
+      })
+      if (!ok) return
+    }
     commitRows(rows.filter((_, i) => i !== idx))
   }
 
@@ -164,6 +178,10 @@ export function DetailNarrative({
   }
 
   const [manageMode, setManageMode] = useState(false)
+  /* 섹션이 모두 사라지면 관리 토글도 사라지므로 모드도 함께 해제(갇힘 방지). */
+  useEffect(() => {
+    if (rows.length === 0 && manageMode) setManageMode(false)
+  }, [rows.length, manageMode])
 
   return (
     <>

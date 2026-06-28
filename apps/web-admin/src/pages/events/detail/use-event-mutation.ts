@@ -123,6 +123,7 @@ const LISTING_FIELDS: ReadonlyArray<keyof UpdateEventDto> = [
   'categoryId',
   'location',
   'parentEventId',
+  'childEventIds',
   'description',
 ]
 
