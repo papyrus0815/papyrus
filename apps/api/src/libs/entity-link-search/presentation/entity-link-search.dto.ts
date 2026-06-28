@@ -2,6 +2,7 @@ export type EntityLinkSearchItemDto = {
   type:
     | 'person'
     | 'event'
+    | 'company'
     | 'country'
     | 'historicalCountry'
     | 'dynasty'

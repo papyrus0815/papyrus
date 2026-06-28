@@ -17,6 +17,7 @@ import type {
 export * as count from "./count/index";
 export * as on_this_day from "./on_this_day/index";
 export * as parent from "./parent/index";
+export * as by_account from "./by_account/index";
 export * as deleted from "./deleted/index";
 export * as restore from "./restore/index";
 export * as permanent from "./permanent/index";
@@ -137,12 +138,6 @@ export namespace getAllEvents {
 }
 
 /**
- * 사건 상세 조회
- *
- * @param id 사건 ID
- * @returns 사건 정보
- * @tag events
- *
  * @controller EventController.getEventById
  * @path GET /events/:id
  * @accessor api.functional.events.getEventById

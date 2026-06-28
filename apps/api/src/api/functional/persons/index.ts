@@ -18,6 +18,7 @@ export * as infographic from "./infographic/index";
 export * as with_government_positions from "./with_government_positions/index";
 export * as dashboard from "./dashboard/index";
 export * as my_evaluations from "./my_evaluations/index";
+export * as by_account from "./by_account/index";
 export * as tenures from "./tenures/index";
 export * as human_relationships from "./human_relationships/index";
 export * as mentor_lineage from "./mentor_lineage/index";

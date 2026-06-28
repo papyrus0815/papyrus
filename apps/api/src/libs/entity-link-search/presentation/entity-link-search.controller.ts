@@ -81,6 +81,7 @@ export class EntityLinkSearchController {
     const [
       persons,
       events,
+      companies,
       countries,
       historicalCountries,
       dynasties,
@@ -115,6 +116,32 @@ export class EntityLinkSearchController {
         take: 8,
         orderBy: { updatedAt: 'desc' },
         select: { id: true, title: true, startDate: true },
+      }),
+      // 기업 — 명칭 정본은 Organization(type=COMPANY)이라 organization 경유 검색.
+      // 단 반환 id는 Company.id(딥링크 /companies/:id 타깃 — Organization.id면 404).
+      this.prisma.company.findMany({
+        where: {
+          organization: {
+            ...(partyFilter ? { countryId: partyFilter } : {}),
+            OR: [
+              { name: { contains: term } },
+              { localName: { contains: term } },
+              { shortName: { contains: term } },
+            ],
+          },
+        },
+        take: 6,
+        orderBy: { organization: { name: 'asc' } },
+        select: {
+          id: true,
+          organization: {
+            select: {
+              name: true,
+              localName: true,
+              country: { select: { name: true } },
+            },
+          },
+        },
       }),
       this.prisma.country.findMany({
         where: {
@@ -197,6 +224,17 @@ export class EntityLinkSearchController {
         subtitle: e.startDate
           ? `${e.startDate.getFullYear()}년`
           : undefined,
+      })
+    }
+    for (const company of companies) {
+      items.push({
+        type: 'company',
+        id: company.id, // Company.id (딥링크 타깃)
+        name: company.organization.name,
+        subtitle:
+          company.organization.country?.name ??
+          company.organization.localName ??
+          undefined,
       })
     }
     for (const c of countries) {

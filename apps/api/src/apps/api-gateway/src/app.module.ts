@@ -32,6 +32,9 @@ import { EntityLinkSearchModule } from '../../../libs/entity-link-search/entity-
 import { NaturalFeatureModule } from '../../../libs/natural-feature/natural-feature.module'
 import { InfrastructureModule } from '../../../libs/infrastructure/infrastructure.module'
 import { GamificationModule } from '../../../libs/gamification/gamification.module'
+import { WalletModule } from '../../../libs/wallet/wallet.module'
+import { ArtifactModule } from '../../../libs/artifact/artifact.module'
+import { CommentModule } from '../../../libs/comment/comment.module'
 
 import {
   AppConfigModule,
@@ -50,6 +53,9 @@ import {
     AppConfigModule,
     PrismaModule,
     GamificationModule,
+    WalletModule,
+    ArtifactModule,
+    CommentModule,
     AuthModule,
     CountryModule,
     ContinentModule,

@@ -74,6 +74,18 @@ model Account {
   /// 게이미피케이션: 획득한 뱃지
   accountBadges AccountBadge[]
 
+  /// 지갑(파피): 잔액 (WalletLedger 합계의 비정규화 캐시)
+  papyBalance Int @default(0) @map("papy_balance")
+  /// 지갑(파피): 입출 원장
+  walletLedgers WalletLedger[]
+  /// 지갑(파피): 보유 코스메틱
+  userItems UserItem[]
+  /// 수집한 역사 유물
+  userArtifacts UserArtifact[]
+
+  /// 작성한 콘텐츠 댓글 (폴리모픽 — 사건 등)
+  comments Comment[]
+
   /// 리더보드 정렬용 (totalPoints desc)
   @@index([totalPoints], name: "idx_account_total_points")
   @@map("account")
@@ -154,6 +166,9 @@ model Notification {
   actorAccountId String? @map("actor_account_id") @db.Char(36)
   /// (선택) 변경을 수행한 계정 표시명 스냅샷(displayName ?? username). 렌더 시 조인 없이 "· 홍길동" 표기.
   actorName String? @map("actor_name") @db.VarChar(60)
+  /// (선택) 이 알림의 수신 대상 계정. null=전역 공유피드(기존 동작), 값=해당 계정에게만 노출.
+  /// 예: "내 사건에 누가 댓글 달림"은 사건 소유자에게만 보내는 타겟 알림.
+  recipientAccountId String? @map("recipient_account_id") @db.Char(36)
   /// 상세 페이지 이동용 ID
   recordId  String?  @map("record_id") @db.Char(36)
   /// (선택) 부가 설명. 예: 직책명만, 기간, 하위 항목 요약 등
@@ -169,6 +184,8 @@ model Notification {
   @@index([ownerType], name: "idx_notification_owner_type")
   /// 수정 알림 병합(dedup) 조회용: (recordId, ownerType, method)로 최근 미읽음 UPDATE 탐색
   @@index([recordId, ownerType, method], name: "idx_notification_dedup")
+  /// 타겟 알림 피드 조회용 (recipientAccountId = 나 OR null)
+  @@index([recipientAccountId], name: "idx_notification_recipient")
   @@map("notification")
 }
 
