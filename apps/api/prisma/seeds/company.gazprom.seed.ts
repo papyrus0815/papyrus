@@ -287,15 +287,42 @@ export async function seedGazpromCompany(prisma: PrismaService): Promise<void> {
     console.log(`    ✅ ${c.name} (${c.slug})`)
   }
 
-  // ── 기업 (가스프롬) ──────────────────────────────────────────────────────
+  // ── Organization(정본) + 기업(가스프롬 산업 확장) ───────────────────────
+  // schema-1 통합(방향 B): 명칭·상태·국가·날짜 등 공유필드는 type=COMPANY Organization이
+  // 정본으로 보유하고, Company는 founder·시설·연혁·업종만 갖는 1:1 확장이다.
+  const orgData = {
+    name: COMPANY_NAME,
+    shortName: 'GAZP',
+    localName: 'ПАО «Газпром»',
+    description:
+      '러시아의 국영 천연가스 기업이자 세계 최대 규모의 천연가스 생산·수송 회사. 소련 가스공업부를 모태로 1989년 출범했으며, 러시아 정부가 과반 지분을 보유한다. 노르드스트림·시베리아의 힘 등 대형 파이프라인망을 통해 유럽·아시아로 가스를 공급하며 모스크바 증권거래소(MOEX) 상장사다(티커 GAZP).',
+    status: 'ACTIVE' as any,
+    foundedDate: FOUNDED_AT,
+    websiteUrl: 'https://www.gazprom.com',
+    countryId: russia.id,
+    headquartersCityId: hqCityId,
+  }
+  let org = await prisma.organization.findFirst({
+    where: { name: COMPANY_NAME, type: 'COMPANY' as any },
+    select: { id: true },
+  })
+  if (org) {
+    await prisma.organization.update({ where: { id: org.id }, data: orgData })
+  } else {
+    org = await prisma.organization.create({
+      data: { ...orgData, type: 'COMPANY' as any },
+      select: { id: true },
+    })
+    console.log('    ✅ Organization(정본) 생성')
+  }
+
   let companyId: string
   const existing = await prisma.company.findFirst({
-    where: { name: COMPANY_NAME, countryId: russia.id },
+    where: { organizationId: org.id },
     select: { id: true },
   })
   if (existing) {
     companyId = existing.id
-    // 보강 재실행: 창립자 연결이 비어 있으면 채운다
     await prisma.company.update({
       where: { id: companyId },
       data: { founderId },
@@ -303,19 +330,7 @@ export async function seedGazpromCompany(prisma: PrismaService): Promise<void> {
     console.log(`\n  ⏭️  기업 '${COMPANY_NAME}' 이미 존재 — 창립자 연결 보강 (id=${companyId})`)
   } else {
     const created = await prisma.company.create({
-      data: {
-        name: COMPANY_NAME,
-        shortName: 'GAZP',
-        localName: 'ПАО «Газпром»',
-        description:
-          '러시아의 국영 천연가스 기업이자 세계 최대 규모의 천연가스 생산·수송 회사. 소련 가스공업부를 모태로 1989년 출범했으며, 러시아 정부가 과반 지분을 보유한다. 노르드스트림·시베리아의 힘 등 대형 파이프라인망을 통해 유럽·아시아로 가스를 공급하며 모스크바 증권거래소(MOEX) 상장사다(티커 GAZP).',
-        status: 'ACTIVE',
-        foundedAt: FOUNDED_AT,
-        websiteUrl: 'https://www.gazprom.com',
-        countryId: russia.id,
-        headquartersCityId: hqCityId,
-        founderId,
-      },
+      data: { organizationId: org.id, founderId },
       select: { id: true },
     })
     companyId = created.id
@@ -388,38 +403,7 @@ export async function seedGazpromCompany(prisma: PrismaService): Promise<void> {
     console.log(`    ✅ ${f.name}`)
   }
 
-  // ── Organization 1:1 연결 (인물 경력·사건 연결의 다리) ────────────────────
-  console.log('\n  🔗 Organization 연결...')
-  let org = await prisma.organization.findFirst({
-    where: { name: COMPANY_NAME, type: 'COMPANY' as any },
-    select: { id: true },
-  })
-  if (org) {
-    console.log('    ⏭️  Organization 이미 존재')
-  } else {
-    const created = await prisma.organization.create({
-      data: {
-        name: COMPANY_NAME,
-        shortName: 'GAZP',
-        localName: 'ПАО «Газпром»',
-        type: 'COMPANY' as any,
-        status: 'ACTIVE' as any,
-        description: '가스프롬 — Company와 동일 실체(경력·사건 연결용 Organization).',
-        foundedDate: FOUNDED_AT,
-        websiteUrl: 'https://www.gazprom.com',
-        countryId: russia.id,
-        headquartersCityId: hqCityId,
-      },
-      select: { id: true },
-    })
-    org = created
-    console.log('    ✅ Organization 생성')
-  }
-  // Company ↔ Organization (1:1) 연결
-  await prisma.company.update({
-    where: { id: companyId },
-    data: { organizationId: org.id },
-  })
+  // Organization(정본)·기업 다리는 위에서 이미 생성·연결됨 — org 변수 재사용.
 
   // ── 임원 (OrganizationPersonRole) ────────────────────────────────────────
   console.log('\n  👔 임원 등록...')

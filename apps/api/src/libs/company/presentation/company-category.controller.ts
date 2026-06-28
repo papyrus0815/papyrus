@@ -8,8 +8,10 @@ import {
   Param,
   Post,
   Put,
+  UseGuards,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
+import { AuthGuard } from '@nestjs/passport'
 import { CompanyCategoryService } from '../application/company-category.service'
 import type { CompanyCategoryWithRelations } from '../infrastructure/company-category.repository'
 import {
@@ -23,6 +25,7 @@ import {
  */
 @ApiTags('company-categories')
 @Controller('company-categories')
+@UseGuards(AuthGuard('jwt'))
 export class CompanyCategoryController {
   constructor(
     private readonly companyCategoryService: CompanyCategoryService,

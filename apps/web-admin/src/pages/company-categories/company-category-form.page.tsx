@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 import { FiSave, FiArrowLeft } from 'react-icons/fi'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useBlocker, useNavigate, useParams } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import type { CompanyCategory } from '@/shared/api/company-category'
 import { companyCategoryApi } from '@/shared/api/company-category'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
 const Page = styled.div`
@@ -189,12 +190,44 @@ export const CompanyCategoryFormPage: React.FC = () => {
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [options, setOptions] = useState<CompanyCategory[]>([])
-  const [form, setForm] = useState({
+  const emptyForm = {
     name: '',
     slug: '',
     description: '',
     parentId: '',
-  })
+  }
+  const [form, setForm] = useState(emptyForm)
+
+  // 미저장 변경 추적 — SPA 라우트 이동(useBlocker)·새로고침/탭 닫기(beforeunload) 시 경고.
+  // create는 빈 폼이 기준선, edit는 서버 hydrate 직후를 기준선으로 캡처.
+  const baselineRef = useRef(JSON.stringify(emptyForm))
+  const isDirty = JSON.stringify(form) !== baselineRef.current
+  const isDirtyRef = useRef(false)
+  isDirtyRef.current = isDirty
+
+  // SPA 내 라우트 전환(브라우저 뒤로가기·사이드바 링크 포함) 차단 — data router의 useBlocker.
+  // state 대신 ref로 판정해 confirm 직후 같은 틱의 navigate가 stale state로 막히지 않게 함.
+  const blocker = useBlocker(() => isDirtyRef.current)
+  // blocked 진입당 confirm 1회만 — 비동기 confirm 대기 중 리렌더로 다이얼로그가 중복되지 않게.
+  const blockerPromptingRef = useRef(false)
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') {
+      blockerPromptingRef.current = false
+      return
+    }
+    if (blockerPromptingRef.current) return
+    blockerPromptingRef.current = true
+    confirm({
+      title: '확인',
+      message: '저장하지 않은 변경사항이 있습니다. 정말 나가시겠습니까?',
+      confirmLabel: '나가기',
+      danger: true,
+    }).then((confirmed) => {
+      if (confirmed) blocker.proceed()
+      else blocker.reset()
+    })
+  }, [blocker])
 
   useEffect(() => {
     companyCategoryApi
@@ -210,17 +243,48 @@ export const CompanyCategoryFormPage: React.FC = () => {
       .getById(id!)
       .then((c) => {
         if (c) {
-          setForm({
+          const hydrated = {
             name: c.name,
             slug: c.slug ?? '',
             description: c.description ?? '',
             parentId: c.parentId ?? '',
-          })
+          }
+          setForm(hydrated)
+          baselineRef.current = JSON.stringify(hydrated)
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [id, isEdit])
+
+  // 새로고침/탭 닫기 경고 — 앱 공통 패턴(person-edit.page와 동일).
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (!isDirtyRef.current) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
+
+  const handleCancel = async () => {
+    if (
+      isDirtyRef.current &&
+      !(await confirm({
+        title: '확인',
+        message: '저장하지 않은 변경사항이 있습니다. 정말 나가시겠습니까?',
+        confirmLabel: '나가기',
+        danger: true,
+      }))
+    ) {
+      return
+    }
+    // 이미 확인받았으므로 dirty 해제 — blocker의 중복 confirm 방지.
+    baselineRef.current = JSON.stringify(form)
+    isDirtyRef.current = false
+    navigate('/company-categories')
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -241,6 +305,9 @@ export const CompanyCategoryFormPage: React.FC = () => {
       } else {
         await companyCategoryApi.create(payload)
       }
+      // 저장 성공 — dirty 해제 후 이동(이탈 경고 오발 방지).
+      baselineRef.current = JSON.stringify(form)
+      isDirtyRef.current = false
       navigate('/company-categories')
     } catch (err) {
       notify.error(err instanceof Error ? err.message : '저장에 실패했습니다.')
@@ -261,7 +328,7 @@ export const CompanyCategoryFormPage: React.FC = () => {
       <Header>
         <BackBtn
           type="button"
-          onClick={() => navigate('/company-categories')}
+          onClick={handleCancel}
           aria-label="목록으로"
         >
           <FiArrowLeft size={18} />
@@ -318,7 +385,7 @@ export const CompanyCategoryFormPage: React.FC = () => {
           />
         </Row>
         <Actions>
-          <Btn type="button" onClick={() => navigate('/company-categories')}>
+          <Btn type="button" onClick={handleCancel}>
             취소
           </Btn>
           <Btn $primary type="submit" disabled={saving}>

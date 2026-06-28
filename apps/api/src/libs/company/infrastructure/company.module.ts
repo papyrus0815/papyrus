@@ -5,8 +5,10 @@ import { CompanyService } from '../application/company.service'
 import { CompanyCategoryService } from '../application/company-category.service'
 import { CompanyRepository } from './company.repository'
 import { CompanyCategoryRepository } from './company-category.repository'
+import { NotificationModule } from '../../notification/notification.module'
 
 @Module({
+  imports: [NotificationModule],
   controllers: [CompanyController, CompanyCategoryController],
   providers: [
     CompanyService,

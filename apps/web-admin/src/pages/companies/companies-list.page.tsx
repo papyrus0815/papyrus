@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import {
   FiPlus,
   FiEdit2,
@@ -23,11 +23,12 @@ import {
   FiArrowDown,
   FiX,
 } from 'react-icons/fi'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import styled, { css, keyframes } from 'styled-components'
 
 import type { Company, CompanyStatus } from '@/shared/api/company'
 import { companyApi } from '@/shared/api/company'
+import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
@@ -49,26 +50,42 @@ const STATUS_ORDER: CompanyStatus[] = [
   'OTHER',
 ]
 
-const getInitial = (c: Company) =>
-  (c.shortName?.trim()?.[0] ?? c.name.trim()[0] ?? '·').toUpperCase()
+const getInitial = (company: Company) =>
+  (company.shortName?.trim()?.[0] ?? company.name.trim()[0] ?? '·').toUpperCase()
 
-const getYear = (iso: string | null) => (iso ? iso.slice(0, 4) : null)
+/** 설립 연도 라벨 — BC 음수연도 안전(slice(0,4)는 '-0044'를 '-004'로 깨뜨림). */
+const getYear = (iso: string | null): string | null => {
+  const parts = parseIsoDateParts(iso)
+  if (!parts) return null
+  return parts.year < 0 ? `BC ${Math.abs(parts.year)}` : String(parts.year)
+}
+
+/** 로고 이미지 — 로드 실패 시 이니셜로 폴백(깨진 이미지 박스 방지). */
+const LogoImage: React.FC<{ src: string; fallback: string }> = ({
+  src,
+  fallback,
+}) => {
+  const [broken, setBroken] = useState(false)
+  if (broken) return <>{fallback}</>
+  return <img src={src} alt="" onError={() => setBroken(true)} />
+}
 
 type ViewMode = 'list' | 'table'
 
 type SortKey = 'name' | 'status' | 'country' | 'founded'
 type SortState = { key: SortKey; dir: 'asc' | 'desc' }
 
-const sortValue = (c: Company, key: SortKey): string | number | null => {
+const sortValue = (company: Company, key: SortKey): string | number | null => {
   switch (key) {
     case 'name':
-      return c.name
+      return company.name
     case 'status':
-      return c.status ? STATUS_ORDER.indexOf(c.status) : null
+      return company.status ? STATUS_ORDER.indexOf(company.status) : null
     case 'country':
-      return c.country?.name ?? c.historicalCountry?.name ?? null
+      return company.country?.name ?? company.historicalCountry?.name ?? null
     case 'founded':
-      return c.foundedAt ?? null
+      // BC 안전 숫자 키 — raw ISO 문자열 비교는 음수연도를 사전식으로 오정렬.
+      return dateSortKey(company.foundedAt)
   }
 }
 
@@ -89,8 +106,11 @@ const getPageItems = (current: number, total: number): (number | 'dots')[] => {
 
 export const CompaniesListPage: React.FC = () => {
   const navigate = useNavigate()
+  const prefersReducedMotion = useReducedMotion()
   const [list, setList] = useState<Company[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [query, setQuery] = useState('') // 입력값(즉시)
   const [search, setSearch] = useState('') // 디바운스된 검색어
   const [statusFilter, setStatusFilter] = useState<CompanyStatus | 'ALL'>('ALL')
@@ -110,10 +130,12 @@ export const CompaniesListPage: React.FC = () => {
 
   const load = () => {
     setLoading(true)
+    setLoadError(false)
     companyApi
       .getAll()
       .then(setList)
-      .catch(() => setList([]))
+      // 실패를 빈 목록으로 흡수하면 서버 장애가 '등록된 기업 없음'으로 오인된다 — 에러 상태로 분리.
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }
 
@@ -137,9 +159,9 @@ export const CompaniesListPage: React.FC = () => {
       OTHER: 0,
     }
     const countries = new Set<string>()
-    for (const c of list) {
-      if (c.status) counts[c.status] += 1
-      const country = c.country?.name ?? c.historicalCountry?.name
+    for (const company of list) {
+      if (company.status) counts[company.status] += 1
+      const country = company.country?.name ?? company.historicalCountry?.name
       if (country) countries.add(country)
     }
     return {
@@ -153,13 +175,13 @@ export const CompaniesListPage: React.FC = () => {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return list.filter((c) => {
-      if (statusFilter !== 'ALL' && c.status !== statusFilter) return false
+    return list.filter((company) => {
+      if (statusFilter !== 'ALL' && company.status !== statusFilter) return false
       if (!q) return true
       return (
-        c.name.toLowerCase().includes(q) ||
-        (c.shortName?.toLowerCase().includes(q) ?? false) ||
-        (c.localName?.toLowerCase().includes(q) ?? false)
+        company.name.toLowerCase().includes(q) ||
+        (company.shortName?.toLowerCase().includes(q) ?? false) ||
+        (company.localName?.toLowerCase().includes(q) ?? false)
       )
     })
   }, [list, search, statusFilter])
@@ -200,6 +222,7 @@ export const CompaniesListPage: React.FC = () => {
   }
   const handleDelete = async (id: string, name: string, e: React.MouseEvent) => {
     e.stopPropagation()
+    if (deletingId) return
     if (
       !(await confirm({
         title: '삭제 확인',
@@ -208,11 +231,15 @@ export const CompaniesListPage: React.FC = () => {
       }))
     )
       return
+    setDeletingId(id)
     try {
       await companyApi.delete(id)
-      load()
+      // 낙관적 제거 — 전체 재조회 대신 목록에서만 빼서 깜빡임을 줄인다.
+      setList((prev) => prev.filter((company) => company.id !== id))
     } catch (err) {
       notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -230,13 +257,22 @@ export const CompaniesListPage: React.FC = () => {
     const Comp = hideSm ? SortHeaderHideSm : SortHeader
     const active = sort?.key === col
     return (
-      <Comp $active={active} onClick={() => toggleSort(col)}>
+      <Comp
+        type="button"
+        $active={active}
+        onClick={() => toggleSort(col)}
+        aria-label={
+          active
+            ? `${label}, ${sort.dir === 'asc' ? '오름차순' : '내림차순'} 정렬`
+            : `${label} 정렬`
+        }
+      >
         {label}
         {active &&
           (sort.dir === 'asc' ? (
-            <FiArrowUp size={12} />
+            <FiArrowUp size={12} aria-hidden />
           ) : (
-            <FiArrowDown size={12} />
+            <FiArrowDown size={12} aria-hidden />
           ))}
       </Comp>
     )
@@ -247,11 +283,8 @@ export const CompaniesListPage: React.FC = () => {
       <StatRow>
         {Array.from({ length: 4 }).map((_, i) => (
           <StatCard key={i} $accent="#cbd5e1">
-            <Skeleton $w="40px" $h="40px" $r="12px" />
-            <SkeletonStack style={{ flex: 1 }}>
-              <Skeleton $w="52px" $h="22px" />
-              <Skeleton $w="68px" $h="10px" />
-            </SkeletonStack>
+            <Skeleton $w="48px" $h="30px" $r="8px" />
+            <Skeleton $w="62px" $h="12px" />
           </StatCard>
         ))}
       </StatRow>
@@ -300,46 +333,67 @@ export const CompaniesListPage: React.FC = () => {
         </HeaderActions>
       </Header>
 
+      <VisuallyHidden role="status" aria-live="polite">
+        {loading
+          ? '불러오는 중'
+          : loadError
+            ? '기업을 불러오지 못했습니다'
+            : filtered.length === 0
+              ? '조건에 맞는 기업이 없습니다'
+              : `${filtered.length}개 기업`}
+      </VisuallyHidden>
+
       {loading ? (
         renderSkeleton()
+      ) : loadError ? (
+        <EmptyBox>
+          <EmptyIcon>
+            <FiBriefcase size={26} />
+          </EmptyIcon>
+          <EmptyTitle>기업을 불러오지 못했습니다</EmptyTitle>
+          <EmptyDesc>일시적인 오류일 수 있습니다. 다시 시도해 주세요.</EmptyDesc>
+          <Btn $primary onClick={load}>
+            다시 시도
+          </Btn>
+        </EmptyBox>
       ) : (
         <>
       <StatRow>
         <StatCard $accent="#6366f1">
-          <StatIcon $accent="#6366f1">
-            <FiBriefcase size={18} />
-          </StatIcon>
-          <StatText>
-            <StatValue>{stats.total.toLocaleString()}</StatValue>
-            <StatLabel>전체 기업</StatLabel>
-          </StatText>
+          <StatValue>{stats.total.toLocaleString()}</StatValue>
+          <StatLabel>
+            <StatIcon $accent="#6366f1">
+              <FiBriefcase size={13} />
+            </StatIcon>
+            전체 기업
+          </StatLabel>
         </StatCard>
         <StatCard $accent="#16a34a">
-          <StatIcon $accent="#16a34a">
-            <FiCheckCircle size={18} />
-          </StatIcon>
-          <StatText>
-            <StatValue>{stats.active.toLocaleString()}</StatValue>
-            <StatLabel>활동 중</StatLabel>
-          </StatText>
+          <StatValue>{stats.active.toLocaleString()}</StatValue>
+          <StatLabel>
+            <StatIcon $accent="#16a34a">
+              <FiCheckCircle size={13} />
+            </StatIcon>
+            활동 중
+          </StatLabel>
         </StatCard>
         <StatCard $accent="#64748b">
-          <StatIcon $accent="#64748b">
-            <FiGitMerge size={18} />
-          </StatIcon>
-          <StatText>
-            <StatValue>{stats.closed.toLocaleString()}</StatValue>
-            <StatLabel>해산 · 합병</StatLabel>
-          </StatText>
+          <StatValue>{stats.closed.toLocaleString()}</StatValue>
+          <StatLabel>
+            <StatIcon $accent="#64748b">
+              <FiGitMerge size={13} />
+            </StatIcon>
+            해산 · 합병
+          </StatLabel>
         </StatCard>
         <StatCard $accent="#0891b2">
-          <StatIcon $accent="#0891b2">
-            <FiGlobe size={18} />
-          </StatIcon>
-          <StatText>
-            <StatValue>{stats.countries.toLocaleString()}</StatValue>
-            <StatLabel>등록 국가</StatLabel>
-          </StatText>
+          <StatValue>{stats.countries.toLocaleString()}</StatValue>
+          <StatLabel>
+            <StatIcon $accent="#0891b2">
+              <FiGlobe size={13} />
+            </StatIcon>
+            등록 국가
+          </StatLabel>
         </StatCard>
       </StatRow>
 
@@ -349,6 +403,7 @@ export const CompaniesListPage: React.FC = () => {
           <SearchInput
             type="text"
             placeholder="기업명·약칭·원어명 검색..."
+            aria-label="기업 검색"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -362,16 +417,20 @@ export const CompaniesListPage: React.FC = () => {
             </ClearBtn>
           )}
         </SearchWrap>
-        <FilterChips>
-          {statusFilters.map((f) => (
+        <FilterChips role="group" aria-label="상태 필터">
+          {statusFilters.map((filter) => (
             <FilterChip
-              key={f.key}
+              key={filter.key}
               type="button"
-              $active={statusFilter === f.key}
-              onClick={() => setStatusFilter(f.key)}
+              $active={statusFilter === filter.key}
+              aria-pressed={statusFilter === filter.key}
+              aria-label={`${filter.label} ${filter.count}개`}
+              onClick={() => setStatusFilter(filter.key)}
             >
-              {f.label}
-              <ChipCount $active={statusFilter === f.key}>{f.count}</ChipCount>
+              {filter.label}
+              <ChipCount $active={statusFilter === filter.key}>
+                {filter.count}
+              </ChipCount>
             </FilterChip>
           ))}
         </FilterChips>
@@ -412,10 +471,21 @@ export const CompaniesListPage: React.FC = () => {
               ? '검색어나 필터를 변경해 보세요.'
               : '첫 기업을 등록해 데이터베이스를 시작하세요.'}
           </EmptyDesc>
-          {!search && statusFilter === 'ALL' && (
+          {!search && statusFilter === 'ALL' ? (
             <Btn $primary onClick={handleCreate}>
               <FiPlus size={18} />
               기업 추가
+            </Btn>
+          ) : (
+            <Btn
+              onClick={() => {
+                setQuery('')
+                setSearch('')
+                setStatusFilter('ALL')
+              }}
+            >
+              <FiX size={16} />
+              필터 초기화
             </Btn>
           )}
         </EmptyBox>
@@ -427,108 +497,109 @@ export const CompaniesListPage: React.FC = () => {
             </ResultCount>
           </ResultBar>
           {viewMode === 'list' ? (
-            <List>
-              {paginated.map((c, idx) => {
-              const meta = c.status ? STATUS_META[c.status] : null
-              const country = c.country?.name ?? c.historicalCountry?.name
-              const year = getYear(c.foundedAt)
+            <EditorialList>
+              {paginated.map((company) => {
+              const meta = company.status ? STATUS_META[company.status] : null
+              const country = company.country?.name ?? company.historicalCountry?.name
+              const year = getYear(company.foundedAt)
               return (
-                <ListItem
-                  key={c.id}
+                <EditorialItem
+                  key={company.id}
                   as={motion.li}
-                  initial={{ opacity: 0, y: 8 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min(idx * 0.02, 0.3) }}
-                  $accent={meta?.color ?? '#94a3b8'}
-                  onClick={() => navigate(`/companies/${c.id}`)}
+                  transition={{ duration: 0.15 }}
+                  onClick={() => navigate(`/companies/${company.id}`)}
                 >
-                  <Thumb $hasLogo={!!c.logoUrl}>
-                    {c.logoUrl ? (
-                      <img src={c.logoUrl} alt="" />
-                    ) : (
-                      getInitial(c)
-                    )}
-                  </Thumb>
-                  <ItemContent>
-                    <ItemNameRow>
-                      <ItemName>{c.name}</ItemName>
-                      {c.shortName && <ShortName>{c.shortName}</ShortName>}
-                      {meta && (
-                        <StatusChip $color={meta.color} $bg={meta.bg}>
-                          {meta.label}
-                        </StatusChip>
-                      )}
-                    </ItemNameRow>
+                  <EdMain>
+                    <EdTopRow>
+                      <BigName
+                        to={`/companies/${company.id}`}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {company.name}
+                      </BigName>
+                      {company.shortName && <EdShort>{company.shortName}</EdShort>}
+                    </EdTopRow>
                     <MetaRow>
                       {country && (
                         <MetaItem>
-                          <FiMapPin size={12} />
+                          <FiMapPin size={13} />
                           {country}
                         </MetaItem>
                       )}
                       {year && (
                         <MetaItem>
-                          <FiCalendar size={12} />
+                          <FiCalendar size={13} />
                           {year} 설립
                         </MetaItem>
                       )}
-                      {c.headquartersCity?.name && (
+                      {company.headquartersCity?.name && (
                         <MetaItem>
-                          <FiBriefcase size={12} />
-                          {c.headquartersCity.name}
+                          <FiBriefcase size={13} />
+                          {company.headquartersCity.name}
                         </MetaItem>
                       )}
-                      {c.founder?.name && (
+                      {company.founder?.name && (
                         <MetaItem>
-                          <FiUser size={12} />
-                          {c.founder.name}
+                          <FiUser size={13} />
+                          {company.founder.name}
                         </MetaItem>
                       )}
-                      {c.organization?.name && (
+                      {company.organization?.name && (
                         <MetaItem>
-                          <FiGlobe size={12} />
-                          {c.organization.name}
+                          <FiGlobe size={13} />
+                          {company.organization.name}
                         </MetaItem>
                       )}
                       {!country &&
                         !year &&
-                        !c.headquartersCity?.name &&
-                        !c.founder?.name &&
-                        !c.organization?.name && <MetaItem>—</MetaItem>}
+                        !company.headquartersCity?.name &&
+                        !company.founder?.name &&
+                        !company.organization?.name && <MetaItem>—</MetaItem>}
                     </MetaRow>
-                    {c.description && <ItemDesc>{c.description}</ItemDesc>}
-                  </ItemContent>
-                  <ItemActions onClick={(e) => e.stopPropagation()}>
-                    {c.websiteUrl && (
-                      <IconLink
-                        href={c.websiteUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        title="웹사이트 열기"
-                      >
-                        <FiExternalLink size={16} />
-                      </IconLink>
+                    {company.description && <EdDesc>{company.description}</EdDesc>}
+                  </EdMain>
+                  <EdRight onClick={(e) => e.stopPropagation()}>
+                    {meta && (
+                      <StatusBadge $color={meta.color}>{meta.label}</StatusBadge>
                     )}
-                    <IconBtn
-                      type="button"
-                      onClick={(ev) => handleEdit(c.id, ev)}
-                      title="수정"
-                    >
-                      <FiEdit2 size={16} />
-                    </IconBtn>
-                    <IconBtn
-                      type="button"
-                      $danger
-                      onClick={(ev) => handleDelete(c.id, c.name, ev)}
-                      title="삭제"
-                    >
-                      <FiTrash2 size={16} />
-                    </IconBtn>
-                  </ItemActions>
-                </ListItem>
+                    <EdActions>
+                      {company.websiteUrl && (
+                        <IconLink
+                          href={company.websiteUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          title="웹사이트 열기"
+                          aria-label={`${company.name} 웹사이트 (새 창)`}
+                        >
+                          <FiExternalLink size={16} />
+                        </IconLink>
+                      )}
+                      <IconBtn
+                        type="button"
+                        onClick={(ev) => handleEdit(company.id, ev)}
+                        title="수정"
+                        aria-label="수정"
+                      >
+                        <FiEdit2 size={16} />
+                      </IconBtn>
+                      <IconBtn
+                        type="button"
+                        $danger
+                        disabled={deletingId === company.id}
+                        onClick={(ev) => handleDelete(company.id, company.name, ev)}
+                        title="삭제"
+                        aria-label="삭제"
+                      >
+                        <FiTrash2 size={16} />
+                      </IconBtn>
+                    </EdActions>
+                  </EdRight>
+                </EditorialItem>
               )
             })}
-            </List>
+            </EditorialList>
           ) : (
             <TableCard>
               <TableHead>
@@ -538,27 +609,33 @@ export const CompaniesListPage: React.FC = () => {
                 {renderSortHeader('설립', 'founded', true)}
                 <ThRight>관리</ThRight>
               </TableHead>
-              {paginated.map((c) => {
-                const meta = c.status ? STATUS_META[c.status] : null
-                const country = c.country?.name ?? c.historicalCountry?.name
-                const year = getYear(c.foundedAt)
+              {paginated.map((company) => {
+                const meta = company.status ? STATUS_META[company.status] : null
+                const country = company.country?.name ?? company.historicalCountry?.name
+                const year = getYear(company.foundedAt)
+                const initial = getInitial(company)
                 return (
                   <TableRow
-                    key={c.id}
-                    onClick={() => navigate(`/companies/${c.id}`)}
+                    key={company.id}
+                    onClick={() => navigate(`/companies/${company.id}`)}
                   >
                     <Td>
                       <CellCompany>
-                        <ThumbSm $hasLogo={!!c.logoUrl}>
-                          {c.logoUrl ? (
-                            <img src={c.logoUrl} alt="" />
+                        <ThumbSm $hasLogo={!!company.logoUrl}>
+                          {company.logoUrl ? (
+                            <LogoImage src={company.logoUrl} fallback={initial} />
                           ) : (
-                            getInitial(c)
+                            initial
                           )}
                         </ThumbSm>
                         <CellCompanyText>
-                          <CellName>{c.name}</CellName>
-                          {c.shortName && <CellSub>{c.shortName}</CellSub>}
+                          <CellName
+                            to={`/companies/${company.id}`}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {company.name}
+                          </CellName>
+                          {company.shortName && <CellSub>{company.shortName}</CellSub>}
                         </CellCompanyText>
                       </CellCompany>
                     </Td>
@@ -575,28 +652,32 @@ export const CompaniesListPage: React.FC = () => {
                     <TdHideSm>{year ?? <MutedDash>—</MutedDash>}</TdHideSm>
                     <TdRight onClick={(e) => e.stopPropagation()}>
                       <ItemActions>
-                        {c.websiteUrl && (
+                        {company.websiteUrl && (
                           <IconLink
-                            href={c.websiteUrl}
+                            href={company.websiteUrl}
                             target="_blank"
                             rel="noreferrer noopener"
                             title="웹사이트 열기"
+                            aria-label={`${company.name} 웹사이트 (새 창)`}
                           >
                             <FiExternalLink size={15} />
                           </IconLink>
                         )}
                         <IconBtn
                           type="button"
-                          onClick={(ev) => handleEdit(c.id, ev)}
+                          onClick={(ev) => handleEdit(company.id, ev)}
                           title="수정"
+                          aria-label="수정"
                         >
                           <FiEdit2 size={15} />
                         </IconBtn>
                         <IconBtn
                           type="button"
                           $danger
-                          onClick={(ev) => handleDelete(c.id, c.name, ev)}
+                          disabled={deletingId === company.id}
+                          onClick={(ev) => handleDelete(company.id, company.name, ev)}
                           title="삭제"
+                          aria-label="삭제"
                         >
                           <FiTrash2 size={15} />
                         </IconBtn>
@@ -609,7 +690,7 @@ export const CompaniesListPage: React.FC = () => {
           )}
 
           {totalPages > 1 && (
-            <Pagination>
+            <Pagination as="nav" aria-label="페이지네이션">
               <PageInfo>
                 {pageStart + 1}–
                 {Math.min(pageStart + pageSize, filtered.length)} / 전체{' '}
@@ -632,6 +713,7 @@ export const CompaniesListPage: React.FC = () => {
                       key={it}
                       type="button"
                       $active={it === currentPage}
+                      aria-current={it === currentPage ? 'page' : undefined}
                       onClick={() => setPage(it)}
                     >
                       {it}
@@ -651,6 +733,7 @@ export const CompaniesListPage: React.FC = () => {
                 <span>페이지당</span>
                 <select
                   value={pageSize}
+                  aria-label="페이지당 항목 수"
                   onChange={(e) => setPageSize(Number(e.target.value))}
                 >
                   {PAGE_SIZES.map((n) => (
@@ -673,10 +756,28 @@ export const CompaniesListPage: React.FC = () => {
 // ───────────────────────── Styled ─────────────────────────
 
 const Page = styled.div`
+  /* companiesRoutes는 ContentLayout이 아니라 <Layout/> 직속이고 전역 body·#root가
+     overflow:hidden+100vh라, 페이지 자체를 *내부 스크롤 컨테이너*로 만들어야 헤더
+     아래 목록·페이지네이션이 잘리지 않는다(상세·폼 페이지와 동일 패턴). */
+  height: calc(100vh - var(--header-height, 64px));
+  margin-top: var(--header-height, 64px);
+  overflow-y: auto;
+  overflow-x: hidden;
   /* 가운데 정렬 캡 제거 — 좌우 전체 폭 사용 */
-  padding: calc(var(--header-height, 64px) + 2rem) clamp(1.25rem, 2.5vw, 2.5rem)
-    4rem;
+  padding: 2rem clamp(1.25rem, 2.5vw, 2.5rem) 4rem;
   width: 100%;
+`
+
+const VisuallyHidden = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 `
 
 const Header = styled.header`
@@ -702,9 +803,8 @@ const TitleBadge = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  background: ${({ theme }) => theme.colors.gradient.primary};
-  box-shadow: 0 6px 16px ${({ theme }) => theme.colors.shadow.md};
+  color: ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) => theme.colors.activeLight};
 `
 
 const Title = styled.h1`
@@ -729,74 +829,60 @@ const HeaderActions = styled.div`
   flex-wrap: wrap;
 `
 
+/* ── 미니멀 KPI 스트립 (박스 없이 숫자 + 라벨 + 세로 구분선) ── */
 const StatRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 12px;
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 0;
   margin-bottom: 1.5rem;
-  /* 풀폭에서 KPI 카드가 과하게 늘어나지 않도록 상한 */
-  max-width: 1120px;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const StatCard = styled.div<{ $accent: string }>`
-  position: relative;
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 18px;
-  border-radius: 16px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  overflow: hidden;
-  transition:
-    transform 0.15s,
-    box-shadow 0.15s;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 34px;
+  border-left: 1px solid ${({ theme }) => theme.colors.border.light};
 
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 3px;
-    background: ${({ $accent }) => $accent};
-    opacity: 0.85;
+  &:first-child {
+    border-left: none;
+    padding-left: 2px;
   }
 
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 22px ${({ theme }) => theme.colors.shadow.sm};
+  @media (max-width: 640px) {
+    padding: 2px 18px;
+
+    &:first-child {
+      padding-left: 2px;
+    }
   }
 `
 
-const StatIcon = styled.div<{ $accent: string }>`
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  display: flex;
+const StatIcon = styled.span<{ $accent: string }>`
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   color: ${({ $accent }) => $accent};
-  background: ${({ $accent }) => `${$accent}1f`};
-`
-
-const StatText = styled.div`
-  min-width: 0;
 `
 
 const StatValue = styled.div`
-  font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
+  font-size: 1.875rem;
+  font-weight: 750;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
   color: ${({ theme }) => theme.colors.text.primary};
   font-variant-numeric: tabular-nums;
 `
 
 const StatLabel = styled.div`
-  margin-top: 2px;
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Toolbar = styled.div`
@@ -947,92 +1033,6 @@ const List = styled.ul`
   gap: 8px;
 `
 
-const ListItem = styled.li<{ $accent: string }>`
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px 14px 18px;
-  border-radius: 14px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  cursor: pointer;
-  overflow: hidden;
-  transition:
-    transform 0.15s,
-    box-shadow 0.15s,
-    border-color 0.15s;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: 3px;
-    background: ${({ $accent }) => $accent};
-    opacity: 0.65;
-    transition: opacity 0.15s;
-  }
-
-  &:hover {
-    transform: translateY(-1px);
-    border-color: ${({ theme }) => theme.colors.primary};
-    box-shadow: 0 8px 22px ${({ theme }) => theme.colors.shadow.md};
-
-    &::before {
-      opacity: 1;
-    }
-  }
-`
-
-const Thumb = styled.div<{ $hasLogo: boolean }>`
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
-  overflow: hidden;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #fff;
-  background: ${({ $hasLogo, theme }) =>
-    $hasLogo ? theme.colors.background.tertiary : theme.colors.gradient.primary};
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-`
-
-const ItemContent = styled.div`
-  flex: 1;
-  min-width: 0;
-`
-
-const ItemNameRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-`
-
-const ItemName = styled.div`
-  font-weight: 600;
-  font-size: 0.9375rem;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const ShortName = styled.span`
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 1px 7px;
-  border-radius: 6px;
-  background: ${({ theme }) => theme.colors.background.tertiary};
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
 const StatusChip = styled.span<{ $color: string; $bg: string }>`
   font-size: 0.6875rem;
   font-weight: 700;
@@ -1046,15 +1046,15 @@ const MetaRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px 12px;
-  margin-top: 5px;
+  gap: 5px 16px;
+  margin-top: 9px;
 `
 
 const MetaItem = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.75rem;
+  gap: 5px;
+  font-size: 0.8125rem;
   color: ${({ theme }) => theme.colors.text.secondary};
 
   svg {
@@ -1063,22 +1063,142 @@ const MetaItem = styled.span`
   }
 `
 
-const ItemDesc = styled.p`
-  margin: 6px 0 0;
-  font-size: 0.8125rem;
-  line-height: 1.45;
+const ItemActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+`
+
+/* ── 에디토리얼 빅 타이포 리스트 ── */
+const EditorialList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+`
+
+const EditorialItem = styled.li`
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 22px 14px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:first-child {
+    border-top: none;
+  }
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const EdMain = styled.div`
+  min-width: 0;
+  flex: 1;
+`
+
+const EdTopRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+`
+
+const BigName = styled(Link)`
+  font-size: 1.5rem;
+  font-weight: 750;
+  letter-spacing: -0.022em;
+  line-height: 1.2;
+  color: ${({ theme }) => theme.colors.text.primary};
+  text-decoration: none;
+  transition: color 0.15s;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  ${EditorialItem}:hover & {
+    color: ${({ theme }) => theme.colors.primary};
+  }
+
+  @media (max-width: 640px) {
+    font-size: 1.25rem;
+  }
+`
+
+const EdShort = styled.span`
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const EdDesc = styled.p`
+  margin: 9px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
   color: ${({ theme }) => theme.colors.text.secondary};
+  max-width: 86ch;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 `
 
-const ItemActions = styled.div`
+const EdRight = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+`
+
+const StatusBadge = styled.span<{ $color: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: ${({ $color }) => $color};
+  white-space: nowrap;
+
+  &::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: ${({ $color }) => $color};
+  }
+`
+
+const EdActions = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-shrink: 0;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.15s, transform 0.15s;
+
+  /* 키보드 포커스(focus-within)에도 노출 — 안 그러면 Tab으로 수정/삭제 버튼에 닿아도
+     보이지 않아 WCAG 2.4.7(Focus Visible) 위반(hover만 처리하던 누락 보완). */
+  ${EditorialItem}:hover &,
+  ${EditorialItem}:focus-within & {
+    opacity: 1;
+    transform: none;
+  }
+
+  @media (hover: none) {
+    opacity: 1;
+    transform: none;
+  }
 `
 
 const actionBtnStyles = css`
@@ -1106,6 +1226,10 @@ const actionBtnStyles = css`
 
 const IconBtn = styled.button<{ $danger?: boolean }>`
   ${actionBtnStyles}
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
   ${({ $danger, theme }) =>
     $danger &&
     css`
@@ -1320,7 +1444,8 @@ const TableCard = styled.div`
 const TableHead = styled.div`
   ${tableGrid}
   position: sticky;
-  top: var(--header-height, 64px);
+  /* 스크롤 컨테이너가 이제 Page(헤더 아래에서 시작)이므로 top:0이 곧 뷰포트 상단. */
+  top: 0;
   z-index: 2;
   padding: 12px 18px;
   background: ${({ theme }) => theme.colors.background.secondary};
@@ -1340,10 +1465,14 @@ const ThRight = styled(Th)`
   text-align: right;
 `
 
-const SortHeader = styled.div<{ $active?: boolean }>`
+const SortHeader = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
   font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1419,9 +1548,13 @@ const ThumbSm = styled.div<{ $hasLogo: boolean }>`
   justify-content: center;
   font-size: 0.875rem;
   font-weight: 700;
-  color: #fff;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
   background: ${({ $hasLogo, theme }) =>
-    $hasLogo ? theme.colors.background.tertiary : theme.colors.gradient.primary};
+    $hasLogo
+      ? theme.colors.background.tertiary
+      : theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.2)'
+        : '#eef2ff'};
   img {
     width: 100%;
     height: 100%;
@@ -1433,13 +1566,19 @@ const CellCompanyText = styled.div`
   min-width: 0;
 `
 
-const CellName = styled.div`
+const CellName = styled(Link)`
+  display: block;
   font-weight: 600;
   font-size: 0.875rem;
   color: ${({ theme }) => theme.colors.text.primary};
+  text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  &:hover {
+    text-decoration: underline;
+  }
 `
 
 const CellSub = styled.div`

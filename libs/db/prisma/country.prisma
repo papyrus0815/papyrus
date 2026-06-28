@@ -98,7 +98,6 @@ model Country {
   socialPhenomena           SocialPhenomenon[]
   Organizations             Organization[]                   @relation("OrganizationCountry")
   organizationMemberships   OrganizationCountryMembership[]  @relation("OrgMembershipCountry")
-  companies                 Company[]                        @relation("CompanyCountry")
   PoliticalParty            PoliticalParty[]                 @relation("PoliticalPartyCountry")
   electoralDistricts      ElectoralDistrict[]              @relation("ElectoralDistrictCountry")
   elections                 Election[]                       @relation("ElectionCountry")
@@ -430,7 +429,6 @@ model City {
   CompanyFacility        CompanyFacility[]
   Event                  Event[]
   Organizations          Organization[]          @relation("OrganizationHeadquartersCity")
-  companyHeadquarters    Company[]               @relation("CompanyHeadquartersCity")
   PoliticalParty         PoliticalParty[]        @relation("PoliticalPartyHeadquartersCity")
   personsBornHere        Person[]                @relation("PersonBirthCity")
   personsDiedHere        Person[]                @relation("PersonDeathCity")

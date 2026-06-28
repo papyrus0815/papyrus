@@ -1,5 +1,6 @@
 export * from './create-company.dto'
 export * from './update-company.dto'
+export * from './company-children.dto'
 export * from './company.response'
 export * from './create-company-category.dto'
 export * from './update-company-category.dto'

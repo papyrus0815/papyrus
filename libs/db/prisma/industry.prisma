@@ -93,69 +93,44 @@ model CompanyCategory {
 // ========================
 // 기업
 // ========================
+/// 기업의 산업 고유 확장(extension). 명칭·상태·국가맥락·설립/해산일 등 공유필드의
+/// 단일 진실(source of truth)은 동일 실체의 Organization(type=COMPANY)이 보유한다.
+/// Company는 산업 도메인 고유의 founder·시설·연혁·업종분류만 갖는 1:1 확장 테이블.
+/// (schema-1 통합, 방향 B — Organization 정본)
 model Company {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 회사 이름
-  name String @db.VarChar(100)
-  /// 약칭/티커 (예: EIC, GE)
-  shortName String? @map("short_name") @db.VarChar(50)
-  /// 현지어/원어 명칭
-  localName String? @map("local_name") @db.VarChar(200)
-
-  /// 회사 설명
-  description String? @db.Text
-
-  /// 상태
-  status CompanyStatus? @default(ACTIVE)
-
-  /// 설립일
-  foundedAt   DateTime? @map("founded_at")
-  /// 해산/폐업일
-  dissolvedAt DateTime? @map("dissolved_at")
-
-  /// 공식 웹사이트
-  websiteUrl String? @map("website_url") @db.VarChar(255)
-  /// 로고 URL
-  logoUrl String? @map("logo_url") @db.VarChar(255)
-
-  /// 자유 확장
-  extra Json?
-
   //--- 외래키
   /// 창립자
   founderId String? @map("founder_id") @db.Char(36)
-  /// 현대 국가 소속(국내 기업)
-  countryId String? @map("country_id") @db.Char(36)
-  /// 역사적 국가 소속(예: 동인도회사)
-  historicalCountryId String? @map("historical_country_id") @db.Char(36)
-  /// 본사 위치 도시
-  headquartersCityId String? @map("headquarters_city_id") @db.Char(36)
-  /// 동일 실체의 Organization (BusinessCareer 등 인물 경력과 연결할 때 사용)
-  organizationId String? @unique @map("organization_id") @db.Char(36)
+  /// 동일 실체의 Organization(정본, 1:1). 명칭·상태·국가·날짜·웹사이트·로고·extra는 Organization이 보유.
+  organizationId String @unique @map("organization_id") @db.Char(36)
+  /// 생성한 계정(기여 추적·소유권용, ALS actor). 시드·배치는 NULL.
+  createdById String? @map("created_by") @db.Char(36)
+
+  //--- 회사 고유 내러티브
+  /// 재무·주가 분석 코멘터리(리치텍스트 HTML) — 시점별 비고 위의 섹션 단위 서술.
+  financialCommentary String? @map("financial_commentary") @db.Text
 
   //--- 관계 필드
-  founder           Person?            @relation("FounderToCompany", fields: [founderId], references: [id], onDelete: SetNull)
-  country           Country?           @relation("CompanyCountry", fields: [countryId], references: [id], onDelete: SetNull)
-  historicalCountry HistoricalCountry? @relation("CompanyHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
-  headquartersCity  City?              @relation("CompanyHeadquartersCity", fields: [headquartersCityId], references: [id], onDelete: SetNull)
-  organization      Organization?      @relation("CompanyOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
+  founder      Person?      @relation("FounderToCompany", fields: [founderId], references: [id], onDelete: SetNull)
+  organization Organization @relation("CompanyOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
 
   facilities              CompanyFacility[]
   CompanyHistory          CompanyHistory[]
   CompanyCategoryRelation CompanyCategoryRelation[]
+  products                CompanyProduct[]
+  stockPoints             CompanyStockPoint[]
+  analystRatings          CompanyAnalystRating[]
+  outlooks                CompanyOutlook[]
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@unique([name, countryId], name: "uniq_company_name_country")
-  @@index([name], name: "idx_company_name")
-  @@index([status], name: "idx_company_status")
-  @@index([countryId], name: "idx_company_countryId")
-  @@index([historicalCountryId], name: "idx_company_historicalCountryId")
-  @@index([foundedAt], name: "idx_company_foundedAt")
+  @@index([founderId], name: "idx_company_founderId")
+  @@index([createdById], name: "idx_company_createdById")
   @@map("company")
 }
 
@@ -256,9 +231,32 @@ model CompanyFacilityHistory {
 // ========================
 // 기업 연혁
 // ========================
+/// 연혁 항목의 종류 — 제품 발표·재무·인수합병 등(필터·아이콘·구조필드 노출용)
+enum CompanyHistoryType {
+  /// 일반 연혁
+  GENERAL
+  /// 제품·기술 발표/출시 (예: NVIDIA Blackwell 발표)
+  PRODUCT_LAUNCH
+  /// 재무·실적 (상장/IPO, 분기 실적, 자금 조달 등)
+  FINANCIAL
+  /// 인수·합병
+  MERGER_ACQUISITION
+  /// 경영진 변동
+  LEADERSHIP
+  /// 소송·규제·법적 사건
+  LEGAL
+  /// 주요 마일스톤
+  MILESTONE
+  /// 기타
+  OTHER
+}
+
 model CompanyHistory {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
+
+  /// 연혁 항목 종류 (제품 발표·재무 등)
+  type CompanyHistoryType? @default(GENERAL)
 
   /// 연혁 제목
   title String @db.VarChar(200)
@@ -266,11 +264,19 @@ model CompanyHistory {
   /// 이력이 발생한 날짜/시점
   occurredAt DateTime? @map("occurred_at")
 
-  /// 상세 내용
-  content String?
+  /// 상세 내용 (리치텍스트 HTML — VARCHAR(191) 초과 무성 truncate 방지 위해 TEXT)
+  content String? @db.Text
 
   /// 추가 메모
   note String?
+
+  //--- 경제 맥락 스냅샷 (발표·실적 시점의 주가/시총 — Phase A)
+  /// 당시 주가 (해당 시점 종가 등)
+  stockPrice Decimal? @map("stock_price") @db.Decimal(20, 4)
+  /// 당시 시가총액
+  marketCap Decimal? @map("market_cap") @db.Decimal(24, 2)
+  /// 통화 코드 (예: USD, KRW)
+  currency String? @db.VarChar(10)
 
   /// 정렬 순서
   order Int?
@@ -290,6 +296,387 @@ model CompanyHistory {
 
   @@index([eventId], name: "idx_company_history_eventId")
   @@map("company_history")
+}
+
+// ========================
+// 기업 제품 (제품·기술 카탈로그)
+// ========================
+/// 기업의 제품·기술을 1급 항목으로 관리(예: NVIDIA Blackwell, Hopper).
+/// 연혁(발표 사건)과 별개로 제품 자체를 목록·검색 가능한 엔티티로 둔다.
+model CompanyProduct {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 기업
+  companyId String @map("company_id") @db.Char(36)
+
+  /// 제품명 (예: Blackwell B200)
+  name String @db.VarChar(200)
+  /// 분류 (예: GPU, CPU, 서비스 — 자유 텍스트)
+  category String? @db.VarChar(100)
+  /// 제품 라인/세대 (예: Blackwell 아키텍처, GeForce RTX)
+  productLine String? @map("product_line") @db.VarChar(150)
+  /// 설명·의의
+  description String? @db.Text
+
+  /// 발표일
+  announcedAt DateTime? @map("announced_at")
+  /// 출시일
+  releasedAt DateTime? @map("released_at")
+  /// 단종일
+  discontinuedAt DateTime? @map("discontinued_at")
+
+  /// 대표 이미지
+  imageUrl String? @map("image_url") @db.VarChar(500)
+
+  /// 정렬 순서
+  order Int?
+
+  //--- 관계 필드
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId], name: "idx_company_product_companyId")
+  @@map("company_product")
+}
+
+// ========================
+// 기업 주가·재무 시점 (시계열)
+// ========================
+/// 기업의 날짜별 주가·시가총액·매출 스냅샷 시계열(CountryEconomicIndicator의 기업판).
+/// 연혁(발표·실적)과 상관 분석·차트에 사용.
+model CompanyStockPoint {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 기업
+  companyId String @map("company_id") @db.Char(36)
+
+  /// 기준일
+  date DateTime @map("date")
+
+  /// 주가(종가 등)
+  price Decimal? @db.Decimal(20, 4)
+  /// 시가총액
+  marketCap Decimal? @map("market_cap") @db.Decimal(24, 2)
+  /// 매출(해당 시점/기간)
+  revenue Decimal? @db.Decimal(24, 2)
+  /// 통화 코드 (예: USD)
+  currency String? @db.VarChar(10)
+
+  /// 출처
+  source String? @db.VarChar(200)
+  /// 비고
+  note String? @db.Text
+
+  //--- 관계 필드
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([companyId, date], name: "uniq_company_stock_point_company_date")
+  @@index([companyId, date], name: "idx_company_stock_point_company_date")
+  @@map("company_stock_point")
+}
+
+// ========================
+// 증권사 목표주가 / 투자의견
+// ========================
+/// 투자의견 — 한국식 5단계.
+enum AnalystRating {
+  STRONG_BUY
+  BUY
+  HOLD
+  SELL
+  STRONG_SELL
+}
+
+/// 증권사·애널리스트가 제시한 목표주가·투자의견(시점별 다건 → 컨센서스 도출).
+model CompanyAnalystRating {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 기업
+  companyId String @map("company_id") @db.Char(36)
+
+  /// 증권사/리서치 기관 (예: 미래에셋증권, Morgan Stanley)
+  firm String @db.VarChar(150)
+  /// 애널리스트명 (선택)
+  analyst String? @db.VarChar(100)
+
+  /// 목표주가
+  targetPrice Decimal? @map("target_price") @db.Decimal(20, 4)
+  /// 직전 목표주가(상향/하향 표시용)
+  priorTargetPrice Decimal? @map("prior_target_price") @db.Decimal(20, 4)
+  /// 통화 코드 (예: KRW, USD)
+  currency String? @db.VarChar(10)
+
+  /// 투자의견
+  rating AnalystRating?
+
+  /// 제시일
+  publishedAt DateTime? @map("published_at")
+
+  /// 리포트 제목
+  reportTitle String? @map("report_title") @db.VarChar(255)
+  /// 리포트/출처 링크
+  sourceUrl String? @map("source_url") @db.VarChar(500)
+  /// 비고
+  note String? @db.Text
+
+  /// 정렬 순서
+  order Int?
+
+  //--- 관계 필드
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId, publishedAt], name: "idx_company_analyst_rating")
+  @@map("company_analyst_rating")
+}
+
+// ========================
+// 기업 전망 / 핵심 변수
+// ========================
+/// 전망 방향(강세/중립/약세).
+enum OutlookStance {
+  BULLISH
+  NEUTRAL
+  BEARISH
+}
+
+/// 핵심 변수의 주가 영향(호재/악재/중립).
+enum DriverImpact {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+}
+
+/// 핵심 변수의 중요도(상/중/하).
+enum DriverImportance {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+/// 전망 확신도(높음/보통/낮음).
+enum OutlookConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+/// 전망 검증 결과(적중/미스/부분).
+enum OutlookOutcome {
+  HIT
+  MISS
+  PARTIAL
+}
+
+/// 시나리오 종류(낙관/기본/비관).
+enum ScenarioKind {
+  BULL
+  BASE
+  BEAR
+}
+
+/// 촉매 예정일 신뢰도(확정/추정/미정).
+enum CatalystDateConfidence {
+  CONFIRMED
+  ESTIMATED
+  TBD
+}
+
+/// 목표가 산출 밸류에이션 방법.
+enum ValuationMethod {
+  PER
+  PBR
+  EV_EBITDA
+  DCF
+  SOTP
+  OTHER
+}
+
+/// 핵심 변수 역할(투자포인트/리스크).
+enum DriverRole {
+  THESIS
+  RISK
+}
+
+/// 향후 전망(미래 예측) — 과거 시계열(CompanyStockPoint)과 별개. 기간·방향·예상범위·근거.
+model CompanyOutlook {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 기업
+  companyId String @map("company_id") @db.Char(36)
+
+  /// 전망 기간 라벨 (예: "다음 주", "2026 Q3")
+  horizon String? @db.VarChar(100)
+  /// 작성일(전망 기준 시점)
+  asOf DateTime? @map("as_of")
+  /// 전망 도달 목표 시점(정렬·만기·검증 기준). horizon 라벨은 표시용으로 병행.
+  targetDate DateTime? @map("target_date")
+
+  /// 전망 방향
+  stance OutlookStance?
+  /// 전망 확신도(높음/보통/낮음)
+  confidence OutlookConfidence?
+
+  /// 대표 목표가(범위의 중심값). 비우면 expectedLow/High 중앙값으로 대체.
+  targetPrice Decimal? @map("target_price") @db.Decimal(20, 4)
+  /// 직전 전망의 목표가(상향/하향 표시용 — delete-and-recreate라 self-relation 대신 값으로 보존).
+  priorTargetPrice Decimal? @map("prior_target_price") @db.Decimal(20, 4)
+  /// 예상 주가 하단
+  expectedLow Decimal? @map("expected_low") @db.Decimal(20, 4)
+  /// 예상 주가 상단
+  expectedHigh Decimal? @map("expected_high") @db.Decimal(20, 4)
+  /// 통화 코드
+  currency String? @db.VarChar(10)
+
+  /// 전망 근거(리치텍스트 HTML)
+  rationale String? @db.Text
+  /// 출처
+  source String? @db.VarChar(200)
+
+  //--- 밸류에이션 근거(목표가가 '어떻게' 나왔나)
+  /// 산출 방법(PER/PBR/DCF 등)
+  valuationMethod ValuationMethod? @map("valuation_method")
+  /// 목표 멀티플(예: 목표 PER 15.0)
+  targetMultiple Decimal? @map("target_multiple") @db.Decimal(10, 2)
+  /// 주당 기준값(EPS/BPS 등)
+  perShareBasis Decimal? @map("per_share_basis") @db.Decimal(20, 4)
+  /// 기준 라벨(예: "2026E EPS")
+  basisLabel String? @map("basis_label") @db.VarChar(100)
+
+  //--- 사후 검증(만기 후 실제 결과 기록)
+  /// 실현 주가(만기 시점 실제). 비우면 targetDate 시점 stockPoint에서 파생 가능.
+  actualPrice Decimal? @map("actual_price") @db.Decimal(20, 4)
+  /// 검증 결과(적중/미스/부분)
+  outcome OutlookOutcome?
+  /// 검증 시점
+  resolvedAt DateTime? @map("resolved_at")
+
+  /// 정렬 순서
+  order Int?
+
+  //--- 관계 필드
+  company   Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  drivers   CompanyOutlookDriver[]
+  scenarios CompanyOutlookScenario[]
+  catalysts CompanyOutlookCatalyst[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId], name: "idx_company_outlook_company")
+  @@map("company_outlook")
+}
+
+/// 전망의 핵심 변수(드라이버) — 이름·영향(호재/악재)·중요도.
+model CompanyOutlookDriver {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 전망
+  outlookId String @map("outlook_id") @db.Char(36)
+
+  /// 변수명 (예: "AI 가속기 수요", "원/달러 환율")
+  name String @db.VarChar(200)
+  /// 역할(투자포인트/리스크)
+  role DriverRole?
+  /// 주가 영향 방향
+  impact DriverImpact?
+  /// 중요도
+  importance DriverImportance?
+  /// 비고
+  note String? @db.Text
+
+  /// 정렬 순서
+  order Int?
+
+  //--- 관계 필드
+  outlook CompanyOutlook @relation(fields: [outlookId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([outlookId], name: "idx_company_outlook_driver")
+  @@map("company_outlook_driver")
+}
+
+/// 전망 시나리오(낙관/기본/비관) — 목표가·확률로 확률가중 기대값 산출.
+model CompanyOutlookScenario {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 전망
+  outlookId String @map("outlook_id") @db.Char(36)
+
+  /// 시나리오 종류
+  kind ScenarioKind
+  /// 목표 주가
+  targetPrice Decimal? @map("target_price") @db.Decimal(20, 4)
+  /// 발생 확률(0~100)
+  probability Int?
+  /// 요약(이 시나리오의 전제)
+  summary String? @db.Text
+
+  /// 정렬 순서
+  order Int?
+
+  //--- 관계 필드
+  outlook CompanyOutlook @relation(fields: [outlookId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([outlookId], name: "idx_company_outlook_scenario")
+  @@map("company_outlook_scenario")
+}
+
+/// 전망 촉매(예정 이벤트) — 날짜가 박힌 변곡점(실적발표·FOMC 등).
+model CompanyOutlookCatalyst {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 소속 전망
+  outlookId String @map("outlook_id") @db.Char(36)
+
+  /// 이벤트명 (예: "2분기 실적 발표")
+  title String @db.VarChar(200)
+  /// 예정일
+  expectedDate DateTime? @map("expected_date")
+  /// 예정일 신뢰도(확정/추정/미정)
+  dateConfidence CatalystDateConfidence? @map("date_confidence")
+  /// 주가 영향(호재/악재/중립 — DriverImpact 재사용)
+  impact DriverImpact?
+  /// 비고
+  note String? @db.Text
+
+  /// 정렬 순서
+  order Int?
+
+  //--- 관계 필드
+  outlook CompanyOutlook @relation(fields: [outlookId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([outlookId], name: "idx_company_outlook_catalyst")
+  @@map("company_outlook_catalyst")
 }
 
 // ========================

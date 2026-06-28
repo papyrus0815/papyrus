@@ -31,6 +31,6 @@ export interface CreateCompanyDto {
   historicalCountryId?: string
   /** 본사 위치 도시 ID */
   headquartersCityId?: string
-  /** 동일 실체의 조직 ID (1:1) */
+  /** 기존 Organization을 기업으로 승격(부착)할 때만 지정. 미지정 시 type=COMPANY Organization 자동 생성. */
   organizationId?: string
 }

@@ -18,9 +18,14 @@ import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
 const Page = styled.div`
-  padding: calc(var(--header-height, 64px) + 1.5rem) 2rem 4rem;
+  /* <Layout/> 직속 + 전역 overflow:hidden이라 페이지 자체를 내부 스크롤 컨테이너로
+     (companies-list·상세·폼과 동일 패턴). margin은 상단=헤더오프셋, 좌우=auto로 중앙정렬. */
+  height: calc(100vh - var(--header-height, 64px));
+  margin: var(--header-height, 64px) auto 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.5rem 2rem 4rem;
   max-width: 1000px;
-  margin: 0 auto;
 `
 
 const BackLink = styled.button`
@@ -285,18 +290,32 @@ export const CompanyCategoriesListPage: React.FC = () => {
     )
   }, [list, search])
 
-  const handleDelete = async (c: CompanyCategory, e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleDelete = async (
+    category: CompanyCategory,
+    event: React.MouseEvent,
+  ) => {
+    event.stopPropagation()
+    const childrenCount = category.childrenCount
+    const companyCount = category.companyCount
+    const message =
+      `'${category.name}'을(를) 삭제합니다.` +
+      (childrenCount > 0
+        ? ` 하위 ${childrenCount}개 카테고리는 최상위로 이동합니다.`
+        : '') +
+      (companyCount > 0
+        ? ` 연결된 기업 ${companyCount}곳의 분류 연결이 해제됩니다.`
+        : '')
     if (
       !(await confirm({
         title: '삭제 확인',
-        message: `'${c.name}' 카테고리를 삭제하시겠습니까?`,
+        message,
+        confirmLabel: '삭제',
         danger: true,
       }))
     )
       return
     try {
-      await companyCategoryApi.delete(c.id)
+      await companyCategoryApi.delete(category.id)
       load()
     } catch (err) {
       notify.error(err instanceof Error ? err.message : '삭제에 실패했습니다.')
