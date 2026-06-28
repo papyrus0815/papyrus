@@ -5,32 +5,48 @@ import styled from 'styled-components'
 
 import type { Badge } from './gamification.api'
 
+/** BADGE_FRAME 코스메틱 (본인 화면에서 획득 뱃지에 테두리/광채 적용). */
+export interface BadgeFrameCosmetic {
+  borderStyle?: string
+  shadowEffect?: string
+}
+
 /** 뱃지 그리드 — 획득/미획득을 함께 보여준다(미획득은 흐리게 + 자물쇠). */
-export const BadgeList: React.FC<{ badges: Badge[]; compact?: boolean }> = ({
-  badges,
-  compact,
-}) => {
+export const BadgeList: React.FC<{
+  badges: Badge[]
+  compact?: boolean
+  /** 장착한 뱃지 테두리 코스메틱(획득 뱃지에만 적용) */
+  frame?: BadgeFrameCosmetic | null
+}> = ({ badges, compact, frame }) => {
   return (
     <Grid $compact={!!compact}>
-      {badges.map((b) => (
-        <Item key={b.code} $earned={b.earned} title={`${b.label} — ${b.description}`}>
-          <IconWrap $color={b.color} $earned={b.earned}>
-            {b.earned ? <FiAward size={compact ? 14 : 18} /> : <FiLock size={compact ? 12 : 15} />}
+      {badges.map((badge) => (
+        <Item key={badge.code} $earned={badge.earned} title={`${badge.label} — ${badge.description}`}>
+          <IconWrap
+            $color={badge.color}
+            $earned={badge.earned}
+            style={
+              frame && badge.earned
+                ? { border: frame.borderStyle, boxShadow: frame.shadowEffect }
+                : undefined
+            }
+          >
+            {badge.earned ? <FiAward size={compact ? 14 : 18} /> : <FiLock size={compact ? 12 : 15} />}
           </IconWrap>
           {!compact && (
             <Meta>
-              <Name $earned={b.earned}>{b.label}</Name>
-              <Desc>{b.description}</Desc>
-              {!b.earned && b.target > 1 && (
+              <Name $earned={badge.earned}>{badge.label}</Name>
+              <Desc>{badge.description}</Desc>
+              {!badge.earned && badge.target > 1 && (
                 <Progress>
                   <ProgressTrack>
                     <ProgressFill
-                      $color={b.color}
-                      style={{ width: `${Math.round((b.current / b.target) * 100)}%` }}
+                      $color={badge.color}
+                      style={{ width: `${Math.round((badge.current / badge.target) * 100)}%` }}
                     />
                   </ProgressTrack>
                   <ProgressLabel>
-                    {b.current}/{b.target}
+                    {badge.current}/{badge.target}
                   </ProgressLabel>
                 </Progress>
               )}

@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { invalidateGamification } from '@/entities/gamification'
 import * as personsApi from '@/shared/api/persons'
 import type {
@@ -31,6 +36,18 @@ export const personKeys = {
   /** GET /persons/dashboard/person-counts-by-modern-country */
   modernCountryPersonCounts: ['persons', 'modern-country-person-counts'] as const,
 }
+
+/**
+ * 방문(놀러가기): 타 계정이 등록한 인물 목록(카드, 읽기전용).
+ * 방(공개 프로필)에서 그 사람이 등록한 인물관을 보여줄 때 사용.
+ */
+export const visitedPersonsQueryOptions = (accountId: string) =>
+  queryOptions({
+    queryKey: ['persons', 'by-account', accountId] as const,
+    queryFn: () => personsApi.getPersonsByAccount(accountId),
+    staleTime: 60_000,
+    enabled: !!accountId,
+  })
 
 /**
  * 모든 인물 목록 조회 훅

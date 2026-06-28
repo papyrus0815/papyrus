@@ -179,6 +179,17 @@ export class PersonController {
   }
 
   /**
+   * 방문(놀러가기): 타 계정이 등록한 인물 목록(카드, 읽기전용).
+   * 보수 노출 — 카드 레벨만(상세 미개방). 편집·평가 액션은 프론트에서 viewerIsOwner로 숨김.
+   * 개별 인물 숨김(Person.isPublic)은 Phase B. 더 엄격히 "대표인물만"을 원하면 여기서 필터.
+   * 주의: `:id` 라우트보다 위에 위치해야 함 (NestJS 라우트 매칭 순서).
+   */
+  @Get('by-account/:accountId')
+  async getByAccount(@Param('accountId') accountId: string): Promise<PersonResponseDto[]> {
+    return this.personService.findAll(accountId)
+  }
+
+  /**
    * ID로 인물 조회 (본인 등록분만)
    */
   @Get(':id')

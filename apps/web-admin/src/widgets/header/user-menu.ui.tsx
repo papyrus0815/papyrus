@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence } from 'framer-motion'
-import { FiAward, FiLogOut, FiUser } from 'react-icons/fi'
+import { FiArchive, FiAward, FiHome, FiLogOut, FiShoppingBag, FiUser } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -18,6 +18,13 @@ import {
   gamificationSummaryQueryOptions,
 } from '@/entities/gamification'
 import { sessionQueryOptions, useSessionStore } from '@/entities/session'
+import {
+  avatarFrameStyle,
+  nicknameColor,
+  useEquippedCosmetics,
+  walletMeQueryOptions,
+} from '@/entities/wallet'
+import { useThemeStore } from '@/shared/styles/theme.store'
 import { useOnClickOutside } from '@/shared/hooks/use-on-click-outside.hook'
 import { pathKeys } from '@/shared/router'
 
@@ -56,6 +63,11 @@ export function UserMenu({
   const { data: pointSummary } = useQuery(gamificationSummaryQueryOptions)
   const { data: badges } = useQuery(gamificationBadgesQueryOptions)
   const { data: account } = useQuery(sessionQueryOptions)
+  const { data: wallet } = useQuery(walletMeQueryOptions)
+  const cosmetics = useEquippedCosmetics()
+  const isDark = useThemeStore((state) => state.mode === 'dark')
+  const avatarStyle = avatarFrameStyle(cosmetics.avatarFrame)
+  const nameColor = nicknameColor(cosmetics.nicknameColor, isDark)
 
   // 화면 표시명: 닉네임(displayName) 우선, 없으면 로그인 ID(store username)로 폴백
   const shownName = account?.displayName || username || ''
@@ -95,20 +107,21 @@ export function UserMenu({
   const body = (
     <>
       <ProfileHeader>
-        <AvatarLg>{getAvatarInitial(shownName)}</AvatarLg>
+        <AvatarLg style={avatarStyle}>{getAvatarInitial(shownName)}</AvatarLg>
         <div>
-          <ProfileName>{shownName || '게스트'}</ProfileName>
+          <ProfileName style={{ color: nameColor }}>{shownName || '게스트'}</ProfileName>
           <ProfileRole>
             <GradeChip
               gradeCode={pointSummary?.gradeCode}
               points={pointSummary?.totalPoints}
+              cosmetic={cosmetics.gradeTheme}
             />
           </ProfileRole>
         </div>
       </ProfileHeader>
       {pointSummary && (
         <div style={{ padding: '0 14px' }}>
-          <GradeProgressCard summary={pointSummary} />
+          <GradeProgressCard summary={pointSummary} cosmetic={cosmetics.gradeTheme} />
         </div>
       )}
       {badges && badges.length > 0 && (
@@ -120,7 +133,7 @@ export function UserMenu({
             </span>
           </BadgeSectionHead>
           {earnedBadges.length > 0 ? (
-            <BadgeList badges={earnedBadges} compact />
+            <BadgeList badges={earnedBadges} compact frame={cosmetics.badgeFrame} />
           ) : (
             <BadgeEmpty>콘텐츠를 등록하고 첫 뱃지를 획득해보세요!</BadgeEmpty>
           )}
@@ -130,9 +143,20 @@ export function UserMenu({
       <MenuItem onClick={() => goTo(pathKeys.leaderboard())}>
         <FiAward size={14} /> 리더보드
       </MenuItem>
+      <MenuItem onClick={() => goTo(pathKeys.shop())}>
+        <FiShoppingBag size={14} /> 파피 상점
+      </MenuItem>
+      <MenuItem onClick={() => goTo(pathKeys.collection())}>
+        <FiArchive size={14} /> 유물관
+      </MenuItem>
       <MenuItem onClick={() => goTo(pathKeys.profile.root())}>
         <FiUser size={14} /> 내 프로필
       </MenuItem>
+      {account?.id && (
+        <MenuItem onClick={() => goTo(pathKeys.publicProfile(account.id))}>
+          <FiHome size={14} /> 내 방
+        </MenuItem>
+      )}
       <MenuItem
         onClick={() => {
           playClickSound()
@@ -151,11 +175,17 @@ export function UserMenu({
 
   return (
     <>
+      {wallet && (
+        <HeaderPapySlot type="button" onClick={() => goTo(pathKeys.shop())} title="파피 상점">
+          🪙 {wallet.balance.toLocaleString()}
+        </HeaderPapySlot>
+      )}
       {pointSummary && (
         <HeaderGradeSlot>
           <GradeChip
             gradeCode={pointSummary.gradeCode}
             points={pointSummary.totalPoints}
+            cosmetic={cosmetics.gradeTheme}
           />
         </HeaderGradeSlot>
       )}
@@ -170,7 +200,7 @@ export function UserMenu({
             onToggle()
           }}
         >
-          <Avatar>{getAvatarInitial(shownName)}</Avatar>
+          <Avatar style={avatarStyle}>{getAvatarInitial(shownName)}</Avatar>
         </UserButton>
 
         <AnimatePresence>
@@ -197,6 +227,24 @@ export function UserMenu({
 const HeaderGradeSlot = styled.div`
   display: inline-flex;
   align-items: center;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+`
+
+const HeaderPapySlot = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 
   @media (max-width: 768px) {
     display: none;

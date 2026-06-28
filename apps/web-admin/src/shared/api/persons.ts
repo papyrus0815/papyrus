@@ -104,6 +104,18 @@ export async function getAllPersons(): Promise<PersonResponseDto[]> {
 }
 
 /**
+ * 방문(놀러가기): 타 계정이 등록한 인물 목록(카드, 읽기전용) — GET /persons/by-account/:accountId
+ */
+export async function getPersonsByAccount(
+  accountId: string,
+): Promise<PersonResponseDto[]> {
+  return (await personsApi.by_account.getByAccount(
+    getApiConnection(),
+    accountId,
+  )) as PersonResponseDto[]
+}
+
+/**
  * 인포그래픽 목록(경량) 조회 — 대시보드 인포그래픽 전용.
  * 전체 인물 payload(countryAffiliations·재임 상세 등) 대신 adapt에 필요한 필드만 받음.
  */

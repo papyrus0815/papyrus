@@ -39,7 +39,19 @@ import {
   sessionQueryOptions,
 } from '@/entities/session'
 import { usePersons } from '@/entities/person/api'
+import {
+  avatarFrameStyle,
+  nicknameColor,
+  profileBackground,
+  useEquippedCosmetics,
+} from '@/entities/wallet'
+import {
+  linkedEntityPath,
+  myCollectionQueryOptions,
+  rarityMeta,
+} from '@/entities/artifact'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { useThemeStore } from '@/shared/styles/theme.store'
 import { queryClient } from '@/shared/queryClient'
 import { pathKeys } from '@/shared/router'
 import { notify } from '@/shared/ui/toast'
@@ -78,13 +90,21 @@ function ProfileContent() {
   const { data: account } = useQuery(sessionQueryOptions)
   const { data: summary } = useQuery(gamificationSummaryQueryOptions)
   const { data: badges } = useQuery(gamificationBadgesQueryOptions)
+  const { data: myArtifacts } = useQuery(myCollectionQueryOptions)
 
   const name = account?.displayName || account?.account || '게스트'
   const earned = (badges ?? []).filter((b) => b.earned)
+  const displayedArtifacts = (myArtifacts ?? []).filter((item) => item.displayed)
   const gradeCode = summary?.gradeCode ?? account?.gradeCode
 
   const [thumbErrored, setThumbErrored] = useState(false)
   const showThumb = !!account?.heroThumbnail && !thumbErrored
+
+  const cosmetics = useEquippedCosmetics()
+  const isDark = useThemeStore((state) => state.mode === 'dark')
+  const avatarStyle = avatarFrameStyle(cosmetics.avatarFrame)
+  const nameColor = nicknameColor(cosmetics.nicknameColor, isDark)
+  const heroBackground = profileBackground(cosmetics.profileTheme)
 
   return (
     <Page>
@@ -105,22 +125,23 @@ function ProfileContent() {
       </PageHead>
 
       {/* 히어로 배너 */}
-      <Hero>
+      <Hero style={heroBackground ? { background: heroBackground } : undefined}>
         <HeroLeft>
           {showThumb ? (
             <AvatarImg
               src={account!.heroThumbnail!}
               alt=""
+              style={avatarStyle}
               onError={() => setThumbErrored(true)}
             />
           ) : (
-            <AvatarFallback>{name.charAt(0).toUpperCase()}</AvatarFallback>
+            <AvatarFallback style={avatarStyle}>{name.charAt(0).toUpperCase()}</AvatarFallback>
           )}
           <HeroIdentity>
-            <HeroName>{name}</HeroName>
+            <HeroName style={{ color: nameColor }}>{name}</HeroName>
             <HeroSub>
               {account?.heroName && <HeroTag>{account.heroName}</HeroTag>}
-              {gradeCode && <GradeChip gradeCode={gradeCode} />}
+              {gradeCode && <GradeChip gradeCode={gradeCode} cosmetic={cosmetics.gradeTheme} />}
             </HeroSub>
           </HeroIdentity>
         </HeroLeft>
@@ -167,7 +188,7 @@ function ProfileContent() {
           <Card>
             <CardTitle>등급 진행</CardTitle>
             {summary ? (
-              <GradeProgressCard summary={summary} />
+              <GradeProgressCard summary={summary} cosmetic={cosmetics.gradeTheme} />
             ) : (
               <Muted>점수 정보를 불러오는 중...</Muted>
             )}
@@ -184,13 +205,43 @@ function ProfileContent() {
             </CardTitle>
             {badges ? (
               earned.length > 0 ? (
-                <BadgeList badges={earned} />
+                <BadgeList badges={earned} frame={cosmetics.badgeFrame} />
               ) : (
                 <Muted>콘텐츠를 등록하고 첫 뱃지를 획득해보세요!</Muted>
               )
             ) : (
               <Muted>뱃지 정보를 불러오는 중...</Muted>
             )}
+          </Card>
+
+          <Card>
+            <CardTitle>
+              유물 진열장
+              {myArtifacts && <Count>{displayedArtifacts.length}</Count>}
+            </CardTitle>
+            {displayedArtifacts.length > 0 ? (
+              <ArtifactShelf>
+                {displayedArtifacts.map((item) => {
+                  const rarity = rarityMeta(item.rarity)
+                  const path = linkedEntityPath(item.linkedType, item.linkedId)
+                  return (
+                    <ShelfItem
+                      key={item.id}
+                      style={{ background: `${rarity.color}1a` }}
+                      title={item.name}
+                      onClick={() => path && navigate(path)}
+                    >
+                      {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <span>🏺</span>}
+                    </ShelfItem>
+                  )
+                })}
+              </ArtifactShelf>
+            ) : (
+              <Muted>유물관에서 유물을 모아 진열해보세요.</Muted>
+            )}
+            <ShelfMore type="button" onClick={() => navigate(pathKeys.collection())}>
+              유물관 가기 →
+            </ShelfMore>
           </Card>
         </Col>
 
@@ -884,6 +935,40 @@ const Muted = styled.div`
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.secondary};
   padding: 8px 0;
+`
+
+const ArtifactShelf = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 8px;
+`
+
+const ShelfItem = styled.div`
+  aspect-ratio: 1;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  cursor: pointer;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`
+
+const ShelfMore = styled.button`
+  margin-top: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.primary};
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 `
 
 const ReadonlyRow = styled.div`

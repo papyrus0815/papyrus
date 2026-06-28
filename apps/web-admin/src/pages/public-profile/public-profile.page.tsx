@@ -1,10 +1,10 @@
 /**
  * 공개 프로필 (/profile/:accountId) — 타 사용자의 등급·뱃지 컬렉션 열람(자랑 보기).
  */
-import React from 'react'
+import React, { useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { FiArrowLeft } from 'react-icons/fi'
+import { FiArrowLeft, FiEdit2 } from 'react-icons/fi'
 import { useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -14,11 +14,62 @@ import {
   fmtNum,
   gamificationProfileQueryOptions,
 } from '@/entities/gamification'
+import {
+  avatarFrameStyle,
+  nicknameColor,
+  profileBackground,
+  useEquippedCosmetics,
+} from '@/entities/wallet'
+import {
+  linkedEntityPath,
+  rarityMeta,
+  visitedCollectionQueryOptions,
+} from '@/entities/artifact'
+import { visitedPersonsQueryOptions } from '@/entities/person/api'
+import { visitedEventsQueryOptions } from '@/entities/event/model'
+import { CommentModal } from '@/entities/comment'
+import { sessionQueryOptions } from '@/entities/session'
+import type { VisitedEventCard } from '@/shared/api/events'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { useThemeStore } from '@/shared/styles/theme.store'
+import { pathKeys } from '@/shared/router'
+
+/** 사건 카드 연도 라벨 — 구조화 필드(startYear/startEra) 우선, BC는 "기원전". 없으면 빈 문자열. */
+function eventYearLabel(event: {
+  startEra: string | null
+  startYear: number | null
+  startDate: string | null
+}): string {
+  if (event.startYear != null) {
+    return event.startEra === 'BC' ? `기원전 ${event.startYear}년` : `${event.startYear}년`
+  }
+  if (event.startDate) {
+    const year = new Date(event.startDate).getUTCFullYear()
+    if (!Number.isNaN(year)) return `${year}년`
+  }
+  return ''
+}
 
 export default function PublicProfilePage() {
   const { accountId = '' } = useParams()
   const navigate = useNavigate()
+  const isDark = useThemeStore((state) => state.mode === 'dark')
+
   const { data: profile, isLoading, isError } = useQuery(gamificationProfileQueryOptions(accountId))
+  const { data: me } = useQuery(sessionQueryOptions)
+  // 방 주인 기준 외형·진열·등록 인물 (모두 읽기전용 방문 read)
+  const cosmetics = useEquippedCosmetics(accountId)
+  const { data: visitedArtifacts } = useQuery(visitedCollectionQueryOptions(accountId))
+  const { data: visitedPersons } = useQuery(visitedPersonsQueryOptions(accountId))
+  const { data: visitedEvents } = useQuery(visitedEventsQueryOptions(accountId))
+
+  const viewerIsOwner = !!me?.id && me.id === accountId
+  const heroBg = profileBackground(cosmetics.profileTheme)
+  const nameColor = nicknameColor(cosmetics.nicknameColor, isDark)
+  const artifacts = visitedArtifacts ?? []
+  const persons = visitedPersons ?? []
+  const events = visitedEvents ?? []
+  const [openEvent, setOpenEvent] = useState<VisitedEventCard | null>(null)
 
   return (
     <Wrap>
@@ -33,19 +84,26 @@ export default function PublicProfilePage() {
 
       {profile && (
         <>
-          <Hero>
+          <Hero style={heroBg ? { background: heroBg, padding: 16, borderRadius: 16 } : undefined}>
             {profile.heroThumbnail ? (
-              <Avatar src={profile.heroThumbnail} alt="" />
+              <Avatar src={profile.heroThumbnail} alt="" style={avatarFrameStyle(cosmetics.avatarFrame)} />
             ) : (
-              <AvatarFallback>{profile.username.charAt(0).toUpperCase()}</AvatarFallback>
+              <AvatarFallback style={avatarFrameStyle(cosmetics.avatarFrame)}>
+                {profile.username.charAt(0).toUpperCase()}
+              </AvatarFallback>
             )}
             <HeroInfo>
-              <Name>{profile.username}</Name>
+              <Name style={nameColor ? { color: nameColor } : undefined}>{profile.username}</Name>
               <HeroMeta>
                 <GradeChip gradeCode={profile.gradeCode} points={profile.totalPoints} />
                 {profile.heroName && <HeroName>{profile.heroName}</HeroName>}
               </HeroMeta>
             </HeroInfo>
+            {viewerIsOwner && (
+              <OwnerCta type="button" onClick={() => navigate(pathKeys.profile.root())}>
+                <FiEdit2 size={13} /> 내 방 꾸미기
+              </OwnerCta>
+            )}
           </Hero>
 
           <Stats>
@@ -71,10 +129,10 @@ export default function PublicProfilePage() {
             <Panel>
               <PanelTitle>기여한 세기 ({profile.centuryBreakdown.length})</PanelTitle>
               <CenturyChips>
-                {profile.centuryBreakdown.map((c) => (
-                  <CenturyChip key={c.century ?? 'unknown'}>
-                    {c.label}
-                    <ChipCount>{fmtNum(c.entryCount)}</ChipCount>
+                {profile.centuryBreakdown.map((century) => (
+                  <CenturyChip key={century.century ?? 'unknown'}>
+                    {century.label}
+                    <ChipCount>{fmtNum(century.entryCount)}</ChipCount>
                   </CenturyChip>
                 ))}
               </CenturyChips>
@@ -89,7 +147,84 @@ export default function PublicProfilePage() {
               <Muted>아직 획득한 뱃지가 없습니다.</Muted>
             )}
           </Panel>
+
+          <Panel>
+            <PanelTitle>유물 진열장 ({artifacts.length})</PanelTitle>
+            {artifacts.length > 0 ? (
+              <Shelf>
+                {artifacts.map((item) => {
+                  const rarity = rarityMeta(item.rarity)
+                  const linkPath = linkedEntityPath(item.linkedType, item.linkedId)
+                  return (
+                    <ShelfItem
+                      key={item.id}
+                      style={{ background: `${rarity.color}1a` }}
+                      title={item.name}
+                      $clickable={!!linkPath}
+                      onClick={() => linkPath && navigate(linkPath)}
+                    >
+                      {item.imageUrl ? <img src={item.imageUrl} alt="" /> : <span>🏺</span>}
+                    </ShelfItem>
+                  )
+                })}
+              </Shelf>
+            ) : (
+              <Muted>진열한 유물이 없습니다.</Muted>
+            )}
+          </Panel>
+
+          <Panel>
+            <PanelTitle>등록 인물관 ({persons.length})</PanelTitle>
+            {persons.length > 0 ? (
+              <PersonGrid>
+                {persons.map((person) => (
+                  <PersonCard key={person.id} title={getPersonDisplayName(person)}>
+                    {person.profileImageUrl ? (
+                      <PersonAvatar src={person.profileImageUrl} alt="" />
+                    ) : (
+                      <PersonAvatarFallback>
+                        {getPersonDisplayName(person, true).charAt(0) || '?'}
+                      </PersonAvatarFallback>
+                    )}
+                    <PersonName>{getPersonDisplayName(person, true)}</PersonName>
+                  </PersonCard>
+                ))}
+              </PersonGrid>
+            ) : (
+              <Muted>등록한 인물이 없습니다.</Muted>
+            )}
+          </Panel>
+
+          <Panel>
+            <PanelTitle>등록 사건관 ({events.length})</PanelTitle>
+            {events.length > 0 ? (
+              <EventList>
+                {events.map((event) => (
+                  <EventRow
+                    key={event.id}
+                    title={`${event.title} — 댓글 보기`}
+                    onClick={() => setOpenEvent(event)}
+                  >
+                    <EventTitle>{event.title}</EventTitle>
+                    <EventDate>{eventYearLabel(event)}</EventDate>
+                  </EventRow>
+                ))}
+              </EventList>
+            ) : (
+              <Muted>등록한 사건이 없습니다.</Muted>
+            )}
+          </Panel>
         </>
+      )}
+
+      {openEvent && (
+        <CommentModal
+          ownerType="EVENT"
+          recordId={openEvent.id}
+          title={openEvent.title}
+          subtitle={eventYearLabel(openEvent)}
+          onClose={() => setOpenEvent(null)}
+        />
       )}
     </Wrap>
   )
@@ -256,4 +391,127 @@ const ChipCount = styled.span`
   font-weight: 800;
   color: #fff;
   background: ${({ theme }) => theme.colors.primary ?? '#6366f1'};
+`
+
+const OwnerCta = styled.button`
+  margin-left: auto;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border ?? 'rgba(0,0,0,0.08)'};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+`
+
+const Shelf = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 8px;
+`
+
+const ShelfItem = styled.div<{ $clickable: boolean }>`
+  aspect-ratio: 1;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  overflow: hidden;
+  cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`
+
+const PersonGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 12px;
+`
+
+const PersonCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const PersonAvatar = styled.img`
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+`
+
+const PersonAvatarFallback = styled.div`
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  background: ${({ theme }) => theme.colors.primary ?? '#6366f1'};
+`
+
+const PersonName = styled.span`
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const EventList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const EventRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    opacity: 0.82;
+  }
+`
+
+const EventTitle = styled.span`
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const EventDate = styled.span`
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `

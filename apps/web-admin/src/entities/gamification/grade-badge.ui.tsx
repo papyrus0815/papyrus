@@ -6,14 +6,24 @@ import styled from 'styled-components'
 import { fmtNum, gradeMeta } from './grade.model'
 import type { PointSummary } from './gamification.api'
 
+/** GRADE_THEME 코스메틱 오버라이드 (본인 화면에서만 전달). */
+export interface GradeChipCosmetic {
+  bgGradient?: string
+  fgColor?: string
+}
+
 /** 등급 칩 — 등급명 + (선택)점수. 헤더/프로필 등에서 재사용. */
 export const GradeChip: React.FC<{
   gradeCode: string | null | undefined
   points?: number | null
-}> = ({ gradeCode, points }) => {
+  /** 장착한 등급 테마 코스메틱(있으면 색/배경 오버라이드) */
+  cosmetic?: GradeChipCosmetic | null
+}> = ({ gradeCode, points, cosmetic }) => {
   const meta = gradeMeta(gradeCode)
+  const bg = cosmetic?.bgGradient ?? meta.bg
+  const color = cosmetic?.fgColor ?? meta.color
   return (
-    <Chip $color={meta.color} $bg={meta.bg} title={`${meta.label} 등급`}>
+    <Chip $color={color} $bg={bg} title={`${meta.label} 등급`}>
       <FiAward size={11} />
       <span>{meta.label}</span>
       {points != null && <Pts>{fmtNum(points)}P</Pts>}
@@ -22,7 +32,10 @@ export const GradeChip: React.FC<{
 }
 
 /** 프로필용 등급 카드 — 등급 칩 + 다음 등급까지 진행 바. */
-export const GradeProgressCard: React.FC<{ summary: PointSummary }> = ({ summary }) => {
+export const GradeProgressCard: React.FC<{
+  summary: PointSummary
+  cosmetic?: GradeChipCosmetic | null
+}> = ({ summary, cosmetic }) => {
   const meta = gradeMeta(summary.gradeCode)
   const pct = Math.round((summary.progressRatio ?? 0) * 100)
   const nextMeta = summary.nextGradeCode ? gradeMeta(summary.nextGradeCode) : null
@@ -30,7 +43,7 @@ export const GradeProgressCard: React.FC<{ summary: PointSummary }> = ({ summary
     <Card>
       <CardTop>
         <TopLeft>
-          <GradeChip gradeCode={summary.gradeCode} />
+          <GradeChip gradeCode={summary.gradeCode} cosmetic={cosmetic} />
           {summary.rank != null && <RankPill>전체 {fmtNum(summary.rank)}위</RankPill>}
         </TopLeft>
         <Total>{fmtNum(summary.totalPoints)}P</Total>
