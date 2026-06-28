@@ -74,6 +74,7 @@ describe('point.policy', () => {
       expect(createPointsFor(AggregateType.COUNTRY)).toBe(30)
       expect(createPointsFor(AggregateType.HISTORICAL_COUNTRY)).toBe(30)
       expect(createPointsFor(AggregateType.EVENT)).toBe(20)
+      expect(createPointsFor(AggregateType.COMPANY)).toBe(20)
     })
 
     it('미적립 타입은 0', () => {

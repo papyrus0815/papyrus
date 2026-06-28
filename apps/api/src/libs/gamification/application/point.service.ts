@@ -905,6 +905,16 @@ export class PointService {
           })
           return d ? centuryFromDateEra(d.establishedDate, null) : null
         }
+        case AggregateType.COMPANY: {
+          // 명칭·날짜 정본은 Organization(type=COMPANY). organization 경유로 설립일 산출.
+          const company = await this.prisma.company.findUnique({
+            where: { id: recordId },
+            select: { organization: { select: { foundedDate: true } } },
+          })
+          return company
+            ? centuryFromDateEra(company.organization.foundedDate, null)
+            : null
+        }
         default:
           // COUNTRY(현대국가) 및 그 외 타입은 세기를 매기지 않음.
           return null
@@ -993,6 +1003,20 @@ export class PointService {
             select: { countryId: true, historicalCountryId: true },
           })
           return d?.countryId ?? d?.historicalCountryId ?? null
+        }
+        case AggregateType.COMPANY: {
+          // 국가 맥락 정본도 Organization(type=COMPANY).
+          const company = await this.prisma.company.findUnique({
+            where: { id: recordId },
+            select: {
+              organization: { select: { countryId: true, historicalCountryId: true } },
+            },
+          })
+          return (
+            company?.organization.countryId ??
+            company?.organization.historicalCountryId ??
+            null
+          )
         }
         default:
           return null

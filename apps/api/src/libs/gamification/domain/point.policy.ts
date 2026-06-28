@@ -89,6 +89,8 @@ const CREATE_POINTS: Partial<Record<AggregateType, number>> = {
   [AggregateType.COUNTRY]: 30,
   [AggregateType.HISTORICAL_COUNTRY]: 30,
   [AggregateType.EVENT]: 20,
+  // 기업 — 단일 엔티티 콘텐츠로 EVENT 동급. (동일 실체 ORGANIZATION은 의도적으로 미적립)
+  [AggregateType.COMPANY]: 20,
   // 행정구역 — 단위가 작고 일괄 등록이 흔해 낮게 책정
   [AggregateType.ADMINISTRATIVE_DIVISION]: 10,
 }
