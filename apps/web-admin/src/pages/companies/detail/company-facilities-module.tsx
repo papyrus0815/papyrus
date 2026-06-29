@@ -282,6 +282,21 @@ export function CompanyFacilitiesModule({
                   label="건설 배경"
                 />
               </S.RowNarrative>
+
+              <S.RowNarrative>
+                <S.RowFieldLabel>메모</S.RowFieldLabel>
+                <InlineRichText
+                  value={row.note ?? ''}
+                  onSave={(next) =>
+                    updateRow(idx, {
+                      note: isVisuallyEmptyRichText(next) ? null : next,
+                    })
+                  }
+                  placeholder="추가 메모 — 운영·이슈 등"
+                  onPersonClick={onPersonClick}
+                  stickyEditButton={false}
+                />
+              </S.RowNarrative>
             </S.Row>
           ))}
         </S.RowStack>

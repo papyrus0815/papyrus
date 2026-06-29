@@ -457,6 +457,21 @@ export function CompanyStockModule({
                 </span>
               </S.RowMetaLine>
 
+              <S.RowNarrative>
+                <S.RowFieldLabel>메모</S.RowFieldLabel>
+                <InlineRichText
+                  value={row.note ?? ''}
+                  onSave={(next) =>
+                    updateRow(idx, {
+                      note: isVisuallyEmptyRichText(next) ? null : next,
+                    })
+                  }
+                  placeholder="이 시점 메모 — 실적·이벤트·수급 등"
+                  onPersonClick={onPersonClick}
+                  stickyEditButton={false}
+                />
+              </S.RowNarrative>
+
               {!row.date &&
                 (!!row.price || !!row.marketCap || !!row.currency.trim()) && (
                   <DateWarn>⚠ 기준일을 선택해야 저장됩니다.</DateWarn>
