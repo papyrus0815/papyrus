@@ -223,6 +223,7 @@ export class CompanyController {
           role: drv.role,
           impact: drv.impact,
           importance: drv.importance,
+          eventDate: drv.eventDate ? drv.eventDate.toISOString() : null,
           note: drv.note,
           order: drv.order,
         })),

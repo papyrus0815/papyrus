@@ -328,6 +328,11 @@ export class CompanyOutlookDriverInputDto {
   importance?: DriverImportance | null
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== '' && value != null)
+  @IsDateString()
+  eventDate?: string | null
+
+  @IsOptional()
   @IsString()
   note?: string | null
 

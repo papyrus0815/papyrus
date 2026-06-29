@@ -346,6 +346,9 @@ export class CompanyService {
                           role: driver.role ?? null,
                           impact: driver.impact ?? null,
                           importance: driver.importance ?? null,
+                          eventDate: driver.eventDate
+                            ? new Date(driver.eventDate)
+                            : null,
                           note: driver.note ?? null,
                           order: driver.order ?? dIndex,
                         })),

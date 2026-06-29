@@ -255,6 +255,7 @@ export interface CompanyOutlookDriverItem {
   role: DriverRoleValue | null
   impact: DriverImpactValue | null
   importance: DriverImportanceValue | null
+  eventDate: string | null
   note: string | null
   order: number | null
 }

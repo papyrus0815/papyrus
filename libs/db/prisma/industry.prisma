@@ -598,6 +598,8 @@ model CompanyOutlookDriver {
   impact DriverImpact?
   /// 중요도
   importance DriverImportance?
+  /// 예정일(있으면 '촉매' — 날짜 박힌 변곡점). 없으면 상시 변수.
+  eventDate DateTime? @map("event_date")
   /// 비고
   note String? @db.Text
 
