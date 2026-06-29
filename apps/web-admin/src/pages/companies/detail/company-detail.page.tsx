@@ -348,19 +348,30 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
                       stockPoints={company.stockPoints ?? []}
                       financialCommentary={company.financialCommentary ?? null}
                       forecastBand={(() => {
-                        const outlook = (company.outlooks ?? []).find(
-                          (entry) =>
-                            entry.expectedLow != null &&
-                            entry.expectedHigh != null,
-                        )
-                        return outlook
-                          ? {
-                              low: outlook.expectedLow,
-                              high: outlook.expectedHigh,
-                              target: outlook.targetPrice,
-                              stance: outlook.stance,
-                            }
-                          : null
+                        const bandOf = (entry: (typeof company.outlooks)[number]) => {
+                          // 범위는 시나리오(비관/낙관) 우선, 없으면 예상 하단/상단.
+                          const bear = entry.scenarios?.find(
+                            (scn) => scn.kind === 'BEAR',
+                          )?.targetPrice
+                          const bull = entry.scenarios?.find(
+                            (scn) => scn.kind === 'BULL',
+                          )?.targetPrice
+                          const low = bear ?? entry.expectedLow
+                          const high = bull ?? entry.expectedHigh
+                          return low != null && high != null
+                            ? {
+                                low,
+                                high,
+                                target: entry.targetPrice,
+                                stance: entry.stance,
+                              }
+                            : null
+                        }
+                        for (const entry of company.outlooks ?? []) {
+                          const band = bandOf(entry)
+                          if (band) return band
+                        }
+                        return null
                       })()}
                       onPatch={onPatch}
                       onPersonClick={onPersonClick}

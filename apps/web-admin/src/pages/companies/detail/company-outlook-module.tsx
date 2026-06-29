@@ -122,12 +122,6 @@ const OUTCOME_LABEL: Record<OutlookOutcome, string> = {
 const outcomeTone = (outcome: OutlookOutcome | ''): Tone =>
   outcome === 'HIT' ? 'positive' : outcome === 'MISS' ? 'negative' : 'neutral'
 
-const DATE_CONF_OPTIONS: InlineSelectOption[] = [
-  { value: 'CONFIRMED', label: '확정' },
-  { value: 'ESTIMATED', label: '추정' },
-  { value: 'TBD', label: '미정' },
-]
-
 const ROLE_OPTIONS: InlineSelectOption[] = [
   { value: 'THESIS', label: '투자포인트' },
   { value: 'RISK', label: '리스크' },
@@ -167,14 +161,16 @@ interface OutlookCalc {
   bandReversed: boolean
 }
 
-/** 전망 행의 파생 지표 — 현재가 대비 여력·R/R·중앙값. 데이터 변경 없이 표시·계산용. */
+/** 전망 행의 파생 지표 — 현재가 대비 여력·R/R·중앙값. 데이터 변경 없이 표시·계산용.
+ *  range는 모드에 따라 호출 측이 주입(범위 모드=예상하단/상단, 시나리오 모드=비관/낙관). */
 function computeOutlook(
-  row: { targetPrice: string; expectedLow: string; expectedHigh: string },
+  targetPrice: string,
+  range: { low: number | null; high: number | null },
   currentPrice: number | null,
 ): OutlookCalc {
-  const target = strToNum(row.targetPrice)
-  let low = strToNum(row.expectedLow)
-  let high = strToNum(row.expectedHigh)
+  const target = strToNum(targetPrice)
+  let low = range.low
+  let high = range.high
   const bandReversed = low != null && high != null && low > high
   if (bandReversed) [low, high] = [high, low] // 계산은 정렬된 값으로 방어
   const mid =
@@ -199,6 +195,7 @@ interface DriverRow {
   role: DriverRole | ''
   impact: DriverImpact | ''
   importance: DriverImportance | ''
+  eventDate: string | null
   note: string | null
 }
 
@@ -256,6 +253,7 @@ function makeDriver(
     role: input.role ?? '',
     impact: input.impact ?? '',
     importance: input.importance ?? '',
+    eventDate: input.eventDate,
     note: input.note,
   }
 }
@@ -376,6 +374,23 @@ export function CompanyOutlookModule({
     ),
   )
 
+  /* 분산 표시 모드(범위 vs 시나리오) — UI 전용. 명시 선택 없으면 데이터로 추론. */
+  const [dispModes, setDispModes] = useState<
+    Record<string, 'range' | 'scenario'>
+  >({})
+  const dispMode = (row: OutlookRow): 'range' | 'scenario' => {
+    const explicit = dispModes[row.key]
+    if (explicit) return explicit
+    const hasScenarioRange = row.scenarios.some(
+      (scenario) =>
+        scenario.kind !== 'BASE' &&
+        (scenario.targetPrice.trim() || scenario.probability.trim()),
+    )
+    return hasScenarioRange ? 'scenario' : 'range'
+  }
+  const setDispMode = (key: string, mode: 'range' | 'scenario') =>
+    setDispModes((prev) => ({ ...prev, [key]: mode }))
+
   useEffect(() => {
     setRows((prev) =>
       syncRows(prev, serverRows, nextKey, nextDriverKey, nextCatalystKey),
@@ -421,20 +436,24 @@ export function CompanyOutlookModule({
             role: driver.role || null,
             impact: driver.impact || null,
             importance: driver.importance || null,
+            eventDate: driver.eventDate ?? null,
             note: driver.note,
             order: dIdx,
           })) as CompanyOutlookDriverInput[],
-        /* 값이 하나라도 있는 시나리오만 전송(빈 3행은 제외). */
+        /* 값이 하나라도 있는 시나리오만 전송. BASE 목표가는 대표 목표가(단일 출처). */
         scenarios: row.scenarios
           .filter(
             (scenario) =>
-              scenario.targetPrice.trim() ||
+              (scenario.kind !== 'BASE' && scenario.targetPrice.trim()) ||
               scenario.probability.trim() ||
               (scenario.summary ?? '').trim(),
           )
           .map((scenario, sIdx) => ({
             kind: scenario.kind,
-            targetPrice: strToNum(scenario.targetPrice),
+            targetPrice:
+              scenario.kind === 'BASE'
+                ? strToNum(row.targetPrice)
+                : strToNum(scenario.targetPrice),
             probability: strToNum(scenario.probability),
             summary: (scenario.summary ?? '').trim() || null,
             order: sIdx,
@@ -522,6 +541,7 @@ export function CompanyOutlookModule({
           role: '',
           impact: '',
           importance: '',
+          eventDate: null,
           note: null,
         },
       ],
@@ -551,43 +571,6 @@ export function CompanyOutlookModule({
       scenarios: row.scenarios.map((scenario, i) =>
         i === scenarioIdx ? { ...scenario, ...patch } : scenario,
       ),
-    })
-  }
-
-  const addCatalyst = (outlookIdx: number) => {
-    const row = rows[outlookIdx]
-    updateRow(outlookIdx, {
-      catalysts: [
-        ...row.catalysts,
-        {
-          key: nextCatalystKey(),
-          title: '',
-          expectedDate: null,
-          dateConfidence: '',
-          impact: '',
-          note: null,
-        },
-      ],
-    })
-  }
-
-  const updateCatalyst = (
-    outlookIdx: number,
-    catalystIdx: number,
-    patch: Partial<CatalystRow>,
-  ) => {
-    const row = rows[outlookIdx]
-    updateRow(outlookIdx, {
-      catalysts: row.catalysts.map((catalyst, i) =>
-        i === catalystIdx ? { ...catalyst, ...patch } : catalyst,
-      ),
-    })
-  }
-
-  const removeCatalyst = (outlookIdx: number, catalystIdx: number) => {
-    const row = rows[outlookIdx]
-    updateRow(outlookIdx, {
-      catalysts: row.catalysts.filter((_, i) => i !== catalystIdx),
     })
   }
 
@@ -627,14 +610,32 @@ export function CompanyOutlookModule({
       ) : (
         <S.RowStack>
           {rows.map((row, idx) => {
-            const calc = computeOutlook(row, currentPrice)
+            const mode = dispMode(row)
+            const bearTarget = strToNum(
+              row.scenarios.find((scn) => scn.kind === 'BEAR')?.targetPrice ?? '',
+            )
+            const bullTarget = strToNum(
+              row.scenarios.find((scn) => scn.kind === 'BULL')?.targetPrice ?? '',
+            )
+            const range =
+              mode === 'scenario'
+                ? { low: bearTarget, high: bullTarget }
+                : {
+                    low: strToNum(row.expectedLow),
+                    high: strToNum(row.expectedHigh),
+                  }
+            const calc = computeOutlook(row.targetPrice, range, currentPrice)
             const hasRange = calc.low != null && calc.high != null
             // 시나리오 확률가중 기대값 + 확률 합.
             let evSum = 0
             let evWeight = 0
             let probSum = 0
             for (const scenario of row.scenarios) {
-              const tgt = strToNum(scenario.targetPrice)
+              // BASE 목표가는 대표 목표가(단일 출처)를 사용 — 별도 입력 없음.
+              const tgt =
+                scenario.kind === 'BASE'
+                  ? strToNum(row.targetPrice)
+                  : strToNum(scenario.targetPrice)
               const prob = strToNum(scenario.probability)
               if (prob != null) probSum += prob
               if (tgt != null && prob != null) {
@@ -645,7 +646,8 @@ export function CompanyOutlookModule({
             const expectedValue = evWeight > 0 ? evSum / evWeight : null
             const hasScenario = row.scenarios.some(
               (scenario) =>
-                scenario.targetPrice.trim() || scenario.probability.trim(),
+                (scenario.kind !== 'BASE' && scenario.targetPrice.trim()) ||
+                scenario.probability.trim(),
             )
             // 만기(목표일) 경과 → 검증 안내.
             const targetPast =
@@ -808,28 +810,6 @@ export function CompanyOutlookModule({
 
               <S.RowMetaLine>
                 <span>
-                  <S.RowFieldLabel>예상 하단</S.RowFieldLabel>
-                  <InlineText
-                    value={row.expectedLow}
-                    onSave={(next) => updateRow(idx, { expectedLow: next })}
-                    placeholder="예: 200000"
-                    label="예상 하단"
-                    formatRead={readGrouped}
-                    numeric
-                  />
-                </span>
-                <span>
-                  <S.RowFieldLabel>예상 상단</S.RowFieldLabel>
-                  <InlineText
-                    value={row.expectedHigh}
-                    onSave={(next) => updateRow(idx, { expectedHigh: next })}
-                    placeholder="예: 260000"
-                    label="예상 상단"
-                    formatRead={readGrouped}
-                    numeric
-                  />
-                </span>
-                <span>
                   <S.RowFieldLabel>작성일</S.RowFieldLabel>
                   <InlineDate
                     value={row.asOf}
@@ -853,9 +833,115 @@ export function CompanyOutlookModule({
                 </span>
               </S.RowMetaLine>
 
-              {calc.bandReversed && (
-                <Warn>⚠ 예상 하단이 상단보다 큽니다 — 값을 확인하세요.</Warn>
-              )}
+              {/* 분산 — 범위 vs 시나리오 택1(토글). 같은 '예상 범위'를 두 방식으로
+                  중복 입력하지 않게 한 곳에서 전환한다. */}
+              <SubBlock>
+                <SubHead>
+                  예상 범위
+                  <ModeToggle>
+                    <ModeBtn
+                      type="button"
+                      $active={mode === 'range'}
+                      onClick={() => setDispMode(row.key, 'range')}
+                    >
+                      범위
+                    </ModeBtn>
+                    <ModeBtn
+                      type="button"
+                      $active={mode === 'scenario'}
+                      onClick={() => setDispMode(row.key, 'scenario')}
+                    >
+                      시나리오
+                    </ModeBtn>
+                  </ModeToggle>
+                  {mode === 'scenario' && expectedValue != null && (
+                    <SubMeta>
+                      기대값 {formatGrouped(Math.round(expectedValue))}
+                    </SubMeta>
+                  )}
+                  {mode === 'scenario' && hasScenario && probSum !== 100 && (
+                    <Warn as="span">확률 합 {probSum}%</Warn>
+                  )}
+                  {calc.bandReversed && (
+                    <Warn as="span">하단이 상단보다 큽니다</Warn>
+                  )}
+                </SubHead>
+
+                {mode === 'range' ? (
+                  <S.RowMetaLine>
+                    <span>
+                      <S.RowFieldLabel>하단</S.RowFieldLabel>
+                      <InlineText
+                        value={row.expectedLow}
+                        onSave={(next) =>
+                          updateRow(idx, { expectedLow: next })
+                        }
+                        placeholder="예: 200000"
+                        label="예상 하단"
+                        formatRead={readGrouped}
+                        numeric
+                      />
+                    </span>
+                    <span>
+                      <S.RowFieldLabel>상단</S.RowFieldLabel>
+                      <InlineText
+                        value={row.expectedHigh}
+                        onSave={(next) =>
+                          updateRow(idx, { expectedHigh: next })
+                        }
+                        placeholder="예: 260000"
+                        label="예상 상단"
+                        formatRead={readGrouped}
+                        numeric
+                      />
+                    </span>
+                  </S.RowMetaLine>
+                ) : (
+                  <ScenarioGrid>
+                    {row.scenarios.map((scenario, sIdx) => (
+                      <ScenarioRowEl key={scenario.kind}>
+                        <TonePill $tone={scenarioTone(scenario.kind)}>
+                          {SCENARIO_LABEL[scenario.kind]}
+                        </TonePill>
+                        <ScenarioField>
+                          <S.RowFieldLabel>목표가</S.RowFieldLabel>
+                          {scenario.kind === 'BASE' ? (
+                            <ScenarioBase>
+                              {row.targetPrice.trim()
+                                ? formatGrouped(strToNum(row.targetPrice) ?? 0)
+                                : '대표 목표가'}
+                            </ScenarioBase>
+                          ) : (
+                            <InlineText
+                              value={scenario.targetPrice}
+                              onSave={(next) =>
+                                updateScenario(idx, sIdx, { targetPrice: next })
+                              }
+                              placeholder="—"
+                              label={`${SCENARIO_LABEL[scenario.kind]} 목표가`}
+                              formatRead={readGrouped}
+                              numeric
+                            />
+                          )}
+                        </ScenarioField>
+                        <ScenarioField>
+                          <S.RowFieldLabel>확률</S.RowFieldLabel>
+                          <InlineText
+                            value={scenario.probability}
+                            onSave={(next) =>
+                              updateScenario(idx, sIdx, { probability: next })
+                            }
+                            placeholder="%"
+                            label={`${SCENARIO_LABEL[scenario.kind]} 확률`}
+                            numeric
+                          />
+                          <ScenarioPct>%</ScenarioPct>
+                        </ScenarioField>
+                      </ScenarioRowEl>
+                    ))}
+                  </ScenarioGrid>
+                )}
+              </SubBlock>
 
               {/* 핵심 변수 목록 */}
               <DriverBlock>
@@ -920,6 +1006,33 @@ export function CompanyOutlookModule({
                             label="중요도"
                           />
                         </DriverMeta>
+                        <DriverMeta>
+                          <S.RowFieldLabel>예정일</S.RowFieldLabel>
+                          <InlineDate
+                            value={driver.eventDate}
+                            onSave={(next) =>
+                              updateDriver(idx, dIdx, { eventDate: next })
+                            }
+                            emptyLabel="—"
+                            pickerTitle="촉매 예정일"
+                            blockBc
+                            label="예정일(촉매)"
+                          />
+                          {driver.eventDate &&
+                            (() => {
+                              const days = Math.ceil(
+                                (new Date(driver.eventDate).getTime() -
+                                  Date.now()) /
+                                  86400000,
+                              )
+                              if (days < 0) return null
+                              return (
+                                <DDay $soon={days <= 14}>
+                                  {days === 0 ? 'D-day' : `D-${days}`}
+                                </DDay>
+                              )
+                            })()}
+                        </DriverMeta>
                         <S.IconBtn
                           type="button"
                           onClick={() => removeDriver(idx, dIdx)}
@@ -952,56 +1065,6 @@ export function CompanyOutlookModule({
                   <FiPlus /> 변수 추가
                 </DriverAdd>
               </DriverBlock>
-
-              {/* 시나리오 3트랙(낙관/기본/비관) */}
-              <SubBlock>
-                <SubHead>
-                  시나리오
-                  {expectedValue != null && (
-                    <SubMeta>
-                      기대값 {formatGrouped(Math.round(expectedValue))}
-                    </SubMeta>
-                  )}
-                  {hasScenario && probSum !== 100 && (
-                    <Warn as="span">확률 합 {probSum}%</Warn>
-                  )}
-                </SubHead>
-                <ScenarioGrid>
-                  {row.scenarios.map((scenario, sIdx) => (
-                    <ScenarioRowEl key={scenario.kind}>
-                      <TonePill $tone={scenarioTone(scenario.kind)}>
-                        {SCENARIO_LABEL[scenario.kind]}
-                      </TonePill>
-                      <ScenarioField>
-                        <S.RowFieldLabel>목표가</S.RowFieldLabel>
-                        <InlineText
-                          value={scenario.targetPrice}
-                          onSave={(next) =>
-                            updateScenario(idx, sIdx, { targetPrice: next })
-                          }
-                          placeholder="—"
-                          label={`${SCENARIO_LABEL[scenario.kind]} 목표가`}
-                          formatRead={readGrouped}
-                          numeric
-                        />
-                      </ScenarioField>
-                      <ScenarioField>
-                        <S.RowFieldLabel>확률</S.RowFieldLabel>
-                        <InlineText
-                          value={scenario.probability}
-                          onSave={(next) =>
-                            updateScenario(idx, sIdx, { probability: next })
-                          }
-                          placeholder="%"
-                          label={`${SCENARIO_LABEL[scenario.kind]} 확률`}
-                          numeric
-                        />
-                        <ScenarioPct>%</ScenarioPct>
-                      </ScenarioField>
-                    </ScenarioRowEl>
-                  ))}
-                </ScenarioGrid>
-              </SubBlock>
 
               {/* 밸류에이션 근거(목표가 산출) */}
               <SubBlock>
@@ -1069,89 +1132,6 @@ export function CompanyOutlookModule({
                     />
                   </span>
                 </S.RowMetaLine>
-              </SubBlock>
-
-              {/* 촉매(예정 이벤트) */}
-              <SubBlock>
-                <SubHead>예정 촉매</SubHead>
-                {row.catalysts.length > 0 && (
-                  <CatalystList>
-                    {row.catalysts.map((catalyst, cIdx) => {
-                      const imminent =
-                        !!catalyst.expectedDate &&
-                        new Date(catalyst.expectedDate).getTime() - Date.now() <
-                          14 * 86400000 &&
-                        new Date(catalyst.expectedDate).getTime() >= Date.now()
-                      return (
-                        <CatalystItem key={catalyst.key}>
-                          {catalyst.impact && (
-                            <ToneDot $tone={impactTone(catalyst.impact)} />
-                          )}
-                          <CatalystName>
-                            <InlineText
-                              value={catalyst.title}
-                              onSave={(next) =>
-                                updateCatalyst(idx, cIdx, { title: next })
-                              }
-                              placeholder="이벤트 (예: 2분기 실적 발표)"
-                              label="촉매명"
-                            />
-                          </CatalystName>
-                          <CatalystMeta $imminent={imminent}>
-                            <InlineDate
-                              value={catalyst.expectedDate}
-                              onSave={(next) =>
-                                updateCatalyst(idx, cIdx, { expectedDate: next })
-                              }
-                              emptyLabel="예정일"
-                              pickerTitle="촉매 예정일"
-                              blockBc
-                              label="예정일"
-                            />
-                          </CatalystMeta>
-                          <CatalystSel>
-                            <InlineSelect
-                              value={catalyst.impact}
-                              options={IMPACT_OPTIONS}
-                              onSave={(next) =>
-                                updateCatalyst(idx, cIdx, {
-                                  impact: next as DriverImpact | '',
-                                })
-                              }
-                              placeholder="영향"
-                              label="영향"
-                            />
-                          </CatalystSel>
-                          <CatalystSel>
-                            <InlineSelect
-                              value={catalyst.dateConfidence}
-                              options={DATE_CONF_OPTIONS}
-                              onSave={(next) =>
-                                updateCatalyst(idx, cIdx, {
-                                  dateConfidence:
-                                    next as CatalystDateConfidence | '',
-                                })
-                              }
-                              placeholder="신뢰도"
-                              label="예정일 신뢰도"
-                            />
-                          </CatalystSel>
-                          <S.IconBtn
-                            type="button"
-                            onClick={() => removeCatalyst(idx, cIdx)}
-                            aria-label="촉매 삭제"
-                            $danger
-                          >
-                            <FiTrash2 />
-                          </S.IconBtn>
-                        </CatalystItem>
-                      )
-                    })}
-                  </CatalystList>
-                )}
-                <DriverAdd type="button" onClick={() => addCatalyst(idx)}>
-                  <FiPlus /> 촉매 추가
-                </DriverAdd>
               </SubBlock>
 
               {/* 사후 검증(만기 경과 시) */}
@@ -1484,39 +1464,33 @@ const ScenarioPct = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const CatalystList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 6px;
+/** BASE 시나리오 목표가 — 대표 목표가의 읽기전용 미러(별도 입력 없음). */
+const ScenarioBase = styled.span`
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const CatalystItem = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+const ModeToggle = styled.span`
+  display: inline-flex;
+  gap: 1px;
+  padding: 1px;
+  border-radius: 999px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-const CatalystName = styled.span`
-  flex: 1;
-  min-width: 140px;
+const ModeBtn = styled.button<{ $active: boolean }>`
+  font: inherit;
+  font-size: 0.6875rem;
   font-weight: 600;
-`
-
-const CatalystMeta = styled.span<{ $imminent?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  ${({ theme, $imminent }) =>
-    $imminent &&
-    `color: ${toneColor('warning', theme.mode === 'dark')}; font-weight: 600;`}
-`
-
-const CatalystSel = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  padding: 2px 10px;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  color: ${({ theme, $active }) =>
+    $active ? '#ffffff' : theme.colors.text.tertiary};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : 'transparent'};
 `
 
 const DriverBlock = styled.div`
@@ -1553,6 +1527,19 @@ const DriverName = styled.span`
   flex: 1;
   min-width: 120px;
   font-weight: 600;
+`
+
+/** 촉매 임박 D-day 배지(예정일 있는 변수). */
+const DDay = styled.span<{ $soon: boolean }>`
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: ${({ theme, $soon }) =>
+    $soon
+      ? toneColor('warning', theme.mode === 'dark')
+      : theme.colors.text.tertiary};
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 /** 변수 내용(근거) — flex-wrap 내에서 전폭 줄로 떨어져 변수 아래 노출. */

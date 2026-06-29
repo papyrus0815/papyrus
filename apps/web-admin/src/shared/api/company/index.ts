@@ -170,6 +170,7 @@ export type CompanyOutlookDriverItem = {
   role: DriverRole | null
   impact: DriverImpact | null
   importance: DriverImportance | null
+  eventDate: string | null
   note: string | null
   order: number | null
 }
@@ -324,6 +325,7 @@ export type CompanyOutlookDriverInput = {
   role?: DriverRole | null
   impact?: DriverImpact | null
   importance?: DriverImportance | null
+  eventDate?: string | null
   note?: string | null
   order?: number | null
 }
