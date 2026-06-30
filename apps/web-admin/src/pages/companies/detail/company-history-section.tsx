@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { FiArrowDown, FiArrowUp, FiPlus, FiSettings, FiTrash2 } from 'react-icons/fi'
+import {
+  FiArrowDown,
+  FiArrowUp,
+  FiPlus,
+  FiSettings,
+  FiTrash2,
+} from 'react-icons/fi'
+import styled from 'styled-components'
 
 import type {
   CompanyHistoryInput,
@@ -36,6 +43,24 @@ const HISTORY_TYPE_OPTIONS: InlineSelectOption[] = [
   { value: 'MILESTONE', label: '마일스톤' },
   { value: 'OTHER', label: '기타' },
 ]
+
+/**
+ * 발생일 오름차순 비교(미입력 null은 맨 뒤).
+ * **달력 일자(YYYY-MM-DD)만 비교** — 같은 날에 date-only('2024-01-15')와 풀 ISO
+ * ('2024-01-15T00:00:00.000Z') 포맷이 섞여도 동일(=0)로 보아 runInfo의 그룹핑(slice(0,10))과
+ * 일치시키고, stable sort가 intra-day 수동 순서(화살표 결과)를 보존하도록 한다.
+ */
+function compareDateAscNullLast(
+  left: string | null,
+  right: string | null,
+): number {
+  const leftKey = left ? left.slice(0, 10) : null
+  const rightKey = right ? right.slice(0, 10) : null
+  if (leftKey === rightKey) return 0
+  if (leftKey == null) return 1
+  if (rightKey == null) return -1
+  return leftKey < rightKey ? -1 : 1
+}
 
 interface HistoryRow {
   /** 클라이언트 임시 키 — InlineText/InlineRichText 인스턴스(자체 draft) 보존용. */
@@ -100,7 +125,12 @@ export function CompanyHistorySection({
     () =>
       (histories ?? [])
         .slice()
-        .sort((a, right) => (a.order ?? 0) - (right.order ?? 0)),
+        // 발생일 오름차순(미입력은 맨 뒤)이 정렬 권위. 같은 날짜는 저장된 order로 intra-day 순서 유지.
+        .sort((left, right) => {
+          const byDate = compareDateAscNullLast(left.occurredAt, right.occurredAt)
+          if (byDate !== 0) return byDate
+          return (left.order ?? 0) - (right.order ?? 0)
+        }),
     [histories],
   )
 
@@ -109,16 +139,32 @@ export function CompanyHistorySection({
   )
 
   useEffect(() => {
-    setRows((prev) => syncRows(prev, serverRows, nextKey))
+    setRows((prev) =>
+      // syncRows는 미매칭(제목 없는·로컬 신규) 행을 배열 끝에 append하므로, 날짜 정렬 불변을 위해
+      // 병합 결과를 한 번 더 발생일순(stable)으로 정렬한다 — 제목 없는 '날짜만 입력' 행이 맨 아래로
+      // 튀는 스냅백 방지. null(미입력) 행은 여전히 맨 뒤.
+      syncRows(prev, serverRows, nextKey)
+        .slice()
+        .sort((left, right) =>
+          compareDateAscNullLast(left.occurredAt, right.occurredAt),
+        ),
+    )
   }, [serverRows, nextKey])
 
   const commitRows = (next: HistoryRow[]) => {
-    setRows(next)
+    /* 항상 발생일 오름차순으로 정렬(미입력 맨 뒤). 같은 날짜는 stable sort라 현재 순서가 유지돼
+       intra-day 수동 순서(화살표 결과)를 보존한다. order는 정렬된 위치로 재부여돼 tiebreaker가 된다. */
+    const sorted = next
+      .slice()
+      .sort((left, right) =>
+        compareDateAscNullLast(left.occurredAt, right.occurredAt),
+      )
+    setRows(sorted)
     /* 제목이 *반드시* 있어야 저장한다 — 서버 CompanyHistoryInputDto.title은 @IsNotEmpty라
        빈 제목 행을 보내면 전체배열 PUT이 400난다. 제목 없는 행(본문·날짜·재무만 입력)은
        PUT에서 drop하되 로컬 행은 유지(syncRows가 미매칭 tail로 보존)되어 입력은 안 사라지고,
        사용자는 제목을 채우면 저장된다. (제목 validate로 안내) */
-    const cleaned: CompanyHistoryInput[] = next
+    const cleaned: CompanyHistoryInput[] = sorted
       .filter((row) => row.title.trim())
       .map((row, idx) => ({
         type: row.type,
@@ -190,6 +236,50 @@ export function CompanyHistorySection({
 
   const [manageMode, setManageMode] = useState(false)
 
+  /* 인접 동일 날짜 run — 같은 날짜가 *연속*한 구간을 한 날짜 노드로 묶는다(전역 그룹핑이 아니라
+     인접만; 수동 order와 충돌 안 함). isStart=run 첫 행(날짜+N건 배지), isSub=후속 행(날짜 숨김·작은 틱).
+     null(미입력) 날짜는 병합하지 않음(각자 단일). */
+  const runInfo = useMemo(() => {
+    const info = rows.map(() => ({
+      isStart: true,
+      isSub: false,
+      isEnd: true,
+      count: 1,
+    }))
+    let start = 0
+    while (start < rows.length) {
+      const firstDate = rows[start].occurredAt
+      const key = firstDate ? firstDate.slice(0, 10) : null
+      let end = start + 1
+      if (key != null) {
+        while (end < rows.length && rows[end].occurredAt?.slice(0, 10) === key)
+          end++
+      }
+      const count = end - start
+      info[start] = { isStart: true, isSub: false, isEnd: count === 1, count }
+      for (let pos = start + 1; pos < end; pos++)
+        info[pos] = {
+          isStart: false,
+          isSub: true,
+          isEnd: pos === end - 1,
+          count,
+        }
+      start = end
+    }
+    return info
+  }, [rows])
+
+  /* run(같은 날짜 묶음) 전체 행의 발생일을 한 번에 변경 — 날짜 노드에서 일괄. */
+  const setRunDate = (startIdx: number, count: number, next: string | null) => {
+    commitRows(
+      rows.map((row, position) =>
+        position >= startIdx && position < startIdx + count
+          ? { ...row, occurredAt: next }
+          : row,
+      ),
+    )
+  }
+
   return (
     <S.Section id="company-history">
       <S.SectionHeader>
@@ -218,7 +308,7 @@ export function CompanyHistorySection({
           그리고 제품 발표(예: Blackwell)와 당시 주가까지 시간순으로 적어보세요.
         </S.EmptyState>
       ) : (
-        <S.RowStack>
+        <Timeline>
           {rows.map((row, idx) => {
             const showFinance =
               row.type === 'PRODUCT_LAUNCH' ||
@@ -226,10 +316,46 @@ export function CompanyHistorySection({
               !!row.stockPrice ||
               !!row.marketCap ||
               !!row.currency
+            const run = runInfo[idx]
             return (
-              <S.Row key={row.key}>
+              <TLItem key={row.key} $sub={run.isSub}>
+                {!run.isSub && (
+                  <TLDate>
+                    <InlineDate
+                      value={row.occurredAt}
+                      onSave={(next) =>
+                        run.count > 1
+                          ? setRunDate(idx, run.count, next)
+                          : updateRow(idx, { occurredAt: next })
+                      }
+                      emptyLabel="시점 미입력"
+                      pickerTitle={
+                        run.count > 1
+                          ? '발생일 선택 (이 날짜 전체 일괄)'
+                          : '연혁 발생일 선택'
+                      }
+                      blockBc
+                      label={
+                        run.count > 1 ? `발생일 (${run.count}건 일괄)` : '발생일'
+                      }
+                    />
+                    {run.count > 1 && <CountBadge>{run.count}건</CountBadge>}
+                  </TLDate>
+                )}
+                {manageMode && run.count > 1 && (
+                  <SubDateEdit>
+                    <S.RowFieldLabel>이 항목 날짜</S.RowFieldLabel>
+                    <InlineDate
+                      value={row.occurredAt}
+                      onSave={(next) => updateRow(idx, { occurredAt: next })}
+                      emptyLabel="시점 미입력"
+                      pickerTitle="이 항목만 다른 날로"
+                      blockBc
+                      label="이 항목 발생일"
+                    />
+                  </SubDateEdit>
+                )}
                 <S.RowHeader>
-                  <S.RowIndex aria-hidden>{idx + 1}</S.RowIndex>
                   <S.RowTitleHost>
                     <InlineText
                       value={row.title}
@@ -243,22 +369,27 @@ export function CompanyHistorySection({
                   </S.RowTitleHost>
                   {manageMode && (
                     <S.ManageActions>
-                      <S.IconBtn
-                        type="button"
-                        onClick={() => moveRow(idx, -1)}
-                        disabled={idx === 0}
-                        aria-label="위로"
-                      >
-                        <FiArrowUp />
-                      </S.IconBtn>
-                      <S.IconBtn
-                        type="button"
-                        onClick={() => moveRow(idx, 1)}
-                        disabled={idx === rows.length - 1}
-                        aria-label="아래로"
-                      >
-                        <FiArrowDown />
-                      </S.IconBtn>
+                      {/* 같은 날짜 묶음 안에서만 순서 조정(자동 날짜정렬이라 날짜 경계 넘는 이동은 무의미). */}
+                      {run.count > 1 && (
+                        <>
+                          <S.IconBtn
+                            type="button"
+                            onClick={() => moveRow(idx, -1)}
+                            disabled={run.isStart}
+                            aria-label="위로 (같은 날 안에서)"
+                          >
+                            <FiArrowUp />
+                          </S.IconBtn>
+                          <S.IconBtn
+                            type="button"
+                            onClick={() => moveRow(idx, 1)}
+                            disabled={run.isEnd}
+                            aria-label="아래로 (같은 날 안에서)"
+                          >
+                            <FiArrowDown />
+                          </S.IconBtn>
+                        </>
+                      )}
                       <S.IconBtn
                         type="button"
                         onClick={() => void removeRow(idx)}
@@ -284,17 +415,6 @@ export function CompanyHistorySection({
                       }
                       placeholder="종류"
                       label="연혁 종류"
-                    />
-                  </span>
-                  <span>
-                    <S.RowFieldLabel>발생</S.RowFieldLabel>
-                    <InlineDate
-                      value={row.occurredAt}
-                      onSave={(next) => updateRow(idx, { occurredAt: next })}
-                      emptyLabel="시점 미입력"
-                      pickerTitle="연혁 발생일 선택"
-                      blockBc
-                      label="발생일"
                     />
                   </span>
                 </S.RowMetaLine>
@@ -358,10 +478,10 @@ export function CompanyHistorySection({
                     stickyEditButton={false}
                   />
                 </S.RowNarrative>
-              </S.Row>
+              </TLItem>
             )
           })}
-        </S.RowStack>
+        </Timeline>
       )}
 
       <S.AddButton type="button" onClick={addRow}>
@@ -432,3 +552,80 @@ function syncRows(
   }
   return next
 }
+
+const Timeline = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  margin-left: 4px;
+`
+
+/**
+ * 타임라인 항목 — 좌측 세로선(::before) + 날짜 노드(::after), 콘텐츠는 우측 들여쓰기.
+ * $sub: 같은 날짜 묶음의 후속 행(날짜 숨김) — 큰 점 대신 작은 회색 틱 + 위 간격을 좁혀 그룹임을 시각화.
+ */
+const TLItem = styled.div<{ $sub?: boolean }>`
+  position: relative;
+  padding-left: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: ${({ $sub }) => ($sub ? '-12px' : '0')};
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 14px;
+    bottom: -26px;
+    width: 2px;
+    background: ${({ theme }) => theme.colors.border.default};
+  }
+  &:last-child::before {
+    display: none;
+  }
+  &::after {
+    content: '';
+    position: absolute;
+    left: ${({ $sub }) => ($sub ? '2px' : '0')};
+    top: 6px;
+    width: ${({ $sub }) => ($sub ? '6px' : '10px')};
+    height: ${({ $sub }) => ($sub ? '6px' : '10px')};
+    border-radius: 50%;
+    background: ${({ theme, $sub }) =>
+      $sub ? theme.colors.border.default : theme.colors.primary};
+    box-shadow: ${({ theme, $sub }) =>
+      $sub ? 'none' : `0 0 0 3px ${theme.colors.background.secondary}`};
+  }
+`
+
+const TLDate = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary};
+`
+
+/** 같은 날짜 묶음 헤더의 '이 날 N건' 배지. */
+const CountBadge = styled.span`
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+/** 관리 모드에서 묶음 내 한 항목만 다른 날로 분리하는 항목별 날짜 편집 줄. */
+const SubDateEdit = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
