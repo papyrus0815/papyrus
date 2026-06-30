@@ -369,8 +369,10 @@ model CompanyStockPoint {
 
   /// 출처
   source String? @db.VarChar(200)
-  /// 비고
+  /// 비고 (회사 미시 — 이 회사의 실적·이벤트·수급 등)
   note String? @db.Text
+  /// 증시 동향 (시장 거시 — 지수·매크로·섹터·수급 등 시장 전체 서술; 회사 미시인 note와 분리)
+  marketNote String? @map("market_note") @db.Text
 
   //--- 관계 필드
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)

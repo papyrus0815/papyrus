@@ -273,6 +273,7 @@ export class CompanyService {
             currency: point.currency ?? null,
             source: point.source ?? null,
             note: point.note ?? null,
+            marketNote: point.marketNote ?? null,
           }))
           if (stockData.length > 0) {
             await tx.companyStockPoint.createMany({

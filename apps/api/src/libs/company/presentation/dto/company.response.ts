@@ -146,6 +146,7 @@ export interface CompanyStockPointItem {
   currency: string | null
   source: string | null
   note: string | null
+  marketNote: string | null
 }
 
 /** 투자의견 (한국식 5단계) */

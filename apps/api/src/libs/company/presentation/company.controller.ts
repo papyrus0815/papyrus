@@ -176,6 +176,7 @@ export class CompanyController {
         currency: sp.currency,
         source: sp.source,
         note: sp.note,
+        marketNote: sp.marketNote,
       })),
       analystRatings: c.analystRatings.map((ar) => ({
         id: ar.id,

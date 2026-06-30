@@ -46,8 +46,11 @@ interface StockRow {
   marketCap: string
   currency: string
   source: string
-  /* 입력 컨트롤 없는 보존 필드. */
+  /** 이 회사 미시 메모(실적·이벤트·수급). */
   note: string | null
+  /** 이 시점의 시장 거시 동향(증시 동향 — 지수·매크로·섹터). 회사 미시인 note와 분리. */
+  marketNote: string | null
+  /* 입력 컨트롤 없는 보존 필드. */
   revenue: number | null
 }
 
@@ -61,8 +64,17 @@ function makeRow(point: CompanyStockPointItem, key: string): StockRow {
     currency: point.currency ?? '',
     source: point.source ?? '',
     note: point.note,
+    marketNote: point.marketNote,
     revenue: point.revenue,
   }
+}
+
+/** 로컬 자정 기준 오늘 날짜(YYYY-MM-DD). 시점 추가 시 발생일 프리필용. */
+function todayIso(): string {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
 }
 
 /** 최신 전망의 예상범위 — 주가 차트에 가로 밴드+목표선으로 오버레이. */
@@ -135,6 +147,7 @@ export function CompanyStockModule({
         currency: row.currency.trim() || null,
         source: row.source.trim() || null,
         note: row.note,
+        marketNote: row.marketNote,
       })
     }
     const cleaned = Array.from(byInstant.values())
@@ -145,19 +158,27 @@ export function CompanyStockModule({
   }
 
   const addRow = () => {
-    setRows((arr) => [
-      ...arr,
-      {
-        key: nextKey(),
-        date: null,
-        price: '',
-        marketCap: '',
-        currency: '',
-        source: '',
-        note: null,
-        revenue: null,
-      },
-    ])
+    setRows((arr) => {
+      /* 발생일 프리필 — 매번 달력 손택 마찰을 줄인다. 단 @@unique([companyId,date])라
+         같은 날 행이 이미 있으면 프리필 시 무음 병합(commitRows dedup)되므로, 그 경우엔
+         날짜를 비워 사용자가 다른 날을 고르게 한다. */
+      const today = todayIso()
+      const todayTaken = arr.some((row) => row.date?.slice(0, 10) === today)
+      return [
+        ...arr,
+        {
+          key: nextKey(),
+          date: todayTaken ? null : today,
+          price: '',
+          marketCap: '',
+          currency: '',
+          source: '',
+          note: null,
+          marketNote: null,
+          revenue: null,
+        },
+      ]
+    })
   }
 
   const updateRow = (idx: number, patch: Partial<StockRow>) => {
@@ -172,7 +193,9 @@ export function CompanyStockModule({
       !!row.price.trim() ||
       !!row.marketCap.trim() ||
       !!row.currency.trim() ||
-      !!row.source.trim()
+      !!row.source.trim() ||
+      !isVisuallyEmptyRichText(row.note ?? '') ||
+      !isVisuallyEmptyRichText(row.marketNote ?? '')
     if (
       hasContent &&
       !(await confirm({
@@ -229,6 +252,20 @@ export function CompanyStockModule({
     }
     return { map, periodPct }
   }, [rows])
+
+  /* 증시 동향이 적힌 시점 — 차트에 세로 마커로 오버레이(가격 있는 시점만, 라벨은 차트 카테고리와 동일 키). */
+  const marketMarks = useMemo(
+    () =>
+      rows
+        .filter(
+          (row) =>
+            !!row.date &&
+            strToNum(row.price) != null &&
+            !isVisuallyEmptyRichText(row.marketNote ?? ''),
+        )
+        .map((row) => (row.date as string).slice(0, 10)),
+    [rows],
+  )
 
   const fmtNum = (value: number) =>
     value.toLocaleString('ko-KR', { maximumFractionDigits: 2 })
@@ -355,6 +392,21 @@ export function CompanyStockModule({
                   }}
                 />
               )}
+              {marketMarks.map((label) => (
+                <ReferenceLine
+                  key={`mk-${label}`}
+                  x={label}
+                  stroke={theme.colors.text.tertiary}
+                  strokeDasharray="2 3"
+                  strokeOpacity={0.6}
+                  label={{
+                    value: '시황',
+                    position: 'insideTopRight',
+                    fontSize: 9,
+                    fill: theme.colors.text.tertiary,
+                  }}
+                />
+              ))}
               <Line
                 type="monotone"
                 dataKey="price"
@@ -370,8 +422,9 @@ export function CompanyStockModule({
 
       {rows.length === 0 ? (
         <S.EmptyState>
-          날짜별 주가·시가총액을 기록하면 차트로 추세를 보고, 연혁의 발표 시점과 비교할
-          수 있습니다.
+          날짜별 주가·시가총액과 그날의 <strong>증시 동향</strong>을 기록하면 차트로
+          추세를 보고, 연혁의 발표 시점과 비교할 수 있습니다. 아래{' '}
+          <strong>＋ 시점 추가</strong>(오늘 날짜 자동)로 시작하세요.
         </S.EmptyState>
       ) : (
         <S.RowStack>
@@ -466,7 +519,22 @@ export function CompanyStockModule({
                       note: isVisuallyEmptyRichText(next) ? null : next,
                     })
                   }
-                  placeholder="이 시점 메모 — 실적·이벤트·수급 등"
+                  placeholder="이 회사 메모 — 실적·이벤트·수급 등"
+                  onPersonClick={onPersonClick}
+                  stickyEditButton={false}
+                />
+              </S.RowNarrative>
+
+              <S.RowNarrative>
+                <S.RowFieldLabel>증시 동향</S.RowFieldLabel>
+                <InlineRichText
+                  value={row.marketNote ?? ''}
+                  onSave={(next) =>
+                    updateRow(idx, {
+                      marketNote: isVisuallyEmptyRichText(next) ? null : next,
+                    })
+                  }
+                  placeholder="이 날의 시장 전체 동향 — 코스피·나스닥·금리·섹터·수급 등"
                   onPersonClick={onPersonClick}
                   stickyEditButton={false}
                 />

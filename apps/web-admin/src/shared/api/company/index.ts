@@ -114,6 +114,7 @@ export type CompanyStockPointItem = {
   currency: string | null
   source: string | null
   note: string | null
+  marketNote: string | null
 }
 
 /** 투자의견(한국식 5단계) */
@@ -304,6 +305,7 @@ export type CompanyStockPointInput = {
   currency?: string | null
   source?: string | null
   note?: string | null
+  marketNote?: string | null
 }
 
 export type CompanyAnalystRatingInput = {

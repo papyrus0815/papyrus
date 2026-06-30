@@ -248,6 +248,11 @@ export class CompanyStockPointInputDto {
   @IsOptional()
   @IsString()
   note?: string | null
+
+  /** 증시 동향(시장 거시 — 지수·매크로·섹터). 회사 미시 비고인 note와 분리. */
+  @IsOptional()
+  @IsString()
+  marketNote?: string | null
 }
 
 /** 증권사 목표주가·투자의견 입력 */
