@@ -445,8 +445,10 @@ function PersonNodeInner({ data }: NodeProps) {
       ? `${person.birthYear ?? '?'}–${person.deathYear ?? ''}`
       : null
   const isDeceased = person.deathYear != null
+  // 비소유 노드(다른 계정 등록)는 상세(/persons/:id)가 계정 스코프라 404 → 클릭 비활성 + dim
+  const openable = person.isOwned !== false
   const handleClick = (ev: React.MouseEvent) => {
-    if (!person.id) return
+    if (!person.id || !openable) return
     if (ev.shiftKey) {
       // Shift+클릭: 가계도 중심을 이 인물로 변경 (C2)
       navigate(`/genealogy/${person.id}/`)
@@ -459,10 +461,11 @@ function PersonNodeInner({ data }: NodeProps) {
     <NodeWrap
       $isEgo={isEgo}
       $deceased={isDeceased}
+      $dimmed={!openable}
       $w={sizes.NODE_W}
       $h={sizes.NODE_H}
       onClick={handleClick}
-      title={buildPersonTooltip(person, displayName)}
+      title={openable ? buildPersonTooltip(person, displayName) : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
@@ -561,7 +564,9 @@ function GenealogyFlow({ personId }: { personId: string }) {
   const sizes = isCompact ? COMPACT_SIZES : DESKTOP_SIZES
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['family-tree', personId],
+    // 인물 상세 패널과 동일 키 — 가족 편집 후 invalidateQueries(['person-family-tree'])가
+    // 전체 가계도 페이지에도 반영되도록 통일(과거 ['family-tree']는 어떤 무효화 경로도 안 쳐 최대 5분 stale).
+    queryKey: ['person-family-tree', personId],
     queryFn: () => getPersonFamilyTree(personId),
     staleTime: 5 * 60 * 1000,
   })
@@ -997,6 +1002,8 @@ const NodeWrap = styled.div<{
   $deceased?: boolean
   $w?: number
   $h?: number
+  /** 비소유 노드 — 현재 계정이 상세를 열 수 없음(다른 계정 등록). dim + 클릭 불가. */
+  $dimmed?: boolean
 }>`
   position: relative;
   width: ${({ $w }) => $w ?? DESKTOP_SIZES.NODE_W}px;
@@ -1020,6 +1027,12 @@ const NodeWrap = styled.div<{
     box-shadow: 0 8px 24px rgba(0,0,0,0.12);
     /* 모바일 (C5): hover 대체용 active 처리 */
   }
+
+  ${({ $dimmed }) =>
+    $dimmed
+      ? `opacity: 0.5; cursor: default;
+         &:hover, &:focus-within, &:active { transform: none; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }`
+      : ''}
 
   @media (prefers-color-scheme: dark) {
     --node-bg: #1e293b;

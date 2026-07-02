@@ -312,6 +312,52 @@ export class PersonService {
   }
 
   /**
+   * 부모/조상 그래프 무결성 검증 — 자기 자신을 부모로 지정(자기부모)하거나
+   * 조상 체인에 자기 자신이 등장(순환)하는 손상 그래프 생성을 막는다.
+   * 새로 지정되는 fatherId/motherId만 검사(기존 엣지는 저장 시점에 이미 검증됨).
+   */
+  private async assertNoParentCycle(
+    id: string,
+    fatherId?: string | null,
+    motherId?: string | null,
+  ): Promise<void> {
+    if (fatherId && fatherId === id)
+      throw new BadRequestException('자기 자신을 아버지로 지정할 수 없습니다.')
+    if (motherId && motherId === id)
+      throw new BadRequestException('자기 자신을 어머니로 지정할 수 없습니다.')
+
+    const start = [fatherId, motherId].filter((value): value is string => !!value)
+    if (start.length === 0) return
+
+    // 지정된 부모들의 조상 체인을 위로 순회 — 도중에 id가 나오면 순환(자기 자신이 조상).
+    const visited = new Set<string>()
+    let frontier = start
+    let depth = 0
+    while (frontier.length > 0 && depth < 64) {
+      const parents = await this.prisma.person.findMany({
+        where: { id: { in: frontier } },
+        select: { id: true, fatherId: true, motherId: true },
+      })
+      const next: string[] = []
+      for (const parent of parents) {
+        for (const ancestorId of [parent.fatherId, parent.motherId]) {
+          if (!ancestorId) continue
+          if (ancestorId === id)
+            throw new BadRequestException(
+              '부모/조상 관계에 순환이 생깁니다 — 자기 자신을 조상으로 지정할 수 없습니다.',
+            )
+          if (!visited.has(ancestorId)) {
+            visited.add(ancestorId)
+            next.push(ancestorId)
+          }
+        }
+      }
+      frontier = next
+      depth++
+    }
+  }
+
+  /**
    * 인물 생성 (accountId 있으면 소유자로 저장)
    */
   async create(data: CreatePersonData, accountId?: string): Promise<PersonResponseDto> {
@@ -341,6 +387,10 @@ export class PersonService {
       throw accountId
         ? new ForbiddenException('본인이 등록한 인물만 수정할 수 있습니다.')
         : new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${id})`)
+    }
+    // 부모 지정 시 자기부모·조상 순환 방지 (지정된 부모만 검사)
+    if (data.fatherId != null || data.motherId != null) {
+      await this.assertNoParentCycle(id, data.fatherId, data.motherId)
     }
     const person = await this.personRepository.update(id, data)
     const change = describePersonUpdate(existing, data)

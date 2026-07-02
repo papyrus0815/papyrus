@@ -1648,6 +1648,42 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 배우자 관계를 정렬된 페어키(min,max)로 정규화 — 커플당 단일 canonical 행.
+   * PersonSpouse @@unique([personId, spouseId])는 방향성 키라 (A,B)·(B,A)가 합법 공존한다.
+   * 배우자는 대칭 관계이므로 항상 (min,max) 순으로 저장하면, 어느 쪽에서 편집·재저장해도
+   * 동일한 한 행으로 수렴해 역방향 중복행·메타 divergence를 방지한다.
+   * 자기 자신·중복 페어는 방어적으로 제거한다.
+   */
+  private buildCanonicalSpouseRows(
+    ownerId: string,
+    relations: Array<{
+      spouseId: string
+      marriageStartDate?: Date | null
+      marriageEndDate?: Date | null
+      note?: string | null
+    }>,
+  ): Prisma.PersonSpouseCreateManyInput[] {
+    const seen = new Set<string>()
+    const rows: Prisma.PersonSpouseCreateManyInput[] = []
+    for (const relation of relations) {
+      if (!relation.spouseId || relation.spouseId === ownerId) continue
+      const [personId, spouseId] =
+        ownerId < relation.spouseId ? [ownerId, relation.spouseId] : [relation.spouseId, ownerId]
+      const key = `${personId}__${spouseId}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      rows.push({
+        personId,
+        spouseId,
+        marriageStartDate: relation.marriageStartDate ?? null,
+        marriageEndDate: relation.marriageEndDate ?? null,
+        note: relation.note ?? null,
+      })
+    }
+    return rows
+  }
+
+  /**
    * 인물 생성
    * FK 필드 정리 + countryId는 Country에 있을 때만 Person에 저장.
    * 역사적 국가 ID면 Person.countryId는 넣지 않고, PersonCountryAffiliation(CITIZENSHIP, priority=0)에 저장.
@@ -1684,15 +1720,10 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
 
     if (spouseRelations?.length) {
-      await this.prisma.personSpouse.createMany({
-        data: spouseRelations.map((s) => ({
-          personId: person.id,
-          spouseId: s.spouseId,
-          marriageStartDate: s.marriageStartDate ?? null,
-          marriageEndDate: s.marriageEndDate ?? null,
-          note: s.note ?? null,
-        })),
-      })
+      const rows = this.buildCanonicalSpouseRows(person.id, spouseRelations)
+      if (rows.length) {
+        await this.prisma.personSpouse.createMany({ data: rows, skipDuplicates: true })
+      }
     }
 
     // 역사 국가인 경우 CITIZENSHIP priority=0 소속 생성
@@ -1793,17 +1824,17 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
 
     if (spouseRelations !== undefined) {
-      await this.prisma.personSpouse.deleteMany({ where: { personId: id } })
+      // 이 인물이 얽힌 배우자 행을 양방향(personId=id OR spouseId=id)으로 모두 제거 후
+      // canonical(min,max) 페어로 재생성 — 역방향으로 등록됐던 행까지 단일 행으로 수렴시킨다.
+      // (폼은 역방향 행도 hydrate하므로 payload가 이 인물의 결혼 전체를 담는다)
+      await this.prisma.personSpouse.deleteMany({
+        where: { OR: [{ personId: id }, { spouseId: id }] },
+      })
       if (spouseRelations.length) {
-        await this.prisma.personSpouse.createMany({
-          data: spouseRelations.map((s: { spouseId: string; marriageStartDate?: Date; marriageEndDate?: Date; note?: string }) => ({
-            personId: id,
-            spouseId: s.spouseId,
-            marriageStartDate: s.marriageStartDate ?? null,
-            marriageEndDate: s.marriageEndDate ?? null,
-            note: s.note ?? null,
-          })),
-        })
+        const rows = this.buildCanonicalSpouseRows(id, spouseRelations)
+        if (rows.length) {
+          await this.prisma.personSpouse.createMany({ data: rows, skipDuplicates: true })
+        }
       }
     }
 
@@ -4736,6 +4767,9 @@ export class PersonPrismaRepository implements IPersonRepository {
     }> = []
     for (const key of parentChildSet) {
       const [src, tgt] = key.split('__')
+      // 자기부모(fatherId===self 등) 손상 데이터가 자기 자신을 부모 카드로 렌더하지 않도록 방어.
+      // 쓰기 경로(PersonService)에서 막지만 기존 손상 행에 대한 read-side 안전망.
+      if (src === tgt) continue
       if (nodeMap.has(src) && nodeMap.has(tgt))
         edges.push({ source: src, target: tgt, type: 'parent-child' })
     }
