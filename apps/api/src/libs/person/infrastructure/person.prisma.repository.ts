@@ -4397,6 +4397,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       marriageStartYear: number | null
       marriageEndYear: number | null
       note: string | null
+      /** true = 실제 PersonSpouse 없이 자녀의 다른 친부모로 추론된 엣지(점선 '추정'용).
+       *  false = 실제 PersonSpouse 유래(결혼일·메모가 비어 있어도 확정 관계). */
+      derived: boolean
     }>()
     /** truncated 사유 모음 (BFS take 절단 통지) */
     const truncations: Array<{ scope: string; took: number; limit: number }> = []
@@ -4413,13 +4416,17 @@ export class PersonPrismaRepository implements IPersonRepository {
       a: string,
       b: string,
       meta?: { marriageStartDate?: Date | null; marriageEndDate?: Date | null; note?: string | null },
+      derived = false,
     ) => {
       const key = [a, b].sort().join('__')
+      // 먼저 등장한 메타를 보존(first-wins) — 실제 PersonSpouse 엣지는 BFS 초반에
+      // 추가되므로, 나중의 Step5 추론(derived) 호출이 확정 관계를 덮어쓰지 않는다.
       if (!spouseEdgeMeta.has(key)) {
         spouseEdgeMeta.set(key, {
           marriageStartYear: yearOfDate(meta?.marriageStartDate),
           marriageEndYear: yearOfDate(meta?.marriageEndDate),
           note: (meta?.note ?? null) as string | null,
+          derived,
         })
       }
     }
@@ -4551,9 +4558,10 @@ export class PersonPrismaRepository implements IPersonRepository {
       if (child.motherId && child.motherId !== personId) inferredSpouseIds.push(child.motherId)
     }
     await fetchBatch(inferredSpouseIds)
-    // 추론된 배우자 — PersonSpouse 레코드가 없는 경우만 spouse 엣지 추가 (메타 없음)
+    // 추론된 배우자 — PersonSpouse 레코드가 없는 경우만 spouse 엣지 추가 (derived=true).
+    // (first-wins라 실제 결혼이 이미 등록돼 있으면 이 호출은 무시됨)
     for (const sid of inferredSpouseIds) {
-      if (nodeMap.has(sid)) addSpouseEdge(personId, sid)
+      if (nodeMap.has(sid)) addSpouseEdge(personId, sid, undefined, true)
     }
 
     // ── Step 6: 명시 배우자의 자녀 ────────────────────────────────────
@@ -4784,10 +4792,6 @@ export class PersonPrismaRepository implements IPersonRepository {
     for (const [key, meta] of spouseEdgeMeta) {
       const [a, b] = key.split('__')
       if (nodeMap.has(a) && nodeMap.has(b)) {
-        const isInferred =
-          meta.marriageStartYear == null &&
-          meta.marriageEndYear == null &&
-          meta.note == null
         edges.push({
           source: a,
           target: b,
@@ -4795,7 +4799,8 @@ export class PersonPrismaRepository implements IPersonRepository {
           marriageStartYear: meta.marriageStartYear,
           marriageEndYear: meta.marriageEndYear,
           note: meta.note,
-          inferred: isInferred,
+          // 결혼일·메모가 비어 있어도 실제 PersonSpouse면 확정(실선). 추론 엣지만 '추정'(점선).
+          inferred: meta.derived,
         })
       }
     }
