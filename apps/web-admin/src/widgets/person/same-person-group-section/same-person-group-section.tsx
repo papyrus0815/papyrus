@@ -250,7 +250,8 @@ export function SamePersonGroupSection({
 /* ─── styles ───────────────────────────────────────────────────────────── */
 
 const Wrap = styled.section`
-  margin-top: 24px;
+  /* 상위 OverviewSections가 gap:32px로 형제 간격을 통일하므로 여기서 margin-top을
+     더하면 56px 이중 간격이 된다 — 컨테이너 gap에 위임. */
   display: flex;
   flex-direction: column;
   gap: 12px;

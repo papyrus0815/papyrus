@@ -1006,6 +1006,26 @@ export const OverviewSections = styled.div`
   gap: 32px;
 `
 
+/** 개요 4클러스터(생애·요약 / 이력·활동 / 관계 / 소속·맥락) 구분 라벨 — 라벨 + 우측 divider 선.
+    위쪽에 여백을 더하고 아래쪽을 당겨(margin) 라벨이 뒤따르는 섹션 묶음에 붙어 보이게 한다. */
+export const OverviewClusterLabel = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 -8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: ${({ theme }) => theme.colors.border.light};
+  }
+`
+
 export const OverviewSectionHeaderRow = styled.div`
   display: flex;
   align-items: center;
@@ -1244,6 +1264,13 @@ export const UnifiedEditBtn = styled.button`
       theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)'};
     color: ${({ theme }) =>
       theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  }
+  /* 키보드 포커스 시 가시화 — opacity:0 + hover만 있으면 Tab 이동해도 계속 투명해
+     보이지 않는다(형제 삭제 버튼과 동일 규약). */
+  &:focus-visible {
+    opacity: 1;
+    outline: 2px solid ${({ theme }) => theme.colors.button.primary};
+    outline-offset: 1px;
   }
 `
 

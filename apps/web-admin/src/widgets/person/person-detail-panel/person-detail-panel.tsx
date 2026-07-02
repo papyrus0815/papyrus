@@ -18,12 +18,16 @@ import {
   FiAlertTriangle,
   FiArrowLeft,
   FiAward,
+  FiBook,
   FiBookOpen,
+  FiBriefcase,
   FiCalendar,
   FiCamera,
   FiEdit2,
   FiExternalLink,
+  FiFileText,
   FiFlag,
+  FiGitBranch,
   FiInfo,
   FiMapPin,
   FiPlus,
@@ -199,6 +203,7 @@ import {
   NicknameType,
   NicknameValue,
   OutlineButton,
+  OverviewClusterLabel,
   OverviewSectionHeaderRow,
   OverviewSectionHeading,
   OverviewSections,
@@ -1191,11 +1196,12 @@ export function PersonDetailPanel({
               <KpiValue>약 {tenureTotalYears}년</KpiValue>
             </KpiItem>
           )}
-          {person.influence != null && person.influence > 0 && (
+          {optimisticInfluence != null && optimisticInfluence > 0 && (
             <KpiItem>
               <KpiLabel>영향력</KpiLabel>
               <KpiValue>
-                <InfluenceBadge influence={person.influence} />
+                {/* 낙관값 단일 소스 — 저장 중에도 섹션 슬라이더와 배지가 어긋나지 않게 */}
+                <InfluenceBadge influence={optimisticInfluence} />
               </KpiValue>
             </KpiItem>
           )}
@@ -1335,6 +1341,9 @@ export function PersonDetailPanel({
                 transition={{ duration: 0.2 }}
               >
                 <OverviewSections>
+                  {/* ── 클러스터 ① 생애·요약 ── */}
+                  <OverviewClusterLabel>생애·요약</OverviewClusterLabel>
+
                   {/* 1. 전기 — 가장 중요한 서술 정보 */}
                   <section aria-label="전기">
                     <OverviewSectionHeaderRow>
@@ -1390,9 +1399,11 @@ export function PersonDetailPanel({
                                   await updatePerson(person.id, {
                                     influence: nextInfluence,
                                   })
-                                  queryClient.invalidateQueries({
-                                    queryKey: personKeys.detailFull(personId),
-                                  })
+                                  // 영향력은 목록·인포그래픽·가문 그리드에도 박혀 있어
+                                  // detail만이 아니라 넓게 무효화한다. await로 refetch 착지까지
+                                  // 트랜지션을 pending 유지 → 낙관값이 옛 base로 되돌아가는
+                                  // 깜빡임(새값→옛값→새값) 없이 새 base로 매끄럽게 수렴.
+                                  await invalidatePersonCaches()
                                   // 성공 시에만 편집 모드 종료 — 실패하면 편집 모드·
                                   // influenceDraft를 그대로 유지해 즉시 재시도 가능.
                                   setEditingInfluence(false)
@@ -1415,6 +1426,7 @@ export function PersonDetailPanel({
                           </OutlineButton>
                           <OutlineButton
                             type="button"
+                            disabled={savingInfluence}
                             onClick={() => setEditingInfluence(false)}
                           >
                             취소
@@ -1497,8 +1509,8 @@ export function PersonDetailPanel({
                     ageAtDeath={ageAtDeath}
                   />
 
-                  {/* 2.57. 배우자 상세 — 혼인 기간·메모 중 하나라도 있을 때만 표시 */}
-                  <SpouseDetailSection spouseRelations={p.spouseRelations} />
+                  {/* ── 클러스터 ② 이력·활동 ── */}
+                  <OverviewClusterLabel>이력·활동</OverviewClusterLabel>
 
                   {/* 3. 재임·재위 통합 */}
                   <section aria-label="재임·재위">
@@ -1545,6 +1557,7 @@ export function PersonDetailPanel({
                       deathDateStr={deathDateStr}
                       isDeceased={isDeceased}
                       embedInModal={embedInModal}
+                      dynastyName={person.dynasty?.name ?? null}
                       currentPersonId={personId}
                       onPersonClick={handlePersonClick}
                       onPlayClick={playClickSound}
@@ -1590,168 +1603,6 @@ export function PersonDetailPanel({
                     reignId={editingReignId}
                   />
 
-                  {/* 3.1. 국가 소속·국적 (다중) */}
-                  {p.countryAffiliations && p.countryAffiliations.length > 0 && (() => {
-                    const TYPE_LABELS: Record<string, string> = {
-                      CITIZENSHIP: '국적',
-                      BIRTH_PLACE: '출생',
-                      PRIMARY_RESIDENCE: '거주',
-                      SERVED: '복무',
-                      EXILE: '망명',
-                      OTHER: '기타',
-                    }
-                    const sorted = p.countryAffiliations.slice().sort((a, b) => {
-                      const pa = a.priority ?? 999
-                      const pb = b.priority ?? 999
-                      return pa - pb
-                    })
-                    return (
-                      <section aria-label="국가 소속·국적">
-                        <OverviewSectionHeaderRow>
-                          <OverviewSectionHeading>
-                            <FiFlag size={14} strokeWidth={2.2} />
-                            <span>국가 소속·국적</span>
-                            <CountMuted>{sorted.length}</CountMuted>
-                          </OverviewSectionHeading>
-                        </OverviewSectionHeaderRow>
-                        <CountryAffiliationList>
-                          {sorted.map((aff, affIdx) => {
-                            const c =
-                              aff.historicalCountry ??
-                              aff.country ??
-                              null
-                            const typeLabel = aff.affiliationType
-                              ? TYPE_LABELS[aff.affiliationType] ??
-                                aff.affiliationType
-                              : '소속'
-                            const start = formatIsoDateKo(aff.startDate)
-                            const end = formatIsoDateKo(aff.endDate)
-                            const period =
-                              formatPeriod(start, end)
-                            return (
-                              <CountryAffiliationChip
-                                key={aff.id ?? `aff-${affIdx}`}
-                                $primary={aff.priority === 0}
-                              >
-                                <CountryAffiliationType>{typeLabel}</CountryAffiliationType>
-                                <CountryAffiliationName>
-                                  {c?.name ?? '국가 미상'}
-                                </CountryAffiliationName>
-                                {period && (
-                                  <CountryAffiliationPeriod>{period}</CountryAffiliationPeriod>
-                                )}
-                              </CountryAffiliationChip>
-                            )
-                          })}
-                        </CountryAffiliationList>
-                      </section>
-                    )
-                  })()}
-
-                  {/* 3.2. 시조로 등록된 가문 */}
-                  {p.foundedDynasties && p.foundedDynasties.length > 0 && (
-                    <section aria-label="시조 가문">
-                      <OverviewSectionHeaderRow>
-                        <OverviewSectionHeading>
-                          <FiAward size={14} strokeWidth={2.2} />
-                          <span>시조 가문</span>
-                          {p.foundedDynasties.length > 1 && (
-                            <CountMuted>{p.foundedDynasties.length}</CountMuted>
-                          )}
-                        </OverviewSectionHeading>
-                      </OverviewSectionHeaderRow>
-                      <FoundedDynastyRow>
-                        {p.foundedDynasties.map((d, dIdx) => (
-                          <FoundedDynastyChip
-                            key={d.id ?? d.name ?? `dynasty-${dIdx}`}
-                            type="button"
-                            onClick={() => {
-                              playClickSound()
-                              navigate(pathKeys.dynasty())
-                            }}
-                          >
-                            {d.name ?? '이름 없음'}
-                          </FoundedDynastyChip>
-                        ))}
-                      </FoundedDynastyRow>
-                    </section>
-                  )}
-
-                  {/* 3.3. 학력 */}
-                  {p.educations && p.educations.length > 0 && (
-                    <CollapsibleSection
-                      storageKey="education"
-                      ariaLabel="학력"
-                      icon={<FiBookOpen size={14} strokeWidth={2.2} />}
-                      title="학력"
-                      count={p.educations.length}
-                      defaultOpen={false}
-                    >
-                      <SimpleEntryList>
-                        {p.educations
-                          .slice()
-                          .sort((a, b) => {
-                            const ta = a.startDate ? new Date(a.startDate).getTime() : 0
-                            const tb = b.startDate ? new Date(b.startDate).getTime() : 0
-                            return tb - ta
-                          })
-                          .map((e, eduIdx) => {
-                            const start = formatIsoDateKo(e.startDate)
-                            const end = formatIsoDateKo(e.endDate)
-                            const period =
-                              formatPeriod(start, end, '재학중')
-                            const subParts = [
-                              e.major,
-                              e.department,
-                              e.classNumber != null ? `${e.classNumber}기` : null,
-                              e.degree,
-                            ].filter(Boolean) as string[]
-                            return (
-                              <SimpleEntryItem key={e.id ?? `edu-${eduIdx}`}>
-                                {!embedInModal && e.id && (
-                                  <SimpleEntryDeleteBtn
-                                    type="button"
-                                    data-role="entry-delete"
-                                    aria-label="삭제"
-                                    disabled={isEntryDeleting}
-                                    onClick={() =>
-                                      setEntryDeleteTarget({
-                                        kind: 'education',
-                                        id: e.id!,
-                                        label:
-                                          e.organization?.name ?? '학교 미상',
-                                      })
-                                    }
-                                  >
-                                    <FiTrash2 size={13} />
-                                  </SimpleEntryDeleteBtn>
-                                )}
-                                <SimpleEntryHeader>
-                                  <SimpleEntryTitle>
-                                    {e.organization?.name ?? '학교 미상'}
-                                  </SimpleEntryTitle>
-                                  {e.status && (
-                                    <SimpleEntryRole>{e.status}</SimpleEntryRole>
-                                  )}
-                                </SimpleEntryHeader>
-                                {subParts.length > 0 && (
-                                  <SimpleEntryPeriod>
-                                    {subParts.join(' · ')}
-                                  </SimpleEntryPeriod>
-                                )}
-                                {period && (
-                                  <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
-                                )}
-                                {e.notes && (
-                                  <SimpleEntryDescription>{e.notes}</SimpleEntryDescription>
-                                )}
-                              </SimpleEntryItem>
-                            )
-                          })}
-                      </SimpleEntryList>
-                    </CollapsibleSection>
-                  )}
-
                   {/* 3.35. 분야별 경력 */}
                   {(!embedInModal || (p.careers && p.careers.length > 0)) && (() => {
                     const careers = p.careers ?? []
@@ -1784,7 +1635,7 @@ export function PersonDetailPanel({
                       <CollapsibleSection
                         storageKey="careers"
                         ariaLabel="분야별 경력"
-                        icon={<FiAward size={14} strokeWidth={2.2} />}
+                        icon={<FiBriefcase size={14} strokeWidth={2.2} />}
                         title="분야별 경력"
                         count={careers.length > 0 ? careers.length : undefined}
                         defaultOpen={false}
@@ -1815,8 +1666,13 @@ export function PersonDetailPanel({
                           {kinds.map((k) => {
                             const list = grouped[k] ?? []
                             const sorted = list.slice().sort((a, b) => {
-                              const ta = a.startDate ? new Date(a.startDate).getTime() : 0
-                              const tb = b.startDate ? new Date(b.startDate).getTime() : 0
+                              // BC/고대 안전 정렬(new Date 금지) — 날짜 없으면 맨 뒤.
+                              const ta = a.startDate
+                                ? isoDateSortKey(a.startDate)
+                                : Number.NEGATIVE_INFINITY
+                              const tb = b.startDate
+                                ? isoDateSortKey(b.startDate)
+                                : Number.NEGATIVE_INFINITY
                               return tb - ta
                             })
                             return (
@@ -1892,6 +1748,86 @@ export function PersonDetailPanel({
                     )
                   })()}
 
+                  {/* 3.3. 학력 */}
+                  {p.educations && p.educations.length > 0 && (
+                    <CollapsibleSection
+                      storageKey="education"
+                      ariaLabel="학력"
+                      icon={<FiBook size={14} strokeWidth={2.2} />}
+                      title="학력"
+                      count={p.educations.length}
+                      defaultOpen={false}
+                    >
+                      <SimpleEntryList>
+                        {p.educations
+                          .slice()
+                          .sort((a, b) => {
+                            // BC/고대 안전 정렬(new Date 금지, isoDateSortKey) — 날짜 없으면 맨 뒤.
+                            const ta = a.startDate
+                              ? isoDateSortKey(a.startDate)
+                              : Number.NEGATIVE_INFINITY
+                            const tb = b.startDate
+                              ? isoDateSortKey(b.startDate)
+                              : Number.NEGATIVE_INFINITY
+                            return tb - ta
+                          })
+                          .map((e, eduIdx) => {
+                            const start = formatIsoDateKo(e.startDate)
+                            const end = formatIsoDateKo(e.endDate)
+                            const period =
+                              formatPeriod(start, end, '재학중')
+                            const subParts = [
+                              e.major,
+                              e.department,
+                              e.classNumber != null ? `${e.classNumber}기` : null,
+                              e.degree,
+                            ].filter(Boolean) as string[]
+                            return (
+                              <SimpleEntryItem key={e.id ?? `edu-${eduIdx}`}>
+                                {!embedInModal && e.id && (
+                                  <SimpleEntryDeleteBtn
+                                    type="button"
+                                    data-role="entry-delete"
+                                    aria-label="삭제"
+                                    disabled={isEntryDeleting}
+                                    onClick={() =>
+                                      setEntryDeleteTarget({
+                                        kind: 'education',
+                                        id: e.id!,
+                                        label:
+                                          e.organization?.name ?? '학교 미상',
+                                      })
+                                    }
+                                  >
+                                    <FiTrash2 size={13} />
+                                  </SimpleEntryDeleteBtn>
+                                )}
+                                <SimpleEntryHeader>
+                                  <SimpleEntryTitle>
+                                    {e.organization?.name ?? '학교 미상'}
+                                  </SimpleEntryTitle>
+                                  {e.status && (
+                                    <SimpleEntryRole>{e.status}</SimpleEntryRole>
+                                  )}
+                                </SimpleEntryHeader>
+                                {subParts.length > 0 && (
+                                  <SimpleEntryPeriod>
+                                    {subParts.join(' · ')}
+                                  </SimpleEntryPeriod>
+                                )}
+                                {period && (
+                                  <SimpleEntryPeriod>{period}</SimpleEntryPeriod>
+                                )}
+                                {e.notes && (
+                                  <SimpleEntryDescription>{e.notes}</SimpleEntryDescription>
+                                )}
+                              </SimpleEntryItem>
+                            )
+                          })}
+                      </SimpleEntryList>
+                    </CollapsibleSection>
+                  )}
+
                   {/* 3.4. 수상·훈장 */}
                   {(!embedInModal || (p.awards && p.awards.length > 0)) && (
                     <CollapsibleSection
@@ -1930,8 +1866,13 @@ export function PersonDetailPanel({
                         {p.awards
                           .slice()
                           .sort((a, b) => {
-                            const ta = a.awardDate ? new Date(a.awardDate).getTime() : 0
-                            const tb = b.awardDate ? new Date(b.awardDate).getTime() : 0
+                            // BC/고대 안전 정렬(new Date 금지) — 날짜 없으면 맨 뒤.
+                            const ta = a.awardDate
+                              ? isoDateSortKey(a.awardDate)
+                              : Number.NEGATIVE_INFINITY
+                            const tb = b.awardDate
+                              ? isoDateSortKey(b.awardDate)
+                              : Number.NEGATIVE_INFINITY
                             return tb - ta
                           })
                           .map((a, awardIdx) => (
@@ -1995,7 +1936,7 @@ export function PersonDetailPanel({
                       <CollapsibleSection
                         storageKey="activities"
                         ariaLabel="활동·이력"
-                        icon={<FiBookOpen size={14} strokeWidth={2.2} />}
+                        icon={<FiFileText size={14} strokeWidth={2.2} />}
                         title="활동·이력"
                         count={total}
                         defaultOpen={false}
@@ -2050,8 +1991,13 @@ export function PersonDetailPanel({
                                 {orgRoles
                                   .slice()
                                   .sort((a, b) => {
-                                    const ta = a.startDate ? new Date(a.startDate).getTime() : 0
-                                    const tb = b.startDate ? new Date(b.startDate).getTime() : 0
+                                    // BC/고대 안전 정렬(new Date 금지) — 날짜 없으면 맨 뒤.
+                                    const ta = a.startDate
+                                      ? isoDateSortKey(a.startDate)
+                                      : Number.NEGATIVE_INFINITY
+                                    const tb = b.startDate
+                                      ? isoDateSortKey(b.startDate)
+                                      : Number.NEGATIVE_INFINITY
                                     return tb - ta
                                   })
                                   .map((o, orgIdx) => {
@@ -2090,8 +2036,13 @@ export function PersonDetailPanel({
                                 {milCmds
                                   .slice()
                                   .sort((a, b) => {
-                                    const ta = a.startDate ? new Date(a.startDate).getTime() : 0
-                                    const tb = b.startDate ? new Date(b.startDate).getTime() : 0
+                                    // BC/고대 안전 정렬(new Date 금지) — 날짜 없으면 맨 뒤.
+                                    const ta = a.startDate
+                                      ? isoDateSortKey(a.startDate)
+                                      : Number.NEGATIVE_INFINITY
+                                    const tb = b.startDate
+                                      ? isoDateSortKey(b.startDate)
+                                      : Number.NEGATIVE_INFINITY
                                     return tb - ta
                                   })
                                   .map((m, milIdx) => {
@@ -2129,6 +2080,17 @@ export function PersonDetailPanel({
                     )
                   })()}
 
+                  {/* ── 클러스터 ③ 관계 ── */}
+                  {(!embedInModal ||
+                    (p.spouseRelations?.length ?? 0) > 0 ||
+                    ((person as { humanRelationships?: PersonHumanRelationshipItem[] })
+                      .humanRelationships?.length ?? 0) > 0) && (
+                    <OverviewClusterLabel>관계</OverviewClusterLabel>
+                  )}
+
+                  {/* 2.57. 배우자 상세 — 혼인 기간·메모 중 하나라도 있을 때만 표시 */}
+                  <SpouseDetailSection spouseRelations={p.spouseRelations} />
+
                   {/* 4. 인간관계 */}
                   <PersonHumanRelationshipsSection
                     personId={person.id}
@@ -2143,6 +2105,100 @@ export function PersonDetailPanel({
                       embedInModal ? onLinkedPersonClick : pushPersonToModalStack
                     }
                   />
+
+                  {/* ── 클러스터 ④ 소속·맥락 ── */}
+                  {(!embedInModal ||
+                    (p.countryAffiliations?.length ?? 0) > 0 ||
+                    (p.foundedDynasties?.length ?? 0) > 0) && (
+                    <OverviewClusterLabel>소속·맥락</OverviewClusterLabel>
+                  )}
+
+                  {/* 3.1. 국가 소속·국적 (다중) */}
+                  {p.countryAffiliations && p.countryAffiliations.length > 0 && (() => {
+                    const TYPE_LABELS: Record<string, string> = {
+                      CITIZENSHIP: '국적',
+                      BIRTH_PLACE: '출생',
+                      PRIMARY_RESIDENCE: '거주',
+                      SERVED: '복무',
+                      EXILE: '망명',
+                      OTHER: '기타',
+                    }
+                    const sorted = p.countryAffiliations.slice().sort((a, b) => {
+                      const pa = a.priority ?? 999
+                      const pb = b.priority ?? 999
+                      return pa - pb
+                    })
+                    return (
+                      <section aria-label="국가 소속·국적">
+                        <OverviewSectionHeaderRow>
+                          <OverviewSectionHeading>
+                            <FiFlag size={14} strokeWidth={2.2} />
+                            <span>국가 소속·국적</span>
+                            <CountMuted>{sorted.length}</CountMuted>
+                          </OverviewSectionHeading>
+                        </OverviewSectionHeaderRow>
+                        <CountryAffiliationList>
+                          {sorted.map((aff, affIdx) => {
+                            const c =
+                              aff.historicalCountry ??
+                              aff.country ??
+                              null
+                            const typeLabel = aff.affiliationType
+                              ? TYPE_LABELS[aff.affiliationType] ??
+                                aff.affiliationType
+                              : '소속'
+                            const start = formatIsoDateKo(aff.startDate)
+                            const end = formatIsoDateKo(aff.endDate)
+                            const period =
+                              formatPeriod(start, end)
+                            return (
+                              <CountryAffiliationChip
+                                key={aff.id ?? `aff-${affIdx}`}
+                                $primary={aff.priority === 0}
+                              >
+                                <CountryAffiliationType>{typeLabel}</CountryAffiliationType>
+                                <CountryAffiliationName>
+                                  {c?.name ?? '국가 미상'}
+                                </CountryAffiliationName>
+                                {period && (
+                                  <CountryAffiliationPeriod>{period}</CountryAffiliationPeriod>
+                                )}
+                              </CountryAffiliationChip>
+                            )
+                          })}
+                        </CountryAffiliationList>
+                      </section>
+                    )
+                  })()}
+
+                  {/* 3.2. 시조로 등록된 가문 */}
+                  {p.foundedDynasties && p.foundedDynasties.length > 0 && (
+                    <section aria-label="시조 가문">
+                      <OverviewSectionHeaderRow>
+                        <OverviewSectionHeading>
+                          <FiGitBranch size={14} strokeWidth={2.2} />
+                          <span>시조 가문</span>
+                          {p.foundedDynasties.length > 1 && (
+                            <CountMuted>{p.foundedDynasties.length}</CountMuted>
+                          )}
+                        </OverviewSectionHeading>
+                      </OverviewSectionHeaderRow>
+                      <FoundedDynastyRow>
+                        {p.foundedDynasties.map((d, dIdx) => (
+                          <FoundedDynastyChip
+                            key={d.id ?? d.name ?? `dynasty-${dIdx}`}
+                            type="button"
+                            onClick={() => {
+                              playClickSound()
+                              navigate(pathKeys.dynasty())
+                            }}
+                          >
+                            {d.name ?? '이름 없음'}
+                          </FoundedDynastyChip>
+                        ))}
+                      </FoundedDynastyRow>
+                    </section>
+                  )}
 
                   {/* 5. 소속 그룹 (세대·계파·동기) */}
                   <SamePersonGroupSection
