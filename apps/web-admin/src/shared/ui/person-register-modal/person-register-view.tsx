@@ -260,17 +260,14 @@ export function PersonRegisterView({
   // 가족
   const [fatherId, setFatherId] = useState('')
   const [motherId, setMotherId] = useState('')
-  const [spouseId, setSpouseId] = useState('')
-  const [spouseNote, setSpouseNote] = useState('')
+  // 사생아·서출 — 가계도 카드 별표(*) 마커
+  const [illegitimate, setIllegitimate] = useState(false)
   /**
-   * 수정 모드에서 서버에 저장돼 있던 배우자 관계 전체(payload 형태).
-   * 폼은 첫 관계의 배우자·메모만 편집하므로, 결혼 시작/종료일과 둘째 이후 배우자를
-   * 여기 보존했다가 저장 시 그대로 왕복시킨다 — 서버는 배열 수신 시 통째 교체(delete-and-recreate)라
-   * 보존하지 않으면 결혼일·다중 배우자가 무경고 유실됨.
+   * 배우자 관계 목록(반복 행) — 각 행: 배우자 + 혼인 시작/종료일 + 메모.
+   * 다중 배우자(정실/후궁·순차 재혼)와 결혼일을 폼에서 직접 편집·추가/삭제한다.
+   * (과거: 스칼라 첫 슬롯 + 숨은 보존 배열로 둘째 이후는 편집 불가·날짜 입력 불가였음)
    */
-  const [editSpouseRelations, setEditSpouseRelations] = useState<
-    SpouseRelationInput[]
-  >([])
+  const [spouseRows, setSpouseRows] = useState<SpouseRelationInput[]>([])
   // 기타
   const [profileImageUrl, setProfileImageUrl] = useState('')
   const [regnalName, setRegnalName] = useState('')
@@ -366,8 +363,7 @@ export function PersonRegisterView({
       !!religionId ||
       !!fatherId ||
       !!motherId ||
-      !!spouseId ||
-      !!spouseNote,
+      spouseRows.length > 0,
     [
       originalName,
       surnameMeaning,
@@ -385,8 +381,7 @@ export function PersonRegisterView({
       religionId,
       fatherId,
       motherId,
-      spouseId,
-      spouseNote,
+      spouseRows,
     ],
   )
 
@@ -477,10 +472,10 @@ export function PersonRegisterView({
       if (p.id === editPersonId) return false
       if (p.id === fatherId) return false
       if (p.id === motherId) return false
-      if (p.id === spouseId) return false
+      if (spouseRows.some((relation) => relation.spouseId === p.id)) return false
       return true
     })
-  }, [recentlyRegistered, editPersonId, fatherId, motherId, spouseId])
+  }, [recentlyRegistered, editPersonId, fatherId, motherId, spouseRows])
 
   /** countryId → defaultNameDisplayOrder. 이름 미리보기 순서 결정용. */
   const countryNameOrderById = useMemo(() => {
@@ -686,8 +681,8 @@ export function PersonRegisterView({
     makeFormField('religionId', () => religionId, setReligionId, ''),
     makeFormField('fatherId', () => fatherId, setFatherId, ''),
     makeFormField('motherId', () => motherId, setMotherId, ''),
-    makeFormField('spouseId', () => spouseId, setSpouseId, ''),
-    makeFormField('spouseNote', () => spouseNote, setSpouseNote, ''),
+    makeFormField('illegitimate', () => illegitimate, setIllegitimate, false),
+    makeFormField('spouseRelations', () => spouseRows, setSpouseRows, []),
     makeFormField('profileImageUrl', () => profileImageUrl, setProfileImageUrl, ''),
     makeFormField('regnalName', () => regnalName, setRegnalName, ''),
     makeFormField('templeName', () => templeName, setTempleName, ''),
@@ -735,7 +730,7 @@ export function PersonRegisterView({
       setThumbnailObjectUrl(null)
       setThumbnailMarkedForRemoval(false)
       setEditFamilyCache({})
-      setEditSpouseRelations([])
+      // spouseRows는 폼 필드 레지스트리(makeFormField 'spouseRelations')가 일괄 리셋함.
       requestAnimationFrame(() => {
         dirtyTrackingEnabledRef.current = true
       })
@@ -845,19 +840,18 @@ export function PersonRegisterView({
         setReligionId(p.religionId ?? '')
         setFatherId(p.fatherId ?? p.father?.id ?? '')
         setMotherId(p.motherId ?? p.mother?.id ?? '')
-        // 배우자 관계 전체(결혼 시작/종료일·둘째 이후 배우자 포함)를 payload 형태로 보존 —
-        // 저장 시 그대로 왕복시켜 통째 교체(deleteMany→createMany)에 의한 유실을 막는다.
+        setIllegitimate(Boolean((p as any).illegitimate))
+        // 배우자 관계 전체(결혼 시작/종료일·다중 배우자 포함)를 반복 행으로 로드.
+        // 날짜는 <input type="date">용으로 YYYY-MM-DD 정규화(서버는 ISO 문자열 반환).
         const spouseRels: SpouseRelationInput[] = (p.spouseRelations ?? [])
           .filter((rel: any) => rel?.spouse?.id)
           .map((rel: any) => ({
             spouseId: String(rel.spouse.id),
-            marriageStartDate: rel.marriageStartDate ?? undefined,
-            marriageEndDate: rel.marriageEndDate ?? undefined,
+            marriageStartDate: rel.marriageStartDate ? String(rel.marriageStartDate).slice(0, 10) : undefined,
+            marriageEndDate: rel.marriageEndDate ? String(rel.marriageEndDate).slice(0, 10) : undefined,
             note: rel.note ?? null,
           }))
-        setEditSpouseRelations(spouseRels)
-        setSpouseId(spouseRels[0]?.spouseId ?? p.spouseId ?? '')
-        setSpouseNote(spouseRels[0]?.note ?? '')
+        setSpouseRows(spouseRels)
         // detail 응답의 임베디드 인물을 가족 캐시에 보관 — 인물 풀 lazy 로드 전에도 카드 정확.
         setEditFamilyCache({
           father: p.father ?? undefined,
@@ -1464,28 +1458,23 @@ export function PersonRegisterView({
    *   폼이 편집하는 첫 관계만 교체한다. 이미 관계가 있던 인물을 고르면 결혼일은 유지.
    */
   const buildSpouseRelations = (): SpouseRelationInput[] | undefined => {
-    const note = spouseNote.trim() || null
-    if (!isEditMode) {
-      return spouseId ? [{ spouseId, note }] : undefined
-    }
-    // 첫 슬롯을 비웠으면 첫 관계만 제거, 나머지(둘째 이후)는 무손실 유지.
-    if (!spouseId) return editSpouseRelations.slice(1)
-    // 보존 관계 중 같은 인물이 있으면 그 결혼일을 승계 (첫 관계 교체·순서 변경 모두 커버).
-    const preserved = editSpouseRelations.find(
-      (relation) => relation.spouseId === spouseId,
-    )
-    return [
-      {
-        spouseId,
-        marriageStartDate: preserved?.marriageStartDate,
-        marriageEndDate: preserved?.marriageEndDate,
-        note,
-      },
-      // 중복 행 방지 — 첫 슬롯에 들어간 인물은 나머지 목록에서 제외.
-      ...editSpouseRelations
-        .slice(1)
-        .filter((relation) => relation.spouseId !== spouseId),
-    ]
+    // 배우자 미선택(빈) 행은 제외 + 같은 배우자 중복 페어 제거.
+    const seen = new Set<string>()
+    const rows = spouseRows
+      .filter((row) => {
+        if (!row.spouseId || seen.has(row.spouseId)) return false
+        seen.add(row.spouseId)
+        return true
+      })
+      .map((row) => ({
+        spouseId: row.spouseId,
+        marriageStartDate: row.marriageStartDate || undefined,
+        marriageEndDate: row.marriageEndDate || undefined,
+        note: row.note?.trim() ? row.note.trim() : null,
+      }))
+    // 수정 모드: 항상 배열 전송(빈 배열이면 전체 제거). 신규: 채워진 행만.
+    if (!isEditMode) return rows.length ? rows : undefined
+    return rows
   }
 
   const buildPayload = (
@@ -1545,6 +1534,7 @@ export function PersonRegisterView({
       religionId: religionId || undefined,
       fatherId: fatherId || undefined,
       motherId: motherId || undefined,
+      illegitimate,
       // 신규: 첫 배우자만 / 수정: 보존된 전체 관계를 왕복(첫 관계만 교체, 비우면 첫 관계 제거).
       spouseRelations: buildSpouseRelations(),
       isBirthDateUnknown,
@@ -1778,7 +1768,7 @@ export function PersonRegisterView({
         {
           id: 'family',
           label: '가족',
-          filled: !!fatherId || !!motherId || !!spouseId,
+          filled: !!fatherId || !!motherId || spouseRows.length > 0,
         },
       )
     }
@@ -1815,7 +1805,7 @@ export function PersonRegisterView({
     countryAffiliations,
     fatherId,
     motherId,
-    spouseId,
+    spouseRows,
   ])
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -2352,12 +2342,12 @@ export function PersonRegisterView({
                   fid={fid}
                   fatherId={fatherId}
                   motherId={motherId}
-                  spouseId={spouseId}
-                  spouseNote={spouseNote}
+                  illegitimate={illegitimate}
+                  spouseRows={spouseRows}
                   setFatherId={setFatherId}
                   setMotherId={setMotherId}
-                  setSpouseId={setSpouseId}
-                  setSpouseNote={setSpouseNote}
+                  setIllegitimate={setIllegitimate}
+                  setSpouseRows={setSpouseRows}
                   showFatherModal={showFatherModal}
                   showMotherModal={showMotherModal}
                   showSpouseModal={showSpouseModal}

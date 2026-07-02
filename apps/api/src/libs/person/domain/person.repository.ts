@@ -76,6 +76,8 @@ export interface CreatePersonData {
   denominationId?: string
   fatherId?: string
   motherId?: string
+  /** 사생아·서출 여부 — 가계도 카드 별표 마커 */
+  illegitimate?: boolean
   countryId?: string
   birthCityId?: string
   deathCityId?: string
@@ -148,6 +150,8 @@ export interface UpdatePersonData {
   denominationId?: string
   fatherId?: string | null
   motherId?: string | null
+  /** 사생아·서출 여부 — 가계도 카드 별표 마커 */
+  illegitimate?: boolean
   countryId?: string
   birthCityId?: string | null
   deathCityId?: string | null

@@ -434,6 +434,13 @@ export class CreatePersonDto {
   motherId?: string
 
   /**
+   * 사생아·서출 여부 — 가계도 카드 별표(*) 마커. 기본 false.
+   */
+  @IsOptional()
+  @IsBoolean()
+  illegitimate?: boolean
+
+  /**
    * 국가 ID (선택)
    */
   @IsOptional()

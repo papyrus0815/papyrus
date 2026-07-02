@@ -42,7 +42,8 @@ import { personKeys } from '@/entities/person/api'
 import type { PersonHumanRelationshipItem } from '@/shared/api/person-human-relationships'
 import { personCareerApi } from '@/shared/api/person-career'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
-import { deletePerson, updatePerson } from '@/shared/api/persons'
+import { deletePerson, updatePerson, getAllPersons } from '@/shared/api/persons'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getPersonFamilyTree } from '@/shared/api/persons-family-tree'
 import {
@@ -160,6 +161,8 @@ import {
   ErrorIcon,
   ErrorTitle,
   ErrorWrap,
+  FamilyActionRow,
+  FamilyActionBtn,
   FamilyBadge,
   FamilyBadgeRow,
   FoundedDynastyChip,
@@ -712,6 +715,102 @@ export function PersonDetailPanel({
       ]),
     [personId, queryClient],
   )
+
+  // ─── 가계도 하향 저작 — ego 기준 자녀/부모/배우자 추가·기존 인물 연결 ──────────
+  const [familyAddMode, setFamilyAddMode] = useState<
+    'child' | 'father' | 'mother' | 'spouse' | null
+  >(null)
+  /** 모달 열릴 때만 인물 풀 로드(검색 + "새 인물" 생성 대상). */
+  const { data: familyAddPool } = useQuery({
+    queryKey: ['persons-pool-for-family-add'],
+    queryFn: getAllPersons,
+    enabled: familyAddMode !== null,
+    staleTime: 60_000,
+  })
+
+  /**
+   * 선택/생성한 인물을 ego와 연결하는 FK write.
+   * - child : 대상 인물의 fatherId/motherId(ego 성별) = ego
+   * - father/mother : ego의 fatherId/motherId = 대상 인물
+   * - spouse : ego.spouseRelations에 대상 인물 추가(기존 관계 보존, 서버가 canonical 정규화)
+   */
+  const applyFamilyLink = useCallback(
+    async (targetId: string) => {
+      const currentPerson = person
+      const mode = familyAddMode
+      if (!currentPerson || !mode || targetId === currentPerson.id) {
+        setFamilyAddMode(null)
+        return
+      }
+      try {
+        if (mode === 'child') {
+          // ego 성별로 자녀의 부/모 슬롯 결정(불명이면 아버지 기본, 이후 수정 가능)
+          await updatePerson(
+            targetId,
+            currentPerson.gender === 'FEMALE'
+              ? { motherId: currentPerson.id }
+              : { fatherId: currentPerson.id },
+          )
+        } else if (mode === 'father') {
+          await updatePerson(currentPerson.id, { fatherId: targetId })
+        } else if (mode === 'mother') {
+          await updatePerson(currentPerson.id, { motherId: targetId })
+        } else if (mode === 'spouse') {
+          // 기존 배우자 관계 보존 후 추가(update는 통째 교체 → 전체 배열 재전송).
+          const existing = (currentPerson.spouseRelations ?? []).flatMap((rel) =>
+            rel.spouse?.id
+              ? [
+                  {
+                    spouseId: rel.spouse.id,
+                    marriageStartDate: rel.marriageStartDate ?? undefined,
+                    marriageEndDate: rel.marriageEndDate ?? undefined,
+                    note: rel.note ?? null,
+                  },
+                ]
+              : [],
+          )
+          if (existing.some((rel) => rel.spouseId === targetId)) {
+            notify.error('이미 배우자로 등록된 인물입니다.')
+            setFamilyAddMode(null)
+            return
+          }
+          await updatePerson(currentPerson.id, {
+            spouseRelations: [...existing, { spouseId: targetId }],
+          })
+        }
+        await invalidatePersonCaches(true)
+        notify.success('가족 관계를 추가했습니다.')
+      } catch {
+        notify.error('가족 관계 추가에 실패했습니다.')
+      } finally {
+        setFamilyAddMode(null)
+      }
+    },
+    [person, familyAddMode, invalidatePersonCaches],
+  )
+
+  /** 가족 추가 모달 config(제목·exclude) — 모드+ego 기준. person 없으면 null. */
+  const familyModalConfig =
+    familyAddMode && person
+      ? (() => {
+          const spouseIds = (person.spouseRelations ?? []).flatMap((rel) =>
+            rel.spouse?.id ? [rel.spouse.id] : [],
+          )
+          const selfId = person.id
+          const fatherId = person.father?.id ?? ''
+          const motherId = person.mother?.id ?? ''
+          const byMode = {
+            child: { title: '자녀로 추가할 인물', exclude: [selfId] },
+            father: { title: '아버지로 지정할 인물', exclude: [selfId, motherId, ...spouseIds] },
+            mother: { title: '어머니로 지정할 인물', exclude: [selfId, fatherId, ...spouseIds] },
+            spouse: {
+              title: '배우자로 추가할 인물',
+              exclude: [selfId, fatherId, motherId, ...spouseIds],
+            },
+          } as const
+          return byMode[familyAddMode]
+        })()
+      : null
 
   const handleAvatarFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2226,6 +2325,31 @@ export function PersonDetailPanel({
               >
                 <section aria-label="가족 관계">
                   <SectionLabel>가족 관계</SectionLabel>
+                  {/* 하향 저작 퀵액션 — ego 기준 가족 추가(기존 인물 검색 또는 새 등록). */}
+                  <FamilyActionRow>
+                    <FamilyActionBtn type="button" onClick={() => setFamilyAddMode('child')}>
+                      + 자녀 추가
+                    </FamilyActionBtn>
+                    <FamilyActionBtn
+                      type="button"
+                      onClick={() => setFamilyAddMode('father')}
+                      disabled={!!person.father}
+                      title={person.father ? '이미 아버지가 지정되어 있습니다' : undefined}
+                    >
+                      + 아버지 추가
+                    </FamilyActionBtn>
+                    <FamilyActionBtn
+                      type="button"
+                      onClick={() => setFamilyAddMode('mother')}
+                      disabled={!!person.mother}
+                      title={person.mother ? '이미 어머니가 지정되어 있습니다' : undefined}
+                    >
+                      + 어머니 추가
+                    </FamilyActionBtn>
+                    <FamilyActionBtn type="button" onClick={() => setFamilyAddMode('spouse')}>
+                      + 배우자 추가
+                    </FamilyActionBtn>
+                  </FamilyActionRow>
                   {!person.father &&
                   !person.mother &&
                   !person.spouse &&
@@ -2265,6 +2389,20 @@ export function PersonDetailPanel({
                         전체 가계도 보기
                       </FullGenealogyLink>
                     </FullGenealogyLinkRow>
+                  )}
+                  {/* 가족 추가 모달 — 기존 인물 검색 또는 "새 인물" 생성 후 ego와 연결. */}
+                  {familyModalConfig && (
+                    <PersonSelectModal
+                      persons={familyAddPool ?? []}
+                      selectedPersonId=""
+                      onSelect={(id) => applyFamilyLink(id)}
+                      onClose={() => setFamilyAddMode(null)}
+                      excludeIds={familyModalConfig.exclude.filter(Boolean)}
+                      title={familyModalConfig.title}
+                      searchPlaceholder="인물 검색…"
+                      defaultCountryId={(person as { countryId?: string }).countryId || undefined}
+                      loading={!familyAddPool}
+                    />
                   )}
                 </section>
 

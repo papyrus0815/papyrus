@@ -258,6 +258,13 @@ export class UpdatePersonDto {
   motherId?: string | null
 
   /**
+   * 사생아·서출 여부 — 가계도 카드 별표(*) 마커.
+   */
+  @IsOptional()
+  @IsBoolean()
+  illegitimate?: boolean
+
+  /**
    * 국가 ID (선택)
    */
   @IsOptional()

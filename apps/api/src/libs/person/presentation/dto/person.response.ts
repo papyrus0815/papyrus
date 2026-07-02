@@ -38,6 +38,8 @@ export interface PersonResponseDto {
   denomination?: { id: string; name: string } | null
   fatherId: string | null
   motherId: string | null
+  /** 사생아·서출 여부 — 가계도 카드 별표(*) 마커 */
+  illegitimate: boolean
   countryId: string | null
   /** 소속 국가 (목록 표시용, id·name·flagEmoji·이름 표시 기본) */
   country?: {

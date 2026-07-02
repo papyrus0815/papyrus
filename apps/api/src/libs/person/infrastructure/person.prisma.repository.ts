@@ -441,6 +441,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       denomination: person.denomination != null ? { id: person.denomination.id, name: person.denomination.name } : null,
       fatherId: person.fatherId,
       motherId: person.motherId,
+      illegitimate: Boolean(person.illegitimate),
       countryId: this.getEffectiveBirthCountryId(person),
       country: this.resolveCountryBlockForName(person),
       birthCityId: person.birthCityId ?? null,

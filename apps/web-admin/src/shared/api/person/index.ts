@@ -113,6 +113,8 @@ export type CreatePersonInput = {
   jobId?: string | null
   fatherId?: string | null
   motherId?: string | null
+  /** 사생아·서출 여부 — 가계도 카드 별표(*) 마커 */
+  illegitimate?: boolean
   /** 출생지 도시 ID (등록된 도시) */
   birthCityId?: string | null
   /** 사망지 도시 ID */

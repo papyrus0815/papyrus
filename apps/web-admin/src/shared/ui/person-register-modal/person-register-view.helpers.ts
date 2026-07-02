@@ -2,7 +2,7 @@
  * PersonRegisterView 순수 헬퍼·옵션·타입.
  * 컴포넌트 본체에서 분리해 단일 파일 비대를 줄이고 단위 검증·재사용을 쉽게 함.
  */
-import type { Era } from '@/shared/api/persons'
+import type { Era, SpouseRelationInput } from '@/shared/api/persons'
 import type { PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import type { CountryAffiliationRow } from './sections/country-affiliations-section'
 
@@ -233,8 +233,8 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   religionId: string
   fatherId: string
   motherId: string
-  spouseId: string
-  spouseNote: string
+  illegitimate: boolean
+  spouseRelations: SpouseRelationInput[]
   profileImageUrl: string
   regnalName: string
   templeName: string

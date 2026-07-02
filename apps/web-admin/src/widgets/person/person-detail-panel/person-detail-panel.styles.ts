@@ -3226,3 +3226,37 @@ export const AchievementEmpty = styled.p`
   font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
+
+// ─── 가계도 가족 퀵액션 (ego 기준 자녀/부모/배우자 추가·기존 인물 연결) ──────
+export const FamilyActionRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+`
+
+export const FamilyActionBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'};
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    border-style: solid;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+`
