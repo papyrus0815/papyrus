@@ -19,6 +19,7 @@ import {
   CreatePersonDto,
   UpdatePersonDto,
   PersonResponseDto,
+  FamilyTreeResponseDto,
   PersonInfographicItemDto,
   CreateMilitaryCareerDto,
   CreateBusinessCareerDto,
@@ -404,7 +405,7 @@ export class PersonController {
     @Param('id') id: string,
     @Request() req: any,
     @Query('includeCollaterals') includeCollaterals?: string,
-  ): Promise<any> {
+  ): Promise<FamilyTreeResponseDto> {
     const accountId = req.user?.id ?? req.user?.sub ?? undefined
     const flag = includeCollaterals === 'false' || includeCollaterals === '0' ? false : true
     return this.personService.getFamilyTree(id, accountId, { includeCollaterals: flag })

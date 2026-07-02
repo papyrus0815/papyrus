@@ -2,6 +2,12 @@ import { getApiConnection } from './client'
 
 export interface FamilyTreePerson {
   id: string
+  /**
+   * 현재 계정이 이 노드 상세를 열 수 있는지 (서버 계산 — findByIdWithRelations 스코프와 동일).
+   * false면 클릭 비활성(dim) 처리 — 노드는 보이나 열면 404 나는 불일치 방지.
+   * 비인증 요청 시 서버가 전 노드 true로 내려줌.
+   */
+  isOwned: boolean
   name: string
   surname?: string | null
   middleName?: string | null

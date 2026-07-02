@@ -88,7 +88,9 @@ export function AncestorColumn({
   const badgeRole = depth <= 2 ? role : 'ancestor'
   const label = getAncestorBadgeLabel(path, person.gender)
 
-  const clickable = Boolean(onPersonClick && person.id)
+  // 비소유 노드(다른 계정 등록)는 상세를 열 수 없음 → 클릭 비활성 + dim
+  const openable = person.isOwned !== false
+  const clickable = Boolean(onPersonClick && person.id) && openable
   const handleClick = () => person.id && onPersonClick?.(person.id)
   const personAsNode = ftPersonToNodePerson(person)
   const tooltip = buildPersonTooltip(person)
@@ -140,7 +142,8 @@ export function AncestorColumn({
       <GeoNode
         $role={role}
         $clickable={clickable}
-        title={tooltip}
+        $dimmed={!openable}
+        title={openable ? tooltip : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
         {...(clickable
           ? {
               role: 'button' as const,

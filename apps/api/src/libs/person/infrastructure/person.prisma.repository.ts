@@ -47,6 +47,7 @@ import {
   UpdateTenureAchievementDto,
   UpdateGovernmentPositionDefinitionDto,
   PersonResponseDto,
+  FamilyTreeResponseDto,
   PersonInfographicItemDto,
   MilitaryCareerResponseDto,
   BusinessCareerResponseDto,
@@ -4294,18 +4295,19 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 가계도 BFS — ego를 중심으로 부·모 / 조부모(고조부모까지) /
    * 형제·삼촌·이모·고모·조카 / 자녀·손자녀·증손자녀 / 배우자·처가·시가까지 수집.
    *
-   * @param accountId — 시그니처 호환을 위해 받지만 가계도는 공개 데이터로 취급해
-   *   필터에 사용하지 않는다. 향후 권한 정책이 정해지면 fetchBatch where 절에 반영.
+   * @param accountId — 트리 자체는 공개(계정 무관 BFS)로 유지하되, 각 노드에
+   *   isOwned(현재 계정이 상세를 열 수 있는지 = findByIdWithRelations 스코프와 동일 술어)를
+   *   계산해 내려준다. 비소유 노드는 프론트에서 클릭 비활성 처리 → "노드는 보이나 열면 404"
+   *   불일치 제거. accountId 미전달(비인증) 시 상세도 무스코프라 전 노드 isOwned=true.
    * @param opts.includeCollaterals — false면 방계 친척(7b/7c/7d/7e)을 BFS에서 제외.
    *   기본 true. 합스부르크·이씨조선급 가계는 방계 호출 비용이 커서 성능·트래픽
    *   민감한 곳에서 옵트아웃할 수 있다. 끄면 조상 카드의 "형제 N" 칩이 사라진다.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async findFamilyTree(
     personId: string,
-    _accountId?: string,
+    accountId?: string,
     opts?: { includeCollaterals?: boolean },
-  ) {
+  ): Promise<FamilyTreeResponseDto> {
     const includeCollaterals = opts?.includeCollaterals !== false
     // ── 공통 select ───────────────────────────────────────────────────
     // 카드 정보 풍부도 (B4·B6·E1)와 결혼 메타(A3·H1)를 위해 확장.
@@ -4314,6 +4316,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       nameDisplayOrder: true, gender: true, regnalName: true,
       profileImageUrl: true, birthDate: true, deathDate: true,
       fatherId: true, motherId: true,
+      // 소유권 — 노드 isOwned(상세 열람 가능 여부) 계산에 사용
+      accountId: true,
       // 사생아·서출 플래그 (UI 별표 마커)
       illegitimate: true,
       // 어떤 결혼에서 태어난 자녀인지 (다중 배우자 분기에 사용)
@@ -4694,6 +4698,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       const flagSrc = reignCountrySrc ?? personCountrySrc
       return {
         id:              p.id              as string,
+        // 현재 계정이 이 노드 상세를 열 수 있는지 (findByIdWithRelations 스코프와 동일 술어).
+        // 비인증(accountId 없음)이면 상세도 무스코프라 전 노드 열람 가능.
+        isOwned:         accountId == null ? true : (p.accountId as string | null) === accountId,
         name:            p.name            as string,
         surname:         (p.surname        ?? null) as string | null,
         middleName:      (p.middleName     ?? null) as string | null,

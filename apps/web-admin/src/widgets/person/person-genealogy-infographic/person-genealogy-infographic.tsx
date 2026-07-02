@@ -328,8 +328,12 @@ export function PersonGenealogyInfographic({
         : spouseLegacy ? [spouseLegacy]
         : [])
 
-  const clickableProps = (id?: string) =>
-    id && onPersonClick
+  const clickableProps = (id?: string) => {
+    // BFS 응답에 isOwned=false로 온 노드는 상세를 열 수 없음(다른 계정 등록) → 클릭 비활성 + dim.
+    const openable = !id || ftNodeMap.get(id)?.isOwned !== false
+    if (!openable)
+      return { $dimmed: true, title: '다른 계정이 등록한 인물이라 상세를 열 수 없습니다' }
+    return id && onPersonClick
       ? {
           role: 'button' as const,
           tabIndex: 0,
@@ -340,6 +344,7 @@ export function PersonGenealogyInfographic({
           $clickable: true,
         }
       : {}
+  }
 
   const hasPaternalGp = Boolean(paternalGrandfather || paternalGrandmother)
   const hasMaternalGp = Boolean(maternalGrandfather || maternalGrandmother)

@@ -7,7 +7,7 @@ import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { NODE_H, NODE_W } from './constants'
-import { FamilyTreeLookupContext } from './context'
+import { FamilyTreeLookupContext, useNodeOpenable } from './context'
 import type { AvatarRole, FlagSource, NodePerson, PersonMetaSource } from './types'
 import {
   buildPersonTooltip,
@@ -261,13 +261,15 @@ export function NodePersonCompactCard({
   onPersonClick?: (id: string) => void
 }) {
   const tooltip = buildPersonTooltip(person)
-  const clickable = Boolean(onPersonClick && person.id)
+  const openable = useNodeOpenable(person.id)
+  const clickable = Boolean(onPersonClick && person.id) && openable
   const handle = () => person.id && onPersonClick?.(person.id)
   return (
     <GeoNode
       $role={role}
       $clickable={clickable}
-      title={tooltip}
+      $dimmed={!openable}
+      title={openable ? tooltip : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
       {...(clickable
         ? {
             role: 'button' as const,
@@ -299,7 +301,8 @@ export function SiblingCompactNode({
   person: NodePerson
   onPersonClick?: (id: string) => void
 }) {
-  const clickable = Boolean(onPersonClick && person.id)
+  const openable = useNodeOpenable(person.id)
+  const clickable = Boolean(onPersonClick && person.id) && openable
   const handle = () => person.id && onPersonClick?.(person.id)
   const tooltip = buildPersonTooltip(person)
   const interactiveProps = clickable
@@ -316,7 +319,13 @@ export function SiblingCompactNode({
       }
     : {}
   return (
-    <GeoNode $role="sibling" $clickable={clickable} title={tooltip} {...interactiveProps}>
+    <GeoNode
+      $role="sibling"
+      $clickable={clickable}
+      $dimmed={!openable}
+      title={openable ? tooltip : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
+      {...interactiveProps}
+    >
       <GeoThumbnail person={person} role="sibling" />
       <NodeNameBlock person={person} />
       <NodeBadge $role="sibling">형제</NodeBadge>
@@ -356,7 +365,8 @@ export function DescendantNode({
   const baseName = getPersonDisplayName(person, true)
   const displayName = person.illegitimate ? `${baseName}*` : baseName
   const initial = [...baseName.trim()][0] ?? '?'
-  const clickable = Boolean(onPersonClick && person.id)
+  const openable = useNodeOpenable(person.id)
+  const clickable = Boolean(onPersonClick && person.id) && openable
   const handle = () => person.id && onPersonClick?.(person.id)
   const tooltip = buildPersonTooltip(person)
   const isDeceased = d != null
@@ -364,7 +374,8 @@ export function DescendantNode({
     <GeoNode
       $role="ancestor"
       $clickable={clickable}
-      title={tooltip}
+      $dimmed={!openable}
+      title={openable ? tooltip : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
       {...(clickable
         ? {
             role: 'button' as const,
@@ -492,6 +503,8 @@ export const GeoNode = styled.div<{
   $role: string
   $emphasis?: boolean
   $clickable?: boolean
+  /** 비소유 노드 — 현재 계정이 상세를 열 수 없음(다른 계정 등록). 살짝 흐리게 + 클릭 불가. */
+  $dimmed?: boolean
 }>`
   position: relative;
   display: flex;
@@ -532,6 +545,13 @@ export const GeoNode = styled.div<{
         outline: 2px solid #6366f1;
         outline-offset: 2px;
       }
+    `}
+
+  ${({ $dimmed }) =>
+    $dimmed &&
+    css`
+      opacity: 0.5;
+      cursor: default;
     `}
 
   ${({ $emphasis, theme }) =>
