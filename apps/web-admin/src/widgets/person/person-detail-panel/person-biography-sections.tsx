@@ -407,6 +407,22 @@ export function PersonBiographySections({
     [doPersist],
   )
 
+  /** 편집 중이던 본문 변경(updateField는 디바운스 타이머를 잡지 않음)이 dirty면 true.
+      구조 변경(삭제·순서)은 persistTimerRef로 flush되지만 본문 편집은 이걸로 판정해
+      탭 전환·패널 닫기·인물 전환 시 함께 flush(저장 안 누른 타이핑의 조용한 유실 방지). */
+  const hasDirtyInProgressEdit = useCallback(() => {
+    const key = editingKeyRef.current
+    if (key == null) return false
+    const editedRow = latestRowsRef.current.find(
+      (sectionRow) => sectionRow.key === key,
+    )
+    if (!editedRow) return false
+    return (
+      editedRow.title !== editInitialRef.current.title ||
+      editedRow.content !== editInitialRef.current.content
+    )
+  }, [])
+
   /* ── 인물 전환 대응 ───────────────────────────────────────────
      key 없이 personId만 바뀌는 호출부(상세 페이지 라우트 재사용, 위젯의 제자리
      교체 등)에서도 이전 인물의 rows·편집 상태가 새 인물로 새지 않도록 컴포넌트
@@ -416,10 +432,13 @@ export function PersonBiographySections({
     if (personIdRef.current === personId) return
     const prevPersonId = personIdRef.current
     personIdRef.current = personId
-    // ① 이전 인물의 pending 구조 변경을 이전 인물 id로 즉시 flush.
-    if (persistTimerRef.current != null) {
-      clearTimeout(persistTimerRef.current)
+    // ① 이전 인물의 pending 구조 변경 + 편집 중 본문 변경을 이전 인물 id로 즉시 flush.
+    const pendingTimer = persistTimerRef.current
+    if (pendingTimer != null) {
+      clearTimeout(pendingTimer)
       persistTimerRef.current = null
+    }
+    if (pendingTimer != null || hasDirtyInProgressEdit()) {
       doPersist(prevPersonId, latestRowsRef.current)
     }
     // ② rows를 새 인물의 서버 상태로 강제 리셋. 레거시 시드는 리마운트와 동일하게
@@ -462,13 +481,17 @@ export function PersonBiographySections({
      personIdRef는 latestRowsRef의 rows와 항상 같은 인물을 가리킨다(마운트·전환 시 갱신). */
   useEffect(
     () => () => {
-      if (persistTimerRef.current != null) {
-        clearTimeout(persistTimerRef.current)
+      const pendingTimer = persistTimerRef.current
+      if (pendingTimer != null) {
+        clearTimeout(pendingTimer)
         persistTimerRef.current = null
+      }
+      // 구조 변경(타이머) 또는 편집 중 본문 변경(dirty)이 있으면 언마운트 전 flush.
+      if (pendingTimer != null || hasDirtyInProgressEdit()) {
         doPersist(personIdRef.current, latestRowsRef.current)
       }
     },
-    [doPersist],
+    [doPersist, hasDirtyInProgressEdit],
   )
 
   const updateField = useCallback((key: string, patch: Partial<Row>) => {
@@ -518,9 +541,24 @@ export function PersonBiographySections({
   }, [editingKey])
 
   const removeSection = useCallback(
-    (key: string) => {
+    async (key: string) => {
+      // 되돌릴 수 없는 삭제(delete-and-recreate PUT) — 확인 가드. 같은 패널의
+      // 학력·경력·수상·업적 삭제와 동일 규약(무확인 삭제 금지).
+      const target = latestRowsRef.current.find(
+        (sectionRow) => sectionRow.key === key,
+      )
+      const label = target?.title?.trim()
+      const ok = await confirm({
+        title: '전기 섹션 삭제',
+        message: label
+          ? `'${label}' 섹션을 삭제할까요? 되돌릴 수 없습니다.`
+          : '이 전기 섹션을 삭제할까요? 되돌릴 수 없습니다.',
+        confirmLabel: '삭제',
+        danger: true,
+      })
+      if (!ok) return
       setRows((arr) => {
-        const next = arr.filter((r) => r.key !== key)
+        const next = arr.filter((sectionRow) => sectionRow.key !== key)
         persistDebounced(next)
         return next
       })

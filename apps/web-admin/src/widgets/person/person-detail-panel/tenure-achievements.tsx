@@ -106,6 +106,7 @@ export function TenureAchievements({
   const [endDate, setEndDate] = useState('')
   const [showOnEventsPage, setShowOnEventsPage] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const isReign = hostKind === 'reign'
 
@@ -189,6 +190,7 @@ export function TenureAchievements({
   }
 
   const handleDelete = async (achievementId: string) => {
+    if (deletingId) return // in-flight 삭제 중 재클릭 무시(이중 삭제 방지)
     if (
       !(await confirm({
         title: '삭제 확인',
@@ -198,6 +200,7 @@ export function TenureAchievements({
     )
       return
     onPlayClick?.()
+    setDeletingId(achievementId)
     try {
       if (isReign) {
         await personCareerApi.deleteSovereignReignAchievement(
@@ -212,6 +215,8 @@ export function TenureAchievements({
       onChanged()
     } catch (err: any) {
       notify.error(err?.message ?? '삭제에 실패했습니다.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -316,6 +321,7 @@ export function TenureAchievements({
                             type="button"
                             aria-label="삭제"
                             $danger
+                            disabled={deletingId === a.id}
                             onClick={() => handleDelete(a.id)}
                           >
                             <FiTrash2 size={11} />
