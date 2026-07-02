@@ -167,8 +167,6 @@ import {
   FamilyBadgeRow,
   FoundedDynastyChip,
   FoundedDynastyRow,
-  FullGenealogyLink,
-  FullGenealogyLinkRow,
   HeaderActions,
   HeaderLeft,
   HeaderRow,
@@ -2376,19 +2374,6 @@ export function PersonDetailPanel({
                           : pushPersonToModalStack
                       }
                     />
-                  )}
-                  {!embedInModal && (
-                    <FullGenealogyLinkRow>
-                      <FullGenealogyLink
-                        onClick={() => {
-                          playClickSound()
-                          window.open(`/genealogy/${person.id}/`, '_blank')
-                        }}
-                      >
-                        <FiUsers size={14} strokeWidth={1.75} />
-                        전체 가계도 보기
-                      </FullGenealogyLink>
-                    </FullGenealogyLinkRow>
                   )}
                   {/* 가족 추가 모달 — 기존 인물 검색 또는 "새 인물" 생성 후 ego와 연결. */}
                   {familyModalConfig && (

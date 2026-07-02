@@ -944,32 +944,6 @@ export const SectionLabel = styled.div`
   color: #6366f1;
 `
 
-export const FullGenealogyLinkRow = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
-`
-
-export const FullGenealogyLink = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #6366f1;
-  background: rgba(99, 102, 241, 0.07);
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  border-radius: 10px;
-  padding: 8px 14px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
-  &:hover {
-    background: rgba(99, 102, 241, 0.12);
-    border-color: rgba(99, 102, 241, 0.4);
-    transform: translateY(-1px);
-  }
-`
-
 export const SectionLabelRow = styled.div`
   display: flex;
   align-items: center;
