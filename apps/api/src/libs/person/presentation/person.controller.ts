@@ -485,6 +485,7 @@ export class PersonController {
     humanRelationships: any[]
     isBirthDateUnknown: boolean
     isDeathDateUnknown: boolean
+    birthNote: string | null
     deathType: string | null
     deathCause: string | null
     deathNote: string | null
@@ -706,6 +707,7 @@ export class PersonController {
               c.branch ??
               c.department ??
               c.sport ??
+      birthNote: (person as any).birthNote ?? null,
               c.specialization ??
               null
             out.push({
@@ -827,6 +829,7 @@ export class PersonController {
       countryAffiliations: dto.countryAffiliations,
       nicknames: dto.nicknames,
     }, accountId)
+      birthNote: dto.birthNote,
   }
 
   /**
@@ -938,6 +941,7 @@ export class PersonController {
       countryAffiliations: dto.countryAffiliations,
       sections: dto.sections,
       nicknames: dto.nicknames,
+      birthNote: dto.birthNote,
     }, accountId)
   }
 

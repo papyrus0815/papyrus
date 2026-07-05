@@ -266,6 +266,14 @@ export class CreatePersonDto {
   isBirthDateUnknown?: boolean
 
   /**
+   * 출생 관련 메모 (탄생 설화·유복자·조산 등 맥락). deathNote의 출생 대칭.
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  birthNote?: string | null
+
+  /**
    * 사망 정보 (객체 형식)
    */
   @IsOptional()

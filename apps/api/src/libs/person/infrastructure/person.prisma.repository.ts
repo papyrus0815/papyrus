@@ -498,6 +498,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       id: person.id,
       name: person.name,
       surname: person.surname ?? null,
+      birthNote: (person as any).birthNote ?? null,
       middleName: person.middleName ?? null,
       birthEra: person.birthEra as any,
       birthYear: person.birthDate ? person.birthDate.getUTCFullYear() : null,
