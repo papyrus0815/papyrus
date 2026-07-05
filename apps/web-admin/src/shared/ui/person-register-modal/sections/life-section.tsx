@@ -47,6 +47,8 @@ export interface LifeSectionProps {
   birthDay: string
   isBirthDateUnknown: boolean
   setIsBirthDateUnknown: React.Dispatch<React.SetStateAction<boolean>>
+  isBirthDateApproximate: boolean
+  setIsBirthDateApproximate: React.Dispatch<React.SetStateAction<boolean>>
   setShowBirthDateModal: (v: boolean) => void
   setBirthEra: (era: Era) => void
   setBirthYear: (value: string) => void
@@ -59,6 +61,8 @@ export interface LifeSectionProps {
   deathDay: string
   isAlive: boolean
   isDeathDateUnknown: boolean
+  isDeathDateApproximate: boolean
+  setIsDeathDateApproximate: React.Dispatch<React.SetStateAction<boolean>>
   setShowDeathDateModal: (v: boolean) => void
   setDeathEra: (era: Era) => void
   setDeathYear: (value: string) => void
@@ -107,6 +111,8 @@ export function LifeSection({
   birthDay,
   isBirthDateUnknown,
   setIsBirthDateUnknown,
+  isBirthDateApproximate,
+  setIsBirthDateApproximate,
   setShowBirthDateModal,
   setBirthEra,
   setBirthYear,
@@ -118,6 +124,8 @@ export function LifeSection({
   deathDay,
   isAlive,
   isDeathDateUnknown,
+  isDeathDateApproximate,
+  setIsDeathDateApproximate,
   setShowDeathDateModal,
   setDeathEra,
   setDeathYear,
@@ -201,11 +209,31 @@ export function LifeSection({
                 $active={isBirthDateUnknown}
                 aria-pressed={isBirthDateUnknown}
                 onClick={() => {
-                  setIsBirthDateUnknown((v) => !v)
+                  setIsBirthDateUnknown((v) => {
+                    if (!v) setIsBirthDateApproximate(false) // 미상↔추정 배타
+                    return !v
+                  })
                   markDirty()
                 }}
               >
                 출생일 미상
+              </SegmentBtn>
+              <SegmentBtn
+                type="button"
+                $variant="ghost"
+                $active={isBirthDateApproximate}
+                aria-pressed={isBirthDateApproximate}
+                disabled={isBirthDateUnknown}
+                onClick={() => {
+                  setIsBirthDateApproximate((v) => {
+                    if (!v) setIsBirthDateUnknown(false) // 미상↔추정 배타
+                    return !v
+                  })
+                  markDirty()
+                }}
+                title="'약 1500년'처럼 추정 연도"
+              >
+                추정
               </SegmentBtn>
               {errors.birth && (
                 <FieldError role="alert">
@@ -280,6 +308,22 @@ export function LifeSection({
                   일자 미상
                 </Segmented3WayBtn>
               </Segmented3Way>
+              {!isAlive && (
+                <SegmentBtn
+                  type="button"
+                  $variant="ghost"
+                  $active={isDeathDateApproximate}
+                  aria-pressed={isDeathDateApproximate}
+                  disabled={isDeathDateUnknown}
+                  onClick={() => {
+                    setIsDeathDateApproximate((v) => !v)
+                    markDirty()
+                  }}
+                  title="'약 1500년'처럼 추정 연도"
+                >
+                  추정
+                </SegmentBtn>
+              )}
               {lifespanText && (
                 <LifespanText aria-live="polite">{lifespanText}</LifespanText>
               )}

@@ -211,6 +211,8 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   middleNameMeaning: string
   gender: string
   isBirthDateUnknown: boolean
+  isBirthDateApproximate: boolean
+  isDeathDateApproximate: boolean
   birthEra: Era
   birthYear: string
   birthMonth: string

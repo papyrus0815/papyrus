@@ -230,6 +230,8 @@ export function PersonRegisterView({
   const [gender, setGender] = useState('')
   // 생몰
   const [isBirthDateUnknown, setIsBirthDateUnknown] = useState(false)
+  const [isBirthDateApproximate, setIsBirthDateApproximate] = useState(false)
+  const [isDeathDateApproximate, setIsDeathDateApproximate] = useState(false)
   const [birthEra, setBirthEra] = useState<Era>('AD')
   const [birthYear, setBirthYear] = useState('')
   const [birthMonth, setBirthMonth] = useState('')
@@ -622,6 +624,8 @@ export function PersonRegisterView({
       setIsBirthDateUnknown,
       false,
     ),
+    makeFormField('isBirthDateApproximate', () => isBirthDateApproximate, setIsBirthDateApproximate, false),
+    makeFormField('isDeathDateApproximate', () => isDeathDateApproximate, setIsDeathDateApproximate, false),
     makeFormField('birthEra', () => birthEra, setBirthEra, 'AD'),
     makeFormField('birthYear', () => birthYear, setBirthYear, ''),
     makeFormField('birthMonth', () => birthMonth, setBirthMonth, ''),
@@ -896,6 +900,8 @@ export function PersonRegisterView({
         setDeathCause((p as any).deathCause ?? '')
         setDeathNote((p as any).deathNote ?? '')
         setBirthNote((p as any).birthNote ?? '')
+        setIsBirthDateApproximate((p as any).isBirthDateApproximate ?? false)
+        setIsDeathDateApproximate((p as any).isDeathDateApproximate ?? false)
         // 이름의 뜻이 있으면 기본 탭의 collapse 자동 펼침.
         const hasNameMeanings =
           (p.surnameMeaning && String(p.surnameMeaning).trim()) ||
@@ -1593,6 +1599,9 @@ export function PersonRegisterView({
       spouseRelations: buildSpouseRelations(),
       isBirthDateUnknown,
       isDeathDateUnknown,
+      // 미상↔추정 배타(클라 1차) — 서버도 정규화하나 페이로드에서 선반영.
+      isBirthDateApproximate: isBirthDateUnknown ? false : isBirthDateApproximate,
+      isDeathDateApproximate: isAlive || isDeathDateUnknown ? false : isDeathDateApproximate,
       isAlive,
       // 생존중일 때는 사망 상세를 강제로 비움 — UI에서 숨겨도 state에 남아 있을 수 있어 명시 nullify.
       deathType: isAlive ? null : (deathType || null),
@@ -2224,6 +2233,10 @@ export function PersonRegisterView({
                 birthDay={birthDay}
                 isBirthDateUnknown={isBirthDateUnknown}
                 setIsBirthDateUnknown={setIsBirthDateUnknown}
+                isBirthDateApproximate={isBirthDateApproximate}
+                setIsBirthDateApproximate={setIsBirthDateApproximate}
+                isDeathDateApproximate={isDeathDateApproximate}
+                setIsDeathDateApproximate={setIsDeathDateApproximate}
                 setShowBirthDateModal={setShowBirthDateModal}
                 setBirthEra={setBirthEra}
                 setBirthYear={setBirthYear}
@@ -2286,6 +2299,10 @@ export function PersonRegisterView({
                 birthDay={birthDay}
                 isBirthDateUnknown={isBirthDateUnknown}
                 setIsBirthDateUnknown={setIsBirthDateUnknown}
+                isBirthDateApproximate={isBirthDateApproximate}
+                setIsBirthDateApproximate={setIsBirthDateApproximate}
+                isDeathDateApproximate={isDeathDateApproximate}
+                setIsDeathDateApproximate={setIsDeathDateApproximate}
                 setShowBirthDateModal={setShowBirthDateModal}
                 setBirthEra={setBirthEra}
                 setBirthYear={setBirthYear}

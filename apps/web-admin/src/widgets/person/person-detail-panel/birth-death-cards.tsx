@@ -84,7 +84,10 @@ export function BirthDeathCards({
           {birthDateStr ? (
             <LifeCardRow>
               <LifeCardLabel>일자</LifeCardLabel>
-              <LifeCardValue>{birthDateStr}</LifeCardValue>
+              <LifeCardValue>
+                {birthDateStr}
+                {p.isBirthDateApproximate ? '경' : ''}
+              </LifeCardValue>
             </LifeCardRow>
           ) : p.isBirthDateUnknown ? (
             <LifeCardRow>
@@ -119,7 +122,10 @@ export function BirthDeathCards({
           {deathDateStr ? (
             <LifeCardRow>
               <LifeCardLabel>일자</LifeCardLabel>
-              <LifeCardValue>{deathDateStr}</LifeCardValue>
+              <LifeCardValue>
+                {deathDateStr}
+                {p.isDeathDateApproximate ? '경' : ''}
+              </LifeCardValue>
             </LifeCardRow>
           ) : p.isDeathDateUnknown ? (
             <LifeCardRow>

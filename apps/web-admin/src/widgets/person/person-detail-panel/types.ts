@@ -105,6 +105,9 @@ export interface PersonDetailData {
   influence?: number | null
   isBirthDateUnknown?: boolean | null
   isDeathDateUnknown?: boolean | null
+  /** 출생/사망일 추정(circa) — 표시에 '경' 접미 */
+  isBirthDateApproximate?: boolean | null
+  isDeathDateApproximate?: boolean | null
   /** 사생아·서출 — 가계도 별표(*)와 동일 시맨틱 */
   illegitimate?: boolean | null
   dynastyId?: string | null
