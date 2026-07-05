@@ -23,13 +23,12 @@ export const RADIUS = {
   round: '50%', // 아바타·badge
 } as const
 
-/** 타이포 — 반픽셀(11.5·12.5·13.5)·17 제거하고 6단계로만. */
+/** 타이포 — 반픽셀(11.5·12.5·13.5)·16·17 제거하고 5단계로만. */
 export const FONT = {
   eyebrow: '11px', // 대문자 그룹 라벨
   meta: '12px', // hint·desc·meta·error·보조 버튼
   label: '13px', // 필드 라벨·chip·세그먼트
   body: '14px', // 인풋 값·본문
-  title: '16px', // 섹션 타이틀
   hero: '18px', // hero 이름
 } as const
 

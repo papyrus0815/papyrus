@@ -229,13 +229,15 @@ export const CoreDivider = styled.div`
  * 코어 블록 eyebrow 라벨(이름/신원/생몰) — 작은 대문자 톤으로 필드 라벨(13px)과
  * 위계를 분리해 "섹션 마커"임을 알린다. DeathTypeGroupLabel과 동일 시각 언어.
  */
-export const CoreSectionLabel = styled.div`
+export const CoreSectionLabel = styled.h3`
+  /* 태그만 heading(상시 긴 폼의 스크린리더 랜드마크) — 시각은 eyebrow 그대로.
+     UA margin-top을 0으로 눌러 24px CoreDivider 리듬을 보호. */
+  margin: 0 0 10px;
   font-size: ${FONT.eyebrow};
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-bottom: 10px;
 `
 
 // ─── Layout wrapper (Top-aligned modern form layout) ────────────────────────
@@ -294,66 +296,29 @@ export const PersonFormLayoutWrap = styled.div`
   }
 `
 
-// ─── Section header ─────────────────────────────────────────────────────────
-
-/**
- * 섹션 헤더 — 17px sentence-case + 1줄 설명.
- * scroll-spy용 data-form-section은 wrapper에 둔다.
- */
-export const SectionHeader = styled.div`
-  margin: 36px 0 12px;
-  &:first-child {
-    margin-top: 4px;
-  }
-`
-
-export const SectionHeaderTitle = styled.h3`
-  margin: 0 0 4px;
-  font-size: ${FONT.title};
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.01em;
-  line-height: 1.3;
-`
-
-export const SectionHeaderDesc = styled.p`
-  margin: 0;
-  font-size: ${FONT.meta};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1.5;
-`
-
 // Disclosure 카드(AdvancedSection·Toggle·Body 등)는 _form-primitives에서 정의·re-export.
 
-// ─── "더 입력" 토글 (필수 코어와 선택 상세를 가르는 affordance) ───────────────
-// 필수만 채우면 등록 끝 — 상세는 원하는 사람만 펼치게 해 첫인상 부담을 줄인다.
+// ─── 필수/선택 시임(OptionalSeam) ────────────────────────────────────────────
+// 접기(MoreToggle)를 없애며 사라진 '여기까지면 등록 끝' 경계를 캡션 얹은 hairline으로 복원.
+// 좌측정렬 eyebrow 라벨을 쓰면 섹션 마커(CoreSectionLabel)와 겹쳐 섹션으로 오독되므로,
+// 반드시 중앙 정렬 hairline + 보조 톤 캡션으로만 둔다(새 섹션 헤더가 아님을 시각으로 못박음).
 
-export const MoreToggle = styled.button<{ $open: boolean }>`
+export const OptionalSeam = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
-  margin-top: 20px;
-  padding: 13px 14px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8fafc'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: ${RADIUS.card};
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+  margin: 30px 0;
+  font-size: ${FONT.meta};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1.4;
+  text-align: center;
 
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.06)' : theme.colors.activeLight};
-  }
-  &:focus-visible {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.primary};
-    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: ${({ theme }) => theme.colors.border.light};
   }
 `
 

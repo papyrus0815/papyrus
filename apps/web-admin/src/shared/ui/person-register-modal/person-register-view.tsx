@@ -55,6 +55,7 @@ import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import { type PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import {
   FieldControl,
+  FieldHint,
   FieldLabel,
   FieldRow,
   FormRows,
@@ -111,11 +112,11 @@ import {
   InlineFields,
   LoadingHost,
   LoadingOverlay,
-  MoreToggle,
   NotFoundDesc,
   NotFoundIcon,
   NotFoundPanel,
   NotFoundTitle,
+  OptionalSeam,
   OriginalNameInputWrap,
   PersonFormLayoutWrap,
   ThumbnailCircle,
@@ -243,7 +244,14 @@ export function PersonRegisterView({
   const [deathDay, setDeathDay] = useState('')
   // 소속
   const [countryId, setCountryId] = useState<string>(initialCountryId ?? '')
+  // 주 국적이 역사(과거) 국가일 때의 FK — 현대 countryId와 상호배타.
+  // 선택/편집로드/reset 등 모든 write 사이트에서 반드시 반대 필드를 비운다(둘 다 set 금지).
+  const [historicalCountryId, setHistoricalCountryId] = useState<string>('')
   const [countryName, setCountryName] = useState<string>('')
+  /** 주 국적 id — 현대(countryId) 우선, 없으면 역사(historicalCountryId). 읽기 전용 파생. */
+  const primaryCountryId = countryId || historicalCountryId
+  /** 주 국적이 역사(과거) 국가인지 — historicalCountryId 보유가 source of truth. */
+  const countryIsHistorical = !!historicalCountryId
   // 추가 국가 소속(다중) — 주 국적 외 출생지·복무·망명 등
   const [countryAffiliations, setCountryAffiliations] = useState<
     CountryAffiliationRow[]
@@ -285,13 +293,6 @@ export function PersonRegisterView({
   const [nameMeaningsOpen, setNameMeaningsOpen] = useState(false)
   /** 생애 탭의 "군주명·묘호·시호" 접기 영역 — 군주가 아닌 인물에겐 영구 무관 */
   const [monarchTitlesOpen, setMonarchTitlesOpen] = useState(false)
-  /**
-   * 필수-먼저 레이아웃: 코어(이름·성별·국적·생몰)만 기본 노출,
-   * 상세(이름원어/뜻·사망상세·군주·소속·가족)는 이 토글로 펼친다.
-   * 편집 모드에서 상세값이 있으면 진입 시 1회 자동 펼침(아래 effect).
-   */
-  const [moreOpen, setMoreOpen] = useState(false)
-  const autoExpandedDetailsRef = useRef(false)
   /**
    * 등록 성공 직후 노출하는 다이얼로그 — "다른 인물 이어서 등록할까요?".
    * 사용자가 "다른 인물 등록"을 누르면 폼만 리셋하고 모달은 유지, "닫기"는 onCancel 호출.
@@ -341,59 +342,6 @@ export function PersonRegisterView({
   const uidPrefix = useId()
   const fid = useCallback((k: string) => `${uidPrefix}-${k}`, [uidPrefix])
 
-  /**
-   * 편집 모드 등으로 상세 필드에 값이 차면 "더 입력" 영역을 1회 자동 펼침.
-   * (값이 있는데 접혀 있어 "비어 보이는" 오해를 막음 — 사용자가 닫으면 다시 안 열림)
-   */
-  /** 상세 필드(이름원어/뜻·사망상세·군주·소속·가족) 중 하나라도 값이 있는지. */
-  const hasDetailValues = useMemo(
-    () =>
-      !!originalName ||
-      !!surnameMeaning ||
-      !!nameMeaning ||
-      !!middleNameMeaning ||
-      !!deathType ||
-      !!deathCause ||
-      !!deathNote ||
-      !!regnalName ||
-      !!templeName ||
-      !!posthumousName ||
-      !!birthPlace ||
-      !!deathPlace ||
-      !!dynastyId ||
-      !!religionId ||
-      !!fatherId ||
-      !!motherId ||
-      spouseRows.length > 0,
-    [
-      originalName,
-      surnameMeaning,
-      nameMeaning,
-      middleNameMeaning,
-      deathType,
-      deathCause,
-      deathNote,
-      regnalName,
-      templeName,
-      posthumousName,
-      birthPlace,
-      deathPlace,
-      dynastyId,
-      religionId,
-      fatherId,
-      motherId,
-      spouseRows,
-    ],
-  )
-
-  useEffect(() => {
-    if (autoExpandedDetailsRef.current) return
-    if (hasDetailValues) {
-      setMoreOpen(true)
-      autoExpandedDetailsRef.current = true
-    }
-  }, [hasDetailValues])
-
   /** draft 복원 배너 — 진입 시 1회만 평가, 사용자 응답 후 사라짐. */
   const [pendingDraftSavedAt, setPendingDraftSavedAt] = useState<number | null>(
     null,
@@ -417,9 +365,9 @@ export function PersonRegisterView({
       name: !!name?.trim(),
       surname: !!surname?.trim(),
       gender: !!gender,
-      countryId: !!countryId,
+      countryId: !!primaryCountryId,
     })
-  }, [name, surname, gender, countryId])
+  }, [name, surname, gender, primaryCountryId])
 
   const [modernCountries, setModernCountries] = useState<CountryResponseDto[]>(
     [],
@@ -503,7 +451,7 @@ export function PersonRegisterView({
     const order =
       nameFormat !== 'auto'
         ? nameFormat
-        : (countryNameOrderById.get(countryId) ?? 'korean')
+        : (countryNameOrderById.get(primaryCountryId) ?? 'korean')
     return getPersonDisplayName(
       {
         name,
@@ -513,7 +461,7 @@ export function PersonRegisterView({
       },
       false,
     )
-  }, [name, surname, middleName, countryId, countryNameOrderById, nameFormat])
+  }, [name, surname, middleName, primaryCountryId, countryNameOrderById, nameFormat])
 
   /** 향년 계산 — 둘 다 정상값일 때만. */
   const lifespanText = useMemo(() => {
@@ -596,11 +544,13 @@ export function PersonRegisterView({
 
   /** 인물 풀이 한 번이라도 로드되었는지 — 같은 모달 인스턴스 내 중복 호출 방지. */
   const personsLoadedRef = useRef(false)
-  /** 상세(가족 인라인 검색) 펼치거나 "+ 새 인물" 모달 열 때 인물 풀 로드. */
-  const needsPersons =
-    moreOpen || showFatherModal || showMotherModal || showSpouseModal
-  useEffect(() => {
-    if (!needsPersons || personsLoadedRef.current) return
+  /**
+   * 인물 풀(getAllPersons) 로드 — 가족(부/모/배우자) 인라인 검색 후보와 "+ 새 인물" 모달에 필요.
+   * 가족 섹션이 상시 노출로 바뀌어 "접기 펼침" 시점 로드가 사라졌으므로, 코어 첫 페인트 뒤
+   * idle에 한 번 당겨온다(아래 마운트 effect). 후보가 비어 기존 인물을 못 찾고 중복 생성하는 회귀 차단.
+   */
+  const loadPersons = useCallback(() => {
+    if (personsLoadedRef.current) return
     personsLoadedRef.current = true
     getAllPersons()
       .then((pers) => {
@@ -609,12 +559,32 @@ export function PersonRegisterView({
       .catch(() => {
         personsLoadedRef.current = false
       })
-  }, [needsPersons])
+  }, [])
+
+  // 마운트 후 idle에 인물 풀 프리로드 — essentials 첫 페인트/빠른 등록(15초) 경로를 막지 않도록 지연.
+  useEffect(() => {
+    const ric = window as typeof window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+      cancelIdleCallback?: (id: number) => void
+    }
+    if (typeof ric.requestIdleCallback === 'function') {
+      const id = ric.requestIdleCallback(loadPersons, { timeout: 1500 })
+      return () => ric.cancelIdleCallback?.(id)
+    }
+    const fallbackTimer = setTimeout(loadPersons, 300)
+    return () => clearTimeout(fallbackTimer)
+  }, [loadPersons])
+
+  // idle 발화 전 "+ 새 인물" 등 인물 선택 모달을 열면 즉시 로드(레이스 폴백).
+  useEffect(() => {
+    if (showFatherModal || showMotherModal || showSpouseModal) loadPersons()
+  }, [showFatherModal, showMotherModal, showSpouseModal, loadPersons])
 
   useEffect(() => {
     // 수정 모드에서는 인물 데이터가 권위 — 부모가 흘려보낸 initialCountryId가 덮어쓰지 않게.
     if (editPersonId) return
     setCountryId(initialCountryId ?? '')
+    setHistoricalCountryId('') // 부모 컨텍스트(initialCountryId)는 항상 현대국가
     setCountryName('')
   }, [initialCountryId, editPersonId])
 
@@ -668,6 +638,7 @@ export function PersonRegisterView({
     makeFormField('deathMonth', () => deathMonth, setDeathMonth, ''),
     makeFormField('deathDay', () => deathDay, setDeathDay, ''),
     makeFormField('countryId', () => countryId, setCountryId, ''),
+    makeFormField('historicalCountryId', () => historicalCountryId, setHistoricalCountryId, ''),
     makeFormField(
       'countryAffiliations',
       () => countryAffiliations,
@@ -704,25 +675,30 @@ export function PersonRegisterView({
       // 등록 모드 전환 시 폼 초기화
       setNameMeaningsOpen(false)
       setMonarchTitlesOpen(false)
-      setMoreOpen(false)
-      autoExpandedDetailsRef.current = false
-      // "또 등록" 흐름에서 직전 등록 국가 보존(`preserveCountryIdRef`).
-      // 일반 reset에서는 initialCountryId(부모가 흘린 값)으로 폴백.
-      const nextCountryId = preserveCountryIdRef.current ?? initialCountryId ?? ''
+      // "또 등록" 흐름에서 직전 등록 주 국적(현대/역사 둘 다) 보존(`preserveCountryIdRef`).
+      // 일반 reset에서는 initialCountryId(부모가 흘린 현대국가)으로 폴백.
+      const preserved = preserveCountryIdRef.current
+      const nextCountryId = preserved ? preserved.countryId : (initialCountryId ?? '')
+      const nextHistoricalCountryId = preserved ? preserved.historicalCountryId : ''
       preserveCountryIdRef.current = null
-      // 폼 필드는 레지스트리에서 일괄 초기화 — countryId만 보존 국가로 대체.
+      // 폼 필드는 레지스트리에서 일괄 초기화 — 주 국적 두 필드만 보존 값으로 대체.
       formFieldsRef.current.forEach((field) =>
-        field.key === 'countryId' ? setCountryId(nextCountryId) : field.reset(),
+        field.key === 'countryId'
+          ? setCountryId(nextCountryId)
+          : field.key === 'historicalCountryId'
+            ? setHistoricalCountryId(nextHistoricalCountryId)
+            : field.reset(),
       )
       // 스냅샷 외 transient 상태는 명시 초기화.
-      // countryName은 보존된 countryId가 있으면 즉시 재계산 — countryId 값이 동일하면
-      // 이름 조회 effect(deps: countryId)가 재실행되지 않아 버튼이 '국가 선택'으로 비어 보임.
+      // countryName은 보존된 주 국적이 있으면 즉시 재계산 — 값이 동일하면
+      // 이름 조회 effect가 재실행되지 않아 버튼이 '국가 선택'으로 비어 보임.
+      const nextPrimary = nextCountryId || nextHistoricalCountryId
       setCountryName(
-        nextCountryId
-          ? (modernCountries.find((country) => country.id === nextCountryId)
+        nextPrimary
+          ? (modernCountries.find((country) => country.id === nextPrimary)
               ?.name ??
               historicalCountries.find(
-                (country) => country.id === nextCountryId,
+                (country) => country.id === nextPrimary,
               )?.name ??
               '')
           : '',
@@ -765,8 +741,16 @@ export function PersonRegisterView({
         setRegnalName(p.regnalName ?? '')
         setTempleName(p.templeName ?? '')
         setPosthumousName(p.posthumousName ?? '')
-        setCountryId(p.countryId ?? '')
-        // 주 국적(priority 0 CITIZENSHIP)은 countryId가 담당 → 그 외 소속만 행으로 로드
+        // 주 국적: 응답 historicalCountryId(FK)가 있으면 역사국가, 없으면 현대 countryId.
+        // (countryId는 effective라 역사인물이면 역사PK가 담길 수 있으므로 historicalCountryId로 판별)
+        if (p.historicalCountryId) {
+          setHistoricalCountryId(p.historicalCountryId)
+          setCountryId('')
+        } else {
+          setCountryId(p.countryId ?? '')
+          setHistoricalCountryId('')
+        }
+        // 주 국적(priority 0 CITIZENSHIP)은 countryId/historicalCountryId가 담당 → 그 외 소속만 행으로 로드
         setCountryAffiliations(
           ((p as any).countryAffiliations ?? [])
             .filter(
@@ -929,13 +913,19 @@ export function PersonRegisterView({
   }, [editPersonId, initialCountryId, resetCounter])
 
   useEffect(() => {
-    if (!countryId || (!modernCountries.length && !historicalCountries.length))
+    if (!primaryCountryId || (!modernCountries.length && !historicalCountries.length))
       return
-    const modern = modernCountries.find((c) => c.id === countryId)
-    const historical = historicalCountries.find((c) => c.id === countryId)
-    if (modern) setCountryName(modern.name)
-    else if (historical) setCountryName(historical.name ?? '')
-  }, [countryId, modernCountries, historicalCountries])
+    if (countryId) {
+      const modern = modernCountries.find((country) => country.id === countryId)
+      if (modern) setCountryName(modern.name)
+    } else if (historicalCountryId) {
+      const historical = historicalCountries.find(
+        (country) => country.id === historicalCountryId,
+      )
+      if (historical) setCountryName(historical.name ?? '')
+    }
+  }, [countryId, historicalCountryId, primaryCountryId, modernCountries, historicalCountries])
+
 
   // ─── Draft (localStorage) ──────────────────────────────────────────────────
   // 레지스트리에서 직렬화 — 필드별 deps 나열 없이 항상 최신 값을 읽는다(formFieldsRef).
@@ -1006,13 +996,19 @@ export function PersonRegisterView({
    * `initialCountryId` 대신 사용. 사용자가 모달 처음 열 때 initialCountryId가
    * 비어있어도 직전 등록 국가가 자동으로 유지된다.
    */
-  const preserveCountryIdRef = useRef<string | null>(null)
+  const preserveCountryIdRef = useRef<{
+    countryId: string
+    historicalCountryId: string
+  } | null>(null)
 
-  /** 등록 성공 다이얼로그 — "다른 인물 등록" 선택 시 폼 리셋, 모달은 유지(직전 국가 보존). */
+  /** 등록 성공 다이얼로그 — "다른 인물 등록" 선택 시 폼 리셋, 모달은 유지(직전 주 국적 보존). */
   const handleRegisterAnother = () => {
     setShowRegisterAgainDialog(false)
     setLastCreatedPerson(null)
-    preserveCountryIdRef.current = countryId || null
+    preserveCountryIdRef.current =
+      countryId || historicalCountryId
+        ? { countryId, historicalCountryId }
+        : null
     setResetCounter((n) => n + 1)
   }
 
@@ -1029,9 +1025,20 @@ export function PersonRegisterView({
     else onCancel()
   }
 
-  const handleCountrySelect = (c: { id: string; name: string }) => {
-    const prev = countryId
-    setCountryId(c.id)
+  const handleCountrySelect = (c: {
+    id: string
+    name: string
+    isHistorical: boolean
+  }) => {
+    const prev = countryId || historicalCountryId
+    // 상호배타: 현대/역사 중 한쪽만 세팅하고 반대 필드는 비운다.
+    if (c.isHistorical) {
+      setHistoricalCountryId(c.id)
+      setCountryId('')
+    } else {
+      setCountryId(c.id)
+      setHistoricalCountryId('')
+    }
     setCountryName(c.name)
     setShowCountryModal(false)
     clearFieldError('countryId')
@@ -1410,7 +1417,7 @@ export function PersonRegisterView({
     // 성(surname)은 외자·단일명·성 미상 인물을 위해 선택. 이름·성별·국적만 필수.
     if (!name.trim()) e.name = REQUIRED_MESSAGES.name
     if (!gender) e.gender = REQUIRED_MESSAGES.gender
-    if (!countryId) e.countryId = REQUIRED_MESSAGES.countryId
+    if (!primaryCountryId) e.countryId = REQUIRED_MESSAGES.countryId
     const dateErrs = computeBirthDeathErrors(
       {
         era: birthEra,
@@ -1431,10 +1438,30 @@ export function PersonRegisterView({
     if (dateErrs.birth) e.birth = dateErrs.birth
     if (dateErrs.death) e.death = dateErrs.death
     // 국가 소속 행의 기간 역전(종료<시작)은 서버로 잘못 전송되므로 제출 차단.
-    // 해당 행은 "더 입력 → 소속·가문" 안에 있으니 접혀 있으면 펼쳐 인라인 오류를 보이게 한다.
+    // 소속 행이 상시 노출이라 파생 aria-invalid로 handleSubmit 첫-오류 스크롤이 곧바로 착지한다.
     if (hasAffiliationDateError(countryAffiliations)) {
       e._form = '국가 소속의 기간을 확인해주세요. 종료일이 시작일보다 빠른 행이 있습니다.'
-      setMoreOpen(true)
+    }
+    // 배우자 미선택 행에 혼인일·메모만 입력하면 저장 시 조용히 폐기되므로 제출 차단.
+    const orphanSpouseMeta = spouseRows.some(
+      (row) =>
+        !row.spouseId &&
+        (row.marriageStartDate || row.marriageEndDate || (row.note && row.note.trim())),
+    )
+    // 혼인 종료일이 시작일보다 빠른 행(음수 기간)도 차단.
+    const badSpouseDate = spouseRows.some(
+      (row) =>
+        row.spouseId &&
+        row.marriageStartDate &&
+        row.marriageEndDate &&
+        String(row.marriageEndDate).slice(0, 10) < String(row.marriageStartDate).slice(0, 10),
+    )
+    if (orphanSpouseMeta || badSpouseDate) {
+      const parts: string[] = []
+      if (orphanSpouseMeta)
+        parts.push('배우자가 선택되지 않은 행에 혼인일·메모가 입력되어 있습니다. 배우자를 선택하거나 행을 비워주세요.')
+      if (badSpouseDate) parts.push('배우자 혼인 종료일이 시작일보다 빠른 행이 있습니다.')
+      e._form = [e._form, ...parts].filter(Boolean).join(' ')
     }
     setErrors(e)
     if (Object.keys(e).length > 0) return false
@@ -1509,6 +1536,7 @@ export function PersonRegisterView({
       templeName: templeName.trim() || null,
       posthumousName: posthumousName.trim() || null,
       countryId: countryId || undefined,
+      historicalCountryId: historicalCountryId || undefined,
       // 수정 모드: 항상 배열 전송(빈 배열이면 추가 소속 제거). 신규: 채워진 행만.
       countryAffiliations:
         isEditMode || countryAffiliations.length
@@ -1625,6 +1653,9 @@ export function PersonRegisterView({
         // (PATCH 계약: undefined = 변경 없음 — 키를 생략하면 기존 값이 남아 재진입 시 부활)
         const updatePayload: UpdatePersonInput = {
           ...payload,
+          // 주 국적 두 필드 모두 명시 null로 해제 — 현대↔역사 전환 시 반대편 FK가 서버에 잔존(시한폭탄)하는 것 방지.
+          countryId: countryId || null,
+          historicalCountryId: historicalCountryId || null,
           dynastyId: dynastyId || null,
           religionId: religionId || null,
           fatherId: fatherId || null,
@@ -1710,8 +1741,8 @@ export function PersonRegisterView({
 
   /**
    * 좌측 scroll-spy 인덱스용 섹션 목록 — 본문의 data-form-section 앵커와 id가 일치.
-   * "더 입력"이 접히면 상세 섹션 앵커가 DOM에 없으므로 목록에서도 빼, 클릭해도 안 움직이는
-   * 죽은 항목이 생기지 않게 한다(수정 모드는 상세가 있으면 자동 펼침이라 대부분 노출).
+   * 접기 제거로 4개 챕터(기본 정보·생애·가문/종교/국가·가족)가 항상 노출되므로 무조건 emit한다.
+   * (이름 상세는 '기본 정보', 출생지/사망지·사망 상세·군주 호칭은 '생애' 챕터로 흡수됨.)
    */
   const onSectionsChangeRef = useRef(onSectionsChange)
   onSectionsChangeRef.current = onSectionsChange
@@ -1722,88 +1753,57 @@ export function PersonRegisterView({
       {
         id: 'basic',
         label: '기본 정보',
-        // 성(surname)은 선택이라 완료 판정에서 제외 — 이름·성별·국적만.
-        filled: !!name && !!gender && !!countryId,
+        // 성(surname)·이름 상세는 선택 — 완료 배지는 필수(이름·성별·국적)만으로 판정.
+        filled: !!name && !!gender && !!primaryCountryId,
       },
       {
         id: 'life',
-        // 실제 의미 있는 입력(출생/사망 날짜 또는 미상)일 때만 채움 — 이전엔 isAlive
-        // 기본 false 때문에 `!isAlive`가 항상 true라 입력 0인데도 '생몰 완료'로 떴다.
-        label: '생몰',
+        // 생몰 날짜(essentials) + 출생지/사망지·사망 상세·군주 호칭(details)을 한 챕터로 흡수.
+        label: '생애',
         filled:
           !!birthYear ||
           isBirthDateUnknown ||
           !!deathYear ||
-          isDeathDateUnknown,
+          isDeathDateUnknown ||
+          !!birthPlace ||
+          !!deathPlace ||
+          !!deathCause ||
+          !!deathNote ||
+          !!regnalName ||
+          !!templeName ||
+          !!posthumousName,
+      },
+      {
+        id: 'affiliation',
+        label: '가문 · 종교 · 국가',
+        filled: !!dynastyId || !!religionId || countryAffiliations.length > 0,
+      },
+      {
+        id: 'family',
+        label: '가족',
+        filled: !!fatherId || !!motherId || spouseRows.length > 0,
       },
     ]
-    if (moreOpen) {
-      sections.push(
-        {
-          id: 'names',
-          label: '이름 상세',
-          filled:
-            !!originalName ||
-            !!surnameMeaning ||
-            !!nameMeaning ||
-            !!middleNameMeaning,
-        },
-        {
-          id: 'death-detail',
-          // 사망 유형은 생몰(코어)로 이동 — 여기 완료 판정은 출생지·사망지·원인·메모·군주 호칭.
-          label: '생애 상세',
-          filled:
-            !!birthPlace ||
-            !!deathPlace ||
-            !!deathCause ||
-            !!deathNote ||
-            !!regnalName ||
-            !!templeName ||
-            !!posthumousName,
-        },
-        {
-          id: 'affiliation',
-          label: '가문 · 종교 · 국가',
-          filled:
-            !!dynastyId ||
-            !!religionId ||
-            countryAffiliations.length > 0,
-        },
-        {
-          id: 'family',
-          label: '가족',
-          filled: !!fatherId || !!motherId || spouseRows.length > 0,
-        },
-      )
-    }
     // id·label·filled가 실제로 바뀐 경우에만 부모로 전달 (불필요한 리렌더 차단).
     const key = sections.map((s) => `${s.id}:${s.filled ? 1 : 0}`).join('|')
     if (key === lastSectionsKeyRef.current) return
     lastSectionsKeyRef.current = key
     onSectionsChangeRef.current?.(sections)
   }, [
-    moreOpen,
-    surname,
     name,
     gender,
-    countryId,
+    primaryCountryId,
     birthYear,
     isBirthDateUnknown,
-    isAlive,
     deathYear,
     isDeathDateUnknown,
-    originalName,
-    surnameMeaning,
-    nameMeaning,
-    middleNameMeaning,
-    deathType,
+    birthPlace,
+    deathPlace,
     deathCause,
     deathNote,
     regnalName,
     templeName,
     posthumousName,
-    birthPlace,
-    deathPlace,
     dynastyId,
     religionId,
     countryAffiliations,
@@ -1871,8 +1871,9 @@ export function PersonRegisterView({
           )}
           <FormSectionInner aria-busy={isLoadingEdit}>
             {/*
-             * 필수-먼저 레이아웃: 코어(사진·이름·성별·국적·생몰)만 늘 노출해
-             * "한 명 빠르게 추가"를 15초 작업으로 만든다. 나머지 상세는 MoreToggle로 펼침.
+             * 4개 챕터(기본 정보 · 생애 · 가문/종교/국가 · 가족)를 늘 펼쳐 두되,
+             * 필수(이름·성별·국적)를 앞에 모으고 OptionalSeam으로 '여기까지면 등록 끝'을 표식.
+             * 세부(이름 원어/뜻·사망 상세·군주 호칭)는 필드 단위 disclosure로만 접어 첫인상 부담을 관리.
              */}
             <FormRows data-form-section="basic">
                 <CoreSectionLabel>이름</CoreSectionLabel>
@@ -2024,7 +2025,7 @@ export function PersonRegisterView({
                           {
                             value: 'auto',
                             label: `국가 기본 (${
-                              (countryNameOrderById.get(countryId) ??
+                              (countryNameOrderById.get(primaryCountryId) ??
                                 'korean') === 'western'
                                 ? '이름·성'
                                 : '성·이름'
@@ -2038,6 +2039,70 @@ export function PersonRegisterView({
                     </NameOrderControl>
                   </FieldControl>
                 </FieldRow>
+
+                {/* 이름 원어 — 성·이름 클러스터에 인접(구 '이름 상세' 섹션에서 이관) */}
+                <FieldRow>
+                  <FieldLabel htmlFor={fid('originalName')}>이름 원어</FieldLabel>
+                  <FieldControl>
+                    <OriginalNameInputWrap>
+                      <FormInput
+                        id={fid('originalName')}
+                        value={originalName}
+                        onChange={(e) => setOriginalName(e.target.value)}
+                        placeholder="Franklin D. Roosevelt"
+                      />
+                    </OriginalNameInputWrap>
+                  </FieldControl>
+                </FieldRow>
+
+                {/* 이름의 뜻 — 성·이름·중간이름의 한자/뜻 (옵셔널 disclosure) */}
+                <AdvancedSection>
+                  <AdvancedToggle
+                    type="button"
+                    $open={nameMeaningsOpen}
+                    onClick={() => setNameMeaningsOpen((v) => !v)}
+                    aria-expanded={nameMeaningsOpen}
+                  >
+                    <AdvancedToggleIcon $open={nameMeaningsOpen}>
+                      <FiChevronRight size={14} />
+                    </AdvancedToggleIcon>
+                    <AdvancedToggleBody>
+                      <AdvancedToggleTitle>이름의 뜻</AdvancedToggleTitle>
+                      <AdvancedToggleDesc>
+                        성·이름·중간이름의 한자/뜻 (선택)
+                      </AdvancedToggleDesc>
+                    </AdvancedToggleBody>
+                  </AdvancedToggle>
+                  {nameMeaningsOpen && (
+                    <AdvancedBody>
+                      <FieldLabel htmlFor={fid('surnameMeaning')}>
+                        성·이름·중간이름의 뜻
+                      </FieldLabel>
+                      <FieldControl>
+                        <InlineFields $cols={3}>
+                          <FormInput
+                            id={fid('surnameMeaning')}
+                            value={surnameMeaning}
+                            onChange={(e) => setSurnameMeaning(e.target.value)}
+                            placeholder="성의 뜻"
+                          />
+                          <FormInput
+                            id={fid('nameMeaning')}
+                            value={nameMeaning}
+                            onChange={(e) => setNameMeaning(e.target.value)}
+                            placeholder="이름의 뜻"
+                          />
+                          <FormInput
+                            id={fid('middleNameMeaning')}
+                            value={middleNameMeaning}
+                            onChange={(e) => setMiddleNameMeaning(e.target.value)}
+                            placeholder="중간이름의 뜻"
+                          />
+                        </InlineFields>
+                      </FieldControl>
+                    </AdvancedBody>
+                  )}
+                </AdvancedSection>
 
                 <CoreDivider />
 
@@ -2102,6 +2167,11 @@ export function PersonRegisterView({
                         {errors.countryId}
                       </FieldError>
                     )}
+                    <FieldHint>
+                      {countryIsHistorical
+                        ? '역사(과거) 국가가 선택되었습니다.'
+                        : '과거 국가(예: 잉글랜드 왕국)는 선택 창의 ‘역사 국가’ 탭에서 고를 수 있어요.'}
+                    </FieldHint>
                   </CoreFieldCell>
                 </CoreFieldPair>
               </FormRows>
@@ -2155,169 +2225,75 @@ export function PersonRegisterView({
                 errors={errors}
                 markDirty={markDirty}
               />
+
+              {/* 생애 상세 — 출생지·사망지 + 사망 유형·원인·메모 + 군주 호칭 (생몰과 한 챕터로 인접 배치) */}
+              <CoreDivider />
+              <CoreSectionLabel>생애 상세</CoreSectionLabel>
+              {/* 출생지·사망지 — 생몰 날짜와 한 흐름에 두어 발견성 회복 */}
+              <PlaceFields
+                countryId={primaryCountryId}
+                birthPlace={birthPlace}
+                deathPlace={deathPlace}
+                setBirthPlace={setBirthPlace}
+                setDeathPlace={setDeathPlace}
+                setBirthCityId={setBirthCityId}
+                setDeathCityId={setDeathCityId}
+                onCopyBirthToDeathPlace={handleCopyBirthToDeathPlace}
+                markDirty={markDirty}
+              />
+              <LifeSection
+                mode="details"
+                fid={fid}
+                birthEra={birthEra}
+                birthYear={birthYear}
+                birthMonth={birthMonth}
+                birthDay={birthDay}
+                isBirthDateUnknown={isBirthDateUnknown}
+                setIsBirthDateUnknown={setIsBirthDateUnknown}
+                setShowBirthDateModal={setShowBirthDateModal}
+                setBirthEra={setBirthEra}
+                setBirthYear={setBirthYear}
+                setBirthMonth={setBirthMonth}
+                setBirthDay={setBirthDay}
+                deathEra={deathEra}
+                deathYear={deathYear}
+                deathMonth={deathMonth}
+                deathDay={deathDay}
+                isAlive={isAlive}
+                isDeathDateUnknown={isDeathDateUnknown}
+                setShowDeathDateModal={setShowDeathDateModal}
+                setDeathEra={setDeathEra}
+                setDeathYear={setDeathYear}
+                setDeathMonth={setDeathMonth}
+                setDeathDay={setDeathDay}
+                setDeathStatus={setDeathStatus}
+                deathType={deathType}
+                deathCause={deathCause}
+                deathNote={deathNote}
+                setDeathType={setDeathType}
+                setDeathCause={setDeathCause}
+                setDeathNote={setDeathNote}
+                monarchTitlesOpen={monarchTitlesOpen}
+                setMonarchTitlesOpen={setMonarchTitlesOpen}
+                regnalName={regnalName}
+                templeName={templeName}
+                posthumousName={posthumousName}
+                setRegnalName={setRegnalName}
+                setTempleName={setTempleName}
+                setPosthumousName={setPosthumousName}
+                lifespanText={lifespanText}
+                errors={errors}
+                markDirty={markDirty}
+              />
               </div>
 
-              {/* ===== 선택 상세 토글 ===== */}
-              <MoreToggle
-                type="button"
-                $open={moreOpen}
-                onClick={() => setMoreOpen((v) => !v)}
-                aria-expanded={moreOpen}
-              >
-                <AdvancedToggleIcon $open={moreOpen}>
-                  <FiChevronRight size={14} />
-                </AdvancedToggleIcon>
-                <AdvancedToggleBody>
-                  <AdvancedToggleTitle>
-                    {moreOpen ? '상세 정보 접기' : '더 입력 (선택)'}
-                  </AdvancedToggleTitle>
-                  <AdvancedToggleDesc>
-                    이름 원어·뜻 · 출생지/사망지 · 사망 상세 · 군주 호칭 · 가문/종교 · 가족
-                  </AdvancedToggleDesc>
-                </AdvancedToggleBody>
-              </MoreToggle>
+              {/* 필수/선택 경계 — 접기(MoreToggle)가 겸하던 '여기까지면 등록 끝' 표식을 seam으로 복원 */}
+              <OptionalSeam>
+                여기까지가 인물 기본 정보예요 · 아래 소속·가족은 선택이라 지금 등록해도 됩니다
+              </OptionalSeam>
 
-              {moreOpen && (
-                <>
-                <CoreDivider />
-                <div data-form-section="names">
-                <CoreSectionLabel>이름 상세</CoreSectionLabel>
-                <FormRows>
-                {/* 이름 원어 */}
-                <FieldRow>
-                  <FieldLabel htmlFor={fid('originalName')}>이름 원어</FieldLabel>
-                  <FieldControl>
-                    <OriginalNameInputWrap>
-                      <FormInput
-                        id={fid('originalName')}
-                        value={originalName}
-                        onChange={(e) => setOriginalName(e.target.value)}
-                        placeholder="Franklin D. Roosevelt"
-                      />
-                    </OriginalNameInputWrap>
-                  </FieldControl>
-                </FieldRow>
-
-                {/* 이름의 뜻 — 옵셔널 정보 disclosure 카드 */}
-                <AdvancedSection>
-                  <AdvancedToggle
-                    type="button"
-                    $open={nameMeaningsOpen}
-                    onClick={() => setNameMeaningsOpen((v) => !v)}
-                    aria-expanded={nameMeaningsOpen}
-                  >
-                    <AdvancedToggleIcon $open={nameMeaningsOpen}>
-                      <FiChevronRight size={14} />
-                    </AdvancedToggleIcon>
-                    <AdvancedToggleBody>
-                      <AdvancedToggleTitle>이름의 뜻</AdvancedToggleTitle>
-                      <AdvancedToggleDesc>
-                        성·이름·중간이름의 한자/뜻 (선택)
-                      </AdvancedToggleDesc>
-                    </AdvancedToggleBody>
-                  </AdvancedToggle>
-                  {nameMeaningsOpen && (
-                    <AdvancedBody>
-                      <FieldLabel htmlFor={fid('surnameMeaning')}>
-                        성·이름·중간이름의 뜻
-                      </FieldLabel>
-                      <FieldControl>
-                        <InlineFields $cols={3}>
-                          <FormInput
-                            id={fid('surnameMeaning')}
-                            value={surnameMeaning}
-                            onChange={(e) =>
-                              setSurnameMeaning(e.target.value)
-                            }
-                            placeholder="성의 뜻"
-                          />
-                          <FormInput
-                            id={fid('nameMeaning')}
-                            value={nameMeaning}
-                            onChange={(e) => setNameMeaning(e.target.value)}
-                            placeholder="이름의 뜻"
-                          />
-                          <FormInput
-                            id={fid('middleNameMeaning')}
-                            value={middleNameMeaning}
-                            onChange={(e) =>
-                              setMiddleNameMeaning(e.target.value)
-                            }
-                            placeholder="중간이름의 뜻"
-                          />
-                        </InlineFields>
-                      </FieldControl>
-                    </AdvancedBody>
-                  )}
-                </AdvancedSection>
-                </FormRows>
-                </div>
-
-                {/* 생애 상세 — 출생지·사망지 + 사망 유형·원인·메모 + 군주 호칭 (details) */}
-                <CoreDivider />
-                <div data-form-section="death-detail">
-                <CoreSectionLabel>생애 상세</CoreSectionLabel>
-                {/* 출생지·사망지 — 출생 날짜와 한 흐름에 두어 발견성 회복(구 소속·가문 섹션에서 이관) */}
-                <PlaceFields
-                  countryId={countryId}
-                  birthPlace={birthPlace}
-                  deathPlace={deathPlace}
-                  setBirthPlace={setBirthPlace}
-                  setDeathPlace={setDeathPlace}
-                  setBirthCityId={setBirthCityId}
-                  setDeathCityId={setDeathCityId}
-                  onCopyBirthToDeathPlace={handleCopyBirthToDeathPlace}
-                  markDirty={markDirty}
-                />
-                <LifeSection
-                  mode="details"
-                  fid={fid}
-                  birthEra={birthEra}
-                  birthYear={birthYear}
-                  birthMonth={birthMonth}
-                  birthDay={birthDay}
-                  isBirthDateUnknown={isBirthDateUnknown}
-                  setIsBirthDateUnknown={setIsBirthDateUnknown}
-                  setShowBirthDateModal={setShowBirthDateModal}
-                  setBirthEra={setBirthEra}
-                  setBirthYear={setBirthYear}
-                  setBirthMonth={setBirthMonth}
-                  setBirthDay={setBirthDay}
-                  deathEra={deathEra}
-                  deathYear={deathYear}
-                  deathMonth={deathMonth}
-                  deathDay={deathDay}
-                  isAlive={isAlive}
-                  isDeathDateUnknown={isDeathDateUnknown}
-                  setShowDeathDateModal={setShowDeathDateModal}
-                  setDeathEra={setDeathEra}
-                  setDeathYear={setDeathYear}
-                  setDeathMonth={setDeathMonth}
-                  setDeathDay={setDeathDay}
-                  setDeathStatus={setDeathStatus}
-                  deathType={deathType}
-                  deathCause={deathCause}
-                  deathNote={deathNote}
-                  setDeathType={setDeathType}
-                  setDeathCause={setDeathCause}
-                  setDeathNote={setDeathNote}
-                  monarchTitlesOpen={monarchTitlesOpen}
-                  setMonarchTitlesOpen={setMonarchTitlesOpen}
-                  regnalName={regnalName}
-                  templeName={templeName}
-                  posthumousName={posthumousName}
-                  setRegnalName={setRegnalName}
-                  setTempleName={setTempleName}
-                  setPosthumousName={setPosthumousName}
-                  lifespanText={lifespanText}
-                  errors={errors}
-                  markDirty={markDirty}
-                />
-
-                </div>
-
-                {/* 가문 · 종교 · 국가 — 가문·종교 + 다중 국가 소속 (출생/사망지는 생애 상세로 이관) */}
-                <CoreDivider />
+              <>
+                {/* 가문 · 종교 · 국가 — 가문·종교 + 다중 국가 소속 */}
                 <div data-form-section="affiliation">
                 <CoreSectionLabel>가문 · 종교 · 국가</CoreSectionLabel>
                 <AffiliationSection
@@ -2371,8 +2347,7 @@ export function PersonRegisterView({
                   markDirty={markDirty}
                 />
                 </div>
-                </>
-              )}
+              </>
           </FormSectionInner>
         </LoadingHost>
       </form>
@@ -2389,7 +2364,7 @@ export function PersonRegisterView({
           const nameLabel = lastCreatedPerson
             ? `${getPersonDisplayName(lastCreatedPerson)}을(를) 등록했습니다. `
             : ''
-          if (countryId && countryName) {
+          if (primaryCountryId && countryName) {
             return `${nameLabel}${countryName}에 다른 인물도 이어서 등록할까요?`
           }
           return `${nameLabel}다른 인물도 이어서 등록할까요?`
@@ -2407,7 +2382,7 @@ export function PersonRegisterView({
         modernCountries={modernCountries}
         historicalCountries={historicalCountries}
         title="소속 국가 선택"
-        selectedCountryId={countryId || undefined}
+        selectedCountryId={primaryCountryId || undefined}
       />
       <CountrySelectModal
         isOpen={affCountryPickerRow !== null}
