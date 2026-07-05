@@ -360,9 +360,51 @@ export class PersonService {
   }
 
   /**
+   * 생몰 연도 역전 방지 — 출생이 사망보다 뒤면 거부. BC 부호연도(BC=음수)로 비교하며
+   * 네이티브 Date 대소 비교는 쓰지 않는다(BC가 AD로 둔갑). 모달의 클라이언트 검증
+   * (computeBirthDeathErrors)이 인라인 편집·가계도 저작 등 비모달 쓰기 경로에서는 우회되므로
+   * 도메인 계층에 서버 가드를 둔다(자기부모 가드 assertNoParentCycle와 동일 위치·정책).
+   * date: null=명시적 해제, undefined=변경 없음(기존 유지), Date=새 값.
+   */
+  private assertLifespanOrder(
+    birthDate: Date | null | undefined,
+    birthEra: 'BC' | 'AD' | null | undefined,
+    deathDate: Date | null | undefined,
+    deathEra: 'BC' | 'AD' | null | undefined,
+    existing?: {
+      birthEra?: string | null
+      birthYear?: number | null
+      deathEra?: string | null
+      deathYear?: number | null
+    },
+  ): void {
+    const signedYear = (
+      date: Date | null | undefined,
+      era: 'BC' | 'AD' | null | undefined,
+      exEra?: string | null,
+      exYear?: number | null,
+    ): number | null => {
+      if (date === null) return null
+      if (date !== undefined) {
+        // buildUtcDateFromParts가 setUTCFullYear로 크기값 연도를 정확히 심으므로 <100 연도도 안전.
+        const year = date.getUTCFullYear()
+        return era === 'BC' ? -year : year
+      }
+      if (exYear == null) return null
+      return exEra === 'BC' ? -exYear : exYear
+    }
+    const birthSigned = signedYear(birthDate, birthEra, existing?.birthEra, existing?.birthYear)
+    const deathSigned = signedYear(deathDate, deathEra, existing?.deathEra, existing?.deathYear)
+    if (birthSigned != null && deathSigned != null && birthSigned > deathSigned) {
+      throw new BadRequestException('출생 연도는 사망 연도보다 이전이거나 같아야 합니다.')
+    }
+  }
+
+  /**
    * 인물 생성 (accountId 있으면 소유자로 저장)
    */
   async create(data: CreatePersonData, accountId?: string): Promise<PersonResponseDto> {
+    this.assertLifespanOrder(data.birthDate, data.birthEra, data.deathDate, data.deathEra)
     const createData = accountId != null ? { ...data, accountId } : data
     const person = await this.personRepository.create(createData)
     await this.notificationService.notifyPerson(
@@ -394,6 +436,13 @@ export class PersonService {
     if (data.fatherId != null || data.motherId != null) {
       await this.assertNoParentCycle(id, data.fatherId, data.motherId)
     }
+    // 수정 후 유효 생몰(변경분 ?? 기존)로 역전 검증 — 한쪽만 바꿔도 잔존값과 비교.
+    this.assertLifespanOrder(data.birthDate, data.birthEra, data.deathDate, data.deathEra, {
+      birthEra: existing.birthEra,
+      birthYear: existing.birthYear,
+      deathEra: existing.deathEra,
+      deathYear: existing.deathYear,
+    })
     const person = await this.personRepository.update(id, data)
     const change = describePersonUpdate(existing, data)
     // 전기 등 하위 리소스 변경이면 제목이 이미 구체적이므로 preview 생략,
