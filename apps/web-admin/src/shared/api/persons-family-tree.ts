@@ -15,6 +15,9 @@ export interface FamilyTreePerson {
   gender?: string | null
   regnalName?: string | null
   profileImageUrl?: string | null
+  /** BC/AD — birthYear는 크기값(양수)이라 era 없이는 BC가 AD로 둔갑한다 */
+  birthEra?: 'BC' | 'AD' | null
+  deathEra?: 'BC' | 'AD' | null
   birthYear?: number | null
   deathYear?: number | null
   dynasty?: { id: string; name: string } | null
@@ -45,6 +48,8 @@ export interface FamilyTreePerson {
     flagEmoji?: string | null
     isoCode?: string | null
     thumbnailUrl?: string | null
+    /** 국가 기본 이름 표시 순서 — 개인 nameDisplayOrder 오버라이드 없을 때 사용 */
+    defaultNameDisplayOrder?: string | null
   } | null
   /** UI 편의 — 우선순위(sovereignCountry > country) 적용 결과 */
   flag?: {

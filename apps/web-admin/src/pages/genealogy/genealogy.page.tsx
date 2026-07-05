@@ -322,7 +322,8 @@ function buildGraph(
 
   const rfEdges: Edge[] = data.edges.map((e, i) => {
     const isSpouse = e.type === 'spouse'
-    const inferred = isSpouse && Boolean((e as any).inferred)
+    // inferred는 계약(FamilyTreeEdge)에 이미 선언됨 — any 캐스트 불필요(계약 변경 시 컴파일 강제).
+    const inferred = isSpouse && Boolean(e.inferred)
     const marriagePeriod =
       isSpouse && (e.marriageStartYear != null || e.marriageEndYear != null)
         ? `${e.marriageStartYear ?? '?'}–${e.marriageEndYear ?? ''}`
@@ -429,6 +430,7 @@ function PersonNodeInner({ data }: NodeProps) {
       surname: person.surname,
       middleName: person.middleName,
       nameDisplayOrder: person.nameDisplayOrder,
+      country: person.country ?? null,
     },
     true,
   )
@@ -440,9 +442,12 @@ function PersonNodeInner({ data }: NodeProps) {
 
   const initial = [...(baseName.trim() || '?')][0] ?? '?'
 
+  // BC/AD — birthYear는 크기값(양수)이라 era 없이는 BC가 AD로 둔갑한다.
+  const fmtYear = (mag: number | null | undefined, era: string | null | undefined) =>
+    mag == null ? null : era === 'BC' ? `BC ${Math.abs(mag)}` : String(mag)
   const lifeSpan =
     person.birthYear != null || person.deathYear != null
-      ? `${person.birthYear ?? '?'}–${person.deathYear ?? ''}`
+      ? `${fmtYear(person.birthYear, person.birthEra) ?? '?'}–${fmtYear(person.deathYear, person.deathEra) ?? ''}`
       : null
   const isDeceased = person.deathYear != null
   // 비소유 노드(다른 계정 등록)는 상세(/persons/:id)가 계정 스코프라 404 → 클릭 비활성 + dim
@@ -591,7 +596,7 @@ function GenealogyFlow({ personId }: { personId: string }) {
     if (!data) return ''
     const ego = data.nodes.find(n => n.id === data.egoId)
     if (!ego) return ''
-    return getPersonDisplayName({ name: ego.name, surname: ego.surname, middleName: ego.middleName, nameDisplayOrder: ego.nameDisplayOrder }, true)
+    return getPersonDisplayName({ name: ego.name, surname: ego.surname, middleName: ego.middleName, nameDisplayOrder: ego.nameDisplayOrder, country: ego.country ?? null }, true)
   }, [data])
 
   // 세대 라벨 계산 (D1) — y 좌표를 (NODE_H + V_GAP)으로 나눠 세대 도출
@@ -624,7 +629,7 @@ function GenealogyFlow({ personId }: { personId: string }) {
     return rfNodes.filter((n) => {
       const p = (n.data as any)?.person as FamilyTreePerson | undefined
       if (!p) return false
-      const name = (p.name ?? '') + (p.surname ?? '') + (p.regnalName ?? '') + (p.originalName ?? '')
+      const name = (p.name ?? '') + (p.surname ?? '') + (p.middleName ?? '') + (p.regnalName ?? '') + (p.originalName ?? '')
       return name.toLowerCase().includes(q)
     })
   }, [search, rfNodes])

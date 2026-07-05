@@ -1,7 +1,15 @@
 import styled from 'styled-components'
-import type { ChildPerson } from './types'
-import { CHILD_GAP, GP_PAIR_GAP, GP_PAIR_W, NODE_W } from './constants'
-import { childCenterOffsetInPair, childPairWidth } from './utils'
+import {
+  CHILD_GAP,
+  DESCENDANT_GAP,
+  GP_PAIR_GAP,
+  GP_PAIR_W,
+  NODE_H,
+  NODE_W,
+  SPOUSE_JOIN_W,
+  SPOUSE_STACK_GAP,
+} from './constants'
+import type { ChildLayout } from './geometry'
 
 /**
  * ForkSvg: preserveAspectRatio="none" + vectorEffect="non-scaling-stroke"
@@ -30,6 +38,102 @@ export function ForkFromTwoParents() {
       <title>부모 두 분에서 이어지는 혈연선</title>
       <path
         d="M 100 0 L 100 18 M 300 0 L 300 18 M 100 18 L 300 18 M 200 18 L 200 52"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </ForkSvg>
+  )
+}
+
+/**
+ * ego ↔ 배우자 세로 스택 연결선(브래킷).
+ *
+ * 배우자가 2명 이상이면 스택 전체 세로 중앙 한 곳에만 ♥선을 그리던 기존 방식은
+ * 카드 사이 gap(빈 공간)을 가리켰다. 각 배우자 카드 세로 중앙에서 세로 버스로 모은 뒤
+ * 버스 중점에서 ego로 한 줄 나가는 브래킷으로 교체 — 짝수 명일 때도 선이 카드에 닿는다.
+ *
+ * 카드 높이는 NODE_H 고정 가정($card SpouseJoin·자녀 페어와 동일 전제).
+ * side='left'면 배우자 스택이 왼쪽(x=0)·ego가 오른쪽(x=W), 'right'면 반대.
+ */
+export function SpouseStackJoin({
+  count,
+  side,
+}: {
+  count: number
+  side: 'left' | 'right'
+}) {
+  const w = SPOUSE_JOIN_W
+  const centers = Array.from(
+    { length: Math.max(count, 1) },
+    (_, i) => i * (NODE_H + SPOUSE_STACK_GAP) + NODE_H / 2,
+  )
+  const totalH =
+    Math.max(count, 1) * NODE_H + (Math.max(count, 1) - 1) * SPOUSE_STACK_GAP
+  const top = centers[0]
+  const bottom = centers[centers.length - 1]
+  const mid = (top + bottom) / 2
+  const stackX = side === 'left' ? 0 : w
+  const egoX = side === 'left' ? w : 0
+  const busX = w / 2
+  const segments = centers.map((y) => `M ${stackX} ${y} L ${busX} ${y}`)
+  if (count > 1) segments.push(`M ${busX} ${top} L ${busX} ${bottom}`)
+  segments.push(`M ${busX} ${mid} L ${egoX} ${mid}`)
+  return (
+    <ForkSvg
+      viewBox={`0 0 ${w} ${totalH}`}
+      xmlns="http://www.w3.org/2000/svg"
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <title>배우자 관계선</title>
+      <path
+        d={segments.join(' ')}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </ForkSvg>
+  )
+}
+
+/**
+ * 부모 둘 → 아래로 수렴 (실측 폭 버전).
+ *
+ * ForkFromTwoParents는 부/모 컬럼이 항상 50:50이라 가정해 선을 25%/75%에 고정했지만,
+ * 두 가지의 서브트리 폭이 다르면(비대칭 조상) 카드 중심이 그 위치를 벗어나 선이 어긋났다.
+ * 여기서는 실측 폭(leftW·gap·rightW)으로 각 부모 카드 중심과 자식 드롭(컬럼 중앙)을 계산한다.
+ * viewBox 폭 = leftW+gap+rightW = AncColumnDiv 폭(부모 둘일 때)과 일치.
+ */
+export function ForkFromTwoParentsMeasured({
+  leftW,
+  gap,
+  rightW,
+}: {
+  leftW: number
+  gap: number
+  rightW: number
+}) {
+  const totalW = leftW + gap + rightW
+  const leftC = leftW / 2
+  const rightC = leftW + gap + rightW / 2
+  const stem = totalW / 2 // 자식 카드 중심 (max(NODE_W,totalW)=totalW 컬럼 중앙)
+  return (
+    <ForkSvg
+      viewBox={`0 0 ${totalW} 52`}
+      xmlns="http://www.w3.org/2000/svg"
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <title>부모 두 분에서 이어지는 혈연선</title>
+      <path
+        d={`M ${leftC} 0 L ${leftC} 18 M ${rightC} 0 L ${rightC} 18 M ${leftC} 18 L ${rightC} 18 M ${stem} 18 L ${stem} 52`}
         fill="none"
         stroke="currentColor"
         strokeWidth="1.75"
@@ -70,31 +174,30 @@ export function ForkFromOneParent() {
  * 첫/마지막 페어가 [배우자 + 자녀]일 때 페어 중심 ≠ 자녀 중심이므로, 페어 중심을 쓰면
  * 가로 바가 배우자 위까지 침범해 "배우자도 ego의 자녀"처럼 보이는 정렬 버그 발생.
  *
- * ChildPair::before(수직 세그먼트)도 동일한 childCenterOffsetInPair를 쓰므로
- * 단일 헬퍼로 출처 통일.
+ * 페어 폭·자녀 오프셋은 손자녀 서브트리로 팽창한 실측값(computeChildLayouts)을 받아 쓴다.
+ * ChildPair::before(수직 세그먼트)·childrenCenterShift도 같은 layouts를 소비하므로 출처 통일.
  *
  * xMid는 자녀 중심들의 평균(=childMean)으로 둔다. main에서 ChildrenGrid + ForkTrack에
  * `transform: translateX(-childrenCenterShift)`를 함께 걸어, childMean이 GenerationBlock
  * 중심(=ego 수직 드롭 위치)에 정렬되도록 보정한다. 시프트와 xMid가 짝지어 작동해야
  * 가로 바·수직선 모두 ego와 자녀 중심에 정확히 정렬됨.
  */
-export function ForkToChildren({ childList }: { childList: ChildPerson[] }) {
-  const pairWidths = childList.map(childPairWidth)
+export function ForkToChildren({ layouts }: { layouts: ChildLayout[] }) {
   const totalW =
-    pairWidths.reduce((s, w) => s + w, 0) + (childList.length - 1) * CHILD_GAP
+    layouts.reduce((acc, layout) => acc + layout.pairWidth, 0) +
+    (layouts.length - 1) * CHILD_GAP
 
-  // 각 페어의 좌측 x (누적). pairStartX[i] + childCenterOffsetInPair(i) = 자녀 중심 절대 x
+  // 각 페어의 좌측 x (누적). pairStartX[index] + childOffset = 자녀 카드 중심 절대 x
   const pairStartX: number[] = []
-  let acc = 0
-  for (let i = 0; i < childList.length; i++) {
-    pairStartX.push(acc)
-    acc += pairWidths[i] + (i < childList.length - 1 ? CHILD_GAP : 0)
+  let cursor = 0
+  for (let index = 0; index < layouts.length; index++) {
+    pairStartX.push(cursor)
+    cursor += layouts[index].pairWidth + (index < layouts.length - 1 ? CHILD_GAP : 0)
   }
-  const childCenterX = (i: number) =>
-    pairStartX[i] + childCenterOffsetInPair(childList[i])
+  const childCenterX = (index: number) => pairStartX[index] + layouts[index].childOffset
 
   const xStart = childCenterX(0)
-  const xEnd = childCenterX(childList.length - 1)
+  const xEnd = childCenterX(layouts.length - 1)
   const xMid = (xStart + xEnd) / 2
 
   return (
@@ -148,13 +251,27 @@ export function ForkFromTwoGrandparents() {
   )
 }
 
-/** N개의 후손 카드 위로 T자형 분기선 — 카드 폭 NODE_W 기준으로 정렬 */
-export function ForkToCompactChildren({ count }: { count: number }) {
-  const GAP = 12 // GrandchildrenRow gap
-  const W = NODE_W
-  const totalW = count * W + (count - 1) * GAP
-  const xStart = W / 2
-  const xEnd = totalW - W / 2
+/**
+ * N개의 후손 페어 위로 T자형 분기선.
+ *
+ * 각 페어 폭은 균일한 NODE_W가 아니라 그 아래 서브트리로 팽창한 실측값(widths)이다 —
+ * 균일 폭을 가정하면 손자녀가 또 자녀를 가진 페어에서 바가 좁아져 스텁이 카드를 벗어난다.
+ * 세로 stem(xMid)은 컨테이너(GrandchildrenForkTrack, width:100%·center) 중앙에 서야
+ * 부모 카드 중심과 이어지므로 totalW/2에 고정한다.
+ */
+export function ForkToCompactChildren({ widths }: { widths: number[] }) {
+  const count = widths.length
+  const totalW =
+    widths.reduce((acc, width) => acc + width, 0) + (count - 1) * DESCENDANT_GAP
+  const pairStartX: number[] = []
+  let cursor = 0
+  for (let index = 0; index < count; index++) {
+    pairStartX.push(cursor)
+    cursor += widths[index] + (index < count - 1 ? DESCENDANT_GAP : 0)
+  }
+  const centerX = (index: number) => pairStartX[index] + widths[index] / 2
+  const xStart = centerX(0)
+  const xEnd = centerX(count - 1)
   const xMid = totalW / 2
   return (
     <svg

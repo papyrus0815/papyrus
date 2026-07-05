@@ -18,6 +18,10 @@ export type NodePerson = PersonNameFields & {
   /** BFS 응답에서만 채워지는 연도 폴백 — birthDate/deathDate가 없을 때 lifeSpan 계산용 */
   birthYear?: number | null
   deathYear?: number | null
+  /** BC/AD — birthYear/deathYear는 크기값(양수)이라 era 없이는 BC가 AD로 둔갑한다.
+   *  REST(PersonDetailData) 소스는 birthEra가 느슨한 string이라 넓게 받는다. */
+  birthEra?: string | null
+  deathEra?: string | null
   originalName?: string | null
   posthumousName?: string | null
   templeName?: string | null
@@ -26,6 +30,13 @@ export type NodePerson = PersonNameFields & {
   deathPlace?: string | null
   illegitimate?: boolean | null
   parentMarriageId?: string | null
+  /**
+   * BFS spouse 엣지 provenance — true면 PersonSpouse 미등록(자녀의 다른 친부모로 추론된
+   * 배우자). 확정 배우자와 구분해 '배우자(추정)'로 표시(오정보 방지).
+   */
+  inferred?: boolean | null
+  marriageStartYear?: number | null
+  marriageEndYear?: number | null
   country?: {
     id?: string
     name?: string | null
@@ -47,6 +58,7 @@ export type AvatarRole =
   | 'ego'
   | 'spouse'
   | 'child'
+  | 'descendant'
   | 'sibling'
   | 'ancestor'
 

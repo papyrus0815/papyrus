@@ -33,11 +33,17 @@ import {
   SiblingCompactNode,
 } from './card'
 import {
+  ANC_PARENTS_GAP,
   CHILD_GAP,
+  DESCENDANT_MAX_DEPTH,
   FT_MAX_DEPTH,
   GP_PAIR_GAP,
   GP_PAIR_W,
+  NODE_H,
   NODE_W,
+  SPOUSE_JOIN_MARGIN,
+  SPOUSE_JOIN_W,
+  SPOUSE_STACK_GAP,
   TRUNCATION_SCOPE_LABEL,
 } from './constants'
 import { FamilyTreeLookupContext } from './context'
@@ -47,14 +53,17 @@ import {
   ForkFromOneParent,
   ForkFromTwoGrandparents,
   ForkFromTwoParents,
+  ForkFromTwoParentsMeasured,
   ForkToChildren,
+  SpouseStackJoin,
 } from './forks'
 import { AncestorSiblingsModal, SiblingsListModal } from './modals'
 import type { ChildPerson, NodePerson } from './types'
 import {
+  ancestorColumnWidth,
   birthYearOf,
-  childCenterOffsetInPair,
   childrenCenterShift,
+  computeChildLayouts,
   isChildOnLeftInPair,
   isLeft,
   isRight,
@@ -69,13 +78,34 @@ export interface PersonGenealogyInfographicProps {
   father?: NodePerson | null
   mother?: NodePerson | null
   spouses?: NodePerson[] | null
+  /** @deprecated legacy 단수 배우자 — spouses 배열로 대체됨. 死코드지만 호스트 커밋 전까지 유지(G24 후속). */
   spouse?: NodePerson | null
   children?: ChildPerson[] | null
   siblings?: NodePerson[] | null
   /** FamilyTreeData를 주면 조부모 이상을 동적으로 표시 (n세대 재귀) */
   familyTreeData?: FamilyTreeData | null
   onPersonClick?: (personId: string) => void
+  /**
+   * 내부 '가계도' 헤더 표시 여부(기본 true). 호스트가 이미 자체 섹션 라벨을 그리는 경우
+   * false로 꺼서 이중 헤더를 피한다(person-detail-panel의 '가족 관계' 라벨).
+   */
+  showHeader?: boolean
 }
+
+/** spouse 엣지에서 뽑은 배우자 노드 + provenance 메타 (inferred·혼인연도) */
+type SpouseEdgeEntry = {
+  node: FamilyTreePerson
+  inferred: boolean
+  marriageStartYear: number | null
+  marriageEndYear: number | null
+}
+
+/**
+ * 임베드 위젯이 렌더하지 않는 BFS scope — truncation 배너에서 제외한다.
+ * 'spouse-children'(배우자의 다른 결혼 자녀)은 페치되지만 임베드는 그리지 않으므로,
+ * 화면에 없는 그룹의 "일부만 표시" 유령 배너를 막는다.
+ */
+const EMBED_UNRENDERED_SCOPES = new Set<string>(['spouse-children'])
 
 export function PersonGenealogyInfographic({
   ego,
@@ -88,6 +118,7 @@ export function PersonGenealogyInfographic({
   siblings,
   familyTreeData,
   onPersonClick,
+  showHeader = true,
 }: PersonGenealogyInfographicProps) {
   // ── FamilyTreeData 기반 동적 조상 렌더링 준비 ──────────────────
   const ftNodeMap = useMemo(() => {
@@ -115,6 +146,20 @@ export function PersonGenealogyInfographic({
       ? ftResolveParentIds(familyTreeData.egoId, ftParentsOf, ftNodeMap)
       : {},
     [familyTreeData, ftParentsOf, ftNodeMap],
+  )
+
+  // ego 부/모 조상 컬럼의 실측 폭 — ParentsRow 레이아웃과 부모→ego fork 끝점 계산에 사용.
+  // (부모는 depth 1: path 'F'/'M' 길이 1)
+  const { ancFatherW, ancMotherW } = useMemo(
+    () => ({
+      ancFatherW: ftFatherId
+        ? ancestorColumnWidth(ftFatherId, ftParentsOf, ftNodeMap, 1, FT_MAX_DEPTH, new Set())
+        : 0,
+      ancMotherW: ftMotherId
+        ? ancestorColumnWidth(ftMotherId, ftParentsOf, ftNodeMap, 1, FT_MAX_DEPTH, new Set())
+        : 0,
+    }),
+    [ftFatherId, ftMotherId, ftParentsOf, ftNodeMap],
   )
 
   // childrenOf 맵: parentId → grandchild ids (familyTreeData 기반)
@@ -153,8 +198,8 @@ export function PersonGenealogyInfographic({
         .map((sid) => ftNodeMap.get(sid))
         .filter((n): n is FamilyTreePerson => Boolean(n))
         .sort((a, b) => {
-          const ay = a.birthYear ?? Number.POSITIVE_INFINITY
-          const by = b.birthYear ?? Number.POSITIVE_INFINITY
+          const ay = birthYearOf(a) ?? Number.POSITIVE_INFINITY
+          const by = birthYearOf(b) ?? Number.POSITIVE_INFINITY
           return ay - by
         })
       if (siblingNodes.length > 0) out.set(node.id, siblingNodes)
@@ -178,28 +223,38 @@ export function PersonGenealogyInfographic({
     // 형제 — siblingsByPersonId에서 추출
     const sibs = (siblingsByPersonId.get(egoId) ?? []).map(ftPersonToNodePerson)
 
-    // 배우자 — spouse 엣지에서 ego가 끼인 것
+    // 배우자 — spouse 엣지에서 ego가 끼인 것. 엣지 provenance(inferred)·혼인연도를 함께 보존해
+    // '배우자(추정)' 구분에 사용(임베드가 추론 배우자를 확정처럼 그리던 오정보 방지).
     const sps: NodePerson[] = []
-    const spouseEdgesByPersonId = new Map<string, FamilyTreePerson[]>()
+    const spouseEdgesByPersonId = new Map<string, SpouseEdgeEntry[]>()
     for (const e of familyTreeData.edges) {
       if (e.type !== 'spouse') continue
-      const aPid = e.source
-      const bPid = e.target
-      const a = ftNodeMap.get(aPid)
-      const b = ftNodeMap.get(bPid)
+      const meta = {
+        inferred: Boolean(e.inferred),
+        marriageStartYear: e.marriageStartYear ?? null,
+        marriageEndYear: e.marriageEndYear ?? null,
+      }
+      const a = ftNodeMap.get(e.source)
+      const b = ftNodeMap.get(e.target)
       if (a) {
-        const list = spouseEdgesByPersonId.get(bPid) ?? []
-        list.push(a)
-        spouseEdgesByPersonId.set(bPid, list)
+        const list = spouseEdgesByPersonId.get(e.target) ?? []
+        list.push({ node: a, ...meta })
+        spouseEdgesByPersonId.set(e.target, list)
       }
       if (b) {
-        const list = spouseEdgesByPersonId.get(aPid) ?? []
-        list.push(b)
-        spouseEdgesByPersonId.set(aPid, list)
+        const list = spouseEdgesByPersonId.get(e.source) ?? []
+        list.push({ node: b, ...meta })
+        spouseEdgesByPersonId.set(e.source, list)
       }
     }
-    for (const p of spouseEdgesByPersonId.get(egoId) ?? []) {
-      sps.push(ftPersonToNodePerson(p))
+    const toSpouseNode = (entry: SpouseEdgeEntry): NodePerson => ({
+      ...ftPersonToNodePerson(entry.node),
+      inferred: entry.inferred,
+      marriageStartYear: entry.marriageStartYear,
+      marriageEndYear: entry.marriageEndYear,
+    })
+    for (const entry of spouseEdgesByPersonId.get(egoId) ?? []) {
+      sps.push(toSpouseNode(entry))
     }
 
     // 자녀 — ftChildrenOf[ego.id], 각 자녀의 spouse를 spouse 엣지에서 찾아 join
@@ -208,8 +263,8 @@ export function PersonGenealogyInfographic({
       .map((cid) => ftNodeMap.get(cid))
       .filter((c): c is FamilyTreePerson => Boolean(c))
       .sort((a, b) => {
-        const ay = a.birthYear ?? Number.POSITIVE_INFINITY
-        const by = b.birthYear ?? Number.POSITIVE_INFINITY
+        const ay = birthYearOf(a) ?? Number.POSITIVE_INFINITY
+        const by = birthYearOf(b) ?? Number.POSITIVE_INFINITY
         return ay - by
       })
       .map((c) => {
@@ -217,14 +272,19 @@ export function PersonGenealogyInfographic({
         const sp = spouseCandidates[0] ?? null
         return {
           ...ftPersonToNodePerson(c),
-          spouse: sp ? ftPersonToNodePerson(sp) : null,
+          spouse: sp ? toSpouseNode(sp) : null,
         }
       })
 
     return { siblings: sibs, spouses: sps, children: childs }
   }, [familyTreeData, siblingsByPersonId, ftChildrenOf, ftNodeMap, ego.id])
 
-  const childList = (ftDerivedEgoFamily?.children ?? children ?? []).filter(Boolean)
+  // useMemo로 참조 안정화 — 매 렌더 새 배열이면 이를 deps로 갖는 하위 memo
+  // (descendantsByParentId·childLayouts·childrenShift)가 전부 무효화된다.
+  const childList = useMemo(
+    () => (ftDerivedEgoFamily?.children ?? children ?? []).filter(Boolean),
+    [ftDerivedEgoFamily, children],
+  )
 
   /**
    * 각 부모(=ego의 자녀, 손자녀, …) → 다음 세대 노드 배열 (출생연도 오름차순).
@@ -257,8 +317,8 @@ export function PersonGenealogyInfographic({
         .filter((n): n is FamilyTreePerson => Boolean(n))
         .filter((n) => !excludeIds.has(n.id))
         .sort((a, b) => {
-          const ay = a.birthYear ?? Number.POSITIVE_INFINITY
-          const by = b.birthYear ?? Number.POSITIVE_INFINITY
+          const ay = birthYearOf(a) ?? Number.POSITIVE_INFINITY
+          const by = birthYearOf(b) ?? Number.POSITIVE_INFINITY
           return ay - by
         })
       for (const cn of childNodes) {
@@ -282,8 +342,8 @@ export function PersonGenealogyInfographic({
     }
     for (const list of out.values()) {
       list.sort((a, b) => {
-        const ay = a.birthYear ?? Number.POSITIVE_INFINITY
-        const by = b.birthYear ?? Number.POSITIVE_INFINITY
+        const ay = birthYearOf(a) ?? Number.POSITIVE_INFINITY
+        const by = birthYearOf(b) ?? Number.POSITIVE_INFINITY
         return ay - by
       })
     }
@@ -312,21 +372,31 @@ export function PersonGenealogyInfographic({
     return { descendantsByParentId: out, inMarriageByPersonId: inMarriage }
   }, [familyTreeData, ftChildrenOf, ftNodeMap, ftParentsOf, childList, ego.id])
 
-  const siblingList = (ftDerivedEgoFamily?.siblings ?? siblings ?? [])
-    .filter(Boolean)
-    .slice()
-    .sort((a, b) => {
-      const ay = birthYearOf(a)
-      const by = birthYearOf(b)
-      if (ay == null && by == null) return 0
-      if (ay == null) return 1
-      if (by == null) return -1
-      return ay - by
-    })
-  const spouseList: NodePerson[] = ftDerivedEgoFamily?.spouses
-    ?? (spousesProp != null ? (spousesProp.filter(Boolean) as NodePerson[])
-        : spouseLegacy ? [spouseLegacy]
-        : [])
+  const siblingList = useMemo(
+    () =>
+      (ftDerivedEgoFamily?.siblings ?? siblings ?? [])
+        .filter(Boolean)
+        .slice()
+        .sort((a, b) => {
+          const ay = birthYearOf(a)
+          const by = birthYearOf(b)
+          if (ay == null && by == null) return 0
+          if (ay == null) return 1
+          if (by == null) return -1
+          return ay - by
+        }),
+    [ftDerivedEgoFamily, siblings],
+  )
+  const spouseList: NodePerson[] = useMemo(
+    () =>
+      ftDerivedEgoFamily?.spouses ??
+      (spousesProp != null
+        ? (spousesProp.filter(Boolean) as NodePerson[])
+        : spouseLegacy
+          ? [spouseLegacy]
+          : []),
+    [ftDerivedEgoFamily, spousesProp, spouseLegacy],
+  )
 
   const clickableProps = (id?: string) => {
     // BFS 응답에 isOwned=false로 온 노드는 상세를 열 수 없음(다른 계정 등록) → 클릭 비활성 + dim.
@@ -359,7 +429,11 @@ export function PersonGenealogyInfographic({
   const twoSides = hasFatherSide && hasMotherSide
 
   const hasFtAncestors = Boolean(ftFatherId || ftMotherId)
-  if (!hasFatherSide && !hasMotherSide && !hasFtAncestors && !hasSpouses && !hasChildren && !hasSiblings) return null
+  // 여기서 조기 return하면 아래 useState/useMemo(6개)가 조건부로 실행돼 Rules of Hooks 위반.
+  // 듀얼 소스(REST props + family-tree BFS) refetch 레이스로 마운트 중 조건이 뒤집히면
+  // 렌더 간 훅 수가 달라져 React가 throw한다. 실제 반환은 모든 훅을 지난 렌더 직전에서.
+  const isEmptyTree =
+    !hasFatherSide && !hasMotherSide && !hasFtAncestors && !hasSpouses && !hasChildren && !hasSiblings
 
   const firstSpouse = spouseList[0] ?? null
   // 형제자매가 있으면 왼쪽을 차지하므로, 배우자는 항상 오른쪽
@@ -402,9 +476,24 @@ export function PersonGenealogyInfographic({
    * 그만큼 왼쪽으로 transform 시켜야 ego와 정렬됨.
    * ForkToChildren의 xMid도 자녀 mean을 쓰도록 짝지어 있어 시프트와 함께 작동.
    */
-  const childrenShift = useMemo(() => childrenCenterShift(childList), [childList])
-  const childrenShiftStyle =
-    childrenShift !== 0 ? { transform: `translateX(${-childrenShift}px)` } : undefined
+  /**
+   * 자녀 페어별 렌더 기하(폭·자녀 중심 오프셋) — 손자녀 서브트리로 팽창한 실측값.
+   * fork SVG·ChildPair::before·center-shift가 이 단일 출처를 공유해 선 어긋남을 방지.
+   */
+  const childLayouts = useMemo(
+    () => computeChildLayouts(childList, descendantsByParentId, ego.id),
+    [childList, descendantsByParentId, ego.id],
+  )
+  const childrenShift = useMemo(() => childrenCenterShift(childLayouts), [childLayouts])
+  // shift를 transform이 아닌 래퍼 padding으로 반영 — 레이아웃에 참여해야 GenerationsInner
+  // max-content 폭에 포함되고, 좌측으로 밀린 자녀·손자녀 카드가 LTR 스크롤로 도달 불가하게
+  // 잘리지 않는다(G7). 래퍼 중심 = childMean이 되어 ego 드롭 정렬도 유지된다.
+  const childrenShiftPadding =
+    childrenShift > 0
+      ? { paddingRight: 2 * childrenShift }
+      : childrenShift < 0
+        ? { paddingLeft: -2 * childrenShift }
+        : undefined
 
   /**
    * BFS take 한도로 절단된 그룹 — scope별로 dedupe해 헤더 아래 알림 배너로 노출.
@@ -415,10 +504,14 @@ export function PersonGenealogyInfographic({
     if (!trs || trs.length === 0) return null
     const byScope = new Map<string, number>()
     for (const t of trs) {
+      // 임베드가 렌더하지 않는 scope(배우자의 다른 결혼 자녀 등)는 배너에서 제외 —
+      // 화면에 없는 그룹의 "일부만 표시" 유령 배너를 막는다.
+      if (EMBED_UNRENDERED_SCOPES.has(t.scope)) continue
       if (!byScope.has(t.scope) || byScope.get(t.scope)! < t.took) {
         byScope.set(t.scope, t.took)
       }
     }
+    if (byScope.size === 0) return null
     const labels: Array<{ scope: string; label: string; took: number }> = []
     for (const [scope, took] of byScope) {
       labels.push({ scope, label: TRUNCATION_SCOPE_LABEL[scope] ?? scope, took })
@@ -426,20 +519,25 @@ export function PersonGenealogyInfographic({
     return labels
   }, [familyTreeData])
 
+  // 모든 훅을 지난 뒤 빈 트리 반환 (위 isEmptyTree 주석 참고 — Rules of Hooks).
+  if (isEmptyTree) return null
+
   return (
     <FamilyTreeLookupContext.Provider value={ftNodeMap}>
       <Root>
-        <InfographicHeader>
-          <HeaderIcon aria-hidden>
-            <FiUsers size={18} strokeWidth={1.75} />
-          </HeaderIcon>
-          <HeaderText>
-            <HeaderTitle>가계도</HeaderTitle>
-            <HeaderDesc>
-              위·아래가 세대입니다. 가로로 이어진 선은 부부, 아래로 꺾인 선은 자녀·후손 방향입니다.
-            </HeaderDesc>
-          </HeaderText>
-        </InfographicHeader>
+        {showHeader && (
+          <InfographicHeader>
+            <HeaderIcon aria-hidden>
+              <FiUsers size={18} strokeWidth={1.75} />
+            </HeaderIcon>
+            <HeaderText>
+              <HeaderTitle>가계도</HeaderTitle>
+              <HeaderDesc>
+                위·아래가 세대입니다. 가로로 이어진 선은 부부, 아래로 꺾인 선은 자녀·후손 방향입니다.
+              </HeaderDesc>
+            </HeaderText>
+          </InfographicHeader>
+        )}
 
         {truncationBanner && truncationBanner.length > 0 && (
           <TruncationBanner role="status">
@@ -493,8 +591,22 @@ export function PersonGenealogyInfographic({
                     />
                   )}
                 </ParentsRow>
-                <ForkTrack>
-                  {ftFatherId && ftMotherId ? <ForkFromTwoParents /> : <ForkFromOneParent />}
+                <ForkTrack
+                  style={
+                    ftFatherId && ftMotherId
+                      ? { width: ancFatherW + ANC_PARENTS_GAP + ancMotherW }
+                      : undefined
+                  }
+                >
+                  {ftFatherId && ftMotherId ? (
+                    <ForkFromTwoParentsMeasured
+                      leftW={ancFatherW}
+                      gap={ANC_PARENTS_GAP}
+                      rightW={ancMotherW}
+                    />
+                  ) : (
+                    <ForkFromOneParent />
+                  )}
                 </ForkTrack>
               </GenerationBlock>
             ) : (hasFatherSide || hasMotherSide) ? (
@@ -632,15 +744,13 @@ export function PersonGenealogyInfographic({
                         <GeoNode key={sp.id ?? `sp-${i}`} $role="spouse" {...clickableProps(sp.id)}>
                           <GeoThumbnail person={sp} role="spouse" />
                           <NodeNameBlock person={sp} />
-                          <NodeBadge $role="spouse">{spouseList.length > 1 ? `배우자 ${i + 1}` : '배우자'}</NodeBadge>
+                          <NodeBadge $role="spouse">{(spouseList.length > 1 ? `배우자 ${i + 1}` : '배우자') + (sp.inferred ? ' (추정)' : '')}</NodeBadge>
                           <CardHoverInfo person={sp} />
                         </GeoNode>
                       ))}
                     </SpouseStack>
                     <SpouseJoin aria-hidden>
-                      <svg width="36" height="20" viewBox="0 0 36 20" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M 0 10 L 36 10" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-                      </svg>
+                      <SpouseStackJoin count={spouseList.length} side="left" />
                       <SpouseHeart><FiHeart size={13} strokeWidth={2.2} /></SpouseHeart>
                     </SpouseJoin>
                   </SpouseSlot>
@@ -657,9 +767,7 @@ export function PersonGenealogyInfographic({
                 {hasSpouses && spouseSide === 'right' && (
                   <SpouseSlot $side="right">
                     <SpouseJoin aria-hidden>
-                      <svg width="36" height="20" viewBox="0 0 36 20" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M 0 10 L 36 10" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-                      </svg>
+                      <SpouseStackJoin count={spouseList.length} side="right" />
                       <SpouseHeart><FiHeart size={13} strokeWidth={2.2} /></SpouseHeart>
                     </SpouseJoin>
                     <SpouseStack>
@@ -667,7 +775,7 @@ export function PersonGenealogyInfographic({
                         <GeoNode key={sp.id ?? `sp-${i}`} $role="spouse" {...clickableProps(sp.id)}>
                           <GeoThumbnail person={sp} role="spouse" />
                           <NodeNameBlock person={sp} />
-                          <NodeBadge $role="spouse">{spouseList.length > 1 ? `배우자 ${i + 1}` : '배우자'}</NodeBadge>
+                          <NodeBadge $role="spouse">{(spouseList.length > 1 ? `배우자 ${i + 1}` : '배우자') + (sp.inferred ? ' (추정)' : '')}</NodeBadge>
                           <CardHoverInfo person={sp} />
                         </GeoNode>
                       ))}
@@ -680,16 +788,13 @@ export function PersonGenealogyInfographic({
             {/* ── 자녀 세대 ── */}
             {hasChildren && (
               <GenerationBlock>
-                <ForkTrack
-                  $compact
-                  $multiChild={childList.length > 1}
-                  style={childrenShiftStyle}
-                >
-                  {childList.length > 1 ? <ForkToChildren childList={childList} /> : <ForkFromOneParent />}
-                </ForkTrack>
                 {childList.length === 1 ? (
                   // 자녀 1명: ego-row 패턴과 동일하게 자녀 카드를 정중앙(auto 컬럼)에 고정
-                  // → fork 수직선(50%)이 자녀 카드 중심과 정확히 일치
+                  // → fork 수직선(50%)이 자녀 카드 중심과 정확히 일치. shift 없음.
+                  <>
+                    <ForkTrack $compact>
+                      <ForkFromOneParent />
+                    </ForkTrack>
                   <SingleChildRow>
                     {/* col 1 (1fr) — 왼쪽 배우자 or 빈 균형 공간 */}
                     {(() => {
@@ -727,7 +832,7 @@ export function PersonGenealogyInfographic({
                           descendants={descendantsByParentId.get(childList[0].id) ?? []}
                           childrenOf={descendantsByParentId}
                           depth={0}
-                          maxDepth={3}
+                          maxDepth={DESCENDANT_MAX_DEPTH}
                           visited={new Set([ego.id, childList[0].id].filter(Boolean) as string[])}
                           inMarriageByPersonId={inMarriageByPersonId}
                           onPersonClick={onPersonClick}
@@ -758,8 +863,16 @@ export function PersonGenealogyInfographic({
                       return <ChildSpouseSlot>{join}{spouseNode}</ChildSpouseSlot>
                     })()}
                   </SingleChildRow>
+                  </>
                 ) : (
-                  <ChildrenGrid style={childrenShiftStyle}>
+                  // 다자녀: shift를 transform 대신 래퍼 padding으로 반영(G7).
+                  // ForkTrack(가로 바)·ChildrenGrid(카드)가 같은 래퍼 안에서 함께 밀려
+                  // 정렬을 유지하고, 밀린 폭이 레이아웃에 포함돼 스크롤로 전부 도달 가능.
+                  <ChildrenShiftWrap style={childrenShiftPadding}>
+                    <ForkTrack $compact $multiChild>
+                      <ForkToChildren layouts={childLayouts} />
+                    </ForkTrack>
+                    <ChildrenGrid>
                     {childList.map((child, idx) => {
                       const pairKey = child.id ?? `child-${idx}`
                       const grands = child.id
@@ -770,7 +883,7 @@ export function PersonGenealogyInfographic({
                           descendants={grands}
                           childrenOf={descendantsByParentId}
                           depth={0}
-                          maxDepth={3}
+                          maxDepth={DESCENDANT_MAX_DEPTH}
                           visited={new Set([ego.id, child.id].filter(Boolean) as string[])}
                           inMarriageByPersonId={inMarriageByPersonId}
                           onPersonClick={onPersonClick}
@@ -785,9 +898,9 @@ export function PersonGenealogyInfographic({
                         </GeoNode>
                       )
                       if (!child.spouse) {
-                        // 배우자 없음: 자녀 카드 중심이 ChildPair 중심
+                        // 배우자 없음: 자녀 카드 중심 = ChildNodeColumn(서브트리 포함) 폭의 중앙
                         return (
-                          <ChildPair key={pairKey} $childOffset={NODE_W / 2}>
+                          <ChildPair key={pairKey} $childOffset={childLayouts[idx].childOffset}>
                             <ChildNodeColumn>
                               {childNode}
                               {grandSubtree}
@@ -800,12 +913,14 @@ export function PersonGenealogyInfographic({
                           key={`${pairKey}-sp-${child.spouse.id ?? 'u'}`}
                           person={child.spouse}
                           role="spouse"
-                          badge="배우자"
+                          badge={child.spouse.inferred ? '배우자(추정)' : '배우자'}
                           onPersonClick={onPersonClick}
                         />
                       )
                       const join = (
-                        <SpouseJoin key={`${pairKey}-join`} aria-hidden>
+                        // $card: 자녀 카드 높이(NODE_H)에 맞춰 하트를 카드 세로 중앙에 고정.
+                        // 서브트리로 행이 길어져도 하트가 빈 공간에 뜨지 않게 함(align-self:center 회피).
+                        <SpouseJoin key={`${pairKey}-join`} $card aria-hidden>
                           <svg width="28" height="20" viewBox="0 0 28 20" xmlns="http://www.w3.org/2000/svg">
                             <path d="M 0 10 L 28 10" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
                           </svg>
@@ -813,7 +928,6 @@ export function PersonGenealogyInfographic({
                         </SpouseJoin>
                       )
                       const childIsLeft = isChildOnLeftInPair(child)
-                      const childOffset = childCenterOffsetInPair(child)
                       // 손자녀 서브트리는 자녀 카드 바로 아래에만 위치 (배우자 옆에 정렬)
                       const childWithGrand = (
                         <ChildNodeColumn>
@@ -822,7 +936,7 @@ export function PersonGenealogyInfographic({
                         </ChildNodeColumn>
                       )
                       return (
-                        <ChildPair key={pairKey} $childOffset={childOffset}>
+                        <ChildPair key={pairKey} $childOffset={childLayouts[idx].childOffset}>
                           <ChildPairRow>
                             {childIsLeft
                               ? <>{childWithGrand}{join}{spouseNode}</>
@@ -832,6 +946,7 @@ export function PersonGenealogyInfographic({
                       )
                     })}
                   </ChildrenGrid>
+                  </ChildrenShiftWrap>
                 )}
               </GenerationBlock>
             )}
@@ -1021,18 +1136,19 @@ const GenerationBlock = styled.div`
 `
 
 /**
- * ParentsRow: 아버지 쪽 FamilyColumn + 어머니 쪽 FamilyColumn을 나란히 배치
- * twoSides일 때 1fr 1fr grid → 각 FamilyColumn 중심이 25% / 75%
- * ForkFromTwoParents viewBox x=100(25%), x=300(75%)와 정확히 일치
+ * ParentsRow: ego의 부/모 AncestorColumn을 실측 폭으로 나란히 배치.
+ * 균등분할(1fr 1fr) 대신 콘텐츠 shrink-wrap + gap — 부/모 서브트리가 비대칭이어도
+ * 각 컬럼이 실제 폭을 가져 부모→ego fork(ForkFromTwoParentsMeasured)가 카드 중심에 정확히 닿는다.
  *
- * align-items: end — 두 컬럼을 아래로 정렬해서 아버지/어머니 카드가 같은 y 좌표에 놓이게.
+ * align-items: flex-end — 두 컬럼을 아래로 정렬해 부/모 카드가 같은 y에 놓이게.
  * (한쪽 컬럼에만 조부모가 있을 때 반대쪽 부모가 조부모 행에 붙어버리는 문제 방지)
  */
 const ParentsRow = styled.div<{ $twoSides: boolean }>`
-  width: 100%;
-  ${({ $twoSides }) => $twoSides
-    ? css`display: grid; grid-template-columns: 1fr 1fr; align-items: end;`
-    : css`display: flex; justify-content: center;`}
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: flex-end;
+  ${({ $twoSides }) => ($twoSides ? css`gap: ${ANC_PARENTS_GAP}px;` : '')}
 `
 
 /**
@@ -1103,19 +1219,31 @@ const SpouseSlot = styled.div<{ $side: 'left' | 'right' }>`
 const SpouseStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: ${SPOUSE_STACK_GAP}px;
   align-items: center;
   flex-shrink: 0;
 `
 
-const SpouseJoin = styled.div`
+const SpouseJoin = styled.div<{ $card?: boolean }>`
   position: relative;
-  flex: 0 0 52px;
+  flex: 0 0 ${SPOUSE_JOIN_W}px;
   display: flex;
   align-items: center;
   justify-content: center;
-  align-self: center;
-  margin: 0 2px;
+  /* 기본: flex 라인 세로 중앙. $card: 자녀 페어처럼 서브트리로 행이 길어지는 경우
+     카드 높이(NODE_H)에 맞춰 상단 정렬 → 하트가 카드 세로 중앙에 고정(빈 공간 부유 방지). */
+  ${({ $card }) =>
+    $card
+      ? css`
+          align-self: flex-start;
+          height: ${NODE_H}px;
+        `
+      : css`
+          /* ego 배우자 스택 join은 스택 전체 높이로 늘려(SpouseStackJoin 브래킷이
+             각 카드 세로 중앙에 닿도록), ♥는 relative 컨테이너 중앙(=버스 중점)에 고정. */
+          align-self: stretch;
+        `}
+  margin: 0 ${SPOUSE_JOIN_MARGIN}px;
   color: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(148,163,184,0.5)' : 'rgba(120,113,108,0.55)'};
 `
@@ -1193,6 +1321,18 @@ const ChildSpouseSlot = styled.div<{ $reverse?: boolean }>`
   flex-direction: row;
   align-items: center;
   justify-content: ${({ $reverse }) => ($reverse ? 'flex-end' : 'flex-start')};
+`
+
+/**
+ * ChildrenShiftWrap: 다자녀 세대의 fork 바 + 자녀 그리드를 함께 감싸 center-shift를
+ * padding으로 반영(G7). width 미지정 → 콘텐츠+padding에 맞춰 shrink되므로 padding이
+ * 레이아웃(및 GenerationsInner max-content 폭)에 참여한다. 이 덕에 좌측으로 밀린
+ * 카드가 LTR 스크롤 컨테이너에서 도달 불가하게 잘리지 않는다.
+ */
+const ChildrenShiftWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 `
 
 const ChildrenGrid = styled.div`

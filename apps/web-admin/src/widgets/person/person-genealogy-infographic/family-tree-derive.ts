@@ -18,6 +18,8 @@ export function ftPersonToNodePerson(p: FamilyTreePerson): NodePerson {
     profileImageUrl: p.profileImageUrl ?? null,
     birthYear: p.birthYear ?? null,
     deathYear: p.deathYear ?? null,
+    birthEra: p.birthEra ?? null,
+    deathEra: p.deathEra ?? null,
     dynasty: p.dynasty ?? null,
     illegitimate: p.illegitimate ?? false,
     parentMarriageId: p.parentMarriageId ?? null,

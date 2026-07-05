@@ -5,7 +5,7 @@ import type { FamilyTreePerson } from '@/shared/api/persons-family-tree'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
-import { NODE_W } from './constants'
+import { ANC_PARENTS_GAP, NODE_W } from './constants'
 import {
   CardHoverInfo,
   CountryFlag,
@@ -15,7 +15,8 @@ import {
   familyTreePersonFlag,
 } from './card'
 import { ftPersonToNodePerson, ftResolveParentIds, getAncestorBadgeLabel } from './family-tree-derive'
-import { ForkFromOneParent, ForkFromTwoParents } from './forks'
+import { ForkFromOneParent, ForkFromTwoParentsMeasured } from './forks'
+import { ancestorColumnWidth } from './geometry'
 import type { AvatarRole } from './types'
 import { buildPersonTooltip } from './utils'
 
@@ -74,6 +75,16 @@ export function AncestorColumn({
   const showMother = canGoDeeper && Boolean(motherId) && motherId && !visited.has(motherId)
   const showParents = showFather || showMother
   const hasBothParents = Boolean(showFather && showMother)
+  // 부/모 컬럼의 실측 폭 — fork 끝점을 실제 카드 중심에 맞추기 위함(균등분할 드리프트 제거).
+  // 컬럼 자체는 flex 0 0 auto로 콘텐츠에 맞춰 shrink되므로 폭을 주입할 필요는 없고, fork만 소비.
+  const fatherW =
+    showFather && fatherId
+      ? ancestorColumnWidth(fatherId, parentsOf, nodeMap, depth + 1, maxDepth, nextVisited)
+      : 0
+  const motherW =
+    showMother && motherId
+      ? ancestorColumnWidth(motherId, parentsOf, nodeMap, depth + 1, maxDepth, nextVisited)
+      : 0
 
   const role: AvatarRole =
     depth === 1
@@ -135,7 +146,11 @@ export function AncestorColumn({
             )}
           </AncParentsGrid>
           <AncForkTrack>
-            {hasBothParents ? <ForkFromTwoParents /> : <ForkFromOneParent />}
+            {hasBothParents ? (
+              <ForkFromTwoParentsMeasured leftW={fatherW} gap={ANC_PARENTS_GAP} rightW={motherW} />
+            ) : (
+              <ForkFromOneParent />
+            )}
           </AncForkTrack>
         </>
       )}
@@ -203,19 +218,20 @@ export function AncestorColumn({
 
 /**
  * AncColumnDiv: 한 조상과 그 위 세대 묶음 컨테이너
- * - flex: 1 1 0 → AncParentsGrid 안에서 균등 분할 (항상 50:50)
+ * - flex: 0 0 auto → 균등분할(1 1 0) 대신 콘텐츠(서브트리) 실측 폭으로 shrink.
+ *   비대칭 서브트리에서 커넥터가 카드 중심을 벗어나던 드리프트를 제거한다.
  * - min-width: NODE_W → 카드 폭 보장
  */
 const AncColumnDiv = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex: 1 1 0;
+  flex: 0 0 auto;
   min-width: ${NODE_W}px;
 `
 
 /**
- * AncParentsGrid: 부/모 AncestorColumn을 1:1로 나란히
+ * AncParentsGrid: 부/모 AncestorColumn을 실측 폭으로 나란히 (gap = ANC_PARENTS_GAP).
  * align-items: flex-end — 한쪽 가지에 윗 세대 데이터가 없으면(컬럼이 짧으면)
  * 짧은 쪽 카드가 위로 떠서 형제 가지의 윗 세대와 같은 행에 그려지는 문제를 방지.
  */
@@ -223,7 +239,7 @@ const AncParentsGrid = styled.div`
   display: flex;
   flex-direction: row;
   align-items: flex-end;
-  width: 100%;
+  gap: ${ANC_PARENTS_GAP}px;
 `
 
 /** AncForkTrack: AncestorColumn 안에서 부모→자식 연결선 영역 */

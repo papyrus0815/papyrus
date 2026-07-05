@@ -10,12 +10,16 @@ import { NODE_H, NODE_W } from './constants'
 import { FamilyTreeLookupContext, useNodeOpenable } from './context'
 import type { AvatarRole, FlagSource, NodePerson, PersonMetaSource } from './types'
 import {
+  birthYearOf,
   buildPersonTooltip,
   buildPersonTooltipLines,
+  deathYearOf,
   displayInitial,
+  formatYear,
   isDeceasedOf,
   lifeSpan,
   resolvePersonThumbnailSrc,
+  signedYearFromParts,
 } from './utils'
 
 // ─── 카드 hover 부가 정보 버블 (React Portal) ─────────────────────
@@ -125,7 +129,7 @@ export function NodeNameBlock({
   const span = lifeSpan(person)
   const isDeceased = isDeceasedOf(person)
   const baseName = getPersonDisplayName(person, true)
-  const displayName = person.illegitimate ? `${baseName}*` : baseName
+  const displayName = baseName
   return (
     <NodeNameWrap>
       {person.regnalName && (
@@ -137,6 +141,7 @@ export function NodeNameBlock({
       )}
       <NodeName>
         {displayName}
+        {person.illegitimate && <IllegitimateMark aria-label="사생아·서출">*</IllegitimateMark>}
         {isDeceased && <DeceasedMark aria-label="사망"> †</DeceasedMark>}
       </NodeName>
       {span && <NodeMeta>{span}</NodeMeta>}
@@ -352,24 +357,25 @@ export function DescendantNode({
   inMarriagesWith?: FamilyTreePerson[]
   onPersonClick?: (id: string) => void
 }) {
-  const b = person.birthYear
-  const d = person.deathYear
+  // BC=음수(부호 있는 연도) — 표시 시 formatYear로 'BC n' 변환. era 없이는 BC가 AD로 둔갑.
+  const birth = birthYearOf(person)
+  const death = deathYearOf(person)
   const lifespan =
-    b == null && d == null ? null
-    : b != null && d == null ? `${b}–`
-    : b == null && d != null ? `?–${d}`
-    : `${b}–${d}`
+    birth == null && death == null ? null
+    : birth != null && death == null ? `${formatYear(birth)}–`
+    : birth == null && death != null ? `?–${formatYear(death)}`
+    : `${formatYear(birth)}–${formatYear(death)}`
   const src = person.profileImageUrl
     ? getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl
     : null
   const baseName = getPersonDisplayName(person, true)
-  const displayName = person.illegitimate ? `${baseName}*` : baseName
+  const displayName = baseName
   const initial = [...baseName.trim()][0] ?? '?'
   const openable = useNodeOpenable(person.id)
   const clickable = Boolean(onPersonClick && person.id) && openable
   const handle = () => person.id && onPersonClick?.(person.id)
   const tooltip = buildPersonTooltip(person)
-  const isDeceased = d != null
+  const isDeceased = death != null
   return (
     <GeoNode
       $role="ancestor"
@@ -417,12 +423,14 @@ export function DescendantNode({
         )}
         <NodeName>
           {displayName}
+          {person.illegitimate && <IllegitimateMark aria-label="사생아·서출">*</IllegitimateMark>}
           {isDeceased && <DeceasedMark aria-label="사망"> †</DeceasedMark>}
         </NodeName>
         {lifespan && <NodeMeta>{lifespan}</NodeMeta>}
         {person.dynasty?.name && <NodeDynasty>{person.dynasty.name}</NodeDynasty>}
       </NodeNameWrap>
-      <NodeBadge $role="ancestor">{badge}</NodeBadge>
+      {/* 후손은 sky(descendant), 조상 형제 모달의 '형제' 배지는 amber(sibling) — 방향성 색 유지 */}
+      <NodeBadge $role={badge === '형제' ? 'sibling' : 'descendant'}>{badge}</NodeBadge>
       <CardHoverInfo person={person} />
       {inMarriagesWith && inMarriagesWith.length > 0 && (() => {
         // 자기 자신은 절대 partner가 될 수 없음 — 데이터 이상 방어
@@ -431,7 +439,8 @@ export function DescendantNode({
         // 합스부르크 가계처럼 동명이인이 흔한 도메인 — 출생연도로 디스앰비
         const formatPartner = (p: FamilyTreePerson) => {
           const name = getPersonDisplayName(p, true)
-          return p.birthYear != null ? `${name} (${p.birthYear})` : name
+          const py = signedYearFromParts(p.birthYear ?? null, p.birthEra)
+          return py != null ? `${name} (${formatYear(py)})` : name
         }
         const labels = partners.map(formatPartner)
         const joined = labels.join(', ')
@@ -593,6 +602,17 @@ export const GeoNode = styled.div<{
                 `}
           }
         `}
+
+  ${({ $dimmed }) =>
+    $dimmed &&
+    css`
+      /* 클릭 불가(비소유) 카드가 hover에 떠오르지 않게 — clickable처럼 보이는 어포던스 제거(G27).
+         emphasis 블록 뒤에 둬 소스 순서로 base hover transform을 덮어쓴다. */
+      &:hover {
+        transform: none;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+      }
+    `}
 `
 
 export const AvatarImage = styled.img`
@@ -702,6 +722,14 @@ const DeceasedMark = styled.span`
   letter-spacing: 0;
 `
 
+/** 사생아·서출 마커(*) — 이름 문자열 연결 대신 aria-label 있는 별도 마크(스크린리더 인지). */
+const IllegitimateMark = styled.span`
+  font-size: 0.9em;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: 0;
+`
+
 const NodeName = styled.div`
   font-size: 14px;
   font-weight: 700;
@@ -765,6 +793,9 @@ export const NodeBadge = styled.span<{ $role: string }>`
         return pill(dark ? 'rgba(244,63,94,0.15)' : 'rgba(225,29,72,0.08)', dark ? '#fda4af' : '#be123c')
       case 'child':
         return pill(dark ? 'rgba(14,165,233,0.15)' : 'rgba(2,132,199,0.1)', dark ? '#7dd3fc' : '#0369a1')
+      case 'descendant':
+        // 후손(손자녀+)은 자녀(child)와 같은 하향 계열 sky — 상향 조상(회색 default)과 구분.
+        return pill(dark ? 'rgba(56,189,248,0.12)' : 'rgba(56,189,248,0.12)', dark ? '#7dd3fc' : '#0284c7')
       case 'sibling':
         return pill(dark ? 'rgba(245,158,11,0.15)' : 'rgba(245,158,11,0.1)', dark ? '#fcd34d' : '#b45309')
       default:
