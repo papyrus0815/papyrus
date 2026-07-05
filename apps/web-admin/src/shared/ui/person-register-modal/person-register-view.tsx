@@ -1110,6 +1110,7 @@ export function PersonRegisterView({
       if (isAlive) return
       setIsAlive(true)
       setIsDeathDateUnknown(false)
+      setIsDeathDateApproximate(false) // 생존/미상 전환 시 stale 추정 정리(미상↔추정 배타)
       setDeathYear('')
       setDeathMonth('')
       setDeathDay('')
@@ -1133,6 +1134,7 @@ export function PersonRegisterView({
     if (!isAlive && isDeathDateUnknown) return
     setIsAlive(false)
     setIsDeathDateUnknown(true)
+    setIsDeathDateApproximate(false) // 일자 미상↔추정 배타
     setDeathYear('')
     setDeathMonth('')
     setDeathDay('')

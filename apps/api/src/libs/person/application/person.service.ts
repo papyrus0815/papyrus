@@ -387,8 +387,10 @@ export class PersonService {
       if (date === null) return null
       if (date !== undefined) {
         // buildUtcDateFromParts가 setUTCFullYear로 크기값 연도를 정확히 심으므로 <100 연도도 안전.
+        // era 누락 시 기존 era로 폴백 — 비모달 쓰기가 date만 보내도 BC가 AD로 둔갑하지 않도록.
         const year = date.getUTCFullYear()
-        return era === 'BC' ? -year : year
+        const useEra = era ?? exEra
+        return useEra === 'BC' ? -year : year
       }
       if (exYear == null) return null
       return exEra === 'BC' ? -exYear : exYear

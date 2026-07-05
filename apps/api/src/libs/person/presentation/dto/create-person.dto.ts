@@ -137,10 +137,12 @@ export class DateInfoDto {
  */
 export class NicknameDto {
   @IsString()
+  @MaxLength(100) // DB nickname VarChar(100) — 초과 시 트랜잭션 롤백(500) 대신 400
   nickname!: string
 
   @IsOptional()
   @IsString()
+  @MaxLength(50) // DB type VarChar(50)
   type?: string
 
   @IsOptional()
