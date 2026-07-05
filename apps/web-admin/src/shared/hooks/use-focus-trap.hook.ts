@@ -29,6 +29,14 @@ function getFocusable(root: HTMLElement): HTMLElement[] {
   ).filter((el) => el.offsetParent !== null || el === document.activeElement)
 }
 
+/**
+ * 활성 트랩 스택 — 중첩 모달이 겹치면 여러 useFocusTrap이 같은 document capture 단계에
+ * 등록돼, 외부 트랩의 `!root.contains(active)` 분기가 내부 모달의 포커스를 가로채
+ * Tab이 매번 내부 첫 요소로 튕기는 충돌이 생긴다. 최상위(가장 최근 활성) 트랩만
+ * Tab을 처리하도록 스택으로 게이트한다.
+ */
+const trapStack: HTMLElement[] = []
+
 export const useFocusTrap = (
   containerRef: RefObject<HTMLElement | null>,
   enabled: boolean,
@@ -41,6 +49,9 @@ export const useFocusTrap = (
 
     // 열기 직전 포커스 요소 보관 (닫힐 때 복원)
     const previouslyFocused = document.activeElement as HTMLElement | null
+
+    // 이 트랩을 최상위로 등록 — 아래 onKeyDown이 최상위일 때만 Tab을 처리한다.
+    trapStack.push(root)
 
     // 초기 포커스 이동 — 마운트 직후 DOM 정리 전일 수 있어 다음 프레임에 실행
     const rafId = window.requestAnimationFrame(() => {
@@ -56,6 +67,8 @@ export const useFocusTrap = (
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return
+      // 최상위 트랩만 처리 — 중첩 모달에서 외부 트랩이 내부 포커스를 가로채는 충돌 방지.
+      if (trapStack[trapStack.length - 1] !== root) return
       const focusable = getFocusable(root)
       if (focusable.length === 0) {
         // 가둘 대상이 없으면 패널 밖으로 못 나가게만 막음
@@ -86,6 +99,8 @@ export const useFocusTrap = (
     return () => {
       window.cancelAnimationFrame(rafId)
       document.removeEventListener('keydown', onKeyDown, true)
+      const stackIdx = trapStack.lastIndexOf(root)
+      if (stackIdx !== -1) trapStack.splice(stackIdx, 1)
       // 직전 포커스 복원 (요소가 아직 DOM에 있을 때만)
       if (previouslyFocused && document.contains(previouslyFocused)) {
         previouslyFocused.focus()

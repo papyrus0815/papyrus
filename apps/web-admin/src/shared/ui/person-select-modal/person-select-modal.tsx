@@ -44,10 +44,15 @@ interface PersonSelectModalProps {
   /** 검색 placeholder (예: "아버지로 등록할 인물을 검색...") */
   searchPlaceholder?: string
   /**
-   * 인라인 "+ 새 인물 등록" 진입점 활성화. 부모 폼의 현재 국가를 기본값으로 사용.
-   * 미지정이거나 빈 문자열이면 진입점 자체가 노출되지 않음.
+   * 인라인 "+ 새 인물 등록"의 국가 기본값. 있으면 등록 시 이 국가로 저장.
+   * 없어도 allowCreate가 true면 국가 없이 등록 가능(고대·국가미상 인물).
    */
   defaultCountryId?: string
+  /**
+   * 인라인 새 인물 등록 진입점 노출 여부. 미지정 시 기존 동작(defaultCountryId 유무로 게이트).
+   * 국가가 없는 인물(예: 고대 인물)의 가족 추가에서도 등록을 허용하려면 명시적으로 true.
+   */
+  allowCreate?: boolean
   /** 인라인 등록으로 새 인물이 생성된 경우 콜백 — 부모가 로컬 인물 목록을 갱신할 수 있도록. */
   onCreatedPerson?: (person: PersonResponseDto) => void
   /**
@@ -72,6 +77,7 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   title,
   searchPlaceholder,
   defaultCountryId,
+  allowCreate,
   onCreatedPerson,
   multiSelect = false,
   loading = false,
@@ -104,7 +110,8 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // ─── 인라인 새 인물 등록 ───────────────────────────────────────────────
-  const canCreate = !!defaultCountryId
+  // 기존 동작(country 유무 게이트)을 유지하되, allowCreate가 명시되면 그 값 우선.
+  const canCreate = allowCreate ?? !!defaultCountryId
   const [createMode, setCreateMode] = useState(false)
   const [newName, setNewName] = useState('')
   const [newSurname, setNewSurname] = useState('')
@@ -130,10 +137,6 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   }
 
   const handleCreateSubmit = async () => {
-    if (!defaultCountryId) {
-      notify.error('국가를 먼저 선택해 주세요.')
-      return
-    }
     if (!newName.trim()) {
       notify.error('이름을 입력해 주세요.')
       return
@@ -152,7 +155,8 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
         name: newName.trim(),
         surname: newSurname.trim(),
         gender: newGender,
-        countryId: defaultCountryId,
+        // 국가 기본값이 있으면 사용, 없으면 국가 없이 등록(고대·국가미상 인물 허용).
+        ...(defaultCountryId ? { countryId: defaultCountryId } : {}),
       }
       if (newBirthYear.trim()) {
         const y = parseInt(newBirthYear, 10)

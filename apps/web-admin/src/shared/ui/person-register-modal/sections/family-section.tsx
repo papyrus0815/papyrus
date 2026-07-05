@@ -10,6 +10,7 @@ import styled from 'styled-components'
 
 import type { PersonResponseDto, SpouseRelationInput } from '@/shared/api/persons'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import {
   FieldControl,
@@ -308,7 +309,23 @@ export function FamilySection({
                     type="button"
                     aria-label={`배우자 ${index + 1} 삭제`}
                     title="이 배우자 행 삭제"
-                    onClick={() => {
+                    onClick={async () => {
+                      // 입력된 내용이 있으면 무경고 삭제 대신 확인 — 혼인일·메모 유실 방지.
+                      const hasContent = Boolean(
+                        row.spouseId ||
+                          row.marriageStartDate ||
+                          row.marriageEndDate ||
+                          (row.note && row.note.trim()),
+                      )
+                      if (hasContent) {
+                        const ok = await confirm({
+                          title: '배우자 행 삭제',
+                          message: `${index + 1}번 배우자 행을 삭제할까요? 입력한 혼인일·메모도 함께 삭제됩니다.`,
+                          confirmLabel: '삭제',
+                          danger: true,
+                        })
+                        if (!ok) return
+                      }
                       removeSpouseRow(index)
                       markDirty()
                     }}
@@ -333,6 +350,15 @@ export function FamilySection({
                     <SpouseDateInput
                       type="date"
                       value={toDateInputValue(row.marriageEndDate)}
+                      // 종료일은 시작일 이후만 — 음수 기간 모순 데이터 방지(네이티브 min + aria)
+                      min={toDateInputValue(row.marriageStartDate) || undefined}
+                      aria-invalid={
+                        Boolean(
+                          row.marriageStartDate &&
+                            row.marriageEndDate &&
+                            toDateInputValue(row.marriageEndDate) < toDateInputValue(row.marriageStartDate),
+                        ) || undefined
+                      }
                       onChange={(e) => {
                         updateSpouseRow(index, { marriageEndDate: e.target.value || undefined })
                         markDirty()
@@ -340,6 +366,13 @@ export function FamilySection({
                     />
                   </SpouseDateField>
                 </SpouseRowMeta>
+                {row.marriageStartDate &&
+                  row.marriageEndDate &&
+                  toDateInputValue(row.marriageEndDate) < toDateInputValue(row.marriageStartDate) && (
+                    <SpouseDateError role="alert">
+                      혼인 종료일이 시작일보다 빠릅니다.
+                    </SpouseDateError>
+                  )}
                 <SpouseNoteTextarea
                   aria-label={`배우자 ${index + 1} 설명`}
                   value={row.note ?? ''}
@@ -683,6 +716,15 @@ const SpouseDateInput = styled.input`
     outline: none;
     border-color: ${({ theme }) => theme.colors.primary};
   }
+  &[aria-invalid='true'] {
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#f87171' : '#dc2626')};
+  }
+`
+
+const SpouseDateError = styled.p`
+  margin: 4px 0 0 30px;
+  font-size: ${FONT.meta};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#f87171' : '#dc2626')};
 `
 
 const SpouseAddBtn = styled.button`
