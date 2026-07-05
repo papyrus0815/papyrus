@@ -85,6 +85,7 @@ import {
 } from './sections/country-affiliations-section'
 import { FamilySection } from './sections/family-section'
 import { LifeSection } from './sections/life-section'
+import { PlaceFields } from './sections/place-fields'
 import { usePersonDraft } from './use-person-draft.hook'
 
 import {
@@ -1630,6 +1631,9 @@ export function PersonRegisterView({
           motherId: motherId || null,
           birthCityId: birthCityId || null,
           deathCityId: deathCityId || null,
+          // 행정구역도 명시 null로 — cityId만 null 처리하면 장소를 비워도 기존 adminDivisionId가 서버에 잔존한다.
+          birthAdminDivisionId: birthPlace?.adminDivisionId || null,
+          deathAdminDivisionId: deathPlace?.adminDivisionId || null,
           // 날짜가 비워졌으면(미상·생존 전환 포함) null = 해제.
           // isAlive·isDeathDateUnknown 플래그 수신 시 서버도 함께 클리어(이중 안전장치).
           birth: payload.birth ?? null,
@@ -1746,9 +1750,11 @@ export function PersonRegisterView({
         },
         {
           id: 'death-detail',
-          // 사망 유형은 생몰(코어)로 이동 — 여기 완료 판정은 원인·메모·군주 호칭만.
+          // 사망 유형은 생몰(코어)로 이동 — 여기 완료 판정은 출생지·사망지·원인·메모·군주 호칭.
           label: '생애 상세',
           filled:
+            !!birthPlace ||
+            !!deathPlace ||
             !!deathCause ||
             !!deathNote ||
             !!regnalName ||
@@ -1757,10 +1763,8 @@ export function PersonRegisterView({
         },
         {
           id: 'affiliation',
-          label: '소속 · 가문',
+          label: '가문 · 종교 · 국가',
           filled:
-            !!birthPlace ||
-            !!deathPlace ||
             !!dynastyId ||
             !!religionId ||
             countryAffiliations.length > 0,
@@ -2168,7 +2172,7 @@ export function PersonRegisterView({
                     {moreOpen ? '상세 정보 접기' : '더 입력 (선택)'}
                   </AdvancedToggleTitle>
                   <AdvancedToggleDesc>
-                    이름 원어·뜻 · 사망 상세 · 군주 호칭 · 소속/가문 · 가족
+                    이름 원어·뜻 · 출생지/사망지 · 사망 상세 · 군주 호칭 · 가문/종교 · 가족
                   </AdvancedToggleDesc>
                 </AdvancedToggleBody>
               </MoreToggle>
@@ -2249,10 +2253,22 @@ export function PersonRegisterView({
                 </FormRows>
                 </div>
 
-                {/* 생애 상세 — 사망 유형·원인·메모 + 군주 호칭 (details) */}
+                {/* 생애 상세 — 출생지·사망지 + 사망 유형·원인·메모 + 군주 호칭 (details) */}
                 <CoreDivider />
                 <div data-form-section="death-detail">
                 <CoreSectionLabel>생애 상세</CoreSectionLabel>
+                {/* 출생지·사망지 — 출생 날짜와 한 흐름에 두어 발견성 회복(구 소속·가문 섹션에서 이관) */}
+                <PlaceFields
+                  countryId={countryId}
+                  birthPlace={birthPlace}
+                  deathPlace={deathPlace}
+                  setBirthPlace={setBirthPlace}
+                  setDeathPlace={setDeathPlace}
+                  setBirthCityId={setBirthCityId}
+                  setDeathCityId={setDeathCityId}
+                  onCopyBirthToDeathPlace={handleCopyBirthToDeathPlace}
+                  markDirty={markDirty}
+                />
                 <LifeSection
                   mode="details"
                   fid={fid}
@@ -2300,19 +2316,11 @@ export function PersonRegisterView({
 
                 </div>
 
-                {/* 소속 · 가문 — 출생/사망지·가문·종교 (국적은 코어) */}
+                {/* 가문 · 종교 · 국가 — 가문·종교 + 다중 국가 소속 (출생/사망지는 생애 상세로 이관) */}
                 <CoreDivider />
                 <div data-form-section="affiliation">
-                <CoreSectionLabel>소속 · 가문</CoreSectionLabel>
+                <CoreSectionLabel>가문 · 종교 · 국가</CoreSectionLabel>
                 <AffiliationSection
-                  countryId={countryId}
-                  birthPlace={birthPlace}
-                  deathPlace={deathPlace}
-                  setBirthPlace={setBirthPlace}
-                  setDeathPlace={setDeathPlace}
-                  setBirthCityId={setBirthCityId}
-                  setDeathCityId={setDeathCityId}
-                  onCopyBirthToDeathPlace={handleCopyBirthToDeathPlace}
                   dynastyOptions={dynastySelectOptions}
                   religionOptions={religionSelectOptions}
                   dynastyValue={dynastyId}

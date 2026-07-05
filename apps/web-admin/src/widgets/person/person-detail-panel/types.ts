@@ -102,7 +102,10 @@ export interface PersonDetailData {
   createdAt?: string | null
   isAlive?: boolean | null
   influence?: number | null
+  isBirthDateUnknown?: boolean | null
   isDeathDateUnknown?: boolean | null
+  /** 사생아·서출 — 가계도 별표(*)와 동일 시맨틱 */
+  illegitimate?: boolean | null
   dynastyId?: string | null
   religionId?: string | null
   religion?: { id?: string; name?: string | null } | null

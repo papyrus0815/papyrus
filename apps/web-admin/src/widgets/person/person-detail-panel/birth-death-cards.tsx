@@ -6,6 +6,7 @@ import { FiAlertTriangle, FiCalendar } from 'react-icons/fi'
 
 import { DEATH_TYPE_LABELS } from './helpers'
 import {
+  BirthMarkerPill,
   DeathCauseText,
   DeathInfoRow,
   DeathNoteText,
@@ -46,10 +47,12 @@ export function BirthDeathCards({
     p.deathAdminDivision?.name ??
     p.deathPlaceText ??
     null
-  const hasBirth = !!birthDateStr || !!birthPlace
+  const hasBirth =
+    !!birthDateStr || !!birthPlace || !!p.isBirthDateUnknown || !!p.illegitimate
   const hasDeath =
     !!deathDateStr ||
     !!deathPlace ||
+    !!p.isDeathDateUnknown ||
     !!p.deathType ||
     !!p.deathCause ||
     !!p.deathNote
@@ -64,13 +67,19 @@ export function BirthDeathCards({
               <FiCalendar size={14} strokeWidth={2.2} />
             </LifeCardIconWrap>
             <LifeCardTitle>출생</LifeCardTitle>
+            {p.illegitimate && <BirthMarkerPill>서출</BirthMarkerPill>}
           </LifeCardHeader>
-          {birthDateStr && (
+          {birthDateStr ? (
             <LifeCardRow>
               <LifeCardLabel>일자</LifeCardLabel>
               <LifeCardValue>{birthDateStr}</LifeCardValue>
             </LifeCardRow>
-          )}
+          ) : p.isBirthDateUnknown ? (
+            <LifeCardRow>
+              <LifeCardLabel>일자</LifeCardLabel>
+              <LifeCardValue>미상</LifeCardValue>
+            </LifeCardRow>
+          ) : null}
           {birthPlace && (
             <LifeCardRow>
               <LifeCardLabel>장소</LifeCardLabel>
@@ -88,12 +97,17 @@ export function BirthDeathCards({
             <LifeCardTitle>사망</LifeCardTitle>
             {ageAtDeath != null && <LifeCardAge>향년 {ageAtDeath}세</LifeCardAge>}
           </LifeCardHeader>
-          {deathDateStr && (
+          {deathDateStr ? (
             <LifeCardRow>
               <LifeCardLabel>일자</LifeCardLabel>
               <LifeCardValue>{deathDateStr}</LifeCardValue>
             </LifeCardRow>
-          )}
+          ) : p.isDeathDateUnknown ? (
+            <LifeCardRow>
+              <LifeCardLabel>일자</LifeCardLabel>
+              <LifeCardValue>미상</LifeCardValue>
+            </LifeCardRow>
+          ) : null}
           {deathPlace && (
             <LifeCardRow>
               <LifeCardLabel>장소</LifeCardLabel>

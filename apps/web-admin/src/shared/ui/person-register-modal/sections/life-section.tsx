@@ -202,6 +202,12 @@ export function LifeSection({
               >
                 출생일 미상
               </SegmentBtn>
+              {errors.birth && (
+                <FieldError role="alert">
+                  <FiAlertCircle size={13} />
+                  {errors.birth}
+                </FieldError>
+              )}
             </LifeCol>
 
             {/* ── 사망 열 ── */}
@@ -272,15 +278,15 @@ export function LifeSection({
               {lifespanText && (
                 <LifespanText aria-live="polite">{lifespanText}</LifespanText>
               )}
+              {/* 사망일 오류 — 출생>사망 역전 검증도 errs.death에 키잉되어 이 열에 귀속된다 */}
+              {errors.death && (
+                <FieldError role="alert">
+                  <FiAlertCircle size={13} />
+                  {errors.death}
+                </FieldError>
+              )}
             </LifeCol>
           </LifePairGrid>
-
-          {(errors.birth || errors.death) && (
-            <FieldError role="alert">
-              <FiAlertCircle size={13} />
-              {errors.birth || errors.death}
-            </FieldError>
-          )}
         </LifeStack>
       </FieldRow>
       )}

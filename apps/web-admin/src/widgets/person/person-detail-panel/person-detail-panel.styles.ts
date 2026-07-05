@@ -1760,6 +1760,23 @@ export const LifeCardAge = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+/** 출생 카드 신분 마커 — 서출(사생아). 가계도 별표(*)와 동일 시맨틱, 사망(적색)과 구분한 앰버 톤. */
+export const BirthMarkerPill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.14)' : 'rgba(245, 158, 11, 0.1)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#b45309')};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(245, 158, 11, 0.24)'};
+`
+
 export const LifeCardRow = styled.div`
   display: flex;
   align-items: baseline;
