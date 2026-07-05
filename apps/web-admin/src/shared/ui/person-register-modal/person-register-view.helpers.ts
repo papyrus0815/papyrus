@@ -224,6 +224,7 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   deathMonth: string
   deathDay: string
   countryId: string
+  historicalCountryId: string
   countryAffiliations: CountryAffiliationRow[]
   birthCityId: string
   deathCityId: string

@@ -50,6 +50,8 @@ export type Person = {
   deathNote?: string | null
   regnalName?: string | null
   countryId?: string | null
+  /** 주 국적이 역사(과거) 국가일 때의 first-class FK (HistoricalCountry PK). 현대면 null. */
+  historicalCountryId?: string | null
   birthCityId?: string | null
   deathCityId?: string | null
   /** 출생지 행정구역 ID */
@@ -69,6 +71,12 @@ export type Person = {
     isoCode?: string | null
     /** 인물 이름 표시 순서 기본값 (국가 설정) */
     defaultNameDisplayOrder?: string | null
+    /** 이 국가가 역사(과거) 국가인지 — 상세 배지 라벨·라우팅 분기용 */
+    isHistorical?: boolean
+    /** 배지 라우팅 대상 현대국가 id (역사국가면 연결 현대국가, 현대면 자기 자신). 연결 없으면 null. */
+    modernCountryId?: string | null
+    /** 대표 이미지(역사국가) URL */
+    thumbnailUrl?: string | null
   } | null
   /** 가문 (목록/재임 응답에서 포함될 수 있음) */
   dynasty?: { id: string; name: string } | null
@@ -108,6 +116,8 @@ export type CreatePersonInput = {
   preEnthronementTitle?: string | null
   // 관계
   countryId?: string | null
+  /** 주 국적이 역사(과거) 국가일 때의 first-class FK (HistoricalCountry PK). countryId와 상호배타. */
+  historicalCountryId?: string | null
   dynastyId?: string | null
   religionId?: string | null
   jobId?: string | null
