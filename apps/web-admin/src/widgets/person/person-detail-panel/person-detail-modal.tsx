@@ -62,18 +62,25 @@ export function PersonDetailModal({
   const pop = useCallback(() => setStack((s) => s.slice(0, -1)), [])
   const depth = stack.length // 0이면 루트 인물
 
-  // ESC 닫기 (stack이 있으면 pop, 없으면 close) — capture 단계로 등록해
-  // 타임라인 가이드라인 해제 등 하위 ESC 핸들러보다 먼저 처리한다.
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // ESC 닫기 (stack이 있으면 pop, 없으면 close). window capture 대신 이 모달 패널(panelRef)에
+  // 바인딩 + stopPropagation — 포커스가 이 모달 안에 있을 때만 잡는다. 이렇게 하면 위에 뜬
+  // 자식 모달(가족 추가 PersonSelectModal은 document.body 포털이라 panelRef 밖)의 Esc가
+  // 이 모달을 먼저 닫아버리는 충돌이 구조적으로 사라진다. 하위 window ESC(전기·타임라인)는
+  // stopPropagation으로 여전히 선점.
   useEffect(() => {
     if (!personId) return
+    const node = panelRef.current
+    if (!node) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       e.stopPropagation()
       if (depth > 0) pop()
       else onClose()
     }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
+    node.addEventListener('keydown', onKey)
+    return () => node.removeEventListener('keydown', onKey)
   }, [personId, depth, pop, onClose])
 
   const { data: topPerson } = useQuery({
@@ -88,7 +95,6 @@ export function PersonDetailModal({
 
   // 모달 열림 동안 body 스크롤 락 + 패널 내 포커스 트랩
   const open = !!personId && !!topId
-  const panelRef = useRef<HTMLDivElement>(null)
   useBodyScrollLock(open)
   useFocusTrap(panelRef, open)
 
