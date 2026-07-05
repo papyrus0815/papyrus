@@ -183,11 +183,6 @@ export const OriginalNameInputWrap = styled.div`
   width: 100%;
 `
 
-/** 상단 정렬 라벨 패턴. 행 구분은 PersonFormLayoutWrap의 border-top 규칙으로. */
-export const FieldRowMulti = styled.div`
-  display: block;
-  padding: 18px 0;
-`
 
 /**
  * 짧은 코어 컨트롤(성별·국적)을 가로 2열로 묶어 세로 길이를 줄이고 960px 폭을 활용.
@@ -253,16 +248,11 @@ export const PersonFormLayoutWrap = styled.div`
     margin-top: 20px;
   }
 
-  ${FieldRowMulti} {
-    margin-top: 18px;
-  }
-
   ${ThumbnailHero} {
     margin-top: 0;
   }
 
-  ${FieldRow}:first-child,
-  ${FieldRowMulti}:first-child {
+  ${FieldRow}:first-child {
     margin-top: 0;
   }
 

@@ -74,11 +74,8 @@ export function AffiliationSection({
 
 // ─── Styled ──────────────────────────────────────────────────────────────────
 
-/* Top-aligned 패턴 — 비-첫행에만 가벼운 구분선. */
+/* Top-aligned 패턴 — 세로 여백만(단일 자식이라 :not(:first-child) border-top은 死코드였음). */
 const FieldRowMulti = styled.div`
   display: block;
   padding: 18px 0;
-  &:not(:first-child) {
-    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  }
 `
