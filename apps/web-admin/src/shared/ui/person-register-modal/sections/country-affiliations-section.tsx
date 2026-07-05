@@ -185,7 +185,7 @@ export function CountryAffiliationsSection({
         </FieldLabel>
         <ControlWide>
           <HintText>
-            주 국적 외에 출생지·복무·망명·이중국적 등을 추가합니다. (현대/역사적 국가 모두 가능)
+            주 국적 외 출생지·복무·망명·이중국적 등을 추가합니다.
           </HintText>
 
           {rows.length > 0 && (
@@ -496,6 +496,8 @@ const NoteInput = styled.input`
   }
 `
 
+// 선택적 반복행 추가 — 필수 국적(SelectBtn)보다 조용한 ghost 톤으로 강등해
+// 폼에서 시각 무게가 위계 역전되지 않게 한다(솔리드 indigo 채움→투명+보조 보더).
 const AddBtn = styled.button`
   align-self: flex-start;
   display: inline-flex;
@@ -503,17 +505,22 @@ const AddBtn = styled.button`
   gap: 6px;
   padding: 8px 12px;
   font-size: ${FONT.label};
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.primary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : '#eef2ff'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.4)' : '#c7d2fe'};
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: ${RADIUS.control};
   cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
   &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.2)' : '#e0e7ff'};
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.08)'
+        : theme.colors.activeLight};
   }
 `
