@@ -145,6 +145,9 @@ model Person {
   /// 출생일 미상 여부
   isBirthDateUnknown Boolean @default(false) @map("is_birth_date_unknown")
 
+  /// 출생일 추정(circa) 여부 — '약 1500년'처럼 부정확 연도. isBirthDateUnknown(완전 미상)과 배타.
+  isBirthDateApproximate Boolean @default(false) @map("is_birth_date_approximate")
+
   /// 출생 관련 메모 (탄생 설화·유복자·칠삭둥이·조산 등 맥락). deathNote의 출생 대칭.
   birthNote String? @map("birth_note") @db.Text
 
@@ -156,6 +159,9 @@ model Person {
 
   /// 사망일 미상 여부
   isDeathDateUnknown Boolean @default(false) @map("is_death_date_unknown")
+
+  /// 사망일 추정(circa) 여부 — isDeathDateUnknown(완전 미상)과 배타.
+  isDeathDateApproximate Boolean @default(false) @map("is_death_date_approximate")
 
   /// 사망 유형 (자연사, 병사, 암살 등)
   deathType DeathType? @map("death_type")
