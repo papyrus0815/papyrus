@@ -240,6 +240,7 @@ export function PersonRegisterView({
   const [deathType, setDeathType] = useState<string>('')
   const [deathCause, setDeathCause] = useState<string>('')
   const [deathNote, setDeathNote] = useState<string>('')
+  const [birthNote, setBirthNote] = useState<string>('')
   const [deathYear, setDeathYear] = useState('')
   const [deathMonth, setDeathMonth] = useState('')
   const [deathDay, setDeathDay] = useState('')
@@ -636,6 +637,7 @@ export function PersonRegisterView({
     makeFormField('deathType', () => deathType, setDeathType, ''),
     makeFormField('deathCause', () => deathCause, setDeathCause, ''),
     makeFormField('deathNote', () => deathNote, setDeathNote, ''),
+    makeFormField('birthNote', () => birthNote, setBirthNote, ''),
     makeFormField('deathYear', () => deathYear, setDeathYear, ''),
     makeFormField('deathMonth', () => deathMonth, setDeathMonth, ''),
     makeFormField('deathDay', () => deathDay, setDeathDay, ''),
@@ -893,6 +895,7 @@ export function PersonRegisterView({
         setDeathType((p as any).deathType ?? '')
         setDeathCause((p as any).deathCause ?? '')
         setDeathNote((p as any).deathNote ?? '')
+        setBirthNote((p as any).birthNote ?? '')
         // 이름의 뜻이 있으면 기본 탭의 collapse 자동 펼침.
         const hasNameMeanings =
           (p.surnameMeaning && String(p.surnameMeaning).trim()) ||
@@ -1595,6 +1598,7 @@ export function PersonRegisterView({
       deathType: isAlive ? null : (deathType || null),
       deathCause: isAlive ? null : (deathCause.trim() || null),
       deathNote: isAlive ? null : (deathNote.trim() || null),
+      birthNote: birthNote.trim() || null,
     }
     if (!isBirthDateUnknown && birthYear.trim()) {
       const y = parseInt(birthYear, 10)
@@ -2239,6 +2243,8 @@ export function PersonRegisterView({
                 setDeathStatus={setDeathStatus}
                 deathType={deathType}
                 deathCause={deathCause}
+                birthNote={birthNote}
+                setBirthNote={setBirthNote}
                 deathNote={deathNote}
                 setDeathType={setDeathType}
                 setDeathCause={setDeathCause}
@@ -2299,6 +2305,8 @@ export function PersonRegisterView({
                 setDeathStatus={setDeathStatus}
                 deathType={deathType}
                 deathCause={deathCause}
+                birthNote={birthNote}
+                setBirthNote={setBirthNote}
                 deathNote={deathNote}
                 setDeathType={setDeathType}
                 setDeathCause={setDeathCause}

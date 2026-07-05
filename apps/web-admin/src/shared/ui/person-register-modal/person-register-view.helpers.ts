@@ -221,6 +221,7 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   deathType: string
   deathCause: string
   deathNote: string
+  birthNote: string
   deathYear: string
   deathMonth: string
   deathDay: string

@@ -65,6 +65,9 @@ export interface LifeSectionProps {
   setDeathMonth: (value: string) => void
   setDeathDay: (value: string) => void
   setDeathStatus: (status: 'alive' | 'deceased' | 'unknown') => void
+  // 출생 상세
+  birthNote: string
+  setBirthNote: (v: string) => void
   // 사망 상세
   deathType: string
   deathCause: string
@@ -121,6 +124,8 @@ export function LifeSection({
   setDeathMonth,
   setDeathDay,
   setDeathStatus,
+  birthNote,
+  setBirthNote,
   deathType,
   deathCause,
   deathNote,
@@ -326,6 +331,24 @@ export function LifeSection({
                 </DeathTypeGroupBox>
               ))}
             </DeathTypeGrouped>
+          </FieldControl>
+        </FieldRow>
+      )}
+
+      {/* 출생 상세 — 출생 메모(탄생 설화·유복자 등). deathNote 대칭. details 영역. */}
+      {showDetails && (
+        <FieldRow>
+          <FieldLabel>출생 상세</FieldLabel>
+          <FieldControl>
+            <Textarea
+              value={birthNote}
+              onChange={(e) => {
+                setBirthNote(e.target.value)
+                markDirty()
+              }}
+              placeholder="출생 메모 (탄생 설화·유복자·조산 등 맥락)"
+              rows={2}
+            />
           </FieldControl>
         </FieldRow>
       )}

@@ -59,7 +59,8 @@ export function BirthDeathCards({
     !!birthPlace ||
     !!birthCountry ||
     !!p.isBirthDateUnknown ||
-    !!p.illegitimate
+    !!p.illegitimate ||
+    !!p.birthNote
   const hasDeath =
     !!deathDateStr ||
     !!deathPlace ||
@@ -103,6 +104,7 @@ export function BirthDeathCards({
               <LifeCardValue>{birthCountry}</LifeCardValue>
             </LifeCardRow>
           )}
+          {p.birthNote && <DeathNoteText>{p.birthNote}</DeathNoteText>}
         </LifeCard>
       )}
       {hasDeath && (

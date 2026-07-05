@@ -78,6 +78,7 @@ export interface PersonDetailData {
   deathEra?: string | null
   /** ISO 날짜 문자열 (가계도 노드 등에서 사용) */
   deathDate?: string | null
+  birthNote?: string | null
   deathType?: string | null
   deathCause?: string | null
   deathNote?: string | null
