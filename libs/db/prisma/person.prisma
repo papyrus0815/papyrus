@@ -210,7 +210,10 @@ model Person {
   motherId       String? @map("mother_id") @db.Char(36)
   /// @deprecated 직업 정보는 Career 테이블들 사용 (MilitaryCareer, BusinessCareer 등)
   jobId          String? @map("job_id") @db.Char(36)
-  countryId      String? @map("country_id") @db.Char(36) // 주 국적 (간편 조회용, deprecated 예정)
+  countryId      String? @map("country_id") @db.Char(36) // 주 국적 — 현대 Country 전용. 역사국가 주국적은 historicalCountryId 사용
+  /// 주 국적이 역사(과거) 국가일 때의 FK. countryId(현대)와 병렬 — 상호배타는 도출 우선순위(역사>현대)로 해소.
+  /// Event/Tenure/Organization의 dual-FK 선례와 동형. 둘 다 null이면 국적 미상.
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
   /// 출생지 (도시)
   birthCityId    String? @map("birth_city_id") @db.Char(36)
   /// 사망지 (도시)
@@ -230,6 +233,7 @@ model Person {
   denomination       ReligionDenomination? @relation("DenominationToPerson", fields: [denominationId], references: [id], onDelete: SetNull)
   job                Job?                  @relation("JobToPerson", fields: [jobId], references: [id], onDelete: SetNull)
   country            Country?              @relation("CountryToPerson", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry  HistoricalCountry?    @relation("PersonHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
   birthCity          City?                 @relation("PersonBirthCity", fields: [birthCityId], references: [id], onDelete: SetNull)
   deathCity          City?                 @relation("PersonDeathCity", fields: [deathCityId], references: [id], onDelete: SetNull)
   birthAdminDivision AdministrativeDivision? @relation("PersonBirthAdminDivision", fields: [birthAdminDivisionId], references: [id], onDelete: SetNull)
@@ -325,6 +329,7 @@ model Person {
   @@index([motherId], name: "idx_person_motherId")
   @@index([jobId], name: "idx_person_jobId")
   @@index([countryId], name: "idx_person_countryId")
+  @@index([historicalCountryId], name: "idx_person_historicalCountryId")
   @@index([birthCityId], name: "idx_person_birthCityId")
   @@index([deathCityId], name: "idx_person_deathCityId")
   @@index([parentMarriageId], name: "idx_person_parentMarriageId")
