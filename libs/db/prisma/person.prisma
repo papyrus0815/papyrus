@@ -193,6 +193,10 @@ model Person {
   /// 사생아·서출 여부 (가계도 카드에 별표 마커)
   illegitimate Boolean @default(false) @map("illegitimate")
 
+  /// 출생 서열 (1-base, 성별 통합 — 예: 5 → "5남" 또는 gender 미상 시 "다섯째").
+  /// 생일 미상 형제가 많은 사서 인물용 — 가계도 형제 정렬의 1차 키(birthYear는 2차).
+  birthOrder Int? @map("birth_order")
+
   /// 어느 결혼에서 태어났는지 (PersonSpouse FK) — 다중 배우자 케이스에서 자녀를 어머니별로 묶기.
   /// null이면 미상 또는 단일 배우자 케이스로 모호성 없음.
   parentMarriageId String? @map("parent_marriage_id") @db.Char(36)
