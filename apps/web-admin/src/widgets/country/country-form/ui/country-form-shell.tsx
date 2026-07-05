@@ -704,6 +704,15 @@ export function CountryFormShell({
         if (top <= offset) current = item.id
         else break
       }
+      // 바닥까지 스크롤되면 마지막 섹션을 활성 — offset(top+80)보다 아래에서 시작하는
+      // 짧은 마지막 섹션(예: 가족)이 영영 활성화되지 않는 결함 보정.
+      // '>8' 가드로 넘치지 않는(fitContent) 폼에서의 오작동을 차단.
+      if (
+        root.scrollHeight - root.clientHeight > 8 &&
+        root.scrollTop + root.clientHeight >= root.scrollHeight - 4
+      ) {
+        current = sectionIndex[sectionIndex.length - 1].id
+      }
       setActiveSection(current)
     }
 

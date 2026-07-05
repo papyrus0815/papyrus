@@ -106,6 +106,8 @@ export interface CreatePersonData {
     priority?: number
     note?: string
   }>
+  /** 별칭(아명·출생명·자·아호·필명 등) — 있으면 통째로 delete-and-recreate */
+  nicknames?: Array<{ nickname: string; type?: string; priority?: number }>
   /** 등록 계정 ID (개인 정보 플랫폼) */
   accountId?: string
 }
@@ -180,6 +182,8 @@ export interface UpdatePersonData {
     priority?: number
     note?: string
   }>
+  /** 별칭(아명·출생명·자·아호·필명 등) — 있으면 통째로 delete-and-recreate */
+  nicknames?: Array<{ nickname: string; type?: string; priority?: number }>
   /** 전기(생애 서술) 섹션 — 있으면 기존 전체 삭제 후 일괄 재생성(delete-and-recreate) */
   sections?: Array<{
     title: string

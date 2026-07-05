@@ -1706,17 +1706,21 @@ export class PersonPrismaRepository implements IPersonRepository {
           where: { id: sanitized.countryId as string },
           select: { id: true },
         })
-        if (inHistorical) {
-          mainHistoricalId = sanitized.countryId as string
-        }
+        if (inHistorical) (sanitized as any).historicalCountryId = sanitized.countryId
         delete sanitized.countryId
       }
     }
+
+    // dual-write(F1=A): 역사 주국적이면 first-class FK(person.historicalCountryId, sanitized로 person.create에 기록)에
+    // 더해 CITIZENSHIP priority=0 슬롯도 미러 — findPersonsByAffiliationInCountry 발견 인덱스·도출 폴백(F6)을 유지.
+    const mainHistoricalId = (sanitized as any).historicalCountryId as string | undefined
 
     const spouseRelations = (sanitized as CreatePersonData).spouseRelations
     delete (sanitized as Record<string, unknown>).spouseRelations
     const countryAffiliations = (sanitized as CreatePersonData).countryAffiliations
     delete (sanitized as Record<string, unknown>).countryAffiliations
+    const nicknames = (sanitized as CreatePersonData).nicknames
+    delete (sanitized as Record<string, unknown>).nicknames
 
     const person = await this.prisma.person.create({
       data: sanitized as Parameters<PrismaService['person']['create']>[0]['data'],
@@ -1726,6 +1730,21 @@ export class PersonPrismaRepository implements IPersonRepository {
       const rows = this.buildCanonicalSpouseRows(person.id, spouseRelations)
       if (rows.length) {
         await this.prisma.personSpouse.createMany({ data: rows, skipDuplicates: true })
+      }
+    }
+
+    // 별칭(아명·출생명 등) 일괄 생성
+    if (nicknames?.length) {
+      const rows = nicknames
+        .filter((nick) => nick.nickname?.trim())
+        .map((nick) => ({
+          personId: person.id,
+          nickname: nick.nickname.trim(),
+          type: nick.type?.trim() || null,
+          priority: nick.priority ?? 0,
+        }))
+      if (rows.length) {
+        await this.prisma.personNickname.createMany({ data: rows })
       }
     }
 
@@ -1800,17 +1819,15 @@ export class PersonPrismaRepository implements IPersonRepository {
           where: { id: sanitized.countryId as string },
           select: { id: true },
         })
-        if (inHistorical) {
-          mainHistoricalId = sanitized.countryId as string
-          ;(sanitized as any).countryId = null
-        } else {
-          delete sanitized.countryId
-        }
+        if (inHistorical) (sanitized as any).historicalCountryId = sanitized.countryId
+        ;(sanitized as any).countryId = null
       }
-    } else if (sanitized.countryId === null || (sanitized as any).countryId === '') {
-      ;(sanitized as any).countryId = null
-      mainHistoricalId = null
     }
+
+    // dual-write(F1=A) 슬롯 동기화 키. sanitize가 ''·undefined를 제거하므로
+    // undefined=변경없음, null=해제, string=설정. (신 프론트는 주국적 해제 시 null 전송)
+    // 주의: 현대 countryId 해제는 더 이상 역사 슬롯을 건드리지 않는다(두 필드 독립).
+    const mainHistoricalId = (sanitized as any).historicalCountryId as string | null | undefined
 
     const spouseRelations = (sanitized as UpdatePersonData).spouseRelations
     delete (sanitized as Record<string, unknown>).spouseRelations
@@ -1818,94 +1835,117 @@ export class PersonPrismaRepository implements IPersonRepository {
     delete (sanitized as Record<string, unknown>).countryAffiliations
     const sections = (sanitized as UpdatePersonData).sections
     delete (sanitized as Record<string, unknown>).sections
+    const nicknames = (sanitized as UpdatePersonData).nicknames
+    delete (sanitized as Record<string, unknown>).nicknames
 
     const updateData = { ...sanitized } as Parameters<PrismaService['person']['update']>[0]['data']
 
-    const person = await this.prisma.person.update({
-      where: { id },
-      data: updateData,
-    })
-
-    if (spouseRelations !== undefined) {
-      // 이 인물이 얽힌 배우자 행을 양방향(personId=id OR spouseId=id)으로 모두 제거 후
-      // canonical(min,max) 페어로 재생성 — 역방향으로 등록됐던 행까지 단일 행으로 수렴시킨다.
-      // (폼은 역방향 행도 hydrate하므로 payload가 이 인물의 결혼 전체를 담는다)
-      await this.prisma.personSpouse.deleteMany({
-        where: { OR: [{ personId: id }, { spouseId: id }] },
+    // 배우자·섹션·소속은 delete-and-recreate라, 스칼라 update와 함께 하나의 트랜잭션으로
+    // 묶는다. 이렇게 하지 않으면 deleteMany가 커밋된 뒤 createMany가 실패(존재하지 않는
+    // spouseId FK, 커넥션 단절 등)할 때 결혼/섹션 기록이 무성 소실된다.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.person.update({
+        where: { id },
+        data: updateData,
       })
-      if (spouseRelations.length) {
-        const rows = this.buildCanonicalSpouseRows(id, spouseRelations)
+
+      if (spouseRelations !== undefined) {
+        // 이 인물이 얽힌 배우자 행을 양방향(personId=id OR spouseId=id)으로 모두 제거 후
+        // canonical(min,max) 페어로 재생성 — 역방향으로 등록됐던 행까지 단일 행으로 수렴시킨다.
+        // (폼은 역방향 행도 hydrate하므로 payload가 이 인물의 결혼 전체를 담는다)
+        await tx.personSpouse.deleteMany({
+          where: { OR: [{ personId: id }, { spouseId: id }] },
+        })
+        if (spouseRelations.length) {
+          const rows = this.buildCanonicalSpouseRows(id, spouseRelations)
+          if (rows.length) {
+            await tx.personSpouse.createMany({ data: rows, skipDuplicates: true })
+          }
+        }
+      }
+
+      // 전기(생애 서술) 섹션 — EventSection 패턴 미러: 통째 delete-and-recreate
+      if (sections !== undefined) {
+        await tx.personSection.deleteMany({ where: { personId: id } })
+        if (sections.length) {
+          await tx.personSection.createMany({
+            data: sections.map((s, idx) => ({
+              personId: id,
+              title: s.title,
+              content: s.content,
+              order: s.order ?? idx,
+              sectionType: s.sectionType ?? null,
+            })),
+          })
+        }
+      }
+
+      // 별칭(아명·출생명 등) — 있으면 통째로 교체(delete-and-recreate)
+      if (nicknames !== undefined) {
+        await tx.personNickname.deleteMany({ where: { personId: id } })
+        const rows = nicknames
+          .filter((nick) => nick.nickname?.trim())
+          .map((nick) => ({
+            personId: id,
+            nickname: nick.nickname.trim(),
+            type: nick.type?.trim() || null,
+            priority: nick.priority ?? 0,
+          }))
         if (rows.length) {
-          await this.prisma.personSpouse.createMany({ data: rows, skipDuplicates: true })
+          await tx.personNickname.createMany({ data: rows })
         }
       }
-    }
 
-    // 전기(생애 서술) 섹션 — EventSection 패턴 미러: 통째 delete-and-recreate
-    if (sections !== undefined) {
-      await this.prisma.personSection.deleteMany({ where: { personId: id } })
-      if (sections.length) {
-        await this.prisma.personSection.createMany({
-          data: sections.map((s, idx) => ({
-            personId: id,
-            title: s.title,
-            content: s.content,
-            order: s.order ?? idx,
-            sectionType: s.sectionType ?? null,
-          })),
+      // 역사 국가 변경 시 CITIZENSHIP priority=0 소속 upsert
+      if (mainHistoricalId !== undefined) {
+        const existing = await tx.personCountryAffiliation.findFirst({
+          where: { personId: id, affiliationType: 'CITIZENSHIP' as any, priority: 0 },
         })
-      }
-    }
-
-    // 역사 국가 변경 시 CITIZENSHIP priority=0 소속 upsert
-    if (mainHistoricalId !== undefined) {
-      const existing = await this.prisma.personCountryAffiliation.findFirst({
-        where: { personId: id, affiliationType: 'CITIZENSHIP' as any, priority: 0 },
-      })
-      if (mainHistoricalId === null) {
-        if (existing?.historicalCountryId) {
-          await this.prisma.personCountryAffiliation.delete({ where: { id: existing.id } })
+        if (mainHistoricalId === null) {
+          if (existing?.historicalCountryId) {
+            await tx.personCountryAffiliation.delete({ where: { id: existing.id } })
+          }
+        } else if (existing) {
+          await tx.personCountryAffiliation.update({
+            where: { id: existing.id },
+            data: { historicalCountryId: mainHistoricalId, countryId: null },
+          })
+        } else {
+          await tx.personCountryAffiliation.create({
+            data: {
+              personId: id,
+              affiliationType: 'CITIZENSHIP' as any,
+              priority: 0,
+              historicalCountryId: mainHistoricalId,
+            },
+          })
         }
-      } else if (existing) {
-        await this.prisma.personCountryAffiliation.update({
-          where: { id: existing.id },
-          data: { historicalCountryId: mainHistoricalId, countryId: null },
-        })
-      } else {
-        await this.prisma.personCountryAffiliation.create({
-          data: {
+      }
+
+      // 추가 국가 소속(다중) — 주 국적(priority 0 CITIZENSHIP)은 보존하고 나머지 전체 교체
+      if (countryAffiliations !== undefined) {
+        await tx.personCountryAffiliation.deleteMany({
+          where: {
             personId: id,
-            affiliationType: 'CITIZENSHIP' as any,
-            priority: 0,
-            historicalCountryId: mainHistoricalId,
+            NOT: { affiliationType: 'CITIZENSHIP' as any, priority: 0 },
           },
         })
+        if (countryAffiliations.length) {
+          await tx.personCountryAffiliation.createMany({
+            data: countryAffiliations.map((a) => ({
+              personId: id,
+              affiliationType: a.affiliationType as any,
+              countryId: a.countryId || null,
+              historicalCountryId: a.historicalCountryId || null,
+              startDate: a.startDate ? new Date(a.startDate) : null,
+              endDate: a.endDate ? new Date(a.endDate) : null,
+              priority: a.priority ?? 1,
+              note: a.note || null,
+            })),
+          })
+        }
       }
-    }
-
-    // 추가 국가 소속(다중) — 주 국적(priority 0 CITIZENSHIP)은 보존하고 나머지 전체 교체
-    if (countryAffiliations !== undefined) {
-      await this.prisma.personCountryAffiliation.deleteMany({
-        where: {
-          personId: id,
-          NOT: { affiliationType: 'CITIZENSHIP' as any, priority: 0 },
-        },
-      })
-      if (countryAffiliations.length) {
-        await this.prisma.personCountryAffiliation.createMany({
-          data: countryAffiliations.map((a) => ({
-            personId: id,
-            affiliationType: a.affiliationType as any,
-            countryId: a.countryId || null,
-            historicalCountryId: a.historicalCountryId || null,
-            startDate: a.startDate ? new Date(a.startDate) : null,
-            endDate: a.endDate ? new Date(a.endDate) : null,
-            priority: a.priority ?? 1,
-            note: a.note || null,
-          })),
-        })
-      }
-    }
+    })
 
     // 응답에 effective countryId(역사적 국가 포함)를 넣기 위해 countryAffiliations 포함해 재조회
     const updated = await this.prisma.person.findUnique({

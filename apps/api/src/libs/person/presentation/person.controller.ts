@@ -825,6 +825,7 @@ export class PersonController {
         note: s.note,
       })),
       countryAffiliations: dto.countryAffiliations,
+      nicknames: dto.nicknames,
     }, accountId)
   }
 
@@ -936,6 +937,7 @@ export class PersonController {
       })),
       countryAffiliations: dto.countryAffiliations,
       sections: dto.sections,
+      nicknames: dto.nicknames,
     }, accountId)
   }
 

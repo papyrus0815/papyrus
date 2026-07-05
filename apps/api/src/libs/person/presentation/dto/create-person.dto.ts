@@ -368,6 +368,16 @@ export class CreatePersonDto {
   profileImages?: ProfileImageDto[]
 
   /**
+   * 별칭 목록 (아명·출생명·자·아호·필명 등). type으로 성격 구분.
+   * 저장 시 통째로 delete-and-recreate.
+   */
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NicknameDto)
+  nicknames?: NicknameDto[]
+
+  /**
    * 이벤트 목록에 생몰년 표시 여부
    */
   @IsOptional()
