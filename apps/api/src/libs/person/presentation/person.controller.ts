@@ -484,9 +484,11 @@ export class PersonController {
     spouse: any
     humanRelationships: any[]
     isBirthDateUnknown: boolean
-    isDeathDateUnknown: boolean
+    isBirthDateApproximate: boolean
     birthNote: string | null
     deathType: string | null
+    isDeathDateUnknown: boolean
+    isDeathDateApproximate: boolean
     deathCause: string | null
     deathNote: string | null
     isAlive: boolean
@@ -707,7 +709,9 @@ export class PersonController {
               c.branch ??
               c.department ??
               c.sport ??
+      isBirthDateApproximate: (person as any).isBirthDateApproximate ?? false,
       birthNote: (person as any).birthNote ?? null,
+      isDeathDateApproximate: (person as any).isDeathDateApproximate ?? false,
               c.specialization ??
               null
             out.push({
@@ -829,7 +833,11 @@ export class PersonController {
       countryAffiliations: dto.countryAffiliations,
       nicknames: dto.nicknames,
     }, accountId)
+      // 미상↔추정 배타(서버 정규화) — 미상이면 추정 강제 해제.
+      isBirthDateApproximate: dto.isBirthDateUnknown ? false : dto.isBirthDateApproximate,
       birthNote: dto.birthNote,
+      isDeathDateApproximate:
+        dto.isAlive || dto.isDeathDateUnknown ? false : dto.isDeathDateApproximate,
   }
 
   /**
@@ -941,7 +949,11 @@ export class PersonController {
       countryAffiliations: dto.countryAffiliations,
       sections: dto.sections,
       nicknames: dto.nicknames,
+      // 미상↔추정 배타(서버 정규화) — 미상이면 추정 강제 해제.
+      isBirthDateApproximate: dto.isBirthDateUnknown ? false : dto.isBirthDateApproximate,
       birthNote: dto.birthNote,
+      isDeathDateApproximate:
+        dto.isAlive || dto.isDeathDateUnknown ? false : dto.isDeathDateApproximate,
     }, accountId)
   }
 

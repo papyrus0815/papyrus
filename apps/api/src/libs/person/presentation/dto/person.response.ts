@@ -71,10 +71,14 @@ export interface PersonResponseDto {
   showLifespanOnEventList?: boolean
   /** 출생일 미상 여부 */
   isBirthDateUnknown?: boolean
+  /** 출생일 추정(circa) 여부 */
+  isBirthDateApproximate?: boolean
   /** 출생 관련 메모 (탄생 설화·유복자·조산 등) — deathNote의 출생 대칭 */
   birthNote?: string | null
   /** 사망일 미상 여부 */
   isDeathDateUnknown?: boolean
+  /** 사망일 추정(circa) 여부 */
+  isDeathDateApproximate?: boolean
   /** 사망 유형 */
   deathType?: DeathType | null
   /** 사망 원인 상세 */

@@ -148,7 +148,7 @@ function summarizePersonChanges(
       keys: [
         'birthEra', 'birthYear', 'birthMonth', 'birthDay',
         'deathEra', 'deathYear', 'deathMonth', 'deathDay',
-        'isBirthDateUnknown', 'birthNote', 'isDeathDateUnknown', 'isAlive', 'deathType', 'deathCause', 'deathNote',
+        'isBirthDateUnknown', 'isBirthDateApproximate', 'birthNote', 'isDeathDateUnknown', 'isDeathDateApproximate', 'isAlive', 'deathType', 'deathCause', 'deathNote',
       ],
     },
     { label: '전기', keys: ['biography'] },

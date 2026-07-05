@@ -55,8 +55,10 @@ export interface CreatePersonData {
   birthEra?: 'BC' | 'AD'
   deathEra?: 'BC' | 'AD'
   isBirthDateUnknown?: boolean
+  isBirthDateApproximate?: boolean
   birthNote?: string | null
   isDeathDateUnknown?: boolean
+  isDeathDateApproximate?: boolean
   deathType?: string | null
   deathCause?: string | null
   deathNote?: string | null
@@ -132,8 +134,10 @@ export interface UpdatePersonData {
   birthEra?: 'BC' | 'AD' | null
   deathEra?: 'BC' | 'AD' | null
   isBirthDateUnknown?: boolean
+  isBirthDateApproximate?: boolean
   birthNote?: string | null
   isDeathDateUnknown?: boolean
+  isDeathDateApproximate?: boolean
   deathType?: string | null
   deathCause?: string | null
   deathNote?: string | null

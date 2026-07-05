@@ -266,6 +266,13 @@ export class CreatePersonDto {
   isBirthDateUnknown?: boolean
 
   /**
+   * 출생일 추정(circa) 여부 — '약 1500년'. 미상과 배타.
+   */
+  @IsOptional()
+  @IsBoolean()
+  isBirthDateApproximate?: boolean
+
+  /**
    * 출생 관련 메모 (탄생 설화·유복자·조산 등 맥락). deathNote의 출생 대칭.
    */
   @IsOptional()
@@ -303,6 +310,13 @@ export class CreatePersonDto {
   @IsOptional()
   @IsBoolean()
   isDeathDateUnknown?: boolean
+
+  /**
+   * 사망일 추정(circa) 여부 — 미상과 배타.
+   */
+  @IsOptional()
+  @IsBoolean()
+  isDeathDateApproximate?: boolean
 
   /**
    * 사망 유형 (자연사, 병사, 암살 등)
