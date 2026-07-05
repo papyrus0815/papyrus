@@ -52,64 +52,99 @@ export function PlaceFields({
 }: PlaceFieldsProps) {
   return (
     <FormRows>
-      <FieldRow>
-        <FieldLabel>출생지</FieldLabel>
-        <FieldControl>
-          <PlaceAutocompleteWrap>
-            <PlaceAutocomplete
-              value={birthPlace}
-              onChange={(place) => {
-                setBirthPlace(place)
-                setBirthCityId(place?.cityId ?? '')
-                markDirty()
-              }}
-              countryId={countryId || undefined}
-            />
-          </PlaceAutocompleteWrap>
-        </FieldControl>
-      </FieldRow>
-      <FieldRow>
-        <FieldLabel>사망지</FieldLabel>
-        <FieldControl>
-          {birthPlace && (
-            <InlineActionBtn
-              type="button"
-              onClick={onCopyBirthToDeathPlace}
-              title="출생지를 사망지로 복사"
-            >
-              <FiCopy size={12} />
-              출생지와 동일
-            </InlineActionBtn>
-          )}
-          <PlaceAutocompleteWrap>
-            <PlaceAutocomplete
-              value={deathPlace}
-              onChange={(place) => {
-                setDeathPlace(place)
-                setDeathCityId(place?.cityId ?? '')
-                markDirty()
-              }}
-              countryId={countryId || undefined}
-            />
-          </PlaceAutocompleteWrap>
-        </FieldControl>
-      </FieldRow>
+      {/* 출생지·사망지 2열 — 병렬 개념이라 나란히 두어 세로 길이를 줄인다(≤640px 1열). */}
+      <PlaceGrid>
+        <FieldRow>
+          <FieldLabel>출생지</FieldLabel>
+          <FieldControl>
+            <PlaceAutocompleteWrap>
+              <PlaceAutocomplete
+                value={birthPlace}
+                onChange={(place) => {
+                  setBirthPlace(place)
+                  setBirthCityId(place?.cityId ?? '')
+                  markDirty()
+                }}
+                countryId={countryId || undefined}
+              />
+            </PlaceAutocompleteWrap>
+          </FieldControl>
+        </FieldRow>
+        <FieldRow>
+          {/* 복사 버튼을 라벨 행 우측에 둬, birthPlace 유무로 autocomplete 위치가
+              흔들리는(raggedness) 문제를 없앤다. */}
+          <DeathLabelRow>
+            <FieldLabel>사망지</FieldLabel>
+            {birthPlace && (
+              <InlineActionBtn
+                type="button"
+                onClick={onCopyBirthToDeathPlace}
+                title="출생지를 사망지로 복사"
+              >
+                <FiCopy size={12} />
+                출생지와 동일
+              </InlineActionBtn>
+            )}
+          </DeathLabelRow>
+          <FieldControl>
+            <PlaceAutocompleteWrap>
+              <PlaceAutocomplete
+                value={deathPlace}
+                onChange={(place) => {
+                  setDeathPlace(place)
+                  setDeathCityId(place?.cityId ?? '')
+                  markDirty()
+                }}
+                countryId={countryId || undefined}
+              />
+            </PlaceAutocompleteWrap>
+          </FieldControl>
+        </FieldRow>
+      </PlaceGrid>
     </FormRows>
   )
 }
 
 // ─── Styled ──────────────────────────────────────────────────────────────────
 
+/**
+ * 출생지·사망지 2열 그리드 — CoreFieldPair(성별·국적)와 동형. `&&`로 특이도를 높여
+ * PersonFormLayoutWrap의 `${FieldRow} { margin-top: 20px }`(둘째 칸이 20px 밀려 라벨
+ * 어긋남)를 확실히 눌러 두 칸 상단 정렬을 보장.
+ */
+const PlaceGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 16px;
+  align-items: start;
+  max-width: 600px;
+
+  && > ${FieldRow} {
+    margin-top: 0;
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+`
+
+const DeathLabelRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
+`
+
 const PlaceAutocompleteWrap = styled.div`
   width: 100%;
 `
 
 const InlineActionBtn = styled.button`
-  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-bottom: 8px;
   padding: 4px 10px;
   font-size: ${FONT.meta};
   font-weight: 500;
