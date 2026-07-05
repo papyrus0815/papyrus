@@ -18,7 +18,7 @@ import {
   FormRows,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
-import { FieldError, FONT, RADIUS, SelectBtn } from '../_form-primitives'
+import { AddRowBtn, FieldError, FONT, RADIUS, SelectBtn } from '../_form-primitives'
 
 /** 국가 소속 한 행의 폼 상태 (저장 시 DTO로 변환) */
 export type CountryAffiliationRow = {
@@ -309,10 +309,10 @@ export function CountryAffiliationsSection({
             </RowList>
           )}
 
-          <AddBtn type="button" onClick={addRow}>
+          <AddRowBtn type="button" onClick={addRow}>
             <FiPlus size={16} />
             소속 추가
-          </AddBtn>
+          </AddRowBtn>
         </ControlWide>
       </FieldRow>
 
@@ -496,31 +496,3 @@ const NoteInput = styled.input`
   }
 `
 
-// 선택적 반복행 추가 — 필수 국적(SelectBtn)보다 조용한 ghost 톤으로 강등해
-// 폼에서 시각 무게가 위계 역전되지 않게 한다(솔리드 indigo 채움→투명+보조 보더).
-const AddBtn = styled.button`
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  font-size: ${FONT.label};
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: ${RADIUS.control};
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease,
-    background 0.15s ease;
-  &:hover {
-    color: ${({ theme }) => theme.colors.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.08)'
-        : theme.colors.activeLight};
-  }
-`

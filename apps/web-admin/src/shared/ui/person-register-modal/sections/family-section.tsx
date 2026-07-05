@@ -6,6 +6,7 @@
  */
 import React, { useState } from 'react'
 
+import { FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type { PersonResponseDto, SpouseRelationInput } from '@/shared/api/persons'
@@ -20,7 +21,7 @@ import {
   Textarea,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
-import { FONT, RADIUS } from '../_form-primitives'
+import { AddRowBtn, FONT, RADIUS } from '../_form-primitives'
 import {
   InlineSearchSelect,
   type SearchOption,
@@ -385,15 +386,16 @@ export function FamilySection({
                 />
               </SpouseRowCard>
             ))}
-            <SpouseAddBtn
+            <AddRowBtn
               type="button"
               onClick={() => {
                 addSpouseRow()
                 markDirty()
               }}
             >
-              + 배우자 추가
-            </SpouseAddBtn>
+              <FiPlus size={16} />
+              배우자 추가
+            </AddRowBtn>
           </SpouseRowList>
         </FieldControl>
       </FieldRow>
@@ -717,33 +719,13 @@ const SpouseDateInput = styled.input`
     border-color: ${({ theme }) => theme.colors.primary};
   }
   &[aria-invalid='true'] {
-    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#f87171' : '#dc2626')};
+    border-color: ${({ theme }) => theme.colors.alert.danger.fg};
   }
 `
 
 const SpouseDateError = styled.p`
   margin: 4px 0 0 30px;
   font-size: ${FONT.meta};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f87171' : '#dc2626')};
+  color: ${({ theme }) => theme.colors.alert.danger.fg};
 `
 
-const SpouseAddBtn = styled.button`
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 7px 14px;
-  font-size: ${FONT.meta};
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.primary};
-  background: transparent;
-  border: 1px dashed ${({ theme }) => theme.colors.primary};
-  border-radius: ${RADIUS.pill};
-  cursor: pointer;
-  transition: background 0.15s;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.08)'};
-  }
-`

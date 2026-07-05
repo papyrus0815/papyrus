@@ -263,3 +263,38 @@ export const AdvancedToggleDesc = styled.span`
 export const AdvancedBody = styled.div`
   padding: 10px 0 4px;
 `
+
+// ─── 반복행 추가 버튼 (국가 소속·배우자 등 "행 추가" 어포던스 공용) ─────────────
+/**
+ * 반복행 추가 버튼 — 국가 소속·배우자 슬롯이 제각각(솔리드 indigo vs dashed primary)이라
+ * 여기서 하나로 통일. ghost 톤(투명 + dashed border.default + pill)으로 필수 CTA(SubmitBtn)와
+ * 위계 경쟁을 낮춰, 상시 노출되는 반복행 어포던스를 가볍게 한다.
+ * 아이콘(FiPlus)+라벨은 사용처에서 children으로 넣는다.
+ */
+export const AddRowBtn = styled.button`
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: ${FONT.label};
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  border-radius: ${RADIUS.pill};
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.08)'
+        : theme.colors.activeLight};
+  }
+`
