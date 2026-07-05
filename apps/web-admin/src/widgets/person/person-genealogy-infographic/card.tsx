@@ -561,6 +561,17 @@ export const GeoNode = styled.div<{
     css`
       opacity: 0.5;
       cursor: default;
+      /* 왜 흐린지(다른 계정 등록 → 열 수 없음) 상시 시각 단서 — hover title에만 의존하지
+         않도록 코너에 자물쇠. 터치·비hover 사용자도 인지 가능(G32). 상세 사유는 title. */
+      &::after {
+        content: '🔒';
+        position: absolute;
+        top: 5px;
+        left: 6px;
+        font-size: 11px;
+        line-height: 1;
+        pointer-events: none;
+      }
     `}
 
   ${({ $emphasis, theme }) =>
