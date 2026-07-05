@@ -2616,6 +2616,12 @@ export function PersonDetailPanel({
         personId={person.id}
         onClose={() => setCareerModalOpen(false)}
       />
+                    birthPlace={
+                      p.birthCity?.name ??
+                      p.birthAdminDivision?.name ??
+                      p.birthPlaceText ??
+                      null
+                    }
 
       <EventInlineModal
         eventId={viewingEventId}

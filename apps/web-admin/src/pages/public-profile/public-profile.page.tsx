@@ -31,6 +31,7 @@ import { CommentModal } from '@/entities/comment'
 import { sessionQueryOptions } from '@/entities/session'
 import type { VisitedEventCard } from '@/shared/api/events'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { formatPersonLifespan } from '@/shared/lib/tenure-person-utils'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { pathKeys } from '@/shared/router'
 
@@ -187,6 +188,9 @@ export default function PublicProfilePage() {
                       </PersonAvatarFallback>
                     )}
                     <PersonName>{getPersonDisplayName(person, true)}</PersonName>
+                    {(person.birthYear != null || person.deathYear != null) && (
+                      <PersonLifespan>{formatPersonLifespan(person)}</PersonLifespan>
+                    )}
                   </PersonCard>
                 ))}
               </PersonGrid>
@@ -474,6 +478,15 @@ const PersonName = styled.span`
   color: ${({ theme }) => theme.colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const PersonLifespan = styled.span`
+  margin-top: 2px;
+  font-size: 10.5px;
+  font-weight: 500;
+  text-align: center;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   white-space: nowrap;
 `
 

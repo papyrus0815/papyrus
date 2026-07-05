@@ -47,8 +47,19 @@ export function BirthDeathCards({
     p.deathAdminDivision?.name ??
     p.deathPlaceText ??
     null
+  // 출생 당시 국가 — BIRTH_PLACE 소속(historicalCountry 우선). 장소 필드(도시)와 별개 시스템이라
+  // 병기해 두 계통을 한 카드에 수렴한다(예: 아인슈타인 울름[도시] + 독일 제국[출생국]).
+  const birthPlaceAff = p.countryAffiliations?.find(
+    (aff) => aff.affiliationType === 'BIRTH_PLACE',
+  )
+  const birthCountry =
+    birthPlaceAff?.historicalCountry?.name ?? birthPlaceAff?.country?.name ?? null
   const hasBirth =
-    !!birthDateStr || !!birthPlace || !!p.isBirthDateUnknown || !!p.illegitimate
+    !!birthDateStr ||
+    !!birthPlace ||
+    !!birthCountry ||
+    !!p.isBirthDateUnknown ||
+    !!p.illegitimate
   const hasDeath =
     !!deathDateStr ||
     !!deathPlace ||
@@ -84,6 +95,12 @@ export function BirthDeathCards({
             <LifeCardRow>
               <LifeCardLabel>장소</LifeCardLabel>
               <LifeCardValue>{birthPlace}</LifeCardValue>
+            </LifeCardRow>
+          )}
+          {birthCountry && (
+            <LifeCardRow>
+              <LifeCardLabel>출생국</LifeCardLabel>
+              <LifeCardValue>{birthCountry}</LifeCardValue>
             </LifeCardRow>
           )}
         </LifeCard>

@@ -126,6 +126,8 @@ export interface PersonLifeTimelineInfographicProps {
   /** 출생·사망 기원 (BC/AD). null/미지정은 AD */
   birthEra?: string | null
   deathEra?: string | null
+  /** 출생지 — 연보 "출생" 카드 subtitle (도시>행정구역>자유텍스트 폴백은 부모가 계산) */
+  birthPlace?: string | null
   /** 사망 상세 — 연보 "사망" 카드에 함께 표시 */
   deathType?: string | null
   deathCause?: string | null
@@ -384,6 +386,7 @@ export function PersonLifeTimelineInfographic({
   deathDate,
   birthEra,
   deathEra,
+  birthPlace,
   deathType,
   deathCause,
   deathNote,
@@ -437,6 +440,7 @@ export function PersonLifeTimelineInfographic({
         end: null,
         sortKey: toTs(birth) - 1,
         title: '출생',
+        subtitle: birthPlace ?? null,
         dateLabel: formatWithPrecision(birth, 'day'),
       })
     }
@@ -732,6 +736,7 @@ export function PersonLifeTimelineInfographic({
   }, [
     birth,
     death,
+    birthPlace,
     deathType,
     deathCause,
     deathNote,
