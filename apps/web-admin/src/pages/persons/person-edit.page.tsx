@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
-import { FiArrowLeft } from 'react-icons/fi'
+import { FiArrowLeft, FiCheck } from 'react-icons/fi'
 import { useBlocker, useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -31,6 +31,14 @@ export default function PersonEditPage() {
   const queryClient = useQueryClient()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitLabel, setSubmitLabel] = useState(personId ? '저장' : '등록')
+  // 필수 필드 채움 상태 — 페이지 모드엔 좌측 레일이 없어, 접기가 담당하던
+  // '필수만 채우면 끝' 안심 신호를 sticky 푸터의 진척칩으로 대체(모달 푸터와 동형).
+  const [filled, setFilled] = useState<{
+    name?: boolean
+    surname?: boolean
+    gender?: boolean
+    countryId?: boolean
+  }>({})
   // 미저장 변경 추적 — SPA 라우트 이동(useBlocker)·새로고침/탭 닫기(beforeunload) 시 경고.
   // 모달 버전과 문구 통일.
   const [isDirty, setIsDirty] = useState(false)
@@ -114,6 +122,19 @@ export default function PersonEditPage() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
+  // 필수 3항목(이름·성별·국적) 진척 — 성(surname)은 선택이라 제외(레지스터 뷰 완료 판정과 동일).
+  const requiredFlags = [!!filled.name, !!filled.gender, !!filled.countryId]
+  const requiredDone = requiredFlags.filter(Boolean).length
+  const requiredTotal = requiredFlags.length
+  const requiredComplete = requiredDone === requiredTotal
+  const requiredMissing = [
+    !filled.name && '이름',
+    !filled.gender && '성별',
+    !filled.countryId && '국적',
+  ]
+    .filter(Boolean)
+    .join(', ')
+
   return (
     <Root>
       <FormCardWrapper>
@@ -131,8 +152,29 @@ export default function PersonEditPage() {
           onSubmittingChange={setIsSubmitting}
           onSubmitLabelChange={setSubmitLabel}
           onDirtyChange={setIsDirty}
+          onValuesChange={setFilled}
         />
         <StickyFooter>
+          <RequiredProgress
+            $complete={requiredComplete}
+            title={
+              requiredComplete
+                ? '필수 항목 모두 입력'
+                : `필수 미완: ${requiredMissing}`
+            }
+          >
+            <RequiredDots>
+              {requiredFlags.map((done, idx) => (
+                <RequiredDot
+                  key={idx}
+                  $on={done}
+                  $complete={requiredComplete}
+                />
+              ))}
+            </RequiredDots>
+            {requiredComplete && <FiCheck size={12} />}
+            필수 {requiredDone}/{requiredTotal}
+          </RequiredProgress>
           <SubmitButton
             type="submit"
             form="person-register-form"
@@ -151,4 +193,42 @@ const Root = styled.div`
   background: ${({ theme }) => theme.colors.background.primary};
   display: flex;
   flex-direction: column;
+`
+
+// 페이지 모드 sticky 푸터의 필수 진척칩 — 모달 셸의 ProgressLabel과 동형(색·톤 일치).
+// margin-right:auto로 좌측 정렬, 제출 버튼은 우측 유지(StickyFooter flex-end 그대로).
+const RequiredProgress = styled.span<{ $complete: boolean }>`
+  margin-right: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  color: ${({ $complete, theme }) =>
+    $complete ? theme.colors.alert.success.fg : theme.colors.text.tertiary};
+
+  > svg {
+    flex-shrink: 0;
+  }
+`
+
+const RequiredDots = styled.span`
+  display: inline-flex;
+  gap: 4px;
+`
+
+const RequiredDot = styled.span<{ $on: boolean; $complete: boolean }>`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  transition: background 0.15s ease;
+  background: ${({ $on, $complete, theme }) =>
+    $complete
+      ? theme.colors.alert.success.fg
+      : $on
+        ? theme.colors.primary
+        : theme.colors.border.medium};
 `
