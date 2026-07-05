@@ -675,7 +675,10 @@ export class PersonController {
         null,
       humanRelationships,
       isBirthDateUnknown: person.isBirthDateUnknown ?? false,
+      isBirthDateApproximate: (person as any).isBirthDateApproximate ?? false,
+      birthNote: (person as any).birthNote ?? null,
       isDeathDateUnknown: person.isDeathDateUnknown ?? false,
+      isDeathDateApproximate: (person as any).isDeathDateApproximate ?? false,
       deathType: (person as any).deathType ?? null,
       deathCause: (person as any).deathCause ?? null,
       deathNote: (person as any).deathNote ?? null,
@@ -709,9 +712,6 @@ export class PersonController {
               c.branch ??
               c.department ??
               c.sport ??
-      isBirthDateApproximate: (person as any).isBirthDateApproximate ?? false,
-      birthNote: (person as any).birthNote ?? null,
-      isDeathDateApproximate: (person as any).isDeathDateApproximate ?? false,
               c.specialization ??
               null
             out.push({
@@ -799,7 +799,12 @@ export class PersonController {
       birthEra,
       deathEra,
       isBirthDateUnknown: dto.isBirthDateUnknown,
+      // 미상↔추정 배타(서버 정규화) — 미상이면 추정 강제 해제.
+      isBirthDateApproximate: dto.isBirthDateUnknown ? false : dto.isBirthDateApproximate,
+      birthNote: dto.birthNote,
       isDeathDateUnknown: dto.isDeathDateUnknown,
+      isDeathDateApproximate:
+        dto.isAlive || dto.isDeathDateUnknown ? false : dto.isDeathDateApproximate,
       deathType: dto.deathType ?? null,
       deathCause: dto.deathCause ?? null,
       deathNote: dto.deathNote ?? null,
@@ -833,11 +838,6 @@ export class PersonController {
       countryAffiliations: dto.countryAffiliations,
       nicknames: dto.nicknames,
     }, accountId)
-      // 미상↔추정 배타(서버 정규화) — 미상이면 추정 강제 해제.
-      isBirthDateApproximate: dto.isBirthDateUnknown ? false : dto.isBirthDateApproximate,
-      birthNote: dto.birthNote,
-      isDeathDateApproximate:
-        dto.isAlive || dto.isDeathDateUnknown ? false : dto.isDeathDateApproximate,
   }
 
   /**
@@ -912,7 +912,12 @@ export class PersonController {
       birthEra,
       deathEra,
       isBirthDateUnknown: dto.isBirthDateUnknown,
+      // 미상↔추정 배타(서버 정규화) — 미상이면 추정 강제 해제.
+      isBirthDateApproximate: dto.isBirthDateUnknown ? false : dto.isBirthDateApproximate,
+      birthNote: dto.birthNote,
       isDeathDateUnknown: dto.isDeathDateUnknown,
+      isDeathDateApproximate:
+        dto.isAlive || dto.isDeathDateUnknown ? false : dto.isDeathDateApproximate,
       // PATCH 의미 — 보내지 않은 필드(undefined)는 변경 없음으로 둔다.
       // `?? null`로 강제하면 전기·프로필 등 부분 업데이트 시 사망 상세가 지워진다.
       // (등록 폼은 생존중 전환 시 명시적 null을 보내므로 "비우기"는 그대로 동작)
@@ -949,11 +954,6 @@ export class PersonController {
       countryAffiliations: dto.countryAffiliations,
       sections: dto.sections,
       nicknames: dto.nicknames,
-      // 미상↔추정 배타(서버 정규화) — 미상이면 추정 강제 해제.
-      isBirthDateApproximate: dto.isBirthDateUnknown ? false : dto.isBirthDateApproximate,
-      birthNote: dto.birthNote,
-      isDeathDateApproximate:
-        dto.isAlive || dto.isDeathDateUnknown ? false : dto.isDeathDateApproximate,
     }, accountId)
   }
 
