@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber, IsIn, ValidateIf, IsInt, Min, Max } from 'class-validator'
+import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber, IsIn, ValidateIf, IsInt, Min, Max, MaxLength } from 'class-validator'
 import { Type } from 'class-transformer'
 
 /**
@@ -309,6 +309,7 @@ export class CreatePersonDto {
   @IsOptional()
   @ValidateIf((_o, v) => v != null)
   @IsString()
+  @MaxLength(300) // DB death_cause VarChar(300) — 초과 시 Prisma 500 대신 400으로 거른다
   deathCause?: string | null
 
   /**
@@ -481,6 +482,7 @@ export class CreatePersonDto {
   @IsOptional()
   @ValidateIf((_o, v) => v != null)
   @IsString()
+  @MaxLength(255) // DB birth_place_text VarChar(255)
   birthPlaceText?: string | null
 
   /**
@@ -489,6 +491,7 @@ export class CreatePersonDto {
   @IsOptional()
   @ValidateIf((_o, v) => v != null)
   @IsString()
+  @MaxLength(255) // DB death_place_text VarChar(255)
   deathPlaceText?: string | null
 
   /**

@@ -148,14 +148,15 @@ function summarizePersonChanges(
       keys: [
         'birthEra', 'birthYear', 'birthMonth', 'birthDay',
         'deathEra', 'deathYear', 'deathMonth', 'deathDay',
-        'isDeathDateUnknown', 'isAlive', 'deathType', 'deathCause', 'deathNote',
+        'isBirthDateUnknown', 'isDeathDateUnknown', 'isAlive', 'deathType', 'deathCause', 'deathNote',
       ],
     },
     { label: '전기', keys: ['biography'] },
     { label: '성별', keys: ['gender'] },
     { label: '사진', keys: ['profileImageUrl'] },
     { label: '영향력', keys: ['influence'] },
-    { label: '관계', keys: ['dynastyId', 'religionId', 'denominationId', 'fatherId', 'motherId', 'countryId'] },
+    // illegitimate(사생아·서출)는 부모 관계 맥락이라 '관계' 그룹에 둔다(가족 섹션 체크박스에서 저작).
+    { label: '관계', keys: ['dynastyId', 'religionId', 'denominationId', 'fatherId', 'motherId', 'countryId', 'illegitimate'] },
   ]
   const changed = groups
     .filter((g) => g.keys.some((k) => data[k] !== undefined && normField(data[k]) !== normField(existing[k])))

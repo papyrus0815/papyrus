@@ -455,6 +455,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       birthAdminDivision: person.birthAdminDivision ? { id: person.birthAdminDivision.id, name: person.birthAdminDivision.name } : null,
       deathAdminDivision: person.deathAdminDivision ? { id: person.deathAdminDivision.id, name: person.deathAdminDivision.name } : null,
       showLifespanOnEventList: person.showLifespanOnEventList,
+      isBirthDateUnknown: person.isBirthDateUnknown ?? false,
       isDeathDateUnknown: person.isDeathDateUnknown ?? false,
       deathType: (person as any).deathType ?? null,
       deathCause: (person as any).deathCause ?? null,

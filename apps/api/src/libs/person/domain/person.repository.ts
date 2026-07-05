@@ -155,10 +155,10 @@ export interface UpdatePersonData {
   countryId?: string
   birthCityId?: string | null
   deathCityId?: string | null
-  /** 출생지 행정구역 ID — 도시 없이 행정구역만 저장 */
-  birthAdminDivisionId?: string
-  /** 사망지 행정구역 ID — 도시 없이 행정구역만 저장 */
-  deathAdminDivisionId?: string
+  /** 출생지 행정구역 ID — 도시 없이 행정구역만 저장. null이면 해제 */
+  birthAdminDivisionId?: string | null
+  /** 사망지 행정구역 ID — 도시 없이 행정구역만 저장. null이면 해제 */
+  deathAdminDivisionId?: string | null
   /** 출생지 직접 입력 텍스트 (역사 지명 등) */
   birthPlaceText?: string | null
   /** 사망지 직접 입력 텍스트 (역사 지명 등) */

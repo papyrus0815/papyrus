@@ -69,6 +69,8 @@ export interface PersonResponseDto {
   deathAdminDivision?: { id: string; name: string } | null
   // 이벤트 목록에 생몰년 표시 여부
   showLifespanOnEventList?: boolean
+  /** 출생일 미상 여부 */
+  isBirthDateUnknown?: boolean
   /** 사망일 미상 여부 */
   isDeathDateUnknown?: boolean
   /** 사망 유형 */

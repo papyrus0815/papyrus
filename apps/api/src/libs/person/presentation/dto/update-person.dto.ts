@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn, ValidateIf, IsArray, IsInt, Min, Max } from 'class-validator'
+import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, ValidateNested, IsIn, ValidateIf, IsArray, IsInt, Min, Max, MaxLength } from 'class-validator'
 import { Type } from 'class-transformer'
 import { Era, DeathType, DateInfoDto, SpouseRelationDto, BiographySectionDto, CountryAffiliationDto } from './create-person.dto'
 
@@ -141,6 +141,7 @@ export class UpdatePersonDto {
   @IsOptional()
   @ValidateIf((_o, v) => v != null)
   @IsString()
+  @MaxLength(300) // DB death_cause VarChar(300) — 초과 시 Prisma 500 대신 400으로 거른다
   deathCause?: string | null
 
   /**
@@ -288,18 +289,20 @@ export class UpdatePersonDto {
   deathCityId?: string | null
 
   /**
-   * 출생지 행정구역 ID (선택) — 도시 없이 행정구역만 저장할 때
+   * 출생지 행정구역 ID (선택) — 도시 없이 행정구역만 저장할 때. null이면 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  birthAdminDivisionId?: string
+  birthAdminDivisionId?: string | null
 
   /**
-   * 사망지 행정구역 ID (선택) — 도시 없이 행정구역만 저장할 때
+   * 사망지 행정구역 ID (선택) — 도시 없이 행정구역만 저장할 때. null이면 해제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  deathAdminDivisionId?: string
+  deathAdminDivisionId?: string | null
 
   /**
    * 출생지 직접 입력 텍스트 (역사적 지명 등)
@@ -307,6 +310,7 @@ export class UpdatePersonDto {
   @IsOptional()
   @ValidateIf((_o, v) => v != null)
   @IsString()
+  @MaxLength(255) // DB birth_place_text VarChar(255)
   birthPlaceText?: string | null
 
   /**
@@ -315,6 +319,7 @@ export class UpdatePersonDto {
   @IsOptional()
   @ValidateIf((_o, v) => v != null)
   @IsString()
+  @MaxLength(255) // DB death_place_text VarChar(255)
   deathPlaceText?: string | null
 
   /**
