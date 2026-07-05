@@ -86,6 +86,7 @@ import {
 } from './sections/country-affiliations-section'
 import { FamilySection } from './sections/family-section'
 import { LifeSection } from './sections/life-section'
+import { NicknameSection, type NicknameRow } from './sections/nickname-section'
 import { PlaceFields } from './sections/place-fields'
 import { usePersonDraft } from './use-person-draft.hook'
 
@@ -277,6 +278,7 @@ export function PersonRegisterView({
    * (과거: 스칼라 첫 슬롯 + 숨은 보존 배열로 둘째 이후는 편집 불가·날짜 입력 불가였음)
    */
   const [spouseRows, setSpouseRows] = useState<SpouseRelationInput[]>([])
+  const [nicknameRows, setNicknameRows] = useState<NicknameRow[]>([])
   // 기타
   const [profileImageUrl, setProfileImageUrl] = useState('')
   const [regnalName, setRegnalName] = useState('')
@@ -645,6 +647,7 @@ export function PersonRegisterView({
       setCountryAffiliations,
       [],
     ),
+    makeFormField('nicknameRows', () => nicknameRows, setNicknameRows, []),
     makeFormField('birthCityId', () => birthCityId, setBirthCityId, ''),
     makeFormField('deathCityId', () => deathCityId, setDeathCityId, ''),
     makeFormField('birthPlace', () => birthPlace, setBirthPlace, null),
@@ -736,6 +739,14 @@ export function PersonRegisterView({
         setSurnameMeaning(p.surnameMeaning ?? '')
         setNameMeaning(p.nameMeaning ?? '')
         setMiddleNameMeaning(p.middleNameMeaning ?? '')
+        setNicknameRows(
+          [...((p as any).nicknames ?? [])]
+            .sort((a: any, b: any) => (a.priority ?? 0) - (b.priority ?? 0))
+            .map((nick: any) => ({
+              nickname: nick.nickname ?? '',
+              type: nick.type ?? '',
+            })),
+        )
         setGender(p.gender ?? '')
         setProfileImageUrl(p.profileImageUrl ?? '')
         setRegnalName(p.regnalName ?? '')
@@ -1553,6 +1564,17 @@ export function PersonRegisterView({
                 note: r.note,
               }))
           : undefined,
+      // 별칭(아명·출생명 등). 수정: 항상 전송(빈 배열이면 전부 제거). 신규: 채워진 행만.
+      nicknames:
+        isEditMode || nicknameRows.some((r) => r.nickname.trim())
+          ? nicknameRows
+              .filter((r) => r.nickname.trim())
+              .map((r, idx) => ({
+                nickname: r.nickname.trim(),
+                type: r.type.trim() || undefined,
+                priority: idx,
+              }))
+          : undefined,
       birthCityId: birthCityId || undefined,
       deathCityId: deathCityId || undefined,
       birthAdminDivisionId: birthPlace?.adminDivisionId || undefined,
@@ -2103,6 +2125,14 @@ export function PersonRegisterView({
                     </AdvancedBody>
                   )}
                 </AdvancedSection>
+
+                {/* 별칭(아명·출생명·자·필명 등) — 이름 클러스터에 인접. 개명 인물의 출생명 등. */}
+                <NicknameSection
+                  rows={nicknameRows}
+                  setRows={setNicknameRows}
+                  markDirty={markDirty}
+                  fid={fid}
+                />
 
                 <CoreDivider />
 

@@ -5,6 +5,7 @@
 import type { Era, SpouseRelationInput } from '@/shared/api/persons'
 import type { PlaceResult } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import type { CountryAffiliationRow } from './sections/country-affiliations-section'
+import type { NicknameRow } from './sections/nickname-section'
 
 // ─── Options ──────────────────────────────────────────────────────────────────
 
@@ -226,6 +227,7 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   countryId: string
   historicalCountryId: string
   countryAffiliations: CountryAffiliationRow[]
+  nicknameRows: NicknameRow[]
   birthCityId: string
   deathCityId: string
   birthPlace: PlaceResult | null
