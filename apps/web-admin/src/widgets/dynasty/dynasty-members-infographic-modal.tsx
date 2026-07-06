@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FiUsers, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { dynastyApi } from '@/shared/api/dynasty'
 import { personApi, type Person } from '@/shared/api/person'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { glassCardMixin } from '@/shared/styles/mixins'
@@ -30,6 +31,32 @@ export type DynastyMembersInfographicModalProps = {
 
 function signedYear(era: 'BC' | 'AD' | null | undefined, year: number): number {
   return era === 'BC' ? -year : year
+}
+
+/** ISO 문자열에서 연도만 안전 추출 — 네이티브 Date의 타임존/BC 함정을 피해 문자열 파싱. */
+function yearOf(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const match = iso.match(/^(\d{1,4})-/)
+  return match ? String(parseInt(match[1], 10)) : null
+}
+
+/** 존속기간 라벨 — "1600–1918" / "1600–"(현존·미상) / "–1918" / null(둘 다 없음). */
+function periodOf(start: string | null, end: string | null): string | null {
+  const startYear = yearOf(start)
+  const endYear = yearOf(end)
+  if (!startYear && !endYear) return null
+  return `${startYear ?? ''}–${endYear ?? ''}`
+}
+
+/** 시조 생몰 연도 — "595–673" / "595–" / null. */
+function lifespanYears(
+  birth: string | null,
+  death: string | null,
+): string | null {
+  const birthYear = yearOf(birth)
+  const deathYear = yearOf(death)
+  if (!birthYear && !deathYear) return null
+  return `${birthYear ?? '?'}–${deathYear ?? ''}`
 }
 
 function ageOf(p: Person): number | null {
@@ -95,6 +122,14 @@ export function DynastyMembersInfographicModal({
     staleTime: 60_000,
   })
 
+  // 헤더 요약(시조·존속기간·설명)용 가문 엔티티 — 구성원 목록과 별개 쿼리.
+  const { data: dynasty } = useQuery({
+    queryKey: ['dynasty-brief', dynastyId],
+    queryFn: () => dynastyApi.getById(dynastyId),
+    enabled: isOpen && Boolean(dynastyId),
+    staleTime: 300_000,
+  })
+
   // ESC 키로 모달 닫기 + 모달 열려 있는 동안 배경 스크롤 잠금
   useEffect(() => {
     if (!isOpen) return
@@ -123,6 +158,20 @@ export function DynastyMembersInfographicModal({
   const total = persons.length
   const showContent = !isLoading && !isError && total > 0
 
+  // 헤더 요약 파생값 — 시조(등록 인물 또는 텍스트)·존속기간·설명.
+  const founderName = dynasty?.founder
+    ? [dynasty.founder.surname, dynasty.founder.name].filter(Boolean).join(' ')
+    : dynasty?.founderText?.trim() || null
+  const founderLifespan = dynasty?.founder
+    ? lifespanYears(dynasty.founder.birthDate, dynasty.founder.deathDate)
+    : null
+  const periodLabel = periodOf(
+    dynasty?.startDate ?? null,
+    dynasty?.endDate ?? null,
+  )
+  const description = dynasty?.description?.trim() || null
+  const hasMeta = Boolean(founderName || periodLabel || description)
+
   return (
     <Overlay
       role="dialog"
@@ -145,6 +194,33 @@ export function DynastyMembersInfographicModal({
             <FiX size={22} />
           </CloseBtn>
         </PanelHeader>
+
+        {hasMeta && (
+          <DynastyMetaBand>
+            {(founderName || periodLabel) && (
+              <DynastyMetaList>
+                {founderName && (
+                  <DynastyMetaItem>
+                    <DynastyMetaLabel>시조</DynastyMetaLabel>
+                    <DynastyMetaValue>
+                      {founderName}
+                      {founderLifespan && (
+                        <DynastyMetaSub>{founderLifespan}</DynastyMetaSub>
+                      )}
+                    </DynastyMetaValue>
+                  </DynastyMetaItem>
+                )}
+                {periodLabel && (
+                  <DynastyMetaItem>
+                    <DynastyMetaLabel>존속</DynastyMetaLabel>
+                    <DynastyMetaValue>{periodLabel}</DynastyMetaValue>
+                  </DynastyMetaItem>
+                )}
+              </DynastyMetaList>
+            )}
+            {description && <DynastyDesc>{description}</DynastyDesc>}
+          </DynastyMetaBand>
+        )}
 
         {showContent && <MembersStatsStrip persons={persons} />}
 
@@ -264,6 +340,64 @@ const PanelSubtitle = styled.p`
   font-size: 14px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+// ─── 가문 요약 밴드 (시조·존속기간·설명) — 헤더와 통계 스트립 사이 ───────────────
+const DynastyMetaBand = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 22px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const DynastyMetaList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+`
+
+const DynastyMetaItem = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+`
+
+const DynastyMetaLabel = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const DynastyMetaValue = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const DynastyMetaSub = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const DynastyDesc = styled.p`
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `
 
 const CloseBtn = styled.button`
