@@ -1853,17 +1853,53 @@ export class PersonPrismaRepository implements IPersonRepository {
       })
 
       if (spouseRelations !== undefined) {
-        // 이 인물이 얽힌 배우자 행을 양방향(personId=id OR spouseId=id)으로 모두 제거 후
-        // canonical(min,max) 페어로 재생성 — 역방향으로 등록됐던 행까지 단일 행으로 수렴시킨다.
+        // 이 인물이 얽힌 배우자 행을 canonical(min,max) 페어로 수렴시키되, 통째 delete-recreate가
+        // 아니라 페어키로 매칭해 **유지되는 커플은 id를 보존한 채 update**한다. delete-recreate는
+        // 매 저장마다 PersonSpouse.id를 새로 발급해 (a) 자녀의 parentMarriageId(FK 아닌 맨 참조)
+        // 링크를 끊고 (b) 배우자와 무관한 인물 편집에도 배우자 행을 churn했다.
         // (폼은 역방향 행도 hydrate하므로 payload가 이 인물의 결혼 전체를 담는다)
-        await tx.personSpouse.deleteMany({
+        const desiredRows = this.buildCanonicalSpouseRows(id, spouseRelations)
+        const desiredByKey = new Map(
+          desiredRows.map((row) => [`${row.personId}__${row.spouseId}`, row]),
+        )
+        const existing = await tx.personSpouse.findMany({
           where: { OR: [{ personId: id }, { spouseId: id }] },
+          select: { id: true, personId: true, spouseId: true },
         })
-        if (spouseRelations.length) {
-          const rows = this.buildCanonicalSpouseRows(id, spouseRelations)
-          if (rows.length) {
-            await tx.personSpouse.createMany({ data: rows, skipDuplicates: true })
-          }
+        // canonical 키별 대표 기존 행(first-wins)만 유지, 나머지(중복·역방향 잔재)는 삭제 대상.
+        const keptRowIdByKey = new Map<string, string>()
+        const rowIdsToDelete: string[] = []
+        for (const row of existing) {
+          const [pairPersonId, pairSpouseId] =
+            row.personId < row.spouseId ? [row.personId, row.spouseId] : [row.spouseId, row.personId]
+          const key = `${pairPersonId}__${pairSpouseId}`
+          if (!keptRowIdByKey.has(key) && desiredByKey.has(key)) keptRowIdByKey.set(key, row.id)
+          else rowIdsToDelete.push(row.id)
+        }
+        // 1) 불필요·중복 행 먼저 삭제 — 유지 행을 canonical 방향으로 정규화할 때 unique 충돌 방지.
+        if (rowIdsToDelete.length) {
+          await tx.personSpouse.deleteMany({ where: { id: { in: rowIdsToDelete } } })
+        }
+        // 2) 유지 커플: id 보존한 채 canonical 방향 + 결혼 메타를 갱신.
+        for (const [key, rowId] of keptRowIdByKey) {
+          const row = desiredByKey.get(key)!
+          await tx.personSpouse.update({
+            where: { id: rowId },
+            data: {
+              personId: row.personId,
+              spouseId: row.spouseId,
+              marriageStartDate: row.marriageStartDate ?? null,
+              marriageEndDate: row.marriageEndDate ?? null,
+              note: row.note ?? null,
+            },
+          })
+        }
+        // 3) 신규 커플만 create.
+        const rowsToCreate = desiredRows.filter(
+          (row) => !keptRowIdByKey.has(`${row.personId}__${row.spouseId}`),
+        )
+        if (rowsToCreate.length) {
+          await tx.personSpouse.createMany({ data: rowsToCreate, skipDuplicates: true })
         }
       }
 
