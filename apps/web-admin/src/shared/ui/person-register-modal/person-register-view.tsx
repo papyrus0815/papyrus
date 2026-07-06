@@ -853,6 +853,17 @@ export function PersonRegisterView({
             marriageEndDate: rel.marriageEndDate ? String(rel.marriageEndDate).slice(0, 10) : undefined,
             note: rel.note ?? null,
           }))
+          // 저장은 canonical(min,max) id 순이고 응답은 양방향(AsPerson+AsSpouse) 병합이라, 별도 정렬이
+          // 없으면 화면의 "1번/2번 배우자"가 UUID 대소로 결정돼 재로드마다 뒤바뀐다. 다중 배우자
+          // (정실/후궁·순차 재혼)에서 순서가 의미를 갖도록 혼인 시작일 오름차순(미상은 뒤)으로 안정화.
+          .sort((rowA: SpouseRelationInput, rowB: SpouseRelationInput) => {
+            const startA = rowA.marriageStartDate ?? ''
+            const startB = rowB.marriageStartDate ?? ''
+            if (startA && startB) return startA < startB ? -1 : startA > startB ? 1 : 0
+            if (startA) return -1
+            if (startB) return 1
+            return 0
+          })
         setSpouseRows(spouseRels)
         // detail 응답의 임베디드 인물을 가족 캐시에 보관 — 인물 풀 lazy 로드 전에도 카드 정확.
         setEditFamilyCache({
