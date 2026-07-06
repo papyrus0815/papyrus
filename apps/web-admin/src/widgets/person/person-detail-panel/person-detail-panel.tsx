@@ -97,6 +97,7 @@ import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-in
 import { PersonHumanRelationshipsSection } from '@/widgets/person/person-human-relationships-section/person-human-relationships-section'
 import { SameDynastyMembersSection } from '@/widgets/person/same-dynasty-members-section/same-dynasty-members-section'
 import { SamePersonGroupSection } from '@/widgets/person/same-person-group-section/same-person-group-section'
+import { DynastyMembersInfographicModal } from '@/widgets/dynasty/dynasty-members-infographic-modal'
 import { PersonStatsSection } from '@/widgets/person/person-stats-section/person-stats-section'
 import {
   type ElectionCandidacyDetail,
@@ -398,6 +399,12 @@ export function PersonDetailPanel({
     useState<RichTextTermTooltipState | null>(null)
   const [dynastyTooltip, setDynastyTooltip] =
     useState<RichTextDynastyTooltipState | null>(null)
+  // 가문 KPI·시조 가문 칩 클릭 시 페이지 이동 대신 "가문 한눈에" 모달을 연다.
+  // 하나의 상태로 person.dynasty(소속)·foundedDynasties(시조) 어느 쪽이든 열 수 있게 {id,name} 보관.
+  const [dynastyModal, setDynastyModal] = useState<{
+    id: string
+    name: string
+  } | null>(null)
 
   const {
     data: person,
@@ -1310,7 +1317,10 @@ export function PersonDetailPanel({
                   type="button"
                   onClick={() => {
                     playClickSound()
-                    navigate(pathKeys.dynasty())
+                    setDynastyModal({
+                      id: person.dynasty!.id,
+                      name: person.dynasty!.name,
+                    })
                   }}
                 >
                   {person.dynasty.name}
@@ -2287,7 +2297,14 @@ export function PersonDetailPanel({
                             type="button"
                             onClick={() => {
                               playClickSound()
-                              navigate(pathKeys.dynasty())
+                              if (d.id) {
+                                setDynastyModal({
+                                  id: d.id,
+                                  name: d.name ?? '이름 없음',
+                                })
+                              } else {
+                                navigate(pathKeys.dynasty())
+                              }
                             }}
                           >
                             {d.name ?? '이름 없음'}
@@ -2834,6 +2851,16 @@ export function PersonDetailPanel({
             </span>
           </BioDynastyTooltipPopover>
         </BioTermTooltipOverlay>
+      )}
+
+      {/* 가문 한눈에 보기 — 가문 KPI·시조 가문 칩 클릭으로 열림(페이지 이동 대체) */}
+      {dynastyModal && (
+        <DynastyMembersInfographicModal
+          dynastyId={dynastyModal.id}
+          dynastyName={dynastyModal.name}
+          isOpen
+          onClose={() => setDynastyModal(null)}
+        />
       )}
     </>
   )
