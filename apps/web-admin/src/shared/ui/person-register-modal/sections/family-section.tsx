@@ -93,6 +93,22 @@ export function FamilySection({
   const [pendingSpouseRowIndex, setPendingSpouseRowIndex] = useState<number | null>(null)
   /** 이미 배우자로 지정된 id들 — 옵션·모달 exclude 및 중복 방지용. */
   const usedSpouseIds = spouseRows.map((row) => row.spouseId).filter(Boolean)
+  /**
+   * 혼인 정보(혼인일·메모) disclosure — spouseId별로 수동 펼침 상태를 보관.
+   * 배우자만 고르는 흔한 경우 첫인상 잡음(날짜피커 2개 + textarea)을 줄이려 기본 접힘.
+   * 이미 입력된 메타가 있으면(수정 로드 포함) 항상 노출해 데이터를 숨기지 않는다.
+   * index가 아니라 spouseId로 키잉해 행 삭제·정렬로 인덱스가 밀려도 펼침이 엉키지 않는다.
+   */
+  const [openMetaSpouseIds, setOpenMetaSpouseIds] = useState<Set<string>>(new Set())
+  const rowHasMeta = (row: SpouseRelationInput) =>
+    Boolean(row.marriageStartDate || row.marriageEndDate || (row.note && row.note.trim()))
+  const toggleMetaOpen = (spouseId: string) =>
+    setOpenMetaSpouseIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(spouseId)) next.delete(spouseId)
+      else next.add(spouseId)
+      return next
+    })
 
   const addSpouseRow = () => setSpouseRows((prev) => [...prev, { spouseId: '' }])
   const updateSpouseRow = (index: number, patch: Partial<SpouseRelationInput>) =>
@@ -278,7 +294,18 @@ export function FamilySection({
             {spouseRows.length === 0 && (
               <SpouseEmptyHint>등록된 배우자가 없습니다</SpouseEmptyHint>
             )}
-            {spouseRows.map((row, index) => (
+            {spouseRows.map((row, index) => {
+              const dateInverted = Boolean(
+                row.marriageStartDate &&
+                  row.marriageEndDate &&
+                  toDateInputValue(row.marriageEndDate) < toDateInputValue(row.marriageStartDate),
+              )
+              // 배우자를 고른 뒤에만 혼인 메타(혼인일·메모) 노출 — 빈 새 행 잡음 감소.
+              // 이미 값이 있으면(수정 로드 포함) 항상 노출해 데이터를 숨기지 않는다.
+              const showMeta =
+                Boolean(row.spouseId) && (rowHasMeta(row) || openMetaSpouseIds.has(row.spouseId))
+              const dateErrorId = fid(`spouse-${index}-date-error`)
+              return (
               <SpouseRowCard key={index}>
                 <SpouseRowMain>
                   <SpouseRowIndex>{index + 1}</SpouseRowIndex>
@@ -334,58 +361,68 @@ export function FamilySection({
                     ×
                   </SpouseRemoveBtn>
                 </SpouseRowMain>
-                <SpouseRowMeta>
-                  <SpouseDateField>
-                    <SpouseDateLabel>혼인 시작</SpouseDateLabel>
-                    <SpouseDateInput
-                      type="date"
-                      value={toDateInputValue(row.marriageStartDate)}
+                {showMeta ? (
+                  <>
+                    <SpouseRowMeta>
+                      <SpouseDateField>
+                        <SpouseDateLabel>혼인 시작</SpouseDateLabel>
+                        <SpouseDateInput
+                          type="date"
+                          value={toDateInputValue(row.marriageStartDate)}
+                          onChange={(e) => {
+                            updateSpouseRow(index, { marriageStartDate: e.target.value || undefined })
+                            markDirty()
+                          }}
+                        />
+                      </SpouseDateField>
+                      <SpouseDateField>
+                        <SpouseDateLabel>혼인 종료</SpouseDateLabel>
+                        <SpouseDateInput
+                          type="date"
+                          value={toDateInputValue(row.marriageEndDate)}
+                          // 종료일은 시작일 이후만 — 음수 기간 모순 데이터 방지(네이티브 min + aria)
+                          min={toDateInputValue(row.marriageStartDate) || undefined}
+                          aria-invalid={dateInverted || undefined}
+                          aria-describedby={dateInverted ? dateErrorId : undefined}
+                          onChange={(e) => {
+                            updateSpouseRow(index, { marriageEndDate: e.target.value || undefined })
+                            markDirty()
+                          }}
+                        />
+                      </SpouseDateField>
+                    </SpouseRowMeta>
+                    {dateInverted && (
+                      <SpouseDateError id={dateErrorId} role="alert">
+                        혼인 종료일이 시작일보다 빠릅니다.
+                      </SpouseDateError>
+                    )}
+                    <SpouseNoteTextarea
+                      aria-label={`배우자 ${index + 1} 설명`}
+                      value={row.note ?? ''}
                       onChange={(e) => {
-                        updateSpouseRow(index, { marriageStartDate: e.target.value || undefined })
+                        updateSpouseRow(index, { note: e.target.value || null })
                         markDirty()
                       }}
+                      placeholder="1대 왕비, 재위 기간 중 사망"
+                      rows={2}
                     />
-                  </SpouseDateField>
-                  <SpouseDateField>
-                    <SpouseDateLabel>혼인 종료</SpouseDateLabel>
-                    <SpouseDateInput
-                      type="date"
-                      value={toDateInputValue(row.marriageEndDate)}
-                      // 종료일은 시작일 이후만 — 음수 기간 모순 데이터 방지(네이티브 min + aria)
-                      min={toDateInputValue(row.marriageStartDate) || undefined}
-                      aria-invalid={
-                        Boolean(
-                          row.marriageStartDate &&
-                            row.marriageEndDate &&
-                            toDateInputValue(row.marriageEndDate) < toDateInputValue(row.marriageStartDate),
-                        ) || undefined
-                      }
-                      onChange={(e) => {
-                        updateSpouseRow(index, { marriageEndDate: e.target.value || undefined })
-                        markDirty()
-                      }}
-                    />
-                  </SpouseDateField>
-                </SpouseRowMeta>
-                {row.marriageStartDate &&
-                  row.marriageEndDate &&
-                  toDateInputValue(row.marriageEndDate) < toDateInputValue(row.marriageStartDate) && (
-                    <SpouseDateError role="alert">
-                      혼인 종료일이 시작일보다 빠릅니다.
-                    </SpouseDateError>
-                  )}
-                <SpouseNoteTextarea
-                  aria-label={`배우자 ${index + 1} 설명`}
-                  value={row.note ?? ''}
-                  onChange={(e) => {
-                    updateSpouseRow(index, { note: e.target.value || null })
-                    markDirty()
-                  }}
-                  placeholder="1대 왕비, 재위 기간 중 사망"
-                  rows={2}
-                />
+                    {/* 빈 채로 펼친 행은 다시 접을 수 있게 — 값이 있으면 데이터 은닉 방지차 미노출. */}
+                    {!rowHasMeta(row) && (
+                      <SpouseMetaToggle type="button" onClick={() => toggleMetaOpen(row.spouseId)}>
+                        혼인 정보 접기
+                      </SpouseMetaToggle>
+                    )}
+                  </>
+                ) : (
+                  row.spouseId && (
+                    <SpouseMetaToggle type="button" onClick={() => toggleMetaOpen(row.spouseId)}>
+                      <FiPlus size={13} /> 혼인 정보(혼인일·메모) 추가
+                    </SpouseMetaToggle>
+                  )
+                )}
               </SpouseRowCard>
-            ))}
+              )
+            })}
             <AddRowBtn
               type="button"
               onClick={() => {
@@ -679,7 +716,32 @@ const SpouseRemoveBtn = styled.button`
 
   &:hover {
     color: #fff;
-    background: #ef4444;
+    background: ${({ theme }) => theme.colors.alert.danger.fg};
+  }
+`
+
+/** 혼인 정보(혼인일·메모) disclosure 토글 — 경량 ghost 텍스트(카드-인-카드 금지, canon). */
+const SpouseMetaToggle = styled.button`
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 30px;
+  padding: 2px 4px;
+  font-size: ${FONT.meta};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 `
 
