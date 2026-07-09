@@ -1004,7 +1004,9 @@ export const OverviewSectionHeaderRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  /* 좁은 폭에서 버튼 라벨이 버튼 안에서 줄바꿈되는 대신 액션 행이 통째로 내려가도록 */
+  flex-wrap: wrap;
+  gap: 8px 12px;
   margin-bottom: 14px;
 `
 
@@ -1431,6 +1433,7 @@ export const TenureAddButton = styled.button`
   font-size: 13px;
   font-weight: 600;
   border-radius: 10px;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background 0.15s ease,

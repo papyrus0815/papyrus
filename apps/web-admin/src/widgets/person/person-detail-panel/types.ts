@@ -23,6 +23,8 @@ export interface TenureLikeRecord {
   endReason?: string | null
   endReasonDetail?: string | null
   title?: string | null
+  /** 직위 유형(GovernmentPositionType — HEAD_OF_STATE 등). 재임에만 존재, 재위는 없음. */
+  positionType?: string | null
   positionDefinition?: { id?: string; title?: string | null } | null
   country?: { id?: string; name?: string | null } | null
   historicalCountry?: { id?: string; name?: string | null } | null

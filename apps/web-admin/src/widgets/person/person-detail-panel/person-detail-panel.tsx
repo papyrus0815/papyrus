@@ -253,6 +253,7 @@ import {
   isoDateToApproxDays,
   pickGovernmentTenures,
 } from './helpers'
+import { deriveContemporaryHeadsTarget } from './contemporary-heads-target'
 
 interface PersonDetailPanelProps {
   personId: string
@@ -595,6 +596,30 @@ export function PersonDetailPanel({
       return { kind: it.kind, data: it.data, ordinalNum: ord, isReappointment }
     })
     return { items, count: items.length }
+  }, [person])
+
+  /**
+   * 「동시대 수장 비교」 딥링크 타깃 — 수장급(국가원수·정부수반·재위) 기록이 있을
+   * 때만 산출되고, null이면 CTA 자체를 렌더하지 않는다. 종료일 미입력 기록은
+   * 사망 연도로 캡해 대표 연도가 엉뚱한 시대로 밀리지 않게 한다.
+   */
+  const contemporaryHeadsTarget = useMemo(() => {
+    const deathSignedYear =
+      person?.deathYear != null
+        ? person.deathEra === 'BC'
+          ? -person.deathYear
+          : person.deathYear
+        : null
+    return deriveContemporaryHeadsTarget({
+      tenures: pickGovernmentTenures(person),
+      reigns: person?.sovereignReigns ?? [],
+      deathSignedYear,
+      // 사망 확정 + 연도 미상 인물의 종료일 미입력 재위가 올해까지 늘어나
+      // 대표 연도가 수백 년 뒤로 밀리는 것 방지
+      deceasedWithUnknownDeathYear:
+        deathSignedYear == null &&
+        (person?.isAlive === false || person?.isDeathDateUnknown === true),
+    })
   }, [person])
 
   /**
@@ -1631,6 +1656,32 @@ export function PersonDetailPanel({
                       </OverviewSectionHeading>
                       {!embedInModal && (
                         <UnifiedActionRow>
+                          {contemporaryHeadsTarget && (
+                            /* 수장비교 딥링크 — 재위 시대·국가를 프리셋해 진입 (사건 상세 ContemporaryHeadsLink 선례) */
+                            <TenureAddButton
+                              type="button"
+                              title={`${
+                                contemporaryHeadsTarget.year < 0
+                                  ? `기원전 ${-contemporaryHeadsTarget.year}년`
+                                  : `${contemporaryHeadsTarget.year}년`
+                              } 시점에 세계 각국이 누구의 통치 아래 있었는지 비교`}
+                              onClick={() => {
+                                playClickSound()
+                                navigate(
+                                  pathKeys.headsOfState(
+                                    contemporaryHeadsTarget.year,
+                                    {
+                                      range: contemporaryHeadsTarget.range,
+                                      pins: contemporaryHeadsTarget.pins,
+                                    },
+                                  ),
+                                )
+                              }}
+                            >
+                              <FiUsers size={12} />
+                              동시대 수장 비교
+                            </TenureAddButton>
+                          )}
                           <TenureAddButton
                             type="button"
                             onClick={() => {
