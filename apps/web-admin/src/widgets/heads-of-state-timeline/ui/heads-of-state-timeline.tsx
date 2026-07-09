@@ -210,6 +210,8 @@ function HeadsOfStateTimelineInner() {
     highlightYear: state.highlightYear,
     categoryFilter: categoryFilter.asList,
     isAllCategoriesEnabled: categoryFilter.isAllEnabled,
+    // 딥링크 pins 적용 전에 sink가 돌면 병합 전 보드로 URL을 덮어써 pins가 소실됨
+    suspend: state.isApplyingUrlPins,
   })
 
   // 핀 추가 시 토스트로 시각 피드백 — 추가된 row 갯수 차이로 감지

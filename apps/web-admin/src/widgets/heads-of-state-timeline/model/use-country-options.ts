@@ -112,6 +112,13 @@ export function useCountryOptions(enabled: boolean = true) {
   return {
     options,
     isLoading: modernQuery.isLoading || historicalQuery.isLoading,
+    /**
+     * 두 소스가 모두 성공적으로 로드됐는지 — 에러로 끝난 쿼리는 isLoading=false지만
+     * 완전하지 않다. URL 핀 적용·reconcile(미존재 국가 삭제)처럼 "이 국가는 존재하지
+     * 않는다"는 판단이 필요한 곳은 반드시 이 플래그를 게이트로 써야 한다.
+     * (역사국가 fetch가 일시 실패했을 때 저장된 역사 핀이 전부 삭제되는 사고 방지.)
+     */
+    isComplete: modernQuery.isSuccess && historicalQuery.isSuccess,
   }
 }
 

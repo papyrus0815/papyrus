@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { notify } from '@/shared/ui/toast'
+
 import { usePinnedRows } from './use-pinned-rows'
 import { useCountryOptions } from './use-country-options'
+import {
+  mergeUrlPinRows,
+  parsePinsParam,
+  parseRangeParam,
+  parseYearParam,
+} from './url-pins'
 import type { PinnedRow, PinnedSegment, YearRange } from './types'
 
 const DEFAULT_RANGE: YearRange = { startYear: 1500, endYear: 2030 }
@@ -41,15 +49,11 @@ function writeRangeStorage(range: YearRange) {
   }
 }
 
-/** URL `?year=` 진입 — 사건 상세에서 자동 가이드라인 */
+/** URL `?year=` 진입 — 사건·인물 상세에서 자동 가이드라인 (파서는 url-pins.ts 순수 모듈) */
 function readYearFromUrl(): number | null {
   if (typeof window === 'undefined') return null
   try {
-    const params = new URLSearchParams(window.location.search)
-    const raw = params.get('year')
-    if (!raw) return null
-    const n = Number(raw)
-    return Number.isFinite(n) ? n : null
+    return parseYearParam(new URLSearchParams(window.location.search).get('year'))
   } catch {
     return null
   }
@@ -59,15 +63,7 @@ function readYearFromUrl(): number | null {
 function readRangeFromUrl(): YearRange | null {
   if (typeof window === 'undefined') return null
   try {
-    const params = new URLSearchParams(window.location.search)
-    const raw = params.get('range')
-    if (!raw) return null
-    const m = raw.match(/^(-?\d{1,5})\s*[-_~]\s*(-?\d{1,5})$/)
-    if (!m) return null
-    const a = parseInt(m[1]!, 10)
-    const b = parseInt(m[2]!, 10)
-    if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return null
-    return { startYear: a, endYear: b }
+    return parseRangeParam(new URLSearchParams(window.location.search).get('range'))
   } catch {
     return null
   }
@@ -77,11 +73,7 @@ function readRangeFromUrl(): YearRange | null {
 function readPinsFromUrl(): string[][] | null {
   if (typeof window === 'undefined') return null
   try {
-    const params = new URLSearchParams(window.location.search)
-    const raw = params.get('pins')
-    if (!raw) return null
-    const groups = raw.split(',').map((g) => g.split('+').filter(Boolean))
-    return groups.filter((g) => g.length > 0)
+    return parsePinsParam(new URLSearchParams(window.location.search).get('pins'))
   } catch {
     return null
   }
@@ -154,7 +146,7 @@ function rangeForManySegments(
  */
 export function useHeadsOfStateTimelineState() {
   const pinned = usePinnedRows()
-  const { options, isLoading: optionsLoading } = useCountryOptions(true)
+  const { options, isComplete: optionsComplete } = useCountryOptions(true)
 
   const initialUrlYear = useMemo(() => readYearFromUrl(), [])
   const initialUrlRange = useMemo(() => readRangeFromUrl(), [])
@@ -169,14 +161,38 @@ export function useHeadsOfStateTimelineState() {
   })
   const [highlightYear, setHighlightYear] = useState<number | null>(initialUrlYear)
 
-  // range 영속화 — 줌 슬라이더 드래그 같은 빈번 변경엔 throttle 적용
+  /**
+   * URL(?year/?range)이 시간축을 결정한 세션인지 — true인 동안은 (a) 범위를
+   * localStorage에 영속하지 않고(호기심 딥링크 방문이 저장 범위를 덮지 않도록),
+   * (b) 첫 핀 자동 fit을 보류한다(딥링크가 잡아둔 시대를 유지).
+   * 사용자가 범위를 직접 조작하거나 보드를 비우면 해제 — 이후는 평소처럼 동작.
+   */
+  const urlRangeActiveRef = useRef(
+    initialUrlYear != null || initialUrlRange != null,
+  )
+
+  /** 사용자 주도 범위 변경 — URL 세션 모드를 해제하고 영속화를 재개한다 */
+  const setRangeByUser = useCallback(
+    (next: YearRange | ((prev: YearRange) => YearRange)) => {
+      urlRangeActiveRef.current = false
+      setRange(next)
+    },
+    [],
+  )
+
+  // range 영속화 — 줌 슬라이더 드래그 같은 빈번 변경엔 throttle 적용.
+  // URL이 잡아둔 범위는 영속하지 않는다 (딥링크 방문이 저장 범위를 덮지 않도록).
   useEffect(() => {
+    if (urlRangeActiveRef.current) return
     const handle = window.setTimeout(() => writeRangeStorage(range), 300)
     return () => window.clearTimeout(handle)
   }, [range])
 
-  // URL pins로 진입한 경우 한 번 핀 적용 (옵션 fetch 후)
+  // URL pins로 진입한 경우 한 번 핀 적용 (옵션 fetch 후) —
+  // 보드가 비어있으면 교체, 이미 핀이 있으면 dedup 병합-추가
   const urlPinsAppliedRef = useRef(false)
+  // 적용 완료를 렌더에도 반영 (ref는 재렌더를 못 일으킴 — 스피너 해제용)
+  const [urlPinsSettled, setUrlPinsSettled] = useState(false)
   // 옵션 fetch가 무한히 안 끝나는 (오프라인·서버 다운) 케이스 대비 — 5초 후엔 EmptyHero로 폴백
   const [urlPinsTimedOut, setUrlPinsTimedOut] = useState(false)
   useEffect(() => {
@@ -190,7 +206,9 @@ export function useHeadsOfStateTimelineState() {
       urlPinsAppliedRef.current = true
       return
     }
-    if (optionsLoading) return
+    // isLoading이 아니라 isComplete 게이트 — 한쪽 소스(예: 역사국가)가 에러로 끝나면
+    // isLoading=false지만 옵션이 불완전해, 멀쩡한 핀을 "미존재"로 오판해 드랍한다.
+    if (!optionsComplete) return
     if (options.length === 0) return
 
     const findOpt = (token: string) => {
@@ -219,21 +237,42 @@ export function useHeadsOfStateTimelineState() {
         nextRows.push({
           rowId: `r${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-3)}`,
           segments: segs,
+          // 세션 한정 — localStorage 미저장 (딥링크 방문이 저장 보드를 영구 변경하지 않도록)
+          transient: true,
         })
       }
     }
 
-    if (nextRows.length > 0 && pinned.rows.length === 0) {
-      pinned.replaceAll(nextRows)
+    // 링크가 가리킨 국가를 찾지 못했으면(삭제·환경 불일치) 조용히 사라지지 않게 알림
+    const requestedCount = initialUrlPins.reduce(
+      (acc, group) => acc + group.length,
+      0,
+    )
+    const resolvedCount = nextRows.reduce(
+      (acc, row) => acc + row.segments.length,
+      0,
+    )
+    if (resolvedCount < requestedCount) {
+      notify.warning(
+        `링크의 국가 ${requestedCount - resolvedCount}곳을 찾을 수 없어 제외했습니다`,
+      )
     }
+
+    const mergedRows = mergeUrlPinRows(pinned.rows, nextRows)
+    if (mergedRows) pinned.replaceAll(mergedRows)
     urlPinsAppliedRef.current = true
-  }, [initialUrlPins, options, optionsLoading, pinned])
+    // ref만 세우면 재렌더가 없어 — 핀을 하나도 못 얹은 경우 스피너가 5초 타임아웃까지
+    // 남는다. state로도 완료를 알려 즉시 EmptyHero/보드로 전환.
+    setUrlPinsSettled(true)
+  }, [initialUrlPins, options, optionsComplete, pinned])
 
   // 옵션 fetch 후 unknown countryId / 이름·국기 변경분 reconcile
   const reconciledRef = useRef(false)
   useEffect(() => {
     if (reconciledRef.current) return
-    if (optionsLoading) return
+    // isComplete 게이트 필수 — 역사국가 fetch가 일시 실패한 상태에서 reconcile이 돌면
+    // 저장된 역사 핀 전부를 "미존재 국가"로 오판해 영구 삭제한다.
+    if (!optionsComplete) return
     if (options.length === 0) return
     const optMap = new Map(
       options.map((o) => [`${o.kind}:${o.countryId}`, o] as const),
@@ -252,18 +291,19 @@ export function useHeadsOfStateTimelineState() {
       },
     )
     reconciledRef.current = true
-  }, [options, optionsLoading, pinned])
+  }, [options, optionsComplete, pinned])
 
-  /** 처음 비어있다가 첫 행이 들어올 때만 자동 fit — 이후엔 사용자 조작을 존중 */
+  /** 처음 비어있다가 첫 행이 들어올 때만 자동 fit — 이후엔 사용자 조작을 존중.
+   *  URL이 시대를 잡아둔 동안(urlRangeActiveRef)은 보류 — 딥링크 컨텍스트 유지. */
   const addRow = useCallback(
     (segment: Omit<PinnedSegment, 'segmentId'>) => {
       const wasEmpty = pinned.rows.length === 0
       pinned.addRow(segment)
-      if (wasEmpty && initialUrlYear == null && initialUrlRange == null) {
+      if (wasEmpty && !urlRangeActiveRef.current) {
         setRange(rangeForFirstSegment(segment))
       }
     },
-    [pinned, initialUrlYear, initialUrlRange],
+    [pinned],
   )
 
   /** 다중 추가 — N개의 union lifespan으로 자동 fit */
@@ -271,23 +311,25 @@ export function useHeadsOfStateTimelineState() {
     (segments: Omit<PinnedSegment, 'segmentId'>[]) => {
       const wasEmpty = pinned.rows.length === 0
       segments.forEach(pinned.addRow)
-      if (
-        wasEmpty &&
-        segments.length > 0 &&
-        initialUrlYear == null &&
-        initialUrlRange == null
-      ) {
+      if (wasEmpty && segments.length > 0 && !urlRangeActiveRef.current) {
         const fit = rangeForManySegments(segments)
         if (fit) setRange(fit)
       }
     },
-    [pinned, initialUrlYear, initialUrlRange],
+    [pinned],
   )
+
+  /** 보드 비우기 — URL 세션 모드도 함께 해제해, 이후 첫 핀부터는 평소처럼
+   *  자동 fit·범위 영속화가 동작한다 (딥링크로 온 시대에 갇히지 않도록). */
+  const clearAll = useCallback(() => {
+    urlRangeActiveRef.current = false
+    pinned.clearAll()
+  }, [pinned])
 
   /** URL `?pins=`로 진입한 직후, 옵션 fetch가 완료되기 전엔 EmptyHero 대신 skeleton을 보여줄 수 있도록 알림.
    *  5초 timeout 후엔 폴백 — fetch 가 영원히 안 끝나도 EmptyHero 노출. */
   const isApplyingUrlPins =
-    !urlPinsAppliedRef.current &&
+    !urlPinsSettled &&
     !urlPinsTimedOut &&
     initialUrlPins != null &&
     initialUrlPins.length > 0
@@ -302,9 +344,9 @@ export function useHeadsOfStateTimelineState() {
     restoreRowAt: pinned.restoreRowAt,
     addSegmentToRow: pinned.addSegmentToRow,
     removeSegmentFromRow: pinned.removeSegmentFromRow,
-    clearAll: pinned.clearAll,
+    clearAll,
     range,
-    setRange,
+    setRange: setRangeByUser,
     highlightYear,
     setHighlightYear,
     isApplyingUrlPins,

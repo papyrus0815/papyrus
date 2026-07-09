@@ -25,11 +25,17 @@ export function useTimelineUrlSync(opts: {
   highlightYear: number | null
   categoryFilter: PositionTypeCategory[]
   isAllCategoriesEnabled: boolean
+  /**
+   * URL `?pins=` 적용이 끝나기 전(true) 동안 sink를 보류 — 이 훅이 병합 전
+   * 보드 상태로 URL을 덮어써 딥링크의 pins가 리로드·복사에서 소실되는 것 방지.
+   */
+  suspend?: boolean
 }) {
-  const { range, rows, highlightYear, categoryFilter, isAllCategoriesEnabled } = opts
+  const { range, rows, highlightYear, categoryFilter, isAllCategoriesEnabled, suspend } = opts
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+    if (suspend) return
     const url = new URL(window.location.href)
     const next = url.searchParams
 
@@ -64,6 +70,7 @@ export function useTimelineUrlSync(opts: {
     highlightYear,
     categoryFilter,
     isAllCategoriesEnabled,
+    suspend,
   ])
 }
 

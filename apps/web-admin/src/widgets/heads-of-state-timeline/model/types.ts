@@ -27,6 +27,12 @@ export interface PinnedSegment {
 export interface PinnedRow {
   rowId: string
   segments: PinnedSegment[]
+  /**
+   * URL 딥링크(?pins=)로 이 세션에만 얹힌 행 — localStorage에 저장하지 않는다.
+   * (호기심 클릭 한 번이 사용자의 저장 핀 보드를 영구 변경하지 않도록.)
+   * 사용자가 보드를 조작하면 채택되어 플래그가 해제된다.
+   */
+  transient?: boolean
 }
 
 /** 시간축 표시 범위 (정수 연도. 음수 = 기원전) */

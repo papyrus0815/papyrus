@@ -106,12 +106,39 @@ export const pathKeys = {
   continents: () => `/${ROUTES.CONTINENTS}/`,
   /**
    * 역대 수장 통합 비교 페이지 — 현대·역사 국가 모두 한 화면에서 비교.
-   * `year` 쿼리는 동시대 가이드라인을 그 시점에 자동으로 꽂는다 (사건 상세 진입용).
+   * `year` 쿼리는 동시대 가이드라인을 그 시점에 자동으로 꽂는다 (사건·인물 상세 진입용).
+   *
+   * URL 계약(목적지 파서: use-heads-of-state-timeline-state.ts):
+   *  - `?range=START-END` — 시간축 초기 범위, endYear > startYear 필수(아니면 무시)
+   *  - `?pins=C:<countryId>,H:<historicalCountryId>` — 초기 핀 국가(콤마=행)
+   *    보드가 비어있으면 교체, 이미 핀이 있으면 dedup 병합-추가된다.
    */
-  headsOfState: (year?: number) =>
-    year != null
-      ? `/${ROUTES.HEADS_OF_STATE}/?year=${year}`
-      : `/${ROUTES.HEADS_OF_STATE}/`,
+  headsOfState: (
+    year?: number,
+    opts?: {
+      range?: { startYear: number; endYear: number }
+      pins?: Array<{ kind: 'C' | 'H'; id: string }>
+    },
+  ) => {
+    const params = new URLSearchParams()
+    if (year != null) params.set('year', String(year))
+    if (opts?.range) {
+      // 음수(BC) 연도가 끼면 '-' 구분자가 모호해지므로 '~' 사용 (파서는 [-_~] 모두 수용)
+      const separator =
+        opts.range.startYear < 0 || opts.range.endYear < 0 ? '~' : '-'
+      params.set(
+        'range',
+        `${opts.range.startYear}${separator}${opts.range.endYear}`,
+      )
+    }
+    if (opts?.pins && opts.pins.length > 0) {
+      params.set('pins', opts.pins.map((pin) => `${pin.kind}:${pin.id}`).join(','))
+    }
+    const query = params.toString()
+    return query
+      ? `/${ROUTES.HEADS_OF_STATE}/?${query}`
+      : `/${ROUTES.HEADS_OF_STATE}/`
+  },
 
   // --- Events Routes ---
   events: {

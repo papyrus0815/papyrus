@@ -54,7 +54,12 @@ function readStorage(): PinnedRow[] {
 function writeStorage(rows: PinnedRow[]) {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rows))
+    // 딥링크로 세션에만 얹힌 행(transient)은 저장하지 않는다 —
+    // 호기심 클릭 한 번이 저장 핀 보드를 영구 변경하지 않도록.
+    const durable = rows
+      .filter((row) => !row.transient)
+      .map((row) => ({ rowId: row.rowId, segments: row.segments }))
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(durable))
   } catch {
     // 용량 초과·시크릿 모드 등은 무시
   }
@@ -62,6 +67,18 @@ function writeStorage(rows: PinnedRow[]) {
 
 function makeId() {
   return `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+}
+
+/**
+ * 사용자가 보드를 직접 조작하는 순간 transient 행을 채택(durable 전환)한다 —
+ * 딥링크로 온 행이라도 그 위에서 작업을 시작했다면 사용자의 보드로 간주.
+ * 변경이 없으면 같은 참조를 돌려줘 불필요한 재렌더·재저장을 피한다.
+ */
+function adoptTransientRows(rows: PinnedRow[]): PinnedRow[] {
+  if (!rows.some((row) => row.transient)) return rows
+  return rows.map((row) =>
+    row.transient ? { rowId: row.rowId, segments: row.segments } : row,
+  )
 }
 
 /**
@@ -78,15 +95,16 @@ export function usePinnedRows() {
   const addRow = useCallback(
     (segment: Omit<PinnedSegment, 'segmentId'>) => {
       setRows((prev) => {
-        const exists = prev.some((r) =>
+        const base = adoptTransientRows(prev)
+        const exists = base.some((r) =>
           r.segments.some(
             (s) =>
               s.kind === segment.kind && s.countryId === segment.countryId,
           ),
         )
-        if (exists) return prev
+        if (exists) return base
         return [
-          ...prev,
+          ...base,
           {
             rowId: makeId(),
             segments: [{ ...segment, segmentId: makeId() }],
@@ -98,23 +116,25 @@ export function usePinnedRows() {
   )
 
   const removeRow = useCallback((rowId: string) => {
-    setRows((prev) => prev.filter((r) => r.rowId !== rowId))
+    setRows((prev) =>
+      adoptTransientRows(prev).filter((row) => row.rowId !== rowId),
+    )
   }, [])
 
   /** 한 행 안에 segment 추가 — 계승국 묶기 */
   const addSegmentToRow = useCallback(
     (rowId: string, segment: Omit<PinnedSegment, 'segmentId'>) => {
       setRows((prev) =>
-        prev.map((r) => {
-          if (r.rowId !== rowId) return r
-          const exists = r.segments.some(
-            (s) =>
-              s.kind === segment.kind && s.countryId === segment.countryId,
+        adoptTransientRows(prev).map((row) => {
+          if (row.rowId !== rowId) return row
+          const exists = row.segments.some(
+            (seg) =>
+              seg.kind === segment.kind && seg.countryId === segment.countryId,
           )
-          if (exists) return r
+          if (exists) return row
           return {
-            ...r,
-            segments: [...r.segments, { ...segment, segmentId: makeId() }],
+            ...row,
+            segments: [...row.segments, { ...segment, segmentId: makeId() }],
           }
         }),
       )
@@ -125,7 +145,7 @@ export function usePinnedRows() {
   const removeSegmentFromRow = useCallback(
     (rowId: string, segmentId: string) => {
       setRows((prev) =>
-        prev
+        adoptTransientRows(prev)
           .map((r) =>
             r.rowId === rowId
               ? { ...r, segments: r.segments.filter((s) => s.segmentId !== segmentId) }
@@ -139,11 +159,12 @@ export function usePinnedRows() {
 
   const moveRow = useCallback((rowId: string, direction: 'up' | 'down') => {
     setRows((prev) => {
-      const idx = prev.findIndex((r) => r.rowId === rowId)
+      const base = adoptTransientRows(prev)
+      const idx = base.findIndex((row) => row.rowId === rowId)
       if (idx < 0) return prev
       const target = direction === 'up' ? idx - 1 : idx + 1
-      if (target < 0 || target >= prev.length) return prev
-      const next = prev.slice()
+      if (target < 0 || target >= base.length) return prev
+      const next = base.slice()
       const [moved] = next.splice(idx, 1)
       if (!moved) return prev
       next.splice(target, 0, moved)
@@ -157,7 +178,8 @@ export function usePinnedRows() {
       if (fromIndex === toIndex) return prev
       if (fromIndex < 0 || fromIndex >= prev.length) return prev
       if (toIndex < 0 || toIndex >= prev.length) return prev
-      const next = prev.slice()
+      const base = adoptTransientRows(prev)
+      const next = base.slice()
       const [moved] = next.splice(fromIndex, 1)
       if (!moved) return prev
       next.splice(toIndex, 0, moved)
@@ -170,16 +192,17 @@ export function usePinnedRows() {
    *  rowId 충돌 가능성을 피해 새 ID 발급 + segment ID도 새로 발급. */
   const restoreRowAt = useCallback((index: number, row: PinnedRow) => {
     setRows((prev) => {
+      const base = adoptTransientRows(prev)
       const exists = new Set(
-        prev.flatMap((r) =>
-          r.segments.map((s) => `${s.kind}:${s.countryId}`),
+        base.flatMap((row) =>
+          row.segments.map((seg) => `${seg.kind}:${seg.countryId}`),
         ),
       )
       const segments = row.segments
         .filter((s) => !exists.has(`${s.kind}:${s.countryId}`))
         .map((s) => ({ ...s, segmentId: makeId() }))
       if (segments.length === 0) return prev
-      const next = prev.slice()
+      const next = base.slice()
       const restored: PinnedRow = { rowId: makeId(), segments }
       const safeIdx = Math.max(0, Math.min(index, next.length))
       next.splice(safeIdx, 0, restored)
