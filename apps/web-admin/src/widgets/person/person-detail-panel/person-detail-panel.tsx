@@ -254,6 +254,7 @@ import {
   pickGovernmentTenures,
 } from './helpers'
 import { deriveContemporaryHeadsTarget } from './contemporary-heads-target'
+import { ContemporariesStrip } from './contemporaries-strip'
 
 interface PersonDetailPanelProps {
   personId: string
@@ -742,6 +743,9 @@ export function PersonDetailPanel({
         queryClient.invalidateQueries({ queryKey: ['persons-by-country'] }),
         queryClient.invalidateQueries({ queryKey: ['persons-by-dynasty'] }),
         queryClient.invalidateQueries({ queryKey: ['persons-by-tenure-country'] }),
+        // 동시대 수장 스트립 — 서버 유도 창이 대상의 사망 연도로 캡되므로
+        // 인물(생몰) 수정 후에도 신선해야 한다 (재임 수정은 invalidateTenureQueries가 담당)
+        queryClient.invalidateQueries({ queryKey: ['person-contemporaries'] }),
       ]),
     [personId, queryClient],
   )
@@ -1656,32 +1660,6 @@ export function PersonDetailPanel({
                       </OverviewSectionHeading>
                       {!embedInModal && (
                         <UnifiedActionRow>
-                          {contemporaryHeadsTarget && (
-                            /* 수장비교 딥링크 — 재위 시대·국가를 프리셋해 진입 (사건 상세 ContemporaryHeadsLink 선례) */
-                            <TenureAddButton
-                              type="button"
-                              title={`${
-                                contemporaryHeadsTarget.year < 0
-                                  ? `기원전 ${-contemporaryHeadsTarget.year}년`
-                                  : `${contemporaryHeadsTarget.year}년`
-                              } 시점에 세계 각국이 누구의 통치 아래 있었는지 비교`}
-                              onClick={() => {
-                                playClickSound()
-                                navigate(
-                                  pathKeys.headsOfState(
-                                    contemporaryHeadsTarget.year,
-                                    {
-                                      range: contemporaryHeadsTarget.range,
-                                      pins: contemporaryHeadsTarget.pins,
-                                    },
-                                  ),
-                                )
-                              }}
-                            >
-                              <FiUsers size={12} />
-                              동시대 수장 비교
-                            </TenureAddButton>
-                          )}
                           <TenureAddButton
                             type="button"
                             onClick={() => {
@@ -1731,6 +1709,29 @@ export function PersonDetailPanel({
                         // 업적은 행정부·수장 비교 화면에도 박혀 있어 함께 무효화
                         invalidateTenureQueries(queryClient, { personId })
                       }}
+                    />
+                    {/* 동시대 수장 — 클릭 0회 발견 스트립. 수장비교 딥링크 CTA는
+                        헤더에서 이곳(스트립 헤더)으로 이관 (검토서 §3 2단계) */}
+                    <ContemporariesStrip
+                      personId={personId}
+                      enabled={contemporaryHeadsTarget != null}
+                      onPersonClick={handlePersonClick}
+                      onOpenCompare={
+                        !embedInModal && contemporaryHeadsTarget
+                          ? () => {
+                              playClickSound()
+                              navigate(
+                                pathKeys.headsOfState(
+                                  contemporaryHeadsTarget.year,
+                                  {
+                                    range: contemporaryHeadsTarget.range,
+                                    pins: contemporaryHeadsTarget.pins,
+                                  },
+                                ),
+                              )
+                            }
+                          : undefined
+                      }
                     />
                   </section>
 

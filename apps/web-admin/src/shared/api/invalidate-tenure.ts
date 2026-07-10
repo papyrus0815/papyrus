@@ -61,6 +61,12 @@ export function invalidateTenureQueries(
   // ── 업적(사건 페이지 연동) ──
   invalidate(['tenure-achievements-by-event'])
 
+  // ── 인물 통합 기록 비교(person-records) — 재임/재위/업적이 union 소스라 함께 무효화 ──
+  invalidate(['person-records'])
+
+  // ── 동시대 수장(person-contemporaries) — tenure/reign overlap이 소스라 함께 무효화 ──
+  invalidate(['person-contemporaries'])
+
   // ── 인물 상세 — 같은 재임/업적이 인물 패널에도 박혀 있어 함께 무효화 ──
   if (scope.personId) {
     invalidate(['person-detail', scope.personId])
