@@ -1,7 +1,8 @@
 # 인물 상세 → 동시대 수장 바로보기 검토서
 
 - 작성일: 2026-07-09
-- 상태: 검토 완료 · **1단계 구현 완료**(2026-07-09, 미커밋 — §3 1단계 + 구현 후 적대 리뷰 8건 반영: 딥링크 세션화(transient 핀·URL range 미영속), url-sync suspend, isComplete 게이트(역사핀 삭제 사고 방지), settled 상태(스피너 5초 고착 해소), 미해석 핀 경고 토스트, 사망연도 미상 클램프, 헤더 행 wrap, 계약 스펙이 진짜 파서 실행; 유닛 34 + 훅 5 테스트) · 2단계 미착수
+- 상태: 검토 완료 · **1단계 구현·커밋 완료**(2026-07-09 — §3 1단계 + 구현 후 적대 리뷰 8건 반영: 딥링크 세션화(transient 핀·URL range 미영속), url-sync suspend, isComplete 게이트(역사핀 삭제 사고 방지), settled 상태(스피너 5초 고착 해소), 미해석 핀 경고 토스트, 사망연도 미상 클램프, 헤더 행 wrap, 계약 스펙이 진짜 파서 실행; 유닛 34 + 훅 5 테스트)
+- **2단계 구현 완료**(2026-07-10): `GET /persons/:id/contemporaries` — person-records식 수직 슬라이스(전용 컨트롤러·서비스, JWT 클래스 가드, signed-year 계약, 창 서버 유도(수장급 union + 사망 캡·미상 클램프), 2테이블 overlap + endDate=null 후처리(수장별 사망 캡), REIGN 우선 dedup(UTC 날짜 단위), 겹침 정렬 + limit/omittedCount, scope=sameCountry 브리지 확장) + 개요 탭 재임·재위 아래 「동시대 수장」 인라인 스트립(국가 그룹 칩, category-tokens는 entities 승격+위젯 shim, 1단계 CTA는 스트립 헤더로 이관). 구현 후 적대 리뷰 확정 7건 반영: ①effectiveEndYear 미래시작 클램프(음수 겹침·역전 창) ②dedup을 UTC 날짜 단위로(밀리초 정확 일치는 normalize-tenures의 24h 관용과 불일치) ③SQL 잔여필터 superset화(startDate gte 분기 — 종료<시작 오염 행 선탈락 방지) ④칩 role=listitem이 버튼 의미 박탈 → role=group+aria-label ⑤서양식 이름 순서(country.defaultNameDisplayOrder DTO 포함) ⑥인물(생몰) 수정 시 스트립 무효화(invalidatePersonCaches) ⑦**P2: 타계정 수장 칩 클릭 데드엔드 → isOwned DTO + 비소유 칩 비활성**(가계도 선례). api 21 + 스트립 lib 19 테스트, 라이브 e2e(창 유도·limit·scope·400·401·isOwned) 통과.
 - 요구: 인물 상세에서 왕/대통령/황제 등 최고권력자를 볼 때, 수장비교로 수동 이동하지 않고 당대(같은 시기) 군주들을 바로 보고 싶다.
 - 방법: 4방향 코드 조사(수장비교·인물상세·백엔드 API·공용 선례) → 설계안 3종(최소변경/한눈에 모달/서버계약 우선) → 안별 적대 검증(총 검증 체크 67건: CONFIRMED 67, REFUTED 5, UNVERIFIED 3).
 
