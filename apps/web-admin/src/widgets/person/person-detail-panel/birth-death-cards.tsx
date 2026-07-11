@@ -4,6 +4,8 @@
  */
 import { FiAlertTriangle, FiCalendar } from 'react-icons/fi'
 
+import { formatFloruit } from '@/shared/lib/lifespan-text'
+
 import { DEATH_TYPE_LABELS } from './helpers'
 import {
   BirthMarkerPill,
@@ -54,13 +56,28 @@ export function BirthDeathCards({
   )
   const birthCountry =
     birthPlaceAff?.historicalCountry?.name ?? birthPlaceAff?.country?.name ?? null
+  // 활동시기(floruit) — 생몰 전면 미상 인물의 폴백. 크기값+era를 부호연도로 환산해 포맷.
+  const floruitStartSigned =
+    p.floruitStartYear != null
+      ? (p.floruitEra === 'BC' ? -p.floruitStartYear : p.floruitStartYear)
+      : null
+  const floruitEndSigned =
+    p.floruitEndYear != null
+      ? (p.floruitEra === 'BC' ? -p.floruitEndYear : p.floruitEndYear)
+      : null
+  // floruit는 생몰의 폴백 — 생몰 일자가 하나라도 표시되면 숨긴다(formatLifespan 규약과 일치).
+  const floruitLabel =
+    !birthDateStr && !deathDateStr
+      ? formatFloruit(floruitStartSigned, floruitEndSigned)
+      : ''
   const hasBirth =
     !!birthDateStr ||
     !!birthPlace ||
     !!birthCountry ||
     !!p.isBirthDateUnknown ||
     !!p.illegitimate ||
-    !!p.birthNote
+    !!p.birthNote ||
+    !!floruitLabel
   const hasDeath =
     !!deathDateStr ||
     !!deathPlace ||
@@ -95,6 +112,12 @@ export function BirthDeathCards({
               <LifeCardValue>미상</LifeCardValue>
             </LifeCardRow>
           ) : null}
+          {floruitLabel && (
+            <LifeCardRow>
+              <LifeCardLabel>활동시기</LifeCardLabel>
+              <LifeCardValue>{floruitLabel}</LifeCardValue>
+            </LifeCardRow>
+          )}
           {birthPlace && (
             <LifeCardRow>
               <LifeCardLabel>장소</LifeCardLabel>

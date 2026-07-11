@@ -596,6 +596,19 @@ export const NicknameValue = styled.span`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
+/** 별칭 이유·유래 — 칩 안 값 뒤 muted 접미. 길면 말줄임(전문은 title 툴팁). */
+export const NicknameReason = styled.span`
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  &::before {
+    content: '· ';
+  }
+`
+
 export const BackToListButton = styled.button`
   display: inline-flex;
   align-items: center;
@@ -1215,6 +1228,13 @@ export const UnifiedSubRow = styled.div`
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   margin-top: 2px;
+`
+
+/** 비고(notes) — 즉위/퇴위 칩과 달리 여러 줄일 수 있어 자체 행을 차지하고 개행을 보존. */
+export const UnifiedNote = styled.span`
+  flex-basis: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
 `
 
 export const UnifiedEditBtn = styled.button`
@@ -2986,6 +3006,7 @@ export const AchievementRowDesc = styled.div`
   font-size: 11.5px;
   line-height: 1.55;
   color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: pre-wrap;
   word-break: break-word;
 `
 
@@ -3249,8 +3270,15 @@ export const FamilyActionBtn = styled.button`
     border-color: ${({ theme }) => theme.colors.primary};
     border-style: solid;
   }
-  &:disabled {
+  /* aria-disabled(포커스 유지형 비활성)도 native disabled와 동일한 시각 + hover 무효화 */
+  &:disabled,
+  &[aria-disabled='true'] {
     opacity: 0.5;
     cursor: default;
+  }
+  &[aria-disabled='true']:hover {
+    color: ${({ theme }) => theme.colors.text.secondary};
+    border-color: ${({ theme }) => theme.colors.border.default};
+    border-style: dashed;
   }
 `

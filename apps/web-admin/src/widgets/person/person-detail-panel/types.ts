@@ -71,12 +71,15 @@ export interface PersonDetailData {
   birthYear?: number | null
   birthMonth?: number | null
   birthDay?: number | null
+  /** 출생일 정밀도 'year'|'month'|'day'. precision<day면 서버가 month/day를 null로 내려준다. */
+  birthDatePrecision?: string | null
   birthEra?: string | null
   /** ISO 날짜 문자열 (가계도 노드 등에서 사용) */
   birthDate?: string | null
   deathYear?: number | null
   deathMonth?: number | null
   deathDay?: number | null
+  deathDatePrecision?: string | null
   deathEra?: string | null
   /** ISO 날짜 문자열 (가계도 노드 등에서 사용) */
   deathDate?: string | null
@@ -101,9 +104,15 @@ export interface PersonDetailData {
     nickname?: string | null
     type?: string | null
     priority?: number | null
+    /** 이 별칭이 붙은 이유·유래 */
+    reason?: string | null
   }> | null
   createdAt?: string | null
   isAlive?: boolean | null
+  /** 활동시기(floruit) — 생몰 전면 미상 인물의 활동 연대(생몰 폴백). 크기값(양수)+floruitEra. */
+  floruitStartYear?: number | null
+  floruitEndYear?: number | null
+  floruitEra?: string | null
   influence?: number | null
   isBirthDateUnknown?: boolean | null
   isDeathDateUnknown?: boolean | null

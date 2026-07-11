@@ -246,6 +246,10 @@ export function PersonRegisterView({
   const [deathYear, setDeathYear] = useState('')
   const [deathMonth, setDeathMonth] = useState('')
   const [deathDay, setDeathDay] = useState('')
+  // 활동시기(floruit) — 생몰이 둘 다 미상일 때만 노출. 크기값 연도 문자열 + era.
+  const [floruitStartYear, setFloruitStartYear] = useState('')
+  const [floruitEndYear, setFloruitEndYear] = useState('')
+  const [floruitEra, setFloruitEra] = useState<Era>('AD')
   // 소속
   const [countryId, setCountryId] = useState<string>(initialCountryId ?? '')
   // 주 국적이 역사(과거) 국가일 때의 FK — 현대 countryId와 상호배타.
@@ -645,6 +649,9 @@ export function PersonRegisterView({
     makeFormField('deathYear', () => deathYear, setDeathYear, ''),
     makeFormField('deathMonth', () => deathMonth, setDeathMonth, ''),
     makeFormField('deathDay', () => deathDay, setDeathDay, ''),
+    makeFormField('floruitStartYear', () => floruitStartYear, setFloruitStartYear, ''),
+    makeFormField('floruitEndYear', () => floruitEndYear, setFloruitEndYear, ''),
+    makeFormField('floruitEra', () => floruitEra, setFloruitEra, 'AD'),
     makeFormField('countryId', () => countryId, setCountryId, ''),
     makeFormField('historicalCountryId', () => historicalCountryId, setHistoricalCountryId, ''),
     makeFormField(
@@ -751,6 +758,8 @@ export function PersonRegisterView({
             .map((nick: any) => ({
               nickname: nick.nickname ?? '',
               type: nick.type ?? '',
+              // ★ 이유 복원 필수 — 누락하면 무관 필드 저장 시 delete-recreate로 전 별칭 이유가 소실.
+              reason: nick.reason ?? '',
             })),
         )
         setGender(p.gender ?? '')
@@ -913,6 +922,10 @@ export function PersonRegisterView({
         setBirthNote((p as any).birthNote ?? '')
         setIsBirthDateApproximate((p as any).isBirthDateApproximate ?? false)
         setIsDeathDateApproximate((p as any).isDeathDateApproximate ?? false)
+        // 활동시기(floruit)
+        setFloruitStartYear((p as any).floruitStartYear != null ? String((p as any).floruitStartYear) : '')
+        setFloruitEndYear((p as any).floruitEndYear != null ? String((p as any).floruitEndYear) : '')
+        setFloruitEra(((p as any).floruitEra as Era) ?? 'AD')
         // 이름의 뜻이 있으면 기본 탭의 collapse 자동 펼침.
         const hasNameMeanings =
           (p.surnameMeaning && String(p.surnameMeaning).trim()) ||
@@ -1595,6 +1608,7 @@ export function PersonRegisterView({
                 nickname: r.nickname.trim(),
                 type: r.type.trim() || undefined,
                 priority: idx,
+                reason: r.reason.trim() || undefined,
               }))
           : undefined,
       birthCityId: birthCityId || undefined,
@@ -1644,6 +1658,14 @@ export function PersonRegisterView({
         }
       }
     }
+    // 활동시기(floruit) — 값 유무와 무관하게 왕복(수정 시 해제 = null). 생몰이 있으면 표시엔 무시되나 저장은 보존.
+    const floruitStart = parseInt(floruitStartYear, 10)
+    const floruitEnd = parseInt(floruitEndYear, 10)
+    input.floruitStartYear = floruitStartYear.trim() && !isNaN(floruitStart) ? floruitStart : null
+    input.floruitEndYear = floruitEndYear.trim() && !isNaN(floruitEnd) ? floruitEnd : null
+    // era는 floruit 연도가 있을 때만 기록 — 모든 인물의 era 컬럼이 'AD'로 오염되지 않게.
+    input.floruitEra =
+      input.floruitStartYear != null || input.floruitEndYear != null ? floruitEra : null
     return input
   }
 
@@ -2267,6 +2289,12 @@ export function PersonRegisterView({
                 setDeathMonth={setDeathMonth}
                 setDeathDay={setDeathDay}
                 setDeathStatus={setDeathStatus}
+                floruitStartYear={floruitStartYear}
+                floruitEndYear={floruitEndYear}
+                floruitEra={floruitEra}
+                setFloruitStartYear={setFloruitStartYear}
+                setFloruitEndYear={setFloruitEndYear}
+                setFloruitEra={setFloruitEra}
                 deathType={deathType}
                 deathCause={deathCause}
                 birthNote={birthNote}
@@ -2333,6 +2361,12 @@ export function PersonRegisterView({
                 setDeathMonth={setDeathMonth}
                 setDeathDay={setDeathDay}
                 setDeathStatus={setDeathStatus}
+                floruitStartYear={floruitStartYear}
+                floruitEndYear={floruitEndYear}
+                floruitEra={floruitEra}
+                setFloruitStartYear={setFloruitStartYear}
+                setFloruitEndYear={setFloruitEndYear}
+                setFloruitEra={setFloruitEra}
                 deathType={deathType}
                 deathCause={deathCause}
                 birthNote={birthNote}

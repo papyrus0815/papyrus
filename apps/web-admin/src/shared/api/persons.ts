@@ -66,6 +66,8 @@ interface RelaxedPersonInputFields {
   deathType?: string | null
   birthEra?: Era
   deathEra?: Era
+  /** 활동시기(floruit) 기원 — 폼 Era 리터럴로 완화. null = 해제(floruit 연도 없음) */
+  floruitEra?: Era | null
   /** 수정 시 null = 출생일·기원(birthDate·birthEra) 해제 */
   birth?: DateInfoInput | null
   /** 수정 시 null = 사망일·기원(deathDate·deathEra) 해제 */

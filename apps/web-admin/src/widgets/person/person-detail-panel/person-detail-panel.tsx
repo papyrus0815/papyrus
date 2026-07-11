@@ -201,6 +201,7 @@ import {
   NameMetaRow,
   NameMetaValue,
   NicknameChip,
+  NicknameReason,
   NicknameRow,
   NicknameType,
   NicknameValue,
@@ -1211,9 +1212,13 @@ export function PersonDetailPanel({
                 return (
                   <NicknameRow>
                     {sorted.map((n, i) => (
-                      <NicknameChip key={n.id ?? n.nickname ?? `nickname-${i}`}>
+                      <NicknameChip
+                        key={n.id ?? n.nickname ?? `nickname-${i}`}
+                        title={n.reason || undefined}
+                      >
                         {n.type && <NicknameType>{n.type}</NicknameType>}
                         <NicknameValue>{n.nickname}</NicknameValue>
+                        {n.reason && <NicknameReason>{n.reason}</NicknameReason>}
                       </NicknameChip>
                     ))}
                   </NicknameRow>

@@ -69,6 +69,13 @@ export interface LifeSectionProps {
   setDeathMonth: (value: string) => void
   setDeathDay: (value: string) => void
   setDeathStatus: (status: 'alive' | 'deceased' | 'unknown') => void
+  // 활동시기(floruit) — 생몰이 둘 다 미상일 때만 노출(생몰 폴백). 크기값 연도 문자열 + era.
+  floruitStartYear: string
+  floruitEndYear: string
+  floruitEra: Era
+  setFloruitStartYear: (value: string) => void
+  setFloruitEndYear: (value: string) => void
+  setFloruitEra: (era: Era) => void
   // 출생 상세
   birthNote: string
   setBirthNote: (v: string) => void
@@ -132,6 +139,12 @@ export function LifeSection({
   setDeathMonth,
   setDeathDay,
   setDeathStatus,
+  floruitStartYear,
+  floruitEndYear,
+  floruitEra,
+  setFloruitStartYear,
+  setFloruitEndYear,
+  setFloruitEra,
   birthNote,
   setBirthNote,
   deathType,
@@ -340,6 +353,57 @@ export function LifeSection({
       </FieldRow>
       )}
 
+      {/* 활동시기(floruit) — 생몰이 둘 다 미상일 때만. 생몰을 전혀 몰라도 활동 연대는 아는 고대·중세 인물용. */}
+      {showEssentials && isBirthDateUnknown && isDeathDateUnknown && (
+        <FieldRow>
+          <FieldLabel>활동시기</FieldLabel>
+          <FieldControl>
+            <FloruitHint>
+              생몰을 전혀 모를 때 활동 연대만 기록 (예: 15세기 → 1401 ~ 1500)
+            </FloruitHint>
+            <FloruitRow>
+              <FloruitEraToggle role="group" aria-label="활동시기 기원">
+                {(['AD', 'BC'] as const).map((era) => (
+                  <SegmentBtn
+                    key={era}
+                    type="button"
+                    $active={floruitEra === era}
+                    aria-pressed={floruitEra === era}
+                    onClick={() => {
+                      setFloruitEra(era)
+                      markDirty()
+                    }}
+                  >
+                    {era === 'AD' ? '서기' : '기원전'}
+                  </SegmentBtn>
+                ))}
+              </FloruitEraToggle>
+              <FloruitYearInput
+                value={floruitStartYear}
+                onChange={(event) => {
+                  setFloruitStartYear(event.target.value.replace(/[^0-9]/g, ''))
+                  markDirty()
+                }}
+                placeholder="시작 연도"
+                inputMode="numeric"
+                aria-label="활동시기 시작 연도"
+              />
+              <FloruitTilde>~</FloruitTilde>
+              <FloruitYearInput
+                value={floruitEndYear}
+                onChange={(event) => {
+                  setFloruitEndYear(event.target.value.replace(/[^0-9]/g, ''))
+                  markDirty()
+                }}
+                placeholder="종료 연도"
+                inputMode="numeric"
+                aria-label="활동시기 종료 연도"
+              />
+            </FloruitRow>
+          </FieldControl>
+        </FieldRow>
+      )}
+
       {/*
        * 사망 유형(사인) — 사망/일자미상일 때만(=생존중 아닐 때). essentials 영역.
        * 암살·전사·처형은 역사 인물의 핵심 사실이라 "더 입력"을 펼치지 않아도 보이게 코어로 올림.
@@ -546,6 +610,45 @@ const LifespanText = styled.span`
   font-weight: 400;
   color: ${({ theme }) => theme.colors.text.tertiary};
   white-space: nowrap;
+`
+
+// ─── 활동시기(floruit) ────────────────────────────────────────────────────────
+const FloruitHint = styled.p`
+  margin: 0 0 8px;
+  font-size: ${FONT.meta};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const FloruitRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const FloruitEraToggle = styled.div`
+  display: inline-flex;
+  gap: 6px;
+`
+
+const FloruitYearInput = styled.input`
+  width: 96px;
+  height: 36px;
+  padding: 0 10px;
+  font-size: ${FONT.body};
+  border-radius: 8px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const FloruitTilde = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 /** 사망 유형 chip — 채움 톤 + active=indigo. 사망 분기 segmented는 별도 컴포넌트 사용. */

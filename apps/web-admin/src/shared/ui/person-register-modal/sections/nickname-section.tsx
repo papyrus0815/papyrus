@@ -21,6 +21,8 @@ import { FONT, RADIUS } from '../_form-primitives'
 export interface NicknameRow {
   nickname: string
   type: string
+  /** 이 별칭이 붙은 이유·유래 (선택). type=분류와 직교. */
+  reason: string
 }
 
 export interface NicknameSectionProps {
@@ -46,7 +48,7 @@ export function NicknameSection({
     markDirty()
   }
   const add = () => {
-    setRows((prev) => [...prev, { nickname: '', type: '' }])
+    setRows((prev) => [...prev, { nickname: '', type: '', reason: '' }])
     markDirty()
   }
   const remove = (idx: number) => {
@@ -65,26 +67,36 @@ export function NicknameSection({
           </datalist>
           {rows.map((row, idx) => (
             <NicknameRowWrap key={idx}>
-              <TypeInput
-                list={listId}
-                value={row.type}
-                onChange={(event) => update(idx, { type: event.target.value })}
-                placeholder="유형(아명·출생명…)"
-                aria-label="별칭 유형"
+              <NicknameTopRow>
+                <TypeInput
+                  list={listId}
+                  value={row.type}
+                  onChange={(event) => update(idx, { type: event.target.value })}
+                  placeholder="유형(아명·출생명…)"
+                  aria-label="별칭 유형"
+                />
+                <NameInput
+                  value={row.nickname}
+                  onChange={(event) => update(idx, { nickname: event.target.value })}
+                  placeholder="별칭"
+                  aria-label="별칭"
+                />
+                <RemoveBtn
+                  type="button"
+                  onClick={() => remove(idx)}
+                  aria-label="별칭 삭제"
+                >
+                  <FiX size={14} />
+                </RemoveBtn>
+              </NicknameTopRow>
+              {/* 이유·유래 — type(분류)과 직교. 산문이라 하단 풀폭 입력. */}
+              <ReasonInput
+                value={row.reason}
+                onChange={(event) => update(idx, { reason: event.target.value })}
+                placeholder="이 별칭이 붙은 이유·유래 (선택)"
+                aria-label="별칭 이유"
+                maxLength={300}
               />
-              <NameInput
-                value={row.nickname}
-                onChange={(event) => update(idx, { nickname: event.target.value })}
-                placeholder="별칭"
-                aria-label="별칭"
-              />
-              <RemoveBtn
-                type="button"
-                onClick={() => remove(idx)}
-                aria-label="별칭 삭제"
-              >
-                <FiX size={14} />
-              </RemoveBtn>
             </NicknameRowWrap>
           ))}
           <AddBtn type="button" onClick={add}>
@@ -101,11 +113,17 @@ export function NicknameSection({
 
 const NicknameRowWrap = styled.div`
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  & + & {
+    margin-top: 12px;
+  }
+`
+
+const NicknameTopRow = styled.div`
+  display: flex;
   gap: 8px;
   align-items: center;
-  & + & {
-    margin-top: 8px;
-  }
 `
 
 const baseInput = `
@@ -139,6 +157,26 @@ const NameInput = styled.input`
   &:focus {
     outline: none;
     border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+/** 별칭 이유·유래 — 상단 행(유형+별칭) 아래 풀폭. 삭제 버튼 폭만큼 우측 여백을 둬 정렬. */
+const ReasonInput = styled.input`
+  ${baseInput}
+  width: 100%;
+  height: 32px;
+  font-size: ${FONT.meta};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafafa'};
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  &:focus {
+    outline: none;
+    border-style: solid;
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 

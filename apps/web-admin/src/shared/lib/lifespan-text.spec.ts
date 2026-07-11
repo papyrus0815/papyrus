@@ -1,7 +1,7 @@
 /**
  * lifespan-text 단일 포맷터 테스트 — BC(음수 부호 연도)·미상·circa 경계.
  */
-import { formatLifespan, formatSignedYear } from './lifespan-text'
+import { formatLifespan, formatSignedYear, formatFloruit, formatCenturyLabel } from './lifespan-text'
 
 describe('formatSignedYear', () => {
   it('AD는 그대로, BC는 접두', () => {
@@ -23,10 +23,13 @@ describe('formatLifespan', () => {
     expect(formatLifespan({ birthYear: -4, deathYear: 30 })).toBe('BC 4–30')
   })
 
-  it('circa(추정) 접두', () => {
+  it('circa(추정) 접미 년경 (팀 canon)', () => {
     expect(
       formatLifespan({ birthYear: 1500, deathYear: 1558, birthApproximate: true }),
-    ).toBe('약 1500–1558')
+    ).toBe('1500년경–1558')
+    expect(
+      formatLifespan({ birthYear: -44, deathYear: null, birthApproximate: true }),
+    ).toBe('BC 44년경–?')
   })
 
   it('사망 미상 — 기본은 물음표, 생존 표시는 열림', () => {
@@ -42,5 +45,37 @@ describe('formatLifespan', () => {
 
   it('둘 다 미상이면 빈 문자열 (미상 문구는 호출부 책임)', () => {
     expect(formatLifespan({ birthYear: null, deathYear: null })).toBe('')
+  })
+
+  it('둘 다 미상이어도 floruit가 있으면 활동시기 폴백', () => {
+    expect(
+      formatLifespan({ birthYear: null, deathYear: null, floruitStartYear: 1401, floruitEndYear: 1500 }),
+    ).toBe('fl. 15세기')
+    expect(
+      formatLifespan({ birthYear: null, deathYear: null, floruitStartYear: 1200, floruitEndYear: 1250 }),
+    ).toBe('fl. 1200–1250')
+    // 생몰이 있으면 floruit는 무시(폴백일 뿐)
+    expect(
+      formatLifespan({ birthYear: 1210, deathYear: 1260, floruitStartYear: 1230, floruitEndYear: 1250 }),
+    ).toBe('1210–1260')
+  })
+})
+
+describe('formatFloruit', () => {
+  it('범위/세기/한쪽/없음', () => {
+    expect(formatFloruit(1401, 1500)).toBe('fl. 15세기')
+    expect(formatFloruit(1200, 1250)).toBe('fl. 1200–1250')
+    expect(formatFloruit(1450, null)).toBe('fl. 1450~')
+    expect(formatFloruit(null, 1450)).toBe('fl. ~1450')
+    expect(formatFloruit(-500, -401)).toBe('fl. BC 500–BC 401')
+    expect(formatFloruit(null, null)).toBe('')
+  })
+})
+
+describe('formatCenturyLabel', () => {
+  it('AD/BC 세기', () => {
+    expect(formatCenturyLabel(1401)).toBe('15세기')
+    expect(formatCenturyLabel(1500)).toBe('15세기')
+    expect(formatCenturyLabel(-500)).toBe('BC 5세기')
   })
 })
