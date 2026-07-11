@@ -1,6 +1,11 @@
 import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber, IsIn, ValidateIf, IsInt, Min, Max, MaxLength } from 'class-validator'
 import { Type } from 'class-transformer'
 
+import { MaxByteLength } from '../../../shared/max-byte-length.validator'
+
+/** PersonSection.content 는 `@db.Text`(MySQL TEXT = 65535 bytes) — 저장 전 바이트 상한 검증. */
+const BIOGRAPHY_SECTION_CONTENT_MAX_BYTES = 65535
+
 /**
  * 배우자 관계 DTO (인물 생성/수정 시)
  */
@@ -27,9 +32,11 @@ export class SpouseRelationDto {
  */
 export class BiographySectionDto {
   @IsString()
+  @MaxLength(500) // PersonSection.title = @db.VarChar(500)
   title!: string
 
   @IsString()
+  @MaxByteLength(BIOGRAPHY_SECTION_CONTENT_MAX_BYTES) // @db.Text = 65535 bytes
   content!: string
 
   @IsOptional()
@@ -38,6 +45,7 @@ export class BiographySectionDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100) // PersonSection.sectionType = @db.VarChar(100)
   sectionType?: string
 }
 

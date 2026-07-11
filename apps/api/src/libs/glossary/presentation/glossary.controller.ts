@@ -95,16 +95,24 @@ export class GlossaryController {
       countryId?: string | null
       historicalCountryId?: string | null
       name?: { contains: string }
+      eventId?: string | null
       OR?: Array<{ eventId: null } | { eventId: string }>
     } = {}
     if (countryId) where.countryId = countryId
     if (historicalCountryId) where.historicalCountryId = historicalCountryId
     if (q && q.trim()) where.name = { contains: q.trim() }
     if (eventId?.trim()) {
+      // 사건 저작: 전역 + 그 사건 전용 용어
       where.OR = [
         { eventId: null },
         { eventId: eventId.trim() },
       ]
+    } else {
+      // 비-사건 문맥(인물 전기·신규 사건 저작 등)에서는 **전역 용어만** 노출한다.
+      // 미지정 시 eventId 무제약이면 특정 사건 전용 용어가 무관한 문서 검색으로 새어 나오고,
+      // 그 용어를 링크한 뒤 원 사건이 삭제되면 eventId onDelete:Cascade로 용어가 함께 삭제돼
+      // 본문 .term 이 dangling(설명 불러오기 실패)이 된다.
+      where.eventId = null
     }
 
     const list = await this.prisma.glossaryTerm.findMany({
