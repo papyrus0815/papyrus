@@ -11,6 +11,7 @@ import type { FamilyTreePerson } from '@/shared/api/persons-family-tree'
 import {
   classifySiblingKinship,
   ftResolveParentIds,
+  partitionSiblingsByKinship,
   siblingKinshipBadgeLabel,
   siblingKinshipNote,
   withSiblingKinshipMeta,
@@ -141,6 +142,69 @@ describe('withSiblingKinshipMeta — 노트/이름 주입 게이트', () => {
     expect(enriched.kinshipNote).toBe('어머니 기록 미상 — 친형제/이복 여부 미확정')
     // nodeMap 없음(REST 폴백) — 이름 라인은 생략
     expect(enriched.fatherName).toBeNull()
+  })
+})
+
+describe('partitionSiblingsByKinship — 형제 레인 파티션', () => {
+  const anchor = { fatherId: F1, motherId: M1 }
+
+  it('친형제 → 이복(어머니별, 첫 등장 순) → 이부 → 관계 미상 순서로 파티션', () => {
+    const siblings = [
+      { id: 'full-1', fatherId: F1, motherId: M1 },
+      { id: 'half-m2', fatherId: F1, motherId: M2 },
+      { id: 'unknown', fatherId: F1, motherId: null },
+      { id: 'half-m3', fatherId: F1, motherId: 'mother-3' },
+      { id: 'half-m2-2', fatherId: F1, motherId: M2 },
+      { id: 'maternal', fatherId: F2, motherId: M1 },
+    ]
+    const lanes = partitionSiblingsByKinship(anchor, siblings, null)
+    expect(lanes.map((lane) => lane.kind)).toEqual([
+      'full', 'paternal-half', 'paternal-half', 'maternal-half', 'undetermined',
+    ])
+    // 같은 어머니(M2) 소생은 한 레인에 — 그룹 키는 공동부모 FK
+    expect(lanes[1].siblings.map((sib) => sib.id)).toEqual(['half-m2', 'half-m2-2'])
+    expect(lanes[2].siblings.map((sib) => sib.id)).toEqual(['half-m3'])
+    expect(lanes[3].siblings.map((sib) => sib.id)).toEqual(['maternal'])
+    expect(lanes[4].siblings.map((sib) => sib.id)).toEqual(['unknown'])
+  })
+
+  it('레인 내 순서는 입력 배열 순서 유지 (재정렬 금지)', () => {
+    const siblings = [
+      { id: 'b', fatherId: F1, motherId: M1 },
+      { id: 'a', fatherId: F1, motherId: M1 },
+    ]
+    const lanes = partitionSiblingsByKinship(anchor, siblings, null)
+    expect(lanes[0].siblings.map((sib) => sib.id)).toEqual(['b', 'a'])
+  })
+
+  it('어머니 이름 미해소(nodeMap 부재)면 순번+비단정 문구 — 미등재 단정 금지, 레인 간 구분 유지', () => {
+    const lanes = partitionSiblingsByKinship(anchor, [
+      { id: 'sib-a', fatherId: F1, motherId: M2 },
+      { id: 'sib-b', fatherId: F1, motherId: 'mother-3' },
+    ], null)
+    // 이름이 전부 미해소여도 순번으로 레인이 서로 구분돼야 함(동일 헤더 중복 금지)
+    expect(lanes[0].title).toBe('이복 — 어머니 ① (기록 있음)')
+    expect(lanes[1].title).toBe('이복 — 어머니 ② (기록 있음)')
+  })
+
+  it('관계 미상 레인 제목은 사유를 단정하지 않음 — data-anomaly도 담기므로', () => {
+    const lanes = partitionSiblingsByKinship(anchor, [
+      { id: 'full', fatherId: F1, motherId: M1 },
+      { id: 'anomaly', fatherId: F1, motherId: F1 },
+    ], null)
+    const undetermined = lanes.find((lane) => lane.kind === 'undetermined')
+    // 카드 노트('부모 기록이 서로 모순')와 모순되는 '기록 불충분' 단정 금지
+    expect(undetermined?.title).toBe('관계 미상 — 개별 사유는 카드 참조')
+    expect(undetermined?.siblings.map((sib) => sib.id)).toEqual(['anomaly'])
+  })
+
+  it('전원 친형제면 레인 1개 — 호출부가 flat 렌더로 폴백할 수 있는 형태', () => {
+    const lanes = partitionSiblingsByKinship(anchor, [
+      { id: 'x', fatherId: F1, motherId: M1 },
+      { id: 'y', fatherId: F1, motherId: M1 },
+    ], null)
+    expect(lanes).toHaveLength(1)
+    expect(lanes[0].kind).toBe('full')
   })
 })
 

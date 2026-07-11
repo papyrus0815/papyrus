@@ -232,30 +232,158 @@ export function siblingKinshipNote(result: SiblingKinshipResult): string | null 
 }
 
 /**
- * 형제 카드 툴팁용 부모 이름·판별 고지 주입.
- * 이름 해소는 그래프 노드에서만 — FK가 있는데 노드가 미페치면(«이 가계도에 미표시»)
- * '미등재'로 단정하지 않는다(BFS는 계정 무스코프라 미표시 ≠ 미등재).
- * nodeMap이 null이면(REST 폴백 — 그래프 부재) 이름 라인은 생략하고 고지만 남긴다.
+ * 그래프 노드에서 부모 이름 해소 — FK가 있는데 노드가 미페치면 «이 가계도에 미표시»
+ * ('미등재'로 단정하지 않는다: BFS는 계정 무스코프라 미표시 ≠ 미등재).
+ * nodeMap이 null이면(REST 폴백 — 그래프 부재) null.
  */
+function resolveParentName(
+  parentId: string | null | undefined,
+  nodeMap: Map<string, FamilyTreePerson> | null,
+): string | null {
+  if (parentId == null || nodeMap == null) return null
+  const node = nodeMap.get(parentId)
+  return node ? getPersonDisplayName(node, true) : '이 가계도에 미표시'
+}
+
+/**
+ * 카드 툴팁용 부모 이름 라인 주입 (형제·자녀 공용).
+ * omitParentId: 문맥상 자명한 쪽 생략 — ego의 자녀 카드에서 ego 본인 라인은 노이즈.
+ */
+export function withParentNames<T extends SiblingParentFks>(
+  person: T,
+  nodeMap: Map<string, FamilyTreePerson> | null,
+  opts?: { omitParentId?: string | null },
+): T & { fatherName?: string | null; motherName?: string | null } {
+  const omit = opts?.omitParentId ?? null
+  return {
+    ...person,
+    fatherName:
+      omit != null && person.fatherId === omit ? null : resolveParentName(person.fatherId, nodeMap),
+    motherName:
+      omit != null && person.motherId === omit ? null : resolveParentName(person.motherId, nodeMap),
+  }
+}
+
+/** 형제 카드 툴팁용 부모 이름 + 판별 고지 주입. */
 export function withSiblingKinshipMeta<T extends SiblingParentFks>(
   sibling: T,
   result: SiblingKinshipResult,
   nodeMap: Map<string, FamilyTreePerson> | null,
 ): T & { fatherName?: string | null; motherName?: string | null; kinshipNote?: string | null } {
-  const resolveName = (parentId: string | null | undefined): string | null => {
-    if (parentId == null || nodeMap == null) return null
-    const node = nodeMap.get(parentId)
-    return node ? getPersonDisplayName(node, true) : '이 가계도에 미표시'
-  }
   // FK 계약 미도달(구 응답 캐시 — 두 키 모두 부재)이면 '기록 미상' 계열 문구가
   // 거짓 사유가 되므로 노트를 생략(패널 헤더의 FK-undefined 생략과 대칭).
   const contractReached = sibling.fatherId !== undefined || sibling.motherId !== undefined
   return {
-    ...sibling,
-    fatherName: resolveName(sibling.fatherId),
-    motherName: resolveName(sibling.motherId),
+    ...withParentNames(sibling, nodeMap),
     kinshipNote: contractReached ? siblingKinshipNote(result) : null,
   }
+}
+
+// ─── 형제 레인 파티션 (밀집 왕가 가독성 — 모달 그룹핑) ────────────────
+
+export type SiblingLaneKind = 'full' | 'paternal-half' | 'maternal-half' | 'undetermined'
+
+export type SiblingLane<T> = {
+  /** React key용 안정 식별자 (미상 부모는 ID별 별도 레인) */
+  key: string
+  kind: SiblingLaneKind
+  /** 레인 헤더 문구 — '이복 — 어머니 ○○○' 등 */
+  title: string
+  siblings: T[]
+}
+
+/**
+ * 형제 목록을 판별 결과로 레인 파티션 — 형제 모달의 그룹 표시용.
+ *
+ * - 그룹 키는 공동부모 FK(이복→어머니 ID, 이부→아버지 ID). parentMarriageId가 아니다
+ *   (writer 0 공백·FK relation 미도입 — G22 의존 회피).
+ * - 레인 내 순서는 입력 배열 순서 그대로(재정렬 금지 — 기존 comparator 위임).
+ * - 레인 순서: 친형제 → 이복(첫 등장 순 = 최연장자 출생 asc) → 이부 → 관계 미상 최후순.
+ * - 부모 이름 미해소(그래프 밖)여도 ID별 별도 레인 — «이 가계도에 미표시» 비단정 문구.
+ */
+/** ①②③… 원형 숫자 (20 초과는 괄호 폴백) — 이름 미해소 레인의 안정 구분자 */
+function circledNumber(seq: number): string {
+  return seq >= 1 && seq <= 20 ? String.fromCharCode(0x2460 + seq - 1) : `(${seq})`
+}
+
+export function partitionSiblingsByKinship<T extends SiblingParentFks>(
+  anchor: SiblingParentFks,
+  siblings: T[],
+  nodeMap: Map<string, FamilyTreePerson> | null,
+): SiblingLane<T>[] {
+  const fullLane: SiblingLane<T> = { key: 'full', kind: 'full', title: '친형제', siblings: [] }
+  // 사유를 단정하지 않는 중립 제목 — 이 레인은 기록 결손뿐 아니라 기록 모순(data-anomaly)도
+  // 담으므로 '기록 불충분' 단정은 카드 노트('부모 기록이 서로 모순')와 자기모순이 된다.
+  const undeterminedLane: SiblingLane<T> = {
+    key: 'undetermined',
+    kind: 'undetermined',
+    title: '관계 미상 — 개별 사유는 카드 참조',
+    siblings: [],
+  }
+  const paternalLanes = new Map<string, SiblingLane<T>>()
+  const maternalLanes = new Map<string, SiblingLane<T>>()
+
+  /**
+   * 레인 제목 — 이름 해소 실패 시(그래프 밖·REST 폴백) 같은 문구가 여러 레인에 반복되면
+   * ID별 분리의 표시 의미가 소멸하므로 안정 순번(첫 등장 순)을 병기해 구분한다.
+   * «이 가계도에 미표시»는 이름 자리에 그대로 넣으면 사람 이름처럼 읽혀 괄호로 감싼다.
+   */
+  const laneTitle = (
+    prefix: string,
+    parentLabel: string,
+    parentId: string,
+    unresolvedSeq: number,
+  ): string => {
+    const name = resolveParentName(parentId, nodeMap)
+    if (name != null && name !== '이 가계도에 미표시') return `${prefix} — ${parentLabel} ${name}`
+    const marker = circledNumber(unresolvedSeq)
+    const note = name == null ? '(기록 있음)' : '(이 가계도에 미표시)'
+    return `${prefix} — ${parentLabel} ${marker} ${note}`
+  }
+
+  for (const sibling of siblings) {
+    const { kinship } = classifySiblingKinship(anchor, sibling)
+    // truthy 가드 유지 — classify가 HALF ⇒ 반대편 FK 비-null을 보장하므로 도달하는 falsy는
+    // ''(빈 문자열) 손상값뿐이고, 그 경우 미상 레인이 안전한 착지점이다.
+    if (kinship === 'FULL') {
+      fullLane.siblings.push(sibling)
+    } else if (kinship === 'PATERNAL_HALF' && sibling.motherId) {
+      const motherId = sibling.motherId
+      let lane = paternalLanes.get(motherId)
+      if (!lane) {
+        lane = {
+          key: `paternal-half-${motherId}`,
+          kind: 'paternal-half',
+          title: laneTitle('이복', '어머니', motherId, paternalLanes.size + 1),
+          siblings: [],
+        }
+        paternalLanes.set(motherId, lane)
+      }
+      lane.siblings.push(sibling)
+    } else if (kinship === 'MATERNAL_HALF' && sibling.fatherId) {
+      const fatherId = sibling.fatherId
+      let lane = maternalLanes.get(fatherId)
+      if (!lane) {
+        lane = {
+          key: `maternal-half-${fatherId}`,
+          kind: 'maternal-half',
+          title: laneTitle('이부', '아버지', fatherId, maternalLanes.size + 1),
+          siblings: [],
+        }
+        maternalLanes.set(fatherId, lane)
+      }
+      lane.siblings.push(sibling)
+    } else {
+      undeterminedLane.siblings.push(sibling)
+    }
+  }
+
+  const lanes: SiblingLane<T>[] = []
+  if (fullLane.siblings.length > 0) lanes.push(fullLane)
+  lanes.push(...paternalLanes.values())
+  lanes.push(...maternalLanes.values())
+  if (undeterminedLane.siblings.length > 0) lanes.push(undeterminedLane)
+  return lanes
 }
 
 /**

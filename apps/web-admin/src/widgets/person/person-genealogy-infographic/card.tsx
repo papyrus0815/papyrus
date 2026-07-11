@@ -386,9 +386,13 @@ export function DescendantNode({
   const handle = () => person.id && onPersonClick?.(person.id)
   const tooltip = buildPersonTooltip(person)
   const isDeceased = death != null
+  // G29 배지 색상 언어 정리 — 조상 형제 모달의 형제 계열 카드는 amber(sibling),
+  // 손자녀 등 후손 카드는 sky(descendant). 'ancestor' 회색 재사용으로 증조부와
+  // 같은 색이 되던 붕괴 해소(배지·아바타·카드 프레임을 같은 role로 통일).
+  const cardRole: AvatarRole = badge.endsWith('형제') ? 'sibling' : 'descendant'
   return (
     <GeoNode
-      $role="ancestor"
+      $role={cardRole}
       $clickable={clickable}
       $dimmed={!openable}
       title={openable ? tooltip : '다른 계정이 등록한 인물이라 상세를 열 수 없습니다'}
@@ -407,7 +411,7 @@ export function DescendantNode({
         : {})}
     >
       <AvatarFrame>
-        <NodeAvatar $role="ancestor" $hasImage={Boolean(src)}>
+        <NodeAvatar $role={cardRole} $hasImage={Boolean(src)}>
           {src ? (
             <AvatarImage src={src} alt={`${baseName} 프로필 사진`} loading="lazy" decoding="async" />
           ) : (
@@ -440,8 +444,8 @@ export function DescendantNode({
         {person.dynasty?.name && <NodeDynasty>{person.dynasty.name}</NodeDynasty>}
       </NodeNameWrap>
       {/* 후손은 sky(descendant), 조상 형제 모달의 형제 계열 배지는 amber(sibling) — 방향성 색 유지.
-          '이복형제'/'이부형제'도 amber를 유지해야 하므로 등호가 아닌 접미 판정. */}
-      <NodeBadge $role={badge.endsWith('형제') ? 'sibling' : 'descendant'} aria-label={badgeAriaLabel}>{badge}</NodeBadge>
+          '이복형제'/'이부형제'도 amber를 유지해야 하므로 등호가 아닌 접미 판정(cardRole과 동일 기준). */}
+      <NodeBadge $role={cardRole} aria-label={badgeAriaLabel}>{badge}</NodeBadge>
       <CardHoverInfo person={person} />
       {inMarriagesWith && inMarriagesWith.length > 0 && (() => {
         // 자기 자신은 절대 partner가 될 수 없음 — 데이터 이상 방어
@@ -547,7 +551,7 @@ export const GeoNode = styled.div<{
 
   /* hover/focus 시 카드 자체를 위로 끌어올린다 — 시각 lift + 내부 칩이 인접 카드 위로
      올라오도록. HoverInfoBubble은 portal로 document.body에 렌더하므로 이 z-index의
-     영향을 받지 않음. SiblingsModalOverlay(1000)보다 낮아 모달은 정상 가림. */
+     영향을 받지 않음. 공용 ModalOverlay(Z_INDEX.MODAL_OVERLAY=9999)보다 낮아 모달은 정상 가림. */
   &:hover,
   &:focus-within {
     z-index: 60;
@@ -830,6 +834,42 @@ export const NodeBadge = styled.span<{ $role: string }>`
  * 사촌결혼 — 가계도 안 다른 후손과 결혼했음을 카드 하단에 표시.
  * dedupe로 한쪽에만 그려진 자녀의 또 다른 부모를 명시.
  */
+/**
+ * 다중 혼인 자녀의 생모(반대편 부모) 귀속 칩 — «○○○ 소생».
+ * ego의 자녀들이 서로 다른 반대편 부모를 가질 때만 노출(1차 리뷰 #1 최소안 — consort
+ * 인디케이터). InMarriageMark와 동일한 하단 모서리 칩 문법, 색은 배우자 rose 계열과
+ * 구분되는 중립 slate(새 색상 언어 도입 회피 — 범례 항목 동반).
+ */
+export const ConsortMark = styled.span`
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  max-width: ${NODE_W - 12}px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  /* 카드 경계 밖으로 걸치는 칩 — 반투명이면 아래 커넥터 선이 비치므로 배경색 위 틴트로 불투명 합성 */
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? `linear-gradient(0deg, rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.16)), ${theme.colors.background.primary}`
+      : `linear-gradient(0deg, rgba(148, 163, 184, 0.12), rgba(148, 163, 184, 0.12)), ${theme.colors.background.primary}`};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#cbd5e1' : '#475569')};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.38)' : 'rgba(148, 163, 184, 0.30)'};
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+`
+
 const InMarriageMark = styled.span`
   position: absolute;
   bottom: -7px;
@@ -844,8 +884,11 @@ const InMarriageMark = styled.span`
   font-weight: 700;
   letter-spacing: 0.02em;
   border-radius: 999px;
+  /* ConsortMark와 동일 — 카드 밖으로 걸치는 칩은 커넥터 선 비침 방지 위해 불투명 합성 */
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(244, 114, 182, 0.18)' : 'rgba(244, 114, 182, 0.10)'};
+    theme.mode === 'dark'
+      ? `linear-gradient(0deg, rgba(244, 114, 182, 0.18), rgba(244, 114, 182, 0.18)), ${theme.colors.background.primary}`
+      : `linear-gradient(0deg, rgba(244, 114, 182, 0.10), rgba(244, 114, 182, 0.10)), ${theme.colors.background.primary}`};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#f9a8d4' : '#be185d')};
   border: 1px solid
     ${({ theme }) =>

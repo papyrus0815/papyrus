@@ -25,6 +25,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { AncestorColumn } from './ancestor-column'
 import {
   CardHoverInfo,
+  ConsortMark,
   GeoNode,
   GeoThumbnail,
   NodeBadge,
@@ -54,6 +55,7 @@ import {
   ftResolveParentIds,
   siblingKinshipAriaLabel,
   siblingKinshipBadgeLabel,
+  withParentNames,
   withSiblingKinshipMeta,
   type SiblingParentFks,
 } from './family-tree-derive'
@@ -266,7 +268,9 @@ export function PersonGenealogyInfographic({
       sps.push(toSpouseNode(entry))
     }
 
-    // 자녀 — ftChildrenOf[ego.id], 각 자녀의 spouse를 spouse 엣지에서 찾아 join
+    // 자녀 — ftChildrenOf[ego.id], 각 자녀의 spouse를 spouse 엣지에서 찾아 join.
+    // 툴팁에 반대편 부모 이름 주입(ego 본인 라인은 자명하므로 생략) — 다중 혼인에서
+    // 어느 배우자 소생인지 hover로 확인 가능(칩은 반대편 부모가 갈릴 때만).
     const childIds = ftChildrenOf.get(egoId) ?? []
     const childs: ChildPerson[] = childIds
       .map((cid) => ftNodeMap.get(cid))
@@ -280,7 +284,7 @@ export function PersonGenealogyInfographic({
         const spouseCandidates = spouseEdgesByPersonId.get(c.id) ?? []
         const sp = spouseCandidates[0] ?? null
         return {
-          ...ftPersonToNodePerson(c),
+          ...withParentNames(ftPersonToNodePerson(c), ftNodeMap, { omitParentId: egoId }),
           spouse: sp ? toSpouseNode(sp) : null,
         }
       })
@@ -495,6 +499,72 @@ export function PersonGenealogyInfographic({
   const hiddenSiblingCount = siblingList.length - visibleSiblings.length
 
   /**
+   * 근접-3 선별이 '확정 반형제'를 숨길 때만 더보기 버튼에 요약 병기 —
+   * 보이는 3명이 전부 동복이면 스트립만 본 사용자가 이복 존재를 모르는 은폐 방지.
+   * 판별불가는 세지 않는다(과잉 주장 금지 — 사유는 모달·툴팁 담당).
+   */
+  const hiddenHalfSummary = useMemo(() => {
+    if (hiddenSiblingCount <= 0) return null
+    const visibleIds = new Set(visibleSiblings.map((sib) => sib.id))
+    let paternalCount = 0
+    let maternalCount = 0
+    for (const sib of siblingList) {
+      if (sib.id && visibleIds.has(sib.id)) continue
+      const { kinship } = classifySiblingKinship(egoParentFks, sib)
+      if (kinship === 'PATERNAL_HALF') paternalCount += 1
+      else if (kinship === 'MATERNAL_HALF') maternalCount += 1
+    }
+    const parts: string[] = []
+    if (paternalCount > 0) parts.push(`이복 ${paternalCount}`)
+    if (maternalCount > 0) parts.push(`이부 ${maternalCount}`)
+    return parts.length > 0 ? parts.join(' · ') : null
+  }, [hiddenSiblingCount, visibleSiblings, siblingList, egoParentFks])
+
+  /** BFS take 절단 여부 — 모달 레인 카운트의 '표시분 기준' 한정 고지용 (scope별) */
+  const siblingsTruncated = Boolean(
+    familyTreeData?.truncations?.some((t) => t.scope === 'siblings'),
+  )
+  // 'siblings'(=ego 형제 scope)는 제외 — 조상 형제 모달 구성원은 방계 scope에서만 오므로
+  // ego 형제 절단만으로 조상 모달에 거짓 '일부만 표시' 고지가 뜨지 않게.
+  const collateralsTruncated = Boolean(
+    familyTreeData?.truncations?.some((t) =>
+      ['aunts-uncles', 'grand-aunts-uncles', 'great-grand-aunts-uncles'].includes(t.scope),
+    ),
+  )
+
+  /**
+   * 다중 혼인 자녀의 생모 귀속 칩(«○○○ 소생») 노출 조건 — ego 자녀들의 반대편 부모가
+   * 2명 이상으로 갈릴 때만(1차 리뷰 #1 consort 인디케이터 최소안). 반대편 부모가
+   * 하나뿐이면 배우자 카드가 이미 문맥을 제공하므로 칩은 노이즈다.
+   */
+  const childOtherParentIds = useMemo(() => {
+    const ids = new Set<string>()
+    if (!ego.id) return ids
+    for (const child of childList) {
+      const otherId =
+        child.fatherId && child.fatherId !== ego.id ? child.fatherId
+        : child.motherId && child.motherId !== ego.id ? child.motherId
+        : null
+      if (otherId) ids.add(otherId)
+    }
+    return ids
+  }, [childList, ego.id])
+  const showConsortMarks = childOtherParentIds.size >= 2
+  const consortMarkFor = (child: NodePerson) => {
+    if (!showConsortMarks || !ego.id) return null
+    const otherId =
+      child.fatherId && child.fatherId !== ego.id ? child.fatherId
+      : child.motherId && child.motherId !== ego.id ? child.motherId
+      : null
+    if (!otherId) return null
+    const node = ftNodeMap.get(otherId)
+    if (!node) return null // 그래프 밖 — 이름 없는 칩은 노이즈, 툴팁(카드 hover)이 담당
+    const name = getPersonDisplayName(node, true)
+    // title 없음 — pointer-events:none 칩이라 네이티브 툴팁은 어차피 사문(死文)
+    return <ConsortMark aria-label={`${name} 소생`}>{name} 소생</ConsortMark>
+  }
+
+  /**
    * 자녀 행의 시각 중심을 ego 수직선 아래로 정렬하기 위한 px 시프트.
    * 자녀 1명 또는 모든 자녀가 배우자 없을 땐 0(자연 대칭).
    * 양수면 자녀 mean이 ChildrenGrid 컨테이너 중심보다 오른쪽에 있어서, 컨테이너를
@@ -587,7 +657,8 @@ export function PersonGenealogyInfographic({
             <LegendTerm>이부형제</LegendTerm> 어머니 같고 아버지 다름 ·{' '}
             <LegendTerm>형제</LegendTerm>(무표기) 친형제 또는 부모 기록 미상 — 카드에 마우스를
             올리면 사유가 표시됩니다 · <LegendTerm>*</LegendTerm> 서출(이복 여부와 별개) ·{' '}
-            <LegendTerm>(추정)</LegendTerm> 자녀 관계로 추정된 배우자
+            <LegendTerm>(추정)</LegendTerm> 자녀 관계로 추정된 배우자 ·{' '}
+            <LegendTerm>○○○ 소생</LegendTerm> 다중 혼인에서 자녀의 반대편 부모(생모·생부)
           </LegendBody>
         </LegendDetails>
 
@@ -766,9 +837,10 @@ export function PersonGenealogyInfographic({
                         <SiblingMoreToggle
                           type="button"
                           onClick={() => setSiblingsModalOpen(true)}
-                          aria-label={`형제자매 ${hiddenSiblingCount}명 더 보기 (전체 ${siblingList.length}명)`}
+                          aria-label={`형제자매 ${hiddenSiblingCount}명 더 보기 (전체 ${siblingList.length}명${hiddenHalfSummary ? `, 숨겨진 형제 중 ${hiddenHalfSummary}` : ''})`}
                         >
                           외 {hiddenSiblingCount}명 더 보기
+                          {hiddenHalfSummary && ` · ${hiddenHalfSummary}`}
                         </SiblingMoreToggle>
                       )}
                     </SiblingsStack>
@@ -937,6 +1009,7 @@ export function PersonGenealogyInfographic({
                           <NodeNameBlock person={child} />
                           <NodeBadge $role="child">자녀</NodeBadge>
                           <CardHoverInfo person={child} />
+                          {consortMarkFor(child)}
                         </GeoNode>
                       )
                       if (!child.spouse) {
@@ -999,6 +1072,7 @@ export function PersonGenealogyInfographic({
           <SiblingsListModal
             siblings={siblingList}
             anchorParents={egoParentFks}
+            truncated={siblingsTruncated}
             onClose={() => setSiblingsModalOpen(false)}
             onPersonClick={onPersonClick}
           />
@@ -1007,6 +1081,7 @@ export function PersonGenealogyInfographic({
           <AncestorSiblingsModal
             person={ancestorSiblingsOf.person}
             siblings={ancestorSiblingsOf.siblings}
+            truncated={collateralsTruncated}
             onClose={() => setAncestorSiblingsOf(null)}
             onPersonClick={onPersonClick}
           />
