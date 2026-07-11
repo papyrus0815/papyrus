@@ -72,6 +72,20 @@ function buildUtcDateFromParts(year: number, month?: number, day?: number): Date
 }
 
 /**
+ * 생몰일 정밀도('year'|'month'|'day') 파생. 구조화 입력(dto.birth/death)에서 월/일 존재로 판정 —
+ * 월 미입력→'year', 일 미입력→'month', 둘 다→'day'. buildUtcDateFromParts가 01-01로 채운 값을
+ * 응답 매퍼가 precision<day면 되돌리는(월/일 null화) 근거다. 날짜 자체가 없으면 undefined.
+ * 레거시 ISO 문자열 경로는 완전일자로 간주('day').
+ */
+function derivePrecision(
+  info: { month?: number; day?: number } | null | undefined,
+  builtDate: Date | null | undefined,
+): string | undefined {
+  if (info) return info.month == null ? 'year' : info.day == null ? 'month' : 'day'
+  return builtDate ? 'day' : undefined
+}
+
+/**
  * 'YYYY-MM-DD'(BC는 '-' 접두) 생몰일 문자열 → era + 크기값 UTC Date.
  * 문자열 직접 파싱(네이티브 Date 파싱 금지). 파싱 불가하면 undefined(필드 무시).
  */
@@ -425,15 +439,17 @@ export class PersonController {
     surnameMeaning: string | null
     nameMeaning: string | null
     middleNameMeaning: string | null
-    nicknames: Array<{ id: string; nickname: string; type: string | null; priority: number | null }>
+    nicknames: Array<{ id: string; nickname: string; type: string | null; priority: number | null; reason: string | null }>
     birthEra: any
     birthYear: number | null
     birthMonth: number | null
     birthDay: number | null
+    birthDatePrecision: string | null
     deathEra: any
     deathYear: number | null
     deathMonth: number | null
     deathDay: number | null
+    deathDatePrecision: string | null
     gender: string | null
     biography: string | null
     biographySections: Array<{
@@ -492,6 +508,9 @@ export class PersonController {
     deathCause: string | null
     deathNote: string | null
     isAlive: boolean
+    floruitStartYear: number | null
+    floruitEndYear: number | null
+    floruitEra: any
     influence: number | null
     preEnthronementTitle: string | null
     educations: any[]
@@ -567,16 +586,37 @@ export class PersonController {
         nickname: n.nickname,
         type: n.type ?? null,
         priority: n.priority ?? null,
+        reason: n.reason ?? null,
       })),
       birthEra: person.birthEra as any,
       // birthDate는 UTC 자정 저장 — UTC getter로 읽어야 입력일이 그대로 복원된다(-1일 방지).
+      // precision이 'year'/'month'면 01-01로 채운 월·일을 null로 되돌린다(연도만 앎 → 1월1일 둔갑 차단).
+      // 레거시(precision NULL)는 현행대로 월·일 노출.
       birthYear: person.birthDate ? person.birthDate.getUTCFullYear() : null,
-      birthMonth: person.birthDate ? person.birthDate.getUTCMonth() + 1 : null,
-      birthDay: person.birthDate ? person.birthDate.getUTCDate() : null,
+      birthMonth:
+        person.birthDate && person.birthDatePrecision !== 'year'
+          ? person.birthDate.getUTCMonth() + 1
+          : null,
+      birthDay:
+        person.birthDate &&
+        person.birthDatePrecision !== 'year' &&
+        person.birthDatePrecision !== 'month'
+          ? person.birthDate.getUTCDate()
+          : null,
+      birthDatePrecision: person.birthDatePrecision ?? null,
       deathEra: person.deathEra as any,
       deathYear: person.deathDate ? person.deathDate.getUTCFullYear() : null,
-      deathMonth: person.deathDate ? person.deathDate.getUTCMonth() + 1 : null,
-      deathDay: person.deathDate ? person.deathDate.getUTCDate() : null,
+      deathMonth:
+        person.deathDate && person.deathDatePrecision !== 'year'
+          ? person.deathDate.getUTCMonth() + 1
+          : null,
+      deathDay:
+        person.deathDate &&
+        person.deathDatePrecision !== 'year' &&
+        person.deathDatePrecision !== 'month'
+          ? person.deathDate.getUTCDate()
+          : null,
+      deathDatePrecision: person.deathDatePrecision ?? null,
       gender: person.gender,
       biography: person.biography,
       biographySections: (person.biographySections ?? []).map((s: any) => ({
@@ -683,6 +723,9 @@ export class PersonController {
       deathCause: (person as any).deathCause ?? null,
       deathNote: (person as any).deathNote ?? null,
       isAlive: person.isAlive ?? false,
+      floruitStartYear: (person as any).floruitStartYear ?? null,
+      floruitEndYear: (person as any).floruitEndYear ?? null,
+      floruitEra: (person as any).floruitEra ?? null,
       influence: (person as any).influence ?? null,
       preEnthronementTitle: (person as any).preEnthronementTitle ?? null,
       educations: serializeBigInt(person.educations ?? []),
@@ -785,6 +828,11 @@ export class PersonController {
       }
     }
 
+    // 정밀도(연/월/일) 파생 — 월/일 미입력이면 'year'. buildUtcDateFromParts가 01-01로 채운 값을
+    // 응답 매퍼가 precision<day면 월/일을 null화해 되돌린다('연도만 앎'이 1월1일로 둔갑하는 손실 차단).
+    const birthDatePrecision = derivePrecision(dto.birth, birthDate)
+    const deathDatePrecision = derivePrecision(dto.death, deathDate)
+
     return this.personService.create({
       name: dto.name,
       middleName: dto.middleName,
@@ -801,14 +849,21 @@ export class PersonController {
       isBirthDateUnknown: dto.isBirthDateUnknown,
       // 미상↔추정 배타(서버 정규화) — 미상이면 추정 강제 해제.
       isBirthDateApproximate: dto.isBirthDateUnknown ? false : dto.isBirthDateApproximate,
+      // 미상이면 정밀도도 무의미 → null.
+      birthDatePrecision: dto.isBirthDateUnknown ? null : birthDatePrecision,
       birthNote: dto.birthNote,
       isDeathDateUnknown: dto.isDeathDateUnknown,
       isDeathDateApproximate:
         dto.isAlive || dto.isDeathDateUnknown ? false : dto.isDeathDateApproximate,
+      deathDatePrecision:
+        dto.isAlive || dto.isDeathDateUnknown ? null : deathDatePrecision,
       deathType: dto.deathType ?? null,
       deathCause: dto.deathCause ?? null,
       deathNote: dto.deathNote ?? null,
       isAlive: dto.isAlive,
+      floruitStartYear: dto.floruitStartYear,
+      floruitEndYear: dto.floruitEndYear,
+      floruitEra: dto.floruitEra,
       influence: dto.influence,
       gender: dto.gender,
       biography: dto.biography,
@@ -898,6 +953,19 @@ export class PersonController {
       deathEra = null
     }
 
+    // 정밀도 파생(PATCH 의미) — 날짜를 보내지 않으면 undefined(변경 없음), null 해제/미상이면 null.
+    let birthDatePrecision: string | null | undefined
+    if (dto.birth === null) birthDatePrecision = null
+    else if (dto.birth) birthDatePrecision = derivePrecision(dto.birth, birthDate)
+    else if (dto.birthDate) birthDatePrecision = 'day'
+    if (dto.isBirthDateUnknown === true) birthDatePrecision = null
+
+    let deathDatePrecision: string | null | undefined
+    if (dto.death === null) deathDatePrecision = null
+    else if (dto.death) deathDatePrecision = derivePrecision(dto.death, deathDate)
+    else if (dto.deathDate) deathDatePrecision = 'day'
+    if (dto.isAlive === true || dto.isDeathDateUnknown === true) deathDatePrecision = null
+
     return this.personService.update(id, {
       name: dto.name,
       middleName: dto.middleName,
@@ -914,10 +982,12 @@ export class PersonController {
       isBirthDateUnknown: dto.isBirthDateUnknown,
       // 미상↔추정 배타(서버 정규화) — 미상이면 추정 강제 해제.
       isBirthDateApproximate: dto.isBirthDateUnknown ? false : dto.isBirthDateApproximate,
+      birthDatePrecision,
       birthNote: dto.birthNote,
       isDeathDateUnknown: dto.isDeathDateUnknown,
       isDeathDateApproximate:
         dto.isAlive || dto.isDeathDateUnknown ? false : dto.isDeathDateApproximate,
+      deathDatePrecision,
       // PATCH 의미 — 보내지 않은 필드(undefined)는 변경 없음으로 둔다.
       // `?? null`로 강제하면 전기·프로필 등 부분 업데이트 시 사망 상세가 지워진다.
       // (등록 폼은 생존중 전환 시 명시적 null을 보내므로 "비우기"는 그대로 동작)
@@ -925,6 +995,9 @@ export class PersonController {
       deathCause: dto.deathCause,
       deathNote: dto.deathNote,
       isAlive: dto.isAlive,
+      floruitStartYear: dto.floruitStartYear,
+      floruitEndYear: dto.floruitEndYear,
+      floruitEra: dto.floruitEra,
       influence: dto.influence,
       gender: dto.gender,
       biography: dto.biography,

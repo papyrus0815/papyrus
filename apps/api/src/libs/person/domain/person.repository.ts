@@ -56,13 +56,20 @@ export interface CreatePersonData {
   deathEra?: 'BC' | 'AD'
   isBirthDateUnknown?: boolean
   isBirthDateApproximate?: boolean
+  /** 출생일 정밀도 'year'|'month'|'day' — 서버 파생(월/일 미입력→year). '연도만 앎'의 01-01 날조 차단 */
+  birthDatePrecision?: string | null
   birthNote?: string | null
   isDeathDateUnknown?: boolean
   isDeathDateApproximate?: boolean
+  deathDatePrecision?: string | null
   deathType?: string | null
   deathCause?: string | null
   deathNote?: string | null
   isAlive?: boolean
+  /** 활동시기(floruit) — 생몰 전면 미상 인물의 활동 연대. 크기값(양수)+floruitEra */
+  floruitStartYear?: number | null
+  floruitEndYear?: number | null
+  floruitEra?: 'BC' | 'AD' | null
   /** 역사적 영향력 (0–100) */
   influence?: number
   gender?: string
@@ -110,7 +117,7 @@ export interface CreatePersonData {
     note?: string
   }>
   /** 별칭(아명·출생명·자·아호·필명 등) — 있으면 통째로 delete-and-recreate */
-  nicknames?: Array<{ nickname: string; type?: string; priority?: number }>
+  nicknames?: Array<{ nickname: string; type?: string; priority?: number; reason?: string | null }>
   /** 등록 계정 ID (개인 정보 플랫폼) */
   accountId?: string
 }
@@ -135,13 +142,20 @@ export interface UpdatePersonData {
   deathEra?: 'BC' | 'AD' | null
   isBirthDateUnknown?: boolean
   isBirthDateApproximate?: boolean
+  /** 출생일 정밀도 'year'|'month'|'day' — 서버 파생(월/일 미입력→year). '연도만 앎'의 01-01 날조 차단 */
+  birthDatePrecision?: string | null
   birthNote?: string | null
   isDeathDateUnknown?: boolean
   isDeathDateApproximate?: boolean
+  deathDatePrecision?: string | null
   deathType?: string | null
   deathCause?: string | null
   deathNote?: string | null
   isAlive?: boolean
+  /** 활동시기(floruit) — 생몰 전면 미상 인물의 활동 연대. 크기값(양수)+floruitEra */
+  floruitStartYear?: number | null
+  floruitEndYear?: number | null
+  floruitEra?: 'BC' | 'AD' | null
   /** 역사적 영향력 (0–100) */
   influence?: number | null
   gender?: string
@@ -189,7 +203,7 @@ export interface UpdatePersonData {
     note?: string
   }>
   /** 별칭(아명·출생명·자·아호·필명 등) — 있으면 통째로 delete-and-recreate */
-  nicknames?: Array<{ nickname: string; type?: string; priority?: number }>
+  nicknames?: Array<{ nickname: string; type?: string; priority?: number; reason?: string | null }>
   /** 전기(생애 서술) 섹션 — 있으면 기존 전체 삭제 후 일괄 재생성(delete-and-recreate) */
   sections?: Array<{
     title: string

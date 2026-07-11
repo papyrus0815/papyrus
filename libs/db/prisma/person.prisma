@@ -148,6 +148,10 @@ model Person {
   /// 출생일 추정(circa) 여부 — '약 1500년'처럼 부정확 연도. isBirthDateUnknown(완전 미상)과 배타.
   isBirthDateApproximate Boolean @default(false) @map("is_birth_date_approximate")
 
+  /// 출생일 정밀도: 'year'|'month'|'day'. 서버 파생(월/일 미입력 → 'year'). null=레거시(출처불명, 소급 판정 금지).
+  /// '연도만 앎'을 buildUtcDateFromParts의 01-01 채움과 구별해 왕복 손실을 막는다. PersonLifeEvent.startDatePrecision 관례.
+  birthDatePrecision String? @map("birth_date_precision") @db.VarChar(10)
+
   /// 출생 관련 메모 (탄생 설화·유복자·칠삭둥이·조산 등 맥락). deathNote의 출생 대칭.
   birthNote String? @map("birth_note") @db.Text
 
@@ -162,6 +166,9 @@ model Person {
 
   /// 사망일 추정(circa) 여부 — isDeathDateUnknown(완전 미상)과 배타.
   isDeathDateApproximate Boolean @default(false) @map("is_death_date_approximate")
+
+  /// 사망일 정밀도: 'year'|'month'|'day'. birthDatePrecision 대칭 — 서버 파생.
+  deathDatePrecision String? @map("death_date_precision") @db.VarChar(10)
 
   /// 사망 유형 (자연사, 병사, 암살 등)
   deathType DeathType? @map("death_type")
@@ -196,6 +203,14 @@ model Person {
   /// 출생 서열 (1-base, 성별 통합 — 예: 5 → "5남" 또는 gender 미상 시 "다섯째").
   /// 생일 미상 형제가 많은 사서 인물용 — 가계도 형제 정렬의 1차 키(birthYear는 2차).
   birthOrder Int? @map("birth_order")
+
+  /// 활동시기(floruit) — 생몰이 아예 미상이고 '활동 연대'만 아는 고대·중세 인물용(생몰의 폴백, 생몰 있으면 미표시).
+  /// 크기값(양수) 연도 + floruitEra(BC/AD). 세기만 알면 start=1401·end=1500처럼 세기 경계로 채운다.
+  floruitStartYear Int? @map("floruit_start_year")
+  /// 활동시기 종료 연도(크기값). start만 있으면 단일 시점/개막.
+  floruitEndYear Int? @map("floruit_end_year")
+  /// 활동시기 기원(BC/AD). BC/AD를 걸치는 극희소 케이스는 대표 era 하나로 단순화.
+  floruitEra Era? @map("floruit_era")
 
   /// 어느 결혼에서 태어났는지 (PersonSpouse FK) — 다중 배우자 케이스에서 자녀를 어머니별로 묶기.
   /// null이면 미상 또는 단일 배우자 케이스로 모호성 없음.
@@ -662,6 +677,9 @@ model PersonNickname {
 
   /// 우선순위 (낮을수록 우선)
   priority Int? @default(0)
+
+  /// 이 별칭이 붙은 이유·유래·일화 (예: '피와 철 연설에서 유래'). type(분류)과 직교하는 자유 서술.
+  reason String? @db.VarChar(300)
 
   //--- 관계 필드
   person Person @relation(fields: [personId], references: [id], onDelete: Cascade)

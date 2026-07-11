@@ -148,6 +148,13 @@ export class NicknameDto {
   @IsOptional()
   @IsNumber()
   priority?: number
+
+  /** 이 별칭이 붙은 이유·유래 (type=분류와 직교). DB reason VarChar(300) — 초과 시 Prisma 500 대신 400. */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  @MaxLength(300)
+  reason?: string | null
 }
 
 /**
@@ -350,6 +357,28 @@ export class CreatePersonDto {
   @IsOptional()
   @IsBoolean()
   isAlive?: boolean
+
+  /**
+   * 활동시기(floruit) 시작 연도 — 크기값(양수). 생몰이 전면 미상이고 활동 연대만 아는 인물용(생몰의 폴백).
+   * 세기만 알면 start=1401·end=1500처럼 세기 경계로 채운다.
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsInt()
+  @Min(1)
+  floruitStartYear?: number | null
+
+  /** 활동시기 종료 연도(크기값). start만 있으면 단일 시점. */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsInt()
+  @Min(1)
+  floruitEndYear?: number | null
+
+  /** 활동시기 기원(BC/AD). */
+  @IsOptional()
+  @IsEnum(Era)
+  floruitEra?: Era
 
   /**
    * 역사적 영향력 (0–100)

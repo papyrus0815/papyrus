@@ -17,10 +17,17 @@ export interface PersonResponseDto {
   birthYear: number | null
   birthMonth: number | null
   birthDay: number | null
+  /** 출생일 정밀도 'year'|'month'|'day'. null=레거시(출처불명). precision<day면 위 month/day는 null로 나온다. */
+  birthDatePrecision: string | null
   deathEra: Era | null
   deathYear: number | null
   deathMonth: number | null
   deathDay: number | null
+  deathDatePrecision: string | null
+  /** 활동시기(floruit) — 생몰 전면 미상 인물의 활동 연대(생몰 폴백). 크기값(양수)+floruitEra. */
+  floruitStartYear: number | null
+  floruitEndYear: number | null
+  floruitEra: Era | null
   gender: string | null
   biography: string | null
   profileImageUrl: string | null

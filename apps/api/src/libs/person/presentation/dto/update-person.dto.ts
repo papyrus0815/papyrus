@@ -182,6 +182,27 @@ export class UpdatePersonDto {
   isAlive?: boolean
 
   /**
+   * 활동시기(floruit) 시작 연도 — 크기값(양수). 생몰 전면 미상 인물의 활동 연대. 세기만 알면 start=1401·end=1500.
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsInt()
+  @Min(1)
+  floruitStartYear?: number | null
+
+  /** 활동시기 종료 연도(크기값). */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsInt()
+  @Min(1)
+  floruitEndYear?: number | null
+
+  /** 활동시기 기원(BC/AD). */
+  @IsOptional()
+  @IsEnum(Era)
+  floruitEra?: Era
+
+  /**
    * 역사적 영향력 (0–100)
    */
   @IsOptional()

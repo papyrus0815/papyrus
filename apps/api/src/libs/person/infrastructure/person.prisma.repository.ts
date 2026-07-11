@@ -411,12 +411,32 @@ export class PersonPrismaRepository implements IPersonRepository {
       // 로컬 getter(getDate 등)로 읽으면 런타임 TZ가 UTC보다 뒤일 때 하루가 밀린다(-1일).
       // 저장과 동일하게 UTC getter로 읽어 입력한 날짜를 그대로 복원한다.
       birthYear: person.birthDate ? person.birthDate.getUTCFullYear() : null,
-      birthMonth: person.birthDate ? person.birthDate.getUTCMonth() + 1 : null,
-      birthDay: person.birthDate ? person.birthDate.getUTCDate() : null,
+      // 정밀도(precision)가 'year'/'month'면 buildUtcDateFromParts가 채운 01-01의 월·일을 되돌린다(null).
+      // '연도만 앎'이 1월1일로 둔갑하는 손실 차단. 레거시(precision NULL)는 출처불명이라 현행대로 노출(소급 판정 금지).
+      birthMonth:
+        person.birthDate && (person as any).birthDatePrecision !== 'year'
+          ? person.birthDate.getUTCMonth() + 1
+          : null,
+      birthDay:
+        person.birthDate &&
+        (person as any).birthDatePrecision !== 'year' &&
+        (person as any).birthDatePrecision !== 'month'
+          ? person.birthDate.getUTCDate()
+          : null,
+      birthDatePrecision: (person as any).birthDatePrecision ?? null,
       deathEra: person.deathEra as any,
       deathYear: person.deathDate ? person.deathDate.getUTCFullYear() : null,
-      deathMonth: person.deathDate ? person.deathDate.getUTCMonth() + 1 : null,
-      deathDay: person.deathDate ? person.deathDate.getUTCDate() : null,
+      deathMonth:
+        person.deathDate && (person as any).deathDatePrecision !== 'year'
+          ? person.deathDate.getUTCMonth() + 1
+          : null,
+      deathDay:
+        person.deathDate &&
+        (person as any).deathDatePrecision !== 'year' &&
+        (person as any).deathDatePrecision !== 'month'
+          ? person.deathDate.getUTCDate()
+          : null,
+      deathDatePrecision: (person as any).deathDatePrecision ?? null,
       gender: person.gender,
       biography: person.biography,
       profileImageUrl: person.profileImageUrl,
@@ -461,6 +481,10 @@ export class PersonPrismaRepository implements IPersonRepository {
       deathCause: (person as any).deathCause ?? null,
       deathNote: (person as any).deathNote ?? null,
       isAlive: person.isAlive ?? false,
+      // 활동시기(floruit) — 생몰 전면 미상 인물의 활동 연대(생몰 폴백)
+      floruitStartYear: (person as any).floruitStartYear ?? null,
+      floruitEndYear: (person as any).floruitEndYear ?? null,
+      floruitEra: (person as any).floruitEra ?? null,
       influence: (person as any).influence ?? null,
       // 정부 직위 재임 기록
       governmentTenures: person.GovernmentTenures ? serializeBigInt(person.GovernmentTenures) : undefined,
@@ -1745,6 +1769,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           nickname: nick.nickname.trim(),
           type: nick.type?.trim() || null,
           priority: nick.priority ?? 0,
+          reason: nick.reason?.trim() || null,
         }))
       if (rows.length) {
         await this.prisma.personNickname.createMany({ data: rows })
@@ -1929,6 +1954,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             nickname: nick.nickname.trim(),
             type: nick.type?.trim() || null,
             priority: nick.priority ?? 0,
+            reason: nick.reason?.trim() || null,
           }))
         if (rows.length) {
           await tx.personNickname.createMany({ data: rows })
