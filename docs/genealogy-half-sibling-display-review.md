@@ -144,9 +144,21 @@ siblings는 컨트롤러 선언·생성 SDK 모두 `any[]`, family-tree는 web-a
 
 **검증**: api tsc 0 · web tsc 0 · jest 29/29 · lint 순증 0(HEAD 대비 파일별 동일, panel −4) · 라이브 e2e(BFS 노드 FK·Step 7a 페치·REST siblings FK/illegitimate·헤더 분해 '아버지만 공유 2'·create/update/'' 가드 400 전부 확인, 실데이터 이복 쌍 브와디스와프 2세↔카지미에시 2세).
 
-## 9. 잔여 미결 (§8 구현 이후 남은 것)
+## 9. 배치3 구현 기록 (2026-07-11, 미커밋)
+
+레인 그룹핑 + 합류 항목(#14/#26·G29·#1 최소안) 구현 완료:
+
+- **레인 파티션**: `partitionSiblingsByKinship` — 친형제 → 이복(어머니 ID별, 첫 등장 순) → 이부(아버지 ID별) → 관계 미상 최후순. 그룹 키는 공동부모 FK(parentMarriageId 아님), 레인 내 재정렬 금지. 레인 2개 이상일 때만 헤더(단일 구성이면 flat 유지).
+- **#14/#26**: 형제 모달 2종(~90% 중복)을 `SiblingsLaneModal` 하나로 통합, 공용 `<Modal>`+`useModalBehavior` 이관(직접 Esc/트랩 구현 제거), `ModalBody` 재사용.
+- **G29**: DescendantNode의 'ancestor' 회색 재사용 해소 — 형제 계열=amber, 손자녀=sky로 카드·아바타·배지 role 통일.
+- **#1 최소안(consort 인디케이터)**: ego 자녀들의 반대편 부모가 2명 이상 갈릴 때만 자녀 카드에 «○○○ 소생» 칩 + 툴팁 반대편 부모 라인(ego 라인 생략) + 범례 항목. 혼인별 fork 재배치(최대안)는 기하 회귀 리스크로 마이그 배치(#7 rank)와 함께 보류.
+- **스트립 요약**: 근접-3 선별이 확정 반형제를 숨길 때만 '외 N명 더 보기 · 이복 K' 병기(판별불가 불산입).
+- **truncation 한정 고지**: 절단 시 모달 부제 '구분·인원수는 표시된 형제 기준'(ego='siblings', 조상=방계 3-scope — ego scope 제외로 거짓 고지 방지).
+
+**적대 리뷰 3차 9건 CONFIRMED(중복 정리 후 7건) 전건 반영**: 미상 레인 제목의 거짓 사유 단정 중립화(카드 노트와 자기모순 해소), 이름 미해소 레인 순번(①②) 병기+«미표시» 괄호화, collateralsTruncated에서 ego scope 제거, 사문 ariaLabel 제거(공용 Modal title 우선), 레인 헤딩 h4→h3+aria-labelledby(이중 낭독 방지), bespoke 스크롤 → ModalBody 재사용, 카드 밖 칩(Consort/InMarriage) 불투명 합성(커넥터 비침 방지)+死 title 제거. 검증: jest 34 · web tsc 전체 0 · lint 순증 0.
+
+## 10. 잔여 미결
 
 1. **G37**(/genealogy 처분) — 여전히 미결. 처분 확정 시 그 지면의 형제 라벨 반영 여부 재검토.
-2. **배치3(레인 그룹핑)** 착수 시점 — 기등재 배치4 #1(혼인별 자식 fork)·#14/#26 모달 공용 Modal 이관·G29 배지색과 합류 필수(별도 진행 시 rebase 충돌 확정).
-3. **이부 라벨 민감성** — 확정 조건 판별로 1차 방어했으나, 부모 FK 오입력(동명이인) 시 확정 오정보 전파는 데이터 정정 경로 의존. 신규 입력 검수 흐름은 별건 백로그.
-4. **배치4 마이그 대기열** — parentMarriage relation(양성 승격 신호)·birthLegitimacy·입양 BIOLOGICAL 게이트·birthOrder 저작 UI·퀵액션 반대편 부모 프롬프트.
+2. **이부 라벨 민감성** — 확정 조건 판별로 1차 방어했으나, 부모 FK 오입력(동명이인) 시 확정 오정보 전파는 데이터 정정 경로 의존. 신규 입력 검수 흐름은 별건 백로그.
+3. **배치4 마이그 대기열** — parentMarriage relation(양성 승격 신호)·birthLegitimacy·입양 BIOLOGICAL 게이트·birthOrder 저작 UI·퀵액션 반대편 부모 프롬프트·혼인별 자식 fork 최대안(#1+#7 rank).
