@@ -569,6 +569,10 @@ export class PersonController {
       gender: s.gender, dynasty: s.dynasty, birthDate: s.birthDate instanceof Date ? s.birthDate.toISOString() : s.birthDate ?? null,
       deathDate: s.deathDate instanceof Date ? s.deathDate.toISOString() : s.deathDate ?? null,
       profileImageUrl: s.profileImageUrl ?? null, profileImages: s.profileImages ?? [],
+      // 친/이복/이부 판별용 부모 FK + 사생아 마커 — BFS 도착 전 폴백 렌더에서도
+      // classifySiblingKinship과 '*' 마커가 동작하도록 가계도 노드와 필드 정합.
+      fatherId: s.fatherId ?? null, motherId: s.motherId ?? null,
+      illegitimate: Boolean(s.illegitimate),
     })))
 
     return {

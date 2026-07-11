@@ -323,6 +323,10 @@ export class PersonService {
     fatherId?: string | null,
     motherId?: string | null,
   ): Promise<void> {
+    // ''는 repository sanitizePersonFkFields가 '변경 없음'으로 삭제하는 실재 클라이언트
+    // 센티널 — 여기서도 undefined로 정규화해 아래 '한쪽만 갱신' 조합 검사와 일치시킨다.
+    if (fatherId === '') fatherId = undefined
+    if (motherId === '') motherId = undefined
     if (fatherId && fatherId === id)
       throw new BadRequestException('자기 자신을 아버지로 지정할 수 없습니다.')
     if (motherId && motherId === id)
@@ -330,6 +334,22 @@ export class PersonService {
 
     const start = [fatherId, motherId].filter((value): value is string => !!value)
     if (start.length === 0) return
+
+    // 동일인 중복 FK(아버지=어머니) 가드 — 형제 친/이복/이부 판별(부모 ID 집합 비교)이
+    // 축퇴 집합에서 '부모 1명 공유=친형제 확정'으로 오판하지 않도록 쓰기 시점에 차단.
+    // 한쪽만 갱신되는 update는 기존 반대편 FK와의 조합도 검사한다(undefined=변경 없음).
+    if (fatherId && motherId && fatherId === motherId)
+      throw new BadRequestException('아버지와 어머니를 같은 인물로 지정할 수 없습니다.')
+    if ((fatherId && motherId === undefined) || (motherId && fatherId === undefined)) {
+      const existing = await this.prisma.person.findUnique({
+        where: { id },
+        select: { fatherId: true, motherId: true },
+      })
+      const nextFather = fatherId !== undefined ? fatherId : existing?.fatherId
+      const nextMother = motherId !== undefined ? motherId : existing?.motherId
+      if (nextFather && nextMother && nextFather === nextMother)
+        throw new BadRequestException('아버지와 어머니를 같은 인물로 지정할 수 없습니다.')
+    }
 
     // 지정된 부모들의 조상 체인을 위로 순회 — 도중에 id가 나오면 순환(자기 자신이 조상).
     const visited = new Set<string>()
@@ -407,6 +427,10 @@ export class PersonService {
    */
   async create(data: CreatePersonData, accountId?: string): Promise<PersonResponseDto> {
     this.assertLifespanOrder(data.birthDate, data.birthEra, data.deathDate, data.deathEra)
+    // 중복 FK(아버지=어머니) 가드 — update의 assertNoParentCycle과 동일 불변식.
+    // 생성 시점엔 자기부모·순환이 원천 불가(id 미존재)라 등호 검사만으로 충분(DB 왕복 0).
+    if (data.fatherId && data.motherId && data.fatherId === data.motherId)
+      throw new BadRequestException('아버지와 어머니를 같은 인물로 지정할 수 없습니다.')
     const createData = accountId != null ? { ...data, accountId } : data
     const person = await this.personRepository.create(createData)
     await this.notificationService.notifyPerson(

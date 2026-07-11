@@ -168,6 +168,13 @@ export interface FamilyTreeNodeDto {
   illegitimate: boolean
   /** 어떤 결혼에서 태어난 자녀인지 — 다중 배우자 분기용 PersonSpouse FK */
   parentMarriageId: string | null
+  /**
+   * 부모 FK 스칼라 — 형제 친/이복/이부 판별용. parent-child 엣지는 양끝이 그래프에
+   * 있을 때만 방출되므로, '부모 미상(NULL)'과 '그래프 밖(미페치)'은 이 스칼라로만
+   * 구분할 수 있다. 판정은 클라이언트 classifySiblingKinship이 FK 직접 비교로 수행.
+   */
+  fatherId: string | null
+  motherId: string | null
   originalName: string | null
   posthumousName: string | null
   templeName: string | null

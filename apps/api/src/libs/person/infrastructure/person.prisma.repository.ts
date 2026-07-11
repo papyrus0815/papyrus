@@ -1115,6 +1115,8 @@ export class PersonPrismaRepository implements IPersonRepository {
                 id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
+                // 친/이복/이부 판별용 부모 FK + 사생아 마커 (형제 투영에 노출)
+                fatherId: true, motherId: true, illegitimate: true,
                 profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
               },
             },
@@ -1160,6 +1162,8 @@ export class PersonPrismaRepository implements IPersonRepository {
                 id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
+                // 친/이복/이부 판별용 부모 FK + 사생아 마커 (형제 투영에 노출)
+                fatherId: true, motherId: true, illegitimate: true,
                 profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
               },
             },
@@ -4594,6 +4598,9 @@ export class PersonPrismaRepository implements IPersonRepository {
         where,
         select: { id: true },
         orderBy: [
+          // birthOrder(서차) 1차 — 사서 인물은 생일 미상 형제가 많아 birthDate만으로는
+          // NULLS LAST 절단에서 체계적으로 탈락한다(컬럼 도입 목적 그대로 복합키 정렬).
+          { birthOrder: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
           { birthDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
           { id: Prisma.SortOrder.asc },
         ],
@@ -4694,6 +4701,24 @@ export class PersonPrismaRepository implements IPersonRepository {
       excludeIds: [personId],
     })
 
+    // ── Step 7a: 형제의 반대편 부모 (cap 40) ─────────────────────────
+    // 자녀는 Step 5가 반대편 부모를 항상 페치하지만 형제는 대응 단계가 없어,
+    // 이복/이부 툴팁·모달의 부모 이름 해소가 후궁·무등록 혼인(PersonSpouse 없음)에서
+    // 실패한다. 판별 자체는 노드 fatherId/motherId 스칼라 비교라 이 페치와 무관 —
+    // 여기서 못 가져와도 판정은 정확하고, 이름만 «이 가계도에 미표시»로 폴백된다.
+    const siblingOtherParentIds: string[] = []
+    for (const sid of sibIds) {
+      const sib = nodeMap.get(sid)
+      if (!sib) continue
+      if (sib.fatherId && !egoParentIds.includes(sib.fatherId)) siblingOtherParentIds.push(sib.fatherId)
+      if (sib.motherId && !egoParentIds.includes(sib.motherId)) siblingOtherParentIds.push(sib.motherId)
+    }
+    // 7a로 '새로' 유입되는 노드를 기억 — Step 9 배우자 수집(cap 200)에서 제외해,
+    // 이름 해소 보조용 노드의 배우자가 렌더되는 후손·방계의 배우자 예산을 선점하지 않게 한다.
+    const supportOnlyCandidateIds = siblingOtherParentIds.filter(id => !nodeMap.has(id))
+    await fetchBatch(siblingOtherParentIds, { cap: 40, scope: 'sibling-other-parents' })
+    const supportOnlyNodeIds = new Set(supportOnlyCandidateIds.filter(id => nodeMap.has(id)))
+
     // ── Step 7b/7c/7d/7e: 방계 친척 ── includeCollaterals=false면 일괄 스킵 ─
     let auntsUnclesIds: string[] = []
     if (includeCollaterals) {
@@ -4752,7 +4777,9 @@ export class PersonPrismaRepository implements IPersonRepository {
     // 4대 조상·방계·후손이 모두 nodeMap에 들어와 있어 부풀 위험이 큰 단계.
     // cap을 두지 않으면 합스부르크급 가계에서 한번에 수천 행을 페치하게 된다.
     const allSpouseIds: string[] = []
-    for (const [, p] of nodeMap) {
+    for (const [nid, p] of nodeMap) {
+      // Step 7a 이름 해소 보조 전용 노드 — 배우자는 임베드가 렌더하지 않는 데이터라 cap 예산에서 제외
+      if (supportOnlyNodeIds.has(nid)) continue
       for (const sid of getSpouseIds(p)) allSpouseIds.push(sid)
     }
     await fetchBatch(allSpouseIds, { cap: 200, scope: 'all-spouses' })
@@ -4829,6 +4856,12 @@ export class PersonPrismaRepository implements IPersonRepository {
         // 사생아·서출 + 어머니별 분기용 결혼 FK
         illegitimate: Boolean(p.illegitimate),
         parentMarriageId: (p.parentMarriageId ?? null) as string | null,
+        // 부모 FK 스칼라 — 형제 친/이복/이부 판별용. 엣지는 양끝이 nodeMap에 있을 때만
+        // 방출되므로 '미상(NULL)'과 '그래프 밖(미페치)'은 이 값으로만 구분 가능.
+        // 자기부모(fatherId===id) 손상 행은 엣지 억제(src===tgt continue)와 동일 정책으로
+        // 스칼라에서도 null 새니타이즈 — 클라이언트가 유령 조상 카드를 그리지 않게.
+        fatherId: (p.fatherId && p.fatherId !== p.id ? p.fatherId : null) as string | null,
+        motherId: (p.motherId && p.motherId !== p.id ? p.motherId : null) as string | null,
         // 새 메타 필드 (UI 카드 hover/확장에 사용)
         originalName:         (p.originalName ?? null) as string | null,
         posthumousName:       (p.posthumousName ?? null) as string | null,
