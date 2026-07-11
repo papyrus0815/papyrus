@@ -179,6 +179,23 @@ const ActionButton = styled.button<{ $primary?: boolean }>`
   }
 `
 
+/** 전역 용어 편집 시 파급(blast radius) 경고 — 이 용어를 링크한 모든 문서에 반영됨을 알림. */
+const GlobalTermNotice = styled.div`
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  border-radius: 10px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#92400e')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(251,191,36,0.1)' : '#fffbeb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(251,191,36,0.28)' : '#fde68a'};
+`
+
 interface TermLinkModalProps {
   visible: boolean
   explanationOnly: boolean
@@ -526,6 +543,10 @@ function TermEditModalComponent({
             </>
           ) : (
             <>
+              <GlobalTermNotice>
+                전역 용어입니다. 수정하면 이 용어를 링크한 다른 문서에도 함께
+                반영됩니다.
+              </GlobalTermNotice>
               <NewLabel>용어명</NewLabel>
               <NewInput
                 placeholder="용어명 (필수)"

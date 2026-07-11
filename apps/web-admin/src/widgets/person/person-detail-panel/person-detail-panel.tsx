@@ -56,6 +56,7 @@ import {
   uploadImage,
 } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
+import { RichTextEntityTooltip } from '@/shared/ui/rich-text-read-view'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
@@ -114,7 +115,6 @@ import {
   AvatarSpinner,
   BackToListButton,
   BioContent,
-  BioDynastyTooltipPopover,
   BioEditActions,
   BioEditorWrap,
   BioEmptyClickable,
@@ -133,8 +133,6 @@ import {
   BioProse,
   BioSectionLabel,
   BioSectionLabelRow,
-  BioTermTooltipOverlay,
-  BioTermTooltipPopover,
   BioText,
   CloseBtn,
   CountMuted,
@@ -2892,43 +2890,45 @@ export function PersonDetailPanel({
       </AnimatePresence>
 
       {termTooltip && (
-        <BioTermTooltipOverlay
-          role="presentation"
-          onClick={() => setTermTooltip(null)}
-        >
-          <BioTermTooltipPopover
-            $x={termTooltip.x}
-            $y={termTooltip.y}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <strong>{termTooltip.name}</strong>
-            <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {termTooltip.description === null
-                ? ' 로딩…'
-                : termTooltip.description || '(설명 없음)'}
-            </span>
-          </BioTermTooltipPopover>
-        </BioTermTooltipOverlay>
+        <RichTextEntityTooltip
+          x={termTooltip.x}
+          y={termTooltip.y}
+          eyebrow={termTooltip.name}
+          eyebrowColor="#0d9488"
+          description={termTooltip.description}
+          onClose={() => setTermTooltip(null)}
+          action={
+            termTooltip.countryId
+              ? {
+                  label: '국가 보기 →',
+                  onClick: () => {
+                    const countryId = termTooltip.countryId
+                    setTermTooltip(null)
+                    if (countryId) navigate(pathKeys.countryDetail(countryId))
+                  },
+                }
+              : null
+          }
+        />
       )}
 
       {dynastyTooltip && (
-        <BioTermTooltipOverlay
-          role="presentation"
-          onClick={() => setDynastyTooltip(null)}
-        >
-          <BioDynastyTooltipPopover
-            $x={dynastyTooltip.x}
-            $y={dynastyTooltip.y}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <strong>가문 · {dynastyTooltip.name}</strong>
-            <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {dynastyTooltip.description === null
-                ? ' 로딩…'
-                : dynastyTooltip.description || '(설명 없음)'}
-            </span>
-          </BioDynastyTooltipPopover>
-        </BioTermTooltipOverlay>
+        <RichTextEntityTooltip
+          x={dynastyTooltip.x}
+          y={dynastyTooltip.y}
+          eyebrow={`가문 · ${dynastyTooltip.name}`}
+          eyebrowColor="#6366f1"
+          description={dynastyTooltip.description}
+          onClose={() => setDynastyTooltip(null)}
+          action={{
+            label: '가문 구성원 보기 →',
+            onClick: () => {
+              const { dynastyId, name } = dynastyTooltip
+              setDynastyTooltip(null)
+              setDynastyModal({ id: dynastyId, name })
+            },
+          }}
+        />
       )}
 
       {/* 가문 한눈에 보기 — 가문 KPI·시조 가문 칩 클릭으로 열림(페이지 이동 대체) */}

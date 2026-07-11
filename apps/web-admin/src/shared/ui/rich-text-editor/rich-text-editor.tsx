@@ -17,6 +17,7 @@ import {
   updateGlossaryTerm,
 } from '@/shared/api/glossary'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { invalidateGlossaryTermCache } from '@/shared/hooks/use-rich-text-prose-click'
 import type { MentionItem } from '@/shared/lib/mention/mention-system'
 import { MENTION_TYPE_CONFIG } from '@/shared/lib/mention/mention-system'
 import {
@@ -2166,9 +2167,13 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     setTermLinkNewName(selectedText)
     setTermLinkNewDesc('')
     setTermLinkDocumentOnly(true)
-    setTermLinkQuery('')
-    setTermLinkResults([])
-  }, [selectedText])
+    // 선택 문구로 검색을 시드해 **기존 용어를 먼저** 노출한다(E2). 이전엔 검색창이 비어 있고
+    // 신규 등록칸만 프리필돼, 같은 이름의 전역 용어가 있어도 중복 생성으로 흐르기 쉬웠다.
+    const seed = selectedText.trim()
+    setTermLinkQuery(selectedText)
+    if (seed) searchTermLinks(seed)
+    else setTermLinkResults([])
+  }, [selectedText, searchTermLinks])
 
   /** 설명 넣기: 이 문서에서만 쓰는 설명만 입력 (용어 검색 없음) — documentScope 있을 때만 노출 */
   const handleOpenExplanationModal = useCallback(() => {
@@ -2251,7 +2256,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       const term = await createGlossaryTerm(dto)
       insertTermLink(term)
     } catch (err) {
+      // 실패해도 모달은 그대로 열려 있어 재시도 가능 — 무성 실패(console만) 대신 안내(E3).
       console.error('용어 등록 실패:', err)
+      notify.error('용어 등록에 실패했습니다. 다시 시도해 주세요.')
     }
   }, [
     termLinkNewName,
@@ -2335,6 +2342,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         name: termEditName.trim(),
         description: termEditDesc.trim() || null,
       })
+      // 읽기 툴팁 캐시가 옛 값을 계속 보여주지 않도록 무효화.
+      invalidateGlossaryTermCache(termEditId)
       if (editorRef.current) {
         const span = editorRef.current.querySelector(
           `.term[data-term-id="${termEditId}"]`,
@@ -2375,6 +2384,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         handleContentChange()
       }
       await deleteGlossaryTerm(termEditId)
+      invalidateGlossaryTermCache(termEditId)
       handleCloseTermEditModal()
     } catch (err) {
       console.error('설명 삭제 실패:', err)

@@ -3,12 +3,35 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { NavigateFunction } from 'react-router-dom'
 
 import { dynastyApi } from '@/shared/api/dynasty'
-import { getGlossaryTermById } from '@/shared/api/glossary'
+import { getGlossaryTermById, type GlossaryTermDto } from '@/shared/api/glossary'
 import { getHistoricalCountryById } from '@/shared/api/historical-countries'
 import { militaryUnitApi } from '@/shared/api/military-unit'
 import { politicalPartyApi } from '@/shared/api/political-party'
 import { pathKeys } from '@/shared/router'
 import { notify } from '@/shared/ui/toast'
+
+/**
+ * 세션 단위 용어/가문 상세 캐시 — 같은 항목을 반복 클릭해도 재fetch·「로딩…」 깜빡임을
+ * 없앤다(C4). 백과 한 세션에서 term/dynasty 수는 작아 evict 없이 유지한다.
+ * `.has()`로 캐시 유무를 판단(설명이 null인 정상 항목과 미조회를 구분).
+ */
+const glossaryTermCache = new Map<string, GlossaryTermDto>()
+const dynastyDescCache = new Map<string, string | null>()
+
+/**
+ * 용어 캐시 무효화 — 용어 수정/삭제 후 호출해 다음 클릭이 최신값을 다시 불러오게 한다.
+ * (id 생략 시 전체 비움). 캐시가 세션 내내 유지돼 편집 결과가 툴팁에 안 비치는 것을 방지.
+ */
+export function invalidateGlossaryTermCache(id?: string): void {
+  if (id) glossaryTermCache.delete(id)
+  else glossaryTermCache.clear()
+}
+
+/** 가문 툴팁 설명 캐시 무효화 (id 생략 시 전체). */
+export function invalidateDynastyTooltipCache(id?: string): void {
+  if (id) dynastyDescCache.delete(id)
+  else dynastyDescCache.clear()
+}
 
 export type RichTextTermTooltipState = {
   termId: string
@@ -16,6 +39,9 @@ export type RichTextTermTooltipState = {
   description: string | null
   x: number
   y: number
+  /** 용어의 출처 국가(현대/역사) — 팝오버 「더 보기」 딥링크용(C5). */
+  countryId?: string | null
+  historicalCountryId?: string | null
 }
 
 export type RichTextDynastyTooltipState = {
@@ -138,29 +164,35 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
           ''
         if (id) {
           e.preventDefault()
+          const cachedDesc = dynastyDescCache.has(id)
+            ? (dynastyDescCache.get(id) ?? '')
+            : null
           setDynastyTooltip({
             dynastyId: id,
             name,
-            description: null,
+            description: cachedDesc,
             x: e.clientX,
             y: e.clientY,
           })
-          dynastyApi
-            .getById(id)
-            .then((dynasty) => {
-              setDynastyTooltip((prev) =>
-                prev && prev.dynastyId === id
-                  ? { ...prev, description: dynasty.description ?? null }
-                  : prev,
-              )
-            })
-            .catch(() => {
-              setDynastyTooltip((prev) =>
-                prev && prev.dynastyId === id
-                  ? { ...prev, description: '(정보를 불러올 수 없습니다)' }
-                  : prev,
-              )
-            })
+          if (!dynastyDescCache.has(id)) {
+            dynastyApi
+              .getById(id)
+              .then((dynasty) => {
+                dynastyDescCache.set(id, dynasty.description ?? null)
+                setDynastyTooltip((prev) =>
+                  prev && prev.dynastyId === id
+                    ? { ...prev, description: dynasty.description ?? '' }
+                    : prev,
+                )
+              })
+              .catch(() => {
+                setDynastyTooltip((prev) =>
+                  prev && prev.dynastyId === id
+                    ? { ...prev, description: '(정보를 불러올 수 없습니다)' }
+                    : prev,
+                )
+              })
+          }
         }
         return
       }
@@ -204,8 +236,11 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
           .then((p) => {
             if (p.countryId) go(p.countryId)
             else
-              notify.error(
-                '이 정당에 연결된 현대 국가가 없어 해당 국가 화면으로 이동할 수 없습니다.',
+              // 연결된 현대 국가가 없어 이동할 곳이 없음 — 무엇을 눌렀는지 알려주고
+              // 붉은 오류 대신 안내 톤으로(데드엔드 완화).
+              notify.show(
+                `정당 「${p.name}」 — 연결된 현대 국가가 없어 이동할 수 없습니다.`,
+                { icon: 'ℹ️' },
               )
           })
           .catch(() => notify.error('정당 정보를 불러올 수 없습니다.'))
@@ -268,8 +303,9 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
               if (first)
                 navigate(pathKeys.countryHistorical(first))
               else
-                notify.error(
-                  '연결된 현대 국가가 없어 해당 국가의 역사 탭으로 이동할 수 없습니다.',
+                notify.show(
+                  `「${hc.name}」 — 연결된 현대 국가가 없어 역사 탭으로 이동할 수 없습니다.`,
+                  { icon: 'ℹ️' },
                 )
             })
             .catch(() =>
@@ -294,13 +330,14 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
           e.preventDefault()
           militaryUnitApi
             .getById(mid)
-            .then((u) => {
-              const cid = u?.countryId
-              if (cid)
-                navigate(pathKeys.countryGovernment(cid))
+            .then((unit) => {
+              const unitCountryId = unit?.countryId
+              if (unitCountryId)
+                navigate(pathKeys.countryGovernment(unitCountryId))
               else
-                notify.error(
-                  '이 부대에 연결된 현대 국가가 없어 행정조직 탭으로 이동할 수 없습니다.',
+                notify.show(
+                  `부대 「${unit?.name ?? ''}」 — 연결된 현대 국가가 없어 행정조직 탭으로 이동할 수 없습니다.`,
+                  { icon: 'ℹ️' },
                 )
             })
             .catch(() => notify.error('군부대 정보를 불러올 수 없습니다.'))
@@ -315,28 +352,42 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
           termEl.getAttribute('data-term-name') || termEl.textContent || ''
         if (termId) {
           e.preventDefault()
+          const cached = glossaryTermCache.get(termId)
           setTermTooltip({
             termId,
-            name,
-            description: null,
+            // 표제·설명·출처를 캐시(있으면)로 즉시 채워 재fetch·깜빡임 제거(C4).
+            name: cached?.name || name,
+            description: cached ? (cached.description ?? '') : null,
+            countryId: cached?.countryId ?? null,
+            historicalCountryId: cached?.historicalCountryId ?? null,
             x: e.clientX,
             y: e.clientY,
           })
-          getGlossaryTermById(termId)
-            .then((termDto) => {
-              setTermTooltip((prev) =>
-                prev && prev.termId === termId
-                  ? { ...prev, description: termDto.description }
-                  : prev,
-              )
-            })
-            .catch(() => {
-              setTermTooltip((prev) =>
-                prev && prev.termId === termId
-                  ? { ...prev, description: '(설명을 불러올 수 없습니다)' }
-                  : prev,
-              )
-            })
+          if (!cached) {
+            getGlossaryTermById(termId)
+              .then((termDto) => {
+                glossaryTermCache.set(termId, termDto)
+                setTermTooltip((prev) =>
+                  prev && prev.termId === termId
+                    ? {
+                        ...prev,
+                        // 전역 개명 반영 — 본문에 프리즈된 옛 이름 대신 최신 표제(C4).
+                        name: termDto.name || prev.name,
+                        description: termDto.description ?? '',
+                        countryId: termDto.countryId ?? null,
+                        historicalCountryId: termDto.historicalCountryId ?? null,
+                      }
+                    : prev,
+                )
+              })
+              .catch(() => {
+                setTermTooltip((prev) =>
+                  prev && prev.termId === termId
+                    ? { ...prev, description: '(설명을 불러올 수 없습니다)' }
+                    : prev,
+                )
+              })
+          }
         }
       }
     },

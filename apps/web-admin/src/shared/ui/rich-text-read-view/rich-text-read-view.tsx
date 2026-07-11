@@ -58,6 +58,25 @@ const Root = styled.div`
   ${richTextReadonlyHorizontalRuleCss}
   ${richTextReadonlyMediaAndTablesCss}
   ${richTextReadonlyEntityLinksCss}
+
+  /* 엔티티 링크 어포던스 구분(읽기 뷰 전용 — 에디터 미적용). 단일 amber라 클릭 결과가
+     '페이지 이동/제자리 툴팁/모달'로 제각각이던 예측 불가를 완화:
+     확실히 다른 화면으로 이동하는 타입엔 ↗ 글리프를 붙이고, 제자리 요약 툴팁형(가문)은
+     도움말 커서로 '정보' 성격을 표시한다. person/historicalCountry/party/military는
+     맥락에 따라 이동/툴팁이 갈려 중립 유지. */
+  .entity-link[data-entity-type='event']::after,
+  .entity-link[data-entity-type='company']::after,
+  .entity-link[data-entity-type='country']::after,
+  .entity-link[data-entity-type='personGroup']::after {
+    content: '↗';
+    margin-left: 3px;
+    font-size: 0.82em;
+    font-weight: 400;
+    opacity: 0.65;
+  }
+  .entity-link[data-entity-type='dynasty'] {
+    cursor: help;
+  }
 `
 
 export type RichTextReadViewProps = {

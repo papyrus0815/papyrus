@@ -839,11 +839,16 @@ export function PersonBiographySections({
                       </TypeChip>
                     ))}
                   </TypeSelectRow>
+                  <AuthoringHint>
+                    문구를 선택해 우클릭하면 <strong>용어 연결</strong>(설명 툴팁)·
+                    <strong>엔티티 연결</strong>(인물·사건·기업·국가·가문 등 링크)을
+                    넣을 수 있습니다.
+                  </AuthoringHint>
                   <RichTextEditor
                     value={row.content}
                     onChange={(v) => updateField(row.key, { content: v })}
                     showTitle={false}
-                    placeholder="본문을 입력하세요. 서식·이미지·인물 멘션을 넣을 수 있습니다."
+                    placeholder="본문을 입력하세요. 서식·이미지·멘션과 용어·엔티티 링크를 넣을 수 있습니다."
                     onImageUpload={createRichTextImageUploader('persons')}
                     /* 편집 진입 시 본문에 포커스 — preventScroll로 현재 스크롤
                        위치 유지(네이티브 input autoFocus처럼 위로 점프하지 않음). */
@@ -1178,6 +1183,18 @@ const EditHint = styled.div`
   margin: 6px 2px 0;
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 저작 발견성(E1) — 용어·엔티티 링크 저작 진입(문구 선택 후 우클릭)을 안내. 사건 저작 화면과 동형. */
+const AuthoringHint = styled.p`
+  margin: 0 2px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  strong {
+    color: ${({ theme }) => theme.colors.text.primary};
+    font-weight: 600;
+  }
 `
 
 const EditActions = styled.div`
