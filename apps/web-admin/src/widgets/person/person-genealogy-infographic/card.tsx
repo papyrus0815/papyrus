@@ -10,7 +10,6 @@ import { NODE_H, NODE_W } from './constants'
 import { FamilyTreeLookupContext, useNodeOpenable } from './context'
 import type { AvatarRole, FlagSource, NodePerson, PersonMetaSource } from './types'
 import {
-  birthYearOf,
   buildPersonTooltip,
   buildPersonTooltipLines,
   deathYearOf,
@@ -367,14 +366,9 @@ export function DescendantNode({
   inMarriagesWith?: FamilyTreePerson[]
   onPersonClick?: (id: string) => void
 }) {
-  // BC=음수(부호 있는 연도) — 표시 시 formatYear로 'BC n' 변환. era 없이는 BC가 AD로 둔갑.
-  const birth = birthYearOf(person)
   const death = deathYearOf(person)
-  const lifespan =
-    birth == null && death == null ? null
-    : birth != null && death == null ? `${formatYear(birth)}–`
-    : birth == null && death != null ? `?–${formatYear(death)}`
-    : `${formatYear(birth)}–${formatYear(death)}`
+  // 생몰 한 줄 — 정본 formatLifespan에 위임하는 lifeSpan util 재사용(BC-safe·표기 통일).
+  const lifespan = lifeSpan(person)
   const src = person.profileImageUrl
     ? getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl
     : null
