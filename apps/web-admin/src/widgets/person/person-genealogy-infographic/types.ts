@@ -31,6 +31,12 @@ export type NodePerson = PersonNameFields & {
   illegitimate?: boolean | null
   parentMarriageId?: string | null
   /**
+   * 부모 FK 스칼라 — 형제 친/이복/이부 판별(classifySiblingKinship) 입력.
+   * BFS(ftPersonToNodePerson)와 REST 상세 siblings 투영 양쪽에서 채워진다.
+   */
+  fatherId?: string | null
+  motherId?: string | null
+  /**
    * BFS spouse 엣지 provenance — true면 PersonSpouse 미등록(자녀의 다른 친부모로 추론된
    * 배우자). 확정 배우자와 구분해 '배우자(추정)'로 표시(오정보 방지).
    */
@@ -79,6 +85,10 @@ export type PersonMetaSource = {
   preEnthronementTitle?: string | null
   birthPlace?: string | null
   deathPlace?: string | null
+  /** 형제 카드 전용(withSiblingKinshipMeta 주입) — 부모 이름·판별불가 고지 */
+  fatherName?: string | null
+  motherName?: string | null
+  kinshipNote?: string | null
 }
 
 export type PersonTooltipLine = { label: string; value: string }

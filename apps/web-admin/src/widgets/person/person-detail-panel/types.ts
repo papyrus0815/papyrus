@@ -187,6 +187,9 @@ export interface PersonDetailData {
     defaultNameDisplayOrder?: string | null
   } | null
   dynasty?: { id: string; name: string } | null
+  /** 부모 FK 스칼라 — 형제 친/이복/이부 판별(classifySiblingKinship)의 anchor 입력 */
+  fatherId?: string | null
+  motherId?: string | null
   father?: PersonAncestorNode | null
   mother?: PersonAncestorNode | null
   spouse?: PersonNameFields | null
@@ -195,6 +198,9 @@ export interface PersonDetailData {
     profileImages?: { url?: string | null }[] | null;
     dynasty?: { id?: string; name?: string | null } | null;
     birthDate?: string | Date | null; deathDate?: string | Date | null;
+    /** 친/이복/이부 판별용 부모 FK + 사생아 마커 (REST 투영과 정합) */
+    fatherId?: string | null; motherId?: string | null;
+    illegitimate?: boolean | null;
   }> | null
   children?: Array<PersonNameFields & {
     id?: string; gender?: string | null; profileImageUrl?: string | null;

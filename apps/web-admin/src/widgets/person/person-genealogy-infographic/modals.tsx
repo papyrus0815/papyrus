@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useContext, useEffect } from 'react'
 import styled from 'styled-components'
 
 import type { FamilyTreePerson } from '@/shared/api/persons-family-tree'
@@ -6,21 +6,33 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { NODE_W } from './constants'
 import { DescendantNode, SiblingCompactNode } from './card'
+import { FamilyTreeLookupContext } from './context'
+import {
+  classifySiblingKinship,
+  siblingKinshipAriaLabel,
+  siblingKinshipBadgeLabel,
+  withSiblingKinshipMeta,
+  type SiblingParentFks,
+} from './family-tree-derive'
 import type { NodePerson } from './types'
 
 /**
  * "외 N명 더 보기" 칩 클릭 시 전체 형제를 출생연도순 컴팩트 카드 그리드로 표시.
  * 가계도 인포그래픽 위에 오버레이 — 클릭 외부·Esc로 닫음.
+ * anchorParents: 판별 기준(ego)의 부모 FK — 없으면 판별 없이 무수식 '형제'.
  */
 export function SiblingsListModal({
   siblings,
+  anchorParents,
   onClose,
   onPersonClick,
 }: {
   siblings: NodePerson[]
+  anchorParents?: SiblingParentFks | null
   onClose: () => void
   onPersonClick?: (id: string) => void
 }) {
+  const nodeMap = useContext(FamilyTreeLookupContext)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -38,16 +50,25 @@ export function SiblingsListModal({
           </SiblingsModalClose>
         </SiblingsModalHeader>
         <SiblingsModalGrid>
-          {siblings.map((sib, idx) => (
-            <SiblingCompactNode
-              key={sib.id ?? `sib-modal-${idx}`}
-              person={sib}
-              onPersonClick={(id) => {
-                onClose()
-                onPersonClick?.(id)
-              }}
-            />
-          ))}
+          {siblings.map((sib, idx) => {
+            const kinship = anchorParents ? classifySiblingKinship(anchorParents, sib) : null
+            return (
+              <SiblingCompactNode
+                key={sib.id ?? `sib-modal-${idx}`}
+                person={
+                  kinship
+                    ? withSiblingKinshipMeta(sib, kinship, nodeMap.size > 0 ? nodeMap : null)
+                    : sib
+                }
+                badge={kinship ? siblingKinshipBadgeLabel(kinship) : undefined}
+                badgeAriaLabel={kinship ? siblingKinshipAriaLabel(kinship) : undefined}
+                onPersonClick={(id) => {
+                  onClose()
+                  onPersonClick?.(id)
+                }}
+              />
+            )
+          })}
         </SiblingsModalGrid>
       </SiblingsModalPanel>
     </SiblingsModalOverlay>
@@ -70,6 +91,7 @@ export function AncestorSiblingsModal({
   onClose: () => void
   onPersonClick?: (id: string) => void
 }) {
+  const nodeMap = useContext(FamilyTreeLookupContext)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -94,17 +116,22 @@ export function AncestorSiblingsModal({
           </SiblingsModalClose>
         </SiblingsModalHeader>
         <SiblingsModalGrid>
-          {siblings.map((sib, idx) => (
-            <DescendantNode
-              key={sib.id ?? `anc-sib-${idx}`}
-              person={sib}
-              badge="형제"
-              onPersonClick={(id) => {
-                onClose()
-                onPersonClick?.(id)
-              }}
-            />
-          ))}
+          {siblings.map((sib, idx) => {
+            // 판별 기준(anchor)은 이 모달의 주인공 조상 본인 — per-anchor 구조 그대로.
+            const kinship = classifySiblingKinship(person, sib)
+            return (
+              <DescendantNode
+                key={sib.id ?? `anc-sib-${idx}`}
+                person={withSiblingKinshipMeta(sib, kinship, nodeMap.size > 0 ? nodeMap : null)}
+                badge={siblingKinshipBadgeLabel(kinship)}
+                badgeAriaLabel={siblingKinshipAriaLabel(kinship)}
+                onPersonClick={(id) => {
+                  onClose()
+                  onPersonClick?.(id)
+                }}
+              />
+            )
+          })}
         </SiblingsModalGrid>
       </SiblingsModalPanel>
     </SiblingsModalOverlay>

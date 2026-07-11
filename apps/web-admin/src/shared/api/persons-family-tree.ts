@@ -25,6 +25,13 @@ export interface FamilyTreePerson {
   illegitimate?: boolean
   /** 어떤 결혼에서 태어난 자녀인지 — 다중 배우자 분기용 PersonSpouse FK */
   parentMarriageId?: string | null
+  /**
+   * 부모 FK 스칼라 — 형제 친/이복/이부 판별용 (FamilyTreeNodeDto와 대칭 유지).
+   * 엣지는 양끝이 그래프에 있을 때만 방출되므로 '부모 미상(NULL)'과
+   * '그래프 밖(미페치)'은 이 값으로만 구분할 수 있다.
+   */
+  fatherId?: string | null
+  motherId?: string | null
   // 카드 hover/확장용 메타
   originalName?: string | null
   posthumousName?: string | null

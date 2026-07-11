@@ -93,6 +93,7 @@ import { AwardRegisterModal } from '@/widgets/person/award-register-modal/award-
 import { CareerRegisterModal } from '@/widgets/person/career-register-modal/career-register-modal'
 import { PersonLifeEventFormModal } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
 import { PersonLifeTimelineInfographic } from '@/widgets/person/person-life-timeline-infographic/person-life-timeline-infographic'
+import { classifySiblingKinship } from '@/widgets/person/person-genealogy-infographic/family-tree-derive'
 import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-infographic/person-genealogy-infographic'
 import { PersonHumanRelationshipsSection } from '@/widgets/person/person-human-relationships-section/person-human-relationships-section'
 import { SameDynastyMembersSection } from '@/widgets/person/same-dynasty-members-section/same-dynasty-members-section'
@@ -1229,7 +1230,7 @@ export function PersonDetailPanel({
               )}
               {(() => {
                 // 가족 구성 요약 뱃지 (부/모/배우자/자녀 수)
-                const badges: Array<{ key: string; label: string; personId?: string }> = []
+                const badges: Array<{ key: string; label: string; personId?: string; title?: string }> = []
                 if (p.father)
                   badges.push({
                     key: 'father',
@@ -1256,27 +1257,56 @@ export function PersonDetailPanel({
                     label: `자녀 ${childrenCount}`,
                   })
                 const siblingCount = (p.siblings ?? []).length
-                if (siblingCount > 0)
+                if (siblingCount > 0) {
+                  // 공유 축 분해 툴팁 — 사실 진술만(이복/이부 단정 없음). REST siblings는
+                  // take 무제한(무절단 완전)이라 억제 조건 불필요. FK 미도달(구 캐시)이면 생략.
+                  const egoFks = { fatherId: p.fatherId ?? null, motherId: p.motherId ?? null }
+                  let fullCount = 0
+                  let fatherOnlyCount = 0
+                  let motherOnlyCount = 0
+                  let hasFkData = false
+                  for (const sib of p.siblings ?? []) {
+                    if (sib?.fatherId === undefined && sib?.motherId === undefined) continue
+                    hasFkData = true
+                    const shared = classifySiblingKinship(egoFks, sib).sharedAxis
+                    if (shared === 'both') fullCount += 1
+                    else if (shared === 'father') fatherOnlyCount += 1
+                    else if (shared === 'mother') motherOnlyCount += 1
+                  }
+                  const parts: string[] = []
+                  if (fullCount > 0) parts.push(`부모 모두 공유 ${fullCount}`)
+                  if (fatherOnlyCount > 0) parts.push(`아버지만 공유 ${fatherOnlyCount}`)
+                  if (motherOnlyCount > 0) parts.push(`어머니만 공유 ${motherOnlyCount}`)
                   badges.push({
                     key: 'siblings',
                     label: `형제 ${siblingCount}`,
+                    title: hasFkData && parts.length > 0 ? parts.join(' · ') : undefined,
                   })
+                }
                 if (badges.length === 0) return null
                 return (
                   <FamilyBadgeRow>
-                    {badges.map((b) =>
-                      b.personId ? (
+                    {badges.map((badgeItem) =>
+                      badgeItem.personId ? (
                         <FamilyBadge
-                          key={b.key}
+                          key={badgeItem.key}
                           as="button"
                           type="button"
                           style={{ cursor: 'pointer' }}
-                          onClick={() => handlePersonClick(b.personId!)}
+                          title={badgeItem.title}
+                          onClick={() => handlePersonClick(badgeItem.personId!)}
                         >
-                          {b.label}
+                          {badgeItem.label}
                         </FamilyBadge>
                       ) : (
-                        <FamilyBadge key={b.key}>{b.label}</FamilyBadge>
+                        <FamilyBadge
+                          key={badgeItem.key}
+                          title={badgeItem.title}
+                          // title은 마우스 hover 전용 — SR 경로는 라벨+분해 병합 aria-label로 확보
+                          aria-label={badgeItem.title ? `${badgeItem.label} — ${badgeItem.title}` : undefined}
+                        >
+                          {badgeItem.label}
+                        </FamilyBadge>
                       ),
                     )}
                   </FamilyBadgeRow>

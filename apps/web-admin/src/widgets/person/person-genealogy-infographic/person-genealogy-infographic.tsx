@@ -48,7 +48,15 @@ import {
 } from './constants'
 import { FamilyTreeLookupContext } from './context'
 import { DescendantSubtree } from './descendant-subtree'
-import { ftPersonToNodePerson, ftResolveParentIds } from './family-tree-derive'
+import {
+  classifySiblingKinship,
+  ftPersonToNodePerson,
+  ftResolveParentIds,
+  siblingKinshipAriaLabel,
+  siblingKinshipBadgeLabel,
+  withSiblingKinshipMeta,
+  type SiblingParentFks,
+} from './family-tree-derive'
 import {
   ForkFromOneParent,
   ForkFromTwoGrandparents,
@@ -104,8 +112,9 @@ type SpouseEdgeEntry = {
  * 임베드 위젯이 렌더하지 않는 BFS scope — truncation 배너에서 제외한다.
  * 'spouse-children'(배우자의 다른 결혼 자녀)은 페치되지만 임베드는 그리지 않으므로,
  * 화면에 없는 그룹의 "일부만 표시" 유령 배너를 막는다.
+ * 'sibling-other-parents'는 형제 툴팁의 부모 이름 해소용 보조 페치 — 카드 그룹이 아니다.
  */
-const EMBED_UNRENDERED_SCOPES = new Set<string>(['spouse-children'])
+const EMBED_UNRENDERED_SCOPES = new Set<string>(['spouse-children', 'sibling-other-parents'])
 
 export function PersonGenealogyInfographic({
   ego,
@@ -398,6 +407,22 @@ export function PersonGenealogyInfographic({
     [ftDerivedEgoFamily, spousesProp, spouseLegacy],
   )
 
+  /**
+   * 형제 판별 기준(anchor=ego)의 부모 FK — BFS 노드 스칼라(정본) 우선, REST 폴백은
+   * ego.fatherId 또는 father/mother prop의 id. 폴백도 동일한 FK 사실이라 판정 규칙이 같아
+   * BFS 도착 시 라벨이 강등되지 않는다(동일 입력 → 동일 판정).
+   */
+  const egoParentFks = useMemo<SiblingParentFks>(() => {
+    const bfsEgo = ego.id ? ftNodeMap.get(ego.id) : undefined
+    if (bfsEgo && bfsEgo.fatherId !== undefined && bfsEgo.motherId !== undefined) {
+      return { fatherId: bfsEgo.fatherId ?? null, motherId: bfsEgo.motherId ?? null }
+    }
+    return {
+      fatherId: ego.fatherId ?? father?.id ?? null,
+      motherId: ego.motherId ?? mother?.id ?? null,
+    }
+  }, [ftNodeMap, ego, father, mother])
+
   const clickableProps = (id?: string) => {
     // BFS 응답에 isOwned=false로 온 노드는 상세를 열 수 없음(다른 계정 등록) → 클릭 비활성 + dim.
     const openable = !id || ftNodeMap.get(id)?.isOwned !== false
@@ -553,6 +578,18 @@ export function PersonGenealogyInfographic({
             </TruncationBannerText>
           </TruncationBanner>
         )}
+
+        {/* 접이식 표기 범례 — 이복/이부 배지·서출 마커·추정 배우자 정의 (닫힘 기본) */}
+        <LegendDetails>
+          <LegendSummary>표기 안내</LegendSummary>
+          <LegendBody>
+            <LegendTerm>이복형제</LegendTerm> 아버지 같고 어머니 다름 ·{' '}
+            <LegendTerm>이부형제</LegendTerm> 어머니 같고 아버지 다름 ·{' '}
+            <LegendTerm>형제</LegendTerm>(무표기) 친형제 또는 부모 기록 미상 — 카드에 마우스를
+            올리면 사유가 표시됩니다 · <LegendTerm>*</LegendTerm> 서출(이복 여부와 별개) ·{' '}
+            <LegendTerm>(추정)</LegendTerm> 자녀 관계로 추정된 배우자
+          </LegendBody>
+        </LegendDetails>
 
         <TreeCanvas
           role="tree"
@@ -713,13 +750,18 @@ export function PersonGenealogyInfographic({
                 {hasSiblings ? (
                   <SiblingSlot>
                     <SiblingsStack>
-                      {visibleSiblings.map((sib, idx) => (
-                        <SiblingCompactNode
-                          key={sib.id ?? `sib-${idx}`}
-                          person={sib}
-                          onPersonClick={onPersonClick}
-                        />
-                      ))}
+                      {visibleSiblings.map((sib, idx) => {
+                        const kinship = classifySiblingKinship(egoParentFks, sib)
+                        return (
+                          <SiblingCompactNode
+                            key={sib.id ?? `sib-${idx}`}
+                            person={withSiblingKinshipMeta(sib, kinship, familyTreeData ? ftNodeMap : null)}
+                            badge={siblingKinshipBadgeLabel(kinship)}
+                            badgeAriaLabel={siblingKinshipAriaLabel(kinship)}
+                            onPersonClick={onPersonClick}
+                          />
+                        )
+                      })}
                       {hiddenSiblingCount > 0 && (
                         <SiblingMoreToggle
                           type="button"
@@ -956,6 +998,7 @@ export function PersonGenealogyInfographic({
         {siblingsModalOpen && (
           <SiblingsListModal
             siblings={siblingList}
+            anchorParents={egoParentFks}
             onClose={() => setSiblingsModalOpen(false)}
             onPersonClick={onPersonClick}
           />
@@ -974,6 +1017,34 @@ export function PersonGenealogyInfographic({
 }
 
 // ─── 메인 컴포넌트 전용 styled (헤더·캔버스·레이아웃) ─────────────────
+const LegendDetails = styled.details`
+  align-self: flex-start;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const LegendSummary = styled.summary`
+  width: fit-content;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const LegendBody = styled.p`
+  margin: 4px 0 0;
+`
+
+const LegendTerm = styled.strong`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
 const Root = styled.div`
   display: flex;
   flex-direction: column;

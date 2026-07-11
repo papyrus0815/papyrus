@@ -52,4 +52,5 @@ export const TRUNCATION_SCOPE_LABEL: Record<string, string> = {
   'all-spouses': '배우자 일괄',
   'spouse-parents': '처가·시가 부모',
   'spouse-parent-spouses': '처가·시가 부부쌍',
+  'sibling-other-parents': '형제의 다른 쪽 부모',
 }

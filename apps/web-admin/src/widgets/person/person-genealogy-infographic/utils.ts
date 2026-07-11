@@ -105,6 +105,10 @@ export function buildPersonTooltipLines(person: PersonMetaSource): PersonTooltip
   if (person.posthumousName) lines.push({ label: '시호', value: person.posthumousName })
   if (person.birthPlace) lines.push({ label: '출생', value: person.birthPlace })
   if (person.deathPlace) lines.push({ label: '사망', value: person.deathPlace })
+  // 형제 카드 전용 — withSiblingKinshipMeta가 주입 (소생 구분 열람 + 판별불가 사유 고지)
+  if (person.fatherName) lines.push({ label: '아버지', value: person.fatherName })
+  if (person.motherName) lines.push({ label: '어머니', value: person.motherName })
+  if (person.kinshipNote) lines.push({ label: '형제 관계', value: person.kinshipNote })
   return lines
 }
 

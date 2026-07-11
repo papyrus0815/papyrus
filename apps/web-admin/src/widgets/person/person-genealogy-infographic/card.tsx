@@ -298,13 +298,21 @@ export function NodePersonCompactCard({
 }
 
 // ─── 형제자매 카드 ─────────────────────────────────────────────────
-/** 형제자매 카드 — 본인 카드와 동일한 NODE_W·NODE_H로 렌더. */
+/**
+ * 형제자매 카드 — 본인 카드와 동일한 NODE_W·NODE_H로 렌더.
+ * badge: classifySiblingKinship 판별 결과 라벨('형제'|'이복형제'|'이부형제') —
+ * 판별불가·친형제는 무수식 '형제'(기본값). 색은 전 분류 amber sibling 단일 유지(텍스트만 분화).
+ */
 export function SiblingCompactNode({
   person,
   onPersonClick,
+  badge = '형제',
+  badgeAriaLabel,
 }: {
   person: NodePerson
   onPersonClick?: (id: string) => void
+  badge?: string
+  badgeAriaLabel?: string
 }) {
   const openable = useNodeOpenable(person.id)
   const clickable = Boolean(onPersonClick && person.id) && openable
@@ -333,7 +341,7 @@ export function SiblingCompactNode({
     >
       <GeoThumbnail person={person} role="sibling" />
       <NodeNameBlock person={person} />
-      <NodeBadge $role="sibling">형제</NodeBadge>
+      <NodeBadge $role="sibling" aria-label={badgeAriaLabel}>{badge}</NodeBadge>
       <CardHoverInfo person={person} />
     </GeoNode>
   )
@@ -348,12 +356,14 @@ export function SiblingCompactNode({
 export function DescendantNode({
   person,
   badge = '손자녀',
+  badgeAriaLabel,
   /** 사촌결혼 — 가계도 안 다른 후손/자녀와 결혼한 경우 상대 인물들 (다중 결혼 가능) */
   inMarriagesWith,
   onPersonClick,
 }: {
   person: FamilyTreePerson
   badge?: string
+  badgeAriaLabel?: string
   inMarriagesWith?: FamilyTreePerson[]
   onPersonClick?: (id: string) => void
 }) {
@@ -429,8 +439,9 @@ export function DescendantNode({
         {lifespan && <NodeMeta>{lifespan}</NodeMeta>}
         {person.dynasty?.name && <NodeDynasty>{person.dynasty.name}</NodeDynasty>}
       </NodeNameWrap>
-      {/* 후손은 sky(descendant), 조상 형제 모달의 '형제' 배지는 amber(sibling) — 방향성 색 유지 */}
-      <NodeBadge $role={badge === '형제' ? 'sibling' : 'descendant'}>{badge}</NodeBadge>
+      {/* 후손은 sky(descendant), 조상 형제 모달의 형제 계열 배지는 amber(sibling) — 방향성 색 유지.
+          '이복형제'/'이부형제'도 amber를 유지해야 하므로 등호가 아닌 접미 판정. */}
+      <NodeBadge $role={badge.endsWith('형제') ? 'sibling' : 'descendant'} aria-label={badgeAriaLabel}>{badge}</NodeBadge>
       <CardHoverInfo person={person} />
       {inMarriagesWith && inMarriagesWith.length > 0 && (() => {
         // 자기 자신은 절대 partner가 될 수 없음 — 데이터 이상 방어

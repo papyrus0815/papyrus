@@ -30,6 +30,7 @@ import { FiArrowLeft, FiDownload, FiSearch, FiTarget, FiUsers } from 'react-icon
 import { getPersonFamilyTree, type FamilyTreePerson, type FamilyTreeData } from '@/shared/api/persons-family-tree'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { TRUNCATION_SCOPE_LABEL } from '@/widgets/person/person-genealogy-infographic/constants'
 
 // ─── Layout sizes ──────────────────────────────────────────────────
 // 데스크탑/모바일 분기 — 노드 카드와 간격을 viewport에 맞춰 축소.
@@ -769,7 +770,8 @@ function GenealogyFlow({ personId }: { personId: string }) {
 
         {data?.truncations && data.truncations.length > 0 && (
           <TruncationNotice>
-            데이터가 일부 절단되었습니다 — {data.truncations.map((t) => `${t.scope} ${t.took}+`).join(', ')}
+            데이터가 일부 절단되었습니다 —{' '}
+            {data.truncations.map((trunc) => `${TRUNCATION_SCOPE_LABEL[trunc.scope] ?? trunc.scope} ${trunc.took}+`).join(', ')}
           </TruncationNotice>
         )}
       </FlowWrap>
