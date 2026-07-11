@@ -59,6 +59,7 @@ import {
 } from '@/shared/api/person-life-events'
 import { type PersonResponseDto, getAllPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { formatLifespan as formatLifespanText } from '@/shared/lib/lifespan-text'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormTextarea } from '@/shared/ui/form-input/form-input'
@@ -2203,22 +2204,22 @@ function formatRelationshipPeriod(
   return ''
 }
 
-/** 인물 brief → 생몰년 표시. 예: "1452 – 1519", "BC 384 – BC 322", "1888 –" */
+/** 인물 brief → 생몰년 표시. 정본 formatLifespan에 위임(ISO→부호연도, 네이티브 Date 금지). */
 function formatLifespan(p: {
   birthDate?: string | null
   deathDate?: string | null
 }): string {
-  const yearOf = (iso: string | null | undefined): string | null => {
+  const toSignedYear = (iso: string | null | undefined): number | null => {
     if (!iso) return null
     const isBce = iso.startsWith('-')
-    const body = isBce ? iso.slice(1) : iso
-    const year = body.slice(0, 4).replace(/^0+/, '') || '0'
-    return isBce ? `BC ${year}` : year
+    const year = parseInt((isBce ? iso.slice(1) : iso).slice(0, 4), 10)
+    if (!Number.isFinite(year) || year === 0) return null
+    return isBce ? -year : year
   }
-  const b = yearOf(p.birthDate ?? null)
-  const d = yearOf(p.deathDate ?? null)
-  if (!b && !d) return ''
-  return `${b ?? '?'} – ${d ?? ''}`.trim()
+  return formatLifespanText({
+    birthYear: toSignedYear(p.birthDate),
+    deathYear: toSignedYear(p.deathDate),
+  })
 }
 
 /** 인물 중심 멘토 계보 — 위로 스승, 아래로 제자 */

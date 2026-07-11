@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { FiEdit2, FiPlus } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
+import { formatLifespan } from '@/shared/lib/lifespan-text'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { PersonGenealogyInfographic } from '@/widgets/person/person-genealogy-infographic/person-genealogy-infographic'
@@ -41,13 +42,23 @@ export function PersonDetailView({
 
   const fullName = getPersonDisplayName(person)
 
-  const birthYearText = person.birthYear
-    ? `${person.birthYear}${person.birthEra === 'BC' ? ' BC' : ''}`
-    : '?'
-  const deathYearText = person.deathYear
-    ? `${person.deathYear}${person.deathEra === 'BC' ? ' BC' : ''}`
-    : '?'
-  const lifespanText = `${birthYearText} ~ ${deathYearText}`
+  // 생몰 한 줄 — 정본 formatLifespan에 위임(부호연도 어댑트). BC/circa/생존 표기 통일.
+  const lifespanText =
+    formatLifespan({
+      birthYear:
+        person.birthYear != null
+          ? person.birthEra === 'BC'
+            ? -person.birthYear
+            : person.birthYear
+          : null,
+      deathYear:
+        person.deathYear != null
+          ? person.deathEra === 'BC'
+            ? -person.deathYear
+            : person.deathYear
+          : null,
+      isAlive: person.isAlive ?? undefined,
+    }) || '생몰년 미상'
 
   return (
     <Container>

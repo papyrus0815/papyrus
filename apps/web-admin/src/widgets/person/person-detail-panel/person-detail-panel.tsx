@@ -966,12 +966,6 @@ export function PersonDetailPanel({
   const monarchPositionTitle =
     firstReign?.positionDefinition?.title || null
 
-  const birthYearText = p.birthYear
-    ? `${p.birthYear}${p.birthEra === 'BC' ? ' BC' : ''}`
-    : '?'
-  const deathYearText = p.deathYear
-    ? `${p.deathYear}${p.deathEra === 'BC' ? ' BC' : ''}`
-    : null
   const isDeceased = p.deathYear != null
   const currentYear = new Date().getFullYear()
   const ageAtDeath =
@@ -982,9 +976,6 @@ export function PersonDetailPanel({
     !isDeceased && p.birthYear != null && p.birthEra !== 'BC'
       ? currentYear - p.birthYear
       : null
-  const lifespanText = isDeceased
-    ? `${birthYearText} ~ ${deathYearText}${ageAtDeath != null ? ` · 사망 · ${ageAtDeath}세` : ' · 사망'}`
-    : `${birthYearText} ~ ${currentAge != null ? `생존 (${currentAge}세)` : '생존'}`
 
   /** 이름 밑: 년월일~년월일 (출생~사망 또는 출생~생존) */
   const birthDateStr = formatDateKo(

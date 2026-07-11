@@ -6,6 +6,7 @@ import styled, { css } from 'styled-components'
 
 import type { Person } from '@/shared/api/person'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { formatLifespan as formatLifespanText } from '@/shared/lib/lifespan-text'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 
@@ -19,23 +20,15 @@ function signedYear(era: 'BC' | 'AD' | null | undefined, year: number): number {
   return era === 'BC' ? -year : year
 }
 
-function formatYearLabel(
-  era: 'BC' | 'AD' | null | undefined,
-  year: number | null | undefined,
-): string {
-  if (year == null || !Number.isFinite(year)) return ''
-  return era === 'BC' ? `BC ${year}` : `${year}`
-}
-
+/** 생몰 한 줄 — 정본 formatLifespan에 위임(부호연도 어댑트). 빈 문자열이면 '연도 미상' 폴백. */
 function formatLifespan(p: Person): string {
-  const b = formatYearLabel(p.birthEra ?? null, p.birthYear ?? null)
-  const d = p.isAlive
-    ? '—'
-    : formatYearLabel(p.deathEra ?? null, p.deathYear ?? null)
-  if (!b && !d) return '연도 미상'
-  if (!b) return `? — ${d || '?'}`
-  if (p.isAlive) return `${b} —`
-  return `${b} — ${d || '?'}`
+  return (
+    formatLifespanText({
+      birthYear: p.birthYear != null ? signedYear(p.birthEra, p.birthYear) : null,
+      deathYear: p.deathYear != null ? signedYear(p.deathEra, p.deathYear) : null,
+      isAlive: p.isAlive ?? undefined,
+    }) || '연도 미상'
+  )
 }
 
 function ageOf(p: Person): number | null {

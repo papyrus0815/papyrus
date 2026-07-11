@@ -1,4 +1,5 @@
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { formatLifespan as formatLifespanText } from '@/shared/lib/lifespan-text'
 import {
   type PersonNameFields,
   getPersonDisplayName,
@@ -65,9 +66,15 @@ export function lifeSpan(person: NodePerson): string | null {
   const birth = birthYearOf(person)
   const death = deathYearOf(person)
   if (birth == null && death == null) return null
-  if (birth != null && death == null) return `${formatYear(birth)}–`
-  if (birth == null && death != null) return `?–${formatYear(death)}`
-  return `${formatYear(birth)}–${formatYear(death)}`
+  // 정본 formatLifespan에 위임(부호연도). NodePerson에 isAlive가 없어 생존/미상 구분 불가 →
+  // 사망 미상은 현행대로 'b–'로 표기(정밀한 isAlive 배선은 후속, 검토서 §R2).
+  return (
+    formatLifespanText({
+      birthYear: birth,
+      deathYear: death,
+      isAlive: death == null,
+    }) || null
+  )
 }
 
 export function resolvePersonThumbnailSrc(p: {
