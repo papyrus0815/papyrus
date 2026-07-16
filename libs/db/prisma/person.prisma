@@ -380,8 +380,8 @@ model PersonSection {
   /// 섹션 제목 (예: 생애, 업적, 평가)
   title String @db.VarChar(500)
 
-  /// 섹션 내용 (HTML)
-  content String @db.Text
+  /// 섹션 내용 (HTML) — TEXT(64KB)는 한글(3B/자)+엔티티 마크업 장문 전기에서 초과 실사례가 있어 MEDIUMTEXT(16MB)로 확장
+  content String @db.MediumText
 
   /// 표시 순서
   order Int @default(0)

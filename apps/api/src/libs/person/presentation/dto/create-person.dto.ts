@@ -3,8 +3,8 @@ import { Type } from 'class-transformer'
 
 import { MaxByteLength } from '../../../shared/max-byte-length.validator'
 
-/** PersonSection.content 는 `@db.Text`(MySQL TEXT = 65535 bytes) — 저장 전 바이트 상한 검증. */
-const BIOGRAPHY_SECTION_CONTENT_MAX_BYTES = 65535
+/** PersonSection.content 는 `@db.MediumText`(MySQL MEDIUMTEXT = 16777215 bytes) — 저장 전 바이트 상한 검증. */
+const BIOGRAPHY_SECTION_CONTENT_MAX_BYTES = 16777215
 
 /**
  * 배우자 관계 DTO (인물 생성/수정 시)
@@ -36,7 +36,7 @@ export class BiographySectionDto {
   title!: string
 
   @IsString()
-  @MaxByteLength(BIOGRAPHY_SECTION_CONTENT_MAX_BYTES) // @db.Text = 65535 bytes
+  @MaxByteLength(BIOGRAPHY_SECTION_CONTENT_MAX_BYTES) // @db.MediumText = 16777215 bytes
   content!: string
 
   @IsOptional()
