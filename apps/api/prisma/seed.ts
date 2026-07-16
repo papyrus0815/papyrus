@@ -25,6 +25,10 @@ import {
   seedItalyHistoricalCountries,
   seedItalyHistoricalCountryRelations,
   seedFranceHistoricalCountries,
+  seedAustriaHistoricalCountries,
+  seedAustriaHistoricalCountryRelations,
+  seedCroatiaHistoricalCountries,
+  seedCroatiaHistoricalCountryRelations,
   seedNapoleonIII,
   seedPalmerston,
   seedCavour,
@@ -170,6 +174,22 @@ async function main() {
 
         // 7-6. 프랑스 관련 역사 국가 시딩 (서프랑크~제5공화국)
         await seedFranceHistoricalCountries(prisma)
+
+        // 7-7. 오스트리아 관련 역사 국가 시딩 (변경백령~연합군 점령기)
+        //  · 의존: seedGermanyHistoricalCountries(신성로마제국·독일 연방·나치 독일 — 계승/소속 관계 대상)
+        await seedAustriaHistoricalCountries(prisma)
+
+        // 7-8. 오스트리아 역사 국가 계승·소속 관계 시딩
+        await seedAustriaHistoricalCountryRelations(prisma)
+
+        // 7-9. 크로아티아 관련 역사 국가 시딩 (공국~사회주의 공화국)
+        //  · 의존: seedCountries(현대 HR) + seedGermanyHistoricalCountries(나치 독일)
+        //    + seedAustriaHistoricalCountries(오스트리아 제국·오스트리아-헝가리)
+        //    + seedSerbiaHistoricalCountries(유고슬라비아 계열) — 계승/소속 관계 대상
+        await seedCroatiaHistoricalCountries(prisma)
+
+        // 7-10. 크로아티아 역사 국가 계승·소속 관계 시딩
+        await seedCroatiaHistoricalCountryRelations(prisma)
 
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)

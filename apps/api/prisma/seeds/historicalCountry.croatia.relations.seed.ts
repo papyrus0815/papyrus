@@ -1,0 +1,144 @@
+import {
+  HistoricalMembershipRole,
+  TransitionEventType,
+  TransitionScope,
+} from '@prisma/client'
+
+import { PrismaService } from '../prisma.service'
+
+// ── 계승 관계 정의 ────────────────────────────────────────────────────────────
+// { predecessor, successor, eventType, transitionScope }
+const TRANSITIONS: {
+  predecessor: string
+  successor: string
+  eventType: TransitionEventType
+  transitionScope: TransitionScope
+}[] = [
+  // 공국 → 왕국 (925 토미슬라브 국왕 즉위)
+  { predecessor: '크로아티아 공국', successor: '크로아티아 왕국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 왕국 → 헝가리 동군연합 (1102 콜로만 대관)
+  { predecessor: '크로아티아 왕국', successor: '크로아티아 왕국 (헝가리 동군연합)', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 동군연합 → 합스부르크 (1527 체틴 의회 페르디난트 1세 선출)
+  { predecessor: '크로아티아 왕국 (헝가리 동군연합)', successor: '크로아티아 왕국 (합스부르크)', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 합스부르크 → 크로아티아-슬라보니아 (1868 나고드바)
+  { predecessor: '크로아티아 왕국 (합스부르크)', successor: '크로아티아-슬라보니아 왕국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 크로아티아-슬라보니아 → 유고슬라비아 합류 (1918)
+  { predecessor: '크로아티아-슬라보니아 왕국', successor: '세르비아-크로아티아-슬로베니아 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 달마티아 → 유고슬라비아 합류 (1918)
+  { predecessor: '달마티아 왕국', successor: '세르비아-크로아티아-슬로베니아 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 베네치아령 달마티아 → 오스트리아령 달마티아 왕국 (1797 캄포포르미오 조약, 1815 빈 회의 확정)
+  { predecessor: '베네치아 공화국', successor: '달마티아 왕국', eventType: TransitionEventType.TREATY, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 두브로브니크 → 나폴레옹 병합 (1808)
+  { predecessor: '두브로브니크 공화국', successor: '프랑스 제1제국', eventType: TransitionEventType.CONQUEST, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 프랑스 일리리아 주 → 오스트리아 달마티아 왕국 (1815 빈 회의)
+  { predecessor: '프랑스 제1제국', successor: '달마티아 왕국', eventType: TransitionEventType.TREATY, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 추축국 침공으로 유고슬라비아 분할 → NDH (1941)
+  { predecessor: '유고슬라비아 왕국', successor: '크로아티아 독립국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // NDH 붕괴 → 사회주의 크로아티아 (1945)
+  { predecessor: '크로아티아 독립국', successor: '크로아티아 사회주의 공화국', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
+]
+
+// ── 소속 관계 정의 ────────────────────────────────────────────────────────────
+// { parent, member, role, isLeadingMember }
+const MEMBERSHIPS: {
+  parent: string
+  member: string
+  role: HistoricalMembershipRole
+  isLeadingMember?: boolean
+}[] = [
+  // 헝가리 왕관령 (1102~1868)
+  { parent: '헝가리 왕국', member: '크로아티아 왕국 (헝가리 동군연합)', role: HistoricalMembershipRole.UNION },
+  { parent: '헝가리 왕국', member: '크로아티아 왕국 (합스부르크)', role: HistoricalMembershipRole.UNION },
+  { parent: '헝가리 왕국', member: '크로아티아-슬라보니아 왕국', role: HistoricalMembershipRole.UNION },
+  // 합스부르크 제국 소속 (1804~1918)
+  { parent: '오스트리아 제국', member: '크로아티아 왕국 (합스부르크)', role: HistoricalMembershipRole.UNION },
+  { parent: '오스트리아 제국', member: '달마티아 왕국', role: HistoricalMembershipRole.UNION },
+  { parent: '오스트리아-헝가리 제국', member: '크로아티아-슬라보니아 왕국', role: HistoricalMembershipRole.UNION },
+  { parent: '오스트리아-헝가리 제국', member: '달마티아 왕국', role: HistoricalMembershipRole.UNION },
+  // 두브로브니크의 종주권 (1358 자다르 조약 후 헝가리 보호, 1458 이후 오스만 조공)
+  { parent: '헝가리 왕국', member: '두브로브니크 공화국', role: HistoricalMembershipRole.PROTECTORATE },
+  { parent: '오스만 제국', member: '두브로브니크 공화국', role: HistoricalMembershipRole.VASSAL_STATE },
+  // NDH = 독일·이탈리아 괴뢰국
+  { parent: '나치 독일 (제3제국)', member: '크로아티아 독립국', role: HistoricalMembershipRole.PROTECTORATE },
+  // 유고슬라비아 연방 구성 공화국
+  { parent: '유고슬라비아 사회주의 연방 공화국', member: '크로아티아 사회주의 공화국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+]
+
+export async function seedCroatiaHistoricalCountryRelations(
+  prisma: PrismaService,
+): Promise<void> {
+  console.log('\n🔗 크로아티아 역사 국가 계승·소속 관계 시딩 시작...')
+
+  // 이름 → id 맵 구축
+  const nameToId = new Map<string, string>()
+  const allNames = new Set([
+    ...TRANSITIONS.map((t) => t.predecessor),
+    ...TRANSITIONS.map((t) => t.successor),
+    ...MEMBERSHIPS.map((m) => m.parent),
+    ...MEMBERSHIPS.map((m) => m.member),
+  ])
+  for (const name of allNames) {
+    const found = await prisma.historicalCountry.findFirst({ where: { name } })
+    if (found) nameToId.set(name, found.id)
+    else console.warn(`  ⚠️  찾을 수 없음: ${name}`)
+  }
+
+  // ── 계승 관계 ──────────────────────────────────────────────────────
+  console.log('\n  📜 계승 관계 등록...')
+  let transitionCount = 0
+  for (const t of TRANSITIONS) {
+    const predecessorId = nameToId.get(t.predecessor)
+    const successorId = nameToId.get(t.successor)
+    if (!predecessorId || !successorId) continue
+
+    const exists = await prisma.historicalCountryTransition.findFirst({
+      where: { predecessorId, successorId },
+    })
+    if (!exists) {
+      await prisma.historicalCountryTransition.create({
+        data: {
+          predecessorId,
+          successorId,
+          eventType: t.eventType,
+          transitionScope: t.transitionScope,
+        },
+      })
+      console.log(`    ✅ ${t.predecessor} → ${t.successor} (${t.eventType})`)
+      transitionCount++
+    } else {
+      console.log(`    ♻️  ${t.predecessor} → ${t.successor}`)
+    }
+  }
+
+  // ── 소속 관계 ──────────────────────────────────────────────────────
+  console.log('\n  🏛️  소속 관계 등록...')
+  let membershipCount = 0
+  for (const m of MEMBERSHIPS) {
+    const parentId = nameToId.get(m.parent)
+    const memberId = nameToId.get(m.member)
+    if (!parentId || !memberId) continue
+
+    const exists = await prisma.historicalCountryMembership.findFirst({
+      where: {
+        historicalCountryId: parentId,
+        memberCountryId: memberId,
+      },
+    })
+    if (!exists) {
+      await prisma.historicalCountryMembership.create({
+        data: {
+          historicalCountryId: parentId,
+          memberCountryId: memberId,
+          role: m.role,
+          isLeadingMember: m.isLeadingMember ?? false,
+        },
+      })
+      console.log(`    ✅ [${m.parent}] ← ${m.member}${m.isLeadingMember ? ' (주축)' : ''}`)
+      membershipCount++
+    } else {
+      console.log(`    ♻️  [${m.parent}] ← ${m.member}`)
+    }
+  }
+
+  console.log(`\n✅ 계승 관계 ${transitionCount}건, 소속 관계 ${membershipCount}건 완료\n`)
+}

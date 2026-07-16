@@ -232,6 +232,15 @@ const COUNTRIES: CountryData[] = [
     continentName: '유럽',
   },
   {
+    name: '크로아티아',
+    localName: 'Hrvatska',
+    flagEmoji: '🇭🇷',
+    isoCode: 'HR',
+    population: 3871833,
+    areaSqKm: 56594.0,
+    continentName: '유럽',
+  },
+  {
     name: '폴란드',
     localName: 'Polska',
     flagEmoji: '🇵🇱',
