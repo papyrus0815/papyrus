@@ -157,8 +157,13 @@ siblings는 컨트롤러 선언·생성 SDK 모두 `any[]`, family-tree는 web-a
 
 **적대 리뷰 3차 9건 CONFIRMED(중복 정리 후 7건) 전건 반영**: 미상 레인 제목의 거짓 사유 단정 중립화(카드 노트와 자기모순 해소), 이름 미해소 레인 순번(①②) 병기+«미표시» 괄호화, collateralsTruncated에서 ego scope 제거, 사문 ariaLabel 제거(공용 Modal title 우선), 레인 헤딩 h4→h3+aria-labelledby(이중 낭독 방지), bespoke 스크롤 → ModalBody 재사용, 카드 밖 칩(Consort/InMarriage) 불투명 합성(커넥터 비침 방지)+死 title 제거. 검증: jest 34 · web tsc 전체 0 · lint 순증 0.
 
-## 10. 잔여 미결
+## 10. 후속 구현 기록 (2026-07-11, 미커밋)
+
+- **배치3 렌더 테스트**: `modals.spec.tsx` 4케이스(레인 헤더·flat 폴백·절단 고지·공용 Modal aria) — 브라우저 육안 확인(확장 미연결) 대체 회귀 가드.
+- **배치4 무마이그 — 퀵액션 반대편 부모 프롬프트**: '자녀 추가'가 ego 쪽 슬롯만 기록해 판별불가 46%를 양산하던 상류 근인 개선. 자녀 링크 직후 반대편 부모 미기록이면 지정 피커가 이어서 열림(닫으면 건너뜀). ego 배우자를 목록 상단 핀(`PersonSelectModal`에 `pinnedIds` prop 신설 — 정렬·검색 뒤 부상). 적대 리뷰 P3 4건 반영: 죽은 정렬→진짜 핀, 즉석 생성 자녀 이름 소실(onSelect 2번째 인자), 쓰기 직전 서버 재확인+교체 confirm(스테일 풀 덮어쓰기 차단), 프롬프트를 탭 조건 밖 렌더(유령 재출현 방지)+문구 '(닫으면 건너뜀)'. tsc 0 · lint 순증 0.
+
+## 11. 잔여 미결
 
 1. **G37**(/genealogy 처분) — 여전히 미결. 처분 확정 시 그 지면의 형제 라벨 반영 여부 재검토.
 2. **이부 라벨 민감성** — 확정 조건 판별로 1차 방어했으나, 부모 FK 오입력(동명이인) 시 확정 오정보 전파는 데이터 정정 경로 의존. 신규 입력 검수 흐름은 별건 백로그.
-3. **배치4 마이그 대기열** — parentMarriage relation(양성 승격 신호)·birthLegitimacy·입양 BIOLOGICAL 게이트·birthOrder 저작 UI·퀵액션 반대편 부모 프롬프트·혼인별 자식 fork 최대안(#1+#7 rank).
+3. **배치4 마이그 대기열** — parentMarriage relation(양성 승격 신호)·birthLegitimacy·입양 BIOLOGICAL 게이트·birthOrder 저작 UI·혼인별 자식 fork 최대안(#1+#7 rank). 기존 대기열(#7·#19·#2·#31)과 additive 마이그 1회 합류 원칙 유지.
