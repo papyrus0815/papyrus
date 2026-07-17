@@ -3259,6 +3259,82 @@ export const AchievementCheckboxRow = styled.label`
   }
 `
 
+export const AchievementLinkLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const AchievementLinkBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.18)'};
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  &:hover {
+    color: var(--ach-strong);
+    border-color: var(--ach-base);
+    border-style: solid;
+  }
+  &:focus-visible {
+    outline: 2px solid var(--ach-base);
+    outline-offset: 2px;
+  }
+`
+
+export const AchievementLinkedChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 240px;
+  padding: 3px 6px 3px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(20,184,166,0.16)' : 'rgba(20,184,166,0.1)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`
+
+export const AchievementLinkClearBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.08)'};
+  }
+  &:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 1px;
+  }
+`
+
 export const AchievementFormActions = styled.div`
   display: flex;
   justify-content: flex-end;
@@ -3322,6 +3398,82 @@ export const AchievementEmpty = styled.p`
   margin: 0;
   padding: 6px 2px 2px;
   font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+// ─── 업적 연결 사건 선택 모달 — 포털 렌더라 --ach-* 변수가 상속되지 않음(테마 토큰만 사용) ───
+
+export const AchievementEventPickerSearchRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    color: ${({ theme }) => theme.colors.text.primary};
+    outline: none;
+    &::placeholder {
+      color: ${({ theme }) => theme.colors.text.tertiary};
+    }
+  }
+`
+
+export const AchievementEventPickerList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  max-height: min(56vh, 400px);
+  overflow-y: auto;
+`
+
+export const AchievementEventPickerRow = styled.button`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: -2px;
+  }
+`
+
+export const AchievementEventPickerRowTitle = styled.span`
+  font-size: 13.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  word-break: break-word;
+`
+
+export const AchievementEventPickerRowMeta = styled.span`
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const AchievementEventPickerEmpty = styled.p`
+  margin: 0;
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 

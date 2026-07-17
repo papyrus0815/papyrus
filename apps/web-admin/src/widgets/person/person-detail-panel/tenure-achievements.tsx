@@ -6,8 +6,9 @@
  * - 변경 후에는 onChanged()로 부모가 상세 쿼리를 무효화해 최신 목록을 다시 받게 함.
  * - accent 색은 부모 카드(재임=인디고 / 재위=틸)와 연동.
  */
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   FiAward,
@@ -17,11 +18,15 @@ import {
   FiEyeOff,
   FiLink,
   FiPlus,
+  FiSearch,
   FiTrash2,
+  FiX,
 } from 'react-icons/fi'
 
+import { getAllEvents } from '@/shared/api/events'
 import { personCareerApi } from '@/shared/api/person-career'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { Modal } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
 import { compareTenureAchievementsByOrder, formatIsoDateKo } from './helpers'
@@ -35,12 +40,22 @@ import {
   AchievementDateField,
   AchievementEmpty,
   AchievementEventBadge,
+  AchievementEventPickerEmpty,
+  AchievementEventPickerList,
+  AchievementEventPickerRow,
+  AchievementEventPickerRowMeta,
+  AchievementEventPickerRowTitle,
+  AchievementEventPickerSearchRow,
   AchievementForm,
   AchievementFormActions,
   AchievementFormRow,
   AchievementHeaderRow,
   AchievementHiddenBadge,
   AchievementIconBtn,
+  AchievementLinkBtn,
+  AchievementLinkClearBtn,
+  AchievementLinkLabel,
+  AchievementLinkedChip,
   AchievementNode,
   AchievementRowActions,
   AchievementRowDesc,
@@ -65,6 +80,12 @@ export interface TenureAchievementItem {
   showOnEventsPage?: boolean | null
   eventId?: string | null
   event?: { id: string; title?: string | null; deletedAt?: string | null } | null
+}
+
+/** 폼에서 선택된 연결 사건 (id + 표시용 제목) */
+interface LinkedEventRef {
+  id: string
+  title: string
 }
 
 interface TenureAchievementsProps {
@@ -105,6 +126,8 @@ export function TenureAchievements({
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [showOnEventsPage, setShowOnEventsPage] = useState(true)
+  const [linkedEvent, setLinkedEvent] = useState<LinkedEventRef | null>(null)
+  const [eventPickerOpen, setEventPickerOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -118,6 +141,8 @@ export function TenureAchievements({
     setStartDate('')
     setEndDate('')
     setShowOnEventsPage(true)
+    setLinkedEvent(null)
+    setEventPickerOpen(false)
   }
 
   const openAddForm = () => {
@@ -128,6 +153,7 @@ export function TenureAchievements({
     setStartDate('')
     setEndDate('')
     setShowOnEventsPage(true)
+    setLinkedEvent(null)
     setExpanded(true)
     setFormOpen(true)
   }
@@ -140,6 +166,12 @@ export function TenureAchievements({
     setStartDate(toDateInput(a.startDate))
     setEndDate(toDateInput(a.endDate))
     setShowOnEventsPage(a.showOnEventsPage ?? true)
+    // 삭제된 사건은 배지 표시와 동일하게 무시 — 그대로 저장하면 연결 해제(null)로 내려감
+    setLinkedEvent(
+      a.eventId && a.event && a.event.deletedAt == null
+        ? { id: a.eventId, title: a.event.title ?? '연결된 사건' }
+        : null,
+    )
     setExpanded(true)
     setFormOpen(true)
   }
@@ -149,7 +181,7 @@ export function TenureAchievements({
       notify.error('제목을 입력하세요.')
       return
     }
-    const dto = {
+    const baseDto = {
       title: title.trim(),
       description: description.trim() || undefined,
       startDate: startDate || undefined,
@@ -159,6 +191,8 @@ export function TenureAchievements({
     setSubmitting(true)
     try {
       if (editingId) {
+        // 수정은 eventId를 항상 실어 보냄 — 선택 없음(null)이 연결 해제 계약(키 없음=유지)
+        const dto = { ...baseDto, eventId: linkedEvent?.id ?? null }
         if (isReign) {
           await personCareerApi.updateSovereignReignAchievement(
             hostId,
@@ -170,6 +204,7 @@ export function TenureAchievements({
         }
         notify.success('업적이 수정되었습니다.')
       } else {
+        const dto = { ...baseDto, eventId: linkedEvent?.id }
         if (isReign) {
           await personCareerApi.createSovereignReignAchievement(hostId, dto)
         } else {
@@ -371,6 +406,30 @@ export function TenureAchievements({
                     />
                   </AchievementDateField>
                 </AchievementFormRow>
+                <AchievementFormRow>
+                  <AchievementLinkLabel>연결 사건</AchievementLinkLabel>
+                  {linkedEvent ? (
+                    <AchievementLinkedChip title={linkedEvent.title}>
+                      <FiLink size={10} />
+                      <span>{linkedEvent.title}</span>
+                      <AchievementLinkClearBtn
+                        type="button"
+                        aria-label="사건 연결 해제"
+                        onClick={() => setLinkedEvent(null)}
+                      >
+                        <FiX size={11} />
+                      </AchievementLinkClearBtn>
+                    </AchievementLinkedChip>
+                  ) : (
+                    <AchievementLinkBtn
+                      type="button"
+                      onClick={() => setEventPickerOpen(true)}
+                    >
+                      <FiLink size={10} />
+                      사건 연결
+                    </AchievementLinkBtn>
+                  )}
+                </AchievementFormRow>
                 <AchievementCheckboxRow>
                   <input
                     type="checkbox"
@@ -396,6 +455,104 @@ export function TenureAchievements({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {!readOnly && (
+        <EventPickerModal
+          isOpen={eventPickerOpen}
+          onClose={() => setEventPickerOpen(false)}
+          onSelect={(picked) => {
+            setLinkedEvent(picked)
+            setEventPickerOpen(false)
+          }}
+        />
+      )}
     </AchievementSection>
+  )
+}
+
+// ────── 연결 사건 선택 모달 ──────
+
+interface EventPickerModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onSelect: (picked: LinkedEventRef) => void
+}
+
+/**
+ * 공용 <Modal> 기반 사건 피커 — 최근 200건을 로드해 제목 부분일치로 클라 필터.
+ * 행 클릭 시 {id, title}을 넘기고 닫는다.
+ */
+function EventPickerModal({ isOpen, onClose, onSelect }: EventPickerModalProps) {
+  const [search, setSearch] = useState('')
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['events', 'achievement-link-picker'],
+    queryFn: () => getAllEvents({ limit: 200 }),
+    staleTime: 5 * 60 * 1000,
+    enabled: isOpen,
+  })
+
+  // 재오픈 시 이전 검색어가 남지 않게 닫힐 때 초기화
+  useEffect(() => {
+    if (!isOpen) setSearch('')
+  }, [isOpen])
+
+  const filtered = useMemo(() => {
+    const rows = data ?? []
+    const keyword = search.trim().toLowerCase()
+    if (!keyword) return rows
+    return rows.filter((eventRow) =>
+      (eventRow.title ?? '').toLowerCase().includes(keyword),
+    )
+  }, [data, search])
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="사건 연결" size="narrow">
+      <AchievementEventPickerSearchRow>
+        <FiSearch size={14} />
+        <input
+          type="search"
+          value={search}
+          onChange={(changeEvent) => setSearch(changeEvent.target.value)}
+          placeholder="사건 제목 검색"
+          aria-label="사건 제목 검색"
+        />
+      </AchievementEventPickerSearchRow>
+      <AchievementEventPickerList>
+        {isLoading ? (
+          <AchievementEventPickerEmpty>불러오는 중…</AchievementEventPickerEmpty>
+        ) : isError ? (
+          <AchievementEventPickerEmpty>
+            사건 목록을 불러오지 못했습니다.
+          </AchievementEventPickerEmpty>
+        ) : filtered.length === 0 ? (
+          <AchievementEventPickerEmpty>
+            {search.trim() ? '검색 결과가 없습니다.' : '등록된 사건이 없습니다.'}
+          </AchievementEventPickerEmpty>
+        ) : (
+          filtered.map((eventRow) => (
+            <AchievementEventPickerRow
+              key={eventRow.id}
+              type="button"
+              onClick={() =>
+                onSelect({
+                  id: eventRow.id,
+                  title: eventRow.title ?? '연결된 사건',
+                })
+              }
+            >
+              <AchievementEventPickerRowTitle>
+                {eventRow.title}
+              </AchievementEventPickerRowTitle>
+              {eventRow.startDate && (
+                <AchievementEventPickerRowMeta>
+                  {String(eventRow.startDate).slice(0, 10)}
+                </AchievementEventPickerRowMeta>
+              )}
+            </AchievementEventPickerRow>
+          ))
+        )}
+      </AchievementEventPickerList>
+    </Modal>
   )
 }
