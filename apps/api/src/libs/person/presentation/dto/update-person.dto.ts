@@ -7,6 +7,15 @@ import { Era, DeathType, DateInfoDto, SpouseRelationDto, BiographySectionDto, Co
  */
 export class UpdatePersonDto {
   /**
+   * 낙관적 동시성 토큰(CC1) — 클라가 마지막으로 본 상세 응답의 updatedAt(ISO).
+   * 있으면 서버가 저장 트랜잭션에서 현재 updatedAt과 대조해 불일치 시 409로 거부(stale clobber 차단).
+   * 생략하면 종전처럼 last-write-wins(하위호환).
+   */
+  @IsOptional()
+  @IsDateString()
+  expectedUpdatedAt?: string
+
+  /**
    * 이름 (선택)
    */
   @IsOptional()

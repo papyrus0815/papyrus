@@ -123,6 +123,14 @@ export interface CreatePersonData {
   }>
   /** 별칭(아명·출생명·자·아호·필명 등) — 있으면 통째로 delete-and-recreate */
   nicknames?: Array<{ nickname: string; type?: string; priority?: number; reason?: string | null }>
+  /** 전기(생애 서술) 섹션 — 생성 시 함께 저장(update 경로와 대칭). */
+  sections?: Array<{
+    id?: string
+    title: string
+    content: string
+    order?: number
+    sectionType?: string | null
+  }>
   /** 등록 계정 ID (개인 정보 플랫폼) */
   accountId?: string
 }
@@ -214,13 +222,22 @@ export interface UpdatePersonData {
   }>
   /** 별칭(아명·출생명·자·아호·필명 등) — 있으면 통째로 delete-and-recreate */
   nicknames?: Array<{ nickname: string; type?: string; priority?: number; reason?: string | null }>
-  /** 전기(생애 서술) 섹션 — 있으면 기존 전체 삭제 후 일괄 재생성(delete-and-recreate) */
+  /**
+   * 전기(생애 서술) 섹션 — 있으면 id 보존 diff-update(기존 id는 update, 신규는 create, 누락은 delete).
+   * id를 보내지 않으면 신규로 간주(하위호환: 전체 delete-recreate와 동일 결과).
+   */
   sections?: Array<{
+    id?: string
     title: string
     content: string
     order?: number
     sectionType?: string | null
   }>
+  /**
+   * 낙관적 동시성 토큰(CC1) — 클라가 마지막으로 본 상세 응답의 updatedAt(ISO).
+   * 있으면 트랜잭션 첫 줄에서 현재 updatedAt과 대조해 불일치 시 409(ConflictException).
+   */
+  expectedUpdatedAt?: string
 }
 
 /**

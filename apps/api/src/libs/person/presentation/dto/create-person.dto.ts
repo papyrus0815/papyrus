@@ -31,6 +31,14 @@ export class SpouseRelationDto {
  * EventSection 패턴 미러 — 저장 시 sections 배열을 통째로 delete-and-recreate.
  */
 export class BiographySectionDto {
+  /**
+   * 기존 섹션 id — 있으면 서버가 id 보존 diff-update로 매칭(CC3, 저장마다 id 재발급 방지).
+   * 신규 섹션은 생략. 클라(전기 에디터)가 serverId로 왕복한다.
+   */
+  @IsOptional()
+  @IsString()
+  id?: string
+
   @IsString()
   @MaxLength(500) // PersonSection.title = @db.VarChar(500)
   title!: string
@@ -128,15 +136,22 @@ export class DateInfoDto {
   @IsEnum(Era)
   era!: Era
 
-  @IsNumber()
+  // year는 크기값(양수) — BC/AD는 era로 구분하므로 1 이상. month=13·day=0 등 범위 밖 값이
+  // 400 없이 silent 롤오버 저장되던 것을 검증으로 차단.
+  @IsInt()
+  @Min(1)
   year!: number
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(12)
   month?: number
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(31)
   day?: number
 }
 

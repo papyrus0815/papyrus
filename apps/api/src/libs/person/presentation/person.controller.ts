@@ -524,8 +524,12 @@ export class PersonController {
     updatedAt: string
   }> {
     const accountId = req.user?.id ?? req.user?.sub
-    const person: any = await this.personService.findByIdWithRelations(id, accountId)
-    const humanRelationships = await this.personService.findHumanRelationships(id, accountId)
+    // 소유권은 findByIdWithRelations(id, accountId)가 검증 — 관계 조회는 소유권 재검(중복 findById)
+    // 없는 내부 메서드로 분리해 병렬 실행. 미소유면 findByIdWithRelations가 던져 Promise.all이 전파.
+    const [person, humanRelationships]: [any, any] = await Promise.all([
+      this.personService.findByIdWithRelations(id, accountId),
+      this.personService.findHumanRelationshipsForDetail(id),
+    ])
 
     // 부모와 자녀 중복 제거
     const childrenMap = new Map()
@@ -935,6 +939,8 @@ export class PersonController {
         note: s.note,
       })),
       countryAffiliations: dto.countryAffiliations,
+      // 전기 섹션 — DTO에 선언·검증되면서도 create 매핑 누락으로 무성 드롭되던 것을 배선(update와 대칭).
+      sections: dto.sections,
       nicknames: dto.nicknames,
     }, accountId)
   }
@@ -1075,6 +1081,8 @@ export class PersonController {
       countryAffiliations: dto.countryAffiliations,
       sections: dto.sections,
       nicknames: dto.nicknames,
+      // 낙관적 동시성 토큰(CC1) — 있으면 repository가 트랜잭션 첫 줄에서 updatedAt 프리컨디션 검사(409).
+      expectedUpdatedAt: dto.expectedUpdatedAt,
     }, accountId)
   }
 
@@ -1096,96 +1104,97 @@ export class PersonController {
    * 인물의 모든 경력 조회
    */
   @Get(':personId/careers')
-  async getAllCareers(@Param('personId') personId: string): Promise<AllCareersResponseDto> {
-    return this.personService.findAllCareers(personId)
+  async getAllCareers(@Param('personId') personId: string, @Request() req: any): Promise<AllCareersResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.findAllCareers(personId, accountId)
   }
 
   /**
    * 군인 경력 추가
    */
   @Post('careers/military')
-  async addMilitaryCareer(@Body() dto: CreateMilitaryCareerDto): Promise<MilitaryCareerResponseDto> {
-    return this.personService.addMilitaryCareer(dto)
+  async addMilitaryCareer(@Body() dto: CreateMilitaryCareerDto, @Request() req: any): Promise<MilitaryCareerResponseDto> {
+    return this.personService.addMilitaryCareer(dto, req.user?.id ?? req.user?.sub)
   }
 
   /**
    * 기업인 경력 추가
    */
   @Post('careers/business')
-  async addBusinessCareer(@Body() dto: CreateBusinessCareerDto): Promise<BusinessCareerResponseDto> {
-    return this.personService.addBusinessCareer(dto)
+  async addBusinessCareer(@Body() dto: CreateBusinessCareerDto, @Request() req: any): Promise<BusinessCareerResponseDto> {
+    return this.personService.addBusinessCareer(dto, req.user?.id ?? req.user?.sub)
   }
 
   /**
    * 학자 경력 추가
    */
   @Post('careers/academic')
-  async addAcademicCareer(@Body() dto: CreateAcademicCareerDto): Promise<AcademicCareerResponseDto> {
-    return this.personService.addAcademicCareer(dto)
+  async addAcademicCareer(@Body() dto: CreateAcademicCareerDto, @Request() req: any): Promise<AcademicCareerResponseDto> {
+    return this.personService.addAcademicCareer(dto, req.user?.id ?? req.user?.sub)
   }
 
   /**
    * 운동선수 경력 추가
    */
   @Post('careers/athlete')
-  async addAthleteCareer(@Body() dto: CreateAthleteCareerDto): Promise<AthleteCareerResponseDto> {
-    return this.personService.addAthleteCareer(dto)
+  async addAthleteCareer(@Body() dto: CreateAthleteCareerDto, @Request() req: any): Promise<AthleteCareerResponseDto> {
+    return this.personService.addAthleteCareer(dto, req.user?.id ?? req.user?.sub)
   }
 
   /**
    * 종교인 경력 추가
    */
   @Post('careers/religious')
-  async addReligiousCareer(@Body() dto: CreateReligiousCareerDto): Promise<ReligiousCareerResponseDto> {
-    return this.personService.addReligiousCareer(dto)
+  async addReligiousCareer(@Body() dto: CreateReligiousCareerDto, @Request() req: any): Promise<ReligiousCareerResponseDto> {
+    return this.personService.addReligiousCareer(dto, req.user?.id ?? req.user?.sub)
   }
 
   /**
    * 예술가 경력 추가
    */
   @Post('careers/artist')
-  async addArtistCareer(@Body() dto: CreateArtistCareerDto): Promise<ArtistCareerResponseDto> {
-    return this.personService.addArtistCareer(dto)
+  async addArtistCareer(@Body() dto: CreateArtistCareerDto, @Request() req: any): Promise<ArtistCareerResponseDto> {
+    return this.personService.addArtistCareer(dto, req.user?.id ?? req.user?.sub)
   }
 
   /**
    * 언론인 경력 추가
    */
   @Post('careers/media')
-  async addMediaCareer(@Body() dto: CreateMediaCareerDto): Promise<MediaCareerResponseDto> {
-    return this.personService.addMediaCareer(dto)
+  async addMediaCareer(@Body() dto: CreateMediaCareerDto, @Request() req: any): Promise<MediaCareerResponseDto> {
+    return this.personService.addMediaCareer(dto, req.user?.id ?? req.user?.sub)
   }
 
   /**
    * 법조인 경력 추가
    */
   @Post('careers/legal')
-  async addLegalCareer(@Body() dto: CreateLegalCareerDto): Promise<LegalCareerResponseDto> {
-    return this.personService.addLegalCareer(dto)
+  async addLegalCareer(@Body() dto: CreateLegalCareerDto, @Request() req: any): Promise<LegalCareerResponseDto> {
+    return this.personService.addLegalCareer(dto, req.user?.id ?? req.user?.sub)
   }
 
   /**
    * 의료인 경력 추가
    */
   @Post('careers/medical')
-  async addMedicalCareer(@Body() dto: CreateMedicalCareerDto): Promise<MedicalCareerResponseDto> {
-    return this.personService.addMedicalCareer(dto)
+  async addMedicalCareer(@Body() dto: CreateMedicalCareerDto, @Request() req: any): Promise<MedicalCareerResponseDto> {
+    return this.personService.addMedicalCareer(dto, req.user?.id ?? req.user?.sub)
   }
 
   /**
    * 학력 추가
    */
   @Post('educations')
-  async addEducation(@Body() dto: CreateEducationDto): Promise<PersonEducationResponseDto> {
-    return this.personService.addEducation(dto)
+  async addEducation(@Body() dto: CreateEducationDto, @Request() req: any): Promise<PersonEducationResponseDto> {
+    return this.personService.addEducation(dto, req.user?.id ?? req.user?.sub)
   }
 
   /**
    * 수상/훈장 추가
    */
   @Post('awards')
-  async addAward(@Body() dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto> {
-    return this.personService.addAward(dto)
+  async addAward(@Body() dto: CreatePersonAwardDto, @Request() req: any): Promise<PersonAwardResponseDto> {
+    return this.personService.addAward(dto, req.user?.id ?? req.user?.sub)
   }
 
   // ========================
@@ -1197,8 +1206,8 @@ export class PersonController {
    */
   @Delete('careers/military/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteMilitaryCareer(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteMilitaryCareer(id)
+  async deleteMilitaryCareer(@Param('id') id: string, @Request() req: any): Promise<void> {
+    await this.personService.deleteMilitaryCareer(id, req.user?.id ?? req.user?.sub)
   }
 
   /**
@@ -1206,8 +1215,8 @@ export class PersonController {
    */
   @Delete('careers/business/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteBusinessCareer(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteBusinessCareer(id)
+  async deleteBusinessCareer(@Param('id') id: string, @Request() req: any): Promise<void> {
+    await this.personService.deleteBusinessCareer(id, req.user?.id ?? req.user?.sub)
   }
 
   /**
@@ -1215,8 +1224,8 @@ export class PersonController {
    */
   @Delete('careers/academic/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteAcademicCareer(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteAcademicCareer(id)
+  async deleteAcademicCareer(@Param('id') id: string, @Request() req: any): Promise<void> {
+    await this.personService.deleteAcademicCareer(id, req.user?.id ?? req.user?.sub)
   }
 
   /**
@@ -1224,8 +1233,8 @@ export class PersonController {
    */
   @Delete('careers/athlete/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteAthleteCareer(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteAthleteCareer(id)
+  async deleteAthleteCareer(@Param('id') id: string, @Request() req: any): Promise<void> {
+    await this.personService.deleteAthleteCareer(id, req.user?.id ?? req.user?.sub)
   }
 
   /**
@@ -1233,8 +1242,8 @@ export class PersonController {
    */
   @Delete('careers/religious/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteReligiousCareer(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteReligiousCareer(id)
+  async deleteReligiousCareer(@Param('id') id: string, @Request() req: any): Promise<void> {
+    await this.personService.deleteReligiousCareer(id, req.user?.id ?? req.user?.sub)
   }
 
   /**
@@ -1242,8 +1251,8 @@ export class PersonController {
    */
   @Delete('careers/artist/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteArtistCareer(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteArtistCareer(id)
+  async deleteArtistCareer(@Param('id') id: string, @Request() req: any): Promise<void> {
+    await this.personService.deleteArtistCareer(id, req.user?.id ?? req.user?.sub)
   }
 
   /**
@@ -1251,8 +1260,8 @@ export class PersonController {
    */
   @Delete('careers/media/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteMediaCareer(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteMediaCareer(id)
+  async deleteMediaCareer(@Param('id') id: string, @Request() req: any): Promise<void> {
+    await this.personService.deleteMediaCareer(id, req.user?.id ?? req.user?.sub)
   }
 
   /**
@@ -1260,8 +1269,8 @@ export class PersonController {
    */
   @Delete('careers/legal/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteLegalCareer(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteLegalCareer(id)
+  async deleteLegalCareer(@Param('id') id: string, @Request() req: any): Promise<void> {
+    await this.personService.deleteLegalCareer(id, req.user?.id ?? req.user?.sub)
   }
 
   /**
@@ -1269,8 +1278,8 @@ export class PersonController {
    */
   @Delete('careers/medical/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteMedicalCareer(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteMedicalCareer(id)
+  async deleteMedicalCareer(@Param('id') id: string, @Request() req: any): Promise<void> {
+    await this.personService.deleteMedicalCareer(id, req.user?.id ?? req.user?.sub)
   }
 
   /**
@@ -1278,8 +1287,8 @@ export class PersonController {
    */
   @Delete('educations/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteEducation(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteEducation(id)
+  async deleteEducation(@Param('id') id: string, @Request() req: any): Promise<void> {
+    await this.personService.deleteEducation(id, req.user?.id ?? req.user?.sub)
   }
 
   /**
@@ -1287,7 +1296,7 @@ export class PersonController {
    */
   @Delete('awards/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteAward(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteAward(id)
+  async deleteAward(@Param('id') id: string, @Request() req: any): Promise<void> {
+    await this.personService.deleteAward(id, req.user?.id ?? req.user?.sub)
   }
 }

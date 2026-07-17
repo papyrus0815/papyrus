@@ -433,12 +433,18 @@ export class PersonService {
       throw new BadRequestException('아버지와 어머니를 같은 인물로 지정할 수 없습니다.')
     const createData = accountId != null ? { ...data, accountId } : data
     const person = await this.personRepository.create(createData)
-    await this.notificationService.notifyPerson(
-      personDisplayName(person),
-      EventMethod.CREATE,
-      person.id,
-      yearRangePreview(person.birthEra, person.birthYear, person.deathEra, person.deathYear),
-    )
+    // 커밋 이후 부수효과(알림)는 저장 성공과 독립 — 예외가 나도 저장 성공을 실패로
+    // 오보하지 않게 격리(로깅만). 클라의 dirty 기준선·중복 저장 오염 방지.
+    try {
+      await this.notificationService.notifyPerson(
+        personDisplayName(person),
+        EventMethod.CREATE,
+        person.id,
+        yearRangePreview(person.birthEra, person.birthYear, person.deathEra, person.deathYear),
+      )
+    } catch (err) {
+      console.error('[person.create] 알림 발행 실패(무시):', err)
+    }
     await this.pointService.awardForCreate(
       accountId,
       AggregateType.PERSON,
@@ -479,13 +485,19 @@ export class PersonService {
           before: personDisplayName(existing),
           after: personDisplayName(person),
         }) ?? yearRangePreview(person.birthEra, person.birthYear, person.deathEra, person.deathYear)
-    await this.notificationService.notifyPerson(
-      personDisplayName(person),
-      change.method,
-      person.id,
-      preview,
-      change.subResourceType,
-    )
+    // 커밋 이후 알림은 저장 성공과 독립 — 예외를 격리해 저장 성공이 프론트에 실패로
+    // 오보되지 않게(전기 자동저장 dirty 기준선 오염·중복 알림 방지). 로깅만.
+    try {
+      await this.notificationService.notifyPerson(
+        personDisplayName(person),
+        change.method,
+        person.id,
+        preview,
+        change.subResourceType,
+      )
+    } catch (err) {
+      console.error('[person.update] 알림 발행 실패(무시):', err)
+    }
     // 수정으로 내용을 채운 경우에도 완성도 보너스 적립(콘텐츠당 1회, 멱등)
     await this.pointService.awardCompletenessBonus(
       accountId,
@@ -599,9 +611,53 @@ export class PersonService {
   // ========================
 
   /**
+   * 하위 리소스(경력·학력·수상) 추가 대상 인물의 소유권 검사 — 연보(addPersonLifeEvent)와 동일 정책.
+   * accountId 미지정(비인증 내부 호출)이면 통과. 대상 인물이 없으면 404, 타 계정이면 403.
+   */
+  private async assertPersonOwnership(
+    personId: string | null | undefined,
+    accountId?: string,
+  ): Promise<void> {
+    if (accountId == null || !personId) return
+    const person = await this.prisma.person.findUnique({
+      where: { id: personId },
+      select: { accountId: true },
+    })
+    if (!person) {
+      throw new NotFoundException('인물을 찾을 수 없습니다.')
+    }
+    if (person.accountId != null && person.accountId !== accountId) {
+      throw new ForbiddenException('본인이 등록한 인물에만 추가할 수 있습니다.')
+    }
+  }
+
+  /**
+   * 하위 리소스 행(경력·학력·수상)의 소유권 검사 — id로 행→인물→계정을 조회해 검증.
+   * delete 전에 호출(삭제 후엔 행이 사라져 검증 불가). model은 해당 prisma delegate.
+   */
+  private async assertSubResourceOwnershipById(
+    model: { findUnique: (args: any) => Promise<any> },
+    id: string,
+    accountId?: string,
+  ): Promise<void> {
+    if (accountId == null) return
+    const row = await model.findUnique({
+      where: { id },
+      select: { person: { select: { accountId: true } } },
+    })
+    if (!row) {
+      throw new NotFoundException('항목을 찾을 수 없습니다.')
+    }
+    if (row.person?.accountId != null && row.person.accountId !== accountId) {
+      throw new ForbiddenException('본인이 등록한 인물의 항목만 삭제할 수 있습니다.')
+    }
+  }
+
+  /**
    * 군인 경력 추가
    */
-  async addMilitaryCareer(dto: CreateMilitaryCareerDto): Promise<MilitaryCareerResponseDto> {
+  async addMilitaryCareer(dto: CreateMilitaryCareerDto, accountId?: string): Promise<MilitaryCareerResponseDto> {
+    await this.assertPersonOwnership(dto.personId, accountId)
     const created = await this.personRepository.addMilitaryCareer(dto)
     await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
     return created
@@ -610,7 +666,8 @@ export class PersonService {
   /**
    * 기업인 경력 추가
    */
-  async addBusinessCareer(dto: CreateBusinessCareerDto): Promise<BusinessCareerResponseDto> {
+  async addBusinessCareer(dto: CreateBusinessCareerDto, accountId?: string): Promise<BusinessCareerResponseDto> {
+    await this.assertPersonOwnership(dto.personId, accountId)
     const created = await this.personRepository.addBusinessCareer(dto)
     await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
     return created
@@ -619,7 +676,8 @@ export class PersonService {
   /**
    * 학자 경력 추가
    */
-  async addAcademicCareer(dto: CreateAcademicCareerDto): Promise<AcademicCareerResponseDto> {
+  async addAcademicCareer(dto: CreateAcademicCareerDto, accountId?: string): Promise<AcademicCareerResponseDto> {
+    await this.assertPersonOwnership(dto.personId, accountId)
     const created = await this.personRepository.addAcademicCareer(dto)
     await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
     return created
@@ -628,7 +686,8 @@ export class PersonService {
   /**
    * 운동선수 경력 추가
    */
-  async addAthleteCareer(dto: CreateAthleteCareerDto): Promise<AthleteCareerResponseDto> {
+  async addAthleteCareer(dto: CreateAthleteCareerDto, accountId?: string): Promise<AthleteCareerResponseDto> {
+    await this.assertPersonOwnership(dto.personId, accountId)
     const created = await this.personRepository.addAthleteCareer(dto)
     await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
     return created
@@ -637,7 +696,8 @@ export class PersonService {
   /**
    * 종교인 경력 추가
    */
-  async addReligiousCareer(dto: CreateReligiousCareerDto): Promise<ReligiousCareerResponseDto> {
+  async addReligiousCareer(dto: CreateReligiousCareerDto, accountId?: string): Promise<ReligiousCareerResponseDto> {
+    await this.assertPersonOwnership(dto.personId, accountId)
     const created = await this.personRepository.addReligiousCareer(dto)
     await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
     return created
@@ -646,7 +706,8 @@ export class PersonService {
   /**
    * 예술가 경력 추가
    */
-  async addArtistCareer(dto: CreateArtistCareerDto): Promise<ArtistCareerResponseDto> {
+  async addArtistCareer(dto: CreateArtistCareerDto, accountId?: string): Promise<ArtistCareerResponseDto> {
+    await this.assertPersonOwnership(dto.personId, accountId)
     const created = await this.personRepository.addArtistCareer(dto)
     await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
     return created
@@ -655,7 +716,8 @@ export class PersonService {
   /**
    * 언론인 경력 추가
    */
-  async addMediaCareer(dto: CreateMediaCareerDto): Promise<MediaCareerResponseDto> {
+  async addMediaCareer(dto: CreateMediaCareerDto, accountId?: string): Promise<MediaCareerResponseDto> {
+    await this.assertPersonOwnership(dto.personId, accountId)
     const created = await this.personRepository.addMediaCareer(dto)
     await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
     return created
@@ -664,7 +726,8 @@ export class PersonService {
   /**
    * 법조인 경력 추가
    */
-  async addLegalCareer(dto: CreateLegalCareerDto): Promise<LegalCareerResponseDto> {
+  async addLegalCareer(dto: CreateLegalCareerDto, accountId?: string): Promise<LegalCareerResponseDto> {
+    await this.assertPersonOwnership(dto.personId, accountId)
     const created = await this.personRepository.addLegalCareer(dto)
     await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
     return created
@@ -673,7 +736,8 @@ export class PersonService {
   /**
    * 의료인 경력 추가
    */
-  async addMedicalCareer(dto: CreateMedicalCareerDto): Promise<MedicalCareerResponseDto> {
+  async addMedicalCareer(dto: CreateMedicalCareerDto, accountId?: string): Promise<MedicalCareerResponseDto> {
+    await this.assertPersonOwnership(dto.personId, accountId)
     const created = await this.personRepository.addMedicalCareer(dto)
     await this.notifyPersonSection(created.personId, NotificationSubResource.CAREER, careerItemLabel(created))
     return created
@@ -1190,7 +1254,8 @@ export class PersonService {
   /**
    * 학력 추가
    */
-  async addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto> {
+  async addEducation(dto: CreateEducationDto, accountId?: string): Promise<PersonEducationResponseDto> {
+    await this.assertPersonOwnership(dto.personId, accountId)
     const created = await this.personRepository.addEducation(dto)
     await this.notifyPersonSection(created.personId, NotificationSubResource.EDUCATION, educationItemLabel(created))
     return created
@@ -1199,72 +1264,84 @@ export class PersonService {
   /**
    * 수상/훈장 추가
    */
-  async addAward(dto: CreatePersonAwardDto): Promise<PersonAwardResponseDto> {
+  async addAward(dto: CreatePersonAwardDto, accountId?: string): Promise<PersonAwardResponseDto> {
+    await this.assertPersonOwnership(dto.personId, accountId)
     const created = await this.personRepository.addAward(dto)
     await this.notifyPersonSection(created.personId, NotificationSubResource.AWARD, awardItemLabel(created))
     return created
   }
 
-  async deleteMilitaryCareer(id: string): Promise<void> {
+  async deleteMilitaryCareer(id: string, accountId?: string): Promise<void> {
+    await this.assertSubResourceOwnershipById(this.prisma.militaryCareer, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteMilitaryCareer(id)
     await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
-  async deleteBusinessCareer(id: string): Promise<void> {
+  async deleteBusinessCareer(id: string, accountId?: string): Promise<void> {
+    await this.assertSubResourceOwnershipById(this.prisma.businessCareer, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteBusinessCareer(id)
     await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
-  async deleteAcademicCareer(id: string): Promise<void> {
+  async deleteAcademicCareer(id: string, accountId?: string): Promise<void> {
+    await this.assertSubResourceOwnershipById(this.prisma.academicCareer, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteAcademicCareer(id)
     await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
-  async deleteAthleteCareer(id: string): Promise<void> {
+  async deleteAthleteCareer(id: string, accountId?: string): Promise<void> {
+    await this.assertSubResourceOwnershipById(this.prisma.athleteCareer, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteAthleteCareer(id)
     await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
-  async deleteReligiousCareer(id: string): Promise<void> {
+  async deleteReligiousCareer(id: string, accountId?: string): Promise<void> {
+    await this.assertSubResourceOwnershipById(this.prisma.religiousCareer, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteReligiousCareer(id)
     await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
-  async deleteArtistCareer(id: string): Promise<void> {
+  async deleteArtistCareer(id: string, accountId?: string): Promise<void> {
+    await this.assertSubResourceOwnershipById(this.prisma.artistCareer, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteArtistCareer(id)
     await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
-  async deleteMediaCareer(id: string): Promise<void> {
+  async deleteMediaCareer(id: string, accountId?: string): Promise<void> {
+    await this.assertSubResourceOwnershipById(this.prisma.mediaCareer, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteMediaCareer(id)
     await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
-  async deleteLegalCareer(id: string): Promise<void> {
+  async deleteLegalCareer(id: string, accountId?: string): Promise<void> {
+    await this.assertSubResourceOwnershipById(this.prisma.legalCareer, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteLegalCareer(id)
     await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
-  async deleteMedicalCareer(id: string): Promise<void> {
+  async deleteMedicalCareer(id: string, accountId?: string): Promise<void> {
+    await this.assertSubResourceOwnershipById(this.prisma.medicalCareer, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteMedicalCareer(id)
     await this.notifyPersonSection(personId, NotificationSubResource.CAREER, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
-  async deleteEducation(id: string): Promise<void> {
+  async deleteEducation(id: string, accountId?: string): Promise<void> {
+    await this.assertSubResourceOwnershipById(this.prisma.personEducation, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteEducation(id)
     await this.notifyPersonSection(personId, NotificationSubResource.EDUCATION, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
-  async deleteAward(id: string): Promise<void> {
+  async deleteAward(id: string, accountId?: string): Promise<void> {
+    await this.assertSubResourceOwnershipById(this.prisma.personAward, id, accountId)
     const { personId, itemLabel } = await this.personRepository.deleteAward(id)
     await this.notifyPersonSection(personId, NotificationSubResource.AWARD, itemLabel ? `${itemLabel} 삭제` : undefined)
   }
 
   /**
-   * 인물의 모든 경력 조회
+   * 인물의 모든 경력 조회 (accountId 있으면 소유자만 — 타 계정 경력 열람 차단)
    */
-  async findAllCareers(personId: string): Promise<AllCareersResponseDto> {
-    await this.findById(personId) // 존재 여부 확인
+  async findAllCareers(personId: string, accountId?: string): Promise<AllCareersResponseDto> {
+    await this.findById(personId, accountId) // 존재 + 소유권 확인
     return this.personRepository.findAllCareers(personId)
   }
 
@@ -1447,6 +1524,19 @@ export class PersonService {
    */
   async findHumanRelationships(personId: string, accountId?: string) {
     await this.findById(personId, accountId)
+    return this.loadHumanRelationships(personId)
+  }
+
+  /**
+   * 소유권 검사 없이 인간관계만 조회 — getDetailById에서 findByIdWithRelations와 병렬로
+   * 호출할 때 사용(소유권은 병렬의 findByIdWithRelations가 같은 id·accountId로 이미 검증).
+   * 상세 진입마다 소유권용 findById(전체 매핑 포함)를 중복 실행하던 낭비 제거.
+   */
+  async findHumanRelationshipsForDetail(personId: string) {
+    return this.loadHumanRelationships(personId)
+  }
+
+  private async loadHumanRelationships(personId: string) {
     const rows = await this.prisma.personHumanRelationship.findMany({
       where: {
         OR: [{ fromPersonId: personId }, { toPersonId: personId }],
@@ -2054,13 +2144,16 @@ export class PersonService {
       administration?: number | null
       notes?: string | null
     } = {}
-    if ('politics' in dto) data.politics = dto.politics ?? null
-    if ('military' in dto) data.military = dto.military ?? null
-    if ('diplomacy' in dto) data.diplomacy = dto.diplomacy ?? null
-    if ('intellect' in dto) data.intellect = dto.intellect ?? null
-    if ('charisma' in dto) data.charisma = dto.charisma ?? null
-    if ('administration' in dto) data.administration = dto.administration ?? null
-    if ('notes' in dto) data.notes = dto.notes ?? null
+    // `'k' in dto` 는 ES2023 useDefineForClassFields로 페이로드에 없던 축도 항상 true라
+    // 미전송 축을 null로 wipe한다(일괄 평가 계약 파손). `!== undefined`로 '전송된 키'만 반영
+    // — 명시적 null=초기화 시맨틱은 그대로 보존.
+    if (dto.politics !== undefined) data.politics = dto.politics ?? null
+    if (dto.military !== undefined) data.military = dto.military ?? null
+    if (dto.diplomacy !== undefined) data.diplomacy = dto.diplomacy ?? null
+    if (dto.intellect !== undefined) data.intellect = dto.intellect ?? null
+    if (dto.charisma !== undefined) data.charisma = dto.charisma ?? null
+    if (dto.administration !== undefined) data.administration = dto.administration ?? null
+    if (dto.notes !== undefined) data.notes = dto.notes ?? null
 
     const row = await this.prisma.personStats.upsert({
       where: { person_stats_person_account_key: { personId, accountId } },
@@ -2169,14 +2262,16 @@ export class PersonService {
           administration?: number | null
           notes?: string | null
         } = {}
-        if ('politics' in statsDto) data.politics = statsDto.politics ?? null
-        if ('military' in statsDto) data.military = statsDto.military ?? null
-        if ('diplomacy' in statsDto) data.diplomacy = statsDto.diplomacy ?? null
-        if ('intellect' in statsDto) data.intellect = statsDto.intellect ?? null
-        if ('charisma' in statsDto) data.charisma = statsDto.charisma ?? null
-        if ('administration' in statsDto)
+        // `'k' in statsDto`는 ES2023 useDefineForClassFields로 항상 true → 미전송 축 wipe.
+        // `!== undefined`로 전송된 키만 반영(명시적 null=초기화 보존).
+        if (statsDto.politics !== undefined) data.politics = statsDto.politics ?? null
+        if (statsDto.military !== undefined) data.military = statsDto.military ?? null
+        if (statsDto.diplomacy !== undefined) data.diplomacy = statsDto.diplomacy ?? null
+        if (statsDto.intellect !== undefined) data.intellect = statsDto.intellect ?? null
+        if (statsDto.charisma !== undefined) data.charisma = statsDto.charisma ?? null
+        if (statsDto.administration !== undefined)
           data.administration = statsDto.administration ?? null
-        if ('notes' in statsDto) data.notes = statsDto.notes ?? null
+        if (statsDto.notes !== undefined) data.notes = statsDto.notes ?? null
         statsRow = await tx.personStats.upsert({
           where: { person_stats_person_account_key: { personId, accountId } },
           create: { personId, accountId, ...data },

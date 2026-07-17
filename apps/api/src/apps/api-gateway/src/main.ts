@@ -54,8 +54,11 @@ async function bootstrap() {
     logger.log(
       `📁 업로드 경로 후보: ${uploadCandidates.filter((d) => existsSync(d)).join(', ')}`,
     )
-    expressApp.use(json({ limit: '10mb' }))
-    expressApp.use(urlencoded({ extended: true, limit: '10mb' }))
+    // 전기 섹션 content 상한(BIOGRAPHY_SECTION_CONTENT_MAX_BYTES=16MB, create-person.dto.ts)이 실효
+    // 상한이 되도록 body limit을 그 위(18mb)로 둔다. 이 값이 검증상수보다 작으면 큰 섹션의 저장이
+    // 검증(친절한 400) 이전에 raw 413으로 잘려 그 인물의 모든 전기 저장이 진단 불가로 막힌다.
+    expressApp.use(json({ limit: '18mb' }))
+    expressApp.use(urlencoded({ extended: true, limit: '18mb' }))
     expressApp.use(cookieParser())
 
     const app = await NestFactory.create<NestExpressApplication>(

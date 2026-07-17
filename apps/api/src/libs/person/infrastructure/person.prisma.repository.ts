@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
 import {
   Person,
   MilitaryCareer,
@@ -1883,10 +1883,25 @@ export class PersonPrismaRepository implements IPersonRepository {
     delete (sanitized as Record<string, unknown>).countryAffiliations
     const nicknames = (sanitized as CreatePersonData).nicknames
     delete (sanitized as Record<string, unknown>).nicknames
+    const sections = (sanitized as CreatePersonData).sections
+    delete (sanitized as Record<string, unknown>).sections
 
     const person = await this.prisma.person.create({
       data: sanitized as Parameters<PrismaService['person']['create']>[0]['data'],
     })
+
+    // 전기 섹션 — DTO에 있어도 create에서 무성 드롭되던 것을 update와 대칭으로 저장(BE5).
+    if (sections?.length) {
+      await this.prisma.personSection.createMany({
+        data: sections.map((s, idx) => ({
+          personId: person.id,
+          title: s.title,
+          content: s.content,
+          order: s.order ?? idx,
+          sectionType: s.sectionType ?? null,
+        })),
+      })
+    }
 
     if (spouseRelations?.length) {
       const rows = this.buildCanonicalSpouseRows(person.id, spouseRelations)
@@ -2000,6 +2015,9 @@ export class PersonPrismaRepository implements IPersonRepository {
     delete (sanitized as Record<string, unknown>).sections
     const nicknames = (sanitized as UpdatePersonData).nicknames
     delete (sanitized as Record<string, unknown>).nicknames
+    // 낙관적 동시성 토큰(CC1) — 스칼라 아니므로 person.update 데이터에서 분리.
+    const expectedUpdatedAt = (sanitized as UpdatePersonData).expectedUpdatedAt
+    delete (sanitized as Record<string, unknown>).expectedUpdatedAt
 
     const updateData = { ...sanitized } as Parameters<PrismaService['person']['update']>[0]['data']
 
@@ -2007,6 +2025,23 @@ export class PersonPrismaRepository implements IPersonRepository {
     // 묶는다. 이렇게 하지 않으면 deleteMany가 커밋된 뒤 createMany가 실패(존재하지 않는
     // spouseId FK, 커넥션 단절 등)할 때 결혼/섹션 기록이 무성 소실된다.
     await this.prisma.$transaction(async (tx) => {
+      // CC1: 낙관적 동시성 검사 — 클라가 마지막으로 본 updatedAt과 현재 값이 다르면(다른 탭·세션이
+      // 먼저 저장) 409로 거부해 stale 스냅샷의 last-write-wins clobber를 막는다. 같은 트랜잭션
+      // 내 read→write라 검사 이후 쓰기까지 원자적(MySQL 기본 REPEATABLE READ).
+      if (expectedUpdatedAt != null) {
+        const current = await tx.person.findUnique({
+          where: { id },
+          select: { updatedAt: true },
+        })
+        if (!current) {
+          throw new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${id})`)
+        }
+        if (current.updatedAt.getTime() !== new Date(expectedUpdatedAt).getTime()) {
+          throw new ConflictException(
+            '이 인물은 다른 곳에서 먼저 수정되었습니다. 새로고침 후 다시 시도해 주세요.',
+          )
+        }
+      }
       await tx.person.update({
         where: { id },
         data: updateData,
@@ -2063,19 +2098,37 @@ export class PersonPrismaRepository implements IPersonRepository {
         }
       }
 
-      // 전기(생애 서술) 섹션 — EventSection 패턴 미러: 통째 delete-and-recreate
+      // 전기(생애 서술) 섹션 — id 보존 diff-update(CC3). 기존 delete-and-recreate는 매 저장마다
+      // PersonSection.id를 재발급해, 교차 인스턴스(멀티탭·스택 모달)의 serverId 매칭을 무력화하고
+      // 상대 저장을 stale 로컬로 덮거나 섹션을 중복 부활시켰다. id로 매칭해 유지 섹션은 update,
+      // 신규만 create, 누락은 delete — 유지 섹션의 id가 안정돼 클라 rebase가 정상 동작한다.
+      // (클라가 id를 안 보내면 전부 신규 취급 → 기존 delete-recreate와 동일 결과: 하위호환)
       if (sections !== undefined) {
-        await tx.personSection.deleteMany({ where: { personId: id } })
-        if (sections.length) {
-          await tx.personSection.createMany({
-            data: sections.map((s, idx) => ({
-              personId: id,
-              title: s.title,
-              content: s.content,
-              order: s.order ?? idx,
-              sectionType: s.sectionType ?? null,
-            })),
-          })
+        const existing = await tx.personSection.findMany({
+          where: { personId: id },
+          select: { id: true },
+        })
+        const existingIds = new Set(existing.map((row) => row.id))
+        const incomingIds = new Set(
+          sections.map((s) => s.id).filter((sid): sid is string => !!sid),
+        )
+        const idsToDelete = [...existingIds].filter((eid) => !incomingIds.has(eid))
+        if (idsToDelete.length) {
+          await tx.personSection.deleteMany({ where: { id: { in: idsToDelete } } })
+        }
+        for (let idx = 0; idx < sections.length; idx++) {
+          const s = sections[idx]
+          const fields = {
+            title: s.title,
+            content: s.content,
+            order: s.order ?? idx,
+            sectionType: s.sectionType ?? null,
+          }
+          if (s.id && existingIds.has(s.id)) {
+            await tx.personSection.update({ where: { id: s.id }, data: fields })
+          } else {
+            await tx.personSection.create({ data: { personId: id, ...fields } })
+          }
         }
       }
 
