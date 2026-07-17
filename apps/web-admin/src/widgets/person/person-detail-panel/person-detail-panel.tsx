@@ -92,6 +92,7 @@ import { notify } from '@/shared/ui/toast'
 import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 import { AwardRegisterModal } from '@/widgets/person/award-register-modal/award-register-modal'
 import { CareerRegisterModal } from '@/widgets/person/career-register-modal/career-register-modal'
+import { EducationRegisterModal } from '@/widgets/person/education-register-modal/education-register-modal'
 import { PersonLifeEventFormModal } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
 import { PersonLifeTimelineInfographic } from '@/widgets/person/person-life-timeline-infographic/person-life-timeline-infographic'
 import { classifySiblingKinship } from '@/widgets/person/person-genealogy-infographic/family-tree-derive'
@@ -360,6 +361,7 @@ export function PersonDetailPanel({
   const [editingLifeEvent, setEditingLifeEvent] = useState<PersonLifeEvent | null>(null)
   const [awardModalOpen, setAwardModalOpen] = useState(false)
   const [careerModalOpen, setCareerModalOpen] = useState(false)
+  const [educationModalOpen, setEducationModalOpen] = useState(false)
   /** 연보의 사건 카드 클릭 시 띄울 사건 인라인 모달 — null이면 닫힘 */
   const [viewingEventId, setViewingEventId] = useState<string | null>(null)
   /** 저장 직후 하이라이트·스크롤 대상 id (타임라인 인포그래픽에 전달). 0.8초 뒤 자동 해제 */
@@ -1932,15 +1934,41 @@ export function PersonDetailPanel({
                   })()}
 
                   {/* 3.3. 학력 */}
-                  {p.educations && p.educations.length > 0 && (
+                  {(!embedInModal || (p.educations && p.educations.length > 0)) && (
                     <CollapsibleSection
                       storageKey="education"
                       ariaLabel="학력"
                       icon={<FiBook size={14} strokeWidth={2.2} />}
                       title="학력"
-                      count={p.educations.length}
+                      count={
+                        p.educations && p.educations.length > 0
+                          ? p.educations.length
+                          : undefined
+                      }
                       defaultOpen={false}
+                      actions={
+                        !embedInModal && (
+                          <UnifiedActionRow>
+                            <TenureAddButton
+                              type="button"
+                              onClick={() => {
+                                playClickSound()
+                                setEducationModalOpen(true)
+                              }}
+                            >
+                              <FiPlus size={12} />
+                              학력
+                            </TenureAddButton>
+                          </UnifiedActionRow>
+                        )
+                      }
                     >
+                      {!p.educations || p.educations.length === 0 ? (
+                        <TenureEmpty>
+                          등록된 학력이 없습니다. 위{' '}
+                          <strong>학력 버튼</strong>으로 추가하세요.
+                        </TenureEmpty>
+                      ) : (
                       <SimpleEntryList>
                         {p.educations
                           .slice()
@@ -2008,6 +2036,7 @@ export function PersonDetailPanel({
                             )
                           })}
                       </SimpleEntryList>
+                      )}
                     </CollapsibleSection>
                   )}
 
@@ -2632,6 +2661,12 @@ export function PersonDetailPanel({
                     }
                     birthEra={p.birthEra ?? null}
                     deathEra={p.deathEra ?? null}
+                    birthPlace={
+                      p.birthCity?.name ??
+                      p.birthAdminDivision?.name ??
+                      p.birthPlaceText ??
+                      null
+                    }
                     deathType={p.deathType ?? null}
                     deathCause={p.deathCause ?? null}
                     deathNote={p.deathNote ?? null}
@@ -2722,12 +2757,12 @@ export function PersonDetailPanel({
         personId={person.id}
         onClose={() => setCareerModalOpen(false)}
       />
-                    birthPlace={
-                      p.birthCity?.name ??
-                      p.birthAdminDivision?.name ??
-                      p.birthPlaceText ??
-                      null
-                    }
+
+      <EducationRegisterModal
+        open={educationModalOpen}
+        personId={person.id}
+        onClose={() => setEducationModalOpen(false)}
+      />
 
       <EventInlineModal
         eventId={viewingEventId}
