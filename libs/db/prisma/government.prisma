@@ -89,6 +89,12 @@ enum AppointmentMethod {
   COUP
   /// 의회 선출
   PARLIAMENTARY_ELECTION
+  /// 정복 (외부 세력의 정복으로 즉위 — 내부 찬탈 COUP와 구분. 예: 정복왕 윌리엄)
+  CONQUEST
+  /// 복위 (폐위·퇴위 후 같은 인물이 다시 즉위. 예: 헨리 6세 Readeption, 고려 충선왕)
+  RESTORATION
+  /// 선거군주제 선출 (신성로마 선제후 선출, 폴란드-리투아니아 자유선거 — 공화정 선거와 구분)
+  ELECTIVE_MONARCHY
   /// 기타
   OTHER
 }
@@ -313,10 +319,14 @@ model SovereignReign {
   /// 공백·논란 계승·다국가 통치(부르봉=프랑스/스페인)를 수용하기 위해 유니크 제약 없는 자유 정수.
   dynastyOrdinal Int? @map("dynasty_ordinal")
 
+  /// 재위 개시일(법적 즉위일). 대관식일은 별개 사실 — 스칼라 컬럼 대신 Event 링크로 담는다(BC·정밀도 제약 회피).
   startDate DateTime @map("start_date")
   endDate   DateTime? @map("end_date")
 
   appointmentMethod AppointmentMethod? @map("appointment_method")
+  /// 즉위 경위 상세 서사 — appointmentMethod의 상세 쌍(endReasonDetail의 시작측 대칭).
+  /// 승계 경위(선왕 사망·양위·찬탈·정복·선거군주)·대관식 언급·선왕과의 관계·섭정/수렴청정 등 수용.
+  appointmentDetail String?            @map("appointment_detail") @db.Text
   endReason         TenureEndReason?   @map("end_reason")
   endReasonDetail   String?            @map("end_reason_detail") @db.Text
   notes             String?            @db.Text
@@ -427,7 +437,7 @@ model GovernmentPositionTenure {
   /// 서양 군주 전용, 동아시아는 termNumber 사용
   regnalNumber Int? @map("regnal_number")
 
-  /// 임기 시작일 (즉위일)
+  /// 임기 시작일 — 취임일(군주 재위는 법적 즉위일; 대관식일은 별개 사실로 Event 링크가 정본)
   startDate DateTime @map("start_date")
 
   /// 임기 종료일 (퇴위일, 현재 재직 중이면 NULL)
@@ -435,6 +445,9 @@ model GovernmentPositionTenure {
 
   /// 임명/선출 방식
   appointmentMethod AppointmentMethod? @map("appointment_method")
+
+  /// 취임 경위 상세 서사 — appointmentMethod의 상세 쌍(endReasonDetail의 시작측 대칭, 재위 카드에선 '즉위 상세')
+  appointmentDetail String? @map("appointment_detail") @db.Text
 
   /// 종료 사유 (Enum)
   endReason TenureEndReason? @map("end_reason")

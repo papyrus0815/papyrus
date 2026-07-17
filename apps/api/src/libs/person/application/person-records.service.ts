@@ -38,6 +38,20 @@ function toPlainSummary(html?: string | null): string | null {
   return text.length > SUMMARY_LIMIT ? `${text.slice(0, SUMMARY_LIMIT)}…` : text
 }
 
+/**
+ * plain text 서술 → 공백 축약 200자. 빈 결과는 null.
+ * appointmentDetail 등 Textarea 저작 원문에 toPlainSummary(HTML 스트리퍼)를 쓰면
+ * 사용자가 문자 그대로 적은 꺾쇠 구간(<조지 5세> 등)이 태그로 오인·소실되므로 분리.
+ */
+function toPlainTextSummary(text?: string | null): string | null {
+  if (!text) return null
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (!normalized) return null
+  return normalized.length > SUMMARY_LIMIT
+    ? `${normalized.slice(0, SUMMARY_LIMIT)}…`
+    : normalized
+}
+
 function yearOf(date?: Date | null): number | null {
   return date ? date.getUTCFullYear() : null
 }
@@ -228,7 +242,7 @@ export class PersonRecordsService {
         sourceId: row.id,
         personId: row.personId,
         title: row.termNumber != null ? `제${row.termNumber}대 ${baseTitle}` : baseTitle,
-        summary: null,
+        summary: toPlainTextSummary(row.appointmentDetail),
         category: row.positionType,
         startYear: yearOf(row.startDate),
         endYear: yearOf(row.endDate),
@@ -251,7 +265,7 @@ export class PersonRecordsService {
         title: row.regnalName
           ? `${row.regnalName} · ${positionTitle} 재위`
           : `${positionTitle} 재위`,
-        summary: null,
+        summary: toPlainTextSummary(row.appointmentDetail),
         category: row.positionDefinition?.positionType ?? 'HEAD_OF_STATE',
         startYear: yearOf(row.startDate),
         endYear: yearOf(row.endDate),

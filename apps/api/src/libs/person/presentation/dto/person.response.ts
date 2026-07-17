@@ -1,6 +1,48 @@
 import { Era, DeathType } from './create-person.dto'
 
 /**
+ * 인물 상세 응답의 군주·재위(SovereignReign) 요약.
+ *
+ * 이 타입은 `PersonRepository.findByIdWithRelations`의 sovereignReigns select와 1:1이다 —
+ * select에 컬럼을 추가하면 여기도 함께 추가할 것(반쪽배선 방지 계약).
+ */
+export interface PersonSovereignReignSummaryDto {
+  id: string
+  /** 재위 시작일 (직렬화된 ISO 문자열) */
+  startDate: string
+  /** 재위 종료일 — 현직·미상이면 null */
+  endDate: string | null
+  /** 비고 (레거시 왕명 인코딩 포함 가능) */
+  notes: string | null
+  /** 왕명 (정식 컬럼) */
+  regnalName: string | null
+  /** 왕명 서수 (예: 14세의 14) */
+  regnalNumber: number | null
+  /** 통산 대수 — 공식 대수 없으면 null */
+  termNumber: number | null
+  /** 본인 회차 (기) */
+  subTermNumber: number | null
+  /** 왕조 내 서수 (왕조 n대) */
+  dynastyOrdinal: number | null
+  /** 즉위 방식 (AppointmentMethod enum 문자열) */
+  appointmentMethod: string | null
+  /** 즉위 방식 상세 서술 */
+  appointmentDetail: string | null
+  /** 퇴위 사유 (enum 문자열) */
+  endReason: string | null
+  /** 퇴위 사유 상세 서술 */
+  endReasonDetail: string | null
+  /** 직위 정의 (군주위) */
+  positionDefinition: { id: string; title: string | null } | null
+  /** 현대 국가 */
+  country: { id: string; name: string | null } | null
+  /** 역사(과거) 국가 */
+  historicalCountry: { id: string; name: string | null } | null
+  /** 재위 중 업적 — TENURE_ACHIEVEMENTS_SELECT shape (전면 타이핑은 범위 밖) */
+  achievements: any[]
+}
+
+/**
  * 인물 응답 DTO
  */
 export interface PersonResponseDto {
@@ -113,7 +155,7 @@ export interface PersonResponseDto {
   // 정부 직위 재임 기록
   governmentTenures?: any[]
   /** 군주·재위 전용 기록 (SovereignReign — 행정부 재임과 별도 테이블) */
-  sovereignReigns?: any[]
+  sovereignReigns?: PersonSovereignReignSummaryDto[]
   /** 인물 연보 (PersonLifeEvent — 자유 서술형 시간축) */
   lifeEvents?: any[]
   createdAt: string

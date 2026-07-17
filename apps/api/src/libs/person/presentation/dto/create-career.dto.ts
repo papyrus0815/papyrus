@@ -719,7 +719,7 @@ export class CreateGovernmentPositionTenureDto {
 
   @IsOptional()
   @IsString()
-  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'OTHER' | null
+  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'CONQUEST' | 'RESTORATION' | 'ELECTIVE_MONARCHY' | 'OTHER' | null
 
   /** 취임 경위 상세 서사 — appointmentMethod의 상세 쌍(endReasonDetail의 시작측 대칭) */
   @IsOptional()
@@ -809,7 +809,12 @@ export class CreateSovereignReignDto {
 
   @IsOptional()
   @IsString()
-  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'OTHER' | null
+  appointmentMethod?: 'DIRECT_ELECTION' | 'INDIRECT_ELECTION' | 'APPOINTMENT' | 'HEREDITARY' | 'COUP' | 'PARLIAMENTARY_ELECTION' | 'CONQUEST' | 'RESTORATION' | 'ELECTIVE_MONARCHY' | 'OTHER' | null
+
+  /** 즉위 경위 상세 서사 — appointmentMethod의 상세 쌍(승계 경위·대관식 언급·선왕 관계·섭정 등) */
+  @IsOptional()
+  @IsString()
+  appointmentDetail?: string | null
 
   @IsOptional()
   @IsString()
@@ -823,10 +828,10 @@ export class CreateSovereignReignDto {
   @IsString()
   notes?: string | null
 
-  /** 왕호/재위명 (예: 빅토리아, 루이 14세) */
+  /** 왕호/재위명 (예: 빅토리아, 루이 14세) — 수정(Partial) 시 null = 명시적 해제 */
   @IsOptional()
   @IsString()
-  regnalName?: string
+  regnalName?: string | null
 
   @IsOptional()
   @IsBoolean()

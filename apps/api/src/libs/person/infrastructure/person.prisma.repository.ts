@@ -1617,6 +1617,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             startDate: true,
             endDate: true,
             appointmentMethod: true,
+            appointmentDetail: true,
             endReason: true,
             endReasonDetail: true,
             notes: true,
@@ -1670,6 +1671,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             subTermNumber: true,
             dynastyOrdinal: true,
             appointmentMethod: true,
+            appointmentDetail: true,
             endReason: true,
             endReasonDetail: true,
             positionDefinition: {
@@ -2463,6 +2465,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         startDate: new Date(dto.startDate),
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
         appointmentMethod: dto.appointmentMethod as any,
+        appointmentDetail: dto.appointmentDetail,
         endReason: dto.endReason as any,
         endReasonDetail: dto.endReasonDetail,
         notes: dto.notes,
@@ -2525,6 +2528,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.startDate) updateData.startDate = new Date(dto.startDate)
     if (dto.endDate !== undefined) updateData.endDate = dto.endDate ? new Date(dto.endDate) : null
     if (dto.appointmentMethod !== undefined) updateData.appointmentMethod = dto.appointmentMethod as any
+    if (dto.appointmentDetail !== undefined) updateData.appointmentDetail = dto.appointmentDetail
     if (dto.endReason !== undefined) updateData.endReason = dto.endReason as any
     if (dto.endReasonDetail !== undefined) updateData.endReasonDetail = dto.endReasonDetail
     if (dto.notes !== undefined) updateData.notes = dto.notes
@@ -4198,6 +4202,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         startDate: new Date(dto.startDate),
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
         appointmentMethod: dto.appointmentMethod as any,
+        appointmentDetail: dto.appointmentDetail,
         endReason: dto.endReason as any,
         endReasonDetail: dto.endReasonDetail,
         notes: dto.notes,
@@ -4237,6 +4242,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.startDate) updateData.startDate = new Date(dto.startDate)
     if (dto.endDate !== undefined) updateData.endDate = dto.endDate ? new Date(dto.endDate) : null
     if (dto.appointmentMethod !== undefined) updateData.appointmentMethod = dto.appointmentMethod as any
+    if (dto.appointmentDetail !== undefined) updateData.appointmentDetail = dto.appointmentDetail
     if (dto.endReason !== undefined) updateData.endReason = dto.endReason as any
     if (dto.endReasonDetail !== undefined) updateData.endReasonDetail = dto.endReasonDetail
     if (dto.notes !== undefined) updateData.notes = dto.notes
