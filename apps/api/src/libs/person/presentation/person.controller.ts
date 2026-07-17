@@ -472,7 +472,6 @@ export class PersonController {
     dynasty: any
     religion: any
     denomination: any
-    job: any
     birthCityId: string | null
     deathCityId: string | null
     birthAdminDivisionId: string | null
@@ -654,7 +653,6 @@ export class PersonController {
       birthAdminDivision: person.birthAdminDivision ? { id: person.birthAdminDivision.id, name: person.birthAdminDivision.name } : null,
       deathAdminDivision: person.deathAdminDivision ? { id: person.deathAdminDivision.id, name: person.deathAdminDivision.name } : null,
       dynastyId: person.dynastyId ?? null,
-      job: person.job ?? null,
       ...(() => {
         // CITIZENSHIP priority=0 소속을 effective 국가로 도출.
         // countryId·country 객체가 일치하도록 함께 반환 (Person.countryId 기반 객체와 affiliation이 다른 record일 수 있음).
@@ -691,7 +689,7 @@ export class PersonController {
       electionCandidacies: serializeBigInt(person.electionCandidacies || []),
       militaryCommands: person.MilitaryUnitCommander || [],
       events: person.PersonEvent || [],
-      governmentPositions: person.GovernmentTenures || [],
+      governmentPositions: serializeBigInt(person.GovernmentTenures ?? []),
       spouseRelations: (() => {
         const seen = new Set<string>()
         return [

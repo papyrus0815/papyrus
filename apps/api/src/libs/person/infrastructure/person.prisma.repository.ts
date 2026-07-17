@@ -1074,7 +1074,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         dynasty: true,
         religion: true,
         denomination: true,
-        job: true,
         father: {
           select: {
             id: true,
@@ -1546,14 +1545,9 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
         },
-        lifeEvents: {
-          orderBy: [
-            { startDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
-            { sortOrder: Prisma.SortOrder.asc },
-            { createdAt: Prisma.SortOrder.asc },
-          ],
-        },
-        // 전기(생애 서술) 다중 섹션 — 상세 화면에서 order 순으로 렌더링
+        // 전기(생애 서술) 다중 섹션 — 상세 화면에서 order 순으로 렌더링.
+        // 연보(lifeEvents)는 상세 응답이 아니라 별도 엔드포인트(listPersonLifeEvents)로
+        // 조회한다 — 상세 select에서 제외해 기본 탭의 불필요한 과다fetch를 없앤다.
         biographySections: {
           orderBy: { order: Prisma.SortOrder.asc },
         },
