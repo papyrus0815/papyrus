@@ -78,6 +78,34 @@ export function getDecade(year: number): number {
 }
 
 /**
+ * 세기 → 부호 연도 범위. `getCentury`의 역함수 (같은 경계 규약: 16세기 = 1501~1600).
+ * `toYear`는 배타(exclusive) — person-records compare API 계약과 동일.
+ * BC: -1세기 = BC 1~100 = -100 ≤ y < 0 (연도 0은 존재하지 않지만 배타 상한으로는 유효).
+ */
+export function centuryYearRange(century: number): {
+  fromYear: number
+  toYear: number
+} {
+  if (century > 0) {
+    return { fromYear: 100 * (century - 1) + 1, toYear: 100 * century + 1 }
+  }
+  return { fromYear: 100 * century, toYear: 100 * (century + 1) }
+}
+
+/** 세기(BC 음수) → 표시 라벨. 예: 16 → "16세기", -1 → "기원전 1세기". */
+export function formatCenturyLabel(century: number): string {
+  return century > 0 ? `${century}세기` : `기원전 ${-century}세기`
+}
+
+/**
+ * 세기 이동 시 존재하지 않는 0세기를 건너뛴다 (-1세기 다음은 1세기).
+ */
+export function stepCentury(century: number, delta: 1 | -1): number {
+  const next = century + delta
+  return next === 0 ? next + delta : next
+}
+
+/**
  * ISO 문자열 → 시간순 정렬용 정수 키. BC(음수 연도)까지 안정 정렬.
  * 부호연도×10000 + 월×100 + 일. 파싱 불가면 null.
  *

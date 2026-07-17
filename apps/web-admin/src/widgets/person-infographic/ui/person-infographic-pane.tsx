@@ -1,7 +1,9 @@
 /**
  * 인물 인포그래픽 페인.
  *
- * 매트릭스 / 은하계 / 시대 스토리 / 왕조 / 능력치 5개 인포그래픽 뷰.
+ * 매트릭스 / 은하계 / 시대 스토리 / 왕조 / 능력치 / 기록 비교 6개 뷰.
+ * 기록 비교(records)는 필터 스코프와 무관한 별도 데이터(compare API)라
+ * InfographicContent 대신 전용 뷰로 분기한다.
  *
  * 국가 상세 → "이 나라 인물 보기" 진입은 ?countries=<id>로 들어와
  * useFilterUrlSync가 scope.country에 적용 → 동일 인포그래픽 + 국가 필터로 표시.
@@ -17,7 +19,9 @@ import {
 
 import type { PersonInfographicView } from '../model/filter.store'
 import { usePersonInfographicFilterStore } from '../model/filter.store'
+import { useFilterUrlSync } from '../model/url-sync'
 import { InfographicContent } from './infographic-content'
+import { RecordsCompareView } from './records-compare-view'
 
 const VIEW_OPTIONS: Array<[Exclude<PersonInfographicView, 'cards'>, string]> = [
   ['matrix', '매트릭스'],
@@ -25,6 +29,7 @@ const VIEW_OPTIONS: Array<[Exclude<PersonInfographicView, 'cards'>, string]> = [
   ['story', '시대 스토리'],
   ['dynasty', '왕조'],
   ['stats', '능력치'],
+  ['records', '기록 비교'],
 ]
 
 interface PersonInfographicPaneProps {
@@ -34,6 +39,9 @@ interface PersonInfographicPaneProps {
 export function PersonInfographicPane({
   onPersonClick,
 }: PersonInfographicPaneProps) {
+  // URL ↔ store 동기화 — records 뷰에서 InfographicContent가 언마운트돼도
+  // view·recordPersonIds 등 쿼리 동기화가 유지되도록 페인 레벨에서 1회 등록.
+  useFilterUrlSync()
   const view = usePersonInfographicFilterStore((s) => s.view)
   const setView = usePersonInfographicFilterStore((s) => s.setView)
   const activeView: Exclude<PersonInfographicView, 'cards'> =
@@ -79,7 +87,11 @@ export function PersonInfographicPane({
           </PersonInnerPillBtn>
         ))}
       </PersonInnerPillNav>
-      <InfographicContent onPersonClick={onPersonClick} />
+      {activeView === 'records' ? (
+        <RecordsCompareView onPersonClick={onPersonClick} />
+      ) : (
+        <InfographicContent onPersonClick={onPersonClick} />
+      )}
     </PaneWrap>
   )
 }

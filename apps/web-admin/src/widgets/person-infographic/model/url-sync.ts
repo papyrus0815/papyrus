@@ -2,7 +2,8 @@
  * 인포그래픽 store ↔ URL 쿼리 양방향 동기화.
  *
  * 지원 파라미터:
- *   view, q, era, region, field, countries, alive, minInf, sort
+ *   view, q, era, region, field, countries, alive, minInf, sort,
+ *   recordPersonIds, fromYear, toYear (기록 비교 뷰 — 부호 연도, toYear 배타)
  *
  * 동작:
  *  - 마운트 시: URL → store (한 번)
@@ -22,6 +23,7 @@ import type {
   PersonSortKey,
 } from './filter.store'
 import { usePersonInfographicFilterStore } from './filter.store'
+import { MAX_RECORD_PERSONS } from './records-compare'
 
 const VIEWS: PersonInfographicView[] = [
   'cards',
@@ -30,6 +32,7 @@ const VIEWS: PersonInfographicView[] = [
   'story',
   'dynasty',
   'stats',
+  'records',
 ]
 const ALIVES: AliveFilter[] = ['all', 'alive', 'dead']
 const SORTS: PersonSortKey[] = ['influence', 'name', 'year', 'deathYear']
@@ -54,6 +57,15 @@ export function useFilterUrlSync(): void {
   const aliveFilter = usePersonInfographicFilterStore((s) => s.aliveFilter)
   const minInfluence = usePersonInfographicFilterStore((s) => s.minInfluence)
   const sort = usePersonInfographicFilterStore((s) => s.sort)
+  const recordPersonIds = usePersonInfographicFilterStore(
+    (state) => state.recordPersonIds,
+  )
+  const recordFromYear = usePersonInfographicFilterStore(
+    (state) => state.recordFromYear,
+  )
+  const recordToYear = usePersonInfographicFilterStore(
+    (state) => state.recordToYear,
+  )
 
   // 국가 scope 식별자 정규화용 id→이름 맵.
   // 외부 진입(국가 상세 "이 나라 인물 보기" 등)은 ?countries=<국가UUID>로 들어오는데,
@@ -132,6 +144,27 @@ export function useFilterUrlSync(): void {
       }
     }
 
+    // 기록 비교 뷰 — recordPersonIds(콤마 목록) / fromYear(포함) / toYear(배타), 부호 연도
+    const recordIdsRaw = searchParams.get('recordPersonIds')
+    if (recordIdsRaw != null) {
+      const ids = parseList(recordIdsRaw).slice(0, MAX_RECORD_PERSONS)
+      if (!eqList(ids, recordPersonIds)) patch.recordPersonIds = ids
+    }
+    const fromYearRaw = searchParams.get('fromYear')
+    if (fromYearRaw != null) {
+      const fromYear = Number(fromYearRaw)
+      if (Number.isInteger(fromYear) && fromYear !== recordFromYear) {
+        patch.recordFromYear = fromYear
+      }
+    }
+    const toYearRaw = searchParams.get('toYear')
+    if (toYearRaw != null) {
+      const toYear = Number(toYearRaw)
+      if (Number.isInteger(toYear) && toYear !== recordToYear) {
+        patch.recordToYear = toYear
+      }
+    }
+
     if (Object.keys(patch).length > 0) setMany(patch)
     initializedRef.current = true
   }, [searchParams, setMany, idToCountryName])
@@ -154,6 +187,9 @@ export function useFilterUrlSync(): void {
     setOrDel('region', scopes.region.join(','))
     setOrDel('field', scopes.field.join(','))
     setOrDel('countries', scopes.country.join(','))
+    setOrDel('recordPersonIds', recordPersonIds.join(','))
+    setOrDel('fromYear', recordFromYear != null ? String(recordFromYear) : '')
+    setOrDel('toYear', recordToYear != null ? String(recordToYear) : '')
 
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true })
@@ -165,6 +201,9 @@ export function useFilterUrlSync(): void {
     minInfluence,
     sort,
     scopes,
+    recordPersonIds,
+    recordFromYear,
+    recordToYear,
     searchParams,
     setSearchParams,
   ])

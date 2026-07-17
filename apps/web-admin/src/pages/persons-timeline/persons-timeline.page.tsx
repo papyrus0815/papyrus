@@ -2,11 +2,12 @@
  * /history/dashboard/persons
  * /history/dashboard/persons/:personId
  *
- * 인물 대시보드 — 인포그래픽 5뷰 (매트릭스/은하계/시대 스토리/왕조/능력치) + 필터.
+ * 인물 대시보드 — 인포그래픽 6뷰 (매트릭스/은하계/시대 스토리/왕조/능력치/기록 비교) + 필터.
  * 인물 상세는 같은 페이지에서 PersonDetailPanel로 우측 렌더.
  *
  * URL 쿼리(useFilterUrlSync 가 store와 양방향 동기화):
  *   view, q, era, region, field, countries, alive, minInf, sort
+ *   + 기록 비교(view=records): recordPersonIds, fromYear(포함), toYear(배타) — 부호 연도
  *
  * 국가 상세 → "이 나라 인물 보기"는 ?countries=<id>로 진입 → 일반 필터 스코프로 적용됨
  * (별도 카드 전용 모드 없음 — 인포그래픽 + 필터로 통일).

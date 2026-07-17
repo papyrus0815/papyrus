@@ -3,6 +3,9 @@ import { useMemo } from 'react'
 import { FiBookmark, FiCalendar, FiX } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
+import { centuryYearRange, getCentury } from '@/shared/lib/iso-date'
+import { CenturyStepper } from '@/shared/ui/century-stepper'
+
 import type { YearRange } from '../model/types'
 import type { UserTimePreset } from '../model/use-user-presets'
 import { formatYear } from '../lib/format-year'
@@ -88,6 +91,15 @@ export function RangeControls({
   )?.id
   const activePresetId = exactPresetId ?? containingPresetId
 
+  // 현재 범위가 정확히 한 세기(centuryYearRange)와 일치할 때만 세기 표시 — 아니면 흐림(null)
+  const currentCentury = useMemo(() => {
+    const candidate = getCentury(range.startYear)
+    const { fromYear, toYear } = centuryYearRange(candidate)
+    return fromYear === range.startYear && toYear === range.endYear
+      ? candidate
+      : null
+  }, [range.startYear, range.endYear])
+
   return (
     <Wrap>
       <PresetGroup>
@@ -102,6 +114,14 @@ export function RangeControls({
           </PresetButton>
         ))}
       </PresetGroup>
+      <CenturyGroup>
+        <CenturyStepper
+          century={currentCentury}
+          onChange={({ fromYear, toYear }) =>
+            onRangeChange({ startYear: fromYear, endYear: toYear })
+          }
+        />
+      </CenturyGroup>
       <ZoomGroup>
         <ZoomLabel>줌</ZoomLabel>
         <ZoomSlider
@@ -215,6 +235,15 @@ const PresetButton = styled.button<{ $active: boolean }>`
     color: ${({ theme }) => theme.colors.primary};
     background: ${({ theme }) => theme.colors.activeLight};
   }
+`
+
+const CenturyGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 4px;
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const ZoomGroup = styled.div`

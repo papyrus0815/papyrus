@@ -2593,17 +2593,30 @@ export function PersonDetailPanel({
                   <SectionLabelRow>
                     <SectionLabel>연보 · 통합 타임라인</SectionLabel>
                     {!embedInModal && (
-                      <TenureAddButton
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setEditingLifeEvent(null)
-                          setLifeEventModalOpen(true)
-                        }}
-                      >
-                        <FiPlus size={14} />
-                        연보 추가
-                      </TenureAddButton>
+                      <UnifiedActionRow>
+                        {/* 기록 비교 뷰 딥링크 — ?view=records&recordPersonIds=<id> */}
+                        <TenureAddButton
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            navigate(pathKeys.personsTimelineRecords([personId]))
+                          }}
+                        >
+                          <FiUsers size={14} />
+                          다른 인물과 비교
+                        </TenureAddButton>
+                        <TenureAddButton
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            setEditingLifeEvent(null)
+                            setLifeEventModalOpen(true)
+                          }}
+                        >
+                          <FiPlus size={14} />
+                          연보 추가
+                        </TenureAddButton>
+                      </UnifiedActionRow>
                     )}
                   </SectionLabelRow>
                   <PersonLifeTimelineInfographic

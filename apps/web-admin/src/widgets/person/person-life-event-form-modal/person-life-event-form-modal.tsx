@@ -36,6 +36,7 @@ import {
   deletePersonLifeEvent,
   updatePersonLifeEvent,
 } from '@/shared/api/person-life-events'
+import { personRecordsKeys } from '@/shared/api/person-records'
 import { createRichTextImageUploader } from '@/shared/api/upload'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
@@ -526,6 +527,8 @@ export function PersonLifeEventFormModal({
     queryClient.invalidateQueries({
       queryKey: ['person-life-events', personId],
     })
+    // 인물 통합 기록 비교(person-records)도 연보 변경을 즉시 반영
+    queryClient.invalidateQueries({ queryKey: personRecordsKeys.all })
   }
 
   /**

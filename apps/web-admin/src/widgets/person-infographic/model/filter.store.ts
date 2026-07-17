@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+import { MAX_RECORD_PERSONS } from './records-compare'
+
 export type PersonInfographicView =
   | 'cards'
   | 'matrix'
@@ -8,6 +10,7 @@ export type PersonInfographicView =
   | 'story'
   | 'dynasty'
   | 'stats'
+  | 'records'
 
 export type AliveFilter = 'all' | 'alive' | 'dead'
 
@@ -42,12 +45,26 @@ interface PersonInfographicFilterState {
   /** 좋아요 고정 인물 (localStorage로 유지) */
   pinned: string[]
 
+  /** 기록 비교 뷰 — 비교 대상 인물 id (URL recordPersonIds 동기화, 최대 12명) */
+  recordPersonIds: string[]
+  /** 기록 비교 기간 — 부호 연도(BC 음수), from 포함 / to 배타. null이면 전 기간 */
+  recordFromYear: number | null
+  recordToYear: number | null
+
   /** 한 번에 여러 필드를 갱신 — URL → store 동기화에서 사용 (single render) */
   setMany: (
     patch: Partial<
       Pick<
         PersonInfographicFilterState,
-        'scopes' | 'minInfluence' | 'aliveFilter' | 'view' | 'query' | 'sort'
+        | 'scopes'
+        | 'minInfluence'
+        | 'aliveFilter'
+        | 'view'
+        | 'query'
+        | 'sort'
+        | 'recordPersonIds'
+        | 'recordFromYear'
+        | 'recordToYear'
       >
     >,
   ) => void
@@ -65,6 +82,12 @@ interface PersonInfographicFilterState {
   setSort: (s: PersonSortKey) => void
   togglePin: (id: string) => void
   resetFilters: () => void
+
+  /** 기록 비교 — 인물 추가(중복·정원 초과는 무시) */
+  addRecordPersonId: (id: string) => void
+  removeRecordPersonId: (id: string) => void
+  /** 기록 비교 기간 설정 — 둘 다 null이면 전 기간 */
+  setRecordYearRange: (fromYear: number | null, toYear: number | null) => void
 }
 
 export const usePersonInfographicFilterStore =
@@ -78,6 +101,9 @@ export const usePersonInfographicFilterStore =
         query: '',
         sort: 'influence',
         pinned: [],
+        recordPersonIds: [],
+        recordFromYear: null,
+        recordToYear: null,
 
         setMany: (patch) => set(patch),
         toggleScope: (kind, value) =>
@@ -111,6 +137,25 @@ export const usePersonInfographicFilterStore =
             aliveFilter: 'all',
             query: '',
           }),
+
+        addRecordPersonId: (id) =>
+          set((state) => {
+            if (
+              state.recordPersonIds.includes(id) ||
+              state.recordPersonIds.length >= MAX_RECORD_PERSONS
+            ) {
+              return state
+            }
+            return { recordPersonIds: [...state.recordPersonIds, id] }
+          }),
+        removeRecordPersonId: (id) =>
+          set((state) => ({
+            recordPersonIds: state.recordPersonIds.filter(
+              (personId) => personId !== id,
+            ),
+          })),
+        setRecordYearRange: (fromYear, toYear) =>
+          set({ recordFromYear: fromYear, recordToYear: toYear }),
       }),
       {
         name: 'person-infographic-filter',

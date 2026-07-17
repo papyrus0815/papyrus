@@ -3,14 +3,17 @@
  * 사건 리스트 정렬/세기 그룹이 의존하는 load-bearing 유틸이라 회귀 방지가 중요.
  */
 import {
+  centuryYearRange,
   compareByDate,
   dateSortKey,
+  formatCenturyLabel,
   getCentury,
   getCenturyFromIso,
   getDecade,
   isoDaySpan,
   isoYearSpan,
   parseIsoDateParts,
+  stepCentury,
 } from './iso-date'
 
 describe('parseIsoDateParts', () => {
@@ -55,6 +58,47 @@ describe('getCentury', () => {
     expect(getCentury(-100)).toBe(-1) // 100 BC = 기원전 1세기
     expect(getCentury(-101)).toBe(-2) // 101 BC = 기원전 2세기
     expect(getCentury(0)).toBe(-1) // 연도 0 ≈ 1 BC
+  })
+})
+
+describe('centuryYearRange — getCentury의 역함수 (toYear 배타)', () => {
+  it('AD 세기 경계', () => {
+    expect(centuryYearRange(16)).toEqual({ fromYear: 1501, toYear: 1601 })
+    expect(centuryYearRange(1)).toEqual({ fromYear: 1, toYear: 101 })
+    expect(centuryYearRange(20)).toEqual({ fromYear: 1901, toYear: 2001 })
+  })
+
+  it('BC 세기 경계 (음수 세기)', () => {
+    expect(centuryYearRange(-1)).toEqual({ fromYear: -100, toYear: 0 })
+    expect(centuryYearRange(-2)).toEqual({ fromYear: -200, toYear: -100 })
+  })
+
+  it('범위 내 모든 연도가 getCentury로 되돌아감 (왕복 정합)', () => {
+    for (const century of [16, 1, -1, -2]) {
+      const { fromYear, toYear } = centuryYearRange(century)
+      expect(getCentury(fromYear)).toBe(century)
+      expect(getCentury(toYear - 1)).toBe(century)
+    }
+  })
+})
+
+describe('stepCentury — 0세기 건너뛰기', () => {
+  it('AD/BC 내부 이동', () => {
+    expect(stepCentury(16, 1)).toBe(17)
+    expect(stepCentury(16, -1)).toBe(15)
+    expect(stepCentury(-2, 1)).toBe(-1)
+  })
+
+  it('-1세기 ↔ 1세기 경계에서 0을 건너뜀', () => {
+    expect(stepCentury(-1, 1)).toBe(1)
+    expect(stepCentury(1, -1)).toBe(-1)
+  })
+})
+
+describe('formatCenturyLabel', () => {
+  it('AD/BC 라벨', () => {
+    expect(formatCenturyLabel(16)).toBe('16세기')
+    expect(formatCenturyLabel(-1)).toBe('기원전 1세기')
   })
 })
 

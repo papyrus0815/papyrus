@@ -1,7 +1,8 @@
 /**
  * 인물 인포그래픽 콘텐츠 — 헤더 + 검색 + 통계 토글 + 뷰 디스패치.
  *
- * 6개 뷰(matrix/galaxy/story/dynasty/stats)는 각자 별도 파일.
+ * 5개 뷰(matrix/galaxy/story/dynasty/stats)는 각자 별도 파일.
+ * records(기록 비교) 뷰는 상위 PersonInfographicPane이 별도 분기.
  * 필터·뷰·정렬 상태는 zustand store + URL 쿼리 동기화로 공유.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
@@ -21,7 +22,6 @@ import {
   type PersonInfographicView,
 } from '../model/filter.store'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
-import { useFilterUrlSync } from '../model/url-sync'
 
 import { DynastyView } from './dynasty-view'
 import { CardGridSkeleton } from './_shared/card-grid-skeleton'
@@ -43,7 +43,7 @@ const STATS_KEY = 'person-infographic-stats-open'
 export function InfographicContent({
   onPersonClick,
 }: InfographicContentProps) {
-  useFilterUrlSync()
+  // URL ↔ store 동기화는 상위 PersonInfographicPane이 담당 (records 뷰 분기 공유)
   const { isLoading, isError, refetch } = usePersonsInfographic()
   const allPeople = useAdaptedPersons()
 

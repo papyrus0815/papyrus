@@ -95,6 +95,20 @@ export const pathKeys = {
   /** 인물 타임라인 — 인물 상세 (사이드바 유지) */
   personsTimelineDetail: (personId: string) =>
     `/${ROUTES.PERSONS_TIMELINE}/${encodeURIComponent(personId)}/`,
+  /**
+   * 인물 타임라인 — 기록 비교 뷰 딥링크.
+   * URL 계약: ?view=records&recordPersonIds=a,b,c(&fromYear=1501&toYear=1601)
+   * (부호 연도, fromYear 포함 / toYear 배타)
+   */
+  personsTimelineRecords: (
+    personIds: string[],
+    range?: { fromYear: number; toYear: number },
+  ) =>
+    `/${ROUTES.PERSONS_TIMELINE}/?view=records&recordPersonIds=${personIds
+      .map(encodeURIComponent)
+      .join(',')}${
+      range ? `&fromYear=${range.fromYear}&toYear=${range.toYear}` : ''
+    }`,
   /** 민족 타임라인 */
   ethnicityTimeline: () => `/${ROUTES.ETHNICITY}/`,
   /** 저원(입법) 타임라인 */

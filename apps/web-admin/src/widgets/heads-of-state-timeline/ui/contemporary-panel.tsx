@@ -5,7 +5,15 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
+import { Link } from 'react-router'
 import styled, { useTheme } from 'styled-components'
+
+import {
+  PERSON_RECORD_KIND_COLOR,
+  PERSON_RECORD_KIND_LABEL,
+  type PersonRecordItem,
+} from '@/shared/api/person-records'
+import { centuryYearRange, getCentury } from '@/shared/lib/iso-date'
 
 import { sortSegmentsChronologically } from '../lib/sort-segments'
 import type { TenureBar } from '../lib/normalize-tenures'
@@ -17,6 +25,10 @@ import {
   useContemporaryEvents,
   type ContemporaryEvent,
 } from '../api/use-contemporary-events'
+import {
+  PERSON_RECORDS_MAX_IDS,
+  useContemporaryPersonRecords,
+} from '../api/use-contemporary-person-records'
 
 interface Props {
   highlightYear: number
@@ -105,6 +117,36 @@ export function ContemporaryPanel({
   }, [rawEntries, sortMode])
   const totalBars = entries.reduce((acc, e) => acc + e.bars.length, 0)
 
+  // 패널에 표시된 수장 personId — "그 해 한 일" 배치 조회·인물 축 비교 링크 공용
+  const headPersonIds = useMemo(() => {
+    const seen = new Set<string>()
+    const ids: string[] = []
+    for (const entry of rawEntries) {
+      for (const bar of entry.bars) {
+        if (bar.personId && !seen.has(bar.personId)) {
+          seen.add(bar.personId)
+          ids.push(bar.personId)
+        }
+      }
+    }
+    return ids
+  }, [rawEntries])
+
+  const {
+    recordsByPerson,
+    requestedIds,
+    omittedCount,
+    isLoading: recordsLoading,
+  } = useContemporaryPersonRecords(headPersonIds, highlightYear)
+  const requestedIdSet = useMemo(() => new Set(requestedIds), [requestedIds])
+
+  // 인물 축 비교 링크 — 가이드라인 연도가 속한 세기 범위(toYear 배타), URL 계약 고정
+  const compareRecordsUrl = useMemo(() => {
+    const { fromYear, toYear } = centuryYearRange(getCentury(highlightYear))
+    const ids = headPersonIds.slice(0, PERSON_RECORDS_MAX_IDS).join(',')
+    return `/persons-timeline?view=records&recordPersonIds=${ids}&fromYear=${fromYear}&toYear=${toYear}`
+  }, [highlightYear, headPersonIds])
+
   return (
     <Wrap
       initial={{ width: 0, opacity: 0 }}
@@ -140,6 +182,13 @@ export function ContemporaryPanel({
           가나다순
         </SortBtn>
       </SortRow>
+      {headPersonIds.length > 0 && (
+        <ScopeCaption>
+          연보는 내 계정 기록만 표시
+          {omittedCount > 0 &&
+            ` · 기록 조회는 앞 ${PERSON_RECORDS_MAX_IDS}명만 (+${omittedCount}명 생략)`}
+        </ScopeCaption>
+      )}
       <List>
         {entries.length === 0 && (
           <EmptyHint>핀한 행이 없습니다</EmptyHint>
@@ -190,6 +239,12 @@ export function ContemporaryPanel({
                             <span>{bar.positionTitle}</span>
                           )}
                         </BarMeta>
+                        {bar.personId && requestedIdSet.has(bar.personId) && (
+                          <YearRecords
+                            records={recordsByPerson.get(bar.personId)}
+                            loading={recordsLoading}
+                          />
+                        )}
                       </BarMain>
                     </BarItem>
                   )
@@ -214,6 +269,13 @@ export function ContemporaryPanel({
             </EmptyRowsSummary>
           )
         })()}
+        {headPersonIds.length > 0 && (
+          <CompareLinkRow>
+            <CompareLink to={compareRecordsUrl}>
+              이 시점 인물 축으로 비교 →
+            </CompareLink>
+          </CompareLinkRow>
+        )}
       </List>
 
       <EventsSection>
@@ -264,6 +326,40 @@ export function ContemporaryPanel({
 function formatEventYears(ev: ContemporaryEvent): string {
   if (ev.startYear === ev.endYear) return `${formatYear(ev.startYear)}년`
   return `${formatYear(ev.startYear)} ~ ${formatYear(ev.endYear)}`
+}
+
+/** 수장 한 명의 "그 해 한 일" — kind 칩 + 제목(+요약 1줄). 기록 없으면 미세 표기만 */
+function YearRecords({
+  records,
+  loading,
+}: {
+  records: PersonRecordItem[] | undefined
+  loading: boolean
+}) {
+  if (loading) return <RecordFaint>기록 불러오는 중…</RecordFaint>
+  if (!records || records.length === 0) {
+    return <RecordFaint>이 해 기록 없음</RecordFaint>
+  }
+  return (
+    <RecordList>
+      {records.map((record) => {
+        const tone = PERSON_RECORD_KIND_COLOR[record.kind]
+        return (
+          <RecordRow key={`${record.kind}-${record.sourceId}`}>
+            <RecordKindChip $base={tone.base} $soft={tone.soft}>
+              {PERSON_RECORD_KIND_LABEL[record.kind]}
+            </RecordKindChip>
+            <RecordBody>
+              <RecordTitle>{record.title}</RecordTitle>
+              {record.summary && (
+                <RecordSummary>{record.summary}</RecordSummary>
+              )}
+            </RecordBody>
+          </RecordRow>
+        )
+      })}
+    </RecordList>
+  )
 }
 
 const Wrap = styled(motion.aside)`
@@ -527,6 +623,95 @@ const BarMeta = styled.div`
   font-size: 11px;
   color: ${({ theme }) => theme.colors.text.secondary};
   align-items: center;
+`
+
+/* ── 그 해 한 일 (통합 기록) ─────────────────────────────────── */
+
+const ScopeCaption = styled.div`
+  padding: 0 16px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RecordFaint = styled.span`
+  font-size: 10px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.75;
+`
+
+const RecordList = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 2px;
+`
+
+const RecordRow = styled.span`
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+`
+
+const RecordKindChip = styled.span<{ $base: string; $soft: string }>`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 15px;
+  letter-spacing: 0.02em;
+  background: ${({ $soft }) => $soft};
+  color: ${({ $base }) => $base};
+`
+
+const RecordBody = styled.span`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+`
+
+const RecordTitle = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const RecordSummary = styled.span`
+  font-size: 10px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const CompareLinkRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 2px 0;
+`
+
+const CompareLink = styled(Link)`
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  color: ${({ theme }) => theme.colors.primary};
+  border-radius: 4px;
+  &:hover {
+    text-decoration: underline;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
 `
 
 const CategoryBadge = styled.span<{ $category: TenureBar['positionCategory'] }>`
