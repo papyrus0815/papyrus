@@ -45,7 +45,9 @@ export class PersonLifeEventController {
   /**
    * 특정 인물의 연보 목록 (시간순).
    * - `limit`: 선택. 반환 개수 상한(기본 미제한, 상한 200). 인물당 연보가 매우 많을 때 페이로드 보호.
+   * - 연보는 계정 스코프 개인 기록 — 공개 정책(Person.isPublic류) 확정 전까지 인증 필수.
    */
+  @UseGuards(AuthGuard('jwt'))
   @Get('by-person/:personId')
   async listByPerson(
     @Param('personId') personId: string,

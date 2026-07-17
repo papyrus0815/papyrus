@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { PrismaService } from '@prisma/prisma.service'
 
+import { getActorAccountId } from '../../shared/actor-context'
 import {
   EntityLinkSearchItemDto,
   EntityLinkSearchResponseDto,
@@ -25,16 +26,19 @@ const GROUP_TYPE_LABEL: Record<string, string> = {
 function displayPersonName(p: {
   name: string
   surname: string | null
+  middleName?: string | null
+  nameDisplayOrder?: string | null
   country?: { defaultNameDisplayOrder?: string | null; isoCode?: string | null } | null
 }): string {
-  const d = p.country?.defaultNameDisplayOrder
-  let order: 'western' | 'korean'
-  if (d === 'western') order = 'western'
-  else if (d === 'korean') order = 'korean'
-  else order = 'korean'
-  if (order === 'western')
-    return [p.name, p.surname].filter(Boolean).join(' ').trim() || p.name
-  return [p.surname, p.name].filter(Boolean).join(' ').trim() || p.name
+  // 순서 우선순위는 프론트 getPersonDisplayName과 동일: 개인 오버라이드 → 국가 기본 → 동양식.
+  // 중간이름은 이름 묶음에 붙는다 — western: 이름 중간 성 / korean: 성 이름 중간.
+  const resolved = p.nameDisplayOrder ?? p.country?.defaultNameDisplayOrder
+  const order: 'western' | 'korean' = resolved === 'western' ? 'western' : 'korean'
+  const parts =
+    order === 'western'
+      ? [p.name, p.middleName, p.surname]
+      : [p.surname, p.name, p.middleName]
+  return parts.filter(Boolean).join(' ').trim() || p.name
 }
 
 /**
@@ -56,6 +60,12 @@ export class EntityLinkSearchController {
     if (term.length < 1) {
       return { items: [] }
     }
+
+    // 소유자 스코프: person/event 상세 조회는 소유자 전용이라(person.findById 404, event 403)
+    // 검색에서 비소유 엔티티를 미리 배제해야 링크 클릭 시의 데드엔드(404/403)를 막는다.
+    // actor 값은 person.accountId · event.createdById 양쪽과 동일한 req.user.id.
+    // company/country 등 전역 엔티티는 소유 개념이 없어 스코프하지 않는다.
+    const actorAccountId = getActorAccountId()
 
     const partyFilter = countryId?.trim()
     const partyWhere = {
@@ -91,10 +101,17 @@ export class EntityLinkSearchController {
     ] = await Promise.all([
       this.prisma.person.findMany({
         where: {
-          OR: [
-            { name: { contains: term } },
-            { surname: { contains: term } },
-            { originalName: { contains: term } },
+          AND: [
+            {
+              OR: [
+                { name: { contains: term } },
+                { surname: { contains: term } },
+                { middleName: { contains: term } },
+                { originalName: { contains: term } },
+              ],
+            },
+            // 소유 인물만 — 비소유/무소속(accountId=null) 인물은 상세 조회가 404라 링크해도 죽음.
+            ...(actorAccountId ? [{ accountId: actorAccountId }] : []),
           ],
         },
         take: 8,
@@ -103,6 +120,8 @@ export class EntityLinkSearchController {
           id: true,
           name: true,
           surname: true,
+          middleName: true,
+          nameDisplayOrder: true,
           birthDate: true,
           profileImageUrl: true,
           country: { select: { defaultNameDisplayOrder: true, isoCode: true } },
@@ -112,6 +131,8 @@ export class EntityLinkSearchController {
         where: {
           deletedAt: null,
           title: { contains: term },
+          // 본인 사건만 — getEventById가 createdById 불일치 시 403이라, 타계정 사건 링크는 데드엔드.
+          ...(actorAccountId ? { createdById: actorAccountId } : {}),
         },
         take: 8,
         orderBy: { updatedAt: 'desc' },
