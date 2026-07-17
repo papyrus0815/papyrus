@@ -325,6 +325,7 @@ function HeroActors({
                 ? getPersonDisplayName({
                     name: p.person.name ?? '',
                     surname: p.person.surname,
+                    middleName: p.person.middleName,
                     nameDisplayOrder: p.person.nameDisplayOrder,
                     country: p.person.country,
                   }) || '미상'

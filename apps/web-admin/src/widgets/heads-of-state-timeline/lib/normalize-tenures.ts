@@ -9,6 +9,7 @@
 import { categorizePosition } from '@/entities/government-position/model/categorize'
 import { regnalNameFromNotes } from '@/entities/government-position/model/regnal-name'
 import type { PositionCategory } from '@/entities/government-position/model/types'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { toJulianYear } from './time-scale'
 
@@ -28,6 +29,8 @@ export interface RawTenureRecord {
     id?: string | null
     name?: string | null
     surname?: string | null
+    middleName?: string | null
+    nameDisplayOrder?: string | null
     country?: { defaultNameDisplayOrder?: string | null } | null
   } | null
   regnalName?: string | null
@@ -90,16 +93,15 @@ function getPositionTitle(t: RawTenureRecord): string | null {
 function getPersonName(t: RawTenureRecord): string | null {
   const p = t.person
   if (!p) return null
-  // 동양식(성+이름) vs 서양식 — 사이드 정보 미가공으로 표시 (간단)
-  const surname = (p.surname ?? '').trim()
-  const name = (p.name ?? '').trim()
-  if (surname && name) {
-    if (p.country?.defaultNameDisplayOrder === 'GIVEN_FAMILY') {
-      return `${name} ${surname}`
-    }
-    return `${surname}${name}`
-  }
-  return name || surname || null
+  return (
+    getPersonDisplayName({
+      name: p.name ?? '',
+      surname: p.surname,
+      middleName: p.middleName,
+      nameDisplayOrder: p.nameDisplayOrder,
+      country: p.country ?? null,
+    }) || null
+  )
 }
 
 /** 직책 분류 — 엔티티 단일 출처(categorizePosition)에 위임 */

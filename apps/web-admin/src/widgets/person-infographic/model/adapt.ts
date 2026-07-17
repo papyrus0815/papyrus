@@ -81,6 +81,7 @@ export function adapt(p: PersonInfographicItem): AdaptedPerson | null {
       name: p.name,
       surname: p.surname,
       middleName: p.middleName,
+      nameDisplayOrder: p.nameDisplayOrder,
       country: p.country,
     }) ||
     p.name ||

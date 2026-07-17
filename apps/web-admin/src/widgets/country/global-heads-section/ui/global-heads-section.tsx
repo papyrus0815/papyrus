@@ -704,6 +704,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
           name: p.name || '',
           surname: p.surname ?? '',
           middleName: p.middleName ?? '',
+          nameDisplayOrder: p.nameDisplayOrder ?? null,
           country: p.country ?? null,
         })
       : '—'

@@ -93,7 +93,7 @@ export const MENTION_TYPE_CONFIG: Record<
     label: '인물',
     icon: FiUsers,
     color: '#6366f1',
-    searchFields: ['name', 'surname'],
+    searchFields: ['name', 'surname', 'middleName'],
     getName: (item: unknown) => {
       const p = item as PersonResponseDto
       return (
@@ -101,6 +101,7 @@ export const MENTION_TYPE_CONFIG: Record<
           name: p.name ?? '',
           surname: p.surname,
           middleName: p.middleName,
+          nameDisplayOrder: p.nameDisplayOrder ?? null,
           country: p.country ?? null,
         }) || '이름 없음'
       )

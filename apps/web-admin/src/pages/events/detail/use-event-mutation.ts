@@ -307,6 +307,7 @@ function resolvePersons(
         id: string
         name?: string | null
         surname?: string | null
+        middleName?: string | null
         profileImageUrl?: string | null
         nameDisplayOrder?: string | null
         country?: { defaultNameDisplayOrder?: string | null } | null
@@ -323,6 +324,7 @@ function resolvePersons(
           id: a.id,
           name: a.name,
           surname: a.surname,
+          middleName: a.middleName ?? null,
           profileImageUrl: a.profileImageUrl,
           nameDisplayOrder: a.nameDisplayOrder ?? null,
           country: a.country

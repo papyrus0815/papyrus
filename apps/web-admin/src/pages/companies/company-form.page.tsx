@@ -1038,6 +1038,7 @@ function personLabel(person: PersonResponseDto): string {
     name: person.name ?? '',
     surname: (person as { surname?: string }).surname ?? '',
     middleName: (person as { middleName?: string }).middleName ?? '',
+    nameDisplayOrder: person.nameDisplayOrder ?? null,
     country:
       (person as { country?: { defaultNameDisplayOrder?: string | null } | null })
         .country ?? null,

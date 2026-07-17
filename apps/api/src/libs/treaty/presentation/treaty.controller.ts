@@ -39,7 +39,17 @@ const TREATY_SIGNATORY_INCLUDE = {
   historicalCountry: {
     select: { id: true, name: true, thumbnailUrl: true },
   },
-  person: { select: { id: true, name: true, surname: true, profileImageUrl: true } },
+  person: {
+    select: {
+      id: true,
+      name: true,
+      surname: true,
+      middleName: true,
+      nameDisplayOrder: true,
+      profileImageUrl: true,
+      country: { select: { defaultNameDisplayOrder: true } },
+    },
+  },
   positionDefinition: {
     select: { id: true, title: true, positionType: true, titleEn: true },
   },
@@ -52,7 +62,16 @@ const TREATY_SIGNATORY_INCLUDE = {
           termNumber: true,
           subTermNumber: true,
           regnalNumber: true,
-          person: { select: { id: true, name: true, surname: true } },
+          person: {
+            select: {
+              id: true,
+              name: true,
+              surname: true,
+              middleName: true,
+              nameDisplayOrder: true,
+              country: { select: { defaultNameDisplayOrder: true } },
+            },
+          },
         },
       },
     },

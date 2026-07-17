@@ -78,7 +78,10 @@ export interface PersonHumanRelationshipBrief {
   id: string
   name: string
   surname: string | null
+  middleName?: string | null
   nameDisplayOrder: string | null
+  /** 소속 국가 기본 이름 표시 순서 — 개인 오버라이드 없을 때 사용 */
+  country?: { defaultNameDisplayOrder?: string | null } | null
   birthDate: string | null
   deathDate: string | null
   /** 프로필 이미지 URL (없으면 null) — 관계 카드 아바타에 표시 */

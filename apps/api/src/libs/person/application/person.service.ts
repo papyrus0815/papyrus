@@ -1282,8 +1282,8 @@ export class PersonService {
       note: string | null
       fromPersonId: string
       toPersonId: string
-      fromPerson: { id: string; name: string; surname: string | null; nameDisplayOrder: string | null; birthDate: Date | null; deathDate: Date | null }
-      toPerson: { id: string; name: string; surname: string | null; nameDisplayOrder: string | null; birthDate: Date | null; deathDate: Date | null }
+      fromPerson: { id: string; name: string; surname: string | null; middleName: string | null; nameDisplayOrder: string | null; country: { defaultNameDisplayOrder: string | null } | null; profileImageUrl: string | null; birthDate: Date | null; deathDate: Date | null }
+      toPerson: { id: string; name: string; surname: string | null; middleName: string | null; nameDisplayOrder: string | null; country: { defaultNameDisplayOrder: string | null } | null; profileImageUrl: string | null; birthDate: Date | null; deathDate: Date | null }
       tags?: { tag: PersonRelationshipTag }[]
       sources?: {
         id: string
@@ -1377,7 +1377,10 @@ export class PersonService {
     id: string
     name: string
     surname: string | null
+    middleName: string | null
     nameDisplayOrder: string | null
+    country: { defaultNameDisplayOrder: string | null } | null
+    profileImageUrl: string | null
     birthDate: Date | null
     deathDate: Date | null
   }) {
@@ -1385,7 +1388,10 @@ export class PersonService {
       id: p.id,
       name: p.name,
       surname: p.surname,
+      middleName: p.middleName,
       nameDisplayOrder: p.nameDisplayOrder,
+      country: p.country,
+      profileImageUrl: p.profileImageUrl,
       birthDate: p.birthDate?.toISOString() ?? null,
       deathDate: p.deathDate?.toISOString() ?? null,
     }
@@ -1398,7 +1404,10 @@ export class PersonService {
         id: true,
         name: true,
         surname: true,
+        middleName: true,
         nameDisplayOrder: true,
+        country: { select: { defaultNameDisplayOrder: true } },
+        profileImageUrl: true,
         birthDate: true,
         deathDate: true,
       },
@@ -1408,7 +1417,10 @@ export class PersonService {
         id: true,
         name: true,
         surname: true,
+        middleName: true,
         nameDisplayOrder: true,
+        country: { select: { defaultNameDisplayOrder: true } },
+        profileImageUrl: true,
         birthDate: true,
         deathDate: true,
       },
@@ -1879,7 +1891,10 @@ export class PersonService {
       id: true,
       name: true,
       surname: true,
+      middleName: true,
       nameDisplayOrder: true,
+      country: { select: { defaultNameDisplayOrder: true } },
+      profileImageUrl: true,
       birthDate: true,
       deathDate: true,
     } as const

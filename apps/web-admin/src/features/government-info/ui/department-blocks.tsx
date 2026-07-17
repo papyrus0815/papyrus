@@ -34,6 +34,7 @@ export function DepartmentTenuresBlock({
       name?: string
       surname?: string
       middleName?: string
+      nameDisplayOrder?: string | null
       country?: { defaultNameDisplayOrder?: string | null } | null
     } | null,
   ) => {
@@ -43,6 +44,7 @@ export function DepartmentTenuresBlock({
         name: p.name ?? '',
         surname: p.surname,
         middleName: p.middleName,
+        nameDisplayOrder: p.nameDisplayOrder ?? null,
         country: p.country ?? undefined,
       }) ||
       p.name ||

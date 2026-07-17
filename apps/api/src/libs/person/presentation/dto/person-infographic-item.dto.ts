@@ -15,6 +15,8 @@ export interface PersonInfographicItemDto {
   name: string
   surname: string | null
   middleName: string | null
+  /** 개인 표시 순서 오버라이드 — 국가 기본(country.defaultNameDisplayOrder)보다 우선 */
+  nameDisplayOrder: string | null
   birthEra: Era | null
   birthYear: number | null
   deathEra: Era | null

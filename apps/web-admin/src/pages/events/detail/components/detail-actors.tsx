@@ -105,6 +105,7 @@ export function DetailActors({
       ? getPersonDisplayName({
           name: removed.person.name ?? '',
           surname: removed.person.surname,
+          middleName: removed.person.middleName,
           nameDisplayOrder: removed.person.nameDisplayOrder,
           country: removed.person.country,
         }) || '인물'
@@ -268,6 +269,7 @@ export function DetailActors({
                 ? getPersonDisplayName({
                     name: person.person.name ?? '',
                     surname: person.person.surname,
+                    middleName: person.person.middleName,
                     nameDisplayOrder: person.person.nameDisplayOrder,
                     country: person.person.country,
                   }) || '미상'

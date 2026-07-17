@@ -91,6 +91,7 @@ export function useRegistrationFeed(): Result {
         name?: string | null
         surname?: string | null
         middleName?: string | null
+        nameDisplayOrder?: string | null
         createdAt?: string
         profileImageUrl?: string | null
         country?: {
@@ -120,6 +121,7 @@ export function useRegistrationFeed(): Result {
               name: p.name ?? '',
               surname: p.surname,
               middleName: p.middleName,
+              nameDisplayOrder: p.nameDisplayOrder ?? null,
               country: p.country ?? undefined,
             },
             defaultOrder != null

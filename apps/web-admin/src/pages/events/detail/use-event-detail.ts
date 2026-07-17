@@ -24,6 +24,7 @@ export interface EventDetailPerson {
     id: string
     name?: string | null
     surname?: string | null
+    middleName?: string | null
     profileImageUrl?: string | null
     /** 개인 이름 표시 순서 오버라이드 (korean=성→이름, western=이름→성) */
     nameDisplayOrder?: string | null

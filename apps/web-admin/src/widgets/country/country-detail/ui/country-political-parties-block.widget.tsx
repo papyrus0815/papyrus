@@ -914,6 +914,7 @@ function PartyMembershipsBlock({ partyId }: { partyId: string }) {
                 name: person.name,
                 surname: person.surname,
                 middleName: person.middleName,
+                nameDisplayOrder: person.nameDisplayOrder ?? null,
                 country: person.country ?? null,
               })
               const period =

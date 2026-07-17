@@ -243,6 +243,7 @@ function OrganizationHeadsSection({ organizationId }: { organizationId: string }
                 name: t.person?.name ?? '',
                 surname: t.person?.surname ?? '',
                 middleName: t.person?.middleName ?? '',
+                nameDisplayOrder: t.person?.nameDisplayOrder ?? null,
                 country: t.person?.country ?? null,
               })}
               {' · '}

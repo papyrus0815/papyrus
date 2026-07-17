@@ -31,7 +31,7 @@ export interface PersonSelectFieldProps {
   value: string
   selectedPerson: Pick<
     PersonResponseDto,
-    'id' | 'name' | 'surname' | 'middleName' | 'profileImageUrl'
+    'id' | 'name' | 'surname' | 'middleName' | 'nameDisplayOrder' | 'profileImageUrl'
   > & {
     country?: { defaultNameDisplayOrder?: string | null } | null
   } | null
@@ -45,7 +45,7 @@ export interface PersonSelectFieldProps {
 function getDisplayName(
   p: (Pick<
     PersonResponseDto,
-    'name' | 'surname' | 'middleName'
+    'name' | 'surname' | 'middleName' | 'nameDisplayOrder'
   > & {
     country?: { defaultNameDisplayOrder?: string | null } | null
   }) | null,
@@ -55,6 +55,7 @@ function getDisplayName(
     name: p.name ?? '',
     surname: p.surname ?? '',
     middleName: p.middleName ?? '',
+    nameDisplayOrder: p.nameDisplayOrder ?? null,
     country: p.country ?? null,
   })
 }

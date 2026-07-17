@@ -874,6 +874,8 @@ function cabinetListLabel(c: CabinetListItemDto): string {
         name: p.name ?? '',
         surname: p.surname,
         middleName: (p as { middleName?: string | null }).middleName,
+        nameDisplayOrder: (p as { nameDisplayOrder?: string | null })
+          .nameDisplayOrder,
         country: (
           p as {
             country?: { defaultNameDisplayOrder?: string | null } | null
@@ -1635,28 +1637,33 @@ const TreatyDetail: React.FC<{
                 서명국 · 참여국 ({treaty.signatories.length})
               </SectionTitle>
               <SignatoryRow>
-                {treaty.signatories.map((s) => {
+                {treaty.signatories.map((signatory) => {
                   const countryName =
-                    s.country?.name ?? s.historicalCountry?.name ?? '알 수 없음'
-                  const flag = s.country?.flagEmoji ?? ''
-                  const personName = s.person
+                    signatory.country?.name ?? signatory.historicalCountry?.name ?? '알 수 없음'
+                  const flag = signatory.country?.flagEmoji ?? ''
+                  const personName = signatory.person
                     ? getPersonDisplayName({
-                        name: s.person.name ?? '',
-                        surname: s.person.surname,
-                        middleName: (s.person as { middleName?: string | null }).middleName,
-                        country: (s.person as { country?: { defaultNameDisplayOrder?: string | null } | null })
+                        name: signatory.person.name ?? '',
+                        surname: signatory.person.surname,
+                        middleName: (signatory.person as { middleName?: string | null }).middleName,
+                        nameDisplayOrder: (signatory.person as { nameDisplayOrder?: string | null })
+                          .nameDisplayOrder,
+                        country: (signatory.person as { country?: { defaultNameDisplayOrder?: string | null } | null })
                           .country,
                       })
                     : null
-                  const cabinetLabel = s.cabinet
-                    ? (s.cabinet.name ??
+                  const cabinetLabel = signatory.cabinet
+                    ? (signatory.cabinet.name ??
                       (() => {
-                        const ht = s.cabinet.headTenure
+                        const ht = signatory.cabinet.headTenure
                         const pName = ht?.person
                           ? getPersonDisplayName({
                               name: ht.person.name ?? '',
                               surname: ht.person.surname,
                               middleName: (ht.person as { middleName?: string | null }).middleName,
+                              nameDisplayOrder: (
+                                ht.person as { nameDisplayOrder?: string | null }
+                              ).nameDisplayOrder,
                               country: (
                                 ht.person as {
                                   country?: { defaultNameDisplayOrder?: string | null } | null
@@ -1671,24 +1678,24 @@ const TreatyDetail: React.FC<{
                       })())
                     : null
                   return (
-                    <SignatoryCard key={s.id}>
+                    <SignatoryCard key={signatory.id}>
                       <SignatoryCountry>
                         {flag} {countryName}
                       </SignatoryCountry>
                       {personName && (
                         <SignatoryPerson>서명자: {personName}</SignatoryPerson>
                       )}
-                      {s.role && <SignatoryRole>직책: {s.role}</SignatoryRole>}
+                      {signatory.role && <SignatoryRole>직책: {signatory.role}</SignatoryRole>}
                       {cabinetLabel && (
                         <SignatoryRole>행정부: {cabinetLabel}</SignatoryRole>
                       )}
-                      {s.signedAt && (
+                      {signatory.signedAt && (
                         <SignatoryRole>
-                          {fmtDate(s.signedAt)} 서명
+                          {fmtDate(signatory.signedAt)} 서명
                         </SignatoryRole>
                       )}
-                      <SignatoryBadge $type={s.participationType}>
-                        {TREATY_PARTICIPATION_LABELS[s.participationType]}
+                      <SignatoryBadge $type={signatory.participationType}>
+                        {TREATY_PARTICIPATION_LABELS[signatory.participationType]}
                       </SignatoryBadge>
                       <div
                         style={{
@@ -1700,7 +1707,7 @@ const TreatyDetail: React.FC<{
                       >
                         <button
                           type="button"
-                          onClick={() => setEditSignatory(s)}
+                          onClick={() => setEditSignatory(signatory)}
                           style={{
                             background: 'none',
                             border: 'none',
@@ -1714,7 +1721,7 @@ const TreatyDetail: React.FC<{
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteSignatory(s.id)}
+                          onClick={() => handleDeleteSignatory(signatory.id)}
                           style={{
                             background: 'none',
                             border: 'none',

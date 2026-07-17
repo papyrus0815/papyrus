@@ -526,6 +526,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       birthNote: (person as any).birthNote ?? null,
       isDeathDateApproximate: (person as any).isDeathDateApproximate ?? false,
       middleName: person.middleName ?? null,
+      nameDisplayOrder: person.nameDisplayOrder ?? null,
       birthEra: person.birthEra as any,
       birthYear: person.birthDate ? person.birthDate.getUTCFullYear() : null,
       deathEra: person.deathEra as any,
@@ -1079,7 +1080,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             id: true,
             name: true,
             surname: true,
+            middleName: true,
             nameDisplayOrder: true,
+            country: { select: { defaultNameDisplayOrder: true } },
             regnalName: true,
             gender: true,
             dynasty: { select: { id: true, name: true } },
@@ -1094,7 +1097,8 @@ export class PersonPrismaRepository implements IPersonRepository {
             // 친조부모
             father: {
               select: {
-                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
                 profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
@@ -1102,7 +1106,8 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
             mother: {
               select: {
-                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
                 profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
@@ -1111,7 +1116,8 @@ export class PersonPrismaRepository implements IPersonRepository {
             // 형제자매 (부의 자녀)
             childrenFromFather: {
               select: {
-                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
                 // 친/이복/이부 판별용 부모 FK + 사생아 마커 (형제 투영에 노출)
@@ -1126,7 +1132,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             id: true,
             name: true,
             surname: true,
+            middleName: true,
             nameDisplayOrder: true,
+            country: { select: { defaultNameDisplayOrder: true } },
             regnalName: true,
             gender: true,
             dynasty: { select: { id: true, name: true } },
@@ -1141,7 +1149,8 @@ export class PersonPrismaRepository implements IPersonRepository {
             // 외조부모
             father: {
               select: {
-                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
                 profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
@@ -1149,7 +1158,8 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
             mother: {
               select: {
-                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
                 profileImages: { select: { url: true, priority: true }, orderBy: [{ priority: Prisma.SortOrder.asc }], take: 1 },
@@ -1158,7 +1168,8 @@ export class PersonPrismaRepository implements IPersonRepository {
             // 형제자매 (모의 자녀)
             childrenFromMother: {
               select: {
-                id: true, name: true, surname: true, nameDisplayOrder: true, regnalName: true,
+                id: true, name: true, surname: true, middleName: true, nameDisplayOrder: true, regnalName: true,
+                country: { select: { defaultNameDisplayOrder: true } },
                 gender: true, dynasty: { select: { id: true, name: true } },
                 birthDate: true, deathDate: true, profileImageUrl: true,
                 // 친/이복/이부 판별용 부모 FK + 사생아 마커 (형제 투영에 노출)
@@ -1173,7 +1184,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             id: true,
             name: true,
             surname: true,
+            middleName: true,
             nameDisplayOrder: true,
+            country: { select: { defaultNameDisplayOrder: true } },
             regnalName: true,
             gender: true,
             dynasty: { select: { id: true, name: true } },
@@ -1185,7 +1198,7 @@ export class PersonPrismaRepository implements IPersonRepository {
               orderBy: [{ priority: Prisma.SortOrder.asc }],
               take: 1,
             },
-            // 자녀의 배우자 (가계도에 표시)
+            // 자녀의 배우자 (가계도에 표시) — 정방향
             spouseRelationsAsPerson: {
               select: {
                 id: true,
@@ -1196,7 +1209,40 @@ export class PersonPrismaRepository implements IPersonRepository {
                     id: true,
                     name: true,
                     surname: true,
+                    middleName: true,
                     nameDisplayOrder: true,
+                    country: { select: { defaultNameDisplayOrder: true } },
+                    regnalName: true,
+                    gender: true,
+                    dynasty: { select: { id: true, name: true } },
+                    birthDate: true,
+                    deathDate: true,
+                    profileImageUrl: true,
+                    profileImages: {
+                      select: { url: true, priority: true },
+                      orderBy: [{ priority: Prisma.SortOrder.asc }],
+                      take: 1,
+                    },
+                  },
+                },
+              },
+            },
+            // 자녀의 배우자 (가계도에 표시) — 역방향.
+            // canonical(min,max) 쓰기로 자녀 id > 배우자 id면 결혼 행이 이쪽에 저장되므로
+            // 이걸 함께 조회하지 않으면 자녀 배우자가 절반가량 누락된다.
+            spouseRelationsAsSpouse: {
+              select: {
+                id: true,
+                marriageStartDate: true,
+                marriageEndDate: true,
+                person: {
+                  select: {
+                    id: true,
+                    name: true,
+                    surname: true,
+                    middleName: true,
+                    nameDisplayOrder: true,
+                    country: { select: { defaultNameDisplayOrder: true } },
                     regnalName: true,
                     gender: true,
                     dynasty: { select: { id: true, name: true } },
@@ -1219,7 +1265,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             id: true,
             name: true,
             surname: true,
+            middleName: true,
             nameDisplayOrder: true,
+            country: { select: { defaultNameDisplayOrder: true } },
             regnalName: true,
             gender: true,
             dynasty: { select: { id: true, name: true } },
@@ -1231,7 +1279,7 @@ export class PersonPrismaRepository implements IPersonRepository {
               orderBy: [{ priority: Prisma.SortOrder.asc }],
               take: 1,
             },
-            // 자녀의 배우자 (가계도에 표시)
+            // 자녀의 배우자 (가계도에 표시) — 정방향
             spouseRelationsAsPerson: {
               select: {
                 id: true,
@@ -1242,7 +1290,40 @@ export class PersonPrismaRepository implements IPersonRepository {
                     id: true,
                     name: true,
                     surname: true,
+                    middleName: true,
                     nameDisplayOrder: true,
+                    country: { select: { defaultNameDisplayOrder: true } },
+                    regnalName: true,
+                    gender: true,
+                    dynasty: { select: { id: true, name: true } },
+                    birthDate: true,
+                    deathDate: true,
+                    profileImageUrl: true,
+                    profileImages: {
+                      select: { url: true, priority: true },
+                      orderBy: [{ priority: Prisma.SortOrder.asc }],
+                      take: 1,
+                    },
+                  },
+                },
+              },
+            },
+            // 자녀의 배우자 (가계도에 표시) — 역방향.
+            // canonical(min,max) 쓰기로 자녀 id > 배우자 id면 결혼 행이 이쪽에 저장되므로
+            // 이걸 함께 조회하지 않으면 자녀 배우자가 절반가량 누락된다.
+            spouseRelationsAsSpouse: {
+              select: {
+                id: true,
+                marriageStartDate: true,
+                marriageEndDate: true,
+                person: {
+                  select: {
+                    id: true,
+                    name: true,
+                    surname: true,
+                    middleName: true,
+                    nameDisplayOrder: true,
+                    country: { select: { defaultNameDisplayOrder: true } },
                     regnalName: true,
                     gender: true,
                     dynasty: { select: { id: true, name: true } },
@@ -1271,7 +1352,9 @@ export class PersonPrismaRepository implements IPersonRepository {
                 id: true,
                 name: true,
                 surname: true,
+                middleName: true,
                 nameDisplayOrder: true,
+                country: { select: { defaultNameDisplayOrder: true } },
                 regnalName: true,
                 gender: true,
                 dynasty: { select: { id: true, name: true } },
@@ -1299,7 +1382,9 @@ export class PersonPrismaRepository implements IPersonRepository {
                 id: true,
                 name: true,
                 surname: true,
+                middleName: true,
                 nameDisplayOrder: true,
+                country: { select: { defaultNameDisplayOrder: true } },
                 regnalName: true,
                 gender: true,
                 dynasty: { select: { id: true, name: true } },
@@ -2544,6 +2629,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           name: true,
           surname: true,
           middleName: true,
+          nameDisplayOrder: true,
           regnalName: true,
           profileImageUrl: true,
           country: {

@@ -96,6 +96,7 @@ function matchesQuery(p: Person, q: string): boolean {
   const haystack = [
     p.name,
     p.surname,
+    p.middleName,
     p.regnalName,
     p.country?.name,
   ]
