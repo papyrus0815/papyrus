@@ -1013,6 +1013,33 @@ export const OverviewClusterLabel = styled.div`
   }
 `
 
+/** 개요 점프 내비(UX8) — 4클러스터 바로가기 칩 행. */
+export const OverviewJumpNav = styled.nav`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+`
+
+export const OverviewJumpChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+  &:hover,
+  &:focus-visible {
+    border-color: #6366f1;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+  }
+`
+
 export const OverviewSectionHeaderRow = styled.div`
   display: flex;
   align-items: center;
@@ -1276,6 +1303,35 @@ export const InfluenceBlock = styled.div`
   flex-direction: column;
   gap: 10px;
   padding: 4px 2px 2px;
+`
+
+/** 영향력 미평가(null) 빈 상태(UX7) — 능력치 섹션 빈 상태와 동일 톤. */
+export const InfluenceEmpty = styled.div`
+  padding: 6px 2px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 연보 페치 실패 안내(ER3) — 거짓 빈 상태 대신 실패를 표면화 + 재시도. */
+export const LifeEventsErrorNote = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  border-radius: 10px;
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#7f1d1d' : '#fecaca')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#b91c1c')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(220,38,38,0.12)' : 'rgba(254,226,226,0.6)'};
+  button {
+    padding: 4px 12px;
+    font-size: 12px;
+    border-radius: 7px;
+  }
 `
 
 export const InfluenceSliderRow = styled.div`
@@ -2263,6 +2319,33 @@ export const CloseBtn = styled.button`
   &:hover {
     transform: translateY(-1px);
     box-shadow: none;
+  }
+`
+
+/** 오류 상태 액션 행(ER1) — 재시도 + 닫기. */
+export const ErrorActions = styled.div`
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+`
+
+/** 일시 오류 재시도 버튼(ER1) — 채운 인디고. */
+export const PrimaryRetryBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #6366f1;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  &:hover {
+    transform: translateY(-1px);
   }
 `
 

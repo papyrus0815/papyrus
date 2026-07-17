@@ -159,10 +159,14 @@ import {
   DetailCountryName,
   DetailCountryRow,
   EmptyState,
+  ErrorActions,
   ErrorDesc,
   ErrorIcon,
   ErrorTitle,
   ErrorWrap,
+  InfluenceEmpty,
+  LifeEventsErrorNote,
+  PrimaryRetryBtn,
   FamilyActionRow,
   FamilyActionBtn,
   FamilyBadge,
@@ -208,6 +212,8 @@ import {
   NicknameValue,
   OutlineButton,
   OverviewClusterLabel,
+  OverviewJumpChip,
+  OverviewJumpNav,
   OverviewSectionHeaderRow,
   OverviewSectionHeading,
   OverviewSections,
@@ -248,6 +254,7 @@ import type {
   TenureLikeRecord,
 } from './types'
 import {
+  ageBetweenYears,
   formatDateKo,
   formatIsoDateKo,
   formatPeriod,
@@ -255,6 +262,7 @@ import {
   isoDateToApproxDays,
   pickGovernmentTenures,
 } from './helpers'
+import { formatFloruit } from '@/shared/lib/lifespan-text'
 import { deriveContemporaryHeadsTarget } from './contemporary-heads-target'
 import { ContemporariesStrip } from './contemporaries-strip'
 
@@ -299,6 +307,27 @@ function extractApiErrorMessage(err: unknown, fallback: string): string {
     if (raw.length < 200 && !raw.trimStart().startsWith('<')) return raw
   }
   return fallback
+}
+
+/** 개요 4클러스터 점프 내비 정의(UX8) — 앵커 id는 각 OverviewClusterLabel과 짝. */
+const OVERVIEW_CLUSTERS = [
+  { id: 'overview-cluster-life', label: '생애·요약' },
+  { id: 'overview-cluster-history', label: '이력·활동' },
+  { id: 'overview-cluster-relations', label: '관계' },
+  { id: 'overview-cluster-context', label: '소속·맥락' },
+] as const
+
+/** 개요 클러스터로 스크롤(UX8) — prefers-reduced-motion 존중(AY5). */
+function scrollToOverviewCluster(anchorId: string) {
+  const el = document.getElementById(anchorId)
+  if (!el) return
+  const reduceMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  el.scrollIntoView({
+    behavior: reduceMotion ? 'auto' : 'smooth',
+    block: 'start',
+  })
 }
 
 export function PersonDetailPanel({
@@ -374,12 +403,35 @@ export function PersonDetailPanel({
     const urlTab = parseTab(searchParams.get('tab'))
     setActiveTab((prev) => (prev === urlTab ? prev : urlTab))
   }, [embedInModal, parseTab, searchParams])
+  /** 탭바 화살표 키 내비게이션(AY4) — ←/→ 순환, Home/End. roving tabindex와 함께 완결. */
+  const handleTabKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      const order: TabType[] = ['overview', 'genealogy', 'politics', 'events']
+      const idx = order.indexOf(activeTab)
+      let nextIdx = idx
+      if (event.key === 'ArrowRight') nextIdx = (idx + 1) % order.length
+      else if (event.key === 'ArrowLeft')
+        nextIdx = (idx - 1 + order.length) % order.length
+      else if (event.key === 'Home') nextIdx = 0
+      else if (event.key === 'End') nextIdx = order.length - 1
+      else return
+      event.preventDefault()
+      const nextKey = order[nextIdx]
+      handleTabChange(nextKey)
+      document.getElementById(`person-detail-tab-${nextKey}`)?.focus()
+    },
+    [activeTab, handleTabChange],
+  )
   const [tenureModalOpen, setTenureModalOpen] = useState(false)
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
   const [sovereignReignModalOpen, setSovereignReignModalOpen] = useState(false)
   const [editingReignId, setEditingReignId] = useState<string | null>(null)
   const [lifeEventModalOpen, setLifeEventModalOpen] = useState(false)
   const [editingLifeEvent, setEditingLifeEvent] = useState<PersonLifeEvent | null>(null)
+  /** 헤더 아바타 이미지 로드 실패 → 글리프 폴백(MD1). src 변경 시 리셋. */
+  const [avatarBroken, setAvatarBroken] = useState(false)
+  /** 국가 배지 국기 이미지(업로드 썸네일·flagcdn) 로드 실패 → flagEmoji 폴백(MD4). */
+  const [countryFlagBroken, setCountryFlagBroken] = useState(false)
   const [awardModalOpen, setAwardModalOpen] = useState(false)
   const [careerModalOpen, setCareerModalOpen] = useState(false)
   const [educationModalOpen, setEducationModalOpen] = useState(false)
@@ -435,6 +487,8 @@ export function PersonDetailPanel({
     data: person,
     isLoading,
     isError,
+    error: personError,
+    refetch: refetchPerson,
   } = useQuery<PersonDetailData>({
     queryKey: personKeys.detailFull(personId),
     queryFn: () => getPersonDetailById(personId) as Promise<PersonDetailData>,
@@ -469,10 +523,21 @@ export function PersonDetailPanel({
     staleTime: 5 * 60 * 1000,
   })
 
-  const { data: lifeEvents = [] } = useQuery({
+  // 아바타 URL이 바뀌면(업로드·인물 전환) 깨짐 상태 리셋(MD1).
+  useEffect(() => {
+    setAvatarBroken(false)
+  }, [person?.profileImageUrl])
+  // 국가가 바뀌면 국기 깨짐 상태 리셋(MD4).
+  useEffect(() => {
+    setCountryFlagBroken(false)
+  }, [person?.country?.thumbnailUrl, person?.country?.isoCode])
+
+  const { data: lifeEvents = [], isError: lifeEventsError } = useQuery({
     queryKey: ['person-life-events', personId],
     queryFn: () => listPersonLifeEvents(personId),
-    enabled: !!personId,
+    // 연보 탭·연보 등록 모달에서만 소비하므로 그때만 페치(PF3) — 개요 진입·모달 스택
+    // 마다 큰 설명 페이로드를 받던 비용 제거(가계도 쿼리와 동일하게 게이트).
+    enabled: !!personId && (activeTab === 'events' || lifeEventModalOpen),
     // 탭/서브탭 전환마다 큰 설명 페이로드를 재요청하지 않도록 1분 캐시.
     // 모달에서 작성·삭제 후 invalidateQueries로 명시적 새로고침.
     staleTime: 60 * 1000,
@@ -650,6 +715,29 @@ export function PersonDetailPanel({
   }, [person])
 
   /**
+   * 종료일 미입력 구간의 상한(근사 일수). 사망자는 사망일까지만 합산해 재임 총 연수가
+   * 현재(2026)까지 늘어나 수백 년 부풀지 않게 한다(TC2, 사망일 카드 폴백과 통일).
+   * - 생존자: null(호출부가 now 사용)
+   * - 사망 확정 + 사망일 있음: 사망일
+   * - 사망 확정 + 연도 미상: 'unknown'(호출부가 open-ended 구간 제외)
+   */
+  const tenureOpenEndCap = useMemo<number | 'unknown' | null>(() => {
+    if (!person) return null
+    const deceased =
+      person.deathYear != null ||
+      person.isAlive === false ||
+      person.isDeathDateUnknown === true
+    if (!deceased) return null
+    const capIso =
+      person.deathDate ??
+      (person.deathYear != null
+        ? `${person.deathEra === 'BC' ? '-' : ''}${String(person.deathYear).padStart(4, '0')}-${String(person.deathMonth ?? 12).padStart(2, '0')}-${String(person.deathDay ?? 28).padStart(2, '0')}`
+        : null)
+    const cap = capIso ? isoDateToApproxDays(capIso) : null
+    return cap ?? 'unknown'
+  }, [person])
+
+  /**
    * 재임·재위 총 연수 (KPI). 군주 겸 수반 등 구간이 겹칠 수 있어 interval 병합 후
    * 합산 — 이중계산 방지. 0 이하이면 null.
    */
@@ -658,11 +746,17 @@ export function PersonDetailPanel({
     if (all.length === 0) return null
     // BC·고대 안전: ms 타임스탬프 대신 부호 있는 근사 일수로 구간을 표현한다.
     const now = isoDateToApproxDays(new Date().toISOString()) ?? 0
+    // 종료일 미입력 구간의 끝: 사망자는 사망일, 생존자는 현재. 사망 확정·연도 미상은 제외.
+    const openEnd = tenureOpenEndCap === 'unknown' ? null : tenureOpenEndCap ?? now
     const intervals = all
       .map(({ data }) => {
         const s = isoDateToApproxDays(data.startDate)
         if (s == null) return null
-        const e = isoDateToApproxDays(data.endDate) ?? now
+        let e = isoDateToApproxDays(data.endDate)
+        if (e == null) {
+          if (openEnd == null) return null
+          e = openEnd
+        }
         return [s, Math.max(s, e)] as [number, number]
       })
       .filter((iv): iv is [number, number] => iv != null)
@@ -726,16 +820,36 @@ export function PersonDetailPanel({
   const bioMentionPanelRef = useRef<HTMLDivElement>(null)
   useBodyScrollLock(bioMentionModalOpen)
   useFocusTrap(bioMentionPanelRef, bioMentionModalOpen)
+  // Esc로 스택 1단 pop(마지막이면 닫힘) — 키보드 닫기 경로(AY9). 열린 자식 툴팁·
+  // 라이트박스가 Esc를 먼저 소비했으면(마커) 양보한다.
+  useEffect(() => {
+    if (!bioMentionModalOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (document.querySelector('[data-lightbox-open="true"]')) return
+      event.stopPropagation()
+      setPersonLinkStack((prev) => prev.slice(0, -1))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [bioMentionModalOpen])
 
-  const pushPersonToModalStack = useCallback((id: string) => {
-    setPersonLinkStack((prev) => {
-      // 같은 인물을 연속으로 열면 중복 push 방지, 스택이 과도하게 깊어지지
-      // 않도록 최근 12단계로 상한(메모리·UX 안전장치).
-      if (prev[prev.length - 1] === id) return prev
-      const next = [...prev, id]
-      return next.length > 12 ? next.slice(next.length - 12) : next
-    })
-  }, [])
+  const pushPersonToModalStack = useCallback(
+    (id: string) => {
+      setPersonLinkStack((prev) => {
+        // 루트 인물로 되돌아가면 스택 전체를 닫는다 — 같은 인물의 전기 편집기 2개가
+        // 한 창에 동시 마운트돼 이중 writer 충돌이 나는 A→B→A 경로 차단(CC2).
+        if (id === personId) return []
+        // 스택에 이미 있으면 새 인스턴스 push 대신 그 깊이까지 pop('그 인물로 돌아가기').
+        const existingIdx = prev.indexOf(id)
+        if (existingIdx >= 0) return prev.slice(0, existingIdx + 1)
+        // 스택이 과도하게 깊어지지 않도록 최근 12단계로 상한(메모리·UX 안전장치).
+        const next = [...prev, id]
+        return next.length > 12 ? next.slice(next.length - 12) : next
+      })
+    },
+    [personId],
+  )
 
   /**
    * 인물 링크 클릭 공통 핸들러 — 모달 임베드면 부모 스택만 갱신(중첩 모달 방지),
@@ -793,7 +907,7 @@ export function PersonDetailPanel({
   /** 모달 열릴 때만 인물 풀 로드(검색 + "새 인물" 생성 대상).
    *  쿼리 키를 personKeys.all(['persons']) 프리픽스 안에 둬 invalidatePersonCaches가
    *  가족 추가·인물 생성 후 이 풀도 함께 무효화하도록 한다(기존 독립 키는 미커버였음). */
-  const { data: familyAddPool } = useQuery({
+  const { data: familyAddPool, isFetching: familyAddPoolFetching } = useQuery({
     queryKey: ['persons', 'pool-for-family-add'],
     queryFn: getAllPersons,
     enabled: familyAddMode !== null || childOtherParent !== null,
@@ -1067,15 +1181,39 @@ export function PersonDetailPanel({
   }
 
   if (isError || !person) {
+    // 상태 구분(ER1): 404=삭제/부재, 401·403=권한, 그 외/네트워크=일시 오류(재시도).
+    const status = (personError as { status?: number } | null)?.status ?? null
+    const isNotFound = status === 404
+    const isAuth = status === 401 || status === 403
+    const isTransient = !isNotFound && !isAuth
     return (
       <PanelRoot>
         <ErrorWrap>
           <ErrorIcon>⚠️</ErrorIcon>
-          <ErrorTitle>인물을 찾을 수 없습니다</ErrorTitle>
-          <ErrorDesc>목록에서 다시 선택해 주세요.</ErrorDesc>
-          <CloseBtn type="button" onClick={onClose}>
-            닫기
-          </CloseBtn>
+          <ErrorTitle>
+            {isNotFound
+              ? '인물을 찾을 수 없습니다'
+              : isAuth
+                ? '접근 권한이 없습니다'
+                : '인물 정보를 불러오지 못했습니다'}
+          </ErrorTitle>
+          <ErrorDesc>
+            {isNotFound
+              ? '삭제되었거나 존재하지 않는 인물입니다. 목록에서 다시 선택해 주세요.'
+              : isAuth
+                ? '세션이 만료되었거나 이 인물을 볼 권한이 없습니다.'
+                : '일시적인 오류일 수 있습니다. 잠시 후 다시 시도해 주세요.'}
+          </ErrorDesc>
+          <ErrorActions>
+            {isTransient && (
+              <PrimaryRetryBtn type="button" onClick={() => refetchPerson()}>
+                다시 시도
+              </PrimaryRetryBtn>
+            )}
+            <CloseBtn type="button" onClick={onClose}>
+              닫기
+            </CloseBtn>
+          </ErrorActions>
         </ErrorWrap>
       </PanelRoot>
     )
@@ -1095,18 +1233,25 @@ export function PersonDetailPanel({
   const monarchPositionTitle =
     firstReign?.positionDefinition?.title || null
 
-  const isDeceased = p.deathYear != null
+  // 사망 판정을 몰년뿐 아니라 생존 플래그·사망일 미상 플래그까지 확장(UX1) — 몰년 미상
+  // 고인이 '생존'으로 둔갑하지 않게. 향년은 era 안전 계산(BC·BC→AD 교차, TC1).
+  const isDeceased =
+    p.deathYear != null ||
+    p.isAlive === false ||
+    p.isDeathDateUnknown === true
   const currentYear = new Date().getFullYear()
-  const ageAtDeath =
-    isDeceased && p.birthYear != null && p.deathYear != null
-      ? p.deathYear - p.birthYear
-      : null
+  const ageAtDeath = ageBetweenYears(
+    p.birthYear,
+    p.birthEra,
+    p.deathYear,
+    p.deathEra,
+  )
   const currentAge =
     !isDeceased && p.birthYear != null && p.birthEra !== 'BC'
       ? currentYear - p.birthYear
       : null
 
-  /** 이름 밑: 년월일~년월일 (출생~사망 또는 출생~생존) */
+  /** 이름 밑: 년월일~년월일 (출생~사망 또는 출생~생존). circa면 '경' 접미(canon). */
   const birthDateStr = formatDateKo(
     p.birthYear ?? undefined,
     p.birthMonth ?? undefined,
@@ -1119,16 +1264,43 @@ export function PersonDetailPanel({
     p.deathDay ?? undefined,
     p.deathEra,
   )
-  const rangeStr = [birthDateStr, deathDateStr].filter(Boolean).join(' ~ ')
-  const subtitleLifespan = isDeceased
-    ? rangeStr
-      ? rangeStr + (ageAtDeath != null ? `(향년 ${ageAtDeath}세)` : '')
-      : '생몰년 미상'
-    : birthDateStr
-      ? `${birthDateStr} ~ 생존${currentAge != null ? ` (${currentAge}세)` : ''}`
-      : currentAge != null
-        ? `생존 (${currentAge}세)`
-        : '생존'
+  const birthLabel = birthDateStr
+    ? `${birthDateStr}${p.isBirthDateApproximate ? '경' : ''}`
+    : ''
+  const deathLabel = deathDateStr
+    ? `${deathDateStr}${p.isDeathDateApproximate ? '경' : ''}`
+    : ''
+  // 생몰 전면 미상 폴백 — 활동시기(floruit)가 있으면 그것으로.
+  const floruitLabel =
+    !birthLabel && !deathLabel
+      ? formatFloruit(
+          p.floruitStartYear != null
+            ? p.floruitEra === 'BC'
+              ? -p.floruitStartYear
+              : p.floruitStartYear
+            : null,
+          p.floruitEndYear != null
+            ? p.floruitEra === 'BC'
+              ? -p.floruitEndYear
+              : p.floruitEndYear
+            : null,
+        )
+      : ''
+  const subtitleLifespan = (() => {
+    if (isDeceased) {
+      if (birthLabel && deathLabel)
+        return `${birthLabel} ~ ${deathLabel}${ageAtDeath != null ? ` (향년 ${ageAtDeath}세)` : ''}`
+      if (birthLabel) return `${birthLabel} ~ 몰년 미상`
+      if (deathLabel) return `출생 미상 ~ ${deathLabel}`
+      return floruitLabel || '생몰년 미상'
+    }
+    if (birthLabel) {
+      // 몰년 기록이 없어도 currentAge가 비상식적(>120)이면 생존 단정 대신 몰년 미상.
+      if (currentAge != null && currentAge > 120) return `${birthLabel} ~ 몰년 미상`
+      return `${birthLabel} ~ 생존${currentAge != null ? ` (${currentAge}세)` : ''}`
+    }
+    return floruitLabel || '생존'
+  })()
 
   const genderLabel =
     p.gender === 'MALE' ? '남' : p.gender === 'FEMALE' ? '여' : (p.gender ?? '—')
@@ -1223,27 +1395,36 @@ export function PersonDetailPanel({
             <AvatarButton
               type="button"
               $loading={uploadingAvatar}
-              aria-label="프로필 사진 변경"
-              onClick={() => !uploadingAvatar && avatarInputRef.current?.click()}
+              aria-label={embedInModal ? fullName : '프로필 사진 변경'}
+              // 임베드(읽기) 모달에서는 업로드 트리거 비활성 — 편집 어포던스 누출 방지(UX2).
+              onClick={() =>
+                !embedInModal &&
+                !uploadingAvatar &&
+                avatarInputRef.current?.click()
+              }
+              style={embedInModal ? { cursor: 'default' } : undefined}
             >
-              {person.profileImageUrl ? (
+              {person.profileImageUrl && !avatarBroken ? (
                 <img
                   src={
                     getUploadImageUrl(person.profileImageUrl) ||
                     person.profileImageUrl
                   }
                   alt={fullName}
+                  onError={() => setAvatarBroken(true)}
                 />
               ) : (
                 <FiUsers size={24} aria-hidden />
               )}
-              <AvatarOverlay aria-hidden>
-                {uploadingAvatar ? (
-                  <AvatarSpinner />
-                ) : (
-                  <FiCamera size={20} strokeWidth={2} />
-                )}
-              </AvatarOverlay>
+              {!embedInModal && (
+                <AvatarOverlay aria-hidden>
+                  {uploadingAvatar ? (
+                    <AvatarSpinner />
+                  ) : (
+                    <FiCamera size={20} strokeWidth={2} />
+                  )}
+                </AvatarOverlay>
+              )}
             </AvatarButton>
             <HeaderTitleBlock>
               <PageTitleRow>
@@ -1280,8 +1461,13 @@ export function PersonDetailPanel({
                       : undefined
                   }
                 >
-                  {countryFlagSrc ? (
-                    <CountryFlagImg src={countryFlagSrc} alt="" aria-hidden />
+                  {countryFlagSrc && !countryFlagBroken ? (
+                    <CountryFlagImg
+                      src={countryFlagSrc}
+                      alt=""
+                      aria-hidden
+                      onError={() => setCountryFlagBroken(true)}
+                    />
                   ) : p.country?.flagEmoji ? (
                     <DetailCountryFlagEmoji>{p.country.flagEmoji}</DetailCountryFlagEmoji>
                   ) : null}
@@ -1579,12 +1765,18 @@ export function PersonDetailPanel({
         </KpiStrip>
 
         {/* 탭 네비게이션 */}
-        <TabNav role="tablist" aria-label="인물 상세 구역">
+        <TabNav
+          role="tablist"
+          aria-label="인물 상세 구역"
+          onKeyDown={handleTabKeyDown}
+        >
           <TabBtn
             type="button"
             role="tab"
             id="person-detail-tab-overview"
+            aria-controls="person-detail-panel-overview"
             aria-selected={activeTab === 'overview'}
+            tabIndex={activeTab === 'overview' ? 0 : -1}
             $active={activeTab === 'overview'}
             onClick={() => {
               playClickSound()
@@ -1598,7 +1790,9 @@ export function PersonDetailPanel({
             type="button"
             role="tab"
             id="person-detail-tab-genealogy"
+            aria-controls="person-detail-panel-genealogy"
             aria-selected={activeTab === 'genealogy'}
+            tabIndex={activeTab === 'genealogy' ? 0 : -1}
             $active={activeTab === 'genealogy'}
             onClick={() => {
               playClickSound()
@@ -1612,7 +1806,9 @@ export function PersonDetailPanel({
             type="button"
             role="tab"
             id="person-detail-tab-politics"
+            aria-controls="person-detail-panel-politics"
             aria-selected={activeTab === 'politics'}
+            tabIndex={activeTab === 'politics' ? 0 : -1}
             $active={activeTab === 'politics'}
             onClick={() => {
               playClickSound()
@@ -1626,7 +1822,9 @@ export function PersonDetailPanel({
             type="button"
             role="tab"
             id="person-detail-tab-events"
+            aria-controls="person-detail-panel-events"
             aria-selected={activeTab === 'events'}
+            tabIndex={activeTab === 'events' ? 0 : -1}
             $active={activeTab === 'events'}
             onClick={() => {
               playClickSound()
@@ -1654,8 +1852,25 @@ export function PersonDetailPanel({
                 transition={{ duration: 0.2 }}
               >
                 <OverviewSections>
+                  {/* 개요 점프 내비(UX8) — 4클러스터로 바로 이동. 선형 스크롤 완화.
+                      풀 페이지에서만(임베드는 클러스터가 조건부라 앵커 부재 가능). */}
+                  {!embedInModal && (
+                    <OverviewJumpNav aria-label="개요 섹션 바로가기">
+                      {OVERVIEW_CLUSTERS.map((cluster) => (
+                        <OverviewJumpChip
+                          key={cluster.id}
+                          type="button"
+                          onClick={() => scrollToOverviewCluster(cluster.id)}
+                        >
+                          {cluster.label}
+                        </OverviewJumpChip>
+                      ))}
+                    </OverviewJumpNav>
+                  )}
                   {/* ── 클러스터 ① 생애·요약 ── */}
-                  <OverviewClusterLabel>생애·요약</OverviewClusterLabel>
+                  <OverviewClusterLabel id="overview-cluster-life">
+                    생애·요약
+                  </OverviewClusterLabel>
 
                   {/* 1. 전기 — 가장 중요한 서술 정보 */}
                   <section aria-label="전기">
@@ -1669,6 +1884,22 @@ export function PersonDetailPanel({
                       personId={person.id}
                       sections={p.biographySections ?? undefined}
                       legacyBiography={person.biography}
+                      // 임베드(읽기) 모달에서는 편집 어포던스(✎·관리·추가) 숨김(UX2).
+                      readOnly={embedInModal}
+                      lifespanBounds={{
+                        minSigned:
+                          p.birthYear != null
+                            ? p.birthEra === 'BC'
+                              ? -p.birthYear
+                              : p.birthYear
+                            : null,
+                        maxSigned:
+                          p.deathYear != null
+                            ? p.deathEra === 'BC'
+                              ? -p.deathYear
+                              : p.deathYear
+                            : null,
+                      }}
                       onPersonClick={
                         embedInModal
                           ? (id) => onLinkedPersonClick?.(id)
@@ -1748,6 +1979,16 @@ export function PersonDetailPanel({
                       )}
                     </OverviewSectionHeaderRow>
                     {(() => {
+                      // 미평가(null)를 0점으로 둔갑시키지 않는다(UX7) — 편집 중이 아니면
+                      // 빈 상태로. 임베드(읽기)에서는 의미 없는 빈 게이지 대신 숨김.
+                      if (!editingInfluence && person.influence == null) {
+                        if (embedInModal) return null
+                        return (
+                          <InfluenceEmpty>
+                            아직 영향력 평가가 없습니다. ‘설정’을 눌러 기록해 보세요.
+                          </InfluenceEmpty>
+                        )
+                      }
                       const current = editingInfluence
                         ? influenceDraft
                         : optimisticInfluence
@@ -1823,7 +2064,9 @@ export function PersonDetailPanel({
                   />
 
                   {/* ── 클러스터 ② 이력·활동 ── */}
-                  <OverviewClusterLabel>이력·활동</OverviewClusterLabel>
+                  <OverviewClusterLabel id="overview-cluster-history">
+                    이력·활동
+                  </OverviewClusterLabel>
 
                   {/* 3. 재임·재위 통합 */}
                   <section aria-label="재임·재위">
@@ -1867,6 +2110,7 @@ export function PersonDetailPanel({
                       birthYear={person.birthYear}
                       birthMonth={person.birthMonth}
                       birthDay={person.birthDay}
+                      birthEra={person.birthEra ?? null}
                       deathDateStr={deathDateStr}
                       isDeceased={isDeceased}
                       embedInModal={embedInModal}
@@ -2021,7 +2265,7 @@ export function PersonDetailPanel({
                                     const start = formatIsoDateKo(c.startDate)
                                     const end = formatIsoDateKo(c.endDate)
                                     const period =
-                                      formatPeriod(start, end)
+                                      formatPeriod(start, end, isDeceased ? '미상' : '현재')
                                     const titleBits = [
                                       c.organization?.name,
                                       c.rank?.name,
@@ -2137,7 +2381,7 @@ export function PersonDetailPanel({
                             const start = formatIsoDateKo(e.startDate)
                             const end = formatIsoDateKo(e.endDate)
                             const period =
-                              formatPeriod(start, end, '재학중')
+                              formatPeriod(start, end, isDeceased ? '미상' : '재학중')
                             const subParts = [
                               e.major,
                               e.department,
@@ -2367,7 +2611,7 @@ export function PersonDetailPanel({
                                     const start = formatIsoDateKo(o.startDate)
                                     const end = formatIsoDateKo(o.endDate)
                                     const period =
-                                      formatPeriod(start, end)
+                                      formatPeriod(start, end, isDeceased ? '미상' : '현재')
                                     return (
                                       <SimpleEntryItem key={o.id ?? `org-${orgIdx}`}>
                                         <SimpleEntryHeader>
@@ -2412,7 +2656,7 @@ export function PersonDetailPanel({
                                     const start = formatIsoDateKo(m.startDate)
                                     const end = formatIsoDateKo(m.endDate)
                                     const period =
-                                      formatPeriod(start, end)
+                                      formatPeriod(start, end, isDeceased ? '미상' : '현재')
                                     const titleParts = [m.rank, m.role].filter(Boolean) as string[]
                                     return (
                                       <SimpleEntryItem key={m.id ?? `mil-${milIdx}`}>
@@ -2448,11 +2692,16 @@ export function PersonDetailPanel({
                     (p.spouseRelations?.length ?? 0) > 0 ||
                     ((person as { humanRelationships?: PersonHumanRelationshipItem[] })
                       .humanRelationships?.length ?? 0) > 0) && (
-                    <OverviewClusterLabel>관계</OverviewClusterLabel>
+                    <OverviewClusterLabel id="overview-cluster-relations">
+                      관계
+                    </OverviewClusterLabel>
                   )}
 
                   {/* 2.57. 배우자 상세 — 혼인 기간·메모 중 하나라도 있을 때만 표시 */}
-                  <SpouseDetailSection spouseRelations={p.spouseRelations} />
+                  <SpouseDetailSection
+                    spouseRelations={p.spouseRelations}
+                    isDeceased={isDeceased}
+                  />
 
                   {/* 4. 인간관계 */}
                   <PersonHumanRelationshipsSection
@@ -2473,7 +2722,9 @@ export function PersonDetailPanel({
                   {(!embedInModal ||
                     (p.countryAffiliations?.length ?? 0) > 0 ||
                     (p.foundedDynasties?.length ?? 0) > 0) && (
-                    <OverviewClusterLabel>소속·맥락</OverviewClusterLabel>
+                    <OverviewClusterLabel id="overview-cluster-context">
+                      소속·맥락
+                    </OverviewClusterLabel>
                   )}
 
                   {/* 3.1. 국가 소속·국적 (다중) */}
@@ -2513,7 +2764,7 @@ export function PersonDetailPanel({
                             const start = formatIsoDateKo(aff.startDate)
                             const end = formatIsoDateKo(aff.endDate)
                             const period =
-                              formatPeriod(start, end)
+                              formatPeriod(start, end, isDeceased ? '미상' : '현재')
                             return (
                               <CountryAffiliationChip
                                 key={aff.id ?? `aff-${affIdx}`}
@@ -2678,7 +2929,7 @@ export function PersonDetailPanel({
                           (old?: typeof familyAddPool) => (old ? [created, ...old] : old),
                         )
                       }
-                      loading={!familyAddPool}
+                      loading={familyAddPoolFetching}
                     />
                   )}
                 </section>
@@ -2747,7 +2998,7 @@ export function PersonDetailPanel({
                           const start = formatIsoDateKo(l.startDate)
                           const end = formatIsoDateKo(l.endDate)
                           const period =
-                            formatPeriod(start, end)
+                            formatPeriod(start, end, isDeceased ? '미상' : '현재')
                           return (
                             <SimpleEntryItem key={l.id ?? `party-${partyIdx}`}>
                               <SimpleEntryHeader>
@@ -2818,6 +3069,21 @@ export function PersonDetailPanel({
                       </UnifiedActionRow>
                     )}
                   </SectionLabelRow>
+                  {lifeEventsError && (
+                    <LifeEventsErrorNote role="alert">
+                      연보를 불러오지 못했습니다. 아래 타임라인이 불완전할 수 있어요.
+                      <PrimaryRetryBtn
+                        type="button"
+                        onClick={() =>
+                          queryClient.invalidateQueries({
+                            queryKey: ['person-life-events', personId],
+                          })
+                        }
+                      >
+                        다시 시도
+                      </PrimaryRetryBtn>
+                    </LifeEventsErrorNote>
+                  )}
                   <PersonLifeTimelineInfographic
                     birthDate={
                       p.birthYear != null

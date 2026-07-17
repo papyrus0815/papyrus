@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 import { useQuery } from '@tanstack/react-query'
 import styled, { css } from 'styled-components'
 
@@ -6,6 +8,7 @@ import {
   getPersonContemporaries,
   personContemporariesKeys,
 } from '@/shared/api/person-contemporaries'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import type { PositionCategory } from '@/entities/government-position/model/types'
 import {
   groupRulersByCountry,
@@ -89,13 +92,10 @@ export function ContemporariesStrip({
                 {group.chips.map((chip) => {
                   const chipBody = (
                     <>
-                      {chip.profileImageUrl ? (
-                        <ChipAvatar src={chip.profileImageUrl} alt="" aria-hidden />
-                      ) : (
-                        <ChipGlyph $category={chip.category} aria-hidden>
-                          {CATEGORY_TOKENS[chip.category].glyph}
-                        </ChipGlyph>
-                      )}
+                      <ChipAvatarOrGlyph
+                        profileImageUrl={chip.profileImageUrl}
+                        category={chip.category}
+                      />
                       <ChipName>{chip.label}</ChipName>
                       <ChipSpan>{chip.spanText}</ChipSpan>
                     </>
@@ -137,6 +137,43 @@ export function ContemporariesStrip({
         </ChipScrollRow>
       )}
     </StripSection>
+  )
+}
+
+/**
+ * 칩 아바타 — 업로드 상대경로를 getUploadImageUrl로 절대화(분리 오리진 안전)하고,
+ * 로드 실패 시 카테고리 글리프로 강등해 깨진 이미지가 정본 UI로 남지 않게 한다.
+ */
+function ChipAvatarOrGlyph({
+  profileImageUrl,
+  category,
+}: {
+  profileImageUrl: string | null
+  category: PositionCategory
+}) {
+  const resolvedSrc = profileImageUrl
+    ? getUploadImageUrl(profileImageUrl) || profileImageUrl
+    : null
+  const [imageBroken, setImageBroken] = useState(false)
+  // src가 바뀌면(다른 인물 데이터로 재사용 등) 실패 상태 리셋
+  useEffect(() => {
+    setImageBroken(false)
+  }, [resolvedSrc])
+
+  if (!resolvedSrc || imageBroken) {
+    return (
+      <ChipGlyph $category={category} aria-hidden>
+        {CATEGORY_TOKENS[category].glyph}
+      </ChipGlyph>
+    )
+  }
+  return (
+    <ChipAvatar
+      src={resolvedSrc}
+      alt=""
+      aria-hidden
+      onError={() => setImageBroken(true)}
+    />
   )
 }
 

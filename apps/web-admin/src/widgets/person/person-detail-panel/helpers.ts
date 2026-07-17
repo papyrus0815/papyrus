@@ -123,21 +123,54 @@ export {
 } from '@/shared/lib/tenure-labels'
 
 /**
+ * era 플래그(BC/AD) + 크기 연도 → 천문 연도(부호). BC N년 = 1−N
+ * (BC 1년→0, AD 1년→1). 나이·기간 차 계산에 쓰면 BC/AD 경계의
+ * "0년 없음"이 자동 보정된다. era 미상은 AD로 간주.
+ */
+export function astroYearFromEra(
+  year: number | null | undefined,
+  era?: string | null,
+): number | null {
+  if (year == null) return null
+  return era === 'BC' ? 1 - year : year
+}
+
+/**
+ * 출생~사망 향년(만 나이 근사, era 안전). 연 단위 — 월·일 정밀 보정은 생략.
+ * 한쪽이라도 연도 미상이면 null, 음수(데이터 오류)면 null.
+ */
+export function ageBetweenYears(
+  birthYear: number | null | undefined,
+  birthEra: string | null | undefined,
+  deathYear: number | null | undefined,
+  deathEra: string | null | undefined,
+): number | null {
+  const birthAstro = astroYearFromEra(birthYear, birthEra)
+  const deathAstro = astroYearFromEra(deathYear, deathEra)
+  if (birthAstro == null || deathAstro == null) return null
+  const age = deathAstro - birthAstro
+  return age >= 0 ? age : null
+}
+
+/**
  * 특정 시점에 몇 살이었는지 계산 (출생년월일 + 해당 날짜)
- * 출생 정보 없으면 null
+ * 출생 정보 없으면 null.
+ * birthEra·대상 날짜 era를 모두 천문 연도로 환산해 BC 출생·BC 시점·BC→AD 교차를
+ * 모두 올바르게 계산한다(birthEra 미지정이면 AD 가정 — 기존 호출부 호환).
  */
 export function getAgeAtDate(
   birthYear: number | null | undefined,
   birthMonth?: number | null,
   birthDay?: number | null,
   dateIso?: string | null,
+  birthEra?: string | null,
 ): number | null {
   if (birthYear == null) return null
   const p = parseIsoDateParts(dateIso)
-  // 출생 era 를 받지 않으므로 birthYear 는 AD 로 가정한다.
-  // 대상 날짜가 BC면 AD 출생연도와의 나이 계산이 불가능 → null.
-  if (!p || p.era === 'BC') return null
-  let age = p.year - birthYear
+  if (!p) return null
+  const birthAstro = birthEra === 'BC' ? 1 - birthYear : birthYear
+  const dateAstro = p.era === 'BC' ? 1 - p.year : p.year
+  let age = dateAstro - birthAstro
   if (age < 0) return null
   if (birthMonth != null && birthDay != null) {
     if (p.month < birthMonth || (p.month === birthMonth && p.day < birthDay)) age--
@@ -149,7 +182,11 @@ export function getAgeAtDate(
  * 기간 문자열 포맷터. start/end 는 이미 포맷된 문자열(예: formatIsoDateKo 결과)를 받는다.
  * - start & end 모두 있으면 `${start} ~ ${end}`
  * - start 만 있으면 `${start} ~ ${ongoingLabel}` (기본 '현재')
- * - start 가 없으면 null
+ * - end 만 있으면 `~ ${end}` (기간 종료만 아는 관계 — 단독 날짜로 오독되지 않게 '~' 접두)
+ * - 둘 다 없으면 null
+ *
+ * ongoingLabel: 진행 중 구간의 끝 표기. 사망자에게는 '미상'을 넘겨(재임·재위 규약과 통일)
+ * 종료일 미입력이 '현재/재학중'으로 둔갑하지 않게 한다.
  */
 export function formatPeriod(
   start: string | null | undefined,
@@ -158,5 +195,6 @@ export function formatPeriod(
 ): string | null {
   if (start && end) return `${start} ~ ${end}`
   if (start) return `${start} ~ ${ongoingLabel}`
+  if (end) return `~ ${end}`
   return null
 }

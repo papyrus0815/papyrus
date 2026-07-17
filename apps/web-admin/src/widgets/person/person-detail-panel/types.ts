@@ -110,6 +110,8 @@ export interface PersonDetailData {
     reason?: string | null
   }> | null
   createdAt?: string | null
+  /** 낙관적 동시성 토큰 — 마지막으로 본 상세 스냅샷의 갱신 시각(CC1 If-Unmodified-Since식). */
+  updatedAt?: string | null
   isAlive?: boolean | null
   /** 활동시기(floruit) — 생몰 전면 미상 인물의 활동 연대(생몰 폴백). 크기값(양수)+floruitEra. */
   floruitStartYear?: number | null

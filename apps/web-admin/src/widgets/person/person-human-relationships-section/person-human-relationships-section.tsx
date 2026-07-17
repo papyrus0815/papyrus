@@ -2076,13 +2076,23 @@ function SourceSelector({
   onChange: (next: string[]) => void
   disabled?: boolean
 }) {
-  const { data: subjectEvents = [], isLoading: subjectLoading } = useQuery({
+  const {
+    data: subjectEvents = [],
+    isLoading: subjectLoading,
+    isError: subjectError,
+    refetch: refetchSubjectEvents,
+  } = useQuery({
     queryKey: ['person-life-events', subjectPersonId],
     queryFn: () => listPersonLifeEvents(subjectPersonId),
     enabled: !!subjectPersonId,
     staleTime: 60_000,
   })
-  const { data: relatedEvents = [], isLoading: relatedLoading } = useQuery({
+  const {
+    data: relatedEvents = [],
+    isLoading: relatedLoading,
+    isError: relatedError,
+    refetch: refetchRelatedEvents,
+  } = useQuery({
     queryKey: ['person-life-events', relatedPersonId],
     queryFn: () => listPersonLifeEvents(relatedPersonId!),
     enabled: !!relatedPersonId,
@@ -2135,6 +2145,24 @@ function SourceSelector({
   }
   if (subjectLoading || relatedLoading) {
     return <SourceSelectorEmpty>연보 불러오는 중…</SourceSelectorEmpty>
+  }
+  // 쿼리 실패를 빈 목록으로 위장하지 않는다 — '등록된 사건이 없습니다'라는
+  // 거짓 빈 상태 대신 실패를 알리고 재시도 경로를 노출.
+  if (subjectError || relatedError) {
+    return (
+      <SourceSelectorEmpty>
+        연보를 불러오지 못했습니다.{' '}
+        <SourceRetryBtn
+          type="button"
+          onClick={() => {
+            if (subjectError) void refetchSubjectEvents()
+            if (relatedError) void refetchRelatedEvents()
+          }}
+        >
+          다시 시도
+        </SourceRetryBtn>
+      </SourceSelectorEmpty>
+    )
   }
   if (allEvents.length === 0) {
     return (
@@ -4182,6 +4210,23 @@ const SourceSelectorEmpty = styled.p`
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : '#e2e8f0'};
   border-radius: 10px;
+`
+
+/** 연보 로드 실패 시 재시도 — SourceSelectorEmpty 내 인라인 링크 버튼 */
+const SourceRetryBtn = styled.button`
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #6366f1;
+  cursor: pointer;
+  text-decoration: underline;
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 `
 
 /* ── 카드: 근거 사건 chips ──────────────────────────────────── */

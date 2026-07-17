@@ -93,6 +93,34 @@ type Row = {
 let keySeq = 0
 const nextKey = () => `bio-sec-${keySeq++}`
 
+/** HTML/평문 본문에 눈에 보이는 텍스트·미디어가 있는지 — 빈 신규 섹션(유령) 판정용. */
+function hasVisibleContent(content: string): boolean {
+  if (!content) return false
+  if (/<(img|figure|table|iframe|hr|video)\b/i.test(content)) return true
+  return content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0
+}
+
+/**
+ * 본문 텍스트에서 "NNNN년"·"기원전 NNNN년"·"BC NNNN" 형태의 부호 연도를 추출(RD7).
+ * native Date 금지 규약 준수(문자열 직접 파싱). '년' 접미가 붙은 것만 봐서
+ * 페이지 번호·수량 등 오탐을 줄인다. BC는 음수.
+ */
+function extractSignedYearsFromText(html: string): number[] {
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ')
+  const years: number[] = []
+  const bcRe = /(?:기원전|BC)\s*(\d{1,4})\s*년?/g
+  const adRe = /(\d{3,4})\s*년/g
+  let match: RegExpExecArray | null
+  while ((match = bcRe.exec(text)) != null) years.push(-parseInt(match[1], 10))
+  // BC 매치 위치를 제외하기 위해 AD는 '년' 접미 필수 + 앞에 기원전/BC가 없는 경우만.
+  while ((match = adRe.exec(text)) != null) {
+    const before = text.slice(Math.max(0, match.index - 4), match.index)
+    if (/기원전|BC/.test(before)) continue
+    years.push(parseInt(match[1], 10))
+  }
+  return years
+}
+
 function toRows(
   sections: BiographySectionData[] | undefined,
   legacyBiography: string | null | undefined,
@@ -235,6 +263,10 @@ type Props = {
   sections: BiographySectionData[] | undefined
   /** 섹션이 비었을 때 시드로 쓸 레거시 단일 전기(person.biography) */
   legacyBiography?: string | null
+  /** 읽기 전용(임베드 모달) — 편집 어포던스(관리·추가·✎) 숨김(UX2). */
+  readOnly?: boolean
+  /** 생몰 부호연도 경계 — 전기 서술 연도가 이 범위 밖이면 편집 중 비차단 힌트(RD7). */
+  lifespanBounds?: { minSigned: number | null; maxSigned: number | null }
   /** 읽기 본문 인물 멘션 클릭 (패널 모달 스택 등) */
   onPersonClick: (personId: string) => void
   /** 읽기 본문 용어(.term) 클릭 → 정의 툴팁 (패널 포털과 공유) */
@@ -251,6 +283,8 @@ export function PersonBiographySections({
   personId,
   sections,
   legacyBiography,
+  readOnly = false,
+  lifespanBounds,
   onPersonClick,
   setTermTooltip,
   setDynastyTooltip,
@@ -262,6 +296,8 @@ export function PersonBiographySections({
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [manageMode, setManageMode] = useState(false)
   const [saving, setSaving] = useState(false)
+  /** 마지막 저장(PUT)이 실패해 현재 인물에 미반영 잔여분이 있는가 — 재시도 배너 노출. */
+  const [saveFailed, setSaveFailed] = useState(false)
   const [dragKey, setDragKey] = useState<string | null>(null)
   const [dropKey, setDropKey] = useState<string | null>(null)
   /** 편집 진입 시점의 제목/본문 — Esc 취소 시 dirty 판단·복원용 */
@@ -271,6 +307,18 @@ export function PersonBiographySections({
   })
   /** 섹션 DOM 노드 — 목차 점프 scrollIntoView 대상. */
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  /** 섹션별 편집(✎) 버튼 — 저장·취소·삭제 종료 후 포커스 복귀 대상(a11y). */
+  const editBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  /** 섹션 추가 행 첫 버튼 — 마지막 섹션 삭제 후 포커스 복귀 대상. */
+  const addRowBtnRef = useRef<HTMLButtonElement | null>(null)
+  /** 편집 종료 후 포커스를 옮길 대상: 'edit:<key>' | 'add' | null. */
+  const pendingFocusRef = useRef<string | null>(null)
+  /**
+   * 편집기의 디바운스 대기 입력을 즉시 반영해 최신 HTML을 돌려주는 flush.
+   * debounceMs>0이면 마지막 200ms 입력이 rows에 아직 없으므로 저장·전환·언마운트
+   * 직전에 반드시 호출해 유실을 막는다(사건 InlineRichText와 동일 계약).
+   */
+  const editorFlushRef = useRef<(() => string | null) | null>(null)
 
   /* ── 저장·동기화용 ref ──────────────────────────────────────── */
   /** 현재 rows의 주인 personId — flush·재전송이 다른 인물로 교차 저장되지 않게 추적. */
@@ -283,6 +331,11 @@ export function PersonBiographySections({
   useEffect(() => {
     editingKeyRef.current = editingKey
   }, [editingKey])
+  /** saving 미러 — 키보드 단축키 리스너를 rows·saving에 의존시키지 않기 위한 참조(PF4). */
+  const savingRef = useRef(saving)
+  useEffect(() => {
+    savingRef.current = saving
+  }, [saving])
 
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** 디바운스 flush 시 읽을 최신 rows. */
@@ -342,8 +395,10 @@ export function PersonBiographySections({
             if (
               curPersonId === personIdRef.current &&
               curGen === rowsGenRef.current
-            )
+            ) {
               lastPersistedRef.current = snapshotRows(curRows)
+              setSaveFailed(false)
+            }
             // 같은 인물의 더 늦은 저장이 대기 중이면 이 응답은 stale —
             // 무효화(불필요 refetch)도 토스트도 생략.
             if (!pendingPersistRef.current.has(curPersonId)) {
@@ -354,10 +409,14 @@ export function PersonBiographySections({
                 notify.success('전기가 저장되었습니다.')
             }
           } catch (err) {
-            if (!pendingPersistRef.current.has(curPersonId))
+            if (!pendingPersistRef.current.has(curPersonId)) {
               notify.error(
                 err instanceof Error ? err.message : '전기 저장에 실패했습니다.',
               )
+              // 현재 인물의 저장이 실패했으면 잔여분을 시각화(재시도 배너) — 읽기 모드가
+              // 미저장 내용을 저장본처럼 보여주다 이탈 시 영구 유실되는 것 방지(DS1).
+              if (curPersonId === personIdRef.current) setSaveFailed(true)
+            }
           } finally {
             if (pendingPersistRef.current.size === 0) setSaving(false)
           }
@@ -382,6 +441,21 @@ export function PersonBiographySections({
     [queryClient],
   )
 
+  /** 구조 변경(순서·삭제) PUT payload — 편집 중 row는 아직 저장 안 한 초안 대신
+      마지막 저장본을 보내 명시 저장 전의 draft가 서버에 새지 않게 한다(DS3).
+      draft는 로컬 rows에 그대로 남아 명시 저장/언마운트 flush 때만 전송된다. */
+  const buildStructuralPayload = useCallback((rows: Row[]): Row[] => {
+    const key = editingKeyRef.current
+    const base = lastPersistedRef.current
+    if (key == null || !base?.has(key)) return rows
+    const snap = base.get(key) as RowSnapshot
+    return rows.map((sectionRow) =>
+      sectionRow.key === key
+        ? { ...sectionRow, title: snap.title, content: snap.content }
+        : sectionRow,
+    )
+  }, [])
+
   /** 명시 저장(편집 완료) — 디바운스 타이머를 취소하고 즉시 전송. */
   const persistNow = useCallback(
     (next: Row[]) => {
@@ -394,17 +468,22 @@ export function PersonBiographySections({
     [doPersist],
   )
 
-  /** 구조 변경(순서·삭제·드래그) — 연타를 1회 PUT로 합친다. */
+  /** 구조 변경(순서·삭제·드래그) — 연타를 1회 PUT로 합친다.
+      편집 중 row의 미저장 draft는 payload에서 제외(buildStructuralPayload)해
+      구조 변경 저장이 초안을 서버에 발행하지 않게 한다(DS3). */
   const persistDebounced = useCallback(
     (next: Row[]) => {
       latestRowsRef.current = next
       if (persistTimerRef.current != null) clearTimeout(persistTimerRef.current)
       persistTimerRef.current = setTimeout(() => {
         persistTimerRef.current = null
-        doPersist(personIdRef.current, latestRowsRef.current)
+        doPersist(
+          personIdRef.current,
+          buildStructuralPayload(latestRowsRef.current),
+        )
       }, STRUCTURAL_PERSIST_DELAY)
     },
-    [doPersist],
+    [doPersist, buildStructuralPayload],
   )
 
   /** 편집 중이던 본문 변경(updateField는 디바운스 타이머를 잡지 않음)이 dirty면 true.
@@ -423,6 +502,30 @@ export function PersonBiographySections({
     )
   }, [])
 
+  /** 편집기의 디바운스 대기 입력(마지막 ~200ms)을 편집 중 row에 합쳐 최신 rows를 만든다.
+      저장·전환·언마운트 직전에 호출 — 이 반환값을 persist 대상으로 쓰면 유실이 없다. */
+  const collectRowsWithPendingEditorInput = useCallback((): Row[] => {
+    const key = editingKeyRef.current
+    if (key == null) return latestRowsRef.current
+    const flushed = editorFlushRef.current?.() ?? null
+    if (flushed == null) return latestRowsRef.current
+    const merged = latestRowsRef.current.map((sectionRow) =>
+      sectionRow.key === key ? { ...sectionRow, content: flushed } : sectionRow,
+    )
+    latestRowsRef.current = merged
+    return merged
+  }, [])
+
+  /** 마지막 persist 기준선 대비 (내용·개수) 미반영 변경이 있는가 — 편집 중이 아니어도
+      직전 저장 실패로 서버에 못 올라간 잔여분(DS1)까지 잡아 전환·언마운트 시 재전송·경고. */
+  const hasUnpersistedChanges = useCallback(() => {
+    const base = lastPersistedRef.current
+    if (!base) return false
+    const cur = latestRowsRef.current
+    if (cur.length !== base.size) return true
+    return cur.some((sectionRow) => isRowDirtySince(sectionRow, base))
+  }, [])
+
   /* ── 인물 전환 대응 ───────────────────────────────────────────
      key 없이 personId만 바뀌는 호출부(상세 페이지 라우트 재사용, 위젯의 제자리
      교체 등)에서도 이전 인물의 rows·편집 상태가 새 인물로 새지 않도록 컴포넌트
@@ -438,9 +541,17 @@ export function PersonBiographySections({
       clearTimeout(pendingTimer)
       persistTimerRef.current = null
     }
-    if (pendingTimer != null || hasDirtyInProgressEdit()) {
-      doPersist(prevPersonId, latestRowsRef.current)
+    // 편집기 디바운스 대기분을 먼저 반영하고, 구조 변경·편집 중 변경·직전 저장
+    // 실패 잔여분(hasUnpersistedChanges)을 이전 인물 앞으로 flush.
+    const rowsToFlush = collectRowsWithPendingEditorInput()
+    if (
+      pendingTimer != null ||
+      hasDirtyInProgressEdit() ||
+      hasUnpersistedChanges()
+    ) {
+      doPersist(prevPersonId, rowsToFlush)
     }
+    setSaveFailed(false)
     // ② rows를 새 인물의 서버 상태로 강제 리셋. 레거시 시드는 리마운트와 동일하게
     //    항상 재적용 — 키 없는 호출부에서 재방문해도 서버에 남아 있는 레거시 전기가
     //    빈 상태로 보이지 않게. 삭제된 시드의 refetch 부활 차단은 sync의
@@ -486,30 +597,80 @@ export function PersonBiographySections({
         clearTimeout(pendingTimer)
         persistTimerRef.current = null
       }
-      // 구조 변경(타이머) 또는 편집 중 본문 변경(dirty)이 있으면 언마운트 전 flush.
-      if (pendingTimer != null || hasDirtyInProgressEdit()) {
-        doPersist(personIdRef.current, latestRowsRef.current)
+      // 구조 변경(타이머)·편집 중 본문 변경·직전 저장 실패 잔여분이 있으면
+      // 언마운트 전 flush(편집기 디바운스 대기분도 반영).
+      const rowsToFlush = collectRowsWithPendingEditorInput()
+      if (
+        pendingTimer != null ||
+        hasDirtyInProgressEdit() ||
+        hasUnpersistedChanges()
+      ) {
+        doPersist(personIdRef.current, rowsToFlush)
       }
     },
-    [doPersist, hasDirtyInProgressEdit],
+    [
+      doPersist,
+      hasDirtyInProgressEdit,
+      hasUnpersistedChanges,
+      collectRowsWithPendingEditorInput,
+    ],
   )
+
+  /* 브라우저 새로고침·탭 닫기 보호(DS5) — SPA 내부 전환은 언마운트 flush가 커버하지만
+     네이티브 이탈은 언마운트가 안 도므로 beforeunload로 확인창을 띄운다. 편집 중이거나
+     미저장 잔여분이 있을 때만(불필요한 이탈 마찰 방지). */
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (
+        editingKeyRef.current != null &&
+        (hasDirtyInProgressEdit() || hasUnpersistedChanges())
+      ) {
+        event.preventDefault()
+        event.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasDirtyInProgressEdit, hasUnpersistedChanges])
 
   const updateField = useCallback((key: string, patch: Partial<Row>) => {
     setRows((arr) => arr.map((r) => (r.key === key ? { ...r, ...patch } : r)))
   }, [])
 
+  /** 다른 섹션 편집·추가로 넘어가기 전, 진행 중이던 편집이 dirty면 자동 저장(DS2).
+      이전 편집이 dirty 추적에서 고아화돼 조용히 유실·동반 커밋되는 것을 막는다
+      (사건 상세 InlineRichText처럼 전환 시 자동 저장). */
+  const commitCurrentEditIfAny = useCallback(() => {
+    const key = editingKeyRef.current
+    if (key == null) return
+    const nextRows = collectRowsWithPendingEditorInput()
+    const row = nextRows.find((sectionRow) => sectionRow.key === key)
+    const dirty =
+      row != null &&
+      (row.title !== editInitialRef.current.title ||
+        row.content !== editInitialRef.current.content)
+    if (dirty) {
+      setRows(nextRows)
+      persistNow(nextRows)
+    }
+  }, [collectRowsWithPendingEditorInput, persistNow])
+
   const addSection = useCallback(
     (sectionType: SectionTypeValue | null, title: string) => {
+      commitCurrentEditIfAny()
       const row: Row = { key: nextKey(), title, content: '', sectionType }
       editInitialRef.current = { title, content: '' }
       setRows((arr) => [...arr, row])
       setEditingKey(row.key)
     },
-    [],
+    [commitCurrentEditIfAny],
   )
 
   const beginEdit = useCallback(
     (key: string) => {
+      if (editingKeyRef.current != null && editingKeyRef.current !== key) {
+        commitCurrentEditIfAny()
+      }
       const row = rows.find((r) => r.key === key)
       editInitialRef.current = {
         title: row?.title ?? '',
@@ -517,13 +678,16 @@ export function PersonBiographySections({
       }
       setEditingKey(key)
     },
-    [rows],
+    [rows, commitCurrentEditIfAny],
   )
 
   /** 편집 취소 — 초기값으로 복원하고, 빈 섹션(새로 추가했다 비운 것)은 제거 */
   const cancelEdit = useCallback(() => {
     const key = editingKey
     if (key == null) return
+    const willRemove =
+      !editInitialRef.current.title.trim() &&
+      !hasVisibleContent(editInitialRef.current.content)
     setRows((arr) =>
       arr
         .map((r) =>
@@ -537,6 +701,8 @@ export function PersonBiographySections({
         )
         .filter((r) => r.key !== key || r.title.trim() || r.content.trim()),
     )
+    // 종료 후 포커스 복귀(AY3): 유령 제거면 추가 행, 아니면 해당 섹션 편집 버튼.
+    pendingFocusRef.current = willRemove ? 'add' : `edit:${key}`
     setEditingKey(null)
   }, [editingKey])
 
@@ -557,12 +723,18 @@ export function PersonBiographySections({
         danger: true,
       })
       if (!ok) return
-      setRows((arr) => {
-        const next = arr.filter((sectionRow) => sectionRow.key !== key)
+      // 삭제 후 포커스 복귀(AY3): 이웃 섹션 편집 버튼, 없으면 추가 행.
+      const arr = latestRowsRef.current
+      const idx = arr.findIndex((sectionRow) => sectionRow.key === key)
+      const neighborKey =
+        arr[idx - 1]?.key ?? arr[idx + 1]?.key ?? null
+      setRows((rows) => {
+        const next = rows.filter((sectionRow) => sectionRow.key !== key)
         persistDebounced(next)
         return next
       })
       if (editingKey === key) setEditingKey(null)
+      pendingFocusRef.current = neighborKey ? `edit:${neighborKey}` : 'add'
     },
     [persistDebounced, editingKey],
   )
@@ -602,16 +774,58 @@ export function PersonBiographySections({
   )
 
   const saveSection = useCallback(
-    (_key: string) => {
+    (key: string) => {
+      // 디바운스 대기 중인 마지막 입력을 먼저 반영(PF1).
+      let nextRows = collectRowsWithPendingEditorInput()
+      const row = nextRows.find((sectionRow) => sectionRow.key === key)
+      if (row && !row.title.trim() && !hasVisibleContent(row.content)) {
+        // 빈 신규 섹션(제목·본문 모두 없음) → 로컬 유령화 방지: 제거 후 저장(AU2).
+        notify.info('내용이 없어 저장되지 않았습니다.')
+        nextRows = nextRows.filter((sectionRow) => sectionRow.key !== key)
+        pendingFocusRef.current = 'add'
+      } else if (row && !row.title.trim()) {
+        // 제목 미입력 → 유형 라벨/'섹션 N' 자동 채움(TOC·삭제 확인 식별용, AU2).
+        const meta = sectionTypeMeta(row.sectionType)
+        const autoTitle =
+          meta?.label ??
+          `섹션 ${nextRows.findIndex((sectionRow) => sectionRow.key === key) + 1}`
+        nextRows = nextRows.map((sectionRow) =>
+          sectionRow.key === key ? { ...sectionRow, title: autoTitle } : sectionRow,
+        )
+        pendingFocusRef.current = `edit:${key}`
+      } else {
+        pendingFocusRef.current = `edit:${key}`
+      }
+      latestRowsRef.current = nextRows
+      setRows(nextRows)
       setEditingKey(null)
-      persistNow(latestRowsRef.current)
+      editingKeyRef.current = null
+      persistNow(nextRows)
     },
-    [persistNow],
+    [collectRowsWithPendingEditorInput, persistNow],
   )
 
+  /* 편집 종료(저장·취소·삭제) 후 포커스 복귀(AY3) — 편집기 종료로 body에 떨어진
+     포커스를 해당 섹션의 편집 버튼(또는 추가 행)으로 되돌린다. */
+  useEffect(() => {
+    const target = pendingFocusRef.current
+    if (target == null || editingKey != null) return
+    pendingFocusRef.current = null
+    if (target === 'add') {
+      addRowBtnRef.current?.focus()
+      return
+    }
+    const key = target.slice('edit:'.length)
+    editBtnRefs.current[key]?.focus()
+  }, [editingKey, rows])
+
   const scrollToSection = useCallback((key: string) => {
+    // prefers-reduced-motion 존중(AY5) — 부드러운 스크롤 대신 즉시 이동.
+    const reduceMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     sectionRefs.current[key]?.scrollIntoView({
-      behavior: 'smooth',
+      behavior: reduceMotion ? 'auto' : 'smooth',
       block: 'start',
     })
   }, [])
@@ -626,10 +840,15 @@ export function PersonBiographySections({
     const onKey = async (e: KeyboardEvent) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        if (!saving) saveSection(editingKey)
+        // saving·rows를 deps로 두지 않고 ref로 읽어 리스너를 편집 세션당 1회만 등록(PF4).
+        if (!savingRef.current) saveSection(editingKey)
       } else if (e.key === 'Escape') {
+        // 읽기 뷰 이미지 라이트박스가 열려 있으면 그쪽 Esc가 먼저 처리하도록 양보(AU1).
+        if (document.querySelector('[data-lightbox-open="true"]')) return
         e.preventDefault()
-        const row = rows.find((r) => r.key === editingKey)
+        // 편집기 디바운스 대기분까지 반영해 dirty를 판정(마지막 입력 유실 방지).
+        const merged = collectRowsWithPendingEditorInput()
+        const row = merged.find((sectionRow) => sectionRow.key === editingKey)
         const dirty = row
           ? row.title !== editInitialRef.current.title ||
             row.content !== editInitialRef.current.content
@@ -647,9 +866,11 @@ export function PersonBiographySections({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [editingKey, rows, saving, saveSection, cancelEdit])
+  }, [editingKey, saveSection, cancelEdit, collectRowsWithPendingEditorInput])
 
   if (rows.length === 0) {
+    // 읽기 전용(임베드)에서는 빈 전기에 작성 팔레트를 노출하지 않는다(UX2).
+    if (readOnly) return null
     // 빈 상태 — 추천 템플릿으로 작성 진입장벽을 낮춘다.
     return (
       <EmptyState>
@@ -676,18 +897,42 @@ export function PersonBiographySections({
 
   const showToc = rows.length >= TOC_MIN_SECTIONS && editingKey == null
 
+  // 중복 제목 감지(AU2) — 편집 중 인라인 경고용(TOC·삭제 확인에서 식별 곤란).
+  const titleCounts = new Map<string, number>()
+  for (const sectionRow of rows) {
+    const trimmed = sectionRow.title.trim()
+    if (trimmed) titleCounts.set(trimmed, (titleCounts.get(trimmed) ?? 0) + 1)
+  }
+
+  const retrySave = () => {
+    setSaveFailed(false)
+    persistNow(latestRowsRef.current)
+  }
+
   return (
     <Wrap>
-      <Toolbar>
-        <ManageToggle
-          type="button"
-          $active={manageMode}
-          onClick={() => setManageMode((v) => !v)}
-        >
-          <FiSettings size={13} />
-          {manageMode ? '관리 끝' : '관리'}
-        </ManageToggle>
-      </Toolbar>
+      {saveFailed && (
+        <SaveFailedBanner role="alert">
+          <span>
+            마지막 저장에 실패했습니다. 미저장 변경이 남아 있습니다.
+          </span>
+          <RetryBtn type="button" onClick={retrySave} disabled={saving}>
+            다시 시도
+          </RetryBtn>
+        </SaveFailedBanner>
+      )}
+      {!readOnly && (
+        <Toolbar>
+          <ManageToggle
+            type="button"
+            $active={manageMode}
+            onClick={() => setManageMode((v) => !v)}
+          >
+            <FiSettings size={13} />
+            {manageMode ? '관리 끝' : '관리'}
+          </ManageToggle>
+        </Toolbar>
+      )}
 
       {showToc && (
         <Toc aria-label="전기 목차">
@@ -774,6 +1019,7 @@ export function PersonBiographySections({
               {isEditing ? (
                 <SectionTitleInput
                   value={row.title}
+                  aria-label="섹션 제목"
                   placeholder="섹션 제목 (예: 생애, 업적, 평가)"
                   onChange={(e) =>
                     updateField(row.key, { title: e.target.value })
@@ -817,13 +1063,14 @@ export function PersonBiographySections({
             <SectionBody>
               {isEditing ? (
                 <>
-                  <TypeSelectRow role="radiogroup" aria-label="섹션 유형">
+                  {/* 해제 가능한 다중택일 토글 — 라디오 시맨틱(단일·해제불가)과 실동작이
+                      어긋나므로 aria-pressed 토글 버튼 그룹으로 표현(AY6). */}
+                  <TypeSelectRow role="group" aria-label="섹션 유형">
                     {SECTION_TYPES.map((t) => (
                       <TypeChip
                         key={t.value}
                         type="button"
-                        role="radio"
-                        aria-checked={(row.sectionType ?? null) === t.value}
+                        aria-pressed={(row.sectionType ?? null) === t.value}
                         $active={(row.sectionType ?? null) === t.value}
                         onClick={() =>
                           updateField(row.key, {
@@ -839,17 +1086,56 @@ export function PersonBiographySections({
                       </TypeChip>
                     ))}
                   </TypeSelectRow>
+                  {row.title.trim() &&
+                    (titleCounts.get(row.title.trim()) ?? 0) > 1 && (
+                      <DuplicateTitleWarn role="alert">
+                        같은 제목의 섹션이 이미 있습니다 — 목차·삭제 확인에서 구분이
+                        어려울 수 있어요.
+                      </DuplicateTitleWarn>
+                    )}
                   <AuthoringHint>
                     문구를 선택해 우클릭하면 <strong>용어 연결</strong>(설명 툴팁)·
                     <strong>엔티티 연결</strong>(인물·사건·기업·국가·가문 등 링크)을
                     넣을 수 있습니다.
                   </AuthoringHint>
+                  {(() => {
+                    // RD7 — 생몰 범위 밖 연도 비차단 힌트(저작 시점 경량 lint).
+                    const bounds = lifespanBounds
+                    if (
+                      !bounds ||
+                      (bounds.minSigned == null && bounds.maxSigned == null)
+                    )
+                      return null
+                    const lo = bounds.minSigned
+                    const hi = bounds.maxSigned
+                    const outliers = Array.from(
+                      new Set(extractSignedYearsFromText(row.content)),
+                    ).filter(
+                      (y) =>
+                        (lo != null && y < lo - 1) || (hi != null && y > hi + 1),
+                    )
+                    if (outliers.length === 0) return null
+                    return (
+                      <DateHint role="note">
+                        생몰 범위 밖 연도가 있습니다:{' '}
+                        {outliers
+                          .map((y) => (y < 0 ? `기원전 ${-y}` : `${y}`))
+                          .join(', ')}{' '}
+                        — 사후 사건 서술이면 무시해도 됩니다.
+                      </DateHint>
+                    )
+                  })()}
                   <RichTextEditor
                     value={row.content}
                     onChange={(v) => updateField(row.key, { content: v })}
                     showTitle={false}
                     placeholder="본문을 입력하세요. 서식·이미지·멘션과 용어·엔티티 링크를 넣을 수 있습니다."
                     onImageUpload={createRichTextImageUploader('persons')}
+                    /* 키 입력마다 전체 innerHTML sanitize+리스트 재렌더가 돌지 않게
+                       디바운스(사건 InlineRichText 패턴). 저장·전환·언마운트 직전엔
+                       collectRowsWithPendingEditorInput가 flushRef로 마지막 입력을 회수(PF1). */
+                    debounceMs={200}
+                    flushRef={editorFlushRef}
                     /* 편집 진입 시 본문에 포커스 — preventScroll로 현재 스크롤
                        위치 유지(네이티브 input autoFocus처럼 위로 점프하지 않음). */
                     autoFocus
@@ -894,10 +1180,14 @@ export function PersonBiographySections({
                       </EmptyHint>
                     )}
                   </BodyReadCol>
-                  {!manageMode && (
+                  {!manageMode && !readOnly && (
                     <StickyEditBtn
+                      ref={(el) => {
+                        editBtnRefs.current[row.key] = el
+                      }}
                       type="button"
                       title="편집"
+                      aria-label={`${row.title || '제목 없는'} 섹션 편집`}
                       onClick={() => beginEdit(row.key)}
                     >
                       <FiEdit2 size={14} />
@@ -910,26 +1200,29 @@ export function PersonBiographySections({
         )
       })}
 
-      <AddRow>
-        {SECTION_TYPES.filter((t) => t.value !== 'narrative').map((t) => (
-          <AddTypeBtn
-            key={t.value}
+      {!readOnly && (
+        <AddRow>
+          {SECTION_TYPES.filter((t) => t.value !== 'narrative').map((t, addIdx) => (
+            <AddTypeBtn
+              key={t.value}
+              ref={addIdx === 0 ? addRowBtnRef : undefined}
+              type="button"
+              disabled={saving}
+              onClick={() => addSection(t.value, t.label)}
+            >
+              <t.Icon size={13} />
+              {t.label}
+            </AddTypeBtn>
+          ))}
+          <AddButton
             type="button"
+            onClick={() => addSection(null, '')}
             disabled={saving}
-            onClick={() => addSection(t.value, t.label)}
           >
-            <t.Icon size={13} />
-            {t.label}
-          </AddTypeBtn>
-        ))}
-        <AddButton
-          type="button"
-          onClick={() => addSection(null, '')}
-          disabled={saving}
-        >
-          <FiPlus size={14} />빈 섹션
-        </AddButton>
-      </AddRow>
+            <FiPlus size={14} />빈 섹션
+          </AddButton>
+        </AddRow>
+      )}
     </Wrap>
   )
 }
@@ -1140,12 +1433,73 @@ const TypeChip = styled.button<{ $active?: boolean }>`
   border-radius: 999px;
   border: 1px solid
     ${({ theme, $active }) =>
-      $active ? '#4f46e5' : theme.colors.border.default};
+      $active
+        ? theme.mode === 'dark'
+          ? '#a5b4fc'
+          : '#4f46e5'
+        : theme.colors.border.default};
+  /* 다크 테마에서 #4f46e5 텍스트는 어두운 배경 대비 미달(≈2.5:1) → 밝은 인디고로(AY7). */
   color: ${({ theme, $active }) =>
-    $active ? '#4f46e5' : theme.colors.text.secondary};
-  background: ${({ $active }) =>
-    $active ? 'rgba(79,70,229,0.08)' : 'transparent'};
+    $active
+      ? theme.mode === 'dark'
+        ? '#c7d2fe'
+        : '#4f46e5'
+      : theme.colors.text.secondary};
+  background: ${({ theme, $active }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99,102,241,0.18)'
+        : 'rgba(79,70,229,0.08)'
+      : 'transparent'};
   cursor: pointer;
+`
+
+/** 저장 실패 잔여분 경고 배너(DS1) — 미저장 변경을 시각화하고 재시도를 제공. */
+const SaveFailedBanner = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 9px;
+  border: 1px solid
+    ${({ theme }) => (theme.mode === 'dark' ? '#7f1d1d' : '#fecaca')};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#b91c1c')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(220,38,38,0.12)' : 'rgba(254,226,226,0.7)'};
+`
+
+const RetryBtn = styled.button`
+  flex: 0 0 auto;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 7px;
+  border: none;
+  background: #dc2626;
+  color: #fff;
+  cursor: pointer;
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+`
+
+/** 중복 제목 인라인 경고(AU2). */
+const DuplicateTitleWarn = styled.div`
+  margin: -4px 2px 8px;
+  font-size: 12px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+`
+
+/** 생몰 범위 밖 연도 비차단 힌트(RD7). */
+const DateHint = styled.div`
+  margin: 0 2px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
 `
 
 /** 읽기 본문 + sticky 편집 버튼을 가로로 배치하는 호스트. */
@@ -1235,6 +1589,10 @@ const PrimaryBtn = styled.button`
 `
 
 const PlainText = styled.div`
+  /* HTML 전기(RichTextReadView, 15px/1.7)와 활자 크기를 통일해 저장 형식에 따라
+     같은 지면 본문이 갈라지지 않게 한다(RD6). */
+  font-size: 15px;
+  line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
 `

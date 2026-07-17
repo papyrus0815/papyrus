@@ -95,7 +95,14 @@ export type UpdatePersonDto = Omit<
   SdkUpdatePersonDto,
   keyof RelaxedPersonInputFields
 > &
-  RelaxedPersonInputFields
+  RelaxedPersonInputFields & {
+    /**
+     * 낙관적 동시성 토큰(CC1) — 마지막으로 본 상세의 updatedAt(ISO). 서버가 현재
+     * updatedAt과 비교해 불일치면 409(다른 세션이 먼저 저장). SDK 타입엔 아직
+     * 없지만(nestia 미재생성) 서버 DTO에 존재하므로 런타임 캐스팅으로 전달된다.
+     */
+    expectedUpdatedAt?: string
+  }
 
 /**
  * 모든 인물 조회

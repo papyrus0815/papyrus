@@ -38,6 +38,8 @@ interface TenureReignListProps {
   birthYear?: number | null
   birthMonth?: number | null
   birthDay?: number | null
+  /** 출생 era(BC/AD) — 나이 배지 계산이 BC 출생·BC→AD 교차에서 어긋나지 않게 위임 */
+  birthEra?: string | null
   /** 사망일 표시 문자열(재직 중 사망 시 종료일 폴백) */
   deathDateStr: string
   isDeceased: boolean
@@ -59,6 +61,7 @@ export function TenureReignList({
   birthYear,
   birthMonth,
   birthDay,
+  birthEra,
   deathDateStr,
   isDeceased,
   embedInModal,
@@ -95,9 +98,15 @@ export function TenureReignList({
         const startStr = formatIsoDateKo(d.startDate)
         const endStr = d.endDate ? formatIsoDateKo(d.endDate) : null
         const subTermNum = d.subTermNumber
-        const ageAtStart = getAgeAtDate(birthYear, birthMonth, birthDay, d.startDate)
+        const ageAtStart = getAgeAtDate(
+          birthYear,
+          birthMonth,
+          birthDay,
+          d.startDate,
+          birthEra,
+        )
         const ageAtEnd = d.endDate
-          ? getAgeAtDate(birthYear, birthMonth, birthDay, d.endDate)
+          ? getAgeAtDate(birthYear, birthMonth, birthDay, d.endDate, birthEra)
           : null
         const mainTitle =
           isReign && d.regnalName ? `${d.regnalName} · ${posTitle}` : posTitle

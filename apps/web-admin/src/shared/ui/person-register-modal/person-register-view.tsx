@@ -348,6 +348,9 @@ export function PersonRegisterView({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isDirty, setIsDirty] = useState(false)
   const dirtyTrackingEnabledRef = useRef(false)
+  /** 수정 진입 시 로드한 상세의 updatedAt(CC1 낙관적 동시성 토큰). 저장 시 서버로 보내
+      다른 세션이 먼저 저장했으면 409로 감지 → 덮어쓰기 대신 안내. */
+  const loadedUpdatedAtRef = useRef<string | null>(null)
   const uidPrefix = useId()
   const fid = useCallback((k: string) => `${uidPrefix}-${k}`, [uidPrefix])
 
@@ -738,6 +741,7 @@ export function PersonRegisterView({
     getPersonDetailById(editPersonId)
       .then((p: any) => {
         if (cancelled || !p) return
+        loadedUpdatedAtRef.current = p.updatedAt ?? null
         setName(p.name ?? '')
         setSurname(p.surname ?? '')
         setMiddleName(p.middleName ?? '')
@@ -1739,6 +1743,8 @@ export function PersonRegisterView({
           // isAlive·isDeathDateUnknown 플래그 수신 시 서버도 함께 클리어(이중 안전장치).
           birth: payload.birth ?? null,
           death: payload.death ?? null,
+          // 낙관적 동시성(CC1) — 로드 시점 대비 서버가 바뀌었으면 409로 덮어쓰기 차단.
+          expectedUpdatedAt: loadedUpdatedAtRef.current ?? undefined,
         }
         await updatePerson(editPersonId, updatePayload)
         notify.success('인물 정보가 수정되었습니다.')
@@ -1777,6 +1783,21 @@ export function PersonRegisterView({
         setShowRegisterAgainDialog(true)
       }
     } catch (err: any) {
+      // 낙관적 동시성 충돌(409, CC1) — 다른 세션이 먼저 저장. 상대 변경을 덮어쓰지
+      // 않도록 상세를 새로 불러오고(토큰 갱신) 재검토를 요청한다.
+      if (err?.status === 409) {
+        try {
+          const fresh: any = await getPersonDetailById(editPersonId!)
+          loadedUpdatedAtRef.current = fresh?.updatedAt ?? null
+        } catch {
+          /* 새 토큰 조회 실패는 무시 — 다음 저장이 다시 409를 낼 뿐 */
+        }
+        const conflictMsg =
+          '다른 곳에서 이 인물이 먼저 수정되었습니다. 최신 내용을 확인한 뒤 다시 저장해 주세요.'
+        setErrors((prev) => ({ ...prev, _form: conflictMsg }))
+        notify.error(conflictMsg)
+        return
+      }
       const base =
         err?.message ??
         (isEditMode ? '수정에 실패했습니다.' : '등록에 실패했습니다.')
