@@ -1,5 +1,6 @@
 import {
   HistoricalMembershipRole,
+  HistoricalRelationType,
   TransitionEventType,
   TransitionScope,
 } from '@prisma/client'
@@ -64,6 +65,19 @@ const MEMBERSHIPS: {
   { parent: '오스트리아-헝가리 제국', member: '슈타이어마르크 공국', role: HistoricalMembershipRole.UNION },
 ]
 
+// ── 수평 관계(동군연합) 정의 ──────────────────────────────────────────────────
+const RELATIONS: {
+  subject: string
+  object: string
+  relationType: HistoricalRelationType
+  startDate?: string
+  endDate?: string
+}[] = [
+  // 게오르겐베르크 협약(1186) 발효 = 오타카르 4세 사망(1192-05-08) ~
+  // 노이베르크 조약(1379-09-25)으로 알베르트(오스트리아)·레오폴트(이너 오스트리아) 분지 분할되어 동군 해소
+  { subject: '오스트리아 공국', object: '슈타이어마르크 공국', relationType: HistoricalRelationType.PERSONAL_UNION, startDate: '1192-05-08', endDate: '1379-09-25' },
+]
+
 export async function seedAustriaHistoricalCountryRelations(
   prisma: PrismaService,
 ): Promise<void> {
@@ -76,6 +90,8 @@ export async function seedAustriaHistoricalCountryRelations(
     ...TRANSITIONS.map((t) => t.successor),
     ...MEMBERSHIPS.map((m) => m.parent),
     ...MEMBERSHIPS.map((m) => m.member),
+    ...RELATIONS.map((r) => r.subject),
+    ...RELATIONS.map((r) => r.object),
   ])
   for (const name of allNames) {
     const found = await prisma.historicalCountry.findFirst({ where: { name } })
@@ -140,5 +156,33 @@ export async function seedAustriaHistoricalCountryRelations(
     }
   }
 
-  console.log(`\n✅ 계승 관계 ${transitionCount}건, 소속 관계 ${membershipCount}건 완료\n`)
+  // ── 수평 관계(동군연합) ────────────────────────────────────────────
+  console.log('\n  👑 수평 관계(동군연합) 등록...')
+  let relationCount = 0
+  for (const r of RELATIONS) {
+    const subjectCountryId = nameToId.get(r.subject)
+    const objectCountryId = nameToId.get(r.object)
+    if (!subjectCountryId || !objectCountryId) continue
+
+    const exists = await prisma.historicalCountryRelation.findFirst({
+      where: { subjectCountryId, objectCountryId, relationType: r.relationType },
+    })
+    if (!exists) {
+      await prisma.historicalCountryRelation.create({
+        data: {
+          subjectCountryId,
+          objectCountryId,
+          relationType: r.relationType,
+          startDate: r.startDate ? new Date(r.startDate) : undefined,
+          endDate: r.endDate ? new Date(r.endDate) : undefined,
+        },
+      })
+      console.log(`    ✅ ${r.subject} ↔ ${r.object} (${r.relationType})`)
+      relationCount++
+    } else {
+      console.log(`    ♻️  ${r.subject} ↔ ${r.object}`)
+    }
+  }
+
+  console.log(`\n✅ 계승 관계 ${transitionCount}건, 소속 관계 ${membershipCount}건, 수평 관계 ${relationCount}건 완료\n`)
 }
