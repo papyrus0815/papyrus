@@ -12,6 +12,7 @@ import * as S from '@/shared/ui/form-styles'
 
 import { useCountries } from '@/features/country/api'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api'
+import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
 import {
   personCareerApi,
   type CreateGovernmentPositionTenureDto,
@@ -409,6 +410,21 @@ export function TenureRegisterPanel({
   // belongs 검사가 돌아 역사국가 연결이 잘못 해제된다. 성공 응답일 때만 검사.
   const { data: historicalCountries = [], isSuccess: historicalCountriesLoaded } =
     useHistoricalCountriesByModernCountry(open ? countryId : '')
+  // 현대 국가를 선택하지 않아도 역사적 국가를 직접 고를 수 있도록 전체 목록도 확보한다.
+  // 교황령·신성로마제국처럼 특정 현대 국가에 매이지 않는 정치체(교황·황제 등)를
+  // "이탈리아를 먼저 골라야 교황령이 뜨는" 우회 없이 등록하기 위함.
+  const { data: allHistoricalCountries = [] } = useHistoricalCountries()
+  // 현대 국가를 골랐으면 그 소속 역사 국가로 좁히고, 안 골랐으면 전체 역사 국가에서 직접 선택.
+  const historicalCountryOptions: Array<{ id: string; name: string; flagEmoji: string | null }> = (
+    (countryId ? historicalCountries : allHistoricalCountries) as Array<{
+      id: string
+      name?: string | null
+    }>
+  ).map((historical) => ({
+    id: historical.id,
+    name: historical.name ?? historical.id,
+    flagEmoji: null,
+  }))
   const { data: positionDefinitions = [] } = useQuery({
     queryKey: ['position-definitions-tenure', countryId, historicalCountryId],
     queryFn: () =>
@@ -874,28 +890,31 @@ export function TenureRegisterPanel({
                 </FieldControl>
               </FieldRow>
 
-              {/* 역사국가 전용 행(countryId NULL) 수정 시에도 기존 선택이 보이도록 historicalCountryId 단독으로도 렌더 */}
-              {((countryId && historicalCountries.length > 0) || historicalCountryId) && (
-                <FieldRow>
-                  <FieldLabel>역사적 국가 (선택)</FieldLabel>
-                  <FieldControl>
-                    <SelectTriggerButton
-                      type="button"
-                      onClick={() => setHistoricalCountryModalOpen(true)}
-                      $hasValue={!!historicalCountryId}
-                    >
-                      <span>
-                        {historicalCountryId
-                          ? (historicalCountries as any[]).find((h: any) => h.id === historicalCountryId)?.name ??
-                            (editingTenure as any)?.historicalCountry?.name ??
-                            '역사적 국가'
-                          : '현대 국가 기준'}
-                      </span>
-                      <FiChevronDown size={20} />
-                    </SelectTriggerButton>
-                  </FieldControl>
-                </FieldRow>
-              )}
+              {/* 현대 국가에 매이지 않는 정치체(교황령·신성로마제국 등)도 직접 고를 수 있도록 항상 렌더 */}
+              <FieldRow>
+                <FieldLabel>역사적 국가 (선택)</FieldLabel>
+                <FieldControl>
+                  <SelectTriggerButton
+                    type="button"
+                    onClick={() => setHistoricalCountryModalOpen(true)}
+                    $hasValue={!!historicalCountryId}
+                  >
+                    <span>
+                      {historicalCountryId
+                        ? historicalCountryOptions.find((option) => option.id === historicalCountryId)?.name ??
+                          (editingTenure as { historicalCountry?: { name?: string } })?.historicalCountry?.name ??
+                          '역사적 국가'
+                        : countryId
+                          ? '현대 국가 기준'
+                          : '역사적 국가 선택'}
+                    </span>
+                    <FiChevronDown size={20} />
+                  </SelectTriggerButton>
+                  <FieldHint style={{ marginTop: 6 }}>
+                    교황령·신성로마제국처럼 현대 국가에 속하지 않는 정치체도 직접 선택할 수 있습니다.
+                  </FieldHint>
+                </FieldControl>
+              </FieldRow>
 
               <FieldRow>
                 <FieldLabel>
@@ -1181,30 +1200,24 @@ export function TenureRegisterPanel({
         }}
       />
 
-      {((countryId && historicalCountries.length > 0) || historicalCountryId) && (
-        <CountrySearchModal
-          isOpen={historicalCountryModalOpen}
-          onClose={() => setHistoricalCountryModalOpen(false)}
-          title="역사적 국가 선택"
-          placeholder="국가명으로 검색..."
-          historicalOnly
-          modernCountries={[]}
-          historicalCountries={[
-            { id: '', name: '현대 국가 기준' },
-            ...(historicalCountries as any[]).map((h: any) => ({
-              id: h.id,
-              name: h.name ?? h.id,
-              flagEmoji: (h as any).flagEmoji ?? null,
-            })),
-          ]}
-          selectedCountryId={historicalCountryId ?? ''}
-          onSelect={({ id }) => {
-            setHistoricalCountryId(id || null)
-            setPositionDefinitionId(null)
-            setHistoricalCountryModalOpen(false)
-          }}
-        />
-      )}
+      <CountrySearchModal
+        isOpen={historicalCountryModalOpen}
+        onClose={() => setHistoricalCountryModalOpen(false)}
+        title="역사적 국가 선택"
+        placeholder="국가명으로 검색..."
+        historicalOnly
+        modernCountries={[]}
+        historicalCountries={[
+          { id: '', name: countryId ? '현대 국가 기준' : '선택 안 함' },
+          ...historicalCountryOptions,
+        ]}
+        selectedCountryId={historicalCountryId ?? ''}
+        onSelect={({ id }) => {
+          setHistoricalCountryId(id || null)
+          setPositionDefinitionId(null)
+          setHistoricalCountryModalOpen(false)
+        }}
+      />
 
       <SelectModal
         isOpen={positionModalOpen}

@@ -309,11 +309,29 @@ export class UpdatePersonDto {
   illegitimate?: boolean
 
   /**
-   * 국가 ID (선택)
+   * 출생 서열 (1-base, 성별 통합). null이면 해제.
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsInt()
+  @Min(1)
+  birthOrder?: number | null
+
+  /**
+   * 주 국적 — 현대 Country ID (선택). null=명시적 해제. 역사 국가면 historicalCountryId 사용.
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  countryId?: string
+  countryId?: string | null
+
+  /**
+   * 주 국적이 역사(과거) 국가일 때의 ID (선택) — HistoricalCountry first-class FK. null=명시적 해제.
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  historicalCountryId?: string | null
 
   /**
    * 출생지 도시 ID (선택). null이면 해제

@@ -466,8 +466,11 @@ export class PersonController {
     sovereignReigns: any[]
     dynastyId: string | null
     countryId: string | null
+    historicalCountryId: string | null
     fatherId: string | null
     motherId: string | null
+    illegitimate: boolean
+    birthOrder: number | null
     country: any
     dynasty: any
     religion: any
@@ -501,9 +504,9 @@ export class PersonController {
     isBirthDateUnknown: boolean
     isBirthDateApproximate: boolean
     birthNote: string | null
-    deathType: string | null
     isDeathDateUnknown: boolean
     isDeathDateApproximate: boolean
+    deathType: string | null
     deathCause: string | null
     deathNote: string | null
     isAlive: boolean
@@ -654,34 +657,64 @@ export class PersonController {
       deathAdminDivision: person.deathAdminDivision ? { id: person.deathAdminDivision.id, name: person.deathAdminDivision.name } : null,
       dynastyId: person.dynastyId ?? null,
       ...(() => {
-        // CITIZENSHIP priority=0 소속을 effective 국가로 도출.
-        // countryId·country 객체가 일치하도록 함께 반환 (Person.countryId 기반 객체와 affiliation이 다른 record일 수 있음).
+        // effective 주 국적 도출 — first-class FK 우선(역사>현대), 없으면 CITIZENSHIP priority=0 슬롯 폴백(F6).
+        // 목록(repository.resolveCountryBlockForName)과 표기·이름순서를 일치시켜야 목록↔상세가 어긋나지 않는다.
+        // HistoricalCountry엔 flag/iso/defaultNameDisplayOrder가 없어 연결 현대국가에서 주입하고,
+        // 배지 라우팅용 isHistorical/modernCountryId를 함께 노출한다.
+        const buildHistorical = (hc: any) => {
+          const mc = hc.modernConnections?.[0]?.modernCountry ?? null
+          return {
+            countryId: hc.id as string,
+            historicalCountryId: hc.id as string,
+            country: serializeBigInt({
+              id: hc.id,
+              name: hc.name,
+              thumbnailUrl: hc.thumbnailUrl ?? null,
+              flagEmoji: mc?.flagEmoji ?? null,
+              isoCode: mc?.isoCode ?? null,
+              defaultNameDisplayOrder: mc?.defaultNameDisplayOrder ?? null,
+              isHistorical: true,
+              modernCountryId: mc?.id ?? null,
+            }),
+          }
+        }
+        const buildModern = (c: any) => ({
+          countryId: c.id as string,
+          historicalCountryId: null as string | null,
+          country: serializeBigInt({ ...c, isHistorical: false, modernCountryId: c.id }),
+        })
+        // 1. first-class FK
+        if (person.historicalCountry) return buildHistorical(person.historicalCountry)
+        if (person.country) return buildModern(person.country)
+        // 2. CITIZENSHIP priority=0 슬롯 폴백
         const affiliations: any[] = person.countryAffiliations ?? []
         const main = affiliations
           .filter((a: any) => String(a.affiliationType) === 'CITIZENSHIP')
           .sort((a: any, b: any) => (a.priority ?? 999) - (b.priority ?? 999))[0]
-        if (main) {
-          const effectiveCountryId =
-            main.historicalCountryId ?? main.countryId ?? null
-          const effectiveCountryObj =
-            main.historicalCountry ?? main.country ?? person.country ?? null
-          return {
-            countryId: effectiveCountryId,
-            country: serializeBigInt(effectiveCountryObj),
-          }
-        }
+        if (main?.historicalCountry) return buildHistorical(main.historicalCountry)
+        if (main?.country) return buildModern(main.country)
         return {
           countryId: person.countryId ?? null,
-          country: serializeBigInt(person.country),
+          historicalCountryId: person.historicalCountryId ?? null,
+          country: null,
         }
       })(),
       fatherId: person.fatherId ?? null,
       motherId: person.motherId ?? null,
+      // 사생아·서출 — 수정 모달 hydration(체크박스) + 가계도 ego 카드 별표 마커.
+      // 누락 시 illegitimate=true 인물을 수정 저장하면 플래그가 무성 클리어된다.
+      illegitimate: Boolean(person.illegitimate),
+      birthOrder: (person as any).birthOrder ?? null,
       father: person.father != null ? serializeBigInt(person.father) : null,
       mother: person.mother != null ? serializeBigInt(person.mother) : null,
       children: serializeBigInt(children),
       siblings: siblings,
-      foundedCompanies: person.foundedCompanies || [],
+      foundedCompanies: (person.foundedCompanies || []).map((company: any) => ({
+        id: company.id,
+        name: company.organization?.name ?? null,
+        foundedAt: company.organization?.foundedDate ?? null,
+        description: company.organization?.description ?? null,
+      })),
       books: person.Book || [],
       organizationRoles: person.OrganizationPersonRole || [],
       partyLeaderships: person.PoliticalPartyLeadership || [],
@@ -884,7 +917,11 @@ export class PersonController {
       denominationId: dto.denominationId,
       fatherId: dto.fatherId,
       motherId: dto.motherId,
+      // 사생아·서출 — 가계도 카드 별표 마커 (누락 시 체크박스가 조용히 무동작)
+      illegitimate: dto.illegitimate,
+      birthOrder: dto.birthOrder,
       countryId: dto.countryId,
+      historicalCountryId: dto.historicalCountryId,
       birthCityId: dto.birthCityId,
       deathCityId: dto.deathCityId,
       birthAdminDivisionId: dto.birthAdminDivisionId,
@@ -1018,7 +1055,11 @@ export class PersonController {
       denominationId: dto.denominationId,
       fatherId: dto.fatherId,
       motherId: dto.motherId,
+      // 사생아·서출 — 가계도 카드 별표 마커 (누락 시 체크박스가 조용히 무동작)
+      illegitimate: dto.illegitimate,
+      birthOrder: dto.birthOrder,
       countryId: dto.countryId,
+      historicalCountryId: dto.historicalCountryId,
       birthCityId: dto.birthCityId,
       deathCityId: dto.deathCityId,
       birthAdminDivisionId: dto.birthAdminDivisionId,

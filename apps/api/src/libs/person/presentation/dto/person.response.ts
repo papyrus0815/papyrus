@@ -47,14 +47,28 @@ export interface PersonResponseDto {
   motherId: string | null
   /** 사생아·서출 여부 — 가계도 카드 별표(*) 마커 */
   illegitimate: boolean
+  /** 출생 서열 (1-base, 성별 통합) */
+  birthOrder?: number | null
+  /** effective 주 국적 id (역사>현대 우선). 역사국가면 HistoricalCountry PK가 담길 수 있음 — 라우팅엔 country.modernCountryId 사용. */
   countryId: string | null
-  /** 소속 국가 (목록 표시용, id·name·flagEmoji·이름 표시 기본) */
+  /** 주 국적이 역사(과거) 국가일 때의 first-class FK (HistoricalCountry PK). 현대 주국적이면 null. */
+  historicalCountryId: string | null
+  /**
+   * 소속 국가 (목록 표시용). isHistorical=true면 id는 역사국가 PK이고 flag/iso/이름순서는
+   * 연결 현대국가에서 주입된다 → 상세 배지 라우팅은 반드시 modernCountryId를 쓸 것.
+   */
   country?: {
     id: string
     name: string
     flagEmoji?: string | null
     isoCode?: string | null
     defaultNameDisplayOrder?: string | null
+    /** 이 국가가 역사(과거) 국가인지 — 배지 라벨·라우팅 분기용 */
+    isHistorical?: boolean
+    /** 배지 라우팅 대상 현대국가 id (역사국가면 연결 현대국가, 현대면 자기 자신). 연결 없으면 null. */
+    modernCountryId?: string | null
+    /** 대표 이미지(역사국가) URL */
+    thumbnailUrl?: string | null
   } | null
   birthCityId: string | null
   deathCityId: string | null

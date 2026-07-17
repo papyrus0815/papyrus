@@ -513,11 +513,30 @@ export class CreatePersonDto {
   illegitimate?: boolean
 
   /**
-   * 국가 ID (선택)
+   * 출생 서열 (1-base, 성별 통합 — 예: 5 → "5남"). null이면 미지정.
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsInt()
+  @Min(1)
+  birthOrder?: number | null
+
+  /**
+   * 주 국적 — 현대 Country ID (선택). 역사(과거) 국가면 historicalCountryId 사용.
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  countryId?: string
+  countryId?: string | null
+
+  /**
+   * 주 국적이 역사(과거) 국가일 때의 ID (선택) — HistoricalCountry first-class FK.
+   * countryId(현대)와 상호배타. 둘 다 null이면 국적 미상.
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  historicalCountryId?: string | null
 
   /**
    * 출생지 도시 ID (선택) — 등록된 도시(City)

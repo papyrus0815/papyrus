@@ -187,7 +187,12 @@ export interface PersonDetailData {
     isoCode?: string | null
     thumbnailUrl?: string | null
     defaultNameDisplayOrder?: string | null
+    /** 이 국가가 역사(과거) 국가인지 — id는 역사국가 PK이므로 라우팅은 modernCountryId 사용 */
+    isHistorical?: boolean
+    /** 배지 라우팅 대상 현대국가 id (역사국가면 연결 현대국가, 현대면 자기 자신). 연결 없으면 null. */
+    modernCountryId?: string | null
   } | null
+  historicalCountryId?: string | null
   dynasty?: { id: string; name: string } | null
   /** 부모 FK 스칼라 — 형제 친/이복/이부 판별(classifySiblingKinship)의 anchor 입력 */
   fatherId?: string | null
@@ -267,12 +272,6 @@ export interface PersonDetailData {
     summary?: string | null
   }> | null
   foundedCompanies?: Array<{
-    id?: string
-    name?: string | null
-    foundedAt?: string | null
-    description?: string | null
-  }> | null
-  companies?: Array<{
     id?: string
     name?: string | null
     foundedAt?: string | null

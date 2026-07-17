@@ -11,6 +11,7 @@ import { FiChevronDown, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { useHistoricalCountriesByModernCountry, useCountries } from '@/features/country/api'
+import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
 import { personCareerApi } from '@/shared/api/person-career'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -205,6 +206,10 @@ export function SovereignReignRegisterPanel({
   const { data: historicalCountries = [] } = useHistoricalCountriesByModernCountry(
     open ? countryId : '',
   )
+  // 현대 국가를 선택하지 않아도 역사적 국가를 직접 고를 수 있도록 전체 목록도 확보한다.
+  // 교황령·신성로마제국처럼 특정 현대 국가에 매이지 않는 정치체(교황·황제 등)를
+  // "이탈리아를 먼저 골라야 교황령이 뜨는" 우회 없이 등록하기 위함.
+  const { data: allHistoricalCountries = [] } = useHistoricalCountries()
   const { data: positionDefinitions = [] } = useQuery({
     queryKey: ['position-definitions-sovereign', countryId, historicalCountryId],
     queryFn: () =>
@@ -288,8 +293,19 @@ export function SovereignReignRegisterPanel({
     (existingReignAny?.country?.id && existingReignAny.country.id === countryId
       ? existingReignAny.country
       : null)
+  // 현대 국가를 골랐으면 그 소속 역사 국가로 좁히고, 안 골랐으면 전체 역사 국가에서 직접 선택.
+  const historicalCountryOptions: Array<{ id: string; name: string; flagEmoji: string | null }> = (
+    (countryId ? historicalCountries : allHistoricalCountries) as Array<{
+      id: string
+      name?: string | null
+    }>
+  ).map((historical) => ({
+    id: historical.id,
+    name: historical.name ?? historical.id,
+    flagEmoji: null,
+  }))
   const selectedHistorical =
-    (historicalCountries as any[]).find((c: any) => c.id === historicalCountryId) ??
+    historicalCountryOptions.find((option) => option.id === historicalCountryId) ??
     (existingReignAny?.historicalCountry?.id &&
     existingReignAny.historicalCountry.id === historicalCountryId
       ? existingReignAny.historicalCountry
@@ -434,18 +450,17 @@ export function SovereignReignRegisterPanel({
                               type="button"
                               $hasValue={!!historicalCountryId}
                               onClick={() => setHistoricalCountryModalOpen(true)}
-                              disabled={!countryId}
                             >
                               <span>
                                 {historicalCountryId
                                   ? (selectedHistorical?.name ?? '역사적 국가')
-                                  : countryId
-                                    ? '역사적 국가 선택 (선택)'
-                                    : '현대 국가를 먼저 선택하세요'}
+                                  : '역사적 국가 선택 (선택)'}
                               </span>
                               <FiChevronDown size={16} />
                             </SelectTriggerButton>
-                            <FieldHint>역사적 국가가 있으면 현대 국가보다 우선 표시됩니다.</FieldHint>
+                            <FieldHint>
+                              교황령·신성로마제국처럼 현대 국가에 속하지 않는 정치체도 직접 선택할 수 있습니다. 역사적 국가가 있으면 현대 국가보다 우선 표시됩니다.
+                            </FieldHint>
                           </FieldControl>
                         </FieldRow>
 
@@ -664,30 +679,24 @@ export function SovereignReignRegisterPanel({
         }}
       />
 
-      {/* 역사적 국가 선택 모달 */}
-      {countryId && (
-        <CountrySearchModal
-          isOpen={historicalCountryModalOpen}
-          onClose={() => setHistoricalCountryModalOpen(false)}
-          title="역사적 국가 선택"
-          historicalOnly
-          modernCountries={[]}
-          historicalCountries={[
-            { id: '', name: '현대 국가 기준' },
-            ...(historicalCountries as any[]).map((h: any) => ({
-              id: h.id,
-              name: h.name ?? h.id,
-              flagEmoji: (h as any).flagEmoji ?? null,
-            })),
-          ]}
-          selectedCountryId={historicalCountryId ?? ''}
-          onSelect={({ id }) => {
-            setHistoricalCountryId(id || null)
-            setPositionDefinitionId(null)
-            setHistoricalCountryModalOpen(false)
-          }}
-        />
-      )}
+      {/* 역사적 국가 선택 모달 — 현대 국가 미선택 시 전체 역사 국가에서 직접 선택 */}
+      <CountrySearchModal
+        isOpen={historicalCountryModalOpen}
+        onClose={() => setHistoricalCountryModalOpen(false)}
+        title="역사적 국가 선택"
+        historicalOnly
+        modernCountries={[]}
+        historicalCountries={[
+          { id: '', name: countryId ? '현대 국가 기준' : '선택 안 함' },
+          ...historicalCountryOptions,
+        ]}
+        selectedCountryId={historicalCountryId ?? ''}
+        onSelect={({ id }) => {
+          setHistoricalCountryId(id || null)
+          setPositionDefinitionId(null)
+          setHistoricalCountryModalOpen(false)
+        }}
+      />
 
       {/* 직위 선택 모달 */}
       <SelectModal

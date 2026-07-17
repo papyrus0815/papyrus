@@ -156,7 +156,7 @@ function summarizePersonChanges(
     { label: '사진', keys: ['profileImageUrl'] },
     { label: '영향력', keys: ['influence'] },
     // illegitimate(사생아·서출)는 부모 관계 맥락이라 '관계' 그룹에 둔다(가족 섹션 체크박스에서 저작).
-    { label: '관계', keys: ['dynastyId', 'religionId', 'denominationId', 'fatherId', 'motherId', 'countryId', 'illegitimate'] },
+    { label: '관계', keys: ['dynastyId', 'religionId', 'denominationId', 'fatherId', 'motherId', 'countryId', 'illegitimate', 'birthOrder'] },
   ]
   const changed = groups
     .filter((g) => g.keys.some((k) => data[k] !== undefined && normField(data[k]) !== normField(existing[k])))

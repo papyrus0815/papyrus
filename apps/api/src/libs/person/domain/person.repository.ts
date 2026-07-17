@@ -88,7 +88,12 @@ export interface CreatePersonData {
   motherId?: string
   /** 사생아·서출 여부 — 가계도 카드 별표 마커 */
   illegitimate?: boolean
-  countryId?: string
+  /** 출생 서열 (1-base, 성별 통합) */
+  birthOrder?: number | null
+  /** 주 국적 — 현대 Country FK */
+  countryId?: string | null
+  /** 주 국적이 역사(과거) 국가일 때의 first-class FK (HistoricalCountry) */
+  historicalCountryId?: string | null
   birthCityId?: string
   deathCityId?: string
   /** 출생지 행정구역 ID — 도시 없이 행정구역만 저장 */
@@ -174,7 +179,12 @@ export interface UpdatePersonData {
   motherId?: string | null
   /** 사생아·서출 여부 — 가계도 카드 별표 마커 */
   illegitimate?: boolean
-  countryId?: string
+  /** 출생 서열 (1-base, 성별 통합) */
+  birthOrder?: number | null
+  /** 주 국적 — 현대 Country FK. null=명시적 해제 */
+  countryId?: string | null
+  /** 주 국적이 역사(과거) 국가일 때의 first-class FK. null=명시적 해제 */
+  historicalCountryId?: string | null
   birthCityId?: string | null
   deathCityId?: string | null
   /** 출생지 행정구역 ID — 도시 없이 행정구역만 저장. null이면 해제 */

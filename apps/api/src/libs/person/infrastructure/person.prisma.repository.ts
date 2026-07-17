@@ -112,6 +112,34 @@ const PERSON_INCLUDE_AFFILIATIONS_FOR_NAME: Prisma.PersonCountryAffiliationInclu
   }
 
 /**
+ * 인물 주 국적이 역사(과거) 국가일 때의 first-class FK(Person.historicalCountry) include.
+ * HistoricalCountry는 include(전체 스칼라: id·name·thumbnailUrl 등) + 연결 현대국가(modernConnections[0])로
+ * flagEmoji·isoCode·defaultNameDisplayOrder·배지 라우팅용 modernCountryId를 주입한다.
+ * resolveCountryBlockForName / getEffectiveBirthCountryId가 이 관계를 읽으므로
+ * mapToPersonResponse를 통과하는 모든 include에 spread해야 한다(누락 시 역사국가 표기 소실).
+ */
+const PERSON_HISTORICAL_COUNTRY_FOR_NAME = {
+  historicalCountry: {
+    include: {
+      modernConnections: {
+        take: 1,
+        include: {
+          modernCountry: {
+            select: {
+              id: true,
+              name: true,
+              flagEmoji: true,
+              isoCode: true,
+              defaultNameDisplayOrder: true,
+            },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.PersonInclude
+
+/**
  * 인물 카드(목록·스트립·묶음 멤버 등) 공통 include.
  * mapToPersonResponse가 기대하는 국가/가문/직업/출생·사망지/재임/재위를 한 벌로 로드.
  */
@@ -128,6 +156,7 @@ const PERSON_CARD_INCLUDE = {
       defaultNameDisplayOrder: true,
     },
   },
+  ...PERSON_HISTORICAL_COUNTRY_FOR_NAME,
   dynasty: { select: { id: true, name: true } },
   job: { select: { id: true, title: true } },
   birthCity: { select: { id: true, name: true } },
@@ -181,6 +210,7 @@ const PERSON_INFOGRAPHIC_INCLUDE = {
       defaultNameDisplayOrder: true,
     },
   },
+  ...PERSON_HISTORICAL_COUNTRY_FOR_NAME,
   dynasty: { select: { name: true } },
   GovernmentTenures: {
     select: {
@@ -295,6 +325,7 @@ export class PersonPrismaRepository implements IPersonRepository {
   private sanitizePersonFkFields<T extends CreatePersonData | UpdatePersonData>(data: T): T {
     const fkKeys = [
       'countryId',
+      'historicalCountryId',
       'birthCityId',
       'deathCityId',
       'birthAdminDivisionId',
@@ -314,22 +345,29 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
-   * 응답용 출생 국가 ID: CITIZENSHIP priority=0 소속 우선, 없으면 person.countryId, 마지막으로 BIRTH_PLACE 소속
+   * 응답용 effective 국가 ID: first-class FK 우선(역사>현대), 다음 CITIZENSHIP priority=0 슬롯 폴백,
+   * 마지막으로 BIRTH_PLACE 소속. 슬롯 폴백은 미백필/롤백 데이터(F6) 대비 — 백필 검증 후 제거 가능.
    */
   private getEffectiveBirthCountryId(person: any): string | null {
+    if (person.historicalCountryId) return person.historicalCountryId
+    if (person.countryId) return person.countryId
     const affiliations = person.countryAffiliations as Array<{ affiliationType: string; priority?: number | null; historicalCountryId?: string | null; countryId?: string | null }> | undefined
     const main = affiliations
       ?.filter((a) => String(a.affiliationType) === 'CITIZENSHIP')
       .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))[0]
     if (main?.historicalCountryId) return main.historicalCountryId
     if (main?.countryId) return main.countryId
-    if (person.countryId) return person.countryId
     const birth = affiliations?.find((a) => String(a.affiliationType) === 'BIRTH_PLACE')
     return birth?.historicalCountryId ?? birth?.countryId ?? null
   }
 
   /**
-   * 이름 표시 순서용 country 블록: CITIZENSHIP priority=0 소속 우선, 없으면 person.country(FK), 마지막으로 BIRTH_PLACE 소속.
+   * 이름 표시 순서·배지용 country 블록.
+   * 우선순위: 1) person.historicalCountry FK(first-class) 2) person.country FK(현대)
+   *          3) CITIZENSHIP priority=0 슬롯 폴백(F6, 미백필/롤백 대비) 4) BIRTH_PLACE 소속.
+   * isHistorical/modernCountryId: 상세 국가 배지가 역사국가(전용 상세 라우트 부재)를
+   *   연결 현대국가의 '역사' 탭으로 라우팅하거나 비활성화하는 데 쓴다.
+   * HistoricalCountry엔 flag/iso/defaultNameDisplayOrder가 없어 연결 현대국가에서 주입.
    */
   private resolveCountryBlockForName(person: any): {
     id: string
@@ -337,21 +375,19 @@ export class PersonPrismaRepository implements IPersonRepository {
     flagEmoji: string | null
     isoCode: string | null
     defaultNameDisplayOrder: string | null
+    isHistorical: boolean
+    modernCountryId: string | null
+    thumbnailUrl: string | null
   } | null {
+    type ModernCountry = { id: string; name: string; flagEmoji: string | null; isoCode: string | null; defaultNameDisplayOrder: string | null; thumbnailUrl?: string | null }
+    type HistoricalCountryBlock = { id: string; name: string; thumbnailUrl?: string | null; modernConnections?: Array<{ modernCountry: ModernCountry }> }
     type AffiliationEntry = {
       affiliationType: string
       priority?: number | null
-      country?: { id: string; name: string; flagEmoji: string | null; isoCode: string | null; defaultNameDisplayOrder: string | null } | null
-      historicalCountry?: { id: string; name: string; modernConnections?: Array<{ modernCountry: { id: string; name: string; flagEmoji: string | null; isoCode: string | null; defaultNameDisplayOrder: string | null } }> } | null
+      country?: ModernCountry | null
+      historicalCountry?: HistoricalCountryBlock | null
     }
-    const affiliations = person.countryAffiliations as AffiliationEntry[] | undefined
-
-    // 1. CITIZENSHIP priority=0 소속 우선
-    const main = affiliations
-      ?.filter((a) => String(a.affiliationType) === 'CITIZENSHIP')
-      .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))[0]
-    if (main?.historicalCountry != null) {
-      const hc = main.historicalCountry
+    const fromHistorical = (hc: HistoricalCountryBlock) => {
       const mc = hc.modernConnections?.[0]?.modernCountry
       return {
         id: hc.id,
@@ -359,34 +395,39 @@ export class PersonPrismaRepository implements IPersonRepository {
         flagEmoji: mc?.flagEmoji ?? null,
         isoCode: mc?.isoCode ?? null,
         defaultNameDisplayOrder: mc?.defaultNameDisplayOrder ?? null,
+        isHistorical: true,
+        modernCountryId: mc?.id ?? null,
+        thumbnailUrl: hc.thumbnailUrl ?? null,
       }
     }
-    if (main?.country != null) {
-      const c = main.country
-      return { id: c.id, name: c.name, flagEmoji: c.flagEmoji ?? null, isoCode: c.isoCode ?? null, defaultNameDisplayOrder: c.defaultNameDisplayOrder ?? null }
-    }
+    const fromModern = (c: ModernCountry) => ({
+      id: c.id,
+      name: c.name,
+      flagEmoji: c.flagEmoji ?? null,
+      isoCode: c.isoCode ?? null,
+      defaultNameDisplayOrder: c.defaultNameDisplayOrder ?? null,
+      isHistorical: false,
+      modernCountryId: c.id,
+      thumbnailUrl: c.thumbnailUrl ?? null,
+    })
 
-    // 2. person.country FK (현대 국가)
-    if (person.country != null) {
-      return {
-        id: person.country.id,
-        name: person.country.name,
-        flagEmoji: person.country.flagEmoji ?? null,
-        isoCode: person.country.isoCode ?? null,
-        defaultNameDisplayOrder: person.country.defaultNameDisplayOrder ?? null,
-      }
-    }
+    // 1. first-class FK 우선 (역사 > 현대)
+    if (person.historicalCountry != null) return fromHistorical(person.historicalCountry as HistoricalCountryBlock)
+    if (person.country != null) return fromModern(person.country as ModernCountry)
+
+    const affiliations = person.countryAffiliations as AffiliationEntry[] | undefined
+
+    // 2. CITIZENSHIP priority=0 슬롯 폴백 (F6)
+    const main = affiliations
+      ?.filter((a) => String(a.affiliationType) === 'CITIZENSHIP')
+      .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))[0]
+    if (main?.historicalCountry != null) return fromHistorical(main.historicalCountry)
+    if (main?.country != null) return fromModern(main.country)
 
     // 3. BIRTH_PLACE 소속
     const birth = affiliations?.find((a) => String(a.affiliationType) === 'BIRTH_PLACE')
-    if (birth?.country != null) {
-      const c = birth.country
-      return { id: c.id, name: c.name, flagEmoji: c.flagEmoji ?? null, isoCode: c.isoCode ?? null, defaultNameDisplayOrder: c.defaultNameDisplayOrder ?? null }
-    }
-    const mc = birth?.historicalCountry?.modernConnections?.[0]?.modernCountry
-    if (mc != null) {
-      return { id: mc.id, name: mc.name, flagEmoji: mc.flagEmoji ?? null, isoCode: mc.isoCode ?? null, defaultNameDisplayOrder: mc.defaultNameDisplayOrder ?? null }
-    }
+    if (birth?.country != null) return fromModern(birth.country)
+    if (birth?.historicalCountry != null) return fromHistorical(birth.historicalCountry)
     return null
   }
 
@@ -462,7 +503,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       fatherId: person.fatherId,
       motherId: person.motherId,
       illegitimate: Boolean(person.illegitimate),
+      birthOrder: (person as any).birthOrder ?? null,
       countryId: this.getEffectiveBirthCountryId(person),
+      historicalCountryId: person.historicalCountryId ?? null,
       country: this.resolveCountryBlockForName(person),
       birthCityId: person.birthCityId ?? null,
       deathCityId: person.deathCityId ?? null,
@@ -476,7 +519,10 @@ export class PersonPrismaRepository implements IPersonRepository {
       deathAdminDivision: person.deathAdminDivision ? { id: person.deathAdminDivision.id, name: person.deathAdminDivision.name } : null,
       showLifespanOnEventList: person.showLifespanOnEventList,
       isBirthDateUnknown: person.isBirthDateUnknown ?? false,
+      isBirthDateApproximate: (person as any).isBirthDateApproximate ?? false,
+      birthNote: (person as any).birthNote ?? null,
       isDeathDateUnknown: person.isDeathDateUnknown ?? false,
+      isDeathDateApproximate: (person as any).isDeathDateApproximate ?? false,
       deathType: (person as any).deathType ?? null,
       deathCause: (person as any).deathCause ?? null,
       deathNote: (person as any).deathNote ?? null,
@@ -522,9 +568,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       id: person.id,
       name: person.name,
       surname: person.surname ?? null,
-      isBirthDateApproximate: (person as any).isBirthDateApproximate ?? false,
-      birthNote: (person as any).birthNote ?? null,
-      isDeathDateApproximate: (person as any).isDeathDateApproximate ?? false,
       middleName: person.middleName ?? null,
       nameDisplayOrder: person.nameDisplayOrder ?? null,
       birthEra: person.birthEra as any,
@@ -1040,6 +1083,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           defaultNameDisplayOrder: true,
         },
       },
+      ...PERSON_HISTORICAL_COUNTRY_FOR_NAME,
       dynasty: { select: { id: true, name: true } },
       religion: { select: { id: true, name: true } },
       denomination: { select: { id: true, name: true } },
@@ -1072,6 +1116,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     const where = accountId != null ? { id, accountId } : { id }
     const include = {
         country: true,
+        ...PERSON_HISTORICAL_COUNTRY_FOR_NAME,
         dynasty: true,
         religion: true,
         denomination: true,
@@ -1411,11 +1456,17 @@ export class PersonPrismaRepository implements IPersonRepository {
         birthAdminDivision: { select: { id: true, name: true } },
         deathAdminDivision: { select: { id: true, name: true } },
         foundedCompanies: {
+          // 명칭·설립일·설명은 정본 Organization이 보유(Company↔Organization 통합, 방향 B).
+          // 응답은 컨트롤러에서 { name, foundedAt, description } 평면화로 프론트 계약 유지.
           select: {
             id: true,
-            name: true,
-            foundedAt: true,
-            description: true,
+            organization: {
+              select: {
+                name: true,
+                foundedDate: true,
+                description: true,
+              },
+            },
           },
         },
         Book: {
@@ -1805,9 +1856,9 @@ export class PersonPrismaRepository implements IPersonRepository {
   async create(data: CreatePersonData): Promise<PersonResponseDto> {
     const sanitized = this.sanitizePersonFkFields(data) as CreatePersonData & Record<string, unknown>
 
-    let mainHistoricalId: string | undefined
-
-    if (sanitized.countryId) {
+    // 방어적 하위호환: countryId에 역사국가 id가 오면(구 클라이언트·전환기) historicalCountryId로 이관.
+    // 신 프론트는 countryId(현대)·historicalCountryId(역사)를 분리 전송하므로 이 분기는 거의 no-op.
+    if (sanitized.countryId && !(sanitized as any).historicalCountryId) {
       const inCountry = await this.prisma.country.findUnique({
         where: { id: sanitized.countryId as string },
         select: { id: true },
@@ -1904,6 +1955,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             defaultNameDisplayOrder: true,
           },
         },
+        ...PERSON_HISTORICAL_COUNTRY_FOR_NAME,
       },
     })
     if (!created) throw new Error(`Created person ${person.id} not found on re-fetch`)
@@ -1918,10 +1970,9 @@ export class PersonPrismaRepository implements IPersonRepository {
   async update(id: string, data: UpdatePersonData): Promise<PersonResponseDto> {
     const sanitized = this.sanitizePersonFkFields(data) as UpdatePersonData & Record<string, unknown>
 
-    // undefined = 변경 없음, null = 명시적 삭제, string = 역사 국가 ID
-    let mainHistoricalId: string | null | undefined
-
-    if (sanitized.countryId) {
+    // 방어적 하위호환: countryId에 역사국가 id가 오면(구 클라이언트) historicalCountryId로 이관하고
+    // countryId(현대 컬럼)는 비운다. 신 프론트는 두 필드를 분리 전송하므로 거의 no-op.
+    if (sanitized.countryId && !(sanitized as any).historicalCountryId) {
       const inCountry = await this.prisma.country.findUnique({
         where: { id: sanitized.countryId as string },
         select: { id: true },
@@ -2112,6 +2163,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             defaultNameDisplayOrder: true,
           },
         },
+        ...PERSON_HISTORICAL_COUNTRY_FOR_NAME,
       },
     })
     if (!updated) throw new Error(`Updated person ${id} not found on re-fetch`)
@@ -4560,11 +4612,31 @@ export class PersonPrismaRepository implements IPersonRepository {
         orderBy: { startDate: Prisma.SortOrder.asc },
         take: 1,
       },
-      // 일반 인물 카드 국기 — Person.countryId (legacy 주 국적)
+      // 일반 인물 카드 국기 — Person.countryId (현대 주 국적)
+      // defaultNameDisplayOrder: 가계도 노드 이름 표시 순서(개인 오버라이드 없을 때 국가 기본)
       country: {
         select: {
           id: true, name: true,
           flagEmoji: true, isoCode: true, thumbnailUrl: true,
+          defaultNameDisplayOrder: true,
+        },
+      },
+      // 역사(과거) 국가가 주 국적인 인물 — 연결 현대국가 깃발로 폴백(비군주 역사국적 노드 국기 누락 방지)
+      historicalCountry: {
+        select: {
+          id: true, name: true, thumbnailUrl: true,
+          modernConnections: {
+            take: 1,
+            select: {
+              modernCountry: {
+                select: {
+                  id: true, name: true,
+                  flagEmoji: true, isoCode: true, thumbnailUrl: true,
+                  defaultNameDisplayOrder: true,
+                },
+              },
+            },
+          },
         },
       },
       dynasty: { select: { id: true, name: true } },
@@ -4920,7 +4992,23 @@ export class PersonPrismaRepository implements IPersonRepository {
           ?? reignHcModernCountry
           ?? reign?.historicalCountry
           ?? null
-      const personCountrySrc = (p.country ?? null) as {
+      // 역사(과거) 국가가 주 국적인 비군주 인물 — 연결 현대국가 깃발로 폴백(노드 국기 누락 방지).
+      const personHc = (p as any).historicalCountry as {
+        id: string; name: string; thumbnailUrl?: string | null
+        modernConnections?: Array<{ modernCountry: { id: string; name: string; flagEmoji?: string | null; isoCode?: string | null; thumbnailUrl?: string | null; defaultNameDisplayOrder?: string | null } }>
+      } | null | undefined
+      const personHcModern = personHc?.modernConnections?.[0]?.modernCountry ?? null
+      const personCountrySrc = ((p.country as any) ??
+        (personHc
+          ? {
+              id: personHc.id,
+              name: personHc.name,
+              flagEmoji: personHcModern?.flagEmoji ?? null,
+              isoCode: personHcModern?.isoCode ?? null,
+              thumbnailUrl: personHc.thumbnailUrl ?? personHcModern?.thumbnailUrl ?? null,
+              defaultNameDisplayOrder: personHcModern?.defaultNameDisplayOrder ?? null,
+            }
+          : null)) as {
         id: string; name: string
         flagEmoji?: string | null; isoCode?: string | null; thumbnailUrl?: string | null
         defaultNameDisplayOrder?: string | null

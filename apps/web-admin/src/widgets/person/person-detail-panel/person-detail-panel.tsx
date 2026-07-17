@@ -1249,15 +1249,36 @@ export function PersonDetailPanel({
               <PageTitleRow>
                 <PageTitle>{fullName}</PageTitle>
               </PageTitleRow>
-              {p.country?.name && (
+              {p.country?.name && (() => {
+                // 역사국가는 전용 상세 라우트가 없다 → 연결 현대국가의 '역사' 탭으로 라우팅(a),
+                // 연결이 없으면 비대화형 라벨로 표시(c). 현대국가는 기존 상세로(기본).
+                const isHistorical = !!p.country?.isHistorical
+                // 라우팅 대상: 역사국가면 브리지 현대국가 id, 현대면 자기 id.
+                const navTargetId = isHistorical
+                  ? (p.country?.modernCountryId ?? null)
+                  : (p.country?.id ?? null)
+                const interactive = !!navTargetId
+                return (
                 <DetailCountryRow
-                  as="button"
-                  type="button"
-                  onClick={() => {
-                    if (!p.country?.id) return
-                    playClickSound()
-                    navigate(pathKeys.countryDetail(p.country.id))
-                  }}
+                  as={interactive ? 'button' : 'div'}
+                  {...(interactive ? { type: 'button' as const } : {})}
+                  title={
+                    isHistorical && !navTargetId
+                      ? '이 역사 국가는 연결된 현대 국가가 없어 상세로 이동할 수 없습니다.'
+                      : undefined
+                  }
+                  onClick={
+                    interactive
+                      ? () => {
+                          playClickSound()
+                          navigate(
+                            isHistorical
+                              ? pathKeys.countryHistorical(navTargetId)
+                              : pathKeys.countryDetail(navTargetId),
+                          )
+                        }
+                      : undefined
+                  }
                 >
                   {countryFlagSrc ? (
                     <CountryFlagImg src={countryFlagSrc} alt="" aria-hidden />
@@ -1266,7 +1287,8 @@ export function PersonDetailPanel({
                   ) : null}
                   <DetailCountryName>{p.country.name}</DetailCountryName>
                 </DetailCountryRow>
-              )}
+                )
+              })()}
               {monarchName && (
                 <MonarchTitleRow>
                   <MonarchCrownIcon>♛</MonarchCrownIcon>
