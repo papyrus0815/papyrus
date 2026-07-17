@@ -109,6 +109,27 @@ const POSITION_TYPE_ORDER: Record<string, number> = {
 
 const OTHER_POSITION_VALUE = 'OTHER'
 
+/**
+ * 레거시 notes 인코딩("왕명: X") 분리 — 저장 시 '왕명:' 줄만 갈아끼우고 다른 지면
+ * (재위 등록 패널 '비고')에서 적은 나머지 서술을 보존한다.
+ * tenure-register-panel의 splitLegacyRegnalNote와 동일 로직(파일 로컬이라 import 불가).
+ */
+const LEGACY_REGNAL_NOTE_RE = /^[ \t]*왕명[ \t]*:[ \t]*\S.*$/m
+
+function splitLegacyRegnalNote(raw: string): {
+  regnalLine: string
+  rest: string
+} {
+  const matched = raw.match(LEGACY_REGNAL_NOTE_RE)
+  if (!matched || matched.index == null) return { regnalLine: '', rest: raw }
+  const rest = (
+    raw.slice(0, matched.index) + raw.slice(matched.index + matched[0].length)
+  )
+    .replace(/\n{2,}/g, '\n')
+    .replace(/^\n+|\n+$/g, '')
+  return { regnalLine: matched[0].trim(), rest }
+}
+
 function formatRegnalEraDatePart(
   year?: number | null,
   monthValue?: number | null,
@@ -820,13 +841,22 @@ export function HeadsOfStateSection({
     try {
       const def = selectedPositionDefinition
       const resolvedPositionType = def ? def.positionType : 'OTHER'
-      const notesValue = regnalName.trim()
-        ? `왕명: ${regnalName.trim()}`
-        : undefined
       const editingRow = editingTenureId
         ? (tenures.find((t: any) => t.id === editingTenureId) as any)
         : null
       const editAsSovereign = editingRow?.recordKind === 'SOVEREIGN_REIGN'
+      const regnalNameTrimmed = regnalName.trim()
+      // 수정 시 기존 notes의 '왕명:' 줄만 갈아끼우고 나머지 서술은 보존
+      const { rest: preservedNoteRest } = splitLegacyRegnalNote(
+        typeof editingRow?.notes === 'string' ? editingRow.notes : '',
+      )
+      const composedNotes = [
+        regnalNameTrimmed ? `왕명: ${regnalNameTrimmed}` : null,
+        preservedNoteRest || null,
+      ]
+        .filter(Boolean)
+        .join('\n')
+      const notesValue = composedNotes || undefined
       const useSovereignPath =
         resolvedPositionType === 'HEAD_OF_STATE' &&
         sovereignReignOnlyForm &&
@@ -851,6 +881,7 @@ export function HeadsOfStateSection({
             ? undefined
             : parseInt(regnalNumber, 10) || undefined,
         notes: notesValue,
+        regnalName: regnalNameTrimmed || undefined,
         showPositionInfo: showOnEventsPage,
       }
 
@@ -882,15 +913,20 @@ export function HeadsOfStateSection({
 
       if (editingTenureId) {
         if (editAsSovereign) {
-          await personCareerApi.updateSovereignReign(
-            editingTenureId,
-            sovereignPayload,
-          )
+          await personCareerApi.updateSovereignReign(editingTenureId, {
+            ...sovereignPayload,
+            // 수정 계약: null=해제 — 왕명·기존 서술이 모두 비면 notes를 비운다
+            notes: composedNotes || null,
+            regnalName: regnalNameTrimmed || null,
+          })
           notify.success('재위 기록이 수정되었습니다.')
         } else {
           await personCareerApi.updateGovernmentPositionTenure(
             editingTenureId,
-            tenurePayload,
+            {
+              ...tenurePayload,
+              notes: composedNotes || null,
+            },
           )
           notify.success('재임 기록이 수정되었습니다.')
         }
