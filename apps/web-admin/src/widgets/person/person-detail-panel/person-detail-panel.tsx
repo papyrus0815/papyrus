@@ -42,7 +42,7 @@ import { personKeys } from '@/entities/person/api'
 import type { PersonHumanRelationshipItem } from '@/shared/api/person-human-relationships'
 import { personCareerApi } from '@/shared/api/person-career'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
-import { deletePerson, updatePerson, getAllPersons } from '@/shared/api/persons'
+import { deletePerson, updatePerson, getAllPersons, getPersonById } from '@/shared/api/persons'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getPersonFamilyTree } from '@/shared/api/persons-family-tree'
@@ -84,6 +84,7 @@ import { PersonBiographySections } from './person-biography-sections'
 import { SpouseDetailSection } from './spouse-detail-section'
 import { TenureReignList } from './tenure-reign-list'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
@@ -280,6 +281,26 @@ interface PersonDetailPanelProps {
   syncDocumentTitle?: boolean
 }
 
+/**
+ * nestia HttpError에서 서버가 보낸 사람이 읽을 수 있는 사유를 추출.
+ * HttpError.message는 응답 body(NestJS 예외 JSON) 문자열이라 { message }를 파싱한다.
+ * JSON이 아니거나 너무 길거나 HTML이면 fallback으로 안전하게 후퇴.
+ */
+function extractApiErrorMessage(err: unknown, fallback: string): string {
+  const raw = err && typeof err === 'object' && 'message' in err
+    ? (err as { message?: unknown }).message
+    : undefined
+  if (typeof raw !== 'string') return fallback
+  try {
+    const body = JSON.parse(raw) as { message?: unknown }
+    if (typeof body.message === 'string' && body.message.trim()) return body.message
+    if (Array.isArray(body.message) && body.message.length) return body.message.join(', ')
+  } catch {
+    if (raw.length < 200 && !raw.trimStart().startsWith('<')) return raw
+  }
+  return fallback
+}
+
 export function PersonDetailPanel({
   personId,
   onClose,
@@ -438,10 +459,13 @@ export function PersonDetailPanel({
     (_prev, next: number) => next,
   )
 
+  // 가계도 탭에서만 BFS 페치 — familyTreeData 소비처는 genealogy 탭 하나뿐인데
+  // 패널 마운트마다(사건 상세에서 인물 모달 훑기 등) 12+단계 BFS·수백 KB를 받던 비용 제거.
+  // staleTime 5분이라 탭 재진입은 캐시. 기본 탭이 genealogy(URL)면 즉시 페치.
   const { data: familyTreeData } = useQuery({
     queryKey: ['person-family-tree', personId],
     queryFn: () => getPersonFamilyTree(personId),
-    enabled: !!personId,
+    enabled: !!personId && activeTab === 'genealogy',
     staleTime: 5 * 60 * 1000,
   })
 
@@ -756,13 +780,33 @@ export function PersonDetailPanel({
   const [familyAddMode, setFamilyAddMode] = useState<
     'child' | 'father' | 'mother' | 'spouse' | null
   >(null)
-  /** 모달 열릴 때만 인물 풀 로드(검색 + "새 인물" 생성 대상). */
+  /**
+   * 자녀 링크 직후 반대편 부모 지정 프롬프트 — '자녀 추가'가 ego 쪽 슬롯만 기록해
+   * 편부모 FK(→ 가계도 형제 판별불가)를 체계적으로 양산하던 상류 근인 개선.
+   * 검토서 docs/genealogy-half-sibling-display-review.md §10 배치4 무마이그 항목.
+   */
+  const [childOtherParent, setChildOtherParent] = useState<{
+    childId: string
+    childName: string
+    slot: 'fatherId' | 'motherId'
+  } | null>(null)
+  /** 모달 열릴 때만 인물 풀 로드(검색 + "새 인물" 생성 대상).
+   *  쿼리 키를 personKeys.all(['persons']) 프리픽스 안에 둬 invalidatePersonCaches가
+   *  가족 추가·인물 생성 후 이 풀도 함께 무효화하도록 한다(기존 독립 키는 미커버였음). */
   const { data: familyAddPool } = useQuery({
-    queryKey: ['persons-pool-for-family-add'],
+    queryKey: ['persons', 'pool-for-family-add'],
     queryFn: getAllPersons,
-    enabled: familyAddMode !== null,
-    staleTime: 60_000,
+    enabled: familyAddMode !== null || childOtherParent !== null,
+    staleTime: 5 * 60_000,
   })
+  /** 반대편 부모 최유력 후보(=ego의 배우자) — 피커 목록 상단에 핀 */
+  const egoSpouseIdsForPin = useMemo(
+    () =>
+      (person?.spouseRelations ?? []).flatMap((rel) =>
+        rel.spouse?.id ? [rel.spouse.id] : [],
+      ),
+    [person],
+  )
 
   /**
    * 선택/생성한 인물을 ego와 연결하는 FK write.
@@ -771,7 +815,7 @@ export function PersonDetailPanel({
    * - spouse : ego.spouseRelations에 대상 인물 추가(기존 관계 보존, 서버가 canonical 정규화)
    */
   const applyFamilyLink = useCallback(
-    async (targetId: string) => {
+    async (targetId: string, targetName?: string) => {
       const currentPerson = person
       const mode = familyAddMode
       if (!currentPerson || !mode || targetId === currentPerson.id) {
@@ -780,13 +824,56 @@ export function PersonDetailPanel({
       }
       try {
         if (mode === 'child') {
-          // ego 성별로 자녀의 부/모 슬롯 결정(불명이면 아버지 기본, 이후 수정 가능)
-          await updatePerson(
-            targetId,
-            currentPerson.gender === 'FEMALE'
-              ? { motherId: currentPerson.id }
-              : { fatherId: currentPerson.id },
+          const egoName = getPersonDisplayName(currentPerson as unknown as PersonNameFields, true)
+          // ego 성별로 자녀의 부/모 슬롯 결정. MALE/FEMALE이 아니면(미지정 등) 어느 슬롯에
+          // 넣을지 명시적으로 물어 여성 인물이 아버지 슬롯에 잘못 들어가는 것을 막는다.
+          const genderUpper = (currentPerson.gender ?? '').toUpperCase()
+          let slot: 'fatherId' | 'motherId'
+          if (genderUpper === 'FEMALE') slot = 'motherId'
+          else if (genderUpper === 'MALE') slot = 'fatherId'
+          else {
+            const asFather = await confirm({
+              title: '부모 슬롯 선택',
+              message: `${egoName}의 성별이 지정되지 않았습니다. 아버지로 기록할까요? (취소하면 어머니로 기록됩니다)`,
+              confirmLabel: '아버지로',
+              cancelLabel: '어머니로',
+            })
+            slot = asFather ? 'fatherId' : 'motherId'
+          }
+          // 대상 자녀에게 이미 다른 부/모가 지정돼 있으면 무경고 덮어쓰기 대신 교체 확인.
+          // (덮어쓰면 그 자녀가 기존 부모의 가계도에서 조용히 사라진다)
+          const target = familyAddPool?.find((candidate) => candidate.id === targetId)
+          const existingParentId = slot === 'fatherId' ? target?.fatherId : target?.motherId
+          if (existingParentId && existingParentId !== currentPerson.id) {
+            const slotLabel = slot === 'fatherId' ? '아버지' : '어머니'
+            const ok = await confirm({
+              title: `${slotLabel} 교체`,
+              message: `이 인물에게는 이미 ${slotLabel}가 지정되어 있습니다. ${egoName}(으)로 교체하면 기존 ${slotLabel}의 가계도에서 빠집니다. 교체할까요?`,
+              confirmLabel: '교체',
+              danger: true,
+            })
+            if (!ok) {
+              setFamilyAddMode(null)
+              return
+            }
+          }
+          await updatePerson(targetId, { [slot]: currentPerson.id })
+          // 반대편 부모가 미기록이면 이어서 지정 프롬프트 — 편부모 FK로 남기지 않기 위한
+          // 선택 단계(모달 닫기 = 나중에). 이미 기록돼 있으면 프롬프트 생략.
+          const otherSlot: 'fatherId' | 'motherId' = slot === 'fatherId' ? 'motherId' : 'fatherId'
+          const otherAlreadySet = Boolean(
+            otherSlot === 'motherId' ? target?.motherId : target?.fatherId,
           )
+          if (!otherAlreadySet) {
+            setChildOtherParent({
+              childId: targetId,
+              // 즉석 생성 인물은 풀 스냅샷에 없다 — 모달이 건네준 표시명으로 폴백
+              childName: target
+                ? getPersonDisplayName(target as unknown as PersonNameFields, true)
+                : (targetName ?? '자녀'),
+              slot: otherSlot,
+            })
+          }
         } else if (mode === 'father') {
           await updatePerson(currentPerson.id, { fatherId: targetId })
         } else if (mode === 'mother') {
@@ -816,13 +903,50 @@ export function PersonDetailPanel({
         }
         await invalidatePersonCaches(true)
         notify.success('가족 관계를 추가했습니다.')
-      } catch {
-        notify.error('가족 관계 추가에 실패했습니다.')
+      } catch (err) {
+        // 서버(assertNoParentCycle 등)가 보낸 구체 사유를 표시 — nestia HttpError.message는
+        // 응답 body(JSON) 문자열이라 그대로 쓰지 않고 { message } 를 파싱한다.
+        notify.error(extractApiErrorMessage(err, '가족 관계 추가에 실패했습니다.'))
       } finally {
         setFamilyAddMode(null)
       }
     },
-    [person, familyAddMode, invalidatePersonCaches],
+    [person, familyAddMode, familyAddPool, invalidatePersonCaches],
+  )
+
+  /** 자녀의 반대편 부모 FK write — 프롬프트에서 인물 선택 시 */
+  const applyChildOtherParent = useCallback(
+    async (targetId: string) => {
+      const pending = childOtherParent
+      if (!pending || targetId === pending.childId) {
+        setChildOtherParent(null)
+        return
+      }
+      try {
+        // 프롬프트가 뜬 뒤 다른 탭/세션이 이 슬롯을 채웠을 수 있다 — 스테일 풀 스냅샷
+        // 대신 쓰기 직전 서버 재확인 후, 점유 시 ego 슬롯과 동일한 교체 confirm.
+        const fresh = await getPersonById(pending.childId)
+        const occupiedId = pending.slot === 'motherId' ? fresh.motherId : fresh.fatherId
+        const slotLabel = pending.slot === 'motherId' ? '어머니' : '아버지'
+        if (occupiedId && occupiedId !== targetId) {
+          const ok = await confirm({
+            title: `${slotLabel} 교체`,
+            message: `이 인물에게는 이미 ${slotLabel}가 지정되어 있습니다. 교체하면 기존 ${slotLabel}의 가계도에서 빠집니다. 교체할까요?`,
+            confirmLabel: '교체',
+            danger: true,
+          })
+          if (!ok) return
+        }
+        await updatePerson(pending.childId, { [pending.slot]: targetId })
+        await invalidatePersonCaches(true)
+        notify.success(`${slotLabel} 관계를 추가했습니다.`)
+      } catch (err) {
+        notify.error(extractApiErrorMessage(err, '가족 관계 추가에 실패했습니다.'))
+      } finally {
+        setChildOtherParent(null)
+      }
+    },
+    [childOtherParent, invalidatePersonCaches],
   )
 
   /** 가족 추가 모달 config(제목·exclude) — 모드+ego 기준. person 없으면 null. */
@@ -835,13 +959,18 @@ export function PersonDetailPanel({
           const selfId = person.id
           const fatherId = person.father?.id ?? ''
           const motherId = person.mother?.id ?? ''
+          // 자녀는 배우자 후보에서 제외 — 자식 페이지에선 부모 선택이 막히는데 부모
+          // 페이지에선 자식 선택이 허용되는 비대칭 근친혼 게이트를 없앤다.
+          const childIds = (person.children ?? [])
+            .map((child) => child.id)
+            .filter(Boolean) as string[]
           const byMode = {
             child: { title: '자녀로 추가할 인물', exclude: [selfId] },
             father: { title: '아버지로 지정할 인물', exclude: [selfId, motherId, ...spouseIds] },
             mother: { title: '어머니로 지정할 인물', exclude: [selfId, fatherId, ...spouseIds] },
             spouse: {
               title: '배우자로 추가할 인물',
-              exclude: [selfId, fatherId, motherId, ...spouseIds],
+              exclude: [selfId, fatherId, motherId, ...spouseIds, ...childIds],
             },
           } as const
           return byMode[familyAddMode]
@@ -2452,16 +2581,26 @@ export function PersonDetailPanel({
                     </FamilyActionBtn>
                     <FamilyActionBtn
                       type="button"
-                      onClick={() => setFamilyAddMode('father')}
-                      disabled={!!person.father}
+                      // native disabled 대신 aria-disabled — 포커스 유지(키보드·SR가 사유 인지),
+                      // 이미 지정된 경우 클릭 시 안내 토스트(G33).
+                      aria-disabled={person.father ? true : undefined}
+                      onClick={() =>
+                        person.father
+                          ? notify.error('이미 아버지가 지정되어 있습니다. 변경은 수정 모달에서 하세요.')
+                          : setFamilyAddMode('father')
+                      }
                       title={person.father ? '이미 아버지가 지정되어 있습니다' : undefined}
                     >
                       + 아버지 추가
                     </FamilyActionBtn>
                     <FamilyActionBtn
                       type="button"
-                      onClick={() => setFamilyAddMode('mother')}
-                      disabled={!!person.mother}
+                      aria-disabled={person.mother ? true : undefined}
+                      onClick={() =>
+                        person.mother
+                          ? notify.error('이미 어머니가 지정되어 있습니다. 변경은 수정 모달에서 하세요.')
+                          : setFamilyAddMode('mother')
+                      }
                       title={person.mother ? '이미 어머니가 지정되어 있습니다' : undefined}
                     >
                       + 어머니 추가
@@ -2479,13 +2618,13 @@ export function PersonDetailPanel({
                   ) : (
                     <PersonGenealogyInfographic
                       ego={person}
+                      showHeader={false}
                       father={person.father}
                       mother={person.mother}
                       paternalGrandfather={person.father?.father}
                       paternalGrandmother={person.father?.mother}
                       maternalGrandfather={person.mother?.father}
                       maternalGrandmother={person.mother?.mother}
-                      spouse={person.spouse}
                       spouses={(person.spouseRelations ?? []).map((r: any) => r.spouse).filter(Boolean)}
                       siblings={person.siblings}
                       children={person.children}
@@ -2502,12 +2641,21 @@ export function PersonDetailPanel({
                     <PersonSelectModal
                       persons={familyAddPool ?? []}
                       selectedPersonId=""
-                      onSelect={(id) => applyFamilyLink(id)}
+                      onSelect={(id, name) => applyFamilyLink(id, name)}
                       onClose={() => setFamilyAddMode(null)}
                       excludeIds={familyModalConfig.exclude.filter(Boolean)}
                       title={familyModalConfig.title}
                       searchPlaceholder="인물 검색…"
                       defaultCountryId={(person as { countryId?: string }).countryId || undefined}
+                      // 국가 미상 인물(고대 등)의 가족 추가에서도 새 인물 등록을 허용.
+                      allowCreate
+                      // 즉석 생성 인물을 풀 캐시에 바로 반영 — 이어지는 가족 추가 모달에서 검색됨.
+                      onCreatedPerson={(created) =>
+                        queryClient.setQueryData(
+                          ['persons', 'pool-for-family-add'],
+                          (old?: typeof familyAddPool) => (old ? [created, ...old] : old),
+                        )
+                      }
                       loading={!familyAddPool}
                     />
                   )}
@@ -2772,6 +2920,30 @@ export function PersonDetailPanel({
           viewingEventId ? personEventContextByEventId.get(viewingEventId) ?? null : null
         }
       />
+
+      {/* 자녀 추가 후속 — 반대편 부모 지정 프롬프트(닫으면 건너뜀). 탭 조건 밖(패널
+          최상위)에 렌더: updatePerson 대기 중 탭을 벗어나도 유령 재출현 없이 즉시 뜬다. */}
+      {childOtherParent && (
+        <PersonSelectModal
+          persons={familyAddPool ?? []}
+          pinnedIds={egoSpouseIdsForPin}
+          selectedPersonId=""
+          onSelect={(id) => applyChildOtherParent(id)}
+          onClose={() => setChildOtherParent(null)}
+          excludeIds={[childOtherParent.childId, person.id].filter(Boolean)}
+          title={`${childOtherParent.childName}의 ${childOtherParent.slot === 'motherId' ? '어머니' : '아버지'}도 지정할까요? (닫으면 건너뜀)`}
+          searchPlaceholder="인물 검색…"
+          defaultCountryId={(person as { countryId?: string }).countryId || undefined}
+          allowCreate
+          onCreatedPerson={(created) =>
+            queryClient.setQueryData(
+              ['persons', 'pool-for-family-add'],
+              (old?: typeof familyAddPool) => (old ? [created, ...old] : old),
+            )
+          }
+          loading={!familyAddPool}
+        />
+      )}
 
       <AnimatePresence>
         {deleteConfirmOpen && (

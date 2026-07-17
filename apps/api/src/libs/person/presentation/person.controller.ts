@@ -533,10 +533,15 @@ export class PersonController {
     person.childrenFromMother?.forEach((child: any) =>
       childrenMap.set(child.id, child),
     )
-    // 각 자녀에 첫 배우자(spouse) 평탄화 — 가계도 렌더용
+    // 각 자녀에 첫 배우자(spouse) 평탄화 — 가계도 렌더용.
+    // canonical(min,max) 쓰기로 자녀 id가 배우자 id보다 크면 결혼 행이 역방향
+    // (spouseRelationsAsSpouse)에 저장되므로 양방향을 모두 봐야 자녀 배우자가 누락되지 않는다.
     const children = Array.from(childrenMap.values()).map((child: any) => ({
       ...child,
-      spouse: child.spouseRelationsAsPerson?.[0]?.spouse ?? null,
+      spouse:
+        child.spouseRelationsAsPerson?.[0]?.spouse ??
+        child.spouseRelationsAsSpouse?.[0]?.person ??
+        null,
     }))
 
     // BigInt → 문자열, Date → ISO (그대로 두면 Date가 `{}`로 직렬화되어 클라이언트에서 날짜가 사라짐)

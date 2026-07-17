@@ -63,6 +63,11 @@ interface PersonSelectModalProps {
   multiSelect?: boolean
   /** 인물 목록 로딩 중 여부 — 첫 오픈 시 fetch 대기 동안 빈 상태 대신 로더를 노출. */
   loading?: boolean
+  /**
+   * 목록 상단에 고정할 인물 ID들(유력 후보 — 예: 자녀의 반대편 부모 후보로 ego의 배우자).
+   * 검색·필터는 그대로 적용되고, 정렬 결과에서 핀 그룹만 위로 부상한다(그룹 내 상대 순서 유지).
+   */
+  pinnedIds?: string[]
 }
 
 type SortOption = 'name' | 'birth-asc' | 'birth-desc'
@@ -81,6 +86,7 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
   onCreatedPerson,
   multiSelect = false,
   loading = false,
+  pinnedIds,
 }) => {
   // 모달이 떠 있는 동안 배경 스크롤 잠금 (참조 카운트 방식이라 중첩 모달에도 안전).
   useBodyScrollLock(true)
@@ -307,6 +313,15 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
       return 0
     })
 
+    // 핀 부상 — 검색·필터·정렬을 다 거친 결과에서 유력 후보만 위로 (그룹 내 순서 유지)
+    if (pinnedIds && pinnedIds.length > 0) {
+      const pinnedSet = new Set(pinnedIds)
+      const pinned = result.filter((person) => pinnedSet.has(person.id))
+      if (pinned.length > 0) {
+        result = [...pinned, ...result.filter((person) => !pinnedSet.has(person.id))]
+      }
+    }
+
     return result
   }, [
     persons,
@@ -317,6 +332,7 @@ export const PersonSelectModal: React.FC<PersonSelectModalProps> = ({
     filterDynasty,
     filterReligion,
     sortBy,
+    pinnedIds,
   ])
 
   const activeFilterCount = [filterCountry, filterDynasty, filterReligion].filter(
