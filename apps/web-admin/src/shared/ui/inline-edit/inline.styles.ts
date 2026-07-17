@@ -100,12 +100,6 @@ export const InlineTextArea = styled.textarea`
   resize: vertical;
 `
 
-export const InlineSelectEl = styled.select`
-  ${inputBase}
-  cursor: pointer;
-  padding-right: 18px;
-`
-
 /** 저장/취소 inline 버튼(rich text 등 명시 저장 필요한 곳용) */
 export const InlineActionRow = styled.div`
   display: flex;
