@@ -189,6 +189,7 @@ export function SovereignReignRegisterPanel({
   const [endDate, setEndDate] = useState('')
   const [regnalNumber, setRegnalNumber] = useState('')
   const [subTermNumber, setSubTermNumber] = useState('')
+  const [dynastyOrdinal, setDynastyOrdinal] = useState('')
   const [appointmentMethod, setAppointmentMethod] = useState('')
   const [endReason, setEndReason] = useState('')
   const [endReasonDetail, setEndReasonDetail] = useState('')
@@ -236,6 +237,7 @@ export function SovereignReignRegisterPanel({
     setEndDate('')
     setRegnalNumber('')
     setSubTermNumber('')
+    setDynastyOrdinal('')
     setAppointmentMethod('')
     setEndReason('')
     setEndReasonDetail('')
@@ -261,6 +263,7 @@ export function SovereignReignRegisterPanel({
     setEndDate(r.endDate ? r.endDate.slice(0, 10) : '')
     setRegnalNumber(r.regnalNumber != null ? String(r.regnalNumber) : '')
     setSubTermNumber(r.subTermNumber != null ? String(r.subTermNumber) : '')
+    setDynastyOrdinal(r.dynastyOrdinal != null ? String(r.dynastyOrdinal) : '')
     setAppointmentMethod(r.appointmentMethod ?? '')
     setEndReason(r.endReason ?? '')
     setEndReasonDetail(r.endReasonDetail ?? '')
@@ -320,6 +323,7 @@ export function SovereignReignRegisterPanel({
         endDate: endDate || undefined,
         regnalNumber: regnalNumber ? Number(regnalNumber) : undefined,
         subTermNumber: subTermNumber ? Number(subTermNumber) : undefined,
+        dynastyOrdinal: dynastyOrdinal ? Number(dynastyOrdinal) : undefined,
         appointmentMethod: (appointmentMethod || undefined) as any,
         endReason: (endReason || undefined) as any,
         endReasonDetail: endReasonDetail.trim() || undefined,
@@ -523,6 +527,23 @@ export function SovereignReignRegisterPanel({
                               onChange={(e) => setSubTermNumber(e.target.value)}
                               placeholder="같은 대 안에서 재위가 나뉠 때 (예: 복위)"
                             />
+                          </FieldControl>
+                        </FieldRow>
+
+                        {/* 왕조 서수 (유럽식 "왕조 N대 국왕") */}
+                        <FieldRow>
+                          <FieldLabel>왕조 서수 (선택)</FieldLabel>
+                          <FieldControl>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={dynastyOrdinal}
+                              onChange={(event) => setDynastyOrdinal(event.target.value)}
+                              placeholder="예: 5 (부르봉 왕조 5대 국왕)"
+                            />
+                            <FieldHint>
+                              인물의 소속 왕조 안에서의 계승 순번. 국가 통산 대수·재위번호와 별개입니다.
+                            </FieldHint>
                           </FieldControl>
                         </FieldRow>
 

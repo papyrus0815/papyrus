@@ -307,6 +307,12 @@ model SovereignReign {
   subTermNumber Int? @map("sub_term_number")
   regnalNumber  Int? @map("regnal_number")
 
+  /// 왕조 내 서수 (예: 5 → "부르봉 왕조 5대 국왕", 3 → "합스부르크 왕조 3대")
+  /// 인물의 소속 왕조(Person.dynastyId) 안에서의 계승 순번 — 큐레이터가 직접 지정.
+  /// termNumber(국가 통산 대수)·regnalNumber(이름별 재위번호, 국가 스코프)와 별개 축.
+  /// 공백·논란 계승·다국가 통치(부르봉=프랑스/스페인)를 수용하기 위해 유니크 제약 없는 자유 정수.
+  dynastyOrdinal Int? @map("dynasty_ordinal")
+
   startDate DateTime @map("start_date")
   endDate   DateTime? @map("end_date")
 

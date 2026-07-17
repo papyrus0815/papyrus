@@ -790,6 +790,11 @@ export class CreateSovereignReignDto {
   @IsNumber()
   regnalNumber?: number | null
 
+  /** 왕조 내 서수 (예: 5 → "부르봉 왕조 5대") — termNumber/regnalNumber와 별개 축, 큐레이터 직접 지정 */
+  @IsOptional()
+  @IsNumber()
+  dynastyOrdinal?: number | null
+
   @IsDateString()
   startDate!: string // BC('-' 시작) 불가 (재위 모델에 era 컬럼 없음)
 

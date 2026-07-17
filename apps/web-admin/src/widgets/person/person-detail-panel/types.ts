@@ -18,6 +18,8 @@ export interface TenureLikeRecord {
   subTermNumber?: number | null
   /** 재위 국가별 즉위 서수 */
   regnalNumber?: number | null
+  /** 왕조 내 서수 (예: 5 → "부르봉 왕조 5대") — 재위 전용 */
+  dynastyOrdinal?: number | null
   regnalName?: string | null
   appointmentMethod?: string | null
   endReason?: string | null

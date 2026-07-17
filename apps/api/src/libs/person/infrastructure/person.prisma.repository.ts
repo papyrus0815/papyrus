@@ -1533,6 +1533,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             regnalNumber: true,
             termNumber: true,
             subTermNumber: true,
+            dynastyOrdinal: true,
             appointmentMethod: true,
             endReason: true,
             endReasonDetail: true,
@@ -4008,6 +4009,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         termNumber: dto.termNumber,
         subTermNumber: dto.subTermNumber,
         regnalNumber: dto.regnalNumber,
+        dynastyOrdinal: dto.dynastyOrdinal,
         startDate: new Date(dto.startDate),
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
         appointmentMethod: dto.appointmentMethod as any,
@@ -4046,6 +4048,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.termNumber !== undefined) updateData.termNumber = dto.termNumber
     if (dto.subTermNumber !== undefined) updateData.subTermNumber = dto.subTermNumber
     if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber
+    if (dto.dynastyOrdinal !== undefined) updateData.dynastyOrdinal = dto.dynastyOrdinal
     if (dto.startDate) updateData.startDate = new Date(dto.startDate)
     if (dto.endDate !== undefined) updateData.endDate = dto.endDate ? new Date(dto.endDate) : null
     if (dto.appointmentMethod !== undefined) updateData.appointmentMethod = dto.appointmentMethod as any
@@ -4324,6 +4327,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             endDate: true,
             termNumber: true,
             regnalNumber: true,
+            dynastyOrdinal: true,
             notes: true,
             showPositionInfo: true,
             positionDefinition: {
@@ -4446,6 +4450,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       sovereignReigns: {
         select: {
           regnalNumber: true,
+          dynastyOrdinal: true,
           country: {
             select: {
               id: true, name: true,

@@ -294,6 +294,8 @@ export interface CreateSovereignReignDto {
   termNumber?: number
   subTermNumber?: number
   regnalNumber?: number
+  /** 왕조 내 서수 (예: 5 → "부르봉 왕조 5대") */
+  dynastyOrdinal?: number
   startDate: string
   endDate?: string
   appointmentMethod?: CreateGovernmentPositionTenureDto['appointmentMethod']
@@ -311,6 +313,7 @@ export type UpdateSovereignReignDto = Partial<
     | 'termNumber'
     | 'subTermNumber'
     | 'regnalNumber'
+    | 'dynastyOrdinal'
     | 'appointmentMethod'
     | 'endReason'
     | 'endReasonDetail'
@@ -321,6 +324,7 @@ export type UpdateSovereignReignDto = Partial<
   termNumber?: number | null
   subTermNumber?: number | null
   regnalNumber?: number | null
+  dynastyOrdinal?: number | null
   appointmentMethod?: CreateSovereignReignDto['appointmentMethod'] | null
   endReason?: CreateSovereignReignDto['endReason'] | null
   endReasonDetail?: string | null

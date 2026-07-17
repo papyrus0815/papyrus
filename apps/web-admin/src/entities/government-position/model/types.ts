@@ -58,6 +58,8 @@ export interface Tenure {
   termNumber: number | null
   subTermNumber: number | null
   regnalNumber: number | null
+  /** 왕조 내 서수 (예: 5 → "부르봉 왕조 5대") — 재위(SOVEREIGN_REIGN) 전용, 왕조명은 인물의 소속 왕조에서 */
+  dynastyOrdinal: number | null
   country: TenureCountryRef | null
   historicalCountry: TenureCountryRef | null
   startDate: string | null

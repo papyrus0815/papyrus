@@ -198,6 +198,7 @@ export function RegisterMonarchModal({
   const [endDate, setEndDate] = useState('')
   const [regnalNumber, setRegnalNumber] = useState('')
   const [subTermNumber, setSubTermNumber] = useState('')
+  const [dynastyOrdinal, setDynastyOrdinal] = useState('')
   const [appointmentMethod, setAppointmentMethod] = useState('')
   const [endReason, setEndReason] = useState('')
   const [endReasonDetail, setEndReasonDetail] = useState('')
@@ -277,6 +278,7 @@ export function RegisterMonarchModal({
     setEndDate('')
     setRegnalNumber('')
     setSubTermNumber('')
+    setDynastyOrdinal('')
     setAppointmentMethod('')
     setEndReason('')
     setEndReasonDetail('')
@@ -389,6 +391,7 @@ export function RegisterMonarchModal({
       termNumber: num,
       regnalNumber: num,
       subTermNumber: parseOptionalInt(subTermNumber),
+      dynastyOrdinal: parseOptionalInt(dynastyOrdinal),
       appointmentMethod: (appointmentMethod ||
         undefined) as CreateSovereignReignDto['appointmentMethod'],
       endReason: (endReason ||
@@ -589,6 +592,22 @@ export function RegisterMonarchModal({
                   onChange={(e) => setSubTermNumber(e.target.value)}
                   placeholder="선택 — 같은 대 안에서 재위가 나뉠 때 (예: 복위)"
                 />
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel>왕조 서수</FieldLabel>
+              <FieldControl>
+                <StyledFormInput
+                  type="number"
+                  min={1}
+                  value={dynastyOrdinal}
+                  onChange={(event) => setDynastyOrdinal(event.target.value)}
+                  placeholder="선택 — 소속 왕조 내 순번 (예: 5 → 부르봉 왕조 5대 국왕)"
+                />
+                <FieldHint>
+                  유럽식 &ldquo;왕조 N대 국왕&rdquo; 표기용. 국가 통산 대수·재위번호와 별개 축입니다.
+                </FieldHint>
               </FieldControl>
             </FieldRow>
 

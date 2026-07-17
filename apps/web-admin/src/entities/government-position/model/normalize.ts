@@ -56,6 +56,7 @@ export interface RawTenureLike {
   regnalNumber?: number | null
   termNumber?: number | null
   subTermNumber?: number | null
+  dynastyOrdinal?: number | null
   notes?: string | null
   startDate?: string | null
   endDate?: string | null
@@ -154,6 +155,7 @@ export function normalizeTenure(
     termNumber: raw.termNumber ?? null,
     subTermNumber: raw.subTermNumber ?? null,
     regnalNumber: raw.regnalNumber ?? null,
+    dynastyOrdinal: raw.dynastyOrdinal ?? null,
     country: normalizeCountry(raw.country),
     historicalCountry: normalizeCountry(raw.historicalCountry),
     startDate: raw.startDate ?? null,

@@ -24,6 +24,7 @@ import {
   UnifiedKindBadge,
   UnifiedMetaChip,
   UnifiedMetaRow,
+  UnifiedNote,
   UnifiedOrdinal,
   UnifiedReappointBadge,
   UnifiedSubRow,
@@ -41,6 +42,8 @@ interface TenureReignListProps {
   deathDateStr: string
   isDeceased: boolean
   embedInModal: boolean
+  /** 인물의 소속 왕조명 — 재위의 왕조 서수를 "부르봉 왕조 5대"로 표시할 때 접두 */
+  dynastyName?: string | null
   /** 현재 보고 있는 인물 — 같은 행정부 동료 표시에서 본인 강조용 */
   currentPersonId?: string | null
   /** 같은 행정부 동료(인물) 클릭 시 이동 */
@@ -59,6 +62,7 @@ export function TenureReignList({
   deathDateStr,
   isDeceased,
   embedInModal,
+  dynastyName,
   currentPersonId,
   onPersonClick,
   onEditTenure,
@@ -132,6 +136,12 @@ export function TenureReignList({
               </UnifiedCardTopRow>
               <UnifiedMetaRow>
                 {countryName && <UnifiedMetaChip>{countryName}</UnifiedMetaChip>}
+                {isReign && d.dynastyOrdinal != null && (
+                  <UnifiedMetaChip>
+                    {dynastyName ? `${dynastyName} ` : '왕조 '}
+                    {d.dynastyOrdinal}대
+                  </UnifiedMetaChip>
+                )}
                 {(startStr || endStr) && (
                   <UnifiedMetaChip $muted>
                     {startStr || '?'} – {endLabel}
@@ -169,7 +179,7 @@ export function TenureReignList({
                         .join(' — ')}
                     </span>
                   )}
-                  {d.notes && <span>{d.notes}</span>}
+                  {d.notes && <UnifiedNote>{d.notes}</UnifiedNote>}
                 </UnifiedSubRow>
               )}
               <TenureAchievements

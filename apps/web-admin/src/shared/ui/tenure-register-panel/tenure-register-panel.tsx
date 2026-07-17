@@ -385,6 +385,8 @@ export function TenureRegisterPanel({
   /** 대수(termNumber, 일반 재임) 또는 재위번호(regnalNumber, 군주 재위) — recordKind에 따라 한쪽에만 기록 */
   const [ordinalNumber, setOrdinalNumber] = useState('')
   const [subTermNumber, setSubTermNumber] = useState('')
+  /** 왕조 내 서수 — 재위(SOVEREIGN_REIGN) 수정 시에만 의미, "부르봉 왕조 N대" */
+  const [dynastyOrdinal, setDynastyOrdinal] = useState('')
   const [appointmentMethod, setAppointmentMethod] = useState('')
   const [endReason, setEndReason] = useState('')
   const [endReasonDetail, setEndReasonDetail] = useState('')
@@ -541,6 +543,7 @@ export function TenureRegisterPanel({
     setEndDate('')
     setOrdinalNumber('')
     setSubTermNumber('')
+    setDynastyOrdinal('')
     setAppointmentMethod('')
     setEndReason('')
     setEndReasonDetail('')
@@ -611,6 +614,7 @@ export function TenureRegisterPanel({
     const num = t.recordKind === 'SOVEREIGN_REIGN' ? t.regnalNumber : t.termNumber
     setOrdinalNumber(num != null ? String(num) : '')
     setSubTermNumber(t.subTermNumber != null ? String(t.subTermNumber) : '')
+    setDynastyOrdinal(t.dynastyOrdinal != null ? String(t.dynastyOrdinal) : '')
     setAppointmentMethod(t.appointmentMethod ?? '')
     setEndReason(t.endReason ?? '')
     setEndReasonDetail(t.endReasonDetail ?? '')
@@ -653,6 +657,9 @@ export function TenureRegisterPanel({
     const parsedSubTerm = subTermNumber.trim()
       ? parseInt(subTermNumber, 10) || emptyAs
       : emptyAs
+    const parsedDynastyOrdinal = dynastyOrdinal.trim()
+      ? parseInt(dynastyOrdinal, 10) || emptyAs
+      : emptyAs
     // 레거시 "왕명: X" 줄은 저장 시 비고 앞에 재결합 — 위젯들의 왕명 파싱 보존
     const combinedNotes = [legacyRegnalNote, notes.trim()].filter(Boolean).join('\n')
     const payload = {
@@ -688,6 +695,7 @@ export function TenureRegisterPanel({
             // 재위(SOVEREIGN_REIGN)는 regnalNumber(재위번호)만 기록 — termNumber(통산 대수)는 보내지 않음
             regnalNumber: parsedOrdinal ?? null,
             subTermNumber: parsedSubTerm ?? null,
+            dynastyOrdinal: parsedDynastyOrdinal ?? null,
             appointmentMethod: (appointmentMethod || null) as any,
             endReason: (endReason || null) as any,
             endReasonDetail: endReasonDetail.trim() || null,
@@ -1040,6 +1048,22 @@ export function TenureRegisterPanel({
                   />
                 </FieldControl>
               </FieldRow>
+
+              {editingIsSovereign && (
+                <FieldRow>
+                  <FieldLabel>왕조 서수</FieldLabel>
+                  <FieldControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={dynastyOrdinal}
+                      onChange={(event) => setDynastyOrdinal(event.target.value)}
+                      placeholder="선택 (예: 부르봉 왕조 5대 → 5)"
+                      title="소속 왕조 내 계승 순번 — 재위번호·통산 대수와 별개 축"
+                    />
+                  </FieldControl>
+                </FieldRow>
+              )}
 
               <FieldRow>
                 <FieldLabel>취임 방식</FieldLabel>
