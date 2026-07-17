@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<!--
+  「세 왕조의 시대」 SNS 카드뉴스 20장 — 사건·제도·경제 중심, 3부 구성 (1080×1350, 4:5)
+  디자인 v3(트렌디): 볼드 산세리프 + 테라코타 단일 포인트 + 라운드 패널, 본문 라이트 / 표지·파트·아웃트로 다크
+  제2부 헝가리 = 임레·언드라시 사건 축 (형제 내전 → 소금 재정 → 필리시 → 금인칙서·튜튼)
+  PDF 재생성:
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --disable-gpu \
+      --no-pdf-header-footer --print-to-pdf=docs/sns-carousel-three-dynasties.pdf \
+      "file://$PWD/docs/sns-carousel-three-dynasties.html"
+  카피 출처·데이터 검토: docs/sns-carousel-central-eastern-europe-review.md
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</title>
+<style>
+  @page { size: 1080px 1350px; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --paper: #F7F5EF;
+    --ink: #17150F;
+    --body: #37332B;
+    --muted: #8B8578;
+    --accent: #C2491B;
+    --accent-deep: #9E3A13;
+    --hair: #E3DFD3;
+    --panel: #EDE8DB;
+    --dark: #131110;
+    --d-text: #F3F0E8;
+    --d-muted: #9C968A;
+    --d-accent: #EA6A34;
+    --d-hair: #35312A;
+  }
+  body { background: var(--paper); font-family: "Apple SD Gothic Neo", sans-serif; }
+  .serif { font-family: "AppleMyungjo", "Nanum Myeongjo", serif; }
+
+  .card {
+    width: 1080px; height: 1350px;
+    page-break-after: always;
+    position: relative;
+    background: var(--paper);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    padding: 80px 92px 54px;
+  }
+
+  /* ── 라이트 본문 카드 ── */
+  .tags { display: flex; align-items: center; gap: 16px; margin-bottom: 34px; }
+  .pill { background: var(--accent); color: var(--paper); font-size: 19px; font-weight: 800; letter-spacing: 2px; padding: 9px 24px; border-radius: 999px; }
+  .tag-txt { color: var(--muted); font-size: 20px; font-weight: 700; letter-spacing: 3px; }
+
+  .chip { color: var(--accent); font-size: 66px; font-weight: 900; letter-spacing: -1px; margin-bottom: 6px; }
+  .title { color: var(--ink); font-size: 58px; font-weight: 900; line-height: 1.2; letter-spacing: -0.5px; margin-bottom: 30px; }
+  .lead { color: var(--body); font-size: 27px; line-height: 1.62; }
+  .lead b { color: var(--ink); }
+
+  .block { margin-top: 40px; }
+
+  .timeline .tl-row { display: flex; align-items: baseline; padding: 16px 0; border-bottom: 1px solid var(--hair); }
+  .timeline .tl-row:last-child { border-bottom: none; }
+  .tl-year { color: var(--accent); font-size: 25px; font-weight: 800; width: 160px; flex: none; }
+  .tl-text { color: var(--body); font-size: 24.5px; line-height: 1.45; }
+  .tl-text b { color: var(--ink); font-weight: 800; }
+  .tl-text small { color: var(--muted); font-size: 20.5px; }
+
+  .quote { margin-top: 40px; padding-left: 30px; border-left: 6px solid var(--accent); border-radius: 2px; }
+  .quote .q { color: var(--accent-deep); font-size: 32px; line-height: 1.5; font-weight: 700; }
+  .quote .qsrc { color: var(--muted); font-size: 21.5px; margin-top: 12px; line-height: 1.5; }
+
+  .facts { background: var(--panel); border-radius: 22px; padding: 32px 36px; margin-top: 40px; }
+  .facts li { list-style: none; color: var(--body); font-size: 24px; line-height: 1.52; padding-left: 24px; position: relative; margin-bottom: 13px; }
+  .facts li:last-child { margin-bottom: 0; }
+  .facts li::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); position: absolute; left: 0; top: 13px; }
+  .facts li b { color: var(--ink); font-weight: 800; }
+
+  .vs { display: flex; align-items: stretch; gap: 20px; margin-top: 40px; }
+  .vs .side { flex: 1; background: var(--panel); border-radius: 22px; padding: 30px 32px; }
+  .vs .side .who { color: var(--ink); font-size: 27px; font-weight: 800; margin-bottom: 10px; line-height: 1.3; }
+  .vs .side .meta { color: var(--muted); font-size: 22px; line-height: 1.5; }
+  .vs .mid { align-self: center; color: var(--accent); font-size: 36px; font-weight: 900; letter-spacing: 1px; }
+
+  .note { margin-top: 48px; padding-top: 22px; border-top: 1px solid var(--hair); }
+  .note-label { color: var(--accent); font-size: 19px; font-weight: 800; letter-spacing: 6px; margin-bottom: 12px; }
+  .note li { list-style: none; color: var(--muted); font-size: 22px; line-height: 1.48; padding-left: 20px; position: relative; margin-bottom: 9px; }
+  .note li::before { content: "—"; color: var(--accent); position: absolute; left: 0; font-size: 18px; }
+  .note li b { color: #59544A; }
+
+  .footer { display: flex; justify-content: space-between; align-items: baseline; margin-top: auto; padding-top: 20px; color: var(--muted); font-size: 18px; letter-spacing: 2px; }
+  .footer .page { color: var(--accent); font-weight: 800; letter-spacing: 3px; }
+
+  /* ── 다크 카드 ── */
+  .dark { background: var(--dark); }
+  .dark .footer { color: var(--d-muted); }
+  .dark .footer .page { color: var(--d-accent); }
+
+  .cover { text-align: center; }
+  .cover .en { color: var(--d-accent); font-size: 24px; font-weight: 800; letter-spacing: 8px; margin-top: 14px; }
+  .cover .headline { color: var(--d-text); font-size: 122px; font-weight: 900; line-height: 1.14; letter-spacing: -2px; margin-top: 230px; }
+  .cover .bar { width: 72px; height: 10px; border-radius: 6px; background: var(--d-accent); margin: 56px auto 0; }
+  .cover .sub { color: var(--d-muted); font-size: 29px; line-height: 1.62; margin-top: 48px; }
+  .stage { display: flex; gap: 22px; margin-top: 70px; }
+  .stage .col { flex: 1; border-top: 6px solid var(--d-accent); border-radius: 3px; padding-top: 20px; text-align: left; }
+  .stage .dyn { color: var(--d-text); font-size: 25px; font-weight: 800; margin-bottom: 9px; }
+  .stage .realm { color: var(--d-muted); font-size: 20.5px; line-height: 1.5; }
+  .cover .swipe { color: var(--d-accent); font-size: 23px; font-weight: 800; letter-spacing: 4px; margin-top: auto; padding-top: 30px; }
+
+  .part { text-align: left; }
+  .part .part-en { color: var(--d-accent); font-size: 27px; font-weight: 800; letter-spacing: 7px; margin-top: 170px; }
+  .part .part-title { color: var(--d-text); font-size: 140px; font-weight: 900; letter-spacing: -3px; margin-top: 20px; line-height: 1.05; }
+  .part .part-bar { width: 72px; height: 10px; border-radius: 6px; background: var(--d-accent); margin: 52px 0; }
+  .part .part-sub { color: var(--d-muted); font-size: 28px; line-height: 1.65; }
+  .part .toc { margin-top: 78px; }
+  .part .toc li { list-style: none; display: flex; align-items: baseline; gap: 26px; padding: 17px 0; border-bottom: 1px solid var(--d-hair); }
+  .part .toc li:last-child { border-bottom: none; }
+  .part .toc .no { color: var(--d-accent); font-size: 24px; font-weight: 800; width: 50px; flex: none; }
+  .part .toc .t { color: var(--d-text); font-size: 26px; font-weight: 700; }
+
+  .outro { text-align: center; }
+  .outro .title { color: var(--d-text); font-size: 60px; font-weight: 900; letter-spacing: -1px; margin-top: 10px; margin-bottom: 10px; }
+  .outro .bar { width: 72px; height: 10px; border-radius: 6px; background: var(--d-accent); margin: 0 auto 46px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 38px 40px; padding: 0 14px; }
+  .grid figure img { width: 100%; height: 300px; object-fit: cover; object-position: 50% 10%; border-radius: 18px; }
+  .grid .gname { color: var(--d-text); font-size: 23px; font-weight: 800; margin-top: 14px; }
+  .grid .gfate { color: var(--d-muted); font-size: 20px; margin-top: 5px; }
+  .outro .credit { color: var(--d-muted); font-size: 22.5px; line-height: 1.62; margin-top: auto; padding-top: 26px; }
+</style>
+</head>
+<body>
+
+<!-- 01 · 표지 (dark) -->
+<section class="card dark cover">
+  <div class="en">THREE DYNASTIES · 1138 – 1245</div>
+  <div class="headline">세 왕조의<br>시대</div>
+  <div class="bar"></div>
+  <div class="sub">폴란드 · 헝가리 · 루스, 유럽의 동쪽에서 뒤엉킨 세 나라.<br>분열의 제도와 소금의 경제, 암살과 십자군 — 그리고 몽골.</div>
+  <div class="stage">
+    <div class="col">
+      <div class="dyn">폴란드 — 피아스트</div>
+      <div class="realm">세니오라트가 낳은 분열<br>크라쿠프 쟁탈전과 씨족 정치</div>
+    </div>
+    <div class="col">
+      <div class="dyn">헝가리 — 아르파드</div>
+      <div class="realm">임레와 언드라시 형제의 시대<br>소금 재정과 금인칙서</div>
+    </div>
+    <div class="col">
+      <div class="dyn">루스 — 류리크</div>
+      <div class="realm">다닐로의 갈리치아-볼히니아<br>왕관과 쿠미스, 몽골과의 싸움</div>
+    </div>
+  </div>
+  <div class="swipe">밀어서 넘기세요 →</div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">01 / 23</span></div>
+</section>
+
+<!-- 02 · 세계 배경 -->
+<section class="card">
+  <div class="tags"><span class="pill">프롤로그</span><span class="tag-txt">1200년 무렵의 세계</span></div>
+  <div class="title">같은 시각, 세계는</div>
+  <div class="lead">세 나라의 이야기는 더 큰 물결 위에 있었다. 십자군의 세기가 절정으로 치닫고, 천년 제국 비잔틴이 무너지고, 스텝에서는 세계를 뒤엎을 이름이 막 태어나던 시대다.</div>
+  <div class="block timeline">
+    <div class="tl-row"><div class="tl-year">1189~92</div><div class="tl-text">제3차 십자군 — 사자심왕 리처드와 살라딘의 대결</div></div>
+    <div class="tl-row"><div class="tl-year">1198</div><div class="tl-text">서른일곱의 법률가 <b>인노첸시오 3세</b>, 교황좌에 오르다</div></div>
+    <div class="tl-row"><div class="tl-year">1204</div><div class="tl-text">제4차 십자군, <b>콘스탄티노폴리스 함락</b> — 비잔틴의 몰락</div></div>
+    <div class="tl-row"><div class="tl-year">1206</div><div class="tl-text">스텝의 테무진, <b>'칭기즈 칸'</b>으로 추대되다</div></div>
+    <div class="tl-row"><div class="tl-year">1215</div><div class="tl-text">마그나 카르타 — 왕권을 문서로 제한하는 시대의 개막</div></div>
+  </div>
+  <div class="note">
+    <div class="note-label">배경</div>
+    <ul>
+      <li>폴란드·헝가리·루스는 라틴 기독교와 동방 기독교, 스텝이 맞닿는 유럽의 동쪽 경계였다</li>
+      <li>십자군의 물결은 이 변경으로도 밀려들고(카드 14), 그 뒤를 몽골이 따른다(카드 22)</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">02 / 23</span></div>
+</section>
+
+<!-- 03 · PART 1 (dark) -->
+<section class="card dark part">
+  <div class="part-en">PART 1 — POLAND</div>
+  <div class="part-title">폴란드</div>
+  <div class="part-bar"></div>
+  <div class="part-sub">1138년 한 장의 유언으로 다섯 조각 난 나라 —<br>볼레스와프 3세의 유언에서 헨리크 2세의 레그니차까지.</div>
+  <ul class="toc">
+    <li><div class="no">04</div><div class="t">세니오라트 — 분열의 설계도 (볼레스와프 3세)</div></li>
+    <li><div class="no">05</div><div class="t">추방공의 몰락 — 첫 번째 균열</div></li>
+    <li><div class="no">06</div><div class="t">노공과 정의공 — 크라쿠프 쟁탈전</div></li>
+    <li><div class="no">07</div><div class="t">씨족 정치 — 킹메이커들의 크라쿠프</div></li>
+    <li><div class="no">08</div><div class="t">가사바 암살 사건 (레셰크 비아위)</div></li>
+    <li><div class="no">09</div><div class="t">헨리크 부자의 군주국 (헨리크 2세)</div></li>
+  </ul>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">03 / 23</span></div>
+</section>
+
+<!-- 04 · 세니오라트 -->
+<section class="card">
+  <div class="tags"><span class="pill">제1부 폴란드</span><span class="tag-txt">제도</span></div>
+  <div class="chip">1138</div>
+  <div class="title">세니오라트 —<br>분열의 설계도</div>
+  <div class="lead">대공 볼레스와프 3세는 유언으로 국토를 나눴다. 가문의 <b>최연장자</b>가 수도 크라쿠프의 대공령과 종주권을 갖고, 나머지는 각자의 공국을 세습한다. 장자 상속이 아니라 '가문 전체의 서열 상속'이라 세대가 갈릴수록 계승권자가 폭증했고 — 내전을 막으려던 설계는 약 200년 분열기의 시작점이 됐다.</div>
+  <div class="block facts">
+    <ul>
+      <li>다섯 조각 — 실롱스크 · 마조프셰 · 대폴란드 · 산도미에시, 그리고 <b>대공의 크라쿠프</b></li>
+      <li>같은 시기 키예프 루스도 같은 원리의 <b>순환 상속제(로타)</b>로 쪼개지고 있었다(제3부) — 두 나라는 같은 병을 앓았다</li>
+    </ul>
+  </div>
+  <div class="note">
+    <div class="note-label">기록</div>
+    <ul>
+      <li>볼레스와프 3세는 입이 비뚤어져 '크시보우스티'라 불렸다 — 프워츠크 대성당 안장</li>
+      <li>두 번의 혼인(즈비스와바 1103 · 살로메아 1115)이 남긴 <b>배다른 아들들이 곧 적이 된다</b></li>
+      <li>장남 브와디스와프 2세는 1146년 파문·축출 — '추방공'이라는 별칭만 남았다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">04 / 23</span></div>
+</section>
+
+<!-- 05 · 추방공의 몰락 -->
+<section class="card">
+  <div class="tags"><span class="pill">제1부 폴란드</span><span class="tag-txt">사건 — 첫 번째 균열</span></div>
+  <div class="chip">1141 ~ 1146</div>
+  <div class="title">추방공의 몰락 —<br>장남이 쫓겨나다</div>
+  <div class="lead">유언의 잉크가 마르기도 전에 균열이 갔다. 장남 브와디스와프 2세는 재통일을 노려 <b>계모 살로메아와 이복동생들의 연합</b>과 싸웠다. 승기를 잡는 듯했지만 — 1145년, 아버지 대부터 30년을 섬긴 궁재 <b>표트르 브워스토비츠를 실명 · 혀 절단형</b>에 처한 것이 모든 것을 뒤집었다.</div>
+  <div class="block timeline">
+    <div class="tl-row"><div class="tl-year">1141</div><div class="tl-text">웬치차 회의 — 계모 살로메아, 대공을 배제하고 <b>소공파를 결집</b></div></div>
+    <div class="tl-row"><div class="tl-year">1145</div><div class="tl-text"><b>표트르 실명형</b> — 귀족과 교회가 일제히 등을 돌리다</div></div>
+    <div class="tl-row"><div class="tl-year">1146</div><div class="tl-text">그니에즈노 대주교의 <b>파문</b> — 군세가 무너지고 국외로 축출</div></div>
+    <div class="tl-row"><div class="tl-year">1159</div><div class="tl-text">'비그나니에츠(추방공)' — 끝내 돌아오지 못하고 망명지에서 죽다</div></div>
+  </div>
+  <div class="note">
+    <div class="note-label">기록 · 배경</div>
+    <ul>
+      <li>표트르는 거짓 투항으로 프셰미실 공을 사로잡았던 당대의 전설 — <b>속죄로 성당 77개</b>를 세웠다고 전해진다</li>
+      <li>그의 참극은 "너무 강해진 팔라틴은 부러뜨린다"는 문법의 마지막 장 — 씨족 정치(카드 7)의 복선이다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">05 / 23</span></div>
+</section>
+
+<!-- 06 · 노공과 정의공 -->
+<section class="card">
+  <div class="tags"><span class="pill">제1부 폴란드</span><span class="tag-txt">사건 — 크라쿠프 쟁탈전</span></div>
+  <div class="chip">1173 ~ 1202</div>
+  <div class="title">노공과 정의공 —<br>크라쿠프 쟁탈전</div>
+  <div class="lead"><b>크라쿠프를 쥔 자만이 '폴란드 대공'</b>이었다. 추방공이 쫓겨난 뒤 대공좌는 동생들에게 차례로 넘어갔다 — 곱슬공, 그리고 상실과 복위로 30년을 채운 '노공' 미에슈코 3세와 연회에서 급사한 막내 '정의공' 카지미에시 2세의 대결로.</div>
+  <div class="block timeline">
+    <div class="tl-row"><div class="tl-year">1146~73</div><div class="tl-text">'곱슬공' 볼레스와프 4세의 27년 — <b>1157년 바르바로사 침공에 무릎</b> 꿇다</div></div>
+    <div class="tl-row"><div class="tl-year">1173</div><div class="tl-text">곱슬공이 죽자 '노공' 미에슈코 3세, 크라쿠프 대공 즉위</div></div>
+    <div class="tl-row"><div class="tl-year">1177</div><div class="tl-text">가혹한 재정·사법 통치 — <b>주교 주도의 반란</b>으로 축출, 정의공 옹립</div></div>
+    <div class="tl-row"><div class="tl-year">1194</div><div class="tl-text">정의공, 크라쿠프의 연회에서 <b>잔을 비운 직후 급사</b></div></div>
+    <div class="tl-row"><div class="tl-year">1195</div><div class="tl-text">모즈가바 전투 — 노공 부상, 아들 볼레스와프 전사</div></div>
+    <div class="tl-row"><div class="tl-year">1198</div><div class="tl-text">미망인 헬레나와 협상 — <b>레셰크의 후계 인정을 대가로</b> 크라쿠프 복귀</div></div>
+    <div class="tl-row"><div class="tl-year">1202</div><div class="tl-text">노공, 대공 지위를 쥔 채 사망 — 다음은 킹메이커들의 시간</div></div>
+  </div>
+  <div class="note">
+    <div class="note-label">기록</div>
+    <ul>
+      <li>정의공의 급사 순간, 후원하던 연대기 작가 <b>카드우베크와 '영혼의 불멸'을 문답하던 중</b>이었다고 전해진다 — 독살 의혹도 함께 기록됐다</li>
+      <li>헬레나는 아홉 살 아들 레셰크 비아위의 섭정을 맡았다 — 다음 카드의 무대다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">06 / 23</span></div>
+</section>
+
+<!-- 06 · 씨족 정치 -->
+<section class="card">
+  <div class="tags"><span class="pill">제1부 폴란드</span><span class="tag-txt">권력 구조</span></div>
+  <div class="chip">1202</div>
+  <div class="title">씨족 정치 —<br>킹메이커들의 크라쿠프</div>
+  <div class="lead">분열기의 실권은 공작이 아니라 <b>문장 씨족</b> — 하나의 문장과 전투 구호를 공유하는 친족 연합(그리피치 · 아브단치 · 오드로봉주) — 에 있었다. "너무 강해진 팔라틴은 군주가 부러뜨린다"가 12세기 전반의 문법이었지만, 분열이 저울을 뒤집었다. <b>군주는 작아졌는데 관직은 그대로였다.</b></div>
+  <div class="quote">
+    <div class="q serif">"대공좌를 주겠다 — 후견인 고보레크를 내치면."</div>
+    <div class="qsrc">— 1202년 노공이 죽자 크라쿠프 보이보다 미코와이가 젊은 레셰크에게 건 조건. 레셰크는 거절했고, 왕좌는 잠시 다른 피아스트에게 갔다. 공작을 고르는 것은 이제 씨족이었다.</div>
+  </div>
+  <div class="note">
+    <div class="note-label">배경 — 씨족의 세 기둥</div>
+    <ul>
+      <li><b>세습 영지</b>와 면제 특권, <b>관직의 과점</b>(보이보다·카슈텔란을 친족끼리 돌려 맡기), 그리고 <b>씨족 수도원</b>(옌제유프·미에후프) — 묘역이자 문서고이자 기도 공동체</li>
+      <li>팔라틴의 계보가 곧 경고였다 — 제 이름으로 주화를 찍은 세치에흐, 1117년 실명당한 스카르비미르, 1145년의 표트르 브워스토비츠</li>
+      <li>크라쿠프 보이보다 미코와이는 군주 미성년기 <b>사실상의 국가 원수</b>로 12년을 버텼다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">07 / 23</span></div>
+</section>
+
+<!-- 07 · 가사바 -->
+<section class="card">
+  <div class="tags"><span class="pill">제1부 폴란드</span><span class="tag-txt">사건</span></div>
+  <div class="chip">1227</div>
+  <div class="title">가사바 —<br>목욕탕의 칼</div>
+  <div class="lead">포메렐리아 총독 시비엥토페우크의 이반을 논의하러 제후들이 가사바에 모였다. 회의 도중 — <b>목욕 중이던 대공 레셰크 비아위가 습격당했다.</b> 말을 타고 달아났지만 마르친코보 마을에서 살해됐다. 분열기 폴란드의 마지막 구심점이 사라진 순간이다.</div>
+  <div class="block facts">
+    <ul>
+      <li>동석한 헨리크 수염공도 중상 — <b>기사 페레그린이 몸으로 감싸</b> 목숨을 건졌다</li>
+      <li>배후는 시비엥토페우크로 지목 — 이 죽음으로 <b>포메렐리아는 사실상 독립</b>했다</li>
+      <li>남겨진 후계자는 생후 17개월 — 크라쿠프 쟁탈전이 다시 수십 년 이어진다</li>
+    </ul>
+  </div>
+  <div class="note">
+    <div class="note-label">기록 · 배경</div>
+    <ul>
+      <li>레셰크는 1205년 자비호스트에서 <b>루스의 로만을 꺾은</b>(카드 17) 바로 그 대공이다</li>
+      <li>가사바 이후 세니오라트는 사실상 사문화 — 재통일 대관(브와디스와프 워키에테크)은 <b>1320년에야</b> 온다</li>
+      <li>여담: 교황에게 "폴란드엔 맥주도 꿀술도 없다"며 십자군 원정을 미룬 것도 레셰크다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">08 / 23</span></div>
+</section>
+
+
+<!-- 08 · 헨리크 부자의 군주국 -->
+<section class="card">
+  <div class="tags"><span class="pill">제1부 폴란드</span><span class="tag-txt">사건 — 실롱스크의 부상</span></div>
+  <div class="chip">1227 ~ 1241</div>
+  <div class="title">헨리크 부자의 군주국 —<br>재통일의 문턱</div>
+  <div class="lead">가사바의 혼란 속에서 기회를 잡은 건 실롱스크였다. 그날 목숨을 건진 <b>헨리크 1세 수염공</b>은 마조프셰의 콘라트와 다툰 끝에 크라쿠프 대공좌를 차지했고, 실롱스크–크라쿠프–대폴란드를 잇는 <b>'헨리크 군주국'</b>을 세웠다. 1238년 아들 헨리크 2세 경건공이 그 전부를 물려받았다 — 분열 100년 만에 재통일이 눈앞이었다.</div>
+  <div class="block timeline">
+    <div class="tl-row"><div class="tl-year">1227</div><div class="tl-text">가사바 — 수염공, 기사 페레그린의 몸에 덮여 생존</div></div>
+    <div class="tl-row"><div class="tl-year">1232</div><div class="tl-text">수염공, <b>크라쿠프 대공</b> — 콘라트와의 쟁탈전 끝에</div></div>
+    <div class="tl-row"><div class="tl-year">1234</div><div class="tl-text">대폴란드 남부까지 확보 — 세 지방을 한 손에</div></div>
+    <div class="tl-row"><div class="tl-year">1238</div><div class="tl-text"><b>헨리크 2세 경건공</b>, 군주국 전체를 상속</div></div>
+    <div class="tl-row"><div class="tl-year">1241</div><div class="tl-text">몽골의 습래 — 레그니차 <small>(카드 22)</small></div></div>
+  </div>
+  <div class="note">
+    <div class="note-label">배경</div>
+    <ul>
+      <li>부자는 독일 이주민을 불러 도시와 광산을 세우는 <b>'개발 국가'</b>로 실롱스크를 폴란드에서 가장 부유한 지방으로 키웠다 — 그 돈이 군주국의 연료였다</li>
+      <li>수염공의 아내 <b>야드비가는 헝가리 왕비 게르트루다의 언니</b>(카드 13) — 실롱스크와 아르파드도 사돈이었다. 훗날 성녀로 시성된다(1267)</li>
+      <li>경건공을 위해 <b>왕관 청원</b>까지 준비했다고 전해진다 — 레그니차가 모든 것을 끝냈다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">09 / 23</span></div>
+</section>
+
+<!-- 09 · PART 2 (dark) -->
+<section class="card dark part">
+  <div class="part-en">PART 2 — HUNGARY</div>
+  <div class="part-title">헝가리</div>
+  <div class="part-bar"></div>
+  <div class="part-sub">벨러 3세가 남긴 중유럽의 강국 —<br>두 아들 임레와 언드라시가 그 유산을 두고 부딪친다.</div>
+  <ul class="toc">
+    <li><div class="no">11</div><div class="t">형제의 내전 — "왕을 벨 자 누구냐"</div></li>
+    <li><div class="no">12</div><div class="t">왕의 소금 — 언드라시의 재정</div></li>
+    <li><div class="no">13</div><div class="t">필리시 숲의 암살</div></li>
+    <li><div class="no">14</div><div class="t">금인칙서, 그리고 튜튼 기사단</div></li>
+  </ul>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">10 / 23</span></div>
+</section>
+
+<!-- 09 · 형제의 내전 -->
+<section class="card">
+  <div class="tags"><span class="pill">제2부 헝가리</span><span class="tag-txt">사건 — 형제 내전</span></div>
+  <div class="chip">1196 ~ 1205</div>
+  <div class="title">"왕을 벨 자<br>누구냐"</div>
+  <div class="lead">비잔틴 궁정에서 자란 벨러 3세는 문서 행정을 도입하고 잉글랜드·프랑스에 비견되는 재정을 쌓아 헝가리를 강국으로 만들었다. 그가 죽자(1196) — <b>두 아들이 그 유산을 두고 부딪쳤다.</b> 형 임레의 치세 내내 동생 언드라시는 반란을 일으켰다.</div>
+  <div class="block timeline">
+    <div class="tl-row"><div class="tl-year">1197~98</div><div class="tl-text">언드라시의 1·2차 반란 — 크로아티아·달마티아를 떼어 받다</div></div>
+    <div class="tl-row"><div class="tl-year">1203</div><div class="tl-text">바라주딘 대치 — 임레, <b>비무장으로 반군 진영에 걸어 들어가</b> 동생을 직접 체포</div></div>
+    <div class="tl-row"><div class="tl-year">1204</div><div class="tl-text">임레, 다섯 살 아들 라슬로 3세를 대관시키고 병사</div></div>
+    <div class="tl-row"><div class="tl-year">1205</div><div class="tl-text">라슬로, 빈 피신 중 급사 — <b>왕위는 언드라시 2세에게</b></div></div>
+  </div>
+  <div class="note">
+    <div class="note-label">기록</div>
+    <ul>
+      <li>"왕을 벨 자 누구냐" — 왕관만 쓴 채 걸어 들어간 임레에게 아무도 감히 손대지 못했다는 일화</li>
+      <li>임레는 제4차 십자군이 헝가리 왕령 자다르를 약탈하자(1203) 강력 항의 — 참가자들이 파문당했다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">11 / 23</span></div>
+</section>
+
+<!-- 10 · 왕의 소금 -->
+<section class="card">
+  <div class="tags"><span class="pill">제2부 헝가리</span><span class="tag-txt">경제 — 언드라시의 재정</span></div>
+  <div class="chip">레갈레</div>
+  <div class="title">왕의 소금 —<br>트란실바니아 암염 광산</div>
+  <div class="lead">언드라시 2세가 물려받은 재정의 심장은 소금이었다. 트란실바니아 분지 지하에는 평균 <b>두께 400m의 소금층</b> — 약 1,300만 년 전 내해가 증발하며 남긴 유산 — 이 깔려 있다. 땅만 파면 순도 높은 암염이 쏟아지는 '중세의 엘도라도'. 투르다 광산은 이미 1075년 문헌에 국왕 자산으로 기록돼 있다.</div>
+  <div class="block facts">
+    <ul>
+      <li><b>왕실 전매(레갈레)</b> — 채굴은 국왕 허가제, 유통은 '소금 사무소'가 통제</li>
+      <li><b>무레슈강 소금길</b> — 뗏목에 실린 소금 바위가 유럽으로. 이 강을 쥐는 자가 동유럽 경제를 쥐었다</li>
+      <li>채굴 기술은 독일계 이주민(트란실바니아 작센인)을 초빙해 확보 — 자치 특권을 주고 정착시켰다</li>
+    </ul>
+  </div>
+  <div class="note">
+    <div class="note-label">몰락 — 언드라시의 소금 위기</div>
+    <ul>
+      <li>즉위 공작에 광산 이권을 귀족·교회에 남발 → 재정 파탄 → <b>유대인·무슬림 징세 대리인 고용</b> → 귀족과 교황청의 분노</li>
+      <li>그 청구서가 <b>금인칙서(1222)의 소금 조항</b>이다 — "소금 전매권은 함부로 넘길 수 없다" (카드 14)</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">12 / 23</span></div>
+</section>
+
+<!-- 11 · 필리시 -->
+<section class="card">
+  <div class="tags"><span class="pill">제2부 헝가리</span><span class="tag-txt">사건 — 왕비 암살</span></div>
+  <div class="chip">1213</div>
+  <div class="title">필리시 숲의 암살</div>
+  <div class="lead">언드라시가 할리치 원정으로 자리를 비운 사이 — 사냥 행궁에서 <b>왕비 게르트루다가 귀족 음모단에게 참살당했다.</b> 메라니아 친정 인맥을 요직에 앉힌 왕비에게 쌓인 반감이 칼이 됐다.</div>
+  <div class="quote">
+    <div class="q serif">"왕비를 죽이는 것을 두려워하지 말라 좋은 일이다 …"</div>
+    <div class="qsrc">— 에스테르곰 대주교의 '구두점 없는 편지'. 끊어 읽기에 따라 정반대가 되어 책임을 피해 가는 문장이라는 전설이 이 사건에 결부됐다.</div>
+  </div>
+  <div class="block facts">
+    <ul>
+      <li><b>베르톨트</b> — 자격 없이 대주교가 된 왕비의 동생 · <b>에크베르트</b> — 독일 왕 암살(1208) 연루로 도망 와 비호받던 오빠</li>
+      <li><b>페테르</b> — 주모자. 유일하게 말뚝형에 처해졌다 — 미온적 처벌의 앙금은 한 세대를 갔다</li>
+      <li><b>벨러 4세</b> — 훗날 어머니의 원수를 재청산하는 아들 (카드 22에서 다시)</li>
+    </ul>
+  </div>
+  <div class="note">
+    <div class="note-label">기록 · 배경</div>
+    <ul>
+      <li>이 사건은 오페라 『반크 반』으로 각색돼 헝가리의 국민 서사가 됐다 — 정작 궁재 반크의 연루 여부는 지금도 논쟁거리다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">13 / 23</span></div>
+</section>
+
+<!-- 12 · 금인칙서 + 튜튼 -->
+<section class="card">
+  <div class="tags"><span class="pill">제2부 헝가리</span><span class="tag-txt">문서와 국경</span></div>
+  <div class="chip">1222</div>
+  <div class="title">금인칙서,<br>그리고 튜튼 기사단</div>
+  <div class="lead">할리치 원정(제3부)과 십자군으로 왕령지를 탕진한 언드라시 2세. 귀족의 반발은 <b>1222년 금인칙서</b>로 터졌다 — 귀족의 권리와 <b>저항권</b>까지 명문화한, 마그나 카르타(1215)와 나란히 꼽히는 문서다. 소금 조항은 카드 12에서 본 그대로.</div>
+  <div class="block timeline">
+    <div class="tl-row"><div class="tl-year">1211</div><div class="tl-text">쿠만족 방어를 위해 <b>튜튼 기사단 초빙</b> — 조건은 '목조 성채만'</div></div>
+    <div class="tl-row"><div class="tl-year">1217~18</div><div class="tl-text">제5차 십자군 지휘 — '예루살렘의 언드라시'</div></div>
+    <div class="tl-row"><div class="tl-year">1224</div><div class="tl-text">기사단, 영지를 <b>교황에 봉헌</b>(성 베드로의 재산) — 왕권 부정</div></div>
+    <div class="tl-row"><div class="tl-year">1225</div><div class="tl-text">언드라시의 무력 축출 — 기사단은 빈손으로 쫓겨난다</div></div>
+  </div>
+  <div class="note">
+    <div class="note-label">배경 — 나비효과</div>
+    <ul>
+      <li>같은 1224년 <b>안드레아눔 특허</b> — 작센 이주민을 국왕 직속 자치 공동체로. 수백 년 트란실바니아 작센 자치의 헌장</li>
+      <li>쫓겨난 기사단은 폴란드행 초빙엔 <b>삼중 안전장치</b>(리미니 1226 · 크루슈비차 1230 · 리에티 1234)를 깔았고, 발트해의 기사단 국가로 성공한다 — <b>"프로이센의 설계도는 언드라시가 그리게 만든 셈"</b></li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">14 / 23</span></div>
+</section>
+
+<!-- 13 · PART 3 (dark) -->
+<section class="card dark part">
+  <div class="part-en">PART 3 — RUS</div>
+  <div class="part-title">루스</div>
+  <div class="part-bar"></div>
+  <div class="part-sub">네 살에 나라를 물려받은 아이가 왕관을 쓰고<br>칸과 맞서기까지 — 다닐로 로마노비치의 60년.</div>
+  <ul class="toc">
+    <li><div class="no">16</div><div class="t">다닐로가 물려받은 땅 — 소금과 보야르</div></li>
+    <li><div class="no">17</div><div class="t">자비호스트 — 로만, 폴란드와 싸우다</div></li>
+    <li><div class="no">18</div><div class="t">40년 계승 전쟁 — 유랑에서 귀환까지</div></li>
+    <li><div class="no">19</div><div class="t">칼카 강 — 몽골과의 첫 싸움</div></li>
+    <li><div class="no">20</div><div class="t">왕관과 쿠미스 — 칸과 맞선 왕</div></li>
+  </ul>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">15 / 23</span></div>
+</section>
+
+<!-- 15 · 다닐로가 물려받은 땅 -->
+<section class="card">
+  <div class="tags"><span class="pill">제3부 루스</span><span class="tag-txt">무대 — 경제와 권력</span></div>
+  <div class="chip">1199 ~ 1205</div>
+  <div class="title">다닐로가 물려받은 땅 —<br>소금과 보야르의 갈리치아</div>
+  <div class="lead">카르파티아 기슭의 갈리치아는 소금의 땅이었다. 소금 무역이 쌓은 부는 <b>루스에서 유례없이 강력한 대귀족(보야르)</b>을 길렀다 — 공작을 갈아치우는 땅. 1199년 볼히니아 공 로만이 두 공국을 합쳐 <b>갈리치아-볼히니아 공국</b>을 세우고 보야르를 눌렀지만, 1205년 그가 폴란드 원정에서 전사하자 — 남은 것은 <b>네 살 다닐로와 두 살 바실코</b>였다.</div>
+  <div class="quote">
+    <div class="q serif">"벌을 눌러 죽이지 않고는, 꿀을 먹을 수 없다."</div>
+    <div class="qsrc">— 보야르를 두고 아버지 로만이 남겼다고 연대기가 전하는 말. 그 벌들이 이제 어린 형제의 나라를 흔든다.</div>
+  </div>
+  <div class="note">
+    <div class="note-label">배경</div>
+    <ul>
+      <li>키예프의 시대는 이미 저물어 있었다 — 순환 상속(로타)의 계승 분쟁과 1169년 약탈로, 루스의 무게중심은 변경으로 옮겨 갔다</li>
+      <li>등록 역사국가: 갈리치아-볼히니아 공국(1199~1349)</li>
+      <li>로만의 어머니는 폴란드 공주(볼레스와프 3세의 딸) — <b>류리크와 피아스트는 사돈</b>이었고, 그 인연이 다음 카드에서 창끝으로 바뀐다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">16 / 23</span></div>
+</section>
+
+<!-- 17 · 자비호스트 -->
+<section class="card">
+  <div class="tags"><span class="pill">제3부 루스</span><span class="tag-txt">사건 — 폴란드와의 전쟁</span></div>
+  <div class="chip">1205</div>
+  <div class="title">자비호스트 —<br>로만, 폴란드와 싸우다</div>
+  <div class="lead">로만과 폴란드는 원래 <b>한편</b>이었다. 어머니가 폴란드 공주였고, 1195년 모즈가바 전투에서는 <b>어린 레셰크 진영에 서서 노공과 싸우다 부상까지</b> 입었다. 그런 그가 1205년 6월, 갑자기 군대를 돌려 비스와 강을 건넜다 — 자비호스트에서 사촌 레셰크의 폴란드군과 충돌했고, <b>공작은 전장에서 죽었다.</b></div>
+  <div class="vs">
+    <div class="side">
+      <div class="who">로만 므스티슬라비치</div>
+      <div class="meta">갈리치아-볼히니아 대공 · 53세<br>루스를 평정한 최강의 공작</div>
+    </div>
+    <div class="mid">VS</div>
+    <div class="side">
+      <div class="who">레셰크 비아위</div>
+      <div class="meta">크라쿠프 대공 · 20세<br>10년 전 로만이 목숨 걸고 도운 사촌</div>
+    </div>
+  </div>
+  <div class="note">
+    <div class="note-label">기록 · 배경</div>
+    <ul>
+      <li>사인 기록: <b>"자비호스트 전투에서 폴란드군에 패해 전사"</b></li>
+      <li>동맹이 왜 창끝을 겨눴는지는 사료마다 엇갈린다 — <b>루블린 영유권 분쟁</b>설, 신성로마 왕위 전쟁(호엔슈타우펜 대 벨프)에 끌려 들어간 <b>대리전</b>설</li>
+      <li>승자 레셰크의 최후는 카드 8에서 보았다 — 이제 패자의 아이들 차례다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">17 / 23</span></div>
+</section>
+
+<!-- 18 · 40년 계승 전쟁 -->
+<section class="card">
+  <div class="tags"><span class="pill">제3부 루스</span><span class="tag-txt">사건 — 계승 전쟁</span></div>
+  <div class="chip">1205 ~ 1245</div>
+  <div class="title">40년 계승 전쟁 —<br>유랑에서 귀환까지</div>
+  <div class="lead">공작이 죽자, 네 살 다닐로와 두 살 바실코의 나라는 보야르의 반란과 이웃 왕들의 놀이판이 됐다. 다닐로는 어머니와 함께 떠돌며 자랐다 — 아이러니하게도 <b>아버지를 죽인 레셰크의 크라쿠프에서, 다시 언드라시의 헝가리 궁정에서.</b></div>
+  <div class="block timeline">
+    <div class="tl-row"><div class="tl-year">1205</div><div class="tl-text">자비호스트(카드 17) — <b>왕위 계승 전쟁의 시작</b></div></div>
+    <div class="tl-row"><div class="tl-year">1213</div><div class="tl-text">보야르 볼로디슬라프, 스스로 공좌에 — <b>루스 역사상 유일한 참칭</b></div></div>
+    <div class="tl-row"><div class="tl-year">1214</div><div class="tl-text">스피시 밀약 — 레셰크와 언드라시(카드 14)가 <b>갈리치아를 나눠 갖기로</b>, 언드라시의 아들 콜로만이 '갈리치아 왕'으로 대관</div></div>
+    <div class="tl-row"><div class="tl-year">1238</div><div class="tl-text">다닐로, <b>갈리치 탈환</b> — 어른이 되어 돌아오다</div></div>
+    <div class="tl-row"><div class="tl-year">1245</div><div class="tl-text">야로스와프 전투 — <b>40년 전쟁의 종지부</b></div></div>
+  </div>
+  <div class="note">
+    <div class="note-label">기록 · 배경</div>
+    <ul>
+      <li>등록 사건: 갈리치아-볼히니아 왕위 계승 전쟁(1205~1245)</li>
+      <li>다닐로를 거둔 것은 아버지의 적들이었다 — 적과 친척이 한 몸인 시대</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">18 / 23</span></div>
+</section>
+
+<!-- 17 · 칼카 강 -->
+<section class="card">
+  <div class="tags"><span class="pill">제3부 루스</span><span class="tag-txt">사건 — 몽골과의 첫 싸움</span></div>
+  <div class="chip">1223</div>
+  <div class="title">칼카 강 —<br>낯선 군단과의 첫 싸움</div>
+  <div class="lead">스텝에서 쫓겨 온 쿠만이 루스에 구원을 청했다. 루스 공들의 연합군 — <b>스물둘의 다닐로도 그 안에 있었다</b> — 은 칼카 강에서 낯선 기마 군단에 궤멸당했다. 다닐로는 <b>가슴에 창상을 입고도 싸우다</b> 살아 돌아왔다.</div>
+  <div class="block facts">
+    <ul>
+      <li>승자들은 사로잡힌 공들 위에 <b>상판을 깔고 연회</b>를 열었다</li>
+      <li>그리고 홀연히 동쪽으로 사라졌다 — <b>그것은 정찰이었다</b></li>
+      <li>17년 뒤 바투의 본대가 돌아온다 — 1240년 키예프 함락 (카드 22)</li>
+    </ul>
+  </div>
+  <div class="note">
+    <div class="note-label">기록 · 배경</div>
+    <ul>
+      <li>연대기는 "젊고 싸움에 달아올라 제 가슴의 상처를 느끼지 못했다"고 전한다</li>
+      <li>이 참패에도 루스는 대비하지 않았다 — 공들은 다시 서로 싸웠다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">19 / 23</span></div>
+</section>
+
+<!-- 18 · 왕관과 쿠미스 -->
+<section class="card">
+  <div class="tags"><span class="pill">제3부 루스</span><span class="tag-txt">사건 — 칸과 맞선 왕</span></div>
+  <div class="chip">1245 ~ 1264</div>
+  <div class="title">왕관과 쿠미스 —<br>칸과 맞선 왕</div>
+  <div class="lead">야로스와프의 승리 직후, 다닐로는 바투의 장막으로 불려가 무릎을 꿇고 <b>쿠미스(마유주)를 마셨다</b>. 그리고 1253년 도로히친에서 <b>교황 사절이 가져온 왕관</b>을 썼다 — '루스의 왕(Rex Russiae)'. 왕관과 칸 사이, 줄타기의 시작이었다.</div>
+  <div class="quote">
+    <div class="q serif">"오, 타타르의 영예는 악보다 더 악하다!"</div>
+    <div class="qsrc">— 바투 앞에 무릎 꿇은 다닐로를 두고 연대기가 남긴 탄식.</div>
+  </div>
+  <div class="block facts">
+    <ul>
+      <li>1254~55 몽골 장군 쿠렘사의 침공을 <b>격퇴</b> — 몽골에 맞서 이긴 드문 사례</li>
+      <li>1259 부룬다이의 대군 앞에 굴복 — <b>제 손으로 성벽을 허물어야 했다</b></li>
+      <li>아들 레프의 이름을 딴 도시가 오늘의 <b>리비우</b> — 다닐로는 1264년 홀름에 잠들었다</li>
+    </ul>
+  </div>
+  <div class="note">
+    <div class="note-label">배경</div>
+    <ul>
+      <li>교황 왕관의 대가는 교회 통합과 대몽골 십자군 약속 — 실현되지 않았지만, 칭호는 남았다</li>
+      <li>공국은 1349년 폴란드(카지미에시 3세)에 병합될 때까지 이어진다 — 이야기는 다시 폴란드로 돌아와 끝난다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">20 / 23</span></div>
+</section>
+
+<!-- 18 · 교황의 세기 -->
+<section class="card">
+  <div class="tags"><span class="pill">에필로그</span><span class="tag-txt">교차 — 세 나라 위의 로마</span></div>
+  <div class="chip">1198 ~ 1253</div>
+  <div class="title">파문과 왕관 —<br>교황의 세기</div>
+  <div class="lead">이 시대 세 나라의 정치를 관통한 또 하나의 권력은 로마였다. 볼로냐에서 법학을 익히고 서른일곱에 선출된 <b>인노첸시오 3세</b>("교황은 태양, 황제는 달")와 그 후계자들은, 군대 없이도 파문 · 성무 금지 · 왕관으로 왕들을 움직였다.</div>
+  <div class="block facts">
+    <ul>
+      <li><b>파문</b> — 폴란드의 '추방공' 축출(1146)도, 자다르를 약탈한 십자군(1203)도 파문이 갈랐다</li>
+      <li><b>성무 금지</b> — 잉글랜드의 존 왕은 나라를 교황에게 봉토로 바치고 되돌려받았다</li>
+      <li><b>서약 관리</b> — 언드라시의 십자군도, 레셰크의 "맥주도 꿀술도 없다" 청원도 교황청 문서고를 거쳤다</li>
+      <li><b>왕관</b> — 다닐로의 '루스의 왕'(1253)처럼, 왕을 만드는 것도 로마였다</li>
+    </ul>
+  </div>
+  <div class="note">
+    <div class="note-label">기록</div>
+    <ul>
+      <li>제4차 라테란 공의회(1215) — 중세 최대의 종교 회의. 화체설을 공식 교리로, 연 1회 고해성사를 의무로</li>
+      <li>1216년 페루자에서 급서 — 도둑이 제의를 벗겨 가 시신이 벌거벗겨진 채 발견됐다는 기록은 '덧없는 영광'의 예화로 남았다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">21 / 23</span></div>
+</section>
+
+<!-- 19 · 몽골 -->
+<section class="card">
+  <div class="tags"><span class="pill">에필로그</span><span class="tag-txt">세 나라, 같은 폭풍</span></div>
+  <div class="chip">1223 ~ 1241</div>
+  <div class="title">그리고,<br>몽골이 왔다</div>
+  <div class="lead">칼카의 정찰(카드 19)로부터 17년 — 이번엔 <b>바투의 본대</b>였다. 1240년 키예프가 불탔고, 군단은 둘로 갈라져 폴란드와 헝가리로 향했다. 세 나라의 이야기가 하나의 폭풍 속에서 만난다.</div>
+  <div class="block timeline">
+    <div class="tl-row"><div class="tl-year">1237~40</div><div class="tl-text">바투의 본격 침공 — <b>1240년 키예프 함락</b></div></div>
+    <div class="tl-row"><div class="tl-year">1241. 4. 9</div><div class="tl-text"><b>레그니차</b> — 폴란드 제후군 궤멸, 헨리크 2세 전사</div></div>
+    <div class="tl-row"><div class="tl-year">1241. 4. 11</div><div class="tl-text">이틀 뒤 <b>모히</b> — 헝가리 본대 대패, 벨러 4세 도주</div></div>
+  </div>
+  <div class="note">
+    <div class="note-label">기록 · 배경</div>
+    <ul>
+      <li>레그니차의 헨리크 2세는 <b>카드 9 군주국의 주인</b> — 재통일의 꿈이 그와 함께 부서졌다. 시신은 왼발 발가락 6개로 확인됐다고 전해진다</li>
+      <li>모히의 벨러 4세는 <b>게르트루다의 그 아들</b> — 폐허에서 나라를 다시 세워 '제2의 건국자'로 불린다</li>
+      <li>다닐로의 줄타기(카드 20)까지 — 세 나라 모두, 같은 폭풍 아래 놓였다</li>
+    </ul>
+  </div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">22 / 23</span></div>
+</section>
+
+<!-- 20 · 아웃트로 (dark) -->
+<section class="card dark outro">
+  <div class="title">세 왕조의 교차</div>
+  <div class="bar"></div>
+  <div class="grid">
+    <figure>
+      <img src="file:///Users/taeyoung/Desktop/project/papyrus/apps/api/uploads/images/persons/2026/07/1783783152641-660200345.webp" alt="">
+      <div class="gname">레셰크 비아위 · 피아스트</div>
+      <div class="gfate">폴란드 — 가사바에서 피살 · 1227</div>
+    </figure>
+    <figure>
+      <img src="file:///Users/taeyoung/Desktop/project/papyrus/apps/api/uploads/images/persons/2026/07/1783793371228-837040737.webp" alt="">
+      <div class="gname">언드라시 2세 · 아르파드</div>
+      <div class="gfate">헝가리 — 소금을 탕진한 '예루살렘의 왕'</div>
+    </figure>
+    <figure>
+      <img src="file:///Users/taeyoung/Desktop/project/papyrus/apps/api/uploads/images/persons/2026/07/1784017143828-759844257.jpg" alt="">
+      <div class="gname">로만 므스티슬라비치 · 류리크</div>
+      <div class="gfate">루스 — 자비호스트에서 전사 · 1205</div>
+    </figure>
+    <figure>
+      <img src="file:///Users/taeyoung/Desktop/project/papyrus/apps/api/uploads/images/persons/2026/07/1783845195550-504854725.webp" alt="">
+      <div class="gname">인노첸시오 3세 · 교황좌</div>
+      <div class="gfate">그들 모두의 위에 · †1216</div>
+    </figure>
+  </div>
+  <div class="credit">세니오라트와 로타, 소금과 문장 씨족, 파문과 왕관 — 한 시대를 움직인 것들.<br>사건과 기록의 뼈대는 파피루스에 등록된 데이터에서, 배경은 통설의 역사 서술에서 가져왔습니다.</div>
+  <div class="footer"><span>세 왕조의 시대 — 폴란드 · 헝가리 · 루스</span><span class="page">23 / 23</span></div>
+</section>
+
+</body>
+</html>
