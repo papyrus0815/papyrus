@@ -9,6 +9,9 @@ export const APPOINTMENT_METHOD_LABELS: Record<string, string> = {
   PARLIAMENTARY_ELECTION: '의회 선출',
   APPOINTMENT: '임명',
   HEREDITARY: '세습',
+  ELECTIVE_MONARCHY: '선거군주제 선출',
+  CONQUEST: '정복',
+  RESTORATION: '복위',
   COUP: '쿠데타 / 혁명',
   OTHER: '기타',
 }

@@ -233,6 +233,9 @@ export interface CreateGovernmentPositionTenureDto {
     | 'HEREDITARY'
     | 'COUP'
     | 'PARLIAMENTARY_ELECTION'
+    | 'CONQUEST'
+    | 'RESTORATION'
+    | 'ELECTIVE_MONARCHY'
     | 'OTHER'
   endReason?:
     | 'TERM_COMPLETED'
@@ -246,6 +249,8 @@ export interface CreateGovernmentPositionTenureDto {
     | 'WAR_DEFEAT'
     | 'STATE_DISSOLVED'
     | 'OTHER'
+  /** 취임 경위 상세 서사 — appointmentMethod의 상세 쌍(재위는 '즉위 상세') */
+  appointmentDetail?: string
   endReasonDetail?: string
   notes?: string
   priority?: number
@@ -260,7 +265,7 @@ export interface CreateGovernmentPositionTenureDto {
 /**
  * 재임 수정(PUT) 전용 DTO — 수정 모드에서 *비운 값은 명시적 null(해제)*로 전송한다.
  * 키 없음(undefined)은 기존 값 유지. 서버 repository가 null=해제를 지원
- * (endDate·cabinetId·termNumber·subTermNumber·regnalNumber·notes·appointmentMethod·endReason·endReasonDetail).
+ * (endDate·cabinetId·termNumber·subTermNumber·regnalNumber·notes·appointmentMethod·appointmentDetail·endReason·endReasonDetail).
  */
 export type UpdateGovernmentPositionTenureDto = Partial<
   Omit<
@@ -270,6 +275,7 @@ export type UpdateGovernmentPositionTenureDto = Partial<
     | 'subTermNumber'
     | 'regnalNumber'
     | 'appointmentMethod'
+    | 'appointmentDetail'
     | 'endReason'
     | 'endReasonDetail'
     | 'notes'
@@ -280,6 +286,7 @@ export type UpdateGovernmentPositionTenureDto = Partial<
   subTermNumber?: number | null
   regnalNumber?: number | null
   appointmentMethod?: CreateGovernmentPositionTenureDto['appointmentMethod'] | null
+  appointmentDetail?: string | null
   endReason?: CreateGovernmentPositionTenureDto['endReason'] | null
   endReasonDetail?: string | null
   notes?: string | null
@@ -299,9 +306,13 @@ export interface CreateSovereignReignDto {
   startDate: string
   endDate?: string
   appointmentMethod?: CreateGovernmentPositionTenureDto['appointmentMethod']
+  /** 즉위 경위 상세 서사 — appointmentMethod의 상세 쌍(승계 경위·대관식 언급·선왕 관계 등) */
+  appointmentDetail?: string
   endReason?: CreateGovernmentPositionTenureDto['endReason']
   endReasonDetail?: string
   notes?: string
+  /** 왕호/재위명 (예: 빅토리아, 루이 14세) */
+  regnalName?: string
   showPositionInfo?: boolean
 }
 
@@ -315,9 +326,11 @@ export type UpdateSovereignReignDto = Partial<
     | 'regnalNumber'
     | 'dynastyOrdinal'
     | 'appointmentMethod'
+    | 'appointmentDetail'
     | 'endReason'
     | 'endReasonDetail'
     | 'notes'
+    | 'regnalName'
   >
 > & {
   endDate?: string | null
@@ -326,9 +339,11 @@ export type UpdateSovereignReignDto = Partial<
   regnalNumber?: number | null
   dynastyOrdinal?: number | null
   appointmentMethod?: CreateSovereignReignDto['appointmentMethod'] | null
+  appointmentDetail?: string | null
   endReason?: CreateSovereignReignDto['endReason'] | null
   endReasonDetail?: string | null
   notes?: string | null
+  regnalName?: string | null
 }
 
 /**

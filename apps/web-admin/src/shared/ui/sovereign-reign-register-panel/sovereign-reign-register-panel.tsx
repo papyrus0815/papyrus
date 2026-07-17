@@ -13,6 +13,7 @@ import styled from 'styled-components'
 import { useHistoricalCountriesByModernCountry, useCountries } from '@/features/country/api'
 import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
 import { personCareerApi } from '@/shared/api/person-career'
+import type { CreateSovereignReignDto } from '@/shared/api/person-career'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
@@ -158,6 +159,56 @@ const RequiredMark = styled.span`
   color: ${({ theme }) => theme.colors.error};
 `
 
+/**
+ * 재위 레코드 → 폼 필드 정규화.
+ * 수정 hydrate와 닫기 confirm의 dirty 기준선이 반드시 같은 정규화를 공유해야
+ * 하므로 한 곳에 둔다 (키 순서도 dirty 비교(JSON.stringify)에 쓰이므로 유지).
+ */
+const reignToFormFields = (reign: any) => {
+  // regnalName 필드 우선, 없으면 legacy notes에서 "왕명: X" 파싱
+  const legacyMatch =
+    (reign.notes ?? '').match(/왕명\s*:\s*(.+?)(?:\n|$)/i) ||
+    (reign.notes ?? '').match(/왕명\s*:\s*(.+)/i)
+  return {
+    countryId: reign.countryId ?? reign.country?.id ?? '',
+    historicalCountryId:
+      reign.historicalCountryId ?? reign.historicalCountry?.id ?? null,
+    positionDefinitionId:
+      reign.positionDefinitionId ?? reign.positionDefinition?.id ?? null,
+    regnalName: reign.regnalName ?? (legacyMatch ? legacyMatch[1].trim() : ''),
+    startDate: reign.startDate ? reign.startDate.slice(0, 10) : '',
+    endDate: reign.endDate ? reign.endDate.slice(0, 10) : '',
+    regnalNumber: reign.regnalNumber != null ? String(reign.regnalNumber) : '',
+    subTermNumber:
+      reign.subTermNumber != null ? String(reign.subTermNumber) : '',
+    dynastyOrdinal:
+      reign.dynastyOrdinal != null ? String(reign.dynastyOrdinal) : '',
+    appointmentMethod: reign.appointmentMethod ?? '',
+    appointmentDetail: reign.appointmentDetail ?? '',
+    endReason: reign.endReason ?? '',
+    endReasonDetail: reign.endReasonDetail ?? '',
+    notes: reign.notes ?? '',
+  }
+}
+
+/** 생성 모드 기준선(빈 폼) — reignToFormFields와 키 순서 동일 유지 */
+const EMPTY_FORM_FIELDS: ReturnType<typeof reignToFormFields> = {
+  countryId: '',
+  historicalCountryId: null,
+  positionDefinitionId: null,
+  regnalName: '',
+  startDate: '',
+  endDate: '',
+  regnalNumber: '',
+  subTermNumber: '',
+  dynastyOrdinal: '',
+  appointmentMethod: '',
+  appointmentDetail: '',
+  endReason: '',
+  endReasonDetail: '',
+  notes: '',
+}
+
 export interface SovereignReignRegisterPanelProps {
   personId: string
   open: boolean
@@ -192,6 +243,7 @@ export function SovereignReignRegisterPanel({
   const [subTermNumber, setSubTermNumber] = useState('')
   const [dynastyOrdinal, setDynastyOrdinal] = useState('')
   const [appointmentMethod, setAppointmentMethod] = useState('')
+  const [appointmentDetail, setAppointmentDetail] = useState('')
   const [endReason, setEndReason] = useState('')
   const [endReasonDetail, setEndReasonDetail] = useState('')
   const [notes, setNotes] = useState('')
@@ -244,6 +296,7 @@ export function SovereignReignRegisterPanel({
     setSubTermNumber('')
     setDynastyOrdinal('')
     setAppointmentMethod('')
+    setAppointmentDetail('')
     setEndReason('')
     setEndReasonDetail('')
     setNotes('')
@@ -255,24 +308,21 @@ export function SovereignReignRegisterPanel({
 
   useEffect(() => {
     if (!open || !existingReign) return
-    const r = existingReign as any
-    setCountryId(r.countryId ?? r.country?.id ?? '')
-    setHistoricalCountryId(r.historicalCountryId ?? r.historicalCountry?.id ?? null)
-    setPositionDefinitionId(r.positionDefinitionId ?? r.positionDefinition?.id ?? null)
-    // regnalName 필드 우선, 없으면 legacy notes에서 "왕명: X" 파싱
-    const legacyMatch =
-      (r.notes ?? '').match(/왕명\s*:\s*(.+?)(?:\n|$)/i) ||
-      (r.notes ?? '').match(/왕명\s*:\s*(.+)/i)
-    setRegnalName(r.regnalName ?? (legacyMatch ? legacyMatch[1].trim() : ''))
-    setStartDate(r.startDate ? r.startDate.slice(0, 10) : '')
-    setEndDate(r.endDate ? r.endDate.slice(0, 10) : '')
-    setRegnalNumber(r.regnalNumber != null ? String(r.regnalNumber) : '')
-    setSubTermNumber(r.subTermNumber != null ? String(r.subTermNumber) : '')
-    setDynastyOrdinal(r.dynastyOrdinal != null ? String(r.dynastyOrdinal) : '')
-    setAppointmentMethod(r.appointmentMethod ?? '')
-    setEndReason(r.endReason ?? '')
-    setEndReasonDetail(r.endReasonDetail ?? '')
-    setNotes(r.notes ?? '')
+    const fields = reignToFormFields(existingReign)
+    setCountryId(fields.countryId)
+    setHistoricalCountryId(fields.historicalCountryId)
+    setPositionDefinitionId(fields.positionDefinitionId)
+    setRegnalName(fields.regnalName)
+    setStartDate(fields.startDate)
+    setEndDate(fields.endDate)
+    setRegnalNumber(fields.regnalNumber)
+    setSubTermNumber(fields.subTermNumber)
+    setDynastyOrdinal(fields.dynastyOrdinal)
+    setAppointmentMethod(fields.appointmentMethod)
+    setAppointmentDetail(fields.appointmentDetail)
+    setEndReason(fields.endReason)
+    setEndReasonDetail(fields.endReasonDetail)
+    setNotes(fields.notes)
   }, [open, existingReign])
 
   // 생성 모드: 열릴 때 prefill된 국가를 1회 적용 (in-place 등록)
@@ -325,32 +375,90 @@ export function SovereignReignRegisterPanel({
 
   const canSubmit = startDate.trim().length > 0
 
+  /**
+   * 닫기 confirm용 dirty 기준선 — 생성=prefill 반영 초기값, 수정=hydrate 값.
+   * 수정 모드 hydrate 대기 중(existingReign 미도착)에는 null로 판정 유보.
+   */
+  const baselineFields = useMemo(() => {
+    if (isEdit) {
+      return existingReign ? reignToFormFields(existingReign) : null
+    }
+    return {
+      ...EMPTY_FORM_FIELDS,
+      countryId: initialCountryId ?? '',
+      historicalCountryId: initialHistoricalCountryId ?? null,
+    }
+  }, [isEdit, existingReign, initialCountryId, initialHistoricalCountryId])
+
+  const formDirty =
+    baselineFields != null &&
+    JSON.stringify(baselineFields) !==
+      JSON.stringify({
+        countryId,
+        historicalCountryId,
+        positionDefinitionId,
+        regnalName,
+        startDate,
+        endDate,
+        regnalNumber,
+        subTermNumber,
+        dynastyOrdinal,
+        appointmentMethod,
+        appointmentDetail,
+        endReason,
+        endReasonDetail,
+        notes,
+      })
+
+  /** 닫기 요청 — 작성 중 내용이 있으면 confirm 게이트 (오버레이 오클릭에 서사 유실 방지) */
+  const requestClose = async () => {
+    // in-flight 중 닫기 무시 — 요청 실패 시 입력 보존 (성공 닫힘은 handleSubmit/handleDelete가 직접 onClose)
+    if (submitting || deleting) return
+    if (formDirty) {
+      const confirmed = await confirm({
+        title: '작성 중인 내용이 있습니다',
+        message: '저장하지 않고 닫으시겠습니까? 입력한 내용은 사라집니다.',
+        danger: true,
+      })
+      if (!confirmed) return
+    }
+    onClose()
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!canSubmit || submitting) return
     setSubmitting(true)
     try {
+      /** 수정 모드: 비운 값은 명시적 null(해제) 전송 — undefined면 서버가 기존 값을 유지해 silent no-op */
+      const emptyAs = isEdit && reignId ? null : undefined
       const dto = {
         personId,
         countryId: countryId || undefined,
         historicalCountryId: historicalCountryId || undefined,
         positionDefinitionId: positionDefinitionId || undefined,
         startDate,
-        endDate: endDate || undefined,
-        regnalNumber: regnalNumber ? Number(regnalNumber) : undefined,
-        subTermNumber: subTermNumber ? Number(subTermNumber) : undefined,
-        dynastyOrdinal: dynastyOrdinal ? Number(dynastyOrdinal) : undefined,
-        appointmentMethod: (appointmentMethod || undefined) as any,
-        endReason: (endReason || undefined) as any,
-        endReasonDetail: endReasonDetail.trim() || undefined,
-        notes: notes.trim() || undefined,
-        regnalName: regnalName.trim() || undefined,
+        endDate: endDate || emptyAs,
+        regnalNumber: regnalNumber ? Number(regnalNumber) : emptyAs,
+        subTermNumber: subTermNumber ? Number(subTermNumber) : emptyAs,
+        dynastyOrdinal: dynastyOrdinal ? Number(dynastyOrdinal) : emptyAs,
+        appointmentMethod: (appointmentMethod || emptyAs) as
+          | CreateSovereignReignDto['appointmentMethod']
+          | null,
+        appointmentDetail: appointmentDetail.trim() || emptyAs,
+        endReason: (endReason || emptyAs) as
+          | CreateSovereignReignDto['endReason']
+          | null,
+        endReasonDetail: endReasonDetail.trim() || emptyAs,
+        notes: notes.trim() || emptyAs,
+        regnalName: regnalName.trim() || emptyAs,
       }
       if (isEdit && reignId) {
         await personCareerApi.updateSovereignReign(reignId, dto)
         notify.success('군주 재위가 수정되었습니다.')
       } else {
-        await personCareerApi.addSovereignReign(dto)
+        // 생성 모드에서는 emptyAs === undefined 라 null이 실제로 들어가지 않음
+        await personCareerApi.addSovereignReign(dto as CreateSovereignReignDto)
         notify.success('군주 재위가 등록되었습니다.')
       }
       invalidateTenureQueries(queryClient, { personId })
@@ -400,7 +508,7 @@ export function SovereignReignRegisterPanel({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={onClose}
+              onClick={() => void requestClose()}
             >
               <PersonRegisterModalBox
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -418,7 +526,7 @@ export function SovereignReignRegisterPanel({
                   <PersonRegisterModalCloseBtn
                     type="button"
                     aria-label="닫기"
-                    onClick={onClose}
+                    onClick={() => void requestClose()}
                   >
                     <FiX size={20} />
                   </PersonRegisterModalCloseBtn>
@@ -580,6 +688,24 @@ export function SovereignReignRegisterPanel({
                           </FieldControl>
                         </FieldRow>
 
+                        {/* 즉위 상세 — 즉위 방식(enum)의 서사 쌍: 승계 경위·대관식 언급·선왕 관계 등 */}
+                        <FieldRow>
+                          <FieldLabel htmlFor="sovereign-appointment-detail">
+                            즉위 상세
+                          </FieldLabel>
+                          <FieldControl>
+                            <Textarea
+                              id="sovereign-appointment-detail"
+                              value={appointmentDetail}
+                              onChange={(event) =>
+                                setAppointmentDetail(event.target.value)
+                              }
+                              placeholder="선택 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관"
+                              rows={2}
+                            />
+                          </FieldControl>
+                        </FieldRow>
+
                         {/* 퇴위 사유 */}
                         <FieldRow>
                           <FieldLabel>퇴위 사유</FieldLabel>
@@ -638,7 +764,7 @@ export function SovereignReignRegisterPanel({
                   )}
                   <PersonRegisterModalCancelBtn
                     type="button"
-                    onClick={onClose}
+                    onClick={() => void requestClose()}
                     disabled={submitting || deleting}
                   >
                     취소

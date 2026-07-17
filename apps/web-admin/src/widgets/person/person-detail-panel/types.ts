@@ -22,6 +22,8 @@ export interface TenureLikeRecord {
   dynastyOrdinal?: number | null
   regnalName?: string | null
   appointmentMethod?: string | null
+  /** 즉위/취임 경위 상세 서사 — appointmentMethod의 상세 쌍 */
+  appointmentDetail?: string | null
   endReason?: string | null
   endReasonDetail?: string | null
   title?: string | null

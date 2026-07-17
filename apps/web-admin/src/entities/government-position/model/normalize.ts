@@ -50,6 +50,7 @@ export interface RawTenureLike {
   } | null
   title?: string | null
   appointmentMethod?: string | null
+  appointmentDetail?: string | null
   endReason?: string | null
   endReasonDetail?: string | null
   regnalName?: string | null
@@ -161,6 +162,7 @@ export function normalizeTenure(
     startDate: raw.startDate ?? null,
     endDate: raw.endDate ?? null,
     appointmentMethod: raw.appointmentMethod ?? null,
+    appointmentDetail: raw.appointmentDetail ?? null,
     endReason: raw.endReason ?? null,
     endReasonDetail: raw.endReasonDetail ?? null,
     notes: raw.notes ?? null,

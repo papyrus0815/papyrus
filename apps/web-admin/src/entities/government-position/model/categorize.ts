@@ -20,7 +20,15 @@ const MONARCH_TITLE_RE =
   /국왕|왕\b|King|Queen|Emperor|황제|천황|여왕|Tsar|Czar|Sultan|Caliph|술탄|칼리프/i
 const POPE_TITLE_RE = /교황|Pope/i
 
-const MONARCH_METHODS = new Set(['HEREDITARY', 'SUCCESSION', 'COUP'])
+const MONARCH_METHODS = new Set([
+  'HEREDITARY',
+  'SUCCESSION',
+  'COUP',
+  // 군주 전용 즉위 경위 — 선거군주제는 '선출'이지만 군주로 분류 (신성로마·폴란드)
+  'CONQUEST',
+  'RESTORATION',
+  'ELECTIVE_MONARCHY',
+])
 const PRESIDENT_METHODS = new Set([
   'DIRECT_ELECTION',
   'INDIRECT_ELECTION',

@@ -26,7 +26,10 @@ import {
   type PersonLifeEvent,
   type PersonLifeEventCategory,
 } from '@/shared/api/person-life-events'
-import { TENURE_END_REASON_LABELS } from '@/shared/lib/tenure-labels'
+import {
+  APPOINTMENT_METHOD_LABELS,
+  TENURE_END_REASON_LABELS,
+} from '@/shared/lib/tenure-labels'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { CATEGORY_ICON } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
@@ -72,7 +75,10 @@ interface ReignInput {
   notes?: string | null
   regnalNumber?: number | null
   subTermNumber?: number | null
+  appointmentMethod?: string | null
+  appointmentDetail?: string | null
   endReason?: string | null
+  endReasonDetail?: string | null
   positionDefinition?: { title?: string | null } | null
   country?: { name?: string | null } | null
   historicalCountry?: { name?: string | null } | null
@@ -86,7 +92,10 @@ interface TenureInput {
   notes?: string | null
   termNumber?: number | null
   subTermNumber?: number | null
+  appointmentMethod?: string | null
+  appointmentDetail?: string | null
   endReason?: string | null
+  endReasonDetail?: string | null
   positionDefinition?: { title?: string | null } | null
   country?: { name?: string | null } | null
   historicalCountry?: { name?: string | null } | null
@@ -445,59 +454,97 @@ export function PersonLifeTimelineInfographic({
       })
     }
 
-    for (const r of reigns ?? []) {
-      const s = parseDate(r.startDate)
-      const e = parseDate(r.endDate)
-      const country = r.historicalCountry?.name ?? r.country?.name ?? null
-      const pos = r.positionDefinition?.title ?? '재위'
+    for (const reign of reigns ?? []) {
+      const startsAt = parseDate(reign.startDate)
+      const endsAt = parseDate(reign.endDate)
+      const country = reign.historicalCountry?.name ?? reign.country?.name ?? null
+      const pos = reign.positionDefinition?.title ?? '재위'
       result.push({
-        key: `reign-${r.id}`,
+        key: `reign-${reign.id}`,
         kind: 'reign',
-        start: s,
-        end: e,
-        sortKey: toTs(s),
+        start: startsAt,
+        end: endsAt,
+        sortKey: toTs(startsAt),
         title: [country, pos].filter(Boolean).join(' · ') || '재위',
         subtitle:
-          r.regnalNumber != null
-            ? `${r.regnalNumber}대${r.subTermNumber != null ? ` ${r.subTermNumber}기` : ''}`
+          reign.regnalNumber != null
+            ? `${reign.regnalNumber}대${reign.subTermNumber != null ? ` ${reign.subTermNumber}기` : ''}`
             : null,
-        dateLabel: formatRange(s, e),
+        dateLabel: formatRange(startsAt, endsAt),
         description:
           [
-            r.notes,
-            r.endReason ? `종료: ${TENURE_END_REASON_LABELS[r.endReason] ?? r.endReason}` : null,
+            reign.appointmentMethod || reign.appointmentDetail
+              ? `즉위: ${[
+                  reign.appointmentMethod
+                    ? APPOINTMENT_METHOD_LABELS[reign.appointmentMethod] ?? reign.appointmentMethod
+                    : null,
+                  reign.appointmentDetail,
+                ]
+                  .filter(Boolean)
+                  .join(' — ')}`
+              : null,
+            reign.notes,
+            reign.endReason || reign.endReasonDetail
+              ? `종료: ${[
+                  reign.endReason
+                    ? TENURE_END_REASON_LABELS[reign.endReason] ?? reign.endReason
+                    : null,
+                  reign.endReasonDetail,
+                ]
+                  .filter(Boolean)
+                  .join(' — ')}`
+              : null,
           ]
             .filter(Boolean)
             .join('\n') || null,
-        durationDays: diffDays(s, e),
+        durationDays: diffDays(startsAt, endsAt),
       })
     }
 
-    for (const t of tenures ?? []) {
-      const s = parseDate(t.startDate)
-      const e = parseDate(t.endDate)
-      const country = t.historicalCountry?.name ?? t.country?.name ?? null
-      const pos = t.positionDefinition?.title ?? t.title ?? '재임'
+    for (const tenure of tenures ?? []) {
+      const startsAt = parseDate(tenure.startDate)
+      const endsAt = parseDate(tenure.endDate)
+      const country = tenure.historicalCountry?.name ?? tenure.country?.name ?? null
+      const pos = tenure.positionDefinition?.title ?? tenure.title ?? '재임'
       result.push({
-        key: `tenure-${t.id}`,
+        key: `tenure-${tenure.id}`,
         kind: 'tenure',
-        start: s,
-        end: e,
-        sortKey: toTs(s),
+        start: startsAt,
+        end: endsAt,
+        sortKey: toTs(startsAt),
         title: [country, pos].filter(Boolean).join(' · ') || '재임',
         subtitle:
-          t.termNumber != null
-            ? `제${t.termNumber}대${t.subTermNumber != null ? ` ${t.subTermNumber}기` : ''}`
+          tenure.termNumber != null
+            ? `제${tenure.termNumber}대${tenure.subTermNumber != null ? ` ${tenure.subTermNumber}기` : ''}`
             : null,
-        dateLabel: formatRange(s, e),
+        dateLabel: formatRange(startsAt, endsAt),
         description:
           [
-            t.notes,
-            t.endReason ? `종료: ${TENURE_END_REASON_LABELS[t.endReason] ?? t.endReason}` : null,
+            tenure.appointmentMethod || tenure.appointmentDetail
+              ? `취임: ${[
+                  tenure.appointmentMethod
+                    ? APPOINTMENT_METHOD_LABELS[tenure.appointmentMethod] ?? tenure.appointmentMethod
+                    : null,
+                  tenure.appointmentDetail,
+                ]
+                  .filter(Boolean)
+                  .join(' — ')}`
+              : null,
+            tenure.notes,
+            tenure.endReason || tenure.endReasonDetail
+              ? `종료: ${[
+                  tenure.endReason
+                    ? TENURE_END_REASON_LABELS[tenure.endReason] ?? tenure.endReason
+                    : null,
+                  tenure.endReasonDetail,
+                ]
+                  .filter(Boolean)
+                  .join(' — ')}`
+              : null,
           ]
             .filter(Boolean)
             .join('\n') || null,
-        durationDays: diffDays(s, e),
+        durationDays: diffDays(startsAt, endsAt),
       })
     }
 

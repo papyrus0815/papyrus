@@ -200,6 +200,7 @@ export function RegisterMonarchModal({
   const [subTermNumber, setSubTermNumber] = useState('')
   const [dynastyOrdinal, setDynastyOrdinal] = useState('')
   const [appointmentMethod, setAppointmentMethod] = useState('')
+  const [appointmentDetail, setAppointmentDetail] = useState('')
   const [endReason, setEndReason] = useState('')
   const [endReasonDetail, setEndReasonDetail] = useState('')
   const [notes, setNotes] = useState('')
@@ -280,6 +281,7 @@ export function RegisterMonarchModal({
     setSubTermNumber('')
     setDynastyOrdinal('')
     setAppointmentMethod('')
+    setAppointmentDetail('')
     setEndReason('')
     setEndReasonDetail('')
     setNotes('')
@@ -394,6 +396,7 @@ export function RegisterMonarchModal({
       dynastyOrdinal: parseOptionalInt(dynastyOrdinal),
       appointmentMethod: (appointmentMethod ||
         undefined) as CreateSovereignReignDto['appointmentMethod'],
+      appointmentDetail: appointmentDetail.trim() || undefined,
       endReason: (endReason ||
         undefined) as CreateSovereignReignDto['endReason'],
       endReasonDetail: endReasonDetail.trim() || undefined,
@@ -625,6 +628,21 @@ export function RegisterMonarchModal({
                     </option>
                   ))}
                 </FormSelectNative>
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
+              <FieldLabel htmlFor="monarch-appointment-detail">
+                즉위 상세
+              </FieldLabel>
+              <FieldControl>
+                <StyledFormTextarea
+                  id="monarch-appointment-detail"
+                  value={appointmentDetail}
+                  onChange={(event) => setAppointmentDetail(event.target.value)}
+                  placeholder="선택 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관"
+                  rows={2}
+                />
               </FieldControl>
             </FieldRow>
 

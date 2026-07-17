@@ -389,6 +389,8 @@ export function TenureRegisterPanel({
   /** 왕조 내 서수 — 재위(SOVEREIGN_REIGN) 수정 시에만 의미, "부르봉 왕조 N대" */
   const [dynastyOrdinal, setDynastyOrdinal] = useState('')
   const [appointmentMethod, setAppointmentMethod] = useState('')
+  /** 즉위/취임 경위 상세 서사 — appointmentMethod(enum)의 상세 쌍, endReasonDetail의 시작측 대칭 */
+  const [appointmentDetail, setAppointmentDetail] = useState('')
   const [endReason, setEndReason] = useState('')
   const [endReasonDetail, setEndReasonDetail] = useState('')
   const [notes, setNotes] = useState('')
@@ -561,6 +563,7 @@ export function TenureRegisterPanel({
     setSubTermNumber('')
     setDynastyOrdinal('')
     setAppointmentMethod('')
+    setAppointmentDetail('')
     setEndReason('')
     setEndReasonDetail('')
     setNotes('')
@@ -632,6 +635,7 @@ export function TenureRegisterPanel({
     setSubTermNumber(t.subTermNumber != null ? String(t.subTermNumber) : '')
     setDynastyOrdinal(t.dynastyOrdinal != null ? String(t.dynastyOrdinal) : '')
     setAppointmentMethod(t.appointmentMethod ?? '')
+    setAppointmentDetail(t.appointmentDetail ?? '')
     setEndReason(t.endReason ?? '')
     setEndReasonDetail(t.endReasonDetail ?? '')
     // 레거시 "왕명: X" 줄은 비고에서 분리(읽기 전용) — 실수로 지워 위젯 왕명 표시가 깨지는 것 방지
@@ -691,6 +695,7 @@ export function TenureRegisterPanel({
       termNumber: parsedOrdinal,
       subTermNumber: parsedSubTerm,
       appointmentMethod: (appointmentMethod || emptyAs) as any,
+      appointmentDetail: appointmentDetail.trim() || emptyAs,
       endReason: (endReason || emptyAs) as any,
       endReasonDetail: endReasonDetail.trim() || emptyAs,
       notes: combinedNotes || emptyAs,
@@ -713,6 +718,7 @@ export function TenureRegisterPanel({
             subTermNumber: parsedSubTerm ?? null,
             dynastyOrdinal: parsedDynastyOrdinal ?? null,
             appointmentMethod: (appointmentMethod || null) as any,
+            appointmentDetail: appointmentDetail.trim() || null,
             endReason: (endReason || null) as any,
             endReasonDetail: endReasonDetail.trim() || null,
             notes: combinedNotes || null,
@@ -1085,7 +1091,7 @@ export function TenureRegisterPanel({
               )}
 
               <FieldRow>
-                <FieldLabel>취임 방식</FieldLabel>
+                <FieldLabel>{editingIsSovereign ? '즉위 방식' : '취임 방식'}</FieldLabel>
                 <FieldControl>
                   <FormSelectNative
                     value={appointmentMethod}
@@ -1098,6 +1104,26 @@ export function TenureRegisterPanel({
                       </option>
                     ))}
                   </FormSelectNative>
+                </FieldControl>
+              </FieldRow>
+
+              <FieldRow>
+                {/* 재위(SOVEREIGN_REIGN)는 '즉위 상세', 일반 재임은 '취임 상세' — appointmentMethod의 서사 쌍 */}
+                <FieldLabel htmlFor="tenure-appointment-detail">
+                  {editingIsSovereign ? '즉위 상세' : '취임 상세'}
+                </FieldLabel>
+                <FieldControl>
+                  <Textarea
+                    id="tenure-appointment-detail"
+                    value={appointmentDetail}
+                    onChange={(event) => setAppointmentDetail(event.target.value)}
+                    placeholder={
+                      editingIsSovereign
+                        ? '선택 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관'
+                        : '선택 (예: 권한대행 후 정식 취임)'
+                    }
+                    rows={2}
+                  />
                 </FieldControl>
               </FieldRow>
 

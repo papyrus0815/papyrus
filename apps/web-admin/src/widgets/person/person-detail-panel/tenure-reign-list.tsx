@@ -157,13 +157,18 @@ export function TenureReignList({
                   </UnifiedMetaChip>
                 )}
                 {ageAtStart != null && (
-                  <UnifiedAgeBadge>{ageAtStart}세에 취임</UnifiedAgeBadge>
+                  <UnifiedAgeBadge>
+                    {ageAtStart}세에 {isReign ? '즉위' : '취임'}
+                  </UnifiedAgeBadge>
                 )}
                 {ageAtEnd != null && (
-                  <UnifiedAgeBadge>{ageAtEnd}세에 퇴임</UnifiedAgeBadge>
+                  <UnifiedAgeBadge>
+                    {ageAtEnd}세에 {isReign ? '퇴위' : '퇴임'}
+                  </UnifiedAgeBadge>
                 )}
               </UnifiedMetaRow>
               {(d.appointmentMethod ||
+                d.appointmentDetail ||
                 d.endReason ||
                 d.endReasonDetail ||
                 d.notes) && (
@@ -174,6 +179,10 @@ export function TenureReignList({
                       {APPOINTMENT_METHOD_LABELS[d.appointmentMethod] ??
                         d.appointmentMethod}
                     </span>
+                  )}
+                  {/* 즉위/취임 경위 서사 — 칩과 달리 여러 문장일 수 있어 UnifiedNote(자체 행·개행 보존)로 */}
+                  {d.appointmentDetail && (
+                    <UnifiedNote>{d.appointmentDetail}</UnifiedNote>
                   )}
                   {(d.endReason || d.endReasonDetail) && (
                     <span>

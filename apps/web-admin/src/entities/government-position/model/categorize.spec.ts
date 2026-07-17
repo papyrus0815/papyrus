@@ -35,6 +35,17 @@ describe('categorizePosition — 직책 분류 단일 출처', () => {
       }
     })
 
+    it('군주 전용 즉위 경위(정복·복위·선거군주제 선출) → MONARCH — 선거군주제는 선출이지만 군주', () => {
+      for (const method of ['CONQUEST', 'RESTORATION', 'ELECTIVE_MONARCHY']) {
+        expect(
+          categorizePosition({
+            positionType: 'HEAD_OF_STATE',
+            appointmentMethod: method,
+          }),
+        ).toBe('MONARCH')
+      }
+    })
+
     it('선거 임명방식 → PRESIDENT', () => {
       for (const method of [
         'DIRECT_ELECTION',
