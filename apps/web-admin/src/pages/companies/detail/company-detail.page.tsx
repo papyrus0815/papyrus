@@ -323,7 +323,7 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
               </S.GroupPanel>
 
               <S.GroupPanel $active={activeGroup === 'business'} role="tabpanel">
-                <S.GroupGrid>
+                <S.GroupGrid $reading>
                   <S.GridCell $card>
                     <CompanyHistorySection
                       histories={company.histories ?? []}

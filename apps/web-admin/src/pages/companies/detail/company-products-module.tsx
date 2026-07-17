@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FiPlus, FiTrash2 } from 'react-icons/fi'
+import styled from 'styled-components'
 
 import type {
   CompanyProductInput,
@@ -158,9 +159,9 @@ export function CompanyProductsModule({
           제품·기술을 카탈로그로 기록할 수 있습니다 (예: Blackwell B200, Hopper H100).
         </S.EmptyState>
       ) : (
-        <S.RowStack>
+        <CardGrid>
           {rows.map((row, idx) => (
-            <S.Row key={row.key}>
+            <ProductCard key={row.key}>
               <S.RowHeader>
                 <S.RowTitleHost>
                   <InlineText
@@ -239,9 +240,9 @@ export function CompanyProductsModule({
                   label="제품 설명"
                 />
               </S.RowNarrative>
-            </S.Row>
+            </ProductCard>
           ))}
-        </S.RowStack>
+        </CardGrid>
       )}
 
       <S.AddButton type="button" onClick={addRow}>
@@ -293,3 +294,21 @@ function syncRows(
   }
   return next
 }
+
+const CardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
+`
+
+/** 제품 카드 — 카탈로그식 그리드. 모듈 카드(GridCell) 안의 채워진 카드. */
+const ProductCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.primary};
+`

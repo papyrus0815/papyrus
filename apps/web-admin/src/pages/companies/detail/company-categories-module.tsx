@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { FiX } from 'react-icons/fi'
+import { FiPlus, FiX } from 'react-icons/fi'
+import styled from 'styled-components'
 
 import type {
   CompanyCategoryInput,
@@ -10,6 +11,7 @@ import type {
 } from '@/shared/api/company'
 import { companyCategoryApi } from '@/shared/api/company-category'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { Modal } from '@/shared/ui/modal'
 
 import * as S from './company-detail.styles'
 
@@ -36,6 +38,7 @@ export function CompanyCategoriesModule({
   onPatch,
 }: CompanyCategoriesModuleProps) {
   const [links, setLinks] = useState<LinkRow[]>(() => toLinks(categories))
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   useEffect(() => {
     setLinks(toLinks(categories))
@@ -124,23 +127,36 @@ export function CompanyCategoriesModule({
         ))}
 
         {addable.length > 0 && (
-          <S.CategorySelect
-            value=""
-            onChange={(e) => {
-              addCategory(e.target.value)
-              e.target.value = ''
-            }}
-            aria-label="업종 추가"
-          >
-            <option value="">＋ 업종 추가</option>
-            {addable.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.parent ? `${cat.parent.name} › ${cat.name}` : cat.name}
-              </option>
-            ))}
-          </S.CategorySelect>
+          <AddChipBtn type="button" onClick={() => setPickerOpen(true)}>
+            <FiPlus /> 업종 추가
+          </AddChipBtn>
         )}
       </S.ChipRow>
+
+      <Modal
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        title="업종 추가"
+        size="narrow"
+      >
+        <PickList role="listbox" aria-label="업종 선택">
+          {addable.map((cat) => (
+            <PickRow
+              key={cat.id}
+              type="button"
+              onClick={() => {
+                addCategory(cat.id)
+                setPickerOpen(false)
+              }}
+            >
+              {cat.parent ? `${cat.parent.name} › ${cat.name}` : cat.name}
+            </PickRow>
+          ))}
+          {addable.length === 0 && (
+            <PickEmpty>추가할 업종이 없습니다.</PickEmpty>
+          )}
+        </PickList>
+      </Modal>
 
       {links.length === 0 && addable.length === 0 && (
         <S.EmptyState>등록된 업종 분류가 없습니다.</S.EmptyState>
@@ -158,3 +174,77 @@ function toLinks(categories: CompanyCategoryLink[]): LinkRow[] {
     note: cat.note,
   }))
 }
+
+/** 칩 행의 '＋ 업종 추가' — native select 대신 모달 피커를 여는 칩형 버튼. */
+const AddChipBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  border-radius: 999px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    color 0.12s;
+
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+`
+
+const PickList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+`
+
+const PickRow = styled.button`
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.9375rem;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  transition: background 0.12s;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: -2px;
+  }
+`
+
+const PickEmpty = styled.p`
+  margin: 0;
+  padding: 18px 14px;
+  text-align: center;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 0.875rem;
+`

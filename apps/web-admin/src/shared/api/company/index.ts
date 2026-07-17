@@ -43,6 +43,13 @@ export type CompanyHistoryType =
   | 'LEGAL'
   | 'MILESTONE'
   | 'OTHER'
+  // 확장(2026-06: 반도체/테크 IR 커버리지) — Prisma enum CompanyHistoryType과 동기화
+  | 'CAPITAL_INVESTMENT'
+  | 'PARTNERSHIP'
+  | 'CAPITAL_POLICY'
+  | 'RESTRUCTURING'
+  | 'REGULATORY'
+  | 'INCIDENT'
 
 export type CompanyHistoryItem = {
   id: string

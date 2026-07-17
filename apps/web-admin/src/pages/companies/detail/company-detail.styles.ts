@@ -103,10 +103,17 @@ export const GroupPanel = styled.div<{ $active: boolean }>`
  * 그룹 내부 — 전체폭을 2단으로 채워 세로 길이 절감(차트 등 wide 섹션은 전폭 span).
  * $aside: 본문+사이드 카드용 비대칭 2단(개요 탭 = 서술 넓게 + 요약 카드 좁게).
  */
-export const GroupGrid = styled.div<{ $aside?: boolean }>`
+export const GroupGrid = styled.div<{ $aside?: boolean; $reading?: boolean }>`
   display: grid;
-  grid-template-columns: ${({ $aside }) =>
-    $aside ? 'minmax(0, 1.8fr) minmax(280px, 1fr)' : 'repeat(2, minmax(0, 1fr))'};
+  /* $reading: 서술형(연혁·제품) — 신문 칼럼식 단일 폭으로 중앙 정렬(2단은 너무 좁고
+     전폭은 줄이 너무 길어 가독성 저하). $aside: 본문+사이드. 기본: 2단. */
+  grid-template-columns: ${({ $aside, $reading }) =>
+    $reading
+      ? 'minmax(0, 880px)'
+      : $aside
+        ? 'minmax(0, 1.8fr) minmax(280px, 1fr)'
+        : 'repeat(2, minmax(0, 1fr))'};
+  justify-content: ${({ $reading }) => ($reading ? 'center' : 'stretch')};
   gap: 32px 40px;
   align-items: start;
 
@@ -554,6 +561,36 @@ export const AddButton = styled.button`
   }
 `
 
+/**
+ * 연혁 행에서 '당시 주가·시총' 스냅샷 패널을 수동으로 펼치는 어포던스.
+ * 자동노출(제품출시·재무·설비투자·자본정책·M&A) 외 종류(제휴·정부규제·마일스톤 등)도
+ * 신규 행에서 스냅샷을 입력할 수 있게 한다 — 패널이 값에만 의존해 닭-달걀에 빠지지 않도록.
+ */
+export const SnapshotAddBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px dashed ${({ theme }) => hairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s, border-color 0.14s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+
+  svg {
+    width: 11px;
+    height: 11px;
+  }
+`
+
 /* ───────────────────────── 업종 칩 ───────────────────────── */
 
 export const ChipRow = styled.div`
@@ -596,17 +633,6 @@ export const ChipRemove = styled.button`
     width: 11px;
     height: 11px;
   }
-`
-
-export const CategorySelect = styled.select`
-  font: inherit;
-  font-size: 13px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => hairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  cursor: pointer;
 `
 
 /* ───────────────────────── Empty / states ───────────────────────── */

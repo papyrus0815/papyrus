@@ -33,16 +33,65 @@ import {
 
 import * as S from './company-detail.styles'
 
-const HISTORY_TYPE_OPTIONS: InlineSelectOption[] = [
-  { value: 'GENERAL', label: '일반' },
-  { value: 'PRODUCT_LAUNCH', label: '제품 발표' },
-  { value: 'FINANCIAL', label: '재무·실적' },
-  { value: 'MERGER_ACQUISITION', label: '인수·합병' },
-  { value: 'LEADERSHIP', label: '경영진' },
-  { value: 'LEGAL', label: '법적' },
-  { value: 'MILESTONE', label: '마일스톤' },
-  { value: 'OTHER', label: '기타' },
+/**
+ * 종류 라벨 — `satisfies Record<CompanyHistoryType, string>`로 *모든* 종류의 라벨을 강제한다.
+ * union에 값을 추가하고 여기 누락하면 tsc가 잡고, 없는 값을 적어도 tsc가 잡는다
+ * (InlineSelectOption.value가 string이라 옵션 배열만으론 잡히지 않는 드리프트의 유일한 안전망).
+ */
+const HISTORY_TYPE_LABELS = {
+  GENERAL: '일반',
+  PRODUCT_LAUNCH: '제품·기술 출시',
+  FINANCIAL: '재무·실적',
+  MERGER_ACQUISITION: '인수·합병',
+  LEADERSHIP: '경영진',
+  LEGAL: '소송·법무',
+  MILESTONE: '마일스톤',
+  OTHER: '기타',
+  CAPITAL_INVESTMENT: '설비투자·증설',
+  PARTNERSHIP: '제휴·파트너십',
+  CAPITAL_POLICY: '자본정책·주주환원',
+  RESTRUCTURING: '구조조정·분사',
+  REGULATORY: '정부·규제',
+  INCIDENT: '위기·사고',
+} satisfies Record<CompanyHistoryType, string>
+
+/**
+ * InlineSelect 노출 순서 — enum 정의순이 아닌 이 배열이 타임라인 표시 순서를 결정.
+ * 자본 흐름(투입→조달→환원)·외부관계 지배권 이전 여부로 군집해 입력자가 고르기 쉽게 둔다.
+ * (배열 타입이 CompanyHistoryType[]이라 없는 값·오타를 tsc가 잡는다.)
+ */
+const HISTORY_TYPE_ORDER: CompanyHistoryType[] = [
+  'GENERAL',
+  'PRODUCT_LAUNCH',
+  'MILESTONE',
+  'CAPITAL_INVESTMENT',
+  'FINANCIAL',
+  'CAPITAL_POLICY',
+  'MERGER_ACQUISITION',
+  'PARTNERSHIP',
+  'RESTRUCTURING',
+  'LEADERSHIP',
+  'REGULATORY',
+  'LEGAL',
+  'INCIDENT',
+  'OTHER',
 ]
+
+const HISTORY_TYPE_OPTIONS: InlineSelectOption[] = HISTORY_TYPE_ORDER.map(
+  (value) => ({ value, label: HISTORY_TYPE_LABELS[value] }),
+)
+
+/**
+ * 발표 당시 '주가·시총' 스냅샷 입력칸을 *자동* 노출하는 종류 — 통상 주가/시총 재평가를
+ * 유발해 스냅샷 기록 가치가 큰 사건. 그 외 종류는 행의 '＋ 당시 주가·시총' 토글로 수동 노출.
+ */
+const SHOW_FINANCE_TYPES = new Set<CompanyHistoryType>([
+  'PRODUCT_LAUNCH',
+  'FINANCIAL',
+  'CAPITAL_INVESTMENT',
+  'CAPITAL_POLICY',
+  'MERGER_ACQUISITION',
+])
 
 /**
  * 발생일 오름차순 비교(미입력 null은 맨 뒤).
@@ -236,6 +285,18 @@ export function CompanyHistorySection({
 
   const [manageMode, setManageMode] = useState(false)
 
+  /* 자동노출 종류가 아닌 행에서 '당시 주가·시총' 패널을 수동으로 펼친 행들(클라이언트 key 기준).
+     key는 syncRows가 보존하므로 편집 중에도 유지된다. */
+  const [snapshotKeys, setSnapshotKeys] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const openSnapshot = (key: string) =>
+    setSnapshotKeys((prev) => {
+      const next = new Set(prev)
+      next.add(key)
+      return next
+    })
+
   /* 인접 동일 날짜 run — 같은 날짜가 *연속*한 구간을 한 날짜 노드로 묶는다(전역 그룹핑이 아니라
      인접만; 수동 order와 충돌 안 함). isStart=run 첫 행(날짜+N건 배지), isSub=후속 행(날짜 숨김·작은 틱).
      null(미입력) 날짜는 병합하지 않음(각자 단일). */
@@ -311,11 +372,11 @@ export function CompanyHistorySection({
         <Timeline>
           {rows.map((row, idx) => {
             const showFinance =
-              row.type === 'PRODUCT_LAUNCH' ||
-              row.type === 'FINANCIAL' ||
+              SHOW_FINANCE_TYPES.has(row.type) ||
               !!row.stockPrice ||
               !!row.marketCap ||
-              !!row.currency
+              !!row.currency ||
+              snapshotKeys.has(row.key)
             const run = runInfo[idx]
             return (
               <TLItem key={row.key} $sub={run.isSub}>
@@ -418,6 +479,17 @@ export function CompanyHistorySection({
                     />
                   </span>
                 </S.RowMetaLine>
+
+                {!showFinance && (
+                  <S.RowMetaLine>
+                    <S.SnapshotAddBtn
+                      type="button"
+                      onClick={() => openSnapshot(row.key)}
+                    >
+                      <FiPlus /> 당시 주가·시총 기록
+                    </S.SnapshotAddBtn>
+                  </S.RowMetaLine>
+                )}
 
                 {showFinance && (
                   <S.RowMetaLine>

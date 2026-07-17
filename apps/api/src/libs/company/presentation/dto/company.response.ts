@@ -80,7 +80,11 @@ export interface CompanyFacilitySummary {
   administrativeDivision: CompanyRelationSummary | null
 }
 
-/** 연혁 항목 종류 (DTO 검증 @IsEnum 용 단일 출처) */
+/**
+ * 연혁 항목 종류 — 응답 타입(CompanyHistoryTypeValue) 파생 전용.
+ * 쓰기 검증의 단일 출처는 Prisma enum CompanyHistoryType(@IsEnum, prisma generate 산물)이며
+ * 이 배열은 그와 컴파일 링크가 없으므로 enum 추가 시 함께 동기화해야 한다.
+ */
 export const COMPANY_HISTORY_TYPE_VALUES = [
   'GENERAL',
   'PRODUCT_LAUNCH',
@@ -90,6 +94,13 @@ export const COMPANY_HISTORY_TYPE_VALUES = [
   'LEGAL',
   'MILESTONE',
   'OTHER',
+  // 확장(2026-06: 반도체/테크 IR 커버리지) — Prisma enum과 동기화 필수
+  'CAPITAL_INVESTMENT',
+  'PARTNERSHIP',
+  'CAPITAL_POLICY',
+  'RESTRUCTURING',
+  'REGULATORY',
+  'INCIDENT',
 ] as const
 
 export type CompanyHistoryTypeValue = (typeof COMPANY_HISTORY_TYPE_VALUES)[number]

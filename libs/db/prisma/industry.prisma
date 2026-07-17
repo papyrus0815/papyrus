@@ -233,22 +233,36 @@ model CompanyFacilityHistory {
 // ========================
 /// 연혁 항목의 종류 — 제품 발표·재무·인수합병 등(필터·아이콘·구조필드 노출용)
 enum CompanyHistoryType {
-  /// 일반 연혁
+  /// 일반 연혁 — 미분류 기본값(@default). 구체 유형이 분명해지면 이동
   GENERAL
-  /// 제품·기술 발표/출시 (예: NVIDIA Blackwell 발표)
+  /// 제품·기술 출시 — 제품·칩·아키텍처·공정노드 발표/출시/양산 + 양산 전 기술 돌파(리스크생산·테이프아웃·신공정·핵심특허). (예: NVIDIA Blackwell, TSMC N2 양산)
   PRODUCT_LAUNCH
-  /// 재무·실적 (상장/IPO, 분기 실적, 자금 조달 등)
+  /// 재무·실적 — 실적·자금 조달(상장/IPO·분기실적·증자·차입·가이던스·신용등급). 주주 환원은 CAPITAL_POLICY, 설비 투입은 CAPITAL_INVESTMENT로 분리
   FINANCIAL
-  /// 인수·합병
+  /// 인수·합병 — 지배권이 이전되는 거래(인수·합병·피인수·매각). 지배권 없는 협력은 PARTNERSHIP, 거래 후 인력 재편은 RESTRUCTURING
   MERGER_ACQUISITION
-  /// 경영진 변동
+  /// 경영진 변동 — 개인 단위 리더십(CEO/CFO·이사회 선임·사임·승계). 조직 단위 인력 재편은 RESTRUCTURING
   LEADERSHIP
-  /// 소송·규제·법적 사건
+  /// 소송·법무 — 사적 법적 분쟁(소송·판결·합의·특허침해·집단소송). 정부 규제·보조금·정책은 REGULATORY
   LEGAL
-  /// 주요 마일스톤
+  /// 주요 마일스톤 — 정체성·상징 이정표(설립·사명변경·본사이전·창립N주년·시총 돌파). 구체 유형이 있으면 그쪽 우선(잔여 상징 앵커)
   MILESTONE
-  /// 기타
+  /// 기타 — 어느 유형에도 안 드는 예외 폴백(ESG·수상·인증 등 저빈도 soft news 포함)
   OTHER
+
+  //--- 확장(2026-06: 반도체/테크 IR 서사 커버리지) — additive(끝에 append). 표시 순서는 프론트 HISTORY_TYPE_OPTIONS가 결정
+  /// 설비투자·증설 — 물리적 생산능력에 자본을 투입(신규 팹·공장 착공/완공·증설·대규모 CAPEX 가이던스·이사회 자본충당·핵심장비 발주). 실적발표에 수반된 capex 가이던스는 FINANCIAL, 독립 팹/증설 결정은 여기. (예: TSMC 애리조나 팹·$31.3B 자본충당)
+  CAPITAL_INVESTMENT
+  /// 제휴·파트너십 — 지배권 변경 없는 외부 협력(전략적 제휴·합작(JV)·장기 공급계약·기술협력·소수지분 투자). 지배권 이전 시 MERGER_ACQUISITION. (예: NVIDIA–Synopsys $2B 지분+협력)
+  PARTNERSHIP
+  /// 자본정책·주주환원 — 배당 신설·증액, 자사주 매입·소각, 액면분할/병합, 주주권리 변경(FINANCIAL의 역방향). (예: NVIDIA $80B 자사주·10:1 분할)
+  CAPITAL_POLICY
+  /// 구조조정·분사 — 조직·인력·자산의 내부 축소·재편(감원·공장폐쇄·사업철수·비용절감·분사). 소유권 이전 매각은 MERGER_ACQUISITION. (예: Intel Foundry 감원·독일 팹 백지화)
+  RESTRUCTURING
+  /// 정부·규제·정책 — 주체가 정부인 사건(보조금·세액공제·수출규제·제재·반독점 승인·인허가). 동시충족 시 정부 주체면 여기 우선(호악재는 제목으로 식별). (예: CHIPS Act 보조금·대중 수출규제)
+  REGULATORY
+  /// 위기·사고 — 부정적 운영 사건(사이버공격·데이터유출·리콜·공장사고·오염·영업비밀 유출). 소송 전이는 LEGAL, 정부 제재는 REGULATORY. (예: TSMC WannaCry·랜섬웨어)
+  INCIDENT
 }
 
 model CompanyHistory {
