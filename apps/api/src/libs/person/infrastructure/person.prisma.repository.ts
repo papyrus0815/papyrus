@@ -4510,6 +4510,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       id: true, name: true, surname: true, middleName: true,
       nameDisplayOrder: true, gender: true, regnalName: true,
       profileImageUrl: true, birthDate: true, deathDate: true,
+      // BC/AD — birthDate는 크기값(양수) 연도로 저장되므로 era 없이는 BC가 AD로 둔갑한다.
+      birthEra: true, deathEra: true,
       fatherId: true, motherId: true,
       // 소유권 — 노드 isOwned(상세 열람 가능 여부) 계산에 사용
       accountId: true,
@@ -4921,6 +4923,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       const personCountrySrc = (p.country ?? null) as {
         id: string; name: string
         flagEmoji?: string | null; isoCode?: string | null; thumbnailUrl?: string | null
+        defaultNameDisplayOrder?: string | null
       } | null
       const flagSrc = reignCountrySrc ?? personCountrySrc
       return {
@@ -4935,6 +4938,9 @@ export class PersonPrismaRepository implements IPersonRepository {
         gender:          (p.gender         ?? null) as string | null,
         regnalName:      (p.regnalName     ?? null) as string | null,
         profileImageUrl: (p.profileImageUrl ?? null) as string | null,
+        // birthYear는 크기값(양수). BC/AD 판정은 era로 — 프론트가 'BC n' 표시·연대순 정렬에 사용.
+        birthEra:   p.birthEra ?? null,
+        deathEra:   p.deathEra ?? null,
         birthYear:  yearOfDate(p.birthDate),
         deathYear:  yearOfDate(p.deathDate),
         dynasty: p.dynasty ? { id: p.dynasty.id as string, name: p.dynasty.name as string } : null,
@@ -4980,6 +4986,7 @@ export class PersonPrismaRepository implements IPersonRepository {
               flagEmoji: personCountrySrc.flagEmoji ?? null,
               isoCode: personCountrySrc.isoCode ?? null,
               thumbnailUrl: personCountrySrc.thumbnailUrl ?? null,
+              defaultNameDisplayOrder: personCountrySrc.defaultNameDisplayOrder ?? null,
             }
           : null,
         // 카드용 국기 통합 필드 — 우선순위 적용 결과 (UI 편의)

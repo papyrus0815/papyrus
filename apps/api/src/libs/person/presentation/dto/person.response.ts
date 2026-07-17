@@ -144,6 +144,8 @@ export interface FamilyTreeNodeCountryDto {
   flagEmoji: string | null
   isoCode: string | null
   thumbnailUrl: string | null
+  /** 국가 기본 이름 표시 순서 — 노드 개인 nameDisplayOrder 오버라이드 없을 때 사용 */
+  defaultNameDisplayOrder: string | null
 }
 
 export interface FamilyTreeNodeDto {
@@ -161,6 +163,9 @@ export interface FamilyTreeNodeDto {
   gender: string | null
   regnalName: string | null
   profileImageUrl: string | null
+  /** BC/AD — birthYear는 크기값(양수)이라 era 없이는 BC가 AD로 둔갑한다 */
+  birthEra: Era | null
+  deathEra: Era | null
   birthYear: number | null
   deathYear: number | null
   dynasty: { id: string; name: string } | null
