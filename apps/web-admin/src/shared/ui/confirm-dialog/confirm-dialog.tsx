@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 
 import { createPortal } from 'react-dom'
 
@@ -11,6 +11,7 @@ import {
   ModalOverlay,
   ModalTitle,
 } from '@/shared/ui/modal/modal.styles'
+import { useModalBehavior } from '@/shared/ui/modal'
 
 const Message = styled.p`
   margin: 0;
@@ -56,7 +57,12 @@ export type ConfirmDialogProps = {
 }
 
 /**
- * window.confirm 대체 — 테마와 맞는 확인 다이얼로그
+ * window.confirm 대체 — 테마와 맞는 확인 다이얼로그.
+ *
+ * 접근성은 useModalBehavior가 일괄 담당(모달 규약과 동일):
+ * Esc=취소·포커스 트랩·초기 포커스(취소 버튼)·닫힐 때 트리거로 포커스 복원·
+ * body 스크롤 락. 트리거에 포커스가 남아 Enter 재발화로 다이얼로그가
+ * 중복 큐잉되던 문제를 초기 포커스 이동이 구조적으로 차단한다.
  */
 export function ConfirmDialog({
   isOpen,
@@ -68,6 +74,16 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogBoxRef = useRef<HTMLDivElement | null>(null)
+  const cancelBtnRef = useRef<HTMLButtonElement | null>(null)
+  // 초기 포커스는 취소 버튼 — 위험(삭제) 확인에서 Enter 오발화가 파괴적이지 않게.
+  useModalBehavior({
+    isOpen,
+    onClose: onCancel,
+    containerRef: dialogBoxRef,
+    initialFocusRef: cancelBtnRef,
+  })
+
   if (typeof document === 'undefined' || !isOpen) return null
 
   return createPortal(
@@ -77,6 +93,7 @@ export function ConfirmDialog({
       style={{ zIndex: Z_INDEX.MODAL_OVERLAY + 2 }}
     >
       <ModalBoxNarrow
+        ref={dialogBoxRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
@@ -88,7 +105,7 @@ export function ConfirmDialog({
         </ModalTitle>
         <Message>{message}</Message>
         <ModalFooter style={{ padding: '16px 0 0', border: 'none', gap: 10 }}>
-          <FooterBtn type="button" onClick={onCancel}>
+          <FooterBtn ref={cancelBtnRef} type="button" onClick={onCancel}>
             {cancelLabel}
           </FooterBtn>
           <FooterBtn

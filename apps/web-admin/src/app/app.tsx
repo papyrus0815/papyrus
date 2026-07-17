@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, MotionConfig, motion } from 'framer-motion'
 import { Toaster } from 'react-hot-toast'
 import { ThemeProvider, useTheme } from 'styled-components'
 import styled, { keyframes } from 'styled-components'
@@ -238,54 +238,58 @@ export default function App() {
 
   return (
     <ThemeProvider theme={currentTheme}>
-      <SmartErrorBoundary FallbackComponent={ErrorHandler} onError={logError}>
-        {/* 검은 화면 (배경 꺼짐) */}
-        <BlackOverlay $isVisible={!isBackgroundEnabled} />
+      {/* prefers-reduced-motion 사용자 설정을 framer-motion 전체에 전파 —
+          개별 motion 컴포넌트가 분기하지 않아도 transform/레이아웃 애니메이션이 비활성화된다. */}
+      <MotionConfig reducedMotion="user">
+        <SmartErrorBoundary FallbackComponent={ErrorHandler} onError={logError}>
+          {/* 검은 화면 (배경 꺼짐) */}
+          <BlackOverlay $isVisible={!isBackgroundEnabled} />
 
-        {/* 전역 배경 (모든 페이지 공유) */}
-        <GlobalBackgroundContainer
-          id="global-bg"
-          $isVisible={isBackgroundEnabled}
-        >
-          <BackgroundSlideshow onLoaded={handleBackgroundLoaded} />
-        </GlobalBackgroundContainer>
+          {/* 전역 배경 (모든 페이지 공유) */}
+          <GlobalBackgroundContainer
+            id="global-bg"
+            $isVisible={isBackgroundEnabled}
+          >
+            <BackgroundSlideshow onLoaded={handleBackgroundLoaded} />
+          </GlobalBackgroundContainer>
 
-        {/* 배경 로딩 중 스피너 */}
-        <AnimatePresence>
-          {!isBackgroundLoaded && isBackgroundEnabled && (
-            <LoadingOverlay
-              as={motion.div}
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <Spinner />
-              <LoadingText>로딩 중...</LoadingText>
-            </LoadingOverlay>
-          )}
-        </AnimatePresence>
-
-        <ContentContainer $hasGlobalBackground={isBackgroundEnabled}>
-          <QueryClientProvider client={queryClient}>
-            <BootstrappedRouter />
-            <ReactQueryDevtools
-              initialIsOpen={false}
-              buttonPosition="bottom-left"
-            />
-            {/* Toast 알림 */}
-            <ThemedToaster />
-            {/* 명령형 confirm() 호스트 (window.confirm 대체) */}
-            <ConfirmHost />
-            {/* 환경 변수 설정 모달 */}
-            {showModal && (
-              <EnvConfigModal
-                missingEnvKeys={missingEnvKeys}
-                onClose={closeModal}
-              />
+          {/* 배경 로딩 중 스피너 */}
+          <AnimatePresence>
+            {!isBackgroundLoaded && isBackgroundEnabled && (
+              <LoadingOverlay
+                as={motion.div}
+                initial={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                <Spinner />
+                <LoadingText>로딩 중...</LoadingText>
+              </LoadingOverlay>
             )}
-          </QueryClientProvider>
-        </ContentContainer>
-      </SmartErrorBoundary>
+          </AnimatePresence>
+
+          <ContentContainer $hasGlobalBackground={isBackgroundEnabled}>
+            <QueryClientProvider client={queryClient}>
+              <BootstrappedRouter />
+              <ReactQueryDevtools
+                initialIsOpen={false}
+                buttonPosition="bottom-left"
+              />
+              {/* Toast 알림 */}
+              <ThemedToaster />
+              {/* 명령형 confirm() 호스트 (window.confirm 대체) */}
+              <ConfirmHost />
+              {/* 환경 변수 설정 모달 */}
+              {showModal && (
+                <EnvConfigModal
+                  missingEnvKeys={missingEnvKeys}
+                  onClose={closeModal}
+                />
+              )}
+            </QueryClientProvider>
+          </ContentContainer>
+        </SmartErrorBoundary>
+      </MotionConfig>
     </ThemeProvider>
   )
 }

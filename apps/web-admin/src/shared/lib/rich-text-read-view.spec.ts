@@ -37,4 +37,25 @@ describe('formatRichTextForReadView', () => {
     expect(out).toContain('셀')
     expect(out).not.toContain('script')
   })
+
+  // RD1: 인라인 요소 사이의 의미 있는 공백은 보존, 블록 태그 사이 소스 개행만 접는다.
+  it('인라인 요소(strong/em) 사이의 공백을 보존한다', () => {
+    const out = formatRichTextForReadView('<p><strong>가</strong> <em>나</em></p>')
+    // '가'와 '나' 사이 공백이 사라져 '가나'로 붙으면 안 된다.
+    expect(out).toContain('</strong> <em>')
+    expect(out).not.toContain('</strong><em>')
+  })
+
+  it('블록 태그(</p>) 뒤 소스 개행은 접어 빈 줄 누적을 막는다', () => {
+    const out = formatRichTextForReadView('<p>A</p>\n<p>B</p>')
+    expect(out).toContain('</p><p>')
+    expect(out).not.toMatch(/<\/p>\s*\n\s*<p>/)
+  })
+
+  it('인라인 링크(a) 사이 공백도 보존한다', () => {
+    const out = formatRichTextForReadView(
+      '<p><a href="/x">앞</a> <a href="/y">뒤</a></p>',
+    )
+    expect(out).toContain('</a> <a')
+  })
 })

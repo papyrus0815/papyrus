@@ -90,12 +90,50 @@ export function resolveRichTextImageSrcsForDisplay(html: string): string {
  * 일부 컨테이너의 `white-space: pre-wrap`이나 본문 가까이 placed된 인라인
  * 텍스트와 만나 빈 줄이 추가로 보이는 현상이 생김. 표시 직전에 한 번 정리.
  *
- * 콘텐츠 안의 텍스트(예: `<p>a   b</p>`)는 건드리지 않고, **닫는 태그와
- * 다음 여는 태그 사이**의 공백만 제거함.
+ * ⚠ 인라인 경계 보존: 예전엔 `/>\s+</g` 로 `>`와 `<` 사이 공백을 무차별 제거했는데,
+ * `<strong>가</strong> <em>나</em>` 처럼 **인라인 요소 사이의 의미 있는 공백**까지
+ * 지워 단어가 붙어 렌더됐다(RD1). 원래 목적은 소스 포맷용 *개행* 정리이므로,
+ * 닫는 태그가 **블록 태그**일 때에 한해, 그 뒤 공백에 개행(\n·\r)이 포함된 경우만
+ * 제거한다. 인라인 경계의 순수 스페이스(개행 없음)는 항상 보존된다.
  */
+const BLOCK_TAG_BOUNDARY =
+  /(<\/(?:p|div|ul|ol|li|table|thead|tbody|tr|td|th|figure|figcaption|blockquote|h[1-6]|section|article)>)[ \t]*[\r\n]\s*</gi
+
 function collapseInterBlockWhitespace(html: string): string {
   if (!html) return html
-  return html.replace(/>\s+</g, '><')
+  return html.replace(BLOCK_TAG_BOUNDARY, '$1<')
+}
+
+/**
+ * 저장/표시 직전 img의 편집 전용 title(예: '클릭하여 크기 조절')을 제거하고,
+ * alt가 없으면 figcaption에서 파생하거나 빈 문자열(장식 처리)로 채운다.
+ *
+ * 배경(AY2): 에디터가 이미지 삽입 시 리사이즈 힌트를 `img.title`로 남기는데, 이 title이
+ * 저장 HTML에 그대로 실려 스크린리더가 '클릭하여 크기 조절'을 이미지 이름으로 낭독한다.
+ * title은 편집 DOM에서만 쓰고 읽기 표시 단계에서 벗겨낸다. alt 없는 이미지도 SR이
+ * 파일명·URL을 읽지 않도록 여기서 보정한다.
+ */
+function normalizeImageA11y(html: string): string {
+  const raw = html?.trim() ?? ''
+  if (raw === '' || !/<img\b/i.test(raw)) return html ?? ''
+  if (typeof document === 'undefined') return html ?? ''
+  try {
+    const tpl = document.createElement('template')
+    tpl.innerHTML = raw
+    tpl.content.querySelectorAll('img').forEach((node) => {
+      const img = node as HTMLImageElement
+      img.removeAttribute('title')
+      if (!img.hasAttribute('alt')) {
+        const figure = img.closest('figure')
+        const caption =
+          figure?.querySelector('figcaption')?.textContent?.trim() ?? ''
+        img.setAttribute('alt', caption)
+      }
+    })
+    return tpl.innerHTML
+  } catch {
+    return html ?? ''
+  }
 }
 
 /**
@@ -113,10 +151,11 @@ function collapseExcessiveBreaks(html: string): string {
  * 2. `stripMentionLeadingAt` — 멘션 @ 표시 제거
  * 3. `collapseInterBlockWhitespace` — 블록 태그 사이 소스 개행 제거
  * 4. `collapseExcessiveBreaks` — `<br>` 3개 이상 연속 → 2개로 축소
- * 5. `resolveRichTextImageSrcsForDisplay` — 업로드 이미지 상대 경로 → 절대 URL
+ * 5. `normalizeImageA11y` — img 편집용 title 제거 + alt 보정(SR 오낭독 방지)
+ * 6. `resolveRichTextImageSrcsForDisplay` — 업로드 이미지 상대 경로 → 절대 URL
  */
 export function formatRichTextForReadView(html: string): string {
   const safe = stripMentionLeadingAt(sanitizeRichTextHtml(html ?? ''))
   const compact = collapseExcessiveBreaks(collapseInterBlockWhitespace(safe))
-  return resolveRichTextImageSrcsForDisplay(compact)
+  return resolveRichTextImageSrcsForDisplay(normalizeImageA11y(compact))
 }

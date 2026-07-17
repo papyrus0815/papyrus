@@ -1259,7 +1259,12 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       img.style.maxWidth = '100%'
       img.style.height = 'auto'
       img.style.width = 'auto'
+      // 편집 어포던스 힌트 — 편집 DOM에서만 사용. 저장/읽기 표시 단계
+      // (formatRichTextForReadView → normalizeImageA11y)에서 벗겨내 SR 오낭독을 막는다.
       img.title = '클릭하여 크기 조절'
+      // 접근성: caption이 있으면 alt로, 없으면 빈 alt(장식 처리)로 명시해
+      // SR이 파일명·URL을 이미지 이름으로 낭독하지 않게 한다(AY2).
+      img.alt = caption || ''
 
       imageContainer.appendChild(img)
 
