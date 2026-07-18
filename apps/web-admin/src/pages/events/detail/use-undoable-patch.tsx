@@ -206,6 +206,17 @@ function buildInverse(
       case 'categoryId':
         inv.categoryId = event.categoryId ?? null
         break
+      /**
+       * 계층 필드 — 응답엔 childEventIds가 없고 childEvents(객체 배열)뿐이라
+       * default 분기로 가면 undefined가 되어 inverse가 빈 patch로 무동작했다.
+       * parentEventId도 "부모 없음"으로의 undo는 null 명시 전송이어야 FK가 비워진다.
+       */
+      case 'childEventIds':
+        inv.childEventIds = (event.childEvents ?? []).map((child) => child.id)
+        break
+      case 'parentEventId':
+        inv.parentEventId = event.parentEventId ?? null
+        break
       default:
         // 나머지는 단순 scalar — event에서 같은 키 그대로
         inv[k as string] =
