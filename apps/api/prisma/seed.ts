@@ -31,6 +31,8 @@ import {
   seedCroatiaHistoricalCountryRelations,
   seedPolandHistoricalCountries,
   seedPolandHistoricalCountryRelations,
+  seedBohemiaHistoricalCountries,
+  seedBohemiaHistoricalCountryRelations,
   seedNapoleonIII,
   seedPalmerston,
   seedCavour,
@@ -201,6 +203,15 @@ async function main() {
 
         // 7-12. 폴란드 역사 국가 계승·소속 관계 시딩
         await seedPolandHistoricalCountryRelations(prisma)
+
+        // 7-13. 보헤미아 관련 역사 국가 시딩 (대모라비아~체코슬로바키아)
+        //  · 의존: seedCountries(현대 CZ·SK) + seedGermanyHistoricalCountries(신성로마제국·나치 독일)
+        //    + seedAustriaHistoricalCountries(대공국·제국·이중제국) + seedPolandHistoricalCountries(폴란드 왕국)
+        //  · 보헤미아 왕국·헝가리 왕국은 인물 시드 선실행 시 그 행을 재사용(왕국은 fallback ENTRIES 포함)
+        await seedBohemiaHistoricalCountries(prisma)
+
+        // 7-14. 보헤미아 역사 국가 계승·소속 관계 시딩
+        await seedBohemiaHistoricalCountryRelations(prisma)
 
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)
