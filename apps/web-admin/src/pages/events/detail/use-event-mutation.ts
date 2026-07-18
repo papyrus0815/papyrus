@@ -100,6 +100,19 @@ export function useEventMutation(eventId: string) {
       if (patchAffectsListing(patch)) {
         queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
       }
+      /**
+       * 계층 patch(parentEventId·childEventIds)는 *다른* 사건의 상세 캐시도 바꾼다 —
+       * 재부모화하면 옛 부모의 childEvents, 새 부모의 childEvents, 이동된 자식의
+       * parentEvent가 전부 stale. 어느 사건이 영향받았는지 클라이언트가 다 알 수 없어
+       * event-detail 루트를 무효화한다(자기 자신은 위의 isMutating 게이트가 관리하므로
+       * 제외). 계층 patch는 키스트로크성 빈도가 아니라 비용 부담 없음.
+       */
+      if ('parentEventId' in patch || 'childEventIds' in patch) {
+        queryClient.invalidateQueries({
+          queryKey: ['event-detail'],
+          predicate: (query) => query.queryKey[1] !== eventId,
+        })
+      }
     },
     onError: (error: unknown) => {
       // 낙관 스냅샷(previous) 통째 복원은 그 사이 성공한 *다른* 패치까지 덮어

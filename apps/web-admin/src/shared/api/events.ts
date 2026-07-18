@@ -164,6 +164,53 @@ export async function getEventsCount(
 }
 
 /**
+ * 상위·하위 사건 연결 피커용 경량 후보 — GET /events/link-candidates.
+ *
+ * getAllEvents(목록 API)는 최상위만·100건 캡이라 연결 후보 검색에 부적합했다.
+ * 이 API는 *하위 사건 포함* 본인 소유 전체를 title 부분일치로 서버 검색한다.
+ * BC·고대 사건은 startDate가 null — startEra/startYear 구조화 필드로 표기할 것.
+ */
+export interface EventLinkCandidate {
+  id: string
+  title: string
+  startDate?: string | null
+  startDatePrecision?: string | null
+  endDate?: string | null
+  endDatePrecision?: string | null
+  startEra?: string | null
+  startYear?: number | null
+  endEra?: string | null
+  endYear?: number | null
+  /** 현재 상위 사건 — 있으면 "이미 X의 하위" 표시·재부모화 확인의 근거 */
+  parentEventId?: string | null
+  parentEventTitle?: string | null
+}
+
+export async function getEventLinkCandidates(params?: {
+  /** 사건명 부분일치 검색어 — 비면 최근 수정순 기본 목록 */
+  query?: string
+  /** 기본 30, 최대 100 (서버 캡) */
+  limit?: number
+}): Promise<EventLinkCandidate[]> {
+  try {
+    const connection = getConnection()
+    const url = new URL(`${connection.host}/events/link-candidates`)
+    const term = params?.query?.trim()
+    if (term) url.searchParams.set('q', term)
+    if (params?.limit != null) url.searchParams.set('limit', String(params.limit))
+
+    const response = await fetch(url.toString(), {
+      headers: (connection.headers ?? {}) as HeadersInit,
+      credentials: 'include',
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return (await response.json()) as EventLinkCandidate[]
+  } catch (error) {
+    throw new Error(`사건 연결 후보 조회 실패: ${error}`)
+  }
+}
+
+/**
  * 역사 속 오늘 — start_date의 월·일이 오늘과 같은 사건(연도 무관).
  * month·day는 사용자 로컬 기준으로 넘긴다(서버 TZ와 어긋남 방지). 1-based month.
  * 없으면 빈 배열.

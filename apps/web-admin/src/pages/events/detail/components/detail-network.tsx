@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { FiPlus, FiX } from 'react-icons/fi'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -10,12 +10,14 @@ import {
   resolveCategory,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 import {
-  type EventResponseDto,
+  type EventLinkCandidate,
   type UpdateEventDto,
-  getAllEvents,
+  getEventLinkCandidates,
 } from '@/shared/api/events'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 
 import * as S from '../styles'
@@ -34,9 +36,15 @@ interface DetailNetworkProps {
  */
 export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const prefetchEvent = usePrefetchEventDetail()
-  const children = (event.childEvents ?? [])
-    .slice()
-    .sort((a, b) => compareEventStart(a.startDate, b.startDate))
+  const children = useMemo(
+    () =>
+      (event.childEvents ?? [])
+        .slice()
+        .sort((first, second) =>
+          compareEventStart(first.startDate, second.startDate),
+        ),
+    [event.childEvents],
+  )
   const keywords = (event.keywords ?? []).filter(
     (k): k is string => typeof k === 'string' && k.trim().length > 0,
   )
@@ -44,48 +52,100 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
 
-  /* 상위·하위 사건 연결 모달 — 열릴 때만 전체 사건 목록을 적재. */
+  /*
+   * 상위·하위 사건 연결 모달 — 후보는 서버사이드 검색(GET /events/link-candidates).
+   * 과거엔 목록 API(최상위만·100건 캡)를 재사용해 이미 하위인 사건·오래된 사건이
+   * 검색에 안 잡혔다. 검색어는 디바운스 후 서버로, 모달 내부 필터는 그대로 동작
+   * (서버 결과는 항상 검색어를 포함하므로 무손실).
+   */
   const [parentModalOpen, setParentModalOpen] = useState(false)
   const [childModalOpen, setChildModalOpen] = useState(false)
-  const { data: allEvents = [], isLoading: eventsLoading } = useQuery({
-    queryKey: ['events', 'all-for-link'],
-    // 서버가 take=min(limit,100)으로 캡하므로 300은 100으로 잘린다 — 캡에 맞춰 명시.
-    // TODO: 사건 100건 초과 시 연결 후보가 잘리므로 서버사이드 검색/페이지네이션 필요.
-    queryFn: () => getAllEvents({ limit: 100 }),
+  const [searchTerm, setSearchTerm] = useState('')
+  // 모달 열림/닫힘 시 debounced를 즉시 현재값으로 스냅 — 닫기 직전 검색어가 250ms
+  // 동안 남아 다른 모달 첫 화면에 이전 결과가 비치는 것을 방지.
+  const debouncedTerm = useDebouncedValue(
+    searchTerm,
+    250,
+    `${parentModalOpen}:${childModalOpen}`,
+  )
+  const {
+    data: candidates = [],
+    isLoading: eventsLoading,
+    isFetching: eventsFetching,
+  } = useQuery({
+    // ['events'] 프리픽스(eventKeys.lists()) 아래 — 사건 mutation 시 함께 무효화된다.
+    queryKey: ['events', 'link-candidates', debouncedTerm],
+    queryFn: () => getEventLinkCandidates({ query: debouncedTerm, limit: 50 }),
     enabled: parentModalOpen || childModalOpen,
     staleTime: 60_000,
+    // 검색어 타이핑 중 이전 결과를 유지 — 목록이 '불러오는 중'으로 깜빡이지 않게.
+    placeholderData: keepPreviousData,
   })
+  // fetch 중 + 디바운스 대기 중 모두 '검색 중'으로 — 확정형 '결과 없음' 오탐 방지.
+  const searchPending = eventsFetching || searchTerm !== debouncedTerm
 
-  const childIds = children.map((c) => c.id)
+  const childIds = useMemo(
+    () => children.map((child) => child.id),
+    [children],
+  )
+  // confirm 대기 등 비동기 구간에서 클로저의 stale childIds로 patch를 만들면
+  // 직전에 추가된 연결이 소리 없이 풀린다 — patch 시점엔 항상 최신 목록을 참조.
+  const childIdsRef = useRef(childIds)
+  useEffect(() => {
+    childIdsRef.current = childIds
+  }, [childIds])
 
-  /* 선택 옵션 — 자기 자신 제외. (getAllEvents는 최상위 사건만 반환.) */
+  /* 선택 옵션 — 자기 자신 제외. 날짜 + 현재 소속(이미 하위인 경우)을 설명 라인에. */
   const eventOptions = useMemo<SelectOption[]>(
     () =>
-      (allEvents as EventResponseDto[])
-        .filter((evt) => evt.id !== event.id)
-        .map((evt) => ({
-          value: evt.id,
-          label: evt.title,
-          description: evt.startDate
-            ? formatDateRange(
-                evt.startDate,
-                evt.endDate ?? undefined,
-                evt.startDatePrecision,
-                evt.endDatePrecision,
-              )
-            : undefined,
+      candidates
+        .filter((candidate) => candidate.id !== event.id)
+        .map((candidate) => ({
+          value: candidate.id,
+          label: candidate.title,
+          description: candidateDescription(candidate, event.id),
         })),
-    [allEvents, event.id],
+    [candidates, event.id],
+  )
+
+  /* 직계 순환은 후보에서 제외 — 상위 피커엔 현재 자식 불가, 하위 피커엔 현재 부모 불가.
+   * (깊은 순환은 서버 조상 워크 가드가 409로 거부.) */
+  const parentOptions = useMemo(
+    () => eventOptions.filter((option) => !childIds.includes(option.value)),
+    [eventOptions, childIds],
+  )
+  const childOptions = useMemo(
+    () => eventOptions.filter((option) => option.value !== event.parentEventId),
+    [eventOptions, event.parentEventId],
   )
 
   /**
    * 하위 사건 연결 — 서버는 childEventIds를 받으면 *기존 연결을 모두 해제 후 재설정*하므로
    * 항상 전체 목록을 보낸다. 토글식: 이미 자식이면 제거, 아니면 추가.
+   * 다른 사건의 하위인 후보를 붙이면 그쪽 연결이 끊기고 옮겨오므로 확인을 거친다.
    */
-  const toggleChild = (childId: string) => {
-    const next = childIds.includes(childId)
-      ? childIds.filter((id) => id !== childId)
-      : [...childIds, childId]
+  const toggleChild = async (childId: string) => {
+    const isRemoving = childIds.includes(childId)
+    if (!isRemoving) {
+      const candidate = candidates.find((item) => item.id === childId)
+      if (candidate?.parentEventId && candidate.parentEventId !== event.id) {
+        const confirmed = await confirm({
+          title: '하위 사건 이동',
+          message: `'${candidate.title}'은(는) 현재 '${
+            candidate.parentEventTitle ?? '다른 사건'
+          }'의 하위 사건입니다. 그 연결을 끊고 이 사건의 하위로 옮길까요?`,
+          confirmLabel: '이동',
+        })
+        if (!confirmed) return
+      }
+    }
+    // confirm await 사이 다른 patch가 반영됐을 수 있어 ref의 최신 목록으로 구성.
+    const latest = childIdsRef.current
+    const next = isRemoving
+      ? latest.filter((id) => id !== childId)
+      : latest.includes(childId)
+        ? latest
+        : [...latest, childId]
     onPatch({ childEventIds: next })
   }
 
@@ -97,7 +157,16 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const setParent = (parentId: string | null) => {
     onPatch({ parentEventId: parentId } as UpdateEventDto)
     setParentModalOpen(false)
+    setSearchTerm('')
   }
+
+  /* 서버 캡(50)에 닿으면 잘린 목록임을 알림 — '전체'로 오독하지 않게. */
+  const truncationHint =
+    candidates.length >= 50 ? (
+      <TruncationNote>
+        후보가 많아 50건까지만 표시 중 — 검색어로 좁혀 주세요
+      </TruncationNote>
+    ) : undefined
 
   const parentEvent = event.parentEvent
 
@@ -269,29 +338,81 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
 
       <SelectModal
         isOpen={parentModalOpen}
-        onClose={() => setParentModalOpen(false)}
+        onClose={() => {
+          setParentModalOpen(false)
+          setSearchTerm('')
+        }}
         title="상위 사건 지정"
-        options={eventOptions}
+        options={parentOptions}
         selectedValue={event.parentEventId ?? undefined}
         onSelect={(id) => setParent(id)}
         searchable
-        searchPlaceholder="사건명으로 검색..."
+        searchPlaceholder="사건명으로 검색 (하위 사건 포함)"
         isLoading={eventsLoading}
+        isSearching={searchPending}
+        onQueryChange={setSearchTerm}
+        headerExtra={truncationHint}
       />
       <SelectModal
         isOpen={childModalOpen}
-        onClose={() => setChildModalOpen(false)}
+        onClose={() => {
+          setChildModalOpen(false)
+          setSearchTerm('')
+        }}
         title="하위 사건 추가"
-        options={eventOptions}
+        options={childOptions}
         multiple
         selectedValues={childIds}
-        onSelect={(id) => toggleChild(id)}
+        onSelect={(id) => void toggleChild(id)}
         searchable
-        searchPlaceholder="사건명으로 검색..."
+        searchPlaceholder="사건명으로 검색 (하위 사건 포함)"
         isLoading={eventsLoading}
+        isSearching={searchPending}
+        onQueryChange={setSearchTerm}
+        headerExtra={truncationHint}
       />
     </S.Section>
   )
+}
+
+/**
+ * 후보 날짜 라벨 — startDate가 있으면 정밀도 포맷, BC·고대(DATETIME 저장 불가)는
+ * 구조화 연도(startEra/startYear)로 표기. 둘 다 없으면 null.
+ */
+function candidateDateLabel(candidate: EventLinkCandidate): string | null {
+  if (candidate.startDate) {
+    return formatDateRange(
+      candidate.startDate,
+      candidate.endDate ?? undefined,
+      candidate.startDatePrecision,
+      candidate.endDatePrecision,
+    )
+  }
+  if (candidate.startYear != null) {
+    const start = `${candidate.startEra === 'BC' ? '기원전 ' : ''}${candidate.startYear}년`
+    if (candidate.endYear != null) {
+      const end = `${candidate.endEra === 'BC' ? '기원전 ' : ''}${candidate.endYear}년`
+      if (end !== start) return `${start} ~ ${end}`
+    }
+    return start
+  }
+  return null
+}
+
+/** 후보 설명 라인 — 날짜 · 현재 소속 상위 사건("이미 하위" 안내). */
+function candidateDescription(
+  candidate: EventLinkCandidate,
+  currentEventId: string,
+): string | undefined {
+  const parts: string[] = []
+  const dateLabel = candidateDateLabel(candidate)
+  if (dateLabel) parts.push(dateLabel)
+  if (candidate.parentEventId === currentEventId) {
+    parts.push('이 사건의 하위')
+  } else if (candidate.parentEventId) {
+    parts.push(`현재 '${candidate.parentEventTitle ?? '다른 사건'}'의 하위`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : undefined
 }
 
 /**
@@ -331,6 +452,11 @@ const HierBlock = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
+`
+
+const TruncationNote = styled.div`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const HierRow = styled.div`
