@@ -92,6 +92,20 @@ const ENTRIES: HistoricalCountryEntry[] = [
     linkToGermany: true,
   },
   {
+    name: '마이센 변경백령',
+    enName: 'Margraviate of Meissen',
+    description:
+      '965년 오토 1세가 엘베강 동쪽 소르브인 지역에 세운 신성로마제국의 동방 변경백령. ' +
+      '1089년부터 베틴 가문이 지배하며 작센 지역의 핵심 세력으로 성장했고, ' +
+      '1423년 변경백 프리드리히 4세(호전공)가 작센-비텐베르크 공국과 선제후 지위를 받으면서 작센 선제후국으로 통합되었다.',
+    startEra: 'AD', startYear: 965,
+    endEra: 'AD', endYear: 1423,
+    stateType: HistoricalStateType.MARGRAVIATE,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 51.16, longitude: 13.47,
+    linkToGermany: true,
+  },
+  {
     name: '작센 선제후국',
     enName: 'Electorate of Saxony',
     description: '신성로마제국의 선제후국. 마르틴 루터의 종교개혁을 지원한 프리드리히 3세(현명공)가 통치했으며, 독일 문화·음악의 중심지.',
@@ -111,6 +125,20 @@ const ENTRIES: HistoricalCountryEntry[] = [
     stateType: HistoricalStateType.ELECTORATE,
     entityKind: HistoricalEntityKind.STATE,
     latitude: 49.5, longitude: 8.4,
+    linkToGermany: true,
+  },
+  {
+    name: '바이에른 공국',
+    enName: 'Duchy of Bavaria',
+    description:
+      '중세 독일의 대표적 부족 공국(슈탐 공국). 6세기 중엽 아길롤핑 가문 아래 성립해 프랑크 왕국의 종주권 아래 있었고, ' +
+      '카롤링거 직할기를 거쳐 907년 부족 공국으로 재건되었다. 1180년부터 비텔스바흐 가문이 지배했으며, ' +
+      '30년 전쟁 중이던 1623년 막시밀리안 1세가 선제후 지위를 획득하며 바이에른 선제후국으로 승격되었다.',
+    startEra: 'AD', startYear: 555,
+    endEra: 'AD', endYear: 1623,
+    stateType: HistoricalStateType.PRINCIPALITY,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 48.1, longitude: 11.6,
     linkToGermany: true,
   },
   {
