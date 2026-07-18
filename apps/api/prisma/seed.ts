@@ -29,6 +29,8 @@ import {
   seedAustriaHistoricalCountryRelations,
   seedCroatiaHistoricalCountries,
   seedCroatiaHistoricalCountryRelations,
+  seedPolandHistoricalCountries,
+  seedPolandHistoricalCountryRelations,
   seedNapoleonIII,
   seedPalmerston,
   seedCavour,
@@ -190,6 +192,15 @@ async function main() {
 
         // 7-10. 크로아티아 역사 국가 계승·소속 관계 시딩
         await seedCroatiaHistoricalCountryRelations(prisma)
+
+        // 7-11. 폴란드 관련 역사 국가 시딩 (피아스트 공국~인민공화국)
+        //  · 의존: seedCountries(현대 PL·LT·BY) + seedGermanyHistoricalCountries(프로이센·독일 제국·나치 독일)
+        //    + seedRussiaHistoricalCountries(러시아 제국·소련) + seedAustriaHistoricalCountries(대공국·제국·이중제국)
+        //    — 분할·독립 계승 관계 대상. 동군연합 수평 관계는 헝가리 왕국(인물 시드 유래)·작센 선제후국/왕국 참조
+        await seedPolandHistoricalCountries(prisma)
+
+        // 7-12. 폴란드 역사 국가 계승·소속 관계 시딩
+        await seedPolandHistoricalCountryRelations(prisma)
 
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)
