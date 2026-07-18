@@ -10,6 +10,19 @@ export interface SelectOption<T = string> {
   description?: string
 }
 
+/**
+ * 검색 비교용 정규화 — 소문자 + NFKD 분해 후 결합 분음부호 제거.
+ * DB(utf8mb4_unicode_ci)는 악센트·전각을 무시하고 매칭하는데 JS includes는 코드포인트
+ * 정확 일치라, 서버가 반환한 결과('Königgrätz' ↔ 'konig')를 클라 필터가 다시 숨기는
+ * 불일치가 생긴다. NFKD는 전각→반각, NFD 자소 분리 한글도 일관 형태로 접는다.
+ */
+function foldForSearch(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
 interface SelectModalProps<T = string> {
   /** 모달 표시 여부 */
   isOpen: boolean
@@ -35,6 +48,18 @@ interface SelectModalProps<T = string> {
   searchPlaceholder?: string
   /** 로딩 상태 — 옵션 fetching 중 */
   isLoading?: boolean
+  /**
+   * 검색어 변경 통지 — 부모가 서버사이드 검색으로 options를 갱신할 때 사용.
+   * 모달이 닫혀 검색어가 초기화될 때도 ''로 통지된다. 내부 클라이언트 필터는
+   * 그대로 동작하므로(서버 결과는 항상 검색어를 포함해 무손실) 부모는 fetch만 하면 된다.
+   */
+  onQueryChange?: (query: string) => void
+  /**
+   * 서버 검색 fetch 진행 중 — 필터 결과가 비어도 "검색 결과 없음"을 확정 표기하지
+   * 않고 "검색 중…"을 보여준다(디바운스·전송 중 오탐 방지). isLoading(첫 적재)과 달리
+   * 목록이 있으면 그대로 두고 빈 상태 문구만 바꾼다.
+   */
+  isSearching?: boolean
 }
 
 /**
@@ -76,23 +101,31 @@ export function SelectModal<T = string>({
   searchable,
   searchPlaceholder = '검색...',
   isLoading = false,
+  onQueryChange,
+  isSearching = false,
 }: SelectModalProps<T>) {
   const [query, setQuery] = useState('')
 
-  // 모달이 닫히면 검색어 초기화
+  // 모달이 닫히면 검색어 초기화 (서버사이드 검색 부모에게도 통지)
   useEffect(() => {
-    if (!isOpen) setQuery('')
+    if (!isOpen) {
+      setQuery('')
+      onQueryChange?.('')
+    }
+    // onQueryChange 함수 identity 변화로 초기화가 재실행될 이유는 없음 — isOpen에만 반응.
   }, [isOpen])
 
   const showSearch = searchable ?? options.length >= 6
 
   const filteredOptions = useMemo(() => {
     if (!query.trim()) return options
-    const q = query.trim().toLowerCase()
+    const folded = foldForSearch(query.trim())
     return options.filter(
       (opt) =>
-        opt.label.toLowerCase().includes(q) ||
-        (opt.description?.toLowerCase().includes(q) ?? false),
+        foldForSearch(opt.label).includes(folded) ||
+        (opt.description
+          ? foldForSearch(opt.description).includes(folded)
+          : false),
     )
   }, [options, query])
 
@@ -138,7 +171,10 @@ export function SelectModal<T = string>({
             <S.SearchInput
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(changeEvent) => {
+                setQuery(changeEvent.target.value)
+                onQueryChange?.(changeEvent.target.value)
+              }}
               placeholder={searchPlaceholder}
               autoFocus
             />
@@ -153,17 +189,25 @@ export function SelectModal<T = string>({
               <S.EmptyDesc>잠시만 기다려 주세요</S.EmptyDesc>
             </S.EmptyState>
           ) : filteredOptions.length === 0 ? (
-            <S.EmptyState>
-              <S.EmptyIcon>{query ? '🔍' : '📭'}</S.EmptyIcon>
-              <S.EmptyTitle>
-                {query ? '검색 결과 없음' : '데이터가 없습니다'}
-              </S.EmptyTitle>
-              <S.EmptyDesc>
-                {query
-                  ? `"${query}"에 해당하는 항목을 찾지 못했습니다`
-                  : '선택 가능한 항목이 없습니다'}
-              </S.EmptyDesc>
-            </S.EmptyState>
+            isSearching ? (
+              <S.EmptyState>
+                <S.EmptyIcon>🔍</S.EmptyIcon>
+                <S.EmptyTitle>검색 중…</S.EmptyTitle>
+                <S.EmptyDesc>서버에서 결과를 가져오는 중입니다</S.EmptyDesc>
+              </S.EmptyState>
+            ) : (
+              <S.EmptyState>
+                <S.EmptyIcon>{query ? '🔍' : '📭'}</S.EmptyIcon>
+                <S.EmptyTitle>
+                  {query ? '검색 결과 없음' : '데이터가 없습니다'}
+                </S.EmptyTitle>
+                <S.EmptyDesc>
+                  {query
+                    ? `"${query}"에 해당하는 항목을 찾지 못했습니다`
+                    : '선택 가능한 항목이 없습니다'}
+                </S.EmptyDesc>
+              </S.EmptyState>
+            )
           ) : (
             filteredOptions.map((option) => (
               <S.SelectOption
