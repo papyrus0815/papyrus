@@ -113,9 +113,13 @@ export class EventService {
       )
     }
 
-    // 상위 사건이 존재하는지 확인
-    if (data.parentEventId) {
-      await this.getEventById(data.parentEventId)
+    // 상위·하위 연결 대상 존재 + 소유권 확인 — 새 사건은 순환 불가라 소유권만.
+    // (childEventIds는 상대 사건의 부모 FK를 덮어쓰므로 update와 동일하게 가드.)
+    if (data.parentEventId || (childEventIds && childEventIds.length > 0)) {
+      await this.assertLinkTargetsOwnedBy(data.createdById, [
+        ...(childEventIds ?? []),
+        ...(data.parentEventId ? [data.parentEventId] : []),
+      ])
     }
 
     // 관련 사건들이 존재하는지 확인
@@ -353,12 +357,11 @@ export class EventService {
       }
     }
 
-    // 상위 사건이 존재하는지 확인 (자기 자신을 상위로 설정하는 것 방지)
-    if (data.parentEventId) {
-      if (data.parentEventId === id) {
-        throw new ConflictException('Event cannot be its own parent')
-      }
-      await this.getEventById(data.parentEventId)
+    // 상위·하위 연결 검증 — 존재·소유권·순환. 하위 사건도 연결 후보가 되면서
+    // 계층이 2단 이상으로 깊어질 수 있어, 자기-부모 단발 체크로는 부족하다.
+    // 쓰기 시작 전(비트랜잭션 구간 앞)에 전부 검증한다.
+    if (data.parentEventId !== undefined || childEventIds !== undefined) {
+      await this.assertHierarchyLinkable(id, data.parentEventId, childEventIds)
     }
 
     // 관련 국가 업데이트
@@ -509,6 +512,136 @@ export class EventService {
       yearPreview(updated.startEra, updated.startYear),
     )
     return updated
+  }
+
+  /**
+   * 상위·하위 사건 연결 검증 — 존재·소유권·순환.
+   *
+   * - 소유권: 연결 대상은 모두 대상 사건과 같은 소유자(createdById)여야 한다.
+   *   (childEventIds는 상대 사건의 parentEventId를 덮어쓰는 쓰기라, 타 계정 사건을
+   *   끌어오는 통로가 되면 안 된다.)
+   * - 순환: 이번 요청으로 새로 생기는 엣지는 전부 id를 지나므로(id→새 부모, 각 child→id),
+   *   *요청 반영 후* 부모 체인을 id의 새 부모부터 위로 걸어 올라가며 id를 다시 만나면
+   *   순환이다. childEventIds에 든 사건의 부모는 id가 될 예정이므로 체인 위에서 만나면
+   *   id로 치환해 계속 걷는다. (예: 새 부모가 이번에 하위로 붙는 사건의 자손인 경우까지 검출.)
+   *
+   * @param id 수정 대상 사건 ID
+   * @param parentEventId 새 상위 사건 ID — undefined면 변경 없음(현재값 유지), null이면 해제
+   * @param childEventIds 새 하위 사건 ID 전체 목록 — undefined면 변경 없음
+   */
+  private async assertHierarchyLinkable(
+    id: string,
+    parentEventId?: string | null,
+    childEventIds?: string[],
+  ): Promise<void> {
+    const target = await this.prisma.event.findUnique({
+      where: { id },
+      select: { createdById: true, parentEventId: true },
+    })
+    if (!target) {
+      throw new NotFoundException(`Event with id ${id} not found`)
+    }
+
+    const childSet = new Set(childEventIds ?? [])
+    if (childSet.has(id)) {
+      throw new ConflictException('자기 자신을 하위 사건으로 연결할 수 없습니다')
+    }
+    if (parentEventId === id) {
+      throw new ConflictException('자기 자신을 상위 사건으로 지정할 수 없습니다')
+    }
+
+    // 존재 + 소유권 — 연결에 등장하는 모든 상대 사건을 한 번에 검사.
+    // 예외: 이미 이 사건의 자식인데 소프트 삭제된 항목은 통과 — 상세 응답에서 온
+    // childEventIds 전체 목록에 섞여 있을 수 있고, 유지해도 링크가 변하지 않는다
+    // (거부하면 무관한 자식 편집까지 404로 막는 회귀).
+    const linkedIds = [
+      ...new Set([
+        ...(childEventIds ?? []),
+        ...(parentEventId ? [parentEventId] : []),
+      ]),
+    ]
+    if (linkedIds.length > 0) {
+      const rows = await this.prisma.event.findMany({
+        where: { id: { in: linkedIds } },
+        select: { id: true, createdById: true, deletedAt: true, parentEventId: true },
+      })
+      const byId = new Map(rows.map((row) => [row.id, row]))
+      for (const linkedId of linkedIds) {
+        const row = byId.get(linkedId)
+        if (!row || (row.deletedAt && row.parentEventId !== id)) {
+          throw new NotFoundException(
+            `연결하려는 사건을 찾을 수 없습니다: ${linkedId}`,
+          )
+        }
+        if (row.createdById !== target.createdById) {
+          throw new ForbiddenException('본인이 등록한 사건만 연결할 수 있습니다')
+        }
+      }
+    }
+
+    // 순환 검사 — *반영 후* 부모 체인 워크. undefined는 "변경 없음"이라 현재 부모에서 시작.
+    const effectiveParentId =
+      parentEventId === undefined ? target.parentEventId : parentEventId
+    let cursor: string | null = effectiveParentId ?? null
+    const visited = new Set<string>()
+    while (cursor) {
+      if (cursor === id) {
+        throw new ConflictException(
+          '순환 계층은 만들 수 없습니다: 지정한 상위 사건이 이 사건의 하위 계보에 있습니다',
+        )
+      }
+      // 기존 데이터에 이미 순환이 있는 경우의 무한 루프 방어 — 이번 요청이 만든 순환은 아님.
+      if (visited.has(cursor) || visited.size > 100) break
+      visited.add(cursor)
+      if (childSet.has(cursor)) {
+        // 이번 요청으로 이 사건의 부모가 id가 될 예정 — 체인을 id로 이어 걷는다.
+        cursor = id
+        continue
+      }
+      const row: { parentEventId: string | null } | null =
+        await this.prisma.event.findUnique({
+          where: { id: cursor },
+          select: { parentEventId: true },
+        })
+      const dbParent = row?.parentEventId ?? null
+      if (dbParent === id && childEventIds !== undefined) {
+        // 현재는 id의 자식이지만 새 목록에 없음 → 이번 요청으로 분리(delete-recreate가
+        // 부모를 null로 리셋). 반영 후 체인은 여기서 끊긴다 — 분리한 자식(의 서브트리)
+        // 으로 재부모화하는 합법 요청을 409로 오탐하지 않기 위한 분기.
+        cursor = null
+        continue
+      }
+      cursor = dbParent
+    }
+  }
+
+  /**
+   * 연결 대상 존재·소유권만 검증 — create 경로용(새 사건은 어떤 체인에도 없어
+   * 순환이 불가능하므로 순환 워크는 생략). childEventIds는 상대 사건의
+   * parentEventId를 덮어쓰는 쓰기라 소유권 검증 없이는 타 계정 사건 탈취 통로가 된다.
+   */
+  private async assertLinkTargetsOwnedBy(
+    ownerId: string | null | undefined,
+    linkedIds: string[],
+  ): Promise<void> {
+    const unique = [...new Set(linkedIds)]
+    if (unique.length === 0) return
+    const rows = await this.prisma.event.findMany({
+      where: { id: { in: unique } },
+      select: { id: true, createdById: true, deletedAt: true },
+    })
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    for (const linkedId of unique) {
+      const row = byId.get(linkedId)
+      if (!row || row.deletedAt) {
+        throw new NotFoundException(
+          `연결하려는 사건을 찾을 수 없습니다: ${linkedId}`,
+        )
+      }
+      if (row.createdById !== ownerId) {
+        throw new ForbiddenException('본인이 등록한 사건만 연결할 수 있습니다')
+      }
+    }
   }
 
   /**

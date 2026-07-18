@@ -20,7 +20,12 @@ import { AuthGuard } from '@nestjs/passport'
 import { ApiTags } from '@nestjs/swagger'
 import { EventService } from '../application/event.service'
 import { MilitaryEventService } from '../application/military-event.service'
-import { CreateEventDto, UpdateEventDto, EventResponseDto } from './dto'
+import {
+  CreateEventDto,
+  UpdateEventDto,
+  EventResponseDto,
+  EventLinkCandidateDto,
+} from './dto'
 import { Event } from '../domain/event.entity'
 import { PrismaClient } from '@prisma/client'
 
@@ -414,6 +419,8 @@ export class EventController {
         category: true,
         parentEvent: true,
         childEvents: {
+          // 상세(loadEventDetail)와 동일 — 소프트 삭제된 자식 제외.
+          where: { deletedAt: null },
           include: {
             category: true,
             eventSections: true,
@@ -437,7 +444,7 @@ export class EventController {
         },
       },
     })
-    
+
     console.log(`✅ ${events.length}개 최상위 사건 반환`)
     events.forEach(evt => {
       console.log(`   - ${evt.title}: ${evt.childEvents?.length || 0}개 하위 사건`)
@@ -552,6 +559,80 @@ export class EventController {
     })
 
     return { total }
+  }
+
+  /**
+   * 상위·하위 사건 연결 후보 검색 — 경량 응답.
+   *
+   * 연결 모달의 후보는 그간 목록 API(GET /events)를 재사용했는데, 그 API는
+   * ① parentEventId=null(최상위만) ② take 캡 100이라 이미 하위인 사건·오래된 사건이
+   * 검색에 안 잡히는 결함이 있었다. 이 엔드포인트는 *하위 사건 포함* 본인 소유
+   * 미삭제 전체를 대상으로 title 부분일치 검색한다. q가 비면 최근 수정순 기본 목록.
+   *
+   * ⚠️ 라우트는 반드시 @Get(':id')보다 먼저 선언 — 아니면 'link-candidates'가 :id로 매칭된다.
+   * @param q 사건명 부분일치 검색어 (비면 최근 수정순)
+   * @param limit 가져올 개수 (기본 30, 최대 100)
+   * @returns 경량 후보 목록 (id·제목·날짜·현재 상위 사건)
+   * @tag events
+   */
+  @Get('link-candidates')
+  async getEventLinkCandidates(
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+    @Request() req?: any,
+  ): Promise<EventLinkCandidateDto[]> {
+    const userId = req.user?.id || req.user?.sub
+    const term = (q ?? '').trim()
+    const parsedLimit = limit ? parseInt(limit, 10) : NaN
+    const take = Number.isNaN(parsedLimit)
+      ? 30
+      : Math.min(Math.max(parsedLimit, 1), 100)
+
+    const events = await this.prisma.event.findMany({
+      where: {
+        createdById: userId,
+        deletedAt: null,
+        ...(term && { title: { contains: term } }),
+      },
+      take,
+      // 검색 시엔 시대순(내림), 기본 목록은 최근 손댄 순 — 방금 만든 사건을 바로 연결하는 흐름.
+      orderBy: term ? { startDate: 'desc' } : { updatedAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        startDate: true,
+        startDatePrecision: true,
+        endDate: true,
+        endDatePrecision: true,
+        startEra: true,
+        startYear: true,
+        endEra: true,
+        endYear: true,
+        parentEventId: true,
+        parentEvent: { select: { title: true, deletedAt: true } },
+      },
+    })
+
+    return events.map((event) => {
+      // 부모가 소프트 삭제됐으면 연결 UX상 무부모로 취급 — 삭제된 사건명을
+      // "현재 X의 하위" 안내·이동 confirm에 생존 사건처럼 노출하지 않는다.
+      const liveParent =
+        event.parentEvent && !event.parentEvent.deletedAt ? event.parentEvent : null
+      return {
+        id: event.id,
+        title: event.title,
+        startDate: event.startDate ? event.startDate.toISOString() : null,
+        startDatePrecision: event.startDatePrecision,
+        endDate: event.endDate ? event.endDate.toISOString() : null,
+        endDatePrecision: event.endDatePrecision,
+        startEra: event.startEra,
+        startYear: event.startYear,
+        endEra: event.endEra,
+        endYear: event.endYear,
+        parentEventId: liveParent ? event.parentEventId : null,
+        parentEventTitle: liveParent?.title ?? null,
+      }
+    })
   }
 
   /**
@@ -680,6 +761,9 @@ export class EventController {
         administrativeDivision: { select: { id: true, name: true } },
         parentEvent: true,
         childEvents: {
+          // 소프트 삭제된 자식 제외 — 유령 카드 방지 + 프론트가 이 목록으로
+          // childEventIds 전체 재전송을 만들기 때문에(가드가 삭제 사건을 거부) 필수.
+          where: { deletedAt: null },
           include: {
             eventSections: { orderBy: { order: 'asc' } },
             eventImages: { orderBy: { order: 'asc' } },

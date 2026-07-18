@@ -302,3 +302,48 @@ export class EventResponseDto {
   updatedAt?: string
 }
 
+/**
+ * 상위·하위 사건 연결 피커용 경량 후보.
+ *
+ * 전체 응답(EventResponseDto)은 섹션·이미지·군사정보까지 실어 검색 피커에 과중하므로
+ * 식별·표시에 필요한 최소 필드만 노출한다. parentEventId·parentEventTitle은
+ * "이미 다른 사건의 하위" 표시와 재부모화 확인 UI의 근거.
+ */
+export class EventLinkCandidateDto {
+  @ApiProperty({ description: '사건 ID' })
+  id!: string
+
+  @ApiProperty({ description: '사건명' })
+  title!: string
+
+  @ApiProperty({ description: '시작일', required: false })
+  startDate?: string | null
+
+  @ApiProperty({ description: '시작일 정밀도', required: false })
+  startDatePrecision?: string | null
+
+  @ApiProperty({ description: '종료일', required: false })
+  endDate?: string | null
+
+  @ApiProperty({ description: '종료일 정밀도', required: false })
+  endDatePrecision?: string | null
+
+  @ApiProperty({ description: '시작 연대 (BC/AD) — BC·고대는 startDate가 null이라 이 필드로 표시', required: false })
+  startEra?: string | null
+
+  @ApiProperty({ description: '시작 연도 (구조화)', required: false })
+  startYear?: number | null
+
+  @ApiProperty({ description: '종료 연대 (BC/AD)', required: false })
+  endEra?: string | null
+
+  @ApiProperty({ description: '종료 연도 (구조화)', required: false })
+  endYear?: number | null
+
+  @ApiProperty({ description: '현재 상위 사건 ID (없으면 null)', required: false })
+  parentEventId?: string | null
+
+  @ApiProperty({ description: '현재 상위 사건명 (없으면 null)', required: false })
+  parentEventTitle?: string | null
+}
+
