@@ -179,18 +179,39 @@ export class HistoricalCountryPrismaRepository
       })
     }
 
-    // 상위(후임) Transition만 업데이트 (Membership은 소속·구성 탭 전용)
+    // 상위(후임) Transition을 diff 기반으로 반영 (F11) — Membership은 소속·구성 탭 전용.
+    // 과거에는 predecessor=자신인 transition을 전량 deleteMany 후 폼의 단일 대표값으로
+    // 재생성했다. 그러면 계승 탭에서 후임별로 개별 저작한 eventType·transitionScope가
+    // 이름 하나 고쳐 저장하는 것만으로 대표값으로 평탄화되고 id도 재발급됐다.
+    // 후임 집합의 추가/삭제분만 반영해 남는 행은 그대로 보존한다.
     if (data.parentHistoricalCountryIds !== undefined) {
-      await this.prisma.historicalCountryTransition.deleteMany({
-        where: { predecessorId: id },
-      })
-      if (
-        data.parentHistoricalCountryIds &&
-        data.parentHistoricalCountryIds.length > 0 &&
-        data.transitionEventType
-      ) {
+      const desiredSuccessorIds = new Set(data.parentHistoricalCountryIds)
+      const existingTransitions =
+        await this.prisma.historicalCountryTransition.findMany({
+          where: { predecessorId: id },
+          select: { id: true, successorId: true },
+        })
+      const existingSuccessorIds = new Set(
+        existingTransitions.map((transition) => transition.successorId),
+      )
+
+      // 더 이상 후임이 아닌 행만 삭제 (남는 행의 eventType/scope는 건드리지 않음)
+      const transitionIdsToDelete = existingTransitions
+        .filter((transition) => !desiredSuccessorIds.has(transition.successorId))
+        .map((transition) => transition.id)
+      if (transitionIdsToDelete.length > 0) {
+        await this.prisma.historicalCountryTransition.deleteMany({
+          where: { id: { in: transitionIdsToDelete } },
+        })
+      }
+
+      // 새로 추가된 후임만 생성 (eventType/scope는 폼이 보낸 대표값 사용)
+      const successorIdsToAdd = data.parentHistoricalCountryIds.filter(
+        (successorId) => !existingSuccessorIds.has(successorId),
+      )
+      if (successorIdsToAdd.length > 0 && data.transitionEventType) {
         await this.prisma.historicalCountryTransition.createMany({
-          data: data.parentHistoricalCountryIds.map((successorId) => ({
+          data: successorIdsToAdd.map((successorId) => ({
             predecessorId: id,
             successorId,
             eventType: data.transitionEventType!,

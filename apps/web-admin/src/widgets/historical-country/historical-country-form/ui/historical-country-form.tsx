@@ -623,16 +623,23 @@ export function HistoricalCountryForm({
     }
 
     // 수정 모드인 경우 id 추가
-    if (editing?.id) {
-      payload.id = editing.id
+    const isEditMode = !!editing?.id
+    if (isEditMode) {
+      payload.id = editing!.id
     }
 
-    // 연결된 현대 국가가 선택된 경우 추가 (여러 국가 지원)
-    if (selectedModernCountries.length > 0) {
+    // 연결된 현대 국가 (F10): 수정 모드에서는 길이와 무관하게 항상 전송한다.
+    // 마지막 칩까지 지운 빈 배열도 서버에 도달해야 '전체 해제'가 반영된다
+    // (서버는 parentModernCountryIds가 오면 deleteMany→createMany 전량 재작성 지원).
+    // 생성 모드에서는 빈 배열이면 생략(기존 동작 유지).
+    if (isEditMode || selectedModernCountries.length > 0) {
       payload.parentModernCountryIds = selectedModernCountries
     }
-    // 후임 선택 시 추가 + 변천 유형·전환 성격 (날짜는 후임 국가 시작 시점 참조)
-    if (selectedParentHistoricalIds.length > 0) {
+    // 후임 역사 국가 (F10/F11): 수정 모드에서는 빈 배열도 항상 전송해 마지막 후임 해제가
+    // 반영되게 한다. 서버는 diff 기반(추가/삭제분만)으로 반영하므로 후임 집합이 그대로면
+    // 기존 계승 행의 eventType·transitionScope는 보존되고, 여기서 고른 유형은 새로 추가된
+    // 후임에만 적용된다.
+    if (isEditMode || selectedParentHistoricalIds.length > 0) {
       payload.parentHistoricalCountryIds = selectedParentHistoricalIds
       payload.transitionEventType = transitionEventType
       payload.transitionScope = transitionScope || undefined
@@ -1071,6 +1078,13 @@ export function HistoricalCountryForm({
                     return '변환 날짜는 다음 국가의 존속 시작 시점을 참조합니다.'
                   })()}
                 </S.FormHelp>
+                {editing?.id && (
+                  <S.FormHelp>
+                    이미 연결된 후임의 변천 유형·성격은 저장 시 유지됩니다. 개별
+                    수정은 상세의 계승 탭에서 하세요. 여기서 고른 값은 새로 추가한
+                    후임에만 적용됩니다.
+                  </S.FormHelp>
+                )}
                 <S.FormLabel style={{ marginTop: 12 }}>변환 성격</S.FormLabel>
                 <FormSelectNative
                   value={transitionScope}
