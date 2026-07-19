@@ -1619,6 +1619,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             endDate: true,
             appointmentMethod: true,
             appointmentDetail: true,
+            startDatePrecision: true,
+            accessionEventId: true,
+            accessionEvent: { select: { id: true, title: true, deletedAt: true } },
             endReason: true,
             endReasonDetail: true,
             notes: true,
@@ -1673,6 +1676,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             dynastyOrdinal: true,
             appointmentMethod: true,
             appointmentDetail: true,
+            startDatePrecision: true,
+            accessionEventId: true,
+            accessionEvent: { select: { id: true, title: true, deletedAt: true } },
             endReason: true,
             endReasonDetail: true,
             positionDefinition: {
@@ -2466,7 +2472,9 @@ export class PersonPrismaRepository implements IPersonRepository {
         subTermNumber: dto.subTermNumber,
         regnalNumber: dto.regnalNumber,
         startDate: new Date(dto.startDate),
+        startDatePrecision: dto.startDatePrecision,
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        accessionEventId: dto.accessionEventId ?? undefined,
         appointmentMethod: dto.appointmentMethod as any,
         appointmentDetail: dto.appointmentDetail,
         endReason: dto.endReason as any,
@@ -2529,7 +2537,9 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.subTermNumber !== undefined) updateData.subTermNumber = dto.subTermNumber
     if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber
     if (dto.startDate) updateData.startDate = new Date(dto.startDate)
+    if (dto.startDatePrecision !== undefined) updateData.startDatePrecision = dto.startDatePrecision
     if (dto.endDate !== undefined) updateData.endDate = dto.endDate ? new Date(dto.endDate) : null
+    if (dto.accessionEventId !== undefined) updateData.accessionEventId = dto.accessionEventId || null
     if (dto.appointmentMethod !== undefined) updateData.appointmentMethod = dto.appointmentMethod as any
     if (dto.appointmentDetail !== undefined) updateData.appointmentDetail = dto.appointmentDetail
     if (dto.endReason !== undefined) updateData.endReason = dto.endReason as any
@@ -3942,6 +3952,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       country: true,
       historicalCountry: true,
       achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+      // 수정 폼의 대관식 링크 칩 표시용(스칼라 accessionEventId는 include에서 자동)
+      accessionEvent: { select: { id: true, title: true, deletedAt: true } },
       electionCandidacy: {
         select: {
           id: true,
@@ -3964,6 +3976,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           country: true,
           historicalCountry: true,
           achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+          accessionEvent: { select: { id: true, title: true, deletedAt: true } },
         },
         orderBy: { startDate: 'desc' },
       }),
@@ -4203,7 +4216,9 @@ export class PersonPrismaRepository implements IPersonRepository {
         regnalNumber: dto.regnalNumber,
         dynastyOrdinal: dto.dynastyOrdinal,
         startDate: new Date(dto.startDate),
+        startDatePrecision: dto.startDatePrecision,
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        accessionEventId: dto.accessionEventId ?? undefined,
         appointmentMethod: dto.appointmentMethod as any,
         appointmentDetail: dto.appointmentDetail,
         endReason: dto.endReason as any,
@@ -4243,7 +4258,9 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber
     if (dto.dynastyOrdinal !== undefined) updateData.dynastyOrdinal = dto.dynastyOrdinal
     if (dto.startDate) updateData.startDate = new Date(dto.startDate)
+    if (dto.startDatePrecision !== undefined) updateData.startDatePrecision = dto.startDatePrecision
     if (dto.endDate !== undefined) updateData.endDate = dto.endDate ? new Date(dto.endDate) : null
+    if (dto.accessionEventId !== undefined) updateData.accessionEventId = dto.accessionEventId || null
     if (dto.appointmentMethod !== undefined) updateData.appointmentMethod = dto.appointmentMethod as any
     if (dto.appointmentDetail !== undefined) updateData.appointmentDetail = dto.appointmentDetail
     if (dto.endReason !== undefined) updateData.endReason = dto.endReason as any

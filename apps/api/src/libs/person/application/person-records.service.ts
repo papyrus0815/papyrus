@@ -249,8 +249,8 @@ export class PersonRecordsService {
         ongoing: row.endDate == null,
         startDate: isoOf(row.startDate),
         endDate: isoOf(row.endDate),
-        precision: null,
-        linkEventId: null,
+        precision: row.startDatePrecision ?? null,
+        linkEventId: row.accessionEventId ?? null,
         countryName: row.country?.name ?? row.historicalCountry?.name ?? null,
         role: null,
       })
@@ -272,8 +272,8 @@ export class PersonRecordsService {
         ongoing: row.endDate == null,
         startDate: isoOf(row.startDate),
         endDate: isoOf(row.endDate),
-        precision: null,
-        linkEventId: null,
+        precision: row.startDatePrecision ?? null,
+        linkEventId: row.accessionEventId ?? null,
         countryName: row.country?.name ?? row.historicalCountry?.name ?? null,
         role: null,
       })

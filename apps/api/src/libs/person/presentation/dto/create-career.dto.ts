@@ -7,6 +7,7 @@ import {
   IsArray,
   ValidateNested,
   IsIn,
+  IsUUID,
 } from 'class-validator'
 import { Type } from 'class-transformer'
 
@@ -713,6 +714,16 @@ export class CreateGovernmentPositionTenureDto {
   @IsDateString()
   startDate!: string // 취임일 (필수) — BC('-' 시작) 불가 (재임 모델에 era 컬럼 없음)
 
+  /** 취임일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움). 수정 시 null=해제(일 단위 복귀) */
+  @IsOptional()
+  @IsIn(['year', 'month', 'day'])
+  startDatePrecision?: string | null
+
+  /** 취임·즉위식 사건(Event 정본) 링크 — 수정 시 null=해제 */
+  @IsOptional()
+  @IsUUID()
+  accessionEventId?: string | null
+
   @IsOptional()
   @IsDateString()
   endDate?: string | null // 퇴임일 — BC('-' 시작) 불가
@@ -802,6 +813,16 @@ export class CreateSovereignReignDto {
 
   @IsDateString()
   startDate!: string // BC('-' 시작) 불가 (재위 모델에 era 컬럼 없음)
+
+  /** 즉위일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움). 수정 시 null=해제(일 단위 복귀) */
+  @IsOptional()
+  @IsIn(['year', 'month', 'day'])
+  startDatePrecision?: string | null
+
+  /** 즉위·대관식 사건(Event 정본) 링크 — 수정 시 null=해제 */
+  @IsOptional()
+  @IsUUID()
+  accessionEventId?: string | null
 
   @IsOptional()
   @IsDateString()

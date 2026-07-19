@@ -10,8 +10,13 @@ export interface PersonSovereignReignSummaryDto {
   id: string
   /** 재위 시작일 (직렬화된 ISO 문자열) */
   startDate: string
+  /** 즉위일 정밀도 — 'year'면 연도만 앎(표시·나이 파생은 완화) */
+  startDatePrecision: string | null
   /** 재위 종료일 — 현직·미상이면 null */
   endDate: string | null
+  /** 즉위·대관식 사건(Event 정본) 링크 */
+  accessionEventId: string | null
+  accessionEvent: { id: string; title: string | null; deletedAt: string | null } | null
   /** 비고 (레거시 왕명 인코딩 포함 가능) */
   notes: string | null
   /** 왕명 (정식 컬럼) */

@@ -319,9 +319,16 @@ model SovereignReign {
   /// 공백·논란 계승·다국가 통치(부르봉=프랑스/스페인)를 수용하기 위해 유니크 제약 없는 자유 정수.
   dynastyOrdinal Int? @map("dynasty_ordinal")
 
-  /// 재위 개시일(법적 즉위일). 대관식일은 별개 사실 — 스칼라 컬럼 대신 Event 링크로 담는다(BC·정밀도 제약 회피).
+  /// 재위 개시일(법적 즉위일). 대관식일은 별개 사실 — 스칼라 컬럼 대신 accessionEvent 링크로 담는다(BC·정밀도 제약 회피).
   startDate DateTime @map("start_date")
+  /// 즉위일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움, 표시·나이 파생은 완화). NULL=일 단위.
+  /// Person.birthDatePrecision·Event.startDatePrecision 선례 동형.
+  startDatePrecision String? @map("start_date_precision") @db.VarChar(10)
   endDate   DateTime? @map("end_date")
+
+  /// 즉위·대관식 사건(Event 정본) 링크 — 대관식 날짜·장소·의식은 Event가 정본(BC 구조화 완비)
+  accessionEventId String? @map("accession_event_id") @db.Char(36)
+  accessionEvent   Event?  @relation("SovereignReignAccessionEvent", fields: [accessionEventId], references: [id], onDelete: SetNull)
 
   appointmentMethod AppointmentMethod? @map("appointment_method")
   /// 즉위 경위 상세 서사 — appointmentMethod의 상세 쌍(endReasonDetail의 시작측 대칭).
@@ -350,6 +357,7 @@ model SovereignReign {
   @@index([positionDefinitionId], name: "idx_sovereign_reign_posDefId")
   @@index([accountId], name: "idx_sovereign_reign_accountId")
   @@index([startDate], name: "idx_sovereign_reign_startDate")
+  @@index([accessionEventId], name: "idx_sovereign_reign_accessionEventId")
   /// 동양식 즉위 서수(n대): 한 국가에 1대는 단 한 명 (예: 표트르 대제 = 러시아 제국 1대)
   /// regnalNumber 는 country/historicalCountry 별 start_date 순 ordinal
   /// MySQL NULL-distinct: regnalNumber 가 NULL 이면 unique 검사에서 항상 distinct
@@ -440,8 +448,15 @@ model GovernmentPositionTenure {
   /// 임기 시작일 — 취임일(군주 재위는 법적 즉위일; 대관식일은 별개 사실로 Event 링크가 정본)
   startDate DateTime @map("start_date")
 
+  /// 취임일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움). NULL=일 단위. SovereignReign과 동형.
+  startDatePrecision String? @map("start_date_precision") @db.VarChar(10)
+
   /// 임기 종료일 (퇴위일, 현재 재직 중이면 NULL)
   endDate DateTime? @map("end_date")
+
+  /// 취임·즉위식 사건(Event 정본) 링크 — 재위 카드의 대관식 배지와 대칭
+  accessionEventId String? @map("accession_event_id") @db.Char(36)
+  accessionEvent   Event?  @relation("TenureAccessionEvent", fields: [accessionEventId], references: [id], onDelete: SetNull)
 
   /// 임명/선출 방식
   appointmentMethod AppointmentMethod? @map("appointment_method")
@@ -505,6 +520,7 @@ model GovernmentPositionTenure {
   @@index([administrationDepartmentId], name: "idx_gov_tenure_adminDeptId")
   @@index([accountId], name: "idx_gov_tenure_accountId")
   @@index([mandateSource], name: "idx_gov_tenure_mandateSource")
+  @@index([accessionEventId], name: "idx_gov_tenure_accessionEventId")
   @@map("government_position_tenure")
 }
 

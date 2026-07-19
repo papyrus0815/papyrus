@@ -448,11 +448,13 @@ export class GovernmentPositionController {
    */
   @Put('tenures/:id')
   async updateTenure(
+    @Req() req: Request,
     @Param('id') id: string,
     @Body() dto: Partial<CreateGovernmentPositionTenureDto>
   ): Promise<any> {
     assertNoBcTenureDates(dto)
-    const result = await this.personService.updateGovernmentPositionTenure(id, dto)
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const result = await this.personService.updateGovernmentPositionTenure(id, dto, accountId)
     return serializeBigInt(result)
   }
 
@@ -460,8 +462,9 @@ export class GovernmentPositionController {
    * 국가원수/왕위 재임 기록 삭제
    */
   @Delete('tenures/:id')
-  async deleteTenure(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteGovernmentPositionTenure(id)
+  async deleteTenure(@Req() req: Request, @Param('id') id: string): Promise<void> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    await this.personService.deleteGovernmentPositionTenure(id, accountId)
   }
 
   /** 재임 1건 + 업적 조회 (수장 비교 등 읽기 팝오버용) */
@@ -481,17 +484,20 @@ export class GovernmentPositionController {
 
   @Put('sovereign-reigns/:id')
   async updateSovereignReign(
+    @Req() req: Request,
     @Param('id') id: string,
     @Body() dto: Partial<CreateSovereignReignDto>,
   ): Promise<any> {
     assertNoBcTenureDates(dto)
-    const result = await this.personService.updateSovereignReign(id, dto)
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const result = await this.personService.updateSovereignReign(id, dto, accountId)
     return serializeBigInt(result)
   }
 
   @Delete('sovereign-reigns/:id')
-  async deleteSovereignReign(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteSovereignReign(id)
+  async deleteSovereignReign(@Req() req: Request, @Param('id') id: string): Promise<void> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    await this.personService.deleteSovereignReign(id, accountId)
   }
 
   /** 재위 1건 + 업적 조회 (수장 비교 등 읽기 팝오버용) */
@@ -502,33 +508,40 @@ export class GovernmentPositionController {
 
   @Post('sovereign-reigns/:sovereignReignId/achievements')
   async addSovereignReignAchievement(
+    @Req() req: Request,
     @Param('sovereignReignId') sovereignReignId: string,
     @Body() dto: CreateTenureAchievementDto,
   ): Promise<any> {
-    const result = await this.personService.createSovereignReignAchievement(sovereignReignId, dto)
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const result = await this.personService.createSovereignReignAchievement(sovereignReignId, dto, accountId)
     return serializeBigInt(result)
   }
 
   @Patch('sovereign-reigns/:sovereignReignId/achievements/:achievementId')
   async updateSovereignReignAchievement(
+    @Req() req: Request,
     @Param('sovereignReignId') sovereignReignId: string,
     @Param('achievementId') achievementId: string,
     @Body() dto: UpdateTenureAchievementDto,
   ): Promise<any> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const result = await this.personService.updateSovereignReignAchievement(
       sovereignReignId,
       achievementId,
       dto,
+      accountId,
     )
     return serializeBigInt(result)
   }
 
   @Delete('sovereign-reigns/:sovereignReignId/achievements/:achievementId')
   async deleteSovereignReignAchievement(
+    @Req() req: Request,
     @Param('sovereignReignId') sovereignReignId: string,
     @Param('achievementId') achievementId: string,
   ): Promise<void> {
-    await this.personService.deleteSovereignReignAchievement(sovereignReignId, achievementId)
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    await this.personService.deleteSovereignReignAchievement(sovereignReignId, achievementId, accountId)
   }
 
   /**
@@ -536,10 +549,12 @@ export class GovernmentPositionController {
    */
   @Post('tenures/:tenureId/achievements')
   async addTenureAchievement(
+    @Req() req: Request,
     @Param('tenureId') tenureId: string,
     @Body() dto: CreateTenureAchievementDto,
   ): Promise<any> {
-    const result = await this.personService.createTenureAchievement(tenureId, dto)
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const result = await this.personService.createTenureAchievement(tenureId, dto, accountId)
     return serializeBigInt(result)
   }
 
@@ -568,14 +583,17 @@ export class GovernmentPositionController {
    */
   @Patch('tenures/:tenureId/achievements/:achievementId')
   async updateTenureAchievement(
+    @Req() req: Request,
     @Param('tenureId') tenureId: string,
     @Param('achievementId') achievementId: string,
     @Body() dto: UpdateTenureAchievementDto,
   ): Promise<any> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const result = await this.personService.updateTenureAchievement(
       tenureId,
       achievementId,
       dto,
+      accountId,
     )
     return serializeBigInt(result)
   }
@@ -585,10 +603,12 @@ export class GovernmentPositionController {
    */
   @Delete('tenures/:tenureId/achievements/:achievementId')
   async deleteTenureAchievement(
+    @Req() req: Request,
     @Param('tenureId') tenureId: string,
     @Param('achievementId') achievementId: string,
   ): Promise<void> {
-    await this.personService.deleteTenureAchievement(tenureId, achievementId)
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    await this.personService.deleteTenureAchievement(tenureId, achievementId, accountId)
   }
 
   /**
@@ -596,33 +616,40 @@ export class GovernmentPositionController {
    */
   @Post('tenures/:tenureId/regnal-eras')
   async addRegnalEra(
+    @Req() req: Request,
     @Param('tenureId') tenureId: string,
     @Body() dto: CreateRegnalEraDto,
   ): Promise<any> {
-    const result = await this.personService.createRegnalEra(tenureId, dto)
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const result = await this.personService.createRegnalEra(tenureId, dto, accountId)
     return serializeBigInt(result)
   }
 
   @Post('sovereign-reigns/:sovereignReignId/regnal-eras')
   async addSovereignReignRegnalEra(
+    @Req() req: Request,
     @Param('sovereignReignId') sovereignReignId: string,
     @Body() dto: CreateRegnalEraDto,
   ): Promise<any> {
-    const result = await this.personService.createRegnalEraForSovereignReign(sovereignReignId, dto)
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const result = await this.personService.createRegnalEraForSovereignReign(sovereignReignId, dto, accountId)
     return serializeBigInt(result)
   }
 
   @Patch('regnal-eras/:id')
   async patchRegnalEra(
+    @Req() req: Request,
     @Param('id') id: string,
     @Body() dto: UpdateRegnalEraDto,
   ): Promise<any> {
-    const result = await this.personService.updateRegnalEra(id, dto)
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const result = await this.personService.updateRegnalEra(id, dto, accountId)
     return serializeBigInt(result)
   }
 
   @Delete('regnal-eras/:id')
-  async deleteRegnalEra(@Param('id') id: string): Promise<void> {
-    await this.personService.deleteRegnalEra(id)
+  async deleteRegnalEra(@Req() req: Request, @Param('id') id: string): Promise<void> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    await this.personService.deleteRegnalEra(id, accountId)
   }
 }
