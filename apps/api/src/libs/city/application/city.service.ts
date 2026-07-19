@@ -39,6 +39,12 @@ type DivisionOwner = {
 }
 
 /**
+ * 체계 시행일로 저장 가능한 최소 연도(서기).
+ * DATETIME 왕복이 신뢰 가능한 하한 — 이 리포의 확립된 규약(AD 1000+).
+ */
+const MIN_SCHEME_YEAR = 1000
+
+/**
  * City / AdministrativeDivision 도메인 비즈니스 로직.
  *
  * 컨트롤러(CityController)는 HTTP 매핑만 담당하고, 모든 검증·트랜잭션·쿼리는 여기에 모은다.
@@ -328,7 +334,11 @@ export class CityService {
 
   /**
    * 체계 시행일 파싱 — 빈 값이면 null.
-   * MySQL DATETIME은 기원전(음수 연도)을 저장할 수 없어 명시적으로 거부한다.
+   *
+   * MySQL DATETIME은 기원전(음수 연도)을 저장할 수 없고, mariadb 어댑터는
+   * 연도 1000 미만도 안전하게 왕복시키지 못한다(읽기 변환에서 '0044-…'를
+   * 2044로 오파싱 → 화면 전역 오표시, 그 상태로 1회 수정하면 실제 저장까지
+   * 손상 고착). 무성 손상이므로 기원전과 같은 결로 입력 단계에서 거부한다.
    */
   private parseSchemeDate(
     value: string | null | undefined,
@@ -345,6 +355,14 @@ export class CityService {
     const date = new Date(trimmed)
     if (Number.isNaN(date.getTime())) {
       throw new BadRequestException(`${label} 형식이 올바르지 않습니다.`)
+    }
+    // 연도는 ISO 문자열 선두에서 직접 읽는다 — 네이티브 Date의 2자리 연도 보정 회피
+    const yearMatch = trimmed.match(/^(\d{1,6})-/)
+    const year = yearMatch ? parseInt(yearMatch[1], 10) : date.getUTCFullYear()
+    if (year < MIN_SCHEME_YEAR) {
+      throw new BadRequestException(
+        `${label}에 서기 ${MIN_SCHEME_YEAR}년 이전 날짜는 저장할 수 없습니다 — 저장 후 연도가 어긋나 아직 지원하지 않습니다. 비워 두세요.`,
+      )
     }
     return date
   }

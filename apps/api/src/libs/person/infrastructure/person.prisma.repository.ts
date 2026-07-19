@@ -368,8 +368,9 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 이름 표시 순서·배지용 country 블록.
    * 우선순위: 1) person.historicalCountry FK(first-class) 2) person.country FK(현대)
    *          3) CITIZENSHIP priority=0 슬롯 폴백(F6, 미백필/롤백 대비) 4) BIRTH_PLACE 소속.
-   * isHistorical/modernCountryId: 상세 국가 배지가 역사국가(전용 상세 라우트 부재)를
-   *   연결 현대국가의 '역사' 탭으로 라우팅하거나 비활성화하는 데 쓴다.
+   * isHistorical/modernCountryId: 역사/현대 축 판별과 연결 현대국가 참조용.
+   *   배지 내비게이션은 이 값을 쓰지 않는다 — /country/:id 셸이 역사국가 id도 그대로
+   *   resolve하므로 프론트는 축과 무관하게 countryDetail(country.id)로 이동한다.
    * HistoricalCountry엔 flag/iso/defaultNameDisplayOrder가 없어 연결 현대국가에서 주입.
    */
   private resolveCountryBlockForName(person: any): {
@@ -1905,6 +1906,69 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * countryAffiliations 배열로 들어온 행이 주 국적 슬롯(CITIZENSHIP priority=0) 자리인지 판별(F26).
+   * priority 미지정은 부가 소속으로 간주하는 쓰기 기본값(?? 1)과 맞춘다.
+   */
+  private isPrimaryCitizenshipRow(row: { affiliationType: string; priority?: number }): boolean {
+    return row.affiliationType === 'CITIZENSHIP' && (row.priority ?? 1) === 0
+  }
+
+  /**
+   * 주 국적 슬롯(CITIZENSHIP priority=0) 유일성 보장 쓰기(F26).
+   *
+   * 스키마에 unique 제약이 없어 prisma.upsert를 못 쓰므로 findFirst → update/create로 대신한다.
+   * 예전 생성 경로는 유일성 검사 없이 무조건 create해서, 저장을 반복할수록 슬롯이 증식했다.
+   * FK(Person.historicalCountryId/countryId)가 정본이고 이 슬롯은 발견 인덱스용 미러이므로,
+   * 호출부는 FK 값을 그대로 넘긴다. 경합을 줄이려 호출부와 같은 트랜잭션/클라이언트에서 실행한다.
+   *
+   * startDate·endDate·note는 전달된 경우에만 덮어쓴다 — FK 미러 동기화가 기존 슬롯의 부가 정보를 지우지 않도록.
+   */
+  private async syncPrimaryCitizenshipSlot(
+    client: Prisma.TransactionClient,
+    personId: string,
+    slot: {
+      countryId?: string | null
+      historicalCountryId?: string | null
+      startDate?: Date | null
+      endDate?: Date | null
+      note?: string | null
+    },
+  ): Promise<void> {
+    const patch: {
+      countryId: string | null
+      historicalCountryId: string | null
+      startDate?: Date | null
+      endDate?: Date | null
+      note?: string | null
+    } = {
+      countryId: slot.countryId ?? null,
+      historicalCountryId: slot.historicalCountryId ?? null,
+    }
+    if (slot.startDate !== undefined) patch.startDate = slot.startDate
+    if (slot.endDate !== undefined) patch.endDate = slot.endDate
+    if (slot.note !== undefined) patch.note = slot.note
+
+    const existing = await client.personCountryAffiliation.findFirst({
+      where: { personId, affiliationType: 'CITIZENSHIP' as any, priority: 0 },
+    })
+    if (existing) {
+      await client.personCountryAffiliation.update({
+        where: { id: existing.id },
+        data: patch,
+      })
+      return
+    }
+    await client.personCountryAffiliation.create({
+      data: {
+        personId,
+        affiliationType: 'CITIZENSHIP' as any,
+        priority: 0,
+        ...patch,
+      },
+    })
+  }
+
+  /**
    * 인물 생성
    * FK 필드 정리 + countryId는 Country에 있을 때만 Person에 저장.
    * 역사적 국가 ID면 Person.countryId는 넣지 않고, PersonCountryAffiliation(CITIZENSHIP, priority=0)에 저장.
@@ -1983,22 +2047,37 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
     }
 
-    // 역사 국가인 경우 CITIZENSHIP priority=0 소속 생성
+    // 주 국적 슬롯(CITIZENSHIP priority=0)은 인물당 1행 계약(F26).
+    // 배열에 슬롯 자리 행이 섞여 오면 부가 소속으로 따로 만들지 않고 슬롯 쓰기로 흡수한다 —
+    // 그러지 않으면 FK 미러와 배열이 각각 create해 같은 내용의 슬롯이 둘 생긴다.
+    const primaryCitizenshipRows = (countryAffiliations ?? []).filter((affiliation) =>
+      this.isPrimaryCitizenshipRow(affiliation),
+    )
+    const extraAffiliations = (countryAffiliations ?? []).filter(
+      (affiliation) => !this.isPrimaryCitizenshipRow(affiliation),
+    )
+
+    // 역사 국가인 경우 CITIZENSHIP priority=0 소속 생성(FK 미러가 정본)
     if (mainHistoricalId) {
-      await this.prisma.personCountryAffiliation.create({
-        data: {
-          personId: person.id,
-          affiliationType: 'CITIZENSHIP' as any,
-          priority: 0,
-          historicalCountryId: mainHistoricalId,
-        },
+      await this.syncPrimaryCitizenshipSlot(this.prisma, person.id, {
+        historicalCountryId: mainHistoricalId,
+      })
+    } else if (primaryCitizenshipRows.length) {
+      // FK 미러가 없을 때만 배열 행이 슬롯을 채운다. 2행 이상 와도 첫 행만 — 슬롯은 1개 계약.
+      const primary = primaryCitizenshipRows[0]
+      await this.syncPrimaryCitizenshipSlot(this.prisma, person.id, {
+        countryId: primary.countryId || null,
+        historicalCountryId: primary.historicalCountryId || null,
+        startDate: primary.startDate ? new Date(primary.startDate) : null,
+        endDate: primary.endDate ? new Date(primary.endDate) : null,
+        note: primary.note || null,
       })
     }
 
     // 추가 국가 소속(다중) 일괄 생성 — 주 국적(countryId)과 별개
-    if (countryAffiliations?.length) {
+    if (extraAffiliations.length) {
       await this.prisma.personCountryAffiliation.createMany({
-        data: countryAffiliations.map((a) => ({
+        data: extraAffiliations.map((a) => ({
           personId: person.id,
           affiliationType: a.affiliationType as any,
           countryId: a.countryId || null,
@@ -2218,30 +2297,37 @@ export class PersonPrismaRepository implements IPersonRepository {
         }
       }
 
+      // 주 국적 슬롯(CITIZENSHIP priority=0)은 인물당 1행 계약(F26).
+      // 아래 deleteMany가 슬롯을 보존하므로, 배열에 슬롯 자리 행이 되돌아오면 그대로 createMany 하던
+      // 예전 코드는 저장할 때마다 슬롯을 하나씩 늘렸다(구 프론트 왕복분). 배열의 슬롯 행은 슬롯 쓰기로 흡수한다.
+      const primaryCitizenshipRows = (countryAffiliations ?? []).filter((affiliation) =>
+        this.isPrimaryCitizenshipRow(affiliation),
+      )
+      const extraAffiliations = countryAffiliations?.filter(
+        (affiliation) => !this.isPrimaryCitizenshipRow(affiliation),
+      )
+
       // 역사 국가 변경 시 CITIZENSHIP priority=0 소속 upsert
-      if (mainHistoricalId !== undefined) {
+      if (mainHistoricalId === null) {
+        // 주 국적 해제 — 역사국가를 담고 있던 슬롯만 제거(현대 국적 슬롯은 건드리지 않음)
         const existing = await tx.personCountryAffiliation.findFirst({
           where: { personId: id, affiliationType: 'CITIZENSHIP' as any, priority: 0 },
         })
-        if (mainHistoricalId === null) {
-          if (existing?.historicalCountryId) {
-            await tx.personCountryAffiliation.delete({ where: { id: existing.id } })
-          }
-        } else if (existing) {
-          await tx.personCountryAffiliation.update({
-            where: { id: existing.id },
-            data: { historicalCountryId: mainHistoricalId, countryId: null },
-          })
-        } else {
-          await tx.personCountryAffiliation.create({
-            data: {
-              personId: id,
-              affiliationType: 'CITIZENSHIP' as any,
-              priority: 0,
-              historicalCountryId: mainHistoricalId,
-            },
-          })
+        if (existing?.historicalCountryId) {
+          await tx.personCountryAffiliation.delete({ where: { id: existing.id } })
         }
+      } else if (mainHistoricalId) {
+        await this.syncPrimaryCitizenshipSlot(tx, id, { historicalCountryId: mainHistoricalId })
+      } else if (primaryCitizenshipRows.length) {
+        // FK 지시(historicalCountryId)가 없을 때만 배열 행이 슬롯을 갱신한다 — FK가 정본.
+        const primary = primaryCitizenshipRows[0]
+        await this.syncPrimaryCitizenshipSlot(tx, id, {
+          countryId: primary.countryId || null,
+          historicalCountryId: primary.historicalCountryId || null,
+          startDate: primary.startDate ? new Date(primary.startDate) : null,
+          endDate: primary.endDate ? new Date(primary.endDate) : null,
+          note: primary.note || null,
+        })
       }
 
       // 추가 국가 소속(다중) — 주 국적(priority 0 CITIZENSHIP)은 보존하고 나머지 전체 교체
@@ -2252,9 +2338,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             NOT: { affiliationType: 'CITIZENSHIP' as any, priority: 0 },
           },
         })
-        if (countryAffiliations.length) {
+        if (extraAffiliations?.length) {
           await tx.personCountryAffiliation.createMany({
-            data: countryAffiliations.map((a) => ({
+            data: extraAffiliations.map((a) => ({
               personId: id,
               affiliationType: a.affiliationType as any,
               countryId: a.countryId || null,
@@ -2472,6 +2558,11 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   /**
    * 재임 기록의 국가 FK 정리: 빈 문자열/무효 ID 제거, countryId가 역사적 국가 ID면 historicalCountryId로만 저장
+   *
+   * 두 테이블 어디에도 없는 ID는 무성 드롭하지 않고 BadRequest로 거부한다(F9).
+   * 예전에는 필드를 조용히 누락시켜, 오타·삭제된 id를 보내면 '국가 없는 재임'이 200으로 저장되고
+   * 어느 수반 목록에도 안 잡히는 유령 기록이 남았다.
+   * 빈 값/null(국가 미지정)은 정상 입력이므로 거부 대상이 아니다.
    */
   private async resolveTenureCountryFields(dto: {
     countryId?: string | null
@@ -2489,11 +2580,15 @@ export class PersonPrismaRepository implements IPersonRepository {
       if (inCountry) {
         result.countryId = cid
       } else {
+        // 레거시 이관 경로: 구 클라이언트가 역사국가 id를 countryId 슬롯에 담아 보낸 경우 → historicalCountryId로 재라우팅
         const inHistorical = await this.prisma.historicalCountry.findUnique({
           where: { id: cid },
           select: { id: true },
         })
-        if (inHistorical) result.historicalCountryId = cid
+        if (!inHistorical) {
+          throw new BadRequestException(`국가를 찾을 수 없습니다: ${cid}`)
+        }
+        result.historicalCountryId = cid
       }
     }
     if (hid && result.historicalCountryId === undefined) {
@@ -2501,7 +2596,10 @@ export class PersonPrismaRepository implements IPersonRepository {
         where: { id: hid },
         select: { id: true },
       })
-      if (inHistorical) result.historicalCountryId = hid
+      if (!inHistorical) {
+        throw new BadRequestException(`역사 국가를 찾을 수 없습니다: ${hid}`)
+      }
+      result.historicalCountryId = hid
     }
     return result
   }
