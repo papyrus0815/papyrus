@@ -20,6 +20,11 @@ import {
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
+import {
+  describeLifespanMismatch,
+  signedYearFromIsoLike,
+} from '@/shared/lib/country-period'
+import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
@@ -432,6 +437,24 @@ export function TenureRegisterPanel({
     name: historical.name ?? historical.id,
     flagEmoji: null,
   }))
+
+  // F33 소프트 경고 — 선택된 역사국가의 존속기간과 취임 연도를 대조.
+  // 존속기간은 구조화(startEra/Year)로 100% 채워져 있는 allHistoricalCountries가 진실이라
+  // 여기서 조회한다(scope 목록은 DATETIME startDate라 BC 불신). 재임 startDate는 blockBc라
+  // AD only → recordSupportsBc=false(BC 국가는 비교 불가라 무경고). 저장은 막지 않는다.
+  const lifespanWarning = useMemo(() => {
+    if (!historicalCountryId) return null
+    const selected = (allHistoricalCountries as Array<{
+      id: string
+      startEra?: string | null
+      startYear?: number | null
+      endEra?: string | null
+      endYear?: number | null
+    }>).find((historical) => historical.id === historicalCountryId)
+    if (!selected) return null
+    return describeLifespanMismatch(selected, signedYearFromIsoLike(startDate))
+  }, [historicalCountryId, allHistoricalCountries, startDate])
+
   const { data: positionDefinitions = [] } = useQuery({
     queryKey: ['position-definitions-tenure', countryId, historicalCountryId],
     queryFn: () =>
@@ -1011,6 +1034,12 @@ export function TenureRegisterPanel({
                 blockBc
                 clearableEnd
               />
+
+              {lifespanWarning && (
+                <AlertBox variant="warning" icon="⚠️" style={{ marginTop: 4 }}>
+                  선택한 역사국가 {lifespanWarning} 소급·추존·망명 등 정당한 경우라면 그대로 저장하세요.
+                </AlertBox>
+              )}
 
               <FieldRow>
                 <FieldLabel>

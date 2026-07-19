@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
 import styled, { useTheme } from 'styled-components'
@@ -23,7 +23,12 @@ import { getImageUrl } from '@/pages/events/utils/event-create.utils'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
+import {
+  describeLifespanMismatch,
+  signedYearFromIsoLike,
+} from '@/shared/lib/country-period'
 import { uploadImage } from '@/shared/api/upload'
+import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { TimePickerModal } from '@/shared/ui/time-picker-modal/time-picker-modal'
 import { notify } from '@/shared/ui/toast'
@@ -159,6 +164,28 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
 
   const KEYWORD_MAX_LENGTH = 30
   const KEYWORD_MAX_COUNT = 20
+
+  // F33 소프트 경고 — 사건 시점이 선택한 역사국가 존속기간 밖이면 인라인 경고(저장은 허용).
+  // 사건 startDate는 '-YYYY'로 BC도 담을 수 있어 recordSupportsBc=true(부호 전 구간 비교).
+  // availableHistoricalCountries가 구조화 존속기간(startEra/Year)을 담은 DTO라 그대로 대조.
+  const historicalLifespanWarnings = useMemo(() => {
+    const eventSignedYear = signedYearFromIsoLike(startDate)
+    if (eventSignedYear == null) return []
+    return relatedHistoricalCountryIds
+      .map((historicalId) => {
+        const country = availableHistoricalCountries.find(
+          (candidate) => candidate.id === historicalId,
+        )
+        if (!country) return null
+        const mismatch = describeLifespanMismatch(country, eventSignedYear, {
+          recordSupportsBc: true,
+        })
+        return mismatch ? { id: historicalId, name: country.name, mismatch } : null
+      })
+      .filter(
+        (item): item is { id: string; name: string; mismatch: string } => item != null,
+      )
+  }, [startDate, relatedHistoricalCountryIds, availableHistoricalCountries])
 
   const addKeywordsFromInput = () => {
     const raw = keywordInput.trim()
@@ -736,6 +763,17 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 })}
               </S.SelectedItemsContainer>
             )}
+            {historicalLifespanWarnings.map((item) => (
+              <AlertBox
+                key={item.id}
+                variant="warning"
+                icon="⚠️"
+                style={{ marginTop: 8 }}
+              >
+                <strong>{item.name}</strong> {item.mismatch} 국가 소멸 전후 소급·연속 사건 등
+                정당한 경우라면 그대로 저장하세요.
+              </AlertBox>
+            ))}
             <S.Hint>
               이 사건과 관련된 국가들을 선택하세요 (예: 한국전쟁 → 대한민국,
               북한, 미국, 중국 등). 좌측 ★ 별을 눌러 <strong>메인 국가</strong>를 지정하면
