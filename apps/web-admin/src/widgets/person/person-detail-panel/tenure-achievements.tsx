@@ -6,9 +6,8 @@
  * - 변경 후에는 onChanged()로 부모가 상세 쿼리를 무효화해 최신 목록을 다시 받게 함.
  * - accent 색은 부모 카드(재임=인디고 / 재위=틸)와 연동.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   FiAward,
@@ -18,15 +17,13 @@ import {
   FiEyeOff,
   FiLink,
   FiPlus,
-  FiSearch,
   FiTrash2,
   FiX,
 } from 'react-icons/fi'
 
-import { getAllEvents } from '@/shared/api/events'
 import { personCareerApi } from '@/shared/api/person-career'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import { Modal } from '@/shared/ui/modal'
+import { EventPickerModal } from '@/shared/ui/event-picker-modal/event-picker-modal'
 import { notify } from '@/shared/ui/toast'
 
 import { compareTenureAchievementsByOrder, formatIsoDateKo } from './helpers'
@@ -40,12 +37,6 @@ import {
   AchievementDateField,
   AchievementEmpty,
   AchievementEventBadge,
-  AchievementEventPickerEmpty,
-  AchievementEventPickerList,
-  AchievementEventPickerRow,
-  AchievementEventPickerRowMeta,
-  AchievementEventPickerRowTitle,
-  AchievementEventPickerSearchRow,
   AchievementForm,
   AchievementFormActions,
   AchievementFormRow,
@@ -467,92 +458,5 @@ export function TenureAchievements({
         />
       )}
     </AchievementSection>
-  )
-}
-
-// ────── 연결 사건 선택 모달 ──────
-
-interface EventPickerModalProps {
-  isOpen: boolean
-  onClose: () => void
-  onSelect: (picked: LinkedEventRef) => void
-}
-
-/**
- * 공용 <Modal> 기반 사건 피커 — 최근 200건을 로드해 제목 부분일치로 클라 필터.
- * 행 클릭 시 {id, title}을 넘기고 닫는다.
- */
-function EventPickerModal({ isOpen, onClose, onSelect }: EventPickerModalProps) {
-  const [search, setSearch] = useState('')
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['events', 'achievement-link-picker'],
-    queryFn: () => getAllEvents({ limit: 200 }),
-    staleTime: 5 * 60 * 1000,
-    enabled: isOpen,
-  })
-
-  // 재오픈 시 이전 검색어가 남지 않게 닫힐 때 초기화
-  useEffect(() => {
-    if (!isOpen) setSearch('')
-  }, [isOpen])
-
-  const filtered = useMemo(() => {
-    const rows = data ?? []
-    const keyword = search.trim().toLowerCase()
-    if (!keyword) return rows
-    return rows.filter((eventRow) =>
-      (eventRow.title ?? '').toLowerCase().includes(keyword),
-    )
-  }, [data, search])
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="사건 연결" size="narrow">
-      <AchievementEventPickerSearchRow>
-        <FiSearch size={14} />
-        <input
-          type="search"
-          value={search}
-          onChange={(changeEvent) => setSearch(changeEvent.target.value)}
-          placeholder="사건 제목 검색"
-          aria-label="사건 제목 검색"
-        />
-      </AchievementEventPickerSearchRow>
-      <AchievementEventPickerList>
-        {isLoading ? (
-          <AchievementEventPickerEmpty>불러오는 중…</AchievementEventPickerEmpty>
-        ) : isError ? (
-          <AchievementEventPickerEmpty>
-            사건 목록을 불러오지 못했습니다.
-          </AchievementEventPickerEmpty>
-        ) : filtered.length === 0 ? (
-          <AchievementEventPickerEmpty>
-            {search.trim() ? '검색 결과가 없습니다.' : '등록된 사건이 없습니다.'}
-          </AchievementEventPickerEmpty>
-        ) : (
-          filtered.map((eventRow) => (
-            <AchievementEventPickerRow
-              key={eventRow.id}
-              type="button"
-              onClick={() =>
-                onSelect({
-                  id: eventRow.id,
-                  title: eventRow.title ?? '연결된 사건',
-                })
-              }
-            >
-              <AchievementEventPickerRowTitle>
-                {eventRow.title}
-              </AchievementEventPickerRowTitle>
-              {eventRow.startDate && (
-                <AchievementEventPickerRowMeta>
-                  {String(eventRow.startDate).slice(0, 10)}
-                </AchievementEventPickerRowMeta>
-              )}
-            </AchievementEventPickerRow>
-          ))
-        )}
-      </AchievementEventPickerList>
-    </Modal>
   )
 }
