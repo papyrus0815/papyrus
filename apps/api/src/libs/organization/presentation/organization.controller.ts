@@ -41,6 +41,8 @@ function toResponseDto(entity: {
   headquartersCityId: string | null
   countryId: string | null
   historicalCountryId: string | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
   createdAt: Date
   updatedAt: Date
 }): OrganizationResponseDto {
@@ -60,6 +62,8 @@ function toResponseDto(entity: {
     headquartersCityId: entity.headquartersCityId,
     countryId: entity.countryId,
     historicalCountryId: entity.historicalCountryId,
+    country: entity.country ?? null,
+    historicalCountry: entity.historicalCountry ?? null,
     createdAt: entity.createdAt.toISOString(),
     updatedAt: entity.updatedAt.toISOString(),
   }
@@ -81,6 +85,8 @@ function treeToDto(node: {
   headquartersCityId: string | null
   countryId: string | null
   historicalCountryId: string | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
   createdAt: Date
   updatedAt: Date
   children: any[]

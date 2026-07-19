@@ -16,6 +16,14 @@ import { AuthGuard } from '@nestjs/passport'
 import { Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import { serializeElectionBigInt } from '../election-serialize.util'
+import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
+
+/** 응답에 연결 국가/역사국가 요약({id,name})을 실어주는 공용 include */
+const LAW_COUNTRY_INCLUDE = {
+  lawType: { select: { id: true, name: true } },
+  country: { select: { id: true, name: true } },
+  historicalCountry: { select: { id: true, name: true } },
+} satisfies Prisma.LawInclude
 
 function parseOptionalPositiveInt(
   v: unknown,
@@ -69,15 +77,20 @@ export class LawController {
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
   ): Promise<any> {
-    const where: Prisma.LawWhereInput = {}
-    if (countryId) where.countryId = countryId
-    if (historicalCountryId) where.historicalCountryId = historicalCountryId
+    // 현대 국가 필터는 브리지로 연결된 역사국가 소속까지 OR 확장(검토서 F14 —
+    // person·election·party와 동일 소속 정의). 역사국가 단독 필터는 정확 일치.
+    // (현재 law 0행이라 관측 효과는 없으나 계약 정합·미래 데이터 대비.)
+    const where: Prisma.LawWhereInput = {
+      ...(countryId
+        ? await resolveCountryScopeOr(this.prisma, countryId)
+        : historicalCountryId
+          ? { historicalCountryId }
+          : {}),
+    }
     const rows = await this.prisma.law.findMany({
       where: Object.keys(where).length ? where : undefined,
       orderBy: { name: 'asc' },
-      include: {
-        lawType: { select: { id: true, name: true } },
-      },
+      include: LAW_COUNTRY_INCLUDE,
     })
     return serializeElectionBigInt(rows)
   }
@@ -106,9 +119,7 @@ export class LawController {
         countryId: body.countryId ?? undefined,
         historicalCountryId: body.historicalCountryId ?? undefined,
       },
-      include: {
-        lawType: { select: { id: true, name: true } },
-      },
+      include: LAW_COUNTRY_INCLUDE,
     })
     return serializeElectionBigInt(row)
   }
@@ -151,9 +162,7 @@ export class LawController {
     const row = await this.prisma.law.update({
       where: { id },
       data,
-      include: {
-        lawType: { select: { id: true, name: true } },
-      },
+      include: LAW_COUNTRY_INCLUDE,
     })
     return serializeElectionBigInt(row)
   }

@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
+import { Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 
 const GLOSSARY_TERM_NAME_MAX_LENGTH = 1000
@@ -25,12 +26,28 @@ function truncateName(name: string): string {
     : t
 }
 
+/** 응답에 연결 국가/역사국가 요약({id,name})을 실어주는 공용 include */
+const GLOSSARY_COUNTRY_INCLUDE = {
+  country: { select: { id: true, name: true } },
+  historicalCountry: { select: { id: true, name: true } },
+} satisfies Prisma.GlossaryTermInclude
+
+/** 연결 국가/역사국가 요약 (id→이름 별도 조회 없이 표시) */
+export type GlossaryCountryRefDto = {
+  id: string
+  name: string
+}
+
 export type GlossaryTermResponseDto = {
   id: string
   name: string
   description: string | null
   countryId: string | null
   historicalCountryId: string | null
+  /** 현대 국가 요약(있으면) */
+  country: GlossaryCountryRefDto | null
+  /** 역사국가 요약(있으면) — 표시는 역사 우선 */
+  historicalCountry: GlossaryCountryRefDto | null
   eventId: string | null
   createdAt: string
   updatedAt: string
@@ -59,6 +76,8 @@ function toResponse(row: {
   description: string | null
   countryId: string | null
   historicalCountryId: string | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
   eventId: string | null
   createdAt: Date
   updatedAt: Date
@@ -69,6 +88,8 @@ function toResponse(row: {
     description: row.description ?? null,
     countryId: row.countryId ?? null,
     historicalCountryId: row.historicalCountryId ?? null,
+    country: row.country ?? null,
+    historicalCountry: row.historicalCountry ?? null,
     eventId: row.eventId ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -118,6 +139,7 @@ export class GlossaryController {
     const list = await this.prisma.glossaryTerm.findMany({
       where,
       orderBy: { name: 'asc' },
+      include: GLOSSARY_COUNTRY_INCLUDE,
     })
     return list.map(toResponse)
   }
@@ -129,6 +151,7 @@ export class GlossaryController {
   async getById(@Param('id') id: string): Promise<GlossaryTermResponseDto> {
     const row = await this.prisma.glossaryTerm.findUnique({
       where: { id },
+      include: GLOSSARY_COUNTRY_INCLUDE,
     })
     if (!row) throw new NotFoundException(`Glossary term with id ${id} not found`)
     return toResponse(row)
@@ -144,6 +167,7 @@ export class GlossaryController {
         historicalCountryId: dto.historicalCountryId || null,
         eventId: dto.eventId?.trim() || null,
       },
+      include: GLOSSARY_COUNTRY_INCLUDE,
     })
     return toResponse(row)
   }
@@ -167,6 +191,7 @@ export class GlossaryController {
         }),
         ...(dto.eventId !== undefined && { eventId: dto.eventId?.trim() || null }),
       },
+      include: GLOSSARY_COUNTRY_INCLUDE,
     })
     return toResponse(row)
   }

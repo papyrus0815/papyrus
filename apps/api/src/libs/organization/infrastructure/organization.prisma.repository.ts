@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import type {
   IOrganizationRepository,
@@ -10,6 +11,13 @@ import type {
   OrganizationHierarchyEntity,
   OrganizationTreeNode,
 } from '../domain/organization.repository'
+import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
+
+/** 응답에 연결 국가/역사국가 요약({id,name})을 실어주는 공용 include */
+const COUNTRY_SUMMARY_INCLUDE = {
+  country: { select: { id: true, name: true } },
+  historicalCountry: { select: { id: true, name: true } },
+} satisfies Prisma.OrganizationInclude
 
 @Injectable()
 export class OrganizationPrismaRepository implements IOrganizationRepository {
@@ -18,19 +26,26 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
   async findById(id: string): Promise<OrganizationEntity | null> {
     const row = await this.prisma.organization.findUnique({
       where: { id },
+      include: COUNTRY_SUMMARY_INCLUDE,
     })
     return row ? this.toEntity(row) : null
   }
 
   async findMany(filter: OrganizationListFilter): Promise<OrganizationEntity[]> {
+    // 현대 국가 필터는 브리지로 연결된 역사국가 소속까지 OR 확장(검토서 F14 —
+    // person·election·party와 같은 소속 정의를 공유해 대시보드 숫자 정합).
+    // 역사국가 단독 필터는 정확 일치.
+    const where: Prisma.OrganizationWhereInput = {
+      ...(filter.countryId != null
+        ? await resolveCountryScopeOr(this.prisma, filter.countryId)
+        : filter.historicalCountryId != null
+          ? { historicalCountryId: filter.historicalCountryId }
+          : {}),
+      ...(filter.type != null && { type: filter.type }),
+    }
     const rows = await this.prisma.organization.findMany({
-      where: {
-        ...(filter.countryId != null && { countryId: filter.countryId }),
-        ...(filter.historicalCountryId != null && {
-          historicalCountryId: filter.historicalCountryId,
-        }),
-        ...(filter.type != null && { type: filter.type }),
-      },
+      where,
+      include: COUNTRY_SUMMARY_INCLUDE,
       orderBy: { name: 'asc' },
     })
     return rows.map((r) => this.toEntity(r))
@@ -54,6 +69,7 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
         countryId: data.countryId,
         historicalCountryId: data.historicalCountryId,
       },
+      include: COUNTRY_SUMMARY_INCLUDE,
     })
     return this.toEntity(row)
   }
@@ -80,6 +96,7 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
         countryId: data.countryId,
         historicalCountryId: data.historicalCountryId,
       },
+      include: COUNTRY_SUMMARY_INCLUDE,
     })
     return this.toEntity(row)
   }
@@ -210,6 +227,8 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
     headquartersCityId: string | null
     countryId: string | null
     historicalCountryId: string | null
+    country?: { id: string; name: string } | null
+    historicalCountry?: { id: string; name: string } | null
     createdAt: Date
     updatedAt: Date
   }): OrganizationEntity {
@@ -229,6 +248,8 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
       headquartersCityId: row.headquartersCityId,
       countryId: row.countryId,
       historicalCountryId: row.historicalCountryId,
+      country: row.country ?? null,
+      historicalCountry: row.historicalCountry ?? null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     }

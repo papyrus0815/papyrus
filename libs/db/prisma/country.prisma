@@ -463,7 +463,9 @@ model AdministrationDepartmentCategory {
 // ========================
 /// 국가별 행정 부처/기관 (국방부, 외교부, 국정원 등).
 /// 카테고리로 전세계 비교. 설립/폐지일·후신(successor)으로 개편 이력(안기부→국정원 등) 표현.
-/// 현대 국가(countryId) 또는 역사적 국가(historicalCountryId) 소속. 역사적 국가 부처(예: 조선 6조)는 historicalCountryId 설정.
+/// 국가 소속 — 현대(countryId)·역사(historicalCountryId) 듀얼 FK. 상호배타 아님: 둘 다 설정 가능하며
+/// countryId는 표시/그룹핑 축, historicalCountryId는 소속 축이라 의미가 다르다. 도출·표시는 역사 우선(person.prisma의 역사>현대 규약과 동일).
+/// 조선 6조 등 역사 부처는 historicalCountryId 설정(선택적으로 연결 현대 국가도 함께). 둘 다 null이면 무소속.
 model AdministrationDepartment {
   /// PK
   id String @id @default(uuid()) @db.Char(36)

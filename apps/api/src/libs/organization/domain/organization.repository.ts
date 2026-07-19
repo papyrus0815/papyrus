@@ -66,6 +66,14 @@ export interface CreateOrganizationHierarchyData {
 }
 
 /**
+ * 연결 국가/역사국가 요약 (응답 표시용 — 프론트가 id→이름 전체목록 lookup 없이 표시)
+ */
+export interface OrganizationCountrySummary {
+  id: string
+  name: string
+}
+
+/**
  * 조직 엔티티 (Repository/Service 계층)
  */
 export interface OrganizationEntity {
@@ -84,6 +92,10 @@ export interface OrganizationEntity {
   headquartersCityId: string | null
   countryId: string | null
   historicalCountryId: string | null
+  /** 현대 국가 요약(있으면). 그룹핑 축 */
+  country: OrganizationCountrySummary | null
+  /** 역사국가 요약(있으면). 소속 축 — 표시는 역사 우선 */
+  historicalCountry: OrganizationCountrySummary | null
   createdAt: Date
   updatedAt: Date
 }
