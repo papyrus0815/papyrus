@@ -82,11 +82,27 @@ export class HistoricalCountryService {
   async getHistoricalCountryById(id: string, accountId?: string): Promise<HistoricalCountry> {
     const country = await this.repository.findById(id, accountId)
     if (!country) {
-      throw accountId
-        ? new ForbiddenException('본인이 등록한 역사적 국가만 조회할 수 있습니다.')
-        : new NotFoundException(`Historical country with id ${id} not found`)
+      throw await this.buildAccessError(id, accountId, '조회')
     }
     return country
+  }
+
+  /**
+   * 소유 검증 실패의 원인을 구분해 예외를 만든다.
+   * 미존재까지 403으로 응답하면 삭제된 국가를 권한 문제로 오인하게 되므로,
+   * 계정 무시 재조회로 존재 여부를 확인해 404/403을 가른다. (실패 경로에서만 조회)
+   */
+  private async buildAccessError(
+    id: string,
+    accountId: string | undefined,
+    action: string,
+  ): Promise<NotFoundException | ForbiddenException> {
+    if (accountId != null && (await this.repository.findById(id))) {
+      return new ForbiddenException(
+        `본인이 등록한 역사적 국가만 ${action}할 수 있습니다.`,
+      )
+    }
+    return new NotFoundException(`Historical country with id ${id} not found`)
   }
 
   /**
@@ -154,9 +170,7 @@ export class HistoricalCountryService {
   ): Promise<HistoricalCountry> {
     const current = await this.repository.findById(id, accountId)
     if (!current) {
-      throw accountId
-        ? new ForbiddenException('본인이 등록한 역사적 국가만 수정할 수 있습니다.')
-        : new NotFoundException(`Historical country with id ${id} not found`)
+      throw await this.buildAccessError(id, accountId, '수정')
     }
     const newThumbnail = data.thumbnailUrl ?? null
     const isClearingOrReplacing =
@@ -186,9 +200,7 @@ export class HistoricalCountryService {
   async deleteHistoricalCountry(id: string, accountId?: string): Promise<void> {
     const country = await this.repository.findById(id, accountId)
     if (!country) {
-      throw accountId
-        ? new ForbiddenException('본인이 등록한 역사적 국가만 삭제할 수 있습니다.')
-        : new NotFoundException(`Historical country with id ${id} not found`)
+      throw await this.buildAccessError(id, accountId, '삭제')
     }
     await this.repository.delete(id)
     await this.notificationService.notifyHistoricalCountry(
@@ -254,6 +266,7 @@ export class HistoricalCountryService {
       predecessorId: data.predecessorId,
       successorId: data.successorId,
       eventType: data.eventType,
+      transitionScope: data.transitionScope,
     })
   }
 
@@ -282,6 +295,9 @@ export class HistoricalCountryService {
     }
     return this.transitionRepository.update(transitionId, {
       ...(data.eventType !== undefined && { eventType: data.eventType }),
+      ...(data.transitionScope !== undefined && {
+        transitionScope: data.transitionScope,
+      }),
     })
   }
 

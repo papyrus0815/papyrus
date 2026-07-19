@@ -17,6 +17,13 @@ const successorSelect = {
   startDay: true,
 } as const
 
+/**
+ * 후임 국가의 존속 시작 시점 표시 문자열.
+ *
+ * era 접두(BC)는 월·일 유무와 무관하게 **항상 먼저** 붙인다.
+ * (과거에는 월이 있으면 조기 반환해 'BC 44년 3월'이 '0044.03'으로 나가 AD로 오독됐다.)
+ * 연도는 zero-pad 하지 않는다 — '0044' 단독 노출은 연대가 아니라 코드처럼 읽힌다.
+ */
 function formatSuccessorStartDate(
   startEra: Era | null,
   startYear: number | null,
@@ -24,10 +31,12 @@ function formatSuccessorStartDate(
   startDay: number | null,
 ): string | null {
   if (startYear == null) return null
-  const yy = String(Math.abs(startYear)).padStart(4, '0')
-  if (startMonth != null && startDay != null) return `${yy}.${String(startMonth).padStart(2, '0')}.${String(startDay).padStart(2, '0')}`
-  if (startMonth != null) return `${yy}.${String(startMonth).padStart(2, '0')}`
-  return startEra === 'BC' ? `BC ${startYear}` : yy
+  const prefix = startEra === 'BC' ? 'BC ' : ''
+  const year = String(Math.abs(startYear))
+  if (startMonth != null && startDay != null)
+    return `${prefix}${year}.${String(startMonth).padStart(2, '0')}.${String(startDay).padStart(2, '0')}`
+  if (startMonth != null) return `${prefix}${year}.${String(startMonth).padStart(2, '0')}`
+  return `${prefix}${year}`
 }
 
 function toRecord(row: {

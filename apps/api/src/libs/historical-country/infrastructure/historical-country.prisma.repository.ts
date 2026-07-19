@@ -239,6 +239,7 @@ export class HistoricalCountryPrismaRepository
       enName: data.enName,
       nameOrigin: data.nameOrigin,
       description: data.description,
+      history: data.history,
       thumbnailUrl: data.thumbnailUrl,
       startEra: data.startEra,
       startYear: data.startYear,
