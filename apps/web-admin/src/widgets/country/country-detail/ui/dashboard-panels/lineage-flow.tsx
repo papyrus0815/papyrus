@@ -1,43 +1,29 @@
+import {
+  compareByCountryStart,
+  formatCountryPeriod,
+  type CountryPeriodShape,
+} from '@/shared/lib/country-period'
 import * as S from '../country-detail-dashboard.styles'
 
 interface LineageNode {
   id: string
   name: string
   yearsLabel: string | null
-  startYearForSort: number
-}
-
-interface HistoricalCountryYearShape {
-  startYear?: number | null
-  endYear?: number | null
 }
 
 /** 전체/경량 역사 국가 DTO 공통 — 여기서 실제로 쓰는 필드만 요구 */
 type LineageSource = {
   id: string
   name?: string | null
-} & HistoricalCountryYearShape
+} & CountryPeriodShape
 
-function getYears(h: LineageSource): {
-  start: number | null
-  end: number | null
-} {
-  const shape = h as HistoricalCountryYearShape
+function toNode(source: LineageSource): LineageNode {
+  // era를 반영한 공용 포맷터 — BC는 '기원전', 종료 미상은 '미상'(‘현재’ 아님)
+  const yearsLabel = formatCountryPeriod(source, { variant: 'short' })
   return {
-    start: shape.startYear ?? null,
-    end: shape.endYear ?? null,
-  }
-}
-
-function toNode(h: LineageSource): LineageNode {
-  const { start, end } = getYears(h)
-  const yearsLabel =
-    start == null && end == null ? null : `${start ?? ''}–${end ?? ''}`
-  return {
-    id: h.id,
-    name: (h as { name?: string }).name ?? '미상',
-    yearsLabel,
-    startYearForSort: start ?? 0,
+    id: source.id,
+    name: source.name ?? '미상',
+    yearsLabel: yearsLabel || null,
   }
 }
 
@@ -52,9 +38,8 @@ export function LineageFlow({
   historicalCountries,
   currentName,
 }: LineageFlowProps) {
-  const nodes = [...historicalCountries]
-    .map(toNode)
-    .sort((a, b) => a.startYearForSort - b.startYearForSort)
+  // era 인지 비교기로 시간순 정렬 — BC 국가가 역순으로 이어지던 문제(F7) 해소
+  const nodes = [...historicalCountries].sort(compareByCountryStart).map(toNode)
 
   const items: Array<
     | { kind: 'chip'; node: LineageNode | { id: '__current'; name: string; yearsLabel: string | null } }

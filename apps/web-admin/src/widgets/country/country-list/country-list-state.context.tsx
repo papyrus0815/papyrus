@@ -30,6 +30,10 @@ export interface CountryListStateContextValue {
   setSortBy: (s: SortBy) => void
   // 계산된 목록
   filtered: UnifiedCountry[]
+  /** 역사국가 총 개수 — '전체' 필터에서 존재를 알리는 카운트 배지용 (F37) */
+  historicalCount: number
+  /** 브리지(현대 국가 연결)가 없는 역사국가 id — 행 '연결 안 됨' 배지 근거 (F37) */
+  unlinkedHistoricalIds: Set<string>
   // 핵심 데이터 (useContentCoreData 제공 값)
   countries: Country[]
   unifiedCountries: UnifiedCountry[]
@@ -75,31 +79,59 @@ export function CountryListStateProvider({ children }: ProviderProps) {
   const [sortBy, setSortBy] = useState<SortBy>('area')
   const [showPersonRegisterModal, setShowPersonRegisterModal] = useState(false)
 
+  /**
+   * 역사국가 통합 목록 — API 목록 + 현대 국가에 딸린 경량 항목을 id로 dedup.
+   * '과거' 필터·검색 합류·카운트 배지가 모두 같은 재료를 쓰도록 한 번만 만든다
+   * (검색어 입력마다 193건을 다시 변환하던 중복 제거).
+   */
+  const historicalUnified = useMemo<UnifiedCountry[]>(() => {
+    const byId = new Map<string, UnifiedCountry>()
+    ;(apiHistoricalCountries ?? []).forEach((hc) => {
+      if (!byId.has(hc.id))
+        byId.set(hc.id, historicalToUnified(hc as HistoricalCountry))
+    })
+    unifiedCountries.forEach((country) => {
+      if (country.type !== 'modern' || !country.historicalCountries) return
+      country.historicalCountries.forEach((hc) => {
+        if (!byId.has(hc.id)) byId.set(hc.id, historicalToUnified(hc))
+      })
+    })
+    return Array.from(byId.values())
+  }, [apiHistoricalCountries, unifiedCountries])
+
+  /**
+   * 브리지가 없는 역사국가 id 집합 (F37).
+   * - 현대 국가 응답에 딸려 내려온 항목은 정의상 연결됨
+   * - API 목록 항목은 parentModernCountryIds가 비어 있으면 미연결
+   * 미연결 국가는 현대 행 chevron 트리에 아예 나타나지 않으므로 배지로 저작을 유도한다.
+   */
+  const unlinkedHistoricalIds = useMemo<Set<string>>(() => {
+    const bridgedIds = new Set<string>()
+    unifiedCountries.forEach((country) => {
+      if (country.type !== 'modern' || !country.historicalCountries) return
+      country.historicalCountries.forEach((hc) => bridgedIds.add(hc.id))
+    })
+    const unlinked = new Set<string>()
+    ;(apiHistoricalCountries ?? []).forEach((hc) => {
+      if (bridgedIds.has(hc.id)) return
+      const parentIds = (hc as { parentModernCountryIds?: string[] })
+        .parentModernCountryIds
+      if (!parentIds || parentIds.length === 0) unlinked.add(hc.id)
+    })
+    return unlinked
+  }, [apiHistoricalCountries, unifiedCountries])
+
   const filtered = useMemo(() => {
     const searchTextLower = query.trim().toLowerCase()
+    const matchesHistoricalSearch = (country: UnifiedCountry) =>
+      !searchTextLower ||
+      country.name.toLowerCase().includes(searchTextLower) ||
+      (country.enName || '').toLowerCase().includes(searchTextLower)
 
     if (countryTypeFilter === 'historical') {
-      const fromApi = (apiHistoricalCountries ?? []).map((hc) =>
-        historicalToUnified(hc as HistoricalCountry),
-      )
-      const seenIds = new Set(fromApi.map((c) => c.id))
-      unifiedCountries.forEach((country) => {
-        if (country.type === 'modern' && country.historicalCountries) {
-          country.historicalCountries.forEach((hc) => {
-            if (!seenIds.has(hc.id)) {
-              seenIds.add(hc.id)
-              fromApi.push(historicalToUnified(hc))
-            }
-          })
-        }
-      })
-      const result = fromApi.filter(
-        (country) =>
-          !searchTextLower ||
-          country.name.toLowerCase().includes(searchTextLower) ||
-          (country.enName || '').toLowerCase().includes(searchTextLower),
-      )
-      return result.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+      return historicalUnified
+        .filter(matchesHistoricalSearch)
+        .sort((left, right) => left.name.localeCompare(right.name, 'ko'))
     }
 
     const modernResult = unifiedCountries.filter((country) => {
@@ -116,39 +148,11 @@ export function CountryListStateProvider({ children }: ProviderProps) {
 
     // 검색어가 있을 때 역사적 국가도 함께 검색
     if (searchTextLower) {
-      const seenIds = new Set<string>()
-      const historicalMatches: UnifiedCountry[] = []
-
-      ;(apiHistoricalCountries ?? []).forEach((hc) => {
-        const unified = historicalToUnified(hc as HistoricalCountry)
-        if (
-          !seenIds.has(unified.id) &&
-          (unified.name.toLowerCase().includes(searchTextLower) ||
-            (unified.enName || '').toLowerCase().includes(searchTextLower))
-        ) {
-          seenIds.add(unified.id)
-          historicalMatches.push(unified)
-        }
-      })
-
-      unifiedCountries.forEach((country) => {
-        if (country.type === 'modern' && country.historicalCountries) {
-          country.historicalCountries.forEach((hc) => {
-            const unified = historicalToUnified(hc)
-            if (
-              !seenIds.has(unified.id) &&
-              (unified.name.toLowerCase().includes(searchTextLower) ||
-                (unified.enName || '').toLowerCase().includes(searchTextLower))
-            ) {
-              seenIds.add(unified.id)
-              historicalMatches.push(unified)
-            }
-          })
-        }
-      })
-
-      const result = [...modernResult, ...historicalMatches]
-      return result.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+      const result = [
+        ...modernResult,
+        ...historicalUnified.filter(matchesHistoricalSearch),
+      ]
+      return result.sort((left, right) => left.name.localeCompare(right.name, 'ko'))
     }
 
     const result = modernResult
@@ -166,7 +170,7 @@ export function CountryListStateProvider({ children }: ProviderProps) {
     })
   }, [
     unifiedCountries,
-    apiHistoricalCountries,
+    historicalUnified,
     query,
     continentFilter,
     countryTypeFilter,
@@ -184,6 +188,8 @@ export function CountryListStateProvider({ children }: ProviderProps) {
       sortBy,
       setSortBy,
       filtered,
+      historicalCount: historicalUnified.length,
+      unlinkedHistoricalIds,
       countries,
       unifiedCountries,
       continents,
@@ -199,6 +205,8 @@ export function CountryListStateProvider({ children }: ProviderProps) {
       countryTypeFilter,
       sortBy,
       filtered,
+      historicalUnified,
+      unlinkedHistoricalIds,
       countries,
       unifiedCountries,
       continents,

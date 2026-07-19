@@ -11,12 +11,31 @@
 import React from 'react'
 
 import { FaStar, FaRegStar, FaLandmark } from 'react-icons/fa'
+import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { formatCountryPeriod } from '@/shared/lib/country-period'
 
+import { useCountryListState } from '../country-list-state.context'
 import { withAlpha } from '../model/continent-colors'
 import * as S from './country-list.styles'
+
+/** 브리지(현대 국가 연결) 없는 역사국가 표식 — 저작 유도용 (F37) */
+const UnlinkedBadge = styled.span`
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(245,158,11,0.32)' : '#fde68a'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245,158,11,0.14)' : '#fef3c7'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#92400e')};
+`
 
 /** 인구 한국어 단위 변환: ≥1억은 "1.4억", 만 단위는 "5,170만" */
 function formatPopulation(n: number): string {
@@ -63,11 +82,19 @@ export function CountryListRow({
   onEditHistorical,
   onContextMenu,
 }: CountryListRowProps) {
+  const { unlinkedHistoricalIds } = useCountryListState()
   const hasChildren =
     !isQuickAccess &&
     country.type === 'modern' &&
     !!country.historicalCountries &&
     country.historicalCountries.length > 0
+  // BC 국가가 AD로 오독되지 않도록 존속기간은 공용 포맷터를 경유 (F7/F37)
+  const periodText =
+    country.type === 'historical'
+      ? formatCountryPeriod(country, { variant: 'short' })
+      : ''
+  const isUnlinked =
+    country.type === 'historical' && unlinkedHistoricalIds.has(country.id)
 
   return (
     <>
@@ -138,14 +165,12 @@ export function CountryListRow({
                 ) : (
                   <>
                     {country.enName && <span>{country.enName}</span>}
-                    {country.enName && country.startYear && (
-                      <span className="dot" />
-                    )}
-                    {country.startYear && (
-                      <span>
-                        {country.startYear}
-                        {country.endYear ? `–${country.endYear}` : ''}
-                      </span>
+                    {country.enName && periodText && <span className="dot" />}
+                    {periodText && <span>{periodText}</span>}
+                    {isUnlinked && (
+                      <UnlinkedBadge title="현대 국가에 연결되지 않음 — 현대 국가 행에서는 찾을 수 없습니다">
+                        연결 안 됨
+                      </UnlinkedBadge>
                     )}
                   </>
                 )}
