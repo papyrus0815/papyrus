@@ -21,6 +21,11 @@ import {
 import { PrismaService } from '@prisma/prisma.service'
 import { serializeBigInt } from '../../shared/serialize.util'
 import {
+  resolveCountryScopeOr,
+  resolveLinkedHistoricalCountryIds,
+  buildCountryScopeOr,
+} from '../../country/domain/country-scope.util'
+import {
   IPersonRepository,
   CreatePersonData,
   UpdatePersonData,
@@ -858,6 +863,21 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 역사국가별 인물 목록 조회 (person.historicalCountryId 직접 매칭, accountId 무관)
+   * 현대판 findPersonsByCountryId의 역사 축 대칭 — 본체 FK 기준 (검토서 F21).
+   */
+  async findPersonsByHistoricalCountryId(
+    historicalCountryId: string,
+  ): Promise<PersonResponseDto[]> {
+    const persons = await this.prisma.person.findMany({
+      where: { historicalCountryId },
+      orderBy: [{ name: 'asc' }, { surname: 'asc' }],
+      include: PERSON_CARD_INCLUDE,
+    })
+    return persons.map((p) => this.mapToPersonResponse(p))
+  }
+
+  /**
    * 인물 ID 집합으로 인물 카드 목록 (묶음 멤버 등). 입력 순서는 보장하지 않음.
    */
   async findPersonsByIds(ids: string[]): Promise<PersonResponseDto[]> {
@@ -886,25 +906,35 @@ export class PersonPrismaRepository implements IPersonRepository {
    * Person.countryId가 아닌 PersonCountryAffiliation 기준 (독일 → 신성로마제국 연결 인물 포함)
    */
   async findPersonsByAffiliationInCountry(countryId: string): Promise<PersonResponseDto[]> {
-    const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
-      .findMany({
-        where: { modernCountryId: countryId },
-        select: { historicalCountryId: true },
-      })
-      .then((rows) => rows.map((r) => r.historicalCountryId))
-
-    const affiliationWhere =
-      linkedHistoricalIds.length > 0
-        ? {
-            OR: [
-              { countryId },
-              { historicalCountryId: { in: linkedHistoricalIds } },
-            ],
-          }
-        : { countryId }
+    // 브리지 스코프 공용 헬퍼: countryId 직접 + 연결 역사국가 OR 확장 (검토서 F14)
+    const affiliationWhere = await resolveCountryScopeOr(this.prisma, countryId)
 
     const affs = await this.prisma.personCountryAffiliation.findMany({
       where: affiliationWhere,
+      select: { personId: true },
+      distinct: ['personId'],
+    })
+    const personIds = affs.map((a) => a.personId)
+    if (personIds.length === 0) return []
+
+    const persons = await this.prisma.person.findMany({
+      where: { id: { in: personIds } },
+      orderBy: [{ name: 'asc' }, { surname: 'asc' }],
+      include: PERSON_CARD_INCLUDE,
+    })
+    return persons.map((p) => this.mapToPersonResponse(p))
+  }
+
+  /**
+   * 역사국가에 소속(affiliation)이 있는 인물 조회 (PersonCountryAffiliation.historicalCountryId 직접 매칭)
+   * 현대판 findPersonsByAffiliationInCountry의 역사 축 대칭 — 역사국가는 이미
+   * 최종 소속 축이므로 브리지 OR 확장을 하지 않는다 (검토서 F21).
+   */
+  async findPersonsByAffiliationInHistoricalCountry(
+    historicalCountryId: string,
+  ): Promise<PersonResponseDto[]> {
+    const affs = await this.prisma.personCountryAffiliation.findMany({
+      where: { historicalCountryId },
       select: { personId: true },
       distinct: ['personId'],
     })
@@ -933,22 +963,13 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
     for (const r of direct) merged.add(r.id)
 
-    const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
-      .findMany({
-        where: { modernCountryId: countryId },
-        select: { historicalCountryId: true },
-      })
-      .then((rows) => rows.map((r) => r.historicalCountryId))
-
-    const tenureWhere =
-      linkedHistoricalIds.length > 0
-        ? {
-            OR: [
-              { countryId },
-              { historicalCountryId: { in: linkedHistoricalIds } },
-            ],
-          }
-        : { countryId }
+    // 브리지 스코프 공용 헬퍼 (검토서 F14) — 연결 역사국가 id는 한 번만 조회하고
+    // 재임·소속 두 where에 재사용한다.
+    const linkedHistoricalIds = await resolveLinkedHistoricalCountryIds(
+      this.prisma,
+      countryId,
+    )
+    const tenureWhere = buildCountryScopeOr(countryId, linkedHistoricalIds)
 
     const [tenureRows, reignRows] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
@@ -965,15 +986,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     for (const t of tenureRows) merged.add(t.personId)
     for (const r of reignRows) merged.add(r.personId)
 
-    const affiliationWhere =
-      linkedHistoricalIds.length > 0
-        ? {
-            OR: [
-              { countryId },
-              { historicalCountryId: { in: linkedHistoricalIds } },
-            ],
-          }
-        : { countryId }
+    const affiliationWhere = buildCountryScopeOr(countryId, linkedHistoricalIds)
 
     const affs = await this.prisma.personCountryAffiliation.findMany({
       where: affiliationWhere,

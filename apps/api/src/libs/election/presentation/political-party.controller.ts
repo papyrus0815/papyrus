@@ -15,6 +15,7 @@ import { AuthGuard } from '@nestjs/passport'
 import { EventMethod, GovernmentPositionType } from '@prisma/client'
 
 import { PrismaService } from '@prisma/prisma.service'
+import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
 import { NotificationService } from '../../notification/application/notification.service'
 import { assertLawMatchesPoliticalPartyJurisdiction } from '../domain/law-jurisdiction.util'
 import {
@@ -82,24 +83,8 @@ export class PoliticalPartyController {
     let where: Record<string, unknown> = {}
 
     if (countryId) {
-      // 현대 국가 → 연결된 역사 국가까지 OR 포함
-      const linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
-        .findMany({
-          where: { modernCountryId: countryId },
-          select: { historicalCountryId: true },
-        })
-        .then((rows) => rows.map((r) => r.historicalCountryId))
-
-      if (linkedHistoricalIds.length > 0) {
-        where = {
-          OR: [
-            { countryId },
-            { historicalCountryId: { in: linkedHistoricalIds } },
-          ],
-        }
-      } else {
-        where.countryId = countryId
-      }
+      // 현대 국가 → 연결된 역사 국가까지 OR 포함(브리지 스코프 공용 헬퍼)
+      where = await resolveCountryScopeOr(this.prisma, countryId)
     } else if (historicalCountryId) {
       where.historicalCountryId = historicalCountryId
     }
@@ -107,6 +92,12 @@ export class PoliticalPartyController {
     const rows = await this.prisma.politicalParty.findMany({
       where: Object.keys(where).length ? where : undefined,
       orderBy: { name: 'asc' },
+      include: {
+        // 목록에서 소속 국가(현대/역사) 이름·id 요약 — 프론트가 별도 조회 없이
+        // 어느 FK가 찼는지로 현대/역사 판별 가능(검토서 F13)
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+      },
     })
     return serializeElectionBigInt(rows)
   }

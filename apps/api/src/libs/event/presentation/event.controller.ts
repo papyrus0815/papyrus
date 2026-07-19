@@ -28,6 +28,7 @@ import {
 } from './dto'
 import { Event } from '../domain/event.entity'
 import { PrismaClient } from '@prisma/client'
+import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
 
 /** 사건 날짜 구조화 파싱 결과 */
 interface ParsedEventDate {
@@ -166,6 +167,23 @@ export class EventController {
             role: relation.role ?? null,
           })
         }
+      })
+    }
+
+    // F17: 본체 historicalCountryId(주 무대 역사국가)를 관련 역사국가 표시 목록에
+    // dedup 합류. event_country_relation 행 없이 본체 FK만 지정된(시드 전용) 자식 사건도
+    // 상세 히어로·행위자 칩에 국가 귀속이 표시되도록 한다. 이름 표기를 위해
+    // historicalCountry relation이 include된 응답 경로에서만 합류한다.
+    if (
+      event.historicalCountry &&
+      event.historicalCountryId &&
+      !relatedHistoricalCountryIds.includes(event.historicalCountryId)
+    ) {
+      relatedHistoricalCountryIds.push(event.historicalCountryId)
+      relatedHistoricalCountries.push({
+        id: event.historicalCountry.id,
+        name: event.historicalCountry.name,
+        role: null,
       })
     }
 
@@ -382,6 +400,20 @@ export class EventController {
       if (filterCountryId) {
         countryRelationOr.push({ countryId: filterCountryId })
         countryRelationOr.push({ historicalCountryId: filterCountryId })
+        // F14: filterCountryId가 현대 국가이면 브리지로 연결된 역사국가도 합류시킨다
+        // (예: 대한민국 → 조선). 현대국가 대시보드의 인물·선거·정당 카운트와 동일한
+        // 소속 정의를 사건 카운트에도 적용해, 브리지 역사국가로 태그된 사건이 빠지지 않게 함.
+        // filterCountryId가 역사 국가 id면 브리지 조회가 빈 배열이라 조건이 늘지 않음
+        // (레거시 dual-match 동작 보존).
+        const linkedHistoricalIds = await resolveLinkedHistoricalCountryIds(
+          this.prisma,
+          filterCountryId,
+        )
+        if (linkedHistoricalIds.length > 0) {
+          countryRelationOr.push({
+            historicalCountryId: { in: linkedHistoricalIds },
+          })
+        }
       }
       if (countryIdList) {
         countryRelationOr.push({ countryId: { in: countryIdList } })
@@ -417,12 +449,15 @@ export class EventController {
       orderBy: createdAtGte ? { createdAt: 'desc' } : { startDate: 'desc' },
       include: {
         category: true,
+        // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
+        historicalCountry: { select: { id: true, name: true } },
         parentEvent: true,
         childEvents: {
           // 상세(loadEventDetail)와 동일 — 소프트 삭제된 자식 제외.
           where: { deletedAt: null },
           include: {
             category: true,
+            historicalCountry: { select: { id: true, name: true } },
             eventSections: true,
             eventImages: true,
           },
@@ -528,6 +563,17 @@ export class EventController {
       if (filterCountryId) {
         countryRelationOr.push({ countryId: filterCountryId })
         countryRelationOr.push({ historicalCountryId: filterCountryId })
+        // F14: 목록(getAllEvents)과 동일하게, 현대 국가면 브리지 연결 역사국가도 합류
+        // (카운트가 목록과 어긋나지 않도록 스코프 일치). 역사 id면 조회 빈 배열이라 무변화.
+        const linkedHistoricalIds = await resolveLinkedHistoricalCountryIds(
+          this.prisma,
+          filterCountryId,
+        )
+        if (linkedHistoricalIds.length > 0) {
+          countryRelationOr.push({
+            historicalCountryId: { in: linkedHistoricalIds },
+          })
+        }
       }
       if (countryIdList) {
         countryRelationOr.push({ countryId: { in: countryIdList } })
@@ -686,9 +732,16 @@ export class EventController {
       where: { id: { in: ids } },
       include: {
         category: true,
+        // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
+        historicalCountry: { select: { id: true, name: true } },
         parentEvent: true,
         childEvents: {
-          include: { category: true, eventSections: true, eventImages: true },
+          include: {
+            category: true,
+            historicalCountry: { select: { id: true, name: true } },
+            eventSections: true,
+            eventImages: true,
+          },
           orderBy: { startDate: 'asc' },
         },
         countryRelations: {
@@ -756,6 +809,8 @@ export class EventController {
       where: { id },
       include: {
         category: true,
+        // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
+        historicalCountry: { select: { id: true, name: true } },
         // 위치 복원: 편집 폼 PlaceSelect 뱃지에 표시할 이름 (UUID만으론 부족)
         city: { select: { id: true, name: true } },
         administrativeDivision: { select: { id: true, name: true } },
@@ -765,6 +820,7 @@ export class EventController {
           // childEventIds 전체 재전송을 만들기 때문에(가드가 삭제 사건을 거부) 필수.
           where: { deletedAt: null },
           include: {
+            historicalCountry: { select: { id: true, name: true } },
             eventSections: { orderBy: { order: 'asc' } },
             eventImages: { orderBy: { order: 'asc' } },
           },
