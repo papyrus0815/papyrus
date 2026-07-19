@@ -58,9 +58,8 @@ export type UpdateAdministrationDepartmentEventInput = Parameters<
   typeof adminDeptApi.events.updateEvent
 >[2]
 
-async function fetchTenures(
-  path: string,
-): Promise<AdministrationDepartmentTenureItem[]> {
+/** Nestia 미생성(또는 시그니처 미반영) GET 경로용 배열 페치 */
+async function fetchJsonList<T>(path: string): Promise<T[]> {
   const conn = getApiConnection()
   const url = `${conn.host}${path}`
   const headers: Record<string, string> = {
@@ -72,7 +71,7 @@ async function fetchTenures(
     const text = await res.text()
     throw new Error(text || `HTTP ${res.status}`)
   }
-  const list = (await res.json()) as AdministrationDepartmentTenureItem[]
+  const list = (await res.json()) as T[]
   return Array.isArray(list) ? list : []
 }
 
@@ -115,6 +114,19 @@ export const administrationDepartmentApi = {
     return Array.isArray(list) ? list : []
   },
 
+  /**
+   * 역사적 국가별 행정부처 목록 (조선 6조 등).
+   * 서버 `GET /administration-departments?historicalCountryId=`를 쓰지만 Nestia getAll
+   * 시그니처에 아직 이 쿼리가 없어 직접 페치 — SDK 재생성 후 정리 가능.
+   */
+  getByHistoricalCountryId: async (
+    historicalCountryId: string,
+  ): Promise<AdministrationDepartment[]> => {
+    return fetchJsonList<AdministrationDepartment>(
+      `/administration-departments?historicalCountryId=${encodeURIComponent(historicalCountryId)}`,
+    )
+  },
+
   getById: async (id: string): Promise<AdministrationDepartment | null> => {
     return adminDeptApi.getById(getApiConnection(), id)
   },
@@ -123,7 +135,7 @@ export const administrationDepartmentApi = {
   getTenuresByDepartmentId: async (
     departmentId: string,
   ): Promise<AdministrationDepartmentTenureItem[]> => {
-    return fetchTenures(
+    return fetchJsonList<AdministrationDepartmentTenureItem>(
       `/administration-departments/${encodeURIComponent(departmentId)}/tenures`,
     )
   },

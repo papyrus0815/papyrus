@@ -60,6 +60,8 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterCountry, setFilterCountry] = useState('')
   const [filterCountryName, setFilterCountryName] = useState('')
+  // 필터 대상이 역사적 국가면 historicalCountryId 축으로 조회 (countryId 축과 PK 공간이 다름)
+  const [filterIsHistorical, setFilterIsHistorical] = useState(false)
   const [countryModalOpen, setCountryModalOpen] = useState(false)
   const [sortBy, setSortBy] = useState<'name' | 'country' | 'date'>('name')
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(
@@ -74,13 +76,22 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
     HistoricalCountryResponseDto[]
   >([])
   const departmentsQuery = useQuery({
-    queryKey: filterCountry
-      ? administrationDepartmentsByCountryQueryKey(filterCountry)
-      : administrationDepartmentsAllQueryKey(),
+    // 역사 축 키는 'administration-departments' 프리픽스 아래 두어 기존 무효화 헬퍼가 함께 걷어가도록 함
+    queryKey: !filterCountry
+      ? administrationDepartmentsAllQueryKey()
+      : filterIsHistorical
+        ? ([
+            'administration-departments',
+            'by-historical-country',
+            filterCountry,
+          ] as const)
+        : administrationDepartmentsByCountryQueryKey(filterCountry),
     queryFn: () =>
-      filterCountry
-        ? administrationDepartmentApi.getByCountryId(filterCountry)
-        : administrationDepartmentApi.getAll(),
+      !filterCountry
+        ? administrationDepartmentApi.getAll()
+        : filterIsHistorical
+          ? administrationDepartmentApi.getByHistoricalCountryId(filterCountry)
+          : administrationDepartmentApi.getByCountryId(filterCountry),
   })
   const departments = departmentsQuery.data ?? []
   const departmentsLoading = departmentsQuery.isPending
@@ -117,11 +128,17 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
     historicalCountries.forEach((c) => {
       byCountryId[c.id] = c.name
     })
-    return departments.map((d) => ({
-      ...d,
-      // countryId가 null인 부처는 국가명 빈 문자열로 표시
-      countryName: d.countryId ? (byCountryId[d.countryId] ?? d.countryId) : '',
-    }))
+    return departments.map((dept) => {
+      // 역사 우선 — 조선 6조처럼 두 축이 함께 채워진 부처는 역사적 국가명으로 표시
+      const displayCountryId = dept.historicalCountryId ?? dept.countryId
+      return {
+        ...dept,
+        // 두 축 모두 null인 부처는 국가명 빈 문자열로 표시
+        countryName: displayCountryId
+          ? (byCountryId[displayCountryId] ?? displayCountryId)
+          : '',
+      }
+    })
   }, [departments, modernCountries, historicalCountries])
 
   const uniqueCountries = Array.from(
@@ -280,6 +297,7 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                         playClickSound()
                         setFilterCountry('')
                         setFilterCountryName('')
+                        setFilterIsHistorical(false)
                       }}
                     >
                       <FiX size={12} />
@@ -1073,6 +1091,7 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
           onSelect={(country) => {
             setFilterCountry(country.id)
             setFilterCountryName(country.name)
+            setFilterIsHistorical(Boolean(country.isHistorical))
             setCountryModalOpen(false)
           }}
           modernCountries={modernCountries}

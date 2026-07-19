@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  BadRequestException,
   ConflictException,
   NotFoundException,
 } from '@nestjs/common'
@@ -37,6 +38,8 @@ export type AdministrationDepartmentResponseDto = {
   name: string
   thumbnailUrl: string | null
   countryId: string | null
+  /** 역사적 국가 ID (조선 6조 등). 현대 국가와 동시 보유 가능 — 표시/그룹핑은 countryId, 정체성은 이쪽이 우선 */
+  historicalCountryId: string | null
   parentId: string | null
   categoryId: string | null
   category: AdministrationDepartmentCategoryDto | null
@@ -53,7 +56,10 @@ export type AdministrationDepartmentResponseDto = {
 
 export type CreateAdministrationDepartmentDto = {
   name: string
-  countryId: string
+  /** 현대 국가 ID. historicalCountryId와 함께 채울 수 있음(표시/그룹핑용) */
+  countryId?: string | null
+  /** 역사적 국가 ID (조선 6조 등) */
+  historicalCountryId?: string | null
   parentId?: string | null
   categoryId?: string | null
   thumbnailUrl?: string | null
@@ -65,6 +71,8 @@ export type CreateAdministrationDepartmentDto = {
 
 export type UpdateAdministrationDepartmentDto = {
   name?: string
+  countryId?: string | null
+  historicalCountryId?: string | null
   parentId?: string | null
   categoryId?: string | null
   thumbnailUrl?: string | null
@@ -146,6 +154,7 @@ export class AdministrationDepartmentController {
     name: string
     thumbnailUrl: string | null
     countryId: string | null
+    historicalCountryId: string | null
     parentId: string | null
     categoryId: string | null
     description: string | null
@@ -163,6 +172,7 @@ export class AdministrationDepartmentController {
       name: row.name,
       thumbnailUrl: row.thumbnailUrl ?? null,
       countryId: row.countryId ?? null,
+      historicalCountryId: row.historicalCountryId ?? null,
       parentId: row.parentId ?? null,
       categoryId: row.categoryId ?? null,
       category: row.category
@@ -180,6 +190,27 @@ export class AdministrationDepartmentController {
       })),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+    }
+  }
+
+  /**
+   * 국가 축 검증 — 정책: **엄격 XOR이 아니라 "적어도 하나 필수 + 역사 우선"**.
+   *
+   * 조약 서명국(TreatySignatory)은 현대/역사 동시 지정을 금지하지만, 부처는 스키마 주석
+   * (country.prisma `countryId`)이 "역사적 국가 부처도 연결된 현대 국가를 넣을 수 있음"이라며
+   * dual-fill을 명시적으로 허용한다(조선 6조를 대한민국 그룹 아래 묶어 보여주는 용도).
+   * 따라서 동시 지정은 허용하고, 둘 다 비면 어느 국가 그룹에도 속하지 못하는 고아 부처가
+   * 되므로 400으로 막는다. 둘 다 있을 때 부처의 정체성 축은 historicalCountryId(역사 우선)이며
+   * countryId는 표시/그룹핑 보조 축으로 해석한다.
+   */
+  private validateCountryAxis(input: {
+    countryId?: string | null
+    historicalCountryId?: string | null
+  }): void {
+    if (!input.countryId && !input.historicalCountryId) {
+      throw new BadRequestException(
+        '소속 국가(현대 또는 역사적 국가) 중 하나는 반드시 지정해야 합니다.',
+      )
     }
   }
 
@@ -235,14 +266,20 @@ export class AdministrationDepartmentController {
   }
 
   /**
-   * 전체 행정부처 목록 조회 (선택: countryId로 필터)
+   * 전체 행정부처 목록 조회 (선택: countryId / historicalCountryId로 필터)
    */
   @Get()
   async getAll(
     @Query('countryId') countryId?: string,
+    @Query('historicalCountryId') historicalCountryId?: string,
   ): Promise<AdministrationDepartmentResponseDto[]> {
+    // 두 축을 동시에 주면 AND(둘 다 만족하는 dual-fill 부처만)
+    const where = {
+      ...(countryId ? { countryId } : {}),
+      ...(historicalCountryId ? { historicalCountryId } : {}),
+    }
     const list = await this.prisma.administrationDepartment.findMany({
-      where: countryId ? { countryId } : undefined,
+      where: Object.keys(where).length > 0 ? where : undefined,
       orderBy: [{ countryId: 'asc' }, { name: 'asc' }],
       include: this.departmentInclude,
     })
@@ -443,10 +480,12 @@ export class AdministrationDepartmentController {
   async create(
     @Body() body: CreateAdministrationDepartmentDto,
   ): Promise<AdministrationDepartmentResponseDto> {
+    this.validateCountryAxis(body)
     const row = await this.prisma.administrationDepartment.create({
       data: {
         name: body.name,
-        countryId: body.countryId,
+        countryId: body.countryId ?? undefined,
+        historicalCountryId: body.historicalCountryId ?? undefined,
         parentId: body.parentId ?? undefined,
         categoryId: body.categoryId ?? undefined,
         thumbnailUrl: body.thumbnailUrl ?? undefined,
@@ -478,10 +517,23 @@ export class AdministrationDepartmentController {
     if (!current) {
       throw new NotFoundException('부처를 찾을 수 없습니다.')
     }
+    // 부분 수정이므로 병합 결과로 검증 (한 축만 비우는 요청이 고아를 만들지 않도록)
+    this.validateCountryAxis({
+      countryId:
+        body.countryId !== undefined ? body.countryId : current.countryId,
+      historicalCountryId:
+        body.historicalCountryId !== undefined
+          ? body.historicalCountryId
+          : current.historicalCountryId,
+    })
     const row = await this.prisma.administrationDepartment.update({
       where: { id },
       data: {
         ...(body.name != null && { name: body.name }),
+        ...(body.countryId !== undefined && { countryId: body.countryId }),
+        ...(body.historicalCountryId !== undefined && {
+          historicalCountryId: body.historicalCountryId,
+        }),
         ...(body.parentId !== undefined && { parentId: body.parentId }),
         ...(body.categoryId !== undefined && { categoryId: body.categoryId }),
         ...(body.thumbnailUrl !== undefined && { thumbnailUrl: body.thumbnailUrl }),

@@ -95,7 +95,9 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
 
   const [formData, setFormData] = useState({
     name: '',
+    // 현대 국가 / 역사적 국가는 서로 다른 테이블 FK — 폼에서는 한 번에 한 축만 채운다
     countryId: '',
+    historicalCountryId: '',
     countryName: '',
     countryFlag: '',
     parentId: '',
@@ -215,6 +217,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
         ...prev,
         name: dept.name,
         countryId: dept.countryId ?? '',
+        historicalCountryId: dept.historicalCountryId ?? '',
         parentId: dept.parentId ?? '',
         description: dept.description ?? '',
       }))
@@ -224,20 +227,33 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
     }
   }, [isEditMode, id])
 
+  // 선택된 국가 — 역사 우선(두 축이 함께 채워진 레거시 행도 역사 부처로 인식)
+  const selectedCountryId = formData.historicalCountryId || formData.countryId
+
   // 수정 모드: 국가 목록 로드 후 countryName 보정
   useEffect(() => {
-    if (!formData.countryId || formData.countryName) return
-    const c =
-      modernCountries.find((x) => x.id === formData.countryId) ||
-      historicalCountries.find((x) => x.id === formData.countryId)
-    if (c) {
+    if (!selectedCountryId || formData.countryName) return
+    const matched = formData.historicalCountryId
+      ? historicalCountries.find(
+          (country) => country.id === formData.historicalCountryId,
+        )
+      : modernCountries.find((country) => country.id === formData.countryId)
+    if (matched) {
       setFormData((prev) => ({
         ...prev,
-        countryName: c.name,
-        countryFlag: 'flagEmoji' in c && c.flagEmoji ? c.flagEmoji : '',
+        countryName: matched.name,
+        countryFlag:
+          'flagEmoji' in matched && matched.flagEmoji ? matched.flagEmoji : '',
       }))
     }
-  }, [formData.countryId, formData.countryName, modernCountries, historicalCountries])
+  }, [
+    selectedCountryId,
+    formData.countryId,
+    formData.historicalCountryId,
+    formData.countryName,
+    modernCountries,
+    historicalCountries,
+  ])
 
   const loadCountries = async () => {
     try {
@@ -449,22 +465,29 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
       return
     }
 
-    if (!formData.countryId) {
+    if (!selectedCountryId) {
       notify.error('국가를 선택해주세요.')
       return
+    }
+
+    // 축 분리 — 역사적 국가 PK를 countryId(현대 국가 FK)에 넣으면 FK 위반으로 저장이 실패한다
+    const countryPayload = {
+      countryId: formData.countryId || null,
+      historicalCountryId: formData.historicalCountryId || null,
     }
 
     try {
       if (isEditMode && id) {
         await administrationDepartmentApi.update(id, {
           name: formData.name.trim(),
+          ...countryPayload,
           parentId: formData.parentId || null,
           description: formData.description.trim() || null,
         })
       } else {
         await administrationDepartmentApi.create({
           name: formData.name.trim(),
-          countryId: formData.countryId,
+          ...countryPayload,
           parentId: formData.parentId || null,
           description: formData.description.trim() || null,
         })
@@ -590,12 +613,16 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
                       <Label>
                         소속 국가 <Required>*</Required>
                       </Label>
-                      {formData.countryId ? (
+                      {selectedCountryId ? (
                         <SelectedCountryCard>
                           <CountryFlag>{formData.countryFlag || '🌏'}</CountryFlag>
                           <CountryInfo>
                             <CountryName>{formData.countryName}</CountryName>
-                            <CountryLabel>소속 국가</CountryLabel>
+                            <CountryLabel>
+                              {formData.historicalCountryId
+                                ? '소속 국가 (역사)'
+                                : '소속 국가'}
+                            </CountryLabel>
                           </CountryInfo>
                           <ClearIconButton
                             type="button"
@@ -604,6 +631,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
                               setFormData({
                                 ...formData,
                                 countryId: '',
+                                historicalCountryId: '',
                                 countryName: '',
                                 countryFlag: '',
                               })
@@ -1295,10 +1323,16 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
           onClose={() => setCountryModalOpen(false)}
           onSelect={(country) => {
             // 모달은 {id, name, isHistorical}만 전달 — 국기는 현대 국가 목록에서 보강
-            const matched = modernCountries.find((c) => c.id === country.id)
+            const matched = country.isHistorical
+              ? undefined
+              : modernCountries.find(
+                  (modernCountry) => modernCountry.id === country.id,
+                )
+            // 상호배타 — 선택한 축만 채우고 반대편은 비운다
             setFormData({
               ...formData,
-              countryId: country.id,
+              countryId: country.isHistorical ? '' : country.id,
+              historicalCountryId: country.isHistorical ? country.id : '',
               countryName: country.name,
               countryFlag: matched?.flagEmoji || '🌏',
             })
@@ -1306,6 +1340,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
           }}
           modernCountries={modernCountries}
           historicalCountries={historicalCountries}
+          selectedCountryId={selectedCountryId || undefined}
         />
       )}
 
