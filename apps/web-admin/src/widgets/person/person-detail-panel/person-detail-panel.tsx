@@ -67,6 +67,7 @@ import {
   useRichTextProseClick,
   useRichTextTooltipEscape,
 } from '@/shared/hooks/use-rich-text-prose-click'
+import { NICKNAME_TYPE_LABELS } from '@/shared/lib/nickname-type-labels'
 import {
   type PersonNameFields,
   getPersonDisplayName,
@@ -1540,14 +1541,20 @@ export function PersonDetailPanel({
                 )
                 return (
                   <NicknameRow>
-                    {sorted.map((n, i) => (
+                    {sorted.map((nick, idx) => (
                       <NicknameChip
-                        key={n.id ?? n.nickname ?? `nickname-${i}`}
-                        title={n.reason || undefined}
+                        key={nick.id ?? nick.nickname ?? `nickname-${idx}`}
+                        title={nick.reason || undefined}
                       >
-                        {n.type && <NicknameType>{n.type}</NicknameType>}
-                        <NicknameValue>{n.nickname}</NicknameValue>
-                        {n.reason && <NicknameReason>{n.reason}</NicknameReason>}
+                        {nick.type && (
+                          <NicknameType>
+                            {NICKNAME_TYPE_LABELS[nick.type] ?? nick.type}
+                          </NicknameType>
+                        )}
+                        <NicknameValue>{nick.nickname}</NicknameValue>
+                        {nick.reason && (
+                          <NicknameReason>{nick.reason}</NicknameReason>
+                        )}
                       </NicknameChip>
                     ))}
                   </NicknameRow>

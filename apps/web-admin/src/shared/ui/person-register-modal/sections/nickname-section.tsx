@@ -6,9 +6,13 @@
  */
 import React from 'react'
 
-import { FiPlus, FiX } from 'react-icons/fi'
+import { FiChevronDown, FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import {
+  NICKNAME_TYPE_OPTIONS,
+  normalizeNicknameType,
+} from '@/shared/lib/nickname-type-labels'
 import {
   FieldControl,
   FieldLabel,
@@ -20,6 +24,7 @@ import { FONT, RADIUS } from '../_form-primitives'
 
 export interface NicknameRow {
   nickname: string
+  /** 별칭 유형 토큰 (PersonNicknameType) 또는 '' (미분류) */
   type: string
   /** 이 별칭이 붙은 이유·유래 (선택). type=분류와 직교. */
   reason: string
@@ -29,20 +34,13 @@ export interface NicknameSectionProps {
   rows: NicknameRow[]
   setRows: React.Dispatch<React.SetStateAction<NicknameRow[]>>
   markDirty: () => void
-  /** datalist·라벨 id 유일화 (한 페이지 다중 폼 대비) */
-  fid: (name: string) => string
 }
-
-/** 유형 프리셋 — 자유 입력도 허용(datalist). 표기 흔들림 방지용 권장값. */
-const TYPE_PRESETS = ['아명', '출생명', '자(字)', '아호(雅號)', '시호', '필명', '별명']
 
 export function NicknameSection({
   rows,
   setRows,
   markDirty,
-  fid,
 }: NicknameSectionProps) {
-  const listId = fid('nickname-type-presets')
   const update = (idx: number, patch: Partial<NicknameRow>) => {
     setRows((prev) => prev.map((row, i) => (i === idx ? { ...row, ...patch } : row)))
     markDirty()
@@ -60,21 +58,27 @@ export function NicknameSection({
       <FieldRow>
         <FieldLabel>별칭</FieldLabel>
         <FieldControl>
-          <datalist id={listId}>
-            {TYPE_PRESETS.map((preset) => (
-              <option key={preset} value={preset} />
-            ))}
-          </datalist>
           {rows.map((row, idx) => (
             <NicknameRowWrap key={idx}>
               <NicknameTopRow>
-                <TypeInput
-                  list={listId}
-                  value={row.type}
-                  onChange={(event) => update(idx, { type: event.target.value })}
-                  placeholder="유형(아명·출생명…)"
-                  aria-label="별칭 유형"
-                />
+                <TypeSelectWrap>
+                  <TypeSelect
+                    // draft 복원 등으로 남은 레거시 자유 문자열도 정규화해 표시 — 저장값과 표시 일치
+                    value={normalizeNicknameType(row.type)}
+                    onChange={(event) => update(idx, { type: event.target.value })}
+                    aria-label="별칭 유형"
+                  >
+                    <option value="">유형 없음</option>
+                    {NICKNAME_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </TypeSelect>
+                  <SelectCaret>
+                    <FiChevronDown size={16} />
+                  </SelectCaret>
+                </TypeSelectWrap>
                 <NameInput
                   value={row.nickname}
                   onChange={(event) => update(idx, { nickname: event.target.value })}
@@ -133,17 +137,35 @@ const baseInput = `
   border-radius: ${RADIUS.control};
 `
 
-const TypeInput = styled.input`
-  ${baseInput}
+const TypeSelectWrap = styled.div`
+  position: relative;
   flex: 0 0 132px;
+`
+
+const TypeSelect = styled.select`
+  ${baseInput}
+  width: 100%;
+  appearance: none;
+  padding-right: 28px;
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
+  cursor: pointer;
   &:focus {
     outline: none;
     border-color: ${({ theme }) => theme.colors.primary};
   }
+`
+
+const SelectCaret = styled.span`
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  display: inline-flex;
 `
 
 const NameInput = styled.input`

@@ -38,6 +38,14 @@ export interface SpouseRelationInput {
   note?: string | null
 }
 
+/** 서버 NicknameDto 미러 — type은 폼 호환 string (서버 NicknameType enum, @IsEnum 검증) */
+export interface NicknameInput {
+  nickname: string
+  type?: string
+  priority?: number
+  reason?: string | null
+}
+
 /** 서버 CountryAffiliationDto 미러 — affiliationType은 폼 호환 string */
 export interface CountryAffiliationInput {
   affiliationType: string
@@ -74,6 +82,7 @@ interface RelaxedPersonInputFields {
   death?: DateInfoInput | null
   spouseRelations?: SpouseRelationInput[]
   countryAffiliations?: CountryAffiliationInput[]
+  nicknames?: NicknameInput[]
   sections?: Array<{
     title: string
     content: string

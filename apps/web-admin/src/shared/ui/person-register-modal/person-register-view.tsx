@@ -46,6 +46,7 @@ import {
   uploadImage,
   validateImageFile,
 } from '@/shared/api/upload'
+import { normalizeNicknameType } from '@/shared/lib/nickname-type-labels'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
@@ -761,7 +762,8 @@ export function PersonRegisterView({
             .sort((a: any, b: any) => (a.priority ?? 0) - (b.priority ?? 0))
             .map((nick: any) => ({
               nickname: nick.nickname ?? '',
-              type: nick.type ?? '',
+              // enum 정식화 이전 자유 문자열 방어 — 토큰으로 정규화
+              type: normalizeNicknameType(nick.type),
               // ★ 이유 복원 필수 — 누락하면 무관 필드 저장 시 delete-recreate로 전 별칭 이유가 소실.
               reason: nick.reason ?? '',
             })),
@@ -1605,14 +1607,15 @@ export function PersonRegisterView({
           : undefined,
       // 별칭(아명·출생명 등). 수정: 항상 전송(빈 배열이면 전부 제거). 신규: 채워진 행만.
       nicknames:
-        isEditMode || nicknameRows.some((r) => r.nickname.trim())
+        isEditMode || nicknameRows.some((row) => row.nickname.trim())
           ? nicknameRows
-              .filter((r) => r.nickname.trim())
-              .map((r, idx) => ({
-                nickname: r.nickname.trim(),
-                type: r.type.trim() || undefined,
+              .filter((row) => row.nickname.trim())
+              .map((row, idx) => ({
+                nickname: row.nickname.trim(),
+                // 스냅샷 draft에 남은 레거시 자유 문자열도 토큰으로 — 서버 @IsEnum 400 방지
+                type: normalizeNicknameType(row.type) || undefined,
                 priority: idx,
-                reason: r.reason.trim() || undefined,
+                reason: row.reason.trim() || undefined,
               }))
           : undefined,
       birthCityId: birthCityId || undefined,
@@ -2200,7 +2203,6 @@ export function PersonRegisterView({
                   rows={nicknameRows}
                   setRows={setNicknameRows}
                   markDirty={markDirty}
-                  fid={fid}
                 />
 
                 <CoreDivider />
