@@ -11,7 +11,7 @@ import styled from 'styled-components'
 import * as S from '@/shared/ui/form-styles'
 
 import { useCountries } from '@/features/country/api'
-import { useHistoricalCountriesByModernCountry } from '@/features/country/api'
+import { useHistoricalCountryScope } from '@/shared/lib/use-historical-country-scope'
 import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
 import {
   personCareerApi,
@@ -410,10 +410,13 @@ export function TenureRegisterPanel({
   const [personImageError, setPersonImageError] = useState(false)
 
   const { data: countries = [] } = useCountries()
-  // isSuccess 가드 — isFetched는 fetch가 에러로 끝나도 true가 돼 기본값 []로
-  // belongs 검사가 돌아 역사국가 연결이 잘못 해제된다. 성공 응답일 때만 검사.
-  const { data: historicalCountries = [], isSuccess: historicalCountriesLoaded } =
-    useHistoricalCountriesByModernCountry(open ? countryId : '')
+  // 현대 국가 소속 역사국가 목록 + 보수적 해제 정책(재위 패널과 동일 정책, 공용 훅)
+  const { historicalCountries } = useHistoricalCountryScope({
+    open,
+    countryId,
+    historicalCountryId,
+    onClearHistoricalCountry: () => setHistoricalCountryId(null),
+  })
   // 현대 국가를 선택하지 않아도 역사적 국가를 직접 고를 수 있도록 전체 목록도 확보한다.
   // 교황령·신성로마제국처럼 특정 현대 국가에 매이지 않는 정치체(교황·황제 등)를
   // "이탈리아를 먼저 골라야 교황령이 뜨는" 우회 없이 등록하기 위함.
@@ -595,22 +598,6 @@ export function TenureRegisterPanel({
   useEffect(() => {
     setPersonImageError(false)
   }, [personDetail?.id])
-
-  /**
-   * 국가 재선택 시 역사적 국가를 무조건 비우지 않고, 새 국가 소속이 아닐 때만 해제.
-   * (역사국가 전용 행을 수정하다 현대 국가를 골랐을 때 historicalCountryId가
-   * 조용히 NULL로 덮여 연결이 파괴되던 문제 방지)
-   */
-  useEffect(() => {
-    if (!open || !countryId || !historicalCountryId) return
-    // 성공적으로 받아온 목록일 때만 해제 — 조회 에러 시(데이터 기본값 [])
-    // belongs=false로 오판해 연결을 조용히 파괴하면 안 됨
-    if (!historicalCountriesLoaded) return
-    const belongs = (historicalCountries as any[]).some(
-      (h: any) => h.id === historicalCountryId,
-    )
-    if (!belongs) setHistoricalCountryId(null)
-  }, [open, countryId, historicalCountryId, historicalCountriesLoaded, historicalCountries])
 
   /** 수반 직책 선택 시 소속 행정부 지정 불가(백엔드 400) — 선택돼 있던 행정부는 자동 해제 */
   useEffect(() => {
@@ -1251,7 +1238,7 @@ export function TenureRegisterPanel({
         onSelect={({ id }) => {
           setCountryId(id || '')
           // historicalCountryId는 여기서 무조건 null로 덮지 않음 — 새 국가 소속이
-          // 아닐 때만 effect에서 해제 (역사국가 연결의 조용한 파괴 방지)
+          // 아닐 때만 useHistoricalCountryScope가 해제 (역사국가 연결의 조용한 파괴 방지)
           setPositionDefinitionId(null)
           setCountryModalOpen(false)
         }}

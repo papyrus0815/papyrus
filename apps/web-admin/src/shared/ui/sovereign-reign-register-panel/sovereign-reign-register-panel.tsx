@@ -8,8 +8,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiChevronDown, FiLink, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { useHistoricalCountriesByModernCountry, useCountries } from '@/features/country/api'
+import { useCountries } from '@/features/country/api'
 import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
+import { useHistoricalCountryScope } from '@/shared/lib/use-historical-country-scope'
 import { personCareerApi } from '@/shared/api/person-career'
 import type { CreateSovereignReignDto } from '@/shared/api/person-career'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
@@ -291,9 +292,13 @@ export function SovereignReignRegisterPanel({
   const [accessionEventPickerOpen, setAccessionEventPickerOpen] = useState(false)
 
   const { data: countries = [] } = useCountries()
-  const { data: historicalCountries = [] } = useHistoricalCountriesByModernCountry(
-    open ? countryId : '',
-  )
+  // 현대 국가 소속 역사국가 목록 + 보수적 해제 정책(재임 패널과 동일 정책, 공용 훅)
+  const { historicalCountries } = useHistoricalCountryScope({
+    open,
+    countryId,
+    historicalCountryId,
+    onClearHistoricalCountry: () => setHistoricalCountryId(null),
+  })
   // 현대 국가를 선택하지 않아도 역사적 국가를 직접 고를 수 있도록 전체 목록도 확보한다.
   // 교황령·신성로마제국처럼 특정 현대 국가에 매이지 않는 정치체(교황·황제 등)를
   // "이탈리아를 먼저 골라야 교황령이 뜨는" 우회 없이 등록하기 위함.
@@ -871,7 +876,8 @@ export function SovereignReignRegisterPanel({
         selectedCountryId={countryId || ''}
         onSelect={({ id }) => {
           setCountryId(id)
-          setHistoricalCountryId(null)
+          // historicalCountryId는 여기서 무조건 null로 덮지 않음 — 새 국가 소속이
+          // 아닐 때만 useHistoricalCountryScope가 해제 (역사국가 연결의 조용한 파괴 방지)
           setPositionDefinitionId(null)
           setCountryModalOpen(false)
         }}

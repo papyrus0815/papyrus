@@ -52,10 +52,20 @@ function isoToYearLabel(iso: string | null | undefined): string {
   return `${prefix}${Math.abs(p.year)}년 ${p.month}월 ${p.day}일`
 }
 
-/** 백엔드 DATETIME이 기원전을 저장하지 못함 — 연도 1 미만이면 BCE 취급 */
-function isBceDate(iso: string): boolean {
-  const p = parseIsoDateParts(iso)
-  return p != null && p.year < 1
+/**
+ * 체계 시행일로 저장 가능한 최소 연도(서기) — 백엔드 MIN_SCHEME_YEAR와 같은 값.
+ * DATETIME 왕복이 신뢰 가능한 하한(AD 1000+).
+ */
+const MIN_SCHEME_YEAR = 1000
+
+/**
+ * 백엔드가 저장하지 못하는 연도인지 — 기원전(음수)뿐 아니라 서기 1000년 미만도 포함.
+ * mariadb 어댑터가 연도 1000 미만 DATETIME을 왕복시키지 못해(0044 → 2044로 오파싱)
+ * 저장은 성공한 척하면서 값이 어긋난다. 서버 400 전에 인라인으로 알린다.
+ */
+function isUnsupportedSchemeDate(iso: string): boolean {
+  const parts = parseIsoDateParts(iso)
+  return parts != null && parts.year < MIN_SCHEME_YEAR
 }
 
 export function AdminDivisionSchemeModal({
@@ -96,12 +106,14 @@ export function AdminDivisionSchemeModal({
       setError('체계 이름은 필수입니다')
       return
     }
-    // 백엔드가 기원전 날짜를 저장하지 못함(DATETIME) — 400 나기 전에 막는다
+    // 백엔드가 기원전·서기 1000년 미만을 저장하지 못함(DATETIME) — 400 나기 전에 막는다
     if (
-      (startDate && isBceDate(startDate)) ||
-      (endDate && isBceDate(endDate))
+      (startDate && isUnsupportedSchemeDate(startDate)) ||
+      (endDate && isUnsupportedSchemeDate(endDate))
     ) {
-      setError('기원전 날짜는 체계 시행일로 저장할 수 없습니다')
+      setError(
+        `기원전과 서기 ${MIN_SCHEME_YEAR}년 이전 날짜는 체계 시행일로 저장할 수 없습니다 — 저장 후 연도가 어긋나 아직 지원하지 않습니다`,
+      )
       return
     }
     if (startDate && endDate) {

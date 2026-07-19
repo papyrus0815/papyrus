@@ -27,8 +27,6 @@ import {
 } from '@/shared/api/administration-department'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllCountries } from '@/shared/api/countries'
-import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
-import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type {
   CreateMilitaryUnitInput,
   MilitaryUnit,
@@ -256,6 +254,15 @@ const MILITARY_BRANCHES = [
   { value: 'OTHER', label: '기타' },
 ]
 
+/**
+ * 군부대는 역사 국가를 소속으로 고를 수 없다 — MilitaryUnit에 historicalCountryId 컬럼이 없고
+ * countryId는 현대 Country FK 전용이라, 역사 국가 id를 저장하면 FK 위반(P2003)으로 실패한다.
+ * 지원하려면 스키마 확장(historicalCountryId 추가 + 마이그레이션)이 선행돼야 한다.
+ * 그때까지 국가 선택 모달에는 빈 목록을 넘겨 역사 국가를 고를 수 없게 한다.
+ * (참조 안정용 모듈 상수 — 인라인 []는 매 렌더 새 배열이라 모달 내부 memo가 무효화된다)
+ */
+const NO_HISTORICAL_COUNTRIES: never[] = []
+
 type TabType = 'basic' | 'military' | 'description'
 
 export type MilitaryUnitFormModalProps = {
@@ -290,9 +297,6 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [modernCountries, setModernCountries] = useState<CountryResponseDto[]>(
     [],
   )
-  const [historicalCountries, setHistoricalCountries] = useState<
-    HistoricalCountryResponseDto[]
-  >([])
   const [allUnits, setAllUnits] = useState<MilitaryUnit[]>([])
 
   // Modals
@@ -418,12 +422,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
 
   const loadCountries = async () => {
     try {
-      const [modern, historical] = await Promise.all([
-        getAllCountries(),
-        getAllHistoricalCountries(),
-      ])
+      // 역사 국가는 로드하지 않음 — MilitaryUnit.countryId는 현대 Country FK 전용
+      const modern = await getAllCountries()
       setModernCountries(modern)
-      setHistoricalCountries(historical)
     } catch {
       // ignore
     }
@@ -1204,16 +1205,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         isOpen={countryModalOpen}
         onClose={() => setCountryModalOpen(false)}
         onSelect={(country) => {
+          // 선택 후보는 현대 국가뿐(NO_HISTORICAL_COUNTRIES 주석 참고)
           const modernCountry = modernCountries.find((c) => c.id === country.id)
-          const historicalCountry = historicalCountries.find(
-            (c) => c.id === country.id,
-          )
-          // 역사 국가 DTO에는 flagEmoji가 없음(런타임에도 미제공) — 구조적 접근으로 안전 처리
-          const flagEmoji =
-            modernCountry?.flagEmoji ||
-            (historicalCountry as { flagEmoji?: string } | undefined)
-              ?.flagEmoji ||
-            '🏳️'
+          const flagEmoji = modernCountry?.flagEmoji || '🏳️'
 
           setCountryId(country.id)
           setCountryName(country.name)
@@ -1222,7 +1216,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
           setCountryModalOpen(false)
         }}
         modernCountries={modernCountries}
-        historicalCountries={historicalCountries}
+        historicalCountries={NO_HISTORICAL_COUNTRIES}
       />
 
       {/* 부대 유형 선택 모달 */}
