@@ -95,8 +95,17 @@ export function TenureReignList({
         const posTitle = d.positionDefinition?.title ?? d.title ?? '직책'
         const countryName =
           d.historicalCountry?.name ?? d.country?.name ?? null
-        const startStr = formatIsoDateKo(d.startDate)
+        // 'year' 정밀도 = 연도만 앎(월일 01-01은 관행 채움) — 시작쪽만 연도로 완화, 종료쪽 무변경
+        const startYearOnly = d.startDatePrecision === 'year' && !!d.startDate
+        const startStr = startYearOnly
+          ? `${Number(String(d.startDate).slice(0, 4))}년`
+          : formatIsoDateKo(d.startDate)
         const endStr = d.endDate ? formatIsoDateKo(d.endDate) : null
+        // 즉위식·취임식 사건 링크 — 소프트삭제된 사건은 배지 숨김
+        const accessionEvent =
+          d.accessionEvent && !d.accessionEvent.deletedAt
+            ? d.accessionEvent
+            : null
         const subTermNum = d.subTermNumber
         const ageAtStart = getAgeAtDate(
           birthYear,
@@ -158,7 +167,8 @@ export function TenureReignList({
                 )}
                 {ageAtStart != null && (
                   <UnifiedAgeBadge>
-                    {ageAtStart}세에 {isReign ? '즉위' : '취임'}
+                    {ageAtStart}세{startYearOnly ? '경' : ''}에{' '}
+                    {isReign ? '즉위' : '취임'}
                   </UnifiedAgeBadge>
                 )}
                 {ageAtEnd != null && (
@@ -169,6 +179,7 @@ export function TenureReignList({
               </UnifiedMetaRow>
               {(d.appointmentMethod ||
                 d.appointmentDetail ||
+                accessionEvent ||
                 d.endReason ||
                 d.endReasonDetail ||
                 d.notes) && (
@@ -178,6 +189,12 @@ export function TenureReignList({
                       {isReign ? '즉위' : '취임'}:{' '}
                       {APPOINTMENT_METHOD_LABELS[d.appointmentMethod] ??
                         d.appointmentMethod}
+                    </span>
+                  )}
+                  {accessionEvent && (
+                    <span>
+                      {isReign ? '즉위식' : '취임식'}:{' '}
+                      {accessionEvent.title ?? '(제목 없음)'}
                     </span>
                   )}
                   {/* 즉위/취임 경위 서사 — 칩과 달리 여러 문장일 수 있어 UnifiedNote(자체 행·개행 보존)로 */}

@@ -63,7 +63,12 @@ export interface Tenure {
   country: TenureCountryRef | null
   historicalCountry: TenureCountryRef | null
   startDate: string | null
+  /** 시작일 정밀도 — 'year'면 연도만 앎(01-01 관행 채움), 표시·나이 파생은 완화 */
+  startDatePrecision: string | null
   endDate: string | null
+  /** 즉위·대관식 사건(Event 정본) 링크 */
+  accessionEventId: string | null
+  accessionEvent: { id: string; title: string | null; deletedAt?: string | null } | null
   appointmentMethod: string | null
   /** 즉위/취임 경위 상세 서사 — appointmentMethod의 상세 쌍(endReasonDetail의 시작측 대칭) */
   appointmentDetail: string | null

@@ -71,6 +71,8 @@ export interface SpouseRelationInput extends FamilyMember {
 interface ReignInput {
   id: string
   startDate?: string | null
+  /** 'year'=연도만 앎(월일 01-01은 관행 채움) — dateLabel 시작쪽만 연도 표기 */
+  startDatePrecision?: string | null
   endDate?: string | null
   notes?: string | null
   regnalNumber?: number | null
@@ -87,6 +89,8 @@ interface ReignInput {
 interface TenureInput {
   id: string
   startDate?: string | null
+  /** 'year'=연도만 앎(월일 01-01은 관행 채움) — dateLabel 시작쪽만 연도 표기 */
+  startDatePrecision?: string | null
   endDate?: string | null
   title?: string | null
   notes?: string | null
@@ -470,7 +474,7 @@ export function PersonLifeTimelineInfographic({
           reign.regnalNumber != null
             ? `${reign.regnalNumber}대${reign.subTermNumber != null ? ` ${reign.subTermNumber}기` : ''}`
             : null,
-        dateLabel: formatRange(startsAt, endsAt),
+        dateLabel: formatRange(startsAt, endsAt, reign.startDatePrecision),
         description:
           [
             reign.appointmentMethod || reign.appointmentDetail
@@ -517,7 +521,7 @@ export function PersonLifeTimelineInfographic({
           tenure.termNumber != null
             ? `제${tenure.termNumber}대${tenure.subTermNumber != null ? ` ${tenure.subTermNumber}기` : ''}`
             : null,
-        dateLabel: formatRange(startsAt, endsAt),
+        dateLabel: formatRange(startsAt, endsAt, tenure.startDatePrecision),
         description:
           [
             tenure.appointmentMethod || tenure.appointmentDetail

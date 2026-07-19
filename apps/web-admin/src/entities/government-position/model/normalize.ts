@@ -60,7 +60,10 @@ export interface RawTenureLike {
   dynastyOrdinal?: number | null
   notes?: string | null
   startDate?: string | null
+  startDatePrecision?: string | null
   endDate?: string | null
+  accessionEventId?: string | null
+  accessionEvent?: { id?: string | null; title?: string | null; deletedAt?: string | null } | null
   country?: { id?: string | null; name?: string | null } | null
   historicalCountry?: { id?: string | null; name?: string | null } | null
   cabinetId?: string | null
@@ -160,7 +163,16 @@ export function normalizeTenure(
     country: normalizeCountry(raw.country),
     historicalCountry: normalizeCountry(raw.historicalCountry),
     startDate: raw.startDate ?? null,
+    startDatePrecision: raw.startDatePrecision ?? null,
     endDate: raw.endDate ?? null,
+    accessionEventId: raw.accessionEventId ?? raw.accessionEvent?.id ?? null,
+    accessionEvent: raw.accessionEvent?.id
+      ? {
+          id: raw.accessionEvent.id,
+          title: raw.accessionEvent.title ?? null,
+          deletedAt: raw.accessionEvent.deletedAt ?? null,
+        }
+      : null,
     appointmentMethod: raw.appointmentMethod ?? null,
     appointmentDetail: raw.appointmentDetail ?? null,
     endReason: raw.endReason ?? null,

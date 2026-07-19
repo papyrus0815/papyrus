@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 
-import { FiChevronDown, FiInfo, FiSave } from 'react-icons/fi'
+import { FiChevronDown, FiInfo, FiLink, FiSave, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
@@ -18,6 +18,13 @@ import {
   TENURE_END_REASON_OPTIONS,
 } from '@/shared/lib/tenure-labels'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
+import {
+  EventPickerModal,
+  EventPickerLinkBtn,
+  EventPickerLinkClearBtn,
+  EventPickerLinkedChip,
+  type EventPickerSelection,
+} from '@/shared/ui/event-picker-modal/event-picker-modal'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import { FormInput, FormTextarea } from '@/shared/ui/form-input/form-input'
@@ -195,6 +202,8 @@ export function RegisterMonarchModal({
     useState<string | null>(null)
   const [regnalName, setRegnalName] = useState('')
   const [startDate, setStartDate] = useState('')
+  /** 즉위일 정밀도 'year' — 연도만 앎(월일은 01-01 관행 채움) */
+  const [startDateYearOnly, setStartDateYearOnly] = useState(false)
   const [endDate, setEndDate] = useState('')
   const [regnalNumber, setRegnalNumber] = useState('')
   const [subTermNumber, setSubTermNumber] = useState('')
@@ -205,6 +214,11 @@ export function RegisterMonarchModal({
   const [endReasonDetail, setEndReasonDetail] = useState('')
   const [notes, setNotes] = useState('')
   const [showOnEventsPage, setShowOnEventsPage] = useState(true)
+  /** 즉위·대관식 사건 링크 — id는 payload, title은 칩 표시용 */
+  const [linkedAccessionEvent, setLinkedAccessionEvent] =
+    useState<EventPickerSelection | null>(null)
+  const [accessionEventPickerOpen, setAccessionEventPickerOpen] =
+    useState(false)
 
   const [includeRegnalEra, setIncludeRegnalEra] = useState(false)
   const [eraName, setEraName] = useState('')
@@ -239,6 +253,7 @@ export function RegisterMonarchModal({
       setPositionTitleModalOpen(false)
       setAffinityCountryModalOpen(false)
       setPersonSelectModalOpen(false)
+      setAccessionEventPickerOpen(false)
     }
   }, [isOpen])
 
@@ -276,6 +291,7 @@ export function RegisterMonarchModal({
     setSelectedPositionDefinitionId(null)
     setRegnalName('')
     setStartDate('')
+    setStartDateYearOnly(false)
     setEndDate('')
     setRegnalNumber('')
     setSubTermNumber('')
@@ -286,6 +302,7 @@ export function RegisterMonarchModal({
     setEndReasonDetail('')
     setNotes('')
     setShowOnEventsPage(true)
+    setLinkedAccessionEvent(null)
     setIncludeRegnalEra(false)
     setEraName('')
     setEraNameEn('')
@@ -389,6 +406,8 @@ export function RegisterMonarchModal({
       historicalCountryId:
         selectedAffinityHistoricalId ?? historicalCountryId ?? undefined,
       startDate: startDate.trim(),
+      // 'year'=연도만 앎(월일은 01-01 관행 채움) — 생성 전용 모달이라 미체크는 undefined
+      startDatePrecision: startDateYearOnly ? 'year' : undefined,
       endDate: endDate.trim() || undefined,
       termNumber: num,
       regnalNumber: num,
@@ -397,6 +416,7 @@ export function RegisterMonarchModal({
       appointmentMethod: (appointmentMethod ||
         undefined) as CreateSovereignReignDto['appointmentMethod'],
       appointmentDetail: appointmentDetail.trim() || undefined,
+      accessionEventId: linkedAccessionEvent?.id || undefined,
       endReason: (endReason ||
         undefined) as CreateSovereignReignDto['endReason'],
       endReasonDetail: endReasonDetail.trim() || undefined,
@@ -568,6 +588,28 @@ export function RegisterMonarchModal({
             />
 
             <FieldRow>
+              <FieldLabel>즉위일 정밀도</FieldLabel>
+              <FieldControl>
+                <CheckboxRow style={{ marginBottom: 0 }}>
+                  <input
+                    type="checkbox"
+                    id="monarch-start-year-only"
+                    checked={startDateYearOnly}
+                    onChange={(event) =>
+                      setStartDateYearOnly(event.target.checked)
+                    }
+                  />
+                  <label htmlFor="monarch-start-year-only">
+                    즉위 연도만 앎
+                  </label>
+                </CheckboxRow>
+                <FieldHint>
+                  날짜는 관행상 1월 1일로 입력 — 표시는 연도만
+                </FieldHint>
+              </FieldControl>
+            </FieldRow>
+
+            <FieldRow>
               <FieldLabel>대수/재위번호</FieldLabel>
               <FieldControl>
                 <StyledFormInput
@@ -643,6 +685,37 @@ export function RegisterMonarchModal({
                   placeholder="선택 — 예: 선왕 서거로 승계, 1653년 랭스 대성당에서 대관"
                   rows={2}
                 />
+              </FieldControl>
+            </FieldRow>
+
+            {/* 즉위·대관식 사건 — 즉위 상세 서사의 구조화 쌍(Event 정본 링크) */}
+            <FieldRow>
+              <FieldLabel>즉위·대관식 사건</FieldLabel>
+              <FieldControl>
+                {linkedAccessionEvent ? (
+                  <EventPickerLinkedChip title={linkedAccessionEvent.title}>
+                    <FiLink size={12} />
+                    <span>{linkedAccessionEvent.title}</span>
+                    <EventPickerLinkClearBtn
+                      type="button"
+                      aria-label="사건 연결 해제"
+                      onClick={() => setLinkedAccessionEvent(null)}
+                    >
+                      <FiX size={13} />
+                    </EventPickerLinkClearBtn>
+                  </EventPickerLinkedChip>
+                ) : (
+                  <EventPickerLinkBtn
+                    type="button"
+                    onClick={() => setAccessionEventPickerOpen(true)}
+                  >
+                    <FiLink size={12} />
+                    사건 연결
+                  </EventPickerLinkBtn>
+                )}
+                <FieldHint>
+                  대관식·즉위식을 사건으로 등록했다면 여기서 연결합니다.
+                </FieldHint>
               </FieldControl>
             </FieldRow>
 
@@ -847,6 +920,17 @@ export function RegisterMonarchModal({
         options={positionTitleOptions}
         selectedValue={selectedPositionDefinitionId ?? ''}
         onSelect={handlePositionTitleSelect}
+      />
+
+      {/* 즉위·대관식 사건 선택 모달 */}
+      <EventPickerModal
+        isOpen={isOpen && accessionEventPickerOpen}
+        onClose={() => setAccessionEventPickerOpen(false)}
+        onSelect={(picked) => {
+          setLinkedAccessionEvent(picked)
+          setAccessionEventPickerOpen(false)
+        }}
+        title="즉위·대관식 사건 연결"
       />
 
       {!isHistorical && hasSubordinateHistorical && (

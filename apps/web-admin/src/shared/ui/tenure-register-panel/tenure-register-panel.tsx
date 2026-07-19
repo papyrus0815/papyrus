@@ -382,6 +382,8 @@ export function TenureRegisterPanel({
   const [title, setTitle] = useState('')
   const [titleEn, setTitleEn] = useState('')
   const [startDate, setStartDate] = useState('')
+  /** 취임일 정밀도 'year' — 연도만 앎(월일은 01-01 관행 채움) */
+  const [startDateYearOnly, setStartDateYearOnly] = useState(false)
   const [endDate, setEndDate] = useState('')
   /** 대수(termNumber, 일반 재임) 또는 재위번호(regnalNumber, 군주 재위) — recordKind에 따라 한쪽에만 기록 */
   const [ordinalNumber, setOrdinalNumber] = useState('')
@@ -558,6 +560,7 @@ export function TenureRegisterPanel({
     setTitle('')
     setTitleEn('')
     setStartDate('')
+    setStartDateYearOnly(false)
     setEndDate('')
     setOrdinalNumber('')
     setSubTermNumber('')
@@ -627,6 +630,7 @@ export function TenureRegisterPanel({
     setTitle(t.title ?? t.positionDefinition?.title ?? '')
     setTitleEn(t.titleEn ?? '')
     setStartDate(t.startDate ? (typeof t.startDate === 'string' ? t.startDate.split('T')[0] : '') : '')
+    setStartDateYearOnly(t.startDatePrecision === 'year')
     setEndDate(t.endDate ? (typeof t.endDate === 'string' ? t.endDate.split('T')[0] : '') : '')
     // 대수/재위번호 분리: 재위(SOVEREIGN_REIGN)는 regnalNumber, 일반 재임은 termNumber만 사용
     // (교차 폴백 금지 — 저장 시 반대편 필드로 값이 옮겨가는 오염 방지)
@@ -690,6 +694,8 @@ export function TenureRegisterPanel({
       countryId: historicalCountryId ? undefined : (countryId || undefined),
       historicalCountryId: historicalCountryId || undefined,
       startDate,
+      // 'year'=연도만 앎(월일은 01-01 관행 채움) — 수정 모드 체크 해제는 null(해제)
+      startDatePrecision: startDateYearOnly ? ('year' as const) : emptyAs,
       endDate: endDate || emptyAs,
       // 일반 재임은 termNumber(공식 통산 대수)만 기록 — regnalNumber(군주 재위번호)에 이중 기록하지 않음
       termNumber: parsedOrdinal,
@@ -712,6 +718,7 @@ export function TenureRegisterPanel({
             historicalCountryId: historicalCountryId || undefined,
             positionDefinitionId: positionDefinitionId || undefined,
             startDate,
+            startDatePrecision: startDateYearOnly ? ('year' as const) : null,
             endDate: endDate || null,
             // 재위(SOVEREIGN_REIGN)는 regnalNumber(재위번호)만 기록 — termNumber(통산 대수)는 보내지 않음
             regnalNumber: parsedOrdinal ?? null,
@@ -1017,6 +1024,30 @@ export function TenureRegisterPanel({
                 blockBc
                 clearableEnd
               />
+
+              <FieldRow>
+                <FieldLabel>
+                  {editingIsSovereign ? '즉위일 정밀도' : '취임일 정밀도'}
+                </FieldLabel>
+                <FieldControl>
+                  <CheckboxLabelRow>
+                    <input
+                      type="checkbox"
+                      id="tenure-start-year-only"
+                      checked={startDateYearOnly}
+                      onChange={(event) =>
+                        setStartDateYearOnly(event.target.checked)
+                      }
+                    />
+                    <label htmlFor="tenure-start-year-only">
+                      {editingIsSovereign ? '즉위 연도만 앎' : '취임 연도만 앎'}
+                    </label>
+                  </CheckboxLabelRow>
+                  <FieldHint>
+                    날짜는 관행상 1월 1일로 입력 — 표시는 연도만
+                  </FieldHint>
+                </FieldControl>
+              </FieldRow>
             </FormRows>
           </SidebarFormWrap>
         </S.FormSection>

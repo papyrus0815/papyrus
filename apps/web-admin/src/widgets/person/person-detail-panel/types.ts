@@ -11,7 +11,12 @@ export type TabType = 'overview' | 'genealogy' | 'politics' | 'events'
 export interface TenureLikeRecord {
   id: string
   startDate?: string | null
+  /** 시작일 정밀도 — 'year'면 연도만 앎(표시는 'YYYY년', 나이는 'N세경') */
+  startDatePrecision?: string | null
   endDate?: string | null
+  /** 즉위·대관식 사건(Event 정본) 링크 */
+  accessionEventId?: string | null
+  accessionEvent?: { id: string; title?: string | null; deletedAt?: string | null } | null
   notes?: string | null
   /** 재임 통산 대수 / 재위는 termNumber */
   termNumber?: number | null

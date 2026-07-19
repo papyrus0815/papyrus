@@ -223,7 +223,11 @@ export interface CreateGovernmentPositionTenureDto {
   subTermNumber?: number // 기수 (1기, 2기 — 같은 대수 내 복수 임기 구분)
   regnalNumber?: number // 재위번호 (서양 군주)
   startDate: string // 취임일 (필수)
+  /** 취임일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움) */
+  startDatePrecision?: 'year' | 'month' | 'day'
   endDate?: string // 퇴임일
+  /** 취임·즉위식 사건(Event 정본) 링크 */
+  accessionEventId?: string
   /** 소속 행정부(Cabinet) ID — 이 각료/총독 재임이 속한 행정부 */
   cabinetId?: string | null
   appointmentMethod?:
@@ -279,9 +283,13 @@ export type UpdateGovernmentPositionTenureDto = Partial<
     | 'endReason'
     | 'endReasonDetail'
     | 'notes'
+    | 'startDatePrecision'
+    | 'accessionEventId'
   >
 > & {
   endDate?: string | null
+  startDatePrecision?: 'year' | 'month' | 'day' | null
+  accessionEventId?: string | null
   termNumber?: number | null
   subTermNumber?: number | null
   regnalNumber?: number | null
@@ -304,7 +312,11 @@ export interface CreateSovereignReignDto {
   /** 왕조 내 서수 (예: 5 → "부르봉 왕조 5대") */
   dynastyOrdinal?: number
   startDate: string
+  /** 즉위일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움) */
+  startDatePrecision?: 'year' | 'month' | 'day'
   endDate?: string
+  /** 즉위·대관식 사건(Event 정본) 링크 */
+  accessionEventId?: string
   appointmentMethod?: CreateGovernmentPositionTenureDto['appointmentMethod']
   /** 즉위 경위 상세 서사 — appointmentMethod의 상세 쌍(승계 경위·대관식 언급·선왕 관계 등) */
   appointmentDetail?: string
@@ -331,9 +343,13 @@ export type UpdateSovereignReignDto = Partial<
     | 'endReasonDetail'
     | 'notes'
     | 'regnalName'
+    | 'startDatePrecision'
+    | 'accessionEventId'
   >
 > & {
   endDate?: string | null
+  startDatePrecision?: 'year' | 'month' | 'day' | null
+  accessionEventId?: string | null
   termNumber?: number | null
   subTermNumber?: number | null
   regnalNumber?: number | null
