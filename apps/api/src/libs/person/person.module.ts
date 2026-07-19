@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { PersonController } from './presentation/person.controller'
 import { PersonByCountryController } from './presentation/person-by-country.controller'
+import { PersonByHistoricalCountryController } from './presentation/person-by-historical-country.controller'
 import { PersonByDynastyController } from './presentation/person-by-dynasty.controller'
 import { GovernmentPositionController } from './presentation/government-position.controller'
 import { PersonLifeEventController } from './presentation/person-life-event.controller'
@@ -23,6 +24,7 @@ import { UploadModule } from '../shared/upload/upload.module'
   controllers: [
     PersonController,
     PersonByCountryController,
+    PersonByHistoricalCountryController,
     PersonByDynastyController,
     GovernmentPositionController,
     PersonLifeEventController,

@@ -221,21 +221,50 @@ export class PersonService {
   }
 
   /**
-   * 국가별 인물 전체 조회 (해당 국가와 직접 연결된 인물만, accountId 무관)
+   * 현대 국가별 인물 전체 조회 (해당 국가와 직접 연결된 인물만, accountId 무관)
    * - person.countryId = 해당 국가
    * - 해당 국가(또는 연결된 역사적 국가)에 재임 기록
    * - PersonCountryAffiliation으로 해당 국가 또는 연결된 역사적 국가 소속 (출생지·시민권·봉사국 등)
    */
   async findPersonsByCountry(countryId: string): Promise<PersonResponseDto[]> {
-    const [byCountryId, byTenure, byAffiliation] = await Promise.all([
+    return this.mergePersonSources([
       this.personRepository.findPersonsByCountryId(countryId),
       this.personRepository.findPersonsWithTenureInCountry({ countryId }),
       this.personRepository.findPersonsByAffiliationInCountry(countryId),
     ])
+  }
+
+  /**
+   * 역사국가별 인물 전체 조회 — 현대판 findPersonsByCountry와 대칭인 3원 합집합.
+   * 재임 없는 본체 FK 인물(조선 문인·학자 등)까지 역사국가 스코프에서 도달 가능 (검토서 F21).
+   * - person.historicalCountryId = 해당 역사국가 (본체 FK)
+   * - 해당 역사국가에 재임 기록 (findPersonsWithTenureInCountry 역사 축)
+   * - PersonCountryAffiliation.historicalCountryId 소속 (브리지 확장 없음 — 역사국가가 최종 축)
+   */
+  async findPersonsByHistoricalCountry(
+    historicalCountryId: string,
+  ): Promise<PersonResponseDto[]> {
+    return this.mergePersonSources([
+      this.personRepository.findPersonsByHistoricalCountryId(historicalCountryId),
+      this.personRepository.findPersonsWithTenureInCountry({ historicalCountryId }),
+      this.personRepository.findPersonsByAffiliationInHistoricalCountry(
+        historicalCountryId,
+      ),
+    ])
+  }
+
+  /**
+   * 소속 축별 인물 소스(본체 FK·재임·소속)를 id 기준 합집합.
+   * 앞선 소스가 우선(중복 시 먼저 담긴 DTO 유지) — 현대/역사 축 공통 병합 로직.
+   */
+  private async mergePersonSources(
+    sources: Array<Promise<PersonResponseDto[]>>,
+  ): Promise<PersonResponseDto[]> {
+    const lists = await Promise.all(sources)
     const byId = new Map<string, PersonResponseDto>()
-    for (const p of byCountryId) byId.set(p.id, p)
-    for (const p of byTenure) if (!byId.has(p.id)) byId.set(p.id, p)
-    for (const p of byAffiliation) if (!byId.has(p.id)) byId.set(p.id, p)
+    for (const list of lists) {
+      for (const p of list) if (!byId.has(p.id)) byId.set(p.id, p)
+    }
     return Array.from(byId.values())
   }
 

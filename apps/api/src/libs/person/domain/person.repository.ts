@@ -297,6 +297,14 @@ export interface IPersonRepository {
   findPersonsByCountryId(countryId: string): Promise<PersonResponseDto[]>
 
   /**
+   * 역사국가별 인물 목록 조회 (person.historicalCountryId 직접 매칭, accountId 무관)
+   * — 현대판 findPersonsByCountryId의 역사 축 대칭 (검토서 F21)
+   */
+  findPersonsByHistoricalCountryId(
+    historicalCountryId: string,
+  ): Promise<PersonResponseDto[]>
+
+  /**
    * 가문별 인물 목록 (person.dynastyId = dynastyId, accountId 무관)
    */
   findPersonsByDynastyId(dynastyId: string): Promise<PersonResponseDto[]>
@@ -312,6 +320,14 @@ export interface IPersonRepository {
    */
   findPersonsByAffiliationInCountry(
     countryId: string,
+  ): Promise<PersonResponseDto[]>
+
+  /**
+   * 역사국가에 소속(affiliation)이 있는 인물 조회
+   * (PersonCountryAffiliation.historicalCountryId 직접 매칭, 브리지 확장 없음 — 검토서 F21)
+   */
+  findPersonsByAffiliationInHistoricalCountry(
+    historicalCountryId: string,
   ): Promise<PersonResponseDto[]>
 
   /**
