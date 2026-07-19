@@ -20,11 +20,27 @@ import { FiCheck, FiGlobe, FiSearch, FiX } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { useContinents } from '@/features/continent/use-continents.hook'
+import { getStateTypeLabel } from '@/entities/historical-country/lib/utils'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { formatCountryPeriod, toSignedYear } from '@/shared/lib/country-period'
+import {
+  boostByHintYearRange,
+  filterCountriesByQuery,
+  formatHintYearRange,
+  isHintYearRangeUsable,
+  matchesHintYearRange,
+  type CountryHintYearRange,
+} from '@/shared/lib/country-picker-filter'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
+import {
+  HistoricalCountryCreateButton,
+  HistoricalCountryCreateHost,
+  HistoricalCountryCreateIcon,
+  useCanCreateHistoricalCountry,
+} from '@/shared/ui/country-picker-create/historical-country-create'
 import {
   AddButton,
   SaveButton,
@@ -46,6 +62,11 @@ interface CountrySelectModalProps {
   selectedCountryId?: string
   selectedCountryIds?: string[] // 복수 선택용
   multiSelect?: boolean // 복수 선택 모드
+  /**
+   * 시대 힌트(F42) — 저작 중인 대상의 부호 연도 범위(BC 음수, 예: 인물 생몰년).
+   * 겹치는 역사국가를 **상단으로 끌어올릴 뿐 걸러내지 않는다**(망명·유년기 등 경계 사례 보호).
+   */
+  hintYearRange?: CountryHintYearRange
 }
 
 type CountryType = 'modern' | 'historical'
@@ -58,28 +79,18 @@ type CountrySortField =
   | 'population'
   | 'areaSqKm'
 
+/**
+ * 검색 필터 — 피커 3종 공용 스펙(name·enName·localName·isoCode) + 이 피커의 대륙명 확장.
+ * 필터 본체는 `@/shared/lib/country-picker-filter`가 단일 출처(F19②).
+ */
 function filterCountryList(
   countries: (CountryResponseDto | HistoricalCountryResponseDto)[],
   queryTrimmed: string,
   continentNameById: Map<string, string>,
 ): (CountryResponseDto | HistoricalCountryResponseDto)[] {
-  if (!queryTrimmed) return countries
-  const query = queryTrimmed.toLowerCase()
-  return countries.filter((country) => {
-    const modern = country as CountryResponseDto
-    const historical = country as HistoricalCountryResponseDto
-    const candidates = [
-      country.name,
-      modern.localName,
-      modern.isoCode,
-      modern.continentId ? continentNameById.get(modern.continentId) : undefined,
-      historical.enName,
-    ]
-    return candidates.some((value) =>
-      String(value ?? '')
-        .toLowerCase()
-        .includes(query),
-    )
+  return filterCountriesByQuery(countries, queryTrimmed, (country) => {
+    const continentId = (country as CountryResponseDto).continentId
+    return continentId ? continentNameById.get(continentId) : undefined
   })
 }
 
@@ -130,8 +141,15 @@ function sortCountryList(
       const ha = a as HistoricalCountryResponseDto
       const hb = b as HistoricalCountryResponseDto
       if (sortBy === 'startYear') {
-        const va = ha.startYear ?? -1
-        const vb = hb.startYear ?? -1
+        // BC는 부호 연도(음수)로 비교 — raw startYear는 기원전 753년을 AD 753으로 취급했다
+        const va = toSignedYear(ha.startEra, ha.startYear)
+        const vb = toSignedYear(hb.startEra, hb.startYear)
+        // 시작 미상은 정렬 방향과 무관하게 항상 뒤로 (0 폴백 금지)
+        if (va == null && vb == null) {
+          return mult * ha.name.localeCompare(hb.name, 'ko')
+        }
+        if (va == null) return 1
+        if (vb == null) return -1
         return mult * (va - vb) || mult * ha.name.localeCompare(hb.name, 'ko')
       }
       return mult * ha.name.localeCompare(hb.name, 'ko')
@@ -150,19 +168,47 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
   selectedCountryId,
   selectedCountryIds = [],
   multiSelect = false,
+  hintYearRange,
 }) => {
   const playClickSound = useClickSound()
   const [searchQuery, setSearchQuery] = useState('')
   const [countryType, setCountryType] = useState<CountryType>('modern')
   const [sortBy, setSortBy] = useState<CountrySortField>('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [createOpen, setCreateOpen] = useState(false)
+  const wasOpenRef = useRef(false)
+  const canCreateHistorical = useCanCreateHistoricalCountry()
 
-  // 모달이 열릴 때 초기화
+  /**
+   * 모달이 열릴 때 초기화 — 현재 선택이 역사국가면 역사 탭으로 연다(F19①).
+   * 무조건 '현대'로 열면 역사 국적 인물을 수정할 때 현재 선택이 보이지 않아
+   * 미선택으로 오인하거나 매번 탭을 바꿔야 했다. (CountrySearchModal의 전례를 이식)
+   */
   useEffect(() => {
-    if (isOpen) {
-      setSearchQuery('')
+    if (!isOpen) {
+      wasOpenRef.current = false
+      setCreateOpen(false)
+      return
     }
-  }, [isOpen])
+    if (wasOpenRef.current) return
+    wasOpenRef.current = true
+    setSearchQuery('')
+    const currentIds = multiSelect
+      ? selectedCountryIds
+      : selectedCountryId
+        ? [selectedCountryId]
+        : []
+    const selectedInHistorical =
+      currentIds.length > 0 &&
+      historicalCountries.some((country) => currentIds.includes(country.id))
+    setCountryType(selectedInHistorical ? 'historical' : 'modern')
+  }, [
+    isOpen,
+    multiSelect,
+    selectedCountryId,
+    selectedCountryIds,
+    historicalCountries,
+  ])
 
   useEffect(() => {
     if (
@@ -210,13 +256,29 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
     )
   }, [isOpen, historicalCountries, deferredSearch, continentNameById])
 
+  const hintActive = isHintYearRangeUsable(hintYearRange)
+
   const displayCountries = useMemo(() => {
     if (!isOpen) return []
     const list =
       countryType === 'modern'
         ? filteredModernCountries
         : filteredHistoricalCountries
-    return sortCountryList(list, countryType, sortBy, sortOrder, continentNameById)
+    const sorted = sortCountryList(
+      list,
+      countryType,
+      sortBy,
+      sortOrder,
+      continentNameById,
+    )
+    // 시대 힌트(F42)는 역사 탭에서만 의미가 있다 — 겹치는 국가를 앞으로만 옮긴다(제외 없음)
+    if (countryType !== 'historical') return sorted
+    // 캐스팅 사유: 역사 탭 목록임이 확정된 지점인데 배열 타입은 union이라
+    // CountryPeriodShape(전 필드 옵셔널) weak-type 검사에 걸린다.
+    return boostByHintYearRange(
+      sorted as HistoricalCountryResponseDto[],
+      hintYearRange,
+    )
   }, [
     isOpen,
     countryType,
@@ -225,6 +287,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
     sortBy,
     sortOrder,
     continentNameById,
+    hintYearRange,
   ])
 
   const scrollViewportRef = useRef<HTMLDivElement>(null)
@@ -296,7 +359,28 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
     [playClickSound, onSelect, multiSelect, onClose],
   )
 
+  /** 인라인 등록(F20) — 생성된 역사국가를 곧바로 선택해 저작 흐름을 끊지 않는다. */
+  const handleCreated = useCallback(
+    (created: { id: string; name: string }) => {
+      setCreateOpen(false)
+      onSelect({ id: created.id, name: created.name, isHistorical: true })
+      if (!multiSelect) onClose()
+    },
+    [onSelect, multiSelect, onClose],
+  )
+
+  const modernCountryOptions = useMemo(
+    () => modernCountries.map(({ id, name }) => ({ id, name })),
+    [modernCountries],
+  )
+  const historicalCountryOptions = useMemo(
+    () => historicalCountries.map(({ id, name }) => ({ id, name })),
+    [historicalCountries],
+  )
+
   if (!isOpen) return null
+
+  const showCreateCta = countryType === 'historical' && canCreateHistorical
 
   const modalDescription =
     multiSelect === true
@@ -333,7 +417,7 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
               </SearchIcon>
               <SearchInput
                 type="text"
-                placeholder="국가명, 현지명, ISO 코드로 검색..."
+                placeholder="국가명, 영문명, 현지명, ISO 코드로 검색..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 autoFocus
@@ -442,6 +526,14 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
                 ? `"${searchQuery}" 검색 결과 ${displayCountries.length}개`
                 : `${countryType === 'modern' ? '현대 국가' : '역사 국가'} ${displayCountries.length}개`}
             </ResultSummary>
+            {/* 시대 힌트 안내 — 정렬만 바뀌었을 뿐 목록에서 빠진 국가는 없다는 점을 명시 */}
+            {hintActive && countryType === 'historical' && (
+              <HintNotice>
+                <HintBadge>시대 일치</HintBadge>
+                {formatHintYearRange(hintYearRange)}에 존속한 국가를 위로
+                올렸습니다. 나머지도 그대로 목록에 있습니다.
+              </HintNotice>
+            )}
           </ToolbarSection>
 
           {/* 국가 목록 — 가상 스크롤(행 단위 그리드)로 대량 목록 렉 완화 */}
@@ -454,6 +546,24 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
                     ? '검색 결과가 없습니다'
                     : '국가 정보가 없습니다'}
                 </EmptyText>
+                {/* F20: 없으면 폼을 떠나야 했던 흐름 — 여기서 바로 등록하고 자동 선택 */}
+                {showCreateCta && (
+                  <>
+                    <EmptyHint>
+                      찾는 역사국가가 아직 등록되지 않았다면 여기서 바로 만들 수
+                      있습니다. 작성 중인 내용은 그대로 유지됩니다.
+                    </EmptyHint>
+                    <HistoricalCountryCreateButton
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setCreateOpen(true)
+                      }}
+                    >
+                      <HistoricalCountryCreateIcon />새 역사국가 등록
+                    </HistoricalCountryCreateButton>
+                  </>
+                )}
               </GridEmptyState>
             ) : (
               <VirtualGridSizer
@@ -493,6 +603,13 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
                               ? continentNameById.get(continentId)
                               : undefined
                           }
+                          hintMatched={
+                            countryType === 'historical' &&
+                            matchesHintYearRange(
+                              country as HistoricalCountryResponseDto,
+                              hintYearRange,
+                            )
+                          }
                         />
                       )
                     })}
@@ -500,7 +617,32 @@ export const CountrySelectModal: React.FC<CountrySelectModalProps> = ({
                 ))}
               </VirtualGridSizer>
             )}
+            {/* 목록 하단 CTA — 결과가 있어도 '내가 찾는 그 국가'가 없을 수 있다 */}
+            {showCreateCta && displayCountries.length > 0 && (
+              <ListFooterCta>
+                <HistoricalCountryCreateButton
+                  type="button"
+                  $variant="inline"
+                  onClick={() => {
+                    playClickSound()
+                    setCreateOpen(true)
+                  }}
+                >
+                  <HistoricalCountryCreateIcon />
+                  찾는 국가가 없나요? 새 역사국가 등록
+                </HistoricalCountryCreateButton>
+              </ListFooterCta>
+            )}
           </CardGrid>
+          {/* 등록 모달 — ModalContainer 안(=stopPropagation 우산)에 두어야
+              폼 클릭이 Overlay onClick={onClose}로 버블링돼 피커가 함께 닫히지 않는다 */}
+          <HistoricalCountryCreateHost
+            isOpen={createOpen}
+            onClose={() => setCreateOpen(false)}
+            modernCountries={modernCountryOptions}
+            historicalCountries={historicalCountryOptions}
+            onCreated={handleCreated}
+          />
         </ModalBody>
         <ModalFooter>
           <FooterInfo>
@@ -849,6 +991,60 @@ const ResultSummary = styled.div`
   line-height: 1.45;
 `
 
+/** 시대 힌트가 적용됐음을 알리는 안내 — '걸러내지 않았다'를 반드시 함께 말한다 */
+const HintNotice = styled.div`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const HintBadge = styled.span`
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  box-shadow: inset 2px 0 0 0 ${({ theme }) => theme.colors.primary}55;
+`
+
+const CardHintBadge = styled.span`
+  align-self: flex-start;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+/** 목록 하단 등록 CTA 행 */
+const ListFooterCta = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: 6px 0 2px;
+`
+
+const EmptyHint = styled.p`
+  max-width: 420px;
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 const SortOrderBtn = styled.button<{ $active: boolean }>`
   padding: 7px 12px;
   font-size: 12px;
@@ -1139,6 +1335,7 @@ const CountryGridCard = memo(
     isSelected,
     onPick,
     continentName,
+    hintMatched = false,
   }: {
     country: CountryResponseDto | HistoricalCountryResponseDto
     countryType: CountryType
@@ -1148,9 +1345,13 @@ const CountryGridCard = memo(
       isHistorical: boolean,
     ) => void
     continentName?: string | null
+    /** 시대 힌트와 존속기간이 겹치는 국가 — 상단 정렬 + 배지 (F42) */
+    hintMatched?: boolean
   }) {
     const modern = country as CountryResponseDto
     const historical = country as HistoricalCountryResponseDto
+    const periodText =
+      countryType === 'historical' ? formatCountryPeriod(historical) : ''
     return (
       <CountryCard
         type="button"
@@ -1178,6 +1379,7 @@ const CountryGridCard = memo(
           </CardFlagSlot>
           <CardTitleBlock>
             <CardName>{country.name}</CardName>
+            {hintMatched && <CardHintBadge>시대 일치</CardHintBadge>}
           </CardTitleBlock>
           {isSelected ? (
             <CardCheck aria-hidden>
@@ -1214,14 +1416,13 @@ const CountryGridCard = memo(
               {historical.enName && (
                 <CardMetaRow>{historical.enName}</CardMetaRow>
               )}
-              {historical.startYear != null && (
-                <CardMetaRow>
-                  {historical.startYear}
-                  {historical.endYear ? ` - ${historical.endYear}` : ' - 현재'}
-                </CardMetaRow>
-              )}
+              {/* 존속기간·국가형태는 공용 포맷터/라벨로 — raw 연도는 BC를 AD로,
+                  종료 미상을 '현재'로 오독시켰다(고대 국가에 치명적, F19③) */}
+              {periodText && <CardMetaRow>{periodText}</CardMetaRow>}
               {historical.stateType && (
-                <CardMetaRow>{historical.stateType}</CardMetaRow>
+                <CardMetaRow>
+                  {getStateTypeLabel(historical.stateType)}
+                </CardMetaRow>
               )}
               {historical.description && (
                 <CardMetaRow className="desc" title={historical.description}>
@@ -1238,6 +1439,7 @@ const CountryGridCard = memo(
     prev.country.id === next.country.id &&
     prev.isSelected === next.isSelected &&
     prev.countryType === next.countryType &&
+    prev.hintMatched === next.hintMatched &&
     prev.onPick === next.onPick,
 )
 

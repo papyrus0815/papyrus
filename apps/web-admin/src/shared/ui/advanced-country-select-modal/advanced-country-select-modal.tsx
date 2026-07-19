@@ -2,17 +2,33 @@
  * 고급 국가 선택 모달 - 좌측 필터 + 우측 리스트
  * 인물 페이지와 동일한 스타일
  */
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { FiCheck, FiGlobe, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { useContinents } from '@/features/continent/use-continents.hook'
+import { getStateTypeLabel } from '@/entities/historical-country/lib/utils'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { formatCountryPeriod, toSignedYear } from '@/shared/lib/country-period'
+import {
+  boostByHintYearRange,
+  filterCountriesByQuery,
+  formatHintYearRange,
+  isHintYearRangeUsable,
+  matchesHintYearRange,
+  type CountryHintYearRange,
+} from '@/shared/lib/country-picker-filter'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
+import {
+  HistoricalCountryCreateButton,
+  HistoricalCountryCreateHost,
+  HistoricalCountryCreateIcon,
+  useCanCreateHistoricalCountry,
+} from '@/shared/ui/country-picker-create/historical-country-create'
 
 /**
  * 호출부에서 "전체 국가" 같은 sentinel 옵션을 첫 항목으로 끼워 넣을 수 있도록
@@ -35,6 +51,11 @@ interface AdvancedCountrySelectModalProps {
   selectedCountryIds: string[] // 복수 선택용
   multiSelect?: boolean
   title?: string
+  /**
+   * 시대 힌트(F42) — 저작 대상의 부호 연도 범위(BC 음수). 겹치는 역사국가를
+   * 상단으로 올릴 뿐 **걸러내지 않는다**(망명·유년기 등 경계 사례 보호).
+   */
+  hintYearRange?: CountryHintYearRange
 }
 
 export const AdvancedCountrySelectModal: React.FC<
@@ -48,6 +69,7 @@ export const AdvancedCountrySelectModal: React.FC<
   selectedCountryIds,
   multiSelect = true,
   title = '국가 선택',
+  hintYearRange,
 }) => {
   const playClick = useClickSound()
   // 대륙 이름 표시용 — CountryResponseDto에는 continentId만 있어 이름은 대륙 목록에서 매핑
@@ -57,6 +79,29 @@ export const AdvancedCountrySelectModal: React.FC<
   )
   const [selectedContinent, setSelectedContinent] = useState<string>('all')
   const [countrySearchTerm, setCountrySearchTerm] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const wasOpenRef = useRef(false)
+  const canCreateHistorical = useCanCreateHistoricalCountry()
+
+  /**
+   * 열릴 때 현재 선택이 역사국가면 역사 탭으로 연다(F19①).
+   * 무조건 '현대'로 열면 역사국가 선택분이 보이지 않아 미선택으로 오인하게 된다.
+   */
+  useEffect(() => {
+    if (!isOpen) {
+      wasOpenRef.current = false
+      setCreateOpen(false)
+      return
+    }
+    if (wasOpenRef.current) return
+    wasOpenRef.current = true
+    const selectedInHistorical =
+      selectedCountryIds.length > 0 &&
+      historicalCountries.some((country) =>
+        selectedCountryIds.includes(country.id),
+      )
+    setCountryType(selectedInHistorical ? 'historical' : 'modern')
+  }, [isOpen, selectedCountryIds, historicalCountries])
   const [sortBy, setSortBy] = useState<
     'name' | 'isoCode' | 'continent' | 'startYear' | 'population' | 'areaSqKm'
   >('name')
@@ -102,32 +147,35 @@ export const AdvancedCountrySelectModal: React.FC<
 
   // 필터링 + 정렬된 국가 목록
   const filteredCountries = useMemo(() => {
-    const countries =
+    const countries: (ModernCountryOption | HistoricalCountryResponseDto)[] =
       countryType === 'modern' ? modernCountries : historicalCountries
 
-    const filtered = countries.filter((country) => {
-      const matchesSearch = country.name
-        .toLowerCase()
-        .includes(countrySearchTerm.toLowerCase())
-
-      if (countryType === 'modern') {
+    // 검색 필드는 피커 3종 공용 스펙(name·enName·localName·isoCode + 대륙명)으로 통일(F19②)
+    const searched = filterCountriesByQuery(
+      countries,
+      countrySearchTerm,
+      (country) => {
         const continentId = (country as ModernCountryOption).continentId
-        const continentName = continentId
-          ? continentNameById.get(continentId)
-          : undefined
-        const matchesContinent =
-          selectedContinent === 'all' || continentName === selectedContinent
-        return matchesSearch && matchesContinent
-      }
+        return continentId ? continentNameById.get(continentId) : undefined
+      },
+    )
 
-      return matchesSearch
-    })
+    const filtered =
+      countryType === 'modern' && selectedContinent !== 'all'
+        ? searched.filter((country) => {
+            const continentId = (country as ModernCountryOption).continentId
+            const continentName = continentId
+              ? continentNameById.get(continentId)
+              : undefined
+            return continentName === selectedContinent
+          })
+        : searched
 
     const mult = sortOrder === 'asc' ? 1 : -1
-    return [...filtered].sort((a, b) => {
+    const sorted = [...filtered].sort((left, right) => {
       if (countryType === 'modern') {
-        const ma = a as CountryResponseDto
-        const mb = b as CountryResponseDto
+        const ma = left as CountryResponseDto
+        const mb = right as CountryResponseDto
         if (sortBy === 'name') {
           return mult * ma.name.localeCompare(mb.name, 'ko')
         }
@@ -162,22 +210,39 @@ export const AdvancedCountrySelectModal: React.FC<
           return mult * (va - vb) || mult * ma.name.localeCompare(mb.name, 'ko')
         }
       } else {
-        const ha = a as HistoricalCountryResponseDto
-        const hb = b as HistoricalCountryResponseDto
+        const ha = left as HistoricalCountryResponseDto
+        const hb = right as HistoricalCountryResponseDto
         if (sortBy === 'startYear') {
-          const va = ha.startYear ?? -1
-          const vb = hb.startYear ?? -1
+          // BC는 부호 연도(음수)로 — raw startYear는 기원전 753년을 AD 753으로 취급했다
+          const va = toSignedYear(ha.startEra, ha.startYear)
+          const vb = toSignedYear(hb.startEra, hb.startYear)
+          // 시작 미상은 정렬 방향과 무관하게 항상 뒤로 (0 폴백 금지)
+          if (va == null && vb == null) {
+            return mult * ha.name.localeCompare(hb.name, 'ko')
+          }
+          if (va == null) return 1
+          if (vb == null) return -1
           return mult * (va - vb) || mult * ha.name.localeCompare(hb.name, 'ko')
         }
         return mult * ha.name.localeCompare(hb.name, 'ko')
       }
       return 0
     })
+
+    // 시대 힌트는 역사 탭에서만 의미가 있다 — 상단 정렬만, 제외 없음(F42)
+    if (countryType !== 'historical') return sorted
+    // 캐스팅 사유: 역사 탭 확정 지점인데 배열 타입이 union이라
+    // CountryPeriodShape(전 필드 옵셔널) weak-type 검사에 걸린다.
+    return boostByHintYearRange(
+      sorted as HistoricalCountryResponseDto[],
+      hintYearRange,
+    )
   }, [
     countryType,
     modernCountries,
     historicalCountries,
     countrySearchTerm,
+    hintYearRange,
     selectedContinent,
     continentNameById,
     sortBy,
@@ -199,6 +264,24 @@ export const AdvancedCountrySelectModal: React.FC<
       onClose()
     }
   }
+
+  /** 인라인 등록(F20) — 생성 즉시 선택해 저작 흐름(입력값)을 끊지 않는다 */
+  const handleCreated = (created: { id: string; name: string }) => {
+    setCreateOpen(false)
+    onSelect({ id: created.id, name: created.name, isHistorical: true })
+    if (!multiSelect) onClose()
+  }
+
+  const hintActive = isHintYearRangeUsable(hintYearRange)
+  const showCreateCta = countryType === 'historical' && canCreateHistorical
+  const modernCountryOptions = modernCountries.map(({ id, name }) => ({
+    id,
+    name,
+  }))
+  const historicalCountryOptions = historicalCountries.map(({ id, name }) => ({
+    id,
+    name,
+  }))
 
   if (!isOpen) return null
 
@@ -323,6 +406,15 @@ export const AdvancedCountrySelectModal: React.FC<
               </SortRow>
             </SearchWrapper>
 
+            {/* 시대 힌트 안내 — '걸러내지 않았다'를 함께 알린다 (F42) */}
+            {hintActive && countryType === 'historical' && (
+              <HintNotice>
+                <HintChip>시대 일치</HintChip>
+                {formatHintYearRange(hintYearRange)}에 존속한 국가를 위로
+                올렸습니다. 나머지도 그대로 있습니다.
+              </HintNotice>
+            )}
+
             <CardGrid>
               {filteredCountries.map((country) => {
                 const isSelected = selectedCountryIds.includes(country.id)
@@ -339,6 +431,11 @@ export const AdvancedCountrySelectModal: React.FC<
                   >
                     <CardFlag>{modern.flagEmoji || '🌐'}</CardFlag>
                     <CardName>{country.name}</CardName>
+                    {countryType === 'historical' &&
+                      hintActive &&
+                      matchesHintYearRange(historical, hintYearRange) && (
+                        <HintChip>시대 일치</HintChip>
+                      )}
                     <CardMetaList>
                       {countryType === 'modern' ? (
                         <>
@@ -369,16 +466,17 @@ export const AdvancedCountrySelectModal: React.FC<
                           {historical.enName && (
                             <CardMetaRow>{historical.enName}</CardMetaRow>
                           )}
-                          {historical.startYear != null && (
+                          {/* 존속기간·국가형태는 공용 포맷터/라벨로 — raw 표기는 BC를
+                              AD로, 종료 미상을 '현재'로 오독시켰다(F19③) */}
+                          {formatCountryPeriod(historical) && (
                             <CardMetaRow>
-                              {historical.startYear}
-                              {historical.endYear
-                                ? ` - ${historical.endYear}`
-                                : ' - 현재'}
+                              {formatCountryPeriod(historical)}
                             </CardMetaRow>
                           )}
                           {historical.stateType && (
-                            <CardMetaRow>{historical.stateType}</CardMetaRow>
+                            <CardMetaRow>
+                              {getStateTypeLabel(historical.stateType)}
+                            </CardMetaRow>
                           )}
                           {historical.description && (
                             <CardMetaRow className="desc">
@@ -401,9 +499,38 @@ export const AdvancedCountrySelectModal: React.FC<
               {filteredCountries.length === 0 && (
                 <EmptyMessage>검색 결과가 없습니다.</EmptyMessage>
               )}
+              {/* F20: 없으면 폼을 떠나야 했던 흐름 — 여기서 등록하고 자동 선택 */}
+              {showCreateCta && (
+                <CreateCtaRow>
+                  <HistoricalCountryCreateButton
+                    type="button"
+                    $variant={
+                      filteredCountries.length === 0 ? 'block' : 'inline'
+                    }
+                    onClick={() => {
+                      playClick()
+                      setCreateOpen(true)
+                    }}
+                  >
+                    <HistoricalCountryCreateIcon />
+                    {filteredCountries.length === 0
+                      ? '새 역사국가 등록'
+                      : '찾는 국가가 없나요? 새 역사국가 등록'}
+                  </HistoricalCountryCreateButton>
+                </CreateCtaRow>
+              )}
             </CardGrid>
           </ListArea>
         </ModalBody>
+        {/* 등록 모달 — ModalContent(stopPropagation) 안에 두어야 폼 클릭이
+            Modal onClick={onClose}로 버블링돼 피커까지 닫히지 않는다 */}
+        <HistoricalCountryCreateHost
+          isOpen={createOpen}
+          onClose={() => setCreateOpen(false)}
+          modernCountries={modernCountryOptions}
+          historicalCountries={historicalCountryOptions}
+          onCreated={handleCreated}
+        />
       </ModalContent>
     </Modal>
   )
@@ -806,6 +933,40 @@ const CardCheck = styled.div`
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+`
+
+/** 시대 힌트 안내 줄 (F42) */
+const HintNotice = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  flex-shrink: 0;
+`
+
+const HintChip = styled.span`
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.tertiary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+/** 인라인 등록 CTA 행 (F20) — 그리드 전체 폭 차지 */
+const CreateCtaRow = styled.div`
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
 `
 
 const EmptyMessage = styled.div`
