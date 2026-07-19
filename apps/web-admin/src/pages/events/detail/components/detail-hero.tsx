@@ -367,21 +367,23 @@ function HeroActors({
       {(modern.length > 0 || historical.length > 0) && (
         <Lineup>
           <CountryInline>
-            {modern.map((c, i) => (
-              <span key={c.id}>
-                <CountryName to={pathKeys.countryDetail(c.id)}>
-                  {c.name}
+            {modern.map((country, index) => (
+              <span key={country.id}>
+                <CountryName to={pathKeys.countryDetail(country.id)}>
+                  {country.name}
                 </CountryName>
-                {i < modern.length - 1 && <CountrySep>·</CountrySep>}
+                {index < modern.length - 1 && <CountrySep>·</CountrySep>}
               </span>
             ))}
             {modern.length > 0 && historical.length > 0 && (
               <CountryHardSep>—</CountryHardSep>
             )}
-            {historical.map((c, i) => (
-              <span key={c.id}>
-                <HistoricalName>{c.name}</HistoricalName>
-                {i < historical.length - 1 && <CountrySep>·</CountrySep>}
+            {historical.map((country, index) => (
+              <span key={country.id}>
+                <HistoricalName to={pathKeys.countryDetail(country.id)}>
+                  {country.name}
+                </HistoricalName>
+                {index < historical.length - 1 && <CountrySep>·</CountrySep>}
               </span>
             ))}
             {countryOverflow > 0 && (
@@ -538,7 +540,9 @@ const CountryName = styled(Link)`
   }
 `
 
-const HistoricalName = styled.span`
+/* 역사 국가도 /country/:histId 상세가 실존 — 현대국(CountryName)과 동일한
+ * 링크 어포던스(hover·focus-visible 밑줄)를 상속하고 이탤릭 톤만 덧입힌다. */
+const HistoricalName = styled(CountryName)`
   font-style: italic;
   color: ${({ theme }) =>
     theme.mode === 'dark'

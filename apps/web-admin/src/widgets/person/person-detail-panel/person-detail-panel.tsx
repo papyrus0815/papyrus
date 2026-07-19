@@ -1438,32 +1438,19 @@ export function PersonDetailPanel({
                 <PageTitle>{fullName}</PageTitle>
               </PageTitleRow>
               {p.country?.name && (() => {
-                // 역사국가는 전용 상세 라우트가 없다 → 연결 현대국가의 '역사' 탭으로 라우팅(a),
-                // 연결이 없으면 비대화형 라벨로 표시(c). 현대국가는 기존 상세로(기본).
-                const isHistorical = !!p.country?.isHistorical
-                // 라우팅 대상: 역사국가면 브리지 현대국가 id, 현대면 자기 id.
-                const navTargetId = isHistorical
-                  ? (p.country?.modernCountryId ?? null)
-                  : (p.country?.id ?? null)
+                // /country/:id 셸이 역사국가 id도 그대로 resolve해 전용 상세(14탭)를 렌더하므로
+                // 현대/역사 구분 없이 country 블록의 id를 그대로 목적지로 쓴다(브리지 현대국 우회 불필요).
+                const navTargetId = p.country?.id ?? null
                 const interactive = !!navTargetId
                 return (
                 <DetailCountryRow
                   as={interactive ? 'button' : 'div'}
                   {...(interactive ? { type: 'button' as const } : {})}
-                  title={
-                    isHistorical && !navTargetId
-                      ? '이 역사 국가는 연결된 현대 국가가 없어 상세로 이동할 수 없습니다.'
-                      : undefined
-                  }
                   onClick={
                     interactive
                       ? () => {
                           playClickSound()
-                          navigate(
-                            isHistorical
-                              ? pathKeys.countryHistorical(navTargetId)
-                              : pathKeys.countryDetail(navTargetId),
-                          )
+                          navigate(pathKeys.countryDetail(navTargetId))
                         }
                       : undefined
                   }

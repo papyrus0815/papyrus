@@ -424,7 +424,11 @@ export function DetailActors({
               )}
               {historicalCountries.map((country, i) => (
                 <NationItem key={country.id}>
-                  <HistoricalCountryName>{country.name}</HistoricalCountryName>
+                  <HistoricalCountryName
+                    to={pathKeys.countryDetail(country.id)}
+                  >
+                    {country.name}
+                  </HistoricalCountryName>
                   {manageMode && (
                     <>
                       <NationReorder
@@ -907,7 +911,9 @@ const CountryLink = styled(Link)`
   }
 `
 
-const HistoricalCountryName = styled.span`
+/* 역사 국가도 /country/:histId 상세가 실존 — 현대국(CountryLink)과 동일한
+ * 링크 어포던스(hover·focus-visible 밑줄)를 상속하고 이탤릭 톤만 덧입힌다. */
+const HistoricalCountryName = styled(CountryLink)`
   font-style: italic;
   color: ${({ theme }) =>
     theme.mode === 'dark'

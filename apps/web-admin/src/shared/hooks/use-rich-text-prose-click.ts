@@ -4,7 +4,6 @@ import type { NavigateFunction } from 'react-router-dom'
 
 import { dynastyApi } from '@/shared/api/dynasty'
 import { getGlossaryTermById, type GlossaryTermDto } from '@/shared/api/glossary'
-import { getHistoricalCountryById } from '@/shared/api/historical-countries'
 import { militaryUnitApi } from '@/shared/api/military-unit'
 import { politicalPartyApi } from '@/shared/api/political-party'
 import { pathKeys } from '@/shared/router'
@@ -297,20 +296,9 @@ export function useRichTextProseClick(options: UseRichTextProseClickOptions): {
           historicalCountryEl.getAttribute('data-entity-id')
         if (hid) {
           e.preventDefault()
-          getHistoricalCountryById(hid)
-            .then((hc) => {
-              const first = hc.parentModernCountryIds?.[0]
-              if (first)
-                navigate(pathKeys.countryHistorical(first))
-              else
-                notify.show(
-                  `「${hc.name}」 — 연결된 현대 국가가 없어 역사 탭으로 이동할 수 없습니다.`,
-                  { icon: 'ℹ️' },
-                )
-            })
-            .catch(() =>
-              notify.error('역사적 국가 정보를 불러올 수 없습니다.'),
-            )
+          // /country/:id 셸이 역사국가 id를 그대로 resolve해 전용 상세를 렌더한다.
+          // 브리지 현대국 조회 없이 바로 이동(연결 현대국이 없어도 데드엔드 아님).
+          navigate(pathKeys.countryDetail(hid))
         }
         return
       }
