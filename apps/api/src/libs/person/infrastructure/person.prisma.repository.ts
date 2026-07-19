@@ -13,6 +13,8 @@ import {
   PersonEducation,
   PersonAward,
   PersonNicknameType,
+  Era,
+  MarriageRank,
   Prisma,
   TenureMandateSource,
 } from '@prisma/client'
@@ -1391,7 +1393,18 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             marriageStartDate: true,
+            marriageStartEra: true,
+            marriageStartYear: true,
+            marriageStartMonth: true,
+            marriageStartDay: true,
+            marriageStartPrecision: true,
             marriageEndDate: true,
+            marriageEndEra: true,
+            marriageEndYear: true,
+            marriageEndMonth: true,
+            marriageEndDay: true,
+            marriageEndPrecision: true,
+            marriageRank: true,
             note: true,
             spouse: {
               select: {
@@ -1421,7 +1434,18 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: {
             id: true,
             marriageStartDate: true,
+            marriageStartEra: true,
+            marriageStartYear: true,
+            marriageStartMonth: true,
+            marriageStartDay: true,
+            marriageStartPrecision: true,
             marriageEndDate: true,
+            marriageEndEra: true,
+            marriageEndYear: true,
+            marriageEndMonth: true,
+            marriageEndDay: true,
+            marriageEndPrecision: true,
+            marriageRank: true,
             note: true,
             person: {
               select: {
@@ -1833,7 +1857,18 @@ export class PersonPrismaRepository implements IPersonRepository {
     relations: Array<{
       spouseId: string
       marriageStartDate?: Date | null
+      marriageStartEra?: string | null
+      marriageStartYear?: number | null
+      marriageStartMonth?: number | null
+      marriageStartDay?: number | null
+      marriageStartPrecision?: string | null
       marriageEndDate?: Date | null
+      marriageEndEra?: string | null
+      marriageEndYear?: number | null
+      marriageEndMonth?: number | null
+      marriageEndDay?: number | null
+      marriageEndPrecision?: string | null
+      marriageRank?: string | null
       note?: string | null
     }>,
   ): Prisma.PersonSpouseCreateManyInput[] {
@@ -1850,7 +1885,19 @@ export class PersonPrismaRepository implements IPersonRepository {
         personId,
         spouseId,
         marriageStartDate: relation.marriageStartDate ?? null,
+        // 컨트롤러 mapSpouseDateInput이 era/precision을 보증 — 도메인 계약은 string이라 여기서 좁힘
+        marriageStartEra: (relation.marriageStartEra as Era | undefined) ?? null,
+        marriageStartYear: relation.marriageStartYear ?? null,
+        marriageStartMonth: relation.marriageStartMonth ?? null,
+        marriageStartDay: relation.marriageStartDay ?? null,
+        marriageStartPrecision: relation.marriageStartPrecision ?? null,
         marriageEndDate: relation.marriageEndDate ?? null,
+        marriageEndEra: (relation.marriageEndEra as Era | undefined) ?? null,
+        marriageEndYear: relation.marriageEndYear ?? null,
+        marriageEndMonth: relation.marriageEndMonth ?? null,
+        marriageEndDay: relation.marriageEndDay ?? null,
+        marriageEndPrecision: relation.marriageEndPrecision ?? null,
+        marriageRank: (relation.marriageRank as MarriageRank | undefined) ?? null,
         note: relation.note ?? null,
       })
     }
@@ -2094,7 +2141,18 @@ export class PersonPrismaRepository implements IPersonRepository {
               personId: row.personId,
               spouseId: row.spouseId,
               marriageStartDate: row.marriageStartDate ?? null,
+              marriageStartEra: row.marriageStartEra ?? null,
+              marriageStartYear: row.marriageStartYear ?? null,
+              marriageStartMonth: row.marriageStartMonth ?? null,
+              marriageStartDay: row.marriageStartDay ?? null,
+              marriageStartPrecision: row.marriageStartPrecision ?? null,
               marriageEndDate: row.marriageEndDate ?? null,
+              marriageEndEra: row.marriageEndEra ?? null,
+              marriageEndYear: row.marriageEndYear ?? null,
+              marriageEndMonth: row.marriageEndMonth ?? null,
+              marriageEndDay: row.marriageEndDay ?? null,
+              marriageEndPrecision: row.marriageEndPrecision ?? null,
+              marriageRank: row.marriageRank ?? null,
               note: row.note ?? null,
             },
           })
@@ -4724,7 +4782,12 @@ export class PersonPrismaRepository implements IPersonRepository {
         select: {
           spouseId: true,
           marriageStartDate: true,
+          marriageStartEra: true,
+          marriageStartYear: true,
           marriageEndDate: true,
+          marriageEndEra: true,
+          marriageEndYear: true,
+          marriageRank: true,
           note: true,
         },
       },
@@ -4732,7 +4795,12 @@ export class PersonPrismaRepository implements IPersonRepository {
         select: {
           personId: true,
           marriageStartDate: true,
+          marriageStartEra: true,
+          marriageStartYear: true,
           marriageEndDate: true,
+          marriageEndEra: true,
+          marriageEndYear: true,
+          marriageRank: true,
           note: true,
         },
       },
@@ -4742,8 +4810,10 @@ export class PersonPrismaRepository implements IPersonRepository {
     const parentChildSet = new Set<string>()  // "parentId__childId"
     /** spouse 엣지 키 → 메타 (정렬된 "a__b"). 첫 번째 등장한 메타를 보존 */
     const spouseEdgeMeta = new Map<string, {
+      /** 부호 연도 — BC는 음수 (marriageStartEra로 복원; DATETIME은 크기값 저장) */
       marriageStartYear: number | null
       marriageEndYear: number | null
+      marriageRank: string | null
       note: string | null
       /** true = 실제 PersonSpouse 없이 자녀의 다른 친부모로 추론된 엣지(점선 '추정'용).
        *  false = 실제 PersonSpouse 유래(결혼일·메모가 비어 있어도 확정 관계). */
@@ -4763,16 +4833,30 @@ export class PersonPrismaRepository implements IPersonRepository {
     const addSpouseEdge = (
       a: string,
       b: string,
-      meta?: { marriageStartDate?: Date | null; marriageEndDate?: Date | null; note?: string | null },
+      meta?: {
+        marriageStartDate?: Date | null
+        marriageStartEra?: string | null
+        marriageStartYear?: number | null
+        marriageEndDate?: Date | null
+        marriageEndEra?: string | null
+        marriageEndYear?: number | null
+        marriageRank?: string | null
+        note?: string | null
+      },
       derived = false,
     ) => {
       const key = [a, b].sort().join('__')
       // 먼저 등장한 메타를 보존(first-wins) — 실제 PersonSpouse 엣지는 BFS 초반에
       // 추가되므로, 나중의 Step5 추론(derived) 호출이 확정 관계를 덮어쓰지 않는다.
       if (!spouseEdgeMeta.has(key)) {
+        // 구조화 연도 우선(BC·고대는 DateTime이 null), 레거시 행은 DateTime 연도 폴백
+        const startYear = meta?.marriageStartYear ?? yearOfDate(meta?.marriageStartDate)
+        const endYear = meta?.marriageEndYear ?? yearOfDate(meta?.marriageEndDate)
         spouseEdgeMeta.set(key, {
-          marriageStartYear: yearOfDate(meta?.marriageStartDate),
-          marriageEndYear: yearOfDate(meta?.marriageEndDate),
+          // BC는 음수 부호 연도로 — 소비자(♥ 라벨·정렬)가 era 없이도 순서·표기 판단 가능
+          marriageStartYear: startYear != null && meta?.marriageStartEra === 'BC' ? -startYear : startYear,
+          marriageEndYear: endYear != null && meta?.marriageEndEra === 'BC' ? -endYear : endYear,
+          marriageRank: (meta?.marriageRank ?? null) as string | null,
           note: (meta?.note ?? null) as string | null,
           derived,
         })
@@ -5173,8 +5257,11 @@ export class PersonPrismaRepository implements IPersonRepository {
       source: string
       target: string
       type: 'parent-child' | 'spouse'
+      /** 부호 연도 — BC는 음수 */
       marriageStartYear?: number | null
       marriageEndYear?: number | null
+      /** 혼인 서열/형태 (MarriageRank 토큰) */
+      marriageRank?: string | null
       note?: string | null
       /** PersonSpouse 레코드가 없고 자녀의 다른 친부모로 추정된 배우자 */
       inferred?: boolean
@@ -5196,6 +5283,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           type: 'spouse',
           marriageStartYear: meta.marriageStartYear,
           marriageEndYear: meta.marriageEndYear,
+          marriageRank: meta.marriageRank,
           note: meta.note,
           // 결혼일·메모가 비어 있어도 실제 PersonSpouse면 확정(실선). 추론 엣지만 '추정'(점선).
           inferred: meta.derived,

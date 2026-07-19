@@ -107,8 +107,22 @@ export interface CreatePersonData {
   /** 배우자 관계 목록 (선택) */
   spouseRelations?: Array<{
     spouseId: string
+    /// DateTime은 AD 1000~9999만(드라이버 직렬화 손상 회피) — 구조화 연/월/일이 진실
     marriageStartDate?: Date
+    /// 혼인 시작 기원(BC/AD)·크기값 연/월/일·정밀도 — null = 값 없음/레거시
+    marriageStartEra?: string | null
+    marriageStartYear?: number | null
+    marriageStartMonth?: number | null
+    marriageStartDay?: number | null
+    marriageStartPrecision?: string | null
     marriageEndDate?: Date
+    marriageEndEra?: string | null
+    marriageEndYear?: number | null
+    marriageEndMonth?: number | null
+    marriageEndDay?: number | null
+    marriageEndPrecision?: string | null
+    /// 혼인 서열/형태 (Prisma MarriageRank 토큰)
+    marriageRank?: string | null
     note?: string
   }>
   /** 국가 소속(다중) — 주 국적 외 출생지·복무·망명·이중국적 등 */
@@ -206,8 +220,22 @@ export interface UpdatePersonData {
   /** 배우자 관계 목록 (선택, 있으면 기존 삭제 후 일괄 반영) */
   spouseRelations?: Array<{
     spouseId: string
+    /// DateTime은 AD 1000~9999만(드라이버 직렬화 손상 회피) — 구조화 연/월/일이 진실
     marriageStartDate?: Date
+    /// 혼인 시작 기원(BC/AD)·크기값 연/월/일·정밀도 — null = 값 없음/레거시
+    marriageStartEra?: string | null
+    marriageStartYear?: number | null
+    marriageStartMonth?: number | null
+    marriageStartDay?: number | null
+    marriageStartPrecision?: string | null
     marriageEndDate?: Date
+    marriageEndEra?: string | null
+    marriageEndYear?: number | null
+    marriageEndMonth?: number | null
+    marriageEndDay?: number | null
+    marriageEndPrecision?: string | null
+    /// 혼인 서열/형태 (Prisma MarriageRank 토큰)
+    marriageRank?: string | null
     note?: string
   }>
   /** 국가 소속(다중) — 주 국적 외 소속. 있으면 주 국적 외 전체 교체 */

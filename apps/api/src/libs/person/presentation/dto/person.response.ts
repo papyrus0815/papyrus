@@ -259,9 +259,11 @@ export interface FamilyTreeEdgeDto {
   source: string
   target: string
   type: 'parent-child' | 'spouse'
-  /** spouse 엣지에만: 결혼 시작/종료 연도 + 메모 */
+  /** spouse 엣지에만: 결혼 시작/종료 연도(부호 연도 — BC는 음수) + 메모 */
   marriageStartYear?: number | null
   marriageEndYear?: number | null
+  /** spouse 엣지에만: 혼인 서열/형태 (MarriageRank 토큰 — PRIMARY·CONCUBINE 등) */
+  marriageRank?: string | null
   note?: string | null
   /** spouse 엣지에만: PersonSpouse 미등록 — 자녀의 다른 친부모로 추정된 배우자 */
   inferred?: boolean

@@ -470,13 +470,52 @@ model PersonLifeEvent {
 // PersonSpouse (배우자 관계)
 // ========================
 /// 인물 간 배우자 관계. 혼인 기간·비고 관리.
+/// 혼인 서열/형태 — 정실·후궁 등 (couple 단위, 정렬은 enum 정의 순서를 따른다)
+enum MarriageRank {
+  PRIMARY    // 정실·정비
+  SECONDARY  // 계비·후처 (재혼 정실)
+  CONCUBINE  // 후궁·측실·첩
+  MORGANATIC // 귀천상혼 (신분차 혼인)
+  COMMON_LAW // 사실혼·비공식 결합
+  OTHER      // 기타
+}
+
 model PersonSpouse {
-  id                String    @id @default(uuid()) @db.Char(36)
-  personId          String    @map("person_id") @db.Char(36)
-  spouseId          String    @map("spouse_id") @db.Char(36)
+  id       String @id @default(uuid()) @db.Char(36)
+  personId String @map("person_id") @db.Char(36)
+  spouseId String @map("spouse_id") @db.Char(36)
+
+  /// 혼인 시작 기원 (BC/AD). null = 레거시(미기록, AD로 간주)
+  marriageStartEra Era? @map("marriage_start_era")
+
+  /// 혼인 시작일 — AD 1000~9999 완전/부분일자만 저장(MySQL DATETIME 한계 + 드라이버 2자리연도·TZ 손상).
+  /// BC·고대(연<1000)는 null이고 아래 구조화 필드(marriageStartYear/…)가 진실 (Event 관례).
   marriageStartDate DateTime? @map("marriage_start_date") @db.DateTime(3)
-  marriageEndDate   DateTime? @map("marriage_end_date") @db.DateTime(3)
-  note              String?   @db.Text
+
+  /// 혼인 시작 구조화 표현 — 크기값 연도(BC도 양수, 부호는 era) + 월/일(모르면 null)
+  marriageStartYear  Int? @map("marriage_start_year")
+  marriageStartMonth Int? @map("marriage_start_month")
+  marriageStartDay   Int? @map("marriage_start_day")
+
+  /// 혼인 시작일 정밀도: 'year'|'month'|'day'. 서버 파생. null=레거시(소급 판정 금지)
+  marriageStartPrecision String? @map("marriage_start_precision") @db.VarChar(10)
+
+  /// 혼인 종료 기원 (BC/AD)
+  marriageEndEra Era? @map("marriage_end_era")
+
+  marriageEndDate DateTime? @map("marriage_end_date") @db.DateTime(3)
+
+  marriageEndYear  Int? @map("marriage_end_year")
+  marriageEndMonth Int? @map("marriage_end_month")
+  marriageEndDay   Int? @map("marriage_end_day")
+
+  /// 혼인 종료일 정밀도: 'year'|'month'|'day'
+  marriageEndPrecision String? @map("marriage_end_precision") @db.VarChar(10)
+
+  /// 혼인 서열/형태 (정실·계비·후궁 등). null = 미분류
+  marriageRank MarriageRank? @map("marriage_rank")
+
+  note String? @db.Text
   createdAt         DateTime  @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt         DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
 

@@ -1,11 +1,30 @@
 import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber, IsIn, ValidateIf, IsInt, Min, Max, MaxLength } from 'class-validator'
 import { Type } from 'class-transformer'
-import type { PersonNicknameType } from '@prisma/client'
+import type { PersonNicknameType, MarriageRank as PrismaMarriageRank } from '@prisma/client'
 
 import { MaxByteLength } from '../../../shared/max-byte-length.validator'
 
 /** PersonSection.content 는 `@db.MediumText`(MySQL MEDIUMTEXT = 16777215 bytes) — 저장 전 바이트 상한 검증. */
 const BIOGRAPHY_SECTION_CONTENT_MAX_BYTES = 16777215
+
+/**
+ * 혼인 서열/형태 (Prisma MarriageRank 미러)
+ */
+export enum MarriageRank {
+  PRIMARY = 'PRIMARY',
+  SECONDARY = 'SECONDARY',
+  CONCUBINE = 'CONCUBINE',
+  MORGANATIC = 'MORGANATIC',
+  COMMON_LAW = 'COMMON_LAW',
+  OTHER = 'OTHER',
+}
+
+/** 컴파일 타임 미러 검증 — Prisma MarriageRank와 어긋나면 이 대입에서 tsc 에러 */
+export const MARRIAGE_RANK_MIRROR_SYNCED: `${MarriageRank}` extends PrismaMarriageRank
+  ? PrismaMarriageRank extends `${MarriageRank}`
+    ? true
+    : never
+  : never = true
 
 /**
  * 배우자 관계 DTO (인물 생성/수정 시)
@@ -14,10 +33,35 @@ export class SpouseRelationDto {
   @IsString()
   spouseId!: string
 
+  /**
+   * 혼인 시작 구조화 값 — BC·연단위 지원 (birth/death의 DateInfoDto 관례).
+   * 있으면 marriageStartDate(레거시 ISO)보다 우선. null = 값 없음.
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @ValidateNested()
+  @Type(() => DateInfoDto)
+  marriageStart?: DateInfoDto | null
+
+  /** 혼인 종료 구조화 값 — marriageStart와 동일 규약 */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @ValidateNested()
+  @Type(() => DateInfoDto)
+  marriageEnd?: DateInfoDto | null
+
+  /** 혼인 서열/형태 (정실·계비·후궁 등). null = 미분류 */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsEnum(MarriageRank)
+  marriageRank?: MarriageRank | null
+
+  /** @deprecated 레거시 ISO 채널 — 구조화 marriageStart가 정본. 서버는 문자열 직접 파싱(BC '-' 접두 인식) */
   @IsOptional()
   @IsDateString()
   marriageStartDate?: string
 
+  /** @deprecated 레거시 ISO 채널 — 구조화 marriageEnd가 정본 */
   @IsOptional()
   @IsDateString()
   marriageEndDate?: string
@@ -139,8 +183,10 @@ export class DateInfoDto {
 
   // year는 크기값(양수) — BC/AD는 era로 구분하므로 1 이상. month=13·day=0 등 범위 밖 값이
   // 400 없이 silent 롤오버 저장되던 것을 검증으로 차단.
+  // 상한 9999 — 앱 전역 연도 범위(웹 isValidYear)와 정합 + INT 컬럼 오버플로 500 차단.
   @IsInt()
   @Min(1)
+  @Max(9999)
   year!: number
 
   @IsOptional()
