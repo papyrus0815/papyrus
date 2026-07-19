@@ -1,5 +1,6 @@
 import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber, IsIn, ValidateIf, IsInt, Min, Max, MaxLength } from 'class-validator'
 import { Type } from 'class-transformer'
+import type { PersonNicknameType } from '@prisma/client'
 
 import { MaxByteLength } from '../../../shared/max-byte-length.validator'
 
@@ -156,6 +157,35 @@ export class DateInfoDto {
 }
 
 /**
+ * 별칭 유형 (Prisma PersonNicknameType 미러)
+ */
+export enum NicknameType {
+  EPITHET = 'EPITHET',
+  PET_NAME = 'PET_NAME',
+  HONORIFIC = 'HONORIFIC',
+  PEJORATIVE = 'PEJORATIVE',
+  BIRTH_NAME = 'BIRTH_NAME',
+  CHILDHOOD_NAME = 'CHILDHOOD_NAME',
+  COURTESY_NAME = 'COURTESY_NAME',
+  ART_NAME = 'ART_NAME',
+  PEN_NAME = 'PEN_NAME',
+  POSTHUMOUS_NAME = 'POSTHUMOUS_NAME',
+  TEMPLE_NAME = 'TEMPLE_NAME',
+  PSEUDONYM = 'PSEUDONYM',
+  OTHER = 'OTHER',
+}
+
+/**
+ * 컴파일 타임 미러 검증 — Prisma PersonNicknameType과 값이 어긋나면 이 대입에서 tsc 에러.
+ * (리포지토리의 `as PersonNicknameType` 캐스트가 드리프트를 런타임 500으로 미루는 것을 차단)
+ */
+export const NICKNAME_TYPE_MIRROR_SYNCED: `${NicknameType}` extends PersonNicknameType
+  ? PersonNicknameType extends `${NicknameType}`
+    ? true
+    : never
+  : never = true
+
+/**
  * 별명 DTO
  */
 export class NicknameDto {
@@ -164,9 +194,8 @@ export class NicknameDto {
   nickname!: string
 
   @IsOptional()
-  @IsString()
-  @MaxLength(50) // DB type VarChar(50)
-  type?: string
+  @IsEnum(NicknameType)
+  type?: NicknameType
 
   @IsOptional()
   @IsNumber()

@@ -107,6 +107,23 @@ enum PersonGroupType {
   OTHER      // 기타
 }
 
+/// 별칭 유형 — PersonNickname.type 분류
+enum PersonNicknameType {
+  EPITHET         // 별명·이명 (사자왕, 용맹공 등 세간의 별칭)
+  PET_NAME        // 애칭
+  HONORIFIC       // 존칭·경칭
+  PEJORATIVE      // 멸칭·조롱
+  BIRTH_NAME      // 출생명 (개명 전 이름, Wikidata P1477)
+  CHILDHOOD_NAME  // 아명(兒名)
+  COURTESY_NAME   // 자(字)
+  ART_NAME        // 호·아호(雅號)
+  PEN_NAME        // 필명
+  POSTHUMOUS_NAME // 시호(諡號)
+  TEMPLE_NAME     // 묘호(廟號)
+  PSEUDONYM       // 가명·익명 활동명
+  OTHER           // 기타
+}
+
 // ========================
 // Person
 // ========================
@@ -672,8 +689,8 @@ model PersonNickname {
   /// 별명/호/필명
   nickname String @db.VarChar(100)
 
-  /// 유형 (별명, 호, 필명, 아호 등)
-  type String? @db.VarChar(50)
+  /// 유형 분류 (별명·애칭·시호·아명 등)
+  type PersonNicknameType?
 
   /// 우선순위 (낮을수록 우선)
   priority Int? @default(0)

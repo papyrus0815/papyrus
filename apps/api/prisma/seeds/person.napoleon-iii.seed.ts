@@ -33,6 +33,7 @@ import {
   DeathType,
   GovernmentPositionType,
   TenureEndReason,
+  type PersonNicknameType,
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
@@ -233,9 +234,9 @@ const ALL_PERSONS = [
 ] as const
 
 // ── 별명 ────────────────────────────────────────────────────────────────────
-const NICKNAMES: { nickname: string; type: string; priority: number }[] = [
-  { nickname: '꼬마 나폴레옹 (Napoléon le Petit)', type: '조롱', priority: 1 },
-  { nickname: '바댕게 (Badinguet)', type: '별명', priority: 2 },
+const NICKNAMES: { nickname: string; type: PersonNicknameType; priority: number }[] = [
+  { nickname: '꼬마 나폴레옹 (Napoléon le Petit)', type: 'PEJORATIVE', priority: 1 },
+  { nickname: '바댕게 (Badinguet)', type: 'EPITHET', priority: 2 },
 ]
 
 // ── 연보 ────────────────────────────────────────────────────────────────────

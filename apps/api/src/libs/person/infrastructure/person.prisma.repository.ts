@@ -12,6 +12,7 @@ import {
   MedicalCareer,
   PersonEducation,
   PersonAward,
+  PersonNicknameType,
   Prisma,
   TenureMandateSource,
 } from '@prisma/client'
@@ -1919,7 +1920,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         .map((nick) => ({
           personId: person.id,
           nickname: nick.nickname.trim(),
-          type: nick.type?.trim() || null,
+          // DTO @IsEnum(NicknameType)이 토큰을 보증 — 도메인 계약은 string이라 여기서 좁힘
+          type: (nick.type as PersonNicknameType | undefined) || null,
           priority: nick.priority ?? 0,
           reason: nick.reason?.trim() || null,
         }))
@@ -2142,7 +2144,8 @@ export class PersonPrismaRepository implements IPersonRepository {
           .map((nick) => ({
             personId: id,
             nickname: nick.nickname.trim(),
-            type: nick.type?.trim() || null,
+            // DTO @IsEnum(NicknameType)이 토큰을 보증 — 도메인 계약은 string이라 여기서 좁힘
+            type: (nick.type as PersonNicknameType | undefined) || null,
             priority: nick.priority ?? 0,
             reason: nick.reason?.trim() || null,
           }))

@@ -39,6 +39,7 @@ import {
   PersonHumanRelationshipType,
   PoliticalPosition,
   TenureEndReason,
+  type PersonNicknameType,
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
@@ -357,10 +358,10 @@ const PARTY_MEMBERSHIPS: {
 ]
 
 // ── 별명 ────────────────────────────────────────────────────────────────────
-const NICKNAMES: { nickname: string; type: string; priority: number }[] = [
-  { nickname: '팸 (Pam)', type: '애칭', priority: 1 },
-  { nickname: '큐피드 경 (Lord Cupid)', type: '별명', priority: 2 },
-  { nickname: '경석 경 (Lord Pumicestone)', type: '조롱', priority: 3 },
+const NICKNAMES: { nickname: string; type: PersonNicknameType; priority: number }[] = [
+  { nickname: '팸 (Pam)', type: 'PET_NAME', priority: 1 },
+  { nickname: '큐피드 경 (Lord Cupid)', type: 'EPITHET', priority: 2 },
+  { nickname: '경석 경 (Lord Pumicestone)', type: 'PEJORATIVE', priority: 3 },
 ]
 
 // ── 연보 ────────────────────────────────────────────────────────────────────

@@ -31,6 +31,7 @@ import {
   DeathType,
   GovernmentPositionType,
   TenureEndReason,
+  type PersonNicknameType,
 } from '@prisma/client'
 
 import { PrismaService } from '../prisma.service'
@@ -150,8 +151,8 @@ const TENURES: TenureSpec[] = [
 ]
 
 // ── 별명 ────────────────────────────────────────────────────────────────────
-const NICKNAMES: { nickname: string; type: string; priority: number }[] = [
-  { nickname: '직조공 (Il Tessitore)', type: '별명', priority: 1 },
+const NICKNAMES: { nickname: string; type: PersonNicknameType; priority: number }[] = [
+  { nickname: '직조공 (Il Tessitore)', type: 'EPITHET', priority: 1 },
 ]
 
 // ── 연보 ────────────────────────────────────────────────────────────────────
