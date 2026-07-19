@@ -8,8 +8,10 @@ import {
   Param,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
+import { AuthGuard } from '@nestjs/passport'
 import { DynastyService } from '../application/dynasty.service'
 import {
   CreateDynastyDto,
@@ -52,8 +54,17 @@ function toResponseDto(d: DynastyRow): DynastyResponseDto {
   }
 }
 
+/**
+ * 가문(왕조) API — 로그인 필수.
+ *
+ * Dynasty도 `accountId`가 없는 공유 카탈로그라 소유자 게이트는 불가(마이그레이션 선행).
+ * 읽기 포함 클래스 레벨 가드가 안전함을 확인: 가문 조회는 로그인 화면(가문 페이지·
+ * 인물 등록 모달·리치텍스트 멘션) 안에서만 쓰이고, 비로그인 라우트인 /genealogy는
+ * 가문명을 인물 응답에 실려 오는 값으로 표시할 뿐 이 API를 호출하지 않는다.
+ */
 @ApiTags('dynasties')
 @Controller('dynasties')
+@UseGuards(AuthGuard('jwt'))
 export class DynastyController {
   constructor(private readonly dynastyService: DynastyService) {}
 

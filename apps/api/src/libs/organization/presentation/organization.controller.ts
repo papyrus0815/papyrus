@@ -9,8 +9,10 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
+import { AuthGuard } from '@nestjs/passport'
 import { OrganizationType } from '@prisma/client'
 import { OrganizationService } from '../application/organization.service'
 import { CreateOrganizationDto } from './dto/create-organization.dto'
@@ -91,8 +93,18 @@ function treeToDto(node: {
   }
 }
 
+/**
+ * 조직(행정기구·정당·국제기구 등) API — 로그인 필수.
+ *
+ * Organization은 `accountId`가 없는 공유 카탈로그라 소유자 단위 게이트는 걸 수 없다
+ * (계정 스코프가 필요하면 스키마 마이그레이션 선행). 최소한 비로그인 쓰기는 막는다.
+ * 읽기까지 클래스 레벨로 막아도 회귀가 없음을 확인: 조직 조회는 전부 로그인 화면
+ * (조직 목록/폼·경력/학력 모달·정부 조직 탭) 안에서만 호출되고, 비로그인 라우트
+ * (로그인·/services·/genealogy)는 이 API를 부르지 않는다.
+ */
 @ApiTags('organizations')
 @Controller('organizations')
+@UseGuards(AuthGuard('jwt'))
 export class OrganizationController {
   constructor(private readonly organizationService: OrganizationService) {}
 

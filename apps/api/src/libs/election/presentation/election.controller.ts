@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   NotFoundException,
   Param,
@@ -10,6 +11,7 @@ import {
   Post,
   Put,
   Query,
+  Request,
   UseGuards,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
@@ -166,7 +168,7 @@ export interface CreateElectionBody {
   description?: string | null
   /** 사건(Event) 정본 연결 */
   eventId?: string | null
-  accountId?: string | null
+  // accountId는 클라이언트가 지정할 수 없다 — 항상 JWT 주체에서 도출한다.
 }
 
 @ApiTags('elections')
@@ -258,11 +260,12 @@ export class ElectionController {
 
   @Post(':electionId/candidacies')
   async createCandidacy(
+    @Request() req: any,
     @Param('electionId') electionId: string,
     @Body()
     body: CreateCandidacyBody,
   ): Promise<any> {
-    await this.ensureElection(electionId)
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
     const row = await this.prisma.electionCandidacy.create({
       data: {
         electionId,
@@ -287,11 +290,13 @@ export class ElectionController {
 
   @Patch(':electionId/candidacies/:candidacyId')
   async updateCandidacy(
+    @Request() req: any,
     @Param('electionId') electionId: string,
     @Param('candidacyId') candidacyId: string,
     @Body()
     body: UpdateCandidacyBody,
   ): Promise<any> {
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
     const existing = await this.prisma.electionCandidacy.findFirst({
       where: { id: candidacyId, electionId },
     })
@@ -322,9 +327,11 @@ export class ElectionController {
 
   @Delete(':electionId/candidacies/:candidacyId')
   async deleteCandidacy(
+    @Request() req: any,
     @Param('electionId') electionId: string,
     @Param('candidacyId') candidacyId: string,
   ): Promise<any> {
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
     const existing = await this.prisma.electionCandidacy.findFirst({
       where: { id: candidacyId, electionId },
     })
@@ -334,11 +341,13 @@ export class ElectionController {
 
   @Put(':electionId/candidacies/:candidacyId/result')
   async upsertResult(
+    @Request() req: any,
     @Param('electionId') electionId: string,
     @Param('candidacyId') candidacyId: string,
     @Body()
     body: UpsertCandidacyResultBody,
   ): Promise<any> {
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
     const existing = await this.prisma.electionCandidacy.findFirst({
       where: { id: candidacyId, electionId },
     })
@@ -391,11 +400,12 @@ export class ElectionController {
 
   @Post(':electionId/ballot-options')
   async createBallotOption(
+    @Request() req: any,
     @Param('electionId') electionId: string,
     @Body()
     body: CreateBallotOptionBody,
   ): Promise<any> {
-    await this.ensureElection(electionId)
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
     const row = await this.prisma.electionBallotOption.create({
       data: {
         electionId,
@@ -411,11 +421,13 @@ export class ElectionController {
 
   @Patch(':electionId/ballot-options/:optionId')
   async updateBallotOption(
+    @Request() req: any,
     @Param('electionId') electionId: string,
     @Param('optionId') optionId: string,
     @Body()
     body: UpdateBallotOptionBody,
   ): Promise<any> {
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
     const existing = await this.prisma.electionBallotOption.findFirst({
       where: { id: optionId, electionId },
     })
@@ -435,9 +447,11 @@ export class ElectionController {
 
   @Delete(':electionId/ballot-options/:optionId')
   async deleteBallotOption(
+    @Request() req: any,
     @Param('electionId') electionId: string,
     @Param('optionId') optionId: string,
   ): Promise<any> {
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
     const existing = await this.prisma.electionBallotOption.findFirst({
       where: { id: optionId, electionId },
     })
@@ -447,11 +461,13 @@ export class ElectionController {
 
   @Put(':electionId/ballot-options/:optionId/result')
   async upsertBallotOptionResult(
+    @Request() req: any,
     @Param('electionId') electionId: string,
     @Param('optionId') optionId: string,
     @Body()
     body: UpsertBallotOptionResultBody,
   ): Promise<any> {
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
     const opt = await this.prisma.electionBallotOption.findFirst({
       where: { id: optionId, electionId },
     })
@@ -486,12 +502,13 @@ export class ElectionController {
 
   @Put(':electionId/party-results/:partyId')
   async upsertPartyResult(
+    @Request() req: any,
     @Param('electionId') electionId: string,
     @Param('partyId') partyId: string,
     @Body()
     body: UpsertPartyResultBody,
   ): Promise<any> {
-    await this.ensureElection(electionId)
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
     const party = await this.prisma.politicalParty.findUnique({ where: { id: partyId } })
     if (!party) throw new NotFoundException('정당을 찾을 수 없습니다.')
 
@@ -540,10 +557,11 @@ export class ElectionController {
 
   @Delete(':electionId/party-results/:partyId')
   async deletePartyResult(
+    @Request() req: any,
     @Param('electionId') electionId: string,
     @Param('partyId') partyId: string,
   ): Promise<any> {
-    await this.ensureElection(electionId)
+    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
     try {
       await this.prisma.electionPartyResult.delete({
         where: {
@@ -605,9 +623,11 @@ export class ElectionController {
 
   @Post()
   async create(
+    @Request() req: any,
     @Body()
     body: CreateElectionBody,
   ): Promise<any> {
+    const accountId = this.actorAccountId(req)
     const row = await this.prisma.election.create({
       data: {
         name: body.name,
@@ -644,7 +664,8 @@ export class ElectionController {
         convocationOrdinal: body.convocationOrdinal ?? undefined,
         description: body.description ?? undefined,
         eventId: body.eventId ?? undefined,
-        accountId: body.accountId ?? undefined,
+        // 소유자는 JWT 주체 고정 (body 값은 신뢰하지 않는다)
+        accountId: accountId ?? undefined,
       },
       include: electionInclude,
     })
@@ -653,10 +674,12 @@ export class ElectionController {
 
   @Patch(':id')
   async update(
+    @Request() req: any,
     @Param('id') id: string,
     @Body()
     body: UpdateElectionBody,
   ): Promise<any> {
+    await this.ensureElectionOwner(id, this.actorAccountId(req))
     const data: Record<string, unknown> = {}
     if (body.name !== undefined) data.name = body.name
     if (body.shortName !== undefined) data.shortName = body.shortName
@@ -710,13 +733,35 @@ export class ElectionController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string): Promise<any> {
+  async remove(@Request() req: any, @Param('id') id: string): Promise<any> {
+    await this.ensureElectionOwner(id, this.actorAccountId(req))
     await this.prisma.election.delete({ where: { id } })
   }
 
   private async ensureElection(id: string) {
     const e = await this.prisma.election.findUnique({ where: { id }, select: { id: true } })
     if (!e) throw new NotFoundException('선거를 찾을 수 없습니다.')
+  }
+
+  /** JWT 주체의 계정 ID (jwt.strategy가 id·userId 둘 다 실어 준다) */
+  private actorAccountId(req: any): string | undefined {
+    return req?.user?.id ?? req?.user?.sub
+  }
+
+  /**
+   * 쓰기 전 소유 검증 — 본인이 등록한 선거만 수정/삭제할 수 있다.
+   * (역사적 국가 도메인의 403 패턴과 동일. 하위 리소스 쓰기도 부모 선거 소유자로 게이트한다.)
+   */
+  private async ensureElectionOwner(id: string, accountId?: string) {
+    const election = await this.prisma.election.findUnique({
+      where: { id },
+      select: { id: true, accountId: true },
+    })
+    if (!election) throw new NotFoundException('선거를 찾을 수 없습니다.')
+    // 주체를 특정할 수 없으면(토큰에 sub 없음) 통과시키지 않는다 — 우회 경로 차단
+    if (accountId == null || election.accountId !== accountId) {
+      throw new ForbiddenException('본인이 등록한 선거만 수정·삭제할 수 있습니다.')
+    }
   }
 
   private parseClosureKind(
