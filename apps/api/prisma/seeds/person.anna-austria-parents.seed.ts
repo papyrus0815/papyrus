@@ -172,7 +172,7 @@ export async function seedAnnaAustriaParents(prisma: PrismaService): Promise<voi
   }
 
   const hrePos = await prisma.governmentPositionDefinition.findFirst({
-    where: { title: '신성로마황제' },
+    where: { title: '황제' },
     select: { id: true },
   })
 

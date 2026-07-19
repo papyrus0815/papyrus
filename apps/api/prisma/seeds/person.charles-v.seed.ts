@@ -370,7 +370,7 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
   // regnalName은 국가별 표기 — HRE는 "카를 5세"(Karl V), 카스티야는 "카를로스 1세"(Carlos I).
   // 합스부르크령 네덜란드는 자신의 사용 명칭 따라 "카를 5세"(Karel V) 그대로.
   const hrePos = await prisma.governmentPositionDefinition.findFirst({
-    where: { title: '신성로마황제' },
+    where: { title: '황제' },
     select: { id: true },
   })
   const dukePos = await prisma.governmentPositionDefinition.findFirst({
@@ -407,7 +407,7 @@ export async function seedCharlesV(prisma: PrismaService): Promise<void> {
       historicalCountryId: hreHC.id,
       historicalCountryName: '신성로마제국',
       positionDefinitionId: hrePos.id,
-      positionTitle: '신성로마황제',
+      positionTitle: '황제',
       regnalNumber: 20,
       regnalName: '카를 5세',
       startDate: new Date(1519, 5, 28),

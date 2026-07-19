@@ -344,7 +344,7 @@ export async function seedPhilipIParents(prisma: PrismaService): Promise<void> {
     select: { id: true },
   })
   const hrePos = await prisma.governmentPositionDefinition.findFirst({
-    where: { title: '신성로마황제' },
+    where: { title: '황제' },
     select: { id: true },
   })
 

@@ -12,11 +12,14 @@ const DEFINITIONS: {
 }[] = [
   // ─ 국가원수 (HEAD_OF_STATE) — 군주·대통령·최고지도자
   // rank 1: 최고 주권자 (황제·국왕·교황 등)
+  // ⚠ 칭호 통합 규칙: 국가 스코프(재위의 historicalCountryId)로 구분되는 일반 칭호는 하나로
+  //   통합한다 — '신성로마황제'는 '황제'+신성로마제국으로 통합(2026-07-16, consolidate-hre-
+  //   emperor-definition.ts). 국가별 bespoke 칭호(러시아차르·오스트리아황제 등) 신설 금지.
+  //   별도 정의는 한국어 어휘 자체가 다른 고정 칭호(천황·교황·칸·술탄 등)에만 허용.
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '국왕', titleEn: 'King', rank: 1 },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '여왕', titleEn: 'Queen', rank: 1 },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '황제', titleEn: 'Emperor', rank: 1 },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '천황', titleEn: 'Emperor', titleLocal: '天皇', rank: 1 },
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '신성로마황제', titleEn: 'Holy Roman Emperor', titleLocal: 'Imperator Romanorum', rank: 1 },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '교황', titleEn: 'Pope', titleLocal: 'Papa', rank: 1 },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '칸', titleEn: 'Khagan', rank: 1 },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '술탄', titleEn: 'Sultan', rank: 1 },

@@ -170,7 +170,7 @@ export async function seedMaximilianIIParents(prisma: PrismaService): Promise<vo
   }
 
   const hrePos = await prisma.governmentPositionDefinition.findFirst({
-    where: { title: '신성로마황제' },
+    where: { title: '황제' },
     select: { id: true },
   })
 
