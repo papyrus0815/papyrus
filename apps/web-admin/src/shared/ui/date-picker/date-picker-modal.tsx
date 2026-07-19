@@ -56,11 +56,24 @@ function parseFlexibleDate(value?: string | null): Date | null {
   if (!value) return null
   const neg = value.startsWith('-')
   const body = neg ? value.slice(1) : value
-  const match = body.match(/^(\d{1,6})-(\d{1,2})-(\d{1,2})/)
+  // 월/일 옵셔널 — 부분 정밀('1526'·'-0044-03') 값이 네이티브 new Date() 폴백으로 새면
+  // BC '-0044'가 AD 2044로, '1526'이 TZ에 따라 1525-12-31로 둔갑한다. 미상 월/일은 1월 1일로 초기화.
+  const match = body.match(/^(\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/)
   if (match) {
     const year = parseInt(match[1], 10) * (neg ? -1 : 1)
-    return makeDate(year, parseInt(match[2], 10) - 1, parseInt(match[3], 10))
+    return makeDate(
+      year,
+      (match[2] ? parseInt(match[2], 10) : 1) - 1,
+      match[3] ? parseInt(match[3], 10) : 1,
+    )
   }
+  // ISO datetime 등 숫자-하이픈 패턴 밖 문자열만 네이티브 폴백(부호 없는 완전 형식)
+  const full = body.match(/^(\d{1,6})-(\d{1,2})-(\d{1,2})/)
+  if (full) {
+    const year = parseInt(full[1], 10) * (neg ? -1 : 1)
+    return makeDate(year, parseInt(full[2], 10) - 1, parseInt(full[3], 10))
+  }
+  if (neg) return null
   const fallback = new Date(value)
   return Number.isNaN(fallback.getTime()) ? null : fallback
 }

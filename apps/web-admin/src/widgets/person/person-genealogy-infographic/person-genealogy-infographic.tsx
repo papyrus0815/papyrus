@@ -20,6 +20,7 @@ import { FiHeart, FiUsers } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import type { FamilyTreeData, FamilyTreePerson } from '@/shared/api/persons-family-tree'
+import { marriageRankOrder } from '@/shared/lib/marriage-rank-labels'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { AncestorColumn } from './ancestor-column'
@@ -102,12 +103,13 @@ export interface PersonGenealogyInfographicProps {
   showHeader?: boolean
 }
 
-/** spouse 엣지에서 뽑은 배우자 노드 + provenance 메타 (inferred·혼인연도) */
+/** spouse 엣지에서 뽑은 배우자 노드 + provenance 메타 (inferred·혼인연도·서열) */
 type SpouseEdgeEntry = {
   node: FamilyTreePerson
   inferred: boolean
   marriageStartYear: number | null
   marriageEndYear: number | null
+  marriageRank: string | null
 }
 
 /**
@@ -244,6 +246,7 @@ export function PersonGenealogyInfographic({
         inferred: Boolean(e.inferred),
         marriageStartYear: e.marriageStartYear ?? null,
         marriageEndYear: e.marriageEndYear ?? null,
+        marriageRank: e.marriageRank ?? null,
       }
       const a = ftNodeMap.get(e.source)
       const b = ftNodeMap.get(e.target)
@@ -264,7 +267,19 @@ export function PersonGenealogyInfographic({
       marriageStartYear: entry.marriageStartYear,
       marriageEndYear: entry.marriageEndYear,
     })
-    for (const entry of spouseEdgesByPersonId.get(egoId) ?? []) {
+    // '배우자 N' 번호가 엣지 발견 순서(UUID·BFS 순)로 흔들리지 않게
+    // 서열(정실 우선) → 혼인 시작 부호연도(미상 뒤) 로 안정 정렬.
+    const egoSpouseEntries = [...(spouseEdgesByPersonId.get(egoId) ?? [])].sort(
+      (entryA, entryB) => {
+        const rankDiff =
+          marriageRankOrder(entryA.marriageRank) - marriageRankOrder(entryB.marriageRank)
+        if (rankDiff !== 0) return rankDiff
+        const yearA = entryA.marriageStartYear ?? Number.POSITIVE_INFINITY
+        const yearB = entryB.marriageStartYear ?? Number.POSITIVE_INFINITY
+        return yearA - yearB
+      },
+    )
+    for (const entry of egoSpouseEntries) {
       sps.push(toSpouseNode(entry))
     }
 

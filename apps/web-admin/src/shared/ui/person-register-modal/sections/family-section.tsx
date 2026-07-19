@@ -6,12 +6,22 @@
  */
 import React, { useState } from 'react'
 
-import { FiPlus } from 'react-icons/fi'
+import { FiChevronDown, FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import type { PersonResponseDto, SpouseRelationInput } from '@/shared/api/persons'
+import type { PersonResponseDto } from '@/shared/api/persons'
+import { MARRIAGE_RANK_OPTIONS } from '@/shared/lib/marriage-rank-labels'
+import {
+  buildPartialDateString,
+  emptyPartialDateParts,
+  hasAnyPartialDateInput,
+  isPartialRangeInverted,
+  parsePartialDateString,
+  type PartialDateParts,
+} from '@/shared/lib/partial-date-string'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import {
   FieldControl,
@@ -22,10 +32,48 @@ import {
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
 import { AddRowBtn, FONT, RADIUS } from '../_form-primitives'
+import { InlineDateField } from './inline-date-field'
 import {
   InlineSearchSelect,
   type SearchOption,
 } from './inline-search-select'
+
+/**
+ * 배우자 폼 행 — 혼인일은 명시적 파츠(era/연/월/일) 상태.
+ * (단일 문자열 왕복은 "월을 지우면 일이 소실·빈 행 BC 토글 무반응" 같은 편집 중간 상태를
+ *  표현 못 해 파츠 상태로 정규화. 저장 시 partialPartsToDateInfo가 정밀도 사다리를 적용.)
+ */
+export interface SpouseFormRow {
+  spouseId: string
+  start: PartialDateParts
+  end: PartialDateParts
+  /** MarriageRank 토큰 또는 ''(미분류) */
+  rank: string
+  note: string | null
+}
+
+/**
+ * 구형 draft 스냅샷(부분 정밀 문자열 marriageStartDate / 네이티브 date 'YYYY-MM-DD') 호환 —
+ * 어떤 저장 형상이 와도 SpouseFormRow로 승격한다.
+ */
+export function normalizeSpouseRow(
+  raw:
+    | (Partial<SpouseFormRow> & {
+        marriageStartDate?: string
+        marriageEndDate?: string
+        marriageRank?: string | null
+      })
+    | null
+    | undefined,
+): SpouseFormRow {
+  return {
+    spouseId: raw?.spouseId ?? '',
+    start: raw?.start ?? parsePartialDateString(raw?.marriageStartDate),
+    end: raw?.end ?? parsePartialDateString(raw?.marriageEndDate),
+    rank: raw?.rank ?? raw?.marriageRank ?? '',
+    note: raw?.note ?? null,
+  }
+}
 
 export interface FamilySectionProps {
   fid: (key: string) => string
@@ -34,12 +82,12 @@ export interface FamilySectionProps {
   motherId: string
   /** 사생아·서출 — 가계도 카드 별표(*) 마커 */
   illegitimate: boolean
-  /** 배우자 관계 반복 행 (배우자 + 혼인 시작/종료일 + 메모) */
-  spouseRows: SpouseRelationInput[]
+  /** 배우자 관계 반복 행 (배우자 + 혼인 시작/종료일·서열 + 메모) */
+  spouseRows: SpouseFormRow[]
   setFatherId: (id: string) => void
   setMotherId: (id: string) => void
   setIllegitimate: (value: boolean) => void
-  setSpouseRows: React.Dispatch<React.SetStateAction<SpouseRelationInput[]>>
+  setSpouseRows: React.Dispatch<React.SetStateAction<SpouseFormRow[]>>
   // PersonSelectModal 표시 상태(= "+ 새 인물" 생성 분기)
   showFatherModal: boolean
   showMotherModal: boolean
@@ -100,8 +148,18 @@ export function FamilySection({
    * index가 아니라 spouseId로 키잉해 행 삭제·정렬로 인덱스가 밀려도 펼침이 엉키지 않는다.
    */
   const [openMetaSpouseIds, setOpenMetaSpouseIds] = useState<Set<string>>(new Set())
-  const rowHasMeta = (row: SpouseRelationInput) =>
-    Boolean(row.marriageStartDate || row.marriageEndDate || (row.note && row.note.trim()))
+  /** 달력 보조 모달 대상 — {행, 시작/종료}. null = 닫힘 */
+  const [spouseDateModal, setSpouseDateModal] = useState<{
+    index: number
+    side: 'start' | 'end'
+  } | null>(null)
+  const rowHasMeta = (row: SpouseFormRow) =>
+    Boolean(
+      hasAnyPartialDateInput(row.start) ||
+        hasAnyPartialDateInput(row.end) ||
+        row.rank ||
+        (row.note && row.note.trim()),
+    )
   const toggleMetaOpen = (spouseId: string) =>
     setOpenMetaSpouseIds((prev) => {
       const next = new Set(prev)
@@ -110,10 +168,19 @@ export function FamilySection({
       return next
     })
 
-  const addSpouseRow = () => setSpouseRows((prev) => [...prev, { spouseId: '' }])
-  const updateSpouseRow = (index: number, patch: Partial<SpouseRelationInput>) =>
+  const emptySpouseRow = (): SpouseFormRow => ({
+    spouseId: '',
+    start: emptyPartialDateParts(),
+    end: emptyPartialDateParts(),
+    rank: '',
+    note: null,
+  })
+  const addSpouseRow = () => setSpouseRows((prev) => [...prev, emptySpouseRow()])
+  const updateSpouseRow = (index: number, patch: Partial<SpouseFormRow>) =>
     setSpouseRows((prev) =>
-      prev.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)),
+      prev.map((row, rowIndex) =>
+        rowIndex === index ? { ...normalizeSpouseRow(row), ...patch } : row,
+      ),
     )
   const removeSpouseRow = (index: number) =>
     setSpouseRows((prev) => prev.filter((_, rowIndex) => rowIndex !== index))
@@ -122,14 +189,29 @@ export function FamilySection({
     setSpouseRows((prev) => {
       if (pendingSpouseRowIndex != null && pendingSpouseRowIndex < prev.length)
         return prev.map((row, rowIndex) =>
-          rowIndex === pendingSpouseRowIndex ? { ...row, spouseId: id } : row,
+          rowIndex === pendingSpouseRowIndex
+            ? { ...normalizeSpouseRow(row), spouseId: id }
+            : row,
         )
       if (prev.some((row) => row.spouseId === id)) return prev
-      return [...prev, { spouseId: id }]
+      return [...prev, { ...emptySpouseRow(), spouseId: id }]
     })
   }
-  /** <input type="date">용 — ISO/문자열을 YYYY-MM-DD로 자른다. */
-  const toDateInputValue = (value?: string) => (value ? value.slice(0, 10) : '')
+  /** 혼인일 한 파트 갱신 — 파츠 상태 직접 패치(문자열 왕복 없음: 편집 중간 상태 보존). */
+  const patchSpouseDateParts = (
+    index: number,
+    side: 'start' | 'end',
+    patch: Partial<PartialDateParts>,
+  ) => {
+    setSpouseRows((prev) =>
+      prev.map((raw, rowIndex) => {
+        if (rowIndex !== index) return raw
+        const row = normalizeSpouseRow(raw)
+        return { ...row, [side]: { ...row[side], ...patch } }
+      }),
+    )
+    markDirty()
+  }
 
   /** 인물 풀 → 콤보 옵션(슬롯별 exclude 적용). */
   const personOptions = (excludeIds: string[]): SearchOption[] =>
@@ -153,7 +235,9 @@ export function FamilySection({
       label: '배우자로 추가',
       setId: (id) =>
         setSpouseRows((prev) =>
-          prev.some((row) => row.spouseId === id) ? prev : [...prev, { spouseId: id }],
+          prev.some((row) => row.spouseId === id)
+            ? prev
+            : [...prev, { ...emptySpouseRow(), spouseId: id }],
         ),
     },
   ]
@@ -294,12 +378,11 @@ export function FamilySection({
             {spouseRows.length === 0 && (
               <SpouseEmptyHint>등록된 배우자가 없습니다</SpouseEmptyHint>
             )}
-            {spouseRows.map((row, index) => {
-              const dateInverted = Boolean(
-                row.marriageStartDate &&
-                  row.marriageEndDate &&
-                  toDateInputValue(row.marriageEndDate) < toDateInputValue(row.marriageStartDate),
-              )
+            {spouseRows.map((rawRow, index) => {
+              // 구형 draft 스냅샷 방어 — 어떤 저장 형상이 와도 파츠 행으로 승격
+              const row = normalizeSpouseRow(rawRow)
+              // 역전 검증 — 공통 정밀도까지만 보수 비교(연만 아는 종료일 오탐 방지, BC 안전)
+              const dateInverted = isPartialRangeInverted(row.start, row.end)
               // 배우자를 고른 뒤에만 혼인 메타(혼인일·메모) 노출 — 빈 새 행 잡음 감소.
               // 이미 값이 있으면(수정 로드 포함) 항상 노출해 데이터를 숨기지 않는다.
               const showMeta =
@@ -338,13 +421,8 @@ export function FamilySection({
                     aria-label={`배우자 ${index + 1} 삭제`}
                     title="이 배우자 행 삭제"
                     onClick={async () => {
-                      // 입력된 내용이 있으면 무경고 삭제 대신 확인 — 혼인일·메모 유실 방지.
-                      const hasContent = Boolean(
-                        row.spouseId ||
-                          row.marriageStartDate ||
-                          row.marriageEndDate ||
-                          (row.note && row.note.trim()),
-                      )
+                      // 입력된 내용이 있으면 무경고 삭제 대신 확인 — 혼인일·서열·메모 유실 방지.
+                      const hasContent = Boolean(row.spouseId || rowHasMeta(row))
                       if (hasContent) {
                         const ok = await confirm({
                           title: '배우자 행 삭제',
@@ -364,32 +442,63 @@ export function FamilySection({
                 {showMeta ? (
                   <>
                     <SpouseRowMeta>
-                      <SpouseDateField>
+                      {/* 혼인일 — 생몰일과 동일한 era/연/월/일 입력(연도만·BC 지원). 월·일은 비워도 된다. */}
+                      <SpouseMetaField>
                         <SpouseDateLabel>혼인 시작</SpouseDateLabel>
-                        <SpouseDateInput
-                          type="date"
-                          value={toDateInputValue(row.marriageStartDate)}
-                          onChange={(e) => {
-                            updateSpouseRow(index, { marriageStartDate: e.target.value || undefined })
-                            markDirty()
-                          }}
+                        <InlineDateField
+                          ariaLabel={`배우자 ${index + 1} 혼인 시작일`}
+                          era={row.start.era}
+                          year={row.start.year}
+                          month={row.start.month}
+                          day={row.start.day}
+                          onEra={(era) => patchSpouseDateParts(index, 'start', { era })}
+                          onYear={(value) => patchSpouseDateParts(index, 'start', { year: value })}
+                          onMonth={(value) => patchSpouseDateParts(index, 'start', { month: value })}
+                          onDay={(value) => patchSpouseDateParts(index, 'start', { day: value })}
+                          onOpenPicker={() => setSpouseDateModal({ index, side: 'start' })}
                         />
-                      </SpouseDateField>
-                      <SpouseDateField>
+                      </SpouseMetaField>
+                      <SpouseMetaField>
                         <SpouseDateLabel>혼인 종료</SpouseDateLabel>
-                        <SpouseDateInput
-                          type="date"
-                          value={toDateInputValue(row.marriageEndDate)}
-                          // 종료일은 시작일 이후만 — 음수 기간 모순 데이터 방지(네이티브 min + aria)
-                          min={toDateInputValue(row.marriageStartDate) || undefined}
-                          aria-invalid={dateInverted || undefined}
-                          aria-describedby={dateInverted ? dateErrorId : undefined}
-                          onChange={(e) => {
-                            updateSpouseRow(index, { marriageEndDate: e.target.value || undefined })
-                            markDirty()
-                          }}
+                        <InlineDateField
+                          ariaLabel={`배우자 ${index + 1} 혼인 종료일`}
+                          era={row.end.era}
+                          year={row.end.year}
+                          month={row.end.month}
+                          day={row.end.day}
+                          onEra={(era) => patchSpouseDateParts(index, 'end', { era })}
+                          onYear={(value) => patchSpouseDateParts(index, 'end', { year: value })}
+                          onMonth={(value) => patchSpouseDateParts(index, 'end', { month: value })}
+                          onDay={(value) => patchSpouseDateParts(index, 'end', { day: value })}
+                          onOpenPicker={() => setSpouseDateModal({ index, side: 'end' })}
+                          error={dateInverted}
+                          ariaDescribedBy={dateInverted ? dateErrorId : undefined}
                         />
-                      </SpouseDateField>
+                      </SpouseMetaField>
+                      {/* 혼인 서열/형태 — 정실·계비·후궁 등 (미분류 허용) */}
+                      <SpouseMetaField>
+                        <SpouseDateLabel>서열</SpouseDateLabel>
+                        <SpouseRankSelectWrap>
+                          <SpouseRankSelect
+                            aria-label={`배우자 ${index + 1} 혼인 서열`}
+                            value={row.rank}
+                            onChange={(event) => {
+                              updateSpouseRow(index, { rank: event.target.value })
+                              markDirty()
+                            }}
+                          >
+                            <option value="">미분류</option>
+                            {MARRIAGE_RANK_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </SpouseRankSelect>
+                          <SpouseRankCaret>
+                            <FiChevronDown size={14} />
+                          </SpouseRankCaret>
+                        </SpouseRankSelectWrap>
+                      </SpouseMetaField>
                     </SpouseRowMeta>
                     {dateInverted && (
                       <SpouseDateError id={dateErrorId} role="alert">
@@ -458,6 +567,33 @@ export function FamilySection({
           />
         ) : null,
       )}
+      {/* 배우자 혼인일 달력 보조 — AD/BC 토글 지원, 선택 결과('-YYYY-MM-DD')를 파츠로 반영. */}
+      {spouseDateModal &&
+        (() => {
+          const targetRow = normalizeSpouseRow(spouseRows[spouseDateModal.index])
+          const targetParts =
+            spouseDateModal.side === 'start' ? targetRow.start : targetRow.end
+          // 부분 정밀(연만·연월) 값은 달력 초기값으로 못 쓴다 — 완전일자일 때만 전달
+          const initialDate =
+            targetParts.year && targetParts.month && targetParts.day
+              ? buildPartialDateString(targetParts)
+              : undefined
+          return (
+            <DatePickerModal
+              isOpen
+              onSelect={(date) => {
+                patchSpouseDateParts(
+                  spouseDateModal.index,
+                  spouseDateModal.side,
+                  parsePartialDateString(date),
+                )
+                setSpouseDateModal(null)
+              }}
+              onClose={() => setSpouseDateModal(null)}
+              initialDate={initialDate}
+            />
+          )
+        })()}
       {/* 배우자 "새 인물 등록" 모달 — pending 행을 채운다(검색·생성). */}
       {showSpouseModal && (
         <PersonSelectModal
@@ -752,7 +888,8 @@ const SpouseRowMeta = styled.div`
   padding-left: 30px;
 `
 
-const SpouseDateField = styled.label`
+/** 혼인 메타 필드(혼인일·서열) — 라벨 + 컨트롤 세로 스택. label 태그 아님(내부에 버튼 여럿). */
+const SpouseMetaField = styled.div`
   display: inline-flex;
   flex-direction: column;
   gap: 4px;
@@ -766,23 +903,36 @@ const SpouseDateLabel = styled.span`
   letter-spacing: 0.04em;
 `
 
-const SpouseDateInput = styled.input`
+const SpouseRankSelectWrap = styled.div`
+  position: relative;
+  width: 118px;
+`
+
+const SpouseRankSelect = styled.select`
+  width: 100%;
+  appearance: none;
+  padding: 7px 26px 7px 8px;
   font-size: ${FONT.meta};
-  padding: 6px 8px;
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: ${RADIUS.control};
-  color-scheme: ${({ theme }) => (theme.mode === 'dark' ? 'dark' : 'light')};
-
+  cursor: pointer;
   &:focus {
     outline: none;
     border-color: ${({ theme }) => theme.colors.primary};
   }
-  &[aria-invalid='true'] {
-    border-color: ${({ theme }) => theme.colors.alert.danger.fg};
-  }
+`
+
+const SpouseRankCaret = styled.span`
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  display: inline-flex;
 `
 
 const SpouseDateError = styled.p`

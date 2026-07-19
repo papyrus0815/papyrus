@@ -66,6 +66,10 @@ export interface FamilyMember {
 
 export interface SpouseRelationInput extends FamilyMember {
   marriageStartDate?: string | null
+  /** 혼인 시작 기원 — 'BC'면 타임라인(AD 축)에서 혼인 노드 제외(크기값 연도 둔갑 방지) */
+  marriageStartEra?: string | null
+  /** 혼인 시작 정밀도('year'|'month'|'day') — 01-01 채움을 '1월 1일'로 둔갑시키지 않게 라벨 게이트 */
+  marriageStartPrecision?: string | null
 }
 
 interface ReignInput {
@@ -705,7 +709,8 @@ export function PersonLifeTimelineInfographic({
       pushFamilyBirth('spouse', sp, i)
       pushFamilyDeath('spouse', sp, i)
 
-      const mStart = parseDate(sp.marriageStartDate)
+      // BC 혼인일은 DATETIME 크기값 저장이라 AD 축 타임라인에 올리면 연도가 둔갑 — 제외.
+      const mStart = sp.marriageStartEra === 'BC' ? null : parseDate(sp.marriageStartDate)
       if (mStart && !hasLifeOverlap(mStart)) {
         result.push({
           key: `marriage-start-${sp.id ?? i}`,
@@ -714,7 +719,8 @@ export function PersonLifeTimelineInfographic({
           end: null,
           sortKey: toTs(mStart),
           title: `${sp.name}과 혼인`,
-          dateLabel: formatWithPrecision(mStart, 'day'),
+          // 연/월 정밀 혼인일의 01-01 채움이 '1월 1일'로 둔갑하지 않게 정밀도만큼만 표기
+          dateLabel: formatWithPrecision(mStart, sp.marriageStartPrecision ?? 'day'),
           familyRelation: 'spouse',
           familyPersonId: sp.id,
         })

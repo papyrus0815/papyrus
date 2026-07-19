@@ -46,7 +46,17 @@ import {
   uploadImage,
   validateImageFile,
 } from '@/shared/api/upload'
+import { marriageRankOrder } from '@/shared/lib/marriage-rank-labels'
 import { normalizeNicknameType } from '@/shared/lib/nickname-type-labels'
+import {
+  hasAnyPartialDateInput,
+  isPartialRangeInverted,
+  parsePartialDateString,
+  partialDateFromResponse,
+  partialDateFromStructured,
+  partialPartsSortKey,
+  partialPartsToDateInfo,
+} from '@/shared/lib/partial-date-string'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
@@ -85,7 +95,11 @@ import {
   makeAffiliationRow,
   type CountryAffiliationRow,
 } from './sections/country-affiliations-section'
-import { FamilySection } from './sections/family-section'
+import {
+  FamilySection,
+  normalizeSpouseRow,
+  type SpouseFormRow,
+} from './sections/family-section'
 import { LifeSection } from './sections/life-section'
 import { NicknameSection, type NicknameRow } from './sections/nickname-section'
 import { PlaceFields } from './sections/place-fields'
@@ -285,7 +299,7 @@ export function PersonRegisterView({
    * 다중 배우자(정실/후궁·순차 재혼)와 결혼일을 폼에서 직접 편집·추가/삭제한다.
    * (과거: 스칼라 첫 슬롯 + 숨은 보존 배열로 둘째 이후는 편집 불가·날짜 입력 불가였음)
    */
-  const [spouseRows, setSpouseRows] = useState<SpouseRelationInput[]>([])
+  const [spouseRows, setSpouseRows] = useState<SpouseFormRow[]>([])
   const [nicknameRows, setNicknameRows] = useState<NicknameRow[]>([])
   // 기타
   const [profileImageUrl, setProfileImageUrl] = useState('')
@@ -858,25 +872,53 @@ export function PersonRegisterView({
         setFatherId(p.fatherId ?? p.father?.id ?? '')
         setMotherId(p.motherId ?? p.mother?.id ?? '')
         setIllegitimate(Boolean((p as any).illegitimate))
-        // 배우자 관계 전체(결혼 시작/종료일·다중 배우자 포함)를 반복 행으로 로드.
-        // 날짜는 <input type="date">용으로 YYYY-MM-DD 정규화(서버는 ISO 문자열 반환).
-        const spouseRels: SpouseRelationInput[] = (p.spouseRelations ?? [])
+        // 배우자 관계 전체(결혼 시작/종료일·서열·다중 배우자 포함)를 반복 행으로 로드.
+        // 날짜는 era+precision을 반영한 부분 정밀 부호 문자열('1526'·'-0044-03-15')로 복원 —
+        // DATETIME의 01-01 채움·BC 크기값 저장을 폼에 노출하지 않는다.
+        const spouseRels: SpouseFormRow[] = (p.spouseRelations ?? [])
           .filter((rel: any) => rel?.spouse?.id)
           .map((rel: any) => ({
             spouseId: String(rel.spouse.id),
-            marriageStartDate: rel.marriageStartDate ? String(rel.marriageStartDate).slice(0, 10) : undefined,
-            marriageEndDate: rel.marriageEndDate ? String(rel.marriageEndDate).slice(0, 10) : undefined,
+            // 구조화 연/월/일 우선(BC·고대는 DateTime null), 레거시 행은 ISO+era+precision 폴백
+            start: parsePartialDateString(
+              partialDateFromStructured(
+                rel.marriageStartYear,
+                rel.marriageStartMonth,
+                rel.marriageStartDay,
+                rel.marriageStartEra,
+              ) ||
+                partialDateFromResponse(
+                  rel.marriageStartDate,
+                  rel.marriageStartEra,
+                  rel.marriageStartPrecision,
+                ),
+            ),
+            end: parsePartialDateString(
+              partialDateFromStructured(
+                rel.marriageEndYear,
+                rel.marriageEndMonth,
+                rel.marriageEndDay,
+                rel.marriageEndEra,
+              ) ||
+                partialDateFromResponse(
+                  rel.marriageEndDate,
+                  rel.marriageEndEra,
+                  rel.marriageEndPrecision,
+                ),
+            ),
+            rank: rel.marriageRank ?? '',
             note: rel.note ?? null,
           }))
-          // 저장은 canonical(min,max) id 순이고 응답은 양방향(AsPerson+AsSpouse) 병합이라, 별도 정렬이
-          // 없으면 화면의 "1번/2번 배우자"가 UUID 대소로 결정돼 재로드마다 뒤바뀐다. 다중 배우자
-          // (정실/후궁·순차 재혼)에서 순서가 의미를 갖도록 혼인 시작일 오름차순(미상은 뒤)으로 안정화.
-          .sort((rowA: SpouseRelationInput, rowB: SpouseRelationInput) => {
-            const startA = rowA.marriageStartDate ?? ''
-            const startB = rowB.marriageStartDate ?? ''
-            if (startA && startB) return startA < startB ? -1 : startA > startB ? 1 : 0
-            if (startA) return -1
-            if (startB) return 1
+          // 서버가 서열→부호연도→id로 정렬해 주지만, 방어적으로 같은 키로 재정렬(스냅샷 draft 등
+          // 서버 정렬을 안 거친 행 대비). 서열 명시가 이기고, 혼인 시작 미상은 뒤.
+          .sort((rowA: SpouseFormRow, rowB: SpouseFormRow) => {
+            const rankDiff = marriageRankOrder(rowA.rank) - marriageRankOrder(rowB.rank)
+            if (rankDiff !== 0) return rankDiff
+            const keyA = partialPartsSortKey(rowA.start)
+            const keyB = partialPartsSortKey(rowB.start)
+            if (keyA != null && keyB != null) return keyA - keyB
+            if (keyA != null) return -1
+            if (keyB != null) return 1
             return 0
           })
         setSpouseRows(spouseRels)
@@ -1494,24 +1536,24 @@ export function PersonRegisterView({
     if (hasAffiliationDateError(countryAffiliations)) {
       e._form = '국가 소속의 기간을 확인해주세요. 종료일이 시작일보다 빠른 행이 있습니다.'
     }
-    // 배우자 미선택 행에 혼인일·메모만 입력하면 저장 시 조용히 폐기되므로 제출 차단.
-    const orphanSpouseMeta = spouseRows.some(
+    // 배우자 미선택 행에 혼인일·서열·메모만 입력하면 저장 시 조용히 폐기되므로 제출 차단.
+    const normalizedSpouseRows = spouseRows.map((row) => normalizeSpouseRow(row))
+    const orphanSpouseMeta = normalizedSpouseRows.some(
       (row) =>
         !row.spouseId &&
-        (row.marriageStartDate || row.marriageEndDate || (row.note && row.note.trim())),
+        (hasAnyPartialDateInput(row.start) ||
+          hasAnyPartialDateInput(row.end) ||
+          row.rank ||
+          (row.note && row.note.trim())),
     )
-    // 혼인 종료일이 시작일보다 빠른 행(음수 기간)도 차단.
-    const badSpouseDate = spouseRows.some(
-      (row) =>
-        row.spouseId &&
-        row.marriageStartDate &&
-        row.marriageEndDate &&
-        String(row.marriageEndDate).slice(0, 10) < String(row.marriageStartDate).slice(0, 10),
+    // 혼인 종료일이 시작일보다 빠른 행(음수 기간)도 차단 — 공통 정밀도까지만 보수 비교(BC 안전).
+    const badSpouseDate = normalizedSpouseRows.some(
+      (row) => row.spouseId && isPartialRangeInverted(row.start, row.end),
     )
     if (orphanSpouseMeta || badSpouseDate) {
       const parts: string[] = []
       if (orphanSpouseMeta)
-        parts.push('배우자가 선택되지 않은 행에 혼인일·메모가 입력되어 있습니다. 배우자를 선택하거나 행을 비워주세요.')
+        parts.push('배우자가 선택되지 않은 행에 혼인일·서열·메모가 입력되어 있습니다. 배우자를 선택하거나 행을 비워주세요.')
       if (badSpouseDate) parts.push('배우자 혼인 종료일이 시작일보다 빠른 행이 있습니다.')
       e._form = [e._form, ...parts].filter(Boolean).join(' ')
     }
@@ -1538,6 +1580,7 @@ export function PersonRegisterView({
    *   폼이 편집하는 첫 관계만 교체한다. 이미 관계가 있던 인물을 고르면 결혼일은 유지.
    */
   const buildSpouseRelations = (): SpouseRelationInput[] | undefined => {
+    // 파츠 행 → 전송 형상. 구형 draft 스냅샷 행도 normalize로 승격.
     // 배우자 미선택(빈) 행은 제외 + 같은 배우자 중복 페어 제거.
     const seen = new Set<string>()
     const rows = spouseRows
@@ -1546,12 +1589,17 @@ export function PersonRegisterView({
         seen.add(row.spouseId)
         return true
       })
-      .map((row) => ({
-        spouseId: row.spouseId,
-        marriageStartDate: row.marriageStartDate || undefined,
-        marriageEndDate: row.marriageEndDate || undefined,
-        note: row.note?.trim() ? row.note.trim() : null,
-      }))
+      .map((raw) => {
+        const row = normalizeSpouseRow(raw)
+        return {
+          spouseId: row.spouseId,
+          // 폼 파츠 → 구조화 DateInfo 전송(BC·연단위 보존, 정밀도 사다리). 레거시 ISO 채널은 미사용.
+          marriageStart: partialPartsToDateInfo(row.start) ?? null,
+          marriageEnd: partialPartsToDateInfo(row.end) ?? null,
+          marriageRank: row.rank || null,
+          note: row.note?.trim() ? row.note.trim() : null,
+        }
+      })
     // 수정 모드: 항상 배열 전송(빈 배열이면 전체 제거). 신규: 채워진 행만.
     if (!isEditMode) return rows.length ? rows : undefined
     return rows

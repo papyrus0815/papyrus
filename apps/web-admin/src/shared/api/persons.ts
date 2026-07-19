@@ -33,6 +33,15 @@ export interface DateInfoInput {
 /** 서버 SpouseRelationDto 미러 — note는 런타임에서 null 수용(@IsOptional) */
 export interface SpouseRelationInput {
   spouseId: string
+  /** 구조화 혼인 시작 — BC·연단위 (서버 DateInfoDto). 폼은 문자열 채널을 쓰고 payload 빌드에서 변환 */
+  marriageStart?: DateInfoInput | null
+  marriageEnd?: DateInfoInput | null
+  /** 혼인 서열/형태 (MarriageRank 토큰 — PRIMARY·CONCUBINE 등). null = 미분류 */
+  marriageRank?: string | null
+  /**
+   * 폼 행 상태 겸 레거시 채널 — 부분 정밀 부호 문자열('1526'·'1526-03'·'-0044-03-15').
+   * shared/lib/partial-date-string 헬퍼로 파싱·조립. payload에서는 구조화 marriageStart로 변환 전송.
+   */
   marriageStartDate?: string
   marriageEndDate?: string
   note?: string | null

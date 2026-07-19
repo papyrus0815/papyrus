@@ -28,6 +28,8 @@ interface InlineDateFieldProps {
   disabled?: boolean
   disabledLabel?: string
   error?: boolean
+  /** 오류 메시지 연결(role=alert 요소 id) — 역전 검증 등 외부 오류를 연도 입력에 연결 */
+  ariaDescribedBy?: string
   ariaLabel: string
 }
 
@@ -47,6 +49,7 @@ export function InlineDateField({
   disabled,
   disabledLabel,
   error,
+  ariaDescribedBy,
   ariaLabel,
 }: InlineDateFieldProps) {
   if (disabled) {
@@ -69,6 +72,7 @@ export function InlineDateField({
           placeholder="년"
           aria-label="연도"
           aria-invalid={error || undefined}
+          aria-describedby={ariaDescribedBy}
           value={year}
           onChange={(event) => onYear(digits(event.target.value, 4))}
         />

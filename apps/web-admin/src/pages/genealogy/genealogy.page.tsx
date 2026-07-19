@@ -29,6 +29,7 @@ import { FiArrowLeft, FiDownload, FiSearch, FiTarget, FiUsers } from 'react-icon
 
 import { getPersonFamilyTree, type FamilyTreePerson, type FamilyTreeData } from '@/shared/api/persons-family-tree'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { marriageRankOrder } from '@/shared/lib/marriage-rank-labels'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { TRUNCATION_SCOPE_LABEL } from '@/widgets/person/person-genealogy-infographic/constants'
 
@@ -196,10 +197,31 @@ function computeLayout(
 
   // ── D. Ego's spouses → right (COUPLE_STEP clearance) ─────────────
   const egoSpouseSet = new Set(spousesOf.get(egoId) ?? [])
+  // 배치 순서 — 엣지 발견(Set 삽입) 순서 대신 서열(정실 우선)→혼인 부호연도로 안정 정렬
+  // (상세 인포그래픽의 '배우자 N' 정렬과 일치).
+  const egoSpouseMeta = new Map<string, { rank: string | null; year: number | null }>()
+  for (const e of edges) {
+    if (e.type !== 'spouse') continue
+    const other = e.source === egoId ? e.target : e.target === egoId ? e.source : null
+    if (other && !egoSpouseMeta.has(other))
+      egoSpouseMeta.set(other, {
+        rank: e.marriageRank ?? null,
+        year: e.marriageStartYear ?? null,
+      })
+  }
+  const egoSpouses = [...egoSpouseSet].sort((idA, idB) => {
+    const metaA = egoSpouseMeta.get(idA)
+    const metaB = egoSpouseMeta.get(idB)
+    const rankDiff = marriageRankOrder(metaA?.rank) - marriageRankOrder(metaB?.rank)
+    if (rankDiff !== 0) return rankDiff
+    return (
+      (metaA?.year ?? Number.POSITIVE_INFINITY) - (metaB?.year ?? Number.POSITIVE_INFINITY)
+    )
+  })
 
   // Ensure at least COUPLE_STEP from ego (x=0) so parent rows don't collide
   let rightCursor = Math.max(maxX() + STEP, COUPLE_STEP)
-  for (const sid of egoSpouseSet) {
+  for (const sid of egoSpouses) {
     xMap.set(sid, rightCursor)
     // Check if this spouse has parents in the graph
     const spouseHasParents = (parentsOf.get(sid) ?? []).some(pid =>
@@ -325,9 +347,12 @@ function buildGraph(
     const isSpouse = e.type === 'spouse'
     // inferred는 계약(FamilyTreeEdge)에 이미 선언됨 — any 캐스트 불필요(계약 변경 시 컴파일 강제).
     const inferred = isSpouse && Boolean(e.inferred)
+    // 부호 연도(BC 음수) → 컴팩트 라벨: BC 44 등. AD는 숫자 그대로.
+    const fmtMarriageYear = (year: number | null | undefined) =>
+      year == null ? null : year < 0 ? `BC ${-year}` : String(year)
     const marriagePeriod =
       isSpouse && (e.marriageStartYear != null || e.marriageEndYear != null)
-        ? `${e.marriageStartYear ?? '?'}–${e.marriageEndYear ?? ''}`
+        ? `${fmtMarriageYear(e.marriageStartYear) ?? '?'}–${fmtMarriageYear(e.marriageEndYear) ?? ''}`
         : null
     const labelText = isSpouse
       ? (inferred ? '♡' : (marriagePeriod ? `♥ ${marriagePeriod}` : '♥'))

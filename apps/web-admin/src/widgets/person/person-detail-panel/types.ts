@@ -227,7 +227,20 @@ export interface PersonDetailData {
   spouseRelations?: Array<{
     id?: string
     marriageStartDate?: string | null
+    /** 혼인 기원(BC/AD)·구조화 연/월/일·정밀도 — DATETIME은 AD 1000+ 전용, 구조화 필드가 진실 */
+    marriageStartEra?: string | null
+    marriageStartYear?: number | null
+    marriageStartMonth?: number | null
+    marriageStartDay?: number | null
+    marriageStartPrecision?: string | null
     marriageEndDate?: string | null
+    marriageEndEra?: string | null
+    marriageEndYear?: number | null
+    marriageEndMonth?: number | null
+    marriageEndDay?: number | null
+    marriageEndPrecision?: string | null
+    /** 혼인 서열/형태 (MarriageRank 토큰) */
+    marriageRank?: string | null
     note?: string | null
     spouse?: (PersonNameFields & {
       id?: string

@@ -67,6 +67,7 @@ import {
   useRichTextProseClick,
   useRichTextTooltipEscape,
 } from '@/shared/hooks/use-rich-text-prose-click'
+import { MARRIAGE_RANK_LABELS } from '@/shared/lib/marriage-rank-labels'
 import { NICKNAME_TYPE_LABELS } from '@/shared/lib/nickname-type-labels'
 import {
   type PersonNameFields,
@@ -579,14 +580,17 @@ export function PersonDetailPanel({
 
   const timelineSpouses = useMemo(() => {
     const list = (person?.spouseRelations ?? []) as any[]
-    return list.map((r) => {
-      const sp = r.spouse ?? r
+    return list.map((rel) => {
+      const sp = rel.spouse ?? rel
       return {
         id: sp.id,
         name: getPersonDisplayName(sp, true),
         birthDate: sp.birthDate ? String(sp.birthDate) : null,
         deathDate: sp.deathDate ? String(sp.deathDate) : null,
-        marriageStartDate: r.marriageStartDate ?? null,
+        marriageStartDate: rel.marriageStartDate ?? null,
+        // BC 혼인은 타임라인(AD 축)에 올리면 둔갑 — era로 게이트
+        marriageStartEra: rel.marriageStartEra ?? null,
+        marriageStartPrecision: rel.marriageStartPrecision ?? null,
       }
     })
   }, [person])
@@ -788,14 +792,16 @@ export function PersonDetailPanel({
       PersonDetailData['spouseRelations']
     >
     return rels
-      .map((r) => {
-        const sp = r.spouse ?? null
+      .map((rel) => {
+        const sp = rel.spouse ?? null
         return {
           id: sp?.id as string | undefined,
           name: sp ? getPersonDisplayName(sp, true) : '',
+          /** 혼인 서열 토큰 — 있으면 이름 뒤 괄호 표기 */
+          rank: rel.marriageRank ?? null,
         }
       })
-      .filter((s) => s.name && s.name !== '이름 없음')
+      .filter((entry) => entry.name && entry.name !== '이름 없음')
   }, [person])
 
   const modalTopId =
@@ -1749,19 +1755,22 @@ export function PersonDetailPanel({
                 <KpiLabel>배우자 {kpiSpouses.length > 1 ? `(${kpiSpouses.length})` : ''}</KpiLabel>
                 <KpiValue>
                   {kpiSpouses.length > 0
-                    ? kpiSpouses.map((s, i) => (
-                        <span key={s.id ?? `spouse-${i}`}>
-                          {i > 0 && ' · '}
-                          {s.id ? (
+                    ? kpiSpouses.map((sp, idx) => (
+                        <span key={sp.id ?? `spouse-${idx}`}>
+                          {idx > 0 && ' · '}
+                          {sp.id ? (
                             <KpiLink
                               type="button"
-                              onClick={() => handlePersonClick(s.id!)}
+                              onClick={() => handlePersonClick(sp.id!)}
                             >
-                              {s.name}
+                              {sp.name}
                             </KpiLink>
                           ) : (
-                            s.name
+                            sp.name
                           )}
+                          {sp.rank
+                            ? ` (${MARRIAGE_RANK_LABELS[sp.rank] ?? sp.rank})`
+                            : ''}
                         </span>
                       ))
                     : fallbackName}

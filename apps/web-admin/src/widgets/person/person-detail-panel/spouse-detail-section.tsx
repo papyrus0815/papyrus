@@ -4,9 +4,15 @@
  */
 import { FiUsers } from 'react-icons/fi'
 
+import { MARRIAGE_RANK_LABELS } from '@/shared/lib/marriage-rank-labels'
+import {
+  formatPartialDateKo,
+  partialDateFromResponse,
+  partialDateFromStructured,
+} from '@/shared/lib/partial-date-string'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
-import { formatIsoDateKo, formatPeriod } from './helpers'
+import { formatPeriod } from './helpers'
 import {
   CountMuted,
   OverviewSectionHeaderRow,
@@ -30,8 +36,33 @@ export function SpouseDetailSection({
   spouseRelations,
   isDeceased,
 }: SpouseDetailSectionProps) {
+  // 구조화 연/월/일 우선(BC·고대는 DateTime null), 레거시 행은 ISO+era+precision 폴백 —
+  // 정밀도만큼만 표기해 01-01 채움이 '1월 1일'로 둔갑하지 않게 한다.
+  const marriageDateLabel = (
+    rel: NonNullable<PersonDetailData['spouseRelations']>[number],
+    side: 'Start' | 'End',
+  ): string =>
+    formatPartialDateKo(
+      partialDateFromStructured(
+        rel[`marriage${side}Year`],
+        rel[`marriage${side}Month`],
+        rel[`marriage${side}Day`],
+        rel[`marriage${side}Era`],
+      ) ||
+        partialDateFromResponse(
+          rel[`marriage${side}Date`],
+          rel[`marriage${side}Era`],
+          rel[`marriage${side}Precision`],
+        ),
+    )
   const rels = (spouseRelations ?? []).filter(
-    (r) => r.note || r.marriageStartDate || r.marriageEndDate,
+    (rel) =>
+      rel.note ||
+      rel.marriageRank ||
+      rel.marriageStartDate ||
+      rel.marriageEndDate ||
+      rel.marriageStartYear != null ||
+      rel.marriageEndYear != null,
   )
   if (rels.length === 0) return null
 
@@ -45,21 +76,27 @@ export function SpouseDetailSection({
         </OverviewSectionHeading>
       </OverviewSectionHeaderRow>
       <SpouseDetailList>
-        {rels.map((r, idx) => {
-          const sp = r.spouse ?? null
+        {rels.map((rel, idx) => {
+          const sp = rel.spouse ?? null
           const name = sp ? getPersonDisplayName(sp, true) : '이름 없음'
-          const start = formatIsoDateKo(r.marriageStartDate)
-          const end = formatIsoDateKo(r.marriageEndDate)
+          const start = marriageDateLabel(rel, 'Start')
+          const end = marriageDateLabel(rel, 'End')
           // 종료일만 있는 관계가 단독 날짜로 보이면 혼인일로 오독됨 —
           // formatPeriod가 '~ 종료일' 접두·진행형 폴백을 일괄 처리.
           const period = formatPeriod(start, end, isDeceased ? '미상' : '현재')
+          const rankLabel = rel.marriageRank
+            ? MARRIAGE_RANK_LABELS[rel.marriageRank] ?? rel.marriageRank
+            : null
           return (
-            <SpouseDetailItem key={r.id ?? `spouse-${idx}`}>
+            <SpouseDetailItem key={rel.id ?? `spouse-${idx}`}>
               <SpouseDetailHeader>
-                <SpouseDetailName>{name}</SpouseDetailName>
+                <SpouseDetailName>
+                  {name}
+                  {rankLabel ? ` (${rankLabel})` : ''}
+                </SpouseDetailName>
                 {period && <SpouseDetailPeriod>{period}</SpouseDetailPeriod>}
               </SpouseDetailHeader>
-              {r.note && <SpouseDetailNote>{r.note}</SpouseDetailNote>}
+              {rel.note && <SpouseDetailNote>{rel.note}</SpouseDetailNote>}
             </SpouseDetailItem>
           )
         })}
