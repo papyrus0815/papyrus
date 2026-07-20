@@ -154,7 +154,6 @@ export type HistoricalCountryTab =
   | 'succession' // 계승 관계
   | 'membership' // 소속·구성 (신성로마-제후국 등)
   | 'relation' // 국가 관계 (한·중 조공, 동맹 등)
-  | 'territory' // 영토 변천
   | 'culture' // 문화 유산
 
 /**
@@ -375,8 +374,8 @@ export function HistoricalCountryDetail({
                   {activeTab === 'relation' && (
                     <RelationSection country={country} />
                   )}
-                  {/* 영토·문화는 저작 API가 없어 플레이스홀더 — 로드맵 확정 시 배선 */}
-                  {activeTab === 'territory' && <TerritorySection />}
+                  {/* 문화는 저작 API가 없어 플레이스홀더 — 로드맵 확정 시 배선.
+                      영토 변천 탭은 저작 모델·데이터가 없어 제거함(행정구역은 regions 탭에서 실제 지원). */}
                   {activeTab === 'culture' && <CultureSection />}
                 </motion.div>
               </AnimatePresence>
@@ -590,7 +589,6 @@ function HistoricalCountryTabs({
     { id: 'succession', label: '계승' },
     { id: 'membership', label: '소속·구성' },
     { id: 'relation', label: '국가 관계' },
-    { id: 'territory', label: '영토' },
     { id: 'culture', label: '문화' },
   ]
 
@@ -1815,10 +1813,6 @@ function SuccessionRow({
 }
 
 // ============================================
-// 영토 변천 섹션
-// ============================================
-
-// ============================================
 // 행정구역 섹션 — 현대 국가와 동일한 등록/드릴다운 UI를 historicalCountryId 소속으로 사용
 // ============================================
 
@@ -1864,26 +1858,6 @@ function HistoricalRegionsSection({ country }: { country: UnifiedCountry }) {
   )
 }
 
-function TerritorySection() {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-  return (
-    <div
-      style={{
-        padding: '48px',
-        background: isDark ? '#1d1d1d' : '#fafafa',
-        minHeight: 'calc(100vh - 300px)',
-      }}
-    >
-      <EmptyState
-        message="영토 변천 정보가 준비 중입니다"
-        description="역사적 지도와 영토 확장/축소 정보가 표시됩니다"
-        isDark={isDark}
-      />
-    </div>
-  )
-}
-
 // ============================================
 // 문화 유산 섹션
 // ============================================
@@ -1892,8 +1866,8 @@ function TerritorySection() {
  * 문화 유산 탭 — 저작 가능한 데이터 모델·API가 아직 없어 정직한 '준비 중' 상태.
  *
  * 과거에는 국가명 includes('조선'|'고려') 매칭으로 하드코딩 목업을 렌더해
- * 실데이터로 오인될 수 있었다(예: 북한 상세에 조선왕조 유산). 목업을 제거하고
- * 영토 탭과 같은 플레이스홀더로 통일한다.
+ * 실데이터로 오인될 수 있었다(예: 북한 상세에 조선왕조 유산). 목업을 제거해
+ * 정직한 플레이스홀더로 둔다.
  */
 function CultureSection() {
   const { mode } = useThemeStore()
