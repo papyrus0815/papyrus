@@ -214,15 +214,22 @@ export const EventDashboardView: React.FC<Props> = ({
     )
   }
 
+  // serverTotal은 *최상위(parentEventId=null)* 개수. events는 자식까지 포함한 평탄
+  // 배열이라 events.length는 항상 serverTotal 이상이 되어 부분 경고가 억제됐다.
+  // 로드된 최상위 수로 비교해야 "아직 다 안 불러옴"을 정확히 감지한다.
+  const loadedRootCount = useMemo(
+    () => events.filter((evt) => !evt.parentEventId).length,
+    [events],
+  )
   const isPartial =
-    typeof serverTotal === 'number' && events.length < serverTotal
+    typeof serverTotal === 'number' && loadedRootCount < serverTotal
 
   return (
     <Host>
       {isPartial && (
         <PartialDataBanner role="status">
-          현재 로드된 {events.length.toLocaleString()}건 기준 집계입니다 (전체{' '}
-          {serverTotal!.toLocaleString()}건). 목록/타임라인에서 더 불러오면
+          현재 로드된 최상위 {loadedRootCount.toLocaleString()}건 기준 집계입니다
+          (전체 {serverTotal!.toLocaleString()}건). 목록/타임라인에서 더 불러오면
           통계가 갱신됩니다.
         </PartialDataBanner>
       )}

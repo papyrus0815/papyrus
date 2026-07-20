@@ -17,6 +17,7 @@ import { CategoryDot as SharedCategoryDot } from '@/shared/ui/category-dot/categ
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import { ImportancePill } from '@/shared/ui/importance-pill/importance-pill'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import { BRAND } from '../../../pages/events/styles/theme'
 import type {
@@ -34,6 +35,16 @@ const focusVisible = `
 
 /** useEventHierarchy 출력 계약 단일화 — 각 뷰의 중복 선언 제거 */
 type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
+
+/**
+ * 연도 라벨 — 네이티브 Date 금지(BC·연도<100을 Invalid Date/오년도로 만듦).
+ * ISO 구성요소 파싱으로 부호 연도 안전 처리. BC는 '기원전 N', 미상은 '—'.
+ */
+const formatYear = (start: string): string => {
+  const parts = parseIsoDateParts(start)
+  if (!parts) return '—'
+  return parts.year < 0 ? `기원전 ${Math.abs(parts.year)}` : `${parts.year}`
+}
 
 interface Props {
   flattenedHierarchy: FlatItem[]
@@ -132,7 +143,7 @@ export const EventTreeView: React.FC<Props> = ({
       {rootEvents.map((evt) => {
         const root = evt.hierarchy
         const totalNodes = countAllNodes(root)
-        const startYear = new Date(root.period.start).getFullYear()
+        const startYear = formatYear(root.period.start)
         return (
           <RootCard key={evt.id} $active={selectedEventId === root.id}>
             <RootHeader
@@ -207,7 +218,7 @@ const TreeNode: React.FC<{
   const isOpen = collapseAll
     ? expanded.has(node.id)
     : depth <= 1 || expanded.has(node.id)
-  const startYear = new Date(node.period.start).getFullYear()
+  const startYear = formatYear(node.period.start)
 
   return (
     <NodeWrap $depth={depth}>

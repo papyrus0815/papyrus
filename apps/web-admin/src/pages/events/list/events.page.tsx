@@ -413,13 +413,19 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
         null,
     )
     // 현재 화면은 로드·필터된 일부만 → 전체보다 적으면 부분 내보내기임을 확인.
+    // serverTotal은 *최상위(parentEventId=null)* 개수이므로, 부분 여부 판정은
+    // 로드된 *최상위* 수(depth 0)로 비교해야 한다. exportedCount(하위 포함)로 비교하면
+    // 자식이 많을 때 exportedCount>serverTotal이 되어 부분 경고가 조용히 억제됐다.
     const exportedCount = exported.filter(Boolean).length
+    const loadedRootCount = visibleFlattenedHierarchy.filter(
+      (item) => item.depth === 0,
+    ).length
     if (
       typeof serverTotal === 'number' &&
-      exportedCount < serverTotal &&
+      loadedRootCount < serverTotal &&
       !(await confirm({
         title: '확인',
-        message: `전체 ${serverTotal.toLocaleString()}건 중 현재 로드·필터된 ${exportedCount.toLocaleString()}건만 내보냅니다. 계속할까요?`,
+        message: `등록된 최상위 사건 ${serverTotal.toLocaleString()}건 중 현재 로드·필터된 ${loadedRootCount.toLocaleString()}건(하위 사건 포함 ${exportedCount.toLocaleString()}건)만 내보냅니다. 계속할까요?`,
       }))
     ) {
       return

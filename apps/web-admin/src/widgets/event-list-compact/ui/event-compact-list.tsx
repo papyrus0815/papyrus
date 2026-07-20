@@ -138,7 +138,15 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           lastTopLevelYear = parsedYear
         }
       }
-      const year = parsedYear ?? lastTopLevelYear
+      // 자식(depth>0)은 *부모(직전 depth 0)의 연도 버킷*에 귀속시킨다.
+      // allYears는 eventYears(=depth 0 연도)에서만 파생되므로, 자식을 자기
+      // period.start 연도로 버킷팅하면 그 연도에 최상위 사건이 없을 때 버킷 키가
+      // allYears에 없어 렌더 루프(allYears.map)가 순회하지 않고 자식이 조용히
+      // 누락됐다(예: 임진왜란 1592의 자식 명량 1597). 부모 연도로 귀속하면
+      // 버킷 키가 항상 allYears에 존재하고, 부모-자식이 인접 유지되며, 부모를
+      // 접었을 때의 소멸 인과도 일치한다. 평면 보기(showFlatView)에선 모든 항목이
+      // depth 0라 이 분기가 무관 — 각자 자기 연도로 정상 버킷팅된다.
+      const year = item.depth === 0 ? parsedYear ?? lastTopLevelYear : lastTopLevelYear
       if (year === null) return
       if (!byYear.has(year)) byYear.set(year, [])
       byYear.get(year)!.push(item)

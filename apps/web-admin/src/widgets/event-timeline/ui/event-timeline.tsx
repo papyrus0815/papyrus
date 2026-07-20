@@ -5198,7 +5198,9 @@ const Bar = styled.rect<{
     const base =
       $importance === 'normal' || $importance === 'notable' ? 0.7 : 1
     /* 자식(depth>0) 톤 다운 — 부모/형제 사건과 시각 위계 분리 */
-    return $depth > 0 ? base * 0.65 : base
+    // 자식은 가독 하한(0.6)을 두고 완만히 톤다운 — 이전 base*0.65는 normal 자식이
+    // 0.46까지 흐려져 "하위 사건이 안 보인다"는 인상을 줬다. 위계 구분은 유지하되 판독 가능하게.
+    return $depth > 0 ? Math.max(0.6, base * 0.85) : base
   }};
 
   &:hover,
@@ -5231,7 +5233,9 @@ const MilestonePill = styled.rect<{
     if ($dim) return 0.4
     const base =
       $importance === 'normal' || $importance === 'notable' ? 0.7 : 1
-    return $depth > 0 ? base * 0.65 : base
+    // 자식은 가독 하한(0.6)을 두고 완만히 톤다운 — 이전 base*0.65는 normal 자식이
+    // 0.46까지 흐려져 "하위 사건이 안 보인다"는 인상을 줬다. 위계 구분은 유지하되 판독 가능하게.
+    return $depth > 0 ? Math.max(0.6, base * 0.85) : base
   }};
 
   &:hover,

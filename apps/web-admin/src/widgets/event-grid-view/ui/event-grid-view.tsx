@@ -64,17 +64,20 @@ export const EventGridView: React.FC<Props> = ({
   onSelectEvent,
 }) => {
   /** 전체 events 기준 decade별 사건 수 — heat 정규화의 *글로벌 max* 산정에 사용.
-   * 필터 결과만으로 정규화하면 작은 절대값도 100% heat로 보여 시각 왜곡. */
+   * 필터 결과만으로 정규화하면 작은 절대값도 100% heat로 보여 시각 왜곡.
+   * 셀 count(numerator)는 최상위(depth 0)만 세므로, 분모도 최상위만 세야 heat가
+   * 체계적으로 낮게 나오는 소스 불일치가 없다(자식 포함 시 분모만 커져 왜곡). */
   const globalMaxByDecade = useMemo(() => {
-    const m = new Map<number, number>()
-    for (const e of events) {
-      const p = parseIsoDateParts(e.startDate)
-      if (!p) continue
-      const d = getDecade(p.year)
-      m.set(d, (m.get(d) ?? 0) + 1)
+    const decadeCount = new Map<number, number>()
+    for (const evt of events) {
+      if (evt.parentEventId) continue // 자식 제외 — numerator와 동일 스코프
+      const parts = parseIsoDateParts(evt.startDate)
+      if (!parts) continue
+      const decade = getDecade(parts.year)
+      decadeCount.set(decade, (decadeCount.get(decade) ?? 0) + 1)
     }
     let max = 0
-    for (const v of m.values()) if (v > max) max = v
+    for (const count of decadeCount.values()) if (count > max) max = count
     return max
   }, [events])
 
