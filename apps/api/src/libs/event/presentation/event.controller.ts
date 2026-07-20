@@ -460,6 +460,18 @@ export class EventController {
             historicalCountry: { select: { id: true, name: true } },
             eventSections: true,
             eventImages: true,
+            // 손자(2단 하위) — 트리/목록의 3계층 표시용. 경량 include(category·역사국가만)로
+            // 페이로드 팽창을 억제. 여기서 nested를 멈춰 depth 3(root→자식→손자)에서 캡한다.
+            // toResponseDto가 childEvents를 재귀 매핑하므로 배선 불필요(손자의 childEvents는
+            // include 안 해 undefined → 응답에서 자연히 종단).
+            childEvents: {
+              where: { deletedAt: null },
+              include: {
+                category: true,
+                historicalCountry: { select: { id: true, name: true } },
+              },
+              orderBy: { startDate: 'asc' },
+            },
           },
           orderBy: { startDate: 'asc' }, // 하위 사건 시간순 정렬
         },
