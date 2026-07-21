@@ -2,7 +2,8 @@
  * 자동 저장 patch에 1단계 undo를 얹는 훅.
  *
  * - 모든 patch 직전 *현재 event* 값을 inverse patch로 직렬화한다.
- * - mutate 성공 후 5초 토스트 — "되돌리기" 버튼 클릭 시 inverse patch로 mutate.
+ * - mutate 성공 후 5초 토스트 — "되돌리기" 버튼 클릭 또는 Ctrl/⌘+Z로 inverse patch를 mutate
+ *   (키보드 언두는 텍스트 편집 필드 밖에서만 — 편집 중엔 네이티브 텍스트 언두를 양보).
  * - 한 번에 1개의 토스트만 유효 — 다음 patch 발생 시 이전 토스트는 자동 dismiss
  *   (옛날 상태로의 점프를 방지).
  * - undo 자체는 연쇄 토스트를 띄우지 않음(원본 inverse는 raw `mutate`로 보냄).
@@ -67,6 +68,57 @@ export function useUndoablePatch({
     eventRef.current = event
   }, [event])
 
+  /**
+   * 키보드 언두(Ctrl/Cmd+Z) — 5초 토스트 버튼은 키보드로 도달하기 어렵다(포커스 이동
+   * 없음·bottom-center·자동 소멸). 보편적 언두 단축키를 배선해, 지금 유효한 inverse가
+   * 있으면 편집 필드 밖에서 Ctrl+Z로 즉시 되돌린다. mutate는 매 렌더 stable하지 않을 수
+   * 있어 ref로 고정하고, 리스너는 마운트 시 1회만 바인딩한다.
+   */
+  const mutateRef = useRef(mutate)
+  useEffect(() => {
+    mutateRef.current = mutate
+  }, [mutate])
+  const pendingUndoRef = useRef<UpdateEventDto | null>(null)
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearPendingUndo = useCallback(() => {
+    pendingUndoRef.current = null
+    if (clearTimerRef.current) {
+      clearTimeout(clearTimerRef.current)
+      clearTimerRef.current = null
+    }
+  }, [])
+
+  const runUndo = useCallback(() => {
+    const inverse = pendingUndoRef.current
+    if (!inverse) return
+    mutateRef.current(inverse)
+    if (lastToastRef.current) {
+      notify.dismiss(lastToastRef.current)
+      lastToastRef.current = null
+    }
+    clearPendingUndo()
+  }, [clearPendingUndo])
+
+  useEffect(() => {
+    const handleKeyDown = (keyEvent: KeyboardEvent) => {
+      const isUndoCombo =
+        (keyEvent.metaKey || keyEvent.ctrlKey) &&
+        !keyEvent.shiftKey &&
+        !keyEvent.altKey &&
+        (keyEvent.key === 'z' || keyEvent.key === 'Z')
+      if (!isUndoCombo || !pendingUndoRef.current) return
+      // 텍스트 편집 중(입력/textarea/contentEditable)엔 네이티브 텍스트 언두를 가로채지 않는다.
+      if (isEditableTarget(keyEvent.target) || isEditableTarget(document.activeElement)) {
+        return
+      }
+      keyEvent.preventDefault()
+      runUndo()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [runUndo])
+
   return useCallback(
     (patch: UpdateEventDto, opts?: PatchOptions) => {
       const current = eventRef.current
@@ -90,8 +142,15 @@ export function useUndoablePatch({
         onSuccess: () => {
           // 더 새로운 mutation이 시작됐다면 이 콜백은 stale — 토스트 생략.
           if (mySeq !== seqRef.current) return
+          // 키보드 언두가 참조할 현재 inverse를 등록 — 토스트 가시 수명(5초)에 맞춰 만료.
+          pendingUndoRef.current = inverse
+          if (clearTimerRef.current) clearTimeout(clearTimerRef.current)
+          clearTimerRef.current = setTimeout(() => {
+            pendingUndoRef.current = null
+            clearTimerRef.current = null
+          }, UNDO_DURATION_MS)
           const id = notify.show(
-            (t) => (
+            () => (
               <Bar>
                 <Row>
                   <Status>
@@ -99,16 +158,10 @@ export function useUndoablePatch({
                     {savedLabel}
                   </Status>
                   <Divider aria-hidden />
-                  <UndoBtn
-                    type="button"
-                    onClick={() => {
-                      mutate(inverse)
-                      notify.dismiss(t.id)
-                      lastToastRef.current = null
-                    }}
-                  >
+                  <UndoBtn type="button" onClick={runUndo}>
                     <FiCornerUpLeft aria-hidden />
                     되돌리기
+                    <Kbd aria-hidden>{UNDO_SHORTCUT_HINT}</Kbd>
                   </UndoBtn>
                 </Row>
                 {/* 5초 소진 타이머 — undo 기회가 닫히는 시점을 시각화. */}
@@ -123,7 +176,25 @@ export function useUndoablePatch({
         },
       })
     },
-    [mutate],
+    [mutate, runUndo],
+  )
+}
+
+/** 언두 단축키 힌트 — 플랫폼별 표기(⌘Z / Ctrl+Z). */
+const IS_APPLE_PLATFORM =
+  typeof navigator !== 'undefined' &&
+  /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '')
+const UNDO_SHORTCUT_HINT = IS_APPLE_PLATFORM ? '⌘Z' : 'Ctrl+Z'
+
+/** 포커스가 텍스트 편집 컨텍스트에 있는지 — 그럴 땐 Ctrl+Z를 네이티브 텍스트 언두에 양보. */
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  return (
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    target.isContentEditable ||
+    target.getAttribute('role') === 'textbox'
   )
 }
 
@@ -302,6 +373,19 @@ const UndoBtn = styled.button`
         : 'rgba(15,23,42,0.05)'};
     outline: none;
   }
+`
+
+/* 단축키 힌트 — 되돌리기 버튼에 Ctrl/⌘+Z를 옅게 노출(발견성). */
+const Kbd = styled.kbd`
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 5px;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
 `
 
 /* 소진 타이머 트랙 — 콘텐츠 폭 안쪽에 두어 pill 곡률과 충돌하지 않는다. */
