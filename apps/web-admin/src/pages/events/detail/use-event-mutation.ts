@@ -4,7 +4,11 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 
-import { type UpdateEventDto, updateEvent } from '@/shared/api/events'
+import {
+  type EventLinkCandidate,
+  type UpdateEventDto,
+  updateEvent,
+} from '@/shared/api/events'
 import { notify } from '@/shared/ui/toast'
 
 import {
@@ -21,8 +25,10 @@ import {
  *
  * categoryId·related*·eventImages는 derived 객체(category/relatedCountries/…)로 표시되어
  * patch의 id/원본만으론 부족하므로, buildOptimisticEvent에서 별도로 재구성한다.
- * parentEventId(→parentEvent 브레드크럼)·eventSections(→DetailNarrative 로컬 state로 이미
- * 즉시 반영)은 낙관 대상에서 제외하고 refetch로만 반영한다.
+ * parentEventId·childEventIds(계층)도 파생 객체(parentEvent/childEvents)로 표시되어
+ * buildOptimisticEvent의 전용 분기에서 link-candidates 캐시로 재구성한다(스칼라가 아니라
+ * 이 목록엔 없음). eventSections(→DetailNarrative 로컬 state로 이미 즉시 반영)만 낙관
+ * 대상에서 제외하고 refetch로만 반영한다.
  */
 const OPTIMISTIC_SCALAR_FIELDS = [
   'title',
@@ -81,15 +87,27 @@ export function useEventMutation(eventId: string) {
       queryClient.setQueryData<EventDetail>(detailKey, next)
       return { previous }
     },
-    onSuccess: (_data, patch) => {
+    onSuccess: (data, patch) => {
       /**
-       * 같은 사건의 *다른* mutation이 아직 in-flight면 detail refetch를 미룬다.
+       * 같은 사건의 *다른* mutation이 아직 in-flight면 reconcile을 미룬다.
        * (onSuccess 시점엔 자신은 이미 settled라 isMutating 집계에서 빠지므로, 0이면
        * 내가 마지막.) 먼저 끝난 mutation이 refetch해 낙관적 최신값을 옛 서버 응답으로
        * 되돌리는 역행 깜빡임을 막고, 마지막 mutation만 최종 reconcile한다.
+       *
+       * reconcile은 invalidate(무거운 GET 재유발) 대신 PUT 응답을 *직접 시딩*한다 —
+       * 응답이 loadEventDetail full 상세(childEvents·parentEvent·군사·섹션 포함)라 두 번째
+       * 왕복이 사라지고, 낙관에서 stub였던 childEvents/parentEvent(제목만·회색)가 정본
+       * (카테고리 색·설명·조상 체인)으로 즉시 교체된다. 응답이 없으면(폴백 bare) invalidate.
        */
       if (queryClient.isMutating({ mutationKey }) === 0) {
-        queryClient.invalidateQueries({ queryKey: detailKey })
+        if (data) {
+          queryClient.setQueryData<EventDetail>(
+            detailKey,
+            data as unknown as EventDetail,
+          )
+        } else {
+          queryClient.invalidateQueries({ queryKey: detailKey })
+        }
       }
       /**
        * 목록(ledger/catalog) 쪽 캐시는 *목록 표시에 영향 있는 필드*가 바뀌었을 때만
@@ -256,7 +274,131 @@ function buildOptimisticEvent(
     changed = true
   }
 
+  /**
+   * 계층 필드(childEventIds·parentEventId) — 낙관 재구성이 *필수*다. 과거엔 낙관
+   * 제외라 refetch 전까지 캐시(event.childEvents/parentEvent)가 stale였고,
+   * detail-network가 그 stale 목록을 childIdsRef로 참조해 하위 사건 다중선택 시
+   * 먼저 고른 자식이 delete-recreate로 소리 없이 유실됐다(연속 제거도 부활). 여기서
+   * 캐시를 즉시 재구성하면 childIds/selectedValues·breadcrumb·댓글 게이트가 곧바로
+   * 전진한다. 신규 항목 이름·날짜는 link-candidates 캐시에서 보강, 못 찾으면 id만 든
+   * stub(제목·색은 refetch가 채움) — 관련 배열처럼 '못 찾으면 필드째 낙관 생략'하면
+   * childIds가 다시 stale해져 원래 결함이 재발하므로, 여기선 항상 재구성한다.
+   */
+  if ('childEventIds' in patch) {
+    next.childEvents = resolveChildEvents(
+      patch.childEventIds ?? [],
+      prev.childEvents,
+      qc,
+    )
+    changed = true
+  }
+
+  if ('parentEventId' in patch) {
+    const parentId = patch.parentEventId ?? null
+    next.parentEventId = parentId
+    // 해제(null)는 parentEvent도 즉시 비워 breadcrumb·상위 링크가 곧바로 사라진다.
+    next.parentEvent = parentId
+      ? resolveParentEvent(parentId, prev.parentEvent, qc)
+      : undefined
+    changed = true
+  }
+
   return changed ? next : null
+}
+
+/* ───────────────────────── 계층(상위/하위) 낙관 재구성 ───────────────────────── */
+
+/**
+ * 열려 있던(또는 최근) 연결 모달들의 link-candidates 캐시를 전부 훑어 id→후보 맵을
+ * 만든다. 캐시 키는 검색어별(`['events','link-candidates', term]`)로 여러 개라 모두 병합.
+ */
+function collectLinkCandidates(
+  qc: QueryClient,
+): Map<string, EventLinkCandidate> {
+  const map = new Map<string, EventLinkCandidate>()
+  const entries = qc.getQueriesData<EventLinkCandidate[]>({
+    queryKey: ['events', 'link-candidates'],
+  })
+  for (const [, list] of entries) {
+    if (!Array.isArray(list)) continue
+    for (const candidate of list) {
+      if (candidate && !map.has(candidate.id)) map.set(candidate.id, candidate)
+    }
+  }
+  return map
+}
+
+/**
+ * 후보의 날짜를 응답 형태(ISO, BC=음수연도)로 재구성 — 서버 formatEventDate와 동일.
+ * BC·고대는 startDate=null이고 startEra/startYear가 진실이라, 정렬(compareEventStart)과
+ * 카드 표기가 refetch 전에도 안정되도록 `-YYYY-01-01`로 합성한다.
+ */
+function reconstructIsoDate(
+  date: string | null | undefined,
+  era: string | null | undefined,
+  year: number | null | undefined,
+): string | null {
+  if (date) return date
+  if (year == null) return null
+  const yyyy = String(year).padStart(4, '0')
+  return `${era === 'BC' ? '-' : ''}${yyyy}-01-01`
+}
+
+/** 후보(EventLinkCandidate) → 낙관 stub EventDetail. 못 찾으면 id만(제목 공백). */
+function candidateToEventStub(
+  id: string,
+  candidate: EventLinkCandidate | undefined,
+): EventDetail {
+  return {
+    id,
+    title: candidate?.title ?? '',
+    startDate: reconstructIsoDate(
+      candidate?.startDate,
+      candidate?.startEra,
+      candidate?.startYear,
+    ),
+    startDatePrecision: candidate?.startDatePrecision ?? null,
+    endDate: reconstructIsoDate(
+      candidate?.endDate,
+      candidate?.endEra,
+      candidate?.endYear,
+    ),
+    endDatePrecision: candidate?.endDatePrecision ?? null,
+  }
+}
+
+/**
+ * childEventIds → childEvents(EventDetail[]) 낙관 재구성. 유지되는 자식은 prev의 완전한
+ * 객체(카테고리·설명 포함)를 재사용하고, 신규 자식만 후보 캐시로 stub 생성.
+ */
+function resolveChildEvents(
+  ids: string[],
+  prevChildren: EventDetail[] | undefined,
+  qc: QueryClient,
+): EventDetail[] {
+  let candidates: Map<string, EventLinkCandidate> | null = null
+  return ids.map((id) => {
+    const existing = prevChildren?.find((child) => child.id === id)
+    if (existing) return existing
+    if (!candidates) candidates = collectLinkCandidates(qc)
+    return candidateToEventStub(id, candidates.get(id))
+  })
+}
+
+/**
+ * parentEventId → parentEvent(EventDetail) 낙관 재구성. 같은 부모면 prev 재사용,
+ * 후보 캐시에 없으면 prev 유지(스칼라 parentEventId는 이미 세팅돼 댓글 게이트는 즉시
+ * 반영, breadcrumb·상위 링크만 refetch로 채워짐).
+ */
+function resolveParentEvent(
+  id: string,
+  prevParent: EventDetail | undefined,
+  qc: QueryClient,
+): EventDetail | undefined {
+  if (prevParent?.id === id) return prevParent
+  const candidate = collectLinkCandidates(qc).get(id)
+  if (!candidate) return prevParent
+  return candidateToEventStub(id, candidate)
 }
 
 /** id 배열을 prev derived 객체 + all 캐시로 해소. 미해결 항목이 있으면 null. */

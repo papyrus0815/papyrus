@@ -207,10 +207,15 @@ export function formatDateWithPrecision(
   const parts = parseIsoDateParts(dateStr)
   if (!parts) return dateStr
   const { year, month, day } = parts
+  // BC(음수 연도)는 '기원전 N년'으로 — parseIsoDateParts가 부호 연도를 돌려주므로 그대로
+  // `${year}년`을 쓰면 '-44년'으로 표기된다(하위 사건 카드·타임라인 등 이 함수를 쓰는 모든 곳).
+  // 단일 출처 보정이라 피커(candidateDateLabel)의 startYear 분기와 이중 접두 위험은 없다
+  // (그쪽은 이 함수를 거치지 않고 별도 라벨을 만든다).
+  const yearLabel = year < 0 ? `기원전 ${Math.abs(year)}년` : `${year}년`
   const prec = precision === 'year' || precision === 'month' ? precision : 'day'
-  if (prec === 'year') return `${year}년`
-  if (prec === 'month') return `${year}년 ${month}월`
-  return `${year}년 ${month}월 ${day}일`
+  if (prec === 'year') return yearLabel
+  if (prec === 'month') return `${yearLabel} ${month}월`
+  return `${yearLabel} ${month}월 ${day}일`
 }
 
 /**

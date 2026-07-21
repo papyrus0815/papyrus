@@ -28,10 +28,14 @@ interface DetailNetworkProps {
   onPatch: (patch: UpdateEventDto) => void
 }
 
+/** 하위 사건 카드 표시 상한 — 초과분은 '더 보기'로 펼침. */
+const CHILD_CARD_CAP = 24
+
 /**
- * 사건의 횡적 네트워크 — 자식 사건 + 키워드.
+ * 사건의 계층·횡적 네트워크 — 상위 사건 + 하위 사건 + 키워드.
  *
- * 자식은 시간 순으로 정렬된 카드 그리드. 각 카드 클릭 시 해당 사건 상세로.
+ * 상위는 지정/변경/해제하는 단일 링크 행. 하위는 시간 순으로 정렬된 카드 그리드로,
+ * 각 카드 클릭 시 해당 사건 상세로(카드 상한 초과분은 '더 보기'로 펼침).
  * 키워드는 inline chip — 칩의 ✕로 제거, "+" 인풋으로 추가. 별도 폼 X.
  */
 export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
@@ -48,6 +52,14 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const keywords = (event.keywords ?? []).filter(
     (k): k is string => typeof k === 'string' && k.trim().length > 0,
   )
+
+  // 하위 카드는 상한까지만 렌더(그 이상은 '더 보기'로 펼침) — 하위가 수십~수백인 상위
+  // 사건에서 카드 그리드·hover prefetch가 무한 확장되지 않게(히어로의 참여자/국가 캡과 대칭).
+  const [showAllChildren, setShowAllChildren] = useState(false)
+  const visibleChildren = showAllChildren
+    ? children
+    : children.slice(0, CHILD_CARD_CAP)
+  const hiddenChildCount = children.length - visibleChildren.length
 
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
@@ -75,7 +87,9 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   } = useQuery({
     // ['events'] 프리픽스(eventKeys.lists()) 아래 — 사건 mutation 시 함께 무효화된다.
     queryKey: ['events', 'link-candidates', debouncedTerm],
-    queryFn: () => getEventLinkCandidates({ query: debouncedTerm, limit: 50 }),
+    // limit은 표시 상한(50)보다 1 크게 요청 — 정확히 50건일 때 '더 있음' 오탐을 피하고
+    // (>50일 때만 절단), 51번째는 표시하지 않고 '더 있음' 신호로만 쓴다.
+    queryFn: () => getEventLinkCandidates({ query: debouncedTerm, limit: 51 }),
     enabled: parentModalOpen || childModalOpen,
     staleTime: 60_000,
     // 검색어 타이핑 중 이전 결과를 유지 — 목록이 '불러오는 중'으로 깜빡이지 않게.
@@ -95,10 +109,12 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     childIdsRef.current = childIds
   }, [childIds])
 
-  /* 선택 옵션 — 자기 자신 제외. 날짜 + 현재 소속(이미 하위인 경우)을 설명 라인에. */
+  /* 선택 옵션 — 자기 자신 제외, 표시 상한 50(51번째는 '더 있음' 신호라 제외). 날짜 +
+   * 현재 소속(이미 하위인 경우)을 설명 라인에. */
   const eventOptions = useMemo<SelectOption[]>(
     () =>
       candidates
+        .slice(0, 50)
         .filter((candidate) => candidate.id !== event.id)
         .map((candidate) => ({
           value: candidate.id,
@@ -160,15 +176,25 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     setSearchTerm('')
   }
 
-  /* 서버 캡(50)에 닿으면 잘린 목록임을 알림 — '전체'로 오독하지 않게. */
+  /* 51건 요청 중 50건 초과가 실제로 왔을 때만 잘림 알림 — 정확히 50건(더 없음)은 오탐 안 함. */
   const truncationHint =
-    candidates.length >= 50 ? (
+    candidates.length > 50 ? (
       <TruncationNote>
         후보가 많아 50건까지만 표시 중 — 검색어로 좁혀 주세요
       </TruncationNote>
     ) : undefined
 
   const parentEvent = event.parentEvent
+
+  /* 섹션 부제 — 상위(있으면)·자식·키워드를 요약. 과거엔 자식·키워드만 세어, 상위만 있고
+   * 자식·키워드가 없는 사건은 부제가 통째 사라졌다(관계 신호 은닉). */
+  const relationSummary = [
+    parentEvent ? '상위 1' : null,
+    children.length > 0 ? `자식 ${children.length}` : null,
+    keywords.length > 0 ? `키워드 ${keywords.length}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   const submitKeyword = () => {
     const next = draft.trim()
@@ -208,18 +234,14 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     <S.Section id="network">
       <S.SectionHeader>
         <S.SectionTitle>연관</S.SectionTitle>
-        {(children.length > 0 || keywords.length > 0) && (
-          <S.SectionSubtitle>
-            {children.length > 0 && `자식 ${children.length}`}
-            {children.length > 0 && keywords.length > 0 && ' · '}
-            {keywords.length > 0 && `키워드 ${keywords.length}`}
-          </S.SectionSubtitle>
+        {relationSummary && (
+          <S.SectionSubtitle>{relationSummary}</S.SectionSubtitle>
         )}
       </S.SectionHeader>
 
       {/* 상위 사건 — 지정/변경/해제 */}
-      <HierBlock>
-        <KeywordsLabel>상위 사건</KeywordsLabel>
+      <HierBlock role="group" aria-labelledby="network-parent-label">
+        <KeywordsLabel id="network-parent-label">상위 사건</KeywordsLabel>
         <HierRow>
           {parentEvent ? (
             <>
@@ -230,10 +252,18 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
               >
                 {parentEvent.title}
               </ParentLink>
-              <TextBtn type="button" onClick={() => setParentModalOpen(true)}>
+              <TextBtn
+                type="button"
+                onClick={() => setParentModalOpen(true)}
+                aria-label="상위 사건 변경"
+              >
                 변경
               </TextBtn>
-              <TextBtn type="button" onClick={() => setParent(null)}>
+              <TextBtn
+                type="button"
+                onClick={() => setParent(null)}
+                aria-label="상위 사건 해제"
+              >
                 해제
               </TextBtn>
             </>
@@ -246,11 +276,11 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
       </HierBlock>
 
       {/* 하위 사건 — 카드 그리드 + 추가/제거 */}
-      <HierBlock>
-        <KeywordsLabel>하위 사건</KeywordsLabel>
+      <HierBlock role="group" aria-labelledby="network-children-label">
+        <KeywordsLabel id="network-children-label">하위 사건</KeywordsLabel>
         {children.length > 0 && (
           <S.CardGrid $cols={2}>
-            {children.map((child) => {
+            {visibleChildren.map((child) => {
               const category = resolveCategory(child.category?.name)
               const dateLabel =
                 child.startDate &&
@@ -289,13 +319,22 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
             })}
           </S.CardGrid>
         )}
+        {hiddenChildCount > 0 && (
+          <TextBtn
+            type="button"
+            onClick={() => setShowAllChildren(true)}
+            aria-label={`하위 사건 ${hiddenChildCount}개 더 보기`}
+          >
+            외 {hiddenChildCount}개 더 보기
+          </TextBtn>
+        )}
         <AddBtn type="button" onClick={() => setChildModalOpen(true)}>
           <FiPlus /> 하위 사건 추가
         </AddBtn>
       </HierBlock>
 
-      <KeywordsBlock>
-        <KeywordsLabel>키워드</KeywordsLabel>
+      <KeywordsBlock role="group" aria-labelledby="network-keywords-label">
+        <KeywordsLabel id="network-keywords-label">키워드</KeywordsLabel>
         <KeywordsRow>
           {keywords.map((keyword) => (
             <KeywordChip key={keyword}>
