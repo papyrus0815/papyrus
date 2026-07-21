@@ -105,8 +105,11 @@ export class EventService {
     primaryCountryId?: string,
     primaryHistoricalCountryId?: string,
   ): Promise<Event> {
-    // 중복 체크
-    const existing = await this.events.findByTitle(data.title)
+    // 중복 체크 — 같은 계정의 미삭제 사건 안에서만(타 계정 제목 충돌·소프트삭제 좀비 제외).
+    const existing = await this.events.findByTitle(
+      data.title,
+      data.createdById ?? undefined,
+    )
     if (existing) {
       throw new ConflictException(
         `Event with title ${data.title} already exists`,
@@ -344,12 +347,15 @@ export class EventService {
      */
     relatedPersons?: Array<{ personId: string; role?: string; note?: string }>,
   ): Promise<Event> {
-    // 존재 여부 확인
-    await this.getEventById(id)
+    // 존재 여부 확인 (소유자 스코프한 제목 중복 검사에 사용)
+    const target = await this.getEventById(id)
 
-    // 제목 변경 시 중복 체크
+    // 제목 변경 시 중복 체크 — 같은 계정의 미삭제 사건 안에서, 자기 자신 제외.
     if (data.title) {
-      const existing = await this.events.findByTitle(data.title)
+      const existing = await this.events.findByTitle(
+        data.title,
+        target.createdById ?? undefined,
+      )
       if (existing && existing.id !== id) {
         throw new ConflictException(
           `Event with title ${data.title} already exists`,
@@ -480,26 +486,33 @@ export class EventService {
       }
     }
 
-    // 🆕 기존 사건을 하위 사건으로 연결
+    // 🆕 기존 사건을 하위 사건으로 연결 — 전체목록 덮어쓰기(detach 후 재링크).
     if (childEventIds !== undefined) {
       console.log(`🔗 기존 사건 ${childEventIds.length}개를 하위 사건으로 연결...`)
-      
-      // 먼저 기존 하위 사건들의 연결 해제 (선택적)
-      await this.prisma.event.updateMany({
-        where: { parentEventId: id },
-        data: { parentEventId: null },
-      })
-      
-      // 새로운 하위 사건 연결
+
+      // detach는 *살아있는* 자식만(deletedAt:null). 소프트삭제된 자식은 부모 FK를
+      // 보존해야 한다 — deleteEvent가 deletedAt만 세팅하고 restoreEvent가 부모를
+      // 복원하지 않으므로, 여기서 null로 만들면 복구 시 부모를 영구히 잃는다. 게다가
+      // 프론트가 만드는 childEventIds에는 소프트삭제 자식이 애초에 없어(loadEventDetail이
+      // deletedAt:null로 걸러 응답) 재링크에서도 빠진다.
+      // detach + 재링크를 $transaction으로 원자화해 부분 실패 시 '반쯤 detach된 고아'
+      // 상태를 남기지 않는다(존재·소유권·순환은 위 assertHierarchyLinkable에서 선검증).
+      await this.prisma.$transaction([
+        this.prisma.event.updateMany({
+          where: { parentEventId: id, deletedAt: null },
+          data: { parentEventId: null },
+        }),
+        ...(childEventIds.length > 0
+          ? [
+              this.prisma.event.updateMany({
+                where: { id: { in: childEventIds } },
+                data: { parentEventId: id },
+              }),
+            ]
+          : []),
+      ])
+
       if (childEventIds.length > 0) {
-        await Promise.all(
-          childEventIds.map((childId) =>
-            this.prisma.event.update({
-              where: { id: childId },
-              data: { parentEventId: id },
-            })
-          )
-        )
         console.log(`✅ ${childEventIds.length}개 사건이 하위 사건으로 연결됨`)
       }
     }

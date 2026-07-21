@@ -32,9 +32,22 @@ export class EventPrismaRepository implements EventRepository {
     return event ? this.toEntity(event) : null
   }
 
-  async findByTitle(title: string): Promise<Event | null> {
+  /**
+   * 제목으로 사건 조회 — 중복 제목 검사용.
+   *
+   * ⚠️ title에는 DB `@unique`가 없어 앱 레벨 강제다. 반드시 소유자(createdById)와
+   * 미삭제(deletedAt:null)로 스코프한다:
+   *  - createdById 미스코프 시 타 계정이 먼저 쓴 제목이 내 생성을 409로 막고 타 계정
+   *    데이터 존재를 누설(나머지 소유권 로직과 불일치).
+   *  - deletedAt 미필터 시 소프트삭제된 좀비 제목이 재생성을 막는다(활성 목록엔 없어 원인 불명).
+   */
+  async findByTitle(title: string, createdById?: string): Promise<Event | null> {
     const event = await this.prisma.event.findFirst({
-      where: { title },
+      where: {
+        title,
+        deletedAt: null,
+        ...(createdById ? { createdById } : {}),
+      },
       include: {
         category: true,
         parentEvent: true,
@@ -46,7 +59,8 @@ export class EventPrismaRepository implements EventRepository {
 
   async findByParentEventId(parentEventId: string): Promise<Event[]> {
     const events = await this.prisma.event.findMany({
-      where: { parentEventId },
+      // 소프트삭제된 자식 제외 — loadEventDetail의 childEvents 정책과 통일(유령 자식 방지).
+      where: { parentEventId, deletedAt: null },
       orderBy: { startDate: 'asc' },
       include: {
         category: true,

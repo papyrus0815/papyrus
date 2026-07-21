@@ -205,7 +205,13 @@ export class EventController {
       background: event.background,
       aftermath: event.aftermath,
       parentEventId: event.parentEventId,
-      parentEvent: event.parentEvent ? this.toResponseDto(event.parentEvent) : undefined,
+      // 소프트삭제된(유령) 부모는 breadcrumb·상위 링크에 노출하지 않는다 — link-candidates의
+      // liveParent 정책과 통일. deletedAt은 include된 parentEvent에 실려온다(select 시엔 undefined라
+      // 통과). 재귀 호출이 조상 각 단계에도 같은 게이트를 적용한다.
+      parentEvent:
+        event.parentEvent && !event.parentEvent.deletedAt
+          ? this.toResponseDto(event.parentEvent)
+          : undefined,
       childEvents: event.childEvents ? event.childEvents.map((child: any) => this.toResponseDto(child)) : undefined,
       keywords: event.keywords != null ? (Array.isArray(event.keywords) ? event.keywords : []) : null,
       cityId: event.cityId,
@@ -826,15 +832,30 @@ export class EventController {
         // 위치 복원: 편집 폼 PlaceSelect 뱃지에 표시할 이름 (UUID만으론 부족)
         city: { select: { id: true, name: true } },
         administrativeDivision: { select: { id: true, name: true } },
-        parentEvent: true,
+        // 조상 breadcrumb용 — parentEvent를 여러 단계 중첩 로드(각 단계 scalar만).
+        // 단일레벨(parentEvent: true)만 로드하면 히어로 breadcrumb의 조부모 체인·'…'
+        // 말줄임이 죽은 코드가 된다(부모.parentEvent가 늘 undefined). 스칼라(제목·날짜·
+        // deletedAt·parentEventId)만이라 페이로드 부담 작고, 소프트삭제 조상은 toResponseDto가
+        // deletedAt로 null 처리한다. depth 4까지 로드해 CAP(3) 초과 시 '…' 표식이 뜬다.
+        parentEvent: {
+          include: {
+            parentEvent: {
+              include: {
+                parentEvent: { include: { parentEvent: true } },
+              },
+            },
+          },
+        },
         childEvents: {
           // 소프트 삭제된 자식 제외 — 유령 카드 방지 + 프론트가 이 목록으로
           // childEventIds 전체 재전송을 만들기 때문에(가드가 삭제 사건을 거부) 필수.
           where: { deletedAt: null },
           include: {
+            // 카드 색띠용 category — 누락 시 resolveCategory(undefined)가 전부 회색 폴백.
+            category: { select: { id: true, name: true } },
             historicalCountry: { select: { id: true, name: true } },
-            eventSections: { orderBy: { order: 'asc' } },
-            eventImages: { orderBy: { order: 'asc' } },
+            // eventSections·eventImages는 카드가 쓰지 않는데 섹션 content(MEDIUMTEXT)까지
+            // 매 상세 응답에 실려 페이로드가 부풀었다 — 제거(카드는 title·날짜·설명·category만 소비).
           },
           orderBy: { startDate: 'asc' }, // 하위 사건 시간순 정렬
         },
