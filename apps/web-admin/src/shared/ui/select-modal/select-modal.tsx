@@ -64,6 +64,13 @@ interface SelectModalProps<T = string> {
    * 목록이 있으면 그대로 두고 빈 상태 문구만 바꾼다.
    */
   isSearching?: boolean
+  /**
+   * 서버 조회 실패 — 빈 목록을 "결과 없음"으로 오인시키지 않고 오류 상태(재시도 버튼)를
+   * 보여준다. 실패가 조용히 삼켜져 "없음"으로 위장하던 것을 보정.
+   */
+  hasError?: boolean
+  /** 오류 상태에서 '다시 시도' 클릭 시 재조회 — 부모가 refetch를 넘긴다. */
+  onRetry?: () => void
 }
 
 /**
@@ -107,6 +114,8 @@ export function SelectModal<T = string>({
   isLoading = false,
   onQueryChange,
   isSearching = false,
+  hasError = false,
+  onRetry,
 }: SelectModalProps<T>) {
   const [query, setQuery] = useState('')
 
@@ -162,13 +171,15 @@ export function SelectModal<T = string>({
    * SR이 어떤 전환도 못 받던 것을 보정(WCAG 4.1.3). 옵션 목록이 있을 땐 개수를 알린다. */
   const statusText = isLoading
     ? '불러오는 중'
-    : isSearching
-      ? '검색 중'
-      : query
-        ? filteredOptions.length > 0
-          ? `검색 결과 ${filteredOptions.length}건`
-          : '검색 결과 없음'
-        : ''
+    : hasError && filteredOptions.length === 0
+      ? '불러오지 못했습니다'
+      : isSearching
+        ? '검색 중'
+        : query
+          ? filteredOptions.length > 0
+            ? `검색 결과 ${filteredOptions.length}건`
+            : '검색 결과 없음'
+          : ''
 
   return createPortal(
     <S.SelectModalOverlay
@@ -231,6 +242,19 @@ export function SelectModal<T = string>({
               <S.EmptyTitle>불러오는 중...</S.EmptyTitle>
               <S.EmptyDesc>잠시만 기다려 주세요</S.EmptyDesc>
             </S.EmptyState>
+          ) : hasError && filteredOptions.length === 0 ? (
+            <S.EmptyState>
+              <S.EmptyIcon>⚠️</S.EmptyIcon>
+              <S.EmptyTitle>불러오지 못했습니다</S.EmptyTitle>
+              <S.EmptyDesc>
+                네트워크 오류일 수 있어요 — 잠시 후 다시 시도해 주세요
+              </S.EmptyDesc>
+              {onRetry && (
+                <RetryBtn type="button" onClick={onRetry}>
+                  다시 시도
+                </RetryBtn>
+              )}
+            </S.EmptyState>
           ) : filteredOptions.length === 0 ? (
             isSearching ? (
               <S.EmptyState>
@@ -292,6 +316,31 @@ export function SelectModal<T = string>({
     document.body,
   )
 }
+
+/** 오류 상태 '다시 시도' 버튼. */
+const RetryBtn = styled.button`
+  margin-top: 12px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+`
 
 /** 시각적으로 숨기되 보조기술엔 노출되는 라이브 리전용 — 표준 sr-only 패턴. */
 const VisuallyHidden = styled.span`
