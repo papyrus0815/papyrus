@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { FiPlus, FiX } from 'react-icons/fi'
+import { FiChevronLeft, FiChevronRight, FiPlus, FiX } from 'react-icons/fi'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
@@ -13,6 +13,7 @@ import {
   type EventLinkCandidate,
   type UpdateEventDto,
   getEventLinkCandidates,
+  getEventsByParentId,
 } from '@/shared/api/events'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
@@ -84,6 +85,8 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     data: candidates = [],
     isLoading: eventsLoading,
     isFetching: eventsFetching,
+    isError: eventsError,
+    refetch: refetchCandidates,
   } = useQuery({
     // ['events'] 프리픽스(eventKeys.lists()) 아래 — 사건 mutation 시 함께 무효화된다.
     queryKey: ['events', 'link-candidates', debouncedTerm],
@@ -94,6 +97,8 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     staleTime: 60_000,
     // 검색어 타이핑 중 이전 결과를 유지 — 목록이 '불러오는 중'으로 깜빡이지 않게.
     placeholderData: keepPreviousData,
+    // 전역 retry:false를 이 조회에 한해 완화 — 일시 네트워크 오류로 '결과 없음' 위장 방지.
+    retry: 1,
   })
   // fetch 중 + 디바운스 대기 중 모두 '검색 중'으로 — 확정형 '결과 없음' 오탐 방지.
   const searchPending = eventsFetching || searchTerm !== debouncedTerm
@@ -186,6 +191,32 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
 
   const parentEvent = event.parentEvent
 
+  /* 형제(같은 상위) 사건 — 하위 사건 상세에서 부모 왕복 없이 이전/다음으로 이동.
+   * 상위가 있을 때만 조회. 부모의 하위 목록(미삭제)을 시간순 정렬해 현재 위치의 앞뒤를 잡는다. */
+  const { data: siblings = [] } = useQuery({
+    queryKey: ['events', 'siblings', event.parentEventId],
+    queryFn: () => getEventsByParentId(event.parentEventId as string),
+    enabled: Boolean(event.parentEventId),
+    staleTime: 60_000,
+  })
+  const sortedSiblings = useMemo(
+    () =>
+      siblings
+        .slice()
+        .sort((first, second) =>
+          compareEventStart(first.startDate, second.startDate),
+        ),
+    [siblings],
+  )
+  const siblingIndex = sortedSiblings.findIndex(
+    (sibling) => sibling.id === event.id,
+  )
+  const prevSibling = siblingIndex > 0 ? sortedSiblings[siblingIndex - 1] : null
+  const nextSibling =
+    siblingIndex >= 0 && siblingIndex < sortedSiblings.length - 1
+      ? sortedSiblings[siblingIndex + 1]
+      : null
+
   /* 섹션 부제 — 상위(있으면)·자식·키워드를 요약. 과거엔 자식·키워드만 세어, 상위만 있고
    * 자식·키워드가 없는 사건은 부제가 통째 사라졌다(관계 신호 은닉). */
   const relationSummary = [
@@ -273,6 +304,37 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
             </AddBtn>
           )}
         </HierRow>
+        {parentEvent && (prevSibling || nextSibling) && (
+          <SiblingNav aria-label="형제 사건 이동">
+            {prevSibling ? (
+              <SiblingLink
+                to={pathKeys.events.detail(prevSibling.id)}
+                viewTransition
+                onMouseEnter={() => prefetchEvent(prevSibling.id)}
+                onFocus={() => prefetchEvent(prevSibling.id)}
+                aria-label={`이전 형제 사건: ${prevSibling.title}`}
+              >
+                <FiChevronLeft aria-hidden />
+                <SiblingText>{prevSibling.title}</SiblingText>
+              </SiblingLink>
+            ) : (
+              <span />
+            )}
+            {nextSibling && (
+              <SiblingLink
+                to={pathKeys.events.detail(nextSibling.id)}
+                viewTransition
+                onMouseEnter={() => prefetchEvent(nextSibling.id)}
+                onFocus={() => prefetchEvent(nextSibling.id)}
+                aria-label={`다음 형제 사건: ${nextSibling.title}`}
+                $alignEnd
+              >
+                <SiblingText>{nextSibling.title}</SiblingText>
+                <FiChevronRight aria-hidden />
+              </SiblingLink>
+            )}
+          </SiblingNav>
+        )}
       </HierBlock>
 
       {/* 하위 사건 — 카드 그리드 + 추가/제거 */}
@@ -389,6 +451,8 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
         searchPlaceholder="사건명으로 검색 (하위 사건 포함)"
         isLoading={eventsLoading}
         isSearching={searchPending}
+        hasError={eventsError}
+        onRetry={() => void refetchCandidates()}
         onQueryChange={setSearchTerm}
         headerExtra={truncationHint}
       />
@@ -407,6 +471,8 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
         searchPlaceholder="사건명으로 검색 (하위 사건 포함)"
         isLoading={eventsLoading}
         isSearching={searchPending}
+        hasError={eventsError}
+        onRetry={() => void refetchCandidates()}
         onQueryChange={setSearchTerm}
         headerExtra={truncationHint}
       />
@@ -520,8 +586,52 @@ const ParentLink = styled(Link)`
   }
 `
 
+const SiblingNav = styled.nav`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+`
+
+const SiblingLink = styled(Link)<{ $alignEnd?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 48%;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-decoration: none;
+  justify-content: ${({ $alignEnd }) => ($alignEnd ? 'flex-end' : 'flex-start')};
+  margin-left: ${({ $alignEnd }) => ($alignEnd ? 'auto' : '0')};
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.text.primary};
+    outline: none;
+  }
+
+  svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+  }
+`
+
+const SiblingText = styled.span`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
 const TextBtn = styled.button`
-  padding: 0;
+  /* 최소 24×24 터치 타깃(WCAG 2.5.8) — 12px 텍스트라도 클릭 영역은 24px 확보. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0 4px;
   border: none;
   background: transparent;
   font-family: inherit;
@@ -532,6 +642,13 @@ const TextBtn = styled.button`
   transition: color 0.14s;
 
   &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+    border-radius: 4px;
     color: ${({ theme }) => theme.colors.text.primary};
   }
 `

@@ -138,9 +138,7 @@ export function useEventMutation(eventId: string) {
       // 가능: A시작→B성공→A실패 시 B가 사라짐). 서버 정본으로 재동기화해 실패분만
       // 되돌리고 이미 저장된 변경은 보존한다.
       queryClient.invalidateQueries({ queryKey: detailKey })
-      const message =
-        error instanceof Error ? error.message : '알 수 없는 오류'
-      notify.error(`저장 실패: ${message}`)
+      notify.error(`저장 실패: ${friendlyErrorMessage(error)}`)
     },
   })
 }
@@ -160,6 +158,37 @@ const LISTING_FIELDS: ReadonlyArray<keyof UpdateEventDto> = [
 
 function patchAffectsListing(patch: UpdateEventDto): boolean {
   return LISTING_FIELDS.some((k) => k in patch)
+}
+
+/**
+ * 서버 에러를 사용자 친화 문구로 — nestia HttpError.message는 응답 본문(JSON) 원문이라
+ * 순환 계층·중복 제목 같은 409도 `{"message":"순환 계층은…","statusCode":409}` 블롭으로
+ * 토스트에 뜬다. 본문의 `message`만 추출해 깔끔한 한국어 사유로 보여준다.
+ */
+function friendlyErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') return '알 수 없는 오류'
+  const raw =
+    typeof (error as { message?: unknown }).message === 'string'
+      ? (error as { message: string }).message
+      : ''
+  const pick = (text: string): string | null => {
+    try {
+      const parsed = JSON.parse(text) as { message?: unknown }
+      if (typeof parsed.message === 'string') return parsed.message
+      if (Array.isArray(parsed.message)) return parsed.message.join(', ')
+    } catch {
+      /* JSON 아님 */
+    }
+    return null
+  }
+  const direct = pick(raw)
+  if (direct) return direct
+  const brace = raw.indexOf('{')
+  if (brace >= 0) {
+    const sliced = pick(raw.slice(brace))
+    if (sliced) return sliced
+  }
+  return raw || '알 수 없는 오류'
 }
 
 /* ───────────────────────── 낙관적 업데이트 빌더 ───────────────────────── */

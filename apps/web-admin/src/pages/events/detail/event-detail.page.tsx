@@ -1,7 +1,8 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
+import styled from 'styled-components'
 
 import { resolveCategory } from '@/pages/events/ledger/styles/ledger-tokens'
 import { CommentSection } from '@/entities/comment'
@@ -209,9 +210,10 @@ function EventDetailContent({ eventId }: { eventId: string }) {
 
     items.push({ id: 'network', label: '연관' })
     items.push({ id: 'appendix', label: '이미지' })
-    // 댓글은 최상위 사건만 — 백엔드가 하위 사건(parentEventId≠null)엔 댓글을 노출/허용하지
-    // 않으므로(스코프 불일치 시 빈-상태 오인·작성 404), 하위 사건에선 섹션 자체를 숨긴다.
-    if (!event.parentEventId) items.push({ id: 'comments', label: '댓글' })
+    // 댓글 — 최상위 사건은 댓글 스레드, 하위 사건은 상위 댓글로 유도하는 안내(둘 다 #comments
+    // 앵커를 렌더하므로 rail 항목은 항상 노출). 백엔드가 하위 사건엔 댓글을 노출/허용하지
+    // 않아(스코프 불일치) 하위에선 스레드 대신 안내만 보여준다.
+    items.push({ id: 'comments', label: '댓글' })
 
     return items
     // event는 *식별자 변경* 시에만 재구성. parentEventId는 위계 변경이라 의도적으로 포함.
@@ -287,14 +289,25 @@ function EventDetailContent({ eventId }: { eventId: string }) {
               <DetailNetwork event={event} onPatch={onPatch} />
               <DetailAppendix event={event} onPatch={onPatch} />
 
-              {!event.parentEventId && (
-                <S.Section id="comments">
-                  <S.SectionHeader>
-                    <S.SectionTitle>댓글</S.SectionTitle>
-                  </S.SectionHeader>
+              <S.Section id="comments">
+                <S.SectionHeader>
+                  <S.SectionTitle>댓글</S.SectionTitle>
+                </S.SectionHeader>
+                {event.parentEventId ? (
+                  // 하위 사건은 자체 댓글 스레드가 없다 — 논의가 이어지는 상위 사건 댓글로 유도.
+                  <S.HelperText>
+                    이 사건은 하위 사건입니다 — 논의는{' '}
+                    <ParentCommentsLink
+                      to={`${pathKeys.events.detail(event.parentEventId)}#comments`}
+                    >
+                      상위 사건 댓글
+                    </ParentCommentsLink>
+                    에서 이어집니다.
+                  </S.HelperText>
+                ) : (
                   <CommentSection ownerType="EVENT" recordId={eventId} />
-                </S.Section>
-              )}
+                )}
+              </S.Section>
             </S.Main>
           </S.Body>
         </S.PageInner>
@@ -304,6 +317,20 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     </InlineEditProvider>
   )
 }
+
+/** 하위 사건 → 상위 사건 댓글로 유도하는 인라인 링크. */
+const ParentCommentsLink = styled(Link)`
+  color: ${({ theme }) => theme.colors.primary};
+  font-weight: 600;
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    outline: none;
+  }
+`
 
 /* ───────────────────────── Suspense / Error fallback ───────────────────────── */
 
