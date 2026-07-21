@@ -660,7 +660,11 @@ export class EventController {
       },
       take,
       // 검색 시엔 시대순(내림), 기본 목록은 최근 손댄 순 — 방금 만든 사건을 바로 연결하는 흐름.
-      orderBy: term ? { startDate: 'desc' } : { updatedAt: 'desc' },
+      // id 2차 정렬로 결정성 확보 — startDate/updatedAt 동률(특히 BC·미상 startDate=NULL이
+      // 다수 동률)일 때 순서가 요청마다 뒤바뀌어 take 캡 경계에서 목록이 흔들리던 것 방지.
+      orderBy: term
+        ? [{ startDate: 'desc' }, { id: 'desc' }]
+        : [{ updatedAt: 'desc' }, { id: 'desc' }],
       select: {
         id: true,
         title: true,
