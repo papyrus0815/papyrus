@@ -1,6 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
+import styled from 'styled-components'
+
+import { useModalBehavior } from '@/shared/ui/modal'
+
 import * as S from './select-modal.styles'
 
 export interface SelectOption<T = string> {
@@ -106,6 +110,22 @@ export function SelectModal<T = string>({
 }: SelectModalProps<T>) {
   const [query, setQuery] = useState('')
 
+  /**
+   * a11y 토대 — 손수 만든 portal이라 Esc·포커스 트랩·body 스크롤 락·포커스 복원이
+   * 전무했다. 공용 useModalBehavior에 위임(웹앰 규약: 새/기존 모달은 이 훅을 써야 함).
+   * containerRef=모달 컨테이너, 초기 포커스는 검색창(없으면 훅이 첫 focusable로 폴백).
+   */
+  const containerRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const titleId = useId()
+
+  useModalBehavior({
+    isOpen,
+    onClose,
+    containerRef,
+    initialFocusRef: searchRef,
+  })
+
   // 모달이 닫히면 검색어 초기화 (서버사이드 검색 부모에게도 통지)
   useEffect(() => {
     if (!isOpen) {
@@ -138,6 +158,18 @@ export function SelectModal<T = string>({
     return selectedValue === value
   }
 
+  /* 라이브 리전 문구 — 로딩/검색중/결과수/없음. 검색창에 포커스가 머문 채 목록만 바뀌어
+   * SR이 어떤 전환도 못 받던 것을 보정(WCAG 4.1.3). 옵션 목록이 있을 땐 개수를 알린다. */
+  const statusText = isLoading
+    ? '불러오는 중'
+    : isSearching
+      ? '검색 중'
+      : query
+        ? filteredOptions.length > 0
+          ? `검색 결과 ${filteredOptions.length}건`
+          : '검색 결과 없음'
+        : ''
+
   return createPortal(
     <S.SelectModalOverlay
       as={motion.div}
@@ -146,16 +178,20 @@ export function SelectModal<T = string>({
       onClick={onClose}
     >
       <S.SelectModal
+        ref={containerRef}
         as={motion.div}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.2 }}
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
       >
         <S.SelectModalHeader>
-          <S.SelectModalTitle>{title}</S.SelectModalTitle>
-          <S.SelectModalClose onClick={onClose}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <S.SelectModalTitle id={titleId}>{title}</S.SelectModalTitle>
+          <S.SelectModalClose type="button" onClick={onClose} aria-label="닫기">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
                 d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
                 fill="currentColor"
@@ -164,11 +200,17 @@ export function SelectModal<T = string>({
           </S.SelectModalClose>
         </S.SelectModalHeader>
 
+        {/* 로딩·검색·결과 상태를 보조기술에 announce — 시각 텍스트만 바뀌던 조용한 갱신 보정. */}
+        <VisuallyHidden role="status" aria-live="polite">
+          {statusText}
+        </VisuallyHidden>
+
         {headerExtra && <S.HeaderExtraWrapper>{headerExtra}</S.HeaderExtraWrapper>}
 
         {showSearch && (
           <S.SearchWrapper>
             <S.SearchInput
+              ref={searchRef}
               type="text"
               value={query}
               onChange={(changeEvent) => {
@@ -176,6 +218,7 @@ export function SelectModal<T = string>({
                 onQueryChange?.(changeEvent.target.value)
               }}
               placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
               autoFocus
             />
           </S.SearchWrapper>
@@ -212,6 +255,10 @@ export function SelectModal<T = string>({
             filteredOptions.map((option) => (
               <S.SelectOption
                 key={String(option.value)}
+                type="button"
+                // 선택 상태를 색·체크 아이콘뿐 아니라 보조기술에도 전달(WCAG 4.1.2).
+                // 다중/단일 모두 '눌림'으로 현재 선택을 표현.
+                aria-pressed={isSelected(option.value)}
                 $active={isSelected(option.value)}
                 onClick={() => onSelect(option.value)}
               >
@@ -228,7 +275,7 @@ export function SelectModal<T = string>({
                 </S.SelectOptionBody>
                 {isSelected(option.value) && (
                   <S.SelectOptionCheck>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path
                         d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
                         fill="currentColor"
@@ -245,3 +292,16 @@ export function SelectModal<T = string>({
     document.body,
   )
 }
+
+/** 시각적으로 숨기되 보조기술엔 노출되는 라이브 리전용 — 표준 sr-only 패턴. */
+const VisuallyHidden = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+`
