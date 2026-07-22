@@ -849,8 +849,10 @@ export const SimpleYearLabel = styled.div`
  * 4. 컴팩트한 한 줄 — Year/Century divider 사이의 *여백* 대용으로 가볍게
  */
 export const CollapsedPlaceholder = styled.div`
-  margin: 2px 0 6px 0;
-  padding: 8px 14px;
+  /* '압축 구간'인데 펼친 행만큼 두꺼우면 접기가 공간을 안 아낀다 → 얇은 밴드(~40→~24px)로
+   * 눌러 '이 구간은 압축됨' 인상을 강화한다. */
+  margin: 1px 0 4px 0;
+  padding: 4px 14px;
   border-radius: 8px;
   text-align: center;
   position: relative;
@@ -861,9 +863,9 @@ export const CollapsedPlaceholder = styled.div`
           background-image: repeating-linear-gradient(
             -45deg,
             transparent 0,
-            transparent 5px,
-            rgba(147, 197, 253, 0.045) 5px,
-            rgba(147, 197, 253, 0.045) 9px
+            transparent 4px,
+            rgba(147, 197, 253, 0.045) 4px,
+            rgba(147, 197, 253, 0.045) 7px
           );
           border: 1px dashed rgba(147, 197, 253, 0.18);
         `
@@ -872,9 +874,9 @@ export const CollapsedPlaceholder = styled.div`
           background-image: repeating-linear-gradient(
             -45deg,
             transparent 0,
-            transparent 5px,
-            rgba(37, 99, 235, 0.045) 5px,
-            rgba(37, 99, 235, 0.045) 9px
+            transparent 4px,
+            rgba(37, 99, 235, 0.045) 4px,
+            rgba(37, 99, 235, 0.045) 7px
           );
           border: 1px dashed rgba(37, 99, 235, 0.22);
         `}
@@ -915,7 +917,7 @@ export const CollapsedPlaceholder = styled.div`
   }
 
   span {
-    font-size: 11.5px;
+    font-size: 10.5px;
     font-weight: 500;
     letter-spacing: -0.005em;
     color: ${({ theme }) =>

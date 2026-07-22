@@ -750,7 +750,7 @@ const SkeletonStop = styled.div<{ $depth: number }>`
   position: relative;
   display: flex;
   align-items: stretch;
-  padding: 10px 12px 10px 14px;
+  padding: 8px 12px 8px 14px;
   margin-left: ${({ $depth }) => $depth * 22}px;
   border-bottom: 1px solid
     ${({ theme }) =>

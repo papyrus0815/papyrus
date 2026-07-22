@@ -4,8 +4,9 @@
  *
  * 디자인 원칙
  *  - "카드 박스" 아님. 좌측 레일(left:32px in CompactList)에 dot로 점찍힌 *시간축의 정거장*.
- *  - **2단 구성**: 1행은 시각 1순위(연도·제목·중요도), 2행은 메타(카테고리·기간·국기·액션).
- *    이전 단일 행 9요소 → 시선이 안정되고 우측 가장자리 충돌 해소.
+ *  - **단일 행**: [월·일][카테고리 칩][제목][★][기간][국기][액션]을 한 줄에 좌측 밀착.
+ *    제목(flex:0 1 auto+ellipsis) 뒤에 메타가 바로 붙어 '죽은 여백' 없이 스캔되고,
+ *    남는 우측은 예측 가능한 여백(Body max-width로 읽기 컬럼 제한).
  *  - **중요도는 색이 아닌 별(★)** — 카테고리 색·active 색과 충돌 방지.
  *    critical=★★★, major=★★, normal=무표시.
  *  - depth > 0 (하위 사건)는 들여쓰기 + 더 긴 레일 connector.
@@ -303,7 +304,7 @@ const Stop = styled.div<{
   position: relative;
   display: flex;
   align-items: stretch;
-  padding: 10px 12px 10px 14px;
+  padding: 8px 12px 8px 14px;
   margin-left: ${({ $depth }) => $depth * 22}px;
   cursor: pointer;
   font-variant-numeric: tabular-nums;
