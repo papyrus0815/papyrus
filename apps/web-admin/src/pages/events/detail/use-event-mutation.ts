@@ -204,7 +204,7 @@ function friendlyErrorMessage(error: unknown): string {
  *   (placeholder 깜빡임 방지 — refetch가 채움).
  * - eventImages: patch가 전체 배열이라 그대로 재구성(id는 url로 prev 매칭/합성).
  */
-function buildOptimisticEvent(
+export function buildOptimisticEvent(
   prev: EventDetail,
   patch: UpdateEventDto,
   qc: QueryClient,
