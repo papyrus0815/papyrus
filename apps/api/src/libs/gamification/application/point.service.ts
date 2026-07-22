@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { AggregateType, EventCountryRole, PointReason, Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
+import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
 import { createPointsFor, gradeForPoints, gradeProgressFor, GradeProgress } from '../domain/point.policy'
 import { BADGE_DEFS, BadgeStats, badgeProgress, earnedBadgeCodes } from '../domain/badge.policy'
 import { centuryFromDateEra, centuryFromYearEra, centuryLabel } from '../domain/century'
@@ -536,7 +537,13 @@ export class PointService {
     const centuryWhere = hasCentury
       ? { contentCentury: century === 'unknown' ? null : century }
       : {}
-    const countryWhere = hasCountry ? { contentCountryId: country } : {}
+    // 국가 필터는 브리지 합산(F14와 동일): 현대 국가를 고르면 연결된 역사국가 기여까지 포함.
+    const countryScopeIds = hasCountry
+      ? await this.resolveLeaderboardCountryIds(country!)
+      : undefined
+    const countryWhere = countryScopeIds
+      ? { contentCountryId: { in: countryScopeIds } }
+      : {}
     const sums = await this.prisma.pointEntry.groupBy({
       by: ['accountId'],
       where: { ...(start ? { createdAt: { gte: start } } : {}), ...centuryWhere, ...countryWhere },
@@ -560,7 +567,7 @@ export class PointService {
         where: { id: { in: ids } },
         select: { id: true, username: true, displayName: true, gradeCode: true, representativePerson: { select: { profileImageUrl: true } } },
       }),
-      this.contributionCounts(ids, start, century, country),
+      this.contributionCounts(ids, start, century, countryScopeIds),
     ])
     const accMap = new Map(accounts.map((a) => [a.id, a]))
 
@@ -646,30 +653,81 @@ export class PointService {
       const sign = g.reason === PointReason.CREATE_CONTENT ? 1 : -1
       netById.set(g.contentCountryId, (netById.get(g.contentCountryId) ?? 0) + sign * g._count._all)
     }
-    const ids = [...netById.entries()].filter(([, n]) => n > 0).map(([id]) => id)
-    if (ids.length === 0) return []
+    const positiveIds = [...netById.entries()].filter(([, n]) => n > 0).map(([id]) => id)
+    if (positiveIds.length === 0) return []
     const [countries, historical] = await Promise.all([
-      this.prisma.country.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
-      this.prisma.historicalCountry.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+      this.prisma.country.findMany({ where: { id: { in: positiveIds } }, select: { id: true, name: true } }),
+      this.prisma.historicalCountry.findMany({ where: { id: { in: positiveIds } }, select: { id: true, name: true } }),
     ])
     const modernMap = new Map(countries.map((c) => [c.id, c.name]))
     const histMap = new Map(historical.map((h) => [h.id, h.name]))
-    return ids
-      .map((id) => ({
-        countryId: id,
-        name: modernMap.get(id) ?? histMap.get(id) ?? '(알 수 없음)',
-        historical: !modernMap.has(id) && histMap.has(id),
-        entryCount: netById.get(id) ?? 0,
-      }))
-      .sort((a, b) => b.entryCount - a.entryCount)
+
+    // 기여가 있는 역사국가 → 연결 현대국가(브리지) 조회. 필터가 브리지 합산이므로(F14),
+    // 드롭다운 카운트도 현대 국가 옵션에 연결 역사국가 기여를 합산해 선택 결과와 일치시킨다.
+    const histIds = positiveIds.filter((id) => histMap.has(id))
+    const bridges = histIds.length
+      ? await this.prisma.historicalCountryModernCountry.findMany({
+          where: { historicalCountryId: { in: histIds } },
+          select: { historicalCountryId: true, modernCountryId: true },
+        })
+      : []
+    // 현대 국가별 합산 총계 = 직접 기여 + 연결 역사국가 기여
+    const modernInclusive = new Map<string, number>()
+    for (const id of positiveIds) {
+      if (modernMap.has(id)) {
+        modernInclusive.set(id, (modernInclusive.get(id) ?? 0) + (netById.get(id) ?? 0))
+      }
+    }
+    const bridgedModernIds = new Set<string>()
+    for (const bridge of bridges) {
+      bridgedModernIds.add(bridge.modernCountryId)
+      modernInclusive.set(
+        bridge.modernCountryId,
+        (modernInclusive.get(bridge.modernCountryId) ?? 0) +
+          (netById.get(bridge.historicalCountryId) ?? 0),
+      )
+    }
+    // 직접 기여 없이 브리지로만 등장하는 현대 국가 이름 보충
+    const missingModernIds = [...bridgedModernIds].filter((id) => !modernMap.has(id))
+    if (missingModernIds.length) {
+      const extra = await this.prisma.country.findMany({
+        where: { id: { in: missingModernIds } },
+        select: { id: true, name: true },
+      })
+      for (const c of extra) modernMap.set(c.id, c.name)
+    }
+
+    const options: CountryOption[] = []
+    // 현대 국가 옵션(브리지 합산 총계)
+    for (const [id, total] of modernInclusive.entries()) {
+      if (total <= 0) continue
+      options.push({ countryId: id, name: modernMap.get(id) ?? '(알 수 없음)', historical: false, entryCount: total })
+    }
+    // 역사국가 옵션(자기 자신만 — 브리지 여부와 무관하게 개별 선택 가능)
+    for (const id of histIds) {
+      const net = netById.get(id) ?? 0
+      if (net <= 0) continue
+      options.push({ countryId: id, name: histMap.get(id) ?? '(알 수 없음)', historical: true, entryCount: net })
+    }
+    return options.sort((a, b) => b.entryCount - a.entryCount)
   }
 
   /** 유효 기여 수(적립-회수)를 계정별로 집계 (since/century 지정 시 그 조건으로 한정) */
+  /**
+   * 리더보드 국가 필터를 브리지 합산 범위로 확장 (F14와 동일).
+   * 현대 국가면 [자신 + 연결 역사국가], 역사국가면 [자신]만(역방향 확장 없음).
+   * contentCountryId는 현대·역사 PK를 한 컬럼에 섞어 담으므로 in 절로 처리한다.
+   */
+  private async resolveLeaderboardCountryIds(country: string): Promise<string[]> {
+    const linked = await resolveLinkedHistoricalCountryIds(this.prisma, country)
+    return linked.length > 0 ? [country, ...linked] : [country]
+  }
+
   private async contributionCounts(
     ids: string[],
     since?: Date | null,
     century?: CenturyFilter,
-    country?: string,
+    countryIds?: string[],
   ): Promise<Map<string, number>> {
     const map = new Map<string, number>()
     if (ids.length === 0) return map
@@ -680,7 +738,7 @@ export class PointService {
         reason: { in: [PointReason.CREATE_CONTENT, PointReason.CONTENT_DELETED] },
         ...(since ? { createdAt: { gte: since } } : {}),
         ...(century !== undefined ? { contentCentury: century === 'unknown' ? null : century } : {}),
-        ...(country ? { contentCountryId: country } : {}),
+        ...(countryIds ? { contentCountryId: { in: countryIds } } : {}),
       },
       _count: { _all: true },
     })
