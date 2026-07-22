@@ -92,6 +92,28 @@ export const FilterGroup = styled.div`
     border-color: ${BRAND.primaryBorder};
   }
 
+  /* 좁은 폭 — 트리거 4개(카테고리·대륙·국가·세기) 합폭이 뷰포트를 넘으면 우측('전체')이
+   * overflow:hidden으로 잘려 접근 불가하던 문제. 가로 스크롤 + 우측 페이드로 전부 접근 가능하게. */
+  @media (max-width: 768px) {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    & > * {
+      flex-shrink: 0;
+    }
+    mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+    -webkit-mask-image: linear-gradient(
+      to right,
+      #000 calc(100% - 14px),
+      transparent
+    );
+  }
+
   /* focus halo — 그룹에 표시 */
   &:focus-within {
     border-color: ${BRAND.primaryBorderHover};

@@ -20,7 +20,10 @@ import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 import { type IsoDateParts, parseIsoDateParts } from '@/shared/lib/iso-date'
 
-import { CATEGORY_BADGE_COLORS } from '../../../pages/events/styles/theme'
+import {
+  CATEGORY_BADGE_COLORS,
+  CATEGORY_SOFT_COLORS,
+} from '../../../pages/events/styles/theme'
 import type {
   EventHierarchyNode,
   HistoricalEvent,
@@ -141,6 +144,10 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
     CATEGORY_BADGE_COLORS[
       event.category as keyof typeof CATEGORY_BADGE_COLORS
     ] ?? '#2563eb'
+  // 카테고리 라벨은 원색 텍스트(WCAG AA 미달) 대신 저채도 soft chip으로.
+  const soft =
+    CATEGORY_SOFT_COLORS[event.category as keyof typeof CATEGORY_SOFT_COLORS] ??
+    CATEGORY_SOFT_COLORS.other
 
   return (
     <Stop
@@ -162,88 +169,88 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
       data-event-id={node.id}
       data-active={isActive ? 'true' : undefined}
     >
+      {/* 단일 행 — 콘텐츠를 좌측에 밀착시키고(우측 정렬 메타 폐기) 제목 뒤에 메타가 바로
+       * 따라오게 해, 짧은 제목에서 제목↔메타 사이가 텅 비던 '죽은 여백'을 제거한다. */}
       <Body>
-        <Row1>
-          {hasChildren ? (
-            <ExpandBtn
+        {hasChildren ? (
+          <ExpandBtn
+            type="button"
+            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+              e.stopPropagation()
+              onToggleExpansion(node.id)
+            }}
+            $expanded={isExpanded}
+            aria-label={isExpanded ? '접기' : '하위 사건 펼치기'}
+          >
+            <FiChevronRight size={11} />
+          </ExpandBtn>
+        ) : (
+          <ExpandSpacer />
+        )}
+
+        <Year $tier={tier}>{startYear}</Year>
+        <CategoryLabel
+          $rgb={soft.rgb}
+          $text={soft.text}
+          $textDark={soft.textDark}
+        >
+          {categoryName}
+        </CategoryLabel>
+        <Title $tier={tier}>{highlightMatches(node.title, searchQuery)}</Title>
+
+        {tier !== 'normal' && (
+          <ImportanceStars
+            $tier={tier}
+            role="img"
+            aria-label={tier === 'critical' ? '핵심 사건' : '주요 사건'}
+            title={tier === 'critical' ? '핵심 사건' : '주요 사건'}
+          >
+            {tier === 'critical' ? '★★★' : '★★'}
+          </ImportanceStars>
+        )}
+
+        {duration && <Duration>{duration}</Duration>}
+        <Flags>
+          <CountryFlags
+            modern={event.relatedCountries}
+            historical={event.relatedHistoricalCountries}
+            max={3}
+            size="sm"
+          />
+        </Flags>
+
+        <RowActions>
+          {hasChildren && depth === 0 && (
+            <IconBtn
               type="button"
               onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                 e.stopPropagation()
-                onToggleExpansion(node.id)
+                onShowSummary(node.id)
               }}
-              $expanded={isExpanded}
-              aria-label={isExpanded ? '접기' : '하위 사건 펼치기'}
+              title="사건 요약 보기"
+              aria-label="사건 요약 보기"
             >
-              <FiChevronRight size={11} />
-            </ExpandBtn>
-          ) : (
-            <ExpandSpacer />
+              <FiGitBranch size={12} />
+            </IconBtn>
           )}
-
-          <Year $tier={tier}>{startYear}</Year>
-          <Title $tier={tier}>{highlightMatches(node.title, searchQuery)}</Title>
-
-          {tier !== 'normal' && (
-            <ImportanceStars
-              $tier={tier}
-              role="img"
-              aria-label={tier === 'critical' ? '핵심 사건' : '주요 사건'}
-              title={tier === 'critical' ? '핵심 사건' : '주요 사건'}
+          {onToggleBookmark && (
+            <BookmarkBtn
+              type="button"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                e.stopPropagation()
+                onToggleBookmark(node.id)
+              }}
+              $bookmarked={isBookmarked}
+              title={isBookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+              aria-label={isBookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
             >
-              {tier === 'critical' ? '★★★' : '★★'}
-            </ImportanceStars>
-          )}
-
-          <RowActions>
-            {hasChildren && depth === 0 && (
-              <IconBtn
-                type="button"
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  e.stopPropagation()
-                  onShowSummary(node.id)
-                }}
-                title="사건 요약 보기"
-                aria-label="사건 요약 보기"
-              >
-                <FiGitBranch size={12} />
-              </IconBtn>
-            )}
-            {onToggleBookmark && (
-              <BookmarkBtn
-                type="button"
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  e.stopPropagation()
-                  onToggleBookmark(node.id)
-                }}
-                $bookmarked={isBookmarked}
-                title={isBookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-                aria-label={isBookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-              >
-                <FiBookmark
-                  size={13}
-                  fill={isBookmarked ? 'currentColor' : 'none'}
-                />
-              </BookmarkBtn>
-            )}
-          </RowActions>
-        </Row1>
-
-        <Row2>
-          <CategoryLabel style={{ color: categoryColor }}>
-            {categoryName}
-          </CategoryLabel>
-          <MetaPushRight>
-            <Duration>{duration}</Duration>
-            <Flags>
-              <CountryFlags
-                modern={event.relatedCountries}
-                historical={event.relatedHistoricalCountries}
-                max={3}
-                size="sm"
+              <FiBookmark
+                size={13}
+                fill={isBookmarked ? 'currentColor' : 'none'}
               />
-            </Flags>
-          </MetaPushRight>
-        </Row2>
+            </BookmarkBtn>
+          )}
+        </RowActions>
       </Body>
     </Stop>
   )
@@ -354,12 +361,11 @@ const Stop = styled.div<{
     background: ${({ $categoryColor }) => $categoryColor};
     border: none;
     border-radius: 50%;
-    /* 0~2px 흰 separator → 2~4px amber ring(active만) */
-    box-shadow: ${({ $active, theme }) => {
+    /* separator 링만 — active 식별은 좌측 인디고 막대·bg tint·도트 확대(7→11px)가 담당.
+     * amber는 북마크·레거시 major와 중복 신호라 도트 ring에서는 제거. */
+    box-shadow: ${({ theme }) => {
       const sep = theme.mode === 'dark' ? '#0f0f12' : '#ffffff'
-      return $active
-        ? `0 0 0 2px ${sep}, 0 0 0 4px #f59e0b`
-        : `0 0 0 2px ${sep}`
+      return `0 0 0 2px ${sep}`
     }};
     z-index: 1;
     transition: background 0.14s ease, width 0.14s ease, height 0.14s ease,
@@ -410,35 +416,24 @@ const Stop = styled.div<{
   }
 `
 
+/* 단일 행 컨테이너 — 모든 토큰(연도·카테고리·제목·별·기간·국기·액션)을 한 줄에 좌측 밀착.
+ * max-width로 읽기 컬럼을 제한하되, flex:1 스페이서가 없으므로 콘텐츠는 좌측에 붙고 남는
+ * 폭은 예측 가능한 우측 여백이 된다(제목↔메타 사이 죽은 여백 소멸). */
 const Body = styled.div`
   flex: 1;
   min-width: 0;
+  max-width: 880px;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-`
-
-const Row1 = styled.div`
-  display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
-  min-width: 0;
-`
-
-const Row2 = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding-left: 28px; /* ExpandBtn 20 + gap 8 — Row1 정렬 맞춤 */
-  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const RowActions = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  margin-left: auto;
+  margin-left: 2px;
   flex-shrink: 0;
 `
 
@@ -471,43 +466,37 @@ const ExpandSpacer = styled.span`
 `
 
 const Year = styled.span<{ $tier: ImportanceTier }>`
-  font-size: ${({ $tier }) =>
-    $tier === 'critical' ? '13px' : $tier === 'major' ? '12.5px' : '12px'};
-  /* 제목이 먼저 읽히도록 연도는 한 단계 톤다운(700→600, secondary→tertiary).
-     tabular-nums로 연도 자릿수 정렬 — 스캔 시 세로 리듬 안정. */
-  font-weight: 600;
+  /* 날짜는 보조 데이텀 — 항상 제목보다 한 단계 아래. tier별 크기 증가를 없애 고정 12px로,
+     굵기도 500으로 낮춰(중요도 신호는 제목·별이 담당) 제목이 확실한 주인공이 되게 한다. */
+  font-size: 12px;
+  font-weight: 500;
   letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   min-width: 36px;
+  /* 모바일 — 연도는 sticky 연도 divider와 중복이라, 좁은 폭에선 숨겨 제목에 폭을 양보. */
+  @media (max-width: 640px) {
+    display: none;
+  }
 `
 
 const Title = styled.span<{ $tier: ImportanceTier }>`
-  flex: 1;
+  /* 단일 행 밀도 — 제목은 자기 폭(flex:0 1 auto)만 차지하고, 넘치면 …로 자른다.
+   * flex:1을 쓰지 않아 뒤따르는 메타가 제목 바로 옆에 붙어 '죽은 여백'이 생기지 않는다. */
+  flex: 0 1 auto;
   min-width: 0;
+  /* 제목이 확실한 주인공 — 하한 14px, normal도 weight 600으로 올려 연도(12px/500)와 위계 명확. */
   font-size: ${({ $tier }) =>
-    $tier === 'critical' ? '14px' : $tier === 'major' ? '13.5px' : '13px'};
+    $tier === 'critical' ? '15px' : $tier === 'major' ? '14.5px' : '14px'};
   font-weight: ${({ $tier }) =>
-    $tier === 'critical' ? 700 : $tier === 'major' ? 600 : 500};
+    $tier === 'critical' ? 700 : $tier === 'major' ? 650 : 600};
   letter-spacing: -0.01em;
   line-height: 1.3;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
-  /* critical/major는 2줄까지 허용 — 긴 한국어 사건명 잘림 완화. normal은 1줄 유지(밀도 보호). */
-  ${({ $tier }) =>
-    $tier === 'normal'
-      ? css`
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        `
-      : css`
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          word-break: keep-all;
-        `}
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 /* 검색어 매칭 강조 — 노란 배경 + 진한 텍스트. 다크 모드는 amber 톤. */
@@ -532,20 +521,24 @@ const ImportanceStars = styled.span<{ $tier: ImportanceTier }>`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const CategoryLabel = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+/* 저채도 soft chip — 원색 텍스트(AA 미달)를 대신. 배경 tint + 어둡게 조정한 텍스트색으로
+ * 대비 확보하고, 칩 형태로 '분류'임을 명확히(중요도=별과 신호 분리). */
+const CategoryLabel = styled.span<{
+  $rgb: string
+  $text: string
+  $textDark: string
+}>`
   flex-shrink: 0;
-  /* color는 inline style로 카테고리 색 주입 — dot 제거하고 라벨 자체에 색 부여 */
-`
-
-const MetaPushRight = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.5;
+  background: ${({ $rgb, theme }) =>
+    theme.mode === 'dark' ? `rgba(${$rgb}, 0.16)` : `rgba(${$rgb}, 0.1)`};
+  color: ${({ $text, $textDark, theme }) =>
+    theme.mode === 'dark' ? $textDark : $text};
 `
 
 const Duration = styled.span`
