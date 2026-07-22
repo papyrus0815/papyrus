@@ -93,6 +93,9 @@ export const useEventHierarchy = (
   // hierarchy를 flatten하여 리스트로 만들기
   const flattenedHierarchy = useMemo(() => {
     const result: FlattenedHierarchyItem[] = []
+    // 자식 노드의 부모 이벤트 조회를 O(1)로. 이전엔 노드마다 events.find(O(N))라
+    // 자동 전체 펼침(모든 부모 펼침)과 곱해져 대규모에서 O(자식수 × N)였다.
+    const eventById = new Map(events.map((event) => [event.id, event]))
 
     if (showFlatView) {
       const addAllEventsFlat = (
@@ -107,7 +110,7 @@ export const useEventHierarchy = (
         // 자식들도 재귀적으로 추가 (depth 0으로)
         if (node.children) {
           const childParentEvent =
-            events.find((e) => e.id === node.id) ?? parentEvent
+            eventById.get(node.id) ?? parentEvent
           node.children.forEach((child) => {
             addAllEventsFlat(child, childParentEvent)
           })
@@ -141,7 +144,7 @@ export const useEventHierarchy = (
         // 펼쳐진 경우에만 자식 노드 추가
         if (expandedEventIds.has(node.id) && node.children) {
           const childParentEvent =
-            events.find((e) => e.id === node.id) ?? parentEvent
+            eventById.get(node.id) ?? parentEvent
 
           // 하위 사건도 부모와 동일한 정렬 적용 (BC·미상 안전)
           const sortedChildren = [...node.children].sort((a, b) => {

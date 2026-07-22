@@ -29,6 +29,12 @@ export const CompactList = styled.div`
   overflow-x: hidden;
   padding: 4px 12px 120px 70px;
   position: relative;
+  /* 좌측 타임라인 레일까지의 인셋 — 세기/연도 디바이더와 행 커넥터가 이 값만큼 좌로 당겨져
+   * 레일 도트에 정렬된다. 이전엔 -38px 하드코딩이라 모바일(거터 24px)에서 디바이더가 화면
+   * 밖으로 삐져나가고 도트가 잘렸다. 거터에 맞춰 변수로 단일화(모바일에서 재정의). */
+  --rail-inset: 38px;
+  /* 세기 sticky 헤더 높이 — 연도 sticky 헤더 top 오프셋의 단일 출처(하드코딩 44px 결합 해소). */
+  --century-header-h: 44px;
 
   background-image: ${({ theme }) =>
     theme.mode === 'dark'
@@ -71,6 +77,8 @@ export const CompactList = styled.div`
   /* 모바일 — 좌측 70px 패딩(타임라인 가이드 레일용)이 좁은 폭에선
    * 콘텐츠 영역을 너무 잘라먹는다. padding과 가이드라인 위치를 12px로 동기화. */
   @media (max-width: 640px) {
+    /* 모바일 거터(24px)·레일(12px)에 맞춰 인셋 축소 → 디바이더/커넥터가 레일에 재정렬 */
+    --rail-inset: 12px;
     padding: 4px 10px max(120px, env(safe-area-inset-bottom)) 24px;
     background-image: ${({ theme }) =>
       theme.mode === 'dark'
@@ -515,8 +523,8 @@ export const YearDivider = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin: 22px -12px 8px -38px;
-  padding: 8px 12px 8px 38px;
+  margin: 22px -12px 8px calc(-1 * var(--rail-inset));
+  padding: 8px 12px 8px var(--rail-inset);
   border: none;
   border-top: 1px solid
     ${({ theme }) =>
@@ -528,7 +536,7 @@ export const YearDivider = styled.button`
   text-align: left;
   background: transparent;
   position: sticky;
-  top: 44px;
+  top: var(--century-header-h, 44px);
   z-index: 5;
   transition: background 0.15s ease-out;
   align-self: stretch;
@@ -587,6 +595,7 @@ export const YearDivider = styled.button`
     svg {
       color: ${({ theme }) => theme.colors.text.tertiary};
       flex-shrink: 0;
+      transition: transform 0.3s ease;
     }
   }
 
@@ -604,6 +613,9 @@ export const YearDivider = styled.button`
 
   @media (prefers-reduced-motion: reduce) {
     transition: none;
+    svg {
+      transition: none;
+    }
   }
 `
 
@@ -636,9 +648,9 @@ export const CenturyDivider = styled.button`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 28px -38px 8px -38px;
-  padding: 10px 16px 10px 38px;
-  width: calc(100% + 38px);
+  margin: 28px calc(-1 * var(--rail-inset)) 8px calc(-1 * var(--rail-inset));
+  padding: 10px 16px 10px var(--rail-inset);
+  width: calc(100% + var(--rail-inset));
   border: none;
   border-top: 1px solid
     ${({ theme }) =>
@@ -717,6 +729,13 @@ export const CenturyDividerLabel = styled.span`
     color: ${({ theme }) => theme.colors.text.tertiary};
     flex-shrink: 0;
     align-self: center;
+    transition: transform 0.3s ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    svg {
+      transition: none;
+    }
   }
 `
 
@@ -843,9 +862,9 @@ export const CollapsedPlaceholder = styled.div`
   &::before {
     content: '';
     position: absolute;
-    left: -38px;
+    left: calc(-1 * var(--rail-inset));
     top: 50%;
-    width: 38px;
+    width: var(--rail-inset);
     height: 1px;
     border-top: 1px dashed
       ${({ theme }) =>
@@ -859,7 +878,7 @@ export const CollapsedPlaceholder = styled.div`
   &::after {
     content: '';
     position: absolute;
-    left: -38px;
+    left: calc(-1 * var(--rail-inset));
     top: 50%;
     transform: translate(-50%, -50%);
     width: 7px;
@@ -973,6 +992,13 @@ export const EmptyCatalogState = styled.div`
   @media (max-width: 480px) {
     padding: 50px 24px;
     min-height: 320px;
+  }
+  /* 짧은 뷰포트 — CatalogSection(overflow:hidden, max-height 제한) 안에서 420px 최소 높이가
+   * 잘려 '필터 초기화/새 사건 등록' 버튼에 도달 못 하는 문제. 축소·상단 정렬로 접근성 확보. */
+  @media (max-height: 720px) {
+    min-height: 0;
+    padding: 40px 24px;
+    justify-content: flex-start;
   }
 `
 

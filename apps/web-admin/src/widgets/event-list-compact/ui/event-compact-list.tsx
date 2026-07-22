@@ -45,6 +45,9 @@ interface EventCompactListProps {
   isLoadingMore?: boolean
   displayedCount?: number
   hasMoreData?: boolean
+  /** 이미 일부 로드된 뒤 다음 페이지 로드가 실패한 상태 — 하단 인라인 재시도 노출 */
+  loadMoreFailed?: boolean
+  onRetryLoadMore?: () => void
   bookmarks?: Set<string>
   /** 사용자 입력 검색어 — Title의 매칭 부분 강조에 사용 */
   searchQuery?: string
@@ -73,6 +76,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   isLoadingMore = false,
   displayedCount = 0,
   hasMoreData = false,
+  loadMoreFailed = false,
+  onRetryLoadMore,
   bookmarks = new Set(),
   searchQuery,
   recentEventIds = [],
@@ -117,59 +122,60 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     return m
   }, [events])
 
-  const { allYears, eventsByYear, centuryCount } = useMemo(() => {
+  const { allYears, eventsByYear, centuryCount, unknownItems } = useMemo(() => {
     const eventYears = new Set<number>()
-    const byYear = new Map<
-      number,
-      Array<{
-        node: EventHierarchyNode
-        depth: number
-        parentEvent: HistoricalEvent | null
-      }>
-    >()
+    const byYear = new Map<number, typeof flattenedHierarchy>()
+    /**
+     * 연도를 전혀 확정할 수 없는 항목(날짜 완전 미상 + 귀속시킬 상위 연도도 없음)을 모으는 버킷.
+     * 이전엔 year===null이면 조용히 *드롭*됐다 → (a) 오름차순에서 날짜 완전 미상 최상위 사건이
+     * 목록 맨 앞으로 정렬돼 통째 사라지고, (b) '북마크만'으로 부모 없이 남은 자식이 화면에서
+     * 통째 사라졌다("1건"인데 빈 화면). 절대 드롭하지 않고 여기 모아 '연도 미상' 섹션으로 렌더한다.
+     */
+    const unknownItems: typeof flattenedHierarchy = []
+    /** 세기별 사건 수 — depth 0만, *실제 버킷 귀속 연도* 기준(연 헤더 카운트 합과 정합). */
+    const centuryCount = new Map<number, number>()
     let lastTopLevelYear: number | null = null
     flattenedHierarchy.forEach((item) => {
-      // BC·고대 날짜 안전 파싱(네이티브 Date 금지). 파싱 실패(연도 미상)는 직전
-      // 상위 사건 연도 그룹에 흡수 — NaN 키를 만들지 않는다.
+      // BC·고대 날짜 안전 파싱(네이티브 Date 금지).
       const parsedYear = parseIsoDateParts(item.node.period.start)?.year ?? null
-      if (item.depth === 0) {
-        if (parsedYear !== null) {
-          eventYears.add(parsedYear)
-          lastTopLevelYear = parsedYear
-        }
+      if (item.depth === 0 && parsedYear !== null) {
+        lastTopLevelYear = parsedYear
       }
-      // 자식(depth>0)은 *부모(직전 depth 0)의 연도 버킷*에 귀속시킨다.
-      // allYears는 eventYears(=depth 0 연도)에서만 파생되므로, 자식을 자기
-      // period.start 연도로 버킷팅하면 그 연도에 최상위 사건이 없을 때 버킷 키가
-      // allYears에 없어 렌더 루프(allYears.map)가 순회하지 않고 자식이 조용히
-      // 누락됐다(예: 임진왜란 1592의 자식 명량 1597). 부모 연도로 귀속하면
-      // 버킷 키가 항상 allYears에 존재하고, 부모-자식이 인접 유지되며, 부모를
-      // 접었을 때의 소멸 인과도 일치한다. 평면 보기(showFlatView)에선 모든 항목이
-      // depth 0라 이 분기가 무관 — 각자 자기 연도로 정상 버킷팅된다.
-      const year = item.depth === 0 ? parsedYear ?? lastTopLevelYear : lastTopLevelYear
-      if (year === null) return
-      if (!byYear.has(year)) byYear.set(year, [])
-      byYear.get(year)!.push(item)
+      // 버킷 귀속 연도: 최상위는 자기 연도 우선, 자식은 직전 최상위(부모) 연도 우선.
+      // 어느 쪽도 없으면(부모가 필터로 사라진 자식 등) 자기 연도로 폴백한다 → 그래도 null이면 미상.
+      const bucketYear =
+        item.depth === 0
+          ? parsedYear ?? lastTopLevelYear
+          : lastTopLevelYear ?? parsedYear
+      if (bucketYear === null) {
+        unknownItems.push(item)
+        return
+      }
+      // depth 무관하게 add — 부모 없이 자식 연도로 버킷팅한 경우에도 allYears에 버킷이
+      // 존재해야 렌더 루프(allYears.map)가 그 연도를 순회한다.
+      eventYears.add(bucketYear)
+      if (!byYear.has(bucketYear)) byYear.set(bucketYear, [])
+      byYear.get(bucketYear)!.push(item)
+      // getCentury(year)로 BC 음수 세기까지 정합(1950 → 20세기).
+      if (item.depth === 0) {
+        const centuryOfBucket = getCentury(bucketYear)
+        centuryCount.set(
+          centuryOfBucket,
+          (centuryCount.get(centuryOfBucket) ?? 0) + 1,
+        )
+      }
     })
-    const sortedYears = Array.from(eventYears).sort((a, b) => a - b)
+    const sortedYears = Array.from(eventYears).sort(
+      (yearA, yearB) => yearA - yearB,
+    )
     const orderedYears =
       sortDirection === 'desc' ? [...sortedYears].reverse() : sortedYears
-
-    /** 세기별 사건 수 — flattenedHierarchy의 depth 0 사건만 집계.
-     *  getCentury(year)로 BC 음수 세기까지 정합(1950 → 20세기). */
-    const centuryCount = new Map<number, number>()
-    for (const item of flattenedHierarchy) {
-      if (item.depth !== 0) continue
-      const y = parseIsoDateParts(item.node.period.start)?.year ?? null
-      if (y === null) continue
-      const c = getCentury(y)
-      centuryCount.set(c, (centuryCount.get(c) ?? 0) + 1)
-    }
 
     return {
       allYears: orderedYears,
       eventsByYear: byYear,
       centuryCount,
+      unknownItems,
     }
   }, [flattenedHierarchy, sortDirection])
 
@@ -335,7 +341,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                           transform: isCenturyCollapsed
                             ? 'rotate(-90deg)'
                             : 'rotate(0deg)',
-                          transition: 'transform 0.3s ease',
                         }}
                       />
                       <span>
@@ -371,7 +376,6 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                         transform: isYearCollapsed
                           ? 'rotate(-90deg)'
                           : 'rotate(0deg)',
-                        transition: 'transform 0.3s ease',
                       }}
                     />
                     {currentYear}년
@@ -426,6 +430,45 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             })
           })()}
 
+          {/* 연도 미상 — period.start가 비었거나 파싱 불가하고 귀속할 상위 연도도 없는 항목.
+           * 그룹핑에서 드롭하지 않고 여기 모아 렌더한다(자식만 남은 북마크 필터·날짜 완전 미상). */}
+          {unknownItems.length > 0 && (
+            <React.Fragment key="year-unknown">
+              <List.YearDivider as="div" style={{ cursor: 'default' }}>
+                <span>
+                  연도 미상
+                  <List.CollapsedCount>{unknownItems.length}</List.CollapsedCount>
+                </span>
+              </List.YearDivider>
+              {unknownItems.map(({ node, depth, parentEvent }) => {
+                const hasChildren = Boolean(
+                  node.children && node.children.length > 0,
+                )
+                const isExpanded = expandedEventIds.has(node.id)
+                const event = eventById.get(node.id) ?? parentEvent
+                if (!event) return null
+                return (
+                  <EventListItem
+                    key={node.id}
+                    node={node}
+                    event={event}
+                    depth={depth}
+                    isExpanded={isExpanded}
+                    hasChildren={hasChildren}
+                    isActive={selectedEventId === node.id}
+                    dbCategories={dbCategories}
+                    isBookmarked={bookmarks.has(node.id)}
+                    searchQuery={searchQuery}
+                    onSelect={onSelectEvent}
+                    onToggleExpansion={onToggleExpansion}
+                    onShowSummary={onShowSummary}
+                    onToggleBookmark={onToggleBookmark}
+                  />
+                )
+              })}
+            </React.Fragment>
+          )}
+
           {/* 로딩 / 끝 안내 — 사용자가 "어디까지 봤는지·더 있는지·끝인지" 즉시 알 수 있도록.
            * displayedCount를 모든 상태에 노출해 스크롤 중에도 진행도가 보임. */}
           {isLoadingMore && (
@@ -438,7 +481,19 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               </LoadingMoreText>
             </LoadingMoreRow>
           )}
-          {!isLoadingMore && hasMoreData && (
+          {/* 부분 로드 실패 — 전역 에러 배너(events.length===0)엔 안 걸리는 조용한 누락을
+           * 인라인으로 노출하고 재시도 진입점을 준다. */}
+          {loadMoreFailed && !isLoadingMore && (
+            <LoadingMoreRow role="alert">
+              <LoadMoreErrorText>일부 사건을 불러오지 못했습니다.</LoadMoreErrorText>
+              {onRetryLoadMore && (
+                <RetryLoadMoreButton type="button" onClick={onRetryLoadMore}>
+                  다시 시도
+                </RetryLoadMoreButton>
+              )}
+            </LoadingMoreRow>
+          )}
+          {!isLoadingMore && hasMoreData && !loadMoreFailed && (
             <LoadingMoreRow aria-hidden="true">
               <ScrollHintInline>
                 {displayedCount > 0
@@ -477,6 +532,40 @@ const LoadingMoreText = styled.div`
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-size: 13px;
   font-weight: 500;
+`
+
+const LoadMoreErrorText = styled.span`
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#dc2626')};
+`
+
+const RetryLoadMoreButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248,113,113,0.4)' : 'rgba(220,38,38,0.35)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(248,113,113,0.12)' : 'rgba(220,38,38,0.06)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#dc2626')};
+  transition: background 0.14s, border-color 0.14s;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248,113,113,0.2)' : 'rgba(220,38,38,0.1)'};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${BRAND.focusRing};
+  }
 `
 
 const ScrollHint = styled.div`
@@ -656,7 +745,7 @@ const SkeletonStop = styled.div<{ $depth: number }>`
 
 const SkeletonRail = styled.span`
   position: absolute;
-  left: -38px;
+  left: calc(-1 * var(--rail-inset, 38px));
   top: 50%;
   transform: translate(-50%, -50%);
   width: 8px;

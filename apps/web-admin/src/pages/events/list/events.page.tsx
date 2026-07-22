@@ -158,12 +158,18 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     isLoading,
     isFetchingNextPage,
     isError,
+    loadMoreFailed,
     hasMore,
     fetchMoreEvents,
     refetch: refetchEvents,
   } = useEvents({
     pageSize,
     countryId: countryId ?? undefined,
+    // 정렬·세기 필터·계층 평탄화가 전부 클라이언트 전역이라, 일부 페이지만 로드된 채로
+    // 정렬을 바꾸면 로드된 창 안에서만 재정렬된다(안 받은 페이지의 사건은 영영 안 나옴).
+    // 특히 1000년 이전 사건은 start_date NULL → 서버 정렬상 맨 뒤로 밀려 마지막 페이지에
+    // 몰리므로, 전체 페이지를 자동 소진해 전역 정렬/필터가 완전한 데이터를 보게 한다.
+    autoLoadAll: true,
   })
 
   // ===== 권위 총개수 — 헤더 "전체 N건"이 *로드된 수*가 아닌 진짜 총량을 표시하도록 =====
@@ -537,7 +543,9 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
               : filterSummaryChips
           }
           dbCategories={dbCategories}
-          isLoadingMore={isLoading && events.length > 0}
+          isLoadingMore={isFetchingNextPage}
+          loadMoreFailed={loadMoreFailed}
+          onRetryLoadMore={fetchMoreEvents}
           displayedCount={visibleFlattenedHierarchy.length}
           hasMoreData={hasMore}
           bookmarks={bookmarks}

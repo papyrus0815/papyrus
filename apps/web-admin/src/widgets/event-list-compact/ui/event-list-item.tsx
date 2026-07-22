@@ -157,8 +157,8 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
         }
       }}
       tabIndex={0}
-      role="button"
-      aria-pressed={isActive}
+      role="listitem"
+      aria-current={isActive ? 'true' : undefined}
       data-event-id={node.id}
       data-active={isActive ? 'true' : undefined}
     >
@@ -323,9 +323,9 @@ const Stop = styled.div<{
   &::before {
     content: '';
     position: absolute;
-    left: ${({ $depth }) => -38 - $depth * 22}px;
+    left: ${({ $depth }) => `calc(-1 * var(--rail-inset) - ${$depth * 22}px)`};
     top: 50%;
-    width: ${({ $depth }) => 38 + $depth * 22}px;
+    width: ${({ $depth }) => `calc(var(--rail-inset) + ${$depth * 22}px)`};
     height: 1px;
     border-top: 1px solid
       ${({ theme }) =>
@@ -344,7 +344,7 @@ const Stop = styled.div<{
   &::after {
     content: '';
     position: absolute;
-    left: ${({ $depth }) => -38 - $depth * 22}px;
+    left: ${({ $depth }) => `calc(-1 * var(--rail-inset) - ${$depth * 22}px)`};
     top: 50%;
     transform: translate(-50%, -50%);
     width: ${({ $active, $tier }) =>
