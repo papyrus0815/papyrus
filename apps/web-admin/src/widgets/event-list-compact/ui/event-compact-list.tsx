@@ -5,9 +5,12 @@
 import React, { useMemo, useState } from 'react'
 
 import {
+  FiAlertCircle,
   FiChevronDown,
   FiFilter,
+  FiInbox,
   FiPlus,
+  FiSearch,
   FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
@@ -184,23 +187,19 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       {isLoading ? (
         <List.CompactList>
           {[...Array(Math.min(pageSize, 12))].map((_, index) => {
-            // 실제 timeline-stop 레이아웃과 동일하게: 좌측 레일 dot + Row1(year/title) + Row2(category/duration)
+            // 실제 행(단일 행: 레일 dot + [연도][카테고리칩][제목])과 동일 구조로 렌더 →
+            // 로딩→데이터 전환 시 높이·요소 위치 점프 없음.
             const depth = index % 3
             // 동일 폭 반복 회피 — index 기반 폭으로 자연스러운 다양성
-            const titleW = 50 + ((index * 13) % 30) // 50~80%
-            const categoryW = 60 + ((index * 7) % 40) // 60~100px
+            const titleW = 40 + ((index * 13) % 30) // 40~70%
+            const categoryW = 40 + ((index * 7) % 24) // 40~64px
             return (
               <SkeletonStop key={index} $depth={depth}>
                 <SkeletonRail aria-hidden="true" />
                 <SkeletonBody>
-                  <SkeletonRow1>
-                    <SkeletonYear />
-                    <SkeletonTitleBar style={{ width: `${titleW}%` }} />
-                  </SkeletonRow1>
-                  <SkeletonRow2>
-                    <SkeletonCategory style={{ width: `${categoryW}px` }} />
-                    <SkeletonDuration />
-                  </SkeletonRow2>
+                  <SkeletonYear />
+                  <SkeletonCategory style={{ width: `${categoryW}px` }} />
+                  <SkeletonTitleBar style={{ width: `${titleW}%` }} />
                 </SkeletonBody>
               </SkeletonStop>
             )
@@ -208,8 +207,16 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         </List.CompactList>
       ) : flattenedHierarchy.length === 0 ? (
         <List.EmptyCatalogState>
+          {/* 상태별 아이콘 — 빈 DB(수신함)·필터결과0(깔때기)·검색무결과(돋보기)로 구별해
+           * '필터 때문에 안 보이나?' 오해를 없앤다. */}
           <List.EmptyIcon>
-            <FiFilter size={44} />
+            {events.length === 0 ? (
+              <FiInbox size={44} />
+            ) : hasActiveFilters ? (
+              <FiFilter size={44} />
+            ) : (
+              <FiSearch size={44} />
+            )}
           </List.EmptyIcon>
           <List.EmptyContent>
             <List.EmptyTitle>
@@ -412,6 +419,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                           dbCategories={dbCategories}
                           isBookmarked={bookmarks.has(node.id)}
                           searchQuery={searchQuery}
+                          // 이 행이 속한 연 그룹 — 같은 해면 선두 토큰을 월·일로 대체(연도 중복 제거)
+                          groupYear={currentYear}
                           // 안정 참조 전달 — 행마다 새 화살표를 만들지 않아 EventListItem의
                           // React.memo가 실효. id는 EventListItem이 node.id로 직접 전달.
                           onSelect={onSelectEvent}
@@ -434,12 +443,12 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
            * 그룹핑에서 드롭하지 않고 여기 모아 렌더한다(자식만 남은 북마크 필터·날짜 완전 미상). */}
           {unknownItems.length > 0 && (
             <React.Fragment key="year-unknown">
-              <List.YearDivider as="div" style={{ cursor: 'default' }}>
+              <List.UnknownYearDivider as="div" style={{ cursor: 'default' }}>
                 <span>
                   연도 미상
                   <List.CollapsedCount>{unknownItems.length}</List.CollapsedCount>
                 </span>
-              </List.YearDivider>
+              </List.UnknownYearDivider>
               {unknownItems.map(({ node, depth, parentEvent }) => {
                 const hasChildren = Boolean(
                   node.children && node.children.length > 0,
@@ -485,7 +494,14 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
            * 인라인으로 노출하고 재시도 진입점을 준다. */}
           {loadMoreFailed && !isLoadingMore && (
             <LoadingMoreRow role="alert">
-              <LoadMoreErrorText>일부 사건을 불러오지 못했습니다.</LoadMoreErrorText>
+              <LoadMoreErrorText>
+                <FiAlertCircle
+                  size={14}
+                  aria-hidden="true"
+                  style={{ flexShrink: 0, verticalAlign: '-2px', marginRight: 6 }}
+                />
+                일부 사건을 불러오지 못했습니다.
+              </LoadMoreErrorText>
               {onRetryLoadMore && (
                 <RetryLoadMoreButton type="button" onClick={onRetryLoadMore}>
                   다시 시도
@@ -758,23 +774,19 @@ const SkeletonRail = styled.span`
   z-index: 1;
 `
 
+/* 단일 행 — 실제 행([연도][카테고리칩][제목])과 동일 구조. */
 const SkeletonBody = styled.div`
   flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-`
-
-const SkeletonRow1 = styled.div`
-  display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 8px;
-  padding-left: 28px; /* ExpandSpacer 자리 */
+  min-width: 0;
+  max-width: 880px;
 `
 
 const SkeletonYear = styled.span`
-  width: 36px;
+  width: 30px;
   height: 11px;
   border-radius: 4px;
   ${skeletonBarBg}
@@ -782,35 +794,19 @@ const SkeletonYear = styled.span`
   flex-shrink: 0;
 `
 
+const SkeletonCategory = styled.span`
+  height: 16px;
+  border-radius: 6px;
+  ${skeletonBarBg}
+  ${shimmerAnimation}
+  opacity: 0.7;
+  flex-shrink: 0;
+`
+
 const SkeletonTitleBar = styled.span`
-  height: 13px;
+  height: 14px;
   border-radius: 4px;
   ${skeletonBarBg}
   ${shimmerAnimation}
-  max-width: 90%;
-`
-
-const SkeletonRow2 = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-left: 28px;
-`
-
-const SkeletonCategory = styled.span`
-  height: 10px;
-  border-radius: 3px;
-  ${skeletonBarBg}
-  ${shimmerAnimation}
-  opacity: 0.7;
-`
-
-const SkeletonDuration = styled.span`
-  margin-left: auto;
-  width: 50px;
-  height: 10px;
-  border-radius: 3px;
-  ${skeletonBarBg}
-  ${shimmerAnimation}
-  opacity: 0.7;
+  max-width: 70%;
 `

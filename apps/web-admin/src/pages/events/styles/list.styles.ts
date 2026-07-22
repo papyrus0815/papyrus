@@ -41,15 +41,15 @@ export const CompactList = styled.div`
       ? `linear-gradient(
           to right,
           transparent 31px,
-          rgba(147, 197, 253, 0.14) 31px,
-          rgba(147, 197, 253, 0.14) 32px,
+          rgba(147, 197, 253, 0.2) 31px,
+          rgba(147, 197, 253, 0.2) 32px,
           transparent 32px
         )`
       : `linear-gradient(
           to right,
           transparent 31px,
-          rgba(37, 99, 235, 0.16) 31px,
-          rgba(37, 99, 235, 0.16) 32px,
+          rgba(37, 99, 235, 0.22) 31px,
+          rgba(37, 99, 235, 0.22) 32px,
           transparent 32px
         )`};
   background-attachment: local;
@@ -85,15 +85,15 @@ export const CompactList = styled.div`
         ? `linear-gradient(
             to right,
             transparent 11px,
-            rgba(147, 197, 253, 0.14) 11px,
-            rgba(147, 197, 253, 0.14) 12px,
+            rgba(147, 197, 253, 0.2) 11px,
+            rgba(147, 197, 253, 0.2) 12px,
             transparent 12px
           )`
         : `linear-gradient(
             to right,
             transparent 11px,
-            rgba(37, 99, 235, 0.16) 11px,
-            rgba(37, 99, 235, 0.16) 12px,
+            rgba(37, 99, 235, 0.22) 11px,
+            rgba(37, 99, 235, 0.22) 12px,
             transparent 12px
           )`};
   }
@@ -567,12 +567,12 @@ export const YearDivider = styled.button`
     top: 0;
     right: 0;
     bottom: 0;
+    /* 연 헤더는 불투명 solid 띠로 강등 — 세기(1차 sticky)만 glass로 두어 'glass 위 glass'
+     * 스택과 blur 재합성 비용을 없앤다(occlusion은 불투명도로 해결). */
     background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(15, 15, 18, 0.7)'
-        : 'rgba(255, 255, 255, 0.78)'};
-    backdrop-filter: blur(8px) saturate(160%);
-    -webkit-backdrop-filter: blur(8px) saturate(160%);
+        ? 'rgba(15, 15, 18, 0.94)'
+        : 'rgba(255, 255, 255, 0.95)'};
     z-index: -1;
   }
 
@@ -616,6 +616,20 @@ export const YearDivider = styled.button`
     svg {
       transition: none;
     }
+  }
+`
+
+/* '연도 미상' 전용 — 확정 연도(solid indigo 앵커)와 시각 무게를 구별. 도트를 hollow·muted로
+ * 강등해 '이 구간은 불확실한 catch-all'임을 신호한다(1985년 같은 datum으로 오독 방지). */
+export const UnknownYearDivider = styled(YearDivider)`
+  &::before {
+    width: 8px;
+    height: 8px;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+    border: 1.5px solid ${({ theme }) => theme.colors.text.tertiary};
+  }
+  span {
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
@@ -697,6 +711,13 @@ export const CenturyDivider = styled.button`
 
   &:first-child {
     margin-top: 0;
+  }
+
+  /* 세기 직후 첫 연도 divider — 세기 하단 hairline과 연도 상단 hairline이 근접 이중선으로
+   * 쌓이던 것을 정리. 세기 하단 라인 하나로 경계를 대표하고 연도 상단선은 제거·간격 축소. */
+  & + button {
+    border-top: none;
+    margin-top: 12px;
   }
 
   &:hover {

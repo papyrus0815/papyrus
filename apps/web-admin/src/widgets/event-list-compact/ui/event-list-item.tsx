@@ -41,6 +41,12 @@ interface EventListItemProps {
   /** 활성 검색어 — Title에서 매칭 부분 노란 배경 */
   searchQuery?: string
   /**
+   * 이 행이 속한 연도 그룹의 연도. 행의 연도가 이 값과 같으면 연도가 이미 그룹 헤더에
+   * 표시돼 중복이므로, 선두 토큰을 월·일(정밀도 확정 시)로 대체하거나 생략한다.
+   * '연도 미상' 섹션·평면 뷰의 다른 해 항목은 null → 연도를 그대로 표시.
+   */
+  groupYear?: number | null
+  /**
    * id 기반 콜백 — 상위(CompactList)가 *안정* 참조를 그대로 넘길 수 있어 React.memo가
    * 실효를 낸다(행마다 인라인 화살표를 만들면 memo가 매번 무력화됨).
    */
@@ -125,6 +131,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   dbCategories,
   isBookmarked = false,
   searchQuery,
+  groupYear,
   onSelect,
   onToggleExpansion,
   onShowSummary,
@@ -133,11 +140,26 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   const tier = tierFromNode(node.importance)
   const startParts = parseIsoDateParts(node.period.start)
   const endParts = node.period.end ? parseIsoDateParts(node.period.end) : null
-  const startYear = startParts
-    ? startParts.year < 0
-      ? `기원전 ${Math.abs(startParts.year)}`
-      : startParts.year
-    : '미상'
+  /**
+   * 행 선두 시간 토큰. 연도가 그룹 헤더('YYYY년')와 같으면 중복이라 월·일(정밀도가
+   * 'day'/'month'로 *확정*된 경우만)로 대체하고, 연도만 아는 경우(precision 미확정·'year')는
+   * 생략해 divider에 위임한다. 그룹과 다른 해(평면 뷰·미상 섹션)는 연도를 그대로 노출.
+   * ⚠️ 연도만 아는 이벤트가 01-01로 저장될 수 있어, precision이 명시적으로 'day'일 때만 월.일.
+   */
+  const rowDateLabel = (() => {
+    if (!startParts) return '미상'
+    if (startParts.year < 0) return `기원전 ${Math.abs(startParts.year)}`
+    if (groupYear != null && startParts.year === groupYear) {
+      const precision = event.startDatePrecision
+      if (precision === 'year') return '' // 명시적 연-정밀도 → 그룹 헤더에 위임
+      if (precision === 'month') return `${startParts.month}월`
+      // 'day' 또는 precision 미기록(대부분 실제 월·일 보유) → 월.일.
+      // 단 01-01은 연도만 아는 값이 sentinel로 저장된 것일 수 있어(BC·고대 재구성 등) 생략.
+      if (startParts.month === 1 && startParts.day === 1) return ''
+      return `${startParts.month}.${startParts.day}`
+    }
+    return `${startParts.year}`
+  })()
   const duration = formatDuration(startParts, endParts)
   const categoryName = getCategoryName(event.category, dbCategories)
   const categoryColor =
@@ -188,7 +210,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
           <ExpandSpacer />
         )}
 
-        <Year $tier={tier}>{startYear}</Year>
+        <Year $tier={tier}>{rowDateLabel}</Year>
         <CategoryLabel
           $rgb={soft.rgb}
           $text={soft.text}
