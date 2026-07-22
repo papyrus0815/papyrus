@@ -182,6 +182,32 @@ export async function getPersonsByTenureCountry(params: {
 }
 
 /**
+ * 역사국가 소속 인물 3원 합집합 조회 (본체 historicalCountryId + 재임 + affiliation).
+ * 재임 단독인 getPersonsByTenureCountry와 달리 재임 없는 인물(문인·학자 등)도 포함한다.
+ * GET /persons/by-historical-country/:id — nestia SDK 미생성이라 raw fetch (재생성 시 SDK로 교체).
+ */
+export async function getPersonsByHistoricalCountryUnion(
+  historicalCountryId: string,
+): Promise<PersonResponseDto[]> {
+  if (!historicalCountryId) return []
+  const conn = getApiConnection()
+  const url = `${conn.host}/persons/by-historical-country/${encodeURIComponent(historicalCountryId)}`
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(typeof conn.headers?.Authorization === 'string' && {
+        Authorization: conn.headers.Authorization,
+      }),
+    },
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const data = await res.json()
+  return (Array.isArray(data) ? data : data?.data ?? []) as PersonResponseDto[]
+}
+
+/**
  * 인물 상세 조회
  */
 export async function getPersonById(id: string): Promise<PersonResponseDto> {

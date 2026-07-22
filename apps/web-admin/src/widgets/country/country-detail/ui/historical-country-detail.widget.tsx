@@ -7,7 +7,7 @@ import styled from 'styled-components'
 import { useThemeStore } from '@/shared/styles/theme.store'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { getPersonsByTenureCountry } from '@/shared/api/persons'
+import { getPersonsByHistoricalCountryUnion } from '@/shared/api/persons'
 import {
   formatCountryPeriod,
   getCountryDurationYears,
@@ -939,11 +939,12 @@ function OverviewStatChip({
 // ============================================
 
 /**
- * 주요 인물 탭 — 이 역사국가에 재임(관직·재위) 기록이 있는 실제 인물.
+ * 주요 인물 탭 — 이 역사국가 소속 인물(주 국적 + 재임 + 소속 3원 합집합).
  *
  * 과거에는 국가명 includes('조선'|'고려') 매칭으로 하드코딩 목업을 렌더해
  * '조선민주주의인민공화국'(북한) 상세에 조선왕조 인물이 실데이터처럼 표시됐다.
- * 재임 API(GET /government-positions/historical-countries/:id/persons)로 대체.
+ * 재임 단독 API를 쓰던 것을 3원 합집합(GET /persons/by-historical-country/:id)으로
+ * 대체 — 재임 없는 문인·학자(현대 국가 상세와 동일 기준)도 포함된다.
  */
 function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
   const { mode } = useThemeStore()
@@ -951,8 +952,8 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
   const navigate = useNavigate()
 
   const { data: figures = [], isLoading } = useQuery({
-    queryKey: ['historical-country-tenure-persons', country.id],
-    queryFn: () => getPersonsByTenureCountry({ historicalCountryId: country.id }),
+    queryKey: ['historical-country-union-persons', country.id],
+    queryFn: () => getPersonsByHistoricalCountryUnion(country.id),
     enabled: !!country.id,
   })
 
@@ -983,7 +984,7 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
       >
         <EmptyState
           message="등록된 인물이 없습니다"
-          description="이 국가에 재임(관직·재위) 기록이 있는 인물이 여기에 표시됩니다. 역대 수반 탭에서 재임을 등록해 보세요."
+          description="이 국가를 주 국적으로 삼거나 재임·소속 기록이 있는 인물이 여기에 표시됩니다."
           isDark={isDark}
         />
       </div>
@@ -1005,7 +1006,7 @@ function HistoricalFiguresSection({ country }: { country: UnifiedCountry }) {
           color: isDark ? '#a1a1aa' : '#64748b',
         }}
       >
-        이 국가에 재임 기록이 있는 인물 {figures.length}명
+        이 국가 소속 인물 {figures.length}명
       </p>
       <div
         style={{
