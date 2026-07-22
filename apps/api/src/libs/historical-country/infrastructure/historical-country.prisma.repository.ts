@@ -8,6 +8,7 @@ import {
   HistoricalCountryListFilter,
 } from '../domain/historical-country.repository'
 import { HistoricalCountry } from '../domain/historical-country.entity'
+import { computeTransitionSuccessorDiff } from '../domain/transition-diff.util'
 
 @Injectable()
 export class HistoricalCountryPrismaRepository
@@ -185,20 +186,18 @@ export class HistoricalCountryPrismaRepository
     // 이름 하나 고쳐 저장하는 것만으로 대표값으로 평탄화되고 id도 재발급됐다.
     // 후임 집합의 추가/삭제분만 반영해 남는 행은 그대로 보존한다.
     if (data.parentHistoricalCountryIds !== undefined) {
-      const desiredSuccessorIds = new Set(data.parentHistoricalCountryIds)
       const existingTransitions =
         await this.prisma.historicalCountryTransition.findMany({
           where: { predecessorId: id },
           select: { id: true, successorId: true },
         })
-      const existingSuccessorIds = new Set(
-        existingTransitions.map((transition) => transition.successorId),
-      )
+      const { transitionIdsToDelete, successorIdsToAdd } =
+        computeTransitionSuccessorDiff(
+          existingTransitions,
+          data.parentHistoricalCountryIds,
+        )
 
       // 더 이상 후임이 아닌 행만 삭제 (남는 행의 eventType/scope는 건드리지 않음)
-      const transitionIdsToDelete = existingTransitions
-        .filter((transition) => !desiredSuccessorIds.has(transition.successorId))
-        .map((transition) => transition.id)
       if (transitionIdsToDelete.length > 0) {
         await this.prisma.historicalCountryTransition.deleteMany({
           where: { id: { in: transitionIdsToDelete } },
@@ -206,9 +205,6 @@ export class HistoricalCountryPrismaRepository
       }
 
       // 새로 추가된 후임만 생성 (eventType/scope는 폼이 보낸 대표값 사용)
-      const successorIdsToAdd = data.parentHistoricalCountryIds.filter(
-        (successorId) => !existingSuccessorIds.has(successorId),
-      )
       if (successorIdsToAdd.length > 0 && data.transitionEventType) {
         await this.prisma.historicalCountryTransition.createMany({
           data: successorIdsToAdd.map((successorId) => ({
