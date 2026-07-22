@@ -7,6 +7,7 @@ import {
   compareByDate,
   dateSortKey,
   formatCenturyLabel,
+  formatDateWithPrecision,
   getCentury,
   getCenturyFromIso,
   getDecade,
@@ -182,5 +183,24 @@ describe('isoDaySpan', () => {
   it('end 없거나 파싱 불가면 null', () => {
     expect(isoDaySpan('2024-01-01', undefined)).toBeNull()
     expect(isoDaySpan('', '2024-01-01')).toBeNull()
+  })
+})
+
+describe('formatDateWithPrecision — BC(음수 연도) 기원전 표기 (P3-4)', () => {
+  it('BC 연도를 "기원전 N년"으로 표기(하위 카드 "-44년" 회귀 방지)', () => {
+    expect(formatDateWithPrecision('-0044-03-15', 'year')).toBe('기원전 44년')
+    expect(formatDateWithPrecision('-0044-03-15', 'month')).toBe('기원전 44년 3월')
+    expect(formatDateWithPrecision('-0044-03-15', 'day')).toBe(
+      '기원전 44년 3월 15일',
+    )
+  })
+
+  it('AD 연도는 접두 없이 그대로', () => {
+    expect(formatDateWithPrecision('1789-07-14', 'day')).toBe('1789년 7월 14일')
+    expect(formatDateWithPrecision('1789-07-14', 'year')).toBe('1789년')
+  })
+
+  it('precision 미지정은 day로 간주', () => {
+    expect(formatDateWithPrecision('-0044-03-15')).toBe('기원전 44년 3월 15일')
   })
 })
