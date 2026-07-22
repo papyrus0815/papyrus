@@ -1,6 +1,11 @@
 import { PrismaService } from '@prisma/prisma.service'
+import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
 
-/** 정당 소속 국가(현대·역사)와 일치하는 재임 `where` — `person` 레포와 동일 규칙 */
+/**
+ * 정당 소속 국가(현대·역사)와 일치하는 재임 `where` — `person` 레포와 동일 규칙.
+ * 현대 국가 스코프(브리지 연결 역사국가 합산)는 공용 헬퍼 resolveCountryScopeOr를
+ * 재사용하고, 역사국가 단독 소속만 이 유틸이 별도로 처리한다.
+ */
 export async function buildTenureJurisdictionWhere(
   prisma: PrismaService,
   party: { countryId: string | null; historicalCountryId: string | null },
@@ -13,21 +18,7 @@ export async function buildTenureJurisdictionWhere(
   }
 
   if (countryId) {
-    const linkedHistoricalIds = await prisma.historicalCountryModernCountry
-      .findMany({
-        where: { modernCountryId: countryId },
-        select: { historicalCountryId: true },
-      })
-      .then((rows) => rows.map((r) => r.historicalCountryId))
-    if (linkedHistoricalIds.length > 0) {
-      return {
-        OR: [
-          { countryId },
-          { historicalCountryId: { in: linkedHistoricalIds } },
-        ],
-      }
-    }
-    return { countryId }
+    return resolveCountryScopeOr(prisma, countryId)
   }
 
   return null
