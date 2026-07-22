@@ -86,6 +86,11 @@ interface EventTimelineProps {
   hasMore?: boolean
   isFetchingMore?: boolean
   onLoadMore?: () => void
+  /**
+   * 자동 소진 중 한 페이지가 실패해 자동 재개가 멈춘 상태(useEvents 무한재시도 가드).
+   * 부분 데이터로 span·bars가 그려지므로 재시도(onLoadMore)를 명시 노출한다.
+   */
+  loadMoreFailed?: boolean
   /** 첫 페이지 로딩 중 — 데이터 0과 구분해 "불러오는 중" 표시 (로딩↔빈 상태 혼동 방지) */
   isLoading?: boolean
   /**
@@ -353,6 +358,7 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   hasMore = false,
   isFetchingMore = false,
   onLoadMore,
+  loadMoreFailed = false,
   isLoading = false,
   wideMode = false,
 }) => {
@@ -3673,7 +3679,15 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
                 <EventRailTitle>이 구간 사건</EventRailTitle>
                 <EventRailCount>
                   {viewportBars.total.toLocaleString()}건
-                  {autoLoadCapped && hasMore && !isFetchingMore ? (
+                  {loadMoreFailed ? (
+                    <EventRailMoreBtn
+                      type="button"
+                      onClick={handleManualLoadMore}
+                      title="일부 사건을 불러오지 못했어요 · 다시 시도"
+                    >
+                      다시 시도
+                    </EventRailMoreBtn>
+                  ) : autoLoadCapped && hasMore && !isFetchingMore ? (
                     <EventRailMoreBtn
                       type="button"
                       onClick={handleManualLoadMore}

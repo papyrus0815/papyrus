@@ -98,8 +98,12 @@ export function useLedgerData(
   countryId?: string | null,
   lens: LensChip[] = [],
 ) {
+  // autoLoadAll: 원장은 시간축(time-pivot)·카테고리 등 pivot을 전부 클라이언트 전역으로
+  // 집계하는데, 서버는 start_date DESC로 페이지 단위만 준다. 일부만 로드되면 옛 세기(특히
+  // 1000년 이전 = start_date NULL이라 서버 정렬상 맨 뒤)가 pivot에서 통째로 누락되므로,
+  // 전체 페이지를 자동 소진해 완전한 데이터로 집계한다. [[event-catalog-clientside-sort-over-paginated]]
   const eventsOptions = useMemo(
-    () => lensToEventsOptions(lens, countryId),
+    () => ({ ...lensToEventsOptions(lens, countryId), autoLoadAll: true }),
     [lens, countryId],
   )
   const {
@@ -108,6 +112,7 @@ export function useLedgerData(
     isFetching,
     isFetchingNextPage,
     hasMore,
+    loadMoreFailed,
     fetchMoreEvents,
   } = useEvents(eventsOptions)
 
@@ -212,6 +217,9 @@ export function useLedgerData(
     isFetching,
     isFetchingNextPage,
     hasMore,
+    // 자동 소진(autoLoadAll) 중 뒤 페이지 로드 실패 — pivot이 부분 데이터로 집계되지 않도록
+    // UI에서 재시도(fetchMoreEvents)를 노출하기 위한 신호.
+    loadMoreFailed,
     fetchMoreEvents,
     isError: dictError !== null,
     error: dictError,

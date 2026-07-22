@@ -15,10 +15,12 @@ import styled from 'styled-components'
 
 import {
   BODY_TEXT,
+  ledgerAccent,
   ledgerAccentSubtle,
   ledgerBackground,
   ledgerHairline,
   ledgerInkLine,
+  ledgerSurfaceSolid,
 } from './ledger-tokens'
 
 export const Page = styled.div`
@@ -105,5 +107,44 @@ export const FloatingHintWrap = styled.div`
     bottom: 14px;
     right: 50%;
     transform: translateX(50%);
+  }
+`
+
+/**
+ * 자동 소진(autoLoadAll) 중 일부 페이지 로드가 실패했을 때 상단에 뜨는 sticky 배너.
+ * 부분 데이터로 pivot을 집계 중임을 알리고 재시도(이어받기)를 노출한다 — 없으면 옛 세기
+ * 사건이 조용히 누락된다. sticky라 스크롤해도 유지.
+ */
+export const LoadMoreFailedBanner = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  background: ${({ theme }) => ledgerSurfaceSolid(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerInkLine(theme.mode)};
+  border-radius: 10px;
+  ${BODY_TEXT}
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const LoadMoreRetryButton = styled.button`
+  flex: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   }
 `

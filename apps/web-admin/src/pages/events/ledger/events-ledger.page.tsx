@@ -28,6 +28,8 @@ import {
   LedgerScroller,
   LedgerSlot,
   LensSlot,
+  LoadMoreFailedBanner,
+  LoadMoreRetryButton,
   Page,
   PivotSlot,
 } from './styles/ledger.styles'
@@ -58,6 +60,7 @@ export const EventsLedgerPage: React.FC<EventsLedgerPageProps> = ({
     isLoading,
     isFetchingNextPage,
     hasMore,
+    loadMoreFailed,
     fetchMoreEvents,
     isError,
     dbCategories,
@@ -139,6 +142,20 @@ export const EventsLedgerPage: React.FC<EventsLedgerPageProps> = ({
             />
           ) : (
             <>
+              {loadMoreFailed && (
+                <LoadMoreFailedBanner role="alert">
+                  <span>
+                    일부 사건을 불러오지 못했습니다 — 지금 집계는 일부 데이터만
+                    반영합니다.
+                  </span>
+                  <LoadMoreRetryButton
+                    type="button"
+                    onClick={() => fetchMoreEvents()}
+                  >
+                    다시 시도
+                  </LoadMoreRetryButton>
+                </LoadMoreFailedBanner>
+              )}
               {pivot === PIVOT.TIME && (
                 <TimePivot
                   events={events}

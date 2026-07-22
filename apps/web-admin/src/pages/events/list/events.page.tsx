@@ -575,6 +575,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           hasMore={hasMore}
           isFetchingMore={isFetchingNextPage}
           onLoadMore={fetchMoreEvents}
+          loadMoreFailed={loadMoreFailed}
           isLoading={isLoading && events.length === 0}
           wideMode={wideMode}
         />

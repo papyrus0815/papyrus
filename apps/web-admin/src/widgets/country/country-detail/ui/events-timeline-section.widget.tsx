@@ -70,10 +70,19 @@ export function EventsTimelineSection({
   const [view, setView] = useState<'list' | 'form'>(() =>
     initialFormFromSearchParams ? 'form' : 'list',
   )
-  const { events, isLoading, hasMore, fetchMoreEvents, refetch } = useEvents({
-    pageSize,
-    countryId: countryId ?? undefined,
-  })
+  // autoLoadAll: 타임라인은 사건을 서버 순서(start_date DESC)로 카드 나열하는데, 1000년 이전
+  // 사건은 start_date NULL이라 서버 정렬상 맨 뒤(마지막 페이지)로 밀린다. 전체 페이지를 자동
+  // 소진해 옛 세기 사건도 '더 보기' 클릭 없이 바로 나오게 한다(수동 페이지네이션 대체).
+  // [[event-catalog-clientside-sort-over-paginated]]
+  // loadMoreFailed: 자동 소진 중 한 페이지가 실패하면 무한 재시도 방지를 위해 자동 재개가
+  // 멈춘다(useEvents 가드). 이 경우 일부 사건(특히 뒤 페이지의 옛 세기)이 누락된 채로 남으므로
+  // 재시도 버튼으로 사용자가 이어받게 한다 — 없으면 부분 데이터가 조용히 묻힌다.
+  const { events, isLoading, loadMoreFailed, fetchMoreEvents, refetch } =
+    useEvents({
+      pageSize,
+      countryId: countryId ?? undefined,
+      autoLoadAll: true,
+    })
 
   const list = events ?? []
 
@@ -493,12 +502,21 @@ export function EventsTimelineSection({
             </div>
           )}
 
-          {hasMore && pageSize <= 100 && (
+          {/* 자동 소진 중 일부 페이지 로드 실패 — 재시도로 이어받기(옛 세기 누락 방지) */}
+          {loadMoreFailed && (
             <div style={{ marginTop: 24, textAlign: 'center' }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: theme.colors.text.secondary,
+                  marginBottom: 10,
+                }}
+              >
+                일부 사건을 불러오지 못했습니다.
+              </div>
               <button
                 type="button"
                 onClick={() => fetchMoreEvents()}
-                disabled={isLoading}
                 style={{
                   padding: '12px 24px',
                   borderRadius: 12,
@@ -507,10 +525,10 @@ export function EventsTimelineSection({
                   color: theme.colors.text.secondary,
                   fontSize: 14,
                   fontWeight: 600,
-                  cursor: isLoading ? 'wait' : 'pointer',
+                  cursor: 'pointer',
                 }}
               >
-                {isLoading ? '불러오는 중…' : '더 보기'}
+                다시 시도
               </button>
             </div>
           )}
