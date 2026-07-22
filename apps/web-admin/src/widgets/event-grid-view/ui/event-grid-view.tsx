@@ -153,9 +153,17 @@ export const EventGridView: React.FC<Props> = ({
           return (
             <Card
               key={cell.decade}
-              type="button"
+              role="button"
+              tabIndex={0}
+              aria-label={`${cell.decade}년대 · 사건 ${cell.count}건`}
               onClick={() => {
                 if (cell.top3[0]) onSelectEvent(cell.top3[0].id)
+              }}
+              onKeyDown={(keyEvent) => {
+                if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
+                  keyEvent.preventDefault()
+                  if (cell.top3[0]) onSelectEvent(cell.top3[0].id)
+                }
               }}
               $heat={heatRatio}
             >
@@ -243,7 +251,9 @@ const Grid = styled.div`
 
 /* heat ratio (0..1) → border 강도와 살짝의 배경 tint로 *밀도 시각화*.
  * 카드 자체는 평면 톤. ledger polish 정책 유지. */
-const Card = styled.button<{ $heat: number }>`
+// 카드는 클릭 가능한 컨테이너지만, 내부에 실제 <button>(Top3Row)을 담으므로 <button>이 아닌
+// role="button" <div>로 둔다(<button> 안 <button>은 DOM 중첩 오류). 키보드는 onKeyDown이 담당.
+const Card = styled.div<{ $heat: number }>`
   position: relative;
   display: flex;
   flex-direction: column;

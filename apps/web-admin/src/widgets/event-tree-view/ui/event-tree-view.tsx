@@ -223,11 +223,19 @@ const TreeNode: React.FC<{
   return (
     <NodeWrap $depth={depth}>
       <NodeRow
-        type="button"
+        role="button"
+        tabIndex={0}
         $active={selectedId === node.id}
         aria-current={selectedId === node.id ? 'true' : undefined}
+        aria-label={node.title}
         data-event-id={node.id}
         onClick={() => onSelect(node.id)}
+        onKeyDown={(keyEvent) => {
+          if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
+            keyEvent.preventDefault()
+            onSelect(node.id)
+          }
+        }}
       >
         {hasChildren ? (
           <ToggleBtn
@@ -439,7 +447,9 @@ const NodeWrap = styled.div<{ $depth: number }>`
   margin-left: ${({ $depth }) => ($depth - 1) * 18}px;
 `
 
-const NodeRow = styled.button<{ $active: boolean }>`
+// 노드 행은 클릭 가능하지만 내부에 실제 <button>(ToggleBtn)을 담으므로 <button>이 아닌
+// role="button" <div>로 둔다(<button> 안 <button> DOM 중첩 오류 회피). 키보드는 onKeyDown.
+const NodeRow = styled.div<{ $active: boolean }>`
   display: flex;
   align-items: center;
   gap: 8px;
