@@ -48,6 +48,13 @@ model Dynasty {
   /// 가문 종료일 (멸문 또는 권력 상실)
   endDate DateTime? @map("end_date")
 
+  /// 가문 시작(성립) 사유 (시조 즉위·분가 독립·최초 문헌 등장 등)
+  startReason String? @map("start_reason") @db.VarChar(200)
+
+  /// 가문 종료(단절) 사유 (멸문·권력 상실·개명·타가문 병합 등)
+  /// DynastyRule.endReason(특정 국가 통치 종료)과 층위가 다름 — 여기는 혈통집단 자체의 종료
+  endReason String? @map("end_reason") @db.VarChar(200)
+
   /// 본관·발상지 (예: "김해", "Habsburg", "藤原")
   originPlace String? @map("origin_place") @db.VarChar(200)
 
