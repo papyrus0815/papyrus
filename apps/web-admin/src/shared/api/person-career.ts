@@ -1,6 +1,8 @@
 // apps/web-admin/src/shared/api/person-career.ts
 import axios from 'axios'
 
+import type { DateInfoInput, Era } from '@/shared/api/persons'
+
 // API 클라이언트 생성
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '',
@@ -311,10 +313,17 @@ export interface CreateSovereignReignDto {
   regnalNumber?: number
   /** 왕조 내 서수 (예: 5 → "부르봉 왕조 5대") */
   dynastyOrdinal?: number
-  startDate: string
-  /** 즉위일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움) */
+  /** 레거시 ISO 즉위일(AD only). 구조화 startDateInfo가 있으면 그쪽 우선. 둘 중 하나 필수. */
+  startDate?: string
+  /** 구조화 즉위일 — BC·고대·연단위(서버 DateInfoDto). 파츠 UI에서 변환해 전송. */
+  startDateInfo?: DateInfoInput | null
+  /** 즉위일 정밀도 — 구조화 입력 시 서버가 재파생하므로 보통 생략 */
   startDatePrecision?: 'year' | 'month' | 'day'
   endDate?: string
+  /** 구조화 퇴위일 — 시작측 대칭 */
+  endDateInfo?: DateInfoInput | null
+  /** 퇴위일 정밀도 — 시작측 대칭 */
+  endDatePrecision?: 'year' | 'month' | 'day'
   /** 즉위·대관식 사건(Event 정본) 링크 */
   accessionEventId?: string
   appointmentMethod?: CreateGovernmentPositionTenureDto['appointmentMethod']

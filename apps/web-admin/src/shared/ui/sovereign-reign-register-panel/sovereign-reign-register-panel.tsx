@@ -23,11 +23,19 @@ import {
   EventPickerLinkedChip,
   type EventPickerSelection,
 } from '@/shared/ui/event-picker-modal/event-picker-modal'
-import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import {
-  describeLifespanMismatch,
-  signedYearFromIsoLike,
-} from '@/shared/lib/country-period'
+  type PartialDateParts,
+  emptyPartialDateParts,
+  partialDateFromStructured,
+  partialDateFromResponse,
+  partialPartsToDateInfo,
+  buildPartialDateString,
+  parsePartialDateString,
+  isPartialRangeInverted,
+} from '@/shared/lib/partial-date-string'
+import { InlineDateField } from '@/shared/ui/person-register-modal/sections/inline-date-field'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { describeLifespanMismatch } from '@/shared/lib/country-period'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 import {
@@ -166,24 +174,22 @@ const RequiredMark = styled.span`
   color: ${({ theme }) => theme.colors.error};
 `
 
-/** '즉위 연도만 앎' 정밀도 체크 행 — 이 파일 유일 체크박스라 최소형 label+input */
-const CheckboxRow = styled.div`
+/** 재위 시작/종료 날짜 파츠 입력 2열 — 좁은 폭에선 세로로 랩 */
+const ReignDateRow = styled.div`
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-  input[type='checkbox'] {
-    width: 18px;
-    height: 18px;
-    accent-color: #6366f1;
-    cursor: pointer;
-  }
-  label {
-    font-size: 13.5px;
-    color: ${({ theme }) => theme.colors.text.primary};
-    cursor: pointer;
-    user-select: none;
-  }
+  flex-wrap: wrap;
+  gap: 14px;
+`
+const ReignDateCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+`
+const ReignDateLabel = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 /**
@@ -203,9 +209,33 @@ const reignToFormFields = (reign: any) => {
     positionDefinitionId:
       reign.positionDefinitionId ?? reign.positionDefinition?.id ?? null,
     regnalName: reign.regnalName ?? (legacyMatch ? legacyMatch[1].trim() : ''),
-    startDate: reign.startDate ? reign.startDate.slice(0, 10) : '',
-    startDateYearOnly: reign.startDatePrecision === 'year',
-    endDate: reign.endDate ? reign.endDate.slice(0, 10) : '',
+    // 구조화(startEra/startYear/...) 우선, 없으면 레거시 DATETIME+precision 폴백 → 파츠 복원.
+    start: parsePartialDateString(
+      partialDateFromStructured(
+        reign.startYear,
+        reign.startMonth,
+        reign.startDay,
+        reign.startEra,
+      ) ||
+        partialDateFromResponse(
+          reign.startDate,
+          reign.startEra,
+          reign.startDatePrecision,
+        ),
+    ),
+    end: parsePartialDateString(
+      partialDateFromStructured(
+        reign.endYear,
+        reign.endMonth,
+        reign.endDay,
+        reign.endEra,
+      ) ||
+        partialDateFromResponse(
+          reign.endDate,
+          reign.endEra,
+          reign.endDatePrecision,
+        ),
+    ),
     regnalNumber: reign.regnalNumber != null ? String(reign.regnalNumber) : '',
     subTermNumber:
       reign.subTermNumber != null ? String(reign.subTermNumber) : '',
@@ -232,9 +262,8 @@ const EMPTY_FORM_FIELDS: ReturnType<typeof reignToFormFields> = {
   historicalCountryId: null,
   positionDefinitionId: null,
   regnalName: '',
-  startDate: '',
-  startDateYearOnly: false,
-  endDate: '',
+  start: emptyPartialDateParts(),
+  end: emptyPartialDateParts(),
   regnalNumber: '',
   subTermNumber: '',
   dynastyOrdinal: '',
@@ -274,9 +303,16 @@ export function SovereignReignRegisterPanel({
   const [historicalCountryId, setHistoricalCountryId] = useState<string | null>(null)
   const [positionDefinitionId, setPositionDefinitionId] = useState<string | null>(null)
   const [regnalName, setRegnalName] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [startDateYearOnly, setStartDateYearOnly] = useState(false)
-  const [endDate, setEndDate] = useState('')
+  const [start, setStart] = useState<PartialDateParts>(emptyPartialDateParts())
+  const [end, setEnd] = useState<PartialDateParts>(emptyPartialDateParts())
+  /** 달력 보조 모달 대상(시작/종료) — InlineDateField의 달력 버튼이 연다 */
+  const [datePickerSide, setDatePickerSide] = useState<'start' | 'end' | null>(
+    null,
+  )
+  const patchStart = (patch: Partial<PartialDateParts>) =>
+    setStart((prev) => ({ ...prev, ...patch }))
+  const patchEnd = (patch: Partial<PartialDateParts>) =>
+    setEnd((prev) => ({ ...prev, ...patch }))
   const [regnalNumber, setRegnalNumber] = useState('')
   const [subTermNumber, setSubTermNumber] = useState('')
   const [dynastyOrdinal, setDynastyOrdinal] = useState('')
@@ -336,9 +372,9 @@ export function SovereignReignRegisterPanel({
     setHistoricalCountryId(null)
     setPositionDefinitionId(null)
     setRegnalName('')
-    setStartDate('')
-    setStartDateYearOnly(false)
-    setEndDate('')
+    setStart(emptyPartialDateParts())
+    setEnd(emptyPartialDateParts())
+    setDatePickerSide(null)
     setRegnalNumber('')
     setSubTermNumber('')
     setDynastyOrdinal('')
@@ -362,9 +398,8 @@ export function SovereignReignRegisterPanel({
     setHistoricalCountryId(fields.historicalCountryId)
     setPositionDefinitionId(fields.positionDefinitionId)
     setRegnalName(fields.regnalName)
-    setStartDate(fields.startDate)
-    setStartDateYearOnly(fields.startDateYearOnly)
-    setEndDate(fields.endDate)
+    setStart(fields.start)
+    setEnd(fields.end)
     setRegnalNumber(fields.regnalNumber)
     setSubTermNumber(fields.subTermNumber)
     setDynastyOrdinal(fields.dynastyOrdinal)
@@ -426,9 +461,9 @@ export function SovereignReignRegisterPanel({
     : null
 
   // F33 소프트 경고 — 선택된 역사국가의 존속기간과 즉위 연도를 대조.
-  // 존속기간 구조화(startEra/Year)가 100% 채워진 allHistoricalCountries를 진실로 삼는다
-  // (scope 목록은 DATETIME startDate라 BC 불신). 재위 startDate는 blockBc라 AD only →
-  // recordSupportsBc=false(BC 국가는 비교 불가라 무경고). 저장은 막지 않는다.
+  // 존속기간 구조화(startEra/Year)가 100% 채워진 allHistoricalCountries를 진실로 삼는다.
+  // 재위 즉위연도도 이제 구조화 파츠(BC 지원)라 recordSupportsBc=true → BC 국가·BC 즉위도 대조.
+  // 저장은 막지 않는다.
   const lifespanWarning = useMemo(() => {
     if (!historicalCountryId) return null
     const selected = (allHistoricalCountries as Array<{
@@ -439,8 +474,14 @@ export function SovereignReignRegisterPanel({
       endYear?: number | null
     }>).find((historical) => historical.id === historicalCountryId)
     if (!selected) return null
-    return describeLifespanMismatch(selected, signedYearFromIsoLike(startDate))
-  }, [historicalCountryId, allHistoricalCountries, startDate])
+    const startInfo = partialPartsToDateInfo(start)
+    const signedYear = startInfo
+      ? (startInfo.era === 'BC' ? -startInfo.year : startInfo.year)
+      : null
+    return describeLifespanMismatch(selected, signedYear, {
+      recordSupportsBc: true,
+    })
+  }, [historicalCountryId, allHistoricalCountries, start])
 
   const positionOptions = useMemo(
     () =>
@@ -451,7 +492,10 @@ export function SovereignReignRegisterPanel({
     [positionDefinitions],
   )
 
-  const canSubmit = startDate.trim().length > 0
+  // 재위 시작 연도 필수 — 파츠에서 유효 DateInfo(연도 1~9999)가 나오면 제출 가능.
+  const canSubmit = partialPartsToDateInfo(start) != null
+  /** 재위 종료가 시작보다 빠른가(추존·복위 등 정당 케이스도 있어 하드 차단 아님, 소프트 경고). */
+  const dateInverted = isPartialRangeInverted(start, end)
 
   /**
    * 닫기 confirm용 dirty 기준선 — 생성=prefill 반영 초기값, 수정=hydrate 값.
@@ -476,9 +520,8 @@ export function SovereignReignRegisterPanel({
         historicalCountryId,
         positionDefinitionId,
         regnalName,
-        startDate,
-        startDateYearOnly,
-        endDate,
+        start,
+        end,
         regnalNumber,
         subTermNumber,
         dynastyOrdinal,
@@ -517,10 +560,10 @@ export function SovereignReignRegisterPanel({
         countryId: countryId || undefined,
         historicalCountryId: historicalCountryId || undefined,
         positionDefinitionId: positionDefinitionId || undefined,
-        startDate,
-        // 'year'=연도만 앎(월일은 01-01 관행 채움) — 서버 계약상 undefined=유지, null=해제
-        startDatePrecision: startDateYearOnly ? ('year' as const) : emptyAs,
-        endDate: endDate || emptyAs,
+        // 구조화 즉위/퇴위일(era·연/월/일) — BC·고대·연단위 지원. 서버가 precision·DATETIME을 파생.
+        // 종료 비움=null(현직/해제). 시작은 canSubmit이 유효 DateInfo를 보장.
+        startDateInfo: partialPartsToDateInfo(start),
+        endDateInfo: partialPartsToDateInfo(end) ?? null,
         regnalNumber: regnalNumber ? Number(regnalNumber) : emptyAs,
         subTermNumber: subTermNumber ? Number(subTermNumber) : emptyAs,
         dynastyOrdinal: dynastyOrdinal ? Number(dynastyOrdinal) : emptyAs,
@@ -664,34 +707,57 @@ export function SovereignReignRegisterPanel({
                     재위 기간 <RequiredMark>*</RequiredMark>
                   </FieldLabel>
                   <FieldControl>
-                    <DateRangeField
-                      startValue={startDate}
-                      endValue={endDate}
-                      onStartChange={setStartDate}
-                      onEndChange={setEndDate}
-                      startPlaceholder="재위 시작 (필수)"
-                      endPlaceholder="재위 종료 (비워두면 현재)"
-                      renderControlOnly
-                      startPickerTitle="재위 시작일"
-                      endPickerTitle="재위 종료일"
-                      blockBc
-                    />
-                    <CheckboxRow>
-                      <input
-                        type="checkbox"
-                        id="sovereign-start-year-only"
-                        checked={startDateYearOnly}
-                        onChange={(event) =>
-                          setStartDateYearOnly(event.target.checked)
-                        }
-                      />
-                      <label htmlFor="sovereign-start-year-only">
-                        즉위 연도만 앎
-                      </label>
-                    </CheckboxRow>
+                    <ReignDateRow>
+                      <ReignDateCol>
+                        <ReignDateLabel>재위 시작</ReignDateLabel>
+                        <InlineDateField
+                          ariaLabel="재위 시작일"
+                          era={start.era}
+                          year={start.year}
+                          month={start.month}
+                          day={start.day}
+                          onEra={(era) => patchStart({ era })}
+                          onYear={(year) => patchStart({ year })}
+                          onMonth={(month) => patchStart({ month })}
+                          onDay={(day) => patchStart({ day })}
+                          onOpenPicker={() => setDatePickerSide('start')}
+                        />
+                      </ReignDateCol>
+                      <ReignDateCol>
+                        <ReignDateLabel>재위 종료 (비워두면 현재)</ReignDateLabel>
+                        <InlineDateField
+                          ariaLabel="재위 종료일"
+                          era={end.era}
+                          year={end.year}
+                          month={end.month}
+                          day={end.day}
+                          onEra={(era) => patchEnd({ era })}
+                          onYear={(year) => patchEnd({ year })}
+                          onMonth={(month) => patchEnd({ month })}
+                          onDay={(day) => patchEnd({ day })}
+                          onOpenPicker={() => setDatePickerSide('end')}
+                          error={dateInverted}
+                          ariaDescribedBy={
+                            dateInverted ? 'reign-date-error' : undefined
+                          }
+                        />
+                      </ReignDateCol>
+                    </ReignDateRow>
                     <FieldHint>
-                      날짜는 관행상 1월 1일로 입력 — 표시는 연도만
+                      연도만 입력해도 됩니다(월·일은 비워도 됨). 기원전은 연도 왼쪽 BC
+                      버튼으로, 정확한 날짜는 달력(📅)으로 선택하세요.
                     </FieldHint>
+                    {dateInverted && (
+                      <div id="reign-date-error" role="alert">
+                        <AlertBox
+                          variant="warning"
+                          icon="⚠️"
+                          style={{ marginTop: 4 }}
+                        >
+                          재위 종료가 시작보다 빠릅니다 — 추존·복위 등 정당한 경우가 아니면 확인해 주세요.
+                        </AlertBox>
+                      </div>
+                    )}
                     {lifespanWarning && (
                       <AlertBox variant="warning" icon="⚠️" style={{ marginTop: 4 }}>
                         선택한 역사국가 {lifespanWarning} 추존·복위·소급 등 정당한 경우라면 그대로 저장하세요.
@@ -952,6 +1018,31 @@ export function SovereignReignRegisterPanel({
         }}
         title="즉위·대관식 사건 연결"
       />
+
+      {/* 재위 시작/종료 달력 보조 — 파츠 텍스트 입력과 병행. 완전일자만 초기값으로 전달. */}
+      {datePickerSide &&
+        (() => {
+          const parts = datePickerSide === 'start' ? start : end
+          const initialDate =
+            parts.year && parts.month && parts.day
+              ? buildPartialDateString(parts)
+              : undefined
+          const apply = datePickerSide === 'start' ? patchStart : patchEnd
+          return (
+            <DatePickerModal
+              isOpen
+              initialDate={initialDate}
+              title={
+                datePickerSide === 'start' ? '재위 시작일' : '재위 종료일'
+              }
+              onSelect={(date) => {
+                apply(parsePartialDateString(date))
+                setDatePickerSide(null)
+              }}
+              onClose={() => setDatePickerSide(null)}
+            />
+          )
+        })()}
     </>
   )
 }
