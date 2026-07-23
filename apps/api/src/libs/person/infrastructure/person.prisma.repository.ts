@@ -32,6 +32,7 @@ import {
   DeletedSubResource,
 } from '../domain/person.repository'
 import { careerItemLabel, educationItemLabel, awardItemLabel } from '../domain/subresource-label.util'
+import { mapStructuredDateInput } from '../domain/structured-date.util'
 import {
   CreateMilitaryCareerDto,
   CreateBusinessCareerDto,
@@ -4372,6 +4373,14 @@ export class PersonPrismaRepository implements IPersonRepository {
       countryId: dto.countryId,
       historicalCountryId: dto.historicalCountryId,
     })
+    // 구조화 채널(startDateInfo)이 오면 그것이 진실(BC·고대·연단위) — DateTime은 AD1000+만 병행.
+    // 레거시(startDate ISO만)면 기존 동작 유지(구조화 컬럼은 비움)해 타 진입점 회귀 방지.
+    const start = dto.startDateInfo
+      ? mapStructuredDateInput(dto.startDateInfo, undefined)
+      : null
+    const end = dto.endDateInfo
+      ? mapStructuredDateInput(dto.endDateInfo, undefined)
+      : null
     const row = await this.prisma.sovereignReign.create({
       data: {
         personId: dto.personId,
@@ -4384,9 +4393,22 @@ export class PersonPrismaRepository implements IPersonRepository {
         subTermNumber: dto.subTermNumber,
         regnalNumber: dto.regnalNumber,
         dynastyOrdinal: dto.dynastyOrdinal,
-        startDate: new Date(dto.startDate),
-        startDatePrecision: dto.startDatePrecision,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        startDate: start ? start.date : dto.startDate ? new Date(dto.startDate) : null,
+        startDatePrecision: start ? start.precision : dto.startDatePrecision,
+        ...(start && {
+          startEra: start.era,
+          startYear: start.year,
+          startMonth: start.month,
+          startDay: start.day,
+        }),
+        endDate: end ? end.date : dto.endDate ? new Date(dto.endDate) : undefined,
+        endDatePrecision: end ? end.precision : dto.endDatePrecision,
+        ...(end && {
+          endEra: end.era,
+          endYear: end.year,
+          endMonth: end.month,
+          endDay: end.day,
+        }),
         accessionEventId: dto.accessionEventId ?? undefined,
         appointmentMethod: dto.appointmentMethod as any,
         appointmentDetail: dto.appointmentDetail,
@@ -4426,9 +4448,37 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.subTermNumber !== undefined) updateData.subTermNumber = dto.subTermNumber
     if (dto.regnalNumber !== undefined) updateData.regnalNumber = dto.regnalNumber
     if (dto.dynastyOrdinal !== undefined) updateData.dynastyOrdinal = dto.dynastyOrdinal
-    if (dto.startDate) updateData.startDate = new Date(dto.startDate)
-    if (dto.startDatePrecision !== undefined) updateData.startDatePrecision = dto.startDatePrecision
-    if (dto.endDate !== undefined) updateData.endDate = dto.endDate ? new Date(dto.endDate) : null
+    // 구조화 채널(startDateInfo)이 오면 6컬럼(date/precision/era/year/month/day)을 *한 덩어리*로
+    // 갱신 — 부분 갱신 시 startDate와 startYear가 어긋나는 정합 붕괴를 막는다. 없으면 레거시 경로.
+    if (dto.startDateInfo !== undefined) {
+      const start = dto.startDateInfo
+        ? mapStructuredDateInput(dto.startDateInfo, undefined)
+        : null
+      updateData.startDate = start ? start.date : null
+      updateData.startDatePrecision = start ? start.precision : null
+      updateData.startEra = start ? start.era : null
+      updateData.startYear = start ? start.year : null
+      updateData.startMonth = start ? start.month : null
+      updateData.startDay = start ? start.day : null
+    } else {
+      if (dto.startDate) updateData.startDate = new Date(dto.startDate)
+      if (dto.startDatePrecision !== undefined)
+        updateData.startDatePrecision = dto.startDatePrecision
+    }
+    if (dto.endDateInfo !== undefined) {
+      const end = dto.endDateInfo
+        ? mapStructuredDateInput(dto.endDateInfo, undefined)
+        : null
+      updateData.endDate = end ? end.date : null
+      updateData.endDatePrecision = end ? end.precision : null
+      updateData.endEra = end ? end.era : null
+      updateData.endYear = end ? end.year : null
+      updateData.endMonth = end ? end.month : null
+      updateData.endDay = end ? end.day : null
+    } else {
+      if (dto.endDate !== undefined)
+        updateData.endDate = dto.endDate ? new Date(dto.endDate) : null
+    }
     if (dto.accessionEventId !== undefined) updateData.accessionEventId = dto.accessionEventId || null
     if (dto.appointmentMethod !== undefined) updateData.appointmentMethod = dto.appointmentMethod as any
     if (dto.appointmentDetail !== undefined) updateData.appointmentDetail = dto.appointmentDetail

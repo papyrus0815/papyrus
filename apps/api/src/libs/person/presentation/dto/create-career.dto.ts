@@ -11,6 +11,8 @@ import {
 } from 'class-validator'
 import { Type } from 'class-transformer'
 
+import { DateInfoDto } from './create-person.dto'
+
 /**
  * Career 이미지 DTO
  */
@@ -811,10 +813,18 @@ export class CreateSovereignReignDto {
   @IsNumber()
   dynastyOrdinal?: number | null
 
+  /** 레거시 ISO 즉위일(AD only). 구조화 startDateInfo가 있으면 그쪽이 우선 — 서비스가 둘 중 하나 필수 검증. */
+  @IsOptional()
   @IsDateString()
-  startDate!: string // BC('-' 시작) 불가 (재위 모델에 era 컬럼 없음)
+  startDate?: string
 
-  /** 즉위일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움). 수정 시 null=해제(일 단위 복귀) */
+  /** 구조화 즉위일 — BC·고대·연단위 지원(PersonSpouse.marriageStart·DateInfoDto 선례). era+크기값 연/월/일. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DateInfoDto)
+  startDateInfo?: DateInfoDto | null
+
+  /** 즉위일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움). 구조화 입력 시 서버가 재파생. */
   @IsOptional()
   @IsIn(['year', 'month', 'day'])
   startDatePrecision?: string | null
@@ -826,7 +836,18 @@ export class CreateSovereignReignDto {
 
   @IsOptional()
   @IsDateString()
-  endDate?: string | null // BC('-' 시작) 불가
+  endDate?: string | null // 레거시 ISO(AD only). 구조화 endDateInfo 우선.
+
+  /** 구조화 퇴위일 — 시작측 대칭. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DateInfoDto)
+  endDateInfo?: DateInfoDto | null
+
+  /** 퇴위일 정밀도 — 시작측 대칭(연도만 아는 고대 군주 퇴위 수용). */
+  @IsOptional()
+  @IsIn(['year', 'month', 'day'])
+  endDatePrecision?: string | null
 
   @IsOptional()
   @IsString()

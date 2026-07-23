@@ -476,7 +476,12 @@ export class GovernmentPositionController {
   /** 군주·재위 전용 기록 추가 (SovereignReign — 행정부와 별도 테이블) */
   @Post('sovereign-reigns')
   async addSovereignReign(@Req() req: Request, @Body() dto: CreateSovereignReignDto): Promise<any> {
-    assertNoBcTenureDates(dto)
+    // 구조화 채널(startDateInfo/endDateInfo)은 era 컬럼으로 BC를 안전 저장 → 게이트 면제.
+    // 레거시 ISO 문자열만 여전히 BC 차단(음수 부호가 DATETIME에서 소실되므로).
+    assertNoBcTenureDates({
+      startDate: dto.startDateInfo ? null : dto.startDate,
+      endDate: dto.endDateInfo ? null : dto.endDate,
+    })
     const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const result = await this.personService.addSovereignReign(dto, accountId)
     return serializeBigInt(result)
@@ -488,7 +493,10 @@ export class GovernmentPositionController {
     @Param('id') id: string,
     @Body() dto: Partial<CreateSovereignReignDto>,
   ): Promise<any> {
-    assertNoBcTenureDates(dto)
+    assertNoBcTenureDates({
+      startDate: dto.startDateInfo ? null : dto.startDate,
+      endDate: dto.endDateInfo ? null : dto.endDate,
+    })
     const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const result = await this.personService.updateSovereignReign(id, dto, accountId)
     return serializeBigInt(result)

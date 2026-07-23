@@ -319,12 +319,24 @@ model SovereignReign {
   /// 공백·논란 계승·다국가 통치(부르봉=프랑스/스페인)를 수용하기 위해 유니크 제약 없는 자유 정수.
   dynastyOrdinal Int? @map("dynasty_ordinal")
 
-  /// 재위 개시일(법적 즉위일). 대관식일은 별개 사실 — 스칼라 컬럼 대신 accessionEvent 링크로 담는다(BC·정밀도 제약 회피).
-  startDate DateTime @map("start_date")
-  /// 즉위일 정밀도 — 'year'면 연도만 앎(월일은 01-01 관행 채움, 표시·나이 파생은 완화). NULL=일 단위.
-  /// Person.birthDatePrecision·Event.startDatePrecision 선례 동형.
+  /// 재위 개시일(법적 즉위일). AD 1000~9999 완전일자만 채운다 — BC·고대·연단위는 아래 구조화
+  /// (startEra/startYear/...)가 진실. DATETIME은 드라이버가 연도<100을 2044로 손상시켜 nullable로 둔다.
+  startDate DateTime? @map("start_date")
+  /// 즉위일 정밀도 — 'year'면 연도만 앎, 'month'면 연·월, NULL/'day'=일 단위. Person.birthDatePrecision·Event 선례 동형.
   startDatePrecision String? @map("start_date_precision") @db.VarChar(10)
+  /// 구조화 즉위일 — BC·고대·연단위 지원(PersonSpouse.marriageStart* 선례 동형). year=크기값(양수), era=BC/AD.
+  /// AD1000+ 완전일자면 startDate(DATETIME)도 병행 채움(정렬·기존코드 호환); 그 밖은 이 Int 축이 유일 진실.
+  startEra   Era? @map("start_era")
+  startYear  Int? @map("start_year")
+  startMonth Int? @map("start_month")
+  startDay   Int? @map("start_day")
   endDate   DateTime? @map("end_date")
+  /// 퇴위일 정밀도 — 시작측 대칭(marriageEndPrecision 선례). 퇴위 연도만 아는 고대 군주 수용.
+  endDatePrecision String? @map("end_date_precision") @db.VarChar(10)
+  endEra   Era? @map("end_era")
+  endYear  Int? @map("end_year")
+  endMonth Int? @map("end_month")
+  endDay   Int? @map("end_day")
 
   /// 즉위·대관식 사건(Event 정본) 링크 — 대관식 날짜·장소·의식은 Event가 정본(BC 구조화 완비)
   accessionEventId String? @map("accession_event_id") @db.Char(36)
