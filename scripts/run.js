@@ -102,7 +102,12 @@ async function main() {
     // main()을 실행한다. 이 경우 아래에서 script()를 또 부르면 이중 실행되어
     // (예: dev → concurrently 2벌 → nx serve api 2개 → 8000 EADDRINUSE) 문제가 된다.
     // 가드가 없는 스크립트만 명시적으로 호출한다.
-    const selfRuns = fs.readFileSync(fullScriptPath, 'utf8').includes('import.meta.url')
+    // NOTE: 가드 유무는 `import.meta.url ===` 비교(가드 시그니처)로 판별한다.
+    // 단순히 `fileURLToPath(import.meta.url)`로 __dirname을 구하는 파일(예: build/nestia.js)은
+    // 가드가 아니므로 제외해야 한다 — 문자열 존재만 확인하던 이전 버전은 이런 파일을
+    // 자기실행으로 오판해 main()이 영영 안 불렸다(build:nestia 무동작 버그).
+    const scriptSource = fs.readFileSync(fullScriptPath, 'utf8')
+    const selfRuns = /import\.meta\.url\s*===|===\s*import\.meta\.url/.test(scriptSource)
 
     console.log(`🚀 실행 중: ${scriptPath}`)
     const scriptModule = await import(pathToFileURL(fullScriptPath).href)
