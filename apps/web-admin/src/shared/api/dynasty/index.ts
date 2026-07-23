@@ -11,6 +11,10 @@ export type DynastyMutationBody = {
   startDate?: string | null
   /** `null`이면 종료일을 비움. 생략 시 기존값 유지 (편집 시) */
   endDate?: string | null
+  /** 가문 성립 사유. `null`이면 비움. 생략 시 기존값 유지 (편집 시) */
+  startReason?: string | null
+  /** 가문 단절 사유. `null`이면 비움. 생략 시 기존값 유지 (편집 시) */
+  endReason?: string | null
   thumbnailUrl?: string | null
   originPlace?: string | null
   founderId?: string | null

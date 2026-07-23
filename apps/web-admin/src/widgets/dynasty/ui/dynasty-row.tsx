@@ -227,6 +227,26 @@ export function DynastyRow({
                   </span>
                 </Motto>
               )}
+              {(dynasty.startReason || dynasty.endReason) && (
+                <ReasonList>
+                  {dynasty.startReason && (
+                    <ReasonItem>
+                      <ReasonLabel $end={false}>성립</ReasonLabel>
+                      <ReasonText>
+                        <HighlightedText text={dynasty.startReason} query={query} />
+                      </ReasonText>
+                    </ReasonItem>
+                  )}
+                  {dynasty.endReason && (
+                    <ReasonItem>
+                      <ReasonLabel $end>단절</ReasonLabel>
+                      <ReasonText>
+                        <HighlightedText text={dynasty.endReason} query={query} />
+                      </ReasonText>
+                    </ReasonItem>
+                  )}
+                </ReasonList>
+              )}
               {dynasty.description && (
                 <Description>
                   <HighlightedText text={dynasty.description} query={query} />
@@ -523,6 +543,41 @@ const Motto = styled.div`
     color: ${({ theme }) => theme.colors.primary};
     opacity: 0.7;
   }
+`
+
+const ReasonList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const ReasonItem = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+`
+
+const ReasonLabel = styled.span<{ $end: boolean }>`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: ${({ theme, $end }) => ($end ? theme.colors.error : theme.colors.primary)};
+  background: ${({ theme, $end }) =>
+    $end
+      ? theme.mode === 'dark'
+        ? 'rgba(255,69,58,0.14)'
+        : 'rgba(239,68,68,0.09)'
+      : primarySoft(theme.mode)};
+`
+
+const ReasonText = styled.span`
+  min-width: 0;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  word-break: break-word;
 `
 
 const Description = styled.p`

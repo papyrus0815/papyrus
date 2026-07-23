@@ -76,6 +76,8 @@ function matchesQuery(d: Dynasty, q: string): boolean {
     d.originPlace,
     d.founderText,
     d.motto,
+    d.startReason,
+    d.endReason,
   ]
     .filter(Boolean)
     .join(' ')
@@ -297,6 +299,8 @@ export function DynastySection() {
       description: empty(data.description),
       startDate: empty(data.startDate),
       endDate: empty(data.endDate),
+      startReason: empty(data.startReason),
+      endReason: empty(data.endReason),
       originPlace: empty(data.originPlace),
       founderText: empty(data.founderText),
       motto: empty(data.motto),

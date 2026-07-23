@@ -39,6 +39,8 @@ export type DynastyFormPayload = {
   description: string
   startDate: string
   endDate: string
+  startReason: string
+  endReason: string
   originPlace: string
   founderText: string
   motto: string
@@ -78,6 +80,8 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
     description: '',
     startDate: '',
     endDate: '',
+    startReason: '',
+    endReason: '',
     originPlace: '',
     founderText: '',
     motto: '',
@@ -101,6 +105,8 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
         description: editing.description ?? '',
         startDate: toDateInputValue(editing.startDate),
         endDate: toDateInputValue(editing.endDate),
+        startReason: editing.startReason ?? '',
+        endReason: editing.endReason ?? '',
         originPlace: editing.originPlace ?? '',
         founderText: editing.founderText ?? '',
         motto: editing.motto ?? '',
@@ -119,6 +125,8 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
         description: '',
         startDate: '',
         endDate: '',
+        startReason: '',
+        endReason: '',
         originPlace: '',
         founderText: '',
         motto: '',
@@ -191,6 +199,35 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
               $filled={Boolean(form.endDate)}
             />
           </div>
+        </FormRow>
+
+        <FormRow>
+          <FormLabel htmlFor={fieldId('startReason')}>성립 사유 · 단절 사유</FormLabel>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+            <TextInput
+              id={fieldId('startReason')}
+              type="text"
+              value={form.startReason}
+              onChange={(e) => setForm((f) => ({ ...f, startReason: e.target.value }))}
+              placeholder="성립 사유 — 예: 역성혁명 건국, 초대 백작 서임"
+              aria-label="성립 사유"
+              maxLength={200}
+              style={{ flex: '1 1 220px', minWidth: 0 }}
+            />
+            <TextInput
+              id={fieldId('endReason')}
+              type="text"
+              value={form.endReason}
+              onChange={(e) => setForm((f) => ({ ...f, endReason: e.target.value }))}
+              placeholder="단절 사유 — 예: 경술국치 병합, 2월혁명 폐위"
+              aria-label="단절 사유"
+              maxLength={200}
+              style={{ flex: '1 1 220px', minWidth: 0 }}
+            />
+          </div>
+          <FieldHelpText>
+            가문 자체의 흥망 서사입니다. 특정 국가 통치의 종료(통치 종료 사유)와는 별개입니다.
+          </FieldHelpText>
         </FormRow>
 
         <FormRow>
