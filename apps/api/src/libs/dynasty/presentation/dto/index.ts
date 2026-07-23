@@ -3,6 +3,10 @@ export interface CreateDynastyDto {
   description?: string
   startDate?: string
   endDate?: string
+  /** 가문 시작(성립) 사유 (시조 즉위·분가 독립·최초 문헌 등장 등) */
+  startReason?: string | null
+  /** 가문 종료(단절) 사유 (멸문·권력 상실·개명·타가문 병합 등) */
+  endReason?: string | null
   /** `POST /upload/image?category=dynasties` 응답의 `url`(`/uploads/...`) */
   thumbnailUrl?: string | null
   /** 본관/발상지 */
@@ -25,6 +29,10 @@ export interface UpdateDynastyDto {
   startDate?: string | null
   /** `null`이면 종료일을 비움. 생략 시 기존값 유지 */
   endDate?: string | null
+  /** `null`이면 성립 사유를 비움. 생략 시 기존값 유지 */
+  startReason?: string | null
+  /** `null`이면 단절 사유를 비움. 생략 시 기존값 유지 */
+  endReason?: string | null
   /** 새 파일 업로드 후의 `url`. `null`/빈 문자열이면 썸네일만 삭제. 생략 시 기존 유지 */
   thumbnailUrl?: string | null
   originPlace?: string | null
@@ -48,6 +56,8 @@ export interface DynastyResponseDto {
   description: string | null
   startDate: string | null
   endDate: string | null
+  startReason: string | null
+  endReason: string | null
   thumbnailUrl: string | null
   originPlace: string | null
   founderId: string | null

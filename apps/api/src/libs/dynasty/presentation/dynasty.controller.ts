@@ -29,6 +29,8 @@ function toResponseDto(d: DynastyRow): DynastyResponseDto {
     description: d.description,
     startDate: d.startDate ? d.startDate.toISOString() : null,
     endDate: d.endDate ? d.endDate.toISOString() : null,
+    startReason: d.startReason,
+    endReason: d.endReason,
     thumbnailUrl: d.thumbnailUrl,
     originPlace: d.originPlace,
     founderId: d.founderId,
@@ -100,6 +102,8 @@ export class DynastyController {
       description: dto.description,
       startDate: dto.startDate ? new Date(dto.startDate) : undefined,
       endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+      startReason: dto.startReason,
+      endReason: dto.endReason,
       thumbnailUrl: dto.thumbnailUrl,
       originPlace: dto.originPlace,
       founderId: dto.founderId,
@@ -131,6 +135,9 @@ export class DynastyController {
           : dto.endDate
             ? new Date(dto.endDate)
             : undefined,
+      // 문자열 사유는 Date 변환 불필요 — undefined=유지/null=클리어/string=값 그대로 전달
+      startReason: dto.startReason,
+      endReason: dto.endReason,
       thumbnailUrl: dto.thumbnailUrl,
       originPlace: dto.originPlace,
       founderId: dto.founderId,

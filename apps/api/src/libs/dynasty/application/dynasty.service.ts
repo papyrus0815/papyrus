@@ -12,6 +12,20 @@ import {
   DYNASTY_THUMBNAIL_ATTACHMENT_TITLE,
 } from '../dynasty-thumbnail.util'
 
+/**
+ * 사유 문자열 정규화 — 이 도메인 DTO는 interface라 ValidationPipe가 붙지 않으므로
+ * VarChar(200) 위반(=raw 500)을 막기 위해 서비스에서 직접 트림·200자 절단한다.
+ * `undefined`(생략=유지)와 `null`(클리어)의 의미는 보존하고, 빈 문자열은 `null`로 수렴.
+ */
+function clampReason(
+  value: string | null | undefined,
+): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  const trimmed = value.trim().slice(0, 200)
+  return trimmed.length > 0 ? trimmed : null
+}
+
 @Injectable()
 export class DynastyService {
   constructor(
@@ -37,6 +51,8 @@ export class DynastyService {
     description?: string
     startDate?: Date
     endDate?: Date
+    startReason?: string | null
+    endReason?: string | null
     /** 업로드 API가 반환한 `/uploads/...` 경로 */
     thumbnailUrl?: string | null
     originPlace?: string | null
@@ -45,7 +61,12 @@ export class DynastyService {
     crestImageUrl?: string | null
     motto?: string | null
   }) {
-    const { thumbnailUrl, ...fields } = data
+    const { thumbnailUrl, ...rest } = data
+    const fields = {
+      ...rest,
+      startReason: clampReason(rest.startReason),
+      endReason: clampReason(rest.endReason),
+    }
     if (fields.founderId) {
       await this.assertPersonExists(fields.founderId)
     }
@@ -77,6 +98,8 @@ export class DynastyService {
       description?: string | null
       startDate?: Date | null
       endDate?: Date | null
+      startReason?: string | null
+      endReason?: string | null
       /** 새 업로드 경로. `null` 또는 빈 문자열이면 썸네일만 제거. 생략 시 썸네일 유지 */
       thumbnailUrl?: string | null
       originPlace?: string | null
@@ -87,7 +110,12 @@ export class DynastyService {
     },
   ) {
     await this.findById(id)
-    const { thumbnailUrl, ...fields } = data
+    const { thumbnailUrl, ...rest } = data
+    const fields = {
+      ...rest,
+      startReason: clampReason(rest.startReason),
+      endReason: clampReason(rest.endReason),
+    }
 
     if (fields.founderId) {
       await this.assertPersonExists(fields.founderId)

@@ -12,6 +12,8 @@ export type DynastyRowWithThumbnail = {
   description: string | null
   startDate: Date | null
   endDate: Date | null
+  startReason: string | null
+  endReason: string | null
   originPlace: string | null
   founderId: string | null
   founder: {
@@ -49,6 +51,8 @@ export class DynastyRepository {
       description: string | null
       startDate: Date | null
       endDate: Date | null
+      startReason: string | null
+      endReason: string | null
       originPlace: string | null
       founderId: string | null
       founder: {
