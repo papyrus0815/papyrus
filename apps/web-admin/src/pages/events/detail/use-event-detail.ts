@@ -92,6 +92,13 @@ export interface EventDetail {
   parentEventId?: string | null
   parentEvent?: EventDetail
   childEvents?: EventDetail[]
+  /**
+   * 추가 상위(EventParentLink) — 주 상위 외 다중 상위. 서버가 소프트삭제 부모를
+   * 걸러 연결 오래된 순으로 내려준다. 쓰기는 patch.extraParentEventIds 전체목록 규약.
+   */
+  extraParents?: Array<{ id: string; title: string }>
+  /** 추가 하위(역방향 엣지) — 읽기전용 표시용. 편집은 자식 사건 쪽에서만. */
+  extraChildren?: Array<{ id: string; title: string }>
   cityId?: string | null
   administrativeDivisionId?: string | null
   historicalCountryId?: string | null

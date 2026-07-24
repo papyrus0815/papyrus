@@ -288,6 +288,16 @@ function buildInverse(
       case 'parentEventId':
         inv.parentEventId = event.parentEventId ?? null
         break
+      /**
+       * 추가 상위 — 응답엔 extraParents(객체 배열)뿐이라 id 배열로 역직렬화.
+       * 승격 swap({parentEventId, extraParentEventIds} 동시 patch)은 buildInverse가
+       * patch 키 순회 구조라 주·부 양쪽을 한 inverse로 원자 복원한다.
+       */
+      case 'extraParentEventIds':
+        inv.extraParentEventIds = (event.extraParents ?? []).map(
+          (extra) => extra.id,
+        )
+        break
       default:
         // 나머지는 단순 scalar — event에서 같은 키 그대로
         inv[k as string] =

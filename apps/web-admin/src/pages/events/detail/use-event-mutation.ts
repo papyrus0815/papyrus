@@ -125,7 +125,11 @@ export function useEventMutation(eventId: string) {
        * event-detail 루트를 무효화한다(자기 자신은 위의 isMutating 게이트가 관리하므로
        * 제외). 계층 patch는 키스트로크성 빈도가 아니라 비용 부담 없음.
        */
-      if ('parentEventId' in patch || 'childEventIds' in patch) {
+      if (
+        'parentEventId' in patch ||
+        'childEventIds' in patch ||
+        'extraParentEventIds' in patch
+      ) {
         queryClient.invalidateQueries({
           queryKey: ['event-detail'],
           predicate: (query) => query.queryKey[1] !== eventId,
@@ -153,6 +157,9 @@ const LISTING_FIELDS: ReadonlyArray<keyof UpdateEventDto> = [
   'location',
   'parentEventId',
   'childEventIds',
+  // link-candidates 캐시가 lists() 프리픽스 하위라 이 키가 후보 '(+N)' 배지·extraParents
+  // 신선도를 담보한다(빈도 낮은 계층 patch라 비용 논거와도 일관).
+  'extraParentEventIds',
   'description',
 ]
 
@@ -327,8 +334,34 @@ export function buildOptimisticEvent(
     next.parentEventId = parentId
     // 해제(null)는 parentEvent도 즉시 비워 breadcrumb·상위 링크가 곧바로 사라진다.
     next.parentEvent = parentId
-      ? resolveParentEvent(parentId, prev.parentEvent, qc)
+      ? resolveParentEvent(parentId, prev, qc)
       : undefined
+    // 서버 W2-(a-2) 거울: 새 주 상위가 기존 추가 상위와 겹치면 그 엣지는 자동
+    // collapse(스칼라 경유 승격). extras patch가 함께 오면 아래 분기가 정본.
+    if (
+      !('extraParentEventIds' in patch) &&
+      parentId &&
+      prev.extraParents?.some((extra) => extra.id === parentId)
+    ) {
+      next.extraParents = prev.extraParents.filter(
+        (extra) => extra.id !== parentId,
+      )
+    }
+    changed = true
+  }
+
+  /**
+   * extraParentEventIds → extraParents 낙관 재구성 — 계층 규약과 동일하게 '항상
+   * 재구성'(못 찾으면 필드째 생략 금지 — extraIds가 stale해져 무성 유실 재발).
+   * 유지 항목은 prev 재사용, 승격 swap의 강등분(직전 주 상위)은 prev.parentEvent
+   * (생존 객체 — 유령이면 애초에 undefined)에서 제목 승계, 신규는 후보 캐시 stub.
+   */
+  if ('extraParentEventIds' in patch) {
+    next.extraParents = resolveExtraParents(
+      patch.extraParentEventIds ?? [],
+      prev,
+      qc,
+    )
     changed = true
   }
 
@@ -415,19 +448,44 @@ function resolveChildEvents(
 }
 
 /**
- * parentEventId → parentEvent(EventDetail) 낙관 재구성. 같은 부모면 prev 재사용,
- * 후보 캐시에 없으면 prev 유지(스칼라 parentEventId는 이미 세팅돼 댓글 게이트는 즉시
- * 반영, breadcrumb·상위 링크만 refetch로 채워짐).
+ * parentEventId → parentEvent(EventDetail) 낙관 재구성.
+ * 소스 우선순위: ① 같은 부모면 prev.parentEvent 재사용 ② 승격 swap이면
+ * prev.extraParents에서 제목 승계(승격은 모달 없는 칩 액션이라 후보 캐시가 cold한
+ * 것이 기본 상태 — 항상 히트) ③ 후보 캐시 stub ④ 최후 빈 stub.
+ * ⚠️ id 불일치 시 prev.parentEvent 폴백 금지 — 옛 부모가 새 부모로 계속 표시되는
+ * cross-slot 오표시가 된다(제목은 refetch가 채움).
  */
 function resolveParentEvent(
   id: string,
-  prevParent: EventDetail | undefined,
+  prev: EventDetail,
   qc: QueryClient,
 ): EventDetail | undefined {
-  if (prevParent?.id === id) return prevParent
-  const candidate = collectLinkCandidates(qc).get(id)
-  if (!candidate) return prevParent
-  return candidateToEventStub(id, candidate)
+  if (prev.parentEvent?.id === id) return prev.parentEvent
+  const fromExtras = prev.extraParents?.find((extra) => extra.id === id)
+  if (fromExtras) return { id, title: fromExtras.title }
+  return candidateToEventStub(id, collectLinkCandidates(qc).get(id))
+}
+
+/**
+ * extraParentEventIds → extraParents 낙관 재구성. 순서는 patch의 배열 순서를 따르며
+ * refetch가 서버 정렬(연결 오래된 순)로 정정한다.
+ */
+function resolveExtraParents(
+  ids: string[],
+  prev: EventDetail,
+  qc: QueryClient,
+): Array<{ id: string; title: string }> {
+  let candidates: Map<string, EventLinkCandidate> | null = null
+  return ids.map((id) => {
+    const existing = prev.extraParents?.find((extra) => extra.id === id)
+    if (existing) return existing
+    // 승격 swap의 강등분 — 직전 주 상위 제목을 생존 객체에서 승계.
+    if (prev.parentEvent?.id === id) {
+      return { id, title: prev.parentEvent.title }
+    }
+    if (!candidates) candidates = collectLinkCandidates(qc)
+    return { id, title: candidates.get(id)?.title ?? '' }
+  })
 }
 
 /** id 배열을 prev derived 객체 + all 캐시로 해소. 미해결 항목이 있으면 null. */

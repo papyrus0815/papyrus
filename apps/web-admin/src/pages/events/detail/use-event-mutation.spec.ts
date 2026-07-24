@@ -111,3 +111,91 @@ describe('buildOptimisticEvent — 상위 사건(parentEventId) 낙관 재구성
     expect(next!.parentEvent).toBeUndefined()
   })
 })
+
+describe('buildOptimisticEvent — 추가 상위(extraParentEventIds) 낙관 재구성', () => {
+  it('연속 추가 누적 — [P2] 다음 [P2,P3]가 정확히 반영(무성 유실 없음)', () => {
+    const qc = qcWithCandidates([
+      { id: 'P2', title: '냉전의 서막' },
+      { id: 'P3', title: '전후 질서' },
+    ])
+    const base = makeEvent({
+      parentEventId: 'P1',
+      parentEvent: { id: 'P1', title: '제2차 세계대전' } as EventDetail,
+    })
+    const step1 = buildOptimisticEvent(
+      base,
+      { extraParentEventIds: ['P2'] } as unknown as Patch,
+      qc,
+    )
+    expect((step1!.extraParents ?? []).map((extra) => extra.id)).toEqual(['P2'])
+    expect(step1!.extraParents![0].title).toBe('냉전의 서막')
+    // step1 캐시를 prev로 삼아 P3 추가 → [P2,P3] (P2가 누락되지 않음 + prev 재사용)
+    const step2 = buildOptimisticEvent(
+      step1!,
+      { extraParentEventIds: ['P2', 'P3'] } as unknown as Patch,
+      qc,
+    )
+    expect((step2!.extraParents ?? []).map((extra) => extra.id)).toEqual([
+      'P2',
+      'P3',
+    ])
+  })
+
+  it('승격 swap cold-cache — 새 parentEvent는 extras에서, 옛 주 상위 제목은 extras로 보존', () => {
+    // 승격은 모달 없는 칩 액션 — 후보 캐시가 비어 있는(cold) 것이 기본 상태.
+    const qc = new QueryClient()
+    const prev = makeEvent({
+      parentEventId: 'P1',
+      parentEvent: { id: 'P1', title: '제2차 세계대전' } as EventDetail,
+      extraParents: [{ id: 'P2', title: '냉전의 서막' }],
+    })
+    const next = buildOptimisticEvent(
+      prev,
+      {
+        parentEventId: 'P2',
+        extraParentEventIds: ['P1'],
+      } as unknown as Patch,
+      qc,
+    )
+    // 새 주 상위: prev.extraParents에서 제목 승계(id 불일치 prevParent 폴백 금지)
+    expect(next!.parentEvent?.id).toBe('P2')
+    expect(next!.parentEvent?.title).toBe('냉전의 서막')
+    // 강등된 옛 주 상위: 생존 객체(prev.parentEvent)에서 제목 승계
+    expect(next!.extraParents).toEqual([
+      { id: 'P1', title: '제2차 세계대전' },
+    ])
+  })
+
+  it('스칼라 경유 승격(a-2 거울) — parent만 기존 엣지로 이동해도 그 엣지는 낙관 제거', () => {
+    const prev = makeEvent({
+      parentEventId: 'P1',
+      parentEvent: { id: 'P1', title: '주' } as EventDetail,
+      extraParents: [
+        { id: 'P2', title: '엣지2' },
+        { id: 'P3', title: '엣지3' },
+      ],
+    })
+    const next = buildOptimisticEvent(
+      prev,
+      { parentEventId: 'P2' } as unknown as Patch,
+      new QueryClient(),
+    )
+    expect(next!.parentEvent?.title).toBe('엣지2')
+    expect((next!.extraParents ?? []).map((extra) => extra.id)).toEqual(['P3'])
+  })
+
+  it('extras-only patch도 낙관 분기가 존재한다(next ≠ null) — 전부 해제 포함', () => {
+    const prev = makeEvent({
+      parentEventId: 'P1',
+      parentEvent: { id: 'P1', title: '주' } as EventDetail,
+      extraParents: [{ id: 'P2', title: '엣지' }],
+    })
+    const next = buildOptimisticEvent(
+      prev,
+      { extraParentEventIds: [] } as unknown as Patch,
+      new QueryClient(),
+    )
+    expect(next).not.toBeNull()
+    expect(next!.extraParents).toEqual([])
+  })
+})
