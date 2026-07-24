@@ -62,6 +62,10 @@ export function PersonRegisterViewModal({
     // 들어가 있으므로 broad invalidate (특정 personId가 아닌 prefix 전체)
     queryClient.invalidateQueries({ queryKey: ['person-detail'] })
     queryClient.invalidateQueries({ queryKey: ['person-family-tree'] })
+    // 동시대 수장·전후 재위(승계) 스트립 — 서버 유도 창이 대상/이웃 사망 연도로 캡되므로
+    // 생몰 편집 후에도 신선해야 한다(detail-panel invalidatePersonCaches와 동일 세트).
+    queryClient.invalidateQueries({ queryKey: ['person-contemporaries'] })
+    queryClient.invalidateQueries({ queryKey: ['person-reign-adjacency'] })
     if (personId) {
       queryClient.invalidateQueries({ queryKey: personKeys.detail(personId) })
     }

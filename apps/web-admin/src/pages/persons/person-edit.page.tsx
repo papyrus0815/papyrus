@@ -89,6 +89,10 @@ export default function PersonEditPage() {
     queryClient.invalidateQueries({ queryKey: personKeys.all })
     queryClient.invalidateQueries({ queryKey: ['person-detail'] })
     queryClient.invalidateQueries({ queryKey: ['person-family-tree'] })
+    // 동시대 수장·전후 재위(승계) 스트립 — 서버 유도 창이 대상/이웃의 사망 연도로 캡되므로
+    // 생몰 편집 후에도 신선해야 한다(detail-panel invalidatePersonCaches와 동일 세트).
+    queryClient.invalidateQueries({ queryKey: ['person-contemporaries'] })
+    queryClient.invalidateQueries({ queryKey: ['person-reign-adjacency'] })
     if (savedId) {
       queryClient.invalidateQueries({ queryKey: personKeys.detail(savedId) })
     }

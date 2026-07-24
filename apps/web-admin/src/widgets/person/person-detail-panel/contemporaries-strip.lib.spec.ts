@@ -140,6 +140,14 @@ describe('spanTextOf — 종료일 미기록의 재위 중/미상 구분', () =>
     expect(spanTextOf(ruler(), record({ endYear: null }))).toBe('1418–?')
   })
 
+  it('생존자라도 표시 record가 최신 재위가 아니면 종료 미기록은 "미상(–?)"', () => {
+    // 생존 인물의 옛 재위(1990–, 종료 공란)가 primary로 걸려도 진행 중처럼 오표기하지 않는다
+    const oldReign = record({ recordId: 'old', startYear: 1990, endYear: null })
+    const newerReign = record({ recordId: 'new', startYear: 2010, endYear: 2015 })
+    const alive = ruler({ isAlive: true, deathYear: null }, [oldReign, newerReign])
+    expect(spanTextOf(alive, oldReign)).toBe('1990–?')
+  })
+
   it('BC 음수 연도는 "BC N"으로 (부호 연도 계약)', () => {
     expect(
       spanTextOf(ruler(), record({ startYear: -247, endYear: -210 })),
@@ -190,6 +198,19 @@ describe('groupRulersByCountry', () => {
     expect(groups.map((group) => group.label)).toEqual(['기타', '대한민국'])
     expect(groups[1]!.flagEmoji).toBe('🇰🇷')
     expect(groups[0]!.chips[0]!.category).toBe('POPE')
+  })
+
+  it('역사국가 그룹은 dual-fill로 현대국가가 붙어도 현대 국기를 표시하지 않는다', () => {
+    // '🇰🇷 조선'처럼 어긋나는 표기 방지 — 역사국가(H:) 그룹은 라벨만
+    const joseonWithModern = ruler({ id: 'sejong', templeName: '세종' }, [
+      record({
+        historicalCountry: { id: 'joseon', name: '조선' },
+        country: { id: 'kr', name: '대한민국', flagEmoji: '🇰🇷' },
+      }),
+    ])
+    const groups = groupRulersByCountry([joseonWithModern], WINDOW)
+    expect(groups[0]!.label).toBe('조선')
+    expect(groups[0]!.flagEmoji).toBeNull()
   })
 
   it('isOwned가 칩까지 전달된다 (타계정 칩 비활성 근거)', () => {

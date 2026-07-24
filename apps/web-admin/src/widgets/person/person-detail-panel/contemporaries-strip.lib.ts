@@ -84,11 +84,19 @@ export function chipLabelOf(ruler: ContemporaryRuler, record: ContemporaryRecord
   return label || '(이름 미상)'
 }
 
-/** 재위 구간 표기 — 종료일 미기록은 생존이면 "–"(재위 중), 아니면 "–?"(미상) */
+/**
+ * 재위 구간 표기 — 종료일 미기록은 "재위 중(–)" vs "미상(–?)"으로 가른다.
+ * 표시 record는 primaryRecordOf(창과 최대 겹침)라 그 인물의 현행 재위가 아닐 수 있으므로,
+ * "재위 중"은 생존자 && 그 인물의 가장 늦게 시작한 record일 때만 — 생존 인물의 옛 재위에
+ * 종료일이 빠져 있어도 'A 1990–'처럼 진행 중으로 오표기하지 않는다(그런 옛 record는 '–?').
+ */
 export function spanTextOf(ruler: ContemporaryRuler, record: ContemporaryRecord): string {
   const start = formatSignedYear(record.startYear)
   if (record.endYear != null) return `${start}–${formatSignedYear(record.endYear)}`
-  return ruler.person.isAlive ? `${start}–` : `${start}–?`
+  const isLatestRecord = !ruler.records.some(
+    (other) => other.startYear > record.startYear,
+  )
+  return ruler.person.isAlive && isLatestRecord ? `${start}–` : `${start}–?`
 }
 
 /**
@@ -110,10 +118,13 @@ export function groupRulersByCountry(
         : 'NONE'
     let group = groups.get(key)
     if (!group) {
+      // 국기는 현대국가(C:) 그룹에만 — 역사국가(H:) 그룹에 record.country의 현대 국기를
+      // 붙이면 '🇰🇷 조선'처럼 어긋나고, 첫 등장 record의 country 유무에 따라 임의로 바뀐다.
+      // C: 그룹은 키가 그 국가라 모든 record가 같은 country → 국기 결정적.
       group = {
         key,
         label: countryRef?.name ?? '기타',
-        flagEmoji: record.country?.flagEmoji ?? null,
+        flagEmoji: record.historicalCountry ? null : (record.country?.flagEmoji ?? null),
         chips: [],
       }
       groups.set(key, group)
