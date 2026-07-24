@@ -9,19 +9,23 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
-import { FiArrowLeft, FiCheck } from 'react-icons/fi'
+import { FiArrowLeft, FiCheck, FiCloud } from 'react-icons/fi'
 import { useBlocker, useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { personKeys } from '@/entities/person/api'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PersonRegisterView } from '@/shared/ui/person-register-modal/person-register-view'
-import { StickyFooter } from '@/shared/ui/person-register-modal/person-register-view.styles'
+import {
+  AutoSaveStatus,
+  StickyFooter,
+} from '@/shared/ui/person-register-modal/person-register-view.styles'
 import { pathKeys } from '@/shared/router'
 import {
   BackButton,
   FormCardWrapper,
   FormHeader,
+  FormHeaderTitle,
   SubmitButton,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
@@ -30,7 +34,14 @@ export default function PersonEditPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitLabel, setSubmitLabel] = useState(personId ? '저장' : '등록')
+  // 제출 라벨은 뷰(onSubmitLabelChange)가 단일 출처로 갱신 — 초기값도 모달과 동일 세트로.
+  const [submitLabel, setSubmitLabel] = useState(
+    personId ? '수정 완료' : '인물 등록',
+  )
+  // 신규 등록은 draft로 임시 저장되므로 이탈 경고를 모달과 정합(수정 모드는 임시저장 없음).
+  const leaveMessage = personId
+    ? '저장하지 않은 변경사항이 있습니다. 정말 나가시겠습니까?'
+    : '입력 내용은 임시 저장되어 다음에 이어서 작성할 수 있습니다. 정말 나가시겠습니까?'
   // 필수 필드 채움 상태 — 페이지 모드엔 좌측 레일이 없어, 접기가 담당하던
   // '필수만 채우면 끝' 안심 신호를 sticky 푸터의 진척칩으로 대체(모달 푸터와 동형).
   const [filled, setFilled] = useState<{
@@ -60,7 +71,7 @@ export default function PersonEditPage() {
     blockerPromptingRef.current = true
     confirm({
       title: '확인',
-      message: '저장하지 않은 변경사항이 있습니다. 정말 나가시겠습니까?',
+      message: leaveMessage,
     }).then((confirmed) => {
       if (confirmed) blocker.proceed()
       else blocker.reset()
@@ -72,7 +83,7 @@ export default function PersonEditPage() {
       isDirtyRef.current &&
       !(await confirm({
         title: '확인',
-        message: '저장하지 않은 변경사항이 있습니다. 정말 나가시겠습니까?',
+        message: leaveMessage,
       }))
     ) {
       return
@@ -147,17 +158,21 @@ export default function PersonEditPage() {
             <FiArrowLeft size={18} />
             목록 보기
           </BackButton>
+          {/* 페이지 최상위 랜드마크 — 모달의 ModalTitle(h2) 미러링(헤딩 레벨 건너뜀 방지). */}
+          <FormHeaderTitle>{personId ? '인물 수정' : '인물 등록'}</FormHeaderTitle>
         </FormHeader>
-        <PersonRegisterView
-          editPersonId={personId ?? null}
-          onCancel={handleCancel}
-          onSuccess={handleSuccess}
-          onCreated={handleCreated}
-          onSubmittingChange={setIsSubmitting}
-          onSubmitLabelChange={setSubmitLabel}
-          onDirtyChange={setIsDirty}
-          onValuesChange={setFilled}
-        />
+        <FormBody>
+          <PersonRegisterView
+            editPersonId={personId ?? null}
+            onCancel={handleCancel}
+            onSuccess={handleSuccess}
+            onCreated={handleCreated}
+            onSubmittingChange={setIsSubmitting}
+            onSubmitLabelChange={setSubmitLabel}
+            onDirtyChange={setIsDirty}
+            onValuesChange={setFilled}
+          />
+        </FormBody>
         <StickyFooter>
           <RequiredProgress
             $complete={requiredComplete}
@@ -179,6 +194,13 @@ export default function PersonEditPage() {
             {requiredComplete && <FiCheck size={12} />}
             필수 {requiredDone}/{requiredTotal}
           </RequiredProgress>
+          {/* 신규 등록은 draft 자동 임시저장 — 모달 푸터의 '임시 저장 중'과 동형 신호. */}
+          {!personId && isDirty && (
+            <AutoSaveStatus>
+              <FiCloud size={12} />
+              임시 저장 중
+            </AutoSaveStatus>
+          )}
           <SubmitButton
             type="submit"
             form="person-register-form"
@@ -197,6 +219,15 @@ const Root = styled.div`
   background: ${({ theme }) => theme.colors.background.primary};
   display: flex;
   flex-direction: column;
+`
+
+/**
+ * 페이지 모드 폼 본문 좌우 거터 — 모달은 FormScroll(padding 28px 32px)이 담당하지만
+ * 페이지는 그 셸이 없어 콘텐츠가 카드 가장자리에 붙던 문제(RESP-12)를 이 진입점에서만 보정.
+ * 공유 FormCardWrapper는 다른 폼도 쓰므로 건드리지 않고 페이지 전용으로만 패딩을 준다.
+ */
+const FormBody = styled.div`
+  padding: 8px clamp(16px, 4vw, 40px) 0;
 `
 
 // 페이지 모드 sticky 푸터의 필수 진척칩 — 모달 셸의 ProgressLabel과 동형(색·톤 일치).

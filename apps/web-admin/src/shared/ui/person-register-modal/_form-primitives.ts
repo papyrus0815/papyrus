@@ -90,6 +90,32 @@ export function segmentToggleMixin(
   `
 }
 
+/**
+ * iOS 줌 방지 — 폰트 <16px 입력에 포커스하면 사파리가 페이지를 확대하고 원복하지 않는다.
+ * bespoke `<input>`/`<select>`(공용 FormInput 미사용 필드)가 제각각 이 가드를 빠뜨려
+ * 모바일에서 필드 탭마다 화면이 튀었다 → 단일 정의로 모아 일괄 적용.
+ */
+export const mobileInputFontMixin = css`
+  @media (max-width: 768px) {
+    font-size: 16px;
+  }
+`
+
+/**
+ * 입력 포커스 링 — 공용 FormInput과 동일하게 `:focus`(비-visible)에서 primary 보더 + focusRing.
+ * bespoke input/select가 border-color만 바꾸고 box-shadow 링을 빠뜨려 "절반만 링이 뜨는"
+ * 키보드 포커스 비일관을 낳았다 → 이 믹스인으로 통일(링 색은 focusRing 토큰 경유, 하드코딩 금지).
+ */
+export function inputFocusMixin(theme: DefaultTheme) {
+  return css`
+    &:focus {
+      outline: none;
+      border-color: ${theme.colors.primary};
+      box-shadow: ${theme.colors.focusRing.primary};
+    }
+  `
+}
+
 // ─── Inline 입력 그룹 ─────────────────────────────────────────────────────────
 
 /**

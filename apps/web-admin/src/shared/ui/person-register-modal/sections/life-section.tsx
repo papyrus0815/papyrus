@@ -33,6 +33,8 @@ import {
   FONT,
   FieldError,
   InlineFields,
+  inputFocusMixin,
+  mobileInputFontMixin,
   segmentToggleMixin,
 } from '../_form-primitives'
 import { DEATH_TYPE_GROUPS } from '../person-register-view.helpers'
@@ -214,11 +216,13 @@ export function LifeSection({
                   disabled={isBirthDateUnknown}
                   disabledLabel="미상"
                   error={!!errors.birth}
+                  ariaDescribedBy={
+                    errors.birth ? fid('birth-err') : undefined
+                  }
                 />
               </LifeFieldGroup>
               <SegmentBtn
                 type="button"
-                $variant="ghost"
                 $active={isBirthDateUnknown}
                 aria-pressed={isBirthDateUnknown}
                 onClick={() => {
@@ -233,7 +237,6 @@ export function LifeSection({
               </SegmentBtn>
               <SegmentBtn
                 type="button"
-                $variant="ghost"
                 $active={isBirthDateApproximate}
                 aria-pressed={isBirthDateApproximate}
                 disabled={isBirthDateUnknown}
@@ -244,12 +247,13 @@ export function LifeSection({
                   })
                   markDirty()
                 }}
+                aria-label="추정 연도"
                 title="'약 1500년'처럼 추정 연도"
               >
                 추정
               </SegmentBtn>
               {errors.birth && (
-                <FieldError role="alert">
+                <FieldError id={fid('birth-err')} role="alert">
                   <FiAlertCircle size={13} />
                   {errors.birth}
                 </FieldError>
@@ -286,6 +290,9 @@ export function LifeSection({
                   disabled={isAlive || isDeathDateUnknown}
                   disabledLabel={isAlive ? '생존 중' : '일자 미상'}
                   error={!!errors.death}
+                  ariaDescribedBy={
+                    errors.death ? fid('death-err') : undefined
+                  }
                 />
               </LifeFieldGroup>
               {/*
@@ -318,20 +325,20 @@ export function LifeSection({
                   $active={!isAlive && isDeathDateUnknown}
                   onClick={() => setDeathStatus('unknown')}
                 >
-                  일자 미상
+                  사망 (일자 미상)
                 </Segmented3WayBtn>
               </Segmented3Way>
               {!isAlive && (
                 <SegmentBtn
                   type="button"
-                  $variant="ghost"
-                  $active={isDeathDateApproximate}
+                    $active={isDeathDateApproximate}
                   aria-pressed={isDeathDateApproximate}
                   disabled={isDeathDateUnknown}
                   onClick={() => {
                     setIsDeathDateApproximate((v) => !v)
                     markDirty()
                   }}
+                  aria-label="추정 연도"
                   title="'약 1500년'처럼 추정 연도"
                 >
                   추정
@@ -342,7 +349,7 @@ export function LifeSection({
               )}
               {/* 사망일 오류 — 출생>사망 역전 검증도 errs.death에 키잉되어 이 열에 귀속된다 */}
               {errors.death && (
-                <FieldError role="alert">
+                <FieldError id={fid('death-err')} role="alert">
                   <FiAlertCircle size={13} />
                   {errors.death}
                 </FieldError>
@@ -481,7 +488,7 @@ export function LifeSection({
                   setDeathNote(e.target.value)
                   markDirty()
                 }}
-                placeholder="사망 메모 (논란·맥락·비고)"
+                placeholder="사망 메모 (논란·맥락)"
                 rows={2}
               />
             </LifeDeathDetails>
@@ -504,7 +511,7 @@ export function LifeSection({
           <AdvancedToggleBody>
             <AdvancedToggleTitle>군주 호칭</AdvancedToggleTitle>
             <AdvancedToggleDesc>
-              군주명·묘호·시호 (군주에 한해, 선택)
+              군주명·묘호·시호 (예: 루이 14세, 世宗 — 군주에 한해, 선택)
             </AdvancedToggleDesc>
           </AdvancedToggleBody>
         </AdvancedToggle>
@@ -641,10 +648,8 @@ const FloruitYearInput = styled.input`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
+  ${mobileInputFontMixin}
+  ${({ theme }) => inputFocusMixin(theme)}
 `
 
 const FloruitTilde = styled.span`
@@ -655,7 +660,6 @@ const FloruitTilde = styled.span`
 const SegmentBtn = styled.button<{
   $active?: boolean
   $error?: boolean
-  $variant?: 'solid' | 'ghost'
 }>`
   ${({ theme, $active, $error }) => segmentToggleMixin(theme, $active, $error)}
 `

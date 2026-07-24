@@ -58,16 +58,27 @@ export function InlineDateField({
   return (
     <Wrap role="group" aria-label={ariaLabel}>
       <EraToggle>
-        <EraBtn type="button" $active={era === 'AD'} onClick={() => onEra('AD')}>
+        <EraBtn
+          type="button"
+          $active={era === 'AD'}
+          aria-pressed={era === 'AD'}
+          onClick={() => onEra('AD')}
+        >
           AD
         </EraBtn>
-        <EraBtn type="button" $active={era === 'BC'} onClick={() => onEra('BC')}>
+        <EraBtn
+          type="button"
+          $active={era === 'BC'}
+          aria-pressed={era === 'BC'}
+          onClick={() => onEra('BC')}
+        >
           BC
         </EraBtn>
       </EraToggle>
       <Fields>
         <DateInput
-          $w={54}
+          $w={60}
+          $error={error}
           inputMode="numeric"
           placeholder="년"
           aria-label="연도"
@@ -78,19 +89,23 @@ export function InlineDateField({
         />
         <Sep>.</Sep>
         <DateInput
-          $w={38}
+          $w={44}
+          $error={error}
           inputMode="numeric"
           placeholder="월"
           aria-label="월"
+          aria-invalid={error || undefined}
           value={month}
           onChange={(event) => onMonth(digits(event.target.value, 2))}
         />
         <Sep>.</Sep>
         <DateInput
-          $w={38}
+          $w={44}
+          $error={error}
           inputMode="numeric"
           placeholder="일"
           aria-label="일"
+          aria-invalid={error || undefined}
           value={day}
           onChange={(event) => onDay(digits(event.target.value, 2))}
         />

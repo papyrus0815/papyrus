@@ -74,6 +74,12 @@ export const ThumbnailCircle = styled.label<{
     border-color: ${({ theme }) => theme.colors.primary};
   }
 
+  /* 라벨 안의 sr-only 파일 input이 키보드 포커스를 받으면 원형에 포커스 링 표시. */
+  &:focus-within {
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+  }
+
   img {
     width: 100%;
     height: 100%;
@@ -107,8 +113,20 @@ export const ThumbnailCircle = styled.label<{
   }
 `
 
+/**
+ * 시각적으로 숨기되 포커스 가능(sr-only) — display:none이면 Tab 순서에서 빠져 키보드로
+ * 사진을 못 올린다. 라벨(ThumbnailCircle) 안에 두어 클릭·드롭·키보드 모두 지원.
+ */
 export const ThumbnailUploadInput = styled.input`
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 `
 
 export const ThumbnailHeroBody = styled.div`
@@ -235,6 +253,13 @@ export const CoreSectionLabel = styled.h3`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+/** '(이름만 필수)' 보조 문구 — 필수 별표가 세 필드 전체로 오독되지 않게 라벨에 덧대는 경량 톤. */
+export const NameOnlyRequiredNote = styled.span`
+  font-size: ${FONT.meta};
+  font-weight: 400;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 // ─── Layout wrapper (Top-aligned modern form layout) ────────────────────────
 // 상단 정렬 라벨 (Linear/Stripe/Notion 류) — 라벨이 위, 컨트롤이 아래.
 
@@ -309,6 +334,17 @@ export const OptionalSeam = styled.div`
     flex: 1;
     height: 1px;
     background: ${({ theme }) => theme.colors.border.light};
+  }
+
+  /* 좁은 폰: 긴 캡션이 hairline을 0으로 밀어내지 않도록 세로 스택(pseudo는 전폭). */
+  @media (max-width: 640px) {
+    flex-direction: column;
+    gap: 8px;
+    &::before,
+    &::after {
+      flex: none;
+      width: 100%;
+    }
   }
 `
 
@@ -519,7 +555,7 @@ export const TopAlert = styled.div<{ $tone?: 'error' | 'warn' }>`
         : theme.colors.alert.danger.border};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12.5px;
+  font-size: ${FONT.meta};
   line-height: 1.5;
 
   svg {
@@ -529,6 +565,42 @@ export const TopAlert = styled.div<{ $tone?: 'error' | 'warn' }>`
       $tone === 'warn'
         ? theme.colors.alert.warning.fg
         : theme.colors.alert.danger.fg};
+  }
+`
+
+/**
+ * 409 충돌 배너의 '최신 내용 불러오기' 액션 — 스테일 폼을 서버 최신으로 재하이드레이션.
+ * 낙관적 동시성 충돌 후 토큰만 갱신하고 저장을 다시 허용하면 상대 세션 변경을 덮어쓰므로,
+ * 사용자가 명시적으로 최신을 불러온 뒤에만 진행하도록 강제하는 유일한 진행 경로.
+ */
+export const ConflictReloadBtn = styled.button`
+  flex-shrink: 0;
+  margin-left: auto;
+  align-self: center;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.alert.danger.fg};
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.alert.danger.border};
+  border-radius: ${RADIUS.control};
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248,113,113,0.12)' : 'rgba(220,38,38,0.06)'};
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
   }
 `
 

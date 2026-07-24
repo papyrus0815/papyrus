@@ -4,9 +4,9 @@
  * - 각 슬롯 위에 "최근 등록한 인물" dashed 칩 행 (또 등록 모드에서 가계 일괄 등록 가속).
  * - 슬롯 클릭 시 PersonSelectModal — 검색·필터·"+ 새 인물" 인라인 등록.
  */
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
-import { FiChevronDown, FiPlus } from 'react-icons/fi'
+import { FiAlertCircle, FiChevronDown, FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type { PersonResponseDto } from '@/shared/api/persons'
@@ -21,6 +21,7 @@ import {
 } from '@/shared/lib/partial-date-string'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { notify } from '@/shared/ui/toast'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import {
@@ -31,7 +32,14 @@ import {
   Textarea,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
-import { AddRowBtn, FONT, RADIUS } from '../_form-primitives'
+import {
+  AddRowBtn,
+  FONT,
+  FieldError,
+  RADIUS,
+  inputFocusMixin,
+  mobileInputFontMixin,
+} from '../_form-primitives'
 import { InlineDateField } from './inline-date-field'
 import {
   InlineSearchSelect,
@@ -107,6 +115,11 @@ export interface FamilySectionProps {
   countryId: string
   // 부모 dirty 추적
   markDirty: () => void
+  /**
+   * 배우자 혼인일 달력(DatePickerModal) 열림 여부를 부모에 보고 — 열린 채로 ⌘Enter가
+   * 폼을 뒤에서 제출하지 않도록 부모 anyModalOpen에 포함시키기 위함(affiliation과 동일 패턴).
+   */
+  onDateModalOpenChange?: (open: boolean) => void
 }
 
 export function FamilySection({
@@ -132,6 +145,7 @@ export function FamilySection({
   editPersonId,
   countryId,
   markDirty,
+  onDateModalOpenChange,
 }: FamilySectionProps) {
   const handleCreatedPerson = (p: PersonResponseDto) =>
     setPersons((prev) => [...prev, p])
@@ -153,6 +167,10 @@ export function FamilySection({
     index: number
     side: 'start' | 'end'
   } | null>(null)
+  // 혼인일 달력 열림/닫힘을 부모에 보고 — 열린 채로 ⌘Enter 조기 제출 차단(anyModalOpen 게이트).
+  useEffect(() => {
+    onDateModalOpenChange?.(spouseDateModal !== null)
+  }, [spouseDateModal, onDateModalOpenChange])
   const rowHasMeta = (row: SpouseFormRow) =>
     Boolean(
       hasAnyPartialDateInput(row.start) ||
@@ -305,6 +323,8 @@ export function FamilySection({
                   onClick={() => {
                     slot.setId(p.id)
                     markDirty()
+                    // 부/모는 단일 슬롯이라 기존 값을 덮어쓴다 — 무성 교체 대신 지정 결과를 알림.
+                    notify.success(`${getPersonDisplayName(p)} · ${slot.label}`)
                   }}
                 >
                   {slot.glyph}
@@ -502,6 +522,7 @@ export function FamilySection({
                     </SpouseRowMeta>
                     {dateInverted && (
                       <SpouseDateError id={dateErrorId} role="alert">
+                        <FiAlertCircle size={13} />
                         혼인 종료일이 시작일보다 빠릅니다.
                       </SpouseDateError>
                     )}
@@ -517,15 +538,23 @@ export function FamilySection({
                     />
                     {/* 빈 채로 펼친 행은 다시 접을 수 있게 — 값이 있으면 데이터 은닉 방지차 미노출. */}
                     {!rowHasMeta(row) && (
-                      <SpouseMetaToggle type="button" onClick={() => toggleMetaOpen(row.spouseId)}>
+                      <SpouseMetaToggle
+                        type="button"
+                        aria-expanded={showMeta}
+                        onClick={() => toggleMetaOpen(row.spouseId)}
+                      >
                         혼인 정보 접기
                       </SpouseMetaToggle>
                     )}
                   </>
                 ) : (
                   row.spouseId && (
-                    <SpouseMetaToggle type="button" onClick={() => toggleMetaOpen(row.spouseId)}>
-                      <FiPlus size={13} /> 혼인 정보(혼인일·메모) 추가
+                    <SpouseMetaToggle
+                      type="button"
+                      aria-expanded={showMeta}
+                      onClick={() => toggleMetaOpen(row.spouseId)}
+                    >
+                      <FiPlus size={13} /> 혼인 정보(혼인일·서열·메모) 추가
                     </SpouseMetaToggle>
                   )
                 )}
@@ -751,11 +780,13 @@ const RecentChipName = styled.span`
 const RecentChipActions = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
 `
 
-/** 父/母/配 mini 슬롯 버튼 — 한 인물을 빠르게 슬롯에 꽂는 inline action. */
+/** 父/母/配 mini 슬롯 버튼 — 한 인물을 빠르게 슬롯에 꽂는 inline action.
+ *  글리프는 22px로 유지하되 ::before 투명 히트박스로 실제 탭 영역을 26px(≥WCAG 2.5.8)로 확대. */
 const RecentSlotBtn = styled.button`
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -772,6 +803,12 @@ const RecentSlotBtn = styled.button`
   transition:
     color 0.15s,
     background 0.15s;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+  }
 
   &:hover {
     color: #fff;
@@ -863,6 +900,9 @@ const SpouseMetaToggle = styled.button`
   align-items: center;
   gap: 4px;
   margin-left: 30px;
+  @media (max-width: 480px) {
+    margin-left: 0;
+  }
   padding: 2px 4px;
   font-size: ${FONT.meta};
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -886,6 +926,11 @@ const SpouseRowMeta = styled.div`
   flex-wrap: wrap;
   gap: 12px;
   padding-left: 30px;
+
+  /* 좁은 폰: 30px 들여쓰기가 폭을 크게 잠식 → 회수 */
+  @media (max-width: 480px) {
+    padding-left: 0;
+  }
 `
 
 /** 혼인 메타 필드(혼인일·서열) — 라벨 + 컨트롤 세로 스택. label 태그 아님(내부에 버튼 여럿). */
@@ -919,10 +964,8 @@ const SpouseRankSelect = styled.select`
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: ${RADIUS.control};
   cursor: pointer;
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
+  ${mobileInputFontMixin}
+  ${({ theme }) => inputFocusMixin(theme)}
 `
 
 const SpouseRankCaret = styled.span`
@@ -935,9 +978,11 @@ const SpouseRankCaret = styled.span`
   display: inline-flex;
 `
 
-const SpouseDateError = styled.p`
-  margin: 4px 0 0 30px;
-  font-size: ${FONT.meta};
-  color: ${({ theme }) => theme.colors.alert.danger.fg};
+/** 혼인일 역전 오류 — 공용 FieldError(아이콘·톤 통일) + 배우자 카드 들여쓰기(30px). */
+const SpouseDateError = styled(FieldError)`
+  margin-left: 30px;
+  @media (max-width: 480px) {
+    margin-left: 0;
+  }
 `
 

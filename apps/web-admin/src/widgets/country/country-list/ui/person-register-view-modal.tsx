@@ -103,6 +103,9 @@ export function PersonRegisterViewModal({
       mode={isEdit ? 'edit' : 'create'}
       draftEnabled={!isEdit}
       fitContent
+      // 첫-오류 이동은 PersonRegisterView.handleSubmit(rAF)이 전담 — 셸의 상시 aria-invalid
+      // 옵저버를 꺼 타이핑 중 포커스 강탈·이중 스크롤 레이스를 없앤다(FB-10/A11Y-8/FB-12).
+      manageErrorFocus={false}
       requiredFields={[
         { label: '이름', done: !!filled.name, jumpTarget: 'name' },
         { label: '성별', done: !!filled.gender, jumpTarget: 'gender' },

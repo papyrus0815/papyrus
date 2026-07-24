@@ -18,7 +18,15 @@ import {
   FormRows,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
-import { AddRowBtn, FieldError, FONT, RADIUS, SelectBtn } from '../_form-primitives'
+import {
+  AddRowBtn,
+  FieldError,
+  FONT,
+  RADIUS,
+  SelectBtn,
+  inputFocusMixin,
+  mobileInputFontMixin,
+} from '../_form-primitives'
 
 /** 국가 소속 한 행의 폼 상태 (저장 시 DTO로 변환) */
 export type CountryAffiliationRow = {
@@ -46,7 +54,7 @@ export const AFFILIATION_TYPE_OPTIONS: ReadonlyArray<{
   label: string
 }> = [
   { value: 'CITIZENSHIP', label: '국적/시민권' },
-  { value: 'BIRTH_PLACE', label: '출생지' },
+  { value: 'BIRTH_PLACE', label: '출생 국가' },
   { value: 'PRIMARY_RESIDENCE', label: '거주/활동지' },
   { value: 'SERVED', label: '복무/봉사' },
   { value: 'EXILE', label: '망명' },
@@ -185,7 +193,8 @@ export function CountryAffiliationsSection({
         </FieldLabel>
         <ControlWide>
           <HintText>
-            주 국적 외 출생지·복무·망명·이중국적 등을 추가합니다.
+            주 국적 외 출생 국가·복무·망명·이중국적 등을 추가합니다. 도시 단위
+            출생지는 ‘생애 상세’에서 입력해요.
           </HintText>
 
           {rows.length > 0 && (
@@ -280,8 +289,8 @@ export function CountryAffiliationsSection({
                       )}
                       <NoteInput
                         type="text"
-                        aria-label={`소속 ${idx + 1} 비고`}
-                        placeholder="비고 (선택)"
+                        aria-label={`소속 ${idx + 1} 메모`}
+                        placeholder="메모 (선택)"
                         value={row.note ?? ''}
                         onChange={(e) =>
                           patchRow(row.key, {
@@ -388,10 +397,8 @@ const TypeSelect = styled.select`
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: ${RADIUS.control};
   cursor: pointer;
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
+  ${mobileInputFontMixin}
+  ${({ theme }) => inputFocusMixin(theme)}
 `
 
 const SelectCaret = styled.span`
@@ -490,9 +497,7 @@ const NoteInput = styled.input`
   border-radius: ${RADIUS.control};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff'};
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
+  ${mobileInputFontMixin}
+  ${({ theme }) => inputFocusMixin(theme)}
 `
 

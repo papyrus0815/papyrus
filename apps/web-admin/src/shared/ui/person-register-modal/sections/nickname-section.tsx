@@ -15,12 +15,19 @@ import {
 } from '@/shared/lib/nickname-type-labels'
 import {
   FieldControl,
+  FieldHint,
   FieldLabel,
   FieldRow,
   FormRows,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
 
-import { FONT, RADIUS } from '../_form-primitives'
+import {
+  AddRowBtn,
+  FONT,
+  RADIUS,
+  inputFocusMixin,
+  mobileInputFontMixin,
+} from '../_form-primitives'
 
 export interface NicknameRow {
   nickname: string
@@ -57,6 +64,9 @@ export function NicknameSection({
     <FormRows>
       <FieldRow>
         <FieldLabel>별칭</FieldLabel>
+        <FieldHint>
+          출생명·아명·자(字)·호·필명도 여기에서 유형을 골라 등록해요.
+        </FieldHint>
         <FieldControl>
           {rows.map((row, idx) => (
             <NicknameRowWrap key={idx}>
@@ -68,7 +78,7 @@ export function NicknameSection({
                     onChange={(event) => update(idx, { type: event.target.value })}
                     aria-label="별칭 유형"
                   >
-                    <option value="">유형 없음</option>
+                    <option value="">미분류</option>
                     {NICKNAME_TYPE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
@@ -82,7 +92,7 @@ export function NicknameSection({
                 <NameInput
                   value={row.nickname}
                   onChange={(event) => update(idx, { nickname: event.target.value })}
-                  placeholder="별칭"
+                  placeholder="별칭·출생명·자·호…"
                   aria-label="별칭"
                 />
                 <RemoveBtn
@@ -103,10 +113,10 @@ export function NicknameSection({
               />
             </NicknameRowWrap>
           ))}
-          <AddBtn type="button" onClick={add}>
-            <FiPlus size={13} />
+          <AddRowBtn type="button" onClick={add}>
+            <FiPlus size={16} />
             별칭 추가
-          </AddBtn>
+          </AddRowBtn>
         </FieldControl>
       </FieldRow>
     </FormRows>
@@ -152,10 +162,8 @@ const TypeSelect = styled.select`
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   cursor: pointer;
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
+  ${mobileInputFontMixin}
+  ${({ theme }) => inputFocusMixin(theme)}
 `
 
 const SelectCaret = styled.span`
@@ -176,10 +184,8 @@ const NameInput = styled.input`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
+  ${mobileInputFontMixin}
+  ${({ theme }) => inputFocusMixin(theme)}
 `
 
 /** 별칭 이유·유래 — 상단 행(유형+별칭) 아래 풀폭. 삭제 버튼 폭만큼 우측 여백을 둬 정렬. */
@@ -192,10 +198,12 @@ const ReasonInput = styled.input`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafafa'};
   border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  ${mobileInputFontMixin}
   &:focus {
     outline: none;
     border-style: solid;
     border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
   }
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
@@ -222,26 +230,3 @@ const RemoveBtn = styled.button`
   }
 `
 
-const AddBtn = styled.button`
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 10px;
-  padding: 6px 12px;
-  font-size: ${FONT.meta};
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.primary};
-  background: transparent;
-  border: 1px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.4)' : 'rgba(99,102,241,0.3)'};
-  border-radius: ${RADIUS.pill};
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
-  &:hover {
-    color: #fff;
-    background: ${({ theme }) => theme.colors.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
-`
