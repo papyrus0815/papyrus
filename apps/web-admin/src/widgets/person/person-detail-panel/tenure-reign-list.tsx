@@ -9,7 +9,7 @@ import { FiEdit2 } from 'react-icons/fi'
 import {
   APPOINTMENT_METHOD_LABELS,
   TENURE_END_REASON_LABELS,
-  formatIsoDateKo,
+  deriveTenurePeriodLabel,
   getAgeAtDate,
 } from './helpers'
 import {
@@ -95,12 +95,18 @@ export function TenureReignList({
         const posTitle = d.positionDefinition?.title ?? d.title ?? '직책'
         const countryName =
           d.historicalCountry?.name ?? d.country?.name ?? null
-        // 'year' 정밀도 = 연도만 앎(월일 01-01은 관행 채움) — 시작쪽만 연도로 완화, 종료쪽 무변경
-        const startYearOnly = d.startDatePrecision === 'year' && !!d.startDate
-        const startStr = startYearOnly
-          ? `${Number(String(d.startDate).slice(0, 4))}년`
-          : formatIsoDateKo(d.startDate)
-        const endStr = d.endDate ? formatIsoDateKo(d.endDate) : null
+        // 종료일·정밀도·재직중사망·미상/현재 폴백은 연보 타임라인과 공용 파생(단일 출처)으로.
+        // ('year' 정밀도 = 연도만 앎 / DEATH_IN_OFFICE → 사망일 / 종료사유·고인 → '미상')
+        const { startYearOnly, rangeLabel } = deriveTenurePeriodLabel(
+          {
+            startDate: d.startDate,
+            startDatePrecision: d.startDatePrecision,
+            endDate: d.endDate,
+            endReason: d.endReason,
+            isDeceased,
+            deathDateStr,
+          },
+        )
         // 즉위식·취임식 사건 링크 — 소프트삭제된 사건은 배지 숨김
         const accessionEvent =
           d.accessionEvent && !d.accessionEvent.deletedAt
@@ -119,15 +125,6 @@ export function TenureReignList({
           : null
         const mainTitle =
           isReign && d.regnalName ? `${d.regnalName} · ${posTitle}` : posTitle
-        // 종료일 폴백: 재직 중 사망이면 사망일, 종료 사유가 있으면(끝났으나 날짜 미상)
-        // '미상', 사망자면 '미상', 그 외 진행 중이면 '현재'.
-        const endLabel =
-          endStr ??
-          (d.endReason === 'DEATH_IN_OFFICE' && deathDateStr
-            ? deathDateStr
-            : d.endReason || isDeceased
-              ? '미상'
-              : '현재')
         return (
           <UnifiedCard key={`${kind}-${d.id}`} $kind={kind}>
             <UnifiedCardMain>
@@ -160,10 +157,8 @@ export function TenureReignList({
                     {d.dynastyOrdinal}대
                   </UnifiedMetaChip>
                 )}
-                {(startStr || endStr) && (
-                  <UnifiedMetaChip $muted>
-                    {startStr || '?'} – {endLabel}
-                  </UnifiedMetaChip>
+                {rangeLabel && (
+                  <UnifiedMetaChip $muted>{rangeLabel}</UnifiedMetaChip>
                 )}
                 {ageAtStart != null && (
                   <UnifiedAgeBadge>

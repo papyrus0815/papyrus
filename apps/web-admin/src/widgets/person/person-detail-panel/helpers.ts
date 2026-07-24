@@ -198,3 +198,69 @@ export function formatPeriod(
   if (end) return `~ ${end}`
   return null
 }
+
+export interface TenurePeriodInput {
+  startDate?: string | null
+  /** 'year'면 시작을 연 단위로만 표기(월·일 관행 채움값 숨김) */
+  startDatePrecision?: string | null
+  endDate?: string | null
+  /** 종료 사유 enum — 있으면 종료일 미상이어도 '미상'(진행 중 아님)으로 확정 */
+  endReason?: string | null
+  /** 고인 여부 — 종료일·종료사유 없어도 '현재'로 둔갑하지 않게 '미상' */
+  isDeceased?: boolean
+  /** 재직 중 사망(DEATH_IN_OFFICE) 시 종료일 폴백으로 쓸 이미 포맷된 사망일 문자열 */
+  deathDateStr?: string | null
+}
+
+export interface TenurePeriodLabel {
+  /** 시작 표기 — 연 정밀도면 "N년"(BC면 "기원전 N년"), 아니면 "YYYY년 M월 D일" */
+  startStr: string
+  /** 시작이 연 정밀도만인지 — 나이 배지 '경' 접미 게이트 */
+  startYearOnly: boolean
+  /** 종료 표기 — 종료일 ?? (재직중사망→사망일, 종료사유·고인→'미상', 그 외 '현재') */
+  endLabel: string
+  /** 종료일이 실제 존재하는지 — age-at-end 계산·en대시 게이트 */
+  hasEndDate: boolean
+  /** "start – end" 결합 표기(카드 칩·타임라인 dateLabel 공용). 시작 미상이면 "? – end". */
+  rangeLabel: string
+}
+
+/**
+ * 재임·재위 기간 라벨 파생 — 개요 카드와 연보 타임라인이 각자 구현하던 종료일·정밀도·
+ * 재직중사망·미상/현재 폴백을 한 곳으로 모아 표기 드리프트를 없앤다(단일 출처).
+ * 모든 날짜 파싱은 BC-safe(parseIsoDateParts/formatIsoDateKo) — `new Date()`는 BC 음수
+ * 연도와 고대 AD를 오파싱하므로 쓰지 않는다.
+ */
+export function deriveTenurePeriodLabel(
+  input: TenurePeriodInput,
+): TenurePeriodLabel {
+  const precision = input.startDatePrecision
+  // '경'(약) 접미 게이트는 연 단위 정밀도에만 (월 정밀도는 월까지 표기해 근사 아님)
+  const startYearOnly = precision === 'year' && !!input.startDate
+  const startParts = parseIsoDateParts(input.startDate)
+  let startStr: string
+  if (startParts && (precision === 'year' || precision === 'month')) {
+    const bc = startParts.era === 'BC' ? '기원전 ' : ''
+    startStr =
+      precision === 'year'
+        ? `${bc}${startParts.year}년`
+        : `${bc}${startParts.year}년 ${startParts.month}월`
+  } else {
+    startStr = formatIsoDateKo(input.startDate)
+  }
+  const endStr = input.endDate ? formatIsoDateKo(input.endDate) : ''
+  const endLabel =
+    endStr ||
+    (input.endReason === 'DEATH_IN_OFFICE' && input.deathDateStr
+      ? input.deathDateStr
+      : input.endReason || input.isDeceased
+        ? '미상'
+        : '현재')
+  const hasEndDate = !!endStr
+  const rangeLabel = startStr
+    ? `${startStr} – ${endLabel}`
+    : hasEndDate
+      ? `? – ${endLabel}`
+      : ''
+  return { startStr, startYearOnly, endLabel, hasEndDate, rangeLabel }
+}

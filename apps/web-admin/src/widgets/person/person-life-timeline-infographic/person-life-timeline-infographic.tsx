@@ -30,6 +30,12 @@ import {
   APPOINTMENT_METHOD_LABELS,
   TENURE_END_REASON_LABELS,
 } from '@/shared/lib/tenure-labels'
+// 재임·재위 기간 라벨은 개요 카드와 단일 출처 공유 — 종료일·정밀도·재직중사망·미상/현재
+// 폴백을 BC-safe로 한 곳에서 파생(표기 드리프트 방지). formatIsoDateKo도 BC-safe 사망일용.
+import {
+  deriveTenurePeriodLabel,
+  formatIsoDateKo,
+} from '@/widgets/person/person-detail-panel/helpers'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { CATEGORY_ICON } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
@@ -478,7 +484,14 @@ export function PersonLifeTimelineInfographic({
           reign.regnalNumber != null
             ? `${reign.regnalNumber}대${reign.subTermNumber != null ? ` ${reign.subTermNumber}기` : ''}`
             : null,
-        dateLabel: formatRange(startsAt, endsAt, reign.startDatePrecision),
+        dateLabel: deriveTenurePeriodLabel({
+          startDate: reign.startDate,
+          startDatePrecision: reign.startDatePrecision,
+          endDate: reign.endDate,
+          endReason: reign.endReason,
+          isDeceased: !!deathDate,
+          deathDateStr: deathDate ? formatIsoDateKo(deathDate) : null,
+        }).rangeLabel,
         description:
           [
             reign.appointmentMethod || reign.appointmentDetail
@@ -525,7 +538,14 @@ export function PersonLifeTimelineInfographic({
           tenure.termNumber != null
             ? `제${tenure.termNumber}대${tenure.subTermNumber != null ? ` ${tenure.subTermNumber}기` : ''}`
             : null,
-        dateLabel: formatRange(startsAt, endsAt, tenure.startDatePrecision),
+        dateLabel: deriveTenurePeriodLabel({
+          startDate: tenure.startDate,
+          startDatePrecision: tenure.startDatePrecision,
+          endDate: tenure.endDate,
+          endReason: tenure.endReason,
+          isDeceased: !!deathDate,
+          deathDateStr: deathDate ? formatIsoDateKo(deathDate) : null,
+        }).rangeLabel,
         description:
           [
             tenure.appointmentMethod || tenure.appointmentDetail
