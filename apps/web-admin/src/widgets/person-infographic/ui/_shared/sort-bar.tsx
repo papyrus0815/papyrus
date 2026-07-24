@@ -1,72 +1,24 @@
 /**
- * 인물 뷰 공용 정렬 바 — 매트릭스/은하계/스토리/왕조 4뷰 동일 사용.
+ * 인물 뷰 공용 정렬 바 — 매트릭스/갤럭시/스토리/왕조 중 카드 그리드 뷰(스토리·왕조)에서 사용.
  * store의 `sort` 상태를 직접 읽고 쓴다 → URL/persist에 자동 동기화.
+ * 세기 '그룹' 순서는 EraOrderToggle이 담당 — 여기서는 그룹 내부 인물 순서만 제어.
  */
-import styled, { css } from 'styled-components'
-
 import { usePersonInfographicFilterStore } from '../../model/filter.store'
 import { SORT_OPTIONS } from '../../model/sort-helpers'
 
+import { SegmentedRadioGroup } from './segmented-radio-group'
+
 export function SortBar() {
-  const sort = usePersonInfographicFilterStore((s) => s.sort)
-  const setSort = usePersonInfographicFilterStore((s) => s.setSort)
+  const sort = usePersonInfographicFilterStore((state) => state.sort)
+  const setSort = usePersonInfographicFilterStore((state) => state.setSort)
 
   return (
-    <Wrap role="radiogroup" aria-label="인물 정렬 기준">
-      <Label>정렬</Label>
-      {SORT_OPTIONS.map(([k, lbl]) => (
-        <Btn
-          key={k}
-          type="button"
-          role="radio"
-          aria-checked={sort === k}
-          $active={sort === k}
-          onClick={() => setSort(k)}
-        >
-          {lbl}
-        </Btn>
-      ))}
-    </Wrap>
+    <SegmentedRadioGroup
+      label="정렬"
+      ariaLabel="인물 정렬 기준"
+      options={SORT_OPTIONS}
+      value={sort}
+      onChange={setSort}
+    />
   )
 }
-
-const Wrap = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 2px;
-  flex-wrap: wrap;
-`
-
-const Label = styled.span`
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-right: 6px;
-`
-
-const Btn = styled.button<{ $active: boolean }>`
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  font-size: 11px;
-  transition: background 0.12s, color 0.12s;
-  ${({ $active, theme }) =>
-    $active
-      ? css`
-          background: ${theme.colors.activeLight};
-          color: ${theme.colors.active};
-          font-weight: 600;
-        `
-      : css`
-          background: transparent;
-          color: ${theme.colors.text.secondary};
-          &:hover {
-            background: ${theme.colors.hover};
-            color: ${theme.colors.text.primary};
-          }
-        `}
-`
