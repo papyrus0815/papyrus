@@ -1,6 +1,9 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common'
 
-import { PersonContemporariesService } from './person-contemporaries.service'
+import {
+  PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE,
+  PersonContemporariesService,
+} from './person-contemporaries.service'
 
 /**
  * 동시대 수장 읽기모델 특성화 — 검토서(docs/person-contemporary-rulers-review.md §4)의
@@ -92,6 +95,8 @@ function createService(fixture: {
   const calls: Record<string, any[]> = {
     tenureWheres: [],
     reignWheres: [],
+    tenureArgs: [],
+    reignArgs: [],
   }
   const prismaFake = {
     person: {
@@ -110,6 +115,7 @@ function createService(fixture: {
     governmentPositionTenure: {
       findMany: jest.fn(async (args: any) => {
         calls.tenureWheres.push(args.where)
+        calls.tenureArgs.push(args)
         return args.where.AND
           ? (fixture.candidateTenures ?? [])
           : (fixture.subjectTenures ?? [])
@@ -118,6 +124,7 @@ function createService(fixture: {
     sovereignReign: {
       findMany: jest.fn(async (args: any) => {
         calls.reignWheres.push(args.where)
+        calls.reignArgs.push(args)
         return args.where.AND
           ? (fixture.candidateReigns ?? [])
           : (fixture.subjectReigns ?? [])
@@ -603,6 +610,58 @@ describe('PersonContemporariesService', () => {
       })
       expect(result.rulers).toEqual([])
       expect(result.meta.totalPersons).toBe(0)
+    })
+  })
+
+  describe('후보 적재 안전 상한 (candidatesTruncated)', () => {
+    it('후보 findMany에 startDate desc orderBy + 안전 take를 건다', async () => {
+      const { service, calls } = createService({ subject: { id: 'subject-1' } })
+      await service.getContemporaries({ ...BASE_PARAMS, fromYear: 1400, toYear: 1500 })
+      const candidateTenureArgs = calls.tenureArgs.find((args: any) => args.where.AND)
+      const candidateReignArgs = calls.reignArgs.find((args: any) => args.where.AND)
+      expect(candidateTenureArgs.take).toBe(PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE)
+      expect(candidateTenureArgs.orderBy).toEqual({ startDate: 'desc' })
+      expect(candidateReignArgs.take).toBe(PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE)
+      expect(candidateReignArgs.orderBy).toEqual({ startDate: 'desc' })
+    })
+
+    it('정상 규모에선 candidatesTruncated=false', async () => {
+      const { service } = createService({
+        subject: { id: 'subject-1' },
+        candidateReigns: [
+          reignRow({ startDate: utc(1418), endDate: utc(1450) }),
+        ],
+      })
+      const result = await service.getContemporaries({
+        ...BASE_PARAMS,
+        fromYear: 1400,
+        toYear: 1460,
+      })
+      expect(result.meta.candidatesTruncated).toBe(false)
+    })
+
+    it('한 테이블이라도 상한만큼 반환하면 candidatesTruncated=true (불완전 노출)', async () => {
+      // 상한 개수의 후보 재위를 만든다 — 각기 다른 인물, 창 안에서 겹침
+      const flood = Array.from(
+        { length: PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE },
+        (_unused, index) =>
+          reignRow({
+            id: `reign-${index}`,
+            startDate: utc(1418),
+            endDate: utc(1450),
+            person: rulerPerson({ id: `ruler-${index}`, deathDate: utc(1450) }),
+          }),
+      )
+      const { service } = createService({
+        subject: { id: 'subject-1' },
+        candidateReigns: flood,
+      })
+      const result = await service.getContemporaries({
+        ...BASE_PARAMS,
+        fromYear: 1400,
+        toYear: 1460,
+      })
+      expect(result.meta.candidatesTruncated).toBe(true)
     })
   })
 })

@@ -79,6 +79,11 @@ export interface PersonContemporariesMetaDto {
   totalPersons: number
   /** cap으로 잘린 인물 수 — 0이 아니면 프론트는 무성 절단 방지 캡션 필수 */
   omittedCount: number
+  /**
+   * 후보 스캔이 안전 상한(테이블당)에 걸려 잘렸을 수 있음 — totalPersons/omittedCount가
+   * 과소일 수 있다. 극단 명시 창에서만 발동하며, 프론트는 불완전 안내 캡션을 띄운다.
+   */
+  candidatesTruncated: boolean
 }
 
 export interface PersonContemporariesResponseDto {

@@ -98,6 +98,7 @@ function response(
       scope: 'all',
       totalPersons: rulers.length,
       omittedCount: 0,
+      candidatesTruncated: false,
       ...metaOverrides,
     },
     rulers,

@@ -21,6 +21,16 @@ import {
 export const PERSON_CONTEMPORARIES_DEFAULT_LIMIT = 100
 export const PERSON_CONTEMPORARIES_MAX_LIMIT = 300
 
+/**
+ * 후보 행 적재 안전 상한(테이블당) — 무제한 in-memory 적재 방지.
+ * 정상 스트립은 창을 서버가 재위 구간에서 유도해 후보가 소수지만, 인증 사용자가 극단
+ * 명시 창(fromYear=1&toYear=3000&scope=all)을 조립하면 창 필터가 붕괴해 near-full-scan이
+ * 될 수 있다. 이 상한에 걸리면 meta.candidatesTruncated=true로 불완전을 노출한다
+ * (무성 절단 금지). 랭킹키(overlapYears)가 앱측 계산이라 SQL top-N은 불가하므로,
+ * startDate 내림차순으로 상한을 두어 상한 발동 시에도 결정론적이게 한다.
+ */
+export const PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE = 2000
+
 export interface GetContemporariesParams {
   personId: string
   /** 대상 인물 소유자 게이트 (findById 관례) — 결과 수장 목록은 글로벌 읽기 */
@@ -126,6 +136,7 @@ export class PersonContemporariesService {
         scope,
         totalPersons: 0,
         omittedCount: 0,
+        candidatesTruncated: false,
       },
       rulers: [],
     })
@@ -190,6 +201,8 @@ export class PersonContemporariesService {
           ],
         },
         select: { ...recordSelect, positionType: true, title: true },
+        orderBy: { startDate: 'desc' },
+        take: PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE,
       }),
       this.prisma.sovereignReign.findMany({
         where: { AND: reignOverlapAnd },
@@ -201,8 +214,15 @@ export class PersonContemporariesService {
           endEra: true,
           endYear: true,
         },
+        orderBy: { startDate: 'desc' },
+        take: PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE,
       }),
     ])
+    // 한 테이블이라도 상한에 닿으면 후보 스캔이 잘렸을 수 있음 — totalPersons/omittedCount가
+    // 과소일 수 있음을 노출한다. (정상 스트립 창에선 발동하지 않는다.)
+    const candidatesTruncated =
+      tenureRows.length >= PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE ||
+      reignRows.length >= PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE
 
     type CandidateRow = {
       record: ContemporaryRecordDto
@@ -355,6 +375,7 @@ export class PersonContemporariesService {
         scope,
         totalPersons: rulers.length,
         omittedCount: rulers.length - capped.length,
+        candidatesTruncated,
       },
       rulers: capped,
     }

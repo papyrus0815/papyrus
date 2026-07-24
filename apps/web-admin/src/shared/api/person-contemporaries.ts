@@ -74,6 +74,8 @@ export interface PersonContemporariesResponse {
     totalPersons: number
     /** 0이 아니면 무성 절단 방지 캡션 필수 */
     omittedCount: number
+    /** 후보 스캔이 안전 상한에 걸려 결과가 불완전할 수 있음 (극단 명시 창에서만) */
+    candidatesTruncated: boolean
   }
   rulers: ContemporaryRuler[]
 }

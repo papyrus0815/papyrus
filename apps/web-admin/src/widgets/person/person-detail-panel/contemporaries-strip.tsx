@@ -178,6 +178,13 @@ export function ContemporariesStrip({
           </OmittedCaption>
         )
       )}
+
+      {/* 후보 스캔이 안전 상한에 걸린 경우 — 결과가 불완전할 수 있음을 알린다(무성 절단 금지) */}
+      {data?.meta.candidatesTruncated && (
+        <OmittedCaption role="status">
+          범위가 넓어 일부 수장이 생략됐을 수 있습니다
+        </OmittedCaption>
+      )}
     </StripSection>
   )
 }
