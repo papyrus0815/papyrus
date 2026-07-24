@@ -178,6 +178,28 @@ describe('PersonContemporariesService', () => {
       expect(result.meta.window).toEqual({ fromYear: 1418, toYear: 1419 })
     })
 
+    it('구조화 축(startEra/startYear) 재위는 startDate=NULL(AD<1000)이어도 창을 유도한다', async () => {
+      const { service } = createService({
+        subject: { id: 'subject-1', isAlive: false, deathDate: null },
+        subjectReigns: [
+          {
+            startDate: null,
+            endDate: null,
+            startEra: 'AD',
+            startYear: 768,
+            endEra: 'AD',
+            endYear: 814,
+            countryId: null,
+            historicalCountryId: 'francia',
+          },
+        ],
+      })
+      const result = await service.getContemporaries(BASE_PARAMS)
+      // startDate만 읽으면 yearOf(null)=null → 400. 구조화 축을 읽어야 768~814 창을 유도.
+      expect(result.meta.window).toEqual({ fromYear: 768, toYear: 815 })
+      expect(result.meta.derivedFromSubject).toBe(true)
+    })
+
     it('창 유도용 대상 재임 조회는 수장급으로 좁힌다 (장관·의원 경력의 창 부풀림 방지)', async () => {
       const { service, calls } = createService({
         subject: { id: 'subject-1' },
@@ -289,6 +311,74 @@ describe('PersonContemporariesService', () => {
       })
       expect(excluded.rulers).toEqual([])
     })
+  })
+
+  it('구조화 축 재위(startDate=NULL, AD<1000)도 후보로 매칭된다 — 동시대 수장 무성 누락 방지', async () => {
+    const { service, calls } = createService({
+      subject: { id: 'subject-1' },
+      candidateReigns: [
+        reignRow({
+          id: 'charlemagne',
+          startDate: null,
+          endDate: null,
+          startEra: 'AD',
+          startYear: 768,
+          endEra: 'AD',
+          endYear: 814,
+          historicalCountry: { id: 'francia', name: '프랑크' },
+          person: rulerPerson({ id: 'charlemagne', isAlive: false, deathDate: null }),
+        }),
+      ],
+    })
+    const result = await service.getContemporaries({
+      ...BASE_PARAMS,
+      fromYear: 780,
+      toYear: 800,
+    })
+    expect(result.rulers).toHaveLength(1)
+    expect(result.rulers[0]!.person.id).toBe('charlemagne')
+    expect(result.rulers[0]!.records[0]!.startYear).toBe(768)
+    expect(result.rulers[0]!.records[0]!.endYear).toBe(814)
+    // 재위 후보 SQL은 startDate=NULL 행도 통과시키는 superset이어야 한다(상한 프루닝에서 탈락 금지)
+    const reignWhere = calls.reignWheres.find((where: any) => where.AND)
+    const upperBound = reignWhere.AND.find((clause: any) =>
+      clause.OR?.some((condition: any) => condition.startDate === null),
+    )
+    expect(upperBound).toBeTruthy()
+  })
+
+  it('같은 인물·같은 시작일의 서로 다른 두 재위(동군연합)는 둘 다 보존된다 (같은 종류는 흡수 금지)', async () => {
+    const person = rulerPerson({ id: 'jagiello', deathDate: utc(1434) })
+    const { service } = createService({
+      subject: { id: 'subject-1' },
+      candidateReigns: [
+        reignRow({
+          id: 'poland',
+          startDate: utc(1386),
+          endDate: utc(1434),
+          historicalCountry: { id: 'poland', name: '폴란드' },
+          person,
+        }),
+        reignRow({
+          id: 'lithuania',
+          startDate: utc(1386),
+          endDate: utc(1434),
+          historicalCountry: { id: 'lithuania', name: '리투아니아' },
+          person,
+        }),
+      ],
+    })
+    const result = await service.getContemporaries({
+      ...BASE_PARAMS,
+      fromYear: 1380,
+      toYear: 1440,
+    })
+    expect(result.rulers).toHaveLength(1)
+    expect(result.rulers[0]!.records).toHaveLength(2)
+    expect(result.rulers[0]!.records.map((record) => record.recordId).sort()).toEqual([
+      'lithuania',
+      'poland',
+    ])
   })
 
   it('같은 인물·같은 시작일의 TENURE·REIGN 중복은 REIGN 우선 (normalize-tenures 규칙)', async () => {

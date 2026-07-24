@@ -23,7 +23,13 @@ function parseSignedYear(raw: string | undefined, label: string): number | null 
   if (!/^-?\d{1,6}$/.test(raw)) {
     throw new BadRequestException(`${label}는 부호 있는 정수 연도여야 합니다`)
   }
-  return Number.parseInt(raw, 10)
+  const year = Number.parseInt(raw, 10)
+  // |year| > 9999는 DATETIME 표현 범위(및 utcYearStart의 setUTCFullYear)를 벗어나
+  // Invalid Date로 Prisma에 새어 500이 되므로 여기서 명시적 400으로 막는다.
+  if (Math.abs(year) > 9999) {
+    throw new BadRequestException(`${label}는 -9999~9999 범위의 연도여야 합니다`)
+  }
+  return year
 }
 
 /**
@@ -59,6 +65,11 @@ export class PersonContemporariesController {
   ): Promise<PersonContemporariesResponseDto> {
     const fromYear = parseSignedYear(fromYearRaw, 'fromYear')
     const toYear = parseSignedYear(toYearRaw, 'toYear')
+    // 쌍 검증은 여기서(DB·소유권 해석 이전) 결정론적 400을 반환한다 — 서비스에 미루면
+    // 소유자 게이트 조회가 먼저 돌아 미소유 대상엔 404가 400을 가리고 불필요한 쿼리가 낭비된다.
+    if ((fromYear == null) !== (toYear == null)) {
+      throw new BadRequestException('fromYear·toYear는 함께 지정하거나 함께 생략해야 합니다')
+    }
     if (fromYear != null && toYear != null && fromYear >= toYear) {
       throw new BadRequestException('fromYear는 toYear(배타)보다 작아야 합니다')
     }

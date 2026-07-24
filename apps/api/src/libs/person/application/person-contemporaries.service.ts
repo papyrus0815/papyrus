@@ -5,101 +5,21 @@ import {
   ContemporaryRulerDto,
   PersonContemporariesResponseDto,
 } from '../presentation/dto/person-contemporaries.response'
+import {
+  HEAD_POSITION_TYPES,
+  RULER_PERSON_SELECT,
+  type SubjectDeathInfo,
+  deathInfoOf,
+  effectiveEndYear,
+  signedYearFromEraDate,
+  signedYearFromStructuredOrDate,
+  utcYearStart,
+  yearOf,
+} from './head-record.shared'
 
 /** 응답 인물 수 cap — 초과분은 meta.omittedCount로 노출 (무성 절단 금지) */
 export const PERSON_CONTEMPORARIES_DEFAULT_LIMIT = 100
 export const PERSON_CONTEMPORARIES_MAX_LIMIT = 300
-
-/** 수장 비교 타임라인과 동일 기준 — 국가원수·정부수반만 (normalize-tenures 참조) */
-const HEAD_POSITION_TYPES = ['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'] as const
-
-function yearOf(date?: Date | null): number | null {
-  return date ? date.getUTCFullYear() : null
-}
-
-/** Person 생몰 하이브리드(era 플래그 + 크기값 DATETIME) → 부호 연도 */
-function signedYearFromEraDate(
-  era?: string | null,
-  date?: Date | null,
-): number | null {
-  const year = yearOf(date)
-  if (year == null) return null
-  return era === 'BC' ? -year : year
-}
-
-/**
- * 부호 연도 → 해당 연도 1월 1일 UTC.
- * `new Date(Date.UTC(y,...))`는 y<100을 19xx로 매핑하는 함정이 있어 setUTCFullYear로 강제.
- */
-function utcYearStart(year: number): Date {
-  const date = new Date(Date.UTC(2000, 0, 1))
-  date.setUTCFullYear(year)
-  return date
-}
-
-interface SubjectDeathInfo {
-  deathSignedYear: number | null
-  /** 사망 확정(또는 사망일 완전 미상)인데 연도가 없음 — 열린 종료를 시작 연도로 클램프 */
-  deceasedWithUnknownDeathYear: boolean
-}
-
-/**
- * 종료일 없는 기록의 실효 종료 연도.
- * 「재임 중」과 「미입력」이 스키마상 구분 불가하므로 사망 연도로 캡한다 —
- * 캡이 없으면 종료일 미입력 과거 군주가 모든 창의 '동시대'로 등장한다.
- * (프론트 contemporary-heads-target.ts와 동일 규칙 — 양쪽이 어긋나면 안 됨)
- */
-function effectiveEndYear(params: {
-  startYear: number
-  endYear: number | null
-  death: SubjectDeathInfo
-  nowYear: number
-}): number {
-  const { startYear, endYear, death, nowYear } = params
-  if (endYear != null) return Math.max(startYear, endYear)
-  if (death.deathSignedYear != null) {
-    return Math.max(startYear, Math.min(death.deathSignedYear, nowYear))
-  }
-  if (death.deceasedWithUnknownDeathYear) return startYear
-  // 시작 클램프 필수 — 미래 시작일 오타(2062 등) 레코드가 음수 겹침·역전 창을 만들지 않게
-  // (프론트 contemporary-heads-target.ts와 동일하게 모든 분기가 startYear 이상을 보장)
-  return Math.max(startYear, nowYear)
-}
-
-function deathInfoOf(person: {
-  deathEra?: string | null
-  deathDate?: Date | null
-  isAlive?: boolean | null
-  isDeathDateUnknown?: boolean | null
-}): SubjectDeathInfo {
-  const deathSignedYear = signedYearFromEraDate(person.deathEra, person.deathDate)
-  return {
-    deathSignedYear,
-    deceasedWithUnknownDeathYear:
-      deathSignedYear == null &&
-      (person.isAlive === false || person.isDeathDateUnknown === true),
-  }
-}
-
-/** 대상·동시대 수장 공용 인물 select — 표시명 조합(person-display-name)에 필요한 필드 포함 */
-const RULER_PERSON_SELECT = {
-  id: true,
-  name: true,
-  surname: true,
-  middleName: true,
-  nameDisplayOrder: true,
-  /** 서양식 이름 순서 폴백 — 개인 오버라이드 없으면 국가 기본이 결정 */
-  country: { select: { defaultNameDisplayOrder: true } },
-  profileImageUrl: true,
-  templeName: true,
-  regnalName: true,
-  isAlive: true,
-  isDeathDateUnknown: true,
-  deathEra: true,
-  deathDate: true,
-  /** 소유 판정용 — 응답엔 isOwned로만 노출 (타계정 인물은 상세 진입 불가라 칩 비활성) */
-  accountId: true,
-} as const
 
 export interface GetContemporariesParams {
   personId: string
@@ -161,12 +81,40 @@ export class PersonContemporariesService {
         select: {
           startDate: true,
           endDate: true,
+          startEra: true,
+          startYear: true,
+          endEra: true,
+          endYear: true,
           countryId: true,
           historicalCountryId: true,
         },
       }),
     ])
-    const subjectHeadRecords = [...subjectTenures, ...subjectReigns]
+    // 창 유도·sameCountry 스코프의 원천 — 재위는 구조화 축(startEra/startYear)이 진실이므로
+    // (AD<1000·BC는 startDate=NULL) 부호 연도를 구조화 우선으로 파생한다. tenure는 구조화
+    // 컬럼이 없어 DATETIME 폴백만 탄다.
+    const subjectHeadRecords = [
+      ...subjectTenures.map((record) => ({
+        startSignedYear: yearOf(record.startDate),
+        endSignedYear: yearOf(record.endDate),
+        countryId: record.countryId,
+        historicalCountryId: record.historicalCountryId,
+      })),
+      ...subjectReigns.map((record) => ({
+        startSignedYear: signedYearFromStructuredOrDate(
+          record.startEra,
+          record.startYear,
+          record.startDate,
+        ),
+        endSignedYear: signedYearFromStructuredOrDate(
+          record.endEra,
+          record.endYear,
+          record.endDate,
+        ),
+        countryId: record.countryId,
+        historicalCountryId: record.historicalCountryId,
+      })),
+    ]
 
     const window = this.resolveWindow(params, subjectHeadRecords, deathInfoOf(subject), nowYear)
     const { fromYear, toYear, derivedFromSubject } = window
@@ -196,19 +144,28 @@ export class PersonContemporariesService {
     // (연도 필터의 정본은 아래 후처리 — SQL은 인덱스 프루닝용).
     const fromDate = utcYearStart(Math.max(fromYear, 1))
     const toDateExclusive = utcYearStart(Math.max(toYear, 1))
-    const overlapAnd: any[] = [
-      { startDate: { lt: toDateExclusive } },
-      // startDate >= fromDate 분기: 종료<시작 오염 데이터도 후처리 정본(시작 클램프)이
-      // 판정할 수 있게 SQL이 진짜 superset이 되도록 — endDate만 보면 그런 행을 선탈락시킨다
-      {
-        OR: [
-          { endDate: null },
-          { endDate: { gte: fromDate } },
-          { startDate: { gte: fromDate } },
-        ],
-      },
+    // 하한 분기: startDate >= fromDate 분기가 있어야 종료<시작 오염 데이터도 후처리 정본
+    // (시작 클램프)이 판정할 수 있는 진짜 superset이 된다 — endDate만 보면 그런 행을 선탈락시킴.
+    const lowerBoundOr = {
+      OR: [
+        { endDate: null },
+        { endDate: { gte: fromDate } },
+        { startDate: { gte: fromDate } },
+      ],
+    }
+    const sharedAnd: any[] = [
+      lowerBoundOr,
       { personId: { not: subject.id } },
       ...(scopeWhere ? [scopeWhere] : []),
+    ]
+    // GovernmentPositionTenure.startDate는 필수 DATETIME(AD1000+)이라 상한 프루닝이 정확.
+    const tenureOverlapAnd: any[] = [{ startDate: { lt: toDateExclusive } }, ...sharedAnd]
+    // SovereignReign은 BC·AD<1000을 startDate=NULL(startEra/startYear가 진실)로 두므로,
+    // NULL startDate 행도 통과시켜 후처리(구조화 부호연도)가 판정하게 한다 — SQL은 프루닝용 superset.
+    // (이 분기 없이는 카롤루스 등 AD<1000 재위가 상한 프루닝에서 조용히 탈락한다.)
+    const reignOverlapAnd: any[] = [
+      { OR: [{ startDate: { lt: toDateExclusive } }, { startDate: null }] },
+      ...sharedAnd,
     ]
 
     const recordSelect = {
@@ -229,14 +186,21 @@ export class PersonContemporariesService {
         where: {
           AND: [
             { positionType: { in: [...HEAD_POSITION_TYPES] } },
-            ...overlapAnd,
+            ...tenureOverlapAnd,
           ],
         },
         select: { ...recordSelect, positionType: true, title: true },
       }),
       this.prisma.sovereignReign.findMany({
-        where: { AND: overlapAnd },
-        select: { ...recordSelect, regnalName: true },
+        where: { AND: reignOverlapAnd },
+        select: {
+          ...recordSelect,
+          regnalName: true,
+          startEra: true,
+          startYear: true,
+          endEra: true,
+          endYear: true,
+        },
       }),
     ])
 
@@ -250,9 +214,14 @@ export class PersonContemporariesService {
       row: any,
       recordKind: ContemporaryRecordDto['recordKind'],
     ): CandidateRow | null => {
-      const startYear = yearOf(row.startDate)
+      // 재위는 구조화 축(startEra/startYear)이 진실 — tenure는 구조화 컬럼이 없어 DATETIME 폴백.
+      const startYear = signedYearFromStructuredOrDate(
+        row.startEra,
+        row.startYear,
+        row.startDate,
+      )
       if (startYear == null) return null
-      const endYear = yearOf(row.endDate)
+      const endYear = signedYearFromStructuredOrDate(row.endEra, row.endYear, row.endDate)
       const effectiveEnd = effectiveEndYear({
         startYear,
         endYear,
@@ -282,28 +251,45 @@ export class PersonContemporariesService {
           termNumber: row.termNumber ?? null,
           startYear,
           endYear,
-          startDate: row.startDate.toISOString(),
-          endDate: row.endDate ? row.endDate.toISOString() : null,
+          // 구조화 재위(startDate=NULL)는 부호 연도 1월 1일로 합성 — dedup 키·정렬 안정성 유지
+          startDate: row.startDate
+            ? row.startDate.toISOString()
+            : utcYearStart(startYear).toISOString(),
+          endDate: row.endDate
+            ? row.endDate.toISOString()
+            : endYear != null
+              ? utcYearStart(endYear).toISOString()
+              : null,
           country: row.country ?? null,
           historicalCountry: row.historicalCountry ?? null,
         },
       }
     }
 
-    // 같은 인물·같은 시작일에 TENURE와 SOVEREIGN_REIGN이 중복되면 REIGN 우선
-    // (수장비교 normalize-tenures의 dedup 규칙과 동일 — 두 화면이 다르게 세면 안 됨).
-    // normalize-tenures는 "같은 날짜로 본다 (시간 무시)"이므로 키도 UTC 날짜 단위 —
-    // 저장 경로별 time-of-day 드리프트(00:00 vs 09:00 등)로 유령 중복이 생기지 않게.
-    const dedupKeyOf = (candidate: CandidateRow) =>
+    // dedup은 **크로스종류만** 적용한다: 같은 취임을 TENURE·SOVEREIGN_REIGN 양쪽에 이중
+    // 입력한 경우 REIGN을 우선(수장비교 normalize-tenures 규칙과 동일 — 두 화면이 다르게 세면 안 됨).
+    // 같은 종류끼리는 흡수하지 않는다 — 같은 시작일의 서로 다른 두 재위(동군연합: 폴란드 국왕 +
+    // 리투아니아 대공 등)나 같은 날 시작한 두 재임이 하나로 붕괴하지 않게. (country를 키에 넣으면
+    // dual-fill 이중입력에서 tenure=현대국가·reign=역사국가로 갈려 크로스종류 dedup이 깨진다.)
+    // 날짜 키는 UTC 날짜 단위(시간 무시) — 저장 경로별 time-of-day 드리프트(00:00 vs 09:00)로
+    // 유령 중복이 생기지 않게(normalize-tenures의 24h 관용과 동일).
+    const personDayKeyOf = (candidate: CandidateRow) =>
       `${candidate.person.id}:${candidate.record.startDate.slice(0, 10)}`
-    const byDedupKey = new Map<string, CandidateRow>()
-    for (const row of tenureRows) {
-      const candidate = toCandidate(row, 'TENURE')
-      if (candidate) byDedupKey.set(dedupKeyOf(candidate), candidate)
-    }
+
+    const reignCandidates: CandidateRow[] = []
     for (const row of reignRows) {
       const candidate = toCandidate(row, 'SOVEREIGN_REIGN')
-      if (candidate) byDedupKey.set(dedupKeyOf(candidate), candidate)
+      if (candidate) reignCandidates.push(candidate)
+    }
+    const reignPersonDays = new Set(reignCandidates.map(personDayKeyOf))
+
+    const tenureCandidates: CandidateRow[] = []
+    for (const row of tenureRows) {
+      const candidate = toCandidate(row, 'TENURE')
+      if (!candidate) continue
+      // 같은 인물·같은 날짜에 재위가 있으면 그 재위가 같은 취임의 정본 — tenure 흡수(REIGN 우선)
+      if (reignPersonDays.has(personDayKeyOf(candidate))) continue
+      tenureCandidates.push(candidate)
     }
 
     // 인물별 그룹 + 겹침 길이 계산
@@ -311,7 +297,7 @@ export class PersonContemporariesService {
       string,
       { person: CandidateRow['person']; records: ContemporaryRecordDto[]; overlapYears: number }
     >()
-    for (const candidate of byDedupKey.values()) {
+    for (const candidate of [...reignCandidates, ...tenureCandidates]) {
       const overlap =
         Math.min(candidate.effectiveEnd, toYear - 1) -
         Math.max(candidate.record.startYear, fromYear) +
@@ -380,7 +366,7 @@ export class PersonContemporariesService {
    */
   private resolveWindow(
     params: GetContemporariesParams,
-    subjectHeadRecords: Array<{ startDate: Date; endDate: Date | null }>,
+    subjectHeadRecords: Array<{ startSignedYear: number | null; endSignedYear: number | null }>,
     subjectDeath: SubjectDeathInfo,
     nowYear: number,
   ): { fromYear: number; toYear: number; derivedFromSubject: boolean } {
@@ -395,11 +381,11 @@ export class PersonContemporariesService {
     let minStart: number | null = null
     let maxEnd: number | null = null
     for (const record of subjectHeadRecords) {
-      const startYear = yearOf(record.startDate)
+      const startYear = record.startSignedYear
       if (startYear == null) continue
       const end = effectiveEndYear({
         startYear,
-        endYear: yearOf(record.endDate),
+        endYear: record.endSignedYear,
         death: subjectDeath,
         nowYear,
       })
