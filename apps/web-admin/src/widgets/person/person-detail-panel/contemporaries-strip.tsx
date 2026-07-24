@@ -80,7 +80,10 @@ export function ContemporariesStrip({
       )}
 
       {data && data.rulers.length > 0 && (
-        <ChipScrollRow>
+        // 가로 스크롤 컨테이너를 포커스 가능하게(tabIndex=0) — 비소유 정적 칩·절단 캡션은
+        // 비포커서블이라, 이게 없으면 키보드 사용자가 오프스크린으로 밀린 그 항목을 스크롤로
+        // 끌어올 수 없다(WCAG 2.1.1). 포커스 시 방향키로 스크롤된다.
+        <ChipScrollRow role="group" aria-label="동시대 수장 목록" tabIndex={0}>
           {groups.map((group) => (
             /* role=group + aria-label — 칩만 탭으로 만나도 어느 나라 수장인지 전달 */
             <CountryGroup key={group.key} role="group" aria-label={group.label}>
@@ -104,11 +107,15 @@ export function ContemporariesStrip({
                   // 타계정 소유 인물은 상세(:id)가 소유자 게이트라 열 수 없음 —
                   // 클릭 데드엔드 대신 비활성 칩 (가계도 비소유 노드 선례)
                   if (!chip.isOwned) {
+                    // span은 암묵 generic 역할이라 aria-label로 이름을 못 붙인다 —
+                    // role="img"로 named leaf를 만들어 카테고리·'다른 계정 소유'가 SR에 낭독되게.
+                    // (button 칩과 정보 대칭. title은 hover 전용이라 키보드/SR 미접근이었음)
                     return (
                       <RulerChipStatic
                         key={chip.personId}
+                        role="img"
                         title="다른 계정 소유 인물 — 상세를 열 수 없습니다"
-                        aria-label={`${chipAria} (다른 계정 소유)`}
+                        aria-label={`${chipAria} (다른 계정 소유 — 상세를 열 수 없음)`}
                       >
                         {chipBody}
                       </RulerChipStatic>
@@ -215,15 +222,15 @@ const CompareLinkButton = styled.button`
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
-  color: #6366f1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#6366f1')};
   cursor: pointer;
   border-radius: 6px;
   &:hover {
     text-decoration: underline;
   }
   &:focus-visible {
-    outline: 2px solid #6366f1;
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
   }
 `
 
@@ -235,6 +242,11 @@ const ChipScrollRow = styled.div`
   padding-bottom: 6px;
   /* 얇은 스크롤바 — 가로 스크롤 존재를 은은하게 알림 */
   scrollbar-width: thin;
+  border-radius: 8px;
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+  }
 `
 
 const CountryGroup = styled.div`
@@ -287,8 +299,8 @@ const RulerChip = styled.button`
       ? `&:hover { background: rgba(255, 255, 255, 0.08); border-color: #3f3f46; }`
       : `&:hover { background: rgba(0, 0, 0, 0.05); }`}
   &:focus-visible {
-    outline: 2px solid #6366f1;
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
   }
 `
 
