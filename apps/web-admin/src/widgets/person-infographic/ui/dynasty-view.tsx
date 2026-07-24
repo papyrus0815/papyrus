@@ -20,16 +20,23 @@ import { makeSortFnWithPinned } from '../model/sort-helpers'
 
 import { EmptyState } from './_shared/empty-state'
 import { EraCardGrid, PersonCardItem } from './_shared/person-card'
+import { PinnedPeopleSection } from './_shared/pinned-people-section'
 
 interface Props {
   people: AdaptedPerson[]
   onOpen: (id: string) => void
-  q: string
+  query: string
   pinned: Set<string>
   togglePin: (id: string, e: React.MouseEvent) => void
 }
 
-export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
+export function DynastyView({
+  people,
+  onOpen,
+  query,
+  pinned,
+  togglePin,
+}: Props) {
   const theme = useTheme()
   const sort = usePersonInfographicFilterStore((s) => s.sort)
   const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
@@ -42,9 +49,12 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
   const { factions, noFaction } = useMemo(() => {
     const byFaction: Record<string, AdaptedPerson[]> = {}
     const without: AdaptedPerson[] = []
-    for (const p of people) {
-      if (p.faction) (byFaction[p.faction] = byFaction[p.faction] || []).push(p)
-      else without.push(p)
+    for (const person of people) {
+      // 핀 인물은 상단 고정 섹션에서만 표시 — 왕조 그룹에서는 제외해 중복 방지.
+      if (pinned.has(person.id)) continue
+      if (person.faction)
+        (byFaction[person.faction] = byFaction[person.faction] || []).push(person)
+      else without.push(person)
     }
     // 연도 범위·대표 국가는 그룹 생성 시 1회 계산 (렌더 본문 spread 제거 — 콜스택/재계산 방지)
     const factions = Object.entries(byFaction)
@@ -61,11 +71,17 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
         return { faction, arr, minYr, maxYr, countryName: arr[0]?.country ?? '' }
       })
     return { factions, noFaction: without }
-  }, [people])
+  }, [people, pinned])
 
   const sortFn = useMemo(
     () => makeSortFnWithPinned(pinned, sort),
     [pinned, sort],
+  )
+
+  // 핀 인물은 왕조와 무관하게 상단 고정 섹션에서만 표시.
+  const pinnedPeople = useMemo(
+    () => people.filter((person) => pinned.has(person.id)).sort(sortFn),
+    [people, pinned, sortFn],
   )
 
   // 정렬은 people/sort/pinned 변할 때만 — expanded(더보기) 토글 등 다른 리렌더에서 재정렬 방지
@@ -82,12 +98,18 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
     [noFaction, sortFn],
   )
 
-  if (!factions.length && !noFaction.length) {
+  if (!factions.length && !noFaction.length && pinnedPeople.length === 0) {
     return <EmptyState hasActiveFilter={hasFilter} onClearFilters={resetFilters} />
   }
 
   return (
     <Wrap>
+      <PinnedPeopleSection
+        people={pinnedPeople}
+        query={query}
+        onTogglePin={togglePin}
+        onOpen={onOpen}
+      />
       {sortedFactions.map(({ faction, arr, minYr, maxYr, countryName, sorted }) => {
         const isExpanded = !!expanded[faction]
         const shown = isExpanded
@@ -113,7 +135,7 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
                   key={p.id}
                   p={p}
                   era={p.era}
-                  q={q}
+                  q={query}
                   pinned={pinned.has(p.id)}
                   onTogglePin={togglePin}
                   onOpen={onOpen}
@@ -160,7 +182,7 @@ export function DynastyView({ people, onOpen, q, pinned, togglePin }: Props) {
                     key={p.id}
                     p={p}
                     era={p.era}
-                    q={q}
+                    q={query}
                     pinned={pinned.has(p.id)}
                     onTogglePin={togglePin}
                     onOpen={onOpen}

@@ -18,6 +18,8 @@ import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/perso
 
 import { ERAS } from '../model/constants'
 import {
+  countActiveScopes,
+  matchesScopes,
   usePersonInfographicFilterStore,
   type PersonInfographicView,
 } from '../model/filter.store'
@@ -106,15 +108,10 @@ export function InfographicContent({
   }, [])
 
   const filtered = useMemo(() => {
-    let arr = allPeople
-    if (scopes.era.length > 0)
-      arr = arr.filter((p) => scopes.era.includes(p.era.key))
-    if (scopes.region.length > 0)
-      arr = arr.filter((p) => scopes.region.includes(p.region))
-    if (scopes.field.length > 0)
-      arr = arr.filter((p) => scopes.field.includes(p.field))
-    if (scopes.country.length > 0)
-      arr = arr.filter((p) => scopes.country.includes(p.country))
+    // scope 매칭 정본은 filter.store의 matchesScopes (era.key 주입) — 인라인 재구현 금지.
+    let arr = allPeople.filter((person) =>
+      matchesScopes(person, scopes, (candidate) => candidate.era.key),
+    )
     if (minInfluence > 0) arr = arr.filter((p) => p.influence >= minInfluence)
     if (aliveFilter === 'alive') arr = arr.filter((p) => p.isAlive)
     else if (aliveFilter === 'dead') arr = arr.filter((p) => !p.isAlive)
@@ -126,11 +123,7 @@ export function InfographicContent({
   }, [allPeople, scopes, dq, minInfluence, aliveFilter])
 
   // 활성 scope 라벨 — 단일이면 그 값, 다중이면 "필터링됨". 모두 비면 "전체 인물".
-  const totalScopeCount =
-    scopes.era.length +
-    scopes.region.length +
-    scopes.field.length +
-    scopes.country.length
+  const totalScopeCount = countActiveScopes(scopes)
   const scopeLabel =
     totalScopeCount === 0
       ? '전체 인물'
@@ -274,7 +267,7 @@ export function InfographicContent({
               <EraStoryView
                 people={filtered}
                 onOpen={onPersonClick}
-                q={dq}
+                query={dq}
                 pinned={pinned}
                 togglePin={togglePin}
               />
@@ -283,7 +276,7 @@ export function InfographicContent({
               <DynastyView
                 people={filtered}
                 onOpen={onPersonClick}
-                q={dq}
+                query={dq}
                 pinned={pinned}
                 togglePin={togglePin}
               />

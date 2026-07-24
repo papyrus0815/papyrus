@@ -27,11 +27,12 @@ import { makeSortFnWithPinned } from '../model/sort-helpers'
 
 import { EmptyState } from './_shared/empty-state'
 import { EraCardGrid, PersonCardItem } from './_shared/person-card'
+import { PinnedPeopleSection } from './_shared/pinned-people-section'
 
 interface Props {
   people: AdaptedPerson[]
   onOpen: (id: string) => void
-  q: string
+  query: string
   pinned: Set<string>
   togglePin: (id: string, e: React.MouseEvent) => void
 }
@@ -50,7 +51,13 @@ const UNKNOWN_CENTURY: CenturyMeta = {
   sortKey: Number.POSITIVE_INFINITY,
 }
 
-export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
+export function EraStoryView({
+  people,
+  onOpen,
+  query,
+  pinned,
+  togglePin,
+}: Props) {
   const theme = useTheme()
   const sort = usePersonInfographicFilterStore((s) => s.sort)
   const eraGroupOrder = usePersonInfographicFilterStore(
@@ -60,23 +67,30 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
   const hasFilter = useHasActiveFilter()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
+  const sortFn = useMemo(
+    () => makeSortFnWithPinned(pinned, sort),
+    [pinned, sort],
+  )
+
+  // 핀 인물은 세기 그룹과 무관하게 상단 고정 섹션에서만 표시(그룹에서는 제외해 중복 방지).
+  const pinnedPeople = useMemo(
+    () => people.filter((person) => pinned.has(person.id)).sort(sortFn),
+    [people, pinned, sortFn],
+  )
+
   const groups: Group[] = useMemo(() => {
     const map: Record<string, Group> = {}
-    for (const p of people) {
-      const meta = p.born == null ? UNKNOWN_CENTURY : centuryOf(p.born)
+    for (const person of people) {
+      if (pinned.has(person.id)) continue
+      const meta = person.born == null ? UNKNOWN_CENTURY : centuryOf(person.born)
       if (!map[meta.key]) map[meta.key] = { meta, arr: [] }
-      map[meta.key].arr.push(p)
+      map[meta.key].arr.push(person)
     }
     // 세기 그룹 나열 방향 — eraGroupOrder('desc'=최신 세기 먼저, 기본).
     return Object.values(map).sort((groupA, groupB) =>
       compareCenturyMeta(groupA.meta, groupB.meta, eraGroupOrder),
     )
-  }, [people, eraGroupOrder])
-
-  const sortFn = useMemo(
-    () => makeSortFnWithPinned(pinned, sort),
-    [pinned, sort],
-  )
+  }, [people, pinned, eraGroupOrder])
 
   // 그룹별 정렬은 people/sort/pinned 변할 때만 — expanded(더보기) 토글 등 다른 리렌더에서 재정렬 방지
   const sortedGroups = useMemo(
@@ -88,7 +102,7 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
     [groups, sortFn],
   )
 
-  if (!groups.length) {
+  if (!groups.length && pinnedPeople.length === 0) {
     return (
       <EmptyState hasActiveFilter={hasFilter} onClearFilters={resetFilters} />
     )
@@ -96,6 +110,12 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
 
   return (
     <Wrap>
+      <PinnedPeopleSection
+        people={pinnedPeople}
+        query={query}
+        onTogglePin={togglePin}
+        onOpen={onOpen}
+      />
       {sortedGroups.map(({ meta, arr }) => {
         const isExpanded = !!expanded[meta.key]
         const shown = isExpanded
@@ -127,7 +147,7 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
                   key={p.id}
                   p={p}
                   era={p.era}
-                  q={q}
+                  q={query}
                   pinned={pinned.has(p.id)}
                   onTogglePin={togglePin}
                   onOpen={onOpen}
