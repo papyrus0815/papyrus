@@ -150,6 +150,9 @@ model DynastyRule {
   /// 통치 종료 일
   endDay Int? @map("end_day")
 
+  /// 통치 시작 사유 (정복·상속·선출·건국 등). Dynasty.startReason(가문 성립)과 층위가 다름 — 여기는 이 국가 통치의 시작.
+  startReason String? @map("start_reason") @db.VarChar(200)
+
   /// 통치 종료 사유 (왕조 교체, 멸망, 혁명 등)
   endReason String? @map("end_reason") @db.VarChar(200)
 
@@ -212,6 +215,9 @@ model DynastyModernRule {
 
   /// 통치 종료 일
   endDay Int? @map("end_day")
+
+  /// 통치 시작 사유 (정복·상속·선출·건국 등). Dynasty.startReason(가문 성립)과 층위가 다름.
+  startReason String? @map("start_reason") @db.VarChar(200)
 
   /// 통치 종료 사유 (왕조 교체, 혁명, 공화정 전환 등)
   endReason String? @map("end_reason") @db.VarChar(200)
