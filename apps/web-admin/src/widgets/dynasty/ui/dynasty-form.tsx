@@ -6,15 +6,27 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
 import type { Dynasty } from '@/shared/api/dynasty'
+import type { DateInfoInput } from '@/shared/api/persons'
 import {
   getUploadImageUrl,
   uploadImage,
   validateImageFile,
 } from '@/shared/api/upload'
+import {
+  type PartialDateParts,
+  buildPartialDateString,
+  emptyPartialDateParts,
+  isPartialRangeInverted,
+  parsePartialDateString,
+  partialDateFromResponse,
+  partialDateFromStructured,
+  partialPartsToDateInfo,
+} from '@/shared/lib/partial-date-string'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { InlineDateField } from '@/shared/ui/person-register-modal/sections/inline-date-field'
 
 import {
   DangerButton,
-  DateInput,
   FieldHelpText,
   FormError,
   FormGroupHeader,
@@ -27,18 +39,28 @@ import {
   TextInput,
 } from './dynasty.styles'
 
-/** 서버 ISO 문자열을 input[type=date]용 YYYY-MM-DD 로 변환 (TZ 변환 없이 앞 10자만 절단). */
-function toDateInputValue(iso: string | null | undefined): string {
-  if (!iso) return ''
-  // 서버는 항상 'YYYY-MM-DDT...' 형태로 응답 — Date 객체를 거치면 사용자 TZ 만큼 하루가 밀릴 수 있음
-  return iso.length >= 10 ? iso.slice(0, 10) : ''
+/** 서버 응답 구조화 필드(우선) 또는 레거시 ISO+precision → 폼 파츠 복원. */
+function partsFromDynasty(
+  year: number | null,
+  month: number | null,
+  day: number | null,
+  era: string | null,
+  iso: string | null,
+  precision: string | null,
+): PartialDateParts {
+  return parsePartialDateString(
+    partialDateFromStructured(year, month, day, era) ||
+      partialDateFromResponse(iso, era, precision),
+  )
 }
 
 export type DynastyFormPayload = {
   name: string
   description: string
-  startDate: string
-  endDate: string
+  /** 구조화 시작일 — BC·고대·연단위. 비우면 null(=시작일 축 클리어). */
+  startDateInfo: DateInfoInput | null
+  /** 구조화 종료일 — 비우면 null(=현재/미상). */
+  endDateInfo: DateInfoInput | null
   startReason: string
   endReason: string
   originPlace: string
@@ -78,14 +100,22 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
   const [form, setForm] = useState({
     name: '',
     description: '',
-    startDate: '',
-    endDate: '',
     startReason: '',
     endReason: '',
     originPlace: '',
     founderText: '',
     motto: '',
   })
+  // 날짜는 BC·고대·연단위 지원 위해 구조화 파츠로 별도 보관(문자열 input[type=date] 대체).
+  const [start, setStart] = useState<PartialDateParts>(emptyPartialDateParts())
+  const [end, setEnd] = useState<PartialDateParts>(emptyPartialDateParts())
+  const [datePickerSide, setDatePickerSide] = useState<'start' | 'end' | null>(
+    null,
+  )
+  const patchStart = (patch: Partial<PartialDateParts>) =>
+    setStart((prev) => ({ ...prev, ...patch }))
+  const patchEnd = (patch: Partial<PartialDateParts>) =>
+    setEnd((prev) => ({ ...prev, ...patch }))
   const [thumbPath, setThumbPath] = useState('')
   const [thumbRemoved, setThumbRemoved] = useState(false)
   const [thumbUploading, setThumbUploading] = useState(false)
@@ -103,14 +133,32 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
       setForm({
         name: editing.name ?? '',
         description: editing.description ?? '',
-        startDate: toDateInputValue(editing.startDate),
-        endDate: toDateInputValue(editing.endDate),
         startReason: editing.startReason ?? '',
         endReason: editing.endReason ?? '',
         originPlace: editing.originPlace ?? '',
         founderText: editing.founderText ?? '',
         motto: editing.motto ?? '',
       })
+      setStart(
+        partsFromDynasty(
+          editing.startYear,
+          editing.startMonth,
+          editing.startDay,
+          editing.startEra,
+          editing.startDate,
+          editing.startDatePrecision,
+        ),
+      )
+      setEnd(
+        partsFromDynasty(
+          editing.endYear,
+          editing.endMonth,
+          editing.endDay,
+          editing.endEra,
+          editing.endDate,
+          editing.endDatePrecision,
+        ),
+      )
       const t = editing.thumbnailUrl ?? ''
       thumbInitialRef.current = t
       setThumbPath(t)
@@ -123,14 +171,14 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
       setForm({
         name: '',
         description: '',
-        startDate: '',
-        endDate: '',
         startReason: '',
         endReason: '',
         originPlace: '',
         founderText: '',
         motto: '',
       })
+      setStart(emptyPartialDateParts())
+      setEnd(emptyPartialDateParts())
       thumbInitialRef.current = ''
       setThumbPath('')
       setThumbRemoved(false)
@@ -140,6 +188,9 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
     }
     setError(null)
   }, [editing])
+
+  // 종료 < 시작 소프트 경고(하드 거부 아님 — 추정·소급 등 정당 사례 허용).
+  const dateInverted = isPartialRangeInverted(start, end)
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -151,6 +202,9 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
     try {
       await onSubmit({
         ...form,
+        // partialPartsToDateInfo: 연도 없으면 undefined → null(축 클리어). 구조화 우선.
+        startDateInfo: partialPartsToDateInfo(start) ?? null,
+        endDateInfo: partialPartsToDateInfo(end) ?? null,
         thumbnailUrl: thumbRemoved ? null : thumbPath || undefined,
         crestImageUrl: crestRemoved ? null : crestPath || undefined,
       })
@@ -160,7 +214,8 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
   }
 
   return (
-    <form id={formId} onSubmit={handleSave} noValidate>
+    <>
+      <form id={formId} onSubmit={handleSave} noValidate>
       {error && <FormError role="alert">{error}</FormError>}
 
       <FormGroupHeader>기본 정보</FormGroupHeader>
@@ -180,25 +235,49 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
         </FormRow>
 
         <FormRow>
-          <FormLabel htmlFor={fieldId('startDate')}>시작일 · 종료일</FormLabel>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-            <DateInput
-              id={fieldId('startDate')}
-              type="date"
-              value={form.startDate}
-              onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
-              aria-label="시작일"
-              $filled={Boolean(form.startDate)}
-            />
-            <DateInput
-              id={fieldId('endDate')}
-              type="date"
-              value={form.endDate}
-              onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
-              aria-label="종료일"
-              $filled={Boolean(form.endDate)}
-            />
+          <FormLabel>시작일 · 종료일</FormLabel>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+              <FieldHelpText style={{ margin: 0 }}>성립</FieldHelpText>
+              <InlineDateField
+                ariaLabel="가문 시작일"
+                era={start.era}
+                year={start.year}
+                month={start.month}
+                day={start.day}
+                onEra={(era) => patchStart({ era })}
+                onYear={(year) => patchStart({ year })}
+                onMonth={(month) => patchStart({ month })}
+                onDay={(day) => patchStart({ day })}
+                onOpenPicker={() => setDatePickerSide('start')}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+              <FieldHelpText style={{ margin: 0 }}>단절 (비우면 존속 중)</FieldHelpText>
+              <InlineDateField
+                ariaLabel="가문 종료일"
+                era={end.era}
+                year={end.year}
+                month={end.month}
+                day={end.day}
+                onEra={(era) => patchEnd({ era })}
+                onYear={(year) => patchEnd({ year })}
+                onMonth={(month) => patchEnd({ month })}
+                onDay={(day) => patchEnd({ day })}
+                onOpenPicker={() => setDatePickerSide('end')}
+                error={dateInverted}
+                ariaDescribedBy={dateInverted ? fieldId('date-error') : undefined}
+              />
+            </div>
           </div>
+          <FieldHelpText>
+            연도만 입력해도 됩니다(월·일 생략 가능). 기원전은 BC 버튼, 정확한 날짜는 달력(📅)으로.
+          </FieldHelpText>
+          {dateInverted && (
+            <FieldHelpText id={fieldId('date-error')} role="alert" style={{ color: 'var(--danger, #ef4444)' }}>
+              종료일이 시작일보다 앞섭니다. 확인해 주세요.
+            </FieldHelpText>
+          )}
         </FormRow>
 
         <FormRow>
@@ -416,6 +495,29 @@ export function DynastyForm({ formId, editing, onSubmit }: Props) {
             )}
           </div>
         </FormRow>
-    </form>
+      </form>
+
+      {datePickerSide &&
+        (() => {
+          const parts = datePickerSide === 'start' ? start : end
+          const initialDate =
+            parts.year && parts.month && parts.day
+              ? buildPartialDateString(parts)
+              : undefined
+          const apply = datePickerSide === 'start' ? patchStart : patchEnd
+          return (
+            <DatePickerModal
+              isOpen
+              initialDate={initialDate}
+              title={datePickerSide === 'start' ? '가문 시작일' : '가문 종료일'}
+              onSelect={(date) => {
+                apply(parsePartialDateString(date))
+                setDatePickerSide(null)
+              }}
+              onClose={() => setDatePickerSide(null)}
+            />
+          )
+        })()}
+    </>
   )
 }

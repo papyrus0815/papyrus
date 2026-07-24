@@ -1,4 +1,5 @@
 import * as dynastiesApi from '@api/functional/dynasties'
+import type { DateInfoInput } from '../persons'
 import { apiConnection } from '../client'
 
 export type Dynasty = Awaited<ReturnType<typeof dynastiesApi.getAll>>[number]
@@ -7,10 +8,16 @@ export type DynastyMutationBody = {
   name: string
   /** `null`이면 설명을 비움. 생략 시 기존값 유지 (편집 시) */
   description?: string | null
-  /** `null`이면 시작일을 비움. 생략 시 기존값 유지 (편집 시) */
+  /** 레거시 ISO 시작일. `null`이면 비움. 구조화 startDateInfo 우선. */
   startDate?: string | null
-  /** `null`이면 종료일을 비움. 생략 시 기존값 유지 (편집 시) */
+  /** 레거시 ISO 종료일. */
   endDate?: string | null
+  /** 구조화 시작일 — BC·고대·연단위. `null`이면 시작일 축 클리어. 생략 시 유지(편집). */
+  startDateInfo?: DateInfoInput | null
+  /** 구조화 종료일 — `null`이면 종료일 축 클리어(현재/미상). */
+  endDateInfo?: DateInfoInput | null
+  startDatePrecision?: string | null
+  endDatePrecision?: string | null
   /** 가문 성립 사유. `null`이면 비움. 생략 시 기존값 유지 (편집 시) */
   startReason?: string | null
   /** 가문 단절 사유. `null`이면 비움. 생략 시 기존값 유지 (편집 시) */

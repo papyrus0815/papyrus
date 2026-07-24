@@ -11,6 +11,11 @@ import styled from 'styled-components'
 
 import { dynastyApi } from '@/shared/api/dynasty'
 import { personApi, type Person } from '@/shared/api/person'
+import {
+  formatCountryYearShort,
+  signedYearFromIsoLike,
+  toSignedYear,
+} from '@/shared/lib/country-period'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
@@ -40,12 +45,23 @@ function yearOf(iso: string | null | undefined): string | null {
   return match ? String(parseInt(match[1], 10)) : null
 }
 
-/** 존속기간 라벨 — "1600–1918" / "1600–"(현존·미상) / "–1918" / null(둘 다 없음). */
-function periodOf(start: string | null, end: string | null): string | null {
-  const startYear = yearOf(start)
-  const endYear = yearOf(end)
-  if (!startYear && !endYear) return null
-  return `${startYear ?? ''}–${endYear ?? ''}`
+/**
+ * 가문 존속기간 라벨 — 구조화(startEra/startYear) 우선, 없으면 레거시 DateTime ISO 폴백.
+ * BC는 'BC 44' 표기. "1600–1918" / "BC 753–" / "–1918" / null(둘 다 없음).
+ */
+function periodOf(d: {
+  startEra: string | null
+  startYear: number | null
+  startDate: string | null
+  endEra: string | null
+  endYear: number | null
+  endDate: string | null
+}): string | null {
+  const start =
+    toSignedYear(d.startEra, d.startYear) ?? signedYearFromIsoLike(d.startDate)
+  const end = toSignedYear(d.endEra, d.endYear) ?? signedYearFromIsoLike(d.endDate)
+  if (start == null && end == null) return null
+  return `${formatCountryYearShort(start) ?? ''}–${formatCountryYearShort(end) ?? ''}`
 }
 
 /** 시조 생몰 연도 — "595–673" / "595–" / null. */
@@ -166,10 +182,7 @@ export function DynastyMembersInfographicModal({
   const founderLifespan = dynasty?.founder
     ? lifespanYears(dynasty.founder.birthDate, dynasty.founder.deathDate)
     : null
-  const periodLabel = periodOf(
-    dynasty?.startDate ?? null,
-    dynasty?.endDate ?? null,
-  )
+  const periodLabel = dynasty ? periodOf(dynasty) : null
   const description = dynasty?.description?.trim() || null
   const hasMeta = Boolean(founderName || periodLabel || description)
 

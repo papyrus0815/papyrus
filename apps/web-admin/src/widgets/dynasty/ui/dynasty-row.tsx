@@ -6,6 +6,7 @@ import styled, { css } from 'styled-components'
 
 import type { Dynasty } from '@/shared/api/dynasty'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { formatCountryYearShort } from '@/shared/lib/country-period'
 
 import { primarySoft } from './dynasty.styles'
 import { HighlightedText } from './text-highlight'
@@ -110,14 +111,17 @@ export function DynastyRow({
   const knownEnd = endYear != null
 
   const eraText =
-    startYear || endYear
-      ? `${startYear ?? '?'} – ${endYear ?? '현재'}`
+    startYear != null || endYear != null
+      ? `${formatCountryYearShort(startYear) ?? '?'} – ${
+          endYear != null ? formatCountryYearShort(endYear) : '현재'
+        }`
       : '연도 미상'
 
   const timelineTitle = (() => {
     if (startYear == null && endYear == null) return '시기 정보 없음'
-    const left = startYear != null ? String(startYear) : '?'
-    const right = endYear != null ? String(endYear) : ongoing ? '현재' : '?'
+    const left = formatCountryYearShort(startYear) ?? '?'
+    const right =
+      endYear != null ? formatCountryYearShort(endYear) : ongoing ? '현재' : '?'
     const dur = duration != null ? ` · ${duration.toLocaleString()}년${ongoing ? '+' : ''}` : ''
     return `${left} – ${right}${dur}`
   })()
@@ -203,8 +207,14 @@ export function DynastyRow({
               />
             </TimelineTrack>
             <TimelineYears>
-              <span>{startYear ?? '?'}</span>
-              <span>{endYear ?? (ongoing ? '현재' : '?')}</span>
+              <span>{formatCountryYearShort(startYear) ?? '?'}</span>
+              <span>
+                {endYear != null
+                  ? formatCountryYearShort(endYear)
+                  : ongoing
+                    ? '현재'
+                    : '?'}
+              </span>
             </TimelineYears>
           </TimelineRow>
         )}

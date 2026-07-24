@@ -16,6 +16,11 @@ import {
   useUpdateDynasty,
 } from '@/features/dynasty/use-dynasties.hook'
 import type { Dynasty, DynastyMutationBody } from '@/shared/api/dynasty'
+import {
+  formatCountryYearShort,
+  signedYearFromIsoLike,
+  toSignedYear,
+} from '@/shared/lib/country-period'
 import { confirm } from '@/shared/ui/confirm-dialog'
 
 import { DynastyFormModal } from './dynasty-form-modal'
@@ -50,15 +55,17 @@ import {
   TitleCluster,
 } from './ui/dynasty.styles'
 
-function getYear(date: string | null | undefined): number | null {
-  if (!date) return null
-  const y = new Date(date).getFullYear()
-  return Number.isFinite(y) ? y : null
+/** 구조화(startEra/startYear) 우선, 없으면 레거시 DateTime ISO를 부호연도로 폴백 파싱(new Date 금지). */
+function signedStartYear(d: Dynasty): number | null {
+  return toSignedYear(d.startEra, d.startYear) ?? signedYearFromIsoLike(d.startDate)
+}
+function signedEndYear(d: Dynasty): number | null {
+  return toSignedYear(d.endEra, d.endYear) ?? signedYearFromIsoLike(d.endDate)
 }
 
 function deriveOne(d: Dynasty): DynastyDerived {
-  const startYear = getYear(d.startDate)
-  const endYear = getYear(d.endDate)
+  const startYear = signedStartYear(d)
+  const endYear = signedEndYear(d)
   const ongoing = startYear != null && endYear == null
   let duration: number | null = null
   if (startYear != null) {
@@ -297,8 +304,9 @@ export function DynastySection() {
     const payload: Partial<DynastyMutationBody> = {
       name: data.name.trim(),
       description: empty(data.description),
-      startDate: empty(data.startDate),
-      endDate: empty(data.endDate),
+      // 구조화 날짜 채널 — 폼이 DateInfo|null로 빌드(null=축 클리어). 신규·편집 모두 그대로 전달.
+      startDateInfo: data.startDateInfo,
+      endDateInfo: data.endDateInfo,
       startReason: empty(data.startReason),
       endReason: empty(data.endReason),
       originPlace: empty(data.originPlace),
@@ -371,7 +379,10 @@ export function DynastySection() {
                     <KpiInlineItem>
                       <KpiInlineLabel>시대</KpiInlineLabel>
                       <KpiInlineValue>
-                        {globalStats.eraSpan.min} – {globalStats.eraSpan.max ?? '현재'}
+                        {formatCountryYearShort(globalStats.eraSpan.min)} –{' '}
+                        {globalStats.eraSpan.max != null
+                          ? formatCountryYearShort(globalStats.eraSpan.max)
+                          : '현재'}
                       </KpiInlineValue>
                     </KpiInlineItem>
                   )}
