@@ -13,7 +13,8 @@
 ///   • 시작일과 종료일로 기간 관리
 ///   • 발생 장소 (도시, 행정구역, 국가)
 ///   • 배경과 여파 분석
-///   • 상위-하위 사건 관계 (큰 사건 > 세부 사건)
+///   • 상위-하위 사건 관계: 주 상위 트리(parentEventId) + 추가 상위(EventParentLink, DAG 엣지)
+///     — EventCategory.parentId는 의도적으로 순수 트리 유지(비대칭)
 /// 
 /// - 사건-인물 관계(PersonEvent): 참여자 관리
 ///   • 사건 참여 인물들의 역할
@@ -282,7 +283,8 @@ model Event {
   background String? @db.Text
   aftermath  String? @db.Text
 
-  /// 부모-자식 사건
+  /// 부모-자식 사건 — '주(primary) 상위'. 추가 상위는 EventParentLink 엣지.
+  /// 루트 판정(parentEventId IS NULL — raw SQL 포함 5곳)이 이 컬럼 하나에 의존한다(INV-2).
   parentEventId String? @map("parent_event_id") @db.Char(36)
 
   /// 전쟁 비용 (텍스트)
@@ -293,8 +295,16 @@ model Event {
 
   //--- 관계 필드
   category    EventCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  parentEvent Event?         @relation("ParentChildEvent", fields: [parentEventId], references: [id])
+  /// onDelete: SetNull은 암묵 기본값과 동일(생성 SQL 무변경) — 명시 이유: 주 상위 하드삭제 시
+  /// 자식 FK가 무통보 NULL이 되므로, permanentlyDeleteEvent가 extras 승격을 트랜잭션으로
+  /// 선행하지 않으면 EventParentLink 잔존 엣지가 INV-2를 깬다(서비스 §하드삭제 규칙 참조).
+  parentEvent Event?         @relation("ParentChildEvent", fields: [parentEventId], references: [id], onDelete: SetNull)
   childEvents Event[]        @relation("ParentChildEvent")
+
+  /// 추가 상위 엣지 (이 사건이 자식인 링크)
+  extraParentLinks EventParentLink[] @relation("EventParentLinkChild")
+  /// 추가 하위 엣지 (이 사건이 부모인 링크)
+  extraChildLinks  EventParentLink[] @relation("EventParentLinkParent")
 
   /// 도시
   cityId String? @map("city_id") @db.Char(36)
@@ -607,4 +617,41 @@ model EventRelation {
   @@index([eventId], name: "idx_event_relation_eventId")
   @@index([relatedEventId], name: "idx_event_relation_relatedEventId")
   @@map("event_relation")
+}
+
+// ========================
+// 사건 추가 상위 링크 (다중 부모 DAG 엣지)
+// ========================
+/// Event.parentEventId(주 상위)를 보완하는 '추가 상위' 엣지.
+/// 불변식(앱 레이어 강제 — 감사 쿼리로 상시 검증, docs/event-multi-parent-review.md §4.8):
+///  INV-1  주 상위(parentEventId)와 중복되는 엣지 금지
+///  INV-2  추가 상위는 주 상위가 있는 사건에만 존재 (루트판정 = parentEventId IS NULL 유지)
+///  INV-3  자기참조 금지 (childEventId <> parentEventId)
+/// 예: '얄타 회담' — 주 상위 '제2차 세계대전', 추가 상위 '냉전의 서막'
+/// EventRelation(무방향 '관련 사건')과 별개 — 이건 방향성 있는 계보 소속.
+/// deletedAt 없음(이벤트 도메인 조인테이블 관례) — 어느 한쪽이 소프트삭제돼도 엣지는 남기고
+/// 응답에서 거른다. sortOrder·note는 v1 의도적 제외(delete-recreate diff와 구조 충돌 — PD5).
+model EventParentLink {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 하위 사건 FK
+  childEventId String @map("child_event_id") @db.Char(36)
+
+  /// 추가 상위 사건 FK
+  parentEventId String @map("parent_event_id") @db.Char(36)
+
+  //--- 관계 필드
+  childEvent  Event @relation("EventParentLinkChild", fields: [childEventId], references: [id], onDelete: Cascade)
+  parentEvent Event @relation("EventParentLinkParent", fields: [parentEventId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // childEventId 조회는 @@unique 선두 컬럼이 커버 — 별도 인덱스 의도적 생략
+  // (EventRelation의 양측 명시 인덱스 관례와 다른 점: 중복 인덱스 쓰기 비용 회피)
+  @@unique([childEventId, parentEventId], name: "uniq_event_parent_link_pair")
+  @@index([parentEventId], name: "idx_event_parent_link_parentId")
+  @@map("event_parent_link")
 }
