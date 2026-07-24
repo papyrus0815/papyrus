@@ -26,6 +26,16 @@ function clampReason(
   return trimmed.length > 0 ? trimmed : null
 }
 
+/** 비고 정규화 — notes는 @db.Text라 길이제한 없음, 트림만(빈 문자열→null, undefined=유지). */
+function normalizeNotes(
+  value: string | null | undefined,
+): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
 @Injectable()
 export class DynastyService {
   constructor(
@@ -249,6 +259,55 @@ export class DynastyService {
         profileImageUrl: m.profileImageUrl,
       })),
     }
+  }
+
+  /**
+   * 통치기록(역사국가) 종료 사유·비고만 수정 — 통치 국가·기간 저작은 별건.
+   * where에 {id, dynastyId}로 스코프해 교차 가문 편집을 차단(부모 가드는 findById가 404).
+   * endReason은 clampReason(200자), notes는 normalizeNotes(트림) 경유 — interface DTO라 서버 검증 필수.
+   * 갱신 후 상세 전체를 재조회해 반환(프론트 캐시 즉시 갱신).
+   */
+  async updateHistoricalRuleReason(
+    dynastyId: string,
+    ruleId: string,
+    data: { endReason?: string | null; notes?: string | null },
+  ) {
+    await this.findById(dynastyId)
+    const res = await this.prisma.dynastyRule.updateMany({
+      where: { id: ruleId, dynastyId },
+      data: {
+        endReason: clampReason(data.endReason),
+        notes: normalizeNotes(data.notes),
+      },
+    })
+    if (res.count === 0) {
+      throw new NotFoundException(
+        `Dynasty rule ${ruleId} not found under dynasty ${dynastyId}`,
+      )
+    }
+    return this.findDetail(dynastyId)
+  }
+
+  /** 통치기록(현대국가) 종료 사유·비고만 수정 — updateHistoricalRuleReason의 현대 국가 쌍. */
+  async updateModernRuleReason(
+    dynastyId: string,
+    ruleId: string,
+    data: { endReason?: string | null; notes?: string | null },
+  ) {
+    await this.findById(dynastyId)
+    const res = await this.prisma.dynastyModernRule.updateMany({
+      where: { id: ruleId, dynastyId },
+      data: {
+        endReason: clampReason(data.endReason),
+        notes: normalizeNotes(data.notes),
+      },
+    })
+    if (res.count === 0) {
+      throw new NotFoundException(
+        `Dynasty modern rule ${ruleId} not found under dynasty ${dynastyId}`,
+      )
+    }
+    return this.findDetail(dynastyId)
   }
 
   async delete(id: string) {

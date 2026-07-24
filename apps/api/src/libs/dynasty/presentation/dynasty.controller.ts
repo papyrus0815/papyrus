@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -21,7 +22,21 @@ import {
   DynastyDetailResponseDto,
   DynastyResponseDto,
   UpdateDynastyDto,
+  UpdateDynastyRuleReasonDto,
 } from './dto'
+
+type DynastyDetailRow = Awaited<ReturnType<DynastyService['findDetail']>>
+
+/** findDetail 결과 → DynastyDetailResponseDto (getDetail·rule 편집 응답 공용). */
+function toDetailResponse(d: DynastyDetailRow): DynastyDetailResponseDto {
+  return {
+    ...toResponseDto(d),
+    historicalRules: d.historicalRules,
+    modernRules: d.modernRules,
+    memberCount: d.memberCount,
+    members: d.members,
+  }
+}
 
 type DynastyRow = Awaited<ReturnType<DynastyService['findById']>>
 
@@ -118,13 +133,38 @@ export class DynastyController {
   @Get(':id/detail')
   async getDetail(@Param('id') id: string): Promise<DynastyDetailResponseDto> {
     const d = await this.dynastyService.findDetail(id)
-    return {
-      ...toResponseDto(d),
-      historicalRules: d.historicalRules,
-      modernRules: d.modernRules,
-      memberCount: d.memberCount,
-      members: d.members,
-    }
+    return toDetailResponse(d)
+  }
+
+  /**
+   * 통치기록(역사국가) 종료 사유·비고 수정. 통치 국가·기간 저작은 별건(제품 결정 게이트).
+   * 갱신된 가문 상세 전체를 반환.
+   */
+  @Patch(':id/historical-rules/:ruleId')
+  async updateHistoricalRuleReason(
+    @Param('id') id: string,
+    @Param('ruleId') ruleId: string,
+    @Body() dto: UpdateDynastyRuleReasonDto,
+  ): Promise<DynastyDetailResponseDto> {
+    const d = await this.dynastyService.updateHistoricalRuleReason(id, ruleId, {
+      endReason: dto.endReason,
+      notes: dto.notes,
+    })
+    return toDetailResponse(d)
+  }
+
+  /** 통치기록(현대국가) 종료 사유·비고 수정. */
+  @Patch(':id/modern-rules/:ruleId')
+  async updateModernRuleReason(
+    @Param('id') id: string,
+    @Param('ruleId') ruleId: string,
+    @Body() dto: UpdateDynastyRuleReasonDto,
+  ): Promise<DynastyDetailResponseDto> {
+    const d = await this.dynastyService.updateModernRuleReason(id, ruleId, {
+      endReason: dto.endReason,
+      notes: dto.notes,
+    })
+    return toDetailResponse(d)
   }
 
   @Post()

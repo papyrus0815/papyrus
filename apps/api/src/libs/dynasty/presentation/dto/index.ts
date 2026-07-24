@@ -111,6 +111,18 @@ export interface DynastyResponseDto {
   updatedAt: string
 }
 
+/**
+ * 통치기록(DynastyRule/ModernRule)의 좁은 편집 바디 — 종료 사유·비고만.
+ * 통치 국가·기간 저작은 별건(제품 결정 게이트). endReason은 VarChar(200)이라 서버에서 clamp.
+ * `null`=비움, 생략(undefined)=기존값 유지.
+ */
+export interface UpdateDynastyRuleReasonDto {
+  /** 통치 종료 사유 ({국가명} 통치 종료 — 가문 자체 단절과 층위 다름). */
+  endReason?: string | null
+  /** 비고/특이사항. */
+  notes?: string | null
+}
+
 export interface DynastyHistoricalRuleDto {
   id: string
   historicalCountryId: string
