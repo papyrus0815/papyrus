@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
-import { AttachmentOwner } from '@prisma/client'
+import { AttachmentOwner, Era } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import { UploadService } from '../../shared/upload/upload.service'
 import { DynastyRepository } from '../infrastructure/dynasty.repository'
@@ -49,8 +49,19 @@ export class DynastyService {
   async create(data: {
     name: string
     description?: string
-    startDate?: Date
-    endDate?: Date
+    // 구조화 BC/고대는 date=null(구조화 Int가 진실)이므로 Date|null.
+    startDate?: Date | null
+    endDate?: Date | null
+    startDatePrecision?: string | null
+    startEra?: Era | null
+    startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
+    endDatePrecision?: string | null
+    endEra?: Era | null
+    endYear?: number | null
+    endMonth?: number | null
+    endDay?: number | null
     startReason?: string | null
     endReason?: string | null
     /** 업로드 API가 반환한 `/uploads/...` 경로 */
@@ -98,6 +109,16 @@ export class DynastyService {
       description?: string | null
       startDate?: Date | null
       endDate?: Date | null
+      startDatePrecision?: string | null
+      startEra?: Era | null
+      startYear?: number | null
+      startMonth?: number | null
+      startDay?: number | null
+      endDatePrecision?: string | null
+      endEra?: Era | null
+      endYear?: number | null
+      endMonth?: number | null
+      endDay?: number | null
       startReason?: string | null
       endReason?: string | null
       /** 새 업로드 경로. `null` 또는 빈 문자열이면 썸네일만 제거. 생략 시 썸네일 유지 */

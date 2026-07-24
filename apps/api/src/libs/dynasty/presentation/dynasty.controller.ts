@@ -12,15 +12,37 @@ import {
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
+import { Era } from '@prisma/client'
+import { mapStructuredDateInput } from '../../person/domain/structured-date.util'
 import { DynastyService } from '../application/dynasty.service'
 import {
   CreateDynastyDto,
+  DateInfo,
   DynastyDetailResponseDto,
   DynastyResponseDto,
   UpdateDynastyDto,
 } from './dto'
 
 type DynastyRow = Awaited<ReturnType<DynastyService['findById']>>
+
+/**
+ * 구조화 채널(우선) 또는 레거시 ISO를 6컬럼(DateTime+precision+era/year/month/day)으로 정규화.
+ * DateTime은 AD1000~9999 완전일자만 채움 — BC/고대/연단위는 date=null이고 era/year가 진실.
+ */
+function dateSlice(
+  info: DateInfo | null | undefined,
+  legacyIso: string | null | undefined,
+) {
+  const r = mapStructuredDateInput(info ?? null, legacyIso ?? null)
+  return {
+    date: r.date,
+    precision: r.precision,
+    era: r.era as Era | null,
+    year: r.year,
+    month: r.month,
+    day: r.day,
+  }
+}
 
 function toResponseDto(d: DynastyRow): DynastyResponseDto {
   return {
@@ -29,6 +51,16 @@ function toResponseDto(d: DynastyRow): DynastyResponseDto {
     description: d.description,
     startDate: d.startDate ? d.startDate.toISOString() : null,
     endDate: d.endDate ? d.endDate.toISOString() : null,
+    startDatePrecision: d.startDatePrecision,
+    startEra: d.startEra,
+    startYear: d.startYear,
+    startMonth: d.startMonth,
+    startDay: d.startDay,
+    endDatePrecision: d.endDatePrecision,
+    endEra: d.endEra,
+    endYear: d.endYear,
+    endMonth: d.endMonth,
+    endDay: d.endDay,
     startReason: d.startReason,
     endReason: d.endReason,
     thumbnailUrl: d.thumbnailUrl,
@@ -97,11 +129,23 @@ export class DynastyController {
 
   @Post()
   async create(@Body() dto: CreateDynastyDto): Promise<DynastyResponseDto> {
+    const s = dateSlice(dto.startDateInfo, dto.startDate)
+    const e = dateSlice(dto.endDateInfo, dto.endDate)
     const d = await this.dynastyService.create({
       name: dto.name,
       description: dto.description,
-      startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-      endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+      startDate: s.date,
+      startDatePrecision: s.precision,
+      startEra: s.era,
+      startYear: s.year,
+      startMonth: s.month,
+      startDay: s.day,
+      endDate: e.date,
+      endDatePrecision: e.precision,
+      endEra: e.era,
+      endYear: e.year,
+      endMonth: e.month,
+      endDay: e.day,
       startReason: dto.startReason,
       endReason: dto.endReason,
       thumbnailUrl: dto.thumbnailUrl,
@@ -119,22 +163,36 @@ export class DynastyController {
     @Param('id') id: string,
     @Body() dto: UpdateDynastyDto,
   ): Promise<DynastyResponseDto> {
+    // 날짜 축은 구조화(startDateInfo) 또는 레거시(startDate) 중 하나라도 제공되면 6컬럼을 통째로
+    // 세팅(부분갱신 정합 붕괴 방지), 둘 다 undefined면 축 전체를 건드리지 않음. 두 채널 혼용 금지.
+    const startProvided =
+      dto.startDateInfo !== undefined || dto.startDate !== undefined
+    const endProvided = dto.endDateInfo !== undefined || dto.endDate !== undefined
+    const s = startProvided ? dateSlice(dto.startDateInfo, dto.startDate) : null
+    const e = endProvided ? dateSlice(dto.endDateInfo, dto.endDate) : null
     const d = await this.dynastyService.update(id, {
       name: dto.name,
       description: dto.description,
-      // null → 클리어, 문자열 → 새 값, undefined → 변경 없음
-      startDate:
-        dto.startDate === null
-          ? null
-          : dto.startDate
-            ? new Date(dto.startDate)
-            : undefined,
-      endDate:
-        dto.endDate === null
-          ? null
-          : dto.endDate
-            ? new Date(dto.endDate)
-            : undefined,
+      ...(s
+        ? {
+            startDate: s.date,
+            startDatePrecision: s.precision,
+            startEra: s.era,
+            startYear: s.year,
+            startMonth: s.month,
+            startDay: s.day,
+          }
+        : {}),
+      ...(e
+        ? {
+            endDate: e.date,
+            endDatePrecision: e.precision,
+            endEra: e.era,
+            endYear: e.year,
+            endMonth: e.month,
+            endDay: e.day,
+          }
+        : {}),
       // 문자열 사유는 Date 변환 불필요 — undefined=유지/null=클리어/string=값 그대로 전달
       startReason: dto.startReason,
       endReason: dto.endReason,

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { AttachmentOwner } from '@prisma/client'
+import { AttachmentOwner, Era } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import {
   DYNASTY_THUMBNAIL_ATTACHMENT_TITLE,
@@ -12,6 +12,16 @@ export type DynastyRowWithThumbnail = {
   description: string | null
   startDate: Date | null
   endDate: Date | null
+  startDatePrecision: string | null
+  startEra: Era | null
+  startYear: number | null
+  startMonth: number | null
+  startDay: number | null
+  endDatePrecision: string | null
+  endEra: Era | null
+  endYear: number | null
+  endMonth: number | null
+  endDay: number | null
   startReason: string | null
   endReason: string | null
   originPlace: string | null
@@ -51,6 +61,16 @@ export class DynastyRepository {
       description: string | null
       startDate: Date | null
       endDate: Date | null
+      startDatePrecision: string | null
+      startEra: Era | null
+      startYear: number | null
+      startMonth: number | null
+      startDay: number | null
+      endDatePrecision: string | null
+      endEra: Era | null
+      endYear: number | null
+      endMonth: number | null
+      endDay: number | null
       startReason: string | null
       endReason: string | null
       originPlace: string | null

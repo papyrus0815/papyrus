@@ -1,8 +1,30 @@
+/**
+ * 구조화 날짜 입력 채널 — BC·고대·연단위 지원 (person DateInfoDto 미러).
+ * 이 도메인 DTO는 interface(ValidationPipe 없음)라 class DateInfoDto를 재사용하지 못하므로 로컬 재선언.
+ * year=크기값(양수)·era=BC/AD. 서버가 mapStructuredDateInput으로 6컬럼(DateTime+precision+era/year/month/day)에 매핑.
+ */
+export interface DateInfo {
+  era: 'BC' | 'AD'
+  year: number
+  month?: number
+  day?: number
+}
+
 export interface CreateDynastyDto {
   name: string
   description?: string
+  /** 레거시 ISO 시작일(AD only). 구조화 startDateInfo가 있으면 그쪽이 우선. */
   startDate?: string
+  /** 레거시 ISO 종료일(AD only). 구조화 endDateInfo가 있으면 그쪽이 우선. */
   endDate?: string
+  /** 구조화 시작일 — BC·고대·연단위 (era+크기값 연/월/일). */
+  startDateInfo?: DateInfo | null
+  /** 구조화 종료일 — BC·고대·연단위. */
+  endDateInfo?: DateInfo | null
+  /** 시작일 정밀도('year'|'month'|'day'). 구조화 입력 시 서버가 재파생. */
+  startDatePrecision?: string | null
+  /** 종료일 정밀도. */
+  endDatePrecision?: string | null
   /** 가문 시작(성립) 사유 (시조 즉위·분가 독립·최초 문헌 등장 등) */
   startReason?: string | null
   /** 가문 종료(단절) 사유 (멸문·권력 상실·개명·타가문 병합 등) */
@@ -25,10 +47,16 @@ export interface UpdateDynastyDto {
   name?: string
   /** `null`이면 설명을 비움. 생략 시 기존값 유지 */
   description?: string | null
-  /** `null`이면 시작일을 비움. 생략 시 기존값 유지 */
+  /** `null`이면 시작일을 비움. 생략 시 기존값 유지 (레거시 ISO, 구조화 startDateInfo 우선) */
   startDate?: string | null
-  /** `null`이면 종료일을 비움. 생략 시 기존값 유지 */
+  /** `null`이면 종료일을 비움. 생략 시 기존값 유지 (레거시 ISO) */
   endDate?: string | null
+  /** 구조화 시작일. `null`이면 시작일 축을 비움(6컬럼 통째). 생략 시 기존 유지. */
+  startDateInfo?: DateInfo | null
+  /** 구조화 종료일. `null`이면 종료일 축을 비움. 생략 시 기존 유지. */
+  endDateInfo?: DateInfo | null
+  startDatePrecision?: string | null
+  endDatePrecision?: string | null
   /** `null`이면 성립 사유를 비움. 생략 시 기존값 유지 */
   startReason?: string | null
   /** `null`이면 단절 사유를 비움. 생략 시 기존값 유지 */
@@ -54,8 +82,20 @@ export interface DynastyResponseDto {
   id: string
   name: string
   description: string | null
+  /** 레거시 ISO 시작일 — AD1000~9999 완전일자만 값, 그 밖은 null(구조화 필드가 진실). */
   startDate: string | null
   endDate: string | null
+  /** 구조화 시작일 축 — BC·고대·연단위. startDate가 null이어도 이 필드가 진실. */
+  startDatePrecision: string | null
+  startEra: string | null
+  startYear: number | null
+  startMonth: number | null
+  startDay: number | null
+  endDatePrecision: string | null
+  endEra: string | null
+  endYear: number | null
+  endMonth: number | null
+  endDay: number | null
   startReason: string | null
   endReason: string | null
   thumbnailUrl: string | null
