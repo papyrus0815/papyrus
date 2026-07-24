@@ -1,8 +1,23 @@
 import * as dynastiesApi from '@api/functional/dynasties'
+import * as dynastyDetailApi from '@api/functional/dynasties/detail'
+import * as dynastyHistoricalRulesApi from '@api/functional/dynasties/historical_rules'
+import * as dynastyModernRulesApi from '@api/functional/dynasties/modern_rules'
 import type { DateInfoInput } from '../persons'
 import { apiConnection } from '../client'
 
 export type Dynasty = Awaited<ReturnType<typeof dynastiesApi.getAll>>[number]
+/** 가문 상세 — 기본 + 통치기록(역사/현대) + 구성원 미리보기 */
+export type DynastyDetail = Awaited<
+  ReturnType<typeof dynastyDetailApi.getDetail>
+>
+export type DynastyHistoricalRule = DynastyDetail['historicalRules'][number]
+export type DynastyModernRule = DynastyDetail['modernRules'][number]
+
+/** 통치기록 좁은 편집(종료 사유·비고) 바디 — 통치 국가·기간 저작은 별건. */
+export type DynastyRuleReasonBody = {
+  endReason?: string | null
+  notes?: string | null
+}
 
 export type DynastyMutationBody = {
   name: string
@@ -41,6 +56,38 @@ export const dynastyApi = {
 
   getById: async (id: string): Promise<Dynasty> => {
     return await dynastiesApi.getById(apiConnection, id)
+  },
+
+  getDetail: async (id: string): Promise<DynastyDetail> => {
+    return await dynastyDetailApi.getDetail(apiConnection, id)
+  },
+
+  /** 통치기록(역사국가) 종료 사유·비고 수정 → 갱신된 상세 반환 */
+  updateHistoricalRuleReason: async (
+    dynastyId: string,
+    ruleId: string,
+    body: DynastyRuleReasonBody,
+  ): Promise<DynastyDetail> => {
+    return await dynastyHistoricalRulesApi.updateHistoricalRuleReason(
+      apiConnection,
+      dynastyId,
+      ruleId,
+      body,
+    )
+  },
+
+  /** 통치기록(현대국가) 종료 사유·비고 수정 → 갱신된 상세 반환 */
+  updateModernRuleReason: async (
+    dynastyId: string,
+    ruleId: string,
+    body: DynastyRuleReasonBody,
+  ): Promise<DynastyDetail> => {
+    return await dynastyModernRulesApi.updateModernRuleReason(
+      apiConnection,
+      dynastyId,
+      ruleId,
+      body,
+    )
   },
 
   // 로컬 타입은 null 허용(해제 의도) — 서버 CreateDynastyDto와의 차이는 단언으로 통과

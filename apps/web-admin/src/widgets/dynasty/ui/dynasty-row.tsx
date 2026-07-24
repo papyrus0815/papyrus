@@ -36,6 +36,7 @@ interface Props {
   onEdit: () => void
   onDelete: () => void
   onShowMembers: () => void
+  onShowRules: () => void
 }
 
 const IconChevron = ({ open }: { open: boolean }) => (
@@ -88,6 +89,7 @@ export function DynastyRow({
   onEdit,
   onDelete,
   onShowMembers,
+  onShowRules,
 }: Props) {
   const { dynasty, startYear, endYear, duration, ongoing } = derived
   const initial = dynasty.name?.trim().slice(0, 1) || '·'
@@ -263,10 +265,15 @@ export function DynastyRow({
                 </Description>
               )}
               <ActionRow>
-                <MembersBtn type="button" onClick={onShowMembers}>
-                  구성원 인포그래픽
-                  {memberCount > 0 && ` · ${memberCount.toLocaleString()}명`}
-                </MembersBtn>
+                <LeftCluster>
+                  <MembersBtn type="button" onClick={onShowMembers}>
+                    구성원 인포그래픽
+                    {memberCount > 0 && ` · ${memberCount.toLocaleString()}명`}
+                  </MembersBtn>
+                  <RulesBtn type="button" onClick={onShowRules}>
+                    통치 기록
+                  </RulesBtn>
+                </LeftCluster>
                 <ActionGroup>
                   <ActionBtn type="button" onClick={onEdit}>수정</ActionBtn>
                   <ActionBtn
@@ -610,6 +617,36 @@ const ActionRow = styled.div`
 const ActionGroup = styled.div`
   display: flex;
   gap: 4px;
+`
+
+const LeftCluster = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const RulesBtn = styled.button`
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 999px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
 `
 
 const MembersBtn = styled.button`

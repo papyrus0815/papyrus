@@ -25,6 +25,7 @@ import { confirm } from '@/shared/ui/confirm-dialog'
 
 import { DynastyFormModal } from './dynasty-form-modal'
 import { DynastyMembersInfographicModal } from './dynasty-members-infographic-modal'
+import { DynastyRulesModal } from './dynasty-rules-modal'
 import {
   defaultDirFor,
   DynastyControls,
@@ -157,6 +158,10 @@ export function DynastySection() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Dynasty | null>(null)
   const [membersModal, setMembersModal] = useState<{
+    id: string
+    name: string
+  } | null>(null)
+  const [rulesModal, setRulesModal] = useState<{
     id: string
     name: string
   } | null>(null)
@@ -488,6 +493,12 @@ export function DynastySection() {
                         name: derived.dynasty.name,
                       })
                     }
+                    onShowRules={() =>
+                      setRulesModal({
+                        id: derived.dynasty.id,
+                        name: derived.dynasty.name,
+                      })
+                    }
                   />
                 </Fragment>
               )
@@ -510,6 +521,15 @@ export function DynastySection() {
           dynastyName={membersModal.name}
           isOpen
           onClose={() => setMembersModal(null)}
+        />
+      )}
+
+      {rulesModal && (
+        <DynastyRulesModal
+          dynastyId={rulesModal.id}
+          dynastyName={rulesModal.name}
+          isOpen
+          onClose={() => setRulesModal(null)}
         />
       )}
     </SectionRoot>
