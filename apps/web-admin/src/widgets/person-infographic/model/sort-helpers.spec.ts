@@ -4,7 +4,12 @@
  * - compareCenturyMeta: 세기 그룹 최신/오래된순 방향 + '연도 미상' 항상 끝
  */
 import { centuryOf, compareCenturyMeta, type CenturyMeta } from './century'
-import { makeSortFnWithPinned } from './sort-helpers'
+import type { MultiScopes } from './filter.store'
+import {
+  hasAnyActiveScope,
+  isPersonInScopes,
+  makeSortFnWithPinned,
+} from './sort-helpers'
 import type { AdaptedPerson } from './types'
 
 const ERA_STUB: AdaptedPerson['era'] = {
@@ -205,5 +210,52 @@ describe('compareCenturyMeta — 세기 그룹 방향', () => {
       .sort((metaA, metaB) => compareCenturyMeta(metaA, metaB, 'asc'))
       .map((meta) => meta.key)
     expect(ascSorted[ascSorted.length - 1]).toBe('unknown')
+  })
+})
+
+const EMPTY_SCOPES: MultiScopes = { era: [], region: [], field: [], country: [] }
+
+describe('isPersonInScopes / hasAnyActiveScope (matchesScopes 위임)', () => {
+  const target = person({
+    id: 'x',
+    era: { ...ERA_STUB, key: 'medieval' },
+    region: '유럽',
+    field: '정치',
+    country: '프랑스',
+  })
+
+  it('scope 비었으면 항상 매칭 · 활성 아님', () => {
+    expect(isPersonInScopes(target, EMPTY_SCOPES)).toBe(true)
+    expect(hasAnyActiveScope(EMPTY_SCOPES)).toBe(false)
+  })
+
+  it('era.key로 매칭(주입된 eraKeyOf)', () => {
+    expect(isPersonInScopes(target, { ...EMPTY_SCOPES, era: ['medieval'] })).toBe(
+      true,
+    )
+    expect(isPersonInScopes(target, { ...EMPTY_SCOPES, era: ['ancient'] })).toBe(
+      false,
+    )
+  })
+
+  it('카테고리 간 AND — 하나라도 불일치면 제외', () => {
+    expect(
+      isPersonInScopes(target, {
+        ...EMPTY_SCOPES,
+        region: ['유럽'],
+        field: ['군사'],
+      }),
+    ).toBe(false)
+    expect(
+      isPersonInScopes(target, {
+        ...EMPTY_SCOPES,
+        region: ['유럽'],
+        field: ['정치'],
+      }),
+    ).toBe(true)
+  })
+
+  it('scope 값이 있으면 활성', () => {
+    expect(hasAnyActiveScope({ ...EMPTY_SCOPES, country: ['프랑스'] })).toBe(true)
   })
 })

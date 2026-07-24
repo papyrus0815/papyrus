@@ -1,3 +1,4 @@
+import { countActiveScopes, matchesScopes } from './filter.store'
 import type { AdaptedPerson } from './types'
 import type { MultiScopes, PersonSortKey } from './filter.store'
 
@@ -56,24 +57,15 @@ export function makeSortFnWithPinned(
 /**
  * scope(era/region/field/country) 필터에 인물이 부합하는지 검사.
  * matrix·galaxy 등 "활성/비활성" 시각화에서 강조 대상 판별에 공통 사용.
+ * 로직 정본은 filter.store의 matchesScopes — 여기서는 AdaptedPerson용 얇은 래퍼(era.key 주입).
  */
 export function isPersonInScopes(
-  p: AdaptedPerson,
+  person: AdaptedPerson,
   scopes: MultiScopes,
 ): boolean {
-  if (scopes.era.length > 0 && !scopes.era.includes(p.era.key)) return false
-  if (scopes.region.length > 0 && !scopes.region.includes(p.region)) return false
-  if (scopes.field.length > 0 && !scopes.field.includes(p.field)) return false
-  if (scopes.country.length > 0 && !scopes.country.includes(p.country)) return false
-  return true
+  return matchesScopes(person, scopes, (candidate) => candidate.era.key)
 }
 
 export function hasAnyActiveScope(scopes: MultiScopes): boolean {
-  return (
-    scopes.era.length +
-      scopes.region.length +
-      scopes.field.length +
-      scopes.country.length >
-    0
-  )
+  return countActiveScopes(scopes) > 0
 }

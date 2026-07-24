@@ -226,17 +226,12 @@ export function matchesScopes<
  * 갤럭시/매트릭스의 점 강조(isActive)는 scope 한정이라 별도(hasAnyActiveScope)를 그대로 쓴다.
  */
 export function useHasActiveFilter(): boolean {
-  return usePersonInfographicFilterStore((s) => {
-    const sc = s.scopes
-    return (
-      sc.era.length +
-        sc.region.length +
-        sc.field.length +
-        sc.country.length +
-        (s.minInfluence > 0 ? 1 : 0) +
-        (s.aliveFilter !== 'all' ? 1 : 0) +
-        (s.query.trim() ? 1 : 0) >
-      0
-    )
-  })
+  return usePersonInfographicFilterStore(
+    (state) =>
+      countActiveScopes(state.scopes) +
+        (state.minInfluence > 0 ? 1 : 0) +
+        (state.aliveFilter !== 'all' ? 1 : 0) +
+        (state.query.trim() ? 1 : 0) >
+      0,
+  )
 }
