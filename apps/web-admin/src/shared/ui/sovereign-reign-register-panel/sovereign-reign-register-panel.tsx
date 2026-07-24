@@ -778,7 +778,7 @@ export function SovereignReignRegisterPanel({
                       placeholder="예: 1 (해당 국가의 1대 군주)"
                     />
                     <FieldHint>
-                      한 국가에 같은 대수의 군주는 단 한 명입니다 (예: 표트르 대제 = 러시아 제국 1대).
+                      위에서 고른 국가/정체 기준의 통산 순번 — 한 대상에 같은 대수의 군주는 단 한 명입니다 (예: 표트르 대제 = 러시아 제국 1대). 루이 14세·이반 6세식 이름별 번호는 재위명에 적으세요(숫자 축 아님).
                     </FieldHint>
                   </FieldControl>
                 </FieldRow>
@@ -899,14 +899,20 @@ export function SovereignReignRegisterPanel({
                   </FieldControl>
                 </FieldRow>
 
-                {/* 퇴위 사유 상세 */}
+                {/* 퇴위 사유 상세 — endReason(enum)의 서사 쌍, 즉위 상세의 종료측 대칭 */}
                 <FieldRow>
-                  <FieldLabel>퇴위 사유 상세</FieldLabel>
+                  <FieldLabel htmlFor="sovereign-end-reason-detail">
+                    퇴위 사유 상세
+                  </FieldLabel>
                   <FieldControl>
-                    <Input
+                    <Textarea
+                      id="sovereign-end-reason-detail"
                       value={endReasonDetail}
-                      onChange={(e) => setEndReasonDetail(e.target.value)}
-                      placeholder="선택 (예: 명예혁명으로 폐위)"
+                      onChange={(event) =>
+                        setEndReasonDetail(event.target.value)
+                      }
+                      placeholder="선택 — 예: 명예혁명으로 폐위, 아들 조지 2세에게 양위"
+                      rows={2}
                     />
                   </FieldControl>
                 </FieldRow>

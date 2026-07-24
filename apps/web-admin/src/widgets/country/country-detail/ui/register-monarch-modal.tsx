@@ -409,7 +409,8 @@ export function RegisterMonarchModal({
       // 'year'=연도만 앎(월일은 01-01 관행 채움) — 생성 전용 모달이라 미체크는 undefined
       startDatePrecision: startDateYearOnly ? 'year' : undefined,
       endDate: endDate.trim() || undefined,
-      termNumber: num,
+      // 재위(SovereignReign)의 통산 즉위 순서는 regnalNumber 축이 정본
+      // (표시 ordinalOf·@@unique 모두 regnalNumber 기준). termNumber 이중기록 안 함.
       regnalNumber: num,
       subTermNumber: parseOptionalInt(subTermNumber),
       dynastyOrdinal: parseOptionalInt(dynastyOrdinal),
@@ -529,6 +530,9 @@ export function RegisterMonarchModal({
                   </ModalSelectBtn>
                   <FieldHint>
                     현대 국가 또는 연결된 하위 역사적 국가 중 하나를 선택하세요.
+                    아래 <strong>즉위 순서(제N대)</strong>는 여기서 고른 대상
+                    기준으로 셉니다 — 정체별로 세려면(예: 프랑스 제3공화국) 하위
+                    역사적 국가를, 국가 통산으로 세려면 현대 국가를 고르세요.
                   </FieldHint>
                 </FieldControl>
               </FieldRow>
@@ -610,19 +614,20 @@ export function RegisterMonarchModal({
             </FieldRow>
 
             <FieldRow>
-              <FieldLabel>대수/재위번호</FieldLabel>
+              <FieldLabel>즉위 순서 (제N대)</FieldLabel>
               <FieldControl>
                 <StyledFormInput
                   type="number"
                   min={1}
                   value={regnalNumber}
                   onChange={(e) => setRegnalNumber(e.target.value)}
-                  placeholder="예: 4 (세종), 14 (루이 14세), 266 (프란치스코)"
-                  title="역대 순번"
+                  placeholder="예: 4 (조선 제4대 세종), 266 (제266대 교황)"
+                  title="선택한 국가/정체 기준 통산 즉위 순서"
                 />
                 <FieldHint>
-                  역대 순번. 동아시아(제4대)·서양 군주(14세)·교황(266대) 등
-                  숫자만 입력
+                  위에서 고른 국가/정체 기준의 통산 순번(제N대) — 한 대상에 같은
+                  대수는 한 명뿐. <strong>루이 14세·이반 6세</strong>식 이름별
+                  번호는 위 <strong>왕명</strong>에 적으세요(숫자 축 아님).
                 </FieldHint>
               </FieldControl>
             </FieldRow>

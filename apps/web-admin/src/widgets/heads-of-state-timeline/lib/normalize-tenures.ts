@@ -115,8 +115,13 @@ function categorize(tenure: RawTenureRecord): PositionTypeCategory {
 }
 
 function ordinalOf(t: RawTenureRecord): number | null {
-  if (typeof t.regnalNumber === 'number') return t.regnalNumber
-  if (typeof t.termNumber === 'number') return t.termNumber
+  // 재위=regnalNumber(즉위 순서) 우선, 재임=termNumber(통산 대수) 우선 —
+  // 인물 상세 person-detail-panel의 ordinalOf와 동일 규약(화면 간 서수 불일치 방지)
+  const isReign = t.recordKind === 'SOVEREIGN_REIGN'
+  const primary = isReign ? t.regnalNumber : t.termNumber
+  const secondary = isReign ? t.termNumber : t.regnalNumber
+  if (typeof primary === 'number') return primary
+  if (typeof secondary === 'number') return secondary
   return null
 }
 

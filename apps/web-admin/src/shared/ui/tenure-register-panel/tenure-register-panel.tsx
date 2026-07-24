@@ -1089,18 +1089,18 @@ export function TenureRegisterPanel({
           <SidebarFormWrap>
             <FormRows>
               <FieldRow>
-                {/* 재위(SOVEREIGN_REIGN) 수정은 재위번호(regnalNumber), 일반 재임은 대수(termNumber) — 이중 기록 금지 */}
-                <FieldLabel>{editingIsSovereign ? '재위번호' : '대수'}</FieldLabel>
+                {/* 재위(SOVEREIGN_REIGN)는 즉위 순서(regnalNumber), 일반 재임은 대수(termNumber) — 둘 다 '선택한 국가/정체 기준 통산 제N대', 이중 기록 금지 */}
+                <FieldLabel>{editingIsSovereign ? '즉위 순서 (제N대)' : '대수'}</FieldLabel>
                 <FieldControl>
                   <Input
                     type="number"
                     min={1}
                     value={ordinalNumber}
                     onChange={(e) => setOrdinalNumber(e.target.value)}
-                    placeholder={editingIsSovereign ? '선택 (예: 루이 14세 → 14)' : '선택 (예: 제20대 → 20)'}
+                    placeholder={editingIsSovereign ? '선택 (예: 러시아 제국 제1대 → 1)' : '선택 (예: 제20대 → 20)'}
                     title={
                       editingIsSovereign
-                        ? '서양 군주 재위번호'
+                        ? '선택한 국가/정체 기준 통산 즉위 순서 — 루이 14세식 이름별 번호는 재위명(왕명)에'
                         : '공식 통산 대수 — 없으면 비워두기'
                     }
                   />
