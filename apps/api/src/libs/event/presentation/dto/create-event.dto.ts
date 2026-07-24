@@ -301,5 +301,17 @@ export class CreateEventDto {
   @IsArray()
   @IsString({ each: true })
   childEventIds?: string[]
+
+  @ApiProperty({
+    description:
+      '추가 상위 사건 ID 목록 — 주 상위(parentEventId) 외 다중 상위(EventParentLink 엣지). ' +
+      '주 상위가 있을 때만 허용(INV-2)·주 상위와 중복 금지(INV-1)·자기참조 금지(INV-3), 위반 시 409.',
+    required: false,
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  extraParentEventIds?: string[]
 }
 

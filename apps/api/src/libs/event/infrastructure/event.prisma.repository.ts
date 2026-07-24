@@ -128,8 +128,12 @@ export class EventPrismaRepository implements EventRepository {
    * @param data 수정할 데이터
    * @returns 수정된 사건 엔티티
    */
-  async update(id: string, data: Partial<Omit<Event, 'id'>>): Promise<Event> {
-    const event = await this.prisma.event.update({
+  async update(
+    id: string,
+    data: Partial<Omit<Event, 'id'>>,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Event> {
+    const event = await (tx ?? this.prisma).event.update({
       where: { id },
       data: {
         title: data.title,
@@ -171,8 +175,8 @@ export class EventPrismaRepository implements EventRepository {
     return this.toEntity(event)
   }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.event.delete({
+  async delete(id: string, tx?: Prisma.TransactionClient): Promise<void> {
+    await (tx ?? this.prisma).event.delete({
       where: { id },
     })
   }

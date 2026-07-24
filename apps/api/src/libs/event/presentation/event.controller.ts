@@ -1056,6 +1056,7 @@ export class EventController {
       dto.childEventIds, // 🆕 기존 사건을 하위로 연결
       dto.primaryCountryId,
       dto.primaryHistoricalCountryId,
+      dto.extraParentEventIds, // 🆕 추가 상위(EventParentLink) — 수령만 하고 버리는 계약 거짓말 금지
     )
 
     // 정규화된 군사 정보 저장
@@ -1171,6 +1172,7 @@ export class EventController {
       dto.primaryCountryId,
       dto.primaryHistoricalCountryId,
       dto.relatedPersons,
+      dto.extraParentEventIds, // 🆕 추가 상위(EventParentLink) 전체목록 — undefined=변경 없음
     )
 
     // 정규화된 군사 정보 저장
