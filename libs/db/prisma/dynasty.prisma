@@ -42,11 +42,26 @@ model Dynasty {
   /// 설명
   description String? @db.Text
 
-  /// 가문 시작일 (최초 등장 또는 중요 인물의 시작)
+  /// 가문 시작일. AD 1000~9999 완전일자만 채운다 — BC·고대·연단위는 아래 구조화
+  /// (startEra/startYear/...)가 진실. DATETIME은 드라이버가 연도<100을 2044로 손상시켜 nullable로 둔다.
   startDate DateTime? @map("start_date")
+  /// 시작일 정밀도 — 'year'면 연도만 앎, 'month'면 연·월, NULL/'day'=일 단위. Event·SovereignReign 선례 동형.
+  startDatePrecision String? @map("start_date_precision") @db.VarChar(10)
+  /// 구조화 시작일 — BC·고대·연단위 지원(DynastyRule·SovereignReign 선례 동형). year=크기값(양수), era=BC/AD.
+  /// AD1000+ 완전일자면 startDate(DATETIME)도 병행 채움(정렬·기존코드 호환); 그 밖은 이 Int 축이 유일 진실.
+  startEra   Era? @map("start_era")
+  startYear  Int? @map("start_year")
+  startMonth Int? @map("start_month")
+  startDay   Int? @map("start_day")
 
-  /// 가문 종료일 (멸문 또는 권력 상실)
+  /// 가문 종료일 (멸문 또는 권력 상실). AD 1000~9999 완전일자만 채움 — 그 밖은 아래 구조화가 진실.
   endDate DateTime? @map("end_date")
+  /// 종료일 정밀도 — 시작측 대칭. 종료 연도만 아는 고대 가문 수용.
+  endDatePrecision String? @map("end_date_precision") @db.VarChar(10)
+  endEra   Era? @map("end_era")
+  endYear  Int? @map("end_year")
+  endMonth Int? @map("end_month")
+  endDay   Int? @map("end_day")
 
   /// 가문 시작(성립) 사유 (시조 즉위·분가 독립·최초 문헌 등장 등)
   startReason String? @map("start_reason") @db.VarChar(200)
