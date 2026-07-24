@@ -192,8 +192,13 @@ export function useFilterUrlSync(): void {
     setOrDel('q', query)
     setOrDel('alive', aliveFilter !== 'all' ? aliveFilter : '')
     setOrDel('minInf', minInfluence > 0 ? String(minInfluence) : '')
-    setOrDel('sort', sort !== 'influence' ? sort : '')
-    setOrDel('order', eraGroupOrder !== 'desc' ? eraGroupOrder : '')
+    // sort/order는 실제로 소비하는 뷰에서만 URL에 노출 — matrix·galaxy·stats·records엔
+    // inert 파라미터를 남기지 않는다(값은 store·persist에 유지되어 뷰 복귀 시 재노출).
+    const effectiveView = view === 'cards' ? 'story' : view
+    const sortConsumed = effectiveView === 'story' || effectiveView === 'dynasty'
+    const orderConsumed = effectiveView === 'story'
+    setOrDel('sort', sortConsumed && sort !== 'influence' ? sort : '')
+    setOrDel('order', orderConsumed && eraGroupOrder !== 'desc' ? eraGroupOrder : '')
     setOrDel('era', scopes.era.join(','))
     setOrDel('region', scopes.region.join(','))
     setOrDel('field', scopes.field.join(','))
