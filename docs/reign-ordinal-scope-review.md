@@ -23,8 +23,10 @@
 | `sovereign-reign-register-panel.tsx` | 즉위 순서 힌트에 스코프 + 이름별→재위명 명시 | F4·F6(입력) |
 | `heads-of-state-timeline/lib/normalize-tenures.ts` | `ordinalOf` kind-aware(재위=regnalNumber·재임=termNumber 우선)로 인물상세와 통일 | F7 |
 
+**추가 구현 (2026-07-23, 미커밋)**:
+- **✅ 러시아 황제 시드 정정** — `person.russia-emperors.seed.ts`의 `regnalNumber`를 이름별(표트르=1·예카테리나2세=2·이반6세=6…)에서 **positional 제1~14대**로 재분류(각 인물 설명의 "제N대 황제"가 정답). 유니크 가드(561-576행)가 이름별 중복(=1이 6명)을 "다른 인물 점유"로 걸러 **12명 재위가 실제로 SKIP되던 활성 버그** 해소 → 14명 전원 생성. 중복 0 확인. (`russia-tsardom.seed.ts`는 이미 positional 차르국 제N대라 무변경.) 이름별 번호를 카드 왕명으로 노출하려면 reign-level `regnalName` 세팅이 추가로 필요(현재 person-level만·영문 'Peter' — 별도 개선).
+
 **남은 것 (미구현)**:
-- **🔴 러시아 황제 시드 데이터 정정** — `person.russia-emperors.seed.ts`·`russia-tsardom.seed.ts`가 `regnalNumber`를 이름별로 넣어 `@@unique`와 충돌·오표시. positional로 재분류하고 이름별 번호는 `regnalName`('표트르 1세' 등)으로 이동 필요(정확한 통산 순서 확정 요함 — 별도 작업 권장).
 - **스키마 주석 동기화** — `government.prisma`의 `regnalNumber` 주석 3곳 상충(:318·:373-375·:455-458)을 정본 P로 통일(주석 전용, `db:build`만·마이그 불요). 병렬 세션 소스 드리프트 위험이 있어 단독 커밋 시 반영 권장.
 - **옵션 B/C** — 이름별 번호를 **숫자 축으로도** 다루고 싶으면(정렬·질의) 그때 `@@unique` 재설계 + 데이터 재분류가 필요. 현재 정본 P에선 불요.
 

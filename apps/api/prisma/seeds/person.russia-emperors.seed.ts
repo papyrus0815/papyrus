@@ -124,7 +124,8 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 1,
+        // 정본 P: regnalNumber = 러시아 제국 통산 즉위 순서(제N대). 이름별 번호(예카테리나 1세)는 인물 regnalName.
+        regnalNumber: 2,
         startYear: 1725, startMonth: 2, startDay: 8,
         endYear: 1727, endMonth: 5, endDay: 17,
         appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
@@ -179,7 +180,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 2,
+        regnalNumber: 3,
         startYear: 1727, startMonth: 5, startDay: 18,
         endYear: 1730, endMonth: 1, endDay: 30,
         appointmentMethod: AppointmentMethod.HEREDITARY,
@@ -205,7 +206,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 1,
+        regnalNumber: 4,
         startYear: 1730, startMonth: 2, startDay: 19,
         endYear: 1740, endMonth: 10, endDay: 28,
         appointmentMethod: AppointmentMethod.INDIRECT_ELECTION,
@@ -230,7 +231,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 6,
+        regnalNumber: 5,
         startYear: 1740, startMonth: 10, startDay: 28,
         endYear: 1741, endMonth: 12, endDay: 6,
         appointmentMethod: AppointmentMethod.HEREDITARY,
@@ -258,7 +259,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 1,
+        regnalNumber: 6,
         startYear: 1741, startMonth: 12, startDay: 6,
         endYear: 1762, endMonth: 1, endDay: 5,
         appointmentMethod: AppointmentMethod.COUP,
@@ -284,7 +285,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 3,
+        regnalNumber: 7,
         startYear: 1762, startMonth: 1, startDay: 5,
         endYear: 1762, endMonth: 7, endDay: 9,
         appointmentMethod: AppointmentMethod.HEREDITARY,
@@ -310,7 +311,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 2,
+        regnalNumber: 8,
         startYear: 1762, startMonth: 7, startDay: 9,
         endYear: 1796, endMonth: 11, endDay: 17,
         appointmentMethod: AppointmentMethod.COUP,
@@ -337,7 +338,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 1,
+        regnalNumber: 9,
         startYear: 1796, startMonth: 11, startDay: 17,
         endYear: 1801, endMonth: 3, endDay: 23,
         appointmentMethod: AppointmentMethod.HEREDITARY,
@@ -378,7 +379,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 1,
+        regnalNumber: 10,
         startYear: 1801, startMonth: 3, startDay: 23,
         endYear: 1825, endMonth: 12, endDay: 1,
         appointmentMethod: AppointmentMethod.HEREDITARY,
@@ -405,7 +406,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 1,
+        regnalNumber: 11,
         startYear: 1825, startMonth: 12, startDay: 19,
         endYear: 1855, endMonth: 3, endDay: 2,
         appointmentMethod: AppointmentMethod.HEREDITARY,
@@ -431,7 +432,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 2,
+        regnalNumber: 12,
         startYear: 1855, startMonth: 3, startDay: 2,
         endYear: 1881, endMonth: 3, endDay: 13,
         appointmentMethod: AppointmentMethod.HEREDITARY,
@@ -458,7 +459,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 3,
+        regnalNumber: 13,
         startYear: 1881, startMonth: 3, startDay: 13,
         endYear: 1894, endMonth: 11, endDay: 1,
         appointmentMethod: AppointmentMethod.HEREDITARY,
@@ -484,7 +485,7 @@ const MONARCHS: MonarchEntry[] = [
       {
         countryName: '러시아 제국',
         positionTitle: '황제',
-        regnalNumber: 2,
+        regnalNumber: 14,
         startYear: 1894, startMonth: 11, startDay: 1,
         endYear: 1917, endMonth: 3, endDay: 15,
         appointmentMethod: AppointmentMethod.HEREDITARY,
