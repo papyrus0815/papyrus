@@ -16,8 +16,11 @@ export type AliveFilter = 'all' | 'alive' | 'dead'
 
 export type ScopeKind = 'era' | 'region' | 'field' | 'country'
 
-/** 인물 정렬 기준 — 모든 뷰에서 공유. */
+/** 인물 정렬 기준 — 카드 그리드 뷰(스토리·왕조)의 그룹 내부 인물 순서. */
 export type PersonSortKey = 'influence' | 'name' | 'year' | 'deathYear'
+
+/** 시대 스토리 세기 그룹의 시간축 방향 — 'desc'=최신 세기 먼저(기본), 'asc'=오래된 세기 먼저. */
+export type EraGroupOrder = 'asc' | 'desc'
 
 /** 다중 선택 가능한 카테고리별 필터 — 카테고리 안 OR, 카테고리 간 AND */
 export interface MultiScopes {
@@ -40,8 +43,10 @@ interface PersonInfographicFilterState {
   aliveFilter: AliveFilter
   view: PersonInfographicView
   query: string
-  /** 인물 정렬 기준 — 매트릭스/갤럭시/스토리/왕조 공통 */
+  /** 인물 정렬 기준 — 카드 그리드 뷰(스토리·왕조)의 그룹 내부 순서 */
   sort: PersonSortKey
+  /** 시대 스토리 세기 그룹 나열 방향 — 최신순(기본)/오래된순 */
+  eraGroupOrder: EraGroupOrder
   /** 좋아요 고정 인물 (localStorage로 유지) */
   pinned: string[]
 
@@ -62,6 +67,7 @@ interface PersonInfographicFilterState {
         | 'view'
         | 'query'
         | 'sort'
+        | 'eraGroupOrder'
         | 'recordPersonIds'
         | 'recordFromYear'
         | 'recordToYear'
@@ -80,6 +86,7 @@ interface PersonInfographicFilterState {
   setView: (v: PersonInfographicView) => void
   setQuery: (q: string) => void
   setSort: (s: PersonSortKey) => void
+  setEraGroupOrder: (order: EraGroupOrder) => void
   togglePin: (id: string) => void
   resetFilters: () => void
 
@@ -100,6 +107,7 @@ export const usePersonInfographicFilterStore =
         view: 'cards',
         query: '',
         sort: 'influence',
+        eraGroupOrder: 'desc',
         pinned: [],
         recordPersonIds: [],
         recordFromYear: null,
@@ -122,6 +130,7 @@ export const usePersonInfographicFilterStore =
         setView: (view) => set({ view }),
         setQuery: (query) => set({ query }),
         setSort: (sort) => set({ sort }),
+        setEraGroupOrder: (eraGroupOrder) => set({ eraGroupOrder }),
         togglePin: (id) =>
           set((state) => ({
             pinned: state.pinned.includes(id)
@@ -172,9 +181,12 @@ export const usePersonInfographicFilterStore =
             view: p.view ?? 'cards',
           } as Partial<PersonInfographicFilterState>
         },
+        // sort·eraGroupOrder도 표시 환경설정이라 view와 함께 유지(새로고침 시 선택 보존).
         partialize: (state) => ({
           pinned: state.pinned,
           view: state.view,
+          sort: state.sort,
+          eraGroupOrder: state.eraGroupOrder,
         }),
       },
     ),

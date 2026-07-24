@@ -26,6 +26,7 @@ import { useAdaptedPersons } from '../model/use-adapted-persons'
 import { DynastyView } from './dynasty-view'
 import { CardGridSkeleton } from './_shared/card-grid-skeleton'
 import { EmptyState } from './_shared/empty-state'
+import { EraOrderToggle } from './_shared/era-order-toggle'
 import { SortBar } from './_shared/sort-bar'
 import { EraStoryView } from './era-story-view'
 import { GalaxyView } from './galaxy-view'
@@ -215,6 +216,8 @@ export function InfographicContent({
             </SearchBox>
             {/* 정렬은 카드 그리드 뷰(스토리·왕조)에서만 의미 — 동작 패리티 유지 */}
             {(activeView === 'story' || activeView === 'dynasty') && <SortBar />}
+            {/* 세기 그룹 나열 방향(최신/오래된순)은 세기 그룹 뷰(스토리) 전용 */}
+            {activeView === 'story' && <EraOrderToggle />}
           </ToolbarMid>
 
           <ToolbarActions>

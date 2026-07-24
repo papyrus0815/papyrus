@@ -2,7 +2,7 @@
  * 인포그래픽 store ↔ URL 쿼리 양방향 동기화.
  *
  * 지원 파라미터:
- *   view, q, era, region, field, countries, alive, minInf, sort,
+ *   view, q, era, region, field, countries, alive, minInf, sort, order,
  *   recordPersonIds, fromYear, toYear (기록 비교 뷰 — 부호 연도, toYear 배타)
  *
  * 동작:
@@ -18,6 +18,7 @@ import { useCountries } from '@/features/country/api'
 
 import type {
   AliveFilter,
+  EraGroupOrder,
   MultiScopes,
   PersonInfographicView,
   PersonSortKey,
@@ -36,6 +37,7 @@ const VIEWS: PersonInfographicView[] = [
 ]
 const ALIVES: AliveFilter[] = ['all', 'alive', 'dead']
 const SORTS: PersonSortKey[] = ['influence', 'name', 'year', 'deathYear']
+const ORDERS: EraGroupOrder[] = ['asc', 'desc']
 
 function parseList(v: string | null): string[] {
   if (!v) return []
@@ -57,6 +59,9 @@ export function useFilterUrlSync(): void {
   const aliveFilter = usePersonInfographicFilterStore((s) => s.aliveFilter)
   const minInfluence = usePersonInfographicFilterStore((s) => s.minInfluence)
   const sort = usePersonInfographicFilterStore((s) => s.sort)
+  const eraGroupOrder = usePersonInfographicFilterStore(
+    (state) => state.eraGroupOrder,
+  )
   const recordPersonIds = usePersonInfographicFilterStore(
     (state) => state.recordPersonIds,
   )
@@ -117,6 +122,11 @@ export function useFilterUrlSync(): void {
     const s = searchParams.get('sort')
     if (s && (SORTS as string[]).includes(s) && s !== sort) {
       patch.sort = s as PersonSortKey
+    }
+
+    const order = searchParams.get('order')
+    if (order && (ORDERS as string[]).includes(order) && order !== eraGroupOrder) {
+      patch.eraGroupOrder = order as EraGroupOrder
     }
 
     // scope(era/region/field/countries)는 하나라도 URL에 있을 때만 채택 — 전부 없으면 store 유지
@@ -183,6 +193,7 @@ export function useFilterUrlSync(): void {
     setOrDel('alive', aliveFilter !== 'all' ? aliveFilter : '')
     setOrDel('minInf', minInfluence > 0 ? String(minInfluence) : '')
     setOrDel('sort', sort !== 'influence' ? sort : '')
+    setOrDel('order', eraGroupOrder !== 'desc' ? eraGroupOrder : '')
     setOrDel('era', scopes.era.join(','))
     setOrDel('region', scopes.region.join(','))
     setOrDel('field', scopes.field.join(','))
@@ -200,6 +211,7 @@ export function useFilterUrlSync(): void {
     aliveFilter,
     minInfluence,
     sort,
+    eraGroupOrder,
     scopes,
     recordPersonIds,
     recordFromYear,

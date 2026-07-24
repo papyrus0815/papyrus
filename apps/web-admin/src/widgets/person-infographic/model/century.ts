@@ -31,3 +31,20 @@ export function centuryOf(year: number): CenturyMeta {
 export function formatYear(y: number): string {
   return y < 0 ? `${-y}BC` : `${y}`
 }
+
+/**
+ * 세기 그룹 나열 순서 비교기.
+ * order='desc'(기본)는 최신 세기 먼저, 'asc'는 오래된 세기 먼저.
+ * '연도 미상'(key==='unknown', sortKey=+∞)은 방향과 무관하게 항상 맨 끝.
+ */
+export function compareCenturyMeta(
+  centuryA: CenturyMeta,
+  centuryB: CenturyMeta,
+  order: 'asc' | 'desc',
+): number {
+  const aUnknown = centuryA.key === 'unknown'
+  const bUnknown = centuryB.key === 'unknown'
+  if (aUnknown !== bUnknown) return aUnknown ? 1 : -1
+  const dir = order === 'desc' ? -1 : 1
+  return (centuryA.sortKey - centuryB.sortKey) * dir
+}

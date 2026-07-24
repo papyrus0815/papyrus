@@ -6,7 +6,7 @@
  * 인물 상세는 같은 페이지에서 PersonDetailPanel로 우측 렌더.
  *
  * URL 쿼리(useFilterUrlSync 가 store와 양방향 동기화):
- *   view, q, era, region, field, countries, alive, minInf, sort
+ *   view, q, era, region, field, countries, alive, minInf, sort, order
  *   + 기록 비교(view=records): recordPersonIds, fromYear(포함), toYear(배타) — 부호 연도
  *
  * 국가 상세 → "이 나라 인물 보기"는 ?countries=<id>로 진입 → 일반 필터 스코프로 적용됨

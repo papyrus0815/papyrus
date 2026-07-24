@@ -12,7 +12,12 @@ import { glassOrSolidMixin } from '@/shared/styles/mixins'
 
 import type { AdaptedPerson } from '../model/types'
 import { yearOfEra } from '../model/adapt'
-import { centuryOf, formatYear, type CenturyMeta } from '../model/century'
+import {
+  centuryOf,
+  compareCenturyMeta,
+  formatYear,
+  type CenturyMeta,
+} from '../model/century'
 import { INFOGRAPHIC_DEFAULTS } from '../model/constants'
 import {
   usePersonInfographicFilterStore,
@@ -48,6 +53,9 @@ const UNKNOWN_CENTURY: CenturyMeta = {
 export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
   const theme = useTheme()
   const sort = usePersonInfographicFilterStore((s) => s.sort)
+  const eraGroupOrder = usePersonInfographicFilterStore(
+    (state) => state.eraGroupOrder,
+  )
   const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
   const hasFilter = useHasActiveFilter()
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
@@ -59,8 +67,11 @@ export function EraStoryView({ people, onOpen, q, pinned, togglePin }: Props) {
       if (!map[meta.key]) map[meta.key] = { meta, arr: [] }
       map[meta.key].arr.push(p)
     }
-    return Object.values(map).sort((a, b) => a.meta.sortKey - b.meta.sortKey)
-  }, [people])
+    // 세기 그룹 나열 방향 — eraGroupOrder('desc'=최신 세기 먼저, 기본).
+    return Object.values(map).sort((groupA, groupB) =>
+      compareCenturyMeta(groupA.meta, groupB.meta, eraGroupOrder),
+    )
+  }, [people, eraGroupOrder])
 
   const sortFn = useMemo(
     () => makeSortFnWithPinned(pinned, sort),
