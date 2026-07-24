@@ -64,6 +64,7 @@ export function ContemporariesStrip({
           {data && (
             <StripWindowCaption>
               {windowCaptionOf(data.meta.window)}
+              {data.rulers.length > 1 && ' · 겹친 기간 긴 순'}
             </StripWindowCaption>
           )}
         </StripTitle>
@@ -129,7 +130,9 @@ export function ContemporariesStrip({
                       <ChipSpan>{chip.spanText}</ChipSpan>
                     </>
                   )
-                  const chipAria = `${chip.label} — ${group.label} ${CATEGORY_TOKENS[chip.category].label} ${chip.spanText}`
+                  // 정보밀도 보강 — 칩 본문(이름+대표 스팬)에 안 담기는 겹침 기간·전체 직위·
+                  // 복수 재위 스팬을 aria-label(키보드/SR)·title(hover)에 실어 노출한다.
+                  const chipAria = `${chip.label} — ${group.label} ${CATEGORY_TOKENS[chip.category].label} ${chip.spanText} · ${chip.detailText}`
                   // 타계정 소유 인물은 상세(:id)가 소유자 게이트라 열 수 없음 —
                   // 클릭 데드엔드 대신 비활성 칩 (가계도 비소유 노드 선례)
                   if (!chip.isOwned) {
@@ -140,7 +143,7 @@ export function ContemporariesStrip({
                       <RulerChipStatic
                         key={chip.personId}
                         role="img"
-                        title="다른 계정 소유 인물 — 상세를 열 수 없습니다"
+                        title={`${chip.detailText} · 다른 계정 소유 인물 — 상세를 열 수 없습니다`}
                         aria-label={`${chipAria} (다른 계정 소유 — 상세를 열 수 없음)`}
                       >
                         {chipBody}
@@ -151,7 +154,7 @@ export function ContemporariesStrip({
                     <RulerChip
                       key={chip.personId}
                       type="button"
-                      title={chip.title ?? undefined}
+                      title={chip.detailText}
                       aria-label={chipAria}
                       onClick={() => onPersonClick(chip.personId)}
                     >

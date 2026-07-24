@@ -165,6 +165,31 @@ it('소유 칩 클릭은 onPersonClick(personId)을 호출한다', async () => {
   expect(onPersonClick).toHaveBeenCalledWith('sejong')
 })
 
+it('수장이 2명 이상이면 헤더에 정렬 근거(겹친 기간 긴 순) 캡션을 노출한다', async () => {
+  mockGet.mockResolvedValue(
+    response([
+      ruler({ id: 'sejong', label: '세종' }),
+      ruler({ id: 'munjong', label: '문종' }),
+    ]),
+  )
+  renderStrip(
+    <ContemporariesStrip personId="p1" enabled onPersonClick={jest.fn()} />,
+  )
+  await screen.findByRole('button', { name: /세종/ })
+  expect(screen.getByText(/겹친 기간 긴 순/)).toBeInTheDocument()
+})
+
+it('칩 aria-label·title에 겹침 기간 상세를 실어 정보밀도를 보강한다', async () => {
+  mockGet.mockResolvedValue(response([ruler({ id: 'sejong', label: '세종' })]))
+  renderStrip(
+    <ContemporariesStrip personId="p1" enabled onPersonClick={jest.fn()} />,
+  )
+  const chip = await screen.findByRole('button', { name: /세종/ })
+  // ruler() 기본 overlapYears=32
+  expect(chip.getAttribute('aria-label')).toContain('겹침 32년')
+  expect(chip.getAttribute('title')).toContain('겹침 32년')
+})
+
 it('절단 안내: onOpenCompare 있으면 딥링크 버튼, 없으면(모달) 죽은 포인터 없는 중립 문구', async () => {
   mockGet.mockResolvedValue(
     response([ruler({ id: 'sejong', label: '세종' })], { omittedCount: 5 }),

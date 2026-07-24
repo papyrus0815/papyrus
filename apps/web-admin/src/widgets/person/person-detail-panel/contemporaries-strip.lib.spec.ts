@@ -4,6 +4,7 @@
  */
 import {
   categoryOfRecord,
+  chipDetailTextOf,
   chipLabelOf,
   groupRulersByCountry,
   primaryRecordOf,
@@ -152,6 +153,25 @@ describe('spanTextOf — 종료일 미기록의 재위 중/미상 구분', () =>
     expect(
       spanTextOf(ruler(), record({ startYear: -247, endYear: -210 })),
     ).toBe('BC 247–BC 210')
+  })
+})
+
+describe('chipDetailTextOf — 겹침 기간·직위·복수 재위 (aria/title 정보밀도)', () => {
+  it('겹친 기간과 전체 직위를 포함한다', () => {
+    const subject = ruler()
+    expect(chipDetailTextOf(subject, subject.records[0]!)).toBe('겹침 10년 · 국왕')
+  })
+
+  it('복수 재위면 모든 스팬을 나열한다', () => {
+    const first = record({ recordId: 'a', startYear: 1418, endYear: 1450, title: null })
+    const second = record({ recordId: 'b', startYear: 1455, endYear: 1460, title: null })
+    const subject = ruler({}, [first, second])
+    expect(chipDetailTextOf(subject, first)).toBe('겹침 10년 · 재위 1418–1450, 1455–1460')
+  })
+
+  it('overlapYears 음수(경계 오차)는 0으로 클램프', () => {
+    const subject = { ...ruler(), overlapYears: -3 }
+    expect(chipDetailTextOf(subject, subject.records[0]!)).toContain('겹침 0년')
   })
 })
 

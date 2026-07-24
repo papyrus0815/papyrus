@@ -24,6 +24,12 @@ export interface ContemporaryChip {
   profileImageUrl: string | null
   /** false면 타계정 소유 — 상세를 열 수 없어 비클릭 렌더 (가계도 isOwned 선례) */
   isOwned: boolean
+  /**
+   * 정렬 근거이자 정보밀도 보강 — 겹친 기간·전체 직위·복수 재위 스팬을 한 줄로.
+   * 칩은 좁아 대표 스팬만 보이므로, 이 상세를 aria-label·title(hover)에 노출한다.
+   * (플로팅 팝오버는 가로 스크롤 overflow 클리핑·시각 검증 부재로 배제 — 검토서 §UX.)
+   */
+  detailText: string
 }
 
 export interface ContemporaryCountryGroup {
@@ -100,6 +106,24 @@ export function spanTextOf(ruler: ContemporaryRuler, record: ContemporaryRecord)
 }
 
 /**
+ * 칩 상세 — 겹친 기간(정렬 근거)·전체 직위·복수 재위 스팬. 칩 본문엔 안 들어가는
+ * 정보를 aria-label·title로 노출해, 순서 근거 불투명·정보밀도 부족을 보강한다.
+ * 서수(regnalNumber) 텍스트화는 이름 표기 관례(서양 'N세' vs 로마숫자)가 갈려 제외.
+ */
+export function chipDetailTextOf(
+  ruler: ContemporaryRuler,
+  primaryRecord: ContemporaryRecord,
+): string {
+  const parts: string[] = [`겹침 ${Math.max(0, ruler.overlapYears)}년`]
+  if (primaryRecord.title?.trim()) parts.push(primaryRecord.title.trim())
+  if (ruler.records.length > 1) {
+    const spans = ruler.records.map((record) => spanTextOf(ruler, record)).join(', ')
+    parts.push(`재위 ${spans}`)
+  }
+  return parts.join(' · ')
+}
+
+/**
  * 국가별 그룹핑 — 그룹·칩 순서는 서버 정렬(겹침 길이 내림차순)의 첫 등장 순서를 보존.
  * 국가 정보가 없는 기록(교황 등)은 '기타' 그룹.
  */
@@ -137,6 +161,7 @@ export function groupRulersByCountry(
       title: record.title,
       profileImageUrl: ruler.person.profileImageUrl,
       isOwned: ruler.person.isOwned,
+      detailText: chipDetailTextOf(ruler, record),
     })
   }
   return [...groups.values()]
