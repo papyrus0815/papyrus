@@ -27,7 +27,13 @@ import {
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
+import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
+import {
+  PersonRegisterModalFormScroll,
+  PersonRegisterModalStickyFooter,
+  PersonRegisterModalPrimaryBtn,
+  PersonRegisterModalCancelBtn,
+} from '@/shared/ui/register-modal-shell/register-modal-shell'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
@@ -305,30 +311,24 @@ const CheckboxLabelRow = styled.div`
   }
 `
 
-const FormActions = styled.div`
-  display: flex;
-  align-items: center;
-  margin-top: 28px;
-  padding: 0;
-`
-
-const DeleteButton = styled.button`
-  padding: 10px 16px;
+/** 스티키 푸터 좌측 삭제 — margin-right:auto로 취소·저장을 우측에 모음(재위 모달과 동일 패턴) */
+const FooterDeleteBtn = styled.button`
+  margin-right: auto;
+  padding: 10px 14px;
   font-size: 13px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.error};
   background: transparent;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.2s;
 
   &:hover:not(:disabled) {
     background: ${({ theme }) =>
       theme.mode === 'dark'
         ? 'rgba(255, 69, 58, 0.16)'
         : 'rgba(239, 68, 68, 0.08)'};
-    color: ${({ theme }) => theme.colors.error};
   }
   &:disabled {
     opacity: 0.5;
@@ -815,28 +815,26 @@ export function TenureRegisterPanel({
       : '재임 등록'
 
   return (
-    <FormSidePanel
-      isOpen={open}
-      title={panelTitle}
-      onClose={onClose}
-      panelWidth={640}
-      submitLabel={submitting ? '처리 중…' : submitLabelText}
-      formId={FORM_ID}
-      submitDisabled={submitDisabled}
-      headerExtra={
-        <RequiredNoticeWrap>
-          <span className="required-title">필수 항목:</span>
-          <span className="required-list">
-            <span className={`required-item ${hasCountry ? 'completed' : ''}`}>국가</span>
-            {', '}
-            <span className={`required-item ${hasPosition ? 'completed' : ''}`}>직책</span>
-            {', '}
-            <span className={`required-item ${hasStartDate ? 'completed' : ''}`}>취임일</span>
-          </span>
-        </RequiredNoticeWrap>
-      }
-    >
-      <S.Form id={FORM_ID} onSubmit={handleSubmit}>
+    <>
+      <RegisterModal
+        isOpen={open}
+        onClose={onClose}
+        title={panelTitle}
+        maxWidth="min(640px, 94vw)"
+        minHeight="auto"
+      >
+        <PersonRegisterModalFormScroll>
+          <RequiredNoticeWrap>
+            <span className="required-title">필수 항목:</span>
+            <span className="required-list">
+              <span className={`required-item ${hasCountry ? 'completed' : ''}`}>국가</span>
+              {', '}
+              <span className={`required-item ${hasPosition ? 'completed' : ''}`}>직책</span>
+              {', '}
+              <span className={`required-item ${hasStartDate ? 'completed' : ''}`}>취임일</span>
+            </span>
+          </RequiredNoticeWrap>
+          <S.Form id={FORM_ID} onSubmit={handleSubmit}>
         {personDetail && (
           <PersonInfoBar>
             <PersonThumbnail aria-hidden>
@@ -1238,18 +1236,34 @@ export function TenureRegisterPanel({
           </SidebarFormWrap>
         </S.FormSection>
 
-        {(isEdit && (
-          <FormActions>
-            <DeleteButton
+          </S.Form>
+        </PersonRegisterModalFormScroll>
+        <PersonRegisterModalStickyFooter>
+          {isEdit && (
+            <FooterDeleteBtn
               type="button"
               onClick={() => setDeleteConfirmOpen(true)}
               disabled={submitting}
             >
               삭제
-            </DeleteButton>
-          </FormActions>
-        )) || null}
-      </S.Form>
+            </FooterDeleteBtn>
+          )}
+          <PersonRegisterModalCancelBtn
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+          >
+            취소
+          </PersonRegisterModalCancelBtn>
+          <PersonRegisterModalPrimaryBtn
+            type="submit"
+            form={FORM_ID}
+            disabled={submitDisabled}
+          >
+            {submitting ? '처리 중…' : submitLabelText}
+          </PersonRegisterModalPrimaryBtn>
+        </PersonRegisterModalStickyFooter>
+      </RegisterModal>
 
       <CountrySearchModal
         isOpen={countryModalOpen}
@@ -1339,6 +1353,6 @@ export function TenureRegisterPanel({
         onConfirm={handleDelete}
         onCancel={() => setDeleteConfirmOpen(false)}
       />
-    </FormSidePanel>
+    </>
   )
 }

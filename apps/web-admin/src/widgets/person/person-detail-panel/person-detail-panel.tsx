@@ -44,6 +44,7 @@ import { personCareerApi } from '@/shared/api/person-career'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { deletePerson, updatePerson, getAllPersons, getPersonById } from '@/shared/api/persons'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getPersonFamilyTree } from '@/shared/api/persons-family-tree'
 import {
@@ -428,6 +429,9 @@ export function PersonDetailPanel({
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
   const [sovereignReignModalOpen, setSovereignReignModalOpen] = useState(false)
   const [editingReignId, setEditingReignId] = useState<string | null>(null)
+  /** 재임·재위 단일 진입점 — "추가" 클릭 시 군주/관직 선택 스텝을 띄우고, 선택에 따라
+   *  기존 등록 패널(SovereignReign/GovernmentPositionTenure)로 라우팅한다. 두 폼·백엔드 무변경. */
+  const [addKindChooserOpen, setAddKindChooserOpen] = useState(false)
   const [lifeEventModalOpen, setLifeEventModalOpen] = useState(false)
   const [editingLifeEvent, setEditingLifeEvent] = useState<PersonLifeEvent | null>(null)
   /** 헤더 아바타 이미지 로드 실패 → 글리프 폴백(MD1). src 변경 시 리셋. */
@@ -2087,23 +2091,11 @@ export function PersonDetailPanel({
                             type="button"
                             onClick={() => {
                               playClickSound()
-                              setEditingTenureId(null)
-                              setTenureModalOpen(true)
+                              setAddKindChooserOpen(true)
                             }}
                           >
                             <FiPlus size={12} />
-                            재임
-                          </TenureAddButton>
-                          <TenureAddButton
-                            type="button"
-                            onClick={() => {
-                              playClickSound()
-                              setEditingReignId(null)
-                              setSovereignReignModalOpen(true)
-                            }}
-                          >
-                            <FiPlus size={12} />
-                            재위
+                            재임·재위 추가
                           </TenureAddButton>
                         </UnifiedActionRow>
                       )}
@@ -2184,6 +2176,38 @@ export function PersonDetailPanel({
                       setEditingReignId(null)
                     }}
                     reignId={editingReignId}
+                  />
+                  {/* 재임·재위 단일 진입점 — 어떤 기록을 추가할지 고르는 선택 스텝.
+                      군주면 재위 패널, 관직이면 재임 패널로 라우팅(엔티티는 그대로 분리). */}
+                  <SelectModal
+                    isOpen={addKindChooserOpen}
+                    onClose={() => setAddKindChooserOpen(false)}
+                    title="추가할 기록 선택"
+                    options={[
+                      {
+                        value: 'reign',
+                        icon: '👑',
+                        label: '군주 재위',
+                        description: '국왕·황제·천황·쇼군 등 군주의 재위',
+                      },
+                      {
+                        value: 'tenure',
+                        icon: '🏛️',
+                        label: '관직 재임',
+                        description: '대통령·총리·장관·외교관 등 공직 임기',
+                      },
+                    ]}
+                    onSelect={(kind) => {
+                      setAddKindChooserOpen(false)
+                      playClickSound()
+                      if (kind === 'reign') {
+                        setEditingReignId(null)
+                        setSovereignReignModalOpen(true)
+                      } else {
+                        setEditingTenureId(null)
+                        setTenureModalOpen(true)
+                      }
+                    }}
                   />
 
                   {/* 3.35. 분야별 경력 */}
