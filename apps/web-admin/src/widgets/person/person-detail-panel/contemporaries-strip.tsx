@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import styled, { css } from 'styled-components'
 
 import { CATEGORY_TOKENS } from '@/entities/government-position/model/category-tokens'
@@ -9,11 +9,14 @@ import {
   personContemporariesKeys,
 } from '@/shared/api/person-contemporaries'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import type { PositionCategory } from '@/entities/government-position/model/types'
 import {
   groupRulersByCountry,
   windowCaptionOf,
 } from './contemporaries-strip.lib'
+
+type ContemporariesScope = 'all' | 'sameCountry'
 
 interface ContemporariesStripProps {
   personId: string
@@ -36,10 +39,16 @@ export function ContemporariesStrip({
   onPersonClick,
   onOpenCompare,
 }: ContemporariesStripProps) {
+  // 서버는 scope=all|sameCountry를 이미 지원 — 유도 창은 그대로 두고 후보만 대상 국가로 좁힌다.
+  // (창을 안 넘기므로 meta.window는 scope와 무관하게 동일 = "같은 시기, 같은 나라로 필터".)
+  const [scope, setScope] = useState<ContemporariesScope>('all')
+
   const contemporariesQuery = useQuery({
-    queryKey: personContemporariesKeys.byPerson(personId),
-    queryFn: () => getPersonContemporaries(personId),
+    queryKey: personContemporariesKeys.byPerson(personId, { scope }),
+    queryFn: () => getPersonContemporaries(personId, { scope }),
     enabled,
+    // scope 전환 시 이전 데이터를 유지해 스켈레톤 깜빡임을 없앤다.
+    placeholderData: keepPreviousData,
   })
 
   if (!enabled) return null
@@ -58,11 +67,24 @@ export function ContemporariesStrip({
             </StripWindowCaption>
           )}
         </StripTitle>
-        {onOpenCompare && (
-          <CompareLinkButton type="button" onClick={onOpenCompare}>
-            수장 비교에서 보기 →
-          </CompareLinkButton>
-        )}
+        <StripControls>
+          <ScopeToggleWrap>
+            <SegmentControl<ContemporariesScope>
+              value={scope}
+              onChange={setScope}
+              ariaLabel="동시대 수장 범위"
+              options={[
+                { value: 'all', label: '전체' },
+                { value: 'sameCountry', label: '같은 나라' },
+              ]}
+            />
+          </ScopeToggleWrap>
+          {onOpenCompare && (
+            <CompareLinkButton type="button" onClick={onOpenCompare}>
+              수장 비교에서 보기 →
+            </CompareLinkButton>
+          )}
+        </StripControls>
       </StripHeaderRow>
 
       {contemporariesQuery.isLoading && (
@@ -76,7 +98,11 @@ export function ContemporariesStrip({
         <MutedNote role="status">동시대 수장을 불러오지 못했습니다</MutedNote>
       )}
       {data && data.rulers.length === 0 && (
-        <MutedNote>같은 시기의 다른 수장 기록이 없습니다</MutedNote>
+        <MutedNote>
+          {scope === 'sameCountry'
+            ? '같은 나라의 동시대 수장 기록이 없습니다'
+            : '같은 시기의 다른 수장 기록이 없습니다'}
+        </MutedNote>
       )}
 
       {data && data.rulers.length > 0 && (
@@ -204,6 +230,21 @@ const StripHeaderRow = styled.div`
   flex-wrap: wrap;
   gap: 6px 12px;
   margin-bottom: 8px;
+`
+
+const StripControls = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+`
+
+/** 컴팩트 스트립 톤에 맞춰 canon 세그먼트를 살짝 축소(패딩·폰트만) */
+const ScopeToggleWrap = styled.div`
+  button {
+    padding: 3px 9px;
+    font-size: 11px;
+  }
 `
 
 const StripTitle = styled.h4`
