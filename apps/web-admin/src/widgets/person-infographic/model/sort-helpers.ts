@@ -20,11 +20,24 @@ function cmpYear(
   return dir === 'asc' ? yearA - yearB : yearB - yearA
 }
 
-function compareBy(sort: PersonSortKey, a: AdaptedPerson, b: AdaptedPerson) {
-  if (sort === 'name') return a.name.localeCompare(b.name)
-  if (sort === 'year') return cmpYear(a.born, b.born, 'asc')
-  if (sort === 'deathYear') return cmpYear(a.died, b.died, 'desc')
-  return b.influence - a.influence
+function compareBy(
+  sort: PersonSortKey,
+  personA: AdaptedPerson,
+  personB: AdaptedPerson,
+) {
+  // 연도 키는 방향 통일 — 출생·사망 모두 '최신순'(desc). (이전엔 출생 asc·사망 desc 비대칭)
+  let primary: number
+  if (sort === 'name') primary = personA.name.localeCompare(personB.name, 'ko')
+  else if (sort === 'year')
+    primary = cmpYear(personA.born, personB.born, 'desc')
+  else if (sort === 'deathYear')
+    primary = cmpYear(personA.died, personB.died, 'desc')
+  else primary = personB.influence - personA.influence
+  if (primary !== 0) return primary
+  // 동점 2차 기준 — 순서 결정성 확보(영향력 미상=0 대량 동점·동일 연도 방어).
+  const byName = personA.name.localeCompare(personB.name, 'ko')
+  if (byName !== 0) return byName
+  return personA.id < personB.id ? -1 : personA.id > personB.id ? 1 : 0
 }
 
 /** 핀 된 인물을 항상 위로 올리는 정렬 비교 함수 생성기. */
