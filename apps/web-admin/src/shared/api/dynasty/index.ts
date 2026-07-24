@@ -13,10 +13,11 @@ export type DynastyDetail = Awaited<
 export type DynastyHistoricalRule = DynastyDetail['historicalRules'][number]
 export type DynastyModernRule = DynastyDetail['modernRules'][number]
 
-/** 통치기록 수정 바디 — 기간(구조화)·종료 사유·비고. 통치 국가는 불변. */
+/** 통치기록 수정 바디 — 기간(구조화)·시작/종료 사유·비고. 통치 국가는 불변. */
 export type DynastyRuleReasonBody = {
   startDateInfo?: DateInfoInput | null
   endDateInfo?: DateInfoInput | null
+  startReason?: string | null
   endReason?: string | null
   notes?: string | null
 }
@@ -26,6 +27,7 @@ export type CreateDynastyHistoricalRuleBody = {
   historicalCountryId: string
   startDateInfo?: DateInfoInput | null
   endDateInfo?: DateInfoInput | null
+  startReason?: string | null
   endReason?: string | null
   notes?: string | null
 }
@@ -35,6 +37,7 @@ export type CreateDynastyModernRuleBody = {
   countryId: string
   startDateInfo?: DateInfoInput | null
   endDateInfo?: DateInfoInput | null
+  startReason?: string | null
   endReason?: string | null
   notes?: string | null
 }

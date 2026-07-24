@@ -53,6 +53,7 @@ export type UnifiedRule = {
   endYear: number | null
   endMonth: number | null
   endDay: number | null
+  startReason: string | null
   endReason: string | null
   notes: string | null
 }
@@ -70,6 +71,7 @@ function unifyHistorical(rule: DynastyHistoricalRule): UnifiedRule {
     endYear: rule.endYear,
     endMonth: rule.endMonth,
     endDay: rule.endDay,
+    startReason: rule.startReason,
     endReason: rule.endReason,
     notes: rule.notes,
   }
@@ -88,6 +90,7 @@ function unifyModern(rule: DynastyModernRule): UnifiedRule {
     endYear: rule.endYear,
     endMonth: rule.endMonth,
     endDay: rule.endDay,
+    startReason: rule.startReason,
     endReason: rule.endReason,
     notes: rule.notes,
   }
@@ -290,6 +293,12 @@ export function DynastyRulesModal({
                     </RuleTop>
 
                     <RuleMeta>
+                      {rule.startReason && (
+                        <MetaRow>
+                          <MetaLabel>통치 시작 사유</MetaLabel>
+                          <MetaValue>{rule.startReason}</MetaValue>
+                        </MetaRow>
+                      )}
                       {rule.endReason ? (
                         <MetaRow>
                           <MetaLabel>통치 종료 사유</MetaLabel>

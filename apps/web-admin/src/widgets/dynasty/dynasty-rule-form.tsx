@@ -85,6 +85,7 @@ export function DynastyRuleForm({
         )
       : emptyPartialDateParts(),
   )
+  const [startReason, setStartReason] = useState(editing?.startReason ?? '')
   const [endReason, setEndReason] = useState(editing?.endReason ?? '')
   const [notes, setNotes] = useState(editing?.notes ?? '')
   const [datePickerSide, setDatePickerSide] = useState<'start' | 'end' | null>(
@@ -141,6 +142,7 @@ export function DynastyRuleForm({
     const reasonBody = {
       startDateInfo,
       endDateInfo,
+      startReason: startReason.trim() || null,
       endReason: endReason.trim() || null,
       notes: notes.trim() || null,
     }
@@ -261,6 +263,17 @@ export function DynastyRuleForm({
               종료일이 시작일보다 앞섭니다. 확인해 주세요.
             </InvertWarn>
           )}
+        </Field>
+
+        <Field>
+          <FieldLabel>통치 시작 사유</FieldLabel>
+          <TextInput
+            type="text"
+            value={startReason}
+            maxLength={200}
+            placeholder="예: 정복, 상속, 선출, 건국"
+            onChange={(event) => setStartReason(event.target.value)}
+          />
         </Field>
 
         <Field>
