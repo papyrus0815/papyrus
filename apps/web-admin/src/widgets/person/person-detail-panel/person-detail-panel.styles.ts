@@ -1088,203 +1088,261 @@ export const UnifiedActionRow = styled.div`
   gap: 6px;
 `
 
-// ─── 재임·재위 통합 카드 ───────────────────────────────────────
-export const UnifiedCardList = styled.div`
+// ─── 재임·재위 통합 리스트 (플랫 에디토리얼 행) ─────────────────
+// 카드 박스를 없앤 단일 서피스 리스트 — 항목은 '행', 형제 사이는 실선 헤어라인,
+// 항목 내부 소섹션(승계·행정부·업적)은 점선 seam. 컨테이너 중첩이 구조적으로 불가.
+export const UnifiedCardList = styled.ol`
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 `
 
 export const unifiedKindColor = {
   tenure: {
-    base: '#4338ca',
+    // 킥커 글리프 디스크 배경(--entry-soft)
     softBg: 'rgba(99,102,241,0.1)',
     softBgDark: 'rgba(99,102,241,0.18)',
+    // 킥커·액센트 팩트 텍스트(--entry-accent)
     text: '#4338ca',
     textDark: '#a5b4fc',
+    // hover/focus 라운드 워시(--entry-wash) — 지속 서피스 아님(트랜지언트 하이라이트)
+    wash: 'rgba(99,102,241,0.05)',
+    washDark: 'rgba(129,140,248,0.08)',
+    // focus-within 링(--entry-ring)
+    ring: 'rgba(99,102,241,0.14)',
+    ringDark: 'rgba(129,140,248,0.2)',
   },
   reign: {
-    base: '#0f766e',
     softBg: 'rgba(20,184,166,0.1)',
     softBgDark: 'rgba(20,184,166,0.18)',
     text: '#0f766e',
     textDark: '#5eead4',
+    wash: 'rgba(20,184,166,0.05)',
+    washDark: 'rgba(45,212,191,0.08)',
+    ring: 'rgba(20,184,166,0.14)',
+    ringDark: 'rgba(45,212,191,0.2)',
   },
 } as const
 
-export const UnifiedCard = styled.div<{ $kind: 'tenure' | 'reign' }>`
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 16px 20px;
-  border-radius: 14px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
-  overflow: hidden;
-  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
-
-  &:hover {
-    border-color: rgba(99, 102, 241, 0.18);
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
-  }
-
-  @media (max-width: 560px) {
-    padding: 14px 16px;
-  }
-`
-
-export const UnifiedCardMain = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-`
-
-export const UnifiedCardTopRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-`
-
-export const UnifiedKindBadge = styled.span<{ $kind: 'tenure' | 'reign' }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 3px 9px 3px 8px;
-  border-radius: 999px;
-  background: ${({ $kind, theme }) =>
-    theme.mode === 'dark'
-      ? unifiedKindColor[$kind].softBgDark
-      : unifiedKindColor[$kind].softBg};
-  color: ${({ $kind, theme }) =>
+/** kind 액센트를 CSS 변수로 1회 계산 — 킥커 글리프 디스크·액센트 텍스트·hover 워시·
+    focus 링이 전부 이 변수를 읽는다 (AchievementSection의 --ach-* 패턴과 동형). */
+export const UnifiedCard = styled.li<{ $kind: 'tenure' | 'reign' }>`
+  --entry-accent: ${({ $kind, theme }) =>
     theme.mode === 'dark'
       ? unifiedKindColor[$kind].textDark
       : unifiedKindColor[$kind].text};
+  --entry-ring: ${({ $kind, theme }) =>
+    theme.mode === 'dark'
+      ? unifiedKindColor[$kind].ringDark
+      : unifiedKindColor[$kind].ring};
+  --entry-wash: ${({ $kind, theme }) =>
+    theme.mode === 'dark'
+      ? unifiedKindColor[$kind].washDark
+      : unifiedKindColor[$kind].wash};
+  --entry-soft: ${({ $kind, theme }) =>
+    theme.mode === 'dark'
+      ? unifiedKindColor[$kind].softBgDark
+      : unifiedKindColor[$kind].softBg};
+
+  position: relative;
+  display: block;
+  padding: 15px 12px;
+
+  /* 형제 행 사이 헤어라인 — 카드 박스 대신 리스트 구분선. 첫 행은 무선. */
+  & + & {
+    border-top: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.06)'
+          : 'rgba(15,23,42,0.07)'};
+  }
+
+  /* 행 하이라이트 — 지속 서피스가 아니라 hover/focus 시에만 뜨는 라운드 워시.
+     상하 6·좌우 4px 인셋이라 구분선과 겹치지 않고, z-index:0으로 내용 뒤에 깔린다
+     (Linear/Notion 행 패턴). 컨테이너가 아니라 인터랙션 하이라이트. */
   &::before {
     content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    /* 다크모드: base(진한 색)는 어두운 칩 위에서 저대비 — 텍스트와 동일 토큰 사용 */
-    background: ${({ $kind, theme }) =>
-      theme.mode === 'dark'
-        ? unifiedKindColor[$kind].textDark
-        : unifiedKindColor[$kind].base};
+    position: absolute;
+    inset: 6px 4px;
+    border-radius: 10px;
+    background: var(--entry-wash);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+    z-index: 0;
+  }
+  &:hover::before {
+    opacity: 1;
+  }
+  &:focus-within::before {
+    opacity: 1;
+    box-shadow: 0 0 0 1.5px var(--entry-ring);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &::before {
+      transition: none;
+    }
+  }
+  @media (max-width: 560px) {
+    padding: 13px 8px;
+  }
+`
+
+/* 내용은 워시(::before, z-index:0) 위에 — 수직 리듬은 블록별 margin이 담당 */
+export const UnifiedCardMain = styled.div`
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+`
+
+/** 킥커(eyebrow) — kind·서수·연임을 액센트색 한 줄로. 선두 글리프(재위=방패/
+    재임=서류)는 액센트 소프트 디스크를 입어, 레일 없이도 종류를 상시 표시한다
+    (색맹 안전: 글리프 모양 + '재위/재임' 한글 단어가 색과 독립). */
+export const UnifiedEyebrow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 32px; /* absolute 수정 버튼 자리 */
+  margin-bottom: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  font-variant-numeric: tabular-nums;
+  color: var(--entry-accent);
+  svg {
     flex-shrink: 0;
+    box-sizing: content-box;
+    padding: 3px;
+    border-radius: 6px;
+    background: var(--entry-soft);
+    color: var(--entry-accent);
   }
 `
 
 export const UnifiedCardTitle = styled.div`
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 14.5px;
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+  text-wrap: balance;
   color: ${({ theme }) =>
     theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
   min-width: 0;
   word-break: break-word;
+  @media (max-width: 560px) {
+    font-size: 15px;
+  }
 `
 
-export const UnifiedOrdinal = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
-`
-
-export const UnifiedMetaRow = styled.div`
+/** 팩트라인 — 국가·왕조·기간·나이를 칩 없이 interpunct(·)로 잇는 조용한 한 줄 */
+export const UnifiedFactLine = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 8px;
-  align-items: center;
-`
-
-export const UnifiedMetaChip = styled.span<{ $muted?: boolean }>`
-  font-size: 11.5px;
+  align-items: baseline;
+  row-gap: 2px;
+  margin-top: 6px;
+  font-size: 12px;
   font-weight: 500;
-  padding: 3px 9px;
-  border-radius: 999px;
+  line-height: 1.5;
   font-variant-numeric: tabular-nums;
-  background: ${({ theme, $muted }) =>
-    $muted
-      ? 'transparent'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.05)'
-        : 'rgba(15,23,42,0.045)'};
-  color: ${({ theme, $muted }) =>
-    $muted ? theme.colors.text.tertiary : theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-export const UnifiedAgeBadge = styled.span`
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.18)' : 'rgba(99,102,241,0.09)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
+/** $accent — 진행 중(– 현재) 기간처럼 조용히 강조할 팩트.
+    구분점(·)은 CSS로 자동 — 항목이 조건부로 빠져도 고아 점이 안 생긴다. */
+export const UnifiedFact = styled.span<{ $accent?: boolean }>`
+  white-space: nowrap;
+  ${({ $accent }) =>
+    $accent &&
+    css`
+      color: var(--entry-accent);
+      font-weight: 600;
+    `}
+  & + &::before {
+    content: '·';
+    margin: 0 7px;
+    font-weight: 400;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
 `
 
+/** 연임 — 유일하게 살아남는 배지. pill 채움 대신 각진 아웃라인 스탬프. */
 export const UnifiedReappointBadge = styled.span`
-  font-size: 10.5px;
+  flex-shrink: 0;
+  font-size: 10px;
   font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 999px;
-  letter-spacing: 0.02em;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(245,158,11,0.18)' : 'rgba(245,158,11,0.12)'};
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+  background: transparent;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(245,158,11,0.45)' : 'rgba(245,158,11,0.5)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#b45309')};
 `
 
-export const UnifiedSubRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-top: 2px;
+/** 즉위·경위·퇴위·비고 정의 그리드 — 라벨 컬럼 정렬 (SubRow 흘림 대체) */
+export const UnifiedDetailGrid = styled.dl`
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  column-gap: 10px;
+  row-gap: 5px;
+  margin: 12px 0 0;
+  @media (max-width: 560px) {
+    grid-template-columns: 40px 1fr;
+  }
 `
 
-/** 비고(notes) — 즉위/퇴위 칩과 달리 여러 줄일 수 있어 자체 행을 차지하고 개행을 보존. */
-export const UnifiedNote = styled.span`
-  flex-basis: 100%;
-  white-space: pre-wrap;
+export const UnifiedDetailLabel = styled.dt`
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding-top: 1.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const UnifiedDetailValue = styled.dd<{ $prewrap?: boolean }>`
+  margin: 0;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
   word-break: break-word;
+  ${({ $prewrap }) => $prewrap && 'white-space: pre-wrap;'}
 `
 
 export const UnifiedEditBtn = styled.button`
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2; /* ::before 워시(z-index:0) 위에서 클릭 가능하게 */
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
+  border: none;
   border-radius: 8px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  transform: scale(0.92);
+  transition: opacity 0.15s, transform 0.15s, background 0.15s, color 0.15s;
   ${UnifiedCard}:hover & {
     opacity: 1;
+    transform: scale(1);
   }
   &:hover {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.05)'};
     color: ${({ theme }) =>
       theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
   }
@@ -1292,8 +1350,18 @@ export const UnifiedEditBtn = styled.button`
      보이지 않는다(형제 삭제 버튼과 동일 규약). */
   &:focus-visible {
     opacity: 1;
+    transform: scale(1);
     outline: 2px solid ${({ theme }) => theme.colors.button.primary};
     outline-offset: 1px;
+  }
+  /* 터치 환경 — hover-reveal은 발견성 0이 되므로 반투명 상시 노출 */
+  @media (hover: none) {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+    transform: none;
   }
 `
 
@@ -2898,9 +2966,10 @@ export const AchievementSection = styled.div<{ $kind: AchKind }>`
 
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid
+  /* 카드 보더(solid)와 구분되는 내부 이음새 — dashed 2단 디바이더 위계 */
+  border-top: 1px dashed
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.07)'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : 'rgba(15,23,42,0.09)'};
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -3137,15 +3206,13 @@ export const AchievementIconBtn = styled.button<{ $danger?: boolean }>`
   }
 `
 
+/* 채워진 틴트 박스를 걷어내고 seam 안에 평평하게 흐른다(박스 중첩 방지).
+   입력 필드는 각자 1px 보더를 유지 — 입력 어포던스지 장식 컨테이너가 아니다. */
 export const AchievementForm = styled(motion.div)`
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-top: 4px;
-  padding: 12px;
-  border-radius: 10px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.025)'};
 `
 
 export const AchievementInput = styled.input`

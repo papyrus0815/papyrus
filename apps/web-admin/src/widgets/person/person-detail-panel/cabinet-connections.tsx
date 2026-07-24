@@ -154,52 +154,45 @@ export function CabinetConnections({
   )
 }
 
+/* 토글은 점선 seam 아래에 놓여 승계·업적 소섹션과 같은 방언으로 구분된다. */
 const Wrap = styled.div`
-  margin-top: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : 'rgba(15,23,42,0.09)'};
 `
 
+/* 인디고 필 → 무박스 인디고 텍스트 토글(AchievementToggle와 동일 어포던스).
+   종류 액센트(인디고)만 남기고 chrome 제거. */
 const ToggleBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(129, 140, 248, 0.35)'
-        : 'rgba(99, 102, 241, 0.28)'};
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.16)'
-      : 'rgba(99, 102, 241, 0.08)'};
+  gap: 5px;
+  padding: 3px 4px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: color 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.24)'
-        : 'rgba(99, 102, 241, 0.16)'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#3730a3')};
+  }
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
   }
 `
 
+/* 두 번째 border-left + 인디고 틴트 박스를 제거 — 토글 아래 6px 들여쓴 평평한 흐름.
+   자식 간격(CabinetName·MemberList·PartyRow)은 그대로라 리플로우 없음. */
 const Body = styled.div`
   margin-top: 8px;
-  padding: 8px 10px;
-  border-left: 2px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(129, 140, 248, 0.3)'
-        : 'rgba(99, 102, 241, 0.25)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.07)'
-      : 'rgba(99, 102, 241, 0.04)'};
-  border-radius: 0 8px 8px 0;
+  padding: 0 0 0 6px;
 `
 
 const Muted = styled.div`

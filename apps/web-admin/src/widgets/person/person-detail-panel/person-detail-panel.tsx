@@ -268,6 +268,11 @@ import {
 import { formatFloruit } from '@/shared/lib/lifespan-text'
 import { deriveContemporaryHeadsTarget } from './contemporary-heads-target'
 import { ContemporariesStrip } from './contemporaries-strip'
+import {
+  getPersonReignAdjacency,
+  personReignAdjacencyKeys,
+  type ReignAdjacencyEntry,
+} from '@/shared/api/person-reign-adjacency'
 
 interface PersonDetailPanelProps {
   personId: string
@@ -724,6 +729,26 @@ export function PersonDetailPanel({
   }, [person])
 
   /**
+   * 같은 국가 전/후 재위(승계) — 대상의 모든 수장급 record별 선대/후대를 한 번에.
+   * 게이트는 동시대 수장 스트립과 동일(수장급 재임·재위 있을 때만). 응답을
+   * recordId로 조인할 수 있게 Map으로 변환해 재임·재위 카드에 주입한다.
+   */
+  // scope=succession: 전이 그래프로 정체 경계(왕국→공화국, 차르국→제국)를 잇는다
+  // (D1 결정 = 인스턴스 출시 → 크로스 가산). 전이 미시드 국가는 서버가 instance로 자동 강등.
+  const reignAdjacencyQuery = useQuery({
+    queryKey: personReignAdjacencyKeys.byPerson(personId, { scope: 'succession' }),
+    queryFn: () => getPersonReignAdjacency(personId, { scope: 'succession' }),
+    enabled: contemporaryHeadsTarget != null,
+  })
+  const adjacencyByRecordId = useMemo(() => {
+    const map = new Map<string, ReignAdjacencyEntry>()
+    for (const entry of reignAdjacencyQuery.data?.entries ?? []) {
+      map.set(entry.subjectRecordId, entry)
+    }
+    return map
+  }, [reignAdjacencyQuery.data])
+
+  /**
    * 종료일 미입력 구간의 상한(근사 일수). 사망자는 사망일까지만 합산해 재임 총 연수가
    * 현재(2026)까지 늘어나 수백 년 부풀지 않게 한다(TC2, 사망일 카드 폴백과 통일).
    * - 생존자: null(호출부가 now 사용)
@@ -897,6 +922,8 @@ export function PersonDetailPanel({
         // 동시대 수장 스트립 — 서버 유도 창이 대상의 사망 연도로 캡되므로
         // 인물(생몰) 수정 후에도 신선해야 한다 (재임 수정은 invalidateTenureQueries가 담당)
         queryClient.invalidateQueries({ queryKey: ['person-contemporaries'] }),
+        // 같은 국가 전/후 재위(승계) — 이웃의 생몰(종료 캡)·소유가 소스라 함께 무효화
+        queryClient.invalidateQueries({ queryKey: ['person-reign-adjacency'] }),
       ]),
     [personId, queryClient],
   )
@@ -2112,6 +2139,7 @@ export function PersonDetailPanel({
                       dynastyName={person.dynasty?.name ?? null}
                       currentPersonId={personId}
                       onPersonClick={handlePersonClick}
+                      adjacencyByRecordId={adjacencyByRecordId}
                       onPlayClick={playClickSound}
                       onEditTenure={(id) => {
                         setEditingTenureId(id)
