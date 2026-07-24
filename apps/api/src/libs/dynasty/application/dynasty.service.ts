@@ -36,6 +36,23 @@ function normalizeNotes(
   return trimmed.length > 0 ? trimmed : null
 }
 
+/**
+ * 통치기록 수정/생성 공통 필드 — 컨트롤러가 DateInfo를 구조화 컬럼으로 매핑해 전달.
+ * 날짜 컬럼: 수정 시 undefined=축 미변경/null=클리어, era는 현대국가면 컨트롤러가 AD로 coerce.
+ */
+type RuleMutableFields = {
+  startEra?: Era | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: Era | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  endReason?: string | null
+  notes?: string | null
+}
+
 @Injectable()
 export class DynastyService {
   constructor(
@@ -233,8 +250,12 @@ export class DynastyService {
         historicalCountryName: r.historicalCountry.name,
         startEra: r.startEra,
         startYear: r.startYear,
+        startMonth: r.startMonth,
+        startDay: r.startDay,
         endEra: r.endEra,
         endYear: r.endYear,
+        endMonth: r.endMonth,
+        endDay: r.endDay,
         endReason: r.endReason,
         notes: r.notes,
       })),
@@ -244,8 +265,12 @@ export class DynastyService {
         countryName: r.country.name,
         startEra: r.startEra,
         startYear: r.startYear,
+        startMonth: r.startMonth,
+        startDay: r.startDay,
         endEra: r.endEra,
         endYear: r.endYear,
+        endMonth: r.endMonth,
+        endDay: r.endDay,
         endReason: r.endReason,
         notes: r.notes,
       })),
@@ -262,23 +287,20 @@ export class DynastyService {
   }
 
   /**
-   * 통치기록(역사국가) 종료 사유·비고만 수정 — 통치 국가·기간 저작은 별건.
+   * 통치기록(역사국가) 수정 — 기간(구조화 컬럼)·종료 사유·비고. 통치 국가(FK)는 불변.
    * where에 {id, dynastyId}로 스코프해 교차 가문 편집을 차단(부모 가드는 findById가 404).
-   * endReason은 clampReason(200자), notes는 normalizeNotes(트림) 경유 — interface DTO라 서버 검증 필수.
-   * 갱신 후 상세 전체를 재조회해 반환(프론트 캐시 즉시 갱신).
+   * 날짜 컬럼은 컨트롤러가 provided-gate로 매핑(생략 축은 undefined→Prisma 무시, 클리어는 null).
+   * endReason=clampReason(200자)·notes=normalizeNotes(트림) — interface DTO라 서버 검증 필수.
    */
   async updateHistoricalRuleReason(
     dynastyId: string,
     ruleId: string,
-    data: { endReason?: string | null; notes?: string | null },
+    data: RuleMutableFields,
   ) {
     await this.findById(dynastyId)
     const res = await this.prisma.dynastyRule.updateMany({
       where: { id: ruleId, dynastyId },
-      data: {
-        endReason: clampReason(data.endReason),
-        notes: normalizeNotes(data.notes),
-      },
+      data: this.buildRuleUpdateData(data),
     })
     if (res.count === 0) {
       throw new NotFoundException(
@@ -288,19 +310,16 @@ export class DynastyService {
     return this.findDetail(dynastyId)
   }
 
-  /** 통치기록(현대국가) 종료 사유·비고만 수정 — updateHistoricalRuleReason의 현대 국가 쌍. */
+  /** 통치기록(현대국가) 수정 — updateHistoricalRuleReason의 현대 국가 쌍. */
   async updateModernRuleReason(
     dynastyId: string,
     ruleId: string,
-    data: { endReason?: string | null; notes?: string | null },
+    data: RuleMutableFields,
   ) {
     await this.findById(dynastyId)
     const res = await this.prisma.dynastyModernRule.updateMany({
       where: { id: ruleId, dynastyId },
-      data: {
-        endReason: clampReason(data.endReason),
-        notes: normalizeNotes(data.notes),
-      },
+      data: this.buildRuleUpdateData(data),
     })
     if (res.count === 0) {
       throw new NotFoundException(
@@ -308,6 +327,112 @@ export class DynastyService {
       )
     }
     return this.findDetail(dynastyId)
+  }
+
+  /** 통치기록(역사국가) 신규 등록 — 통치 대상 역사국가 FK 존재 검증 후 생성. */
+  async createHistoricalRule(
+    dynastyId: string,
+    data: RuleMutableFields & { historicalCountryId: string },
+  ) {
+    await this.findById(dynastyId)
+    const exists = await this.prisma.historicalCountry.findUnique({
+      where: { id: data.historicalCountryId },
+      select: { id: true },
+    })
+    if (!exists) {
+      throw new BadRequestException('통치 대상 역사국가를 찾을 수 없습니다.')
+    }
+    await this.prisma.dynastyRule.create({
+      data: {
+        dynastyId,
+        historicalCountryId: data.historicalCountryId,
+        ...this.buildRuleCreateData(data),
+      },
+    })
+    return this.findDetail(dynastyId)
+  }
+
+  /** 통치기록(현대국가) 신규 등록 — 통치 대상 현대국가 FK 존재 검증 후 생성. */
+  async createModernRule(
+    dynastyId: string,
+    data: RuleMutableFields & { countryId: string },
+  ) {
+    await this.findById(dynastyId)
+    const exists = await this.prisma.country.findUnique({
+      where: { id: data.countryId },
+      select: { id: true },
+    })
+    if (!exists) {
+      throw new BadRequestException('통치 대상 현대국가를 찾을 수 없습니다.')
+    }
+    await this.prisma.dynastyModernRule.create({
+      data: {
+        dynastyId,
+        countryId: data.countryId,
+        ...this.buildRuleCreateData(data),
+      },
+    })
+    return this.findDetail(dynastyId)
+  }
+
+  /** 통치기록(역사국가) 삭제 — {id, dynastyId} 스코프. */
+  async deleteHistoricalRule(dynastyId: string, ruleId: string) {
+    await this.findById(dynastyId)
+    const res = await this.prisma.dynastyRule.deleteMany({
+      where: { id: ruleId, dynastyId },
+    })
+    if (res.count === 0) {
+      throw new NotFoundException(
+        `Dynasty rule ${ruleId} not found under dynasty ${dynastyId}`,
+      )
+    }
+    return this.findDetail(dynastyId)
+  }
+
+  /** 통치기록(현대국가) 삭제 — deleteHistoricalRule의 현대 국가 쌍. */
+  async deleteModernRule(dynastyId: string, ruleId: string) {
+    await this.findById(dynastyId)
+    const res = await this.prisma.dynastyModernRule.deleteMany({
+      where: { id: ruleId, dynastyId },
+    })
+    if (res.count === 0) {
+      throw new NotFoundException(
+        `Dynasty modern rule ${ruleId} not found under dynasty ${dynastyId}`,
+      )
+    }
+    return this.findDetail(dynastyId)
+  }
+
+  /** 수정 data — 날짜 컬럼은 undefined면 Prisma가 무시(축 미변경), null이면 클리어. */
+  private buildRuleUpdateData(data: RuleMutableFields) {
+    return {
+      startEra: data.startEra,
+      startYear: data.startYear,
+      startMonth: data.startMonth,
+      startDay: data.startDay,
+      endEra: data.endEra,
+      endYear: data.endYear,
+      endMonth: data.endMonth,
+      endDay: data.endDay,
+      endReason: clampReason(data.endReason),
+      notes: normalizeNotes(data.notes),
+    }
+  }
+
+  /** 생성 data — 날짜 컬럼은 undefined면 null로 명시(모던 era는 컨트롤러가 AD coerce). */
+  private buildRuleCreateData(data: RuleMutableFields) {
+    return {
+      startEra: data.startEra ?? null,
+      startYear: data.startYear ?? null,
+      startMonth: data.startMonth ?? null,
+      startDay: data.startDay ?? null,
+      endEra: data.endEra ?? null,
+      endYear: data.endYear ?? null,
+      endMonth: data.endMonth ?? null,
+      endDay: data.endDay ?? null,
+      endReason: clampReason(data.endReason) ?? null,
+      notes: normalizeNotes(data.notes) ?? null,
+    }
   }
 
   async delete(id: string) {

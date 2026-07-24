@@ -112,14 +112,39 @@ export interface DynastyResponseDto {
 }
 
 /**
- * 통치기록(DynastyRule/ModernRule)의 좁은 편집 바디 — 종료 사유·비고만.
- * 통치 국가·기간 저작은 별건(제품 결정 게이트). endReason은 VarChar(200)이라 서버에서 clamp.
- * `null`=비움, 생략(undefined)=기존값 유지.
+ * 통치기록(DynastyRule/ModernRule) 수정 바디 — 기간(구조화)·종료 사유·비고.
+ * 통치 국가(FK)는 수정 대상 아님(바꾸려면 삭제 후 재등록). `null`=비움, 생략=기존값 유지.
+ * 날짜 축은 startDateInfo/endDateInfo가 오면(!==undefined) era/year/month/day를 통째 세팅.
+ * endReason은 VarChar(200)이라 서버 clamp. 이름은 하위호환(Batch 0 endReason 편집도 이 바디).
  */
 export interface UpdateDynastyRuleReasonDto {
+  /** 구조화 통치 시작일 — BC·고대·연단위. `null`=시작일 비움. 생략=유지. */
+  startDateInfo?: DateInfo | null
+  /** 구조화 통치 종료일 — `null`=종료일 비움(진행중/미상). */
+  endDateInfo?: DateInfo | null
   /** 통치 종료 사유 ({국가명} 통치 종료 — 가문 자체 단절과 층위 다름). */
   endReason?: string | null
   /** 비고/특이사항. */
+  notes?: string | null
+}
+
+/** 통치기록(역사국가) 신규 등록 바디. */
+export interface CreateDynastyHistoricalRuleDto {
+  /** 통치 대상 역사국가 ID (FK). */
+  historicalCountryId: string
+  startDateInfo?: DateInfo | null
+  endDateInfo?: DateInfo | null
+  endReason?: string | null
+  notes?: string | null
+}
+
+/** 통치기록(현대국가) 신규 등록 바디. */
+export interface CreateDynastyModernRuleDto {
+  /** 통치 대상 현대국가 ID (FK). */
+  countryId: string
+  startDateInfo?: DateInfo | null
+  endDateInfo?: DateInfo | null
+  endReason?: string | null
   notes?: string | null
 }
 
@@ -129,8 +154,12 @@ export interface DynastyHistoricalRuleDto {
   historicalCountryName: string
   startEra: string | null
   startYear: number | null
+  startMonth: number | null
+  startDay: number | null
   endEra: string | null
   endYear: number | null
+  endMonth: number | null
+  endDay: number | null
   endReason: string | null
   notes: string | null
 }
@@ -141,8 +170,12 @@ export interface DynastyModernRuleDto {
   countryName: string
   startEra: string | null
   startYear: number | null
+  startMonth: number | null
+  startDay: number | null
   endEra: string | null
   endYear: number | null
+  endMonth: number | null
+  endDay: number | null
   endReason: string | null
   notes: string | null
 }

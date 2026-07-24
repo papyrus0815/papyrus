@@ -18,6 +18,8 @@ import { mapStructuredDateInput } from '../../person/domain/structured-date.util
 import { DynastyService } from '../application/dynasty.service'
 import {
   CreateDynastyDto,
+  CreateDynastyHistoricalRuleDto,
+  CreateDynastyModernRuleDto,
   DateInfo,
   DynastyDetailResponseDto,
   DynastyResponseDto,
@@ -57,6 +59,84 @@ function dateSlice(
     month: r.month,
     day: r.day,
   }
+}
+
+/**
+ * DateInfo → 통치기록 날짜 컬럼(era/year/month/day). date/precision 드롭 — Rule엔 DATETIME·precision 컬럼 없음.
+ * modern=true면 era를 AD로 coerce(현대국가 startEra/endEra @default(AD)를 null이 덮어쓰는 것 방지).
+ */
+function ruleDateColumns(
+  info: DateInfo | null | undefined,
+  opts: { modern: boolean },
+) {
+  const r = mapStructuredDateInput(info ?? null, null)
+  const era = (r.era as Era | null) ?? (opts.modern ? 'AD' : null)
+  return { era, year: r.year, month: r.month, day: r.day }
+}
+
+/** 통치기록 신규 등록 필드 — 날짜 축을 항상 매핑(빈 축도 modern은 AD로 명시). */
+function buildRuleCreateFields(
+  dto: {
+    startDateInfo?: DateInfo | null
+    endDateInfo?: DateInfo | null
+    endReason?: string | null
+    notes?: string | null
+  },
+  modern: boolean,
+) {
+  const s = ruleDateColumns(dto.startDateInfo, { modern })
+  const e = ruleDateColumns(dto.endDateInfo, { modern })
+  return {
+    startEra: s.era,
+    startYear: s.year,
+    startMonth: s.month,
+    startDay: s.day,
+    endEra: e.era,
+    endYear: e.year,
+    endMonth: e.month,
+    endDay: e.day,
+    endReason: dto.endReason,
+    notes: dto.notes,
+  }
+}
+
+/** 통치기록 수정 필드 — 날짜는 provided-gate(제공된 축만 매핑, 미제공 축은 미포함=Prisma 무시). */
+function buildRuleUpdateFields(
+  dto: {
+    startDateInfo?: DateInfo | null
+    endDateInfo?: DateInfo | null
+    endReason?: string | null
+    notes?: string | null
+  },
+  modern: boolean,
+) {
+  const fields: {
+    startEra?: Era | null
+    startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
+    endEra?: Era | null
+    endYear?: number | null
+    endMonth?: number | null
+    endDay?: number | null
+    endReason?: string | null
+    notes?: string | null
+  } = { endReason: dto.endReason, notes: dto.notes }
+  if (dto.startDateInfo !== undefined) {
+    const s = ruleDateColumns(dto.startDateInfo, { modern })
+    fields.startEra = s.era
+    fields.startYear = s.year
+    fields.startMonth = s.month
+    fields.startDay = s.day
+  }
+  if (dto.endDateInfo !== undefined) {
+    const e = ruleDateColumns(dto.endDateInfo, { modern })
+    fields.endEra = e.era
+    fields.endYear = e.year
+    fields.endMonth = e.month
+    fields.endDay = e.day
+  }
+  return fields
 }
 
 function toResponseDto(d: DynastyRow): DynastyResponseDto {
@@ -137,7 +217,35 @@ export class DynastyController {
   }
 
   /**
-   * 통치기록(역사국가) 종료 사유·비고 수정. 통치 국가·기간 저작은 별건(제품 결정 게이트).
+   * 통치기록(역사국가) 등록. 갱신된 가문 상세 전체를 반환.
+   */
+  @Post(':id/historical-rules')
+  async createHistoricalRule(
+    @Param('id') id: string,
+    @Body() dto: CreateDynastyHistoricalRuleDto,
+  ): Promise<DynastyDetailResponseDto> {
+    const d = await this.dynastyService.createHistoricalRule(id, {
+      historicalCountryId: dto.historicalCountryId,
+      ...buildRuleCreateFields(dto, false),
+    })
+    return toDetailResponse(d)
+  }
+
+  /** 통치기록(현대국가) 등록. */
+  @Post(':id/modern-rules')
+  async createModernRule(
+    @Param('id') id: string,
+    @Body() dto: CreateDynastyModernRuleDto,
+  ): Promise<DynastyDetailResponseDto> {
+    const d = await this.dynastyService.createModernRule(id, {
+      countryId: dto.countryId,
+      ...buildRuleCreateFields(dto, true),
+    })
+    return toDetailResponse(d)
+  }
+
+  /**
+   * 통치기록(역사국가) 수정 — 기간·종료 사유·비고. 통치 국가는 불변(바꾸려면 삭제 후 재등록).
    * 갱신된 가문 상세 전체를 반환.
    */
   @Patch(':id/historical-rules/:ruleId')
@@ -146,24 +254,46 @@ export class DynastyController {
     @Param('ruleId') ruleId: string,
     @Body() dto: UpdateDynastyRuleReasonDto,
   ): Promise<DynastyDetailResponseDto> {
-    const d = await this.dynastyService.updateHistoricalRuleReason(id, ruleId, {
-      endReason: dto.endReason,
-      notes: dto.notes,
-    })
+    const d = await this.dynastyService.updateHistoricalRuleReason(
+      id,
+      ruleId,
+      buildRuleUpdateFields(dto, false),
+    )
     return toDetailResponse(d)
   }
 
-  /** 통치기록(현대국가) 종료 사유·비고 수정. */
+  /** 통치기록(현대국가) 수정. */
   @Patch(':id/modern-rules/:ruleId')
   async updateModernRuleReason(
     @Param('id') id: string,
     @Param('ruleId') ruleId: string,
     @Body() dto: UpdateDynastyRuleReasonDto,
   ): Promise<DynastyDetailResponseDto> {
-    const d = await this.dynastyService.updateModernRuleReason(id, ruleId, {
-      endReason: dto.endReason,
-      notes: dto.notes,
-    })
+    const d = await this.dynastyService.updateModernRuleReason(
+      id,
+      ruleId,
+      buildRuleUpdateFields(dto, true),
+    )
+    return toDetailResponse(d)
+  }
+
+  /** 통치기록(역사국가) 삭제. */
+  @Delete(':id/historical-rules/:ruleId')
+  async deleteHistoricalRule(
+    @Param('id') id: string,
+    @Param('ruleId') ruleId: string,
+  ): Promise<DynastyDetailResponseDto> {
+    const d = await this.dynastyService.deleteHistoricalRule(id, ruleId)
+    return toDetailResponse(d)
+  }
+
+  /** 통치기록(현대국가) 삭제. */
+  @Delete(':id/modern-rules/:ruleId')
+  async deleteModernRule(
+    @Param('id') id: string,
+    @Param('ruleId') ruleId: string,
+  ): Promise<DynastyDetailResponseDto> {
+    const d = await this.dynastyService.deleteModernRule(id, ruleId)
     return toDetailResponse(d)
   }
 
