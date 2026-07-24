@@ -49,6 +49,7 @@ type RuleMutableFields = {
   endYear?: number | null
   endMonth?: number | null
   endDay?: number | null
+  startReason?: string | null
   endReason?: string | null
   notes?: string | null
 }
@@ -256,6 +257,7 @@ export class DynastyService {
         endYear: r.endYear,
         endMonth: r.endMonth,
         endDay: r.endDay,
+        startReason: r.startReason,
         endReason: r.endReason,
         notes: r.notes,
       })),
@@ -271,6 +273,7 @@ export class DynastyService {
         endYear: r.endYear,
         endMonth: r.endMonth,
         endDay: r.endDay,
+        startReason: r.startReason,
         endReason: r.endReason,
         notes: r.notes,
       })),
@@ -414,6 +417,7 @@ export class DynastyService {
       endYear: data.endYear,
       endMonth: data.endMonth,
       endDay: data.endDay,
+      startReason: clampReason(data.startReason),
       endReason: clampReason(data.endReason),
       notes: normalizeNotes(data.notes),
     }
@@ -430,6 +434,7 @@ export class DynastyService {
       endYear: data.endYear ?? null,
       endMonth: data.endMonth ?? null,
       endDay: data.endDay ?? null,
+      startReason: clampReason(data.startReason) ?? null,
       endReason: clampReason(data.endReason) ?? null,
       notes: normalizeNotes(data.notes) ?? null,
     }

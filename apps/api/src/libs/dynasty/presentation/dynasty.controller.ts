@@ -79,6 +79,7 @@ function buildRuleCreateFields(
   dto: {
     startDateInfo?: DateInfo | null
     endDateInfo?: DateInfo | null
+    startReason?: string | null
     endReason?: string | null
     notes?: string | null
   },
@@ -95,6 +96,7 @@ function buildRuleCreateFields(
     endYear: e.year,
     endMonth: e.month,
     endDay: e.day,
+    startReason: dto.startReason,
     endReason: dto.endReason,
     notes: dto.notes,
   }
@@ -105,6 +107,7 @@ function buildRuleUpdateFields(
   dto: {
     startDateInfo?: DateInfo | null
     endDateInfo?: DateInfo | null
+    startReason?: string | null
     endReason?: string | null
     notes?: string | null
   },
@@ -119,9 +122,10 @@ function buildRuleUpdateFields(
     endYear?: number | null
     endMonth?: number | null
     endDay?: number | null
+    startReason?: string | null
     endReason?: string | null
     notes?: string | null
-  } = { endReason: dto.endReason, notes: dto.notes }
+  } = { startReason: dto.startReason, endReason: dto.endReason, notes: dto.notes }
   if (dto.startDateInfo !== undefined) {
     const s = ruleDateColumns(dto.startDateInfo, { modern })
     fields.startEra = s.era

@@ -122,6 +122,8 @@ export interface UpdateDynastyRuleReasonDto {
   startDateInfo?: DateInfo | null
   /** 구조화 통치 종료일 — `null`=종료일 비움(진행중/미상). */
   endDateInfo?: DateInfo | null
+  /** 통치 시작 사유 (정복·상속·선출·건국 — 가문 성립과 층위 다름). */
+  startReason?: string | null
   /** 통치 종료 사유 ({국가명} 통치 종료 — 가문 자체 단절과 층위 다름). */
   endReason?: string | null
   /** 비고/특이사항. */
@@ -134,6 +136,7 @@ export interface CreateDynastyHistoricalRuleDto {
   historicalCountryId: string
   startDateInfo?: DateInfo | null
   endDateInfo?: DateInfo | null
+  startReason?: string | null
   endReason?: string | null
   notes?: string | null
 }
@@ -144,6 +147,7 @@ export interface CreateDynastyModernRuleDto {
   countryId: string
   startDateInfo?: DateInfo | null
   endDateInfo?: DateInfo | null
+  startReason?: string | null
   endReason?: string | null
   notes?: string | null
 }
@@ -160,6 +164,7 @@ export interface DynastyHistoricalRuleDto {
   endYear: number | null
   endMonth: number | null
   endDay: number | null
+  startReason: string | null
   endReason: string | null
   notes: string | null
 }
@@ -176,6 +181,7 @@ export interface DynastyModernRuleDto {
   endYear: number | null
   endMonth: number | null
   endDay: number | null
+  startReason: string | null
   endReason: string | null
   notes: string | null
 }
