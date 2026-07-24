@@ -141,6 +141,8 @@ export class CommentService {
   ): Promise<{ ownerAccountId: string | null; label: string | null }> {
     if (ownerType === AggregateType.EVENT) {
       // 방(by-account)에 노출되는 조건과 동일: 최상위(parentEventId=null)·미삭제 사건만 댓글 대상.
+      // 루트 판정 — INV-2("추가 상위는 주 상위 필수") 의존: 다중 상위(EventParentLink)가
+      // 생겨도 이 게이트는 주 상위 FK만 본다(PD4 — 정책 확정 대기, v1 현행 유지).
       // 하위사건·비노출 사건 id로의 댓글 읽기/쓰기를 차단해 방-스코프와 일치시킨다.
       const event = await this.prisma.event.findFirst({
         where: { id: recordId, deletedAt: null, parentEventId: null },

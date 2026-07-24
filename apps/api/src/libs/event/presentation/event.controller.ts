@@ -213,6 +213,26 @@ export class EventController {
           ? this.toResponseDto(event.parentEvent)
           : undefined,
       childEvents: event.childEvents ? event.childEvents.map((child: any) => this.toResponseDto(child)) : undefined,
+      // 추가 상위/하위(EventParentLink) — include된 응답 경로(상세)에서만 실린다.
+      // conditional 필수: 이 매퍼는 목록·후보 등이 공유하므로 무조건 ?? []는 목록 payload를
+      // 오염시키고, 프론트 낙관 갱신이 '[] = 없음'과 '미로드'를 구분 못 하게 된다.
+      // 소프트삭제된 상대는 게이트(유령 주 상위 null 정책 승계).
+      extraParents: Array.isArray(event.extraParentLinks)
+        ? event.extraParentLinks
+            .filter((link: any) => link.parentEvent && !link.parentEvent.deletedAt)
+            .map((link: any) => ({
+              id: link.parentEvent.id,
+              title: link.parentEvent.title,
+            }))
+        : undefined,
+      extraChildren: Array.isArray(event.extraChildLinks)
+        ? event.extraChildLinks
+            .filter((link: any) => link.childEvent && !link.childEvent.deletedAt)
+            .map((link: any) => ({
+              id: link.childEvent.id,
+              title: link.childEvent.title,
+            }))
+        : undefined,
       keywords: event.keywords != null ? (Array.isArray(event.keywords) ? event.keywords : []) : null,
       cityId: event.cityId,
       city: event.city
@@ -435,6 +455,8 @@ export class EventController {
     // 최상위 사건만 페이징 (본인이 등록한 것만, 삭제되지 않은 것만)
     const events = await this.prisma.event.findMany({
       where: {
+        // 루트 판정 — INV-2("추가 상위는 주 상위 필수") 의존: 다중 상위가 생겨도
+        // parentEventId IS NULL만이 루트다(EventParentLink는 루트에 존재 불가).
         parentEventId: null,
         createdById: userId,
         deletedAt: null,
@@ -606,6 +628,7 @@ export class EventController {
 
     const total = await this.prisma.event.count({
       where: {
+        // 루트 판정 — INV-2 의존(getAllEvents와 동일 계약)
         parentEventId: null,
         createdById: userId,
         deletedAt: null,
@@ -678,6 +701,13 @@ export class EventController {
         endYear: true,
         parentEventId: true,
         parentEvent: { select: { title: true, deletedAt: true } },
+        // 추가 상위 — 후보 배지 "(+N)"의 근거. liveParent와 동일 소프트삭제 게이트.
+        extraParentLinks: {
+          select: {
+            parentEvent: { select: { id: true, title: true, deletedAt: true } },
+          },
+          orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+        },
       },
     })
 
@@ -686,6 +716,9 @@ export class EventController {
       // "현재 X의 하위" 안내·이동 confirm에 생존 사건처럼 노출하지 않는다.
       const liveParent =
         event.parentEvent && !event.parentEvent.deletedAt ? event.parentEvent : null
+      const liveExtraParents = event.extraParentLinks
+        .filter((link) => !link.parentEvent.deletedAt)
+        .map((link) => ({ id: link.parentEvent.id, title: link.parentEvent.title }))
       return {
         id: event.id,
         title: event.title,
@@ -699,6 +732,7 @@ export class EventController {
         endYear: event.endYear,
         parentEventId: liveParent ? event.parentEventId : null,
         parentEventTitle: liveParent?.title ?? null,
+        extraParents: liveExtraParents.length > 0 ? liveExtraParents : undefined,
       }
     })
   }
@@ -734,6 +768,10 @@ export class EventController {
 
     // 월·일 매칭은 Prisma 쿼리 빌더로 불가 → 원시 SQL로 후보 ID만 추린 뒤
     // 표준 include로 본문을 채운다(toResponseDto 호환).
+    // ⚠️ parent_event_id IS NULL 루트 판정은 INV-2("추가 상위는 주 상위 필수") 의존 —
+    // raw SQL이라 컴파일러·camelCase grep 모두 못 잡는 유일 지점. 다중 상위 정책이
+    // '주 상위 없는 추가 상위 허용'으로 바뀌면 이 쿼리는 조용히 틀린다
+    // (docs/event-multi-parent-review.md §7 리스크 3).
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM event
       WHERE parent_event_id IS NULL
@@ -850,6 +888,21 @@ export class EventController {
             },
           },
         },
+        // 추가 상위/하위(EventParentLink) — 평면 1단 요약만(id·title·deletedAt).
+        // 주 상위 4단 중첩과 달리 조상 체인을 싣지 않는다 — k^4 조합 팽창 원천 차단.
+        // 정렬 2키 = 칩 순서 결정성(연결 오래된 순, 승격 기본 제안 순서와 일치).
+        extraParentLinks: {
+          include: {
+            parentEvent: { select: { id: true, title: true, deletedAt: true } },
+          },
+          orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+        },
+        extraChildLinks: {
+          include: {
+            childEvent: { select: { id: true, title: true, deletedAt: true } },
+          },
+          orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+        },
         childEvents: {
           // 소프트 삭제된 자식 제외 — 유령 카드 방지 + 프론트가 이 목록으로
           // childEventIds 전체 재전송을 만들기 때문에(가드가 삭제 사건을 거부) 필수.
@@ -947,6 +1000,7 @@ export class EventController {
     const parsedLimit = parseInt(limit ?? '', 10)
     const take = Number.isNaN(parsedLimit) ? 60 : Math.min(Math.max(parsedLimit, 1), 100)
     const rows = await this.prisma.event.findMany({
+      // parentEventId: null 루트 판정 — INV-2 의존(다중 상위 무영향)
       where: { createdById: accountId, parentEventId: null, deletedAt: null },
       take,
       orderBy: { startDate: 'desc' },

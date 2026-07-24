@@ -181,9 +181,16 @@ export interface EventLinkCandidate {
   startYear?: number | null
   endEra?: string | null
   endYear?: number | null
-  /** 현재 상위 사건 — 있으면 "이미 X의 하위" 표시·재부모화 확인의 근거 */
+  /** 현재 상위 사건(주 상위) — 있으면 "이미 X의 하위" 표시·재부모화 확인의 근거 */
   parentEventId?: string | null
   parentEventTitle?: string | null
+  /**
+   * 추가 상위 사건 목록 — 후보 배지 "현재 'X'의 하위 (+N)"의 근거.
+   * 서버가 liveParent와 동일한 소프트삭제 게이트로 산출(칩·카운트 불일치 방지). 비면 미포함.
+   * ⚠️ raw fetch 인터페이스라 SDK 재생성으로 안 따라온다 — 서버 DTO(EventLinkCandidateDto)와
+   * 손 동기화 필수.
+   */
+  extraParents?: Array<{ id: string; title: string }>
 }
 
 export async function getEventLinkCandidates(params?: {

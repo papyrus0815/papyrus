@@ -49,14 +49,41 @@ export class EventResponseDto {
   })
   keywords?: string[] | null
 
-  @ApiProperty({ description: '상위 사건 ID', required: false })
+  @ApiProperty({ description: '상위 사건 ID (주 상위 — 루트판정·트리·breadcrumb 기준)', required: false })
   parentEventId?: string | null
 
-  @ApiProperty({ description: '상위 사건 정보', required: false })
+  @ApiProperty({ description: '상위 사건 정보 (주 상위)', required: false })
   parentEvent?: EventResponseDto
 
-  @ApiProperty({ description: '하위 사건 목록', required: false })
+  @ApiProperty({ description: '하위 사건 목록 (주 상위 기준)', required: false })
   childEvents?: EventResponseDto[]
+
+  @ApiProperty({
+    description:
+      '추가 상위 사건 목록(EventParentLink — 주 상위 외 다중 상위). ' +
+      '상세 응답에만 실림(include 경로 conditional), 소프트삭제 부모는 걸러짐. ' +
+      '정렬: 연결 오래된 순(createdAt asc → id asc).',
+    required: false,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: { id: { type: 'string' }, title: { type: 'string' } },
+    },
+  })
+  extraParents?: Array<{ id: string; title: string }>
+
+  @ApiProperty({
+    description:
+      '추가 하위 사건 목록(EventParentLink 역방향 — 이 사건을 추가 상위로 갖는 사건들). ' +
+      '읽기전용 표시용 — 편집은 자식 쪽에서. 소프트삭제 자식은 걸러짐.',
+    required: false,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: { id: { type: 'string' }, title: { type: 'string' } },
+    },
+  })
+  extraChildren?: Array<{ id: string; title: string }>
 
   @ApiProperty({ description: '도시 ID', required: false })
   cityId?: string | null
@@ -340,10 +367,23 @@ export class EventLinkCandidateDto {
   @ApiProperty({ description: '종료 연도 (구조화)', required: false })
   endYear?: number | null
 
-  @ApiProperty({ description: '현재 상위 사건 ID (없으면 null)', required: false })
+  @ApiProperty({ description: '현재 상위 사건 ID (주 상위 — 없으면 null)', required: false })
   parentEventId?: string | null
 
-  @ApiProperty({ description: '현재 상위 사건명 (없으면 null)', required: false })
+  @ApiProperty({ description: '현재 상위 사건명 (주 상위 — 없으면 null)', required: false })
   parentEventTitle?: string | null
+
+  @ApiProperty({
+    description:
+      "추가 상위 사건 목록 — 후보 배지 \"현재 'X'의 하위 (+N)\"의 근거. " +
+      'liveParent와 동일한 소프트삭제 게이트(칩·카운트 불일치 방지). 비면 미포함.',
+    required: false,
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: { id: { type: 'string' }, title: { type: 'string' } },
+    },
+  })
+  extraParents?: Array<{ id: string; title: string }>
 }
 
