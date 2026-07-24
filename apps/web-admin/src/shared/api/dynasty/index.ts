@@ -13,8 +13,28 @@ export type DynastyDetail = Awaited<
 export type DynastyHistoricalRule = DynastyDetail['historicalRules'][number]
 export type DynastyModernRule = DynastyDetail['modernRules'][number]
 
-/** 통치기록 좁은 편집(종료 사유·비고) 바디 — 통치 국가·기간 저작은 별건. */
+/** 통치기록 수정 바디 — 기간(구조화)·종료 사유·비고. 통치 국가는 불변. */
 export type DynastyRuleReasonBody = {
+  startDateInfo?: DateInfoInput | null
+  endDateInfo?: DateInfoInput | null
+  endReason?: string | null
+  notes?: string | null
+}
+
+/** 통치기록(역사국가) 신규 등록 바디. */
+export type CreateDynastyHistoricalRuleBody = {
+  historicalCountryId: string
+  startDateInfo?: DateInfoInput | null
+  endDateInfo?: DateInfoInput | null
+  endReason?: string | null
+  notes?: string | null
+}
+
+/** 통치기록(현대국가) 신규 등록 바디. */
+export type CreateDynastyModernRuleBody = {
+  countryId: string
+  startDateInfo?: DateInfoInput | null
+  endDateInfo?: DateInfoInput | null
   endReason?: string | null
   notes?: string | null
 }
@@ -87,6 +107,54 @@ export const dynastyApi = {
       dynastyId,
       ruleId,
       body,
+    )
+  },
+
+  /** 통치기록(역사국가) 신규 등록 → 갱신된 상세 반환 */
+  createHistoricalRule: async (
+    dynastyId: string,
+    body: CreateDynastyHistoricalRuleBody,
+  ): Promise<DynastyDetail> => {
+    return await dynastyHistoricalRulesApi.createHistoricalRule(
+      apiConnection,
+      dynastyId,
+      body,
+    )
+  },
+
+  /** 통치기록(현대국가) 신규 등록 → 갱신된 상세 반환 */
+  createModernRule: async (
+    dynastyId: string,
+    body: CreateDynastyModernRuleBody,
+  ): Promise<DynastyDetail> => {
+    return await dynastyModernRulesApi.createModernRule(
+      apiConnection,
+      dynastyId,
+      body,
+    )
+  },
+
+  /** 통치기록(역사국가) 삭제 → 갱신된 상세 반환 */
+  deleteHistoricalRule: async (
+    dynastyId: string,
+    ruleId: string,
+  ): Promise<DynastyDetail> => {
+    return await dynastyHistoricalRulesApi.deleteHistoricalRule(
+      apiConnection,
+      dynastyId,
+      ruleId,
+    )
+  },
+
+  /** 통치기록(현대국가) 삭제 → 갱신된 상세 반환 */
+  deleteModernRule: async (
+    dynastyId: string,
+    ruleId: string,
+  ): Promise<DynastyDetail> => {
+    return await dynastyModernRulesApi.deleteModernRule(
+      apiConnection,
+      dynastyId,
+      ruleId,
     )
   },
 

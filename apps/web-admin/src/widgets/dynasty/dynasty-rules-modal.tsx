@@ -8,12 +8,12 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 
-import { FiGlobe, FiX } from 'react-icons/fi'
+import { FiGlobe, FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
+  useDeleteDynastyRule,
   useDynastyDetail,
-  useUpdateDynastyRuleReason,
 } from '@/features/dynasty/use-dynasties.hook'
 import type {
   DynastyHistoricalRule,
@@ -25,8 +25,11 @@ import {
   toSignedYear,
 } from '@/shared/lib/country-period'
 import { glassCardMixin } from '@/shared/styles/mixins'
-import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
+import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
+
+import { DynastyRuleForm } from './dynasty-rule-form'
 
 export type DynastyRulesModalProps = {
   dynastyId: string
@@ -35,17 +38,21 @@ export type DynastyRulesModalProps = {
   onClose: () => void
 }
 
-type RuleKind = 'historical' | 'modern'
+export type RuleKind = 'historical' | 'modern'
 
 /** 역사/현대 rule을 한 리스트로 다루기 위한 통합 형태. */
-type UnifiedRule = {
+export type UnifiedRule = {
   id: string
   kind: RuleKind
   countryName: string
   startEra: string | null
   startYear: number | null
+  startMonth: number | null
+  startDay: number | null
   endEra: string | null
   endYear: number | null
+  endMonth: number | null
+  endDay: number | null
   endReason: string | null
   notes: string | null
 }
@@ -57,8 +64,12 @@ function unifyHistorical(rule: DynastyHistoricalRule): UnifiedRule {
     countryName: rule.historicalCountryName,
     startEra: rule.startEra,
     startYear: rule.startYear,
+    startMonth: rule.startMonth,
+    startDay: rule.startDay,
     endEra: rule.endEra,
     endYear: rule.endYear,
+    endMonth: rule.endMonth,
+    endDay: rule.endDay,
     endReason: rule.endReason,
     notes: rule.notes,
   }
@@ -71,8 +82,12 @@ function unifyModern(rule: DynastyModernRule): UnifiedRule {
     countryName: rule.countryName,
     startEra: rule.startEra,
     startYear: rule.startYear,
+    startMonth: rule.startMonth,
+    startDay: rule.startDay,
     endEra: rule.endEra,
     endYear: rule.endYear,
+    endMonth: rule.endMonth,
+    endDay: rule.endDay,
     endReason: rule.endReason,
     notes: rule.notes,
   }
@@ -97,12 +112,12 @@ export function DynastyRulesModal({
     dynastyId,
     isOpen,
   )
-  const updateReason = useUpdateDynastyRuleReason()
+  const deleteRule = useDeleteDynastyRule()
 
-  // 인라인 편집 대상 rule id + 드래프트(사유·비고). 한 번에 하나만 편집.
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [draftEndReason, setDraftEndReason] = useState('')
-  const [draftNotes, setDraftNotes] = useState('')
+  // 인라인 폼 상태 — 신규 등록 or 특정 rule 수정(한 번에 하나).
+  const [formMode, setFormMode] = useState<
+    { type: 'create' } | { type: 'edit'; rule: UnifiedRule } | null
+  >(null)
 
   // ESC 닫기 + 배경 스크롤 잠금 (구성원 모달과 동일).
   useEffect(() => {
@@ -144,35 +159,31 @@ export function DynastyRulesModal({
 
   if (!isOpen) return null
 
-  const startEdit = (rule: UnifiedRule) => {
-    setEditingId(rule.id)
-    setDraftEndReason(rule.endReason ?? '')
-    setDraftNotes(rule.notes ?? '')
-  }
-  const cancelEdit = () => {
-    setEditingId(null)
-    setDraftEndReason('')
-    setDraftNotes('')
-  }
-  const saveEdit = async (rule: UnifiedRule) => {
+  const closeForm = () => setFormMode(null)
+  const handleDelete = async (rule: UnifiedRule) => {
+    if (
+      !(await confirm({
+        title: '통치기록 삭제',
+        message: `${rule.countryName} 통치기록을 삭제하시겠습니까?`,
+        danger: true,
+      }))
+    )
+      return
     try {
-      await updateReason.mutateAsync({
+      await deleteRule.mutateAsync({
         dynastyId,
         ruleId: rule.id,
         kind: rule.kind,
-        body: {
-          endReason: draftEndReason.trim() || null,
-          notes: draftNotes.trim() || null,
-        },
       })
-      notify.success('통치기록을 저장했습니다.')
-      cancelEdit()
+      notify.success('통치기록을 삭제했습니다.')
     } catch {
-      notify.error('저장에 실패했습니다.')
+      notify.error('삭제에 실패했습니다.')
     }
   }
 
   const total = rules.length
+  const creating = formMode?.type === 'create'
+  const editingId = formMode?.type === 'edit' ? formMode.rule.id : null
 
   return (
     <Overlay
@@ -192,9 +203,17 @@ export function DynastyRulesModal({
               <PanelSubtitle>{dynastyName}</PanelSubtitle>
             </div>
           </HeaderLead>
-          <CloseBtn type="button" aria-label="닫기" onClick={onClose}>
-            <FiX size={22} />
-          </CloseBtn>
+          <HeaderActions>
+            {!isLoading && !isError && !formMode && (
+              <AddBtn type="button" onClick={() => setFormMode({ type: 'create' })}>
+                <FiPlus size={15} />
+                통치 기록 추가
+              </AddBtn>
+            )}
+            <CloseBtn type="button" aria-label="닫기" onClick={onClose}>
+              <FiX size={22} />
+            </CloseBtn>
+          </HeaderActions>
         </PanelHeader>
 
         <Body>
@@ -202,22 +221,46 @@ export function DynastyRulesModal({
           {isError && (
             <StatusMsg $err>통치 기록을 불러오지 못했습니다.</StatusMsg>
           )}
-          {!isLoading && !isError && total === 0 && (
+
+          {!isLoading && !isError && creating && (
+            <CreateSlot>
+              <DynastyRuleForm
+                dynastyId={dynastyId}
+                editing={null}
+                onDone={closeForm}
+                onCancel={closeForm}
+              />
+            </CreateSlot>
+          )}
+
+          {!isLoading && !isError && total === 0 && !creating && (
             <EmptyWrap>
               <EmptyIcon aria-hidden>
                 <FiGlobe size={28} strokeWidth={1.5} />
               </EmptyIcon>
               <EmptyTitle>등록된 통치 기록이 없습니다</EmptyTitle>
               <EmptyDesc>
-                이 가문이 통치한 국가·기간은 아직 시드/관리자에 의해서만
-                등록됩니다.
+                이 가문이 통치한 국가·기간을 &apos;통치 기록 추가&apos;로
+                등록하세요.
               </EmptyDesc>
             </EmptyWrap>
           )}
+
           {!isLoading && !isError && total > 0 && (
             <RuleList>
               {rules.map((rule) => {
                 const isEditing = editingId === rule.id
+                if (isEditing) {
+                  return (
+                    <DynastyRuleForm
+                      key={rule.id}
+                      dynastyId={dynastyId}
+                      editing={rule}
+                      onDone={closeForm}
+                      onCancel={closeForm}
+                    />
+                  )
+                }
                 return (
                   <RuleCard key={rule.id}>
                     <RuleTop>
@@ -228,75 +271,40 @@ export function DynastyRulesModal({
                         <CountryName>{rule.countryName}</CountryName>
                         <Period>{rulePeriodLabel(rule)}</Period>
                       </RuleHead>
-                      {!isEditing && (
+                      <CardActions>
                         <EditBtn
                           type="button"
-                          onClick={() => startEdit(rule)}
-                          disabled={updateReason.isPending}
+                          onClick={() => setFormMode({ type: 'edit', rule })}
+                          disabled={Boolean(formMode) || deleteRule.isPending}
                         >
                           수정
                         </EditBtn>
-                      )}
+                        <DeleteBtn
+                          type="button"
+                          onClick={() => handleDelete(rule)}
+                          disabled={Boolean(formMode) || deleteRule.isPending}
+                        >
+                          삭제
+                        </DeleteBtn>
+                      </CardActions>
                     </RuleTop>
 
-                    {isEditing ? (
-                      <EditForm>
-                        <FieldLabel htmlFor={`endreason-${rule.id}`}>
-                          {rule.countryName} 통치 종료 사유
-                        </FieldLabel>
-                        <TextInput
-                          id={`endreason-${rule.id}`}
-                          type="text"
-                          value={draftEndReason}
-                          maxLength={200}
-                          placeholder="예: 왕조 교체, 공화정 전환, 병합"
-                          onChange={(event) =>
-                            setDraftEndReason(event.target.value)
-                          }
-                        />
-                        <FieldLabel htmlFor={`notes-${rule.id}`}>비고</FieldLabel>
-                        <TextArea
-                          id={`notes-${rule.id}`}
-                          rows={2}
-                          value={draftNotes}
-                          placeholder="특이사항"
-                          onChange={(event) => setDraftNotes(event.target.value)}
-                        />
-                        <EditActions>
-                          <CancelBtn
-                            type="button"
-                            onClick={cancelEdit}
-                            disabled={updateReason.isPending}
-                          >
-                            취소
-                          </CancelBtn>
-                          <SaveBtn
-                            type="button"
-                            onClick={() => saveEdit(rule)}
-                            disabled={updateReason.isPending}
-                          >
-                            {updateReason.isPending ? '저장 중…' : '저장'}
-                          </SaveBtn>
-                        </EditActions>
-                      </EditForm>
-                    ) : (
-                      <RuleMeta>
-                        {rule.endReason ? (
-                          <MetaRow>
-                            <MetaLabel>통치 종료 사유</MetaLabel>
-                            <MetaValue>{rule.endReason}</MetaValue>
-                          </MetaRow>
-                        ) : (
-                          <MetaRowMuted>통치 종료 사유 미기록</MetaRowMuted>
-                        )}
-                        {rule.notes && (
-                          <MetaRow>
-                            <MetaLabel>비고</MetaLabel>
-                            <MetaValue>{rule.notes}</MetaValue>
-                          </MetaRow>
-                        )}
-                      </RuleMeta>
-                    )}
+                    <RuleMeta>
+                      {rule.endReason ? (
+                        <MetaRow>
+                          <MetaLabel>통치 종료 사유</MetaLabel>
+                          <MetaValue>{rule.endReason}</MetaValue>
+                        </MetaRow>
+                      ) : (
+                        <MetaRowMuted>통치 종료 사유 미기록</MetaRowMuted>
+                      )}
+                      {rule.notes && (
+                        <MetaRow>
+                          <MetaLabel>비고</MetaLabel>
+                          <MetaValue>{rule.notes}</MetaValue>
+                        </MetaRow>
+                      )}
+                    </RuleMeta>
                   </RuleCard>
                 )
               })}
@@ -398,6 +406,31 @@ const CloseBtn = styled.button`
   }
 `
 
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+`
+
+const AddBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  border-radius: 999px;
+  color: ${({ theme }) => theme.colors.button.text};
+  background: ${({ theme }) => theme.colors.primary};
+  transition: background 0.15s ease;
+  &:hover {
+    background: ${({ theme }) => theme.colors.button.hover};
+  }
+`
+
 const Body = styled.div`
   flex: 1;
   min-height: 0;
@@ -460,6 +493,12 @@ const Period = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
+const CardActions = styled.div`
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+`
+
 const EditBtn = styled.button`
   flex-shrink: 0;
   padding: 5px 12px;
@@ -480,6 +519,13 @@ const EditBtn = styled.button`
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+`
+
+const DeleteBtn = styled(EditBtn)`
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) => theme.colors.error};
+    color: ${({ theme }) => theme.colors.error};
   }
 `
 
@@ -518,91 +564,8 @@ const MetaValue = styled.span`
   word-break: break-word;
 `
 
-/* ─── inline edit form ──────────────────────────────────────────────────── */
-
-const EditForm = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 10px;
-`
-
-const FieldLabel = styled.label`
-  font-size: 11.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const TextInput = styled.input`
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
-  outline: none;
-  &:focus {
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
-`
-
-const TextArea = styled.textarea`
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  resize: vertical;
-  color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
-  outline: none;
-  &:focus {
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
-`
-
-const EditActions = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-`
-
-const CancelBtn = styled.button`
-  padding: 6px 14px;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  &:disabled {
-    opacity: 0.5;
-    cursor: wait;
-  }
-`
-
-const SaveBtn = styled.button`
-  padding: 6px 16px;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  border-radius: 8px;
-  color: ${({ theme }) => theme.colors.button.text};
-  background: ${({ theme }) => theme.colors.primary};
-  &:hover:not(:disabled) {
-    background: ${({ theme }) => theme.colors.button.hover};
-  }
-  &:disabled {
-    opacity: 0.6;
-    cursor: wait;
-  }
+const CreateSlot = styled.div`
+  margin-bottom: 12px;
 `
 
 /* ─── status / empty ────────────────────────────────────────────────────── */

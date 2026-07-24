@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   dynastyApi,
+  type CreateDynastyHistoricalRuleBody,
+  type CreateDynastyModernRuleBody,
   type DynastyDetail,
   type DynastyMutationBody,
   type DynastyRuleReasonBody,
@@ -57,6 +59,56 @@ export const useUpdateDynastyRuleReason = () => {
         : dynastyApi.updateModernRuleReason(dynastyId, ruleId, body),
     onSuccess: (detail: DynastyDetail, variables) => {
       // 서버가 갱신된 상세 전체를 반환 — 재요청 없이 캐시에 직접 세팅.
+      queryClient.setQueryData(dynastyDetailKey(variables.dynastyId), detail)
+    },
+  })
+}
+
+/** 통치기록 신규 등록(역사/현대). 반환 상세를 캐시에 직접 반영. */
+export const useCreateDynastyRule = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (
+      variables:
+        | {
+            dynastyId: string
+            kind: 'historical'
+            body: CreateDynastyHistoricalRuleBody
+          }
+        | {
+            dynastyId: string
+            kind: 'modern'
+            body: CreateDynastyModernRuleBody
+          },
+    ) =>
+      variables.kind === 'historical'
+        ? dynastyApi.createHistoricalRule(variables.dynastyId, variables.body)
+        : dynastyApi.createModernRule(variables.dynastyId, variables.body),
+    onSuccess: (detail: DynastyDetail, variables) => {
+      queryClient.setQueryData(dynastyDetailKey(variables.dynastyId), detail)
+    },
+  })
+}
+
+/** 통치기록 삭제(역사/현대). */
+export const useDeleteDynastyRule = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      dynastyId,
+      ruleId,
+      kind,
+    }: {
+      dynastyId: string
+      ruleId: string
+      kind: 'historical' | 'modern'
+    }) =>
+      kind === 'historical'
+        ? dynastyApi.deleteHistoricalRule(dynastyId, ruleId)
+        : dynastyApi.deleteModernRule(dynastyId, ruleId),
+    onSuccess: (detail: DynastyDetail, variables) => {
       queryClient.setQueryData(dynastyDetailKey(variables.dynastyId), detail)
     },
   })
