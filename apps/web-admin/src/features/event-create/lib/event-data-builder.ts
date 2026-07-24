@@ -3,6 +3,7 @@
  * FSD: features/event-create/lib
  */
 import type { MilitaryEvent } from '@/shared/types/military-event.types'
+import type { CreateEventDto } from '@/shared/api/events'
 
 import type { EventBelligerentsGraph } from '../../../pages/events/types/belligerents-graph.types'
 import type { ConferenceEvent } from '../../../pages/events/types/conference-event.types'
@@ -257,7 +258,10 @@ export const buildEventSubmitData = (params: {
         params.militaryEvent.militaryDetails?.combatTypes?.length ||
         params.militaryEvent.casualties?.length ||
         params.militaryEvent.warCost)
-        ? params.militaryEvent
+        ? // 레거시 이중모델: 프론트 MilitaryEvent와 MilitaryEventDto는 enum이 명목상만
+          // 분리(값 동일). 은폐 캐스트를 이 필드 하나로 국소화 — 나머지 필드는
+          // 콜사이트 satisfies가 DTO 표류를 잡는다.
+          (params.militaryEvent as CreateEventDto['militaryEvent'])
         : undefined,
     conferenceEvent: params.conferenceEvent
       ? params.conferenceEvent

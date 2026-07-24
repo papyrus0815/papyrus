@@ -826,11 +826,14 @@ export function EventCreateFormDashboard({
       if (isEditMode && editEventId) {
         await updateEvent(
           editEventId,
-          eventData as Parameters<typeof updateEvent>[1],
+          // satisfies: 빌더 반환이 DTO에서 표류하면 tsc가 잡는다 (as 캐스트는 은폐)
+          eventData satisfies Parameters<typeof updateEvent>[1],
         )
         notify.success('사건이 수정되었습니다.')
       } else {
-        await createEvent(eventData as Parameters<typeof createEvent>[0])
+        await createEvent(
+          eventData satisfies Parameters<typeof createEvent>[0],
+        )
         notify.success('사건이 등록되었습니다.')
       }
       onSuccess()

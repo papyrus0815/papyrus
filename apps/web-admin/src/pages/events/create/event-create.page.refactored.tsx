@@ -368,11 +368,14 @@ export const EventCreatePageRefactored: React.FC<
       if (isEditMode && editEventId) {
         saved = await updateEvent(
           editEventId,
-          eventData as Parameters<typeof updateEvent>[1],
+          // satisfies: 빌더 반환이 DTO에서 표류하면 tsc가 잡는다 (as 캐스트는 은폐)
+          eventData satisfies Parameters<typeof updateEvent>[1],
         )
         notify.success('사건이 성공적으로 수정되었습니다!')
       } else {
-        saved = await createEvent(eventData as Parameters<typeof createEvent>[0])
+        saved = await createEvent(
+          eventData satisfies Parameters<typeof createEvent>[0],
+        )
         targetId = saved.id
         notify.success('사건이 등록되었습니다. 상세에서 내용을 이어서 등록하세요.')
       }
