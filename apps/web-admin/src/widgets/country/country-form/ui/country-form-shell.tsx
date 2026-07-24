@@ -71,6 +71,12 @@ export interface CountryFormShellProps {
    * 큰 빈 공간 없이 내용만큼만 차지하도록. 미지정 시 기존 90vh 고정.
    */
   fitContent?: boolean
+  /**
+   * 셸이 aria-invalid MutationObserver로 첫 오류 필드를 자동 스크롤·포커스할지.
+   * 폼이 자체적으로 첫-오류 이동을 하면(예: 인물 등록 뷰의 handleSubmit rAF) false로 꺼서
+   * 타이핑 중 포커스 강탈·이중 스크롤 레이스를 없앤다. 기본 true(국가 폼 등 기존 동작 유지).
+   */
+  manageErrorFocus?: boolean
   /** 폼 본문 */
   children: React.ReactNode
   /** aria-labelledby용 id (기본: title-id) */
@@ -199,12 +205,8 @@ const Body = styled.div<{ $hasIndex: boolean }>`
   grid-template-columns: ${({ $hasIndex }) => ($hasIndex ? '160px 1fr' : '1fr')};
   position: relative;
 
-  /* 태블릿: 사이드 인덱스 좁게 (라벨 → 숫자) */
-  @media (max-width: 1100px) and (min-width: 769px) {
-    grid-template-columns: ${({ $hasIndex }) =>
-      $hasIndex ? '48px 1fr' : '1fr'};
-  }
-
+  /* 모달 폭이 min(960px,96vw)로 상한 고정이라 라벨 인덱스는 769px까지 항상 들어간다
+     (구 1100px 폭 시절의 숫자배지 축소 브레이크포인트는 제거 — RESP-1). */
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
   }
@@ -259,14 +261,6 @@ const SideIndex = styled.nav`
   border-right: 1px solid ${({ theme }) => theme.colors.border.light};
   padding: 24px 10px 24px 16px;
   overflow-y: auto;
-
-  /* 태블릿: 라벨 숨기고 number badge만 — badge가 시각 anchor */
-  @media (max-width: 1100px) and (min-width: 769px) {
-    padding: 24px 6px;
-    [data-section-label] {
-      display: none;
-    }
-  }
 
   @media (max-width: 768px) {
     display: none;
@@ -328,13 +322,6 @@ const SideIndexItem = styled.li<{ $active: boolean }>`
       background: ${({ theme }) => theme.colors.primary};
       border-radius: 2px;
       transition: height 0.2s ease;
-    }
-  }
-
-  @media (max-width: 1100px) and (min-width: 769px) {
-    > button {
-      justify-content: center;
-      padding: 8px 4px;
     }
   }
 `
@@ -585,6 +572,7 @@ export function CountryFormShell({
   isValid = true,
   draftEnabled = false,
   fitContent = false,
+  manageErrorFocus = true,
   children,
   titleId = 'country-form-shell-title',
 }: CountryFormShellProps) {
@@ -644,25 +632,46 @@ export function CountryFormShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, submitting, isDirty])
 
+  // 트리거 포커스 복원 — 열릴 때 직전 포커스(연 요소)를 잡아 두고 닫힐 때 되돌린다.
+  // (모달이 첫 입력으로 포커스를 옮기기 전 시점이라 activeElement가 트리거다.)
+  useEffect(() => {
+    if (!isOpen) return
+    const opener = document.activeElement as HTMLElement | null
+    return () => {
+      opener?.focus?.()
+    }
+  }, [isOpen])
+
   // 첫 포커스 — 모달 열릴 때 첫 입력 필드로
   useEffect(() => {
     if (!isOpen) return
+    // 터치 기기(coarse pointer)에선 자동 포커스를 생략 — 소프트 키보드가 상단(hero·이름)을
+    // 가리는 부작용을 막는다. 데스크톱(fine pointer)은 기존대로 첫 필드 포커스.
+    if (window.matchMedia?.('(pointer: coarse)').matches) return
     // 다음 tick에 포커스 (DOM mount 후)
     const timer = window.setTimeout(() => {
       const root = scrollRef.current
       if (!root) return
-      const firstInput = root.querySelector<HTMLElement>(
-        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])',
+      // 첫 '보이는' 입력으로 포커스 — display:none 썸네일 파일 input(폼 DOM 최상단)이
+      // 잡히면 focus()가 no-op이라 아무 필드도 포커스되지 않던 문제 차단.
+      // [type=file] 제외 + offsetParent!=null(가시성) 필터로 실제 첫 입력(성/이름)에 착지.
+      const candidates = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'input:not([type="hidden"]):not([type="file"]):not([disabled]), select:not([disabled]), textarea:not([disabled])',
+        ),
       )
-      firstInput?.focus()
+      const firstVisible = candidates.find((el) => el.offsetParent !== null)
+      firstVisible?.focus()
     }, 80)
     return () => window.clearTimeout(timer)
   }, [isOpen])
 
   // 검증 실패 후 첫 에러 필드로 자동 스크롤·포커스
   // (외부 폼이 invalid submit 시 [aria-invalid="true"] 표시한다고 가정)
+  // 폼이 자체적으로 첫-오류 이동을 관리하면(manageErrorFocus=false) 이 옵저버를 끈다 —
+  // 상시 aria-invalid 감시가 타이핑 중 포커스를 강탈하고 폼 rAF와 이중 스크롤하는 레이스 제거.
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || !manageErrorFocus) return
     const root = scrollRef.current
     if (!root) return
     const observer = new MutationObserver(() => {
@@ -683,7 +692,7 @@ export function CountryFormShell({
       subtree: true,
     })
     return () => observer.disconnect()
-  }, [isOpen])
+  }, [isOpen, manageErrorFocus])
 
   // scroll-spy: 본문 스크롤 위치에 따라 활성 섹션 결정
   useEffect(() => {
@@ -721,7 +730,7 @@ export function CountryFormShell({
     return () => root.removeEventListener('scroll', updateActive)
   }, [isOpen, sectionIndex])
 
-  /** 인덱스 클릭 시 해당 섹션으로 스크롤 + pulse highlight */
+  /** 인덱스 클릭 시 해당 섹션으로 스크롤 (착지 피드백은 scroll-spy 활성 표시가 담당). */
   const handleIndexClick = (id: string) => {
     const root = scrollRef.current
     if (!root) return
@@ -730,10 +739,6 @@ export function CountryFormShell({
     )
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      target.setAttribute('data-anchor-pulse', 'true')
-      window.setTimeout(() => {
-        target.removeAttribute('data-anchor-pulse')
-      }, 700)
     }
   }
 
@@ -831,6 +836,8 @@ export function CountryFormShell({
                         <button
                           type="button"
                           onClick={() => handleIndexClick(item.id)}
+                          aria-label={item.label}
+                          aria-current={activeSection === item.id ? 'true' : undefined}
                           title={item.label}
                         >
                           <SideIndexBadge
@@ -859,7 +866,7 @@ export function CountryFormShell({
                   >
                     <SubmittingBox>
                       <InlineSpinner />
-                      저장 중입니다...
+                      저장 중…
                     </SubmittingBox>
                   </SubmittingOverlay>
                 )}
@@ -908,9 +915,9 @@ export function CountryFormShell({
                   </ProgressGroup>
                 )}
                 {draftEnabled && isDirty && (
-                  <AutoSaveHint title="입력 중인 내용을 자동 저장 중">
+                  <AutoSaveHint title="입력 중인 내용을 임시 저장 중">
                     <FiCloud size={12} />
-                    자동 저장됨
+                    임시 저장 중
                   </AutoSaveHint>
                 )}
               </FooterStatus>
@@ -929,7 +936,7 @@ export function CountryFormShell({
                   $emphasis={isComplete && isDirty}
                 >
                   {submitting && <Spinner />}
-                  {submitting ? '저장 중...' : submitLabel}
+                  {submitting ? '저장 중…' : submitLabel}
                 </SubmitBtn>
               </FooterButtons>
             </ModalFooter>
