@@ -136,12 +136,21 @@ export function ContemporariesStrip({
               </ChipRow>
             </CountryGroup>
           ))}
-          {data.meta.omittedCount > 0 && (
-            <OmittedCaption>
-              외 {data.meta.omittedCount}명은 수장 비교에서
-            </OmittedCaption>
-          )}
         </ChipScrollRow>
+      )}
+
+      {/* 절단 안내는 스크롤 밖(항상 노출). 모달 임베드(onOpenCompare 없음)에선 수장비교로
+          갈 경로가 없으므로 죽은 포인터 대신 중립 문구로 분기한다. */}
+      {data && data.rulers.length > 0 && data.meta.omittedCount > 0 && (
+        onOpenCompare ? (
+          <OmittedLinkButton type="button" onClick={onOpenCompare}>
+            외 {data.meta.omittedCount}명 더 — 수장 비교에서 보기 →
+          </OmittedLinkButton>
+        ) : (
+          <OmittedCaption>
+            외 {data.meta.omittedCount}명 더 있음 (겹친 기간 긴 순 상위만 표시)
+          </OmittedCaption>
+        )
       )}
     </StripSection>
   )
@@ -352,10 +361,27 @@ const MutedNote = styled.p`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const OmittedCaption = styled.span`
-  align-self: center;
-  flex: 0 0 auto;
+const OmittedCaption = styled.p`
+  margin: 6px 0 0;
   font-size: 11px;
-  white-space: nowrap;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const OmittedLinkButton = styled.button`
+  margin-top: 6px;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#6366f1')};
+  cursor: pointer;
+  border-radius: 6px;
+  &:hover {
+    text-decoration: underline;
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+  }
 `
