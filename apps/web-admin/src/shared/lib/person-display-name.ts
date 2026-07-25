@@ -49,7 +49,12 @@ function resolveOrder(
 
 /**
  * 국가 기본(`country.defaultNameDisplayOrder`)에 따라 성·이름 또는 이름·성 순으로 전체 이름 반환.
- * korean: 성 + 이름 + 중간이름 / western: 이름 + 중간이름 + 성
+ * western: 이름 + 중간이름 + 성 / korean: 성 + 이름
+ *
+ * 중간이름(middleName)은 정의상 '이름–중간–성' 서양식에서만 자리가 있는 개념이다
+ * (미들네임·귀족 전치사 de·von 포함). 성-우선(korean) 순서로 두면 중간이름이 성 뒤 꼬리로
+ * 매달려(예: "발루아 샤를 드") 뒤집힌 표기가 되므로, **중간이름이 있으면 서양식으로 강제**한다.
+ * 실데이터상 중간이름 보유 인물은 전원 서양권이라 부작용이 없다.
  * @param omitMiddleName true면 리스트 카드용으로 중간이름 제외 (옵션 객체에 넣거나 두 번째 인자로 true)
  */
 export function getPersonDisplayName(
@@ -61,8 +66,12 @@ export function getPersonDisplayName(
   const omitMiddle = opts.omitMiddleName ?? false
   const name = p.name?.trim() ?? ''
   const surname = (p.surname?.trim() ?? '') || ''
+  const hasMiddle = !!p.middleName?.trim()
   const middle = omitMiddle ? '' : (p.middleName?.trim() ?? '') || ''
-  const order = resolveOrder(p, opts)
+  // 중간이름이 있으면 서양식 고정(성-우선에서 꼬리로 매달리는 것 방지).
+  // 개인/국가 순서가 어떻든 이름을 앞에 두어야 중간이름이 이름과 성 사이에 온다.
+  // omitMiddle(컴팩트 뷰)에서도 원본 middleName 유무로 판단해 성 위치를 뷰 간 일관되게 유지.
+  const order = hasMiddle ? 'western' : resolveOrder(p, opts)
   const parts =
     order === 'western' ? [name, middle, surname] : [surname, name, middle]
   return parts.filter(Boolean).join(' ')
