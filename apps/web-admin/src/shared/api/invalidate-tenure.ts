@@ -67,6 +67,9 @@ export function invalidateTenureQueries(
   // ── 동시대 수장(person-contemporaries) — tenure/reign overlap이 소스라 함께 무효화 ──
   invalidate(['person-contemporaries'])
 
+  // ── 같은 국가 전/후 재위(person-reign-adjacency) — tenure/reign 인접이 소스라 함께 무효화 ──
+  invalidate(['person-reign-adjacency'])
+
   // ── 재위 수정 모달 hydrate — 저장 직후 3분 staleTime 안에 같은 재위를 다시 열면
   //    수정 전 스냅샷으로 hydrate되고, 폼의 null-clear(빈 값=해제) 전송과 결합해
   //    직전 저장분이 조용히 지워지는 회귀가 있어 반드시 함께 무효화한다.
