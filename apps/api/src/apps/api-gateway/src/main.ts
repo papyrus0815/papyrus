@@ -137,16 +137,27 @@ async function bootstrap() {
     logger.log(`❤️  Health Check: http://${config.host}:${config.port}/health`)
     logger.log(`🌍 Environment: ${config.nodeEnv}`)
 
-    // 프로세스 종료 방지
-    process.on('SIGTERM', () => {
-      console.log('SIGTERM received, shutting down gracefully')
-      app.close()
-    })
-
-    process.on('SIGINT', () => {
-      console.log('SIGINT received, shutting down gracefully')
-      app.close()
-    })
+    // 종료 신호를 받으면 app.close() 후 반드시 프로세스를 종료한다.
+    // (app.close()만 호출하면 DB 풀 등 열린 핸들 때문에 프로세스가 살아남아
+    //  8000 포트를 계속 점유 → 재시작 시 EADDRINUSE가 발생한다.)
+    let shuttingDown = false
+    const shutdown = async (signal: string) => {
+      if (shuttingDown) return
+      shuttingDown = true
+      console.log(`${signal} received, shutting down gracefully`)
+      // close가 매달려도 강제 종료되도록 안전장치를 먼저 건다.
+      const forceExit = setTimeout(() => process.exit(0), 5000)
+      forceExit.unref()
+      try {
+        await app.close()
+      } catch (err) {
+        console.error('Error during shutdown:', err)
+      } finally {
+        process.exit(0)
+      }
+    }
+    process.on('SIGTERM', () => void shutdown('SIGTERM'))
+    process.on('SIGINT', () => void shutdown('SIGINT'))
 
     // 서버가 계속 실행되도록 유지
     console.log('🔄 Server is running and waiting for requests...')
