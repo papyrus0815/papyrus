@@ -10,6 +10,7 @@ import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 
+import { CountryInfoModal } from './components/country-info-modal'
 import { DetailActors } from './components/detail-actors'
 import { DetailAppendix } from './components/detail-appendix'
 import { DetailHero } from './components/detail-hero'
@@ -113,6 +114,8 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     (personId: string) => {
       const next = new URLSearchParams(searchParams)
       next.set('person', personId)
+      // 인물/국가 모달은 상호 배타 — 겹치면 서로 다른 포커스트랩 구현이 경합한다.
+      next.delete('country')
       setSearchParams(next, { replace: false })
     },
     [searchParams, setSearchParams],
@@ -122,6 +125,41 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     next.delete('person')
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
+
+  /**
+   * 관련국 클릭 → 같은 페이지에서 국가 정보 모달 (인물 모달과 대칭).
+   * URL 쿼리(`?country=<id>`) sync — kind(현대/역사)는 CountryInfoModal이
+   * 사건 응답의 두 배열에서 복원하므로 URL에는 id만 담는다.
+   */
+  const viewingCountryId = searchParams.get('country')
+  const onCountryClick = useCallback(
+    (countryId: string) => {
+      const next = new URLSearchParams(searchParams)
+      next.set('country', countryId)
+      // 인물/국가 모달은 상호 배타 — 겹치면 서로 다른 포커스트랩 구현이 경합한다.
+      next.delete('person')
+      setSearchParams(next, { replace: false })
+    },
+    [searchParams, setSearchParams],
+  )
+  const onCountryModalClose = useCallback(() => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('country')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  /**
+   * 크래프트 딥링크로 `?person=`과 `?country=`가 동시에 실려 오면 두 모달이
+   * 겹쳐 뜨고 포커스트랩이 경합(Tab 고착)한다 — 인물 우선, country는 정리.
+   * (클릭 경로는 위 핸들러의 상호 배타 delete가 이미 막는다.)
+   */
+  useEffect(() => {
+    if (viewingPersonId && viewingCountryId) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('country')
+      setSearchParams(next, { replace: true })
+    }
+  }, [viewingPersonId, viewingCountryId, searchParams, setSearchParams])
 
   /**
    * 본문에 *인물* 엔티티를 링크하면 참여 행위자로 자동 등록.
@@ -249,6 +287,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
             event={event}
             onPatch={onPatch}
             onPersonClick={onPersonClick}
+            onCountryClick={onCountryClick}
           />
 
           <S.Body>
@@ -266,6 +305,7 @@ function EventDetailContent({ eventId }: { eventId: string }) {
                 event={event}
                 onPatch={onPatch}
                 onPersonClick={onPersonClick}
+                onCountryClick={onCountryClick}
               />
 
               {/* 모듈 추가 진입점 — 발견성을 위해 actors 직후로 배치. */}
@@ -314,6 +354,12 @@ function EventDetailContent({ eventId }: { eventId: string }) {
       </S.Page>
 
       <PersonDetailModal personId={viewingPersonId} onClose={onPersonModalClose} />
+      <CountryInfoModal
+        event={event}
+        countryId={viewingCountryId}
+        onOpen={onCountryClick}
+        onClose={onCountryModalClose}
+      />
     </InlineEditProvider>
   )
 }

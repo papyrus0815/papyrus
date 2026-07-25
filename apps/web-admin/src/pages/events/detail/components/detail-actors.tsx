@@ -14,6 +14,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
 import * as S from '../styles'
 import { type PatchOptions } from '../use-undoable-patch'
@@ -25,6 +26,11 @@ interface DetailActorsProps {
   onPatch: (patch: UpdateEventDto, opts?: PatchOptions) => void
   /** 인물 클릭 시 상세 모달 오픈. 페이지 레벨 단일 모달이 처리. */
   onPersonClick: (personId: string) => void
+  /**
+   * 관련국 클릭 시 국가 정보 모달 오픈(인물과 대칭). 링크는 유지되므로
+   * 수정자 키(cmd/ctrl/shift)·중클릭의 새 탭 동선은 그대로 보존된다.
+   */
+  onCountryClick: (countryId: string) => void
 }
 
 /**
@@ -42,6 +48,7 @@ export function DetailActors({
   event,
   onPatch,
   onPersonClick,
+  onCountryClick,
 }: DetailActorsProps) {
   const [personModalOpen, setPersonModalOpen] = useState(false)
   const [countryModalOpen, setCountryModalOpen] = useState(false)
@@ -384,6 +391,12 @@ export function DetailActors({
                 <NationItem key={country.id}>
                   <CountryLink
                     to={pathKeys.countryDetail(country.id)}
+                    aria-haspopup="dialog"
+                    onClick={(clickEvent) => {
+                      if (!shouldInterceptEntityClick(clickEvent)) return
+                      clickEvent.preventDefault()
+                      onCountryClick(country.id)
+                    }}
                   >
                     {country.name}
                   </CountryLink>
@@ -426,6 +439,12 @@ export function DetailActors({
                 <NationItem key={country.id}>
                   <HistoricalCountryName
                     to={pathKeys.countryDetail(country.id)}
+                    aria-haspopup="dialog"
+                    onClick={(clickEvent) => {
+                      if (!shouldInterceptEntityClick(clickEvent)) return
+                      clickEvent.preventDefault()
+                      onCountryClick(country.id)
+                    }}
                   >
                     {country.name}
                   </HistoricalCountryName>

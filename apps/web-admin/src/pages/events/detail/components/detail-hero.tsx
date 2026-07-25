@@ -13,6 +13,7 @@ import { getUploadImageUrl } from '@/shared/api/upload'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
+import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
@@ -29,6 +30,8 @@ interface DetailHeroProps {
   onPatch: (patch: UpdateEventDto) => void
   /** 인물 chip 클릭 시 페이지 레벨 모달 트리거. */
   onPersonClick: (personId: string) => void
+  /** 국가명 클릭 시 페이지 레벨 국가 정보 모달 트리거(관련국 단락과 동일 동작). */
+  onCountryClick: (countryId: string) => void
 }
 
 /**
@@ -40,7 +43,12 @@ interface DetailHeroProps {
  *
  * 부모 사건 브레드크럼은 편집 대상 X (구조 변경은 별도 흐름).
  */
-export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
+export function DetailHero({
+  event,
+  onPatch,
+  onPersonClick,
+  onCountryClick,
+}: DetailHeroProps) {
   const prefetchEvent = usePrefetchEventDetail()
   const { data: categories = [] } = useQuery({
     queryKey: ['event-categories'],
@@ -153,7 +161,11 @@ export function DetailHero({ event, onPatch, onPersonClick }: DetailHeroProps) {
         <ContemporaryHeadsLink event={event} />
       </S.HeroMeta>
 
-      <HeroActors event={event} onPersonClick={onPersonClick} />
+      <HeroActors
+        event={event}
+        onPersonClick={onPersonClick}
+        onCountryClick={onCountryClick}
+      />
 
       <SummaryHost>
         <InlineText
@@ -292,9 +304,11 @@ const COUNTRY_CAP = 8
 function HeroActors({
   event,
   onPersonClick,
+  onCountryClick,
 }: {
   event: EventDetail
   onPersonClick: (personId: string) => void
+  onCountryClick: (countryId: string) => void
 }) {
   const allPersons = event.relatedPersons ?? []
   const allModern = event.relatedCountries ?? []
@@ -369,7 +383,15 @@ function HeroActors({
           <CountryInline>
             {modern.map((country, index) => (
               <span key={country.id}>
-                <CountryName to={pathKeys.countryDetail(country.id)}>
+                <CountryName
+                  to={pathKeys.countryDetail(country.id)}
+                  aria-haspopup="dialog"
+                  onClick={(clickEvent) => {
+                    if (!shouldInterceptEntityClick(clickEvent)) return
+                    clickEvent.preventDefault()
+                    onCountryClick(country.id)
+                  }}
+                >
                   {country.name}
                 </CountryName>
                 {index < modern.length - 1 && <CountrySep>·</CountrySep>}
@@ -380,7 +402,15 @@ function HeroActors({
             )}
             {historical.map((country, index) => (
               <span key={country.id}>
-                <HistoricalName to={pathKeys.countryDetail(country.id)}>
+                <HistoricalName
+                  to={pathKeys.countryDetail(country.id)}
+                  aria-haspopup="dialog"
+                  onClick={(clickEvent) => {
+                    if (!shouldInterceptEntityClick(clickEvent)) return
+                    clickEvent.preventDefault()
+                    onCountryClick(country.id)
+                  }}
+                >
                   {country.name}
                 </HistoricalName>
                 {index < historical.length - 1 && <CountrySep>·</CountrySep>}
