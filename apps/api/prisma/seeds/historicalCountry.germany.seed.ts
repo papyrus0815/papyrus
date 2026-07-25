@@ -7,6 +7,7 @@ const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 interface HistoricalCountryEntry {
   name: string
   enName?: string
+  nameOrigin?: string
   description?: string
   startEra?: 'BC' | 'AD'
   startYear?: number
@@ -78,6 +79,62 @@ const ENTRIES: HistoricalCountryEntry[] = [
     stateType: HistoricalStateType.KINGDOM,
     entityKind: HistoricalEntityKind.STATE,
     latitude: 51.0, longitude: 10.0,
+    linkToGermany: true,
+  },
+  {
+    name: '작센 공국',
+    enName: 'Duchy of Saxony',
+    nameOrigin:
+      '게르만계 작센족(Sachsen)의 이름에서 유래했으며, 이들이 쓰던 외날 검 "작스(sahs/seax)"에서 나온 것으로 본다.',
+    description:
+      '804년 카롤루스 대제의 작센 정복으로 프랑크 왕국에 편입된 작센족 지역이 843년 베르됭 조약 이후 동프랑크의 부족공국(Stammesherzogtum)으로 자리 잡으며 성립. ' +
+      '리우돌프 가문에서 하인리히 1세가 919년 독일 왕으로 선출되어 오토 왕조의 모태가 되었고, 이후 빌룽 가문(961~1106)·주플린부르크 가문을 거쳤다. ' +
+      '벨프 가문의 하인리히 사자공이 바이에른까지 겸해 최대 판도를 이뤘으나 1180년 황제 프리드리히 1세에게 제국추방형을 받고 몰락하면서 공국이 해체되었다. ' +
+      '이때 서부는 쾰른 대주교의 베스트팔렌 공국 등으로 쪼개졌고, 공작 칭호와 엘베강 유역 동부는 아스카니아 가문의 베른하르트가 이어받았다. ' +
+      '1296년 아스카니아 영지가 작센-비텐베르크와 작센-라우엔부르크로 분할되며 통일 공국은 소멸했고, ' +
+      '작센-비텐베르크가 1356년 금인칙서로 선제후 지위를 얻어 작센 선제후국이 되었다.',
+    startEra: 'AD', startYear: 804,
+    endEra: 'AD', endYear: 1296,
+    stateType: HistoricalStateType.PRINCIPALITY,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 52.27, longitude: 10.52,
+    linkToGermany: true,
+  },
+  {
+    name: '프랑켄 공국',
+    enName: 'Duchy of Franconia',
+    nameOrigin:
+      '이 지역에 정착한 프랑크족(Franken)의 이름에서 유래했으며, 라틴어 "프랑코니아(Franconia)"는 "(동)프랑크인의 땅"을 뜻한다. ' +
+      '서프랑크(프랑스)와 구분되는 프랑크족 본향으로, 오늘날 독일 바이에른 북부(오버·미텔·운터프랑켄)에 그 이름이 남아 있다.',
+    description:
+      '906년 콘라딘 가문 아래 마인강 유역에 성립한 신성로마제국의 부족공국(Stammesherzogtum). ' +
+      '911년 공작 콘라트 1세가 카롤링거 왕조 단절 후 동프랑크(독일) 국왕으로 선출될 만큼 왕국의 심장부였다. ' +
+      '939년 공작 에버하르트가 오토 1세에 맞선 반란에서 전사한 뒤 국왕이 새 공작을 임명하지 않아 여러 백작령·주교령으로 분열해 국왕 직속령이 되었다. ' +
+      '1168년 황제 프리드리히 1세(바르바로사)가 뷔르츠부르크 주교에게 프랑켄 공작 칭호를 수여했고, 주교들은 1803년 세속화까지 이를 유지했다. 뷔르츠부르크가 중심지였다.',
+    startEra: 'AD', startYear: 906,
+    endEra: 'AD', endYear: 1168,
+    stateType: HistoricalStateType.PRINCIPALITY,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 49.79, longitude: 9.93,
+    linkToGermany: true,
+  },
+  {
+    name: '슈바벤 공국',
+    enName: 'Duchy of Swabia',
+    nameOrigin:
+      '이 지역에 정착한 게르만계 슈바벤족(Schwaben)의 이름에서 유래했다. 초기에는 같은 지역을 아우르던 부족 이름을 따 "알레마니아(Alemannia)"로도 불렸으며, ' +
+      '오늘날 여러 로망스어에서 독일을 가리키는 말(프랑스어 Allemagne 등)의 어원이 되었다.',
+    description:
+      '알레만니아 부족 영역에서 성장한 신성로마제국의 부족공국(Stammesherzogtum). 915년 팔츠 백작 에르칸거가 공작을 칭했다가 처형된 뒤 ' +
+      '917년경 부르하르트 2세가 안정적 통치를 확립했다. 1079년부터 1268년까지 (짧은 중단을 빼고) 호엔슈타우펜 가문이 다스렸으며, ' +
+      '이 시기 다수의 신성로마황제(프리드리히 1세 바르바로사, 프리드리히 2세 등)를 배출한 제국의 심장부였다. ' +
+      '1268년 마지막 호엔슈타우펜 공작 콘라딘이 처형되면서 공국은 실질적으로 소멸해 뷔르템베르크·바덴 등 수많은 백작령·자유도시로 분열했고, ' +
+      '루돌프 1세가 1289년 아들에게 작위를 주어 잠시 부활을 시도했으나 1313년경 완전히 사라졌다. 고정된 수도는 없었다.',
+    startEra: 'AD', startYear: 915,
+    endEra: 'AD', endYear: 1268,
+    stateType: HistoricalStateType.PRINCIPALITY,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 48.52, longitude: 9.06,
     linkToGermany: true,
   },
   {
@@ -500,6 +557,7 @@ export async function seedGermanyHistoricalCountries(
         data: {
           name: entry.name,
           enName: entry.enName,
+          nameOrigin: entry.nameOrigin,
           description: entry.description,
           startEra: entry.startEra as any,
           startYear: entry.startYear,

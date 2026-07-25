@@ -30,6 +30,17 @@ const TRANSITIONS: {
   // 그레이트브리튼 + 아일랜드 → 연합왕국 (1801 합방)
   { predecessor: '그레이트브리튼 왕국', successor: '그레이트브리튼 및 아일랜드 연합왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
   { predecessor: '아일랜드 왕국', successor: '그레이트브리튼 및 아일랜드 연합왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+
+  // 서식스·에식스 왕국 → 잉글랜드 왕국 (7왕국 통합, 웨식스 매개 최종 계승)
+  { predecessor: '서식스 왕국', successor: '잉글랜드 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '에식스 왕국', successor: '잉글랜드 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
+
+  // 잉글랜드 왕국 ↔ 잉글랜드 연방 (1649 공화정 수립 / 1660 왕정복고 — 동일 영토 체제 전환)
+  { predecessor: '잉글랜드 왕국', successor: '잉글랜드 연방', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.REGIME_CHANGE },
+  { predecessor: '잉글랜드 연방', successor: '잉글랜드 왕국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.REGIME_CHANGE },
+
+  // 그레이트브리튼 및 아일랜드 연합왕국 → 현대 영국 (1922 아일랜드 자유국 분리, UK 존속·개명)
+  { predecessor: '그레이트브리튼 및 아일랜드 연합왕국', successor: '그레이트브리튼 및 북아일랜드 연합왕국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
 ]
 
 const MEMBERSHIPS: {
@@ -51,6 +62,16 @@ const MEMBERSHIPS: {
 
   // 아일랜드 영주권 → 잉글랜드 왕국 소속
   { parent: '잉글랜드 왕국', member: '아일랜드 영주권', role: HistoricalMembershipRole.VASSAL_STATE },
+
+  // 서식스·에식스는 8세기 머시아, 이후 웨식스의 종주권 아래 속국(825~827 흡수)
+  { parent: '머시아 왕국', member: '서식스 왕국', role: HistoricalMembershipRole.VASSAL_STATE },
+  { parent: '웨식스 왕국', member: '서식스 왕국', role: HistoricalMembershipRole.VASSAL_STATE },
+  { parent: '머시아 왕국', member: '에식스 왕국', role: HistoricalMembershipRole.VASSAL_STATE },
+  { parent: '웨식스 왕국', member: '에식스 왕국', role: HistoricalMembershipRole.VASSAL_STATE },
+
+  // 잉글랜드 연방(1649~1660)이 정복·병합해 실효 지배한 스코틀랜드·아일랜드 (1660 왕정복고로 해소)
+  { parent: '잉글랜드 연방', member: '스코틀랜드 왕국', role: HistoricalMembershipRole.UNION },
+  { parent: '잉글랜드 연방', member: '아일랜드 왕국', role: HistoricalMembershipRole.UNION },
 ]
 
 // ── 수평 관계(동군연합) 정의 ──────────────────────────────────────────────────

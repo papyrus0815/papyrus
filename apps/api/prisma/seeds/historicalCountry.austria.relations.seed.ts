@@ -33,6 +33,11 @@ const TRANSITIONS: {
   { predecessor: '오스트리아 연방국', successor: '나치 독일 (제3제국)', eventType: TransitionEventType.CONQUEST, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 나치 독일 패망 → 독일에서 분리·4개국 점령 (1945)
   { predecessor: '나치 독일 (제3제국)', successor: '연합군 점령하 오스트리아', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 케른텐 공국 신설 (976: 바이에른 공국에서 카란타니아 분리·승격)
+  { predecessor: '바이에른 공국', successor: '케른텐 공국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 케른텐 공국 분할 (1918~1920: 대부분 오스트리아, 메자 계곡 등 → 유고슬라비아)
+  { predecessor: '케른텐 공국', successor: '오스트리아 제1공화국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '케른텐 공국', successor: '세르비아-크로아티아-슬로베니아 왕국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 슈타이어마르크 공국 분할 (1918: 북부 → 오스트리아, 남부 → 유고슬라비아)
   { predecessor: '슈타이어마르크 공국', successor: '오스트리아 제1공화국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
   { predecessor: '슈타이어마르크 공국', successor: '세르비아-크로아티아-슬로베니아 왕국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
@@ -51,18 +56,28 @@ const MEMBERSHIPS: {
   { parent: '신성로마제국', member: '오스트리아 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '신성로마제국', member: '오스트리아 대공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '신성로마제국', member: '슈타이어마르크 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '케른텐 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '베로나 변경백령', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   // 게오르겐베르크 협약(1186) 이후 오스트리아와 동군연합 (1192~)
   { parent: '오스트리아 공국', member: '슈타이어마르크 공국', role: HistoricalMembershipRole.UNION },
+  // 베로나 변경백령의 관할 이동 (952~976 바이에른 공작 → 976~1077 케른텐 공작 겸임)
+  { parent: '바이에른 공국', member: '베로나 변경백령', role: HistoricalMembershipRole.UNION },
+  { parent: '케른텐 공국', member: '베로나 변경백령', role: HistoricalMembershipRole.UNION },
+  // 합스부르크 세습령 이너 오스트리아 (케른텐 1335~, 슈타이어마르크 1282~)
+  { parent: '오스트리아 대공국', member: '케른텐 공국', role: HistoricalMembershipRole.UNION },
+  { parent: '오스트리아 대공국', member: '슈타이어마르크 공국', role: HistoricalMembershipRole.UNION },
   // 독일 연방(1815~1866) — 오스트리아가 의장국
   { parent: '독일 연방', member: '오스트리아 제국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER, isLeadingMember: true },
   // 합스부르크 왕관령 (1804~1867)
   { parent: '오스트리아 제국', member: '헝가리 왕국', role: HistoricalMembershipRole.UNION },
   { parent: '오스트리아 제국', member: '보헤미아 왕국', role: HistoricalMembershipRole.UNION },
   { parent: '오스트리아 제국', member: '슈타이어마르크 공국', role: HistoricalMembershipRole.UNION },
+  { parent: '오스트리아 제국', member: '케른텐 공국', role: HistoricalMembershipRole.UNION },
   // 이중 제국 구성 (1867~1918)
   { parent: '오스트리아-헝가리 제국', member: '헝가리 왕국', role: HistoricalMembershipRole.UNION },
   { parent: '오스트리아-헝가리 제국', member: '보헤미아 왕국', role: HistoricalMembershipRole.UNION },
   { parent: '오스트리아-헝가리 제국', member: '슈타이어마르크 공국', role: HistoricalMembershipRole.UNION },
+  { parent: '오스트리아-헝가리 제국', member: '케른텐 공국', role: HistoricalMembershipRole.UNION },
 ]
 
 // ── 수평 관계(동군연합) 정의 ──────────────────────────────────────────────────

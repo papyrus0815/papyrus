@@ -7,6 +7,7 @@ const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 interface HistoricalCountryEntry {
   name: string
   enName?: string
+  nameOrigin?: string
   description?: string
   startEra?: 'BC' | 'AD'
   startYear?: number
@@ -82,6 +83,48 @@ const ENTRIES: HistoricalCountryEntry[] = [
     entityKind: HistoricalEntityKind.STATE,
     latitude: 47.07, longitude: 15.44,
     linkToIsoCodes: ['AT'],
+  },
+
+  // ── 이너 오스트리아 계열 ──────────────────────────────────────────
+  {
+    name: '케른텐 공국',
+    enName: 'Duchy of Carinthia',
+    nameOrigin:
+      '슬라브계 공국 카란타니아(Carantania)에서 유래한 이름으로, 켈트어 karant-(친구·동맹) 또는 암석을 뜻하는 어근에서 온 것으로 본다. ' +
+      '한국어로는 독일어 Kärnten을 따라 "케른텐", 라틴어·영어 Carinthia를 따라 "카린티아"로도 표기한다.',
+    description:
+      '976년 신성로마황제 오토 2세가 바이에른 공국에서 카란타니아 지역을 떼어내 승격시킨 제국 최초의 신설 공국. ' +
+      '창설 당시 베로나 변경백령이 함께 딸려 케른텐 공작이 겸했으나 1077년 분리되었다. ' +
+      '에펜슈타인 가문(1077~1122)과 슈판하임 가문(1122~1269)을 거쳐 보헤미아 왕 오타카르 2세, 괴르츠-티롤 가문이 차례로 차지했고, ' +
+      '1335년 하인리히 사후 합스부르크 가문에 귀속되어 슈타이어마르크·카르니올라와 함께 이너 오스트리아를 구성했다. ' +
+      '수도는 1518년까지 장크트 파이트 안 데어 글란, 이후 클라겐푸르트였다. ' +
+      '1918년 제국 해체와 함께 소멸했으며, 1920년 주민투표로 남부 대부분이 오스트리아에 잔류하고 메자 계곡 등 일부는 유고슬라비아에 귀속되었다.',
+    startEra: 'AD', startYear: 976,
+    endEra: 'AD', endYear: 1918,
+    stateType: HistoricalStateType.PRINCIPALITY,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 46.62, longitude: 14.31,
+    linkToIsoCodes: ['AT'],
+  },
+  // 베로나 변경백령은 지리적으로는 이탈리아지만 952~1077년 바이에른·케른텐 공작이 관할한
+  // 제국 변경령이므로 케른텐과 함께 이 파일에서 관리한다.
+  {
+    name: '베로나 변경백령',
+    enName: 'March of Verona',
+    nameOrigin:
+      '중심 도시 베로나에서 딴 이름으로, 아퀼레이아를 함께 포괄해 "베로나·아퀼레이아 변경백령(Marca Veronensis et Aquileiensis)"으로도 불렸다.',
+    description:
+      '952년 신성로마황제 오토 1세가 이탈리아 왕 베렝가리오 2세에게서 베로나·프리울리·이스트리아·트렌토 일대를 넘겨받아 ' +
+      '이탈리아 왕국에서 분리하고 바이에른 공국에 붙인 변경 영지. 알프스 남쪽 통로를 제국이 직접 장악하려는 조치였다. ' +
+      '976년 케른텐 공국이 신설되면서 함께 이관되어 약 100년간 케른텐 공작이 겸했다. ' +
+      '1077년 하인리히 4세가 프리울리·이스트리아를 아퀼레이아 총대주교에게 넘기며 분할되었고, ' +
+      '이후 베로나 등 도시들이 자치 코무네로 성장해 1167년 롬바르디아 동맹 가담을 계기로 변경백령은 실체를 잃었다.',
+    startEra: 'AD', startYear: 952,
+    endEra: 'AD', endYear: 1167,
+    stateType: HistoricalStateType.MARGRAVIATE,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 45.44, longitude: 10.99,
+    linkToIsoCodes: ['IT'],
   },
 
   // ── 제국 시대 ─────────────────────────────────────────────────────
@@ -192,6 +235,7 @@ export async function seedAustriaHistoricalCountries(
         data: {
           name: entry.name,
           enName: entry.enName,
+          nameOrigin: entry.nameOrigin,
           description: entry.description,
           startEra: entry.startEra as any,
           startYear: entry.startYear,

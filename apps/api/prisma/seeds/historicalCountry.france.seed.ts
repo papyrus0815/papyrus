@@ -7,6 +7,7 @@ const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 interface HistoricalCountryEntry {
   name: string
   enName?: string
+  nameOrigin?: string
   description?: string
   startEra?: 'BC' | 'AD'
   startYear?: number
@@ -52,6 +53,28 @@ const ENTRIES: HistoricalCountryEntry[] = [
     stateType: HistoricalStateType.KINGDOM,
     entityKind: HistoricalEntityKind.STATE,
     latitude: 48.9, longitude: 2.3,
+    linkToIsoCodes: ['FR'],
+  },
+
+  // ── 제국 봉토(로렌) ─────────────────────────────────────────────────
+  {
+    name: '로트링겐 공국',
+    enName: 'Duchy of Lorraine',
+    nameOrigin:
+      '카롤루스 대제의 손자 로타르 2세의 왕국 "로타리 레그눔(Lotharii Regnum)"에서 유래해 "로타링기아(Lotharingia)"로 불렸고, ' +
+      '독일어 로트링겐(Lothringen)·프랑스어 로렌(Lorraine)이 여기서 갈라져 나왔다.',
+    description:
+      '959년 로타링기아가 상·하 둘로 나뉘며 성립한 상(上)로트링겐 공국. ' +
+      '1048년경 알자스 가문의 제라르가 세습 공작위를 확립한 뒤 낭시를 수도로 삼아 로렌 가문이 다스린 신성로마제국의 봉토(상라인 관구)였다. ' +
+      '프랑스와 독일 문화가 교차하는 접경 공국으로, 마지막 공작 프랑수아 슈테판이 1737년 토스카나 대공국과 맞바꿔 로렌을 내놓으면서 ' +
+      '폐위된 폴란드 왕 스타니스와프 레슈친스키에게 넘어갔고, 1766년 그의 사망과 함께 프랑스 왕국에 병합되어 하나의 주(province)로 편입되었다. ' +
+      '한편 프랑수아 슈테판은 마리아 테레지아와 혼인해 합스부르크-로트링겐 왕조를 열어 오스트리아를 통치했다. ' +
+      '(같은 뿌리인 하로트링겐은 일찍이 브라반트 공국 등으로 분열했다.)',
+    startEra: 'AD', startYear: 959,
+    endEra: 'AD', endYear: 1766, endMonth: 2,
+    stateType: HistoricalStateType.PRINCIPALITY,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 48.69, longitude: 6.18,
     linkToIsoCodes: ['FR'],
   },
 
@@ -235,6 +258,7 @@ export async function seedFranceHistoricalCountries(
         data: {
           name: entry.name,
           enName: entry.enName,
+          nameOrigin: entry.nameOrigin,
           description: entry.description,
           startEra: entry.startEra as any,
           startYear: entry.startYear,

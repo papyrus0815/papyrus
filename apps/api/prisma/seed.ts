@@ -25,6 +25,7 @@ import {
   seedItalyHistoricalCountries,
   seedItalyHistoricalCountryRelations,
   seedFranceHistoricalCountries,
+  seedFranceHistoricalCountryRelations,
   seedAustriaHistoricalCountries,
   seedAustriaHistoricalCountryRelations,
   seedCroatiaHistoricalCountries,
@@ -33,6 +34,8 @@ import {
   seedPolandHistoricalCountryRelations,
   seedBohemiaHistoricalCountries,
   seedBohemiaHistoricalCountryRelations,
+  seedDenmarkHistoricalCountries,
+  seedDenmarkHistoricalCountryRelations,
   seedNapoleonIII,
   seedPalmerston,
   seedCavour,
@@ -176,8 +179,12 @@ async function main() {
         // 7-5. 베네룩스 역사 국가 계승·소속 관계 시딩
         await seedBeneluxHistoricalCountryRelations(prisma)
 
-        // 7-6. 프랑스 관련 역사 국가 시딩 (서프랑크~제5공화국)
+        // 7-6. 프랑스 관련 역사 국가 시딩 (서프랑크~제5공화국, 로트링겐 공국)
         await seedFranceHistoricalCountries(prisma)
+
+        // 7-6b. 프랑스 역사 국가 계승·소속 관계 시딩 (로트링겐 공국 → 프랑스 왕국·신성로마제국 소속)
+        //  · 의존: seedGermanyHistoricalCountries(신성로마제국 — 소속 관계 대상)
+        await seedFranceHistoricalCountryRelations(prisma)
 
         // 7-7. 오스트리아 관련 역사 국가 시딩 (변경백령~연합군 점령기)
         //  · 의존: seedGermanyHistoricalCountries(신성로마제국·독일 연방·나치 독일 — 계승/소속 관계 대상)
@@ -212,6 +219,14 @@ async function main() {
 
         // 7-14. 보헤미아 역사 국가 계승·소속 관계 시딩
         await seedBohemiaHistoricalCountryRelations(prisma)
+
+        // 7-15. 덴마크 관련 역사 국가 시딩 (덴마크 왕국·칼마르 동맹·덴마크-노르웨이·슐레스비히/홀슈타인 공국)
+        //  · 의존: seedGermanyHistoricalCountries(신성로마제국·독일 연방·프로이센 왕국 — 계승/소속 관계 대상)
+        //  · 현대 DK/NO/SE는 country 시드 미포함 → 모던 링크는 DE(슐레스비히·홀슈타인)만 연결
+        await seedDenmarkHistoricalCountries(prisma)
+
+        // 7-16. 덴마크 역사 국가 계승·소속 관계 시딩
+        await seedDenmarkHistoricalCountryRelations(prisma)
 
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)

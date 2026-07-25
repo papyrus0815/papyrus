@@ -38,8 +38,13 @@ const TRANSITIONS: {
   { predecessor: '바덴 변경백령', successor: '바덴 대공국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 뷔르템베르크 공국 → 뷔르템베르크 왕국
   { predecessor: '뷔르템베르크 공국', successor: '뷔르템베르크 왕국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 슈바벤 공국 분열 (1112 체링겐 가문이 바덴으로 분리, 1268 소멸 후 뷔르템베르크가 계승)
+  { predecessor: '슈바벤 공국', successor: '바덴 변경백령', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '슈바벤 공국', successor: '뷔르템베르크 공국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 바이에른 공국 → 바이에른 선제후국
   { predecessor: '바이에른 공국', successor: '바이에른 선제후국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 작센 공국 → 작센 선제후국 (1296 작센-비텐베르크 분할 → 1356 금인칙서로 선제후 지위)
+  { predecessor: '작센 공국', successor: '작센 선제후국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 마이센 변경백령 → 작센 선제후국 (1423 베틴 가문의 선제후 지위 획득)
   { predecessor: '마이센 변경백령', successor: '작센 선제후국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 바이에른 선제후국 → 바이에른 왕국
@@ -88,6 +93,13 @@ const MEMBERSHIPS: {
   { parent: '신성로마제국', member: '작센 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '신성로마제국', member: '팔츠 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '신성로마제국', member: '마이센 변경백령', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '작센 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '슈바벤 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '신성로마제국', member: '프랑켄 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  // 부족공국 시기(843~962)는 동프랑크 왕국 소속
+  { parent: '동프랑크 왕국', member: '작센 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '동프랑크 왕국', member: '슈바벤 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
+  { parent: '동프랑크 왕국', member: '프랑켄 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '신성로마제국', member: '바이에른 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '신성로마제국', member: '바이에른 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '신성로마제국', member: '하노버 선제후국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
