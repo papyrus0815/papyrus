@@ -43,6 +43,8 @@ export const INFOGRAPHIC_DEFAULTS = {
   MATRIX_COUNTRY_TOP_N: 20,
   /** EraStory·Dynasty — 그룹별 기본 표시 인원 (이상이면 더보기 토글) */
   GROUP_TOP_N: 20,
+  /** Cards(평면 목록) — 최초 표시 인원 (이상이면 더보기) */
+  CARDS_PAGE_SIZE: 60,
   /** Galaxy 라벨 — 영향력 임계, 라벨 최대 표시 수, x/y 충돌 거리 */
   GALAXY_LABEL_MIN_INFLUENCE: 60,
   GALAXY_LABEL_MAX: 50,

@@ -23,7 +23,8 @@ import { useFilterUrlSync } from '../model/url-sync'
 import { InfographicContent } from './infographic-content'
 import { RecordsCompareView } from './records-compare-view'
 
-const VIEW_OPTIONS: Array<[Exclude<PersonInfographicView, 'cards'>, string]> = [
+const VIEW_OPTIONS: Array<[PersonInfographicView, string]> = [
+  ['cards', '카드'],
   ['matrix', '매트릭스'],
   ['galaxy', '은하계'],
   ['story', '시대 스토리'],
@@ -42,10 +43,9 @@ export function PersonInfographicPane({
   // URL ↔ store 동기화 — records 뷰에서 InfographicContent가 언마운트돼도
   // view·recordPersonIds 등 쿼리 동기화가 유지되도록 페인 레벨에서 1회 등록.
   useFilterUrlSync()
-  const view = usePersonInfographicFilterStore((s) => s.view)
-  const setView = usePersonInfographicFilterStore((s) => s.setView)
-  const activeView: Exclude<PersonInfographicView, 'cards'> =
-    view === 'cards' ? 'story' : view
+  const view = usePersonInfographicFilterStore((state) => state.view)
+  const setView = usePersonInfographicFilterStore((state) => state.setView)
+  const activeView = view
 
   const navRef = useRef<HTMLElement>(null)
 

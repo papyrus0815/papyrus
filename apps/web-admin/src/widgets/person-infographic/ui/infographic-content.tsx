@@ -25,6 +25,7 @@ import {
 } from '../model/filter.store'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
 
+import { CardsView } from './cards-view'
 import { DynastyView } from './dynasty-view'
 import { CardGridSkeleton } from './_shared/card-grid-skeleton'
 import { EmptyState } from './_shared/empty-state'
@@ -144,9 +145,9 @@ export function InfographicContent({
     ? Math.round(knownAges.reduce((sum, age) => sum + age, 0) / knownAges.length)
     : 0
 
-  // 'cards' 이외의 뷰만 이 컴포넌트가 다룸. (cards 뷰는 PersonInfographicPane이 분기.)
-  const activeView: Exclude<PersonInfographicView, 'cards'> =
-    view === 'cards' ? 'story' : view
+  // records 뷰만 상위 PersonInfographicPane이 분기 — 여기선 cards(평면 목록) 포함 나머지를 다룬다.
+  const activeView: Exclude<PersonInfographicView, 'records'> =
+    view === 'records' ? 'cards' : view
 
   const hasActiveFilter =
     totalScopeCount > 0 ||
@@ -207,8 +208,10 @@ export function InfographicContent({
                 </ClearBtn>
               )}
             </SearchBox>
-            {/* 정렬은 카드 그리드 뷰(스토리·왕조)에서만 의미 — 동작 패리티 유지 */}
-            {(activeView === 'story' || activeView === 'dynasty') && <SortBar />}
+            {/* 정렬은 카드 그리드 뷰(카드·스토리·왕조)에서만 의미 */}
+            {(activeView === 'cards' ||
+              activeView === 'story' ||
+              activeView === 'dynasty') && <SortBar />}
             {/* 세기 그룹 나열 방향(최신/오래된순)은 세기 그룹 뷰(스토리) 전용 */}
             {activeView === 'story' && <EraOrderToggle />}
           </ToolbarMid>
@@ -257,6 +260,15 @@ export function InfographicContent({
 
         {!isLoading && filtered.length > 0 && (
           <ViewArea>
+            {activeView === 'cards' && (
+              <CardsView
+                people={filtered}
+                onOpen={onPersonClick}
+                query={dq}
+                pinned={pinned}
+                togglePin={togglePin}
+              />
+            )}
             {activeView === 'matrix' && (
               <MatrixView people={filtered} onOpen={onPersonClick} />
             )}
