@@ -306,6 +306,11 @@ model Event {
   /// 추가 하위 엣지 (이 사건이 부모인 링크)
   extraChildLinks  EventParentLink[] @relation("EventParentLinkParent")
 
+  /// 계층 연결 사유 — 이 사건이 자식인 쌍(상위와의 연결에 붙는 주석)
+  hierarchyReasonsAsChild  EventHierarchyReason[] @relation("EventHierarchyReasonChild")
+  /// 계층 연결 사유 — 이 사건이 부모인 쌍(하위와의 연결에 붙는 주석)
+  hierarchyReasonsAsParent EventHierarchyReason[] @relation("EventHierarchyReasonParent")
+
   /// 도시
   cityId String? @map("city_id") @db.Char(36)
   city   City?   @relation(fields: [cityId], references: [id], onDelete: SetNull)
@@ -630,7 +635,9 @@ model EventRelation {
 /// 예: '얄타 회담' — 주 상위 '제2차 세계대전', 추가 상위 '냉전의 서막'
 /// EventRelation(무방향 '관련 사건')과 별개 — 이건 방향성 있는 계보 소속.
 /// deletedAt 없음(이벤트 도메인 조인테이블 관례) — 어느 한쪽이 소프트삭제돼도 엣지는 남기고
-/// 응답에서 거른다. sortOrder·note는 v1 의도적 제외(delete-recreate diff와 구조 충돌 — PD5).
+/// 응답에서 거른다. note(연결 사유)는 쌍 사이드카 EventHierarchyReason으로 분리 도입 —
+/// 승격 swap·attach collapse가 슬롯만 바꾸고 쌍은 못 바꾸므로 쌍 자연키에 두면 이관 코드가
+/// 0줄이 된다(주 상위 FK 링크의 사유도 같은 테이블이 담아 비대칭 해소). sortOrder는 계속 유예(PD5).
 model EventParentLink {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
@@ -654,4 +661,42 @@ model EventParentLink {
   @@unique([childEventId, parentEventId], name: "uniq_event_parent_link_pair")
   @@index([parentEventId], name: "idx_event_parent_link_parentId")
   @@map("event_parent_link")
+}
+
+// ========================
+// 사건 계층 연결 사유 (쌍 사이드카)
+// ========================
+/// (자식, 상위) 쌍에 붙는 '왜 이 사건이 상위와 연결되는가' 한두 문장 주석.
+/// 주 상위 슬롯(Event.parentEventId FK)이든 추가 상위 엣지(EventParentLink)든 같은 쌍이면
+/// 같은 행 — 사유는 쌍에 함수 종속이지 슬롯에 종속되지 않는다. 그래서 승격 swap·attach
+/// collapse·하드삭제 승격(슬롯만 바꾸고 쌍은 불변)에서 사유 이관 코드가 0줄이다.
+///
+/// 잔존 정책(R-1): 링크 해제 시에도 행 보존(deletedAt 없음 — 이벤트 도메인 조인테이블 관례).
+/// 같은 쌍을 다시 연결하면 사유가 자동 부활한다. 어느 한쪽 사건이 하드삭제되면 양방향
+/// Cascade로 동반 소멸. 앱 레이어가 '실제 링크가 있는 쌍'에만 사유를 쓰도록 강제하고
+/// (감사: child=parent 또는 reason='' 행 0건), 응답은 방출되는 링크 객체에만 사유를 붙인다.
+model EventHierarchyReason {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 하위 사건 FK
+  childEventId String @map("child_event_id") @db.Char(36)
+
+  /// 상위 사건 FK
+  parentEventId String @map("parent_event_id") @db.Char(36)
+
+  /// 연결 사유 — 한두 문장 요약(서사는 사건 본문 background/aftermath에). 행 존재 = 사유 존재(비우면 행 삭제).
+  reason String @db.VarChar(500)
+
+  //--- 관계 필드
+  childEvent  Event @relation("EventHierarchyReasonChild", fields: [childEventId], references: [id], onDelete: Cascade)
+  parentEvent Event @relation("EventHierarchyReasonParent", fields: [parentEventId], references: [id], onDelete: Cascade)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([childEventId, parentEventId], name: "uniq_event_hierarchy_reason_pair")
+  @@index([parentEventId], name: "idx_event_hierarchy_reason_parentId")
+  @@map("event_hierarchy_reason")
 }
