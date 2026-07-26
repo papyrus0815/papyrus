@@ -141,6 +141,22 @@ export class EventController {
     // 썸네일: isPrimary=true인 이미지 URL
     const thumbnail = eventImages?.find((img: any) => img.isPrimary)?.imageUrl || null
 
+    // 계층 연결 사유 맵 — 상세(loadEventDetail)에서만 로드되므로 미로드 시 빈 맵(사유 undefined).
+    //  · reasonByParentId: 이 사건이 자식인 쌍의 상위별 사유(주 상위·추가 상위 표시)
+    //  · reasonByChildId:  이 사건이 부모인 쌍의 자식별 사유(하위 카드·추가 하위 표시)
+    const reasonByParentId = new Map<string, string>()
+    if (Array.isArray(event.hierarchyReasonsAsChild)) {
+      for (const row of event.hierarchyReasonsAsChild) {
+        reasonByParentId.set(row.parentEventId, row.reason)
+      }
+    }
+    const reasonByChildId = new Map<string, string>()
+    if (Array.isArray(event.hierarchyReasonsAsParent)) {
+      for (const row of event.hierarchyReasonsAsParent) {
+        reasonByChildId.set(row.childEventId, row.reason)
+      }
+    }
+
     // 관련 국가 정보 추출
     const relatedCountryIds: string[] = []
     const relatedHistoricalCountryIds: string[] = []
@@ -212,17 +228,28 @@ export class EventController {
         event.parentEvent && !event.parentEvent.deletedAt
           ? this.toResponseDto(event.parentEvent)
           : undefined,
-      childEvents: event.childEvents ? event.childEvents.map((child: any) => this.toResponseDto(child)) : undefined,
+      // 주 상위 연결 사유 — 쌍(this, parentEventId). 상세에서만 실린다(미로드 시 undefined).
+      parentLinkReason: event.parentEventId
+        ? (reasonByParentId.get(event.parentEventId) ?? undefined)
+        : undefined,
+      // 자식 원소에 (child, this) 쌍의 사유를 부착 — 쌍 스코프라 재귀 매퍼가 아니라 여기서.
+      childEvents: event.childEvents
+        ? event.childEvents.map((child: any) => ({
+            ...this.toResponseDto(child),
+            reason: reasonByChildId.get(child.id) ?? undefined,
+          }))
+        : undefined,
       // 추가 상위/하위(EventParentLink) — include된 응답 경로(상세)에서만 실린다.
       // conditional 필수: 이 매퍼는 목록·후보 등이 공유하므로 무조건 ?? []는 목록 payload를
       // 오염시키고, 프론트 낙관 갱신이 '[] = 없음'과 '미로드'를 구분 못 하게 된다.
-      // 소프트삭제된 상대는 게이트(유령 주 상위 null 정책 승계).
+      // 소프트삭제된 상대는 게이트(유령 주 상위 null 정책 승계). 사유는 방출되는 링크 객체에만.
       extraParents: Array.isArray(event.extraParentLinks)
         ? event.extraParentLinks
             .filter((link: any) => link.parentEvent && !link.parentEvent.deletedAt)
             .map((link: any) => ({
               id: link.parentEvent.id,
               title: link.parentEvent.title,
+              reason: reasonByParentId.get(link.parentEvent.id) ?? undefined,
             }))
         : undefined,
       extraChildren: Array.isArray(event.extraChildLinks)
@@ -231,6 +258,7 @@ export class EventController {
             .map((link: any) => ({
               id: link.childEvent.id,
               title: link.childEvent.title,
+              reason: reasonByChildId.get(link.childEvent.id) ?? undefined,
             }))
         : undefined,
       keywords: event.keywords != null ? (Array.isArray(event.keywords) ? event.keywords : []) : null,
@@ -903,6 +931,16 @@ export class EventController {
           },
           orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
         },
+        // 계층 연결 사유(EventHierarchyReason) — 쌍 자연키라 두 방향을 각각 로드.
+        //  · asChild: 이 사건이 자식인 쌍 → parentEventId별 사유(주 상위·추가 상위 표시)
+        //  · asParent: 이 사건이 부모인 쌍 → childEventId별 사유(하위 카드·추가 하위 표시)
+        // 상세(loadEventDetail)에서만 로드 — toResponseDto는 로드됐을 때만 매핑(conditional 계약).
+        hierarchyReasonsAsChild: {
+          select: { parentEventId: true, reason: true },
+        },
+        hierarchyReasonsAsParent: {
+          select: { childEventId: true, reason: true },
+        },
         childEvents: {
           // 소프트 삭제된 자식 제외 — 유령 카드 방지 + 프론트가 이 목록으로
           // childEventIds 전체 재전송을 만들기 때문에(가드가 삭제 사건을 거부) 필수.
@@ -1227,6 +1265,8 @@ export class EventController {
       dto.primaryHistoricalCountryId,
       dto.relatedPersons,
       dto.extraParentEventIds, // 🆕 추가 상위(EventParentLink) 전체목록 — undefined=변경 없음
+      dto.parentLinkReasons, // 🆕 연결 사유(이 사건=자식) 부분 업서트
+      dto.childLinkReasons, // 🆕 연결 사유(이 사건=부모) 부분 업서트
     )
 
     // 정규화된 군사 정보 저장

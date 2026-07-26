@@ -55,35 +55,60 @@ export class EventResponseDto {
   @ApiProperty({ description: '상위 사건 정보 (주 상위)', required: false })
   parentEvent?: EventResponseDto
 
+  @ApiProperty({
+    description:
+      '주 상위와의 연결 사유(EventHierarchyReason — 쌍 this↔parentEventId). ' +
+      '상세 응답에만 실림. 없으면 undefined.',
+    required: false,
+  })
+  parentLinkReason?: string | null
+
   @ApiProperty({ description: '하위 사건 목록 (주 상위 기준)', required: false })
   childEvents?: EventResponseDto[]
 
   @ApiProperty({
     description:
+      '쌍 스코프 연결 사유 — childEvents/extraChildren 원소로 실릴 때 (그 자식↔이 사건) ' +
+      '링크의 사유. 사건 자체의 속성이 아니라 부모-자식 쌍의 주석이라 목록 원소에서만 의미. ' +
+      '상세 응답에만 실림, 없으면 undefined.',
+    required: false,
+  })
+  reason?: string | null
+
+  @ApiProperty({
+    description:
       '추가 상위 사건 목록(EventParentLink — 주 상위 외 다중 상위). ' +
       '상세 응답에만 실림(include 경로 conditional), 소프트삭제 부모는 걸러짐. ' +
-      '정렬: 연결 오래된 순(createdAt asc → id asc).',
+      '정렬: 연결 오래된 순(createdAt asc → id asc). reason=쌍 연결 사유(없으면 undefined).',
     required: false,
     type: 'array',
     items: {
       type: 'object',
-      properties: { id: { type: 'string' }, title: { type: 'string' } },
+      properties: {
+        id: { type: 'string' },
+        title: { type: 'string' },
+        reason: { type: 'string', nullable: true },
+      },
     },
   })
-  extraParents?: Array<{ id: string; title: string }>
+  extraParents?: Array<{ id: string; title: string; reason?: string | null }>
 
   @ApiProperty({
     description:
       '추가 하위 사건 목록(EventParentLink 역방향 — 이 사건을 추가 상위로 갖는 사건들). ' +
-      '읽기전용 표시용 — 편집은 자식 쪽에서. 소프트삭제 자식은 걸러짐.',
+      '읽기전용 표시용 — 편집은 자식 쪽에서. 소프트삭제 자식은 걸러짐. reason=쌍 연결 사유.',
     required: false,
     type: 'array',
     items: {
       type: 'object',
-      properties: { id: { type: 'string' }, title: { type: 'string' } },
+      properties: {
+        id: { type: 'string' },
+        title: { type: 'string' },
+        reason: { type: 'string', nullable: true },
+      },
     },
   })
-  extraChildren?: Array<{ id: string; title: string }>
+  extraChildren?: Array<{ id: string; title: string; reason?: string | null }>
 
   @ApiProperty({ description: '도시 ID', required: false })
   cityId?: string | null

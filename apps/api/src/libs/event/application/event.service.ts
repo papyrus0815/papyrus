@@ -4,10 +4,11 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common'
 import { EventRepository } from '../domain/event.repository'
 import { Event } from '../domain/event.entity'
-import { AggregateType, EventMethod, PrismaClient } from '@prisma/client'
+import { AggregateType, EventMethod, Prisma, PrismaClient } from '@prisma/client'
 import { PointService } from '../../gamification/application/point.service'
 import { completenessBonus } from '../../gamification/domain/point.policy'
 import { NotificationService } from '../../notification/application/notification.service'
@@ -415,6 +416,15 @@ export class EventService {
      * 불변식·엣지 diff는 docs/event-multi-parent-review.md §4.2 매트릭스 참조.
      */
     extraParentEventIds?: string[],
+    /**
+     * 계층 연결 사유 — *부분 업서트* 규약(전체목록 아님): undefined=변경 없음, 나열된
+     * 쌍만 터치. reason 문자열=업서트, null(또는 공백)=행 삭제. 인접(멤버십) 채널과
+     * 독립 — hierarchyTouched 게이트를 태우지 않아 무관 편집이 순환 BFS로 막히지 않는다.
+     * parentLinkReasons: 이 사건이 자식인 쌍(상위와의 연결). childLinkReasons: 부모인 쌍.
+     * docs/event-subevent-link-reason-review.md §2.2.
+     */
+    parentLinkReasons?: Array<{ parentEventId: string; reason: string | null }>,
+    childLinkReasons?: Array<{ childEventId: string; reason: string | null }>,
   ): Promise<Event> {
     // 존재 여부 확인 (소유자 스코프한 제목 중복 검사에 사용)
     const target = await this.getEventById(id)
@@ -448,6 +458,25 @@ export class EventService {
         data.parentEventId,
         childEventIds,
         extraParentEventIds,
+      )
+    }
+
+    // 연결 사유(부분 업서트) — 인접 채널과 독립. 같은 배열 내 중복 쌍은 비결정 동작이라
+    // 선차단(400). 유효 쌍(실제 링크) 밖 업서트는 트랜잭션 안에서 반영 후 상태로 검증.
+    const reasonsTouched =
+      parentLinkReasons !== undefined || childLinkReasons !== undefined
+    if (parentLinkReasons !== undefined) {
+      assertNoDuplicateKey(
+        parentLinkReasons,
+        (entry) => entry.parentEventId,
+        '같은 상위 사건에 대한 연결 사유가 중복 제출되었습니다',
+      )
+    }
+    if (childLinkReasons !== undefined) {
+      assertNoDuplicateKey(
+        childLinkReasons,
+        (entry) => entry.childEventId,
+        '같은 하위 사건에 대한 연결 사유가 중복 제출되었습니다',
       )
     }
 
@@ -576,8 +605,9 @@ export class EventService {
     // 프론트가 만드는 childEventIds에는 소프트삭제 자식이 애초에 없어(loadEventDetail이
     // deletedAt:null로 걸러 응답) 재링크에서도 빠진다.
     // (존재·소유권·불변식·순환·detach 409는 위 assertHierarchyLinkable에서 선검증.)
-    const updated = hierarchyTouched
-      ? await this.prisma.$transaction(async (tx) => {
+    const updated =
+      hierarchyTouched || reasonsTouched
+        ? await this.prisma.$transaction(async (tx) => {
           if (childEventIds !== undefined) {
             console.log(
               `🔗 기존 사건 ${childEventIds.length}개를 하위 사건으로 연결...`,
@@ -623,9 +653,20 @@ export class EventService {
               })
             }
           }
+          // 연결 사유 — 인접 쓰기 *후* 실행해 유효 쌍 집합을 반영 후(effective) 상태로
+          // 읽는다(같은 patch가 방금 붙인 링크에도 사유를 쓸 수 있게). 승격 swap 등은
+          // 슬롯만 바꾸므로 쌍 자연키 사유는 자동으로 따라간다(이관 코드 없음).
+          if (reasonsTouched) {
+            await this.applyHierarchyReasons(
+              tx,
+              id,
+              parentLinkReasons,
+              childLinkReasons,
+            )
+          }
           return this.events.update(id, data, tx)
         })
-      : await this.events.update(id, data)
+        : await this.events.update(id, data)
     await this.notificationService.notifyEvent(
       updated.title,
       EventMethod.UPDATE,
@@ -862,6 +903,87 @@ export class EventService {
     await this.assertNoHierarchyCycle(id, effectiveParentId, childEventIds, bfsExtras)
 
     return edgePlan
+  }
+
+  /**
+   * 계층 연결 사유(EventHierarchyReason) 부분 업서트 — 트랜잭션 안에서 인접 쓰기 *후* 실행.
+   *
+   * 유효 쌍 검증은 반영 후(effective) DB 상태로 읽는다:
+   *  - parentLinkReasons(이 사건=자식): 유효 상위 = 주 상위 FK ∪ 모든 엣지(살아있는+유령).
+   *    유령(소프트삭제 부모) 쌍도 허용 — R-1 부활 약속의 거울(재연결 시 사유 부활).
+   *  - childLinkReasons(이 사건=부모): 유효 자식 = 살아있는 주 상위 FK 자식(편집 자식 쪽 단일화).
+   *
+   * reason 정규화: trim 후 빈 문자열이면 행 삭제(NOT NULL 컬럼에 '' 저장 금지). 삭제(빈/누락)는
+   * 링크 상태와 무관하게 허용(정리 어포던스). 업서트는 delete-then-create — 이벤트 도메인 관례.
+   */
+  private async applyHierarchyReasons(
+    tx: Prisma.TransactionClient,
+    id: string,
+    parentLinkReasons?: Array<{ parentEventId: string; reason: string | null }>,
+    childLinkReasons?: Array<{ childEventId: string; reason: string | null }>,
+  ): Promise<void> {
+    if (parentLinkReasons !== undefined && parentLinkReasons.length > 0) {
+      const self = await tx.event.findUnique({
+        where: { id },
+        select: { parentEventId: true },
+      })
+      const edges = await tx.eventParentLink.findMany({
+        where: { childEventId: id },
+        select: { parentEventId: true },
+      })
+      // 유령(소프트삭제 부모) 엣지까지 포함 — R-1 부활 약속. 주 상위 FK도 유령이면
+      // self.parentEventId가 여전히 가리키므로 유효 집합에 든다.
+      const validParents = new Set<string>([
+        ...(self?.parentEventId ? [self.parentEventId] : []),
+        ...edges.map((edge) => edge.parentEventId),
+      ])
+      for (const entry of parentLinkReasons) {
+        const normalized = (entry.reason ?? '').trim()
+        await tx.eventHierarchyReason.deleteMany({
+          where: { childEventId: id, parentEventId: entry.parentEventId },
+        })
+        if (!normalized) continue
+        if (!validParents.has(entry.parentEventId)) {
+          throw new BadRequestException(
+            '연결되지 않은 상위 사건에는 연결 사유를 기록할 수 없습니다',
+          )
+        }
+        await tx.eventHierarchyReason.create({
+          data: {
+            childEventId: id,
+            parentEventId: entry.parentEventId,
+            reason: normalized,
+          },
+        })
+      }
+    }
+
+    if (childLinkReasons !== undefined && childLinkReasons.length > 0) {
+      const children = await tx.event.findMany({
+        where: { parentEventId: id, deletedAt: null },
+        select: { id: true },
+      })
+      const validChildren = new Set(children.map((child) => child.id))
+      for (const entry of childLinkReasons) {
+        const normalized = (entry.reason ?? '').trim()
+        await tx.eventHierarchyReason.deleteMany({
+          where: { childEventId: entry.childEventId, parentEventId: id },
+        })
+        if (!normalized) continue
+        if (!validChildren.has(entry.childEventId)) {
+          throw new BadRequestException(
+            '연결되지 않은 하위 사건에는 연결 사유를 기록할 수 없습니다',
+          )
+        }
+        await tx.eventHierarchyReason.create({
+          data: {
+            childEventId: entry.childEventId,
+            parentEventId: id,
+            reason: normalized,
+          },
+        })
+      }
+    }
   }
 
   /**
@@ -1160,6 +1282,20 @@ export class EventService {
     // 게이미피케이션: 소프트 삭제 단계에서 회수됐겠지만, 활성 상태에서 바로 완전삭제된 경우 대비(멱등)
     await this.pointService.revokeForRecord(AggregateType.EVENT, id)
     console.log(`🔥 사건 완전 삭제: ${id}`)
+  }
+}
+
+/** 같은 키가 배열에 두 번 이상이면 400 — 부분 업서트의 비결정 동작 차단(연결 사유). */
+function assertNoDuplicateKey<T>(
+  items: T[],
+  keyOf: (item: T) => string,
+  message: string,
+): void {
+  const seen = new Set<string>()
+  for (const item of items) {
+    const key = keyOf(item)
+    if (seen.has(key)) throw new BadRequestException(message)
+    seen.add(key)
   }
 }
 

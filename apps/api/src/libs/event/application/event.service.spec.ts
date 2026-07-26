@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common'
 
 import { EventService } from './event.service'
 
@@ -29,6 +33,12 @@ interface FakeEdgeRow {
   createdAt: Date
 }
 
+interface FakeReasonRow {
+  childEventId: string
+  parentEventId: string
+  reason: string
+}
+
 function matchScalarOrOps(value: string | null, cond: unknown): boolean {
   if (cond === undefined) return true
   if (cond === null || typeof cond === 'string') return value === cond
@@ -43,7 +53,11 @@ function matchScalarOrOps(value: string | null, cond: unknown): boolean {
  * 스펙 전용 최소 fake — 서비스가 실제로 쓰는 where 형태만 해석한다.
  * $transaction(interactive)은 자기 자신을 tx로 넘겨 쓰기 호출을 그대로 기록한다.
  */
-function buildFakePrisma(events: FakeEventRow[], edges: FakeEdgeRow[]) {
+function buildFakePrisma(
+  events: FakeEventRow[],
+  edges: FakeEdgeRow[],
+  reasons: FakeReasonRow[] = [],
+) {
   const eventById = new Map(events.map((row) => [row.id, row]))
 
   const filterEvents = (where: Record<string, unknown>) =>
@@ -113,6 +127,42 @@ function buildFakePrisma(events: FakeEventRow[], edges: FakeEdgeRow[]) {
       createMany: jest.fn(() => Promise.resolve({ count: 0 })),
       delete: jest.fn(() => Promise.resolve()),
     },
+    eventHierarchyReason: {
+      findMany: jest.fn(({ where }: { where: Record<string, unknown> }) =>
+        Promise.resolve(
+          reasons.filter(
+            (row) =>
+              matchScalarOrOps(row.childEventId, where.childEventId) &&
+              matchScalarOrOps(row.parentEventId, where.parentEventId),
+          ),
+        ),
+      ),
+      deleteMany: jest.fn(
+        ({ where }: { where: { childEventId: string; parentEventId: string } }) => {
+          let count = 0
+          for (let idx = reasons.length - 1; idx >= 0; idx -= 1) {
+            if (
+              reasons[idx].childEventId === where.childEventId &&
+              reasons[idx].parentEventId === where.parentEventId
+            ) {
+              reasons.splice(idx, 1)
+              count += 1
+            }
+          }
+          return Promise.resolve({ count })
+        },
+      ),
+      create: jest.fn(
+        ({ data }: { data: FakeReasonRow }) => {
+          reasons.push({
+            childEventId: data.childEventId,
+            parentEventId: data.parentEventId,
+            reason: data.reason,
+          })
+          return Promise.resolve(data)
+        },
+      ),
+    },
     $transaction: jest.fn(),
   }
   // 자기참조(tx=자기 자신) 배선은 객체 생성 후에 — TS7022(순환 추론) 회피
@@ -128,9 +178,10 @@ function buildFakePrisma(events: FakeEventRow[], edges: FakeEdgeRow[]) {
 function buildService(
   events: FakeEventRow[],
   edges: FakeEdgeRow[],
-  options: { createdId?: string } = {},
+  options: { createdId?: string; reasons?: FakeReasonRow[] } = {},
 ) {
-  const fakePrisma = buildFakePrisma(events, edges)
+  const reasons = options.reasons ?? []
+  const fakePrisma = buildFakePrisma(events, edges, reasons)
   const eventById = new Map(events.map((row) => [row.id, row]))
   const fakeRepo = {
     findById: jest.fn((id: string) => Promise.resolve(eventById.get(id) ?? null)),
@@ -163,7 +214,7 @@ function buildService(
     fakePoint as never,
     fakeNotification as never,
   )
-  return { service, fakePrisma, fakeRepo }
+  return { service, fakePrisma, fakeRepo, reasons }
 }
 
 /** updateEvent 포지셔널 인자 헬퍼 — 계층 관련 인자만 노출 */
@@ -480,5 +531,158 @@ describe('EventService 다중 상위 가드 (W1~W5·BFS)', () => {
       'E',
       expect.objectContaining({ location: '빈' }),
     )
+  })
+})
+
+/** updateEvent 포지셔널 인자 헬퍼 — 연결 사유(+선택적 계층) 인자 노출 */
+function updateReasons(
+  service: EventService,
+  id: string,
+  patch: {
+    parentEventId?: string | null
+    childEventIds?: string[]
+    extraParentEventIds?: string[]
+    parentLinkReasons?: Array<{ parentEventId: string; reason: string | null }>
+    childLinkReasons?: Array<{ childEventId: string; reason: string | null }>
+  },
+) {
+  return service.updateEvent(
+    id,
+    patch.parentEventId === undefined ? {} : { parentEventId: patch.parentEventId },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    patch.childEventIds,
+    undefined,
+    undefined,
+    undefined,
+    patch.extraParentEventIds,
+    patch.parentLinkReasons,
+    patch.childLinkReasons,
+  )
+}
+
+describe('EventService 연결 사유(EventHierarchyReason)', () => {
+  test('reason-only: 주 상위 쌍에 업서트 → 행 생성, 계층 쓰기 미실행', async () => {
+    const reasons: FakeReasonRow[] = []
+    const { service, fakePrisma } = buildService(
+      [liveEvent('E', 'P1'), liveEvent('P1')],
+      [],
+      { reasons },
+    )
+    await updateReasons(service, 'E', {
+      parentLinkReasons: [{ parentEventId: 'P1', reason: '  병합의 직접적 계기  ' }],
+    })
+    // trim 후 저장(공백 정규화)
+    expect(reasons).toEqual([
+      { childEventId: 'E', parentEventId: 'P1', reason: '병합의 직접적 계기' },
+    ])
+    // reason-only는 hierarchyTouched 게이트를 태우지 않는다 — 자식 재부모화(event.updateMany)·
+    // 엣지 쓰기(eventParentLink.createMany/deleteMany)가 전무. (사유 검증용 findUnique·
+    // findMany 로드는 정상.)
+    expect(fakePrisma.event.updateMany).not.toHaveBeenCalled()
+    expect(fakePrisma.eventParentLink.createMany).not.toHaveBeenCalled()
+    expect(fakePrisma.eventParentLink.deleteMany).not.toHaveBeenCalled()
+  })
+
+  test('reason 업서트: 연결 안 된 상위 → 400', async () => {
+    const { service } = buildService(
+      [liveEvent('E', 'P1'), liveEvent('P1'), liveEvent('P2')],
+      [],
+    )
+    await expect(
+      updateReasons(service, 'E', {
+        parentLinkReasons: [{ parentEventId: 'P2', reason: '무관 상위' }],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException)
+  })
+
+  test('빈 사유는 행 삭제(비우기) — 링크 상태 무관 허용', async () => {
+    const reasons: FakeReasonRow[] = [
+      { childEventId: 'E', parentEventId: 'P1', reason: '옛 사유' },
+    ]
+    const { service } = buildService([liveEvent('E', 'P1'), liveEvent('P1')], [], {
+      reasons,
+    })
+    await updateReasons(service, 'E', {
+      parentLinkReasons: [{ parentEventId: 'P1', reason: '   ' }],
+    })
+    expect(reasons).toHaveLength(0)
+  })
+
+  test('같은 상위 중복 제출 → 400', async () => {
+    const { service } = buildService([liveEvent('E', 'P1'), liveEvent('P1')], [])
+    await expect(
+      updateReasons(service, 'E', {
+        parentLinkReasons: [
+          { parentEventId: 'P1', reason: '첫째' },
+          { parentEventId: 'P1', reason: '둘째' },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException)
+  })
+
+  test('추가 상위(유령 부모 포함) 쌍에 사유 허용 — R-1 부활', async () => {
+    // E의 주 상위 P1(생존) + 추가 상위 엣지 G(소프트삭제 부모). 유령 쌍에도 사유 기록 허용.
+    const reasons: FakeReasonRow[] = []
+    const { service } = buildService(
+      [liveEvent('E', 'P1'), liveEvent('P1'), deletedEvent('G')],
+      [edge('E', 'G')],
+      { reasons },
+    )
+    await updateReasons(service, 'E', {
+      parentLinkReasons: [{ parentEventId: 'G', reason: '유령 상위 사유' }],
+    })
+    expect(reasons).toEqual([
+      { childEventId: 'E', parentEventId: 'G', reason: '유령 상위 사유' },
+    ])
+  })
+
+  test('childLinkReasons: 살아있는 자식 쌍에 업서트 → (child, this) 키로 저장', async () => {
+    const reasons: FakeReasonRow[] = []
+    const { service } = buildService(
+      [liveEvent('P', null), liveEvent('C', 'P')],
+      [],
+      { reasons },
+    )
+    await updateReasons(service, 'P', {
+      childLinkReasons: [{ childEventId: 'C', reason: '자식 사유' }],
+    })
+    expect(reasons).toEqual([
+      { childEventId: 'C', parentEventId: 'P', reason: '자식 사유' },
+    ])
+  })
+
+  test('childLinkReasons: 자식이 아닌 사건 → 400', async () => {
+    const { service } = buildService(
+      [liveEvent('P', null), liveEvent('X', null)],
+      [],
+    )
+    await expect(
+      updateReasons(service, 'P', {
+        childLinkReasons: [{ childEventId: 'X', reason: '무관' }],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException)
+  })
+
+  test('승격 등 계층-only patch는 사유 행을 건드리지 않는다(쌍 자연키 무손실)', async () => {
+    // E: 주 상위 P1, 추가 상위 P2(엣지). (E,P2) 쌍에 사유. P2를 대표로 승격.
+    const reasons: FakeReasonRow[] = [
+      { childEventId: 'E', parentEventId: 'P2', reason: '승격돼도 남는 사유' },
+    ]
+    const { service } = buildService(
+      [liveEvent('E', 'P1'), liveEvent('P1'), liveEvent('P2')],
+      [edge('E', 'P2')],
+      { reasons },
+    )
+    await updateReasons(service, 'E', {
+      parentEventId: 'P2',
+      extraParentEventIds: ['P1'],
+    })
+    // 사유 patch가 없으므로 eventHierarchyReason 테이블은 무변경 — (E,P2) 쌍 사유 그대로.
+    expect(reasons).toEqual([
+      { childEventId: 'E', parentEventId: 'P2', reason: '승격돼도 남는 사유' },
+    ])
   })
 })
