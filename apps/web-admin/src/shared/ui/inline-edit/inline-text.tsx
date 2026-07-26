@@ -47,6 +47,10 @@ interface InlineTextProps {
   formatRead?: (value: string) => string
   /** 숫자 정렬용 tabular-nums(주가·목표가 등 수치 필드). */
   numeric?: boolean
+  /** 입력 최대 글자 수 — input/textarea maxLength로 하드 제한(초과 입력 차단). */
+  maxLength?: number
+  /** 편집 중 "n/max" 카운터 표시(maxLength와 함께 쓸 때 의미). */
+  showCount?: boolean
 }
 
 /**
@@ -70,6 +74,8 @@ export function InlineText({
   validate,
   formatRead,
   numeric,
+  maxLength,
+  showCount,
 }: InlineTextProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -144,6 +150,8 @@ export function InlineText({
     }
   }
 
+  const nearLimit = maxLength != null && draft.length >= maxLength * 0.9
+
   if (editing) {
     return (
       <EditHost>
@@ -160,6 +168,7 @@ export function InlineText({
             onBlur={() => commit(true)}
             onKeyDown={onKey}
             rows={3}
+            maxLength={maxLength}
             aria-label={label ?? placeholder}
             aria-invalid={error ? true : undefined}
             data-invalid={error ? 'true' : undefined}
@@ -177,12 +186,20 @@ export function InlineText({
             }}
             onBlur={() => commit(true)}
             onKeyDown={onKey}
+            maxLength={maxLength}
             aria-label={label ?? placeholder}
             aria-invalid={error ? true : undefined}
             data-invalid={error ? 'true' : undefined}
           />
         )}
-        {error && <ErrorHint role="alert">{error}</ErrorHint>}
+        <EditFootRow>
+          {error ? <ErrorHint role="alert">{error}</ErrorHint> : <span />}
+          {showCount && maxLength != null && (
+            <CharCount $warn={nearLimit} aria-hidden>
+              {draft.length}/{maxLength}
+            </CharCount>
+          )}
+        </EditFootRow>
       </EditHost>
     )
   }
@@ -246,4 +263,19 @@ const EditHost = styled.span`
 const ErrorHint = styled.span`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.error ?? '#dc2626'};
+`
+
+const EditFootRow = styled.span`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 0;
+`
+
+const CharCount = styled.span<{ $warn?: boolean }>`
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme, $warn }) =>
+    $warn ? theme.colors.error ?? '#dc2626' : theme.colors.text.tertiary};
 `

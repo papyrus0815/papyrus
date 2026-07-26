@@ -19,6 +19,7 @@ import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { InlineText } from '@/shared/ui/inline-edit'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 
 import * as S from '../styles'
@@ -34,6 +35,15 @@ const CHILD_CARD_CAP = 24
 
 /** 추가 하위(역방향 엣지) 칩 표시 상한 — 카드보다 밀도 높은 칩이라 별도 상한. */
 const EXTRA_CHILD_CAP = 12
+
+/**
+ * 계층 연결 사유 최대 글자 수 — 서버 EVENT_LINK_REASON_MAX(update-event.dto.ts)·
+ * Prisma VarChar(500)와 동일 값. 크로스 패키지라 손 동기화.
+ */
+const REASON_MAX = 500
+
+const REASON_PLACEHOLDER =
+  '이 사건이 상위와 어떻게 이어지는지 한두 문장 (예: 병합을 서두르게 만든 직접적 계기)'
 
 /**
  * 사건의 계층·횡적 네트워크 — 상위 사건 + 하위 사건 + 키워드.
@@ -77,6 +87,8 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const [parentModalOpen, setParentModalOpen] = useState(false)
   const [childModalOpen, setChildModalOpen] = useState(false)
   const [extrasModalOpen, setExtrasModalOpen] = useState(false)
+  // 추가 상위 칩의 연결 사유 편집 라인 — 한 번에 하나만 펼침(칩 행 밀도 유지).
+  const [openExtraReasonId, setOpenExtraReasonId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   // 모달 열림/닫힘 시 debounced를 즉시 현재값으로 스냅 — 닫기 직전 검색어가 250ms
   // 동안 남아 다른 모달 첫 화면에 이전 결과가 비치는 것을 방지.
@@ -257,6 +269,23 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const removeExtraParent = (targetId: string) => {
     onPatch({
       extraParentEventIds: extraIdsRef.current.filter((id) => id !== targetId),
+    } as UpdateEventDto)
+  }
+
+  /**
+   * 연결 사유 저장 — 부분 업서트. 빈 문자열은 서버가 삭제로 정규화(행 제거).
+   * parentLinkReasons: 이 사건이 자식인 쌍(주 상위·추가 상위). childLinkReasons: 부모인 쌍(하위).
+   * 링크가 실제로 있는 쌍에만 유효(연결 안 된 상위/하위엔 서버가 400) — UI는 이미
+   * 연결된 항목 옆에서만 편집을 노출하므로 정상 흐름에선 도달 안 함.
+   */
+  const saveParentReason = (parentId: string, next: string) => {
+    onPatch({
+      parentLinkReasons: [{ parentEventId: parentId, reason: next }],
+    } as UpdateEventDto)
+  }
+  const saveChildReason = (childId: string, next: string) => {
+    onPatch({
+      childLinkReasons: [{ childEventId: childId, reason: next }],
     } as UpdateEventDto)
   }
 
@@ -452,6 +481,23 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
             </AddBtn>
           )}
         </HierRow>
+        {/* 주 상위 연결 사유 — '왜 이 사건이 대표 상위와 이어지는가'. 주/부가 사용자에겐
+            한 개념이라 대표 관계에도 사유를 적을 수 있게(비대칭 해소). */}
+        {parentEvent && (
+          <ReasonLine>
+            <ReasonKicker>연결 사유</ReasonKicker>
+            <InlineText
+              value={event.parentLinkReason ?? ''}
+              onSave={(next) => saveParentReason(parentEvent.id, next)}
+              placeholder="연결 사유 추가"
+              label={`'${parentEvent.title}' 연결 사유`}
+              multiline
+              maxLength={REASON_MAX}
+              showCount
+              style={{ flex: 1 }}
+            />
+          </ReasonLine>
+        )}
         {/* 추가 상위 — 주 상위 외 다중 상위(EventParentLink). 트리·breadcrumb·형제는
             주 상위 기준이고, 이 칩 행이 다중 소속 발견성의 정본 지면. 편집(추가·해제·
             승격)은 자식인 이 사건 쪽에서만. */}
@@ -466,9 +512,33 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
                 viewTransition
                 onMouseEnter={() => prefetchEvent(extra.id)}
                 onFocus={() => prefetchEvent(extra.id)}
+                aria-describedby={
+                  extra.reason ? `extra-reason-${extra.id}` : undefined
+                }
               >
                 {extra.title || '(제목 동기화 중)'}
               </ExtraChipLink>
+              {extra.reason && (
+                <VisuallyHidden id={`extra-reason-${extra.id}`}>
+                  연결 사유: {extra.reason}
+                </VisuallyHidden>
+              )}
+              <ReasonToggleBtn
+                type="button"
+                onClick={() =>
+                  setOpenExtraReasonId((cur) =>
+                    cur === extra.id ? null : extra.id,
+                  )
+                }
+                aria-pressed={openExtraReasonId === extra.id}
+                aria-label={`추가 상위 '${extra.title}' 연결 사유 ${
+                  extra.reason ? '편집' : '추가'
+                }`}
+                $hasReason={Boolean(extra.reason)}
+                title={extra.reason ?? undefined}
+              >
+                사유{extra.reason ? '•' : ''}
+              </ReasonToggleBtn>
               <TextBtn
                 type="button"
                 onClick={() => promoteExtraParent(extra.id)}
@@ -503,6 +573,30 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
             </HelperNote>
           )}
         </ExtraParentsRow>
+        {/* 추가 상위 연결 사유 편집 라인 — 열린 칩 하나만. 칩 행 밀도를 지키려 별도 라인. */}
+        {openExtraReasonId &&
+          (() => {
+            const openExtra = extraParents.find(
+              (extra) => extra.id === openExtraReasonId,
+            )
+            if (!openExtra) return null
+            return (
+              <ReasonLine>
+                <ReasonKicker>{openExtra.title} · 사유</ReasonKicker>
+                <InlineText
+                  key={openExtra.id}
+                  value={openExtra.reason ?? ''}
+                  onSave={(next) => saveParentReason(openExtra.id, next)}
+                  placeholder={REASON_PLACEHOLDER}
+                  label={`'${openExtra.title}' 연결 사유`}
+                  multiline
+                  maxLength={REASON_MAX}
+                  showCount
+                  style={{ flex: 1 }}
+                />
+              </ReasonLine>
+            )
+          })()}
         {parentEvent && (prevSibling || nextSibling) && (
           <SiblingNav aria-label="형제 사건 이동">
             {prevSibling ? (
@@ -575,6 +669,20 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
                   >
                     <FiX />
                   </RemoveChildBtn>
+                  {/* 연결 사유 — 카드(Link) 바깥 형제로 배치(a 안에 button/textarea 중첩 금지).
+                      onPatch({ childLinkReasons })는 자기 사건 채널이라 undo 토스트 탑승. */}
+                  <ChildReasonRow>
+                    <InlineText
+                      value={child.reason ?? ''}
+                      onSave={(next) => saveChildReason(child.id, next)}
+                      placeholder="연결 사유 추가"
+                      label={`'${child.title}' 연결 사유`}
+                      multiline
+                      maxLength={REASON_MAX}
+                      showCount
+                      style={{ flex: 1 }}
+                    />
+                  </ChildReasonRow>
                 </ChildCardWrap>
               )
             })}
@@ -609,9 +717,20 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
                   viewTransition
                   onMouseEnter={() => prefetchEvent(extraChild.id)}
                   onFocus={() => prefetchEvent(extraChild.id)}
+                  title={extraChild.reason ?? undefined}
+                  aria-describedby={
+                    extraChild.reason
+                      ? `extra-child-reason-${extraChild.id}`
+                      : undefined
+                  }
                 >
                   {extraChild.title}
                 </ExtraChipLink>
+                {extraChild.reason && (
+                  <VisuallyHidden id={`extra-child-reason-${extraChild.id}`}>
+                    연결 사유: {extraChild.reason}
+                  </VisuallyHidden>
+                )}
               </ExtraChip>
             ))}
             {hiddenExtraChildCount > 0 && (
@@ -894,6 +1013,49 @@ const HelperNote = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+/* 연결 사유 편집 라인 — 주 상위 행/추가 상위 칩 아래. 좌측 얇은 킥커 + InlineText. */
+const ReasonLine = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-left: 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const ReasonKicker = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+/* 하위 카드의 연결 사유 라인 — 카드 바로 아래, 카드 내용과 좌측 정렬(막대+갭 만큼 들여쓰기). */
+const ChildReasonRow = styled.div`
+  display: flex;
+  padding: 0 14px 0 29px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const VisuallyHidden = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+`
+
 const SiblingNav = styled.nav`
   display: flex;
   justify-content: space-between;
@@ -966,11 +1128,25 @@ const TextBtn = styled.button`
   }
 `
 
+/* 칩 '사유' 토글 버튼 — TextBtn 계열, 사유 보유 시 강조·펼침 시 primary. */
+const ReasonToggleBtn = styled(TextBtn)<{ $hasReason?: boolean }>`
+  color: ${({ theme, $hasReason }) =>
+    $hasReason ? theme.colors.text.primary : theme.colors.text.tertiary};
+
+  &[aria-pressed='true'] {
+    color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
 const ChildCardWrap = styled.div`
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 
-  /* 카드 호버 시 제거 버튼 노출 — wrap 안의 유일한 button. */
-  &:hover button {
+  /* 카드 호버 시 제거 버튼만 노출 — 직계 자식 button으로 한정(연결 사유 InlineText의
+     편집 펜슬은 InlineText 자체 hover/focus-within 규칙을 따르도록 건드리지 않는다). */
+  &:hover > button {
     opacity: 0.7;
   }
 `

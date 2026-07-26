@@ -199,3 +199,58 @@ describe('buildOptimisticEvent — 추가 상위(extraParentEventIds) 낙관 재
     expect(next!.extraParents).toEqual([])
   })
 })
+
+describe('buildOptimisticEvent — 연결 사유(parentLinkReasons·childLinkReasons) 낙관 반영', () => {
+  it('parentLinkReasons: 주 상위 쌍이면 parentLinkReason, 추가 상위면 그 칩 reason 갱신', () => {
+    const prev = makeEvent({
+      parentEventId: 'P1',
+      parentEvent: { id: 'P1', title: '주' } as EventDetail,
+      extraParents: [{ id: 'P2', title: '추가' }],
+    })
+    const nextPrimary = buildOptimisticEvent(
+      prev,
+      { parentLinkReasons: [{ parentEventId: 'P1', reason: '대표 사유' }] } as unknown as Patch,
+      new QueryClient(),
+    )
+    expect(nextPrimary!.parentLinkReason).toBe('대표 사유')
+
+    const nextExtra = buildOptimisticEvent(
+      prev,
+      { parentLinkReasons: [{ parentEventId: 'P2', reason: '추가 사유' }] } as unknown as Patch,
+      new QueryClient(),
+    )
+    expect(nextExtra!.extraParents).toEqual([
+      { id: 'P2', title: '추가', reason: '추가 사유' },
+    ])
+  })
+
+  it('빈 문자열 사유는 낙관적으로 null(삭제) 반영', () => {
+    const prev = makeEvent({
+      parentEventId: 'P1',
+      parentEvent: { id: 'P1', title: '주' } as EventDetail,
+      parentLinkReason: '옛 사유',
+    })
+    const next = buildOptimisticEvent(
+      prev,
+      { parentLinkReasons: [{ parentEventId: 'P1', reason: '   ' }] } as unknown as Patch,
+      new QueryClient(),
+    )
+    expect(next!.parentLinkReason).toBeNull()
+  })
+
+  it('childLinkReasons: 해당 하위 카드의 reason만 갱신', () => {
+    const prev = makeEvent({
+      childEvents: [
+        { id: 'C1', title: '자식1' },
+        { id: 'C2', title: '자식2' },
+      ] as EventDetail[],
+    })
+    const next = buildOptimisticEvent(
+      prev,
+      { childLinkReasons: [{ childEventId: 'C2', reason: '자식2 사유' }] } as unknown as Patch,
+      new QueryClient(),
+    )
+    expect(next!.childEvents!.find((child) => child.id === 'C1')?.reason).toBeUndefined()
+    expect(next!.childEvents!.find((child) => child.id === 'C2')?.reason).toBe('자식2 사유')
+  })
+})

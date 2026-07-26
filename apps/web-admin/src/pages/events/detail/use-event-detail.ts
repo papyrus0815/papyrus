@@ -91,14 +91,25 @@ export interface EventDetail {
   keywords?: string[] | null
   parentEventId?: string | null
   parentEvent?: EventDetail
+  /**
+   * 주 상위와의 연결 사유(EventHierarchyReason — 쌍 this↔parentEventId). 상세에만 실림.
+   * 쓰기는 patch.parentLinkReasons 부분 업서트(이 사건이 자식인 쌍).
+   */
+  parentLinkReason?: string | null
   childEvents?: EventDetail[]
+  /**
+   * 쌍 스코프 연결 사유 — childEvents/extraChildren 원소로 실릴 때 (그 자식↔이 사건) 링크의
+   * 사유. 사건 자체 속성이 아니라 부모-자식 쌍의 주석이라 목록 원소에서만 채워진다.
+   */
+  reason?: string | null
   /**
    * 추가 상위(EventParentLink) — 주 상위 외 다중 상위. 서버가 소프트삭제 부모를
    * 걸러 연결 오래된 순으로 내려준다. 쓰기는 patch.extraParentEventIds 전체목록 규약.
+   * reason=쌍 연결 사유(patch.parentLinkReasons로 편집).
    */
-  extraParents?: Array<{ id: string; title: string }>
-  /** 추가 하위(역방향 엣지) — 읽기전용 표시용. 편집은 자식 사건 쪽에서만. */
-  extraChildren?: Array<{ id: string; title: string }>
+  extraParents?: Array<{ id: string; title: string; reason?: string | null }>
+  /** 추가 하위(역방향 엣지) — 읽기전용 표시용. 편집은 자식 사건 쪽에서만. reason=쌍 연결 사유(읽기전용). */
+  extraChildren?: Array<{ id: string; title: string; reason?: string | null }>
   cityId?: string | null
   administrativeDivisionId?: string | null
   historicalCountryId?: string | null

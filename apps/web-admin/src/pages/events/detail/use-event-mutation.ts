@@ -87,7 +87,7 @@ export function useEventMutation(eventId: string) {
       queryClient.setQueryData<EventDetail>(detailKey, next)
       return { previous }
     },
-    onSuccess: (data, patch) => {
+    onSuccess: (data, patch, context) => {
       /**
        * 같은 사건의 *다른* mutation이 아직 in-flight면 reconcile을 미룬다.
        * (onSuccess 시점엔 자신은 이미 settled라 isMutating 집계에서 빠지므로, 0이면
@@ -109,6 +109,17 @@ export function useEventMutation(eventId: string) {
           queryClient.invalidateQueries({ queryKey: detailKey })
         }
       }
+
+      /**
+       * 부활 토스트 — 링크를 (재)연결했더니 이전에 기록해 둔 연결 사유(EventHierarchyReason은
+       * 해제 시에도 행 보존)가 되살아났을 때 안내. 사용자가 이번 patch로 직접 사유를 친
+       * 경우·이미 보이던 사유가 슬롯만 바뀐 승격은 제외(오탐 방지). 무성 부활 차단(V1 바인딩).
+       */
+      if (data && context?.previous) {
+        if (detectReasonRevival(context.previous, patch, data)) {
+          notify.info('이전에 기록한 연결 사유가 복원되었습니다')
+        }
+      }
       /**
        * 목록(ledger/catalog) 쪽 캐시는 *목록 표시에 영향 있는 필드*가 바뀌었을 때만
        * 무효화. 본문(background, aftermath, eventSections 등) patch는 목록에 영향
@@ -128,7 +139,11 @@ export function useEventMutation(eventId: string) {
       if (
         'parentEventId' in patch ||
         'childEventIds' in patch ||
-        'extraParentEventIds' in patch
+        'extraParentEventIds' in patch ||
+        // 연결 사유도 쌍의 반대면(자식↔부모 페이지)을 stale하게 만든다 — patch가 상대 id를
+        // 명시하므로 해당 event-detail 키만 표적 무효화(자기 자신은 위 isMutating 게이트).
+        'parentLinkReasons' in patch ||
+        'childLinkReasons' in patch
       ) {
         queryClient.invalidateQueries({
           queryKey: ['event-detail'],
@@ -365,7 +380,126 @@ export function buildOptimisticEvent(
     changed = true
   }
 
+  /**
+   * 연결 사유(부분 업서트) 낙관 반영 — 나열된 쌍만 터치. 빈 문자열은 삭제(null).
+   * parentLinkReasons: 이 사건이 자식인 쌍 → parentLinkReason(주 상위)·extraParents[].reason.
+   * childLinkReasons: 이 사건이 부모인 쌍 → childEvents[].reason·extraChildren[].reason.
+   */
+  if ('parentLinkReasons' in patch) {
+    for (const entry of patch.parentLinkReasons ?? []) {
+      const value = normalizeReason(entry.reason)
+      if (next.parentEventId === entry.parentEventId) {
+        next.parentLinkReason = value
+      }
+      if (next.extraParents?.some((extra) => extra.id === entry.parentEventId)) {
+        next.extraParents = next.extraParents.map((extra) =>
+          extra.id === entry.parentEventId ? { ...extra, reason: value } : extra,
+        )
+      }
+    }
+    changed = true
+  }
+
+  if ('childLinkReasons' in patch) {
+    for (const entry of patch.childLinkReasons ?? []) {
+      const value = normalizeReason(entry.reason)
+      if (next.childEvents?.some((child) => child.id === entry.childEventId)) {
+        next.childEvents = next.childEvents.map((child) =>
+          child.id === entry.childEventId ? { ...child, reason: value } : child,
+        )
+      }
+      if (
+        next.extraChildren?.some((child) => child.id === entry.childEventId)
+      ) {
+        next.extraChildren = next.extraChildren.map((child) =>
+          child.id === entry.childEventId ? { ...child, reason: value } : child,
+        )
+      }
+    }
+    changed = true
+  }
+
   return changed ? next : null
+}
+
+/** trim 후 빈 문자열은 삭제(null) — 서버 정규화 규칙의 낙관 거울. */
+function normalizeReason(reason: string | null | undefined): string | null {
+  const trimmed = (reason ?? '').trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+/**
+ * 링크 (재)연결로 이전에 기록해 둔 연결 사유가 부활했는지 판정(부활 토스트 게이트).
+ * 부활 = '이번 patch로 링크가 새로 붙었고, 그 쌍의 사유가 응답엔 있는데 직전 캐시엔
+ * 안 보였던' 경우. 사용자가 이번에 직접 친 사유·이미 보이던 사유의 슬롯 이동(승격)은 제외.
+ */
+function detectReasonRevival(
+  prev: EventDetail,
+  patch: UpdateEventDto,
+  response: { parentLinkReason?: string | null } & {
+    extraParents?: Array<{ id: string; reason?: string | null }>
+    childEvents?: Array<{ id: string; reason?: string | null }>
+  },
+): boolean {
+  const nonEmpty = (value: string | null | undefined): boolean =>
+    typeof value === 'string' && value.trim().length > 0
+
+  // 주 상위 (재)연결
+  if ('parentEventId' in patch) {
+    const newParentId = patch.parentEventId ?? null
+    if (newParentId && newParentId !== (prev.parentEventId ?? null)) {
+      const userSet = (patch.parentLinkReasons ?? []).some(
+        (entry) => entry.parentEventId === newParentId,
+      )
+      // 승격(직전 추가 상위 → 대표): 사유가 이미 extraParents로 보이던 것 — 부활 아님.
+      const wasVisibleAsExtra = (prev.extraParents ?? []).some(
+        (extra) => extra.id === newParentId && nonEmpty(extra.reason),
+      )
+      if (!userSet && !wasVisibleAsExtra && nonEmpty(response.parentLinkReason)) {
+        return true
+      }
+    }
+  }
+
+  // 추가 상위 신규 연결
+  if ('extraParentEventIds' in patch) {
+    const prevExtraIds = new Set((prev.extraParents ?? []).map((extra) => extra.id))
+    const added = (patch.extraParentEventIds ?? []).filter(
+      (id) => !prevExtraIds.has(id),
+    )
+    for (const id of added) {
+      const userSet = (patch.parentLinkReasons ?? []).some(
+        (entry) => entry.parentEventId === id,
+      )
+      // 승격의 강등분(직전 주 상위 → 추가 상위): 사유가 이미 parentLinkReason으로
+      // 보이던 것 — 슬롯 이동일 뿐 부활 아님.
+      const wasVisibleAsPrimary =
+        id === (prev.parentEventId ?? null) && nonEmpty(prev.parentLinkReason)
+      const respReason = response.extraParents?.find(
+        (extra) => extra.id === id,
+      )?.reason
+      if (!userSet && !wasVisibleAsPrimary && nonEmpty(respReason)) return true
+    }
+  }
+
+  // 하위 신규 연결
+  if ('childEventIds' in patch) {
+    const prevChildIds = new Set((prev.childEvents ?? []).map((child) => child.id))
+    const added = (patch.childEventIds ?? []).filter(
+      (id) => !prevChildIds.has(id),
+    )
+    for (const id of added) {
+      const userSet = (patch.childLinkReasons ?? []).some(
+        (entry) => entry.childEventId === id,
+      )
+      const respReason = response.childEvents?.find(
+        (child) => child.id === id,
+      )?.reason
+      if (!userSet && nonEmpty(respReason)) return true
+    }
+  }
+
+  return false
 }
 
 /* ───────────────────────── 계층(상위/하위) 낙관 재구성 ───────────────────────── */
