@@ -1189,13 +1189,19 @@ export function TenureRegisterPanel({
                 </FieldControl>
               </FieldRow>
 
+              {/* 퇴임 사유 상세 — endReason(enum)의 서사 쌍. 취임 상세·재위 패널의 퇴위 사유 상세와
+                  동일하게 여러 줄(Textarea): 실각 경위 등 한 줄로 안 끝나는 서술이 대부분 */}
               <FieldRow>
-                <FieldLabel>퇴임 사유 상세</FieldLabel>
+                <FieldLabel htmlFor="tenure-end-reason-detail">
+                  퇴임 사유 상세
+                </FieldLabel>
                 <FieldControl>
-                  <Input
+                  <Textarea
+                    id="tenure-end-reason-detail"
                     value={endReasonDetail}
-                    onChange={(e) => setEndReasonDetail(e.target.value)}
-                    placeholder="선택 (예: 12·12 군사반란으로 실각)"
+                    onChange={(event) => setEndReasonDetail(event.target.value)}
+                    placeholder="선택 — 예: 12·12 군사반란으로 실각, 임기 만료 후 정계 은퇴"
+                    rows={2}
                   />
                 </FieldControl>
               </FieldRow>
