@@ -163,9 +163,15 @@ export interface PersonRegisterViewProps {
    * create 성공 직후 호출 — 캐시 무효화 등 부수효과 전용.
    * 여기서 모달을 닫거나 페이지를 이동하면 "다른 인물 이어서 등록" 다이얼로그가
    * 그려지기 전에 폼이 언마운트되므로 절대 닫기/이동을 하면 안 된다.
-   * 닫기/이동은 다이얼로그 응답 후 onSuccess(닫기 선택) 또는 onCancel로 실행된다.
+   * 닫기/이동은 다이얼로그 응답 후 onViewDetail(상세 보기)·onSuccess(닫기)·onCancel로 실행된다.
    */
   onCreated?: (personId: string) => void
+  /**
+   * 있으면 등록 완료 다이얼로그에 "상세 보기"(주 액션)를 노출하고, 선택 시 호출한다.
+   * 호출부가 폼을 닫고 등록된 인물 상세로 이동하는 책임을 진다(모달=닫기+navigate, 페이지=navigate).
+   * 없으면 다이얼로그는 기존 2지 분기("다른 인물 등록"/"닫기")로 유지된다.
+   */
+  onViewDetail?: (personId: string) => void
   /** 있으면 수정 모드: 해당 인물 로드 후 폼에 채우고 저장 시 update 호출 */
   editPersonId?: string | null
   /** 제출 중 상태 변경 시 부모에게 알림 (외부 하단 버튼 disabled용) */
@@ -225,6 +231,7 @@ export function PersonRegisterView({
   onCancel,
   onSuccess,
   onCreated,
+  onViewDetail,
   editPersonId,
   onSubmittingChange,
   onDirtyChange,
@@ -1147,7 +1154,8 @@ export function PersonRegisterView({
 
   /**
    * 등록 성공 다이얼로그 — "닫기" 선택 시 비로소 닫기/이동 실행.
-   * onSuccess가 있으면 위임(모달=닫기, 페이지=등록 인물 상세 이동), 없으면 onCancel.
+   * onSuccess가 있으면 위임(모달=닫기, 페이지=목록 이동), 없으면 onCancel.
+   * 상세 이동은 별도 액션(onViewDetail·handleViewCreatedDetail)이 전담한다.
    * create 직후에는 onCreated(캐시 무효화 전용)만 호출되므로 다이얼로그가 살아 있다.
    */
   const handleClosePostSuccess = () => {
@@ -1155,6 +1163,20 @@ export function PersonRegisterView({
     const createdId = lastCreatedPerson?.id
     setLastCreatedPerson(null)
     if (createdId && onSuccess) onSuccess(createdId)
+    else onCancel()
+  }
+
+  /**
+   * 등록 성공 다이얼로그 — "상세 보기" 선택 시 방금 등록한 인물 상세로 이동.
+   * 이동 자체는 호출부(onViewDetail)가 수행 — 폼은 라우터를 알지 않는다.
+   */
+  const handleViewCreatedDetail = () => {
+    setShowRegisterAgainDialog(false)
+    const createdId = lastCreatedPerson?.id
+    setLastCreatedPerson(null)
+    // createdId가 없는 이론상 경로에선 이동 대신 기존 닫기 계약으로 폴백(다이얼로그가 남지 않게).
+    if (createdId && onViewDetail) onViewDetail(createdId)
+    else if (createdId && onSuccess) onSuccess(createdId)
     else onCancel()
   }
 
@@ -2681,7 +2703,8 @@ export function PersonRegisterView({
       </form>
 
       {/*
-       * 등록 성공 후 분기 — "다른 인물 이어서 등록" vs "닫기".
+       * 등록 성공 후 분기 — 호출부가 onViewDetail을 주면 3지("상세 보기"/"다른 인물 등록"/"닫기"),
+       * 아니면 기존 2지("다른 인물 이어서 등록" vs "닫기").
        * 메시지는 현재 countryId 채움 여부에 따라 정확히 분기 — preserveCountryIdRef가
        * 다음 라운드에 country를 유지하지만 초기 등록부터 country가 비었으면 그대로 비어 시작.
        */}
@@ -2692,14 +2715,21 @@ export function PersonRegisterView({
           const nameLabel = lastCreatedPerson
             ? `${getPersonDisplayName(lastCreatedPerson)}을(를) 등록했습니다. `
             : ''
-          if (primaryCountryId && countryName) {
-            return `${nameLabel}${countryName}에 다른 인물도 이어서 등록할까요?`
+          const countryPhrase =
+            primaryCountryId && countryName ? `${countryName}에 ` : ''
+          if (onViewDetail) {
+            // 3지 분기라 "…할까요?" 예/아니오 문형 대신 선택지를 그대로 서술한다.
+            return `${nameLabel}상세로 이동해 재위·경력 등 나머지 기록을 이어서 채우거나, ${countryPhrase}다른 인물을 계속 등록할 수 있습니다.`
           }
-          return `${nameLabel}다른 인물도 이어서 등록할까요?`
+          return `${nameLabel}${countryPhrase}다른 인물도 이어서 등록할까요?`
         })()}
-        confirmLabel="다른 인물 등록"
+        confirmLabel={onViewDetail ? '상세 보기' : '다른 인물 등록'}
+        altLabel={onViewDetail ? '다른 인물 등록' : undefined}
+        onAlt={onViewDetail ? handleRegisterAnother : undefined}
         cancelLabel="닫기"
-        onConfirm={handleRegisterAnother}
+        // 초기 포커스는 ConfirmDialog 규약대로 '닫기' — 주 액션 '상세 보기'는 페이지 이탈이라
+        // 반사적 Enter로 연속 등록 흐름이 끊기지 않게 한다(이동은 명시적 클릭/Tab으로만).
+        onConfirm={onViewDetail ? handleViewCreatedDetail : handleRegisterAnother}
         onCancel={handleClosePostSuccess}
       />
 

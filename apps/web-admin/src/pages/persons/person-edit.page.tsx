@@ -13,7 +13,7 @@ import { FiArrowLeft, FiCheck, FiCloud } from 'react-icons/fi'
 import { useBlocker, useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { personKeys } from '@/entities/person/api'
+import { invalidatePersonCaches } from '@/entities/person/api'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PersonRegisterView } from '@/shared/ui/person-register-modal/person-register-view'
 import {
@@ -94,35 +94,41 @@ export default function PersonEditPage() {
     navigate(-1)
   }
 
-  // 캐시 무효화 — 모달 버전(PersonRegisterViewModal.invalidatePersonCaches)과 동일 세트.
+  // 인물 캐시 무효화는 중앙 헬퍼 경유 — 사본 드리프트 방지(G3-1/G3-2, entities/person/api).
   // staleTime 3분이라 무효화 없이 이동하면 상세·목록이 수정 전 데이터를 보여줌.
-  const invalidatePersonCaches = (savedId: string) => {
-    queryClient.invalidateQueries({ queryKey: personKeys.all })
-    queryClient.invalidateQueries({ queryKey: ['person-detail'] })
-    queryClient.invalidateQueries({ queryKey: ['person-family-tree'] })
-    // 동시대 수장·전후 재위(승계) 스트립 — 서버 유도 창이 대상/이웃의 사망 연도로 캡되므로
-    // 생몰 편집 후에도 신선해야 한다(detail-panel invalidatePersonCaches와 동일 세트).
-    queryClient.invalidateQueries({ queryKey: ['person-contemporaries'] })
-    queryClient.invalidateQueries({ queryKey: ['person-reign-adjacency'] })
-    if (savedId) {
-      queryClient.invalidateQueries({ queryKey: personKeys.detail(savedId) })
-    }
-  }
 
   /**
    * create 직후 — 캐시만 무효화하고 페이지는 유지.
    * 여기서 이동하면 폼 안의 "다른 인물 이어서 등록" 다이얼로그가 그려지기 전에 언마운트됨.
-   * 이동은 다이얼로그 응답 후 handleSuccess(닫기 선택 → 상세 이동)로 실행.
+   * 이동은 다이얼로그 응답 후 handleViewDetail(상세 보기) 또는 handleSuccess(닫기 → 목록)로 실행.
    */
   const handleCreated = (savedId: string) => {
-    invalidatePersonCaches(savedId)
+    invalidatePersonCaches(queryClient, { personId: savedId })
   }
 
-  const handleSuccess = (savedId: string) => {
-    // 저장 성공 — dirty 해제 후 이동(이탈 경고 오발 방지).
+  /** 저장 성공 공통 마무리 — dirty 해제(이탈 경고 오발 방지) + 캐시 무효화. */
+  const settleAfterSave = (savedId: string) => {
     isDirtyRef.current = false
     setIsDirty(false)
-    invalidatePersonCaches(savedId)
+    invalidatePersonCaches(queryClient, { personId: savedId })
+  }
+
+  /**
+   * 수정 저장 → 그 인물 상세로.
+   * 신규 등록 후 '닫기'(= 상세로 안 감) → 인물 목록으로. 상세 이동은 등록 완료
+   * 다이얼로그의 '상세 보기'(handleViewDetail)가 전담해 두 버튼이 같은 곳으로 가지 않게 한다.
+   */
+  const handleSuccess = (savedId: string) => {
+    settleAfterSave(savedId)
+    navigate(
+      personId ? pathKeys.persons.detail(savedId) : pathKeys.persons.root(),
+      { replace: true },
+    )
+  }
+
+  /** 등록 완료 다이얼로그의 '상세 보기' — 방금 등록한 인물 상세로. */
+  const handleViewDetail = (savedId: string) => {
+    settleAfterSave(savedId)
     navigate(pathKeys.persons.detail(savedId), { replace: true })
   }
 
@@ -167,6 +173,7 @@ export default function PersonEditPage() {
             onCancel={handleCancel}
             onSuccess={handleSuccess}
             onCreated={handleCreated}
+            onViewDetail={handleViewDetail}
             onSubmittingChange={setIsSubmitting}
             onSubmitLabelChange={setSubmitLabel}
             onDirtyChange={setIsDirty}

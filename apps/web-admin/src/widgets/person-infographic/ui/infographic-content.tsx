@@ -316,6 +316,10 @@ export function InfographicContent({
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
         onSuccess={() => setFormOpen(false)}
+        // 등록 후 '상세 보기'는 이 지면의 정본 경로(onPersonClick = /persons-timeline/:id)로.
+        // 기본값 /persons/:id는 ContentShell 밖이라 좌측 필터 레일·뷰 탭이 통째로 사라진다
+        // — 같은 화면의 인물 카드 클릭과 결과가 달라지는 것을 막는다.
+        onViewDetail={onPersonClick}
       />
     </motion.div>
   )

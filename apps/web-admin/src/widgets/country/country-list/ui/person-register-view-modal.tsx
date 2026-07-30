@@ -5,8 +5,10 @@
 import React, { useEffect, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 
-import { personKeys } from '@/entities/person/api'
+import { invalidatePersonCaches } from '@/entities/person/api'
+import { pathKeys } from '@/shared/router'
 import { CountryFormShell } from '@/widgets/country/country-form/ui/country-form-shell'
 import { PersonRegisterView } from '@/shared/ui/person-register-modal/person-register-view'
 
@@ -15,6 +17,14 @@ export interface PersonRegisterViewModalProps {
   onClose: () => void
   initialCountryId?: string | null
   onSuccess?: (personId: string) => void
+  /**
+   * 등록 완료 다이얼로그 "상세 보기"의 **이동 목적지**만 오버라이드.
+   * 캐시 무효화·onSuccess·모달 닫기(정산)는 언제나 래퍼가 먼저 수행하므로 여기서는
+   * 이동만 하면 된다 — 지면 고유의 상세 경로가 있는 호출부용
+   * (예: persons-timeline은 셸을 유지하는 `/persons-timeline/:id`).
+   * 기본은 `/persons/:id`. `false`를 주면 "상세 보기" 액션 자체를 감춘다(2지 분기 유지).
+   */
+  onViewDetail?: ((personId: string) => void) | false
   /** 수정할 인물 ID (없으면 신규 등록) */
   editPersonId?: string | null
   /** 모달 제목 (기본: 인물 등록 / 인물 수정) */
@@ -28,11 +38,13 @@ export function PersonRegisterViewModal({
   onClose,
   initialCountryId,
   onSuccess,
+  onViewDetail,
   editPersonId,
   title,
   editPersonName,
 }: PersonRegisterViewModalProps) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [submitting, setSubmitting] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const [filled, setFilled] = useState<{
@@ -55,21 +67,7 @@ export function PersonRegisterViewModal({
     }
   }, [isOpen])
 
-  /** 인물 관련 캐시 무효화 — create 직후(onCreated)와 저장 완료(handleSuccess) 공용. */
-  const invalidatePersonCaches = (personId?: string) => {
-    queryClient.invalidateQueries({ queryKey: personKeys.all })
-    // 가족 노드(부모·자녀·손자녀)에 박힌 profileImageUrl 등이 다른 인물 상세·가계도 캐시에도
-    // 들어가 있으므로 broad invalidate (특정 personId가 아닌 prefix 전체)
-    queryClient.invalidateQueries({ queryKey: ['person-detail'] })
-    queryClient.invalidateQueries({ queryKey: ['person-family-tree'] })
-    // 동시대 수장·전후 재위(승계) 스트립 — 서버 유도 창이 대상/이웃 사망 연도로 캡되므로
-    // 생몰 편집 후에도 신선해야 한다(detail-panel invalidatePersonCaches와 동일 세트).
-    queryClient.invalidateQueries({ queryKey: ['person-contemporaries'] })
-    queryClient.invalidateQueries({ queryKey: ['person-reign-adjacency'] })
-    if (personId) {
-      queryClient.invalidateQueries({ queryKey: personKeys.detail(personId) })
-    }
-  }
+  // 인물 캐시 무효화는 중앙 헬퍼 경유 — 사본 드리프트 방지(G3-1/G3-2, entities/person/api)
 
   /**
    * create 직후 — 캐시만 무효화하고 모달은 유지.
@@ -77,14 +75,26 @@ export function PersonRegisterViewModal({
    * 닫기는 다이얼로그 응답 후 handleSuccess(닫기 선택) 또는 onClose(취소)로 실행.
    */
   const handleCreated = (personId: string) => {
-    invalidatePersonCaches(personId)
+    invalidatePersonCaches(queryClient, { personId })
   }
 
   const handleSuccess = (personId?: string) => {
-    invalidatePersonCaches(personId)
+    invalidatePersonCaches(queryClient, { personId })
     setIsDirty(false)
     onSuccess?.(personId ?? '')
     onClose()
+  }
+
+  /**
+   * 등록 완료 다이얼로그의 "상세 보기" — 모달을 먼저 닫고(스크롤 락·포커스 복원 정리)
+   * 방금 등록한 인물 상세로 이동. 등록 직후 재위·경력 등 나머지 기록을 이어서 채우는 경로.
+   */
+  const handleViewDetail = (personId: string) => {
+    handleSuccess(personId)
+    // 오버라이드는 목적지만 바꾼다 — 정산을 건너뛸 수 없는 구조로 두어
+    // 호출부가 캐시 무효화·onSuccess·닫기를 빠뜨리는 사고를 원천 차단.
+    if (typeof onViewDetail === 'function') onViewDetail(personId)
+    else navigate(pathKeys.persons.detail(personId))
   }
 
   const isEdit = !!editPersonId
@@ -123,6 +133,7 @@ export function PersonRegisterViewModal({
         onCancel={onClose}
         onSuccess={handleSuccess}
         onCreated={handleCreated}
+        onViewDetail={onViewDetail === false ? undefined : handleViewDetail}
         onSubmittingChange={setSubmitting}
         onDirtyChange={setIsDirty}
         onValuesChange={setFilled}

@@ -52,6 +52,13 @@ export type ConfirmDialogProps = {
   cancelLabel?: string
   /** 확인 버튼을 경고(삭제 등) 스타일로 */
   danger?: boolean
+  /**
+   * 선택 3번째 액션 — 취소와 확인 사이에 보조 버튼으로 노출.
+   * 라벨과 핸들러가 모두 있을 때만 렌더된다(예: 인물 등록 완료의 "다른 인물 등록").
+   * Esc·바깥 클릭은 그대로 onCancel — 보조 액션은 명시적 클릭으로만 실행된다.
+   */
+  altLabel?: string
+  onAlt?: () => void
   onConfirm: () => void
   onCancel: () => void
 }
@@ -71,12 +78,16 @@ export function ConfirmDialog({
   confirmLabel = '확인',
   cancelLabel = '취소',
   danger = false,
+  altLabel,
+  onAlt,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
   const dialogBoxRef = useRef<HTMLDivElement | null>(null)
   const cancelBtnRef = useRef<HTMLButtonElement | null>(null)
   // 초기 포커스는 취소 버튼 — 위험(삭제) 확인에서 Enter 오발화가 파괴적이지 않게.
+  // 보조 액션이 붙는 다지 분기에서도 마찬가지: 반사적 Enter는 언제나 "아무 일도 안 일어남"이어야 한다
+  // (등록 완료 다이얼로그의 주 액션 '상세 보기'는 페이지 이탈이라 Enter 기본값으로 두지 않는다).
   useModalBehavior({
     isOpen,
     onClose: onCancel,
@@ -108,6 +119,11 @@ export function ConfirmDialog({
           <FooterBtn ref={cancelBtnRef} type="button" onClick={onCancel}>
             {cancelLabel}
           </FooterBtn>
+          {altLabel && onAlt && (
+            <FooterBtn type="button" onClick={onAlt}>
+              {altLabel}
+            </FooterBtn>
+          )}
           <FooterBtn
             type="button"
             $primary
