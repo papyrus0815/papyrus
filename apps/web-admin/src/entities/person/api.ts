@@ -3,6 +3,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from '@tanstack/react-query'
 import { invalidateGamification } from '@/entities/gamification'
 import * as personsApi from '@/shared/api/persons'
@@ -33,8 +34,56 @@ export const personKeys = {
   detail: (id: string) => ['persons', id] as const,
   /** GET /persons/:id/detail (관계·재임 등 포함 상세) */
   detailFull: (id: string) => ['person-detail', id] as const,
+  /** person-detail prefix 전체 (모달 스택의 다른 personId 상세까지 broad invalidate용) */
+  detailFullAll: ['person-detail'] as const,
+  /** 가계도 (다른 인물 상세에 박힌 가족 노드 profileImageUrl 공유) */
+  familyTree: ['person-family-tree'] as const,
+  /** 동시대 수장 스트립 */
+  contemporaries: ['person-contemporaries'] as const,
+  /** 같은 국가 전/후 재위(승계) */
+  reignAdjacency: ['person-reign-adjacency'] as const,
+  /** 국가 대시보드 인물 통계 */
+  byCountry: ['persons-by-country'] as const,
+  /** 가문 구성원 */
+  byDynasty: ['persons-by-dynasty'] as const,
+  /** 국가 상세 수장 섹션 */
+  byTenureCountry: ['persons-by-tenure-country'] as const,
   /** GET /persons/dashboard/person-counts-by-modern-country */
   modernCountryPersonCounts: ['persons', 'modern-country-person-counts'] as const,
+}
+
+/**
+ * 인물 관련 모든 쿼리 캐시 무효화 — 아바타·이름·생몰 수정, 생성, 삭제 후 공통 호출.
+ *
+ * **정본 세트.** 사본을 만들지 말고 반드시 이 헬퍼를 경유한다(invalidateTenureQueries와 동일 규약).
+ * 가족 노드·사건 참여자 썸네일·국가 대시보드/수장 섹션·가문 구성원 등 다른 지면에 박힌
+ * profileImageUrl·통계까지 broad invalidate해 수정 즉시 반영을 보장한다.
+ *
+ * @param options.personId 지정 시 해당 인물의 요약 쿼리(['persons', id])도 함께 무효화
+ * @param options.skipEventDetail 사건 상세(무거운 키) 무효화 생략 (기본 false — 포함)
+ */
+export function invalidatePersonCaches(
+  queryClient: QueryClient,
+  options: { personId?: string; skipEventDetail?: boolean } = {},
+): Promise<unknown> {
+  const { personId, skipEventDetail = false } = options
+  return Promise.all([
+    ...(personId
+      ? [queryClient.invalidateQueries({ queryKey: personKeys.detail(personId) })]
+      : []),
+    queryClient.invalidateQueries({ queryKey: personKeys.detailFullAll }),
+    queryClient.invalidateQueries({ queryKey: personKeys.familyTree }),
+    // 사건 상세 응답이 참여 행위자의 person.profileImageUrl을 박아 두므로 함께 무효화
+    ...(skipEventDetail
+      ? []
+      : [queryClient.invalidateQueries({ queryKey: ['event-detail'] })]),
+    queryClient.invalidateQueries({ queryKey: personKeys.all }),
+    queryClient.invalidateQueries({ queryKey: personKeys.byCountry }),
+    queryClient.invalidateQueries({ queryKey: personKeys.byDynasty }),
+    queryClient.invalidateQueries({ queryKey: personKeys.byTenureCountry }),
+    queryClient.invalidateQueries({ queryKey: personKeys.contemporaries }),
+    queryClient.invalidateQueries({ queryKey: personKeys.reignAdjacency }),
+  ])
 }
 
 /**
