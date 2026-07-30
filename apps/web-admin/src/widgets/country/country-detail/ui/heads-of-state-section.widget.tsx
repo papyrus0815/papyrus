@@ -2986,7 +2986,6 @@ export function HeadsOfStateSection({
                           onEndChange={setEndDate}
                           startPlaceholder="취임일"
                           endPlaceholder="퇴임일 (선택)"
-                          openEndAfterStart
                         />
                         <FieldRow>
                           <FieldLabel>대수/재위번호</FieldLabel>
@@ -3620,7 +3619,6 @@ export function HeadsOfStateSection({
                       onEndChange={setEndDate}
                       startPlaceholder="취임일"
                       endPlaceholder="퇴임일 (선택)"
-                      openEndAfterStart
                     />
                     <FieldRow>
                       <FieldLabel>대수/재위번호</FieldLabel>

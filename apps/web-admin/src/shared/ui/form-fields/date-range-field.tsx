@@ -2,7 +2,7 @@
  * 취임일·퇴임일 등 기간 날짜 필드 - 달력(캘린더) input 공통
  * 라벨 + 취임일 버튼 + 퇴임일 버튼 + DatePickerModal 두 개
  */
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import styled from 'styled-components'
 import { FiCalendar, FiChevronDown, FiX } from 'react-icons/fi'
 
@@ -75,7 +75,13 @@ export interface DateRangeFieldProps {
   onEndChange: (date: string) => void
   startPlaceholder?: string
   endPlaceholder?: string
-  /** 취임일 선택 후 퇴임일 모달 자동 오픈 (기본 true) */
+  /**
+   * 시작일을 고르면 종료일 달력을 곧바로 이어서 여는 연쇄 오픈 (기본 false).
+   *
+   * 종료일(퇴임일·폐업일 등)은 대개 선택 항목이라 — 현직/존속 중이면 비운다 —
+   * 자동으로 띄우면 등록할 때마다 달력을 한 번 더 닫아야 하는 강제 단계가 된다.
+   * 종료일이 사실상 필수인 폼에서만 opt-in.
+   */
   openEndAfterStart?: boolean
   /** true면 FieldRow/FieldLabel 없이 컨트롤(날짜 버튼)만 렌더 (모달 등에서 레이블을 직접 쓸 때) */
   renderControlOnly?: boolean
@@ -105,7 +111,7 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
   onEndChange,
   startPlaceholder = '취임일',
   endPlaceholder = '퇴임일 (선택)',
-  openEndAfterStart = true,
+  openEndAfterStart = false,
   renderControlOnly = false,
   startPickerTitle = '취임일 선택',
   endPickerTitle = '퇴임일 선택',
@@ -114,6 +120,22 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
 }) => {
   const [startModalOpen, setStartModalOpen] = useState(false)
   const [endModalOpen, setEndModalOpen] = useState(false)
+  const startBtnRef = useRef<HTMLButtonElement | null>(null)
+  const endBtnRef = useRef<HTMLButtonElement | null>(null)
+
+  /**
+   * 피커가 닫힌 뒤 "그 피커를 연 버튼"으로 포커스를 되돌린다.
+   *
+   * DatePickerModal은 열릴 때의 activeElement로 복귀하는데, 취임일→퇴임일 연쇄 오픈
+   * (openEndAfterStart)에서는 그 값이 *취임일* 버튼이다. 그래서 퇴임일까지 고르고 나면
+   * 포커스가 취임일 버튼에 남고, 이어서 Enter/Space를 누르면 취임일 달력이 또 열린다.
+   * 모달 내부 복귀는 커밋 시점에 동기로 끝나므로 다음 프레임에 올바른 트리거로 덮어쓴다.
+   */
+  const focusTriggerAfterClose = (
+    ref: React.RefObject<HTMLButtonElement | null>,
+  ) => {
+    requestAnimationFrame(() => ref.current?.focus())
+  }
 
   /** blockBc 켜진 폼에서 BC 선택 차단 — 통과시키면 서버가 AD 미래 날짜로 잘못 저장한다 */
   const isBlockedBc = (date: string) => {
@@ -124,22 +146,49 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
     return false
   }
 
+  /**
+   * 방금 취임일 선택이 퇴임일 모달을 연쇄로 열었음 — 뒤따라 호출되는 onClose(handleStartClose)가
+   * 취임일 버튼으로 포커스를 되돌려 새 모달의 포커스를 빼앗지 않게 하는 1회성 플래그.
+   * (DatePickerModal은 onSelect 직후 항상 onClose를 부른다.)
+   */
+  const chainedToEndRef = useRef(false)
+
   const handleStartSelect = (date: string) => {
     if (isBlockedBc(date)) return
     onStartChange(date)
     setStartModalOpen(false)
     // 퇴임일이 아직 비어 있을 때만 자동 오픈 — 이미 선택했으면 취임일 재수정 시 다시 띄우지 않음
-    if (openEndAfterStart && !endValue) setEndModalOpen(true)
+    if (openEndAfterStart && !endValue) {
+      chainedToEndRef.current = true
+      setEndModalOpen(true)
+    }
+    // 포커스 복귀는 뒤따르는 onClose(handleStartClose)가 일괄 담당.
+  }
+
+  const handleStartClose = () => {
+    setStartModalOpen(false)
+    if (chainedToEndRef.current) {
+      chainedToEndRef.current = false
+      return
+    }
+    focusTriggerAfterClose(startBtnRef)
   }
 
   const handleEndSelect = (date: string) => {
     if (isBlockedBc(date)) return
     onEndChange(date)
     setEndModalOpen(false)
+    focusTriggerAfterClose(endBtnRef)
+  }
+
+  const handleEndClose = () => {
+    setEndModalOpen(false)
+    focusTriggerAfterClose(endBtnRef)
   }
 
   const endDateBtn = (
     <DateFieldBtn
+      ref={endBtnRef}
       type="button"
       onClick={() => setEndModalOpen(true)}
       $hasValue={!!endValue}
@@ -153,6 +202,7 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
   const dateButtons = (
     <DateFieldsRow>
       <DateFieldBtn
+        ref={startBtnRef}
         type="button"
         onClick={() => setStartModalOpen(true)}
         $hasValue={!!startValue}
@@ -200,14 +250,14 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
 
       <DatePickerModal
         isOpen={startModalOpen}
-        onClose={() => setStartModalOpen(false)}
+        onClose={handleStartClose}
         title={startPickerTitle}
         initialDate={startValue || undefined}
         onSelect={handleStartSelect}
       />
       <DatePickerModal
         isOpen={endModalOpen}
-        onClose={() => setEndModalOpen(false)}
+        onClose={handleEndClose}
         title={endPickerTitle}
         initialDate={endValue || undefined}
         onSelect={handleEndSelect}

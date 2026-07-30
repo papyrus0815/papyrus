@@ -588,7 +588,6 @@ export function RegisterMonarchModal({
               onEndChange={setEndDate}
               startPlaceholder="취임일"
               endPlaceholder="퇴임일 (선택)"
-              openEndAfterStart
             />
 
             <FieldRow>

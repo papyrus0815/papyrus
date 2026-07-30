@@ -5726,7 +5726,6 @@ export function CabinetsSection({
                     onEndChange={setMinisterFormEndDate}
                     startPlaceholder="취임일"
                     endPlaceholder="퇴임일 (선택)"
-                    openEndAfterStart
                   />
                 </FormRows>
                 <CabS.MinisterSelectActions>
