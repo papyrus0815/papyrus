@@ -12,8 +12,7 @@
  * 없는 값이라 transformer가 전부 'notable'로 채웠고, 그래서 이 칩은 단 한 번도 렌더된
  * 적이 없다. 실재하지 않는 집계를 지운다.
  *
- * ⚠️ 남은 스코프 불일치: topCategory는 *로드된 전체* events로 세는데 총계는 필터된
- * visibleCount다. 카운트 모수 통일은 배치 4(계층·카운트 계약)에서 함께 처리한다.
+ * 모수 규약: `events`는 **총계와 같은 모수**여야 한다(검토 IA-13).
  */
 import React, { useMemo } from 'react'
 

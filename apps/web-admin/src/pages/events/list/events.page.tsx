@@ -566,6 +566,21 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
 
   const filtersOrSearchActive =
     hasActiveFilters || bookmarksOnly || keywordInput.trim().length > 0
+
+  /**
+   * 헤더 통계('… · 정치 47')가 쓸 사건 집합 — **총계와 같은 모수**.
+   * 필터가 걸리면 조건을 만족한 사건만 센다. 아니면 로드된 전체가 곧 모수다(검토 IA-13).
+   */
+  const statsEvents = useMemo(() => {
+    if (!filtersOrSearchActive) return events
+    const matchedIds = new Set(
+      listRenderedHierarchy
+        .filter((item) => item.isMatch)
+        .map((item) => item.node.id),
+    )
+    return events.filter((event) => matchedIds.has(event.id))
+  }, [filtersOrSearchActive, events, listRenderedHierarchy])
+
   /** 로드된 최상위 사건 수 — serverTotal과 같은 모수(최상위 기준) */
   const rootLoadedCount = useMemo(
     () => events.filter((event) => !event.parentEventId).length,
@@ -846,6 +861,9 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       onAfterDelete={handleAfterDelete}
       onPrev={onDrawerPrev}
       onNext={onDrawerNext}
+      // 선택은 살아 있는데 화면에 보이는 행 목록에 없다 = 필터·검색·북마크로 잘려나간 상태.
+      isOutOfScope={Boolean(selectedEventId) && selectedIndex === -1}
+      onResetFilters={handleResetAll}
       onClose={clearSelectedEvent}
     />
   )
@@ -987,7 +1005,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           // 필터 여부는 카운트 비교가 아니라 실제 필터 상태로 판정한다 —
           // 예전엔 계층을 접기만 해도 '필터됨'으로 둔갑했다(검토 M10).
           filtersActive={filtersOrSearchActive}
-          events={events}
+          // 헤더 통계는 총계와 같은 모수를 써야 한다(검토 IA-13)
+          events={statsEvents}
           dbCategories={dbCategories}
           sortBy={sortBy}
           sortDirection={sortDirection}

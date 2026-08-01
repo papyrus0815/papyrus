@@ -124,6 +124,21 @@ const Menu = styled.div`
   min-width: 280px;
   max-width: 360px;
   padding: 6px;
+
+  /**
+   * 모바일 — 트리거 기준 right:0 + min-width 280px 조합이 좁은 화면에서 패널을 왼쪽 밖으로
+   * 밀어냈다(390px 실측: x=-226, right=54 → 280px 중 226px가 화면 밖, 54px만 보임).
+   * 뷰포트 기준으로 고정하고 좌우 여백을 확보한다.
+   */
+  @media (max-width: 640px) {
+    position: fixed;
+    top: auto;
+    left: 8px;
+    right: 8px;
+    min-width: 0;
+    max-width: none;
+    margin-top: 4px;
+  }
   border-radius: 10px;
   ${({ theme }) =>
     theme.mode === 'dark'

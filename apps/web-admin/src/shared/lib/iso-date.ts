@@ -98,6 +98,18 @@ export function formatCenturyLabel(century: number): string {
 }
 
 /**
+ * 연도 라벨 — 음수(BC)를 '기원전 N년'으로. 세기 라벨·행 토큰과 표기를 통일한다.
+ *
+ * 목록의 연도 그룹 헤더가 이 함수를 거치지 않고 `${year}년`을 그대로 찍는 바람에,
+ * BC 사건이 등록되면 '기원전 1세기' 헤더 아래 '-44년' 헤더가 붙고 그 밑 행은
+ * '기원전 44'로 표기돼 한 화면에서 같은 사실을 세 가지로 말했다(검토 IA-3).
+ * 스크린리더는 '마이너스 사십사 년'으로 읽는다.
+ */
+export function formatYearLabel(year: number): string {
+  return year < 0 ? `기원전 ${-year}년` : `${year}년`
+}
+
+/**
  * 세기 이동 시 존재하지 않는 0세기를 건너뛴다 (-1세기 다음은 1세기).
  */
 export function stepCentury(century: number, delta: 1 | -1): number {

@@ -129,8 +129,26 @@ function highlightMatches(text: string, query: string | undefined) {
 const formatDuration = (
   start: IsoDateParts | null,
   end: IsoDateParts | null,
+  startPrecision?: string | null,
+  endPrecision?: string | null,
 ): string => {
   if (!start) return ''
+  /**
+   * 정밀도가 '일'이 아닌 쪽이 하나라도 있으면 **월·일 차분을 하지 않는다**(검토 IA-11).
+   *
+   * 서버는 월·일이 없는 사건을 `month ?? 1, day ?? 1`로 재구성해 내려보낸다. 그 sentinel을
+   * 그대로 빼면 없는 정보를 지어낸다 — 양끝이 연 정밀도면 동일 비교에 걸려 '1일'이 되고,
+   * 한쪽만 일 정밀도면 '3년 5개월'처럼 sentinel이 만든 월 단위가 튀어나온다.
+   * 같은 파일이 시작일 토큰에는 이미 precision 가드와 01-01 sentinel 가드를 쓰고 있었다.
+   */
+  const dayPrecise = (precision?: string | null) =>
+    precision == null || precision === 'day'
+  if (!dayPrecise(startPrecision) || !dayPrecise(endPrecision)) {
+    const years = end && start ? end.year - start.year : 0
+    if (!end) return ''
+    if (years <= 0) return ''
+    return `약 ${years}년`
+  }
   // 종료 정보가 *없는* 것과 '당일 종료'는 다른 사실이다. 예전엔 둘을 같은 '1일'로
   // 합쳐, 종료 시점이 기록되지 않은 지속 상태(예: 공급 중단)까지 하루짜리 사건으로
   // 단정했다 — 실측상 전체 행의 절반이 이 잉여 토큰을 달고 있었다. 미상은 토큰을
@@ -210,7 +228,12 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
     }
     return `${startParts.year}`
   })()
-  const duration = formatDuration(startParts, endParts)
+  const duration = formatDuration(
+    startParts,
+    endParts,
+    event.startDatePrecision,
+    event.endDatePrecision,
+  )
   const categoryName = getCategoryName(event.category, dbCategories)
   const categoryColor =
     CATEGORY_BADGE_COLORS[
@@ -303,7 +326,17 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
         {/* 필터로 잘려나간 자식이 있으면 조용히 사라진 것처럼 보이지 않게 알린다. */}
         {hiddenChildCount > 0 && (
           <FilteredOutHint
-            title={`현재 필터 조건 밖의 하위 사건 ${hiddenChildCount}개는 숨겨졌습니다`}
+            as="button"
+            type="button"
+            tabIndex={isRovingTarget ? 0 : -1}
+            /* 정보만 주고 되돌릴 수단이 없던 막다른 안내를 행동 가능하게(검토 INT-10).
+               title 속성은 터치·키보드에 안 뜨므로 aria-label로 설명을 옮긴다. */
+            aria-label={`현재 필터 조건 밖의 하위 사건 ${hiddenChildCount}개 — 눌러서 이 사건의 계층 전체 보기`}
+            title={`현재 필터 조건 밖의 하위 사건 ${hiddenChildCount}개 — 눌러서 계층 전체 보기`}
+            onClick={(event: React.MouseEvent<HTMLElement>) => {
+              event.stopPropagation()
+              onShowSummary(node.id)
+            }}
           >
             조건 밖 {hiddenChildCount}
           </FilteredOutHint>
@@ -692,6 +725,12 @@ const ChildCountBadge = styled.span`
 
 const FilteredOutHint = styled.span`
   flex-shrink: 0;
+  /* as="button"으로 렌더된다 — 기본 버튼 표면을 지우고 텍스트처럼 보이게. */
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
 
   @media (max-width: 640px) {
     order: 1;

@@ -66,16 +66,6 @@ export const useEventFilters = (
   }, [countries])
 
   // ===== 사용 가능한 필터 옵션 =====
-  const availableCountries = useMemo(() => {
-    const countries = new Set<string>()
-    events.forEach((event) => {
-      event.countries.forEach((country) => countries.add(country.name))
-    })
-    return Array.from(countries).sort((countryA, countryB) =>
-      countryA.localeCompare(countryB, 'ko'),
-    )
-  }, [events])
-
   const availableCenturies = useMemo(() => {
     const centuries = new Set<number>()
     events.forEach((event) => {
@@ -335,7 +325,6 @@ export const useEventFilters = (
     setShowFlatView,
 
     // 계산된 값
-    availableCountries,
     availableCenturies,
     filteredEvents,
     sortedEvents,

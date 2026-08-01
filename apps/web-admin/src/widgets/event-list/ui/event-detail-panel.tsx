@@ -10,6 +10,8 @@
  */
 import React, { useState } from 'react'
 
+import styled from 'styled-components'
+
 import {
   FiArrowRight,
   FiBookOpen,
@@ -60,6 +62,15 @@ interface EventDetailPanelProps {
   /** 이전/다음 사건으로 이동 — 키보드(↑↓)와 동등하나 마우스 사용자용. 더 이상 없으면 undefined. */
   onPrev?: () => void
   onNext?: () => void
+  /**
+   * 이 사건이 **현재 목록 조건 밖**인가(필터·검색·북마크로 목록에서 사라졌지만 드로어는
+   * 열려 있는 상태). 드로어는 필터를 거치지 않은 맵에서 사건을 뽑으므로 목록과 다른
+   * 모집단을 보여주게 되고, 이전/다음은 인덱스 -1이라 둘 다 disabled가 된다 —
+   * 끝 항목의 정상 비활성과 구분되지 않아 '고장'처럼 보였다(검토 INT-3).
+   */
+  isOutOfScope?: boolean
+  /** 조건 밖 배너의 '필터 초기화' 액션 */
+  onResetFilters?: () => void
   /** 상세 패널 닫기 — 데스크톱 column 모드에서도 X 버튼으로 명시적 닫기 제공 */
   onClose?: () => void
 }
@@ -75,6 +86,8 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   onAfterDelete,
   onPrev,
   onNext,
+  isOutOfScope = false,
+  onResetFilters,
   onClose,
 }) => {
   const navigate = useNavigate()
@@ -337,6 +350,20 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
         </Detail.DetailPanelContent>
       ) : selectedEvent && selectedNode ? (
         <Detail.DetailPanelContent>
+          {/* 조건 밖 선택 고지 — 목록엔 없는데 상세만 열려 있는 상태를 설명한다. */}
+          {isOutOfScope && (
+            <OutOfScopeBanner role="status">
+              <span>
+                이 사건은 현재 목록 조건 밖입니다 — 목록에는 표시되지 않아
+                이전/다음 이동을 쓸 수 없습니다.
+              </span>
+              {onResetFilters && (
+                <OutOfScopeAction type="button" onClick={onResetFilters}>
+                  필터 초기화
+                </OutOfScopeAction>
+              )}
+            </OutOfScopeBanner>
+          )}
           {/* sticky 헤더 — 제목·summary·액션 */}
           <Detail.DetailPanelHeader>
             <Detail.DetailTitleRow>
@@ -373,7 +400,11 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
               {/* 이전/다음 사건 — 키보드 ↑↓와 동등. 끝/처음에서는 disabled */}
               <Detail.ActionButton
                 $variant="ghost"
-                title="이전 사건 (↑)"
+                title={
+                  isOutOfScope
+                    ? '이 사건이 목록 조건 밖이라 이동할 수 없습니다'
+                    : '이전 사건 (↑)'
+                }
                 aria-label="이전 사건"
                 disabled={!onPrev}
                 onClick={() => onPrev?.()}
@@ -382,7 +413,11 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
               </Detail.ActionButton>
               <Detail.ActionButton
                 $variant="ghost"
-                title="다음 사건 (↓)"
+                title={
+                  isOutOfScope
+                    ? '이 사건이 목록 조건 밖이라 이동할 수 없습니다'
+                    : '다음 사건 (↓)'
+                }
                 aria-label="다음 사건"
                 disabled={!onNext}
                 onClick={() => onNext?.()}
@@ -552,3 +587,38 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
     </Detail.DetailPanel>
   )
 }
+
+/* 조건 밖 선택 배너 — 목록과 드로어가 다른 모집단을 보여줄 때만 뜬다(검토 INT-3). */
+const OutOfScopeBanner = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(251,191,36,0.24)' : 'rgba(180,83,9,0.22)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(251,191,36,0.10)' : 'rgba(251,191,36,0.14)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#854d0e')};
+`
+
+const OutOfScopeAction = styled.button`
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(251,191,36,0.4)' : 'rgba(180,83,9,0.35)'};
+  background: transparent;
+  color: inherit;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(251,191,36,0.16)' : 'rgba(180,83,9,0.10)'};
+  }
+`

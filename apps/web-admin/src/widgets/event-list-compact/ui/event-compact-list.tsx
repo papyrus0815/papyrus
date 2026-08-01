@@ -19,7 +19,7 @@ import styled, { css } from 'styled-components'
 import type { SortOption } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
-import { getCentury } from '@/shared/lib/iso-date'
+import { formatYearLabel, getCentury } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 
 import type {
@@ -245,6 +245,26 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             )
           })}
         </List.CompactList>
+      ) : flattenedHierarchy.length === 0 && (isLoadingMore || hasMoreData) ? (
+        /**
+         * 아직 받아올 페이지가 남았는데 현재 창에 결과가 0건인 상태.
+         *
+         * 예전엔 곧장 '현재 조건과 일치하는 사건이 없습니다'를 확정 표시했다. 카탈로그는
+         * autoLoadAll로 전 페이지를 순차 소진하고 1000년 이전 사건은 서버 정렬상 마지막
+         * 페이지에 몰리므로, 옛 사건을 찾는 필터에서 **아직 오지 않았을 뿐인데 없다고
+         * 단정**하는 창이 실제로 존재했다(검토 DATA-12).
+         */
+        <List.EmptyCatalogState>
+          <List.EmptyIcon>
+            <List.LoadingSpinner />
+          </List.EmptyIcon>
+          <List.EmptyContent>
+            <List.EmptyTitle>사건을 불러오는 중입니다</List.EmptyTitle>
+            <List.EmptyDescription>
+              전체 사건을 다 받은 뒤에 조건에 맞는 결과를 보여드립니다.
+            </List.EmptyDescription>
+          </List.EmptyContent>
+        </List.EmptyCatalogState>
       ) : flattenedHierarchy.length === 0 ? (
         <List.EmptyCatalogState>
           {/* 상태별 아이콘 — 빈 DB(수신함)·필터결과0(깔때기)·검색무결과(돋보기)로 구별해
@@ -423,12 +443,12 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                           aria-labelledby={yearHeadingId}
                         >
                           <List.GroupHeading id={yearHeadingId} aria-level={4}>
-                            {`${currentYear}년 — 사건 ${yearEventCount}건`}
+                            {`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건`}
                           </List.GroupHeading>
                           <List.YearDivider
                             type="button"
                             aria-expanded={!isYearCollapsed}
-                            aria-label={`${currentYear}년 — 사건 ${yearEventCount}건 ${
+                            aria-label={`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건 ${
                               isYearCollapsed ? '펼치기' : '접기'
                             }`}
                             onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -446,7 +466,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                                     : 'rotate(0deg)',
                                 }}
                               />
-                              {currentYear}년
+                              {formatYearLabel(currentYear)}
                               <List.CollapsedCount>
                                 {yearEventCount}
                               </List.CollapsedCount>
@@ -460,7 +480,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                                     7행이 사라져 숫자가 화면과 어긋난다. */}
                                 {yearItems.length > 0
                                   ? `${yearItems.length}행이 접혀있습니다`
-                                  : `${currentYear}년`}
+                                  : formatYearLabel(currentYear)}
                               </span>
                             </List.CollapsedPlaceholder>
                           ) : (

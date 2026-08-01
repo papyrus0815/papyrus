@@ -103,6 +103,24 @@ export interface VisitedEventCardDto {
   categoryName: string | null
 }
 
+/**
+ * 목록 응답에서 빼는 본문 필드.
+ *
+ * background·aftermath는 상세 화면 전용 리치텍스트인데 목록 쿼리가 include만 쓰다 보니
+ * 스칼라가 전부 딸려와 그대로 실려 나갔다. 실측(GET /events?limit=100, 사건 138건):
+ * 페이로드 310,208 B 중 background 61,308 B(19.8%) · aftermath 16,573 B(5.3%)로
+ * **목록이 읽지 않는 리치텍스트가 25.1%**였고, 카탈로그는 autoLoadAll로 전 페이지를
+ * 자동 소진하므로 그 전량이 브라우저로 넘어갔다(2026-07-28 검토 DATA-7).
+ *
+ * DTO가 둘 다 optional이라 undefined로 빠져도 계약을 깨지 않는다.
+ * ⚠️ 따라서 *목록 응답에 background가 없다는 사실은 "배경 없음"의 근거가 될 수 없다* —
+ * 본문 유무 판정은 상세 응답(getEventById)으로만 하라.
+ */
+const LIST_OMITTED_BODY_FIELDS = {
+  background: true,
+  aftermath: true,
+} as const
+
 @ApiTags('events')
 @Controller('events')
 @UseGuards(AuthGuard('jwt'))
@@ -507,6 +525,7 @@ export class EventController {
       skip,
       take,
       orderBy: createdAtGte ? { createdAt: 'desc' } : { startDate: 'desc' },
+      omit: LIST_OMITTED_BODY_FIELDS,
       include: {
         category: true,
         // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
@@ -515,6 +534,7 @@ export class EventController {
         childEvents: {
           // 상세(loadEventDetail)와 동일 — 소프트 삭제된 자식 제외.
           where: { deletedAt: null },
+          omit: LIST_OMITTED_BODY_FIELDS,
           include: {
             category: true,
             historicalCountry: { select: { id: true, name: true } },
@@ -541,15 +561,31 @@ export class EventController {
               },
               orderBy: { createdAt: 'asc' },
             },
-            // 손자(2단 하위) — 트리/목록의 3계층 표시용. 경량 include(category·역사국가만)로
-            // 페이로드 팽창을 억제. 여기서 nested를 멈춰 depth 3(root→자식→손자)에서 캡한다.
+            // 손자(2단 하위) — 트리/목록의 3계층 표시용. 경량 include로 페이로드 팽창을 억제.
+            // 여기서 nested를 멈춰 depth 3(root→자식→손자)에서 캡한다.
             // toResponseDto가 childEvents를 재귀 매핑하므로 배선 불필요(손자의 childEvents는
             // include 안 해 undefined → 응답에서 자연히 종단).
             childEvents: {
               where: { deletedAt: null },
+              omit: LIST_OMITTED_BODY_FIELDS,
               include: {
                 category: true,
                 historicalCountry: { select: { id: true, name: true } },
+                /**
+                 * 손자에도 관련국을 실어야 한다 — 자식에만 넣은 수정(TF-7)이 한 계층 앞에서
+                 * 멈춰 있었다. 없으면 toResponseDto가 relatedCountries를 undefined로 내려,
+                 * 손자 행은 국기가 안 뜨고 국가·대륙 필터에서 **항상 탈락**한다
+                 * (필터가 자식에도 적용되므로 곧 '조건 밖'으로 잘리는 결과가 된다).
+                 */
+                countryRelations: {
+                  include: {
+                    country: {
+                      select: { id: true, name: true, flagEmoji: true },
+                    },
+                    historicalCountry: { select: { id: true, name: true } },
+                  },
+                  orderBy: { createdAt: 'asc' },
+                },
               },
               orderBy: { startDate: 'asc' },
             },
