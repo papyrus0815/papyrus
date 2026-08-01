@@ -176,6 +176,39 @@ const formatDuration = (
   return `${Math.max(1, days)}일`
 }
 
+/**
+ * 제목에 검색어가 없을 때 **왜 이 행이 결과에 있는지**를 보여주는 2차 토큰.
+ *
+ * 매칭 술어는 제목·설명·키워드 3필드를 보는데 행이 렌더하는 건 제목 하이라이트뿐이라,
+ * '조약'으로 검색하면 제목에 그 단어가 없는 행들이 아무 표시 없이 섞여 나왔다 —
+ * 왜 걸렸는지 확인하려면 행마다 드로어를 열어야 했다(검토 CR-3).
+ * 설명에서 매칭 주변만 잘라 보여주고, 설명에도 없으면 매칭된 키워드를 보여준다.
+ */
+function buildMatchReason(
+  node: EventHierarchyNode,
+  event: HistoricalEvent,
+  query: string | undefined,
+): { kind: '설명' | '키워드'; text: string } | null {
+  const term = query?.trim().toLowerCase()
+  if (!term) return null
+  if (node.title.toLowerCase().includes(term)) return null // 제목에 이미 보인다
+
+  const summary = node.summary || event.description || ''
+  const at = summary.toLowerCase().indexOf(term)
+  if (at >= 0) {
+    const from = Math.max(0, at - 20)
+    const to = Math.min(summary.length, at + term.length + 20)
+    const snippet = `${from > 0 ? '…' : ''}${summary.slice(from, to).trim()}${to < summary.length ? '…' : ''}`
+    return { kind: '설명', text: snippet }
+  }
+
+  const hitKeyword = (event.keywords ?? []).find((keyword) =>
+    keyword.toLowerCase().includes(term),
+  )
+  if (hitKeyword) return { kind: '키워드', text: hitKeyword }
+  return null
+}
+
 const EventListItemImpl: React.FC<EventListItemProps> = ({
   node,
   event,
@@ -228,6 +261,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
     }
     return `${startParts.year}`
   })()
+  const matchReason = buildMatchReason(node, event, searchQuery)
   const duration = formatDuration(
     startParts,
     endParts,
@@ -308,6 +342,12 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
           {categoryName}
         </CategoryLabel>
         <Title>{highlightMatches(node.title, searchQuery)}</Title>
+        {matchReason && (
+          <MatchReason title={`${matchReason.kind} 일치: ${matchReason.text}`}>
+            <MatchReasonKind>{matchReason.kind}</MatchReasonKind>
+            {highlightMatches(matchReason.text, searchQuery)}
+          </MatchReason>
+        )}
         {/* 모바일 2줄 행의 강제 개행 지점 — 데스크톱에서는 display:none이라 무영향 */}
         <RowBreak aria-hidden="true" />
 
@@ -852,6 +892,37 @@ const CategoryLabel = styled.span<{
   @media (max-width: 640px) {
     order: 1;
   }
+`
+
+/* 검색 매칭 근거 — 제목에 검색어가 없을 때만 나타난다. 제목을 밀어내지 않게 축소·말줄임. */
+const MatchReason = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 0 1 auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: ${metaText};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  @media (max-width: 640px) {
+    /* 2줄 행에서는 메타 줄이 한 줄로 고정돼야 하므로 생략 — 근거는 상세에서 확인한다. */
+    display: none;
+  }
+`
+
+const MatchReasonKind = styled.span`
+  flex-shrink: 0;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(251,191,36,0.16)' : 'rgba(251,191,36,0.22)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#854d0e')};
 `
 
 const Duration = styled.span`

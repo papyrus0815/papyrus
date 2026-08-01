@@ -156,6 +156,12 @@ export const transformEventsFromApi = (
       relatedCountries: evt.relatedCountries,
       relatedHistoricalCountries: evt.relatedHistoricalCountries,
       keywords: evt.keywords ?? undefined,
+      /**
+       * 등록 시각 — '등록순' 정렬(SORT_OPTIONS.CREATED)의 유일한 근거다.
+       * 서버 응답에는 원래 실려 오는데 여기서 매핑되지 않아, 목록에서 등록 축으로
+       * 정렬할 방법 자체가 없었다(검토 CR-4). 매핑하지 않으면 정렬이 조용한 no-op이 된다.
+       */
+      createdAt: (evt as { createdAt?: string | null }).createdAt ?? undefined,
     }
   }
 

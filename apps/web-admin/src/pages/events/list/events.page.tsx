@@ -107,17 +107,22 @@ import { resolveDefaultViewMode } from './lib/resolve-default-view-mode'
 /** 집중(넓게) 보기 선택 영속 키 — 세션 간 유지. 모듈 스코프(렌더마다 재생성 회피). */
 const WIDE_MODE_KEY = 'papyrus.events.wideMode'
 
-export interface EventsCatalogPageProps {
-  /** 국가(현대/역사적) ID로 연관 사건만 표시. 미전달 시 전체 사건 */
-  countryId?: string | null
-  /** 대시보드 등에 임베드 시 상단 타이틀/여백 축소 */
-  embed?: boolean
-}
-
-export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
-  countryId,
-  embed = false,
-}) => {
+/**
+ * (제거됨) EventsCatalogPageProps — `countryId`·`embed`.
+ *
+ * 두 prop이 useEvents 인자·쿼리키·헤더 분기·래퍼/FAB 분기까지 6곳에 흩어져 있었지만,
+ * 이 컴포넌트를 쓰는 곳은 라우트 하나(`event-route.ts`: `Component: EventsCatalogPage`)뿐이고
+ * react-router는 props를 넘기지 않는다 — 즉 **한 번도 실행된 적 없는 분기**였다(검토 CR-7).
+ * 특히 embed 분기는 `PageScene`(fixed 높이) 대신 `EmbedWrapper`를 쓰는데 목록의 내부 스크롤이
+ * PageScene 높이 체인에 의존하므로, 누군가 그 경로를 되살리면 곧바로 스크롤이 깨진다 —
+ * 검증된 적 없는 레이아웃 계약이라 회귀를 사전에 알 수 없었다.
+ *
+ * ⚠️ 국가 상세는 이 페이지가 아니라 `useEvents`를 직접 호출하는 별도 위젯
+ * (`widgets/country/country-detail/.../events-timeline-section.widget.tsx`)을 쓴다.
+ * '사건 목록 구현이 둘'이라는 사실은 그대로이므로, 임베드가 다시 필요해지면
+ * 죽은 분기를 되살리지 말고 두 구현의 통합부터 결정할 것.
+ */
+export const EventsCatalogPage: React.FC = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -161,7 +166,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   }, [])
 
   // ===== 북마크 / 최근 본 =====
-  const { bookmarks, toggleBookmark } = useBookmarks()
+  const { bookmarks, toggleBookmark, removeBookmark } = useBookmarks()
 
   /**
    * 북마크 토글에 피드백 + 되돌리기를 붙인다(검토 INT-5).
@@ -198,7 +203,6 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     refetch: refetchEvents,
   } = useEvents({
     pageSize,
-    countryId: countryId ?? undefined,
     // 정렬·세기 필터·계층 평탄화가 전부 클라이언트 전역이라, 일부 페이지만 로드된 채로
     // 정렬을 바꾸면 로드된 창 안에서만 재정렬된다(안 받은 페이지의 사건은 영영 안 나옴).
     // 특히 1000년 이전 사건은 start_date NULL → 서버 정렬상 맨 뒤로 밀려 마지막 페이지에
@@ -209,8 +213,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   // ===== 권위 총개수 — 헤더 "전체 N건"이 *로드된 수*가 아닌 진짜 총량을 표시하도록 =====
   // 페이징 응답엔 total이 없어 별도 count 엔드포인트 조회(가벼운 count 쿼리). 실패 시 undefined.
   const { data: serverTotal } = useQuery({
-    queryKey: [...eventKeys.count(), countryId ?? null],
-    queryFn: () => getEventsCount({ countryId: countryId ?? undefined }),
+    queryKey: eventKeys.count(),
+    queryFn: () => getEventsCount(),
     staleTime: 30_000,
   })
 
@@ -255,6 +259,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     expandedEventIds,
     setExpandedEventIds,
     toggleEventExpansion,
+    collapseAllChildren,
+    expandAllChildren,
     flattenedHierarchy,
     // matchedCount는 여기서 쓰지 않는다 — 북마크 필터 이후 기준으로 다시 세는
     // visibleMatchedCount가 헤더의 단일 출처다(아래 참조).
@@ -575,6 +581,14 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   const filtersOrSearchActive =
     hasActiveFilters || bookmarksOnly || keywordInput.trim().length > 0
 
+  /** 로드된 사건과 실제로 매칭되는 북마크 수 — 툴바 배지의 모수(검토 CR-6) */
+  const resolvableBookmarkCount = useMemo(() => {
+    if (bookmarks.size === 0) return 0
+    let count = 0
+    for (const event of events) if (bookmarks.has(event.id)) count += 1
+    return count
+  }, [bookmarks, events])
+
   /**
    * 헤더 통계('… · 정치 47')가 쓸 사건 집합 — **총계와 같은 모수**.
    * 필터가 걸리면 조건을 만족한 사건만 센다. 아니면 로드된 전체가 곧 모수다(검토 IA-13).
@@ -780,6 +794,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           onToggleBookmark={handleToggleBookmark}
           onScroll={handleScroll}
           pageSize={pageSize}
+          // '등록순'은 전역 순서 자체가 목적이라 연도 그룹이 켜져 있으면 화면이 전혀 안 바뀐다.
+          grouped={sortBy !== 'created'}
         />
       )
       break
@@ -807,6 +823,8 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   const handleAfterDelete = useCallback(
     (deletedId: string) => {
       if (selectedEventId === deletedId) setSelectedEventId(null)
+      // 지운 사건의 북마크도 함께 정리 — 안 하면 배지 숫자와 '북마크만' 결과가 어긋난다.
+      removeBookmark(deletedId)
 
       /**
        * 낙관적 제거 — 무효화만으로는 지운 행이 화면에 남는다(검토 DATA-6).
@@ -831,7 +849,7 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
       queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
       queryClient.invalidateQueries({ queryKey: eventKeys.count() })
     },
-    [selectedEventId, queryClient],
+    [selectedEventId, queryClient, removeBookmark],
   )
 
   /**
@@ -945,7 +963,17 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     onSelectContinent: setSelectedContinent,
     bookmarksOnly,
     toggleBookmarksOnly,
-    bookmarksCount: bookmarks.size,
+    /**
+     * 배지 수 — 저장된 id 수가 아니라 **로드된 사건과의 교집합**.
+     * 저장값을 그대로 쓰면 삭제·이관된 사건이나 다른 계정의 북마크까지 세어
+     * 목록(교집합만 렌더)과 숫자가 어긋난다(검토 CR-6).
+     * autoLoadAll이라 소진 후에는 정확하고, 소진 중에는 과소 표기될 수 있다.
+     */
+    bookmarksCount: resolvableBookmarkCount,
+    // 하위 사건 일괄 접기/펼치기(검토 CR-5) — 전개된 부모가 하나도 없으면 '접힘' 상태로 본다.
+    allChildrenCollapsed: expandedEventIds.size === 0,
+    onCollapseAllChildren: collapseAllChildren,
+    onExpandAllChildren: expandAllChildren,
     recentEventIds: recentEvents,
     events,
     onSelectEvent: setSelectedEventId,
@@ -997,24 +1025,10 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
   const content = (
     <>
       {/* 집중(넓게) 보기에선 페이지 헤더를 접어 본문에 높이 양보 */}
-      {wideMode ? null : embed ? (
-        <PageStyles.EmbedHeader>
-          연대표
-          {countryId && (
-            <PageStyles.EmbedHeaderHint>
-              · 선택한 국가에 연관된 사건
-            </PageStyles.EmbedHeaderHint>
-          )}
-        </PageStyles.EmbedHeader>
-      ) : (
+      {wideMode ? null : (
         <PageStyles.PageHeader>
           <PageStyles.PageHeaderTitleGroup>
             <PageStyles.PageHeaderTitle>사건 연대표</PageStyles.PageHeaderTitle>
-            {countryId && (
-              <PageStyles.PageHeaderSubtitle>
-                선택한 국가에 연관된 역사적 사건
-              </PageStyles.PageHeaderSubtitle>
-            )}
           </PageStyles.PageHeaderTitleGroup>
         </PageStyles.PageHeader>
       )}
@@ -1088,24 +1102,18 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
 
   return (
     <>
-      {embed ? (
-        <PageStyles.EmbedWrapper>{content}</PageStyles.EmbedWrapper>
-      ) : (
-        <Layout.PageScene>
-          <Layout.PageWrapper>{content}</Layout.PageWrapper>
-        </Layout.PageScene>
-      )}
+      <Layout.PageScene>
+        <Layout.PageWrapper>{content}</Layout.PageWrapper>
+      </Layout.PageScene>
 
-      {/* 모바일 우하단 FAB — embed 모드에선 부모가 자체 CTA를 가질 가능성이 높아 미렌더 */}
-      {!embed && (
-        <Layout.CreateEventFab
-          type="button"
-          aria-label="새 사건 등록"
-          onClick={handleCreateEvent}
-        >
-          <FiPlus size={24} aria-hidden="true" />
-        </Layout.CreateEventFab>
-      )}
+      {/* 모바일 우하단 FAB */}
+      <Layout.CreateEventFab
+        type="button"
+        aria-label="새 사건 등록"
+        onClick={handleCreateEvent}
+      >
+        <FiPlus size={24} aria-hidden="true" />
+      </Layout.CreateEventFab>
 
       <CatalogEntityFilterModals {...entityFilterModalProps} />
       <CatalogOverlayModals {...overlayModalProps} />

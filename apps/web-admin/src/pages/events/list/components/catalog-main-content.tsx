@@ -299,6 +299,7 @@ export const CatalogMainContent: React.FC<Props> = ({
           >
             {/* 'recent'는 내부적으로 startDate 기준 — UI 라벨은 사건 *발생 시기*임을 명확히 */}
             <option value="recent">시기순</option>
+            <option value="created">등록순</option>
             <option value="duration">기간순</option>
           </Filter.SortSelect>
           <Filter.SortButton
@@ -357,7 +358,27 @@ export const CatalogMainContent: React.FC<Props> = ({
         </MetaArea>
       </ToolbarStyles.ViewSwitcherRow>
 
-      {!wideMode && <ViewHint role="note">{VIEW_HINTS[viewMode]}</ViewHint>}
+      {!wideMode && (
+        <ViewHint role="note">
+          {VIEW_HINTS[viewMode]}
+          {/**
+           * IA-12 — 목록 뷰는 연도 그룹핑이 고정이라 '기간순'은 **같은 해 안에서만** 적용된다.
+           * 그런데 화면 어디에도 그 사실이 드러나지 않아, '가장 오래 지속된 사건'을 찾으려는
+           * 사용자는 겉보기에 변화 없는 목록을 보고 컨트롤이 고장 났다고 판단한다.
+           * 그룹핑을 끄는 대신(연도 그룹은 이 뷰의 정체성이다) 조건을 정직하게 밝힌다.
+           */}
+          {viewMode === VIEW_MODES.LIST && sortBy === 'duration' && (
+            <SortScopeNote>
+              · 기간순은 연도 그룹이 고정이라 <strong>같은 해 안에서만</strong> 적용됩니다
+            </SortScopeNote>
+          )}
+          {viewMode === VIEW_MODES.LIST && sortBy === 'created' && (
+            <SortScopeNote>
+              · 등록순은 <strong>연도 그룹을 해제</strong>하고 최근 등록한 순서로 나열합니다
+            </SortScopeNote>
+          )}
+        </ViewHint>
+      )}
 
       {activeSlot}
     </PageStyles.ActiveContent>
@@ -450,6 +471,16 @@ const MoreMenuItem = styled.button<{ $active?: boolean }>`
   &:focus-visible {
     outline: none;
     box-shadow: ${BRAND.focusRing};
+  }
+`
+
+/* 정렬 적용 범위 안내 — 목록 뷰 + 기간순 조합에서만 나타난다(검토 IA-12). */
+const SortScopeNote = styled.span`
+  margin-left: 4px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#854d0e')};
+
+  strong {
+    font-weight: 700;
   }
 `
 

@@ -82,6 +82,14 @@ interface EventCompactListProps {
   onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
   /** 로딩 skeleton 갯수 산정에만 사용 — 페이지 크기 컨트롤은 부모(ViewSwitcherRow)에 있음 */
   pageSize?: number
+  /**
+   * 세기›연도 그룹으로 묶을지 여부(기본 true).
+   *
+   * 연도 그룹핑은 정렬을 **그룹 내부로 가둔다** — '등록순'처럼 전역 순서 자체가 목적인
+   * 정렬은 그룹이 켜져 있으면 화면에서 아무 변화도 만들지 못한다(실측: 상위 5행이 시기순과
+   * 완전히 동일했다). 작동하지 않는 정렬 옵션을 두느니 그때만 그룹을 끈다(검토 CR-4/IA-12).
+   */
+  grouped?: boolean
 }
 
 export const EventCompactList: React.FC<EventCompactListProps> = ({
@@ -114,6 +122,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   onToggleBookmark,
   onScroll,
   pageSize = 20,
+  grouped = true,
 }) => {
   const navigate = useNavigate()
   /**
@@ -383,7 +392,17 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   ? '사건을 계속 불러오는 중입니다.'
                   : `사건 목록 — 표시 ${displayedCount.toLocaleString()}행, 최상위 ${displayedRootCount.toLocaleString()}건`}
           </List.GroupHeading>
-          {centuryGroups.map(({ century, years }) => {
+          {!grouped && (
+            /* 그룹 없는 평면 목록 — 배열 순서(= 선택한 정렬)를 그대로 보여준다.
+               groupYear를 null로 넘겨 각 행이 자기 연도를 그대로 표시하게 한다. */
+            <List.RowList role="list" aria-label="사건 목록">
+              {flattenedHierarchy.map((item, index) =>
+                renderRow(item, null, index + 1, flattenedHierarchy.length),
+              )}
+            </List.RowList>
+          )}
+          {grouped &&
+            centuryGroups.map(({ century, years }) => {
             const isCenturyCollapsed = collapsedCenturies.has(century)
 
             // 세기 라벨/범위 — getCentury 정의(양수 ceil, 음수 BC)에 맞춰 BC 안전.
@@ -518,13 +537,13 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                         </List.YearSection>
                       )
                     })}
-              </List.CenturySection>
-            )
-          })}
+                </List.CenturySection>
+              )
+            })}
 
           {/* 연도 미상 — period.start가 비었거나 파싱 불가하고 귀속할 상위 연도도 없는 항목.
            * 그룹핑에서 드롭하지 않고 여기 모아 렌더한다(자식만 남은 북마크 필터·날짜 완전 미상). */}
-          {unknownItems.length > 0 && (
+          {grouped && unknownItems.length > 0 && (
             /* 연도 섹션과 같은 래퍼를 쓴다 — UnknownYearDivider도 YearDivider를 상속해
              * sticky이므로, 감싸지 않으면 이 헤더만 목록 끝까지 상단에 눌어붙는다. */
             <List.YearSection

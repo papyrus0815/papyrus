@@ -102,6 +102,24 @@ export const useEventHierarchy = (
   // 이전엔 sortedEvents가 바뀔 때마다 전체 Set을 재생성·교체해, 자동 로드 중 페이지마다
   // setState→flatten 재실행이 연쇄됐고 사용자의 수동 접기도 매번 덮어썼다.
   const autoExpandedRef = useRef<Set<string>>(new Set())
+
+  /**
+   * '하위 사건 모두 접기'가 눌린 상태 — 눌린 뒤 도착한 페이지의 부모까지 자동 전개되면
+   * 접기가 계속 되돌려진다(autoLoadAll이 페이지를 연쇄 소진하므로 실제로 그렇게 된다).
+   * 사용자가 '모두 펼치기'를 누르거나 개별 셰브론을 열면 해제된다(검토 CR-5).
+   */
+  const collapseAllRef = useRef(false)
+
+  const collapseAllChildren = useCallback(() => {
+    collapseAllRef.current = true
+    setExpandedEventIds(new Set())
+  }, [])
+
+  const expandAllChildren = useCallback(() => {
+    collapseAllRef.current = false
+    setExpandedEventIds(new Set(autoExpandedRef.current))
+  }, [])
+
   useEffect(() => {
     const newlyExpandable: string[] = []
     for (const event of sortedEvents) {
@@ -115,6 +133,9 @@ export const useEventHierarchy = (
     }
     if (newlyExpandable.length === 0) return // 신규 없음 → setState 생략
     newlyExpandable.forEach((id) => autoExpandedRef.current.add(id))
+    // '모두 접기' 중이면 신규 부모도 접힌 채로 둔다 — 아니면 페이지가 도착할 때마다
+    // 접기가 조금씩 되돌려져 사용자가 30여 번 누른 결과가 사라진다.
+    if (collapseAllRef.current) return
     setExpandedEventIds((prev) => {
       const next = new Set(prev)
       newlyExpandable.forEach((id) => next.add(id))
@@ -130,6 +151,8 @@ export const useEventHierarchy = (
         next.delete(eventId)
       } else {
         next.add(eventId)
+        // 하나라도 직접 펼쳤다면 '모두 접기' 의도는 끝난 것으로 본다.
+        collapseAllRef.current = false
       }
       return next
     })
@@ -348,6 +371,8 @@ export const useEventHierarchy = (
     expandedEventIds,
     setExpandedEventIds,
     toggleEventExpansion,
+    collapseAllChildren,
+    expandAllChildren,
     flattenedHierarchy,
     matchedCount,
   }

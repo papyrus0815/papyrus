@@ -9,6 +9,15 @@
 export const SORT_OPTIONS = {
   RECENT: 'recent',
   DURATION: 'duration',
+  /**
+   * 등록순 — `createdAt` 내림차순.
+   *
+   * 'recent'는 이름과 달리 **startDate**(사건이 일어난 시점) 기준이라 방금 입력한 사건이
+   * 목록 어디에 떨어질지 알 수 없다. 20건을 연달아 입력한 뒤 그것만 모아 보려면 등록 시각
+   * 축이 필요한데 목록 뷰에는 그 축이 없었다(검토 CR-4).
+   * 응답 DTO가 createdAt을 이미 싣고 있어 클라이언트 정렬로 충분하다.
+   */
+  CREATED: 'created',
 } as const
 
 export type SortOption = (typeof SORT_OPTIONS)[keyof typeof SORT_OPTIONS]

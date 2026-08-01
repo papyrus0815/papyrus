@@ -8,6 +8,8 @@ import React from 'react'
 
 import {
   FiBookmark,
+  FiChevronsDown,
+  FiChevronsUp,
   FiDownload,
   FiHelpCircle,
   FiPlus,
@@ -64,6 +66,14 @@ interface Props {
   bookmarksOnly: boolean
   toggleBookmarksOnly: () => void
   bookmarksCount: number
+  /**
+   * 하위 사건 일괄 접기/펼치기 — 자식 보유 사건은 로드될 때마다 전부 자동 전개되는데
+   * 되돌릴 일괄 수단이 목록에 없었다('계층' 토글은 평면 모드라 오히려 행이 늘어난다).
+   * 정리하려면 부모마다 20px 셰브론을 30여 번 눌러야 했다(검토 CR-5).
+   */
+  allChildrenCollapsed: boolean
+  onCollapseAllChildren: () => void
+  onExpandAllChildren: () => void
 
   // 최근 본 (toolbar dropdown — Discovery Hub 제거 후 진입점)
   recentEventIds: string[]
@@ -106,6 +116,9 @@ export const CatalogToolbar: React.FC<Props> = ({
   bookmarksOnly,
   toggleBookmarksOnly,
   bookmarksCount,
+  allChildrenCollapsed,
+  onCollapseAllChildren,
+  onExpandAllChildren,
   recentEventIds,
   events,
   onSelectEvent,
@@ -138,10 +151,10 @@ export const CatalogToolbar: React.FC<Props> = ({
           name="event-search"
           autoComplete="off"
           spellCheck={false}
-          placeholder="사건 검색"
+          placeholder="제목·설명·키워드 검색"
           value={keywordInput}
           onChange={(e) => setKeywordInput(e.target.value)}
-          aria-label="사건 검색"
+          aria-label="사건 검색 — 제목·설명·키워드"
         />
         {hasKeyword ? (
           <ToolbarStyles.PromSearchClear
@@ -184,6 +197,26 @@ export const CatalogToolbar: React.FC<Props> = ({
           events={events}
           onSelectEvent={onSelectEvent}
         />
+        <ToolbarStyles.ToolbarBtn
+          type="button"
+          $active={allChildrenCollapsed}
+          title={
+            allChildrenCollapsed
+              ? '하위 사건 모두 펼치기'
+              : '하위 사건 모두 접기 — 최상위 사건만 훑을 때'
+          }
+          aria-pressed={allChildrenCollapsed}
+          onClick={
+            allChildrenCollapsed ? onExpandAllChildren : onCollapseAllChildren
+          }
+        >
+          {allChildrenCollapsed ? (
+            <FiChevronsDown size={ICON_SIZE.base} aria-hidden="true" />
+          ) : (
+            <FiChevronsUp size={ICON_SIZE.base} aria-hidden="true" />
+          )}
+          <span>{allChildrenCollapsed ? '하위 펼치기' : '하위 접기'}</span>
+        </ToolbarStyles.ToolbarBtn>
         <ToolbarStyles.ToolbarBtn
           type="button"
           $active={bookmarksOnly}

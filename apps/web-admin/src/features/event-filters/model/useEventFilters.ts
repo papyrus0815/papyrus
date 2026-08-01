@@ -205,6 +205,16 @@ export const useEventFilters = (
             isoYearSpan(eventA.startDate, eventA.endDate) -
             isoYearSpan(eventB.startDate, eventB.endDate)
           break
+        case 'created': {
+          // 등록 시각 — 값이 없으면 가장 오래된 것으로 취급해 뒤로 민다.
+          const createdKey = (event: HistoricalEvent) => {
+            const raw = (event as { createdAt?: string | null }).createdAt
+            const time = raw ? Date.parse(raw) : NaN
+            return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time
+          }
+          comparison = createdKey(eventA) - createdKey(eventB)
+          break
+        }
         case 'recent':
         default:
           comparison = startKey(eventA) - startKey(eventB)
