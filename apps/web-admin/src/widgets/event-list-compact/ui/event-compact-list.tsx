@@ -134,10 +134,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
    * 페이지도 같은 함수로 '보이는 행'을 계산해 드로어 이전/다음과 ↑↓ 키가 화면과
    * 어긋나지 않게 한다(검토 INT-4).
    */
-  const { allYears, eventsByYear, centuryCount, unknownItems } = useMemo(
-    () => buildYearBuckets(flattenedHierarchy, sortDirection),
-    [flattenedHierarchy, sortDirection],
-  )
+  const { allYears, eventsByYear, centuryCount, yearRootCount, unknownItems } =
+    useMemo(
+      () => buildYearBuckets(flattenedHierarchy, sortDirection),
+      [flattenedHierarchy, sortDirection],
+    )
 
   /**
    * 세기 → 그 세기에 속한 연도들. 렌더 트리를 `CenturySection > YearSection > 행`으로
@@ -430,9 +431,12 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   ? null
                   : years.map((currentYear) => {
                       const yearItems = eventsByYear.get(currentYear) ?? []
-                      const yearEventCount = yearItems.filter(
-                        (item) => item.depth === 0,
-                      ).length
+                      /**
+                       * 연 헤더 카운트 — depth 0이 아니라 **그룹 단위**(부모가 목록에 없는 행)를 센다.
+                       * depth로 세면 부모 없이 남은 자식이 어디에도 안 세어져 '976년 0'처럼
+                       * 0건 헤더가 나오고, '1건' 헤더 아래 2행이 보인다.
+                       */
+                      const yearEventCount = yearRootCount.get(currentYear) ?? 0
                       const isYearCollapsed = collapsedYears.has(currentYear)
 
                       const yearHeadingId = `events-year-${currentYear}`

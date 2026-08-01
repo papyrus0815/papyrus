@@ -15,8 +15,10 @@ export interface YearBuckets {
   allYears: number[]
   /** 연도 → 그 버킷에 귀속된 행들(원래 순서 유지) */
   eventsByYear: Map<number, FlattenedHierarchyItem[]>
-  /** 세기 → 그 세기의 depth 0 사건 수 */
+  /** 세기 → 그 세기의 '그룹 단위' 사건 수(부모가 목록에 없는 행) */
   centuryCount: Map<number, number>
+  /** 연도 → 그 해의 '그룹 단위' 사건 수. 연 헤더 카운트의 모수 */
+  yearRootCount: Map<number, number>
   /** 연도를 전혀 확정할 수 없는 행 — '연도 미상' 섹션 */
   unknownItems: FlattenedHierarchyItem[]
   /** 행 id → 귀속 연도. 미상은 null. 페이지가 밴드 접힘 판정에 쓴다. */
@@ -39,38 +41,63 @@ export function buildYearBuckets(
   const eventsByYear = new Map<number, FlattenedHierarchyItem[]>()
   const unknownItems: FlattenedHierarchyItem[] = []
   const centuryCount = new Map<number, number>()
+  const yearRootCount = new Map<number, number>()
   const bucketYearById = new Map<string, number | null>()
-  let lastTopLevelYear: number | null = null
+
+  /** 이 목록에 실제로 존재하는 노드 id — '내 부모가 화면에 있는가' 판정용. */
+  const presentIds = new Set(items.map((item) => item.node.id))
 
   items.forEach((item) => {
     // BC·고대 날짜 안전 파싱(네이티브 Date 금지).
     const parsedYear = parseIsoDateParts(item.node.period.start)?.year ?? null
-    if (item.depth === 0 && parsedYear !== null) {
-      lastTopLevelYear = parsedYear
-    }
-    const bucketYear =
-      item.depth === 0
-        ? (parsedYear ?? lastTopLevelYear)
-        : (lastTopLevelYear ?? parsedYear)
+    /**
+     * 이 행이 이 그룹의 *단위*인가 — 부모가 이 목록에 없으면(최상위이거나 필터로 잘렸으면) true.
+     * 연·세기 헤더 카운트의 모수다. depth로만 세면 부모 없이 남은 자식이 어디에도 안 세어져
+     * '1건' 헤더 아래 2행이 보이거나 '976년 0'처럼 0건 헤더가 나온다.
+     */
+    const isGroupRoot =
+      item.parentNodeId === null || !presentIds.has(item.parentNodeId)
 
-    if (bucketYear === null) {
+    /**
+     * 버킷 귀속 — **실제 부모**를 따른다(검토 IA-2).
+     *
+     * 예전엔 '배열에서 직전 depth 0 항목이 곧 내 부모'라는 위치 휴리스틱이었다:
+     *   depth 0 ? parsedYear ?? lastTopLevelYear : lastTopLevelYear ?? parsedYear
+     * ⑴ 북마크 필터가 부모만 제거해도 자식의 depth는 남으므로 그 불변식이 깨져,
+     *    976년 자식이 '20세기 › 1990년' 헤더 아래 렌더되면서 행은 '976'을 주장했다.
+     * ⑵ 날짜 미상 최상위 행이 직전 연도로 흡수돼 그 해·세기 카운트를 부풀렸고,
+     *    미상 정렬 키가 NEGATIVE_INFINITY라 정렬 방향 토글 한 번에 '연도 미상' 섹션과
+     *    가장 오래된 연도 그룹을 오갔다.
+     *
+     * 이제 depth 0은 자기 연도만 쓰고(없으면 자연히 '연도 미상'), 자식은 **부모의 버킷**을
+     * 따른다. DFS 선순회라 부모 항목이 항상 먼저 처리돼 있어 한 번의 전방 패스로 풀린다.
+     * 부모가 목록에 없으면 자기 연도로 폴백한다.
+     */
+    const parentBucket =
+      item.parentNodeId !== null
+        ? bucketYearById.get(item.parentNodeId)
+        : undefined
+    const bucketYear = isGroupRoot ? parsedYear : (parentBucket ?? parsedYear)
+
+    if (bucketYear === null || bucketYear === undefined) {
       bucketYearById.set(item.node.id, null)
       unknownItems.push(item)
       return
     }
     bucketYearById.set(item.node.id, bucketYear)
-    // depth 무관하게 add — 부모 없이 자식 연도로 버킷팅한 경우에도 버킷이 존재해야
+    // depth 무관하게 add — 부모 없이 자기 연도로 버킷팅된 경우에도 버킷이 존재해야
     // 렌더 루프가 그 연도를 순회한다.
     eventYears.add(bucketYear)
     if (!eventsByYear.has(bucketYear)) eventsByYear.set(bucketYear, [])
     eventsByYear.get(bucketYear)!.push(item)
     // getCentury(year)로 BC 음수 세기까지 정합(1950 → 20세기).
-    if (item.depth === 0) {
+    if (isGroupRoot) {
       const centuryOfBucket = getCentury(bucketYear)
       centuryCount.set(
         centuryOfBucket,
         (centuryCount.get(centuryOfBucket) ?? 0) + 1,
       )
+      yearRootCount.set(bucketYear, (yearRootCount.get(bucketYear) ?? 0) + 1)
     }
   })
 
@@ -78,7 +105,14 @@ export function buildYearBuckets(
   const allYears =
     sortDirection === 'desc' ? [...sortedYears].reverse() : sortedYears
 
-  return { allYears, eventsByYear, centuryCount, unknownItems, bucketYearById }
+  return {
+    allYears,
+    eventsByYear,
+    centuryCount,
+    yearRootCount,
+    unknownItems,
+    bucketYearById,
+  }
 }
 
 /**
