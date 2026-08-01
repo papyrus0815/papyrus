@@ -1148,13 +1148,81 @@ export class EventService {
     // 존재 여부 확인 (라벨용으로 캡처)
     const event = await this.getEventById(id)
 
-    // 소프트 삭제: deletedAt 설정
-    await this.prisma.event.update({
-      where: { id },
-      data: {
-        deletedAt: new Date(),
-        deletedById: userId || null,
-      },
+    /**
+     * 자식 재배치 + 소프트 삭제를 한 트랜잭션으로.
+     *
+     * 왜 필요한가: 목록 API는 루트(parentEventId IS NULL)만 페이징하고 자식은 부모의
+     * childEvents include로만 싣는다. 부모에 deletedAt만 세팅하면 그 부모는 루트
+     * 쿼리에서 빠지고, 살아있는 자식들은 parentEventId가 남아 루트도 아니라서
+     * *어느 뷰에도 나타나지 않는* 고아가 된다(2026-07-28 검토 P1-6).
+     *
+     * 재배치 규칙은 완전삭제(permanentlyDeleteEvent)의 확립된 규약을 따른다 —
+     * 추가 상위(EventParentLink)가 있으면 가장 오래된 엣지를 주 상위로 승격해
+     * 사용자가 기록한 연결을 보존하고(INV-2: 추가 상위는 주 상위 필수), 엣지가
+     * 없으면 최상위로 올린다.
+     *
+     * 대상은 *살아있는* 자식만이다. 소프트삭제된 자식은 부모 FK를 보존해야 한다 —
+     * restoreEvent가 부모를 복원하지 않으므로 여기서 끊으면 복구 시 부모를 영구히
+     * 잃는다(updateEvent의 detach 규약과 동일).
+     *
+     * 트레이드오프: 이 사건을 복구해도 승격된 자식은 되돌아오지 않는다. 프론트
+     * 확인 다이얼로그가 이 사실을 사전 고지한다.
+     */
+    await this.prisma.$transaction(async (tx) => {
+      const liveChildren = await tx.event.findMany({
+        where: { parentEventId: id, deletedAt: null },
+        select: { id: true },
+      })
+
+      if (liveChildren.length > 0) {
+        const childIds = liveChildren.map((child) => child.id)
+        const links = await tx.eventParentLink.findMany({
+          where: {
+            childEventId: { in: childIds },
+            parentEventId: { not: id }, // INV-1 방어 — 삭제 대상으로의 승격 금지
+          },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { id: true, childEventId: true, parentEventId: true },
+        })
+
+        const promotionByChild = new Map<
+          string,
+          { id: string; parentEventId: string }
+        >()
+        for (const link of links) {
+          if (!promotionByChild.has(link.childEventId)) {
+            promotionByChild.set(link.childEventId, link)
+          }
+        }
+
+        for (const [childId, link] of promotionByChild) {
+          await tx.event.update({
+            where: { id: childId },
+            data: { parentEventId: link.parentEventId },
+          })
+          await tx.eventParentLink.delete({ where: { id: link.id } })
+        }
+
+        // 승격할 엣지가 없던 자식은 최상위로.
+        const orphanIds = childIds.filter(
+          (childId) => !promotionByChild.has(childId),
+        )
+        if (orphanIds.length > 0) {
+          await tx.event.updateMany({
+            where: { id: { in: orphanIds } },
+            data: { parentEventId: null },
+          })
+        }
+      }
+
+      // 소프트 삭제: deletedAt 설정
+      await tx.event.update({
+        where: { id },
+        data: {
+          deletedAt: new Date(),
+          deletedById: userId || null,
+        },
+      })
     })
 
     // 게이미피케이션: 소프트 삭제 시 점수 회수(어뷰징 방지). 복구 시 복원됨.

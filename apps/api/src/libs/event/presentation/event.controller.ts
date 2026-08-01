@@ -123,7 +123,11 @@ export class EventController {
     const eventSections = event.eventSections?.map((section: any) => ({
       id: section.id,
       title: section.title,
-      content: section.content,
+      // 목록(getAllEvents)은 content를 select하지 않는다(페이로드 축소, P1-5).
+      // DTO가 content를 필수 string으로 선언하므로 빈 문자열로 좁혀 계약을 지킨다.
+      // ⚠️ 따라서 *목록 응답의 content는 "본문 없음"의 근거가 될 수 없다* —
+      // 본문 유무 판정은 상세 응답으로만 하라.
+      content: section.content ?? '',
       order: section.order,
       sectionType: section.sectionType,
     }))
@@ -514,8 +518,29 @@ export class EventController {
           include: {
             category: true,
             historicalCountry: { select: { id: true, name: true } },
-            eventSections: true,
+            // 목록은 섹션 *제목*만 소비한다(드로어의 '본문 구성' 칩) —
+            // content 제외 근거는 아래 루트 include 주석 참고.
+            eventSections: {
+              select: { id: true, title: true, order: true, sectionType: true },
+              orderBy: { order: 'asc' },
+            },
             eventImages: true,
+            /**
+             * 자식의 관련국 — 없으면 toResponseDto가 relatedCountries를 undefined로
+             * 내려보내, 클라의 국가·대륙 필터가 하위 사건을 **절대 매칭하지 못한다**
+             * (2026-07-28 검토 TF-7). 배치 4에서 자식에도 필터를 적용하게 되면서
+             * 이 누락이 곧 '조건 밖'으로 잘리는 결과가 되므로 함께 채운다.
+             * 페이로드는 카드가 쓰는 필드만 select해 억제.
+             */
+            countryRelations: {
+              include: {
+                country: {
+                  select: { id: true, name: true, flagEmoji: true },
+                },
+                historicalCountry: { select: { id: true, name: true } },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
             // 손자(2단 하위) — 트리/목록의 3계층 표시용. 경량 include(category·역사국가만)로
             // 페이로드 팽창을 억제. 여기서 nested를 멈춰 depth 3(root→자식→손자)에서 캡한다.
             // toResponseDto가 childEvents를 재귀 매핑하므로 배선 불필요(손자의 childEvents는
@@ -539,7 +564,17 @@ export class EventController {
           // role 미설정 데이터에서도 lane 배치가 안정적이도록 createdAt 오름차순 — items[0] 결정성 보장
           orderBy: { createdAt: 'asc' },
         },
+        /**
+         * 목록에서 섹션은 *제목*만 쓰인다 — 카탈로그 드로어의 '본문 구성' 칩
+         * (widgets/event-list/ui/event-detail-panel.tsx:309-317)이 유일한 소비처이고,
+         * 7개 뷰 중 content를 읽는 곳은 하나도 없다. content는 MEDIUMTEXT(16MB 상한)라
+         * 통째로 실으면 페이로드가 폭증한다 — 로컬 실측 399섹션 = 1,430KB이고
+         * 카탈로그는 autoLoadAll로 전 페이지를 자동 소진하므로 그 전량이 넘어갔다
+         * (2026-07-28 검토 P1-5). 전문이 필요한 상세·편집 하이드레이션 경로
+         * (getEventById / getEventsByParentId)는 그대로 둔다.
+         */
         eventSections: {
+          select: { id: true, title: true, order: true, sectionType: true },
           orderBy: { order: 'asc' },
         },
         eventImages: {
@@ -548,11 +583,6 @@ export class EventController {
       },
     })
 
-    console.log(`✅ ${events.length}개 최상위 사건 반환`)
-    events.forEach(evt => {
-      console.log(`   - ${evt.title}: ${evt.childEvents?.length || 0}개 하위 사건`)
-    })
-    
     return events.map((event) => this.toResponseDto(event as any))
   }
 
