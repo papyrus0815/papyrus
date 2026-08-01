@@ -106,8 +106,28 @@ export const useEventFilters = (
     return m
   }, [events])
 
-  const filteredEvents = useMemo(() => {
-    /** 단일 사건이 현재 필터를 모두 만족하는가 — 루트·자식 공통 술어. */
+  /**
+   * 내용을 좁히는 필터가 하나라도 걸려 있는가.
+   * (정렬·계층 토글은 '표시 옵션'이라 여기 포함하지 않는다.)
+   *
+   * 이 플래그가 false면 평탄화 단계는 자식 필터링을 건너뛴다 — 불필요한 술어
+   * 호출을 없애고, "필터가 없는데 자식이 사라지는" 상황도 원천 차단한다.
+   */
+  const hasNarrowingFilters =
+    selectedCategory !== FILTER_ALL ||
+    selectedCountry !== FILTER_ALL ||
+    selectedContinent !== FILTER_ALL ||
+    selectedCentury !== FILTER_ALL ||
+    normalizedKeyword.length > 0
+
+  /**
+   * 단일 사건이 현재 필터를 모두 만족하는가 — 루트·자식 공통 술어.
+   *
+   * 평탄화 단계(useEventHierarchy)에도 넘겨 **자식에까지 필터를 적용**한다.
+   * 예전엔 이 술어가 루트 선별에만 쓰이고 자식은 무필터로 전개돼, '전쟁'으로
+   * 필터해도 매칭된 부모 밑의 '외교' 자식이 그대로 섞여 나왔다(검토 TF-8/DATA-6).
+   */
+  const matchesEvent = useMemo(() => {
     const matches = (event: HistoricalEvent): boolean => {
       const categoryOk =
         selectedCategory === FILTER_ALL ||
@@ -147,25 +167,8 @@ export const useEventFilters = (
         categoryOk && keywordOk && centuryOk && countryOk && continentOk,
       )
     }
-
-    /**
-     * 자식 사건도 검색·필터 대상에 포함 — 자식만 매칭돼도 그 *루트*를 결과에 남긴다.
-     * (이전엔 부모만 평가해, 자식 제목으로 검색하면 그 사건이 통째로 사라졌다. 자식은
-     *  루트 펼침으로 도달하므로 루트를 살리면 계층에서 자연히 노출됨.)
-     * 출력은 여전히 루트만 — downstream(hierarchy/flatten)이 의존하는 계약을 유지.
-     */
-    const matchesSelfOrDescendant = (event: HistoricalEvent): boolean => {
-      if (matches(event)) return true
-      const kids = childrenByParent.get(event.id)
-      return kids ? kids.some(matchesSelfOrDescendant) : false
-    }
-
-    return events
-      .filter((event) => !event.parentEventId)
-      .filter(matchesSelfOrDescendant)
+    return matches
   }, [
-    events,
-    childrenByParent,
     selectedCategory,
     normalizedKeyword,
     selectedCentury,
@@ -173,6 +176,24 @@ export const useEventFilters = (
     selectedContinent,
     countryContinentMap,
   ])
+
+  const filteredEvents = useMemo(() => {
+    /**
+     * 자식 사건도 검색·필터 대상에 포함 — 자식만 매칭돼도 그 *루트*를 결과에 남긴다.
+     * (이전엔 부모만 평가해, 자식 제목으로 검색하면 그 사건이 통째로 사라졌다. 자식은
+     *  루트 펼침으로 도달하므로 루트를 살리면 계층에서 자연히 노출됨.)
+     * 출력은 여전히 루트만 — downstream(hierarchy/flatten)이 의존하는 계약을 유지.
+     */
+    const matchesSelfOrDescendant = (event: HistoricalEvent): boolean => {
+      if (matchesEvent(event)) return true
+      const kids = childrenByParent.get(event.id)
+      return kids ? kids.some(matchesSelfOrDescendant) : false
+    }
+
+    return events
+      .filter((event) => !event.parentEventId)
+      .filter(matchesSelfOrDescendant)
+  }, [events, childrenByParent, matchesEvent])
 
   // ===== 이벤트 정렬 =====
   const sortedEvents = useMemo(() => {
@@ -320,6 +341,9 @@ export const useEventFilters = (
     sortedEvents,
     filterSummaryChips,
     hasActiveFilters,
+    /** 평탄화 단계가 자식에도 필터를 적용하도록 노출하는 술어 */
+    matchesEvent,
+    hasNarrowingFilters,
 
     // 액션
     handleResetFilters,

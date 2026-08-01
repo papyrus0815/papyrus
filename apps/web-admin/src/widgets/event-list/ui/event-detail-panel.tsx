@@ -26,12 +26,12 @@ import {
   FiTag,
   FiTarget,
   FiTrash2,
-  FiUsers,
   FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 
 import { getCategoryName } from '@/features/event-list/lib'
+import { formatDateWithPrecision, isoDaySpan } from '@/shared/lib/iso-date'
 import type {
   EventHierarchyNode,
   HistoricalEvent,
@@ -41,7 +41,6 @@ import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import * as Modal from '@/pages/events/styles/modal.styles'
 import * as Skeleton from '@/pages/events/styles/skeleton.styles'
 import { ICON_SIZE } from '@/pages/events/styles/theme'
-import { formatCompactNumber } from '@/pages/events/utils/events.utils'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { deleteEvent } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
@@ -87,32 +86,36 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
     setDescExpanded(false)
   }, [selectedNode?.id])
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
-  }
+  /**
+   * 날짜·기간은 프로젝트 표준 파서(shared/lib/iso-date)로만 만든다.
+   *
+   * 예전엔 `new Date(dateString)` + 로컬 게터를 썼다. 그런데 이 앱의 사건 날짜는
+   * BC(`-0044-03-15`)와 '미상'(빈 문자열)을 포함해서, 네이티브 파서는 둘 다
+   * Invalid Date로 만들고 화면에 `NaN.NaN.NaN`을 찍었다. 같은 데이터를 목록 행과
+   * 요약 모달은 이미 iso-date로 안전하게 렌더하고 있었다(2026-07-28 검토 DATA-2/IX-4).
+   */
+  const dateLabel = (iso: string | undefined, precision: string | null | undefined) =>
+    iso ? formatDateWithPrecision(iso, precision) : '미상'
 
+  /**
+   * 기간 — 종료 정보가 없으면 빈 문자열(토큰 생략). 예전엔 '미입력'과 '당일 종료'를
+   * 모두 '1일'로 합쳐 종료 시점이 기록되지 않은 사건까지 하루짜리로 단정했다(DATA-4).
+   * 연·월 정밀도 사건은 일 단위 기간 자체가 의미 없으므로 계산하지 않는다.
+   */
   const calculateDuration = () => {
     if (!selectedNode) return ''
-    const start = new Date(selectedNode.period.start)
-    const end = selectedNode.period.end
-      ? new Date(selectedNode.period.end)
-      : null
-
-    if (!end || start.getTime() === end.getTime()) {
-      return '1일'
-    }
-
-    const diffTime = Math.abs(end.getTime() - start.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
-    if (diffDays >= 365) {
-      const years = Math.floor(diffDays / 365)
-      const remainingDays = diffDays % 365
+    const { start, end, startPrecision, endPrecision } = selectedNode.period
+    if (!end) return ''
+    if (startPrecision === 'year' || endPrecision === 'year') return ''
+    const days = isoDaySpan(start, end)
+    if (days === null) return ''
+    if (days <= 0) return '1일'
+    if (days >= 365) {
+      const years = Math.floor(days / 365)
+      const remainingDays = days % 365
       return remainingDays > 0 ? `${years}년 ${remainingDays}일` : `${years}년`
     }
-
-    return `${diffDays}일`
+    return `${days}일`
   }
 
   /** 공유 — native share 우선, 실패 시 clipboard, 그것도 실패 시 fallback */
@@ -200,12 +203,12 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
 
   const renderInfo = () => {
     if (!selectedEvent || !selectedNode) return null
+    const durationLabel = calculateDuration()
     const relatedCountries = selectedEvent.relatedCountries ?? []
     const relatedHistorical = selectedEvent.relatedHistoricalCountries ?? []
     const sections = selectedEvent.eventSections ?? []
     const sectionTitles = selectedEvent.sectionTitles ?? []
     const hasSections = sections.length > 0 || sectionTitles.length > 0
-    const isMilitary = selectedEvent.category === 'military'
 
     return (
       <Detail.InfoBlock>
@@ -226,12 +229,23 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             <span>기간</span>
           </Detail.InfoLabel>
           <Detail.InfoValue>
-            {formatDate(selectedNode.period.start)}
+            {dateLabel(
+              selectedNode.period.start,
+              selectedNode.period.startPrecision,
+            )}
             {selectedNode.period.end &&
               selectedNode.period.start !== selectedNode.period.end && (
-                <> ~ {formatDate(selectedNode.period.end)}</>
+                <>
+                  {' ~ '}
+                  {dateLabel(
+                    selectedNode.period.end,
+                    selectedNode.period.endPrecision,
+                  )}
+                </>
               )}
-            <Detail.InfoMutedHint>({calculateDuration()})</Detail.InfoMutedHint>
+            {durationLabel && (
+              <Detail.InfoMutedHint>({durationLabel})</Detail.InfoMutedHint>
+            )}
           </Detail.InfoValue>
 
           {selectedEvent.location && (
@@ -251,30 +265,6 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                 <span>하위 사건</span>
               </Detail.InfoLabel>
               <Detail.InfoValue>{selectedNode.children.length}개</Detail.InfoValue>
-            </>
-          )}
-
-          {isMilitary && selectedEvent.stats.participatingNations > 0 && (
-            <>
-              <Detail.InfoLabel>
-                <FiGlobe size={ICON_SIZE.base} aria-hidden="true" />
-                <span>참전국</span>
-              </Detail.InfoLabel>
-              <Detail.InfoValue>
-                {selectedEvent.stats.participatingNations}개국
-              </Detail.InfoValue>
-            </>
-          )}
-
-          {isMilitary && selectedEvent.stats.casualties.total > 0 && (
-            <>
-              <Detail.InfoLabel>
-                <FiUsers size={ICON_SIZE.base} aria-hidden="true" />
-                <span>사상자</span>
-              </Detail.InfoLabel>
-              <Detail.InfoValue>
-                {formatCompactNumber(selectedEvent.stats.casualties.total)}명
-              </Detail.InfoValue>
             </>
           )}
 
@@ -540,6 +530,17 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             이 사건을 삭제하시겠습니까?
             <br />
             삭제 후에는 목록에서 복구할 수 없습니다.
+            {/* 서버가 살아있는 하위 사건을 최상위로 승격시킨다(계층은 복원되지
+                않음) — 삭제 전에 그 결과를 고지한다. */}
+            {selectedNode?.children && selectedNode.children.length > 0 && (
+              <>
+                <br />
+                <br />
+                하위 사건 {selectedNode.children.length}개는 삭제되지 않고{' '}
+                <strong>최상위 사건으로 이동</strong>합니다. 이 상·하위 연결은
+                되돌릴 수 없습니다.
+              </>
+            )}
           </>
         }
         confirmLabel="삭제"

@@ -176,6 +176,14 @@ const LISTING_FIELDS: ReadonlyArray<keyof UpdateEventDto> = [
   // 신선도를 담보한다(빈도 낮은 계층 patch라 비용 논거와도 일관).
   'extraParentEventIds',
   'description',
+  /**
+   * 목록 행이 실제로 그리고/거르는 값인데 화이트리스트에서 빠져 있었다(검토 DATA-9).
+   *  - relatedCountryIds: 행 우측 국기 칩을 그리고, 국가·대륙 필터의 매칭 술어가 읽는다.
+   *  - keywords: 검색 매칭 술어가 제목·설명과 함께 본다.
+   * 빠져 있으면 상세에서 관련국을 고쳐도 목록의 국기와 필터 결과가 stale하게 남는다.
+   */
+  'relatedCountryIds',
+  'keywords',
 ]
 
 function patchAffectsListing(patch: UpdateEventDto): boolean {

@@ -53,13 +53,28 @@ export const FilterGroup = styled.div`
           border: 1px solid rgba(203, 213, 225, 0.6);
         `}
 
-  /* 모든 nested control(직속 + 깊이 1단)은 자기 border/bg 제거 */
+  /* 모든 nested control(직속 + 깊이 1단)은 자기 border/bg 제거.
+   *
+   * ⚠️ 자손 결합자다 — 트리거는 FilterGroup > PopoverWrap > button 으로 깊이 2에
+   * 있어서 직속 자식 결합자로는 좁힐 수 없다. 대신 팝오버 *내용물*은 body로 포털되어
+   * (widgets/event-filters-panel: useAnchoredPosition) 이 규칙의 사정권 밖에 있다.
+   * 팝오버를 다시 DOM 자식으로 되돌리면 이 !important들이 옵션 버튼의 선택 배경·
+   * 포커스 링까지 지우므로, 되돌릴 거면 이 셀렉터부터 분리해야 한다. */
   & button,
   & select {
     border: none !important;
     border-radius: 0 !important;
     background: transparent !important;
     height: 100% !important;
+  }
+
+  /* ⚠️ box-shadow 리셋은 **포커스가 없을 때만**.
+   * 이전엔 box-shadow:none !important가 무조건 걸려, 트리거 버튼과 세기 select가
+   * 자기 :focus-visible 링(BRAND.focusRing)을 그려도 통째로 지워졌다 —
+   * Tab 실측에서 outline 0px + box-shadow none, 즉 **포커스 표시가 아예 없었다**.
+   * focusRing 토큰을 진하게 고쳐도 이 규칙이 남아 있으면 이 컨트롤들만 그대로다. */
+  & button:not(:focus-visible),
+  & select:not(:focus-visible) {
     box-shadow: none !important;
   }
 

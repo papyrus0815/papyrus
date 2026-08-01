@@ -67,7 +67,18 @@ export const transformEventsFromApi = (
       period: {
         start: evt.startDate ?? '',
         end: evt.endDate ?? undefined,
+        // 정밀도를 노드에 실어야 노드만 받는 소비처(요약 모달 트리·트리 뷰)도
+        // formatDateRange에 정밀도를 넘길 수 있다. 없으면 기본 'day'로 동작해
+        // 연도만 아는 사건에 없는 월·일을 지어낸다(2026-07-28 검토 DATA-3).
+        startPrecision: evt.startDatePrecision ?? undefined,
+        endPrecision: evt.endDatePrecision ?? undefined,
       },
+      /**
+       * ⚠️ 자리표시자 — Event 스키마·응답 DTO 어디에도 importance 필드가 없다.
+       * 이 값을 신호로 쓰던 표시(목록 별·헤더 KPI·대시보드 티어 카드·트리 배지)는
+       * 2026-07-28 검토(M9)에서 전부 제거했다. 남은 소비처는 타임라인 내부
+       * 라벨 우선순위뿐이며, 실제 필드를 도입하기 전까지는 균일값이다.
+       */
       importance: 'notable' as const,
       children: kids.map((child) => buildHierarchy(child, nextSeen)),
     }
@@ -76,8 +87,13 @@ export const transformEventsFromApi = (
   const convertToHistoricalEvent = (evt: EventResponse): HistoricalEvent => {
     // category — DB의 한국어 이름을 1차 식별자로(렌더·필터 일관성 ↑).
     // 안정 매칭 필요한 곳(칩 등)은 categoryId 사용.
-    const evtCategoryId = evt.category?.id ?? 'cat-other-001'
-    const evtCategoryName = evt.category?.name ?? '기타'
+    //
+    // 미지정 사건에 가짜 id('cat-other-001')를 채우지 않는다 — DB의 '기타'
+    // 카테고리는 uuid를 가진 별개 행이라, 가짜 id는 '기타' 필터(정확 일치 비교)에
+    // 절대 걸리지 않으면서 화면에는 '기타'로 보여 분류된 것처럼 위장했다.
+    // 이제 id는 비우고 라벨만 '미분류'로 파생한다(2026-07-28 검토 DATA-13).
+    const evtCategoryId = evt.category?.id ?? ''
+    const evtCategoryName = evt.category?.name ?? '미분류'
     const primaryImage =
       evt.thumbnail ||
       evt.eventImages?.find((img: EventImageResponse) => img.isPrimary)
@@ -93,6 +109,11 @@ export const transformEventsFromApi = (
       description: evt.description ?? '',
       startDate: evt.startDate ?? '',
       endDate: evt.endDate ?? undefined,
+      // 서버는 정밀도를 항상 실어 보내지만 여기서 매핑이 빠져 있어 런타임엔 늘
+      // undefined였다(타입엔 선언돼 있어 tsc가 못 잡음). 그 탓에 목록 행의
+      // precision 가드가 죽고 연·월 정밀도 사건에 가짜 '월.일'이 찍혔다.
+      startDatePrecision: evt.startDatePrecision ?? undefined,
+      endDatePrecision: evt.endDatePrecision ?? undefined,
       location: evt.location ?? undefined,
       tags: [],
       background: evt.background ?? '',

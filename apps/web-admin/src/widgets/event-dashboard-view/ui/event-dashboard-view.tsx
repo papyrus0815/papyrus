@@ -4,9 +4,12 @@
  * 패널 구성:
  *   1) 카테고리 분포 (가로 막대) — 비율 + 절대 수
  *   2) 세기별 빈도 (가로 막대) — 시간 분포
- *   3) 중요도 분포 (작은 칩)
- *   4) 데이터 품질 — 좌표 누락 / 이미지 없음 / 소스 없음 / 분류 없음 카운트
+ *   3) 데이터 품질 — 이미지 없음 / 분류 없음 / 국가 없음 카운트
  *      각 카운트는 클릭 가능 → 드릴다운(외부에서 처리. 현재 표시만)
+ *
+ * '좌표 누락'·'출처 없음' 지표는 **제거됐다**(2026-07-28 검토 DATA-8) — 두 필드 모두
+ * 실데이터가 아니라 transformer의 자리표시자를 검사하고 있어(map.markers는 항상 [],
+ * sources는 아예 매핑되지 않음) 언제나 '100% 누락'이라는 거짓을 보고했다.
  *
  * 모든 차트는 SVG 자체 구현 (라이브러리 의존성 X). 적은 데이터(< 100 카테고리)에서 충분.
  */
@@ -18,8 +21,6 @@ import {
   FiClock,
   FiGlobe,
   FiImage,
-  FiLink,
-  FiMapPin,
   FiPieChart,
   FiTag,
 } from 'react-icons/fi'
@@ -67,18 +68,13 @@ export const EventDashboardView: React.FC<Props> = ({
       string,
       { name: string; flagEmoji?: string; historical: boolean; count: number }
     >()
-    const tierCount = { critical: 0, major: 0, normal: 0 }
 
     let total = 0
-    let missingCoords = 0
     let missingImage = 0
-    let missingSources = 0
     let missingCategory = 0
     let missingCountry = 0
 
-    const missingCoordsIds: string[] = []
     const missingImageIds: string[] = []
-    const missingSourcesIds: string[] = []
     const missingCategoryIds: string[] = []
     const missingCountryIds: string[] = []
 
@@ -96,28 +92,14 @@ export const EventDashboardView: React.FC<Props> = ({
         byCentury.set(century, (byCentury.get(century) ?? 0) + 1)
       }
 
-      if (item.node.importance === 'critical') tierCount.critical += 1
-      else if (item.node.importance === 'major') tierCount.major += 1
-      else tierCount.normal += 1
-
-      const hasCoords = (evt.map?.markers ?? []).some(
-        (m) =>
-          typeof m.coordinates?.lat === 'number' &&
-          typeof m.coordinates?.lng === 'number',
-      )
-      if (!hasCoords) {
-        missingCoords += 1
-        missingCoordsIds.push(evt.id)
-      }
       if (!evt.visuals?.heroImageUrl) {
         missingImage += 1
         missingImageIds.push(evt.id)
       }
-      if (!evt.sources || evt.sources.length === 0) {
-        missingSources += 1
-        missingSourcesIds.push(evt.id)
-      }
-      if (!evt.category) {
+      // 라벨(category)이 아니라 **id**로 판정한다 — 라벨은 미지정 사건에도
+      // '미분류'가 파생되어 항상 truthy라 이 지표가 영원히 0이었다.
+      // transformer가 가짜 id를 채우지 않게 된 지금은 빈 id가 곧 미분류다(DATA-8/13).
+      if (!evt.categoryId) {
         missingCategory += 1
         missingCategoryIds.push(evt.id)
       }
@@ -188,21 +170,31 @@ export const EventDashboardView: React.FC<Props> = ({
       byCategory: categoryRows,
       byCentury: centuryRows,
       byCountry: countryRows,
-      tier: tierCount,
       quality: {
-        missingCoords,
         missingImage,
-        missingSources,
         missingCategory,
         missingCountry,
-        missingCoordsIds,
         missingImageIds,
-        missingSourcesIds,
         missingCategoryIds,
         missingCountryIds,
       },
     }
   }, [flattenedHierarchy, events, dbCategories])
+
+  // serverTotal은 *최상위(parentEventId=null)* 개수. events는 자식까지 포함한 평탄
+  // 배열이라 events.length는 항상 serverTotal 이상이 되어 부분 경고가 억제됐다.
+  // 로드된 최상위 수로 비교해야 "아직 다 안 불러옴"을 정확히 감지한다.
+  //
+  // ⚠️ 훅은 반드시 이른 반환보다 *위*에 있어야 한다. 아래 빈 상태 반환 뒤에 두면
+  // 렌더마다 훅 개수가 달라져(0건 1개 → 데이터 2개) 0건↔N건 전이에서 React가
+  // "Rendered more hooks than during the previous render"를 던지고, 상위 에러
+  // 바운더리가 페이지 전체를 에러 화면으로 교체한다(2026-07-28 검토 P1-2).
+  const loadedRootCount = useMemo(
+    () => events.filter((evt) => !evt.parentEventId).length,
+    [events],
+  )
+  const isPartial =
+    typeof serverTotal === 'number' && loadedRootCount < serverTotal
 
   if (stats.total === 0) {
     return (
@@ -214,16 +206,6 @@ export const EventDashboardView: React.FC<Props> = ({
     )
   }
 
-  // serverTotal은 *최상위(parentEventId=null)* 개수. events는 자식까지 포함한 평탄
-  // 배열이라 events.length는 항상 serverTotal 이상이 되어 부분 경고가 억제됐다.
-  // 로드된 최상위 수로 비교해야 "아직 다 안 불러옴"을 정확히 감지한다.
-  const loadedRootCount = useMemo(
-    () => events.filter((evt) => !evt.parentEventId).length,
-    [events],
-  )
-  const isPartial =
-    typeof serverTotal === 'number' && loadedRootCount < serverTotal
-
   return (
     <Host>
       {isPartial && (
@@ -234,27 +216,9 @@ export const EventDashboardView: React.FC<Props> = ({
         </PartialDataBanner>
       )}
       <Grid>
-        {/* 중요도 분포 — 짧은 칩 행 */}
-        <Card>
-          <CardHeader>
-            <FiAlertCircle size={14} aria-hidden="true" />
-            <h3>중요도 분포</h3>
-          </CardHeader>
-          <TierRow>
-            <TierChip $color={BRAND.primary}>
-              <span>핵심</span>
-              <strong>{stats.tier.critical.toLocaleString()}</strong>
-            </TierChip>
-            <TierChip $color="#f59e0b">
-              <span>주요</span>
-              <strong>{stats.tier.major.toLocaleString()}</strong>
-            </TierChip>
-            <TierChip $color="#94a3b8">
-              <span>평범</span>
-              <strong>{stats.tier.normal.toLocaleString()}</strong>
-            </TierChip>
-          </TierRow>
-        </Card>
+        {/* 중요도 분포 카드 제거 — importance는 스키마·DTO에 없는 값이라
+            transformer가 전부 'notable'로 채웠고, 이 카드는 영구히
+            '핵심 0 · 주요 0 · 평범 N'이라는 거짓 사실을 보고했다(검토 M9). */}
 
         {/* 카테고리 분포 */}
         <Card>
@@ -375,20 +339,6 @@ export const EventDashboardView: React.FC<Props> = ({
           <QualityGrid>
             <QualityCell
               type="button"
-              disabled={stats.quality.missingCoords === 0}
-              onClick={() => {
-                const id = stats.quality.missingCoordsIds[0]
-                if (id) onSelectEvent(id)
-              }}
-            >
-              <FiMapPin size={14} aria-hidden="true" />
-              <QualityLabel>좌표 누락</QualityLabel>
-              <QualityCount $warn={stats.quality.missingCoords > 0}>
-                {stats.quality.missingCoords.toLocaleString()}
-              </QualityCount>
-            </QualityCell>
-            <QualityCell
-              type="button"
               disabled={stats.quality.missingImage === 0}
               onClick={() => {
                 const id = stats.quality.missingImageIds[0]
@@ -399,20 +349,6 @@ export const EventDashboardView: React.FC<Props> = ({
               <QualityLabel>이미지 없음</QualityLabel>
               <QualityCount $warn={stats.quality.missingImage > 0}>
                 {stats.quality.missingImage.toLocaleString()}
-              </QualityCount>
-            </QualityCell>
-            <QualityCell
-              type="button"
-              disabled={stats.quality.missingSources === 0}
-              onClick={() => {
-                const id = stats.quality.missingSourcesIds[0]
-                if (id) onSelectEvent(id)
-              }}
-            >
-              <FiLink size={14} aria-hidden="true" />
-              <QualityLabel>출처 없음</QualityLabel>
-              <QualityCount $warn={stats.quality.missingSources > 0}>
-                {stats.quality.missingSources.toLocaleString()}
               </QualityCount>
             </QualityCell>
             <QualityCell
@@ -518,32 +454,6 @@ const Muted = styled.span`
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;
-`
-
-const TierRow = styled.div`
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-`
-
-const TierChip = styled.div<{ $color: string }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)'};
-  border-left: 3px solid ${({ $color }) => $color};
-  font-size: 11.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  strong {
-    color: ${({ theme }) => theme.colors.text.primary};
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-  }
 `
 
 const BarList = styled.div`

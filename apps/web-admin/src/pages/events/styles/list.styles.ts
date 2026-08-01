@@ -5,7 +5,7 @@
 import styled, { css } from 'styled-components'
 
 import type { HistoricalEventCategory } from '../create/events.types'
-import { BRAND, CATEGORY_BADGE_COLORS, MOTION, SHADOW } from './theme'
+import { BRAND, CATEGORY_BADGE_COLORS, MOTION, SHADOW, metaText } from './theme'
 
 /**
  * 타임라인 레일 — 좌측 gutter(70px) 한가운데(32px)에 1px 수직선.
@@ -519,6 +519,87 @@ export const LoadingSpinner = styled.div`
  *  - 라벨 크기 12 → 14, 솔리드 indigo 도트(이전 outline)로 anchor 강화
  *  - 위 여백 14 → 22, 아래 여백 2 → 8 — 사건 단위 hairline과 위계 분리
  */
+/**
+ * 세기 섹션 / 연도 섹션 래퍼.
+ *
+ * **sticky의 containing block을 만드는 것이 유일한 존재 이유다.**
+ * 이전엔 세기·연도 헤더가 스크롤 컨테이너(CompactList)의 직접 자식이라 sticky 범위가
+ * *목록 전체*였다. 그래서 스크롤을 지나친 헤더가 하나도 밀려나지 않고 전부 같은
+ * top 오프셋에 쌓였다 — 실측상 scrollTop 6000에서 연도 헤더 **34개**가 동시에 stuck.
+ * 오클루전 띠가 alpha 0.95라 겹칠수록 아래 헤더의 글자가 비쳐 유령 텍스트가 됐다.
+ * 각 그룹을 자기 박스로 감싸면 그룹이 화면을 벗어날 때 헤더도 함께 밀려난다.
+ *
+ * display: contents는 쓸 수 없다 — 박스가 생성되지 않아 containing block도 안 생긴다.
+ */
+export const CenturySection = styled.div`
+  display: flex;
+  flex-direction: column;
+  /* 세기 사이 간격 — 이전엔 CenturyDivider의 margin-top: 28px이 담당했으나
+   * 이제 헤더가 항상 섹션의 first-child라 그 규칙이 전 세기에 걸린다. 간격은 섹션 간으로 옮긴다. */
+  & + & {
+    margin-top: 28px;
+  }
+`
+
+export const YearSection = styled.div`
+  display: flex;
+  flex-direction: column;
+
+  /* 세기 헤더 직후 첫 연도 헤더 — 세기 하단 hairline과 이중선이 되지 않게 상단선 제거.
+   * (이전 규칙 'CenturyDivider + button'은 래퍼 도입으로 형제 관계가 끊겨 대체된다.) */
+  &:first-of-type > button {
+    border-top: none;
+    margin-top: 12px;
+  }
+
+  /* 연 그룹의 마지막 행 — 다음 헤더가 자기 상단 hairline을 그리므로 이중선 방지.
+   * (이전 규칙 'Stop:has(+ button)'도 형제 관계가 끊겨 대체된다.)
+   * ⚠️ 행은 RowList 안에 있다(role=list 구조를 적법하게 만들기 위한 래퍼) — 섹션의
+   * 직속 마지막 자식은 RowList 자신이므로 한 단계 더 들어가야 한다. */
+  & > *:last-child,
+  & > *:last-child > *:last-child {
+    border-bottom: none;
+  }
+`
+
+/**
+ * 그룹 헤딩 — **시각적으로는 숨기고 접근성 트리에만 남긴다**.
+ *
+ * 세기·연도 구분자는 접기 버튼이라 role이 button이어야 하고, 한 요소가 heading과 button을
+ * 동시에 가질 수는 없다. 그래서 이 화면에는 heading이 페이지 전체에 단 1개뿐이었고
+ * 스크린리더 사용자가 세기·연도 섹션 사이를 헤딩 탐색으로 건너뛸 방법이 없었다(검토 A11Y-3).
+ *
+ * 헤딩을 별도 요소로 두면 ⑴ 헤딩 탐색이 살아나고 ⑵ 그 id로 섹션(role=group)과 행 목록을
+ * aria-labelledby로 묶어 '이 행이 어느 연도/세기에 속하는가'가 프로그램적으로 전달된다.
+ * 버튼을 감싸지 않고 형제로 두는 이유는 sticky 때문 — 버튼을 heading으로 감싸면 sticky의
+ * containing block이 그 heading이 되어 고정이 아예 동작하지 않는다.
+ */
+export const GroupHeading = styled.h3`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+`
+
+/**
+ * 한 연도 그룹의 행 목록.
+ *
+ * `role="list"`는 자식으로 listitem만 허용한다. 예전엔 스크롤 컨테이너 자체가 list라
+ * 그 안의 세기·연도 접기 버튼 99개가 전부 허용되지 않는 자식이었다(실측: list 직속 자식
+ * 333개 = listitem 233 + button 99 + status 1). 행만 감싸는 list를 따로 두어
+ * 구조를 적법하게 만들고, 헤딩과 aria-labelledby로 묶는다.
+ */
+export const RowList = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
 export const YearDivider = styled.button`
   display: inline-flex;
   align-items: center;
@@ -558,28 +639,33 @@ export const YearDivider = styled.button`
     pointer-events: none;
   }
 
-  /* sticky 시 라벨 쪽만 흐릿한 frosted bg — 본문 텍스트 위에 떠도 가독 유지.
-   * 도트(left:0) 와 padding-left:38 사이는 transparent — 레일이 그대로 보임. */
+  /* sticky 시 라벨 쪽 오클루전 띠 — 본문 텍스트 위에 떠도 가독 유지.
+   * 도트(left:0)와 라벨 시작(padding-left) 사이는 transparent — 레일이 그대로 보임.
+   *
+   * ⚠️ left는 반드시 var(--rail-inset). 이전엔 38px 데스크톱 값이 하드코딩돼 있어
+   * 모바일(--rail-inset: 12px)에서 라벨 앞 26px에 배경이 없었고, 스크롤 시 그 구간으로
+   * 본문 제목이 비쳐 라벨과 겹쳐 읽혔다.
+   *
+   * ⚠️ 반투명 금지. alpha 0.94~0.95는 한 겹만으로도 아래 행이 5~6% 비친다(헤더가 여러 겹
+   * stuck되던 시절엔 유령 텍스트로 누적됐다). 실측 표면색으로 완전 불투명하게 덮는다 —
+   * 라이트 #ffffff / 다크 #141414(카드 #0f0f0f + rgba(255,255,255,0.02) 합성 결과). */
   &::after {
     content: '';
     position: absolute;
-    left: 38px;
+    left: var(--rail-inset);
     top: 0;
     right: 0;
     bottom: 0;
-    /* 연 헤더는 불투명 solid 띠로 강등 — 세기(1차 sticky)만 glass로 두어 'glass 위 glass'
-     * 스택과 blur 재합성 비용을 없앤다(occlusion은 불투명도로 해결). */
     background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(15, 15, 18, 0.94)'
-        : 'rgba(255, 255, 255, 0.95)'};
+      theme.mode === 'dark' ? '#141414' : '#ffffff'};
     z-index: -1;
   }
 
-  &:first-child {
-    margin-top: 0;
-    border-top: none;
-  }
+  /* (제거됨) 예전의 '&:first-child { margin-top:0; border-top:none }'.
+   * YearSection 래퍼 도입 후에는 **모든** 연도 헤더가 자기 섹션의 first-child라
+   * 이 규칙이 전 헤더에 걸려 연 그룹 사이 구분선이 통째로 사라졌다.
+   * 목록 최상단 처리는 CenturySection(첫 섹션은 margin-top 없음)과
+   * YearSection:first-of-type(세기 직후 상단선 제거)이 나눠 맡는다. */
 
   /* span = 라벨 (chevron + 연도 + 카운트) — 도트 옆 인라인 */
   span {
@@ -622,6 +708,13 @@ export const YearDivider = styled.button`
 /* '연도 미상' 전용 — 확정 연도(solid indigo 앵커)와 시각 무게를 구별. 도트를 hollow·muted로
  * 강등해 '이 구간은 불확실한 catch-all'임을 신호한다(1985년 같은 datum으로 오독 방지). */
 export const UnknownYearDivider = styled(YearDivider)`
+  /* 이 헤더는 as="div"로 렌더되는 **비대화형** 요소다. YearDivider의 hover 배경을 그대로
+   * 상속하면 '접을 수 있다'고 약속해 놓고 아무 일도 하지 않는다(검토 VIS-9). */
+  cursor: default;
+  &:hover {
+    background: transparent;
+  }
+
   &::before {
     width: 8px;
     height: 8px;
@@ -638,7 +731,7 @@ export const CollapsedCount = styled.span`
   font-size: 11px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
   flex-shrink: 0;
 `
 
@@ -662,9 +755,20 @@ export const CenturyDivider = styled.button`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 28px calc(-1 * var(--rail-inset)) 8px calc(-1 * var(--rail-inset));
+  /* 좌측은 레일까지 당기고 우측은 컨테이너 패딩(12px)까지 — YearDivider와 **같은 블리드**.
+   * 이전엔 margin-right:-rail 과 width:calc(100% + rail)이 함께 걸려 우측 끝이
+   * 콘텐츠 박스 경계에 멈췄고, YearDivider(우측 -12px까지 확장)보다 12px 짧아
+   * 두 hairline의 오른쪽 끝이 계단처럼 어긋났다. width 선언을 지우고 stretch에 맡긴다. */
+  /* 세기 사이 간격은 'CenturySection + CenturySection'이 담당한다 — 여기서 margin-top을
+   * 주면 섹션 간격과 이중으로 더해진다. (예전엔 &:first-child로 상쇄했는데, 접근성용
+   * GroupHeading이 섹션의 첫 자식이 되면서 그 규칙이 더 이상 매칭되지 않았다.) */
+  margin: 0 -12px 8px calc(-1 * var(--rail-inset));
   padding: 10px 16px 10px var(--rail-inset);
-  width: calc(100% + var(--rail-inset));
+  /* --century-header-h를 '선언된 상수'가 아니라 '실제 높이'로 만든다.
+   * YearDivider가 top: var(--century-header-h)로 이 값에 붙으므로, 상수(44px)와 실측
+   * 높이(41px)가 어긋나면 두 sticky 띠 사이에 3px 슬릿이 생긴다. */
+  box-sizing: border-box;
+  min-height: var(--century-header-h, 44px);
   border: none;
   border-top: 1px solid
     ${({ theme }) =>
@@ -709,16 +813,10 @@ export const CenturyDivider = styled.button`
     pointer-events: none;
   }
 
-  &:first-child {
-    margin-top: 0;
-  }
 
-  /* 세기 직후 첫 연도 divider — 세기 하단 hairline과 연도 상단 hairline이 근접 이중선으로
-   * 쌓이던 것을 정리. 세기 하단 라인 하나로 경계를 대표하고 연도 상단선은 제거·간격 축소. */
-  & + button {
-    border-top: none;
-    margin-top: 12px;
-  }
+  /* (제거됨) 예전의 '& + button' — 세기 직후 첫 연도 divider 상단선 제거.
+   * YearSection 래퍼가 생기며 형제 관계가 끊겼다. 같은 역할을 YearSection의
+   * '&:first-of-type > button'이 이어받는다. */
 
   &:hover {
     background: ${({ theme }) =>
@@ -920,8 +1018,9 @@ export const CollapsedPlaceholder = styled.div`
     font-size: 10.5px;
     font-weight: 500;
     letter-spacing: -0.005em;
-    color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#64748b' : '#94a3b8'};
+    /* 접힌 밴드의 유일한 콘텐츠 — 하드코딩 슬레이트(#94a3b8 2.56:1 / #64748b 4.02:1)는
+     * 양쪽 테마 모두 AA 미달이라 밴드가 빈 띠처럼 보였다. 프로젝트 스케일 밖 값이기도 하다. */
+    color: ${metaText};
     font-variant-numeric: tabular-nums;
   }
 `
@@ -1103,7 +1202,10 @@ export const EmptyDescription = styled.p`
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#94a3b8')};
+  /* ⚠️ 이전 값(dark #475569 / light #94a3b8)은 바로 위 EmptyTitle과 라이트/다크가
+   * **정확히 뒤바뀐** 상태였다 — 다크 2.43:1 / 라이트 2.56:1로 둘 다 AA 미달이고,
+   * 결과 0건 화면에서 '무엇을 하라'고 알려주는 유일한 문장이 제목보다 어두웠다. */
+  color: ${({ theme }) => theme.colors.text.secondary};
 
   @media (max-width: 768px) {
     font-size: 12px;
@@ -1143,7 +1245,8 @@ export const EmptyResetButton = styled.button`
       ? css`
           border: 1px solid rgba(255, 255, 255, 0.08);
           background: rgba(255, 255, 255, 0.04);
-          color: #64748b;
+          /* CTA 라벨이 3.87:1이라 버튼으로 안 읽혔다 → primary 텍스트로 승격 */
+          color: ${theme.colors.text.primary};
           &:hover {
             background: rgba(255, 255, 255, 0.08);
             border-color: rgba(255, 255, 255, 0.14);

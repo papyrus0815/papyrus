@@ -132,7 +132,8 @@ export const CATEGORY_BADGE_COLORS: Record<HistoricalEventCategory, string> = {
   social: '#0d9488',
   technological: '#0e7490',
   cultural: '#db2777',
-  diplomatic: '#0ea5e9',
+  // #0ea5e9는 라이트 흰 배경 대비 2.77:1로 UI 3:1 미달 → 한 단계 진한 shade로.
+  diplomatic: '#0284c7',
   conference: '#1e3a8a',
   religious: '#a16207',
   other: '#6b7280',
@@ -143,10 +144,13 @@ export const CATEGORY_BADGE_COLORS: Record<HistoricalEventCategory, string> = {
   사회: '#0d9488',
   과학기술: '#0e7490',
   문화: '#db2777',
-  외교: '#0ea5e9',
+  외교: '#0284c7',
   '회담/조약': '#1e3a8a',
   종교: '#a16207',
   기타: '#6b7280',
+  // 배치3이 미지정 라벨을 '기타' → '미분류'로 바꿨는데 색 맵 키는 추가되지 않아,
+  // 도트만 '#2563eb' 브랜드 폴백을 타고 칩은 회색이 되는 모순이 생겼다.
+  미분류: '#6b7280',
 }
 
 /**
@@ -181,7 +185,28 @@ export const CATEGORY_SOFT_COLORS: Record<
   '회담/조약': { rgb: '30, 58, 138', text: '#1e3a8a', textDark: '#93c5fd', sparkEnd: '#60a5fa' },
   종교: { rgb: '161, 98, 7', text: '#854d0e', textDark: '#fcd34d', sparkEnd: '#fbbf24' },
   기타: { rgb: '107, 114, 128', text: '#374151', textDark: '#cbd5e1', sparkEnd: '#94a3b8' },
+  미분류: { rgb: '107, 114, 128', text: '#374151', textDark: '#cbd5e1', sparkEnd: '#94a3b8' },
 }
+
+/**
+ * 목록 메타 텍스트 색 — 날짜·기간·카운트·안내문처럼 '보조 데이텀'에 쓰는 회색.
+ *
+ * `theme.colors.text.tertiary`(라이트 #9ca3af / 다크 #71717a)는 소형 텍스트 기준
+ * WCAG AA(4.5:1)에 양쪽 다 미달이다 — 실측 라이트 **2.54:1** / 다크 **3.82:1**.
+ * 그런데 목록에서 이 토큰이 담는 건 '언제 일어난 일인가'(행 날짜·기간)와 '조건 밖 N건'
+ * 같은 **누락 고지**라, 화면에서 가장 안 읽히면 안 되는 정보다.
+ *
+ * text.tertiary 자체를 손대면 앱 전역 회귀 범위가 커서, events 목록 소비처만 이 토큰으로 옮긴다.
+ * 라이트 #6b7280 = 4.83:1 / 다크 #a1a1aa = 7.48:1 (각각 #ffffff / #141414 기준).
+ */
+export const META_TEXT = {
+  light: '#6b7280',
+  dark: '#a1a1aa',
+} as const
+
+/** styled에서 바로 쓰는 헬퍼 — `color: ${metaText};` */
+export const metaText = ({ theme }: { theme: { mode: string } }) =>
+  theme.mode === 'dark' ? META_TEXT.dark : META_TEXT.light
 
 /**
  * 중요도 색상
@@ -217,8 +242,18 @@ export const BRAND = {
   primaryFill: 'rgba(37, 99, 235, 0.16)',
   primaryBorder: 'rgba(37, 99, 235, 0.3)',
   primaryBorderHover: 'rgba(37, 99, 235, 0.5)',
-  /** 키보드 focus halo — 모든 컨트롤 동일하게 사용. 3px·알파 상향으로 WCAG 가시성↑ */
-  focusRing: '0 0 0 3px rgba(37, 99, 235, 0.32)',
+  /**
+   * 키보드 focus 링 — 모든 컨트롤 동일하게 사용.
+   *
+   * ⚠️ **반투명 금지.** 이전 값 `0 0 0 3px rgba(37,99,235,0.32)`은 배경과 합성되면
+   * 라이트 rgb(185,205,249) = **1.60:1**, 다크 **1.37:1**로 WCAG 1.4.11(비텍스트 3:1)에
+   * 한참 못 미쳤다(실측 확인). `outline: none`과 짝을 이루는 소비처가 26개소라 사실상
+   * 목록의 세기·연도 접기 버튼 같은 주요 조작에 포커스 표시가 없는 것과 같았다.
+   *
+   * 불투명 단색으로 바꾼다 — #2563eb는 라이트(#fff) 대비 5.17:1, 다크(#141414) 대비 3.41:1로
+   * 양쪽 테마에서 기준을 통과하므로 테마 분기 없이 한 값으로 유지할 수 있다.
+   */
+  focusRing: '0 0 0 2px #2563eb',
   /** dark mode alt */
   primaryTextOnDark: '#93c5fd',
   primarySoftDark: 'rgba(37, 99, 235, 0.14)',

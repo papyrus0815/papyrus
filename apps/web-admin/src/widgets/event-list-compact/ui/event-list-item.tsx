@@ -4,16 +4,20 @@
  *
  * 디자인 원칙
  *  - "카드 박스" 아님. 좌측 레일(left:32px in CompactList)에 dot로 점찍힌 *시간축의 정거장*.
- *  - **단일 행**: [월·일][카테고리 칩][제목][★][기간][국기][액션]을 한 줄에 좌측 밀착.
+ *  - **단일 행**: [월·일][카테고리 칩][제목][기간][국기][액션]을 한 줄에 좌측 밀착.
  *    제목(flex:0 1 auto+ellipsis) 뒤에 메타가 바로 붙어 '죽은 여백' 없이 스캔되고,
  *    남는 우측은 예측 가능한 여백(Body max-width로 읽기 컬럼 제한).
- *  - **중요도는 색이 아닌 별(★)** — 카테고리 색·active 색과 충돌 방지.
- *    critical=★★★, major=★★, normal=무표시.
+ *  - 중요도(★) 표시는 제거됨 — 데이터 출처가 없다(아래 주석 참고).
  *  - depth > 0 (하위 사건)는 들여쓰기 + 더 긴 레일 connector.
  */
 import React from 'react'
 
-import { FiBookmark, FiChevronRight, FiGitBranch } from 'react-icons/fi'
+import {
+  FiBookmark,
+  FiChevronRight,
+  FiGitBranch,
+  FiLayers,
+} from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
@@ -24,6 +28,7 @@ import { type IsoDateParts, parseIsoDateParts } from '@/shared/lib/iso-date'
 import {
   CATEGORY_BADGE_COLORS,
   CATEGORY_SOFT_COLORS,
+  metaText,
 } from '../../../pages/events/styles/theme'
 import type {
   EventHierarchyNode,
@@ -36,6 +41,16 @@ interface EventListItemProps {
   depth: number
   isExpanded: boolean
   hasChildren: boolean
+  /** 직계 자식 수 — 접었을 때 무엇이 숨는지 알려주는 배지 */
+  childCount?: number
+  /** 필터 때문에 숨겨진 직계 자식 수 — 조용한 누락 방지 */
+  hiddenChildCount?: number
+  /**
+   * 이 행 자체가 현재 필터를 만족하는가. false = '매칭된 후손이 있어 문맥용으로만 남은 부모'.
+   * 이 값이 화면에 반영되지 않으면 헤더 '조건 일치 12건'과 목록 18행의 차이를 설명할
+   * 시각 단서가 전혀 없어, 사용자는 필터가 새는 것으로 읽는다.
+   */
+  isMatch?: boolean
   isActive: boolean
   dbCategories: EventCategoryDto[]
   isBookmarked?: boolean
@@ -47,6 +62,22 @@ interface EventListItemProps {
    * '연도 미상' 섹션·평면 뷰의 다른 해 항목은 null → 연도를 그대로 표시.
    */
   groupYear?: number | null
+  /**
+   * 좁은 폭(≤640px) 여부. 목록이 **한 번만** 계산해 내려준다 — 행마다 useMediaQuery를
+   * 부르면 matchMedia 리스너가 행 수만큼(수백 개) 생긴다.
+   * 폭이 모자란 곳에서 무엇을 먼저 포기할지(국기 개수·자식 수 배지)를 결정한다.
+   */
+  isNarrow?: boolean
+  /** 계층 깊이(1-base) — 하위 사건이 최상위와 똑같이 읽히지 않게 한다 */
+  ariaLevel?: number
+  /** 같은 연도 그룹 안에서의 위치/크기 — 스크린리더가 '3 / 12'를 읽어 준다 */
+  positionInSet?: number
+  setSize?: number
+  /**
+   * 목록의 단일 탭 정지점인가(로빙 tabindex).
+   * 전 행이 tabIndex=0이면 238개의 정지점이 생겨 목록 아래로 키보드 이동이 불가능해진다.
+   */
+  isRovingTarget?: boolean
   /**
    * id 기반 콜백 — 상위(CompactList)가 *안정* 참조를 그대로 넘길 수 있어 React.memo가
    * 실효를 낸다(행마다 인라인 화살표를 만들면 memo가 매번 무력화됨).
@@ -79,15 +110,16 @@ function highlightMatches(text: string, query: string | undefined) {
   )
 }
 
-type ImportanceTier = 'critical' | 'major' | 'normal'
-
-const tierFromNode = (
-  importance: EventHierarchyNode['importance'] | undefined,
-): ImportanceTier => {
-  if (importance === 'critical') return 'critical'
-  if (importance === 'major') return 'major'
-  return 'normal'
-}
+/**
+ * 중요도(importance) 시각 위계는 **제거됐다**(2026-07-28 검토 M9).
+ *
+ * 데이터 출처가 없기 때문이다 — Event 스키마·응답 DTO 어디에도 importance 필드가
+ * 없고, transformer가 모든 사건에 `'notable'`을 하드코딩한다. 그래서 별(★★/★★★)은
+ * 한 번도 렌더된 적이 없고, 제목 3단 크기·도트 3단 크기·헤더 '핵심 N·주요 N' 칩도
+ * 전부 상수 분기였다. 실재하지 않는 신호를 지우고 고정값으로 단순화한다.
+ *
+ * 나중에 importance를 진짜 필드로 도입한다면 이 주석을 지우고 위계를 되살릴 것.
+ */
 
 /**
  * 기간 포맷 — ISO 구성요소(부호 연도 포함) 기반 borrow 차분. BC 음수 연도에서도
@@ -99,11 +131,15 @@ const formatDuration = (
   end: IsoDateParts | null,
 ): string => {
   if (!start) return ''
+  // 종료 정보가 *없는* 것과 '당일 종료'는 다른 사실이다. 예전엔 둘을 같은 '1일'로
+  // 합쳐, 종료 시점이 기록되지 않은 지속 상태(예: 공급 중단)까지 하루짜리 사건으로
+  // 단정했다 — 실측상 전체 행의 절반이 이 잉여 토큰을 달고 있었다. 미상은 토큰을
+  // 생략해 제목 폭을 돌려준다(2026-07-28 검토 LD-5/DATA-4).
+  if (!end) return ''
   if (
-    !end ||
-    (end.year === start.year &&
-      end.month === start.month &&
-      end.day === start.day)
+    end.year === start.year &&
+    end.month === start.month &&
+    end.day === start.day
   )
     return '1일'
   let years = end.year - start.year
@@ -128,17 +164,24 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   depth,
   isExpanded,
   hasChildren,
+  childCount = 0,
+  hiddenChildCount = 0,
+  isMatch = true,
   isActive,
   dbCategories,
   isBookmarked = false,
   searchQuery,
   groupYear,
+  isNarrow = false,
+  ariaLevel,
+  positionInSet,
+  setSize,
+  isRovingTarget = true,
   onSelect,
   onToggleExpansion,
   onShowSummary,
   onToggleBookmark,
 }) => {
-  const tier = tierFromNode(node.importance)
   const startParts = parseIsoDateParts(node.period.start)
   const endParts = node.period.end ? parseIsoDateParts(node.period.end) : null
   /**
@@ -147,6 +190,12 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
    * 생략해 divider에 위임한다. 그룹과 다른 해(평면 뷰·미상 섹션)는 연도를 그대로 노출.
    * ⚠️ 연도만 아는 이벤트가 01-01로 저장될 수 있어, precision이 명시적으로 'day'일 때만 월.일.
    */
+  /**
+   * 이 행의 시간 토큰이 그룹 헤더와 *다른* 해를 가리키는가.
+   * (평면 뷰의 타 연도·'연도 미상' 섹션·BC 표기) — 좁은 폭에서도 숨기면 안 된다.
+   */
+  const isOffGroupYear =
+    !startParts || startParts.year < 0 || groupYear == null || startParts.year !== groupYear
   const rowDateLabel = (() => {
     if (!startParts) return '미상'
     if (startParts.year < 0) return `기원전 ${Math.abs(startParts.year)}`
@@ -176,8 +225,8 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
     <Stop
       $active={isActive}
       $depth={depth}
-      $tier={tier}
       $categoryColor={categoryColor}
+      $context={!isMatch}
       onClick={() => onSelect(node.id)}
       onKeyDown={(e) => {
         // 키보드 네비 — Enter/Space로 행 선택. ↑↓ 이동·펼치기는 상위 catalog hook에서 처리
@@ -186,8 +235,12 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
           onSelect(node.id)
         }
       }}
-      tabIndex={0}
+      // 로빙 tabindex — 목록 전체가 정지점 하나. 그 안 이동은 ↑↓가 담당한다.
+      tabIndex={isRovingTarget ? 0 : -1}
       role="listitem"
+      aria-level={ariaLevel}
+      aria-posinset={positionInSet}
+      aria-setsize={setSize}
       aria-current={isActive ? 'true' : undefined}
       data-event-id={node.id}
       data-active={isActive ? 'true' : undefined}
@@ -203,7 +256,17 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
               onToggleExpansion(node.id)
             }}
             $expanded={isExpanded}
-            aria-label={isExpanded ? '접기' : '하위 사건 펼치기'}
+            // 로빙 tabindex는 행 안의 액션에도 적용된다 — 아니면 행 238개 × 액션 2개가
+            // 그대로 탭 정지점으로 남아 목록을 빠져나가는 데 수백 번이 필요하다.
+            tabIndex={isRovingTarget ? 0 : -1}
+            aria-expanded={isExpanded}
+            aria-label={
+              childCount > 0
+                ? `하위 사건 ${childCount}개 ${isExpanded ? '접기' : '펼치기'}`
+                : isExpanded
+                  ? '접기'
+                  : '하위 사건 펼치기'
+            }
           >
             <FiChevronRight size={11} />
           </ExpandBtn>
@@ -211,7 +274,9 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
           <ExpandSpacer />
         )}
 
-        <Year $tier={tier}>{rowDateLabel}</Year>
+        <Year data-offgroup={isOffGroupYear ? 'true' : undefined}>
+          {rowDateLabel}
+        </Year>
         <CategoryLabel
           $rgb={soft.rgb}
           $text={soft.text}
@@ -219,17 +284,27 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
         >
           {categoryName}
         </CategoryLabel>
-        <Title $tier={tier}>{highlightMatches(node.title, searchQuery)}</Title>
+        <Title>{highlightMatches(node.title, searchQuery)}</Title>
 
-        {tier !== 'normal' && (
-          <ImportanceStars
-            $tier={tier}
-            role="img"
-            aria-label={tier === 'critical' ? '핵심 사건' : '주요 사건'}
-            title={tier === 'critical' ? '핵심 사건' : '주요 사건'}
+        {/* 자식 수 — 접었을 때 무엇이 숨는지 알 수 있게. 어포던스가 20px 셰브론
+            하나뿐이라 접고 나면 몇 개가 사라졌는지 알 방법이 없었다(검토 LD-6). */}
+        {/* 좁은 폭에서는 생략 — 같은 수치가 바로 앞 ExpandBtn의 aria-label
+            ('하위 사건 N개 펼치기')에 이미 있어 정보 손실이 없고, 그 폭을 제목에 돌린다. */}
+        {hasChildren && childCount > 0 && !isNarrow && (
+          /* aria-hidden — 같은 수치가 바로 앞 ExpandBtn의 aria-label('하위 사건 N개 …')에
+             이미 있다. 노출하면 스크린리더가 맥락 없는 숫자 '3'을 한 번 더 읽는다. */
+          <ChildCountBadge aria-hidden="true" title={`하위 사건 ${childCount}개`}>
+            <FiGitBranch size={9} aria-hidden="true" />
+            {childCount}
+          </ChildCountBadge>
+        )}
+        {/* 필터로 잘려나간 자식이 있으면 조용히 사라진 것처럼 보이지 않게 알린다. */}
+        {hiddenChildCount > 0 && (
+          <FilteredOutHint
+            title={`현재 필터 조건 밖의 하위 사건 ${hiddenChildCount}개는 숨겨졌습니다`}
           >
-            {tier === 'critical' ? '★★★' : '★★'}
-          </ImportanceStars>
+            조건 밖 {hiddenChildCount}
+          </FilteredOutHint>
         )}
 
         {duration && <Duration>{duration}</Duration>}
@@ -237,7 +312,9 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
           <CountryFlags
             modern={event.relatedCountries}
             historical={event.relatedHistoricalCountries}
-            max={3}
+            /* 좁은 폭에선 1개 + '+N' — 역사국가는 이모지가 없어 국가명 전체가 텍스트 칩으로
+               그려지므로 3개면 제목을 통째로 밀어낸다(수정 전 390px에서 제목 0폭 73행). */
+            max={isNarrow ? 1 : 3}
             size="sm"
           />
         </Flags>
@@ -250,10 +327,14 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                 e.stopPropagation()
                 onShowSummary(node.id)
               }}
+              tabIndex={isRovingTarget ? 0 : -1}
               title="사건 요약 보기"
               aria-label="사건 요약 보기"
             >
-              <FiGitBranch size={12} />
+              {/* ⚠️ FiGitBranch를 쓰지 말 것 — 바로 옆 ChildCountBadge가 같은 글리프로
+                  '자식 수'라는 다른 뜻을 이미 쓰고 있어, 한 행에서 같은 아이콘이 정적
+                  카운트와 모달 트리거 두 의미로 갈렸다. 브랜치 글리프는 계층 전용으로 예약. */}
+              <FiLayers size={12} />
             </IconBtn>
           )}
           {onToggleBookmark && (
@@ -264,6 +345,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                 onToggleBookmark(node.id)
               }}
               $bookmarked={isBookmarked}
+              tabIndex={isRovingTarget ? 0 : -1}
               title={isBookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
               aria-label={isBookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
             >
@@ -298,8 +380,9 @@ export const EventListItem = React.memo(EventListItemImpl)
 const Stop = styled.div<{
   $active: boolean
   $depth: number
-  $tier: ImportanceTier
   $categoryColor: string
+  /** 필터 문맥용으로만 남은 행(자기 자신은 조건 불일치) — 매칭 행과 구별해 강등 표시 */
+  $context: boolean
 }>`
   position: relative;
   display: flex;
@@ -307,8 +390,26 @@ const Stop = styled.div<{
   padding: 8px 12px 8px 14px;
   margin-left: ${({ $depth }) => $depth * 22}px;
   cursor: pointer;
+
+  /* 문맥용 부모 행 강등 — 이 행 자체는 조건 불일치이고 '매칭된 자식이 아래에 있어서'
+   * 남아 있을 뿐이다. 강등이 없으면 '조건 일치 12건'인데 18행이 똑같은 무게로 보여
+   * 필터가 새는 것처럼 읽힌다. 숨기지 않는 이유는 계층 문맥이 필요하기 때문. */
+  ${({ $context }) =>
+    $context &&
+    css`
+      opacity: 0.62;
+      &:hover,
+      &:focus-within {
+        opacity: 1;
+      }
+    `}
   font-variant-numeric: tabular-nums;
   transition: background 0.14s ease;
+
+  /* 선택 행으로 스크롤(events.page의 단일 effect)할 때 sticky 세기·연도 헤더에
+   * 가려지지 않도록 상단 여백을 확보한다. --century-header-h는 목록 컨테이너가 정의. */
+  scroll-margin-top: calc(var(--century-header-h, 44px) + 44px);
+  scroll-margin-bottom: 12px;
 
   /* 사건 단위 분리 — hairline bottom border. 마지막 행은 자동 제거.
    * YearDivider/CenturyDivider 직전 Stop도 border-bottom 제거(:has(+ button)):
@@ -377,10 +478,8 @@ const Stop = styled.div<{
     left: ${({ $depth }) => `calc(-1 * var(--rail-inset) - ${$depth * 22}px)`};
     top: 50%;
     transform: translate(-50%, -50%);
-    width: ${({ $active, $tier }) =>
-      $active ? '11px' : $tier === 'critical' ? '9px' : '7px'};
-    height: ${({ $active, $tier }) =>
-      $active ? '11px' : $tier === 'critical' ? '9px' : '7px'};
+    width: ${({ $active }) => ($active ? '11px' : '7px')};
+    height: ${({ $active }) => ($active ? '11px' : '7px')};
     background: ${({ $categoryColor }) => $categoryColor};
     border: none;
     border-radius: 50%;
@@ -421,12 +520,27 @@ const Stop = styled.div<{
           : 'rgba(15, 23, 42, 0.05)'};
   }
 
+  /* 강제 색 모드(Windows 고대비 등)에서는 box-shadow·배경 tint가 전부 제거된다 —
+     활성 행과 계층 가이드가 통째로 사라지므로 시스템 색 테두리로 대체 신호를 준다. */
+  @media (forced-colors: active) {
+    ${({ $active }) =>
+      $active &&
+      css`
+        outline: 2px solid Highlight;
+        outline-offset: -2px;
+      `}
+  }
+
   /* 키보드 focus 시각화 — 마우스 click에선 안 뜨고 Tab 순회 시에만 ring */
   &:focus {
     outline: none;
   }
   &:focus-visible {
-    outline: 2px solid #2563eb;
+    /* 다크에서는 파란 활성 배경(rgba(37,99,235,0.22)) 위에 같은 파랑 아웃라인이 그려져
+       링 안쪽 경계 대비가 2.93:1까지 떨어졌다. 화살표 내비게이션은 선택과 포커스를 함께
+       옮기므로 '활성 행 위의 포커스'가 상시 상태라 실질 식별력이 낮았다(검토 A11Y-1). */
+    outline: 2px solid
+      ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
     outline-offset: -2px;
     border-radius: 6px;
   }
@@ -456,7 +570,15 @@ const RowActions = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  margin-left: 2px;
+  /* 액션은 읽기 컬럼(Body max-width 880px)의 **우측 고정 열**에 둔다.
+   *
+   * 이전엔 margin-left: 2px으로 국기 바로 뒤에 붙어, 제목 길이에 따라 버튼 x좌표가
+   * 행마다 달라졌다 — 실측 233행에서 고유 x좌표 184개, 산포 641px(316~957).
+   * 즐겨찾기를 연속으로 누를 때 포인터가 매 행 다른 위치를 찾아야 했고 세로 스캔선도 끊겼다.
+   * auto 마진으로 밀어 한 열에 정렬하되, 메타(기간·국기)는 제목 옆에 그대로 남으므로
+   * 2026-07-22 검토가 없앤 '제목↔메타 죽은 여백'은 되살아나지 않는다. */
+  margin-left: auto;
+  padding-left: 8px;
   flex-shrink: 0;
 `
 
@@ -467,6 +589,14 @@ const ExpandBtn = styled.button<{ $expanded: boolean }>`
   width: 20px;
   height: 20px;
   padding: 0;
+  /* 시각 크기는 20px 그대로 두고 **히트 영역만** 확장한다(포인터·터치 오탭 방지).
+     20×20은 권장 44px에 한참 못 미치고, 바로 옆 액션들과 gap 2px로 붙어 있었다. */
+  position: relative;
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -8px -6px;
+  }
   border: none;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
@@ -476,6 +606,10 @@ const ExpandBtn = styled.button<{ $expanded: boolean }>`
   flex-shrink: 0;
   transition: background 0.12s, transform 0.15s;
   transform: rotate(${({ $expanded }) => ($expanded ? 90 : 0)}deg);
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: background 0.12s;
+  }
   &:hover {
     background: rgba(37, 99, 235, 0.16);
     color: #2563eb;
@@ -488,32 +622,88 @@ const ExpandSpacer = styled.span`
   flex-shrink: 0;
 `
 
-const Year = styled.span<{ $tier: ImportanceTier }>`
+const ChildCountBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 0 5px;
+  height: 15px;
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.06)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const FilteredOutHint = styled.span`
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  /* '조건 밖 N'은 누락 고지다 — 행에서 가장 안 보이는 토큰이면 도입 목적이 무효가 된다. */
+  color: ${metaText};
+  font-variant-numeric: tabular-nums;
+`
+
+const Year = styled.span`
   /* 날짜는 보조 데이텀 — 항상 제목보다 한 단계 아래. tier별 크기 증가를 없애 고정 12px로,
      굵기도 500으로 낮춰(중요도 신호는 제목·별이 담당) 제목이 확실한 주인공이 되게 한다. */
   font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  /* 보조 데이텀이지만 '언제'는 이 목록의 핵심 정보다 — tertiary(2.54:1)는 AA 미달. */
+  color: ${metaText};
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
   min-width: 36px;
-  /* 모바일 — 연도는 sticky 연도 divider와 중복이라, 좁은 폭에선 숨겨 제목에 폭을 양보. */
+
+  /* 그룹 헤더와 *다른* 해를 가리키는 토큰 — 같은 슬롯에 '12.31'(월·일)과 '1893'(연도)이
+   * 완전히 같은 서식으로 찍히면 두 단위가 구분되지 않는다. 실측상 자식 87건 중 62건(71%)이
+   * 부모와 다른 해다. 한 단계 진한 색 + 앞 구분점으로 '이건 다른 해'를 신호한다(검토 VIS-6). */
+  &[data-offgroup='true'] {
+    /* ⚠️ 색으로 구분하려 하지 말 것 — 이 테마에서 text.secondary는 라이트 #6b7280 /
+       다크 #a1a1aa로 메타 토큰과 **값이 같아** 색 분기가 no-op이 된다(실측 확인).
+       괄호로 감싸 테마와 무관하게 '(1893)'과 '12.31'을 즉시 구별되게 한다. */
+    &::before {
+      content: '(';
+      opacity: 0.6;
+    }
+    &::after {
+      content: ')';
+      opacity: 0.6;
+    }
+  }
+
+  /* (제거됨) ≤640px에서 &:not([data-offgroup]) { display: none }.
+   *
+   * 그 규칙의 근거는 "연도는 sticky 연도 divider와 중복"이었는데, 2차 디자인 구현 이후
+   * 이 슬롯이 담는 값은 **연도가 아니라 월·일**이다(rowDateLabel이 'M.D'/'M월'을 만들고,
+   * 연 정밀도로 확정된 경우엔 이미 빈 문자열을 반환해 스스로 중복을 피한다).
+   * 그래서 이 규칙은 중복 제거가 아니라 **모바일에서만 날짜를 통째로 없애는** 회귀였다
+   * (실측: 390px에서 날짜 토큰 렌더 박스 w=0 — 같은 해 안의 선후 관계를 알 방법이 없음).
+   * display:none은 접근성 트리에서도 제거돼 모바일 스크린리더에도 전달되지 않았다.
+   * 폭 확보는 Flags 축소(max=1·max-width)와 Title min-width가 대신 맡는다. */
   @media (max-width: 640px) {
-    display: none;
+    font-size: 11px;
+    min-width: 30px;
   }
 `
 
-const Title = styled.span<{ $tier: ImportanceTier }>`
+const Title = styled.span`
   /* 단일 행 밀도 — 제목은 자기 폭(flex:0 1 auto)만 차지하고, 넘치면 …로 자른다.
    * flex:1을 쓰지 않아 뒤따르는 메타가 제목 바로 옆에 붙어 '죽은 여백'이 생기지 않는다. */
   flex: 0 1 auto;
-  min-width: 0;
-  /* 제목이 확실한 주인공 — 하한 14px, normal도 weight 600으로 올려 연도(12px/500)와 위계 명확. */
-  font-size: ${({ $tier }) =>
-    $tier === 'critical' ? '15px' : $tier === 'major' ? '14.5px' : '14px'};
-  font-weight: ${({ $tier }) =>
-    $tier === 'critical' ? 700 : $tier === 'major' ? 650 : 600};
+  /* ⚠️ min-width: 0이면 제목이 **0px까지 짓눌린다**. Body의 다른 자식이 전부
+   * flex-shrink: 0이라 폭이 모자랄 때 줄어드는 건 제목뿐이기 때문이다.
+   * 390px 실측(수정 전): 238행 중 73행(31%)의 제목 폭이 0 — 카테고리 칩과 국가명만 남았다.
+   * 최소 폭을 두어 어떤 조합에서도 제목이 사라지지 않게 한다(넘치는 국기는 Flags가 흡수). */
+  min-width: 8ch;
+  /* 제목이 확실한 주인공 — 14px/600으로 연도(12px/500)와 위계 명확. */
+  font-size: 14px;
+  font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.3;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
@@ -529,19 +719,6 @@ const Mark = styled.mark`
   color: inherit;
   padding: 0 1px;
   border-radius: 2px;
-`
-
-/* importance — 색 신호 사용 안 함. 별 글리프 톤 다운: dot 크기와 별이 함께 위계 보조하되,
- * 별이 카테고리 dot보다 강해 시선을 가로채지 않게 muted 색·낮은 opacity. */
-const ImportanceStars = styled.span<{ $tier: ImportanceTier }>`
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  font-size: 9px;
-  letter-spacing: 0.5px;
-  font-weight: 600;
-  opacity: ${({ $tier }) => ($tier === 'critical' ? 0.6 : 0.45)};
-  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 /* 저채도 soft chip — 원색 텍스트(AA 미달)를 대신. 배경 tint + 어둡게 조정한 텍스트색으로
@@ -568,7 +745,7 @@ const Duration = styled.span`
   font-size: 11px;
   font-weight: 500;
   letter-spacing: -0.005em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 
@@ -580,7 +757,16 @@ const Duration = styled.span`
 const Flags = styled.span`
   display: inline-flex;
   align-items: center;
-  flex-shrink: 0;
+  /* 국기/역사국가 칩이 폭 초과의 주범이다 — 역사국가는 이모지가 없어 국가명 전체가
+   * 텍스트 칩(max-width 80px)으로 그려지므로 3개면 270px에 달한다. 넘칠 때는 제목을
+   * 0으로 만드는 대신 여기서 흡수한다(좁은 폭에선 max=1로 개수 자체도 줄인다). */
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+
+  @media (max-width: 640px) {
+    max-width: 96px;
+  }
 `
 
 const IconBtn = styled.button`
@@ -594,7 +780,7 @@ const IconBtn = styled.button`
   background: transparent;
   border-radius: 6px;
   color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.45)' : 'rgba(15,23,42,0.45)'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.58)' : 'rgba(15,23,42,0.58)'};
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.12s, color 0.12s;
@@ -620,12 +806,14 @@ const BookmarkBtn = styled.button<{ $bookmarked: boolean }>`
   background: transparent;
   cursor: pointer;
   border-radius: 6px;
+  /* 비활성 아이콘도 '무엇을 할 수 있는지' 알리는 UI 요소다 — WCAG 1.4.11은 3:1을 요구하는데
+   * 이전 alpha 0.32는 실측 라이트 2.06:1 / 다크 2.89:1로 미달이었다. alpha를 올려 통과시킨다. */
   color: ${({ theme, $bookmarked }) =>
     $bookmarked
       ? '#f59e0b'
       : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.32)'
-        : 'rgba(15,23,42,0.32)'};
+        ? 'rgba(255,255,255,0.55)'
+        : 'rgba(15,23,42,0.55)'};
   transition: background 0.12s, color 0.12s;
   flex-shrink: 0;
 

@@ -2,7 +2,7 @@
  * Event Compact List Widget
  * FSD: widgets/event-list-compact/ui
  */
-import React, { useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 
 import {
   FiAlertCircle,
@@ -18,7 +18,8 @@ import styled, { css } from 'styled-components'
 
 import type { SortOption } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
-import { getCentury, parseIsoDateParts } from '@/shared/lib/iso-date'
+import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
+import { getCentury } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 
 import type {
@@ -27,16 +28,19 @@ import type {
 } from '../../../pages/events/create/events.types'
 import * as List from '../../../pages/events/styles/list.styles'
 import { shimmerAnimation } from '../../../pages/events/styles/shared.styles'
-import { BRAND } from '../../../pages/events/styles/theme'
+import { BRAND, metaText } from '../../../pages/events/styles/theme'
+import {
+  buildYearBuckets,
+  groupYearsByCentury,
+} from '@/features/event-hierarchy/model'
+import type { FlattenedHierarchyItem } from '@/features/event-hierarchy/model'
+
 import { EventListItem } from './event-list-item'
 
 interface EventCompactListProps {
   isLoading: boolean
-  flattenedHierarchy: Array<{
-    node: EventHierarchyNode
-    depth: number
-    parentEvent: HistoricalEvent | null
-  }>
+  /** 평탄화 계약은 useEventHierarchy가 단일 출처 — 여기서 재선언하면 필드가 표류한다 */
+  flattenedHierarchy: FlattenedHierarchyItem[]
   events: HistoricalEvent[]
   expandedEventIds: Set<string>
   selectedEventId: string | null
@@ -47,6 +51,11 @@ interface EventCompactListProps {
   dbCategories: EventCategoryDto[]
   isLoadingMore?: boolean
   displayedCount?: number
+  /**
+   * 표시 중인 행 가운데 *최상위* 사건 수 — 헤더의 '등록 N건'(최상위 기준)과 같은
+   * 모수를 하단에도 함께 보여, 같은 화면에서 두 숫자가 모순돼 보이지 않게 한다.
+   */
+  displayedRootCount?: number
   hasMoreData?: boolean
   /** 이미 일부 로드된 뒤 다음 페이지 로드가 실패한 상태 — 하단 인라인 재시도 노출 */
   loadMoreFailed?: boolean
@@ -56,6 +65,15 @@ interface EventCompactListProps {
   searchQuery?: string
   /** 최근 본 사건 ID — 필터 결과 0건 빈 상태에서 fallback 추천으로 노출 */
   recentEventIds?: string[]
+  /**
+   * 세기·연도 밴드 접힘 — **페이지가 소유**한다(위젯 로컬 state 아님).
+   * 위젯 로컬이던 시절엔 뷰를 바꿨다 돌아오면 언마운트로 접기 작업이 통째로 휘발했고,
+   * 드로어 이전/다음이 접힌 밴드 안의 행까지 순회해 ↑↓ 키와 결과가 갈렸다(검토 INT-4/6).
+   */
+  collapsedYears: Set<number>
+  collapsedCenturies: Set<number>
+  onToggleYearCollapse: (year: number) => void
+  onToggleCenturyCollapse: (century: number) => void
   onToggleExpansion: (eventId: string) => void
   onSelectEvent: (eventId: string) => void
   onShowSummary: (eventId: string) => void
@@ -78,12 +96,17 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   dbCategories,
   isLoadingMore = false,
   displayedCount = 0,
+  displayedRootCount = 0,
   hasMoreData = false,
   loadMoreFailed = false,
   onRetryLoadMore,
   bookmarks = new Set(),
   searchQuery,
   recentEventIds = [],
+  collapsedYears,
+  collapsedCenturies,
+  onToggleYearCollapse,
+  onToggleCenturyCollapse,
   onToggleExpansion,
   onSelectEvent,
   onShowSummary,
@@ -93,94 +116,108 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   pageSize = 20,
 }) => {
   const navigate = useNavigate()
-  const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set())
-  /** 세기 접기 — 세기 자체를 토글하면 그 안의 모든 년이 표시 안 됨 */
-  const [collapsedCenturies, setCollapsedCenturies] = useState<Set<number>>(
-    new Set(),
-  )
-  const toggleCenturyCollapse = (century: number) => {
-    setCollapsedCenturies((prev) => {
-      const next = new Set(prev)
-      if (next.has(century)) next.delete(century)
-      else next.add(century)
-      return next
-    })
-  }
-  const toggleYearCollapse = (year: number) => {
-    setCollapsedYears((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(year)) {
-        newSet.delete(year)
-      } else {
-        newSet.add(year)
-      }
-      return newSet
-    })
-  }
+  /**
+   * 좁은 폭 판정을 **목록에서 한 번만** 한다. 행마다 useMediaQuery를 부르면 렌더된 행 수
+   * (수백 개)만큼 matchMedia 리스너가 생긴다. 임계값은 행 스타일의 미디어쿼리와 동일하게 640px.
+   */
+  const isNarrow = useMediaQuery('(max-width: 640px)')
 
   /** id→event O(1) 조회 — 행마다 events.find로 선형 탐색하던 핫패스 제거 */
   const eventById = useMemo(() => {
-    const m = new Map<string, HistoricalEvent>()
-    for (const e of events) m.set(e.id, e)
-    return m
+    const byId = new Map<string, HistoricalEvent>()
+    for (const historicalEvent of events) byId.set(historicalEvent.id, historicalEvent)
+    return byId
   }, [events])
 
-  const { allYears, eventsByYear, centuryCount, unknownItems } = useMemo(() => {
-    const eventYears = new Set<number>()
-    const byYear = new Map<number, typeof flattenedHierarchy>()
-    /**
-     * 연도를 전혀 확정할 수 없는 항목(날짜 완전 미상 + 귀속시킬 상위 연도도 없음)을 모으는 버킷.
-     * 이전엔 year===null이면 조용히 *드롭*됐다 → (a) 오름차순에서 날짜 완전 미상 최상위 사건이
-     * 목록 맨 앞으로 정렬돼 통째 사라지고, (b) '북마크만'으로 부모 없이 남은 자식이 화면에서
-     * 통째 사라졌다("1건"인데 빈 화면). 절대 드롭하지 않고 여기 모아 '연도 미상' 섹션으로 렌더한다.
-     */
-    const unknownItems: typeof flattenedHierarchy = []
-    /** 세기별 사건 수 — depth 0만, *실제 버킷 귀속 연도* 기준(연 헤더 카운트 합과 정합). */
-    const centuryCount = new Map<number, number>()
-    let lastTopLevelYear: number | null = null
-    flattenedHierarchy.forEach((item) => {
-      // BC·고대 날짜 안전 파싱(네이티브 Date 금지).
-      const parsedYear = parseIsoDateParts(item.node.period.start)?.year ?? null
-      if (item.depth === 0 && parsedYear !== null) {
-        lastTopLevelYear = parsedYear
-      }
-      // 버킷 귀속 연도: 최상위는 자기 연도 우선, 자식은 직전 최상위(부모) 연도 우선.
-      // 어느 쪽도 없으면(부모가 필터로 사라진 자식 등) 자기 연도로 폴백한다 → 그래도 null이면 미상.
-      const bucketYear =
-        item.depth === 0
-          ? parsedYear ?? lastTopLevelYear
-          : lastTopLevelYear ?? parsedYear
-      if (bucketYear === null) {
-        unknownItems.push(item)
-        return
-      }
-      // depth 무관하게 add — 부모 없이 자식 연도로 버킷팅한 경우에도 allYears에 버킷이
-      // 존재해야 렌더 루프(allYears.map)가 그 연도를 순회한다.
-      eventYears.add(bucketYear)
-      if (!byYear.has(bucketYear)) byYear.set(bucketYear, [])
-      byYear.get(bucketYear)!.push(item)
-      // getCentury(year)로 BC 음수 세기까지 정합(1950 → 20세기).
-      if (item.depth === 0) {
-        const centuryOfBucket = getCentury(bucketYear)
-        centuryCount.set(
-          centuryOfBucket,
-          (centuryCount.get(centuryOfBucket) ?? 0) + 1,
-        )
-      }
-    })
-    const sortedYears = Array.from(eventYears).sort(
-      (yearA, yearB) => yearA - yearB,
-    )
-    const orderedYears =
-      sortDirection === 'desc' ? [...sortedYears].reverse() : sortedYears
+  /**
+   * 세기›연도 그룹핑 — 계산은 features/event-hierarchy의 공유 함수가 담당한다.
+   * 페이지도 같은 함수로 '보이는 행'을 계산해 드로어 이전/다음과 ↑↓ 키가 화면과
+   * 어긋나지 않게 한다(검토 INT-4).
+   */
+  const { allYears, eventsByYear, centuryCount, unknownItems } = useMemo(
+    () => buildYearBuckets(flattenedHierarchy, sortDirection),
+    [flattenedHierarchy, sortDirection],
+  )
 
-    return {
-      allYears: orderedYears,
-      eventsByYear: byYear,
-      centuryCount,
-      unknownItems,
-    }
-  }, [flattenedHierarchy, sortDirection])
+  /**
+   * 세기 → 그 세기에 속한 연도들. 렌더 트리를 `CenturySection > YearSection > 행`으로
+   * 만들기 위한 그룹핑이다.
+   *
+   * 이전엔 연도 배열을 평면으로 돌면서 "세기가 바뀌면 헤더를 끼워 넣는" 방식이라
+   * 세기·연도 헤더가 스크롤 컨테이너의 직접 자식이 됐다. 그러면 sticky의 containing
+   * block이 목록 전체가 되어 **지나간 헤더가 하나도 밀려나지 않고 계속 쌓인다**
+   * (실측: scrollTop 6000에서 연도 헤더 34개가 동시에 같은 자리에 stuck).
+   * 그룹을 실제 박스로 감싸면 그룹이 끝날 때 헤더도 함께 밀려난다.
+   */
+  const centuryGroups = useMemo(() => groupYearsByCentury(allYears), [allYears])
+
+  /**
+   * 로빙 tabindex의 대상 행 id.
+   *
+   * 예전엔 **모든 행이 tabIndex=0**이라 목록에 238개의 탭 정지점이 생겼다 —
+   * 실측상 헤더·툴바를 지나 목록에 진입하는 데만 Tab 22회가 필요했고, 목록 아래 컨트롤로
+   * 넘어가려면 238번을 더 눌러야 했다(검토 A11Y-7). 목록 전체는 탭 정지점 **하나**만 갖고,
+   * 그 안에서는 ↑↓로 이동하는 것이 리스트박스/그리드의 표준 규약이다.
+   * 선택된 행이 있으면 그 행, 없으면 첫 행이 진입점이 된다.
+   */
+  const rovingRowId =
+    (selectedEventId &&
+      flattenedHierarchy.some((item) => item.node.id === selectedEventId) &&
+      selectedEventId) ||
+    flattenedHierarchy[0]?.node.id ||
+    null
+
+  /** 행 하나 렌더 — 연도 섹션과 '연도 미상' 섹션이 같은 계약을 공유한다. */
+  const renderRow = (
+    {
+      node,
+      depth,
+      parentEvent,
+      hiddenChildCount,
+      isMatch,
+      canExpand,
+    }: FlattenedHierarchyItem,
+    groupYear: number | null,
+    positionInSet: number,
+    setSize: number,
+  ) => {
+    const event = eventById.get(node.id) ?? parentEvent
+    if (!event) return null
+    return (
+      <EventListItem
+        key={node.id}
+        node={node}
+        event={event}
+        depth={depth}
+        isExpanded={expandedEventIds.has(node.id)}
+        // 평탄화가 알려주는 값을 그대로 쓴다 — 자식 수로 추측하면 평면 모드에서
+        // 눌러도 아무 일이 없는 셰브론이 그려진다.
+        hasChildren={canExpand}
+        childCount={canExpand ? (node.children?.length ?? 0) : 0}
+        hiddenChildCount={hiddenChildCount}
+        isMatch={isMatch}
+        isActive={selectedEventId === node.id}
+        dbCategories={dbCategories}
+        isBookmarked={bookmarks.has(node.id)}
+        searchQuery={searchQuery}
+        // 이 행이 속한 연 그룹 — 같은 해면 선두 토큰을 월·일로 대체(연도 중복 제거)
+        groupYear={groupYear}
+        isNarrow={isNarrow}
+        // 계층 깊이를 접근성 트리에 전달 — 예전엔 하위 사건이 최상위와 똑같이 읽혔다.
+        ariaLevel={depth + 1}
+        positionInSet={positionInSet}
+        setSize={setSize}
+        // 목록 전체가 탭 정지점 하나만 갖도록(로빙 tabindex)
+        isRovingTarget={node.id === rovingRowId}
+        // 안정 참조 전달 — 행마다 새 화살표를 만들지 않아 EventListItem의
+        // React.memo가 실효. id는 EventListItem이 node.id로 직접 전달.
+        onSelect={onSelectEvent}
+        onToggleExpansion={onToggleExpansion}
+        onShowSummary={onShowSummary}
+        onToggleBookmark={onToggleBookmark}
+      />
+    )
+  }
 
   return (
     <List.CatalogSection>
@@ -189,14 +226,17 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           {[...Array(Math.min(pageSize, 12))].map((_, index) => {
             // 실제 행(단일 행: 레일 dot + [연도][카테고리칩][제목])과 동일 구조로 렌더 →
             // 로딩→데이터 전환 시 높이·요소 위치 점프 없음.
-            const depth = index % 3
             // 동일 폭 반복 회피 — index 기반 폭으로 자연스러운 다양성
             const titleW = 40 + ((index * 13) % 30) // 40~70%
             const categoryW = 40 + ((index * 7) % 24) // 40~64px
             return (
-              <SkeletonStop key={index} $depth={depth}>
+              /* $depth 0 고정 — 예전엔 index % 3으로 인위적 계단 들여쓰기를 그려,
+                 데이터가 도착하면 그 계단이 평평해지며 레이아웃이 한 번 무너졌다 잡혔다. */
+              <SkeletonStop key={index} $depth={0}>
                 <SkeletonRail aria-hidden="true" />
                 <SkeletonBody>
+                  {/* 실제 행의 20px 셰브론/스페이서 자리 — 없으면 데이터 도착 시 가로 28px 이동 */}
+                  <SkeletonExpandSpacer aria-hidden="true" />
                   <SkeletonYear />
                   <SkeletonCategory style={{ width: `${categoryW}px` }} />
                   <SkeletonTitleBar style={{ width: `${titleW}%` }} />
@@ -236,7 +276,13 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             {hasActiveFilters && activeFilterChips.length > 0 && (
               <ActiveChipsRow>
                 {activeFilterChips.map((chip) => (
-                  <ActiveChip key={chip.key} onClick={chip.onClear}>
+                  <ActiveChip
+                    key={chip.key}
+                    type="button"
+                    // 라벨만 두면 '정치'로 읽혀 해제 버튼인지 전달되지 않는다.
+                    aria-label={`${chip.label} 필터 해제`}
+                    onClick={chip.onClear}
+                  >
                     <span>{chip.label}</span>
                     <FiX size={12} aria-hidden="true" />
                   </ActiveChip>
@@ -287,195 +333,178 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           })()}
         </List.EmptyCatalogState>
       ) : (
-        <List.CompactList
-          onScroll={onScroll}
-          role="list"
-          aria-label={`사건 목록 (${displayedCount.toLocaleString()}건)`}
-        >
-          {(() => {
-            // 이전 행이 어느 세기였는지 추적 — 세기가 바뀌면 헤더 삽입.
-            // map 안에서는 외부 변수 mutation이 어려워 reduce 패턴으로.
-            let prevCentury: number | null = null
-            return allYears.map((currentYear) => {
-              const yearItems = eventsByYear.get(currentYear) ?? []
-              const yearEventCount = yearItems.filter(
-                (item) => item.depth === 0,
-              ).length
-              const isYearCollapsed = collapsedYears.has(currentYear)
+        <List.CompactList onScroll={onScroll} aria-busy={isLoadingMore}>
+          {/*
+           * 목록 규모 고지 — 예전엔 스크롤 컨테이너의 정적 aria-label이었다.
+           * ⑴ role="list"를 컨테이너에 두면 자식으로 listitem만 허용되는데 세기·연도 접기
+           *    버튼이 직속 자식이라 구조가 부적법했고(실측: 직속 자식 333개 중 버튼 99개),
+           * ⑵ 정적 label이라 세기·연도를 접어 행이 줄어도 값이 그대로였다(검토 A11Y-12).
+           * 라이브 영역으로 옮겨 변화가 실제로 낭독되게 한다.
+           */}
+          <List.GroupHeading as="p" role="status" aria-live="polite">
+            {`사건 목록 — 표시 ${displayedCount.toLocaleString()}행, 최상위 ${displayedRootCount.toLocaleString()}건`}
+          </List.GroupHeading>
+          {centuryGroups.map(({ century, years }) => {
+            const isCenturyCollapsed = collapsedCenturies.has(century)
 
-              const century = getCentury(currentYear)
-              const isCenturyChange = prevCentury !== century
-              const isCenturyCollapsed = collapsedCenturies.has(century)
-              prevCentury = century
+            // 세기 라벨/범위 — getCentury 정의(양수 ceil, 음수 BC)에 맞춰 BC 안전.
+            // 양수 c: (c-1)*100+1 ~ c*100 (예: 20세기 → 1901~2000, 1세기 → 1~100)
+            // 음수 c(BC): |c|세기 = (|c|-1)*100+1 ~ |c|*100 BC
+            const absCentury = Math.abs(century)
+            const centuryLabel =
+              century < 0 ? `기원전 ${absCentury}세기` : `${century}세기`
+            const centuryRangeFrom =
+              absCentury === 1 ? 1 : (absCentury - 1) * 100 + 1
+            const centuryRangeTo = absCentury * 100
+            const centuryRangeLabel =
+              century < 0
+                ? `기원전 ${centuryRangeTo}–${centuryRangeFrom}`
+                : `${centuryRangeFrom}–${centuryRangeTo}`
 
-              // 세기 라벨/범위 — getCentury 정의(양수 ceil, 음수 BC)에 맞춰 BC 안전.
-              // 양수 c: (c-1)*100+1 ~ c*100 (예: 20세기 → 1901~2000, 1세기 → 1~100)
-              // 음수 c(BC): |c|세기 = (|c|-1)*100+1 ~ |c|*100 BC
-              const absCentury = Math.abs(century)
-              const centuryLabel =
-                century < 0
-                  ? `기원전 ${absCentury}세기`
-                  : `${century}세기`
-              const centuryRangeFrom = absCentury === 1 ? 1 : (absCentury - 1) * 100 + 1
-              const centuryRangeTo = absCentury * 100
-              const centuryRangeLabel =
-                century < 0
-                  ? `기원전 ${centuryRangeTo}–${centuryRangeFrom}`
-                  : `${centuryRangeFrom}–${centuryRangeTo}`
-
-              // 세기 접힘 → 그 세기 안의 년도는 모두 숨김 (헤더만 노출)
-              if (isCenturyCollapsed && !isCenturyChange) return null
-
-              return (
-              <React.Fragment key={`year-${currentYear}`}>
-                {isCenturyChange && (
-                  <List.CenturyDivider
-                    type="button"
-                    aria-expanded={!isCenturyCollapsed}
-                    aria-label={`${centuryLabel} — 사건 ${centuryCount.get(century) ?? 0}건 ${
-                      isCenturyCollapsed ? '펼치기' : '접기'
-                    }`}
-                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                      e.preventDefault()
-                      toggleCenturyCollapse(century)
-                    }}
-                  >
-                    <List.CenturyDividerLabel>
-                      <FiChevronDown
-                        size={14}
-                        aria-hidden="true"
-                        style={{
-                          transform: isCenturyCollapsed
-                            ? 'rotate(-90deg)'
-                            : 'rotate(0deg)',
-                        }}
-                      />
-                      <span>
-                        {centuryLabel}
-                        <List.CenturyDividerYears>
-                          {' '}({centuryRangeLabel})
-                        </List.CenturyDividerYears>
-                      </span>
-                    </List.CenturyDividerLabel>
-                    <List.CenturyDividerCount>
-                      {(centuryCount.get(century) ?? 0).toLocaleString()}건
-                    </List.CenturyDividerCount>
-                  </List.CenturyDivider>
-                )}
-                {isCenturyCollapsed ? null : (
-                  <>
-                <List.YearDivider
+            const centuryHeadingId = `events-century-${century}`
+            return (
+              <List.CenturySection
+                key={`century-${century}`}
+                role="group"
+                aria-labelledby={centuryHeadingId}
+              >
+                {/* 헤딩 탐색용 — 시각적으로는 숨기고 접근성 트리에만 남긴다. */}
+                <List.GroupHeading id={centuryHeadingId} aria-level={3}>
+                  {`${centuryLabel} (${centuryRangeLabel}) — 사건 ${centuryCount.get(century) ?? 0}건`}
+                </List.GroupHeading>
+                <List.CenturyDivider
                   type="button"
-                  aria-expanded={!isYearCollapsed}
-                  aria-label={`${currentYear}년 — 사건 ${yearEventCount}건 ${
-                    isYearCollapsed ? '펼치기' : '접기'
+                  aria-expanded={!isCenturyCollapsed}
+                  aria-label={`${centuryLabel} — 사건 ${centuryCount.get(century) ?? 0}건 ${
+                    isCenturyCollapsed ? '펼치기' : '접기'
                   }`}
                   onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.preventDefault()
-                    toggleYearCollapse(currentYear)
+                    onToggleCenturyCollapse(century)
                   }}
                 >
-                  <span>
+                  <List.CenturyDividerLabel>
                     <FiChevronDown
-                      size={13}
+                      size={14}
                       aria-hidden="true"
                       style={{
-                        transform: isYearCollapsed
+                        transform: isCenturyCollapsed
                           ? 'rotate(-90deg)'
                           : 'rotate(0deg)',
                       }}
                     />
-                    {currentYear}년
-                    <List.CollapsedCount>{yearEventCount}</List.CollapsedCount>
-                  </span>
-                </List.YearDivider>
-                {isYearCollapsed ? (
-                  <List.CollapsedPlaceholder>
                     <span>
-                      {yearEventCount > 0
-                        ? `${yearEventCount}개 사건이 접혀있습니다`
-                        : `${currentYear}년`}
+                      {centuryLabel}
+                      <List.CenturyDividerYears>
+                        {' '}({centuryRangeLabel})
+                      </List.CenturyDividerYears>
                     </span>
-                  </List.CollapsedPlaceholder>
-                ) : (
-                  <>
-                    {yearItems.map(({ node, depth, parentEvent }) => {
-                      const hasChildren = Boolean(
-                        node.children && node.children.length > 0,
-                      )
-                      const isExpanded = expandedEventIds.has(node.id)
-                      const event = eventById.get(node.id) ?? parentEvent
-                      if (!event) return null
+                  </List.CenturyDividerLabel>
+                  <List.CenturyDividerCount>
+                    {(centuryCount.get(century) ?? 0).toLocaleString()}건
+                  </List.CenturyDividerCount>
+                </List.CenturyDivider>
 
+                {/* 세기 접힘 → 그 세기 안의 연도 섹션을 통째로 렌더하지 않는다(헤더만 남음) */}
+                {isCenturyCollapsed
+                  ? null
+                  : years.map((currentYear) => {
+                      const yearItems = eventsByYear.get(currentYear) ?? []
+                      const yearEventCount = yearItems.filter(
+                        (item) => item.depth === 0,
+                      ).length
+                      const isYearCollapsed = collapsedYears.has(currentYear)
+
+                      const yearHeadingId = `events-year-${currentYear}`
                       return (
-                        <EventListItem
-                          key={node.id}
-                          node={node}
-                          event={event}
-                          depth={depth}
-                          isExpanded={isExpanded}
-                          hasChildren={hasChildren}
-                          isActive={selectedEventId === node.id}
-                          dbCategories={dbCategories}
-                          isBookmarked={bookmarks.has(node.id)}
-                          searchQuery={searchQuery}
-                          // 이 행이 속한 연 그룹 — 같은 해면 선두 토큰을 월·일로 대체(연도 중복 제거)
-                          groupYear={currentYear}
-                          // 안정 참조 전달 — 행마다 새 화살표를 만들지 않아 EventListItem의
-                          // React.memo가 실효. id는 EventListItem이 node.id로 직접 전달.
-                          onSelect={onSelectEvent}
-                          onToggleExpansion={onToggleExpansion}
-                          onShowSummary={onShowSummary}
-                          onToggleBookmark={onToggleBookmark}
-                        />
+                        <List.YearSection
+                          key={`year-${currentYear}`}
+                          role="group"
+                          aria-labelledby={yearHeadingId}
+                        >
+                          <List.GroupHeading id={yearHeadingId} aria-level={4}>
+                            {`${currentYear}년 — 사건 ${yearEventCount}건`}
+                          </List.GroupHeading>
+                          <List.YearDivider
+                            type="button"
+                            aria-expanded={!isYearCollapsed}
+                            aria-label={`${currentYear}년 — 사건 ${yearEventCount}건 ${
+                              isYearCollapsed ? '펼치기' : '접기'
+                            }`}
+                            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                              e.preventDefault()
+                              onToggleYearCollapse(currentYear)
+                            }}
+                          >
+                            <span>
+                              <FiChevronDown
+                                size={13}
+                                aria-hidden="true"
+                                style={{
+                                  transform: isYearCollapsed
+                                    ? 'rotate(-90deg)'
+                                    : 'rotate(0deg)',
+                                }}
+                              />
+                              {currentYear}년
+                              <List.CollapsedCount>
+                                {yearEventCount}
+                              </List.CollapsedCount>
+                            </span>
+                          </List.YearDivider>
+                          {isYearCollapsed ? (
+                            <List.CollapsedPlaceholder>
+                              <span>
+                                {/* 접기가 실제로 숨기는 것은 **렌더되던 행 전체**(하위 사건 포함)다.
+                                    yearEventCount(depth 0만)를 쓰면 '2개 사건이 접혀있습니다'라며
+                                    7행이 사라져 숫자가 화면과 어긋난다. */}
+                                {yearItems.length > 0
+                                  ? `${yearItems.length}행이 접혀있습니다`
+                                  : `${currentYear}년`}
+                              </span>
+                            </List.CollapsedPlaceholder>
+                          ) : (
+                            <List.RowList
+                              role="list"
+                              aria-labelledby={yearHeadingId}
+                            >
+                              {yearItems.map((item, index) =>
+                                renderRow(item, currentYear, index, yearItems.length),
+                              )}
+                            </List.RowList>
+                          )}
+                        </List.YearSection>
                       )
                     })}
-                  </>
-                )}
-                  </>
-                )}
-              </React.Fragment>
+              </List.CenturySection>
             )
-            })
-          })()}
+          })}
 
           {/* 연도 미상 — period.start가 비었거나 파싱 불가하고 귀속할 상위 연도도 없는 항목.
            * 그룹핑에서 드롭하지 않고 여기 모아 렌더한다(자식만 남은 북마크 필터·날짜 완전 미상). */}
           {unknownItems.length > 0 && (
-            <React.Fragment key="year-unknown">
+            /* 연도 섹션과 같은 래퍼를 쓴다 — UnknownYearDivider도 YearDivider를 상속해
+             * sticky이므로, 감싸지 않으면 이 헤더만 목록 끝까지 상단에 눌어붙는다. */
+            <List.YearSection
+              key="year-unknown"
+              role="group"
+              aria-labelledby="events-year-unknown"
+            >
+              <List.GroupHeading id="events-year-unknown" aria-level={4}>
+                {`연도 미상 — 사건 ${unknownItems.length}건`}
+              </List.GroupHeading>
               <List.UnknownYearDivider as="div" style={{ cursor: 'default' }}>
                 <span>
                   연도 미상
                   <List.CollapsedCount>{unknownItems.length}</List.CollapsedCount>
                 </span>
               </List.UnknownYearDivider>
-              {unknownItems.map(({ node, depth, parentEvent }) => {
-                const hasChildren = Boolean(
-                  node.children && node.children.length > 0,
-                )
-                const isExpanded = expandedEventIds.has(node.id)
-                const event = eventById.get(node.id) ?? parentEvent
-                if (!event) return null
-                return (
-                  <EventListItem
-                    key={node.id}
-                    node={node}
-                    event={event}
-                    depth={depth}
-                    isExpanded={isExpanded}
-                    hasChildren={hasChildren}
-                    isActive={selectedEventId === node.id}
-                    dbCategories={dbCategories}
-                    isBookmarked={bookmarks.has(node.id)}
-                    searchQuery={searchQuery}
-                    onSelect={onSelectEvent}
-                    onToggleExpansion={onToggleExpansion}
-                    onShowSummary={onShowSummary}
-                    onToggleBookmark={onToggleBookmark}
-                  />
-                )
-              })}
-            </React.Fragment>
+              <List.RowList role="list" aria-labelledby="events-year-unknown">
+                {unknownItems.map((item, index) =>
+                  renderRow(item, null, index, unknownItems.length),
+                )}
+              </List.RowList>
+            </List.YearSection>
           )}
 
           {/* 로딩 / 끝 안내 — 사용자가 "어디까지 봤는지·더 있는지·끝인지" 즉시 알 수 있도록.
@@ -521,7 +550,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           {!isLoadingMore && !hasMoreData && displayedCount > 0 && (
             <LoadingMoreRow role="status" aria-live="polite">
               <EndOfListText>
-                끝까지 봤습니다 · 총 {displayedCount.toLocaleString()}건
+                끝까지 봤습니다 · 표시 {displayedCount.toLocaleString()}행
+                {displayedRootCount > 0 &&
+                  displayedRootCount !== displayedCount &&
+                  ` (최상위 ${displayedRootCount.toLocaleString()}건)`}
               </EndOfListText>
             </LoadingMoreRow>
           )}
@@ -545,7 +577,7 @@ const LoadingMoreRow = styled.div`
 `
 
 const LoadingMoreText = styled.div`
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
   font-size: 13px;
   font-weight: 500;
 `
@@ -596,7 +628,7 @@ const ScrollHint = styled.div`
 const ScrollHintInline = styled.span`
   font-size: 12.5px;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
   letter-spacing: 0.02em;
 `
 
@@ -648,7 +680,7 @@ const ActiveChip = styled.button`
 const EndOfListText = styled.span`
   font-size: 12.5px;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
 
@@ -750,6 +782,10 @@ const SkeletonStop = styled.div<{ $depth: number }>`
   position: relative;
   display: flex;
   align-items: stretch;
+  /* 실제 행 높이(45px)와 동기화 — 예전엔 33px이라 12행 기준 세로 ~144px이 점프했다.
+     실제 행에는 28px BookmarkBtn이 상시 렌더되므로 그 높이가 하한이다. */
+  box-sizing: border-box;
+  min-height: 45px;
   padding: 8px 12px 8px 14px;
   margin-left: ${({ $depth }) => $depth * 22}px;
   border-bottom: 1px solid
@@ -783,6 +819,12 @@ const SkeletonBody = styled.div`
   gap: 8px;
   min-width: 0;
   max-width: 880px;
+`
+
+const SkeletonExpandSpacer = styled.span`
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 `
 
 const SkeletonYear = styled.span`

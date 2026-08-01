@@ -8,8 +8,9 @@
  * v2 — 인라인 팝오버: 카테고리·국가 모두 클릭 시 *드롭다운 리스트*로 즉시 선택 가능.
  * 항목이 많으면 popover 내부 검색 박스 노출. 기존 모달 진입은 "전체 보기" 풋터에서.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { createPortal } from 'react-dom'
 import {
   FiCalendar,
   FiCheck,
@@ -26,6 +27,9 @@ import type { CenturyFilter } from '@/entities/event/model'
 import { FILTER_ALL } from '@/features/event-list/lib'
 import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
+import { useAnchoredPosition } from '@/shared/hooks/use-anchored-position.hook'
+import { useOverlayEscape } from '@/shared/hooks/use-overlay-escape.hook'
+import { Z_INDEX } from '@/shared/styles/z-index'
 
 import * as Filter from '../../../pages/events/styles/filter.styles'
 import { BRAND, MOTION, SHADOW } from '../../../pages/events/styles/theme'
@@ -183,17 +187,24 @@ export const FiltersPanel: React.FC<FiltersPanelProps> = ({
         </Filter.CenturySelectWrap>
       </Filter.FilterGroup>
 
-      {/* 토글들 — segmented group 외부, inline group */}
-      <Filter.FilterToggle onClick={onToggleFlatView}>
+      {/* 토글들 — segmented group 외부, inline group.
+       *
+       * ⚠️ FilterToggle(label)에 onClick을 걸지 말 것. label 안의 Switch는 button —
+       * HTML labelable 요소라 label의 피제어 컨트롤이 된다. 라벨 영역을 누르면
+       * ⑴ label 자신의 onClick ⑵ 브라우저가 button으로 전달한 활성화 클릭이 연달아 실행돼
+       * **짝수 번 토글 = 순 변화 0**이 됐다. 라이브 실측에선 URL만 flat=1로 바뀌고 목록은
+       * 계층 그대로 남아, 새로고침하면 다른 화면이 뜨는 URL↔화면 desync까지 생겼다.
+       * 토글 주체는 Switch 하나로 단일화한다(라벨 클릭은 브라우저가 알아서 버튼으로 전달). */}
+      <Filter.FilterToggle>
         <FiLayers size={12} style={{ color: '#64748b' }} aria-hidden="true" />
         <Filter.FilterToggleLabel>계층</Filter.FilterToggleLabel>
         <Filter.Switch
           type="button"
+          role="switch"
+          aria-checked={!showFlatView}
+          aria-label="계층 보기"
           $active={!showFlatView}
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggleFlatView()
-          }}
+          onClick={onToggleFlatView}
         >
           <Filter.SwitchThumb $active={!showFlatView} />
         </Filter.Switch>
@@ -241,25 +252,33 @@ const InlineFilterPopover: React.FC<InlineFilterPopoverProps> = ({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const wrapRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  /** 포털된 팝오버 노드 — wrapRef의 자손이 아니므로 외부클릭 판정에 따로 필요 */
+  const popoverRef = useRef<HTMLDivElement | null>(null)
   const searchRef = useRef<HTMLInputElement | null>(null)
+  const position = useAnchoredPosition(triggerRef, open)
+  const closePopover = useCallback(() => setOpen(false), [])
 
-  // 닫기: 외부 클릭 / Escape
+  // 닫기: 외부 클릭(Escape는 useOverlayEscape)
   useEffect(() => {
     if (!open) return
-    const onDocDown = (e: MouseEvent) => {
-      if (!wrapRef.current) return
-      if (!wrapRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+    const onDocDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      // 팝오버는 body로 포털되어 wrapRef 밖에 있다. popoverRef를 함께 보지 않으면
+      // 옵션을 누르는 mousedown이 "외부 클릭"으로 판정돼 click 전에 언마운트되고,
+      // 결과적으로 아무것도 선택되지 않는다.
+      if (wrapRef.current?.contains(target)) return
+      if (popoverRef.current?.contains(target)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', onDocDown)
-    document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('mousedown', onDocDown)
-      document.removeEventListener('keydown', onKey)
     }
   }, [open])
+  // Escape는 공용 훅이 처리한다 — 전파를 끊어 페이지의 window 핸들러가 같은 키를
+  // '선택 해제'로 재해석하지 못하게 한다(검토 INT-1).
+  useOverlayEscape(open, closePopover)
 
   // 열렸을 때 검색 input 자동 포커스
   useEffect(() => {
@@ -285,8 +304,9 @@ const InlineFilterPopover: React.FC<InlineFilterPopoverProps> = ({
   return (
     <PopoverWrap ref={wrapRef}>
       <Filter.FilterTriggerButton
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen((prev) => !prev)}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
@@ -305,73 +325,84 @@ const InlineFilterPopover: React.FC<InlineFilterPopoverProps> = ({
           }}
         />
       </Filter.FilterTriggerButton>
-      {open && (
-        <Popover role="listbox" aria-label={ariaLabel}>
-          {searchable && (
-            <SearchRow>
-              <FiSearch size={12} aria-hidden="true" />
-              <SearchInput
-                ref={searchRef}
-                type="search"
-                value={query}
-                placeholder="검색…"
-                onChange={(e) => setQuery(e.target.value)}
-                aria-label={`${ariaLabel} 검색`}
-              />
-            </SearchRow>
-          )}
-          <List>
-            {visibleList.length === 0 ? (
-              <Empty>검색 결과 없음</Empty>
-            ) : (
-              visibleList.map((opt) => {
-                const selected = opt.id === selectedId
-                return (
-                  <Item
-                    key={opt.id}
-                    role="option"
-                    aria-selected={selected}
-                    $selected={selected}
+      {open &&
+        position &&
+        createPortal(
+          <Popover
+            ref={popoverRef}
+            role="listbox"
+            aria-label={ariaLabel}
+            style={{
+              top: position.top,
+              left: position.left,
+              minWidth: position.minWidth,
+              maxHeight: position.maxHeight,
+            }}
+          >
+            {searchable && (
+              <SearchRow>
+                <FiSearch size={12} aria-hidden="true" />
+                <SearchInput
+                  ref={searchRef}
+                  type="search"
+                  value={query}
+                  placeholder="검색…"
+                  onChange={(event) => setQuery(event.target.value)}
+                  aria-label={`${ariaLabel} 검색`}
+                />
+              </SearchRow>
+            )}
+            <List>
+              {visibleList.length === 0 ? (
+                <Empty>검색 결과 없음</Empty>
+              ) : (
+                visibleList.map((option) => {
+                  const selected = option.id === selectedId
+                  return (
+                    <Item
+                      key={option.id}
+                      role="option"
+                      aria-selected={selected}
+                      $selected={selected}
+                      type="button"
+                      onClick={() => {
+                        onSelect(option.id)
+                        setOpen(false)
+                      }}
+                    >
+                      {option.prefix && (
+                        <ItemPrefix aria-hidden="true">
+                          {option.prefix}
+                        </ItemPrefix>
+                      )}
+                      <ItemName>{option.name}</ItemName>
+                      {selected && <FiCheck size={12} aria-hidden="true" />}
+                    </Item>
+                  )
+                })
+              )}
+            </List>
+            {(truncated || onShowMoreModal) && (
+              <Footer>
+                {truncated && (
+                  <FooterHint>+ 더 많은 항목은 검색으로 찾기</FooterHint>
+                )}
+                {onShowMoreModal && (
+                  <FooterAction
                     type="button"
                     onClick={() => {
-                      onSelect(opt.id)
+                      onShowMoreModal()
                       setOpen(false)
                     }}
                   >
-                    {opt.prefix && (
-                      <ItemPrefix aria-hidden="true">{opt.prefix}</ItemPrefix>
-                    )}
-                    <ItemName>{opt.name}</ItemName>
-                    {selected && (
-                      <FiCheck size={12} aria-hidden="true" />
-                    )}
-                  </Item>
-                )
-              })
+                    전체 보기 →
+                  </FooterAction>
+                )}
+              </Footer>
             )}
-          </List>
-          {(truncated || onShowMoreModal) && (
-            <Footer>
-              {truncated && (
-                <FooterHint>
-                  + 더 많은 항목은 검색으로 찾기
-                </FooterHint>
-              )}
-              {onShowMoreModal && (
-                <FooterAction
-                  type="button"
-                  onClick={() => {
-                    onShowMoreModal()
-                    setOpen(false)
-                  }}
-                >
-                  전체 보기 →
-                </FooterAction>
-              )}
-            </Footer>
-          )}
-        </Popover>
-      )}
+          </Popover>,
+          document.body,
+        )}
     </PopoverWrap>
   )
 }
@@ -386,11 +417,15 @@ const PopoverWrap = styled.div`
   align-items: stretch;
 `
 
+/**
+ * body로 포털되어 뜬다 — `top`/`left`/`minWidth`/`maxHeight`는 useAnchoredPosition이
+ * 인라인 스타일로 주입한다. 툴바 안에서 absolute로 띄우면 FilterGroup의
+ * `overflow: hidden`에 잘리므로 이 컴포넌트를 다시 DOM 자식으로 되돌리지 말 것.
+ * (같은 이유로 FilterGroup의 `& button { ...!important }` 자손 리셋도 더 이상 닿지 않는다.)
+ */
 const Popover = styled.div`
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 60;
+  position: fixed;
+  z-index: ${Z_INDEX.DROPDOWN};
   min-width: 200px;
   max-width: 280px;
   display: flex;
@@ -441,6 +476,9 @@ const SearchInput = styled.input`
 const List = styled.div`
   display: flex;
   flex-direction: column;
+  /* 뷰포트가 짧으면 Popover의 maxHeight가 더 작다 — flex 축소로 그 안에 맞춘다. */
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: 280px;
   overflow-y: auto;
   padding: 4px;

@@ -2801,9 +2801,8 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
               <>
                 <EmptyTitle>이 범위에 표시할 사건이 없습니다</EmptyTitle>
                 <EmptyDescription>
-                  상단 검색·필터를 조정하거나, 목록·지도·갤러리 등 다른 뷰로
-                  전환해 보세요. 데이터가 아직 적재되지 않은 시기일 수도
-                  있습니다.
+                  상단 검색·필터를 조정하거나, 목록 보기로 전환해 보세요.
+                  데이터가 아직 적재되지 않은 시기일 수도 있습니다.
                 </EmptyDescription>
               </>
             )}

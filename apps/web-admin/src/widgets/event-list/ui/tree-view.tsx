@@ -21,18 +21,14 @@ export const TreeView: React.FC<TreeViewProps> = ({ node }) => {
       <Modal.TreeNodeCard $depth={depth} $importance={currentNode.importance}>
         <Modal.TreeNodeHeader>
           <Modal.TreeNodeTitle>{currentNode.title}</Modal.TreeNodeTitle>
-          {currentNode.importance && (
-            <Modal.TreeImportanceBadge $importance={currentNode.importance}>
-              {currentNode.importance === 'critical'
-                ? '핵심'
-                : currentNode.importance === 'major'
-                  ? '주요'
-                  : '일반'}
-            </Modal.TreeImportanceBadge>
-          )}
         </Modal.TreeNodeHeader>
         <Modal.TreeNodeDate>
-          {formatDateRange(currentNode.period.start, currentNode.period.end)}
+          {formatDateRange(
+            currentNode.period.start,
+            currentNode.period.end,
+            currentNode.period.startPrecision,
+            currentNode.period.endPrecision,
+          )}
         </Modal.TreeNodeDate>
         <Modal.TreeNodeSummary>{currentNode.summary}</Modal.TreeNodeSummary>
       </Modal.TreeNodeCard>

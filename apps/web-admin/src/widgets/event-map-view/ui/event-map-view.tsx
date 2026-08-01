@@ -168,8 +168,8 @@ export const EventMapView: React.FC<Props> = ({
     return hasActiveFilters && onResetFilters ? (
       <EmptyStateSpotlight
         icon={<FiFilter size={28} />}
-        title="현재 필터에 좌표 있는 사건이 없습니다"
-        description="필터를 풀어 좌표가 있는 다른 사건을 확인해 보세요."
+        title="지도 보기는 준비 중입니다"
+        description="사건에 좌표를 기록하는 기능이 아직 없습니다 — 필터 때문이 아닙니다."
         primaryAction={{
           label: '필터 모두 초기화',
           onClick: onResetFilters,
@@ -178,11 +178,11 @@ export const EventMapView: React.FC<Props> = ({
     ) : (
       <EmptyStateSpotlight
         icon={<FiMapPin size={28} />}
-        title="아직 좌표 데이터가 없습니다"
+        title="지도 보기는 준비 중입니다"
         description={
           <>
-            사건 등록 시 <em>map.markers</em>에 좌표를 추가하면 여기에
-            표시됩니다.
+            사건에 좌표를 기록하는 기능이 아직 없어 표시할 위치 데이터가
+            없습니다. 시대·계층 탐색은 타임라인·목록 보기를 이용해 주세요.
           </>
         }
       />

@@ -61,7 +61,15 @@ export const EventTreeView: React.FC<Props> = ({
   dbCategories,
   onSelectEvent,
 }) => {
-  /** 현재 표시 대상 root 사건만 추출 (visibleFlattenedHierarchy의 depth 0) */
+  /**
+   * 현재 표시 대상 root 사건만 추출.
+   *
+   * ⚠️ `depth === 0`만으로 판정하면 안 된다. '계층' 토글을 끄면(평면 모드) 평탄화가
+   * **모든 노드를 depth 0으로** 밀어 넣기 때문에, 자식 사건이 자기 루트 카드로 한 번
+   * 나오고 부모 카드 안 자식 노드로 또 한 번 나온다(`data-event-id`도 중복돼 키보드
+   * 이동·aria-current가 첫 노드로만 매칭). 트리 뷰는 계층을 보여주는 뷰이므로
+   * 표시 대상이더라도 **원본 루트(parentEventId 없음)**만 카드로 삼는다(검토 IA-9).
+   */
   const rootEvents = useMemo(() => {
     const eventById = new Map<string, HistoricalEvent>()
     for (const e of events) eventById.set(e.id, e)
@@ -69,11 +77,13 @@ export const EventTreeView: React.FC<Props> = ({
     const seen = new Set<string>()
     const out: HistoricalEvent[] = []
     for (const item of flattenedHierarchy) {
-      if (item.depth !== 0) continue
       if (seen.has(item.node.id)) continue
-      seen.add(item.node.id)
       const evt = eventById.get(item.node.id)
-      if (evt) out.push(evt)
+      if (!evt) continue
+      // 평면 모드에서도 원본 계층 기준으로 루트를 판정
+      if (evt.parentEventId) continue
+      seen.add(item.node.id)
+      out.push(evt)
     }
     return out
   }, [flattenedHierarchy, events])
@@ -257,7 +267,6 @@ const TreeNode: React.FC<{
           <ToggleSpacer />
         )}
         <NodeYear>{startYear}</NodeYear>
-        <ImportancePill tier={node.importance} size="sm" />
         <NodeTitle>{node.title}</NodeTitle>
         {node.summary && <NodeSummary>{node.summary}</NodeSummary>}
       </NodeRow>

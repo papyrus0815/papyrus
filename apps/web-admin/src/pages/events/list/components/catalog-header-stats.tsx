@@ -4,9 +4,16 @@
  * 이전엔 PageHeader 우측에 별도 KPI chip 그룹이었으나, 사용자 시선 부담과
  * ViewMeta(표시/전체 카운트)와의 정보 중복 때문에 한 줄로 융합. 이제 다음과 같이 노출:
  *
- *   표시 1,247건 · 핵심 89 · 주요 234 · 정치 47
+ *   표시 1,247건 · 정치 47
  *
- * 카테고리는 TOP 1만 표기(과부하 방지). 핵심·주요는 항상 표기, normal은 생략.
+ * 카테고리는 TOP 1만 표기(과부하 방지).
+ *
+ * 중요도(핵심·주요) 칩은 **제거됐다**(2026-07-28 검토 M9) — importance는 스키마·DTO에
+ * 없는 값이라 transformer가 전부 'notable'로 채웠고, 그래서 이 칩은 단 한 번도 렌더된
+ * 적이 없다. 실재하지 않는 집계를 지운다.
+ *
+ * ⚠️ 남은 스코프 불일치: topCategory는 *로드된 전체* events로 세는데 총계는 필터된
+ * visibleCount다. 카운트 모수 통일은 배치 4(계층·카운트 계약)에서 함께 처리한다.
  */
 import React, { useMemo } from 'react'
 
@@ -21,17 +28,10 @@ import { CATEGORY_BADGE_COLORS } from '../../styles/theme'
 interface Props {
   events: HistoricalEvent[]
   dbCategories: EventCategoryDto[]
-  /** 현재 필터된 표시 건수 — undefined면 serverTotal/events.length로 폴백 */
+  /** 필터를 만족하는 사건 수 — undefined(미필터)면 serverTotal/events.length로 폴백 */
   visibleCount?: number
-  /** 서버 권위 총개수 — 미필터 상태에서 "N건"을 로드된 수가 아닌 진짜 총량으로 */
+  /** 서버 권위 총개수(최상위 기준) — 미필터 상태의 "N건" */
   serverTotal?: number
-}
-
-type Tier = 'critical' | 'major'
-
-const TIER_META: Record<Tier, { label: string; color: string }> = {
-  critical: { label: '핵심', color: '#2563eb' },
-  major: { label: '주요', color: '#f59e0b' },
 }
 
 export const CatalogHeaderStats: React.FC<Props> = ({
@@ -40,24 +40,19 @@ export const CatalogHeaderStats: React.FC<Props> = ({
   visibleCount,
   serverTotal,
 }) => {
-  const { tiers, topCategory } = useMemo(() => {
-    const tierCount: Record<Tier, number> = { critical: 0, major: 0 }
+  const { topCategory } = useMemo(() => {
     const catCount = new Map<string, number>()
 
-    for (const e of events) {
-      const imp = e.hierarchy?.importance
-      if (imp === 'critical') tierCount.critical += 1
-      else if (imp === 'major') tierCount.major += 1
-
-      const k = e.category || 'other'
-      catCount.set(k, (catCount.get(k) ?? 0) + 1)
+    for (const historicalEvent of events) {
+      const key = historicalEvent.category || 'other'
+      catCount.set(key, (catCount.get(key) ?? 0) + 1)
     }
 
-    const top1 = Array.from(catCount.entries())
-      .sort((a, b) => b[1] - a[1])[0]
+    const top1 = Array.from(catCount.entries()).sort(
+      (left, right) => right[1] - left[1],
+    )[0]
 
     return {
-      tiers: tierCount,
       topCategory: top1
         ? {
             key: top1[0],
@@ -74,32 +69,22 @@ export const CatalogHeaderStats: React.FC<Props> = ({
 
   if (events.length === 0) return null
 
-  // 필터 중이면 표시 건수, 아니면 서버 권위 총량(없으면 로드된 수)
+  // 필터 중이면 조건을 만족하는 사건 수, 아니면 서버 권위 총량(없으면 로드된 수)
+  const isFiltered = visibleCount !== undefined
   const total = visibleCount ?? serverTotal ?? events.length
 
   return (
     <Strip aria-label="등록 사건 분포">
-      <Total>
+      <Total
+        title={
+          isFiltered
+            ? '현재 조건을 만족하는 사건 수'
+            : '등록된 최상위 사건 수(하위 사건은 별도)'
+        }
+      >
+        {isFiltered && <TotalPrefix>조건 일치</TotalPrefix>}
         <strong>{total.toLocaleString()}</strong>건
       </Total>
-      {tiers.critical > 0 && (
-        <>
-          <Sep aria-hidden="true">·</Sep>
-          <StatItem title={`핵심 ${tiers.critical}건`}>
-            <Dot style={{ background: TIER_META.critical.color }} />
-            <span>핵심 {tiers.critical.toLocaleString()}</span>
-          </StatItem>
-        </>
-      )}
-      {tiers.major > 0 && (
-        <>
-          <Sep aria-hidden="true">·</Sep>
-          <StatItem title={`주요 ${tiers.major}건`}>
-            <Dot style={{ background: TIER_META.major.color }} />
-            <span>주요 {tiers.major.toLocaleString()}</span>
-          </StatItem>
-        </>
-      )}
       {topCategory && (
         <>
           <Sep aria-hidden="true">·</Sep>
@@ -135,6 +120,12 @@ const Total = styled.span`
     color: ${({ theme }) => theme.colors.text.primary};
     margin-right: 1px;
   }
+`
+
+const TotalPrefix = styled.span`
+  margin-right: 4px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const StatItem = styled.span`

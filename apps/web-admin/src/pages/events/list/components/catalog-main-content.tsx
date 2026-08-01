@@ -2,7 +2,7 @@
  * 카탈로그 메인 영역 (활성 뷰 모드).
  *
  * 디자인 원칙
- *  - **뷰 세그먼트 3+1**: 자주 쓰는 타임라인/목록/지도는 세그먼트 노출, 그 외(격자/통계/트리/갤러리)는
+ *  - **뷰 세그먼트 2+1**: 자주 쓰는 타임라인/목록은 세그먼트 노출, 그 외(격자/통계/트리/갤러리/지도)는
  *    "더보기 ▾" 드롭다운으로 묶어 시각 부담 감소.
  *  - **통계 인라인**: 페이지 헤더의 KPI chip을 제거하고 ViewMeta 자리에 한 줄 요약으로 융합.
  *  - 표시 옵션(정렬·방향·페이지 크기)은 필터와 시각 family 분리.
@@ -12,8 +12,11 @@
  *
  * 상세 패널은 `CatalogDetailDrawer`로 분리.
  */
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 
+import { useOverlayEscape } from '@/shared/hooks/use-overlay-escape.hook'
+
+import { createPortal } from 'react-dom'
 import {
   FiArrowDown,
   FiBarChart2,
@@ -33,6 +36,8 @@ import styled from 'styled-components'
 import type { SortOption } from '@/features/event-list/lib'
 import { VIEW_MODES, type ViewMode } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
+import { useAnchoredPosition } from '@/shared/hooks/use-anchored-position.hook'
+import { Z_INDEX } from '@/shared/styles/z-index'
 
 import type { HistoricalEvent } from '../../create/events.types'
 import * as Filter from '../../styles/filter.styles'
@@ -46,12 +51,16 @@ import { CatalogHeaderStats } from './catalog-header-stats'
 interface Props {
   viewMode: ViewMode
   setViewMode: (v: ViewMode) => void
-  /** 현재 필터·북마크가 적용된 *보이는* 항목 수 — 화면 상의 진실 */
+  /** 현재 필터·북마크가 적용돼 화면에 렌더되는 *행* 수(부모+펼친 자식) */
   visibleCount: number
-  /** 현재까지 로드된 최상위 사건 수 — visibleCount와 다를 때만 보조 표시 */
+  /** 그중 필터를 실제로 만족하는 사건 수 — 문맥용 부모 행은 제외 */
+  matchedCount: number
+  /** 현재까지 로드된 *최상위* 사건 수 — serverTotal과 같은 모수 */
   totalCount: number
-  /** 서버의 권위 총개수(로드 여부 무관). 있으면 "전체 N건"을 이 값으로 — 로드된 수 과소표시 해소 */
+  /** 서버의 권위 총개수(최상위 기준, 로드 여부 무관) */
   serverTotal?: number
+  /** 필터·검색·북마크가 실제로 걸려 있는가 — 카운트 비교로 추측하지 않는다 */
+  filtersActive: boolean
 
   /** 인라인 통계 strip을 위한 데이터 */
   events: HistoricalEvent[]
@@ -91,21 +100,26 @@ const VIEW_HINTS: Record<ViewMode, string> = {
   [VIEW_MODES.TIMELINE]:
     '시대별 분포·동시대성 — 막대 길이=기간, 우측 목록으로 사건명 확인',
   [VIEW_MODES.LIST]: '전체 사건을 시간순으로 훑기 — 세기·연도별 그룹',
-  [VIEW_MODES.MAP]: '지리적 위치 — 좌표가 있는 사건만 표시',
+  [VIEW_MODES.MAP]: '지리적 위치 — 좌표 데이터가 아직 없어 준비 중입니다',
   [VIEW_MODES.GRID]: '10년 단위 밀집도 — 어느 시대에 사건이 몰렸는지',
   [VIEW_MODES.DASHBOARD]: '데이터 분포·품질 통계 — 사건 목록이 아닌 집계',
   [VIEW_MODES.TREE]: '상·하위 사건의 계층 관계',
   [VIEW_MODES.GALLERY]: '이미지 중심 카드 — 시각적 탐색',
 }
 
-/** 자주 쓰는 3개 — 세그먼트 컨트롤로 노출 */
+/**
+ * 자주 쓰는 2개 — 세그먼트 컨트롤로 노출.
+ *
+ * 지도는 여기서 **빠졌다**(2026-07-28 검토 M8): 좌표 파이프라인이 스키마·DTO·등록
+ * 폼 어디에도 없어 데이터와 무관하게 100% 빈 화면인데, primary 3개 중 하나를
+ * 차지하고 있었다. 좌표를 실제로 싣게 되면 다시 올릴 것.
+ */
 const PRIMARY_MODES: ModeDef[] = [
   { value: VIEW_MODES.TIMELINE, label: '타임라인', icon: <FiClock size={13} /> },
   { value: VIEW_MODES.LIST, label: '목록', icon: <FiList size={13} /> },
-  { value: VIEW_MODES.MAP, label: '지도', icon: <FiMapPin size={13} /> },
 ]
 
-/** 보조 4개 — "더보기 ▾" 드롭다운에 묶음 */
+/** 보조 5개 — "더보기 ▾" 드롭다운에 묶음 */
 const SECONDARY_MODES: ModeDef[] = [
   { value: VIEW_MODES.GRID, label: '격자', icon: <FiGrid size={13} /> },
   {
@@ -115,14 +129,17 @@ const SECONDARY_MODES: ModeDef[] = [
   },
   { value: VIEW_MODES.TREE, label: '트리', icon: <FiGitBranch size={13} /> },
   { value: VIEW_MODES.GALLERY, label: '갤러리', icon: <FiImage size={13} /> },
+  { value: VIEW_MODES.MAP, label: '지도', icon: <FiMapPin size={13} /> },
 ]
 
 export const CatalogMainContent: React.FC<Props> = ({
   viewMode,
   setViewMode,
   visibleCount,
+  matchedCount,
   totalCount,
   serverTotal,
+  filtersActive,
   events,
   dbCategories,
   sortBy,
@@ -135,29 +152,44 @@ export const CatalogMainContent: React.FC<Props> = ({
   onToggleWideMode,
   activeSlot,
 }) => {
-  const isFiltered = visibleCount !== totalCount
-  /** 표시용 권위 총량 — 서버 count가 있으면 그 값, 없으면 로드된 수로 폴백 */
+  /**
+   * 필터 여부는 **실제 필터 상태**로 판정한다.
+   * 예전엔 `visibleCount !== totalCount`로 추측했는데, 두 값의 모수가 애초에 달라
+   * (행 수 vs 최상위 사건 수) 필터를 하나도 안 걸어도 거의 항상 true였고, 반대로
+   * 계층을 접으면 우연히 같아져 '미필터'로 뒤집히기도 했다(검토 M10).
+   */
+  const isFiltered = filtersActive
+  /** 표시용 권위 총량 — 서버 count가 있으면 그 값, 없으면 로드된 최상위 수로 폴백 */
   const authoritativeTotal = serverTotal ?? totalCount
 
   // ── 더보기 메뉴 ────────────────────────────────────────────────────
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLDivElement | null>(null)
+  const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
+  /** 포털된 메뉴 노드 — moreRef의 자손이 아니라 외부클릭 판정에 따로 필요 */
+  const moreMenuRef = useRef<HTMLDivElement | null>(null)
+  const morePosition = useAnchoredPosition(moreTriggerRef, moreOpen, {
+    maxWidth: 140,
+  })
+  const closeMoreMenu = useCallback(() => setMoreOpen(false), [])
+
   useEffect(() => {
     if (!moreOpen) return
-    const onDocDown = (e: MouseEvent) => {
-      if (!moreRef.current) return
-      if (!moreRef.current.contains(e.target as Node)) setMoreOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMoreOpen(false)
+    const onDocDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (moreRef.current?.contains(target)) return
+      // 메뉴는 body로 포털된다 — 이 검사가 없으면 항목을 누르는 mousedown이
+      // 외부 클릭으로 판정돼 click 전에 언마운트되고 뷰가 전환되지 않는다.
+      if (moreMenuRef.current?.contains(target)) return
+      setMoreOpen(false)
     }
     document.addEventListener('mousedown', onDocDown)
-    document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('mousedown', onDocDown)
-      document.removeEventListener('keydown', onKey)
     }
   }, [moreOpen])
+  // Escape는 공용 훅이 처리(전파 차단) — 검토 INT-1
+  useOverlayEscape(moreOpen, closeMoreMenu)
 
   const activeSecondary = SECONDARY_MODES.find((m) => m.value === viewMode)
   const moreActive = !!activeSecondary
@@ -184,12 +216,13 @@ export const CatalogMainContent: React.FC<Props> = ({
             )
           })}
 
-          {/* 더보기 — 격자/통계/트리/갤러리 묶음 */}
+          {/* 더보기 — 격자/통계/트리/갤러리/지도 묶음 */}
           <MoreSegmentWrap ref={moreRef}>
             <ToolbarStyles.ViewSegment
+              ref={moreTriggerRef}
               type="button"
               $active={moreActive}
-              onClick={() => setMoreOpen((v) => !v)}
+              onClick={() => setMoreOpen((prev) => !prev)}
               aria-haspopup="true"
               aria-expanded={moreOpen}
               aria-label={
@@ -218,30 +251,42 @@ export const CatalogMainContent: React.FC<Props> = ({
                 }}
               />
             </ToolbarStyles.ViewSegment>
-            {moreOpen && (
-              // role="group" + aria-pressed 버튼 그룹 — 선언만 하고 키보드 메뉴
-              // 내비(화살표 로빙)를 구현하지 않던 menu 패턴 대신 실제 Tab 동작과 일치.
-              <MoreMenu role="group" aria-label="추가 보기 모드">
-                {SECONDARY_MODES.map((mode) => {
-                  const active = viewMode === mode.value
-                  return (
-                    <MoreMenuItem
-                      key={mode.value}
-                      aria-pressed={active}
-                      $active={active}
-                      type="button"
-                      onClick={() => {
-                        setViewMode(mode.value)
-                        setMoreOpen(false)
-                      }}
-                    >
-                      <span aria-hidden="true">{mode.icon}</span>
-                      <span>{mode.label}</span>
-                    </MoreMenuItem>
-                  )
-                })}
-              </MoreMenu>
-            )}
+            {moreOpen &&
+              morePosition &&
+              createPortal(
+                // role="group" + aria-pressed 버튼 그룹 — 선언만 하고 키보드 메뉴
+                // 내비(화살표 로빙)를 구현하지 않던 menu 패턴 대신 실제 Tab 동작과 일치.
+                <MoreMenu
+                  ref={moreMenuRef}
+                  role="group"
+                  aria-label="추가 보기 모드"
+                  style={{
+                    top: morePosition.top,
+                    left: morePosition.left,
+                    maxHeight: morePosition.maxHeight,
+                  }}
+                >
+                  {SECONDARY_MODES.map((mode) => {
+                    const active = viewMode === mode.value
+                    return (
+                      <MoreMenuItem
+                        key={mode.value}
+                        aria-pressed={active}
+                        $active={active}
+                        type="button"
+                        onClick={() => {
+                          setViewMode(mode.value)
+                          setMoreOpen(false)
+                        }}
+                      >
+                        <span aria-hidden="true">{mode.icon}</span>
+                        <span>{mode.label}</span>
+                      </MoreMenuItem>
+                    )
+                  })}
+                </MoreMenu>,
+                document.body,
+              )}
           </MoreSegmentWrap>
         </ToolbarStyles.ViewSegmented>
 
@@ -301,12 +346,12 @@ export const CatalogMainContent: React.FC<Props> = ({
           <CatalogHeaderStats
             events={events}
             dbCategories={dbCategories}
-            visibleCount={isFiltered ? visibleCount : undefined}
+            visibleCount={isFiltered ? matchedCount : undefined}
             serverTotal={serverTotal}
           />
           {isFiltered && (
-            <FilteredHint title="등록된 전체 사건 수(필터 적용 전). 카테고리·세기·검색 필터는 이 값에 반영되지 않음.">
-              / 등록 전체 {authoritativeTotal.toLocaleString()}건
+            <FilteredHint title="등록된 최상위 사건 수(필터 적용 전). 앞의 숫자는 현재 조건을 만족하는 사건 수이므로 모수가 다릅니다.">
+              / 등록 전체 {authoritativeTotal.toLocaleString()}건(최상위)
             </FilteredHint>
           )}
         </MetaArea>
@@ -328,17 +373,22 @@ const MoreSegmentWrap = styled.div`
   display: inline-flex;
 `
 
+/**
+ * body로 포털된다 — 좌표는 useAnchoredPosition이 인라인으로 주입.
+ * ViewSegmented가 ≤720px에서 `overflow-x:auto` + `mask-image`를 걸기 때문에,
+ * 세그먼트 안에서 absolute로 띄우면 메뉴가 통째로 잘려 격자·통계·트리·갤러리에
+ * 진입할 수단이 사라진다(2026-07-28 검토 P1-8).
+ */
 const MoreMenu = styled.div`
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 50;
+  position: fixed;
+  z-index: ${Z_INDEX.DROPDOWN};
   min-width: 140px;
   padding: 4px;
   border-radius: 8px;
   display: flex;
   flex-direction: column;
   gap: 1px;
+  overflow-y: auto;
   ${({ theme }) =>
     theme.mode === 'dark'
       ? `background: #18181b;

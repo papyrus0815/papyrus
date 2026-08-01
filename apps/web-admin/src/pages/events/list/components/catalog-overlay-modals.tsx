@@ -88,19 +88,23 @@ export const CatalogOverlayModals: React.FC<Props> = ({
                   <li>
                     <kbd aria-label="위쪽 화살표">↑</kbd> /{' '}
                     <kbd aria-label="아래쪽 화살표">↓</kbd>
-                    <span>이전 / 다음 사건 선택</span>
+                    <span>이전 / 다음 사건 선택 (목록 행에 포커스가 있을 때)</span>
                   </li>
                   <li>
                     <kbd>Home</kbd> / <kbd>End</kbd>
-                    <span>맨 처음 / 맨 끝</span>
+                    <span>맨 처음 / 맨 끝 (목록 행에 포커스가 있을 때)</span>
                   </li>
                   <li>
-                    <kbd>Enter</kbd>
-                    <span>선택한 사건 상세로 이동</span>
+                    <kbd>Enter</kbd> / <kbd>Space</kbd>
+                    <span>포커스한 사건 열기 (우측 상세 패널)</span>
+                  </li>
+                  <li>
+                    <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Enter</kbd>
+                    <span>상세 페이지로 이동 (목록을 떠남)</span>
                   </li>
                   <li>
                     <kbd>Esc</kbd>
-                    <span>도움말 닫기 / 선택 해제</span>
+                    <span>열린 창 닫기 → 없으면 선택 해제</span>
                   </li>
                 </PageStyles.ShortcutList>
 
@@ -185,6 +189,8 @@ export const CatalogOverlayModals: React.FC<Props> = ({
                         {formatDateRange(
                           summaryNode.period.start,
                           summaryNode.period.end,
+                          summaryNode.period.startPrecision,
+                          summaryNode.period.endPrecision,
                         )}
                       </Modal.SummarySubtitle>
                     </div>

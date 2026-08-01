@@ -18,6 +18,13 @@ export interface EventHierarchyNode {
   period: {
     start: string
     end?: string
+    /**
+     * 날짜 정밀도('year' | 'month' | 'day') — 노드만 받는 소비처(요약 모달 트리,
+     * 트리 뷰, 상세 드로어)가 formatDateRange/formatDateWithPrecision에 넘겨
+     * 없는 월·일을 지어내지 않게 한다(2026-07-28 검토 DATA-3).
+     */
+    startPrecision?: string | null
+    endPrecision?: string | null
   }
   importance: 'critical' | 'major' | 'notable'
   children?: EventHierarchyNode[]

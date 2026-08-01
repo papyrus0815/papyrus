@@ -9,11 +9,12 @@
  *  - Esc → 닫기
  *  - 외부 클릭 → 닫기
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FiClock } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { useOverlayEscape } from '@/shared/hooks/use-overlay-escape.hook'
 import { CategoryDot } from '@/shared/ui/category-dot/category-dot'
 
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
@@ -47,22 +48,21 @@ export const RecentEventsDropdown: React.FC<Props> = ({
       .slice(0, MAX_ITEMS)
   }, [recentEventIds, events])
 
-  // 외부 클릭 + Esc 닫기
+  const closeDropdown = useCallback(() => setOpen(false), [])
+
+  // 외부 클릭 닫기(Escape는 useOverlayEscape)
   useEffect(() => {
     if (!open) return
     const onDoc = (e: MouseEvent) => {
       if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
     }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
     document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
     }
   }, [open])
+  // Escape는 공용 훅이 처리(전파 차단) — 검토 INT-1
+  useOverlayEscape(open, closeDropdown)
 
   if (items.length === 0) return null
 
