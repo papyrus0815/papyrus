@@ -285,11 +285,13 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
           {categoryName}
         </CategoryLabel>
         <Title>{highlightMatches(node.title, searchQuery)}</Title>
+        {/* 모바일 2줄 행의 강제 개행 지점 — 데스크톱에서는 display:none이라 무영향 */}
+        <RowBreak aria-hidden="true" />
 
         {/* 자식 수 — 접었을 때 무엇이 숨는지 알 수 있게. 어포던스가 20px 셰브론
             하나뿐이라 접고 나면 몇 개가 사라졌는지 알 방법이 없었다(검토 LD-6). */}
-        {/* 좁은 폭에서는 생략 — 같은 수치가 바로 앞 ExpandBtn의 aria-label
-            ('하위 사건 N개 펼치기')에 이미 있어 정보 손실이 없고, 그 폭을 제목에 돌린다. */}
+        {/* 좁은 폭에서는 생략 — 메타 줄을 한 줄로 고정하기 위한 폭 확보이고,
+            같은 수치가 바로 앞 ExpandBtn의 aria-label에 이미 있어 정보 손실이 없다. */}
         {hasChildren && childCount > 0 && !isNarrow && (
           /* aria-hidden — 같은 수치가 바로 앞 ExpandBtn의 aria-label('하위 사건 N개 …')에
              이미 있다. 노출하면 스크린리더가 맥락 없는 숫자 '3'을 한 번 더 읽는다. */
@@ -312,8 +314,8 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
           <CountryFlags
             modern={event.relatedCountries}
             historical={event.relatedHistoricalCountries}
-            /* 좁은 폭에선 1개 + '+N' — 역사국가는 이모지가 없어 국가명 전체가 텍스트 칩으로
-               그려지므로 3개면 제목을 통째로 밀어낸다(수정 전 390px에서 제목 0폭 73행). */
+            /* 좁은 폭은 1개 + '+N'. 2개를 그리면 위 max-width 상한에 걸려 두 번째 칩이
+               중간에서 잘린다(역사국가는 이모지가 없어 국가명 전체가 텍스트 칩이라 폭을 많이 먹는다). */
             max={isNarrow ? 1 : 3}
             size="sm"
           />
@@ -564,6 +566,39 @@ const Body = styled.div`
   flex-direction: row;
   align-items: center;
   gap: 8px;
+
+  /**
+   * 모바일(≤640px) 2줄 행 — 1줄: 제목, 2줄: 날짜·분류·기간·국기·액션.
+   *
+   * 2026-07-22 검토가 채택한 '단일 행'은 데스크톱 기준 결정이었다. 390px에서는 고정 토큰
+   * (셰브론 20 + 날짜 30 + 칩 34 + 국기 + 액션 28 + gap)이 행 폭의 대부분을 먹어 제목에
+   * 남는 폭이 120px 남짓이었다 — 한글 8자 내외라 어떤 사건인지 식별이 안 됐다.
+   * 데스크톱 단일 행 결정은 그대로 두고 좁은 폭에서만 줄을 나눈다.
+   *
+   * 줄바꿈은 order + 0높이 100%폭 스페이서(RowBreak)로 강제한다. 제목이 짧아도 메타가
+   * 같은 줄로 올라오지 않아야 행 높이가 들쭉날쭉하지 않다.
+   */
+  @media (max-width: 640px) {
+    flex-wrap: wrap;
+    row-gap: 3px;
+    align-items: center;
+  }
+`
+
+/**
+ * 모바일 전용 줄바꿈 스페이서 — flex 컨테이너에서 강제 개행을 만드는 표준 기법.
+ * 데스크톱에서는 렌더 트리에 있지만 박스를 만들지 않는다(display: none).
+ */
+const RowBreak = styled.span`
+  display: none;
+
+  @media (max-width: 640px) {
+    display: block;
+    flex-basis: 100%;
+    height: 0;
+    /* 제목(-1)과 메타(1) 사이 */
+    order: 0;
+  }
 `
 
 const RowActions = styled.div`
@@ -580,6 +615,10 @@ const RowActions = styled.div`
   margin-left: auto;
   padding-left: 8px;
   flex-shrink: 0;
+
+  @media (max-width: 640px) {
+    order: 2;
+  }
 `
 
 const ExpandBtn = styled.button<{ $expanded: boolean }>`
@@ -610,6 +649,10 @@ const ExpandBtn = styled.button<{ $expanded: boolean }>`
   @media (prefers-reduced-motion: reduce) {
     transition: background 0.12s;
   }
+
+  @media (max-width: 640px) {
+    order: -2;
+  }
   &:hover {
     background: rgba(37, 99, 235, 0.16);
     color: #2563eb;
@@ -620,6 +663,10 @@ const ExpandSpacer = styled.span`
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+
+  @media (max-width: 640px) {
+    order: -2;
+  }
 `
 
 const ChildCountBadge = styled.span`
@@ -627,6 +674,11 @@ const ChildCountBadge = styled.span`
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+
+  @media (max-width: 640px) {
+    order: 1;
+  }
+
   padding: 0 5px;
   height: 15px;
   border-radius: 7px;
@@ -640,6 +692,11 @@ const ChildCountBadge = styled.span`
 
 const FilteredOutHint = styled.span`
   flex-shrink: 0;
+
+  @media (max-width: 640px) {
+    order: 1;
+  }
+
   font-size: 10.5px;
   font-weight: 500;
   letter-spacing: -0.005em;
@@ -689,6 +746,7 @@ const Year = styled.span`
   @media (max-width: 640px) {
     font-size: 11px;
     min-width: 30px;
+    order: 1;
   }
 `
 
@@ -710,6 +768,18 @@ const Title = styled.span`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  /* 모바일 1줄차 — 셰브론만 옆에 두고 남은 폭 전부를 제목이 가진다(120px → ~270px).
+   *
+   * ⚠️ flex-basis는 반드시 0. auto면 기준 폭이 *콘텐츠 폭*이라 긴 제목이 셰브론과
+   * 같은 줄에 못 들어가 자기 줄로 밀려나고, 결과적으로 셰브론만 있는 빈 줄이 하나 더
+   * 생겨 행이 3줄(92px)이 된다 — 실측에서 240행 중 79행이 이 상태였다.
+   * basis 0이면 남은 폭을 받아 한 줄에 눕고 넘치면 말줄임된다. */
+  @media (max-width: 640px) {
+    order: -1;
+    flex: 1 1 0;
+    min-width: 0;
+  }
 `
 
 /* 검색어 매칭 강조 — 노란 배경 + 진한 텍스트. 다크 모드는 amber 톤. */
@@ -739,6 +809,10 @@ const CategoryLabel = styled.span<{
     theme.mode === 'dark' ? `rgba(${$rgb}, 0.16)` : `rgba(${$rgb}, 0.1)`};
   color: ${({ $text, $textDark, theme }) =>
     theme.mode === 'dark' ? $textDark : $text};
+
+  @media (max-width: 640px) {
+    order: 1;
+  }
 `
 
 const Duration = styled.span`
@@ -749,7 +823,10 @@ const Duration = styled.span`
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 
-  @media (max-width: 600px) {
+  /* 모바일 메타 줄은 **한 줄로 고정**해야 행 높이가 일정하다(들쭉날쭉하면 스캔이 깨진다).
+     한정된 폭에서 가장 먼저 포기할 토큰이 기간이다 — 실측상 233행 중 218행(94%)이
+     '1일'이라 반복 노이즈에 가깝고, 날짜·분류·국가가 훨씬 높은 식별 가치를 갖는다. */
+  @media (max-width: 640px) {
     display: none;
   }
 `
@@ -765,7 +842,12 @@ const Flags = styled.span`
   overflow: hidden;
 
   @media (max-width: 640px) {
-    max-width: 96px;
+    order: 1;
+    /* 메타 줄 1줄 고정을 위한 상한. 실측 폭 합계로 역산한다 —
+       Body 296 = 날짜 30 + 분류 56(최장 '전쟁/군사') + 액션 66(요약+북마크) + gap 24
+       = 176을 빼고 남는 120에서 안전 여유 8px. 이 상한을 넘기면 flex가 국기를
+       3번째 줄로 밀어 행 높이가 71px과 94px로 갈린다(실측: 240행 중 46행). */
+    max-width: 112px;
   }
 `
 
