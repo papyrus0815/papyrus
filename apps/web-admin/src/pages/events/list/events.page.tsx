@@ -864,6 +864,31 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
     }
   }, [selectedIndex, navigableItems])
 
+  /**
+   * 드로어 열림 고지 — **항상 마운트**된 라이브 영역이 페이지에 하나 있고, 문구는
+   * '닫힘 → 열림' 전이에서만 세팅한다(검토 A11Y-18).
+   *
+   * ⚠️ 두 가지를 동시에 지켜야 한다.
+   * ⑴ 드로어 컴포넌트 안에 두면 안 된다 — 그 컴포넌트가 `selectedEventId && (...)`로
+   *    조건부 렌더라 라이브 영역이 텍스트를 품은 채 삽입돼 첫 열림이 낭독되지 않는다.
+   * ⑵ 선택이 바뀔 때마다 문구를 갱신하면 안 된다 — ↑/↓ 내비게이션이 선택을 연속으로
+   *    옮기므로 행 포커스 낭독 위에 '…상세를 열었습니다'가 매번 겹쳐 큐잉된다.
+   */
+  const [drawerAnnouncement, setDrawerAnnouncement] = useState('')
+  const hadSelectionRef = useRef(false)
+  useEffect(() => {
+    const hasSelection = Boolean(selectedEventId)
+    if (hasSelection && !hadSelectionRef.current) {
+      const title = selectedEvent?.title ?? selectedNode?.title
+      setDrawerAnnouncement(
+        title ? `${title} 상세를 열었습니다` : '사건 상세를 열었습니다',
+      )
+    } else if (!hasSelection) {
+      setDrawerAnnouncement('')
+    }
+    hadSelectionRef.current = hasSelection
+  }, [selectedEventId, selectedEvent, selectedNode])
+
   const detailPanelSlot = (
     <EventDetailPanel
       /**
@@ -1044,6 +1069,9 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
           onToggleWideMode={toggleWideMode}
           activeSlot={activeSlot}
         />
+        <PageStyles.DrawerAnnouncer role="status" aria-live="polite">
+          {drawerAnnouncement}
+        </PageStyles.DrawerAnnouncer>
         {selectedEventId && (
           <CatalogDetailDrawer
             open

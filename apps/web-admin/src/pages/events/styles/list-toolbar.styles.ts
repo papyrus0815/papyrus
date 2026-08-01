@@ -465,23 +465,16 @@ export const ViewSegmented = styled.div`
       display: none;
     }
 
-    /* 우측 가장자리 fade — 가로 스크롤로 더 있음을 시각적으로 안내.
-     * mask는 스크롤 위치와 무관하게 "양 끝 페이드"가 되어 좌측 시작 위치에서도
-     * 살짝 hint, 그러나 그 비용보다 affordance 이득이 큼. */
-    mask-image: linear-gradient(
-      to right,
-      transparent 0,
-      #000 8px,
-      #000 calc(100% - 16px),
-      transparent 100%
-    );
-    -webkit-mask-image: linear-gradient(
-      to right,
-      transparent 0,
-      #000 8px,
-      #000 calc(100% - 16px),
-      transparent 100%
-    );
+    /**
+     * (제거됨) 양 끝 mask-image 페이드.
+     *
+     * 가로 스크롤 affordance로 넣었고 주석도 '스크롤 위치 무관하게 양 끝이 페이드된다'는
+     * 비용을 인정하면서 '7개 모드가 넘치므로' 정당화했다. 그런데 배치3이 지도 뷰를
+     * SECONDARY_MODES로 내리면서 PRIMARY_MODES는 2개, 실제 렌더 버튼은 3개(≈133px)가 됐다 —
+     * **어떤 모바일 폭에서도 넘치지 않는다**. 스크롤은 영영 발생하지 않고 mask만 남아
+     * 세그먼트 컨테이너의 좌우 모서리(라운드 보더·배경)가 상시 흐려 보였다(검토 RWD-4).
+     * overflow-x:auto는 남겨 둔다 — 모드가 다시 늘어나면 스크롤 자체는 동작해야 한다.
+     */
 
     & > button {
       scroll-snap-align: start;

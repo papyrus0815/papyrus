@@ -55,6 +55,27 @@ const isInteractiveTarget = (target: EventTarget | null): boolean => {
   )
 }
 
+/**
+ * **텍스트 입력** 요소인가 — `?`·`/` 전용 가드.
+ *
+ * `isInteractiveTarget`은 버튼·링크·다이얼로그까지 막는다. 그 넓은 가드를 `?`에 쓰면
+ * 도움말 모달이 열린 순간(포커스 트랩이 첫 focusable인 닫기 **버튼**으로 포커스를 옮긴다)
+ * `?`가 삼켜져 **모달 안에서는 같은 키로 닫을 수 없다** — 정작 모달 본문은 '이 도움말
+ * 열기/닫기'라고 안내한다. 포털 수정으로 모달이 실제로 렌더되면서 드러난 어긋남이다.
+ * 글자 입력을 가로채면 안 되는 것은 텍스트 입력 요소뿐이므로 그것만 막는다.
+ */
+const isTextEntryTarget = (target: EventTarget | null): boolean => {
+  const element = target as HTMLElement | null
+  if (!element) return false
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement
+  ) {
+    return true
+  }
+  return Boolean(element.isContentEditable)
+}
+
 interface CatalogShortcutsArgs {
   searchInputRef: RefObject<HTMLInputElement | null>
   setShortcutHelpOpen: (updater: (value: boolean) => boolean) => void
@@ -77,10 +98,11 @@ export function useCatalogShortcuts(args: CatalogShortcutsArgs) {
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const inEditable = isInteractiveTarget(event.target)
-      if (event.key === '?' && !inEditable) {
+      const inTextEntry = isTextEntryTarget(event.target)
+      if (event.key === '?' && !inTextEntry) {
         event.preventDefault()
         setShortcutHelpOpen((open) => !open)
-      } else if (event.key === '/' && !inEditable) {
+      } else if (event.key === '/' && !inTextEntry) {
         event.preventDefault()
         searchInputRef.current?.focus()
       } else if (event.key === 'Escape') {

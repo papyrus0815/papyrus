@@ -47,9 +47,19 @@ export const CatalogOverlayModals: React.FC<Props> = ({
 
   return (
     <>
-      <AnimatePresence>
-        {shortcutHelpOpen &&
-          createPortal(
+      {/*
+       * ⚠️ createPortal은 **AnimatePresence 바깥**에 있어야 한다.
+       *
+       * 포털이 AnimatePresence의 자식이면 아무것도 렌더되지 않는다 —
+       * AnimatePresence는 자식을 `isValidElement`로 거르는데, createPortal이 돌려주는 값은
+       * `$$typeof: REACT_PORTAL_TYPE`이라 element가 아니어서 통째로 버려진다.
+       * 실측: 버튼을 눌러 state는 열리고(body.overflow → hidden) 콘솔 에러도 없는데
+       * document.body의 자식 수가 그대로였고 [role=dialog]가 0이었다.
+       * 즉 **단축키 도움말·사건 요약 모달이 열리지 않는 상태**였다.
+       */}
+      {createPortal(
+        <AnimatePresence>
+          {shortcutHelpOpen && (
             <PageStyles.ShortcutOverlay
               as={motion.div}
               role="dialog"
@@ -143,15 +153,15 @@ export const CatalogOverlayModals: React.FC<Props> = ({
                   </li>
                 </PageStyles.ShortcutList>
               </PageStyles.ShortcutBox>
-            </PageStyles.ShortcutOverlay>,
-            document.body,
+            </PageStyles.ShortcutOverlay>
           )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body,
+      )}
 
-      <AnimatePresence>
-        {showSummaryModal &&
-          summaryNode &&
-          createPortal(
+      {createPortal(
+        <AnimatePresence>
+          {showSummaryModal && summaryNode && (
             <>
               <Modal.ModalOverlay
                 as={motion.div}
@@ -207,10 +217,11 @@ export const CatalogOverlayModals: React.FC<Props> = ({
                   </Modal.SummaryContent>
                 </motion.div>
               </Modal.SummaryModal>
-            </>,
-            document.body,
+            </>
           )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body,
+      )}
     </>
   )
 }

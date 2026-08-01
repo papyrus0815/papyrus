@@ -481,6 +481,20 @@ export const DetailDrawerClose = styled.button`
   }
 `
 
+/** 드로어 열림 고지 전용 — 시각적으로 숨기고 접근성 트리에만 남긴다. */
+export const DrawerAnnouncer = styled.p`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+`
+
 export const ShortcutOverlay = styled.div`
   position: fixed;
   inset: 0;
@@ -491,6 +505,19 @@ export const ShortcutOverlay = styled.div`
   align-items: center;
   justify-content: center;
   padding: 24px;
+  /**
+   * 짧은 뷰포트 대비 — 모달이 열린 동안 body는 overflow:hidden이고 셸도 position:fixed라
+   * 문서 스크롤이 아예 없다. 오버레이에 스크롤이 없으면 내용(13항목 + 섹션 제목 ≈ 600px)이
+   * 뷰포트 높이 ~660px 미만에서 위아래로 잘린 채 **읽을 방법이 사라진다**(검토 RWD-5).
+   * 내용이 넘칠 때만 세로 스크롤이 생기도록 하고, 중앙 정렬이 넘침을 잘라먹지 않게
+   * align-items를 safe center로 둔다.
+   */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* 위의 align-items:center 는 의도적인 폴백이다 — safe 키워드 미지원 브라우저에서는
+   * 중앙 정렬이 유지되고(넘치면 위쪽이 잘릴 수 있음), 지원 브라우저에서는 넘칠 때
+   * start 정렬로 떨어져 잘림 없이 스크롤된다. */
+  align-items: safe center;
   animation: fadein 0.15s ease-out;
 
   @keyframes fadein {
@@ -510,6 +537,12 @@ export const ShortcutBox = styled.div`
   padding: 20px 24px 22px;
   width: 100%;
   max-width: 460px;
+  /* 오버레이 패딩(24px×2)을 뺀 높이를 넘지 않게 하고, 넘치면 박스 안에서 스크롤한다.
+   * dvh가 이 폴더의 정본이다(layout.styles.ts:27, modal.styles.ts:168) — 100vh는 모바일에서
+   * 주소창 높이만큼 실제 뷰포트보다 커서, 상한을 걸어도 그만큼 잘린다. vh는 구형 폴백. */
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
   box-shadow:
     0 24px 64px rgba(15, 23, 42, 0.24),
     0 2px 6px rgba(15, 23, 42, 0.06);

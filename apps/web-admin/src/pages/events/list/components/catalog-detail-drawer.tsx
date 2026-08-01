@@ -61,14 +61,28 @@ export const CatalogDetailDrawer: React.FC<Props> = ({
         onClick={onClose}
         aria-hidden="true"
       />
+      {/* 열림 고지(A11Y-18)는 **페이지 레벨**의 DrawerAnnouncer가 담당한다 —
+       * 이 컴포넌트 자체가 `selectedEventId && (...)`로 조건부 렌더라, 여기에 두면
+       * 라이브 영역이 텍스트를 품은 채 삽입돼 첫 열림이 낭독되지 않는다. */}
       <PageStyles.DetailPanelHost
         ref={trapRef}
         $open={open}
-        role={isMobile ? 'dialog' : undefined}
+        /**
+         * 모바일 = dialog(트랩·aria-modal), 데스크톱 = region 랜드마크.
+         * 데스크톱에서 role을 비워 두면 SR이 이 영역으로 건너뛸 방법이 없다 —
+         * 랜드마크로 두면 '사건 상세: <제목>' 영역으로 바로 이동할 수 있다.
+         */
+        role={isMobile ? 'dialog' : open ? 'region' : undefined}
         aria-modal={isMobile && open ? true : undefined}
-        /* 다이얼로그 이름은 **어떤 사건인지**여야 한다. 고정 문구 '사건 상세'는
-         * 어느 사건을 열었는지 스크린리더에 전달하지 못한다. */
-        aria-label={isMobile ? (title ?? '사건 상세') : undefined}
+        /* 이름은 **어떤 사건인지**여야 한다. 고정 문구 '사건 상세'는 어느 사건을 열었는지
+         * 전달하지 못한다. */
+        aria-label={
+          isMobile
+            ? (title ?? '사건 상세')
+            : open
+              ? `사건 상세: ${title ?? '선택된 사건'}`
+              : undefined
+        }
       >
         {/*
          * (제거됨) DetailDrawerHeader — 제목 + 닫기 버튼의 자체 sticky 띠.

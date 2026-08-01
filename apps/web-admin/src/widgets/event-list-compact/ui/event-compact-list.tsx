@@ -356,14 +356,32 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       ) : (
         <List.CompactList onScroll={onScroll} aria-busy={isLoadingMore}>
           {/*
-           * 목록 규모 고지 — 예전엔 스크롤 컨테이너의 정적 aria-label이었다.
-           * ⑴ role="list"를 컨테이너에 두면 자식으로 listitem만 허용되는데 세기·연도 접기
-           *    버튼이 직속 자식이라 구조가 부적법했고(실측: 직속 자식 333개 중 버튼 99개),
-           * ⑵ 정적 label이라 세기·연도를 접어 행이 줄어도 값이 그대로였다(검토 A11Y-12).
-           * 라이브 영역으로 옮겨 변화가 실제로 낭독되게 한다.
+           * 목록 상태 고지 — **항상 마운트된 단일 라이브 영역**.
+           *
+           * ⑴ 정적 aria-label이던 시절엔 세기·연도를 접어 행이 줄어도 값이 그대로였다(A11Y-12).
+           * ⑵ 하단의 '더 불러오는 중'·'끝까지 봤습니다'·'불러오지 못했습니다'는 각각
+           *    **조건부 렌더**라 텍스트를 가진 채 노드가 삽입된다 — 그 방식이 누락되는 AT
+           *    조합에서는 부분 실패 경고가 조용히 지나가고, 낭독되는 환경에서는 autoLoadAll이
+           *    페이지마다 붙였다 떼며 반복 소음이 된다(A11Y-11).
+           * 그래서 노드는 계속 두고 **텍스트만** 바꾼다. 라이브 영역은 값이 바뀔 때만 읽으므로
+           * 자동 소진 중에는 같은 문구가 유지돼 한 번만 낭독되고, 다 받은 뒤 최종 카운트가
+           * 한 번 더 읽힌다. 하단 시각 행들은 aria-hidden으로 중복 낭독을 막는다.
            */}
           <List.GroupHeading as="p" role="status" aria-live="polite">
-            {`사건 목록 — 표시 ${displayedCount.toLocaleString()}행, 최상위 ${displayedRootCount.toLocaleString()}건`}
+            {/* ⚠️ 분기 순서 주의 — 로딩이 실패보다 앞이다.
+             * React Query에서 이미 페이지를 받은 뒤의 재시도는 status가 'error'로 유지되므로
+             * `isFetchNextPageError`(loadMoreFailed)와 `isFetchingNextPage`(isLoadingMore)가
+             * **동시에 true**가 된다. 실패를 앞에 두면 재시도 중에도 문구가 그대로라
+             * ⑴ 재시도 시작이 고지되지 않고 ⑵ 또 실패해도 값이 안 바뀌어 반복 실패가
+             * 한 번도 낭독되지 않는다(예전 role="alert"가 매번 알리던 것을 잃는다).
+             * 실패 문구에 현재 규모를 함께 실어, 실패가 고정된 상태에서도 행 수가 전달되게 한다. */}
+            {isLoadingMore
+              ? '사건을 계속 불러오는 중입니다.'
+              : loadMoreFailed
+                ? `일부 사건을 불러오지 못했습니다. 다시 시도할 수 있습니다. 현재 표시 ${displayedCount.toLocaleString()}행, 최상위 ${displayedRootCount.toLocaleString()}건`
+                : hasMoreData
+                  ? '사건을 계속 불러오는 중입니다.'
+                  : `사건 목록 — 표시 ${displayedCount.toLocaleString()}행, 최상위 ${displayedRootCount.toLocaleString()}건`}
           </List.GroupHeading>
           {centuryGroups.map(({ century, years }) => {
             const isCenturyCollapsed = collapsedCenturies.has(century)
@@ -534,7 +552,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           {/* 로딩 / 끝 안내 — 사용자가 "어디까지 봤는지·더 있는지·끝인지" 즉시 알 수 있도록.
            * displayedCount를 모든 상태에 노출해 스크롤 중에도 진행도가 보임. */}
           {isLoadingMore && (
-            <LoadingMoreRow role="status" aria-live="polite">
+            /* 라이브 역할만 뗀다(자동 고지는 상단 단일 라이브 영역이 담당) — aria-hidden으로
+               숨기면 브라우즈 모드로 목록을 훑는 사용자에게서 진행 상태가 통째로 사라진다. */
+            <LoadingMoreRow>
               <List.LoadingSpinner />
               <LoadingMoreText>
                 {displayedCount > 0
@@ -546,7 +566,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           {/* 부분 로드 실패 — 전역 에러 배너(events.length===0)엔 안 걸리는 조용한 누락을
            * 인라인으로 노출하고 재시도 진입점을 준다. */}
           {loadMoreFailed && !isLoadingMore && (
-            <LoadingMoreRow role="alert">
+            /* ⚠️ 이 행에는 '다시 시도' 버튼이 있으므로 aria-hidden 금지 —
+             * 포커스 가능한 컨트롤을 AT에서 숨기면 탭으로 닿는데 정체를 알 수 없는 상태가 된다.
+             * 대신 role="alert"만 뗀다: 조건부로 삽입되는 alert는 AT 조합에 따라 통째로
+             * 누락되므로, 실패 고지는 항상 마운트된 상단 라이브 영역이 담당한다(A11Y-11). */
+            <LoadingMoreRow>
               <LoadMoreErrorText>
                 <FiAlertCircle
                   size={14}
@@ -572,7 +596,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             </LoadingMoreRow>
           )}
           {!isLoadingMore && !hasMoreData && displayedCount > 0 && (
-            <LoadingMoreRow role="status" aria-live="polite">
+            /* '끝까지 봤습니다'는 목록의 끝을 알리는 콘텐츠다 — 브라우즈 모드에서 읽혀야 한다.
+               자동 고지만 상단 라이브 영역에 맡기고 여기서는 role/aria-live를 두지 않는다. */
+            <LoadingMoreRow>
               <EndOfListText>
                 끝까지 봤습니다 · 표시 {displayedCount.toLocaleString()}행
                 {displayedRootCount > 0 &&

@@ -375,7 +375,8 @@ const MoreSegmentWrap = styled.div`
 
 /**
  * body로 포털된다 — 좌표는 useAnchoredPosition이 인라인으로 주입.
- * ViewSegmented가 ≤720px에서 `overflow-x:auto` + `mask-image`를 걸기 때문에,
+ * ViewSegmented가 ≤720px에서 `overflow-x:auto`를 걸기 때문에,
+ * (양 끝 mask-image는 2026-08-01 제거됨 — 지도 뷰 강등으로 세그먼트가 넘치지 않게 됐다)
  * 세그먼트 안에서 absolute로 띄우면 메뉴가 통째로 잘려 격자·통계·트리·갤러리에
  * 진입할 수단이 사라진다(2026-07-28 검토 P1-8).
  */
