@@ -41,6 +41,14 @@ export interface FlattenedHierarchyItem {
    */
   canExpand: boolean
   /**
+   * 이 행의 부모 *노드* id(최상위는 null).
+   *
+   * `parentEvent`는 부모의 HistoricalEvent이고 평면 모드에선 다른 값이 들어간다.
+   * 접힘 계산·버킷 귀속처럼 '트리에서 누구 밑인가'가 필요한 곳은 이 필드를 써야
+   * 배열 순서('직전 depth 0이 곧 내 부모') 같은 위치 휴리스틱에 기대지 않는다.
+   */
+  parentNodeId: string | null
+  /**
    * 접힌 조상(부모/조부모) 아래에 있어 **목록에 렌더되지 않는** 행인가.
    *
    * 평탄화 결과는 목록 외에 타임라인·격자·지도·통계·트리·갤러리·JSON 내보내기가
@@ -127,8 +135,14 @@ export const useEventHierarchy = (
     })
   }, [])
 
-  // hierarchy를 flatten하여 리스트로 만들기
-  const flattenedHierarchy = useMemo(() => {
+  /**
+   * 평탄화 — **접힘과 무관한 비싼 계산**.
+   *
+   * deps에 expandedEventIds가 있던 시절엔 셰브론을 한 번 누를 때마다 트리 전체를 다시
+   * 걸으며 필터 술어를 재평가했다(검토 DATA-8). 접힘은 '어떤 행을 렌더할지'일 뿐
+   * '무엇이 조건을 만족하는지'를 바꾸지 않으므로, 그 값은 아래 싼 memo에서 덧입힌다.
+   */
+  const flattenedBase = useMemo(() => {
     const result: FlattenedHierarchyItem[] = []
     // 자식 노드의 부모 이벤트 조회를 O(1)로. 이전엔 노드마다 events.find(O(N))라
     // 자동 전체 펼침(모든 부모 펼침)과 곱해져 대규모에서 O(자식수 × N)였다.
@@ -142,15 +156,35 @@ export const useEventHierarchy = (
      * 들어갔다(검토 TF-8/DATA-6). 자기 또는 후손이 매칭될 때만 자식을 남긴다.
      */
     const filteringActive = hasNarrowingFilters && !!matchesEvent
+
+    /**
+     * 술어 결과 캐시 — 한 노드가 이 memo 한 번에 **4~6회** 평가되던 것을 1회로 줄인다.
+     *
+     * 자식 노드 하나는 ⑴ 부모의 hiddenCountOf→keepsNode ⑵ children.filter(keepsNode)
+     * ⑶ 자기 nodeMatches ⑷ 자기 hiddenCountOf 재귀에서 각각 평가됐고, matchesEvent는
+     * 캐시 없이 매번 title.toLowerCase()·description.toLowerCase()로 새 문자열을 만든다.
+     * 2,000건(~3,200 노드) 규모에서 검색어가 걸린 상태의 조작 한 번이 1만 회 규모의
+     * 술어 호출 + 문자열 복사를 유발한다(검토 DATA-8).
+     */
+    const matchCache = new Map<string, boolean>()
     const nodeMatches = (node: EventHierarchyNode): boolean => {
       if (!filteringActive) return true
+      const cached = matchCache.get(node.id)
+      if (cached !== undefined) return cached
       const event = eventById.get(node.id)
-      return event ? matchesEvent(event) : false
+      const result = event ? matchesEvent(event) : false
+      matchCache.set(node.id, result)
+      return result
     }
+    const keepsCache = new Map<string, boolean>()
     const keepsNode = (node: EventHierarchyNode): boolean => {
       if (!filteringActive) return true
-      if (nodeMatches(node)) return true
-      return (node.children ?? []).some(keepsNode)
+      const cached = keepsCache.get(node.id)
+      if (cached !== undefined) return cached
+      const result =
+        nodeMatches(node) || (node.children ?? []).some(keepsNode)
+      keepsCache.set(node.id, result)
+      return result
     }
     /** 필터로 잘려나간 직계 자식 수 */
     const hiddenCountOf = (node: EventHierarchyNode): number => {
@@ -162,11 +196,13 @@ export const useEventHierarchy = (
       const addAllEventsFlat = (
         node: EventHierarchyNode,
         parentEvent: HistoricalEvent | null,
+        parentNodeId: string | null,
       ) => {
         result.push({
           node,
           depth: 0, // 모든 사건을 depth 0으로
           parentEvent,
+          parentNodeId,
           isMatch: nodeMatches(node),
           // 평면 모드는 계층을 보여주지 않으므로 '숨긴 자식'을 알릴 자리가 없다.
           hiddenChildCount: 0,
@@ -180,13 +216,13 @@ export const useEventHierarchy = (
           const childParentEvent =
             eventById.get(node.id) ?? parentEvent
           node.children.filter(keepsNode).forEach((child) => {
-            addAllEventsFlat(child, childParentEvent)
+            addAllEventsFlat(child, childParentEvent, node.id)
           })
         }
       }
 
       sortedEvents.forEach((event) => {
-        addAllEventsFlat(event.hierarchy, event)
+        addAllEventsFlat(event.hierarchy, event, null)
       })
 
       // 평면 모드에서는 정렬 기준에 따라 재정렬 (BC·미상 안전)
@@ -218,25 +254,23 @@ export const useEventHierarchy = (
         node: EventHierarchyNode,
         depth: number,
         parentEvent: HistoricalEvent | null,
-        collapsedAway: boolean,
+        parentNodeId: string | null,
       ) => {
         result.push({
           node,
           depth,
           parentEvent,
+          parentNodeId,
           isMatch: nodeMatches(node),
           hiddenChildCount: hiddenCountOf(node),
           canExpand: (node.children?.length ?? 0) > 0,
-          isCollapsedAway: collapsedAway,
+          // 접힘은 이 memo 밖에서 계산한다(아래 주석 참고) — 여기선 자리만 채운다.
+          isCollapsedAway: false,
         })
 
         if (node.children) {
           const childParentEvent =
             eventById.get(node.id) ?? parentEvent
-          // 이 노드가 접혀 있으면 그 아래는 전부 '접힘으로 숨김'. 조상 중 하나라도
-          // 접혀 있으면 계속 전파된다.
-          const childrenCollapsedAway =
-            collapsedAway || !expandedEventIds.has(node.id)
 
           // 하위 사건도 부모와 동일한 정렬 적용 (BC·미상 안전)
           const sortedChildren = [...node.children]
@@ -253,20 +287,19 @@ export const useEventHierarchy = (
             })
 
           sortedChildren.forEach((child) => {
-            traverse(child, depth + 1, childParentEvent, childrenCollapsedAway)
+            traverse(child, depth + 1, childParentEvent, node.id)
           })
         }
       }
 
       sortedEvents.forEach((event) => {
-        traverse(event.hierarchy, 0, event, false)
+        traverse(event.hierarchy, 0, event, null)
       })
     }
 
     return result
   }, [
     sortedEvents,
-    expandedEventIds,
     events,
     showFlatView,
     sortBy,
@@ -274,6 +307,31 @@ export const useEventHierarchy = (
     matchesEvent,
     hasNarrowingFilters,
   ])
+
+  /**
+   * 접힘 덧입히기 — O(n) 한 번. DFS 선순회라 부모 항목이 항상 먼저 나오므로,
+   * '부모가 접혔거나 부모가 이미 접힘 아래면 나도 접힘 아래'를 단일 전방 패스로 계산한다.
+   * 셰브론 조작은 이 memo만 다시 돈다(술어 재평가 없음).
+   */
+  const flattenedHierarchy = useMemo(() => {
+    if (showFlatView) return flattenedBase
+    const collapsedAwayById = new Map<string, boolean>()
+    let anyCollapsed = false
+    const next = flattenedBase.map((item) => {
+      const parentId = item.parentNodeId
+      const collapsedAway =
+        parentId !== null &&
+        ((collapsedAwayById.get(parentId) ?? false) ||
+          !expandedEventIds.has(parentId))
+      collapsedAwayById.set(item.node.id, collapsedAway)
+      if (collapsedAway) anyCollapsed = true
+      return collapsedAway === item.isCollapsedAway
+        ? item
+        : { ...item, isCollapsedAway: collapsedAway }
+    })
+    // 접힌 게 하나도 없으면 원본 배열을 그대로 돌려 참조 안정성을 지킨다.
+    return anyCollapsed ? next : flattenedBase
+  }, [flattenedBase, expandedEventIds, showFlatView])
 
   /**
    * 필터를 실제로 만족하는 사건 수 — 문맥용으로만 남은 부모 행은 제외한다.

@@ -16,7 +16,11 @@ import React, {
   useTransition,
 } from 'react'
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  type InfiniteData,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { FiAlertTriangle, FiPlus, FiRefreshCw } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -94,6 +98,10 @@ import {
 } from './hooks/use-catalog-keyboard'
 import { useCatalogUrlSync } from './hooks/use-catalog-url-sync'
 import { exportEventsAsJson } from './lib/export-events'
+import {
+  type PrunableEvent,
+  pruneEventFromPages,
+} from './lib/prune-deleted-event'
 import { resolveDefaultViewMode } from './lib/resolve-default-view-mode'
 
 /** 집중(넓게) 보기 선택 영속 키 — 세션 간 유지. 모듈 스코프(렌더마다 재생성 회피). */
@@ -798,10 +806,28 @@ export const EventsCatalogPage: React.FC<EventsCatalogPageProps> = ({
 
   const handleAfterDelete = useCallback(
     (deletedId: string) => {
-      // 선택 해제 + React Query 캐시 invalidate (페이지 reload 회피)
+      if (selectedEventId === deletedId) setSelectedEventId(null)
+
+      /**
+       * 낙관적 제거 — 무효화만으로는 지운 행이 화면에 남는다(검토 DATA-6).
+       *
+       * 목록은 useInfiniteQuery이고 maxPages를 안 걸어 v5 재검증이 **저장된 모든 페이지를
+       * 처음부터 순차 재요청**한다. autoLoadAll이라 페이지 수는 항상 '전체/pageSize'이므로
+       * 228건·pageSize 100이면 3회, 2,000건이면 20회 순차 요청 + 전량 페이로드 재수신이다.
+       * 그 사이 토스트는 떴는데 방금 지운 행이 그대로 보인다.
+       * 캐시에서 먼저 걷어내고 무효화는 배경 정합용으로만 남긴다.
+       */
+      queryClient.setQueriesData<InfiniteData<PrunableEvent[]>>(
+        { queryKey: eventKeys.lists() },
+        (cached) => {
+          if (!cached?.pages) return cached
+          const pages = pruneEventFromPages(cached.pages, deletedId)
+          return pages === cached.pages ? cached : { ...cached, pages }
+        },
+      )
+
       // 목록(['events'])과 헤더 총개수(['events-count']) 모두 무효화 — 안 하면
       // 삭제 후 헤더 "전체 N건"이 staleTime 동안 옛 값을 유지.
-      if (selectedEventId === deletedId) setSelectedEventId(null)
       queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
       queryClient.invalidateQueries({ queryKey: eventKeys.count() })
     },
