@@ -156,6 +156,11 @@ model GovernmentPositionDefinition {
   description String? @db.Text
   rank        Int?    @default(999)
 
+  /// 군주·주권 칭호 여부. true면 국왕·황제·교황·칸 등 세습·주권 원수 →
+  /// "관직 재임"(공직 임기) 피커에서 제외하고 "군주 재위"로 등록. 대통령·국가주석 등
+  /// 공화정 원수는 false(관직 재임 유지). ROYAL_NOBLE_TITLE·각료 등은 false 기본.
+  isMonarchical Boolean @default(false) @map("is_monarchical")
+
   /// 중앙부처 카테고리 연결 — 외교부 장관, 국방부 장관 등 일반 직위 (관리자 등록)
   categoryId String? @map("category_id") @db.Char(36)
 

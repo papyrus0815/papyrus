@@ -39,6 +39,7 @@ import { notify } from '@/shared/ui/toast'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
+import { filterPositionDefinitions } from './filter-position-definitions'
 import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
 import {
   APPOINTMENT_METHOD_OPTIONS,
@@ -156,14 +157,6 @@ const BUILTIN_POSITIONS = [
     titleEn: 'Vice President',
   },
 ] as const
-
-/** 각료 등록 플로우에서 선택 가능한 직위 타입 (수반·의원·군인 등 제외) */
-const MINISTER_POSITION_TYPES = new Set([
-  'DEPUTY_HEAD_OF_STATE',
-  'CABINET_MINISTER',
-  'VICE_MINISTER',
-  'OTHER',
-])
 
 /**
  * 레거시 notes 인코딩("왕명: X") 분리 — 역대 수반·계보·행정부 위젯이 이 줄을
@@ -522,24 +515,21 @@ export function TenureRegisterPanel({
   const isHeadPositionType =
     positionType === 'HEAD_OF_STATE' || positionType === 'HEAD_OF_GOVERNMENT'
 
-  /** 각료 추가로 열렸을 때는 각료/차관/기타만 표시 (수반·의원·군인 등 제외) */
+  /** 각료 추가로 열렸을 때는 각료/차관/기타만 표시; 일반 재임은 군주·주권 칭호 제외 */
   const isMinisterFlowForFilter = !tenureId && initialCabinetId != null
   const positionTitleOptions: SelectOption<string>[] = useMemo(() => {
-    let defs = positionDefinitions as any[]
-    if (isMinisterFlowForFilter) {
-      defs = defs.filter(
-        (d: any) => d.positionType && MINISTER_POSITION_TYPES.has(d.positionType),
-      )
-    }
-    const byDef = defs.map((d: any) => ({
-      value: d.id,
-      label: d.title ?? d.name ?? d.id ?? '직책',
+    const defs = filterPositionDefinitions(positionDefinitions as any[], {
+      isMinisterFlow: isMinisterFlowForFilter,
+    })
+    const byDef = defs.map((def: any) => ({
+      value: def.id,
+      label: def.title ?? def.name ?? def.id ?? '직책',
     }))
     // 이미 같은 positionType의 정의가 있으면 내장 항목은 중복 노출하지 않음
-    const definedTypes = new Set(defs.map((d: any) => d.positionType))
+    const definedTypes = new Set(defs.map((def: any) => def.positionType))
     const builtins = BUILTIN_POSITIONS.filter(
-      (b) => !definedTypes.has(b.positionType),
-    ).map((b) => ({ value: b.value, label: b.label }))
+      (builtin) => !definedTypes.has(builtin.positionType),
+    ).map((builtin) => ({ value: builtin.value, label: builtin.label }))
     return [...byDef, ...builtins, { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' }]
   }, [positionDefinitions, isMinisterFlowForFilter])
 

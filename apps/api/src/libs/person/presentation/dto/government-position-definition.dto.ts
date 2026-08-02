@@ -2,6 +2,7 @@ import {
   IsString,
   IsOptional,
   IsInt,
+  IsBoolean,
   IsDateString,
   IsUUID,
   Min,
@@ -30,6 +31,11 @@ export class CreateGovernmentPositionDefinitionDto {
   @IsInt()
   @Min(0)
   rank?: number | null
+
+  /** 군주·주권 칭호 여부 — true면 "관직 재임" 피커에서 제외(재위로 등록) */
+  @IsOptional()
+  @IsBoolean()
+  isMonarchical?: boolean
 
   /** 중앙부처 카테고리 연결 (관리자 등록 직위) */
   @IsOptional()
@@ -75,6 +81,11 @@ export class UpdateGovernmentPositionDefinitionDto {
   @IsInt()
   @Min(0)
   rank?: number | null
+
+  /** 군주·주권 칭호 여부 — true면 "관직 재임" 피커에서 제외(재위로 등록) */
+  @IsOptional()
+  @IsBoolean()
+  isMonarchical?: boolean
 
   /** 중앙부처 카테고리 연결 (관리자 등록 직위) */
   @IsOptional()

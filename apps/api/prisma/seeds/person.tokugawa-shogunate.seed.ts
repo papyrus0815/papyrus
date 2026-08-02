@@ -1735,6 +1735,8 @@ export async function seedTokugawaShogunate(prisma: PrismaService): Promise<void
         titleLocal: '藩主',
         positionType: 'HEAD_OF_STATE',
         rank: 5,
+        // 자번 내 사실상 군주 → 재위(SovereignReign)로 등록. "관직 재임" 피커에서 제외.
+        isMonarchical: true,
         description:
           '에도 시대 막번 체제 하에서 번(藩)을 통치한 봉건 영주. 막부의 가신이면서도 ' +
           '자번 내에서는 사실상 군주로 정치·재정·사법권을 행사했으며, 1871년 폐번치현으로 ' +

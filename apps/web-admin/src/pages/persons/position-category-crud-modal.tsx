@@ -297,6 +297,7 @@ const defaultForm: CreateGovernmentPositionDefinitionDto = {
   positionType: 'HEAD_OF_STATE',
   description: null,
   rank: null,
+  isMonarchical: false,
   categoryId: null,
   organizationId: null,
   establishedDate: null,
@@ -353,6 +354,7 @@ export function PositionCategoryCrudModal({
         positionType: def.positionType,
         description: def.description ?? null,
         rank: def.rank ?? null,
+        isMonarchical: def.isMonarchical ?? false,
         categoryId: def.categoryId ?? null,
         organizationId: def.organizationId ?? null,
         establishedDate: def.establishedDate ?? null,
@@ -513,6 +515,33 @@ export function PositionCategoryCrudModal({
                     }}
                     title="직위 유형 선택"
                   />
+                </Field>
+                <Field>
+                  <Label>군주·주권 칭호</Label>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.isMonarchical ?? false}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          isMonarchical: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span>
+                      국왕·황제·번주 등 세습·주권 칭호 (체크 시 &ldquo;관직 재임&rdquo; 목록에서
+                      숨기고 군주 재위로 등록)
+                    </span>
+                  </label>
                 </Field>
                 <Field>
                   <Label>표시 순서 (rank)</Label>

@@ -3964,6 +3964,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         titleLocal: dto.titleLocal ?? undefined,
         description: dto.description ?? undefined,
         rank: dto.rank ?? undefined,
+        isMonarchical: dto.isMonarchical ?? undefined,
         categoryId: dto.categoryId ?? undefined,
         organizationId: dto.organizationId ?? undefined,
         establishedDate: dto.establishedDate ? new Date(dto.establishedDate) : undefined,
@@ -3991,6 +3992,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.positionType !== undefined) data.positionType = dto.positionType as any
     if (dto.description !== undefined) data.description = dto.description
     if (dto.rank !== undefined) data.rank = dto.rank
+    if (dto.isMonarchical !== undefined) data.isMonarchical = dto.isMonarchical
     if (dto.categoryId !== undefined) data.categoryId = dto.categoryId
     if (dto.organizationId !== undefined) data.organizationId = dto.organizationId
     if (dto.establishedDate !== undefined)

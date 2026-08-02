@@ -9,6 +9,8 @@ const DEFINITIONS: {
   titleEn: string | null
   titleLocal?: string | null
   rank?: number
+  /** 군주·주권 칭호(재위로 등록) 여부. true면 "관직 재임" 피커에서 제외. */
+  isMonarchical?: boolean
 }[] = [
   // ─ 국가원수 (HEAD_OF_STATE) — 군주·대통령·최고지도자
   // rank 1: 최고 주권자 (황제·국왕·교황 등)
@@ -16,24 +18,24 @@ const DEFINITIONS: {
   //   통합한다 — '신성로마황제'는 '황제'+신성로마제국으로 통합(2026-07-16, consolidate-hre-
   //   emperor-definition.ts). 국가별 bespoke 칭호(러시아차르·오스트리아황제 등) 신설 금지.
   //   별도 정의는 한국어 어휘 자체가 다른 고정 칭호(천황·교황·칸·술탄 등)에만 허용.
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '국왕', titleEn: 'King', rank: 1 },
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '여왕', titleEn: 'Queen', rank: 1 },
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '황제', titleEn: 'Emperor', rank: 1 },
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '천황', titleEn: 'Emperor', titleLocal: '天皇', rank: 1 },
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '교황', titleEn: 'Pope', titleLocal: 'Papa', rank: 1 },
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '칸', titleEn: 'Khagan', rank: 1 },
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '술탄', titleEn: 'Sultan', rank: 1 },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '국왕', titleEn: 'King', rank: 1, isMonarchical: true },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '여왕', titleEn: 'Queen', rank: 1, isMonarchical: true },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '황제', titleEn: 'Emperor', rank: 1, isMonarchical: true },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '천황', titleEn: 'Emperor', titleLocal: '天皇', rank: 1, isMonarchical: true },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '교황', titleEn: 'Pope', titleLocal: 'Papa', rank: 1, isMonarchical: true },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '칸', titleEn: 'Khagan', rank: 1, isMonarchical: true },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '술탄', titleEn: 'Sultan', rank: 1, isMonarchical: true },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '대통령', titleEn: 'President', rank: 1 },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '국가주석', titleEn: 'President', titleLocal: '国家主席', rank: 1 },
   { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '최고지도자(라흐바르)', titleEn: 'Supreme Leader (Rahbar)', titleLocal: 'رهبر', rank: 1 },
   // rank 2: 선출·의전 국가원수 / 제국 내 왕급 (신성로마제국 겸직)
   // '대통령(연방)' 제거 — 일반 '대통령'(rank 1)으로 통합 (positionType 동일, 표시명만 달랐음)
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '선제후', titleEn: 'Prince-Elector', titleLocal: 'Kurfürst', rank: 2 },
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '로마왕', titleEn: 'King of the Romans', titleLocal: 'Rex Romanorum', rank: 2 },
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '이탈리아왕', titleEn: 'King of Italy', titleLocal: 'Rex Italiae', rank: 2 },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '선제후', titleEn: 'Prince-Elector', titleLocal: 'Kurfürst', rank: 2, isMonarchical: true },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '로마왕', titleEn: 'King of the Romans', titleLocal: 'Rex Romanorum', rank: 2, isMonarchical: true },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '이탈리아왕', titleEn: 'King of Italy', titleLocal: 'Rex Italiae', rank: 2, isMonarchical: true },
   // rank 3: 하위 제후국 군주 (변경백·방백)
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '변경백', titleEn: 'Margrave', titleLocal: 'Markgraf', rank: 3 },
-  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '방백', titleEn: 'Landgrave', titleLocal: 'Landgraf', rank: 3 },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '변경백', titleEn: 'Margrave', titleLocal: 'Markgraf', rank: 3, isMonarchical: true },
+  { positionType: GovernmentPositionType.HEAD_OF_STATE, title: '방백', titleEn: 'Landgrave', titleLocal: 'Landgraf', rank: 3, isMonarchical: true },
   // ─ 행정부 수반 (HEAD_OF_GOVERNMENT) — 총리·재상·쇼군 등
   // rank 1: 실권 행정 수반 (쇼군·총리·재상 등 동급)
   { positionType: GovernmentPositionType.HEAD_OF_GOVERNMENT, title: '쇼군', titleEn: 'Shogun', titleLocal: '将軍', rank: 1 },
@@ -61,6 +63,18 @@ const DEFINITIONS: {
   { positionType: GovernmentPositionType.ROYAL_NOBLE_TITLE, title: '자', titleEn: 'Viscount', titleLocal: '子', rank: 5 },
   { positionType: GovernmentPositionType.ROYAL_NOBLE_TITLE, title: '남', titleEn: 'Baron', titleLocal: '男', rank: 6 },
   { positionType: GovernmentPositionType.ROYAL_NOBLE_TITLE, title: '벽경백', titleEn: 'Count (Byeokgyeong)', titleLocal: '壁經伯', rank: 4 },
+  // ─ 각료/장관 (CABINET_MINISTER) — 행정부 각료. 특정 부처는 재임 행에서 세분(외무대신·외무경 등)하고,
+  //   여기엔 국가·시대 공통으로 재사용할 대표 부처 정의만 둔다. rank는 각의 내 통상 서열(외무·재무·내무·국방 우선).
+  //   더 구체적인 직함(외무대신·외국봉행·6조 판서 등)은 재임 등록의 '기타 (직접 입력)'으로 커버.
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '외무장관', titleEn: 'Foreign Minister', rank: 1 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '재무장관', titleEn: 'Finance Minister', rank: 1 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '내무장관', titleEn: 'Interior Minister', rank: 1 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '국방장관', titleEn: 'Defense Minister', rank: 1 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '법무장관', titleEn: 'Justice Minister', rank: 2 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '교육장관', titleEn: 'Education Minister', rank: 2 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '장관', titleEn: 'Minister', rank: 3 },
+  // ─ 차관 (VICE_MINISTER) — 정무직 고위 공무원
+  { positionType: GovernmentPositionType.VICE_MINISTER, title: '차관', titleEn: 'Vice Minister', rank: 1 },
 ]
 
 export async function seedGovernmentPositionDefinitions(
@@ -89,6 +103,7 @@ export async function seedGovernmentPositionDefinitions(
           titleEn: row.titleEn ?? undefined,
           titleLocal: row.titleLocal ?? undefined,
           rank: row.rank ?? undefined,
+          isMonarchical: row.isMonarchical ?? undefined,
         },
       })
       console.log(`  ✅ ${row.title} (${row.positionType})`)

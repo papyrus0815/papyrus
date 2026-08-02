@@ -353,6 +353,7 @@ const emptyForm = (
   positionType: 'CABINET_MINISTER',
   description: null,
   rank: null,
+  isMonarchical: false,
   categoryId: categoryId ?? null,
   organizationId: organizationId ?? null,
   establishedDate: null,
@@ -408,6 +409,7 @@ export function PositionDefinitionsSection({
         positionType: def.positionType,
         description: def.description ?? null,
         rank: def.rank ?? null,
+        isMonarchical: def.isMonarchical ?? false,
         categoryId: def.categoryId ?? fixedCategoryId ?? null,
         organizationId: def.organizationId ?? fixedOrganizationId ?? null,
         establishedDate: def.establishedDate ?? null,
@@ -610,6 +612,36 @@ export function PositionDefinitionsSection({
                         }}
                         title="직위 유형 선택"
                       />
+                    </FieldControl>
+                  </FieldRow>
+
+                  <FieldRow>
+                    <FieldLabel>군주·주권 칭호</FieldLabel>
+                    <FieldControl>
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          cursor: 'pointer',
+                          fontSize: 13,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.isMonarchical ?? false}
+                          onChange={(event) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              isMonarchical: event.target.checked,
+                            }))
+                          }
+                        />
+                        <span>
+                          국왕·황제·번주 등 세습·주권 칭호 (체크 시 &ldquo;관직 재임&rdquo;
+                          목록에서 숨기고 군주 재위로 등록)
+                        </span>
+                      </label>
                     </FieldControl>
                   </FieldRow>
 
