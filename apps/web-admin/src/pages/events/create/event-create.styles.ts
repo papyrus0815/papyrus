@@ -32,6 +32,8 @@ type ColorSet = {
     default: string
     hover: string
     focus: string
+    /** 포커스 시 3px 소프트 헤일로 — theme.colors.focusRing(1px)과 두께가 달라 별도 보관 */
+    focusHalo: string
     light: string
   }
   text: {
@@ -68,6 +70,7 @@ const LIGHT_COLORS: ColorSet = {
     default: '#e2e8f0',
     hover: '#cbd5e1',
     focus: '#8b5cf6',
+    focusHalo: 'rgba(99, 102, 241, 0.12)',
     light: '#f1f5f9',
   },
   text: {
@@ -104,6 +107,7 @@ const DARK_COLORS: ColorSet = {
     default: '#2a2a2a',
     hover: '#3f3f46',
     focus: '#a78bfa',
+    focusHalo: 'rgba(99, 106, 242, 0.20)',
     light: '#212121',
   },
   text: {
@@ -120,9 +124,29 @@ const DARK_COLORS: ColorSet = {
   },
 }
 
-/** 라이트/다크 색상 셋 선택 — styled-components 내부에서만 사용 */
-export const getC = (theme: DefaultTheme) =>
-  theme.mode === 'dark' ? DARK_COLORS : LIGHT_COLORS
+/**
+ * 라이트/다크 색상 셋 선택 — styled-components 내부에서만 사용.
+ *
+ * **브랜드색(primary·focus)은 앱 테마를 단일 출처로 덮어쓴다.** 이 파일의 원래 primary는
+ * `#8b5cf6`인데 그건 앱 테마의 *secondary*라, 사건 등록 폼만 앱에서 유일하게 다른 색을
+ * 강조색으로 쓰고 있었다. 나머지(배경·테두리·텍스트·상태색)는 이 파일 값을 그대로 둔다.
+ *
+ * 카테고리별 색(`getCategoryColors`)은 분류의 정체성이라 브랜드색과 무관 — 건드리지 않는다.
+ */
+export const getC = (theme: DefaultTheme) => {
+  const base = theme.mode === 'dark' ? DARK_COLORS : LIGHT_COLORS
+  return {
+    ...base,
+    primary: {
+      ...base.primary,
+      main: theme.colors.primary,
+      light: theme.colors.secondary,
+      dark: theme.colors.button.hover,
+      gradient: theme.colors.gradient.primary,
+    },
+    border: { ...base.border, focus: theme.colors.primary },
+  }
+}
 
 /** 라이트/다크 분기 단축 헬퍼 */
 export const pickC = (theme: DefaultTheme, light: string, dark: string) =>
@@ -313,7 +337,7 @@ export const OverlaySpinner = styled.div`
   width: 32px;
   height: 32px;
   border: 3px solid ${({ theme }) => getC(theme).border.default};
-  border-top-color: #8b5cf6;
+  border-top-color: ${({ theme }) => getC(theme).primary.main};
   border-radius: 50%;
   animation: form-spinner-rotate 0.8s linear infinite;
 
@@ -550,7 +574,7 @@ export const DateInputWrapper = styled.div`
 
   &:focus-within {
     border-color: ${({ theme }) => getC(theme).border.focus};
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+    box-shadow: 0 0 0 3px ${({ theme }) => getC(theme).border.focusHalo};
   }
 
   svg {
