@@ -14,7 +14,7 @@ export const PageScene = styled.div`
   bottom: 0;
   width: 100%;
   height: calc(100vh - var(--header-height));
-  padding-top: 16px;
+  padding-top: 12px;
   /* iOS home indicator 영역 회피 — env가 0인 데스크톱에선 그냥 16px */
   padding-bottom: max(16px, env(safe-area-inset-bottom));
   overflow: hidden;
@@ -32,7 +32,7 @@ export const PageScene = styled.div`
 export const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
   padding: 0 20px;
   flex: 1;

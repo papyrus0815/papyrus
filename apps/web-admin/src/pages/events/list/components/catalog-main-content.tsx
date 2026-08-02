@@ -213,8 +213,11 @@ export const CatalogMainContent: React.FC<Props> = ({
                 $active={active}
                 onClick={() => setViewMode(mode.value)}
                 aria-pressed={active}
-                title={mode.label}
-                aria-label={mode.label}
+                /* 전용 힌트 행(38px)을 없애고 텍스트는 여기로 옮긴다 —
+                   '이 뷰가 무엇을 잘 보여주는지'는 뷰를 **고르는 순간** 필요한 정보이지
+                   고른 뒤에 목록 위 한 줄을 상시 점유할 정보가 아니다. */
+                title={`${mode.label} — ${VIEW_HINTS[mode.value]}`}
+                aria-label={`${mode.label} — ${VIEW_HINTS[mode.value]}`}
               >
                 {mode.icon}
                 <span className="label">{mode.label}</span>
@@ -308,6 +311,21 @@ export const CatalogMainContent: React.FC<Props> = ({
             <option value="created">등록순</option>
             <option value="duration">기간순</option>
           </Filter.SortSelect>
+          {/**
+           * 정렬 스코프 고지 — 전용 힌트 행이 사라져도 **이건 남는다**.
+           * 목록 뷰는 연도 그룹핑이 고정이라 '기간순'이 같은 해 안에서만 적용되는데,
+           * 그 사실이 화면 어디에도 없으면 '가장 오래 지속된 사건'을 찾으려는 사용자는
+           * 겉보기에 변화 없는 목록을 보고 컨트롤이 고장 났다고 판단한다(검토 IA-12).
+           * 상태 의존 고지이므로 방금 조작한 컨트롤 옆이 원래 자리다.
+           */}
+          {viewMode === VIEW_MODES.LIST && sortBy === 'duration' && (
+            <SortScopeNote role="note">
+              같은 해 안에서만
+            </SortScopeNote>
+          )}
+          {viewMode === VIEW_MODES.LIST && sortBy === 'created' && (
+            <SortScopeNote role="note">연도 그룹 해제</SortScopeNote>
+          )}
           <Filter.SortButton
             type="button"
             onClick={onSortDirectionToggle}
@@ -349,8 +367,11 @@ export const CatalogMainContent: React.FC<Props> = ({
           </DensityGroup>
         )}
 
-        {/* 집중(넓게) 보기 토글 — 어느 뷰에서도 항상 보이도록 ViewSwitcherRow에 둠.
-            (특히 타임라인은 미니맵 접기로 ~166px를 본문에 양보) */}
+        {/* 집중(넓게) 보기 토글 — **타임라인 전용**.
+            예전엔 모든 뷰에 있었지만 실제로 접는 것은 ⑴ 페이지 h1과 ⑵ 타임라인 미니맵
+            둘뿐이었다. h1을 상시 제거하면서 목록·격자 등에서는 이 버튼이 아무것도
+            하지 않는 no-op이 된다 — 실행된 적 없는 계약을 남기지 않는다. */}
+        {viewMode === VIEW_MODES.TIMELINE && (
         <ToolbarStyles.ToolbarBtn
           type="button"
           $active={wideMode}
@@ -369,6 +390,7 @@ export const CatalogMainContent: React.FC<Props> = ({
           )}
           <span>{wideMode ? '기본' : '넓게'}</span>
         </ToolbarStyles.ToolbarBtn>
+        )}
 
         <MetaArea aria-live="polite">
           <CatalogHeaderStats
@@ -385,27 +407,6 @@ export const CatalogMainContent: React.FC<Props> = ({
         </MetaArea>
       </ToolbarStyles.ViewSwitcherRow>
 
-      {!wideMode && (
-        <ViewHint role="note">
-          {VIEW_HINTS[viewMode]}
-          {/**
-           * IA-12 — 목록 뷰는 연도 그룹핑이 고정이라 '기간순'은 **같은 해 안에서만** 적용된다.
-           * 그런데 화면 어디에도 그 사실이 드러나지 않아, '가장 오래 지속된 사건'을 찾으려는
-           * 사용자는 겉보기에 변화 없는 목록을 보고 컨트롤이 고장 났다고 판단한다.
-           * 그룹핑을 끄는 대신(연도 그룹은 이 뷰의 정체성이다) 조건을 정직하게 밝힌다.
-           */}
-          {viewMode === VIEW_MODES.LIST && sortBy === 'duration' && (
-            <SortScopeNote>
-              · 기간순은 연도 그룹이 고정이라 <strong>같은 해 안에서만</strong> 적용됩니다
-            </SortScopeNote>
-          )}
-          {viewMode === VIEW_MODES.LIST && sortBy === 'created' && (
-            <SortScopeNote>
-              · 등록순은 <strong>연도 그룹을 해제</strong>하고 최근 등록한 순서로 나열합니다
-            </SortScopeNote>
-          )}
-        </ViewHint>
-      )}
 
       {activeSlot}
     </PageStyles.ActiveContent>

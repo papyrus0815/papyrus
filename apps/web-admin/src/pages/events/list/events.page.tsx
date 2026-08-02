@@ -92,6 +92,7 @@ import { CatalogOverlayModals } from './components/catalog-overlay-modals'
 import { CatalogToolbar } from './components/catalog-toolbar'
 import { useCatalogEventIndex } from './hooks/use-catalog-event-index'
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
+import { useEventRegisterModalUrl } from '@/widgets/event-form/model/use-event-register-modal-url'
 import { useCatalogModals } from './hooks/use-catalog-modals'
 import { useCatalogReferenceData } from './hooks/use-catalog-reference-data'
 import {
@@ -374,8 +375,16 @@ export const EventsCatalogPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedKeyword])
 
-  /** 사건 등록 모달 — 이 페이지가 소유한다(useCatalogModals는 anyOverlayOpen에만 반영) */
-  const [createModalOpen, setCreateModalOpen] = useState(false)
+  /**
+   * 사건 등록 모달 — 이 페이지가 소유한다(useCatalogModals는 anyOverlayOpen에만 반영).
+   * 열림은 `?eventForm=new`로 URL에 동기화 → 뒤로가기로 닫히고 새로고침에도 복원된다.
+   */
+  const {
+    isOpen: createModalOpen,
+    open: openCreateModal,
+    close: closeCreateModal,
+    onDirtyChange: onCreateFormDirtyChange,
+  } = useEventRegisterModalUrl()
 
   // ===== 모달 상태 묶음 (스크롤 잠금 effect 포함) =====
   const {
@@ -699,7 +708,7 @@ export const EventsCatalogPage: React.FC = () => {
    * 펼친 행)가 언마운트로 소멸하고, 돌아오는 경로도 필터가 빠진 `/events`였다.
    * 모달은 아무것도 언마운트하지 않아 복귀가 정확하다.
    */
-  const handleCreateEvent = useCallback(() => setCreateModalOpen(true), [])
+  const handleCreateEvent = useCallback(() => openCreateModal(), [openCreateModal])
   const handleExportJson = useCallback(async () => {
     const exported = visibleFlattenedHierarchy.map(
       (it) =>
@@ -1090,13 +1099,11 @@ export const EventsCatalogPage: React.FC = () => {
   const content = (
     <>
       {/* 집중(넓게) 보기에선 페이지 헤더를 접어 본문에 높이 양보 */}
-      {wideMode ? null : (
-        <PageStyles.PageHeader>
-          <PageStyles.PageHeaderTitleGroup>
-            <PageStyles.PageHeaderTitle>사건 연대표</PageStyles.PageHeaderTitle>
-          </PageStyles.PageHeaderTitleGroup>
-        </PageStyles.PageHeader>
-      )}
+      {/* 제목은 시각 층에서 제거하고 접근성 트리에만 남긴다 — 좌측 nav의 활성 탭
+          '사건'이 같은 말을 이미 하고 있고, 이 27px는 스크롤해도 회수되지 않았다. */}
+      <PageStyles.VisuallyHiddenPageTitle>
+        사건 연대표
+      </PageStyles.VisuallyHiddenPageTitle>
 
       <CatalogToolbar {...toolbarProps} />
 
@@ -1187,7 +1194,8 @@ export const EventsCatalogPage: React.FC = () => {
 
       <EventRegisterModal
         isOpen={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
+        onClose={closeCreateModal}
+        onDirtyChange={onCreateFormDirtyChange}
       />
     </>
   )

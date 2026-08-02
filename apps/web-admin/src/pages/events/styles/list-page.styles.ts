@@ -57,6 +57,25 @@ export const EmbedWrapper = styled.div`
  *
  * v2: 통계 chip을 ViewMeta 자리로 옮기면서 헤더는 Title만 — 실제 align 컨텍스트가
  * 단순해져 padding 축소. */
+/**
+ * 시각적으로만 숨긴 페이지 제목.
+ *
+ * h1 '사건 연대표'는 좌측 nav의 활성 탭 '사건'과 같은 말을 27px + 간격 12px에 다시 적었고,
+ * 스크롤해도 회수되지 않는 고정 크롬이었다. 시각 층에서는 지우되 문서에 h1이 없으면
+ * 헤딩 탐색이 깨지므로(세기 h3 · 연도 h4가 그 아래에 매달려 있다) 접근성 트리에는 남긴다.
+ */
+export const VisuallyHiddenPageTitle = styled.h1`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+`
+
 export const PageHeader = styled.div`
   display: flex;
   align-items: center;
@@ -148,7 +167,7 @@ export const EmbedHeaderHint = styled.span`
 export const ActiveContent = styled.div<{ $capped?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
   min-height: 0;
   min-width: 0;
   flex: 1;
