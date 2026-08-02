@@ -168,8 +168,14 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
    * 페이지도 같은 함수로 '보이는 행'을 계산해 드로어 이전/다음과 ↑↓ 키가 화면과
    * 어긋나지 않게 한다(검토 INT-4).
    */
-  const { allYears, eventsByYear, centuryCount, yearRootCount, unknownItems } =
-    useMemo(
+  const {
+    allYears,
+    eventsByYear,
+    centuryCount,
+    yearRootCount,
+    unknownItems,
+    headerlessYears,
+  } = useMemo(
       () => buildYearBuckets(flattenedHierarchy, sortDirection),
       [flattenedHierarchy, sortDirection],
     )
@@ -215,6 +221,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     groupYear: number | null,
     positionInSet: number,
     setSize: number,
+    /** 이 연 그룹에 시각 헤더가 없는가 — 행이 연도를 되살려야 하는지 결정한다 */
+    groupHeaderless = false,
   ) => {
     const event = eventById.get(node.id) ?? parentEvent
     if (!event) return null
@@ -237,6 +245,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         searchQuery={searchQuery}
         // 이 행이 속한 연 그룹 — 같은 해면 선두 토큰을 월·일로 대체(연도 중복 제거)
         groupYear={groupYear}
+        groupHeaderless={groupHeaderless}
         isNarrow={isNarrow}
         flagMax={flagMax}
         // 계층 깊이를 접근성 트리에 전달 — 예전엔 하위 사건이 최상위와 똑같이 읽혔다.
@@ -502,7 +511,24 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                        * 0건 헤더가 나오고, '1건' 헤더 아래 2행이 보인다.
                        */
                       const yearEventCount = yearRootCount.get(currentYear) ?? 0
-                      const isYearCollapsed = collapsedYears.has(currentYear)
+                      /**
+                       * 1행짜리 연 그룹(실측 88개 중 50개 = 57%)은 시각 헤더를 렌더하지 않는다.
+                       * 63px 헤더 + 45px 행 = 108px를 사건 한 건에 쓰고 그중 58%가 크롬인데,
+                       * 아래 유일한 행은 자기 날짜를 이미 갖고 있다.
+                       *
+                       * ⚠️ role=group · aria-labelledby · 시각적 숨김 GroupHeading · YearSection
+                       * 래퍼는 **그대로 둔다** — 헤딩 탐색과 sticky containing block 한정이
+                       * 거기에 걸려 있다. 사라지는 것은 시각 밴드뿐이다.
+                       */
+                      const isHeaderless = headerlessYears.has(currentYear)
+                      /**
+                       * ⚠️ 이 분기는 selectVisibleRows(list-grouping.ts)와 **정확히 같아야** 한다.
+                       * 헤더가 없으면 접기 토글도 없으므로 접힘을 허용하면 되돌릴 수단이 없다.
+                       * 한쪽만 고치면 DOM에는 행이 보이는데 ↑↓ 내비·드로어 이전/다음
+                       * 모수에서는 빠진다(이 화면이 이미 태운 실패 모드).
+                       */
+                      const isYearCollapsed =
+                        !isHeaderless && collapsedYears.has(currentYear)
 
                       const yearHeadingId = `events-year-${currentYear}`
                       return (
@@ -514,6 +540,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                           <List.GroupHeading id={yearHeadingId} aria-level={4}>
                             {`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건`}
                           </List.GroupHeading>
+                          {!isHeaderless && (
                           <List.YearDivider
                             type="button"
                             aria-expanded={!isYearCollapsed}
@@ -543,6 +570,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                               </List.CollapsedCount>
                             </span>
                           </List.YearDivider>
+                          )}
                           {isYearCollapsed ? (
                             <List.CollapsedPlaceholder>
                               <span>
@@ -560,7 +588,13 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                               aria-labelledby={yearHeadingId}
                             >
                               {yearItems.map((item, index) =>
-                                renderRow(item, currentYear, index, yearItems.length),
+                                renderRow(
+                                  item,
+                                  currentYear,
+                                  index,
+                                  yearItems.length,
+                                  isHeaderless,
+                                ),
                               )}
                             </List.RowList>
                           )}

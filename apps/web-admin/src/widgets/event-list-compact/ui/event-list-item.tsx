@@ -58,6 +58,11 @@ interface EventListItemProps {
    */
   groupYear?: number | null
   /**
+   * 이 행이 속한 연도 그룹에 **시각 헤더가 없는가**(1행짜리 버킷).
+   * 헤더가 연도를 말해 주지 않으므로 행이 연도를 되살려 'YYYY.M.D'로 표시한다.
+   */
+  groupHeaderless?: boolean
+  /**
    * 좁은 폭(≤640px) 여부. 목록이 **한 번만** 계산해 내려준다 — 행마다 useMediaQuery를
    * 부르면 matchMedia 리스너가 행 수만큼(수백 개) 생긴다.
    * 폭이 모자란 곳에서 무엇을 먼저 포기할지(국기 개수·자식 수 배지)를 결정한다.
@@ -224,6 +229,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   isBookmarked = false,
   searchQuery,
   groupYear,
+  groupHeaderless = false,
   isNarrow = false,
   flagMax = 3,
   ariaLevel,
@@ -254,12 +260,21 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
     if (startParts.year < 0) return `기원전 ${Math.abs(startParts.year)}`
     if (groupYear != null && startParts.year === groupYear) {
       const precision = event.startDatePrecision
-      if (precision === 'year') return '' // 명시적 연-정밀도 → 그룹 헤더에 위임
-      if (precision === 'month') return `${startParts.month}월`
+      /**
+       * 시각 헤더가 없는 연도(1행 버킷)는 연도를 **행이 되살린다**.
+       * 헤더를 지우고도 월·일만 남기면 '7.27'만 보이는 미아 행이 된다.
+       */
+      const yearPrefix = groupHeaderless ? `${startParts.year}.` : ''
+      if (precision === 'year') return groupHeaderless ? `${startParts.year}` : ''
+      if (precision === 'month')
+        return groupHeaderless
+          ? `${startParts.year}.${startParts.month}`
+          : `${startParts.month}월`
       // 'day' 또는 precision 미기록(대부분 실제 월·일 보유) → 월.일.
       // 단 01-01은 연도만 아는 값이 sentinel로 저장된 것일 수 있어(BC·고대 재구성 등) 생략.
-      if (startParts.month === 1 && startParts.day === 1) return ''
-      return `${startParts.month}.${startParts.day}`
+      if (startParts.month === 1 && startParts.day === 1)
+        return groupHeaderless ? `${startParts.year}` : ''
+      return `${yearPrefix}${startParts.month}.${startParts.day}`
     }
     return `${startParts.year}`
   })()
@@ -271,6 +286,17 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
     event.endDatePrecision,
   )
   const categoryName = getCategoryName(event.category, dbCategories)
+  /**
+   * 관련국 칩 개수 — **폭 예산**으로 정한다. 개수만으로는 안 된다.
+   *
+   * 현대 국가는 이모지 한 글자(약 26px)지만 역사국가는 이모지가 없어 국가명 전체가
+   * 텍스트 칩이다. 같은 3개라도 앞은 78px, 뒤는 240px를 먹는다. 개수를 고정하면
+   * 텍스트 칩 3개가 128px 트랙에 욱여넣어져 전부 '오…', '러…'로 잘려 아무것도
+   * 식별할 수 없게 된다 — 잘림이 없어졌을 뿐 정보는 여전히 0이다.
+   * 텍스트 칩이 섞여 있으면 개수를 줄여 남는 칩이 읽히게 한다.
+   */
+  const hasTextChips = (event.relatedHistoricalCountries?.length ?? 0) > 0
+  const effectiveFlagMax = hasTextChips ? Math.min(flagMax, 2) : flagMax
   // 카테고리 hue는 이제 **칩이 단독으로** 싣는다(행 도트 폐지, 배치 C1).
   // 원색 텍스트는 WCAG AA 미달이라 저채도 soft chip으로.
   const soft =
@@ -414,7 +440,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
             historical={event.relatedHistoricalCountries}
             /* 개수는 대역이 정한다(목록이 1회 계산). 폭만 줄이면 역사국가처럼 이모지가
                없어 국가명 전체가 텍스트 칩인 경우 글리프 중간에서 잘린다. */
-            max={flagMax}
+            max={effectiveFlagMax}
             size="sm"
             /* 폭 예산 안에서 말줄임 — 글리프 중간 절단으로 없는 국가명이 만들어지던
                것을 막고, '+N'은 어떤 폭에서도 살아남는다. */
@@ -1136,6 +1162,9 @@ const Duration = styled.span`
 const Flags = styled.span`
   grid-column: flags;
   align-self: center;
+  /* 텍스트 칩(역사국가)의 개별 상한. 트랙 128px에 2개 + '+N'이 들어가려면
+     칩 하나가 52px 안쪽이어야 한다 — 한글 4~5자로, 국가를 구별하기에 충분하다. */
+  --flag-name-max: 52px;
   display: inline-flex;
   align-items: center;
   /* 국기/역사국가 칩이 폭 초과의 주범이다 — 역사국가는 이모지가 없어 국가명 전체가

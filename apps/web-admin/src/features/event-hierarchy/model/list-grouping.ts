@@ -23,6 +23,19 @@ export interface YearBuckets {
   unknownItems: FlattenedHierarchyItem[]
   /** 행 id → 귀속 연도. 미상은 null. 페이지가 밴드 접힘 판정에 쓴다. */
   bucketYearById: Map<string, number | null>
+  /**
+   * 시각 헤더를 렌더하지 않는 연도 — 그 해에 행이 **하나뿐**인 버킷.
+   *
+   * 실측: 연 그룹 88개 중 50개(57%)가 1행짜리다. 이들이 63px 헤더 + 45px 행 = 108px를
+   * 사건 한 건에 쓰고 그중 58%가 크롬이며, 아래 유일한 행은 자기 날짜를 이미 갖고 있다
+   * (연 그룹과 같은 해면 월·일만 보이므로 헤더를 지우면 연도를 되살려 줘야 한다).
+   *
+   * ⚠️ 헤더가 없다는 것은 **접기 토글도 없다**는 뜻이다. 그래서 이 연도들은
+   * 연 단위 접힘의 대상에서 제외해야 한다 — 아니면 되돌릴 수단 없이 행이 사라진다.
+   * `selectVisibleRows`와 렌더가 **둘 다** 이 집합을 봐야 하고, 한쪽만 보면
+   * DOM에는 행이 있는데 ↑↓·드로어 이전/다음 모수에서는 빠지는 회귀가 난다.
+   */
+  headerlessYears: Set<number>
 }
 
 /**
@@ -105,6 +118,11 @@ export function buildYearBuckets(
   const allYears =
     sortDirection === 'desc' ? [...sortedYears].reverse() : sortedYears
 
+  const headerlessYears = new Set<number>()
+  eventsByYear.forEach((bucketItems, year) => {
+    if (bucketItems.length === 1) headerlessYears.add(year)
+  })
+
   return {
     allYears,
     eventsByYear,
@@ -112,6 +130,7 @@ export function buildYearBuckets(
     yearRootCount,
     unknownItems,
     bucketYearById,
+    headerlessYears,
   }
 }
 
@@ -148,6 +167,14 @@ export function selectVisibleRows(
     // '연도 미상' 섹션은 접기 대상이 아니다 — 항상 렌더된다.
     if (year === null || year === undefined) return true
     if (collapsedCenturies.has(getCentury(year))) return false
+    /**
+     * 헤더 없는 연도(1행짜리)는 연 단위 접힘의 대상이 아니다 — 접기 토글 자체가
+     * 화면에 없으므로 접히면 되돌릴 수단이 없다.
+     * ⚠️ 이 분기는 렌더(event-compact-list)와 **정확히 같아야** 한다. 한쪽만 고치면
+     * DOM에는 행이 보이는데 ↑↓ 내비와 드로어 이전/다음 모수에서는 빠진다.
+     * 세기 단위 접힘은 그대로 적용된다 — 세기 헤더는 항상 있기 때문이다.
+     */
+    if (buckets.headerlessYears.has(year)) return true
     return !collapsedYears.has(year)
   })
 }
