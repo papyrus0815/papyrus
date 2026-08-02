@@ -253,11 +253,24 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
    * 이 행의 시간 토큰이 그룹 헤더와 *다른* 해를 가리키는가.
    * (평면 뷰의 타 연도·'연도 미상' 섹션·BC 표기) — 좁은 폭에서도 숨기면 안 된다.
    */
+  /**
+   * 이 행의 시간 토큰이 그룹 헤더와 *다른* 해를 가리키는가 — 괄호로 신호한다.
+   * ⚠️ BC는 제외한다. 'BC' 접두사 자체가 이미 다른 축이라는 신호라 괄호는 중복이고,
+   * 괄호 2자가 날짜 열 예산을 또 잠식한다.
+   */
   const isOffGroupYear =
-    !startParts || startParts.year < 0 || groupYear == null || startParts.year !== groupYear
+    !!startParts &&
+    startParts.year >= 0 &&
+    (groupYear == null || startParts.year !== groupYear)
   const rowDateLabel = (() => {
     if (!startParts) return '미상'
-    if (startParts.year < 0) return `기원전 ${Math.abs(startParts.year)}`
+    /**
+     * BC는 행에서 **축약**한다. '기원전 1046'은 11자(~72px)로 날짜 열 예산(66px)을
+     * 넘겨 그 초과분을 제목이 전부 떠안았다 — 고대사가 이 앱의 주요 콘텐츠라
+     * 데이터가 들어오는 순간 좁은 대역 전체에서 발현한다.
+     * 전체 표기는 title 속성이 유지한다.
+     */
+    if (startParts.year < 0) return `BC ${Math.abs(startParts.year)}`
     if (groupYear != null && startParts.year === groupYear) {
       const precision = event.startDatePrecision
       /**
@@ -982,6 +995,9 @@ const Year = styled.span`
   color: ${({ theme }) => (theme.mode === 'dark' ? '#d4d4d8' : '#4b5563')};
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  /* 극단값(BC·헤더리스 승격 'YYYY.M.D')이 열을 넘기더라도 제목을 잠식하지 못하게
+     여기서 흡수한다 — 격자에서 줄어들 수 있는 건 제목 트랙뿐이기 때문이다. */
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 

@@ -89,7 +89,10 @@ export const CompactList = styled.div.attrs(
    * 것은 세기·연도 앵커 도트뿐이라 36px이면 충분하다.
    *
    * 축소분 34px은 날짜 슬롯 승격(36 → 66px)에 재투자된다 — 리딩 거터 총량은 줄지 않는다. */
-  padding: 4px 12px 120px var(--rail-gutter);
+  /* 하단 여백 120 → 32px. 120px은 모바일 FAB(56px) 회피가 목적인데 데스크톱에는
+     FAB가 없어 아무것도 피하지 않았다 — 마지막 세기에 도착하면 화면 3분의 1이
+     안내문과 빈칸이었다. 모바일에서만 안전 영역과 함께 되살린다. */
+  padding: 4px 12px 32px var(--rail-gutter);
   position: relative;
 
   /* 레일 3좌표는 한 세트로 움직인다 — 거터(패딩) · 축선 x · 인셋(=거터-축선).
@@ -209,7 +212,7 @@ export const CompactList = styled.div.attrs(
     --rail-x: 11px;
     /* 배경 그라디언트는 --rail-x를 읽으므로 여기서 재선언할 필요가 없다
        (이전에는 11/12px 리터럴을 두 번째로 적어 두 좌표가 따로 놀았다). */
-    padding: 4px 10px max(120px, env(safe-area-inset-bottom)) var(--rail-gutter);
+    padding: 4px 10px max(96px, env(safe-area-inset-bottom)) var(--rail-gutter);
   }
 
   /* ≤400px — 메타 줄이 1px 차이로 넘쳐 3줄로 무너지던 구간(실측 320px).
@@ -949,31 +952,30 @@ export const CenturyDivider = styled.button`
    * 높이(41px)가 어긋나면 두 sticky 띠 사이에 3px 슬릿이 생긴다. */
   box-sizing: border-box;
   min-height: var(--century-header-h, 44px);
+  /* hairline 2줄 제거 — 세기·연도 헤더가 **같은 굵기** hairline을 쓰던 탓에 목록
+     최상단 130px에 동일한 선이 3줄 쌓여, 시대 분기점이라는 사건이 오히려 희석됐다.
+     세기 경계는 이제 여백과 타입 크기가 만든다(연도 hairline은 그대로 둔다). */
   border: none;
-  border-top: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)'};
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)'};
   border-radius: 0;
   cursor: pointer;
   text-align: left;
   position: sticky;
   top: 0;
   z-index: 6;
+  /* ⚠️ 반투명 금지. 연 헤더는 같은 이유로 이미 솔리드로 고쳐져 있었는데(alpha 0.94에서도
+     아래 행이 5~6% 비친다) 세기 헤더만 0.78/0.82로 남아 있었다. 세기 헤더는 섹션 전체
+     구간에서 상시 stuck이라 비침이 가장 오래 노출되는 표면이고, blur까지 겹쳐 라벨 뒤에
+     회색 얼룩을 만들었다. 실측 표면색으로 완전히 덮는다. */
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(15, 15, 18, 0.78);
+          background: #141414;
           color: ${theme.colors.text.primary};
         `
       : css`
-          background: rgba(255, 255, 255, 0.82);
+          background: #ffffff;
           color: ${theme.colors.text.primary};
         `}
-  backdrop-filter: blur(10px) saturate(160%);
-  -webkit-backdrop-filter: blur(10px) saturate(160%);
   transition: background 0.15s ease-out;
 
   /* 레일(divider padding-box left=rail) 솔리드 큰 도트 — 시대 분기 */
@@ -983,8 +985,9 @@ export const CenturyDivider = styled.button`
     left: 0;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: 12px;
-    height: 12px;
+    /* 세기 16 : 연도 10 = 1.6× — 두 단계가 '조금 다른 같은 것'으로 보이던 문제. */
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     background: ${BRAND.primary};
     box-shadow: 0 0 0 3px
@@ -1019,7 +1022,9 @@ export const CenturyDividerLabel = styled.span`
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 16px;
+  /* 세기 20 : 연도 14 = 1.43×. 16px일 때는 1.14×라 스크롤 중 '시대가 바뀐 것인지
+     해가 바뀐 것인지'를 라벨을 읽어야만 알 수 있었다. */
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};

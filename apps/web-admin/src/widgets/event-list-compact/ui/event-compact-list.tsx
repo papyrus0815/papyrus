@@ -516,9 +516,18 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                 </List.CenturyDivider>
 
                 {/* 세기 접힘 → 그 세기 안의 연도 섹션을 통째로 렌더하지 않는다(헤더만 남음) */}
-                {isCenturyCollapsed
-                  ? null
-                  : years.map((currentYear) => {
+                {/* 세기 접힘도 연도 접힘과 **같은 언어**를 쓴다.
+                    예전엔 상위 레벨일수록 숨기는 양이 많은데(93행짜리 20세기) 정직성
+                    신호는 반대로 사라져, 접힌 세기와 '사건이 없는 세기'가 화면상
+                    구별되지 않았다 — 스크롤 중 데이터 공백으로 오독된다. */}
+                {isCenturyCollapsed ? (
+                  <List.CollapsedPlaceholder>
+                    <span>
+                      {`${centuryLabel} — ${centuryCount.get(century) ?? 0}건 접힘`}
+                    </span>
+                  </List.CollapsedPlaceholder>
+                ) : (
+                  years.map((currentYear) => {
                       const yearItems = eventsByYear.get(currentYear) ?? []
                       /**
                        * 연 헤더 카운트 — depth 0이 아니라 **그룹 단위**(부모가 목록에 없는 행)를 센다.
@@ -639,7 +648,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                           )}
                         </List.YearSection>
                       )
-                    })}
+                    })
+                )}
                 </List.CenturySection>
               )
             })}
@@ -740,7 +750,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LoadingMoreRow = styled.div`
-  padding: 40px;
+  /* 40 → 14px. 이 행은 4개 분기 중 하나가 **항상** 렌더되므로 목록 끝에 상시 존재한다.
+     99px짜리 안내문이 마지막 세기를 확인하러 온 화면의 3분의 1을 먹고 있었다. */
+  padding: 14px;
   text-align: center;
   display: flex;
   align-items: center;
@@ -786,15 +798,6 @@ const RetryLoadMoreButton = styled.button`
     outline: none;
     box-shadow: ${BRAND.focusRing};
   }
-`
-
-const ScrollHint = styled.div`
-  padding: 32px;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : '#cbd5e1'};
 `
 
 const ScrollHintInline = styled.span`

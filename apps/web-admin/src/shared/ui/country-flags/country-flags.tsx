@@ -211,7 +211,20 @@ const Item = styled.span<ChipProps>`
   ${chipMixin}
 `
 
+/**
+ * 이모지 국기는 **시스템 컬러 폰트**라 앱의 색 토큰과 조율할 수 없다 — 목록의 색 예산을
+ * 정하는 주체가 둘이 되고, 어떤 튜닝을 해도 행 우측의 채도는 통제되지 않는다.
+ * 정지 상태에서만 채도를 회수하고 hover/선택 행에서는 원색으로 되돌린다(정보는 유지).
+ */
 const FlagText = styled.span<{ $size: 'sm' | 'md' }>`
+  filter: saturate(0.75);
+  transition: filter 0.12s;
+
+  [data-event-id]:hover &,
+  [data-event-id][data-active='true'] & {
+    filter: none;
+  }
+
   /* flag emoji는 이모지 폰트로 — 시스템 emoji color font 사용 */
   font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji',
     sans-serif;
