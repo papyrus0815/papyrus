@@ -166,14 +166,19 @@ export function getMainPathAndBranchRows(
   const roots = chain.filter(
     (id) => !inChainForMain.some((e) => e.successorId === id),
   )
-  function longestPathFrom(id: string): string[] {
+  // onStack: 현재 경로에 있는 노드. 잘못 등록된 순환 SUCCESSION 데이터에서
+  // 무한 재귀(스택 오버플로)로 섹션 전체가 크래시하는 것을 막는다.
+  function longestPathFrom(id: string, onStack: Set<string> = new Set()): string[] {
     const succs = successors.get(id) ?? []
     if (succs.length === 0) return [id]
+    onStack.add(id)
     let best: string[] = [id]
-    for (const s of succs) {
-      const sub = longestPathFrom(s)
+    for (const successor of succs) {
+      if (onStack.has(successor)) continue // 사이클 방어: 이미 경로에 있는 노드로는 내려가지 않음
+      const sub = longestPathFrom(successor, onStack)
       if (1 + sub.length > best.length) best = [id, ...sub]
     }
+    onStack.delete(id)
     return best
   }
   let mainPath: string[] = []

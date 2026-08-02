@@ -170,7 +170,13 @@ export function CountryInlineModal({
     ? getCountryDurationYears(historical)
     : null
 
-  const predecessors = modern?.historicalCountries ?? []
+  // 서버 linkKind가 있으면 퀵뷰엔 직계 전신선만, 없으면(데이터 부족·구버전) 전체.
+  const historicalAll = modern?.historicalCountries ?? []
+  const historicalPredecessors = historicalAll.filter(
+    (hc) => hc.linkKind === 'PREDECESSOR',
+  )
+  const predecessors =
+    historicalPredecessors.length > 0 ? historicalPredecessors : historicalAll
 
   return (
     <Modal
@@ -274,7 +280,7 @@ export function CountryInlineModal({
 
             {predecessors.length > 0 && (
               <ChipSection>
-                <SectionLabel>역사적 전신</SectionLabel>
+                <SectionLabel>관련 역사국가</SectionLabel>
                 <ChipRow>
                   {predecessors.map((predecessor) => {
                     const periodText = formatCountryPeriod(predecessor, {

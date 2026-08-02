@@ -43,6 +43,7 @@ import {
   getCountryYearRange,
   getMainPathAndBranchRows,
 } from '../model/linked-historical-flow-graph'
+import { classifyLinkedHistorical } from '../model/linked-historical-classify'
 import { useLinkedHistoricalData } from '../model/use-linked-historical-data.hook'
 
 /* 행정조직·인물과 동일: 단일 악센트, 회색 톤 */
@@ -62,6 +63,12 @@ const EMPTY_RELS: {
 
 /** 흐름도 카드 최소 폭(%) — 한쪽 연도만 알려진 국가의 클릭 영역 확보용. */
 const MIN_FLOW_WIDTH_PCT = 1.5
+
+/**
+ * 목록을 전신/구성국/유산 3버킷으로 접기 시작하는 최소 연결 개수.
+ * 이보다 적으면 평면 나열이 더 읽기 쉬워 flat 유지(소형국은 애초에 '많다' 문제가 없다).
+ */
+const LINKED_BUCKET_THRESHOLD = 8
 
 /** 연결된 역사적 국가가 없을 때 메시지 — list/flow 모드 공통. */
 const LINKED_EMPTY_MESSAGE =
@@ -642,6 +649,62 @@ export function LinkedHistoricalCountriesSection({
     return map
   }, [list, transitions, relations, memberships])
 
+  /**
+   * 표시용 3버킷 분류 — 전신(펼침)/구성국(접힘)/유산(접힘).
+   * ⚠️ 표시 전용 파생이다. 브리지 행·스코프 합산과 무관하며 어떤 노드도 사라지지 않는다.
+   * 계보가 잡히지 않거나(트렁크 없음) 소형국이면 버킷 이득이 없어 flat으로 폴백.
+   */
+  const linkedBuckets = useMemo(() => {
+    // 정본은 서버가 실어준 linkKind. 모든 항목에 있으면 그걸 쓰고, 없으면(구버전 API·
+    // 캐시) 클라 분류로 폴백한다. 둘은 동일 알고리즘이라 결과가 같다.
+    const kindById = new Map<string, string>()
+    const hasServerKind =
+      list.length > 0 && list.every((item) => item.linkKind != null)
+    if (hasServerKind) {
+      for (const item of list) kindById.set(item.id, item.linkKind as string)
+    } else {
+      const toSigned = (
+        era: string | null | undefined,
+        year: number | null | undefined,
+      ): number | null => {
+        if (year == null) return null
+        return era === 'BC' ? -Math.abs(year) : Math.abs(year)
+      }
+      const { kindById: clientKind } = classifyLinkedHistorical({
+        nodes: list.map((item) => ({
+          id: item.id,
+          startYear: toSigned(item.startEra, item.startYear),
+          endYear: toSigned(item.endEra, item.endYear),
+        })),
+        transitions: transitions.map((transition) => ({
+          predecessorId: transition.predecessorId,
+          successorId: transition.successorId,
+        })),
+        memberships: memberships.map((membership) => ({
+          historicalCountryId: membership.historicalCountryId,
+          memberCountryId: membership.memberCountryId,
+          isLeadingMember: membership.isLeadingMember,
+        })),
+      })
+      for (const [id, kind] of clientKind) kindById.set(id, kind)
+    }
+    const predecessors = list.filter(
+      (item) => kindById.get(item.id) === 'PREDECESSOR',
+    )
+    const constituents = list.filter(
+      (item) => kindById.get(item.id) === 'CONSTITUENT',
+    )
+    const heritage = list.filter(
+      (item) => kindById.get(item.id) === 'HERITAGE',
+    )
+    // 전신 계보가 2 이상 잡혀야 버킷팅(서버 flat 폴백 시 전신 0 → 평면 유지).
+    const shouldBucket =
+      list.length > LINKED_BUCKET_THRESHOLD &&
+      predecessors.length >= 2 &&
+      constituents.length + heritage.length > 0
+    return { predecessors, constituents, heritage, shouldBucket }
+  }, [list, transitions, memberships])
+
   /** 흐름도용: 변천 있으면 체인별, 없으면 전체를 한 줄로. 연방-구성원도 같은 체인으로 묶어 선 연결 */
   const { chains, transitionByEdge } = useMemo(() => {
     const edgeMap = new Map<string, HistoricalCountryTransitionDto>()
@@ -1116,6 +1179,43 @@ export function LinkedHistoricalCountriesSection({
           <SectionLabel>역사적 국가 목록</SectionLabel>
           {count === 0 ? (
             <EmptyCard>{LINKED_EMPTY_MESSAGE}</EmptyCard>
+          ) : linkedBuckets.shouldBucket ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <LinkedBucketGroup
+                title="직계 전신"
+                hint="이 국가로 이어진 주 계보"
+                tone={MAIN}
+                items={linkedBuckets.predecessors}
+                defaultOpen
+                idToCountry={idToCountry}
+                countryRelations={countryRelations}
+                onNavigate={(id) => navigate(pathKeys.countryDetail(id))}
+              />
+              {linkedBuckets.constituents.length > 0 && (
+                <LinkedBucketGroup
+                  title="구성 정치체"
+                  hint="당대 이 나라를 구성한 제후국·구성원"
+                  tone="#64748b"
+                  items={linkedBuckets.constituents}
+                  defaultOpen={false}
+                  idToCountry={idToCountry}
+                  countryRelations={countryRelations}
+                  onNavigate={(id) => navigate(pathKeys.countryDetail(id))}
+                />
+              )}
+              {linkedBuckets.heritage.length > 0 && (
+                <LinkedBucketGroup
+                  title="관련·유산 정치체"
+                  hint="영토를 공유한 고대·광역 정치체 등"
+                  tone="#94a3b8"
+                  items={linkedBuckets.heritage}
+                  defaultOpen={false}
+                  idToCountry={idToCountry}
+                  countryRelations={countryRelations}
+                  onNavigate={(id) => navigate(pathKeys.countryDetail(id))}
+                />
+              )}
+            </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {list.map((h, idx) => {
@@ -2348,6 +2448,116 @@ const ModernCountryCard = styled(motion.div)`
     transform: translateY(-2px);
   }
 `
+
+/**
+ * 목록 3버킷 중 한 그룹 — 접이식 헤더(제목·개수·설명) + 펼치면 카드들.
+ * 전신 그룹만 기본 펼침, 구성국·유산은 접힘으로 "많다" 체감을 눌러준다.
+ */
+function LinkedBucketGroup({
+  title,
+  hint,
+  tone,
+  items,
+  defaultOpen,
+  idToCountry,
+  countryRelations,
+  onNavigate,
+}: {
+  title: string
+  hint: string
+  tone: string
+  items: HistoricalCountryItem[]
+  defaultOpen: boolean
+  idToCountry: Map<string, HistoricalCountryItem>
+  countryRelations: Map<string, typeof EMPTY_RELS>
+  onNavigate: (id: string) => void
+}) {
+  const { mode } = useThemeStore()
+  const isDark = mode === 'dark'
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          width: '100%',
+          padding: '12px 14px',
+          background: isDark ? '#1a1a1a' : '#f8fafc',
+          border: `1px solid ${isDark ? '#2a2a2a' : BORDER}`,
+          borderRadius: 12,
+          cursor: 'pointer',
+          textAlign: 'left',
+          color: isDark ? '#f5f5f5' : TITLE,
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            display: 'inline-flex',
+            fontSize: 12,
+            color: isDark ? '#a1a1aa' : MUTED,
+            transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+            transition: 'transform 0.18s ease',
+          }}
+        >
+          ▶
+        </span>
+        <span style={{ fontSize: 15, fontWeight: 700 }}>{title}</span>
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: tone,
+            background: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
+            border: `1px solid ${isDark ? 'rgba(99,102,241,0.24)' : '#e0e7ff'}`,
+            borderRadius: 999,
+            padding: '2px 9px',
+          }}
+        >
+          {items.length}개
+        </span>
+        <span
+          style={{
+            fontSize: 12,
+            color: isDark ? '#a1a1aa' : MUTED,
+            fontWeight: 500,
+            marginLeft: 'auto',
+          }}
+        >
+          {hint}
+        </span>
+      </button>
+      {open && (
+        <div
+          role="group"
+          aria-label={title}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+            marginTop: 14,
+          }}
+        >
+          {items.map((item, index) => (
+            <HistoricalCountryCard
+              key={item.id}
+              h={item}
+              idx={index}
+              relations={countryRelations.get(item.id) ?? EMPTY_RELS}
+              idToCountry={idToCountry}
+              onDetail={() => onNavigate(item.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function HistoricalCountryCard({
   h,

@@ -30,48 +30,27 @@ function toNode(source: LineageSource): LineageNode {
 export interface LineageFlowProps {
   /** 시간순 정렬 전 historical countries (전체/경량 DTO 모두 허용) */
   historicalCountries: LineageSource[]
-  /** 현재 국가 노드(연결의 마지막) */
-  currentName: string
 }
 
-export function LineageFlow({
-  historicalCountries,
-  currentName,
-}: LineageFlowProps) {
+export function LineageFlow({ historicalCountries }: LineageFlowProps) {
   // era 인지 비교기로 시간순 정렬 — BC 국가가 역순으로 이어지던 문제(F7) 해소
   const nodes = [...historicalCountries].sort(compareByCountryStart).map(toNode)
 
-  const items: Array<
-    | { kind: 'chip'; node: LineageNode | { id: '__current'; name: string; yearsLabel: string | null } }
-    | { kind: 'arrow'; key: string }
-  > = []
-  for (let i = 0; i < nodes.length; i++) {
-    items.push({ kind: 'chip', node: nodes[i] as LineageNode })
-    items.push({ kind: 'arrow', key: `arr-${i}` })
-  }
-  items.push({
-    kind: 'chip',
-    node: { id: '__current', name: currentName, yearsLabel: '현재' },
-  })
-
+  // 화살표(→)로 잇지 않는다 — 이 목록엔 직계 계승뿐 아니라 당대 병존 구성국·느슨한
+  // 고대조상까지 섞여 있어(검토서 R1) 선형 계승을 그리면 거짓 주장이 된다. 관련
+  // 역사국가를 칩으로만 나열하고, 현대 국가를 종단 칩으로 덧붙이지 않는다.
   return (
     <S.LineageFlow>
-      {items.map((it) =>
-        it.kind === 'chip' ? (
-          <S.LineageChip key={it.node.id}>
-            <S.LineageChipBody>
-              <S.LineageName>{it.node.name}</S.LineageName>
-              {it.node.yearsLabel && (
-                <S.LineageYears>{it.node.yearsLabel}</S.LineageYears>
-              )}
-            </S.LineageChipBody>
-          </S.LineageChip>
-        ) : (
-          <S.LineageArrow key={it.key} aria-hidden>
-            →
-          </S.LineageArrow>
-        ),
-      )}
+      {nodes.map((node) => (
+        <S.LineageChip key={node.id}>
+          <S.LineageChipBody>
+            <S.LineageName>{node.name}</S.LineageName>
+            {node.yearsLabel && (
+              <S.LineageYears>{node.yearsLabel}</S.LineageYears>
+            )}
+          </S.LineageChipBody>
+        </S.LineageChip>
+      ))}
     </S.LineageFlow>
   )
 }

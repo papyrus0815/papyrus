@@ -82,7 +82,14 @@ export function CountryDetailDashboard({
     navigate(pathKeys.countryElections(country.id))
 
   const totalActivity = stats.recentActivity.length
-  const lineage = country.historicalCountries ?? []
+  // 서버가 linkKind로 전신을 구분해주면 대시보드 요약엔 직계 전신선만 보인다
+  // (독일 47 → 12). 구분이 없으면(데이터 부족·구버전 API) 전체를 그대로 보여준다.
+  const lineageAll = country.historicalCountries ?? []
+  const lineagePredecessors = lineageAll.filter(
+    (hc) => hc.linkKind === 'PREDECESSOR',
+  )
+  const lineage =
+    lineagePredecessors.length > 0 ? lineagePredecessors : lineageAll
 
   // 정치 섹션은 데이터 로드 중이거나 셋 중 하나라도 있을 때만 노출.
   const politicsHasData =
@@ -344,13 +351,10 @@ export function CountryDetailDashboard({
             <S.SectionTitleIcon $accent="amber">
               <IconHistory />
             </S.SectionTitleIcon>
-            <S.SectionTitleText>역사적 전신</S.SectionTitleText>
+            <S.SectionTitleText>관련 역사국가</S.SectionTitleText>
             <S.SectionCountChip>{lineage.length}개</S.SectionCountChip>
           </S.SectionTitleRow>
-          <LineageFlow
-            historicalCountries={lineage}
-            currentName={country.name}
-          />
+          <LineageFlow historicalCountries={lineage} />
         </S.Section>
       )}
     </S.DashboardRoot>
