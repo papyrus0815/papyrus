@@ -149,7 +149,11 @@ dirty 가드는 셸에 없으므로 래퍼에서 구현(Esc·오버레이·취�
 - **편집 흡수**: 상세 히어로에 썸네일 인라인 편집 추가 → `/events/:eventId/edit` 리다이렉트 → `event-detail-panel.tsx:208,:439` 상세로. create 페이지 577 → ~430줄 [M]
 - **URL 동기화**: `?eventForm=new` push/replace + 라우트 redirect loader 강등 [M]
 - **세로 압축**: 카테고리 카드그리드(354px, 390뷰포트 563px) → 드롭다운, 역사국가 존속기간 경고 N개 나열(`basic-info-section.tsx:171-188`, `:766-776`) → 1개 요약+접기. **모달 전용 이득 아님 — 페이지에서도 그대로 이득** [M]
-- **스타일 canon 이관**: `event-create.styles.ts`(813줄)는 자체 `primary:'#8b5cf6'`(`:53`,`:70`)를 쓰는데 앱 테마 primary는 `#6366f1`(`shared/styles/theme.ts:61`) — **사건 등록 폼은 앱에서 유일하게 브랜드색이 다르다.** 반면 국가상세의 '중복' 사건 폼은 공용 kit을 **이미 쓴다**(`event-create-form-dashboard.tsx:2,56`). 정본이 canon 위반자이고 중복본이 준수자인 역전 상태 → `shared/ui/register-form-layout`으로 이관 [L]
+- ~~**스타일 canon 이관**~~ — **절반 완료 + 절반 기각**(2026-08-02 실측).
+  - ✅ 브랜드색: 이 폼만 `#8b5cf6`(= 앱의 *secondary*)를 primary로 쓰던 진짜 canon 위반 → `getC(theme)`가 앱 테마에서 덮어쓰도록 수정. 실측 라이트 `rgb(99,102,241)` / 다크 `rgb(99,106,242)`.
+  - ❌ 구조 이관: **기각.** `register-form-layout`과 골격을 대조하니 **일치하는 컴포넌트가 0개**다 — 라벨 200px/14px vs 360px/13px, 필수 표식 `*` 글리프 vs 5px 점, 에러 `⚠`+#ef4444 vs 평문 #ea4335, 힌트 `text.muted` vs `text.secondary`. 사본이 아니라 **서로 다른 시각 언어**다.
+    결정타: 라벨 360px를 받으면 등록 모달(콘텐츠 990px)에서 필드가 606px로 눌려 **설계폭 680px 아래로 내려간다** — 모달 폭 1040px로 확보한 "가로 손실 0"이 무너진다.
+    → 이관은 리팩터가 아니라 재디자인이므로, **두 폼의 시각 규격을 먼저 하나로 정하는 제품/디자인 결정이 선행**해야 한다. 근거는 `event-create.styles.ts` 헤더 주석에 박아 뒀다.
 
 ---
 
