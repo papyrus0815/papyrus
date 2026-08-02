@@ -1,7 +1,20 @@
-import React, { useState, useEffect } from 'react'
+/**
+ * 시간 선택 모달.
+ *
+ * **document.body로 포털**한다 — 다른 모달 안에서 열릴 수 있기 때문이다. 부모 모달 DOM
+ * 안에 남으면 (1) 부모 셸의 `backdrop-filter`가 containing block을 만들어 `position: fixed`가
+ * 부모 박스에 갇히고(다크 테마에서만 재현), (2) Esc의 native 이벤트가 부모 모달 root까지
+ * 버블해 **자식 대신 부모가 닫힌다**. 포털은 두 경로를 동시에 끊는다.
+ */
+import React, { useState, useEffect, useRef } from 'react'
+
+import { createPortal } from 'react-dom'
+
 import styled from 'styled-components'
 import { FiClock, FiX, FiCheck } from 'react-icons/fi'
 import { glassCardMixin } from '@/shared/styles/mixins'
+import { Z_INDEX } from '@/shared/styles/z-index'
+import { useModalBehavior } from '@/shared/ui/modal/use-modal-behavior.hook'
 
 interface TimePickerModalProps {
   isOpen: boolean
@@ -20,6 +33,11 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
 }) => {
   const [selectedHour, setSelectedHour] = useState<number>(0)
   const [selectedMinute, setSelectedMinute] = useState<number>(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Esc·포커스 트랩·스크롤락·포커스 복원 일괄. root 바인딩이라 포털과 짝을 이뤄야
+  // 부모 모달이 Esc를 가로채지 않는다.
+  useModalBehavior({ isOpen, onClose, containerRef })
 
   useEffect(() => {
     if (isOpen && initialTime) {
@@ -52,9 +70,16 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
     onClose()
   }
 
-  return (
+  const modal = (
     <Overlay onClick={onClose}>
-      <ModalContainer onClick={(e) => e.stopPropagation()}>
+      <ModalContainer
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+      >
         <ModalHeader>
           <HeaderLeft>
             <ClockIcon>
@@ -148,6 +173,10 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
       </ModalContainer>
     </Overlay>
   )
+
+  if (typeof document === 'undefined') return null
+
+  return createPortal(modal, document.body)
 }
 
 const Overlay = styled.div`
@@ -161,7 +190,7 @@ const Overlay = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
   animation: fadeIn 0.2s ease-out;
 
   @keyframes fadeIn {

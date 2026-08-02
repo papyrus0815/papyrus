@@ -158,12 +158,30 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const [isEndDateModalOpen, setIsEndDateModalOpen] = useState(false)
   const [isStartTimeModalOpen, setIsStartTimeModalOpen] = useState(false)
   const [isEndTimeModalOpen, setIsEndTimeModalOpen] = useState(false)
+  /** 시작일 선택 직후 종료일 필드로 포커스를 옮길지 (피커 닫힘 후 1회) */
+  const pendingEndDateFocusRef = useRef(false)
+  const endDateTriggerRef = useRef<HTMLDivElement>(null)
   const [keywordInput, setKeywordInput] = useState(keywords.join(', '))
   const [keywordValidationMsg, setKeywordValidationMsg] = useState('')
   const skipKeywordSyncRef = useRef(false)
 
   const KEYWORD_MAX_LENGTH = 30
   const KEYWORD_MAX_COUNT = 20
+
+  /**
+   * 시작일 피커가 닫힌 **다음 프레임**에 종료일 필드로 포커스를 옮긴다.
+   * 피커는 언마운트 커밋에서 "열기 직전 포커스"를 동기 복원하므로, 그보다 늦게 실행돼야
+   * 우리 포커스가 덮이지 않는다.
+   */
+  useEffect(() => {
+    if (isStartDateModalOpen) return
+    if (!pendingEndDateFocusRef.current) return
+    pendingEndDateFocusRef.current = false
+    const frame = window.requestAnimationFrame(() => {
+      endDateTriggerRef.current?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [isStartDateModalOpen])
 
   // F33 소프트 경고 — 사건 시점이 선택한 역사국가 존속기간 밖이면 인라인 경고(저장은 허용).
   // 사건 startDate는 '-YYYY'로 BC도 담을 수 있어 recordSupportsBc=true(부호 전 구간 비교).
@@ -317,6 +335,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             <S.DateRangeColumn>
               <S.DateRangeLabel>종료일</S.DateRangeLabel>
               <S.DateInputWrapper
+                ref={endDateTriggerRef}
+                // 프로그램적 포커스만 받는다(탭 정지점을 늘리지 않음)
+                tabIndex={-1}
                 onClick={() => {
                   playClickSound()
                   setIsEndDateModalOpen(true)
@@ -358,8 +379,14 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         onSelect={(date) => {
           setStartDate(date)
           setIsStartDateModalOpen(false)
-          // 시작일 선택 직후 종료일 설정할 수 있도록 모달 열기
-          setTimeout(() => setIsEndDateModalOpen(true), 200)
+          /**
+           * 예전엔 `setTimeout(() => setIsEndDateModalOpen(true), 200)`으로 종료일
+           * 피커를 **자동으로 이어 열었다**. 피커는 닫힐 때 "열기 직전 포커스"로
+           * 포커스를 되돌리는데, 그 복원과 다음 피커의 열기가 타이머로 엇갈리면
+           * 포커스가 이미 사라진 노드를 향한다(폼이 모달 안에 들어가면 더 잘 깨진다).
+           * 자동 개방 대신 종료일 필드로 포커스만 옮겨 다음 행동을 가리킨다.
+           */
+          pendingEndDateFocusRef.current = true
         }}
         initialDate={startDate}
         maxDate={endDate}

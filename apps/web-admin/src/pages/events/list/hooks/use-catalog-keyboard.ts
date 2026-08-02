@@ -76,6 +76,22 @@ const isTextEntryTarget = (target: EventTarget | null): boolean => {
   return Boolean(element.isContentEditable)
 }
 
+/**
+ * 모달 다이얼로그가 열려 있는가 — `/` 전용 가드.
+ *
+ * `isTextEntryTarget`은 input/textarea/contenteditable만 막는다. 그래서 폼 모달이 열려
+ * 있고 포커스가 날짜·국가처럼 **버튼**에 있으면 `/`가 통과해, 모달 뒤 카탈로그 검색창으로
+ * 포커스를 옮겨 버렸다. `aria-modal` 다이얼로그 밖으로 포커스가 탈출하는 것이라
+ * `?`가 삼켜지는 것보다 심각하다.
+ *
+ * 포커스가 body에 있어도(모달 열림 직후 등) 막아야 하므로 대상이 아니라 **문서 전체**를
+ * 본다.
+ */
+const isModalDialogOpen = (): boolean => {
+  if (typeof document === 'undefined') return false
+  return Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'))
+}
+
 interface CatalogShortcutsArgs {
   searchInputRef: RefObject<HTMLInputElement | null>
   setShortcutHelpOpen: (updater: (value: boolean) => boolean) => void
@@ -102,7 +118,7 @@ export function useCatalogShortcuts(args: CatalogShortcutsArgs) {
       if (event.key === '?' && !inTextEntry) {
         event.preventDefault()
         setShortcutHelpOpen((open) => !open)
-      } else if (event.key === '/' && !inTextEntry) {
+      } else if (event.key === '/' && !inTextEntry && !isModalDialogOpen()) {
         event.preventDefault()
         searchInputRef.current?.focus()
       } else if (event.key === 'Escape') {

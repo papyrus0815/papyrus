@@ -1,8 +1,15 @@
 /**
  * 고급 국가 선택 모달 - 좌측 필터 + 우측 리스트
  * 인물 페이지와 동일한 스타일
+ *
+ * **document.body로 포털**한다 — 사건 등록 폼 등 다른 모달 안에서 열리기 때문이다.
+ * 부모 모달 DOM 안에 남으면 (1) 부모 셸의 `backdrop-filter`가 containing block을 만들어
+ * `position: fixed`가 부모 박스에 갇히고(다크 테마에서만 재현), (2) Esc의 native 이벤트가
+ * 부모 모달 root까지 버블해 **자식 대신 부모가 닫힌다**.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+
+import { createPortal } from 'react-dom'
 
 import { FiCheck, FiGlobe, FiSearch, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -23,6 +30,7 @@ import {
 } from '@/shared/lib/country-picker-filter'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { useModalBehavior } from '@/shared/ui/modal/use-modal-behavior.hook'
 import {
   HistoricalCountryCreateButton,
   HistoricalCountryCreateHost,
@@ -81,6 +89,22 @@ export const AdvancedCountrySelectModal: React.FC<
   const [countrySearchTerm, setCountrySearchTerm] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const wasOpenRef = useRef(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  /**
+   * Esc·포커스 트랩·스크롤락·포커스 복원 일괄.
+   *
+   * `createOpen`(역사국가 등록 폼이 이 모달 *안에* 열린 상태)일 때는 Esc와 트랩을 끈다 —
+   * 등록 폼 셸(CountryFormShell)이 Esc를 window에서 듣는데, 여기서 먼저 잡아
+   * stopPropagation하면 **등록 폼 대신 피커가 닫힌다**.
+   */
+  useModalBehavior({
+    isOpen,
+    onClose,
+    containerRef,
+    closeOnEsc: !createOpen,
+    trapFocus: !createOpen,
+  })
   const canCreateHistorical = useCanCreateHistoricalCountry()
 
   /**
@@ -285,9 +309,16 @@ export const AdvancedCountrySelectModal: React.FC<
 
   if (!isOpen) return null
 
-  return (
+  const modal = (
     <Modal onClick={onClose}>
-      <ModalContent onClick={(e) => e.stopPropagation()}>
+      <ModalContent
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+      >
         <ModalHeader>
           <ModalTitle>{title}</ModalTitle>
           <ModalCloseButton onClick={onClose}>
@@ -534,6 +565,10 @@ export const AdvancedCountrySelectModal: React.FC<
       </ModalContent>
     </Modal>
   )
+
+  if (typeof document === 'undefined') return null
+
+  return createPortal(modal, document.body)
 }
 
 // Styled Components
