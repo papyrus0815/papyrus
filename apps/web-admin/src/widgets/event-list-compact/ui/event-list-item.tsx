@@ -731,6 +731,13 @@ const Body = styled.div`
     column-gap: 8px;
     align-items: center;
   }
+
+  /* ≤400px — 헤더리스 연 그룹 도입으로 모바일 날짜가 '7.27'(30px)에서
+   * '1980.9.22'(54px)로 길어졌다. 그만큼 메타 줄이 넘쳐 320px에서 3줄로 무너졌다
+   * (실측 행 높이 68/93/94px 4종). gap을 좁혀 24px를 회수한다. */
+  @media (max-width: 400px) {
+    column-gap: 6px;
+  }
 `
 
 /**
@@ -859,7 +866,10 @@ const Disclosure = styled.button<{ $expanded: boolean }>`
   }
 
   @media (max-width: 640px) {
-    order: -2;
+    /* 메타 줄 선두로 내린다. 제목 줄 앞에 두면 제목만 22+8=30px 안쪽으로 들여써져
+       한 행에 좌측 기준선이 두 개 생긴다(실측 제목 85px vs 메타 55px).
+       세로로 훑을 때 눈이 두 축을 오가야 하고, 제목이 쓸 수 있는 폭도 그만큼 준다. */
+    order: 1;
   }
   &:hover {
     background: rgba(37, 99, 235, 0.16);
@@ -883,7 +893,9 @@ const DiscSpacer = styled.span`
   flex-shrink: 0;
 
   @media (max-width: 640px) {
-    order: -2;
+    /* 자식 없는 행도 같은 자리를 예약한다 — 아니면 메타 줄의 날짜 x가 행마다
+       30px씩 튀어 방금 세운 열이 다시 무너진다. */
+    order: 1;
   }
 `
 
@@ -1113,8 +1125,11 @@ const MatchReason = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
 
-  @media (max-width: 640px) {
-    /* 2줄 행에서는 메타 줄이 한 줄로 고정돼야 하므로 생략 — 근거는 상세에서 확인한다. */
+  /* 좁은 폭에서도 **넓은 절반(481~640px)에서는 되살린다.**
+   * 검색 결과의 76%가 제목에 검색어가 없는 행인데(매칭 술어는 제목·설명·키워드 3필드),
+   * 근거를 통째로 지우면 모바일 검색은 '왜 걸렸는지 알 수 없는 목록'이 된다.
+   * 480px 이하에서만 포기한다 — 거기서는 제목 자체의 폭이 먼저 위협받는다. */
+  @media (max-width: 480px) {
     display: none;
   }
 `
@@ -1152,9 +1167,12 @@ const Duration = styled.span`
   }
 
   /* 모바일 메타 줄은 **한 줄로 고정**해야 행 높이가 일정하다(들쭉날쭉하면 스캔이 깨진다).
-     한정된 폭에서 가장 먼저 포기할 토큰이 기간이다 — 실측상 233행 중 218행(94%)이
-     '1일'이라 반복 노이즈에 가깝고, 날짜·분류·국가가 훨씬 높은 식별 가치를 갖는다. */
-  @media (max-width: 640px) {
+   *
+   * 예전엔 ≤640 전체에서 기간을 지웠다. 근거는 '233행 중 218행(94%)이 1일'이었는데,
+   * 그 통계는 종료 미상까지 '1일'로 합치던 시절 것이다. 지금은 종료 미상이 토큰을
+   * 만들지 않고 당일은 점 하나로 눌리므로, 실제로 글자를 차지하는 기간은 105행뿐이다.
+   * 481~640px에서는 그 105행을 되살린다. */
+  @media (max-width: 480px) {
     display: none;
   }
 `
@@ -1182,12 +1200,27 @@ const Flags = styled.span`
        3번째 줄로 밀어 행 높이가 71px과 94px로 갈린다(실측: 240행 중 46행). */
     max-width: 112px;
   }
+
+  /* ≤400px — ≤640 한 벌이 320~640(폭 2배 범위)을 담당하던 것을 두 단계로 나눈다.
+   * 실측: 320·360px에서 메타 줄이 넘쳐 행 높이가 68/93/94px 4종으로 갈렸다(3줄 붕괴).
+   * 폭 합계 역산: Body 260 = 디스클로저 22 + 날짜 30 + 분류 40 + 액션 66 + gap 32 = 190,
+   * 남는 70에서 안전 여유를 빼고 56. */
+  @media (max-width: 400px) {
+    max-width: 48px;
+  }
 `
 
 const IconBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
+
+  /* ≤400px — 자식이 있는 행은 액션이 두 개(요약 + 북마크)라 메타 줄이 넘쳐 3줄이 된다.
+   * 요약은 **중복 어포던스**다(행을 누르면 열리는 드로어가 같은 계층 정보를 준다).
+   * 정보가 아니라 지름길을 포기하는 것이라 이 대역에서만 접는다. */
+  @media (max-width: 400px) {
+    display: none;
+  }
   width: var(--row-act-btn);
   height: var(--row-act-btn);
   padding: 0;

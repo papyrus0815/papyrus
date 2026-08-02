@@ -211,6 +211,17 @@ export const CompactList = styled.div.attrs(
        (이전에는 11/12px 리터럴을 두 번째로 적어 두 좌표가 따로 놀았다). */
     padding: 4px 10px max(120px, env(safe-area-inset-bottom)) var(--rail-gutter);
   }
+
+  /* ≤400px — 메타 줄이 1px 차이로 넘쳐 3줄로 무너지던 구간(실측 320px).
+     행 좌우 패딩에서 8px를 회수해 임계를 넘긴다. */
+  @media (max-width: 400px) {
+    --row-pad-l: 10px;
+    --row-pad-r: 8px;
+    /* 들여쓰기 24px는 320px 화면에서 폭의 7.5%다. 하위 사건 행이 그만큼 오른쪽으로
+       밀려 메타 줄이 넘치고 3줄이 됐다(실측: 320px에서 depth 1 행만 94px).
+       계층은 여전히 읽히되 폭을 덜 먹는 12px로. */
+    --row-indent: 12px;
+  }
 `
 
 export type ListItemImportance = 'critical' | 'major' | 'normal'

@@ -915,12 +915,19 @@ const SkeletonStop = styled.div<{ $depth: number }>`
   position: relative;
   display: flex;
   align-items: stretch;
-  /* 실제 행 높이(45px)와 동기화 — 예전엔 33px이라 12행 기준 세로 ~144px이 점프했다.
-     실제 행에는 28px BookmarkBtn이 상시 렌더되므로 그 높이가 하한이다. */
+  /* 실제 행 높이와 동기화 — 예전엔 33px이라 12행 기준 세로 ~144px이 점프했다.
+     이제 행 높이는 밀도 토큰이 소유하므로 같은 변수를 읽는다(조밀 32 / 기본 45 / 편안 52).
+     리터럴로 두면 밀도를 바꿀 때마다 로딩→데이터 전환에서 점프가 되살아난다. */
   box-sizing: border-box;
-  min-height: 45px;
-  padding: 8px 12px 8px 14px;
-  margin-left: ${({ $depth }) => $depth * 22}px;
+  min-height: var(--row-min-h);
+  padding: var(--row-pad-y) var(--row-pad-r) var(--row-pad-y) var(--row-pad-l);
+  margin-left: ${({ $depth }) => `calc(var(--row-indent) * ${$depth})`};
+
+  /* 모바일은 실제 행이 2줄(69px)인데 스켈레톤은 1줄이라 데이터가 도착하는 순간
+     12행 × 24px = 288px가 아래로 밀렸다. 좁은 폭에서는 2줄 높이를 예약한다. */
+  @media (max-width: 640px) {
+    min-height: 69px;
+  }
   border-bottom: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
