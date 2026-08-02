@@ -331,6 +331,103 @@ export const TYPE_SCALE = {
 } as const
 
 /**
+ * 목록(LIST) 뷰 밀도 계층 — 행·그룹 크롬의 세로 예산과 가로 트랙 폭의 **단일 출처**.
+ *
+ * 왜 토큰인가: 4차 검토 실측에서 행 기하가 event-list-item.tsx·list.styles.ts 두 파일의
+ * 리터럴 40여 곳에 흩어져 있었고, 그래서 "행 높이 45px의 60%가 데이터가 아니다"라는 사실을
+ * 고치려면 매번 여러 파일을 동시에 만져야 했다. 소비처는 CSS 변수만 읽고, 값은 여기서만 바뀐다.
+ *
+ * ⚠️ `cozy`는 도입 시점에 **현행 렌더와 픽셀 동일**하도록 고정했다. 이 배치는 리터럴→변수
+ * 기계 치환이고 시각 무변화가 완료 조건이다. 값 변경은 후속 배치가 담당한다.
+ *
+ * ⚠️ `railInset`·`centuryH`는 기존 CSS 변수 `--rail-inset`·`--century-header-h`의 값을
+ * 공급할 뿐 **이름과 소비처를 바꾸지 않는다**. YearDivider가 `top: var(--century-header-h)`로
+ * 세기 헤더에 붙어 있어, 이름이 끊기면 두 sticky 띠 사이에 슬릿이 생긴다.
+ */
+export type ListDensity = 'compact' | 'cozy' | 'roomy'
+
+export const LIST_DENSITY = {
+  compact: {
+    rowMinH: 32,
+    rowPadY: 3,
+    rowPadL: 14,
+    rowPadR: 12,
+    colGap: 10,
+    actBtn: 24, // WCAG 2.2 SC 2.5.8 AA 최소치 — 이 아래로 내리지 않는다
+    discBtn: 20,
+    colDate: 56,
+    colChip: 56,
+    colDur: 52,
+    colFlags: 112,
+    colAct: 52,
+    indent: 24,
+    yearH: 30,
+    yearMt: 10,
+    yearMb: 4,
+    centuryH: 36,
+    centuryGap: 16,
+    railInset: 24,
+  },
+  cozy: {
+    rowMinH: 45,
+    rowPadY: 8,
+    rowPadL: 14,
+    rowPadR: 12,
+    colGap: 8,
+    actBtn: 28,
+    discBtn: 20,
+    colDate: 36,
+    colChip: 60,
+    colDur: 56,
+    colFlags: 128,
+    colAct: 60,
+    indent: 22,
+    yearH: 38,
+    yearMt: 22,
+    yearMb: 8,
+    centuryH: 44,
+    centuryGap: 28,
+    railInset: 38,
+  },
+  roomy: {
+    rowMinH: 52,
+    rowPadY: 11,
+    rowPadL: 14,
+    rowPadR: 12,
+    colGap: 14,
+    actBtn: 28,
+    discBtn: 22,
+    colDate: 70,
+    colChip: 64,
+    colDur: 60,
+    colFlags: 136,
+    colAct: 60,
+    indent: 24,
+    yearH: 44,
+    yearMt: 24,
+    yearMb: 10,
+    centuryH: 48,
+    centuryGap: 32,
+    railInset: 38,
+  },
+} as const
+
+/**
+ * 목록 행 안 타입 스케일 — 3단.
+ *
+ * 실측상 행 하나가 10 / 10.5 / 11 / 12 / 14 다섯 단을 썼고 인접 단차가 0.5px였다.
+ * 0.5px는 위계를 0비트 실어 나른다. `title > meta > chip` 3단으로 줄이고, 굵기는
+ * 700 > 600 > 500이 크기와 **같은 방향으로** 단조가 되게 한다.
+ *
+ * 도입 시점 값은 현행 제목 14 / 날짜 12 / 칩 10.5과 동일 — 통합은 타입 토큰 배치에서.
+ */
+export const ROW_TYPE = {
+  compact: { title: '13px', meta: '11px', chip: '10px' },
+  cozy: { title: '14px', meta: '12px', chip: '10.5px' },
+  roomy: { title: '15px', meta: '12px', chip: '11px' },
+} as const
+
+/**
  * 표면 색 — PageScene/Drawer/Card 등 surface elevation.
  *   base: PageScene 외곽 (가장 어둡거나 밝음)
  *   raised: drawer/sidebar — base보다 한 톤 위

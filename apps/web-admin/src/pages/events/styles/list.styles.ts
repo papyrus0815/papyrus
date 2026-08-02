@@ -5,7 +5,53 @@
 import styled, { css } from 'styled-components'
 
 import type { HistoricalEventCategory } from '../create/events.types'
-import { BRAND, CATEGORY_BADGE_COLORS, MOTION, SHADOW, metaText } from './theme'
+import {
+  BRAND,
+  CATEGORY_BADGE_COLORS,
+  LIST_DENSITY,
+  MOTION,
+  ROW_TYPE,
+  SHADOW,
+  metaText,
+  type ListDensity,
+} from './theme'
+
+/**
+ * 밀도 토큰 → CSS 변수 선언문.
+ *
+ * 소비처(행·그룹 헤더·스켈레톤)는 변수만 읽는다. 밀도 분기를 컴포넌트마다 흩뿌리지 않기
+ * 위해 스크롤 컨테이너가 **한 번만** 선언한다.
+ */
+const densityVars = (density: ListDensity) => {
+  const d = LIST_DENSITY[density]
+  const type = ROW_TYPE[density]
+  return css`
+    --row-min-h: ${d.rowMinH}px;
+    --row-pad-y: ${d.rowPadY}px;
+    --row-pad-l: ${d.rowPadL}px;
+    --row-pad-r: ${d.rowPadR}px;
+    --row-col-gap: ${d.colGap}px;
+    --row-act-btn: ${d.actBtn}px;
+    --row-disc-btn: ${d.discBtn}px;
+    --col-date: ${d.colDate}px;
+    --col-chip: ${d.colChip}px;
+    --col-dur: ${d.colDur}px;
+    --col-flags: ${d.colFlags}px;
+    --col-act: ${d.colAct}px;
+    --row-indent: ${d.indent}px;
+    --row-title: ${type.title};
+    --row-meta: ${type.meta};
+    --row-chip: ${type.chip};
+    --year-h: ${d.yearH}px;
+    --year-mt: ${d.yearMt}px;
+    --year-mb: ${d.yearMb}px;
+    --century-gap: ${d.centuryGap}px;
+    /* ⚠️ 아래 두 개는 **기존 변수** — 이름·소비처 불변, 값만 밀도에 묶는다.
+       YearDivider가 top: var(--century-header-h)로 세기 헤더에 붙어 있다. */
+    --century-header-h: ${d.centuryH}px;
+    --rail-inset: ${d.railInset}px;
+  `
+}
 
 /**
  * 타임라인 레일 — 좌측 gutter(70px) 한가운데(32px)에 1px 수직선.
@@ -29,12 +75,18 @@ export const CompactList = styled.div`
   overflow-x: hidden;
   padding: 4px 12px 120px 70px;
   position: relative;
-  /* 좌측 타임라인 레일까지의 인셋 — 세기/연도 디바이더와 행 커넥터가 이 값만큼 좌로 당겨져
-   * 레일 도트에 정렬된다. 이전엔 -38px 하드코딩이라 모바일(거터 24px)에서 디바이더가 화면
-   * 밖으로 삐져나가고 도트가 잘렸다. 거터에 맞춰 변수로 단일화(모바일에서 재정의). */
-  --rail-inset: 38px;
-  /* 세기 sticky 헤더 높이 — 연도 sticky 헤더 top 오프셋의 단일 출처(하드코딩 44px 결합 해소). */
-  --century-header-h: 44px;
+
+  /* 행·그룹 헤더·스켈레톤이 공유하는 기하 변수 — 밀도 토큰이 단일 출처.
+   * --rail-inset(디바이더·커넥터를 레일 도트에 정렬)과 --century-header-h(연도 sticky
+   * 헤더의 top 오프셋)도 여기에 편입됐다 — 이름과 소비처는 그대로다.
+   * ⚠️ 이 주석 안에서 백틱을 쓰지 말 것 — styled 템플릿 리터럴이 끊겨 TS1005가 난다. */
+  ${densityVars('cozy')}
+  &[data-density='compact'] {
+    ${densityVars('compact')}
+  }
+  &[data-density='roomy'] {
+    ${densityVars('roomy')}
+  }
 
   background-image: ${({ theme }) =>
     theme.mode === 'dark'
@@ -77,8 +129,15 @@ export const CompactList = styled.div`
   /* 모바일 — 좌측 70px 패딩(타임라인 가이드 레일용)이 좁은 폭에선
    * 콘텐츠 영역을 너무 잘라먹는다. padding과 가이드라인 위치를 12px로 동기화. */
   @media (max-width: 640px) {
-    /* 모바일 거터(24px)·레일(12px)에 맞춰 인셋 축소 → 디바이더/커넥터가 레일에 재정렬 */
-    --rail-inset: 12px;
+    /* 모바일 거터(24px)·레일(12px)에 맞춰 인셋 축소 → 디바이더/커넥터가 레일에 재정렬.
+     *
+     * ⚠️ 앰퍼샌드를 두 번 겹쳐 특이도를 2배로 올린다. 밀도 변수를 속성 선택자
+     * [data-density=...](0,2,0)로 선언하기 때문에, 여기서 단일 앰퍼샌드(0,1,0)로 쓰면
+     * 모바일에서 밀도 선택자가 이겨 레일 인셋이 데스크톱 값(24~38px)으로 되돌아간다 —
+     * 디바이더가 화면 밖으로 삐져나가던 그 회귀다. */
+    && {
+      --rail-inset: 12px;
+    }
     padding: 4px 10px max(120px, env(safe-area-inset-bottom)) 24px;
     background-image: ${({ theme }) =>
       theme.mode === 'dark'

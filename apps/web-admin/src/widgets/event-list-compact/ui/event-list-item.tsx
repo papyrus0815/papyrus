@@ -462,8 +462,11 @@ const Stop = styled.div<{
   position: relative;
   display: flex;
   align-items: stretch;
-  padding: 8px 12px 8px 14px;
-  margin-left: ${({ $depth }) => $depth * 22}px;
+  /* 기하는 전부 밀도 변수(CompactList가 선언) — 리터럴 금지.
+   * min-height가 계산값보다 크게 잡혀 있어야 행 높이 고유값이 1종으로 고정된다. */
+  min-height: var(--row-min-h);
+  padding: var(--row-pad-y) var(--row-pad-r) var(--row-pad-y) var(--row-pad-l);
+  margin-left: ${({ $depth }) => `calc(var(--row-indent) * ${$depth})`};
   cursor: pointer;
 
   /* 문맥용 부모 행 강등 — 이 행 자체는 조건 불일치이고 '매칭된 자식이 아래에 있어서'
@@ -529,9 +532,11 @@ const Stop = styled.div<{
   &::before {
     content: '';
     position: absolute;
-    left: ${({ $depth }) => `calc(-1 * var(--rail-inset) - ${$depth * 22}px)`};
+    left: ${({ $depth }) =>
+      `calc(-1 * var(--rail-inset) - var(--row-indent) * ${$depth})`};
     top: 50%;
-    width: ${({ $depth }) => `calc(var(--rail-inset) + ${$depth * 22}px)`};
+    width: ${({ $depth }) =>
+      `calc(var(--rail-inset) + var(--row-indent) * ${$depth})`};
     height: 1px;
     border-top: 1px solid
       ${({ theme }) =>
@@ -550,7 +555,8 @@ const Stop = styled.div<{
   &::after {
     content: '';
     position: absolute;
-    left: ${({ $depth }) => `calc(-1 * var(--rail-inset) - ${$depth * 22}px)`};
+    left: ${({ $depth }) =>
+      `calc(-1 * var(--rail-inset) - var(--row-indent) * ${$depth})`};
     top: 50%;
     transform: translate(-50%, -50%);
     width: ${({ $active }) => ($active ? '11px' : '7px')};
@@ -638,7 +644,7 @@ const Body = styled.div`
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: var(--row-col-gap);
 
   /**
    * 모바일(≤640px) 2줄 행 — 1줄: 제목, 2줄: 날짜·분류·기간·국기·액션.
@@ -698,8 +704,8 @@ const ExpandBtn = styled.button<{ $expanded: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: var(--row-disc-btn);
+  height: var(--row-disc-btn);
   padding: 0;
   /* 시각 크기는 20px 그대로 두고 **히트 영역만** 확장한다(포인터·터치 오탭 방지).
      20×20은 권장 44px에 한참 못 미치고, 바로 옆 액션들과 gap 2px로 붙어 있었다. */
@@ -733,8 +739,8 @@ const ExpandBtn = styled.button<{ $expanded: boolean }>`
 `
 
 const ExpandSpacer = styled.span`
-  width: 20px;
-  height: 20px;
+  width: var(--row-disc-btn);
+  height: var(--row-disc-btn);
   flex-shrink: 0;
 
   @media (max-width: 640px) {
@@ -787,14 +793,14 @@ const FilteredOutHint = styled.span`
 const Year = styled.span`
   /* 날짜는 보조 데이텀 — 항상 제목보다 한 단계 아래. tier별 크기 증가를 없애 고정 12px로,
      굵기도 500으로 낮춰(중요도 신호는 제목·별이 담당) 제목이 확실한 주인공이 되게 한다. */
-  font-size: 12px;
+  font-size: var(--row-meta);
   font-weight: 500;
   letter-spacing: -0.01em;
   /* 보조 데이텀이지만 '언제'는 이 목록의 핵심 정보다 — tertiary(2.54:1)는 AA 미달. */
   color: ${metaText};
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
-  min-width: 36px;
+  min-width: var(--col-date);
 
   /* 그룹 헤더와 *다른* 해를 가리키는 토큰 — 같은 슬롯에 '12.31'(월·일)과 '1893'(연도)이
    * 완전히 같은 서식으로 찍히면 두 단위가 구분되지 않는다. 실측상 자식 87건 중 62건(71%)이
@@ -838,8 +844,8 @@ const Title = styled.span`
    * 390px 실측(수정 전): 238행 중 73행(31%)의 제목 폭이 0 — 카테고리 칩과 국가명만 남았다.
    * 최소 폭을 두어 어떤 조합에서도 제목이 사라지지 않게 한다(넘치는 국기는 Flags가 흡수). */
   min-width: 8ch;
-  /* 제목이 확실한 주인공 — 14px/600으로 연도(12px/500)와 위계 명확. */
-  font-size: 14px;
+  /* 제목이 확실한 주인공 — 연도보다 크고 굵다. 크기는 밀도 토큰이 소유. */
+  font-size: var(--row-title);
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.3;
@@ -880,7 +886,7 @@ const CategoryLabel = styled.span<{
   flex-shrink: 0;
   padding: 2px 8px;
   border-radius: 6px;
-  font-size: 10.5px;
+  font-size: var(--row-chip);
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1.5;
@@ -965,8 +971,8 @@ const IconBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--row-act-btn);
+  height: var(--row-act-btn);
   padding: 0;
   border: none;
   background: transparent;
@@ -991,8 +997,8 @@ const BookmarkBtn = styled.button<{ $bookmarked: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--row-act-btn);
+  height: var(--row-act-btn);
   padding: 0;
   border: none;
   background: transparent;
