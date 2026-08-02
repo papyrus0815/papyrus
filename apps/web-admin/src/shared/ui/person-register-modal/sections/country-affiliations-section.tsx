@@ -397,8 +397,15 @@ const TypeSelect = styled.select`
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: ${RADIUS.control};
   cursor: pointer;
+  /* 다크에서 네이티브 OS 드롭다운·옵션이 흰 배경으로 뜨는 것 방지(전역 color-scheme만으론 부족) */
+  color-scheme: ${({ theme }) => (theme.mode === 'dark' ? 'dark' : 'light')};
   ${mobileInputFontMixin}
   ${({ theme }) => inputFocusMixin(theme)}
+  option {
+    background-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#18181b' : '#ffffff'};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const SelectCaret = styled.span`
