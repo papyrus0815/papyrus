@@ -23,44 +23,47 @@ import {
  * 위해 스크롤 컨테이너가 **한 번만** 선언한다.
  */
 const densityVars = (density: ListDensity) => {
-  const d = LIST_DENSITY[density]
+  const box = LIST_DENSITY[density]
   const type = ROW_TYPE[density]
   return css`
-    --row-min-h: ${d.rowMinH}px;
-    --row-pad-y: ${d.rowPadY}px;
-    --row-pad-l: ${d.rowPadL}px;
-    --row-pad-r: ${d.rowPadR}px;
-    --row-col-gap: ${d.colGap}px;
-    --row-act-btn: ${d.actBtn}px;
-    --row-disc-btn: ${d.discBtn}px;
-    --col-date: ${d.colDate}px;
-    --col-chip: ${d.colChip}px;
-    --col-dur: ${d.colDur}px;
-    --col-flags: ${d.colFlags}px;
-    --col-act: ${d.colAct}px;
-    --row-indent: ${d.indent}px;
+    --row-min-h: ${box.rowMinH}px;
+    --row-pad-y: ${box.rowPadY}px;
+    --row-pad-l: ${box.rowPadL}px;
+    --row-pad-r: ${box.rowPadR}px;
+    --row-col-gap: ${box.colGap}px;
+    --row-act-btn: ${box.actBtn}px;
+    --row-disc-btn: ${box.discBtn}px;
+    --col-date: ${box.colDate}px;
+    --col-chip: ${box.colChip}px;
+    --col-dur: ${box.colDur}px;
+    --col-flags: ${box.colFlags}px;
+    --col-act: ${box.colAct}px;
+    --row-indent: ${box.indent}px;
     --row-title: ${type.title};
     --row-meta: ${type.meta};
     --row-chip: ${type.chip};
-    --year-h: ${d.yearH}px;
-    --year-mt: ${d.yearMt}px;
-    --year-mb: ${d.yearMb}px;
-    --century-gap: ${d.centuryGap}px;
+    --year-h: ${box.yearH}px;
+    --year-mt: ${box.yearMt}px;
+    --year-mb: ${box.yearMb}px;
+    --century-gap: ${box.centuryGap}px;
     /* ⚠️ 아래 두 개는 **기존 변수** — 이름·소비처 불변, 값만 밀도에 묶는다.
        YearDivider가 top: var(--century-header-h)로 세기 헤더에 붙어 있다. */
-    --century-header-h: ${d.centuryH}px;
-    --rail-inset: ${d.railInset}px;
+    --century-header-h: ${box.centuryH}px;
+    --rail-inset: ${box.railInset}px;
   `
 }
 
 /**
- * 타임라인 레일 — 좌측 gutter(70px) 한가운데(32px)에 1px 수직선.
+ * 타임라인 레일 — 좌측 거터 안에 1px 수직선.
  *
- * `background-attachment: local`로 스크롤 콘텐츠와 함께 흐르도록 함. (fixed/scroll와 달리
- * 콘텐츠 길이만큼 늘어나서 위/아래 어디로 스크롤해도 레일이 끊기지 않음.)
+ * 좌표는 세 변수가 한 세트로 소유한다: `--rail-gutter`(패딩) · `--rail-x`(축선) ·
+ * `--rail-inset`(= 거터 − 축선, 밀도 토큰이 공급). 디바이더 도트와 오클루전 띠가 전부
+ * `--rail-inset`을 읽으므로 밴드가 거터를 바꾸면 자동 추종한다.
  *
- * Year/Century divider의 도트(left:32px)와 CollapsedPlaceholder::after(left:-38px)가
- * 모두 이 레일 좌표에 정렬됨 — 시간축의 *눈금*과 *압축 구간*으로 읽힌다.
+ * `background-attachment: local`로 스크롤 콘텐츠와 함께 흐른다(fixed/scroll와 달리
+ * 콘텐츠 길이만큼 늘어나 위/아래 어디로 스크롤해도 축이 끊기지 않음).
+ *
+ * 축 위 눈금은 **세기·연도 앵커 도트뿐**이다 — 행 단위 도트·커넥터는 배치 C1에서 폐지했다.
  */
 export const CompactList = styled.div`
   display: flex;
@@ -73,8 +76,26 @@ export const CompactList = styled.div`
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 12px 120px 70px;
+  /* 좌측 거터 70 → 36px.
+   *
+   * 거터가 70px를 점유하던 이유는 행마다 찍히던 카테고리 도트와 도트→행 커넥터였다.
+   * 그 도트가 나르는 유일한 정보(카테고리)는 145px 옆 칩이 이미 한글 텍스트로 말하고
+   * 있었고, 다크에서는 최빈 3개 카테고리가 1.78~2.85:1로 WCAG 1.4.11에 미달해
+   * 252행 중 161행(64%)이 배경에 잠겼다. 행 도트·커넥터를 폐지하면 거터가 실어야 할
+   * 것은 세기·연도 앵커 도트뿐이라 36px이면 충분하다.
+   *
+   * 축소분 34px은 날짜 슬롯 승격(36 → 66px)에 재투자된다 — 리딩 거터 총량은 줄지 않는다. */
+  padding: 4px 12px 120px var(--rail-gutter);
   position: relative;
+
+  /* 레일 3좌표는 한 세트로 움직인다 — 거터(패딩) · 축선 x · 인셋(=거터-축선).
+   * 인셋은 밀도 토큰이 공급하고(--rail-inset), 나머지 둘은 밴드가 정한다.
+   * 셋을 따로 고치면 디바이더 도트가 축선에서 어긋난다(모바일에서 실제로 겪었던 회귀). */
+  --rail-gutter: 36px;
+  --rail-x: 17px;
+  /* 마지막 사건 아래로 레일이 계속 이어져 목록이 끝나지 않는 것처럼 보이던 문제.
+   * 축을 하단 패딩만큼 잘라 종단을 만든다. */
+  --rail-tail: 104px;
 
   /* 행·그룹 헤더·스켈레톤이 공유하는 기하 변수 — 밀도 토큰이 단일 출처.
    * --rail-inset(디바이더·커넥터를 레일 도트에 정렬)과 --century-header-h(연도 sticky
@@ -88,24 +109,31 @@ export const CompactList = styled.div`
     ${densityVars('roomy')}
   }
 
+  /* 축선 — 좌표는 --rail-x가 소유하므로 밴드가 거터를 바꾸면 자동 추종한다.
+   *
+   * alpha를 0.20/0.22 → 0.32/0.34로 올린다. 행 도트를 폐지하기 전에는 축(1.38:1)이
+   * 그 위의 눈금(도트)보다 흐린 역전 상태였다 — 이제 축이 유일한 선이므로 자기 몫의
+   * 대비를 가져야 한다. */
   background-image: ${({ theme }) =>
     theme.mode === 'dark'
       ? `linear-gradient(
           to right,
-          transparent 31px,
-          rgba(147, 197, 253, 0.2) 31px,
-          rgba(147, 197, 253, 0.2) 32px,
-          transparent 32px
+          transparent var(--rail-x),
+          rgba(147, 197, 253, 0.32) var(--rail-x),
+          rgba(147, 197, 253, 0.32) calc(var(--rail-x) + 1px),
+          transparent calc(var(--rail-x) + 1px)
         )`
       : `linear-gradient(
           to right,
-          transparent 31px,
-          rgba(37, 99, 235, 0.22) 31px,
-          rgba(37, 99, 235, 0.22) 32px,
-          transparent 32px
+          transparent var(--rail-x),
+          rgba(37, 99, 235, 0.34) var(--rail-x),
+          rgba(37, 99, 235, 0.34) calc(var(--rail-x) + 1px),
+          transparent calc(var(--rail-x) + 1px)
         )`};
   background-attachment: local;
   background-repeat: no-repeat;
+  /* 종단 — 하단 패딩 구간에는 축을 그리지 않는다. local 첨부라 높이는 콘텐츠 전체 길이다. */
+  background-size: 100% calc(100% - var(--rail-tail));
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -126,8 +154,21 @@ export const CompactList = styled.div`
     max-height: none;
   }
 
-  /* 모바일 — 좌측 70px 패딩(타임라인 가이드 레일용)이 좁은 폭에선
-   * 콘텐츠 영역을 너무 잘라먹는다. padding과 가이드라인 위치를 12px로 동기화. */
+  /* 중간 대역(641~1024px) — 이 구간에 거터 규칙이 **처음** 생긴다.
+   *
+   * 실측: 641px에서 제목 잘림 125/252행, 국가칩 잘림 127행. 640px에서는 각각 1행/0행.
+   * 즉 1px 좁히면 좋아지는 역전이 있었고, 그 원인 중 하나가 데스크톱 거터가
+   * 이 대역까지 그대로 내려오는 것이었다. iPad 세로(834)·1440 노트북 200% 확대(720)가
+   * 전부 여기 착지한다. */
+  @media (max-width: 1024px) {
+    --rail-gutter: 24px;
+    --rail-x: 11px;
+    && {
+      --rail-inset: 13px;
+    }
+  }
+
+  /* 모바일 — 좁은 폭에서 거터를 더 줄이고 축선을 12px로 동기화. */
   @media (max-width: 640px) {
     /* 모바일 거터(24px)·레일(12px)에 맞춰 인셋 축소 → 디바이더/커넥터가 레일에 재정렬.
      *
@@ -138,23 +179,11 @@ export const CompactList = styled.div`
     && {
       --rail-inset: 12px;
     }
-    padding: 4px 10px max(120px, env(safe-area-inset-bottom)) 24px;
-    background-image: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? `linear-gradient(
-            to right,
-            transparent 11px,
-            rgba(147, 197, 253, 0.2) 11px,
-            rgba(147, 197, 253, 0.2) 12px,
-            transparent 12px
-          )`
-        : `linear-gradient(
-            to right,
-            transparent 11px,
-            rgba(37, 99, 235, 0.22) 11px,
-            rgba(37, 99, 235, 0.22) 12px,
-            transparent 12px
-          )`};
+    --rail-gutter: 24px;
+    --rail-x: 11px;
+    /* 배경 그라디언트는 --rail-x를 읽으므로 여기서 재선언할 필요가 없다
+       (이전에는 11/12px 리터럴을 두 번째로 적어 두 좌표가 따로 놀았다). */
+    padding: 4px 10px max(120px, env(safe-area-inset-bottom)) var(--rail-gutter);
   }
 `
 

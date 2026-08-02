@@ -366,7 +366,7 @@ export const LIST_DENSITY = {
     yearMb: 4,
     centuryH: 36,
     centuryGap: 16,
-    railInset: 24,
+    railInset: 19,
   },
   cozy: {
     rowMinH: 45,
@@ -387,7 +387,7 @@ export const LIST_DENSITY = {
     yearMb: 8,
     centuryH: 44,
     centuryGap: 28,
-    railInset: 38,
+    railInset: 19,
   },
   roomy: {
     rowMinH: 52,
@@ -408,7 +408,7 @@ export const LIST_DENSITY = {
     yearMb: 10,
     centuryH: 48,
     centuryGap: 32,
-    railInset: 38,
+    railInset: 19,
   },
 } as const
 

@@ -3,12 +3,13 @@
  * FSD: widgets/event-list-compact/ui
  *
  * 디자인 원칙
- *  - "카드 박스" 아님. 좌측 레일(left:32px in CompactList)에 dot로 점찍힌 *시간축의 정거장*.
+ *  - "카드 박스" 아님. 좌측 축을 따라 흐르는 평면 행. 행 단위 도트는 폐지됐고(배치 C1)
+ *    축 위 눈금은 세기·연도 앵커만 남는다.
  *  - **단일 행**: [월·일][카테고리 칩][제목][기간][국기][액션]을 한 줄에 좌측 밀착.
  *    제목(flex:0 1 auto+ellipsis) 뒤에 메타가 바로 붙어 '죽은 여백' 없이 스캔되고,
  *    남는 우측은 예측 가능한 여백(Body max-width로 읽기 컬럼 제한).
  *  - 중요도(★) 표시는 제거됨 — 데이터 출처가 없다(아래 주석 참고).
- *  - depth > 0 (하위 사건)는 들여쓰기 + 더 긴 레일 connector.
+ *  - depth > 0 (하위 사건)는 들여쓰기로만 구별한다(레일 커넥터는 배치 C1에서 폐지).
  */
 import React from 'react'
 
@@ -26,7 +27,6 @@ import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 import { type IsoDateParts, parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import {
-  CATEGORY_BADGE_COLORS,
   CATEGORY_SOFT_COLORS,
   metaText,
 } from '../../../pages/events/styles/theme'
@@ -269,11 +269,8 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
     event.endDatePrecision,
   )
   const categoryName = getCategoryName(event.category, dbCategories)
-  const categoryColor =
-    CATEGORY_BADGE_COLORS[
-      event.category as keyof typeof CATEGORY_BADGE_COLORS
-    ] ?? '#2563eb'
-  // 카테고리 라벨은 원색 텍스트(WCAG AA 미달) 대신 저채도 soft chip으로.
+  // 카테고리 hue는 이제 **칩이 단독으로** 싣는다(행 도트 폐지, 배치 C1).
+  // 원색 텍스트는 WCAG AA 미달이라 저채도 soft chip으로.
   const soft =
     CATEGORY_SOFT_COLORS[event.category as keyof typeof CATEGORY_SOFT_COLORS] ??
     CATEGORY_SOFT_COLORS.other
@@ -282,7 +279,6 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
     <Stop
       $active={isActive}
       $depth={depth}
-      $categoryColor={categoryColor}
       $context={!isMatch}
       onClick={() => onSelect(node.id)}
       onKeyDown={(e) => {
@@ -449,13 +445,12 @@ export const EventListItem = React.memo(EventListItemImpl)
 /**
  * 타임라인 정거장(row) — 2단 구성 컨테이너.
  * - 좌측 레일(CompactList의 left:32px)에 dot + connector를 ::before/::after로 그림.
- * - depth>0 행은 들여쓰기되며 connector가 길어져 들여쓴 양만큼 확장.
+ * - depth>0 행은 들여쓰기된다(레일 커넥터는 배치 C1에서 폐지).
  * - active state: **좌측 4px 색 막대 + 미세 bg tint**(색 신호 단일화).
  */
 const Stop = styled.div<{
   $active: boolean
   $depth: number
-  $categoryColor: string
   /** 필터 문맥용으로만 남은 행(자기 자신은 조건 불일치) — 매칭 행과 구별해 강등 표시 */
   $context: boolean
 }>`
@@ -527,53 +522,26 @@ const Stop = styled.div<{
       border-bottom-color: transparent;
     `}
 
-  /* 레일 → 행 connector. solid hairline + 약간 더 진한 톤으로 위계 인지 강화.
-   * 점선 dashed는 깊어질수록 시각 약했음. */
-  &::before {
-    content: '';
-    position: absolute;
-    left: ${({ $depth }) =>
-      `calc(-1 * var(--rail-inset) - var(--row-indent) * ${$depth})`};
-    top: 50%;
-    width: ${({ $depth }) =>
-      `calc(var(--rail-inset) + var(--row-indent) * ${$depth})`};
-    height: 1px;
-    border-top: 1px solid
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(147, 197, 253, 0.45)'
-          : 'rgba(37, 99, 235, 0.35)'};
-    pointer-events: none;
-  }
-
-  /* 레일 위 도트 — 시간축의 정거장.
+  /**
+   * (폐지됨) 행 도트(::after)와 레일→행 커넥터(::before). 2026-08-01 4차 검토 배치 C1.
    *
-   * 색 신호 단일화: 도트는 항상 **카테고리 색**.
-   * importance는 도트 *크기*(7/9/11px)와 별(★) 글리프로 표현.
-   * active 인식: 카테고리 색 그대로 유지 + 외곽 amber ring(box-shadow)로 색 충돌 회피.
-   *   (이전: 흰 가운데 + indigo border → 카테고리 파란 색과 시각 충돌) */
-  &::after {
-    content: '';
-    position: absolute;
-    left: ${({ $depth }) =>
-      `calc(-1 * var(--rail-inset) - var(--row-indent) * ${$depth})`};
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: ${({ $active }) => ($active ? '11px' : '7px')};
-    height: ${({ $active }) => ($active ? '11px' : '7px')};
-    background: ${({ $categoryColor }) => $categoryColor};
-    border: none;
-    border-radius: 50%;
-    /* separator 링만 — active 식별은 좌측 인디고 막대·bg tint·도트 확대(7→11px)가 담당.
-     * amber는 북마크·레거시 major와 중복 신호라 도트 ring에서는 제거. */
-    box-shadow: ${({ theme }) => {
-      const sep = theme.mode === 'dark' ? '#0f0f12' : '#ffffff'
-      return `0 0 0 2px ${sep}`
-    }};
-    z-index: 1;
-    transition: background 0.14s ease, width 0.14s ease, height 0.14s ease,
-      box-shadow 0.14s ease;
-  }
+   * 네 개의 진단이 한 지점을 가리켰다.
+   *  - 도트가 나르는 유일한 정보는 카테고리인데, 같은 정보를 145px 옆 칩이 한글 텍스트로
+   *    이미 말한다. 2026-07-22 설계기록이 '도트 이중 인코딩'을 이유로 다른 안을 기각했지만
+   *    정작 도트 + 칩 tint + 칩 라벨 hue = 3중 인코딩이 그대로 배포돼 있었다.
+   *  - 다크에서 최빈 3개 카테고리 도트가 1.78~2.85:1로 WCAG 1.4.11(3:1) 미달 —
+   *    252행 중 161행(64%). 라이트는 통과라 같은 화면이 테마에 따라 다른 위계로 읽혔다.
+   *  - 행을 선택하면 그 도트(11px)가 자기 연도 앵커 도트(10px)보다 커져 눈금 서열이
+   *    상시 역전됐다.
+   *  - 자식 행 도트가 최상위와 같은 좌표·크기라, 축만 보면 252건이지만 실제 연대기
+   *    앵커는 167건이었다.
+   *
+   * 부수 효과: stuck 헤더의 좌측 오클루전 띠를 관통하던 도트·커넥터가 사라져,
+   * 헤더 ::after의 left 좌표를 손댈 필요 자체가 없어졌다.
+   *
+   * 축(수직선)과 세기·연도 앵커 도트는 존치한다 — 스크롤 중 '지금 어느 시대인가'를
+   * 읽으려면 좌측 단일 축이 필요하고, 축이 없으면 헤더는 그냥 텍스트 줄이 된다.
+   */
 
   /* active별 bg tint — 활성 행이 hover 행과 명확히 구분되도록 강화. */
   ${({ $active, theme }) => {
