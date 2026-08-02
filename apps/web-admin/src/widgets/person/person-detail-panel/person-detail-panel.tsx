@@ -38,7 +38,10 @@ import {
 } from 'react-icons/fi'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
-import { personKeys } from '@/entities/person/api'
+import {
+  personKeys,
+  invalidatePersonCaches as invalidatePersonCachesShared,
+} from '@/entities/person/api'
 import type { PersonHumanRelationshipItem } from '@/shared/api/person-human-relationships'
 import { personCareerApi } from '@/shared/api/person-career'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
@@ -901,30 +904,12 @@ export function PersonDetailPanel({
     [embedInModal, onLinkedPersonClick, pushPersonToModalStack, playClickSound],
   )
 
-  /** 인물 관련 모든 쿼리 캐시 무효화 (아바타 변경·삭제·수정 후 공통 호출) */
+  /** 인물 관련 모든 쿼리 캐시 무효화 (아바타 변경·삭제·수정 후 공통 호출) — 중앙 헬퍼 위임(G3-2) */
   const invalidatePersonCaches = useCallback(
     (withDetail = true) =>
-      Promise.all([
-        ...(withDetail
-          ? [queryClient.invalidateQueries({ queryKey: ['persons', personId] })]
-          : []),
-        // 모달 스택의 부모 패널 등 다른 personId 상세에도 가족 노드(profileImageUrl 등)가
-        // 박혀 있으므로 person-detail / family-tree 는 항상 broad invalidate.
-        // 사건 상세의 참여 행위자 리스트도 event-detail 응답에 person.profileImageUrl을
-        // 박아 두므로 함께 무효화해야 썸네일 변경이 즉시 반영된다.
-        queryClient.invalidateQueries({ queryKey: ['person-detail'] }),
-        queryClient.invalidateQueries({ queryKey: ['person-family-tree'] }),
-        queryClient.invalidateQueries({ queryKey: ['event-detail'] }),
-        queryClient.invalidateQueries({ queryKey: personKeys.all }),
-        queryClient.invalidateQueries({ queryKey: ['persons-by-country'] }),
-        queryClient.invalidateQueries({ queryKey: ['persons-by-dynasty'] }),
-        queryClient.invalidateQueries({ queryKey: ['persons-by-tenure-country'] }),
-        // 동시대 수장 스트립 — 서버 유도 창이 대상의 사망 연도로 캡되므로
-        // 인물(생몰) 수정 후에도 신선해야 한다 (재임 수정은 invalidateTenureQueries가 담당)
-        queryClient.invalidateQueries({ queryKey: ['person-contemporaries'] }),
-        // 같은 국가 전/후 재위(승계) — 이웃의 생몰(종료 캡)·소유가 소스라 함께 무효화
-        queryClient.invalidateQueries({ queryKey: ['person-reign-adjacency'] }),
-      ]),
+      invalidatePersonCachesShared(queryClient, {
+        personId: withDetail ? personId : undefined,
+      }),
     [personId, queryClient],
   )
 
