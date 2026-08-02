@@ -19,9 +19,11 @@
  */
 import React, { Suspense, useCallback, useRef, useState } from 'react'
 
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { eventKeys } from '@/pages/events/detail/use-event-detail'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog'
@@ -65,6 +67,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   onSaved,
 }) => {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const formRef = useRef<EventBasicFormHandle | null>(null)
   const [formState, setFormState] = useState<EventBasicFormState>({
     isEditMode: Boolean(eventId),
@@ -105,6 +108,19 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
     [onSaved],
   )
 
+  /**
+   * 뒤에 살아 있는 목록을 지금 되살린다.
+   *
+   * 폼 본체는 저장 시 `refetchType: 'none'`으로 **표시만** 한다 — 그 시점엔 사용자가
+   * 상세로 갈지 목록에 남을지 아직 모르는데, 상세로 가면 목록은 언마운트되므로 그
+   * 재조회가 통째로 낭비이기 때문이다. 목록에 남기로 한 분기에서만 여기서 받는다.
+   * 마운트된 쿼리가 없으면(대시보드에서 연 경우) no-op.
+   */
+  const refetchMountedLists = useCallback(() => {
+    void queryClient.refetchQueries({ queryKey: eventKeys.lists(), type: 'active' })
+    void queryClient.refetchQueries({ queryKey: eventKeys.count(), type: 'active' })
+  }, [queryClient])
+
   /** 상세 보기 — 폼 본체가 캐시 시딩·프리페치를 끝낸 뒤라 무로딩 진입 */
   const handleViewDetail = useCallback(() => {
     const targetId = savedEventId
@@ -119,12 +135,14 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   const handleRegisterAnother = useCallback(() => {
     setSavedEventId(null)
     formRef.current?.reset({ keepCategory: true, keepRelatedCountries: true })
-  }, [])
+    refetchMountedLists()
+  }, [refetchMountedLists])
 
   const handleCloseAfterSave = useCallback(() => {
     setSavedEventId(null)
     onClose()
-  }, [onClose])
+    refetchMountedLists()
+  }, [onClose, refetchMountedLists])
 
   return (
     <>

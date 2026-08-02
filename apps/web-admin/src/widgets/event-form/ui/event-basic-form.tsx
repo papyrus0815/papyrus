@@ -480,10 +480,26 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       // 저장된 값이 새 기준선 — 이후 수정분만 다시 dirty가 된다.
       baselineRef.current = snapshotRef.current
       markDirty(false)
-      queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
+
+      /**
+       * `refetchType: 'none'` — **표시만 하고 지금 다시 받지는 않는다.**
+       *
+       * 페이지 시절엔 저장과 동시에 목록이 언마운트돼 재조회가 아예 안 일어났다. 모달에서는
+       * 목록이 뒤에 살아 있어서, 기본값(`'active'`)이면 `autoLoadAll`이 소진해 둔 N페이지가
+       * 그 자리에서 전부 재조회된다. 게다가 이 시점엔 사용자가 상세로 갈지(=목록 언마운트,
+       * 재조회가 통째로 낭비) 목록에 남을지 아직 고르지도 않았다.
+       * 목록에 남는 분기에서 셸이 `refetchQueries`로 되살린다(EventRegisterModal).
+       */
+      queryClient.invalidateQueries({
+        queryKey: eventKeys.lists(),
+        refetchType: 'none',
+      })
       if (!isEditMode) {
         // 신규 생성만 총개수를 늘림 → 헤더 "전체 N건" 무효화 (수정은 개수 불변)
-        queryClient.invalidateQueries({ queryKey: eventKeys.count() })
+        queryClient.invalidateQueries({
+          queryKey: eventKeys.count(),
+          refetchType: 'none',
+        })
       }
       invalidateGamification(queryClient)
 

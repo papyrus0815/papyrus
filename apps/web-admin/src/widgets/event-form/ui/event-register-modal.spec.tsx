@@ -14,6 +14,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 
 import { renderWithTheme } from '@/shared/test/render-with-theme'
 
+
 import { EventRegisterModal } from './event-register-modal'
 import type {
   EventBasicFormProps,
@@ -27,6 +28,22 @@ import type {
 const navigateMock = jest.fn()
 jest.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
+}))
+
+const refetchQueriesMock = jest.fn()
+jest.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({ refetchQueries: refetchQueriesMock }),
+}))
+/**
+ * `eventKeys`만 필요한데 이 모듈은 API 계층(`api.service.ts`)을 끌어오고, 그 파일의
+ * `import.meta`가 현재 jest ts 설정에서 컴파일되지 않는다(리포 기존 제약).
+ */
+jest.mock('@/pages/events/detail/use-event-detail', () => ({
+  eventKeys: {
+    lists: () => ['events'],
+    detail: (eventId: string) => ['event-detail', eventId],
+    count: () => ['events-count'],
+  },
 }))
 
 const confirmMock = jest.fn()
@@ -189,6 +206,21 @@ it('완료 분기에서 "닫기"를 고르면 확인 없이 닫힌다 (저장했
 
   await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
   expect(confirmMock).not.toHaveBeenCalled()
+})
+
+it('목록에 남는 분기에서만 마운트된 목록을 재조회한다', async () => {
+  setup()
+  await waitForBody()
+
+  // 상세로 이동 → 목록이 언마운트되므로 재조회는 낭비
+  fireEvent.click(screen.getByText('_saved'))
+  fireEvent.click(await screen.findByRole('button', { name: '상세 보기' }))
+  expect(refetchQueriesMock).not.toHaveBeenCalled()
+
+  // 계속 등록 → 목록이 뒤에 남아 있으므로 지금 받아야 새 사건이 보인다
+  fireEvent.click(screen.getByText('_saved'))
+  fireEvent.click(await screen.findByRole('button', { name: '사건 계속 등록' }))
+  await waitFor(() => expect(refetchQueriesMock).toHaveBeenCalled())
 })
 
 it('저장 버튼은 폼이 유효할 때만 활성화된다', async () => {

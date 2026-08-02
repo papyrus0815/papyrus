@@ -273,6 +273,36 @@ describe('EventBasicForm — 저장', () => {
     expect(onSaved).toHaveBeenCalledWith('evt-new', 'create')
   })
 
+  it('목록 무효화는 refetchType:none — 재조회는 목록에 남는 셸이 결정한다', async () => {
+    eventsApi.createEvent.mockResolvedValue({ id: 'evt-new', title: '새 사건' })
+
+    const client = makeClient()
+    const invalidate = jest.spyOn(client, 'invalidateQueries')
+    jest.spyOn(client, 'ensureQueryData').mockResolvedValue({} as never)
+
+    const formRef = { current: null } as React.RefObject<
+      import('./event-basic-form').EventBasicFormHandle | null
+    >
+    render(<EventBasicForm formRef={formRef} onSaved={jest.fn()} />, {
+      wrapper: wrap(client),
+    })
+    fireEvent.change(screen.getByLabelText('사건명'), { target: { value: '새 사건' } })
+    fireEvent.change(screen.getByLabelText('시작일'), { target: { value: '1815-06-18' } })
+    await act(async () => {
+      await formRef.current?.submit()
+    })
+
+    // 기본값('active')이면 목록이 뒤에 살아 있는 모달에서 소진해 둔 N페이지가 즉시 재조회된다
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ['events'],
+      refetchType: 'none',
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ['events-count'],
+      refetchType: 'none',
+    })
+  })
+
   it('필수값이 비면 저장하지 않는다', async () => {
     const client = makeClient()
     const formRef = { current: null } as React.RefObject<
