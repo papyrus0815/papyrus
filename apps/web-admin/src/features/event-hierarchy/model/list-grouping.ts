@@ -36,6 +36,26 @@ export interface YearBuckets {
    * DOM에는 행이 있는데 ↑↓·드로어 이전/다음 모수에서는 빠지는 회귀가 난다.
    */
   headerlessYears: Set<number>
+  /**
+   * 표시 순서상 **직전 연도 그룹과의 공백**. 연도 → 공백 정보.
+   *
+   * 실측: 연 그룹 88개의 경계 87개 중 1년 간격은 29개뿐이고 **18개가 10년 이상**,
+   * 최대 203년(1205→1002)이며 **12세기는 통째로 결번**이다. 그런데 모든 경계가
+   * 동일한 여백으로 그려져, 사용자가 스크롤 거리로 시간 흐름을 읽을 때
+   * '연속된 해'와 '기록이 없는 200년'이 완전히 같아 보인다.
+   * 데이터의 가장 중요한 사실 중 하나인 **공백**이 화면에서 사라지는 것이다.
+   */
+  yearGapBefore: Map<number, YearGap>
+}
+
+export interface YearGap {
+  /** 직전 표시 연도와의 절대 연차 */
+  years: number
+  /**
+   * 이 공백이 통째로 건너뛴 세기들. 있으면 연차 대신 이 이름을 라벨한다 —
+   * '203년 기록 없음'보다 '12세기 기록 없음'이 연대기에서 훨씬 잘 읽힌다.
+   */
+  missingCenturies: number[]
 }
 
 /**
@@ -123,6 +143,31 @@ export function buildYearBuckets(
     if (bucketItems.length === 1) headerlessYears.add(year)
   })
 
+  /**
+   * 공백 계산은 **표시 순서** 기준이다(정렬 방향이 이미 적용된 allYears).
+   * 방향과 무관하게 절대 연차를 쓰므로 오름/내림 어느 쪽에서도 같은 공백이 같게 읽힌다.
+   */
+  const yearGapBefore = new Map<number, YearGap>()
+  for (let index = 1; index < allYears.length; index += 1) {
+    const previous = allYears[index - 1]
+    const current = allYears[index]
+    const lower = Math.min(previous, current)
+    const upper = Math.max(previous, current)
+    const missingCenturies: number[] = []
+    // 0세기는 존재하지 않는다(기원전 1세기 다음이 1세기).
+    for (
+      let century = getCentury(lower) + 1;
+      century < getCentury(upper);
+      century += 1
+    ) {
+      if (century !== 0) missingCenturies.push(century)
+    }
+    yearGapBefore.set(current, {
+      years: Math.abs(previous - current),
+      missingCenturies,
+    })
+  }
+
   return {
     allYears,
     eventsByYear,
@@ -131,7 +176,39 @@ export function buildYearBuckets(
     unknownItems,
     bucketYearById,
     headerlessYears,
+    yearGapBefore,
   }
+}
+
+/**
+ * 공백 크기 → 그룹 앞 추가 여백(px).
+ *
+ * 로그 스케일 같은 연속 함수를 쓰지 않는다 — 픽셀로 연차를 정확히 읽을 수 있다는
+ * **거짓 정밀도**를 주기 때문이다. 라벨이 정확한 숫자를 말하고, 여백은 '더 크다'는
+ * 순서 정보만 싣는 4단 계단이면 충분하다.
+ */
+export function gapSpacingPx(gapYears: number): number {
+  if (gapYears <= 1) return 0
+  if (gapYears < 10) return 4
+  if (gapYears < 50) return 12
+  if (gapYears < 100) return 20
+  return 28
+}
+
+/** 공백 라벨 — 통째로 빠진 세기가 있으면 그 이름을, 없으면 연차를 말한다. */
+export function formatGapLabel(gap: YearGap): string | null {
+  if (gap.years < 10) return null
+  if (gap.missingCenturies.length > 0) {
+    const names = gap.missingCenturies
+      .map((century) =>
+        century < 0 ? `기원전 ${Math.abs(century)}세기` : `${century}세기`,
+      )
+      .reverse()
+    const label =
+      names.length <= 2 ? names.join('·') : `${names[0]}~${names[names.length - 1]}`
+    return `${label} 기록 없음`
+  }
+  return `${gap.years}년 기록 없음`
 }
 
 /**

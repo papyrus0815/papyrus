@@ -35,6 +35,8 @@ import {
 } from '../../../pages/events/styles/theme'
 import {
   buildYearBuckets,
+  formatGapLabel,
+  gapSpacingPx,
   groupYearsByCentury,
 } from '@/features/event-hierarchy/model'
 import type { FlattenedHierarchyItem } from '@/features/event-hierarchy/model'
@@ -175,6 +177,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     yearRootCount,
     unknownItems,
     headerlessYears,
+    yearGapBefore,
   } = useMemo(
       () => buildYearBuckets(flattenedHierarchy, sortDirection),
       [flattenedHierarchy, sortDirection],
@@ -463,6 +466,18 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                 role="group"
                 aria-labelledby={centuryHeadingId}
               >
+                {/* 통째로 빠진 세기는 **세기 헤더 앞**에 고지한다 — 13세기 블록이 끝나고
+                    '12세기 기록 없음'을 지난 뒤 11세기 헤더가 오는 순서라야 연대기로 읽힌다.
+                    (연도 그룹 안에 두면 11세기 헤더 아래에 12세기 얘기가 나온다.) */}
+                {(() => {
+                  const firstGap = yearGapBefore.get(years[0])
+                  if (!firstGap || firstGap.missingCenturies.length === 0)
+                    return null
+                  const label = formatGapLabel(firstGap)
+                  return label ? (
+                    <List.GapMarker role="note">{label}</List.GapMarker>
+                  ) : null
+                })()}
                 {/* 헤딩 탐색용 — 시각적으로는 숨기고 접근성 트리에만 남긴다. */}
                 <List.GroupHeading id={centuryHeadingId} aria-level={3}>
                   {`${centuryLabel} (${centuryRangeLabel}) — 사건 ${centuryCount.get(century) ?? 0}건`}
@@ -536,7 +551,31 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                           key={`year-${currentYear}`}
                           role="group"
                           aria-labelledby={yearHeadingId}
+                          /* 공백에 비례한 추가 여백 — 스크롤 거리로 시간 흐름을 읽을 때
+                             '연속된 해'와 '기록 없는 200년'이 같아 보이던 문제.
+                             ⚠️ 세기를 통째로 건너뛴 공백은 세기 헤더 앞에서 이미 표지와
+                             여백을 받았다. 여기서 또 주면 세기 헤더 아래에 정체불명의
+                             빈 띠가 생긴다(실측: 11세기 헤더 밑 28px 공백). */
+                          style={
+                            {
+                              '--gap-space': (() => {
+                                const gap = yearGapBefore.get(currentYear)
+                                if (!gap || gap.missingCenturies.length > 0)
+                                  return '0px'
+                                return `${gapSpacingPx(gap.years)}px`
+                              })(),
+                            } as React.CSSProperties
+                          }
                         >
+                          {(() => {
+                            const gap = yearGapBefore.get(currentYear)
+                            // 세기를 건너뛴 공백은 세기 헤더 앞에서 이미 고지했다.
+                            if (!gap || gap.missingCenturies.length > 0) return null
+                            const label = formatGapLabel(gap)
+                            return label ? (
+                              <List.GapMarker role="note">{label}</List.GapMarker>
+                            ) : null
+                          })()}
                           <List.GroupHeading id={yearHeadingId} aria-level={4}>
                             {`${formatYearLabel(currentYear)} — 사건 ${yearEventCount}건`}
                           </List.GroupHeading>

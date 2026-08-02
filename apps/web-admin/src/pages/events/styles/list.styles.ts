@@ -666,9 +666,47 @@ export const CenturySection = styled.div`
   }
 `
 
+/**
+ * 기록 공백 표지 — 연 그룹 사이가 10년 이상 벌어질 때만 나타난다.
+ *
+ * 여백만 키우면 '왜 벌어졌는지'를 사용자가 추론해야 하고, 라벨만 달면 스크롤 감각과
+ * 어긋난다. 둘을 함께 둔다 — 여백은 순서(더 크다)를, 라벨은 정확한 값을 싣는다.
+ * 축(레일) 위에 그리지 않고 콘텐츠 폭에 두어 '시간축을 끊는 눈금'이 아니라
+ * '이 구간에 데이터가 없다'는 **데이터에 대한 진술**로 읽히게 한다.
+ */
+export const GapMarker = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px calc(-1 * var(--rail-inset));
+  padding-left: var(--rail-inset);
+  font-size: var(--row-meta, 12px);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: ${metaText};
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+
+  /* 점선 rule — 실선은 그룹 hairline과 같은 무게라 '경계'로 오독된다. */
+  &::after {
+    content: '';
+    flex: 1;
+    height: 0;
+    border-top: 1px dashed
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.14)'
+          : 'rgba(15, 23, 42, 0.14)'};
+  }
+`
+
 export const YearSection = styled.div`
   display: flex;
   flex-direction: column;
+
+  /* 공백 크기에 비례한 추가 여백 — 인라인 변수로 그룹마다 주입한다.
+     선언이 없으면 0이라 기존 리듬 그대로다. */
+  margin-top: var(--gap-space, 0);
 
   /* 세기 헤더 직후 첫 연도 헤더 — 세기 하단 hairline과 이중선이 되지 않게 상단선 제거.
    * (이전 규칙 'CenturyDivider + button'은 래퍼 도입으로 형제 관계가 끊겨 대체된다.) */

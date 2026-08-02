@@ -1,5 +1,7 @@
 import {
   buildYearBuckets,
+  formatGapLabel,
+  gapSpacingPx,
   groupYearsByCentury,
   selectVisibleRows,
 } from './list-grouping'
@@ -136,5 +138,60 @@ describe('groupYearsByCentury', () => {
       { century: 21, years: [2026, 2025] },
       { century: 20, years: [1996, 1990] },
     ])
+  })
+})
+
+describe('연도 공백(yearGapBefore) — 기록 없는 구간을 화면에 되살린다', () => {
+  it('표시 순서상 직전 연도와의 절대 연차를 담는다', () => {
+    const buckets = buildYearBuckets(
+      [row('a', '2026-01-01'), row('b', '2025-01-01'), row('c', '1996-01-01')],
+      'desc',
+    )
+    expect(buckets.yearGapBefore.get(2025)?.years).toBe(1)
+    expect(buckets.yearGapBefore.get(1996)?.years).toBe(29)
+    // 첫 그룹은 비교 대상이 없다.
+    expect(buckets.yearGapBefore.get(2026)).toBeUndefined()
+  })
+
+  it('정렬 방향이 바뀌어도 같은 공백은 같은 값으로 읽힌다', () => {
+    const items = [row('a', '2026-01-01'), row('c', '1996-01-01')]
+    const desc = buildYearBuckets(items, 'desc')
+    const asc = buildYearBuckets(items, 'asc')
+    expect(desc.yearGapBefore.get(1996)?.years).toBe(30)
+    expect(asc.yearGapBefore.get(2026)?.years).toBe(30)
+  })
+
+  it('통째로 건너뛴 세기를 집어낸다 — 실데이터 1205→1002는 12세기 결번', () => {
+    const buckets = buildYearBuckets(
+      [row('a', '1205-01-01'), row('b', '1002-01-01')],
+      'desc',
+    )
+    const gap = buckets.yearGapBefore.get(1002)
+    expect(gap?.years).toBe(203)
+    expect(gap?.missingCenturies).toEqual([12])
+    expect(formatGapLabel(gap!)).toBe('12세기 기록 없음')
+  })
+
+  it('세기를 건너뛰지 않으면 연차로 말한다', () => {
+    const buckets = buildYearBuckets(
+      [row('a', '1839-01-01'), row('b', '1776-01-01')],
+      'desc',
+    )
+    expect(formatGapLabel(buckets.yearGapBefore.get(1776)!)).toBe(
+      '63년 기록 없음',
+    )
+  })
+
+  it('10년 미만은 표지를 만들지 않는다 — 87개 경계 중 69개가 여기 해당한다', () => {
+    expect(formatGapLabel({ years: 9, missingCenturies: [] })).toBeNull()
+    expect(formatGapLabel({ years: 1, missingCenturies: [] })).toBeNull()
+  })
+
+  it('여백은 4단 계단 — 픽셀로 연차를 읽을 수 있다는 거짓 정밀도를 주지 않는다', () => {
+    expect(gapSpacingPx(1)).toBe(0)
+    expect(gapSpacingPx(5)).toBe(4)
+    expect(gapSpacingPx(29)).toBe(12)
+    expect(gapSpacingPx(63)).toBe(20)
+    expect(gapSpacingPx(203)).toBe(28)
   })
 })
