@@ -8,6 +8,8 @@ interface RecentCountriesState {
   /** 최근 방문 국가 ID (가장 최근이 맨 앞) */
   recentIds: string[]
   push: (id: string) => void
+  /** 국가 삭제 시 최근 목록에서 제거 (유령 id 잔존 방지 — F59) */
+  remove: (id: string) => void
   clear: () => void
 }
 
@@ -17,12 +19,16 @@ export const useRecentCountriesStore = create<RecentCountriesState>()(
       recentIds: [],
       push: (id) =>
         set((state) => {
-          const next = [id, ...state.recentIds.filter((x) => x !== id)].slice(
-            0,
-            MAX_RECENT_COUNTRIES,
-          )
+          const next = [
+            id,
+            ...state.recentIds.filter((recentId) => recentId !== id),
+          ].slice(0, MAX_RECENT_COUNTRIES)
           return { recentIds: next }
         }),
+      remove: (id) =>
+        set((state) => ({
+          recentIds: state.recentIds.filter((recentId) => recentId !== id),
+        })),
       clear: () => set({ recentIds: [] }),
     }),
     {

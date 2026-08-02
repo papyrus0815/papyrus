@@ -102,7 +102,7 @@ export function useCountryFormModal(opts: UseCountryFormModalOptions = {}) {
   )
 
   const remove = useCallback(
-    async (id: string, name: string) => {
+    async (id: string, name: string): Promise<boolean> => {
       if (
         !(await confirm({
           title: '삭제 확인',
@@ -110,13 +110,15 @@ export function useCountryFormModal(opts: UseCountryFormModalOptions = {}) {
           danger: true,
         }))
       )
-        return
+        return false
       const loadingToast = notify.loading('삭제하는 중...')
       try {
         await deleteMutation.mutateAsync(id)
         notify.success('삭제되었습니다', { id: loadingToast })
+        return true
       } catch (err) {
         notify.error('삭제 실패: ' + (err as Error).message, { id: loadingToast })
+        return false
       }
     },
     [deleteMutation],

@@ -84,11 +84,15 @@ export function CountryDetailShell() {
 
   const selectedId = params.countryId ?? null
 
-  // 최근 방문 국가 캐시 (⌘K 팔레트용) — store가 dedup 처리
-  const pushRecentCountry = useRecentCountriesStore((s) => s.push)
+  // 최근 방문 국가 캐시 (⌘K 팔레트용) — store가 dedup 처리.
+  // 실존하는 국가만 push해 오타·삭제된 URL의 유령 id 영속을 막는다(F59).
+  // (로딩 중 미존재 시엔 다음 렌더에서 countriesById 채워진 뒤 자연 보충)
+  const pushRecentCountry = useRecentCountriesStore((store) => store.push)
   useEffect(() => {
-    if (selectedId) pushRecentCountry(selectedId)
-  }, [selectedId, pushRecentCountry])
+    if (selectedId && countriesById.has(selectedId)) {
+      pushRecentCountry(selectedId)
+    }
+  }, [selectedId, countriesById, pushRecentCountry])
 
   // 현재 선택된 국가 — 통합 인덱스에서 O(1) 조회 (현대/raw 역사/현대의 하위 역사 모두)
   const selectedCountry = useMemo(() => {
@@ -139,8 +143,8 @@ export function CountryDetailShell() {
   const modernCountriesForModal = useMemo(() => {
     if (!historicalForm.isOpen) return []
     return unifiedCountries
-      .filter((c) => c.type === 'modern')
-      .map((c) => ({ id: c.id, name: c.name }))
+      .filter((country) => country.type === 'modern')
+      .map((country) => ({ id: country.id, name: country.name }))
   }, [historicalForm.isOpen, unifiedCountries])
 
   const historicalCountriesForModal = useMemo(() => {

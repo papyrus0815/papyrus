@@ -13,6 +13,8 @@ interface SidebarHeaderProps {
   title: React.ReactNode
   /** 타이틀 옆에 표시할 카운트 (선택) */
   count?: number | string
+  /** 카운트 배지에 붙일 tooltip — 분수 카운트의 의미 설명용 (선택) */
+  countTitle?: string
   /** 우측 추가 액션 (예: + 등록) */
   action?: React.ReactNode
   /** 접기 버튼이 호출할 핸들러. 없으면 접기 버튼 숨김 */
@@ -22,6 +24,7 @@ interface SidebarHeaderProps {
 export function SidebarHeader({
   title,
   count,
+  countTitle,
   action,
   onCollapse,
 }: SidebarHeaderProps) {
@@ -29,7 +32,7 @@ export function SidebarHeader({
     <Root>
       <Left>
         <Title>{title}</Title>
-        {count !== undefined && <Count>{count}</Count>}
+        {count !== undefined && <Count title={countTitle}>{count}</Count>}
       </Left>
       <Right>
         {action}

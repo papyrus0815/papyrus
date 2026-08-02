@@ -49,7 +49,19 @@ export function useListKeyboardNav({
   const handleListKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (rowIds.length === 0) return
-      const idx = focusedIndex >= 0 ? focusedIndex : 0
+      // 현재 실제로 포커스된 행의 data-row-index를 우선 사용 — 마우스 클릭으로 focusedIndex와
+      // 어긋난 경우(클릭은 focusedIndex를 갱신하지 않음) 맨 위로 점프하던 문제 방지(F12).
+      const activeRow = containerRef.current?.contains(
+        document.activeElement,
+      )
+        ? (document.activeElement as HTMLElement)
+        : null
+      const activeAttr = activeRow?.getAttribute('data-row-index')
+      const activeIndex =
+        activeAttr != null && Number.isInteger(Number(activeAttr))
+          ? Number(activeAttr)
+          : focusedIndex
+      const idx = activeIndex >= 0 ? activeIndex : 0
 
       if (e.key === 'ArrowDown') {
         e.preventDefault()
@@ -82,6 +94,7 @@ export function useListKeyboardNav({
       }
     },
     [
+      containerRef,
       rowIds,
       focusedIndex,
       focusRow,

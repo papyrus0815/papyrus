@@ -12,13 +12,14 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { FaLandmark } from 'react-icons/fa'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { formatCountryPeriod } from '@/shared/lib/country-period'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
-import { withAlpha } from '../model/continent-colors'
+import { getBadgeTextColor, withAlpha } from '../model/continent-colors'
 import * as S from './country-list.styles'
 
 const POPOVER_WIDTH = 240
@@ -52,11 +53,11 @@ interface CountryListChildrenPopoverProps {
   onContextMenu?: (country: UnifiedCountry, e: React.MouseEvent) => void
 }
 
-const isoBadgeStyle = (color?: string) =>
+const isoBadgeStyle = (color?: string, isDark = false) =>
   color
     ? {
         background: withAlpha(color, 0.14),
-        color,
+        color: getBadgeTextColor(color, isDark),
       }
     : undefined
 
@@ -69,6 +70,8 @@ export function CountryListChildrenPopover({
   onClose,
   onContextMenu,
 }: CountryListChildrenPopoverProps) {
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
   const popRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{
     top: number
@@ -218,7 +221,7 @@ export function CountryListChildrenPopover({
               />
             </S.ThumbnailAvatar>
           ) : (
-            <S.IsoBadge style={isoBadgeStyle(accentColor)} aria-hidden>
+            <S.IsoBadge style={isoBadgeStyle(accentColor, isDark)} aria-hidden>
               {parent.type === 'modern' && parent.isoCode
                 ? parent.isoCode
                 : parent.name.slice(0, 2)}
@@ -237,7 +240,12 @@ export function CountryListChildrenPopover({
         {children.length === 0 ? (
           <S.ChildrenEmpty>등록된 역사 국가가 없습니다.</S.ChildrenEmpty>
         ) : (
-          children.map((historical) => (
+          children.map((historical) => {
+            // BC-safe 존속기간 — 원시 연도 출력은 BC를 AD로 오독시킨다(F6)
+            const periodText = formatCountryPeriod(historical, {
+              variant: 'short',
+            })
+            return (
             <S.ListRow
               key={historical.id}
               role="option"
@@ -273,7 +281,7 @@ export function CountryListChildrenPopover({
                   ) : (
                     <S.IsoBadge
                       $size="sm"
-                      style={isoBadgeStyle(accentColor)}
+                      style={isoBadgeStyle(accentColor, isDark)}
                       aria-hidden
                     >
                       <FaLandmark />
@@ -284,18 +292,14 @@ export function CountryListChildrenPopover({
                       {historical.name}
                     </S.CodeText>
                     <S.SubMeta>
-                      {historical.startYear && (
-                        <span>
-                          {historical.startYear}
-                          {historical.endYear ? `–${historical.endYear}` : ''}
-                        </span>
-                      )}
+                      {periodText && <span>{periodText}</span>}
                     </S.SubMeta>
                   </S.TextStack>
                 </S.RowLeft>
               </S.RowTop>
             </S.ListRow>
-          ))
+            )
+          })
         )}
       </S.ChildrenScroll>
       </Inner>

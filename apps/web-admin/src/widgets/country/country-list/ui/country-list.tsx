@@ -18,6 +18,10 @@ import { CountryListAddMenu } from './country-list-add-menu'
 import { CountryListChildrenPopover } from './country-list-children-popover'
 import { CountryListContextMenu } from './country-list-context-menu'
 import { CountryListEmpty } from './country-list-empty'
+import {
+  CountryListError,
+  HistoricalPartialErrorBanner,
+} from './country-list-error'
 import { CountryListFilters } from './country-list-filters'
 import { CountryListRow } from './country-list-row'
 import { CountryListSkeleton } from './country-list-skeleton'
@@ -53,6 +57,7 @@ function CountryListInner({
 }: CountryListProps) {
   const {
     unifiedCountries,
+    countriesById,
     filtered,
     continents,
     query,
@@ -63,7 +68,13 @@ function CountryListInner({
     setCountryTypeFilter: onCountryTypeFilterChange,
     sortBy,
     setSortBy: onSortByChange,
-    isLoading,
+    historicalCount,
+    isLoadingCountries,
+    isLoadingHistorical,
+    isLoadingContinents,
+    isError,
+    isErrorHistorical,
+    refetchAll,
     showPersonRegisterModal,
     setShowPersonRegisterModal,
   } = useCountryListState()
@@ -90,20 +101,23 @@ function CountryListInner({
     },
     [collapsedGroups],
   )
+  // 'all' sentinel을 실제 Set으로 materialize (continents + 특수 그룹 모두 collapsed로 시작)
+  const materializeCollapsed = React.useCallback(
+    (prev: Set<string> | 'all'): Set<string> => {
+      if (prev !== 'all') return new Set(prev)
+      const nextSet = new Set<string>(
+        continents.map((continent) => continent.id),
+      )
+      nextSet.add('__unknown__')
+      nextSet.add('__historical__')
+      return nextSet
+    },
+    [continents],
+  )
   const toggleGroup = React.useCallback(
     (continentId: string) => {
       setCollapsedGroups((prev) => {
-        // 'all' sentinel을 실제 Set으로 materialize (continents + 특수 그룹 모두 collapsed로 시작)
-        const base =
-          prev === 'all'
-            ? (() => {
-                const s = new Set<string>(continents.map((c) => c.id))
-                s.add('__unknown__')
-                s.add('__historical__')
-                return s
-              })()
-            : new Set(prev)
-
+        const base = materializeCollapsed(prev)
         if (base.has(continentId)) base.delete(continentId)
         else base.add(continentId)
         try {
@@ -117,13 +131,39 @@ function CountryListInner({
         return base
       })
     },
-    [continents],
+    [materializeCollapsed],
+  )
+  // 선택 국가의 그룹을 임시로 펼침(F1) — localStorage에 기록하지 않아 '기본 접힘' 의도를 보존.
+  const expandGroupForSelection = React.useCallback(
+    (continentId: string) => {
+      setCollapsedGroups((prev) => {
+        if (prev !== 'all' && !prev.has(continentId)) return prev // 이미 펼침
+        const base = materializeCollapsed(prev)
+        base.delete(continentId)
+        return base
+      })
+    },
+    [materializeCollapsed],
   )
   const listRef = React.useRef<HTMLDivElement>(null)
+  // 접기/펼치기 토글 시 누른 버튼이 언마운트돼 포커스가 body로 유실되는 것 방지(F30):
+  // collapsed 전환 후 반대편 토글 버튼(aria-label로 조회)으로 포커스 이동.
+  const paneRef = React.useRef<HTMLDivElement>(null)
+  const collapsedDidMountRef = React.useRef(false)
+  useEffect(() => {
+    if (!collapsedDidMountRef.current) {
+      collapsedDidMountRef.current = true
+      return
+    }
+    const targetLabel = collapsed ? '패널 펼치기' : '패널 접기'
+    paneRef.current
+      ?.querySelector<HTMLElement>(`[aria-label="${targetLabel}"]`)
+      ?.focus()
+  }, [collapsed])
 
-  const pinnedIds = usePinnedCountriesStore((s) => s.pinnedIds)
-  const togglePinned = usePinnedCountriesStore((s) => s.toggle)
-  const recentIds = useRecentCountriesStore((s) => s.recentIds)
+  const pinnedIds = usePinnedCountriesStore((store) => store.pinnedIds)
+  const togglePinned = usePinnedCountriesStore((store) => store.toggle)
+  const recentIds = useRecentCountriesStore((store) => store.recentIds)
 
 
   // 핀 + 최근 — 사이드바 상단 빠른 접근 섹션. 필터/검색 활성 시 숨김.
@@ -132,29 +172,18 @@ function CountryListInner({
 
   const quickAccessItems = React.useMemo(() => {
     if (hasFilterActive) return { pinned: [], recent: [] }
-    const flatById = new Map<string, UnifiedCountry>()
-    // UnifiedCountry 목록 사용 — Country에는 type 판별 필드가 없어 역사 국가 분기가 동작하지 않음
-    for (const c of unifiedCountries) {
-      flatById.set(c.id, c)
-      if (c.type === 'modern' && c.historicalCountries) {
-        for (const h of c.historicalCountries) {
-          flatById.set(h.id, {
-            ...h,
-            type: 'historical',
-          } as unknown as UnifiedCountry)
-        }
-      }
-    }
+    // core의 countriesById(현대+역사+하위역사 3원 인덱스)를 재사용 — 자체 flatById 재구축을
+    // 버려 미연결 역사국가도 핀/최근에서 조회되게 한다(F5, O(1)).
     const pinned = pinnedIds
-      .map((id) => flatById.get(id))
-      .filter((c): c is UnifiedCountry => !!c)
+      .map((id) => countriesById.get(id))
+      .filter((country): country is UnifiedCountry => !!country)
     const recent = recentIds
       .filter((id) => !pinnedIds.includes(id))
-      .map((id) => flatById.get(id))
-      .filter((c): c is UnifiedCountry => !!c)
+      .map((id) => countriesById.get(id))
+      .filter((country): country is UnifiedCountry => !!country)
       .slice(0, 5)
     return { pinned, recent }
-  }, [hasFilterActive, unifiedCountries, pinnedIds, recentIds])
+  }, [hasFilterActive, countriesById, pinnedIds, recentIds])
 
   // 대륙별로 그룹화 (현대 국가만; continentId 기준). 과거만 선택 시 단일 그룹으로 플랫 목록
   const groupedByContinent = React.useMemo(() => {
@@ -184,24 +213,34 @@ function CountryListInner({
     // 명시적 표시 순서: 유럽 → 아시아 → 북아메리카 → 남아메리카 → 아프리카 → ...
     // (continent-colors.ts의 NAME_ORDER 매핑). 매핑 안 된 대륙은 뒤에 데이터 순서대로.
     const orderedContinents = [...continents].sort(
-      (a, b) => getContinentOrder(a.name) - getContinentOrder(b.name),
+      (contA, contB) => getContinentOrder(contA.name) - getContinentOrder(contB.name),
     )
     const result: {
       continentId: string
       name: string
       countries: typeof filtered
     }[] = []
+    const emittedKeys = new Set<string>()
     for (const cont of orderedContinents) {
       const list = groups.get(cont.id)
-      if (list?.length)
+      if (list?.length) {
         result.push({ continentId: cont.id, name: cont.name, countries: list })
+        emittedKeys.add(cont.id)
+      }
     }
-    const unknownList = groups.get('__unknown__')
-    if (unknownList?.length) {
+    // never-drop (F4): 로드된 대륙 섹션에 못 들어간 국가 — 대륙 목록이 아직 로딩 중이거나
+    // continentId가 현재 대륙 목록에 없는(고아) 경우 포함 — 를 전부 '미분류'로 모은다.
+    // 어떤 시점에도 국가가 조용히 사라지지 않게 하는 안전망. (__unknown__ 버킷도 여기서 흡수)
+    const unclassified: typeof filtered = []
+    for (const [groupKey, list] of groups) {
+      if (emittedKeys.has(groupKey)) continue
+      unclassified.push(...list)
+    }
+    if (unclassified.length > 0) {
       result.push({
         continentId: '__unknown__',
         name: '미분류',
-        countries: unknownList,
+        countries: unclassified,
       })
     }
     // 검색으로 매칭된 역사적 국가가 있으면 별도 섹션으로 추가
@@ -253,10 +292,10 @@ function CountryListInner({
     const indexMap = new Map<string, number>()
     for (const group of groupedWithQuickAccess) {
       if (!hasFilterActive && isGroupCollapsedById(group.continentId)) continue
-      for (const c of group.countries) {
-        const key = `${group.continentId}-${c.id}`
-        indexMap.set(key, ids.length)
-        ids.push(c.id)
+      for (const country of group.countries) {
+        const rowKey = `${group.continentId}-${country.id}`
+        indexMap.set(rowKey, ids.length)
+        ids.push(country.id)
       }
     }
     return {
@@ -265,23 +304,62 @@ function CountryListInner({
     }
   }, [groupedWithQuickAccess, isGroupCollapsedById, hasFilterActive])
 
+  // roving tabindex 단일 진입점(F11) — 선택 행(첫 등장), 없으면 첫 행. 목록 전체에서 한 개만 tabIndex=0.
+  const tabStopFlatIndex = React.useMemo(() => {
+    if (flatRowIds.length === 0) return -1
+    const selectedFlatIndex = selectedId
+      ? flatRowIds.indexOf(selectedId)
+      : -1
+    return selectedFlatIndex >= 0 ? selectedFlatIndex : 0
+  }, [flatRowIds, selectedId])
+
   const { handleListKeyDown, handleSearchKeyDown } = useListKeyboardNav({
     containerRef: listRef,
     rowIds: flatRowIds,
     onSelect,
   })
 
-  // 선택된 국가가 변경되면 해당 행으로 자동 스크롤 (popover 모드 — sub-row 펼침 없음)
+  // 외부 진입(딥링크·⌘K)으로 selectedId가 바뀌면 해당 국가의 그룹을 자동 펼치고 그 행으로
+  // 스크롤한다(F1). 접힌 그룹은 임시로만 펼쳐(localStorage 미기록) '기본 접힘' 의도를 보존하고,
+  // 데이터 로드 후 행이 마운트되면(countriesById에 등장) 재실행돼 1회 스크롤한다.
+  const selectedCountryForScroll = selectedId
+    ? countriesById.get(selectedId)
+    : undefined
   useEffect(() => {
-    if (!selectedId) return
-    const t = setTimeout(() => {
-      const element = document.getElementById(`country-${selectedId}`)
-      if (element && listRef.current) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-      }
-    }, 80)
-    return () => clearTimeout(t)
-  }, [selectedId])
+    if (!selectedId || !selectedCountryForScroll) return
+    // 대상 그룹 판정 (never-drop 규칙과 동일): 역사=과거 섹션, 현대=continentId(미로드/고아면 미분류)
+    const targetGroupId =
+      selectedCountryForScroll.type === 'historical'
+        ? '__historical__'
+        : selectedCountryForScroll.continentId &&
+            continents.some(
+              (continent) =>
+                continent.id === selectedCountryForScroll.continentId,
+            )
+          ? selectedCountryForScroll.continentId
+          : '__unknown__'
+    expandGroupForSelection(targetGroupId)
+    // 펼침 반영(재렌더) 후 스코프 한정 스크롤 — 전역 getElementById 대신 listRef 내부만.
+    // 두 번의 rAF로 새 그룹이 커밋·레이아웃된 뒤 스크롤한다.
+    let innerRaf = 0
+    const outerRaf = requestAnimationFrame(() => {
+      innerRaf = requestAnimationFrame(() => {
+        const element = listRef.current?.querySelector<HTMLElement>(
+          `#country-${CSS.escape(selectedId)}`,
+        )
+        element?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      })
+    })
+    return () => {
+      cancelAnimationFrame(outerRaf)
+      if (innerRaf) cancelAnimationFrame(innerRaf)
+    }
+  }, [
+    selectedId,
+    selectedCountryForScroll,
+    continents,
+    expandGroupForSelection,
+  ])
 
   const handleClearFilters = () => {
     onQueryChange('')
@@ -291,6 +369,51 @@ function CountryListInner({
 
   const handleAddPerson = () => setShowPersonRegisterModal(true)
   const handleAddHistorical = () => onAddHistorical?.()
+
+  // 헤더 카운트 분모(모집단) — 현재 유형 필터가 실제로 보여주는 집합에 맞춘다(F7).
+  // '과거'=역사 총수, 검색 중 '전체'(대륙 미지정)=현대+역사(합류분), 그 외=현대 총수.
+  // 역사 합류 조건은 filtered의 shouldMergeHistorical과 정확히 일치시킨다(대륙 지정 시 제외).
+  // 분자(표시 수)가 분모와 다를 때만 분수로 노출해 '필터 중' 신호를 준다.
+  const mergesHistoricalIntoCount =
+    !!query && countryTypeFilter === 'all' && !continentFilter
+  const countPopulation =
+    countryTypeFilter === 'historical'
+      ? historicalCount
+      : mergesHistoricalIntoCount
+        ? unifiedCountries.length + historicalCount
+        : unifiedCountries.length
+  const headerCount =
+    filtered.length !== countPopulation
+      ? `${filtered.length}/${countPopulation}`
+      : countPopulation
+
+  // 검색·필터 결과 수 스크린리더 공지 (F28) — 타이핑 폭주를 피해 300ms 디바운스.
+  const [liveMessage, setLiveMessage] = React.useState('')
+  useEffect(() => {
+    if (!hasFilterActive) {
+      setLiveMessage('')
+      return
+    }
+    const timerId = setTimeout(() => {
+      setLiveMessage(
+        filtered.length === 0
+          ? '검색 결과 없음'
+          : `국가 ${filtered.length}개`,
+      )
+    }, 300)
+    return () => clearTimeout(timerId)
+  }, [filtered.length, hasFilterActive])
+
+  // 스켈레톤 게이트 — 활성 필터의 데이터 소스로 판정(G1-3). '과거'는 역사 쿼리,
+  // 그 외는 현대 쿼리 기준. 추가로, 대륙 그룹핑을 해야 하는데(비-과거) 대륙이 아직
+  // 콜드 로딩 중이면 현대 국가가 '미분류'로 잠깐 쏟아지는 대신 스켈레톤을 보인다(F4 레이스).
+  const isInitialLoading =
+    countryTypeFilter === 'historical'
+      ? isLoadingHistorical && filtered.length === 0
+      : (isLoadingCountries && unifiedCountries.length === 0) ||
+        (isLoadingContinents &&
+          continents.length === 0 &&
+          unifiedCountries.length > 0)
 
   // 우클릭 컨텍스트 메뉴 — 행에서 onContextMenu로 호출
   const [contextMenu, setContextMenu] = React.useState<{
@@ -326,15 +449,16 @@ function CountryListInner({
   return (
     <>
       <S.ListPaneWrapper>
-        <S.ListPane $collapsed={collapsed}>
+        <S.ListPane ref={paneRef} $collapsed={collapsed}>
           {!collapsed && (
             <>
               <SidebarHeader
                 title="국가 목록"
-                count={
-                  hasFilterActive && filtered.length !== unifiedCountries.length
-                    ? `${filtered.length}/${unifiedCountries.length}`
-                    : unifiedCountries.length
+                count={headerCount}
+                countTitle={
+                  filtered.length !== countPopulation
+                    ? `표시 ${filtered.length} / 전체 ${countPopulation}`
+                    : undefined
                 }
                 action={
                   <CountryListAddMenu
@@ -359,6 +483,11 @@ function CountryListInner({
                 onClearFilters={handleClearFilters}
                 onSearchKeyDown={handleSearchKeyDown}
               />
+
+              {/* 검색·필터 결과 수 스크린리더 공지 (F28) */}
+              <S.SrLiveRegion role="status" aria-live="polite">
+                {liveMessage}
+              </S.SrLiveRegion>
 
               <S.SidebarTabBody>
                 <AnimatePresence initial={false} mode="wait">
@@ -394,8 +523,11 @@ function CountryListInner({
                             tabIndex={-1}
                             onKeyDown={handleListKeyDown}
                           >
-                            {isLoading && unifiedCountries.length === 0 ? (
+                            {isInitialLoading ? (
                               <CountryListSkeleton />
+                            ) : isError && filtered.length === 0 ? (
+                              // fetch 실패를 빈 상태로 위장하지 않고 재시도 경로 제공(G1-1)
+                              <CountryListError onRetry={refetchAll} />
                             ) : filtered.length === 0 ? (
                               <CountryListEmpty
                                 query={query}
@@ -404,7 +536,15 @@ function CountryListInner({
                                 onAdd={onAdd}
                               />
                             ) : (
-                              groupedWithQuickAccess.map((group) => {
+                              <>
+                                {/* 역사 목록만 실패 → 일부만 표시 중임을 고지(G1-2) */}
+                                {isErrorHistorical &&
+                                  countryTypeFilter !== 'modern' && (
+                                    <HistoricalPartialErrorBanner
+                                      onRetry={refetchAll}
+                                    />
+                                  )}
+                                {groupedWithQuickAccess.map((group) => {
                                 // 검색·필터 활성 시 collapsed 무시 (자동 펼침)
                                 const isGroupCollapsed =
                                   !hasFilterActive &&
@@ -486,6 +626,9 @@ function CountryListInner({
                                               !!group.isQuickAccess
                                             }
                                             selectedId={selectedId}
+                                            isTabStop={
+                                              baseIndex === tabStopFlatIndex
+                                            }
                                             pinned={pinnedIds.includes(
                                               country.id,
                                             )}
@@ -508,7 +651,8 @@ function CountryListInner({
                                       })}
                                   </React.Fragment>
                                 )
-                              })
+                                })}
+                              </>
                             )}
                           </S.VirtualList>
                         </S.ListContainer>
@@ -520,7 +664,7 @@ function CountryListInner({
           )}
           {/* 접힘 상태 — 인물 필터와 동일하게 상단 rail에 펼치기 버튼 (가운데 floating X) */}
           {collapsed && (
-            <S.CollapsedRail aria-label="국가 목록 (접힘)">
+            <S.CollapsedRail role="group" aria-label="국가 목록 (접힘)">
               <S.CollapsedToggleBtn
                 type="button"
                 onClick={onToggleCollapse}
@@ -561,21 +705,31 @@ function CountryListInner({
       )}
 
       {/* M2 — 부모 chevron 클릭 시 떠오르는 역사 국가 popover */}
-      {childrenPopover && (
-        <CountryListChildrenPopover
-          parent={childrenPopover.parent}
-          anchorEl={childrenPopover.anchorEl}
-          selectedId={selectedId}
-          accentColor={getContinentColor({
-            continentId:
-              (childrenPopover.parent as { continentId?: string | null })
-                .continentId ?? null,
-          })}
-          onSelect={onSelect}
-          onClose={() => setChildrenPopover(null)}
-          onContextMenu={handleRowContextMenu}
-        />
-      )}
+      {childrenPopover &&
+        (() => {
+          // 대륙 색은 이름 기반이라 continentId만으론 회색 fallback이 된다 — 이름을 함께 조회(F25)
+          const parentContinentId =
+            childrenPopover.parent.continentId ?? null
+          const parentContinentName = parentContinentId
+            ? (continents.find(
+                (continent) => continent.id === parentContinentId,
+              )?.name ?? null)
+            : null
+          return (
+            <CountryListChildrenPopover
+              parent={childrenPopover.parent}
+              anchorEl={childrenPopover.anchorEl}
+              selectedId={selectedId}
+              accentColor={getContinentColor({
+                continentId: parentContinentId,
+                continentName: parentContinentName,
+              })}
+              onSelect={onSelect}
+              onClose={() => setChildrenPopover(null)}
+              onContextMenu={handleRowContextMenu}
+            />
+          )
+        })()}
     </>
   )
 }

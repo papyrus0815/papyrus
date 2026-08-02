@@ -54,10 +54,10 @@ export function CountryListAddMenu({
       <Trigger
         type="button"
         aria-label="등록"
-        aria-haspopup="menu"
+        aria-haspopup="true"
         aria-expanded={open}
         title="등록"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen((isOpen) => !isOpen)}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
           <path
@@ -74,9 +74,8 @@ export function CountryListAddMenu({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.96 }}
             transition={{ duration: 0.12 }}
-            role="menu"
           >
-            <Item type="button" role="menuitem" onClick={select(onAddModern)}>
+            <Item type="button" onClick={select(onAddModern)}>
               <ItemIcon>
                 <FaGlobeAsia />
               </ItemIcon>
@@ -85,11 +84,7 @@ export function CountryListAddMenu({
                 <ItemDesc>ISO·대륙·수도</ItemDesc>
               </ItemText>
             </Item>
-            <Item
-              type="button"
-              role="menuitem"
-              onClick={select(onAddHistorical)}
-            >
+            <Item type="button" onClick={select(onAddHistorical)}>
               <ItemIcon>
                 <FaLandmark />
               </ItemIcon>
@@ -98,7 +93,7 @@ export function CountryListAddMenu({
                 <ItemDesc>제국·왕국·정권·시대</ItemDesc>
               </ItemText>
             </Item>
-            <Item type="button" role="menuitem" onClick={select(onAddPerson)}>
+            <Item type="button" onClick={select(onAddPerson)}>
               <ItemIcon>
                 <FaUserPlus />
               </ItemIcon>

@@ -14,7 +14,9 @@ import type { Country } from '@/entities/country/api'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import type { HistoricalCountry } from '@/entities/historical-country/api'
 import { pathKeys } from '@/shared/router'
+import { useRecentCountriesStore } from '@/widgets/command-palette'
 import { useCountryFormModal } from '@/widgets/country/country-form/model/use-country-form-modal.hook'
+import { usePinnedCountriesStore } from '@/widgets/country/country-list/model/pinned-countries.store'
 import { useHistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form/model/use-historical-country-form-modal.hook'
 
 interface Args {
@@ -29,6 +31,9 @@ export function useCountryFormHandlers({
   selectedCountry,
 }: Args) {
   const navigate = useNavigate()
+  // 삭제 시 핀·최근에서 유령 id 제거 (F59)
+  const removePinned = usePinnedCountriesStore((store) => store.remove)
+  const removeRecent = useRecentCountriesStore((store) => store.remove)
 
   // 신규 등록 후 새 국가의 상세 페이지로 자동 이동
   const countryForm = useCountryFormModal({
@@ -65,13 +70,28 @@ export function useCountryFormHandlers({
     async (id: string) => {
       if (selectedCountry?.type === 'historical') {
         const ok = await historicalForm.remove(id)
-        if (ok) navigate(pathKeys.country())
+        if (ok) {
+          removePinned(id)
+          removeRecent(id)
+          navigate(pathKeys.country())
+        }
       } else {
         const name = selectedCountry?.name ?? '국가'
-        await countryForm.remove(id, name)
+        const ok = await countryForm.remove(id, name)
+        if (ok) {
+          removePinned(id)
+          removeRecent(id)
+        }
       }
     },
-    [selectedCountry, historicalForm, countryForm, navigate],
+    [
+      selectedCountry,
+      historicalForm,
+      countryForm,
+      navigate,
+      removePinned,
+      removeRecent,
+    ],
   )
 
   return {

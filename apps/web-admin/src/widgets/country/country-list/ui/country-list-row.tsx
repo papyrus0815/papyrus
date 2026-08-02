@@ -11,14 +11,14 @@
 import React from 'react'
 
 import { FaStar, FaRegStar, FaLandmark } from 'react-icons/fa'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { formatCountryPeriod } from '@/shared/lib/country-period'
 
 import { useCountryListState } from '../country-list-state.context'
-import { withAlpha } from '../model/continent-colors'
+import { getBadgeTextColor, withAlpha } from '../model/continent-colors'
 import * as S from './country-list.styles'
 
 /** 브리지(현대 국가 연결) 없는 역사국가 표식 — 저작 유도용 (F37) */
@@ -58,6 +58,8 @@ interface CountryListRowProps {
   accentColor?: string
   /** 키보드 nav를 위한 행 인덱스 */
   rowIndex: number
+  /** roving tabindex — 목록의 단일 Tab 진입점(선택 행, 없으면 첫 행)이면 true (F11) */
+  isTabStop?: boolean
   /** chevron 클릭 시 부모 popover 호출 (M2) */
   childrenPopoverOpenForId?: string | null
   onShowChildren?: (country: UnifiedCountry, anchorEl: HTMLElement) => void
@@ -75,6 +77,7 @@ export function CountryListRow({
   pinned,
   accentColor,
   rowIndex,
+  isTabStop = false,
   childrenPopoverOpenForId,
   onShowChildren,
   onSelect,
@@ -83,6 +86,8 @@ export function CountryListRow({
   onContextMenu,
 }: CountryListRowProps) {
   const { unlinkedHistoricalIds } = useCountryListState()
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
   const hasChildren =
     !isQuickAccess &&
     country.type === 'modern' &&
@@ -101,7 +106,7 @@ export function CountryListRow({
       <S.ListRow
         id={isQuickAccess ? undefined : `country-${country.id}`}
         role="option"
-        tabIndex={-1}
+        tabIndex={isTabStop ? 0 : -1}
         data-row-index={rowIndex}
         aria-selected={country.id === selectedId}
         $active={country.id === selectedId}
@@ -129,7 +134,7 @@ export function CountryListRow({
                   accentColor
                     ? {
                         background: withAlpha(accentColor, 0.14),
-                        color: accentColor,
+                        color: getBadgeTextColor(accentColor, isDark),
                       }
                     : undefined
                 }

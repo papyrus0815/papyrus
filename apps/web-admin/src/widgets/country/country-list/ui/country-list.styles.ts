@@ -299,6 +299,19 @@ export const ListContainer = styled.div`
   height: 100%;
 `
 
+/** 시각적으로 숨기되 보조기술엔 노출 — 필터 결과 수 aria-live 공지용 (F28, 표준 sr-only) */
+export const SrLiveRegion = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+`
+
 export const SidebarFilterSlot = styled.div`
   min-height: 54px;
   flex-shrink: 0;
@@ -781,6 +794,8 @@ export const ListRow = styled.div<{
   text-align: left;
   transition: background 0.12s ease;
   min-height: ${({ $compact }) => ($compact ? '46px' : '56px')};
+  /* sticky 그룹 헤더(약 34px)에 가리지 않게 자동 스크롤 여백 확보 (F1) */
+  scroll-margin-top: 40px;
   line-height: 1.2;
   position: relative;
   flex-shrink: 0;

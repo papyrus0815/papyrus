@@ -1,7 +1,14 @@
 import { motion, AnimatePresence } from 'framer-motion'
+import { FaLandmark } from 'react-icons/fa'
 import { FiCheck, FiList, FiPlus, FiSearch, FiX } from 'react-icons/fi'
 
+import {
+  COUNTRY_TYPE_LABELS,
+  type CountryTypeFilter,
+} from '@/entities/country/model/unified-types'
+import { formatCountryPeriod } from '@/shared/lib/country-period'
 import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
+import { CountryListEmpty } from '@/widgets/country/country-list/ui/country-list-empty'
 
 import * as PageS from './country-mobile-ui.styles'
 import * as ListS from '@/widgets/country/country-list/ui/country-list.styles'
@@ -29,9 +36,19 @@ export function CountryMobileUI({
     setQuery: onQueryChange,
     continentFilter,
     setContinentFilter: onContinentFilterChange,
+    countryTypeFilter,
+    setCountryTypeFilter: onCountryTypeFilterChange,
     sortBy,
     setSortBy: onSortByChange,
   } = useCountryListState()
+  // 데스크톱과 동일한 필터 활성 판정 — 유형까지 포함해 트랩(historical 잔존) 해제 가능(F10)
+  const hasFilterActive =
+    !!query || !!continentFilter || countryTypeFilter !== 'all'
+  const handleClearFilters = () => {
+    onQueryChange('')
+    onContinentFilterChange('')
+    onCountryTypeFilterChange('all')
+  }
   return (
     <>
       {/* Mobile View Switcher */}
@@ -118,9 +135,32 @@ export function CountryMobileUI({
                   </PageS.MobileSearchWrapper>
                   <PageS.MobileFilterRow>
                     <ListS.FilterSelect
-                      value={continentFilter}
+                      value={countryTypeFilter}
+                      onChange={(e) =>
+                        onCountryTypeFilterChange(
+                          e.target.value as CountryTypeFilter,
+                        )
+                      }
+                      $active={countryTypeFilter !== 'all'}
+                      aria-label="국가 유형"
+                    >
+                      <option value="all">{COUNTRY_TYPE_LABELS.all}</option>
+                      <option value="modern">
+                        {COUNTRY_TYPE_LABELS.modern}
+                      </option>
+                      <option value="historical">
+                        {COUNTRY_TYPE_LABELS.historical}
+                      </option>
+                    </ListS.FilterSelect>
+                    <ListS.FilterSelect
+                      value={
+                        countryTypeFilter === 'historical' ? '' : continentFilter
+                      }
                       onChange={(e) => onContinentFilterChange(e.target.value)}
-                      $active={!!continentFilter}
+                      $active={
+                        countryTypeFilter !== 'historical' && !!continentFilter
+                      }
+                      disabled={countryTypeFilter === 'historical'}
                       aria-label="대륙"
                     >
                       <option value="">대륙 전체</option>
@@ -143,20 +183,15 @@ export function CountryMobileUI({
                       <option value="population">인구순</option>
                       <option value="area">면적순</option>
                     </ListS.FilterSelect>
-                    {(query || continentFilter) && (
-                      <PageS.MobileClearButton
-                        onClick={() => {
-                          onQueryChange('')
-                          onContinentFilterChange('')
-                        }}
-                      >
+                    {hasFilterActive && (
+                      <PageS.MobileClearButton onClick={handleClearFilters}>
                         초기화
                       </PageS.MobileClearButton>
                     )}
                   </PageS.MobileFilterRow>
                 </PageS.MobileListSearchRow>
               </PageS.MobileListHeader>
-              {(query || continentFilter) && (
+              {hasFilterActive && (
                 <ListS.FilterResultBar>
                   <ListS.FilterResultText>
                     <FiCheck size={16} />
@@ -168,85 +203,78 @@ export function CountryMobileUI({
               <ListS.ListContainer>
                 <ListS.VirtualList>
                   {filtered.length === 0 ? (
-                    <ListS.EmptyFilterState>
-                      <ListS.EmptyFilterIcon>🔍</ListS.EmptyFilterIcon>
-                      <ListS.EmptyFilterTitle>
-                        {query
-                          ? '일치하는 국가가 없어요'
-                          : '등록된 국가가 없어요'}
-                      </ListS.EmptyFilterTitle>
-                      <ListS.EmptyFilterText>
-                        {query && (
-                          <>
-                            <strong>"{query}"</strong> 검색어와 일치하는 국가를
-                            찾지 못했어요.
-                            <br />
-                            다른 검색어를 시도하거나 새 국가를 등록해보세요.
-                          </>
-                        )}
-                        {!query && continentFilter && (
-                          <>
-                            선택한 대륙에 등록된 국가가 없어요.
-                            <br />
-                            필터를 초기화하거나 새 국가를 등록해보세요.
-                          </>
-                        )}
-                        {!query && !continentFilter && (
-                          <>
-                            아직 등록된 국가가 없어요.
-                            <br />첫 국가를 등록해서 시작해보세요.
-                          </>
-                        )}
-                      </ListS.EmptyFilterText>
-                      <ListS.EmptyFilterActions>
-                        <ListS.AddButton onClick={onAddCountry}>
-                          <ListS.AddButtonIcon>
-                            <FiPlus size={14} />
-                          </ListS.AddButtonIcon>
-                          새 국가 등록
-                        </ListS.AddButton>
-                      </ListS.EmptyFilterActions>
-                    </ListS.EmptyFilterState>
+                    // 데스크톱과 동일한 빈 상태 컴포넌트 재사용 — 유형별 카피·사본 제거(F10)
+                    <CountryListEmpty
+                      query={query}
+                      continentFilter={continentFilter}
+                      countryTypeFilter={countryTypeFilter}
+                      onAdd={onAddCountry}
+                    />
                   ) : (
-                    filtered.map((country) => (
-                      <ListS.ListRow
-                        key={country.id}
-                        $active={country.id === selectedId}
-                        onClick={() => {
-                          onSelectCountry(country.id)
-                          onMobileListOpenChange(false)
-                        }}
-                      >
-                        <ListS.RowTop>
-                          <ListS.RowLeft>
-                            <ListS.FlagBadge>
-                              {country.flagEmoji || '🏳️'}
-                            </ListS.FlagBadge>
-                            <ListS.TextCol>
-                              <ListS.CodeText $unread={!country.isoCode}>
-                                {country.name}
-                              </ListS.CodeText>
-                              <ListS.NameText>
-                                {country.isoCode || '-'} ·{' '}
-                                {country.capital || '수도 미상'}
-                              </ListS.NameText>
-                            </ListS.TextCol>
-                          </ListS.RowLeft>
-                        </ListS.RowTop>
-                        <ListS.RowBottom>
-                          <ListS.Meta>
-                            {country.population != null && (
-                              <span>인구 {country.population.toLocaleString()}</span>
-                            )}
-                            {country.population != null &&
-                              country.areaSqKm != null && <ListS.Dot />}
-                            {country.areaSqKm != null && (
-                              <span>면적 {country.areaSqKm.toLocaleString()}km²</span>
-                            )}
-                          </ListS.Meta>
-                        </ListS.RowBottom>
-                      </ListS.ListRow>
-                    ))
+                    filtered.map((country) => {
+                      // 역사 국가는 현대 전용 렌더(flagEmoji·수도·인구)로는 깨지므로 유형 분기(F10)
+                      const isHistorical = country.type === 'historical'
+                      const periodText = isHistorical
+                        ? formatCountryPeriod(country, { variant: 'short' })
+                        : ''
+                      return (
+                        <ListS.ListRow
+                          key={country.id}
+                          $active={country.id === selectedId}
+                          onClick={() => {
+                            onSelectCountry(country.id)
+                            onMobileListOpenChange(false)
+                          }}
+                        >
+                          <ListS.RowTop>
+                            <ListS.RowLeft>
+                              <ListS.FlagBadge>
+                                {isHistorical ? (
+                                  <FaLandmark size={16} />
+                                ) : (
+                                  country.flagEmoji || '🏳️'
+                                )}
+                              </ListS.FlagBadge>
+                              <ListS.TextCol>
+                                <ListS.CodeText $unread={false}>
+                                  {country.name}
+                                </ListS.CodeText>
+                                <ListS.NameText>
+                                  {isHistorical
+                                    ? country.enName || periodText || '과거 국가'
+                                    : `${country.isoCode || '-'} · ${country.capital || '수도 미상'}`}
+                                </ListS.NameText>
+                              </ListS.TextCol>
+                            </ListS.RowLeft>
+                          </ListS.RowTop>
+                          <ListS.RowBottom>
+                            <ListS.Meta>
+                              {isHistorical ? (
+                                periodText && <span>{periodText}</span>
+                              ) : (
+                                <>
+                                  {country.population != null && (
+                                    <span>
+                                      인구{' '}
+                                      {Number(
+                                        country.population,
+                                      ).toLocaleString()}
+                                    </span>
+                                  )}
+                                  {country.population != null &&
+                                    country.areaSqKm != null && <ListS.Dot />}
+                                  {country.areaSqKm != null && (
+                                    <span>
+                                      면적 {country.areaSqKm.toLocaleString()}km²
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </ListS.Meta>
+                          </ListS.RowBottom>
+                        </ListS.ListRow>
+                      )
+                    })
                   )}
                 </ListS.VirtualList>
               </ListS.ListContainer>

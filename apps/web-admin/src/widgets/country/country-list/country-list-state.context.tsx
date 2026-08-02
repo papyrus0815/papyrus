@@ -16,18 +16,20 @@ import type { HistoricalCountry } from '@/entities/historical-country/api'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { useContentCoreData } from '@/widgets/content-shell/model/use-content-core-data.hook'
 
-export type SortBy = 'name' | 'population' | 'area'
+import { compareBySort, type SortBy } from './model/sort-countries'
+
+export type { SortBy }
 
 export interface CountryListStateContextValue {
   // 필터/정렬
   query: string
-  setQuery: (q: string) => void
+  setQuery: (query: string) => void
   continentFilter: string
   setContinentFilter: (id: string) => void
   countryTypeFilter: CountryTypeFilter
   setCountryTypeFilter: (t: CountryTypeFilter) => void
   sortBy: SortBy
-  setSortBy: (s: SortBy) => void
+  setSortBy: (sort: SortBy) => void
   // 계산된 목록
   filtered: UnifiedCountry[]
   /** 역사국가 총 개수 — '전체' 필터에서 존재를 알리는 카운트 배지용 (F37) */
@@ -37,13 +39,29 @@ export interface CountryListStateContextValue {
   // 핵심 데이터 (useContentCoreData 제공 값)
   countries: Country[]
   unifiedCountries: UnifiedCountry[]
+  /** 모든 국가(현대+역사+하위역사) id→UnifiedCountry 인덱스 — 핀/최근 O(1) 조회용 (F5) */
+  countriesById: Map<string, UnifiedCountry>
   continents: ContinentOption[]
   apiHistoricalCountries: HistoricalCountry[] | undefined
   apiCountries: CountryResponseDto[] | undefined
   isLoading: boolean
+  /** 현대 국가 쿼리 로딩 여부 — '전체'/'현대' 스켈레톤 게이트용 (G1-3) */
+  isLoadingCountries: boolean
+  /** 역사 국가 쿼리 로딩 여부 — '과거' 스켈레톤 게이트용 (G1-3) */
+  isLoadingHistorical: boolean
+  /** 대륙 쿼리 로딩 여부 — 대륙 그룹핑 준비 판정용 (F4) */
+  isLoadingContinents: boolean
+  /** 현대·역사 목록 중 하나라도 에러 (부분 실패 포함) — 빈 상태 위장 방지 (G1-1) */
+  isError: boolean
+  /** 현대 국가 목록 쿼리 에러 (G1-1) */
+  isErrorCountries: boolean
+  /** 역사 국가 목록 쿼리 에러 — '과거'·검색 합류의 부분 결손 신호 (G1-2) */
+  isErrorHistorical: boolean
+  /** 두 목록 쿼리 재조회 (에러 재시도) */
+  refetchAll: () => void
   // 인물 등록 모달 (페이지 전역에서 열기)
   showPersonRegisterModal: boolean
-  setShowPersonRegisterModal: (v: boolean) => void
+  setShowPersonRegisterModal: (value: boolean) => void
 }
 
 const CountryListStateContext =
@@ -67,9 +85,17 @@ export function CountryListStateProvider({ children }: ProviderProps) {
   const {
     countries,
     unifiedCountries,
+    countriesById,
     continents,
     apiHistoricalCountries,
     isLoading,
+    isLoadingCountries,
+    isLoadingHistorical,
+    isLoadingContinents,
+    isError,
+    isErrorCountries,
+    isErrorHistorical,
+    refetchAll,
   } = core
 
   const [query, setQuery] = useState('')
@@ -123,15 +149,16 @@ export function CountryListStateProvider({ children }: ProviderProps) {
 
   const filtered = useMemo(() => {
     const searchTextLower = query.trim().toLowerCase()
+    const compare = compareBySort(sortBy)
     const matchesHistoricalSearch = (country: UnifiedCountry) =>
       !searchTextLower ||
       country.name.toLowerCase().includes(searchTextLower) ||
       (country.enName || '').toLowerCase().includes(searchTextLower)
 
+    // '과거' 필터 — 역사 국가만. 대륙 필터는 역사 국가에 continentId가 없어
+    // 무의미하므로 무시한다(필터 UI에서 대륙 셀렉트 비활성). 정렬은 공용 비교자 경유.
     if (countryTypeFilter === 'historical') {
-      return historicalUnified
-        .filter(matchesHistoricalSearch)
-        .sort((left, right) => left.name.localeCompare(right.name, 'ko'))
+      return historicalUnified.filter(matchesHistoricalSearch).sort(compare)
     }
 
     const modernResult = unifiedCountries.filter((country) => {
@@ -146,28 +173,18 @@ export function CountryListStateProvider({ children }: ProviderProps) {
       return matchSearch && matchContinent
     })
 
-    // 검색어가 있을 때 역사적 국가도 함께 검색
-    if (searchTextLower) {
-      const result = [
-        ...modernResult,
-        ...historicalUnified.filter(matchesHistoricalSearch),
-      ]
-      return result.sort((left, right) => left.name.localeCompare(right.name, 'ko'))
-    }
+    // 검색 중 역사 국가 합류는 '전체' 유형 + 대륙 미지정일 때만 (F3):
+    // - 유형='현대'를 명시했으면 과거 국가를 섞지 않는다(계약 준수).
+    // - 대륙 필터 활성 시 역사 국가는 대륙 소속이 없어 제외되어야 한다.
+    const shouldMergeHistorical =
+      !!searchTextLower && countryTypeFilter === 'all' && !continentFilter
 
-    const result = modernResult
+    const combined = shouldMergeHistorical
+      ? [...modernResult, ...historicalUnified.filter(matchesHistoricalSearch)]
+      : modernResult
 
-    return result.sort((countryA, countryB) => {
-      if (sortBy === 'name')
-        return countryA.name.localeCompare(countryB.name, 'ko')
-      if (sortBy === 'population')
-        return (
-          (Number(countryB.population) || 0) - (Number(countryA.population) || 0)
-        )
-      if (sortBy === 'area')
-        return (countryB.areaSqKm || 0) - (countryA.areaSqKm || 0)
-      return 0
-    })
+    // 정렬은 항상 sortBy를 반영 — 검색 시 무음으로 이름순으로 바뀌던 문제 제거(F3).
+    return combined.sort(compare)
   }, [
     unifiedCountries,
     historicalUnified,
@@ -192,10 +209,18 @@ export function CountryListStateProvider({ children }: ProviderProps) {
       unlinkedHistoricalIds,
       countries,
       unifiedCountries,
+      countriesById,
       continents,
       apiHistoricalCountries,
       apiCountries: core.apiCountries,
       isLoading,
+      isLoadingCountries,
+      isLoadingHistorical,
+      isLoadingContinents,
+      isError,
+      isErrorCountries,
+      isErrorHistorical,
+      refetchAll,
       showPersonRegisterModal,
       setShowPersonRegisterModal,
     }),
@@ -209,10 +234,18 @@ export function CountryListStateProvider({ children }: ProviderProps) {
       unlinkedHistoricalIds,
       countries,
       unifiedCountries,
+      countriesById,
       continents,
       apiHistoricalCountries,
       core.apiCountries,
       isLoading,
+      isLoadingCountries,
+      isLoadingHistorical,
+      isLoadingContinents,
+      isError,
+      isErrorCountries,
+      isErrorHistorical,
+      refetchAll,
       showPersonRegisterModal,
     ],
   )

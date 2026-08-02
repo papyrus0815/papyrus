@@ -73,14 +73,14 @@ const UnlinkedHint = styled.span`
 
 interface CountryListFiltersProps {
   query: string
-  onQueryChange: (q: string) => void
+  onQueryChange: (query: string) => void
   countryTypeFilter: CountryTypeFilter
-  onCountryTypeFilterChange: (v: CountryTypeFilter) => void
+  onCountryTypeFilterChange: (value: CountryTypeFilter) => void
   continentFilter: string
-  onContinentFilterChange: (v: string) => void
+  onContinentFilterChange: (value: string) => void
   continents: { id: string; name: string }[]
   sortBy: SortBy
-  onSortByChange: (v: SortBy) => void
+  onSortByChange: (value: SortBy) => void
   onClearFilters: () => void
   /** 검색 인풋에서 ↓ 키 → 첫 행으로 포커스 이동 */
   onSearchKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
@@ -99,12 +99,19 @@ export function CountryListFilters({
   onClearFilters,
   onSearchKeyDown,
 }: CountryListFiltersProps) {
-  const { historicalCount, unlinkedHistoricalIds } = useCountryListState()
+  const { historicalCount, unlinkedHistoricalIds, isErrorHistorical } =
+    useCountryListState()
   const isFiltered =
     !!query || !!continentFilter || countryTypeFilter !== 'all'
+  // 대륙 필터는 역사 국가에 continentId가 없어 '과거' 유형에선 무의미하므로 비활성(F3).
+  const continentDisabled = countryTypeFilter === 'historical'
   // 검색 중에는 역사국가가 이미 결과에 합류하므로 유도 배지를 감춘다.
+  // 역사 목록 로딩 실패 시엔 historicalCount가 과소 집계이므로 잘못된 수를 노출하지 않는다(G1-2).
   const showHistoricalBadge =
-    !query && countryTypeFilter !== 'historical' && historicalCount > 0
+    !query &&
+    countryTypeFilter !== 'historical' &&
+    !isErrorHistorical &&
+    historicalCount > 0
   const showUnlinkedHint =
     countryTypeFilter === 'historical' && unlinkedHistoricalIds.size > 0
 
@@ -118,7 +125,8 @@ export function CountryListFilters({
           </svg>
         </S.SearchIcon>
         <S.SearchInput
-          type="text"
+          type="search"
+          aria-label="국가 검색"
           placeholder="국가 검색..."
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
@@ -149,10 +157,16 @@ export function CountryListFilters({
         </S.FilterSelect>
 
         <S.FilterSelect
-          value={continentFilter}
+          value={continentDisabled ? '' : continentFilter}
           onChange={(e) => onContinentFilterChange(e.target.value)}
-          $active={!!continentFilter}
+          $active={!continentDisabled && !!continentFilter}
+          disabled={continentDisabled}
           aria-label="대륙"
+          title={
+            continentDisabled
+              ? '과거 국가는 대륙으로 분류되지 않아요'
+              : undefined
+          }
         >
           <option value="">대륙 전체</option>
           {continents.map((continent) => (
