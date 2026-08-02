@@ -22,7 +22,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { FiAlertTriangle, FiPlus, FiRefreshCw } from 'react-icons/fi'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useEvents } from '@/entities/event/model'
 import { getEventsCount } from '@/shared/api/events'
@@ -35,7 +35,7 @@ import {
 } from '@/features/event-hierarchy/model'
 import { VIEW_MODES, type ViewMode } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
-import { pathKeys, returnTo } from '@/shared/router'
+import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { useBookmarks } from '@/shared/hooks/use-bookmarks.hook'
@@ -90,6 +90,7 @@ import { CatalogMainContent } from './components/catalog-main-content'
 import { CatalogOverlayModals } from './components/catalog-overlay-modals'
 import { CatalogToolbar } from './components/catalog-toolbar'
 import { useCatalogEventIndex } from './hooks/use-catalog-event-index'
+import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
 import { useCatalogModals } from './hooks/use-catalog-modals'
 import { useCatalogReferenceData } from './hooks/use-catalog-reference-data'
 import {
@@ -124,8 +125,6 @@ const WIDE_MODE_KEY = 'papyrus.events.wideMode'
  */
 export const EventsCatalogPage: React.FC = () => {
   const navigate = useNavigate()
-  // 사건 등록 폼에 복귀 목적지(현재 URL의 필터·정렬 포함)를 넘기기 위함
-  const location = useLocation()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -318,6 +317,9 @@ export const EventsCatalogPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedKeyword])
 
+  /** 사건 등록 모달 — 이 페이지가 소유한다(useCatalogModals는 anyOverlayOpen에만 반영) */
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+
   // ===== 모달 상태 묶음 (스크롤 잠금 effect 포함) =====
   const {
     shortcutHelpOpen,
@@ -334,7 +336,7 @@ export const EventsCatalogPage: React.FC = () => {
     openSummary,
     anyOverlayOpen,
     closeTopOverlay,
-  } = useCatalogModals()
+  } = useCatalogModals(createModalOpen)
 
   // ===== 사건 선택 시 최근 본 목록에 추가 =====
   useEffect(() => {
@@ -635,10 +637,12 @@ export const EventsCatalogPage: React.FC = () => {
     () => setBookmarksOnly((v) => !v),
     [],
   )
-  const handleCreateEvent = useCallback(
-    () => navigate(pathKeys.events.create(), returnTo(location)),
-    [navigate, location],
-  )
+  /**
+   * 사건 등록은 모달로 연다 — 페이지로 나가면 URL에 없는 UI 상태(연도/세기 접힘,
+   * 펼친 행)가 언마운트로 소멸하고, 돌아오는 경로도 필터가 빠진 `/events`였다.
+   * 모달은 아무것도 언마운트하지 않아 복귀가 정확하다.
+   */
+  const handleCreateEvent = useCallback(() => setCreateModalOpen(true), [])
   const handleExportJson = useCallback(async () => {
     const exported = visibleFlattenedHierarchy.map(
       (it) =>
@@ -751,6 +755,7 @@ export const EventsCatalogPage: React.FC = () => {
     case VIEW_MODES.LIST:
       activeSlot = (
         <EventCompactList
+          onCreateEvent={handleCreateEvent}
           isLoading={isLoading && events.length === 0}
           // 목록은 접힘으로 숨긴 행을 뺀 배열만 받는다. 완전한 모집단은 다른 뷰·내보내기 몫.
           flattenedHierarchy={listRenderedHierarchy}
@@ -1119,6 +1124,11 @@ export const EventsCatalogPage: React.FC = () => {
 
       <CatalogEntityFilterModals {...entityFilterModalProps} />
       <CatalogOverlayModals {...overlayModalProps} />
+
+      <EventRegisterModal
+        isOpen={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+      />
     </>
   )
 }

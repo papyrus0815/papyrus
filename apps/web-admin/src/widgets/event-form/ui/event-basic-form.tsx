@@ -27,6 +27,7 @@ import { invalidateGamification } from '@/entities/gamification'
 import { useFormEntities } from '@/entities/event-form/model'
 import { buildEventSubmitData, checkBasicInfo, validateBasicInfo } from '@/features/event-create/lib'
 import { useBasicInfoForm } from '@/features/event-form/model'
+import type { BasicInfoResetOptions } from '@/features/event-form/model/useBasicInfoForm'
 import {
   type EventDetail,
   eventDetailQueryOptions,
@@ -56,6 +57,11 @@ interface LoadedEventImage {
 export interface EventBasicFormHandle {
   /** 저장 실행. 유효하지 않으면 에러 표시만 하고 아무 일도 일어나지 않는다. */
   submit: () => Promise<void>
+  /**
+   * 폼 비우기 — 모달의 "사건 계속 등록"처럼 언마운트 없이 다음 입력을 받을 때.
+   * 비운 상태가 새 기준선이 되므로 곧바로 dirty가 풀린다.
+   */
+  reset: (options?: BasicInfoResetOptions) => void
 }
 
 /** 셸이 헤더·버튼·오버레이를 그리는 데 필요한 본체 상태 */
@@ -203,6 +209,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     isValid: isBasicInfoValid,
     getDateError,
     calculateDaysDifference,
+    reset: resetFormFields,
   } = useBasicInfoForm()
 
   // ===== Form State =====
@@ -526,7 +533,21 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     onSaved,
   ])
 
-  useImperativeHandle(formRef, () => ({ submit: handleSubmit }), [handleSubmit])
+  const handleReset = useCallback(
+    (options?: BasicInfoResetOptions) => {
+      resetFormFields(options)
+      setSubmitAttempted(false)
+      // 비운 결과가 새 기준선 — 토큰을 올리면 기준선 effect가 다시 잡는다.
+      setHydrationToken((token) => token + 1)
+    },
+    [resetFormFields],
+  )
+
+  useImperativeHandle(
+    formRef,
+    () => ({ submit: handleSubmit, reset: handleReset }),
+    [handleSubmit, handleReset],
+  )
 
   return (
     <>

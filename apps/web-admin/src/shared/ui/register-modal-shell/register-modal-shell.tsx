@@ -36,6 +36,15 @@ export const PersonRegisterModalBox = styled(motion.div)<{
    * 콘텐츠는 `PersonRegisterModalFormScroll` 안에서만 스크롤.
    */
   $height?: string
+  /**
+   * ≤768px에서 화면을 꽉 채운다(opt-in).
+   *
+   * 기본값(`min(960px,96vw)` + `max-height:90vh` + 오버레이 padding 24px)은 390×844에서
+   * 본문 세로가 약 630px밖에 안 남아 **같은 폼의 페이지 판(716px)보다 좁아진다**.
+   * 긴 폼을 모바일에서 다룰 모달은 이 옵션을 켜서 페이지보다 넓은 지면을 확보한다.
+   * `dvh`를 쓰는 이유 — 모바일 주소창 높이만큼 하단 푸터가 잘리기 때문.
+   */
+  $fullBleedOnMobile?: boolean
 }>`
   ${({ theme }) => glassCardMixin(theme)}
   width: ${({ $maxWidth }) => $maxWidth ?? 'min(960px, 96vw)'};
@@ -54,6 +63,20 @@ export const PersonRegisterModalBox = styled(motion.div)<{
   display: flex;
   flex-direction: column;
   overflow: hidden;
+
+  ${({ $fullBleedOnMobile }) =>
+    $fullBleedOnMobile
+      ? `
+    @media (max-width: 768px) {
+      width: 100vw;
+      height: 100dvh;
+      min-height: 100dvh;
+      max-height: none;
+      border-radius: 0;
+      border: none;
+    }
+  `
+      : ''}
 `
 
 export const PersonRegisterModalHeader = styled.div`

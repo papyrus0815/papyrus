@@ -522,8 +522,10 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                                 }}
                               />
                               {formatYearLabel(currentYear)}
+                              {/* 단위 '건' 필수 — 숫자만 두면 '2026년 6'이 6월로 읽힌다.
+                                  세기 헤더는 이미 'N건'이라 표기도 함께 통일된다. */}
                               <List.CollapsedCount>
-                                {yearEventCount}
+                                {yearEventCount}건
                               </List.CollapsedCount>
                             </span>
                           </List.YearDivider>

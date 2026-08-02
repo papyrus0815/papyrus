@@ -47,6 +47,11 @@ export interface RegisterModalProps {
   minHeight?: string
   /** 지정 시 height: min(값, 90vh)로 바깥 박스 높이 고정 (탭 전환 등) */
   height?: string
+  /**
+   * ≤768px에서 화면을 꽉 채운다. 긴 폼은 켜는 편이 낫다 — 기본 박스는 390×844에서
+   * 본문 세로가 같은 폼의 페이지 판보다 좁아진다.
+   */
+  fullBleedOnMobile?: boolean
   /** 오버레이 클릭으로 닫기 (기본 true) */
   closeOnOverlayClick?: boolean
   /** Esc 로 닫기 (기본 true) */
@@ -78,6 +83,7 @@ export function RegisterModal({
   maxWidth,
   minHeight,
   height,
+  fullBleedOnMobile = false,
   closeOnOverlayClick = true,
   closeOnEsc = true,
   lockScroll = true,
@@ -135,6 +141,7 @@ export function RegisterModal({
             $maxWidth={maxWidth}
             $minHeight={minHeight}
             $height={height}
+            $fullBleedOnMobile={fullBleedOnMobile}
             initial={{ opacity: 0, scale: 0.96, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 16 }}

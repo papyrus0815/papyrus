@@ -32,7 +32,19 @@ export interface CatalogModalsState {
   closeTopOverlay: () => boolean
 }
 
-export function useCatalogModals(): CatalogModalsState {
+/**
+ * @param externalOverlayOpen 이 훅이 소유하지 않는 오버레이(사건 등록 모달 등)가 열려 있는가.
+ *
+ * **`anyOverlayOpen` 계산에만 반영한다.** 두 곳에는 일부러 넣지 않는다:
+ *  - `closeTopOverlay` — 동기 boolean을 반환하는 계약이라, 닫기 전에 비동기 dirty 확인을
+ *    받아야 하는 등록 모달과 맞지 않는다(확인 대기 중인데 true를 돌려주면 Escape가
+ *    "닫았다"고 오인한다).
+ *  - 아래 body 스크롤락 effect — 등록 모달은 `useModalBehavior`의 **참조 카운트** 락을
+ *    이미 쓴다. 여기 raw 락까지 겹치면 한쪽이 먼저 풀 때 overflow가 잘못 복원된다.
+ */
+export function useCatalogModals(
+  externalOverlayOpen = false,
+): CatalogModalsState {
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [showCountryModal, setShowCountryModal] = useState(false)
@@ -70,7 +82,11 @@ export function useCatalogModals(): CatalogModalsState {
   }, [])
 
   const anyOverlayOpen =
-    shortcutHelpOpen || showSummaryModal || showCategoryModal || showCountryModal
+    externalOverlayOpen ||
+    shortcutHelpOpen ||
+    showSummaryModal ||
+    showCategoryModal ||
+    showCountryModal
 
   /**
    * Escape 우선순위 — 나중에 열린 것(더 위 레이어)부터 하나만 닫는다.
