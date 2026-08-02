@@ -161,6 +161,20 @@ const ENTRIES: HistoricalCountryEntry[] = [
     latitude: 45.81, longitude: 15.98,
     linkToIsoCodes: ['HR'],
   },
+  {
+    name: '크로아티아 공화국',
+    enName: 'Republic of Croatia',
+    description:
+      '1991년 6월 25일 슬로베니아와 같은 날 유고슬라비아 연방에서 독립을 선언하며 성립한 크로아티아인의 국민국가' +
+      '(브리오니 협정의 유예를 거쳐 10월 8일 발효). 세르비아계 반군·유고 인민군과의 크로아티아 독립전쟁(1991~1995)을 ' +
+      '치렀으며, 1992년 5월 유엔에 가입하고 1995년 폭풍 작전과 에르두트 협정으로 전 영토를 회복했다. ' +
+      '2009년 나토(NATO), 2013년 7월 유럽연합(EU)에 가입했으며 2023년 유로화 도입과 솅겐 편입을 마쳤다.',
+    startEra: 'AD', startYear: 1991, startMonth: 6,
+    stateType: HistoricalStateType.REPUBLIC,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 45.81, longitude: 15.98,
+    linkToIsoCodes: ['HR'],
+  },
 ]
 
 /**

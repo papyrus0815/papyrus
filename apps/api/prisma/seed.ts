@@ -36,6 +36,16 @@ import {
   seedBohemiaHistoricalCountryRelations,
   seedDenmarkHistoricalCountries,
   seedDenmarkHistoricalCountryRelations,
+  seedSloveniaHistoricalCountries,
+  seedSloveniaHistoricalCountryRelations,
+  seedBulgariaHistoricalCountries,
+  seedBulgariaHistoricalCountryRelations,
+  seedMontenegroHistoricalCountries,
+  seedMontenegroHistoricalCountryRelations,
+  seedRomaniaHistoricalCountries,
+  seedRomaniaHistoricalCountryRelations,
+  seedGreeceHistoricalCountries,
+  seedGreeceHistoricalCountryRelations,
   seedNapoleonIII,
   seedPalmerston,
   seedCavour,
@@ -211,9 +221,9 @@ async function main() {
         // 7-12. 폴란드 역사 국가 계승·소속 관계 시딩
         await seedPolandHistoricalCountryRelations(prisma)
 
-        // 7-13. 보헤미아 관련 역사 국가 시딩 (대모라비아~체코슬로바키아)
-        //  · 의존: seedCountries(현대 CZ·SK) + seedGermanyHistoricalCountries(신성로마제국·나치 독일)
-        //    + seedAustriaHistoricalCountries(대공국·제국·이중제국) + seedPolandHistoricalCountries(폴란드 왕국)
+        // 7-13. 보헤미아 관련 역사 국가 시딩 (아바르 칸국·사모 제국·대모라비아~체코슬로바키아)
+        //  · 의존: seedCountries(현대 CZ·SK) + seedGermanyHistoricalCountries(신성로마제국·나치 독일·프랑크 왕국 — 아바르 정복 계승 대상)
+        //    + seedAustriaHistoricalCountries(대공국·제국·이중제국 + 카란타니아 공국 — 사모 와해 계승 대상) + seedPolandHistoricalCountries(폴란드 왕국)
         //  · 보헤미아 왕국·헝가리 왕국은 인물 시드 선실행 시 그 행을 재사용(왕국은 fallback ENTRIES 포함)
         await seedBohemiaHistoricalCountries(prisma)
 
@@ -227,6 +237,55 @@ async function main() {
 
         // 7-16. 덴마크 역사 국가 계승·소속 관계 시딩
         await seedDenmarkHistoricalCountryRelations(prisma)
+
+        // 7-17. 슬로베니아 관련 역사 국가 시딩 (카르니올라 공국·사회주의 공화국·독립 공화국)
+        //  · 의존: seedCountries(현대 SI) + seedSerbiaHistoricalCountries(유고슬라비아 계열 — EXTRA 링크·계승/소속 대상)
+        //    + seedAustriaHistoricalCountries(오스트리아 대공국·제국·이중제국 — 카르니올라 소속 대상)
+        //    + seedGermanyHistoricalCountries(신성로마제국) + seedItalyHistoricalCountries(이탈리아 왕국 — 1920 라팔로 계승 대상)
+        //  · 카란타니아 공국(658~828)은 austria 시드에서 관리(SI 링크 포함)
+        await seedSloveniaHistoricalCountries(prisma)
+
+        // 7-18. 슬로베니아 역사 국가 계승·소속 관계 시딩
+        await seedSloveniaHistoricalCountryRelations(prisma)
+
+        // 7-19. 불가리아 관련 역사 국가 시딩 (고대 대불가리아~불가리아 공화국 8건)
+        //  · 의존: seedCountries(현대 BG·RO·RS·UA·RU) + seedBohemiaHistoricalCountries(아바르 칸국 — 크룸 병합 계승 대상)
+        //  · 동로마 제국·오스만 제국은 사건 시드(콘스탄티노플 함락 1453·크림 전쟁) 유래 —
+        //    첫 파이프라인 실행 순서상 없으면 관계 시드가 warn+skip 후 재실행에서 채움
+        //  · MK(오흐리드)는 현대 국가 미등록이라 제1제국 링크는 미래용 표기(warn+skip)
+        await seedBulgariaHistoricalCountries(prisma)
+
+        // 7-20. 불가리아 역사 국가 계승·소속 관계 시딩
+        await seedBulgariaHistoricalCountryRelations(prisma)
+
+        // 7-21. 몬테네그로 관련 역사 국가 시딩 (두클랴~몬테네그로 공화국 7건)
+        //  · 의존: seedCountries(현대 ME) + seedSerbiaHistoricalCountries(라슈카·세르비아 제국·유고 계열 — 계승/EXTRA 대상)
+        //  · 동로마·오스만은 사건 시드 유래(7-19 불가리아 주석 참조) — 없으면 warn+skip 후 재실행에서 채움
+        //  · 일리리아 주(slovenia 시드)의 ME 미래용 표기는 ME 등록 후 slovenia 재실행으로 링크
+        await seedMontenegroHistoricalCountries(prisma)
+
+        // 7-22. 몬테네그로 역사 국가 계승·소속 관계 시딩
+        await seedMontenegroHistoricalCountryRelations(prisma)
+
+        // 7-23. 루마니아 관련 역사 국가 시딩 (다키아~현대 루마니아 + 몰도바 공화국 10건)
+        //  · 의존: seedCountries(현대 RO·MD) + seedItalyHistoricalCountries(로마 제국 — 다키아 정복 대상)
+        //    + 헝가리 왕국(인물 시드 유래)·러시아 제국·소련·몰다비아 소비에트 사회주의 공화국(러시아 계열 시드)
+        //  · 오스만은 사건 시드 유래(7-19 주석 참조) — 없으면 warn+skip 후 재실행에서 채움
+        await seedRomaniaHistoricalCountries(prisma)
+
+        // 7-24. 루마니아 역사 국가 계승·소속 관계 시딩
+        await seedRomaniaHistoricalCountryRelations(prisma)
+
+        // 7-25. 그리스 관련 역사 국가 시딩 (미케네 문명~그리스 공화국 18건)
+        //  · 의존: seedCountries(현대 GR) + seedItalyHistoricalCountries(로마 공화국·제국·베네치아 공화국 —
+        //    고대 정복 계승·이오니아 제도 전신 대상) + seedBritainHistoricalCountries(연합왕국 — 이오니아 보호국)
+        //  · 동로마·오스만은 사건 시드 유래(7-19 불가리아 주석 참조) — 없으면 warn+skip 후 재실행에서 채움
+        //  · 동로마 제국→오스만 제국(1453) 엣지는 이 배치에서 처음 개통
+        //  · AL(에페이로스 창건기 강역)은 현대 국가 미등록 — 등록 후 재실행 시 링크(미래용 표기)
+        await seedGreeceHistoricalCountries(prisma)
+
+        // 7-26. 그리스 역사 국가 계승·소속 관계 시딩
+        await seedGreeceHistoricalCountryRelations(prisma)
 
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)

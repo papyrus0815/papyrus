@@ -23,6 +23,29 @@ interface HistoricalCountryEntry {
 }
 
 const ENTRIES: HistoricalCountryEntry[] = [
+  // ── 슬라브 공국의 시대 ────────────────────────────────────────────
+  {
+    name: '카란타니아 공국',
+    enName: 'Principality of Carantania',
+    nameOrigin:
+      '라틴 사료의 "카란타니아(Carantania)"에서 온 이름으로, 켈트어 karant-(친구·동맹) 또는 암석을 뜻하는 어근에서 유래한 것으로 본다. ' +
+      '같은 어근이 오늘날의 케른텐(카린티아)과 슬로베니아어 지명 코로슈카(Koroška)에 남아 있으며, 한국어로는 "카란티아"로도 표기한다.',
+    description:
+      '7세기 중엽(658년경) 사모의 부족 연맹이 와해된 뒤 동알프스의 슬라브인이 세운 초기 슬라브 공국. ' +
+      '졸펠트 평원의 카른부르크(크른스키 그라드)를 중심지로 했으며, 안정적인 정치체를 이룬 가장 이른 시기의 슬라브 국가로 꼽힌다. ' +
+      '745년경 보루트 공이 아바르의 압박에 맞서 바이에른의 보호를 받아들이며 프랑크 세력권의 종속 공국이 되었고, 이를 계기로 잘츠부르크 주도의 기독교화가 진행되었다. ' +
+      '788년 바이에른과 함께 프랑크 왕국에 편입된 뒤에도 토착 공이 다스렸으나, 류데비트 봉기(819~822) 가담을 빌미로 828년 토착 공이 폐지되고 프랑크 백작령으로 재편되며 소멸했다. ' +
+      '영역은 오늘날 오스트리아 남부와 슬로베니아 북부에 걸쳤고, "공후의 돌(크네지 카멘)" 위에서 슬라브어로 치르던 독특한 공작 즉위 의식은 케른텐 공국까지 이어져 1414년까지 지속되었다. ' +
+      '이 때문에 카란타니아는 슬로베니아 민족 정체성의 기원으로 여겨진다.',
+    startEra: 'AD', startYear: 658,
+    endEra: 'AD', endYear: 828,
+    stateType: HistoricalStateType.PRINCIPALITY,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 46.69, longitude: 14.29,
+    // SI(슬로베니아)는 현대 국가 미등록 — 등록 후 재실행하면 링크된다(덴마크 시드의 DK/NO/SE 전례)
+    linkToIsoCodes: ['AT', 'SI'],
+  },
+
   // ── 바벤베르크 시대 ───────────────────────────────────────────────
   {
     name: '오스트리아 변경백령',
@@ -82,7 +105,8 @@ const ENTRIES: HistoricalCountryEntry[] = [
     stateType: HistoricalStateType.PRINCIPALITY,
     entityKind: HistoricalEntityKind.STATE,
     latitude: 47.07, longitude: 15.44,
-    linkToIsoCodes: ['AT'],
+    // 남부(하부 슈타이어마르크, 마리보르 일대)가 1918년 유고 → 오늘날 슬로베니아
+    linkToIsoCodes: ['AT', 'SI'],
   },
 
   // ── 이너 오스트리아 계열 ──────────────────────────────────────────
@@ -104,7 +128,8 @@ const ENTRIES: HistoricalCountryEntry[] = [
     stateType: HistoricalStateType.PRINCIPALITY,
     entityKind: HistoricalEntityKind.STATE,
     latitude: 46.62, longitude: 14.31,
-    linkToIsoCodes: ['AT'],
+    // 메자 계곡·예제르스코 등 남부 일부가 1920년 유고 → 오늘날 슬로베니아 케른텐(코로슈카)
+    linkToIsoCodes: ['AT', 'SI'],
   },
   // 베로나 변경백령은 지리적으로는 이탈리아지만 952~1077년 바이에른·케른텐 공작이 관할한
   // 제국 변경령이므로 케른텐과 함께 이 파일에서 관리한다.

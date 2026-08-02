@@ -7,6 +7,7 @@ const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 interface HistoricalCountryEntry {
   name: string
   enName?: string
+  nameOrigin?: string
   description?: string
   startEra?: 'BC' | 'AD'
   startYear?: number
@@ -22,6 +23,53 @@ interface HistoricalCountryEntry {
 }
 
 const ENTRIES: HistoricalCountryEntry[] = [
+  // ── 이주기·초기 슬라브 ────────────────────────────────────────────
+  // 아바르 칸국은 중심이 판노니아(헝가리)지만 사모 연맹·대모라비아 서사의 전제(반란 대상·붕괴 공백)라
+  // 이 파일에서 함께 관리한다(베로나 변경백령을 austria 시드가 관리하는 전례).
+  {
+    name: '아바르 칸국',
+    enName: 'Avar Khaganate',
+    nameOrigin:
+      '중앙아시아에서 서진해 온 유목민 아바르인의 이름에서 왔으며, 군주 칭호 카간(可汗)을 붙여 칸국(카간국)이라 부른다.',
+    description:
+      '567년 랑고바르드와 연합해 게피드를 멸망시키고 카르파티아 분지에 자리 잡은 유목 국가. ' +
+      '바얀 1세 치세에 판노니아를 중심으로 동알프스에서 흑해에 이르는 패권을 구축했고, ' +
+      '주변 슬라브인들을 복속시켜 공납과 종군을 강요했다. 626년 콘스탄티노플 포위 실패 후 쇠퇴가 시작되어 ' +
+      '623년 사모의 반란, 7세기 후반 불가르의 이탈로 세력권이 줄었다. ' +
+      '791년부터 카롤루스 대제의 원정이 이어져 796년 본영(링)이 함락되며 사실상 붕괴했고, ' +
+      '822년 프랑크 사료에서 마지막으로 언급된 뒤 소멸했다. 슬로베니아·오스트리아 동부의 슬라브 정착과 ' +
+      '카란타니아 성립(아바르 압박에 맞선 바이에른 보호 요청)의 배경이 된 세력이다.',
+    startEra: 'AD', startYear: 567,
+    endEra: 'AD', endYear: 822,
+    stateType: HistoricalStateType.KHANATE,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 47.0, longitude: 19.0,
+    // 카르파티아 분지 정주핵만 링크(HU 전역·남슬로바키아·동오스트리아·슬라보니아/보이보디나·트란실바니아).
+    // 슬로베니아는 알프스 슬라브에 대한 조공 패권이지 정주 영토가 아니라 제외 — 그 시기는 카란타니아 행이 담당
+    linkToIsoCodes: ['HU', 'SK', 'AT', 'HR', 'RS', 'RO'],
+  },
+  {
+    name: '사모 제국',
+    enName: "Samo's Empire",
+    nameOrigin:
+      '프랑크 상인 출신으로 연맹의 왕으로 추대된 사모(Samo)의 이름에서 온 후대 역사가들의 명칭으로, ' +
+      '프레데가르 연대기가 그를 "왕(rex)"이라 기록했다.',
+    description:
+      '623년경 아바르 지배에 맞서 봉기한 서슬라브 부족들이 프랑크 상인 사모를 왕으로 추대해 세운 ' +
+      '최초의 슬라브 정치체(부족 연맹). 중심지는 모라비아·니더외스터라이히 일대로 추정되며 정확한 위치는 전하지 않는다. ' +
+      '631년 보가스티스부르크 전투에서 프랑크 왕 다고베르트 1세의 침공을 격퇴했고, ' +
+      '이후 소르브의 수장 데르반이 연맹에 합류하는 등 세력을 넓혔다. ' +
+      '658년경 사모가 죽자 연맹은 와해되었으나, 그 남부 알프스 권역에서 카란타니아 공국이 이어져 나왔다.',
+    startEra: 'AD', startYear: 623,
+    endEra: 'AD', endYear: 658,
+    stateType: HistoricalStateType.TRIBAL_STATE,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 48.8, longitude: 16.6,
+    // 핵심권(모라비아·서슬로바키아·니더외스터라이히)만 링크. 프레데가르 사료상 소르브(DE)는 느슨한
+    // 가맹, 발루쿠스의 marca Vinedorum(SI)은 연합 소속 명시가 없어 둘 다 제외(적대 검증 판정)
+    linkToIsoCodes: ['CZ', 'SK', 'AT'],
+  },
+
   // ── 서슬라브 초기 국가 ────────────────────────────────────────────
   {
     name: '대모라비아 왕국',
@@ -149,6 +197,7 @@ export async function seedBohemiaHistoricalCountries(
         data: {
           name: entry.name,
           enName: entry.enName,
+          nameOrigin: entry.nameOrigin,
           description: entry.description,
           startEra: entry.startEra as any,
           startYear: entry.startYear,

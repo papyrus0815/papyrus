@@ -15,6 +15,10 @@ const TRANSITIONS: {
   eventType: TransitionEventType
   transitionScope: TransitionScope
 }[] = [
+  // 카란타니아 소멸 (828: 류데비트 봉기 가담 후 토착 공 폐지, 프랑크 백작령 재편)
+  { predecessor: '카란타니아 공국', successor: '프랑크 왕국', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 카란타니아 → 케른텐 공국 (976 승격 신설이 지역·공작 즉위 의식을 계승 — 828~976 프랑크 변경령기는 단순화)
+  { predecessor: '카란타니아 공국', successor: '케른텐 공국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 변경백령 → 공국 (1156 특권 소칙서 승격)
   { predecessor: '오스트리아 변경백령', successor: '오스트리아 공국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 공국 → 대공국 (1453 특권 대칙서 인준)
@@ -51,6 +55,9 @@ const MEMBERSHIPS: {
   role: HistoricalMembershipRole
   isLeadingMember?: boolean
 }[] = [
+  // 카란타니아 종속 (745~788 바이에른 보호령 → 788~828 프랑크 직속, 토착 공 유지)
+  { parent: '바이에른 공국', member: '카란타니아 공국', role: HistoricalMembershipRole.VASSAL_STATE },
+  { parent: '프랑크 왕국', member: '카란타니아 공국', role: HistoricalMembershipRole.VASSAL_STATE },
   // 신성로마제국 소속 (976~1806)
   { parent: '신성로마제국', member: '오스트리아 변경백령', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },
   { parent: '신성로마제국', member: '오스트리아 공국', role: HistoricalMembershipRole.CONFEDERATION_MEMBER },

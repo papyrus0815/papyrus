@@ -24,6 +24,9 @@ const TRANSITIONS: {
   { predecessor: '유고슬라비아 왕국',                 successor: '유고슬라비아 사회주의 연방 공화국',   eventType: TransitionEventType.SUCCESSION,  transitionScope: TransitionScope.REGIME_CHANGE },
   { predecessor: '유고슬라비아 사회주의 연방 공화국',   successor: '유고슬라비아 연방 공화국',           eventType: TransitionEventType.DISSOLVED,   transitionScope: TransitionScope.STATE_SUCCESSION },
   { predecessor: '유고슬라비아 연방 공화국',           successor: '세르비아 몬테네그로',               eventType: TransitionEventType.SUCCESSION,  transitionScope: TransitionScope.REGIME_CHANGE },
+  // 2006 몬테네그로 분리로 연합 해체 — 세르비아가 법적 계승국으로 존속(럼프 DISSOLVED, SFRY→유고연방공화국 동형).
+  // 이탈 측 엣지(세르비아 몬테네그로→몬테네그로 공화국 INDEPENDENCE)는 montenegro relations 시드가 관리
+  { predecessor: '세르비아 몬테네그로',               successor: '세르비아 공화국',                   eventType: TransitionEventType.DISSOLVED,   transitionScope: TransitionScope.STATE_SUCCESSION },
 ]
 
 export async function seedSerbiaHistoricalCountryRelations(

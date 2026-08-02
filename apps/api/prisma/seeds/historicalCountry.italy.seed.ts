@@ -54,7 +54,9 @@ const ENTRIES: HistoricalCountryEntry[] = [
     stateType: HistoricalStateType.EMPIRE,
     entityKind: HistoricalEntityKind.STATE,
     latitude: 41.9, longitude: 12.5,
-    linkToIsoCodes: ['IT', 'FR', 'DE', 'GB', 'TR', 'RO', 'BG', 'HU', 'AT', 'EG'],
+    // HR(달마티아·스플리트)·RS(모이시아·싱기두눔=베오그라드)는 기존 10개국과 동급 속주라 보강
+    // SI(에모나=류블랴나)는 slovenia 시드 EXTRA_MODERN_LINKS가 담당
+    linkToIsoCodes: ['IT', 'FR', 'DE', 'GB', 'TR', 'RO', 'BG', 'HU', 'AT', 'EG', 'HR', 'RS'],
   },
   {
     name: '서로마 제국',
@@ -65,7 +67,10 @@ const ENTRIES: HistoricalCountryEntry[] = [
     stateType: HistoricalStateType.EMPIRE,
     entityKind: HistoricalEntityKind.STATE,
     latitude: 41.9, longitude: 12.5,
-    linkToIsoCodes: ['IT', 'FR', 'DE', 'GB', 'RO'],
+    // AT(노리쿰)·HR(달마티아 — 395 분할에서 서방 배속, 네포스의 거점)는 전 기간 서로마령이라 보강.
+    // RO는 다키아가 271년(서로마 성립 120년 전) 포기됐고 아우렐리아누스 다키아는 다뉴브 이남
+    // (동방 일리리쿰)이라 영토 사실 오류로 제거(적대 검증 판정). SI는 slovenia 시드 EXTRA가 담당
+    linkToIsoCodes: ['IT', 'FR', 'DE', 'GB', 'AT', 'HR'],
   },
 
   // ── 민족 이동기 ───────────────────────────────────────────────────

@@ -149,6 +149,19 @@ const ENTRIES: HistoricalCountryEntry[] = [
     latitude: 44.0, longitude: 20.9,
     linkToIsoCodes: ['RS'],
   },
+  {
+    name: '세르비아 공화국',
+    enName: 'Republic of Serbia',
+    description:
+      '2006년 몬테네그로의 분리로 세르비아 몬테네그로 연합이 해체되면서 그 법적 지위를 승계한 ' +
+      '세르비아인의 국민국가(6월 5일 계승 선언). 2008년 코소보의 일방적 독립 선언을 인정하지 않고 있으며, ' +
+      '2012년부터 유럽연합(EU) 가입 후보국이다.',
+    startEra: 'AD', startYear: 2006, startMonth: 6,
+    stateType: HistoricalStateType.REPUBLIC,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 44.79, longitude: 20.45,
+    linkToIsoCodes: ['RS'],
+  },
 ]
 
 export async function seedSerbiaHistoricalCountries(

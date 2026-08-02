@@ -37,6 +37,9 @@ const TRANSITIONS: {
   { predecessor: '유고슬라비아 왕국', successor: '크로아티아 독립국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
   // NDH 붕괴 → 사회주의 크로아티아 (1945)
   { predecessor: '크로아티아 독립국', successor: '크로아티아 사회주의 공화국', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 1991 독립 — 슬로베니아 공화국과 동일 패턴(연방 이탈 INDEPENDENCE + 자기 전신 체제전환 SUCCESSION/REGIME_CHANGE)
+  { predecessor: '유고슬라비아 사회주의 연방 공화국', successor: '크로아티아 공화국', eventType: TransitionEventType.INDEPENDENCE, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '크로아티아 사회주의 공화국', successor: '크로아티아 공화국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.REGIME_CHANGE },
 ]
 
 // ── 소속 관계 정의 ────────────────────────────────────────────────────────────

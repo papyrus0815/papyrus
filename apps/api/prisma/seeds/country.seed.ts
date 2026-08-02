@@ -241,6 +241,33 @@ const COUNTRIES: CountryData[] = [
     continentName: '유럽',
   },
   {
+    name: '슬로베니아',
+    localName: 'Slovenija',
+    flagEmoji: '🇸🇮',
+    isoCode: 'SI',
+    population: 2130986,
+    areaSqKm: 20273.0,
+    continentName: '유럽',
+  },
+  {
+    name: '몬테네그로',
+    localName: 'Crna Gora',
+    flagEmoji: '🇲🇪',
+    isoCode: 'ME',
+    population: 623633,
+    areaSqKm: 13812.0,
+    continentName: '유럽',
+  },
+  {
+    name: '그리스',
+    localName: 'Ελλάδα',
+    flagEmoji: '🇬🇷',
+    isoCode: 'GR',
+    population: 10413982,
+    areaSqKm: 131957.0,
+    continentName: '유럽',
+  },
+  {
     name: '폴란드',
     localName: 'Polska',
     flagEmoji: '🇵🇱',
@@ -634,10 +661,17 @@ const COUNTRIES: CountryData[] = [
 export async function seedCountries(
   prisma: PrismaService,
   continentMap: Map<string, string>,
+  // 지정 시 해당 ISO만 upsert — 전체 실행은 사용자가 UI에서 고친 국가 데이터를 시드값으로 되돌리므로,
+  // 단독 러너에서 신규 국가만 반영할 때 사용한다
+  onlyIsoCodes?: string[],
 ): Promise<void> {
   console.log('\n🌏 국가 시딩 시작...')
 
-  for (const country of COUNTRIES) {
+  const targets = onlyIsoCodes
+    ? COUNTRIES.filter((country) => onlyIsoCodes.includes(country.isoCode))
+    : COUNTRIES
+
+  for (const country of targets) {
     const continentId = continentMap.get(country.continentName)
     if (!continentId) {
       console.error(`  ❌ 대륙을 찾을 수 없음: ${country.continentName}`)
@@ -671,5 +705,5 @@ export async function seedCountries(
     console.log(`  ✅ 국가 생성됨: ${created.name}`)
   }
 
-  console.log(`✅ 총 ${COUNTRIES.length}개 국가 생성 완료!\n`)
+  console.log(`✅ 총 ${targets.length}개 국가 생성 완료!\n`)
 }

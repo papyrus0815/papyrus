@@ -15,6 +15,14 @@ const TRANSITIONS: {
   eventType: TransitionEventType
   transitionScope: TransitionScope
 }[] = [
+  // 아바르 지배에 맞선 슬라브 반란 → 사모 연맹 이탈 독립 (623 — 영토 분리가 아닌 지배권 이탈)
+  { predecessor: '아바르 칸국', successor: '사모 제국', eventType: TransitionEventType.INDEPENDENCE, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 사모 사후 연맹 와해 → 남부 알프스 권역에서 카란타니아 성립 (658, austria 시드 소유 노드)
+  { predecessor: '사모 제국', successor: '카란타니아 공국', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 카롤루스 대제 원정으로 아바르 붕괴 (796 링 함락)
+  { predecessor: '아바르 칸국', successor: '프랑크 왕국', eventType: TransitionEventType.CONQUEST, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 아바르 붕괴 공백에서 모라비아 세력 성장 (822~833 갭은 카란타니아→케른텐 148년 갭 단순화 전례)
+  { predecessor: '아바르 칸국', successor: '대모라비아 왕국', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 대모라비아 붕괴 후 보헤미아 분지의 패권 승계
   { predecessor: '대모라비아 왕국', successor: '보헤미아 공국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 공국 → 왕국 (1198 오타카르 1세 세습 왕위)
