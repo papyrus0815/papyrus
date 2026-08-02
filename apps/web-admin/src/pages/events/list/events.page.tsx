@@ -41,6 +41,7 @@ import { notify } from '@/shared/ui/toast'
 import { useBookmarks } from '@/shared/hooks/use-bookmarks.hook'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { useRecentEvents } from '@/shared/hooks/use-recent-events.hook'
+import type { ListDensity } from '@/pages/events/styles/theme'
 import { EventCompactList } from '@/widgets/event-list-compact/ui/event-compact-list'
 import { EventTimeline } from '@/widgets/event-timeline/ui/event-timeline'
 import { EventDetailPanel } from '@/widgets/event-list/ui/event-detail-panel'
@@ -107,6 +108,9 @@ import { resolveDefaultViewMode } from './lib/resolve-default-view-mode'
 
 /** 집중(넓게) 보기 선택 영속 키 — 세션 간 유지. 모듈 스코프(렌더마다 재생성 회피). */
 const WIDE_MODE_KEY = 'papyrus.events.wideMode'
+/** 목록 밀도 선택 영속 키 — 세션 간 유지. */
+const LIST_DENSITY_KEY = 'papyrus.events.listDensity'
+const LIST_DENSITIES: ListDensity[] = ['compact', 'cozy', 'roomy']
 
 /**
  * (제거됨) EventsCatalogPageProps — `countryId`·`embed`.
@@ -136,6 +140,59 @@ export const EventsCatalogPage: React.FC = () => {
   // 기본 page size 100 — 타임라인 뷰가 한 번에 더 많은 사건을 보여주도록.
   // 사용자는 toolbar의 page size 컨트롤로 변경 가능.
   const [pageSize, setPageSize] = useState(100)
+
+  // ===== 목록 밀도 =====
+  // 세로 픽셀의 소유권을 사용자에게 넘긴다. 행 높이의 60%가 데이터가 아니라 여백과
+  // 아이콘인데(45px 중 28px이 액션 버튼), 사용자가 '더 많이 보기'로 쓸 수 있는 레버가
+  // '넓게'(세로 79px 회수) 하나뿐이었다.
+  //
+  // ⚠️ wideMode와 달리 뷰포트로 **자동 추정하지 않는다**. 밀도는 과업 의존적이라
+  // (찾을 땐 조밀, 읽을 땐 편안) 사용자 선택이 우선이고, 자동 추정은 "왜 어제와 다르지"를 만든다.
+  const [listDensity, setListDensity] = useState<ListDensity>(() => {
+    if (typeof window === 'undefined') return 'cozy'
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get('density')
+      if (fromUrl && LIST_DENSITIES.includes(fromUrl as ListDensity)) {
+        return fromUrl as ListDensity
+      }
+      const saved = window.localStorage.getItem(LIST_DENSITY_KEY)
+      if (saved && LIST_DENSITIES.includes(saved as ListDensity)) {
+        return saved as ListDensity
+      }
+    } catch {
+      /* storage 비활성 — 기본값으로 */
+    }
+    return 'cozy'
+  })
+  const changeListDensity = useCallback((next: ListDensity) => {
+    // 밀도 변경은 전 행의 높이를 바꾸므로 보고 있던 위치가 튄다.
+    // 변경 **전** 뷰포트 상단에 걸친 첫 행을 기억해 두었다가 다시 그 자리로 돌린다.
+    const scroller = document.querySelector('[data-list-scroller]')
+    let anchorId: string | null = null
+    if (scroller) {
+      const top = scroller.getBoundingClientRect().top
+      const rows = Array.from(scroller.querySelectorAll('[data-event-id]'))
+      const firstVisible = rows.find(
+        (row) => row.getBoundingClientRect().bottom > top,
+      )
+      anchorId = firstVisible?.getAttribute('data-event-id') ?? null
+    }
+    setListDensity(next)
+    try {
+      window.localStorage.setItem(LIST_DENSITY_KEY, next)
+    } catch {
+      /* storage 비활성 — 세션 내 변경만 동작 */
+    }
+    if (anchorId) {
+      // 레이아웃이 새 밀도로 반영된 다음 프레임에 복귀. 높이 transition은 두지 않는다
+      // (전 행이 동시에 움직이면 스크롤 앵커가 다시 어긋난다).
+      requestAnimationFrame(() => {
+        document
+          .querySelector(`[data-event-id="${anchorId}"]`)
+          ?.scrollIntoView({ block: 'start', behavior: 'instant' })
+      })
+    }
+  }, [])
 
   // ===== 집중(넓게) 보기 =====
   // 페이지 헤더·뷰 힌트·타임라인 미니맵을 접어 콘텐츠 본문에 세로 공간(~250px)을 양보.
@@ -755,6 +812,7 @@ export const EventsCatalogPage: React.FC = () => {
     case VIEW_MODES.LIST:
       activeSlot = (
         <EventCompactList
+          density={listDensity}
           onCreateEvent={handleCreateEvent}
           isLoading={isLoading && events.length === 0}
           // 목록은 접힘으로 숨긴 행을 뺀 배열만 받는다. 완전한 모집단은 다른 뷰·내보내기 몫.
@@ -1088,6 +1146,8 @@ export const EventsCatalogPage: React.FC = () => {
           onPageSizeChange={handlePageSizeChange}
           wideMode={wideMode}
           onToggleWideMode={toggleWideMode}
+          listDensity={listDensity}
+          onChangeListDensity={changeListDensity}
           activeSlot={activeSlot}
         />
         <PageStyles.DrawerAnnouncer role="status" aria-live="polite">

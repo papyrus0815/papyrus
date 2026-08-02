@@ -28,7 +28,11 @@ import type {
 } from '../../../pages/events/create/events.types'
 import * as List from '../../../pages/events/styles/list.styles'
 import { shimmerAnimation } from '../../../pages/events/styles/shared.styles'
-import { BRAND, metaText } from '../../../pages/events/styles/theme'
+import {
+  BRAND,
+  metaText,
+  type ListDensity,
+} from '../../../pages/events/styles/theme'
 import {
   buildYearBuckets,
   groupYearsByCentury,
@@ -67,6 +71,11 @@ interface EventCompactListProps {
   loadMoreFailed?: boolean
   onRetryLoadMore?: () => void
   bookmarks?: Set<string>
+  /**
+   * 행 밀도. 세로 픽셀의 소유권을 사용자에게 넘긴다 — 밀도는 취향이 아니라 과업 의존적이라
+   * (특정 사건을 찾을 땐 조밀, 읽을 땐 편안) 자동 추정하지 않고 선택을 그대로 따른다.
+   */
+  density?: ListDensity
   /** 사용자 입력 검색어 — Title의 매칭 부분 강조에 사용 */
   searchQuery?: string
   /** 최근 본 사건 ID — 필터 결과 0건 빈 상태에서 fallback 추천으로 노출 */
@@ -117,6 +126,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   onRetryLoadMore,
   bookmarks = new Set(),
   searchQuery,
+  density = 'cozy',
   recentEventIds = [],
   collapsedYears,
   collapsedCenturies,
@@ -377,7 +387,11 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
           })()}
         </List.EmptyCatalogState>
       ) : (
-        <List.CompactList onScroll={onScroll} aria-busy={isLoadingMore}>
+        <List.CompactList
+          onScroll={onScroll}
+          aria-busy={isLoadingMore}
+          data-density={density}
+        >
           {/*
            * 목록 상태 고지 — **항상 마운트된 단일 라이브 영역**.
            *

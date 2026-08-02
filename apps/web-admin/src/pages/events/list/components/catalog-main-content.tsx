@@ -35,6 +35,7 @@ import styled from 'styled-components'
 
 import type { SortOption } from '@/features/event-list/lib'
 import { VIEW_MODES, type ViewMode } from '@/features/event-list/lib'
+import type { ListDensity } from '@/pages/events/styles/theme'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { useAnchoredPosition } from '@/shared/hooks/use-anchored-position.hook'
 import { Z_INDEX } from '@/shared/styles/z-index'
@@ -81,6 +82,9 @@ interface Props {
    */
   wideMode: boolean
   onToggleWideMode: () => void
+  /** 목록 밀도 — LIST 뷰에서만 노출되는 컨트롤 */
+  listDensity: ListDensity
+  onChangeListDensity: (next: ListDensity) => void
 
   /** 부모가 viewMode에 따라 빌드해 넘긴 단일 활성 슬롯 */
   activeSlot: React.ReactNode
@@ -150,6 +154,8 @@ export const CatalogMainContent: React.FC<Props> = ({
   onPageSizeChange,
   wideMode,
   onToggleWideMode,
+  listDensity,
+  onChangeListDensity,
   activeSlot,
 }) => {
   /**
@@ -322,6 +328,27 @@ export const CatalogMainContent: React.FC<Props> = ({
           </List.SortSelect>
         </ToolbarStyles.DisplayOptions>
 
+        {/* 목록 밀도 — LIST 뷰 전용. 다른 뷰에는 '행'이라는 단위가 없다.
+            라벨을 아이콘이 아니라 글자로 두는 이유는, 밀도 아이콘 3종의 관습이 약해
+            아이콘만으로는 무엇이 조밀인지 눌러 봐야 알기 때문이다. */}
+        {viewMode === VIEW_MODES.LIST && (
+          <DensityGroup role="radiogroup" aria-label="목록 밀도">
+            {DENSITY_OPTIONS.map((option) => (
+              <DensityBtn
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={listDensity === option.value}
+                $active={listDensity === option.value}
+                onClick={() => onChangeListDensity(option.value)}
+                title={option.hint}
+              >
+                {option.label}
+              </DensityBtn>
+            ))}
+          </DensityGroup>
+        )}
+
         {/* 집중(넓게) 보기 토글 — 어느 뷰에서도 항상 보이도록 ViewSwitcherRow에 둠.
             (특히 타임라인은 미니맵 접기로 ~166px를 본문에 양보) */}
         <ToolbarStyles.ToolbarBtn
@@ -385,9 +412,65 @@ export const CatalogMainContent: React.FC<Props> = ({
   )
 }
 
+const DENSITY_OPTIONS: Array<{
+  value: ListDensity
+  label: string
+  hint: string
+}> = [
+  { value: 'compact', label: '조밀', hint: '조밀 — 행 높이 32px, 한 화면에 더 많이' },
+  { value: 'cozy', label: '기본', hint: '기본 — 행 높이 45px' },
+  { value: 'roomy', label: '편안', hint: '편안 — 행 높이 52px, 읽기 위주' },
+]
+
 // ─────────────────────────────────────────────────────────────────────────────
 // styled — 더보기 dropdown + 메타 영역
 // ─────────────────────────────────────────────────────────────────────────────
+
+const DensityGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
+
+  @media (max-width: 899px) {
+    /* 좁은 폭에서는 밀도보다 먼저 지켜야 할 컨트롤이 많다 — 이 대역은 행이 이미
+       2줄/압축 규약을 쓰므로 밀도 선택의 의미도 작다. */
+    display: none;
+  }
+`
+
+const DensityBtn = styled.button<{ $active: boolean }>`
+  border: none;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  font-family: inherit;
+  background: ${({ theme, $active }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(37,99,235,0.28)'
+        : '#ffffff'
+      : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#93c5fd'
+        : '#2563eb'
+      : theme.colors.text.secondary};
+  box-shadow: ${({ $active, theme }) =>
+    $active && theme.mode === 'light'
+      ? '0 1px 2px rgba(15,23,42,0.08)'
+      : 'none'};
+
+  &:hover {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
+  }
+`
 
 const MoreSegmentWrap = styled.div`
   position: relative;

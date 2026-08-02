@@ -651,7 +651,7 @@ export const CenturySection = styled.div`
   /* 세기 사이 간격 — 이전엔 CenturyDivider의 margin-top: 28px이 담당했으나
    * 이제 헤더가 항상 섹션의 first-child라 그 규칙이 전 세기에 걸린다. 간격은 섹션 간으로 옮긴다. */
   & + & {
-    margin-top: 28px;
+    margin-top: var(--century-gap);
   }
 `
 
@@ -718,8 +718,11 @@ export const YearDivider = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin: 22px -12px 8px calc(-1 * var(--rail-inset));
-  padding: 8px 12px 8px var(--rail-inset);
+  /* 세로 예산의 31%가 연도 헤더였다(88개 × 63px = 5,500px, 스크롤 총량 17,903px 중).
+     밀도 토큰이 소유하게 해 조밀 모드에서 실제로 줄어들게 한다. */
+  margin: var(--year-mt) -12px var(--year-mb) calc(-1 * var(--rail-inset));
+  padding: 6px 12px 6px var(--rail-inset);
+  min-height: var(--year-h);
   border: none;
   border-top: 1px solid
     ${({ theme }) =>
@@ -890,8 +893,8 @@ export const CenturyDivider = styled.button`
   /* 세기 사이 간격은 'CenturySection + CenturySection'이 담당한다 — 여기서 margin-top을
    * 주면 섹션 간격과 이중으로 더해진다. (예전엔 &:first-child로 상쇄했는데, 접근성용
    * GroupHeading이 섹션의 첫 자식이 되면서 그 규칙이 더 이상 매칭되지 않았다.) */
-  margin: 0 -12px 8px calc(-1 * var(--rail-inset));
-  padding: 10px 16px 10px var(--rail-inset);
+  margin: 0 -12px var(--year-mb) calc(-1 * var(--rail-inset));
+  padding: 8px 16px 8px var(--rail-inset);
   /* --century-header-h를 '선언된 상수'가 아니라 '실제 높이'로 만든다.
    * YearDivider가 top: var(--century-header-h)로 이 값에 붙으므로, 상수(44px)와 실측
    * 높이(41px)가 어긋나면 두 sticky 띠 사이에 3px 슬릿이 생긴다. */
