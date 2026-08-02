@@ -13,14 +13,14 @@ import {
   FiSearch,
   FiX,
 } from 'react-icons/fi'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import type { SortOption } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
 import { formatYearLabel, getCentury } from '@/shared/lib/iso-date'
-import { pathKeys } from '@/shared/router'
+import { pathKeys, returnTo } from '@/shared/router'
 
 import type {
   EventHierarchyNode,
@@ -125,6 +125,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   grouped = true,
 }) => {
   const navigate = useNavigate()
+  // 사건 등록 폼에 복귀 목적지(현재 URL의 필터·정렬 포함)를 넘기기 위함
+  const location = useLocation()
   /**
    * 좁은 폭 판정을 **목록에서 한 번만** 한다. 행마다 useMediaQuery를 부르면 렌더된 행 수
    * (수백 개)만큼 matchMedia 리스너가 생긴다. 임계값은 행 스타일의 미디어쿼리와 동일하게 640px.
@@ -329,7 +331,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
             )}
             {events.length === 0 && (
               <List.EmptyCreateButton
-                onClick={() => navigate(pathKeys.events.create())}
+                onClick={() => navigate(pathKeys.events.create(), returnTo(location))}
               >
                 <FiPlus size={14} />새 사건 등록
               </List.EmptyCreateButton>

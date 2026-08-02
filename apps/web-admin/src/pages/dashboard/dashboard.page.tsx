@@ -2,12 +2,12 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import { sessionQueryOptions } from '@/entities/session'
 import { getAllEvents, getEventsOnThisDay } from '@/shared/api/events'
 import type { EventResponseDto } from '@/shared/api/events'
-import { pathKeys } from '@/shared/router'
+import { pathKeys, returnTo } from '@/shared/router'
 
 import * as S from './dashboard.styles'
 
@@ -171,6 +171,8 @@ export default function DashboardPage() {
   const { data: user } = useQuery(sessionQueryOptions)
   const displayName = user?.account ?? null
   const navigate = useNavigate()
+  // 사건 등록 폼에 복귀 목적지(현재 URL의 필터·정렬 포함)를 넘기기 위함
+  const location = useLocation()
 
   // 대시보드 마운트 시 전역 배경 숨기기
   // (스토어의 enabled=false는 검은 오버레이 모드라, 흰 배경 대시보드에는 직접 제어가 필요)
@@ -220,7 +222,7 @@ export default function DashboardPage() {
               $primary
               title="새 사건"
               aria-label="새 사건 등록"
-              onClick={() => navigate(pathKeys.events.create())}
+              onClick={() => navigate(pathKeys.events.create(), returnTo(location))}
             >
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <path d="M20.24 4.56c-2.34-2.34-6.14-2.34-8.48 0L3 13.32V21h7.68l8.56-8.56c2.34-2.34 2.34-6.14 0-8.48zM9.1 19H5v-4.1l6.34-6.34 4.1 4.1L9.1 19zm8.49-8.49-1.41 1.41-4.1-4.1 1.41-1.41c1.56-1.56 4.09-1.56 5.66 0 1.56 1.57 1.56 4.1 0 5.66z" />

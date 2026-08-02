@@ -199,3 +199,24 @@ export const pathKeys = {
     bySlug: (slug: string) => `/editor/${slug}/`,
   },
 } as const
+
+/**
+ * 폼 페이지가 "이전"·저장 취소 시 돌아갈 목적지를 담는 라우트 state.
+ *
+ * 목록에서 폼으로 들어갔다 나올 때 URL에 동기화된 필터·정렬·뷰모드·선택이 날아가지 않게
+ * 진입점이 현재 URL을 그대로 넘겨준다. state가 없으면 폼은 자기 도메인 루트로 돌아간다.
+ */
+export interface ReturnToState {
+  from?: string
+}
+
+/**
+ * `navigate(to, returnTo(location))` 형태로 쓰는 헬퍼.
+ * state 키 이름이 진입점마다 흩어지지 않게 한 곳에서 만든다.
+ */
+export const returnTo = (location: {
+  pathname: string
+  search?: string
+}): { state: ReturnToState } => ({
+  state: { from: `${location.pathname}${location.search ?? ''}` },
+})

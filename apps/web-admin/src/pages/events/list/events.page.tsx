@@ -22,7 +22,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { FiAlertTriangle, FiPlus, FiRefreshCw } from 'react-icons/fi'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useEvents } from '@/entities/event/model'
 import { getEventsCount } from '@/shared/api/events'
@@ -35,7 +35,7 @@ import {
 } from '@/features/event-hierarchy/model'
 import { VIEW_MODES, type ViewMode } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
-import { pathKeys } from '@/shared/router'
+import { pathKeys, returnTo } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { useBookmarks } from '@/shared/hooks/use-bookmarks.hook'
@@ -124,6 +124,8 @@ const WIDE_MODE_KEY = 'papyrus.events.wideMode'
  */
 export const EventsCatalogPage: React.FC = () => {
   const navigate = useNavigate()
+  // 사건 등록 폼에 복귀 목적지(현재 URL의 필터·정렬 포함)를 넘기기 위함
+  const location = useLocation()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -634,8 +636,8 @@ export const EventsCatalogPage: React.FC = () => {
     [],
   )
   const handleCreateEvent = useCallback(
-    () => navigate(pathKeys.events.create()),
-    [navigate],
+    () => navigate(pathKeys.events.create(), returnTo(location)),
+    [navigate, location],
   )
   const handleExportJson = useCallback(async () => {
     const exported = visibleFlattenedHierarchy.map(

@@ -30,7 +30,7 @@ import {
   FiTrash2,
   FiX,
 } from 'react-icons/fi'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import { getCategoryName } from '@/features/event-list/lib'
 import { formatDateWithPrecision, isoDaySpan } from '@/shared/lib/iso-date'
@@ -45,7 +45,7 @@ import * as Skeleton from '@/pages/events/styles/skeleton.styles'
 import { ICON_SIZE } from '@/pages/events/styles/theme'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { deleteEvent } from '@/shared/api/events'
-import { pathKeys } from '@/shared/router'
+import { pathKeys, returnTo } from '@/shared/router'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
@@ -91,6 +91,8 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   onClose,
 }) => {
   const navigate = useNavigate()
+  // 사건 수정 폼에 복귀 목적지를 넘기기 위함
+  const location = useLocation()
   const [descExpanded, setDescExpanded] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
@@ -205,7 +207,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
         <Detail.HeroPlaceholder
           type="button"
           aria-label="이미지 추가 — 편집으로 이동"
-          onClick={() => navigate(pathKeys.events.edit(selectedNode.id))}
+          onClick={() => navigate(pathKeys.events.edit(selectedNode.id), returnTo(location))}
         >
           <FiImage size={28} aria-hidden="true" />
           <span>대표 이미지 없음 — 클릭하여 추가</span>
@@ -436,7 +438,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                 $variant="ghost"
                 title="수정"
                 aria-label="이 사건 수정"
-                onClick={() => navigate(pathKeys.events.edit(selectedNode.id))}
+                onClick={() => navigate(pathKeys.events.edit(selectedNode.id), returnTo(location))}
               >
                 <FiEdit2 size={ICON_SIZE.base} aria-hidden="true" />
               </Detail.ActionButton>

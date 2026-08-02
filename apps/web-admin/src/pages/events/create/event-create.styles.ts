@@ -215,6 +215,12 @@ export const getCategoryColor = (category: HistoricalEventCategory | '') => {
   return colors[category as ColorKey]
 }
 
+/**
+ * padding-top이 0인 이유 — CSS sticky의 고정 위치는 스크롤 컨테이너의 **패딩만큼 안쪽으로**
+ * 잡힌다. 여기에 padding-top: 32px가 있으면 sticky 헤더가 스크롤포트 상단(64px)이 아니라
+ * 96px에 붙고, 그 32px 띠로 스크롤되는 폼 내용이 헤더 위에 비쳐 보인다.
+ * 상단 여백은 ContentWrapper가 대신 갖는다(헤더보다 위에 있으므로 그냥 스크롤돼 나간다).
+ */
 export const PageWrapper = styled.div`
   position: fixed;
   top: var(--header-height);
@@ -223,7 +229,7 @@ export const PageWrapper = styled.div`
   bottom: 0;
   width: 100%;
   height: calc(100vh - var(--header-height));
-  padding: 32px;
+  padding: 0 32px 32px;
   overflow-y: auto;
   background: transparent;
 `
@@ -232,21 +238,38 @@ export const ContentWrapper = styled.div`
   width: 100%;
   max-width: 1040px;
   margin: 0 auto;
+  padding-top: 32px;
 `
 
 export const FormArea = styled.div`
-  position: relative; /* FormOverlay 기준점 */
+  position: relative;
   display: flex;
   flex-direction: column;
 `
 
+/**
+ * 제목 + 저장/이전 버튼 줄. **sticky** — 폼 전체 높이가 1300px대라 예전엔 조금만
+ * 스크롤해도 저장 버튼이 화면 밖으로 사라졌다.
+ * 배경은 셸 표면(content-shell과 동일 토큰)이라야 스크롤한 필드가 비쳐 보이지 않는다.
+ */
 export const FormAreaHeader = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 0 18px;
+  padding: 16px 0 18px;
+  background: ${({ theme }) => theme.colors.background.primary};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+/** 헤더 우측 액션 묶음 (이전 / 저장) */
+export const FormAreaActions = styled.div`
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 `
 
 export const FormAreaTitle = styled.h2`
@@ -257,10 +280,19 @@ export const FormAreaTitle = styled.h2`
   letter-spacing: -0.02em;
 `
 
-// 폼 영역 위에 떠있는 로딩 오버레이 (편집 모드 데이터 로드, 저장 중)
+/**
+ * 폼 위에 떠있는 로딩 오버레이 (편집 모드 데이터 로드, 저장 중).
+ *
+ * 뷰포트 고정 — 예전엔 `position: absolute; inset: 0`이라 1300px대 폼 **전체**를 기준으로
+ * 중앙 정렬됐고, 아래쪽까지 스크롤한 상태에서 저장하면 스피너가 화면 밖에 그려졌다.
+ * (`PageWrapper`가 `position: fixed`로 헤더 아래를 차지하므로 같은 인셋을 쓴다.)
+ */
 export const FormOverlay = styled.div`
-  position: absolute;
-  inset: 0;
+  position: fixed;
+  top: var(--header-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -271,7 +303,6 @@ export const FormOverlay = styled.div`
       ? 'rgba(15, 15, 15, 0.72)'
       : 'rgba(255, 255, 255, 0.78)'};
   backdrop-filter: blur(2px);
-  border-radius: 16px;
   z-index: 10;
   font-size: 14px;
   font-weight: 600;
