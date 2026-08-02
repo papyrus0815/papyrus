@@ -19,7 +19,6 @@ type ColorSet = {
     light: string
     dark: string
     gradient: string
-    gradientFull: string
   }
   background: {
     page: string
@@ -56,8 +55,6 @@ const LIGHT_COLORS: ColorSet = {
     light: '#a78bfa',
     dark: '#7c3aed',
     gradient: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-    gradientFull:
-      'linear-gradient(135deg, #1e293b 0%, #4f46e5 50%, #7c3aed 100%)',
   },
   background: {
     page: '#f5f7fa',
@@ -93,8 +90,6 @@ const DARK_COLORS: ColorSet = {
     light: '#c4b5fd',
     dark: '#8b5cf6',
     gradient: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
-    gradientFull:
-      'linear-gradient(135deg, #312e81 0%, #6366f1 50%, #a78bfa 100%)',
   },
   background: {
     page: '#0f0f0f',
@@ -151,9 +146,6 @@ export const getC = (theme: DefaultTheme) => {
 /** 라이트/다크 분기 단축 헬퍼 */
 export const pickC = (theme: DefaultTheme, light: string, dark: string) =>
   theme.mode === 'dark' ? dark : light
-
-/** 외부에서 import 하는 정적 색상 (라이트 기준) — 하위 호환 */
-export const COLORS = LIGHT_COLORS
 
 export const getCategoryColor = (category: HistoricalEventCategory | '') => {
   type ColorKey = HistoricalEventCategory
