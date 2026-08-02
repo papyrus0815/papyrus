@@ -9,6 +9,7 @@ import { getAllEvents, getEventsOnThisDay } from '@/shared/api/events'
 import type { EventResponseDto } from '@/shared/api/events'
 import { pathKeys } from '@/shared/router'
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
+import { useEventRegisterModalUrl } from '@/widgets/event-form/model/use-event-register-modal-url'
 
 import * as S from './dashboard.styles'
 
@@ -172,8 +173,13 @@ export default function DashboardPage() {
   const { data: user } = useQuery(sessionQueryOptions)
   const displayName = user?.account ?? null
   const navigate = useNavigate()
-  /** 사건 등록 모달 — 대시보드를 떠나지 않고 추가 */
-  const [createEventOpen, setCreateEventOpen] = useState(false)
+  /** 사건 등록 모달 — 대시보드를 떠나지 않고 추가. 열림은 `?eventForm=new`로 URL 동기화. */
+  const {
+    isOpen: createEventOpen,
+    open: openCreateEvent,
+    close: closeCreateEvent,
+    onDirtyChange: onCreateEventDirtyChange,
+  } = useEventRegisterModalUrl()
 
   // 대시보드 마운트 시 전역 배경 숨기기
   // (스토어의 enabled=false는 검은 오버레이 모드라, 흰 배경 대시보드에는 직접 제어가 필요)
@@ -223,7 +229,7 @@ export default function DashboardPage() {
               $primary
               title="새 사건"
               aria-label="새 사건 등록"
-              onClick={() => setCreateEventOpen(true)}
+              onClick={openCreateEvent}
             >
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <path d="M20.24 4.56c-2.34-2.34-6.14-2.34-8.48 0L3 13.32V21h7.68l8.56-8.56c2.34-2.34 2.34-6.14 0-8.48zM9.1 19H5v-4.1l6.34-6.34 4.1 4.1L9.1 19zm8.49-8.49-1.41 1.41-4.1-4.1 1.41-1.41c1.56-1.56 4.09-1.56 5.66 0 1.56 1.57 1.56 4.1 0 5.66z" />
@@ -298,7 +304,8 @@ export default function DashboardPage() {
 
       <EventRegisterModal
         isOpen={createEventOpen}
-        onClose={() => setCreateEventOpen(false)}
+        onClose={closeCreateEvent}
+        onDirtyChange={onCreateEventDirtyChange}
       />
     </S.DashboardContainer>
   )

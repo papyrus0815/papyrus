@@ -58,6 +58,11 @@ export interface EventRegisterModalProps {
    * 캐시 무효화는 폼 본체가 이미 했으므로 대개 필요 없다.
    */
   onSaved?: (eventId: string) => void
+  /**
+   * 미저장 변경 통지 — URL 동기화 호스트가 **뒤로가기**를 가로채려면 필요하다.
+   * 뒤로가기는 이 컴포넌트를 거치지 않고 언마운트시키므로 자체 확인이 닿지 않는다.
+   */
+  onDirtyChange?: (isDirty: boolean) => void
 }
 
 export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
@@ -65,6 +70,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   onClose,
   eventId,
   onSaved,
+  onDirtyChange,
 }) => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -78,6 +84,16 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   const [isDirty, setIsDirty] = useState(false)
   const isDirtyRef = useRef(false)
   isDirtyRef.current = isDirty
+
+  /** 호스트(URL 동기화)에도 dirty를 알린다 — 뒤로가기 가드가 여기에 걸린다 */
+  const markDirty = useCallback(
+    (next: boolean) => {
+      isDirtyRef.current = next
+      setIsDirty(next)
+      onDirtyChange?.(next)
+    },
+    [onDirtyChange],
+  )
   /** 저장 직후 3지 분기 다이얼로그 대상 */
   const [savedEventId, setSavedEventId] = useState<string | null>(null)
 
@@ -93,19 +109,17 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
     ) {
       return
     }
-    isDirtyRef.current = false
-    setIsDirty(false)
+    markDirty(false)
     onClose()
-  }, [isSubmitting, onClose])
+  }, [isSubmitting, markDirty, onClose])
 
   const handleSaved = useCallback(
     (id: string) => {
-      isDirtyRef.current = false
-      setIsDirty(false)
+      markDirty(false)
       onSaved?.(id)
       setSavedEventId(id)
     },
-    [onSaved],
+    [markDirty, onSaved],
   )
 
   /**
@@ -174,7 +188,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
               <LazyEventBasicForm
                 eventId={eventId}
                 formRef={formRef}
-                onDirtyChange={setIsDirty}
+                onDirtyChange={markDirty}
                 onStateChange={setFormState}
                 onSaved={handleSaved}
                 // 모달은 열 때마다 마운트라 로드 토스트가 매번 뜬다 — 제목으로 대체
