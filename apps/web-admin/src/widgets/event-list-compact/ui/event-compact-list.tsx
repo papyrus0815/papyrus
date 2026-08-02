@@ -13,14 +13,14 @@ import {
   FiSearch,
   FiX,
 } from 'react-icons/fi'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import type { SortOption } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { useMediaQuery } from '@/shared/hooks/use-media-query.hook'
 import { formatYearLabel, getCentury } from '@/shared/lib/iso-date'
-import { pathKeys, returnTo } from '@/shared/router'
+import { pathKeys } from '@/shared/router'
 
 import type {
   EventHierarchyNode,
@@ -38,6 +38,12 @@ import type { FlattenedHierarchyItem } from '@/features/event-hierarchy/model'
 import { EventListItem } from './event-list-item'
 
 interface EventCompactListProps {
+  /**
+   * 빈 상태의 '사건 등록' CTA. **마운트 지면이 표면을 결정한다** — 카탈로그는 모달을
+   * 열고, 다른 지면은 자기 방식대로. 미전달 시 CTA를 렌더하지 않는다(예전엔 위젯이
+   * 직접 등록 페이지로 navigate해 부모가 흐름을 바꿀 수 없었다).
+   */
+  onCreateEvent?: () => void
   isLoading: boolean
   /** 평탄화 계약은 useEventHierarchy가 단일 출처 — 여기서 재선언하면 필드가 표류한다 */
   flattenedHierarchy: FlattenedHierarchyItem[]
@@ -93,6 +99,7 @@ interface EventCompactListProps {
 }
 
 export const EventCompactList: React.FC<EventCompactListProps> = ({
+  onCreateEvent,
   isLoading,
   flattenedHierarchy,
   events,
@@ -125,13 +132,19 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   grouped = true,
 }) => {
   const navigate = useNavigate()
-  // 사건 등록 폼에 복귀 목적지(현재 URL의 필터·정렬 포함)를 넘기기 위함
-  const location = useLocation()
   /**
    * 좁은 폭 판정을 **목록에서 한 번만** 한다. 행마다 useMediaQuery를 부르면 렌더된 행 수
    * (수백 개)만큼 matchMedia 리스너가 생긴다. 임계값은 행 스타일의 미디어쿼리와 동일하게 640px.
    */
   const isNarrow = useMediaQuery('(max-width: 640px)')
+  /**
+   * 중간 대역(641~899px) — 이 구간이 오래 '적응 없는 붕괴 대역'이었다.
+   * 실측 641px에서 제목 잘림 125/252행·국가칩 중간 절단 127행인데 640px에서는 각각
+   * 1행/0행이었다. 1px 좁히면 좋아지는 역전은 임계가 하나뿐이라는 증거다.
+   * 격자 트랙은 CSS가 좁히고, CSS로 못 하는 것(국기 개수)은 이 값이 정한다.
+   */
+  const isMidWidth = useMediaQuery('(min-width: 641px) and (max-width: 899px)')
+  const flagMax = isNarrow ? 1 : isMidWidth ? 2 : 3
 
   /** id→event O(1) 조회 — 행마다 events.find로 선형 탐색하던 핫패스 제거 */
   const eventById = useMemo(() => {
@@ -215,6 +228,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         // 이 행이 속한 연 그룹 — 같은 해면 선두 토큰을 월·일로 대체(연도 중복 제거)
         groupYear={groupYear}
         isNarrow={isNarrow}
+        flagMax={flagMax}
         // 계층 깊이를 접근성 트리에 전달 — 예전엔 하위 사건이 최상위와 똑같이 읽혔다.
         ariaLevel={depth + 1}
         positionInSet={positionInSet}
@@ -329,10 +343,8 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                 모든 필터 초기화
               </List.EmptyResetButton>
             )}
-            {events.length === 0 && (
-              <List.EmptyCreateButton
-                onClick={() => navigate(pathKeys.events.create(), returnTo(location))}
-              >
+            {events.length === 0 && onCreateEvent && (
+              <List.EmptyCreateButton onClick={onCreateEvent}>
                 <FiPlus size={14} />새 사건 등록
               </List.EmptyCreateButton>
             )}

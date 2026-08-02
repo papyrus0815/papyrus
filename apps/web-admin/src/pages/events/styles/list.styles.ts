@@ -65,7 +65,11 @@ const densityVars = (density: ListDensity) => {
  *
  * 축 위 눈금은 **세기·연도 앵커 도트뿐**이다 — 행 단위 도트·커넥터는 배치 C1에서 폐지했다.
  */
-export const CompactList = styled.div`
+export const CompactList = styled.div.attrs(
+  /* 실측 하네스가 스크롤 컨테이너를 잡을 손잡이. 스타일 훅이 아니라 검증용이며,
+     이게 없어서 4차 검토의 측정 스크립트가 매번 부모를 거슬러 올라가야 했다. */
+  () => ({ 'data-list-scroller': '' }) as Record<string, string>,
+)`
   display: flex;
   flex-direction: column;
   /* gap 0 — 사건 분리 신호는 각 Stop의 hairline border-bottom으로 옮김.
@@ -154,18 +158,40 @@ export const CompactList = styled.div`
     max-height: none;
   }
 
-  /* 중간 대역(641~1024px) — 이 구간에 거터 규칙이 **처음** 생긴다.
+  /* ── 대역 사다리 ──────────────────────────────────────────────────────────
    *
-   * 실측: 641px에서 제목 잘림 125/252행, 국가칩 잘림 127행. 640px에서는 각각 1행/0행.
-   * 즉 1px 좁히면 좋아지는 역전이 있었고, 그 원인 중 하나가 데스크톱 거터가
-   * 이 대역까지 그대로 내려오는 것이었다. iPad 세로(834)·1440 노트북 200% 확대(720)가
-   * 전부 여기 착지한다. */
+   * 예전에는 임계가 640 하나뿐이라 641~1023px가 '적응 없는 붕괴 대역'이었다.
+   * 실측 641px에서 제목 잘림 125/252행·국가칩 중간 절단 127행인데, 640px에서는
+   * 각각 1행/0행 — 1px 좁히면 좋아지는 역전 자체가 중간 단계가 없다는 증거였다.
+   * iPad 세로(834)·iPhone 가로(844)·1440 노트북 200% 확대(720)가 전부 여기 착지한다.
+   *
+   * 고정 트랙 합을 대역마다 줄여 제목 트랙에 폭을 돌려준다.
+   * 어떤 대역에서도 열을 **없애지는 않는다** — 기간·국가는 정보이고, 뷰포트가 좁다는
+   * 이유로 정보를 통째로 감추면 그게 바로 이전 라운드가 지적당한 패턴이다. */
+  @media (max-width: 1179px) {
+    --col-date: 62px;
+    --col-chip: 56px;
+    --col-dur: 52px;
+    --col-flags: 96px;
+    --col-act: 58px;
+    --row-col-gap: 10px;
+  }
+
   @media (max-width: 1024px) {
     --rail-gutter: 24px;
     --rail-x: 11px;
     && {
       --rail-inset: 13px;
     }
+  }
+
+  @media (max-width: 899px) {
+    --col-date: 58px;
+    --col-chip: 52px;
+    --col-dur: 48px;
+    --col-flags: 60px;
+    --col-act: 56px;
+    --row-col-gap: 8px;
   }
 
   /* 모바일 — 좁은 폭에서 거터를 더 줄이고 축선을 12px로 동기화. */
@@ -1432,10 +1458,26 @@ export const SummaryIconButton = styled.button`
 /* 목록 뷰 카드 컨테이너 — 타임라인 위젯의 cardBase와 시각 family 통일.
  * 1px border + 12px radius + theme bg. 내부의 CompactList가 자체 좌측 레일을 그리므로
  * 별도 ::before 그라데이션 데코는 제거(이중 라인 방지). */
+/**
+ * 목록 카드.
+ *
+ * ⚠️ 폭 상한은 **여기**가 소유한다. 예전에는 행 안쪽(Body max-width:880px)이 상한을 들고
+ * 있어서, 행 hairline·hover·active tint는 컨테이너 전체 폭(1316px)을 그리는데 정보는
+ * 985px에서 끝났다 — 1920에서는 행의 48%가 행 **안쪽** 빈칸이었다. 상한을 카드로 올리면
+ * 같은 빈 픽셀이 카드 밖으로 나가 '여백'으로 읽힌다.
+ *
+ * 1120 = 격자 고정 트랙 합 370(date 66 + chip 60 + dur 56 + flags 128 + act 60)
+ *      + gap 60(12×5) + 제목 트랙 608 + Stop 패딩 26 + 목록 패딩 48 + 보더 2.
+ *
+ * ⚠️ layout.styles.ts에도 같은 이름의 CatalogSection이 있지만 **소비처가 0인 죽은
+ * export**다(유일 소비처는 event-compact-list.tsx의 List.CatalogSection). 거기를 고치면
+ * 아무 일도 일어나지 않는다.
+ */
 export const CatalogSection = styled.section`
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: min(100%, 1120px);
   max-height: calc(100vh - var(--header-height) - 60px);
   overflow: hidden;
   position: relative;

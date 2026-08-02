@@ -137,13 +137,22 @@ export const EmbedHeaderHint = styled.span`
   font-size: 13px;
 `
 
-export const ActiveContent = styled.div`
+/**
+ * 뷰 본문 래퍼 — 뷰 전환 세그먼트 + 활성 뷰 슬롯.
+ *
+ * `$capped`는 목록(LIST) 뷰 전용이다. 목록 카드가 격자 트랙 합에서 역산한 1120px 상한을
+ * 갖는데, 그 위 툴바만 전체 폭이면 두 요소가 서로 다른 우측 끝을 주장해 카드가 페이지에서
+ * 떨어져 나온 것처럼 보인다. 상한을 공유해 한 컬럼으로 읽히게 한다.
+ * 다른 뷰(타임라인·격자·갤러리 등)는 넓은 폭이 실제로 정보를 싣기 때문에 상한을 걸지 않는다.
+ */
+export const ActiveContent = styled.div<{ $capped?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 14px;
   min-height: 0;
   min-width: 0;
   flex: 1;
+  ${({ $capped }) => $capped && 'max-width: 1120px;'}
 `
 
 export const TabBar = styled.div`

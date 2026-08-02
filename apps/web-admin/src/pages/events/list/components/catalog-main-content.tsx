@@ -195,7 +195,7 @@ export const CatalogMainContent: React.FC<Props> = ({
   const moreActive = !!activeSecondary
 
   return (
-    <PageStyles.ActiveContent>
+    <PageStyles.ActiveContent $capped={viewMode === VIEW_MODES.LIST}>
       <ToolbarStyles.ViewSwitcherRow>
         <ToolbarStyles.ViewSegmented role="group" aria-label="보기 모드">
           {PRIMARY_MODES.map((mode) => {

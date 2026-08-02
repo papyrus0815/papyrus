@@ -13,12 +13,7 @@
  */
 import React from 'react'
 
-import {
-  FiBookmark,
-  FiChevronRight,
-  FiGitBranch,
-  FiLayers,
-} from 'react-icons/fi'
+import { FiBookmark, FiChevronRight, FiLayers } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
@@ -68,6 +63,12 @@ interface EventListItemProps {
    * 폭이 모자란 곳에서 무엇을 먼저 포기할지(국기 개수·자식 수 배지)를 결정한다.
    */
   isNarrow?: boolean
+  /**
+   * 관련국 칩 최대 개수 — 목록이 대역별로 계산해 내려준다.
+   * CSS로는 개수를 못 자르고, 폭만 자르면 글리프 중간에서 절단돼
+   * '이탈'·'그레이트' 같은 존재하지 않는 국가명이 만들어진다.
+   */
+  flagMax?: number
   /** 계층 깊이(1-base) — 하위 사건이 최상위와 똑같이 읽히지 않게 한다 */
   ariaLevel?: number
   /** 같은 연도 그룹 안에서의 위치/크기 — 스크린리더가 '3 / 12'를 읽어 준다 */
@@ -224,6 +225,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   searchQuery,
   groupYear,
   isNarrow = false,
+  flagMax = 3,
   ariaLevel,
   positionInSet,
   setSize,
@@ -280,6 +282,9 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
       $active={isActive}
       $depth={depth}
       $context={!isMatch}
+      /* depth를 인라인 CSS 변수로 넘긴다 — styled prop이면 depth마다 클래스가 생성돼
+         252행에서 클래스 캐시가 부풀고 React.memo 이득이 깎인다. */
+      style={{ '--depth': depth } as React.CSSProperties}
       onClick={() => onSelect(node.id)}
       onKeyDown={(e) => {
         // 키보드 네비 — Enter/Space로 행 선택. ↑↓ 이동·펼치기는 상위 catalog hook에서 처리
@@ -298,35 +303,13 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
       data-event-id={node.id}
       data-active={isActive ? 'true' : undefined}
     >
-      {/* 단일 행 — 콘텐츠를 좌측에 밀착시키고(우측 정렬 메타 폐기) 제목 뒤에 메타가 바로
-       * 따라오게 해, 짧은 제목에서 제목↔메타 사이가 텅 비던 '죽은 여백'을 제거한다. */}
+      {/* 6트랙 원장 격자 — [날짜][분류][제목][기간][국가][액션].
+       *
+       * 이전 구조는 flex 좌측 밀착이었다. 각 행의 Body가 자기만의 flex 컨테이너라
+       * 열 축이라는 것이 아예 존재하지 않았고, 열이 겹쳐 보이는 건 우연이었다 —
+       * 실측 제목 좌측 x 11종(219~265) · 기간 x 157종 · 국기 x 161종.
+       * 폭 고정 트랙 5개 + minmax(0,1fr) 하나로 전 행·전 그룹 공통 축을 만든다. */}
       <Body>
-        {hasChildren ? (
-          <ExpandBtn
-            type="button"
-            onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-              e.stopPropagation()
-              onToggleExpansion(node.id)
-            }}
-            $expanded={isExpanded}
-            // 로빙 tabindex는 행 안의 액션에도 적용된다 — 아니면 행 238개 × 액션 2개가
-            // 그대로 탭 정지점으로 남아 목록을 빠져나가는 데 수백 번이 필요하다.
-            tabIndex={isRovingTarget ? 0 : -1}
-            aria-expanded={isExpanded}
-            aria-label={
-              childCount > 0
-                ? `하위 사건 ${childCount}개 ${isExpanded ? '접기' : '펼치기'}`
-                : isExpanded
-                  ? '접기'
-                  : '하위 사건 펼치기'
-            }
-          >
-            <FiChevronRight size={11} />
-          </ExpandBtn>
-        ) : (
-          <ExpandSpacer />
-        )}
-
         <Year data-offgroup={isOffGroupYear ? 'true' : undefined}>
           {rowDateLabel}
         </Year>
@@ -337,55 +320,101 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
         >
           {categoryName}
         </CategoryLabel>
-        <Title>{highlightMatches(node.title, searchQuery)}</Title>
-        {matchReason && (
-          <MatchReason title={`${matchReason.kind} 일치: ${matchReason.text}`}>
-            <MatchReasonKind>{matchReason.kind}</MatchReasonKind>
-            {highlightMatches(matchReason.text, searchQuery)}
-          </MatchReason>
-        )}
-        {/* 모바일 2줄 행의 강제 개행 지점 — 데스크톱에서는 display:none이라 무영향 */}
+
+        {/* 제목 셀 = [들여쓰기][디스클로저][텍스트] 3열 서브격자.
+         *
+         * 계층 들여쓰기를 **제목 셀 안에** 가둔다. 예전처럼 행 전체를 밀면 날짜·분류·기간·
+         * 국기·액션까지 22px씩 따라 움직여, 계층과 무관한 축들이 depth에 오염됐다
+         * (액션 우측 끝이 985/1007로 갈리던 문제). 이제 depth가 바꾸는 것은 제목 텍스트
+         * 시작점 하나뿐이다. */}
+        <TitleCell>
+          <Indent aria-hidden="true" />
+          {hasChildren ? (
+            <Disclosure
+              type="button"
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                e.stopPropagation()
+                onToggleExpansion(node.id)
+              }}
+              $expanded={isExpanded}
+              // 로빙 tabindex는 행 안의 액션에도 적용된다 — 아니면 행 238개 × 액션 2개가
+              // 그대로 탭 정지점으로 남아 목록을 빠져나가는 데 수백 번이 필요하다.
+              tabIndex={isRovingTarget ? 0 : -1}
+              aria-expanded={isExpanded}
+              aria-label={
+                childCount > 0
+                  ? `하위 사건 ${childCount}개 ${isExpanded ? '접기' : '펼치기'}`
+                  : isExpanded
+                    ? '접기'
+                    : '하위 사건 펼치기'
+              }
+            >
+              <FiChevronRight size={11} aria-hidden="true" />
+              {/* 자식 수를 셰브론과 한 컨트롤로 합친다. 예전에는 셰브론(x=105)·자식수
+                  배지(제목 뒤 가변 x)·요약 버튼(x=919)이 한 개념을 행의 세 지점에서
+                  말했고, 배지가 제목과 기간 사이에 끼어들어 메타 x를 한 번 더 흔들었다.
+                  aria-hidden — 같은 수치가 이 버튼의 aria-label에 이미 있다. */}
+              {childCount > 0 && !isNarrow && (
+                <DiscCount aria-hidden="true">{childCount}</DiscCount>
+              )}
+            </Disclosure>
+          ) : (
+            <DiscSpacer aria-hidden="true" />
+          )}
+          <TitleText>
+            <Title data-row-title="">
+              {highlightMatches(node.title, searchQuery)}
+            </Title>
+            {matchReason && (
+              <MatchReason
+                title={`${matchReason.kind} 일치: ${matchReason.text}`}
+              >
+                <MatchReasonKind>{matchReason.kind}</MatchReasonKind>
+                {highlightMatches(matchReason.text, searchQuery)}
+              </MatchReason>
+            )}
+            {/* 필터로 잘려나간 자식이 있으면 조용히 사라진 것처럼 보이지 않게 알린다. */}
+            {hiddenChildCount > 0 && (
+              <FilteredOutHint
+                as="button"
+                type="button"
+                tabIndex={isRovingTarget ? 0 : -1}
+                /* 정보만 주고 되돌릴 수단이 없던 막다른 안내를 행동 가능하게(검토 INT-10).
+                   title 속성은 터치·키보드에 안 뜨므로 aria-label로 설명을 옮긴다. */
+                aria-label={`현재 필터 조건 밖의 하위 사건 ${hiddenChildCount}개 — 눌러서 이 사건의 계층 전체 보기`}
+                title={`현재 필터 조건 밖의 하위 사건 ${hiddenChildCount}개 — 눌러서 계층 전체 보기`}
+                onClick={(event: React.MouseEvent<HTMLElement>) => {
+                  event.stopPropagation()
+                  onShowSummary(node.id)
+                }}
+              >
+                조건 밖 {hiddenChildCount}
+              </FilteredOutHint>
+            )}
+          </TitleText>
+        </TitleCell>
+
+        {/* 모바일 2줄 행의 강제 개행 지점 — 데스크톱 격자에서는 display:none이라 무영향 */}
         <RowBreak aria-hidden="true" />
 
-        {/* 자식 수 — 접었을 때 무엇이 숨는지 알 수 있게. 어포던스가 20px 셰브론
-            하나뿐이라 접고 나면 몇 개가 사라졌는지 알 방법이 없었다(검토 LD-6). */}
-        {/* 좁은 폭에서는 생략 — 메타 줄을 한 줄로 고정하기 위한 폭 확보이고,
-            같은 수치가 바로 앞 ExpandBtn의 aria-label에 이미 있어 정보 손실이 없다. */}
-        {hasChildren && childCount > 0 && !isNarrow && (
-          /* aria-hidden — 같은 수치가 바로 앞 ExpandBtn의 aria-label('하위 사건 N개 …')에
-             이미 있다. 노출하면 스크린리더가 맥락 없는 숫자 '3'을 한 번 더 읽는다. */
-          <ChildCountBadge aria-hidden="true" title={`하위 사건 ${childCount}개`}>
-            <FiGitBranch size={9} aria-hidden="true" />
-            {childCount}
-          </ChildCountBadge>
-        )}
-        {/* 필터로 잘려나간 자식이 있으면 조용히 사라진 것처럼 보이지 않게 알린다. */}
-        {hiddenChildCount > 0 && (
-          <FilteredOutHint
-            as="button"
-            type="button"
-            tabIndex={isRovingTarget ? 0 : -1}
-            /* 정보만 주고 되돌릴 수단이 없던 막다른 안내를 행동 가능하게(검토 INT-10).
-               title 속성은 터치·키보드에 안 뜨므로 aria-label로 설명을 옮긴다. */
-            aria-label={`현재 필터 조건 밖의 하위 사건 ${hiddenChildCount}개 — 눌러서 이 사건의 계층 전체 보기`}
-            title={`현재 필터 조건 밖의 하위 사건 ${hiddenChildCount}개 — 눌러서 계층 전체 보기`}
-            onClick={(event: React.MouseEvent<HTMLElement>) => {
-              event.stopPropagation()
-              onShowSummary(node.id)
-            }}
-          >
-            조건 밖 {hiddenChildCount}
-          </FilteredOutHint>
-        )}
-
-        {duration && <Duration>{duration}</Duration>}
+        {/* 기간 — 우측 정렬 고정 열. 실측 252행 중 133행(53%)이 '1일'이라 텍스트로 두면
+            반복 노이즈지만, '종료 확정'과 '종료 미상'은 다른 사실이라 지울 수도 없다.
+            당일은 점 하나로 눌러 세로로 훑을 때 **지속된 사건만** 튀어나오게 한다.
+            formatDuration에는 손대지 않는다(precision 가드 보존). */}
+        <Duration data-sameday={duration === '1일' ? 'true' : undefined}>
+          {duration === '1일' ? (
+            <SrOnly>1일</SrOnly>
+          ) : (
+            duration
+          )}
+        </Duration>
         <Flags>
           <CountryFlags
             modern={event.relatedCountries}
             historical={event.relatedHistoricalCountries}
-            /* 좁은 폭은 1개 + '+N'. 2개를 그리면 위 max-width 상한에 걸려 두 번째 칩이
-               중간에서 잘린다(역사국가는 이모지가 없어 국가명 전체가 텍스트 칩이라 폭을 많이 먹는다). */
-            max={isNarrow ? 1 : 3}
+            /* 개수는 대역이 정한다(목록이 1회 계산). 폭만 줄이면 역사국가처럼 이모지가
+               없어 국가명 전체가 텍스트 칩인 경우 글리프 중간에서 잘린다. */
+            max={flagMax}
             size="sm"
           />
         </Flags>
@@ -402,9 +431,9 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
               title="사건 요약 보기"
               aria-label="사건 요약 보기"
             >
-              {/* ⚠️ FiGitBranch를 쓰지 말 것 — 바로 옆 ChildCountBadge가 같은 글리프로
-                  '자식 수'라는 다른 뜻을 이미 쓰고 있어, 한 행에서 같은 아이콘이 정적
-                  카운트와 모달 트리거 두 의미로 갈렸다. 브랜치 글리프는 계층 전용으로 예약. */}
+              {/* ⚠️ 브랜치 글리프(FiGitBranch)를 쓰지 말 것 — 계층 신호는 제목 셀의
+                  디스클로저가 전담한다. 여기에 같은 글리프를 두면 한 행에서 같은
+                  아이콘이 '자식 수'와 '모달 트리거' 두 의미로 갈린다. */}
               <FiLayers size={12} />
             </IconBtn>
           )}
@@ -461,8 +490,14 @@ const Stop = styled.div<{
    * min-height가 계산값보다 크게 잡혀 있어야 행 높이 고유값이 1종으로 고정된다. */
   min-height: var(--row-min-h);
   padding: var(--row-pad-y) var(--row-pad-r) var(--row-pad-y) var(--row-pad-l);
-  margin-left: ${({ $depth }) => `calc(var(--row-indent) * ${$depth})`};
+  /* 데스크톱에서는 행을 밀지 않는다 — 들여쓰기는 제목 셀의 ind 트랙이 전담한다.
+     모바일(격자 미적용)에서만 예전처럼 행 전체를 민다. */
+  margin-left: 0;
   cursor: pointer;
+
+  @media (max-width: 640px) {
+    margin-left: min(calc(var(--row-indent) * var(--depth, 0)), 72px);
+  }
 
   /* 문맥용 부모 행 강등 — 이 행 자체는 조건 불일치이고 '매칭된 자식이 아래에 있어서'
    * 남아 있을 뿐이다. 강등이 없으면 '조건 일치 12건'인데 18행이 똑같은 무게로 보여
@@ -476,7 +511,10 @@ const Stop = styled.div<{
         opacity: 1;
       }
     `}
-  font-variant-numeric: tabular-nums;
+  /* (제거됨) font-variant-numeric: tabular-nums.
+   * 등폭 숫자는 숫자가 세로로 쌓일 때만 값을 한다. 실측상 252행 중 109행(43%)의
+   * **제목**이 숫자를 포함하는데, 행 전역 tabular가 그 제목만 최대 7px 넓혀 말줄임
+   * 임계를 앞당기고 있었다. 날짜·기간·카운트 열에만 국소 선언한다. */
   transition: background 0.14s ease;
 
   /* 선택 행으로 스크롤(events.page의 단일 effect)할 때 sticky 세기·연도 헤더에
@@ -602,17 +640,34 @@ const Stop = styled.div<{
   }
 `
 
-/* 단일 행 컨테이너 — 모든 토큰(연도·카테고리·제목·별·기간·국기·액션)을 한 줄에 좌측 밀착.
- * max-width로 읽기 컬럼을 제한하되, flex:1 스페이서가 없으므로 콘텐츠는 좌측에 붙고 남는
- * 폭은 예측 가능한 우측 여백이 된다(제목↔메타 사이 죽은 여백 소멸). */
+/**
+ * 행 본문 — 6트랙 원장 격자.
+ *
+ * ⚠️ subgrid를 쓰지 말 것. RowList가 연도 그룹마다 별도 DOM이라 subgrid·auto·max-content
+ * 트랙은 **그룹마다 다른 폭**을 만들어 세기 경계에서 열이 어긋난다. 고정 px 트랙 5개 +
+ * minmax(0,1fr) 하나만이 전 그룹 공통 축을 만든다 — 모든 행 박스 폭이 같으므로 1fr의
+ * 계산값도 전 행 동일하다. 이것이 subgrid 없이 열을 세우는 유일한 정공법이다.
+ *
+ * ⚠️ max-width를 여기에 두지 않는다. 예전의 880px 캡은 지키는 게 없으면서(콘텐츠 자연
+ * 최대 폭이 870px라 실제로 걸려 잘리는 제목은 1행뿐이었다) 행 **안쪽에** 400~900px의
+ * 빈 밴드를 만들었다. 폭 상한은 카드(List.CatalogSection)가 소유한다 — 같은 빈 픽셀이라도
+ * 행 안에 있으면 '깨진 행', 카드 밖에 있으면 '여백'으로 읽힌다.
+ */
 const Body = styled.div`
   flex: 1;
   min-width: 0;
-  max-width: 880px;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--row-col-gap);
+  display: grid;
+  grid-template-columns:
+    [date] var(--col-date)
+    [cat] var(--col-chip)
+    [title] minmax(0, 1fr)
+    [dur] var(--col-dur)
+    [flags] var(--col-flags)
+    [act] var(--col-act);
+  column-gap: var(--row-col-gap);
+  /* 베이스라인 정렬 — 예전 center 정렬은 칩 라인박스(15.75px)와 제목(18.2px)이 어긋나
+   * 전 행에서 1.51px 드리프트를 만들었다. 상자형 셀만 center로 예외 처리한다. */
+  align-items: baseline;
 
   /**
    * 모바일(≤640px) 2줄 행 — 1줄: 제목, 2줄: 날짜·분류·기간·국기·액션.
@@ -626,8 +681,15 @@ const Body = styled.div`
    * 같은 줄로 올라오지 않아야 행 높이가 들쭉날쭉하지 않다.
    */
   @media (max-width: 640px) {
+    /* ⚠️ 좁은 폭에서는 **격자를 쓰지 않는다.** 2줄 행 규약(Title flex:1 1 0 · Flags
+     * max-width 112px · order 재배치)은 실측으로 어렵게 얻은 것이고, 격자로 옮기면
+     * 제목 0폭 붕괴와 3줄 행이라는 과거 회귀를 다시 열게 된다. 데스크톱 격자와
+     * 모바일 flex는 별개의 규약으로 공존시킨다. */
+    display: flex;
+    flex-direction: row;
     flex-wrap: wrap;
     row-gap: 3px;
+    column-gap: 8px;
     align-items: center;
   }
 `
@@ -649,34 +711,85 @@ const RowBreak = styled.span`
 `
 
 const RowActions = styled.div`
+  grid-column: act;
+  align-self: center;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 2px;
   /* 액션은 읽기 컬럼(Body max-width 880px)의 **우측 고정 열**에 둔다.
    *
    * 이전엔 margin-left: 2px으로 국기 바로 뒤에 붙어, 제목 길이에 따라 버튼 x좌표가
    * 행마다 달라졌다 — 실측 233행에서 고유 x좌표 184개, 산포 641px(316~957).
    * 즐겨찾기를 연속으로 누를 때 포인터가 매 행 다른 위치를 찾아야 했고 세로 스캔선도 끊겼다.
-   * auto 마진으로 밀어 한 열에 정렬하되, 메타(기간·국기)는 제목 옆에 그대로 남으므로
-   * 2026-07-22 검토가 없앤 '제목↔메타 죽은 여백'은 되살아나지 않는다. */
-  margin-left: auto;
-  padding-left: 8px;
+   * 이제 격자 트랙이 열을 보장하므로 auto 마진이 필요 없다 — 그리고 auto 마진 시절엔
+   * 행 전체가 depth만큼 밀려서 자식 행의 액션이 22px 어긋났다(고유 x 3종). */
+  padding-left: 0;
   flex-shrink: 0;
+
+  @media (max-width: 640px) {
+    margin-left: auto;
+  }
 
   @media (max-width: 640px) {
     order: 2;
   }
 `
 
-const ExpandBtn = styled.button<{ $expanded: boolean }>`
+/**
+ * 제목 셀 — [들여쓰기][디스클로저][텍스트] 3열 서브격자.
+ *
+ * 들여쓰기 트랙이 depth를 **혼자** 흡수한다. 예전에는 Stop 전체에 margin-left를 걸어
+ * 날짜·분류·기간·국기·액션까지 22px씩 따라 움직였다(액션 우측 끝 985/1007 분기).
+ * depth는 인라인 CSS 변수로 넘긴다 — styled prop으로 넘기면 depth마다 클래스가 생성돼
+ * 252행에서 클래스 캐시가 부풀고 React.memo 이득이 깎인다.
+ *
+ * 5단 이상은 96px에서 클램프한다(다중 상위 도입으로 depth 3+가 예정돼 있다).
+ */
+const TitleCell = styled.div`
+  min-width: 0;
+  display: grid;
+  grid-template-columns:
+    [ind] min(calc(var(--row-indent) * var(--depth, 0)), 96px)
+    [disc] var(--row-disc-btn)
+    [text] minmax(0, 1fr);
+  column-gap: 0;
+  align-items: baseline;
+
+  @media (max-width: 640px) {
+    /* 모바일에서는 셀 자체를 해제해 자식이 Body의 flex 아이템이 되게 한다 —
+       2줄 행 규약이 직속 자식에 걸린 order로 동작하기 때문이다. */
+    display: contents;
+  }
+`
+
+/** 들여쓰기 트랙을 실제로 점유하는 빈 박스. 격자 트랙만으로는 baseline 정렬이 흔들린다. */
+const Indent = styled.span`
+  grid-column: ind;
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
+/**
+ * 디스클로저 — 셰브론과 자식 수를 **한 컨트롤**로 합친 것.
+ *
+ * 예전에는 셰브론(x=105)·자식수 배지(제목 뒤 가변 x)·요약 버튼(x=919)이 '계층'이라는
+ * 한 개념을 행의 세 지점에서 말했고, 배지가 제목과 기간 사이에 끼어들어 메타 x를
+ * 한 번 더 흔들었다. 배지를 셰브론 안으로 들여 삽입 토큰을 하나 없앤다.
+ */
+const Disclosure = styled.button<{ $expanded: boolean }>`
+  grid-column: disc;
+  align-self: center;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 1px;
   width: var(--row-disc-btn);
   height: var(--row-disc-btn);
   padding: 0;
-  /* 시각 크기는 20px 그대로 두고 **히트 영역만** 확장한다(포인터·터치 오탭 방지).
-     20×20은 권장 44px에 한참 못 미치고, 바로 옆 액션들과 gap 2px로 붙어 있었다. */
+  /* 시각 크기는 그대로 두고 **히트 영역만** 확장한다(포인터·터치 오탭 방지). */
   position: relative;
   &::before {
     content: '';
@@ -690,11 +803,20 @@ const ExpandBtn = styled.button<{ $expanded: boolean }>`
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.12s, transform 0.15s;
-  transform: rotate(${({ $expanded }) => ($expanded ? 90 : 0)}deg);
+  font-size: var(--row-chip);
+  transition: background 0.12s;
+
+  /* ⚠️ 버튼 전체를 회전시키지 않는다 — 회전하면 안에 든 자식 수 숫자까지 눕는다.
+     글리프만 돌린다. */
+  svg {
+    transition: transform 0.15s;
+    transform: rotate(${({ $expanded }) => ($expanded ? 90 : 0)}deg);
+  }
 
   @media (prefers-reduced-motion: reduce) {
-    transition: background 0.12s;
+    svg {
+      transition: none;
+    }
   }
 
   @media (max-width: 640px) {
@@ -706,7 +828,17 @@ const ExpandBtn = styled.button<{ $expanded: boolean }>`
   }
 `
 
-const ExpandSpacer = styled.span`
+/** 디스클로저 안 자식 수 — 셰브론이 있을 때만. */
+const DiscCount = styled.span`
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+`
+
+/** 자식 없는 행도 같은 폭을 예약해 제목 텍스트 시작점이 흔들리지 않게 한다. */
+const DiscSpacer = styled.span`
+  grid-column: disc;
   width: var(--row-disc-btn);
   height: var(--row-disc-btn);
   flex-shrink: 0;
@@ -716,25 +848,36 @@ const ExpandSpacer = styled.span`
   }
 `
 
-const ChildCountBadge = styled.span`
+/**
+ * 제목 텍스트 트랙 — 제목 + 검색 근거 + '조건 밖 N'이 이 안에서 좌측으로 흐른다.
+ * 이 셋은 모두 '제목에 딸린 설명'이라 제목 열 안에 있는 게 옳고, 밖으로 나가면
+ * 기간·국기 열의 x를 흔든다.
+ */
+const TitleText = styled.span`
+  grid-column: text;
+  min-width: 0;
   display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
 
   @media (max-width: 640px) {
-    order: 1;
+    order: -1;
+    flex: 1 1 0;
   }
+`
 
-  padding: 0 5px;
-  height: 15px;
-  border-radius: 7px;
-  font-size: 10px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.06)'};
-  color: ${({ theme }) => theme.colors.text.secondary};
+/** 시각적으로 숨기되 스크린리더에는 남긴다 */
+const SrOnly = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 `
 
 const FilteredOutHint = styled.span`
@@ -761,14 +904,22 @@ const FilteredOutHint = styled.span`
 const Year = styled.span`
   /* 날짜는 보조 데이텀 — 항상 제목보다 한 단계 아래. tier별 크기 증가를 없애 고정 12px로,
      굵기도 500으로 낮춰(중요도 신호는 제목·별이 담당) 제목이 확실한 주인공이 되게 한다. */
+  grid-column: date;
+  /* 우측 정렬 — 자릿수가 다른 값들(7.27 · 12.31 · (1893) · 기원전 1046)이 끝자리를
+     한 축에 세운다. 예전 좌측 정렬 + min-width는 값 길이에 따라 흔들렸고 49행(19%)이
+     슬롯을 넘었다. */
+  text-align: right;
   font-size: var(--row-meta);
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  /* 보조 데이텀이지만 '언제'는 이 목록의 핵심 정보다 — tertiary(2.54:1)는 AA 미달. */
-  color: ${metaText};
+  font-weight: 600;
+  letter-spacing: 0;
+  /* 이 목록의 정렬 축은 '언제'인데, 예전에는 날짜가 행에서 가장 옅고 가장 가는
+     텍스트였다(4.83:1 / weight 500). 정보량이 가장 적은 분류 칩이 대비·굵기 양축에서
+     이기고 있었다. 굵기를 600으로 올리고 색을 한 단계 진하게 해 축을 되돌린다. */
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d4d4d8' : '#4b5563')};
   font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-  min-width: var(--col-date);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 
   /* 그룹 헤더와 *다른* 해를 가리키는 토큰 — 같은 슬롯에 '12.31'(월·일)과 '1893'(연도)이
    * 완전히 같은 서식으로 찍히면 두 단위가 구분되지 않는다. 실측상 자식 87건 중 62건(71%)이
@@ -807,10 +958,9 @@ const Title = styled.span`
   /* 단일 행 밀도 — 제목은 자기 폭(flex:0 1 auto)만 차지하고, 넘치면 …로 자른다.
    * flex:1을 쓰지 않아 뒤따르는 메타가 제목 바로 옆에 붙어 '죽은 여백'이 생기지 않는다. */
   flex: 0 1 auto;
-  /* ⚠️ min-width: 0이면 제목이 **0px까지 짓눌린다**. Body의 다른 자식이 전부
-   * flex-shrink: 0이라 폭이 모자랄 때 줄어드는 건 제목뿐이기 때문이다.
-   * 390px 실측(수정 전): 238행 중 73행(31%)의 제목 폭이 0 — 카테고리 칩과 국가명만 남았다.
-   * 최소 폭을 두어 어떤 조합에서도 제목이 사라지지 않게 한다(넘치는 국기는 Flags가 흡수). */
+  /* 데스크톱에서는 제목이 자기 격자 트랙(minmax(0,1fr)) 안에 있어 다른 셀에 짓눌리지
+   * 않는다. 좁은 폭(flex 경로)에서는 여전히 유일한 축소 대상이라 최소 폭이 필요하다 —
+   * 390px 실측(수정 전) 238행 중 73행(31%)의 제목 폭이 0이었다. */
   min-width: 8ch;
   /* 제목이 확실한 주인공 — 연도보다 크고 굵다. 크기는 밀도 토큰이 소유. */
   font-size: var(--row-title);
@@ -851,13 +1001,26 @@ const CategoryLabel = styled.span<{
   $text: string
   $textDark: string
 }>`
-  flex-shrink: 0;
-  padding: 2px 8px;
+  grid-column: cat;
+  align-self: center;
+  /* 칩이 셀을 꽉 채운다 → 칩의 좌·우 두 모서리가 **모두** 세로 스캔선이 된다.
+     예전에는 라벨 길이대로 폭이 34/43/52/56px 4종이라 좌측선조차 없었고, 그 가변 폭이
+     바로 뒤 제목의 시작점을 11종(219~265px)으로 흩뜨린 근인이었다. */
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  height: 18px;
   border-radius: 6px;
   font-size: var(--row-chip);
-  font-weight: 600;
+  /* 굵기 축에서 날짜(600)에 양보한다 — hue 대비는 유지하되 정렬 축을 이기지 않게. */
+  font-weight: 500;
   letter-spacing: 0;
-  line-height: 1.5;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   background: ${({ $rgb, theme }) =>
     theme.mode === 'dark' ? `rgba(${$rgb}, 0.16)` : `rgba(${$rgb}, 0.1)`};
   color: ${({ $text, $textDark, theme }) =>
@@ -865,6 +1028,11 @@ const CategoryLabel = styled.span<{
 
   @media (max-width: 640px) {
     order: 1;
+    /* ⚠️ width:100%는 **격자 셀 전용**이다. 모바일은 flex라 100%가 행 전체를 먹어
+       메타 줄이 통째로 밀려나고 행이 3~4줄(110px)이 된다 — 실측으로만 잡히는 함정. */
+    width: auto;
+    height: 16px;
+    line-height: 16px;
   }
 `
 
@@ -900,12 +1068,25 @@ const MatchReasonKind = styled.span`
 `
 
 const Duration = styled.span`
-  font-size: 11px;
+  grid-column: dur;
+  /* 우측 정렬 — '오래 지속된 사건 찾기'가 처음으로 세로 스캔으로 성립한다. */
+  text-align: right;
+  font-size: var(--row-meta);
   font-weight: 500;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
   color: ${metaText};
   font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+
+  /* 당일(252행 중 133행 = 53%)은 점 하나로 누른다. 텍스트로 두면 화면 절반이 같은
+     두 글자를 반복해 '27년 4개월'과 완전히 같은 무게로 읽혔다. 지우지 않는 이유는
+     '종료 확정'과 '종료 미상'이 다른 사실이기 때문이고, 그래서 스크린리더에는
+     '1일'이 그대로 남는다. */
+  &[data-sameday='true']::after {
+    content: '·';
+    opacity: 0.55;
+  }
 
   /* 모바일 메타 줄은 **한 줄로 고정**해야 행 높이가 일정하다(들쭉날쭉하면 스캔이 깨진다).
      한정된 폭에서 가장 먼저 포기할 토큰이 기간이다 — 실측상 233행 중 218행(94%)이
@@ -916,6 +1097,8 @@ const Duration = styled.span`
 `
 
 const Flags = styled.span`
+  grid-column: flags;
+  align-self: center;
   display: inline-flex;
   align-items: center;
   /* 국기/역사국가 칩이 폭 초과의 주범이다 — 역사국가는 이모지가 없어 국가명 전체가
