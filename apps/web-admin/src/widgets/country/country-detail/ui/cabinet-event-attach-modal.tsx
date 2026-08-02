@@ -8,10 +8,18 @@
  * 사용처:
  * - 행정부 상세 "관련 사건" 섹션
  * - 재임 등록 패널 (현재 cabinetId 자동 전달)
+ *
+ * 이 모달은 오랫동안 자체 Overlay를 들고 있어 Esc·포커스 트랩·스크롤락·포털이 전부
+ * 없었고(모달 토대 규약 위반), 기간을 native `type="date"`로 받아 **BC·고대 사건을
+ * 등록할 수 없었다**. 공용 `<Modal>` + `DatePickerModal`(BC 지원)로 옮겨 둘 다 해소.
  */
 import { useEffect, useMemo, useState } from 'react'
 import styled from 'styled-components'
-import { FiX } from 'react-icons/fi'
+import { FiCalendar } from 'react-icons/fi'
+import { signedYearFromIsoLike } from '@/shared/lib/country-period'
+import { Modal } from '@/shared/ui/modal'
+import { ModalBody, ModalFooter } from '@/shared/ui/modal/modal.styles'
+import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   CABINET_EVENT_ROLE_LABELS,
   CabinetEventRole,
@@ -23,26 +31,6 @@ import { useThemeStore } from '@/shared/styles/theme.store'
 
 const ROLE_OPTIONS: CabinetEventRole[] = ['ORIGIN', 'PARTY', 'MEDIATOR', 'AFFECTED']
 
-const Overlay = styled.div`
-  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
-  display: flex; align-items: center; justify-content: center; z-index: 1100;
-`
-const Modal = styled.div`
-  background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')}; border-radius: 12px; width: min(560px, 92vw);
-  max-height: 86vh; display: flex; flex-direction: column; overflow: hidden;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.25);
-`
-const Header = styled.div`
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 18px; border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-`
-const Title = styled.h4`margin: 0; font-size: 15px; font-weight: 700; color: ${({ theme }) => (theme.mode === 'dark' ? '#f5f5f5' : '#111827')};`
-const CloseBtn = styled.button`background: transparent; border: none; cursor: pointer; color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')}; padding: 4px;`
-const Body = styled.div`padding: 14px 18px; overflow-y: auto;`
-const Footer = styled.div`
-  padding: 12px 18px; border-top: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};
-  display: flex; justify-content: flex-end; gap: 8px;
-`
 const Tabs = styled.div`display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb')};`
 const Tab = styled.button<{ $active?: boolean }>`
   padding: 8px 14px; background: transparent; border: none;
@@ -83,6 +71,18 @@ const PrimaryBtn = styled.button`
   border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
   &:disabled { background: #9ca3af; cursor: not-allowed; }
 `
+/** 날짜 피커를 여는 버튼 — native date input을 대체(BC 지원) */
+const DateTrigger = styled.button`
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 9px 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 13px; text-align: left;
+
+  &:hover { border-color: ${({ theme }) => theme.colors.border.medium}; }
+`
+
 const GhostBtn = styled.button`
   padding: 8px 14px; background: transparent; border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#3f3f46' : '#d1d5db')};
   border-radius: 6px; color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')}; font-size: 13px; cursor: pointer;
@@ -122,6 +122,9 @@ export function CabinetEventAttachModal({
   const [newStart, setNewStart] = useState('')
   const [newEnd, setNewEnd] = useState('')
   const [newDesc, setNewDesc] = useState('')
+  /** BC·고대 연도를 다루려면 native date로는 불가 — 공용 DatePickerModal을 쓴다 */
+  const [startPickerOpen, setStartPickerOpen] = useState(false)
+  const [endPickerOpen, setEndPickerOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -175,15 +178,8 @@ export function CabinetEventAttachModal({
   }
 
   return (
-    <Overlay role="dialog" aria-modal="true" onClick={onClose}>
-      <Modal onClick={(e) => e.stopPropagation()}>
-        <Header>
-          <Title>이 행정부에 사건 연결</Title>
-          <CloseBtn type="button" onClick={onClose} aria-label="닫기">
-            <FiX size={18} />
-          </CloseBtn>
-        </Header>
-        <Body>
+    <Modal isOpen onClose={onClose} title="이 행정부에 사건 연결">
+      <ModalBody>
           <Tabs>
             <Tab type="button" $active={mode === 'existing'} onClick={() => setMode('existing')}>
               기존 사건에서 선택
@@ -238,16 +234,14 @@ export function CabinetEventAttachModal({
               />
               <FieldLabel>기간</FieldLabel>
               <Row>
-                <Input
-                  type="date"
-                  value={newStart}
-                  onChange={(e) => setNewStart(e.target.value)}
-                />
-                <Input
-                  type="date"
-                  value={newEnd}
-                  onChange={(e) => setNewEnd(e.target.value)}
-                />
+                <DateTrigger type="button" onClick={() => setStartPickerOpen(true)}>
+                  <FiCalendar size={14} aria-hidden />
+                  <span>{newStart ? formatDateLabel(newStart) : '시작일 선택'}</span>
+                </DateTrigger>
+                <DateTrigger type="button" onClick={() => setEndPickerOpen(true)}>
+                  <FiCalendar size={14} aria-hidden />
+                  <span>{newEnd ? formatDateLabel(newEnd) : '종료일 선택'}</span>
+                </DateTrigger>
               </Row>
               <FieldLabel>개요 (선택)</FieldLabel>
               <Input
@@ -270,20 +264,55 @@ export function CabinetEventAttachModal({
               </option>
             ))}
           </Select>
-        </Body>
-        <Footer>
-          <GhostBtn type="button" onClick={onClose}>취소</GhostBtn>
-          <PrimaryBtn type="button" onClick={onSubmit} disabled={!canSubmit}>
-            {submitting ? '저장 중…' : mode === 'new' ? '만들어 연결' : '연결'}
-          </PrimaryBtn>
-        </Footer>
-      </Modal>
-    </Overlay>
+      </ModalBody>
+      <ModalFooter>
+        <GhostBtn type="button" onClick={onClose}>취소</GhostBtn>
+        <PrimaryBtn type="button" onClick={onSubmit} disabled={!canSubmit}>
+          {submitting ? '저장 중…' : mode === 'new' ? '만들어 연결' : '연결'}
+        </PrimaryBtn>
+      </ModalFooter>
+
+      {/* 기간 선택 — BC/고대 지원. 포털 + 자체 Esc 캡처라 이 모달을 닫지 않는다. */}
+      <DatePickerModal
+        isOpen={startPickerOpen}
+        onClose={() => setStartPickerOpen(false)}
+        onSelect={(date) => {
+          setNewStart(date)
+          setStartPickerOpen(false)
+        }}
+        initialDate={newStart}
+        maxDate={newEnd}
+        title="시작 일자 선택"
+      />
+      <DatePickerModal
+        isOpen={endPickerOpen}
+        onClose={() => setEndPickerOpen(false)}
+        onSelect={(date) => {
+          setNewEnd(date)
+          setEndPickerOpen(false)
+        }}
+        initialDate={newEnd || newStart}
+        minDate={newStart}
+        title="종료 일자 선택"
+      />
+    </Modal>
   )
 }
 
-function formatYear(d?: string | null): string {
-  if (!d) return ''
-  const dt = new Date(d)
-  return isNaN(dt.getTime()) ? '' : `${dt.getFullYear()}`
+/**
+ * 연도 라벨 — `new Date()`는 BC/고대(`-0753-01-01`)에서 NaN이 되므로 부호 있는 연도
+ * 파서를 쓴다. 음수면 '기원전 N'으로 읽힌다.
+ */
+function formatYear(value?: string | null): string {
+  if (!value) return ''
+  const signedYear = signedYearFromIsoLike(value)
+  if (signedYear == null) return ''
+  return signedYear < 0 ? `기원전 ${Math.abs(signedYear)}` : `${signedYear}`
+}
+
+/** 날짜 트리거 라벨 — 연도까지만(모달이 좁고, 기간의 해상도는 연 단위로 충분) */
+function formatDateLabel(value: string): string {
+  const year = formatYear(value)
+  const rest = value.replace(/^-?\d{1,6}-/, '')
+  return rest && rest !== value ? `${year}-${rest}` : year
 }
