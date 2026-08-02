@@ -781,10 +781,16 @@ export const YearDivider = styled.button`
    * 목록 최상단 처리는 CenturySection(첫 섹션은 margin-top 없음)과
    * YearSection:first-of-type(세기 직후 상단선 제거)이 나눠 맡는다. */
 
-  /* span = 라벨 (chevron + 연도 + 카운트) — 도트 옆 인라인 */
-  span {
+  /* 라벨 (chevron + 연도) — 도트 옆 인라인.
+   *
+   * ⚠️ 반드시 **자식 결합자**여야 한다. 후손 선택자(span)면 이 규칙이 안쪽 CollapsedCount
+   * (자기 클래스, 특이도 0,1,0)까지 이겨서 카운트가 14px/700 primary로 렌더된다 —
+   * 그러면 '2026년 6'이 한국어에서 **'2026년 6월'로 읽힌다**. 바로 아래 행들이 '7.27'처럼
+   * 월.일을 쓰고 있어 오독이 강화됐고, aria-label은 정확했기 때문에 시각 층에서만
+   * 발생하는 결함이었다. */
+  & > span {
     display: inline-flex;
-    align-items: center;
+    align-items: baseline;
     gap: 6px;
     font-size: 14px;
     font-weight: 700;
@@ -795,6 +801,7 @@ export const YearDivider = styled.button`
     svg {
       color: ${({ theme }) => theme.colors.text.tertiary};
       flex-shrink: 0;
+      align-self: center;
       transition: transform 0.3s ease;
     }
   }
@@ -841,9 +848,16 @@ export const UnknownYearDivider = styled(YearDivider)`
 `
 
 /* 연도 옆 카운트 — chip 제거, 회색 datum-style 숫자 */
+/**
+ * 연도 옆 카운트.
+ *
+ * ⚠️ 단위 '건'을 반드시 붙여 쓸 것. 숫자만 두면 '2026년 6'이 6월로 읽힌다.
+ * 특이도 함정은 YearDivider 쪽에서 자식 결합자로 막았지만, 단위는 두 번째 방어선이다.
+ */
 export const CollapsedCount = styled.span`
-  font-size: 11px;
-  font-weight: 500;
+  font-size: var(--row-meta, 12px);
+  font-weight: 600;
+  letter-spacing: 0;
   font-variant-numeric: tabular-nums;
   color: ${metaText};
   flex-shrink: 0;

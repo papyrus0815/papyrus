@@ -416,6 +416,9 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                없어 국가명 전체가 텍스트 칩인 경우 글리프 중간에서 잘린다. */
             max={flagMax}
             size="sm"
+            /* 폭 예산 안에서 말줄임 — 글리프 중간 절단으로 없는 국가명이 만들어지던
+               것을 막고, '+N'은 어떤 폭에서도 살아남는다. */
+            fit
           />
         </Flags>
 
@@ -501,14 +504,20 @@ const Stop = styled.div<{
 
   /* 문맥용 부모 행 강등 — 이 행 자체는 조건 불일치이고 '매칭된 자식이 아래에 있어서'
    * 남아 있을 뿐이다. 강등이 없으면 '조건 일치 12건'인데 18행이 똑같은 무게로 보여
-   * 필터가 새는 것처럼 읽힌다. 숨기지 않는 이유는 계층 문맥이 필요하기 때문. */
-  ${({ $context }) =>
+   * 필터가 새는 것처럼 읽힌다. 숨기지 않는 이유는 계층 문맥이 필요하기 때문.
+   *
+   * ⚠️ blanket opacity(0.62)를 쓰지 않는다. 두 가지가 잘못됐었다.
+   *  ① 행 전체를 반투명하게 만들어 metaText가 2.39:1로 떨어졌다 — 강등이 아니라 AA 위반을
+   *     새로 만들고 있었다.
+   *  ② hover·focus에서 해제했는데, 키보드 ↑↓ 내비는 선택과 포커스를 함께 옮기므로
+   *     사용자가 그 행을 보는 순간 강등이 사라졌다 = 신호가 한 번도 안 보였다.
+   * 제목의 굵기·색만 낮추고 상태로 해제하지 않는다. */
+  ${({ $context, theme }) =>
     $context &&
     css`
-      opacity: 0.62;
-      &:hover,
-      &:focus-within {
-        opacity: 1;
+      [data-row-title] {
+        font-weight: 500;
+        color: ${theme.mode === 'dark' ? '#a1a1aa' : '#6b7280'};
       }
     `}
   /* (제거됨) font-variant-numeric: tabular-nums.
@@ -585,10 +594,12 @@ const Stop = styled.div<{
   ${({ $active, theme }) => {
     const isDark = theme.mode === 'dark'
     if ($active) {
+      /* 라이트 0.13은 그 위 metaText를 4.04:1로 떨어뜨려 AA에 미달시켰다.
+         식별은 좌측 4px 인디고 막대가 이미 담당하므로 tint는 낮춰도 된다. */
       return css`
         background: ${isDark
-          ? 'rgba(37, 99, 235, 0.22)'
-          : 'rgba(37, 99, 235, 0.13)'};
+          ? 'rgba(37, 99, 235, 0.20)'
+          : 'rgba(37, 99, 235, 0.08)'};
       `
     }
     return css`
@@ -600,8 +611,8 @@ const Stop = styled.div<{
     background: ${({ theme, $active }) =>
       $active
         ? theme.mode === 'dark'
-          ? 'rgba(37, 99, 235, 0.28)'
-          : 'rgba(37, 99, 235, 0.18)'
+          ? 'rgba(37, 99, 235, 0.26)'
+          : 'rgba(37, 99, 235, 0.13)'
         : theme.mode === 'dark'
           ? 'rgba(255, 255, 255, 0.06)'
           : 'rgba(15, 23, 42, 0.05)'};
@@ -628,7 +639,9 @@ const Stop = styled.div<{
        옮기므로 '활성 행 위의 포커스'가 상시 상태라 실질 식별력이 낮았다(검토 A11Y-1). */
     outline: 2px solid
       ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
-    outline-offset: -2px;
+    /* 바깥에 그린다. -2px면 active의 좌측 4px 인디고 막대와 같은 모서리에서 겹쳐
+       '선택됨'과 '포커스됨'이 한 신호로 뭉갠다 — ↑↓ 내비에서는 둘이 상시 동시 상태다. */
+    outline-offset: 1px;
     border-radius: 6px;
   }
 
@@ -893,12 +906,25 @@ const FilteredOutHint = styled.span`
     order: 1;
   }
 
-  font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  /* '조건 밖 N'은 누락 고지다 — 행에서 가장 안 보이는 토큰이면 도입 목적이 무효가 된다. */
-  color: ${metaText};
+  /* 이 목록의 **유일한 인터랙티브 텍스트**인데, 예전에는 39×13px에 정적 메타와 똑같은
+     회색이라 어포던스가 0이었다. metaText 한 토큰이 날짜·기간·근거·행동 4역할을 겸하던
+     것을 3층으로 나눈다 — datum(날짜) / measure(기간·근거) / action(여기). */
+  font-size: var(--row-meta);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
   font-variant-numeric: tabular-nums;
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -6px -4px;
+  }
+  &:hover {
+    text-decoration: underline solid;
+  }
 `
 
 const Year = styled.span`
@@ -964,10 +990,13 @@ const Title = styled.span`
   min-width: 8ch;
   /* 제목이 확실한 주인공 — 연도보다 크고 굵다. 크기는 밀도 토큰이 소유. */
   font-size: var(--row-title);
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  /* 700 — 날짜(600)·칩(500)과 함께 크기·굵기 **양축에서 단조**가 되게 한다.
+     예전엔 제목 600 / 칩 600으로 굵기가 같아 색 있는 칩이 먼저 눈에 들어왔다. */
+  font-weight: 700;
+  /* 한글에 -0.01em은 자간을 눈에 띄게 좁힌다. 라틴 기준 트래킹을 그대로 쓰지 않는다. */
+  letter-spacing: -0.005em;
   line-height: 1.3;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
+  color: ${({ theme }) => theme.colors.text.primary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -985,11 +1014,18 @@ const Title = styled.span`
   }
 `
 
-/* 검색어 매칭 강조 — 노란 배경 + 진한 텍스트. 다크 모드는 amber 톤. */
+/* 검색어 매칭 강조.
+ *
+ * ⚠️ color를 반드시 **강제**한다. color:inherit이면 amber 배경 위에 부모 색이 그대로
+ * 올라와, 메타 회색을 상속하는 매칭 근거에서 대비가 1.99:1(다크)까지 떨어졌다.
+ *
+ * amber는 이 목록에서 **검색 전용**이다(TYPE-6 vs RHYTHM-13 충돌의 결론). 하이라이트는
+ * 제목 텍스트 *안*에 나타나 대체 채널이 없는 반면, 북마크는 fill 유무라는 형태 채널이
+ * 이미 있기 때문이다. */
 const Mark = styled.mark`
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(251, 191, 36, 0.5)' : '#fef3c7'};
-  color: inherit;
+    theme.mode === 'dark' ? '#fbbf24' : '#fde68a'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#1c1917' : '#0f172a')};
   padding: 0 1px;
   border-radius: 2px;
 `
@@ -1043,8 +1079,9 @@ const MatchReason = styled.span`
   gap: 4px;
   min-width: 0;
   flex: 0 1 auto;
-  font-size: 11px;
+  font-size: var(--row-meta);
   font-weight: 500;
+  letter-spacing: 0;
   color: ${metaText};
   white-space: nowrap;
   overflow: hidden;
@@ -1155,11 +1192,12 @@ const BookmarkBtn = styled.button<{ $bookmarked: boolean }>`
   background: transparent;
   cursor: pointer;
   border-radius: 6px;
-  /* 비활성 아이콘도 '무엇을 할 수 있는지' 알리는 UI 요소다 — WCAG 1.4.11은 3:1을 요구하는데
-   * 이전 alpha 0.32는 실측 라이트 2.06:1 / 다크 2.89:1로 미달이었다. alpha를 올려 통과시킨다. */
+  /* 켜짐은 **채워진 글리프 + 본문 색**으로 표현한다.
+   * 예전 amber(#f59e0b)는 라이트에서 2.15:1이라 꺼짐(4.00:1)보다 **덜 보였다** —
+   * 상태가 켜졌는데 신호가 약해지는 역전이었다. amber는 검색 하이라이트에 양보한다. */
   color: ${({ theme, $bookmarked }) =>
     $bookmarked
-      ? '#f59e0b'
+      ? theme.colors.text.primary
       : theme.mode === 'dark'
         ? 'rgba(255,255,255,0.55)'
         : 'rgba(15,23,42,0.55)'};
@@ -1171,6 +1209,6 @@ const BookmarkBtn = styled.button<{ $bookmarked: boolean }>`
       theme.mode === 'dark'
         ? 'rgba(255,255,255,0.06)'
         : 'rgba(15,23,42,0.05)'};
-    color: ${({ $bookmarked }) => ($bookmarked ? '#d97706' : '#f59e0b')};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
