@@ -48,6 +48,25 @@ describe('country-scope.util', () => {
         buildCountryScopeOr('DE', [], { countryField: 'modernCountryId' }),
       ).toEqual({ modernCountryId: 'DE' })
     })
+
+    // 검토서 R4 불변식: 표시 분류(전신/구성국/유산)는 스코프 합산에 영향을 주지 않는다.
+    // 표시 UI가 '구성국'·'유산'으로 접는 역사국가라도 스코프 OR에는 전부 포함돼야 한다.
+    it('표시 분류와 무관하게 연결 id 전부를 IN에 담는다 (관계타입 필터 없음)', () => {
+      // hre=전신, bavaria=구성국, rome=유산 으로 표시 분류되더라도 스코프는 셋 다 포함.
+      const where = buildCountryScopeOr('DE', ['hre', 'bavaria', 'rome'])
+      expect(where).toEqual({
+        OR: [
+          { countryId: 'DE' },
+          { historicalCountryId: { in: ['hre', 'bavaria', 'rome'] } },
+        ],
+      })
+    })
+
+    it('relationKind 같은 분류 필터 인자를 받지 않는다 (시그니처 격리)', () => {
+      // buildCountryScopeOr(modernId, ids, options?) — 3번째 인자는 필드명 옵션뿐.
+      // 분류 필터가 추가되면 이 길이 단언이 깨져 규약 위반을 조기 포착한다.
+      expect(buildCountryScopeOr.length).toBe(3)
+    })
   })
 
   describe('resolveLinkedHistoricalCountryIds', () => {

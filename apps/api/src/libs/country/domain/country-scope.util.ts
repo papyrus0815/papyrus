@@ -14,6 +14,15 @@ import { PrismaService } from '@prisma/prisma.service'
  * 대부분 엔티티는 소속 FK를 `countryId`(현대) / `historicalCountryId`(역사)로
  * 동일하게 노출하므로 기본값이 바로 맞는다. 다른 이름을 쓰는 도메인만
  * `options`로 재지정한다.
+ *
+ * ## ⚠️ 표시 분류와의 격리 (검토서 R4 — 절대 규약)
+ * 현대국가 상세의 "역사국가 목록"은 전신/구성국/유산 3버킷으로 접어 보여주지만,
+ * 그 분류는 **표시 전용 파생**이다(web: `linked-historical-classify.ts`). 스코프 합산은
+ * 관계타입과 무관하게 브리지로 연결된 역사국가 **전부**를 포함해야 한다 — "구성국이니
+ * 집계에서 빼자"는 순간 리더보드·인물국적·사건 등 7개 도메인의 숫자가 표시 UI에 종속돼
+ * 깨진다. 그러므로 `resolveLinkedHistoricalCountryIds`/`buildCountryScopeOr`에
+ * relationKind 같은 분류 필터 인자를 **추가하지 말 것**. (연결 자체를 좁히려면
+ * 브리지 행을 지우는 데이터 결정이며, 그건 별개의 신중한 경로다.)
  */
 
 /** {@link buildCountryScopeOr}가 사용할 필드명(엔티티별 상이 시 재지정) */

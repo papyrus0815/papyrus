@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Era } from '@prisma/client'
+import { LinkedHistoricalKind } from '../../domain/linked-historical-classify'
 
 export class HistoricalCountrySimpleResponseDto {
   /**
@@ -91,4 +92,16 @@ export class HistoricalCountrySimpleResponseDto {
    */
   @ApiProperty({ description: '경도', required: false })
   longitude!: number | null
+
+  /**
+   * 표시용 관계 분류 — PREDECESSOR(직계 전신) / CONSTITUENT(당대 구성국) /
+   * HERITAGE(관련·유산). 현대 국가 상세에서만 파생·채워지며, 목록·피커에서는 null.
+   * 표시 전용 파생이라 스코프 합산과 무관하다.
+   */
+  @ApiProperty({
+    description: '표시용 관계 분류(전신/구성국/유산). 상세에서만 채워짐',
+    required: false,
+    enum: ['PREDECESSOR', 'CONSTITUENT', 'HERITAGE'],
+  })
+  linkKind!: LinkedHistoricalKind | null
 }

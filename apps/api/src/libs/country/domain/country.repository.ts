@@ -1,5 +1,6 @@
 import { Era } from '@prisma/client'
 import { Country } from './country.entity'
+import { LinkedHistoricalKind } from './linked-historical-classify'
 
 export interface HistoricalCountrySimple {
   id: string
@@ -17,6 +18,11 @@ export interface HistoricalCountrySimple {
   endDay: number | null
   latitude: number | null
   longitude: number | null
+  /**
+   * 표시용 관계 분류(전신/구성국/유산). 상세 조회 경로(findById)에서만 파생·채워지며,
+   * 목록·피커 경로에서는 null. 표시 전용 — 스코프 합산과 무관.
+   */
+  linkKind?: LinkedHistoricalKind | null
 }
 
 export interface CountryRepository {

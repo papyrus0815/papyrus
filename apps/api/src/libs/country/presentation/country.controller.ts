@@ -71,6 +71,7 @@ export class CountryController {
         endDay: hc.endDay,
         latitude: hc.latitude,
         longitude: hc.longitude,
+        linkKind: hc.linkKind ?? null,
       })),
     }
   }
@@ -124,6 +125,7 @@ export class CountryController {
       endDay: hc.endDay,
       latitude: hc.latitude,
       longitude: hc.longitude,
+      linkKind: hc.linkKind ?? null,
     }))
   }
 

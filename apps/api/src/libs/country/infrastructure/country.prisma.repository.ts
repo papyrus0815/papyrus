@@ -5,6 +5,7 @@ import {
   CountryRepository,
   HistoricalCountrySimple,
 } from '../domain/country.repository'
+import { classifyLinkedHistorical } from '../domain/linked-historical-classify'
 
 @Injectable()
 export class CountryPrismaRepository implements CountryRepository {
@@ -48,7 +49,51 @@ export class CountryPrismaRepository implements CountryRepository {
               },
             },
           })
-    return country ? this.toEntity(country) : null
+    const entity = country ? this.toEntity(country) : null
+    if (entity) await this.attachLinkKinds(entity)
+    return entity
+  }
+
+  /**
+   * 연결된 역사국가에 표시용 관계 분류(linkKind)를 파생·부착한다.
+   * 상세 조회 경로에서만 호출 — 목록(findAll)은 무변경(추가 쿼리 회피).
+   * ⚠️ 브리지 행 집합·스코프 합산과 무관한 표시 전용 파생이다.
+   */
+  private async attachLinkKinds(country: Country): Promise<void> {
+    const items = country.historicalCountries
+    if (!items || items.length === 0) return
+    const ids = items.map((item) => item.id)
+    const [transitions, memberships] = await Promise.all([
+      this.prisma.historicalCountryTransition.findMany({
+        where: { predecessorId: { in: ids }, successorId: { in: ids } },
+        select: { predecessorId: true, successorId: true },
+      }),
+      this.prisma.historicalCountryMembership.findMany({
+        where: { memberCountryId: { in: ids } },
+        select: {
+          historicalCountryId: true,
+          memberCountryId: true,
+          isLeadingMember: true,
+        },
+      }),
+    ])
+    const toSigned = (
+      era: string | null,
+      year: number | null,
+    ): number | null => {
+      if (year == null) return null
+      return era === 'BC' ? -Math.abs(year) : Math.abs(year)
+    }
+    const { kindById } = classifyLinkedHistorical({
+      nodes: items.map((item) => ({
+        id: item.id,
+        startYear: toSigned(item.startEra, item.startYear),
+        endYear: toSigned(item.endEra, item.endYear),
+      })),
+      transitions,
+      memberships,
+    })
+    for (const item of items) item.linkKind = kindById.get(item.id) ?? null
   }
 
   async findByName(name: string, accountId?: string): Promise<Country | null> {
