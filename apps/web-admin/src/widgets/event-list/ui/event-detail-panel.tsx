@@ -30,7 +30,7 @@ import {
   FiTrash2,
   FiX,
 } from 'react-icons/fi'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { getCategoryName } from '@/features/event-list/lib'
 import { formatDateWithPrecision, isoDaySpan } from '@/shared/lib/iso-date'
@@ -45,7 +45,7 @@ import * as Skeleton from '@/pages/events/styles/skeleton.styles'
 import { ICON_SIZE } from '@/pages/events/styles/theme'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { deleteEvent } from '@/shared/api/events'
-import { pathKeys, returnTo } from '@/shared/router'
+import { pathKeys } from '@/shared/router'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
@@ -91,8 +91,6 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   onClose,
 }) => {
   const navigate = useNavigate()
-  // 사건 수정 폼에 복귀 목적지를 넘기기 위함
-  const location = useLocation()
   const [descExpanded, setDescExpanded] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
@@ -201,13 +199,13 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
         </Detail.HeroFigure>
       )
     }
-    // placeholder — 클릭 시 편집 페이지로 (이미지 추가 동선)
+    // placeholder — 이미지 추가는 상세의 이미지 CRUD가 담당한다(대표 지정 포함).
     return (
       <Detail.HeroFigure>
         <Detail.HeroPlaceholder
           type="button"
-          aria-label="이미지 추가 — 편집으로 이동"
-          onClick={() => navigate(pathKeys.events.edit(selectedNode.id), returnTo(location))}
+          aria-label="이미지 추가 — 상세로 이동"
+          onClick={() => navigate(pathKeys.events.detail(selectedNode.id))}
         >
           <FiImage size={28} aria-hidden="true" />
           <span>대표 이미지 없음 — 클릭하여 추가</span>
@@ -438,7 +436,8 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                 $variant="ghost"
                 title="수정"
                 aria-label="이 사건 수정"
-                onClick={() => navigate(pathKeys.events.edit(selectedNode.id), returnTo(location))}
+                /* 수정 표면은 상세 인라인 편집 하나 — 별도 편집 페이지는 흡수됐다. */
+                onClick={() => navigate(pathKeys.events.detail(selectedNode.id))}
               >
                 <FiEdit2 size={ICON_SIZE.base} aria-hidden="true" />
               </Detail.ActionButton>

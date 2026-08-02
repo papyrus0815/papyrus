@@ -158,6 +158,11 @@ export const pathKeys = {
   events: {
     root: () => `/${ROUTES.EVENTS}/`,
     create: () => `/${ROUTES.EVENTS}/create/`,
+    /**
+     * @deprecated 수정은 상세 인라인 편집으로 흡수됐다. 이 경로는 외부 링크·북마크가
+     * 404가 되지 않도록 상세로 redirect만 한다(`pages/events/event-route.ts`).
+     * 앱 안에서는 `detail()`을 쓸 것 — 호출처 0개.
+     */
     edit: (eventId: string) => `/${ROUTES.EVENTS}/${eventId}/edit/`,
     detail: (eventId: string) => `/${ROUTES.EVENTS}/${eventId}/`,
   },
