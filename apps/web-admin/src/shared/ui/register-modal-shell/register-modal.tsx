@@ -117,6 +117,7 @@ export function RegisterModal({
     <AnimatePresence>
       {isOpen && (
         <PersonRegisterModalOverlay
+          $fullBleedOnMobile={fullBleedOnMobile}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

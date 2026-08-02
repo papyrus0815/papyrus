@@ -13,7 +13,15 @@ import styled from 'styled-components'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
-export const PersonRegisterModalOverlay = styled(motion.div)`
+export const PersonRegisterModalOverlay = styled(motion.div)<{
+  /**
+   * 박스가 ≤768px에서 화면을 꽉 채울 때는 오버레이 padding도 0이어야 한다.
+   * flex 컨테이너의 padding이 남아 있으면 `width: 100vw`를 줘도 flex 아이템이
+   * 콘텐츠 박스(=뷰포트 − padding×2)로 줄어든다. 실측: 390 뷰포트에서 342px로 눌려
+   * **같은 폼의 페이지 판(390)보다 오히려 좁아졌다.**
+   */
+  $fullBleedOnMobile?: boolean
+}>`
   position: fixed;
   inset: 0;
   display: flex;
@@ -24,6 +32,15 @@ export const PersonRegisterModalOverlay = styled(motion.div)`
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
   z-index: ${Z_INDEX.MODAL_OVERLAY};
+
+  ${({ $fullBleedOnMobile }) =>
+    $fullBleedOnMobile
+      ? `
+    @media (max-width: 768px) {
+      padding: 0;
+    }
+  `
+      : ''}
 `
 
 export const PersonRegisterModalBox = styled(motion.div)<{
