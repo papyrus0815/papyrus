@@ -1177,7 +1177,12 @@ export const EventsCatalogPage: React.FC = () => {
   return (
     <>
       <Layout.PageScene>
-        <Layout.PageWrapper>{content}</Layout.PageWrapper>
+        {/* 폭 상한은 셸이 소유한다 — 툴바·본문·오류 배너가 한 우측 끝을 공유해야
+            "우측만 비었다"로 읽히지 않는다. 목록 뷰에서만 캡을 건다(타임라인·격자 등은
+            넓은 폭이 실제로 정보를 싣는다). */}
+        <Layout.PageWrapper $capped={viewMode === VIEW_MODES.LIST}>
+          {content}
+        </Layout.PageWrapper>
       </Layout.PageScene>
 
       {/* 모바일 우하단 FAB */}

@@ -134,6 +134,72 @@ describe('EventListItem', () => {
     expect(screen.getByRole('listitem')).toHaveStyle({ '--depth': '2' })
   })
 
+  /**
+   * 요약 열(배치 D) — 넓은 카드에서 죽은 폭을 잉크로 되돌리는 흡수체.
+   *
+   * jsdom은 컨테이너 쿼리를 평가하지 않으므로 **언제 보이는지**는 여기서 볼 수 없다
+   * (그건 시각 확인의 몫이다). 대신 CSS와 무관한 계약 — 어떤 텍스트가 실리는지 — 만 고정한다.
+   */
+  describe('요약 열', () => {
+    const withSummary = (summary: string, start = '2025-06-13') =>
+      ({ ...baseNode, summary, period: { start, end: '2025-06-24' } }) as never
+
+    const summaryText = () =>
+      document.querySelector('[data-row-summary]')?.textContent ?? null
+
+    it('설명 선두 날짜가 행의 시작 연도와 같으면 잘라낸다 — date 트랙이 이미 말했다', () => {
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          node={withSummary(
+            '2025년 6월 13일, 이스라엘이 이란 핵시설을 선제 타격하며 교전이 시작됐다.',
+          )}
+        />,
+      )
+      expect(summaryText()).toBe(
+        '이스라엘이 이란 핵시설을 선제 타격하며 교전이 시작됐다.',
+      )
+    })
+
+    it('설명이 다른 해로 시작하면 자르지 않는다 — 중복이 아니라 배경 정보다', () => {
+      const background =
+        '1979년 이란 혁명 이후 누적된 적대가 배경이었고 양국은 오래 대리 충돌했다.'
+      renderWithTheme(
+        <EventListItem {...baseProps} node={withSummary(background)} />,
+      )
+      expect(summaryText()).toBe(background)
+    })
+
+    it('잘라낸 뒤 남는 게 너무 짧으면 자르기를 포기한다', () => {
+      const terse = '2025년 6월 13일, 개전했으며 곧 휴전 협상이 시작됐다.'
+      renderWithTheme(
+        <EventListItem {...baseProps} node={withSummary(terse)} />,
+      )
+      expect(summaryText()).toBe(terse)
+    })
+
+    it('설명이 없거나 너무 짧으면 열지 않는다 — 빈 셀을 만들지 않는다', () => {
+      renderWithTheme(<EventListItem {...baseProps} node={withSummary('짧다.')} />)
+      expect(document.querySelector('[data-row-summary]')).toBeNull()
+    })
+
+    it('검색 중이면 앞머리가 아니라 매칭 근거를 싣는다', () => {
+      // 검색 결과의 76%가 제목에 검색어가 없는 행 — 근거를 앞머리로 덮으면
+      // '왜 걸렸는지 알 수 없는 목록'으로 되돌아간다(CR-3).
+      renderWithTheme(
+        <EventListItem
+          {...baseProps}
+          searchQuery="핵시설"
+          node={withSummary(
+            '2025년 6월 13일, 이스라엘이 이란 핵시설을 선제 타격하며 교전이 시작됐다.',
+          )}
+        />,
+      )
+      expect(summaryText()).toContain('설명')
+      expect(summaryText()).toContain('핵시설')
+    })
+  })
+
   it('조건 밖 하위 사건 고지는 버튼이며 되돌릴 수단을 준다', () => {
     const onShowSummary = jest.fn()
     renderWithTheme(

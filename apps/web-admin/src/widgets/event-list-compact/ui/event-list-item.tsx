@@ -23,6 +23,7 @@ import { type IsoDateParts, parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import {
   CATEGORY_SOFT_COLORS,
+  LIST_WIDTH,
   metaText,
 } from '../../../pages/events/styles/theme'
 import type {
@@ -215,6 +216,43 @@ function buildMatchReason(
   return null
 }
 
+/** 요약 열이 실제로 글자를 실을 수 있는 최소 잔량. 이보다 짧으면 열지 않는다. */
+const SNIPPET_MIN_CHARS = 30
+/** 한 줄 말줄임이라 이 이상은 어차피 안 보인다 — DOM 텍스트 노드만 부풀린다. */
+const SNIPPET_MAX_CHARS = 160
+
+/**
+ * 넓은 카드의 `[sum]` 요약 열 텍스트.
+ *
+ * 설명 앞머리에는 제목·날짜 토큰과 겹치는 선두 날짜가 흔하다("1592년 4월 13일, 왜군이…").
+ * 그 부분은 행이 이미 date 트랙에서 말하고 있으므로 잘라낸다. 다만 **행의 시작 연도와
+ * 실제로 일치할 때만** 자른다 — 설명이 다른 해를 언급하며 시작하는 경우(배경 서술)는
+ * 중복이 아니라 정보다. 자른 뒤 남는 게 너무 짧으면 자르기 자체를 포기한다.
+ */
+function buildSnippet(
+  node: EventHierarchyNode,
+  event: HistoricalEvent,
+  startYear: number | null,
+): string | null {
+  const source = (node.summary || event.description || '').replace(/\s+/g, ' ').trim()
+  if (!source) return null
+
+  let text = source
+  const leadingDate = text.match(
+    /^(기원전\s*)?(\d{1,4})\s*년(\s*\d{1,2}\s*월)?(\s*\d{1,2}\s*일)?\s*[,·\-—:]?\s*/,
+  )
+  if (leadingDate && startYear !== null) {
+    const year = Number(leadingDate[2]) * (leadingDate[1] ? -1 : 1)
+    const rest = text.slice(leadingDate[0].length).trim()
+    if (year === startYear && rest.length >= SNIPPET_MIN_CHARS) text = rest
+  }
+
+  if (text.length < SNIPPET_MIN_CHARS) return null
+  return text.length > SNIPPET_MAX_CHARS
+    ? `${text.slice(0, SNIPPET_MAX_CHARS).trimEnd()}…`
+    : text
+}
+
 const EventListItemImpl: React.FC<EventListItemProps> = ({
   node,
   event,
@@ -292,6 +330,10 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
     return `${startParts.year}`
   })()
   const matchReason = buildMatchReason(node, event, searchQuery)
+  /* 넓은 카드에서만 그려진다(CSS 컨테이너 쿼리). 문자열 계산은 좁은 카드에서도 돌지만
+     행당 정규식 2회·slice 2회라 252행 기준 무시할 수 있다 — 대신 폭 판정을 JS로 끌고 와
+     ResizeObserver를 다는 것보다 훨씬 싸다. */
+  const snippet = buildSnippet(node, event, startParts?.year ?? null)
   const duration = formatDuration(
     startParts,
     endParts,
@@ -432,6 +474,35 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
             )}
           </TitleText>
         </TitleCell>
+
+        {/**
+         * 요약 — 넓은 카드 전용 신축 열. 좁은 카드·모바일에서는 박스를 만들지 않는다.
+         * aria-hidden이 아닌 이유: 스크린리더에도 실제로 값이 있는 텍스트다.
+         *
+         * 검색 중이면 설명 앞머리가 아니라 **매칭 근거**를 싣는다. 둘 다 설명에서 오지만
+         * 답하는 질문이 다르다 — 앞머리는 "무슨 사건인가", 근거는 "왜 이 행이 결과에
+         * 있는가"다. 검색 결과의 76%가 제목에 검색어가 없는 행이라, 검색 중에 근거를
+         * 앞머리로 덮으면 CR-3이 고쳤던 '왜 걸렸는지 알 수 없는 목록'으로 되돌아간다.
+         */}
+        {(matchReason || snippet) && (
+          <Snippet
+            data-row-summary=""
+            title={
+              matchReason
+                ? `${matchReason.kind} 일치: ${matchReason.text}`
+                : (snippet ?? undefined)
+            }
+          >
+            {matchReason ? (
+              <>
+                <MatchReasonKind>{matchReason.kind}</MatchReasonKind>{' '}
+                {highlightMatches(matchReason.text, searchQuery)}
+              </>
+            ) : (
+              snippet
+            )}
+          </Snippet>
+        )}
 
         {/* 모바일 2줄 행의 강제 개행 지점 — 데스크톱 격자에서는 display:none이라 무영향 */}
         <RowBreak aria-hidden="true" />
@@ -720,6 +791,29 @@ const Body = styled.div`
   /* 베이스라인 정렬 — 예전 center 정렬은 칩 라인박스(15.75px)와 제목(18.2px)이 어긋나
    * 전 행에서 1.51px 드리프트를 만들었다. 상자형 셀만 center로 예외 처리한다. */
   align-items: baseline;
+
+  /**
+   * 넓은 카드 — 7트랙. 신축 역할을 제목에서 **요약**으로 넘긴다.
+   *
+   * 6트랙에서 유일한 신축 트랙은 제목(1fr)이라, 카드를 넓히면 늘어나는 건 제목 트랙뿐이다.
+   * 그런데 제목 자연 폭은 p50 177px이라 트랙만 1408px로 커지고 잉크는 안 커진다 — 그게
+   * 배치 A1이 1120px 캡으로 덮었던 '깨진 행'이다. 흡수체를 하나 더 세워야 캡을 풀 수 있고,
+   * 그 자리에 설명(목록 응답에 이미 실려 오면서 0픽셀도 안 그려지던 필드)을 놓는다.
+   *
+   * ⚠️ subgrid·auto·max-content 금지 규약은 여전히 유효하다. 여기 두 트랙은 콘텐츠를
+   * 안 보는 순수 길이(--col-title)와 비율(1fr)이고 **fr 트랙은 여전히 1개**라, 연도 그룹마다
+   * RowList DOM이 갈려도 전 그룹이 같은 계산값을 갖는다.
+   */
+  @container eventcard (min-width: ${LIST_WIDTH.summaryColumnMinCard}px) {
+    grid-template-columns:
+      [date] var(--col-date)
+      [cat] var(--col-chip)
+      [title] minmax(0, var(--col-title))
+      [sum] minmax(0, 1fr)
+      [dur] var(--col-dur)
+      [flags] var(--col-flags)
+      [act] var(--col-act);
+  }
 
   /**
    * 모바일(≤640px) 2줄 행 — 1줄: 제목, 2줄: 날짜·분류·기간·국기·액션.
@@ -1146,6 +1240,42 @@ const MatchReason = styled.span`
    * 근거를 통째로 지우면 모바일 검색은 '왜 걸렸는지 알 수 없는 목록'이 된다.
    * 480px 이하에서만 포기한다 — 거기서는 제목 자체의 폭이 먼저 위협받는다. */
   @media (max-width: 480px) {
+    display: none;
+  }
+
+  /* 요약 열이 켜지면 매칭 근거는 그 안으로 흡수된다 — 같은 필드(설명)를 두 지점에서
+     말하게 두면 제목 뒤에 붙은 근거가 제목 트랙을 다시 밀어낸다. */
+  @container eventcard (min-width: ${LIST_WIDTH.summaryColumnMinCard}px) {
+    display: none;
+  }
+`
+
+/**
+ * 요약 셀 — 넓은 카드에서 죽은 폭을 잉크로 되돌리는 유일한 흡수체.
+ *
+ * 기본이 `display: none`이고 컨테이너 게이트에서만 켜진다. 좁은 카드에서 켜지면 제목이
+ * 0폭으로 붕괴하던 과거 회귀를 다시 여는 셈이라, **모바일은 이중으로 차단**한다
+ * (컨테이너 게이트를 통과할 수 없는 폭이지만 규약을 코드로 못박아 둔다).
+ */
+const Snippet = styled.span`
+  display: none;
+
+  /* display:block + inline 자식 — flex로 두면 text-overflow가 자식에 안 걸려
+     말줄임 없이 잘린다(MatchReason이 inline-flex라 겪고 있는 문제). */
+  @container eventcard (min-width: ${LIST_WIDTH.summaryColumnMinCard}px) {
+    display: block;
+    grid-column: sum;
+    min-width: 0;
+    font-size: var(--row-meta);
+    font-weight: 500;
+    letter-spacing: 0;
+    color: ${metaText};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @media (max-width: 640px) {
     display: none;
   }
 `

@@ -159,19 +159,22 @@ export const EmbedHeaderHint = styled.span`
 /**
  * 뷰 본문 래퍼 — 뷰 전환 세그먼트 + 활성 뷰 슬롯.
  *
- * `$capped`는 목록(LIST) 뷰 전용이다. 목록 카드가 격자 트랙 합에서 역산한 1120px 상한을
- * 갖는데, 그 위 툴바만 전체 폭이면 두 요소가 서로 다른 우측 끝을 주장해 카드가 페이지에서
- * 떨어져 나온 것처럼 보인다. 상한을 공유해 한 컬럼으로 읽히게 한다.
- * 다른 뷰(타임라인·격자·갤러리 등)는 넓은 폭이 실제로 정보를 싣기 때문에 상한을 걸지 않는다.
+ * ⚠️ 여기에 폭 상한을 두지 않는다. 상한의 소유자는 `layout.styles.ts`의 `PageWrapper`
+ * 하나다(`theme.ts` LIST_WIDTH). 예전엔 이 래퍼가 1120px 캡을 들고 있었는데, 정작 가장
+ * 넓은 검색·필터 바(CatalogToolbar)는 CatalogSplit 바깥이라 캡을 안 받아 **우측 끝이
+ * 2종**으로 갈렸다 — 그게 "우측만 비었다"의 직접 원인이었다(2026-08-02 검토).
+ *
+ * 캡을 셸로 올린 뒤 이 자리에 상한을 다시 걸면 no-op이거나 이중 소유가 된다:
+ * 미선택 시 부모 track1 = 셸 − 40 ≤ ink, 선택 시 = 셸 − 40 − gap − 패널 ≤ ink 이므로
+ * 전 대역에서 이미 상한 이하다.
  */
-export const ActiveContent = styled.div<{ $capped?: boolean }>`
+export const ActiveContent = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-height: 0;
   min-width: 0;
   flex: 1;
-  ${({ $capped }) => $capped && 'max-width: 1120px;'}
 `
 
 export const TabBar = styled.div`

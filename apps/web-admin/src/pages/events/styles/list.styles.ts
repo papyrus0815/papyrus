@@ -10,6 +10,7 @@ import {
   CATEGORY_BADGE_COLORS,
   LIST_DENSITY,
   MOTION,
+  LIST_WIDTH,
   ROW_TYPE,
   SHADOW,
   metaText,
@@ -38,6 +39,9 @@ const densityVars = (density: ListDensity) => {
     --col-dur: ${box.colDur}px;
     --col-flags: ${box.colFlags}px;
     --col-act: ${box.colAct}px;
+    /* 7트랙(요약 열) 대역에서만 소비된다 — 6트랙에서 제목은 여전히 1fr이다.
+       넓은 카드에서 신축 역할이 제목 → 요약으로 넘어가므로 제목에 상한이 생긴다. */
+    --col-title: ${box.colTitle}px;
     --row-indent: ${box.indent}px;
     --row-title: ${type.title};
     --row-meta: ${type.meta};
@@ -1532,13 +1536,21 @@ export const SummaryIconButton = styled.button`
 /**
  * 목록 카드.
  *
- * ⚠️ 폭 상한은 **여기**가 소유한다. 예전에는 행 안쪽(Body max-width:880px)이 상한을 들고
- * 있어서, 행 hairline·hover·active tint는 컨테이너 전체 폭(1316px)을 그리는데 정보는
- * 985px에서 끝났다 — 1920에서는 행의 48%가 행 **안쪽** 빈칸이었다. 상한을 카드로 올리면
- * 같은 빈 픽셀이 카드 밖으로 나가 '여백'으로 읽힌다.
+ * ⚠️ 폭 상한의 **1차 소유자는 `PageWrapper`**(layout.styles.ts)다. 여기 `min(100%, ink)`는
+ * 카드가 다른 컨테이너에 재배치될 때를 위한 안전핀이며, 정상 경로에서는 셸 캡이 먼저 걸려
+ * 이 선언이 실제로 물리는 일은 없다.
  *
- * 1120 = 격자 고정 트랙 합 370(date 66 + chip 60 + dur 56 + flags 128 + act 60)
- *      + gap 60(12×5) + 제목 트랙 608 + Stop 패딩 26 + 목록 패딩 48 + 보더 2.
+ * 상한이 여기로 올라온 경위: 예전에는 행 안쪽(Body max-width:880px)이 상한을 들고 있어서
+ * 행 hairline·hover·active tint는 컨테이너 전체 폭(1316px)을 그리는데 정보는 985px에서
+ * 끝났다 — 1920에서 행의 48%가 행 **안쪽** 빈칸이었다. 그때 세운 "빈 픽셀이 카드 밖으로
+ * 나가면 여백으로 읽힌다"는 명제는 **틀렸다**: 카드만 캡을 받고 툴바는 못 받아 우측 끝이
+ * 2종이 됐고, 사용자에게는 "우측만 비었다"로 읽혔다(2026-08-02 검토). 그래서 상한을 한 번
+ * 더 위로, 셸까지 올렸다.
+ *
+ * ink 1120 = 격자 고정 트랙 합 370(date 66 + chip 60 + dur 56 + flags 128 + act 60)
+ *          + gap 60(12×5) + 제목 트랙 608 + Stop 패딩 26 + 목록 패딩 48 + 보더 2
+ *          + CompactList 스크롤바 6(:145 `::-webkit-scrollbar{width:6px}` — Chrome에서
+ *            레이아웃 폭을 실제로 점유한다. 이 항이 빠져 있어 예전 산식은 합이 1114였다).
  *
  * ⚠️ layout.styles.ts에도 같은 이름의 CatalogSection이 있지만 **소비처가 0인 죽은
  * export**다(유일 소비처는 event-compact-list.tsx의 List.CatalogSection). 거기를 고치면
@@ -1548,10 +1560,23 @@ export const CatalogSection = styled.section`
   display: flex;
   flex-direction: column;
   height: 100%;
-  width: min(100%, 1120px);
+  width: min(100%, ${LIST_WIDTH.inkWide}px);
   max-height: calc(100vh - var(--header-height) - 60px);
   overflow: hidden;
   position: relative;
+  /**
+   * 행이 요약 열을 켤지 판정하는 기준면.
+   *
+   * 뷰포트가 아니라 **카드 폭**이 기준이어야 한다 — 카드는 상세 패널 선택 여부에 따라
+   * 같은 뷰포트에서도 460px 차이가 나므로 미디어 쿼리로는 판정이 불가능하다.
+   *
+   * ⚠️ container-type: inline-size는 layout 봉쇄를 동반해 이 요소를 fixed 자손의
+   * 컨테이닝 블록으로 만든다. 목록 하위에 fixed·포털은 0건이고, 이 요소는 이미
+   * position: relative라 절대배치 자손의 기준면도 그대로다(검증 완료).
+   * sticky 연·세기 헤더는 스크롤 컨테이너인 CompactList에 붙으므로 무영향.
+   */
+  container-type: inline-size;
+  container-name: eventcard;
   border-radius: 12px;
   border: 1px solid
     ${({ theme }) =>

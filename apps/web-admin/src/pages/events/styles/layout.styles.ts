@@ -4,7 +4,7 @@
  */
 import styled, { css } from 'styled-components'
 
-import { BRAND, MOTION } from './theme'
+import { BRAND, LIST_WIDTH, MOTION } from './theme'
 
 export const PageScene = styled.div`
   position: fixed;
@@ -29,7 +29,30 @@ export const PageScene = styled.div`
   }
 `
 
-export const PageWrapper = styled.div`
+/**
+ * 페이지 셸 — **폭 상한의 단일 소유자**(목록 뷰 한정).
+ *
+ * 툴바·본문·오류 배너를 한 캡 안에 담아 우측 끝을 1종으로 만들고 `margin: 0 auto`로
+ * 중앙정렬한다. 앱 전역에서 페이지 레벨 캡은 예외 없이 `margin: 0 auto`와 짝이며
+ * (administration-departments-list:1124 / collection:258 / person-groups-list:191 …),
+ * 좌측정렬 캡을 쓰던 페이지는 여기 하나뿐이었다.
+ *
+ * ⚠️ concept-C의 "중앙 정렬 금지 — 좌측 스캔선이 폭에 따라 흔들린다"를 **의도적으로
+ * 번복한 것**이다(2026-08-02 승인). 그 금지는 카드가 뷰포트를 따라 늘어나던 캡 이전
+ * 세계의 판단이었다. 지금은 카드 폭이 상한에 고정돼 스캔선이 창 크기마다 한 번 정해져
+ * 고정되고, 무엇보다 셸을 통째로 중앙정렬하므로 **카드 좌측 끝과 툴바 좌측 끝이 영구히
+ * 같은 x에 선다** — 오히려 좌측정렬 시절이 그 규약을 깨고 있었다(카드 x=20, hairline 1900).
+ *
+ * 상한이 **선택 상태를 보지 않는다**는 것이 두 번째 계약이다. 요약 열 도입 전에는
+ * `$hasSelection`으로 캡을 1160↔1620으로 넓혀야 목록과 패널 사이 구멍(1920:300px /
+ * 2560:940px)이 안 생겼고, 그 대가로 선택할 때마다 페이지가 230px 미끄러졌다. 캡이
+ * `pageWide`로 올라간 지금은 패널이 이미 캡 안에 들어오므로 **셸 폭이 상수**이고,
+ * 선택 시 수평 이동이 0이다. 변하는 것은 카드 폭뿐이다(1840 → 1380).
+ *
+ * ⚠️ `transition`을 넣지 말 것 — max-width는 실제로 보간되므로 252행 목록 전체가
+ * 12프레임 동안 리레이아웃된다. 즉시 스냅이 싸다.
+ */
+export const PageWrapper = styled.div<{ $capped?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -38,6 +61,9 @@ export const PageWrapper = styled.div`
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  margin: 0 auto;
+  max-width: ${({ $capped }) =>
+    $capped ? `${LIST_WIDTH.pageWide}px` : 'none'};
 
   @media (max-width: 768px) {
     padding: 0 16px;

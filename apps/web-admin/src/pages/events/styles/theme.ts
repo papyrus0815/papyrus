@@ -360,6 +360,7 @@ export const LIST_DENSITY = {
     colDur: 52,
     colFlags: 112,
     colAct: 52,
+    colTitle: 480,
     indent: 24,
     yearH: 30,
     yearMt: 10,
@@ -381,6 +382,7 @@ export const LIST_DENSITY = {
     colDur: 56,
     colFlags: 128,
     colAct: 60,
+    colTitle: 520,
     indent: 24,
     yearH: 34,
     yearMt: 16,
@@ -402,6 +404,7 @@ export const LIST_DENSITY = {
     colDur: 60,
     colFlags: 136,
     colAct: 60,
+    colTitle: 520,
     indent: 24,
     yearH: 40,
     yearMt: 20,
@@ -499,6 +502,55 @@ export const BREAKPOINTS = {
   tablet: '1024px',
   desktop: '1200px',
   wide: '1600px',
+} as const
+
+/**
+ * 목록(LIST) 뷰 폭 상한 — **단일 출처**.
+ *
+ * 상한의 소유자는 `layout.styles.ts`의 `PageWrapper` 하나다. 예전에는 상한이 세 곳
+ * (행 Body 880 → 카드 1120 → ActiveContent 1120)을 떠돌았고, 그때마다 툴바만 상한 밖에
+ * 남아 **우측 끝이 2종**이 됐다. 1920에서 카드는 x=20에 좌측 고정인데 툴바 hairline은
+ * 1900까지 가서, 그 차이 760px이 "우측이 비었다"로 읽혔다(2026-08-02 검토).
+ *
+ *  - `ink`      = 6트랙 행이 잉크를 그리는 폭. 격자 고정 트랙 합에서 역산한 값이다.
+ *  - `page`     = ink + PageWrapper 좌우 패딩(20×2).
+ *  - `pageWithAside` = page + CatalogSplit gap(20) + 상세 패널(440).
+ *  - `inkWide`  = 7트랙(요약 열 포함) 행이 잉크를 그리는 폭.
+ *  - `pageWide` = inkWide + 패딩(40). **선택 여부와 무관한 셸 상한**이다.
+ *
+ * `pageWide`가 선택 상태를 안 보는 것이 핵심이다: 캡이 이미 패널을 품을 만큼 커서
+ * 선택해도 셸 폭이 안 변하고, 따라서 셸을 중앙정렬해도 페이지가 수평 이동하지 않는다
+ * (요약 열 도입 전에는 선택 시 230px 미끄러졌다).
+ *
+ * ⚠️ 파생값들은 전부 `ink`/`inkWide`에서 유도된다 — 잉크 폭을 바꾸면 나머지는 따라온다.
+ */
+export const LIST_WIDTH = {
+  ink: 1120,
+  page: 1160,
+  pageWithAside: 1620,
+  inkWide: 1840,
+  pageWide: 1880,
+  /**
+   * 요약 열이 켜지는 **카드 폭** 임계(컨테이너 쿼리 기준 — 뷰포트가 아니다).
+   *
+   * 카드 폭은 선택 상태에 따라 달라지므로 미디어 쿼리로는 판정할 수 없다:
+   * 미선택 = 셸 − 40, 선택 = 셸 − 40 − gap 20 − 패널 440.
+   *
+   * ⚠️ 단위는 **content box**다. 컨테이너 쿼리는 border box가 아니라 콘텐츠 상자를
+   * 재므로 카드 보더 2px은 빠진다 — 이 항을 빼먹으면 임계 바로 위 뷰포트에서 열이
+   * 안 켜진다(1824px에서 카드 1324인데 콘텐츠는 1322라 미달했다. 실측으로 확인).
+   *
+   * 1322 = 카드 크롬 80(목록 패딩 48 + Stop 패딩 26 + 스크롤바 6 — 보더 2는 제외)
+   *      + 고정 트랙 370(date 66 + chip 60 + dur 56 + flags 128 + act 60)
+   *      + gap 72(12×6) + 제목 520 + 요약 280  ← cozy 기준
+   * 요약 280자리는 한 줄 말줄임의 실용 하한이다. 그 아래로는 열을 여느니 안 여는 게 낫다.
+   * (compact는 고정 트랙·gap이 더 작아 같은 임계에서 요약이 더 넓게 잡힌다.)
+   *
+   * 결과적으로 선택 상태에서 요약이 살아남는 최소 뷰포트는 1824px이다
+   * (1824 − 500 = 카드 1324 = 콘텐츠 1322). 주 작업 뷰포트가 1920+라 그 아래 대역의
+   * 모드 플립은 수용했다.
+   */
+  summaryColumnMinCard: 1322,
 } as const
 
 /**
