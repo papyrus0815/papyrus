@@ -77,6 +77,45 @@ const isTextEntryTarget = (target: EventTarget | null): boolean => {
 }
 
 /**
+ * Esc를 삼켜야 하는 대상인가 — **Escape 전용** 가드.
+ *
+ * 예전에는 `isInteractiveTarget`을 재사용했는데, 그건 `button, a, [role="button"]`까지
+ * `closest`로 막는다. 그래서 상세 패널 안 **아무 버튼에 포커스가 있으면 Esc가 죽었다** —
+ * 하필 그 버튼 중 하나가 `title="닫기 (Esc)"`인 ✕였다(1920px 실측: ✕에 포커스 → Esc →
+ * 패널 그대로, 목록 행에 포커스 → Esc → 정상 닫힘). 데스크톱 패널은 `role="region"`이라
+ * 자체 Esc 핸들러도 없어(그건 모바일 dialog 분기 전용) 이 훅이 유일한 경로였다.
+ *
+ * 그렇다고 텍스트 입력만 막으면 반대편 회귀가 열린다. 그래서 **Esc에 자기 계약이 있는
+ * 것만** 막는다:
+ *  - 텍스트 입력 — 브라우저가 입력값을 지우는 네이티브 동작. 검색어를 다듬을 때마다
+ *    보던 사건의 드로어가 함께 닫히면 안 된다.
+ *  - 네이티브 select — 열린 드롭다운을 Esc로 취소하는 계약(실측으로 확인).
+ *  - dialog·menu·listbox 컨테이너 — 자기 Esc를 스스로 처리한다. 여기를 통과시키면
+ *    "모달은 남고 뒤의 상세 선택만 조용히 풀리는" 과거 결함이 되살아난다. 특히 사건 등록
+ *    모달은 dirty 확인이 비동기라 `closeTopOverlay`에 **일부러 빠져 있어**(use-catalog-modals
+ *    주석) 이 가드가 유일한 방어선이다.
+ *
+ * 빠진 것은 `button, a, [role="button"], [role="option"]` — 버그를 만들던 바로 그 집합이다.
+ */
+const isEscapeReservedTarget = (target: EventTarget | null): boolean => {
+  const element = target as HTMLElement | null
+  if (!element) return false
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement
+  ) {
+    return true
+  }
+  if (element.isContentEditable) return true
+  return Boolean(
+    element.closest?.(
+      '[role="dialog"], [role="menu"], [role="listbox"], [contenteditable="true"]',
+    ),
+  )
+}
+
+/**
  * 모달 다이얼로그가 열려 있는가 — `/` 전용 가드.
  *
  * `isTextEntryTarget`은 input/textarea/contenteditable만 막는다. 그래서 폼 모달이 열려
@@ -113,7 +152,7 @@ export function useCatalogShortcuts(args: CatalogShortcutsArgs) {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      const inEditable = isInteractiveTarget(event.target)
+      const escapeReserved = isEscapeReservedTarget(event.target)
       const inTextEntry = isTextEntryTarget(event.target)
       if (event.key === '?' && !inTextEntry) {
         event.preventDefault()
@@ -126,10 +165,9 @@ export function useCatalogShortcuts(args: CatalogShortcutsArgs) {
         // 그 외에는 무조건 선택을 해제해, 요약 모달을 띄운 채 Esc를 누르면 모달은
         // 남고 뒤의 상세 선택이 조용히 풀렸다.
         if (closeTopOverlay()) return
-        // ⚠️ 편집 요소 가드 — ?·/ 분기에는 있고 Escape에만 빠져 있었다.
-        // 검색창에서 Esc를 누르면(브라우저가 입력값을 지우는 네이티브 동작) 보고 있던
-        // 사건의 드로어까지 함께 닫혀, 검색어를 다듬을 때마다 상세 맥락을 잃었다.
-        if (inEditable) return
+        // Esc에 자기 계약이 있는 대상만 비켜준다 — 상세 패널의 ✕·이전/다음 같은
+        // **버튼은 더 이상 막지 않는다**(isEscapeReservedTarget 주석 참고).
+        if (escapeReserved) return
         if (selectedEventId) clearSelectedEvent()
       }
     }

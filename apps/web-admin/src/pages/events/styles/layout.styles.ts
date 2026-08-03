@@ -203,7 +203,11 @@ export const TopFilterBar = styled.div`
  * detail 패널 폭 — 1400+에서 440px / 1200~1400에서 380px / <1200은 drawer.
  *
  * `$hasSelection=false`일 땐 *우측 컬럼 자체 미할당* → 메인 뷰 풀 폭.
- * 사건이 선택되면 컬럼 등장 (CSS transition은 grid-template로 자연스럽게).
+ *
+ * ⚠️ `grid-template-columns`에 transition을 걸지 말 것. 트랙 **개수**가 1↔2로 바뀌므로
+ * CSS 명세상 보간 대상이 아니다 — 예전 `transition: grid-template-columns 0.18s`는
+ * 한 번도 실행된 적 없는 선언이었고, 실제로 애니메이션되는 건 gap뿐이라 결과는
+ * '컬럼은 즉시 점프 + gap만 0.18s 흐물거림'이었다. gap만 남긴다.
  */
 export const CatalogSplit = styled.div<{ $hasSelection?: boolean }>`
   display: grid;
@@ -213,7 +217,7 @@ export const CatalogSplit = styled.div<{ $hasSelection?: boolean }>`
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  transition: grid-template-columns 0.18s ease, gap 0.18s ease;
+  transition: gap 0.18s ease;
 
   @media (max-width: 1400px) {
     grid-template-columns: ${({ $hasSelection }) =>
@@ -236,11 +240,10 @@ export const CatalogSplit = styled.div<{ $hasSelection?: boolean }>`
   }
 `
 
-export const CatalogSection = styled.section`
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-`
+/*
+ * (제거됨) CatalogSection — 소비처 0인 죽은 export.
+ *
+ * 같은 이름이 `list.styles.ts`에도 있고 목록 카드가 쓰는 건 **그쪽**이다
+ * (`event-compact-list.tsx`의 `List.CatalogSection`). 파일명이 layout이라 폭·레이아웃을
+ * 고치러 온 사람이 여기를 먼저 열고 고친 뒤 "아무 일도 안 일어난다"에 빠지는 함정이었다.
+ */

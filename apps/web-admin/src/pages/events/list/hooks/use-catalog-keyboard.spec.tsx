@@ -182,7 +182,24 @@ const ShortcutHarness = ({
     selectedEventId,
     clearSelectedEvent,
   })
-  return <div>harness</div>
+  return (
+    <div>
+      harness
+      {/* 상세 패널을 흉내낸다 — 데스크톱은 region(모바일만 dialog) */}
+      <div role="region" aria-label="사건 상세: 테스트">
+        <button type="button" title="닫기 (Esc)" aria-label="상세 닫기">
+          ✕
+        </button>
+      </div>
+      <input aria-label="검색" />
+      <select aria-label="정렬">
+        <option>시기순</option>
+      </select>
+      <div role="dialog" aria-modal="true" aria-label="등록 모달">
+        <button type="button">모달 안 버튼</button>
+      </div>
+    </div>
+  )
 }
 
 describe('useCatalogShortcuts — Escape 우선순위', () => {
@@ -212,5 +229,51 @@ describe('useCatalogShortcuts — Escape 우선순위', () => {
 
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(clearSelectedEvent).toHaveBeenCalled()
+  })
+
+  /**
+   * Escape 가드 범위 (2026-08-02 배치 3).
+   *
+   * 예전엔 `isInteractiveTarget`을 재사용해 **버튼까지** 막았다. 그래서 상세 패널의
+   * ✕(title="닫기 (Esc)")에 포커스가 있으면 Esc가 죽었다 — 1920px 라이브 실측으로
+   * 확인한 실버그다. 이제 Esc에 자기 계약이 있는 대상만 비켜준다.
+   */
+  describe('Escape 가드 범위', () => {
+    const setup = () => {
+      const clearSelectedEvent = jest.fn()
+      render(
+        <ShortcutHarness
+          closeTopOverlay={jest.fn(() => false)}
+          clearSelectedEvent={clearSelectedEvent}
+        />,
+      )
+      return clearSelectedEvent
+    }
+
+    it('상세 패널 닫기 버튼에서 Esc가 먹는다 — 버튼은 더 이상 Esc를 삼키지 않는다', () => {
+      const clearSelectedEvent = setup()
+      fireEvent.keyDown(screen.getByLabelText('상세 닫기'), { key: 'Escape' })
+      expect(clearSelectedEvent).toHaveBeenCalled()
+    })
+
+    it('검색 입력에서는 Esc를 비켜준다 — 검색어를 지울 때 드로어가 함께 닫히면 안 된다', () => {
+      const clearSelectedEvent = setup()
+      fireEvent.keyDown(screen.getByLabelText('검색'), { key: 'Escape' })
+      expect(clearSelectedEvent).not.toHaveBeenCalled()
+    })
+
+    it('네이티브 select에서는 Esc를 비켜준다 — 열린 드롭다운 취소가 네이티브 계약이다', () => {
+      const clearSelectedEvent = setup()
+      fireEvent.keyDown(screen.getByLabelText('정렬'), { key: 'Escape' })
+      expect(clearSelectedEvent).not.toHaveBeenCalled()
+    })
+
+    it('모달 안 버튼에서는 Esc를 비켜준다 — 모달만 남고 뒤 선택이 풀리면 안 된다', () => {
+      // 등록 모달은 dirty 확인이 비동기라 closeTopOverlay에 일부러 빠져 있다.
+      // 이 가드가 유일한 방어선이므로 버튼을 푼 뒤에도 반드시 남아 있어야 한다.
+      const clearSelectedEvent = setup()
+      fireEvent.keyDown(screen.getByText('모달 안 버튼'), { key: 'Escape' })
+      expect(clearSelectedEvent).not.toHaveBeenCalled()
+    })
   })
 })
