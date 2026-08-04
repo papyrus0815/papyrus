@@ -29,9 +29,12 @@ class SmokeContextTest extends MySqlContainerSupport {
 	@Test
 	@DisplayName("account 테이블을 읽을 수 있다")
 	void readsAccountTable() {
-		// 스냅샷은 DDL 만 담으므로 컨테이너는 비어 있다. 여기서 확인하는 것은 행의 존재가 아니라
-		// 매핑이 실제 컬럼에 붙어 쿼리가 나간다는 사실이다.
-		assertThat(accountRefRepository.count()).isZero();
-		assertThat(accountRefRepository.findByUserName("admin")).isEmpty();
+		// 행 수를 단정하지 않는다. 컨테이너는 JVM 당 하나라 다른 테스트가 @Sql 로 넣은
+		// 픽스처가 남아 있을 수 있다. 여기서 확인할 것은 데이터가 아니라 매핑이 실제 컬럼에
+		// 붙어 쿼리가 나간다는 사실이다 — 컬럼명이 하나라도 틀리면 여기서 터진다.
+		assertThat(accountRefRepository.count()).isNotNegative();
+
+		// 존재하지 않는 값으로 조회해 파생 쿼리(user_name 컬럼)까지 실제로 실행시킨다.
+		assertThat(accountRefRepository.findByUserName("__no_such_user__")).isEmpty();
 	}
 }

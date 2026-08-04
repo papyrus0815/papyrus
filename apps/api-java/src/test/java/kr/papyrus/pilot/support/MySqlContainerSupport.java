@@ -55,5 +55,8 @@ public abstract class MySqlContainerSupport {
 		registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
 		registry.add("spring.datasource.username", MYSQL::getUsername);
 		registry.add("spring.datasource.password", MYSQL::getPassword);
+		// JwtDecoder 빈은 키가 없으면 기동을 거부한다(운영에서 키 없이 뜨면 모든 요청이
+		// 조용히 401 이 되므로 일부러 그렇게 만들었다). 테스트에서도 키가 필요하다.
+		registry.add("pilot.jwt-secret", () -> TestTokens.SECRET);
 	}
 }

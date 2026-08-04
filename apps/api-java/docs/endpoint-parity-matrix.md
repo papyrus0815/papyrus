@@ -20,7 +20,7 @@
 
 | # | 메서드 | 경로 | 담당 클래스 | 골든 | 구현 | 비고 |
 |---|---|---|---|---|---|---|
-| 8 | GET | `/wallet/me` | `WalletController.me` | RO + ERR(401) | ⬜ | |
+| 8 | GET | `/wallet/me` | `WalletController.me` | RO + ERR(401) | ✅ | 골든 대조 + 라이브 대조 통과. 키 순서·날짜 포맷 포함 |
 | 9 | POST | `/wallet/exchange` | `.exchange` | — | ⬜ | 멱등키 `EXCHANGE:{requestId}`. 중복은 흡수 후 200 |
 | 10 | POST | `/wallet/redeem` | `.redeem` | ERR(404) | ⬜ | 재사용은 **409** |
 | 11 | GET | `/wallet/shop` | `.shop` | RO | ⬜ | 잘못된 category 는 무시(200) |
@@ -46,8 +46,9 @@
 
 | | |
 |---|---|
-| 구현 완료 | 0 / 23 |
+| 구현 완료 | **1 / 23** (`GET /wallet/me`) |
 | 골든 확보 | 18건 — GET 16 · 에러 봉투 2 |
 | 골든 미확보 | 쓰기 7 (`--include-mutating` 필요, DB 가 바뀜) |
+| 라이브 대조 | `./tools/live-parity.sh` — 구현된 경로만. 현재 1/1 일치 |
 
 **MVP 컷라인은 #1–#18 (gamification 7 + wallet 11).** artifacts 5 는 일정이 밀리면 첫 번째로 자른다.

@@ -38,6 +38,9 @@ Nest 구현과 **일부러 다르게** 만든 지점을 기록한다.
 | null 반환 엔드포인트 | 빈 바디 200 이다. `{}` 도 `null` 도 아니다 |
 | `shop_item.payload` | JSON 통과(passthrough). 문자열로 감싸면 프론트의 `typeof payload !== 'object'` 가드에 걸려 코스메틱이 조용히 죽는다 |
 | 401 봉투 | `{success, timestamp, path, method, statusCode, error:{name,message,details}, requestId}`. Spring 의 `ProblemDetail` 로 바꾸면 프론트의 `/auth/refresh` 자동 재시도가 죽는다 |
+| `DATETIME` 존 해석 | **UTC**다. 서버 `time_zone` 이 `+09:00` 이어도 그렇다 — 규약을 정한 건 서버가 아니라 Prisma다. `Asia/Seoul` 로 읽으면 9시간 어긋난다. ADR-0002 |
+| 토큰 추출 순서 | 쿠키 `access_token` **먼저**, 그 다음 `Authorization: Bearer`. 반대로 하면 계정 전환 직후 둘이 다른 계정을 가리킬 때 Nest와 판정이 갈린다 |
+| 에러 메시지 한국어 | `계정을 찾을 수 없습니다` 등을 그대로 쓴다. 프론트가 토스트에 그대로 띄우므로 영어로 바꾸면 사용자 화면이 바뀐다 |
 | P2002(중복) 정책 비대칭 | `exchange`/`grant`/`purchase` 는 흡수 후 200, `redeem`/`refund` 는 409. 뭉개서 통일하면 프론트 재시도 UX 가 깨진다 |
 | `wallet_ledger.reason` enum | 미사용 2값(`PURCHASE_TOPUP`, `ADMIN_ADJUST`) 포함 7값 전부 선언. 좁히면 기존 행 조회에서 예외가 난다 |
 | `refund` 멱등키 | `REVERSAL:{itemId}`. `{ledgerId}` 로 "개선" 하면 환불의 환불이 무한 증폭된다 |

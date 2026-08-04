@@ -68,8 +68,14 @@ class QuerydslAptSpikeTest extends MySqlContainerSupport {
 				.limit(10)
 				.fetch();
 
-		// 컨테이너는 DDL 만 올라가 있어 비어 있다. 여기서 증명하는 것은 결과가 아니라
-		// 쿼리가 조립되어 실행까지 도달한다는 사실이다.
-		assertThat(rows).isEmpty();
+		// 행 수를 단정하지 않는다. 컨테이너는 JVM 당 하나라 다른 테스트가 @Sql 로 넣은
+		// 픽스처가 남아 있을 수 있고, 여기서 증명할 것은 데이터가 아니라 "쿼리가 조립되어
+		// 실행되고 DTO 로 매핑된다" 는 사실이다.
+		assertThat(rows).isNotNull();
+		assertThat(rows).allSatisfy(row -> {
+			assertThat(row.accountId()).isNotBlank();
+			assertThat(row.displayName()).isNotBlank(); // coalesce 가 동작했다
+			assertThat(row.totalPoints()).isPositive(); // where 절이 적용됐다
+		});
 	}
 }

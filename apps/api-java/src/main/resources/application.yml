@@ -4,12 +4,17 @@ spring:
 
   datasource:
     # Nest(:8000)와 같은 MySQL 8.0.45 를 본다. 파일럿은 읽기 정본을 새로 만들지 않는다.
-    # connectionTimeZone: 서버 time_zone 이 +09:00 이고 Nest 도 KST 로 붙는다.
-    #   기본값으로 두면 JDBC 가 JVM 기본 TZ 로 해석해 자정 근처 값이 하루 밀린다.
+    # connectionTimeZone=UTC 인 이유 — 서버 time_zone 이 +09:00 인데도 UTC 다.
+    #   DATETIME 에는 오프셋이 없어서 "저장된 벽시계를 어느 존으로 읽을 것인가"는 순전히
+    #   클라이언트 규약이고, 이 DB 의 규약을 정한 것은 서버가 아니라 Prisma 다.
+    #   실측: 원본 행 '2026-07-20 07:21:56.727' → Nest 응답 '2026-07-20T07:21:56.727Z'.
+    #   숫자가 그대로에 Z 가 붙는다 = Prisma 는 저장된 벽시계를 UTC 로 읽고 쓴다.
+    #   여기서 Asia/Seoul 로 두면 같은 행이 9시간 어긋난 instant 가 된다.
+    #   (업무상 '오늘' 경계는 별개 축이다 — ClockConfig 는 Asia/Seoul 을 쓴다)
     # innodb_lock_wait_timeout: 서버 기본이 50초라 락 경합 테스트가 사실상 멈춘다.
     #   MySQL 은 `SELECT ... FOR UPDATE WAIT n` 문법이 없어 Hibernate 의 lock timeout
     #   힌트가 무시되므로, 세션 변수로 거는 것이 유일한 방법이다.
-    url: ${PILOT_DB_URL:jdbc:mysql://localhost:3307/papyrus?connectionTimeZone=Asia/Seoul&sessionVariables=innodb_lock_wait_timeout=5&rewriteBatchedStatements=true}
+    url: ${PILOT_DB_URL:jdbc:mysql://localhost:3307/papyrus?connectionTimeZone=UTC&sessionVariables=innodb_lock_wait_timeout=5&rewriteBatchedStatements=true}
     username: ${PILOT_DB_USER:papyrus}
     password: ${PILOT_DB_PASSWORD:}
     hikari:
@@ -25,7 +30,8 @@ spring:
     properties:
       hibernate:
         jdbc:
-          time_zone: Asia/Seoul
+          # 위 connectionTimeZone 과 같은 이유로 UTC. Prisma 가 정한 저장 규약을 따른다.
+          time_zone: UTC
 
   flyway:
     # 첫 커밋에서는 꺼둔다. 켜는 순간 공유 DB 에 flyway_schema_history_pilot 을 만들고

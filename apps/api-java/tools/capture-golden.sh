@@ -144,4 +144,10 @@ else
 fi
 
 echo
+echo "── 입력 픽스처 (골든과 반드시 같은 시점) ──"
+# 이 DB 는 살아 있다. 실제로 캡처 1시간 만에 account.total_points 가 7185 -> 7205 로 움직였다.
+# 픽스처를 따로 뜨면 exchangeableNow 기대값이 어긋나 테스트가 거짓 실패한다.
+node "$SCRIPT_DIR/dump-fixture.js"
+
+echo
 echo "완료: $(find "$OUT_DIR" -name '*.json' | wc -l | tr -d ' ') 개 골든 → $OUT_DIR"

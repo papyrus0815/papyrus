@@ -55,7 +55,11 @@ Boot 4.1 은 3.x 와 다른 점이 몇 개 있고 전부 이 프로젝트에서 
 ./tools/run.sh
 
 # 골든 재캡처 (읽기 전용. Nest 가 :8000 에 떠 있어야 한다)
+# 입력 픽스처도 같이 뜬다 — 둘의 시점이 어긋나면 대조가 거짓 실패한다
 ./tools/capture-golden.sh
+
+# 라이브 대조 (두 서버가 모두 떠 있어야 한다)
+./tools/live-parity.sh
 
 # 스키마 스냅샷 갱신 (Docker mysql 컨테이너 경유)
 ./tools/dump-schema.sh
@@ -82,18 +86,21 @@ Boot 4.1 은 3.x 와 다른 점이 몇 개 있고 전부 이 프로젝트에서 
 | `progressRatio` | `1` | `double` 이면 `1.0` — 프론트 비교가 깨진다 |
 | `createdAt` | `2026-07-20T07:21:56.727Z` | `Instant.toString()` 은 ms 가 0 이면 `.000` 을 생략한다 |
 
-## 현재 상태 (W1)
+## 현재 상태 — W1 완료, W2 착수
 
 | 관문 | 상태 |
 |---|---|
-| `./gradlew build` 통과 | ✅ |
+| `./gradlew build` 통과 | ✅ 테스트 14/14 |
 | QueryDSL APT × Boot 4.1 × Hibernate 7 × Gradle 9 × JDK 21 | ✅ `QAccountRef` 생성 확인 — 폴백 불필요 |
-| `ddl-auto=validate` 로 운영 DDL 위 기동 | ✅ `SmokeContextTest` |
+| `ddl-auto=validate` 로 운영 DDL 위 기동 | ✅ 2.5초, `/actuator/health` UP |
 | `SchemaContractVerifier` (UNIQUE 5종) | ✅ 부팅 시 확인, 없으면 기동 실패 |
 | 골든 캡처 | ✅ 18건 (GET 16 + 에러 봉투 2). POST 성공 경로는 미캡처 |
-| Nest 발급 토큰으로 파일럿 인증 | ⬜ W1 잔여 — `SecurityConfig` 미작성 |
+| **Nest 발급 토큰으로 파일럿 인증** | ✅ HS256 대칭키, 쿠키 우선 추출, 401/404 봉투 일치 |
+| **`GET /wallet/me` 이관** | ✅ 골든 대조 + 라이브 대조 통과 (키 순서·날짜 포맷 포함) |
 
-다음: `SecurityConfig`(HS256 대칭키로 Nest 토큰 검증) → `/wallet/me` 읽기 경로(W2).
+라이브 대조는 `./tools/live-parity.sh` — 같은 토큰으로 :8000 과 :8081 을 동시에 호출해 diff 한다.
+
+다음: `/wallet/shop` · `/wallet/items` · `/wallet/equipped/{accountId}` (W2 잔여 3개).
 
 ## 문서
 

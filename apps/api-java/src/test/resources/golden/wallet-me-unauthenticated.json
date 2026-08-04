@@ -8,7 +8,7 @@
   "bodyEmpty": false,
   "body": {
     "success": false,
-    "timestamp": "2026-08-04T04:43:47.381Z",
+    "timestamp": "2026-08-04T05:43:10.148Z",
     "path": "/wallet/me",
     "method": "GET",
     "statusCode": 401,
@@ -20,6 +20,6 @@
         "statusCode": 401
       }
     },
-    "requestId": "4d2da871-c38c-4141-8d06-041ba5bdeb37"
+    "requestId": "27fa2441-75e9-4139-bf72-8f348444bf00"
   }
 }
