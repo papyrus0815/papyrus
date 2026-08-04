@@ -1,0 +1,85 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/gamification/centuries"
+  },
+  "status": 200,
+  "bodyEmpty": false,
+  "body": [
+    {
+      "century": 21,
+      "label": "21세기",
+      "entryCount": 12
+    },
+    {
+      "century": 20,
+      "label": "20세기",
+      "entryCount": 80
+    },
+    {
+      "century": 19,
+      "label": "19세기",
+      "entryCount": 50
+    },
+    {
+      "century": 18,
+      "label": "18세기",
+      "entryCount": 9
+    },
+    {
+      "century": 17,
+      "label": "17세기",
+      "entryCount": 1
+    },
+    {
+      "century": 16,
+      "label": "16세기",
+      "entryCount": 3
+    },
+    {
+      "century": 15,
+      "label": "15세기",
+      "entryCount": 3
+    },
+    {
+      "century": 14,
+      "label": "14세기",
+      "entryCount": 14
+    },
+    {
+      "century": 13,
+      "label": "13세기",
+      "entryCount": 15
+    },
+    {
+      "century": 12,
+      "label": "12세기",
+      "entryCount": 19
+    },
+    {
+      "century": 11,
+      "label": "11세기",
+      "entryCount": 17
+    },
+    {
+      "century": 10,
+      "label": "10세기",
+      "entryCount": 32
+    },
+    {
+      "century": 9,
+      "label": "9세기",
+      "entryCount": 7
+    },
+    {
+      "century": 8,
+      "label": "8세기",
+      "entryCount": 1
+    },
+    {
+      "century": null,
+      "label": "세기 미상",
+      "entryCount": 8
+    }
+  ]
+}

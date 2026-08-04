@@ -1,0 +1,43 @@
+HELP.md
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### 파일럿 ###
+# 골든(src/test/resources/golden/)은 무시하지 않는다. 계약 기준선이라 반드시 커밋한다.
+# 스키마 스냅샷(src/test/resources/db/testschema/)도 마찬가지다.
+# 시크릿은 애초에 이 디렉터리에 오지 않는다 — tools/env.sh 가 루트 env.development 를 읽는다.
+*.local.env

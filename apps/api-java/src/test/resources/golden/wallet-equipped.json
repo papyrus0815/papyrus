@@ -1,0 +1,9 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/wallet/equipped/6af53fe7-d02b-4c42-b86c-f32800897b32"
+  },
+  "status": 200,
+  "bodyEmpty": false,
+  "body": []
+}

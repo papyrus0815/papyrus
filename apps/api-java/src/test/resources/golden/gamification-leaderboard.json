@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/gamification/leaderboard"
+  },
+  "status": 200,
+  "bodyEmpty": false,
+  "body": [
+    {
+      "rank": 1,
+      "accountId": "6af53fe7-d02b-4c42-b86c-f32800897b32",
+      "username": "에디터",
+      "gradeCode": "DIAMOND",
+      "totalPoints": 7185,
+      "contributionCount": 271,
+      "heroThumbnail": "/uploads/images/persons/2026/06/1780637888209-380554114.webp",
+      "isMe": true
+    }
+  ]
+}

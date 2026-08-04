@@ -1,0 +1,370 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/gamification/countries"
+  },
+  "status": 200,
+  "bodyEmpty": false,
+  "body": [
+    {
+      "countryId": "713f8aaf-f9ae-4ee1-aacc-758dfd38a340",
+      "name": "독일",
+      "historical": false,
+      "entryCount": 57
+    },
+    {
+      "countryId": "46c6f0dd-c364-4a88-9406-369c1f83dca9",
+      "name": "프랑스",
+      "historical": false,
+      "entryCount": 46
+    },
+    {
+      "countryId": "841c6f98-ac4c-4a29-8ac7-2e74c24cd90c",
+      "name": "미국",
+      "historical": false,
+      "entryCount": 32
+    },
+    {
+      "countryId": "480309a0-6a9c-4d23-ba92-e57ce7205ec6",
+      "name": "오스트리아",
+      "historical": false,
+      "entryCount": 32
+    },
+    {
+      "countryId": "06065d9a-4bdb-4066-a8db-e8be8f029e1f",
+      "name": "독일 제국",
+      "historical": true,
+      "entryCount": 28
+    },
+    {
+      "countryId": "1adb99f6-7d7d-49ce-9500-b34cadb486d7",
+      "name": "체코",
+      "historical": false,
+      "entryCount": 24
+    },
+    {
+      "countryId": "38d7d6c0-0835-4488-b505-d5dea7f3292e",
+      "name": "폴란드",
+      "historical": false,
+      "entryCount": 23
+    },
+    {
+      "countryId": "7ac8a1b5-1fbd-489a-aa4a-4cce4afc6752",
+      "name": "헝가리",
+      "historical": false,
+      "entryCount": 22
+    },
+    {
+      "countryId": "4483ebdc-2b1c-4d8f-bcde-67a9a8bcd893",
+      "name": "러시아",
+      "historical": false,
+      "entryCount": 21
+    },
+    {
+      "countryId": "9817916d-3b65-4c38-b42f-a1ea2c02c60a",
+      "name": "러시아 제국",
+      "historical": true,
+      "entryCount": 20
+    },
+    {
+      "countryId": "4d99a6a8-14c4-43f2-8aac-a3cc6382ebdd",
+      "name": "프랑스 제3공화국",
+      "historical": true,
+      "entryCount": 17
+    },
+    {
+      "countryId": "694515a9-cd57-43fe-b1a5-6b89ec37b09b",
+      "name": "오스트리아-헝가리 제국",
+      "historical": true,
+      "entryCount": 15
+    },
+    {
+      "countryId": "0b21e8de-d70a-405a-a7ab-e62bec18d606",
+      "name": "신성로마제국",
+      "historical": true,
+      "entryCount": 15
+    },
+    {
+      "countryId": "55ff35f3-0437-41fc-a805-165206cc805d",
+      "name": "폴란드 공국",
+      "historical": true,
+      "entryCount": 12
+    },
+    {
+      "countryId": "aa87c37d-63ac-4e7b-bb39-4a3a24fe1411",
+      "name": "튀르키예",
+      "historical": false,
+      "entryCount": 9
+    },
+    {
+      "countryId": "51f31c0c-c015-4218-9801-215e8c9232c9",
+      "name": "영국",
+      "historical": false,
+      "entryCount": 8
+    },
+    {
+      "countryId": "cd9768f8-cecc-42ed-8f15-cfd24f8a7870",
+      "name": "세르비아",
+      "historical": false,
+      "entryCount": 8
+    },
+    {
+      "countryId": "03bf09f8-28d7-46c0-b119-af240845f7b5",
+      "name": "오스만 제국",
+      "historical": true,
+      "entryCount": 8
+    },
+    {
+      "countryId": "366027d9-c338-4a80-bde0-4699aaad366f",
+      "name": "보헤미아 공국",
+      "historical": true,
+      "entryCount": 6
+    },
+    {
+      "countryId": "6ced5d7b-ede3-41c1-8276-0e12bd870677",
+      "name": "세르비아 왕국 (근대)",
+      "historical": true,
+      "entryCount": 6
+    },
+    {
+      "countryId": "b4684d4d-3ca2-46ca-86c1-f3f60ae0ac51",
+      "name": "대한민국",
+      "historical": false,
+      "entryCount": 5
+    },
+    {
+      "countryId": "be212304-aba5-41f8-ad0c-68af03054080",
+      "name": "중국",
+      "historical": false,
+      "entryCount": 5
+    },
+    {
+      "countryId": "cb291565-3a0f-4c5d-9414-1b05a22e7d11",
+      "name": "그레이트브리튼 및 아일랜드 연합왕국",
+      "historical": true,
+      "entryCount": 5
+    },
+    {
+      "countryId": "ff788b06-3130-48a5-8665-53ba8ad0d6ef",
+      "name": "우크라이나",
+      "historical": false,
+      "entryCount": 4
+    },
+    {
+      "countryId": "1df49650-f314-480f-aba1-74b8d9c7b894",
+      "name": "일본",
+      "historical": false,
+      "entryCount": 4
+    },
+    {
+      "countryId": "36ab3f54-9947-4029-8c75-eed9d28fba04",
+      "name": "동프랑크 왕국",
+      "historical": true,
+      "entryCount": 4
+    },
+    {
+      "countryId": "2fa90215-7677-4915-9af0-91229c096f03",
+      "name": "청나라",
+      "historical": true,
+      "entryCount": 4
+    },
+    {
+      "countryId": "cc7d649d-861a-47b9-b291-4c43067b2afd",
+      "name": "일본 제국",
+      "historical": true,
+      "entryCount": 4
+    },
+    {
+      "countryId": "5fb8a3f6-f876-4b2c-9774-16cd5c7826f6",
+      "name": "이탈리아",
+      "historical": false,
+      "entryCount": 3
+    },
+    {
+      "countryId": "3b1a8c46-5389-451d-8945-4b4c07de6e8c",
+      "name": "벨라루스",
+      "historical": false,
+      "entryCount": 3
+    },
+    {
+      "countryId": "6eaef97e-9653-4918-9137-a597fd866c91",
+      "name": "몬테네그로",
+      "historical": false,
+      "entryCount": 2
+    },
+    {
+      "countryId": "bcad5825-1276-40cd-a625-af61b27dfa11",
+      "name": "중화민국",
+      "historical": true,
+      "entryCount": 2
+    },
+    {
+      "countryId": "1250d22a-b6c8-4ef1-9797-5db7af0de663",
+      "name": "마이센 변경백령",
+      "historical": true,
+      "entryCount": 2
+    },
+    {
+      "countryId": "400f594b-b114-4981-a284-0abcf2a3d9f7",
+      "name": "세르비아 공국",
+      "historical": true,
+      "entryCount": 2
+    },
+    {
+      "countryId": "7e56979b-5b2e-444c-adbf-25cbef5e8b4b",
+      "name": "갈리치아-볼히니아 공국",
+      "historical": true,
+      "entryCount": 2
+    },
+    {
+      "countryId": "d04aca7a-0572-46a9-b271-98d2459b3c09",
+      "name": "몬테네그로 공국",
+      "historical": true,
+      "entryCount": 2
+    },
+    {
+      "countryId": "7eedabc8-99a8-4e88-8caa-c5bf045e6315",
+      "name": "작센 공국",
+      "historical": true,
+      "entryCount": 2
+    },
+    {
+      "countryId": "3b12d778-8c73-4edf-8173-cd3826c9a898",
+      "name": "루마니아",
+      "historical": false,
+      "entryCount": 1
+    },
+    {
+      "countryId": "ca30ae23-541e-4ceb-a7cf-a8fd49dbe1cb",
+      "name": "스페인",
+      "historical": false,
+      "entryCount": 1
+    },
+    {
+      "countryId": "6a239017-fb96-43d1-9fc9-c9f5bd8bd64a",
+      "name": "슬로바키아",
+      "historical": false,
+      "entryCount": 1
+    },
+    {
+      "countryId": "5469875f-2a23-42f0-849d-e4e11ecf7853",
+      "name": "슬로베니아",
+      "historical": false,
+      "entryCount": 1
+    },
+    {
+      "countryId": "77bdfcd3-c34a-4b64-a39b-e0571aa49844",
+      "name": "불가리아",
+      "historical": false,
+      "entryCount": 1
+    },
+    {
+      "countryId": "beb42dfd-b84c-4766-b4a6-e171b33a87f9",
+      "name": "그리스",
+      "historical": false,
+      "entryCount": 1
+    },
+    {
+      "countryId": "0dacbb76-eb35-462a-983f-33f9e6a272af",
+      "name": "이스라엘",
+      "historical": false,
+      "entryCount": 1
+    },
+    {
+      "countryId": "325f79bf-c537-475e-8d7a-f28ea79be0d4",
+      "name": "팔레스타인",
+      "historical": false,
+      "entryCount": 1
+    },
+    {
+      "countryId": "eca526c7-4d3c-42c3-ad64-e5d907fb26a4",
+      "name": "서프랑크 왕국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "8a1c9464-e720-488b-91ec-f5adaedbde94",
+      "name": "불가리아 왕국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "0b822cbd-25bb-4f37-87a1-43d408b0db7d",
+      "name": "이탈리아 왕국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "fa8eede4-2a43-4d9d-a1f5-8f3d59a91276",
+      "name": "예루살렘 왕국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "949ad4db-8171-4ddb-9400-d08535b0806c",
+      "name": "아카이아 공국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "13ddb4fd-d8be-4ade-abf2-084d9d70c168",
+      "name": "체르니고프 공국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "d0a86b7d-f934-4991-a209-0bdb55a9758a",
+      "name": "멘 백국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "5d572c0a-d0e7-44d2-814d-a7d223fcddc6",
+      "name": "앙주 백국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "0dbe93e7-3d16-43b0-945b-3cfb15b970a7",
+      "name": "바이에른 공국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "efde330c-48c9-4044-9315-1d5d587271b9",
+      "name": "알바니아 왕국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "6af2b6b3-d36f-47c4-ab47-802ba0d7cb15",
+      "name": "케른텐 공국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "373371e0-67ea-4edf-8e7f-a1f610b2188d",
+      "name": "프랑켄 공국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "5e2ac0f1-cb82-4d91-b483-15cf68a68314",
+      "name": "대모라비아 왕국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "3ab239a6-f350-402c-add9-3a7e0a5ad2fd",
+      "name": "프랑크 왕국",
+      "historical": true,
+      "entryCount": 1
+    },
+    {
+      "countryId": "c80601c5-a852-43c5-98b6-e81da5968f2e",
+      "name": "검증용역사국가_F1",
+      "historical": true,
+      "entryCount": 1
+    }
+  ]
+}

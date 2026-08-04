@@ -1,0 +1,25 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/wallet/me",
+    "note": "Authorization 헤더 없음"
+  },
+  "status": 401,
+  "bodyEmpty": false,
+  "body": {
+    "success": false,
+    "timestamp": "2026-08-04T04:43:47.381Z",
+    "path": "/wallet/me",
+    "method": "GET",
+    "statusCode": 401,
+    "error": {
+      "name": "UnauthorizedException",
+      "message": "Unauthorized",
+      "details": {
+        "message": "Unauthorized",
+        "statusCode": 401
+      }
+    },
+    "requestId": "4d2da871-c38c-4141-8d06-041ba5bdeb37"
+  }
+}

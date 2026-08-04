@@ -1,0 +1,125 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/wallet/shop?category=NOT_A_CATEGORY"
+  },
+  "status": 200,
+  "bodyEmpty": false,
+  "body": [
+    {
+      "id": "e73ed33c-53e0-480c-ba31-6be786f01e4b",
+      "category": "AVATAR_FRAME",
+      "code": "FRAME_GOLD",
+      "name": "골드 프레임",
+      "pricePapy": 60,
+      "payload": {
+        "shadowBlur": 12,
+        "borderColor": "#D4AF37",
+        "borderWidth": 3,
+        "shadowColor": "rgba(212,175,55,0.6)"
+      },
+      "thumbnailUrl": null,
+      "owned": false,
+      "equipped": false
+    },
+    {
+      "id": "1099a401-7eab-4025-a171-00d8c8bf973f",
+      "category": "AVATAR_FRAME",
+      "code": "FRAME_NEON",
+      "name": "네온 글로우",
+      "pricePapy": 80,
+      "payload": {
+        "shadowBlur": 18,
+        "borderColor": "#22d3ee",
+        "borderWidth": 2,
+        "shadowColor": "rgba(34,211,238,0.7)"
+      },
+      "thumbnailUrl": null,
+      "owned": false,
+      "equipped": false
+    },
+    {
+      "id": "f2432c0f-6016-4459-ac95-679ec1e40ebd",
+      "category": "NICKNAME_COLOR",
+      "code": "NICK_PURPLE",
+      "name": "퍼플 닉네임",
+      "pricePapy": 30,
+      "payload": {
+        "darkValue": "#a78bfa",
+        "lightValue": "#7c3aed"
+      },
+      "thumbnailUrl": null,
+      "owned": false,
+      "equipped": false
+    },
+    {
+      "id": "7b3f3782-25e9-4fd6-a19e-47cbb2b01543",
+      "category": "NICKNAME_COLOR",
+      "code": "NICK_CYAN",
+      "name": "시안 닉네임",
+      "pricePapy": 30,
+      "payload": {
+        "darkValue": "#22d3ee",
+        "lightValue": "#0891b2"
+      },
+      "thumbnailUrl": null,
+      "owned": false,
+      "equipped": false
+    },
+    {
+      "id": "700f2e3b-d044-4004-be0b-d8aeff6a8eeb",
+      "category": "NICKNAME_COLOR",
+      "code": "NICK_ROSE",
+      "name": "로즈 닉네임",
+      "pricePapy": 30,
+      "payload": {
+        "darkValue": "#fb7185",
+        "lightValue": "#e11d48"
+      },
+      "thumbnailUrl": null,
+      "owned": false,
+      "equipped": false
+    },
+    {
+      "id": "2c12e24e-9a82-4b44-8a1e-36947b9f32dc",
+      "category": "GRADE_THEME",
+      "code": "GRADE_SUNSET",
+      "name": "선셋 등급 테마",
+      "pricePapy": 100,
+      "payload": {
+        "fgColor": "#fff7ed",
+        "bgGradient": "linear-gradient(135deg,#f59e0b,#ef4444)"
+      },
+      "thumbnailUrl": null,
+      "owned": false,
+      "equipped": false
+    },
+    {
+      "id": "9a388af8-b40e-4d00-b4a7-0c2c50dac0b6",
+      "category": "BADGE_FRAME",
+      "code": "BADGE_HOLO",
+      "name": "홀로그램 테두리",
+      "pricePapy": 90,
+      "payload": {
+        "borderStyle": "2px solid transparent",
+        "shadowEffect": "0 0 14px rgba(139,92,246,0.7)"
+      },
+      "thumbnailUrl": null,
+      "owned": false,
+      "equipped": false
+    },
+    {
+      "id": "862f7bef-2ef4-4f69-8f0f-45f9576adbaf",
+      "category": "PROFILE_THEME",
+      "code": "PROFILE_AURORA",
+      "name": "오로라 배경",
+      "pricePapy": 120,
+      "payload": {
+        "bgGradient": "linear-gradient(135deg,#1e3a8a,#0ea5e9,#10b981)"
+      },
+      "thumbnailUrl": null,
+      "owned": false,
+      "equipped": false
+    }
+  ]
+}

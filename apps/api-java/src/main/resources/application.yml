@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: papyrus-pilot
+
+  datasource:
+    # Nest(:8000)와 같은 MySQL 8.0.45 를 본다. 파일럿은 읽기 정본을 새로 만들지 않는다.
+    # connectionTimeZone: 서버 time_zone 이 +09:00 이고 Nest 도 KST 로 붙는다.
+    #   기본값으로 두면 JDBC 가 JVM 기본 TZ 로 해석해 자정 근처 값이 하루 밀린다.
+    # innodb_lock_wait_timeout: 서버 기본이 50초라 락 경합 테스트가 사실상 멈춘다.
+    #   MySQL 은 `SELECT ... FOR UPDATE WAIT n` 문법이 없어 Hibernate 의 lock timeout
+    #   힌트가 무시되므로, 세션 변수로 거는 것이 유일한 방법이다.
+    url: ${PILOT_DB_URL:jdbc:mysql://localhost:3307/papyrus?connectionTimeZone=Asia/Seoul&sessionVariables=innodb_lock_wait_timeout=5&rewriteBatchedStatements=true}
+    username: ${PILOT_DB_USER:papyrus}
+    password: ${PILOT_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+      pool-name: pilot-pool
+
+  jpa:
+    hibernate:
+      # 파일럿은 스키마 정본이 아니다. 정본은 libs/db/prisma/*.prisma 이고
+      # 이 앱은 구조를 절대 바꾸지 않는다. validate 가 그 서약의 실행 형태다.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Seoul
+
+  flyway:
+    # 첫 커밋에서는 꺼둔다. 켜는 순간 공유 DB 에 flyway_schema_history_pilot 을 만들고
+    # baseline 을 찍는 쓰기가 발생한다. 실제로 낼 마이그레이션(V171 인덱스 / V172 파일럿
+    # 전용 테이블 / V173 CHECK)이 생기는 W4 에 켠다.
+    enabled: false
+    table: flyway_schema_history_pilot
+    baseline-on-migrate: true
+    baseline-version: 170
+    clean-disabled: true
+    locations: classpath:db/migration
+
+  jackson:
+    # Boot 4.1 은 Jackson 3(tools.jackson.databind)을 쓴다. Jackson 2 의
+    # WRITE_DATES_AS_TIMESTAMPS 는 아예 제거됐고 날짜 기본값이 ISO-8601 문자열이라
+    # 따로 끌 것이 없다. 그 키를 남겨두면 enum 변환 실패로 기동이 깨진다.
+    #
+    # 단 Java 의 Instant.toString() 은 밀리초가 0 이면 .000 을 생략하는데 Nest 는 항상
+    # 3자리를 낸다. 그 차이는 W2 의 Iso8601MillisSerializer 에서 잡는다.
+    default-property-inclusion: always
+
+server:
+  port: ${PILOT_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+pilot:
+  # Nest 가 HS256 대칭키로 발급한 토큰을 그대로 검증한다. 파일럿은 토큰을 발급하지 않는다.
+  jwt-secret: ${PILOT_JWT_SECRET:}
+  operator-usernames:
+    - admin
+  wallet:
+    # strict = spend/exchange/grant/redeem/refund 5경로 전부 행 잠금.
+    # none 은 LostUpdateReproductionTest 가 현행 Nest 의 결함을 재현할 때만 쓴다.
+    lock-mode: strict
+
+logging:
+  level:
+    kr.papyrus.pilot: INFO

@@ -1,0 +1,85 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/artifacts/collection"
+  },
+  "status": 200,
+  "bodyEmpty": false,
+  "body": [
+    {
+      "id": "b4401268-7ca4-454a-946d-23788012a9ec",
+      "artifactId": "190ba092-5944-481e-a7d9-218fc1bed815",
+      "name": "첨성대",
+      "era": "신라 7세기",
+      "rarity": "COMMON",
+      "imageUrl": null,
+      "description": "동양에서 가장 오래된 천문 관측대. 선덕여왕 대 경주에 세워졌다.",
+      "setKey": null,
+      "contentCentury": 7,
+      "linkedType": null,
+      "linkedId": null,
+      "displayed": true,
+      "acquiredAt": "2026-07-20T07:21:56.731Z"
+    },
+    {
+      "id": "1ce29a94-bf17-430c-8934-3c680159f539",
+      "artifactId": "1e446634-845c-4860-90a4-4576267137b2",
+      "name": "자격루",
+      "era": "조선 15세기",
+      "rarity": "RARE",
+      "imageUrl": null,
+      "description": "스스로 시각을 알리는 물시계(자동 타종 장치). 장영실이 제작.",
+      "setKey": "JOSEON_ROYAL",
+      "contentCentury": 15,
+      "linkedType": "HISTORICAL_COUNTRY",
+      "linkedId": "686c74a4-ec05-44a8-aa64-088dc069f355",
+      "displayed": true,
+      "acquiredAt": "2026-07-20T07:21:56.718Z"
+    },
+    {
+      "id": "59f53805-9743-4e08-9bcc-0d6bed7375c0",
+      "artifactId": "9f573fff-af73-4ea1-b584-31c7a22b7632",
+      "name": "측우기",
+      "era": "조선 15세기",
+      "rarity": "RARE",
+      "imageUrl": null,
+      "description": "세계 최초의 표준 강우량 측정기구. 세종 대 농업 정책의 산물.",
+      "setKey": "JOSEON_ROYAL",
+      "contentCentury": 15,
+      "linkedType": null,
+      "linkedId": null,
+      "displayed": true,
+      "acquiredAt": "2026-07-20T07:21:56.704Z"
+    },
+    {
+      "id": "0ae2de35-3a83-4dcd-b8bf-a3902a5c23a6",
+      "artifactId": "cf41c92d-654a-4bda-8770-e55cfe1a89ef",
+      "name": "거북선",
+      "era": "조선 16세기",
+      "rarity": "LEGENDARY",
+      "imageUrl": null,
+      "description": "임진왜란에서 이순신이 이끈 돌격용 군함. 철갑·용머리가 특징.",
+      "setKey": "JOSEON_ROYAL",
+      "contentCentury": 16,
+      "linkedType": null,
+      "linkedId": null,
+      "displayed": true,
+      "acquiredAt": "2026-07-20T07:21:56.688Z"
+    },
+    {
+      "id": "b1e0d156-96b3-4324-be1b-d836284e5a7a",
+      "artifactId": "8d490757-dda3-4db9-88ef-a000d4341ef2",
+      "name": "훈민정음 해례본",
+      "era": "조선 15세기",
+      "rarity": "LEGENDARY",
+      "imageUrl": null,
+      "description": "세종이 창제한 한글의 원리를 풀이한 책. 국보이자 유네스코 세계기록유산.",
+      "setKey": "JOSEON_ROYAL",
+      "contentCentury": 15,
+      "linkedType": null,
+      "linkedId": null,
+      "displayed": true,
+      "acquiredAt": "2026-07-20T07:21:56.672Z"
+    }
+  ]
+}

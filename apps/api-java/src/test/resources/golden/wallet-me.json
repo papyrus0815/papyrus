@@ -1,0 +1,52 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/wallet/me"
+  },
+  "status": 200,
+  "bodyEmpty": false,
+  "body": {
+    "balance": 210,
+    "pointsPerPapy": 10,
+    "exchangeableNow": 718,
+    "dailyExchangeRemaining": 100,
+    "recent": [
+      {
+        "id": "c55029de-3ac4-4b48-bd7b-5661fef867e0",
+        "amount": -40,
+        "reason": "CONSUME",
+        "createdAt": "2026-07-20T07:21:56.727Z"
+      },
+      {
+        "id": "38d83cb5-8975-4011-b934-edae25339a68",
+        "amount": -80,
+        "reason": "CONSUME",
+        "createdAt": "2026-07-20T07:21:56.713Z"
+      },
+      {
+        "id": "f7deff90-3d58-4819-92d0-da394f7c3544",
+        "amount": -70,
+        "reason": "CONSUME",
+        "createdAt": "2026-07-20T07:21:56.699Z"
+      },
+      {
+        "id": "d6950033-b6df-4f28-a0b3-f1588473e692",
+        "amount": -150,
+        "reason": "CONSUME",
+        "createdAt": "2026-07-20T07:21:56.684Z"
+      },
+      {
+        "id": "647759e0-f12f-4c65-a7c5-2c99b1bc110b",
+        "amount": -150,
+        "reason": "CONSUME",
+        "createdAt": "2026-07-20T07:21:56.667Z"
+      },
+      {
+        "id": "828c038d-e3b0-4002-837b-b42ceeee7c16",
+        "amount": 700,
+        "reason": "PROMO_CODE",
+        "createdAt": "2026-07-20T07:21:56.642Z"
+      }
+    ]
+  }
+}

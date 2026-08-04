@@ -1,0 +1,122 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/artifacts"
+  },
+  "status": 200,
+  "bodyEmpty": false,
+  "body": [
+    {
+      "id": "8d490757-dda3-4db9-88ef-a000d4341ef2",
+      "name": "훈민정음 해례본",
+      "era": "조선 15세기",
+      "rarity": "LEGENDARY",
+      "pricePapy": 150,
+      "imageUrl": null,
+      "description": "세종이 창제한 한글의 원리를 풀이한 책. 국보이자 유네스코 세계기록유산.",
+      "setKey": "JOSEON_ROYAL",
+      "contentCentury": 15,
+      "linkedType": null,
+      "linkedId": null,
+      "owned": true
+    },
+    {
+      "id": "cf41c92d-654a-4bda-8770-e55cfe1a89ef",
+      "name": "거북선",
+      "era": "조선 16세기",
+      "rarity": "LEGENDARY",
+      "pricePapy": 150,
+      "imageUrl": null,
+      "description": "임진왜란에서 이순신이 이끈 돌격용 군함. 철갑·용머리가 특징.",
+      "setKey": "JOSEON_ROYAL",
+      "contentCentury": 16,
+      "linkedType": null,
+      "linkedId": null,
+      "owned": true
+    },
+    {
+      "id": "9f573fff-af73-4ea1-b584-31c7a22b7632",
+      "name": "측우기",
+      "era": "조선 15세기",
+      "rarity": "RARE",
+      "pricePapy": 70,
+      "imageUrl": null,
+      "description": "세계 최초의 표준 강우량 측정기구. 세종 대 농업 정책의 산물.",
+      "setKey": "JOSEON_ROYAL",
+      "contentCentury": 15,
+      "linkedType": null,
+      "linkedId": null,
+      "owned": true
+    },
+    {
+      "id": "6c09282d-5347-4759-944d-75d312e7ea7c",
+      "name": "앙부일구",
+      "era": "조선 15세기",
+      "rarity": "RARE",
+      "pricePapy": 70,
+      "imageUrl": null,
+      "description": "솥뚜껑 모양의 오목 해시계. 시각과 절기를 함께 읽을 수 있었다.",
+      "setKey": "JOSEON_ROYAL",
+      "contentCentury": 15,
+      "linkedType": null,
+      "linkedId": null,
+      "owned": false
+    },
+    {
+      "id": "1e446634-845c-4860-90a4-4576267137b2",
+      "name": "자격루",
+      "era": "조선 15세기",
+      "rarity": "RARE",
+      "pricePapy": 80,
+      "imageUrl": null,
+      "description": "스스로 시각을 알리는 물시계(자동 타종 장치). 장영실이 제작.",
+      "setKey": "JOSEON_ROYAL",
+      "contentCentury": 15,
+      "linkedType": "HISTORICAL_COUNTRY",
+      "linkedId": "686c74a4-ec05-44a8-aa64-088dc069f355",
+      "owned": true
+    },
+    {
+      "id": "478aeb99-bb20-4e35-95c5-cbd63e8c4025",
+      "name": "고려청자 상감운학문 매병",
+      "era": "고려 12세기",
+      "rarity": "RARE",
+      "pricePapy": 90,
+      "imageUrl": null,
+      "description": "비취색 유약과 상감 학·구름 무늬가 절정에 이른 고려 도자의 대표작.",
+      "setKey": null,
+      "contentCentury": 12,
+      "linkedType": null,
+      "linkedId": null,
+      "owned": false
+    },
+    {
+      "id": "cad3bab4-c6ca-43b2-9d64-d0b4ea5912e6",
+      "name": "백제 금동대향로",
+      "era": "백제 6세기",
+      "rarity": "LEGENDARY",
+      "pricePapy": 130,
+      "imageUrl": null,
+      "description": "백제 공예의 정수. 신선 세계를 정교하게 표현한 금동 향로.",
+      "setKey": null,
+      "contentCentury": 6,
+      "linkedType": null,
+      "linkedId": null,
+      "owned": false
+    },
+    {
+      "id": "190ba092-5944-481e-a7d9-218fc1bed815",
+      "name": "첨성대",
+      "era": "신라 7세기",
+      "rarity": "COMMON",
+      "pricePapy": 40,
+      "imageUrl": null,
+      "description": "동양에서 가장 오래된 천문 관측대. 선덕여왕 대 경주에 세워졌다.",
+      "setKey": null,
+      "contentCentury": 7,
+      "linkedType": null,
+      "linkedId": null,
+      "owned": true
+    }
+  ]
+}

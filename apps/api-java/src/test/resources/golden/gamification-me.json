@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/gamification/me"
+  },
+  "status": 200,
+  "bodyEmpty": false,
+  "body": {
+    "totalPoints": 7185,
+    "contributionCount": 271,
+    "rank": 1,
+    "streakDays": 23,
+    "gradeCode": "DIAMOND",
+    "nextGradeCode": null,
+    "currentGradeMin": 1500,
+    "nextGradeMin": null,
+    "pointsToNext": 0,
+    "progressRatio": 1
+  }
+}

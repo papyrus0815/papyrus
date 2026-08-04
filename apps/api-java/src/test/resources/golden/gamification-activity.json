@@ -1,0 +1,220 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/gamification/activity"
+  },
+  "status": 200,
+  "bodyEmpty": false,
+  "body": [
+    {
+      "id": "22552439-fe65-49aa-ab8b-85f4a0292413",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-03T04:49:32.747Z"
+    },
+    {
+      "id": "4965c1e6-7826-436c-b538-a4b247882fd7",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-02T10:37:24.909Z"
+    },
+    {
+      "id": "b8e87a86-75c1-44c0-a5dc-8e54665283eb",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-02T10:21:38.103Z"
+    },
+    {
+      "id": "84e7b7eb-351c-4f11-8538-1ef6283e43b3",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-02T10:20:14.845Z"
+    },
+    {
+      "id": "0e6a3678-1f50-40b7-8fe4-24aa36d47691",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-02T10:18:19.927Z"
+    },
+    {
+      "id": "183c0b3c-c4e5-4a80-9dda-c087a573a67c",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-02T10:11:05.405Z"
+    },
+    {
+      "id": "6d88a377-61d9-44ae-8706-566b280e55f6",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-02T10:03:44.177Z"
+    },
+    {
+      "id": "dc097b3a-024d-4439-9ba8-416060e89a7e",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-02T04:48:00.687Z"
+    },
+    {
+      "id": "0c755b1e-da44-4fd1-a1c8-d0d3f4f6dad6",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-02T04:30:19.548Z"
+    },
+    {
+      "id": "5bdf8a87-03bd-4042-b553-5865f0ace363",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T15:42:33.933Z"
+    },
+    {
+      "id": "f08a49a2-1e3e-4461-8451-39841358bdee",
+      "amount": 5,
+      "reason": "COMPLETENESS_BONUS",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T15:42:33.933Z"
+    },
+    {
+      "id": "3ad60786-74f8-4870-ac77-36214d8719bd",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T15:27:29.503Z"
+    },
+    {
+      "id": "ec867cfe-30f6-424e-813f-7c7929b3e96a",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T15:21:52.548Z"
+    },
+    {
+      "id": "d5b4600e-c958-479e-b739-2906c2e009c5",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T15:14:00.301Z"
+    },
+    {
+      "id": "ddb1b7ed-a229-4bec-9a10-87c86e3863ed",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T15:09:00.130Z"
+    },
+    {
+      "id": "0b021a08-918d-46fd-beaa-2acab2f0d6a9",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T15:04:28.769Z"
+    },
+    {
+      "id": "f7574b4d-3a24-4333-b0b5-2dca3778cfed",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T15:02:04.061Z"
+    },
+    {
+      "id": "528b0e37-4069-4416-9891-3633b964a9b5",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T14:59:38.390Z"
+    },
+    {
+      "id": "a1b489a0-1705-44d1-a1b5-f15475e08037",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T13:40:39.461Z"
+    },
+    {
+      "id": "b1ca2e2e-44cb-40c6-b6d1-2cd5ddc9fe7d",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T13:37:01.113Z"
+    },
+    {
+      "id": "c081318c-035e-487a-a6d4-e4f2c4420887",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T13:32:01.915Z"
+    },
+    {
+      "id": "084ab03c-e6d7-4173-8d55-ad2c45ff6481",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T13:29:12.991Z"
+    },
+    {
+      "id": "a2bd7f39-23ef-4562-8172-8b03cbfcce83",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T12:37:29.113Z"
+    },
+    {
+      "id": "fe0a3bde-622c-4494-a25d-377b63fddd50",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-08-01T08:14:37.065Z"
+    },
+    {
+      "id": "329dab55-1507-4a6d-a526-2ba5f3454f92",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-07-31T10:16:15.624Z"
+    },
+    {
+      "id": "36743e84-6b78-4ff2-a08f-0e05aac0bda1",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-07-31T10:14:57.662Z"
+    },
+    {
+      "id": "bd495d8b-9d87-4342-81a5-1477f72ff82d",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-07-31T10:12:07.094Z"
+    },
+    {
+      "id": "fd690712-5d24-47e6-a993-8ac73aa5d58d",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-07-31T10:01:44.086Z"
+    },
+    {
+      "id": "20551693-3e6a-4090-bb4e-979b8e549617",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-07-31T09:45:25.240Z"
+    },
+    {
+      "id": "e5c3c9a4-3826-4a52-be24-858278c18f7f",
+      "amount": 20,
+      "reason": "CREATE_CONTENT",
+      "ownerType": "EVENT",
+      "createdAt": "2026-07-31T00:59:34.536Z"
+    }
+  ]
+}
