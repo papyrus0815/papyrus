@@ -64,6 +64,24 @@ interface AdvancedCountrySelectModalProps {
    * 상단으로 올릴 뿐 **걸러내지 않는다**(망명·유년기 등 경계 사례 보호).
    */
   hintYearRange?: CountryHintYearRange
+  /**
+   * 선택 해제 — 주어지면 헤더에 '선택 해제' 버튼이 뜬다(검토 IA-14).
+   *
+   * 예전엔 호출부가 `{ id: 'all', name: '전체 국가' }` sentinel을 `modernCountries`
+   * 첫 항목으로 끼워 넣었는데, 목록이 `localeCompare(ko)`로 정렬되므로 그 카드는
+   * **'ㅈ' 구간 한복판**에 파묻혔다(70여 개 중 40번째쯤). 게다가 역사 탭에는 그 카드가
+   * 아예 없어 역사국가를 고른 사람에게는 해제 수단 자체가 없었다.
+   * 탭·정렬과 무관한 헤더 액션이 정답이다.
+   */
+  onClearSelection?: () => void
+  /**
+   * 열릴 때 미리 적용할 대륙(검토 IA-9).
+   *
+   * 이 모달은 자체 대륙 필터를 갖는데 호출 화면의 대륙 필터와 단절돼 있었다. 게다가
+   * 내부 키가 **대륙 이름**이고 페이지는 **continentId**라, 값을 넘겨받을 방법도 없었다.
+   * 내부 키를 id로 통일해 시딩을 가능하게 했다.
+   */
+  initialContinentId?: string
 }
 
 export const AdvancedCountrySelectModal: React.FC<
@@ -78,6 +96,8 @@ export const AdvancedCountrySelectModal: React.FC<
   multiSelect = true,
   title = '국가 선택',
   hintYearRange,
+  onClearSelection,
+  initialContinentId,
 }) => {
   const playClick = useClickSound()
   // 대륙 이름 표시용 — CountryResponseDto에는 continentId만 있어 이름은 대륙 목록에서 매핑
@@ -85,7 +105,14 @@ export const AdvancedCountrySelectModal: React.FC<
   const [countryType, setCountryType] = useState<'modern' | 'historical'>(
     'modern',
   )
-  const [selectedContinent, setSelectedContinent] = useState<string>('all')
+  /**
+   * 대륙 필터의 값은 **continentId**다(검토 IA-9). 예전엔 대륙 *이름*이 키여서
+   * ⑴ 호출 화면(페이지 필터는 id)과 값을 주고받을 수 없었고 ⑵ 동명 대륙이 생기면
+   * 조용히 합쳐지며 ⑶ 이름이 바뀌면 필터가 통째로 무효가 됐다.
+   */
+  const [selectedContinentId, setSelectedContinentId] = useState<string>(
+    () => initialContinentId ?? 'all',
+  )
   const [countrySearchTerm, setCountrySearchTerm] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const wasOpenRef = useRef(false)
@@ -155,18 +182,21 @@ export const AdvancedCountrySelectModal: React.FC<
     return map
   }, [continentList])
 
-  // 대륙 목록 추출 (현대 국가가 실제 속한 대륙만)
+  /**
+   * 대륙 목록 — 현대 국가가 실제 속한 대륙만. **id를 값으로, 이름은 표시용**이다.
+   * 이름을 못 찾은 대륙(참조 목록이 아직 안 옴)은 id를 그대로 쓰지 않고 건너뛴다 —
+   * 사용자에게 uuid를 보여 주느니 그 대륙만 잠시 안 보이는 편이 낫다.
+   */
   const continents = useMemo(() => {
-    const continentSet = new Set<string>()
+    const seen = new Map<string, string>()
     modernCountries.forEach((country) => {
-      const continentName = country.continentId
-        ? continentNameById.get(country.continentId)
-        : undefined
-      if (continentName) {
-        continentSet.add(continentName)
-      }
+      if (!country.continentId || seen.has(country.continentId)) return
+      const continentName = continentNameById.get(country.continentId)
+      if (continentName) seen.set(country.continentId, continentName)
     })
-    return Array.from(continentSet).sort()
+    return Array.from(seen, ([id, name]) => ({ id, name })).sort((left, right) =>
+      left.name.localeCompare(right.name, 'ko'),
+    )
   }, [modernCountries, continentNameById])
 
   // 필터링 + 정렬된 국가 목록
@@ -185,14 +215,12 @@ export const AdvancedCountrySelectModal: React.FC<
     )
 
     const filtered =
-      countryType === 'modern' && selectedContinent !== 'all'
-        ? searched.filter((country) => {
-            const continentId = (country as ModernCountryOption).continentId
-            const continentName = continentId
-              ? continentNameById.get(continentId)
-              : undefined
-            return continentName === selectedContinent
-          })
+      countryType === 'modern' && selectedContinentId !== 'all'
+        ? searched.filter(
+            (country) =>
+              (country as ModernCountryOption).continentId ===
+              selectedContinentId,
+          )
         : searched
 
     const mult = sortOrder === 'asc' ? 1 : -1
@@ -267,7 +295,7 @@ export const AdvancedCountrySelectModal: React.FC<
     historicalCountries,
     countrySearchTerm,
     hintYearRange,
-    selectedContinent,
+    selectedContinentId,
     continentNameById,
     sortBy,
     sortOrder,
@@ -321,9 +349,27 @@ export const AdvancedCountrySelectModal: React.FC<
       >
         <ModalHeader>
           <ModalTitle>{title}</ModalTitle>
-          <ModalCloseButton onClick={onClose}>
-            <FiX />
-          </ModalCloseButton>
+          <ModalHeaderActions>
+            {/**
+             * 선택 해제(검토 IA-14) — **탭·정렬과 무관한** 자리다.
+             * sentinel 카드로 두던 시절엔 이름 정렬에 섞여 'ㅈ' 구간에 파묻히고,
+             * 역사 탭에는 아예 없어 해제할 방법이 사라졌다.
+             */}
+            {onClearSelection && selectedCountryIds.length > 0 && (
+              <ClearSelectionButton
+                type="button"
+                onClick={() => {
+                  playClick()
+                  onClearSelection()
+                }}
+              >
+                선택 해제
+              </ClearSelectionButton>
+            )}
+            <ModalCloseButton onClick={onClose}>
+              <FiX />
+            </ModalCloseButton>
+          </ModalHeaderActions>
         </ModalHeader>
 
         <ModalBody>
@@ -335,7 +381,7 @@ export const AdvancedCountrySelectModal: React.FC<
                 $active={countryType === 'modern'}
                 onClick={() => {
                   setCountryType('modern')
-                  setSelectedContinent('all')
+                  setSelectedContinentId('all')
                 }}
               >
                 <RadioButton $active={countryType === 'modern'}>
@@ -347,7 +393,7 @@ export const AdvancedCountrySelectModal: React.FC<
                 $active={countryType === 'historical'}
                 onClick={() => {
                   setCountryType('historical')
-                  setSelectedContinent('all')
+                  setSelectedContinentId('all')
                 }}
               >
                 <RadioButton $active={countryType === 'historical'}>
@@ -361,18 +407,18 @@ export const AdvancedCountrySelectModal: React.FC<
               <FilterSidebarSection>
                 <FilterSidebarTitle>대륙</FilterSidebarTitle>
                 <FilterOptionButton
-                  $active={selectedContinent === 'all'}
-                  onClick={() => setSelectedContinent('all')}
+                  $active={selectedContinentId === 'all'}
+                  onClick={() => setSelectedContinentId('all')}
                 >
                   전체
                 </FilterOptionButton>
                 {continents.map((continent) => (
                   <FilterOptionButton
-                    key={continent}
-                    $active={selectedContinent === continent}
-                    onClick={() => setSelectedContinent(continent)}
+                    key={continent.id}
+                    $active={selectedContinentId === continent.id}
+                    onClick={() => setSelectedContinentId(continent.id)}
                   >
-                    {continent}
+                    {continent.name}
                   </FilterOptionButton>
                 ))}
               </FilterSidebarSection>
@@ -519,7 +565,13 @@ export const AdvancedCountrySelectModal: React.FC<
                         </>
                       )}
                     </CardMetaList>
-                    {isSelected && multiSelect && (
+                    {/**
+                     * 체크 배지는 **단일 선택에도** 붙는다(검토 IA-14).
+                     * `multiSelect`일 때만 그리던 시절, 단일 선택 피커에서 현재 값은
+                     * 옅은 배경색 하나로만 구별됐다 — 정렬을 바꾸거나 스크롤하면
+                     * "무엇이 지금 걸려 있는지" 확인할 방법이 사실상 없었다.
+                     */}
+                    {isSelected && (
                       <CardCheck>
                         <FiCheck size={14} />
                       </CardCheck>
@@ -608,6 +660,33 @@ const ModalTitle = styled.h3`
   font-size: 20px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/** 헤더 우측 액션 묶음 — '선택 해제'(IA-14)와 닫기 ✕ */
+const ModalHeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+/** 탭·정렬과 무관한 선택 해제(검토 IA-14) */
+const ClearSelectionButton = styled.button`
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: rgba(99, 102, 241, 0.35);
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#818cf8' : '#6366f1'};
+  }
 `
 
 const ModalCloseButton = styled.button`

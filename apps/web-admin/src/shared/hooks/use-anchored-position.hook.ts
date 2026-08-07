@@ -33,6 +33,26 @@ interface AnchoredPositionOptions {
   maxWidth?: number
 }
 
+/**
+ * 좌표 4필드 얕은 비교 — **같으면 setState 자체를 하지 않기 위한** 판정(검토 INT-15/PERF-8).
+ *
+ * 예전엔 스크롤 이벤트마다 무조건 새 객체를 setState했다. 이 훅을 쓰는 팝오버의 트리거는
+ * 목록 스크롤러 *밖*의 sticky 툴바라 rect가 아예 변하지 않는데도, 캡처 단계 스크롤 구독이
+ * 본문 스크롤을 전부 받아 옵션 수십 개를 매 스크롤 이벤트마다 다시 그렸다.
+ */
+function isSamePosition(
+  left: AnchoredPosition | null,
+  right: AnchoredPosition,
+): boolean {
+  return (
+    left !== null &&
+    left.top === right.top &&
+    left.left === right.left &&
+    left.minWidth === right.minWidth &&
+    left.maxHeight === right.maxHeight
+  )
+}
+
 export function useAnchoredPosition(
   anchorRef: RefObject<HTMLElement | null>,
   open: boolean,
@@ -60,7 +80,7 @@ export function useAnchoredPosition(
       const left = Math.max(VIEWPORT_MARGIN, Math.min(rect.left, rightBound))
 
       const top = rect.bottom + gap
-      setPosition({
+      const next: AnchoredPosition = {
         top,
         left,
         minWidth: rect.width,
@@ -68,17 +88,39 @@ export function useAnchoredPosition(
           MIN_USABLE_HEIGHT,
           window.innerHeight - top - VIEWPORT_MARGIN,
         ),
+      }
+      // 좌표가 그대로면 새 객체를 만들지 않는다 — 스크롤 한 번에 팝오버 전체가
+      // 다시 그려지던 원인(검토 INT-15/PERF-8).
+      setPosition((previous) =>
+        isSamePosition(previous, next) ? previous : next,
+      )
+    }
+
+    /**
+     * 스크롤·리사이즈는 한 프레임에 여러 번 들어온다(캡처 단계라 조상 스크롤러 수만큼
+     * 더 온다). rAF로 코얼레스해 프레임당 `getBoundingClientRect` 1회로 묶는다 —
+     * rect 읽기는 강제 레이아웃을 유발하므로 횟수 자체가 비용이다.
+     */
+    let frameId = 0
+    const schedule = () => {
+      if (frameId !== 0) return
+      frameId = window.requestAnimationFrame(() => {
+        frameId = 0
+        recompute()
       })
     }
 
+    // 최초 1회는 동기 — 첫 페인트 전에 좌표가 있어야 팝오버가 (0,0)에서 튀지 않는다.
     recompute()
-    window.addEventListener('resize', recompute)
+    // passive — 이 리스너는 스크롤을 막지 않으므로 브라우저에게 그 사실을 알린다.
+    window.addEventListener('resize', schedule, { passive: true })
     // 캡처 단계 구독 — 툴바 가로 스크롤·본문 스크롤 등 *조상* 스크롤도 잡아야
     // 트리거가 움직였을 때 팝오버가 떨어져 나가지 않는다.
-    window.addEventListener('scroll', recompute, true)
+    window.addEventListener('scroll', schedule, { capture: true, passive: true })
     return () => {
-      window.removeEventListener('resize', recompute)
-      window.removeEventListener('scroll', recompute, true)
+      if (frameId !== 0) window.cancelAnimationFrame(frameId)
+      window.removeEventListener('resize', schedule)
+      window.removeEventListener('scroll', schedule, true)
     }
   }, [anchorRef, open, gap, maxWidth])
 
