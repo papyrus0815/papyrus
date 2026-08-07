@@ -1,7 +1,7 @@
 /**
  * 현재 필터/검색 결과를 JSON 파일로 내보내기.
  *
- * - source: 노드 순회 결과(이벤트 또는 null의 배열). null은 스킵.
+ * - source: 노드 순회 결과(사건 + 필터 일치 여부). event가 null인 항목은 스킵.
  * - 빈 결과거나 SSR 환경이면 무시.
  *
  * ## 왜 전용 직렬화기인가 (2026-07-28 검토 DATA-11)
@@ -15,6 +15,14 @@
  * 여기서는 **실제로 서버에서 온 필드만** 고른다. 특히 날짜 정밀도
  * (startDatePrecision/endDatePrecision)를 포함해, 연도만 아는 사건과 1월 1일 사건을
  * 파일만 보고도 구분할 수 있게 한다.
+ *
+ * ## 왜 `matchesFilter`와 필터 메타를 싣는가 (2026-08-02 검토 GAP-1)
+ *
+ * 내보내기 모집단은 평탄화 결과 전체이고, 거기엔 **자기는 조건을 만족하지 않지만
+ * 매칭된 자손이 있어 문맥으로 남은 부모 행**이 섞여 있다. 목록 화면은 그 행을
+ * 흐리게 강등해 구분하는데 파일에는 아무 표시가 없어, '전쟁'으로 좁혀 내보낸 파일에
+ * 정치 사건이 같은 자격으로 들어앉았다. 행마다 `matchesFilter`를 싣고 파일 머리에
+ * 적용 조건을 기록해, 파일만 보고도 모수를 재구성할 수 있게 한다.
  */
 import type { HistoricalEvent } from '../../create/events.types'
 
@@ -35,9 +43,33 @@ interface ExportedEvent {
   relatedCountries: Array<{ id: string; name: string }>
   relatedHistoricalCountries: Array<{ id: string; name: string }>
   sectionTitles: string[]
+  /**
+   * 이 사건 **자신**이 내보내기 시점의 필터 조건을 만족했는가.
+   * false = 매칭된 자손 때문에 문맥으로만 포함된 부모(목록에서는 흐리게 표시되는 행).
+   */
+  matchesFilter: boolean
 }
 
-const toExported = (event: HistoricalEvent): ExportedEvent => ({
+/** 내보내기 대상 한 줄 — 평탄화 항목에서 사건과 매칭 여부만 뽑은 것 */
+export interface ExportEntry {
+  event: HistoricalEvent | null
+  matchesFilter: boolean
+}
+
+/** 파일 머리에 기록하는 '무엇으로 좁힌 결과인가' */
+export interface ExportFilterMeta {
+  /** 활성 필터 칩 라벨 그대로 — 사람이 읽는 조건 요약 */
+  appliedFilters: string[]
+  /** 검색어(있으면) */
+  keyword?: string
+  /** 서버가 아는 최상위 사건 총수 — 부분 내보내기 판별용 */
+  serverTotal?: number
+}
+
+const toExported = (
+  event: HistoricalEvent,
+  matchesFilter: boolean,
+): ExportedEvent => ({
   id: event.id,
   title: event.title,
   description: event.description ?? '',
@@ -59,16 +91,41 @@ const toExported = (event: HistoricalEvent): ExportedEvent => ({
     (country) => ({ id: country.id, name: country.name }),
   ),
   sectionTitles: event.sectionTitles ?? [],
+  matchesFilter,
 })
 
-export function exportEventsAsJson(source: Array<HistoricalEvent | null>) {
+export function exportEventsAsJson(
+  source: ExportEntry[],
+  meta: ExportFilterMeta = { appliedFilters: [] },
+) {
   if (typeof document === 'undefined') return
-  const events = source.filter(
-    (candidate): candidate is HistoricalEvent => !!candidate,
+  const entries = source.filter(
+    (entry): entry is ExportEntry & { event: HistoricalEvent } => !!entry.event,
   )
-  if (events.length === 0) return
+  if (entries.length === 0) return
 
-  const content = JSON.stringify(events.map(toExported), null, 2)
+  const events = entries.map((entry) =>
+    toExported(entry.event, entry.matchesFilter),
+  )
+  const matchedCount = events.filter((event) => event.matchesFilter).length
+
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    /**
+     * 모수 규약(검토 배치 3) — `matchedCount`는 술어 직후를 센다.
+     * `contextCount`는 문맥용으로만 실린 부모 수이며 조건을 만족하지 않는다.
+     */
+    filters: {
+      applied: meta.appliedFilters,
+      keyword: meta.keyword ?? null,
+      matchedCount,
+      contextCount: events.length - matchedCount,
+      serverTotal: meta.serverTotal ?? null,
+    },
+    events,
+  }
+
+  const content = JSON.stringify(payload, null, 2)
   const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')

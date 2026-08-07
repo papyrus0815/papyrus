@@ -181,23 +181,19 @@ export const useEventHierarchy = (
     const filteringActive = hasNarrowingFilters && !!matchesEvent
 
     /**
-     * 술어 결과 캐시 — 한 노드가 이 memo 한 번에 **4~6회** 평가되던 것을 1회로 줄인다.
+     * 술어 평가 — 한 노드가 이 memo 한 번에 **4~6회** 조회된다
+     * (⑴ 부모의 hiddenCountOf→keepsNode ⑵ children.filter(keepsNode) ⑶ 자기 nodeMatches
+     *  ⑷ 자기 hiddenCountOf 재귀). 2,000건(~3,200 노드)이면 조작 한 번에 1만 회 규모다
+     * (검토 DATA-8).
      *
-     * 자식 노드 하나는 ⑴ 부모의 hiddenCountOf→keepsNode ⑵ children.filter(keepsNode)
-     * ⑶ 자기 nodeMatches ⑷ 자기 hiddenCountOf 재귀에서 각각 평가됐고, matchesEvent는
-     * 캐시 없이 매번 title.toLowerCase()·description.toLowerCase()로 새 문자열을 만든다.
-     * 2,000건(~3,200 노드) 규모에서 검색어가 걸린 상태의 조작 한 번이 1만 회 규모의
-     * 술어 호출 + 문자열 복사를 유발한다(검토 DATA-8).
+     * 캐시는 여기가 아니라 **`useEventFilters.matchesEvent` 안**에 있다(검토 PERF-5).
+     * 여기 두면 루트 선별(`filteredEvents`)이 이미 계산해 둔 같은 결과를 이 훅이 다시
+     * 계산한다 — 캐시가 술어와 같은 수명을 갖도록 술어 쪽으로 올렸다.
      */
-    const matchCache = new Map<string, boolean>()
     const nodeMatches = (node: EventHierarchyNode): boolean => {
       if (!filteringActive) return true
-      const cached = matchCache.get(node.id)
-      if (cached !== undefined) return cached
       const event = eventById.get(node.id)
-      const result = event ? matchesEvent(event) : false
-      matchCache.set(node.id, result)
-      return result
+      return event ? matchesEvent(event) : false
     }
     const keepsCache = new Map<string, boolean>()
     const keepsNode = (node: EventHierarchyNode): boolean => {
@@ -357,13 +353,19 @@ export const useEventHierarchy = (
   }, [flattenedBase, expandedEventIds, showFlatView])
 
   /**
-   * 필터를 실제로 만족하는 사건 수 — 문맥용으로만 남은 부모 행은 제외한다.
-   * 화면의 '표시 N건'이 조건과 무관한 행까지 세던 오염을 막는다.
+   * 필터를 실제로 만족하는 사건 수 — **모수 규약 ①**(검토 DATA-6).
+   *
+   * > `matchedCount`는 ①술어 직후를 센다. `displayedCount`는 ④밴드 접힘 이후를 센다.
+   * > 그 사이 단계(②북마크·③계층접힘)는 어느 카운트에도 영향을 주지 않는다.
+   *
+   * 그래서 `isCollapsedAway`(③ 계층 접힘)를 **보지 않는다**. 예전엔 이 값을 함께
+   * 봐서 데이터도 조건도 그대로인데 '하위 접기' 한 번에 '조건 일치 233건'이 146건으로
+   * 떨어졌다 — 접기는 표시 조작이지 조건이 아니다. 화면에 실제로 남은 행 수는
+   * 별도 숫자(`displayedCount`)가 말한다.
+   * 문맥용으로만 남은 부모 행(`isMatch=false`)은 여전히 제외한다.
    */
   const matchedCount = useMemo(
-    () =>
-      flattenedHierarchy.filter((item) => item.isMatch && !item.isCollapsedAway)
-        .length,
+    () => flattenedHierarchy.filter((item) => item.isMatch).length,
     [flattenedHierarchy],
   )
 

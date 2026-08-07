@@ -3,6 +3,7 @@ import {
   formatGapLabel,
   gapSpacingPx,
   groupYearsByCentury,
+  orderRowsForRender,
   selectVisibleRows,
 } from './list-grouping'
 import type { FlattenedHierarchyItem } from './useEventHierarchy'
@@ -21,12 +22,13 @@ const row = (
   id: string,
   start: string,
   parentNodeId: string | null = null,
+  isMatch = true,
 ): FlattenedHierarchyItem =>
   ({
     node: { id, title: id, period: { start, end: null }, children: [] },
     depth: parentNodeId ? 1 : 0,
     parentNodeId,
-    isMatch: true,
+    isMatch,
     canExpand: false,
     isCollapsedAway: false,
     hiddenChildCount: 0,
@@ -129,6 +131,100 @@ describe('버킷 귀속 — 위치가 아니라 실제 부모를 따른다', () 
     expect(buckets.yearRootCount.get(2020)).toBe(1)
     expect(buckets.eventsByYear.get(2020)).toHaveLength(3)
     expect(buckets.headerlessYears.has(2020)).toBe(false)
+  })
+})
+
+/**
+ * 필터 중 버킷 축 (2026-08-02 검토 `DATA-9`, 배치 2).
+ *
+ * 세기 필터는 행의 *자기* 날짜로 판정하는데 버킷은 부모 계보를 따랐다.
+ * 그래서 '19세기' 칩을 걸어 놓고 그 행이 '18세기 › 1789년' 헤더 아래 놓였다
+ * (살아있는 부모·자식 시작 세기 불일치 13쌍). 필터 중 매칭 행만 축을 바꾼다.
+ */
+describe('buildYearBuckets — 필터 중에는 매칭 행이 자기 연도에 귀속된다', () => {
+  const items = [
+    row('parent', '1789-07-14'),
+    row('child', '1850-01-01', 'parent'),
+  ]
+
+  it('필터가 없으면 자식은 부모 버킷을 따른다(기존 계약)', () => {
+    const buckets = buildYearBuckets(items, 'desc', false)
+    expect(buckets.bucketYearById.get('child')).toBe(1789)
+  })
+
+  it('필터 중이고 자신이 매칭이면 자기 연도로 간다', () => {
+    const buckets = buildYearBuckets(items, 'desc', true)
+    expect(buckets.bucketYearById.get('child')).toBe(1850)
+    expect(buckets.allYears).toEqual([1850, 1789])
+  })
+
+  it('자기 연도로 옮겨간 행은 그 해의 그룹 단위로 세어진다 — 0건 헤더 방지', () => {
+    const buckets = buildYearBuckets(items, 'desc', true)
+    expect(buckets.yearRootCount.get(1850)).toBe(1)
+    expect(buckets.yearRootCount.get(1789)).toBe(1)
+  })
+
+  it('문맥용으로만 남은 행(isMatch=false)은 계보를 그대로 따른다', () => {
+    const contextual = [
+      row('parent', '1789-07-14'),
+      row('child', '1850-01-01', 'parent', false),
+    ]
+    const buckets = buildYearBuckets(contextual, 'desc', true)
+    expect(buckets.bucketYearById.get('child')).toBe(1789)
+  })
+
+  it('자기 날짜가 없으면 필터 중에도 부모 버킷에 남는다 — 미상으로 떨어뜨리지 않는다', () => {
+    const undated = [row('parent', '1789-07-14'), row('child', '', 'parent')]
+    const buckets = buildYearBuckets(undated, 'desc', true)
+    expect(buckets.bucketYearById.get('child')).toBe(1789)
+    expect(buckets.unknownItems).toHaveLength(0)
+  })
+})
+
+/**
+ * 렌더 순서 재배열 (2026-08-02 검증 A).
+ *
+ * DATA-9로 매칭 행이 자기 연도로 옮겨 가면서, 그룹 목록의 DOM 순서(연도 버킷 순)와
+ * 배열 순서(DFS)가 갈리기 시작했다. ↑↓는 DOM을 읽고 드로어 '이전/다음'은 배열
+ * 인덱스를 읽으므로, 재배열하지 않으면 같은 화면에서 두 조작이 반대로 움직인다.
+ */
+describe('orderRowsForRender — 그룹 목록의 DOM 순서를 재현한다', () => {
+  it('매칭 자식이 자기 연도로 옮겨 가면 그 연도 그룹 자리로 이동한다', () => {
+    const items = [
+      row('parent', '1789-07-14'),
+      row('child', '1850-01-01', 'parent'),
+    ]
+    const buckets = buildYearBuckets(items, 'desc', true)
+    // desc 정렬이므로 화면은 1850년 그룹이 먼저다 — 배열 순서(부모 먼저)와 반대.
+    expect(
+      orderRowsForRender(items, buckets).map((item) => item.node.id),
+    ).toEqual(['child', 'parent'])
+  })
+
+  it("'연도 미상'은 항상 맨 끝 — 배열 어디에 있었든", () => {
+    const items = [
+      row('undated', ''),
+      row('dated', '1900-01-01'),
+    ]
+    const buckets = buildYearBuckets(items, 'desc')
+    expect(
+      orderRowsForRender(items, buckets).map((item) => item.node.id),
+    ).toEqual(['dated', 'undated'])
+  })
+
+  it('행을 잃지 않는다 — 입력과 같은 수를 돌려준다', () => {
+    const items = [
+      row('a', '2020-01-01'),
+      row('b', '', 'a'),
+      row('c', '1990-05-05'),
+      row('d', ''),
+    ]
+    const buckets = buildYearBuckets(items, 'desc', true)
+    const ordered = orderRowsForRender(items, buckets)
+    expect(ordered).toHaveLength(items.length)
+    expect(new Set(ordered.map((item) => item.node.id))).toEqual(
+      new Set(['a', 'b', 'c', 'd']),
+    )
   })
 })
 

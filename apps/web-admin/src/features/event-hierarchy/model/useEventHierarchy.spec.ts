@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 
 import { useEventHierarchy } from './useEventHierarchy'
 
@@ -111,5 +111,29 @@ describe('useEventHierarchy — 자식에도 필터 적용', () => {
     )
     expect(parentRow?.isMatch).toBe(false)
     expect(result.current.matchedCount).toBe(1)
+  })
+
+  /**
+   * 모수 규약 ①(검토 DATA-6) — matchedCount는 **술어 직후**를 센다.
+   * 계층 접힘은 표시 조작이므로 이 숫자를 흔들면 안 된다.
+   */
+  it('하위 접기는 matchedCount를 바꾸지 않는다', () => {
+    const { result } = renderFlatten({
+      hasNarrowingFilters: true,
+      matchesEvent: (event) => event.category === '전쟁',
+    })
+    // 부모(전쟁) + 자식(child-war) = 2
+    const before = result.current.matchedCount
+    expect(before).toBe(2)
+
+    act(() => {
+      result.current.collapseAllChildren()
+    })
+
+    // 자식 행은 접혀 화면에서 사라지지만 '조건 일치'는 그대로다.
+    expect(
+      result.current.flattenedHierarchy.some((item) => item.isCollapsedAway),
+    ).toBe(true)
+    expect(result.current.matchedCount).toBe(before)
   })
 })

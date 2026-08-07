@@ -65,10 +65,16 @@ export interface YearGap {
  * 어느 쪽도 없으면 자기 연도로 폴백하고, 그래도 없으면 '연도 미상'.
  * ⚠️ 절대 드롭하지 않는다 — 예전엔 year가 null이면 조용히 사라져
  * 날짜 완전 미상 사건과 부모 없이 남은 자식이 화면에서 통째로 없어졌다.
+ *
+ * @param filteringActive 내용을 좁히는 필터가 걸려 있는가(`useEventFilters.hasNarrowingFilters`).
+ *   true면 **매칭된 행은 자기 연도 버킷에 귀속**된다 — 아래 주석 참고(검토 DATA-9).
+ *   ⚠️ 페이지와 목록 위젯이 **같은 값**을 넘겨야 한다. 다르면 '보이는 행' 판정이
+ *   DOM과 갈려 ↑↓·드로어 이전/다음이 화면에 없는 행을 순회한다.
  */
 export function buildYearBuckets(
   items: FlattenedHierarchyItem[],
   sortDirection: 'asc' | 'desc',
+  filteringActive = false,
 ): YearBuckets {
   const eventYears = new Set<number>()
   const eventsByYear = new Map<number, FlattenedHierarchyItem[]>()
@@ -83,13 +89,8 @@ export function buildYearBuckets(
   items.forEach((item) => {
     // BC·고대 날짜 안전 파싱(네이티브 Date 금지).
     const parsedYear = parseIsoDateParts(item.node.period.start)?.year ?? null
-    /**
-     * 이 행이 이 그룹의 *단위*인가 — 부모가 이 목록에 없으면(최상위이거나 필터로 잘렸으면) true.
-     * 연·세기 헤더 카운트의 모수다. depth로만 세면 부모 없이 남은 자식이 어디에도 안 세어져
-     * '1건' 헤더 아래 2행이 보이거나 '976년 0'처럼 0건 헤더가 나온다.
-     */
-    const isGroupRoot =
-      item.parentNodeId === null || !presentIds.has(item.parentNodeId)
+    const parentPresent =
+      item.parentNodeId !== null && presentIds.has(item.parentNodeId)
 
     /**
      * 버킷 귀속 — **실제 부모**를 따른다(검토 IA-2).
@@ -102,15 +103,33 @@ export function buildYearBuckets(
      *    미상 정렬 키가 NEGATIVE_INFINITY라 정렬 방향 토글 한 번에 '연도 미상' 섹션과
      *    가장 오래된 연도 그룹을 오갔다.
      *
-     * 이제 depth 0은 자기 연도만 쓰고(없으면 자연히 '연도 미상'), 자식은 **부모의 버킷**을
+     * 그래서 depth 0은 자기 연도만 쓰고(없으면 자연히 '연도 미상'), 자식은 **부모의 버킷**을
      * 따른다. DFS 선순회라 부모 항목이 항상 먼저 처리돼 있어 한 번의 전방 패스로 풀린다.
      * 부모가 목록에 없으면 자기 연도로 폴백한다.
+     *
+     * ⚠️ **필터 중에는 예외**다(검토 DATA-9). 세기 필터는 행의 *자기* 날짜로 판정하는데
+     * 버킷은 부모를 따르므로, '19세기' 칩을 걸어 놓고 그 행이 '18세기 › 1789년' 헤더 아래
+     * 놓이는 모순이 생겼다(살아있는 부모·자식 시작 세기 불일치 13쌍). 필터가 걸려 있고
+     * 그 행 자신이 조건을 만족하면(= 사용자가 이 행을 보려고 필터를 건 것) 자기 연도로
+     * 귀속시켜 칩·헤더·행 토큰이 같은 시점을 말하게 한다. 문맥용 부모 행(isMatch=false)은
+     * 계속 계보를 따른다.
      */
-    const parentBucket =
-      item.parentNodeId !== null
-        ? bucketYearById.get(item.parentNodeId)
-        : undefined
-    const bucketYear = isGroupRoot ? parsedYear : (parentBucket ?? parsedYear)
+    const parentBucket = parentPresent
+      ? bucketYearById.get(item.parentNodeId!)
+      : undefined
+    const prefersOwnYear =
+      !parentPresent || (filteringActive && item.isMatch && parsedYear !== null)
+    const bucketYear = prefersOwnYear
+      ? (parsedYear ?? parentBucket)
+      : (parentBucket ?? parsedYear)
+
+    /**
+     * 이 행이 이 그룹의 *단위*인가 — 부모가 **같은 버킷에 없으면** true.
+     * 연·세기 헤더 카운트의 모수다. depth로만 세면 부모 없이 남은 자식이 어디에도 안 세어져
+     * '1건' 헤더 아래 2행이 보이거나 '976년 0'처럼 0건 헤더가 나온다.
+     * 위 예외로 자기 연도에 떨어진 매칭 자식도 그 해에서는 스스로 그룹 단위다.
+     */
+    const isGroupRoot = !parentPresent || bucketYear !== parentBucket
 
     if (bucketYear === null || bucketYear === undefined) {
       bucketYearById.set(item.node.id, null)
@@ -226,6 +245,43 @@ export function groupYearsByCentury(
     else groups.push({ century, years: [year] })
   }
   return groups
+}
+
+/**
+ * 그룹 목록이 **실제로 그리는 순서**로 행을 재배열한다.
+ *
+ * ## 왜 필요한가
+ * 그룹 렌더는 배열 순서가 아니라 `allYears → eventsByYear[year]` 순으로 돌고
+ * '연도 미상' 섹션을 맨 끝에 붙인다. 그런데 드로어 '이전/다음'은
+ * `selectVisibleRows`가 돌려준 **배열 순서**의 인덱스로 움직인다. 두 순서가 갈리면
+ * ↑↓(DOM 순서)와 드로어 이전/다음이 서로 다른 방향으로 이동한다 —
+ * 집합은 같은데 순서만 다르므로 "다음인데 위로 갔다"가 된다.
+ *
+ * 예전엔 자식이 항상 부모 버킷을 따라가 서브트리가 배열에서도 연속이라 두 순서가
+ * 우연히 같았지만, ⑴ 필터 중 매칭 행이 자기 연도로 옮겨 가고(`buildYearBuckets`의
+ * `filteringActive`, 검토 DATA-9) ⑵ 기간순 정렬처럼 배열 순서가 연도 순서와 다른
+ * 정렬이 있으면 어긋난다. 그래서 순서를 렌더 쪽에 맞춘다.
+ *
+ * ⚠️ 이 순서는 `event-compact-list`의 grouped 렌더 순서와 **정확히 같아야** 한다.
+ * (세기 그룹은 `groupYearsByCentury(allYears)`라 결국 `allYears` 순서와 동일하다.)
+ * 그룹이 꺼진 목록(`grouped=false`)은 배열 순서를 그대로 그리므로 이 함수를 쓰지 않는다.
+ */
+export function orderRowsForRender(
+  items: FlattenedHierarchyItem[],
+  buckets: YearBuckets,
+): FlattenedHierarchyItem[] {
+  const ordered: FlattenedHierarchyItem[] = []
+  for (const year of buckets.allYears) {
+    const rows = buckets.eventsByYear.get(year)
+    if (rows) ordered.push(...rows)
+  }
+  ordered.push(...buckets.unknownItems)
+  /**
+   * 방어 — 모든 행은 연도 버킷이나 '연도 미상' 중 하나에 반드시 담긴다(buildYearBuckets 계약).
+   * 그래도 수가 어긋나면 재배열이 행을 잃었다는 뜻이므로 원본을 그대로 돌려준다.
+   * 순서가 어긋나는 것보다 행이 사라지는 쪽이 훨씬 나쁘다.
+   */
+  return ordered.length === items.length ? ordered : items
 }
 
 /**

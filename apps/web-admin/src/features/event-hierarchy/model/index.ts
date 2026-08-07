@@ -10,7 +10,10 @@ export {
   formatGapLabel,
   gapSpacingPx,
   groupYearsByCentury,
+  orderRowsForRender,
   selectVisibleRows,
 } from './list-grouping'
 export type { YearBuckets, YearGap } from './list-grouping'
+export { selectMatchedRows } from './matched-rows'
+export type { SelectMatchedRowsOptions } from './matched-rows'
 
