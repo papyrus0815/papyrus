@@ -133,3 +133,8 @@ libs/api-sdk/src/api/
 apps/service-manager/dist/
 apps/service-manager/out/
 apps/service-manager/node_modules/
+
+# ========================================
+# 개인 문서 (저장소가 public 이다)
+# ========================================
+docs/private/
