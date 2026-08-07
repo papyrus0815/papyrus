@@ -4,18 +4,26 @@
  */
 import styled, { css, keyframes } from 'styled-components'
 
-import { BRAND, MOTION } from './theme'
+import {
+  BRAND,
+  MOTION,
+  metaText,
+  toolbarControlHeight,
+  toolbarSegmentHeight,
+} from './theme'
 
 /* radius 8 (toolbar 버튼과 정렬), focus halo BRAND.focusRing, 1px border (admin 톤).
- * 높이 34px — toolbar 다른 컨트롤과 통일. */
+ * 높이는 `toolbarControlHeight` — toolbar 한 줄 컨트롤 공통 규약(검토 VIS-9). */
 export const PromSearch = styled.div`
   position: relative;
   display: flex;
   align-items: center;
   flex: 1 1 280px;
   min-width: 240px;
-  max-width: 480px;
-  height: 34px;
+  /* 480px 고정 상한은 전폭 2,520px 바에서 검색창을 19%로 만든다. 툴바에서 실제로 폭을
+     흡수하는 유일한 입력이므로 폭에 비례시키되 상·하한으로 묶는다. */
+  max-width: clamp(280px, 22vw, 560px);
+  ${toolbarControlHeight}
   border-radius: 8px;
   ${({ theme }) =>
     theme.mode === 'dark'
@@ -100,7 +108,7 @@ export const PromSearchInput = styled.input`
   padding-right: 14px;
 
   &::placeholder {
-    color: ${({ theme }) => theme.colors.text.tertiary};
+    color: ${metaText};
     font-weight: 400;
   }
   &::-webkit-search-cancel-button {
@@ -197,6 +205,13 @@ export const ToolbarActions = styled.div`
   /* 작은 화면에서 toolbar가 줄바꿈되어도 정렬 유지 */
   flex-wrap: wrap;
   justify-content: flex-end;
+  /* 전폭에서 컨트롤이 좌측에 뭉치고 우측 1,000px 이상이 빈 border-bottom만 남던 문제.
+     TopFilterBar가 flex-start 패킹이고 신축 자식이 검색바 하나뿐이라 "우측이 비었다"가
+     툴바 층위에서 그대로 재현됐다 — 액션군을 우측 끝에 앵커해 바의 양 끝을 채운다.
+     ⚠️ justify-content: flex-end는 이 요소 *안쪽* 정렬이라 바깥 위치를 못 바꾼다.
+        그래서 지금까지 무효 선언이었고, 실제 앵커는 이 margin이 만든다.
+        (이 주석 안에서 백틱 금지 — styled 템플릿 리터럴이 끊긴다.) */
+  margin-left: auto;
 `
 
 /* secondary action 버튼 — *ghost*. 평소엔 border 없음, hover 시 subtle bg.
@@ -212,7 +227,7 @@ export const ToolbarBtn = styled.button<{
   align-items: center;
   gap: 6px;
   padding: 7px 10px;
-  height: 34px;
+  ${toolbarControlHeight}
   border-radius: 8px;
   border: 1px solid
     ${({ $active }) => ($active ? BRAND.primaryBorderHover : 'transparent')};
@@ -258,15 +273,29 @@ export const ToolbarBtn = styled.button<{
     box-shadow: ${BRAND.focusRing};
   }
 
+  /* 지금 조건에서 아무 일도 하지 않는 컨트롤 — 예: 평면 보기의 '하위 접기'(검토 GAP-6).
+     사유는 title로 말하므로 여기서는 '누를 수 없음'만 시각화한다. */
+  &:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+  &:disabled:hover {
+    background: transparent;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
   @media (prefers-reduced-motion: reduce) {
     transition: none;
   }
 
   /* 모바일 — 라벨(span)은 sr-only로 떨어뜨리고 icon만. tooltip(title)은 유지.
-   * 터치 타겟 권장(38~44px)에 맞춰 height/패딩도 키움. */
+   *
+   * ⚠️ 높이는 여기서 키우지 않는다 — 터치 확대는 toolbarControlHeight 믹스인이 768px에서
+   * **한 줄 전체를 같이** 올린다(검토 VIS-9). 예전엔 이 640px 블록만 38px로 키워서
+   * 641~768px 대역에 필터 그룹(40px)과 액션 버튼(34px)이 6px 어긋난 채 나란히 섰다.
+   * 여기 남는 것은 '무엇을 보여줄 것인가'(라벨 sr-only·모바일 숨김)뿐이다. */
   @media (max-width: 640px) {
     padding: 9px 11px;
-    height: 38px;
     & > span:not([class]) {
       position: absolute;
       width: 1px;
@@ -287,29 +316,20 @@ export const ToolbarBtn = styled.button<{
   }
 `
 
-/* TopFilterBar 안에서 인라인으로 흐름 — 가용 폭이 부족하면 wrap.
- * 좌측 separator로 도구 그룹과 시각 분리만 (카운트→칩들→clearAll). */
+/**
+ * 칩 묶음 — `Layout.ActiveFiltersRow` 안에서 신축한다(카운트→칩들).
+ *
+ * 예전엔 TopFilterBar 안 인라인이라 좌측 separator로 도구 그룹과 시각 분리를 했는데,
+ * 전용 행으로 올라간 지금은 분리할 형제가 없어 separator가 근거를 잃었다.
+ * 대신 신축을 여기서 받아 '전체 초기화'가 행의 우측 끝에 앵커되게 한다.
+ */
 export const ActiveFiltersBar = styled.div`
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  padding-left: 10px;
-  margin-left: 2px;
-  position: relative;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    width: 1px;
-    height: 18px;
-    transform: translateY(-50%);
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
-    border-radius: 1px;
-  }
+  flex: 1 1 auto;
+  min-width: 0;
 `
 
 export const ActiveFilterCount = styled.div`
@@ -378,10 +398,18 @@ export const ActiveFilterChip = styled.button`
 `
 
 export const ActiveFilterClearAll = styled.button`
+  /* 칩 바가 신축(flex:1)이므로 이 margin이 **이제 실제로 동작한다** — 인라인 시절에는
+     부모가 inline-flex라 남는 폭이 없어 무효 선언이었다.
+     앞의 hairline은 "칩 하나 지우려다 전체 초기화"를 막는 시각 분리다. */
   margin-left: auto;
-  padding: 5px 12px;
+  flex-shrink: 0;
+  padding: 5px 12px 5px 14px;
   border-radius: 8px;
   border: 1px solid transparent;
+  /* ⚠️ 위 단축 border 뒤에 와야 한다 — 앞에 두면 단축 선언이 덮어쓴다. */
+  border-left: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 11.5px;
@@ -493,7 +521,7 @@ export const ViewSegment = styled.button<{ $active: boolean }>`
   align-items: center;
   gap: 5px;
   padding: 4px 9px;
-  height: 30px;
+  ${toolbarSegmentHeight}
   border: none;
   border-radius: 6px;
   font-family: inherit;
@@ -557,9 +585,9 @@ export const ViewSegment = styled.button<{ $active: boolean }>`
     }
   }
 
-  /* 모바일 터치 타겟 — 30 → 36px로 살짝 키움. icon만 보이는 좁은 폭에서도 손가락 적중률 개선. */
+  /* 터치 대역의 높이는 toolbarSegmentHeight 믹스인이 768px에서 함께 올린다(검토 VIS-9).
+   * 여기서는 손가락 적중 폭만 넓힌다. */
   @media (max-width: 640px) {
-    height: 36px;
     padding: 6px 11px;
   }
 
@@ -580,10 +608,11 @@ export const DisplayOptions = styled.div`
   margin-left: 12px;
   flex-wrap: wrap;
 
-  /* SortSelect / SortButton 모두 height 34 — ViewSegmented(2px padding+30px = 34) 와 정확 정렬 */
+  /* 안에 들어오는 select/button은 툴바 컨트롤 높이 규약을 따른다 — ViewSegmented
+   * (2px 패딩 + 안쪽 세그먼트)와 합이 같아 베이스라인이 정확히 맞는다(검토 VIS-9). */
   & > select,
   & > button {
-    height: 34px;
+    ${toolbarControlHeight}
   }
 
   /* 페이지 크기 select(SortSelect 내부 두 번째 select)는 "20개"~"100개"로 폭이 좁으므로
@@ -602,7 +631,7 @@ export const ViewMeta = styled.div`
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.005em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
   display: inline-flex;
   align-items: baseline;
   gap: 0;

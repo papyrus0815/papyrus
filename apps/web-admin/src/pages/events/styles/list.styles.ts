@@ -10,8 +10,10 @@ import {
   CATEGORY_BADGE_COLORS,
   LIST_DENSITY,
   MOTION,
-  LIST_WIDTH,
+  LIST_STEPS,
   ROW_TYPE,
+  SURFACE,
+  rowHairline,
   SHADOW,
   metaText,
   type ListDensity,
@@ -39,9 +41,23 @@ const densityVars = (density: ListDensity) => {
     --col-dur: ${box.colDur}px;
     --col-flags: ${box.colFlags}px;
     --col-act: ${box.colAct}px;
-    /* 7트랙(요약 열) 대역에서만 소비된다 — 6트랙에서 제목은 여전히 1fr이다.
-       넓은 카드에서 신축 역할이 제목 → 요약으로 넘어가므로 제목에 상한이 생긴다. */
-    --col-title: ${box.colTitle}px;
+    /* 7트랙(요약 열) 이상 대역에서만 소비된다 — 6트랙에서 제목은 여전히 1fr이다.
+       넓은 카드에서 신축 역할이 제목 → 요약으로 넘어가므로 제목에 상한이 생긴다.
+
+       ⚠️ 제목은 fr이 **아니라 순수 길이**다. cqw의 기준면은 eventcard(= CatalogSection)
+       단일 요소라, 연도 그룹마다 RowList DOM이 갈려도 전 행이 같은 계산값을 갖는다 —
+       "fr 트랙은 격자당 1개" 규약 무위반. 단계 플립 없이 연속으로 자라므로 임계 경계에서
+       제목이 점프하지도 않는다. step 1 대역(카드 1322~1740)에서는 22cqw가 하한을 못 넘어
+       계산값이 항상 하한 = 도입 전과 픽셀 동일이다.
+       ⚠️ 이 주석 안에서 백틱을 쓰지 말 것 — styled 템플릿 리터럴이 끊겨 TS1005가 난다. */
+    --col-title: clamp(${box.colTitle}px, 22cqw, ${box.colTitleMax}px);
+    /* 광폭 단계(LIST_STEPS.ledger / .atlas)에서만 소비 */
+    --col-date-wide: ${box.colDateWide}px;
+    --col-dur-wide: ${box.colDurWide}px;
+    --col-flags-wide: ${box.colFlagsWide}px;
+    --col-flags-ultra: ${box.colFlagsUltra}px;
+    --col-kw: ${box.colKw}px;
+    --col-reg: ${box.colReg}px;
     --row-indent: ${box.indent}px;
     --row-title: ${type.title};
     --row-meta: ${type.meta};
@@ -52,6 +68,10 @@ const densityVars = (density: ListDensity) => {
     --century-gap: ${box.centuryGap}px;
     /* ⚠️ 아래 두 개는 **기존 변수** — 이름·소비처 불변, 값만 밀도에 묶는다.
        YearDivider가 top: var(--century-header-h)로 세기 헤더에 붙어 있다. */
+    /* 열 헤더 높이 — sticky 3겹 사다리(열 → 세기 → 연도)의 첫 단.
+       ⚠️ 세기 헤더 top과 연도 헤더 top(calc) **두 곳 모두**에 배선해야 한다.
+       한 곳만 넣으면 띠가 겹치거나 사이에 슬릿이 생긴다. */
+    --col-header-h: ${box.colHeaderH}px;
     --century-header-h: ${box.centuryH}px;
     --rail-inset: ${box.railInset}px;
   `
@@ -96,7 +116,9 @@ export const CompactList = styled.div.attrs(
   /* 하단 여백 120 → 32px. 120px은 모바일 FAB(56px) 회피가 목적인데 데스크톱에는
      FAB가 없어 아무것도 피하지 않았다 — 마지막 세기에 도착하면 화면 3분의 1이
      안내문과 빈칸이었다. 모바일에서만 안전 영역과 함께 되살린다. */
-  padding: 4px 12px 32px var(--rail-gutter);
+  /* 좌 36 / 우 12의 24px 비대칭은 근거가 없다. 전폭에서는 행 잉크가 우측 보더에 12px까지
+     붙어 '오른쪽이 잘렸다'로 읽힌다(짧은 행에서는 여백이 보완해 주던 문제다). */
+  padding: 4px 20px 32px var(--rail-gutter);
   position: relative;
 
   /* 레일 3좌표는 한 세트로 움직인다 — 거터(패딩) · 축선 x · 인셋(=거터-축선).
@@ -144,22 +166,47 @@ export const CompactList = styled.div.attrs(
   background-attachment: local;
   background-repeat: no-repeat;
   /* 종단 — 하단 패딩 구간에는 축을 그리지 않는다. local 첨부라 높이는 콘텐츠 전체 길이다. */
-  background-size: 100% calc(100% - var(--rail-tail));
+  /* 잉크는 1px인데 100% 폭 그라디언트 셰이더가 도는 건 순 낭비다(전폭에서 3,300px).
+     no-repeat이 이미 걸려 있어 시각 결과는 픽셀 동일하다. */
+  background-size: calc(var(--rail-x) + 2px) calc(100% - var(--rail-tail));
 
+  /* 스크롤바 — 중립 크롬. 브랜드 파랑 20%는 라이트 표면 대비 1.33:1로 사실상 안 보였고,
+     브랜드 hue를 중립 크롬에 쓰는 것 자체가 BRAND 규약(primary CTA·활성 상태 전용) 위반이다.
+     ⚠️ 폭 6 → 10은 카드 크롬을 바꾸므로 theme.ts LIST_STEPS를 같이 재유도해야 한다. */
   &::-webkit-scrollbar {
-    width: 6px;
+    width: 10px;
   }
   &::-webkit-scrollbar-track {
     background: transparent;
-    border-radius: 3px;
   }
   &::-webkit-scrollbar-thumb {
-    background: rgba(37, 99, 235, 0.2);
-    border-radius: 3px;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.22)'
+        : 'rgba(15, 23, 42, 0.28)'};
+    border-radius: 5px;
+    /* 트랙에 붙지 않게 안쪽으로 — 배경색 보더는 표면색을 따라간다 */
+    border: 2px solid transparent;
+    background-clip: content-box;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: rgba(37, 99, 235, 0.3);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.34)'
+        : 'rgba(15, 23, 42, 0.40)'};
+    background-clip: content-box;
   }
+  /* Firefox는 표준 속성이 없으면 OS 기본(약 15px)을 그려 임계 산식이 어긋난다. */
+  scrollbar-width: thin;
+  scrollbar-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.22)'
+        : 'rgba(15, 23, 42, 0.28)'}
+    transparent;
+  /* 스크롤바 유무로 행 폭이 흔들리지 않게 자리를 미리 예약한다 */
+  scrollbar-gutter: stable;
+  /* 목록 끝에서 스크롤이 조상으로 체이닝되던 문제 — 드로어에는 이미 있고 목록에만 없었다 */
+  overscroll-behavior: contain;
 
   @media (max-width: 768px) {
     max-height: none;
@@ -231,388 +278,196 @@ export const CompactList = styled.div.attrs(
   }
 `
 
-export type ListItemImportance = 'critical' | 'major' | 'normal'
+/**
+ * 행 격자의 **단일 출처**.
+ *
+ * 소비처: `Body`(event-list-item.tsx) · `SkeletonBody`(event-compact-list.tsx).
+ * 세 곳이 각자 트랙을 선언하면 다음 격자 변경에서 반드시 갈린다 — 실제로 스켈레톤이
+ * `display:flex; max-width:880px`로 남아 있어서, 전폭에서 로딩(880px) → 데이터(3,294px)
+ * 가로 점프가 났다.
+ *
+ * ── 열 사다리 ────────────────────────────────────────────────────────────────
+ * 폭이 늘면 **먼저 고정 열이 켜지거나 넓어져 폭을 지출하고, 잔량만 싱크(`[sum]`)로 간다.**
+ * 이것이 캡 없이도 '행 안쪽 빈 밴드'가 안 생기는 이유다. 반대로 싱크를 끄면 fr이 사라져
+ * 죽은 폭이 즉시 부활하므로 **싱크는 어느 단계에서도 끌 수 없다.**
+ *
+ * ── 불변식 ────────────────────────────────────────────────────────────────────
+ * ⑴ 어느 단계에서도 `minmax(0, 1fr)`는 **정확히 1개**다.
+ * ⑵ 나머지 트랙은 전부 순수 길이(px 또는 clamp/cqw)다. `subgrid`·`auto`·`max-content`·
+ *    `min-content`·`fit-content`는 0개 — 연도 그룹마다 RowList DOM이 갈려도 모든 행 박스
+ *    폭이 같고, 따라서 1fr 계산값도 전 행 동일하다. 이것이 subgrid 없이 열을 세우는
+ *    유일한 정공법이다.
+ * ⑶ 열 **순서는 전 단계 동일**하다. 단계가 바꾸는 것은 '어떤 열이 있는가'와 고정 폭뿐이라,
+ *    셀은 전부 `grid-column: <라인이름>`으로 배치되고 JSX는 단계를 모른다.
+ * ⑷ `[sumend]`는 요약 트랙 **직후**의 라인 이름이다. 설명이 없는 행에서 제목이
+ *    `grid-column: title / sumend`로 요약 자리를 삼켜, 빈 셀이 행 *중간*에 남지 않게 한다.
+ *    step 0에는 `[sum]`이 없어 `[sumend]`가 제목 직후라 그 선언이 자동으로 no-op이 된다.
+ *    ⚠️ `span`을 라인 이름으로 쓰지 말 것 — `grid-column: span N` 키워드와 충돌한다.
+ */
+export const rowGridTemplate = css`
+  display: grid;
+  column-gap: var(--row-col-gap);
+  /* 베이스라인 정렬 — center는 칩 라인박스(15.75px)와 제목(18.2px)이 어긋나
+     전 행에서 1.51px 드리프트를 만든다. 상자형 셀만 center로 예외 처리한다. */
+  align-items: baseline;
+
+  /* ── step 0 (카드 < summary) — 6트랙. 신축은 제목. */
+  grid-template-columns:
+    [date] var(--col-date)
+    [cat] var(--col-chip)
+    [title] minmax(0, 1fr)
+    [sumend dur] var(--col-dur)
+    [flags] var(--col-flags)
+    [act] var(--col-act);
+
+  /* ── step 1 summary — 7트랙. 신축이 제목 → 설명으로. 임계·트랙 폭 모두 현행 그대로.
+       제목 자연 폭 p50이 177px이라 6트랙에서 카드를 넓히면 트랙만 커지고 잉크는 안 커졌다
+       — 흡수체를 하나 더 세워야 캡을 풀 수 있고, 그 자리에 설명(목록 응답에 이미 실려
+       오면서 0픽셀도 안 그려지던 필드)을 놓는다. */
+  @container eventcard (min-width: ${LIST_STEPS.summary}px) {
+    grid-template-columns:
+      [date] var(--col-date)
+      [cat] var(--col-chip)
+      [title] minmax(0, var(--col-title))
+      [sum] minmax(0, 1fr)
+      [sumend dur] var(--col-dur)
+      [flags] var(--col-flags)
+      [act] var(--col-act);
+  }
+
+  /* ── step 2 ledger — 8트랙. 키워드 열이 켜지고, 기간(다년 사건이 앞자리부터 잘리던 폭)과
+       관련국이 넓어진다. */
+  @container eventcard (min-width: ${LIST_STEPS.ledger}px) {
+    --col-dur: var(--col-dur-wide);
+    --col-flags: var(--col-flags-wide);
+    grid-template-columns:
+      [date] var(--col-date)
+      [cat] var(--col-chip)
+      [title] minmax(0, var(--col-title))
+      [sum] minmax(0, 1fr)
+      [sumend kw] var(--col-kw)
+      [dur] var(--col-dur)
+      [flags] var(--col-flags)
+      [act] var(--col-act);
+  }
+
+  /* ── step 3 atlas — 9트랙. 등록 시각이 켜지고(‘등록순’ 정렬의 근거가 화면에 0픽셀이던
+       문제), 날짜(BC·YYYY.M.D 극단값)와 관련국이 한 번 더 넓어진다. */
+  @container eventcard (min-width: ${LIST_STEPS.atlas}px) {
+    --col-date: var(--col-date-wide);
+    --col-dur: var(--col-dur-wide);
+    --col-flags: var(--col-flags-ultra);
+    grid-template-columns:
+      [date] var(--col-date)
+      [cat] var(--col-chip)
+      [title] minmax(0, var(--col-title))
+      [sum] minmax(0, 1fr)
+      [sumend kw] var(--col-kw)
+      [dur] var(--col-dur)
+      [flags] var(--col-flags)
+      [reg] var(--col-reg)
+      [act] var(--col-act);
+  }
+`
+
+/*
+ * (제거됨) 레거시 카드 시스템 styled export 26개 — 전부 참조 0이었다(합계 617줄 = 이
+ * 파일의 3분의 1). 목록 시각을 고치러 온 사람이 가장 먼저 여는 파일에서, 그 3분의 1이
+ * 화면에 0픽셀도 그리지 않는 코드였다.
+ *
+ *   CompactListItem · CompactListBody · CompactThumbnail · CompactCategoryBadge ·
+ *   CompactListContent · CompactListHeader · ExpandButton · ExpandSpacer ·
+ *   CompactCategoryDot · CompactListTitle · CompactListMeta · TimelineDateWrapper ·
+ *   TimelineDateRow · TimelineDuration · DateDivider · SimpleYearLabel ·
+ *   CompactListSummary · ImportanceBadge · SummaryIconButton · ResultControls ·
+ *   ToolbarMeta · ToolbarToggle · ToolbarToggleText · ToolbarToggleLabel ·
+ *   ToolbarToggleDescription · SortDirectionToggle
+ *
+ * ⚠️ 이 중 여럿은 **폐지가 확정된 신호**를 담고 있었다(행 단위 카테고리 도트, 중요도 별,
+ *    SHADOW.sm hover lift). 살아 있으면 다음 검토가 그것들을 현행 규약으로 읽는다.
+ *    되살리지 말 것 — 필요하면 지금 규약(행 격자 + 밀도 토큰) 위에서 새로 만들 것.
+ */
+/**
+ * sticky 열 헤더 — 스크롤 컨테이너의 첫 자식.
+ *
+ * 초광폭에서 행이 최대 9트랙까지 벌어지는데 "이 열이 무엇인가"를 말하는 지면이 없으면
+ * 키워드 칩과 관련국 칩, 기간과 등록 시각이 서로 구별되지 않는다. 26px 마이크로 헤더가
+ * 그 질문에 답하는 가장 싼 수단이다.
+ *
+ * ⚠️ 트랙은 rowGridTemplate **같은 출처**를 읽는다 — subgrid가 필요 없고 fr 트랙도 여전히
+ *    1개다. 라벨은 각자 grid-column으로 배치되므로 열이 꺼지면 라벨도 함께 사라진다.
+ *
+ * ⚠️ sticky 3겹 사다리(열 → 세기 → 연도)의 **첫 단**이다. --col-header-h를 세기 헤더의
+ *    top과 연도 헤더의 top(calc) 두 곳에 배선하지 않으면 띠가 겹치거나 사이에 슬릿이 생긴다.
+ *    이 축은 예전 검토가 "적층 34겹 → 1겹"으로 고친 바로 그 축이라 특히 조심할 것.
+ */
+export const ColumnHeader = styled.div`
+  ${rowGridTemplate}
+  align-items: center;
+  position: sticky;
+  top: 0;
+  /* 세기 6 · 연도 5 위 */
+  z-index: 7;
+  box-sizing: border-box;
+  min-height: var(--col-header-h, 26px);
+  /* 행과 같은 좌우 인셋 — 라벨 x가 셀 x와 어긋나면 헤더가 오히려 오독을 만든다.
+     좌측은 레일까지 당기고(margin) 그만큼 안쪽으로 되민다(padding). */
+  margin: 0 calc(-1 * var(--row-pad-r)) 2px calc(-1 * var(--rail-inset));
+  padding: 0 var(--row-pad-r) 0 calc(var(--rail-inset) + var(--row-pad-l));
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: ${metaText};
+  /* ⚠️ 반투명 금지 — 아래 행이 비친다(세기 헤더가 같은 이유로 솔리드로 고쳐져 있다) */
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised};
+  border-bottom: 1px solid ${rowHairline};
+
+  /* 밀도 컨트롤이 숨는 임계와 정합 — 좁은 폭에서는 행이 2줄/압축 규약이라 열이 없다 */
+  @media (max-width: 899px) {
+    display: none;
+  }
+`
 
 /**
- * 카드 — 평면 톤. hover translateX/box-shadow lift 제거.
- * 도트 외곽 링은 surface 색에 의존 → CSS 변수 `--surface-bg`로 외부 주입 가능하도록 두되,
- * 기본은 PageScene/drawer 양쪽에서 안전한 currentColor 흉내 (theme 분기).
+ * 열 헤더의 라벨 한 칸.
  *
- * importance 좌측 보더 (active 4px / critical 4px / major 3px) 우선순위 유지.
+ * ⚠️ `$showFrom`은 선택이 아니라 **필수 규약**이다. 존재하지 않는 라인 이름으로
+ * `grid-column`을 걸면 CSS가 조용히 **암묵 트랙**을 만들어 헤더가 행보다 넓어진다.
+ * 그래서 늦게 켜지는 열(sum·kw·reg)은 자기 단계에 도달할 때까지 박스를 만들지 않는다 —
+ * 행 셀(`Snippet`·`KeywordCell`·`RegisteredCell`)이 쓰는 것과 **같은 게이트**다.
  */
-export const CompactListItem = styled.div<{
-  $active: boolean
-  $depth: number
-  $importance?: ListItemImportance
+export const ColumnHeaderCell = styled.span<{
+  $col: string
+  $align?: 'right'
+  /** 이 라벨이 켜지는 컨테이너 폭(LIST_STEPS 값). 생략 = step 0부터 항상 존재하는 열 */
+  $showFrom?: number
 }>`
-  border-radius: 12px;
-  padding: 0;
-  margin-left: ${({ $depth }) => $depth * 24}px;
-  cursor: pointer;
-  transition: border-color ${MOTION.fast}, background ${MOTION.fast};
-  position: relative;
-  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: ${({ $align }) => $align ?? 'left'};
 
-  /* importance에 따라 카드 최소 높이 차등 — 한눈 스캔 시 위계 인지 */
-  min-height: ${({ $importance }) =>
-    $importance === 'critical'
-      ? '84px'
-      : $importance === 'major'
-        ? '68px'
-        : '52px'};
-
-  /* 좌측 importance 강조 보더 — active > critical > major 순 우선 */
-  border-left: ${({ $active, $importance }) =>
-    $active
-      ? `4px solid ${BRAND.primary}`
-      : $importance === 'critical'
-        ? `4px solid ${BRAND.primary}`
-        : $importance === 'major'
-          ? '3px solid rgba(245, 158, 11, 0.7)'
-          : '1.5px solid transparent'};
-
-  /* 타임라인 연결선 — hover 시 폭 변화 미세하게만 */
-  &::before {
-    content: '';
-    position: absolute;
-    left: ${({ $depth }) => -41 - $depth * 24}px;
-    top: 50%;
-    width: ${({ $depth }) => 38 + $depth * 24}px;
-    height: 2px;
-    background: ${BRAND.primarySoftHover};
-    transition: width ${MOTION.fast};
-  }
-
-  &:hover::before {
-    width: ${({ $depth }) => 40 + $depth * 24}px;
-  }
-
-  ${({ theme, $active, $depth }) =>
-    theme.mode === 'dark'
+  ${({ $col, $showFrom }) =>
+    $showFrom === undefined
       ? css`
-          background: ${$active
-            ? BRAND.primarySoftDark
-            : $depth > 0
-              ? 'rgba(255, 255, 255, 0.03)'
-              : 'rgba(255, 255, 255, 0.04)'};
-          border: 1.5px solid
-            ${$active
-              ? BRAND.primaryBorderHover
-              : $depth > 0
-                ? 'rgba(37, 99, 235, 0.1)'
-                : 'rgba(255, 255, 255, 0.07)'};
-          border-left: ${$active
-            ? `4px solid ${BRAND.primary}`
-            : `1.5px solid ${$depth > 0 ? 'rgba(37, 99, 235, 0.1)' : 'rgba(255, 255, 255, 0.07)'}`};
-          box-shadow: ${$active ? SHADOW.smDark : SHADOW.none};
-          &:hover {
-            border-color: ${BRAND.primaryBorder};
-            background: ${$active
-              ? BRAND.primaryFillDark
-              : 'rgba(255, 255, 255, 0.06)'};
-          }
-          /* 도트 — 외곽 링 색을 currentColor 기반으로 (drawer/PageScene surface와 무관하게 매끈) */
-          &::after {
-            content: '';
-            position: absolute;
-            left: ${-41 - $depth * 24}px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: ${$active ? '10px' : '8px'};
-            height: ${$active ? '10px' : '8px'};
-            background: ${$active ? BRAND.primary : 'rgba(30, 30, 40, 0.9)'};
-            border: 2px solid
-              ${$active ? BRAND.primary : BRAND.primaryBorderHover};
-            border-radius: 50%;
-            transition: background ${MOTION.fast};
-            z-index: 1;
-          }
-          &:hover::after {
-            background: ${BRAND.primary};
-          }
+          grid-column: ${$col};
         `
       : css`
-          background: ${$active
-            ? BRAND.primarySoft
-            : $depth > 0
-              ? 'rgba(248, 250, 252, 0.8)'
-              : '#ffffff'};
-          border: 1.5px solid
-            ${$active
-              ? BRAND.primaryBorderHover
-              : $depth > 0
-                ? 'rgba(37, 99, 235, 0.08)'
-                : 'rgba(20, 19, 34, 0.08)'};
-          border-left: ${$active
-            ? `4px solid ${BRAND.primary}`
-            : `1.5px solid ${$depth > 0 ? 'rgba(37, 99, 235, 0.08)' : 'rgba(20, 19, 34, 0.08)'}`};
-          box-shadow: ${$active ? SHADOW.sm : SHADOW.xs};
-          &:hover {
-            border-color: ${BRAND.primaryBorder};
-            background: ${$active ? BRAND.primarySoftHover : '#fafbfd'};
-          }
-          &::after {
-            content: '';
-            position: absolute;
-            left: ${-41 - $depth * 24}px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: ${$active ? '10px' : '8px'};
-            height: ${$active ? '10px' : '8px'};
-            background: ${$active ? BRAND.primary : '#ffffff'};
-            border: 2px solid
-              ${$active ? BRAND.primary : BRAND.primaryBorderHover};
-            border-radius: 50%;
-            transition: background ${MOTION.fast};
-            z-index: 1;
-          }
-          &:hover::after {
-            background: ${BRAND.primary};
+          display: none;
+
+          @container eventcard (min-width: ${$showFrom}px) {
+            display: block;
+            grid-column: ${$col};
           }
         `}
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-    &::before,
-    &::after {
-      transition: none;
-    }
-  }
-
-  @media (max-width: 768px) {
-    min-height: ${({ $depth }) => Math.max(80, 100 - $depth * 10)}px;
-  }
 `
 
-export const CompactListBody = styled.div`
-  display: flex;
-  gap: 0;
-  width: 100%;
-  height: 100%;
-  min-height: inherit;
-`
-
-export const CompactThumbnail = styled.div<{
-  $depth: number
-  $isEmpty?: boolean
-}>`
-  width: ${({ $depth }) => Math.max(60, 90 - $depth * 10)}px;
-  align-self: stretch;
-  flex-shrink: 0;
-  background-size: cover;
-  background-position: center;
-  position: relative;
-  border-radius: 12px 0 0 12px;
-  overflow: hidden;
-  background-color: ${({ $isEmpty }) =>
-    $isEmpty ? 'rgba(37, 99, 235, 0.05)' : 'transparent'};
-
-  ${({ $isEmpty }) =>
-    $isEmpty &&
-    `
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    &::before {
-      content: '';
-      width: 24px;
-      height: 24px;
-      background-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" stroke="rgba(37, 99, 235, 0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Crect x="3" y="3" width="18" height="18" rx="2" ry="2"/%3E%3Ccircle cx="8.5" cy="8.5" r="1.5"/%3E%3Cpolyline points="21 15 16 10 5 21"/%3E%3C/svg%3E');
-      background-size: contain;
-      background-repeat: no-repeat;
-      background-position: center;
-      opacity: 0.4;
-    }
-  `}
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: ${({ $isEmpty }) =>
-      $isEmpty
-        ? 'none'
-        : 'linear-gradient(135deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.05) 100%)'};
-  }
-`
-
-export const CompactCategoryBadge = styled.span<{
-  $category: HistoricalEventCategory
-}>`
-  position: absolute;
-  bottom: 6px;
-  left: 6px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 9px;
-  font-weight: 700;
-  color: #fff;
-  z-index: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: ${({ $category }) => {
-    const color = CATEGORY_BADGE_COLORS[$category]
-    return `${color}E6`
-  }};
-`
-
-export const CompactListContent = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  min-width: 0;
-`
-
-export const CompactListHeader = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-`
+export type ListItemImportance = 'critical' | 'major' | 'normal'
 
 /* 평면 톤 — hover scale 제거. */
-export const ExpandButton = styled.button`
-  border-radius: 6px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  color: ${BRAND.primary};
-  cursor: pointer;
-  transition: background ${MOTION.fast}, border-color ${MOTION.fast};
-  flex-shrink: 0;
-  margin-top: 1px;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: ${BRAND.primarySoftDark};
-          border: 1px solid rgba(37, 99, 235, 0.25);
-          &:hover {
-            background: ${BRAND.primaryFillDark};
-            border-color: ${BRAND.primaryBorderHover};
-          }
-        `
-      : css`
-          background: #fff;
-          border: 1px solid ${BRAND.primaryBorder};
-          &:hover {
-            background: ${BRAND.primarySoftHover};
-            border-color: ${BRAND.primaryBorderHover};
-          }
-        `}
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: ${BRAND.focusRing};
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-`
-
-export const ExpandSpacer = styled.span`
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-`
-
-export const CompactCategoryDot = styled.span<{
-  $category: HistoricalEventCategory
-  $depth: number
-}>`
-  width: ${({ $depth }) => 10 - $depth * 1}px;
-  height: ${({ $depth }) => 10 - $depth * 1}px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 4px;
-  border: ${({ $depth }) =>
-    $depth > 0 ? '1.5px solid rgba(255, 255, 255, 0.8)' : 'none'};
-  background: ${({ $category }) => CATEGORY_BADGE_COLORS[$category]};
-  opacity: ${({ $depth }) => Math.max(0.5, 1 - $depth * 0.12)};
-`
-
-export const CompactListTitle = styled.h4`
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
-  flex: 1;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#0f172a')};
-
-  @media (max-width: 768px) {
-    font-size: 14px;
-    line-height: 1.5;
-  }
-`
-
-export const CompactListMeta = styled.div<{ $depth: number }>`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#64748b')};
-
-  span {
-    line-height: 1;
-  }
-
-  @media (max-width: 768px) {
-    font-size: 12px;
-  }
-`
-
-export const TimelineDateWrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#64748b')};
-`
-
 /* 좌측 leading line — 의미 없는 ━━━ 글리프(SR에 읽힘) 제거 후 CSS pseudo border로 대체. */
-export const TimelineDateRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-
-  &::before {
-    content: '';
-    display: inline-block;
-    width: 18px;
-    height: 1.5px;
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#334155' : '#cbd5e1')};
-    border-radius: 1px;
-    flex-shrink: 0;
-  }
-`
-
-export const TimelineDuration = styled.div`
-  font-size: 10px;
-  text-align: center;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 10px;
-  display: inline-block;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#94a3b8')};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.06)'
-      : 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)'};
-`
-
 export const LoadingSpinner = styled.div`
   width: 24px;
   height: 24px;
@@ -790,7 +645,8 @@ export const YearDivider = styled.button`
   text-align: left;
   background: transparent;
   position: sticky;
-  top: var(--century-header-h, 44px);
+  /* 사다리의 세 번째 단 — 열 헤더 + 세기 헤더 높이만큼 내려온다 */
+  top: calc(var(--col-header-h, 26px) + var(--century-header-h, 44px));
   z-index: 5;
   transition: background 0.15s ease-out;
   align-self: stretch;
@@ -807,7 +663,7 @@ export const YearDivider = styled.button`
     border-radius: 50%;
     background: ${BRAND.primary};
     box-shadow: 0 0 0 2.5px
-      ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+      ${({ theme }) => (theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised)};
     z-index: 1;
     pointer-events: none;
   }
@@ -830,7 +686,7 @@ export const YearDivider = styled.button`
     right: 0;
     bottom: 0;
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? '#141414' : '#ffffff'};
+      theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised};
     z-index: -1;
   }
 
@@ -858,10 +714,11 @@ export const YearDivider = styled.button`
     color: ${({ theme }) => theme.colors.text.primary};
 
     svg {
-      color: ${({ theme }) => theme.colors.text.tertiary};
+      color: ${metaText};
       flex-shrink: 0;
       align-self: center;
-      transition: transform 0.3s ease;
+      /* 행 디스클로저(0.15s)와 같은 토큰 — 같은 제스처가 두 속도로 갈리지 않게 */
+      transition: transform ${MOTION.fast};
     }
   }
 
@@ -898,7 +755,7 @@ export const UnknownYearDivider = styled(YearDivider)`
   &::before {
     width: 8px;
     height: 8px;
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+    background: ${({ theme }) => (theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised)};
     border: 1.5px solid ${({ theme }) => theme.colors.text.tertiary};
   }
   span {
@@ -940,8 +797,11 @@ export const CollapsedCount = styled.span`
 export const CenturyDivider = styled.button`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  /* ⚠️ space-between 금지 — 전폭 3440에서 세기 라벨과 건수가 3,000px 넘게 벌어져
+     한 헤더의 두 조각이 서로 다른 정보처럼 읽혔다. 좌측 클러스터로 묶는다.
+     자식(라벨/연도범위/건수)이 이미 별도 span이라 JSX 변경은 0이다. */
+  justify-content: flex-start;
+  gap: 10px;
   /* 좌측은 레일까지 당기고 우측은 컨테이너 패딩(12px)까지 — YearDivider와 **같은 블리드**.
    * 이전엔 margin-right:-rail 과 width:calc(100% + rail)이 함께 걸려 우측 끝이
    * 콘텐츠 박스 경계에 멈췄고, YearDivider(우측 -12px까지 확장)보다 12px 짧아
@@ -964,7 +824,8 @@ export const CenturyDivider = styled.button`
   cursor: pointer;
   text-align: left;
   position: sticky;
-  top: 0;
+  /* 열 헤더 아래에 붙는다 — sticky 3겹 사다리의 두 번째 단 */
+  top: var(--col-header-h, 26px);
   z-index: 6;
   /* ⚠️ 반투명 금지. 연 헤더는 같은 이유로 이미 솔리드로 고쳐져 있었는데(alpha 0.94에서도
      아래 행이 5~6% 비친다) 세기 헤더만 0.78/0.82로 남아 있었다. 세기 헤더는 섹션 전체
@@ -973,7 +834,7 @@ export const CenturyDivider = styled.button`
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: #141414;
+          background: ${SURFACE.dark.raised};
           color: ${theme.colors.text.primary};
         `
       : css`
@@ -995,7 +856,7 @@ export const CenturyDivider = styled.button`
     border-radius: 50%;
     background: ${BRAND.primary};
     box-shadow: 0 0 0 3px
-      ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+      ${({ theme }) => (theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised)};
     z-index: 1;
     pointer-events: none;
   }
@@ -1029,15 +890,23 @@ export const CenturyDividerLabel = styled.span`
   /* 세기 20 : 연도 14 = 1.43×. 16px일 때는 1.14×라 스크롤 중 '시대가 바뀐 것인지
      해가 바뀐 것인지'를 라벨을 읽어야만 알 수 있었다. */
   font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  /* 800은 레포 전체에서 여기 한 곳뿐이었다 — 위계는 크기(20 vs 14)가 이미 만들고 있고,
+     굵기까지 최대치를 쓰면 화면에서 가장 큰 텍스트가 필요 이상으로 무거워진다. */
+  font-weight: 700;
+  /* 같은 레포가 "한글에 라틴 트래킹을 그대로 쓰지 않는다"를 명문화해 놓고, 정작 화면에서
+     가장 큰 텍스트가 -0.02em으로 그 규약을 어기고 있었다. */
+  letter-spacing: -0.01em;
+  /* 세기 숫자가 자릿수에 따라 흔들리지 않게 — 형제(연도·건수)에는 이미 걸려 있었다 */
+  font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
 
   svg {
-    color: ${({ theme }) => theme.colors.text.tertiary};
+    color: ${metaText};
     flex-shrink: 0;
     align-self: center;
-    transition: transform 0.3s ease;
+    /* 같은 제스처(접기/펼치기)가 그룹 헤더 0.3s vs 행 디스클로저 0.15s로 2배 갈려
+       "연도 헤더는 느리다"는 인상을 줬다. 토큰으로 통일한다. */
+    transition: transform ${MOTION.fast};
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -1062,69 +931,6 @@ export const CenturyDividerCount = styled.span`
   letter-spacing: -0.005em;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-export const DateDivider = styled.button`
-  display: flex;
-  align-items: center;
-  margin: 16px 0 8px -70px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  width: calc(100% + 70px);
-  cursor: pointer;
-  position: relative;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 32px;
-    transform: translateX(-50%);
-    width: 8px;
-    height: 8px;
-    background: rgba(37, 99, 235, 0.4);
-    border-radius: 50%;
-    z-index: 1;
-  }
-
-  span {
-    margin-left: 52px;
-    font-size: 11px;
-    font-weight: 500;
-    padding: 2px 10px;
-    border-radius: 6px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? css`
-            color: #64748b;
-            border: 1px solid rgba(255, 255, 255, 0.07);
-          `
-        : css`
-            color: #64748b;
-            border: 1px solid rgba(203, 213, 225, 0.4);
-          `}
-
-    svg {
-      transition: transform 0.2s ease;
-      color: ${({ theme }) => theme.mode === 'dark' ? '#71717a' : '#94a3b8'};
-    }
-  }
-
-  &:hover span {
-    border-color: rgba(37, 99, 235, 0.25);
-  }
-`
-
-export const SimpleYearLabel = styled.div`
-  margin: 12px 0 8px 0;
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 600;
-  background: transparent;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#475569' : '#94a3b8')};
 `
 
 /**
@@ -1194,7 +1000,7 @@ export const CollapsedPlaceholder = styled.div`
     width: 7px;
     height: 7px;
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? '#0f0f12' : '#ffffff'};
+      theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised};
     border: 1.5px solid
       ${({ theme }) =>
         theme.mode === 'dark'
@@ -1212,36 +1018,6 @@ export const CollapsedPlaceholder = styled.div`
     color: ${metaText};
     font-variant-numeric: tabular-nums;
   }
-`
-
-export const CompactListSummary = styled.p<{ $depth: number }>`
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
-  overflow-wrap: break-word;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#475569')};
-
-  @media (max-width: 768px) {
-    font-size: 13px;
-    line-height: 1.6;
-  }
-`
-
-export const ImportanceBadge = styled.span<{ $major?: boolean }>`
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: ${({ $major }) =>
-    $major ? 'rgba(251, 191, 36, 0.15)' : 'rgba(239, 68, 68, 0.15)'};
-  color: ${({ $major }) => ($major ? '#d97706' : '#dc2626')};
 `
 
 export const EmptyCatalogState = styled.div`
@@ -1501,56 +1277,29 @@ export const EmptyCreateButton = styled.button`
 `
 
 /* 평면 톤 — hover scale 제거. */
-export const SummaryIconButton = styled.button`
-  border: none;
-  background: ${BRAND.primarySoftHover};
-  padding: 4px 6px;
-  border-radius: 6px;
-  color: ${BRAND.primary};
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background ${MOTION.fast}, color ${MOTION.fast};
-  flex-shrink: 0;
-  margin-left: 6px;
-
-  &:hover {
-    background: ${BRAND.primaryFill};
-    color: ${BRAND.primaryHover};
-  }
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: ${BRAND.focusRing};
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-`
-
 /* 목록 뷰 카드 컨테이너 — 타임라인 위젯의 cardBase와 시각 family 통일.
  * 1px border + 12px radius + theme bg. 내부의 CompactList가 자체 좌측 레일을 그리므로
  * 별도 ::before 그라데이션 데코는 제거(이중 라인 방지). */
 /**
  * 목록 카드.
  *
- * ⚠️ 폭 상한의 **1차 소유자는 `PageWrapper`**(layout.styles.ts)다. 여기 `min(100%, ink)`는
- * 카드가 다른 컨테이너에 재배치될 때를 위한 안전핀이며, 정상 경로에서는 셸 캡이 먼저 걸려
- * 이 선언이 실제로 물리는 일은 없다.
+ * ⚠️ **폭 상한은 존재하지 않는다.** 2026-08-02 전폭 전환에서 여기 있던
+ * `width: min(100%, LIST_WIDTH.inkWide)`와 셸의 `PageWrapper.max-width`를 **같은 커밋에서
+ * 함께** 제거했다. 둘 중 하나만 지우면 2560에서 카드가 1840에 좌측정렬로 멈추고 툴바
+ * hairline만 2540까지 가서 '우측 끝 2종'이 픽셀 단위로 재현된다 — 사용자가 신고한 바로
+ * 그 그림이다. 다시 캡을 심지 말 것.
  *
- * 상한이 여기로 올라온 경위: 예전에는 행 안쪽(Body max-width:880px)이 상한을 들고 있어서
- * 행 hairline·hover·active tint는 컨테이너 전체 폭(1316px)을 그리는데 정보는 985px에서
- * 끝났다 — 1920에서 행의 48%가 행 **안쪽** 빈칸이었다. 그때 세운 "빈 픽셀이 카드 밖으로
- * 나가면 여백으로 읽힌다"는 명제는 **틀렸다**: 카드만 캡을 받고 툴바는 못 받아 우측 끝이
- * 2종이 됐고, 사용자에게는 "우측만 비었다"로 읽혔다(2026-08-02 검토). 그래서 상한을 한 번
- * 더 위로, 셸까지 올렸다.
+ * 경위(요약): 상한은 행 Body 880 → 카드 1120 → 셸 1880을 떠돌았다. 매 단계의 진단은
+ * 맞았지만("행 안쪽 빈 밴드는 깨진 행으로 읽힌다", "캡이 툴바를 못 덮으면 우측 끝이
+ * 갈린다") 처방이 늘 '더 위에 캡'이었고, 캡이 있는 한 넓은 화면에서는 어딘가가 반드시
+ * 빈다. 이번에는 처방을 바꾼다 — **폭을 흡수하는 열을 행에 더 세운다**
+ * (`rowGridTemplate`의 열 사다리, `theme.ts` LIST_STEPS).
+ * 이 요소는 그 사다리의 **기준면**(container-name: eventcard)이라는 역할만 갖는다.
  *
- * ink 1120 = 격자 고정 트랙 합 370(date 66 + chip 60 + dur 56 + flags 128 + act 60)
- *          + gap 60(12×5) + 제목 트랙 608 + Stop 패딩 26 + 목록 패딩 48 + 보더 2
- *          + CompactList 스크롤바 6(:145 `::-webkit-scrollbar{width:6px}` — Chrome에서
- *            레이아웃 폭을 실제로 점유한다. 이 항이 빠져 있어 예전 산식은 합이 1114였다).
+ * ⚠️ 이 카드 안에서 `position: fixed`를 쓰지 말 것. `container-type: inline-size`가 이
+ * 요소를 fixed 자손의 컨테이닝 블록으로 만들어, 뷰포트가 아니라 카드에 갇힌다. 뷰포트
+ * 고정이 필요하면 document.body 포털 + `useAnchoredPosition`을, 스크롤 컨테이너 고정이
+ * 필요하면 CompactList 안 sticky를 쓴다.
  *
  * ⚠️ layout.styles.ts에도 같은 이름의 CatalogSection이 있지만 **소비처가 0인 죽은
  * export**다(유일 소비처는 event-compact-list.tsx의 List.CatalogSection). 거기를 고치면
@@ -1560,8 +1309,7 @@ export const CatalogSection = styled.section`
   display: flex;
   flex-direction: column;
   height: 100%;
-  width: min(100%, ${LIST_WIDTH.inkWide}px);
-  max-height: calc(100vh - var(--header-height) - 60px);
+  width: 100%;
   overflow: hidden;
   position: relative;
   /**
@@ -1586,74 +1334,6 @@ export const CatalogSection = styled.section`
 `
 
 /* 평면 톤 — hover lift 제거. */
-export const ResultControls = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 10px;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(20, 19, 34, 0.08);
-          box-shadow: ${SHADOW.xs};
-        `}
-`
-
-export const ToolbarMeta = styled.div`
-  font-size: 13px;
-  font-weight: 600;
-  padding: 5px 10px;
-  background: ${BRAND.primarySoftHover};
-  border-radius: 6px;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
-
-  span {
-    color: ${BRAND.primary};
-  }
-`
-
-export const ToolbarToggle = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(37, 99, 235, 0.06);
-          border: 1px solid rgba(37, 99, 235, 0.15);
-        `
-      : css`
-          background: ${BRAND.primarySoft};
-          border: 1px solid ${BRAND.primarySoftHover};
-        `}
-`
-
-export const ToolbarToggleText = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
-export const ToolbarToggleLabel = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#94a3b8' : '#475569')};
-`
-
-export const ToolbarToggleDescription = styled.span`
-  font-size: 10px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(20, 19, 34, 0.5)'};
-`
-
 /* filter.styles의 SortSelect와 시각 family 통일 — radius 8 / 1px / focus halo 토큰 */
 export const SortSelect = styled.select`
   border-radius: 8px;
@@ -1703,51 +1383,3 @@ export const SortSelect = styled.select`
 `
 
 /* 평면 톤 — hover scale 제거. $direction prop으로 회전 (filter.styles.SortButton과 통일) */
-export const SortDirectionToggle = styled.button<{ $direction?: 'asc' | 'desc' }>`
-  border-radius: 8px;
-  padding: 0;
-  width: 34px;
-  height: 34px;
-  color: ${BRAND.primary};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: border-color ${MOTION.fast}, background ${MOTION.fast};
-  svg {
-    transition: transform ${MOTION.base};
-    transform: rotate(
-      ${({ $direction }) => ($direction === 'asc' ? '180deg' : '0deg')}
-    );
-  }
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          &:hover {
-            border-color: ${BRAND.primaryBorder};
-            background: rgba(37, 99, 235, 0.1);
-          }
-        `
-      : css`
-          background: #f8fafc;
-          border: 1px solid rgba(203, 213, 225, 0.6);
-          &:hover {
-            border-color: ${BRAND.primaryBorder};
-            background: #ffffff;
-          }
-        `}
-
-  &:focus-visible {
-    outline: none;
-    box-shadow: ${BRAND.focusRing};
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-    svg {
-      transition: none;
-    }
-  }
-`

@@ -25,15 +25,30 @@ import { FiAlertTriangle, FiPlus, FiRefreshCw } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useEvents } from '@/entities/event/model'
+import type { FilterChip } from '@/entities/event/model'
 import { getEventsCount } from '@/shared/api/events'
 import { eventKeys } from '@/pages/events/detail/use-event-detail'
 import { useEventFilters } from '@/features/event-filters/model'
 import {
+  combineReferenceState,
+  type FilterReferenceState,
+  type ReferenceLoadState,
+} from '@/features/event-filters/model/reference-label'
+import {
   buildYearBuckets,
+  orderRowsForRender,
+  selectMatchedRows,
   selectVisibleRows,
   useEventHierarchy,
 } from '@/features/event-hierarchy/model'
-import { VIEW_MODES, type ViewMode } from '@/features/event-list/lib'
+import {
+  FILTER_ALL,
+  TIMELINE_LANE_LABELS,
+  TIMELINE_LANE_MODES,
+  VIEW_MODES,
+  type TimelineLaneMode,
+  type ViewMode,
+} from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -101,17 +116,22 @@ import {
 } from './hooks/use-catalog-keyboard'
 import { useCatalogUrlSync } from './hooks/use-catalog-url-sync'
 import { exportEventsAsJson } from './lib/export-events'
+import { parseCatalogSearchParams } from './lib/parse-catalog-search-params'
 import {
   type PrunableEvent,
   pruneEventFromPages,
 } from './lib/prune-deleted-event'
-import { resolveDefaultViewMode } from './lib/resolve-default-view-mode'
 
 /** 집중(넓게) 보기 선택 영속 키 — 세션 간 유지. 모듈 스코프(렌더마다 재생성 회피). */
 const WIDE_MODE_KEY = 'papyrus.events.wideMode'
 /** 목록 밀도 선택 영속 키 — 세션 간 유지. */
 const LIST_DENSITY_KEY = 'papyrus.events.listDensity'
 const LIST_DENSITIES: ListDensity[] = ['compact', 'cozy', 'roomy']
+/**
+ * 타임라인 '카테고리 숨김'의 빈 값 — 모듈 스코프 고정 참조.
+ * 매번 `new Set()`을 만들면 초기화·재설정이 위젯 memo를 통째로 무효화한다.
+ */
+const EMPTY_HIDDEN_CATEGORIES: ReadonlySet<string> = new Set<string>()
 
 /**
  * (제거됨) EventsCatalogPageProps — `countryId`·`embed`.
@@ -133,14 +153,29 @@ export const EventsCatalogPage: React.FC = () => {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
 
+  /**
+   * ===== URL 시드 — **모든 상태의 초기값은 여기 하나에서 온다**(검토 URL-5) =====
+   *
+   * 예전엔 12개 파라미터 중 4개(`bookmarks`·`view`·`event`·`q`)만 initializer로 읽고
+   * 나머지는 기본값으로 시작해 effect가 뒤늦게 반영했다. 그 결과 마운트 첫 커밋에서
+   * 상태→URL effect가 *아직 갱신 전인* 기본값으로 URL을 다시 써 딥링크 필터 5개를
+   * 지웠다가 다음 커밋에 복구했다(뒤로가기 히스토리에 그 중간 상태가 남았다).
+   *
+   * 파싱·검증은 `parseCatalogSearchParams` 하나에 있고, URL→state effect도 같은 함수를
+   * 쓴다. 이 스냅샷은 **마운트 시점 고정**이다 — 이후 URL 변화는 effect가 담당한다.
+   */
+  const [initialUrlState] = useState(() =>
+    parseCatalogSearchParams(searchParams),
+  )
+
   // ===== 검색 / 페이지 상태 =====
   const [bookmarksOnly, setBookmarksOnly] = useState(
-    searchParams.get('bookmarks') === '1',
+    initialUrlState.bookmarksOnly,
   )
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   // 기본 page size 100 — 타임라인 뷰가 한 번에 더 많은 사건을 보여주도록.
   // 사용자는 toolbar의 page size 컨트롤로 변경 가능.
-  const [pageSize, setPageSize] = useState(100)
+  const [pageSize, setPageSize] = useState(initialUrlState.pageSize)
 
   // ===== 목록 밀도 =====
   // 세로 픽셀의 소유권을 사용자에게 넘긴다. 행 높이의 60%가 데이터가 아니라 여백과
@@ -277,9 +312,63 @@ export const EventsCatalogPage: React.FC = () => {
     staleTime: 30_000,
   })
 
-  // ===== 참조 데이터 (카테고리·국가·대륙) =====
-  const { dbCategories, countries, historicalCountries, continents } =
-    useCatalogReferenceData()
+  /**
+   * ===== 참조 데이터 (카테고리·국가·대륙) =====
+   *
+   * 훅이 축별로 `{data, isLoading, isError, isSuccess, refetch}`를 돌려준다(검토 GAP-5).
+   * 배열만 쓰던 시절엔 '잘못된 링크'·'아직 안 옴'·'영영 실패'가 화면상 완전히 같았다.
+   */
+  const reference = useCatalogReferenceData()
+  const dbCategories = reference.categories.data
+  const countries = reference.countries.data
+  const historicalCountries = reference.historicalCountries.data
+  const continents = reference.continents.data
+
+  const toLoadState = (channel: {
+    isLoading: boolean
+    isError: boolean
+  }): ReferenceLoadState =>
+    channel.isLoading ? 'loading' : channel.isError ? 'error' : 'ready'
+
+  /**
+   * 축별 라벨 폴백 상태. 국가 축은 현대·역사 두 소스에서 이름을 찾으므로 둘을 합친다 —
+   * 하나라도 로딩 중이면 '아직 모른다'가 정직하다.
+   */
+  const referenceState = useMemo<FilterReferenceState>(
+    () => ({
+      category: toLoadState(reference.categories),
+      country: combineReferenceState(
+        toLoadState(reference.countries),
+        toLoadState(reference.historicalCountries),
+      ),
+      continent: toLoadState(reference.continents),
+    }),
+    // 원시 플래그만 보면 충분 — 채널 객체는 매 렌더 새로 만들어진다.
+    [
+      reference.categories.isLoading,
+      reference.categories.isError,
+      reference.countries.isLoading,
+      reference.countries.isError,
+      reference.historicalCountries.isLoading,
+      reference.historicalCountries.isError,
+      reference.continents.isLoading,
+      reference.continents.isError,
+    ],
+  )
+
+  const handleRetryReference = useCallback(
+    (axis: keyof FilterReferenceState) => {
+      if (axis === 'category') reference.categories.refetch()
+      else if (axis === 'continent') reference.continents.refetch()
+      else {
+        // 국가 축은 두 소스를 함께 쓴다 — 실패한 쪽만 다시 부른다.
+        if (reference.countries.isError) reference.countries.refetch()
+        if (reference.historicalCountries.isError)
+          reference.historicalCountries.refetch()
+      }
+    },
+    [reference],
+  )
 
   // ===== Feature: 필터 =====
   const {
@@ -299,6 +388,7 @@ export const EventsCatalogPage: React.FC = () => {
     setSelectedContinent,
     setShowFlatView,
     availableCenturies,
+    optionCounts,
     sortedEvents,
     filterSummaryChips,
     hasActiveFilters,
@@ -311,6 +401,24 @@ export const EventsCatalogPage: React.FC = () => {
     countries,
     historicalCountries,
     continents,
+    {
+      // 북마크는 사후 filter가 아니라 **다른 축과 같은 술어 레인**에 있다(검토 IA-7/DATA-10).
+      bookmarksOnly,
+      bookmarks,
+      // 필터 7축의 초기값도 URL에서 온다 — 첫 커밋부터 state === URL(검토 URL-5).
+      initial: {
+        selectedCategory: initialUrlState.selectedCategory,
+        selectedCountry: initialUrlState.selectedCountry,
+        selectedContinent: initialUrlState.selectedContinent,
+        selectedCentury: initialUrlState.selectedCentury,
+        keyword: initialUrlState.keyword,
+        sortBy: initialUrlState.sortBy,
+        sortDirection: initialUrlState.sortDirection,
+        showFlatView: initialUrlState.showFlatView,
+      },
+      // 칩 라벨의 폴백 문구를 원인별로 가른다(검토 GAP-5).
+      referenceState,
+    },
   )
 
   // ===== Feature: 계층 / 직책 =====
@@ -321,8 +429,8 @@ export const EventsCatalogPage: React.FC = () => {
     collapseAllChildren,
     expandAllChildren,
     flattenedHierarchy,
-    // matchedCount는 여기서 쓰지 않는다 — 북마크 필터 이후 기준으로 다시 세는
-    // visibleMatchedCount가 헤더의 단일 출처다(아래 참조).
+    // 훅의 matchedCount는 쓰지 않는다 — 아래에서 `matchedOnlyHierarchy.length`로
+    // 같은 값을 얻고, 그 배열을 뷰·내보내기가 그대로 공유한다(모수 규약 ① 단일 출처).
   } = useEventHierarchy(
     sortedEvents,
     events,
@@ -338,9 +446,17 @@ export const EventsCatalogPage: React.FC = () => {
   // 타임라인은 가로 panning이 Space+드래그·Ctrl+휠뿐이라 터치 디바이스에서 사실상 비-인터랙티브 →
   // 첫 진입을 LIST로 두고, 사용자가 명시적으로 타임라인을 선택하면 그 선택은 URL로 보존됨.
   // useCatalogUrlSync도 동일 디폴트를 사용해야 첫 마운트 직후 force-overwrite를 피함.
-  const [viewMode, setViewMode] = useState<ViewMode>(() =>
-    resolveDefaultViewMode(searchParams.get('view')),
-  )
+  const [viewMode, setViewMode] = useState<ViewMode>(initialUrlState.viewMode)
+  /**
+   * 사용자가 뷰를 **직접 골랐는가**(검토 URL-12).
+   *
+   * 예전엔 상태→URL이 `view`를 항상 기록했다. 그래서 모바일에서 만든 링크에는
+   * 디바이스가 추론한 `view=list`가 사용자 선택처럼 실렸고, 데스크톱에서 열면
+   * 타임라인 대신 목록이 떴다. 반대로 데스크톱 링크의 `view=timeline`은 모바일의
+   * 'LIST 폴백'(타임라인은 터치로 사실상 조작 불가)을 무력화했다.
+   * URL에 유효한 view가 있었거나 사용자가 스위처를 눌렀을 때만 true다.
+   */
+  const [viewExplicit, setViewExplicit] = useState(initialUrlState.viewExplicit)
   /**
    * 뷰 전환(시간↔카테고리↔타임라인 등)은 전체 pivot을 같은 events로 다시 그리는
    * *무거운 동기 재렌더*다(특히 가상화 안 된 뷰). 사용자 클릭은 startTransition으로
@@ -348,12 +464,50 @@ export const EventsCatalogPage: React.FC = () => {
    * 그대로 raw setViewMode를 사용한다.
    */
   const [, startViewTransition] = useTransition()
-  const changeViewMode = useCallback(
-    (next: ViewMode) => startViewTransition(() => setViewMode(next)),
+  const changeViewMode = useCallback((next: ViewMode) => {
+    // 사용자의 명시적 선택 — 이때부터 URL이 view를 싣는다.
+    setViewExplicit(true)
+    startViewTransition(() => setViewMode(next))
+  }, [])
+
+  /**
+   * ===== 타임라인 전용 축 — **페이지가 소유한다**(검토 GAP-4) =====
+   *
+   * 레인 축(`lane`)과 카테고리 숨김(`hide`)은 타임라인 위젯의 지역 state였다.
+   * 결과적으로 이 페이지에는 필터 체계가 **둘** 있었고, 두 번째 것은 URL에도
+   * 활성 칩에도 '전체 초기화'에도 없었다 — 카테고리 3개를 숨겨 둔 채 하루 뒤에 돌아온
+   * 사용자에게는 그냥 "사건이 없는 화면"이고, 그 상태를 공유한 링크는 상대에게 다른
+   * 화면을 보여준다. 상태를 여기로 올려 다른 5축과 같은 규약을 받게 한다.
+   *
+   * ⚠️ 숨김 키는 **카테고리 이름**이다(타임라인이 `bar.category` 문자열로 거른다).
+   * id로 바꿔 페이지 카테고리 필터와 합치는 중기안은 다중 선택(보류 IA-10)에 종속되므로
+   * 여기서는 하지 않는다.
+   */
+  const [timelineLane, setTimelineLane] = useState<TimelineLaneMode>(
+    initialUrlState.timelineLane,
+  )
+  const [hiddenTimelineCategories, setHiddenTimelineCategories] = useState<
+    ReadonlySet<string>
+  >(() =>
+    // 빈 집합은 모듈 스코프 고정 참조를 재사용한다(위젯 memo 무효화 방지).
+    initialUrlState.hiddenTimelineCategories.size > 0
+      ? initialUrlState.hiddenTimelineCategories
+      : EMPTY_HIDDEN_CATEGORIES,
+  )
+  const toggleHiddenTimelineCategory = useCallback((categoryKey: string) => {
+    setHiddenTimelineCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(categoryKey)) next.delete(categoryKey)
+      else next.add(categoryKey)
+      return next
+    })
+  }, [])
+  const showAllTimelineCategories = useCallback(
+    () => setHiddenTimelineCategories(EMPTY_HIDDEN_CATEGORIES),
     [],
   )
   const [selectedEventId, setSelectedEventId] = useState<string | null>(
-    searchParams.get('event'),
+    initialUrlState.selectedEventId,
   )
   /**
    * 직전 선택 id — 상세를 닫을 때 그 행으로 포커스를 되돌리기 위한 참조.
@@ -366,7 +520,7 @@ export const EventsCatalogPage: React.FC = () => {
 
   /** 키워드 디바운스 — 입력 자체는 즉시 반영(체감)하되 useEventFilters에 흘려보내는 값만 250ms로 묶음.
    * `isSearchPending`은 디바운스 idle 구간을 toolbar의 spinner로 노출 (UX: 적용됐는지 인지) */
-  const [keywordInput, setKeywordInput] = useState(searchParams.get('q') ?? '')
+  const [keywordInput, setKeywordInput] = useState(initialUrlState.keyword)
   const debouncedKeyword = useDebouncedValue(keywordInput, 250)
   const isSearchPending = debouncedKeyword !== keywordInput
   useEffect(() => {
@@ -419,6 +573,9 @@ export const EventsCatalogPage: React.FC = () => {
     searchParams,
     setSearchParams,
     keywordInput,
+    // URL에 실리는 검색어는 **디바운스를 통과한 값**이다(검토 PERF-11) — 키 입력마다
+    // setSearchParams가 도는 것을 막고, `q`가 실제 적용된 검색어와 어긋나지 않게 한다.
+    debouncedKeyword,
     selectedEventId,
     bookmarksOnly,
     selectedCategory,
@@ -429,7 +586,10 @@ export const EventsCatalogPage: React.FC = () => {
     sortDirection,
     showFlatView,
     viewMode,
+    viewExplicit,
     pageSize,
+    timelineLane,
+    hiddenTimelineCategories,
     setKeywordInput,
     setSelectedEventId,
     setBookmarksOnly,
@@ -441,8 +601,121 @@ export const EventsCatalogPage: React.FC = () => {
     setSortDirection,
     setShowFlatView,
     setViewMode,
+    setViewExplicit,
     setPageSize,
+    setTimelineLane,
+    setHiddenTimelineCategories,
   })
+
+  /**
+   * ===== 미해결 참조 id 낙하 (검토 URL-1/IA-16/DATA-17) =====
+   *
+   * `?country=<삭제된 id>`는 지금까지 그대로 상태가 됐다. 트리거 라벨은 '국가'(= 필터
+   * 없음과 같은 문자열)로 되돌아가고 결과는 0건이라, 사용자에게는 "필터를 안 걸었는데
+   * 아무 것도 없는 화면"이었다. 이제 폴백 문구가 원인을 밝히고(위 referenceState),
+   * 참조 로드가 **성공으로 끝난 뒤에도** 못 찾은 id는 조용히 남기지 않고 해제한다.
+   *
+   * ⚠️ 게이트는 반드시 `isSuccess`다. 로딩 중(빈 배열)에 돌면 정상 필터를 지운다.
+   * 실패(`isError`)일 때도 지우지 않는다 — 그건 '없는 id'가 아니라 '모르는 상태'다.
+   */
+  useEffect(() => {
+    if (
+      reference.categories.isSuccess &&
+      selectedCategory !== FILTER_ALL &&
+      !dbCategories.some((category) => category.id === selectedCategory)
+    ) {
+      setSelectedCategory(FILTER_ALL)
+      notify.warning('링크의 카테고리 필터를 찾을 수 없어 해제했습니다')
+    }
+  }, [
+    reference.categories.isSuccess,
+    dbCategories,
+    selectedCategory,
+    setSelectedCategory,
+  ])
+
+  useEffect(() => {
+    // 국가는 현대·역사 두 목록 **모두** 도착한 뒤에 판정해야 한다(한쪽만 보고 지우면 오판).
+    if (
+      reference.countries.isSuccess &&
+      reference.historicalCountries.isSuccess &&
+      selectedCountry !== FILTER_ALL &&
+      !countries.some((country) => country.id === selectedCountry) &&
+      !historicalCountries.some((country) => country.id === selectedCountry)
+    ) {
+      setSelectedCountry(FILTER_ALL)
+      notify.warning('링크의 국가 필터를 찾을 수 없어 해제했습니다')
+    }
+  }, [
+    reference.countries.isSuccess,
+    reference.historicalCountries.isSuccess,
+    countries,
+    historicalCountries,
+    selectedCountry,
+    setSelectedCountry,
+  ])
+
+  useEffect(() => {
+    if (
+      reference.continents.isSuccess &&
+      selectedContinent !== FILTER_ALL &&
+      !continents.some((continent) => continent.id === selectedContinent)
+    ) {
+      setSelectedContinent(FILTER_ALL)
+      notify.warning('링크의 대륙 필터를 찾을 수 없어 해제했습니다')
+    }
+  }, [
+    reference.continents.isSuccess,
+    continents,
+    selectedContinent,
+    setSelectedContinent,
+  ])
+
+  /**
+   * ===== `?event=<삭제된 id>` — 미발견 상태 (검토 URL-4) =====
+   *
+   * 예전엔 이 링크가 '사건 상세' 랜드마크를 점유한 채 '사건을 선택해주세요'를 띄웠고,
+   * 그 분기에는 **닫기 어포던스가 하나도 없었다** — 데스크톱(≥1200px)은 백드롭도 없어
+   * Esc 말고는 탈출로가 없다. 게다가 새로고침하면 같은 상태가 그대로 돌아왔다.
+   *
+   * 판정은 **자동 로드가 소진된 뒤에만** 한다(`autoLoadAll`이 페이지를 순차 소진하는
+   * 동안에는 아직 안 온 것뿐일 수 있다). 확정되면 선택 state를 비워 URL `event` 키를
+   * 떨어뜨리고, 패널은 `missingEventId`로 전용 상태를 렌더한다.
+   */
+  const [missingEventId, setMissingEventId] = useState<string | null>(null)
+  /**
+   * 사건 로드가 **정상적으로 끝났는가**. 실패(`isError`·`loadMoreFailed`)는 '없다'가
+   * 아니라 '모른다'이므로 미발견으로 단정하지 않는다 — 재시도로 나타날 수 있다.
+   */
+  const eventsSettled =
+    !isLoading &&
+    !isFetchingNextPage &&
+    !hasMore &&
+    !isError &&
+    !loadMoreFailed
+  useEffect(() => {
+    if (!selectedEventId) return
+    // 새 선택이 들어오면 직전 미발견 상태는 즉시 걷는다 — 안 그러면 멀쩡한 사건을
+    // 골랐는데 '찾을 수 없습니다'가 계속 덮고 있게 된다.
+    if (missingEventId) setMissingEventId(null)
+    if (!eventsSettled) return
+    if (
+      eventByIdMap.has(selectedEventId) ||
+      nodeIndexMap.has(selectedEventId)
+    ) {
+      return
+    }
+    setMissingEventId(selectedEventId)
+    setSelectedEventId(null)
+  }, [
+    selectedEventId,
+    missingEventId,
+    eventsSettled,
+    eventByIdMap,
+    nodeIndexMap,
+  ])
+  /** 미발견 전용 상태를 실제로 보여줄 것인가 — 선택이 다시 생겼으면 아니다 */
+  const showMissingEvent = Boolean(missingEventId) && !selectedEventId
 
   // ===== 페이지네이션 핸들러 =====
   // pageSize state 변경만으로 react-query queryKey가 바뀌어 새 페이지로 자동 fetch됨
@@ -450,18 +723,67 @@ export const EventsCatalogPage: React.FC = () => {
     setPageSize(newSize)
   }, [])
 
-  // ===== 북마크 필터 — flattenedHierarchy를 한 번 더 거름 =====
-  const visibleFlattenedHierarchy = useMemo(() => {
-    if (!bookmarksOnly) return flattenedHierarchy
-    return flattenedHierarchy.filter((item) => bookmarks.has(item.node.id))
-  }, [flattenedHierarchy, bookmarksOnly, bookmarks])
+  /**
+   * ════════ 모수 규약 (검토 배치 3) ════════
+   *
+   * 파이프라인은 네 단계다.
+   *   ① 5축 술어(matchesEvent) → 평탄화가 계보 인지로 적용
+   *   ② (없음 — 북마크는 ①에 합류했다)
+   *   ③ 계층 접힘(isCollapsedAway)
+   *   ④ 연·세기 밴드 접힘(selectVisibleRows)
+   *
+   * > `matchedCount`는 **①술어 직후**를 센다. `displayedCount`는 **④밴드 접힘 이후**를
+   * > 센다. 그 사이 단계(②·③)는 **어느 카운트에도 영향을 주지 않는다.**
+   * > 내보내기·6개 뷰는 ①의 `isMatch`를 존중한다.
+   *
+   * 두 숫자는 서로 다른 질문에 답한다 — 전자는 "조건에 맞는 사건이 몇 건인가",
+   * 후자는 "지금 화면에 몇 행이 있는가". 예전엔 전자가 ③ 이후를 세어
+   * 데이터도 조건도 그대로인데 '하위 접기'만으로 233 → 146으로 떨어졌다(검토 DATA-6).
+   * ════════════════════════════════════════
+   */
 
   /**
-   * **목록이 실제로 그리는 행**만 남긴 배열.
+   * 필터를 통과한 **완전한 모집단**(접힘 무관) = 단계 ① 직후.
    *
-   * `visibleFlattenedHierarchy`는 접힌 부모의 자손까지 포함한 *완전한* 모집단이다
-   * (타임라인·격자·지도·통계·트리·갤러리·JSON 내보내기가 그 완전한 모집단을 받아야
-   * 목록의 접기 조작이 다른 화면의 데이터를 지우지 않는다 — 검토 CR-1).
+   * 예전엔 여기서 북마크를 행 단위로 한 번 더 걸렀다. 그 사후 filter가
+   * ⑴ 접기와 곱해져 '북마크한 자식은 접혀 있는데 펼칠 부모 행이 없는' 복구 불가 상태와
+   * ⑵ 부모 없이 depth만 남은 고아 행을 만들었다(검토 IA-7/DATA-10).
+   * 이제 북마크는 `matchesEvent`가 다른 축과 함께 판정하므로 이 지점에 단계가 없다.
+   *
+   * 이 배열은 목록·트리·JSON 내보내기가 공유한다 — 목록의 접기 조작이 다른 화면의
+   * 데이터를 지우지 않으려면 모집단은 완전해야 한다(검토 CR-1).
+   */
+  const visibleFlattenedHierarchy = flattenedHierarchy
+
+  /**
+   * **①의 `isMatch`만 남긴 배열** — 집계·시각화 뷰가 받는 모집단(검토 GAP-1).
+   *
+   * 평탄화는 '매칭된 자손을 가진 부모'를 문맥 행으로 남긴다. 목록은 그 행을 흐리게
+   * 강등해 구분하지만, 타임라인·지도·격자·통계·갤러리는 `isMatch`를 아예 읽지 않고
+   * 데이터로 집계했다 — '전쟁'으로 좁힌 통계 뷰에 정치 막대가 그려졌다.
+   *
+   * ⚠️ 접힘으로 빼는 것과 **필터 불일치로 빼는 것은 다른 축**이다. CR-1이 지키려던
+   * 계약(접기가 다른 화면의 데이터를 지우면 안 된다)은 그대로다 — 여기서 빠지는 것은
+   * 접힌 행이 아니라 '조건을 만족하지 않는 행'이고, 필터를 풀면 즉시 돌아온다.
+   * 트리 뷰만 예외로 완전한 배열을 받는다(구조 뷰라 문맥 부모를 빼면 매칭된 자식이
+   * 통째로 사라진다 — 그 위젯이 자체적으로 강등·가지치기를 한다).
+   *
+   * ⚠️ 단순 `filter(isMatch)`가 아니라 `selectMatchedRows`를 쓴다 — 문맥 부모를 걷어내면
+   * 남은 자식의 `depth`가 거짓이 되고, 이 뷰들은 전부 `depth !== 0`이면 건너뛰므로
+   * '자식만 매칭'인 검색에서 화면이 통째로 비었다(그 함수 주석 참고).
+   */
+  const matchedOnlyHierarchy = useMemo(
+    () =>
+      hasNarrowingFilters
+        ? selectMatchedRows(visibleFlattenedHierarchy, {
+            flatView: showFlatView,
+          })
+        : visibleFlattenedHierarchy,
+    [visibleFlattenedHierarchy, hasNarrowingFilters, showFlatView],
+  )
+
+  /**
+   * **목록이 실제로 그리는 행**만 남긴 배열 — 접힌 조상 아래 행을 뺀다.
    * 목록 렌더·표시 카운트·드로어 이전/다음은 이 걸러진 배열을 쓴다.
    */
   const listRenderedHierarchy = useMemo(
@@ -470,17 +792,13 @@ export const EventsCatalogPage: React.FC = () => {
   )
 
   /**
-   * 헤더 '조건 일치 N건'의 모수 — **화면에 실제로 남은 행** 기준.
+   * 헤더 '조건 일치 N건'의 모수 — **단계 ①(술어) 직후**(검토 DATA-6).
    *
-   * useEventHierarchy가 주는 matchedCount는 북마크 필터를 적용하기 *전* 배열을 센다.
-   * 북마크만 켜면 목록은 0행인데 헤더는 '조건 일치 233건'이라고 말하고, 심지어
-   * '등록 전체 148건(최상위)'보다 큰 숫자가 나왔다(실측 확인).
-   * 북마크는 여기서만 적용되므로 카운트도 여기서 다시 세는 것이 유일한 정합 지점이다.
+   * `matchedOnlyHierarchy`는 필터가 없으면 원본과 같은 배열이므로 이 값은
+   * "조건을 만족한 사건 수"를 정확히 말한다. 접기(③·④)는 이 숫자를 건드리지 않는다 —
+   * 화면 행 수는 `displayedCount`(navigableItems.length)가 따로 말한다.
    */
-  const visibleMatchedCount = useMemo(
-    () => listRenderedHierarchy.filter((item) => item.isMatch).length,
-    [listRenderedHierarchy],
-  )
+  const matchedCount = matchedOnlyHierarchy.length
 
   /**
    * 세기·연도 밴드 접힘 — **페이지가 소유한다**.
@@ -513,28 +831,73 @@ export const EventsCatalogPage: React.FC = () => {
     })
   }, [])
 
-  /** 목록 그룹핑 — 위젯과 같은 함수를 써야 '보이는 행' 판정이 화면과 어긋나지 않는다. */
+  /**
+   * 목록이 세기›연도 그룹으로 묶이는가 — **페이지의 단일 변수**(검토 GAP-2).
+   *
+   * 이 값은 두 곳이 읽는다. ⑴ `EventCompactList`의 `grouped` prop(렌더)과
+   * ⑵ 아래 `navigableItems`의 밴드 접힘 적용 여부(내비 모수)다. 예전엔 ⑴만 있고
+   * ⑵는 `viewMode === LIST`만 봐서, '등록순' 정렬로 그룹이 꺼지면 위젯은 접힘을
+   * 무시하고 전량 렌더하는데 페이지는 접힘을 계속 적용했다 — 화면에 보이는 행을
+   * ↓키·드로어 '다음'이 건너뛰고, 그 행을 클릭하면 '조건 밖' 배너가 떴다.
+   * (연/세기를 접어 둔 상태에서만 발현한다 — 접힘 집합이 비면 selectVisibleRows가
+   *  원본을 그대로 돌려주기 때문이다.)
+   *
+   * ⚠️ 새 분기를 추가할 땐 반드시 이 변수를 읽을 것. 두 곳이 각자 판정하는 순간
+   * 같은 회귀가 재발한다.
+   */
+  const listGrouped =
+    viewMode === VIEW_MODES.LIST &&
+    // '등록순'은 전역 순서 자체가 목적이라 연도 그룹이 켜져 있으면 화면이 전혀 안 바뀐다.
+    sortBy !== 'created'
+
+  /**
+   * 목록 그룹핑 — **이 페이지가 유일한 계산 지점**이다(검토 PERF-4).
+   *
+   * 결과는 `EventCompactList`에 `yearBuckets` prop으로 그대로 내려간다. 예전엔 위젯도
+   * 같은 함수를 자기 입력으로 한 번 더 불렀고, 세 인자(행 배열·정렬 방향·`filteringActive`)를
+   * 손으로 맞춰야 두 판정이 일치하는 구조였다 — 하나만 어긋나도 페이지의 navigableItems와
+   * DOM 행이 다른 집합이 된다(검토 DATA-9). 이제 같은 객체를 공유하므로 어긋날 수 없다.
+   */
   const yearBuckets = useMemo(
-    () => buildYearBuckets(listRenderedHierarchy, sortDirection),
-    [listRenderedHierarchy, sortDirection],
+    () => buildYearBuckets(listRenderedHierarchy, sortDirection, hasNarrowingFilters),
+    [listRenderedHierarchy, sortDirection, hasNarrowingFilters],
   )
 
   /**
-   * 화면에 실제로 렌더되는 행 — 계층 접힘 + 세기/연도 밴드 접힘을 모두 반영.
-   * ↑↓ 키(DOM 렌더 행 기준)와 드로어 이전/다음이 이 하나의 집합을 공유한다.
+   * 화면에 실제로 렌더되는 행 — 목록에서는 계층 접힘 + 세기/연도 밴드 접힘을 모두 반영(단계 ④).
+   * ↑↓ 키(DOM 렌더 행 기준)와 드로어 이전/다음, '조건 밖' 배너가 이 하나의 집합을 공유한다.
+   *
+   * 목록이 아닌 뷰에서는 **그 뷰에 넘긴 배열 그대로**여야 한다 — 아니면 화면에 보이는
+   * 막대·카드를 클릭했는데 '조건 밖'이라고 하거나, 드로어 '다음'이 화면에 없는 사건으로
+   * 건너뛴다(GAP-2와 같은 계열의 어긋남).
    */
+  const activeViewItems =
+    viewMode === VIEW_MODES.TREE
+      ? // 트리만 문맥 부모를 포함한 완전한 배열을 렌더한다(위 GAP-1 주석 참고).
+        visibleFlattenedHierarchy
+      : matchedOnlyHierarchy
   const navigableItems = useMemo(
-    () =>
-      viewMode === VIEW_MODES.LIST
+    () => {
+      if (viewMode !== VIEW_MODES.LIST) return activeViewItems
+      return listGrouped
         ? selectVisibleRows(
-            listRenderedHierarchy,
+            /**
+             * ⚠️ 그룹 목록의 DOM 순서는 배열 순서가 아니라 **연도 버킷 순서**다.
+             * 드로어 '이전/다음'은 이 배열의 인덱스로 움직이므로, 재배열하지 않으면
+             * ↑↓(DOM 순서)와 서로 다른 방향으로 이동한다. 필터 중 매칭 행이 자기 연도로
+             * 옮겨 가면서(DATA-9) 두 순서가 실제로 갈리기 시작했다.
+             */
+            orderRowsForRender(listRenderedHierarchy, yearBuckets),
             yearBuckets,
             collapsedYears,
             collapsedCenturies,
           )
-        : listRenderedHierarchy,
+        : listRenderedHierarchy
+    },
     [
       viewMode,
+      activeViewItems,
+      listGrouped,
       listRenderedHierarchy,
       yearBuckets,
       collapsedYears,
@@ -554,6 +917,8 @@ export const EventsCatalogPage: React.FC = () => {
   const clearSelectedEvent = useCallback(() => {
     const previousId = selectedEventIdRef.current
     setSelectedEventId(null)
+    // 미발견 상태(URL-4)도 같은 닫기 경로로 사라진다 — 탈출로를 두 개로 나누지 않는다.
+    setMissingEventId(null)
     if (typeof window === 'undefined') return
     // 언마운트가 끝난 뒤에 옮겨야 포커스가 사라지는 노드로 가지 않는다.
     window.requestAnimationFrame(() => {
@@ -568,7 +933,8 @@ export const EventsCatalogPage: React.FC = () => {
     searchInputRef,
     setShortcutHelpOpen,
     closeTopOverlay,
-    selectedEventId,
+    // 미발견 패널도 Esc로 닫힌다 — 데스크톱 컬럼은 백드롭이 없어 ✕와 Esc가 전부다(URL-4).
+    selectedEventId: selectedEventId ?? (showMissingEvent ? missingEventId : null),
     clearSelectedEvent,
   })
   useCatalogListNavigation({
@@ -661,31 +1027,230 @@ export const EventsCatalogPage: React.FC = () => {
 
   /**
    * 헤더 통계('… · 정치 47')가 쓸 사건 집합 — **총계와 같은 모수**.
-   * 필터가 걸리면 조건을 만족한 사건만 센다. 아니면 로드된 전체가 곧 모수다(검토 IA-13).
+   *
+   * 필터가 걸리면 단계 ①(술어)을 통과한 사건만 센다 — 접힘(③·④)은 모수를 바꾸지 않는다.
+   * 미필터일 때는 **최상위만** 센다(검토 DATA-7): 옆에 붙는 총계(`serverTotal`)가
+   * 최상위 기준이라, 자식까지 포함한 카테고리 수를 나란히 두면 같은 줄에서 두 숫자가
+   * 서로 다른 모수를 말했다('정치 47 / 등록 전체 110건' 같은 모순).
    */
   const statsEvents = useMemo(() => {
-    if (!filtersOrSearchActive) return events
+    if (!filtersOrSearchActive) {
+      return events.filter((event) => !event.parentEventId)
+    }
     const matchedIds = new Set(
-      listRenderedHierarchy
-        .filter((item) => item.isMatch)
-        .map((item) => item.node.id),
+      matchedOnlyHierarchy.map((item) => item.node.id),
     )
     return events.filter((event) => matchedIds.has(event.id))
-  }, [filtersOrSearchActive, events, listRenderedHierarchy])
+  }, [filtersOrSearchActive, events, matchedOnlyHierarchy])
 
   /** 로드된 최상위 사건 수 — serverTotal과 같은 모수(최상위 기준) */
   const rootLoadedCount = useMemo(
     () => events.filter((event) => !event.parentEventId).length,
     [events],
   )
-  const activeFilterCount = filterSummaryChips.length + (bookmarksOnly ? 1 : 0)
 
-  /** 필터/북마크/검색 일괄 초기화 (위젯 EmptyCatalogState에 전달) */
+  /**
+   * 타임라인 전용 축의 활성 칩(검토 GAP-4).
+   *
+   * **타임라인을 보고 있을 때만** 노출한다 — 이 두 축은 다른 뷰의 결과를 바꾸지 않으므로,
+   * 목록 화면에 '숨김 · 전쟁' 칩을 띄우면 걸리지도 않은 효과를 주장하게 된다.
+   * 반면 '전체 초기화'는 뷰와 무관하게 이 축들도 되돌린다(handleResetAll 참고).
+   */
+  const timelineFilterChips = useMemo<FilterChip[]>(() => {
+    if (viewMode !== VIEW_MODES.TIMELINE) return []
+    const chips: FilterChip[] = []
+    if (timelineLane !== TIMELINE_LANE_MODES.CATEGORY) {
+      chips.push({
+        key: 'lane',
+        label: `타임라인 레인 · ${TIMELINE_LANE_LABELS[timelineLane]}`,
+        onClear: () => setTimelineLane(TIMELINE_LANE_MODES.CATEGORY),
+      })
+    }
+    for (const categoryKey of hiddenTimelineCategories) {
+      chips.push({
+        key: `hide:${categoryKey}`,
+        label: `숨김 · ${categoryKey}`,
+        onClear: () => toggleHiddenTimelineCategory(categoryKey),
+      })
+    }
+    return chips
+  }, [
+    viewMode,
+    timelineLane,
+    hiddenTimelineCategories,
+    toggleHiddenTimelineCategory,
+  ])
+
+  /**
+   * 칩 바에 **실제로 렌더되는** 필터 집합(검토 IA-17).
+   *
+   * 예전엔 'N개 적용 중'을 `filterSummaryChips.length + 북마크`로 셌는데, 툴바는
+   * 검색어 칩을 렌더하지 않는다(검색창이 이미 그 값을 보여주므로). 그래서 검색어만
+   * 있으면 **칩 0개짜리 '1개 적용 중' 바**가 떴고, 다른 조합에서도 숫자와 칩 수가
+   * 어긋났다. 숫자와 칩이 같은 배열에서 나오게 해 구조적으로 어긋날 수 없게 한다.
+   *
+   * 타임라인 전용 축(레인·카테고리 숨김)도 여기 합류한다(검토 GAP-4).
+   */
+  const barFilterChips = useMemo<FilterChip[]>(
+    () => [
+      ...filterSummaryChips.filter((chip) => chip.key !== 'keyword'),
+      ...timelineFilterChips,
+    ],
+    [filterSummaryChips, timelineFilterChips],
+  )
+
+  /**
+   * ===== 빈 상태 칩 + drop-one-out 카운트 (검토 IA-12) =====
+   *
+   * 0건 화면에서 회복하려면 "어느 축이 범인인가"를 알아야 하는데, 예전 빈 상태는
+   * 걸린 조건을 나열만 하고 **추측을 요구**했다. 축이 셋 걸려 있으면 사용자는
+   * 하나씩 껐다 켜며 이진 탐색을 해야 했고, 그 사이 스크롤·선택이 초기화된다.
+   * 각 칩에 '그 축만 풀면 몇 건'을 붙이면 한 번에 지목된다.
+   *
+   * 검색어 칩도 포함한다 — 툴바 칩 바에서는 검색창이 이미 값을 보여주므로 빼지만,
+   * 0건의 범인일 때는 여기서 반드시 지목돼야 한다.
+   */
+  const emptyStateFilterChips = useMemo(() => {
+    const releaseCountByChipKey: Record<string, number> = {
+      category: optionCounts.dropOneOut.category,
+      country: optionCounts.dropOneOut.country,
+      continent: optionCounts.dropOneOut.continent,
+      century: optionCounts.dropOneOut.century,
+      keyword: optionCounts.dropOneOut.keyword,
+      bookmarks: optionCounts.dropOneOut.bookmark,
+    }
+    const chips = bookmarksOnly
+      ? [
+          ...filterSummaryChips,
+          {
+            key: 'bookmarks',
+            label: '북마크만',
+            onClear: () => setBookmarksOnly(false),
+          },
+        ]
+      : filterSummaryChips
+    return chips.map((chip) => ({
+      ...chip,
+      releaseCount: releaseCountByChipKey[chip.key],
+    }))
+  }, [filterSummaryChips, bookmarksOnly, optionCounts, setBookmarksOnly])
+  /**
+   * 'N개 적용 중' 숫자는 **툴바가 이 배열에서 직접 센다**(북마크 칩만 +1).
+   * 페이지가 따로 세어 내려보내던 시절엔 두 값이 갈릴 여지가 남아 있었다.
+   */
+
+  /**
+   * ════════ 초기화 범위 규약 (검토 URL-6 · URL-7 · URL-8/INT-11) ════════
+   *
+   * 기준 한 문장: **'행을 감추는 것'은 전부 되돌리고, '어떻게 보여줄까'는 남긴다.**
+   *
+   * | 대상 | 초기화 | 근거 |
+   * |---|---|---|
+   * | 카테고리·국가·대륙·세기 | **O** | 좁히는 축 (`hasNarrowingFilters`) |
+   * | 검색어 | **O** | 좁히는 축 |
+   * | 북마크만 | **O** | 술어 레인에 합류한 좁히는 축(IA-7) |
+   * | 타임라인 레인·카테고리 숨김 | **O** | 두 번째 필터 체계(GAP-4). 뷰와 무관하게 되돌린다 |
+   * | 연·세기 밴드 접힘 | **O** | 행을 감춘다(URL-6) |
+   * | 하위 사건 접힘(expandedEventIds) | **O** | 행을 감춘다 — 같은 이유 |
+   * | 정렬(sortBy·sortDirection) | **X** | `hasNarrowingFilters`가 '표시 옵션'이라 선언(URL-7) |
+   * | 계층 토글(showFlatView) | **X** | 표시 옵션 |
+   * | 뷰·페이지 크기·밀도·집중 모드 | **X** | 표시 옵션 |
+   * | 선택된 사건(selectedEventId) | **X** | 필터가 아니라 '지금 보고 있는 것' |
+   *
+   * 접힘이 왜 포함인가 — 드로어의 '조건 밖' 배너가 권하는 버튼이 바로 이것인데,
+   * 행을 감춘 원인이 접힘일 때 필터만 풀면 화면이 그대로다. 즉 **완전한 먹통 버튼**이었다.
+   *
+   * 되돌리기 — 초기화 직전 스냅샷을 잡아 `notify.action`으로 복구를 제공한다. 모든 URL
+   * write가 `replace: true`라 뒤로가기로 못 돌아오는데, 훨씬 가벼운 북마크 1건 토글에는
+   * 이미 '실행 취소'가 붙어 있었다(비용 비대칭, URL-8/INT-11).
+   * ════════════════════════════════════════════════════════════════════
+   */
   const handleResetAll = useCallback(() => {
+    const snapshot = {
+      selectedCategory,
+      selectedCountry,
+      selectedContinent,
+      selectedCentury,
+      keywordInput,
+      bookmarksOnly,
+      timelineLane,
+      hiddenTimelineCategories,
+      collapsedYears,
+      collapsedCenturies,
+      expandedEventIds,
+    }
+    /** 해제되는 '좁히는 조건' 수 — 칩과 같은 모수(검색어 칩 포함) */
+    const releasedFilters =
+      filterSummaryChips.length +
+      (bookmarksOnly ? 1 : 0) +
+      (timelineLane !== TIMELINE_LANE_MODES.CATEGORY ? 1 : 0) +
+      hiddenTimelineCategories.size
+    /**
+     * 실제로 감춰진 행이 있었는가 — 밴드 접힘(④)이거나 계층 접힘(③).
+     * ⚠️ `expandedEventIds.size === 0`으로 판정하면 안 된다. 자식이 있는 사건이 하나도
+     * 없는 데이터에서도 그 집합은 비어 있어 '펼쳤다'고 거짓말하게 된다.
+     */
+    const releasedCollapse =
+      collapsedYears.size + collapsedCenturies.size > 0 ||
+      visibleFlattenedHierarchy.length !== listRenderedHierarchy.length
+
     handleResetFilters()
     setKeywordInput('')
     setBookmarksOnly(false)
-  }, [handleResetFilters])
+    setTimelineLane(TIMELINE_LANE_MODES.CATEGORY)
+    setHiddenTimelineCategories(EMPTY_HIDDEN_CATEGORIES)
+    // 접힘도 함께 푼다 — 이 버튼이 '보이게 해 준다'고 약속하기 때문이다(URL-6).
+    setCollapsedYears(new Set())
+    setCollapsedCenturies(new Set())
+    expandAllChildren()
+
+    if (releasedFilters === 0 && !releasedCollapse) return
+    notify.action(
+      releasedFilters > 0
+        ? `필터 ${releasedFilters}개 해제${releasedCollapse ? ' · 접힘 펼침' : ''}`
+        : '접어 둔 항목을 모두 펼쳤습니다',
+      {
+        label: '되돌리기',
+        onClick: () => {
+          setSelectedCategory(snapshot.selectedCategory)
+          setSelectedCountry(snapshot.selectedCountry)
+          setSelectedContinent(snapshot.selectedContinent)
+          setSelectedCentury(snapshot.selectedCentury)
+          // 검색어는 입력값만 되돌리면 디바운스 effect가 술어까지 잇는다.
+          setKeywordInput(snapshot.keywordInput)
+          setBookmarksOnly(snapshot.bookmarksOnly)
+          setTimelineLane(snapshot.timelineLane)
+          setHiddenTimelineCategories(snapshot.hiddenTimelineCategories)
+          setCollapsedYears(snapshot.collapsedYears)
+          setCollapsedCenturies(snapshot.collapsedCenturies)
+          setExpandedEventIds(snapshot.expandedEventIds)
+        },
+      },
+      { type: 'info' },
+    )
+  }, [
+    handleResetFilters,
+    filterSummaryChips,
+    selectedCategory,
+    selectedCountry,
+    selectedContinent,
+    selectedCentury,
+    keywordInput,
+    bookmarksOnly,
+    timelineLane,
+    hiddenTimelineCategories,
+    collapsedYears,
+    collapsedCenturies,
+    expandedEventIds,
+    expandAllChildren,
+    visibleFlattenedHierarchy,
+    listRenderedHierarchy,
+    setSelectedCategory,
+    setSelectedCountry,
+    setSelectedContinent,
+    setSelectedCentury,
+    setExpandedEventIds,
+  ])
 
   // ===== 자식으로 전달되는 핸들러 — useCallback으로 ref 안정화 =====
   const handleExpandEvent = useCallback((eventId: string) => {
@@ -710,17 +1275,23 @@ export const EventsCatalogPage: React.FC = () => {
    */
   const handleCreateEvent = useCallback(() => openCreateModal(), [openCreateModal])
   const handleExportJson = useCallback(async () => {
-    const exported = visibleFlattenedHierarchy.map(
-      (it) =>
+    /**
+     * 행마다 `matchesFilter`를 함께 싣는다(검토 GAP-1) — 모집단에는 '매칭된 자손 때문에
+     * 문맥으로 남은 부모'가 섞여 있는데, 파일에는 그 구분이 없어 '전쟁'으로 좁혀 받은
+     * 파일에 정치 사건이 같은 자격으로 들어앉았다. 조건 요약은 파일 머리에 기록한다.
+     */
+    const exported = visibleFlattenedHierarchy.map((it) => ({
+      event:
         eventByIdMap.get(it.node.id) ??
         nodeIndexMap.get(it.node.id)?.rootEvent ??
         null,
-    )
+      matchesFilter: it.isMatch,
+    }))
     // 현재 화면은 로드·필터된 일부만 → 전체보다 적으면 부분 내보내기임을 확인.
     // serverTotal은 *최상위(parentEventId=null)* 개수이므로, 부분 여부 판정은
     // 로드된 *최상위* 수(depth 0)로 비교해야 한다. exportedCount(하위 포함)로 비교하면
     // 자식이 많을 때 exportedCount>serverTotal이 되어 부분 경고가 조용히 억제됐다.
-    const exportedCount = exported.filter(Boolean).length
+    const exportedCount = exported.filter((entry) => entry.event).length
     const loadedRootCount = visibleFlattenedHierarchy.filter(
       (item) => item.depth === 0,
     ).length
@@ -734,8 +1305,22 @@ export const EventsCatalogPage: React.FC = () => {
     ) {
       return
     }
-    exportEventsAsJson(exported)
-  }, [visibleFlattenedHierarchy, eventByIdMap, nodeIndexMap, serverTotal])
+    exportEventsAsJson(exported, {
+      appliedFilters: barFilterChips
+        .map((chip) => chip.label)
+        .concat(bookmarksOnly ? ['북마크된 항목만'] : []),
+      keyword: debouncedKeyword.trim() || undefined,
+      serverTotal,
+    })
+  }, [
+    visibleFlattenedHierarchy,
+    eventByIdMap,
+    nodeIndexMap,
+    serverTotal,
+    barFilterChips,
+    bookmarksOnly,
+    debouncedKeyword,
+  ])
 
   /** lazy 슬롯 fallback — 위젯 chunk 다운로드 동안 유지되는 빈 박스. layout shift 방지. */
   const lazyFallback = (
@@ -749,14 +1334,20 @@ export const EventsCatalogPage: React.FC = () => {
    * 활성 viewMode에 해당하는 슬롯 *하나만* 빌드.
    * 이전엔 7개 슬롯의 React element를 매 렌더마다 모두 생성했으나, 한 번에 하나만 그려지므로
    * 나머지 6개의 prop computation은 순수 낭비였음. switch로 한 슬롯만 만든다.
+   *
+   * ⚠️ 목록·트리를 제외한 뷰는 `matchedOnlyHierarchy`(단계 ①)를 받는다 —
+   * 문맥 부모를 데이터로 세지 않기 위해서다(검토 GAP-1). 새 뷰를 붙일 때도 같은 배열을 쓸 것.
    */
   let activeSlot: React.ReactNode
+  /** 아직 받아올 페이지가 남았는가 — 빈 상태를 '0건'으로 확정하지 않기 위한 신호(검토 GAP-3) */
+  const stillLoadingMore = hasMore || isFetchingNextPage
+  const firstPageLoading = isLoading && events.length === 0
   switch (viewMode) {
     case VIEW_MODES.MAP:
       activeSlot = (
         <Suspense fallback={lazyFallback}>
           <EventMapView
-            flattenedHierarchy={visibleFlattenedHierarchy}
+            flattenedHierarchy={matchedOnlyHierarchy}
             events={events}
             selectedEventId={selectedEventId}
             onSelectEvent={setSelectedEventId}
@@ -770,11 +1361,15 @@ export const EventsCatalogPage: React.FC = () => {
       activeSlot = (
         <Suspense fallback={lazyFallback}>
           <EventGridView
-            flattenedHierarchy={visibleFlattenedHierarchy}
+            flattenedHierarchy={matchedOnlyHierarchy}
             events={events}
             selectedEventId={selectedEventId}
             dbCategories={dbCategories}
             onSelectEvent={setSelectedEventId}
+            isLoading={firstPageLoading}
+            hasMoreData={stillLoadingMore}
+            hasActiveFilters={filtersOrSearchActive}
+            onResetFilters={handleResetAll}
           />
         </Suspense>
       )
@@ -783,11 +1378,16 @@ export const EventsCatalogPage: React.FC = () => {
       activeSlot = (
         <Suspense fallback={lazyFallback}>
           <EventDashboardView
-            flattenedHierarchy={visibleFlattenedHierarchy}
+            flattenedHierarchy={matchedOnlyHierarchy}
             events={events}
             dbCategories={dbCategories}
             onSelectEvent={setSelectedEventId}
             serverTotal={serverTotal}
+            isLoading={firstPageLoading}
+            hasMoreData={stillLoadingMore}
+            hasActiveFilters={filtersOrSearchActive}
+            filterLabels={barFilterChips.map((chip) => chip.label)}
+            onResetFilters={handleResetAll}
           />
         </Suspense>
       )
@@ -796,11 +1396,17 @@ export const EventsCatalogPage: React.FC = () => {
       activeSlot = (
         <Suspense fallback={lazyFallback}>
           <EventTreeView
+            // 트리만 완전한 배열 — 문맥 부모를 빼면 그 아래 매칭된 자식이 함께 사라진다.
+            // 강등(흐림)과 가지치기는 위젯이 isMatch로 직접 처리한다.
             flattenedHierarchy={visibleFlattenedHierarchy}
             events={events}
             selectedEventId={selectedEventId}
             dbCategories={dbCategories}
             onSelectEvent={setSelectedEventId}
+            isLoading={firstPageLoading}
+            hasMoreData={stillLoadingMore}
+            hasActiveFilters={filtersOrSearchActive}
+            onResetFilters={handleResetAll}
           />
         </Suspense>
       )
@@ -809,11 +1415,15 @@ export const EventsCatalogPage: React.FC = () => {
       activeSlot = (
         <Suspense fallback={lazyFallback}>
           <EventGalleryView
-            flattenedHierarchy={visibleFlattenedHierarchy}
+            flattenedHierarchy={matchedOnlyHierarchy}
             events={events}
             selectedEventId={selectedEventId}
             dbCategories={dbCategories}
             onSelectEvent={setSelectedEventId}
+            isLoading={firstPageLoading}
+            hasMoreData={stillLoadingMore}
+            hasActiveFilters={filtersOrSearchActive}
+            onResetFilters={handleResetAll}
           />
         </Suspense>
       )
@@ -826,23 +1436,18 @@ export const EventsCatalogPage: React.FC = () => {
           isLoading={isLoading && events.length === 0}
           // 목록은 접힘으로 숨긴 행을 뺀 배열만 받는다. 완전한 모집단은 다른 뷰·내보내기 몫.
           flattenedHierarchy={listRenderedHierarchy}
+          // 연도 버킷은 페이지가 계산한 **바로 그 객체**를 내려준다(검토 PERF-4).
+          // 위젯이 다시 계산하면 입력 한 톨 차이로 DOM과 내비 모수가 갈린다.
+          yearBuckets={yearBuckets}
           events={events}
           expandedEventIds={expandedEventIds}
           selectedEventId={selectedEventId}
-          sortDirection={sortDirection}
           hasActiveFilters={filtersOrSearchActive}
-          activeFilterChips={
-            bookmarksOnly
-              ? [
-                  ...filterSummaryChips,
-                  {
-                    key: 'bookmarks',
-                    label: '북마크만',
-                    onClear: () => setBookmarksOnly(false),
-                  },
-                ]
-              : filterSummaryChips
-          }
+          // 칩마다 '이 축만 풀면 몇 건'이 붙어 있다 — 0건에서 범인을 지목한다(검토 IA-12).
+          activeFilterChips={emptyStateFilterChips}
+          // 북마크는 브라우저 로컬이라 공유 링크의 `bookmarks=1`은 받는 쪽에서 항상
+          // 0건이 된다 — 그 사실을 빈 상태에서 밝힌다(검토 URL-11).
+          showBookmarkStorageHint={bookmarksOnly && bookmarks.size === 0}
           dbCategories={dbCategories}
           isLoadingMore={isFetchingNextPage}
           loadMoreFailed={loadMoreFailed}
@@ -867,9 +1472,10 @@ export const EventsCatalogPage: React.FC = () => {
           onResetFilters={handleResetAll}
           onToggleBookmark={handleToggleBookmark}
           onScroll={handleScroll}
-          pageSize={pageSize}
-          // '등록순'은 전역 순서 자체가 목적이라 연도 그룹이 켜져 있으면 화면이 전혀 안 바뀐다.
-          grouped={sortBy !== 'created'}
+          // 접힌 밴드가 반영된 첫 '보이는 행' — 위젯이 접힘을 재계산하지 않게 페이지가 내린다.
+          rovingFallbackId={navigableItems[0]?.node.id ?? null}
+          // ⚠️ 위젯의 렌더 분기와 페이지의 navigableItems가 **같은 변수**를 읽는다(검토 GAP-2).
+          grouped={listGrouped}
         />
       )
       break
@@ -877,7 +1483,7 @@ export const EventsCatalogPage: React.FC = () => {
     default:
       activeSlot = (
         <EventTimeline
-          flattenedHierarchy={visibleFlattenedHierarchy}
+          flattenedHierarchy={matchedOnlyHierarchy}
           events={events}
           selectedEventId={selectedEventId}
           dbCategories={dbCategories}
@@ -888,8 +1494,14 @@ export const EventsCatalogPage: React.FC = () => {
           isFetchingMore={isFetchingNextPage}
           onLoadMore={fetchMoreEvents}
           loadMoreFailed={loadMoreFailed}
-          isLoading={isLoading && events.length === 0}
+          isLoading={firstPageLoading}
           wideMode={wideMode}
+          // 타임라인의 두 번째 필터 체계는 페이지 상태다 — URL·칩·초기화에 참여(검토 GAP-4)
+          groupBy={timelineLane}
+          onGroupByChange={setTimelineLane}
+          hiddenCategories={hiddenTimelineCategories}
+          onToggleHiddenCategory={toggleHiddenTimelineCategory}
+          onShowAllCategories={showAllTimelineCategories}
         />
       )
   }
@@ -995,6 +1607,9 @@ export const EventsCatalogPage: React.FC = () => {
       isLoading={
         !selectedEvent && (isLoading || isFetchingNextPage || hasMore)
       }
+      // 로드 소진 후에도 못 찾은 선택 — 전용 상태로 렌더하고 URL 키는 이미 떨어졌다(URL-4).
+      notFound={showMissingEvent}
+      missingEventId={missingEventId}
       selectedEvent={selectedEvent}
       selectedNode={selectedNode}
       dbCategories={dbCategories}
@@ -1028,6 +1643,14 @@ export const EventsCatalogPage: React.FC = () => {
     countries,
     historicalCountries,
     continents,
+    // 트리거 라벨이 '알 수 없음'인 이유를 구분해 보여준다(검토 GAP-5).
+    referenceState,
+    onRetryReference: handleRetryReference,
+    /**
+     * 옵션 모집단을 참조 DB가 아니라 '내 데이터'로 만드는 건수(검토 IA-13 · IA-2).
+     * 국가 축은 이 값으로 정렬까지 한다 — 첫 화면이 곧 이 카탈로그에 실재하는 국가다.
+     */
+    optionCounts,
     setShowCategoryModal,
     setShowCountryModal,
     toggleShowFlatView,
@@ -1054,8 +1677,11 @@ export const EventsCatalogPage: React.FC = () => {
     onExportJson: handleExportJson,
     onOpenShortcutHelp: openShortcutHelp,
     onCreateEvent: handleCreateEvent,
-    filterSummaryChips,
-    activeFilterCount,
+    /**
+     * ⚠️ 툴바가 렌더할 칩 **그 자체**를 넘긴다(검토 IA-17). 검색어 칩은 이미 제외돼
+     * 있고 타임라인 축 칩은 합류돼 있다 — 툴바가 다시 걸러내면 숫자와 칩이 갈린다.
+     */
+    filterSummaryChips: barFilterChips,
     handleResetAll,
   }
 
@@ -1086,6 +1712,9 @@ export const EventsCatalogPage: React.FC = () => {
     historicalCountries,
     selectedCountry,
     setSelectedCountry,
+    // 모달 대륙 사이드바를 페이지 대륙 필터와 같은 값으로 연다(검토 IA-9)
+    selectedContinent,
+    continents,
   }
 
   const overlayModalProps = {
@@ -1134,7 +1763,7 @@ export const EventsCatalogPage: React.FC = () => {
           viewMode={viewMode}
           setViewMode={changeViewMode}
           visibleCount={visibleFlattenedHierarchy.length}
-          matchedCount={visibleMatchedCount}
+          matchedCount={matchedCount}
           // 로드된 *최상위* 사건 수 — serverTotal(최상위 기준)과 같은 모수여야
           // '표시 152 / 등록 전체 110' 같은 모순이 안 생긴다.
           totalCount={rootLoadedCount}
@@ -1160,11 +1789,17 @@ export const EventsCatalogPage: React.FC = () => {
         <PageStyles.DrawerAnnouncer role="status" aria-live="polite">
           {drawerAnnouncement}
         </PageStyles.DrawerAnnouncer>
-        {selectedEventId && (
+        {/* 미발견 상태도 패널을 유지한다 — 링크가 왜 아무 것도 안 여는지 설명할 지면이
+            사라지면 사용자는 '앱이 멈췄다'로 읽는다(검토 URL-4). */}
+        {(selectedEventId || showMissingEvent) && (
           <CatalogDetailDrawer
             open
             onClose={clearSelectedEvent}
-            title={selectedEvent?.title ?? selectedNode?.title ?? null}
+            title={
+              showMissingEvent
+                ? '사건을 찾을 수 없습니다'
+                : (selectedEvent?.title ?? selectedNode?.title ?? null)
+            }
           >
             {detailPanelSlot}
           </CatalogDetailDrawer>
@@ -1177,12 +1812,10 @@ export const EventsCatalogPage: React.FC = () => {
   return (
     <>
       <Layout.PageScene>
-        {/* 폭 상한은 셸이 소유한다 — 툴바·본문·오류 배너가 한 우측 끝을 공유해야
-            "우측만 비었다"로 읽히지 않는다. 목록 뷰에서만 캡을 건다(타임라인·격자 등은
-            넓은 폭이 실제로 정보를 싣는다). */}
-        <Layout.PageWrapper $capped={viewMode === VIEW_MODES.LIST}>
-          {content}
-        </Layout.PageWrapper>
+        {/* 폭 상한 없음(2026-08-02 전폭 결정). 좌우 거터의 유일한 소유자는 PageWrapper의
+            padding clamp이고, 늘어난 가로 픽셀 흡수는 행 격자의 열 사다리가 한다
+            (theme.ts LIST_STEPS). 여기에 캡을 되살리지 말 것. */}
+        <Layout.PageWrapper>{content}</Layout.PageWrapper>
       </Layout.PageScene>
 
       {/* 모바일 우하단 FAB */}

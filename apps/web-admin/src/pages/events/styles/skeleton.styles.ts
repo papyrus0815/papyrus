@@ -1,4 +1,15 @@
 /**
+ * ⚠️ **이 파일은 살아 있다 — 삭제하지 말 것.**
+ *
+ * 유일 소비처는 widgets/event-list/ui/event-detail-panel.tsx의 **상세 패널 로딩 상태**다
+ * (SkeletonDetailHeroImage · DetailPanelSkeleton · SkeletonDetailTitle · SkeletonText ·
+ * SkeletonCard 5개를 실제로 렌더한다).
+ *
+ * 목록 뷰의 스켈레톤은 여기가 아니라 event-compact-list.tsx 안에 따로 산다
+ * (SkeletonStop/SkeletonBody — 행 격자 rowGridTemplate를 공유한다). 이름이 비슷해
+ * "전이적 죽은 파일"로 오판된 전례가 있어 남긴다.
+ */
+/**
  * Skeleton Loading Styled Components
  *
  * shimmer/pulse 키프레임은 `theme.ts`의 `KEYFRAMES`에 1회 정의되며 `shared.styles`의
@@ -197,43 +208,12 @@ export const SkeletonCard = styled.div`
   }
 `
 
-// ─── Century Skeleton ─────────────────────────────────────────────
-export const SkeletonCenturyButton = styled.div`
-  border: 1.5px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(37, 99, 235, 0.18)'
-        : 'rgba(37, 99, 235, 0.08)'};
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#ffffff'};
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  ${pulseAnimation}
-
-  @media (max-width: 768px) {
-    flex-shrink: 0;
-    min-width: 140px;
-  }
-`
-
-export const SkeletonCenturyLabel = styled.div`
-  height: 32px;
-  width: 100%;
-  ${skeletonBar}
-  ${shimmerAnimation}
-  border-radius: 6px;
-`
-
-export const SkeletonCenturyCount = styled.div`
-  height: 18px;
-  width: 50px;
-  ${skeletonBarSubtle}
-  ${shimmerAnimation}
-  border-radius: 6px;
-`
+/*
+ * (제거됨) `SkeletonCenturyButton` / `SkeletonCenturyLabel` / `SkeletonCenturyCount`.
+ * 유일한 소비처가 고아 위젯 `widgets/event-list/ui/filter-panel.tsx`(참조 0)였고,
+ * 그 위젯을 지우면서 함께 죽었다(검토 VIS-10). 세로형 '세기 버튼 리스트' UI 자체가
+ * 인라인 팝오버로 대체된 지 오래다.
+ */
 
 // ─── Category Summary Skeleton ────────────────────────────────────
 export const SkeletonCategorySummaryCard = styled.div`

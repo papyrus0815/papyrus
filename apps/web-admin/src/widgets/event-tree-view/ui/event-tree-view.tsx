@@ -12,10 +12,10 @@ import { FiChevronDown, FiChevronRight } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
+import { CatalogViewEmpty } from '@/features/event-list/ui/catalog-view-empty'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { CategoryDot as SharedCategoryDot } from '@/shared/ui/category-dot/category-dot'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
-import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import { ImportancePill } from '@/shared/ui/importance-pill/importance-pill'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
@@ -47,11 +47,26 @@ const formatYear = (start: string): string => {
 }
 
 interface Props {
+  /**
+   * ⚠️ 이 뷰만 **문맥 부모를 포함한 완전한 평탄화**를 받는다(검토 GAP-1).
+   *
+   * 다른 5뷰는 `isMatch`인 행만 받아 집계에서 문맥 부모를 배제한다. 트리는 구조를
+   * 보여주는 뷰라 같은 처방을 쓸 수 없다 — 자식 하나만 매칭된 경우 그 부모는
+   * `isMatch=false`이고, 부모를 빼면 **매칭된 자식이 화면에서 통째로 사라진다**
+   * (트리의 자식은 루트 카드 안에서만 도달 가능하다).
+   * 대신 ⑴ 이 배열에 없는 노드(= 필터가 잘라낸 가지)는 렌더하지 않고
+   * ⑵ `isMatch=false` 행은 흐리게 강등해 목록 뷰와 같은 신호를 준다.
+   */
   flattenedHierarchy: FlatItem[]
   events: HistoricalEvent[]
   selectedEventId: string | null
   dbCategories: EventCategoryDto[]
   onSelectEvent: (id: string) => void
+  /** 빈 상태 3분기(로딩·필터0건·데이터0건) 판정용 — 검토 GAP-3 */
+  isLoading?: boolean
+  hasMoreData?: boolean
+  hasActiveFilters?: boolean
+  onResetFilters?: () => void
 }
 
 export const EventTreeView: React.FC<Props> = ({
@@ -60,7 +75,30 @@ export const EventTreeView: React.FC<Props> = ({
   selectedEventId,
   dbCategories,
   onSelectEvent,
+  isLoading = false,
+  hasMoreData = false,
+  hasActiveFilters = false,
+  onResetFilters,
 }) => {
+  /**
+   * 평탄화가 남긴 노드 id 집합 = **필터를 통과했거나 매칭 자손을 가진 노드**.
+   * 트리는 자식을 원본 `node.children`에서 재귀로 그리므로, 이 집합으로 걸러야
+   * 조건 밖 가지가 계속 그려지는 일이 없다(필터가 없으면 전 노드가 들어 있어 no-op).
+   */
+  const keptNodeIds = useMemo(
+    () => new Set(flattenedHierarchy.map((item) => item.node.id)),
+    [flattenedHierarchy],
+  )
+  /** 자기는 조건을 만족하지 않고 문맥으로만 남은 노드 — 흐리게 강등한다. */
+  const contextNodeIds = useMemo(
+    () =>
+      new Set(
+        flattenedHierarchy
+          .filter((item) => !item.isMatch)
+          .map((item) => item.node.id),
+      ),
+    [flattenedHierarchy],
+  )
   /**
    * 현재 표시 대상 root 사건만 추출.
    *
@@ -88,16 +126,20 @@ export const EventTreeView: React.FC<Props> = ({
     return out
   }, [flattenedHierarchy, events])
 
-  /** 모든 노드 id 수집 — 전체 펼침 시 사용 */
+  /**
+   * 모든 노드 id 수집 — 전체 펼침 + 헤더 '노드 N개'의 모수.
+   * 필터가 잘라낸 가지는 렌더도 안 되므로 여기서도 세지 않는다.
+   */
   const allNodeIds = useMemo(() => {
     const ids: string[] = []
-    const visit = (n: EventHierarchyNode) => {
-      ids.push(n.id)
-      if (n.children) for (const c of n.children) visit(c)
+    const visit = (node: EventHierarchyNode) => {
+      if (!keptNodeIds.has(node.id)) return
+      ids.push(node.id)
+      if (node.children) for (const child of node.children) visit(child)
     }
-    for (const evt of rootEvents) visit(evt.hierarchy)
+    for (const rootEvent of rootEvents) visit(rootEvent.hierarchy)
     return ids
-  }, [rootEvents])
+  }, [rootEvents, keptNodeIds])
 
   /** 깊은 자식들 수동 펼침 — depth 1까지는 자동 펼침, expanded set이 추가 펼침 제어 */
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -126,10 +168,14 @@ export const EventTreeView: React.FC<Props> = ({
 
   if (rootEvents.length === 0) {
     return (
-      <EmptyStateSpotlight
+      <CatalogViewEmpty
         icon={<FiChevronDown size={28} />}
         title="표시할 사건이 없습니다"
-        description="필터를 풀거나 사건을 등록해보세요."
+        description="사건을 등록하면 계층 구조가 표시됩니다."
+        isLoading={isLoading}
+        hasMoreData={hasMoreData}
+        hasActiveFilters={hasActiveFilters}
+        onResetFilters={onResetFilters}
       />
     )
   }
@@ -152,14 +198,19 @@ export const EventTreeView: React.FC<Props> = ({
       </Toolbar>
       {rootEvents.map((evt) => {
         const root = evt.hierarchy
-        const totalNodes = countAllNodes(root)
+        const totalNodes = countAllNodes(root, keptNodeIds)
         const startYear = formatYear(root.period.start)
+        const keptChildren = (root.children ?? []).filter((child) =>
+          keptNodeIds.has(child.id),
+        )
         return (
           <RootCard key={evt.id} $active={selectedEventId === root.id}>
             <RootHeader
               type="button"
               onClick={() => onSelectEvent(root.id)}
               $active={selectedEventId === root.id}
+              // 조건을 만족하지 않고 문맥으로만 남은 루트 — 목록 행과 같은 강등 신호
+              $context={contextNodeIds.has(root.id)}
               aria-current={selectedEventId === root.id ? 'true' : undefined}
               data-event-id={root.id}
             >
@@ -181,16 +232,18 @@ export const EventTreeView: React.FC<Props> = ({
                 )}
               </RootMeta>
             </RootHeader>
-            {root.children && root.children.length > 0 && (
+            {keptChildren.length > 0 && (
               <ChildrenWrap>
-                {root.children.map((c) => (
+                {keptChildren.map((child) => (
                   <TreeNode
-                    key={c.id}
-                    node={c}
+                    key={child.id}
+                    node={child}
                     depth={1}
                     expanded={expanded}
                     collapseAll={collapseAll}
                     selectedId={selectedEventId}
+                    keptNodeIds={keptNodeIds}
+                    contextNodeIds={contextNodeIds}
                     onToggle={toggle}
                     onSelect={onSelectEvent}
                   />
@@ -211,6 +264,10 @@ const TreeNode: React.FC<{
   /** 강제 접기 모드 — true면 depth 1 자동 펼침도 무시. 사용자 manual 토글로 해제됨. */
   collapseAll: boolean
   selectedId: string | null
+  /** 필터를 통과해 평탄화에 남은 노드 id — 여기 없는 가지는 그리지 않는다(검토 GAP-1) */
+  keptNodeIds: ReadonlySet<string>
+  /** 문맥으로만 남은 노드 id — 흐리게 강등 */
+  contextNodeIds: ReadonlySet<string>
   onToggle: (id: string) => void
   onSelect: (id: string) => void
 }> = ({
@@ -219,10 +276,15 @@ const TreeNode: React.FC<{
   expanded,
   collapseAll,
   selectedId,
+  keptNodeIds,
+  contextNodeIds,
   onToggle,
   onSelect,
 }) => {
-  const hasChildren = !!(node.children && node.children.length > 0)
+  const keptChildren = (node.children ?? []).filter((child) =>
+    keptNodeIds.has(child.id),
+  )
+  const hasChildren = keptChildren.length > 0
   // 강제 접기 모드: 사용자가 토글한 것만 펼침
   // 정상 모드: depth 1까지 자동 펼침 + expanded set
   const isOpen = collapseAll
@@ -236,6 +298,7 @@ const TreeNode: React.FC<{
         role="button"
         tabIndex={0}
         $active={selectedId === node.id}
+        $context={contextNodeIds.has(node.id)}
         aria-current={selectedId === node.id ? 'true' : undefined}
         aria-label={node.title}
         data-event-id={node.id}
@@ -272,14 +335,16 @@ const TreeNode: React.FC<{
       </NodeRow>
       {hasChildren && isOpen && (
         <NodeChildren>
-          {node.children!.map((c) => (
+          {keptChildren.map((child) => (
             <TreeNode
-              key={c.id}
-              node={c}
+              key={child.id}
+              node={child}
               depth={depth + 1}
               expanded={expanded}
               collapseAll={collapseAll}
               selectedId={selectedId}
+              keptNodeIds={keptNodeIds}
+              contextNodeIds={contextNodeIds}
               onToggle={onToggle}
               onSelect={onSelect}
             />
@@ -290,10 +355,22 @@ const TreeNode: React.FC<{
   )
 }
 
-const countAllNodes = (n: EventHierarchyNode): number => {
-  let c = 1
-  if (n.children) for (const ch of n.children) c += countAllNodes(ch)
-  return c
+/**
+ * 이 카드가 실제로 그리는 노드 수. `keptNodeIds`에 없는 가지(= 필터가 잘라낸 자손)는
+ * 세지 않는다 — 화면엔 없는 자식을 '3개 노드'라고 주장하던 모수 오류(검토 GAP-1).
+ */
+const countAllNodes = (
+  node: EventHierarchyNode,
+  keptNodeIds: ReadonlySet<string>,
+): number => {
+  let count = 1
+  if (node.children) {
+    for (const child of node.children) {
+      if (!keptNodeIds.has(child.id)) continue
+      count += countAllNodes(child, keptNodeIds)
+    }
+  }
+  return count
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -371,13 +448,15 @@ const RootCard = styled.div<{ $active: boolean }>`
   overflow: hidden;
 `
 
-const RootHeader = styled.button<{ $active: boolean }>`
+const RootHeader = styled.button<{ $active: boolean; $context?: boolean }>`
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
   padding: 12px 14px;
   border: none;
+  /* 자기는 조건을 만족하지 않고 매칭 자손 때문에 남은 루트 — 흐리게 강등 */
+  opacity: ${({ $context }) => ($context ? 0.55 : 1)};
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
@@ -458,13 +537,15 @@ const NodeWrap = styled.div<{ $depth: number }>`
 
 // 노드 행은 클릭 가능하지만 내부에 실제 <button>(ToggleBtn)을 담으므로 <button>이 아닌
 // role="button" <div>로 둔다(<button> 안 <button> DOM 중첩 오류 회피). 키보드는 onKeyDown.
-const NodeRow = styled.div<{ $active: boolean }>`
+const NodeRow = styled.div<{ $active: boolean; $context?: boolean }>`
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
   padding: 6px 8px 6px 0;
   border: none;
+  /* 문맥용으로만 남은 노드 — 조건을 만족한 행과 시각적으로 구분(목록 뷰와 동일 규약) */
+  opacity: ${({ $context }) => ($context ? 0.55 : 1)};
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'

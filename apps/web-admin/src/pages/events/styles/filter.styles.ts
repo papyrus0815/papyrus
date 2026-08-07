@@ -1,17 +1,31 @@
 /**
- * Filter Sidebar Styled Components
- * 필터 사이드바 및 세기 선택 관련 스타일
+ * Filter Bar Styled Components
+ * 사건 카탈로그 상단 필터 바(트리거 그룹 · 계층 토글) + 표시 옵션(정렬) 스타일.
+ *
+ * ## 이 파일의 두 규약 (검토 배치 5)
+ *
+ * 1. **형태는 자기 컴포넌트가 말한다.** 예전엔 `FilterGroup`이 `& button, & select { … !important }`로
+ *    자손의 배경·보더·radius·높이를 통째로 덮어써서, `FilterTriggerButton`이 선언한 것 중
+ *    살아남는 건 `color` 하나뿐이었다. 그 결과 활성 표시도 포커스 링도 "새 `!important`를
+ *    달아야만" 보였고, 다음 사람이 또 같은 벽을 만났다(검토 VIS-11).
+ *    지금은 그룹이 **사이(divider)와 껍데기(외곽 보더·radius·클리핑)** 만 그리고,
+ *    컨트롤은 `$inGroup` variant로 '그룹 안에서의 자기 형태'를 여기서 직접 표현한다.
+ *
+ * 2. **색은 토큰으로.** 중립 표면 8값은 `CONTROL`, 브랜드 색은 `BRAND` 경유(검토 VIS-1).
+ *
+ * ⚠️ 죽은 표면 22개 export(세기 버튼 리스트·칩·체크박스·리셋 버튼 등)는 이 배치에서 제거했다.
+ * 유일한 소비처였던 `widgets/event-list/ui/filter-panel.tsx`가 참조 0의 고아 위젯이었다(검토 VIS-10).
  */
 import styled, { css } from 'styled-components'
 
-import { BRAND, MOTION } from './theme'
-
-/* FilterColumn — 사용처에서 obsolete (FilterBlock과 중복 wrapper)이지만
- * 외부 import 호환 위해 단순 contents fragment처럼 둠. 모든 layout 스타일은
- * FilterBlock에서 처리. 새 코드는 FilterColumn 사용 X. */
-export const FilterColumn = styled.div`
-  display: contents;
-`
+import {
+  BRAND,
+  CONTROL,
+  MOTION,
+  focusRingInset,
+  toolbarControlHeight,
+  toolbarControlSquare,
+} from './theme'
 
 /* FilterBlock — toolbar 아이템들이 직접 flex로 배치되는 row. */
 export const FilterBlock = styled.div`
@@ -22,93 +36,59 @@ export const FilterBlock = styled.div`
 `
 
 /**
- * FilterGroup — *연관된 filter 트리거 5개를 한 묶음 border*로.
+ * FilterGroup — 연관된 filter 트리거 4개를 한 묶음 border로.
  *
- * 이전: 카테고리 / 국가 / 세기 / 정렬 / 정렬방향 — 각자 *자신의 1px border*
- *       → toolbar 한 줄에 bordered box 5개 + 그 외 6개 = 어수선
+ * 외곽 1px border 1개 + 내부 hairline divider → 한 *그룹* 인상(Linear/Notion 데이터 툴바 패턴).
  *
- * 지금: 외곽 1px border 1개 + 내부 hairline `border-right` 구분선
- *       → 한 *그룹* 인상. Linear / Notion 데이터 toolbar 패턴.
- *
- * 자식들은 각자 border 제거 / radius 0 / hover 시 inset bg shift만.
+ * `$overflowing`: 우측 페이드 마스크를 **실제로 넘칠 때만** 건다(검토 VIS-7).
+ * 예전엔 ≤768px이면 상시 적용이라, 넘치지 않는 폭에서도 그룹의 우측 모서리와 보더가
+ * 항상 흐렸다. 선례(RWD-4, ViewSegmented)는 '마스크 삭제'였지만 여기는 다르다 —
+ * 375~400px 폰 대역에서는 트리거 4개가 **실제로 넘치고**, 그때 페이드가 없으면
+ * "오른쪽에 더 있다"는 유일한 어포던스가 사라진다. 그래서 삭제가 아니라 조건화다.
+ * 측정은 `widgets/event-filters-panel`이 ResizeObserver로 한다(CSS만으로는 판정 불가).
  */
-export const FilterGroup = styled.div`
+export const FilterGroup = styled.div<{ $overflowing?: boolean }>`
   display: inline-flex;
   align-items: stretch;
-  height: 34px;
-  @media (max-width: 768px) {
-    min-height: 40px;
-  }
+  ${toolbarControlHeight}
   border-radius: 8px;
   overflow: hidden;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color ${MOTION.fast};
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: ${CONTROL.bgDark};
+          border: 1px solid ${CONTROL.borderDark};
         `
       : css`
-          background: #f8fafc;
-          border: 1px solid rgba(203, 213, 225, 0.6);
+          background: ${CONTROL.bgLight};
+          border: 1px solid ${CONTROL.borderLight};
         `}
 
-  /* 모든 nested control(직속 + 깊이 1단)은 자기 border/bg 제거.
-   *
-   * ⚠️ 자손 결합자다 — 트리거는 FilterGroup > PopoverWrap > button 으로 깊이 2에
-   * 있어서 직속 자식 결합자로는 좁힐 수 없다. 대신 팝오버 *내용물*은 body로 포털되어
-   * (widgets/event-filters-panel: useAnchoredPosition) 이 규칙의 사정권 밖에 있다.
-   * 팝오버를 다시 DOM 자식으로 되돌리면 이 !important들이 옵션 버튼의 선택 배경·
-   * 포커스 링까지 지우므로, 되돌릴 거면 이 셀렉터부터 분리해야 한다. */
-  & button,
-  & select {
-    border: none !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    height: 100% !important;
-  }
-
-  /* ⚠️ box-shadow 리셋은 **포커스가 없을 때만**.
-   * 이전엔 box-shadow:none !important가 무조건 걸려, 트리거 버튼과 세기 select가
-   * 자기 :focus-visible 링(BRAND.focusRing)을 그려도 통째로 지워졌다 —
-   * Tab 실측에서 outline 0px + box-shadow none, 즉 **포커스 표시가 아예 없었다**.
-   * focusRing 토큰을 진하게 고쳐도 이 규칙이 남아 있으면 이 컨트롤들만 그대로다. */
-  & button:not(:focus-visible),
-  & select:not(:focus-visible) {
-    box-shadow: none !important;
-  }
-
-  /* 직속 자식들 사이 hairline divider */
-  & > button,
-  & > select,
-  & > div {
-    border-right: 1px solid
+  /* 형제 **사이**의 hairline — '사이'는 컨테이너의 관심사라 여기 남는다.
+   * 자손 결합자도 !important도 필요 없다: 직속 자식(PopoverWrap)은 자기 보더가 없다. */
+  & > * + * {
+    border-left: 1px solid
       ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.08)'
-          : 'rgba(15, 23, 42, 0.08)'} !important;
-    border-radius: 0 !important;
-  }
-  & > *:last-child {
-    border-right: none !important;
+        theme.mode === 'dark' ? CONTROL.dividerDark : CONTROL.dividerLight};
   }
 
-  /* 내부 hover는 inset bg shift */
-  & button:hover,
-  & select:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06) !important'
-        : 'rgba(15, 23, 42, 0.04) !important'};
-  }
-
-  /* 그룹 외곽 hover */
   &:hover {
     border-color: ${BRAND.primaryBorder};
   }
 
-  /* 좁은 폭 — 트리거 4개(카테고리·대륙·국가·세기) 합폭이 뷰포트를 넘으면 우측('전체')이
-   * overflow:hidden으로 잘려 접근 불가하던 문제. 가로 스크롤 + 우측 페이드로 전부 접근 가능하게. */
+  /**
+   * 포커스는 **개별 컨트롤**이 inset outline으로 말한다(focusRingInset 토큰).
+   * 그룹까지 halo를 그리면 "그룹 어딘가"와 "이 컨트롤"이 동시에 켜져 서로 경합하고,
+   * 어차피 그 halo는 아래 overflow:hidden에 상·하가 잘려 반쪽만 보였다.
+   * 그룹은 테두리 색만 거들어 '이 묶음이 활성'까지만 말한다(검토 VIS-2/A11Y-7).
+   */
+  &:focus-within {
+    border-color: ${BRAND.primaryBorderHover};
+  }
+
+  /* 좁은 폭 — 트리거 4개 합폭이 뷰포트를 넘으면 우측이 overflow:hidden으로 잘려
+   * 접근 불가하던 문제. 가로 스크롤로 전부 접근 가능하게. */
   @media (max-width: 768px) {
     max-width: 100%;
     overflow-x: auto;
@@ -121,18 +101,20 @@ export const FilterGroup = styled.div`
     & > * {
       flex-shrink: 0;
     }
-    mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
-    -webkit-mask-image: linear-gradient(
-      to right,
-      #000 calc(100% - 14px),
-      transparent
-    );
-  }
-
-  /* focus halo — 그룹에 표시 */
-  &:focus-within {
-    border-color: ${BRAND.primaryBorderHover};
-    box-shadow: ${BRAND.focusRing};
+    ${({ $overflowing }) =>
+      $overflowing &&
+      css`
+        mask-image: linear-gradient(
+          to right,
+          #000 calc(100% - 14px),
+          transparent
+        );
+        -webkit-mask-image: linear-gradient(
+          to right,
+          #000 calc(100% - 14px),
+          transparent
+        );
+      `}
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -140,274 +122,100 @@ export const FilterGroup = styled.div`
   }
 `
 
-export const FilterBlockLabel = styled.div`
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  letter-spacing: 0.02em;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#475569' : '#94a3b8'};
-`
-
-export const FilterSearchInput = styled.input`
-  border-radius: 8px;
-  padding: 8px 12px 8px 34px;
-  height: 34px;
-  @media (max-width: 768px) {
-    min-height: 40px;
-  }
-  font-size: 12.5px;
-  min-width: 200px;
-  max-width: 300px;
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
-  &::placeholder {
-    font-size: 12px;
-    color: ${({ theme }) => theme.mode === 'dark' ? '#71717a' : '#94a3b8'};
-  }
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04)
-            url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Ccircle cx="11" cy="11" r="8"/%3E%3Cline x1="21" y1="21" x2="16.65" y2="16.65"/%3E%3C/svg%3E')
-            no-repeat 11px 50%;
-          background-size: 13px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: #e2e8f0;
-          &:hover {
-            background-color: rgba(255, 255, 255, 0.06);
-            border-color: rgba(37, 99, 235, 0.3);
-          }
-          &:focus {
-            outline: none;
-            border-color: rgba(37, 99, 235, 0.5);
-            background-color: rgba(255, 255, 255, 0.06);
-            box-shadow: ${BRAND.focusRing};
-          }
-        `
-      : css`
-          background: #f8fafc
-            url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" stroke="%2364748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Ccircle cx="11" cy="11" r="8"/%3E%3Cline x1="21" y1="21" x2="16.65" y2="16.65"/%3E%3C/svg%3E')
-            no-repeat 11px 50%;
-          background-size: 13px;
-          border: 1px solid rgba(203, 213, 225, 0.6);
-          color: #0f172a;
-          &:hover {
-            background-color: #ffffff;
-            border-color: rgba(37, 99, 235, 0.3);
-          }
-          &:focus {
-            outline: none;
-            border-color: rgba(37, 99, 235, 0.5);
-            background-color: #ffffff;
-            box-shadow: ${BRAND.focusRing};
-          }
-        `}
-`
-
-/* admin 도구 톤 — 1px border, radius 8, hover transform/shadow 제거. */
-export const FilterTriggerButton = styled.button`
-  border-radius: 8px;
-  padding: 7px 12px;
-  height: 34px;
-  @media (max-width: 768px) {
-    min-height: 40px;
-  }
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
+/**
+ * 필터 축 트리거 — 그룹 안(`$inGroup`)과 밖 두 형태를 **자기 파일에서** 표현한다.
+ *
+ * 활성 표시는 `data-active` 속성을 소비한다(검토 IA-8/INT-7/VIS-3/A11Y-6).
+ * 이 속성은 위젯이 예전부터 내보내고 있었는데 레포 전체에 소비하는 CSS가 0개였다 —
+ * 즉 활성/비활성 트리거의 유일한 차이가 **라벨 문자열**이었다. 색 단독은 금지라
+ * ⑴ 값 굵기(700) ⑵ 좌측 3px 인디케이터 ⑶ 색·배경 **3중 인코딩**으로 낸다.
+ */
+export const FilterTriggerButton = styled.button<{ $inGroup?: boolean }>`
+  /* 활성 좌측 인디케이터(::before)의 기준 */
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 7px 12px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
   white-space: nowrap;
   transition: background ${MOTION.fast}, border-color ${MOTION.fast},
     color ${MOTION.fast};
+
   svg {
     color: ${BRAND.primary};
     flex-shrink: 0;
   }
-  &:focus-visible {
-    outline: none;
-    border-color: ${BRAND.primaryBorderHover};
-    box-shadow: ${BRAND.focusRing};
-  }
-  ${({ theme }) =>
-    theme.mode === 'dark'
+
+  ${({ $inGroup, theme }) =>
+    $inGroup
       ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: #94a3b8;
+          /* 껍데기(보더·radius·배경)는 그룹이 그린다 — 여기서는 비운다.
+           * 폭 슬롯 고정(검토 VIS-4): 값이 붙어도 트리거가 요동하지 않게 하한을 준다.
+           * 터치 대역은 그룹이 가로 스크롤이라 하한을 걸면 스크롤만 길어져 제외. */
+          height: 100%;
+          min-width: 112px;
+          border: none;
+          border-radius: 0;
+          background: transparent;
+          color: ${theme.mode === 'dark'
+            ? CONTROL.textDark
+            : CONTROL.textLight};
+
+          @media (max-width: 768px) {
+            min-width: 0;
+          }
+
           &:hover {
-            border-color: ${BRAND.primaryBorder};
-            background: rgba(255, 255, 255, 0.06);
+            background: ${theme.mode === 'dark'
+              ? CONTROL.insetHoverDark
+              : CONTROL.insetHoverLight};
+          }
+
+          /* 바깥 spread 링은 그룹의 overflow:hidden에 잘린다 — 안쪽으로 그린다. */
+          &:focus-visible {
+            ${focusRingInset}
           }
         `
       : css`
-          background: #f8fafc;
-          border: 1px solid rgba(203, 213, 225, 0.6);
-          color: #1e293b;
+          ${toolbarControlHeight}
+          border-radius: 8px;
+          background: ${theme.mode === 'dark'
+            ? CONTROL.bgDark
+            : CONTROL.bgLight};
+          border: 1px solid
+            ${theme.mode === 'dark' ? CONTROL.borderDark : CONTROL.borderLight};
+          color: ${theme.mode === 'dark'
+            ? CONTROL.textDark
+            : CONTROL.textLight};
+
           &:hover {
             border-color: ${BRAND.primaryBorder};
-            background: #ffffff;
+            background: ${theme.mode === 'dark'
+              ? CONTROL.bgHoverDark
+              : CONTROL.bgHoverLight};
+          }
+
+          &:focus-visible {
+            outline: none;
+            border-color: ${BRAND.primaryBorderHover};
+            box-shadow: ${BRAND.focusRing};
           }
         `}
 
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-`
+  /* ── 활성(필터 적용 중) ─────────────────────────────────────────────
+   * variant 블록 뒤에 와야 배경·색이 이긴다(속성 선택자라 특이도도 한 단계 위). */
+  &[data-active='true'] {
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primaryTextOnDark : BRAND.primaryHover};
+    /* 라이트는 0.12 — 그룹 배경(#f8fafc)이 이미 밝아 0.06 tint는 눈에 안 잡힌다.
+     * 활성 칩(rgba(37,99,235,0.12))과 같은 값이라 '활성'의 시각 어휘가 한 벌이 된다. */
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primarySoftDark : BRAND.primarySoftHover};
 
-export const FilterCheckbox = styled.label`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  user-select: none;
-
-  input[type='checkbox'] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-    accent-color: #2563eb;
-  }
-
-  span {
-    font-size: 12px;
-    font-weight: 500;
-    color: ${({ theme }) => theme.mode === 'dark' ? '#94a3b8' : '#475569'};
-  }
-
-  &:hover span { color: #2563eb; }
-`
-
-export const FilterChips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-/* radius 16 → 6, 그라데이션 → 단색 alpha. 페이지 ActiveFilterChip과 family. */
-export const FilterChip = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px 4px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  background: rgba(37, 99, 235, 0.12);
-  border: 1px solid rgba(37, 99, 235, 0.3);
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8')};
-
-  button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2px;
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    color: inherit;
-    cursor: pointer;
-    transition: background 0.15s;
-    opacity: 0.7;
-    &:hover {
-      opacity: 1;
-      background: rgba(37, 99, 235, 0.16);
-    }
-  }
-
-  span {
-    white-space: nowrap;
-  }
-`
-
-export const FilterResetButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  padding: 7px 12px;
-  height: 34px;
-  @media (max-width: 768px) {
-    min-height: 40px;
-  }
-  background: rgba(239, 68, 68, 0.06);
-  color: #ef4444;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  white-space: nowrap;
-  &:hover {
-    background: rgba(239, 68, 68, 0.12);
-    border-color: rgba(239, 68, 68, 0.4);
-  }
-  &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
-  }
-`
-
-export const FilterDivider = styled.hr`
-  border: none;
-  height: 1px;
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(37, 99, 235,0.12)'};
-  margin: 8px 0;
-`
-
-export const CenturyHeader = styled.div`
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`
-
-export const CenturyTitle = styled.h4`
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'};
-`
-
-export const CenturyCount = styled.span`
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
-`
-
-export const CenturyList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-
-  @media (max-width: 768px) {
-    flex-direction: row;
-    overflow-x: auto;
-    gap: 8px;
-    padding: 4px 0;
-    &::-webkit-scrollbar { height: 4px; }
-    &::-webkit-scrollbar-track { background: transparent; }
-    &::-webkit-scrollbar-thumb { background: rgba(37, 99, 235,0.2); border-radius: 2px; }
-  }
-`
-
-/* 단색 alpha + 1px border, hover translateX/box-shadow 제거. */
-export const CenturyButton = styled.button<{ $active: boolean }>`
-  border-radius: 8px;
-  padding: 10px 12px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  position: relative;
-  overflow: hidden;
-
-  ${({ $active }) =>
-    $active &&
-    `
     &::before {
       content: '';
       position: absolute;
@@ -415,188 +223,46 @@ export const CenturyButton = styled.button<{ $active: boolean }>`
       top: 0;
       bottom: 0;
       width: 3px;
-      background: #2563eb;
+      background: ${BRAND.primary};
     }
-  `}
-
-  @media (max-width: 768px) {
-    flex-shrink: 0;
-    min-width: 140px;
   }
 
-  ${({ theme, $active }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: ${$active
-            ? 'rgba(37, 99, 235, 0.12)'
-            : 'rgba(255, 255, 255, 0.04)'};
-          border: 1px solid
-            ${$active
-              ? 'rgba(37, 99, 235, 0.35)'
-              : 'rgba(255, 255, 255, 0.07)'};
-          &:hover {
-            border-color: rgba(37, 99, 235, 0.3);
-            background: ${$active
-              ? 'rgba(37, 99, 235, 0.18)'
-              : 'rgba(255, 255, 255, 0.06)'};
-          }
-        `
-      : css`
-          background: ${$active
-            ? 'rgba(37, 99, 235, 0.06)'
-            : '#f8fafc'};
-          border: 1px solid
-            ${$active
-              ? 'rgba(37, 99, 235, 0.3)'
-              : 'rgba(203, 213, 225, 0.6)'};
-          &:hover {
-            border-color: rgba(37, 99, 235, 0.3);
-            background: ${$active
-              ? 'rgba(37, 99, 235, 0.1)'
-              : '#ffffff'};
-          }
-        `}
-`
-
-export const CenturyLabel = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-
-  strong {
-    font-size: 13px;
-    font-weight: 700;
-    color: ${({ theme }) => theme.mode === 'dark' ? '#e2e8f0' : '#0f172a'};
+  &[data-active='true']:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primaryFill};
   }
 
-  span {
-    font-size: 11px;
-    font-weight: 500;
-    color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 `
 
-export const CenturyEventCount = styled.span`
-  font-size: 11px;
-  color: #2563eb;
+/**
+ * 트리거 라벨은 `필드명 · 값` **2요소**다(검토 VIS-4).
+ *
+ * 예전엔 값이 필드명을 *치환*했다. 그래서 '연합군 점령하 오스트리아' 하나로 트리거가
+ * ≈80 → ≈210px가 되고 오른쪽 컨트롤이 전부 밀려 액션 줄이 새 줄로 내려갔다.
+ * 동시에 값이 걸린 축은 **축 이름이 화면에서 사라져** 무슨 필터인지도 알 수 없었다.
+ * 두 문제 다 '치환'이 원인이라 슬롯을 둘로 나눈다 — 필드명은 상시, 값은 폭 상한.
+ */
+export const TriggerAxis = styled.span`
+  flex-shrink: 0;
+`
+
+/** 필드명과 값 사이 구분자 — 장식이라 접근 이름에서는 뺀다(`aria-hidden`) */
+export const TriggerSeparator = styled.span`
+  flex-shrink: 0;
+  opacity: 0.45;
+`
+
+export const TriggerValue = styled.span`
+  /* 12ch = 한글 6자 남짓. 이보다 길면 말줄임 — 폭은 여기서 끝난다. */
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* 활성 3중 인코딩 중 '굵기' — 굵어지는 건 값뿐이라 필드명은 자리를 안 옮긴다. */
   font-weight: 700;
-  padding: 3px 8px;
-  background: rgba(37, 99, 235, 0.12);
-  border-radius: 6px;
-  align-self: flex-start;
-`
-
-export const ResultControls = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border-radius: 8px;
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-        `
-      : css`
-          background: #fff;
-          border: 1px solid rgba(20, 19, 34, 0.06);
-        `}
-`
-
-export const SortDirectionToggle = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 8px;
-  padding: 7px 12px;
-  height: 34px;
-  @media (max-width: 768px) {
-    min-height: 40px;
-  }
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
-  svg { width: 14px; height: 14px; }
-  &:hover { border-color: rgba(37, 99, 235, 0.3); }
-  &:focus-visible {
-    outline: none;
-    box-shadow: ${BRAND.focusRing};
-  }
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: #94a3b8;
-          &:hover { color: #e2e8f0; background: rgba(255, 255, 255, 0.06); }
-        `
-      : css`
-          background: #fff;
-          border: 1px solid rgba(15, 23, 42, 0.12);
-          color: #1f2937;
-          &:hover { color: #111827; }
-        `}
-`
-
-export const SortSelect = styled.select`
-  border-radius: 8px;
-  padding: 7px 10px;
-  height: 34px;
-  @media (max-width: 768px) {
-    min-height: 40px;
-  }
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  min-width: 100px;
-  transition: background 0.15s, border-color 0.15s;
-  &:focus {
-    outline: none;
-    border-color: rgba(37, 99, 235, 0.5);
-    box-shadow: ${BRAND.focusRing};
-  }
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: #e2e8f0;
-          option { background: #1e1e2e; color: #e2e8f0; }
-          &:hover {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(37, 99, 235, 0.3);
-          }
-        `
-      : css`
-          background: #f8fafc;
-          border: 1px solid rgba(203, 213, 225, 0.6);
-          color: #1e293b;
-          option { background: #ffffff; color: #1f2937; }
-          &:hover {
-            background: #ffffff;
-            border-color: rgba(37, 99, 235, 0.3);
-          }
-        `}
-`
-
-export const ToolbarMeta = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#a1a1aa' : '#64748b'};
-
-  span {
-    padding: 4px 10px;
-    background: rgba(37, 99, 235, 0.08);
-    border-radius: 6px;
-    color: #1d4ed8;
-  }
 `
 
 /* FilterToggle — 컨테이너 박스 제거. 단순 inline group으로 toolbar의 다른
@@ -605,72 +271,61 @@ export const FilterToggle = styled.label`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
-  @media (max-width: 768px) {
-    min-height: 40px;
-  }
+  ${toolbarControlHeight}
   padding: 0 4px;
   cursor: pointer;
   user-select: none;
 `
 
+/* 색은 라이트·다크 동일(#64748b) — 두 배경 모두에서 AA를 통과하는 값이라 분기가 없다.
+ * 값을 바꾸는 치환은 이 배치의 범위 밖이므로 토큰화하지 않고 그대로 둔다. */
 export const FilterToggleLabel = styled.span`
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#64748b'};
+  color: #64748b;
 `
 
-/* CenturySelectWrap — icon + select 한 묶음. FilterGroup 안에서 자식으로 동작.
- * 아이콘 색은 테마 토큰(text.tertiary)으로 정렬. */
-export const CenturySelectWrap = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  height: 100%;
-
-  & > svg {
-    color: ${({ theme }) => theme.colors.text.tertiary};
-    flex-shrink: 0;
-  }
-`
-
-export const CenturySelect = styled.select`
+export const SortSelect = styled.select`
   border-radius: 8px;
   padding: 7px 10px;
-  height: 34px;
-  @media (max-width: 768px) {
-    min-height: 40px;
-  }
+  ${toolbarControlHeight}
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
-  min-width: 90px;
-  transition: background 0.15s, border-color 0.15s;
+  min-width: 100px;
+  transition: background ${MOTION.fast}, border-color ${MOTION.fast};
   &:focus {
     outline: none;
-    border-color: rgba(37, 99, 235, 0.5);
+    border-color: ${BRAND.primaryBorderHover};
     box-shadow: ${BRAND.focusRing};
   }
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: ${CONTROL.bgDark};
+          border: 1px solid ${CONTROL.borderDark};
           color: #e2e8f0;
+          option {
+            background: #1e1e2e;
+            color: #e2e8f0;
+          }
           &:hover {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(37, 99, 235, 0.3);
+            background: ${CONTROL.bgHoverDark};
+            border-color: ${BRAND.primaryBorder};
           }
         `
       : css`
-          background: #f8fafc;
-          border: 1px solid rgba(203, 213, 225, 0.6);
-          color: #1e293b;
-          &:hover {
+          background: ${CONTROL.bgLight};
+          border: 1px solid ${CONTROL.borderLight};
+          color: ${CONTROL.textLight};
+          option {
             background: #ffffff;
-            border-color: rgba(37, 99, 235, 0.3);
+            color: #1f2937;
+          }
+          &:hover {
+            background: ${CONTROL.bgHoverLight};
+            border-color: ${BRAND.primaryBorder};
           }
         `}
 `
@@ -681,11 +336,7 @@ export const SortButton = styled.button<{ $direction?: 'asc' | 'desc' }>`
   border-radius: 8px;
   padding: 0;
   cursor: pointer;
-  width: 34px;
-  height: 34px;
-  @media (max-width: 768px) {
-    min-height: 40px;
-  }
+  ${toolbarControlSquare}
   display: flex;
   align-items: center;
   justify-content: center;
@@ -707,20 +358,20 @@ export const SortButton = styled.button<{ $direction?: 'asc' | 'desc' }>`
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: ${CONTROL.bgDark};
+          border: 1px solid ${CONTROL.borderDark};
           color: #64748b;
           &:hover {
-            background: rgba(255, 255, 255, 0.06);
+            background: ${CONTROL.bgHoverDark};
             border-color: ${BRAND.primaryBorder};
           }
         `
       : css`
-          background: #f8fafc;
-          border: 1px solid rgba(203, 213, 225, 0.6);
+          background: ${CONTROL.bgLight};
+          border: 1px solid ${CONTROL.borderLight};
           color: #64748b;
           &:hover {
-            background: #ffffff;
+            background: ${CONTROL.bgHoverLight};
             border-color: ${BRAND.primaryBorder};
           }
         `}
@@ -735,7 +386,7 @@ export const SortButton = styled.button<{ $direction?: 'asc' | 'desc' }>`
 
 /* Switch — admin 도구 톤. 30×18 콤팩트, accent border + subtle bg fill.
  * 흰 썸 + 그림자 → 둥근 색 점, 그림자 없음. iOS 토글 인상 제거.
- * focus 표식은 box-shadow halo로 통일 (다른 컨트롤들과 동일). */
+ * focus 표식은 box-shadow halo로 통일 (클리핑 조상이 없어 잘리지 않는다). */
 export const Switch = styled.button<{ $active?: boolean }>`
   position: relative;
   width: 30px;
@@ -795,26 +446,4 @@ export const SwitchThumb = styled.div<{ $active?: boolean }>`
   @media (prefers-reduced-motion: reduce) {
     transition: none;
   }
-`
-
-export const ChildSortButtons = styled.div`
-  display: flex;
-  gap: 4px;
-  width: 100%;
-`
-
-export const ChildSortButton = styled.button<{ $active: boolean }>`
-  flex: 1;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-size: 11px;
-  font-weight: ${({ $active }) => $active ? '600' : '500'};
-  border: 1px solid ${({ $active }) => $active ? '#2563eb' : 'rgba(203,213,225,0.6)'};
-  background: ${({ theme, $active }) => $active
-    ? 'rgba(37, 99, 235,0.08)'
-    : theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
-  color: ${({ $active }) => $active ? '#2563eb' : 'inherit'};
-  &:hover { border-color: #2563eb; background: rgba(37, 99, 235,0.05); }
 `

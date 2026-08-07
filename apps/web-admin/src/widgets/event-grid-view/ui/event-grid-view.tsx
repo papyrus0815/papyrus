@@ -18,9 +18,9 @@ import { FiGrid } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
+import { CatalogViewEmpty } from '@/features/event-list/ui/catalog-view-empty'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
-import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import { ImportancePill } from '@/shared/ui/importance-pill/importance-pill'
 import { getDecade, parseIsoDateParts } from '@/shared/lib/iso-date'
 
@@ -34,11 +34,21 @@ import type {
 type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
 
 interface Props {
+  /**
+   * ⚠️ **필터를 만족한 행만** 담긴 배열이어야 한다(검토 GAP-1).
+   * 평탄화 결과에는 '매칭된 자손 때문에 문맥으로 남은 부모'가 섞여 있는데,
+   * 이 뷰는 그것을 그냥 데이터로 세어 필터로 배제한 카테고리가 밀집도에 잡혔다.
+   */
   flattenedHierarchy: FlatItem[]
   events: HistoricalEvent[]
   selectedEventId: string | null
   dbCategories: EventCategoryDto[]
   onSelectEvent: (id: string) => void
+  /** 빈 상태 3분기(로딩·필터0건·데이터0건) 판정용 — 검토 GAP-3 */
+  isLoading?: boolean
+  hasMoreData?: boolean
+  hasActiveFilters?: boolean
+  onResetFilters?: () => void
 }
 
 interface DecadeCell {
@@ -62,6 +72,10 @@ export const EventGridView: React.FC<Props> = ({
   selectedEventId,
   dbCategories,
   onSelectEvent,
+  isLoading = false,
+  hasMoreData = false,
+  hasActiveFilters = false,
+  onResetFilters,
 }) => {
   /** 전체 events 기준 decade별 사건 수 — heat 정규화의 *글로벌 max* 산정에 사용.
    * 필터 결과만으로 정규화하면 작은 절대값도 100% heat로 보여 시각 왜곡.
@@ -134,10 +148,14 @@ export const EventGridView: React.FC<Props> = ({
 
   if (cells.length === 0) {
     return (
-      <EmptyStateSpotlight
+      <CatalogViewEmpty
         icon={<FiGrid size={28} />}
         title="표시할 연대가 없습니다"
-        description="필터를 조정하거나 사건을 등록해보세요."
+        description="사건을 등록하면 연대 격자가 채워집니다."
+        isLoading={isLoading}
+        hasMoreData={hasMoreData}
+        hasActiveFilters={hasActiveFilters}
+        onResetFilters={onResetFilters}
       />
     )
   }

@@ -13,6 +13,7 @@ import React, { useState } from 'react'
 import styled from 'styled-components'
 
 import {
+  FiAlertCircle,
   FiArrowRight,
   FiBookOpen,
   FiCalendar,
@@ -73,6 +74,16 @@ interface EventDetailPanelProps {
   onResetFilters?: () => void
   /** 상세 패널 닫기 — 데스크톱 column 모드에서도 X 버튼으로 명시적 닫기 제공 */
   onClose?: () => void
+  /**
+   * `?event=<삭제된 id>`처럼 **끝까지 로드했는데 찾지 못한** 선택인가(검토 URL-4).
+   *
+   * 예전엔 이 상황이 '아직 아무것도 안 골랐다'와 같은 화면('사건을 선택해주세요')이었고,
+   * 그 분기에는 닫기 어포던스가 하나도 없었다 — 데스크톱(≥1200px)은 백드롭도 없어
+   * 상세 컬럼이 자리를 차지한 채 Esc 말고는 빠져나갈 길이 없었다.
+   */
+  notFound?: boolean
+  /** 못 찾은 사건 id — 무엇이 사라졌는지 밝히는 데만 쓴다 */
+  missingEventId?: string | null
 }
 
 export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
@@ -89,6 +100,8 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   isOutOfScope = false,
   onResetFilters,
   onClose,
+  notFound = false,
+  missingEventId = null,
 }) => {
   const navigate = useNavigate()
   const [descExpanded, setDescExpanded] = useState(false)
@@ -331,7 +344,43 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   // ───────────────────────────────────────────────────────────────────────
   return (
     <Detail.DetailPanel>
-      {isLoading ? (
+      {notFound ? (
+        /**
+         * 링크가 가리키는 사건이 없다 — 삭제됐거나 잘못된 id(검토 URL-4).
+         * 이 분기에 도달했을 때 페이지는 이미 `event` 키를 URL에서 떨어뜨렸다.
+         * 그래야 새로고침·공유가 같은 유령을 되살리지 않는다.
+         */
+        <Detail.DetailPanelEmpty>
+          <PanelDismissButton
+            type="button"
+            aria-label="상세 닫기"
+            title="닫기 (Esc)"
+            onClick={() => onClose?.()}
+          >
+            <FiX size={ICON_SIZE.lg} aria-hidden="true" />
+          </PanelDismissButton>
+          <Detail.DetailPanelEmptyIcon>
+            <FiAlertCircle size={ICON_SIZE.lg} aria-hidden="true" />
+          </Detail.DetailPanelEmptyIcon>
+          <Detail.DetailPanelEmptyContent>
+            <Detail.DetailPanelEmptyTitle>
+              사건을 찾을 수 없습니다
+            </Detail.DetailPanelEmptyTitle>
+            <Detail.DetailPanelEmptyDescription>
+              링크가 가리키는 사건이 삭제되었거나 주소가 잘못되었습니다. 주소에서
+              선택은 해제했습니다.
+            </Detail.DetailPanelEmptyDescription>
+            {missingEventId && (
+              <MissingIdHint>id: {missingEventId}</MissingIdHint>
+            )}
+          </Detail.DetailPanelEmptyContent>
+          {onClose && (
+            <NotFoundAction type="button" onClick={onClose}>
+              선택 해제
+            </NotFoundAction>
+          )}
+        </Detail.DetailPanelEmpty>
+      ) : isLoading ? (
         <Detail.DetailPanelContent>
           <>
             <Skeleton.SkeletonDetailHeroImage />
@@ -357,9 +406,18 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                 이 사건은 현재 목록 조건 밖입니다 — 목록에는 표시되지 않아
                 이전/다음 이동을 쓸 수 없습니다.
               </span>
+              {/**
+               * 라벨이 '필터 초기화'이던 시절엔 원인이 접힘(연·세기 밴드나 하위 접기)일 때
+               * 눌러도 화면이 그대로였다 — 완전한 먹통 버튼(검토 URL-6). 호출부의 초기화
+               * 범위에 접힘이 들어왔으므로 라벨도 그 범위를 말한다.
+               */}
               {onResetFilters && (
-                <OutOfScopeAction type="button" onClick={onResetFilters}>
-                  필터 초기화
+                <OutOfScopeAction
+                  type="button"
+                  title="필터·검색어·북마크와 접어 둔 연도·세기·하위 사건을 모두 해제합니다"
+                  onClick={onResetFilters}
+                >
+                  필터·접힘 초기화
                 </OutOfScopeAction>
               )}
             </OutOfScopeBanner>
@@ -544,6 +602,18 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
         </Detail.DetailPanelContent>
       ) : (
         <Detail.DetailPanelEmpty>
+          {/* 빈 상태에도 닫기 — 데스크톱 컬럼은 백드롭이 없어 여기에 ✕가 없으면
+              상세 자리를 차지한 채 Esc 외 탈출로가 없다(검토 URL-4). */}
+          {onClose && (
+            <PanelDismissButton
+              type="button"
+              aria-label="상세 닫기"
+              title="닫기 (Esc)"
+              onClick={onClose}
+            >
+              <FiX size={ICON_SIZE.lg} aria-hidden="true" />
+            </PanelDismissButton>
+          )}
           <Detail.DetailPanelEmptyIcon>
             <FiTarget size={ICON_SIZE.lg} aria-hidden="true" />
           </Detail.DetailPanelEmptyIcon>
@@ -588,6 +658,69 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
     </Detail.DetailPanel>
   )
 }
+
+/**
+ * 빈 상태·미발견 상태의 닫기 ✕ — 헤더가 없는 분기의 유일한 탈출로(검토 URL-4).
+ * `DetailPanelEmpty`가 `position: relative`라 우상단에 얹는다.
+ */
+const PanelDismissButton = styled.button`
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)'};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+  }
+`
+
+/* 사라진 사건의 id — 지원 문의·URL 확인용 단서. 본문보다 한 단계 약하게. */
+const MissingIdHint = styled.code`
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  word-break: break-all;
+`
+
+const NotFoundAction = styled.button`
+  margin-top: 16px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
 
 /* 조건 밖 선택 배너 — 목록과 드로어가 다른 모집단을 보여줄 때만 뜬다(검토 INT-3). */
 const OutOfScopeBanner = styled.div`

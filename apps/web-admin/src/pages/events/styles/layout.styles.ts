@@ -4,7 +4,7 @@
  */
 import styled, { css } from 'styled-components'
 
-import { BRAND, LIST_WIDTH, MOTION } from './theme'
+import { BRAND, MOTION, toolbarControlHeight } from './theme'
 
 export const PageScene = styled.div`
   position: fixed;
@@ -51,52 +51,37 @@ export const PageScene = styled.div`
  *
  * ⚠️ `transition`을 넣지 말 것 — max-width는 실제로 보간되므로 252행 목록 전체가
  * 12프레임 동안 리레이아웃된다. 즉시 스냅이 싸다.
+ *
+ * ⚠️⚠️ 2026-08-02 **재번복**: 위 캡과 중앙정렬은 사용자 지시로 전면 폐지됐다
+ *   ("사건 리스트 페이지 목록 전체 화면을 써야 하는데 가운데로 되어 있다").
+ *   캡의 실효 대역은 뷰포트 > 1880뿐이었고, 그 위에서 좌우로 죽는 폭이 2560에서 각 360px,
+ *   3440에서 각 780px였다. 캡을 정당화하던 원래 사유("남는 폭 전부를 제목 트랙이 흡수해
+ *   행 안에 빈 밴드가 생긴다")는 요약 열(7트랙) 도입으로 이미 절반이 무효였고, 이번
+ *   열 사다리(`theme.ts` LIST_STEPS — 키워드·등록 시각까지 9트랙)가 나머지를 무효화한다.
+ *
+ *   **폭 상한은 이제 레포 어디에도 없다.** 가로 픽셀 흡수는 행 격자의 열 사다리가 하고,
+ *   좌우 여백의 유일한 소유자는 아래 `padding` clamp다. 여기든 `CatalogSection`이든
+ *   `ActiveContent`든 캡을 다시 심지 말 것 — 하나만 심어도 우측 끝이 즉시 2종이 된다.
  */
-export const PageWrapper = styled.div<{ $capped?: boolean }>`
+export const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  padding: 0 20px;
+  /* 전폭 거터 — 폭에 비례. 3440에서 20px는 시각적으로 0에 수렴해 '카드'라는 표면 인지가
+     사라지고, 768 이하에서는 16px이 필요하다. clamp 하한이 기존 ≤768 분기를 그대로
+     흡수한다(768px에서 1.2vw = 9.2px → 하한 16px로 클램프 = 현행과 동일). */
+  padding: 0 clamp(16px, 1.2vw, 32px);
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  margin: 0 auto;
-  max-width: ${({ $capped }) =>
-    $capped ? `${LIST_WIDTH.pageWide}px` : 'none'};
-
-  @media (max-width: 768px) {
-    padding: 0 16px;
-  }
 `
 
-export const PageTopBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-
-  @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-`
-
-export const PageTopTitle = styled.div`
-  h1 {
-    margin: 0;
-    font-size: 32px;
-    font-weight: 700;
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
-  }
-
-  p {
-    margin: 6px 0 0;
-    font-size: 14px;
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#64748b')};
-  }
-`
+/*
+ * (제거됨) `PageTopBar` · `PageTopTitle` — 참조 0인 죽은 export.
+ * 페이지 h1은 상시 제거됐고(집중 보기 논의), 그 뒤로 이 둘을 렌더하는 곳이 없었다.
+ * 32px 제목 스타일이 살아 있으면 다음 검토가 '현행 헤더'로 오독한다.
+ */
 
 /* primary action 버튼 — 페이지 내 *유일한 primary CTA*. ledger polish 평면 톤 안에서도
  * 채워진 indigo로 시인성 확보. hover는 한 톤 진하게(`primaryHover`)로만 변경.
@@ -106,7 +91,9 @@ export const PageTopTitle = styled.div`
 export const CreateEventButton = styled.button`
   border-radius: 8px;
   padding: 8px 14px;
-  height: 34px;
+  /* 툴바 한 줄 컨트롤 공통 규약 — 리터럴 34px이면 641~768 대역에서 primary CTA만 6px
+     작아 한 줄의 베이스라인이 어긋난다(나머지는 768에서 40px로 커진다). */
+  ${toolbarControlHeight}
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.005em;
@@ -185,18 +172,58 @@ export const CreateEventFab = styled.button`
 
 /* toolbar — *카드 아닌 단순 flex row*. border / bg 모두 제거.
  * (이전: card-in-card 인상 → 14개 bordered children 위에 또 카드 1개) */
-export const TopFilterBar = styled.div`
-  display: flex;
-  gap: 10px;
-  /* 상단 8px — 검색바(34px) 위 숨통. 구분선은 한 단계 또렷하게(0.06→0.09). */
-  padding: 8px 0 14px;
-  flex-wrap: wrap;
+export const TopFilterBar = styled.div.attrs(
+  /* 실측 하네스가 툴바 hairline을 잡을 손잡이(`data-list-scroller` 전례).
+     스타일 훅이 아니라 "카드 우측 끝 == 툴바 우측 끝"을 한 줄로 검증하기 위한 것이다. */
+  () => ({ 'data-catalog-toolbar': '' }) as Record<string, string>,
+)`
+  /* ── 넓은 폭: 명시 3존 격자 ────────────────────────────────────────────────
+   * 검색 | 필터 | (남는 폭을 먹는 액션 트랙)
+   *
+   * flex-start 패킹이던 시절, 신축 자식이 검색바 하나뿐이라 전폭에서 컨트롤이 좌측에
+   * 뭉치고 우측 1,000px 이상이 빈 border-bottom만 남았다 — "우측이 비었다"가 툴바
+   * 층위에서 그대로 재현된 것이다. 마지막 트랙이 1fr이라 남는 폭은 전부 액션 트랙
+   * 안에 들어오고, 액션군은 그 안에서 margin-left:auto로 우측 끝에 선다.
+   */
+  display: grid;
+  grid-template-columns: clamp(280px, 22vw, 560px) auto minmax(0, 1fr);
+  column-gap: 10px;
   align-items: center;
+  /* 8/14 → 6/10. 세로 크롬에서 6px 회수(목록은 세로가 곧 행 수다). */
+  padding: 6px 0 10px;
   border-bottom: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
         ? 'rgba(255, 255, 255, 0.09)'
         : 'rgba(20, 19, 34, 0.09)'};
+
+  /* ── 좁은 폭: 기존 wrap 규약으로 복귀 ──────────────────────────────────────
+   * ⚠️ 이 분기를 빼면 태블릿에서 3존이 그대로 유지돼 컨트롤이 압착된다.
+   * 임계는 툴바 라벨이 sr-only로 접히는 1024와 맞춘다. */
+  @media (max-width: 1023px) {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+`
+
+/**
+ * 활성 필터 칩 **전용 행** — 툴바 바깥 형제.
+ *
+ * 예전엔 칩 바가 TopFilterBar 안에서 CTA 뒤에 인라인으로 흘렀다. 그래서 칩이 하나만
+ * 생겨도 폭에 따라 툴바가 한 줄 늘어났다 줄었다 했고(1440에서 57 → 92px), 칩과 조작
+ * 컨트롤이 같은 줄에서 경쟁했다. 전용 행으로 올리면 툴바 높이가 폭·필터 상태와
+ * 무관해지고, 칩은 결과 목록 바로 위라는 제자리를 얻는다.
+ *
+ * 칩이 0개면 이 행 자체를 렌더하지 않는다(호출부 chipCount 게이트).
+ */
+export const ActiveFiltersRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 0;
 `
 
 /**
@@ -211,8 +238,13 @@ export const TopFilterBar = styled.div`
  */
 export const CatalogSplit = styled.div<{ $hasSelection?: boolean }>`
   display: grid;
+  /* 전폭 전환 이후 440px 고정은 3440에서 패널을 화면의 18%로 만들어 '목록만 넓어지고
+     상세는 안 자란다'는 인상을 준다. 폭에 비례시키되 상·하한으로 묶는다.
+     ⚠️ grid-template-columns에 transition을 걸지 말 것 — 폭이 보간되는 동안
+     컨테이너 쿼리 단계가 여러 번 플립해 250여 행이 매 프레임 재조판된다.
+     (이 주석 안에서 백틱 금지 — styled 템플릿 리터럴이 끊겨 TS1005가 난다.) */
   grid-template-columns: ${({ $hasSelection }) =>
-    $hasSelection ? 'minmax(0, 1fr) 440px' : 'minmax(0, 1fr)'};
+    $hasSelection ? 'minmax(0, 1fr) clamp(400px, 22vw, 620px)' : 'minmax(0, 1fr)'};
   gap: ${({ $hasSelection }) => ($hasSelection ? '20px' : '0')};
   flex: 1;
   min-height: 0;
@@ -221,7 +253,7 @@ export const CatalogSplit = styled.div<{ $hasSelection?: boolean }>`
 
   @media (max-width: 1400px) {
     grid-template-columns: ${({ $hasSelection }) =>
-      $hasSelection ? 'minmax(0, 1fr) 380px' : 'minmax(0, 1fr)'};
+      $hasSelection ? 'minmax(0, 1fr) clamp(340px, 26vw, 400px)' : 'minmax(0, 1fr)'};
     gap: ${({ $hasSelection }) => ($hasSelection ? '18px' : '0')};
   }
 

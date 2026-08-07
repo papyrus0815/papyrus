@@ -30,6 +30,7 @@ import type {
 type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
 
 interface Props {
+  /** ⚠️ 필터를 만족한 행만 담긴 배열이어야 한다(검토 GAP-1) — 문맥 부모는 마커가 아니다. */
   flattenedHierarchy: FlatItem[]
   events: HistoricalEvent[]
   selectedEventId: string | null

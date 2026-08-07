@@ -260,6 +260,118 @@ export const BRAND = {
   primaryFillDark: 'rgba(37, 99, 235, 0.22)',
 } as const
 
+/**
+ * **클리핑 컨테이너 안** 컨트롤의 포커스 표시 — `BRAND.focusRing`의 대체재(검토 VIS-2/A11Y-7).
+ *
+ * `focusRing`은 `0 0 0 2px`, 즉 요소 **바깥으로 2px 번지는** box-shadow다. 그래서 조상이
+ * `overflow: hidden`이면(필터 그룹이 정확히 그렇다 — 내부 hairline divider를 위해 클리핑한다)
+ * 상·하 2px이 통째로 잘려 나가 "4개 컨트롤 중 어디에 포커스가 있는지" 구분이 불가능했다.
+ *
+ * `outline-offset: -2px`은 링을 요소 **안쪽**에 그리므로 클리핑과 무관하다. 색·굵기는
+ * focusRing과 같은 값이라 두 규약이 화면에서 같은 인상을 준다.
+ *
+ * ⚠️ 클리핑 조상이 없는 컨트롤은 계속 `BRAND.focusRing`을 쓴다 — 안쪽 링은 컨트롤이 작을수록
+ * 콘텐츠와 붙어 읽기 어렵기 때문에, 잘리지 않는 곳에서까지 바꿀 이유가 없다.
+ */
+export const focusRingInset = `
+  outline: 2px solid ${BRAND.primary};
+  outline-offset: -2px;
+  box-shadow: none;
+`
+
+/**
+ * **브랜드 틴트 배경 위** 컨트롤의 포커스 표시 — 포커스 링 3규약의 세 번째.
+ *
+ *   기본            → `BRAND.focusRing`      (요소 바깥 2px box-shadow)
+ *   클리핑 조상 안  → `focusRingInset`       (안쪽 outline — 잘리지 않게)
+ *   틴트 배경 위    → `focusRingOnTinted`    (여기)
+ *
+ * 다크에서 활성 행 배경(rgba(37,99,235,0.22)) 위에 같은 파랑 링을 그리면 링 안쪽 경계
+ * 대비가 2.93:1까지 떨어진다. ↑↓ 내비게이션은 선택과 포커스를 **함께** 옮기므로
+ * '활성 행 위의 포커스'가 상시 상태라 실질 식별력이 낮았다.
+ *
+ * `outline-offset: 1px`(바깥)인 이유: -2px면 활성 행의 좌측 인디고 막대와 같은 모서리에서
+ * 겹쳐 '선택됨'과 '포커스됨'이 한 신호로 뭉갠다.
+ */
+export const focusRingOnTinted = ({ theme }: { theme: { mode: string } }) => `
+  outline: 2px solid ${theme.mode === 'dark' ? '#93c5fd' : BRAND.primary};
+  outline-offset: 1px;
+`
+
+/**
+ * 툴바 한 줄 컨트롤(필터 그룹·검색바·액션 버튼·보기 세그먼트·정렬)의 **높이 단일 출처**.
+ *
+ * 예전에는 같은 줄에 서는 컨트롤들이 높이 3종(34/30+4/34)과 터치 확대 브레이크포인트
+ * 2종(640·768)을 제각기 들고 있었다. 그 결과 **641~768px 대역에서 필터 그룹만 6px 크고**
+ * (min-height:40 이 768에서 켜지는데 나머지는 640에서야 커진다) 나머지는 34px에 머물러,
+ * 한 줄의 베이스라인이 눈에 띄게 어긋났다(검토 VIS-9).
+ *
+ * 구조 전환(라벨 sr-only 1024 · 가로 스크롤 720 · 액션 숨김 640)은 여기 합치지 않는다 —
+ * 그건 '높이'가 아니라 '무엇을 보여줄 것인가'라 임계가 다른 게 정상이다.
+ */
+export const TOOLBAR_CONTROL = {
+  base: '34px',
+  /** 터치 타겟(권장 38~44px) — 한 임계에서 모든 컨트롤이 같이 커진다 */
+  touch: '40px',
+  touchAt: '768px',
+  /** 세그먼트 컨테이너의 내부 패딩(상하 2px) — 안쪽 버튼 높이 = 전체 − 이 값 */
+  segmentPad: 4,
+} as const
+
+/** 툴바 컨트롤 높이 규약 — 소비처는 리터럴 대신 이것만 쓴다(검토 VIS-9) */
+export const toolbarControlHeight = `
+  height: ${TOOLBAR_CONTROL.base};
+  @media (max-width: ${TOOLBAR_CONTROL.touchAt}) {
+    height: ${TOOLBAR_CONTROL.touch};
+  }
+`
+
+/** 정사각 아이콘 버튼(정렬 방향 등) — 폭이 높이와 함께 움직여야 한다 */
+export const toolbarControlSquare = `
+  width: ${TOOLBAR_CONTROL.base};
+  height: ${TOOLBAR_CONTROL.base};
+  @media (max-width: ${TOOLBAR_CONTROL.touchAt}) {
+    width: ${TOOLBAR_CONTROL.touch};
+    height: ${TOOLBAR_CONTROL.touch};
+  }
+`
+
+/** 세그먼트 컨테이너 **안쪽** 버튼 — 바깥 패딩만큼 작다. 합이 toolbarControlHeight와 같다. */
+export const toolbarSegmentHeight = `
+  height: calc(${TOOLBAR_CONTROL.base} - ${TOOLBAR_CONTROL.segmentPad}px);
+  @media (max-width: ${TOOLBAR_CONTROL.touchAt}) {
+    height: calc(${TOOLBAR_CONTROL.touch} - ${TOOLBAR_CONTROL.segmentPad}px);
+  }
+`
+
+/**
+ * 툴바 컨트롤의 중립 표면 — 6개 컨트롤이 **같은 8개 값을 복붙**하던 것을 한곳으로(검토 VIS-1).
+ *
+ * `filter.styles.ts`에는 색 리터럴이 149개 있었고 `theme.colors` 경유는 1회뿐이었다.
+ * 그중 절대다수가 아래 8값의 반복이라, 토큰 하나로 접으면 "컨트롤 톤을 한 단계 조정"이
+ * 8곳 수정에서 1곳 수정이 된다. 브랜드 색은 여기 넣지 않는다 — 그건 `BRAND`의 소관이다.
+ *
+ * ⚠️ `theme.colors.*`(전역 팔레트)로 치환하지 않은 이유: 전역 텍스트 토큰은
+ * #1f2937/#6b7280/#9ca3af이고 여기 값은 #1e293b/#94a3b8이라 **값이 다르다**. 값이 바뀌는
+ * 치환은 기계적 정리가 아니라 디자인 변경이므로, 이 배치에서는 값 동일 치환만 한다.
+ */
+export const CONTROL = {
+  bgDark: 'rgba(255, 255, 255, 0.04)',
+  bgHoverDark: 'rgba(255, 255, 255, 0.06)',
+  borderDark: 'rgba(255, 255, 255, 0.1)',
+  textDark: '#94a3b8',
+  bgLight: '#f8fafc',
+  bgHoverLight: '#ffffff',
+  borderLight: 'rgba(203, 213, 225, 0.6)',
+  textLight: '#1e293b',
+  /** 그룹 **안쪽** 컨트롤의 hover — 자기 배경이 없으므로 톤 시프트만 얹는다 */
+  insetHoverDark: 'rgba(255, 255, 255, 0.06)',
+  insetHoverLight: 'rgba(15, 23, 42, 0.04)',
+  /** 그룹 안 형제 사이 hairline */
+  dividerDark: 'rgba(255, 255, 255, 0.08)',
+  dividerLight: 'rgba(15, 23, 42, 0.08)',
+} as const
+
 export const DANGER = {
   base: '#ef4444',
   hover: '#dc2626',
@@ -343,6 +455,12 @@ export const TYPE_SCALE = {
  * ⚠️ `railInset`·`centuryH`는 기존 CSS 변수 `--rail-inset`·`--century-header-h`의 값을
  * 공급할 뿐 **이름과 소비처를 바꾸지 않는다**. YearDivider가 `top: var(--century-header-h)`로
  * 세기 헤더에 붙어 있어, 이름이 끊기면 두 sticky 띠 사이에 슬릿이 생긴다.
+ *
+ * ── 광폭 토큰(2026-08-02 전폭 전환) ──────────────────────────────────────────
+ * `colTitleMax`·`col*Wide`·`colKw`·`colReg` 7개는 `LIST_STEPS`의 2·3단계에서만 소비된다.
+ * ⚠️ `colTitle`의 의미가 바뀌었다: 이제 고정 폭이 아니라 `clamp(colTitle, 22cqw, colTitleMax)`
+ *    의 **하한**이다. step 1 대역(카드 1322~1740)에서는 22cqw가 하한을 못 넘으므로
+ *    계산값이 `colTitle` 그대로 = 도입 전과 픽셀 동일하다(0.22 × 2364 = 520이 교차점).
  */
 export type ListDensity = 'compact' | 'cozy' | 'roomy'
 
@@ -368,6 +486,16 @@ export const LIST_DENSITY = {
     centuryH: 36,
     centuryGap: 16,
     railInset: 19,
+    /** sticky 열 헤더 높이 — 3겹 사다리의 첫 단 */
+    colHeaderH: 24,
+    // ── 광폭 단계 토큰(LIST_STEPS.ledger / .atlas에서만 소비) ──────────────────
+    colTitleMax: 700,
+    colDateWide: 72,
+    colDurWide: 76,
+    colFlagsWide: 180,
+    colFlagsUltra: 220,
+    colKw: 200,
+    colReg: 88,
   },
   cozy: {
     rowMinH: 45,
@@ -390,6 +518,19 @@ export const LIST_DENSITY = {
     centuryH: 44,
     centuryGap: 28,
     railInset: 19,
+    /** sticky 열 헤더 높이 — 3겹 사다리의 첫 단 */
+    colHeaderH: 26,
+    // ── 광폭 단계 토큰 ────────────────────────────────────────────────────────
+    /** 실측 제목 자연 최대 613px을 전량 수용하는 clamp 상한 */
+    colTitleMax: 760,
+    colDateWide: 78,
+    /** '12년 11개월'(실측 68px)이 안 잘리는 폭 — 현행 56px은 앞자리가 잘렸다 */
+    colDurWide: 88,
+    colFlagsWide: 200,
+    colFlagsUltra: 240,
+    /** 칩 2개(96×2) + gap 4 + '+N' 28 = 224 < 240 */
+    colKw: 240,
+    colReg: 96,
   },
   roomy: {
     rowMinH: 52,
@@ -412,6 +553,16 @@ export const LIST_DENSITY = {
     centuryH: 48,
     centuryGap: 32,
     railInset: 19,
+    /** sticky 열 헤더 높이 — 3겹 사다리의 첫 단 */
+    colHeaderH: 28,
+    // ── 광폭 단계 토큰 ────────────────────────────────────────────────────────
+    colTitleMax: 760,
+    colDateWide: 82,
+    colDurWide: 92,
+    colFlagsWide: 210,
+    colFlagsUltra: 250,
+    colKw: 260,
+    colReg: 96,
   },
 } as const
 
@@ -426,24 +577,54 @@ export const LIST_DENSITY = {
  */
 export const ROW_TYPE = {
   compact: { title: '13px', meta: '11px', chip: '10px' },
-  cozy: { title: '14px', meta: '12px', chip: '10.5px' },
+  /* 칩 10.5 → 11: fill을 지워 텍스트 대비가 올라간 만큼 크기를 되돌린다.
+     반픽셀은 위계를 0비트 실어 나르므로 스케일에 남기지 않는다(의도적 이탈). */
+  cozy: { title: '14px', meta: '12px', chip: '11px' },
   roomy: { title: '15px', meta: '12px', chip: '11px' },
 } as const
 
+/*
+ * (제거됨 → 부활) `SURFACE` — 아래 다시 선언한다.
+ * 처음 도입 때는 소비처가 한 번도 생기지 않아 지웠다(레포 전역 참조 0). 이번에는
+ * **소비처를 같은 커밋에 넣는다** — 토큰만 먼저 만들면 같은 일이 반복된다.
+ */
+
 /**
- * 표면 색 — PageScene/Drawer/Card 등 surface elevation.
- *   base: PageScene 외곽 (가장 어둡거나 밝음)
- *   raised: drawer/sidebar — base보다 한 톤 위
- *   card: 일반 카드 — raised보다 한 톤 위
+ * 행 구분 hairline — **단일 출처**.
+ *
+ * 전폭 전환으로 행 폭이 1,038 → 3,294px(3.2배)이 되는데, 기존 alpha 0.05는 라이트
+ * 표면 대비 1.106:1로 지각 하한 미만이다. 짧은 행에서는 눈이 행 끝의 여백으로 경계를
+ * 보완하지만 폭이 길어지면 그 보완이 사라져 행들이 한 덩어리로 뭉친다.
+ *
+ * ⚠️ 스켈레톤(event-compact-list의 SkeletonStop)도 **같은 토큰**을 읽어야 한다.
+ *    따로 두면 로딩 → 데이터 전환에서 선 굵기가 튄다.
+ */
+export const ROW_HAIRLINE = {
+  light: 'rgba(15, 23, 42, 0.08)',
+  dark: 'rgba(255, 255, 255, 0.08)',
+} as const
+
+/** styled에서 바로 쓰는 헬퍼 — `border-bottom: 1px solid ${rowHairline};` */
+export const rowHairline = ({ theme }: { theme: { mode: string } }) =>
+  theme.mode === 'dark' ? ROW_HAIRLINE.dark : ROW_HAIRLINE.light
+
+/**
+ * 목록 표면 3단 — 다크 모드에서 난립하던 근접 값들을 접는다.
+ *
+ * 실측상 목록 계열이 `#0f0f12`·`#141414`·`#171717`·`#18181b` 네 값을 섞어 썼는데,
+ * 특히 `#0f0f12`는 `#141414` 대비 ΔRGB(5,5,2)로 **B만 상대적으로 높아** 앵커 도트
+ * 둘레에 옅은 파란 헤일로가 돌았다. 셋으로 접고 의미를 붙인다.
+ *   base    = 페이지 바탕(PageScene)
+ *   raised  = 카드·행 위 오클루전 띠·도트 외곽 링
+ *   overlay = 팝오버/드롭다운처럼 떠 있는 면
  */
 export const SURFACE = {
-  baseDark: '#0f0f0f',
-  raisedDark: '#171717',
-  cardDark: 'rgba(255, 255, 255, 0.04)',
-  baseLight: '#ffffff',
-  raisedLight: '#ffffff',
-  cardLight: '#ffffff',
+  light: { base: '#ffffff', raised: '#ffffff', overlay: '#ffffff' },
+  dark: { base: '#0f0f0f', raised: '#141414', overlay: '#18181b' },
 } as const
+
+export const surfaceRaised = ({ theme }: { theme: { mode: string } }) =>
+  theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised
 
 /**
  * 공통 색상
@@ -505,61 +686,51 @@ export const BREAKPOINTS = {
 } as const
 
 /**
- * 목록(LIST) 뷰 폭 상한 — **단일 출처**.
+ * 목록(LIST) 행 격자의 **컨테이너 임계 단일 출처**.
  *
- * 상한의 소유자는 `layout.styles.ts`의 `PageWrapper` 하나다. 예전에는 상한이 세 곳
- * (행 Body 880 → 카드 1120 → ActiveContent 1120)을 떠돌았고, 그때마다 툴바만 상한 밖에
- * 남아 **우측 끝이 2종**이 됐다. 1920에서 카드는 x=20에 좌측 고정인데 툴바 hairline은
- * 1900까지 가서, 그 차이 760px이 "우측이 비었다"로 읽혔다(2026-08-02 검토).
+ * ⚠️ 이 블록은 더 이상 '폭 상한'이 아니다. 2026-08-02 사용자 지시로 LIST 뷰의 폭 캡과
+ *    중앙정렬은 폐지됐다(`PageWrapper.max-width` / `CatalogSection.width: min()` 둘 다 제거).
+ *    같이 살던 `ink`·`page`·`pageWithAside`·`inkWide`·`pageWide` 5개는 그때 소비처가
+ *    0이 되어 삭제했다 — 값이 살아 있는 척하는 토큰은 다음 사람이 '없는 캡'을 찾게 만든다
+ *    (`SURFACE` 전례, 이 파일 아래 묘비 주석 참고).
  *
- *  - `ink`      = 6트랙 행이 잉크를 그리는 폭. 격자 고정 트랙 합에서 역산한 값이다.
- *  - `page`     = ink + PageWrapper 좌우 패딩(20×2).
- *  - `pageWithAside` = page + CatalogSplit gap(20) + 상세 패널(440).
- *  - `inkWide`  = 7트랙(요약 열 포함) 행이 잉크를 그리는 폭.
- *  - `pageWide` = inkWide + 패딩(40). **선택 여부와 무관한 셸 상한**이다.
+ * 단위는 **content box**다. 컨테이너 쿼리는 border box가 아니라 콘텐츠 상자를 재므로
+ * 카드 보더 2px은 빠진다 — 이 항을 빼먹으면 임계 바로 위 뷰포트에서 열이 안 켜진다
+ * (1824px에서 카드 1324인데 콘텐츠는 1322라 미달했다. 실측으로 확인).
  *
- * `pageWide`가 선택 상태를 안 보는 것이 핵심이다: 캡이 이미 패널을 품을 만큼 커서
- * 선택해도 셸 폭이 안 변하고, 따라서 셸을 중앙정렬해도 페이지가 수평 이동하지 않는다
- * (요약 열 도입 전에는 선택 시 230px 미끄러졌다).
+ * 카드 크롬 92 = 목록 패딩 56(좌 `--rail-gutter` 36 + 우 20)
+ *              + Stop 패딩 26(`rowPadL` 14 + `rowPadR` 12)
+ *              + CompactList 스크롤바 10(`list.styles.ts`의 `::-webkit-scrollbar`)
+ * ⚠️ 위 세 항 중 하나라도 바꾸면 아래 세 임계를 **같은 커밋에서** 재유도할 것.
+ *    (도입 시점 크롬은 80이었고 임계는 1322/1740/2040이었다. 스크롤바 6→10 · 우측
+ *     패딩 12→20으로 12px이 늘어 전부 +12 했다. 이 재유도를 빼먹으면 "임계 바로 위
+ *     뷰포트에서 열이 안 켜지는" 과거 회귀가 그대로 재발한다.)
  *
- * ⚠️ 파생값들은 전부 `ink`/`inkWide`에서 유도된다 — 잉크 폭을 바꾸면 나머지는 따라온다.
+ * 유도식(cozy 기준 — 고정 트랙·gap이 가장 큰 밀도가 통과하면 나머지는 여유가 생긴다):
+ *   summary 1334 = 92 + 고정 370(date 66 + chip 60 + dur 56 + flags 128 + act 60)
+ *                     + gap 72(12×6) + 제목 520 + 요약 하한 280
+ *   ledger  1752 = 92 + 고정 514(date 66 + chip 60 + kw 240 + durWide 88 + flagsWide 200 + act 60)
+ *                     + gap 84(12×7) + 제목 520 + 요약 하한 280 → 여유를 둬 1752
+ *   atlas   2052 = 92 + 고정 862(dateWide 78 + chip 60 + kw 240 + durWide 88 + flagsUltra 240
+ *                                + reg 96 + act 60) + gap 96(12×8) + 제목 520 + 요약 하한 420
+ *
+ * 요약 280자리는 한 줄 말줄임의 실용 하한이다. 그 아래로는 열을 여느니 안 여는 게 낫다.
  */
-export const LIST_WIDTH = {
-  ink: 1120,
-  page: 1160,
-  pageWithAside: 1620,
-  inkWide: 1840,
-  pageWide: 1880,
+export const LIST_STEPS = {
   /**
-   * 요약 열이 켜지는 **카드 폭** 임계(컨테이너 쿼리 기준 — 뷰포트가 아니다).
-   *
-   * 카드 폭은 선택 상태에 따라 달라지므로 미디어 쿼리로는 판정할 수 없다:
-   * 미선택 = 셸 − 40, 선택 = 셸 − 40 − gap 20 − 패널 440.
-   *
-   * ⚠️ 단위는 **content box**다. 컨테이너 쿼리는 border box가 아니라 콘텐츠 상자를
-   * 재므로 카드 보더 2px은 빠진다 — 이 항을 빼먹으면 임계 바로 위 뷰포트에서 열이
-   * 안 켜진다(1824px에서 카드 1324인데 콘텐츠는 1322라 미달했다. 실측으로 확인).
-   *
-   * 1322 = 카드 크롬 80(목록 패딩 48 + Stop 패딩 26 + 스크롤바 6 — 보더 2는 제외)
-   *      + 고정 트랙 370(date 66 + chip 60 + dur 56 + flags 128 + act 60)
-   *      + gap 72(12×6) + 제목 520 + 요약 280  ← cozy 기준
-   * 요약 280자리는 한 줄 말줄임의 실용 하한이다. 그 아래로는 열을 여느니 안 여는 게 낫다.
-   * (compact는 고정 트랙·gap이 더 작아 같은 임계에서 요약이 더 넓게 잡힌다.)
-   *
-   * 결과적으로 선택 상태에서 요약이 살아남는 최소 뷰포트는 1824px이다
-   * (1824 − 500 = 카드 1324 = 콘텐츠 1322). 주 작업 뷰포트가 1920+라 그 아래 대역의
-   * 모드 플립은 수용했다.
+   * 6→7트랙. 신축 역할이 제목 → 설명(요약)으로 넘어간다.
+   * 이전 `summaryColumnMinCard`(1322)에 크롬 증가분 +12를 반영한 값이다.
    */
-  summaryColumnMinCard: 1322,
+  summary: 1334,
+  /** 7→8트랙. 키워드 열이 켜지고 기간·관련국이 넓어진다. */
+  ledger: 1752,
+  /** 8→9트랙. 등록 시각 열이 켜지고 날짜·관련국이 한 번 더 넓어진다. */
+  atlas: 2052,
 } as const
 
-/**
- * Z-인덱스
+/*
+ * (제거됨) `Z_INDEX` — 이 파일의 로컬 z-index 사다리.
+ * 정본은 `@/shared/styles/z-index`이고 events 페이지의 소비처들도 전부 그쪽을 import한다
+ * (`catalog-main-content.tsx`·`filters-panel.tsx`). 여기 값은 스케일도 달라(dropdown 100 vs
+ * 공용 값) 잘못 집으면 팝오버가 드로어 아래로 내려간다 — 오답을 고를 기회만 남아 있었다(검토 VIS-10).
  */
-export const Z_INDEX = {
-  dropdown: 100,
-  modal: 1000,
-  modalOverlay: 1000,
-  modalContent: 1001,
-  tooltip: 2000,
-} as const

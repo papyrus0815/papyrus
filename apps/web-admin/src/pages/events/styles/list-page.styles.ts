@@ -101,72 +101,20 @@ export const PageHeader = styled.div`
   }
 `
 
-export const PageHeaderTitleGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-`
-
 /* 제목은 admin 도구의 *시각 1순위*가 아니다 — 데이터가 1순위.
  * Embed(13px) ↔ 풀 페이지(19px)로 위계 명확히. */
-export const PageHeaderTitle = styled.h1`
-  margin: 0;
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-export const PageHeaderSubtitle = styled.p`
-  margin: 0;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
 /* 임베드 헤더 — 페이지 헤더(19px)보다 한 톤 작게(13px)로 위계 분명히. */
-export const EmbedHeader = styled.div`
-  position: relative;
-  padding: 12px 18px 8px 18px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  color: ${({ theme }) => theme.colors.text.primary};
-
-  /* 좌측 단색 인디고 악센트 */
-  &::before {
-    content: '';
-    position: absolute;
-    left: 6px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 14px;
-    border-radius: 2px;
-    background: ${BRAND.primary};
-  }
-`
-
-export const EmbedHeaderHint = styled.span`
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-left: 10px;
-  font-size: 13px;
-`
-
 /**
  * 뷰 본문 래퍼 — 뷰 전환 세그먼트 + 활성 뷰 슬롯.
  *
- * ⚠️ 여기에 폭 상한을 두지 않는다. 상한의 소유자는 `layout.styles.ts`의 `PageWrapper`
- * 하나다(`theme.ts` LIST_WIDTH). 예전엔 이 래퍼가 1120px 캡을 들고 있었는데, 정작 가장
- * 넓은 검색·필터 바(CatalogToolbar)는 CatalogSplit 바깥이라 캡을 안 받아 **우측 끝이
- * 2종**으로 갈렸다 — 그게 "우측만 비었다"의 직접 원인이었다(2026-08-02 검토).
+ * ⚠️ **폭 상한은 레포 어디에도 없다**(2026-08-02 전폭 전환). 여기에도 두지 말 것.
  *
- * 캡을 셸로 올린 뒤 이 자리에 상한을 다시 걸면 no-op이거나 이중 소유가 된다:
- * 미선택 시 부모 track1 = 셸 − 40 ≤ ink, 선택 시 = 셸 − 40 − gap − 패널 ≤ ink 이므로
- * 전 대역에서 이미 상한 이하다.
+ * 이력: 예전엔 이 래퍼가 1120px 캡을 들고 있었는데, 정작 가장 넓은 검색·필터 바
+ * (CatalogToolbar)는 CatalogSplit 바깥이라 캡을 안 받아 **우측 끝이 2종**으로 갈렸다 —
+ * 그게 "우측만 비었다"의 직접 원인이었다. 그래서 캡을 셸(PageWrapper)로 올렸는데,
+ * 그러자 이번엔 셸 자체가 뷰포트보다 좁아 좌우로 폭이 죽었다. 캡이 있는 한 넓은 화면에서는
+ * 어딘가가 반드시 빈다는 게 결론이고, 그래서 캡 대신 **흡수하는 열**을 세웠다
+ * (`list.styles.ts`의 `rowGridTemplate`, `theme.ts`의 LIST_STEPS).
  */
 export const ActiveContent = styled.div`
   display: flex;

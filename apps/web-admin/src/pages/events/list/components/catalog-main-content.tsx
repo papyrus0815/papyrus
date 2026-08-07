@@ -44,7 +44,14 @@ import type { HistoricalEvent } from '../../create/events.types'
 import * as Filter from '../../styles/filter.styles'
 import * as List from '../../styles/list.styles'
 import * as PageStyles from '../../styles/list-page.styles'
-import { BRAND, MOTION, SHADOW } from '../../styles/theme'
+import {
+  BRAND,
+  MOTION,
+  SHADOW,
+  metaText,
+  toolbarControlHeight,
+  toolbarSegmentHeight,
+} from '../../styles/theme'
 import * as ToolbarStyles from '../../styles/list-toolbar.styles'
 
 import { CatalogHeaderStats } from './catalog-header-stats'
@@ -249,16 +256,11 @@ export const CatalogMainContent: React.FC<Props> = ({
               <span className="label">
                 {activeSecondary ? activeSecondary.label : '더보기'}
               </span>
-              <FiChevronDown
-                size={11}
-                aria-hidden="true"
-                style={{
-                  marginLeft: 1,
-                  opacity: 0.7,
-                  transform: moreOpen ? 'rotate(180deg)' : 'rotate(0)',
-                  transition: 'transform 0.15s ease',
-                }}
-              />
+              {/* ⚠️ 인라인 style 객체로 두지 말 것 — 미디어쿼리를 붙일 자리가 없어
+                  prefers-reduced-motion을 **구조적으로** 만족시킬 수 없다. */}
+              <MoreChevron $open={moreOpen} aria-hidden="true">
+                <FiChevronDown size={11} />
+              </MoreChevron>
             </ToolbarStyles.ViewSegment>
             {moreOpen &&
               morePosition &&
@@ -350,20 +352,51 @@ export const CatalogMainContent: React.FC<Props> = ({
             라벨을 아이콘이 아니라 글자로 두는 이유는, 밀도 아이콘 3종의 관습이 약해
             아이콘만으로는 무엇이 조밀인지 눌러 봐야 알기 때문이다. */}
         {viewMode === VIEW_MODES.LIST && (
+          /**
+           * ⚠️ 라디오 그룹은 **탭 정지점 하나**다(WAI-ARIA roving tabindex).
+           * 세 버튼이 전부 정지점이면 툴바를 지나는 데만 Tab이 3번 더 필요하고,
+           * 같은 목록의 행 로빙 규약(정지점 1개)과도 어긋난다.
+           * 그룹 안 이동은 ←→가 담당하며, 이동과 동시에 선택된다(라디오 표준 동작).
+           */
           <DensityGroup role="radiogroup" aria-label="목록 밀도">
-            {DENSITY_OPTIONS.map((option) => (
-              <DensityBtn
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={listDensity === option.value}
-                $active={listDensity === option.value}
-                onClick={() => onChangeListDensity(option.value)}
-                title={option.hint}
-              >
-                {option.label}
-              </DensityBtn>
-            ))}
+            {DENSITY_OPTIONS.map((option, optionIndex) => {
+              const isSelected = listDensity === option.value
+              return (
+                <DensityBtn
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  tabIndex={isSelected ? 0 : -1}
+                  $active={isSelected}
+                  onClick={() => onChangeListDensity(option.value)}
+                  onKeyDown={(keyEvent) => {
+                    const delta =
+                      keyEvent.key === 'ArrowRight' || keyEvent.key === 'ArrowDown'
+                        ? 1
+                        : keyEvent.key === 'ArrowLeft' || keyEvent.key === 'ArrowUp'
+                          ? -1
+                          : 0
+                    if (delta === 0) return
+                    keyEvent.preventDefault()
+                    const nextIndex =
+                      (optionIndex + delta + DENSITY_OPTIONS.length) %
+                      DENSITY_OPTIONS.length
+                    const nextOption = DENSITY_OPTIONS[nextIndex]
+                    onChangeListDensity(nextOption.value)
+                    // 선택과 포커스를 함께 옮긴다 — 포커스가 남으면 다음 ←→가 같은 자리에서 돈다.
+                    const group = keyEvent.currentTarget.parentElement
+                    const buttons = group?.querySelectorAll<HTMLButtonElement>(
+                      '[role="radio"]',
+                    )
+                    buttons?.[nextIndex]?.focus()
+                  }}
+                  title={option.hint}
+                >
+                  {option.label}
+                </DensityBtn>
+              )
+            })}
           </DensityGroup>
         )}
 
@@ -433,6 +466,8 @@ const DensityGroup = styled.div`
   gap: 2px;
   padding: 2px;
   border-radius: 8px;
+  /* 툴바 한 줄 컨트롤 공통 높이 — 이 그룹만 콘텐츠 높이로 서면 베이스라인이 어긋난다 */
+  ${toolbarControlHeight}
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.04)'};
 
@@ -448,6 +483,10 @@ const DensityBtn = styled.button<{ $active: boolean }>`
   cursor: pointer;
   padding: 3px 8px;
   border-radius: 6px;
+  /* 세그먼트 컨테이너 안쪽 버튼 — 바깥 패딩(4px)만큼 작아 합이 툴바 높이와 같다.
+     기존 콘텐츠 높이(약 20px)는 WCAG 2.2 SC 2.5.8(24×24) 미달이었고,
+     같은 레포의 LIST_DENSITY.compact.actBtn이 못박은 하한 24px보다도 작았다. */
+  ${toolbarSegmentHeight}
   font-size: 11.5px;
   font-weight: ${({ $active }) => ($active ? 700 : 500)};
   font-family: inherit;
@@ -476,6 +515,20 @@ const DensityBtn = styled.button<{ $active: boolean }>`
 const MoreSegmentWrap = styled.div`
   position: relative;
   display: inline-flex;
+`
+
+/** '더보기' 셰브론 — 열림 상태로 회전. 모션 토큰·reduced-motion을 따르기 위해 styled로. */
+const MoreChevron = styled.span<{ $open: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  margin-left: 1px;
+  opacity: 0.7;
+  transform: ${({ $open }) => ($open ? 'rotate(180deg)' : 'rotate(0)')};
+  transition: transform ${MOTION.fast};
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 /**
@@ -556,6 +609,9 @@ const MoreMenuItem = styled.button<{ $active?: boolean }>`
     outline: none;
     box-shadow: ${BRAND.focusRing};
   }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 /* 정렬 적용 범위 안내 — 목록 뷰 + 기간순 조합에서만 나타난다(검토 IA-12). */
@@ -573,11 +629,14 @@ const ViewHint = styled.div`
   font-size: 11.5px;
   line-height: 1.4;
   letter-spacing: -0.005em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
 `
 
 const MetaArea = styled.div`
-  margin-left: auto;
+  /* (제거됨) margin-left: auto — 전폭 2560에서 결과 카운트가 조작 컨트롤에서 1,590px,
+     3440에서 2,470px 떨어져, 필터를 바꿀 때마다 시선이 화면을 가로질러야 했다.
+     카운트는 '방금 만진 컨트롤'에 종속된 정보이므로 밀도 그룹 바로 뒤에 붙는다. */
+  margin-left: 4px;
   display: inline-flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -587,7 +646,7 @@ const MetaArea = styled.div`
 `
 
 const FilteredHint = styled.span`
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
   font-weight: 500;
   letter-spacing: -0.005em;
 `

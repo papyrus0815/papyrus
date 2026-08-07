@@ -192,9 +192,9 @@ interface CatalogListNavigationArgs {
 /**
  * ↑ ↓ Home End Enter — 리스트 네비게이션 (포커스가 목록 행 안에 있을 때만)
  *
- * 이동 대상은 **실제로 렌더된 행**(같은 `role="list"` 안의 `[data-event-id]`)에서
- * 뽑는다. 평탄화 모델 배열을 쓰면 접힌 세기·연도 밴드에 숨은 항목까지 후보가 되어,
- * 화살표가 화면에 없는 사건을 선택하고 포커스는 아무 데도 가지 않는다.
+ * 이동 대상은 **실제로 렌더된 행**(스크롤 컨테이너 `[data-list-scroller]` 안의
+ * `[data-event-id]`)에서 뽑는다. 평탄화 모델 배열을 쓰면 접힌 세기·연도 밴드에 숨은
+ * 항목까지 후보가 되어, 화살표가 화면에 없는 사건을 선택하고 포커스는 아무 데도 가지 않는다.
  */
 export function useCatalogListNavigation(args: CatalogListNavigationArgs) {
   const { setSelectedEventId, navigate, enabled } = args
@@ -230,7 +230,18 @@ export function useCatalogListNavigation(args: CatalogListNavigationArgs) {
         return
       }
 
-      const listRoot = focusedRow.closest('[role="list"]') ?? document
+      /**
+       * ⚠️ 스코프는 **스크롤 컨테이너**지 `role="list"`가 아니다.
+       *
+       * `role="list"`는 목록 전체가 아니라 **연도 그룹마다 하나씩** 있다
+       * (event-compact-list의 `List.RowList`). 그래서 그룹의 마지막 행에서 ArrowDown이
+       * 무동작이었고, 1행짜리 연도 그룹에서는 ↑↓가 아예 아무 일도 하지 않았다.
+       * 드로어의 '이전/다음'(페이지의 navigableItems 전역)과 이동 집합이 갈리던
+       * 계약 위반도 함께 해소된다.
+       *
+       * 접힌 밴드의 행은 애초에 DOM에 없으므로 '보이는 행만 순회'라는 계약은 그대로다.
+       */
+      const listRoot = focusedRow.closest('[data-list-scroller]') ?? document
       const rows = Array.from(
         listRoot.querySelectorAll<HTMLElement>(ROW_SELECTOR),
       )

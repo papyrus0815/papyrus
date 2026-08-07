@@ -30,16 +30,21 @@ import * as List from '../../../pages/events/styles/list.styles'
 import { shimmerAnimation } from '../../../pages/events/styles/shared.styles'
 import {
   BRAND,
+  LIST_STEPS,
+  SURFACE,
   metaText,
+  rowHairline,
   type ListDensity,
 } from '../../../pages/events/styles/theme'
 import {
-  buildYearBuckets,
   formatGapLabel,
   gapSpacingPx,
   groupYearsByCentury,
 } from '@/features/event-hierarchy/model'
-import type { FlattenedHierarchyItem } from '@/features/event-hierarchy/model'
+import type {
+  FlattenedHierarchyItem,
+  YearBuckets,
+} from '@/features/event-hierarchy/model'
 
 import { EventListItem } from './event-list-item'
 
@@ -53,13 +58,39 @@ interface EventCompactListProps {
   isLoading: boolean
   /** 평탄화 계약은 useEventHierarchy가 단일 출처 — 여기서 재선언하면 필드가 표류한다 */
   flattenedHierarchy: FlattenedHierarchyItem[]
+  /**
+   * 세기›연도 버킷 — **페이지가 계산해 내려준다**(검토 PERF-4).
+   *
+   * 위젯이 `buildYearBuckets`를 직접 부르지 않는 이유는 성능보다 **단일 출처**다.
+   * 페이지는 같은 버킷으로 '화면에 보이는 행'(↑↓ 키·드로어 이전/다음·'조건 밖' 배너)을
+   * 정하므로, 두 곳이 각자 계산하면 입력이 한 톨만 달라도 DOM과 내비 모수가 갈린다.
+   */
+  yearBuckets: YearBuckets
   events: HistoricalEvent[]
   expandedEventIds: Set<string>
   selectedEventId: string | null
-  sortDirection: 'asc' | 'desc'
   hasActiveFilters: boolean
-  /** 활성 필터 칩 — 빈 결과 안내에서 어떤 필터가 적용 중인지 보여주는 데 사용 */
-  activeFilterChips?: Array<{ key: string; label: string; onClear: () => void }>
+  /**
+   * 활성 필터 칩 — 빈 결과 안내에서 어떤 필터가 적용 중인지 보여주는 데 사용.
+   *
+   * `releaseCount`는 **그 축만 풀었을 때의 건수**다(검토 IA-12). 0건 회복 경로에서
+   * 이 숫자가 없으면 사용자는 축을 하나씩 껐다 켜며 이진 탐색을 해야 한다 —
+   * 축이 5개라 최악 5회, 그 사이 스크롤·선택이 초기화된다.
+   */
+  activeFilterChips?: Array<{
+    key: string
+    label: string
+    onClear: () => void
+    releaseCount?: number
+  }>
+  /**
+   * '북마크만'인데 이 브라우저에 저장된 북마크가 0건인가(검토 URL-11).
+   *
+   * 북마크는 URL(`bookmarks=1`)에 실리지만 실체는 localStorage다 — 즉 **링크를 받은
+   * 사람은 항상 0건**을 본다. 그 상황이 '조건과 일치하는 사건이 없습니다'로만 보이면
+   * 원인을 데이터 쪽에서 찾게 되므로, 저장 위치를 빈 상태에서 한 줄로 밝힌다.
+   */
+  showBookmarkStorageHint?: boolean
   dbCategories: EventCategoryDto[]
   isLoadingMore?: boolean
   displayedCount?: number
@@ -97,8 +128,11 @@ interface EventCompactListProps {
   onResetFilters: () => void
   onToggleBookmark?: (eventId: string) => void
   onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
-  /** 로딩 skeleton 갯수 산정에만 사용 — 페이지 크기 컨트롤은 부모(ViewSwitcherRow)에 있음 */
-  pageSize?: number
+  /**
+   * 로빙 tabindex 진입점의 폴백 — **밴드 접힘이 반영된** 첫 '보이는 행'의 id.
+   * 페이지의 navigableItems[0]가 정본이다(↑↓·드로어 이전/다음과 같은 집합).
+   */
+  rovingFallbackId?: string | null
   /**
    * 세기›연도 그룹으로 묶을지 여부(기본 true).
    *
@@ -113,12 +147,13 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   onCreateEvent,
   isLoading,
   flattenedHierarchy,
+  yearBuckets,
   events,
   expandedEventIds,
   selectedEventId,
-  sortDirection,
   hasActiveFilters,
   activeFilterChips = [],
+  showBookmarkStorageHint = false,
   dbCategories,
   isLoadingMore = false,
   displayedCount = 0,
@@ -140,7 +175,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   onResetFilters,
   onToggleBookmark,
   onScroll,
-  pageSize = 20,
+  rovingFallbackId = null,
   grouped = true,
 }) => {
   const navigate = useNavigate()
@@ -158,6 +193,21 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   const isMidWidth = useMediaQuery('(min-width: 641px) and (max-width: 899px)')
   const flagMax = isNarrow ? 1 : isMidWidth ? 2 : 3
 
+  /**
+   * 0건의 **단일 범인**(검토 IA-12) — 해제하면 결과가 생기는 축이 정확히 하나일 때만.
+   *
+   * 둘 이상이면 어느 쪽을 권할지 정할 근거가 없으므로 칩의 숫자로만 말하고,
+   * 하나면 그 해제를 1급 액션으로 승격한다(그때 '모든 필터 초기화'는 과잉이다).
+   */
+  const soleCulpritChip = useMemo(() => {
+    const culprits = activeFilterChips.filter(
+      (chip) => typeof chip.releaseCount === 'number' && chip.releaseCount > 0,
+    )
+    // 축이 하나만 걸려 있으면 그 해제는 곧 '모든 필터 초기화'라 버튼 두 개가 같은 말이 된다.
+    if (culprits.length !== 1 || activeFilterChips.length < 2) return undefined
+    return culprits[0]
+  }, [activeFilterChips])
+
   /** id→event O(1) 조회 — 행마다 events.find로 선형 탐색하던 핫패스 제거 */
   const eventById = useMemo(() => {
     const byId = new Map<string, HistoricalEvent>()
@@ -166,9 +216,13 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   }, [events])
 
   /**
-   * 세기›연도 그룹핑 — 계산은 features/event-hierarchy의 공유 함수가 담당한다.
-   * 페이지도 같은 함수로 '보이는 행'을 계산해 드로어 이전/다음과 ↑↓ 키가 화면과
-   * 어긋나지 않게 한다(검토 INT-4).
+   * 세기›연도 그룹핑 — **페이지가 계산한 것을 그대로 받는다**(검토 PERF-4).
+   *
+   * 예전엔 위젯이 `buildYearBuckets`를 한 번 더 불렀다. 입력 3개(행 배열·정렬 방향·
+   * `filteringActive`)를 페이지와 똑같이 맞춰야만 결과가 같은 구조라, 하나라도 어긋나면
+   * DOM에 보이는 행이 페이지의 '보이는 행'(↑↓·드로어 이전/다음 모수)에서 빠진다.
+   * 값을 내려받으면 두 판정이 **같은 객체**라 어긋날 방법 자체가 없어진다
+   * (`list-grouping.ts`의 `orderRowsForRender` 주석이 경고하는 그 어긋남).
    */
   const {
     allYears,
@@ -178,10 +232,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     unknownItems,
     headerlessYears,
     yearGapBefore,
-  } = useMemo(
-      () => buildYearBuckets(flattenedHierarchy, sortDirection),
-      [flattenedHierarchy, sortDirection],
-    )
+  } = yearBuckets
 
   /**
    * 세기 → 그 세기에 속한 연도들. 렌더 트리를 `CenturySection > YearSection > 행`으로
@@ -203,11 +254,18 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
    * 넘어가려면 238번을 더 눌러야 했다(검토 A11Y-7). 목록 전체는 탭 정지점 **하나**만 갖고,
    * 그 안에서는 ↑↓로 이동하는 것이 리스트박스/그리드의 표준 규약이다.
    * 선택된 행이 있으면 그 행, 없으면 첫 행이 진입점이 된다.
+   *
+   * ⚠️ 폴백이 `flattenedHierarchy[0]`이면 **밴드 접힘을 모른다.** 그 행이 속한 세기·연도를
+   * 접으면 그 행은 DOM에 없고, 그러면 목록의 탭 정지점이 **0개**가 되어 Tab으로 목록에
+   * 진입할 수 없다(실측). `rovingFallbackId`는 페이지가 이미 계산한 '보이는 행'의 첫
+   * 항목이므로 접힘을 반영한다 — 위젯이 collapsedYears/collapsedCenturies로 직접
+   * 재계산하지 말 것("한 곳에서만 판정" 규약).
    */
   const rovingRowId =
     (selectedEventId &&
       flattenedHierarchy.some((item) => item.node.id === selectedEventId) &&
       selectedEventId) ||
+    rovingFallbackId ||
     flattenedHierarchy[0]?.node.id ||
     null
 
@@ -270,24 +328,26 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   return (
     <List.CatalogSection>
       {isLoading ? (
-        <List.CompactList>
-          {[...Array(Math.min(pageSize, 12))].map((_, index) => {
-            // 실제 행(단일 행: 레일 dot + [연도][카테고리칩][제목])과 동일 구조로 렌더 →
-            // 로딩→데이터 전환 시 높이·요소 위치 점프 없음.
-            // 동일 폭 반복 회피 — index 기반 폭으로 자연스러운 다양성
-            const titleW = 40 + ((index * 13) % 30) // 40~70%
-            const categoryW = 40 + ((index * 7) % 24) // 40~64px
+        /* ⚠️ data-density가 없으면 조밀 모드 사용자에게 로딩 45px → 데이터 32px 세로 점프가
+           난다(밀도 변수는 스크롤 컨테이너가 한 번만 선언한다). */
+        <List.CompactList data-density={density}>
+          <ListColumnHeader />
+          {[...Array(SKELETON_ROW_COUNT)].map((_, index) => {
+            // 실제 행과 **같은 트랙 선언**으로 렌더 → 로딩→데이터 전환 시 가로·세로 점프 없음.
+            // 동일 폭 반복 회피 — index 기반 폭으로 자연스러운 다양성.
+            // ⚠️ %가 아니라 px 상한이다. 트랙이 3,294px일 때 70%면 2,300px 막대가 된다.
+            const titleWidth = 220 + ((index * 37) % 180) // 220~400px
+            const snippetWidth = 55 + ((index * 11) % 35) // 55~90%
             return (
               /* $depth 0 고정 — 예전엔 index % 3으로 인위적 계단 들여쓰기를 그려,
                  데이터가 도착하면 그 계단이 평평해지며 레이아웃이 한 번 무너졌다 잡혔다. */
               <SkeletonStop key={index} $depth={0}>
                 <SkeletonRail aria-hidden="true" />
                 <SkeletonBody>
-                  {/* 실제 행의 20px 셰브론/스페이서 자리 — 없으면 데이터 도착 시 가로 28px 이동 */}
-                  <SkeletonExpandSpacer aria-hidden="true" />
                   <SkeletonYear />
-                  <SkeletonCategory style={{ width: `${categoryW}px` }} />
-                  <SkeletonTitleBar style={{ width: `${titleW}%` }} />
+                  <SkeletonCategory />
+                  <SkeletonTitleBar style={{ maxWidth: `${titleWidth}px` }} />
+                  <SkeletonSnippet style={{ maxWidth: `${snippetWidth}%` }} />
                 </SkeletonBody>
               </SkeletonStop>
             )
@@ -341,24 +401,62 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   ? '아래 활성 필터 중 하나를 해제하거나, 모두 초기화해보세요.'
                   : '다른 조건으로 검색해보세요.'}
             </List.EmptyDescription>
+            {/* 북마크는 브라우저 로컬 — 공유 링크로 온 사람에게는 이 설명이 없으면
+                '데이터가 없다'로 읽힌다(검토 URL-11). */}
+            {showBookmarkStorageHint && (
+              <BookmarkStorageHint>
+                북마크는 이 브라우저에만 저장됩니다 — 공유받은 링크의 &lsquo;북마크만&rsquo;
+                조건은 상대의 북마크를 가져오지 않습니다.
+              </BookmarkStorageHint>
+            )}
             {hasActiveFilters && activeFilterChips.length > 0 && (
               <ActiveChipsRow>
-                {activeFilterChips.map((chip) => (
-                  <ActiveChip
-                    key={chip.key}
-                    type="button"
-                    // 라벨만 두면 '정치'로 읽혀 해제 버튼인지 전달되지 않는다.
-                    aria-label={`${chip.label} 필터 해제`}
-                    onClick={chip.onClear}
-                  >
-                    <span>{chip.label}</span>
-                    <FiX size={12} aria-hidden="true" />
-                  </ActiveChip>
-                ))}
+                {activeFilterChips.map((chip) => {
+                  /**
+                   * 'drop-one-out' 카운트(검토 IA-12) — 이 축만 풀면 몇 건이 되는가.
+                   * 0이면 붙이지 않는다: '해제 시 0건'은 정보가 아니라 소음이고,
+                   * 다른 축이 진짜 범인이라는 사실만 흐린다.
+                   */
+                  const showRelease =
+                    typeof chip.releaseCount === 'number' &&
+                    chip.releaseCount > 0
+                  return (
+                    <ActiveChip
+                      key={chip.key}
+                      type="button"
+                      // 라벨만 두면 '정치'로 읽혀 해제 버튼인지 전달되지 않는다.
+                      aria-label={
+                        showRelease
+                          ? `${chip.label} 필터 해제 — 해제하면 ${chip.releaseCount}건`
+                          : `${chip.label} 필터 해제`
+                      }
+                      onClick={chip.onClear}
+                    >
+                      <span>{chip.label}</span>
+                      {showRelease && (
+                        <ChipReleaseCount aria-hidden="true">
+                          해제 시 {chip.releaseCount}건
+                        </ChipReleaseCount>
+                      )}
+                      <FiX size={12} aria-hidden="true" />
+                    </ActiveChip>
+                  )
+                })}
               </ActiveChipsRow>
             )}
           </List.EmptyContent>
           <List.EmptyActions>
+            {/**
+             * 범인이 **하나로 좁혀지면** 그 축 해제를 1급 액션으로 승격한다(검토 IA-12).
+             * '모든 필터 초기화'는 되돌리기 비용이 가장 큰 선택지인데, 축 하나만 풀면
+             * 되는 상황에서도 그것이 유일한 CTA였다.
+             */}
+            {hasActiveFilters && soleCulpritChip && (
+              <List.EmptyResetButton onClick={soleCulpritChip.onClear}>
+                <FiX size={14} />
+                {soleCulpritChip.label} 해제 ({soleCulpritChip.releaseCount}건)
+              </List.EmptyResetButton>
+            )}
             {hasActiveFilters && (
               <List.EmptyResetButton onClick={onResetFilters}>
                 <FiX size={14} />
@@ -432,6 +530,9 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                   ? '사건을 계속 불러오는 중입니다.'
                   : `사건 목록 — 표시 ${displayedCount.toLocaleString()}행, 최상위 ${displayedRootCount.toLocaleString()}건`}
           </List.GroupHeading>
+          {/* 열 헤더 — sticky 3겹 사다리의 첫 단. 스켈레톤 경로와 **같은 컴포넌트**라
+              로딩 → 데이터 전환에서 26px 세로 점프가 없다. */}
+          <ListColumnHeader />
           {!grouped && (
             /* 그룹 없는 평면 목록 — 배열 순서(= 선택한 정렬)를 그대로 보여준다.
                groupYear를 null로 넘겨 각 행이 자기 연도를 그대로 표시하게 한다. */
@@ -635,11 +736,14 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
                               role="list"
                               aria-labelledby={yearHeadingId}
                             >
+                              {/* ⚠️ aria-posinset은 **1부터** 시작한다. index를 그대로
+                                  넘기면 첫 행이 '0번째'로 낭독되고, 이 경로가
+                                  grouped 기본값(true)이라 LIST의 상시 경로다. */}
                               {yearItems.map((item, index) =>
                                 renderRow(
                                   item,
                                   currentYear,
-                                  index,
+                                  index + 1,
                                   yearItems.length,
                                   isHeaderless,
                                 ),
@@ -675,7 +779,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
               </List.UnknownYearDivider>
               <List.RowList role="list" aria-labelledby="events-year-unknown">
                 {unknownItems.map((item, index) =>
-                  renderRow(item, null, index, unknownItems.length),
+                  renderRow(item, null, index + 1, unknownItems.length),
                 )}
               </List.RowList>
             </List.YearSection>
@@ -798,6 +902,9 @@ const RetryLoadMoreButton = styled.button`
     outline: none;
     box-shadow: ${BRAND.focusRing};
   }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 const ScrollHintInline = styled.span`
@@ -814,6 +921,16 @@ const ActiveChipsRow = styled.div`
   gap: 6px;
   margin-top: 14px;
   max-width: 480px;
+`
+
+/* 북마크 저장 위치 고지 — 빈 상태 설명 바로 아래, 본문보다 한 단계 약하게(검토 URL-11) */
+const BookmarkStorageHint = styled.p`
+  margin: 6px 0 0;
+  max-width: 420px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${metaText};
 `
 
 const ActiveChip = styled.button`
@@ -850,6 +967,20 @@ const ActiveChip = styled.button`
     outline: none;
     box-shadow: ${BRAND.focusRing};
   }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`
+
+/**
+ * '해제 시 N건'(검토 IA-12) — 칩 라벨과 ✕ 사이의 약한 보조 텍스트.
+ * 라벨과 같은 크기로 두면 무엇이 필터 이름이고 무엇이 예측치인지 갈리지 않는다.
+ */
+const ChipReleaseCount = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const EndOfListText = styled.span`
@@ -918,6 +1049,9 @@ const FallbackItem = styled.button`
         : 'rgba(15,23,42,0.03)'};
     border-color: rgba(37, 99, 235, 0.32);
   }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 `
 
 const FallbackTitle = styled.span`
@@ -934,6 +1068,45 @@ const FallbackTitle = styled.span`
 // Skeleton — 실제 timeline-stop 레이아웃과 동일 구조로 렌더되어,
 // 로딩 → 실제 데이터 전환 시 시각 점프 없이 자연스러운 페인트 흐름 유지.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 로딩 스켈레톤 행 수.
+ *
+ * 예전엔 `Math.min(pageSize, 12)`였는데 pageSize는 **로딩 행 수와 무관한 축**이다
+ * (한 번에 몇 건을 fetch할지일 뿐, 화면에 몇 행이 들어가는지가 아니다). 12행 × 45px =
+ * 540px라 1440 화면 목록 뷰포트(약 1,200px)의 절반 이상이 빈 채로 로딩됐다.
+ * 컨테이너 높이 실측(ResizeObserver)은 별건이고, 상수 18이면 전 대역에서 화면을 덮는다.
+ */
+const SKELETON_ROW_COUNT = 18
+
+/**
+ * 열 헤더 한 줄 — 데이터 경로와 스켈레톤 경로가 **같은 것**을 렌더한다.
+ *
+ * 한쪽에만 있으면 로딩 → 데이터 전환에서 26px 세로 점프가 난다.
+ * 라벨은 각자 트랙에 배치되므로 폭이 좁아 열이 꺼지면 라벨도 같이 사라진다.
+ * `aria-hidden` — 행은 listitem이고 여기 라벨은 시각 보조다. 스크린리더에는 각 셀의
+ * 텍스트와 title 속성이 이미 의미를 싣고 있어, 헤더를 읽히면 행마다 중복 낭독이 된다.
+ */
+const ListColumnHeader: React.FC = () => (
+  <List.ColumnHeader aria-hidden="true">
+    <List.ColumnHeaderCell $col="date">날짜</List.ColumnHeaderCell>
+    <List.ColumnHeaderCell $col="cat">분류</List.ColumnHeaderCell>
+    <List.ColumnHeaderCell $col="title">사건</List.ColumnHeaderCell>
+    <List.ColumnHeaderCell $col="sum" $showFrom={LIST_STEPS.summary}>
+      설명
+    </List.ColumnHeaderCell>
+    <List.ColumnHeaderCell $col="kw" $showFrom={LIST_STEPS.ledger}>
+      키워드
+    </List.ColumnHeaderCell>
+    <List.ColumnHeaderCell $col="dur" $align="right">
+      기간
+    </List.ColumnHeaderCell>
+    <List.ColumnHeaderCell $col="flags">관련국</List.ColumnHeaderCell>
+    <List.ColumnHeaderCell $col="reg" $align="right" $showFrom={LIST_STEPS.atlas}>
+      등록
+    </List.ColumnHeaderCell>
+  </List.ColumnHeader>
+)
 
 const skeletonBarBg = css`
   background: linear-gradient(
@@ -970,11 +1143,8 @@ const SkeletonStop = styled.div<{ $depth: number }>`
   @media (max-width: 640px) {
     min-height: 69px;
   }
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.05)'
-        : 'rgba(15, 23, 42, 0.05)'};
+  /* 실제 행과 **같은 토큰** — 다르면 로딩→데이터에서 선 굵기가 튄다 */
+  border-bottom: 1px solid ${rowHairline};
 `
 
 const SkeletonRail = styled.span`
@@ -988,49 +1158,63 @@ const SkeletonRail = styled.span`
   ${skeletonBarBg}
   ${shimmerAnimation}
   box-shadow: 0 0 0 2px
-    ${({ theme }) => (theme.mode === 'dark' ? '#0f0f12' : '#ffffff')};
+    ${({ theme }) => (theme.mode === 'dark' ? SURFACE.dark.raised : SURFACE.light.raised)};
   z-index: 1;
 `
 
-/* 단일 행 — 실제 행([연도][카테고리칩][제목])과 동일 구조. */
+/**
+ * 스켈레톤 행 — 실제 행 `Body`와 **같은 트랙 선언**(`list.styles.ts`의 `rowGridTemplate`)을
+ * 읽는다.
+ *
+ * 예전엔 `display:flex; max-width:880px`라, 폭 캡을 걷어낸 전폭에서 로딩(880px) →
+ * 데이터(3,294px) 가로 점프가 났다. 자리표시자 폭도 밀도 토큰과 어긋나 있었다.
+ * ⚠️ 여기에 두 번째 트랙 선언을 만들지 말 것 — 만드는 순간 다음 격자 변경에서 또 갈린다.
+ */
 const SkeletonBody = styled.div`
   flex: 1;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
-  max-width: 880px;
-`
-
-const SkeletonExpandSpacer = styled.span`
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
+  ${List.rowGridTemplate}
+  align-items: center;
 `
 
 const SkeletonYear = styled.span`
-  width: 30px;
+  grid-column: date;
   height: 11px;
   border-radius: 4px;
   ${skeletonBarBg}
   ${shimmerAnimation}
-  flex-shrink: 0;
 `
 
 const SkeletonCategory = styled.span`
+  grid-column: cat;
   height: 16px;
   border-radius: 6px;
   ${skeletonBarBg}
   ${shimmerAnimation}
   opacity: 0.7;
-  flex-shrink: 0;
 `
 
 const SkeletonTitleBar = styled.span`
+  grid-column: title;
+  /* 실제 제목은 디스클로저 폭만큼 안쪽에서 시작한다 */
+  margin-left: var(--row-disc-btn);
   height: 14px;
   border-radius: 4px;
   ${skeletonBarBg}
   ${shimmerAnimation}
-  max-width: 70%;
+`
+
+/* 요약 열이 켜지는 대역에서만 — 실제 행과 같은 게이트를 읽는다. */
+const SkeletonSnippet = styled.span`
+  display: none;
+
+  @container eventcard (min-width: ${LIST_STEPS.summary}px) {
+    display: block;
+    grid-column: sum;
+    height: 11px;
+    border-radius: 4px;
+    opacity: 0.6;
+    ${skeletonBarBg}
+    ${shimmerAnimation}
+  }
 `

@@ -27,9 +27,9 @@ import {
 import styled from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
+import { CatalogViewEmpty } from '@/features/event-list/ui/catalog-view-empty'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { CategoryDot } from '@/shared/ui/category-dot/category-dot'
-import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import { getCenturyFromIso } from '@/shared/lib/iso-date'
 
 import { BRAND, CATEGORY_BADGE_COLORS } from '../../../pages/events/styles/theme'
@@ -42,12 +42,25 @@ import type {
 type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
 
 interface Props {
+  /**
+   * ⚠️ **필터를 만족한 행만** 담긴 배열이어야 한다(검토 GAP-1).
+   * 예전엔 평탄화 결과를 통째로 받아 '매칭된 자손 때문에 문맥으로 남은 부모'까지
+   * 집계했다 — '전쟁'으로 좁힌 통계에 정치 막대가 그려지던 원인이다.
+   */
   flattenedHierarchy: FlatItem[]
   events: HistoricalEvent[]
   dbCategories: EventCategoryDto[]
   onSelectEvent: (id: string) => void
   /** 서버 권위 총개수 — 로드된 수보다 크면 통계가 부분 집계임을 경고 */
   serverTotal?: number
+  /** 빈 상태 3분기(로딩·필터0건·데이터0건) 판정용 — 검토 GAP-3 */
+  isLoading?: boolean
+  hasMoreData?: boolean
+  /** 내용을 좁히는 필터가 걸려 있는가 — 배너가 '무엇으로 좁힌 집계인지' 말한다(검토 GAP-7) */
+  hasActiveFilters?: boolean
+  /** 활성 필터 칩 라벨 — 배너 조건 요약에 그대로 노출 */
+  filterLabels?: string[]
+  onResetFilters?: () => void
 }
 
 export const EventDashboardView: React.FC<Props> = ({
@@ -56,6 +69,11 @@ export const EventDashboardView: React.FC<Props> = ({
   dbCategories,
   onSelectEvent,
   serverTotal,
+  isLoading = false,
+  hasMoreData = false,
+  hasActiveFilters = false,
+  filterLabels = [],
+  onResetFilters,
 }) => {
   const stats = useMemo(() => {
     const eventById = new Map<string, HistoricalEvent>()
@@ -198,21 +216,43 @@ export const EventDashboardView: React.FC<Props> = ({
 
   if (stats.total === 0) {
     return (
-      <EmptyStateSpotlight
+      <CatalogViewEmpty
         icon={<FiBarChart2 size={28} />}
         title="표시할 데이터가 없습니다"
-        description="필터를 풀거나 사건을 등록해보세요."
+        description="사건을 등록하면 분포·품질 통계가 표시됩니다."
+        isLoading={isLoading}
+        hasMoreData={hasMoreData}
+        hasActiveFilters={hasActiveFilters}
+        onResetFilters={onResetFilters}
       />
     )
   }
 
   return (
     <Host>
+      {/**
+       * 조건 요약 배너 — 필터 중에는 **항상** 뜬다(검토 GAP-7).
+       *
+       * 이 뷰는 사건 목록이 아니라 집계라, 화면 어디에도 "지금 보는 숫자가 무엇의
+       * 집계인지"가 없었다. 필터를 걸어 놓고 통계로 넘어오면 부분 집계를
+       * 전수 통계로 읽게 된다. 모수는 이 카드들이 실제로 센 수(`stats.total`)다.
+       */}
+      {hasActiveFilters && (
+        <FilteredStatsBanner role="status">
+          현재 조건을 만족하는 최상위 {stats.total.toLocaleString()}건 기준
+          집계입니다
+          {filterLabels.length > 0 && ` — ${filterLabels.join(' · ')}`}.
+        </FilteredStatsBanner>
+      )}
       {isPartial && (
         <PartialDataBanner role="status">
-          현재 로드된 최상위 {loadedRootCount.toLocaleString()}건 기준 집계입니다
-          (전체 {serverTotal!.toLocaleString()}건). 목록/타임라인에서 더 불러오면
-          통계가 갱신됩니다.
+          {/* 모수는 '로드된 수'가 아니라 이 화면이 실제로 집계한 수다 — 필터가 걸리면
+              둘이 크게 갈려 배너가 거짓 모수를 주장했다(검토 GAP-7). */}
+          현재 집계 대상은 {stats.total.toLocaleString()}건이며, 아직 전체를 다
+          받지 못했습니다 (등록 전체 {serverTotal!.toLocaleString()}건 중
+          {' '}
+          {loadedRootCount.toLocaleString()}건 로드). 목록/타임라인에서 더
+          불러오면 통계가 갱신됩니다.
         </PartialDataBanner>
       )}
       <Grid>
@@ -396,6 +436,19 @@ const Host = styled.div`
   min-height: 0;
   overflow: auto;
   padding: 4px 4px 80px;
+`
+
+/** 필터 조건 요약 — 필터 중 상시 노출(검토 GAP-7) */
+const FilteredStatsBanner = styled.div`
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(37,99,235,0.12)' : 'rgba(37,99,235,0.06)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  line-height: 1.5;
 `
 
 /** 부분 로드 통계 경고 — 전수 통계로 오인하지 않도록 */

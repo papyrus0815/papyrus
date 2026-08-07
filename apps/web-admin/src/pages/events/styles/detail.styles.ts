@@ -57,11 +57,36 @@ export const DetailPanel = styled.section`
   }
 `
 
+/**
+ * 상세 패널 본문.
+ *
+ * ⚠️ **측정(measure) 보호가 필요하다.** 전폭 전환에서 패널 폭이 440px 고정 →
+ * `clamp(400px, 22vw, 620px)`로 유동이 됐다(layout.styles의 CatalogSplit). 상한이 없으면
+ * 3440에서 본문 한 줄이 과하게 길어져, "목록은 105자/줄인데 패널은 30자/줄"이라는 예전
+ * 역전이 **반대 방향으로** 재발한다.
+ *
+ * ch 단위는 폰트 크기를 따라가므로 한글에서도 대략 맞는다(72ch ≈ 한글 36자 안팎).
+ * 히어로 이미지·메타 그리드는 패널 폭 전체를 쓰고, **텍스트 블록만** 이 상한을 받는다 —
+ * 그래서 여기가 아니라 문단·서술 컴포넌트에 거는 것이 아니라, 컨테이너에서 중앙정렬로
+ * 처리한다(자식이 stretch면 이미지도 같이 좁아진다).
+ */
 export const DetailPanelContent = styled.div`
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
+
+  /* 읽기 지면 상한 — 패널이 넓어질 때만 실제로 걸린다(좁을 땐 no-op). */
+  > * {
+    max-width: 72ch;
+    margin-inline: auto;
+    width: 100%;
+  }
+
+  /* 히어로는 지면 전체를 쓴다 — 상한을 받으면 좌우에 흰 띠가 생긴다 */
+  > figure {
+    max-width: none;
+  }
 `
 
 /**

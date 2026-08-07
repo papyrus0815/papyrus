@@ -18,15 +18,25 @@ interface HarnessProps {
   setSelectedEventId: (id: string | null) => void
   navigate: (to: string) => void
   enabled?: boolean
-  /** DOM에 실제로 렌더되는 행 — 접힌 밴드를 흉내내려면 여기서 빼면 된다 */
-  renderedIds?: string[]
+  /**
+   * DOM에 실제로 렌더되는 행을 **연도 그룹 단위**로 준다 — 접힌 밴드를 흉내내려면
+   * 그룹째 빼면 된다.
+   *
+   * ⚠️ 평평한 단일 `role="list"`로 두지 말 것. 실제 목록은 `role="list"`가 **연도마다
+   * 하나씩** 있고 그 전부를 스크롤 컨테이너(`[data-list-scroller]`)가 감싼다. 하네스가
+   * 평평하면 "그룹 마지막 행에서 ↓가 무동작"이라는 실제 결함을 구조적으로 재현할 수 없다.
+   */
+  renderedGroups?: string[][]
 }
 
 const NavHarness = ({
   setSelectedEventId,
   navigate,
   enabled = true,
-  renderedIds = ['evt-1', 'evt-2', 'evt-3'],
+  renderedGroups = [
+    ['evt-1', 'evt-2'],
+    ['evt-3', 'evt-4'],
+  ],
 }: HarnessProps) => {
   useCatalogListNavigation({
     setSelectedEventId,
@@ -42,10 +52,18 @@ const NavHarness = ({
         <option value="recent">시기순</option>
         <option value="duration">기간순</option>
       </select>
-      <div role="list" aria-label="사건 목록">
-        {renderedIds.map((id) => (
-          <div key={id} data-event-id={id} role="listitem" tabIndex={0}>
-            {id}
+      <div data-list-scroller="">
+        {renderedGroups.map((groupIds, groupIndex) => (
+          <div
+            key={groupIds[0] ?? groupIndex}
+            role="list"
+            aria-label={`연도 그룹 ${groupIndex + 1}`}
+          >
+            {groupIds.map((id) => (
+              <div key={id} data-event-id={id} role="listitem" tabIndex={0}>
+                {id}
+              </div>
+            ))}
           </div>
         ))}
       </div>
@@ -132,7 +150,7 @@ describe('useCatalogListNavigation — 스코프', () => {
         setSelectedEventId={setSelectedEventId}
         navigate={jest.fn()}
         // evt-2가 접힌 연도 밴드에 들어가 DOM에 없는 상황
-        renderedIds={['evt-1', 'evt-3']}
+        renderedGroups={[['evt-1'], ['evt-3']]}
       />,
     )
 
@@ -140,14 +158,42 @@ describe('useCatalogListNavigation — 스코프', () => {
     expect(setSelectedEventId).toHaveBeenCalledWith('evt-3')
   })
 
-  it('End는 렌더된 마지막 행으로 간다', () => {
+  /**
+   * 회귀 가드 — 이동 스코프는 **스크롤 컨테이너**지 연도 그룹이 아니다.
+   *
+   * `closest('[role="list"]')`로 스코프를 잡던 시절, `role="list"`는 연도마다 하나씩
+   * 있으므로 그룹의 마지막 행에서 ↓가 무동작이었다. 1행짜리 연도 그룹에서는 ↑↓가
+   * 아예 아무 일도 하지 않았다.
+   */
+  it('연도 그룹의 마지막 행에서 ↓는 다음 그룹의 첫 행으로 넘어간다', () => {
+    const setSelectedEventId = jest.fn()
+    render(
+      <NavHarness setSelectedEventId={setSelectedEventId} navigate={jest.fn()} />,
+    )
+
+    // evt-2 = 첫 그룹의 마지막 행, evt-3 = 다음 그룹의 첫 행
+    fireEvent.keyDown(screen.getByText('evt-2'), { key: 'ArrowDown' })
+    expect(setSelectedEventId).toHaveBeenCalledWith('evt-3')
+  })
+
+  it('다음 그룹의 첫 행에서 ↑는 이전 그룹의 마지막 행으로 돌아간다', () => {
+    const setSelectedEventId = jest.fn()
+    render(
+      <NavHarness setSelectedEventId={setSelectedEventId} navigate={jest.fn()} />,
+    )
+
+    fireEvent.keyDown(screen.getByText('evt-3'), { key: 'ArrowUp' })
+    expect(setSelectedEventId).toHaveBeenCalledWith('evt-2')
+  })
+
+  it('End는 목록 전체의 마지막 행으로 간다 — 그룹 마지막이 아니다', () => {
     const setSelectedEventId = jest.fn()
     render(
       <NavHarness setSelectedEventId={setSelectedEventId} navigate={jest.fn()} />,
     )
 
     fireEvent.keyDown(screen.getByText('evt-1'), { key: 'End' })
-    expect(setSelectedEventId).toHaveBeenCalledWith('evt-3')
+    expect(setSelectedEventId).toHaveBeenCalledWith('evt-4')
   })
 
   it('enabled=false면 행 위에서도 아무 것도 하지 않는다', () => {

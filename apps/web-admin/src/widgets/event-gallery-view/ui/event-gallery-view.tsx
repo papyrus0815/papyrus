@@ -14,10 +14,10 @@ import { FiImage } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
+import { CatalogViewEmpty } from '@/features/event-list/ui/catalog-view-empty'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { CategoryDot } from '@/shared/ui/category-dot/category-dot'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
-import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import { ImportancePill } from '@/shared/ui/importance-pill/importance-pill'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
@@ -31,11 +31,17 @@ import type {
 type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
 
 interface Props {
+  /** ⚠️ 필터를 만족한 행만 담긴 배열이어야 한다(검토 GAP-1) — 문맥 부모는 카드가 아니다. */
   flattenedHierarchy: FlatItem[]
   events: HistoricalEvent[]
   selectedEventId: string | null
   dbCategories: EventCategoryDto[]
   onSelectEvent: (id: string) => void
+  /** 빈 상태 3분기(로딩·필터0건·데이터0건) 판정용 — 검토 GAP-3 */
+  isLoading?: boolean
+  hasMoreData?: boolean
+  hasActiveFilters?: boolean
+  onResetFilters?: () => void
 }
 
 export const EventGalleryView: React.FC<Props> = ({
@@ -44,6 +50,10 @@ export const EventGalleryView: React.FC<Props> = ({
   selectedEventId,
   dbCategories,
   onSelectEvent,
+  isLoading = false,
+  hasMoreData = false,
+  hasActiveFilters = false,
+  onResetFilters,
 }) => {
   const cards = useMemo(() => {
     const eventById = new Map<string, HistoricalEvent>()
@@ -69,9 +79,14 @@ export const EventGalleryView: React.FC<Props> = ({
 
   if (cards.length === 0) {
     return (
-      <EmptyStateSpotlight
+      <CatalogViewEmpty
         icon={<FiImage size={28} />}
         title="표시할 사건이 없습니다"
+        description="사건을 등록하면 카드가 채워집니다."
+        isLoading={isLoading}
+        hasMoreData={hasMoreData}
+        hasActiveFilters={hasActiveFilters}
+        onResetFilters={onResetFilters}
       />
     )
   }

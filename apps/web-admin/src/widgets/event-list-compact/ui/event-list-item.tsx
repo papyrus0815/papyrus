@@ -21,10 +21,15 @@ import type { EventCategoryDto } from '@/shared/api/event-categories'
 import { CountryFlags } from '@/shared/ui/country-flags/country-flags'
 import { type IsoDateParts, parseIsoDateParts } from '@/shared/lib/iso-date'
 
+import { rowGridTemplate } from '../../../pages/events/styles/list.styles'
 import {
   CATEGORY_SOFT_COLORS,
-  LIST_WIDTH,
+  CONTROL,
+  LIST_STEPS,
+  MOTION,
+  focusRingOnTinted,
   metaText,
+  rowHairline,
 } from '../../../pages/events/styles/theme'
 import type {
   EventHierarchyNode,
@@ -218,8 +223,41 @@ function buildMatchReason(
 
 /** 요약 열이 실제로 글자를 실을 수 있는 최소 잔량. 이보다 짧으면 열지 않는다. */
 const SNIPPET_MIN_CHARS = 30
-/** 한 줄 말줄임이라 이 이상은 어차피 안 보인다 — DOM 텍스트 노드만 부풀린다. */
-const SNIPPET_MAX_CHARS = 160
+/**
+ * 싱크(요약) 셀의 잉크 상한.
+ *
+ * 160자는 앱 폰트 실측 약 8.67px/자 기준 1,388px에서 끝나, 전폭 3440에서 요약 트랙
+ * (약 1,594px) **안쪽에** 확정 공백을 만든다 — 캡을 없애 되찾은 폭이 다시 죽는다.
+ * 220자 ≈ 1,907px라 전 대역을 덮는다. 비용은 행당 최대 60자 추가(전체 약 16KB 텍스트
+ * 노드)뿐이고, 한 줄 말줄임이라 레이아웃 비용은 0이다.
+ */
+const SNIPPET_MAX_CHARS = 220
+
+/**
+ * 등록 시각의 상대 표기 — 열 사다리 step 3의 `[reg]` 셀.
+ *
+ * 상대 표기를 쓰는 이유는 폭이다: 절대 시각은 96px 트랙에 못 들어가고, 이 열이 답하는
+ * 질문은 "정확히 언제 넣었나"가 아니라 "최근인가"다. 절대 시각은 title 속성이 담는다.
+ */
+function formatRegisteredAt(
+  isoValue: string | null | undefined,
+): { label: string; title: string } | null {
+  if (!isoValue) return null
+  const registered = new Date(isoValue)
+  if (Number.isNaN(registered.getTime())) return null
+  const elapsedDays = Math.floor((Date.now() - registered.getTime()) / 86_400_000)
+  const label =
+    elapsedDays <= 0
+      ? '오늘'
+      : elapsedDays < 7
+        ? `${elapsedDays}일 전`
+        : elapsedDays < 35
+          ? `${Math.floor(elapsedDays / 7)}주 전`
+          : elapsedDays < 365
+            ? `${Math.floor(elapsedDays / 30)}개월 전`
+            : `${Math.floor(elapsedDays / 365)}년 전`
+  return { label, title: registered.toLocaleString('ko-KR') }
+}
 
 /**
  * 넓은 카드의 `[sum]` 요약 열 텍스트.
@@ -352,6 +390,24 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
    */
   const hasTextChips = (event.relatedHistoricalCountries?.length ?? 0) > 0
   const effectiveFlagMax = hasTextChips ? Math.min(flagMax, 2) : flagMax
+  /* 키워드 열(step 2) — 검색 중에는 매칭된 키워드를 첫 칩으로 올린다. '왜 이 행이 결과에
+     있는가'를 말하는 계약(CR-3)과 같은 방향이다. */
+  const searchTerm = searchQuery?.trim().toLowerCase()
+  const allKeywords = event.keywords ?? []
+  const orderedKeywords = searchTerm
+    ? [...allKeywords].sort(
+        (left, right) =>
+          Number(right.toLowerCase().includes(searchTerm)) -
+          Number(left.toLowerCase().includes(searchTerm)),
+      )
+    : allKeywords
+  const visibleKeywords = orderedKeywords.slice(0, 2)
+  const hiddenKeywordCount = Math.max(
+    0,
+    orderedKeywords.length - visibleKeywords.length,
+  )
+  /* 등록 시각 열(step 3) */
+  const registeredAt = formatRegisteredAt(event.createdAt)
   // 카테고리 hue는 이제 **칩이 단독으로** 싣는다(행 도트 폐지, 배치 C1).
   // 원색 텍스트는 WCAG AA 미달이라 저채도 soft chip으로.
   const soft =
@@ -408,7 +464,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
          * 국기·액션까지 22px씩 따라 움직여, 계층과 무관한 축들이 depth에 오염됐다
          * (액션 우측 끝이 985/1007로 갈리던 문제). 이제 depth가 바꾸는 것은 제목 텍스트
          * 시작점 하나뿐이다. */}
-        <TitleCell>
+        <TitleCell $spanSummary={!snippet && !matchReason}>
           <Indent aria-hidden="true" />
           {hasChildren ? (
             <Disclosure
@@ -504,6 +560,21 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
           </Snippet>
         )}
 
+        {/* 키워드 — 열 사다리 step 2 전용. aria-hidden인 이유: 키워드 정본은 상세 패널이
+            말하고, 행 낭독을 3배로 늘리지 않는다(스크린리더에 제목·날짜·분류가 먼저다). */}
+        {visibleKeywords.length > 0 && (
+          <KeywordCell aria-hidden="true">
+            {visibleKeywords.map((keyword) => (
+              <KeywordChip key={keyword} title={keyword}>
+                {keyword}
+              </KeywordChip>
+            ))}
+            {hiddenKeywordCount > 0 && (
+              <KeywordMore>+{hiddenKeywordCount}</KeywordMore>
+            )}
+          </KeywordCell>
+        )}
+
         {/* 모바일 2줄 행의 강제 개행 지점 — 데스크톱 격자에서는 display:none이라 무영향 */}
         <RowBreak aria-hidden="true" />
 
@@ -532,7 +603,14 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
           />
         </Flags>
 
-        <RowActions>
+        {/* 등록 시각 — 열 사다리 step 3 전용. '등록순' 정렬의 근거를 화면에 세운다. */}
+        {registeredAt && (
+          <RegisteredCell title={`등록 ${registeredAt.title}`}>
+            {registeredAt.label}
+          </RegisteredCell>
+        )}
+
+        <RowActions data-has-bookmark={isBookmarked ? 'true' : undefined}>
           {hasChildren && depth === 0 && (
             <IconBtn
               type="button"
@@ -643,12 +721,10 @@ const Stop = styled.div<{
 
   /* 사건 단위 분리 — hairline bottom border. 마지막 행은 자동 제거.
    * YearDivider/CenturyDivider 직전 Stop도 border-bottom 제거(:has(+ button)):
-   * divider 자신이 border-top hairline을 그어 트리플 라인 회피. */
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.05)'
-        : 'rgba(15, 23, 42, 0.05)'};
+   * divider 자신이 border-top hairline을 그어 트리플 라인 회피.
+   * 값은 rowHairline 토큰이 소유한다 — 스켈레톤이 같은 값을 읽어야 로딩→데이터에서
+   * 선 굵기가 안 튄다. 전폭에서 행이 3.2배 길어져 alpha 0.05는 지각 하한 미만이었다. */
+  border-bottom: 1px solid ${rowHairline};
 
   &:last-of-type,
   &:has(+ button) {
@@ -744,14 +820,9 @@ const Stop = styled.div<{
     outline: none;
   }
   &:focus-visible {
-    /* 다크에서는 파란 활성 배경(rgba(37,99,235,0.22)) 위에 같은 파랑 아웃라인이 그려져
-       링 안쪽 경계 대비가 2.93:1까지 떨어졌다. 화살표 내비게이션은 선택과 포커스를 함께
-       옮기므로 '활성 행 위의 포커스'가 상시 상태라 실질 식별력이 낮았다(검토 A11Y-1). */
-    outline: 2px solid
-      ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
-    /* 바깥에 그린다. -2px면 active의 좌측 4px 인디고 막대와 같은 모서리에서 겹쳐
-       '선택됨'과 '포커스됨'이 한 신호로 뭉갠다 — ↑↓ 내비에서는 둘이 상시 동시 상태다. */
-    outline-offset: 1px;
+    /* 틴트 배경 위 포커스 규약 — 근거와 값은 theme.ts focusRingOnTinted가 소유한다.
+       익명 리터럴로 두면 같은 상황을 만난 다음 사람이 규약이 있는 줄 모른다(검토 A11Y-1). */
+    ${focusRingOnTinted}
     border-radius: 6px;
   }
 
@@ -764,56 +835,20 @@ const Stop = styled.div<{
 `
 
 /**
- * 행 본문 — 6트랙 원장 격자.
+ * 행 본문 — 원장 격자. 트랙 정의는 **`list.styles.ts`의 `rowGridTemplate`이 단일 출처**다
+ * (스켈레톤 `SkeletonBody`가 같은 선언을 읽어야 로딩→데이터 전환에서 열이 안 튄다).
  *
- * ⚠️ subgrid를 쓰지 말 것. RowList가 연도 그룹마다 별도 DOM이라 subgrid·auto·max-content
- * 트랙은 **그룹마다 다른 폭**을 만들어 세기 경계에서 열이 어긋난다. 고정 px 트랙 5개 +
- * minmax(0,1fr) 하나만이 전 그룹 공통 축을 만든다 — 모든 행 박스 폭이 같으므로 1fr의
- * 계산값도 전 행 동일하다. 이것이 subgrid 없이 열을 세우는 유일한 정공법이다.
+ * ⚠️ 여기에 트랙을 직접 쓰지 말 것. subgrid 금지·fr 1개 규약·열 사다리 4단계의 근거는
+ * 전부 그쪽 주석에 있다.
  *
- * ⚠️ max-width를 여기에 두지 않는다. 예전의 880px 캡은 지키는 게 없으면서(콘텐츠 자연
+ * ⚠️ max-width도 여기에 두지 않는다. 예전의 880px 캡은 지키는 게 없으면서(콘텐츠 자연
  * 최대 폭이 870px라 실제로 걸려 잘리는 제목은 1행뿐이었다) 행 **안쪽에** 400~900px의
- * 빈 밴드를 만들었다. 폭 상한은 카드(List.CatalogSection)가 소유한다 — 같은 빈 픽셀이라도
- * 행 안에 있으면 '깨진 행', 카드 밖에 있으면 '여백'으로 읽힌다.
+ * 빈 밴드를 만들었다. 이제 폭 상한은 어디에도 없고, 넓어진 폭은 열 사다리가 흡수한다.
  */
 const Body = styled.div`
   flex: 1;
   min-width: 0;
-  display: grid;
-  grid-template-columns:
-    [date] var(--col-date)
-    [cat] var(--col-chip)
-    [title] minmax(0, 1fr)
-    [dur] var(--col-dur)
-    [flags] var(--col-flags)
-    [act] var(--col-act);
-  column-gap: var(--row-col-gap);
-  /* 베이스라인 정렬 — 예전 center 정렬은 칩 라인박스(15.75px)와 제목(18.2px)이 어긋나
-   * 전 행에서 1.51px 드리프트를 만들었다. 상자형 셀만 center로 예외 처리한다. */
-  align-items: baseline;
-
-  /**
-   * 넓은 카드 — 7트랙. 신축 역할을 제목에서 **요약**으로 넘긴다.
-   *
-   * 6트랙에서 유일한 신축 트랙은 제목(1fr)이라, 카드를 넓히면 늘어나는 건 제목 트랙뿐이다.
-   * 그런데 제목 자연 폭은 p50 177px이라 트랙만 1408px로 커지고 잉크는 안 커진다 — 그게
-   * 배치 A1이 1120px 캡으로 덮었던 '깨진 행'이다. 흡수체를 하나 더 세워야 캡을 풀 수 있고,
-   * 그 자리에 설명(목록 응답에 이미 실려 오면서 0픽셀도 안 그려지던 필드)을 놓는다.
-   *
-   * ⚠️ subgrid·auto·max-content 금지 규약은 여전히 유효하다. 여기 두 트랙은 콘텐츠를
-   * 안 보는 순수 길이(--col-title)와 비율(1fr)이고 **fr 트랙은 여전히 1개**라, 연도 그룹마다
-   * RowList DOM이 갈려도 전 그룹이 같은 계산값을 갖는다.
-   */
-  @container eventcard (min-width: ${LIST_WIDTH.summaryColumnMinCard}px) {
-    grid-template-columns:
-      [date] var(--col-date)
-      [cat] var(--col-chip)
-      [title] minmax(0, var(--col-title))
-      [sum] minmax(0, 1fr)
-      [dur] var(--col-dur)
-      [flags] var(--col-flags)
-      [act] var(--col-act);
-  }
+  ${rowGridTemplate}
 
   /**
    * 모바일(≤640px) 2줄 행 — 1줄: 제목, 2줄: 날짜·분류·기간·국기·액션.
@@ -880,12 +915,45 @@ const RowActions = styled.div`
   padding-left: 0;
   flex-shrink: 0;
 
-  @media (max-width: 640px) {
-    margin-left: auto;
+  /**
+   * 평소엔 숨고 행에 들어올 때만 나타난다.
+   *
+   * 조밀 밀도 전폭에서는 한 화면에 37행 × 아이콘 2개 = 74개가 상시 떠 있었다. 그 아이콘들은
+   * 어떤 행이 중요한지 0비트도 말하지 않으면서 우측 열 전체를 시각 소음으로 채웠다.
+   *
+   * ⚠️ visibility:hidden · display:none을 쓰지 말 것 — 로빙 tabindex가 이 버튼들을
+   *    정지점으로 쓴다. opacity 0인 요소는 Tab으로 도달 가능하고 :focus-within이 즉시
+   *    되살리므로, 키보드 사용자에게는 아무것도 사라지지 않는다.
+   *    (이 주석 안에서 백틱 금지 — styled 템플릿 리터럴이 끊긴다.)
+   */
+  opacity: 0;
+  transition: opacity ${MOTION.fast};
+
+  ${Stop}:hover &,
+  ${Stop}:focus-within &,
+  ${Stop}[data-active='true'] & {
+    opacity: 1;
+  }
+
+  /* 북마크가 **켜진** 행은 상태 신호이므로 항상 보인다 */
+  &[data-has-bookmark='true'] {
+    opacity: 1;
+  }
+
+  /* 터치 기기에는 hover가 없다 — 숨기면 영영 못 찾는다 */
+  @media (hover: none) {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 
   @media (max-width: 640px) {
+    margin-left: auto;
     order: 2;
+    /* 좁은 폭은 포인터 hover 규약이 불안정한 경계라 상시 노출 */
+    opacity: 1;
   }
 `
 
@@ -899,7 +967,7 @@ const RowActions = styled.div`
  *
  * 5단 이상은 96px에서 클램프한다(다중 상위 도입으로 depth 3+가 예정돼 있다).
  */
-const TitleCell = styled.div`
+const TitleCell = styled.div<{ $spanSummary?: boolean }>`
   min-width: 0;
   display: grid;
   grid-template-columns:
@@ -908,6 +976,16 @@ const TitleCell = styled.div`
     [text] minmax(0, 1fr);
   column-gap: 0;
   align-items: baseline;
+
+  /* 설명·매칭근거가 둘 다 없는 행은 요약 트랙이 통째로 빈다. 행 *중간*의 빈 셀은
+     '깨진 행'으로 읽히므로 제목이 그 자리를 삼킨다. [sumend]는 요약 직후 라인이라
+     단계가 바뀌어도 스팬 폭이 정확히 '제목 + 요약'이고, 요약 열이 없는 step 0에서는
+     [sumend]가 제목 직후라 이 선언이 자동으로 no-op이 된다. */
+  ${({ $spanSummary }) =>
+    $spanSummary &&
+    css`
+      grid-column: title / sumend;
+    `}
 
   @media (max-width: 640px) {
     /* 모바일에서는 셀 자체를 해제해 자식이 Body의 flex 아이템이 되게 한다 —
@@ -1196,7 +1274,6 @@ const CategoryLabel = styled.span<{
   justify-content: center;
   padding: 0 6px;
   height: 18px;
-  border-radius: 6px;
   font-size: var(--row-chip);
   /* 굵기 축에서 날짜(600)에 양보한다 — hue 대비는 유지하되 정렬 축을 이기지 않게. */
   font-weight: 500;
@@ -1205,8 +1282,21 @@ const CategoryLabel = styled.span<{
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: ${({ $rgb, theme }) =>
-    theme.mode === 'dark' ? `rgba(${$rgb}, 0.16)` : `rgba(${$rgb}, 0.1)`};
+  /**
+   * 색 **면(fill) 없음** — 카테고리 hue는 글자에만 싣는다(2026-08-02 결정).
+   *
+   * 근거 둘 다 실측이다:
+   *  ⑴ 칩 배경과 표면의 대비가 10색 전부 1.06~1.25:1이었다. 비텍스트 기준 3:1의 절반도
+   *     못 미쳐 '배지'로 읽히지 않으면서, 화면 색 면적의 대부분을 차지했다.
+   *  ⑵ 반투명 fill이 활성 행 tint 위에 합성되면 사회 4.11:1 · 문화 4.37:1로 소형 텍스트
+   *     AA(4.5:1) **위반**이었다. ↑↓ 내비가 선택과 포커스를 함께 옮기므로 상시 상태다.
+   *     fill을 지우면 활성 행 위 최저 4.90:1, 라이트 기본 행은 5.47~10.36:1로 전 색 향상.
+   *  ⚠️ 반투명을 유지하면서 ⑵를 해소하는 길은 없다. 색 면이 다시 필요하면
+   *     사전 합성한 **불투명** 헥스 10색을 CATEGORY_SOFT_COLORS에 추가해야 한다.
+   *
+   * ⚠️ width:100% / justify-content:center / height는 **유지**한다 — 칩의 좌·우 모서리가
+   *    세로 스캔선이라는 계약은 fill이 아니라 트랙 폭이 만든다.
+   */
   color: ${({ $text, $textDark, theme }) =>
     theme.mode === 'dark' ? $textDark : $text};
 
@@ -1245,7 +1335,7 @@ const MatchReason = styled.span`
 
   /* 요약 열이 켜지면 매칭 근거는 그 안으로 흡수된다 — 같은 필드(설명)를 두 지점에서
      말하게 두면 제목 뒤에 붙은 근거가 제목 트랙을 다시 밀어낸다. */
-  @container eventcard (min-width: ${LIST_WIDTH.summaryColumnMinCard}px) {
+  @container eventcard (min-width: ${LIST_STEPS.summary}px) {
     display: none;
   }
 `
@@ -1262,7 +1352,7 @@ const Snippet = styled.span`
 
   /* display:block + inline 자식 — flex로 두면 text-overflow가 자식에 안 걸려
      말줄임 없이 잘린다(MatchReason이 inline-flex라 겪고 있는 문제). */
-  @container eventcard (min-width: ${LIST_WIDTH.summaryColumnMinCard}px) {
+  @container eventcard (min-width: ${LIST_STEPS.summary}px) {
     display: block;
     grid-column: sum;
     min-width: 0;
@@ -1291,6 +1381,91 @@ const MatchReasonKind = styled.span`
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#854d0e')};
 `
 
+/**
+ * 키워드 열 — 열 사다리 step 2(ledger)에서만 켜진다.
+ *
+ * 목록 응답이 이미 싣고 transformer가 매핑까지 하는데, 지금까지 행에서 유일한 소비처는
+ * '검색 매칭 근거' 탐색뿐이라 검색어가 없으면 0픽셀이었다. 서버 변경 0줄로 전폭에서
+ * 되찾은 가로 픽셀을 실제 정보로 바꾸는 가장 싼 열이다.
+ *
+ * ⚠️ 카테고리 hue를 쓰지 말 것 — 칩 색은 '분류' 전용 채널이다. amber 계열도 금지다
+ *    (검색 하이라이트 전용). 중립 표면 토큰만 쓴다.
+ */
+const KeywordCell = styled.span`
+  display: none;
+
+  @container eventcard (min-width: ${LIST_STEPS.ledger}px) {
+    display: inline-flex;
+    grid-column: kw;
+    align-self: center;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
+const KeywordChip = styled.span`
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 96px;
+  padding: 0 6px;
+  height: 16px;
+  line-height: 16px;
+  border-radius: 4px;
+  font-size: var(--row-chip);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? CONTROL.bgDark : CONTROL.bgLight};
+  color: ${metaText};
+`
+
+const KeywordMore = styled.span`
+  flex-shrink: 0;
+  font-size: var(--row-chip);
+  font-weight: 600;
+  color: ${metaText};
+  font-variant-numeric: tabular-nums;
+`
+
+/**
+ * 등록 시각 열 — 열 사다리 step 3(atlas)에서만. 커버리지 100%.
+ *
+ * '등록순' 정렬은 연도 그룹핑까지 해제하는데도 화면에 정렬 축을 나타내는 토큰이 하나도
+ * 없어, 사용자가 '방금 넣은 20건'을 눈으로 확인할 수 없었다.
+ *
+ * ⚠️ 조건부 트랙(정렬이 '등록순'일 때만 켜기)으로 만들지 말 것 — 정렬을 바꿀 때마다
+ *    전 행의 열 축이 흔들린다. 폭이 허락하면 항상 있는 열이다.
+ */
+const RegisteredCell = styled.span`
+  display: none;
+
+  @container eventcard (min-width: ${LIST_STEPS.atlas}px) {
+    display: block;
+    grid-column: reg;
+    min-width: 0;
+    text-align: right;
+    font-size: var(--row-meta);
+    font-weight: 500;
+    color: ${metaText};
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
 const Duration = styled.span`
   grid-column: dur;
   /* 우측 정렬 — '오래 지속된 사건 찾기'가 처음으로 세로 스캔으로 성립한다. */
@@ -1302,6 +1477,10 @@ const Duration = styled.span`
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
+  /* ⚠️ 우측정렬 + hard clip이면 LTR에서 **시작(좌측)** 이 잘린다 — '12년 11개월'(약 68px)이
+     56px 트랙에서 '년 11개월'로 렌더돼 앞자리가 소리 없이 사라졌다. 넘침이 최소한 눈에
+     보이게 한다(트랙 폭 자체는 열 사다리 step 2에서 넓어진다). */
+  text-overflow: ellipsis;
 
   /* 당일(252행 중 133행 = 53%)은 점 하나로 누른다. 텍스트로 두면 화면 절반이 같은
      두 글자를 반복해 '27년 4개월'과 완전히 같은 무게로 읽혔다. 지우지 않는 이유는

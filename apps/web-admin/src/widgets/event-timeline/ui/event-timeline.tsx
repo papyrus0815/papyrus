@@ -50,9 +50,15 @@ import {
 import styled, { css, keyframes } from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
+import {
+  TIMELINE_LANE_LABELS,
+  TIMELINE_LANE_MODES,
+  type TimelineLaneMode,
+} from '@/features/event-list/lib'
 import type { ContinentResponseDto } from '@/shared/api/continents'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import { LEDGER_CATEGORY, resolveCategory } from '../../../pages/events/ledger/styles/ledger-tokens'
 import { BRAND, MOTION } from '../../../pages/events/styles/theme'
@@ -70,6 +76,10 @@ import type {
 type FlatItem = import('@/features/event-hierarchy/model').FlattenedHierarchyItem
 
 interface EventTimelineProps {
+  /**
+   * ⚠️ **필터를 만족한 행만** 담긴 배열이어야 한다(검토 GAP-1).
+   * 문맥용으로만 남은 부모까지 막대로 그리면, '전쟁'으로 좁힌 화면에 정치 막대가 뜬다.
+   */
   flattenedHierarchy: FlatItem[]
   events: HistoricalEvent[]
   selectedEventId: string | null
@@ -98,10 +108,27 @@ interface EventTimelineProps {
    * 그 높이(~166px)를 양보한다. 페이지가 소유하는 상태로, 토글은 ViewSwitcherRow에 있다.
    */
   wideMode?: boolean
+
+  /**
+   * ── 두 번째 필터 체계는 **페이지가 소유한다**(검토 GAP-4) ──
+   *
+   * `groupBy`(레인 축)와 `hiddenCategories`(카테고리 숨김)는 위젯 지역 state였다.
+   * 그래서 ⑴ URL에 실리지 않아 공유 링크가 화면을 재현하지 못했고 ⑵ 활성 칩·
+   * '전체 초기화' 어디에도 나타나지 않아, 카테고리를 숨겨 둔 사실을 잊은 사용자가
+   * "사건이 사라졌다"고 판단했다. 상태를 페이지로 올려 URL(`lane`/`hide`)·칩·
+   * 초기화가 다른 5축과 같은 규약을 따르게 한다.
+   *
+   * 미전달 시 이 위젯은 예전처럼 지역 state로 동작한다(다른 지면 재사용 대비).
+   */
+  groupBy?: TimelineLaneMode
+  onGroupByChange?: (next: TimelineLaneMode) => void
+  hiddenCategories?: ReadonlySet<string>
+  onToggleHiddenCategory?: (categoryKey: string) => void
+  onShowAllCategories?: () => void
 }
 
 /** lane 축 — 카테고리(기존) · 대륙 · 국가. 색은 항상 카테고리. */
-type GroupBy = 'category' | 'continent' | 'country'
+type GroupBy = TimelineLaneMode
 
 const UNCATEGORIZED_LANE = '기타'
 
@@ -361,12 +388,29 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   loadMoreFailed = false,
   isLoading = false,
   wideMode = false,
+  groupBy: controlledGroupBy,
+  onGroupByChange,
+  hiddenCategories: controlledHiddenCategories,
+  onToggleHiddenCategory,
+  onShowAllCategories,
 }) => {
   /**
    * lane 그룹 축. UI segmented control이 토글. category가 기본(기존 동작 유지).
    * 변경 시 lane 폭발(국가 모드)에 대비해 별도 cap을 lanes useMemo에서 적용.
+   *
+   * 페이지가 값을 내려주면(카탈로그) 그것이 정본이고, 아니면 지역 state로 동작한다.
    */
-  const [groupBy, setGroupBy] = useState<GroupBy>('category')
+  const [localGroupBy, setLocalGroupBy] = useState<GroupBy>(
+    TIMELINE_LANE_MODES.CATEGORY,
+  )
+  const groupBy = controlledGroupBy ?? localGroupBy
+  const setGroupBy = useCallback(
+    (next: GroupBy) => {
+      if (onGroupByChange) onGroupByChange(next)
+      else setLocalGroupBy(next)
+    },
+    [onGroupByChange],
+  )
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const tooltipIdRef = useRef(`tl-tooltip-${Math.random().toString(36).slice(2, 9)}`)
@@ -410,7 +454,12 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
    * 반대로 막대에 hover하면 레일에서 같은 행이 강조됨.
    */
   const [hoveredBarId, setHoveredBarId] = useState<string | null>(null)
-  const [hiddenCategories, setHiddenCategories] = useState<Set<string>>(new Set())
+  /** 카테고리 숨김 — groupBy와 같은 규약(페이지 소유 우선, 미전달 시 지역 state) */
+  const [localHiddenCategories, setLocalHiddenCategories] = useState<Set<string>>(
+    new Set(),
+  )
+  const hiddenCategories: ReadonlySet<string> =
+    controlledHiddenCategories ?? localHiddenCategories
   const [exportOpen, setExportOpen] = useState(false)
   /** 모양(다이아·네모·wedge) 의미 설명 popover */
   const [shapeLegendOpen, setShapeLegendOpen] = useState(false)
@@ -538,12 +587,22 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
       const startStr = node.period.start
       const endStr = node.period.end
       if (!startStr) continue
-      const start = new Date(startStr)
-      const end = endStr ? new Date(endStr) : start
-      const startYear =
-        start.getFullYear() + (start.getMonth() + start.getDate() / 31) / 12
-      const endYear =
-        end.getFullYear() + (end.getMonth() + end.getDate() / 31) / 12
+      /**
+       * BC·고대 날짜는 **네이티브 Date로 파싱하지 않는다**(검토 GAP-9).
+       * `new Date('-0500-01-01')`은 4자리 음수 연도를 ISO 확장 형식으로 인정하지 않아
+       * 엔진에 따라 Invalid Date거나 부호를 잃은 AD 500이 된다. 세기 필터는 BC를
+       * 지원하는데 타임라인만 그 사건을 AD 자리에 그려, 필터와 화면이 다른 말을 했다.
+       * `parseIsoDateParts`(문자열에서 부호 연도를 직접 추출·TZ 무관) + 부호 연도
+       * 산술로 통일한다 — 격자 뷰·목록 그룹핑과 같은 패턴.
+       */
+      const startParts = parseIsoDateParts(startStr)
+      if (!startParts) continue
+      const endParts = (endStr ? parseIsoDateParts(endStr) : null) ?? startParts
+      // 월은 0-based로 환산해 연 내 위치를 소수로 만든다(기존 getMonth() 산술과 동일).
+      const fractionalYear = (parts: { year: number; month: number; day: number }) =>
+        parts.year + (parts.month - 1 + parts.day / 31) / 12
+      const startYear = fractionalYear(startParts)
+      const endYear = fractionalYear(endParts)
       const importance = (node.importance as BarData['importance']) ?? 'normal'
       const category = root.category || 'other'
 
@@ -2158,9 +2217,18 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
     prevVisibleLanesRef.current = visibleLanes
   }, [visibleLanes])
 
+  /**
+   * 스크롤 앵커 캡처는 **위젯의 책임**으로 남긴다 — 숨김 토글로 lane 수가 변하면
+   * SVG 높이가 바뀌어 보던 위치가 튀는데, 그 보정은 이 위젯만 할 수 있다.
+   * 상태 자체의 소유권만 페이지로 옮겼다(검토 GAP-4).
+   */
   const toggleCategory = (key: string) => {
     captureScrollAnchor()
-    setHiddenCategories((prev) => {
+    if (onToggleHiddenCategory) {
+      onToggleHiddenCategory(key)
+      return
+    }
+    setLocalHiddenCategories((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -2169,7 +2237,11 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
   }
   const showAllCategories = () => {
     captureScrollAnchor()
-    setHiddenCategories(new Set())
+    if (onShowAllCategories) {
+      onShowAllCategories()
+      return
+    }
+    setLocalHiddenCategories(new Set())
   }
 
   // ── viewport readout 텍스트 — BC 연도 대응 ──────────────────────────────
@@ -2505,24 +2577,23 @@ export const EventTimeline: React.FC<EventTimelineProps> = ({
               aria-label="lane 그룹 — 카테고리/대륙/국가"
             >
               {(
-                [
-                  { v: 'category', label: '카테고리' },
-                  { v: 'continent', label: '대륙' },
-                  { v: 'country', label: '국가' },
-                ] as Array<{ v: GroupBy; label: string }>
-              ).map(({ v, label }) => (
-                <GroupBySegment
-                  key={v}
-                  type="button"
-                  role="radio"
-                  aria-checked={groupBy === v}
-                  $active={groupBy === v}
-                  onClick={() => setGroupBy(v)}
-                  title={`lane을 ${label}별로 표시`}
-                >
-                  {label}
-                </GroupBySegment>
-              ))}
+                Object.values(TIMELINE_LANE_MODES) as GroupBy[]
+              ).map((mode) => {
+                const label = TIMELINE_LANE_LABELS[mode]
+                return (
+                  <GroupBySegment
+                    key={mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={groupBy === mode}
+                    $active={groupBy === mode}
+                    onClick={() => setGroupBy(mode)}
+                    title={`lane을 ${label}별로 표시`}
+                  >
+                    {label}
+                  </GroupBySegment>
+                )
+              })}
             </GroupByControls>
             <YearJumpInput
               type="number"

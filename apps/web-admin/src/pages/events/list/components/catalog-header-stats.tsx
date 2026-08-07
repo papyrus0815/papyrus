@@ -22,7 +22,7 @@ import { getCategoryName } from '@/features/event-list/lib'
 import type { EventCategoryDto } from '@/shared/api/event-categories'
 
 import type { HistoricalEvent } from '../../create/events.types'
-import { CATEGORY_BADGE_COLORS } from '../../styles/theme'
+import { CATEGORY_BADGE_COLORS, metaText } from '../../styles/theme'
 
 interface Props {
   events: HistoricalEvent[]
@@ -107,12 +107,12 @@ const Strip = styled.div`
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.005em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
 `
 
 const Total = styled.span`
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
 
   strong {
     font-weight: 700;
@@ -124,7 +124,7 @@ const Total = styled.span`
 const TotalPrefix = styled.span`
   margin-right: 4px;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
 `
 
 const StatItem = styled.span`
@@ -143,7 +143,7 @@ const Dot = styled.span`
 `
 
 const Sep = styled.span`
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${metaText};
   opacity: 0.45;
   user-select: none;
 `
