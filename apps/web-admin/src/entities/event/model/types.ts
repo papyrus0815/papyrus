@@ -3,7 +3,18 @@
  * FSD: entities/event/model
  */
 
-export type CenturyFilter = 'all' | number
+/**
+ * 세기 필터 값 — '전체' | '연도 미상' | 세기(BC는 음수, 0세기는 존재하지 않음).
+ *
+ * `'unknown'` sentinel이 없던 시절, '연도 미상'은 목록의 1급 섹션인데 세기 축에는
+ * 그 값이 없어서 세기를 아무거나 고르면 미상 사건이 **전량 조용히 탈락**했다
+ * (검토 IA-5). 리더보드(`entities/gamification`)가 이미 같은 sentinel 문자열을
+ * 쓰고 있어 표기를 맞춘다.
+ */
+export type CenturyFilter = 'all' | typeof CENTURY_UNKNOWN | number
+
+/** 세기 축의 '연도 미상' sentinel. URL(`century=unknown`)에도 이 문자열 그대로 실린다. */
+export const CENTURY_UNKNOWN = 'unknown' as const
 
 export interface FilterChip {
   key: string

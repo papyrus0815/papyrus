@@ -23,6 +23,7 @@ export type {
   HistoricalEvent,
   HistoricalEventCategory,
 } from './types'
+export { CENTURY_UNKNOWN } from './types'
 export {
   CATEGORY_LABEL,
   CATEGORY_ICON_MAP,
