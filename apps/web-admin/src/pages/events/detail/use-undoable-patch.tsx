@@ -135,6 +135,10 @@ export function useUndoablePatch({
         notify.dismiss(lastToastRef.current)
         lastToastRef.current = null
       }
+      // 새 patch가 나가는 순간 직전 inverse는 무효 — in-flight 창(onSuccess 도착 전)에
+      // Ctrl+Z가 stale inverse를 발사하는 구멍 봉합. 이 patch의 inverse는 onSuccess에서
+      // 재등록되므로 정상 흐름엔 영향 없음.
+      clearPendingUndo()
 
       const mySeq = ++seqRef.current
 
@@ -176,7 +180,7 @@ export function useUndoablePatch({
         },
       })
     },
-    [mutate, runUndo],
+    [mutate, runUndo, clearPendingUndo],
   )
 }
 
@@ -202,7 +206,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
  * patch가 건드린 키만 골라 *현재 event* 값을 같은 DTO 모양으로 직렬화한다.
  * EventDetail의 derived field(`relatedCountries` 등)는 patch dto의 id 배열로 변환.
  */
-function buildInverse(
+export function buildInverse(
   event: EventDetail,
   patch: UpdateEventDto,
 ): UpdateEventDto {
@@ -297,6 +301,38 @@ function buildInverse(
         inv.extraParentEventIds = (event.extraParents ?? []).map(
           (extra) => extra.id,
         )
+        break
+      /**
+       * 연결 사유(부분 업서트) — patch가 나열한 쌍만 되돌린다. 이전 값은 event에서
+       * 쌍 위치별로 역직렬화(주 상위=parentLinkReason, 추가 상위=extraParents[].reason,
+       * 하위=childEvents/extraChildren[].reason). 이전에 없던 사유의 undo는 null 명시
+       * 전송이어야 서버가 행을 삭제한다(케이스 부재 시 undefined 키 → 무성 no-op였음).
+       */
+      case 'parentLinkReasons':
+        inv.parentLinkReasons = (patch.parentLinkReasons ?? []).map(
+          (entry) => ({
+            parentEventId: entry.parentEventId,
+            reason:
+              (entry.parentEventId === (event.parentEventId ?? null)
+                ? event.parentLinkReason
+                : event.extraParents?.find(
+                    (extra) => extra.id === entry.parentEventId,
+                  )?.reason) ?? null,
+          }),
+        )
+        break
+      case 'childLinkReasons':
+        inv.childLinkReasons = (patch.childLinkReasons ?? []).map((entry) => ({
+          childEventId: entry.childEventId,
+          reason:
+            (event.childEvents?.find(
+              (child) => child.id === entry.childEventId,
+            )?.reason ??
+              event.extraChildren?.find(
+                (child) => child.id === entry.childEventId,
+              )?.reason) ??
+            null,
+        }))
         break
       default:
         // 나머지는 단순 scalar — event에서 같은 키 그대로

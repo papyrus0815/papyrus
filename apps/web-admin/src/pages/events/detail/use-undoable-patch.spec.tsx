@@ -10,8 +10,10 @@ jest.mock('@/shared/ui/toast', () => ({
   notify: { show: jest.fn(() => 'toast-id'), dismiss: jest.fn() },
 }))
 
-import { useUndoablePatch } from './use-undoable-patch'
+import { buildInverse, useUndoablePatch } from './use-undoable-patch'
 import { type EventDetail } from './use-event-detail'
+
+type Patch = Parameters<typeof buildInverse>[1]
 
 const EVENT = { id: 'E', title: '루트 사건' } as EventDetail
 
@@ -91,5 +93,58 @@ describe('useUndoablePatch — 키보드 언두(Ctrl/Cmd+Z)', () => {
       fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true, shiftKey: true })
     })
     expect(mutate).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('buildInverse — 연결 사유(parentLinkReasons·childLinkReasons)', () => {
+  // 사유는 쌍의 속성 — 주 상위(parentLinkReason)·추가 상위(extraParents[].reason)·
+  // 하위(childEvents/extraChildren[].reason) 슬롯별로 이전 값을 역직렬화해야 한다.
+  const event = {
+    id: 'E',
+    title: '루트 사건',
+    parentEventId: 'P1',
+    parentLinkReason: '주 상위 옛 사유',
+    extraParents: [{ id: 'P2', title: '추가 상위', reason: '엣지 옛 사유' }],
+    childEvents: [{ id: 'C1', title: '자식', reason: '자식 옛 사유' }] as EventDetail[],
+    extraChildren: [{ id: 'C2', title: '역방향 자식', reason: '역방향 옛 사유' }],
+  } as EventDetail
+
+  it('parentLinkReasons: 쌍 위치별 이전 값 복원 — 없던 사유의 undo는 null(행 삭제) 명시', () => {
+    const inverse = buildInverse(event, {
+      parentLinkReasons: [
+        { parentEventId: 'P1', reason: '새 사유' },
+        { parentEventId: 'P2', reason: '' },
+        { parentEventId: 'P9', reason: '처음 쓰는 사유' },
+      ],
+    } as unknown as Patch)
+    expect(inverse.parentLinkReasons).toEqual([
+      { parentEventId: 'P1', reason: '주 상위 옛 사유' },
+      { parentEventId: 'P2', reason: '엣지 옛 사유' },
+      { parentEventId: 'P9', reason: null },
+    ])
+  })
+
+  it('행 삭제(reason:null) patch의 inverse는 이전 문자열 사유로 복원한다', () => {
+    const inverse = buildInverse(event, {
+      parentLinkReasons: [{ parentEventId: 'P1', reason: null }],
+    } as unknown as Patch)
+    expect(inverse.parentLinkReasons).toEqual([
+      { parentEventId: 'P1', reason: '주 상위 옛 사유' },
+    ])
+  })
+
+  it('childLinkReasons: childEvents·extraChildren 양 슬롯에서 이전 값 복원(없으면 null)', () => {
+    const inverse = buildInverse(event, {
+      childLinkReasons: [
+        { childEventId: 'C1', reason: '바뀐 사유' },
+        { childEventId: 'C2', reason: '바뀐 사유2' },
+        { childEventId: 'C9', reason: '신규 사유' },
+      ],
+    } as unknown as Patch)
+    expect(inverse.childLinkReasons).toEqual([
+      { childEventId: 'C1', reason: '자식 옛 사유' },
+      { childEventId: 'C2', reason: '역방향 옛 사유' },
+      { childEventId: 'C9', reason: null },
+    ])
   })
 })

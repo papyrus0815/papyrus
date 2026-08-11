@@ -1,3 +1,5 @@
+import { useRef } from 'react'
+
 import {
   type QueryClient,
   useMutation,
@@ -68,6 +70,13 @@ export function useEventMutation(eventId: string) {
   const queryClient = useQueryClient()
   const detailKey = eventKeys.detail(eventId)
   const mutationKey = ['event-detail-mutation', eventId] as const
+  /**
+   * mutation *시작* 순번 — onSuccess의 정본 시딩 게이트가 settle 순서(isMutating===0)만
+   * 보면 HTTP 응답 역전(A시작→B시작→B응답→A응답) 시 먼저 시작한 A의 stale 응답이
+   * 마지막에 시딩돼 B의 커밋이 캐시에서 사라진다(서버는 정상, staleTime 30s 동안 지속).
+   * 가장 늦게 시작한 mutation의 응답만 시딩하고, 아니면 invalidate로 폴백.
+   */
+  const startSeqRef = useRef(0)
 
   return useMutation({
     mutationKey,
@@ -75,17 +84,19 @@ export function useEventMutation(eventId: string) {
       return updateEvent(eventId, patch)
     },
     onMutate: async (patch: UpdateEventDto) => {
+      const startSeq = ++startSeqRef.current
+      // cancel이 스냅샷보다 먼저 — 취소 await 사이에 in-flight refetch가 캐시를 바꾸면
+      // 그 이전 스냅샷 기반 next가 최신 캐시를 덮어쓴다(스냅샷은 취소 후 안정 캐시에서).
+      await queryClient.cancelQueries({ queryKey: detailKey })
       const previous = queryClient.getQueryData<EventDetail>(detailKey)
       // 배열/카테고리 derived 갱신은 previous 스냅샷이 있어야 재구성 가능.
       const next = previous
         ? buildOptimisticEvent(previous, patch, queryClient)
         : null
-      if (!next) return { previous: undefined }
+      if (!next) return { previous: undefined, startSeq }
 
-      // in-flight refetch가 낙관적 갱신을 덮어쓰지 않도록 취소 후 적용.
-      await queryClient.cancelQueries({ queryKey: detailKey })
       queryClient.setQueryData<EventDetail>(detailKey, next)
-      return { previous }
+      return { previous, startSeq }
     },
     onSuccess: (data, patch, context) => {
       /**
@@ -97,10 +108,12 @@ export function useEventMutation(eventId: string) {
        * reconcile은 invalidate(무거운 GET 재유발) 대신 PUT 응답을 *직접 시딩*한다 —
        * 응답이 loadEventDetail full 상세(childEvents·parentEvent·군사·섹션 포함)라 두 번째
        * 왕복이 사라지고, 낙관에서 stub였던 childEvents/parentEvent(제목만·회색)가 정본
-       * (카테고리 색·설명·조상 체인)으로 즉시 교체된다. 응답이 없으면(폴백 bare) invalidate.
+       * (카테고리 색·설명·조상 체인)으로 즉시 교체된다. 단, 마지막 settle이어도 *가장 늦게
+       * 시작한* mutation이 아니면(HTTP 역전) 그 응답은 뒤 커밋을 모르는 stale — 시딩 대신
+       * invalidate로 폴백한다. 응답이 없을 때(폴백 bare)도 invalidate.
        */
       if (queryClient.isMutating({ mutationKey }) === 0) {
-        if (data) {
+        if (data && context?.startSeq === startSeqRef.current) {
           queryClient.setQueryData<EventDetail>(
             detailKey,
             data as unknown as EventDetail,
@@ -162,7 +175,7 @@ export function useEventMutation(eventId: string) {
   })
 }
 
-const LISTING_FIELDS: ReadonlyArray<keyof UpdateEventDto> = [
+export const LISTING_FIELDS: ReadonlyArray<keyof UpdateEventDto> = [
   'title',
   'startDate',
   'endDate',
@@ -179,10 +192,12 @@ const LISTING_FIELDS: ReadonlyArray<keyof UpdateEventDto> = [
   /**
    * 목록 행이 실제로 그리고/거르는 값인데 화이트리스트에서 빠져 있었다(검토 DATA-9).
    *  - relatedCountryIds: 행 우측 국기 칩을 그리고, 국가·대륙 필터의 매칭 술어가 읽는다.
+   *  - relatedHistoricalCountryIds: 같은 국가 칩 행·국가 피벗이 역사국가도 그린다(현대와 동형).
    *  - keywords: 검색 매칭 술어가 제목·설명과 함께 본다.
    * 빠져 있으면 상세에서 관련국을 고쳐도 목록의 국기와 필터 결과가 stale하게 남는다.
    */
   'relatedCountryIds',
+  'relatedHistoricalCountryIds',
   'keywords',
 ]
 
@@ -344,10 +359,12 @@ export function buildOptimisticEvent(
    * childIds가 다시 stale해져 원래 결함이 재발하므로, 여기선 항상 재구성한다.
    */
   if ('childEventIds' in patch) {
-    next.childEvents = resolveChildEvents(
-      patch.childEventIds ?? [],
-      prev.childEvents,
-      qc,
+    const newChildIds = patch.childEventIds ?? []
+    next.childEvents = resolveChildEvents(newChildIds, prev.childEvents, qc)
+    // 서버 attach collapse 거울: 주 상위 FK로 붙인 자식이 기존 역방향 엣지(extraChildren)와
+    // 겹치면 서버가 그 엣지를 자동 해소한다 — 낙관에서도 걷어 이중 표시를 막는다.
+    next.extraChildren = prev.extraChildren?.filter(
+      (child) => !newChildIds.includes(child.id),
     )
     changed = true
   }
@@ -359,6 +376,15 @@ export function buildOptimisticEvent(
     next.parentEvent = parentId
       ? resolveParentEvent(parentId, prev, qc)
       : undefined
+    // parentLinkReason은 (this↔주 상위) *쌍*의 주석 — 부모가 바뀌면 옛 쌍의 사유가
+    // 새 부모 옆에 남는 cross-slot 오표시가 된다. 승격 swap이면 그 엣지의 reason 승계,
+    // 같은 부모 유지면 그대로, 그 외(신규 지정·해제)는 null(refetch가 정본 보정).
+    if (parentId !== (prev.parentEventId ?? null)) {
+      const promotedReason = parentId
+        ? prev.extraParents?.find((extra) => extra.id === parentId)?.reason
+        : undefined
+      next.parentLinkReason = promotedReason ?? null
+    }
     // 서버 W2-(a-2) 거울: 새 주 상위가 기존 추가 상위와 겹치면 그 엣지는 자동
     // collapse(스칼라 경유 승격). extras patch가 함께 오면 아래 분기가 정본.
     if (
@@ -441,7 +467,7 @@ function normalizeReason(reason: string | null | undefined): string | null {
  * 부활 = '이번 patch로 링크가 새로 붙었고, 그 쌍의 사유가 응답엔 있는데 직전 캐시엔
  * 안 보였던' 경우. 사용자가 이번에 직접 친 사유·이미 보이던 사유의 슬롯 이동(승격)은 제외.
  */
-function detectReasonRevival(
+export function detectReasonRevival(
   prev: EventDetail,
   patch: UpdateEventDto,
   response: { parentLinkReason?: string | null } & {
@@ -500,10 +526,15 @@ function detectReasonRevival(
       const userSet = (patch.childLinkReasons ?? []).some(
         (entry) => entry.childEventId === id,
       )
+      // 승격(역방향 엣지 → 주 상위 FK 자식): 사유가 이미 extraChildren으로 보이던 것 —
+      // 슬롯 이동일 뿐 부활 아님(상위 방향 두 분기의 가드와 대칭).
+      const wasVisibleAsExtraChild = (prev.extraChildren ?? []).some(
+        (child) => child.id === id && nonEmpty(child.reason),
+      )
       const respReason = response.childEvents?.find(
         (child) => child.id === id,
       )?.reason
-      if (!userSet && nonEmpty(respReason)) return true
+      if (!userSet && !wasVisibleAsExtraChild && nonEmpty(respReason)) return true
     }
   }
 
@@ -616,14 +647,15 @@ function resolveExtraParents(
   ids: string[],
   prev: EventDetail,
   qc: QueryClient,
-): Array<{ id: string; title: string }> {
+): Array<{ id: string; title: string; reason?: string | null }> {
   let candidates: Map<string, EventLinkCandidate> | null = null
   return ids.map((id) => {
     const existing = prev.extraParents?.find((extra) => extra.id === id)
     if (existing) return existing
-    // 승격 swap의 강등분 — 직전 주 상위 제목을 생존 객체에서 승계.
+    // 승격 swap의 강등분 — 직전 주 상위 제목을 생존 객체에서, 사유는 슬롯 이동이므로
+    // 직전 쌍의 parentLinkReason에서 승계(사유는 쌍의 속성 — 슬롯이 바뀌어도 따라간다).
     if (prev.parentEvent?.id === id) {
-      return { id, title: prev.parentEvent.title }
+      return { id, title: prev.parentEvent.title, reason: prev.parentLinkReason }
     }
     if (!candidates) candidates = collectLinkCandidates(qc)
     return { id, title: candidates.get(id)?.title ?? '' }

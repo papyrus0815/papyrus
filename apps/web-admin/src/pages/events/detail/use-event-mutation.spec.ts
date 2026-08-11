@@ -12,7 +12,11 @@ jest.mock('@/shared/api/events', () => ({
   getEventById: jest.fn(),
 }))
 
-import { buildOptimisticEvent } from './use-event-mutation'
+import {
+  LISTING_FIELDS,
+  buildOptimisticEvent,
+  detectReasonRevival,
+} from './use-event-mutation'
 import { type EventDetail } from './use-event-detail'
 
 type Patch = Parameters<typeof buildOptimisticEvent>[1]
@@ -90,6 +94,20 @@ describe('buildOptimisticEvent — 하위 사건(childEventIds) 낙관 재구성
     const next = buildOptimisticEvent(makeEvent(), { childEventIds: ['B'] }, qc)
     expect(next!.childEvents![0].startDate).toBe('-0044-01-01')
   })
+
+  it('childEventIds에 포함된 역방향 엣지(extraChildren)는 낙관 제거 — 서버 attach collapse 거울', () => {
+    const prev = makeEvent({
+      extraChildren: [
+        { id: 'A', title: '역방향 A', reason: '엣지 사유' },
+        { id: 'B', title: '역방향 B' },
+      ],
+    })
+    const qc = qcWithCandidates([{ id: 'A', title: '알파' }])
+    const next = buildOptimisticEvent(prev, { childEventIds: ['A'] }, qc)
+    expect((next!.childEvents ?? []).map((child) => child.id)).toEqual(['A'])
+    // A는 주 상위 FK 자식으로 승격돼 역방향 엣지가 걷힌다 — B만 남는다.
+    expect(next!.extraChildren).toEqual([{ id: 'B', title: '역방향 B' }])
+  })
 })
 
 describe('buildOptimisticEvent — 상위 사건(parentEventId) 낙관 재구성', () => {
@@ -164,6 +182,40 @@ describe('buildOptimisticEvent — 추가 상위(extraParentEventIds) 낙관 재
     expect(next!.extraParents).toEqual([
       { id: 'P1', title: '제2차 세계대전' },
     ])
+  })
+
+  it('승격 swap 시 사유도 슬롯을 따라 이동 — 승격 엣지 reason이 parentLinkReason으로, 강등분은 승계', () => {
+    const prev = makeEvent({
+      parentEventId: 'P1',
+      parentEvent: { id: 'P1', title: '주 상위' } as EventDetail,
+      parentLinkReason: '주 사유',
+      extraParents: [{ id: 'P2', title: '엣지', reason: '엣지 사유' }],
+    })
+    const next = buildOptimisticEvent(
+      prev,
+      { parentEventId: 'P2', extraParentEventIds: ['P1'] } as unknown as Patch,
+      new QueryClient(),
+    )
+    // 사유는 쌍의 속성 — 옛 쌍(P1)의 사유가 새 부모(P2) 옆에 남으면 cross-slot 오표시.
+    expect(next!.parentLinkReason).toBe('엣지 사유')
+    expect(next!.extraParents).toEqual([
+      { id: 'P1', title: '주 상위', reason: '주 사유' },
+    ])
+  })
+
+  it('사유 없는 새 부모 지정은 parentLinkReason을 null로(옛 쌍 사유 잔존 방지)', () => {
+    const prev = makeEvent({
+      parentEventId: 'P1',
+      parentEvent: { id: 'P1', title: '주 상위' } as EventDetail,
+      parentLinkReason: '주 사유',
+    })
+    const qc = qcWithCandidates([{ id: 'P9', title: '새 상위' }])
+    const next = buildOptimisticEvent(
+      prev,
+      { parentEventId: 'P9' } as unknown as Patch,
+      qc,
+    )
+    expect(next!.parentLinkReason).toBeNull()
   })
 
   it('스칼라 경유 승격(a-2 거울) — parent만 기존 엣지로 이동해도 그 엣지는 낙관 제거', () => {
@@ -252,5 +304,47 @@ describe('buildOptimisticEvent — 연결 사유(parentLinkReasons·childLinkRea
     )
     expect(next!.childEvents!.find((child) => child.id === 'C1')?.reason).toBeUndefined()
     expect(next!.childEvents!.find((child) => child.id === 'C2')?.reason).toBe('자식2 사유')
+  })
+})
+
+describe('detectReasonRevival — 하위 신규 연결', () => {
+  it('extraChildren으로 이미 보이던 사유의 슬롯 이동(승격)은 부활 아님', () => {
+    const prev = makeEvent({
+      extraChildren: [{ id: 'C1', title: '역방향', reason: '보이던 사유' }],
+    })
+    const response = { childEvents: [{ id: 'C1', reason: '보이던 사유' }] }
+    expect(
+      detectReasonRevival(prev, { childEventIds: ['C1'] }, response),
+    ).toBe(false)
+  })
+
+  it('직전 캐시 어디에도 안 보이던 사유가 응답에 실리면 부활로 판정', () => {
+    const prev = makeEvent()
+    const response = { childEvents: [{ id: 'C1', reason: '묻혀 있던 사유' }] }
+    expect(
+      detectReasonRevival(prev, { childEventIds: ['C1'] }, response),
+    ).toBe(true)
+  })
+
+  it('사용자가 이번 patch로 직접 친 사유는 부활 아님', () => {
+    const prev = makeEvent()
+    const response = { childEvents: [{ id: 'C1', reason: '방금 친 사유' }] }
+    expect(
+      detectReasonRevival(
+        prev,
+        {
+          childEventIds: ['C1'],
+          childLinkReasons: [{ childEventId: 'C1', reason: '방금 친 사유' }],
+        } as unknown as Patch,
+        response,
+      ),
+    ).toBe(false)
+  })
+})
+
+describe('LISTING_FIELDS — 목록 갱신 화이트리스트(DATA-9)', () => {
+  it('관련국 필드가 현대·역사 양쪽 다 포함된다', () => {
+    expect(LISTING_FIELDS).toContain('relatedCountryIds')
+    expect(LISTING_FIELDS).toContain('relatedHistoricalCountryIds')
   })
 })
