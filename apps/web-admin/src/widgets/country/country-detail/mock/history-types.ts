@@ -41,6 +41,9 @@ export interface HistoricalEvent {
   countryId: string // 해당 국가 (조선, 고려 등)
   type: EventType
   scale: EventScale // 사건 규모
+  // ⚠️ 표시 전용 mock 계약 — 실제 API는 주 상위 FK(parentEventId) 외에
+  // EventParentLink 다중 상위(EventResponseDto.extraParents)를 함께 가진다.
+  // 신규 UI가 이 단수 부모 형상을 복제하지 말 것.
   parentEventId?: string // 상위 사건 ID (하위 사건인 경우)
   subEvents?: string[] // 하위 사건 ID 목록 (거대 사건인 경우)
   participants: EventParticipant[]

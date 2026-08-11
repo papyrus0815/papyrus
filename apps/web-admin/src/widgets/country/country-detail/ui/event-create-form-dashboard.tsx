@@ -444,6 +444,12 @@ const CountryChip = styled(Chip)`
   margin: 0;
 `
 
+/** detail-network HelperNote 미러 — 추가 상위 게이트 안내 */
+const HelperNote = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 function nextSectionId(sections: EventSection[]): string {
   const nums = sections
     .map((s) => parseInt(s.id, 10))
@@ -494,6 +500,7 @@ export function EventCreateFormDashboard({
   const [showStartDateModal, setShowStartDateModal] = useState(false)
   const [showEndDateModal, setShowEndDateModal] = useState(false)
   const [showParentEventModal, setShowParentEventModal] = useState(false)
+  const [showExtraParentModal, setShowExtraParentModal] = useState(false)
   const [showRelatedPersonModal, setShowRelatedPersonModal] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -511,6 +518,7 @@ export function EventCreateFormDashboard({
   >([])
   const [imageUploading, setImageUploading] = useState(false)
   const [parentEventSearch, setParentEventSearch] = useState('')
+  const [extraParentSearch, setExtraParentSearch] = useState('')
   const [sections, setSections] = useState<EventSection[]>(() => [
     { id: '1', title: 'Part 1', content: '', mentions: [] },
   ])
@@ -695,6 +703,11 @@ export function EventCreateFormDashboard({
           event.eventImages?.[0]?.imageUrl
         if (thumbUrl) setThumbnail(String(thumbUrl))
         if (event.parentEventId) rel.setParentEventId(event.parentEventId)
+        // 추가 상위(EventParentLink) 하이드레이션 — update는 전체목록 교체 계약이라
+        // 기존 값을 실어 보내지 않으면 편집 저장이 기존 연결을 지운다.
+        rel.setExtraParentEventIds(
+          (event.extraParents ?? []).map((extra) => extra.id),
+        )
         if (event.eventSections?.length) {
           type SectionRow = {
             id: string
@@ -796,7 +809,7 @@ export function EventCreateFormDashboard({
     }
     setIsSaving(true)
     try {
-      const { mentionedPersons, mentionedEvents } = extractMentions(sections)
+      const { mentionedPersons } = extractMentions(sections)
       const eventData = buildEventSubmitData({
         title: title.trim(),
         description: description.trim(),
@@ -814,12 +827,11 @@ export function EventCreateFormDashboard({
         relatedCountryIds,
         relatedHistoricalCountryIds,
         relatedPersons: rel.relatedPersons,
-        relatedEventIds: rel.relatedEventIds,
+        extraParentEventIds: rel.extraParentEventIds,
         sections,
         belligerentsGraph: { countries: [], relations: [] },
         warCost: '',
         mentionedPersons,
-        mentionedEvents,
         childEventIds: childEventIds.length > 0 ? childEventIds : undefined,
         eventImages: eventImages.length > 0 ? eventImages : undefined,
       })
@@ -856,14 +868,34 @@ export function EventCreateFormDashboard({
     () => availableEvents.filter((e) => e.id !== rel.parentEventId),
     [availableEvents, rel.parentEventId],
   )
-  const relatedEventCandidates = useMemo(
-    () =>
-      availableEvents.filter(
-        (e) =>
-          e.id !== rel.parentEventId && !rel.relatedEventIds.includes(e.id),
+  // 추가 상위 후보 — 주 상위(INV-1)·이미 선택된 추가 상위·자기 자신(수정 모드) 제외
+  const filteredExtraParentEventsForModal = useMemo(() => {
+    const excludedIds = new Set(
+      [rel.parentEventId, editEventId ?? '', ...rel.extraParentEventIds].filter(
+        Boolean,
       ),
-    [availableEvents, rel.parentEventId, rel.relatedEventIds],
-  )
+    )
+    const candidates = availableEvents.filter(
+      (candidate) => !excludedIds.has(candidate.id),
+    )
+    const searchTerm = extraParentSearch.toLowerCase().trim()
+    if (!searchTerm) return candidates.slice(0, 50)
+    return candidates
+      .filter(
+        (candidate) =>
+          (candidate.title &&
+            candidate.title.toLowerCase().includes(searchTerm)) ||
+          (candidate.description &&
+            candidate.description.toLowerCase().includes(searchTerm)),
+      )
+      .slice(0, 50)
+  }, [
+    availableEvents,
+    rel.parentEventId,
+    rel.extraParentEventIds,
+    editEventId,
+    extraParentSearch,
+  ])
   const personCandidates = useMemo(
     () =>
       availablePersons.filter(
@@ -1472,6 +1504,95 @@ export function EventCreateFormDashboard({
                     </button>
                   </FieldControl>
                 </FieldRow>
+                {/* 추가 상위 — 주 상위 외 다중 상위(EventParentLink). INV-2: 주 상위
+                    지정 전에는 비활성(detail-network 추가 상위 행 게이트 미러). */}
+                <FieldRow>
+                  <FieldLabel>추가 상위</FieldLabel>
+                  <FieldControl>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                      }}
+                    >
+                      {rel.extraParentEventIds.length > 0 && (
+                        <div
+                          style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
+                        >
+                          {rel.extraParentEventIds.map((eventId) => {
+                            const extraEvent = availableEvents.find(
+                              (candidate) => candidate.id === eventId,
+                            )
+                            return (
+                              <Chip key={eventId}>
+                                {extraEvent?.title ?? eventId}
+                                <ChipRemoveBtn
+                                  type="button"
+                                  onClick={() =>
+                                    rel.setExtraParentEventIds(
+                                      rel.extraParentEventIds.filter(
+                                        (id) => id !== eventId,
+                                      ),
+                                    )
+                                  }
+                                  aria-label="제거"
+                                >
+                                  ×
+                                </ChipRemoveBtn>
+                              </Chip>
+                            )
+                          })}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowExtraParentModal(true)}
+                        disabled={!rel.parentEventId}
+                        aria-describedby={
+                          !rel.parentEventId
+                            ? 'dashboard-extra-parents-helper'
+                            : undefined
+                        }
+                        style={{
+                          width: '100%',
+                          maxWidth: 320,
+                          padding: '10px 16px',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: !rel.parentEventId
+                            ? theme.colors.text.tertiary
+                            : isDark
+                              ? '#818cf8'
+                              : '#6366f1',
+                          background: !rel.parentEventId
+                            ? theme.colors.background.tertiary
+                            : isDark
+                              ? 'rgba(99,102,241,0.15)'
+                              : '#eef2ff',
+                          border: `1px solid ${
+                            !rel.parentEventId
+                              ? theme.colors.border.default
+                              : isDark
+                                ? 'rgba(99,102,241,0.35)'
+                                : '#c7d2fe'
+                          }`,
+                          borderRadius: 12,
+                          cursor: !rel.parentEventId
+                            ? 'not-allowed'
+                            : 'pointer',
+                        }}
+                      >
+                        + 추가 상위 선택
+                      </button>
+                      {!rel.parentEventId && (
+                        <HelperNote id="dashboard-extra-parents-helper">
+                          먼저 상위 사건을 지정하세요
+                        </HelperNote>
+                      )}
+                    </div>
+                  </FieldControl>
+                </FieldRow>
                 <FieldRow>
                   <FieldLabel>관련 인물</FieldLabel>
                   <FieldControl>
@@ -1529,63 +1650,6 @@ export function EventCreateFormDashboard({
                       >
                         + 인물 선택
                       </button>
-                    </div>
-                  </FieldControl>
-                </FieldRow>
-                <FieldRow>
-                  <FieldLabel>관련 사건</FieldLabel>
-                  <FieldControl>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 8,
-                      }}
-                    >
-                      <div
-                        style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
-                      >
-                        {rel.relatedEventIds.map((eventId) => {
-                          const ev = availableEvents.find(
-                            (e) => e.id === eventId,
-                          )
-                          return (
-                            <Chip key={eventId}>
-                              {ev?.title ?? eventId}
-                              <ChipRemoveBtn
-                                type="button"
-                                onClick={() =>
-                                  rel.setRelatedEventIds(
-                                    rel.relatedEventIds.filter(
-                                      (id) => id !== eventId,
-                                    ),
-                                  )
-                                }
-                                aria-label="제거"
-                              >
-                                ×
-                              </ChipRemoveBtn>
-                            </Chip>
-                          )
-                        })}
-                      </div>
-                      <SelectInput
-                        value=""
-                        onChange={(e) => {
-                          const id = e.target.value
-                          if (!id) return
-                          if (rel.relatedEventIds.includes(id)) return
-                          rel.setRelatedEventIds([...rel.relatedEventIds, id])
-                          e.target.value = ''
-                        }}
-                      >
-                        <option value="">사건 추가…</option>
-                        {relatedEventCandidates.map((ev) => (
-                          <option key={ev.id} value={ev.id}>
-                            {ev.title ?? ev.id}
-                          </option>
-                        ))}
-                      </SelectInput>
                     </div>
                   </FieldControl>
                 </FieldRow>
@@ -1708,6 +1772,56 @@ export function EventCreateFormDashboard({
                   }}
                 >
                   {ev.title ?? ev.id}
+                </EventListBtn>
+              ))}
+            </ModalBody>
+          </ModalPanel>
+        </ModalOverlay>
+      )}
+
+      {showExtraParentModal && (
+        <ModalOverlay onClick={() => setShowExtraParentModal(false)}>
+          <ModalPanel
+            onClick={(mouseEvent) => mouseEvent.stopPropagation()}
+          >
+            <ModalHeader>
+              <ModalTitle>추가 상위 선택</ModalTitle>
+              <ModalCloseBtn
+                type="button"
+                onClick={() => setShowExtraParentModal(false)}
+              >
+                <FiX size={20} />
+              </ModalCloseBtn>
+            </ModalHeader>
+            <ModalBody>
+              <Input
+                type="text"
+                placeholder="사건명 검색..."
+                value={extraParentSearch}
+                onChange={(changeEvent) =>
+                  setExtraParentSearch(changeEvent.target.value)
+                }
+                style={{ marginBottom: 16 }}
+              />
+              {filteredExtraParentEventsForModal.map((candidate) => (
+                <EventListBtn
+                  key={candidate.id}
+                  type="button"
+                  onClick={() => {
+                    // INV-1 이중 방어 — 후보 목록에서 이미 제외되지만 stale 클릭 차단
+                    if (
+                      candidate.id === rel.parentEventId ||
+                      rel.extraParentEventIds.includes(candidate.id)
+                    )
+                      return
+                    rel.setExtraParentEventIds([
+                      ...rel.extraParentEventIds,
+                      candidate.id,
+                    ])
+                    setShowExtraParentModal(false)
+                  }}
+                >
+                  {candidate.title ?? candidate.id}
                 </EventListBtn>
               ))}
             </ModalBody>

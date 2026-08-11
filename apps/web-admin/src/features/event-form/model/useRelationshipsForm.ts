@@ -28,11 +28,8 @@ export const useRelationshipsForm = (
   const [showPersonList, setShowPersonList] = useState(false)
   const personSelectorRef = useRef<HTMLDivElement>(null)
 
-  // 관련 사건
-  const [relatedEventIds, setRelatedEventIds] = useState<string[]>([])
-  const [relatedEventSearch, setRelatedEventSearch] = useState('')
-  const [showRelatedEventList, setShowRelatedEventList] = useState(false)
-  const relatedEventSelectorRef = useRef<HTMLDivElement>(null)
+  // 추가 상위 사건 (EventParentLink) — 주 상위(parentEventId) 지정 시에만 유효
+  const [extraParentEventIds, setExtraParentEventIds] = useState<string[]>([])
 
   // 필터링된 목록
   const filteredParentEvents = useMemo(() => {
@@ -57,20 +54,19 @@ export const useRelationshipsForm = (
     )
   }, [personSearch, availablePersons])
 
-  const filteredRelatedEvents = useMemo(() => {
-    const searchTerm = relatedEventSearch.toLowerCase().trim()
-    const excludeIds = [parentEventId, ...relatedEventIds].filter(Boolean)
-    let events = availableEvents.filter((event) => !excludeIds.includes(event.id))
-
-    if (!searchTerm) {
-      return events.slice(0, 10)
+  // 추가 상위 정합 게이트 — 주 상위 해제 시 추가 상위도 무효(INV-2),
+  // 주 상위로 승격된 사건이 추가 상위에 남으면 중복(INV-1)이라 상태 차원에서 차단.
+  useEffect(() => {
+    if (!parentEventId) {
+      setExtraParentEventIds((prev) => (prev.length ? [] : prev))
+      return
     }
-    return events.filter(
-      (event) =>
-        event.title.toLowerCase().includes(searchTerm) ||
-        (event.description && event.description.toLowerCase().includes(searchTerm)),
+    setExtraParentEventIds((prev) =>
+      prev.includes(parentEventId)
+        ? prev.filter((id) => id !== parentEventId)
+        : prev,
     )
-  }, [relatedEventSearch, parentEventId, relatedEventIds, availableEvents])
+  }, [parentEventId])
 
   // 부모 사건 데이터 로드
   useEffect(() => {
@@ -103,22 +99,16 @@ export const useRelationshipsForm = (
       ) {
         setShowPersonList(false)
       }
-      if (
-        relatedEventSelectorRef.current &&
-        !relatedEventSelectorRef.current.contains(event.target as Node)
-      ) {
-        setShowRelatedEventList(false)
-      }
     }
 
-    if (showParentEventList || showPersonList || showRelatedEventList) {
+    if (showParentEventList || showPersonList) {
       document.addEventListener('mousedown', handleClickOutside)
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showParentEventList, showPersonList, showRelatedEventList])
+  }, [showParentEventList, showPersonList])
 
   return {
     // 부모 사건
@@ -142,15 +132,9 @@ export const useRelationshipsForm = (
     personSelectorRef,
     filteredPersons,
 
-    // 관련 사건
-    relatedEventIds,
-    setRelatedEventIds,
-    relatedEventSearch,
-    setRelatedEventSearch,
-    showRelatedEventList,
-    setShowRelatedEventList,
-    relatedEventSelectorRef,
-    filteredRelatedEvents,
+    // 추가 상위 사건
+    extraParentEventIds,
+    setExtraParentEventIds,
   }
 }
 

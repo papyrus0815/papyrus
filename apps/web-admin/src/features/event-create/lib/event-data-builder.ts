@@ -47,6 +47,9 @@ export const extractMentionsFromHtml = (
 
 /**
  * 멘션 데이터 추출
+ *
+ * 사건 멘션 추출(mentionedEvents)은 죽은 계약이던 relatedEventIds union의
+ * 유일한 소비처였어서 함께 제거 — 본문 사건 멘션은 HTML 링크로만 남는다.
  */
 export const extractMentions = (sections: EventSection[]) => {
   const allMentions = sections.flatMap((section) => section.mentions)
@@ -59,11 +62,7 @@ export const extractMentions = (sections: EventSection[]) => {
       note: '',
     }))
 
-  const mentionedEvents = allMentions
-    .filter((mention) => mention.type === 'event')
-    .map((mention) => mention.id)
-
-  return { mentionedPersons, mentionedEvents }
+  return { mentionedPersons }
 }
 
 /**
@@ -147,14 +146,14 @@ export const buildEventSubmitData = (params: {
   primaryCountryId?: string | null
   primaryHistoricalCountryId?: string | null
   relatedPersons: Array<{ personId: string; role: string; note: string }>
-  relatedEventIds: string[]
+  /** 추가 상위(EventParentLink) — 주 상위(parentEventId) 지정 시에만 유효(INV-2) */
+  extraParentEventIds?: string[]
   sections: EventSection[]
   militaryEvent?: MilitaryEvent
   conferenceEvent?: ConferenceEvent
   belligerentsGraph: EventBelligerentsGraph
   warCost: string
   mentionedPersons: Array<{ personId: string; role: string; note: string }>
-  mentionedEvents: string[]
   childEventIds?: string[] // 기존 사건을 하위 사건으로 연결
   /** 키워드 (동일 사건 매핑용) */
   keywords?: string[]
@@ -233,9 +232,10 @@ export const buildEventSubmitData = (params: {
       [...params.relatedPersons, ...params.mentionedPersons].length > 0
         ? [...params.relatedPersons, ...params.mentionedPersons]
         : undefined,
-    relatedEventIds:
-      [...params.relatedEventIds, ...params.mentionedEvents].length > 0
-        ? [...params.relatedEventIds, ...params.mentionedEvents]
+    // INV-2: 추가 상위는 주 상위가 있을 때만 의미 — 주 상위 없으면 미전송
+    extraParentEventIds:
+      params.parentEventId && params.extraParentEventIds?.length
+        ? params.extraParentEventIds
         : undefined,
     // ✅ 새 구조: eventSections (배열로 직접 전송)
     eventSections:

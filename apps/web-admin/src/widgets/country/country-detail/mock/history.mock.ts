@@ -808,6 +808,9 @@ export const mockHistoryData: HistoryData = {
   get majorEvents() {
     return this.events.filter((event) => event.scale === 'major')
   },
+  // ⚠️ 단수 부모(parentEventId) 기준 그룹핑 — 표시 전용 mock 계약.
+  // 실제 API는 주 상위 FK + EventParentLink 다중 상위(extraParents)라
+  // 한 사건이 여러 부모 그룹에 속할 수 있다. 이 형상을 신규 UI에 복제하지 말 것.
   get subEventsByParent() {
     const result: Record<string, HistoricalEvent[]> = {}
     this.events
