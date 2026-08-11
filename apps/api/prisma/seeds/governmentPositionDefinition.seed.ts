@@ -63,18 +63,52 @@ const DEFINITIONS: {
   { positionType: GovernmentPositionType.ROYAL_NOBLE_TITLE, title: '자', titleEn: 'Viscount', titleLocal: '子', rank: 5 },
   { positionType: GovernmentPositionType.ROYAL_NOBLE_TITLE, title: '남', titleEn: 'Baron', titleLocal: '男', rank: 6 },
   { positionType: GovernmentPositionType.ROYAL_NOBLE_TITLE, title: '벽경백', titleEn: 'Count (Byeokgyeong)', titleLocal: '壁經伯', rank: 4 },
-  // ─ 각료/장관 (CABINET_MINISTER) — 행정부 각료. 특정 부처는 재임 행에서 세분(외무대신·외무경 등)하고,
-  //   여기엔 국가·시대 공통으로 재사용할 대표 부처 정의만 둔다. rank는 각의 내 통상 서열(외무·재무·내무·국방 우선).
-  //   더 구체적인 직함(외무대신·외국봉행·6조 판서 등)은 재임 등록의 '기타 (직접 입력)'으로 커버.
+  // ─ 각료/장관 (CABINET_MINISTER) — 행정부 각료. rank는 각의 내 통상 서열(외무·재무·내무·국방 우선).
+  //   ⚠ 2026-08-11 정책 변경: 과거 이 자리에는 "더 구체적인 직함(외국봉행·6조 판서 등)은
+  //   '기타 (직접 입력)'으로 커버"라고 적혀 있었다. 그 정책이 곧 "있어야 할 직책이 목록에 없다"는
+  //   사용자 리포트의 근인이었다(실측: 정의 없이 자유입력으로만 존재하던 재임 21행).
+  //   이제는 **특정 정체 고유 직책도 정의로 등록하고, 적용 범위(GovernmentPositionDefinitionScope)로
+  //   그 나라에서만 보이게** 한다 — governmentPositionDefinitionScope.seed.ts 참고.
+  //   보편 칭호(총리·대통령·장관 등)에는 스코프를 붙이지 않아 전역으로 남는다.
   { positionType: GovernmentPositionType.CABINET_MINISTER, title: '외무장관', titleEn: 'Foreign Minister', rank: 1 },
   { positionType: GovernmentPositionType.CABINET_MINISTER, title: '재무장관', titleEn: 'Finance Minister', rank: 1 },
   { positionType: GovernmentPositionType.CABINET_MINISTER, title: '내무장관', titleEn: 'Interior Minister', rank: 1 },
   { positionType: GovernmentPositionType.CABINET_MINISTER, title: '국방장관', titleEn: 'Defense Minister', rank: 1 },
   { positionType: GovernmentPositionType.CABINET_MINISTER, title: '법무장관', titleEn: 'Justice Minister', rank: 2 },
   { positionType: GovernmentPositionType.CABINET_MINISTER, title: '교육장관', titleEn: 'Education Minister', rank: 2 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '전쟁장관', titleEn: 'Secretary of State for War', rank: 1 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '해군장관', titleEn: 'Navy Minister', rank: 2 },
   { positionType: GovernmentPositionType.CABINET_MINISTER, title: '장관', titleEn: 'Minister', rank: 3 },
   // ─ 차관 (VICE_MINISTER) — 정무직 고위 공무원
   { positionType: GovernmentPositionType.VICE_MINISTER, title: '차관', titleEn: 'Vice Minister', rank: 1 },
+  // ─ 외교직 (DIPLOMATIC_POST) — 각료도 수반도 아니라 카탈로그에 자리가 없던 축.
+  //   주재지는 정의가 아니라 재임 행의 표시명 오버라이드로 적는다(예: 정의 '영사' + 표시명 '광저우 영국 영사').
+  //   따라서 여기엔 국가 무관 보편 계급만 두고 스코프를 붙이지 않는다.
+  { positionType: GovernmentPositionType.DIPLOMATIC_POST, title: '대사', titleEn: 'Ambassador', rank: 1 },
+  { positionType: GovernmentPositionType.DIPLOMATIC_POST, title: '특명전권공사', titleEn: 'Envoy Extraordinary and Minister Plenipotentiary', rank: 2 },
+  { positionType: GovernmentPositionType.DIPLOMATIC_POST, title: '대리공사', titleEn: "Chargé d'affaires", rank: 3 },
+  { positionType: GovernmentPositionType.DIPLOMATIC_POST, title: '총영사', titleEn: 'Consul General', rank: 4 },
+  { positionType: GovernmentPositionType.DIPLOMATIC_POST, title: '영사', titleEn: 'Consul', rank: 5 },
+  { positionType: GovernmentPositionType.DIPLOMATIC_POST, title: '부영사', titleEn: 'Vice Consul', rank: 6 },
+  // ─ 도쿠가와 막부 전속 직책 — 적용 범위 시드가 '도쿠가와 막부'로 스코프를 붙인다.
+  //   ⚠ 로주를 HEAD_OF_GOVERNMENT로 두지 말 것 — 쇼군이 이미 그 자리라 역대 수반·타임라인에서
+  //     같은 시기 수반이 둘로 겹친다. 막부 각로는 각료(CABINET_MINISTER)로 본다.
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '로주', titleEn: 'Rōjū (Senior Councillor)', titleLocal: '老中', rank: 1 },
+  { positionType: GovernmentPositionType.VICE_MINISTER, title: '와카도시요리', titleEn: 'Wakadoshiyori (Junior Councillor)', titleLocal: '若年寄', rank: 1 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '외국봉행', titleEn: 'Commissioner of Foreign Affairs', titleLocal: '外国奉行', rank: 2 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '감정봉행', titleEn: 'Commissioner of Finance', titleLocal: '勘定奉行', rank: 2 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '군함봉행', titleEn: 'Commissioner of Warships', titleLocal: '軍艦奉行', rank: 2 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '보병봉행', titleEn: 'Commissioner of Infantry', titleLocal: '歩兵奉行', rank: 2 },
+  // ─ 조선 전속 직책 — 적용 범위 시드가 역사국가 '조선' + 현대 '대한민국'으로 스코프를 붙인다.
+  //   영의정은 위 HEAD_OF_GOVERNMENT 블록에 이미 있다(삼정승의 수반).
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '좌의정', titleEn: 'Second State Councillor', titleLocal: '左議政', rank: 1 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '우의정', titleEn: 'Third State Councillor', titleLocal: '右議政', rank: 1 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '이조판서', titleEn: 'Minister of Personnel', titleLocal: '吏曹判書', rank: 2 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '호조판서', titleEn: 'Minister of Taxation', titleLocal: '戶曹判書', rank: 2 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '예조판서', titleEn: 'Minister of Rites', titleLocal: '禮曹判書', rank: 2 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '병조판서', titleEn: 'Minister of War', titleLocal: '兵曹判書', rank: 2 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '형조판서', titleEn: 'Minister of Punishments', titleLocal: '刑曹判書', rank: 2 },
+  { positionType: GovernmentPositionType.CABINET_MINISTER, title: '공조판서', titleEn: 'Minister of Works', titleLocal: '工曹判書', rank: 2 },
 ]
 
 export async function seedGovernmentPositionDefinitions(

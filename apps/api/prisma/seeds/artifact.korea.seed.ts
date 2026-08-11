@@ -115,10 +115,18 @@ async function resolveLink(
       select: { id: true },
     })
   } else if (link.type === AggregateType.HISTORICAL_COUNTRY) {
-    found = await prisma.historicalCountry.findFirst({
-      where: { name: { contains: link.nameLike } },
-      select: { id: true },
-    })
+    // 정확 일치 우선 — contains만 쓰면 '조선'이 '조선민주주의인민공화국'을 물어 온다.
+    // (조선 왕조 행이 생기기 전에는 오연결이 유일한 후보라 드러나지 않던 잠복 결함)
+    found =
+      (await prisma.historicalCountry.findFirst({
+        where: { name: link.nameLike },
+        select: { id: true },
+      })) ??
+      (await prisma.historicalCountry.findFirst({
+        where: { name: { contains: link.nameLike } },
+        orderBy: { name: 'asc' },
+        select: { id: true },
+      }))
   }
   return found ? { linkedType: link.type, linkedId: found.id } : {}
 }

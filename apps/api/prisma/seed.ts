@@ -12,6 +12,7 @@ import {
   seedCountries,
   seedEventCategories,
   seedGovernmentPositionDefinitions,
+  seedGovernmentPositionDefinitionScopes,
   seedGermanyHistoricalCountries,
   seedGermanyHistoricalCountryRelations,
   seedBritainHistoricalCountries,
@@ -46,6 +47,8 @@ import {
   seedRomaniaHistoricalCountryRelations,
   seedGreeceHistoricalCountries,
   seedGreeceHistoricalCountryRelations,
+  seedJoseonHistoricalCountries,
+  seedJoseonHistoricalCountryRelations,
   seedNapoleonIII,
   seedPalmerston,
   seedCavour,
@@ -287,8 +290,17 @@ async function main() {
         // 7-26. 그리스 역사 국가 계승·소속 관계 시딩
         await seedGreeceHistoricalCountryRelations(prisma)
 
+        // 7-29. 조선 왕조 역사 국가 시딩 (고려 → 조선 → 대한제국)
+        //  · 의존: seedCountries(현대 KR). KP는 country 테이블에 없어 링크가 warn+skip된다
+        //  · 선재 행 '조선민주주의인민공화국'(1948~)과는 완전 별개 행 — 멱등 판정은 name 완전 일치
+        await seedJoseonHistoricalCountries(prisma)
+
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)
+        //  ⚠️ 적용 범위(스코프) 시딩은 여기가 아니라 **맨 끝(16)** 이다.
+        //     일본 제국·일본국·도쿠가와 막부는 7-x 블록이 아니라 인물·사건 시드(메이지/전후/쿠로후네)
+        //     안에서 생성돼, 여기서 돌리면 역사국가 타깃만 조용히 유실되고 현대 국가 축만 남는다.
+        //     스코프가 1개라도 생기면 '그 국가 전용'으로 확정되므로 0개(전역)보다 나쁜 상태가 된다.
 
         // 8-1. 나폴레옹 3세 + 가족 + 제2공화국 대통령/제2제국 황제 시딩
         //  · 의존: seedFranceHistoricalCountries(제1제국·제2공화국·제2제국 HC) + 관직 정의(대통령·황제)
@@ -501,6 +513,16 @@ async function main() {
 
         // 11. 행정 부처 카테고리 시딩 (국방·외교 등)
         await seedAdministrationDepartmentCategories(prisma)
+
+        // 16. 관직 정의 적용 범위(스코프) 시딩 — **반드시 맨 끝**.
+        //  · 스코프 행 0개 = 전역, 1개 이상 = 그 국가에서만 노출(government.prisma 규약)
+        //  · 참조하는 역사국가가 7-x 블록뿐 아니라 인물·사건 시드에서도 만들어진다:
+        //    일본 제국=seedJapanMeijiEra / 일본국=seedJapanPostwar / 도쿠가와 막부=seedKurofune.
+        //    한 타깃이라도 먼저 돌면 그 항목은 현대 국가 축만 남아 '현대 전용'으로 굳는다.
+        //  · 조선 관계 시드도 같은 이유로 여기서 돌린다(일본 제국·청나라가 그때서야 존재).
+        //    두 시드 모두 멱등이라 재실행이 안전하다.
+        await seedJoseonHistoricalCountryRelations(prisma)
+        await seedGovernmentPositionDefinitionScopes(prisma)
 
         // 7. 어드민 계정 시딩
         await seedAdmin(prisma)
