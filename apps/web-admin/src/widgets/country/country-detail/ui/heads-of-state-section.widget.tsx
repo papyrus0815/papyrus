@@ -81,6 +81,10 @@ import {
   SelectModal,
   type SelectOption,
 } from '@/shared/ui/select-modal/select-modal'
+import {
+  DEFAULT_COLLAPSED_POSITION_GROUPS,
+  groupHeadsPositionOptions,
+} from '@/shared/ui/tenure-register-panel/group-position-options'
 import { notify } from '@/shared/ui/toast'
 
 import {
@@ -92,6 +96,8 @@ import { LineageTree } from './lineage-tree.widget'
 const HEADS_POSITION_TYPES = new Set([
   'HEAD_OF_STATE',
   'HEAD_OF_GOVERNMENT',
+  // 부통령은 정의상 DEPUTY_HEAD_OF_STATE — 이 집합에 없으면 재분류 후 피커에서 통째로 사라진다
+  'DEPUTY_HEAD_OF_STATE',
   'REGENT',
   'HEIR_APPARENT',
   'ROYAL_NOBLE_TITLE',
@@ -652,23 +658,35 @@ export function HeadsOfStateSection({
 
   /** 해당 국가의 관직 정의(DB) — 직책명 선택 목록으로 사용 */
   const { data: positionDefinitions = [] } = useQuery({
-    queryKey: ['position-definitions', countryId, historicalCountryId],
+    queryKey: [
+      'position-definitions',
+      countryId,
+      historicalCountryId,
+      // 수정 중인 정의는 적용 범위 하드컷을 관통시킨다 — 없으면 다른 정체 전용으로 스코프된
+      // 직책을 참조하는 기존 행을 열었을 때 select가 비고, 저장 시 positionType이 OTHER로 덮인다.
+      selectedPositionDefinitionId,
+    ],
     queryFn: () =>
       personCareerApi.getPositionDefinitions({
         countryId,
         historicalCountryId,
+        includeId: selectedPositionDefinitionId,
       }),
     enabled: !!countryId || !!historicalCountryId,
+    placeholderData: (previous) => previous,
   })
 
-  /** 직책 선택 옵션: DB 관직 정의(수반 관련 유형) + 기타 */
+  /**
+   * 직책 선택 옵션: DB 관직 정의(수반 관련 유형) + 기타.
+   * 작위(공작·백작 등)는 수반 집합에 들어 있지만 공직 임기가 아니므로 접히는 별도 그룹으로 내린다
+   * (재임 등록 패널과 같은 규약 — 제외가 아니라 강등이라 기존 작위 기록의 편집 경로는 남는다).
+   */
   const positionTitleOptions: SelectOption<string>[] = React.useMemo(() => {
     const defs = (positionDefinitions as any[]).filter((d) =>
       HEADS_POSITION_TYPES.has(d.positionType),
     )
-    const byDef = defs.map((d) => ({ value: d.id, label: d.title }))
     return [
-      ...byDef,
+      ...groupHeadsPositionOptions(defs, (def) => def.title ?? def.id),
       { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' },
     ]
   }, [positionDefinitions])
@@ -3743,6 +3761,7 @@ export function HeadsOfStateSection({
         onClose={() => setPositionTitleModalOpen(false)}
         title="직책명 선택"
         options={positionTitleOptions}
+        collapsedGroups={DEFAULT_COLLAPSED_POSITION_GROUPS}
         selectedValue={selectedPositionDefinitionId ?? OTHER_POSITION_VALUE}
         onSelect={handlePositionTitleSelect}
       />

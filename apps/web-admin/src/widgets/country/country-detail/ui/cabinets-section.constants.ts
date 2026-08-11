@@ -14,8 +14,13 @@ export const HEAD_POSITION_TYPES = new Set([
   'ROYAL_NOBLE_TITLE',
 ])
 
-/** 각료 등록 시 선택 가능한 직위 타입 (수반·의원 등 제외) */
+/**
+ * 각료 등록 시 선택 가능한 직위 타입 (수반·의원 등 제외).
+ * DEPUTY_HEAD_OF_STATE(부통령)는 스키마 정의부터 "행정부 각료로 cabinetId에 소속"이라
+ * 각료 집합에 포함한다 — 재임 패널의 MINISTER_POSITION_TYPES와 같은 규약.
+ */
 export const MINISTER_POSITION_TYPES = new Set([
+  'DEPUTY_HEAD_OF_STATE',
   'CABINET_MINISTER',
   'VICE_MINISTER',
   'OTHER',

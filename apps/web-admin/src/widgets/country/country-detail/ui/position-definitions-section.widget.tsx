@@ -15,7 +15,11 @@ import {
   FiChevronDown,
   FiLayers,
   FiAward,
+  FiX,
 } from 'react-icons/fi'
+import { useCountries } from '@/features/country/api'
+import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
+import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { personCareerApi } from '@/shared/api/person-career'
 import type { CreateGovernmentPositionDefinitionDto } from '@/shared/api/person-career'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
@@ -52,6 +56,7 @@ const POSITION_TYPE_OPTIONS: SelectOption<string>[] = [
   { value: 'JUDICIARY', label: '사법부' },
   { value: 'LOCAL_GOVERNMENT', label: '지방정부' },
   { value: 'SPECIAL_POSITION', label: '특별직' },
+  { value: 'DIPLOMATIC_POST', label: '외교직' },
   { value: 'MILITARY_COMMANDER', label: '군 지휘관' },
   { value: 'ROYAL_NOBLE_TITLE', label: '왕족/귀족' },
   { value: 'OTHER', label: '기타' },
@@ -69,6 +74,7 @@ const POSITION_TYPE_COLOR: Record<string, { bg: string; text: string; border: st
   JUDICIARY:          { bg: '#fef9c3', text: '#713f12', border: '#fef08a' },
   LOCAL_GOVERNMENT:   { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
   SPECIAL_POSITION:   { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0' },
+  DIPLOMATIC_POST:    { bg: '#e0e7ff', text: '#3730a3', border: '#c7d2fe' },
   MILITARY_COMMANDER: { bg: '#fff7ed', text: '#9a3412', border: '#fed7aa' },
   ROYAL_NOBLE_TITLE:  { bg: '#fdf4ff', text: '#86198f', border: '#f0abfc' },
   OTHER:              { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' },
@@ -206,6 +212,88 @@ const Dot = styled.span`
 const MetaText = styled.span`
   font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/**
+ * 적용 범위 칩 — "전역"인지 "특정 국가 전용"인지를 목록에서 바로 읽히게 한다.
+ * 이 구분이 안 보이면 "왜 이 직책이 저 나라 피커에 안 뜨지?"를 추적할 방법이 없다.
+ */
+const ScopeChip = styled.span<{ $global: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.6;
+  background: ${({ $global, theme }) =>
+    $global
+      ? theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : '#f1f5f9'
+      : theme.mode === 'dark'
+        ? 'rgba(99, 106, 242, 0.18)'
+        : '#eef2ff'};
+  color: ${({ $global, theme }) =>
+    $global ? theme.colors.text.tertiary : theme.colors.primary};
+  border: 1px solid
+    ${({ $global, theme }) =>
+      $global ? theme.colors.border.default : 'rgba(99, 102, 241, 0.35)'};
+`
+
+/** 폼의 적용 범위 편집 — 칩 + 제거 버튼 */
+const ScopeEditRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const ScopeEditChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px 5px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 106, 242, 0.18)' : '#eef2ff'};
+  color: ${({ theme }) => theme.colors.primary};
+  border: 1px solid rgba(99, 102, 241, 0.35);
+
+  button {
+    display: inline-flex;
+    padding: 2px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    border-radius: 50%;
+  }
+  button:hover {
+    background: rgba(99, 102, 241, 0.18);
+  }
+`
+
+const ScopeAddBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+  }
 `
 
 const CardDesc = styled.p`
@@ -360,6 +448,16 @@ const emptyForm = (
   abolishedDate: null,
 })
 
+/** 적용 범위를 사람이 읽는 국가 이름 목록으로 — 비어 있으면 그 정의는 전역이다. */
+function describeScopes(def: GovernmentPositionDefinition): string[] {
+  return (def.scopes ?? [])
+    .map(
+      (scope) =>
+        scope.historicalCountry?.name ?? scope.country?.name ?? null,
+    )
+    .filter((name): name is string => !!name)
+}
+
 export function PositionDefinitionsSection({
   fixedCategoryId,
   fixedCategoryName,
@@ -372,13 +470,15 @@ export function PositionDefinitionsSection({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [positionTypeModalOpen, setPositionTypeModalOpen] = useState(false)
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
+  const [scopeCountryModalOpen, setScopeCountryModalOpen] = useState(false)
   const [form, setForm] = useState<CreateGovernmentPositionDefinitionDto>(
     emptyForm(fixedCategoryId, fixedOrganizationId),
   )
 
   /* 전체 직위 목록 조회 — categoryId / organizationId 로 클라이언트 필터 */
   const { data: allDefinitions = [], isLoading } = useQuery({
-    queryKey: ['position-definitions-all'],
+    // ['position-definitions', …] 프리픽스 통일 — 정의를 만들면 재임·재위 피커도 함께 갱신된다
+    queryKey: ['position-definitions', 'all'],
     queryFn: () => personCareerApi.getPositionDefinitions({}),
   })
 
@@ -396,7 +496,48 @@ export function PositionDefinitionsSection({
   })
 
   const refetch = () => {
-    queryClient.invalidateQueries({ queryKey: ['position-definitions-all'] })
+    queryClient.invalidateQueries({ queryKey: ['position-definitions'] })
+  }
+
+  /* 적용 범위 편집 — 국가 목록은 앱 전역 캐시를 그대로 쓴다 */
+  const { data: modernCountryList = [] } = useCountries()
+  const { data: historicalCountryList = [] } = useHistoricalCountries()
+
+  /** 수정 중인 정의의 현재 적용 범위 — 목록 캐시에서 파생해 추가·삭제 후 자동 갱신된다 */
+  const editingScopes = editingId
+    ? ((allDefinitions as GovernmentPositionDefinition[]).find(
+        (def) => def.id === editingId,
+      )?.scopes ?? [])
+    : []
+
+  const handleAddScope = async (target: { id: string; isHistorical: boolean }) => {
+    if (!editingId || !target.id) return
+    try {
+      await personCareerApi.addPositionDefinitionScope(
+        editingId,
+        target.isHistorical
+          ? { historicalCountryId: target.id }
+          : { countryId: target.id },
+      )
+      notify.success('적용 범위가 추가되었습니다.')
+      refetch()
+    } catch (err) {
+      notify.error(
+        err instanceof Error ? err.message : '적용 범위 추가에 실패했습니다.',
+      )
+    }
+  }
+
+  const handleRemoveScope = async (scopeId: string) => {
+    try {
+      await personCareerApi.removePositionDefinitionScope(scopeId)
+      notify.success('적용 범위가 해제되었습니다.')
+      refetch()
+    } catch (err) {
+      notify.error(
+        err instanceof Error ? err.message : '적용 범위 해제에 실패했습니다.',
+      )
+    }
   }
 
   const openForm = (def?: GovernmentPositionDefinition | null) => {
@@ -479,7 +620,12 @@ export function PositionDefinitionsSection({
             <FiLayers size={18} color="#6366f1" />
             직위 정의
           </SectionTitle>
-          <SectionSub>{contextLabel} 소속 직위 목록입니다.</SectionSub>
+          {/* 이 목록은 국가로 걸러지지 않는다 — 전역 카탈로그 전체다.
+              "이 국가 소속"이라고 적으면 거짓이 되므로 적용 범위 칩으로 구분을 넘긴다. */}
+          <SectionSub>
+            {contextLabel} 직위 목록입니다. 각 직위의 <strong>적용 범위</strong>가 비어 있으면
+            모든 국가에서, 국가가 지정돼 있으면 그 국가에서만 재임·재위 등록에 나옵니다.
+          </SectionSub>
         </SectionTitleBlock>
         {view === 'list' && (
           <AddBtn type="button" onClick={() => openForm(null)}>
@@ -505,6 +651,7 @@ export function PositionDefinitionsSection({
                   POSITION_TYPE_OPTIONS.find((o) => o.value === def.positionType)?.label ??
                   def.positionType
                 const parentLabel = def.category?.name ?? def.organization?.name ?? null
+                const scopeLabels = describeScopes(def)
 
                 return (
                   <Card key={def.id}>
@@ -524,6 +671,14 @@ export function PositionDefinitionsSection({
                             <MetaText>{def.titleEn}</MetaText>
                           </>
                         )}
+                        <Dot />
+                        <ScopeChip $global={scopeLabels.length === 0}>
+                          {scopeLabels.length === 0
+                            ? '전역'
+                            : `${scopeLabels.slice(0, 3).join(' · ')}${
+                                scopeLabels.length > 3 ? ` +${scopeLabels.length - 3}` : ''
+                              } 전용`}
+                        </ScopeChip>
                       </CardMeta>
                       {def.description && <CardDesc>{def.description}</CardDesc>}
                     </CardBody>
@@ -645,6 +800,48 @@ export function PositionDefinitionsSection({
                     </FieldControl>
                   </FieldRow>
 
+                  {/* 적용 범위 — 수정 모드에서만. 신규 생성 시엔 아직 정의 id가 없어 스코프를 붙일 수 없다
+                      (등록 후 다시 열어 지정). 비어 있으면 전역이라는 규칙을 문구로 명시한다. */}
+                  {editingId && (
+                    <FieldRow>
+                      <FieldLabel>적용 범위</FieldLabel>
+                      <FieldControl>
+                        <ScopeEditRow>
+                          {editingScopes.length === 0 ? (
+                            <ScopeChip $global>전역 (모든 국가)</ScopeChip>
+                          ) : (
+                            editingScopes.map((scope) => (
+                              <ScopeEditChip key={scope.id}>
+                                {scope.historicalCountry?.name ??
+                                  scope.country?.name ??
+                                  '알 수 없음'}
+                                <button
+                                  type="button"
+                                  aria-label="적용 범위 제거"
+                                  onClick={() => handleRemoveScope(scope.id)}
+                                >
+                                  <FiX size={13} />
+                                </button>
+                              </ScopeEditChip>
+                            ))
+                          )}
+                          <ScopeAddBtn
+                            type="button"
+                            onClick={() => setScopeCountryModalOpen(true)}
+                          >
+                            <FiPlus size={13} />
+                            국가 지정
+                          </ScopeAddBtn>
+                        </ScopeEditRow>
+                        <FieldHint style={{ marginTop: 8 }}>
+                          비워 두면 <strong>모든 국가</strong>의 직책 목록에 나옵니다(총리·대통령
+                          같은 보편 칭호). 국가를 지정하면 <strong>그 국가에서만</strong> 보입니다
+                          (쇼군·영의정처럼 한 정체 고유 직책).
+                        </FieldHint>
+                      </FieldControl>
+                    </FieldRow>
+                  )}
+
                   {/* 카테고리 선택 — 고정 카테고리가 없을 때만 표시 */}
                   {!fixedCategoryId && !fixedOrganizationId && (
                     <FieldRow>
@@ -728,6 +925,33 @@ export function PositionDefinitionsSection({
           </FormCardWrapper>
         </FormWrap>
       )}
+
+      {/* 적용 범위 지정 — 현대 국가·역사적 국가 어느 쪽이든 고를 수 있다.
+          역사국가만 지정하면 사용자가 현대 국가만 골랐을 때 그 직책이 사라지므로,
+          시드와 마찬가지로 대응 현대 국가도 함께 지정하는 편이 안전하다(dual-fill). */}
+      <CountrySearchModal
+        isOpen={scopeCountryModalOpen}
+        onClose={() => setScopeCountryModalOpen(false)}
+        title="적용 범위 국가 선택"
+        placeholder="국가명으로 검색..."
+        modernCountries={(modernCountryList as Array<{ id: string; name?: string | null; localName?: string | null; flagEmoji?: string | null }>).map(
+          (country) => ({
+            id: country.id,
+            name: country.name ?? country.localName ?? country.id,
+            flagEmoji: country.flagEmoji ?? null,
+          }),
+        )}
+        historicalCountries={(historicalCountryList as Array<{ id: string; name?: string | null }>).map(
+          (historical) => ({
+            id: historical.id,
+            name: historical.name ?? historical.id,
+          }),
+        )}
+        onSelect={(selected) => {
+          setScopeCountryModalOpen(false)
+          void handleAddScope({ id: selected.id, isHistorical: selected.isHistorical })
+        }}
+      />
     </Section>
   )
 }

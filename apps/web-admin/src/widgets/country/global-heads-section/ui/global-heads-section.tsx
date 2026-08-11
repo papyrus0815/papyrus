@@ -28,12 +28,18 @@ import {
 } from '@/shared/ui/register-form-layout'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
+import {
+  DEFAULT_COLLAPSED_POSITION_GROUPS,
+  groupHeadsPositionOptions,
+} from '@/shared/ui/tenure-register-panel/group-position-options'
 import { GLOBAL_POSITION_DEFINITION_IDS } from '@/features/event-list/lib'
 
 /** 전역 수반 등록 시 표시할 관직 유형 (수반 관련 전체 — 교황, 국왕, 대통령 등) */
 const HEADS_POSITION_TYPES = new Set([
   'HEAD_OF_STATE',
   'HEAD_OF_GOVERNMENT',
+  // 부통령은 정의상 DEPUTY_HEAD_OF_STATE — 이 집합에 없으면 재분류 후 피커에서 통째로 사라진다
+  'DEPUTY_HEAD_OF_STATE',
   'REGENT',
   'HEIR_APPARENT',
   'ROYAL_NOBLE_TITLE',
@@ -537,8 +543,13 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
     if (aGlobal !== bGlobal) return aGlobal - bGlobal
     return (a.rank ?? 999) - (b.rank ?? 999)
   })
+  // 작위(공작·백작 등)는 수반 집합에 들어 있지만 공직 임기가 아니므로 접히는 별도 그룹으로 내린다.
+  // 정렬(전역 직책 우선 → rank)은 그대로 보존되고, 그룹 안에서만 유지된다.
   const positionOptions: SelectOption<string>[] = [
-    ...sortedDefs.map((d) => ({ value: d.id, label: d.title + (d.titleEn ? ` (${d.titleEn})` : '') })),
+    ...groupHeadsPositionOptions(
+      sortedDefs,
+      (def) => `${def.title}${def.titleEn ? ` (${def.titleEn})` : ''}`,
+    ),
     { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' },
   ]
   const selectedDef = selectedPositionDefId
@@ -962,6 +973,7 @@ export function GlobalHeadsSection({ embedded }: GlobalHeadsSectionProps) {
           onClose={() => setPositionModalOpen(false)}
           title="직책 선택"
           options={positionOptions}
+          collapsedGroups={DEFAULT_COLLAPSED_POSITION_GROUPS}
           selectedValue={selectedPositionDefId ?? OTHER_POSITION_VALUE}
           onSelect={handlePositionSelect}
         />
