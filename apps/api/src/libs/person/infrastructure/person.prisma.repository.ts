@@ -3920,20 +3920,172 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
-   * 관직 정의 목록 조회 — 단일 레벨 전체 (재임 선택·관리 공통)
+   * 국가 컨텍스트 매칭 절 — 현대/역사 두 축은 **반드시 OR**, 그리고 **브리지 1홉 확장**.
+   *
+   * 두 축을 AND로 묶으면 안 되는 이유: 실측상 재임 65행의 귀속이 역사국가만 54 / 현대만 11 /
+   * 둘 다 0이다. 값이 있는 축만 절에 넣으므로 NULL 동등비교로 아무 행이나 걸리는 사고도 없다.
+   *
+   * 브리지(historical_country_modern_country)를 타는 이유: 사용자가 '독일'만 골랐는데 기록은
+   * '독일 제국'에 붙어 있는 식의 축 불일치가 지배적이다. 이걸 안 타면 (a) 현대 국가 컨텍스트의
+   * 사용 실적이 항상 0이 되어 "이 국가에서 쓰인 직책" 그룹이 통째로 꺼지고, (b) 역사국가에만
+   * 스코프된 직책이 대응 현대 국가에서 사라진다(그 반대도 마찬가지).
+   * 이 확장은 tenure/reign 행과 스코프 행 모두 (countryId, historicalCountryId) 두 컬럼을
+   * 가지므로 양쪽에 그대로 쓸 수 있다.
    */
-  async findPositionDefinitions(_params?: {
+  private async buildCountryScopeOr(params?: {
     countryId?: string
     historicalCountryId?: string
+  }): Promise<Array<Record<string, any>>> {
+    const countryIds = new Set<string>()
+    const historicalIds = new Set<string>()
+    if (params?.countryId) countryIds.add(params.countryId)
+    if (params?.historicalCountryId) historicalIds.add(params.historicalCountryId)
+    if (countryIds.size === 0 && historicalIds.size === 0) return []
+
+    const links = await this.prisma.historicalCountryModernCountry.findMany({
+      where: {
+        OR: [
+          ...(params?.countryId ? [{ modernCountryId: params.countryId }] : []),
+          ...(params?.historicalCountryId
+            ? [{ historicalCountryId: params.historicalCountryId }]
+            : []),
+        ],
+      },
+      select: { modernCountryId: true, historicalCountryId: true },
+    })
+    for (const link of links) {
+      if (link.modernCountryId) countryIds.add(link.modernCountryId)
+      if (link.historicalCountryId) historicalIds.add(link.historicalCountryId)
+    }
+
+    const clauses: Array<Record<string, any>> = []
+    if (countryIds.size > 0) clauses.push({ countryId: { in: [...countryIds] } })
+    if (historicalIds.size > 0) {
+      clauses.push({ historicalCountryId: { in: [...historicalIds] } })
+    }
+    return clauses
+  }
+
+  /**
+   * 관직 정의 목록 조회 — 재임·재위 피커와 카탈로그 관리 공통.
+   *
+   * 스코프 규칙: **스코프 행 0개 = 전역(항상 노출), 1개 이상 = 그 국가에서만 노출.**
+   * 국가 컨텍스트가 하나도 없으면 필터하지 않고 전량 반환한다 — 카탈로그 관리 화면과
+   * 무파라미터 소비자(국가 상세 직위 섹션 등)가 전량 반환에 의존하기 때문.
+   *
+   * includeIds(수정 중인 재임이 참조하는 정의)는 **어떤 하드컷보다 먼저** 통과시킨다.
+   * 목록에서 빠지면 편집 화면에서 직책이 비어 보이고 재저장 시 연결이 유실된다.
+   */
+  async findPositionDefinitions(params?: {
+    countryId?: string
+    historicalCountryId?: string
+    includeIds?: string[]
   }): Promise<any[]> {
+    const scopeOr = await this.buildCountryScopeOr(params)
+    const includeIds = (params?.includeIds ?? []).filter(Boolean)
+
+    const where =
+      scopeOr.length === 0
+        ? undefined
+        : {
+            OR: [
+              // 스코프가 하나도 없는 정의 = 어느 나라에서나 쓰는 보편 칭호(총리·대통령·국왕…)
+              { scopes: { none: {} } },
+              { scopes: { some: { OR: scopeOr } } },
+              ...(includeIds.length > 0 ? [{ id: { in: includeIds } }] : []),
+            ],
+          }
+
     const list = await this.prisma.governmentPositionDefinition.findMany({
+      where,
       include: {
         category: { select: { id: true, name: true, nameEn: true } },
         organization: { select: { id: true, name: true, shortName: true } },
+        // 적용 범위 칩·편집용 — 빈 배열이면 "전역"이라는 뜻이다(별도 플래그 없음)
+        scopes: {
+          include: {
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
       orderBy: [{ rank: 'asc' }, { title: 'asc' }],
     })
     return list.map((row) => this.serializeDefinition(row))
+  }
+
+  /**
+   * 직책 피커 전용 조회 — 스코프 하드컷을 통과한 정의에 "이 국가에서 실제로 쓰였는가"를 주석으로 붙이고,
+   * 카탈로그에 없어 자유입력(positionDefinitionId NULL)으로 저장된 직책명도 함께 돌려준다.
+   *
+   * 제외가 아니라 **주석**이라는 점이 핵심 — 순서·그룹은 프론트가 정한다. 서버가 조용히 빼면
+   * "있어야 할 직책이 안 보인다"는 반대편 버그가 생긴다.
+   *
+   * ⚠️ GovernmentPositionTenure·SovereignReign에는 deletedAt 필드가 없다(소프트삭제 개념 자체가 없음).
+   *    집계 where에 넣으면 Prisma validation 오류로 500이 난다.
+   */
+  async findPositionDefinitionsForPicker(params?: {
+    countryId?: string
+    historicalCountryId?: string
+    includeIds?: string[]
+  }): Promise<{
+    definitions: any[]
+    recentTitles: Array<{ title: string; positionType: string; count: number }>
+  }> {
+    const definitions = await this.findPositionDefinitions(params)
+    const scopeOr = await this.buildCountryScopeOr(params)
+
+    if (scopeOr.length === 0) {
+      return {
+        definitions: definitions.map((def) => ({
+          ...def,
+          usedCount: 0,
+          usedInThisCountry: false,
+        })),
+        recentTitles: [],
+      }
+    }
+
+    const [tenureUsage, reignUsage, freeTitles] = await Promise.all([
+      this.prisma.governmentPositionTenure.groupBy({
+        by: ['positionDefinitionId'],
+        where: { positionDefinitionId: { not: null }, OR: scopeOr },
+        _count: { _all: true },
+      }),
+      this.prisma.sovereignReign.groupBy({
+        by: ['positionDefinitionId'],
+        where: { positionDefinitionId: { not: null }, OR: scopeOr },
+        _count: { _all: true },
+      }),
+      this.prisma.governmentPositionTenure.groupBy({
+        by: ['title', 'positionType'],
+        where: { positionDefinitionId: null, title: { not: null }, OR: scopeOr },
+        _count: { _all: true },
+      }),
+    ])
+
+    const usedCountById = new Map<string, number>()
+    for (const row of [...tenureUsage, ...reignUsage]) {
+      const key = row.positionDefinitionId
+      if (!key) continue
+      usedCountById.set(key, (usedCountById.get(key) ?? 0) + row._count._all)
+    }
+
+    return {
+      definitions: definitions.map((def) => {
+        const usedCount = usedCountById.get(def.id) ?? 0
+        return { ...def, usedCount, usedInThisCountry: usedCount > 0 }
+      }),
+      recentTitles: freeTitles
+        .filter((row) => (row.title ?? '').trim().length > 0)
+        .map((row) => ({
+          title: row.title as string,
+          positionType: row.positionType as string,
+          count: row._count._all,
+        }))
+        .sort((left, right) => right.count - left.count || left.title.localeCompare(right.title)),
+    }
   }
 
   /**
@@ -3945,6 +4097,14 @@ export class PersonPrismaRepository implements IPersonRepository {
       include: {
         category: { select: { id: true, name: true, nameEn: true } },
         organization: { select: { id: true, name: true, shortName: true } },
+        // 적용 범위 칩·편집용 — 빈 배열이면 "전역"이라는 뜻이다(별도 플래그 없음)
+        scopes: {
+          include: {
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     })
     return row ? this.serializeDefinition(row) : null
@@ -3973,6 +4133,14 @@ export class PersonPrismaRepository implements IPersonRepository {
       include: {
         category: { select: { id: true, name: true, nameEn: true } },
         organization: { select: { id: true, name: true, shortName: true } },
+        // 적용 범위 칩·편집용 — 빈 배열이면 "전역"이라는 뜻이다(별도 플래그 없음)
+        scopes: {
+          include: {
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     })
     return this.serializeDefinition(row)
@@ -4005,6 +4173,14 @@ export class PersonPrismaRepository implements IPersonRepository {
       include: {
         category: { select: { id: true, name: true, nameEn: true } },
         organization: { select: { id: true, name: true, shortName: true } },
+        // 적용 범위 칩·편집용 — 빈 배열이면 "전역"이라는 뜻이다(별도 플래그 없음)
+        scopes: {
+          include: {
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     })
     return this.serializeDefinition(row)
@@ -4017,6 +4193,71 @@ export class PersonPrismaRepository implements IPersonRepository {
     await this.prisma.governmentPositionDefinition.delete({
       where: { id },
     })
+  }
+
+  /**
+   * 관직 정의 적용 범위 추가 — 이 정의를 특정 국가/정체 전용으로 만든다.
+   * 첫 스코프가 붙는 순간 그 정의는 전역에서 내려오므로(스코프 0=전역 규칙) 호출부는
+   * 보편 칭호(총리·대통령·국왕 등)에 이걸 붙이지 않도록 주의해야 한다.
+   *
+   * 멱등: @@unique를 안 걸었으므로(MySQL NULL 유니크는 반쪽 보증) 앱에서 findFirst→create.
+   */
+  async addPositionDefinitionScope(dto: {
+    definitionId: string
+    countryId?: string | null
+    historicalCountryId?: string | null
+    localTitle?: string | null
+    note?: string | null
+  }): Promise<any> {
+    const countryId = dto.countryId ?? null
+    const historicalCountryId = dto.historicalCountryId ?? null
+    const existing = await this.prisma.governmentPositionDefinitionScope.findFirst({
+      where: { definitionId: dto.definitionId, countryId, historicalCountryId },
+    })
+    if (existing) return serializeBigInt(existing)
+    const row = await this.prisma.governmentPositionDefinitionScope.create({
+      data: {
+        definitionId: dto.definitionId,
+        countryId,
+        historicalCountryId,
+        localTitle: dto.localTitle ?? null,
+        note: dto.note ?? null,
+      },
+    })
+    return serializeBigInt(row)
+  }
+
+  /**
+   * 정의가 실제로 쓰이는 서로 다른 국가 컨텍스트 수 + 현재 스코프 행 수.
+   * "아직 전역인데 여러 나라에서 쓰이는 정의"를 좁히려는 시도를 막는 판정 근거.
+   */
+  async countPositionDefinitionUsageContexts(
+    definitionId: string,
+  ): Promise<{ contextCount: number; scopeCount: number }> {
+    const [tenures, reigns, scopeCount] = await Promise.all([
+      this.prisma.governmentPositionTenure.findMany({
+        where: { positionDefinitionId: definitionId },
+        select: { countryId: true, historicalCountryId: true },
+      }),
+      this.prisma.sovereignReign.findMany({
+        where: { positionDefinitionId: definitionId },
+        select: { countryId: true, historicalCountryId: true },
+      }),
+      this.prisma.governmentPositionDefinitionScope.count({
+        where: { definitionId },
+      }),
+    ])
+    const contexts = new Set<string>()
+    for (const row of [...tenures, ...reigns]) {
+      if (row.historicalCountryId) contexts.add(`h:${row.historicalCountryId}`)
+      else if (row.countryId) contexts.add(`c:${row.countryId}`)
+    }
+    return { contextCount: contexts.size, scopeCount }
+  }
+
+  /** 관직 정의 적용 범위 삭제 — 마지막 스코프를 지우면 그 정의는 다시 전역이 된다. */
+  async removePositionDefinitionScope(scopeId: string): Promise<void> {
+    await this.prisma.governmentPositionDefinitionScope.delete({ where: { id: scopeId } })
   }
 
   private serializeDefinition(row: any): any {

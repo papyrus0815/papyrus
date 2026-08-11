@@ -1338,8 +1338,60 @@ export class PersonService {
   async findPositionDefinitions(params: {
     countryId?: string
     historicalCountryId?: string
+    includeIds?: string[]
   }): Promise<any[]> {
     return this.personRepository.findPositionDefinitions(params)
+  }
+
+  /**
+   * 직책 피커용 조회 — 스코프 하드컷 + 이 국가에서의 사용 실적 주석 + 자유입력 직책명.
+   */
+  async findPositionDefinitionsForPicker(params: {
+    countryId?: string
+    historicalCountryId?: string
+    includeIds?: string[]
+  }): Promise<{
+    definitions: any[]
+    recentTitles: Array<{ title: string; positionType: string; count: number }>
+  }> {
+    return this.personRepository.findPositionDefinitionsForPicker(params)
+  }
+
+  /** 관직 정의 적용 범위 추가 (없으면 전역) */
+  async addPositionDefinitionScope(dto: {
+    definitionId: string
+    countryId?: string | null
+    historicalCountryId?: string | null
+    localTitle?: string | null
+    note?: string | null
+  }): Promise<any> {
+    if (!dto.countryId && !dto.historicalCountryId) {
+      throw new BadRequestException(
+        '적용 범위에는 현대 국가 또는 역사적 국가 중 하나 이상이 필요합니다.',
+      )
+    }
+    /**
+     * 첫 스코프가 붙는 순간 그 정의는 **목록에 없는 모든 나라에서 사라진다**(스코프 0=전역 규칙).
+     * '국왕'처럼 역사국가 18곳에 걸쳐 쓰이는 보편 칭호에 클릭 한 번으로 스코프가 붙으면
+     * 나머지 17곳의 신규 등록 경로가 통째로 막힌다. 그래서 아직 전역인 정의가 이미 여러
+     * 국가 컨텍스트에서 쓰이고 있으면 거부한다(재분류 스크립트가 가진 가드의 실시간 대칭).
+     */
+    const usage = await this.personRepository.countPositionDefinitionUsageContexts(
+      dto.definitionId,
+    )
+    if (usage.scopeCount === 0 && usage.contextCount > 1) {
+      throw new BadRequestException(
+        `이 직책은 이미 ${usage.contextCount}개 국가에서 쓰이고 있어 특정 국가 전용으로 좁힐 수 없습니다. ` +
+          '적용 범위를 지정하면 목록에 없는 나머지 국가에서는 이 직책을 새로 등록할 수 없게 됩니다. ' +
+          '국가별로 구분이 필요하면 그 나라 고유 명칭의 직책을 따로 만들어 주세요.',
+      )
+    }
+    return this.personRepository.addPositionDefinitionScope(dto)
+  }
+
+  /** 관직 정의 적용 범위 삭제 — 전부 지우면 다시 전역 */
+  async removePositionDefinitionScope(scopeId: string): Promise<void> {
+    return this.personRepository.removePositionDefinitionScope(scopeId)
   }
 
   /**

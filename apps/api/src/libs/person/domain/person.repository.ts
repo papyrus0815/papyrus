@@ -527,7 +527,31 @@ export interface IPersonRepository {
   findPositionDefinitions(params: {
     countryId?: string
     historicalCountryId?: string
+    /** 수정 중인 정의 — 스코프 하드컷보다 먼저 통과시킨다 */
+    includeIds?: string[]
   }): Promise<any[]>
+  /** 피커 전용 — 스코프 통과 정의 + 이 국가에서의 사용 실적 + 자유입력 직책명 */
+  findPositionDefinitionsForPicker(params: {
+    countryId?: string
+    historicalCountryId?: string
+    includeIds?: string[]
+  }): Promise<{
+    definitions: any[]
+    recentTitles: Array<{ title: string; positionType: string; count: number }>
+  }>
+  /** 정의가 쓰이는 서로 다른 국가 컨텍스트 수 + 현재 스코프 행 수 (범위 좁히기 가드용) */
+  countPositionDefinitionUsageContexts(definitionId: string): Promise<{
+    contextCount: number
+    scopeCount: number
+  }>
+  addPositionDefinitionScope(dto: {
+    definitionId: string
+    countryId?: string | null
+    historicalCountryId?: string | null
+    localTitle?: string | null
+    note?: string | null
+  }): Promise<any>
+  removePositionDefinitionScope(scopeId: string): Promise<void>
   findPositionDefinitionById(id: string): Promise<any | null>
   createPositionDefinition(
     dto: CreateGovernmentPositionDefinitionDto,

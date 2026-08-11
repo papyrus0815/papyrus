@@ -22,6 +22,7 @@ import {
   CreateGovernmentPositionTenureDto,
   CreateSovereignReignDto,
   CreateGovernmentPositionDefinitionDto,
+  CreateGovernmentPositionDefinitionScopeDto,
   CreateTenureAchievementDto,
   CreateRegnalEraDto,
   UpdateRegnalEraDto,
@@ -177,12 +178,63 @@ export class GovernmentPositionController {
   async getDefinitions(
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
+    /** 수정 중인 정의 — 적용 범위 하드컷보다 먼저 통과시켜 편집 중 선택이 유실되지 않게 한다 */
+    @Query('includeId') includeId?: string,
   ): Promise<any[]> {
     const list = await this.personService.findPositionDefinitions({
       countryId: countryId || undefined,
       historicalCountryId: historicalCountryId || undefined,
+      includeIds: includeId ? [includeId] : undefined,
     })
     return list.map(serializeBigInt)
+  }
+
+  /**
+   * 직책 피커 전용 조회 — 정의(스코프 하드컷 + 사용 실적 주석) + 자유입력 직책명.
+   *
+   * ⚠️ 반드시 `@Get('definitions/:id')`보다 **위에** 선언할 것. 아래에 두면 id='picker'로 잡혀
+   *    "관직 정의를 찾을 수 없습니다"가 난다.
+   */
+  @Get('definitions/picker')
+  async getDefinitionsForPicker(
+    @Query('countryId') countryId?: string,
+    @Query('historicalCountryId') historicalCountryId?: string,
+    @Query('includeId') includeId?: string,
+  ): Promise<any> {
+    const result = await this.personService.findPositionDefinitionsForPicker({
+      countryId: countryId || undefined,
+      historicalCountryId: historicalCountryId || undefined,
+      includeIds: includeId ? [includeId] : undefined,
+    })
+    return serializeBigInt(result)
+  }
+
+  /**
+   * 관직 정의 적용 범위 추가 — 이 정의를 특정 국가/정체 전용으로 만든다.
+   * 스코프가 하나라도 붙으면 그 정의는 다른 국가의 피커에서 사라지므로,
+   * 총리·대통령·국왕 같은 보편 칭호에는 붙이지 말 것.
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post('definitions/:id/scopes')
+  async addDefinitionScope(
+    @Param('id') id: string,
+    @Body() dto: CreateGovernmentPositionDefinitionScopeDto,
+  ): Promise<any> {
+    const scope = await this.personService.addPositionDefinitionScope({
+      definitionId: id,
+      countryId: dto.countryId ?? null,
+      historicalCountryId: dto.historicalCountryId ?? null,
+      localTitle: dto.localTitle ?? null,
+      note: dto.note ?? null,
+    })
+    return serializeBigInt(scope)
+  }
+
+  /** 관직 정의 적용 범위 삭제 — 전부 지우면 그 정의는 다시 전역이 된다. */
+  @UseGuards(AuthGuard('jwt'))
+  @Delete('definitions/scopes/:scopeId')
+  async removeDefinitionScope(@Param('scopeId') scopeId: string): Promise<void> {
+    await this.personService.removePositionDefinitionScope(scopeId)
   }
 
   /**
@@ -196,7 +248,12 @@ export class GovernmentPositionController {
 
   /**
    * 관직 정의 생성
+   *
+   * 카탈로그는 계정 소유가 없는 전역 자원이라 소유권 검사는 불가하지만,
+   * 인증 없이 누구나 전역 카탈로그를 바꿀 수 있던 상태는 막는다(읽기 3종은 공개 유지 —
+   * 인물·국가 상세의 조회 경로가 비로그인에서도 열려 있음).
    */
+  @UseGuards(AuthGuard('jwt'))
   @Post('definitions')
   async createDefinition(
     @Body() dto: CreateGovernmentPositionDefinitionDto,
@@ -208,6 +265,7 @@ export class GovernmentPositionController {
   /**
    * 관직 정의 수정
    */
+  @UseGuards(AuthGuard('jwt'))
   @Put('definitions/:id')
   async updateDefinition(
     @Param('id') id: string,
@@ -220,6 +278,7 @@ export class GovernmentPositionController {
   /**
    * 관직 정의 삭제
    */
+  @UseGuards(AuthGuard('jwt'))
   @Delete('definitions/:id')
   async deleteDefinition(@Param('id') id: string): Promise<void> {
     await this.personService.deletePositionDefinition(id)

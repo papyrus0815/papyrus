@@ -673,7 +673,7 @@ export class CreateGovernmentPositionTenureDto {
   personId!: string
 
   @IsString()
-  positionType!: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT' | 'DEPUTY_HEAD_OF_STATE' | 'HEIR_APPARENT' | 'REGENT' | 'CABINET_MINISTER' | 'VICE_MINISTER' | 'LEGISLATOR' | 'JUDICIARY' | 'LOCAL_GOVERNMENT' | 'SPECIAL_POSITION' | 'MILITARY_COMMANDER' | 'ROYAL_NOBLE_TITLE' | 'OTHER' // 직위 타입 (Prisma GovernmentPositionType 미러)
+  positionType!: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT' | 'DEPUTY_HEAD_OF_STATE' | 'HEIR_APPARENT' | 'REGENT' | 'CABINET_MINISTER' | 'VICE_MINISTER' | 'LEGISLATOR' | 'JUDICIARY' | 'LOCAL_GOVERNMENT' | 'SPECIAL_POSITION' | 'DIPLOMATIC_POST' | 'MILITARY_COMMANDER' | 'ROYAL_NOBLE_TITLE' | 'OTHER' // 직위 타입 (Prisma GovernmentPositionType 미러)
 
   /** 직위명 — positionDefinitionId가 있으면 생략(정의에서 표시), 기타 직접 입력 시 필수 */
   @IsOptional()
