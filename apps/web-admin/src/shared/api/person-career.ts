@@ -211,6 +211,7 @@ export interface CreateGovernmentPositionTenureDto {
     | 'JUDICIARY'
     | 'LOCAL_GOVERNMENT'
     | 'SPECIAL_POSITION'
+    | 'DIPLOMATIC_POST' // 외교직 — 대사·공사·영사 (서버 DTO와 동기화)
     | 'MILITARY_COMMANDER'
     | 'ROYAL_NOBLE_TITLE'
     | 'OTHER' // 직위 타입 (필수)
@@ -369,6 +370,50 @@ export type UpdateSovereignReignDto = Partial<
   endReasonDetail?: string | null
   notes?: string | null
   regnalName?: string | null
+}
+
+/**
+ * 관직 정의의 적용 범위 — 행이 0개면 그 정의는 전역(어느 국가에서나 노출)이라는 뜻이다.
+ * 별도 플래그가 없는 이유: 플래그를 켜고 범위를 못 붙이면 "어디에도 안 보이는 정의"가 생긴다.
+ */
+export interface GovernmentPositionDefinitionScope {
+  id: string
+  definitionId: string
+  countryId?: string | null
+  historicalCountryId?: string | null
+  country?: { id: string; name?: string | null } | null
+  historicalCountry?: { id: string; name?: string | null } | null
+  localTitle?: string | null
+  note?: string | null
+}
+
+/** 피커 응답의 정의 — 목록 정의 + 이 국가에서의 사용 실적 주석 */
+export interface PickerPositionDefinition {
+  id: string
+  title?: string | null
+  titleEn?: string | null
+  positionType?: string | null
+  isMonarchical?: boolean | null
+  rank?: number | null
+  scopes?: GovernmentPositionDefinitionScope[] | null
+  /** 이 국가 컨텍스트의 재임·재위에서 쓰인 횟수 */
+  usedCount?: number
+  usedInThisCountry?: boolean
+}
+
+/**
+ * 카탈로그에 없어 자유입력(positionDefinitionId NULL)으로 저장된 직책명.
+ * 같은 국가에서 이미 쓰인 표기라 다음 사람이 다시 손으로 칠 필요가 없게 선택지로 되살린다.
+ */
+export interface RecentFreeTitle {
+  title: string
+  positionType: string
+  count: number
+}
+
+export interface PositionDefinitionPickerResponse {
+  definitions: PickerPositionDefinition[]
+  recentTitles: RecentFreeTitle[]
 }
 
 /**
@@ -1261,16 +1306,66 @@ export const personCareerApi = {
     params: {
       countryId?: string
       historicalCountryId?: string
+      /** 수정 중인 정의 — 적용 범위 하드컷보다 먼저 통과시켜 편집 중 선택 유실을 막는다 */
+      includeId?: string | null
     } = {},
   ) => {
-    const q = new URLSearchParams()
-    if (params.countryId) q.set('countryId', params.countryId)
+    const query = new URLSearchParams()
+    if (params.countryId) query.set('countryId', params.countryId)
     if (params.historicalCountryId)
-      q.set('historicalCountryId', params.historicalCountryId)
+      query.set('historicalCountryId', params.historicalCountryId)
+    if (params.includeId) query.set('includeId', params.includeId)
     const response = await apiClient.get(
-      `/government-positions/definitions?${q.toString()}`,
+      `/government-positions/definitions?${query.toString()}`,
     )
     return response.data ?? []
+  },
+
+  /**
+   * 직책 피커 전용 조회 — 정의(적용 범위 하드컷 + 이 국가에서의 사용 실적) + 자유입력 직책명.
+   *
+   * 목록 API와 달리 "이 국가에서 실제로 쓰인 직책"을 표시할 수 있고, 카탈로그에 없어
+   * 자유입력으로만 저장돼 있던 직책명(recentTitles)도 선택지로 되살릴 수 있다.
+   * includeId = 수정 중인 재임이 참조하는 정의 — 어떤 하드컷보다 먼저 통과시킨다.
+   */
+  getPositionDefinitionsForPicker: async (
+    params: {
+      countryId?: string
+      historicalCountryId?: string
+      includeId?: string | null
+    } = {},
+  ): Promise<PositionDefinitionPickerResponse> => {
+    const query = new URLSearchParams()
+    if (params.countryId) query.set('countryId', params.countryId)
+    if (params.historicalCountryId)
+      query.set('historicalCountryId', params.historicalCountryId)
+    if (params.includeId) query.set('includeId', params.includeId)
+    const response = await apiClient.get(
+      `/government-positions/definitions/picker?${query.toString()}`,
+    )
+    return response.data ?? { definitions: [], recentTitles: [] }
+  },
+
+  /** 관직 정의 적용 범위 추가 — 붙는 순간 그 정의는 다른 국가 피커에서 사라진다 */
+  addPositionDefinitionScope: async (
+    definitionId: string,
+    dto: {
+      countryId?: string | null
+      historicalCountryId?: string | null
+      localTitle?: string | null
+      note?: string | null
+    },
+  ) => {
+    const response = await apiClient.post(
+      `/government-positions/definitions/${definitionId}/scopes`,
+      dto,
+    )
+    return response.data
+  },
+
+  /** 관직 정의 적용 범위 삭제 — 전부 지우면 그 정의는 다시 전역이 된다 */
+  removePositionDefinitionScope: async (scopeId: string) => {
+    await apiClient.delete(`/government-positions/definitions/scopes/${scopeId}`)
   },
 
   /**

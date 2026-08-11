@@ -8,7 +8,9 @@
  * interpunct 팩트라인(국가·왕조·기간·나이) → 정의 그리드(즉위·경위·퇴위·비고).
  * 항목별 카드 박스는 없다 — 형제는 실선 헤어라인, 내부 소섹션은 점선 seam으로 구분.
  */
-import { FiBriefcase, FiEdit2, FiShield } from 'react-icons/fi'
+import { FiAward, FiBriefcase, FiEdit2, FiShield } from 'react-icons/fi'
+
+import { getRecordFamily } from '@/entities/government-position/model/record-family'
 
 import {
   APPOINTMENT_METHOD_LABELS,
@@ -100,6 +102,22 @@ export function TenureReignList({
       {items.map(({ kind, data: record, ordinalNum, isReappointment }) => {
         const isReign = kind === 'reign'
         const posTitle = record.positionDefinition?.title ?? record.title ?? '직책'
+        /**
+         * 작위(공작·백작·자작 등)는 재임 행으로 저장돼 있지만 공직 임기가 아니다 —
+         * '취임/퇴임'이 아니라 '승계/상실'이라 눈썹·동사만 바꾼다(서수·국가·기간은 그대로 성립).
+         */
+        // ⚠️ positionDefinition을 통째로 넘기면 안 된다 — 인물 상세 응답의 positionDefinition
+         // select에는 positionType·isMonarchical이 없어서 항상 OFFICE로 떨어진다(죽은 분기).
+         // 재임 행 자신의 positionType('ROYAL_NOBLE_TITLE')이 실제로 채워져 있으므로 그걸 먼저 본다.
+        const isNobleTitle =
+          !isReign &&
+          getRecordFamily({
+            positionType:
+              record.positionType ?? record.positionDefinition?.positionType ?? null,
+            isMonarchical: record.positionDefinition?.isMonarchical ?? null,
+          }) === 'NOBLE_TITLE'
+        const startVerb = isReign ? '즉위' : isNobleTitle ? '승계' : '취임'
+        const endVerb = isReign ? '퇴위' : isNobleTitle ? '상실' : '퇴임'
         const countryName =
           record.historicalCountry?.name ?? record.country?.name ?? null
         // 종료일·정밀도·재직중사망·미상/현재 폴백은 연보 타임라인과 공용 파생(단일 출처)으로.
@@ -153,8 +171,14 @@ export function TenureReignList({
           <UnifiedCard key={`${kind}-${record.id}`} $kind={kind}>
             <UnifiedCardMain>
               <UnifiedEyebrow>
-                {isReign ? <FiShield size={11} /> : <FiBriefcase size={11} />}
-                <span>{isReign ? '재위' : '재임'}</span>
+                {isReign ? (
+                  <FiShield size={11} />
+                ) : isNobleTitle ? (
+                  <FiAward size={11} />
+                ) : (
+                  <FiBriefcase size={11} />
+                )}
+                <span>{isReign ? '재위' : isNobleTitle ? '작위' : '재임'}</span>
                 {ordinalNum != null && (
                   <span>
                     ·{' '}
@@ -185,13 +209,12 @@ export function TenureReignList({
                   )}
                   {ageAtStart != null && (
                     <UnifiedFact>
-                      {ageAtStart}세{startYearOnly ? '경' : ''}에{' '}
-                      {isReign ? '즉위' : '취임'}
+                      {ageAtStart}세{startYearOnly ? '경' : ''}에 {startVerb}
                     </UnifiedFact>
                   )}
                   {ageAtEnd != null && (
                     <UnifiedFact>
-                      {ageAtEnd}세에 {isReign ? '퇴위' : '퇴임'}
+                      {ageAtEnd}세에 {endVerb}
                     </UnifiedFact>
                   )}
                 </UnifiedFactLine>
@@ -205,9 +228,7 @@ export function TenureReignList({
                 <UnifiedDetailGrid>
                   {record.appointmentMethod && (
                     <>
-                      <UnifiedDetailLabel>
-                        {isReign ? '즉위' : '취임'}
-                      </UnifiedDetailLabel>
+                      <UnifiedDetailLabel>{startVerb}</UnifiedDetailLabel>
                       <UnifiedDetailValue>
                         {APPOINTMENT_METHOD_LABELS[record.appointmentMethod] ??
                           record.appointmentMethod}
@@ -217,7 +238,7 @@ export function TenureReignList({
                   {accessionEvent && (
                     <>
                       <UnifiedDetailLabel>
-                        {isReign ? '즉위식' : '취임식'}
+                        {isReign ? '즉위식' : isNobleTitle ? '서임식' : '취임식'}
                       </UnifiedDetailLabel>
                       <UnifiedDetailValue>
                         {accessionEvent.title ?? '(제목 없음)'}
@@ -235,9 +256,7 @@ export function TenureReignList({
                   )}
                   {(record.endReason || record.endReasonDetail) && (
                     <>
-                      <UnifiedDetailLabel>
-                        {isReign ? '퇴위' : '퇴임'}
-                      </UnifiedDetailLabel>
+                      <UnifiedDetailLabel>{endVerb}</UnifiedDetailLabel>
                       <UnifiedDetailValue>
                         {[
                           record.endReason

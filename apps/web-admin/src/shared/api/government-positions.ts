@@ -16,7 +16,12 @@ export enum GovernmentPositionType {
   JUDICIARY = 'JUDICIARY', // 사법부
   LOCAL_GOVERNMENT = 'LOCAL_GOVERNMENT', // 지방정부
   SPECIAL_POSITION = 'SPECIAL_POSITION', // 특별직
+  DIPLOMATIC_POST = 'DIPLOMATIC_POST', // 외교직 (대사·공사·영사)
   MILITARY_COMMANDER = 'MILITARY_COMMANDER', // 군 지휘관
+  // 아래 3종은 Prisma enum에 있는데 이 미러에서 누락돼 있었다 — 정합화
+  HEIR_APPARENT = 'HEIR_APPARENT', // 왕위 계승자 (왕세자·황태자)
+  REGENT = 'REGENT', // 섭정
+  ROYAL_NOBLE_TITLE = 'ROYAL_NOBLE_TITLE', // 왕족/귀족 칭호
   OTHER = 'OTHER',
 }
 
@@ -45,6 +50,19 @@ export interface GovernmentPositionDefinition {
   } | null
   establishedDate?: string | null
   abolishedDate?: string | null
+  /**
+   * 적용 범위 — 비어 있으면 전역(어느 국가에서나 노출), 하나라도 있으면 그 국가에서만 노출.
+   * 별도 플래그가 없는 이유는 "플래그는 켜졌는데 범위가 비어 어디에도 안 보이는 정의"를
+   * 구조적으로 불가능하게 만들기 위함이다.
+   */
+  scopes?: Array<{
+    id: string
+    countryId?: string | null
+    historicalCountryId?: string | null
+    country?: { id: string; name?: string | null } | null
+    historicalCountry?: { id: string; name?: string | null } | null
+    localTitle?: string | null
+  }> | null
 }
 
 /**

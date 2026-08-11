@@ -12,6 +12,12 @@ export interface SelectOption<T = string> {
   label: string
   icon?: string
   description?: string
+  /**
+   * 구획 라벨 — 지정하면 그 이름의 머리글 아래로 묶이고 접을 수 있다.
+   * 지정하지 않은 옵션은 머리글 없이 그대로 나열된다(기존 소비자 무영향).
+   * 같은 그룹의 옵션은 **연속으로** 넘길 것 — 렌더는 경계 전환에서만 머리글을 낸다.
+   */
+  group?: string
 }
 
 /**
@@ -71,6 +77,34 @@ interface SelectModalProps<T = string> {
   hasError?: boolean
   /** 오류 상태에서 '다시 시도' 클릭 시 재조회 — 부모가 refetch를 넘긴다. */
   onRetry?: () => void
+  /**
+   * 처음에 접어 둘 그룹 이름들 — 부차적인 구획(예: "작위·칭호")을 기본으로 숨긴다.
+   * 접혀 있어도 머리글과 개수는 항상 보이고, (a) 검색어를 입력하거나 (b) 그 그룹에
+   * 현재 선택값이 들어 있으면 자동으로 펼쳐진다. 하드 필터가 아니라 강등이다.
+   */
+  collapsedGroups?: string[]
+}
+
+/** 그룹 머리글의 접힘 표식 — 펼침이면 아래(90°), 접힘이면 오른쪽. */
+function GroupChevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      style={{ transform: open ? 'rotate(90deg)' : 'none' }}
+    >
+      <path
+        d="M9 6l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
 }
 
 /**
@@ -116,8 +150,11 @@ export function SelectModal<T = string>({
   isSearching = false,
   hasError = false,
   onRetry,
+  collapsedGroups,
 }: SelectModalProps<T>) {
   const [query, setQuery] = useState('')
+  /** 사용자가 머리글을 눌러 뒤집은 그룹만 담는다 — 비어 있으면 collapsedGroups가 기본값. */
+  const [groupToggles, setGroupToggles] = useState<Record<string, boolean>>({})
 
   /**
    * a11y 토대 — 손수 만든 portal이라 Esc·포커스 트랩·body 스크롤 락·포커스 복원이
@@ -135,10 +172,11 @@ export function SelectModal<T = string>({
     initialFocusRef: searchRef,
   })
 
-  // 모달이 닫히면 검색어 초기화 (서버사이드 검색 부모에게도 통지)
+  // 모달이 닫히면 검색어 초기화 (서버사이드 검색 부모에게도 통지) + 그룹 접힘도 기본값으로
   useEffect(() => {
     if (!isOpen) {
       setQuery('')
+      setGroupToggles({})
       onQueryChange?.('')
     }
     // onQueryChange 함수 identity 변화로 초기화가 재실행될 이유는 없음 — isOpen에만 반응.
@@ -158,6 +196,33 @@ export function SelectModal<T = string>({
     )
   }, [options, query])
 
+  /** 그룹별 옵션 수 — 접힌 그룹에도 "몇 개가 숨어 있는지"를 보여주기 위해 필터 뒤에 센다. */
+  const groupCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    filteredOptions.forEach((option) => {
+      if (option.group) counts.set(option.group, (counts.get(option.group) ?? 0) + 1)
+    })
+    return counts
+  }, [filteredOptions])
+
+  /**
+   * 현재 선택값이 들어 있는 그룹 — 기본 접힘이어도 펼쳐 준다.
+   * (수정 모드에서 작위 재임을 열었는데 "작위·칭호"가 접혀 선택 표시가 안 보이는 것 방지)
+   */
+  const groupsWithSelection = useMemo(() => {
+    const selectedKeys = multiple
+      ? selectedValues
+      : selectedValue === undefined
+        ? []
+        : [selectedValue]
+    const found = new Set<string>()
+    options.forEach((option) => {
+      if (option.group && selectedKeys.includes(option.value)) found.add(option.group)
+    })
+    return found
+    // selectedValues 기본값이 매 렌더 새 배열이라 참조가 흔들리지만, 계산이 가벼워 문제 없음.
+  }, [options, multiple, selectedValues, selectedValue])
+
   if (!isOpen) return null
 
   const isSelected = (value: T) => {
@@ -165,6 +230,90 @@ export function SelectModal<T = string>({
       return selectedValues.includes(value)
     }
     return selectedValue === value
+  }
+
+  /** 검색과 무관한 '기본 펼침 상태' — 머리글 토글은 이 값을 뒤집어야 한다. */
+  const isGroupExpandedByState = (group: string): boolean => {
+    const toggled = groupToggles[group]
+    if (toggled !== undefined) return toggled
+    if (groupsWithSelection.has(group)) return true
+    return !(collapsedGroups ?? []).includes(group)
+  }
+
+  /**
+   * 검색 중이면 무조건 펼침 — 접힌 그룹 때문에 "검색해도 안 나온다"가 생기면 안 된다.
+   * 단 이 강제값을 토글의 기준으로 쓰면 안 된다. 검색 중 머리글을 누르면 화면은 그대로인데
+   * groupToggles에 false가 박혀, 검색어를 지우는 순간 기본 펼침 그룹이 접혀 버린다.
+   */
+  const isGroupExpanded = (group: string): boolean =>
+    query.trim() ? true : isGroupExpandedByState(group)
+
+  /** 옵션을 순회하며 그룹 경계에서만 머리글을 내고, 접힌 그룹의 옵션은 건너뛴다. */
+  const renderOptionRows = () => {
+    const rows: React.ReactNode[] = []
+    let currentGroup: string | undefined
+    let boundaryPassed = false
+
+    filteredOptions.forEach((option) => {
+      if (!boundaryPassed || option.group !== currentGroup) {
+        currentGroup = option.group
+        boundaryPassed = true
+        if (option.group) {
+          const group = option.group
+          const expanded = isGroupExpanded(group)
+          rows.push(
+            <S.OptionGroupHeader
+              key={`group-${group}`}
+              type="button"
+              aria-expanded={expanded}
+              onClick={() =>
+                setGroupToggles((prev) => ({
+                  ...prev,
+                  [group]: !isGroupExpandedByState(group),
+                }))
+              }
+            >
+              <GroupChevron open={expanded} />
+              <span>{group}</span>
+              <S.OptionGroupCount>{groupCounts.get(group) ?? 0}</S.OptionGroupCount>
+            </S.OptionGroupHeader>,
+          )
+        }
+      }
+      if (option.group && !isGroupExpanded(option.group)) return
+      rows.push(
+        <S.SelectOption
+          key={String(option.value)}
+          type="button"
+          // 선택 상태를 색·체크 아이콘뿐 아니라 보조기술에도 전달(WCAG 4.1.2).
+          // 다중/단일 모두 '눌림'으로 현재 선택을 표현.
+          aria-pressed={isSelected(option.value)}
+          $active={isSelected(option.value)}
+          onClick={() => onSelect(option.value)}
+        >
+          {option.icon && <S.SelectOptionIcon>{option.icon}</S.SelectOptionIcon>}
+          <S.SelectOptionBody>
+            <S.SelectOptionText>{option.label}</S.SelectOptionText>
+            {option.description && (
+              <S.SelectOptionDescription>
+                {option.description}
+              </S.SelectOptionDescription>
+            )}
+          </S.SelectOptionBody>
+          {isSelected(option.value) && (
+            <S.SelectOptionCheck>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
+                  fill="currentColor"
+                />
+              </svg>
+            </S.SelectOptionCheck>
+          )}
+        </S.SelectOption>,
+      )
+    })
+    return rows
   }
 
   /* 라이브 리전 문구 — 로딩/검색중/결과수/없음. 검색창에 포커스가 머문 채 목록만 바뀌어
@@ -276,39 +425,7 @@ export function SelectModal<T = string>({
               </S.EmptyState>
             )
           ) : (
-            filteredOptions.map((option) => (
-              <S.SelectOption
-                key={String(option.value)}
-                type="button"
-                // 선택 상태를 색·체크 아이콘뿐 아니라 보조기술에도 전달(WCAG 4.1.2).
-                // 다중/단일 모두 '눌림'으로 현재 선택을 표현.
-                aria-pressed={isSelected(option.value)}
-                $active={isSelected(option.value)}
-                onClick={() => onSelect(option.value)}
-              >
-                {option.icon && (
-                  <S.SelectOptionIcon>{option.icon}</S.SelectOptionIcon>
-                )}
-                <S.SelectOptionBody>
-                  <S.SelectOptionText>{option.label}</S.SelectOptionText>
-                  {option.description && (
-                    <S.SelectOptionDescription>
-                      {option.description}
-                    </S.SelectOptionDescription>
-                  )}
-                </S.SelectOptionBody>
-                {isSelected(option.value) && (
-                  <S.SelectOptionCheck>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path
-                        d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </S.SelectOptionCheck>
-                )}
-              </S.SelectOption>
-            ))
+            renderOptionRows()
           )}
         </S.SelectModalContent>
       </S.SelectModal>

@@ -17,6 +17,11 @@ import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import {
+  buildReignPositionOptions,
+  DEFAULT_COLLAPSED_REIGN_GROUPS,
+  type PositionDefinitionLike,
+} from '@/shared/ui/tenure-register-panel/group-position-options'
+import {
   EventPickerModal,
   EventPickerLinkBtn,
   EventPickerLinkClearBtn,
@@ -344,15 +349,26 @@ export function SovereignReignRegisterPanel({
   // 교황령·신성로마제국처럼 특정 현대 국가에 매이지 않는 정치체(교황·황제 등)를
   // "이탈리아를 먼저 골라야 교황령이 뜨는" 우회 없이 등록하기 위함.
   const { data: allHistoricalCountries = [] } = useHistoricalCountries()
-  const { data: positionDefinitions = [] } = useQuery({
-    queryKey: ['position-definitions-sovereign', countryId, historicalCountryId],
+  // 재임 패널과 같은 피커 API·쿼리키 프리픽스를 쓴다 — 적용 범위 하드컷 + 이 국가의 사용 실적.
+  const { data: pickerData } = useQuery({
+    queryKey: [
+      'position-definitions',
+      'picker',
+      countryId,
+      historicalCountryId,
+      positionDefinitionId,
+    ],
     queryFn: () =>
-      personCareerApi.getPositionDefinitions({
+      personCareerApi.getPositionDefinitionsForPicker({
         countryId: countryId || undefined,
         historicalCountryId: historicalCountryId || undefined,
+        includeId: positionDefinitionId,
       }),
     enabled: open,
+    // 직위를 고르면 쿼리키가 바뀌므로 이전 결과 유지 — 없으면 트리거 라벨이 잠깐 '직위 선택'으로 되돌아간다
+    placeholderData: (previous) => previous,
   })
+  const positionDefinitions = pickerData?.definitions ?? []
 
   const { data: existingReign } = useQuery({
     queryKey: ['sovereign-reign-detail', reignId],
@@ -456,8 +472,15 @@ export function SovereignReignRegisterPanel({
     existingReignAny.historicalCountry.id === historicalCountryId
       ? existingReignAny.historicalCountry
       : null)
+  /** 수정 중인 재위가 참조하는 정의 — 서버 목록에서 빠져도 라벨·선택 표시가 유실되지 않게 살린다. */
+  const pinnedDefinition: PositionDefinitionLike | null =
+    existingReignAny?.positionDefinition ?? null
+
   const selectedDef = positionDefinitionId
-    ? (positionDefinitions as any[]).find((d: any) => d.id === positionDefinitionId)
+    ? ((positionDefinitions as PositionDefinitionLike[]).find(
+        (def) => def.id === positionDefinitionId,
+      ) ??
+      (pinnedDefinition?.id === positionDefinitionId ? pinnedDefinition : null))
     : null
 
   // F33 소프트 경고 — 선택된 역사국가의 존속기간과 즉위 연도를 대조.
@@ -483,13 +506,17 @@ export function SovereignReignRegisterPanel({
     })
   }, [historicalCountryId, allHistoricalCountries, start])
 
+  /**
+   * 직위 선택지 — 군주 칭호·작위를 위로, 그 밖의 직위(대통령·서기장·각료 등)는 접힌 그룹으로.
+   * 수정 중인 재위가 참조하는 정의는 pinnedDefinition으로 항상 살린다(쇼군 등 관직 타입 재위 18행).
+   */
   const positionOptions = useMemo(
     () =>
-      (positionDefinitions as any[]).map((d: any) => ({
-        value: d.id,
-        label: d.title ?? d.id,
-      })),
-    [positionDefinitions],
+      buildReignPositionOptions({
+        definitions: positionDefinitions as PositionDefinitionLike[],
+        pinnedDefinition,
+      }),
+    [positionDefinitions, pinnedDefinition],
   )
 
   // 재위 시작 연도 필수 — 파츠에서 유효 DateInfo(연도 1~9999)가 나오면 제출 가능.
@@ -1007,6 +1034,8 @@ export function SovereignReignRegisterPanel({
         onClose={() => setPositionModalOpen(false)}
         title="직위 선택"
         options={positionOptions}
+        collapsedGroups={DEFAULT_COLLAPSED_REIGN_GROUPS}
+        searchPlaceholder="직위명으로 검색..."
         selectedValue={positionDefinitionId ?? ''}
         onSelect={(v) => {
           setPositionDefinitionId(v || null)

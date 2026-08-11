@@ -39,7 +39,13 @@ import { notify } from '@/shared/ui/toast'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
 import { CountrySearchModal } from '@/shared/ui/country-search-modal/country-search-modal'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
-import { filterPositionDefinitions } from './filter-position-definitions'
+import {
+  buildPositionOptions,
+  DEFAULT_COLLAPSED_POSITION_GROUPS,
+  parseRecentTitleValue,
+  recentTitleValue,
+  type PositionDefinitionLike,
+} from './group-position-options'
 import { FormSelectNative } from '@/shared/ui/form-select-native/form-select-native'
 import {
   APPOINTMENT_METHOD_OPTIONS,
@@ -448,15 +454,34 @@ export function TenureRegisterPanel({
     return describeLifespanMismatch(selected, signedYearFromIsoLike(startDate))
   }, [historicalCountryId, allHistoricalCountries, startDate])
 
-  const { data: positionDefinitions = [] } = useQuery({
-    queryKey: ['position-definitions-tenure', countryId, historicalCountryId],
+  /**
+   * 직책 피커 데이터 — 정의(적용 범위 하드컷 통과분) + 이 국가에서의 사용 실적 + 자유입력 직책명.
+   * 국가를 아직 고르지 않았으면 서버가 전량 반환한다(조용히 좁히지 않는다).
+   * 쿼리키는 ['position-definitions', …] 프리픽스로 통일해 정의를 새로 만들었을 때
+   * 한 번의 무효화로 재임·재위·관리 화면이 함께 갱신되게 한다.
+   */
+  const { data: pickerData } = useQuery({
+    queryKey: [
+      'position-definitions',
+      'picker',
+      countryId,
+      historicalCountryId,
+      // 현재 선택된 정의는 스코프 하드컷을 관통시킨다 — 편집 중 목록에서 빠져 연결이 유실되는 것 방지
+      positionDefinitionId,
+    ],
     queryFn: () =>
-      personCareerApi.getPositionDefinitions({
+      personCareerApi.getPositionDefinitionsForPicker({
         countryId: countryId || undefined,
         historicalCountryId: historicalCountryId || undefined,
+        includeId: positionDefinitionId,
       }),
     enabled: open,
+    // 직책을 고르면 쿼리키(positionDefinitionId)가 바뀐다 — 이전 결과를 유지하지 않으면
+    // 재조회 동안 목록이 빈 배열이 되어 positionType이 잠깐 'OTHER'로 떨어진다(그 창에 저장하면 오염).
+    placeholderData: (previous) => previous,
   })
+  const positionDefinitions = pickerData?.definitions ?? []
+  const recentTitles = pickerData?.recentTitles ?? []
 
   const { data: cabinets = [] } = useQuery({
     queryKey: ['cabinets-by-country', countryId, historicalCountryId],
@@ -505,8 +530,25 @@ export function TenureRegisterPanel({
 
   const editingIsSovereign = (editingTenure as any)?.recordKind === 'SOVEREIGN_REIGN'
 
+  /**
+   * 수정 중인 재임이 참조하는 정의 — 서버 목록에서 빠져도(국가 스코프·군주 제외·각료 필터)
+   * 옵션 pool에 되살린다. 빠진 채로 두면 selectedDef가 null이 되어 라벨이 `기타: X`로
+   * 강등되고, 그대로 저장하면 positionDefinitionId가 소리 없이 유실된다.
+   * findTenuresByPersonId가 positionDefinition 객체를 통째로 내려주므로 추가 조회는 없다.
+   */
+  const pinnedDefinition: PositionDefinitionLike | null =
+    editingTenure?.positionDefinition ?? null
+
+  const definitionPool = useMemo(() => {
+    const pool = positionDefinitions as PositionDefinitionLike[]
+    if (!pinnedDefinition?.id || pool.some((def) => def.id === pinnedDefinition.id)) {
+      return pool
+    }
+    return [...pool, pinnedDefinition]
+  }, [positionDefinitions, pinnedDefinition])
+
   const selectedDef = positionDefinitionId
-    ? (positionDefinitions as any[]).find((d: any) => d.id === positionDefinitionId)
+    ? definitionPool.find((def) => def.id === positionDefinitionId)
     : null
   const positionType =
     selectedDef?.positionType ?? presetPositionType ?? editingTenure?.positionType ?? 'OTHER'
@@ -515,23 +557,48 @@ export function TenureRegisterPanel({
   const isHeadPositionType =
     positionType === 'HEAD_OF_STATE' || positionType === 'HEAD_OF_GOVERNMENT'
 
-  /** 각료 추가로 열렸을 때는 각료/차관/기타만 표시; 일반 재임은 군주·주권 칭호 제외 */
+  /**
+   * 각료 추가로 열렸을 때는 각료/차관/기타만 표시; 일반 재임은 군주·주권 칭호 제외 +
+   * 작위는 접히는 별도 그룹으로 강등(공직 임기가 아니므로).
+   */
   const isMinisterFlowForFilter = !tenureId && initialCabinetId != null
-  const positionTitleOptions: SelectOption<string>[] = useMemo(() => {
-    const defs = filterPositionDefinitions(positionDefinitions as any[], {
-      isMinisterFlow: isMinisterFlowForFilter,
-    })
-    const byDef = defs.map((def: any) => ({
-      value: def.id,
-      label: def.title ?? def.name ?? def.id ?? '직책',
-    }))
-    // 이미 같은 positionType의 정의가 있으면 내장 항목은 중복 노출하지 않음
-    const definedTypes = new Set(defs.map((def: any) => def.positionType))
-    const builtins = BUILTIN_POSITIONS.filter(
-      (builtin) => !definedTypes.has(builtin.positionType),
-    ).map((builtin) => ({ value: builtin.value, label: builtin.label }))
-    return [...byDef, ...builtins, { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' }]
-  }, [positionDefinitions, isMinisterFlowForFilter])
+  const positionTitleOptions: SelectOption<string>[] = useMemo(
+    () =>
+      buildPositionOptions({
+        definitions: positionDefinitions as PositionDefinitionLike[],
+        isMinisterFlow: isMinisterFlowForFilter,
+        builtins: BUILTIN_POSITIONS,
+        pinnedDefinition,
+        recentTitles,
+        otherValue: OTHER_POSITION_VALUE,
+      }),
+    [positionDefinitions, isMinisterFlowForFilter, pinnedDefinition, recentTitles],
+  )
+
+  /**
+   * 피커에서 체크가 찍힐 값 — 정의 → 자유입력 실적 → 내장 직책 → 기타 순으로 되짚는다.
+   * 자유입력 실적을 먼저 보는 이유: 그 항목들도 presetPositionType을 세우기 때문에,
+   * 내장 직책을 먼저 보면 유형만 같고 표기가 다른 항목에 체크가 잘못 찍힌다.
+   */
+  const selectedPositionValue = useMemo(() => {
+    if (positionDefinitionId) return positionDefinitionId
+    const trimmedTitle = title.trim()
+    const matchedRecent = trimmedTitle
+      ? (recentTitles.find(
+          (row) => row.title === trimmedTitle && row.positionType === presetPositionType,
+        ) ?? recentTitles.find((row) => row.title === trimmedTitle))
+      : undefined
+    if (matchedRecent) {
+      return recentTitleValue(matchedRecent.title, matchedRecent.positionType)
+    }
+    if (presetPositionType) {
+      const builtin = BUILTIN_POSITIONS.find(
+        (candidate) => candidate.positionType === presetPositionType,
+      )
+      if (builtin) return builtin.value
+    }
+    return OTHER_POSITION_VALUE
+  }, [positionDefinitionId, title, recentTitles, presetPositionType])
 
   const positionTitleLabel =
     positionDefinitionId == null
@@ -552,19 +619,45 @@ export function TenureRegisterPanel({
       setPresetPositionType(builtin.positionType)
       return
     }
+    // 자유입력 실적 선택 — 정의 연결 없이 표기와 직위 유형만 복원한다.
+    // presetPositionType을 함께 세워야 positionType이 'OTHER'로 떨어지지 않는다.
+    const recentTitle = parseRecentTitleValue(value)
+    if (recentTitle != null) {
+      setPositionDefinitionId(null)
+      setTitle(recentTitle.title)
+      setTitleEn('')
+      setPresetPositionType(recentTitle.positionType)
+      return
+    }
     if (value === OTHER_POSITION_VALUE) {
       setPositionDefinitionId(null)
       setTitle('')
       setTitleEn('')
       setPresetPositionType(null)
     } else {
-      const def = (positionDefinitions as any[]).find((d: any) => d.id === value)
+      const def = definitionPool.find((definition) => definition.id === value)
       if (def) {
         setPositionDefinitionId(def.id)
         setTitle(def.title ?? def.name ?? '')
-        setTitleEn(def.titleEn ?? def.title_en ?? '')
+        setTitleEn(def.titleEn ?? '')
         setPresetPositionType(null)
       }
+    }
+  }
+
+  /**
+   * 국가가 바뀌면 직책 선택을 놓는다 — 새 국가 기준으로 정의 목록이 다시 오기 때문.
+   * 이때 정의·내장 직책에서 유래한 title까지 함께 비우지 않으면 '총리'가 자유입력으로 남아
+   * `기타: 총리`로 저장된다(실측: 정의가 존재하는데도 positionDefinitionId가 NULL인 재임 5행).
+   * 사용자가 손으로 친 텍스트는 유래가 없으므로 그대로 보존한다.
+   */
+  const releasePositionOnCountryChange = () => {
+    const derivedFromCatalog = !!positionDefinitionId || !!presetPositionType
+    setPositionDefinitionId(null)
+    if (derivedFromCatalog) {
+      setTitle('')
+      setTitleEn('')
+      setPresetPositionType(null)
     }
   }
 
@@ -659,6 +752,13 @@ export function TenureRegisterPanel({
       return
     }
     const def = selectedDef as any
+    /**
+     * 표시명은 정의 표기를 따른다.
+     * web-admin의 표시 지면 20여 곳이 `positionDefinition?.title ?? title` 순서라, 정의를 고른
+     * 재임에 다른 title을 저장하면 그 값은 **어디에도 표시되지 않는다**(저장만 되고 사라짐).
+     * 주재지가 붙는 직함('광저우 영국 영사')은 정의를 고르지 말고 '기타 (직접 입력)'으로 남긴다 —
+     * 피커의 '이 국가에서 쓰인 직책' 그룹이 그 표기를 다음 사람에게 그대로 되살려 준다.
+     */
     const titleValue = def?.title ?? title.trim()
     if (!titleValue) {
       notify.error('직책을 선택하거나 직접 입력해 주세요.')
@@ -945,7 +1045,16 @@ export function TenureRegisterPanel({
                       부처를 미리 등록하지 않아도 <strong>기타 (직접 입력)</strong>으로 직위명(예: 국방장관, 외무대신)을 넣을 수 있습니다.
                     </FieldHint>
                   )}
-                  {/* 정의를 고르지 않은 경우(기타·내장 직책·정의 없음)에만 직접 입력 — 선택 트리거에 종속 */}
+                  {/* 국가 미선택이면 전 카탈로그가 보인다는 사실을 숨기지 않고 알려 준다.
+                      조용히 좁히는 대신 사용자가 좁힐 방법을 안내(보이지 않는 필터 금지). */}
+                  {!countryId && !historicalCountryId && (
+                    <FieldHint style={{ marginTop: 6 }}>
+                      국가를 먼저 고르면 그 나라의 직책만 추려서 보여줍니다.
+                    </FieldHint>
+                  )}
+                  {/* 정의를 고르지 않은 경우(기타·내장 직책·정의 없음)에만 직접 입력 — 선택 트리거에 종속.
+                      정의를 고른 상태에서 다른 표기를 적어도 표시 지면(정의 우선)에 반영되지 않으므로
+                      입력칸 자체를 열지 않는다. 주재지가 붙는 직함은 '기타'로 남기는 게 정직하다. */}
                   {!positionDefinitionId && (
                     <ManualEntryGroup>
                       <ManualEntryCaption>직접 입력</ManualEntryCaption>
@@ -954,7 +1063,7 @@ export function TenureRegisterPanel({
                         <Input
                           value={title}
                           onChange={(e) => setTitle(e.target.value)}
-                          placeholder="예: 최고지도자"
+                          placeholder="예: 광저우 영국 영사"
                         />
                       </ManualEntryField>
                       <ManualEntryField>
@@ -962,7 +1071,7 @@ export function TenureRegisterPanel({
                         <Input
                           value={titleEn}
                           onChange={(e) => setTitleEn(e.target.value)}
-                          placeholder="예: Supreme Leader"
+                          placeholder="예: Consul at Canton"
                         />
                       </ManualEntryField>
                     </ManualEntryGroup>
@@ -1277,7 +1386,7 @@ export function TenureRegisterPanel({
           setCountryId(id || '')
           // historicalCountryId는 여기서 무조건 null로 덮지 않음 — 새 국가 소속이
           // 아닐 때만 useHistoricalCountryScope가 해제 (역사국가 연결의 조용한 파괴 방지)
-          setPositionDefinitionId(null)
+          releasePositionOnCountryChange()
           setCountryModalOpen(false)
         }}
       />
@@ -1296,7 +1405,7 @@ export function TenureRegisterPanel({
         selectedCountryId={historicalCountryId ?? ''}
         onSelect={({ id }) => {
           setHistoricalCountryId(id || null)
-          setPositionDefinitionId(null)
+          releasePositionOnCountryChange()
           setHistoricalCountryModalOpen(false)
         }}
       />
@@ -1306,13 +1415,9 @@ export function TenureRegisterPanel({
         onClose={() => setPositionModalOpen(false)}
         title="직책명 선택"
         options={positionTitleOptions}
-        selectedValue={
-          positionDefinitionId ??
-          (presetPositionType
-            ? BUILTIN_POSITIONS.find((b) => b.positionType === presetPositionType)
-                ?.value ?? OTHER_POSITION_VALUE
-            : OTHER_POSITION_VALUE)
-        }
+        collapsedGroups={DEFAULT_COLLAPSED_POSITION_GROUPS}
+        searchPlaceholder="직책명으로 검색..."
+        selectedValue={selectedPositionValue}
         onSelect={handlePositionSelect}
       />
 

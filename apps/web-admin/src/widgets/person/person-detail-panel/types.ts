@@ -34,7 +34,13 @@ export interface TenureLikeRecord {
   title?: string | null
   /** 직위 유형(GovernmentPositionType — HEAD_OF_STATE 등). 재임에만 존재, 재위는 없음. */
   positionType?: string | null
-  positionDefinition?: { id?: string; title?: string | null } | null
+  /** 직책 정의 — positionType·isMonarchical은 기록 가족(관직/작위/군주) 판정에 쓴다 */
+  positionDefinition?: {
+    id?: string
+    title?: string | null
+    positionType?: string | null
+    isMonarchical?: boolean | null
+  } | null
   country?: { id?: string; name?: string | null } | null
   historicalCountry?: { id?: string; name?: string | null } | null
   achievements?: TenureAchievementItem[] | null

@@ -75,6 +75,56 @@ export const SelectModalContent = styled.div`
   ${scrollbarThinMixin}
 `
 
+/**
+ * 그룹 머리글 — 옵션이 `group`을 가질 때만 나타나는 구분선 겸 접기 토글.
+ * 목록 자체가 아니라 구획 라벨이므로 옵션과 시각 위계를 분명히 벌린다(작은 대문자급 캡션).
+ */
+export const OptionGroupHeader = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 10px 0 6px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  &:first-child {
+    margin-top: 0;
+  }
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.secondary};
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+
+  svg {
+    flex-shrink: 0;
+    transition: transform 0.15s;
+  }
+`
+
+/** 그룹 안의 옵션 수 — 접힌 상태에서 "무엇이 숨어 있는지"를 알리는 유일한 단서라 항상 표시. */
+export const OptionGroupCount = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.85;
+`
+
 export const SelectOption = styled.button<{ $active?: boolean }>`
   width: 100%;
   display: flex;

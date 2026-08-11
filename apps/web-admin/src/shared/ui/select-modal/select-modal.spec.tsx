@@ -94,3 +94,57 @@ describe('SelectModal 접근성', () => {
     expect(screen.getByText('데이터가 없습니다')).toBeInTheDocument()
   })
 })
+
+/**
+ * 그룹 구획 — "관직 재임" 직책 피커가 작위를 접힌 별도 그룹으로 강등하는 데 쓴다.
+ * 하드 필터가 아니므로 접혀 있어도 개수·검색·선택 복원 경로는 반드시 살아 있어야 한다.
+ */
+const GROUPED: SelectOption[] = [
+  { value: 'p', label: '대통령', group: '관직' },
+  { value: 'm', label: '외무장관', group: '관직' },
+  { value: 'v', label: '자작', group: '작위·칭호' },
+  { value: 'OTHER', label: '기타 (직접 입력)' },
+]
+
+describe('SelectModal 옵션 그룹', () => {
+  it('group이 없는 옵션만 있으면 머리글을 만들지 않는다(기존 소비자 무영향)', () => {
+    setup()
+    expect(screen.queryByRole('button', { expanded: true })).not.toBeInTheDocument()
+  })
+
+  it('그룹 머리글을 내고, collapsedGroups는 접은 채 개수만 보여준다', () => {
+    setup({ options: GROUPED, collapsedGroups: ['작위·칭호'] })
+    expect(screen.getByRole('button', { name: /관직/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: /작위·칭호/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.getByRole('button', { name: '대통령' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '자작' })).not.toBeInTheDocument()
+    // 그룹 없는 이스케이프 해치는 접힘과 무관하게 항상 보인다
+    expect(screen.getByRole('button', { name: '기타 (직접 입력)' })).toBeInTheDocument()
+  })
+
+  it('머리글을 누르면 접힌 그룹이 펼쳐진다', () => {
+    setup({ options: GROUPED, collapsedGroups: ['작위·칭호'] })
+    fireEvent.click(screen.getByRole('button', { name: /작위·칭호/ }))
+    expect(screen.getByRole('button', { name: '자작' })).toBeInTheDocument()
+  })
+
+  it('검색어를 입력하면 접힌 그룹도 열린다 — "검색해도 안 나온다"를 만들지 않는다', () => {
+    setup({ options: GROUPED, collapsedGroups: ['작위·칭호'], searchable: true })
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '자작' } })
+    expect(screen.getByRole('button', { name: '자작' })).toBeInTheDocument()
+  })
+
+  it('현재 선택값이 접힌 그룹에 있으면 자동으로 펼친다 — 수정 진입 시 선택 표시 유지', () => {
+    setup({ options: GROUPED, collapsedGroups: ['작위·칭호'], selectedValue: 'v' })
+    expect(screen.getByRole('button', { name: '자작' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+})
