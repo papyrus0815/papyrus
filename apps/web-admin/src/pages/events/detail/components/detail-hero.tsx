@@ -10,7 +10,7 @@ import {
 } from '@/shared/api/event-categories'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getUploadImageUrl } from '@/shared/api/upload'
-import { parseIsoDateParts } from '@/shared/lib/iso-date'
+import { formatYearLabel, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
@@ -71,6 +71,13 @@ export function DetailHero({
   /* cap을 초과해 아직 부모가 더 남아 있으면 앞에 "..." 인디케이터를 렌더. */
   const parentChainTruncated = Boolean(cursor)
 
+  /* 추가 상위(다중 소속) — 주 체인 뒤 '+N' 배지로 신호. 주 상위가 유령(소프트삭제로
+   * parentEvent가 null)이라 체인이 비어도 extras만으로 배지를 단독 렌더한다. */
+  const extraParents = event.extraParents ?? []
+  const extraParentTitles = extraParents
+    .map((extra) => extra.title)
+    .join(', ')
+
   const categoryOptions: InlineSelectOption[] = categories.map(
     (cat: EventCategoryDto) => ({ value: cat.id, label: cat.name }),
   )
@@ -98,7 +105,7 @@ export function DetailHero({
           />
         </S.CategoryChip>
 
-        {parentChain.length > 0 && (
+        {(parentChain.length > 0 || extraParents.length > 0) && (
           <S.Breadcrumb aria-label="상위 사건">
             {parentChainTruncated && (
               <ParentEllipsis title="더 상위 사건이 있습니다">…</ParentEllipsis>
@@ -114,6 +121,16 @@ export function DetailHero({
                 {parent.title}
               </Link>
             ))}
+            {extraParents.length > 0 && (
+              <ExtraParentBadge
+                href="#network"
+                data-extra-parents
+                title={`추가 상위: ${extraParentTitles}`}
+                aria-label={`추가 상위 ${extraParents.length}건: ${extraParentTitles} — 연관 섹션으로 이동`}
+              >
+                +{extraParents.length}
+              </ExtraParentBadge>
+            )}
           </S.Breadcrumb>
         )}
       </S.HeroTopRow>
@@ -265,14 +282,17 @@ const TitleHost = styled.h1`
 function ContemporaryHeadsLink({ event }: { event: EventDetail }) {
   const year = extractYear(event.startDate)
   if (year == null) return null
+  // 목적지 headsOfState가 BC 미지원(재임 tenure era 마이그 없음) — BC 연도는 빈
+  // 화면으로 유도하는 셈이라 링크 자체를 내리지 않는다. BC 지원 마이그 후 가드 제거.
+  if (year < 0) return null
   return (
     <S.HeroMetaItem>
       <FiAward />
       <ContemporaryLink
         to={pathKeys.headsOfState(year)}
-        title={`${year}년 시점에 세계 각국이 누구의 통치 아래 있었는지 비교`}
+        title={`${formatYearLabel(year)} 시점에 세계 각국이 누구의 통치 아래 있었는지 비교`}
       >
-        {year}년 동시대 수장 비교
+        {formatYearLabel(year)} 동시대 수장 비교
       </ContemporaryLink>
     </S.HeroMetaItem>
   )
@@ -651,4 +671,22 @@ const ParentEllipsis = styled.span`
   font-weight: 600;
   letter-spacing: 0.05em;
   cursor: help;
+`
+
+/**
+ * 다중 소속 '+N' 배지 — 주 상위 체인 밖 추가 상위(extraParents) 개수 신호.
+ * 클릭 시 연관(#network) 섹션으로 이동해 전체 목록·편집 UI에 닿는다
+ * (같은 페이지 앵커 — HeroActors의 Overflow(#actors)와 동일 수단).
+ */
+const ExtraParentBadge = styled.a`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 `

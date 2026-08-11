@@ -180,6 +180,11 @@ export const Breadcrumb = styled.nav`
       margin-left: 8px;
       opacity: 0.5;
     }
+
+    /* '+N' 추가 상위 배지 앞은 체인 하강이 아니라 병렬 소속 — '›' 구분자를 지운다. */
+    &:has(+ [data-extra-parents])::after {
+      content: none;
+    }
   }
 `
 

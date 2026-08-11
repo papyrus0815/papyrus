@@ -250,7 +250,8 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     items.push({ id: 'appendix', label: '이미지' })
     // 댓글 — 최상위 사건은 댓글 스레드, 하위 사건은 상위 댓글로 유도하는 안내(둘 다 #comments
     // 앵커를 렌더하므로 rail 항목은 항상 노출). 백엔드가 하위 사건엔 댓글을 노출/허용하지
-    // 않아(스코프 불일치) 하위에선 스레드 대신 안내만 보여준다.
+    // 않아(스코프 불일치) 하위에선 스레드 대신 안내만 보여준다. 하위 판정은 *생존* 상위
+    // (parentEvent) 기준 — 유령 상위(스칼라만 잔존)는 실질 루트로 취급.
     items.push({ id: 'comments', label: '댓글' })
 
     return items
@@ -333,12 +334,15 @@ function EventDetailContent({ eventId }: { eventId: string }) {
                 <S.SectionHeader>
                   <S.SectionTitle>댓글</S.SectionTitle>
                 </S.SectionHeader>
-                {event.parentEventId ? (
+                {event.parentEvent ? (
                   // 하위 사건은 자체 댓글 스레드가 없다 — 논의가 이어지는 상위 사건 댓글로 유도.
+                  // 분기 기준은 *생존* 상위(parentEvent 객체) — 상위가 소프트삭제되면 스칼라
+                  // parentEventId만 남는데(유령), 그걸 기준 삼으면 삭제된 사건으로 유도하는
+                  // 데드엔드가 된다. 유령 상태는 실질 루트로 보고 스레드를 렌더(서버 게이트 동일).
                   <S.HelperText>
                     이 사건은 하위 사건입니다 — 논의는{' '}
                     <ParentCommentsLink
-                      to={`${pathKeys.events.detail(event.parentEventId)}#comments`}
+                      to={`${pathKeys.events.detail(event.parentEvent.id)}#comments`}
                     >
                       상위 사건 댓글
                     </ParentCommentsLink>

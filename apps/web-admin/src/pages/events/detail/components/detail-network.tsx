@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FiChevronLeft, FiChevronRight, FiPlus, FiX } from 'react-icons/fi'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -14,16 +14,34 @@ import {
   type UpdateEventDto,
   getEventLinkCandidates,
   getEventsByParentId,
+  updateEvent,
 } from '@/shared/api/events'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
+import { formatYearLabel } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { InlineText } from '@/shared/ui/inline-edit'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
+import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
-import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
+import {
+  type EventDetail,
+  eventKeys,
+  usePrefetchEventDetail,
+} from '../use-event-detail'
+
+/**
+ * '새 하위 사건 만들기' 등록 모달 — lazy 마운트. 등록 폼 청크(gzip 약 19KB)는
+ * 버튼을 누르는 소수만 필요하므로 상세 초기 번들에 얹지 않는다(등록 모달 자체의
+ * lazy 본문 정책과 동일한 근거).
+ */
+const LazyEventRegisterModal = lazy(() =>
+  import('@/widgets/event-form/ui/event-register-modal').then((module) => ({
+    default: module.EventRegisterModal,
+  })),
+)
 
 interface DetailNetworkProps {
   event: EventDetail
@@ -45,6 +63,9 @@ const REASON_MAX = 500
 const REASON_PLACEHOLDER =
   '이 사건이 상위와 어떻게 이어지는지 한두 문장 (예: 병합을 서두르게 만든 직접적 계기)'
 
+/** 승격 픽커의 '모든 상위 해제' 탈출구 옵션 값 — 사건 id와 충돌하지 않는 sentinel. */
+const PROMOTE_CLEAR_ALL_VALUE = '__clear-all-parents__'
+
 /**
  * 사건의 계층·횡적 네트워크 — 상위 사건 + 하위 사건 + 키워드.
  *
@@ -54,6 +75,22 @@ const REASON_PLACEHOLDER =
  */
 export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const prefetchEvent = usePrefetchEventDetail()
+  const queryClient = useQueryClient()
+
+  /* '새 하위 사건 만들기' — 기존 사건 연결(SelectModal)이 아니라 등록 모달을
+   * initialParent={현재 사건}으로 열어, 고아 생성→상세 이동→수동 연결 3단계를
+   * 등록 1단계로 줄인다. */
+  const [createChildOpen, setCreateChildOpen] = useState(false)
+
+  /**
+   * 새 하위 사건 저장 성공 — 폼 본체가 목록(lists/count) 무효화와 새 사건 상세 시딩을
+   * 이미 끝낸 뒤 불린다. 여기서는 부모(현재 사건) 상세를 무효화해 하위 그리드에 즉시
+   * 반영한다(계층 patch mutation의 detailKey + eventKeys.lists() 무효화 패턴 복제).
+   */
+  const handleChildCreated = () => {
+    queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
+    queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
+  }
   const children = useMemo(
     () =>
       (event.childEvents ?? [])
@@ -64,7 +101,8 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     [event.childEvents],
   )
   const keywords = (event.keywords ?? []).filter(
-    (k): k is string => typeof k === 'string' && k.trim().length > 0,
+    (keyword): keyword is string =>
+      typeof keyword === 'string' && keyword.trim().length > 0,
   )
 
   // 하위 카드는 상한까지만 렌더(그 이상은 '더 보기'로 펼침) — 하위가 수십~수백인 상위
@@ -87,6 +125,8 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const [parentModalOpen, setParentModalOpen] = useState(false)
   const [childModalOpen, setChildModalOpen] = useState(false)
   const [extrasModalOpen, setExtrasModalOpen] = useState(false)
+  // 상위 해제 시 승격 대상 선택 픽커 — 추가 상위 2개 이상일 때만 열림(검색 미사용).
+  const [promotePickerOpen, setPromotePickerOpen] = useState(false)
   // 추가 상위 칩의 연결 사유 편집 라인 — 한 번에 하나만 펼침(칩 행 밀도 유지).
   const [openExtraReasonId, setOpenExtraReasonId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -147,6 +187,21 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     extraIdsRef.current = extraIds
   }, [extraIds])
 
+  // 사유 편집 open 상태가 해제된 칩 id로 잔존하면 같은 사건을 재연결할 때 편집 라인이
+  // 유령처럼 재개방된다 — 현재 extras에 없는 id면 리셋.
+  useEffect(() => {
+    if (openExtraReasonId && !extraIds.includes(openExtraReasonId)) {
+      setOpenExtraReasonId(null)
+    }
+  }, [extraIds, openExtraReasonId])
+
+  /* 추가 하위(역방향 엣지) id 집합 — childIds와 대칭. 상위/추가 상위 후보에서 걸러
+   * 직계 2-cycle(선택 즉시 서버 409 스냅백)을 선차단한다. */
+  const extraChildIds = useMemo(
+    () => (event.extraChildren ?? []).map((extraChild) => extraChild.id),
+    [event.extraChildren],
+  )
+
   /* 선택 옵션 — 자기 자신 제외, 표시 상한 50(51번째는 '더 있음' 신호라 제외). 날짜 +
    * 현재 소속(이미 하위인 경우)을 설명 라인에. */
   const eventOptions = useMemo<SelectOption[]>(
@@ -162,14 +217,19 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     [candidates, event.id],
   )
 
-  /* 직계 순환은 후보에서 제외 — 상위 피커엔 현재 자식 불가, 하위 피커엔 현재
-   * 부모·추가 상위 불가(서버 detach 409·INV-1 선차단). 깊은 순환은 서버 BFS가 409.
+  /* 직계 순환은 후보에서 제외 — 상위 피커엔 현재 자식·추가 하위 불가, 하위 피커엔
+   * 현재 부모·추가 상위 불가(서버 detach 409·INV-1 선차단). 깊은 순환은 서버 BFS가 409.
    * 상위 피커에서 현재 '추가 상위'인 후보는 숨기지 않고 안내를 달아 선택 시
    * 대표 승격(서버 W2-(a-2) 자동 collapse)으로 동작하게 둔다. */
   const parentOptions = useMemo(
     () =>
       eventOptions
-        .filter((option) => !childIds.includes(option.value))
+        .filter(
+          (option) =>
+            !childIds.includes(option.value) &&
+            // 역방향 엣지(추가 하위) — 직계 2-cycle 선차단
+            !extraChildIds.includes(option.value),
+        )
         .map((option) =>
           extraIds.includes(option.value)
             ? {
@@ -183,7 +243,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
               }
             : option,
         ),
-    [eventOptions, childIds, extraIds],
+    [eventOptions, childIds, extraIds, extraChildIds],
   )
   const childOptions = useMemo(
     () =>
@@ -201,29 +261,79 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
       eventOptions.filter(
         (option) =>
           option.value !== event.parentEventId &&
-          !childIds.includes(option.value),
+          !childIds.includes(option.value) &&
+          // 역방향 엣지(추가 하위) — 직계 2-cycle 선차단
+          !extraChildIds.includes(option.value),
       ),
-    [eventOptions, event.parentEventId, childIds],
+    [eventOptions, event.parentEventId, childIds, extraChildIds],
   )
+
+  // 크로스 사건 mutation 진행 가드 — confirm 연쇄·PUT 왕복 동안 재클릭 차단.
+  const crossLinkPendingRef = useRef(false)
+
+  /**
+   * 제3선택 — 후보의 기존 상위 P를 유지한 채 이 사건을 후보의 '추가 상위'로 연결.
+   * *대상 사건* 스코프의 크로스 mutation이라 onPatch(자기 사건 채널) 대신 updateEvent를
+   * 직접 호출한다. 후보의 주 상위 P가 살아 있는 분기라 INV-2(추가 상위는 주 상위 전제)는
+   * 자동 성립. 대상 사건 스코프라 undo 미탑재(V7-1) — 성공 토스트만. 실패(순환 409 등)는
+   * use-event-mutation과 동일한 본문 message 추출로 안내.
+   */
+  const linkThisAsExtraParentOf = async (candidate: EventLinkCandidate) => {
+    if (crossLinkPendingRef.current) return
+    crossLinkPendingRef.current = true
+    try {
+      await updateEvent(candidate.id, {
+        extraParentEventIds: [
+          ...(candidate.extraParents ?? []).map((extra) => extra.id),
+          event.id,
+        ],
+      } as UpdateEventDto)
+      /* 수동 무효화 — use-event-mutation의 계층 무효화 블록 미러(자기 자신 제외
+       * predicate) + 목록 + 자기 상세(이 사건의 '추가 하위' 행 갱신). */
+      queryClient.invalidateQueries({
+        queryKey: ['event-detail'],
+        predicate: (query) => query.queryKey[1] !== event.id,
+      })
+      queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
+      notify.success(`'${candidate.title}'을(를) 추가 하위로 연결했습니다`)
+    } catch (error) {
+      notify.error(`추가 상위 연결 실패: ${crossPatchErrorMessage(error)}`)
+    } finally {
+      crossLinkPendingRef.current = false
+    }
+  }
 
   /**
    * 하위 사건 연결 — 서버는 childEventIds를 받으면 *기존 연결을 모두 해제 후 재설정*하므로
    * 항상 전체 목록을 보낸다. 토글식: 이미 자식이면 제거, 아니면 추가.
-   * 다른 사건의 하위인 후보를 붙이면 그쪽 연결이 끊기고 옮겨오므로 확인을 거친다.
+   * 다른 사건의 하위인 후보를 붙이면 그쪽 연결이 끊기고 옮겨오므로 확인을 거치고,
+   * 이동을 거절하면 기존 상위를 유지한 채 잇는 제3선택(추가 상위 연결)을 이어 묻는다
+   * (releaseParent의 연쇄 confirm 전례 미러).
    */
   const toggleChild = async (childId: string) => {
     const isRemoving = childIds.includes(childId)
     if (!isRemoving) {
       const candidate = candidates.find((item) => item.id === childId)
       if (candidate?.parentEventId && candidate.parentEventId !== event.id) {
-        const confirmed = await confirm({
+        const moveConfirmed = await confirm({
           title: '하위 사건 이동',
           message: `'${candidate.title}'은(는) 현재 '${
             candidate.parentEventTitle ?? '다른 사건'
-          }'의 하위 사건입니다. 그 연결을 끊고 이 사건의 하위로 옮길까요?\n(양쪽 모두 유지하려면 '${candidate.title}' 상세의 '추가 상위'에서 이 사건을 연결하세요.)`,
+          }'의 하위 사건입니다. 그 연결을 끊고 이 사건의 하위로 옮길까요?\n(취소하면 기존 상위를 유지한 채 연결하는 선택지를 이어서 묻습니다.)`,
           confirmLabel: '이동',
         })
-        if (!confirmed) return
+        if (!moveConfirmed) {
+          const keepBoth = await confirm({
+            title: '추가 상위로 연결',
+            message: `'${
+              candidate.parentEventTitle ?? '다른 사건'
+            }' 상위를 유지한 채 이 사건에도 연결할까요?`,
+            confirmLabel: '추가 상위로 연결',
+          })
+          if (keepBoth) await linkThisAsExtraParentOf(candidate)
+          return
+        }
       }
     }
     // confirm await 사이 다른 patch가 반영됐을 수 있어 ref의 최신 목록으로 구성.
@@ -236,7 +346,22 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     onPatch({ childEventIds: next })
   }
 
+  /* 제거 버튼 포커스 이양용 ref — 칩/카드를 지우면 포커스가 body로 낙하해 키보드
+   * 흐름이 끊기므로, 제거 직전 다음 형제의 제거 버튼(없으면 그룹 '추가' 버튼)으로 옮긴다. */
+  const childRemoveRefs = useRef(new Map<string, HTMLButtonElement>())
+  const childAddRef = useRef<HTMLButtonElement | null>(null)
+  const extraRemoveRefs = useRef(new Map<string, HTMLButtonElement>())
+  const extrasAddRef = useRef<HTMLButtonElement | null>(null)
+  const keywordRemoveRefs = useRef(new Map<string, HTMLButtonElement>())
+  const keywordAddRef = useRef<HTMLButtonElement | null>(null)
+
   const removeChild = (childId: string) => {
+    focusNextRemovalTarget(
+      childRemoveRefs.current,
+      childIds,
+      childId,
+      childAddRef.current,
+    )
     onPatch({ childEventIds: childIds.filter((id) => id !== childId) })
   }
 
@@ -267,6 +392,12 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   }
 
   const removeExtraParent = (targetId: string) => {
+    focusNextRemovalTarget(
+      extraRemoveRefs.current,
+      extraIdsRef.current,
+      targetId,
+      extrasAddRef.current,
+    )
     onPatch({
       extraParentEventIds: extraIdsRef.current.filter((id) => id !== targetId),
     } as UpdateEventDto)
@@ -303,18 +434,73 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     } as UpdateEventDto)
   }
 
+  /** 주+추가 상위 일괄 해제 — danger confirm 경유 후 원자 patch(서버 clearAll). */
+  const confirmClearAllParents = async () => {
+    const snapshot = extraIdsRef.current
+    const clearAll = await confirm({
+      title: '모든 상위 해제',
+      message: `현재 상위와 추가 상위 ${snapshot.length}개 연결을 모두 해제할까요?`,
+      confirmLabel: '모두 해제',
+      danger: true,
+    })
+    if (!clearAll) return
+    // 해제는 런타임에 parentEventId:null 명시 전송(DTO 타입은 string이라 캐스트 —
+    // setParent와 동일 사유). extras []와 한 patch = 서버 clearAll 원자 처리.
+    onPatch({
+      parentEventId: null,
+      extraParentEventIds: [],
+    } as unknown as UpdateEventDto)
+  }
+
+  /* 승격 픽커 옵션 — 첫 항목 = 연결 오래된 순(서버 정렬) 기본 제안. SelectOption엔
+   * 위험 스타일이 없어 '모든 상위 해제'는 선택 후 danger confirm 경유로 위험 신호 유지. */
+  const promoteOptions = useMemo<SelectOption[]>(
+    () => [
+      ...extraParents.map((extra, index) => ({
+        value: extra.id,
+        label: extra.title || '(제목 동기화 중)',
+        description:
+          index === 0 ? '기본 제안 — 가장 오래된 연결' : undefined,
+      })),
+      {
+        value: PROMOTE_CLEAR_ALL_VALUE,
+        label: '모든 상위 해제',
+        description: '승격 없이 현재 상위·추가 상위 연결을 모두 해제',
+      },
+    ],
+    [extraParents],
+  )
+
+  /** 승격 픽커 선택 처리 — 원자 swap patch(칩 '승격'과 동일 형상) 또는 전체 해제. */
+  const handlePromotePick = async (pickedId: string) => {
+    setPromotePickerOpen(false)
+    if (pickedId === PROMOTE_CLEAR_ALL_VALUE) {
+      await confirmClearAllParents()
+      return
+    }
+    // 픽커가 열려 있던 사이 목록이 변했을 수 있어 ref 최신값으로 patch 조립.
+    const latest = extraIdsRef.current
+    onPatch({
+      parentEventId: pickedId,
+      extraParentEventIds: latest.filter((id) => id !== pickedId),
+    } as UpdateEventDto)
+  }
+
   /**
    * 주 상위 해제 — 추가 상위가 있으면 서버가 409(INV-2)로 거부하므로 patch 발사 전
    * 가로채 처리 방식을 묻는다(낙관 깜빡임→409 스냅백 방지):
-   *  ① 첫 엣지(연결 오래된 순 = 서버 기본 제안과 동일)를 대표로 승격 + 현 상위 해제
-   *  ② 거절 시 — 주+추가 상위 일괄 해제 원자 patch
-   *  ③ 둘 다 거절 — 무동작.
-   * 승격 대상 '선택' 픽커는 v1 미제공(PD2 잔여) — 칩의 '승격'이 개별 선택 경로를 이미 제공.
+   *  - 추가 상위 2개 이상 — 승격 대상 선택 픽커(SelectModal, '모든 상위 해제' 탈출구 포함)
+   *  - 추가 상위 1개 — 연쇄 confirm: ① 그 엣지 승격+해제 ② 거절 시 주+추가 일괄 해제
+   *    원자 patch ③ 둘 다 거절 — 무동작.
    */
   const releaseParent = async () => {
     const snapshot = extraIdsRef.current
     if (snapshot.length === 0) {
       setParent(null)
+      return
+    }
+    if (snapshot.length >= 2) {
+      setPromotePickerOpen(true)
       return
     }
     const firstExtra =
@@ -339,20 +525,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
       } as UpdateEventDto)
       return
     }
-    const clearAll = await confirm({
-      title: '모든 상위 해제',
-      message: `현재 상위와 추가 상위 ${snapshot.length}개 연결을 모두 해제할까요?`,
-      confirmLabel: '모두 해제',
-      danger: true,
-    })
-    if (clearAll) {
-      // 해제는 런타임에 parentEventId:null 명시 전송(DTO 타입은 string이라 캐스트 —
-      // setParent와 동일 사유). extras []와 한 patch = 서버 clearAll 원자 처리.
-      onPatch({
-        parentEventId: null,
-        extraParentEventIds: [],
-      } as unknown as UpdateEventDto)
-    }
+    await confirmClearAllParents()
   }
 
   /* 형제(같은 상위) 사건 — 하위 사건 상세에서 부모 왕복 없이 이전/다음으로 이동.
@@ -434,8 +607,14 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     setAdding(false)
   }
 
-  const removeKeyword = (k: string) => {
-    onPatch({ keywords: keywords.filter((kw) => kw !== k) })
+  const removeKeyword = (keyword: string) => {
+    focusNextRemovalTarget(
+      keywordRemoveRefs.current,
+      keywords,
+      keyword,
+      keywordAddRef.current,
+    )
+    onPatch({ keywords: keywords.filter((item) => item !== keyword) })
   }
 
   return (
@@ -530,7 +709,12 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
                     cur === extra.id ? null : extra.id,
                   )
                 }
-                aria-pressed={openExtraReasonId === extra.id}
+                aria-expanded={openExtraReasonId === extra.id}
+                aria-controls={
+                  openExtraReasonId === extra.id
+                    ? 'network-extra-reason-editor'
+                    : undefined
+                }
                 aria-label={`추가 상위 '${extra.title}' 연결 사유 ${
                   extra.reason ? '편집' : '추가'
                 }`}
@@ -550,6 +734,10 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
               </TextBtn>
               <ChipX
                 type="button"
+                ref={(node) => {
+                  if (node) extraRemoveRefs.current.set(extra.id, node)
+                  else extraRemoveRefs.current.delete(extra.id)
+                }}
                 onClick={() => removeExtraParent(extra.id)}
                 aria-label={`추가 상위 '${extra.title}' 해제`}
               >
@@ -559,6 +747,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
           ))}
           <AddBtn
             type="button"
+            ref={extrasAddRef}
             onClick={() => setExtrasModalOpen(true)}
             disabled={!parentEvent}
             aria-describedby={
@@ -581,7 +770,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
             )
             if (!openExtra) return null
             return (
-              <ReasonLine>
+              <ReasonLine id="network-extra-reason-editor">
                 <ReasonKicker>{openExtra.title} · 사유</ReasonKicker>
                 <InlineText
                   key={openExtra.id}
@@ -664,6 +853,10 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
                   </ChildCard>
                   <RemoveChildBtn
                     type="button"
+                    ref={(node) => {
+                      if (node) childRemoveRefs.current.set(child.id, node)
+                      else childRemoveRefs.current.delete(child.id)
+                    }}
                     onClick={() => removeChild(child.id)}
                     aria-label={`${child.title} 하위 연결 해제`}
                   >
@@ -697,9 +890,18 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
             외 {hiddenChildCount}개 더 보기
           </TextBtn>
         )}
-        <AddBtn type="button" onClick={() => setChildModalOpen(true)}>
-          <FiPlus /> 하위 사건 추가
-        </AddBtn>
+        <HierRow>
+          <AddBtn
+            type="button"
+            ref={childAddRef}
+            onClick={() => setChildModalOpen(true)}
+          >
+            <FiPlus /> 하위 사건 추가
+          </AddBtn>
+          <AddBtn type="button" onClick={() => setCreateChildOpen(true)}>
+            <FiPlus /> 새 하위 사건 만들기
+          </AddBtn>
+        </HierRow>
       </HierBlock>
 
       {/* 추가 하위(역방향 엣지) — 이 사건을 '추가 상위'로 갖는 사건들. 읽기전용 —
@@ -755,6 +957,10 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
               <span>{keyword}</span>
               <ChipX
                 type="button"
+                ref={(node) => {
+                  if (node) keywordRemoveRefs.current.set(keyword, node)
+                  else keywordRemoveRefs.current.delete(keyword)
+                }}
                 onClick={() => removeKeyword(keyword)}
                 aria-label={`${keyword} 제거`}
               >
@@ -766,7 +972,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
             <KeywordInput
               autoFocus
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(changeEvent) => setDraft(changeEvent.target.value)}
               onBlur={handleBlur}
               onKeyDown={(keyEvent) => {
                 // IME 조합 중 Enter는 조합 확정 — 키워드 조기 커밋 방지.
@@ -782,7 +988,11 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
               placeholder="키워드 입력 후 Enter"
             />
           ) : (
-            <AddBtn type="button" onClick={() => setAdding(true)}>
+            <AddBtn
+              type="button"
+              ref={keywordAddRef}
+              onClick={() => setAdding(true)}
+            >
               <FiPlus /> 추가
             </AddBtn>
           )}
@@ -850,6 +1060,27 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
         onQueryChange={setSearchTerm}
         headerExtra={truncationHint}
       />
+      {/* 상위 해제 시 승격 대상 선택 — 추가 상위 2개 이상일 때만 열림. 후보가 소수라
+          검색 미탑재, '모든 상위 해제'는 선택 후 danger confirm 경유. */}
+      <SelectModal
+        isOpen={promotePickerOpen}
+        onClose={() => setPromotePickerOpen(false)}
+        title="새 대표 상위 선택"
+        options={promoteOptions}
+        onSelect={(pickedId) => void handlePromotePick(pickedId)}
+      />
+
+      {/* 새 하위 사건 등록 — 열 때만 마운트(폼 청크 lazy 로드), 닫으면 언마운트. */}
+      {createChildOpen && (
+        <Suspense fallback={null}>
+          <LazyEventRegisterModal
+            isOpen
+            onClose={() => setCreateChildOpen(false)}
+            initialParent={{ id: event.id, title: event.title }}
+            onSaved={handleChildCreated}
+          />
+        </Suspense>
+      )}
     </S.Section>
   )
 }
@@ -868,14 +1099,67 @@ function candidateDateLabel(candidate: EventLinkCandidate): string | null {
     )
   }
   if (candidate.startYear != null) {
-    const start = `${candidate.startEra === 'BC' ? '기원전 ' : ''}${candidate.startYear}년`
+    // BC는 부호 연도로 접어 shared 포매터 단일출처로 표기(수제 '기원전' 조립 금지).
+    const start = formatYearLabel(
+      candidate.startEra === 'BC' ? -candidate.startYear : candidate.startYear,
+    )
     if (candidate.endYear != null) {
-      const end = `${candidate.endEra === 'BC' ? '기원전 ' : ''}${candidate.endYear}년`
+      const end = formatYearLabel(
+        candidate.endEra === 'BC' ? -candidate.endYear : candidate.endYear,
+      )
       if (end !== start) return `${start} ~ ${end}`
     }
     return start
   }
   return null
+}
+
+/**
+ * 칩/카드 제거 시 포커스 이양 — 제거 버튼에 있던 포커스가 body로 낙하하지 않게,
+ * 렌더 순서상 다음 형제의 제거 버튼(없거나 표시 캡 밖이면 그룹 '추가' 버튼)으로 옮긴다.
+ * 다음 형제 DOM은 제거 re-render 후에도 살아남으므로 제거 직전 즉시 focus해도 유지된다.
+ */
+function focusNextRemovalTarget(
+  removeButtonRefs: Map<string, HTMLButtonElement>,
+  orderedIds: readonly string[],
+  removedId: string,
+  fallback: HTMLButtonElement | null,
+) {
+  const removedIndex = orderedIds.indexOf(removedId)
+  const nextId = removedIndex >= 0 ? orderedIds[removedIndex + 1] : undefined
+  const nextTarget = nextId ? removeButtonRefs.get(nextId) : undefined
+  ;(nextTarget ?? fallback)?.focus()
+}
+
+/**
+ * 서버 에러 → 사용자 문구 — use-event-mutation.ts friendlyErrorMessage의 지역 미러
+ * (비export 함수라 크로스 사건 채널용으로 복제). nestia HttpError.message는 응답
+ * 본문(JSON) 원문이라 순환 409 등이 `{"message":…}` 블롭으로 뜬다 — message만 추출.
+ */
+function crossPatchErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') return '알 수 없는 오류'
+  const raw =
+    typeof (error as { message?: unknown }).message === 'string'
+      ? (error as { message: string }).message
+      : ''
+  const pickMessage = (text: string): string | null => {
+    try {
+      const parsed = JSON.parse(text) as { message?: unknown }
+      if (typeof parsed.message === 'string') return parsed.message
+      if (Array.isArray(parsed.message)) return parsed.message.join(', ')
+    } catch {
+      /* JSON 아님 */
+    }
+    return null
+  }
+  const direct = pickMessage(raw)
+  if (direct) return direct
+  const braceIndex = raw.indexOf('{')
+  if (braceIndex >= 0) {
+    const sliced = pickMessage(raw.slice(braceIndex))
+    if (sliced) return sliced
+  }
+  return raw || '알 수 없는 오류'
 }
 
 /** 후보 설명 라인 — 날짜 · 현재 소속 상위 사건("이미 하위" 안내). */
@@ -904,17 +1188,19 @@ function candidateDescription(
  * 비교 우선순위: 연도 → 월 → 일. 입력 누락은 가장 뒤로 정렬.
  */
 function compareEventStart(
-  a: string | null | undefined,
-  b: string | null | undefined,
+  first: string | null | undefined,
+  second: string | null | undefined,
 ): number {
-  const aT = parseEventDateTokens(a)
-  const bT = parseEventDateTokens(b)
-  if (aT == null && bT == null) return 0
-  if (aT == null) return 1
-  if (bT == null) return -1
-  if (aT.year !== bT.year) return aT.year - bT.year
-  if (aT.month !== bT.month) return aT.month - bT.month
-  return aT.day - bT.day
+  const firstTokens = parseEventDateTokens(first)
+  const secondTokens = parseEventDateTokens(second)
+  if (firstTokens == null && secondTokens == null) return 0
+  if (firstTokens == null) return 1
+  if (secondTokens == null) return -1
+  if (firstTokens.year !== secondTokens.year)
+    return firstTokens.year - secondTokens.year
+  if (firstTokens.month !== secondTokens.month)
+    return firstTokens.month - secondTokens.month
+  return firstTokens.day - secondTokens.day
 }
 
 function parseEventDateTokens(
@@ -922,12 +1208,12 @@ function parseEventDateTokens(
 ): { year: number; month: number; day: number } | null {
   if (!input) return null
   // 선택적 부호 + 1~6자리 연도, 월·일은 선택적.
-  const m = input.match(/^(-?\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/)
-  if (!m || !m[1]) return null
-  const year = parseInt(m[1], 10)
+  const matched = input.match(/^(-?\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/)
+  if (!matched || !matched[1]) return null
+  const year = parseInt(matched[1], 10)
   if (!Number.isFinite(year)) return null
-  const month = m[2] ? parseInt(m[2], 10) : 1
-  const day = m[3] ? parseInt(m[3], 10) : 1
+  const month = matched[2] ? parseInt(matched[2], 10) : 1
+  const day = matched[3] ? parseInt(matched[3], 10) : 1
   return { year, month, day }
 }
 
@@ -1133,7 +1419,7 @@ const ReasonToggleBtn = styled(TextBtn)<{ $hasReason?: boolean }>`
   color: ${({ theme, $hasReason }) =>
     $hasReason ? theme.colors.text.primary : theme.colors.text.tertiary};
 
-  &[aria-pressed='true'] {
+  &[aria-expanded='true'] {
     color: ${({ theme }) => theme.colors.primary};
   }
 `
