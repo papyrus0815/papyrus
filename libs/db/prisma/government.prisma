@@ -65,8 +65,12 @@ enum GovernmentPositionType {
   JUDICIARY
   /// 지방정부 (도지사, 시장, 군수 등)
   LOCAL_GOVERNMENT
-  /// 특별직 (감사원장, 중앙선거관리위원장 등)
+  /// 특별직 (감사원장, 중앙선거관리위원장 등) — 국내 독립기관장
   SPECIAL_POSITION
+  /// 외교직 (대사, 특명전권공사, 총영사, 영사 등)
+  /// 각료도 수반도 아니라 카탈로그에 자리가 없어 전부 자유입력으로 새던 축(실측 tenure 7행).
+  /// 주재지는 정의가 아니라 재임 행의 title 오버라이드로 표기한다(예: '광저우 영국 영사').
+  DIPLOMATIC_POST
   /// 군 지휘관 (국군통수권자는 HEAD_OF_STATE)
   MILITARY_COMMANDER
   /// 왕족/귀족 칭호 (공작, 후작, 백작, 대군, 군 등)
@@ -173,6 +177,9 @@ model GovernmentPositionDefinition {
   category     AdministrationDepartmentCategory? @relation("CategoryPositionDefinitions", fields: [categoryId], references: [id], onDelete: SetNull)
   organization Organization?                     @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
 
+  /// 적용 범위 — 행이 0개면 전역(어느 국가에서나 노출), 1개 이상이면 그 국가에서만 노출
+  scopes GovernmentPositionDefinitionScope[] @relation("PositionDefinitionScopes")
+
   tenures             GovernmentPositionTenure[]
   sovereignReigns   SovereignReign[]           @relation("SovereignReignPositionDef")
   treatySignatories TreatySignatory[]
@@ -185,6 +192,63 @@ model GovernmentPositionDefinition {
   @@index([positionType], name: "idx_gov_pos_def_positionType")
   @@index([rank], name: "idx_gov_pos_def_rank")
   @@map("government_position_definition")
+}
+
+// ========================================
+// GovernmentPositionDefinitionScope
+// ========================================
+/// 관직 정의의 적용 범위 — "이 직책이 어느 국가·정체의 것인가".
+///
+/// 규칙은 단 하나다: **스코프 행이 0개면 전역(어느 국가에서나 노출), 1개 이상이면 그 국가에서만 노출.**
+/// 별도 정책 플래그(UNIVERSAL/COUNTRY_SCOPED 같은 컬럼)를 두지 않는 이유 — 플래그를 켜 놓고
+/// 스코프 행을 못 붙이면 "어디에서도 보이지 않는 정의"가 만들어진다. 존재 여부만으로 판정하면
+/// 그 상태 자체가 구조적으로 불가능하다.
+///
+/// 정의 본체에 countryId를 직접 두지 않은 이유 — '국왕' 정의 하나가 헝가리 왕국·러시아 차르국·
+/// 포르투갈 등 역사국가 18개에 걸쳐 쓰인다(실측 재위 97건). 단일 FK로는 국가별 정의 복제가
+/// 강제되는데, 시드 doctrine이 "국가 스코프로 구분되는 일반 칭호는 하나로 통합"을 명문화하고 있다.
+///
+/// ⚠️ 총리·대통령·국왕·황제·공작처럼 여러 나라가 공유하는 보편 칭호에는 스코프를 붙이지 말 것.
+/// 붙이는 순간 스코프에 없는 나라에서 그 직책이 사라진다. 스코프는 쇼군·영의정·서기장처럼
+/// 특정 정체에 귀속되는 고유 직책에만 붙인다.
+model GovernmentPositionDefinitionScope {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  definitionId String @map("definition_id") @db.Char(36)
+
+  /// 현대 국가 (표시·그룹핑 축)
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 (소속 축) — 레포 규약대로 역사 우선 + 현대 dual-fill. 둘 다 null이면 무의미한 행.
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 적용 시대 창(선택) — 비우면 연결된 국가의 존속기간을 폴백으로 본다.
+  /// 한 나라 안에서도 시기가 갈리는 직책(예: 특정 시기에만 존재한 부처의 장)에만 채운다.
+  startEra  Era? @map("start_era")
+  startYear Int? @map("start_year")
+  endEra    Era? @map("end_era")
+  endYear   Int? @map("end_year")
+
+  /// 그 나라에서의 현지 표기 (예: 쇼군 → 征夷大将軍)
+  localTitle String? @map("local_title") @db.VarChar(100)
+
+  note String? @db.Text
+
+  definition        GovernmentPositionDefinition @relation("PositionDefinitionScopes", fields: [definitionId], references: [id], onDelete: Cascade)
+  country           Country?                     @relation("CountryPositionDefinitionScopes", fields: [countryId], references: [id], onDelete: Cascade)
+  historicalCountry HistoricalCountry?           @relation("HistoricalCountryPositionDefinitionScopes", fields: [historicalCountryId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // @@unique([definitionId, countryId, historicalCountryId])를 걸지 않는다 —
+  // MySQL은 NULL을 포함한 유니크 키에서 중복을 허용해 반쪽 보증밖에 못 된다.
+  // 멱등성은 앱 레벨(findFirst → create)에서 보장한다.
+  @@index([definitionId], name: "idx_gov_pos_def_scope_definitionId")
+  @@index([countryId], name: "idx_gov_pos_def_scope_countryId")
+  @@index([historicalCountryId], name: "idx_gov_pos_def_scope_historicalCountryId")
+  @@map("government_position_definition_scope")
 }
 
 // ========================

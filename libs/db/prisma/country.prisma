@@ -89,6 +89,8 @@ model Country {
   adminDivisionConfigs      CountryAdminDivisionConfig[]
   adminDivisionSchemes      AdminDivisionScheme[]            @relation("CountryAdminDivisionSchemes")
   administrationDepartments AdministrationDepartment[]       @relation("Country_Department")
+  /// 이 국가에만 적용되는 관직 정의 스코프 (없으면 그 정의는 전역)
+  positionDefinitionScopes  GovernmentPositionDefinitionScope[] @relation("CountryPositionDefinitionScopes")
   historicalConnections     HistoricalCountryModernCountry[]
   Law                       Law[]
   groundVehicles            GroundVehicle[]
