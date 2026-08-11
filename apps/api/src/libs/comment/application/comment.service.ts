@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common'
 import { AggregateType, EventMethod } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
+import { ROOT_EVENT_WHERE } from '../../event/domain/event-hierarchy'
 import { NotificationService } from '../../notification/application/notification.service'
 
 /** 댓글 응답 (작성자 표시 + 요청자 기준 삭제 권한) */
@@ -140,12 +141,23 @@ export class CommentService {
     mustExist = false,
   ): Promise<{ ownerAccountId: string | null; label: string | null }> {
     if (ownerType === AggregateType.EVENT) {
-      // 방(by-account)에 노출되는 조건과 동일: 최상위(parentEventId=null)·미삭제 사건만 댓글 대상.
-      // 루트 판정 — INV-2("추가 상위는 주 상위 필수") 의존: 다중 상위(EventParentLink)가
-      // 생겨도 이 게이트는 주 상위 FK만 본다(PD4 — 정책 확정 대기, v1 현행 유지).
-      // 하위사건·비노출 사건 id로의 댓글 읽기/쓰기를 차단해 방-스코프와 일치시킨다.
+      // 방(by-account)에 노출되는 조건과 정합: '살아있는 주 상위 없음'(실질 루트)·미삭제
+      // 사건만 댓글 대상. 주 상위가 소프트삭제된(유령) 자식은 프론트 뷰가 부모를 숨겨
+      // 루트로 취급하므로 댓글 대상으로 인정한다(CG-1) — 엄격 루트 일치만 걸면
+      // 유령 부모 자식이 이유 없이 404가 된다.
+      // 루트 분기는 event/domain/event-hierarchy.ts의 ROOT_EVENT_WHERE(단일출처) —
+      // INV-2 의존 근거도 거기 있다. 이 게이트는 주 상위 FK만 본다(PD4 — 정책 확정
+      // 대기, v1 현행 유지). 살아있는 주 상위가 있는 하위사건은 현행대로 차단해
+      // 방-스코프와 일치시킨다.
       const event = await this.prisma.event.findFirst({
-        where: { id: recordId, deletedAt: null, parentEventId: null },
+        where: {
+          id: recordId,
+          deletedAt: null,
+          OR: [
+            { ...ROOT_EVENT_WHERE },
+            { parentEvent: { deletedAt: { not: null } } },
+          ],
+        },
         select: { createdById: true, title: true },
       })
       if (!event) {

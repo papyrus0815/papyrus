@@ -10,6 +10,7 @@ import {
   IsIn,
 } from 'class-validator'
 import { MilitaryEventDto } from './military-event.dto'
+import { HierarchyReasonEntryDto } from './hierarchy-reason.dto'
 
 export class CreateEventDto {
   @ApiProperty({ description: '사건명' })
@@ -143,15 +144,6 @@ export class CreateEventDto {
     role?: string
     note?: string
   }>
-
-  @ApiProperty({
-    description: '관련 사건 목록 (상위 사건 외)',
-    required: false,
-    type: 'array',
-    items: { type: 'string' },
-  })
-  @IsOptional()
-  relatedEventIds?: string[]
 
   @ApiProperty({
     description: '관련 현대 국가 ID 목록',
@@ -313,5 +305,21 @@ export class CreateEventDto {
   @IsArray()
   @IsString({ each: true })
   extraParentEventIds?: string[]
+
+  @ApiProperty({
+    description:
+      '생성과 동시에 기입하는 연결 사유(이 사건=자식) — 유효 쌍은 이번 요청으로 연결되는 ' +
+      '주 상위(parentEventId)·추가 상위(extraParentEventIds)뿐. 연결되지 않은 상위에 ' +
+      '사유 업서트 시 400, 같은 상위 중복 제출 시 400. 신설 사건엔 지울 행이 없어 ' +
+      'reason null/공백 항목은 no-op. childLinkReasons(이 사건=부모)는 생성 범위 외 — ' +
+      '자식 연결 사유는 자식 쪽 편집(PUT parentLinkReasons)으로 단일화된 규약이라 받지 않는다.',
+    required: false,
+    type: [HierarchyReasonEntryDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => HierarchyReasonEntryDto)
+  parentLinkReasons?: HierarchyReasonEntryDto[]
 }
 

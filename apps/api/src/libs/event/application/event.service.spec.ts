@@ -390,6 +390,22 @@ describe('EventService 다중 상위 가드 (W1~W5·BFS)', () => {
     ).rejects.toThrow(/'사건 C1'에 추가 상위가 연결되어 있어/)
   })
 
+  test('W6: 유령 엣지만 가진 자식은 detach 통과 — 루트 승격 + 잔존 유령 엣지 정리', async () => {
+    const { service, fakePrisma } = buildService(
+      [liveEvent('E'), liveEvent('C1', 'E'), deletedEvent('G')],
+      [edge('C1', 'G')], // 사용자에게 보이지 않는 유령 엣지 — 차단 사유가 아니다
+    )
+    await updateHierarchy(service, 'E', { childEventIds: [] })
+    expect(fakePrisma.event.updateMany).toHaveBeenCalledWith({
+      where: { parentEventId: 'E', deletedAt: null },
+      data: { parentEventId: null },
+    })
+    // INV-2: 루트 승격된 분리 자식의 잔존 유령 엣지는 같은 tx에서 삭제(자식측 clearAll 거울)
+    expect(fakePrisma.eventParentLink.deleteMany).toHaveBeenCalledWith({
+      where: { childEventId: { in: ['C1'] } },
+    })
+  })
+
   test('W3 attach collapse: 새로 붙는 자식의 기존(이 사건→) 엣지 자동 제거', async () => {
     const { service, fakePrisma } = buildService(
       [liveEvent('E'), liveEvent('C2', null)],
@@ -534,6 +550,41 @@ describe('EventService 다중 상위 가드 (W1~W5·BFS)', () => {
   })
 })
 
+describe('EventService 삭제 경로 자식 승격 (HIER-W2)', () => {
+  test('소프트삭제: 유령(소프트삭제 부모) 엣지는 승격 제외 — 루트 승격 + 잔존 엣지 정리', async () => {
+    // C의 주 상위 A(삭제 대상), 유령 엣지 B(소프트삭제). B로 승격하면 C가 전 뷰 소실(P1-6).
+    const { service, fakePrisma } = buildService(
+      [liveEvent('A'), liveEvent('C', 'A'), deletedEvent('B')],
+      [edge('C', 'B')],
+    )
+    await service.deleteEvent('A', OWNER)
+    // 유령 엣지 승격(event.update) 없이 루트로
+    expect(fakePrisma.event.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['C'] } },
+      data: { parentEventId: null },
+    })
+    // INV-2: 루트 승격된 자식의 잔존 유령 엣지 삭제(clearAll/V1-7 거울)
+    expect(fakePrisma.eventParentLink.deleteMany).toHaveBeenCalledWith({
+      where: { childEventId: { in: ['C'] } },
+    })
+    expect(fakePrisma.eventParentLink.delete).not.toHaveBeenCalled()
+  })
+
+  test('하드삭제: 유령 엣지 승격 제외 — 잔존 엣지 정리 후 본체 삭제', async () => {
+    const { service, fakePrisma, fakeRepo } = buildService(
+      [deletedEvent('E'), liveEvent('C', 'E'), deletedEvent('G')],
+      [edge('C', 'G')],
+    )
+    await service.permanentlyDeleteEvent('E', OWNER)
+    // 승격(event.update) 없음 — C는 본체 delete의 SetNull로 루트가 된다
+    expect(fakePrisma.event.update).not.toHaveBeenCalled()
+    expect(fakePrisma.eventParentLink.deleteMany).toHaveBeenCalledWith({
+      where: { childEventId: { in: ['C'] } },
+    })
+    expect(fakeRepo.delete).toHaveBeenCalledWith('E', fakePrisma)
+  })
+})
+
 /** updateEvent 포지셔널 인자 헬퍼 — 연결 사유(+선택적 계층) 인자 노출 */
 function updateReasons(
   service: EventService,
@@ -619,6 +670,37 @@ describe('EventService 연결 사유(EventHierarchyReason)', () => {
           { parentEventId: 'P1', reason: '첫째' },
           { parentEventId: 'P1', reason: '둘째' },
         ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException)
+  })
+
+  test('HIER-W1: 사유+승격 동시 patch — 새 주 상위 쌍 사유가 effective 기준으로 통과', async () => {
+    // 본체 update(주 상위 FK)는 사유 적용 뒤에 실행되므로, DB 재조회면 구 상위만 유효해
+    // 400 롤백이던 결함 — effective 값(제출값) 기준으로 통과해야 한다.
+    const reasons: FakeReasonRow[] = []
+    const { service } = buildService(
+      [liveEvent('E', 'P1'), liveEvent('P1'), liveEvent('P2')],
+      [],
+      { reasons },
+    )
+    await updateReasons(service, 'E', {
+      parentEventId: 'P2',
+      parentLinkReasons: [{ parentEventId: 'P2', reason: '새 상위 사유' }],
+    })
+    expect(reasons).toEqual([
+      { childEventId: 'E', parentEventId: 'P2', reason: '새 상위 사유' },
+    ])
+  })
+
+  test('HIER-W1: 떨어져 나가는 구 주 상위(엣지 잔존 없음) 쌍 사유는 400', async () => {
+    const { service } = buildService(
+      [liveEvent('E', 'P1'), liveEvent('P1'), liveEvent('P2')],
+      [],
+    )
+    await expect(
+      updateReasons(service, 'E', {
+        parentEventId: 'P2',
+        parentLinkReasons: [{ parentEventId: 'P1', reason: '구 상위 사유' }],
       }),
     ).rejects.toBeInstanceOf(BadRequestException)
   })

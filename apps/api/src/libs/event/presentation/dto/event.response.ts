@@ -95,6 +95,15 @@ export class EventResponseDto {
 
   @ApiProperty({
     description:
+      '추가 상위 *개수*(EventParentLink, 살아있는 부모만 — 소프트삭제 부모 제외 필터 카운트). ' +
+      '목록 응답(getAllEvents 루트·자식)의 배지 근거 — 상세는 extraParents 배열이 정본. ' +
+      '_count 미로드 경로에선 undefined(미로드 vs 0 구분 계약, extraParents와 동일).',
+    required: false,
+  })
+  extraParentCount?: number
+
+  @ApiProperty({
+    description:
       '추가 하위 사건 목록(EventParentLink 역방향 — 이 사건을 추가 상위로 갖는 사건들). ' +
       '읽기전용 표시용 — 편집은 자식 쪽에서. 소프트삭제 자식은 걸러짐. reason=쌍 연결 사유.',
     required: false,

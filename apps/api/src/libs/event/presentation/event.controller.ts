@@ -15,6 +15,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common'
 import { AuthGuard } from '@nestjs/passport'
 import { ApiTags } from '@nestjs/swagger'
@@ -27,6 +28,7 @@ import {
   EventLinkCandidateDto,
 } from './dto'
 import { Event } from '../domain/event.entity'
+import { ROOT_EVENT_WHERE } from '../domain/event-hierarchy'
 import { PrismaClient } from '@prisma/client'
 import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
 
@@ -283,6 +285,13 @@ export class EventController {
               reason: reasonByChildId.get(link.childEvent.id) ?? undefined,
             }))
         : undefined,
+      // 추가 상위 *개수* — 목록(getAllEvents) 경로의 _count(살아있는 부모만 필터 카운트)
+      // 로드 시에만 매핑. extraParents 배열의 '미로드 vs 없음' conditional 계약과 동일하게,
+      // _count 미로드 응답에선 undefined로 남긴다(무조건 0 채움 금지).
+      extraParentCount:
+        typeof event._count?.extraParentLinks === 'number'
+          ? event._count.extraParentLinks
+          : undefined,
       keywords: event.keywords != null ? (Array.isArray(event.keywords) ? event.keywords : []) : null,
       cityId: event.cityId,
       city: event.city
@@ -505,9 +514,8 @@ export class EventController {
     // 최상위 사건만 페이징 (본인이 등록한 것만, 삭제되지 않은 것만)
     const events = await this.prisma.event.findMany({
       where: {
-        // 루트 판정 — INV-2("추가 상위는 주 상위 필수") 의존: 다중 상위가 생겨도
-        // parentEventId IS NULL만이 루트다(EventParentLink는 루트에 존재 불가).
-        parentEventId: null,
+        // 루트 판정 — 정의·INV-2 의존 근거는 domain/event-hierarchy.ts(단일출처) 참고.
+        ...ROOT_EVENT_WHERE,
         createdById: userId,
         deletedAt: null,
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
@@ -527,6 +535,14 @@ export class EventController {
       orderBy: createdAtGte ? { createdAt: 'desc' } : { startDate: 'desc' },
       omit: LIST_OMITTED_BODY_FIELDS,
       include: {
+        // 추가 상위 개수(PD-3) — 목록 배지 근거. 엣지 배열(extraParentLinks, 상세 전용)
+        // 대신 필터 relation count로 개수만 싣는다. 유령(소프트삭제 부모) 엣지는 상세의
+        // extraParents 게이트와 동일하게 제외 — 배지 N과 상세 칩 수가 어긋나지 않게.
+        _count: {
+          select: {
+            extraParentLinks: { where: { parentEvent: { deletedAt: null } } },
+          },
+        },
         category: true,
         // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
         historicalCountry: { select: { id: true, name: true } },
@@ -536,6 +552,13 @@ export class EventController {
           where: { deletedAt: null },
           omit: LIST_OMITTED_BODY_FIELDS,
           include: {
+            // 자식 행에도 추가 상위 개수 — 루트와 동일 필터(유령 제외). 손자 레벨은
+            // 경량 include 정책(계층 3 캡)이라 싣지 않는다(undefined=미로드).
+            _count: {
+              select: {
+                extraParentLinks: { where: { parentEvent: { deletedAt: null } } },
+              },
+            },
             category: true,
             historicalCountry: { select: { id: true, name: true } },
             // 목록은 섹션 *제목*만 소비한다(드로어의 '본문 구성' 칩) —
@@ -722,8 +745,8 @@ export class EventController {
 
     const total = await this.prisma.event.count({
       where: {
-        // 루트 판정 — INV-2 의존(getAllEvents와 동일 계약)
-        parentEventId: null,
+        // 루트 판정 — getAllEvents와 동일 계약(domain/event-hierarchy.ts 단일출처)
+        ...ROOT_EVENT_WHERE,
         createdById: userId,
         deletedAt: null,
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
@@ -862,10 +885,10 @@ export class EventController {
 
     // 월·일 매칭은 Prisma 쿼리 빌더로 불가 → 원시 SQL로 후보 ID만 추린 뒤
     // 표준 include로 본문을 채운다(toResponseDto 호환).
-    // ⚠️ parent_event_id IS NULL 루트 판정은 INV-2("추가 상위는 주 상위 필수") 의존 —
-    // raw SQL이라 컴파일러·camelCase grep 모두 못 잡는 유일 지점. 다중 상위 정책이
-    // '주 상위 없는 추가 상위 허용'으로 바뀌면 이 쿼리는 조용히 틀린다
-    // (docs/event-multi-parent-review.md §7 리스크 3).
+    // ⚠️ parent_event_id IS NULL 루트 판정의 정본은 domain/event-hierarchy.ts의
+    // ROOT_EVENT_WHERE — raw SQL이라 스프레드 치환 불가한 유일 지점이고, 컴파일러·
+    // camelCase grep 모두 못 잡는다. 루트 정의(INV-2 의존)가 바뀌면 정본과 함께
+    // 이 쿼리도 손으로 고쳐야 한다(docs/event-multi-parent-review.md §7 리스크 3).
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM event
       WHERE parent_event_id IS NULL
@@ -888,12 +911,20 @@ export class EventController {
         category: true,
         // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
         historicalCountry: { select: { id: true, name: true } },
-        parentEvent: true,
+        // parentEvent는 싣지 않는다 — 위 raw SQL이 루트만 추리므로 항상 null(죽은 로드).
         childEvents: {
+          // 소프트 삭제된 자식 제외 — getAllEvents·loadEventDetail과 동일 형상(API-1).
+          where: { deletedAt: null },
+          omit: LIST_OMITTED_BODY_FIELDS,
           include: {
             category: true,
             historicalCountry: { select: { id: true, name: true } },
-            eventSections: true,
+            // 섹션은 제목만 — 유일 소비처(대시보드 EventCardItem)가 섹션을 안 쓰므로
+            // MEDIUMTEXT content 전문 적재 금지(getAllEvents와 동일 형상, API-2).
+            eventSections: {
+              select: { id: true, title: true, order: true, sectionType: true },
+              orderBy: { order: 'asc' },
+            },
             eventImages: true,
           },
           orderBy: { startDate: 'asc' },
@@ -902,7 +933,10 @@ export class EventController {
           include: { country: true, historicalCountry: true },
           orderBy: { createdAt: 'asc' },
         },
-        eventSections: { orderBy: { order: 'asc' } },
+        eventSections: {
+          select: { id: true, title: true, order: true, sectionType: true },
+          orderBy: { order: 'asc' },
+        },
         eventImages: { orderBy: { order: 'asc' } },
       },
     })
@@ -968,16 +1002,25 @@ export class EventController {
         // 위치 복원: 편집 폼 PlaceSelect 뱃지에 표시할 이름 (UUID만으론 부족)
         city: { select: { id: true, name: true } },
         administrativeDivision: { select: { id: true, name: true } },
-        // 조상 breadcrumb용 — parentEvent를 여러 단계 중첩 로드(각 단계 scalar만).
-        // 단일레벨(parentEvent: true)만 로드하면 히어로 breadcrumb의 조부모 체인·'…'
-        // 말줄임이 죽은 코드가 된다(부모.parentEvent가 늘 undefined). 스칼라(제목·날짜·
-        // deletedAt·parentEventId)만이라 페이로드 부담 작고, 소프트삭제 조상은 toResponseDto가
-        // deletedAt로 null 처리한다. depth 4까지 로드해 CAP(3) 초과 시 '…' 표식이 뜬다.
+        // 조상 breadcrumb용 — parentEvent를 여러 단계 중첩 로드. 단일레벨(parentEvent:
+        // true)만 로드하면 히어로 breadcrumb의 조부모 체인·'…' 말줄임이 죽은 코드가 된다
+        // (부모.parentEvent가 늘 undefined). depth 4까지 로드해 CAP(3) 초과 시 '…' 표식이 뜬다.
+        // 각 단계에 omit — breadcrumb은 제목·날짜만 쓰는데 include가 background/aftermath
+        // (MEDIUMTEXT) 전문까지 실어 조상 수만큼 페이로드가 부풀었다(API-3).
+        // ⚠️ select로 좁히지 말 것 — 소프트삭제 조상 은닉(toResponseDto 유령 게이트)이
+        // include로 실려오는 deletedAt에 의존한다(위 parentEvent 매핑 주석 참고).
         parentEvent: {
+          omit: LIST_OMITTED_BODY_FIELDS,
           include: {
             parentEvent: {
+              omit: LIST_OMITTED_BODY_FIELDS,
               include: {
-                parentEvent: { include: { parentEvent: true } },
+                parentEvent: {
+                  omit: LIST_OMITTED_BODY_FIELDS,
+                  include: {
+                    parentEvent: { omit: LIST_OMITTED_BODY_FIELDS },
+                  },
+                },
               },
             },
           },
@@ -1104,8 +1147,8 @@ export class EventController {
     const parsedLimit = parseInt(limit ?? '', 10)
     const take = Number.isNaN(parsedLimit) ? 60 : Math.min(Math.max(parsedLimit, 1), 100)
     const rows = await this.prisma.event.findMany({
-      // parentEventId: null 루트 판정 — INV-2 의존(다중 상위 무영향)
-      where: { createdById: accountId, parentEventId: null, deletedAt: null },
+      // 루트 판정 — domain/event-hierarchy.ts 단일출처(INV-2 의존, 다중 상위 무영향)
+      where: { createdById: accountId, ...ROOT_EVENT_WHERE, deletedAt: null },
       take,
       orderBy: { startDate: 'desc' },
       select: {
@@ -1206,7 +1249,7 @@ export class EventController {
         createdById: userId, // 🆕 등록자 ID
       },
       dto.relatedPersons,
-      dto.relatedEventIds,
+      dto.parentLinkReasons, // 🆕 생성 동시 연결 사유(이 사건=자식) — 구 relatedEventIds 슬롯
       dto.relatedCountryIds,
       dto.relatedHistoricalCountryIds,
       dto.eventSections,
@@ -1266,21 +1309,30 @@ export class EventController {
     const userId = req.user?.id! // AuthGuard가 이미 인증 체크함
     
     console.log(`👤 사건 수정 사용자: ${userId}`)
-    
+
     // 권한 체크: 본인이 등록한 사건만 수정 가능
     const existingEvent = await this.prisma.event.findUnique({
       where: { id },
-      select: { createdById: true },
+      select: { createdById: true, deletedAt: true },
     })
-    
+
     if (!existingEvent) {
       throw new NotFoundException('사건을 찾을 수 없습니다.')
     }
-    
+
     if (existingEvent.createdById !== userId) {
       throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
     }
-    
+
+    // 소프트삭제된 사건 쓰기 차단(HIER-W3) — 서비스 findById가 deletedAt을 안 거르므로
+    // 여기서 막지 않으면 유령 사건에 PUT { childEventIds }로 살아있는 자식이 유령 부모
+    // 아래로 attach되어 전 뷰에서 소실된다. 복구(restore) 후 수정해야 한다.
+    if (existingEvent.deletedAt) {
+      throw new ConflictException(
+        '삭제된 사건은 수정할 수 없습니다 — 복구 후 다시 시도하세요.',
+      )
+    }
+
     // categoryName이 제공되면 categoryId로 변환 (우선순위: categoryName > categoryId)
     let categoryId = dto.categoryId
     if (dto.categoryName) {
@@ -1463,9 +1515,11 @@ export class EventController {
     @Request() req?: any,
   ): Promise<any> {
     const userId = req.user?.id
-    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
+    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true, deletedAt: true } })
     if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
     if (event.createdById !== userId) throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
+    // 유령 사건에 신규 연결 금지 — PUT 게이트(HIER-W3)와 동일 규약(해제는 정리라 허용)
+    if (event.deletedAt) throw new ConflictException('삭제된 사건은 수정할 수 없습니다 — 복구 후 다시 시도하세요.')
 
     if (!body?.cabinetId) throw new BadRequestException('cabinetId가 필요합니다.')
 
@@ -1505,9 +1559,11 @@ export class EventController {
     @Request() req?: any,
   ): Promise<any> {
     const userId = req.user?.id
-    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true } })
+    const event = await this.prisma.event.findUnique({ where: { id }, select: { createdById: true, deletedAt: true } })
     if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
     if (event.createdById !== userId) throw new ForbiddenException('본인이 등록한 사건만 수정할 수 있습니다.')
+    // 유령 사건 쓰기 차단 — PUT 게이트(HIER-W3)와 동일 규약(해제는 정리라 허용)
+    if (event.deletedAt) throw new ConflictException('삭제된 사건은 수정할 수 없습니다 — 복구 후 다시 시도하세요.')
 
     return this.prisma.cabinetEvent.update({
       where: { cabinetId_eventId: { cabinetId, eventId: id } },

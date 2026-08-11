@@ -75,7 +75,7 @@ export class EventService {
    * 사건 생성
    * @param data 사건 생성 데이터
    * @param relatedPersons 관련 인물 목록
-   * @param relatedEventIds 관련 사건 ID 목록
+   * @param parentLinkReasons 생성과 동시에 기입하는 계층 연결 사유(이 사건=자식)
    * @param sections 섹션 기반 내용 (멘션 정보 포함)
    * @param childEvents 하위 사건 목록 (빠른 등록용)
    * @returns 생성된 사건
@@ -93,7 +93,13 @@ export class EventService {
     }>
     },
     relatedPersons?: Array<{ personId: string; role?: string; note?: string }>,
-    relatedEventIds?: string[],
+    /**
+     * 생성과 동시에 기입하는 계층 연결 사유(이 사건=자식) — 유효 쌍은 이번 요청의
+     * 주 상위·추가 상위뿐. 엣지 쓰기 뒤 같은 tx에서 applyHierarchyReasons로 적용.
+     * (죽은 계약 relatedEventIds가 쓰던 슬롯 재사용 — 호출부·spec이 위치기반 인자라
+     * trailing 추가 대신 빈 슬롯을 채워 뒤 인자들의 위치를 보존한다.)
+     */
+    parentLinkReasons?: Array<{ parentEventId: string; reason: string | null }>,
     relatedCountryIds?: string[],
     relatedHistoricalCountryIds?: string[],
     eventSections?: Array<{
@@ -141,7 +147,9 @@ export class EventService {
       (childEventIds && childEventIds.length > 0) ||
       extraIds.length > 0
     ) {
-      // INV-2: 추가 상위는 주 상위가 있는 사건에만 — 루트판정(parentEventId IS NULL) 보존.
+      // INV-2: 추가 상위는 주 상위가 있는 사건에만 — 루트판정 보존. 이 가드가 지키는
+      // 루트 정의의 정본은 domain/event-hierarchy.ts(isRootEvent) — 여기는 '루트로
+      // 남을 사건인가'라는 시맨틱 검사라 헬퍼 치환 대상이 아니다.
       if (extraIds.length > 0 && !data.parentEventId) {
         throw new ConflictException(
           '주 상위가 없는 사건에는 추가 상위를 연결할 수 없습니다 — 먼저 상위 사건을 지정하세요.',
@@ -176,10 +184,29 @@ export class EventService {
       }
     }
 
-    // 관련 사건들이 존재하는지 확인
-    if (relatedEventIds) {
-      for (const eventId of relatedEventIds) {
-        await this.getEventById(eventId)
+    // 연결 사유(생성 동시 기입) — 같은 배열 내 중복 쌍 선차단(400). 유효 쌍(주·추가 상위)
+    // 검증도 본체 생성 *전*에 한 번 — tx 안 applyHierarchyReasons가 정본이지만, create는
+    // 본체 쓰기가 tx 밖이라 거기서 처음 걸리면 사건만 만들어진 채 400이 나가는 고아가
+    // 생긴다(update와 달리 사전 fail-fast 필요). 삭제 의미(null/공백) 항목은 신설 사건에
+    // 지울 행이 없어 no-op — 검증 대상에서 제외. childLinkReasons는 create 범위 외 —
+    // 자식 연결 사유는 자식 쪽 편집(PUT parentLinkReasons)으로 단일화된 규약이라 받지 않는다.
+    if (parentLinkReasons !== undefined) {
+      assertNoDuplicateKey(
+        parentLinkReasons,
+        (entry) => entry.parentEventId,
+        '같은 상위 사건에 대한 연결 사유가 중복 제출되었습니다',
+      )
+      const validParents = new Set<string>([
+        ...(data.parentEventId ? [data.parentEventId] : []),
+        ...extraIds,
+      ])
+      for (const entry of parentLinkReasons) {
+        const normalized = (entry.reason ?? '').trim()
+        if (normalized && !validParents.has(entry.parentEventId)) {
+          throw new BadRequestException(
+            '연결되지 않은 상위 사건에는 연결 사유를 기록할 수 없습니다',
+          )
+        }
       }
     }
 
@@ -292,8 +319,6 @@ export class EventService {
       )
     }
 
-    // 관련 사건 연결 (추후 구현 가능 - 현재는 parentEventId만 지원)
-
     // 🆕 하위 사건 자동 생성
     if (data.childEvents && Array.isArray(data.childEvents) && data.childEvents.length > 0) {
       console.log(`📝 하위 사건 ${data.childEvents.length}개 생성 시작...`)
@@ -324,10 +349,16 @@ export class EventService {
       }
     }
 
-    // 🆕 기존 사건을 하위로 연결 + 추가 상위 엣지 — 계층 쓰기를 한 $transaction으로
+    // 🆕 기존 사건을 하위로 연결 + 추가 상위 엣지 + 연결 사유 — 계층 쓰기를 한 $transaction으로
     // (부분 실패 시 반쯤 연결된 상태 방지, 기존 비트랜잭션 Promise.all 대체).
     // 신설 사건을 가리키는 기존 엣지는 있을 수 없어 attach collapse는 자연 no-op — 생략.
-    if ((childEventIds && childEventIds.length > 0) || extraIds.length > 0) {
+    const hasReasonWrites =
+      parentLinkReasons !== undefined && parentLinkReasons.length > 0
+    if (
+      (childEventIds && childEventIds.length > 0) ||
+      extraIds.length > 0 ||
+      hasReasonWrites
+    ) {
       await this.prisma.$transaction(async (tx) => {
         if (childEventIds && childEventIds.length > 0) {
           console.log(
@@ -346,6 +377,34 @@ export class EventService {
             })),
             skipDuplicates: true,
           })
+        }
+        // 순환 재검(HIER-W7) — updateEvent tx 재검의 거울. 사전 BFS와 동일 조건
+        // (위·아래 동시 연결일 때만 순환 가능)·동일 인자로, tx 클라이언트를 주입해
+        // 이 tx의 엣지·자식 쓰기가 보이는 상태에서 재실행한다. 위반 시 전체 롤백.
+        if (
+          (data.parentEventId || extraIds.length > 0) &&
+          childEventIds &&
+          childEventIds.length > 0
+        ) {
+          await this.assertNoHierarchyCycle(
+            EventService.CREATE_CYCLE_SENTINEL,
+            data.parentEventId ?? null,
+            childEventIds,
+            extraIds,
+            tx,
+          )
+        }
+        // 연결 사유 — update와 동일하게 엣지 쓰기 *후* 같은 tx에서 적용(방금 쓴 엣지가
+        // 유효 쌍으로 보인다). create의 effective 주 상위 = 방금 본체에 쓴 parentEventId
+        // (본체는 이미 커밋된 상태라 update의 '구값 미반영' 문제가 없다).
+        if (hasReasonWrites) {
+          await this.applyHierarchyReasons(
+            tx,
+            event.id,
+            data.parentEventId ?? null,
+            parentLinkReasons,
+            undefined,
+          )
         }
       })
       if (childEventIds && childEventIds.length > 0) {
@@ -451,14 +510,22 @@ export class EventService {
       childEventIds !== undefined ||
       extraParentEventIds !== undefined
     let edgePlan: ExtraParentEdgePlan = { kind: 'none' }
+    /** tx 내 순환 재검(HIER-W7)이 사전 BFS와 같은 오버레이로 재실행하기 위한 반영 후 상위 집합 */
+    let cycleOverlay: { effectiveParentId: string | null; bfsExtras: string[] } | null =
+      null
     if (hierarchyTouched) {
-      edgePlan = await this.assertHierarchyLinkable(
+      const hierarchyPlan = await this.assertHierarchyLinkable(
         id,
         target,
         data.parentEventId,
         childEventIds,
         extraParentEventIds,
       )
+      edgePlan = hierarchyPlan.edgePlan
+      cycleOverlay = {
+        effectiveParentId: hierarchyPlan.effectiveParentId,
+        bfsExtras: hierarchyPlan.bfsExtras,
+      }
     }
 
     // 연결 사유(부분 업서트) — 인접 채널과 독립. 같은 배열 내 중복 쌍은 비결정 동작이라
@@ -612,6 +679,18 @@ export class EventService {
             console.log(
               `🔗 기존 사건 ${childEventIds.length}개를 하위 사건으로 연결...`,
             )
+            // 분리로 루트가 되는 자식(새 목록에 없는 현행 자식) 선캡처 — detach 후엔
+            // parentEventId가 이미 null이라 식별 불가.
+            const detachingRows = await tx.event.findMany({
+              where: {
+                parentEventId: id,
+                deletedAt: null,
+                ...(childEventIds.length > 0
+                  ? { id: { notIn: childEventIds } }
+                  : {}),
+              },
+              select: { id: true },
+            })
             await tx.event.updateMany({
               where: { parentEventId: id, deletedAt: null },
               data: { parentEventId: null },
@@ -627,6 +706,17 @@ export class EventService {
                 where: { childEventId: { in: childEventIds }, parentEventId: id },
               })
               console.log(`✅ ${childEventIds.length}개 사건이 하위 사건으로 연결됨`)
+            }
+            if (detachingRows.length > 0) {
+              // 루트 승격된 분리 자식의 잔존 엣지 정리(HIER-W6) — 살아있는 부모 엣지는
+              // detach 가드(409)가 선차단했으므로 여기 남는 건 유령(소프트삭제 부모)
+              // 엣지뿐. INV-2('주 상위 없이 엣지 존속 불가')가 부활 약속에 우선한다
+              // (자식측 clearAll/V1-7 규약의 거울).
+              await tx.eventParentLink.deleteMany({
+                where: {
+                  childEventId: { in: detachingRows.map((row) => row.id) },
+                },
+              })
             }
           }
           if (edgePlan.kind === 'clearAll') {
@@ -653,13 +743,31 @@ export class EventService {
               })
             }
           }
-          // 연결 사유 — 인접 쓰기 *후* 실행해 유효 쌍 집합을 반영 후(effective) 상태로
-          // 읽는다(같은 patch가 방금 붙인 링크에도 사유를 쓸 수 있게). 승격 swap 등은
-          // 슬롯만 바꾸므로 쌍 자연키 사유는 자동으로 따라간다(이관 코드 없음).
+          // 순환 재검(HIER-W7, V1-5 정공법) — 사전 BFS는 tx 밖 검증이라, 동시 PUT
+          // 2건(X→Y·Y→X)이 각자 사전검사를 통과한 뒤 커밋되면 순환이 영구 성립할 수
+          // 있다. 계층 쓰기 후·본체 update 전에 tx 클라이언트로 1회 재실행해 위반 시
+          // 전체 롤백한다.
+          if (cycleOverlay) {
+            await this.assertNoHierarchyCycle(
+              id,
+              cycleOverlay.effectiveParentId,
+              childEventIds,
+              cycleOverlay.bfsExtras,
+              tx,
+            )
+          }
+          // 연결 사유 — 엣지·자식 인접 쓰기 *후* 실행해 엣지 집합은 반영 후 tx 상태로
+          // 읽는다(같은 patch가 방금 붙인 링크에도 사유를 쓸 수 있게). 단, 주 상위 FK는
+          // 본체 update가 이 뒤에 오므로 DB가 아직 구값 — effective 값(제출값 ?? 기존값)을
+          // 인자로 전달한다(HIER-W1). 승격 swap 등은 슬롯만 바꾸므로 쌍 자연키 사유는
+          // 자동으로 따라간다(이관 코드 없음).
           if (reasonsTouched) {
             await this.applyHierarchyReasons(
               tx,
               id,
+              data.parentEventId !== undefined
+                ? data.parentEventId
+                : (target.parentEventId ?? null),
               parentLinkReasons,
               childLinkReasons,
             )
@@ -689,7 +797,9 @@ export class EventService {
 
   /**
    * 상위·하위·추가 상위 연결 검증 — 존재·소유권·불변식(INV-1·2·3)·순환.
-   * 통과 시 updateEvent의 계층 트랜잭션이 소비할 추가 상위 엣지 쓰기 계획을 반환한다.
+   * 통과 시 updateEvent의 계층 트랜잭션이 소비할 추가 상위 엣지 쓰기 계획과, tx 내
+   * 순환 재검(HIER-W7)이 같은 오버레이로 재실행할 반영 후 상위 집합
+   * (effectiveParentId·bfsExtras)을 반환한다.
    *
    * 불변식(docs/event-multi-parent-review.md §4.2 매트릭스):
    * - W1(extras patch): 자기참조·주 상위 중복(a-1)·주 상위 부재(b-추가)·유령 주 상위
@@ -714,7 +824,11 @@ export class EventService {
     parentEventId?: string | null,
     childEventIds?: string[],
     extraParentEventIds?: string[],
-  ): Promise<ExtraParentEdgePlan> {
+  ): Promise<{
+    edgePlan: ExtraParentEdgePlan
+    effectiveParentId: string | null
+    bfsExtras: string[]
+  }> {
     const childSet = new Set(childEventIds ?? [])
     if (childSet.has(id)) {
       throw new ConflictException('자기 자신을 하위 사건으로 연결할 수 없습니다')
@@ -765,7 +879,9 @@ export class EventService {
       )
     }
 
-    // (b) INV-2: 주 상위 없이 추가 상위 존속 불가 — 방향별 문구.
+    // (b) INV-2: 주 상위 없이 추가 상위 존속 불가 — 방향별 문구. 루트 정의의 정본은
+    // domain/event-hierarchy.ts(isRootEvent) — 여기는 effective(제출값 병합) 상태 검사라
+    // 헬퍼 치환 대상이 아니다.
     if (effectiveParentId === null && effectiveExtras.length > 0) {
       if (extrasPatch !== undefined) {
         throw new ConflictException(
@@ -859,7 +975,14 @@ export class EventService {
       })
       if (detachRows.length > 0) {
         const blocked = await this.prisma.eventParentLink.findFirst({
-          where: { childEventId: { in: detachRows.map((row) => row.id) } },
+          where: {
+            childEventId: { in: detachRows.map((row) => row.id) },
+            // 유령(소프트삭제 부모) 엣지는 차단 사유가 아니다(HIER-W6) — 상세 응답이
+            // 걸러 사용자에게 보이지도 않는 엣지로 분리를 409하면 해소 경로가 없다.
+            // 자식측 등가 조작(주 상위 해제)이 currentLiveExtraIds로 유령을 무시하는
+            // 것과 대칭. 유령만 남은 자식은 tx에서 잔존 엣지를 정리하고 루트 승격한다.
+            parentEvent: { deletedAt: null },
+          },
           select: { childEventId: true },
         })
         if (blocked) {
@@ -902,14 +1025,17 @@ export class EventService {
           : currentAllExtraIds
     await this.assertNoHierarchyCycle(id, effectiveParentId, childEventIds, bfsExtras)
 
-    return edgePlan
+    return { edgePlan, effectiveParentId, bfsExtras }
   }
 
   /**
    * 계층 연결 사유(EventHierarchyReason) 부분 업서트 — 트랜잭션 안에서 인접 쓰기 *후* 실행.
    *
-   * 유효 쌍 검증은 반영 후(effective) DB 상태로 읽는다:
-   *  - parentLinkReasons(이 사건=자식): 유효 상위 = 주 상위 FK ∪ 모든 엣지(살아있는+유령).
+   * 유효 쌍 검증은 반영 후(effective) 상태로 한다:
+   *  - parentLinkReasons(이 사건=자식): 유효 상위 = effective 주 상위 ∪ 모든 엣지(살아있는+유령).
+   *    주 상위 FK의 본체 update는 이 뒤에 실행되므로 DB 재조회는 항상 '구' 주 상위다 —
+   *    호출부가 effective 값(제출값 ?? 기존값)을 effectiveParentId로 넘긴다(HIER-W1).
+   *    구 주 상위는 엣지로 잔존(승격 swap·유령)하지 않는 한 유효 집합에서 빠진다.
    *    유령(소프트삭제 부모) 쌍도 허용 — R-1 부활 약속의 거울(재연결 시 사유 부활).
    *  - childLinkReasons(이 사건=부모): 유효 자식 = 살아있는 주 상위 FK 자식(편집 자식 쪽 단일화).
    *
@@ -919,22 +1045,19 @@ export class EventService {
   private async applyHierarchyReasons(
     tx: Prisma.TransactionClient,
     id: string,
+    effectiveParentId: string | null,
     parentLinkReasons?: Array<{ parentEventId: string; reason: string | null }>,
     childLinkReasons?: Array<{ childEventId: string; reason: string | null }>,
   ): Promise<void> {
     if (parentLinkReasons !== undefined && parentLinkReasons.length > 0) {
-      const self = await tx.event.findUnique({
-        where: { id },
-        select: { parentEventId: true },
-      })
       const edges = await tx.eventParentLink.findMany({
         where: { childEventId: id },
         select: { parentEventId: true },
       })
-      // 유령(소프트삭제 부모) 엣지까지 포함 — R-1 부활 약속. 주 상위 FK도 유령이면
-      // self.parentEventId가 여전히 가리키므로 유효 집합에 든다.
+      // 유령(소프트삭제 부모) 엣지까지 포함 — R-1 부활 약속. effective 주 상위가 유령이어도
+      // FK가 여전히 가리키는 상태라면 유효 집합에 든다.
       const validParents = new Set<string>([
-        ...(self?.parentEventId ? [self.parentEventId] : []),
+        ...(effectiveParentId ? [effectiveParentId] : []),
         ...edges.map((edge) => edge.parentEventId),
       ])
       for (const entry of parentLinkReasons) {
@@ -1000,12 +1123,14 @@ export class EventService {
    * @param effectiveParentId 반영 후 주 상위(undefined 해소 완료 값)
    * @param childEventIds 새 하위 전체 목록 — undefined면 변경 없음(절단 분기 비활성)
    * @param extraParentIds 반영 후 이 사건의 추가 상위 엣지(보존 유령 포함)
+   * @param db 그래프를 읽을 클라이언트 — tx 내 재검(HIER-W7)은 tx를 주입해 자기 쓰기를 본다
    */
   private async assertNoHierarchyCycle(
     id: string,
     effectiveParentId: string | null,
     childEventIds: string[] | undefined,
     extraParentIds: string[],
+    db: Prisma.TransactionClient | PrismaClient = this.prisma,
   ): Promise<void> {
     const childSet = new Set(childEventIds ?? [])
     const start = [
@@ -1030,11 +1155,11 @@ export class EventService {
         )
       }
       const [rows, links] = await Promise.all([
-        this.prisma.event.findMany({
+        db.event.findMany({
           where: { id: { in: frontier } },
           select: { id: true, parentEventId: true },
         }),
-        this.prisma.eventParentLink.findMany({
+        db.eventParentLink.findMany({
           where: { childEventId: { in: frontier } },
           select: { childEventId: true, parentEventId: true },
         }),
@@ -1067,7 +1192,7 @@ export class EventService {
         for (const parentId of parents) {
           if (!parentId) continue
           if (parentId === id) {
-            const pathLabel = await this.cyclePathTitles(nodeId, prev)
+            const pathLabel = await this.cyclePathTitles(nodeId, prev, db)
             throw new ConflictException(
               `순환 계층은 만들 수 없습니다: ${pathLabel} — 지정한 상위가 이 사건의 하위 계보에 있습니다`,
             )
@@ -1092,6 +1217,7 @@ export class EventService {
   private async cyclePathTitles(
     fromNodeId: string,
     prev: Map<string, string>,
+    db: Prisma.TransactionClient | PrismaClient = this.prisma,
   ): Promise<string> {
     const pathIds: string[] = []
     let cursor: string | undefined = fromNodeId
@@ -1099,7 +1225,7 @@ export class EventService {
       pathIds.push(cursor)
       cursor = prev.get(cursor)
     }
-    const rows = await this.prisma.event.findMany({
+    const rows = await db.event.findMany({
       where: { id: { in: pathIds } },
       select: { id: true, title: true },
     })
@@ -1180,6 +1306,9 @@ export class EventService {
           where: {
             childEventId: { in: childIds },
             parentEventId: { not: id }, // INV-1 방어 — 삭제 대상으로의 승격 금지
+            // 유령(소프트삭제 부모) 엣지 승격 금지(HIER-W2) — 승격하면 자식의 주 상위가
+            // 소프트삭제 사건이 되어 루트도 자식도 아닌 고아로 전 뷰에서 소실(P1-6 부활).
+            parentEvent: { deletedAt: null },
           },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           select: { id: true, childEventId: true, parentEventId: true },
@@ -1203,7 +1332,7 @@ export class EventService {
           await tx.eventParentLink.delete({ where: { id: link.id } })
         }
 
-        // 승격할 엣지가 없던 자식은 최상위로.
+        // 승격할 (살아있는) 엣지가 없던 자식은 최상위로.
         const orphanIds = childIds.filter(
           (childId) => !promotionByChild.has(childId),
         )
@@ -1211,6 +1340,12 @@ export class EventService {
           await tx.event.updateMany({
             where: { id: { in: orphanIds } },
             data: { parentEventId: null },
+          })
+          // 루트 승격된 자식의 잔존(유령) 엣지 정리 — INV-2('주 상위 없이 엣지 존속
+          // 불가')가 소프트삭제-부모 엣지의 부활 약속에 우선한다(clearAll/V1-7 규약의
+          // 거울). 살아있는 엣지가 있었다면 위에서 승격됐으므로 여기 남는 건 유령뿐.
+          await tx.eventParentLink.deleteMany({
+            where: { childEventId: { in: orphanIds } },
           })
         }
       }
@@ -1322,6 +1457,8 @@ export class EventService {
           where: {
             childEventId: { in: children.map((child) => child.id) },
             parentEventId: { not: id }, // INV-1 위반 데이터 방어 — 삭제 대상으로의 승격 금지
+            // 유령(소프트삭제 부모) 엣지 승격 금지(HIER-W2) — deleteEvent와 동일 규약.
+            parentEvent: { deletedAt: null },
           },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           select: { id: true, childEventId: true, parentEventId: true },
@@ -1341,6 +1478,17 @@ export class EventService {
             data: { parentEventId: link.parentEventId },
           })
           await tx.eventParentLink.delete({ where: { id: link.id } })
+        }
+        // 승격 못 한 자식은 본체 delete의 SetNull로 루트가 된다 — 잔존(유령) 엣지를
+        // 같은 tx에서 정리해 INV-2가 DB 레벨에서 깨지지 않게 한다(부활 약속보다 우선,
+        // clearAll/V1-7 규약의 거울). 이 사건으로의 엣지는 Cascade가 지우므로 무해 중복.
+        const orphanIds = children
+          .map((child) => child.id)
+          .filter((childId) => !promotionByChild.has(childId))
+        if (orphanIds.length > 0) {
+          await tx.eventParentLink.deleteMany({
+            where: { childEventId: { in: orphanIds } },
+          })
         }
       }
       // 이후 본체 delete — SetNull은 엣지 없는 자식(정상 루트 승격)에만 발화하고,

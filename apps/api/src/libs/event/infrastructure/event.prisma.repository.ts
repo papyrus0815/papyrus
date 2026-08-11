@@ -21,13 +21,9 @@ export class EventPrismaRepository implements EventRepository {
   }
 
   async findById(id: string): Promise<Event | null> {
+    // include 없음 — toEntity가 스칼라만 매핑하므로 relation 로드는 전부 버려지는 죽은 로드(API-4).
     const event = await this.prisma.event.findUnique({
       where: { id },
-      include: {
-        category: true,
-        parentEvent: true,
-        childEvents: true,
-      },
     })
     return event ? this.toEntity(event) : null
   }
@@ -48,11 +44,6 @@ export class EventPrismaRepository implements EventRepository {
         deletedAt: null,
         ...(createdById ? { createdById } : {}),
       },
-      include: {
-        category: true,
-        parentEvent: true,
-        childEvents: true,
-      },
     })
     return event ? this.toEntity(event) : null
   }
@@ -62,11 +53,6 @@ export class EventPrismaRepository implements EventRepository {
       // 소프트삭제된 자식 제외 — loadEventDetail의 childEvents 정책과 통일(유령 자식 방지).
       where: { parentEventId, deletedAt: null },
       orderBy: { startDate: 'asc' },
-      include: {
-        category: true,
-        parentEvent: true,
-        childEvents: true,
-      },
     })
     return events.map((event) => this.toEntity(event))
   }
