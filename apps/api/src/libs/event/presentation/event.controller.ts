@@ -907,6 +907,10 @@ export class EventController {
 
     const events = await this.prisma.event.findMany({
       where: { id: { in: ids } },
+      // 루트 행에도 본문 제외 — 유일 소비처(대시보드 EventCardItem)가 제목·시대·카테고리·
+      // 설명·썸네일만 소비하므로 background/aftermath(@db.Text) 전문 적재 금지
+      // (getAllEvents 루트와 동일 형상 — DTO 둘 다 optional이라 undefined로 빠져도 계약 유지).
+      omit: LIST_OMITTED_BODY_FIELDS,
       include: {
         category: true,
         // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)

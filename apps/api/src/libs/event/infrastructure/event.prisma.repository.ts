@@ -9,13 +9,9 @@ export class EventPrismaRepository implements EventRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(): Promise<Event[]> {
+    // include 없음 — toEntity가 스칼라만 매핑하므로 relation 로드는 전부 버려지는 죽은 로드(API-4).
     const events = await this.prisma.event.findMany({
       orderBy: { startDate: 'desc' },
-      include: {
-        category: true,
-        parentEvent: true,
-        childEvents: true,
-      },
     })
     return events.map((event) => this.toEntity(event))
   }
@@ -95,11 +91,7 @@ export class EventPrismaRepository implements EventRepository {
         keywords: data.keywords ?? undefined,
         createdById: data.createdById!, // 등록자 ID (필수)
       },
-      include: {
-        category: true,
-        parentEvent: true,
-        childEvents: true,
-      },
+      // include 없음 — toEntity가 스칼라만 매핑하므로 relation 로드는 전부 버려지는 죽은 로드(API-4).
     })
     return this.toEntity(event)
   }
@@ -152,11 +144,7 @@ export class EventPrismaRepository implements EventRepository {
               ? Prisma.JsonNull
               : data.keywords,
       },
-      include: {
-        category: true,
-        parentEvent: true,
-        childEvents: true,
-      },
+      // include 없음 — toEntity가 스칼라만 매핑하므로 relation 로드는 전부 버려지는 죽은 로드(API-4).
     })
     return this.toEntity(event)
   }
