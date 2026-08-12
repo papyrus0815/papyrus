@@ -105,8 +105,10 @@ export function ParentBlock({
 
   return (
     <NetStyles.HierBlock role="group" aria-labelledby="network-parent-label">
-      <NetStyles.KeywordsLabel id="network-parent-label">상위 사건</NetStyles.KeywordsLabel>
-      <NetStyles.HierRow>
+      <NetStyles.BlockLabel id="network-parent-label">상위 사건</NetStyles.BlockLabel>
+      {/* $reveal — 편집 크롬(변경·해제 TextBtn)만 hover/focus-within 시 노출.
+          빈 상태의 AddBtn(상위 사건 지정)은 셀렉터 밖이라 상시 노출(어포던스 유지). */}
+      <NetStyles.HierRow $reveal>
         {parentEvent ? (
           <>
             <NetStyles.ParentLink
@@ -137,6 +139,12 @@ export function ParentBlock({
           </NetStyles.AddBtn>
         )}
       </NetStyles.HierRow>
+      {/* 유령 상위 표지 — 주 상위가 해제·삭제됐는데 추가 상위만 남은 상태의 유일 안내. */}
+      {!parentEvent && extraParents.length > 0 && (
+        <NetStyles.HelperNote>
+          주 상위가 해제·삭제됨 — 추가 상위 {extraParents.length}개 유지 중
+        </NetStyles.HelperNote>
+      )}
       {/* 주 상위 연결 사유 — '왜 이 사건이 대표 상위와 이어지는가'. 주/부가 사용자에겐
           한 개념이라 대표 관계에도 사유를 적을 수 있게(비대칭 해소). */}
       {parentEvent && (
@@ -158,9 +166,9 @@ export function ParentBlock({
           주 상위 기준이고, 이 칩 행이 다중 소속 발견성의 정본 지면. 편집(추가·해제·
           승격)은 자식인 이 사건 쪽에서만. */}
       <NetStyles.ExtraParentsRow>
-        <NetStyles.ExtraInlineLabel id="network-extra-parents-label">
+        <NetStyles.BlockLabel id="network-extra-parents-label">
           추가 상위
-        </NetStyles.ExtraInlineLabel>
+        </NetStyles.BlockLabel>
         {extraParents.map((extra) => (
           <NetStyles.ExtraChip key={extra.id}>
             <NetStyles.ExtraChipLink
@@ -171,6 +179,7 @@ export function ParentBlock({
               aria-describedby={
                 extra.reason ? `extra-reason-${extra.id}` : undefined
               }
+              $pending={!extra.title}
             >
               {extra.title || '(제목 동기화 중)'}
             </NetStyles.ExtraChipLink>

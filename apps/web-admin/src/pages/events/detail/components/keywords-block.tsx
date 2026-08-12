@@ -67,8 +67,8 @@ export function KeywordsBlock({ keywords, onPatch }: KeywordsBlockProps) {
   }
 
   return (
-    <NetStyles.KeywordsBlock role="group" aria-labelledby="network-keywords-label">
-      <NetStyles.KeywordsLabel id="network-keywords-label">키워드</NetStyles.KeywordsLabel>
+    <NetStyles.HierBlock role="group" aria-labelledby="network-keywords-label">
+      <NetStyles.BlockLabel id="network-keywords-label">키워드</NetStyles.BlockLabel>
       <NetStyles.KeywordsRow>
         {keywords.map((keyword) => (
           <NetStyles.KeywordChip key={keyword}>
@@ -115,6 +115,6 @@ export function KeywordsBlock({ keywords, onPatch }: KeywordsBlockProps) {
           </NetStyles.AddBtn>
         )}
       </NetStyles.KeywordsRow>
-    </NetStyles.KeywordsBlock>
+    </NetStyles.HierBlock>
   )
 }

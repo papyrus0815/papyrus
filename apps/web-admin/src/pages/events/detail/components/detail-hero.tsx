@@ -3,7 +3,13 @@ import { FiArrowLeft, FiAward, FiCalendar, FiMapPin } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { resolveCategory, withAlpha } from '@/pages/events/ledger/styles/ledger-tokens'
+import {
+  ledgerAccent,
+  ledgerHairlineStrong,
+  ledgerSubtleFill,
+  resolveCategory,
+  withAlpha,
+} from '@/pages/events/ledger/styles/ledger-tokens'
 import {
   type EventCategoryDto,
   getAllEventCategories,
@@ -90,7 +96,7 @@ export function DetailHero({
           목록
         </BackLink>
         <Sep>·</Sep>
-        <S.CategoryChip $color={category.color}>
+        <S.CategoryChip $color={category.color} $colorDark={category.dark}>
           <span aria-hidden>{category.icon}</span>
           <InlineSelect
             value={event.categoryId ?? ''}
@@ -152,7 +158,11 @@ export function DetailHero({
 
       {/* 카테고리 톤 밴드 — 제목과 메타 사이 시각 앵커. 카테고리 색이 옅게
           좌→우로 흩어지며 페이지 정체성을 한 줄로 표시(밑줄 X, 별도 룰). */}
-      <TitleAccent $color={category.color} aria-hidden />
+      <TitleAccent
+        $color={category.color}
+        $colorDark={category.dark}
+        aria-hidden
+      />
 
       <S.HeroMeta>
         <S.HeroMetaItem>
@@ -223,17 +233,17 @@ const LocationMetaItem = styled(S.HeroMetaItem)`
 /**
  * 제목 아래 카테고리 톤 밴드 — 56px 길이 액센트 룰. 카테고리 색에서 시작해
  * 투명으로 페이드. Hero flex gap(20px)에서 위쪽으로 당겨 제목에 붙인다.
+ * 다크에서는 $colorDark(카테고리 다크 쌍)로 스왑 — 미전달 시 $color 폴백.
  */
-const TitleAccent = styled.div<{ $color: string }>`
+const TitleAccent = styled.div<{ $color: string; $colorDark?: string }>`
   width: 56px;
   height: 3px;
   border-radius: 2px;
   margin-top: -10px;
-  background: linear-gradient(
-    90deg,
-    ${({ $color }) => $color} 0%,
-    ${({ $color }) => withAlpha($color, 0)} 100%
-  );
+  background: ${({ theme, $color, $colorDark }) => {
+    const applied = theme.mode === 'dark' ? $colorDark ?? $color : $color
+    return `linear-gradient(90deg, ${applied} 0%, ${withAlpha(applied, 0)} 100%)`
+  }};
 
   @media (prefers-reduced-motion: no-preference) {
     animation: accentGrow 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -309,6 +319,12 @@ const ContemporaryLink = styled(Link)`
   text-decoration: none;
   &:hover {
     text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 `
 
@@ -451,19 +467,16 @@ function HeroActors({
  * 폰트는 앱 기본(Inter/Pretendard) 그대로 — 세리프 미사용.
  */
 /**
- * Hero 하단 ActorStrip 구분선. detail-actors.tsx의 editorialRuleColor와 동일하게
- * hairline 톤으로 낮춤(이전 0.78/0.5는 본문보다 진해 시선 분산이 컸음).
+ * Hero 하단 ActorStrip 구분선 — 로컬 알파(editorialRule) 대신 페이지 공용
+ * hairline 토큰으로 통일(이전 0.78/0.5는 본문보다 진해 시선 분산이 컸음).
  */
-const editorialRule = (mode: 'light' | 'dark') =>
-  mode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.12)'
-
 const ActorStrip = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
   margin-top: 8px;
   padding-top: 14px;
-  border-top: 1px solid ${({ theme }) => editorialRule(theme.mode)};
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const Lineup = styled.div`
@@ -473,7 +486,7 @@ const Lineup = styled.div`
 /* ── 인물 인라인 — 작은 b&w 아바타 + 본문 sans 이름 ── */
 
 const PersonInline = styled.div`
-  font-size: 14.5px;
+  font-size: 14px;
   line-height: 1.55;
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.005em;
@@ -500,7 +513,9 @@ const PersonInlineButton = styled.button`
   white-space: nowrap;
 
   &:focus-visible {
-    outline: none;
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 `
 
@@ -513,11 +528,7 @@ const PersonAvatar = styled.span<{ $hasImage: boolean }>`
   border-radius: 0; /* 정사각 — editorial photo */
   overflow: hidden;
   background: ${({ theme, $hasImage }) =>
-    $hasImage
-      ? 'transparent'
-      : theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.1)'
-      : 'rgba(15, 23, 42, 0.08)'};
+    $hasImage ? 'transparent' : ledgerSubtleFill(theme.mode)};
   color: ${({ theme }) => theme.colors.text.secondary};
   /* 22×22 안에서 한글/영문 한 글자가 또렷이 읽히도록. 이전 10px는 한글이
      사실상 illegible. */
@@ -537,7 +548,7 @@ const PersonAvatar = styled.span<{ $hasImage: boolean }>`
 `
 
 const PersonName = styled.span`
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: -0.005em;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -551,20 +562,14 @@ const PersonName = styled.span`
 `
 
 const PersonRole = styled.span`
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-style: italic;
-  color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.66)'
-      : 'rgba(15,23,42,0.62)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const PersonSep = styled.span`
   margin: 0 8px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.3)'
-      : 'rgba(15,23,42,0.26)'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 /* ── 국가 인라인 — 현대(roman) · 역사(italic) — flag 미사용 ── */
@@ -586,7 +591,12 @@ const CountryName = styled(Link)`
     text-decoration: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 3px;
-    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 `
 
@@ -594,42 +604,36 @@ const CountryName = styled(Link)`
  * 링크 어포던스(hover·focus-visible 밑줄)를 상속하고 이탤릭 톤만 덧입힌다. */
 const HistoricalName = styled(CountryName)`
   font-style: italic;
-  color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.74)'
-      : 'rgba(15,23,42,0.7)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const CountrySep = styled.span`
   margin: 0 7px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.3)'
-      : 'rgba(15,23,42,0.26)'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const CountryHardSep = styled.span`
   margin: 0 10px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.42)'
-      : 'rgba(15,23,42,0.42)'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Overflow = styled.a`
   font-style: italic;
-  font-size: 13px;
+  font-size: 12.5px;
   margin-left: 10px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.55)'
-      : 'rgba(15,23,42,0.55)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
   text-decoration: none;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
     text-decoration: underline;
     text-underline-offset: 3px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 `
 
@@ -657,6 +661,12 @@ const BackLink = styled(Link)`
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
   }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
 `
 
 const Sep = styled.span`
@@ -679,7 +689,7 @@ const ParentEllipsis = styled.span`
  * (같은 페이지 앵커 — HeroActors의 Overflow(#actors)와 동일 수단).
  */
 const ExtraParentBadge = styled.a`
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -688,5 +698,11 @@ const ExtraParentBadge = styled.a`
   &:focus-visible {
     text-decoration: underline;
     text-underline-offset: 3px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 `

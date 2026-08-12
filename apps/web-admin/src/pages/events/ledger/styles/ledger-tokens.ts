@@ -17,17 +17,19 @@ export type Mode = 'light' | 'dark'
  * 이전 팔레트는 파랑 4종(정치·과학·외교·회담)이 충돌해 색맹 환경에서 동일 인상.
  * 정치=인디고-퍼플, 과학=청록 시안, 외교=하늘, 회담=네이비로 톤을 분리.
  */
+/* dark: 어두운 배경(#0e0f12급) 위 텍스트·글리프용 밝은 쌍 — 대비 4.5:1 이상,
+ * withAlpha 전제로 전부 6자리 hex 유지. 라이트 값(color)과 같은 색상군에서 승도만 올림. */
 export const LEDGER_CATEGORY = {
-  정치: { key: 'politics', color: '#6d28d9', icon: '◆' }, // 보라(인디고-퍼플)
-  경제: { key: 'economy', color: '#b45309', icon: '$' }, // 황갈색
-  '전쟁/군사': { key: 'war', color: '#b91c1c', icon: '⚔' }, // 빨강
-  사회: { key: 'social', color: '#0d9488', icon: '◉' }, // 짙은 청록
-  문화: { key: 'culture', color: '#db2777', icon: '✦' }, // 마젠타
-  과학기술: { key: 'tech', color: '#0e7490', icon: '⚙' }, // 시안 (변경: 0369a1→0e7490)
-  외교: { key: 'diplomacy', color: '#0ea5e9', icon: '☍' }, // 하늘
-  '회담/조약': { key: 'treaty', color: '#1e3a8a', icon: '✎' }, // 네이비
-  종교: { key: 'religion', color: '#a16207', icon: '✚' }, // 황금
-  기타: { key: 'other', color: '#6b7280', icon: '·' }, // 회색
+  정치: { key: 'politics', color: '#6d28d9', dark: '#c4b5fd', icon: '◆' }, // 보라(인디고-퍼플)
+  경제: { key: 'economy', color: '#b45309', dark: '#fbbf24', icon: '$' }, // 황갈색
+  '전쟁/군사': { key: 'war', color: '#b91c1c', dark: '#f87171', icon: '⚔' }, // 빨강
+  사회: { key: 'social', color: '#0d9488', dark: '#2dd4bf', icon: '◉' }, // 짙은 청록
+  문화: { key: 'culture', color: '#db2777', dark: '#f472b6', icon: '✦' }, // 마젠타
+  과학기술: { key: 'tech', color: '#0e7490', dark: '#22d3ee', icon: '⚙' }, // 시안 (변경: 0369a1→0e7490)
+  외교: { key: 'diplomacy', color: '#0ea5e9', dark: '#38bdf8', icon: '☍' }, // 하늘
+  '회담/조약': { key: 'treaty', color: '#1e3a8a', dark: '#93c5fd', icon: '✎' }, // 네이비
+  종교: { key: 'religion', color: '#a16207', dark: '#facc15', icon: '✚' }, // 황금
+  기타: { key: 'other', color: '#6b7280', dark: '#9ca3af', icon: '·' }, // 회색
 } as const
 
 export type LedgerCategoryName = keyof typeof LEDGER_CATEGORY
@@ -41,6 +43,10 @@ export const resolveCategory = (name?: string | null): LedgerCategory => {
   if (!name) return DEFAULT_CATEGORY
   return CATEGORY_BY_NAME[name] ?? DEFAULT_CATEGORY
 }
+
+/** 모드별 카테고리 액센트 — 다크는 밝은 쌍(dark), 라이트는 기본(color). */
+export const categoryAccent = (cat: LedgerCategory, mode: Mode): string =>
+  mode === 'dark' ? cat.dark : cat.color
 
 /** 중요도 — 기간 막대 두께·채도 */
 export type LedgerImportance = 'critical' | 'major' | 'normal' | 'minor'
@@ -201,6 +207,13 @@ export const ledgerHairline = (mode: Mode) =>
 
 export const ledgerHairlineStrong = (mode: Mode) =>
   mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'
+
+export const ledgerHairlineHover = (mode: Mode) =>
+  mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.16)'
+
+/* 플랫 리스트 행 hover 워시 — 액센트 틴트가 아닌 중성(행은 nav가 아니라 내용). */
+export const ledgerRowWash = (mode: Mode) =>
+  mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)'
 
 /* 다크 모드는 전반적으로 알파를 라이트보다 1.5~2배 두텁게 — 어두운 배경에서
  * 0.03~0.06은 시각적으로 거의 사라지므로 0.08~0.14 범위가 안정적. */

@@ -146,9 +146,9 @@ export function useLinkCandidatePicker({
   /* 51건 요청 중 50건 초과가 실제로 왔을 때만 잘림 알림 — 정확히 50건(더 없음)은 오탐 안 함. */
   const truncationHint =
     candidates.length > 50 ? (
-      <NetStyles.TruncationNote>
+      <NetStyles.HelperNote>
         후보가 많아 50건까지만 표시 중 — 검색어로 좁혀 주세요
-      </NetStyles.TruncationNote>
+      </NetStyles.HelperNote>
     ) : undefined
 
   return {

@@ -4,20 +4,20 @@
  * 디자인 의도
  * - 본문은 단일 칼럼(가독폭 720~760px)으로 narrative-first.
  * - 섹션 헤더는 *eyebrow + 큰 타이틀* — 밑줄 X, 공백이 리듬을 결정.
- * - 카드/모듈은 hairline border 위주, fill은 nav성 카드(children grid)에만.
+ * - 카드/모듈은 hairline border 위주 — 하위 사건은 flat rows, fill 카드 사용처 없음.
  * - ledger 페이지의 토큰 체계(ledger-tokens.ts)를 그대로 차용해 다크/라이트 일관 유지.
  */
 import { Link } from 'react-router-dom'
-import styled, { css } from 'styled-components'
+import styled from 'styled-components'
 
 import {
   DIGIT_DISPLAY,
+  MOTION,
   ledgerAccent,
-  ledgerAccentSubtle,
   ledgerBackground,
   ledgerHairline,
+  ledgerHairlineHover,
   ledgerHairlineStrong,
-  ledgerInkLine,
   withAlpha,
 } from '@/pages/events/ledger/styles/ledger-tokens'
 
@@ -175,6 +175,12 @@ export const Breadcrumb = styled.nav`
       color: ${({ theme }) => theme.colors.text.primary};
     }
 
+    &:focus-visible {
+      outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+
     &:not(:last-child)::after {
       content: '›';
       margin-left: 8px;
@@ -188,7 +194,18 @@ export const Breadcrumb = styled.nav`
   }
 `
 
-export const CategoryChip = styled.span<{ $color: string }>`
+/**
+ * 카테고리 색 dual 적용 — 다크에서는 $colorDark(전달 시)로 스왑, 미전달이면
+ * $color 폴백. module-*.tsx의 MODULE_COLOR(라이트 베이크) 소비처는 $colorDark를
+ * 안 넘기므로 현상 유지 — 모듈 지면 다크 보정은 후속 배치(known-gap).
+ */
+const dualColor = (
+  mode: 'light' | 'dark',
+  color: string,
+  colorDark?: string,
+) => (mode === 'dark' ? colorDark ?? color : color)
+
+export const CategoryChip = styled.span<{ $color: string; $colorDark?: string }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -197,9 +214,16 @@ export const CategoryChip = styled.span<{ $color: string }>`
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  background: ${({ $color }) => withAlpha($color, 0.1)};
-  color: ${({ $color }) => $color};
-  border: 1px solid ${({ $color }) => withAlpha($color, 0.3)};
+  background: ${({ theme, $color, $colorDark }) =>
+    withAlpha(
+      dualColor(theme.mode, $color, $colorDark),
+      theme.mode === 'dark' ? 0.14 : 0.1,
+    )};
+  color: ${({ theme, $color, $colorDark }) =>
+    dualColor(theme.mode, $color, $colorDark)};
+  border: 1px solid
+    ${({ theme, $color, $colorDark }) =>
+      withAlpha(dualColor(theme.mode, $color, $colorDark), 0.3)};
 `
 
 export const HeroMeta = styled.div`
@@ -234,47 +258,6 @@ export const HeroActions = styled.div`
   gap: 8px;
   margin-top: 4px;
   flex-wrap: wrap;
-`
-
-const buttonReset = css`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  transition: background 0.16s, color 0.16s, border-color 0.16s;
-
-  svg {
-    width: 13px;
-    height: 13px;
-  }
-`
-
-export const PrimaryButton = styled.button`
-  ${buttonReset}
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  color: #ffffff;
-  border: 1px solid transparent;
-
-  &:hover {
-    filter: brightness(1.05);
-  }
-`
-
-export const SecondaryLink = styled.a`
-  ${buttonReset}
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.tertiary};
-  }
 `
 
 /* ───────────────────────── Rail (sticky 좌측) ───────────────────────── */
@@ -345,7 +328,7 @@ export const RailNavItem = styled.button<{ $active: boolean }>`
       $active ? ledgerAccent(theme.mode) : 'transparent'};
   text-align: left;
   cursor: pointer;
-  transition: color 0.16s, border-color 0.16s;
+  transition: color ${MOTION.normal}, border-color ${MOTION.normal};
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
@@ -382,7 +365,7 @@ export const SectionHeader = styled.header`
 
 export const SectionTitle = styled.h2`
   font-size: 24px;
-  font-weight: 750;
+  font-weight: 700;
   line-height: 1.25;
   letter-spacing: -0.012em;
   margin: 0;
@@ -399,13 +382,18 @@ export const SectionTitle = styled.h2`
  * 모듈 SectionTitle 좌측 카테고리 점 — 페이지 안에서 카테고리 색이 여러 톤으로
  * 흩뿌려지는 노이즈를 줄이기 위해 작고 옅게. Hero CategoryChip이 이미 같은
  * 시그널을 강하게 전달하므로 여기서는 섹션 그루핑만.
+ * $colorDark는 optional — module-*.tsx 소비처는 미전달($color 폴백, known-gap).
  */
-export const SectionTitleDot = styled.span<{ $color: string }>`
+export const SectionTitleDot = styled.span<{
+  $color: string
+  $colorDark?: string
+}>`
   display: inline-block;
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: ${({ $color }) => $color};
+  background: ${({ theme, $color, $colorDark }) =>
+    dualColor(theme.mode, $color, $colorDark)};
   margin-right: 10px;
   margin-bottom: 4px;
   opacity: 0.7;
@@ -438,7 +426,7 @@ export const EditIconButton = styled.button`
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: color 0.14s, border-color 0.14s;
+  transition: color ${MOTION.fast}, border-color ${MOTION.fast};
 
   &:hover {
     border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
@@ -464,33 +452,6 @@ export const SectionBody = styled.div`
   line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};
   max-width: 720px;
-`
-
-/* ───────────────────────── Cards ───────────────────────── */
-
-/**
- * 카드 surface는 본문 흐름과 충돌해서 거의 사용하지 않음. 살아 있는 primitive는
- * - `CardGrid`: 자식 사건 리스트 그리드
- * - `CardMeta`: 보조 메타(uppercase·tabular)
- * 두 가지뿐. 빈 wrapper들은 정리됨.
- */
-export const CardMeta = styled.div`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  ${DIGIT_DISPLAY}
-`
-
-export const CardGrid = styled.div<{ $cols?: number }>`
-  display: grid;
-  grid-template-columns: repeat(${({ $cols = 2 }) => $cols}, minmax(0, 1fr));
-  gap: 12px;
-
-  @media (max-width: 720px) {
-    grid-template-columns: 1fr;
-  }
 `
 
 /* ───────────────────────── Module data card ──────────────────────────── */
@@ -523,15 +484,14 @@ export const ModuleDataCard = styled.div<{ $accent: string }>`
   }
 
   &:hover {
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.16)'};
+    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
   }
 `
 
 /* ───────────────────────── Definition list (모듈 데이터 표) ──────────── */
 
 /**
- * 모듈에서 라벨-값 쌍을 sk할 때 사용. CardGrid보다 가벼움.
+ * 모듈에서 라벨-값 쌍을 sk할 때 사용. 카드 surface보다 가벼움.
  * 좌측 좁은 라벨 · 우측 값. 작은 화면에선 한 줄로 떨어진다.
  */
 export const Definitions = styled.dl`
@@ -685,12 +645,4 @@ export const EmptyStateIcon = styled.span`
 
 export const EmptyStateLine = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-/* ───────────────────────── Accent surfaces ───────────────────────── */
-
-export const AccentSurface = styled.div`
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  border-radius: 8px;
-  padding: 10px 12px;
 `
