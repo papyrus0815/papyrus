@@ -218,6 +218,18 @@ export async function getEventLinkCandidates(params?: {
 }
 
 /**
+ * 사건 댓글 수 조회 — GET /comments?ownerType=EVENT&recordId=<id> (JWT 필요).
+ *
+ * [PD4-NOTICE] 상위 지정으로 댓글이 숨는 전이(루트→하위) 직전 사전 고지용 명령형 조회 —
+ * 목록 길이만 쓴다. 서버 댓글 게이트는 '살아있는 주 상위 없음'(실질 루트)만 댓글 대상으로
+ * 인정하므로, 이미 하위인 사건에 호출하면 404가 난다 — 호출부는 루트일 때만 부른다.
+ */
+export async function getEventCommentCount(eventId: string): Promise<number> {
+  const comments = await api.comments.list(getConnection(), 'EVENT', eventId)
+  return comments.length
+}
+
+/**
  * 역사 속 오늘 — start_date의 월·일이 오늘과 같은 사건(연도 무관).
  * month·day는 사용자 로컬 기준으로 넘긴다(서버 TZ와 어긋남 방지). 1-based month.
  * 없으면 빈 배열.

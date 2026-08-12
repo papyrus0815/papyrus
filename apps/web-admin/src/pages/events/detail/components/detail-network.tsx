@@ -1,36 +1,37 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
-
-import { FiChevronLeft, FiChevronRight, FiPlus, FiX } from 'react-icons/fi'
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
-import styled from 'styled-components'
-
 import {
-  ledgerHairlineStrong,
-  resolveCategory,
-} from '@/pages/events/ledger/styles/ledger-tokens'
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+
+import { useQueryClient } from '@tanstack/react-query'
+import { useBlocker } from 'react-router-dom'
+
 import {
   type EventLinkCandidate,
   type UpdateEventDto,
-  getEventLinkCandidates,
-  getEventsByParentId,
   updateEvent,
 } from '@/shared/api/events'
-import { formatDateRange } from '@/pages/events/utils/events.utils'
-import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
-import { formatYearLabel } from '@/shared/lib/iso-date'
-import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import { InlineText } from '@/shared/ui/inline-edit'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
+import { type EventDetail, eventKeys } from '../use-event-detail'
+import { ChildrenBlock } from './children-block'
 import {
-  type EventDetail,
-  eventKeys,
-  usePrefetchEventDetail,
-} from '../use-event-detail'
+  compareEventStart,
+  crossPatchErrorMessage,
+  fetchEventCommentCountSafe,
+  focusNextRemovalTarget,
+} from './detail-network.lib'
+import { KeywordsBlock } from './keywords-block'
+import { ParentBlock } from './parent-block'
+import { useLinkCandidatePicker } from './use-link-candidate-picker'
 
 /**
  * '새 하위 사건 만들기' 등록 모달 — lazy 마운트. 등록 폼 청크(gzip 약 19KB)는
@@ -48,21 +49,6 @@ interface DetailNetworkProps {
   onPatch: (patch: UpdateEventDto) => void
 }
 
-/** 하위 사건 카드 표시 상한 — 초과분은 '더 보기'로 펼침. */
-const CHILD_CARD_CAP = 24
-
-/** 추가 하위(역방향 엣지) 칩 표시 상한 — 카드보다 밀도 높은 칩이라 별도 상한. */
-const EXTRA_CHILD_CAP = 12
-
-/**
- * 계층 연결 사유 최대 글자 수 — 서버 EVENT_LINK_REASON_MAX(update-event.dto.ts)·
- * Prisma VarChar(500)와 동일 값. 크로스 패키지라 손 동기화.
- */
-const REASON_MAX = 500
-
-const REASON_PLACEHOLDER =
-  '이 사건이 상위와 어떻게 이어지는지 한두 문장 (예: 병합을 서두르게 만든 직접적 계기)'
-
 /** 승격 픽커의 '모든 상위 해제' 탈출구 옵션 값 — 사건 id와 충돌하지 않는 sentinel. */
 const PROMOTE_CLEAR_ALL_VALUE = '__clear-all-parents__'
 
@@ -72,15 +58,58 @@ const PROMOTE_CLEAR_ALL_VALUE = '__clear-all-parents__'
  * 상위는 지정/변경/해제하는 단일 링크 행. 하위는 시간 순으로 정렬된 카드 그리드로,
  * 각 카드 클릭 시 해당 사건 상세로(카드 상한 초과분은 '더 보기'로 펼침).
  * 키워드는 inline chip — 칩의 ✕로 제거, "+" 인풋으로 추가. 별도 폼 X.
+ *
+ * 표시 지면은 parent-block/children-block/keywords-block으로 분할 — 이 컨테이너는
+ * 블록을 가로지르는 상태(선택모달 4종·검색 파이프라인·confirm 연쇄 patch 조립)만 가진다.
  */
 export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
-  const prefetchEvent = usePrefetchEventDetail()
   const queryClient = useQueryClient()
 
   /* '새 하위 사건 만들기' — 기존 사건 연결(SelectModal)이 아니라 등록 모달을
    * initialParent={현재 사건}으로 열어, 고아 생성→상세 이동→수동 연결 3단계를
    * 등록 1단계로 줄인다. */
   const [createChildOpen, setCreateChildOpen] = useState(false)
+
+  /**
+   * 뒤로가기 미저장 보호 — 브라우저 뒤로가기는 이 모달을 우회 언마운트해 작성분을
+   * 조용히 소실시킨다. 카탈로그 호스트(useEventRegisterModalUrl)의 useBlocker 규약을
+   * 이 모달 하나에만 최소로 이식한다: 모달 열림 ∧ dirty일 때만 라우터 이동을 막고
+   * 표준 confirm으로 진행/취소를 받는다. 모달 자체의 닫기(X·취소·Esc)는 이미 확인을
+   * 받은 뒤 dirty를 내리고 오므로 여기서 두 번 묻지 않는다.
+   */
+  const createChildDirtyRef = useRef(false)
+  const handleCreateChildDirtyChange = useCallback((isDirty: boolean) => {
+    createChildDirtyRef.current = isDirty
+  }, [])
+  useEffect(() => {
+    // 닫힘(정상 닫기·저장 완료) 후에는 dirty를 반드시 내린다 — 남으면 이후의
+    // 아무 이동이나 계속 막힌다(호스트 훅과 동일한 방어).
+    if (!createChildOpen) createChildDirtyRef.current = false
+  }, [createChildOpen])
+  const createChildBlocker = useBlocker(
+    () => createChildOpen && createChildDirtyRef.current,
+  )
+  // blocked 진입당 confirm 1회만 — 비동기 confirm 대기 중 리렌더로 다이얼로그 중복 방지.
+  const createChildPromptingRef = useRef(false)
+  useEffect(() => {
+    if (createChildBlocker.state !== 'blocked') {
+      createChildPromptingRef.current = false
+      return
+    }
+    if (createChildPromptingRef.current) return
+    createChildPromptingRef.current = true
+    confirm({
+      title: '확인',
+      message: '저장하지 않은 변경 사항이 있습니다. 닫으시겠습니까?',
+    }).then((confirmed) => {
+      if (confirmed) {
+        createChildDirtyRef.current = false
+        createChildBlocker.proceed()
+      } else {
+        createChildBlocker.reset()
+      }
+    })
+  }, [createChildBlocker])
 
   /**
    * 새 하위 사건 저장 성공 — 폼 본체가 목록(lists/count) 무효화와 새 사건 상세 시딩을
@@ -105,59 +134,13 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
       typeof keyword === 'string' && keyword.trim().length > 0,
   )
 
-  // 하위 카드는 상한까지만 렌더(그 이상은 '더 보기'로 펼침) — 하위가 수십~수백인 상위
-  // 사건에서 카드 그리드·hover prefetch가 무한 확장되지 않게(히어로의 참여자/국가 캡과 대칭).
-  const [showAllChildren, setShowAllChildren] = useState(false)
-  const visibleChildren = showAllChildren
-    ? children
-    : children.slice(0, CHILD_CARD_CAP)
-  const hiddenChildCount = children.length - visibleChildren.length
-
-  const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState('')
-
-  /*
-   * 상위·하위 사건 연결 모달 — 후보는 서버사이드 검색(GET /events/link-candidates).
-   * 과거엔 목록 API(최상위만·100건 캡)를 재사용해 이미 하위인 사건·오래된 사건이
-   * 검색에 안 잡혔다. 검색어는 디바운스 후 서버로, 모달 내부 필터는 그대로 동작
-   * (서버 결과는 항상 검색어를 포함하므로 무손실).
-   */
+  /* 상위·하위·추가 상위 사건 연결 모달 열림 상태 — 검색 파이프라인(useLinkCandidatePicker)의
+   * enabled·디바운스 리셋 키와 SelectModal 렌더가 함께 쓰므로 컨테이너 소유. */
   const [parentModalOpen, setParentModalOpen] = useState(false)
   const [childModalOpen, setChildModalOpen] = useState(false)
   const [extrasModalOpen, setExtrasModalOpen] = useState(false)
   // 상위 해제 시 승격 대상 선택 픽커 — 추가 상위 2개 이상일 때만 열림(검색 미사용).
   const [promotePickerOpen, setPromotePickerOpen] = useState(false)
-  // 추가 상위 칩의 연결 사유 편집 라인 — 한 번에 하나만 펼침(칩 행 밀도 유지).
-  const [openExtraReasonId, setOpenExtraReasonId] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
-  // 모달 열림/닫힘 시 debounced를 즉시 현재값으로 스냅 — 닫기 직전 검색어가 250ms
-  // 동안 남아 다른 모달 첫 화면에 이전 결과가 비치는 것을 방지.
-  const debouncedTerm = useDebouncedValue(
-    searchTerm,
-    250,
-    `${parentModalOpen}:${childModalOpen}:${extrasModalOpen}`,
-  )
-  const {
-    data: candidates = [],
-    isLoading: eventsLoading,
-    isFetching: eventsFetching,
-    isError: eventsError,
-    refetch: refetchCandidates,
-  } = useQuery({
-    // ['events'] 프리픽스(eventKeys.lists()) 아래 — 사건 mutation 시 함께 무효화된다.
-    queryKey: ['events', 'link-candidates', debouncedTerm],
-    // limit은 표시 상한(50)보다 1 크게 요청 — 정확히 50건일 때 '더 있음' 오탐을 피하고
-    // (>50일 때만 절단), 51번째는 표시하지 않고 '더 있음' 신호로만 쓴다.
-    queryFn: () => getEventLinkCandidates({ query: debouncedTerm, limit: 51 }),
-    enabled: parentModalOpen || childModalOpen || extrasModalOpen,
-    staleTime: 60_000,
-    // 검색어 타이핑 중 이전 결과를 유지 — 목록이 '불러오는 중'으로 깜빡이지 않게.
-    placeholderData: keepPreviousData,
-    // 전역 retry:false를 이 조회에 한해 완화 — 일시 네트워크 오류로 '결과 없음' 위장 방지.
-    retry: 1,
-  })
-  // fetch 중 + 디바운스 대기 중 모두 '검색 중'으로 — 확정형 '결과 없음' 오탐 방지.
-  const searchPending = eventsFetching || searchTerm !== debouncedTerm
 
   const childIds = useMemo(
     () => children.map((child) => child.id),
@@ -187,14 +170,6 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     extraIdsRef.current = extraIds
   }, [extraIds])
 
-  // 사유 편집 open 상태가 해제된 칩 id로 잔존하면 같은 사건을 재연결할 때 편집 라인이
-  // 유령처럼 재개방된다 — 현재 extras에 없는 id면 리셋.
-  useEffect(() => {
-    if (openExtraReasonId && !extraIds.includes(openExtraReasonId)) {
-      setOpenExtraReasonId(null)
-    }
-  }, [extraIds, openExtraReasonId])
-
   /* 추가 하위(역방향 엣지) id 집합 — childIds와 대칭. 상위/추가 상위 후보에서 걸러
    * 직계 2-cycle(선택 즉시 서버 409 스냅백)을 선차단한다. */
   const extraChildIds = useMemo(
@@ -202,74 +177,36 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     [event.extraChildren],
   )
 
-  /* 선택 옵션 — 자기 자신 제외, 표시 상한 50(51번째는 '더 있음' 신호라 제외). 날짜 +
-   * 현재 소속(이미 하위인 경우)을 설명 라인에. */
-  const eventOptions = useMemo<SelectOption[]>(
-    () =>
-      candidates
-        .slice(0, 50)
-        .filter((candidate) => candidate.id !== event.id)
-        .map((candidate) => ({
-          value: candidate.id,
-          label: candidate.title,
-          description: candidateDescription(candidate, event.id),
-        })),
-    [candidates, event.id],
-  )
-
-  /* 직계 순환은 후보에서 제외 — 상위 피커엔 현재 자식·추가 하위 불가, 하위 피커엔
-   * 현재 부모·추가 상위 불가(서버 detach 409·INV-1 선차단). 깊은 순환은 서버 BFS가 409.
-   * 상위 피커에서 현재 '추가 상위'인 후보는 숨기지 않고 안내를 달아 선택 시
-   * 대표 승격(서버 W2-(a-2) 자동 collapse)으로 동작하게 둔다. */
-  const parentOptions = useMemo(
-    () =>
-      eventOptions
-        .filter(
-          (option) =>
-            !childIds.includes(option.value) &&
-            // 역방향 엣지(추가 하위) — 직계 2-cycle 선차단
-            !extraChildIds.includes(option.value),
-        )
-        .map((option) =>
-          extraIds.includes(option.value)
-            ? {
-                ...option,
-                description: [
-                  option.description,
-                  '현재 이 사건의 추가 상위 — 선택 시 대표로 승격',
-                ]
-                  .filter(Boolean)
-                  .join(' · '),
-              }
-            : option,
-        ),
-    [eventOptions, childIds, extraIds, extraChildIds],
-  )
-  const childOptions = useMemo(
-    () =>
-      eventOptions.filter(
-        (option) =>
-          option.value !== event.parentEventId &&
-          !extraIds.includes(option.value),
-      ),
-    [eventOptions, event.parentEventId, extraIds],
-  )
-  /* 추가 상위 후보 — 주 상위(INV-1 중복)·현재 자식(직계 순환) 제외. 이미 연결된
-   * 후보는 체크 표시로 남겨 재클릭 시 해제 토글(숨김 금지 — G7). */
-  const extrasOptions = useMemo(
-    () =>
-      eventOptions.filter(
-        (option) =>
-          option.value !== event.parentEventId &&
-          !childIds.includes(option.value) &&
-          // 역방향 엣지(추가 하위) — 직계 2-cycle 선차단
-          !extraChildIds.includes(option.value),
-      ),
-    [eventOptions, event.parentEventId, childIds, extraChildIds],
-  )
+  /* 링크 후보 검색 파이프라인 — SelectModal 3종(상위/하위/추가 상위)이 공유. */
+  const {
+    candidates,
+    eventsLoading,
+    eventsError,
+    searchPending,
+    refetchCandidates,
+    setSearchTerm,
+    parentOptions,
+    childOptions,
+    extrasOptions,
+    truncationHint,
+  } = useLinkCandidatePicker({
+    eventId: event.id,
+    parentEventId: event.parentEventId,
+    childIds,
+    extraIds,
+    extraChildIds,
+    parentModalOpen,
+    childModalOpen,
+    extrasModalOpen,
+  })
 
   // 크로스 사건 mutation 진행 가드 — confirm 연쇄·PUT 왕복 동안 재클릭 차단.
   const crossLinkPendingRef = useRef(false)
+
+  /* [PD4-NOTICE] 댓글 은닉 전이 고지 진행 가드 — 댓글 수 조회 + confirm 대기 동안
+   * 재클릭이 고지·patch를 중복 발사하지 않게 차단(모달은 한 번에 하나만 열리므로
+   * setParent·toggleChild가 하나를 공유해도 충돌 없음). */
+  const commentNoticePendingRef = useRef(false)
 
   /**
    * 제3선택 — 후보의 기존 상위 P를 유지한 채 이 사건을 후보의 '추가 상위'로 연결.
@@ -315,6 +252,28 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     const isRemoving = childIds.includes(childId)
     if (!isRemoving) {
       const candidate = candidates.find((item) => item.id === childId)
+      if (candidate && !candidate.parentEventId) {
+        /* [PD4-NOTICE] 루트 후보 attach — 서버 댓글 게이트는 '살아있는 주 상위 없음'
+         * (실질 루트)만 댓글 대상으로 인정한다. 현재 루트인 후보(유령 주 상위 포함 —
+         * link-candidates가 소프트삭제 부모를 null로 접어 내려줌)를 하위로 붙이면
+         * 그 사건 댓글이 read까지 404로 숨는다(데이터 보존·상위 해제 시 복원).
+         * 댓글이 1개 이상일 때만 사전 confirm — 0개면 현행 무고지 직행. */
+        if (commentNoticePendingRef.current) return
+        commentNoticePendingRef.current = true
+        try {
+          const commentCount = await fetchEventCommentCountSafe(candidate.id)
+          if (commentCount > 0) {
+            const attachConfirmed = await confirm({
+              title: '하위 사건 연결',
+              message: `'${candidate.title}'에 달린 댓글 ${commentCount}개가 상위 지정 동안 숨겨집니다.\n상위를 해제하면 다시 표시됩니다. 계속할까요?`,
+              confirmLabel: '연결',
+            })
+            if (!attachConfirmed) return
+          }
+        } finally {
+          commentNoticePendingRef.current = false
+        }
+      }
       if (candidate?.parentEventId && candidate.parentEventId !== event.id) {
         const moveConfirmed = await confirm({
           title: '하위 사건 이동',
@@ -346,39 +305,43 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     onPatch({ childEventIds: next })
   }
 
-  /* 제거 버튼 포커스 이양용 ref — 칩/카드를 지우면 포커스가 body로 낙하해 키보드
-   * 흐름이 끊기므로, 제거 직전 다음 형제의 제거 버튼(없으면 그룹 '추가' 버튼)으로 옮긴다. */
-  const childRemoveRefs = useRef(new Map<string, HTMLButtonElement>())
-  const childAddRef = useRef<HTMLButtonElement | null>(null)
+  /* 추가 상위 칩 제거 버튼 포커스 이양용 ref — 렌더는 ParentBlock, 이양 로직
+   * (removeExtraParent)은 컨테이너라 여기서 소유해 내려보낸다. */
   const extraRemoveRefs = useRef(new Map<string, HTMLButtonElement>())
   const extrasAddRef = useRef<HTMLButtonElement | null>(null)
-  const keywordRemoveRefs = useRef(new Map<string, HTMLButtonElement>())
-  const keywordAddRef = useRef<HTMLButtonElement | null>(null)
 
-  const removeChild = (childId: string) => {
-    focusNextRemovalTarget(
-      childRemoveRefs.current,
-      childIds,
-      childId,
-      childAddRef.current,
-    )
-    onPatch({ childEventIds: childIds.filter((id) => id !== childId) })
-  }
-
-  /** 상위 사건 지정/변경/해제. 해제는 null을 명시 전송해야 FK가 비워진다. */
-  const setParent = (parentId: string | null) => {
+  /**
+   * 상위 사건 지정/변경/해제. 해제는 null을 명시 전송해야 FK가 비워진다.
+   *
+   * [PD4-NOTICE] 이 사건이 실질 루트(생존 parentEvent 없음 — 유령 주 상위 포함)일 때
+   * 상위를 *지정*하면 서버 댓글 게이트('살아있는 주 상위 없음'만 댓글 대상)에 의해
+   * 이 사건 댓글이 read까지 404로 숨는다(데이터 보존·상위 해제 시 복원). 전이 직전에
+   * 댓글 수를 조회해 1개 이상이면 confirm — 확인 시에만 patch, 0개면 무고지 현행 흐름.
+   * 이미 하위인 상태의 상위 '변경'은 전이가 없어(이미 숨음) 고지하지 않는다.
+   */
+  const setParent = async (parentId: string | null) => {
+    if (parentId && !event.parentEvent) {
+      if (commentNoticePendingRef.current) return
+      commentNoticePendingRef.current = true
+      try {
+        const commentCount = await fetchEventCommentCountSafe(event.id)
+        if (commentCount > 0) {
+          const proceed = await confirm({
+            title: '상위 사건 지정',
+            message: `이 사건에 달린 댓글 ${commentCount}개가 상위 지정 동안 숨겨집니다.\n상위를 해제하면 다시 표시됩니다. 계속할까요?`,
+            confirmLabel: '지정',
+          })
+          // 거절 시 무동작 — 모달은 열어 둔다(다른 후보 선택·닫기 선택권 유지).
+          if (!proceed) return
+        }
+      } finally {
+        commentNoticePendingRef.current = false
+      }
+    }
     onPatch({ parentEventId: parentId } as UpdateEventDto)
     setParentModalOpen(false)
     setSearchTerm('')
   }
-
-  /* 51건 요청 중 50건 초과가 실제로 왔을 때만 잘림 알림 — 정확히 50건(더 없음)은 오탐 안 함. */
-  const truncationHint =
-    candidates.length > 50 ? (
-      <TruncationNote>
-        후보가 많아 50건까지만 표시 중 — 검색어로 좁혀 주세요
-      </TruncationNote>
-    ) : undefined
 
   const parentEvent = event.parentEvent
 
@@ -400,23 +363,6 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     )
     onPatch({
       extraParentEventIds: extraIdsRef.current.filter((id) => id !== targetId),
-    } as UpdateEventDto)
-  }
-
-  /**
-   * 연결 사유 저장 — 부분 업서트. 빈 문자열은 서버가 삭제로 정규화(행 제거).
-   * parentLinkReasons: 이 사건이 자식인 쌍(주 상위·추가 상위). childLinkReasons: 부모인 쌍(하위).
-   * 링크가 실제로 있는 쌍에만 유효(연결 안 된 상위/하위엔 서버가 400) — UI는 이미
-   * 연결된 항목 옆에서만 편집을 노출하므로 정상 흐름에선 도달 안 함.
-   */
-  const saveParentReason = (parentId: string, next: string) => {
-    onPatch({
-      parentLinkReasons: [{ parentEventId: parentId, reason: next }],
-    } as UpdateEventDto)
-  }
-  const saveChildReason = (childId: string, next: string) => {
-    onPatch({
-      childLinkReasons: [{ childEventId: childId, reason: next }],
     } as UpdateEventDto)
   }
 
@@ -496,7 +442,8 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   const releaseParent = async () => {
     const snapshot = extraIdsRef.current
     if (snapshot.length === 0) {
-      setParent(null)
+      // 해제(null)는 댓글 은닉 전이가 아니라 고지 없이 즉시 통과한다.
+      await setParent(null)
       return
     }
     if (snapshot.length >= 2) {
@@ -516,7 +463,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     if (promote) {
       const latest = extraIdsRef.current
       if (latest.length === 0) {
-        setParent(null)
+        await setParent(null)
         return
       }
       onPatch({
@@ -527,40 +474,6 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     }
     await confirmClearAllParents()
   }
-
-  /* 형제(같은 상위) 사건 — 하위 사건 상세에서 부모 왕복 없이 이전/다음으로 이동.
-   * 상위가 있을 때만 조회. 부모의 하위 목록(미삭제)을 시간순 정렬해 현재 위치의 앞뒤를 잡는다. */
-  const { data: siblings = [] } = useQuery({
-    queryKey: ['events', 'siblings', event.parentEventId],
-    queryFn: () => getEventsByParentId(event.parentEventId as string),
-    enabled: Boolean(event.parentEventId),
-    staleTime: 60_000,
-  })
-  const sortedSiblings = useMemo(
-    () =>
-      siblings
-        .slice()
-        .sort((first, second) =>
-          compareEventStart(first.startDate, second.startDate),
-        ),
-    [siblings],
-  )
-  const siblingIndex = sortedSiblings.findIndex(
-    (sibling) => sibling.id === event.id,
-  )
-  const prevSibling = siblingIndex > 0 ? sortedSiblings[siblingIndex - 1] : null
-  const nextSibling =
-    siblingIndex >= 0 && siblingIndex < sortedSiblings.length - 1
-      ? sortedSiblings[siblingIndex + 1]
-      : null
-
-  /* 추가 하위(역방향 엣지) — 읽기전용 표시. 상한 초과분은 '더 보기'로 펼침. */
-  const extraChildren = event.extraChildren ?? []
-  const [showAllExtraChildren, setShowAllExtraChildren] = useState(false)
-  const visibleExtraChildren = showAllExtraChildren
-    ? extraChildren
-    : extraChildren.slice(0, EXTRA_CHILD_CAP)
-  const hiddenExtraChildCount = extraChildren.length - visibleExtraChildren.length
 
   /* 섹션 부제 — 상위(있으면)·자식·키워드를 요약. 과거엔 자식·키워드만 세어, 상위만 있고
    * 자식·키워드가 없는 사건은 부제가 통째 사라졌다(관계 신호 은닉). 다중 상위는
@@ -577,46 +490,6 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     .filter(Boolean)
     .join(' · ')
 
-  const submitKeyword = () => {
-    const next = draft.trim()
-    setDraft('')
-    setAdding(false)
-    if (!next) return
-    if (keywords.includes(next)) return
-    onPatch({ keywords: [...keywords, next] })
-  }
-
-  /**
-   * blur 정책:
-   *  - 입력이 비어 있으면 cancel (UI만 닫고 저장 X).
-   *  - 입력이 있으면 *저장 시도* — 사용자가 길게 타이핑하다 다른 곳을 클릭해도
-   *    내용이 날아가지 않도록. 짧은 부분 단어 자동 저장이 문제될 가능성은 있으나,
-   *    공백 trim + 중복 차단이 들어가 있어 빈 키워드/중복은 묵음 무시.
-   *  - Esc는 항상 cancel.
-   */
-  const handleBlur = () => {
-    if (!draft.trim()) {
-      cancelKeyword()
-      return
-    }
-    submitKeyword()
-  }
-
-  const cancelKeyword = () => {
-    setDraft('')
-    setAdding(false)
-  }
-
-  const removeKeyword = (keyword: string) => {
-    focusNextRemovalTarget(
-      keywordRemoveRefs.current,
-      keywords,
-      keyword,
-      keywordAddRef.current,
-    )
-    onPatch({ keywords: keywords.filter((item) => item !== keyword) })
-  }
-
   return (
     <S.Section id="network">
       <S.SectionHeader>
@@ -626,378 +499,30 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
         )}
       </S.SectionHeader>
 
-      {/* 상위 사건 — 지정/변경/해제 */}
-      <HierBlock role="group" aria-labelledby="network-parent-label">
-        <KeywordsLabel id="network-parent-label">상위 사건</KeywordsLabel>
-        <HierRow>
-          {parentEvent ? (
-            <>
-              <ParentLink
-                to={pathKeys.events.detail(parentEvent.id)}
-                viewTransition
-                onMouseEnter={() => prefetchEvent(parentEvent.id)}
-              >
-                {parentEvent.title}
-              </ParentLink>
-              <TextBtn
-                type="button"
-                onClick={() => setParentModalOpen(true)}
-                aria-label="상위 사건 변경"
-              >
-                변경
-              </TextBtn>
-              <TextBtn
-                type="button"
-                onClick={() => void releaseParent()}
-                aria-label="상위 사건 해제"
-              >
-                해제
-              </TextBtn>
-            </>
-          ) : (
-            <AddBtn type="button" onClick={() => setParentModalOpen(true)}>
-              <FiPlus /> 상위 사건 지정
-            </AddBtn>
-          )}
-        </HierRow>
-        {/* 주 상위 연결 사유 — '왜 이 사건이 대표 상위와 이어지는가'. 주/부가 사용자에겐
-            한 개념이라 대표 관계에도 사유를 적을 수 있게(비대칭 해소). */}
-        {parentEvent && (
-          <ReasonLine>
-            <ReasonKicker>연결 사유</ReasonKicker>
-            <InlineText
-              value={event.parentLinkReason ?? ''}
-              onSave={(next) => saveParentReason(parentEvent.id, next)}
-              placeholder="연결 사유 추가"
-              label={`'${parentEvent.title}' 연결 사유`}
-              multiline
-              maxLength={REASON_MAX}
-              showCount
-              style={{ flex: 1 }}
-            />
-          </ReasonLine>
-        )}
-        {/* 추가 상위 — 주 상위 외 다중 상위(EventParentLink). 트리·breadcrumb·형제는
-            주 상위 기준이고, 이 칩 행이 다중 소속 발견성의 정본 지면. 편집(추가·해제·
-            승격)은 자식인 이 사건 쪽에서만. */}
-        <ExtraParentsRow>
-          <ExtraInlineLabel id="network-extra-parents-label">
-            추가 상위
-          </ExtraInlineLabel>
-          {extraParents.map((extra) => (
-            <ExtraChip key={extra.id}>
-              <ExtraChipLink
-                to={pathKeys.events.detail(extra.id)}
-                viewTransition
-                onMouseEnter={() => prefetchEvent(extra.id)}
-                onFocus={() => prefetchEvent(extra.id)}
-                aria-describedby={
-                  extra.reason ? `extra-reason-${extra.id}` : undefined
-                }
-              >
-                {extra.title || '(제목 동기화 중)'}
-              </ExtraChipLink>
-              {extra.reason && (
-                <VisuallyHidden id={`extra-reason-${extra.id}`}>
-                  연결 사유: {extra.reason}
-                </VisuallyHidden>
-              )}
-              <ReasonToggleBtn
-                type="button"
-                onClick={() =>
-                  setOpenExtraReasonId((cur) =>
-                    cur === extra.id ? null : extra.id,
-                  )
-                }
-                aria-expanded={openExtraReasonId === extra.id}
-                aria-controls={
-                  openExtraReasonId === extra.id
-                    ? 'network-extra-reason-editor'
-                    : undefined
-                }
-                aria-label={`추가 상위 '${extra.title}' 연결 사유 ${
-                  extra.reason ? '편집' : '추가'
-                }`}
-                $hasReason={Boolean(extra.reason)}
-                title={extra.reason ?? undefined}
-              >
-                사유{extra.reason ? '•' : ''}
-              </ReasonToggleBtn>
-              <TextBtn
-                type="button"
-                onClick={() => promoteExtraParent(extra.id)}
-                aria-label={`'${extra.title}'을(를) 대표 상위로 승격`}
-                disabled={!parentEvent}
-                title={!parentEvent ? '주 상위가 없어 승격 대신 상위 지정을 사용하세요' : undefined}
-              >
-                승격
-              </TextBtn>
-              <ChipX
-                type="button"
-                ref={(node) => {
-                  if (node) extraRemoveRefs.current.set(extra.id, node)
-                  else extraRemoveRefs.current.delete(extra.id)
-                }}
-                onClick={() => removeExtraParent(extra.id)}
-                aria-label={`추가 상위 '${extra.title}' 해제`}
-              >
-                <FiX />
-              </ChipX>
-            </ExtraChip>
-          ))}
-          <AddBtn
-            type="button"
-            ref={extrasAddRef}
-            onClick={() => setExtrasModalOpen(true)}
-            disabled={!parentEvent}
-            aria-describedby={
-              !parentEvent ? 'network-extra-parents-helper' : undefined
-            }
-          >
-            <FiPlus /> 추가
-          </AddBtn>
-          {!parentEvent && (
-            <HelperNote id="network-extra-parents-helper">
-              먼저 상위 사건을 지정하세요
-            </HelperNote>
-          )}
-        </ExtraParentsRow>
-        {/* 추가 상위 연결 사유 편집 라인 — 열린 칩 하나만. 칩 행 밀도를 지키려 별도 라인. */}
-        {openExtraReasonId &&
-          (() => {
-            const openExtra = extraParents.find(
-              (extra) => extra.id === openExtraReasonId,
-            )
-            if (!openExtra) return null
-            return (
-              <ReasonLine id="network-extra-reason-editor">
-                <ReasonKicker>{openExtra.title} · 사유</ReasonKicker>
-                <InlineText
-                  key={openExtra.id}
-                  value={openExtra.reason ?? ''}
-                  onSave={(next) => saveParentReason(openExtra.id, next)}
-                  placeholder={REASON_PLACEHOLDER}
-                  label={`'${openExtra.title}' 연결 사유`}
-                  multiline
-                  maxLength={REASON_MAX}
-                  showCount
-                  style={{ flex: 1 }}
-                />
-              </ReasonLine>
-            )
-          })()}
-        {parentEvent && (prevSibling || nextSibling) && (
-          <SiblingNav aria-label="형제 사건 이동">
-            {prevSibling ? (
-              <SiblingLink
-                to={pathKeys.events.detail(prevSibling.id)}
-                viewTransition
-                onMouseEnter={() => prefetchEvent(prevSibling.id)}
-                onFocus={() => prefetchEvent(prevSibling.id)}
-                aria-label={`이전 형제 사건: ${prevSibling.title}`}
-              >
-                <FiChevronLeft aria-hidden />
-                <SiblingText>{prevSibling.title}</SiblingText>
-              </SiblingLink>
-            ) : (
-              <span />
-            )}
-            {nextSibling && (
-              <SiblingLink
-                to={pathKeys.events.detail(nextSibling.id)}
-                viewTransition
-                onMouseEnter={() => prefetchEvent(nextSibling.id)}
-                onFocus={() => prefetchEvent(nextSibling.id)}
-                aria-label={`다음 형제 사건: ${nextSibling.title}`}
-                $alignEnd
-              >
-                <SiblingText>{nextSibling.title}</SiblingText>
-                <FiChevronRight aria-hidden />
-              </SiblingLink>
-            )}
-          </SiblingNav>
-        )}
-      </HierBlock>
+      {/* 상위 사건 — 지정/변경/해제 + 추가 상위 칩 + 형제 네비 */}
+      <ParentBlock
+        event={event}
+        extraParents={extraParents}
+        onOpenParentModal={() => setParentModalOpen(true)}
+        onOpenExtrasModal={() => setExtrasModalOpen(true)}
+        onReleaseParent={() => void releaseParent()}
+        onPromoteExtraParent={promoteExtraParent}
+        onRemoveExtraParent={removeExtraParent}
+        onPatch={onPatch}
+        extraRemoveRefs={extraRemoveRefs}
+        extrasAddRef={extrasAddRef}
+      />
 
-      {/* 하위 사건 — 카드 그리드 + 추가/제거 */}
-      <HierBlock role="group" aria-labelledby="network-children-label">
-        <KeywordsLabel id="network-children-label">하위 사건</KeywordsLabel>
-        {children.length > 0 && (
-          <S.CardGrid $cols={2}>
-            {visibleChildren.map((child) => {
-              const category = resolveCategory(child.category?.name)
-              const dateLabel =
-                child.startDate &&
-                formatDateRange(
-                  child.startDate,
-                  child.endDate ?? undefined,
-                  child.startDatePrecision,
-                  child.endDatePrecision,
-                )
-              return (
-                <ChildCardWrap key={child.id}>
-                  <ChildCard
-                    to={pathKeys.events.detail(child.id)}
-                    viewTransition
-                    onMouseEnter={() => prefetchEvent(child.id)}
-                    onFocus={() => prefetchEvent(child.id)}
-                  >
-                    <ChildBar style={{ background: category.color }} />
-                    <ChildBody>
-                      <ChildTitle>{child.title}</ChildTitle>
-                      {dateLabel && <ChildMeta>{dateLabel}</ChildMeta>}
-                      {child.description && (
-                        <ChildDesc>{child.description}</ChildDesc>
-                      )}
-                    </ChildBody>
-                  </ChildCard>
-                  <RemoveChildBtn
-                    type="button"
-                    ref={(node) => {
-                      if (node) childRemoveRefs.current.set(child.id, node)
-                      else childRemoveRefs.current.delete(child.id)
-                    }}
-                    onClick={() => removeChild(child.id)}
-                    aria-label={`${child.title} 하위 연결 해제`}
-                  >
-                    <FiX />
-                  </RemoveChildBtn>
-                  {/* 연결 사유 — 카드(Link) 바깥 형제로 배치(a 안에 button/textarea 중첩 금지).
-                      onPatch({ childLinkReasons })는 자기 사건 채널이라 undo 토스트 탑승. */}
-                  <ChildReasonRow>
-                    <InlineText
-                      value={child.reason ?? ''}
-                      onSave={(next) => saveChildReason(child.id, next)}
-                      placeholder="연결 사유 추가"
-                      label={`'${child.title}' 연결 사유`}
-                      multiline
-                      maxLength={REASON_MAX}
-                      showCount
-                      style={{ flex: 1 }}
-                    />
-                  </ChildReasonRow>
-                </ChildCardWrap>
-              )
-            })}
-          </S.CardGrid>
-        )}
-        {hiddenChildCount > 0 && (
-          <TextBtn
-            type="button"
-            onClick={() => setShowAllChildren(true)}
-            aria-label={`하위 사건 ${hiddenChildCount}개 더 보기`}
-          >
-            외 {hiddenChildCount}개 더 보기
-          </TextBtn>
-        )}
-        <HierRow>
-          <AddBtn
-            type="button"
-            ref={childAddRef}
-            onClick={() => setChildModalOpen(true)}
-          >
-            <FiPlus /> 하위 사건 추가
-          </AddBtn>
-          <AddBtn type="button" onClick={() => setCreateChildOpen(true)}>
-            <FiPlus /> 새 하위 사건 만들기
-          </AddBtn>
-        </HierRow>
-      </HierBlock>
+      {/* 하위 사건 카드 그리드 + 추가 하위(역방향 엣지) 칩 */}
+      <ChildrenBlock
+        childEvents={children}
+        extraChildren={event.extraChildren ?? []}
+        onPatch={onPatch}
+        onOpenChildModal={() => setChildModalOpen(true)}
+        onOpenCreateChild={() => setCreateChildOpen(true)}
+      />
 
-      {/* 추가 하위(역방향 엣지) — 이 사건을 '추가 상위'로 갖는 사건들. 읽기전용 —
-          엣지 편집은 자식 사건 쪽으로 단일화(양방향 쓰기 지면은 계약 혼선·경합 유발). */}
-      {extraChildren.length > 0 && (
-        <HierBlock role="group" aria-labelledby="network-extra-children-label">
-          <KeywordsLabel id="network-extra-children-label">
-            추가 하위
-          </KeywordsLabel>
-          <KeywordsRow>
-            {visibleExtraChildren.map((extraChild) => (
-              <ExtraChip key={extraChild.id}>
-                <ExtraChipLink
-                  to={pathKeys.events.detail(extraChild.id)}
-                  viewTransition
-                  onMouseEnter={() => prefetchEvent(extraChild.id)}
-                  onFocus={() => prefetchEvent(extraChild.id)}
-                  title={extraChild.reason ?? undefined}
-                  aria-describedby={
-                    extraChild.reason
-                      ? `extra-child-reason-${extraChild.id}`
-                      : undefined
-                  }
-                >
-                  {extraChild.title}
-                </ExtraChipLink>
-                {extraChild.reason && (
-                  <VisuallyHidden id={`extra-child-reason-${extraChild.id}`}>
-                    연결 사유: {extraChild.reason}
-                  </VisuallyHidden>
-                )}
-              </ExtraChip>
-            ))}
-            {hiddenExtraChildCount > 0 && (
-              <TextBtn
-                type="button"
-                onClick={() => setShowAllExtraChildren(true)}
-                aria-label={`추가 하위 ${hiddenExtraChildCount}개 더 보기`}
-              >
-                외 {hiddenExtraChildCount}개 더 보기
-              </TextBtn>
-            )}
-          </KeywordsRow>
-          <HelperNote>연결 편집은 해당 사건의 &lsquo;추가 상위&rsquo;에서</HelperNote>
-        </HierBlock>
-      )}
-
-      <KeywordsBlock role="group" aria-labelledby="network-keywords-label">
-        <KeywordsLabel id="network-keywords-label">키워드</KeywordsLabel>
-        <KeywordsRow>
-          {keywords.map((keyword) => (
-            <KeywordChip key={keyword}>
-              <span>{keyword}</span>
-              <ChipX
-                type="button"
-                ref={(node) => {
-                  if (node) keywordRemoveRefs.current.set(keyword, node)
-                  else keywordRemoveRefs.current.delete(keyword)
-                }}
-                onClick={() => removeKeyword(keyword)}
-                aria-label={`${keyword} 제거`}
-              >
-                <FiX />
-              </ChipX>
-            </KeywordChip>
-          ))}
-          {adding ? (
-            <KeywordInput
-              autoFocus
-              value={draft}
-              onChange={(changeEvent) => setDraft(changeEvent.target.value)}
-              onBlur={handleBlur}
-              onKeyDown={(keyEvent) => {
-                // IME 조합 중 Enter는 조합 확정 — 키워드 조기 커밋 방지.
-                if (keyEvent.key === 'Enter' && !keyEvent.nativeEvent.isComposing) {
-                  keyEvent.preventDefault()
-                  submitKeyword()
-                }
-                if (keyEvent.key === 'Escape') {
-                  keyEvent.preventDefault()
-                  cancelKeyword()
-                }
-              }}
-              placeholder="키워드 입력 후 Enter"
-            />
-          ) : (
-            <AddBtn
-              type="button"
-              ref={keywordAddRef}
-              onClick={() => setAdding(true)}
-            >
-              <FiPlus /> 추가
-            </AddBtn>
-          )}
-        </KeywordsRow>
-      </KeywordsBlock>
+      <KeywordsBlock keywords={keywords} onPatch={onPatch} />
 
       <SelectModal
         isOpen={parentModalOpen}
@@ -1008,7 +533,7 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
         title="상위 사건 지정"
         options={parentOptions}
         selectedValue={event.parentEventId ?? undefined}
-        onSelect={(id) => setParent(id)}
+        onSelect={(id) => void setParent(id)}
         searchable
         searchPlaceholder="사건명으로 검색 (하위 사건 포함)"
         isLoading={eventsLoading}
@@ -1078,596 +603,11 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
             onClose={() => setCreateChildOpen(false)}
             initialParent={{ id: event.id, title: event.title }}
             onSaved={handleChildCreated}
+            // 뒤로가기 미저장 보호(위 useBlocker)의 dirty 신호원.
+            onDirtyChange={handleCreateChildDirtyChange}
           />
         </Suspense>
       )}
     </S.Section>
   )
 }
-
-/**
- * 후보 날짜 라벨 — startDate가 있으면 정밀도 포맷, BC·고대(DATETIME 저장 불가)는
- * 구조화 연도(startEra/startYear)로 표기. 둘 다 없으면 null.
- */
-function candidateDateLabel(candidate: EventLinkCandidate): string | null {
-  if (candidate.startDate) {
-    return formatDateRange(
-      candidate.startDate,
-      candidate.endDate ?? undefined,
-      candidate.startDatePrecision,
-      candidate.endDatePrecision,
-    )
-  }
-  if (candidate.startYear != null) {
-    // BC는 부호 연도로 접어 shared 포매터 단일출처로 표기(수제 '기원전' 조립 금지).
-    const start = formatYearLabel(
-      candidate.startEra === 'BC' ? -candidate.startYear : candidate.startYear,
-    )
-    if (candidate.endYear != null) {
-      const end = formatYearLabel(
-        candidate.endEra === 'BC' ? -candidate.endYear : candidate.endYear,
-      )
-      if (end !== start) return `${start} ~ ${end}`
-    }
-    return start
-  }
-  return null
-}
-
-/**
- * 칩/카드 제거 시 포커스 이양 — 제거 버튼에 있던 포커스가 body로 낙하하지 않게,
- * 렌더 순서상 다음 형제의 제거 버튼(없거나 표시 캡 밖이면 그룹 '추가' 버튼)으로 옮긴다.
- * 다음 형제 DOM은 제거 re-render 후에도 살아남으므로 제거 직전 즉시 focus해도 유지된다.
- */
-function focusNextRemovalTarget(
-  removeButtonRefs: Map<string, HTMLButtonElement>,
-  orderedIds: readonly string[],
-  removedId: string,
-  fallback: HTMLButtonElement | null,
-) {
-  const removedIndex = orderedIds.indexOf(removedId)
-  const nextId = removedIndex >= 0 ? orderedIds[removedIndex + 1] : undefined
-  const nextTarget = nextId ? removeButtonRefs.get(nextId) : undefined
-  ;(nextTarget ?? fallback)?.focus()
-}
-
-/**
- * 서버 에러 → 사용자 문구 — use-event-mutation.ts friendlyErrorMessage의 지역 미러
- * (비export 함수라 크로스 사건 채널용으로 복제). nestia HttpError.message는 응답
- * 본문(JSON) 원문이라 순환 409 등이 `{"message":…}` 블롭으로 뜬다 — message만 추출.
- */
-function crossPatchErrorMessage(error: unknown): string {
-  if (!error || typeof error !== 'object') return '알 수 없는 오류'
-  const raw =
-    typeof (error as { message?: unknown }).message === 'string'
-      ? (error as { message: string }).message
-      : ''
-  const pickMessage = (text: string): string | null => {
-    try {
-      const parsed = JSON.parse(text) as { message?: unknown }
-      if (typeof parsed.message === 'string') return parsed.message
-      if (Array.isArray(parsed.message)) return parsed.message.join(', ')
-    } catch {
-      /* JSON 아님 */
-    }
-    return null
-  }
-  const direct = pickMessage(raw)
-  if (direct) return direct
-  const braceIndex = raw.indexOf('{')
-  if (braceIndex >= 0) {
-    const sliced = pickMessage(raw.slice(braceIndex))
-    if (sliced) return sliced
-  }
-  return raw || '알 수 없는 오류'
-}
-
-/** 후보 설명 라인 — 날짜 · 현재 소속 상위 사건("이미 하위" 안내). */
-function candidateDescription(
-  candidate: EventLinkCandidate,
-  currentEventId: string,
-): string | undefined {
-  const parts: string[] = []
-  const dateLabel = candidateDateLabel(candidate)
-  if (dateLabel) parts.push(dateLabel)
-  const extraCount = candidate.extraParents?.length ?? 0
-  const extraBadge = extraCount > 0 ? ` (+${extraCount})` : ''
-  if (candidate.parentEventId === currentEventId) {
-    parts.push(`이 사건의 하위${extraBadge}`)
-  } else if (candidate.parentEventId) {
-    parts.push(
-      `현재 '${candidate.parentEventTitle ?? '다른 사건'}'의 하위${extraBadge}`,
-    )
-  }
-  return parts.length > 0 ? parts.join(' · ') : undefined
-}
-
-/**
- * 사건 시작일 비교 — JS `Date`는 BC(음수 연도) 일부 표기를 NaN으로 떨굼.
- * Papyrus는 역사 사건을 다루므로 *연·월·일 토큰을 직접 파싱*해 정수 비교한다.
- * 비교 우선순위: 연도 → 월 → 일. 입력 누락은 가장 뒤로 정렬.
- */
-function compareEventStart(
-  first: string | null | undefined,
-  second: string | null | undefined,
-): number {
-  const firstTokens = parseEventDateTokens(first)
-  const secondTokens = parseEventDateTokens(second)
-  if (firstTokens == null && secondTokens == null) return 0
-  if (firstTokens == null) return 1
-  if (secondTokens == null) return -1
-  if (firstTokens.year !== secondTokens.year)
-    return firstTokens.year - secondTokens.year
-  if (firstTokens.month !== secondTokens.month)
-    return firstTokens.month - secondTokens.month
-  return firstTokens.day - secondTokens.day
-}
-
-function parseEventDateTokens(
-  input: string | null | undefined,
-): { year: number; month: number; day: number } | null {
-  if (!input) return null
-  // 선택적 부호 + 1~6자리 연도, 월·일은 선택적.
-  const matched = input.match(/^(-?\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/)
-  if (!matched || !matched[1]) return null
-  const year = parseInt(matched[1], 10)
-  if (!Number.isFinite(year)) return null
-  const month = matched[2] ? parseInt(matched[2], 10) : 1
-  const day = matched[3] ? parseInt(matched[3], 10) : 1
-  return { year, month, day }
-}
-
-const HierBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`
-
-const TruncationNote = styled.div`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const HierRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-`
-
-const ParentLink = styled(Link)`
-  font-size: 14px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  text-decoration: none;
-
-  &:hover,
-  &:focus-visible {
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-    outline: none;
-  }
-`
-
-const ExtraParentsRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-`
-
-const ExtraInlineLabel = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const ExtraChip = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-`
-
-const ExtraChipLink = styled(Link)`
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  text-decoration: none;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  &:hover,
-  &:focus-visible {
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-    outline: none;
-  }
-`
-
-const HelperNote = styled.span`
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-/* 연결 사유 편집 라인 — 주 상위 행/추가 상위 칩 아래. 좌측 얇은 킥커 + InlineText. */
-const ReasonLine = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding-left: 2px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const ReasonKicker = styled.span`
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-/* 하위 카드의 연결 사유 라인 — 카드 바로 아래, 카드 내용과 좌측 정렬(막대+갭 만큼 들여쓰기). */
-const ChildReasonRow = styled.div`
-  display: flex;
-  padding: 0 14px 0 29px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const VisuallyHidden = styled.span`
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-`
-
-const SiblingNav = styled.nav`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-top: 2px;
-`
-
-const SiblingLink = styled(Link)<{ $alignEnd?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 48%;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  text-decoration: none;
-  justify-content: ${({ $alignEnd }) => ($alignEnd ? 'flex-end' : 'flex-start')};
-  margin-left: ${({ $alignEnd }) => ($alignEnd ? 'auto' : '0')};
-
-  &:hover,
-  &:focus-visible {
-    color: ${({ theme }) => theme.colors.text.primary};
-    outline: none;
-  }
-
-  svg {
-    width: 13px;
-    height: 13px;
-    flex-shrink: 0;
-  }
-`
-
-const SiblingText = styled.span`
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-const TextBtn = styled.button`
-  /* 최소 24×24 터치 타깃(WCAG 2.5.8) — 12px 텍스트라도 클릭 영역은 24px 확보. */
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 24px;
-  min-width: 24px;
-  padding: 0 4px;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-  transition: color 0.14s;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 2px;
-    border-radius: 4px;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-`
-
-/* 칩 '사유' 토글 버튼 — TextBtn 계열, 사유 보유 시 강조·펼침 시 primary. */
-const ReasonToggleBtn = styled(TextBtn)<{ $hasReason?: boolean }>`
-  color: ${({ theme, $hasReason }) =>
-    $hasReason ? theme.colors.text.primary : theme.colors.text.tertiary};
-
-  &[aria-expanded='true'] {
-    color: ${({ theme }) => theme.colors.primary};
-  }
-`
-
-const ChildCardWrap = styled.div`
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-
-  /* 카드 호버 시 제거 버튼만 노출 — 직계 자식 button으로 한정(연결 사유 InlineText의
-     편집 펜슬은 InlineText 자체 hover/focus-within 규칙을 따르도록 건드리지 않는다). */
-  &:hover > button {
-    opacity: 0.7;
-  }
-`
-
-const RemoveChildBtn = styled.button`
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.14s, color 0.14s;
-
-  &:hover,
-  &:focus-visible {
-    opacity: 1;
-    color: ${({ theme }) => theme.colors.error};
-    outline: none;
-  }
-
-  @media (hover: none) {
-    opacity: 0.7;
-  }
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-`
-
-const ChildCard = styled(Link)`
-  display: flex;
-  gap: 12px;
-  padding: 12px 14px;
-  background: transparent;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: 10px;
-  text-decoration: none;
-  color: inherit;
-  transition: color 0.16s, background 0.16s, border-color 0.16s, box-shadow 0.16s;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.02)'};
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.16)'};
-    box-shadow: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? '0 2px 10px rgba(0,0,0,0.28)'
-        : '0 2px 8px rgba(15,23,42,0.06)'};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 2px;
-  }
-
-  /* 터치 기기 — hover가 없으므로 탭 시 즉각 피드백. */
-  @media (hover: none) {
-    &:active {
-      background: ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)'};
-    }
-  }
-`
-
-const ChildBar = styled.span`
-  width: 3px;
-  border-radius: 2px;
-  flex-shrink: 0;
-`
-
-const ChildBody = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-`
-
-const ChildTitle = styled.span`
-  font-size: 14px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  line-height: 1.4;
-`
-
-const ChildMeta = styled.span`
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
-`
-
-const ChildDesc = styled.span`
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-`
-
-const KeywordsBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-const KeywordsLabel = styled.div`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const KeywordsRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-`
-
-const KeywordChip = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 0;
-  font-size: 13px;
-  font-weight: 500;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
-  border: none;
-
-  &::before {
-    content: '#';
-    color: ${({ theme }) => theme.colors.text.tertiary};
-    margin-right: 1px;
-  }
-`
-
-const ChipX = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.background.secondary};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 1px;
-  }
-
-  svg {
-    width: 11px;
-    height: 11px;
-  }
-`
-
-const AddBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.14s, color 0.14s;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 2px;
-  }
-
-  &:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-
-    &:hover {
-      border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-      color: ${({ theme }) => theme.colors.text.secondary};
-    }
-  }
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-`
-
-const KeywordInput = styled.input`
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12px;
-  font-weight: 500;
-  font-family: inherit;
-  min-width: 140px;
-  outline: none;
-
-  &:focus {
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
-`
