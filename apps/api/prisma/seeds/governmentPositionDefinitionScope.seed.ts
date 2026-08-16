@@ -89,6 +89,13 @@ const SCOPES: ScopeEntry[] = [
   { title: '공조판서', positionType: 'CABINET_MINISTER', historicalCountries: ['조선'], countries: ['대한민국'] },
   { title: '국무총리', positionType: 'HEAD_OF_GOVERNMENT', countries: ['대한민국'], localTitle: '國務總理' },
 
+  // ── 미국 ────────────────────────────────────────────────
+  // 미국 행정부 고유 명칭 3종만 스코프한다 — 농무·상무·노동·보건복지·교통·에너지·보훈장관은
+  // 다른 나라에도 있는 보편 부처라 governmentPositionDefinition.seed.ts에서 스코프 없이 전역으로 뒀다.
+  { title: '국무장관', positionType: 'CABINET_MINISTER', countries: ['미국'], note: '외무장관과 기능은 같으나 미국 고유 명칭 표기' },
+  { title: '주택도시개발장관', positionType: 'CABINET_MINISTER', countries: ['미국'] },
+  { title: '국토안보장관', positionType: 'CABINET_MINISTER', countries: ['미국'] },
+
   // ── 중국·이란 ───────────────────────────────────────────
   { title: '국가주석', positionType: 'HEAD_OF_STATE', countries: ['중국'], localTitle: '国家主席' },
   { title: '총리(국무원)', positionType: 'HEAD_OF_GOVERNMENT', countries: ['중국'], localTitle: '总理' },

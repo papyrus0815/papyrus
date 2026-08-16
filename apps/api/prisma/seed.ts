@@ -126,6 +126,7 @@ import {
   seedTisza,
   seedPetain,
   seedGallieni,
+  seedTrumpCabinet,
   seedWorldWarOnePersonGroups,
   seedWorldWarOneAppointmentDetails,
 } from './seeds'
@@ -705,6 +706,11 @@ async function main() {
         //  · Person 필드 보강 + 재임 10건(경위 전건)/소속/별명 2/연보 21건/능력치
         await seedGallieni(prisma)
 
+        // 11-17. 트럼프 2기 내각 각료 15부 — 법무·노동·국토안보는 전임자 포함 18명.
+        //  · 의존: seedCountries('미국') + seedGovernmentPositionDefinitions(국무장관 등 신설 10종)
+        //  · Person x18 + 소속(CITIZENSHIP→미국) x18 + 재임(CABINET_MINISTER, countryId=미국) x18
+        await seedTrumpCabinet(prisma)
+
         // 15-1. 제1차 세계대전 인물 묶음(PersonGroup) 7종 — **인물 시드가 모두 끝난 뒤**.
         //  · 7월 위기 결정자·1915 연명서한 서명자/친정 지지 진영·스타프카 수뇌·전시 각의·
         //    페트로그라드 협상국 대사단·프랑스 전시 지도부
@@ -725,6 +731,11 @@ async function main() {
         //    두 시드 모두 멱등이라 재실행이 안전하다.
         await seedJoseonHistoricalCountryRelations(prisma)
         await seedGovernmentPositionDefinitionScopes(prisma)
+
+        // 16-1. Person.countryId 백필 재실행 — 13-5 이후에도 인물 시드(Dimitrijevic~트럼프 내각 등)가
+        //  여럿 더 있어 그 사이 생성된 인물은 13-5 시점엔 아직 없었다. 멱등(countryId가 NULL인
+        //  인물만 처리)이라 두 번째 호출은 안전하다.
+        await seedBackfillPersonCountryId(prisma)
 
         // 7. 어드민 계정 시딩
         await seedAdmin(prisma)
