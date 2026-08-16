@@ -259,6 +259,16 @@ const COUNTRIES: CountryData[] = [
     continentName: '유럽',
   },
   {
+    name: '알바니아',
+    localName: 'Shqipëria',
+    flagEmoji: '🇦🇱',
+    isoCode: 'AL',
+    // 2023년 INSTAT 인구총조사 확정치(추계치가 아닌 조사치)
+    population: 2402113,
+    areaSqKm: 28748.0,
+    continentName: '유럽',
+  },
+  {
     name: '그리스',
     localName: 'Ελλάδα',
     flagEmoji: '🇬🇷',

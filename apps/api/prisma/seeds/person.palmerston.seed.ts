@@ -108,6 +108,8 @@ interface TenureSpec {
   endReasonDetail: string
   notes: string
   cabinetName: string
+  /** 취임 경위 — 인물 상세 재임 카드의 「경위」 항목으로 렌더된다 */
+  appointmentDetail: string
 }
 
 const TENURES: TenureSpec[] = [
@@ -123,6 +125,10 @@ const TENURES: TenureSpec[] = [
       '크림 전쟁 수행 부실로 애버딘 연립내각이 붕괴하자 국민적 인기에 힘입어 1855-02-06 총리 취임. ' +
       '전쟁을 매듭짓고 1856 파리 조약으로 강화했으나, 제2차 아편전쟁 논란과 살인 공모 법안 부결로 1858 사임. (휘그)',
     cabinetName: '1차 파머스턴 내각',
+    appointmentDetail:
+      '크림전쟁 실정을 조사할 특별위원회를 두자는 로벅의 동의안이 1855년 1월 29일 305대 148로 가결되자 애버딘은 이를 불신임으로 받아들여 30일 사퇴했다. ' +
+      '빅토리아 여왕은 먼저 더비를 불렀으나 파머스턴이 클래런던의 외무장관 유임을 조건으로 걸었다가 무산됐고, 랜즈다운은 74세의 고령으로 고사했으며 러셀은 동료들이 등을 돌려 실패했다. ' +
+      '결국 여왕은 2월 4일 그를 불렀고 6일 70세로 취임했다.',
   },
   {
     subTermNumber: 2,
@@ -137,6 +143,10 @@ const TENURES: TenureSpec[] = [
       '이탈리아 통일 지지, 미국 남북전쟁 중립(트렌트호 사건 수습), 슐레스비히-홀슈타인 불개입 등을 거쳐 ' +
       '1865 총선 직후 재임 중 사망. (자유당)',
     cabinetName: '2차 파머스턴 내각',
+    appointmentDetail:
+      '1859년 봄 총선에서도 더비의 보수당은 과반에 이르지 못했고, 6월 6일 윌리스 룸스 회합에서 휘그와 필파, 급진파, 아일랜드 의원들이 자유당으로 결집했다. ' +
+      '6월 7일 하팅턴 후작이 낸 불신임 수정안이 10일 323대 310으로 가결돼 더비가 물러났다. ' +
+      '여왕은 파머스턴과 러셀 사이에서 고르기를 피해 그랜빌 백작에게 조각을 맡겼으나 러셀의 거부로 실패했고, 12일 파머스턴을 다시 불렀다.',
   },
 ]
 
@@ -157,6 +167,8 @@ interface OfficeTenureSpec {
   endReason: TenureEndReason
   endReasonDetail: string
   notes: string
+  /** 취임 경위 — 인물 상세 재임 카드의 「경위」 항목으로 렌더된다 */
+  appointmentDetail: string
 }
 
 const OFFICE_TENURES: OfficeTenureSpec[] = [
@@ -170,6 +182,11 @@ const OFFICE_TENURES: OfficeTenureSpec[] = [
     endReasonDetail: '1828년 캐닝파(Canningite)와 함께 웰링턴 토리 내각에서 동반 사임.',
     notes:
       '약 19년간 전쟁장관(육군 행정·예산 담당)을 지낸, 본인 정치 경력의 출발점. 이 시기에는 토리계 인사였다.',
+    appointmentDetail:
+      '1809년 9월 캐닝과 캐슬레이의 결투, 포틀랜드 공작의 뇌졸중과 사임으로 내각이 무너지자 조지 3세는 10월 4일 스펜서 퍼시벌을 총리로 세웠다. ' +
+      '퍼시벌은 재무장관 자리를 다섯 사람에게 거절당했는데 파머스턴도 그중 하나였다. ' +
+      '스물다섯 살이던 그는 후견인과 동료들의 조언대로 재무부는 너무 위험하다고 보고 각외직인 전쟁장관을 택했고, 퍼시벌은 결국 재무장관을 겸임했다. ' +
+      '전임자는 그랜빌 레브슨-가워다.',
   },
   {
     positionType: GovernmentPositionType.CABINET_MINISTER,
@@ -182,6 +199,10 @@ const OFFICE_TENURES: OfficeTenureSpec[] = [
     endReasonDetail: '1834-11 윌리엄 4세가 멜번 휘그 내각을 해임하면서 함께 물러남.',
     notes:
       '제1기 외무장관. 그레이 휘그 정권에서 벨기에 독립 보장·사국동맹(1834) 등 입헌주의 진영 외교를 주도.',
+    appointmentDetail:
+      '1830년 11월 15일 웰링턴 공작 내각이 민사비 위원회 회부 동의에서 204대 233으로 패했고, 의회개혁 거부 선언으로 이미 지지를 잃은 공작은 이튿날 사퇴했다. ' +
+      '윌리엄 4세는 휘그 지도자 그레이 백작에게 조각을 맡겼다. ' +
+      '1828년 허스키슨과 함께 웰링턴 내각에서 물러나 야당에 있던 캐닝파 파머스턴은 애버딘 백작의 뒤를 이어 외무부를 맡았고, 이 인선으로 사실상 휘그로 옮겨 갔다.',
   },
   {
     positionType: GovernmentPositionType.CABINET_MINISTER,
@@ -194,6 +215,10 @@ const OFFICE_TENURES: OfficeTenureSpec[] = [
     endReasonDetail: '1841 총선 패배로 멜번 내각이 총사퇴하며 함께 퇴임.',
     notes:
       '제2기 외무장관. 멜번 내각에서 동방문제(이집트-오스만 위기)·제1차 아편전쟁(1839~42) 등 포함외교의 전성기.',
+    appointmentDetail:
+      '1834년 11월 윌리엄 4세가 멜버른 1차 내각을 해임하고 필에게 조각을 맡겼으나 필 내각은 소수파였다. ' +
+      '1835년 2월 리치필드 하우스 협약으로 휘그와 급진파, 오코넬의 아일랜드 의원들이 공동전선을 폈고, 4월 7일 아일랜드 국교회 보고서 표결에서 285대 258로 패한 필은 이튿날 사임했다. ' +
+      '국왕은 멜버른을 다시 불렀고 파머스턴은 웰링턴 공작의 뒤를 이어 외무부로 복귀했다.',
   },
   {
     positionType: GovernmentPositionType.CABINET_MINISTER,
@@ -208,6 +233,11 @@ const OFFICE_TENURES: OfficeTenureSpec[] = [
     notes:
       '제3기 외무장관. 돈 파시피코 사건("Civis Romanus sum" 연설, 1850) 등 대중적 강경 외교로 절정에 올랐으나, ' +
       '독단적 외교로 1851 경질되었다.',
+    appointmentDetail:
+      '1845년 12월 러셀의 조각은 그레이 백작이 파머스턴의 외무부 복귀를 이유로 입각을 거부해 무산됐다. ' +
+      '1846년 6월 곡물법 폐지로 분열된 보수당의 보복표로 필의 아일랜드 강제법이 부결되자 필은 사임했고, 6월 30일 러셀이 내각을 세웠다. ' +
+      '이번에는 그레이가 이의를 접었다. ' +
+      '빅토리아 여왕과 앨버트 공은 그의 독단적 외교를 이유로 이 복귀를 반기지 않았고, 이는 1848년 이후 왕실과의 정면충돌로 이어졌다.',
   },
   {
     positionType: GovernmentPositionType.CABINET_MINISTER,
@@ -220,6 +250,10 @@ const OFFICE_TENURES: OfficeTenureSpec[] = [
     notes:
       '애버딘 연립내각의 내무장관(1852~1855). 공장법·공중보건 등 국내 개혁 행정을 맡았고, 크림 전쟁 부실로 ' +
       '애버딘 내각이 무너지자 총리로 직행했다.',
+    appointmentDetail:
+      '1852년 12월 17일 디즈레일리의 예산안이 305대 286으로 부결되면서 더비의 소수 보수당 내각이 무너졌고, 휘그와 필파가 애버딘 백작 아래 연립정부를 꾸렸다. ' +
+      '파머스턴 없이는 정부 구성이 불가능하다고 여겨졌으나, 1851년 외무장관에서 밀려난 지 1년밖에 지나지 않아 외무부 복귀는 어려웠고 그 자리는 러셀이 가져갔다. ' +
+      '그래서 그는 12월 28일 내무장관으로 입각했다.',
   },
   {
     positionType: GovernmentPositionType.ROYAL_NOBLE_TITLE,
@@ -233,6 +267,10 @@ const OFFICE_TENURES: OfficeTenureSpec[] = [
     notes:
       '아일랜드 귀족 작위(Peerage of Ireland)인 파머스턴 자작 3대. 1802년 부친 사망으로 승계. ' +
       '아일랜드 귀족이라 영국 상원 의석이 없어 평생 하원에서 활동했다.',
+    appointmentDetail:
+      '1802년 4월 17일 부친인 제2대 파머스턴 자작 헨리 템플이 웨스트민스터 하노버 스퀘어 자택에서 사망하면서 만 17세의 헨리 존 템플이 작위를 승계했다. ' +
+      '이 작위는 아일랜드 귀족 작위여서 영국 상원 의석이 딸려 오지 않았고, 그 덕분에 그는 뒷날 하원의원으로 활동할 수 있었다. ' +
+      '당시 그는 에든버러 대학에서 공부하던 중이었으며 햄프셔의 브로드랜즈와 아일랜드 슬라이고의 영지를 함께 물려받았다.',
   },
 ]
 
@@ -442,6 +480,112 @@ const LIFE_EVENTS: LifeEventEntry[] = [
     startYear: 1865, startMonth: 10, startDay: 18,
     description: '하트퍼드셔 브로켓 홀에서 재임 중 사망 — 재임 중 사망한 마지막 영국 총리. 웨스트민스터 사원 안장.',
   },
+  // ── 보강분: 기존 10건에 없던 주요 사건 12건 ──
+  {
+    title: '벨기에 독립 승인과 런던 회의',
+    category: 'DIPLOMATIC',
+    startYear: 1830, startMonth: 11,
+    endYear: 1839, endMonth: 4, endDay: 19,
+    description:
+      '외무장관 취임 직후 런던 회의를 주도해 벨기에 독립 문제를 열강 합의로 풀었다. ' +
+      '프랑스의 병합 시도와 반동 3국의 무력 개입을 동시에 막았고, 1831년 레오폴 1세 즉위에 이어 1839년 4월 19일 런던 조약으로 독립과 중립을 확정했다.',
+  },
+  {
+    title: '제1차 아편전쟁 원정 결정',
+    category: 'MILITARY',
+    startYear: 1839, startMonth: 10, startDay: 1,
+    endYear: 1842, endMonth: 8, endDay: 29,
+    description:
+      '임칙서의 아편 몰수 이후 멜버른 내각은 1839년 10월 1일 중국 원정군 파견을 결정했고, 외무장관인 그가 원정 지침과 대중국 요구조건을 직접 작성했다. ' +
+      '전쟁은 1842년 난징 조약으로 끝나 5개 항구가 열렸다.',
+  },
+  {
+    title: '오리엔트 위기와 1840년 런던 협약',
+    category: 'DIPLOMATIC',
+    startYear: 1840, startMonth: 7, startDay: 15,
+    endYear: 1840, endMonth: 11,
+    description:
+      '무함마드 알리가 시리아를 점령하자 프랑스를 빼놓은 채 오스트리아·러시아·프로이센과 7월 15일 런던 협약에 서명했다. ' +
+      '반대하는 각료들에게는 사임을 내걸어 관철했고, 베이루트 포격과 아크레 함락으로 오스만 보전 정책을 지켰다.',
+  },
+  {
+    title: '루이 나폴레옹 쿠데타 승인과 외무장관 해임',
+    category: 'POLITICAL',
+    startYear: 1851, startMonth: 12,
+    description:
+      '1851년 12월 2일 쿠데타 직후 여왕과 내각에 알리지 않고 프랑스 대사에게 지지 의사를 전한 뒤 공식 훈령으로 되풀이했다. ' +
+      '빅토리아 여왕의 오랜 불만이 터져 나왔고 러셀 총리의 사임 요구로 외무부를 떠났다.',
+  },
+  {
+    title: '크림전쟁 수행과 파리 강화조약',
+    category: 'MILITARY',
+    startYear: 1854, startMonth: 3, startDay: 28,
+    endYear: 1856, endMonth: 3, endDay: 30,
+    description:
+      '애버딘 내각에서는 함대 파견 주장이 번번이 막혔으나, 총리가 된 뒤에는 나폴레옹 3세를 설득해 강화를 미루고 1855년 9월 세바스토폴 함락을 끌어냈다. ' +
+      '이듬해 2월 휴전에 이어 3월 30일 파리 조약으로 흑해 비무장화를 얻었다.',
+  },
+  {
+    title: '애로호 사건 문책 패배와 1857년 총선 대승',
+    category: 'POLITICAL',
+    startYear: 1857, startMonth: 3, startDay: 3,
+    endYear: 1857, endMonth: 4,
+    description:
+      '애로호 사건에서 비롯된 광저우 포격을 두고 1857년 3월 3일 하원의 문책 동의안이 263대 247로 가결됐다. ' +
+      '그는 의회를 해산해 총선으로 맞섰고 애국 여론을 업어 1835년 이래 최대인 83석 차 승리를 거뒀다.',
+  },
+  {
+    title: '인도 대반란 대응과 동인도회사 통치 폐지',
+    category: 'MILITARY',
+    startYear: 1857, startMonth: 6,
+    endYear: 1858, endMonth: 8, endDay: 2,
+    description:
+      '1857년 6월 반란 소식이 전해지자 처음에는 가볍게 보았으나 곧 콜린 캠벨과 대규모 증원 병력을 인도로 보냈다. ' +
+      '동인도회사의 통치권을 국왕에게 넘기는 방침을 정했고, 법률은 그가 실각한 뒤인 1858년 8월 제정됐다.',
+  },
+  {
+    title: '오르시니 음모 사건과 1858년 실각',
+    category: 'POLITICAL',
+    startYear: 1858, startMonth: 2, startDay: 19,
+    description:
+      '오르시니가 영국에서 만든 폭탄으로 나폴레옹 3세를 노리자 프랑스를 달래려 살인모의처벌법안을 냈다. ' +
+      '굴욕적이라는 반발 속에 1858년 2월 19일 2독회에서 215대 234로 패해 사임했고 더비의 두 번째 내각이 뒤를 이었다.',
+  },
+  {
+    title: '이탈리아 통일 지원',
+    category: 'DIPLOMATIC',
+    startYear: 1859,
+    endYear: 1861,
+    description:
+      '두 번째 내각은 카보우르의 통일 운동에 우호적이었다. ' +
+      '러셀 외무장관과 함께 가리발디의 남부 원정에 대한 열강의 간섭을 막았고, 1861년 이탈리아 왕국이 세워지자 영국은 이를 이른 시기에 승인했다.',
+  },
+  {
+    title: '미국 남북전쟁 중립과 트렌트호 사건',
+    category: 'DIPLOMATIC',
+    startYear: 1861, startMonth: 5, startDay: 13,
+    endYear: 1862, endMonth: 1,
+    description:
+      '1861년 5월 13일 중립을 선포해 남부를 교전단체로만 인정했다. ' +
+      '11월 트렌트호에서 남부 사절이 납치되자 사과와 석방을 요구하며 캐나다에 증원군을 보냈고, 앨버트 공이 문안을 누그러뜨린 끝에 이듬해 1월 석방으로 매듭지었다.',
+  },
+  {
+    title: '슐레스비히-홀슈타인 위기의 외교적 실패',
+    category: 'DIPLOMATIC',
+    startYear: 1864, startMonth: 2, startDay: 1,
+    endYear: 1864, endMonth: 7,
+    description:
+      '1863년 덴마크를 건드리면 상대는 덴마크만이 아닐 것이라 경고했으나, 1864년 2월 프로이센·오스트리아가 슐레스비히를 침공하자 파병을 포기했다. ' +
+      '런던 회의는 결렬됐고 상원 문책안이 가결되는 등 위신에 큰 타격을 입었다.',
+  },
+  {
+    title: '1865년 총선 승리',
+    category: 'POLITICAL',
+    startYear: 1865, startMonth: 7,
+    description:
+      '1865년 7월 총선에서 자유당이 의석을 늘려 승리했다. ' +
+      '여든 살의 총리는 당의 가장 큰 선거 자산이었고 티버턴 유세에도 직접 나섰으나, 이 승리 석 달 뒤 재임 중에 세상을 떠났다.',
+  },
 ]
 
 // ── 6축 능력치 ──────────────────────────────────────────────────────────────
@@ -615,7 +759,16 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
     })
     if (existing) {
       tenureId = existing.id
-      console.log(`  ⏭️  재임 스킵 (이미 존재): 총리 ${t.subTermNumber}기`)
+      // 선재 행은 create를 타지 않으므로 비어 있는 취임 경위만 따로 백필한다
+      if (!existing.appointmentDetail) {
+        await prisma.governmentPositionTenure.update({
+          where: { id: existing.id },
+          data: { appointmentDetail: t.appointmentDetail },
+        })
+        console.log(`  🔧 취임 경위 보강: 총리 ${t.subTermNumber}기`)
+      } else {
+        console.log(`  ⏭️  재임 스킵 (이미 존재): 총리 ${t.subTermNumber}기`)
+      }
     } else {
       const created = await prisma.governmentPositionTenure.create({
         data: {
@@ -628,6 +781,7 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
           startDate: toDate(t.startYear, t.startMonth, t.startDay),
           endDate: toDate(t.endYear, t.endMonth, t.endDay),
           appointmentMethod: t.appointmentMethod,
+          appointmentDetail: t.appointmentDetail,
           endReason: t.endReason,
           endReasonDetail: t.endReasonDetail,
           notes: t.notes,
@@ -672,7 +826,16 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
     })
     const label = o.subTermNumber ? `${o.title} ${o.subTermNumber}기` : o.title
     if (existing) {
-      console.log(`  ⏭️  재임 스킵 (이미 존재): ${label}`)
+      // 선재 행은 create를 타지 않으므로 비어 있는 취임 경위만 따로 백필한다
+      if (!existing.appointmentDetail) {
+        await prisma.governmentPositionTenure.update({
+          where: { id: existing.id },
+          data: { appointmentDetail: o.appointmentDetail },
+        })
+        console.log(`  🔧 취임 경위 보강: ${label}`)
+      } else {
+        console.log(`  ⏭️  재임 스킵 (이미 존재): ${label}`)
+      }
       continue
     }
     await prisma.governmentPositionTenure.create({
@@ -687,6 +850,7 @@ export async function seedPalmerston(prisma: PrismaService): Promise<void> {
         startDate: toDate(o.startYear, o.startMonth, o.startDay),
         endDate: toDate(o.endYear, o.endMonth, o.endDay),
         appointmentMethod: o.appointmentMethod,
+        appointmentDetail: o.appointmentDetail,
         endReason: o.endReason,
         endReasonDetail: o.endReasonDetail,
         notes: o.notes,

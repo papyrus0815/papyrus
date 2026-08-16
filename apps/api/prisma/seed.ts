@@ -47,6 +47,8 @@ import {
   seedRomaniaHistoricalCountryRelations,
   seedGreeceHistoricalCountries,
   seedGreeceHistoricalCountryRelations,
+  seedAlbaniaHistoricalCountries,
+  seedAlbaniaHistoricalCountryRelations,
   seedJoseonHistoricalCountries,
   seedJoseonHistoricalCountryRelations,
   seedNapoleonIII,
@@ -61,6 +63,23 @@ import {
   seedRussiaEmperors,
   seedRomanovDynasty,
   seedRussiaUnofficialCommittee,
+  seedDanilov,
+  seedYanushkevich,
+  seedGoremykin,
+  seedBark,
+  seedSazonov,
+  seedBuchanan,
+  seedPaleologue,
+  seedKrivoshein,
+  seedSukhomlinov,
+  seedGrigorovich,
+  seedWitte,
+  seedBerchtold,
+  seedPasic,
+  seedPrincip,
+  seedConrad,
+  seedWillemI,
+  seedLeopoldIBelgium,
   seedSardiniaItalyMonarchs,
   seedSavoyDynasty,
   seedJapanMeijiEra,
@@ -101,6 +120,13 @@ import {
   seedJapanGeography,
   seedUsaGeography,
   seedChinaGeography,
+  seedDimitrijevic,
+  seedJoffre,
+  seedTisza,
+  seedPetain,
+  seedGallieni,
+  seedWorldWarOnePersonGroups,
+  seedWorldWarOneAppointmentDetails,
 } from './seeds'
 
 const options = {
@@ -290,10 +316,29 @@ async function main() {
         // 7-26. 그리스 역사 국가 계승·소속 관계 시딩
         await seedGreeceHistoricalCountryRelations(prisma)
 
+        // 7-27. 알바니아 관련 역사 국가 시딩 (일리리아 왕국~알바니아 공화국 16건)
+        //  · 의존: seedCountries(현대 AL·ME·GR) + seedItalyHistoricalCountries(로마 공화국·제국 —
+        //    EXTRA 링크 대상, 베네치아 공화국·나폴리 왕국·시칠리아 왕국·파시스트 이탈리아 — 소속 대상)
+        //    + seedGreeceHistoricalCountries(마케도니아 왕국) + seedMontenegroHistoricalCountries(제타 공국)
+        //    + seedBulgariaHistoricalCountries(불가리아 제2제국) + seedSloveniaHistoricalCountries(일리리아 주)
+        //    + seedGermanyHistoricalCountries(나치 독일)
+        //  · 동로마·오스만은 사건 시드 유래(7-19 불가리아 주석 참조) — 없으면 warn+skip 후 재실행에서 채움
+        //  · 에페이로스 전제군주국(greece 시드)·두클랴·제타 공국(montenegro 시드)의 'AL 미래용' 표기는
+        //    AL 등록 후 각 시드 재실행으로 활성화된다 — 여기서 중복 링크하지 않는다
+        //  · 선재 행 '알바니아 왕국'(1272~1368, UI 생성)은 생성하지 않고 NULL 필드만 가드 백필한다
+        await seedAlbaniaHistoricalCountries(prisma)
+
+        // 7-28. 알바니아 역사 국가 계승·소속 관계 시딩
+        await seedAlbaniaHistoricalCountryRelations(prisma)
+
         // 7-29. 조선 왕조 역사 국가 시딩 (고려 → 조선 → 대한제국)
         //  · 의존: seedCountries(현대 KR). KP는 country 테이블에 없어 링크가 warn+skip된다
         //  · 선재 행 '조선민주주의인민공화국'(1948~)과는 완전 별개 행 — 멱등 판정은 name 완전 일치
         await seedJoseonHistoricalCountries(prisma)
+
+        // 7-30. 조선 왕조 계승·소속 관계 시딩
+        //  · 의존: 선재 행 '일본 제국'·'청나라' — 없으면 warn+skip 후 재실행에서 채움
+        await seedJoseonHistoricalCountryRelations(prisma)
 
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)
@@ -337,6 +382,118 @@ async function main() {
 
         // 11-1. 비공식위원회(1801–1803) 4인 + 가문 + 인간관계 시딩
         await seedRussiaUnofficialCommittee(prisma)
+
+        // 11-2. 유리 다닐로프 — 참모본부·스타프카 병참감 (WWI 개전기 러시아군 작전 총괄)
+        //  · 의존: seedRussiaHistoricalCountries(러시아 제국 HC). 프랑스 제3공화국 HC는 있으면 망명지(EXILE) 연결
+        //  · Person x1 + 군 재임(MILITARY_COMMANDER) 5건 + 소속국가/별명/연보 15건/능력치
+        await seedDanilov(prisma)
+
+        // 11-3. 니콜라이 야누시케비치 — 스타프카 참모장 (다닐로프의 직속 상관, 명목상 참모장)
+        //  · 의존: seedRussiaHistoricalCountries(러시아 제국 HC)
+        //  · Person x1 + 군 재임(MILITARY_COMMANDER) 5건 + 소속국가/연보 18건/능력치 (별명 없음)
+        await seedYanushkevich(prisma)
+
+        // 11-4. 이반 고레미킨 — 대신회의 의장(총리) 2회 (제2대 1906·제5대 1914~1916, WWI 개전기)
+        //  · 의존: seedRussiaHistoricalCountries(러시아 제국 HC) + 관직 정의(총리·내무장관)
+        //  · Person x1 + 내무장관 재임 1건 + 총리 재임 2건/내각 2건 + 소속국가/연보 17건/능력치
+        await seedGoremykin(prisma)
+
+        // 11-5. 표트르 바르크 — 러시아 제국 마지막 재무장관 (1914~1917, 전시 금주·전쟁 재정)
+        //  · 의존: seedRussiaHistoricalCountries(러시아 제국 HC) + 관직 정의(재무장관)
+        //    영국 HC(그레이트브리튼 및 북아일랜드 연합왕국)는 있으면 망명지(EXILE) 연결
+        //  · Person x1 + 재무장관 재임 1건 + 소속국가 2/별명 1/연보 17건/능력치
+        await seedBark(prisma)
+
+        // 11-6. 세르게이 사조노프 — 외무장관 (1910~1916, 발칸 동맹·7월 위기 총동원·전시 외교)
+        //  · 의존: seedRussiaHistoricalCountries(러시아 제국 HC) + 관직 정의(외무장관)
+        //    프랑스 제3공화국 HC는 있으면 망명지(EXILE) 연결
+        //  · Person 보강 x1 + 외무장관 재임 1건 + 소속국가 2/연보 28건/능력치
+        await seedSazonov(prisma)
+
+        // 11-7. 조지 뷰캐넌 — 주러시아 영국 대사 (1910~1918, WWI 페트로그라드 협상국 외교의 축)
+        //  · 의존: seedBritainHistoricalCountries(그레이트브리튼 및 아일랜드 연합왕국 HC) +
+        //    관직 정의(대사·특명전권공사). 러시아 제국 HC는 주재국 표기에만 사용(연결 없음)
+        //  · Person x1 + 외교관 재임(DIPLOMATIC_POST) 4건 + 소속국가/연보 23건/능력치
+        await seedBuchanan(prisma)
+
+        // 11-8. 모리스 팔레올로그 — 주러시아 프랑스 대사 (1914~1917, 7월 위기 확약 논쟁·«차르들의 러시아»)
+        //  · 의존: seedFranceHistoricalCountries(프랑스 제3공화국 HC) + 관직 정의(대사·특명전권공사)
+        //  · Person x1 + 재임 3건(주불가리아 공사·주러시아 대사·외무부 사무총장) + 소속국가/연보 15건/능력치
+        await seedPaleologue(prisma)
+
+        // 11-9. 알렉산드르 크리보셰인 — 토지정비·농업총국 장관 (1908~1915, 스톨리핀 개혁 집행·1915 각료 반발 리더)
+        //  · 의존: seedRussiaHistoricalCountries(러시아 제국 HC). 장관 정의는 카탈로그에 없어 title 직접 기입
+        //  · Person x1 + 장관 재임 1건 + 소속국가/연보 17건/능력치 (남러시아 정부 수반은 HC 부재로 연보 처리)
+        await seedKrivoshein(prisma)
+
+        // 11-10. 블라디미르 수호믈리노프 — 전쟁장관 (1909~1915, WWI 개전기 육군 총괄·1917 유죄판결)
+        //  · 의존: seedRussiaHistoricalCountries(러시아 제국 HC) + 관직 정의(전쟁장관)
+        //  · Person x1 + 재임 7건(군 지휘 6 + 전쟁장관 1) + 소속국가 2/연보 34건/능력치
+        await seedSukhomlinov(prisma)
+
+        // 11-11. 이반 그리고로비치 — 제국 마지막 해군장관 (1911~1917, 쓰시마 이후 함대 재건)
+        //  · 의존: seedRussiaHistoricalCountries(러시아 제국 HC) + 관직 정의(해군장관)
+        //    프랑스 제3공화국 HC는 있으면 망명지(EXILE) 연결
+        //  · Person x1 + 재임(해군 지휘 + 해군장관) + 소속국가/연보/능력치
+        await seedGrigorovich(prisma)
+
+        // 11-12. 세르게이 비테 — 재무장관(1892~1903)·제국 초대 총리(1905~1906)
+        //  · 의존: seedRussiaHistoricalCountries(러시아 제국 HC) + 관직 정의(총리·재무장관)
+        //  · 총리 재임은 termNumber=1 (고레미킨 시드가 전제한 비테1→고레미킨2→스톨리핀3 축)
+        //    + Cabinet 행 동반 생성
+        //  · Person x1 + 재임 5건 + 내각 1건 + 소속국가/연보 33건/능력치
+        await seedWitte(prisma)
+
+        // 11-13. 레오폴트 베르히톨트 — 오스트리아-헝가리 외무장관(1912~1915, 7월 최후통첩)
+        //  · 의존: seedAustriaHistoricalCountries(오스트리아-헝가리 제국 HC) +
+        //    관직 정의(외무장관·대사). 이 시리즈 첫 비(非)러시아 중부유럽 인물 — 그레고리력이라
+        //    구력 병기 없음(러시아 측 사료 인용 시에만 라벨)
+        //  · Person x1 + 재임(주러 대사·외무장관·궁내장관) + 소속국가/연보/능력치
+        await seedBerchtold(prisma)
+
+        // 11-14. 니콜라 파시치 — 세르비아 총리(다수 회차)·SCS 왕국 총리, 7월 최후통첩 수신자
+        //  · 의존: seedSerbiaHistoricalCountries(세르비아 왕국(근대)·세르비아-크로아티아-
+        //    슬로베니아 왕국 HC) + 관직 정의(총리)
+        //  · ⚠️세르비아는 1919년까지 율리우스력 — 국내 날짜는 구력이라 환산·병기 필요
+        //  · 두 국가(세르비아 왕국 → SCS 왕국)에 걸친 첫 인물 + 총리 재임마다 Cabinet 동반
+        await seedPasic(prisma)
+
+        // 11-15. 프란츠 콘라트 폰 회첸도르프 — 오스트리아-헝가리 참모총장(1906~11·1912~17)
+        //  · 의존: seedAustriaHistoricalCountries(오스트리아-헝가리 제국 HC)
+        //  · 군 직책은 카탈로그에 관직 정의가 없어 title 직접 기입(군인 시드 규약)
+        //  · 그레고리력이라 구력 병기 없음(베르히톨트와 동일)
+        await seedConrad(prisma)
+
+        // 11-16. 가브릴로 프린치프 — 1914-06-28 사라예보 저격의 실행자
+        //  · 의존: seedAustriaHistoricalCountries(오스트리아-헝가리 제국 HC).
+        //    세르비아 왕국(근대) HC와 「사라예보 암살 사건」 event는 있으면 연결, 없으면 생략
+        //  · ⚠️이 시리즈 최초의 «공직 이력 0건» 인물 — 재임(GovernmentPositionTenure) 0건이라
+        //    관직 정의·Cabinet 의존이 없고, 그 자리를 연보와 PersonEvent 연결이 대신한다
+        //  · 국적은 오스트리아-헝가리 신민, 베오그라드 체류는 PRIMARY_RESIDENCE로만(국적 아님)
+        //  · Person x1 + 별칭 2 + 소속국가 2 + 사건 연결 1 + 연보 30건 + 능력치
+        await seedPrincip(prisma)
+
+        // 11-17. 빌럼 1세 — 네덜란드 초대 국왕(1815~1840)·«상인왕»
+        //  · 의존: 네덜란드 연합왕국·네덜란드 왕국 HC + 관직 정의('국왕')
+        //  · ⚠️군주라 GovernmentPositionTenure가 아닌 **SovereignReign**을 쓴다
+        //    (유니크 제약 historicalCountryId+regnalNumber — 네덜란드 계열은 현재 비어 있음)
+        //  · 주권공(1813~15)·룩셈부르크 대공은 대응 HC가 없어 재위 아닌 연보로 처리
+        await seedWillemI(prisma)
+
+        // 11-18. 레오폴트 1세 — 벨기에 초대 국왕(1831~1865)·「벨기에인의 왕」
+        //  · 의존: seedBeneluxHistoricalCountries(벨기에 왕국 HC) + 관직 정의('국왕')
+        //    + seedSavoyDynasty(「벨기에 왕가 (작센-코부르크-고타)」 왕조)
+        //  · ⚠️군주 변형 — SovereignReign 1건. regnalNumber는 **국가 통산 대수**(벨기에 제1대),
+        //    이름별 서수 «1세»는 SovereignReign.regnalName에(정본 P). 벨기에 HC는 재위 0건이라
+        //    (hc, rn=1) 무주공산이므로 유니크 충돌 없음
+        //  · 재위 시작은 선출일(06-04)이 아니라 **헌법 선서일 1831-07-21** — 선출은 조건부였고
+        //    섭정 쉬르레 드 쇼키에가 07-21까지 재임해 06-04을 쓰면 47일 중첩된다
+        //  · 러시아군 복무는 임관·계급·역법이 전부 미확정이라 재임 아닌 연보로 처리
+        //  · 부모 2명을 최소 카드로 신규 등록해 형 에른스트 1세·누나 빅토리아 공녀와 형제 관계를
+        //    잇는다(이 스키마는 형제를 부모 공유로만 표현) → 조카 빅토리아 여왕·앨버트까지 연결
+        //  · 「벨기에 왕가」 왕조의 founderId가 NULL이라 이 인물로 채운다
+        //  · Person x1 + 부모 2 + 재위 1 + 별칭 6 + 소속국가 6 + 연보 40건 + 능력치
+        await seedLeopoldIBelgium(prisma)
 
         // 11-2. 일본 메이지·다이쇼·쇼와 천황 + 1~10대 내각총리대신 시딩
         await seedJapanMeijiEra(prisma)
@@ -514,12 +671,49 @@ async function main() {
         // 11. 행정 부처 카테고리 시딩 (국방·외교 등)
         await seedAdministrationDepartmentCategories(prisma)
 
+        // 11-12. 드라구틴 디미트리예비치 «아피스» — 세르비아 참모본부 정보부장·흑수단 창립자
+        //  · 의존: seedSerbiaHistoricalCountries('세르비아 왕국 (근대)' HC)
+        //  · Person x1 + 군 재임 12건(appointmentDetail 포함) + 소속/별명/연보 18건/능력치
+        await seedDimitrijevic(prisma)
+
+        // 11-13. 조제프 조프르 — 프랑스군 총사령관(1914~16)·원수. UI 등록 스텁 행 보강 전용.
+        //  · 의존: seedFranceHistoricalCountries('프랑스 제3공화국' HC)
+        //  · Person 필드 보강 + 군 재임 15건(appointmentDetail 포함) + 연보 18건/능력치
+        await seedJoffre(prisma)
+
+        // 11-14. 티사 이슈트반 — 헝가리 왕국 총리(1903~05·1913~17), 1914년 7월 유일한 개전 반대자
+        //  · 의존: '헝가리 왕국' HC + '총리' 관직 정의. 총리직은 이중제국 공동정부가 아니라
+        //    헝가리 왕국 정부 소속이라 HC가 «오스트리아-헝가리 제국»이 아니다
+        //  · Person x1 + 재임 6건(경위 포함)/내각 2 + 소속/별명/연보 17건/능력치
+        await seedTisza(prisma)
+
+        // 11-15. 필리프 페탱 — 베르됭의 원수이자 비시 프랑스 국가주석. UI 스텁 행 보강 전용.
+        //  · 의존: '프랑스 제3공화국' HC + '비시 프랑스' HC(1940~44 재임 2건은 이쪽에 붙는다)
+        //  · Person 필드 보강 + 재임 14건(경위 전건)/소속/별명 2/연보 22건/능력치
+        await seedPetain(prisma)
+
+        // 11-16. 조제프 갈리에니 — 파리 군사총독(1914)·마다가스카르 총독. UI 스텁 행 보강 전용.
+        //  · 의존: '프랑스 제3공화국' HC (주 국적이 제2제국으로 오등록돼 있어 함께 교정한다)
+        //  · Person 필드 보강 + 재임 10건(경위 전건)/소속/별명 2/연보 21건/능력치
+        await seedGallieni(prisma)
+
+        // 15-1. 제1차 세계대전 인물 묶음(PersonGroup) 7종 — **인물 시드가 모두 끝난 뒤**.
+        //  · 7월 위기 결정자·1915 연명서한 서명자/친정 지지 진영·스타프카 수뇌·전시 각의·
+        //    페트로그라드 협상국 대사단·프랑스 전시 지도부
+        //  · 미등록 인물은 warn 후 건너뛰고, 나중에 인물이 등록되면 재실행으로 멤버만 백필된다
+        await seedWorldWarOnePersonGroups(prisma)
+
+        // 15-2. WWI 인물 재임의 취임 배경(appointmentDetail) 보강 — **인물 시드가 모두 끝난 뒤**.
+        //  · 인물 시드는 기존 재임을 통째로 스킵하므로 이 축은 별도 보강 경로가 필요하다
+        //  · 이미 값이 있으면 덮어쓰지 않는다(UI 편집 보호)
+        await seedWorldWarOneAppointmentDetails(prisma)
+
         // 16. 관직 정의 적용 범위(스코프) 시딩 — **반드시 맨 끝**.
         //  · 스코프 행 0개 = 전역, 1개 이상 = 그 국가에서만 노출(government.prisma 규약)
         //  · 참조하는 역사국가가 7-x 블록뿐 아니라 인물·사건 시드에서도 만들어진다:
         //    일본 제국=seedJapanMeijiEra / 일본국=seedJapanPostwar / 도쿠가와 막부=seedKurofune.
         //    한 타깃이라도 먼저 돌면 그 항목은 현대 국가 축만 남아 '현대 전용'으로 굳는다.
-        //  · 조선 관계 시드도 같은 이유로 여기서 돌린다(일본 제국·청나라가 그때서야 존재).
+        //  · 조선 관계 시드도 같은 이유로 여기서 한 번 더 돌린다(일본 제국·청나라가 그때서야 존재).
         //    두 시드 모두 멱등이라 재실행이 안전하다.
         await seedJoseonHistoricalCountryRelations(prisma)
         await seedGovernmentPositionDefinitionScopes(prisma)
