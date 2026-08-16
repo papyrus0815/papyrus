@@ -21,6 +21,8 @@ import { invalidateGlossaryTermCache } from '@/shared/hooks/use-rich-text-prose-
 import type { MentionItem } from '@/shared/lib/mention/mention-system'
 import { MENTION_TYPE_CONFIG } from '@/shared/lib/mention/mention-system'
 import {
+  isLikelyRichTextHtml,
+  plainTextToRichTextHtml,
   resolveRichTextImageSrcsForDisplay,
 } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
@@ -758,8 +760,16 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     if (!editorRef.current) return
     const incoming = value ?? ''
     if (incoming === lastEmittedValueRef.current) return
+    /**
+     * 순수 텍스트(시드가 넣은 본문)는 innerHTML에 그대로 넣으면 개행이 공백으로
+     * 접혀 문단이 사라지고, 그 상태로 저장하면 원본 구조가 영구 소실된다. 읽기 뷰가
+     * 쓰는 것과 같은 판정으로 분기해 문단·개행을 HTML로 옮긴 뒤 넣는다.
+     */
+    const incomingHtml = isLikelyRichTextHtml(incoming)
+      ? incoming
+      : plainTextToRichTextHtml(incoming)
     const newContent = resolveRichTextImageSrcsForDisplay(
-      sanitizeRichTextHtml(incoming),
+      sanitizeRichTextHtml(incomingHtml),
     )
     // 다음 user-input 이후 비교 기준으로 쓰기 위해 sanitize한 값을 기록
     lastEmittedValueRef.current = incoming

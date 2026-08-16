@@ -16,6 +16,34 @@ export function isLikelyRichTextHtml(html: string | null | undefined): boolean {
 }
 
 /**
+ * 순수 텍스트 본문을 RichTextEditor가 다룰 수 있는 HTML로 변환한다
+ * (`isLikelyRichTextHtml`의 짝 — 둘이 함께 «본문 필드 이중 형식» 계약을 이룬다).
+ *
+ * 왜 필요한가: 전기·설명 같은 본문 필드에는 두 형식이 공존한다 — 시드가 넣은 순수
+ * 텍스트(문단 구분이 `\n\n`)와 에디터가 만든 HTML. 읽기 뷰는 `isLikelyRichTextHtml`로
+ * 분기해 순수 텍스트를 `white-space: pre-wrap`으로 그리지만, 에디터는 값을 그대로
+ * `innerHTML`에 넣으므로 변환 없이는 개행이 전부 공백으로 접힌다 — 그 상태로 저장하면
+ * 접힌 DOM에서 HTML이 만들어져 문단 구분이 **영구 소실**된다.
+ *
+ * 규칙: 빈 줄(개행 2개 이상)을 문단 경계로 삼아 `<p>`로 감싸고, 문단 안의 단일 개행은
+ * `<br>`로 옮긴다. 태그 문자는 이스케이프해 평문의 `<`가 마크업으로 해석되지 않게 한다.
+ */
+export function plainTextToRichTextHtml(text: string | null | undefined): string {
+  const normalized = (text ?? '').replace(/\r\n?/g, '\n')
+  if (normalized.trim() === '') return ''
+  const escaped = normalized
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  return escaped
+    .split(/\n[ \t]*\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph !== '')
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`)
+    .join('')
+}
+
+/**
  * 본문 HTML에서 멘션 스팬의 선두 @ 제거 (상세 뷰에서는 이름만 표시)
  */
 export function stripMentionLeadingAt(html: string): string {

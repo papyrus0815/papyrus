@@ -1,6 +1,7 @@
 import {
   formatRichTextForReadView,
   isLikelyRichTextHtml,
+  plainTextToRichTextHtml,
   stripMentionLeadingAt,
 } from './rich-text-read-view'
 
@@ -25,6 +26,54 @@ describe('isLikelyRichTextHtml', () => {
 
   it('순수 평문이면 false', () => {
     expect(isLikelyRichTextHtml('그는 위대한 지도자였다.')).toBe(false)
+  })
+})
+
+describe('plainTextToRichTextHtml', () => {
+  it('빈 줄을 문단 경계로 삼아 <p>로 감싼다', () => {
+    expect(plainTextToRichTextHtml('첫 문단.\n\n둘째 문단.')).toBe(
+      '<p>첫 문단.</p><p>둘째 문단.</p>',
+    )
+  })
+
+  it('문단 안의 단일 개행은 <br>로 옮긴다', () => {
+    expect(plainTextToRichTextHtml('첫 줄\n둘째 줄')).toBe(
+      '<p>첫 줄<br>둘째 줄</p>',
+    )
+  })
+
+  it('빈 줄이 셋 이상이거나 공백이 섞여도 문단 하나로 합치지 않는다', () => {
+    expect(plainTextToRichTextHtml('가.\n\n\n나.\n \n다.')).toBe(
+      '<p>가.</p><p>나.</p><p>다.</p>',
+    )
+  })
+
+  it('태그 문자를 이스케이프해 평문의 <가 마크업이 되지 않게 한다', () => {
+    expect(plainTextToRichTextHtml('a < b & c > d')).toBe(
+      '<p>a &lt; b &amp; c &gt; d</p>',
+    )
+  })
+
+  it('빈 값·공백만 있는 값은 빈 문자열', () => {
+    expect(plainTextToRichTextHtml('')).toBe('')
+    expect(plainTextToRichTextHtml('   \n\n  ')).toBe('')
+    expect(plainTextToRichTextHtml(null)).toBe('')
+    expect(plainTextToRichTextHtml(undefined)).toBe('')
+  })
+
+  it('CRLF 개행도 LF와 같게 다룬다', () => {
+    expect(plainTextToRichTextHtml('가.\r\n\r\n나.')).toBe('<p>가.</p><p>나.</p>')
+  })
+
+  /**
+   * 이 변환이 필요한 이유 자체를 고정하는 회귀 테스트 — 시드가 넣은 순수 텍스트는
+   * isLikelyRichTextHtml이 false로 보고, 변환 결과는 true로 봐야 에디터가 그 뒤로
+   * 자기 출력과 같은 형식을 다루게 된다.
+   */
+  it('변환 전은 평문·변환 후는 리치텍스트로 판정된다', () => {
+    const seeded = '세르비아의 정치가.\n\n출신과 유학. 자예차르에서 태어났다.'
+    expect(isLikelyRichTextHtml(seeded)).toBe(false)
+    expect(isLikelyRichTextHtml(plainTextToRichTextHtml(seeded))).toBe(true)
   })
 })
 
