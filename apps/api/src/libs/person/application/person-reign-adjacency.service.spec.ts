@@ -5,8 +5,8 @@ import { PersonReignAdjacencyService } from './person-reign-adjacency.service'
 /**
  * 같은 국가 전/후 재위(reign-adjacency) 읽기모델 특성화 — 검토서
  * (docs/person-reign-neighbors-review.md §4·§5)의 확정 규칙을 못 박는다:
- * record별 인스턴스 스코프(브리지 아님)·startDate 최근접·동률 배열·REIGN 우선 dedup·
- * 정밀도 인지 경계·본인 record isSelf·overlapsAnchor·BC/국가없음 앵커 제외.
+ * record별 인스턴스 스코프(브리지 아님)·**승계 축 분리**·startDate 최근접·동률 배열·
+ * REIGN 우선 dedup·정밀도 인지 경계·본인 record isSelf·overlapsAnchor·BC/국가없음 앵커 제외.
  */
 
 function utc(year: number, month = 0, day = 1): Date {
@@ -43,10 +43,11 @@ function rulerPerson(overrides: Partial<any> = {}) {
   }
 }
 
-/** ANCHOR_SELECT 모양 — 대상의 수장급 record */
+/** ANCHOR_REIGN_SELECT 모양 — 재위 앵커의 축은 연결된 직위 정의가 정한다 */
 function anchorReign(overrides: Partial<any> = {}) {
   return {
     id: overrides.id ?? 'anchor-reign',
+    positionDefinition: { positionType: 'HEAD_OF_STATE' },
     startDate: utc(1450),
     endDate: utc(1480),
     startDatePrecision: null,
@@ -56,9 +57,11 @@ function anchorReign(overrides: Partial<any> = {}) {
   }
 }
 
+/** ANCHOR_TENURE_SELECT 모양 — positionType이 앵커의 승계 축을 정한다 */
 function anchorTenure(overrides: Partial<any> = {}) {
   return {
     id: overrides.id ?? 'anchor-tenure',
+    positionType: 'HEAD_OF_STATE',
     startDate: utc(2010),
     endDate: utc(2015),
     startDatePrecision: null,
@@ -68,7 +71,7 @@ function anchorTenure(overrides: Partial<any> = {}) {
   }
 }
 
-/** NEIGHBOR_SELECT 모양 — 이웃 후보(reign) */
+/** NEIGHBOR_SELECT 모양 — 이웃 후보(reign). positionDefinition.positionType이 축 진실원 */
 function worldReign(overrides: Partial<any> = {}) {
   return {
     id: overrides.id ?? 'world-reign',
@@ -82,7 +85,7 @@ function worldReign(overrides: Partial<any> = {}) {
     person: rulerPerson(),
     country: null,
     historicalCountry: { id: 'joseon', name: '조선' },
-    positionDefinition: { id: 'def-1', title: '국왕' },
+    positionDefinition: { id: 'def-1', title: '국왕', positionType: 'HEAD_OF_STATE' },
     ...overrides,
   }
 }
@@ -109,10 +112,16 @@ function worldTenure(overrides: Partial<any> = {}) {
 
 /** 스코프 절(단순 {historicalCountryId} 또는 확장 {OR:[...]})에 world 행이 부합하나 */
 function rowMatchesScope(row: any, andClauses: any[]): boolean {
+  // 축 게이트도 OR을 쓰므로(정의 NULL 살리기) 국가 키가 든 절만 스코프로 인정한다
   const scopeClause = andClauses.find(
     (clause) =>
       clause &&
-      (clause.historicalCountryId || clause.countryId || clause.OR),
+      (clause.historicalCountryId ||
+        clause.countryId ||
+        (clause.OR &&
+          clause.OR.some(
+            (sub: any) => sub.historicalCountryId || sub.countryId,
+          ))),
   )
   if (!scopeClause) return true
   const rowHist = row.historicalCountry?.id ?? null
@@ -134,9 +143,42 @@ function rowMatchesScope(row: any, andClauses: any[]): boolean {
   return matchOne(scopeClause)
 }
 
+/** 정의 축 조건의 두 형태 — 정확 일치 또는 부정 */
+type DefinitionTypeCondition = string | { not: string }
+
 /**
- * 이웃 쿼리의 AND에서 날짜 경계 + 스코프를 적용해 world 후보를 실제로 분할한다
- * (JS 선택 로직 + 스코프 확장을 함께 실검증).
+ * 정의 축 조건(`{ positionType: 'X' }` 또는 `{ positionType: { not: 'X' } }`)에 부합하나.
+ * `null`은 항상 false — Prisma의 `positionDefinition: { is: ... }`가 **관계 NULL 행을
+ * 배제**하는 시맨틱을 그대로 모사한다(구현이 OR로 살려내는지 검증하려면 필수).
+ */
+function matchesDefinitionType(
+  condition: DefinitionTypeCondition,
+  actual: string | null,
+): boolean {
+  if (actual == null) return false
+  if (typeof condition === 'object' && 'not' in condition) {
+    return actual !== condition.not
+  }
+  return actual === condition
+}
+
+/** 재위 축 절(`positionDefinition` 중첩 또는 정의-NULL을 살리는 OR)에 world 행이 부합하나 */
+function rowMatchesReignAxis(row: any, clause: any): boolean {
+  const defType = row.positionDefinition?.positionType ?? null
+  if (clause.positionDefinition) {
+    const condition = clause.positionDefinition.is ?? clause.positionDefinition
+    return matchesDefinitionType(condition.positionType, defType)
+  }
+  return clause.OR.some((sub: any) => {
+    if ('positionDefinitionId' in sub) return row.positionDefinition == null
+    const condition = sub.positionDefinition.is ?? sub.positionDefinition
+    return matchesDefinitionType(condition.positionType, defType)
+  })
+}
+
+/**
+ * 이웃 쿼리의 AND에서 날짜 경계 + 스코프 + **승계 축**을 적용해 world 후보를 실제로 분할한다
+ * (JS 선택 로직 + 스코프 확장 + 축 게이트를 함께 실검증 — 축 절을 무시하면 축 테스트가 공허해진다).
  */
 function filterWorld(pool: any[], andClauses: any[]): any[] {
   const dateClause = andClauses.find(
@@ -145,7 +187,28 @@ function filterWorld(pool: any[], andClauses: any[]): any[] {
       clause.startDate &&
       (clause.startDate.lt !== undefined || clause.startDate.gt !== undefined),
   )
+  // 재임 축은 스칼라 positionType, 재위 축은 정의 중첩(또는 정의-NULL OR)
+  const tenureAxisClause = andClauses.find(
+    (clause) => clause && clause.positionType,
+  )
+  const reignAxisClause = andClauses.find(
+    (clause) =>
+      clause &&
+      (clause.positionDefinition ||
+        (clause.OR &&
+          clause.OR.some(
+            (sub: any) => 'positionDefinitionId' in sub || sub.positionDefinition,
+          ))),
+  )
   let rows = pool.filter((row) => rowMatchesScope(row, andClauses))
+  if (tenureAxisClause) {
+    const value = tenureAxisClause.positionType
+    const allowed = value.in ?? [value]
+    rows = rows.filter((row) => allowed.includes(row.positionType))
+  }
+  if (reignAxisClause) {
+    rows = rows.filter((row) => rowMatchesReignAxis(row, reignAxisClause))
+  }
   if (dateClause) {
     const { lt, gt } = dateClause.startDate
     if (lt) rows = rows.filter((row) => row.startDate.getTime() < lt.getTime())
@@ -310,22 +373,292 @@ describe('PersonReignAdjacencyService', () => {
     // 이웃 reign where.AND 최상위에 인스턴스 절이 정확히 들어간다
     const neighborWhere = calls.neighborReignWheres[0]
     expect(neighborWhere.AND).toContainEqual({ historicalCountryId: 'joseon' })
-    // OR 브리지 절이 없어야 한다 (동시대 sameCountry의 과확장 회피)
-    const hasBridgeOr = neighborWhere.AND.some((clause: any) => clause.OR)
+    // 국가 키를 확장하는 OR 브리지 절이 없어야 한다 (동시대 sameCountry의 과확장 회피).
+    // 축 게이트도 OR을 쓰므로(정의 NULL 재위 살리기) 국가 키가 든 OR만 브리지로 센다.
+    const hasBridgeOr = neighborWhere.AND.some(
+      (clause: any) =>
+        clause.OR &&
+        clause.OR.some((sub: any) => sub.historicalCountryId || sub.countryId),
+    )
     expect(hasBridgeOr).toBe(false)
     // historicalCountryModernCountry(브리지) 조회 자체를 하지 않는다
     expect(calls.bridgeCalls).toBe(0)
   })
 
-  it('이웃 tenure 후보는 수장급으로 좁힌다 (같은 국가 장관·의원 유입 방지)', async () => {
+  it('이웃 tenure 후보는 앵커와 같은 축으로 좁힌다 (장관·의원은 물론 다른 축 수장도 배제)', async () => {
     const { service, calls } = createService({
       subject: { id: 'subject-1' },
-      anchorTenures: [anchorTenure({ countryId: 'kr', historicalCountryId: null })],
+      anchorTenures: [
+        anchorTenure({ positionType: 'HEAD_OF_STATE', countryId: 'kr', historicalCountryId: null }),
+      ],
     })
     await service.getReignAdjacency(BASE_PARAMS)
     const neighborTenureWhere = calls.neighborTenureWheres[0]
-    expect(neighborTenureWhere.AND).toContainEqual({
-      positionType: { in: ['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'] },
+    expect(neighborTenureWhere.AND).toContainEqual({ positionType: 'HEAD_OF_STATE' })
+  })
+
+  describe('승계 축 분리 (국가원수 ⊥ 정부수반 — 병렬 재직은 승계가 아님)', () => {
+    it('정부수반 앵커는 군주 재위를 이웃으로 삼지 않는다 — 초대 총리의 선대는 빈 배열 (비테 ← 니콜라이 2세 회귀)', async () => {
+      const { service } = createService({
+        subject: { id: 'witte' },
+        // 러시아 제국 초대 총리 — 정부수반 축엔 선대가 없다
+        anchorTenures: [
+          anchorTenure({
+            id: 'witte-pm',
+            positionType: 'HEAD_OF_GOVERNMENT',
+            startDate: utc(1905, 10, 1),
+            endDate: utc(1906, 4, 5),
+            countryId: null,
+            historicalCountryId: 'russian-empire',
+          }),
+        ],
+        worldReigns: [
+          // 앵커 시작 전에 즉위해 한참 뒤까지 재위한 군주 — 축 분리 전엔 이게 '선대(공동·중첩)'로 잡혔다
+          worldReign({
+            id: 'nicholas-2',
+            startDate: utc(1894, 10, 1),
+            endDate: utc(1917, 2, 15),
+            historicalCountry: { id: 'russian-empire', name: '러시아 제국' },
+            person: rulerPerson({ id: 'nicholas-2-p', deathDate: utc(1918) }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(BASE_PARAMS)
+      expect(result.entries[0]!.predecessors).toEqual([])
+    })
+
+    it('축은 테이블이 아니라 직위 정의 — 총리 정의로 등록된 재위는 정부수반 축에 남는다 (프랑스 제3공화국 푸앵카레)', async () => {
+      const pmDefinition = { id: 'def-pm', title: '총리', positionType: 'HEAD_OF_GOVERNMENT' }
+      const { service } = createService({
+        subject: { id: 'clemenceau' },
+        // 클레망소 1차 총리(재임) — 후임은 재위 테이블에 들어간 푸앵카레 총리다
+        anchorTenures: [
+          anchorTenure({
+            id: 'clemenceau-1',
+            positionType: 'HEAD_OF_GOVERNMENT',
+            startDate: utc(1906, 9, 25),
+            endDate: utc(1909, 6, 24),
+            countryId: null,
+            historicalCountryId: 'fr3',
+          }),
+        ],
+        worldReigns: [
+          worldReign({
+            id: 'poincare-pm',
+            startDate: utc(1912, 0, 14),
+            endDate: utc(1913, 0, 21),
+            historicalCountry: { id: 'fr3', name: '프랑스 제3공화국' },
+            positionDefinition: pmDefinition,
+            person: rulerPerson({ id: 'poincare-p', deathDate: utc(1934) }),
+          }),
+          // 같은 인물의 대통령 재위 — 국가원수 축이라 총리 사슬엔 끼면 안 된다
+          worldReign({
+            id: 'poincare-president',
+            startDate: utc(1913, 1, 18),
+            endDate: utc(1920, 1, 18),
+            historicalCountry: { id: 'fr3', name: '프랑스 제3공화국' },
+            positionDefinition: { id: 'def-pres', title: '대통령', positionType: 'HEAD_OF_STATE' },
+            person: rulerPerson({ id: 'poincare-p', deathDate: utc(1934) }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(BASE_PARAMS)
+      const successors = result.entries[0]!.successors
+      expect(successors.map((neighbor) => neighbor.record.recordId)).toEqual(['poincare-pm'])
+      // 응답 positionType도 정의에서 파생 — '재위니까 국가원수'로 둔갑시키지 않는다
+      expect(successors[0]!.record.positionType).toBe('HEAD_OF_GOVERNMENT')
+    })
+
+    it('총리 정의 재위가 앵커면 그 자신도 정부수반 축 — 재임으로 등록된 전임 총리를 찾는다', async () => {
+      const { service } = createService({
+        subject: { id: 'poincare-p' },
+        anchorReigns: [
+          anchorReign({
+            id: 'poincare-pm',
+            positionDefinition: { positionType: 'HEAD_OF_GOVERNMENT' },
+            startDate: utc(1912, 0, 14),
+            endDate: utc(1913, 0, 21),
+            countryId: null,
+            historicalCountryId: 'fr3',
+          }),
+        ],
+        worldTenures: [
+          worldTenure({
+            id: 'clemenceau-1',
+            positionType: 'HEAD_OF_GOVERNMENT',
+            title: '총리',
+            startDate: utc(1906, 9, 25),
+            endDate: utc(1909, 6, 24),
+            country: null,
+            historicalCountry: { id: 'fr3', name: '프랑스 제3공화국' },
+            person: rulerPerson({ id: 'clemenceau-p', deathDate: utc(1929) }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(BASE_PARAMS)
+      expect(
+        result.entries[0]!.predecessors.map((neighbor) => neighbor.person.id),
+      ).toEqual(['clemenceau-p'])
+    })
+
+    it('직위 정의가 없는 재위(군주)는 국가원수 축에 남는다 — 관계 NULL을 조용히 떨구면 승계선이 점프한다', async () => {
+      const { service } = createService({
+        subject: { id: 'philippe' },
+        anchorReigns: [
+          anchorReign({
+            id: 'philippe-6',
+            startDate: utc(1328),
+            endDate: utc(1350),
+            historicalCountryId: 'france-k',
+          }),
+        ],
+        worldReigns: [
+          // 정의 미기입 군주 — Prisma 중첩 조건만 쓰면 배제돼 후대가 다음 세기로 점프한다
+          worldReign({
+            id: 'charles-5',
+            startDate: utc(1364, 3, 8),
+            endDate: utc(1380, 8, 16),
+            historicalCountry: { id: 'france-k', name: '프랑스 왕국' },
+            positionDefinition: null,
+            person: rulerPerson({ id: 'charles-5-p', deathDate: utc(1380) }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(BASE_PARAMS)
+      const successors = result.entries[0]!.successors
+      expect(successors.map((neighbor) => neighbor.person.id)).toEqual(['charles-5-p'])
+      // 정의가 없으면 응답 positionType은 국가원수 폴백
+      expect(successors[0]!.record.positionType).toBe('HEAD_OF_STATE')
+    })
+
+    it('정부수반 앵커의 이웃은 같은 축(HEAD_OF_GOVERNMENT) 재임 — 전임·후임 총리로 이어진다', async () => {
+      const { service } = createService({
+        subject: { id: 'witte' },
+        anchorTenures: [
+          anchorTenure({
+            id: 'witte-pm',
+            positionType: 'HEAD_OF_GOVERNMENT',
+            startDate: utc(1905, 10, 1),
+            endDate: utc(1906, 4, 5),
+            countryId: null,
+            historicalCountryId: 'russian-empire',
+          }),
+        ],
+        worldTenures: [
+          worldTenure({
+            id: 'goremykin-pm',
+            positionType: 'HEAD_OF_GOVERNMENT',
+            title: '총리',
+            startDate: utc(1906, 4, 5),
+            endDate: utc(1906, 6, 21),
+            country: null,
+            historicalCountry: { id: 'russian-empire', name: '러시아 제국' },
+            person: rulerPerson({ id: 'goremykin-p', deathDate: utc(1917) }),
+          }),
+          // 같은 국가·같은 시기의 국가원수 축 재임 — 정부수반 카드엔 유입 금지
+          worldTenure({
+            id: 'other-axis-head',
+            positionType: 'HEAD_OF_STATE',
+            startDate: utc(1906, 0, 1),
+            country: null,
+            historicalCountry: { id: 'russian-empire', name: '러시아 제국' },
+            person: rulerPerson({ id: 'other-axis-p' }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(BASE_PARAMS)
+      const successors = result.entries[0]!.successors
+      expect(successors.map((neighbor) => neighbor.person.id)).toEqual(['goremykin-p'])
+    })
+
+    it('국가원수 앵커(군주 재위)는 총리 재임을 이웃으로 삼지 않는다 — 역방향 오염도 차단', async () => {
+      const { service } = createService({
+        subject: { id: 'nicholas-2-p' },
+        anchorReigns: [
+          anchorReign({
+            id: 'nicholas-2',
+            startDate: utc(1894, 10, 1),
+            endDate: utc(1917, 2, 15),
+            historicalCountryId: 'russian-empire',
+          }),
+        ],
+        worldTenures: [
+          // 재위 뒤에 시작한 총리 — 국가원수 축 카드의 '후대'가 되면 안 된다
+          worldTenure({
+            id: 'pm-after',
+            positionType: 'HEAD_OF_GOVERNMENT',
+            startDate: utc(1905, 10, 1),
+            country: null,
+            historicalCountry: { id: 'russian-empire', name: '러시아 제국' },
+            person: rulerPerson({ id: 'pm-after-p' }),
+          }),
+        ],
+        worldReigns: [
+          worldReign({
+            id: 'alexander-3',
+            startDate: utc(1881, 2, 13),
+            endDate: utc(1894, 10, 1),
+            historicalCountry: { id: 'russian-empire', name: '러시아 제국' },
+            person: rulerPerson({ id: 'alexander-3-p', deathDate: utc(1894) }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(BASE_PARAMS)
+      const entry = result.entries[0]!
+      expect(entry.predecessors.map((neighbor) => neighbor.person.id)).toEqual(['alexander-3-p'])
+      expect(entry.successors).toEqual([])
+    })
+
+    it('한 인물이 두 축을 겸직하면 카드별로 축이 갈린다 (record 단위 축 판정)', async () => {
+      const { service } = createService({
+        subject: { id: 'dual' },
+        anchorTenures: [
+          anchorTenure({
+            id: 'dual-hos',
+            positionType: 'HEAD_OF_STATE',
+            startDate: utc(1950),
+            endDate: utc(1960),
+            countryId: 'xx',
+            historicalCountryId: null,
+          }),
+          anchorTenure({
+            id: 'dual-hog',
+            positionType: 'HEAD_OF_GOVERNMENT',
+            startDate: utc(1950),
+            endDate: utc(1955),
+            countryId: 'xx',
+            historicalCountryId: null,
+          }),
+        ],
+        worldTenures: [
+          worldTenure({
+            id: 'prev-hos',
+            positionType: 'HEAD_OF_STATE',
+            startDate: utc(1940),
+            endDate: utc(1950),
+            country: { id: 'xx', name: '가상국', flagEmoji: null },
+            person: rulerPerson({ id: 'prev-hos-p', deathDate: utc(1950) }),
+          }),
+          worldTenure({
+            id: 'prev-hog',
+            positionType: 'HEAD_OF_GOVERNMENT',
+            startDate: utc(1945),
+            endDate: utc(1950),
+            country: { id: 'xx', name: '가상국', flagEmoji: null },
+            person: rulerPerson({ id: 'prev-hog-p', deathDate: utc(1950) }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(BASE_PARAMS)
+      const byRecord = new Map(
+        result.entries.map((entry) => [entry.subjectRecordId, entry]),
+      )
+      expect(
+        byRecord.get('dual-hos')!.predecessors.map((neighbor) => neighbor.person.id),
+      ).toEqual(['prev-hos-p'])
+      expect(
+        byRecord.get('dual-hog')!.predecessors.map((neighbor) => neighbor.person.id),
+      ).toEqual(['prev-hog-p'])
     })
   })
 
@@ -523,6 +856,49 @@ describe('PersonReignAdjacencyService', () => {
       expect(result.entries[0]!.predecessors).toEqual([])
       // 미시드면 modern 링크 조회도 하지 않는다
       expect(calls.bridgeCalls).toBe(0)
+    })
+
+    it('정부수반 축도 전이 그래프를 타지만, 확장된 스코프의 군주 재위는 여전히 미유입', async () => {
+      const { service } = createService({
+        subject: { id: 'pasic' },
+        // 세르비아 왕국 총리 — 후임은 전이로 이어진 SHS 왕국 총리다
+        anchorTenures: [
+          anchorTenure({
+            id: 'pasic-serbia',
+            positionType: 'HEAD_OF_GOVERNMENT',
+            startDate: utc(1912),
+            endDate: utc(1918),
+            countryId: null,
+            historicalCountryId: 'serbia-k',
+          }),
+        ],
+        transitions: [{ predecessorId: 'serbia-k', successorId: 'shs-k' }],
+        worldTenures: [
+          worldTenure({
+            id: 'pasic-shs',
+            positionType: 'HEAD_OF_GOVERNMENT',
+            title: '총리',
+            startDate: utc(1921),
+            endDate: utc(1926),
+            country: null,
+            historicalCountry: { id: 'shs-k', name: '세르비아-크로아티아-슬로베니아 왕국' },
+            person: rulerPerson({ id: 'pasic', deathDate: utc(1926) }),
+          }),
+        ],
+        worldReigns: [
+          // 확장된 정체의 국왕 — 정부수반 축엔 들어오면 안 된다
+          worldReign({
+            id: 'petar-1',
+            startDate: utc(1918),
+            endDate: utc(1921),
+            historicalCountry: { id: 'shs-k', name: '세르비아-크로아티아-슬로베니아 왕국' },
+            person: rulerPerson({ id: 'petar-1-p', deathDate: utc(1921) }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(SUCCESSION_PARAMS)
+      const successors = result.entries[0]!.successors
+      expect(successors.map((neighbor) => neighbor.record.recordId)).toEqual(['pasic-shs'])
     })
 
     it('역사→현대 링크로 초대 대통령(현대 filed)이 후대로 — 왕정→공화정 크로스', async () => {

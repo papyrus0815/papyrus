@@ -20,7 +20,8 @@
 ### 이미 갖춰진 것 (핵심 지렛대)
 - **자매 계약이 완성돼 있다** — `GET /persons/:id/contemporaries` 쿼드(컨트롤러·서비스·DTO·spec, `apps/api/src/libs/person/{application,presentation}/`)가 "인물 X의 재위 기간에 **누가 동시에** 통치했는가"를 답한다. 승계는 같은 재료로 "누가 **바로 앞뒤에** 통치했는가"를 답하면 된다.
 - **그대로 미러링 가능한 규약**(`person-contemporaries.service.ts`):
-  - 유니온 소스: `GovernmentPositionTenure(positionType ∈ {HEAD_OF_STATE, HEAD_OF_GOVERNMENT})` ∪ `SovereignReign` 전량을 **한 시간축으로 병합**(:14, :149). → tenure↔reign 크로스(마지막 왕→초대 대통령)가 자연 성립.
+  - 유니온 소스: `GovernmentPositionTenure(positionType ∈ {HEAD_OF_STATE, HEAD_OF_GOVERNMENT})` ∪ `SovereignReign` 전량(:14, :149). → tenure↔reign 크로스(마지막 왕→초대 대통령)가 자연 성립.
+  - ⚠️ **2026-08-12 개정** — 이 유니온을 **한 시간축으로 병합하지 않는다**. 공간(국가)과 **축**(직위 계열)은 직교한 두 게이트다. 국가만 좁히면 입헌군주정에서 병렬 재직인 군주와 총리가 한 축에 섞여, 자기 축에 선대가 없는 앵커의 빈자리를 다른 축이 메운다(러시아 제국 초대 총리 비테의 '선대'로 니콜라이 2세가 잡히던 결함). **축의 진실원은 `positionDefinition.positionType`이지 record가 어느 테이블에 있느냐가 아니다** — 실측으로 `sovereign_reign`에 정의가 `HEAD_OF_GOVERNMENT`인 행이 17건(도쿠가와 쇼군 15·프랑스 제3공화국 총리 2)이고, 제3공화국 총리직은 재임 3행 + 재위 2행으로 두 테이블에 쪼개져 있어 테이블 기준으로 가르면 클레망소→푸앵카레→푸앵카레 총리 사슬이 끊긴다. 규칙은 화이트리스트 1종(**HEAD_OF_GOVERNMENT 명시만 정부수반**, `HEAD_OF_STATE`·`ROYAL_NOBLE_TITLE`·정의 없음은 전부 국가원수). 정의 미기입 군주 8행(샤를 5세 등)이 탈락하지 않도록 이웃 재위 절은 `positionDefinitionId: null`을 **명시 OR로 살린다**(Prisma의 `positionDefinition: { is }`는 관계 NULL 행을 배제하므로 그냥 쓰면 승계선이 통째로 점프).
   - 부호연도(BC 음수) 계약, `signedYearFromEraDate`(:21), `utcYearStart`(:34 — `setUTCFullYear`로 y<100→19xx 함정 회피).
   - dedup: `${personId}:${startDate.slice(0,10)}`(UTC **날짜** 단위) 키, 충돌 시 **REIGN 우선**(:293) — normalize-tenures와 규칙 일치(두 화면이 다르게 세면 안 됨).
   - `effectiveEndYear`(:52 — 종료일 null을 사망연도/올해로 캡), `RULER_PERSON_SELECT`(:84), `isOwned`(:352 — 타계정 인물은 상세 진입 불가라 칩 비활성).
@@ -175,7 +176,7 @@ export interface PersonReignAdjacencyResponseDto {
 | E4 | 대립왕/평행 계승자 | 정통성 판정 안 함. startDate 순 최근접 제시 + 겹치면 `overlapsAnchor` 태그. **동시대 라이벌은 contemporaries가 담당**(상보) | ✅ 직교 실현 |
 | E5 | startDatePrecision='year'(연만 앎) | 같은 해에 한쪽이라도 year-precision이면 **월·일을 순서 근거로 삼지 않고** "같은 해, 순서 미상" 동률 그룹으로 묶음. **경계 그룹핑을 precision-aware로**(비평 #5) | ⚠️ 신규 로직 |
 | E6 | endDate 없는 현직 | 정렬키는 startDate뿐이라 endDate null은 순서에 무해. overlap 태그 계산엔 `effectiveEndYear`(사망캡) 재사용 — 서버·프론트 규칙 동기화 | ✅ 정렬키가 startDate라 null 취약성 감소 |
-| E7 | tenure↔reign 크로스(왕→대통령) | HEAD tenure ∪ REIGN을 **한 시간축 병합·정렬**. recordKind 대문자 토큰 유지 | ✅ 동일 유니온 |
+| E7 | tenure↔reign 크로스(왕→대통령) | **같은 축 안에서** 두 테이블을 병합·정렬. 왕→초대 대통령이 성립하는 이유는 '유니온이 한 축'이라서가 아니라 **대통령이 `HEAD_OF_STATE`라 군주와 같은 축**이기 때문. recordKind 대문자 토큰 유지 | ✅ 축 안 유니온 |
 | E8 | **브리지 과확장(치명)** | **`buildSameCountryWhere` 재사용 금지** → 인스턴스 스코프 + `HistoricalCountryTransition` 그래프(§2.2) | ⚠️ 의도적 상이 |
 | E9 | 국가정보 없음(교황) | 해당 record만 **빈 결과**(박스 미렌더), `noCountryCount++`. **record별 분기**(대상 전체 빈 처리 금지) | ⚠️ per-record(contemporaries는 per-subject 병합) |
 | E10 | 자기 자신(복위·공동→단독 접점) | 본인 record를 **전역 제외하지 않음**(제외 시 단계전환 끊김). 최근접이 본인이면 **`isSelf` 라벨 + 딥링크 비활성**(same-route no-op 회피). 타인만 '선대/후대 군주' 칩 | ⚠️ 의도적 상이(contemporaries는 personId≠subject 전역필터) |
@@ -214,7 +215,7 @@ export interface PersonReignAdjacencyResponseDto {
 
 - **되돌리기 쉬운 순서**: B0(무영향) → B1(UI 미배선, 단독 머지·즉시 롤백) → B2(무해) → B3(박스 제거로 원복) → B4(스코프 가산, 독립 롤백).
 - **검증**: B1=jest spec + `npm run build:api` 후 main.js kill+재기동(watch 아님) + verify skill(login admin/1234 :8000, 프랑스 왕·Charles V 등 알려진 승계선). B2/B3=`NODE_OPTIONS=--max-old-space-size=12288 npx tsc`(exit code) + 변경파일 eslint + render test + verify(복위·다국가 인물 카드 육안).
-- **spec 필수**: 소유자밖 404 · 인스턴스 스코프 정확일치(자매 정체 미유입) · 동률 배열 · dedup REIGN 우선 자기-인접 방지 · head-level만 · startDate null 제외 · **BC 앵커 스킵+bcSkippedCount** · isOwned 타계정 false · **다국가 대상 record별 스코프 분리**(프랑스 재위 후보에 스페인 왕 부재) · 복위 2 record 상호 이웃 · isSelf 라벨 · **모던 브리지 병렬정체 오염 부재**.
+- **spec 필수**: 소유자밖 404 · 인스턴스 스코프 정확일치(자매 정체 미유입) · 동률 배열 · dedup REIGN 우선 자기-인접 방지 · head-level만 · startDate null 제외 · **BC 앵커 스킵+bcSkippedCount** · isOwned 타계정 false · **다국가 대상 record별 스코프 분리**(프랑스 재위 후보에 스페인 왕 부재) · 복위 2 record 상호 이웃 · isSelf 라벨 · **모던 브리지 병렬정체 오염 부재** · **정부수반 앵커에 군주 재위 미유입**(비테 회귀) · **정의가 HOG인 재위는 정부수반 축**(푸앵카레) · **정의 없는 재위는 국가원수 축에 잔류**(샤를 5세 — 관계 NULL 배제 함정).
 
 ### 명시적 범위 밖 (now)
 - **DB 스키마 변경 — 불필요(확답)**: 기존 `SovereignReign ∪ head-level tenure` + (B4) `HistoricalCountryTransition`(이미 시드) 위의 순수 읽기모델. 필요한 필드·인덱스 전부 존재. **마이그레이션 0건.**

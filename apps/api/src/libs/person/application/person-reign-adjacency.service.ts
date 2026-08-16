@@ -20,14 +20,45 @@ import {
 /** 이웃 후보 over-fetch 상한 — 동률 클러스터·dedup 붕괴 대비 (depth=1 고정 MVP) */
 const NEIGHBOR_OVERFETCH = 16
 
-/** 대상 앵커 조회 select — 스코프·경계·정밀도 판정에 필요한 최소셋 */
-const ANCHOR_SELECT = {
+/**
+ * 승계 축 — 국가원수(군주 포함)와 정부수반은 **병렬 공존**하므로 한 시간축이 아니다.
+ * 입헌군주정에서 총리와 군주는 동시에 재직하며 서로를 계승하지 않는다.
+ */
+type SuccessionAxis = 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+
+/**
+ * 축 판정은 **직위 정의(positionDefinition.positionType)** 가 진실이다 — record가
+ * 어느 테이블에 있느냐(TENURE/SOVEREIGN_REIGN)는 축이 아니다. 실측: sovereign_reign에
+ * 정의가 HEAD_OF_GOVERNMENT인 행이 17건(도쿠가와 쇼군 15·프랑스 제3공화국 총리 2)이고,
+ * 프랑스 제3공화국 총리직은 재임 3행 + 재위 2행으로 **두 테이블에 쪼개져** 있다.
+ * 테이블로 축을 가르면 클레망소(재임)→푸앵카레(재위)→푸앵카레(재임) 총리 사슬이 끊긴다.
+ *
+ * 규칙은 화이트리스트 1종 — **HEAD_OF_GOVERNMENT로 명시된 것만 정부수반**, 나머지
+ * (HEAD_OF_STATE·ROYAL_NOBLE_TITLE·정의 없음)는 전부 국가원수 축. 정의 미기입 군주
+ * (샤를 5세 등 8행)가 자기 왕국 승계선에서 탈락하지 않도록 폴백을 국가원수로 둔다.
+ */
+const HEAD_OF_GOVERNMENT_TYPE = 'HEAD_OF_GOVERNMENT'
+
+/** 대상 앵커 조회 공통 select — 스코프·경계·정밀도 판정에 필요한 최소셋 */
+const ANCHOR_BASE_SELECT = {
   id: true,
   startDate: true,
   endDate: true,
   startDatePrecision: true,
   countryId: true,
   historicalCountryId: true,
+} as const
+
+/** 재임 앵커의 축은 자기 positionType (재임은 정의 없이도 타입이 필수 컬럼) */
+const ANCHOR_TENURE_SELECT = {
+  ...ANCHOR_BASE_SELECT,
+  positionType: true,
+} as const
+
+/** 재위 앵커의 축은 연결된 직위 정의에서 읽는다 (정의 없으면 국가원수 폴백) */
+const ANCHOR_REIGN_SELECT = {
+  ...ANCHOR_BASE_SELECT,
+  positionDefinition: { select: { positionType: true } },
 } as const
 
 /** 이웃 record 조회 select — 표시(칩)에 필요한 전 필드 (contemporaries recordSelect + startDatePrecision) */
@@ -42,7 +73,8 @@ const NEIGHBOR_SELECT = {
   person: { select: RULER_PERSON_SELECT },
   country: { select: { id: true, name: true, flagEmoji: true } },
   historicalCountry: { select: { id: true, name: true } },
-  positionDefinition: { select: { id: true, title: true } },
+  // positionType은 재위 이웃의 축 판정·응답 정직성(toRecordDto)에 쓰인다
+  positionDefinition: { select: { id: true, title: true, positionType: true } },
 } as const
 
 export interface GetReignAdjacencyParams {
@@ -51,6 +83,47 @@ export interface GetReignAdjacencyParams {
   accountId?: string
   /** 'instance'(정확 국가만) | 'succession'(전이 그래프 확장 — B4). MVP는 instance 동작. */
   scope: 'instance' | 'succession'
+}
+
+interface AxisSource {
+  positionType?: string | null
+  positionDefinition?: { positionType?: string | null } | null
+}
+
+/**
+ * 앵커가 놓인 승계 축 — 재임은 자기 positionType, 재위는 연결된 직위 정의에서 읽는다.
+ * 어느 쪽도 HEAD_OF_GOVERNMENT가 아니면 국가원수(폴백)라, 값이 비어도
+ * `positionType: undefined`(= 필터 소실) 같은 구멍이 이웃 쿼리로 새지 않는다.
+ */
+function axisOfAnchor(
+  kind: 'TENURE' | 'SOVEREIGN_REIGN',
+  row: AxisSource,
+): SuccessionAxis {
+  const declared =
+    kind === 'SOVEREIGN_REIGN'
+      ? (row.positionDefinition?.positionType ?? null)
+      : (row.positionType ?? null)
+  return declared === HEAD_OF_GOVERNMENT_TYPE ? 'HEAD_OF_GOVERNMENT' : 'HEAD_OF_STATE'
+}
+
+/**
+ * 이웃 재위(SovereignReign)의 축 게이트 절.
+ *
+ * ⚠️ Prisma의 선택적 to-one 중첩 조건(`positionDefinition: { is: ... }`)은 **관계가
+ * NULL인 행을 배제**한다. 국가원수 축에 그대로 쓰면 정의 미기입 군주가 조용히 사라진다 —
+ * 실측으로 샤를 5세(프랑스 왕국 1364)가 필리프 6세 재위와 루이 12세 재임 사이에 실재해,
+ * 떨어뜨리면 선대/후대가 134년 점프한다. 그래서 `positionDefinitionId: null`을 명시 OR로 살린다.
+ */
+function reignAxisWhere(axis: SuccessionAxis): object {
+  if (axis === 'HEAD_OF_GOVERNMENT') {
+    return { positionDefinition: { is: { positionType: HEAD_OF_GOVERNMENT_TYPE } } }
+  }
+  return {
+    OR: [
+      { positionDefinitionId: null },
+      { positionDefinition: { is: { positionType: { not: HEAD_OF_GOVERNMENT_TYPE } } } },
+    ],
+  }
 }
 
 /** 'YYYY-MM-DD' (dedup·경계 키 — contemporaries와 동일 UTC 날짜 단위) */
@@ -90,10 +163,12 @@ function toRecordDto(
   return {
     recordId: row.id,
     recordKind,
-    // SOVEREIGN_REIGN은 전량 HEAD_OF_STATE로 간주 (categorize 관례와 동일)
+    // 재위는 자기 positionType 컬럼이 없어 직위 정의에서 파생한다. 전량 HEAD_OF_STATE로
+    // 굳히면 총리 정의로 등록된 재위(푸앵카레)가 응답에서 국가원수로 둔갑한다.
+    // 정의 없는 군주는 국가원수 폴백 — axisOfAnchor와 같은 규칙.
     positionType:
       recordKind === 'SOVEREIGN_REIGN'
-        ? 'HEAD_OF_STATE'
+        ? (row.positionDefinition?.positionType ?? 'HEAD_OF_STATE')
         : (row.positionType as string),
     title:
       recordKind === 'SOVEREIGN_REIGN'
@@ -135,10 +210,15 @@ interface EntryContext {
  * 같은 국가 전/후 재위(reign-adjacency) 읽기모델 — 「동시대 수장」의 시간축 인접 자매.
  *
  * 스키마 변경 0: 앵커 record별로 **정확한 국가 인스턴스**(countryId 또는
- * historicalCountryId)로 좁혀 head union(HEAD tenure ∪ SovereignReign)에서
- * startDate 인접(직전=선대, 직후=후대)을 뽑는다. `buildSameCountryWhere`(m:n 브리지)는
- * 창이 없어 병렬 정체가 가짜 이웃을 만들므로 **재사용하지 않는다**(검토서 §2.2).
+ * historicalCountryId)로 좁히고, 다시 **앵커의 승계 축**(국가원수 = HEAD_OF_STATE 재임 ∪
+ * SovereignReign / 정부수반 = HEAD_OF_GOVERNMENT 재임)으로 좁혀 startDate 인접
+ * (직전=선대, 직후=후대)을 뽑는다. `buildSameCountryWhere`(m:n 브리지)는 창이 없어
+ * 병렬 정체가 가짜 이웃을 만들므로 **재사용하지 않는다**(검토서 §2.2).
  * 크로스-정체 승계(왕국→공화국)는 HistoricalCountryTransition 그래프로 B4에서 가산.
+ *
+ * 공간(국가)과 축(직위 계열)은 **직교한 두 게이트**다. 국가만 좁히면 입헌군주정에서
+ * 병렬 재직인 군주와 총리가 한 시간축에 섞여, 자기 축에 선대가 없는 앵커의 빈자리를
+ * 다른 축이 메운다(러시아 제국 초대 총리 비테의 '선대'로 니콜라이 2세가 잡히던 결함).
  */
 @Injectable()
 export class PersonReignAdjacencyService {
@@ -168,11 +248,11 @@ export class PersonReignAdjacencyService {
     const [anchorTenures, anchorReigns] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
         where: { personId, positionType: { in: [...HEAD_POSITION_TYPES] } },
-        select: ANCHOR_SELECT,
+        select: ANCHOR_TENURE_SELECT,
       }),
       this.prisma.sovereignReign.findMany({
         where: { personId },
-        select: ANCHOR_SELECT,
+        select: ANCHOR_REIGN_SELECT,
       }),
     ])
     const anchors = [
@@ -215,9 +295,13 @@ export class PersonReignAdjacencyService {
         accountId,
       }
 
+      // 축(국가원수/정부수반)은 앵커가 정한다 — 총리 카드에 군주가, 군주 카드에 총리가
+      // 선/후대로 섞여 들어오는 것을 막는다(둘은 병렬 재직이지 승계 관계가 아님).
+      const axis = axisOfAnchor(anchor.kind, anchor.row as AxisSource)
+
       const [predRows, succRows] = await Promise.all([
-        this.fetchNeighbors(scopeWhere, anchorStartDate, 'PREDECESSOR'),
-        this.fetchNeighbors(scopeWhere, anchorStartDate, 'SUCCESSOR'),
+        this.fetchNeighbors(scopeWhere, anchorStartDate, 'PREDECESSOR', axis),
+        this.fetchNeighbors(scopeWhere, anchorStartDate, 'SUCCESSOR', axis),
       ])
       const predecessors = this.nearestGroup(predRows, 'PREDECESSOR', context)
       const successors = this.nearestGroup(succRows, 'SUCCESSOR', context)
@@ -315,14 +399,22 @@ export class PersonReignAdjacencyService {
   }
 
   /**
-   * 스코프 안에서 방향(직전/직후) 이웃 후보를 over-fetch.
+   * 스코프 **및 앵커의 승계 축** 안에서 방향(직전/직후) 이웃 후보를 over-fetch.
    * 경계는 앵커의 **실제 저장 startDate**와 비교(합성 연도-경계가 아니라) — MySQL
    * <AD1000 DATETIME 불안정 구간에서도 저장값끼리의 비교라 안전. 진실은 JS 후처리.
+   *
+   * 축 게이트: 두 테이블 모두 조회하되 **앵커와 같은 축**의 행만 남긴다(재임은 자기
+   * positionType, 재위는 직위 정의). 축을 합치면 자기 축에 선대가 없는 앵커(입헌군주국
+   * 초대 총리 등)의 빈자리를 다른 축의 재직자가 조용히 메워 가짜 승계가 된다
+   * (비테 총리 ← 니콜라이 2세). 반대로 테이블로 축을 가르면 한 직위가 두 테이블에 쪼개진
+   * 국가에서 사슬이 끊긴다(프랑스 제3공화국 총리) — 그래서 게이트는 정의 기준이다.
+   * 왕→초대 대통령 크로스는 대통령이 HEAD_OF_STATE라 국가원수 축 안에서 그대로 성립한다.
    */
   private async fetchNeighbors(
     scopeWhere: object,
     anchorStartDate: Date,
     relation: AdjacencyRelation,
+    axis: SuccessionAxis,
   ): Promise<NeighborCandidate[]> {
     const dateFilter =
       relation === 'PREDECESSOR'
@@ -336,8 +428,8 @@ export class PersonReignAdjacencyService {
         where: {
           AND: [
             scopeWhere,
-            // 이웃 tenure도 수장급만 — 같은 국가 장관·의원이 선/후대로 유입되지 않게
-            { positionType: { in: [...HEAD_POSITION_TYPES] } },
+            // 이웃 tenure는 **앵커와 같은 축**만 — 장관·의원은 물론 다른 축 수장도 배제
+            { positionType: axis },
             dateFilter,
           ],
         },
@@ -346,7 +438,9 @@ export class PersonReignAdjacencyService {
         take: NEIGHBOR_OVERFETCH,
       }),
       this.prisma.sovereignReign.findMany({
-        where: { AND: [scopeWhere, dateFilter] },
+        // 재위도 정의로 거른다 — 총리 정의로 등록된 재위(푸앵카레)는 정부수반 축에,
+        // 쇼군·군주 재위는 국가원수 축에 남는다
+        where: { AND: [scopeWhere, reignAxisWhere(axis), dateFilter] },
         select: { ...NEIGHBOR_SELECT, regnalName: true },
         orderBy,
         take: NEIGHBOR_OVERFETCH,
