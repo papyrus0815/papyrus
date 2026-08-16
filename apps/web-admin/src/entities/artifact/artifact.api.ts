@@ -115,7 +115,7 @@ export function linkedEntityPath(type: string | null, id: string | null): string
   if (!type || !id) return null
   switch (type) {
     case 'PERSON':
-      return pathKeys.persons.detail(id)
+      return pathKeys.personsTimelineDetail(id)
     case 'EVENT':
       return pathKeys.events.detail(id)
     case 'COMPANY':

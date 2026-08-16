@@ -720,7 +720,7 @@ function PartyTopLeadersBlock({ partyId }: { partyId: string }) {
             <li key={t.id}>
               <PartyTopLeaderRow
                 type="button"
-                onClick={() => navigate(pathKeys.persons.detail(t.person.id))}
+                onClick={() => navigate(pathKeys.personsTimelineDetail(t.person.id))}
                 aria-label={`${getPersonDisplayName(t.person)} 인물 상세`}
               >
                 <PartyTopLeaderName>
@@ -930,7 +930,7 @@ function PartyMembershipsBlock({ partyId }: { partyId: string }) {
               if (row.leadershipTier && row.leadershipTier !== 'UNSPECIFIED')
                 roleParts.push(row.leadershipTier)
               const goto = () =>
-                navigate(pathKeys.persons.detail(person.id))
+                navigate(pathKeys.personsTimelineDetail(person.id))
               return (
                 <PartyRelationTr
                   key={row.id}
@@ -1906,7 +1906,7 @@ export function CountryPoliticalPartiesBlock({
   const navigate = useNavigate()
   const { handleProseClick } = useRichTextProseClick({
     navigate,
-    onPersonClick: (personId) => navigate(pathKeys.persons.detail(personId)),
+    onPersonClick: (personId) => navigate(pathKeys.personsTimelineDetail(personId)),
   })
   const queryClient = useQueryClient()
   const routeCountryId = countryId ?? historicalCountryId ?? ''

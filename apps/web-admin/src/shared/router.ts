@@ -1,3 +1,5 @@
+import type { NavigateFunction } from 'react-router-dom'
+
 import { ROUTES } from '@/shared/constants/routes'
 
 /**
@@ -95,6 +97,11 @@ export const pathKeys = {
   /** 인물 타임라인 — 인물 상세 (사이드바 유지) */
   personsTimelineDetail: (personId: string) =>
     `/${ROUTES.PERSONS_TIMELINE}/${encodeURIComponent(personId)}/`,
+  /** 인물 등록 — 풀 페이지 폼 (ContentLayout 셸 없음) */
+  personsTimelineCreate: () => `/${ROUTES.PERSONS_TIMELINE}/create/`,
+  /** 인물 수정 — 풀 페이지 폼 (ContentLayout 셸 없음) */
+  personsTimelineEdit: (personId: string) =>
+    `/${ROUTES.PERSONS_TIMELINE}/${encodeURIComponent(personId)}/edit/`,
   /**
    * 인물 타임라인 — 기록 비교 뷰 딥링크.
    * URL 계약: ?view=records&recordPersonIds=a,b,c(&fromYear=1501&toYear=1601)
@@ -167,14 +174,6 @@ export const pathKeys = {
     detail: (eventId: string) => `/${ROUTES.EVENTS}/${eventId}/`,
   },
 
-  // --- Persons Routes ---
-  persons: {
-    root: () => '/persons/',
-    create: () => '/persons/create/',
-    edit: (personId: string) => `/persons/${personId}/edit/`,
-    detail: (personId: string) => `/persons/${personId}/`,
-  },
-
   // --- Companies Routes ---
   companies: {
     root: () => '/companies/',
@@ -225,3 +224,15 @@ export const returnTo = (location: {
 }): { state: ReturnToState } => ({
   state: { from: `${location.pathname}${location.search ?? ''}` },
 })
+
+/**
+ * '뒤로'·'목록 보기'처럼 되돌아감을 약속하는 컨트롤의 공통 동작.
+ *
+ * 지면 하나로 고정 이동시키면 대시보드 밖(가계도·기업·국가 상세 등)에서 들어온 사용자의
+ * 진입 맥락이 사라지고 히스토리 항목만 하나 늘어난다. 반대로 `navigate(-1)`만 쓰면 새 탭
+ * 딥링크(돌아갈 항목 없음)에서 무동작이 된다 — 둘을 한 곳에서 갈라준다.
+ */
+export const goBackOr = (navigate: NavigateFunction, fallback: string) => {
+  if (window.history.length > 1) navigate(-1)
+  else navigate(fallback, { replace: true })
+}

@@ -378,7 +378,7 @@ export default function PersonGroupDetailPage() {
             {group.center && (
               <CenterBanner>
                 ★ 구심점:{' '}
-                <Link to={pathKeys.persons.detail(group.center.id)}>
+                <Link to={pathKeys.personsTimelineDetail(group.center.id)}>
                   {getPersonDisplayName(group.center, true)}
                 </Link>
               </CenterBanner>
@@ -439,7 +439,7 @@ export default function PersonGroupDetailPage() {
             const initial = [...displayName][0] ?? '?'
             return (
               <MemberCard key={m.membershipId}>
-                <MemberLink to={pathKeys.persons.detail(p.id)}>
+                <MemberLink to={pathKeys.personsTimelineDetail(p.id)}>
                   <Avatar $has={Boolean(src)}>
                     {src ? (
                       <img src={src} alt="" loading="lazy" />

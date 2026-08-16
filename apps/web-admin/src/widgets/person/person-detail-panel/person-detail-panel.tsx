@@ -358,9 +358,9 @@ export function PersonDetailPanel({
 
   /**
    * 현재 URL 안의 personId 세그먼트를 다른 id로 교체해 목적지 URL 계산.
-   * - 대시보드(/history/dashboard/persons/:id) / 단독(/persons/:id/) 등 어느 컨텍스트에서든
+   * - 대시보드(/persons-timeline/:id) 등 어느 컨텍스트에서든
    *   "사이드바·브레드크럼 그대로 유지하며 인물만 교체"되는 쪽으로 이동.
-   * - 현재 personId 세그먼트가 URL에 없으면 기본(/persons/:id/)로 폴백.
+   * - 현재 personId 세그먼트가 URL에 없으면 기본(/persons-timeline/:id/)로 폴백.
    */
   const buildDetailUrlFor = useCallback(
     (targetId: string) => {
@@ -371,7 +371,7 @@ export function PersonDetailPanel({
           location.search
         )
       }
-      return `/persons/${encodeURIComponent(targetId)}/`
+      return `/persons-timeline/${encodeURIComponent(targetId)}/`
     },
     [location.pathname, location.search, personId],
   )

@@ -112,13 +112,13 @@ export function MembersTimelineView({ persons }: Props) {
             return (
               <Row
                 key={p.id}
-                onClick={() => navigate(pathKeys.persons.detail(p.id))}
+                onClick={() => navigate(pathKeys.personsTimelineDetail(p.id))}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
-                    navigate(pathKeys.persons.detail(p.id))
+                    navigate(pathKeys.personsTimelineDetail(p.id))
                   }
                 }}
                 aria-label={`${displayName} ${ageInfo}`}

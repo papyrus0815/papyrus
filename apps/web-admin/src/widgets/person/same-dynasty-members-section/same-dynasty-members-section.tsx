@@ -144,7 +144,7 @@ export function SameDynastyMembersSection({
                 onClick={() => {
                   if (isCurrent) return
                   if (onPersonClick) onPersonClick(p.id)
-                  else window.open(`/persons/${p.id}/`, '_blank')
+                  else window.open(`/persons-timeline/${p.id}/`, '_blank')
                 }}
                 aria-current={isCurrent ? 'true' : undefined}
                 aria-label={

@@ -81,7 +81,7 @@ export function MembersGridView({ persons }: Props) {
           <Card
             key={p.id}
             type="button"
-            onClick={() => navigate(pathKeys.persons.detail(p.id))}
+            onClick={() => navigate(pathKeys.personsTimelineDetail(p.id))}
           >
             <Header>
               <YearLine>{formatLifespan(p)}</YearLine>

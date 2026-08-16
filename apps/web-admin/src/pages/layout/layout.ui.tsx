@@ -27,7 +27,7 @@ import Header from '@/widgets/header/header.ui'
 
 // Note: Simple layout only, wrapper removed per request
 
-import { CONTENT_AREA_PREFIXES } from '@/shared/constants/routes'
+import { isContentAreaPath } from '@/shared/constants/routes'
 
 import { type LayoutLoaderData } from './layout.loader'
 
@@ -48,9 +48,7 @@ export default function Layout() {
   const isAuthenticated = !!session || !!token
   const location = useLocation()
 
-  const isPanelsRoute = CONTENT_AREA_PREFIXES.some((p) =>
-    location.pathname.startsWith(p),
-  )
+  const isPanelsRoute = isContentAreaPath(location.pathname)
   const isDashboardRoute = location.pathname === '/'
 
   useCommandPaletteShortcut()

@@ -346,7 +346,7 @@ export function RecordsCompareView({ onPersonClick }: RecordsCompareViewProps) {
                       </EmptyColCaption>
                     )}
                     <AuthorLink
-                      to={`${pathKeys.persons.detail(column.person.id)}?tab=events`}
+                      to={`${pathKeys.personsTimelineDetail(column.person.id)}?tab=events`}
                     >
                       연보 저작하러 가기
                     </AuthorLink>

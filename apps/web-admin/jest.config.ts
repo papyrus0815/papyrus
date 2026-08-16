@@ -5,6 +5,8 @@ const config: Config = {
   preset: '../../jest.preset.js',
   coverageDirectory: '../../coverage/apps/web-admin',
   testEnvironment: 'jsdom',
+  // jsdom에 없는 TextEncoder/TextDecoder 폴리필 — react-router를 실제로 import하는 스펙용.
+  setupFiles: ['<rootDir>/jest.setup.ts'],
   transform: {
     '^.+\\.[tj]sx?$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
   },

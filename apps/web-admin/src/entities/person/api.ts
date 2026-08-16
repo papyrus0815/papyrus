@@ -119,11 +119,12 @@ export function usePersons() {
  * usePersons(전체 payload)와 별도 캐시. 키가 ['persons'] 프리픽스라
  * 인물 생성/수정/삭제의 personKeys.all 무효화로 함께 갱신된다.
  */
-export function usePersonsInfographic() {
+export function usePersonsInfographic(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: personKeys.infographic,
     queryFn: () => personsApi.getInfographicPersons(),
     staleTime: 60_000,
+    enabled: options?.enabled ?? true,
   })
 }
 

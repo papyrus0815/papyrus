@@ -103,7 +103,7 @@ function CompanyDetailContent({ companyId }: { companyId: string }) {
   }, [mutation.isSuccess, mutation.submittedAt])
 
   const onPersonClick = useCallback(
-    (personId: string) => navigate(pathKeys.persons.detail(personId)),
+    (personId: string) => navigate(pathKeys.personsTimelineDetail(personId)),
     [navigate],
   )
 

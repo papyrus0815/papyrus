@@ -91,7 +91,9 @@ export function PersonDetailModal({
   const topName = topPerson ? getPersonDisplayName(topPerson) : ''
 
   const navigate = useNavigate()
-  const targetUrl = topId ? `/persons/${encodeURIComponent(topId)}/` : '#'
+  const targetUrl = topId
+    ? `/persons-timeline/${encodeURIComponent(topId)}/`
+    : '#'
 
   // 모달 열림 동안 body 스크롤 락 + 패널 내 포커스 트랩
   const open = !!personId && !!topId

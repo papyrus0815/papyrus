@@ -55,3 +55,25 @@ export const CONTENT_AREA_PREFIXES = [
   `/${ROUTES.LEGISLATURE}`,
   `/${ROUTES.MILITARY}`,
 ] as const
+
+/**
+ * 콘텐츠 영역 프리픽스를 쓰지만 ContentLayout 셸(사이드바·3분할) 없이 자체 풀페이지를
+ * 그리는 예외 — 인물 등록/수정 폼. URL은 `/persons-timeline/*`이지만 화면은 단일 컬럼
+ * 폼이라, 프리픽스만 보고 콘텐츠 영역으로 판정하면 로딩 스켈레톤이 실제 화면과 어긋난다.
+ */
+const CONTENT_AREA_EXCEPTIONS = [
+  new RegExp(`^/${ROUTES.PERSONS_TIMELINE}/create/?$`),
+  new RegExp(`^/${ROUTES.PERSONS_TIMELINE}/[^/]+/edit/?$`),
+] as const
+
+/**
+ * 이 pathname이 ContentLayout 셸을 쓰는 콘텐츠 영역인지.
+ * 프리픽스 판정 + 위 예외를 한 곳에서 처리 — 호출부가 `.some(startsWith)`를 각자 펼치면
+ * 예외가 한쪽에만 반영되는 드리프트가 난다.
+ */
+export function isContentAreaPath(pathname: string): boolean {
+  if (CONTENT_AREA_EXCEPTIONS.some((pattern) => pattern.test(pathname))) {
+    return false
+  }
+  return CONTENT_AREA_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}

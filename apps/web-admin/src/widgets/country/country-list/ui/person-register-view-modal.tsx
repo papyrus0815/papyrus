@@ -20,9 +20,8 @@ export interface PersonRegisterViewModalProps {
   /**
    * 등록 완료 다이얼로그 "상세 보기"의 **이동 목적지**만 오버라이드.
    * 캐시 무효화·onSuccess·모달 닫기(정산)는 언제나 래퍼가 먼저 수행하므로 여기서는
-   * 이동만 하면 된다 — 지면 고유의 상세 경로가 있는 호출부용
-   * (예: persons-timeline은 셸을 유지하는 `/persons-timeline/:id`).
-   * 기본은 `/persons/:id`. `false`를 주면 "상세 보기" 액션 자체를 감춘다(2지 분기 유지).
+   * 이동만 하면 된다 — 지면 고유의 상세 경로가 있는 호출부용.
+   * 기본은 `/persons-timeline/:id`. `false`를 주면 "상세 보기" 액션 자체를 감춘다(2지 분기 유지).
    */
   onViewDetail?: ((personId: string) => void) | false
   /** 수정할 인물 ID (없으면 신규 등록) */
@@ -94,7 +93,7 @@ export function PersonRegisterViewModal({
     // 오버라이드는 목적지만 바꾼다 — 정산을 건너뛸 수 없는 구조로 두어
     // 호출부가 캐시 무효화·onSuccess·닫기를 빠뜨리는 사고를 원천 차단.
     if (typeof onViewDetail === 'function') onViewDetail(personId)
-    else navigate(pathKeys.persons.detail(personId))
+    else navigate(pathKeys.personsTimelineDetail(personId))
   }
 
   const isEdit = !!editPersonId

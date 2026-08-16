@@ -1,7 +1,7 @@
 /**
  * 인물 등록 / 수정 페이지
- * - /persons/create          → 신규 등록
- * - /persons/:personId/edit  → 기존 인물 수정
+ * - /persons-timeline/create              → 신규 등록
+ * - /persons-timeline/:personId/edit      → 기존 인물 수정
  *
  * 페이지 외곽(FormCardWrapper + 뒤로가기 + sticky 푸터)은 여기서 담당.
  * `PersonRegisterView`는 폼 본체만 그리고, 라벨·submitting 상태를 콜백으로 흘려보낸다.
@@ -20,7 +20,7 @@ import {
   AutoSaveStatus,
   StickyFooter,
 } from '@/shared/ui/person-register-modal/person-register-view.styles'
-import { pathKeys } from '@/shared/router'
+import { goBackOr, pathKeys } from '@/shared/router'
 import {
   BackButton,
   FormCardWrapper,
@@ -91,7 +91,8 @@ export default function PersonEditPage() {
     // 이미 확인받았으므로 dirty 해제 — blocker의 중복 confirm 방지.
     isDirtyRef.current = false
     setIsDirty(false)
-    navigate(-1)
+    // URL 직접 진입(돌아갈 항목 없음)에서 '목록 보기'가 무동작이 되지 않게 목록 폴백.
+    goBackOr(navigate, pathKeys.personsTimeline())
   }
 
   // 인물 캐시 무효화는 중앙 헬퍼 경유 — 사본 드리프트 방지(G3-1/G3-2, entities/person/api).
@@ -121,7 +122,9 @@ export default function PersonEditPage() {
   const handleSuccess = (savedId: string) => {
     settleAfterSave(savedId)
     navigate(
-      personId ? pathKeys.persons.detail(savedId) : pathKeys.persons.root(),
+      personId
+        ? pathKeys.personsTimelineDetail(savedId)
+        : pathKeys.personsTimeline(),
       { replace: true },
     )
   }
@@ -129,7 +132,7 @@ export default function PersonEditPage() {
   /** 등록 완료 다이얼로그의 '상세 보기' — 방금 등록한 인물 상세로. */
   const handleViewDetail = (savedId: string) => {
     settleAfterSave(savedId)
-    navigate(pathKeys.persons.detail(savedId), { replace: true })
+    navigate(pathKeys.personsTimelineDetail(savedId), { replace: true })
   }
 
   // 새로고침/탭 닫기 경고 — 앱 공통 패턴(event-create.page와 동일).

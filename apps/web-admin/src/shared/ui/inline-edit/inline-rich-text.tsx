@@ -97,7 +97,7 @@ export function InlineRichText({
   const handlePersonClick = useCallback(
     (personId: string) => {
       if (onPersonClick) onPersonClick(personId)
-      else navigate(pathKeys.persons.detail(personId))
+      else navigate(pathKeys.personsTimelineDetail(personId))
     },
     [onPersonClick, navigate],
   )

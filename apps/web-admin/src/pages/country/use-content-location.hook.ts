@@ -10,7 +10,7 @@ import { useMemo } from 'react'
 
 import { useLocation, useParams, useSearchParams } from 'react-router-dom'
 
-import { CONTENT_AREA_PREFIXES } from '@/shared/constants/routes'
+import { isContentAreaPath } from '@/shared/constants/routes'
 import type { DashboardContentView } from '@/widgets/content-shell/model/dashboard-menu-items'
 
 /** 현재 페이지의 최상위 모드 */
@@ -106,9 +106,7 @@ export function useContentLocation(): ContentLocation {
 
   return useMemo<ContentLocation>(() => {
     const pathname = location.pathname
-    const inContentArea = CONTENT_AREA_PREFIXES.some((p) =>
-      pathname.startsWith(p),
-    )
+    const inContentArea = isContentAreaPath(pathname)
 
     // /country/:id 상세
     if (params.countryId) {

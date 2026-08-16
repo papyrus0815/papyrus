@@ -24,8 +24,10 @@ export function LeftFilterSlot({
   collapsed = false,
   onToggleCollapse,
 }: LeftFilterSlotProps) {
-  // person view에서 count 표시 (PersonFilterPanel과 경량 인포그래픽 캐시 공유 — 추가 fetch 없음)
-  const { data: rawPersons } = usePersonsInfographic()
+  // person view에서 count 표시 (PersonFilterPanel과 경량 인포그래픽 캐시 공유 — 추가 fetch 없음).
+  // 접힘 상태에서는 count를 그리지 않으므로 쿼리도 끈다 — 인물 상세 딥링크(/persons-timeline/:id)는
+  // 좌측 패널이 기본 접힘이라, 이 게이트가 없으면 인물 한 명 보려고 전량 목록을 받게 된다.
+  const { data: rawPersons } = usePersonsInfographic({ enabled: !collapsed })
   const personCount = rawPersons?.length ?? 0
 
   if (collapsed) {

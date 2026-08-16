@@ -476,7 +476,7 @@ function PersonNodeInner({ data }: NodeProps) {
       ? `${fmtYear(person.birthYear, person.birthEra) ?? '?'}–${fmtYear(person.deathYear, person.deathEra) ?? ''}`
       : null
   const isDeceased = person.deathYear != null
-  // 비소유 노드(다른 계정 등록)는 상세(/persons/:id)가 계정 스코프라 404 → 클릭 비활성 + dim
+  // 비소유 노드(다른 계정 등록)는 상세(/persons-timeline/:id)가 계정 스코프라 404 → 클릭 비활성 + dim
   const openable = person.isOwned !== false
   const handleClick = (ev: React.MouseEvent) => {
     if (!person.id || !openable) return
@@ -484,7 +484,7 @@ function PersonNodeInner({ data }: NodeProps) {
       // Shift+클릭: 가계도 중심을 이 인물로 변경 (C2)
       navigate(`/genealogy/${person.id}/`)
     } else {
-      navigate(`/persons/${person.id}/`)
+      navigate(`/persons-timeline/${person.id}/`)
     }
   }
 

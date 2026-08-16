@@ -1,9 +1,10 @@
 /**
- * /history/dashboard/persons
- * /history/dashboard/persons/:personId
+ * /persons-timeline
+ * /persons-timeline/:personId
  *
  * 인물 대시보드 — 인포그래픽 6뷰 (매트릭스/은하계/시대 스토리/왕조/능력치/기록 비교) + 필터.
  * 인물 상세는 같은 페이지에서 PersonDetailPanel로 우측 렌더.
+ * (구 단독 상세 `/persons/:id`는 이 지면으로 통합 — app/legacy-redirects.tsx가 흡수)
  *
  * URL 쿼리(useFilterUrlSync 가 store와 양방향 동기화):
  *   view, q, era, region, field, countries, alive, minInf, sort, order
@@ -19,7 +20,7 @@ import { FiFilter } from 'react-icons/fi'
 import { useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { pathKeys } from '@/shared/router'
+import { goBackOr, pathKeys } from '@/shared/router'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 import {
   ContentShell,
@@ -48,7 +49,7 @@ function findScrollParent(el: HTMLElement | null): HTMLElement | null {
   return null
 }
 
-export default function DashboardPersonsPage() {
+export default function PersonsTimelinePage() {
   const navigate = useNavigate()
   const params = useParams<{ personId?: string }>()
   const personId = params.personId ?? null
@@ -143,7 +144,10 @@ export default function DashboardPersonsPage() {
                 key={personId}
                 personId={personId}
                 syncDocumentTitle
-                onClose={() => navigate(pathKeys.personsTimeline())}
+                // 라벨이 '뒤로'인 컨트롤 — 실제로 뒤로 가야 한다. 이 지면이 유일한 인물
+                // 상세가 되면서 가계도·기업·국가 상세 등 대시보드 밖 진입이 전부 여기로
+                // 들어온다. 목록으로 고정 이동시키면 그 맥락이 사라진다.
+                onClose={() => goBackOr(navigate, pathKeys.personsTimeline())}
                 onEdit={(id) => {
                   setEditingPersonId(id)
                   setEditModalOpen(true)

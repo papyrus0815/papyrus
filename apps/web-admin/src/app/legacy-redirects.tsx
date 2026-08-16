@@ -1,4 +1,9 @@
-import { redirect, type LoaderFunctionArgs, type RouteObject } from 'react-router-dom'
+import {
+  redirect,
+  replace,
+  type LoaderFunctionArgs,
+  type RouteObject,
+} from 'react-router-dom'
 
 import { pathKeys } from '@/shared/router'
 
@@ -51,4 +56,36 @@ export const legacyHistoryRedirectRoute: RouteObject = {
 export const legacyDynastyRedirectRoutes: RouteObject[] = [
   { path: 'dynasties', loader: () => redirect('/dynasty') },
   { path: 'dynasties/:dynastyId', loader: () => redirect('/dynasty') },
+]
+
+/** `/persons/:personId` → `/persons-timeline/:personId/` (query 보존 — `?tab=` 딥링크) */
+const personsDetailRedirect = ({ params, request }: LoaderFunctionArgs) => {
+  const search = new URL(request.url).search
+  return replace(
+    `${pathKeys.personsTimelineDetail(params.personId ?? '')}${search}`,
+  )
+}
+
+/**
+ * 구 `/persons/*` 단독 라우트 흡수 — 인물 지면을 `/persons-timeline`으로 통합하면서
+ * 북마크·외부 링크가 404가 되지 않도록 redirect만 남긴다.
+ *
+ * `redirect()`가 아니라 `replace()`인 이유: `redirect()`는 히스토리 PUSH라 구 URL이
+ * 스택에 살아남는다. 뒤로가기를 누르면 그 항목의 loader가 다시 돌아 앞으로 밀어내므로
+ * 참조 페이지로 영영 못 돌아간다(react-router 7 기준). `replace()`는 구 항목을 덮어써
+ * 뒤로가기가 원래 출발지로 간다. `/persons/:id`·`create`·`:id/edit`는 이번 통합 전까지
+ * 실제 페이지였으므로, PUSH로 두면 있던 뒤로가기를 망가뜨리는 회귀가 된다.
+ */
+export const legacyPersonsRedirectRoutes: RouteObject[] = [
+  { path: 'persons', loader: () => replace(pathKeys.personsTimeline()) },
+  {
+    path: 'persons/create',
+    loader: () => replace(pathKeys.personsTimelineCreate()),
+  },
+  { path: 'persons/:personId', loader: personsDetailRedirect },
+  {
+    path: 'persons/:personId/edit',
+    loader: ({ params }: LoaderFunctionArgs) =>
+      replace(pathKeys.personsTimelineEdit(params.personId ?? '')),
+  },
 ]

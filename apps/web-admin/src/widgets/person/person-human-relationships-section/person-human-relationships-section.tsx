@@ -81,7 +81,7 @@ type Props = {
    * 인물명 링크 클릭 시 호출. 지정되면 일반 좌클릭을 가로채 부모(상세 패널)가
    * 컨텍스트(좌측 필터·목록)를 유지한 채 인물을 전환하게 한다.
    * (가족트리·계보 등 다른 인물 클릭과 동일한 동작.)
-   * 미지정 시 기존처럼 `/persons/:id` 단독 페이지로 이동.
+   * 미지정 시 기존처럼 `/persons-timeline/:id` 페이지로 이동.
    */
   onPersonClick?: (personId: string) => void
 }
@@ -792,7 +792,7 @@ export function PersonHumanRelationshipsSection({
               )}
             </RelAvatar>
             <RelNameLink
-              to={`/persons/${rel.otherPerson.id}`}
+              to={`/persons-timeline/${rel.otherPerson.id}`}
               onClick={(e) => handlePersonLinkClick(e, rel.otherPerson.id)}
               title="해당 인물 보기"
             >
@@ -901,7 +901,7 @@ export function PersonHumanRelationshipsSection({
             {(rel.sources ?? []).map((s) => (
               <SourceChipLink
                 key={s.id}
-                to={`/persons/${s.lifeEvent.personId}`}
+                to={`/persons-timeline/${s.lifeEvent.personId}`}
                 onClick={(e) => handlePersonLinkClick(e, s.lifeEvent.personId)}
                 title={`${s.lifeEvent.title} — ${formatDateDisplay(s.lifeEvent.startDate ?? '')}`}
               >
@@ -2388,7 +2388,7 @@ function LineageNode({
     >
       <LineageNodeBullet $tone={tone}>·</LineageNodeBullet>
       <LineageNodeLink
-        to={`/persons/${person.id}`}
+        to={`/persons-timeline/${person.id}`}
         onClick={(e) => {
           // onPersonClick이 있으면 일반 좌클릭을 가로채 컨텍스트(필터·패널) 유지.
           // ⌘/Ctrl/Shift+클릭·중클릭은 그대로 둬서 새 탭 열기는 유지.

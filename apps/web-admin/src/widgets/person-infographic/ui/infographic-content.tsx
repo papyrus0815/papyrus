@@ -316,9 +316,9 @@ export function InfographicContent({
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
         onSuccess={() => setFormOpen(false)}
-        // 등록 후 '상세 보기'는 이 지면의 정본 경로(onPersonClick = /persons-timeline/:id)로.
-        // 기본값 /persons/:id는 ContentShell 밖이라 좌측 필터 레일·뷰 탭이 통째로 사라진다
-        // — 같은 화면의 인물 카드 클릭과 결과가 달라지는 것을 막는다.
+        // 등록 후 '상세 보기'는 이 지면의 정본 경로(onPersonClick)로 — 같은 화면의 인물
+        // 카드 클릭과 목적지·전환 방식을 한 곳에서 관리한다. 모달 기본값도 지금은 같은
+        // /persons-timeline/:id지만, 이 지면의 이동은 이 prop 하나만 보면 되도록 명시.
         onViewDetail={onPersonClick}
       />
     </motion.div>

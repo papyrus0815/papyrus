@@ -22,7 +22,10 @@ import { eventPageRoute } from '@/pages/events/event-route'
 import { countryRoute } from '@/pages/country/country.route'
 import { continentsRoute } from '@/pages/continents/continents.route'
 import { headsOfStateRoute } from '@/pages/heads-of-state/heads-of-state.route'
-import { personsTimelineRoutes } from '@/pages/persons-timeline/persons-timeline.route'
+import {
+  personFormRoutes,
+  personsTimelineRoutes,
+} from '@/pages/persons-timeline/persons-timeline.route'
 import { timelineViewsRoutes } from '@/pages/timeline-views/timeline-views.route'
 import ContentLayout from '@/widgets/content-layout/content-layout.ui'
 import { layoutLoader } from '@/pages/layout/layout.loader'
@@ -33,7 +36,6 @@ import { walletRoute } from '@/pages/wallet/wallet.route'
 import { collectionRoute } from '@/pages/collection/collection.route'
 import { profileRoute } from '@/pages/profile/profile.route'
 import { publicProfileRoute } from '@/pages/public-profile/public-profile.route'
-import { personsRoute } from '@/pages/persons/person.route'
 import { loginPageRoute } from '@/pages/login/login-page.route'
 import { page404Route } from '@/pages/page-404/page-404.route'
 // history, panels 제거됨 (연관 위젯 파일 정리)
@@ -42,6 +44,7 @@ import { pathKeys } from '@/shared/router'
 import {
   legacyHistoryRedirectRoute,
   legacyDynastyRedirectRoutes,
+  legacyPersonsRedirectRoutes,
 } from './legacy-redirects'
 
 /**
@@ -167,8 +170,8 @@ const appRouterConfig = [
           dashboardRoute,
           // 이벤트 페이지 라우트
           eventPageRoute,
-          // 인물 상세/등록/수정 라우트
-          personsRoute,
+          // 인물 등록/수정 풀 페이지 폼 — /persons-timeline/* URL이지만 ContentLayout 셸 없음
+          ...personFormRoutes,
           // 가문 — 풀 페이지
           dynastyRoute,
           // 게이미피케이션 리더보드
@@ -205,6 +208,7 @@ const appRouterConfig = [
           // 레거시 redirect (북마크 흡수용 — 별도 파일에서 관리)
           legacyHistoryRedirectRoute,
           ...legacyDynastyRedirectRoutes,
+          ...legacyPersonsRedirectRoutes,
         ],
       },
       {

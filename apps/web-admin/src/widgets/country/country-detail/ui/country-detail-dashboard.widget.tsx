@@ -136,7 +136,7 @@ export function CountryDetailDashboard({
         <CurrentHeadsPanel
           isLoading={stats.loading.tenures}
           heads={stats.currentHeads}
-          onSelect={(personId) => navigate(pathKeys.persons.detail(personId))}
+          onSelect={(personId) => navigate(pathKeys.personsTimelineDetail(personId))}
           onRegister={goGovernment}
         />
       </S.TwoColRow>
@@ -338,7 +338,7 @@ export function CountryDetailDashboard({
             items={stats.recentActivity}
             isLoading={stats.loading.activity}
             onPersonClick={(personId) =>
-              navigate(pathKeys.persons.detail(personId))
+              navigate(pathKeys.personsTimelineDetail(personId))
             }
             onEventClick={goEvents}
           />
