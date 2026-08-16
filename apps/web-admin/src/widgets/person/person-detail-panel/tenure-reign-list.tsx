@@ -5,17 +5,24 @@
  * 이 컴포넌트는 표시와 편집/업적 콜백 위임만 담당.
  *
  * 행 위계(플랫 리스트): 킥커(액센트 글리프 디스크·kind·서수·연임) → 제목 →
- * interpunct 팩트라인(국가·왕조·기간·나이) → 정의 그리드(즉위·경위·퇴위·비고).
+ * interpunct 팩트라인(기간(승격)·길이·국가·왕조·나이) →
+ * 정의 그리드(경위 → 퇴위 → 비고 → 즉위(방식) → 즉위식).
+ *
+ * 그리드 순서 규약: 위 3행은 **서사**(평균 175자), 아래 2행은 **2~6자 분류 토큰**이다.
+ * 토큰(취임 방식은 88%가 '임명' 상수)이 격자 첫 줄을 차지하면 읽을거리가 뒤로 밀린다.
  * 항목별 카드 박스는 없다 — 형제는 실선 헤어라인, 내부 소섹션은 점선 seam으로 구분.
  */
 import { FiAward, FiBriefcase, FiEdit2, FiShield } from 'react-icons/fi'
 
 import { getRecordFamily } from '@/entities/government-position/model/record-family'
+import { VisuallyHidden } from '@/shared/ui/visually-hidden'
 
 import {
   APPOINTMENT_METHOD_LABELS,
-  TENURE_END_REASON_LABELS,
+  type TenureFamily,
+  deriveTenureDurationLabel,
   deriveTenurePeriodLabel,
+  endReasonLabelFor,
   getAgeAtDate,
 } from './helpers'
 import {
@@ -26,10 +33,12 @@ import {
   UnifiedCardTitle,
   UnifiedDetailGrid,
   UnifiedDetailLabel,
+  UnifiedDetailTag,
   UnifiedDetailValue,
   UnifiedEditBtn,
   UnifiedEyebrow,
   UnifiedFact,
+  UnifiedFactKey,
   UnifiedFactLine,
   UnifiedReappointBadge,
 } from './person-detail-panel.styles'
@@ -98,7 +107,9 @@ export function TenureReignList({
   }
 
   return (
-    <UnifiedCardList>
+    /* role은 중복이 아니다 — list-style:none + display:flex 조합에서 WebKit/VoiceOver가
+       ol의 목록 역할을 지운다(스타일이 시맨틱을 먹는 알려진 케이스). */
+    <UnifiedCardList role="list">
       {items.map(({ kind, data: record, ordinalNum, isReappointment }) => {
         const isReign = kind === 'reign'
         const posTitle = record.positionDefinition?.title ?? record.title ?? '직책'
@@ -118,6 +129,11 @@ export function TenureReignList({
           }) === 'NOBLE_TITLE'
         const startVerb = isReign ? '즉위' : isNobleTitle ? '승계' : '취임'
         const endVerb = isReign ? '퇴위' : isNobleTitle ? '상실' : '퇴임'
+        const family: TenureFamily = isReign
+          ? 'reign'
+          : isNobleTitle
+            ? 'noble'
+            : 'office'
         const countryName =
           record.historicalCountry?.name ?? record.country?.name ?? null
         // 종료일·정밀도·재직중사망·미상/현재 폴백은 연보 타임라인과 공용 파생(단일 출처)으로.
@@ -135,6 +151,22 @@ export function TenureReignList({
         // 진행 중(표시 전용 파생) — rangeLabel의 '– 현재'와 같은 조건. 기간 팩트를 액센트로.
         const isOngoing =
           !!record.startDate && !record.endDate && !record.endReason && !isDeceased
+        // 기간 옆 길이("약 3년") — 원천 ISO에서만 파생한다(rangeLabel 파싱 금지 규약)
+        const durationLabel = deriveTenureDurationLabel(
+          record.startDate,
+          record.endDate,
+          record.startDatePrecision,
+        )
+        /**
+         * 'OTHER(기타)'는 사유가 아니라 **결측 마커**다. 부연이 있으면 토큰을 렌더하지
+         * 않는다 — "기타 — 1888년 1월 임기 만료로 귀국했다"는 진짜 사유를 가릴 뿐 아니라
+         * 틀려 보이기까지 한다(실DB 재임 55/127행이 OTHER+부연).
+         */
+        const endEnumLabel =
+          record.endReason &&
+          !(record.endReason === 'OTHER' && record.endReasonDetail)
+            ? endReasonLabelFor(record.endReason, family)
+            : null
         // 즉위식·취임식 사건 링크 — 소프트삭제된 사건은 배지 숨김
         const accessionEvent =
           record.accessionEvent && !record.accessionEvent.deletedAt
@@ -165,10 +197,11 @@ export function TenureReignList({
           !!countryName ||
           (isReign && record.dynastyOrdinal != null) ||
           !!rangeLabel ||
+          !!durationLabel ||
           ageAtStart != null ||
           ageAtEnd != null
         return (
-          <UnifiedCard key={`${kind}-${record.id}`} $kind={kind}>
+          <UnifiedCard key={`${kind}-${record.id}`} $kind={kind} role="listitem">
             <UnifiedCardMain>
               <UnifiedEyebrow>
                 {isReign ? (
@@ -197,15 +230,35 @@ export function TenureReignList({
               <UnifiedCardTitle>{mainTitle}</UnifiedCardTitle>
               {hasFacts && (
                 <UnifiedFactLine>
-                  {countryName && <UnifiedFact>{countryName}</UnifiedFact>}
+                  {/* 기간이 선두 — 이 리스트에서 가장 먼저 찾는 값이다.
+                      rangeLabel은 완성 문자열이라 컨테이너만 바꾸고 문자열은 손대지 않는다.
+                      마이크로 라벨은 자식 <span>이라 팩트의 직계 텍스트에 섞이지 않는다. */}
+                  {rangeLabel && (
+                    <UnifiedFact $period data-period $accent={isOngoing}>
+                      <UnifiedFactKey>기간</UnifiedFactKey>
+                      {rangeLabel}
+                    </UnifiedFact>
+                  )}
+                  {/* 낭독 시 값만 나열되면 무슨 값인지 알 수 없다 — 접두는 자식이라
+                      화면에도, 기존 텍스트 단언에도 영향이 없다. 나이 팩트는 자기서술적이라 제외. */}
+                  {durationLabel && (
+                    <UnifiedFact>
+                      <VisuallyHidden>기간 길이 </VisuallyHidden>
+                      {durationLabel}
+                    </UnifiedFact>
+                  )}
+                  {countryName && (
+                    <UnifiedFact>
+                      <VisuallyHidden>국가 </VisuallyHidden>
+                      {countryName}
+                    </UnifiedFact>
+                  )}
                   {isReign && record.dynastyOrdinal != null && (
                     <UnifiedFact>
+                      <VisuallyHidden>왕조 서수 </VisuallyHidden>
                       {dynastyName ? `${dynastyName} ` : '왕조 '}
                       {record.dynastyOrdinal}대
                     </UnifiedFact>
-                  )}
-                  {rangeLabel && (
-                    <UnifiedFact $accent={isOngoing}>{rangeLabel}</UnifiedFact>
                   )}
                   {ageAtStart != null && (
                     <UnifiedFact>
@@ -222,14 +275,48 @@ export function TenureReignList({
               {(record.appointmentMethod ||
                 record.appointmentDetail ||
                 accessionEvent ||
-                record.endReason ||
+                endEnumLabel ||
                 record.endReasonDetail ||
                 record.notes) && (
                 <UnifiedDetailGrid>
+                  {/* ── 서사 3행: 읽을거리를 격자 위쪽에 둔다 ── */}
+                  {/* 즉위/취임 경위 서사 — 여러 문장일 수 있어 개행 보존($prewrap) */}
+                  {record.appointmentDetail && (
+                    <>
+                      <UnifiedDetailLabel>경위</UnifiedDetailLabel>
+                      <UnifiedDetailValue $prewrap>
+                        {record.appointmentDetail}
+                      </UnifiedDetailValue>
+                    </>
+                  )}
+                  {/* 분류(사임/사퇴)와 서사는 성격이 달라 한 문자열로 잇지 않는다 —
+                      ' — '로 이으면 낭독도 한 덩어리가 되고 서사 첫 줄이 분류에 밀린다. */}
+                  {(endEnumLabel || record.endReasonDetail) && (
+                    <>
+                      <UnifiedDetailLabel>{endVerb}</UnifiedDetailLabel>
+                      {endEnumLabel && (
+                        <UnifiedDetailTag>{endEnumLabel}</UnifiedDetailTag>
+                      )}
+                      {record.endReasonDetail && (
+                        <UnifiedDetailValue $prewrap $tight={!!endEnumLabel}>
+                          {record.endReasonDetail}
+                        </UnifiedDetailValue>
+                      )}
+                    </>
+                  )}
+                  {record.notes && (
+                    <>
+                      <UnifiedDetailLabel>비고</UnifiedDetailLabel>
+                      <UnifiedDetailValue $prewrap $muted>
+                        {record.notes}
+                      </UnifiedDetailValue>
+                    </>
+                  )}
+                  {/* ── 분류 토큰 2행: 2~6자짜리라 서사에 격자를 먼저 내준다 ── */}
                   {record.appointmentMethod && (
                     <>
                       <UnifiedDetailLabel>{startVerb}</UnifiedDetailLabel>
-                      <UnifiedDetailValue>
+                      <UnifiedDetailValue $token>
                         {APPOINTMENT_METHOD_LABELS[record.appointmentMethod] ??
                           record.appointmentMethod}
                       </UnifiedDetailValue>
@@ -240,41 +327,8 @@ export function TenureReignList({
                       <UnifiedDetailLabel>
                         {isReign ? '즉위식' : isNobleTitle ? '서임식' : '취임식'}
                       </UnifiedDetailLabel>
-                      <UnifiedDetailValue>
+                      <UnifiedDetailValue $token>
                         {accessionEvent.title ?? '(제목 없음)'}
-                      </UnifiedDetailValue>
-                    </>
-                  )}
-                  {/* 즉위/취임 경위 서사 — 여러 문장일 수 있어 개행 보존($prewrap) */}
-                  {record.appointmentDetail && (
-                    <>
-                      <UnifiedDetailLabel>경위</UnifiedDetailLabel>
-                      <UnifiedDetailValue $prewrap>
-                        {record.appointmentDetail}
-                      </UnifiedDetailValue>
-                    </>
-                  )}
-                  {(record.endReason || record.endReasonDetail) && (
-                    <>
-                      <UnifiedDetailLabel>{endVerb}</UnifiedDetailLabel>
-                      <UnifiedDetailValue>
-                        {[
-                          record.endReason
-                            ? TENURE_END_REASON_LABELS[record.endReason] ??
-                              record.endReason
-                            : null,
-                          record.endReasonDetail,
-                        ]
-                          .filter(Boolean)
-                          .join(' — ')}
-                      </UnifiedDetailValue>
-                    </>
-                  )}
-                  {record.notes && (
-                    <>
-                      <UnifiedDetailLabel>비고</UnifiedDetailLabel>
-                      <UnifiedDetailValue $prewrap>
-                        {record.notes}
                       </UnifiedDetailValue>
                     </>
                   )}
@@ -317,7 +371,8 @@ export function TenureReignList({
             {!embedInModal && (
               <UnifiedEditBtn
                 type="button"
-                aria-label="수정"
+                /* 15행이 전부 '수정'이면 버튼 목록에서 어느 행인지 구분이 안 된다 */
+                aria-label={`${mainTitle} 수정`}
                 onClick={() => {
                   onPlayClick()
                   if (isReign) onEditReign(record.id)

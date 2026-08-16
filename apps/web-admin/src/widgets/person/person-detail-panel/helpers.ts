@@ -117,10 +117,71 @@ export const DEATH_TYPE_LABELS: Record<string, string> = {
 }
 
 // 취임/즉위 방식·종료 사유 라벨은 등록 폼과 공유 (단일 출처)
-export {
+import {
   APPOINTMENT_METHOD_LABELS,
   TENURE_END_REASON_LABELS,
 } from '@/shared/lib/tenure-labels'
+
+export { APPOINTMENT_METHOD_LABELS, TENURE_END_REASON_LABELS }
+
+/** 기록 종류 — 종료 사유 라벨의 목소리를 가른다 (재위/작위/공직) */
+export type TenureFamily = 'reign' | 'noble' | 'office'
+
+/**
+ * 종료 사유 enum 라벨의 종류별 변형 — **표시층 전용**.
+ *
+ * 공유 맵 TENURE_END_REASON_LABELS는 재임(공직) 목소리로 쓰여 있어, 재위 행이
+ * "퇴위 / 재임 중 사망"이라는 어긋난 조합으로 나온다(실DB sovereign_reign 다수).
+ * dt(즉위/퇴위)만 종류별로 갈리고 값은 안 갈리던 비대칭을 여기서 메운다.
+ *
+ * ⚠️ 스키마·enum 값·등록 폼(TENURE_END_REASON_OPTIONS)은 무변경 — 상세는 '재위 중 사망',
+ *    수정 모달 셀렉트는 '재임 중 사망'으로 보이는 비대칭이 의도된 것임을 여기 남긴다.
+ */
+const END_REASON_KIND_OVERRIDE: Record<
+  'reign' | 'noble',
+  Record<string, string>
+> = {
+  reign: { DEATH_IN_OFFICE: '재위 중 사망' },
+  noble: { DEATH_IN_OFFICE: '보유 중 사망', REMOVAL: '작위 박탈' },
+}
+
+export function endReasonLabelFor(reason: string, family: TenureFamily): string {
+  if (family !== 'office') {
+    const override = END_REASON_KIND_OVERRIDE[family][reason]
+    if (override) return override
+  }
+  return TENURE_END_REASON_LABELS[reason] ?? reason
+}
+
+/**
+ * 재임·재위 '길이' 파생 — 기간 옆에 "약 3년" 식으로 붙는다.
+ * 비고에 손으로 다시 쓰던 '약 N년 재임'의 존재 이유를 없애는 것이 목적.
+ *
+ * ⚠️ 시그니처 규약: 완성된 한국어 문자열(rangeLabel·endLabel·deathDateStr)을 **받지 않는다**.
+ *    표시 문자열 파싱 금지를 주석이 아니라 타입으로 강제한다 — 앞으로의 기간 파생도 이 규약을 따를 것.
+ * ⚠️ fail-quiet: 재임 테이블에는 구조화 연도 컬럼이 없고 DATETIME뿐이며, mariadb가
+ *    연도<100 DATETIME을 손상시킨 이력이 있다 → 양 끝점이 AD 1000+ 일 때만 표시한다.
+ *    (근사가 틀리게 보이느니 안 보이는 편이 낫다)
+ */
+export function deriveTenureDurationLabel(
+  startDate?: string | null,
+  endDate?: string | null,
+  startDatePrecision?: string | null,
+): string | null {
+  const start = parseIsoDateParts(startDate)
+  const end = parseIsoDateParts(endDate)
+  if (!start || !end) return null
+  if (start.era !== 'AD' || end.era !== 'AD') return null
+  if (start.year < 1000 || end.year < 1000) return null
+  const months = end.year * 12 + end.month - (start.year * 12 + start.month)
+  // 0개월(같은 달) · 100년 초과(데이터 오류)는 표시하지 않는다
+  if (months < 1 || months > 1200) return null
+  const years = Math.floor(months / 12)
+  const restMonths = months % 12
+  if (years < 1) return `약 ${restMonths}개월`
+  if (startDatePrecision === 'year' || restMonths === 0) return `약 ${years}년`
+  return `약 ${years}년 ${restMonths}개월`
+}
 
 /**
  * era 플래그(BC/AD) + 크기 연도 → 천문 연도(부호). BC N년 = 1−N

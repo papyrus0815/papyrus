@@ -13,6 +13,8 @@ import {
   getInfluenceTierGradient,
 } from '@/shared/lib/influence-tier'
 
+import { subSectionSeam } from './sub-section-seam'
+
 export const BioMentionModalOverlay = styled(motion.div)`
   position: fixed;
   inset: 0;
@@ -1091,6 +1093,10 @@ export const UnifiedActionRow = styled.div`
 // ─── 재임·재위 통합 리스트 (플랫 에디토리얼 행) ─────────────────
 // 카드 박스를 없앤 단일 서피스 리스트 — 항목은 '행', 형제 사이는 실선 헤어라인,
 // 항목 내부 소섹션(승계·행정부·업적)은 점선 seam. 컨테이너 중첩이 구조적으로 불가.
+//
+// 조판 규약(2026-08-12 가독성 개편): 크기는 11 / 13 / 15 / 17 **4단만** 쓴다.
+// 0.5px 단차(10.5·11.5·12.5)는 실질 1단으로 뭉개져 위계를 못 만든다는 실측 근거로 폐기.
+// 서사 값(경위·퇴임 부연·비고)은 max-width 68ch — 같은 패널 BioText·DeathNoteText 선례.
 export const UnifiedCardList = styled.ol`
   list-style: none;
   margin: 0;
@@ -1111,9 +1117,9 @@ export const unifiedKindColor = {
     // hover/focus 라운드 워시(--entry-wash) — 지속 서피스 아님(트랜지언트 하이라이트)
     wash: 'rgba(99,102,241,0.05)',
     washDark: 'rgba(129,140,248,0.08)',
-    // focus-within 링(--entry-ring)
-    ring: 'rgba(99,102,241,0.14)',
-    ringDark: 'rgba(129,140,248,0.2)',
+    // focus-within 링(--entry-ring) — 0.14 알파는 1.1:1로 사실상 안 보였다(WCAG 1.4.11 3:1 요구)
+    ring: 'rgba(67,56,202,0.75)',
+    ringDark: 'rgba(129,140,248,0.75)',
   },
   reign: {
     softBg: 'rgba(20,184,166,0.1)',
@@ -1122,8 +1128,8 @@ export const unifiedKindColor = {
     textDark: '#5eead4',
     wash: 'rgba(20,184,166,0.05)',
     washDark: 'rgba(45,212,191,0.08)',
-    ring: 'rgba(20,184,166,0.14)',
-    ringDark: 'rgba(45,212,191,0.2)',
+    ring: 'rgba(15,118,110,0.85)',
+    ringDark: 'rgba(45,212,191,0.6)',
   },
 } as const
 
@@ -1149,15 +1155,16 @@ export const UnifiedCard = styled.li<{ $kind: 'tenure' | 'reign' }>`
 
   position: relative;
   display: block;
-  padding: 15px 12px;
+  padding: 16px 12px;
 
-  /* 형제 행 사이 헤어라인 — 카드 박스 대신 리스트 구분선. 첫 행은 무선. */
+  /* 형제 행 사이 헤어라인 — 카드 박스 대신 리스트 구분선. 첫 행은 무선.
+     15행 리스트에서 유일한 랜드마크라 내부 점선 seam(0.09/0.08)보다 진해야 한다. */
   & + & {
     border-top: 1px solid
       ${({ theme }) =>
         theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.06)'
-          : 'rgba(15,23,42,0.07)'};
+          ? 'rgba(255,255,255,0.09)'
+          : 'rgba(15,23,42,0.12)'};
   }
 
   /* 행 하이라이트 — 지속 서피스가 아니라 hover/focus 시에만 뜨는 라운드 워시.
@@ -1179,7 +1186,7 @@ export const UnifiedCard = styled.li<{ $kind: 'tenure' | 'reign' }>`
   }
   &:focus-within::before {
     opacity: 1;
-    box-shadow: 0 0 0 1.5px var(--entry-ring);
+    box-shadow: 0 0 0 2px var(--entry-ring);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -1188,7 +1195,7 @@ export const UnifiedCard = styled.li<{ $kind: 'tenure' | 'reign' }>`
     }
   }
   @media (max-width: 560px) {
-    padding: 13px 8px;
+    padding: 14px 8px;
   }
 `
 
@@ -1210,8 +1217,8 @@ export const UnifiedEyebrow = styled.div`
   align-items: center;
   gap: 6px;
   padding-right: 32px; /* absolute 수정 버튼 자리 */
-  margin-bottom: 5px;
-  font-size: 10.5px;
+  margin-bottom: 4px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.07em;
   font-variant-numeric: tabular-nums;
@@ -1226,96 +1233,186 @@ export const UnifiedEyebrow = styled.div`
   }
 `
 
-export const UnifiedCardTitle = styled.div`
-  font-size: 16px;
+/** 행 제목 — 섹션 헤딩(h3) 아래의 h4. 15행 리스트에서 헤딩 점프의 유일한 정박점이다. */
+export const UnifiedCardTitle = styled.h4`
+  margin: 0;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.02em;
-  line-height: 1.35;
+  line-height: 1.3;
   text-wrap: balance;
   color: ${({ theme }) =>
     theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
   min-width: 0;
-  word-break: break-word;
+  /* 한글은 어절 단위로 끊어야 읽힌다 — break-word는 '책임 장/교'처럼 낱말을 쪼갠다 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
   @media (max-width: 560px) {
-    font-size: 15px;
+    font-size: 16px;
   }
 `
 
-/** 팩트라인 — 국가·왕조·기간·나이를 칩 없이 interpunct(·)로 잇는 조용한 한 줄 */
-export const UnifiedFactLine = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  row-gap: 2px;
-  margin-top: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.5;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-/** $accent — 진행 중(– 현재) 기간처럼 조용히 강조할 팩트.
-    구분점(·)은 CSS로 자동 — 항목이 조건부로 빠져도 고아 점이 안 생긴다. */
-export const UnifiedFact = styled.span<{ $accent?: boolean }>`
+/** $period — 기간. 이 리스트에서 가장 먼저 찾는 값이라 팩트라인 선두에서 한 단계 크게.
+    $accent — 진행 중(– 현재)일 때 kind 액센트로 점등($period 뒤에 와야 색을 덮는다).
+    ⚠️ 형제 구분점(·)은 여기가 아니라 부모(UnifiedFactLine)에 있다 — 아래 주석 참조. */
+export const UnifiedFact = styled.span<{ $accent?: boolean; $period?: boolean }>`
   white-space: nowrap;
+  ${({ $period, theme }) =>
+    $period &&
+    css`
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.45;
+      /* 기간만 리플로우 허용 — '기원전 …' 접두가 붙으면 좁은 폭에서 넘친다 */
+      white-space: normal;
+      word-break: keep-all;
+      color: ${theme.colors.text.primary};
+    `}
   ${({ $accent }) =>
     $accent &&
     css`
       color: var(--entry-accent);
       font-weight: 600;
     `}
-  & + &::before {
+`
+
+/** 팩트 값 앞의 마이크로 라벨 — 현재 소비처는 '기간' 하나.
+    나머지 팩트는 값 자체가 자기서술적('32세에 취임')이라 라벨을 달지 않는다. */
+export const UnifiedFactKey = styled.span`
+  margin-right: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/**
+ * 팩트라인 — 기간(선두·승격)·길이·국가·왕조·나이를 칩 없이 interpunct(·)로 잇는 한 줄.
+ *
+ * ⚠️ 형제 구분점을 자식 안에서 `& + &::before`로 쓰면 안 된다. styled-components의 `&`는
+ * **동적 클래스**(prop 조합마다 다른 해시)로 컴파일되므로, prop이 다른 형제끼리는
+ * (예: $period 켜진 기간 ↔ 평범한 길이 팩트) 선택자가 아예 매칭되지 않아 구분점이
+ * 조용히 사라진다. 부모에서 `${UnifiedFact}`(정적 컴포넌트 클래스)로 걸어야 prop과 무관하게
+ * 성립한다. 조건부 항목이 빠져도 고아 점이 안 생기는 이점은 그대로.
+ */
+export const UnifiedFactLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  row-gap: 2px;
+  margin-top: 8px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  ${UnifiedFact} + ${UnifiedFact}::before {
     content: '·';
-    margin: 0 7px;
+    margin: 0 8px;
+    font-size: 13px;
     font-weight: 400;
-    color: ${({ theme }) => theme.colors.text.tertiary};
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  /* 15px 기간과 13px 팩트 사이에는 점을 찍지 않는다 — 크기가 다른 위계의 이음매라
+     점이 오히려 둘을 같은 급으로 보이게 만든다. 대신 넉넉한 공백으로 띄운다.
+     (data-period는 JSX에서 명시로 넘긴다 — transient prop $period는 DOM에 안 남는다) */
+  ${UnifiedFact}[data-period] + ${UnifiedFact}::before {
+    content: '';
+    margin: 0 0 0 14px;
   }
 `
 
 /** 연임 — 유일하게 살아남는 배지. pill 채움 대신 각진 아웃라인 스탬프. */
 export const UnifiedReappointBadge = styled.span`
   flex-shrink: 0;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   padding: 1px 6px;
   border-radius: 4px;
   letter-spacing: 0.06em;
   background: transparent;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(245,158,11,0.45)' : 'rgba(245,158,11,0.5)'};
+  /* 보더를 글자색과 묶는다 — 고정 알파(0.45/0.5)는 1.5:1로 테두리가 사실상 안 보였다 */
+  border: 1px solid currentColor;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#b45309')};
 `
 
-/** 즉위·경위·퇴위·비고 정의 그리드 — 라벨 컬럼 정렬 (SubRow 흘림 대체) */
+/**
+ * 경위·퇴임·비고·취임(방식)·취임식 정의 그리드.
+ * 라벨 열은 고정 44px이 아니라 `max-content` — 44px일 때 '경위'(22px)와 값 사이가
+ * 32px까지 벌어져 라벨-값 결합이 끊겼다. 우측 정렬 + max-content면 어느 행이든 정확히 10px.
+ * ⚠️ 규약: 라벨은 **최대 3자**('즉위식/서임식/취임식'). 4자 이상이면 트랙이 넓어져
+ *    15행의 값 기준선이 행마다 흔들린다.
+ */
 export const UnifiedDetailGrid = styled.dl`
   display: grid;
-  grid-template-columns: 44px 1fr;
+  grid-template-columns: minmax(32px, max-content) 1fr;
   column-gap: 10px;
-  row-gap: 5px;
-  margin: 12px 0 0;
-  @media (max-width: 560px) {
-    grid-template-columns: 40px 1fr;
-  }
+  row-gap: 10px;
+  margin: 24px 0 0;
 `
 
 export const UnifiedDetailLabel = styled.dt`
+  grid-column: 1;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  padding-top: 1.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1.45;
+  padding-top: 3px;
+  text-align: right;
+  white-space: nowrap;
+  /* tertiary는 라이트 2.5:1로 WCAG 미달이었다 — 이 라벨이 5개 정보의 유일한 구분 신호다 */
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-export const UnifiedDetailValue = styled.dd<{ $prewrap?: boolean }>`
+/**
+ * 정의 값. 기본형은 **서사**(경위·퇴임 부연·비고, 평균 175자·최대 1,229자)라
+ * 읽기 폭 캡을 기본값으로 둔다 — 캡이 없으면 1,328px 컨테이너에서 한 줄 130자로 흐른다.
+ * $token — 2~6자 분류 토큰(취임 방식·취임식). 측정폭이 무의미하므로 캡 해제.
+ * $muted — 비고. 서사 3종 중 한 등급 낮은 잉크로 경위·퇴임과 위계를 나눈다.
+ * $tight — 같은 라벨에 딸린 두 번째 값(퇴임 분류 ↔ 부연)을 붙인다.
+ */
+export const UnifiedDetailValue = styled.dd<{
+  $prewrap?: boolean
+  $token?: boolean
+  $muted?: boolean
+  $tight?: boolean
+}>`
+  grid-column: 2;
   margin: 0;
   min-width: 0;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  word-break: break-word;
+  max-width: 68ch;
+  font-size: 13px;
+  line-height: 1.7;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#d1d5db' : '#374151')};
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  ${({ $muted, theme }) =>
+    $muted &&
+    css`
+      color: ${theme.mode === 'dark' ? theme.colors.text.secondary : '#4b5563'};
+    `}
+  ${({ $token, theme }) =>
+    $token &&
+    css`
+      max-width: none;
+      line-height: 1.4;
+      color: ${theme.colors.text.secondary};
+    `}
+  ${({ $tight }) => $tight && 'margin-top: -6px;'}
   ${({ $prewrap }) => $prewrap && 'white-space: pre-wrap;'}
+`
+
+/** 퇴임/퇴위 사유 분류 토큰 — 같은 라벨 아래 첫 값. 뒤따르는 서사(13px)보다 작고 무겁게. */
+export const UnifiedDetailTag = styled.dd`
+  grid-column: 2;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
 `
 
 export const UnifiedEditBtn = styled.button`
@@ -1331,14 +1428,14 @@ export const UnifiedEditBtn = styled.button`
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-  opacity: 0;
-  transform: scale(0.92);
-  transition: opacity 0.15s, transform 0.15s, background 0.15s, color 0.15s;
+  /* 상시 반투명 — hover-reveal은 터치에서 발견성 0이고, opacity 0.55×tertiary는
+     실효 대비 1.6:1로 WCAG 1.4.11(비텍스트 3:1) 미달이었다. */
+  opacity: 0.75;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
   ${UnifiedCard}:hover & {
     opacity: 1;
-    transform: scale(1);
   }
   &:hover {
     background: ${({ theme }) =>
@@ -1346,22 +1443,13 @@ export const UnifiedEditBtn = styled.button`
     color: ${({ theme }) =>
       theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
   }
-  /* 키보드 포커스 시 가시화 — opacity:0 + hover만 있으면 Tab 이동해도 계속 투명해
-     보이지 않는다(형제 삭제 버튼과 동일 규약). */
   &:focus-visible {
     opacity: 1;
-    transform: scale(1);
     outline: 2px solid ${({ theme }) => theme.colors.button.primary};
     outline-offset: 1px;
   }
-  /* 터치 환경 — hover-reveal은 발견성 0이 되므로 반투명 상시 노출 */
   @media (hover: none) {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    transition: opacity 0.15s, background 0.15s, color 0.15s;
-    transform: none;
+    opacity: 0.9;
   }
 `
 
@@ -2964,15 +3052,39 @@ export const AchievementSection = styled.div<{ $kind: AchKind }>`
     theme.mode === 'dark' ? achAccent[$kind].textDark : achAccent[$kind].text};
   --ach-ring: ${({ $kind }) => achAccent[$kind].ring};
 
-  margin-top: 10px;
-  padding-top: 10px;
-  /* 카드 보더(solid)와 구분되는 내부 이음새 — dashed 2단 디바이더 위계 */
-  border-top: 1px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : 'rgba(15,23,42,0.09)'};
+  /* 행 내부 소섹션 이음새 — 승계·행정부와 동일 출처(subSectionSeam) */
+  ${({ theme }) => subSectionSeam(theme)}
   display: flex;
   flex-direction: column;
   gap: 7px;
+`
+
+/**
+ * 업적 0건 + 편집 가능일 때의 한 줄 어포던스.
+ * 0건에도 seam+헤더(34px)를 그리면 15행 전부가 빈 '업적·한일' 헤더를 이고 있게 된다
+ * (조프르 실측 15/15행이 0건 = 리스트 세로의 약 7%가 빈 어포던스).
+ */
+export const AchievementEmptyAdd = styled.button`
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  &:hover {
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.button.primary};
+    outline-offset: 2px;
+  }
 `
 
 export const AchievementHeaderRow = styled.div`
@@ -2990,7 +3102,7 @@ export const AchievementToggle = styled.button`
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -2998,6 +3110,11 @@ export const AchievementToggle = styled.button`
   &:hover {
     color: ${({ theme }) =>
       theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  }
+  /* 전역 --focus-ring은 box-shadow라 forced-colors에서 사라진다 — outline 기반 자체 링 */
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.button.primary};
+    outline-offset: 2px;
   }
   svg.ach-trophy {
     color: var(--ach-base);
@@ -3012,7 +3129,7 @@ export const AchievementChevron = styled.span<{ $open: boolean }>`
 `
 
 export const AchievementCount = styled.span`
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   min-width: 17px;
@@ -3042,6 +3159,10 @@ export const AchievementAddBtn = styled.button`
   }
   &:active {
     transform: translateY(0);
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.button.primary};
+    outline-offset: 2px;
   }
 `
 
@@ -3090,13 +3211,14 @@ export const AchievementRowMain = styled.div`
 `
 
 export const AchievementRowTitle = styled.div`
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 650;
   letter-spacing: -0.01em;
   line-height: 1.4;
   color: ${({ theme }) =>
     theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
-  word-break: break-word;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 `
 
 export const AchievementRowMeta = styled.div`
@@ -3155,11 +3277,13 @@ export const AchievementHiddenBadge = styled.span`
 `
 
 export const AchievementRowDesc = styled.div`
-  font-size: 11.5px;
-  line-height: 1.55;
+  max-width: 68ch;
+  font-size: 13px;
+  line-height: 1.7;
   color: ${({ theme }) => theme.colors.text.secondary};
   white-space: pre-wrap;
-  word-break: break-word;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 `
 
 export const AchievementRowActions = styled.div`

@@ -113,6 +113,30 @@ describe('SuccessionBox', () => {
     expect(onPersonClick).toHaveBeenCalledWith('alex1')
   })
 
+  it('person.regnalName 원문("Nicholas")은 라벨로 쓰지 않는다 — 표시명 폴백', () => {
+    const nicholas = neighbor({
+      relation: 'PREDECESSOR',
+      id: 'nick',
+      name: '니콜라이',
+      startYear: 1894,
+      endYear: 1917,
+    })
+    nicholas.record.regnalName = null
+    nicholas.person.regnalName = 'Nicholas'
+    renderWithTheme(
+      <SuccessionBox
+        entry={entry({ predecessors: [nicholas] })}
+        anchorLabel="앵커"
+        anchorPolity="러시아 제국"
+        onPersonClick={jest.fn()}
+      />,
+    )
+    expect(
+      screen.getByRole('button', { name: /니콜라이 — 선대/ }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Nicholas')).toBeNull()
+  })
+
   it('본인(isSelf)·타계정(isOwned=false) 이웃은 비클릭(버튼 아님)으로 렌더', () => {
     const onPersonClick = jest.fn()
     renderWithTheme(
@@ -168,6 +192,27 @@ describe('SuccessionBox', () => {
       />,
     )
     expect(screen.getByText('프랑스 제3공화국')).toBeInTheDocument()
+  })
+
+  it('재임(TENURE) 앵커는 전임/후임 어휘 — 초대 총리 카드가 군주 말투로 말하지 않는다', () => {
+    renderWithTheme(
+      <SuccessionBox
+        entry={entry({
+          subjectRecordKind: 'TENURE',
+          successors: [
+            neighbor({ relation: 'SUCCESSOR', id: 'goremykin', name: '고레미킨', startYear: 1906, endYear: 1906 }),
+          ],
+        })}
+        anchorLabel="비테 · 총리"
+        anchorPolity="러시아 제국"
+        onPersonClick={jest.fn()}
+      />,
+    )
+    expect(screen.getByText('이전 재임 기록 없음')).toBeInTheDocument()
+    expect(screen.queryByText('이전 재위 기록 없음')).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /고레미킨 — 후임/ }),
+    ).toBeInTheDocument()
   })
 
   it('양쪽 이웃이 모두 없으면 박스 자체를 렌더하지 않는다', () => {

@@ -36,6 +36,7 @@ import {
   AchievementDateChip,
   AchievementDateField,
   AchievementEmpty,
+  AchievementEmptyAdd,
   AchievementEventBadge,
   AchievementForm,
   AchievementFormActions,
@@ -249,6 +250,20 @@ export function TenureAchievements({
   // 읽기 전용이며 업적이 하나도 없으면 섹션 자체를 렌더링하지 않음
   if (readOnly && list.length === 0) return null
 
+  /**
+   * 0건인데 폼도 안 열렸으면 seam + 헤더(약 34px)를 그리지 않고 한 줄 어포던스만 남긴다.
+   * 재임 15행이 전부 0건인 인물에서는 이 빈 헤더가 리스트 세로의 상당량을 먹는다.
+   * (openAddForm이 expanded·formOpen을 함께 켜므로 클릭하면 정식 섹션+폼이 열린다)
+   */
+  if (list.length === 0 && !formOpen) {
+    return (
+      <AchievementEmptyAdd type="button" onClick={openAddForm}>
+        <FiPlus size={11} />
+        업적·한일 추가
+      </AchievementEmptyAdd>
+    )
+  }
+
   return (
     <AchievementSection $kind={hostKind}>
       <AchievementHeaderRow>
@@ -338,14 +353,14 @@ export function TenureAchievements({
                         <AchievementRowActions>
                           <AchievementIconBtn
                             type="button"
-                            aria-label="수정"
+                            aria-label={`${a.title} 업적 수정`}
                             onClick={() => openEditForm(a)}
                           >
                             <FiEdit2 size={11} />
                           </AchievementIconBtn>
                           <AchievementIconBtn
                             type="button"
-                            aria-label="삭제"
+                            aria-label={`${a.title} 업적 삭제`}
                             $danger
                             disabled={deletingId === a.id}
                             onClick={() => handleDelete(a.id)}

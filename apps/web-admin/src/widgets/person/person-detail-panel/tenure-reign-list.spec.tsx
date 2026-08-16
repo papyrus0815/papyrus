@@ -132,9 +132,92 @@ describe('TenureReignList', () => {
     expect(screen.getByText('랭스 대관식')).toBeInTheDocument()
     expect(screen.getByText('경위')).toBeInTheDocument()
     expect(screen.getByText('퇴위')).toBeInTheDocument()
-    expect(screen.getByText(/UNKNOWN_END_RAW — 괴저/)).toBeInTheDocument()
+    // 분류 토큰과 서사는 별도 dd — 한 문자열로 잇지 않는다
+    expect(screen.getByText('UNKNOWN_END_RAW')).toBeInTheDocument()
+    expect(screen.getByText('괴저')).toBeInTheDocument()
     expect(screen.getByText('비고')).toBeInTheDocument()
     expect(screen.getByText('태양왕.')).toBeInTheDocument()
+  })
+
+  it('기간이 팩트라인 선두로 승격되고 길이가 함께 파생된다', () => {
+    renderWithTheme(
+      <TenureReignList
+        {...baseProps}
+        items={[
+          makeItem({
+            kind: 'reign',
+            record: {
+              id: 'r1',
+              title: '프랑스 국왕',
+              startDate: '1643-05-14T00:00:00.000Z',
+              endDate: '1715-09-01T00:00:00.000Z',
+            },
+          }),
+        ]}
+      />,
+    )
+    expect(screen.getByText('기간')).toBeInTheDocument()
+    expect(screen.getByText('약 72년 4개월')).toBeInTheDocument()
+    // 마이크로 라벨은 자식 엘리먼트 — 기간 팩트의 직계 텍스트는 rangeLabel 그대로다
+    expect(screen.getByText(/^1643년 5월 14일 – 1715년 9월 1일$/)).toBeInTheDocument()
+  })
+
+  it('BC·고대 기록은 길이를 파생하지 않는다(근사 오표기 방지)', () => {
+    renderWithTheme(
+      <TenureReignList
+        {...baseProps}
+        items={[
+          makeItem({
+            kind: 'reign',
+            record: {
+              id: 'r1',
+              title: '황제',
+              startDate: '-0221-01-01T00:00:00.000Z',
+              endDate: '-0210-07-01T00:00:00.000Z',
+            },
+          }),
+        ]}
+      />,
+    )
+    expect(screen.queryByText(/^약 /)).not.toBeInTheDocument()
+  })
+
+  it("종료 사유가 OTHER인데 부연이 있으면 '기타' 토큰을 렌더하지 않는다", () => {
+    renderWithTheme(
+      <TenureReignList
+        {...baseProps}
+        items={[
+          makeItem({
+            kind: 'tenure',
+            record: {
+              id: 't1',
+              title: '공병 장교',
+              endReason: 'OTHER',
+              endReasonDetail: '1888년 1월 임기 만료로 귀국했다.',
+            },
+          }),
+        ]}
+      />,
+    )
+    expect(screen.queryByText(/기타/)).not.toBeInTheDocument()
+    expect(
+      screen.getByText('1888년 1월 임기 만료로 귀국했다.'),
+    ).toBeInTheDocument()
+  })
+
+  it('재위의 재직 중 사망은 재임이 아니라 재위 목소리로 표기된다', () => {
+    renderWithTheme(
+      <TenureReignList
+        {...baseProps}
+        items={[
+          makeItem({
+            kind: 'reign',
+            record: { id: 'r1', title: '국왕', endReason: 'DEATH_IN_OFFICE' },
+          }),
+        ]}
+      />,
+    )
+    expect(screen.getByText('재위 중 사망')).toBeInTheDocument()
   })
 
   it('재임 서수는 초대/제N대·N기, 연임 스탬프 노출', () => {
@@ -223,14 +306,15 @@ describe('TenureReignList', () => {
     expect(screen.getByText('연임')).toBeInTheDocument()
   })
 
-  it('수정 버튼은 기본 노출, embedInModal이면 숨김', () => {
+  it('수정 버튼은 기본 노출, embedInModal이면 숨김 — 이름은 행 제목으로 파생', () => {
     const { rerender } = renderWithTheme(
       <TenureReignList
         {...baseProps}
         items={[makeItem({ kind: 'reign', record: { id: 'r1', title: '국왕' } })]}
       />,
     )
-    expect(screen.getByRole('button', { name: '수정' })).toBeInTheDocument()
+    // 15행이 전부 '수정'이면 버튼 목록에서 구분이 안 된다 → 제목 접두
+    expect(screen.getByRole('button', { name: '국왕 수정' })).toBeInTheDocument()
     rerender(
       <TenureReignList
         {...baseProps}
@@ -238,6 +322,26 @@ describe('TenureReignList', () => {
         items={[makeItem({ kind: 'reign', record: { id: 'r1', title: '국왕' } })]}
       />,
     )
-    expect(screen.queryByRole('button', { name: '수정' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /수정$/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('목록 역할과 행 헤딩이 명시된다 (CSS가 시맨틱을 지우지 못하게)', () => {
+    renderWithTheme(
+      <TenureReignList
+        {...baseProps}
+        items={[
+          makeItem({
+            kind: 'reign',
+            record: { id: 'r1', title: '국왕', regnalName: '루이 14세' },
+          }),
+        ]}
+      />,
+    )
+    expect(screen.getByRole('list')).toHaveAttribute('role', 'list')
+    expect(
+      screen.getByRole('heading', { level: 4, name: '루이 14세 · 국왕' }),
+    ).toBeInTheDocument()
   })
 })

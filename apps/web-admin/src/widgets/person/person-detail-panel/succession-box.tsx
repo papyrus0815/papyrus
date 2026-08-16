@@ -15,7 +15,9 @@ import {
   neighborLabel,
   neighborPolity,
   neighborSpan,
+  successionVocabulary,
 } from './succession-box.lib'
+import { subSectionSeam } from './sub-section-seam'
 
 interface SuccessionBoxProps {
   entry: ReignAdjacencyEntry
@@ -28,10 +30,13 @@ interface SuccessionBoxProps {
 }
 
 /**
- * 「같은 국가 전/후 재위(승계)」 박스 — 각 수장급 재위 카드 안에 좌우(← 선대 · 후대 →)
+ * 「같은 국가 전/후 재위(승계)」 박스 — 각 수장급 카드 안에 좌우(← 선대 · 후대 →)
  * 선형으로 붙는다(동시대 수장의 가로 병렬 스트립과 시각언어 분리). 발견은 배치
  * 엔드포인트(GET /persons/:id/reign-adjacency) 응답을 recordId로 조인해 렌더만 한다
  * (검토서 docs/person-reign-neighbors-review.md §3.3).
+ *
+ * 이웃은 서버가 앵커의 승계 축(국가원수 ⊥ 정부수반)으로 이미 좁혀서 준다 — 총리 카드에
+ * 군주가 섞이지 않으므로, 여기 어휘도 앵커 종류(재위/재임)를 따른다.
  */
 export function SuccessionBox({
   entry,
@@ -42,40 +47,41 @@ export function SuccessionBox({
   const hasAny =
     entry.predecessors.length > 0 || entry.successors.length > 0
   if (!hasAny) return null
+  const vocabulary = successionVocabulary(entry.subjectRecordKind)
 
   return (
     <Box aria-label={`${anchorLabel} 승계`}>
       <Column>
-        <ColumnHead aria-hidden>← 선대</ColumnHead>
+        <ColumnHead aria-hidden>← {vocabulary.predecessor}</ColumnHead>
         {entry.predecessors.length > 0 ? (
           entry.predecessors.map((neighbor) => (
             <NeighborChip
               key={neighbor.record.recordId}
               neighbor={neighbor}
-              directionLabel="선대"
+              directionLabel={vocabulary.predecessor}
               anchorPolity={anchorPolity}
               onPersonClick={onPersonClick}
             />
           ))
         ) : (
-          <EmptyNote>이전 재위 기록 없음</EmptyNote>
+          <EmptyNote>이전 {vocabulary.recordNoun} 기록 없음</EmptyNote>
         )}
       </Column>
       <Divider aria-hidden />
       <Column $end>
-        <ColumnHead aria-hidden>후대 →</ColumnHead>
+        <ColumnHead aria-hidden>{vocabulary.successor} →</ColumnHead>
         {entry.successors.length > 0 ? (
           entry.successors.map((neighbor) => (
             <NeighborChip
               key={neighbor.record.recordId}
               neighbor={neighbor}
-              directionLabel="후대"
+              directionLabel={vocabulary.successor}
               anchorPolity={anchorPolity}
               onPersonClick={onPersonClick}
             />
           ))
         ) : (
-          <EmptyNote>다음 재위 기록 없음</EmptyNote>
+          <EmptyNote>다음 {vocabulary.recordNoun} 기록 없음</EmptyNote>
         )}
       </Column>
     </Box>
@@ -188,15 +194,11 @@ function ChipAvatarOrGlyph({
 /* 인셋 박스가 아니라 점선 seam — 항목 행 안의 소섹션(승계)을 AchievementSection과
    동일한 방언으로 구분한다(컨테이너 중첩 금지). 가운데 Divider는 규칙선이라 유지. */
 const Box = styled.nav`
+  ${({ theme }) => subSectionSeam(theme)}
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: start;
   gap: 12px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : 'rgba(15,23,42,0.09)'};
 `
 
 const Column = styled.div<{ $end?: boolean }>`

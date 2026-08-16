@@ -5,6 +5,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import type {
   AdjacencyNeighbor,
   AdjacencyRecord,
+  AdjacencyRecordKind,
 } from '@/shared/api/person-reign-adjacency'
 
 /**
@@ -25,13 +26,16 @@ export function neighborCategory(record: AdjacencyRecord): PositionCategory {
   })
 }
 
-/** 수장 라벨 — 묘호(세종)·왕호(루이 14세) 우선, 없으면 표시명 규칙 */
+/**
+ * 수장 라벨 — 묘호(세종)·기록 왕호(에드워드 7세) 우선, 없으면 인물 표시명.
+ * person.regnalName은 라벨로 쓰지 않는다 — 원문 표기('Nicholas')·칭호('쇼군')·
+ * 맨 서수('4세')가 섞인 오염 필드 (contemporaries-strip.lib chipLabelOf와 동일 규약).
+ */
 export function neighborLabel(neighbor: AdjacencyNeighbor): string {
   const { person, record } = neighbor
   const label =
     person.templeName?.trim() ||
     record.regnalName?.trim() ||
-    person.regnalName?.trim() ||
     getPersonDisplayName({ ...person, name: person.name ?? '' })
   return label || '(이름 미상)'
 }
@@ -47,4 +51,25 @@ export function neighborSpan(neighbor: AdjacencyNeighbor): string {
 /** 이웃이 속한 정체(政體)명 — 역사국가 우선 */
 export function neighborPolity(record: AdjacencyRecord): string | null {
   return record.historicalCountry?.name ?? record.country?.name ?? null
+}
+
+export interface SuccessionVocabulary {
+  predecessor: string
+  successor: string
+  /** 빈 상태 문구에 쓰는 기록 명사 */
+  recordNoun: string
+}
+
+/**
+ * 승계 어휘 — 군주 재위는 「선대/후대」, 재임(대통령·총리)은 「전임/후임」.
+ * 서버가 축(국가원수 ⊥ 정부수반)을 분리한 뒤로 정부수반 카드의 빈 칼럼이 흔해졌는데,
+ * 거기에 '재위' 어휘가 남으면 총리 카드가 군주 말투로 말한다. 갈림 신호는
+ * tenure-reign-list의 즉위/취임 관례와 동일하게 recordKind 하나로 통일한다.
+ */
+export function successionVocabulary(
+  subjectRecordKind: AdjacencyRecordKind,
+): SuccessionVocabulary {
+  return subjectRecordKind === 'SOVEREIGN_REIGN'
+    ? { predecessor: '선대', successor: '후대', recordNoun: '재위' }
+    : { predecessor: '전임', successor: '후임', recordNoun: '재임' }
 }

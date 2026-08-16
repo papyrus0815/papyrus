@@ -179,6 +179,16 @@ it('수장이 2명 이상이면 헤더에 정렬 근거(겹친 기간 긴 순) �
   expect(screen.getByText(/겹친 기간 긴 순/)).toBeInTheDocument()
 })
 
+it('칩에 어떤 재임인지(직위)가 상시 노출된다', async () => {
+  mockGet.mockResolvedValue(response([ruler({ id: 'sejong', label: '세종' })]))
+  renderStrip(
+    <ContemporariesStrip personId="p1" enabled onPersonClick={jest.fn()} />,
+  )
+  await screen.findByRole('button', { name: /세종/ })
+  // 픽스처 record.title='국왕' — hover가 아니라 칩 본문 텍스트로 보인다
+  expect(screen.getByText('국왕')).toBeInTheDocument()
+})
+
 it('칩 aria-label·title에 겹침 기간 상세를 실어 정보밀도를 보강한다', async () => {
   mockGet.mockResolvedValue(response([ruler({ id: 'sejong', label: '세종' })]))
   renderStrip(

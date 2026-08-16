@@ -121,6 +121,25 @@ describe('chipLabelOf — 묘호·왕호 우선', () => {
     })
     expect(chipLabelOf(westerner, record())).toBe('Franklin Roosevelt')
   })
+
+  it('person.regnalName은 원문 오염 필드라 라벨로 쓰지 않는다 (Nicholas → 표시명)', () => {
+    // 실DB에 'Nicholas'·'Wilhelm'(로마자 원문)·'쇼군'(칭호)·'4세'(맨 서수)가 섞여 있어
+    // 이 폴백이 칩에 원문을 새게 하던 근인 — 표시명으로 대체됨을 못 박는다
+    const nicholas = ruler({
+      name: '니콜라이',
+      surname: '로마노프',
+      regnalName: 'Nicholas',
+      country: { defaultNameDisplayOrder: 'western' },
+    })
+    expect(chipLabelOf(nicholas, record())).toBe('니콜라이 로마노프')
+  })
+
+  it('표시 record에 왕호가 없으면 같은 인물의 다른 record 왕호로 폴백한다', () => {
+    const withRegnal = record({ recordId: 'named', regnalName: '니콜라이 2세' })
+    const withoutRegnal = record({ recordId: 'anon', regnalName: null })
+    const nicholas = ruler({ name: '니콜라이' }, [withRegnal, withoutRegnal])
+    expect(chipLabelOf(nicholas, withoutRegnal)).toBe('니콜라이 2세')
+  })
 })
 
 describe('spanTextOf — 종료일 미기록의 재위 중/미상 구분', () => {
@@ -156,10 +175,10 @@ describe('spanTextOf — 종료일 미기록의 재위 중/미상 구분', () =>
   })
 })
 
-describe('chipDetailTextOf — 겹침 기간·직위·복수 재위 (aria/title 정보밀도)', () => {
-  it('겹친 기간과 전체 직위를 포함한다', () => {
+describe('chipDetailTextOf — 본명·겹침 기간·복수 재위 (aria/title 정보밀도)', () => {
+  it('겹친 기간을 포함한다 (직위는 positionText로 칩에 상시 노출 — 여기서 반복 안 함)', () => {
     const subject = ruler()
-    expect(chipDetailTextOf(subject, subject.records[0]!)).toBe('겹침 10년 · 국왕')
+    expect(chipDetailTextOf(subject, subject.records[0]!)).toBe('겹침 10년')
   })
 
   it('복수 재위면 모든 스팬을 나열한다', () => {
@@ -172,6 +191,18 @@ describe('chipDetailTextOf — 겹침 기간·직위·복수 재위 (aria/title 
   it('overlapYears 음수(경계 오차)는 0으로 클램프', () => {
     const subject = { ...ruler(), overlapYears: -3 }
     expect(chipDetailTextOf(subject, subject.records[0]!)).toContain('겹침 0년')
+  })
+
+  it('라벨이 묘호·왕호면 본명(표시명)을 병기한다', () => {
+    const sejong = ruler({ templeName: '세종', name: '이도' })
+    expect(chipDetailTextOf(sejong, sejong.records[0]!)).toBe(
+      '본명 이도 · 겹침 10년',
+    )
+  })
+
+  it('라벨이 이미 표시명이면 본명을 반복하지 않는다', () => {
+    const plain = ruler({ name: '이도' })
+    expect(chipDetailTextOf(plain, plain.records[0]!)).toBe('겹침 10년')
   })
 })
 
@@ -237,6 +268,16 @@ describe('groupRulersByCountry', () => {
     const foreign = ruler({ id: 'others', isOwned: false })
     const groups = groupRulersByCountry([foreign], WINDOW)
     expect(groups[0]!.chips[0]!.isOwned).toBe(false)
+  })
+
+  it('positionText: record.title 우선, 없으면 카테고리 라벨 폴백 (어떤 재임인지 상시 노출)', () => {
+    const emperor = ruler({ id: 'kaiser' }, [record({ title: '황제' })])
+    const untitled = ruler({ id: 'anon' }, [record({ title: null })])
+    const groups = groupRulersByCountry([emperor, untitled], WINDOW)
+    expect(groups[0]!.chips.map((chip) => chip.positionText)).toEqual([
+      '황제',
+      '군주·왕족',
+    ])
   })
 })
 

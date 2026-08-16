@@ -16,6 +16,7 @@ import {
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { parseIsoDateParts } from './helpers'
+import { subSectionSeam } from './sub-section-seam'
 
 const CABINET_PARTY_ROLE_LABELS: Record<string, string> = {
   LEADING: '여당',
@@ -156,11 +157,7 @@ export function CabinetConnections({
 
 /* 토글은 점선 seam 아래에 놓여 승계·업적 소섹션과 같은 방언으로 구분된다. */
 const Wrap = styled.div`
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : 'rgba(15,23,42,0.09)'};
+  ${({ theme }) => subSectionSeam(theme)}
 `
 
 /* 인디고 필 → 무박스 인디고 텍스트 토글(AchievementToggle와 동일 어포던스).

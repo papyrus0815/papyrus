@@ -1,3 +1,4 @@
+import { CATEGORY_TOKENS } from '@/entities/government-position/model/category-tokens'
 import { categorizePosition } from '@/entities/government-position/model/categorize'
 import type { PositionCategory } from '@/entities/government-position/model/types'
 import { formatSignedYear } from '@/shared/lib/lifespan-text'
@@ -20,14 +21,15 @@ export interface ContemporaryChip {
   category: PositionCategory
   /** "1567–1608" / "2022–"(생존 현직) / "1418–?"(종료 미상) */
   spanText: string
-  title: string | null
+  /** 어떤 재임인지 상시 노출 — record.title('황제'·'내각총리대신') 우선, 없으면 카테고리 라벨 */
+  positionText: string
   profileImageUrl: string | null
   /** false면 타계정 소유 — 상세를 열 수 없어 비클릭 렌더 (가계도 isOwned 선례) */
   isOwned: boolean
   /**
-   * 정렬 근거이자 정보밀도 보강 — 겹친 기간·전체 직위·복수 재위 스팬을 한 줄로.
-   * 칩은 좁아 대표 스팬만 보이므로, 이 상세를 aria-label·title(hover)에 노출한다.
-   * (플로팅 팝오버는 가로 스크롤 overflow 클리핑·시각 검증 부재로 배제 — 검토서 §UX.)
+   * 정렬 근거이자 정보밀도 보강 — 본명(라벨이 왕호일 때)·겹친 기간·복수 재위 스팬을
+   * 한 줄로. 칩 본문에 안 담기는 정보만 담아 aria-label·title(hover)에 노출한다
+   * (직위는 positionText로 칩에 상시 노출되므로 여기서 반복하지 않는다).
    */
   detailText: string
 }
@@ -80,13 +82,24 @@ export function categoryOfRecord(record: ContemporaryRecord): PositionCategory {
   })
 }
 
-/** 수장 라벨 — 묘호(세종)·왕호(루이 14세) 우선, 없으면 표시명 규칙 */
+/** 표시명 규칙으로 정규화한 인물 이름 (성·이름 순서는 개인→국가 오버라이드) */
+function displayNameOf(ruler: ContemporaryRuler): string {
+  return getPersonDisplayName({ ...ruler.person, name: ruler.person.name ?? '' })
+}
+
+/**
+ * 수장 라벨 — 묘호(세종)·기록 왕호(에드워드 7세) 우선, 없으면 인물 표시명.
+ * person.regnalName은 라벨로 쓰지 않는다 — 원문 표기('Nicholas')·칭호('쇼군')·
+ * 맨 서수('4세')가 섞인 오염 필드라 칩에 원문이 새던 원인이었고, 수장비교 보드도
+ * record 왕호→표시명 체인만 쓴다(normalize-tenures 규약). 표시 record(창 최대 겹침)에
+ * 왕호가 없으면 같은 인물의 다른 record 왕호로 폴백한다.
+ */
 export function chipLabelOf(ruler: ContemporaryRuler, record: ContemporaryRecord): string {
-  const label =
-    ruler.person.templeName?.trim() ||
+  const recordRegnalName =
     record.regnalName?.trim() ||
-    ruler.person.regnalName?.trim() ||
-    getPersonDisplayName({ ...ruler.person, name: ruler.person.name ?? '' })
+    ruler.records.find((other) => other.regnalName?.trim())?.regnalName?.trim()
+  const label =
+    ruler.person.templeName?.trim() || recordRegnalName || displayNameOf(ruler)
   return label || '(이름 미상)'
 }
 
@@ -106,16 +119,22 @@ export function spanTextOf(ruler: ContemporaryRuler, record: ContemporaryRecord)
 }
 
 /**
- * 칩 상세 — 겹친 기간(정렬 근거)·전체 직위·복수 재위 스팬. 칩 본문엔 안 들어가는
- * 정보를 aria-label·title로 노출해, 순서 근거 불투명·정보밀도 부족을 보강한다.
+ * 칩 상세 — 본명(라벨이 왕호일 때)·겹친 기간(정렬 근거)·복수 재위 스팬. 칩 본문엔
+ * 안 들어가는 정보를 aria-label·title로 노출해, 순서 근거 불투명을 보강한다.
+ * 직위는 positionText로 칩에 상시 노출되므로 여기서 반복하지 않는다.
  * 서수(regnalNumber) 텍스트화는 이름 표기 관례(서양 'N세' vs 로마숫자)가 갈려 제외.
  */
 export function chipDetailTextOf(
   ruler: ContemporaryRuler,
   primaryRecord: ContemporaryRecord,
 ): string {
-  const parts: string[] = [`겹침 ${Math.max(0, ruler.overlapYears)}년`]
-  if (primaryRecord.title?.trim()) parts.push(primaryRecord.title.trim())
+  const parts: string[] = []
+  // 라벨이 묘호·왕호면 본명(표시명)을 병기 — 수장비교 보드의 '왕호 (본명)' 관례와 대칭
+  const displayName = displayNameOf(ruler)
+  if (displayName && chipLabelOf(ruler, primaryRecord) !== displayName) {
+    parts.push(`본명 ${displayName}`)
+  }
+  parts.push(`겹침 ${Math.max(0, ruler.overlapYears)}년`)
   if (ruler.records.length > 1) {
     const spans = ruler.records.map((record) => spanTextOf(ruler, record)).join(', ')
     parts.push(`재위 ${spans}`)
@@ -134,6 +153,7 @@ export function groupRulersByCountry(
   const groups = new Map<string, ContemporaryCountryGroup>()
   for (const ruler of rulers) {
     const record = primaryRecordOf(ruler, window)
+    const category = categoryOfRecord(record)
     const countryRef = record.historicalCountry ?? record.country
     const key = record.historicalCountry
       ? `H:${record.historicalCountry.id}`
@@ -156,9 +176,9 @@ export function groupRulersByCountry(
     group.chips.push({
       personId: ruler.person.id,
       label: chipLabelOf(ruler, record),
-      category: categoryOfRecord(record),
+      category,
       spanText: spanTextOf(ruler, record),
-      title: record.title,
+      positionText: record.title?.trim() || CATEGORY_TOKENS[category].label,
       profileImageUrl: ruler.person.profileImageUrl,
       isOwned: ruler.person.isOwned,
       detailText: chipDetailTextOf(ruler, record),

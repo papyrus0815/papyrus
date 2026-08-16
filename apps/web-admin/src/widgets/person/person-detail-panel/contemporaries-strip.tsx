@@ -89,11 +89,11 @@ export function ContemporariesStrip({
       </StripHeaderRow>
 
       {contemporariesQuery.isLoading && (
-        <ChipScrollRow aria-hidden>
+        <SkeletonRow aria-hidden>
           <SkeletonChip />
           <SkeletonChip />
           <SkeletonChip />
-        </ChipScrollRow>
+        </SkeletonRow>
       )}
       {contemporariesQuery.isError && (
         <MutedNote role="status">동시대 수장을 불러오지 못했습니다</MutedNote>
@@ -107,17 +107,17 @@ export function ContemporariesStrip({
       )}
 
       {data && data.rulers.length > 0 && (
-        // 가로 스크롤 컨테이너를 포커스 가능하게(tabIndex=0) — 비소유 정적 칩·절단 캡션은
-        // 비포커서블이라, 이게 없으면 키보드 사용자가 오프스크린으로 밀린 그 항목을 스크롤로
-        // 끌어올 수 없다(WCAG 2.1.1). 포커스 시 방향키로 스크롤된다.
-        <ChipScrollRow role="group" aria-label="동시대 수장 목록" tabIndex={0}>
+        // 국가별 구획을 표 행(라벨 열 | 칩 열)으로 — 행 사이 헤어라인 + 라벨 열 세로
+        // 괘선으로 어느 나라 구획인지 정확히 떨어지게 한다. 가로 스크롤(대부분
+        // 오프스크린 은닉)은 폐기, 전원 상시 노출.
+        <GroupTable role="group" aria-label="동시대 수장 목록">
           {groups.map((group) => (
             /* role=group + aria-label — 칩만 탭으로 만나도 어느 나라 수장인지 전달 */
-            <CountryGroup key={group.key} role="group" aria-label={group.label}>
-              <CountryGroupLabel aria-hidden>
+            <GroupRow key={group.key} role="group" aria-label={group.label}>
+              <GroupLabelCell aria-hidden>
                 {group.flagEmoji ? `${group.flagEmoji} ` : ''}
                 {group.label}
-              </CountryGroupLabel>
+              </GroupLabelCell>
               <ChipRow>
                 {group.chips.map((chip) => {
                   const chipBody = (
@@ -127,12 +127,15 @@ export function ContemporariesStrip({
                         category={chip.category}
                       />
                       <ChipName>{chip.label}</ChipName>
+                      <ChipRole $category={chip.category}>
+                        {chip.positionText}
+                      </ChipRole>
                       <ChipSpan>{chip.spanText}</ChipSpan>
                     </>
                   )
-                  // 정보밀도 보강 — 칩 본문(이름+대표 스팬)에 안 담기는 겹침 기간·전체 직위·
-                  // 복수 재위 스팬을 aria-label(키보드/SR)·title(hover)에 실어 노출한다.
-                  const chipAria = `${chip.label} — ${group.label} ${CATEGORY_TOKENS[chip.category].label} ${chip.spanText} · ${chip.detailText}`
+                  // 정보밀도 보강 — 칩 본문에 안 담기는 본명·겹침 기간·복수 재위
+                  // 스팬을 aria-label(키보드/SR)·title(hover)에 실어 노출한다.
+                  const chipAria = `${chip.label} — ${group.label} ${chip.positionText} ${chip.spanText} · ${chip.detailText}`
                   // 타계정 소유 인물은 상세(:id)가 소유자 게이트라 열 수 없음 —
                   // 클릭 데드엔드 대신 비활성 칩 (가계도 비소유 노드 선례)
                   if (!chip.isOwned) {
@@ -163,9 +166,9 @@ export function ContemporariesStrip({
                   )
                 })}
               </ChipRow>
-            </CountryGroup>
+            </GroupRow>
           ))}
-        </ChipScrollRow>
+        </GroupTable>
       )}
 
       {/* 절단 안내는 스크롤 밖(항상 노출). 모달 임베드(onOpenCompare 없음)에선 수장비교로
@@ -294,34 +297,46 @@ const CompareLinkButton = styled.button`
   }
 `
 
-const ChipScrollRow = styled.div`
+const GroupTable = styled.div`
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-  /* 얇은 스크롤바 — 가로 스크롤 존재를 은은하게 알림 */
-  scrollbar-width: thin;
-  border-radius: 8px;
-  &:focus-visible {
-    outline: none;
-    box-shadow: ${({ theme }) => theme.colors.focusRing.primary};
+  flex-direction: column;
+`
+
+/* 국가 구획 한 행 — 라벨 열(고정폭)과 칩 열. 셀은 grid 기본(stretch)으로 늘려
+   라벨 열 세로 괘선이 행 전체 높이를 긋게 한다 */
+const GroupRow = styled.div`
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  column-gap: 12px;
+  padding: 7px 0;
+  & + & {
+    border-top: 1px solid
+      ${({ theme }) =>
+        theme.mode === 'dark' ? '#2a2a2a' : theme.colors.border.default};
   }
 `
 
-const CountryGroup = styled.div`
-  flex: 0 0 auto;
-`
-
-const CountryGroupLabel = styled.div`
-  margin-bottom: 5px;
-  font-size: 11px;
+const GroupLabelCell = styled.div`
+  padding: 6px 12px 2px 0;
+  font-size: 12px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  white-space: nowrap;
+  line-height: 1.45;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  /* 장문 국가명('그레이트브리튼 및 아일랜드 연합왕국')은 어절 단위로 줄바꿈 */
+  word-break: keep-all;
+  border-right: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? '#2a2a2a' : theme.colors.border.default};
 `
 
 const ChipRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+`
+
+const SkeletonRow = styled.div`
   display: flex;
   gap: 6px;
 `
@@ -390,6 +405,21 @@ const ChipGlyph = styled.span<{ $category: PositionCategory }>`
 
 const ChipName = styled.span`
   font-weight: 600;
+  /* 장문 왕호('카를로스 1세 (후아나 1세 jure matris 공동 군주)') 괴물 칩 방지 —
+     전문은 title(hover)·aria-label에 이미 실려 있다 */
+  max-width: 176px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+/** 어떤 재임인지 상시 노출 — 카테고리 글리프와 같은 색으로 종류 신호를 잇는다 */
+const ChipRole = styled.span<{ $category: PositionCategory }>`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme, $category }) =>
+    theme.mode === 'dark'
+      ? CATEGORY_TOKENS[$category].chip.dark.color
+      : CATEGORY_TOKENS[$category].chip.light.color};
 `
 
 const ChipSpan = styled.span`
