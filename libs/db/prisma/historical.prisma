@@ -256,6 +256,8 @@ model HistoricalCountry {
   administrationDepartments AdministrationDepartment[]    @relation("DeptHistoricalCountry")
   /// 이 정체에만 적용되는 관직 정의 스코프 (쇼군→도쿠가와 막부, 영의정→조선 등)
   positionDefinitionScopes  GovernmentPositionDefinitionScope[] @relation("HistoricalCountryPositionDefinitionScopes")
+  /// 이 역사적 국가 소속 군부대 (독일 제국 제1군, 조선 훈련도감 등)
+  militaryUnits             MilitaryUnit[]                @relation("MilitaryUnitHistoricalCountry")
   /// 이 역사적 국가의 행정구역 단위 설정 (예: 조선의 '도')
   adminDivisionConfigs      CountryAdminDivisionConfig[]  @relation("AdminDivConfigHistoricalCountry")
   /// 이 역사적 국가의 행정구역 체계 (팔도제·13도제 등)

@@ -27,6 +27,8 @@ import {
 } from '@/shared/api/administration-department'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllCountries } from '@/shared/api/countries'
+import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
+import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type {
   CreateMilitaryUnitInput,
   MilitaryUnit,
@@ -255,13 +257,11 @@ const MILITARY_BRANCHES = [
 ]
 
 /**
- * 군부대는 역사 국가를 소속으로 고를 수 없다 — MilitaryUnit에 historicalCountryId 컬럼이 없고
- * countryId는 현대 Country FK 전용이라, 역사 국가 id를 저장하면 FK 위반(P2003)으로 실패한다.
- * 지원하려면 스키마 확장(historicalCountryId 추가 + 마이그레이션)이 선행돼야 한다.
- * 그때까지 국가 선택 모달에는 빈 목록을 넘겨 역사 국가를 고를 수 없게 한다.
- * (참조 안정용 모듈 상수 — 인라인 []는 매 렌더 새 배열이라 모달 내부 memo가 무효화된다)
+ * 소속 국가는 현대(countryId)·역사(historicalCountryId) 듀얼 FK다.
+ * 스키마·DTO 모두 두 축을 동시에 담을 수 있지만(부처와 동일 규약), 이 폼은 부처 폼과 같이
+ * **상호배타**로 다룬다 — 고른 축만 채우고 반대편은 비운다. 표시·도출은 역사 우선.
+ * 독일 제국 제1군처럼 과거 정치체 소속 부대는 역사 축에 저장된다.
  */
-const NO_HISTORICAL_COUNTRIES: never[] = []
 
 type TabType = 'basic' | 'military' | 'description'
 
@@ -297,6 +297,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [modernCountries, setModernCountries] = useState<CountryResponseDto[]>(
     [],
   )
+  const [historicalCountries, setHistoricalCountries] = useState<
+    HistoricalCountryResponseDto[]
+  >([])
   const [allUnits, setAllUnits] = useState<MilitaryUnit[]>([])
 
   // Modals
@@ -315,6 +318,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [branch, setBranch] = useState('')
   const [branchName, setBranchName] = useState('')
   const [countryId, setCountryId] = useState('')
+  const [historicalCountryId, setHistoricalCountryId] = useState('')
   const [countryName, setCountryName] = useState('')
   const [countryFlagEmoji, setCountryFlagEmoji] = useState('')
   const [countryEnglishName, setCountryEnglishName] = useState('')
@@ -376,6 +380,8 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     setJurisdiction('')
     setActiveTab('basic')
     setAdministrationDepartmentId(defaultAdministrationDepartmentId ?? '')
+    // 신규 등록의 기본 국가는 현대 축뿐 — 역사 축은 항상 비운 채 시작한다
+    setHistoricalCountryId('')
     if (defaultCountryId) {
       setCountryId(defaultCountryId)
     } else {
@@ -397,15 +403,19 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   }, [isOpen, editingUnitId, countryId, modernCountries])
 
   useEffect(() => {
-    if (!countryId) {
+    // 부처 목록도 선택된 축을 따라간다 — 역사 국가 소속 부대는 그 역사 국가의 부처만 후보
+    if (!countryId && !historicalCountryId) {
       setAdminDepartments([])
       return
     }
     let cancelled = false
     ;(async () => {
       try {
-        const list =
-          await administrationDepartmentApi.getByCountryId(countryId)
+        const list = countryId
+          ? await administrationDepartmentApi.getByCountryId(countryId)
+          : await administrationDepartmentApi.getByHistoricalCountryId(
+              historicalCountryId,
+            )
         if (!cancelled) setAdminDepartments(Array.isArray(list) ? list : [])
       } catch {
         if (!cancelled) setAdminDepartments([])
@@ -414,17 +424,21 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     return () => {
       cancelled = true
     }
-  }, [countryId])
+  }, [countryId, historicalCountryId])
 
   useEffect(() => {
-    if (!countryId) setGarrisonPlace(null)
-  }, [countryId])
+    if (!countryId && !historicalCountryId) setGarrisonPlace(null)
+  }, [countryId, historicalCountryId])
 
   const loadCountries = async () => {
     try {
-      // 역사 국가는 로드하지 않음 — MilitaryUnit.countryId는 현대 Country FK 전용
-      const modern = await getAllCountries()
+      // 두 축을 모두 로드 — 부대는 현대·역사 국가 어느 쪽에도 소속될 수 있다
+      const [modern, historical] = await Promise.all([
+        getAllCountries(),
+        getAllHistoricalCountries(),
+      ])
       setModernCountries(modern)
+      setHistoricalCountries(Array.isArray(historical) ? historical : [])
     } catch {
       // ignore
     }
@@ -451,7 +465,14 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
           : '',
       )
       setCountryId(unit.countryId || '')
-      if (unit.country) {
+      const hydratedHistoricalCountryId = unit.historicalCountryId || ''
+      setHistoricalCountryId(hydratedHistoricalCountryId)
+      // 표시는 역사 우선 — 두 축이 다 채워진 부대는 역사 국가를 정체성으로 본다
+      if (unit.historicalCountry) {
+        setCountryName(unit.historicalCountry.name)
+        setCountryFlagEmoji('🏛️')
+        setCountryEnglishName(unit.historicalCountry.enName || '')
+      } else if (unit.country) {
         setCountryName(unit.country.name)
         setCountryFlagEmoji(unit.country.flagEmoji || '🏳️')
         setCountryEnglishName('')
@@ -530,6 +551,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         ? (branch as NonNullable<CreateMilitaryUnitInput['branch']>)
         : null,
       countryId: countryId || null,
+      historicalCountryId: historicalCountryId || null,
       parentUnitId: parentUnitId || null,
       administrationDepartmentId: administrationDepartmentId || null,
       isActive,
@@ -673,7 +695,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                   소속 국가 <Required title="필수" />
                 </FieldLabel>
                 <FieldControl>
-                  {countryId ? (
+                  {countryId || historicalCountryId ? (
                     <SidePanelFormSectionCard
                       style={{
                         display: 'flex',
@@ -722,6 +744,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                             onClick={() => {
                               playClickSound()
                               setCountryId('')
+                              setHistoricalCountryId('')
                               setCountryName('')
                               setCountryFlagEmoji('')
                               setCountryEnglishName('')
@@ -862,7 +885,10 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                       playClickSound()
                       setAdministrationDepartmentId(e.target.value)
                     }}
-                    disabled={!countryId || lockCountryAndDepartment}
+                    disabled={
+                      (!countryId && !historicalCountryId) ||
+                      lockCountryAndDepartment
+                    }
                   >
                     <option value="">— 없음 —</option>
                     {adminDepartments.map((d) => (
@@ -1205,18 +1231,32 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         isOpen={countryModalOpen}
         onClose={() => setCountryModalOpen(false)}
         onSelect={(country) => {
-          // 선택 후보는 현대 국가뿐(NO_HISTORICAL_COUNTRIES 주석 참고)
-          const modernCountry = modernCountries.find((c) => c.id === country.id)
-          const flagEmoji = modernCountry?.flagEmoji || '🏳️'
-
-          setCountryId(country.id)
+          // 상호배타 — 고른 축만 채우고 반대편은 비운다(부처 폼과 동일 규약)
+          if (country.isHistorical) {
+            const historical = historicalCountries.find(
+              (candidate) => candidate.id === country.id,
+            )
+            setCountryId('')
+            setHistoricalCountryId(country.id)
+            setCountryFlagEmoji('🏛️')
+            setCountryEnglishName(historical?.enName || '')
+          } else {
+            const modernCountry = modernCountries.find(
+              (candidate) => candidate.id === country.id,
+            )
+            setHistoricalCountryId('')
+            setCountryId(country.id)
+            setCountryFlagEmoji(modernCountry?.flagEmoji || '🏳️')
+            setCountryEnglishName('')
+          }
           setCountryName(country.name)
-          setCountryFlagEmoji(flagEmoji)
-          setCountryEnglishName('')
+          // 축이 바뀌면 이전 축의 부처 연결은 무효 — FK가 다른 국가를 가리키게 된다
+          setAdministrationDepartmentId('')
           setCountryModalOpen(false)
         }}
         modernCountries={modernCountries}
-        historicalCountries={NO_HISTORICAL_COUNTRIES}
+        historicalCountries={historicalCountries}
+        selectedCountryId={historicalCountryId || countryId || undefined}
       />
 
       {/* 부대 유형 선택 모달 */}

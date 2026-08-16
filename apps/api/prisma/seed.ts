@@ -120,6 +120,7 @@ import {
   seedJapanGeography,
   seedUsaGeography,
   seedChinaGeography,
+  seedGermanEmpireMilitaryUnits,
   seedDimitrijevic,
   seedJoffre,
   seedTisza,
@@ -670,6 +671,13 @@ async function main() {
 
         // 11. 행정 부처 카테고리 시딩 (국방·외교 등)
         await seedAdministrationDepartmentCategories(prisma)
+
+        // 15. 독일 제국 군부대 — 제1차 세계 대전 서부전선 제1군 + 육군 최고사령부(OHL)
+        //  · 의존: seedGermanyHistoricalCountries(독일 제국 HC) + seedCountries(현대 DE)
+        //    + seedAdministrationDepartmentCategories(국방 카테고리) — 그래서 카테고리 시드 뒤에 둔다
+        //  · 초대 사령관 알렉산더 폰 클루크는 시드가 아니라 UI로 등록된 인물이라
+        //    fresh reset 직후에는 없다 — 그때는 warn 후 지휘관 연결만 건너뛴다
+        await seedGermanEmpireMilitaryUnits(prisma)
 
         // 11-12. 드라구틴 디미트리예비치 «아피스» — 세르비아 참모본부 정보부장·흑수단 창립자
         //  · 의존: seedSerbiaHistoricalCountries('세르비아 왕국 (근대)' HC)

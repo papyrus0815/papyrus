@@ -48,7 +48,10 @@ export interface MilitaryUnitDto {
   name: string
   unitType?: MilitaryUnitType | null
   branch?: MilitaryBranch | null
+  /** 현대 소속 국가 — 표시/그룹핑 축 */
   countryId?: string | null
+  /** 역사 소속 국가(독일 제국 등) — 소속 축. 현대와 듀얼, 표시는 역사 우선 */
+  historicalCountryId?: string | null
   isActive?: boolean | null
   establishedDate?: string | null
   disbandedDate?: string | null
@@ -78,6 +81,16 @@ export interface MilitaryUnitDto {
     id: string
     name: string
     flagEmoji?: string | null
+  } | null
+  /** 역사 소속 국가 — 존속 연도까지 함께 내려 시대착오 표시를 막는다 */
+  historicalCountry?: {
+    id: string
+    name: string
+    enName?: string | null
+    startEra?: string | null
+    startYear?: number | null
+    endEra?: string | null
+    endYear?: number | null
   } | null
   parentUnit?: {
     id: string
@@ -117,6 +130,8 @@ export interface CreateMilitaryUnitDto {
   unitType?: MilitaryUnitType | null
   branch?: MilitaryBranch | null
   countryId?: (string & tags.Format<'uuid'>) | null
+  /** 역사 소속 국가(독일 제국 등). countryId와 동시 설정 가능 — 표시는 역사 우선 */
+  historicalCountryId?: (string & tags.Format<'uuid'>) | null
   isActive?: boolean | null
   establishedDate?: (string & tags.Format<'date-time'>) | null
   disbandedDate?: (string & tags.Format<'date-time'>) | null
@@ -142,6 +157,8 @@ export interface UpdateMilitaryUnitDto {
   unitType?: MilitaryUnitType | null
   branch?: MilitaryBranch | null
   countryId?: (string & tags.Format<'uuid'>) | null
+  /** 역사 소속 국가(독일 제국 등). countryId와 동시 설정 가능 — 표시는 역사 우선 */
+  historicalCountryId?: (string & tags.Format<'uuid'>) | null
   isActive?: boolean | null
   establishedDate?: (string & tags.Format<'date-time'>) | null
   disbandedDate?: (string & tags.Format<'date-time'>) | null

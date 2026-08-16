@@ -46,6 +46,17 @@ export class MilitaryUnitRepository {
             flagEmoji: true,
           },
         },
+        historicalCountry: {
+          select: {
+            id: true,
+            name: true,
+            enName: true,
+            startEra: true,
+            startYear: true,
+            endEra: true,
+            endYear: true,
+          },
+        },
         parentUnit: {
           select: {
             id: true,
@@ -114,6 +125,17 @@ export class MilitaryUnitRepository {
             flagEmoji: true,
           },
         },
+        historicalCountry: {
+          select: {
+            id: true,
+            name: true,
+            enName: true,
+            startEra: true,
+            startYear: true,
+            endEra: true,
+            endYear: true,
+          },
+        },
         parentUnit: {
           select: {
             id: true,
@@ -175,6 +197,7 @@ export class MilitaryUnitRepository {
           unitType: data.unitType,
           branch: data.branch ?? null,
           countryId: data.countryId,
+          historicalCountryId: data.historicalCountryId ?? null,
           isActive: data.isActive,
           establishedDate: data.establishedDate
             ? new Date(data.establishedDate)
@@ -217,6 +240,8 @@ export class MilitaryUnitRepository {
     if (data.unitType !== undefined) updateData.unitType = data.unitType
     if (data.branch !== undefined) updateData.branch = data.branch
     if (data.countryId !== undefined) updateData.countryId = data.countryId
+    if (data.historicalCountryId !== undefined)
+      updateData.historicalCountryId = data.historicalCountryId
     if (data.isActive !== undefined) updateData.isActive = data.isActive
     if (data.establishedDate !== undefined)
       updateData.establishedDate = data.establishedDate
