@@ -81,10 +81,25 @@ export class CreateEventDto {
   @IsOptional()
   aftermath?: string
 
-  @ApiProperty({ description: '상위 사건 ID', required: false })
+  @ApiProperty({
+    description: '상위 사건 ID. 미지정·null이면 최상위 사건으로 생성된다.',
+    required: false,
+    nullable: true,
+  })
   @IsString()
   @IsOptional()
-  parentEventId?: string
+  parentEventId?: string | null
+
+  @ApiProperty({
+    description:
+      "'최상위(앵커) 사건' 판정 오버라이드. 미지정이면 파생 판정(자손 ≥ 1). " +
+      "ANCHOR = 자손 0이어도 앵커, PLAIN = 자손이 있어도 앵커 제외.",
+    required: false,
+    enum: ['ANCHOR', 'PLAIN'],
+  })
+  @IsIn(['ANCHOR', 'PLAIN'])
+  @IsOptional()
+  anchorOverride?: 'ANCHOR' | 'PLAIN'
 
   @ApiProperty({
     description: '이미지 목록',

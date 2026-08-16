@@ -21,6 +21,8 @@ export class Event {
   background?: string | null
   aftermath?: string | null
   parentEventId?: string | null
+  /** '최상위(앵커) 사건' 판정 오버라이드 — null이면 파생(자손 ≥ 1) 자동 판정 */
+  anchorOverride?: 'ANCHOR' | 'PLAIN' | null
   cityId?: string | null
   administrativeDivisionId?: string | null
   historicalCountryId?: string | null

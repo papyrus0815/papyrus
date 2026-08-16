@@ -245,6 +245,9 @@ export class EventController {
       background: event.background,
       aftermath: event.aftermath,
       parentEventId: event.parentEventId,
+      // 앵커 오버라이드 — 프론트 isAnchorEvent가 파생 판정을 덮어쓸 때 읽는다.
+      // 매핑을 빠뜨리면 서버가 보내도 프론트에서 소멸한다(extraParentCount와 같은 사고).
+      anchorOverride: event.anchorOverride ?? null,
       // 소프트삭제된(유령) 부모는 breadcrumb·상위 링크에 노출하지 않는다 — link-candidates의
       // liveParent 정책과 통일. deletedAt은 include된 parentEvent에 실려온다(select 시엔 undefined라
       // 통과). 재귀 호출이 조상 각 단계에도 같은 게이트를 적용한다.
@@ -1244,6 +1247,7 @@ export class EventController {
         background: dto.background,
         aftermath: dto.aftermath,
         parentEventId: dto.parentEventId,
+        anchorOverride: dto.anchorOverride,
         cityId: dto.cityId,
         administrativeDivisionId: dto.administrativeDivisionId,
         historicalCountryId: dto.historicalCountryId,
@@ -1372,6 +1376,9 @@ export class EventController {
         background: dto.background,
         aftermath: dto.aftermath,
         parentEventId: dto.parentEventId,
+        // 3상 그대로 통과 — undefined(키 없음)=변경 안 함 / null=파생 자동 판정 복귀 / 값=고정.
+        // `?? undefined`를 끼우면 '최상위 지정 해제'가 조용한 no-op이 된다.
+        anchorOverride: dto.anchorOverride,
         cityId: dto.cityId,
         administrativeDivisionId: dto.administrativeDivisionId,
         historicalCountryId: dto.historicalCountryId,

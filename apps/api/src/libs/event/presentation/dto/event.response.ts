@@ -52,6 +52,16 @@ export class EventResponseDto {
   @ApiProperty({ description: '상위 사건 ID (주 상위 — 루트판정·트리·breadcrumb 기준)', required: false })
   parentEventId?: string | null
 
+  @ApiProperty({
+    description:
+      "'최상위(앵커) 사건' 판정 오버라이드. null(미지정)이면 파생 판정 — 자손이 하나라도 " +
+      "있으면 앵커. ANCHOR = 자손 0이어도 앵커로 취급, PLAIN = 자손이 있어도 앵커에서 제외. " +
+      '루트 판정(parentEventId IS NULL)과 직교한다.',
+    required: false,
+    enum: ['ANCHOR', 'PLAIN'],
+  })
+  anchorOverride?: 'ANCHOR' | 'PLAIN' | null
+
   @ApiProperty({ description: '상위 사건 정보 (주 상위)', required: false })
   parentEvent?: EventResponseDto
 

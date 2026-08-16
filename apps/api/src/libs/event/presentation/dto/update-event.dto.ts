@@ -84,10 +84,37 @@ export class UpdateEventDto {
   @IsOptional()
   aftermath?: string
 
-  @ApiProperty({ description: '상위 사건 ID', required: false })
+  /**
+   * 상위 사건 ID — **3상**: 키 없음(변경 안 함) / id(지정) / null(해제해 최상위로).
+   *
+   * 런타임은 원래부터 3상이었는데(event.service.ts의 `=== undefined` 가드) 계약이
+   * `string`이라, 타입 안전한 '최상위로 올리기' 호출이 불가능했다 — 프론트가 캐스트로
+   * 뚫거나 `|| undefined`로 접어 조용한 no-op을 만들고 있었다(검토 배치5).
+   */
+  @ApiProperty({
+    description: '상위 사건 ID. null을 보내면 상위를 해제해 최상위 사건이 된다.',
+    required: false,
+    nullable: true,
+  })
   @IsString()
   @IsOptional()
-  parentEventId?: string
+  parentEventId?: string | null
+
+  /**
+   * 앵커 오버라이드 — **3상**이다: 키 없음(변경 안 함) / 'ANCHOR' / 'PLAIN' / null(자동으로 되돌림).
+   * null을 계약에 넣어야 '지정 해제'가 타입 안전하게 표현된다.
+   */
+  @ApiProperty({
+    description:
+      "'최상위(앵커) 사건' 판정 오버라이드. null을 보내면 파생 자동 판정으로 되돌린다. " +
+      '키를 생략하면 변경하지 않는다.',
+    required: false,
+    nullable: true,
+    enum: ['ANCHOR', 'PLAIN'],
+  })
+  @IsIn(['ANCHOR', 'PLAIN', null])
+  @IsOptional()
+  anchorOverride?: 'ANCHOR' | 'PLAIN' | null
 
   @ApiProperty({
     description: '이미지 목록',

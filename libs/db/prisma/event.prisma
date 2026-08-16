@@ -93,6 +93,22 @@ enum EventOrganizationRole {
   OTHER
 }
 
+/// '최상위(앵커) 사건' 판정 오버라이드.
+///
+/// ⚠️ 앵커 **여부를 저장하는 컬럼이 아니다.** 기본 판정은 파생(자손 ≥ 1)이고, 이 컬럼은
+/// 그 판정을 덮어쓰기만 한다(null = 자동). 그래서 도입 시 백필이 0이고, 자식을 붙이거나
+/// 떼면 앵커 여부가 저절로 따라온다 — 저장형 플래그였다면 계층 쓰기 경로 11곳마다
+/// 재계산 훅이 필요했다(docs/event-root-designation-review.md 안 B 기각 사유와 동종).
+///
+/// 판정 단일식(프론트 features/event-hierarchy/model/anchor.ts):
+///   isAnchor = ANCHOR || (!PLAIN && descendantCount >= 1)
+enum EventAnchorOverride {
+  /// 자손이 0이어도 최상위(앵커) 사건으로 취급 — '아직 하위가 없는 전쟁'을 미리 선언
+  ANCHOR
+  /// 자손이 있어도 앵커로 취급하지 않음 — 자손 1짜리 잡음을 손으로 빼는 탈출구
+  PLAIN
+}
+
 /// 진영 레벨
 enum SideLevel {
   /// 연합 (예: 연합군, 추축국)
@@ -286,6 +302,12 @@ model Event {
   /// 부모-자식 사건 — '주(primary) 상위'. 추가 상위는 EventParentLink 엣지.
   /// 루트 판정(parentEventId IS NULL — raw SQL 포함 5곳)이 이 컬럼 하나에 의존한다(INV-2).
   parentEventId String? @map("parent_event_id") @db.Char(36)
+
+  /// '최상위(앵커) 사건' 판정 오버라이드 — null이면 파생(자손 ≥ 1)으로 자동 판정.
+  /// 루트 판정(parentEventId IS NULL)과 **직교**한다: 루트여도 앵커가 아닐 수 있고,
+  /// 상위가 있어도 앵커일 수 있다(그때 화면 라벨은 '최상위'가 아니라 '하위 N건').
+  /// 계층 쓰기 경로를 전혀 건드리지 않는 독립 스칼라라 INV-1/2/3에 영향이 없다.
+  anchorOverride EventAnchorOverride? @map("anchor_override")
 
   /// 전쟁 비용 (텍스트)
   warCost String? @map("war_cost") @db.Text

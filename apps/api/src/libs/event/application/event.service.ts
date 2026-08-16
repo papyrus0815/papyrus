@@ -1406,22 +1406,49 @@ export class EventService {
       throw new ForbiddenException('본인이 삭제한 사건만 복구할 수 있습니다.')
     }
     
-    const restored = await this.prisma.event.update({
-      where: { id },
-      data: {
-        deletedAt: null,
-        deletedById: null,
-      },
-      include: {
-        category: true,
-      },
+    /**
+     * 유령 부모 가드 — 주 상위가 소프트삭제된 상태로 복구하면 그 사건은 되살아나되
+     * **어느 목록에도 안 나온다**: 루트 목록은 parentEventId가 있어서 빼고, 부모는
+     * 삭제돼 있어 그 하위로도 도달할 수 없다(휴지통에서 꺼냈는데 사라지는 것처럼 보임).
+     *
+     * 그래서 부모가 죽어 있으면 **최상위로 올려** 복구하고 그 사실을 응답으로 고지한다.
+     * ⚠️ 이때 `extraParentLinks`를 같은 트랜잭션에서 반드시 비운다 — INV-2('추가 상위는
+     * 주 상위가 있는 사건에만')가 곧바로 깨지기 때문. 이 정리를 빠뜨린 가드는
+     * 가드 자체가 불변식 위반의 원천이 된다.
+     */
+    const liveParent = event.parentEventId
+      ? await this.prisma.event.findFirst({
+          where: { id: event.parentEventId, deletedAt: null },
+          select: { id: true },
+        })
+      : null
+    const restoredAsRoot = Boolean(event.parentEventId) && !liveParent
+
+    const restored = await this.prisma.$transaction(async (tx) => {
+      if (restoredAsRoot) {
+        await tx.eventParentLink.deleteMany({ where: { childEventId: id } })
+      }
+      return tx.event.update({
+        where: { id },
+        data: {
+          deletedAt: null,
+          deletedById: null,
+          ...(restoredAsRoot ? { parentEventId: null } : {}),
+        },
+        include: {
+          category: true,
+        },
+      })
     })
-    
+
     // 게이미피케이션: 복구 시 회수했던 점수 복원
     await this.pointService.restoreForRecord(AggregateType.EVENT, id)
 
-    console.log(`♻️ 사건 복구: ${id}`)
-    return restored
+    console.log(
+      `♻️ 사건 복구: ${id}${restoredAsRoot ? ' (상위가 삭제돼 최상위로 복구)' : ''}`,
+    )
+    // 호출부(컨트롤러)가 사용자에게 '최상위로 복구됐다'고 알릴 수 있도록 플래그를 얹는다.
+    return { ...restored, restoredAsRoot }
   }
 
   /**
