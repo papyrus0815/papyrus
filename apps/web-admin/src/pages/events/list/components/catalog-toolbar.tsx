@@ -11,6 +11,7 @@ import {
   FiChevronsDown,
   FiChevronsUp,
   FiDownload,
+  FiFlag,
   FiHelpCircle,
   FiPlus,
   FiSearch,
@@ -76,11 +77,26 @@ interface Props {
   toggleBookmarksOnly: () => void
   bookmarksCount: number
   /**
+   * 최상위(앵커) 사건 축 — 자손이 있는 루트만 남긴다.
+   * 생존 루트의 88%가 자식 0인 단독 사건이라, 이 칩이 없으면 앵커가 파묻힌다
+   * (docs/event-root-designation-review.md).
+   */
+  anchorsOnly: boolean
+  toggleAnchorsOnly: () => void
+  /** 로드된 최상위 중 앵커 수 — 배지 모수 */
+  anchorsCount: number
+  /**
    * 하위 사건 일괄 접기/펼치기 — 자식 보유 사건은 로드될 때마다 전부 자동 전개되는데
    * 되돌릴 일괄 수단이 목록에 없었다('계층' 토글은 평면 모드라 오히려 행이 늘어난다).
    * 정리하려면 부모마다 20px 셰브론을 30여 번 눌러야 했다(검토 CR-5).
    */
-  allChildrenCollapsed: boolean
+  childrenCollapsed: boolean
+  /** 접어 둔 연·세기 밴드 수 — 0이 아니면 칩 행이 열리고 해제 칩이 뜬다 */
+  collapsedBandCount: number
+  /** 접어 둔 밴드만 전부 펼친다(필터는 유지) */
+  onExpandAllBands: () => void
+  /** 접었다 펼 하위 사건이 **하나라도** 있는가 — 없으면 버튼 자체가 할 일이 없다 */
+  hasCollapsibleChildren: boolean
   onCollapseAllChildren: () => void
   onExpandAllChildren: () => void
 
@@ -131,7 +147,13 @@ export const CatalogToolbar: React.FC<Props> = ({
   bookmarksOnly,
   toggleBookmarksOnly,
   bookmarksCount,
-  allChildrenCollapsed,
+  anchorsOnly,
+  toggleAnchorsOnly,
+  anchorsCount,
+  childrenCollapsed,
+  hasCollapsibleChildren,
+  collapsedBandCount,
+  onExpandAllBands,
   onCollapseAllChildren,
   onExpandAllChildren,
   recentEventIds,
@@ -150,7 +172,13 @@ export const CatalogToolbar: React.FC<Props> = ({
    * 페이지가 세어 내려주던 `activeFilterCount` prop은 제거했다 — 두 곳이 각자 세는 한
    * 언젠가 다시 갈리기 때문이다. 무엇을 칩으로 낼지는 페이지가, 세는 것은 여기가 한다.
    */
-  const chipCount = filterSummaryChips.length + (bookmarksOnly ? 1 : 0)
+  const chipCount =
+    filterSummaryChips.length + (bookmarksOnly ? 1 : 0) + (anchorsOnly ? 1 : 0)
+  /**
+   * 하위 일괄 토글이 할 일이 있는가. 평면 보기는 자손이 이미 전부 depth 0으로 나열돼
+   * 접을 것이 없고(검토 GAP-6), 계층 보기라도 자식 보유 사건이 0건이면 마찬가지다.
+   */
+  const canToggleChildren = !showFlatView && hasCollapsibleChildren
 
   return (
     <>
@@ -237,28 +265,40 @@ export const CatalogToolbar: React.FC<Props> = ({
            * 계층을 다시 켜는 순간 **그때 접힘이 터졌다**(원인과 결과가 분리된 지연 폭발).
            * 행 셰브론이 `canExpand`로 같은 판정을 이미 하고 있으므로 규약을 맞춘다.
            */}
+          {/**
+           * ⚠️ 라벨과 `aria-pressed`를 **같은 조건으로 동시에 뒤집지 않는다**(검토 A11Y-8).
+           * 예전엔 접힌 상태에서 이름이 '하위 펼치기'인데 상태가 '눌림'이라
+           * "하위 펼치기, 눌림"으로 낭독됐다 — 낭독만 들으면 지금 펼쳐져 있다고 읽힌다.
+           * 라벨은 다음 동작을 말하고, 상태는 `aria-pressed` 없이 접근 설명이 싣는다.
+           */}
           <ToolbarStyles.ToolbarBtn
             type="button"
-            $active={!showFlatView && allChildrenCollapsed}
-            disabled={showFlatView}
+            $active={canToggleChildren && childrenCollapsed}
+            disabled={!canToggleChildren}
             title={
               showFlatView
                 ? '평면 보기에서는 하위 사건이 이미 모두 펼쳐져 있어 접을 것이 없습니다'
-                : allChildrenCollapsed
-                  ? '하위 사건 모두 펼치기'
-                  : '하위 사건 모두 접기 — 최상위 사건만 훑을 때'
+                : !hasCollapsibleChildren
+                  ? '지금 목록에는 하위 사건을 가진 사건이 없습니다'
+                  : childrenCollapsed
+                    ? '하위 사건 모두 펼치기 — 지금 일부가 접혀 있습니다'
+                    : '하위 사건 모두 접기 — 최상위 사건만 훑을 때'
             }
-            aria-pressed={!showFlatView && allChildrenCollapsed}
+            aria-label={
+              childrenCollapsed
+                ? '하위 사건 모두 펼치기 — 지금 일부가 접혀 있습니다'
+                : '하위 사건 모두 접기'
+            }
             onClick={
-              allChildrenCollapsed ? onExpandAllChildren : onCollapseAllChildren
+              childrenCollapsed ? onExpandAllChildren : onCollapseAllChildren
             }
           >
-            {allChildrenCollapsed ? (
+            {childrenCollapsed ? (
               <FiChevronsDown size={ICON_SIZE.base} aria-hidden="true" />
             ) : (
               <FiChevronsUp size={ICON_SIZE.base} aria-hidden="true" />
             )}
-            <span>{allChildrenCollapsed ? '하위 펼치기' : '하위 접기'}</span>
+            <span>{childrenCollapsed ? '하위 펼치기' : '하위 접기'}</span>
           </ToolbarStyles.ToolbarBtn>
           <ToolbarStyles.ToolbarBtn
             type="button"
@@ -274,6 +314,19 @@ export const CatalogToolbar: React.FC<Props> = ({
             {bookmarksCount > 0 && (
               <Badge tone="primary">{bookmarksCount}</Badge>
             )}
+          </ToolbarStyles.ToolbarBtn>
+          <ToolbarStyles.ToolbarBtn
+            type="button"
+            $active={anchorsOnly}
+            /* '최상위 사건'의 정의를 토글 지점에서 밝힌다 — 파생 규약(자손 ≥ 1)이라
+               사용자가 하위를 붙이거나 떼면 이 목록이 자동으로 달라진다. */
+            title="하위 사건을 가진 최상위 사건만 보기 — 하위를 붙이면 자동으로 포함됩니다"
+            aria-pressed={anchorsOnly}
+            onClick={toggleAnchorsOnly}
+          >
+            <FiFlag size={ICON_SIZE.base} />
+            <span>최상위</span>
+            {anchorsCount > 0 && <Badge tone="primary">{anchorsCount}</Badge>}
           </ToolbarStyles.ToolbarBtn>
           <ToolbarStyles.ToolbarBtn
             type="button"
@@ -308,13 +361,18 @@ export const CatalogToolbar: React.FC<Props> = ({
        * 툴바 **바깥 전용 행**이다 — 인라인이던 시절엔 칩 하나가 생겨도 툴바가 한 줄
        * 늘었다 줄었다 해서 높이가 폭·필터 상태에 종속됐다.
        */}
-      {chipCount > 0 && (
+      {/* ⚠️ 렌더 조건에 **접힘**도 넣는다(검토 CTRL-3). 필터가 0개인 채로 세기·연도 밴드만
+          접으면 이 행 자체가 렌더되지 않아, 접힌 자리에 '19세기 — N행 접힘'만 남고
+          되돌릴 일괄 수단이 화면 어디에도 없었다('전체 초기화'가 그 역할인데 이 행 안에 있다). */}
+      {(chipCount > 0 || collapsedBandCount > 0) && (
         <Layout.ActiveFiltersRow>
           <ToolbarStyles.ActiveFiltersBar>
-            <ToolbarStyles.ActiveFilterCount>
-              <FiSearch size={ICON_SIZE.xs} />
-              <span>{chipCount}개 적용 중</span>
-            </ToolbarStyles.ActiveFilterCount>
+            {chipCount > 0 && (
+              <ToolbarStyles.ActiveFilterCount>
+                <FiSearch size={ICON_SIZE.xs} />
+                <span>{chipCount}개 적용 중</span>
+              </ToolbarStyles.ActiveFilterCount>
+            )}
             {filterSummaryChips.map((chip) => (
               <ToolbarStyles.ActiveFilterChip
                 key={chip.key}
@@ -334,6 +392,30 @@ export const CatalogToolbar: React.FC<Props> = ({
               >
                 <FiBookmark size={ICON_SIZE.xs} aria-hidden="true" />
                 <span>북마크된 항목만</span>
+                <FiX size={ICON_SIZE.xs} aria-hidden="true" />
+              </ToolbarStyles.ActiveFilterChip>
+            )}
+            {anchorsOnly && (
+              <ToolbarStyles.ActiveFilterChip
+                type="button"
+                onClick={toggleAnchorsOnly}
+                aria-label="최상위 사건 필터 끄기"
+              >
+                <FiFlag size={ICON_SIZE.xs} aria-hidden="true" />
+                <span>최상위 사건만</span>
+                <FiX size={ICON_SIZE.xs} aria-hidden="true" />
+              </ToolbarStyles.ActiveFilterChip>
+            )}
+            {/* 접힌 밴드는 필터가 아니지만 **행을 감춘다**는 점에서 같은 축이다.
+                여기서 접힘만 따로 풀 수 있어야 필터를 유지한 채 되돌릴 수 있다. */}
+            {collapsedBandCount > 0 && (
+              <ToolbarStyles.ActiveFilterChip
+                type="button"
+                onClick={onExpandAllBands}
+                aria-label={`접어 둔 연도·세기 ${collapsedBandCount}개 모두 펼치기`}
+              >
+                <FiChevronsDown size={ICON_SIZE.xs} aria-hidden="true" />
+                <span>{collapsedBandCount}개 밴드 접힘</span>
                 <FiX size={ICON_SIZE.xs} aria-hidden="true" />
               </ToolbarStyles.ActiveFilterChip>
             )}

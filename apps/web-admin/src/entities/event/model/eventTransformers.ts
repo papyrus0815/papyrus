@@ -150,6 +150,15 @@ export const transformEventsFromApi = (
         logisticalScale: '',
       },
       parentEventId: evt.parentEventId ?? undefined,
+      /**
+       * 앵커 오버라이드 — **여기서 빠뜨리면 서버가 보내도 프론트에서 소멸한다.**
+       * `extraParentCount`가 정확히 그렇게 죽어 있었다(응답에 실려 오는데 매핑 누락).
+       * 타입에는 선언돼 있어 tsc가 잡아 주지 않는 종류의 결함이라 주석으로 못박는다.
+       */
+      anchorOverride: evt.anchorOverride ?? null,
+      // 같은 사고의 원본 — 서버 `_count.extraParentLinks`가 실려 오는데 매핑이 없어
+      // 런타임엔 늘 undefined였다. '미로드'와 '0개'를 구분해야 하므로 ?? 0 금지.
+      extraParentCount: (evt as { extraParentCount?: number }).extraParentCount,
       sectionTitles: evt.sectionTitles ?? [],
       eventSections: evt.eventSections,
       eventImages: evt.eventImages,

@@ -8,6 +8,16 @@ import type { CenturyFilter, FilterChip } from '@/entities/event/model'
 // 값(런타임) import는 배럴이 아니라 types 모듈에서 직접 — 배럴은 useEvents → api.service를
 // 끌고 오고 그 안의 `import.meta`가 jest(ts-jest CJS) 컴파일을 막는다.
 import { CENTURY_UNKNOWN } from '@/entities/event/model/types'
+// 값 import는 배럴이 아니라 개별 모듈에서 직접 — features/event-hierarchy 배럴은
+// useEventHierarchy(react 훅)를 끌고 오고, 이 훅의 spec은 그걸 필요로 하지 않는다.
+import {
+  getEventDescendantCount,
+  isAnchorEvent,
+} from '@/features/event-hierarchy/model/anchor'
+import {
+  isRenderRoot,
+  isTreeRoot,
+} from '@/features/event-hierarchy/model/root-event'
 import {
   FILTER_ALL,
   SORT_OPTIONS,
@@ -64,6 +74,25 @@ export interface EventFilterInitialState {
 export interface EventFilterOptions {
   /** '북마크만' 모드 */
   bookmarksOnly?: boolean
+  /**
+   * '최상위(앵커) 사건만' 모드 — 자손이 있는 루트만 남긴다.
+   *
+   * ⚠️ 북마크와 달리 **축 술어(`matchesEvent`)에 넣지 않는다.** 술어에 넣으면 평탄화가
+   * 자식에도 같은 판정을 적용해, 앵커를 펼쳤을 때 정작 하위 사건이 전부 사라진다
+   * (자식은 대부분 자손 0이라 앵커가 아니다). 루트 선별 단계에서만 거른다.
+   */
+  anchorsOnly?: boolean
+  /**
+   * 앵커 스코프 — 이 사건과 그 자손으로 **모수 자체를 좁힌다**.
+   *
+   * ⚠️ 자동 펼침이 아니라 모수 축소여야 한다. 펼침으로 구현하면 useEventHierarchy의
+   * 펼침 래치와 싸우고(사용자가 접으면 다시 열리거나 그 반대), 화면 밖 165건이 여전히
+   * 모수에 남아 헤더 숫자·필터 옵션 건수가 앵커 밖을 센다.
+   *
+   * 앵커 자신이 상위를 가진 사건이어도 이 화면에서는 최상위로 그려진다 —
+   * `isTreeRoot`로 걸러 버리면 비루트 앵커 진입 시 **화면이 통째로 빈다**(검토 K4).
+   */
+  scopeAnchorId?: string | null
   /** 북마크된 사건 id 집합(브라우저 로컬) */
   bookmarks?: ReadonlySet<string>
   /** URL에서 읽어 온 초기 필터 값 — 첫 렌더에만 적용 */
@@ -102,6 +131,8 @@ export const useEventFilters = (
    */
   const {
     bookmarksOnly = false,
+    anchorsOnly = false,
+    scopeAnchorId = null,
     bookmarks,
     initial,
     referenceState = READY_REFERENCE_STATE,
@@ -229,6 +260,29 @@ export const useEventFilters = (
   }, [events])
 
   /**
+   * 앵커 스코프 id 집합 — 앵커 자신 + 모든 자손.
+   *
+   * `childrenByParent`(평면 배열 기반)로 걷는다 — `hierarchy` 노드는 응답 깊이 캡에
+   * 묶여 있지만 평면 배열에는 로드된 사건이 전부 들어 있어 더 깊이 간다.
+   * `seen`은 순환 방어 — 데이터에 순환이 없다는 감사 결과와 무관하게, 여기서 무한
+   * 루프가 나면 탭이 죽는다.
+   */
+  const scopeIds = useMemo(() => {
+    if (!scopeAnchorId) return null
+    const ids = new Set<string>()
+    const stack = [scopeAnchorId]
+    while (stack.length > 0) {
+      const currentId = stack.pop() as string
+      if (ids.has(currentId)) continue
+      ids.add(currentId)
+      for (const child of childrenByParent.get(currentId) ?? []) {
+        stack.push(child.id)
+      }
+    }
+    return ids
+  }, [scopeAnchorId, childrenByParent])
+
+  /**
    * 내용을 좁히는 필터가 하나라도 걸려 있는가.
    * (정렬·계층 토글은 '표시 옵션'이라 여기 포함하지 않는다.)
    *
@@ -325,10 +379,22 @@ export const useEventFilters = (
       return kids ? kids.some(matchesSelfOrDescendant) : false
     }
 
-    return events
-      .filter((event) => !event.parentEventId)
-      .filter(matchesSelfOrDescendant)
-  }, [events, childrenByParent, matchesEvent])
+    /**
+     * 루트 판정은 두 술어로 갈린다(검토 K4):
+     *  · 전역 모수  — `isTreeRoot`(서버 ROOT_EVENT_WHERE의 미러)
+     *  · 앵커 스코프 — `isRenderRoot`(부모가 모수 밖이면 이 화면의 최상위)
+     * 앵커 스코프에서 `isTreeRoot`를 쓰면 비루트 앵커 진입 시 0행이 된다.
+     */
+    const roots = scopeIds
+      ? events.filter(
+          (event) => scopeIds.has(event.id) && isRenderRoot(event, scopeIds),
+        )
+      : events.filter(isTreeRoot)
+    // 앵커 축은 루트 선별 단계 전용 — 자식엔 적용되지 않는다(적용하면 펼쳐도 자식이 없다).
+    // 스코프 안에서는 의미가 없으므로(모수가 이미 한 앵커) 적용하지 않는다.
+    const scoped = anchorsOnly && !scopeIds ? roots.filter(isAnchorEvent) : roots
+    return scoped.filter(matchesSelfOrDescendant)
+  }, [events, childrenByParent, matchesEvent, anchorsOnly, scopeIds])
 
   /**
    * ===== 옵션 건수 + drop-one-out (검토 IA-13 · IA-12 · IA-2) =====
@@ -373,6 +439,16 @@ export const useEventFilters = (
             return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time
           }
           comparison = createdKey(eventA) - createdKey(eventB)
+          break
+        }
+        case 'descendants': {
+          /**
+           * 하위 많은 순 — 자손 수가 같으면 시간축으로 내려가 안정 정렬을 만든다.
+           * (같은 값끼리 `sort`가 순서를 흔들면 목록이 렌더마다 미세하게 뒤바뀐다.)
+           */
+          comparison =
+            getEventDescendantCount(eventA) - getEventDescendantCount(eventB)
+          if (comparison === 0) comparison = startKey(eventA) - startKey(eventB)
           break
         }
         case 'recent':

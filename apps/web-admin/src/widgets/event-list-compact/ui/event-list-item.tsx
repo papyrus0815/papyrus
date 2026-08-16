@@ -13,7 +13,13 @@
  */
 import React from 'react'
 
-import { FiBookmark, FiChevronRight, FiLayers } from 'react-icons/fi'
+import {
+  FiBookmark,
+  FiChevronRight,
+  FiCornerLeftUp,
+  FiFlag,
+  FiLayers,
+} from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { getCategoryName } from '@/features/event-list/lib'
@@ -27,10 +33,17 @@ import {
   CONTROL,
   LIST_STEPS,
   MOTION,
+  focusRingInset,
   focusRingOnTinted,
   metaText,
   rowHairline,
 } from '../../../pages/events/styles/theme'
+import {
+  getAnchorBadgeLabel,
+  getEventDescendantCount,
+  isSoloRootEvent,
+} from '@/features/event-hierarchy/model/anchor'
+
 import type {
   EventHierarchyNode,
   HistoricalEvent,
@@ -42,10 +55,24 @@ interface EventListItemProps {
   depth: number
   isExpanded: boolean
   hasChildren: boolean
+  /** 최상위(앵커) 배지 클릭 — 그 사건 아래로 카탈로그 모수를 좁힌다. 없으면 정적 표기. */
+  onEnterAnchorScope?: (eventId: string) => void
   /** 직계 자식 수 — 접었을 때 무엇이 숨는지 알려주는 배지 */
   childCount?: number
   /** 필터 때문에 숨겨진 직계 자식 수 — 조용한 누락 방지 */
   hiddenChildCount?: number
+  /**
+   * 이 행의 **상위 사건 앵커** — 부모가 이 행과 *다른 연 밴드*에 놓였을 때만 채워진다.
+   *
+   * 자식은 보통 부모 바로 아래 붙지만, ⑴ 필터가 걸리면 매칭 자식이 자기 연도 밴드로
+   * 옮겨 가고(DATA-9) ⑵ 세기 칩 하나에 16~27행이 그렇게 이동한다. 그러면 화면에는
+   * 부모 없이 들여쓰기만 남은 행이 서고, 바로 위 행은 무관한 사건이다(검토 IDX-7).
+   * 계보를 말하는 텍스트가 목록 행에 하나도 없었기 때문에(부모 이름 0회) 그 행이
+   * 무엇의 하위인지 알 방법이 없었다.
+   */
+  anchorParent?: { id: string; title: string; year: number | null } | null
+  /** 트리에서의 부모 노드 id — ← 키가 부모 행으로 올라갈 때 쓴다(최상위는 null) */
+  parentNodeId?: string | null
   /**
    * 이 행 자체가 현재 필터를 만족하는가. false = '매칭된 후손이 있어 문맥용으로만 남은 부모'.
    * 이 값이 화면에 반영되지 않으면 헤더 '조건 일치 12건'과 목록 18행의 차이를 설명할
@@ -297,8 +324,11 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   depth,
   isExpanded,
   hasChildren,
+  onEnterAnchorScope,
   childCount = 0,
   hiddenChildCount = 0,
+  anchorParent = null,
+  parentNodeId = null,
   isMatch = true,
   isActive,
   dbCategories,
@@ -365,9 +395,45 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
         return groupHeaderless ? `${startParts.year}` : ''
       return `${yearPrefix}${startParts.month}.${startParts.day}`
     }
-    return `${startParts.year}`
+    /**
+     * 그룹 헤더와 다른 해 — 예전엔 연도만 돌려줘 월·일이 통째로 사라졌다(검토 IDX-4).
+     * 1875년 밴드는 날짜 열이 '(1878)(1878)(1877)(1877)(1877)(1876)×5'로 찍혀,
+     * 같은 괄호 연도 안의 선후를 알 단서가 화면에 하나도 없었다(실제 값은 1877-04-24 /
+     * 01-15 / 12-13). 월까지 되살리면 그 순서가 읽힌다.
+     *
+     * 일(day)까지는 넣지 않는다 — '1877.4.24'는 9자로 날짜 열 예산(cozy 66px)을 넘겨
+     * 초과분을 제목이 떠안는다(BC 축약이 같은 이유로 도입됐다). 정밀한 전체 값은
+     * 아래 title 속성이 유지한다.
+     */
+    const precision = event.startDatePrecision
+    if (precision === 'year') return `${startParts.year}`
+    if (startParts.month === 1 && startParts.day === 1)
+      return `${startParts.year}`
+    return `${startParts.year}.${startParts.month}`
+  })()
+  /** 날짜 열의 전체 값 — 열 예산 때문에 축약된 토큰(BC·off-group)의 원본. */
+  const rowDateTitle = (() => {
+    if (!startParts) return undefined
+    const era = startParts.year < 0 ? '기원전 ' : ''
+    const yearText = `${era}${Math.abs(startParts.year)}년`
+    const precision = event.startDatePrecision
+    if (precision === 'year') return yearText
+    if (precision === 'month') return `${yearText} ${startParts.month}월`
+    if (startParts.month === 1 && startParts.day === 1) return yearText
+    return `${yearText} ${startParts.month}월 ${startParts.day}일`
   })()
   const matchReason = buildMatchReason(node, event, searchQuery)
+  /**
+   * 앵커(최상위 사건) 표기 — 판정은 `features/event-hierarchy/model/anchor.ts` 단일출처.
+   *
+   * ⚠️ 모수를 `childCount`(직계만)로 바꾸지 말 것. 그러면 손자를 가진 사건의 배지가
+   * 실제 서브트리 크기보다 작게 찍혀, 지면마다 다른 것을 세던 원래 문제로 되돌아간다
+   * (검토 근인 4). depth로 최상위를 판정하지 않는 이유도 같다 — 필터가 걸리면
+   * 자식 행이 depth 0으로 승격된다.
+   */
+  const anchorBadgeLabel = getAnchorBadgeLabel(event)
+  const anchorDescendantCount = getEventDescendantCount(event)
+  const isSolo = isSoloRootEvent(event)
   /* 넓은 카드에서만 그려진다(CSS 컨테이너 쿼리). 문자열 계산은 좁은 카드에서도 돌지만
      행당 정규식 2회·slice 2회라 252행 기준 무시할 수 있다 — 대신 폭 판정을 JS로 끌고 와
      ResizeObserver를 다는 것보다 훨씬 싸다. */
@@ -438,6 +504,21 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
       aria-setsize={setSize}
       aria-current={isActive ? 'true' : undefined}
       data-event-id={node.id}
+      {...
+      /**
+       * 트리 키(←/→)가 읽는 계층 상태 — 모델 배열이 아니라 **DOM**에 싣는다.
+       * ↑↓ 내비가 이미 '렌더된 행'을 DOM에서 뽑는 규약이라(접힌 밴드의 행은 애초에
+       * DOM에 없다), 같은 판정 근거를 쓰면 두 키가 서로 다른 집합을 보는 일이 없다.
+       */
+      {
+        'data-parent-id': parentNodeId ?? undefined,
+        'data-can-expand': hasChildren ? 'true' : undefined,
+        'data-expanded': hasChildren
+          ? isExpanded
+            ? 'true'
+            : 'false'
+          : undefined,
+      }}
       data-active={isActive ? 'true' : undefined}
     >
       {/* 6트랙 원장 격자 — [날짜][분류][제목][기간][국가][액션].
@@ -447,7 +528,10 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
        * 실측 제목 좌측 x 11종(219~265) · 기간 x 157종 · 국기 x 161종.
        * 폭 고정 트랙 5개 + minmax(0,1fr) 하나로 전 행·전 그룹 공통 축을 만든다. */}
       <Body>
-        <Year data-offgroup={isOffGroupYear ? 'true' : undefined}>
+        <Year
+          data-offgroup={isOffGroupYear ? 'true' : undefined}
+          title={rowDateTitle}
+        >
           {rowDateLabel}
         </Year>
         <CategoryLabel
@@ -465,7 +549,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
          * (액션 우측 끝이 985/1007로 갈리던 문제). 이제 depth가 바꾸는 것은 제목 텍스트
          * 시작점 하나뿐이다. */}
         <TitleCell $spanSummary={!snippet && !matchReason}>
-          <Indent aria-hidden="true" />
+          <Indent aria-hidden="true" $depth={depth} />
           {hasChildren ? (
             <Disclosure
               type="button"
@@ -478,12 +562,16 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
               // 그대로 탭 정지점으로 남아 목록을 빠져나가는 데 수백 번이 필요하다.
               tabIndex={isRovingTarget ? 0 : -1}
               aria-expanded={isExpanded}
+              /* 이름을 **자족시킨다**(검토 A11Y-9). 390px 브라우즈 모드에서는
+                 '9.22 → 전쟁 → 하위 사건 18개 펼치기 → 1차세계대전' 순으로 낭독돼
+                 버튼 이름만 들은 시점에는 무엇의 하위인지 알 수 없었다.
+                 ⚠️ DOM 순서를 바꿔 해결하지 말 것 — 데스크톱 3열 서브격자가 깨진다. */
               aria-label={
                 childCount > 0
-                  ? `하위 사건 ${childCount}개 ${isExpanded ? '접기' : '펼치기'}`
-                  : isExpanded
-                    ? '접기'
-                    : '하위 사건 펼치기'
+                  ? `${node.title} — 하위 사건 ${childCount}개 ${
+                      isExpanded ? '접기' : '펼치기'
+                    }`
+                  : `${node.title} — ${isExpanded ? '접기' : '하위 사건 펼치기'}`
               }
             >
               <FiChevronRight size={11} aria-hidden="true" />
@@ -491,7 +579,10 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                   배지(제목 뒤 가변 x)·요약 버튼(x=919)이 한 개념을 행의 세 지점에서
                   말했고, 배지가 제목과 기간 사이에 끼어들어 메타 x를 한 번 더 흔들었다.
                   aria-hidden — 같은 수치가 이 버튼의 aria-label에 이미 있다. */}
-              {childCount > 0 && !isNarrow && (
+              {/* 좁은 폭에서도 숨기지 않는다 — 모바일 LIST가 기본 진입인 대역인데,
+                  거기서만 자식 수가 사라져 '하위가 있다'는 유일한 수치 신호가 없었다
+                  (검토 DISC-5). 셰브론이 메타 줄로 내려가도 숫자는 함께 간다. */}
+              {childCount > 0 && (
                 <DiscCount aria-hidden="true">{childCount}</DiscCount>
               )}
             </Disclosure>
@@ -502,6 +593,38 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
             <Title data-row-title="">
               {highlightMatches(node.title, searchQuery)}
             </Title>
+            {/* 최상위(앵커) 배지 — 루트만 '최상위 사건'이라 부르고, 상위가 있는 앵커는
+                '하위 N건'으로 표기한다. '상위가 있는 최상위 사건'이라는 자기모순 라벨을
+                만들지 않기 위한 규약(사용자 결정 2026-08-11). 판정·문구는 전부
+                features/event-hierarchy/model/anchor.ts 단일출처. */}
+            {anchorBadgeLabel &&
+              (onEnterAnchorScope ? (
+                /* 배지가 곧 조망 진입점 — 별도 지면을 만들지 않고 같은 카탈로그의
+                   모수를 좁힌다. 행 클릭(상세 이동)과 구분되도록 전파를 끊는다. */
+                <AnchorBadge
+                  as="button"
+                  type="button"
+                  tabIndex={isRovingTarget ? 0 : -1}
+                  aria-label={`'${node.title}' 아래 하위 사건 ${anchorDescendantCount}건만 보기`}
+                  title={`하위 사건 ${anchorDescendantCount}건 — 눌러서 이 사건 아래만 보기`}
+                  onClick={(clickEvent: React.MouseEvent<HTMLElement>) => {
+                    clickEvent.stopPropagation()
+                    onEnterAnchorScope(node.id)
+                  }}
+                >
+                  <FiFlag size={9} aria-hidden="true" />
+                  {anchorBadgeLabel}
+                </AnchorBadge>
+              ) : (
+                <AnchorBadge
+                  title={`하위 사건 ${anchorDescendantCount}건을 가진 사건`}
+                >
+                  <FiFlag size={9} aria-hidden="true" />
+                  {anchorBadgeLabel}
+                </AnchorBadge>
+              ))}
+            {/* 하위가 하나도 없는 최상위 — 한 톤 물러나 앵커에 자리를 내준다. */}
+            {isSolo && <SoloToken>· 단독</SoloToken>}
             {matchReason && (
               <MatchReason
                 title={`${matchReason.kind} 일치: ${matchReason.text}`}
@@ -510,7 +633,49 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                 {highlightMatches(matchReason.text, searchQuery)}
               </MatchReason>
             )}
-            {/* 필터로 잘려나간 자식이 있으면 조용히 사라진 것처럼 보이지 않게 알린다. */}
+            {/* 부모가 다른 밴드로 갈라져 나가 화면에서 인접하지 않을 때만 계보를 밝힌다.
+                부모가 바로 위 행이면 칩은 순수한 중복이고, 1914년처럼 자식 18행이
+                이어지는 구간에서 매 행에 붙으면 밀도만 잡아먹는다(검토 IDX-7). */}
+            {anchorParent && (
+              <AnchorChip
+                type="button"
+                tabIndex={isRovingTarget ? 0 : -1}
+                aria-label={`상위 사건 ${anchorParent.title}${
+                  anchorParent.year !== null
+                    ? ` (${anchorParent.year}년 그룹)`
+                    : ''
+                }로 이동`}
+                title={`상위 사건 — ${anchorParent.title}`}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                  event.stopPropagation()
+                  onSelect(anchorParent.id)
+                }}
+              >
+                <FiCornerLeftUp size={10} aria-hidden="true" />
+                <AnchorChipText>{anchorParent.title}</AnchorChipText>
+              </AnchorChip>
+            )}
+            {/* 접힌 부모는 '무엇이 몇 건 숨어 있는지'를 **문장으로** 말한다(검토 DISC-5).
+                셰브론 옆 숫자 배지만으로는 그것이 하위 사건 수라는 게 전달되지 않고,
+                좁은 폭에서는 배지가 제목 줄을 떠나 메타 줄로 내려가 더 멀어진다. */}
+            {hasChildren && !isExpanded && childCount > 0 && (
+              <FilteredOutHint
+                as="button"
+                type="button"
+                tabIndex={isRovingTarget ? 0 : -1}
+                aria-label={`하위 사건 ${childCount}건 펼치기`}
+                onClick={(event: React.MouseEvent<HTMLElement>) => {
+                  event.stopPropagation()
+                  onToggleExpansion(node.id)
+                }}
+              >
+                하위 {childCount}건 접힘
+              </FilteredOutHint>
+            )}
+            {/* 필터로 잘려나간 자식이 있으면 조용히 사라진 것처럼 보이지 않게 알린다.
+                시각 텍스트가 '조건 밖 N'이던 시절엔 그 N이 **하위 사건** 수라는 사실이
+                title 속성에만 있었다 — 터치·키보드에는 뜨지 않는 자리다(검토 DISC-9).
+                문맥 행(자기 자신은 조건 불일치)은 그 사실까지 함께 말한다(검토 FILT-5). */}
             {hiddenChildCount > 0 && (
               <FilteredOutHint
                 as="button"
@@ -518,14 +683,16 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                 tabIndex={isRovingTarget ? 0 : -1}
                 /* 정보만 주고 되돌릴 수단이 없던 막다른 안내를 행동 가능하게(검토 INT-10).
                    title 속성은 터치·키보드에 안 뜨므로 aria-label로 설명을 옮긴다. */
-                aria-label={`현재 필터 조건 밖의 하위 사건 ${hiddenChildCount}개 — 눌러서 이 사건의 계층 전체 보기`}
+                aria-label={`${
+                  isMatch ? '' : '이 사건은 조건 불일치 — '
+                }현재 필터 조건 밖의 하위 사건 ${hiddenChildCount}개 — 눌러서 이 사건의 계층 전체 보기`}
                 title={`현재 필터 조건 밖의 하위 사건 ${hiddenChildCount}개 — 눌러서 계층 전체 보기`}
                 onClick={(event: React.MouseEvent<HTMLElement>) => {
                   event.stopPropagation()
                   onShowSummary(node.id)
                 }}
               >
-                조건 밖 {hiddenChildCount}
+                {isMatch ? '하위' : '문맥 · 하위'} {hiddenChildCount}건 조건 밖
               </FilteredOutHint>
             )}
           </TitleText>
@@ -611,7 +778,12 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
         )}
 
         <RowActions data-has-bookmark={isBookmarked ? 'true' : undefined}>
-          {hasChildren && depth === 0 && (
+          {/* 하위 사건 계층을 손자까지 한눈에 보는 **목록 내 유일한 진입점**이다.
+              ⑴ 이름이 '사건 요약 보기'라 그 사실이 전달되지 않았고
+              ⑵ `depth === 0` 게이트 때문에 자식을 가진 depth 1 부모(손자 5행의 부모)에는
+                 아예 없었다 — 정작 손자를 확인할 곳이 거기다(검토 DISC-6·DEPTH-7).
+              게이트를 '자식이 있는가'로 바꾸고 이름을 동작에 맞춘다. */}
+          {hasChildren && (
             <IconBtn
               type="button"
               onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
@@ -619,8 +791,8 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                 onShowSummary(node.id)
               }}
               tabIndex={isRovingTarget ? 0 : -1}
-              title="사건 요약 보기"
-              aria-label="사건 요약 보기"
+              title="하위 사건 계층 보기"
+              aria-label={`${node.title} — 하위 사건 계층 보기`}
             >
               {/* ⚠️ 브랜치 글리프(FiGitBranch)를 쓰지 말 것 — 계층 신호는 제목 셀의
                   디스클로저가 전담한다. 여기에 같은 글리프를 두면 한 행에서 같은
@@ -714,9 +886,18 @@ const Stop = styled.div<{
    * 임계를 앞당기고 있었다. 날짜·기간·카운트 열에만 국소 선언한다. */
   transition: background 0.14s ease;
 
-  /* 선택 행으로 스크롤(events.page의 단일 effect)할 때 sticky 세기·연도 헤더에
-   * 가려지지 않도록 상단 여백을 확보한다. --century-header-h는 목록 컨테이너가 정의. */
-  scroll-margin-top: calc(var(--century-header-h, 44px) + 44px);
+  /* 선택 행으로 스크롤(events.page의 단일 effect)할 때 sticky 헤더에 가려지지 않도록
+   * 상단 여백을 확보한다.
+   *
+   * ⚠️ 사다리는 **3겹**이다: 열 헤더(--col-header-h) → 세기 헤더(--century-header-h)
+   * → 연 헤더(--year-h + --year-mt). 예전 값은 세기 헤더 + 리터럴 44px이라 열 헤더 한 단이
+   * 빠져 있었고, ↑로 뷰포트 위쪽 행에 도달하면 포커스 행 윗부분 16px이 연 헤더 뒤로 잘렸다
+   * (cozy 행 45px의 36% — 검토 A11Y-10). 사다리 토큰의 합으로 바꿔 밴드 밀도를 바꿔도
+   * 자동으로 따라오게 한다. 값의 정의는 list.styles.ts의 sticky top 3곳과 같은 출처다. */
+  scroll-margin-top: calc(
+    var(--col-header-h, 26px) + var(--century-header-h, 44px) +
+      var(--year-h, 34px) + var(--year-mt, 16px)
+  );
   scroll-margin-bottom: 12px;
 
   /* 사건 단위 분리 — hairline bottom border. 마지막 행은 자동 제거.
@@ -732,23 +913,22 @@ const Stop = styled.div<{
   }
 
   /* 활성 상태 좌측 인디고 막대(굵게) + 우측 라운드 — 긴 리스트에서도 위치 즉시 인지.
-   * depth>0 행은 좌측 1px vertical guide(box-shadow inset)로 부모-자식 위계 시각화.
-   * 두 효과 모두 box-shadow 스택으로 한 번에 적용 — 덕분에 active 위에 guide도 같이 표시. */
+   *
+   * (이관됨) depth>0 행의 좌측 1px guide. 2026-08-11 하위 사건 검토 배치 2.
+   * 행 좌단에 그리던 그 선은 세 가지가 잘못됐다.
+   *  ① **깊이를 읽지 않았다** — depth 1과 2가 같은 선 하나라, 손자를 자식과 구별할 수단이
+   *     들여쓰기 24px 하나뿐이었다.
+   *  ② **대비 미달** — 라이트 1.29:1 / 다크 1.62:1로 WCAG 1.4.11(3:1)에 못 미쳤고,
+   *     하필 19px 옆에 상시 그려지는 레일 축선(1.65:1)이 같은 파란 계열에 알파는 2배라
+   *     계층 신호가 시간축 신호의 '흐린 복사본'으로 읽혔다.
+   *  ③ **계층 신호가 164px 떨어진 두 곳에 나뉘어 있었다** — 선은 행 좌단, 들여쓰기는
+   *     제목 셀 안. 눈이 둘을 한 신호로 묶지 못한다.
+   * 이제 Indent 트랙이 depth만큼의 중립 회색 세로선을 **들여쓰기와 같은 자리에** 그린다.
+   * ⚠️ 이 주석 안에서 백틱을 쓰지 말 것 — styled 템플릿 리터럴이 끊겨 TS1005가 난다.
+   * 여기 남는 것은 활성 막대뿐이다(그래서 활성 행에서 guide가 지워지던 문제도 사라진다). */
   border-radius: ${({ $active }) => ($active ? '6px' : '0')};
-  box-shadow: ${({ $active, $depth, theme }) => {
-    const shadows: string[] = []
-    if ($depth > 0) {
-      const c =
-        theme.mode === 'dark'
-          ? 'rgba(147, 197, 253, 0.22)'
-          : 'rgba(37, 99, 235, 0.18)'
-      shadows.push(`inset 1px 0 0 0 ${c}`)
-    }
-    if ($active) {
-      shadows.push('inset 4px 0 0 0 #2563eb')
-    }
-    return shadows.length ? shadows.join(', ') : 'none'
-  }};
+  box-shadow: ${({ $active }) =>
+    $active ? 'inset 4px 0 0 0 #2563eb' : 'none'};
   ${({ $active }) =>
     $active &&
     css`
@@ -805,7 +985,9 @@ const Stop = styled.div<{
   }
 
   /* 강제 색 모드(Windows 고대비 등)에서는 box-shadow·배경 tint가 전부 제거된다 —
-     활성 행과 계층 가이드가 통째로 사라지므로 시스템 색 테두리로 대체 신호를 준다. */
+     활성 행이 통째로 사라지므로 시스템 색 테두리로 대체 신호를 준다.
+     계층 가이드의 대체 신호는 Indent가 스스로 갖는다(데스크톱). 다만 모바일에서는
+     Indent가 display:none이고 행 전체 margin-left만 남으므로 여기서 한 번 더 준다. */
   @media (forced-colors: active) {
     ${({ $active }) =>
       $active &&
@@ -813,6 +995,10 @@ const Stop = styled.div<{
         outline: 2px solid Highlight;
         outline-offset: -2px;
       `}
+
+    @media (max-width: 640px) {
+      ${({ $depth }) => $depth > 0 && 'border-left: 1px solid CanvasText;'}
+    }
   }
 
   /* 키보드 focus 시각화 — 마우스 click에선 안 뜨고 Tab 순회 시에만 ring */
@@ -994,9 +1180,37 @@ const TitleCell = styled.div<{ $spanSummary?: boolean }>`
   }
 `
 
-/** 들여쓰기 트랙을 실제로 점유하는 빈 박스. 격자 트랙만으로는 baseline 정렬이 흔들린다. */
-const Indent = styled.span`
+/**
+ * 들여쓰기 트랙 — **계층 잉크를 혼자 지고 있는 자리**다.
+ *
+ * 격자 트랙만으로는 baseline 정렬이 흔들려 빈 박스가 필요했는데, 그 박스가 마침
+ * '조상 한 단 = 들여쓰기 한 칸'과 정확히 같은 폭이라 가이드선을 그리기에 맞다.
+ * 반복 그라디언트의 주기를 `--row-indent`로 잡으면 선이 x=0, indent, 2·indent…에 서고,
+ * 트랙 폭이 `indent × depth`이므로 **depth 개수만큼** 선이 그어진다 —
+ * depth 1은 1줄, depth 2는 2줄. 손자를 자식과 구별하는 신호가 여기서 생긴다.
+ *
+ * 색은 레일 축선(파랑 = 시간축)과 **다른 채널**인 중립 회색이다. 같은 hue를 쓰면
+ * 계층선이 시간축의 흐린 복사본으로 읽힌다. 대비는 행 표면 기준 라이트 3.13:1 /
+ * 다크 3.78:1로 WCAG 1.4.11(3:1)을 넘긴다.
+ */
+const Indent = styled.span<{ $depth: number }>`
   grid-column: ind;
+  /* baseline 정렬이 걸린 격자라 명시하지 않으면 높이가 글자 한 줄로 접힌다. */
+  align-self: stretch;
+  background-image: repeating-linear-gradient(
+    to right,
+    ${({ theme }) => (theme.mode === 'dark' ? '#6b7076' : '#8f9296')} 0 1px,
+    transparent 1px var(--row-indent)
+  );
+  background-repeat: no-repeat;
+  background-size: min(calc(var(--row-indent) * var(--depth, 0)), 96px) 100%;
+
+  /* 강제 색 모드(Windows 고대비)는 배경 이미지를 통째로 지운다 — 계층이 사라지므로
+     테두리로 대체한다. 깊이별 줄 수는 포기하고 '자식이다'만 남긴다. */
+  @media (forced-colors: active) {
+    background-image: none;
+    ${({ $depth }) => $depth > 0 && 'border-left: 1px solid CanvasText;'}
+  }
 
   @media (max-width: 640px) {
     display: none;
@@ -1060,11 +1274,24 @@ const Disclosure = styled.button<{ $expanded: boolean }>`
     background: rgba(37, 99, 235, 0.16);
     color: #2563eb;
   }
+  /* 행 안의 액션은 전역 --focus-ring(연보라 반투명 번짐, 라이트 1.39:1 / 다크 1.32:1)을
+     그대로 받고 있었다 — 같은 목록의 행은 solid 2px, 밴드 버튼도 solid인데 여기만
+     판독이 곤란했다(검토 A11Y-2). 링은 목록 규약 3종 중 inset을 쓴다: 이 버튼은
+     제목 셀 서브격자 안의 20~26px 정사각이라 바깥 번짐이 옆 글자를 덮는다. */
+  &:focus-visible {
+    ${focusRingInset}
+  }
 `
 
-/** 디스클로저 안 자식 수 — 셰브론이 있을 때만. */
+/**
+ * 디스클로저 안 자식 수 — 셰브론이 있을 때만.
+ *
+ * 9px 리터럴이었다. 행 타입 스케일은 제목 13/14/15 · 메타 11/12 · 칩 10/11인데
+ * 이 숫자만 그 밖에 있었고, 조밀 밀도에서 20px 버튼 안에 11px 셰브론과 나란히 들어가
+ * 내용 고유폭이 버튼을 넘겼다. 스케일 안으로 들여보낸다(검토 VIS-8).
+ */
 const DiscCount = styled.span`
-  font-size: 9px;
+  font-size: var(--row-chip);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -1116,6 +1343,106 @@ const SrOnly = styled.span`
   border: 0;
 `
 
+/**
+ * 상위 사건 앵커 칩 — 계보를 말하는 목록의 유일한 텍스트.
+ *
+ * 제목과 경쟁하지 않도록 메타 크기·중립 회색으로 두고, 누를 수 있다는 것만 테두리로
+ * 알린다. 폭은 제목을 밀어내지 않게 상한을 두고 말줄임한다.
+ */
+const AnchorChip = styled.button`
+  flex-shrink: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  height: 16px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.14)'};
+  border-radius: 4px;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--row-chip);
+  line-height: 1;
+  color: ${metaText};
+  cursor: pointer;
+
+  &:hover {
+    border-color: #2563eb;
+    color: #2563eb;
+  }
+  &:focus-visible {
+    ${focusRingInset}
+  }
+
+  @media (max-width: 640px) {
+    order: 1;
+  }
+`
+
+/** 앵커 칩의 제목 부분 — 긴 상위 제목이 행을 밀지 않게 말줄임. */
+const AnchorChipText = styled.span`
+  max-width: 15ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+/**
+ * 최상위(앵커) 사건 배지 — 자손이 하나라도 있는 사건.
+ *
+ * 생존 루트 167건 중 147건(88%)이 자식 0인 단독 사건이라, 아무 신호가 없으면
+ * '1차세계대전'이 '1914 킬 운하 재개통'과 완전히 같은 자격으로 나열된다
+ * (docs/event-root-designation-review.md 근인 1).
+ */
+const AnchorBadge = styled.span`
+  flex-shrink: 0;
+  /* as="button"으로도 렌더된다 — 기본 버튼 표면을 지워 정적 배지와 픽셀을 맞춘다. */
+  border: none;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  height: 16px;
+  border-radius: 4px;
+  font-size: var(--row-chip);
+  line-height: 1;
+  font-weight: 600;
+  white-space: nowrap;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(37,99,235,0.18)' : 'rgba(37,99,235,0.10)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#93b4fc' : '#1d4ed8')};
+
+  &:is(button) {
+    cursor: pointer;
+  }
+  &:is(button):hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(37,99,235,0.30)' : 'rgba(37,99,235,0.18)'};
+  }
+  &:is(button):focus-visible {
+    ${focusRingInset}
+  }
+`
+
+/**
+ * 단독 사건 토큰 — 하위가 하나도 없는 최상위.
+ *
+ * 앵커를 강조하는 것만으로는 부족하다. 147행이 아무 표시 없이 남으면 '표시가 없는 것'이
+ * 기본값으로 읽혀 앵커 배지가 장식처럼 보인다. 반대로 이쪽을 **한 톤 물러나게** 찍으면
+ * 목록이 스스로 두 층으로 갈린다. 강조가 아니라 후퇴가 목적이라 색·굵기를 쓰지 않는다.
+ */
+const SoloToken = styled.span`
+  flex-shrink: 0;
+  font-size: var(--row-chip);
+  line-height: 1;
+  white-space: nowrap;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.34)' : 'rgba(15,23,42,0.36)'};
+`
+
 const FilteredOutHint = styled.span`
   flex-shrink: 0;
   /* as="button"으로 렌더된다 — 기본 버튼 표면을 지우고 텍스트처럼 보이게. */
@@ -1144,6 +1471,10 @@ const FilteredOutHint = styled.span`
     content: '';
     position: absolute;
     inset: -6px -4px;
+  }
+  &:focus-visible {
+    ${focusRingInset}
+    border-radius: 3px;
   }
   &:hover {
     text-decoration: underline solid;

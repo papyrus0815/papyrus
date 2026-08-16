@@ -130,10 +130,143 @@ describe('useEventHierarchy — 자식에도 필터 적용', () => {
       result.current.collapseAllChildren()
     })
 
-    // 자식 행은 접혀 화면에서 사라지지만 '조건 일치'는 그대로다.
-    expect(
-      result.current.flattenedHierarchy.some((item) => item.isCollapsedAway),
-    ).toBe(true)
     expect(result.current.matchedCount).toBe(before)
+  })
+
+  /**
+   * 검토 FILT-2·DEPTH-1 — 접힘은 검색보다 먼저 걸려 있던 표시 상태이고,
+   * 검색은 '조건에 맞는 것을 보여 달라'는 나중의 요청이다. 둘이 곱해지면
+   * 헤더는 '조건 일치 29건'인데 화면엔 11행만 남는다.
+   */
+  it('필터 중에는 접어 두었어도 매칭 행이 드러난다', () => {
+    const { result } = renderFlatten({
+      hasNarrowingFilters: true,
+      matchesEvent: (event) => event.category === '전쟁',
+    })
+
+    act(() => {
+      result.current.collapseAllChildren()
+    })
+
+    const warRow = result.current.flattenedHierarchy.find(
+      (item) => item.node.id === 'child-war',
+    )
+    expect(warRow?.isMatch).toBe(true)
+    expect(warRow?.isCollapsedAway).toBe(false)
+  })
+
+  it('필터가 없으면 하위 접기가 자식 행을 그대로 감춘다', () => {
+    const { result } = renderFlatten()
+
+    act(() => {
+      result.current.collapseAllChildren()
+    })
+
+    const hidden = result.current.flattenedHierarchy.filter(
+      (item) => item.isCollapsedAway,
+    )
+    expect(hidden.map((item) => item.node.id).sort()).toEqual([
+      'child-diplomacy',
+      'child-war',
+    ])
+  })
+
+  /**
+   * 검토 FILT-3 — 배지가 약속하는 수와 펼쳤을 때 나오는 행 수는 같은 배열에서 나와야 한다.
+   * 예전엔 배지가 원본 `node.children.length`(2)를 말하고 렌더는 필터 통과분(1)만 그렸다.
+   */
+  it('셰브론 배지 수는 필터 통과 자식 수를 센다', () => {
+    const { result } = renderFlatten({
+      hasNarrowingFilters: true,
+      matchesEvent: (event) => event.category === '전쟁',
+    })
+
+    const parentRow = result.current.flattenedHierarchy.find(
+      (item) => item.node.id === 'parent',
+    )
+    expect(parentRow?.node.children).toHaveLength(2)
+    expect(parentRow?.visibleChildCount).toBe(1)
+    expect(parentRow?.canExpand).toBe(true)
+  })
+})
+
+/**
+ * 검토 DISC-1·CTRL-1 — 자동 펼침·'모두 펼치기'의 모수는 **평탄화 결과 전체**다.
+ * 예전엔 루트 배열(`!parentEventId`로 잘린 것)만 돌아서, 손자는 기본 화면에도
+ * '하위 모두 펼치기'에도 나오지 않았다(실측: 평탄화 273행 중 렌더 268행).
+ */
+describe('useEventHierarchy — 손자까지 펼침 모수에 든다', () => {
+  const grandchildTree = {
+    id: 'root',
+    title: 'root',
+    category: '전쟁',
+    hierarchy: {
+      id: 'root',
+      title: 'root',
+      summary: '',
+      period: { start: '1894-01-01' },
+      importance: 'notable',
+      children: [
+        {
+          id: 'kid',
+          title: 'kid',
+          summary: '',
+          period: { start: '1900-01-01' },
+          importance: 'notable',
+          children: [
+            {
+              id: 'grandkid',
+              title: 'grandkid',
+              summary: '',
+              period: { start: '1913-01-01' },
+              importance: 'notable',
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+  } as unknown as AnyEvent
+
+  const renderDeep = () =>
+    renderHook(() =>
+      useEventHierarchy(
+        [grandchildTree],
+        // 서버 목록은 루트만 준다 — 자식·손자는 hierarchy 트리 안에만 있다.
+        [grandchildTree],
+        false,
+        'recent',
+        'desc',
+      ),
+    )
+
+  it('기본 진입에서 손자 행이 렌더된다', () => {
+    const { result } = renderDeep()
+    const rendered = result.current.flattenedHierarchy.filter(
+      (item) => !item.isCollapsedAway,
+    )
+    expect(rendered.map((item) => item.node.id)).toEqual([
+      'root',
+      'kid',
+      'grandkid',
+    ])
+  })
+
+  it("'모두 접기' 후 '모두 펼치기'가 손자까지 되돌린다", () => {
+    const { result } = renderDeep()
+
+    act(() => {
+      result.current.collapseAllChildren()
+    })
+    expect(
+      result.current.flattenedHierarchy.filter((item) => !item.isCollapsedAway),
+    ).toHaveLength(1)
+
+    act(() => {
+      result.current.expandAllChildren()
+    })
+    expect(
+      result.current.flattenedHierarchy.filter((item) => !item.isCollapsedAway),
+    ).toHaveLength(3)
   })
 })

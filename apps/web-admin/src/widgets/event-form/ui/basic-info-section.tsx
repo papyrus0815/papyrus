@@ -10,6 +10,7 @@ import {
   FiFileText,
   FiGlobe,
   FiImage,
+  FiPlus,
   FiStar,
   FiTag,
   FiX,
@@ -101,6 +102,17 @@ interface BasicInfoSectionProps {
   primaryHistoricalCountryId?: string | null
   setPrimaryHistoricalCountryId?: (value: string | null) => void
 
+  /**
+   * 상위 사건(선택) 슬롯 — '부모에서 가지를 낳는' 트리 등록용. undefined면 행 자체를
+   * 렌더하지 않는다(편집 모달 등 하이드레이션 미지원 지면). 피커 모달·선택 상태는
+   * 부모(EventBasicForm)가 소유하고, 이 섹션은 칩·버튼 표시만 담당한다.
+   */
+  parentEventSlot?: {
+    parent: { id: string; title: string } | null
+    onOpenPicker: () => void
+    onClear: () => void
+  }
+
   // UI 상태
   playClickSound: () => void
   getDateError: () => string | null
@@ -144,6 +156,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   availableCountries = [],
   availableHistoricalCountries = [],
   onOpenCountryModal,
+  parentEventSlot,
   playClickSound,
   getDateError,
   calculateDaysDifference,
@@ -414,6 +427,59 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         initialTime={endTime}
         title="종료 시간 선택"
       />
+
+      {/* 상위 사건 — 고아 생성 후 수동 연결 대신, 등록 시점에 바로 가지로 붙인다 */}
+      {parentEventSlot && (
+        <S.FormRow>
+          <S.FormLabel>
+            상위 사건<OptionalTag>(선택)</OptionalTag>
+          </S.FormLabel>
+          <S.FormField>
+            {parentEventSlot.parent ? (
+              <S.SelectedItemsContainer>
+                <S.SelectedItem>
+                  <span>{parentEventSlot.parent.title}</span>
+                  <S.RemoveButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      parentEventSlot.onClear()
+                    }}
+                    aria-label={`상위 사건 '${parentEventSlot.parent.title}' 해제`}
+                  >
+                    <FiX size={14} />
+                  </S.RemoveButton>
+                </S.SelectedItem>
+                <S.AddButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    parentEventSlot.onOpenPicker()
+                  }}
+                >
+                  변경
+                </S.AddButton>
+              </S.SelectedItemsContainer>
+            ) : (
+              <S.AddButton
+                type="button"
+                onClick={() => {
+                  playClickSound()
+                  parentEventSlot.onOpenPicker()
+                }}
+              >
+                <FiPlus size={16} />
+                상위 사건 선택
+              </S.AddButton>
+            )}
+            <S.Hint>
+              지정하면 이 사건이 해당 사건의 하위(가지)로 곧바로 등록됩니다.
+              계층은 등록 후 상세의 &lsquo;연관&rsquo;에서 언제든 바꿀 수
+              있습니다.
+            </S.Hint>
+          </S.FormField>
+        </S.FormRow>
+      )}
 
       {/* 카테고리 */}
       <S.FormRow>

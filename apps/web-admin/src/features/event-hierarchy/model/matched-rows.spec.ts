@@ -20,6 +20,7 @@ const row = (
     parentNodeId,
     isMatch,
     canExpand: false,
+    visibleChildCount: 0,
     isCollapsedAway: false,
     hiddenChildCount: 0,
     parentEvent: null,

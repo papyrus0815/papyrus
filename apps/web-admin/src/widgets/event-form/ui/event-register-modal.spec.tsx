@@ -76,6 +76,11 @@ jest.mock('./event-basic-form', () => ({
     return (
       <div>
         <span data-testid="notifyOnLoad">{String(props.notifyOnLoad)}</span>
+        <span data-testid="initialParent">
+          {props.initialParent
+            ? `${props.initialParent.id}:${props.initialParent.title}`
+            : ''}
+        </span>
         <button type="button" onClick={() => onDirtyChange?.(true)}>
           _dirty
         </button>
@@ -118,6 +123,14 @@ it('폼 본체를 lazy로 싣고, 편집 로드 토스트는 끈다 (모달은 �
   setup()
   await waitForBody()
   expect(screen.getByTestId('notifyOnLoad')).toHaveTextContent('false')
+})
+
+it('initialParent를 폼 본체에 그대로 전달한다 — 상세·트리 뷰(W3)가 쓰는 프리셋 계약', async () => {
+  setup({ initialParent: { id: 'evt-parent', title: '제1차 세계 대전' } })
+  await waitForBody()
+  expect(screen.getByTestId('initialParent')).toHaveTextContent(
+    'evt-parent:제1차 세계 대전',
+  )
 })
 
 it('변경이 없으면 확인 없이 닫힌다', async () => {

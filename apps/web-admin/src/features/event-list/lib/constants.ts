@@ -18,6 +18,15 @@ export const SORT_OPTIONS = {
    * 응답 DTO가 createdAt을 이미 싣고 있어 클라이언트 정렬로 충분하다.
    */
   CREATED: 'created',
+  /**
+   * 하위 많은 순 — 서브트리 자손 수 내림차순(`getEventDescendantCount`).
+   *
+   * 생존 루트 167건 중 147건(88%)이 자식 0인 단독 사건이라, 시간축 정렬만 있으면
+   * '1차세계대전' 같은 앵커가 단발 사건들 사이에 그대로 파묻힌다. 모드(앵커만 칩)에
+   * 들어가지 않고도 앵커가 스스로 떠오르게 하는 **수동적 발견성** 축이다
+   * (docs/event-root-designation-review.md 근인 1).
+   */
+  DESCENDANTS: 'descendants',
 } as const
 
 export type SortOption = (typeof SORT_OPTIONS)[keyof typeof SORT_OPTIONS]
@@ -54,38 +63,11 @@ export const SUMMARY_VIEW_MODES = {
 export type SummaryViewMode =
   (typeof SUMMARY_VIEW_MODES)[keyof typeof SUMMARY_VIEW_MODES]
 
-/**
- * 타임라인 레인(lane) 축 — 막대를 어떤 기준으로 줄 세울지.
- *
- * 위젯 안의 지역 state였다가 페이지로 승격됐다(검토 GAP-4). 타임라인은 이 축과
- * '카테고리 숨김'이라는 **두 번째 필터 체계**를 자체적으로 갖고 있었는데, URL에도
- * 활성 칩에도 '전체 초기화'에도 없어서 ⑴ 공유 링크가 화면을 재현하지 못하고
- * ⑵ 사용자가 숨겨 둔 카테고리를 잊은 채 "사건이 없다"고 판단했다.
- * 값의 정의를 features 레이어에 두어 위젯·페이지·URL 동기화가 같은 것을 본다.
+/*
+ * (제거) 타임라인 레인(lane) 축 — v4 재설계에서 레인 자체가 사라져 폐지.
+ * 시간 창(`tlw`)의 정의·직렬화는 widgets/event-timeline/model/timeline-model에 있다.
+ * docs/event-timeline-redesign.md 참고.
  */
-export const TIMELINE_LANE_MODES = {
-  CATEGORY: 'category',
-  CONTINENT: 'continent',
-  COUNTRY: 'country',
-} as const
-
-export type TimelineLaneMode =
-  (typeof TIMELINE_LANE_MODES)[keyof typeof TIMELINE_LANE_MODES]
-
-/** 레인 축 표시 라벨 — 위젯의 세그먼트와 페이지의 활성 칩이 **같은 문자열**을 쓴다. */
-export const TIMELINE_LANE_LABELS: Record<TimelineLaneMode, string> = {
-  [TIMELINE_LANE_MODES.CATEGORY]: '카테고리',
-  [TIMELINE_LANE_MODES.CONTINENT]: '대륙',
-  [TIMELINE_LANE_MODES.COUNTRY]: '국가',
-}
-
-/** URL(`lane=`)에서 읽은 값이 유효한 레인 축인가 — 무효하면 기본값(카테고리)으로 낙하 */
-export const isTimelineLaneMode = (
-  value: string | null | undefined,
-): value is TimelineLaneMode =>
-  value === TIMELINE_LANE_MODES.CATEGORY ||
-  value === TIMELINE_LANE_MODES.CONTINENT ||
-  value === TIMELINE_LANE_MODES.COUNTRY
 
 /**
  * 특수 필터 값

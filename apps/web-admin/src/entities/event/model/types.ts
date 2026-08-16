@@ -211,6 +211,17 @@ export interface HistoricalEvent {
     logisticalScale: string
   }
   parentEventId?: string
+  /**
+   * '최상위(앵커) 사건' 판정 오버라이드(서버 Event.anchorOverride).
+   * null/미지정 = 파생 자동 판정(자손 ≥ 1). 판정은 features/event-hierarchy/model/anchor.ts.
+   */
+  anchorOverride?: 'ANCHOR' | 'PLAIN' | null
+  /**
+   * 추가 상위(EventParentLink) 개수 — 목록 응답의 `_count`에서 온다.
+   * 서버는 이미 싣고 있는데 transformer 매핑이 없어 런타임엔 늘 undefined였다(FE-4).
+   * 미로드 응답에서는 undefined로 남는다('없음(0)'과 '미로드'를 구분하는 계약).
+   */
+  extraParentCount?: number
   sectionTitles?: string[] // 작성된 섹션 제목 리스트 (deprecated)
   eventSections?: EventSection[] // 사건 섹션 목록 (새 구조)
   eventImages?: EventImage[] // 사건 이미지 목록 (새 구조)

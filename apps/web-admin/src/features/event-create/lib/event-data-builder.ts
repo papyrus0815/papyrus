@@ -205,6 +205,18 @@ export const buildEventSubmitData = (params: {
     location: params.location.trim() || undefined,
     cityId: params.cityId || undefined,
     administrativeDivisionId: params.administrativeDivisionId || undefined,
+    /**
+     * ⚠️ 여기서 3상(빈 문자열 → null)으로 바꾸지 말 것 — 시도했다가 되돌렸다.
+     *
+     * 서버 계약은 이제 3상을 받는다(UpdateEventDto.parentEventId: string | null).
+     * 하지만 이 빌더는 그걸 쓸 수 없다 — 폼이 **초기값으로도 빈 문자열**을 쓰기 때문에
+     * '한 번도 안 고름'과 '명시 해제'가 여기서는 구분되지 않는다. null로 접으면
+     * 상위를 건드린 적 없는 신규 등록까지 `parentEventId: null`을 실어 보내
+     * '상위 미선택이면 전송하지 않는다' 계약(event-basic-form.spec)을 깬다.
+     *
+     * '— 없음' 무성 no-op(BUG-1)의 올바른 수정 지점은 **폼 레이어**다 — 거기서는
+     * 초기값(undefined)과 사용자의 해제 선택(null)을 갈라 놓을 수 있다.
+     */
     parentEventId: params.parentEventId || undefined,
     tags: params.tags.length > 0 ? params.tags : undefined,
     relatedCountryIds:

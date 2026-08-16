@@ -28,6 +28,8 @@ interface Props {
   showSummaryModal: boolean
   setShowSummaryModal: (v: boolean) => void
   summaryNode: EventHierarchyNode | null
+  /** 트리 노드 선택 — 그 사건을 열고 모달을 닫는다(조상 펼침은 페이지가 담당) */
+  onSelectNode?: (eventId: string) => void
 }
 
 const SHORTCUT_TITLE_ID = 'catalog-shortcut-help-title'
@@ -39,6 +41,7 @@ export const CatalogOverlayModals: React.FC<Props> = ({
   showSummaryModal,
   setShowSummaryModal,
   summaryNode,
+  onSelectNode,
 }) => {
   const shortcutTrapRef = useFocusTrap<HTMLDivElement>(shortcutHelpOpen)
   const summaryTrapRef = useFocusTrap<HTMLDivElement>(
@@ -99,6 +102,14 @@ export const CatalogOverlayModals: React.FC<Props> = ({
                     <kbd aria-label="위쪽 화살표">↑</kbd> /{' '}
                     <kbd aria-label="아래쪽 화살표">↓</kbd>
                     <span>이전 / 다음 사건 선택 (목록 행에 포커스가 있을 때)</span>
+                  </li>
+                  <li>
+                    <kbd aria-label="오른쪽 화살표">→</kbd>
+                    <span>하위 사건 펼치기 · 이미 펼쳐져 있으면 첫 하위로</span>
+                  </li>
+                  <li>
+                    <kbd aria-label="왼쪽 화살표">←</kbd>
+                    <span>하위 사건 접기 · 접혀 있으면 상위 사건으로</span>
                   </li>
                   <li>
                     <kbd>Home</kbd> / <kbd>End</kbd>
@@ -205,7 +216,7 @@ export const CatalogOverlayModals: React.FC<Props> = ({
                       </Modal.SummarySubtitle>
                     </div>
                     <Modal.ModalClose
-                      aria-label="사건 요약 닫기"
+                      aria-label="하위 사건 계층 닫기"
                       onClick={() => setShowSummaryModal(false)}
                     >
                       <FiX size={ICON_SIZE.lg} aria-hidden="true" />
@@ -213,7 +224,7 @@ export const CatalogOverlayModals: React.FC<Props> = ({
                   </Modal.ModalHeader>
 
                   <Modal.SummaryContent>
-                    <TreeView node={summaryNode} />
+                    <TreeView node={summaryNode} onSelectNode={onSelectNode} />
                   </Modal.SummaryContent>
                 </motion.div>
               </Modal.SummaryModal>

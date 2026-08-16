@@ -37,6 +37,8 @@ interface RenderArgs {
   }>
   continents?: Array<{ id: string; name: string }>
   bookmarksOnly?: boolean
+  anchorsOnly?: boolean
+  scopeAnchorId?: string | null
   bookmarks?: Set<string>
   /** URL 시드(검토 URL-5) — 첫 렌더에만 적용된다 */
   initial?: EventFilterOptions['initial']
@@ -55,6 +57,8 @@ const renderFilters = (args: RenderArgs = {}) =>
         (props.continents ?? []) as never,
         {
           bookmarksOnly: props.bookmarksOnly,
+          anchorsOnly: props.anchorsOnly,
+          scopeAnchorId: props.scopeAnchorId,
           bookmarks: props.bookmarks,
           initial: props.initial,
           referenceState: props.referenceState,
@@ -615,5 +619,103 @@ describe('useEventFilters — 칩 폴백 라벨(검토 GAP-5)', () => {
     expect(labelOf(result.current.filterSummaryChips, 'category')).toBe(
       '카테고리 · 알 수 없음',
     )
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 앵커 축 — 파생 앵커 칩 + 스코프 모수 축소
+// (docs/event-root-designation-review.md 배치0·배치3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 노드 트리를 얹은 사건 — 앵커 판정은 `hierarchy`의 자손 수를 본다. */
+const anchorEvent = (
+  id: string,
+  childIds: string[] = [],
+  parentEventId?: string,
+): HistoricalEvent =>
+  event(id, {
+    parentEventId,
+    hierarchy: {
+      id,
+      title: id,
+      summary: '',
+      period: { start: '2000-01-01' },
+      importance: 'notable',
+      children: childIds.map((childId) => ({
+        id: childId,
+        title: childId,
+        summary: '',
+        period: { start: '2000-01-01' },
+        importance: 'notable',
+        children: [],
+      })),
+    },
+  } as unknown as Partial<HistoricalEvent>)
+
+describe("useEventFilters — '최상위(앵커) 사건만' 축", () => {
+  const ww1 = anchorEvent('ww1', ['sarajevo'])
+  const sarajevo = anchorEvent('sarajevo', [], 'ww1')
+  const solo = anchorEvent('kiel-canal')
+  const events = [ww1, sarajevo, solo]
+
+  it('기본값은 모든 루트를 낸다 (앵커 + 단독)', () => {
+    const { result } = renderFilters({ events })
+    expect(result.current.filteredEvents.map((item) => item.id)).toEqual([
+      'ww1',
+      'kiel-canal',
+    ])
+  })
+
+  it('앵커만 켜면 자손 0인 단독 루트가 빠진다', () => {
+    const { result } = renderFilters({ events, anchorsOnly: true })
+    expect(result.current.filteredEvents.map((item) => item.id)).toEqual(['ww1'])
+  })
+
+  it('자식 사건은 앵커 축과 무관하게 루트 배열에 들어오지 않는다', () => {
+    const { result } = renderFilters({ events, anchorsOnly: true })
+    expect(
+      result.current.filteredEvents.some((item) => item.id === 'sarajevo'),
+    ).toBe(false)
+  })
+})
+
+describe('useEventFilters — 앵커 스코프(?anchor=)는 모수를 좁힌다', () => {
+  // 러불 동맹 > 프랑스의 대러시아 차관 > 1888년 차관  (실 DB의 비루트 앵커 축소 모형)
+  const alliance = anchorEvent('alliance', ['loan'])
+  const loan = anchorEvent('loan', ['loan-1888'], 'alliance')
+  const loan1888 = anchorEvent('loan-1888', [], 'loan')
+  const unrelated = anchorEvent('unrelated')
+  const events = [alliance, loan, loan1888, unrelated]
+
+  it('스코프 밖 사건은 모수에서 사라진다', () => {
+    const { result } = renderFilters({ events, scopeAnchorId: 'alliance' })
+    expect(result.current.filteredEvents.map((item) => item.id)).toEqual([
+      'alliance',
+    ])
+  })
+
+  it('⚠️ 비루트 앵커로 진입해도 화면이 비지 않는다 (검토 K4 — 종료 게이트)', () => {
+    // `isTreeRoot`로 걸렀다면 loan은 parentEventId가 있어 0행이 된다.
+    const { result } = renderFilters({ events, scopeAnchorId: 'loan' })
+    expect(result.current.filteredEvents.map((item) => item.id)).toEqual([
+      'loan',
+    ])
+  })
+
+  it('스코프 안에서는 앵커만 칩이 모수를 더 줄이지 않는다', () => {
+    // 모수가 이미 한 앵커의 계보라, 여기에 앵커 판정을 또 걸면 자손이 통째로 사라진다.
+    const { result } = renderFilters({
+      events,
+      scopeAnchorId: 'loan',
+      anchorsOnly: true,
+    })
+    expect(result.current.filteredEvents.map((item) => item.id)).toEqual([
+      'loan',
+    ])
+  })
+
+  it('존재하지 않는 anchor id는 0행 — 조용히 전역 모수로 되돌아가지 않는다', () => {
+    const { result } = renderFilters({ events, scopeAnchorId: 'ghost' })
+    expect(result.current.filteredEvents).toHaveLength(0)
   })
 })

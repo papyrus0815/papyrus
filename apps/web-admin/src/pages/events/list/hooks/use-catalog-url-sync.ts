@@ -20,13 +20,12 @@ import { useEffect, useRef } from 'react'
 import type { useSearchParams } from 'react-router-dom'
 
 import type { CenturyFilter } from '@/entities/event/model'
-import {
-  FILTER_ALL,
-  TIMELINE_LANE_MODES,
-  type TimelineLaneMode,
-  type ViewMode,
-} from '@/features/event-list/lib'
+import { FILTER_ALL, type ViewMode } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
+import {
+  serializeTimelineWindow,
+  type TimelineWindow,
+} from '@/widgets/event-timeline/model/timeline-model'
 
 import {
   DEFAULT_PAGE_SIZE,
@@ -53,6 +52,10 @@ interface CatalogUrlSyncArgs {
   debouncedKeyword: string
   selectedEventId: string | null
   bookmarksOnly: boolean
+  /** '최상위(앵커) 사건만' 모드 — `anchors=1` */
+  anchorsOnly: boolean
+  /** 앵커 스코프 — `anchor=<id>`. 이 사건과 자손으로 모수를 좁힌다. */
+  anchorId: string | null
   selectedCategory: string
   selectedCountry: string
   selectedContinent: string
@@ -69,16 +72,18 @@ interface CatalogUrlSyncArgs {
   /** 페이지 크기 — 표시 선호. 새로고침·공유 시 보존 */
   pageSize: number
   /**
-   * 타임라인 전용 축(검토 GAP-4) — 레인 기준과 숨긴 카테고리.
+   * 타임라인 전용 축(검토 GAP-4) — 시간 창(`tlw`)과 숨긴 카테고리(`hide`).
    * 위젯 지역 state였을 땐 URL에 실리지 않아 공유 링크가 화면을 재현하지 못했다.
    */
-  timelineLane: TimelineLaneMode
+  timelineWindow: TimelineWindow | null
   hiddenTimelineCategories: ReadonlySet<string>
 
   // 세터 (URL → state)
   setKeywordInput: (value: string) => void
   setSelectedEventId: (value: string | null) => void
   setBookmarksOnly: (value: boolean) => void
+  setAnchorsOnly: (value: boolean) => void
+  setAnchorId: (value: string | null) => void
   setSelectedCategory: (value: string) => void
   setSelectedCountry: (value: string) => void
   setSelectedContinent: (value: string) => void
@@ -89,7 +94,7 @@ interface CatalogUrlSyncArgs {
   setViewMode: (value: ViewMode) => void
   setViewExplicit: (value: boolean) => void
   setPageSize: (value: number) => void
-  setTimelineLane: (lane: TimelineLaneMode) => void
+  setTimelineWindow: (next: TimelineWindow | null) => void
   setHiddenTimelineCategories: (hidden: ReadonlySet<string>) => void
 }
 
@@ -101,6 +106,8 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     debouncedKeyword,
     selectedEventId,
     bookmarksOnly,
+    anchorsOnly,
+    anchorId,
     selectedCategory,
     selectedCountry,
     selectedContinent,
@@ -111,11 +118,13 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     viewMode,
     viewExplicit,
     pageSize,
-    timelineLane,
+    timelineWindow,
     hiddenTimelineCategories,
     setKeywordInput,
     setSelectedEventId,
     setBookmarksOnly,
+    setAnchorsOnly,
+    setAnchorId,
     setSelectedCategory,
     setSelectedCountry,
     setSelectedContinent,
@@ -126,7 +135,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     setViewMode,
     setViewExplicit,
     setPageSize,
-    setTimelineLane,
+    setTimelineWindow,
     setHiddenTimelineCategories,
   } = args
 
@@ -162,6 +171,10 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     if (next.bookmarksOnly !== bookmarksOnly)
       setBookmarksOnly(next.bookmarksOnly)
 
+    if (next.anchorsOnly !== anchorsOnly) setAnchorsOnly(next.anchorsOnly)
+
+    if (next.anchorId !== anchorId) setAnchorId(next.anchorId)
+
     if (next.selectedCategory !== selectedCategory)
       setSelectedCategory(next.selectedCategory)
 
@@ -186,7 +199,13 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     if (next.viewMode !== viewMode) setViewMode(next.viewMode)
     if (next.viewExplicit !== viewExplicit) setViewExplicit(next.viewExplicit)
 
-    if (next.timelineLane !== timelineLane) setTimelineLane(next.timelineLane)
+    // 창은 값 객체 — 직렬화 문자열로 비교해야 같은 창이 매번 새 객체로 갈아끼워지지 않는다
+    if (
+      serializeTimelineWindow(next.timelineWindow) !==
+      serializeTimelineWindow(timelineWindow)
+    ) {
+      setTimelineWindow(next.timelineWindow)
+    }
 
     const hiddenChanged =
       next.hiddenTimelineCategories.size !== hiddenTimelineCategories.size ||
@@ -224,6 +243,8 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
       setOrDel('q', debouncedKeyword.trim() || null)
     setOrDel('event', selectedEventId)
     setOrDel('bookmarks', bookmarksOnly ? '1' : null)
+    setOrDel('anchors', anchorsOnly ? '1' : null)
+    setOrDel('anchor', anchorId)
     setOrDel('cat', selectedCategory, FILTER_ALL)
     setOrDel('country', selectedCountry, FILTER_ALL)
     setOrDel('continent', selectedContinent, FILTER_ALL)
@@ -242,8 +263,10 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
      * 데스크톱 링크가 모바일의 'LIST 폴백'(타임라인은 터치로 거의 조작 불가)을 무력화했다.
      */
     setOrDel('view', viewExplicit ? viewMode : null)
-    // 타임라인 축 — 기본값(카테고리 레인 / 숨김 없음)이면 키를 싣지 않는다.
-    setOrDel('lane', timelineLane, TIMELINE_LANE_MODES.CATEGORY)
+    // 타임라인 축 — 기본값(전체 창 / 숨김 없음)이면 키를 싣지 않는다.
+    // v3의 `lane` 파라미터는 폐지 — 구 URL에 남아 있으면 여기서 함께 정리한다.
+    next.delete('lane')
+    setOrDel('tlw', serializeTimelineWindow(timelineWindow))
     setOrDel(
       'hide',
       hiddenTimelineCategories.size > 0
@@ -266,6 +289,8 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     debouncedKeyword,
     selectedEventId,
     bookmarksOnly,
+    anchorsOnly,
+    anchorId,
     selectedCategory,
     selectedCountry,
     selectedContinent,
@@ -276,7 +301,7 @@ export function useCatalogUrlSync(args: CatalogUrlSyncArgs) {
     viewMode,
     viewExplicit,
     pageSize,
-    timelineLane,
+    timelineWindow,
     hiddenTimelineCategories,
   ])
 }

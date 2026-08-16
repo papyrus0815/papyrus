@@ -373,6 +373,16 @@ export const TreeNodeCard = styled.div<{
   $depth: number
   $importance: 'critical' | 'major' | 'notable'
 }>`
+  /* 소비처가 onSelectNode를 주면 as="button"으로 승격된다(tree-view). 버튼 기본 표면·
+     정렬·폰트를 지워 div일 때와 픽셀이 같게 유지한다. */
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  &:is(button) {
+    cursor: pointer;
+  }
   border-radius: 12px;
   padding: 12px 14px;
   margin-bottom: 10px;

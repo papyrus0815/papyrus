@@ -44,6 +44,13 @@ const OPTIMISTIC_SCALAR_FIELDS = [
   'startDatePrecision',
   'endDatePrecision',
   'keywords',
+  /**
+   * 앵커 오버라이드 — 순수 스칼라라 여기 합류시키면 낙관 반영이 끝난다.
+   * 빠지면 '최상위 사건으로 지정'을 눌러도 refetch(최대 30s staleTime) 전까지
+   * 배지가 그대로라, 클릭이 먹지 않은 것처럼 보인다.
+   * `k in patch` 판정이라 null(자동 판정 복귀)도 정확히 반영된다.
+   */
+  'anchorOverride',
 ] as const satisfies ReadonlyArray<keyof UpdateEventDto>
 
 /**

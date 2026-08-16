@@ -21,7 +21,7 @@
  */
 import React, { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 
-import { useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { invalidateGamification } from '@/entities/gamification'
 import { useFormEntities } from '@/entities/event-form/model'
@@ -34,13 +34,21 @@ import {
   eventKeys,
 } from '@/pages/events/detail/use-event-detail'
 import {
+  type EventLinkCandidate,
   type EventResponseDto,
   createEvent,
   getEventById,
+  getEventLinkCandidates,
   updateEvent,
 } from '@/shared/api/events'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
+import { formatDateRange } from '@/shared/lib/iso-date'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
+import {
+  SelectModal,
+  type SelectOption,
+} from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 import { BasicInfoSection } from '@/widgets/event-form/ui/basic-info-section'
 
@@ -51,6 +59,15 @@ interface LoadedEventImage {
   source?: string
   order?: number
   isPrimary?: boolean
+}
+
+/**
+ * 상위 사건 프리셋 — '부모에서 가지를 낳는' 트리 등록의 공개 계약.
+ * 상세 '새 하위 사건 만들기'와 트리 뷰(W3)가 **정확히 이 형태**로 소비한다.
+ */
+export interface EventParentPreset {
+  id: string
+  title: string
 }
 
 /** 셸이 본체에 명령하는 통로 — 저장 버튼이 셸에 있으므로 필요 */
@@ -92,6 +109,12 @@ export interface EventBasicFormProps {
    * 모달 셸은 열 때마다 마운트라 매번 뜨므로 끄고 셸 subtitle로 대체할 것.
    */
   notifyOnLoad?: boolean
+  /**
+   * 상위 사건 프리셋(신규 등록 전용) — 전달되면 '상위 사건' 필드가 이 값으로 채워진 채
+   * 열린다(사용자가 해제·변경 가능). 마운트 시점에만 읽는 초기값이며, dirty 기준선에
+   * 포함되어 '열자마자 dirty' 오판이 생기지 않는다. 편집 모드에서는 무시된다.
+   */
+  initialParent?: EventParentPreset
 }
 
 /**
@@ -162,6 +185,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   onStateChange,
   onSaved,
   notifyOnLoad = true,
+  initialParent,
 }) => {
   const queryClient = useQueryClient()
   const playClickSound = useClickSound()
@@ -234,6 +258,63 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
    * 캡션/출처를 보존하면서 썸네일만 교체해야 상세에서 추가한 이미지가 소실되지 않는다.
    */
   const loadedImagesRef = useRef<LoadedEventImage[] | null>(null)
+
+  // ===== 상위 사건(트리 등록) =====
+  // 신규 등록 전용 — 편집 모드의 계층 편집은 상세 '연관' 섹션이 정본이라 여기서는
+  // 숨긴다(현재 상위를 하이드레이션하지 않으므로, 노출하면 '상위 없음'으로 오독된다).
+  const [parentEvent, setParentEvent] = useState<EventParentPreset | null>(
+    initialParent ?? null,
+  )
+  const [parentPickerOpen, setParentPickerOpen] = useState(false)
+  const [parentSearchTerm, setParentSearchTerm] = useState('')
+  // 모달 열림/닫힘 시 debounced를 즉시 현재값으로 스냅(detail-network와 동일 규약).
+  const debouncedParentTerm = useDebouncedValue(
+    parentSearchTerm,
+    250,
+    String(parentPickerOpen),
+  )
+  const {
+    data: parentCandidates = [],
+    isLoading: parentCandidatesLoading,
+    isFetching: parentCandidatesFetching,
+    isError: parentCandidatesError,
+    refetch: refetchParentCandidates,
+  } = useQuery({
+    // detail-network의 연결 피커와 동일 키 — ['events'] 프리픽스 아래(사건 mutation 시 무효화).
+    queryKey: ['events', 'link-candidates', debouncedParentTerm],
+    // 서버 take 100 캡(알려진 제약) — 넘치는 후보는 검색어로 좁힌다. 51건 요청은
+    // '50건 초과 → 더 있음' 신호용(detail-network와 동일).
+    queryFn: () =>
+      getEventLinkCandidates({ query: debouncedParentTerm, limit: 51 }),
+    enabled: parentPickerOpen && !isEditMode,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    retry: 1,
+  })
+  const parentSearchPending =
+    parentCandidatesFetching || parentSearchTerm !== debouncedParentTerm
+
+  const parentOptions = useMemo<SelectOption[]>(
+    () =>
+      parentCandidates.slice(0, 50).map((candidate) => ({
+        value: candidate.id,
+        label: candidate.title,
+        description: parentCandidateDescription(candidate),
+      })),
+    [parentCandidates],
+  )
+
+  const handleSelectParent = useCallback(
+    (candidateId: string) => {
+      const candidate = parentCandidates.find((item) => item.id === candidateId)
+      if (candidate) {
+        setParentEvent({ id: candidate.id, title: candidate.title })
+      }
+      setParentPickerOpen(false)
+      setParentSearchTerm('')
+    },
+    [parentCandidates],
+  )
 
   const markDirty = useCallback((next: boolean) => {
     if (isDirtyRef.current === next) return
@@ -348,6 +429,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         relatedHistoricalCountryIds,
         primaryCountryId,
         primaryHistoricalCountryId,
+        // 상위 사건도 기준선에 포함 — initialParent 프리필 상태가 곧 기준선이라
+        // '열자마자 dirty' 오판이 없고, 해제/변경만 dirty가 된다.
+        parentEvent?.id ?? '',
       ]),
     [
       title,
@@ -363,6 +447,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       relatedHistoricalCountryIds,
       primaryCountryId,
       primaryHistoricalCountryId,
+      parentEvent,
     ],
   )
   const snapshotRef = useRef(snapshot)
@@ -436,7 +521,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         category,
         location,
         thumbnail,
-        parentEventId: '',
+        // 신규 등록에서만 유효 — 빈 값('')은 빌더가 undefined(미전송)로 정규화한다
+        // (기존 계약 유지). 편집 모드 계층 편집은 상세 '연관' 섹션 담당.
+        parentEventId: !isEditMode && parentEvent ? parentEvent.id : '',
         tags: [],
         relatedCountryIds,
         relatedHistoricalCountryIds,
@@ -540,6 +627,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     primaryCountryId,
     primaryHistoricalCountryId,
     keywords,
+    parentEvent,
     isEditMode,
     eventId,
     queryClient,
@@ -550,6 +638,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const handleReset = useCallback(
     (options?: BasicInfoResetOptions) => {
       resetFormFields(options)
+      // parentEvent는 의도적으로 유지 — "계속 등록"의 전형이 같은 상위 밑에 형제
+      // 가지를 연달아 등록하는 흐름이다(keepCategory와 같은 근거). 칩이 보이므로
+      // 원치 않으면 ✕ 한 번으로 해제된다. 유지된 값은 아래 토큰으로 새 기준선에 편입.
       setSubmitAttempted(false)
       // 비운 결과가 새 기준선 — 토큰을 올리면 기준선 effect가 다시 잡는다.
       setHydrationToken((token) => token + 1)
@@ -597,6 +688,15 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         availableCountries={availableCountries}
         availableHistoricalCountries={availableHistoricalCountries}
         onOpenCountryModal={() => setShowCountryModal(true)}
+        parentEventSlot={
+          isEditMode
+            ? undefined
+            : {
+                parent: parentEvent,
+                onOpenPicker: () => setParentPickerOpen(true),
+                onClear: () => setParentEvent(null),
+              }
+        }
         playClickSound={playClickSound}
         getDateError={getDateError}
         calculateDaysDifference={calculateDaysDifference}
@@ -636,8 +736,66 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         selectedCountryIds={[...relatedCountryIds, ...relatedHistoricalCountryIds]}
         multiSelect={true}
       />
+
+      {/* 상위 사건 피커 — detail-network의 연결 피커와 동일한 서버검색 SelectModal 패턴 */}
+      {!isEditMode && (
+        <SelectModal
+          isOpen={parentPickerOpen}
+          onClose={() => {
+            setParentPickerOpen(false)
+            setParentSearchTerm('')
+          }}
+          title="상위 사건 선택"
+          options={parentOptions}
+          selectedValue={parentEvent?.id}
+          onSelect={handleSelectParent}
+          searchable
+          searchPlaceholder="사건명으로 검색 (하위 사건 포함)"
+          isLoading={parentCandidatesLoading}
+          isSearching={parentSearchPending}
+          hasError={parentCandidatesError}
+          onRetry={() => void refetchParentCandidates()}
+          onQueryChange={setParentSearchTerm}
+          headerExtra={
+            parentCandidates.length > 50 ? (
+              <span style={{ fontSize: 12 }}>
+                후보가 많아 50건까지만 표시 중 — 검색어로 좁혀 주세요
+              </span>
+            ) : undefined
+          }
+        />
+      )}
     </>
   )
+}
+
+/**
+ * 상위 후보 설명 라인 — 날짜(가능하면) · 현재 소속 상위.
+ * BC·고대 사건은 startDate가 null — 구조화 연도(startEra/startYear)로 표기한다
+ * (네이티브 Date 파싱 금지 규약, formatDateRange는 iso-date의 BC-safe 단일 출처).
+ */
+function parentCandidateDescription(
+  candidate: EventLinkCandidate,
+): string | undefined {
+  const parts: string[] = []
+  if (candidate.startDate) {
+    parts.push(
+      formatDateRange(
+        candidate.startDate,
+        candidate.endDate ?? undefined,
+        candidate.startDatePrecision,
+        candidate.endDatePrecision,
+      ),
+    )
+  } else if (candidate.startYear != null) {
+    parts.push(
+      `${candidate.startEra === 'BC' ? '기원전 ' : ''}${candidate.startYear}년`,
+    )
+  }
+  if (candidate.parentEventTitle) {
+    parts.push(`현재 '${candidate.parentEventTitle}'의 하위`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : undefined
 }
 
 export default EventBasicForm

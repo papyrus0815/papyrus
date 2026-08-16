@@ -25,6 +25,7 @@ export interface YearBuckets {
   bucketYearById: Map<string, number | null>
   /**
    * 시각 헤더를 렌더하지 않는 연도 — 그 해에 행이 **하나뿐**인 버킷.
+   * 모수는 `baselineItems`(계층 접힘 이전)다 — 아래 ⚠️와 옵션 주석 참고.
    *
    * 실측: 연 그룹 88개 중 50개(57%)가 1행짜리다. 이들이 63px 헤더 + 45px 행 = 108px를
    * 사건 한 건에 쓰고 그중 58%가 크롬이며, 아래 유일한 행은 자기 날짜를 이미 갖고 있다
@@ -58,39 +59,67 @@ export interface YearGap {
   missingCenturies: number[]
 }
 
+export interface BuildYearBucketsOptions {
+  /**
+   * 계층 보기인가(기본 true). **평면 보기(`flat=1`)에서는 false를 넘겨야 한다.**
+   *
+   * 평면 모드도 `parentNodeId`를 그대로 싣기 때문에 부모 귀속 규칙이 그대로 걸렸다.
+   * 그런데 평면은 배열을 전역 재정렬하므로 '부모가 먼저 처리돼 있다'는 이 함수의
+   * 전방 1패스 전제가 깨지고, **자식이 배열에서 부모보다 앞에 오면 귀속이 뒤집힌다** —
+   * 실측: 정렬 방향 화살표 한 번에 67행이 다른 연 밴드로 옮겨 가고 밴드 수가 111↔94로
+   * 널뛰었다(검토 IDX-8). 평면에는 계층이 없으니 자기 연도만 쓰면 순서 의존이 사라진다.
+   */
+  hierarchy?: boolean
+  /**
+   * 헤더리스·공백 판정의 **모수** — 계층 접힘(하위 접기) *이전*의 행 집합.
+   *
+   * 생략하면 `items`를 그대로 쓴다. 페이지는 `visibleFlattenedHierarchy`(접힘 이전)를
+   * 넘긴다. 이유는 두 가지다.
+   * ⑴ 헤더리스(1행짜리 연도)는 접기 토글이 없다는 뜻인데, 접힘 *이후* 행 수로 판정하면
+   *    '하위 접기' 한 번에 3행짜리 연도가 1행이 되면서 헤더와 토글이 통째로 사라지고
+   *    접어 뒀던 행이 되살아났다(실측: 시각 연 헤더 38→28, 연도 10개에서 동시 발생).
+   * ⑵ 공백 표지('N년 기록 없음')는 **기록의 존재 여부**를 주장하므로, 접혀서 안 보일 뿐
+   *    엄연히 있는 사건을 없다고 말하면 안 된다.
+   */
+  baselineItems?: FlattenedHierarchyItem[]
+}
+
+/** 한 행의 버킷 귀속 결과 — 본 패스와 모수 패스가 같은 규칙을 쓰도록 뽑아 둔다. */
+interface BucketAssignment {
+  item: FlattenedHierarchyItem
+  bucketYear: number | null
+  isGroupRoot: boolean
+}
+
 /**
- * 평탄화된 행들을 연도 버킷에 담는다.
- *
- * 귀속 규칙: 최상위는 자기 연도 우선, 자식은 직전 최상위(부모) 연도 우선.
- * 어느 쪽도 없으면 자기 연도로 폴백하고, 그래도 없으면 '연도 미상'.
- * ⚠️ 절대 드롭하지 않는다 — 예전엔 year가 null이면 조용히 사라져
- * 날짜 완전 미상 사건과 부모 없이 남은 자식이 화면에서 통째로 없어졌다.
- *
- * @param filteringActive 내용을 좁히는 필터가 걸려 있는가(`useEventFilters.hasNarrowingFilters`).
- *   true면 **매칭된 행은 자기 연도 버킷에 귀속**된다 — 아래 주석 참고(검토 DATA-9).
- *   ⚠️ 페이지와 목록 위젯이 **같은 값**을 넘겨야 한다. 다르면 '보이는 행' 판정이
- *   DOM과 갈려 ↑↓·드로어 이전/다음이 화면에 없는 행을 순회한다.
+ * 귀속 패스 — `buildYearBuckets`의 본 계산과 `baselineItems` 모수 계산이 **같은 규칙**을
+ * 쓰게 하는 단일 출처. 두 패스가 갈리면 헤더리스 판정과 렌더가 어긋난다.
  */
-export function buildYearBuckets(
-  items: FlattenedHierarchyItem[],
-  sortDirection: 'asc' | 'desc',
-  filteringActive = false,
-): YearBuckets {
-  const eventYears = new Set<number>()
-  const eventsByYear = new Map<number, FlattenedHierarchyItem[]>()
-  const unknownItems: FlattenedHierarchyItem[] = []
-  const centuryCount = new Map<number, number>()
-  const yearRootCount = new Map<number, number>()
+function assignBuckets(
+  rows: FlattenedHierarchyItem[],
+  filteringActive: boolean,
+  hierarchy: boolean,
+): {
+  assigned: BucketAssignment[]
+  bucketYearById: Map<string, number | null>
+  /** 행들이 **자기 날짜로** 주장하는 연도 전부 — 공백 표지의 진실 판정에 쓴다. */
+  ownYears: Set<number>
+} {
   const bucketYearById = new Map<string, number | null>()
+  const ownYears = new Set<number>()
+  const assigned: BucketAssignment[] = []
 
   /** 이 목록에 실제로 존재하는 노드 id — '내 부모가 화면에 있는가' 판정용. */
-  const presentIds = new Set(items.map((item) => item.node.id))
+  const presentIds = new Set(rows.map((item) => item.node.id))
 
-  items.forEach((item) => {
+  rows.forEach((item) => {
     // BC·고대 날짜 안전 파싱(네이티브 Date 금지).
     const parsedYear = parseIsoDateParts(item.node.period.start)?.year ?? null
+    if (parsedYear !== null) ownYears.add(parsedYear)
     const parentPresent =
-      item.parentNodeId !== null && presentIds.has(item.parentNodeId)
+      hierarchy &&
+      item.parentNodeId !== null &&
+      presentIds.has(item.parentNodeId)
 
     /**
      * 버킷 귀속 — **실제 부모**를 따른다(검토 IA-2).
@@ -130,13 +159,52 @@ export function buildYearBuckets(
      * 위 예외로 자기 연도에 떨어진 매칭 자식도 그 해에서는 스스로 그룹 단위다.
      */
     const isGroupRoot = !parentPresent || bucketYear !== parentBucket
+    const resolved =
+      bucketYear === null || bucketYear === undefined ? null : bucketYear
 
-    if (bucketYear === null || bucketYear === undefined) {
-      bucketYearById.set(item.node.id, null)
+    bucketYearById.set(item.node.id, resolved)
+    assigned.push({ item, bucketYear: resolved, isGroupRoot })
+  })
+
+  return { assigned, bucketYearById, ownYears }
+}
+
+/**
+ * 평탄화된 행들을 연도 버킷에 담는다.
+ *
+ * 귀속 규칙: 최상위는 자기 연도 우선, 자식은 직전 최상위(부모) 연도 우선.
+ * 어느 쪽도 없으면 자기 연도로 폴백하고, 그래도 없으면 '연도 미상'.
+ * ⚠️ 절대 드롭하지 않는다 — 예전엔 year가 null이면 조용히 사라져
+ * 날짜 완전 미상 사건과 부모 없이 남은 자식이 화면에서 통째로 없어졌다.
+ *
+ * @param filteringActive 내용을 좁히는 필터가 걸려 있는가(`useEventFilters.hasNarrowingFilters`).
+ *   true면 **매칭된 행은 자기 연도 버킷에 귀속**된다 — 위 주석 참고(검토 DATA-9).
+ *   ⚠️ 페이지와 목록 위젯이 **같은 값**을 넘겨야 한다. 다르면 '보이는 행' 판정이
+ *   DOM과 갈려 ↑↓·드로어 이전/다음이 화면에 없는 행을 순회한다.
+ */
+export function buildYearBuckets(
+  items: FlattenedHierarchyItem[],
+  sortDirection: 'asc' | 'desc',
+  filteringActive = false,
+  { hierarchy = true, baselineItems }: BuildYearBucketsOptions = {},
+): YearBuckets {
+  const eventYears = new Set<number>()
+  const eventsByYear = new Map<number, FlattenedHierarchyItem[]>()
+  const unknownItems: FlattenedHierarchyItem[] = []
+  const centuryCount = new Map<number, number>()
+  const yearRootCount = new Map<number, number>()
+
+  const { assigned, bucketYearById, ownYears } = assignBuckets(
+    items,
+    filteringActive,
+    hierarchy,
+  )
+
+  assigned.forEach(({ item, bucketYear, isGroupRoot }) => {
+    if (bucketYear === null) {
       unknownItems.push(item)
       return
     }
-    bucketYearById.set(item.node.id, bucketYear)
     // depth 무관하게 add — 부모 없이 자기 연도로 버킷팅된 경우에도 버킷이 존재해야
     // 렌더 루프가 그 연도를 순회한다.
     eventYears.add(bucketYear)
@@ -157,21 +225,57 @@ export function buildYearBuckets(
   const allYears =
     sortDirection === 'desc' ? [...sortedYears].reverse() : sortedYears
 
+  /**
+   * 헤더리스·공백의 모수는 **계층 접힘 이전**이다(옵션 주석 참고).
+   * 모수를 따로 주지 않으면 지금 행들이 곧 모수다.
+   */
+  const baseline =
+    baselineItems && baselineItems !== items
+      ? assignBuckets(baselineItems, filteringActive, hierarchy)
+      : null
+  const baselineRowCount = new Map<number, number>()
+  ;(baseline?.assigned ?? assigned).forEach(({ bucketYear }) => {
+    if (bucketYear === null) return
+    baselineRowCount.set(bucketYear, (baselineRowCount.get(bucketYear) ?? 0) + 1)
+  })
+
   const headerlessYears = new Set<number>()
-  eventsByYear.forEach((bucketItems, year) => {
-    if (bucketItems.length === 1) headerlessYears.add(year)
+  eventsByYear.forEach((_rows, year) => {
+    if ((baselineRowCount.get(year) ?? 0) === 1) headerlessYears.add(year)
   })
 
   /**
    * 공백 계산은 **표시 순서** 기준이다(정렬 방향이 이미 적용된 allYears).
    * 방향과 무관하게 절대 연차를 쓰므로 오름/내림 어느 쪽에서도 같은 공백이 같게 읽힌다.
+   *
+   * ⚠️ 판정 기준은 밴드 목록이 아니라 행들이 **자기 날짜로 주장하는 연도**다(검토 IDX-6).
+   * 자식이 부모 밴드로 흡수되면 그 자식의 연도는 `allYears`에서 사라진다 — 실측 115종 중
+   * 25종이 그렇게 사라졌고, 그 빈자리를 이 계산이 '공백'으로 읽어 **10년 이상 표지 18개 중
+   * 8개가 거짓**이 됐다("977년과 965년 사이 12년 기록 없음" — 실제로는 976·974·968·966에
+   * 6건이 있다). 사이에 실제 기록이 하나라도 있으면 표지도 여백도 만들지 않는다.
    */
+  const coveredYears = Array.from(baseline?.ownYears ?? ownYears).sort(
+    (yearA, yearB) => yearA - yearB,
+  )
+  /** `lower < year < upper`인 기록 연도가 하나라도 있는가 (정렬된 배열 이분 탐색). */
+  const hasRecordBetween = (lower: number, upper: number): boolean => {
+    let low = 0
+    let high = coveredYears.length
+    while (low < high) {
+      const mid = (low + high) >> 1
+      if (coveredYears[mid] <= lower) low = mid + 1
+      else high = mid
+    }
+    return low < coveredYears.length && coveredYears[low] < upper
+  }
+
   const yearGapBefore = new Map<number, YearGap>()
   for (let index = 1; index < allYears.length; index += 1) {
     const previous = allYears[index - 1]
     const current = allYears[index]
     const lower = Math.min(previous, current)
     const upper = Math.max(previous, current)
+    if (hasRecordBetween(lower, upper)) continue
     const missingCenturies: number[] = []
     // 0세기는 존재하지 않는다(기원전 1세기 다음이 1세기).
     for (

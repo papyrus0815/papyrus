@@ -30,6 +30,7 @@ const row = (
     parentNodeId,
     isMatch,
     canExpand: false,
+    visibleChildCount: 0,
     isCollapsedAway: false,
     hiddenChildCount: 0,
   }) as unknown as FlattenedHierarchyItem
@@ -289,5 +290,117 @@ describe('연도 공백(yearGapBefore) — 기록 없는 구간을 화면에 되
     expect(gapSpacingPx(29)).toBe(12)
     expect(gapSpacingPx(63)).toBe(20)
     expect(gapSpacingPx(203)).toBe(28)
+  })
+})
+
+/**
+ * 검토 IDX-6 — 공백 표지는 '기록이 없다'고 **능동적으로 주장**한다.
+ * 자식이 부모 밴드로 흡수되면 그 자식의 연도가 밴드 목록에서 사라지는데,
+ * 그 빈자리를 공백으로 읽어 실데이터에서 10년+ 표지 18개 중 8개가 거짓이었다.
+ */
+describe('buildYearBuckets — 공백 판정은 행의 자기 연도를 본다', () => {
+  it('사이에 흡수된 자식이 있으면 공백 표지를 만들지 않는다', () => {
+    // 977년 부모 + 그 자식 976년(부모 밴드로 흡수) + 965년 부모.
+    // 밴드는 977·965 둘뿐이라 예전엔 '12년 기록 없음'이라 단언했다.
+    const buckets = buildYearBuckets(
+      [
+        row('p977', '0977-01-01'),
+        row('c976', '0976-01-01', 'p977'),
+        row('p965', '0965-01-01'),
+      ],
+      'desc',
+    )
+    expect(buckets.allYears).toEqual([977, 965])
+    expect(buckets.yearGapBefore.get(965)).toBeUndefined()
+  })
+
+  it('사이가 정말 비어 있으면 표지는 그대로 만든다', () => {
+    const buckets = buildYearBuckets(
+      [row('a', '1205-01-01'), row('b', '1002-01-01')],
+      'desc',
+    )
+    expect(buckets.yearGapBefore.get(1002)?.years).toBe(203)
+  })
+
+  it('모수(baselineItems)의 자기 연도까지 본다 — 접힌 행도 기록은 기록이다', () => {
+    const parentRow = row('p977', '0977-01-01')
+    const hiddenChild = row('c976', '0976-01-01', 'p977')
+    const oldRow = row('p965', '0965-01-01')
+    // 하위 접기로 자식이 렌더 배열에서 빠진 상태
+    const buckets = buildYearBuckets([parentRow, oldRow], 'desc', false, {
+      baselineItems: [parentRow, hiddenChild, oldRow],
+    })
+    expect(buckets.yearGapBefore.get(965)).toBeUndefined()
+  })
+})
+
+/**
+ * 검토 IDX-9 — 헤더리스(1행짜리 연도)는 **접기 토글이 없다**는 뜻이다.
+ * 접힘 *이후* 행 수로 판정하면 '하위 접기' 한 번에 헤더와 토글이 통째로 사라지고
+ * 접어 뒀던 행이 되살아난다(실측: 시각 연 헤더 38→28, 연도 10개에서 동시 발생).
+ */
+describe('buildYearBuckets — 헤더리스 판정은 하위 접힘에 흔들리지 않는다', () => {
+  it('접혀서 1행만 남아도 모수가 2행이면 헤더리스가 아니다', () => {
+    const parentRow = row('parent', '1894-01-01')
+    const childRow = row('child', '1904-01-01', 'parent')
+    const buckets = buildYearBuckets([parentRow], 'desc', false, {
+      baselineItems: [parentRow, childRow],
+    })
+    expect(buckets.eventsByYear.get(1894)).toHaveLength(1)
+    expect(buckets.headerlessYears.has(1894)).toBe(false)
+  })
+
+  it('모수를 주지 않으면 지금 행들이 곧 모수다(기존 계약)', () => {
+    const buckets = buildYearBuckets([row('only', '1894-01-01')], 'desc')
+    expect(buckets.headerlessYears.has(1894)).toBe(true)
+  })
+})
+
+/**
+ * 검토 IDX-8 — 평면 보기는 배열을 전역 재정렬하므로 '부모가 먼저 처리돼 있다'는
+ * 전방 1패스 전제가 깨진다. 실측: 정렬 방향 화살표 한 번에 67행이 다른 밴드로 이동.
+ */
+describe('buildYearBuckets — 평면 보기(hierarchy:false)는 배열 순서에 의존하지 않는다', () => {
+  const parentRow = row('parent', '1600-01-01')
+  const childRow = row('child', '1757-01-01', 'parent')
+
+  it('자식이 배열에서 부모보다 앞에 와도 자기 연도에 귀속된다', () => {
+    const forward = buildYearBuckets([parentRow, childRow], 'desc', false, {
+      hierarchy: false,
+    })
+    const reversed = buildYearBuckets([childRow, parentRow], 'desc', false, {
+      hierarchy: false,
+    })
+    expect(forward.bucketYearById.get('child')).toBe(1757)
+    expect(reversed.bucketYearById.get('child')).toBe(1757)
+    expect(forward.allYears).toEqual(reversed.allYears)
+  })
+
+  it('계층 보기에서는 종전대로 부모 밴드를 따른다', () => {
+    const buckets = buildYearBuckets([parentRow, childRow], 'desc')
+    expect(buckets.bucketYearById.get('child')).toBe(1600)
+  })
+})
+
+/**
+ * 실패 모드 ① 회귀 가드 — 그룹핑은 행을 절대 드롭하지 않는다.
+ * 모수 패스(baselineItems)를 도입해도 전사(全射)는 유지돼야 한다.
+ */
+describe('buildYearBuckets — 입력 행은 전부 버킷이나 미상에 담긴다', () => {
+  it('모수를 함께 넘겨도 행 수가 보존된다', () => {
+    const items = [
+      row('a', '1996-03-01'),
+      row('b', ''),
+      row('c', '1205-01-01'),
+      row('d', '1204-01-01', 'c'),
+    ]
+    const buckets = buildYearBuckets(items, 'desc', false, {
+      baselineItems: items,
+    })
+    const bucketed = Array.from(buckets.eventsByYear.values()).reduce(
+      (total, rows) => total + rows.length,
+      0,
+    )
+    expect(bucketed + buckets.unknownItems.length).toBe(items.length)
   })
 })

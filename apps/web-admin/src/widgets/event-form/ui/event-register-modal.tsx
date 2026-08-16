@@ -37,7 +37,10 @@ import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 import type {
   EventBasicFormHandle,
   EventBasicFormState,
+  EventParentPreset,
 } from '@/widgets/event-form/ui/event-basic-form'
+
+export type { EventParentPreset } from '@/widgets/event-form/ui/event-basic-form'
 
 const LazyEventBasicForm = React.lazy(() =>
   import('@/widgets/event-form/ui/event-basic-form').then((module) => ({
@@ -63,6 +66,12 @@ export interface EventRegisterModalProps {
    * 뒤로가기는 이 컴포넌트를 거치지 않고 언마운트시키므로 자체 확인이 닿지 않는다.
    */
   onDirtyChange?: (isDirty: boolean) => void
+  /**
+   * 상위 사건 프리셋 — 전달되면 '상위 사건' 필드가 이 값으로 채워진 채 열린다
+   * (사용자가 해제·변경 가능). 상세의 '새 하위 사건 만들기'와 트리 뷰(W3)가
+   * `{ id: string; title: string }` 시그니처 그대로 소비한다. 신규 등록 전용.
+   */
+  initialParent?: EventParentPreset
 }
 
 export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
@@ -71,6 +80,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   eventId,
   onSaved,
   onDirtyChange,
+  initialParent,
 }) => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -187,6 +197,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
             {isOpen && (
               <LazyEventBasicForm
                 eventId={eventId}
+                initialParent={initialParent}
                 formRef={formRef}
                 onDirtyChange={markDirty}
                 onStateChange={setFormState}

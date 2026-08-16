@@ -90,6 +90,11 @@ export interface EventDetail {
   aftermath?: string | null
   keywords?: string[] | null
   parentEventId?: string | null
+  /**
+   * '최상위(앵커) 사건' 판정 오버라이드 — null/미지정이면 파생 자동 판정(자손 ≥ 1).
+   * 루트 판정(parentEventId)과 직교한다. 판정은 features/event-hierarchy/model/anchor.ts.
+   */
+  anchorOverride?: 'ANCHOR' | 'PLAIN' | null
   parentEvent?: EventDetail
   /**
    * 주 상위와의 연결 사유(EventHierarchyReason — 쌍 this↔parentEventId). 상세에만 실림.

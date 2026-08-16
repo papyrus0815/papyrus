@@ -33,32 +33,18 @@ import { pathKeys } from '@/shared/router'
 const ROW_SELECTOR = '[data-event-id]'
 
 /**
- * 이 요소에 포커스가 있을 때는 키를 가로채면 안 된다.
- * 자기 키 계약을 가진 것들: 텍스트 입력, 네이티브 select, 버튼/링크,
- * 그리고 팝오버·메뉴·다이얼로그처럼 자체 내비게이션을 갖는 컨테이너.
+ * (제거됨) `isInteractiveTarget` — `button, a, [role="button"]`까지 막던 넓은 가드.
+ *
+ * 세 소비처가 전부 그 넓이 때문에 회귀를 냈고, 지금은 셋 다 자기 가드를 갖는다:
+ * `?`·`/`는 `isTextEntryTarget`, Esc는 `isEscapeReservedTarget`, 리스트 내비는
+ * 아래 훅 안의 인라인 가드(행 안 액션에서는 ↑↓를 통과시켜야 한다 — 검토 A11Y-3).
+ * 되살리지 말 것. 아래 두 주석의 '넓은 가드'는 이 함수를 가리킨다.
  */
-const isInteractiveTarget = (target: EventTarget | null): boolean => {
-  const element = target as HTMLElement | null
-  if (!element) return false
-  if (
-    element instanceof HTMLInputElement ||
-    element instanceof HTMLTextAreaElement ||
-    element instanceof HTMLSelectElement
-  ) {
-    return true
-  }
-  if (element.isContentEditable) return true
-  return Boolean(
-    element.closest?.(
-      'button, a, select, [role="button"], [role="listbox"], [role="menu"], [role="dialog"], [role="option"], [contenteditable="true"]',
-    ),
-  )
-}
 
 /**
  * **텍스트 입력** 요소인가 — `?`·`/` 전용 가드.
  *
- * `isInteractiveTarget`은 버튼·링크·다이얼로그까지 막는다. 그 넓은 가드를 `?`에 쓰면
+ * 예전의 넓은 가드는 버튼·링크·다이얼로그까지 막았다. 그것을 `?`에 쓰면
  * 도움말 모달이 열린 순간(포커스 트랩이 첫 focusable인 닫기 **버튼**으로 포커스를 옮긴다)
  * `?`가 삼켜져 **모달 안에서는 같은 키로 닫을 수 없다** — 정작 모달 본문은 '이 도움말
  * 열기/닫기'라고 안내한다. 포털 수정으로 모달이 실제로 렌더되면서 드러난 어긋남이다.
@@ -79,7 +65,7 @@ const isTextEntryTarget = (target: EventTarget | null): boolean => {
 /**
  * Esc를 삼켜야 하는 대상인가 — **Escape 전용** 가드.
  *
- * 예전에는 `isInteractiveTarget`을 재사용했는데, 그건 `button, a, [role="button"]`까지
+ * 예전에는 위의 넓은 가드를 재사용했는데, 그건 `button, a, [role="button"]`까지
  * `closest`로 막는다. 그래서 상세 패널 안 **아무 버튼에 포커스가 있으면 Esc가 죽었다** —
  * 하필 그 버튼 중 하나가 `title="닫기 (Esc)"`인 ✕였다(1920px 실측: ✕에 포커스 → Esc →
  * 패널 그대로, 목록 행에 포커스 → Esc → 정상 닫힘). 데스크톱 패널은 `role="region"`이라
@@ -187,6 +173,8 @@ interface CatalogListNavigationArgs {
   navigate: ReturnType<typeof useNavigate>
   /** 목록 뷰이고 오버레이가 닫혀 있을 때만 true — false면 리스너를 아예 안 건다 */
   enabled: boolean
+  /** ←/→ 트리 키가 부르는 하위 사건 펼치기/접기 토글 */
+  toggleEventExpansion: (eventId: string) => void
 }
 
 /**
@@ -197,7 +185,7 @@ interface CatalogListNavigationArgs {
  * 항목까지 후보가 되어, 화살표가 화면에 없는 사건을 선택하고 포커스는 아무 데도 가지 않는다.
  */
 export function useCatalogListNavigation(args: CatalogListNavigationArgs) {
-  const { setSelectedEventId, navigate, enabled } = args
+  const { setSelectedEventId, navigate, enabled, toggleEventExpansion } = args
 
   useEffect(() => {
     if (!enabled) return
@@ -209,7 +197,69 @@ export function useCatalogListNavigation(args: CatalogListNavigationArgs) {
         ROW_SELECTOR,
       ) as HTMLElement | null
       if (!focusedRow) return
-      if (isInteractiveTarget(event.target)) return
+      /**
+       * ⚠️ 인터랙티브 가드는 **행 밖**에만 건다(검토 A11Y-3).
+       *
+       * 예전엔 행 안의 셰브론·북마크 버튼에 포커스가 가도 이 가드에 걸려 ↑↓가 통째로
+       * 죽었다 — 브라우저 기본 스크롤만 일어나 포커스한 셰브론이 화면 밖으로 밀렸고,
+       * 부모 하나를 여닫는 데 Tab→Enter→Shift+Tab→↓ 네 키가 필요했다. 로빙 규약에서
+       * 행내 액션은 '행 안'이지 '목록 밖'이 아니므로, 거기서도 ↑↓는 행을 옮겨야 한다.
+       * 행 밖(툴바·드로어·모달)은 종전대로 막는다.
+       */
+      const inTextOrOverlay = (event.target as HTMLElement | null)?.closest?.(
+        'input, textarea, select, [contenteditable="true"], [role="listbox"], [role="menu"], [role="dialog"], [role="option"]',
+      )
+      if (inTextOrOverlay) return
+
+      /**
+       * ←/→ — 트리 위젯 표준(WAI-ARIA APG). 목록이 계층을 그리면서도 계층을 **조작하는**
+       * 키 계약은 없었다: 화살표는 상하 이동뿐이고 펼치기는 마우스나 Tab→Enter뿐이었다.
+       *   → : 접혀 있으면 펼치고, 이미 펼쳐져 있으면 첫 자식으로 내려간다
+       *   ← : 펼쳐져 있으면 접고, 아니면 부모 행으로 올라간다
+       * 자식이 없는 행에서는 preventDefault를 하지 않는다 — 가로 스크롤을 뺏지 않기 위해.
+       */
+      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+        const rowId = focusedRow.dataset.eventId
+        if (!rowId) return
+        const canExpand = focusedRow.dataset.canExpand === 'true'
+        const isExpanded = focusedRow.dataset.expanded === 'true'
+        const listRoot = focusedRow.closest('[data-list-scroller]') ?? document
+        const treeRows = Array.from(
+          listRoot.querySelectorAll<HTMLElement>(ROW_SELECTOR),
+        )
+        const focusRow = (targetId: string | null | undefined) => {
+          if (!targetId) return
+          const target = treeRows.find(
+            (candidate) => candidate.dataset.eventId === targetId,
+          )
+          if (!target) return
+          event.preventDefault()
+          setSelectedEventId(targetId)
+          target.focus({ preventScroll: true })
+        }
+
+        if (event.key === 'ArrowRight') {
+          if (canExpand && !isExpanded) {
+            event.preventDefault()
+            toggleEventExpansion(rowId)
+            return
+          }
+          if (canExpand && isExpanded) {
+            // 첫 자식 = DOM에서 바로 다음 행이면서 부모가 나인 행.
+            const next = treeRows[treeRows.indexOf(focusedRow) + 1]
+            if (next?.dataset.parentId === rowId) focusRow(next.dataset.eventId)
+          }
+          return
+        }
+
+        if (canExpand && isExpanded) {
+          event.preventDefault()
+          toggleEventExpansion(rowId)
+          return
+        }
+        focusRow(focusedRow.dataset.parentId)
+        return
+      }
 
       /**
        * 상세 **페이지로 이동**은 수식키를 요구한다(Ctrl/⌘+Enter).
@@ -280,5 +330,5 @@ export function useCatalogListNavigation(args: CatalogListNavigationArgs) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [enabled, navigate, setSelectedEventId])
+  }, [enabled, navigate, setSelectedEventId, toggleEventExpansion])
 }

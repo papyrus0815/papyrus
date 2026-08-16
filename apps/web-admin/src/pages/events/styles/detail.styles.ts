@@ -366,6 +366,44 @@ export const DetailChildrenList = styled.div`
   gap: 8px;
 `
 
+/**
+ * 하위 사건 항목의 날짜 — 제목 바로 아래 한 줄.
+ * 예전엔 드로어의 하위 목록에 날짜가 아예 없어, 목록에서 보던 시간 순서와 대조할 수
+ * 없었다(검토 DISC-7). `span` 규칙(요약)과 색·크기를 나눠 두 줄이 구별되게 한다.
+ */
+export const DetailChildDate = styled.time`
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 하위 사건 목록 하단 액션 줄 — '더 보기'와 '전체 계층 구조 보기'. */
+export const DetailChildrenMoreRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+`
+
+/** '나머지 N개 더 보기' — 텍스트 버튼. */
+export const DetailChildrenMoreButton = styled.button`
+  border: none;
+  background: transparent;
+  padding: 4px 0;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${BRAND.primary};
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+
+  &:hover {
+    text-decoration: underline solid;
+  }
+`
+
 export const DetailChildItem = styled.button`
   border-radius: 10px;
   padding: 10px 12px;
@@ -494,122 +532,9 @@ export const ViewAllHierarchyButton = styled.button`
         `}
 `
 
-// Timeline View
-export const TimelineContainer = styled.div`
-  position: relative;
-  padding-left: 28px;
-
-  /* 타임라인 rail — gradient → 단색 alpha, 두께 3 → 2px */
-  &::before {
-    content: '';
-    position: absolute;
-    left: 10px;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: rgba(37, 99, 235, 0.3);
-    border-radius: 1px;
-  }
-`
-
-/* TimelineEventCard — gradient/shadow ladder 제거. 단순 카드. */
-export const TimelineEventCard = styled.div<{ $depth: number }>`
-  position: relative;
-  padding: 14px 16px;
-  margin-bottom: 14px;
-  margin-left: ${({ $depth }) => $depth * 22}px;
-  border-radius: 8px;
-  transition: border-color 0.15s, background 0.15s;
-  ${({ theme, $depth }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: ${$depth === 0
-            ? 'rgba(37, 99, 235, 0.08)'
-            : 'rgba(255, 255, 255, 0.03)'};
-          border: 1px solid rgba(37, 99, 235, 0.15);
-          &:hover {
-            border-color: rgba(37, 99, 235, 0.3);
-          }
-        `
-      : css`
-          background: ${$depth === 0
-            ? 'rgba(37, 99, 235, 0.05)'
-            : '#ffffff'};
-          border: 1px solid rgba(37, 99, 235, 0.15);
-          &:hover {
-            border-color: rgba(37, 99, 235, 0.3);
-          }
-        `}
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: -28px;
-    top: 20px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: ${({ $depth }) =>
-      $depth === 0 ? BRAND.primary : 'transparent'};
-    border: 2px solid
-      ${({ $depth }) =>
-        $depth === 0 ? BRAND.primary : BRAND.primaryBorderHover};
-    /* 외곽 링 — 표면색 가정 대신 currentColor 기반 alpha (drawer/page 모두 매끈) */
-    box-shadow: 0 0 0 3px
-      ${({ theme }) =>
-        theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.06)'
-          : 'rgba(255,255,255,1)'};
-  }
-`
-
-export const TimelineEventDate = styled.div`
-  font-size: 12px;
-  font-weight: 700;
-  color: #2563eb;
-  margin-bottom: 6px;
-`
-
-export const TimelineEventTitle = styled.h4`
-  margin: 0 0 6px;
-  font-size: 15px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#f1f5f9' : '#0f172a'};
-`
-
-export const TimelineEventSummary = styled.p`
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#64748b' : '#475569'};
-`
-
-export const TimelineImportance = styled.span<{
-  $importance: 'critical' | 'major' | 'notable'
-}>`
-  display: inline-block;
-  margin-top: 8px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: ${({ $importance }) => {
-    switch ($importance) {
-      case 'critical': return 'rgba(239, 68, 68, 0.15)'
-      case 'major': return 'rgba(251, 191, 36, 0.15)'
-      default: return 'rgba(37, 99, 235, 0.1)'
-    }
-  }};
-  color: ${({ $importance }) => {
-    switch ($importance) {
-      case 'critical': return '#dc2626'
-      case 'major': return '#d97706'
-      default: return '#2563eb'
-    }
-  }};
-`
+/* Timeline View styled 6종(TimelineContainer·EventCard·EventDate·EventTitle·
+   EventSummary·Importance)은 v3 이전부터 사용처 0의 죽은 코드 — 삭제(검토 R42).
+   v4 타임라인의 스타일은 widgets/event-timeline이 소유한다. */
 
 // Tree View
 export const TreeContainer = styled.div`

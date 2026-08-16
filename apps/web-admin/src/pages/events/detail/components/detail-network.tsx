@@ -21,6 +21,7 @@ import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
+import * as NetStyles from './detail-network.styles'
 import { type EventDetail, eventKeys } from '../use-event-detail'
 import { ChildrenBlock } from './children-block'
 import {
@@ -46,7 +47,8 @@ const LazyEventRegisterModal = lazy(() =>
 
 interface DetailNetworkProps {
   event: EventDetail
-  onPatch: (patch: UpdateEventDto) => void
+  /** opts.savedLabel — 저장 토스트 문구 교체(앵커 지정처럼 대상명을 박아야 하는 patch용) */
+  onPatch: (patch: UpdateEventDto, opts?: { savedLabel?: string }) => void
 }
 
 /** 승격 픽커의 '모든 상위 해제' 탈출구 옵션 값 — 사건 id와 충돌하지 않는 sentinel. */
@@ -153,6 +155,31 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
     childIdsRef.current = childIds
   }, [childIds])
 
+  /**
+   * ── 하위 사건 '모으기' 스테이징 (docs/event-root-designation-review.md 배치2) ──
+   *
+   * 예전엔 체크 한 번마다 ⑴ 최대 3연속 confirm ⑵ 전체목록 PUT 왕복이 돌았다. 흩어진
+   * 사건 5건을 한 앵커 아래로 모으려면 왕복 5회 + confirm 최대 15회다. 실제로 그래서
+   * 트리가 안 만들어지고 있었다(1914~18 생존 루트 6건 중 5건이 미연결 — 검토 근인 3).
+   *
+   * 모달이 열려 있는 동안 선택은 **로컬에만 쌓이고**, 확정 시 한 번의 confirm + 한 번의
+   * PUT으로 나간다. 서버 계약이 이미 `childEventIds` 전체목록 규약이라 API 변경이 0이고,
+   * 트랜잭션이라 부분 성공이 없다(전부 반영 아니면 전부 미반영).
+   *
+   * null = 스테이징 안 함(모달 닫힘). 열릴 때 현재 목록으로 시드한다.
+   */
+  const [pendingChildIds, setPendingChildIds] = useState<string[] | null>(null)
+  const stagedChildIds = pendingChildIds ?? childIds
+  const stagedAdded = useMemo(
+    () => stagedChildIds.filter((id) => !childIds.includes(id)),
+    [stagedChildIds, childIds],
+  )
+  const stagedRemoved = useMemo(
+    () => childIds.filter((id) => !stagedChildIds.includes(id)),
+    [stagedChildIds, childIds],
+  )
+  const stagedDirty = stagedAdded.length > 0 || stagedRemoved.length > 0
+
   /* 추가 상위(EventParentLink) — 주 상위 외 다중 상위. 서버가 소프트삭제 부모를
    * 걸러 연결 오래된 순으로 내려준다(칩 순서 = 해제 시 승격 기본 제안 순서). */
   const extraParents = useMemo(
@@ -242,67 +269,149 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
   }
 
   /**
-   * 하위 사건 연결 — 서버는 childEventIds를 받으면 *기존 연결을 모두 해제 후 재설정*하므로
-   * 항상 전체 목록을 보낸다. 토글식: 이미 자식이면 제거, 아니면 추가.
-   * 다른 사건의 하위인 후보를 붙이면 그쪽 연결이 끊기고 옮겨오므로 확인을 거치고,
-   * 이동을 거절하면 기존 상위를 유지한 채 잇는 제3선택(추가 상위 연결)을 이어 묻는다
-   * (releaseParent의 연쇄 confirm 전례 미러).
+   * 모달 닫기 — 스테이징을 버린다. 고른 것이 있으면 한 번 확인한다(무성 유실 방지).
+   * 확인 없이 버리면 5건을 고른 뒤 Esc 한 번에 전부 사라진다.
    */
-  const toggleChild = async (childId: string) => {
-    const isRemoving = childIds.includes(childId)
-    if (!isRemoving) {
-      const candidate = candidates.find((item) => item.id === childId)
-      if (candidate && !candidate.parentEventId) {
-        /* [PD4-NOTICE] 루트 후보 attach — 서버 댓글 게이트는 '살아있는 주 상위 없음'
-         * (실질 루트)만 댓글 대상으로 인정한다. 현재 루트인 후보(유령 주 상위 포함 —
-         * link-candidates가 소프트삭제 부모를 null로 접어 내려줌)를 하위로 붙이면
-         * 그 사건 댓글이 read까지 404로 숨는다(데이터 보존·상위 해제 시 복원).
-         * 댓글이 1개 이상일 때만 사전 confirm — 0개면 현행 무고지 직행. */
-        if (commentNoticePendingRef.current) return
-        commentNoticePendingRef.current = true
-        try {
-          const commentCount = await fetchEventCommentCountSafe(candidate.id)
-          if (commentCount > 0) {
-            const attachConfirmed = await confirm({
-              title: '하위 사건 연결',
-              message: `'${candidate.title}'에 달린 댓글 ${commentCount}개가 상위 지정 동안 숨겨집니다.\n상위를 해제하면 다시 표시됩니다. 계속할까요?`,
-              confirmLabel: '연결',
-            })
-            if (!attachConfirmed) return
-          }
-        } finally {
-          commentNoticePendingRef.current = false
-        }
-      }
-      if (candidate?.parentEventId && candidate.parentEventId !== event.id) {
-        const moveConfirmed = await confirm({
-          title: '하위 사건 이동',
-          message: `'${candidate.title}'은(는) 현재 '${
-            candidate.parentEventTitle ?? '다른 사건'
-          }'의 하위 사건입니다. 그 연결을 끊고 이 사건의 하위로 옮길까요?\n(취소하면 기존 상위를 유지한 채 연결하는 선택지를 이어서 묻습니다.)`,
-          confirmLabel: '이동',
+  const closeChildModal = async () => {
+    if (stagedDirty) {
+      const discard = await confirm({
+        title: '선택 취소',
+        message: `고른 ${stagedAdded.length + stagedRemoved.length}건이 저장되지 않았습니다. 그대로 닫을까요?`,
+        confirmLabel: '닫기',
+      })
+      if (!discard) return
+    }
+    setPendingChildIds(null)
+    setChildModalOpen(false)
+    setSearchTerm('')
+  }
+
+  /**
+   * 하위 픽커의 체크 토글 — **로컬 스테이징만.** 서버 왕복도 confirm도 없다.
+   * 확인·커밋은 `commitStagedChildren`이 한 번에 처리한다.
+   */
+  const toggleStagedChild = (childId: string) => {
+    setPendingChildIds((previous) => {
+      const base = previous ?? childIdsRef.current
+      return base.includes(childId)
+        ? base.filter((id) => id !== childId)
+        : [...base, childId]
+    })
+  }
+
+  /**
+   * 스테이징된 선택을 **한 번의 confirm + 한 번의 PUT**으로 확정.
+   *
+   * 확인 문구는 세 사실을 한 다이얼로그에 모은다(예전엔 항목마다 최대 3연속 confirm):
+   *  ⑴ 몇 건을 편입하는가  ⑵ 그중 몇 건이 다른 상위에서 옮겨오는가
+   *  ⑶ 댓글이 몇 개 숨겨지는가(루트였던 사건을 하위로 붙이면 서버 댓글 게이트에 걸린다)
+   *
+   * 예외 하나 — 옮겨올 대상이 **정확히 1건**이면 기존 연쇄 confirm을 그대로 쓴다.
+   * '이동 거절 → 기존 상위 유지한 채 추가 상위로 연결'이라는 제3선택이 거기에만 있고,
+   * 여러 건을 한꺼번에 처리할 땐 그 분기를 물어볼 자리가 없기 때문이다(기능 유실 방지).
+   */
+  const commitStagedChildren = async () => {
+    if (!stagedDirty) {
+      setChildModalOpen(false)
+      setSearchTerm('')
+      return
+    }
+    const addedCandidates = stagedAdded.map(
+      (id) => candidates.find((item) => item.id === id) ?? null,
+    )
+    const movers = addedCandidates.filter(
+      (candidate): candidate is NonNullable<typeof candidate> =>
+        Boolean(candidate?.parentEventId) &&
+        candidate?.parentEventId !== event.id,
+    )
+
+    // 단건 이동 — 제3선택(추가 상위로 연결)이 살아 있는 기존 연쇄 흐름으로 위임.
+    if (movers.length === 1 && stagedAdded.length === 1 && stagedRemoved.length === 0) {
+      const only = movers[0]
+      const moveConfirmed = await confirm({
+        title: '하위 사건 이동',
+        message: `'${only.title}'은(는) 현재 '${
+          only.parentEventTitle ?? '다른 사건'
+        }'의 하위 사건입니다. 그 연결을 끊고 이 사건의 하위로 옮길까요?\n(취소하면 기존 상위를 유지한 채 연결하는 선택지를 이어서 묻습니다.)`,
+        confirmLabel: '이동',
+      })
+      if (!moveConfirmed) {
+        const keepBoth = await confirm({
+          title: '추가 상위로 연결',
+          message: `'${
+            only.parentEventTitle ?? '다른 사건'
+          }' 상위를 유지한 채 이 사건에도 연결할까요?`,
+          confirmLabel: '추가 상위로 연결',
         })
-        if (!moveConfirmed) {
-          const keepBoth = await confirm({
-            title: '추가 상위로 연결',
-            message: `'${
-              candidate.parentEventTitle ?? '다른 사건'
-            }' 상위를 유지한 채 이 사건에도 연결할까요?`,
-            confirmLabel: '추가 상위로 연결',
-          })
-          if (keepBoth) await linkThisAsExtraParentOf(candidate)
-          return
-        }
+        if (keepBoth) await linkThisAsExtraParentOf(only)
+        setPendingChildIds(null)
+        setChildModalOpen(false)
+        setSearchTerm('')
+        return
       }
     }
-    // confirm await 사이 다른 patch가 반영됐을 수 있어 ref의 최신 목록으로 구성.
+
+    /* [PD4-NOTICE] 루트였던 사건을 하위로 붙이면 서버 댓글 게이트('살아있는 주 상위 없음'만
+     * 댓글 대상)에 걸려 그 사건 댓글이 read까지 404로 숨는다(데이터 보존 · 상위 해제 시 복원).
+     * 편입 대상 중 루트인 것들의 댓글 수만 합산해 한 줄로 고지한다. */
+    const rootAdded = addedCandidates.filter(
+      (candidate): candidate is NonNullable<typeof candidate> =>
+        Boolean(candidate) && !candidate?.parentEventId,
+    )
+    let hiddenCommentCount = 0
+    if (rootAdded.length > 0) {
+      const counts = await Promise.all(
+        rootAdded.map((candidate) => fetchEventCommentCountSafe(candidate.id)),
+      )
+      hiddenCommentCount = counts.reduce((sum, count) => sum + count, 0)
+    }
+
+    const lines: string[] = []
+    if (stagedAdded.length > 0) {
+      lines.push(`${stagedAdded.length}건을 '${event.title}'의 하위로 편입합니다.`)
+    }
+    if (stagedRemoved.length > 0) {
+      lines.push(`${stagedRemoved.length}건의 하위 연결을 해제합니다.`)
+    }
+    if (movers.length > 0) {
+      lines.push(`· 그중 ${movers.length}건은 다른 상위에서 옮겨옵니다`)
+    }
+    if (hiddenCommentCount > 0) {
+      lines.push(
+        `· 편입된 사건의 댓글 ${hiddenCommentCount}개가 숨겨집니다(상위 해제 시 복원)`,
+      )
+    }
+    const confirmed = await confirm({
+      title: '하위 사건 편입',
+      message: lines.join('\n'),
+      confirmLabel:
+        stagedAdded.length > 0 ? `${stagedAdded.length}건 편입` : '해제',
+    })
+    if (!confirmed) return
+
+    /**
+     * 커밋은 **스테이징 결과가 아니라 최신 목록에 델타를 다시 적용**해 만든다.
+     * 모달이 열려 있는 동안 다른 경로(승격·해제)가 childEventIds를 바꿨을 수 있는데,
+     * 스테이징 배열을 그대로 보내면 그 변경을 조용히 되돌린다(lost update).
+     * ⚠️ 그래도 서버 쪽 동시 편집까지 막지는 못한다 — 전체목록 PUT 규약의 한계.
+     */
     const latest = childIdsRef.current
-    const next = isRemoving
-      ? latest.filter((id) => id !== childId)
-      : latest.includes(childId)
-        ? latest
-        : [...latest, childId]
-    onPatch({ childEventIds: next })
+    const next = [
+      ...latest.filter((id) => !stagedRemoved.includes(id)),
+      ...stagedAdded.filter((id) => !latest.includes(id)),
+    ]
+    onPatch(
+      { childEventIds: next },
+      {
+        savedLabel:
+          stagedAdded.length > 0
+            ? `${stagedAdded.length}건을 '${event.title}' 하위로 편입`
+            : `하위 연결 ${stagedRemoved.length}건 해제`,
+      },
+    )
+    setPendingChildIds(null)
+    setChildModalOpen(false)
+    setSearchTerm('')
   }
 
   /* 추가 상위 칩 제거 버튼 포커스 이양용 ref — 렌더는 ParentBlock, 이양 로직
@@ -543,17 +652,18 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
         onQueryChange={setSearchTerm}
         headerExtra={truncationHint}
       />
+      {/* 하위 '모으기' — 선택은 로컬에 쌓이고, 헤더의 확정 버튼이 한 번에 커밋한다.
+          닫기(X·Esc·배경)는 스테이징을 버린다 — dirty면 확인을 한 번 받는다. */}
       <SelectModal
         isOpen={childModalOpen}
         onClose={() => {
-          setChildModalOpen(false)
-          setSearchTerm('')
+          void closeChildModal()
         }}
-        title="하위 사건 추가"
+        title="하위 사건 모으기"
         options={childOptions}
         multiple
-        selectedValues={childIds}
-        onSelect={(id) => void toggleChild(id)}
+        selectedValues={stagedChildIds}
+        onSelect={toggleStagedChild}
         searchable
         searchPlaceholder="사건명으로 검색 (하위 사건 포함)"
         isLoading={eventsLoading}
@@ -561,7 +671,34 @@ export function DetailNetwork({ event, onPatch }: DetailNetworkProps) {
         hasError={eventsError}
         onRetry={() => void refetchCandidates()}
         onQueryChange={setSearchTerm}
-        headerExtra={truncationHint}
+        headerExtra={
+          <NetStyles.StageBar>
+            <NetStyles.HelperNote>
+              {stagedDirty
+                ? [
+                    stagedAdded.length > 0 ? `편입 ${stagedAdded.length}건` : null,
+                    stagedRemoved.length > 0
+                      ? `해제 ${stagedRemoved.length}건`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+                : '연결할 사건을 골라 주세요 — 여러 건을 한 번에 모을 수 있습니다'}
+            </NetStyles.HelperNote>
+            <NetStyles.StageCommitBtn
+              type="button"
+              disabled={!stagedDirty}
+              onClick={() => void commitStagedChildren()}
+            >
+              {stagedAdded.length > 0
+                ? `${stagedAdded.length}건을 하위로 편입`
+                : stagedRemoved.length > 0
+                  ? `${stagedRemoved.length}건 해제`
+                  : '변경 없음'}
+            </NetStyles.StageCommitBtn>
+            {truncationHint}
+          </NetStyles.StageBar>
+        }
       />
       {/* 추가 상위 연결 — 엣지 추가는 아무것도 끊지 않으므로 confirm 없음.
           이미 연결된 후보는 체크 표시, 재클릭 시 해제 토글. */}

@@ -8,11 +8,7 @@
  */
 import { renderHook } from '@testing-library/react'
 
-import {
-  FILTER_ALL,
-  TIMELINE_LANE_MODES,
-  VIEW_MODES,
-} from '@/features/event-list/lib'
+import { FILTER_ALL, VIEW_MODES } from '@/features/event-list/lib'
 
 import {
   DEFAULT_PAGE_SIZE,
@@ -37,6 +33,8 @@ const makeArgs = (
   debouncedKeyword: '',
   selectedEventId: null,
   bookmarksOnly: false,
+  anchorsOnly: false,
+  anchorId: null,
   selectedCategory: FILTER_ALL,
   selectedCountry: FILTER_ALL,
   selectedContinent: FILTER_ALL,
@@ -47,11 +45,13 @@ const makeArgs = (
   viewMode: VIEW_MODES.LIST,
   viewExplicit: false,
   pageSize: DEFAULT_PAGE_SIZE,
-  timelineLane: TIMELINE_LANE_MODES.CATEGORY,
+  timelineWindow: null,
   hiddenTimelineCategories: new Set<string>(),
   setKeywordInput: noopSetter,
   setSelectedEventId: noopSetter,
   setBookmarksOnly: noopSetter,
+  setAnchorsOnly: noopSetter,
+  setAnchorId: noopSetter,
   setSelectedCategory: noopSetter,
   setSelectedCountry: noopSetter,
   setSelectedContinent: noopSetter,
@@ -62,7 +62,7 @@ const makeArgs = (
   setViewMode: noopSetter,
   setViewExplicit: noopSetter,
   setPageSize: noopSetter,
-  setTimelineLane: noopSetter,
+  setTimelineWindow: noopSetter,
   setHiddenTimelineCategories: noopSetter,
   ...overrides,
 })
@@ -152,6 +152,8 @@ describe('useCatalogUrlSync — 마운트 왕복(검토 URL-5)', () => {
       debouncedKeyword: seed.keyword,
       selectedEventId: seed.selectedEventId,
       bookmarksOnly: seed.bookmarksOnly,
+      anchorsOnly: seed.anchorsOnly,
+      anchorId: seed.anchorId,
       selectedCategory: seed.selectedCategory,
       selectedCountry: seed.selectedCountry,
       selectedContinent: seed.selectedContinent,
@@ -162,7 +164,7 @@ describe('useCatalogUrlSync — 마운트 왕복(검토 URL-5)', () => {
       viewMode: seed.viewMode,
       viewExplicit: seed.viewExplicit,
       pageSize: seed.pageSize,
-      timelineLane: seed.timelineLane,
+      timelineWindow: seed.timelineWindow,
       hiddenTimelineCategories: seed.hiddenTimelineCategories,
     }
   }
@@ -170,7 +172,7 @@ describe('useCatalogUrlSync — 마운트 왕복(검토 URL-5)', () => {
   it('완전한 딥링크는 첫 커밋에서 URL을 한 번도 쓰지 않는다', () => {
     const search =
       'q=foo&event=e1&bookmarks=1&cat=c1&country=k1&continent=eu&century=17' +
-      '&size=50&sort=duration&dir=asc&flat=1&view=grid&lane=country&hide=%EC%A0%84%EC%9F%81'
+      '&size=50&sort=duration&dir=asc&flat=1&view=grid&tlw=d1871&hide=%EC%A0%84%EC%9F%81'
     const setSearchParams = renderSync(search, seedFromUrl(search))
     expect(setSearchParams).not.toHaveBeenCalled()
   })
@@ -178,15 +180,61 @@ describe('useCatalogUrlSync — 마운트 왕복(검토 URL-5)', () => {
   it('무효값은 첫 write 한 번으로 URL에서 사라지고 정상 축은 그대로 남는다', () => {
     // century=0(존재하지 않는 세기) · sort=bogus(화이트리스트 밖) — 파서가 기본값으로
     // 낙하시키고 setOrDel이 기본값 키를 지우므로, 별도 정리 코드 없이 한 번에 정리된다.
-    const search = 'century=0&sort=bogus&cat=c1&view=list'
+    const search = 'century=0&sort=bogus&tlw=c999&cat=c1&view=list'
     const setSearchParams = renderSync(search, seedFromUrl(search))
     expect(setSearchParams).toHaveBeenCalledTimes(1)
     const written = lastWritten(setSearchParams)
     expect(written.has('century')).toBe(false)
     expect(written.has('sort')).toBe(false)
+    // 상한 밖 tlw도 같은 규약으로 첫 write에서 정리된다(검토 R5).
+    expect(written.has('tlw')).toBe(false)
     expect(written.get('cat')).toBe('c1')
     // 명시된 view는 사용자 선택이므로 남는다(URL-12).
     expect(written.get('view')).toBe('list')
+  })
+
+  it('폐지된 lane 파라미터는 첫 write 한 번으로 정리되고 나머지 축은 남는다', () => {
+    // v3의 레인 축 URL — v4에서 폐지. 구 링크가 열리면 조용히 걷어낸다.
+    const search = 'cat=c1&view=grid&lane=country'
+    const setSearchParams = renderSync(search, seedFromUrl(search))
+    expect(setSearchParams).toHaveBeenCalledTimes(1)
+    const written = lastWritten(setSearchParams)
+    expect(written.has('lane')).toBe(false)
+    expect(written.get('cat')).toBe('c1')
+    expect(written.get('view')).toBe('grid')
+  })
+
+  it('앵커 축은 켜졌을 때만 anchors=1로 실리고, 끄면 키가 사라진다', () => {
+    // 파생 앵커 축(docs/event-root-designation-review.md 배치0) — 기본값은 URL에 안 싣는다.
+    const off = renderSync('cat=c1', { ...seedFromUrl('cat=c1'), anchorsOnly: false })
+    expect(off).not.toHaveBeenCalled()
+
+    const on = renderSync('cat=c1', { ...seedFromUrl('cat=c1'), anchorsOnly: true })
+    expect(lastWritten(on).get('anchors')).toBe('1')
+  })
+
+  it('앵커 스코프는 anchor=<id>로 왕복하고, 해제하면 키가 사라진다', () => {
+    const scoped = renderSync('cat=c1', {
+      ...seedFromUrl('cat=c1'),
+      anchorId: 'f5d0b6f5-0673-49c6-9932-8d24cd912f37',
+    })
+    expect(lastWritten(scoped).get('anchor')).toBe(
+      'f5d0b6f5-0673-49c6-9932-8d24cd912f37',
+    )
+
+    const search = 'anchor=f5d0b6f5-0673-49c6-9932-8d24cd912f37'
+    // 딥링크 진입은 첫 커밋에서 URL을 건드리지 않는다(시딩이 파서를 경유하므로).
+    expect(renderSync(search, seedFromUrl(search))).not.toHaveBeenCalled()
+
+    // 해제(null)면 키 자체가 빠진다 — 빈 anchor=가 남으면 파서가 null로 접어도 URL이 지저분해진다.
+    const cleared = renderSync(search, { ...seedFromUrl(search), anchorId: null })
+    expect(lastWritten(cleared).has('anchor')).toBe(false)
+  })
+
+  it('anchors=1 딥링크는 첫 커밋에서 URL을 다시 쓰지 않는다', () => {
+    // 시딩이 파서를 경유하므로 state === URL — 딥링크가 첫 write에 지워지면 안 된다(URL-5).
+    const search = 'anchors=1&cat=c1'
+    expect(renderSync(search, seedFromUrl(search))).not.toHaveBeenCalled()
   })
 
   it('view가 없는 진입에서는 디바이스 추론 기본값을 URL에 싣지 않는다', () => {

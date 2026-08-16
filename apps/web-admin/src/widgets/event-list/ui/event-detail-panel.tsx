@@ -19,6 +19,7 @@ import {
   FiCalendar,
   FiChevronLeft,
   FiChevronRight,
+  FiCornerLeftUp,
   FiEdit2,
   FiGitBranch,
   FiGlobe,
@@ -33,7 +34,11 @@ import {
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 
+/** 드로어 하위 사건 목록의 기본 노출 개수 — 나머지는 '더 보기'로 편다. */
+const CHILD_PREVIEW_COUNT = 5
+
 import { getCategoryName } from '@/features/event-list/lib'
+import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { formatDateWithPrecision, isoDaySpan } from '@/shared/lib/iso-date'
 import type {
   EventHierarchyNode,
@@ -54,6 +59,13 @@ interface EventDetailPanelProps {
   isLoading: boolean
   selectedEvent: HistoricalEvent | null
   selectedNode: EventHierarchyNode | null
+  /**
+   * 선택 사건의 **상위 사건** — 있으면 정보 그리드에 '상위 사건' 행을 그리고,
+   * 클릭 시 `onSelectEvent(parent.id)`로 드로어를 그 사건으로 전환한다.
+   * 호출부(events.page)가 평탄화 배열의 parentNodeId로 해석해 내려준다.
+   * null/미전달 = 최상위 사건 → 행 자체를 그리지 않는다.
+   */
+  parentEventRef?: { id: string; title: string } | null
   dbCategories: EventCategoryDto[]
   onSelectEvent?: (eventId: string) => void
   onExpandEvent?: (eventId: string) => void
@@ -90,6 +102,7 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
   isLoading,
   selectedEvent,
   selectedNode,
+  parentEventRef = null,
   dbCategories,
   onSelectEvent,
   onExpandEvent,
@@ -105,6 +118,8 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
 }) => {
   const navigate = useNavigate()
   const [descExpanded, setDescExpanded] = useState(false)
+  /** 하위 사건 미리보기 개수 — 이 수를 넘으면 '더 보기'가 붙는다. */
+  const [childrenExpanded, setChildrenExpanded] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
   // 새 사건 선택될 때마다 description clamp 초기화
@@ -284,13 +299,48 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             </>
           )}
 
+          {/* 상위 사건 — 하위(5개 프리뷰)만 있고 위로 갈 길이 없던 비대칭 해소.
+              클릭 시 드로어가 상위 사건으로 전환된다. 최상위면 행 미표시. */}
+          {parentEventRef && (
+            <>
+              <Detail.InfoLabel>
+                <FiCornerLeftUp size={ICON_SIZE.base} aria-hidden="true" />
+                <span>상위 사건</span>
+              </Detail.InfoLabel>
+              <Detail.InfoValue>
+                <ParentEventLink
+                  type="button"
+                  title="상위 사건 상세 보기"
+                  onClick={() => onSelectEvent?.(parentEventRef.id)}
+                >
+                  {parentEventRef.title}
+                </ParentEventLink>
+              </Detail.InfoValue>
+            </>
+          )}
+
           {selectedNode.children && selectedNode.children.length > 0 && (
             <>
               <Detail.InfoLabel>
                 <FiLayers size={ICON_SIZE.base} aria-hidden="true" />
                 <span>하위 사건</span>
               </Detail.InfoLabel>
-              <Detail.InfoValue>{selectedNode.children.length}개</Detail.InfoValue>
+              <Detail.InfoValue>
+                {/* 숫자가 정적 div였다 — 누르면 아무 일도 없는데 그 아래 실제 목록은
+                    리치텍스트 두 덩이를 지나야 나왔다(검토 DISC-7).
+                    이제 여기서 바로 계층 전체를 연다. */}
+                {onShowSummary ? (
+                  <ParentEventLink
+                    type="button"
+                    onClick={() => onShowSummary(selectedNode.id)}
+                    aria-label={`하위 사건 ${selectedNode.children.length}개 — 계층 전체 보기`}
+                  >
+                    {selectedNode.children.length}개
+                  </ParentEventLink>
+                ) : (
+                  `${selectedNode.children.length}개`
+                )}
+              </Detail.InfoValue>
             </>
           )}
 
@@ -527,6 +577,76 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
           {renderInfo()}
 
           {/**
+           * 하위 사건 — **배경·여파보다 위**에 둔다(검토 DISC-7).
+           *
+           * 예전엔 리치텍스트 두 덩이를 다 지나야 나오는 맨 아래였고, 그나마 5개만
+           * 잘라 보여 주면서 날짜가 없었다. 이 패널을 여는 흔한 이유 하나가
+           * '이 사건 밑에 무엇이 있나'인데 그 답이 가장 멀리 있었다.
+           */}
+          {selectedNode.children && selectedNode.children.length > 0 && (
+            <Detail.DetailSection>
+              <Detail.DetailSectionTitle>
+                하위 사건 ({selectedNode.children.length}개)
+              </Detail.DetailSectionTitle>
+              <Detail.DetailChildrenList>
+                {(childrenExpanded
+                  ? selectedNode.children
+                  : selectedNode.children.slice(0, CHILD_PREVIEW_COUNT)
+                ).map((child) => (
+                  <Detail.DetailChildItem
+                    key={child.id}
+                    type="button"
+                    onClick={() => {
+                      if (onSelectEvent) {
+                        onSelectEvent(child.id)
+                        if (onExpandEvent) {
+                          onExpandEvent(selectedNode.id)
+                        }
+                      }
+                    }}
+                  >
+                    <strong>{child.title}</strong>
+                    {/* 날짜가 없으면 목록에서 보던 순서와 대조할 수 없다. */}
+                    <Detail.DetailChildDate>
+                      {formatDateRange(
+                        child.period.start,
+                        child.period.end,
+                        child.period.startPrecision,
+                        child.period.endPrecision,
+                      )}
+                    </Detail.DetailChildDate>
+                    <span>{child.summary}</span>
+                  </Detail.DetailChildItem>
+                ))}
+              </Detail.DetailChildrenList>
+              {selectedNode.children.length > CHILD_PREVIEW_COUNT && (
+                <Detail.DetailChildrenMoreRow>
+                  <Detail.DetailChildrenMoreButton
+                    type="button"
+                    onClick={() => setChildrenExpanded((open) => !open)}
+                    aria-expanded={childrenExpanded}
+                  >
+                    {childrenExpanded
+                      ? '접기'
+                      : `나머지 ${selectedNode.children.length - CHILD_PREVIEW_COUNT}개 더 보기`}
+                  </Detail.DetailChildrenMoreButton>
+                  <Modal.ViewAllHierarchyButton
+                    type="button"
+                    onClick={() => {
+                      if (onShowSummary) {
+                        onShowSummary(selectedNode.id)
+                      }
+                    }}
+                  >
+                    <FiGitBranch size={ICON_SIZE.base} aria-hidden="true" />
+                    전체 계층 구조 보기
+                  </Modal.ViewAllHierarchyButton>
+                </Detail.DetailChildrenMoreRow>
+              )}
+            </Detail.DetailSection>
+          )}
+
+          {/**
            * 배경 — 자식 노드 선택 시에도 root event의 배경 노출.
            * 이전엔 `selectedEvent.id === selectedNode.id` 분기로 root만 → 자식 선택 시 정보 손실.
            */}
@@ -560,45 +680,6 @@ export const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             </Detail.DetailSection>
           )}
 
-          {selectedNode.children && selectedNode.children.length > 0 && (
-            <Detail.DetailSection>
-              <Detail.DetailSectionTitle>
-                하위 사건 ({selectedNode.children.length}개)
-              </Detail.DetailSectionTitle>
-              <Detail.DetailChildrenList>
-                {selectedNode.children.slice(0, 5).map((child) => (
-                  <Detail.DetailChildItem
-                    key={child.id}
-                    type="button"
-                    onClick={() => {
-                      if (onSelectEvent) {
-                        onSelectEvent(child.id)
-                        if (onExpandEvent) {
-                          onExpandEvent(selectedNode.id)
-                        }
-                      }
-                    }}
-                  >
-                    <strong>{child.title}</strong>
-                    <span>{child.summary}</span>
-                  </Detail.DetailChildItem>
-                ))}
-              </Detail.DetailChildrenList>
-              {selectedNode.children.length > 5 && (
-                <Modal.ViewAllHierarchyButton
-                  type="button"
-                  onClick={() => {
-                    if (onShowSummary) {
-                      onShowSummary(selectedNode.id)
-                    }
-                  }}
-                >
-                  <FiGitBranch size={ICON_SIZE.base} aria-hidden="true" />
-                  전체 계층 구조 보기 ({selectedNode.children.length}개)
-                </Modal.ViewAllHierarchyButton>
-              )}
-            </Detail.DetailSection>
-          )}
         </Detail.DetailPanelContent>
       ) : (
         <Detail.DetailPanelEmpty>
@@ -690,6 +771,31 @@ const PanelDismissButton = styled.button`
 
   &:focus-visible {
     outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+  }
+`
+
+/* 상위 사건 링크 — 정보 그리드 값 자리의 텍스트 버튼. 드로어 전환 액션임을
+   링크 시각(파랑·hover 밑줄)으로 신호한다. */
+const ParentEventLink = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  text-align: left;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
+  cursor: pointer;
+  word-break: keep-all;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-radius: 4px;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
   }
 `

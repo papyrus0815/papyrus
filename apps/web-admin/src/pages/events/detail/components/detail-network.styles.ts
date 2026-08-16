@@ -44,6 +44,77 @@ export const HelperNote = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+/**
+ * 최상위(앵커) 사건 상태 배지 — 상세 상위 블록의 **긍정형·상시 노출** 표기.
+ *
+ * 기존 계층 크롬은 hover에서만 뜨는 부정형 '해제' 버튼 하나뿐이라, '이 사건이 최상위다'라는
+ * 상태를 화면이 한 번도 말하지 않았다(docs/event-root-designation-review.md 근인 1).
+ * $reveal 스코프는 TextBtn만 투명화하므로 이 배지는 그 안에서도 항상 보인다.
+ */
+/**
+ * 하위 '모으기' 픽커의 스테이징 바 — 고른 건수와 확정 버튼.
+ *
+ * SelectModal에는 푸터 슬롯이 없어 headerExtra에 얹는다. 헤더는 목록이 길어져도
+ * 스크롤 밖으로 나가지 않아, 50건을 훑으며 고르는 동안 확정 버튼이 늘 보인다.
+ */
+export const StageBar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+`
+
+export const StageCommitBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  background: #2563eb;
+  cursor: pointer;
+
+  &:disabled {
+    /* 아직 고른 것이 없을 때 — 숨기지 않고 흐리게 둬서 '여기가 확정 지점'을 미리 알린다. */
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.10)'};
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    cursor: default;
+  }
+
+  &:not(:disabled):hover {
+    background: #1d4ed8;
+  }
+`
+
+export const AnchorBadge = styled.span<{ $declared?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(37,99,235,0.18)' : 'rgba(37,99,235,0.10)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#93b4fc' : '#1d4ed8')};
+
+  /* 명시 지정(오버라이드)임을 점선 테두리로만 구분 — 색을 하나 더 늘리지 않는다. */
+  ${({ $declared, theme }) =>
+    $declared &&
+    css`
+      border: 1px dashed
+        ${theme.mode === 'dark' ? 'rgba(147,180,252,0.5)' : 'rgba(29,78,216,0.4)'};
+    `}
+`
+
 export const TextBtn = styled.button`
   /* 최소 24×24 터치 타깃(WCAG 2.5.8) — 12.5px 텍스트라도 클릭 영역은 24px 확보. */
   display: inline-flex;

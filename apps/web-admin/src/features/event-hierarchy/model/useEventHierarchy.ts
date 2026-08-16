@@ -41,6 +41,15 @@ export interface FlattenedHierarchyItem {
    */
   canExpand: boolean
   /**
+   * 펼쳤을 때 **실제로 나타나는** 직계 자식 수 — 셰브론 배지의 정본.
+   *
+   * `node.children.length`(원본 트리)와 다르다. 필터가 걸리면 자식도 같은 술어로 걸러지므로
+   * (아래 `keepsNode`) 원본 수를 표시하면 배지는 '하위 11개'인데 펼치면 0행인 죽은 약속이
+   * 된다(실측: 카테고리 '외교' + '대동방위기' → 배지 11 / 렌더 0, '1차세계대전' → 18 / 8).
+   * 평면 모드는 펼칠 것이 없으므로 항상 0.
+   */
+  visibleChildCount: number
+  /**
    * 이 행의 부모 *노드* id(최상위는 null).
    *
    * `parentEvent`는 부모의 HistoricalEvent이고 평면 모드에선 다른 값이 들어간다.
@@ -98,9 +107,10 @@ export const useEventHierarchy = (
     new Set(),
   )
 
-  // 자식 보유 사건을 자동 펼침 — 단, *신규* 부모만 기존 Set에 증분 추가한다.
-  // 이전엔 sortedEvents가 바뀔 때마다 전체 Set을 재생성·교체해, 자동 로드 중 페이지마다
-  // setState→flatten 재실행이 연쇄됐고 사용자의 수동 접기도 매번 덮어썼다.
+  /**
+   * 지금까지 한 번이라도 '펼칠 수 있다'고 판정된 노드 id 전부.
+   * 자동 펼침의 증분 기준이자 **'하위 모두 펼치기'의 복원 모수**다(아래 effect 참고).
+   */
   const autoExpandedRef = useRef<Set<string>>(new Set())
 
   /**
@@ -120,40 +130,21 @@ export const useEventHierarchy = (
     setExpandedEventIds(new Set(autoExpandedRef.current))
   }, [])
 
-  useEffect(() => {
-    const newlyExpandable: string[] = []
-    for (const event of sortedEvents) {
-      if (
-        event.hierarchy.children &&
-        event.hierarchy.children.length > 0 &&
-        !autoExpandedRef.current.has(event.id)
-      ) {
-        newlyExpandable.push(event.id)
-      }
-    }
-    if (newlyExpandable.length === 0) return // 신규 없음 → setState 생략
-    newlyExpandable.forEach((id) => autoExpandedRef.current.add(id))
-    // '모두 접기' 중이면 신규 부모도 접힌 채로 둔다 — 아니면 페이지가 도착할 때마다
-    // 접기가 조금씩 되돌려져 사용자가 30여 번 누른 결과가 사라진다.
-    if (collapseAllRef.current) return
-    setExpandedEventIds((prev) => {
-      const next = new Set(prev)
-      newlyExpandable.forEach((id) => next.add(id))
-      return next
-    })
-  }, [sortedEvents])
-
   // 안정 참조 — CompactList → EventListItem으로 그대로 내려가 React.memo가 실효.
   const toggleEventExpansion = useCallback((eventId: string) => {
     setExpandedEventIds((prev) => {
       const next = new Set(prev)
-      if (next.has(eventId)) {
-        next.delete(eventId)
-      } else {
-        next.add(eventId)
-        // 하나라도 직접 펼쳤다면 '모두 접기' 의도는 끝난 것으로 본다.
-        collapseAllRef.current = false
-      }
+      if (next.has(eventId)) next.delete(eventId)
+      else next.add(eventId)
+      /**
+       * ⚠️ 여기서 `collapseAllRef`를 해제하지 않는다(검토 CTRL-9).
+       *
+       * 예전엔 셰브론 하나만 펼쳐도 '모두 접기' 의도가 끝난 것으로 보고 래치를 풀었다.
+       * 그런데 목록은 페이지를 연쇄 소진하므로(autoLoadAll), 래치가 풀린 뒤 도착한
+       * 페이지의 부모들이 자동 전개되면서 **접어 둔 화면이 저절로 부분 복귀**했다 —
+       * 사용자는 한 건을 열었을 뿐인데 수십 행이 함께 돌아온다.
+       * 래치를 푸는 것은 사용자가 '하위 펼치기'를 명시적으로 누를 때뿐이다.
+       */
       return next
     })
   }, [])
@@ -227,6 +218,7 @@ export const useEventHierarchy = (
           hiddenChildCount: 0,
           // 자손이 이미 같은 목록에 평면으로 나열돼 있어 펼칠 것이 없다.
           canExpand: false,
+          visibleChildCount: 0,
           // 평면 모드는 접기 개념이 없다 — 전부 렌더된다.
           isCollapsedAway: false,
         })
@@ -275,6 +267,25 @@ export const useEventHierarchy = (
         parentEvent: HistoricalEvent | null,
         parentNodeId: string | null,
       ) => {
+        /**
+         * 자식을 **먼저** 확정한다 — 셰브론이 약속하는 수와 펼쳤을 때 나오는 행 수가
+         * 같은 배열에서 나와야 하기 때문이다. 예전엔 행을 push한 뒤에 자식을 걸러서,
+         * 배지는 원본 `node.children.length`를 말하고 렌더는 필터 통과분만 그렸다.
+         * 하위 사건도 부모와 동일한 정렬 적용 (BC·미상 안전).
+         */
+        const sortedChildren = (node.children ?? [])
+          .filter(keepsNode)
+          .sort((left, right) => {
+            const comparison = compareNodes(
+              left.period.start,
+              left.period.end,
+              right.period.start,
+              right.period.end,
+              sortBy,
+            )
+            return sortDirection === 'asc' ? comparison : -comparison
+          })
+
         result.push({
           node,
           depth,
@@ -282,29 +293,14 @@ export const useEventHierarchy = (
           parentNodeId,
           isMatch: nodeMatches(node),
           hiddenChildCount: hiddenCountOf(node),
-          canExpand: (node.children?.length ?? 0) > 0,
-          // 접힘은 이 memo 밖에서 계산한다(아래 주석 참고) — 여기선 자리만 채운다.
+          canExpand: sortedChildren.length > 0,
+          visibleChildCount: sortedChildren.length,
+          // 접힘은 이 memo 밖에서 계산한다(아래 주석 참고) — 여긴 자리만 채운다.
           isCollapsedAway: false,
         })
 
-        if (node.children) {
-          const childParentEvent =
-            eventById.get(node.id) ?? parentEvent
-
-          // 하위 사건도 부모와 동일한 정렬 적용 (BC·미상 안전)
-          const sortedChildren = [...node.children]
-            .filter(keepsNode)
-            .sort((left, right) => {
-              const comparison = compareNodes(
-                left.period.start,
-                left.period.end,
-                right.period.start,
-                right.period.end,
-                sortBy,
-              )
-              return sortDirection === 'asc' ? comparison : -comparison
-            })
-
+        if (sortedChildren.length > 0) {
+          const childParentEvent = eventById.get(node.id) ?? parentEvent
           sortedChildren.forEach((child) => {
             traverse(child, depth + 1, childParentEvent, node.id)
           })
@@ -328,18 +324,61 @@ export const useEventHierarchy = (
   ])
 
   /**
+   * 자동 펼침 — 모수는 **평탄화 결과 전체**다(루트 목록이 아니라).
+   *
+   * 예전엔 이 순회가 `sortedEvents`, 즉 `useEventFilters`가 `!event.parentEventId`로
+   * 잘라 낸 **루트 배열**만 돌았다(`useEventFilters.ts:329`). 그런데 렌더 모수는
+   * `flattenedBase`(전량)라 두 모수가 갈렸고, 결과적으로
+   *   ⑴ 자식을 가진 depth 1 부모 2개는 어떤 버튼으로도 열리지 않았고
+   *   ⑵ 손자 5행이 기본 화면·'하위 모두 펼치기'·'전체 초기화' 어디에서도 나오지 않았다
+   *      (실측: 평탄화 273행 중 렌더 268행 — 5행이 영구 은닉).
+   * `autoExpandedRef`가 '모두 펼치기'의 복원 모수이기도 하므로, 손으로 편 손자가
+   * '하위 접기 → 하위 펼치기' 왕복 한 번에 영구히 사라지는 결함도 여기서 갈라져 나왔다.
+   *
+   * *신규* 항목만 증분 추가하는 성질은 그대로다 — 자동 로드가 페이지를 연쇄 소진하는
+   * 동안 매번 Set을 재생성하면 setState→flatten이 연쇄되고 수동 접기도 덮어쓴다.
+   */
+  useEffect(() => {
+    const newlyExpandable: string[] = []
+    for (const item of flattenedBase) {
+      if (item.canExpand && !autoExpandedRef.current.has(item.node.id)) {
+        newlyExpandable.push(item.node.id)
+      }
+    }
+    if (newlyExpandable.length === 0) return // 신규 없음 → setState 생략
+    newlyExpandable.forEach((id) => autoExpandedRef.current.add(id))
+    // '모두 접기' 중이면 신규 부모도 접힌 채로 둔다 — 아니면 페이지가 도착할 때마다
+    // 접기가 조금씩 되돌려져 사용자가 30여 번 누른 결과가 사라진다.
+    if (collapseAllRef.current) return
+    setExpandedEventIds((prev) => {
+      const next = new Set(prev)
+      newlyExpandable.forEach((id) => next.add(id))
+      return next
+    })
+  }, [flattenedBase])
+
+  /**
    * 접힘 덧입히기 — O(n) 한 번. DFS 선순회라 부모 항목이 항상 먼저 나오므로,
    * '부모가 접혔거나 부모가 이미 접힘 아래면 나도 접힘 아래'를 단일 전방 패스로 계산한다.
    * 셰브론 조작은 이 memo만 다시 돈다(술어 재평가 없음).
+   *
+   * ⚠️ **필터가 걸린 동안 매칭 행은 접힘을 무시하고 드러난다**(검토 FILT-2·DEPTH-1).
+   * 검색은 '이 조건에 맞는 사건을 보여 달라'는 요청인데, 접힘은 그 요청보다 먼저 걸려 있던
+   * 표시 상태다. 둘이 곱해지면 헤더는 '조건 일치 29건'이라 말하고 화면에는 11행만 남는다
+   * (실측: '차관' 16건 중 12행, '전투' 29건 중 매칭 11행). 사용자의 수동 접힘 자체는
+   * 보존하므로 필터를 풀면 원래 접힌 모습으로 정확히 돌아간다.
+   * 문맥용 부모 행(`isMatch=false`)은 강제 노출 대상이 아니다 — 조건에 맞는 것만 끌어낸다.
    */
   const flattenedHierarchy = useMemo(() => {
     if (showFlatView) return flattenedBase
+    const revealMatches = hasNarrowingFilters && !!matchesEvent
     const collapsedAwayById = new Map<string, boolean>()
     let anyCollapsed = false
     const next = flattenedBase.map((item) => {
       const parentId = item.parentNodeId
       const collapsedAway =
         parentId !== null &&
+        !(revealMatches && item.isMatch) &&
         ((collapsedAwayById.get(parentId) ?? false) ||
           !expandedEventIds.has(parentId))
       collapsedAwayById.set(item.node.id, collapsedAway)
@@ -350,7 +389,13 @@ export const useEventHierarchy = (
     })
     // 접힌 게 하나도 없으면 원본 배열을 그대로 돌려 참조 안정성을 지킨다.
     return anyCollapsed ? next : flattenedBase
-  }, [flattenedBase, expandedEventIds, showFlatView])
+  }, [
+    flattenedBase,
+    expandedEventIds,
+    showFlatView,
+    hasNarrowingFilters,
+    matchesEvent,
+  ])
 
   /**
    * 필터를 실제로 만족하는 사건 수 — **모수 규약 ①**(검토 DATA-6).

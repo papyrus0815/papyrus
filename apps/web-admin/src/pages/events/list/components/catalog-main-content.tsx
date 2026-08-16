@@ -84,7 +84,7 @@ interface Props {
   onPageSizeChange: (size: number) => void
 
   /**
-   * 집중(넓게) 보기 — 상단 페이지 헤더·뷰 힌트·미니맵을 접어 콘텐츠(특히 타임라인)에
+   * 집중(넓게) 보기 — 타임라인의 시대 내비게이터를 슬림으로 전환해 연표 리스트에
    * 세로 공간을 양보한다. 상태는 페이지가 소유(localStorage 영속).
    */
   wideMode: boolean
@@ -312,6 +312,8 @@ export const CatalogMainContent: React.FC<Props> = ({
             <option value="recent">시기순</option>
             <option value="created">등록순</option>
             <option value="duration">기간순</option>
+            {/* 하위 많은 순 — 앵커(최상위 사건)가 단독 사건 사이에서 스스로 떠오르는 축 */}
+            <option value="descendants">하위 많은 순</option>
           </Filter.SortSelect>
           {/**
            * 정렬 스코프 고지 — 전용 힌트 행이 사라져도 **이건 남는다**.
@@ -401,9 +403,9 @@ export const CatalogMainContent: React.FC<Props> = ({
         )}
 
         {/* 집중(넓게) 보기 토글 — **타임라인 전용**.
-            예전엔 모든 뷰에 있었지만 실제로 접는 것은 ⑴ 페이지 h1과 ⑵ 타임라인 미니맵
-            둘뿐이었다. h1을 상시 제거하면서 목록·격자 등에서는 이 버튼이 아무것도
-            하지 않는 no-op이 된다 — 실행된 적 없는 계약을 남기지 않는다. */}
+            예전엔 모든 뷰에 있었지만 실제로 접는 것은 타임라인의 시대 내비게이터
+            (슬림 전환)뿐이다(v3 미니맵을 지칭하던 카피는 검토 R24로 정정). 목록·
+            격자 등에서는 no-op이 된다 — 실행된 적 없는 계약을 남기지 않는다. */}
         {viewMode === VIEW_MODES.TIMELINE && (
         <ToolbarStyles.ToolbarBtn
           type="button"
@@ -412,8 +414,8 @@ export const CatalogMainContent: React.FC<Props> = ({
           aria-pressed={wideMode}
           title={
             wideMode
-              ? '기본 보기 — 접은 상단 영역 다시 표시'
-              : '넓게 보기 — 상단 영역(헤더·미니맵 등)을 접어 콘텐츠를 최대화'
+              ? '기본 보기 — 시대 내비게이터를 원래 높이로'
+              : '넓게 보기 — 시대 내비게이터를 슬림으로 접어 연표를 최대화'
           }
         >
           {wideMode ? (

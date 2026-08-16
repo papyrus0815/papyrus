@@ -25,6 +25,7 @@ jest.mock('@/shared/api/events', () => ({
   getEventById: jest.fn(),
   createEvent: jest.fn(),
   updateEvent: jest.fn(),
+  getEventLinkCandidates: jest.fn(),
 }))
 jest.mock('@/shared/ui/toast', () => ({
   notify: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
@@ -51,6 +52,31 @@ jest.mock('@/shared/ui/advanced-country-select-modal/advanced-country-select-mod
 jest.mock('@/pages/events/detail/event-detail.page', () => ({}), { virtual: true })
 
 /**
+ * 상위 사건 피커(SelectModal) 스텁 — 실물은 포털·framer-motion·useModalBehavior를
+ * 물고 있다. 여기서 검증할 계약은 "열렸을 때 옵션을 고르면 폼 상태에 반영되는가"뿐.
+ */
+jest.mock('@/shared/ui/select-modal/select-modal', () => ({
+  SelectModal: (props: {
+    isOpen: boolean
+    options: Array<{ value: string; label: string }>
+    onSelect: (value: string) => void
+  }) =>
+    props.isOpen ? (
+      <div data-testid="parent-picker">
+        {props.options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => props.onSelect(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    ) : null,
+}))
+
+/**
  * 실제 BasicInfoSection은 834줄에 자식 모달 5개를 물고 있다. 여기서 검증할 계약은
  * "폼 상태가 섹션에 옳게 흘러가는가"이므로 값을 노출하는 최소 스텁으로 대체한다.
  */
@@ -65,6 +91,11 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
     keywords: string[]
     relatedCountryIds: string[]
     primaryCountryId: string | null
+    parentEventSlot?: {
+      parent: { id: string; title: string } | null
+      onOpenPicker: () => void
+      onClear: () => void
+    }
   }) => (
     <div>
       <input
@@ -87,6 +118,22 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
       <output data-testid="primaryCountryId">
         {props.primaryCountryId ?? ''}
       </output>
+      <output data-testid="hasParentSlot">
+        {String(Boolean(props.parentEventSlot))}
+      </output>
+      {props.parentEventSlot && (
+        <>
+          <output data-testid="parentTitle">
+            {props.parentEventSlot.parent?.title ?? ''}
+          </output>
+          <button type="button" onClick={props.parentEventSlot.onOpenPicker}>
+            _openParentPicker
+          </button>
+          <button type="button" onClick={props.parentEventSlot.onClear}>
+            _clearParent
+          </button>
+        </>
+      )}
     </div>
   ),
 }))
@@ -95,6 +142,7 @@ const eventsApi = jest.requireMock('@/shared/api/events') as {
   getEventById: jest.Mock
   createEvent: jest.Mock
   updateEvent: jest.Mock
+  getEventLinkCandidates: jest.Mock
 }
 
 function makeClient() {
@@ -430,5 +478,157 @@ describe('EventBasicForm — dirty 통지', () => {
 
     fireEvent.change(titleInput, { target: { value: '' } })
     await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false))
+  })
+})
+
+// ────────────────────────────────────────────────────────────────
+describe('EventBasicForm — 상위 사건(트리 등록)', () => {
+  /** 필수값(사건명·시작일)을 채워 submit 가능 상태로 만든다 */
+  function fillRequired() {
+    fireEvent.change(screen.getByLabelText('사건명'), {
+      target: { value: '하위 전투' },
+    })
+    fireEvent.change(screen.getByLabelText('시작일'), {
+      target: { value: '1914-08-04' },
+    })
+  }
+
+  it('initialParent가 있으면 프리필된 채 열리고, dirty 기준선에 포함된다', async () => {
+    const onDirtyChange = jest.fn()
+    const client = makeClient()
+    render(
+      <EventBasicForm
+        initialParent={{ id: 'evt-parent', title: '제1차 세계 대전' }}
+        onDirtyChange={onDirtyChange}
+      />,
+      { wrapper: wrap(client) },
+    )
+
+    expect(screen.getByTestId('parentTitle')).toHaveTextContent(
+      '제1차 세계 대전',
+    )
+    // 프리필은 기준선의 일부 — '열자마자 dirty' 오판이 없어야 한다
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true)
+  })
+
+  it('프리필된 상위는 제출 시 parentEventId로 전송된다', async () => {
+    eventsApi.createEvent.mockResolvedValue({ id: 'evt-child' })
+    const client = makeClient()
+    jest.spyOn(client, 'ensureQueryData').mockResolvedValue({} as never)
+
+    const formRef = { current: null } as React.RefObject<
+      import('./event-basic-form').EventBasicFormHandle | null
+    >
+    render(
+      <EventBasicForm
+        formRef={formRef}
+        initialParent={{ id: 'evt-parent', title: '제1차 세계 대전' }}
+      />,
+      { wrapper: wrap(client) },
+    )
+    fillRequired()
+
+    await act(async () => {
+      await formRef.current?.submit()
+    })
+
+    expect(eventsApi.createEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ parentEventId: 'evt-parent' }),
+    )
+  })
+
+  it('상위 미선택이면 parentEventId를 전송하지 않는다 (기존 계약 유지)', async () => {
+    eventsApi.createEvent.mockResolvedValue({ id: 'evt-orphan' })
+    const client = makeClient()
+    jest.spyOn(client, 'ensureQueryData').mockResolvedValue({} as never)
+
+    const formRef = { current: null } as React.RefObject<
+      import('./event-basic-form').EventBasicFormHandle | null
+    >
+    render(<EventBasicForm formRef={formRef} />, { wrapper: wrap(client) })
+    fillRequired()
+
+    await act(async () => {
+      await formRef.current?.submit()
+    })
+
+    expect(eventsApi.createEvent).toHaveBeenCalledTimes(1)
+    expect(
+      eventsApi.createEvent.mock.calls[0][0].parentEventId,
+    ).toBeUndefined()
+  })
+
+  it('프리필을 해제하면 dirty가 되고, 제출에서도 빠진다', async () => {
+    eventsApi.createEvent.mockResolvedValue({ id: 'evt-child' })
+    const onDirtyChange = jest.fn()
+    const client = makeClient()
+    jest.spyOn(client, 'ensureQueryData').mockResolvedValue({} as never)
+
+    const formRef = { current: null } as React.RefObject<
+      import('./event-basic-form').EventBasicFormHandle | null
+    >
+    render(
+      <EventBasicForm
+        formRef={formRef}
+        initialParent={{ id: 'evt-parent', title: '제1차 세계 대전' }}
+        onDirtyChange={onDirtyChange}
+      />,
+      { wrapper: wrap(client) },
+    )
+
+    fireEvent.click(screen.getByText('_clearParent'))
+    await waitFor(() => expect(onDirtyChange).toHaveBeenCalledWith(true))
+    expect(screen.getByTestId('parentTitle')).toHaveTextContent('')
+
+    fillRequired()
+    await act(async () => {
+      await formRef.current?.submit()
+    })
+    expect(
+      eventsApi.createEvent.mock.calls[0][0].parentEventId,
+    ).toBeUndefined()
+  })
+
+  it('피커에서 고른 후보가 칩·제출 payload에 반영된다', async () => {
+    eventsApi.getEventLinkCandidates.mockResolvedValue([
+      { id: 'evt-picked', title: '보스니아 위기' },
+    ])
+    eventsApi.createEvent.mockResolvedValue({ id: 'evt-child' })
+    const client = makeClient()
+    jest.spyOn(client, 'ensureQueryData').mockResolvedValue({} as never)
+
+    const formRef = { current: null } as React.RefObject<
+      import('./event-basic-form').EventBasicFormHandle | null
+    >
+    render(<EventBasicForm formRef={formRef} />, { wrapper: wrap(client) })
+
+    fireEvent.click(screen.getByText('_openParentPicker'))
+    fireEvent.click(await screen.findByText('보스니아 위기'))
+
+    expect(screen.getByTestId('parentTitle')).toHaveTextContent('보스니아 위기')
+
+    fillRequired()
+    await act(async () => {
+      await formRef.current?.submit()
+    })
+    expect(eventsApi.createEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ parentEventId: 'evt-picked' }),
+    )
+  })
+
+  it('편집 모드에서는 상위 사건 슬롯을 렌더하지 않는다 (계층 편집은 상세 연관이 정본)', async () => {
+    eventsApi.getEventById.mockResolvedValue({
+      id: 'evt-1',
+      title: '빈 회의',
+      startDate: '1814-09-18T00:00:00.000Z',
+      keywords: [],
+    })
+    const client = makeClient()
+    render(<EventBasicForm eventId="evt-1" />, { wrapper: wrap(client) })
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('사건명')).toHaveValue('빈 회의'),
+    )
+    expect(screen.getByTestId('hasParentSlot')).toHaveTextContent('false')
   })
 })

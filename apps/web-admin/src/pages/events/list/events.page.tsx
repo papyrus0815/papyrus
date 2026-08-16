@@ -24,9 +24,10 @@ import {
 import { FiAlertTriangle, FiPlus, FiRefreshCw } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
-import { useEvents } from '@/entities/event/model'
+import { transformEventsFromApi, useEvents } from '@/entities/event/model'
 import type { FilterChip } from '@/entities/event/model'
-import { getEventsCount } from '@/shared/api/events'
+import { getEventById, getEventsCount } from '@/shared/api/events'
+import type { EventFetchError, EventResponseDto } from '@/shared/api/events'
 import { eventKeys } from '@/pages/events/detail/use-event-detail'
 import { useEventFilters } from '@/features/event-filters/model'
 import {
@@ -36,6 +37,8 @@ import {
 } from '@/features/event-filters/model/reference-label'
 import {
   buildYearBuckets,
+  isAnchorEvent,
+  isTreeRoot,
   orderRowsForRender,
   selectMatchedRows,
   selectVisibleRows,
@@ -43,10 +46,7 @@ import {
 } from '@/features/event-hierarchy/model'
 import {
   FILTER_ALL,
-  TIMELINE_LANE_LABELS,
-  TIMELINE_LANE_MODES,
   VIEW_MODES,
-  type TimelineLaneMode,
   type ViewMode,
 } from '@/features/event-list/lib'
 import type { SortOption } from '@/features/event-list/lib/constants'
@@ -58,7 +58,11 @@ import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { useRecentEvents } from '@/shared/hooks/use-recent-events.hook'
 import type { ListDensity } from '@/pages/events/styles/theme'
 import { EventCompactList } from '@/widgets/event-list-compact/ui/event-compact-list'
-import { EventTimeline } from '@/widgets/event-timeline/ui/event-timeline'
+import {
+  EventTimeline,
+  type TimelineWindow,
+} from '@/widgets/event-timeline/ui/event-timeline'
+import { describeWindow as describeTimelineWindow } from '@/widgets/event-timeline/model/timeline-model'
 import { EventDetailPanel } from '@/widgets/event-list/ui/event-detail-panel'
 
 /**
@@ -107,6 +111,7 @@ import { CatalogOverlayModals } from './components/catalog-overlay-modals'
 import { CatalogToolbar } from './components/catalog-toolbar'
 import { useCatalogEventIndex } from './hooks/use-catalog-event-index'
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
+import type { EventParentPreset } from '@/widgets/event-form/ui/event-register-modal'
 import { useEventRegisterModalUrl } from '@/widgets/event-form/model/use-event-register-modal-url'
 import { useCatalogModals } from './hooks/use-catalog-modals'
 import { useCatalogReferenceData } from './hooks/use-catalog-reference-data'
@@ -171,6 +176,20 @@ export const EventsCatalogPage: React.FC = () => {
   // ===== 검색 / 페이지 상태 =====
   const [bookmarksOnly, setBookmarksOnly] = useState(
     initialUrlState.bookmarksOnly,
+  )
+  /**
+   * '최상위(앵커) 사건만' — 자손이 있는 루트만 남긴다(모수 167 → 20).
+   * 생존 루트의 88%가 자식 0인 단독 사건이라, 이 축이 없으면 앵커가 파묻힌다
+   * (docs/event-root-designation-review.md).
+   */
+  const [anchorsOnly, setAnchorsOnly] = useState(initialUrlState.anchorsOnly)
+  /**
+   * 앵커 스코프 — 이 사건과 자손만 본다(`?anchor=<id>`). '한눈에 조망'의 실체.
+   * 신규 지면이 아니라 **같은 카탈로그의 모수 축소**다 — 계층 지면이 이미 6개라
+   * 일곱 번째를 만드는 것이 곧 근인 4의 악화이기 때문(검토 K2).
+   */
+  const [anchorId, setAnchorId] = useState<string | null>(
+    initialUrlState.anchorId,
   )
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   // 기본 page size 100 — 타임라인 뷰가 한 번에 더 많은 사건을 보여주도록.
@@ -404,6 +423,10 @@ export const EventsCatalogPage: React.FC = () => {
     {
       // 북마크는 사후 filter가 아니라 **다른 축과 같은 술어 레인**에 있다(검토 IA-7/DATA-10).
       bookmarksOnly,
+      // 앵커 축은 반대로 **루트 선별 단계 전용**이다 — 술어에 넣으면 앵커를 펼쳤을 때
+      // 자손이 0인 자식 행이 전부 사라진다(useEventFilters의 anchorsOnly 주석 참고).
+      anchorsOnly,
+      scopeAnchorId: anchorId,
       bookmarks,
       // 필터 7축의 초기값도 URL에서 온다 — 첫 커밋부터 state === URL(검토 URL-5).
       initial: {
@@ -473,18 +496,19 @@ export const EventsCatalogPage: React.FC = () => {
   /**
    * ===== 타임라인 전용 축 — **페이지가 소유한다**(검토 GAP-4) =====
    *
-   * 레인 축(`lane`)과 카테고리 숨김(`hide`)은 타임라인 위젯의 지역 state였다.
-   * 결과적으로 이 페이지에는 필터 체계가 **둘** 있었고, 두 번째 것은 URL에도
-   * 활성 칩에도 '전체 초기화'에도 없었다 — 카테고리 3개를 숨겨 둔 채 하루 뒤에 돌아온
-   * 사용자에게는 그냥 "사건이 없는 화면"이고, 그 상태를 공유한 링크는 상대에게 다른
-   * 화면을 보여준다. 상태를 여기로 올려 다른 5축과 같은 규약을 받게 한다.
+   * 카테고리 숨김(`hide`)과 시간 창(`tlw`)은 위젯 지역 state로 두면 URL에도
+   * 활성 칩에도 '전체 초기화'에도 없는 두 번째 상태 체계가 된다 — 카테고리 3개를
+   * 숨겨 둔 채 하루 뒤에 돌아온 사용자에게는 그냥 "사건이 없는 화면"이고, 공유한
+   * 링크는 상대에게 다른 화면을 보여준다. 상태를 여기로 올려 다른 축과 같은 규약을
+   * 받게 한다. (v3의 레인 축 `lane`은 v4 재설계에서 레인 자체가 사라져 폐지 —
+   * docs/event-timeline-redesign.md)
    *
-   * ⚠️ 숨김 키는 **카테고리 이름**이다(타임라인이 `bar.category` 문자열로 거른다).
+   * ⚠️ 숨김 키는 **카테고리 이름**이다(타임라인이 `point.category` 문자열로 거른다).
    * id로 바꿔 페이지 카테고리 필터와 합치는 중기안은 다중 선택(보류 IA-10)에 종속되므로
    * 여기서는 하지 않는다.
    */
-  const [timelineLane, setTimelineLane] = useState<TimelineLaneMode>(
-    initialUrlState.timelineLane,
+  const [timelineWindow, setTimelineWindow] = useState<TimelineWindow | null>(
+    initialUrlState.timelineWindow,
   )
   const [hiddenTimelineCategories, setHiddenTimelineCategories] = useState<
     ReadonlySet<string>
@@ -540,6 +564,31 @@ export const EventsCatalogPage: React.FC = () => {
     onDirtyChange: onCreateFormDirtyChange,
   } = useEventRegisterModalUrl()
 
+  /**
+   * 트리 노드 '+ 하위 사건'이 채우는 상위 사건 프리셋 — **같은 등록 모달 인스턴스**를
+   * initialParent만 다르게 연다(새 모달 표면 금지). 닫힘은 URL(뒤로가기)로도 오므로
+   * onClose 훅킹이 아니라 열림 상태의 **열림→닫힘 전이**를 보고 클리어한다 — 프리셋이
+   * 남으면 다음 일반 등록('새 사건' 버튼)까지 상위가 미리 채워진 채 열린다.
+   * ⚠️ '닫혀 있으면 클리어'로 쓰면 안 된다: open()의 URL 반영이 transition 렌더로
+   * 늦게 오면, 프리셋만 먼저 설정된 렌더에서 즉시 지워져 기능이 통째로 죽는다.
+   */
+  const [createParentPreset, setCreateParentPreset] =
+    useState<EventParentPreset | null>(null)
+  const handleCreateChildEvent = useCallback(
+    (parent: EventParentPreset) => {
+      setCreateParentPreset(parent)
+      openCreateModal()
+    },
+    [openCreateModal],
+  )
+  const wasCreateModalOpenRef = useRef(false)
+  useEffect(() => {
+    if (wasCreateModalOpenRef.current && !createModalOpen) {
+      setCreateParentPreset(null)
+    }
+    wasCreateModalOpenRef.current = createModalOpen
+  }, [createModalOpen])
+
   // ===== 모달 상태 묶음 (스크롤 잠금 effect 포함) =====
   const {
     shortcutHelpOpen,
@@ -568,6 +617,34 @@ export const EventsCatalogPage: React.FC = () => {
   // ===== id 기반 lookup map =====
   const { eventByIdMap, nodeIndexMap } = useCatalogEventIndex(events)
 
+  /**
+   * ===== lazy 사건 레지스트리 =====
+   *
+   * 목록 API는 루트만 페이징하므로 TREE 뷰 LazyBranch(GET /events/parent/:id)로
+   * 불러온 손자 이하 사건은 eventByIdMap·nodeIndexMap에 없다. 레지스트리가 없으면
+   * 그 행 클릭이 미발견 판정('사건을 찾을 수 없습니다')으로 오발동하고 선택까지
+   * 해제된다. 트리 위젯이 byParent 응답을 올려보내면 **기존 목록과 같은 어댑터**
+   * (transformEventsFromApi)로 변환해 id 기준 dedupe 병합한다 — 같은 데이터로
+   * 다시 불려도 같은 키를 덮어쓸 뿐이라 무해하다.
+   */
+  const [lazyEventById, setLazyEventById] = useState<
+    ReadonlyMap<string, HistoricalEvent>
+  >(new Map())
+  const handleLazyEventsLoaded = useCallback(
+    (loadedEvents: EventResponseDto[]) => {
+      if (loadedEvents.length === 0) return
+      const transformed = transformEventsFromApi(
+        loadedEvents as Parameters<typeof transformEventsFromApi>[0],
+      )
+      setLazyEventById((prev) => {
+        const next = new Map(prev)
+        for (const event of transformed) next.set(event.id, event)
+        return next
+      })
+    },
+    [],
+  )
+
   // ===== URL ↔ 상태 동기화 =====
   useCatalogUrlSync({
     searchParams,
@@ -578,6 +655,8 @@ export const EventsCatalogPage: React.FC = () => {
     debouncedKeyword,
     selectedEventId,
     bookmarksOnly,
+    anchorsOnly,
+    anchorId,
     selectedCategory,
     selectedCountry,
     selectedContinent,
@@ -588,11 +667,13 @@ export const EventsCatalogPage: React.FC = () => {
     viewMode,
     viewExplicit,
     pageSize,
-    timelineLane,
+    timelineWindow,
     hiddenTimelineCategories,
     setKeywordInput,
     setSelectedEventId,
     setBookmarksOnly,
+    setAnchorsOnly,
+    setAnchorId,
     setSelectedCategory,
     setSelectedCountry,
     setSelectedContinent,
@@ -603,7 +684,7 @@ export const EventsCatalogPage: React.FC = () => {
     setViewMode,
     setViewExplicit,
     setPageSize,
-    setTimelineLane,
+    setTimelineWindow,
     setHiddenTimelineCategories,
   })
 
@@ -693,16 +774,56 @@ export const EventsCatalogPage: React.FC = () => {
     !hasMore &&
     !isError &&
     !loadMoreFailed
+  /**
+   * 딥링크/새로고침 복원 — lazy 레지스트리는 세션 state라 리로드 후 비어 있다.
+   * TREE에서 lazy 사건을 선택한 URL(?event=)을 새로고침·공유하면 목록 인덱스
+   * 어디에도 없는 id가 들어오는데, 이를 곧장 미발견으로 확정하면 실재하는 사건이
+   * '찾을 수 없습니다'로 둔갑하고 URL 키까지 떨어진다. 확정 전에 단건 조회로
+   * 1회 확인하고, 성공하면 레지스트리에 등록해 기존 폴백 경로로 살린다.
+   * 404만 '없음'으로 확정 — 그 외 실패는 '모른다'이므로 단정하지 않는다
+   * (eventsSettled가 로드 실패를 미발견으로 안 치는 것과 같은 규약).
+   */
+  const lazyResolveTriedRef = useRef<Set<string>>(new Set())
+  const lazyResolvePendingRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     if (!selectedEventId) return
     // 새 선택이 들어오면 직전 미발견 상태는 즉시 걷는다 — 안 그러면 멀쩡한 사건을
     // 골랐는데 '찾을 수 없습니다'가 계속 덮고 있게 된다.
     if (missingEventId) setMissingEventId(null)
     if (!eventsSettled) return
+    // lazy 레지스트리도 존재 근거다 — 트리에서 서버로 불러온 손자 이하는
+    // 목록 인덱스에 없어도 실재하는 사건이다(미발견 오발동 방지).
     if (
       eventByIdMap.has(selectedEventId) ||
-      nodeIndexMap.has(selectedEventId)
+      nodeIndexMap.has(selectedEventId) ||
+      lazyEventById.has(selectedEventId)
     ) {
+      return
+    }
+    // 단건 확인이 진행 중이면 판정을 미룬다 — 여기서 확정하면 확인이 무의미해진다.
+    if (lazyResolvePendingRef.current.has(selectedEventId)) return
+    if (!lazyResolveTriedRef.current.has(selectedEventId)) {
+      lazyResolveTriedRef.current.add(selectedEventId)
+      lazyResolvePendingRef.current.add(selectedEventId)
+      const requestedId = selectedEventId
+      getEventById(requestedId)
+        .then((dto) => {
+          handleLazyEventsLoaded([dto])
+        })
+        .catch((error: EventFetchError) => {
+          if (error.status !== 404) {
+            // 일시 실패는 '없음'이 아니다 — 다음 판정 기회에 다시 확인한다.
+            lazyResolveTriedRef.current.delete(requestedId)
+            return
+          }
+          // 확인 중 선택이 바뀌었으면 낡은 결과로 현재 선택을 지우지 않는다.
+          if (selectedEventIdRef.current !== requestedId) return
+          setMissingEventId(requestedId)
+          setSelectedEventId(null)
+        })
+        .finally(() => {
+          lazyResolvePendingRef.current.delete(requestedId)
+        })
       return
     }
     setMissingEventId(selectedEventId)
@@ -713,6 +834,8 @@ export const EventsCatalogPage: React.FC = () => {
     eventsSettled,
     eventByIdMap,
     nodeIndexMap,
+    lazyEventById,
+    handleLazyEventsLoaded,
   ])
   /** 미발견 전용 상태를 실제로 보여줄 것인가 — 선택이 다시 생겼으면 아니다 */
   const showMissingEvent = Boolean(missingEventId) && !selectedEventId
@@ -792,6 +915,22 @@ export const EventsCatalogPage: React.FC = () => {
   )
 
   /**
+   * 하위 사건이 지금 접혀 있는가 — **파생 추론이 아니라 실측**이다(검토 CTRL-8).
+   *
+   * 예전엔 툴바가 `expandedEventIds.size === 0`으로 판정했다. 그 집합은
+   * ⑴ 첫 페이지가 도착하기 전에도 ⑵ 자식 보유 사건이 0건인 결과에서도 비어 있어,
+   * 접을 것이 없는데도 버튼이 '하위 펼치기 · 눌림'으로 그려졌다가 목록이 채워지면
+   * 뒤집혔다. 두 배열의 길이 차이는 '접혀서 화면에서 빠진 행이 실제로 있다'는
+   * 관측값이고, 같은 식을 '전체 초기화'의 토스트 판정(:1254-1256)이 이미 쓰고 있다.
+   */
+  const childrenCollapsed =
+    visibleFlattenedHierarchy.length !== listRenderedHierarchy.length
+  const hasCollapsibleChildren = useMemo(
+    () => visibleFlattenedHierarchy.some((item) => item.canExpand),
+    [visibleFlattenedHierarchy],
+  )
+
+  /**
    * 헤더 '조건 일치 N건'의 모수 — **단계 ①(술어) 직후**(검토 DATA-6).
    *
    * `matchedOnlyHierarchy`는 필터가 없으면 원본과 같은 배열이므로 이 값은
@@ -848,7 +987,11 @@ export const EventsCatalogPage: React.FC = () => {
   const listGrouped =
     viewMode === VIEW_MODES.LIST &&
     // '등록순'은 전역 순서 자체가 목적이라 연도 그룹이 켜져 있으면 화면이 전혀 안 바뀐다.
-    sortBy !== 'created'
+    sortBy !== 'created' &&
+    // '하위 많은 순'도 마찬가지다 — 연도 그룹이 켜지면 정렬이 그룹 **내부**로 갇혀,
+    // 자손 18건짜리 앵커가 1914년 밴드 안에서만 위로 가고 목록 전체에서는 그대로
+    // 파묻힌다. 이 축의 목적 자체가 전역 순서이므로 그룹을 끈다.
+    sortBy !== 'descendants'
 
   /**
    * 목록 그룹핑 — **이 페이지가 유일한 계산 지점**이다(검토 PERF-4).
@@ -859,8 +1002,21 @@ export const EventsCatalogPage: React.FC = () => {
    * DOM 행이 다른 집합이 된다(검토 DATA-9). 이제 같은 객체를 공유하므로 어긋날 수 없다.
    */
   const yearBuckets = useMemo(
-    () => buildYearBuckets(listRenderedHierarchy, sortDirection, hasNarrowingFilters),
-    [listRenderedHierarchy, sortDirection, hasNarrowingFilters],
+    () =>
+      buildYearBuckets(listRenderedHierarchy, sortDirection, hasNarrowingFilters, {
+        // 평면 보기에는 계층이 없다 — 부모 귀속을 끄지 않으면 정렬 방향 토글 한 번에
+        // 67행이 다른 밴드로 옮겨 간다(검토 IDX-8).
+        hierarchy: !showFlatView,
+        // 헤더리스·공백 판정의 모수는 **하위 접힘 이전**이어야 한다(검토 IDX-6·IDX-9).
+        baselineItems: visibleFlattenedHierarchy,
+      }),
+    [
+      listRenderedHierarchy,
+      visibleFlattenedHierarchy,
+      sortDirection,
+      hasNarrowingFilters,
+      showFlatView,
+    ],
   )
 
   /**
@@ -905,6 +1061,40 @@ export const EventsCatalogPage: React.FC = () => {
     ],
   )
 
+  /**
+   * 목록의 **유일한 탭 정지점** — 위젯이 아니라 여기서 판정한다(검토 A11Y-1·A11Y-6).
+   *
+   * 후보 집합은 `navigableItems`, 즉 ↑↓·드로어 이전/다음과 **완전히 같은 집합**이다.
+   * 위젯이 자체 판정하던 시절엔 그쪽이 계층 접힘만 아는 배열을 봐서, 행을 고른 뒤 그
+   * 행이 든 밴드를 접으면 정지점이 0개가 됐다(Tab으로 목록 진입 자체가 불가).
+   *
+   * 선택 행이 접힘으로 사라졌을 때 **첫 행으로 되돌리지 않고 가장 가까운 조상**으로
+   * 물러난다 — 1914년 자식 행을 보다 '하위 접기'를 누르면 진입점이 목록 맨 위로
+   * 순간이동해, 보던 자리로 돌아가는 데 ↓를 70번 눌러야 했다(그때마다 드로어가 바뀐다).
+   */
+  const rovingTargetId = useMemo(() => {
+    if (navigableItems.length === 0) return null
+    const navigable = new Set(navigableItems.map((item) => item.node.id))
+    if (selectedEventId && navigable.has(selectedEventId)) return selectedEventId
+    if (selectedEventId) {
+      const parentById = new Map(
+        visibleFlattenedHierarchy.map((item) => [
+          item.node.id,
+          item.parentNodeId,
+        ]),
+      )
+      let cursor = parentById.get(selectedEventId) ?? null
+      // 계보는 유한하지만, 데이터가 순환이면 무한 루프가 되므로 방문 집합으로 막는다.
+      const seen = new Set<string>()
+      while (cursor && !seen.has(cursor)) {
+        if (navigable.has(cursor)) return cursor
+        seen.add(cursor)
+        cursor = parentById.get(cursor) ?? null
+      }
+    }
+    return navigableItems[0].node.id
+  }, [navigableItems, selectedEventId, visibleFlattenedHierarchy])
+
   // ===== 키보드 단축키 + 리스트 네비게이션 =====
   /**
    * 상세 닫기 — **직전에 보던 행으로 포커스를 되돌린다**.
@@ -943,6 +1133,8 @@ export const EventsCatalogPage: React.FC = () => {
     // 목록 뷰에서, 오버레이가 닫혀 있을 때만. 다른 뷰·모달 위에서는 리스너를 아예
     // 걸지 않아 브라우저 기본 키 동작(스크롤·select 조작)을 되돌려준다.
     enabled: viewMode === VIEW_MODES.LIST && !anyOverlayOpen,
+    // ←/→ 트리 키가 부른다. 안정 참조(useCallback)라 리스너를 다시 걸지 않는다.
+    toggleEventExpansion,
   })
 
   /**
@@ -1000,14 +1192,75 @@ export const EventsCatalogPage: React.FC = () => {
     return (
       eventByIdMap.get(selectedEventId) ??
       nodeIndexMap.get(selectedEventId)?.rootEvent ??
+      // 트리 lazy 서브트리에서 불러온 사건 — 목록 인덱스 미스 시 레지스트리 폴백.
+      // byParent 응답엔 background 등 상세 전용 필드가 빌 수 있으나 어댑터가
+      // 안전 기본값('')으로 채워 드로어는 해당 섹션만 조용히 생략한다.
+      lazyEventById.get(selectedEventId) ??
       null
     )
-  }, [selectedEventId, eventByIdMap, nodeIndexMap])
+  }, [selectedEventId, eventByIdMap, nodeIndexMap, lazyEventById])
 
   const selectedNode = useMemo<EventHierarchyNode | null>(() => {
     if (!selectedEventId) return null
-    return nodeIndexMap.get(selectedEventId)?.node ?? null
-  }, [selectedEventId, nodeIndexMap])
+    return (
+      nodeIndexMap.get(selectedEventId)?.node ??
+      // lazy 사건은 어댑터가 만든 자기 자신의 hierarchy 노드를 그대로 쓴다.
+      lazyEventById.get(selectedEventId)?.hierarchy ??
+      null
+    )
+  }, [selectedEventId, nodeIndexMap, lazyEventById])
+
+  /**
+   * 드로어 '상위 사건' 링크의 데이터 — 평탄화의 `parentNodeId`가 정본.
+   *
+   * - 평면(계층 OFF) 모드는 같은 노드가 루트 행(parentNodeId=null)과 자식 행으로
+   *   중복 등장한다 — parentNodeId가 **있는** 행을 우선 채택해야 평면 모드에서도
+   *   상위 링크가 살아 있다.
+   * - 제목은 전체 평탄화 배열에서 부모 노드 행(node.id 일치)으로 해석하고, 없으면
+   *   `parentEvent` 폴백 — 단 평면 모드의 parentEvent는 다른 값이 들어갈 수 있어
+   *   `parentEvent.id === parentNodeId`일 때만 신뢰한다.
+   * - 상위가 없으면 null → 드로어는 행을 그리지 않는다.
+   */
+  const selectedParentRef = useMemo<{ id: string; title: string } | null>(() => {
+    if (!selectedEventId) return null
+    let parentNodeId: string | null = null
+    let parentEventFallback: HistoricalEvent | null = null
+    for (const row of visibleFlattenedHierarchy) {
+      if (row.node.id !== selectedEventId || row.parentNodeId === null) continue
+      parentNodeId = row.parentNodeId
+      parentEventFallback = row.parentEvent
+      break
+    }
+    if (!parentNodeId) {
+      // lazy 사건 폴백 — 평탄화 행에 없으므로 레지스트리의 parentEventId로 해석.
+      // 부모 제목은 목록 인덱스 → lazy 레지스트리 순으로 찾고, 못 찾으면 행 미표시.
+      const lazySelected = lazyEventById.get(selectedEventId)
+      const lazyParentId = lazySelected?.parentEventId
+      if (!lazyParentId) return null
+      const lazyParentTitle =
+        nodeIndexMap.get(lazyParentId)?.node.title ??
+        eventByIdMap.get(lazyParentId)?.title ??
+        lazyEventById.get(lazyParentId)?.title
+      return lazyParentTitle
+        ? { id: lazyParentId, title: lazyParentTitle }
+        : null
+    }
+    for (const row of visibleFlattenedHierarchy) {
+      if (row.node.id === parentNodeId) {
+        return { id: parentNodeId, title: row.node.title }
+      }
+    }
+    if (parentEventFallback && parentEventFallback.id === parentNodeId) {
+      return { id: parentNodeId, title: parentEventFallback.title }
+    }
+    return null
+  }, [
+    selectedEventId,
+    visibleFlattenedHierarchy,
+    lazyEventById,
+    nodeIndexMap,
+    eventByIdMap,
+  ])
 
   const summaryNode = useMemo<EventHierarchyNode | null>(() => {
     if (!summaryEventId) return null
@@ -1015,7 +1268,11 @@ export const EventsCatalogPage: React.FC = () => {
   }, [summaryEventId, nodeIndexMap])
 
   const filtersOrSearchActive =
-    hasActiveFilters || bookmarksOnly || keywordInput.trim().length > 0
+    hasActiveFilters ||
+    bookmarksOnly ||
+    anchorsOnly ||
+    anchorId !== null ||
+    keywordInput.trim().length > 0
 
   /** 로드된 사건과 실제로 매칭되는 북마크 수 — 툴바 배지의 모수(검토 CR-6) */
   const resolvableBookmarkCount = useMemo(() => {
@@ -1035,7 +1292,7 @@ export const EventsCatalogPage: React.FC = () => {
    */
   const statsEvents = useMemo(() => {
     if (!filtersOrSearchActive) {
-      return events.filter((event) => !event.parentEventId)
+      return events.filter(isTreeRoot)
     }
     const matchedIds = new Set(
       matchedOnlyHierarchy.map((item) => item.node.id),
@@ -1044,8 +1301,14 @@ export const EventsCatalogPage: React.FC = () => {
   }, [filtersOrSearchActive, events, matchedOnlyHierarchy])
 
   /** 로드된 최상위 사건 수 — serverTotal과 같은 모수(최상위 기준) */
-  const rootLoadedCount = useMemo(
-    () => events.filter((event) => !event.parentEventId).length,
+  const rootLoadedCount = useMemo(() => events.filter(isTreeRoot).length, [events])
+
+  /**
+   * 로드된 최상위 중 앵커(자손 ≥ 1) 수 — '앵커만' 칩의 배지 모수.
+   * 나머지(rootLoadedCount − anchorRootCount)가 곧 '단독' 사건 수다.
+   */
+  const anchorRootCount = useMemo(
+    () => events.filter((event) => isTreeRoot(event) && isAnchorEvent(event)).length,
     [events],
   )
 
@@ -1059,11 +1322,11 @@ export const EventsCatalogPage: React.FC = () => {
   const timelineFilterChips = useMemo<FilterChip[]>(() => {
     if (viewMode !== VIEW_MODES.TIMELINE) return []
     const chips: FilterChip[] = []
-    if (timelineLane !== TIMELINE_LANE_MODES.CATEGORY) {
+    if (timelineWindow !== null) {
       chips.push({
-        key: 'lane',
-        label: `타임라인 레인 · ${TIMELINE_LANE_LABELS[timelineLane]}`,
-        onClear: () => setTimelineLane(TIMELINE_LANE_MODES.CATEGORY),
+        key: 'tlw',
+        label: `타임라인 창 · ${describeTimelineWindow(timelineWindow)}`,
+        onClear: () => setTimelineWindow(null),
       })
     }
     for (const categoryKey of hiddenTimelineCategories) {
@@ -1076,7 +1339,7 @@ export const EventsCatalogPage: React.FC = () => {
     return chips
   }, [
     viewMode,
-    timelineLane,
+    timelineWindow,
     hiddenTimelineCategories,
     toggleHiddenTimelineCategory,
   ])
@@ -1091,12 +1354,28 @@ export const EventsCatalogPage: React.FC = () => {
    *
    * 타임라인 전용 축(레인·카테고리 숨김)도 여기 합류한다(검토 GAP-4).
    */
+  /**
+   * 앵커 스코프 칩 — 지금 무엇 아래를 보고 있는지와 **나가는 길**을 한 자리에 둔다.
+   * 모수를 통째로 바꾸는 축이라 다른 칩보다 앞에 세운다.
+   */
+  const anchorScopeChip = useMemo<FilterChip | null>(() => {
+    if (!anchorId) return null
+    const scoped = events.find((event) => event.id === anchorId)
+    return {
+      key: 'anchor',
+      // 아직 로드 전이면 제목 대신 중립 문구 — id를 화면에 노출하지 않는다.
+      label: `최상위 · ${scoped?.title ?? '불러오는 중'}`,
+      onClear: () => setAnchorId(null),
+    }
+  }, [anchorId, events])
+
   const barFilterChips = useMemo<FilterChip[]>(
     () => [
+      ...(anchorScopeChip ? [anchorScopeChip] : []),
       ...filterSummaryChips.filter((chip) => chip.key !== 'keyword'),
       ...timelineFilterChips,
     ],
-    [filterSummaryChips, timelineFilterChips],
+    [anchorScopeChip, filterSummaryChips, timelineFilterChips],
   )
 
   /**
@@ -1119,21 +1398,32 @@ export const EventsCatalogPage: React.FC = () => {
       keyword: optionCounts.dropOneOut.keyword,
       bookmarks: optionCounts.dropOneOut.bookmark,
     }
-    const chips = bookmarksOnly
-      ? [
-          ...filterSummaryChips,
-          {
-            key: 'bookmarks',
-            label: '북마크만',
-            onClear: () => setBookmarksOnly(false),
-          },
-        ]
-      : filterSummaryChips
+    const chips: FilterChip[] = [...filterSummaryChips]
+    if (bookmarksOnly) {
+      chips.push({
+        key: 'bookmarks',
+        label: '북마크만',
+        onClear: () => setBookmarksOnly(false),
+      })
+    }
+    if (anchorsOnly) {
+      chips.push({
+        key: 'anchors',
+        label: '최상위 사건만',
+        onClear: () => setAnchorsOnly(false),
+      })
+    }
     return chips.map((chip) => ({
       ...chip,
       releaseCount: releaseCountByChipKey[chip.key],
     }))
-  }, [filterSummaryChips, bookmarksOnly, optionCounts, setBookmarksOnly])
+  }, [
+    filterSummaryChips,
+    bookmarksOnly,
+    anchorsOnly,
+    optionCounts,
+    setBookmarksOnly,
+  ])
   /**
    * 'N개 적용 중' 숫자는 **툴바가 이 배열에서 직접 센다**(북마크 칩만 +1).
    * 페이지가 따로 세어 내려보내던 시절엔 두 값이 갈릴 여지가 남아 있었다.
@@ -1173,17 +1463,27 @@ export const EventsCatalogPage: React.FC = () => {
       selectedCentury,
       keywordInput,
       bookmarksOnly,
-      timelineLane,
+      anchorsOnly,
+      anchorId,
+      timelineWindow,
       hiddenTimelineCategories,
       collapsedYears,
       collapsedCenturies,
       expandedEventIds,
     }
-    /** 해제되는 '좁히는 조건' 수 — 칩과 같은 모수(검색어 칩 포함) */
+    /**
+     * 해제되는 '좁히는 조건' 수 — 칩과 같은 모수(검색어 칩 포함).
+     * 타임라인 축 2종(창 `tlw`·카테고리 숨김 `hide`)은 칩이 TIMELINE 뷰 전용인
+     * 것과 달리 **뷰와 무관하게** 카운트한다(검토 R40 — 의도된 비대칭). 다른
+     * 뷰에서도 URL에 남아 있고 아래에서 실제로 해제되므로, 뷰로 게이트하면
+     * 토스트 건수와 되돌리기 스냅샷이 어긋난다.
+     */
     const releasedFilters =
       filterSummaryChips.length +
       (bookmarksOnly ? 1 : 0) +
-      (timelineLane !== TIMELINE_LANE_MODES.CATEGORY ? 1 : 0) +
+      (anchorsOnly ? 1 : 0) +
+      (anchorId !== null ? 1 : 0) +
+      (timelineWindow !== null ? 1 : 0) +
       hiddenTimelineCategories.size
     /**
      * 실제로 감춰진 행이 있었는가 — 밴드 접힘(④)이거나 계층 접힘(③).
@@ -1197,7 +1497,9 @@ export const EventsCatalogPage: React.FC = () => {
     handleResetFilters()
     setKeywordInput('')
     setBookmarksOnly(false)
-    setTimelineLane(TIMELINE_LANE_MODES.CATEGORY)
+    setAnchorsOnly(false)
+    setAnchorId(null)
+    setTimelineWindow(null)
     setHiddenTimelineCategories(EMPTY_HIDDEN_CATEGORIES)
     // 접힘도 함께 푼다 — 이 버튼이 '보이게 해 준다'고 약속하기 때문이다(URL-6).
     setCollapsedYears(new Set())
@@ -1219,7 +1521,9 @@ export const EventsCatalogPage: React.FC = () => {
           // 검색어는 입력값만 되돌리면 디바운스 effect가 술어까지 잇는다.
           setKeywordInput(snapshot.keywordInput)
           setBookmarksOnly(snapshot.bookmarksOnly)
-          setTimelineLane(snapshot.timelineLane)
+          setAnchorsOnly(snapshot.anchorsOnly)
+          setAnchorId(snapshot.anchorId)
+          setTimelineWindow(snapshot.timelineWindow)
           setHiddenTimelineCategories(snapshot.hiddenTimelineCategories)
           setCollapsedYears(snapshot.collapsedYears)
           setCollapsedCenturies(snapshot.collapsedCenturies)
@@ -1237,7 +1541,9 @@ export const EventsCatalogPage: React.FC = () => {
     selectedCentury,
     keywordInput,
     bookmarksOnly,
-    timelineLane,
+    anchorsOnly,
+    anchorId,
+    timelineWindow,
     hiddenTimelineCategories,
     collapsedYears,
     collapsedCenturies,
@@ -1260,6 +1566,49 @@ export const EventsCatalogPage: React.FC = () => {
       return next
     })
   }, [setExpandedEventIds])
+  /**
+   * 계층 모달(트리)에서 노드를 고르면 그 사건을 연다 — 모달이 막다른 골목이던 것을
+   * 목록으로 되돌리는 경로다(검토 CTRL-7).
+   *
+   * 고른 노드가 접힌 조상 아래일 수 있으므로 **조상 체인을 함께 펼친다**. 그러지 않으면
+   * 선택은 되는데 그 행이 목록에 없어 드로어의 '목록 조건 밖' 배너가 뜬다.
+   */
+  const handleSelectFromTree = useCallback(
+    (eventId: string) => {
+      const parentById = new Map(
+        visibleFlattenedHierarchy.map((item) => [
+          item.node.id,
+          item.parentNodeId,
+        ]),
+      )
+      const ancestors: string[] = []
+      const seen = new Set<string>()
+      let cursor = parentById.get(eventId) ?? null
+      while (cursor && !seen.has(cursor)) {
+        ancestors.push(cursor)
+        seen.add(cursor)
+        cursor = parentById.get(cursor) ?? null
+      }
+      if (ancestors.length > 0) {
+        setExpandedEventIds((prev) => {
+          const next = new Set(prev)
+          ancestors.forEach((id) => next.add(id))
+          return next
+        })
+      }
+      setSelectedEventId(eventId)
+      setShowSummaryModal(false)
+    },
+    [visibleFlattenedHierarchy, setExpandedEventIds, setSelectedEventId],
+  )
+  /**
+   * 접어 둔 연·세기 밴드만 편다 — 필터·검색어·하위 접힘은 그대로 둔다(검토 CTRL-3).
+   * '전체 초기화'는 조건까지 날리므로, 조건은 유지한 채 감춰진 행만 되살릴 길이 필요했다.
+   */
+  const handleExpandAllBands = useCallback(() => {
+    setCollapsedYears(new Set())
+    setCollapsedCenturies(new Set())
+  }, [setCollapsedYears, setCollapsedCenturies])
   const toggleShowFlatView = useCallback(
     () => setShowFlatView((v) => !v),
     [setShowFlatView],
@@ -1268,6 +1617,18 @@ export const EventsCatalogPage: React.FC = () => {
     () => setBookmarksOnly((v) => !v),
     [],
   )
+  const toggleAnchorsOnly = useCallback(
+    () => setAnchorsOnly((previous) => !previous),
+    [],
+  )
+  /**
+   * 앵커 조망 진입 — 모수를 그 사건과 자손으로 좁힌다.
+   * '앵커만' 칩은 스코프 안에서 의미가 없으므로(모수가 이미 한 앵커) 함께 끈다.
+   */
+  const enterAnchorScope = useCallback((eventId: string) => {
+    setAnchorId(eventId)
+    setAnchorsOnly(false)
+  }, [])
   /**
    * 사건 등록은 모달로 연다 — 페이지로 나가면 URL에 없는 UI 상태(연도/세기 접힘,
    * 펼친 행)가 언마운트로 소멸하고, 돌아오는 경로도 필터가 빠진 `/events`였다.
@@ -1308,7 +1669,8 @@ export const EventsCatalogPage: React.FC = () => {
     exportEventsAsJson(exported, {
       appliedFilters: barFilterChips
         .map((chip) => chip.label)
-        .concat(bookmarksOnly ? ['북마크된 항목만'] : []),
+        .concat(bookmarksOnly ? ['북마크된 항목만'] : [])
+        .concat(anchorsOnly ? ['최상위(앵커) 사건만'] : []),
       keyword: debouncedKeyword.trim() || undefined,
       serverTotal,
     })
@@ -1319,6 +1681,7 @@ export const EventsCatalogPage: React.FC = () => {
     serverTotal,
     barFilterChips,
     bookmarksOnly,
+    anchorsOnly,
     debouncedKeyword,
   ])
 
@@ -1403,6 +1766,10 @@ export const EventsCatalogPage: React.FC = () => {
             selectedEventId={selectedEventId}
             dbCategories={dbCategories}
             onSelectEvent={setSelectedEventId}
+            // 노드에서 가지 낳기 — 기존 등록 모달을 initialParent와 함께 연다.
+            onCreateChild={handleCreateChildEvent}
+            // lazy 서브트리 응답 수집 — 미발견 판정·드로어 해석의 폴백 레지스트리.
+            onLazyEventsLoaded={handleLazyEventsLoaded}
             isLoading={firstPageLoading}
             hasMoreData={stillLoadingMore}
             hasActiveFilters={filtersOrSearchActive}
@@ -1469,11 +1836,13 @@ export const EventsCatalogPage: React.FC = () => {
           onToggleExpansion={toggleEventExpansion}
           onSelectEvent={setSelectedEventId}
           onShowSummary={openSummary}
+          // 목록 행의 ⚑ 배지 = 조망 진입점. 신규 지면 없이 모수만 좁힌다.
+          onEnterAnchorScope={enterAnchorScope}
           onResetFilters={handleResetAll}
           onToggleBookmark={handleToggleBookmark}
           onScroll={handleScroll}
           // 접힌 밴드가 반영된 첫 '보이는 행' — 위젯이 접힘을 재계산하지 않게 페이지가 내린다.
-          rovingFallbackId={navigableItems[0]?.node.id ?? null}
+          rovingTargetId={rovingTargetId}
           // ⚠️ 위젯의 렌더 분기와 페이지의 navigableItems가 **같은 변수**를 읽는다(검토 GAP-2).
           grouped={listGrouped}
         />
@@ -1487,8 +1856,6 @@ export const EventsCatalogPage: React.FC = () => {
           events={events}
           selectedEventId={selectedEventId}
           dbCategories={dbCategories}
-          continents={continents}
-          countries={countries}
           onSelectEvent={setSelectedEventId}
           hasMore={hasMore}
           isFetchingMore={isFetchingNextPage}
@@ -1496,9 +1863,9 @@ export const EventsCatalogPage: React.FC = () => {
           loadMoreFailed={loadMoreFailed}
           isLoading={firstPageLoading}
           wideMode={wideMode}
-          // 타임라인의 두 번째 필터 체계는 페이지 상태다 — URL·칩·초기화에 참여(검토 GAP-4)
-          groupBy={timelineLane}
-          onGroupByChange={setTimelineLane}
+          // 타임라인 전용 상태(창·숨김)는 페이지 소유 — URL·칩·초기화에 참여(검토 GAP-4)
+          window={timelineWindow}
+          onWindowChange={setTimelineWindow}
           hiddenCategories={hiddenTimelineCategories}
           onToggleHiddenCategory={toggleHiddenTimelineCategory}
           onShowAllCategories={showAllTimelineCategories}
@@ -1511,6 +1878,15 @@ export const EventsCatalogPage: React.FC = () => {
       if (selectedEventId === deletedId) setSelectedEventId(null)
       // 지운 사건의 북마크도 함께 정리 — 안 하면 배지 숫자와 '북마크만' 결과가 어긋난다.
       removeBookmark(deletedId)
+      // lazy 레지스트리에서도 제거 — 남겨두면 존재 판정·드로어 폴백이 삭제된 사건의
+      // stale 스냅샷을 계속 '실재'로 신뢰한다(뒤로가기로 ?event가 복원되는 경로).
+      // 세션 내 수정 stale은 byParent refetch가 같은 키를 덮어써 해소되므로 별도 조치 불요.
+      setLazyEventById((prev) => {
+        if (!prev.has(deletedId)) return prev
+        const next = new Map(prev)
+        next.delete(deletedId)
+        return next
+      })
 
       /**
        * 낙관적 제거 — 무효화만으로는 지운 행이 화면에 남는다(검토 DATA-6).
@@ -1612,6 +1988,8 @@ export const EventsCatalogPage: React.FC = () => {
       missingEventId={missingEventId}
       selectedEvent={selectedEvent}
       selectedNode={selectedNode}
+      // 상위 사건 링크 — 평탄화 parentNodeId 기반, 없으면 행 미표시(위 memo 주석 참고).
+      parentEventRef={selectedParentRef}
       dbCategories={dbCategories}
       onSelectEvent={setSelectedEventId}
       onExpandEvent={handleExpandEvent}
@@ -1620,7 +1998,14 @@ export const EventsCatalogPage: React.FC = () => {
       onPrev={onDrawerPrev}
       onNext={onDrawerNext}
       // 선택은 살아 있는데 화면에 보이는 행 목록에 없다 = 필터·검색·북마크로 잘려나간 상태.
-      isOutOfScope={Boolean(selectedEventId) && selectedIndex === -1}
+      // lazy 레지스트리로 해석된 사건은 **TREE 뷰에서만** 예외 — 그 뷰에서만 실제 행이
+      // 보여 '조건 밖' 고지(+필터 초기화 권유)가 거짓말이 된다. 다른 뷰로 전환하면
+      // 행 자체가 없으므로 기존 고지를 그대로 타야 한다.
+      isOutOfScope={
+        selectedEventId !== null &&
+        selectedIndex === -1 &&
+        !(viewMode === VIEW_MODES.TREE && lazyEventById.has(selectedEventId))
+      }
       onResetFilters={handleResetAll}
       onClose={clearSelectedEvent}
     />
@@ -1661,14 +2046,24 @@ export const EventsCatalogPage: React.FC = () => {
     bookmarksOnly,
     toggleBookmarksOnly,
     /**
+     * '최상위 사건만' 칩 — 배지는 앵커 수(자손 ≥ 1인 루트). 나머지가 '단독' 사건이다.
+     * autoLoadAll이라 소진 후에는 정확하고, 소진 중에는 과소 표기될 수 있다.
+     */
+    anchorsOnly,
+    toggleAnchorsOnly,
+    anchorsCount: anchorRootCount,
+    /**
      * 배지 수 — 저장된 id 수가 아니라 **로드된 사건과의 교집합**.
      * 저장값을 그대로 쓰면 삭제·이관된 사건이나 다른 계정의 북마크까지 세어
      * 목록(교집합만 렌더)과 숫자가 어긋난다(검토 CR-6).
      * autoLoadAll이라 소진 후에는 정확하고, 소진 중에는 과소 표기될 수 있다.
      */
     bookmarksCount: resolvableBookmarkCount,
-    // 하위 사건 일괄 접기/펼치기(검토 CR-5) — 전개된 부모가 하나도 없으면 '접힘' 상태로 본다.
-    allChildrenCollapsed: expandedEventIds.size === 0,
+    // 하위 사건 일괄 접기/펼치기(검토 CR-5) — 판정은 위 실측값이 한다.
+    childrenCollapsed,
+    hasCollapsibleChildren,
+    collapsedBandCount: collapsedYears.size + collapsedCenturies.size,
+    onExpandAllBands: handleExpandAllBands,
     onCollapseAllChildren: collapseAllChildren,
     onExpandAllChildren: expandAllChildren,
     recentEventIds: recentEvents,
@@ -1723,6 +2118,7 @@ export const EventsCatalogPage: React.FC = () => {
     showSummaryModal,
     setShowSummaryModal,
     summaryNode,
+    onSelectNode: handleSelectFromTree,
   }
 
   const content = (
@@ -1834,6 +2230,8 @@ export const EventsCatalogPage: React.FC = () => {
         isOpen={createModalOpen}
         onClose={closeCreateModal}
         onDirtyChange={onCreateFormDirtyChange}
+        // 트리 '+ 하위 사건' 경유일 때만 값이 있다 — 일반 등록은 undefined(프리필 없음).
+        initialParent={createParentPreset ?? undefined}
       />
     </>
   )

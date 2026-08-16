@@ -88,12 +88,16 @@ describe('EventListItem', () => {
     expect(row).toHaveAttribute('aria-current', 'true')
   })
 
+  /**
+   * 이름이 **자족해야** 한다(검토 A11Y-9) — 390px 브라우즈 모드에서는 버튼이 제목보다
+   * 먼저 낭독돼, '하위 사건 3개 펼치기'만 들은 시점에는 무엇의 하위인지 알 수 없었다.
+   */
   it('자식 수는 디스클로저 aria-label에만 실리고 배지로 중복 낭독되지 않는다', () => {
     renderWithTheme(
       <EventListItem {...baseProps} hasChildren childCount={3} />,
     )
     const disclosure = screen.getByRole('button', {
-      name: '하위 사건 3개 펼치기',
+      name: '2025 이란-이스라엘 12일 전쟁 — 하위 사건 3개 펼치기',
     })
     expect(disclosure).toHaveAttribute('aria-expanded', 'false')
     // 배지 숫자는 시각 전용 — 접근성 트리에 '3'이 한 번 더 나타나면 안 된다.

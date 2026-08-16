@@ -29,12 +29,13 @@ import { CENTURY_UNKNOWN } from '@/entities/event/model/types'
 import {
   FILTER_ALL,
   SORT_OPTIONS,
-  TIMELINE_LANE_MODES,
-  isTimelineLaneMode,
   type SortOption,
-  type TimelineLaneMode,
   type ViewMode,
 } from '@/features/event-list/lib'
+import {
+  parseTimelineWindow,
+  type TimelineWindow,
+} from '@/widgets/event-timeline/model/timeline-model'
 
 import { isExplicitViewMode, resolveDefaultViewMode } from './resolve-default-view-mode'
 
@@ -59,6 +60,17 @@ export interface CatalogUrlState {
   keyword: string
   selectedEventId: string | null
   bookmarksOnly: boolean
+  /**
+   * `anchors=1` — 최상위(앵커) 사건만. 자손이 하나라도 있는 루트만 남겨 모수를
+   * 167 → 20으로 줄인다. 자식 행을 지우는 축이 아니라 **루트 선별 축**이므로,
+   * 앵커를 펼치면 하위 사건은 그대로 보인다.
+   */
+  anchorsOnly: boolean
+  /**
+   * `anchor=<id>` — 이 사건과 그 자손으로 **모수를 좁힌다**(펼침이 아니라 모수 축소).
+   * 앵커 자신이 상위를 가진 사건이어도 이 화면에서는 최상위로 그려진다(isRenderRoot).
+   */
+  anchorId: string | null
   selectedCategory: string
   selectedCountry: string
   selectedContinent: string
@@ -76,7 +88,12 @@ export interface CatalogUrlState {
    * 반대로 모바일 폴백('타임라인은 터치로 거의 조작 불가')도 무력화된다.
    */
   viewExplicit: boolean
-  timelineLane: TimelineLaneMode
+  /**
+   * `tlw` — 타임라인 시간 창(`c19`·`c-1`·`d1871`·`u`). 없거나 무효면 전체(null).
+   * v3의 레인 축(`lane`)은 v4 재설계에서 폐지 — 구 URL의 `lane`은 무시되고
+   * 첫 상태→URL write에서 정리된다.
+   */
+  timelineWindow: TimelineWindow | null
   /** `hide` — 타임라인에서 숨긴 카테고리 **이름** 집합 */
   hiddenTimelineCategories: Set<string>
 }
@@ -153,12 +170,13 @@ export function parseCatalogSearchParams(
 ): CatalogUrlState {
   const viewParam = searchParams.get('view')
   const directionParam = searchParams.get('dir')
-  const laneParam = searchParams.get('lane')
 
   return {
     keyword: (searchParams.get('q') ?? '').trim(),
     selectedEventId: readNonEmpty(searchParams, 'event'),
     bookmarksOnly: searchParams.get('bookmarks') === '1',
+    anchorsOnly: searchParams.get('anchors') === '1',
+    anchorId: readNonEmpty(searchParams, 'anchor'),
     selectedCategory: readIdFilter(searchParams, 'cat'),
     selectedCountry: readIdFilter(searchParams, 'country'),
     selectedContinent: readIdFilter(searchParams, 'continent'),
@@ -172,9 +190,7 @@ export function parseCatalogSearchParams(
     showFlatView: searchParams.get('flat') === '1',
     viewMode: resolveDefaultViewMode(viewParam),
     viewExplicit: isExplicitViewMode(viewParam),
-    timelineLane: isTimelineLaneMode(laneParam)
-      ? laneParam
-      : TIMELINE_LANE_MODES.CATEGORY,
+    timelineWindow: parseTimelineWindow(searchParams.get('tlw')),
     hiddenTimelineCategories: parseHiddenCategoriesParam(
       searchParams.get('hide'),
     ),

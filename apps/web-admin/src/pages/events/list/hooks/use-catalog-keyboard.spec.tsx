@@ -18,6 +18,15 @@ interface HarnessProps {
   setSelectedEventId: (id: string | null) => void
   navigate: (to: string) => void
   enabled?: boolean
+  toggleEventExpansion?: (eventId: string) => void
+  /**
+   * 행별 계층 메타 — ←/→ 트리 키가 읽는 data 속성의 원본.
+   * 실제 행 렌더러(event-list-item)가 싣는 것과 같은 계약이다.
+   */
+  rowMeta?: Record<
+    string,
+    { parentId?: string; canExpand?: boolean; expanded?: boolean }
+  >
   /**
    * DOM에 실제로 렌더되는 행을 **연도 그룹 단위**로 준다 — 접힌 밴드를 흉내내려면
    * 그룹째 빼면 된다.
@@ -33,6 +42,8 @@ const NavHarness = ({
   setSelectedEventId,
   navigate,
   enabled = true,
+  toggleEventExpansion = jest.fn(),
+  rowMeta = {},
   renderedGroups = [
     ['evt-1', 'evt-2'],
     ['evt-3', 'evt-4'],
@@ -42,6 +53,7 @@ const NavHarness = ({
     setSelectedEventId,
     navigate: navigate as never,
     enabled,
+    toggleEventExpansion,
   })
   return (
     <div>
@@ -59,11 +71,26 @@ const NavHarness = ({
             role="list"
             aria-label={`연도 그룹 ${groupIndex + 1}`}
           >
-            {groupIds.map((id) => (
-              <div key={id} data-event-id={id} role="listitem" tabIndex={0}>
-                {id}
-              </div>
-            ))}
+            {groupIds.map((eventId) => {
+              const meta = rowMeta[eventId] ?? {}
+              return (
+                <div
+                  key={eventId}
+                  data-event-id={eventId}
+                  data-parent-id={meta.parentId}
+                  data-can-expand={meta.canExpand ? 'true' : undefined}
+                  data-expanded={
+                    meta.canExpand ? (meta.expanded ? 'true' : 'false') : undefined
+                  }
+                  role="listitem"
+                  tabIndex={0}
+                >
+                  {eventId}
+                  {/* 행 *안의* 액션 — 로빙 규약상 여기서도 ↑↓는 행을 옮겨야 한다. */}
+                  <button type="button">{`${eventId} 셰브론`}</button>
+                </div>
+              )
+            })}
           </div>
         ))}
       </div>
@@ -321,5 +348,108 @@ describe('useCatalogShortcuts — Escape 우선순위', () => {
       fireEvent.keyDown(screen.getByText('모달 안 버튼'), { key: 'Escape' })
       expect(clearSelectedEvent).not.toHaveBeenCalled()
     })
+  })
+})
+
+/**
+ * ←/→ 트리 키 (2026-08-11 하위 사건 검토 배치 4 / CTRL-5·A11Y-3).
+ *
+ * 목록은 계층을 그리면서도 계층을 **조작하는** 키 계약이 없었다 — 화살표는 상하 이동뿐이라
+ * 부모 하나를 여닫는 데 Tab→Enter→Shift+Tab→↓ 네 키가 필요했고, 셰브론에 포커스가 가면
+ * ↑↓가 통째로 죽어 브라우저 기본 스크롤만 일어났다.
+ */
+describe('useCatalogListNavigation — ←/→ 트리 키', () => {
+  const TREE_META = {
+    'evt-1': { canExpand: true, expanded: false },
+    'evt-2': { parentId: 'evt-1', canExpand: false },
+    'evt-3': { canExpand: true, expanded: true },
+    'evt-4': { parentId: 'evt-3', canExpand: false },
+  }
+
+  it('접힌 부모에서 →는 펼친다', () => {
+    const toggleEventExpansion = jest.fn()
+    render(
+      <NavHarness
+        setSelectedEventId={jest.fn()}
+        navigate={jest.fn()}
+        toggleEventExpansion={toggleEventExpansion}
+        rowMeta={TREE_META}
+      />,
+    )
+
+    fireEvent.keyDown(screen.getByText('evt-1'), { key: 'ArrowRight' })
+    expect(toggleEventExpansion).toHaveBeenCalledWith('evt-1')
+  })
+
+  it('펼쳐진 부모에서 →는 첫 자식으로 내려간다', () => {
+    const setSelectedEventId = jest.fn()
+    const toggleEventExpansion = jest.fn()
+    render(
+      <NavHarness
+        setSelectedEventId={setSelectedEventId}
+        navigate={jest.fn()}
+        toggleEventExpansion={toggleEventExpansion}
+        rowMeta={TREE_META}
+      />,
+    )
+
+    fireEvent.keyDown(screen.getByText('evt-3'), { key: 'ArrowRight' })
+    expect(toggleEventExpansion).not.toHaveBeenCalled()
+    expect(setSelectedEventId).toHaveBeenCalledWith('evt-4')
+  })
+
+  it('펼쳐진 부모에서 ←는 접는다', () => {
+    const toggleEventExpansion = jest.fn()
+    render(
+      <NavHarness
+        setSelectedEventId={jest.fn()}
+        navigate={jest.fn()}
+        toggleEventExpansion={toggleEventExpansion}
+        rowMeta={TREE_META}
+      />,
+    )
+
+    fireEvent.keyDown(screen.getByText('evt-3'), { key: 'ArrowLeft' })
+    expect(toggleEventExpansion).toHaveBeenCalledWith('evt-3')
+  })
+
+  it('자식 행에서 ←는 부모 행으로 올라간다', () => {
+    const setSelectedEventId = jest.fn()
+    render(
+      <NavHarness
+        setSelectedEventId={setSelectedEventId}
+        navigate={jest.fn()}
+        rowMeta={TREE_META}
+      />,
+    )
+
+    fireEvent.keyDown(screen.getByText('evt-4'), { key: 'ArrowLeft' })
+    expect(setSelectedEventId).toHaveBeenCalledWith('evt-3')
+  })
+
+  it('자식 없는 최상위 행에서는 →가 기본 동작을 뺏지 않는다', () => {
+    const setSelectedEventId = jest.fn()
+    const notPrevented = (() => {
+      render(
+        <NavHarness
+          setSelectedEventId={setSelectedEventId}
+          navigate={jest.fn()}
+          renderedGroups={[['solo']]}
+        />,
+      )
+      return fireEvent.keyDown(screen.getByText('solo'), { key: 'ArrowRight' })
+    })()
+    expect(setSelectedEventId).not.toHaveBeenCalled()
+    expect(notPrevented).toBe(true)
+  })
+
+  it('행 안의 액션에 포커스가 있어도 ↑↓는 행을 옮긴다', () => {
+    const setSelectedEventId = jest.fn()
+    render(
+      <NavHarness setSelectedEventId={setSelectedEventId} navigate={jest.fn()} />,
+    )
+
+    fireEvent.keyDown(screen.getByText('evt-1 셰브론'), { key: 'ArrowDown' })
+    expect(setSelectedEventId).toHaveBeenCalledWith('evt-2')
   })
 })
