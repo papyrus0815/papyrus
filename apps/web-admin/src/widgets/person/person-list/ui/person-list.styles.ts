@@ -2,27 +2,10 @@
  * PersonList 전용 스타일 — 인물 도메인에만 있는 조각.
  *
  * 패널·검색행·그룹헤더·행 등 목록 조판은 전부 `@/shared/ui/sidebar-list`(국가 목록과 공용).
- * 여기엔 인물에만 있는 것(영향력 배지, 군주/국가원수 표식, 상세 필터 유도 배지)만 둔다.
+ * 여기엔 인물에만 있는 것(군주/국가원수 표식, 상세 필터 유도 배지)만 둔다.
+ * 영향력 수치는 공용 행의 metric 슬롯(RowMetricBadge)이 그린다.
  */
 import styled from 'styled-components'
-
-/** 행 우측 영향력 수치 — 국가 행의 자식 수 배지와 같은 자리 */
-export const InfluenceBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 15px;
-  padding: 0 5px;
-  font-size: 10px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
-  flex-shrink: 0;
-`
 
 /** 이름 옆 군주(♛)·국가원수(★) 표식 */
 export const RoleMark = styled.span`
