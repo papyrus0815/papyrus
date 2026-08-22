@@ -77,6 +77,11 @@ interface PersonInfographicFilterState {
 
   /** 카테고리·값 toggle. 이미 있으면 제거, 없으면 추가 */
   toggleScope: (kind: ScopeKind, value: string) => void
+  /**
+   * 카테고리 값을 통째로 교체 — 사이드바 단일 선택 셀렉트용.
+   * (clearScopeKind + toggleScope 2회 호출이면 렌더가 두 번 돈다)
+   */
+  setScopeValues: (kind: ScopeKind, values: string[]) => void
   /** 특정 카테고리 비우기 */
   clearScopeKind: (kind: ScopeKind) => void
   /** 모든 카테고리 비우기 */
@@ -122,6 +127,8 @@ export const usePersonInfographicFilterStore =
               : [...cur, value]
             return { scopes: { ...state.scopes, [kind]: next } }
           }),
+        setScopeValues: (kind, values) =>
+          set((state) => ({ scopes: { ...state.scopes, [kind]: values } })),
         clearScopeKind: (kind) =>
           set((state) => ({ scopes: { ...state.scopes, [kind]: [] } })),
         clearAllScopes: () => set({ scopes: EMPTY_SCOPES }),

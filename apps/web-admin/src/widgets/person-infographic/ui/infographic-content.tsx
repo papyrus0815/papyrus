@@ -12,17 +12,17 @@ import { FiBarChart2, FiPlus, FiSearch, FiX } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import { usePersonsInfographic } from '@/entities/person/api'
-import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { PersonTabSharedTitle } from '@/widgets/country/country-detail/ui/country-detail.styles'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 
 import { ERAS } from '../model/constants'
 import {
   countActiveScopes,
-  matchesScopes,
   usePersonInfographicFilterStore,
   type PersonInfographicView,
 } from '../model/filter.store'
+import { filterPersons } from '../model/filter-persons'
+import { usePersonQueryInput } from '../model/use-person-query-input'
 import { useAdaptedPersons } from '../model/use-adapted-persons'
 
 import { CardsView } from './cards-view'
@@ -54,11 +54,13 @@ export function InfographicContent({
   const scopes = usePersonInfographicFilterStore((s) => s.scopes)
   const resetFilters = usePersonInfographicFilterStore((s) => s.resetFilters)
   const view = usePersonInfographicFilterStore((s) => s.view)
-  const storeQuery = usePersonInfographicFilterStore((s) => s.query)
-  const setStoreQuery = usePersonInfographicFilterStore((s) => s.setQuery)
-  // 검색 입력은 로컬 state로 즉시 반영하고, 디바운스된 값만 store(→URL)에 커밋.
-  // (이전엔 키 입력마다 store.query→url-sync가 URL을 replaceState로 갱신해 history 스팸)
-  const [searchInput, setSearchInput] = useState(storeQuery)
+  // 검색 입력은 로컬 즉시 반영 + 디바운스 커밋 — 좌측 인물 목록 사이드바의 검색창과 같은 훅을
+  // 쓴다(각자 동기화 쌍을 들면 서로 되돌리며 무한 루프가 난다).
+  const {
+    input: searchInput,
+    setInput: setSearchInput,
+    query: dq,
+  } = usePersonQueryInput()
   const minInfluence = usePersonInfographicFilterStore((s) => s.minInfluence)
   const aliveFilter = usePersonInfographicFilterStore((s) => s.aliveFilter)
   const pinnedList = usePersonInfographicFilterStore((s) => s.pinned)
@@ -74,19 +76,6 @@ export function InfographicContent({
   )
 
   const [formOpen, setFormOpen] = useState(false)
-
-  // 무거운 필터/뷰는 디바운스된 검색어로만 갱신 — 대량 인물 타이핑 랙 완화.
-  const dq = useDebouncedValue(searchInput, 200)
-
-  // 디바운스된 검색어만 store(→URL·필터)에 커밋
-  useEffect(() => {
-    if (dq !== storeQuery) setStoreQuery(dq)
-  }, [dq, storeQuery, setStoreQuery])
-
-  // 외부에서 store.query가 바뀌면(URL 진입·필터 초기화) 입력칸 동기화
-  useEffect(() => {
-    setSearchInput((cur) => (cur === storeQuery ? cur : storeQuery))
-  }, [storeQuery])
 
   // 통계 차트 접힘 — 기본 접힘. localStorage persist.
   const [statsOpen, setStatsOpen] = useState<boolean>(() => {
@@ -108,20 +97,18 @@ export function InfographicContent({
     })
   }, [])
 
-  const filtered = useMemo(() => {
-    // scope 매칭 정본은 filter.store의 matchesScopes (era.key 주입) — 인라인 재구현 금지.
-    let arr = allPeople.filter((person) =>
-      matchesScopes(person, scopes, (candidate) => candidate.era.key),
-    )
-    if (minInfluence > 0) arr = arr.filter((p) => p.influence >= minInfluence)
-    if (aliveFilter === 'alive') arr = arr.filter((p) => p.isAlive)
-    else if (aliveFilter === 'dead') arr = arr.filter((p) => !p.isAlive)
-    if (dq.trim()) {
-      const qq = dq.trim().toLowerCase()
-      arr = arr.filter((p) => p.searchText.includes(qq))
-    }
-    return arr
-  }, [allPeople, scopes, dq, minInfluence, aliveFilter])
+  // 필터 술어 정본은 filterPersons — 좌측 인물 목록 사이드바와 공유한다.
+  // (검색어만 여기서 디바운스된 값을 넘긴다)
+  const filtered = useMemo(
+    () =>
+      filterPersons(allPeople, {
+        scopes,
+        minInfluence,
+        aliveFilter,
+        query: dq,
+      }),
+    [allPeople, scopes, dq, minInfluence, aliveFilter],
+  )
 
   // 활성 scope 라벨 — 단일이면 그 값, 다중이면 "필터링됨". 모두 비면 "전체 인물".
   const totalScopeCount = countActiveScopes(scopes)
