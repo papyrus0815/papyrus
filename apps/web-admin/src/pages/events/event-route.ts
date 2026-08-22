@@ -24,66 +24,45 @@ const editRedirect = ({ params }: LoaderFunctionArgs) =>
 /**
  * 🗺️ Events 페이지 라우트 설정
  *
- * 헤더에서 "사건" 메뉴를 클릭하면 /events 경로로 이동합니다.
- * Lazy loading으로 초기 번들 크기를 최적화합니다.
+ * 목록·상세는 콘텐츠 영역(ContentLayout) 안에 있고, 좌측 사건 목록 사이드바는
+ * 레이아웃(ContentAreaShell)이 소유한다 — 목록↔상세를 오가도 사이드바가 유지된다.
+ * 등록 폼은 전체 폭을 쓰므로 콘텐츠 영역 밖(eventFormRoutes)에 둔다.
  */
 export const eventPageRoute: RouteObject = {
   path: 'events',
   children: [
     {
-      // 등록 폼은 전체 폭을 쓰므로 좌측 목록 셸 밖에 둔다.
-      path: 'create',
+      // /events — 사건 리스트(catalog). ledger 페이지는 보류·미라우트.
+      index: true,
       lazy: async () => {
-        const { default: EventCreatePage } =
-          await import('./create/event-create.page.refactored')
-        return { Component: EventCreatePage }
+        const { EventsCatalogPage } = await import('./list/events.page')
+        return { Component: EventsCatalogPage }
       },
     },
     {
-      // 수정은 상세 인라인 편집으로 흡수 — 위 editRedirect 주석 참고.
-      path: ':eventId/edit',
-      loader: editRedirect,
-    },
-    {
-      /**
-       * 목록·상세 공통 셸(좌측 사건 목록) — layout route라 둘을 오가도 유지된다.
-       *
-       * ContentLayout으로 한 겹 더 감싸는 이유: 좌측 사이드바는 `--header-height`만큼
-       * 아래에서 시작해야 하는데, 그 오프셋과 스크롤 컨테이너를 주는 게 ContentLayout이다.
-       * 이게 없으면 사이드바가 전역 헤더 뒤로 들어가 상단이 잘린다(국가·인물 지면은 이미
-       * ContentLayout 안에 있어 문제가 없었다).
-       */
+      path: ':eventId',
       lazy: async () => {
-        const { default: ContentLayout } =
-          await import('@/widgets/content-layout/content-layout.ui')
-        return { Component: ContentLayout }
+        const { default: EventDetailPage } =
+          await import('./detail/event-detail.page')
+        return { Component: EventDetailPage }
       },
-      children: [
-        {
-          lazy: async () => {
-            const { EventsShell } = await import('./events-shell')
-            return { Component: EventsShell }
-          },
-          children: [
-            {
-              // /events — 사건 리스트(catalog). ledger 페이지는 보류·미라우트.
-              index: true,
-              lazy: async () => {
-                const { EventsCatalogPage } = await import('./list/events.page')
-                return { Component: EventsCatalogPage }
-              },
-            },
-            {
-              path: ':eventId',
-              lazy: async () => {
-                const { default: EventDetailPage } =
-                  await import('./detail/event-detail.page')
-                return { Component: EventDetailPage }
-              },
-            },
-          ],
-        },
-      ],
     },
   ],
 }
+
+/** 콘텐츠 영역 밖(좌측 목록 없음)에 두는 사건 라우트 */
+export const eventFormRoutes: RouteObject[] = [
+  {
+    path: 'events/create',
+    lazy: async () => {
+      const { default: EventCreatePage } =
+        await import('./create/event-create.page.refactored')
+      return { Component: EventCreatePage }
+    },
+  },
+  {
+    // 수정은 상세 인라인 편집으로 흡수 — 위 editRedirect 주석 참고.
+    path: 'events/:eventId/edit',
+    loader: editRedirect,
+  },
+]

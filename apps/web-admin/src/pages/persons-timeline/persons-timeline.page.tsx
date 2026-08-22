@@ -2,8 +2,11 @@
  * /persons-timeline
  * /persons-timeline/:personId
  *
- * 인물 대시보드 — 인포그래픽 6뷰 (매트릭스/은하계/시대 스토리/왕조/능력치/기록 비교) + 필터.
- * 인물 상세는 같은 페이지에서 PersonDetailPanel로 우측 렌더.
+ * 인물 대시보드 — 인포그래픽 6뷰 (매트릭스/은하계/시대 스토리/왕조/능력치/기록 비교).
+ * 인물 상세는 같은 페이지에서 PersonDetailPanel로 렌더.
+ *
+ * 좌측 인물 목록·상세 필터 시트·등록 모달은 이 페이지가 아니라 레이아웃이 소유한다
+ * (ContentAreaShell → PersonSidebar). 셸이 지면 간에 살아남아야 사이드바가 안 깜빡인다.
  * (구 단독 상세 `/persons/:id`는 이 지면으로 통합 — app/legacy-redirects.tsx가 흡수)
  *
  * URL 쿼리(useFilterUrlSync 가 store와 양방향 동기화):
@@ -16,25 +19,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
-import { FiFilter } from 'react-icons/fi'
 import { useNavigate, useParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { goBackOr, pathKeys } from '@/shared/router'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
-import {
-  ContentShell,
-  SidebarSheet,
-  SidebarSheetTrigger,
-} from '@/widgets/content-shell'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
-import { PersonList, useRecentPersonsStore } from '@/widgets/person/person-list'
-import {
-  countActiveScopes,
-  PersonFilterPanel,
-  PersonInfographicPane,
-  usePersonInfographicFilterStore,
-} from '@/widgets/person-infographic'
+import { useRecentPersonsStore } from '@/widgets/person/person-list'
+import { PersonInfographicPane } from '@/widgets/person-infographic'
 
 const SCROLL_KEY = 'person-list-scroll'
 
@@ -53,9 +45,6 @@ export default function PersonsTimelinePage() {
   const navigate = useNavigate()
   const params = useParams<{ personId?: string }>()
   const personId = params.personId ?? null
-  // 상세 필터 시트 — 모바일 floating 트리거와 데스크톱 사이드바 '상세 필터' 배지가 함께 연다.
-  // (셀렉트로 표현 못 하는 다중 스코프·영향력·생존이 여기 있다)
-  const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
 
@@ -64,15 +53,6 @@ export default function PersonsTimelinePage() {
   useEffect(() => {
     if (personId) pushRecentPerson(personId)
   }, [personId, pushRecentPerson])
-
-  // 필터 트리거 배지용 — 활성 필터 개수 (scope + 영향력 + 생존 + 검색어)
-  const activeFilterCount = usePersonInfographicFilterStore(
-    (state) =>
-      countActiveScopes(state.scopes) +
-      (state.minInfluence > 0 ? 1 : 0) +
-      (state.aliveFilter !== 'all' ? 1 : 0) +
-      (state.query.trim() ? 1 : 0),
-  )
 
   /** 카드 → 상세 → 뒤로 왔을 때 스크롤 위치 복원 (실제 스크롤 컨테이너 기준) */
   const scrollElRef = useRef<HTMLElement | null>(null)
@@ -130,94 +110,37 @@ export default function PersonsTimelinePage() {
     [navigate],
   )
 
-  const handleAddPerson = useCallback(() => {
-    setEditingPersonId(null)
-    setEditModalOpen(true)
-  }, [])
-
-  const handleOpenAdvancedFilters = useCallback(
-    () => setAdvancedFilterOpen(true),
-    [],
-  )
-
   return (
     <>
-      <ContentShell
-        /* 국가 목록과 같은 규약 — 좌측 목록이 탐색 수단이므로 기본 펼침.
-           (구 키 persons-filter-collapsed는 '기본 접힘'이던 필터 패널 시절 값이라 승계하지 않는다) */
-        listCollapsedConfig={{
-          storageKey: 'persons-list-collapsed',
-          defaultCollapsed: false,
-        }}
-        mobileDetailVisible
-        left={({ listCollapsed, toggleListCollapsed }) => (
-          <PersonList
-            selectedId={personId}
-            onSelect={handlePersonClick}
-            onAdd={handleAddPerson}
-            onOpenAdvancedFilters={handleOpenAdvancedFilters}
-            collapsed={listCollapsed}
-            onToggleCollapse={toggleListCollapsed}
+      {personId ? (
+        <DetailWrap>
+          <PersonDetailPanel
+            key={personId}
+            personId={personId}
+            syncDocumentTitle
+            // 라벨이 '뒤로'인 컨트롤 — 실제로 뒤로 가야 한다. 이 지면이 유일한 인물
+            // 상세가 되면서 가계도·기업·국가 상세 등 대시보드 밖 진입이 전부 여기로
+            // 들어온다. 목록으로 고정 이동시키면 그 맥락이 사라진다.
+            onClose={() => goBackOr(navigate, pathKeys.personsTimeline())}
+            onEdit={(id) => {
+              setEditingPersonId(id)
+              setEditModalOpen(true)
+            }}
+            onLinkedPersonClick={handlePersonClick}
+            closeLabel="뒤로"
           />
-        )}
-        right={
-          personId ? (
-            <DetailWrap>
-              <PersonDetailPanel
-                key={personId}
-                personId={personId}
-                syncDocumentTitle
-                // 라벨이 '뒤로'인 컨트롤 — 실제로 뒤로 가야 한다. 이 지면이 유일한 인물
-                // 상세가 되면서 가계도·기업·국가 상세 등 대시보드 밖 진입이 전부 여기로
-                // 들어온다. 목록으로 고정 이동시키면 그 맥락이 사라진다.
-                onClose={() => goBackOr(navigate, pathKeys.personsTimeline())}
-                onEdit={(id) => {
-                  setEditingPersonId(id)
-                  setEditModalOpen(true)
-                }}
-                onLinkedPersonClick={handlePersonClick}
-                closeLabel="뒤로"
-              />
-            </DetailWrap>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
-              style={{ width: '100%', minHeight: '100%' }}
-            >
-              <div ref={setScrollSentinel} aria-hidden style={{ height: 0 }} />
-              <PersonInfographicPane onPersonClick={handlePersonClick} />
-            </motion.div>
-          )
-        }
-      />
-
-      {!personId && (
-        <SidebarSheetTrigger
-          type="button"
-          onClick={handleOpenAdvancedFilters}
-          aria-label={
-            activeFilterCount > 0
-              ? `필터 열기, ${activeFilterCount}개 적용 중`
-              : '필터 열기'
-          }
+        </DetailWrap>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+          style={{ width: '100%', minHeight: '100%' }}
         >
-          <FiFilter size={20} />
-          {activeFilterCount > 0 && (
-            <FilterCountBadge aria-hidden>{activeFilterCount}</FilterCountBadge>
-          )}
-        </SidebarSheetTrigger>
+          <div ref={setScrollSentinel} aria-hidden style={{ height: 0 }} />
+          <PersonInfographicPane onPersonClick={handlePersonClick} />
+        </motion.div>
       )}
-
-      {/* 상세 필터 시트 — 인물 상세를 보는 중에도 사이드바에서 열 수 있어야 하므로 personId와 무관 */}
-      <SidebarSheet
-        open={advancedFilterOpen}
-        onClose={() => setAdvancedFilterOpen(false)}
-        title="인물 상세 필터"
-      >
-        <PersonFilterPanel />
-      </SidebarSheet>
 
       <PersonRegisterViewModal
         isOpen={editModalOpen}
@@ -235,23 +158,4 @@ const DetailWrap = styled.div`
   @media (max-width: 640px) {
     padding: 16px 16px 32px;
   }
-`
-
-/** 모바일 필터 트리거 우상단 — 활성 필터 개수 배지 */
-const FilterCountBadge = styled.span`
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 9px;
-  background: ${({ theme }) => theme.colors.active};
-  color: ${({ theme }) => theme.colors.background.primary};
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 18px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.background.primary};
 `

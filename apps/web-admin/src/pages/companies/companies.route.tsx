@@ -1,52 +1,25 @@
 import { RouteObject } from 'react-router-dom'
-import { useParams } from 'react-router-dom'
-
-import { SidebarOutletShell } from '@/widgets/content-shell'
-import { CompanyListSidebar } from '@/widgets/domain-sidebars'
 
 import { CompaniesListPage } from './companies-list.page'
 import { CompanyFormPage } from './company-form.page'
 import { CompanyDetailPage } from './detail/company-detail.page'
 
-function CompaniesSidebar({
-  collapsed,
-  onToggleCollapse,
-}: {
-  collapsed: boolean
-  onToggleCollapse: () => void
-}) {
-  const params = useParams<{ id?: string }>()
-  return (
-    <CompanyListSidebar
-      selectedId={params.id ?? null}
-      collapsed={collapsed}
-      onToggleCollapse={onToggleCollapse}
-    />
-  )
-}
-
 /**
- * /companies — 좌측 기업 목록 + 우측(목록/상세).
- * 등록·수정 폼은 전체 폭을 쓰므로 셸 밖에 둔다.
+ * /companies — 목록·상세. 좌측 기업 목록은 레이아웃(ContentAreaShell)이 소유한다.
+ * 등록·수정 폼은 전체 폭을 쓰므로 콘텐츠 영역 밖(별도 라우트 그룹)에 둔다.
  */
 export const companiesRoutes: RouteObject[] = [
   {
     path: 'companies',
     children: [
-      { path: 'new', element: <CompanyFormPage /> },
-      { path: ':id/edit', element: <CompanyFormPage /> },
-      {
-        element: (
-          <SidebarOutletShell
-            storageKey="companies-list-collapsed"
-            renderSidebar={(context) => <CompaniesSidebar {...context} />}
-          />
-        ),
-        children: [
-          { index: true, element: <CompaniesListPage /> },
-          { path: ':id', element: <CompanyDetailPage /> },
-        ],
-      },
+      { index: true, element: <CompaniesListPage /> },
+      { path: ':id', element: <CompanyDetailPage /> },
     ],
   },
+]
+
+/** 콘텐츠 영역 밖(좌측 목록 없음)에 두는 기업 폼 라우트 */
+export const companyFormRoutes: RouteObject[] = [
+  { path: 'companies/new', element: <CompanyFormPage /> },
+  { path: 'companies/:id/edit', element: <CompanyFormPage /> },
 ]

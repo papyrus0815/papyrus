@@ -1,13 +1,10 @@
 /**
- * 단순 대시보드 뷰 공통 페이지 — 좌측 목록 사이드바 + 우측 본문.
+ * 단순 대시보드 뷰 공통 페이지 — 우측 본문만 담당한다.
  *
- * - ethnicity — 좌측 민족 목록 + 전용 위젯
- * - legislature — 좌측 조직 목록(실데이터) + 안내
- * - military — 좌측 부대 목록(실데이터) + 안내
+ * - ethnicity — 전용 위젯
+ * - legislature · military — 안내 (기능 구현 전)
  *
- * 저원·군사는 오래 좌측이 빈 플레이스홀더였다. 두 지면의 실제 데이터는 각각 organizations와
- * MilitaryUnit이므로 좌측을 그 목록으로 연결한다 — 빈 상자를 두는 것보다 정직하고,
- * 0건이면 공용 빈 상태가 그 사실을 그대로 보여준다.
+ * 좌측 목록(민족/조직/부대)은 레이아웃이 소유한다 — ContentAreaShell 참고.
  *
  * 가문(dynasty)은 풀 페이지(`/dynasty`)로 이전됨 — 이 파일에서 처리하지 않음.
  *
@@ -18,15 +15,7 @@ import { useNavigate } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import { EthnicityDashboardSection } from '@/widgets/country/country-detail/ui/ethnicity-dashboard-section.widget'
-import {
-  ContentShell,
-  type DashboardContentView,
-} from '@/widgets/content-shell'
-import {
-  EthnicityListSidebar,
-  MilitaryUnitListSidebar,
-  OrganizationListSidebar,
-} from '@/widgets/domain-sidebars'
+import { type DashboardContentView } from '@/widgets/content-shell'
 
 const PLACEHOLDERS: Partial<
   Record<
@@ -78,36 +67,16 @@ export default function TimelineViewPage({ view }: Props) {
     )
   }
 
-  const renderLeft = (
-    collapsed: boolean,
-    onToggleCollapse: () => void,
-  ) => {
-    const shared = { collapsed, onToggleCollapse }
-    if (view === 'ethnicity') return <EthnicityListSidebar {...shared} />
-    if (view === 'legislature') return <OrganizationListSidebar {...shared} />
-    return <MilitaryUnitListSidebar {...shared} />
-  }
-
   return (
-    <ContentShell
-      /* 모바일에서는 좌측이 숨겨지므로 우측 본문을 반드시 노출 */
-      mobileDetailVisible
-      listCollapsedConfig={{ storageKey: `${view}-list-collapsed` }}
-      left={({ listCollapsed, toggleListCollapsed }) =>
-        renderLeft(listCollapsed, toggleListCollapsed)
-      }
-      right={
-        <motion.div
-          key={view}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.2 }}
-          style={{ width: '100%', minHeight: '100%' }}
-        >
-          {renderRight()}
-        </motion.div>
-      }
-    />
+    <motion.div
+      key={view}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      style={{ width: '100%', minHeight: '100%' }}
+    >
+      {renderRight()}
+    </motion.div>
   )
 }
 

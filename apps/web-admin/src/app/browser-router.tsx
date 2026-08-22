@@ -16,9 +16,9 @@ import { dynastyRoute } from '@/pages/dynasty/dynasty.route'
 import { personGroupsRoutes } from '@/pages/person-groups/person-groups.route'
 import { ethnicitiesRoutes } from '@/pages/ethnicities/ethnicities.route'
 import { organizationsRoutes } from '@/pages/organizations/organizations.route'
-import { companiesRoutes } from '@/pages/companies/companies.route'
+import { companiesRoutes, companyFormRoutes } from '@/pages/companies/companies.route'
 import { companyCategoriesRoutes } from '@/pages/company-categories/company-categories.route'
-import { eventPageRoute } from '@/pages/events/event-route'
+import { eventFormRoutes, eventPageRoute } from '@/pages/events/event-route'
 import { countryRoute } from '@/pages/country/country.route'
 import { continentsRoute } from '@/pages/continents/continents.route'
 import { headsOfStateRoute } from '@/pages/heads-of-state/heads-of-state.route'
@@ -168,8 +168,9 @@ const appRouterConfig = [
         children: [
           // 루트: 홈 (Dashboard)
           dashboardRoute,
-          // 이벤트 페이지 라우트
-          eventPageRoute,
+          // 전체 폭을 쓰는 폼 — 좌측 목록이 방해가 되므로 콘텐츠 영역 밖에 둔다
+          ...eventFormRoutes,
+          ...companyFormRoutes,
           // 인물 등록/수정 풀 페이지 폼 — /persons-timeline/* URL이지만 ContentLayout 셸 없음
           ...personFormRoutes,
           // 게이미피케이션 리더보드
@@ -189,12 +190,13 @@ const appRouterConfig = [
           // 기업 카테고리 라우트 (CRUD)
           ...companyCategoriesRoutes,
           /**
-           * 콘텐츠 영역 — 좌측 목록 사이드바를 갖는 지면 전부. ContentLayout 셸 공유.
+           * 콘텐츠 영역 — 좌측 목록 사이드바를 갖는 지면 전부.
            *
-           * ContentLayout이 `--header-height` 오프셋과 스크롤 컨테이너를 준다. 사이드바는
-           * 그 오프셋 아래에서 시작해야 하므로(없으면 전역 헤더 뒤로 들어가 상단이 잘린다)
-           * 사이드바가 붙는 지면은 반드시 여기 안에 있어야 한다.
-           * 가문·집단·기업은 원래 밖에 있었고, 실제로 콘텐츠가 헤더에 가려져 있었다.
+           * ContentLayout이 두 가지를 준다: `--header-height` 오프셋·스크롤 컨테이너와,
+           * **단일 ContentAreaShell**(좌측 사이드바 + Outlet). 셸이 이 라우트에 붙어 있어야
+           * 지면을 옮겨도 사이드바가 재마운트되지 않는다 — 지면마다 각자 셸을 열면 매번
+           * 통째로 다시 만들어진다.
+           * 어느 경로에 어떤 사이드바가 붙는지는 ContentAreaShell 한 곳에서 정한다.
            */
           {
             element: <ContentLayout />,
@@ -207,6 +209,7 @@ const appRouterConfig = [
               dynastyRoute,
               ...personGroupsRoutes,
               ...companiesRoutes,
+              eventPageRoute,
             ],
           },
           // 레거시 redirect (북마크 흡수용 — 별도 파일에서 관리)

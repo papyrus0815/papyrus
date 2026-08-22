@@ -1,8 +1,10 @@
 /**
  * /history/country[/:countryId/*] 의 공통 셸 — React Router의 layout route로 동작.
  *
- * - 좌측 리스트, 모바일 UI, 폼 모달은 어떤 sub-route(events / detail / dashboard / ...)에서나 동일.
+ * - 모바일 UI와 상세용 폼 모달은 어떤 sub-route(events / detail / dashboard / ...)에서나 동일.
  * - 우측 콘텐츠는 `<Outlet context={...}/>`로 자식 라우트에 위임.
+ * - **좌측 국가 목록은 여기 없다** — 레이아웃(ContentAreaShell → CountrySidebar)이 소유한다.
+ *   지면을 옮겨도 사이드바가 재마운트되지 않게 하려면 페이지보다 위에 있어야 한다.
  *
  * Layout route 패턴 덕분에 events ↔ dashboard 같은 sub-route 전환 시 셸이 unmount되지 않음 →
  * `useContentCoreData`/`useCountryFormHandlers` 등 데이터·모달 state 보존, document.title 깜빡임 해소.
@@ -27,10 +29,9 @@ import { pathKeys } from '@/shared/router'
 import { useRecentCountriesStore } from '@/widgets/command-palette'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 import { CountryFormModal } from '@/widgets/country/country-form/ui/country-form-modal'
-import { CountryList } from '@/widgets/country/country-list/ui/country-list'
 import { CountryMobileUI } from '@/widgets/country/country-mobile-ui/ui/country-mobile-ui'
 import { HistoricalCountryFormModal } from '@/widgets/historical-country/historical-country-form/ui/historical-country-form-modal'
-import { ContentShell, useContentCoreData } from '@/widgets/content-shell'
+import { useContentCoreData } from '@/widgets/content-shell'
 
 import { useCountryDetailRouting } from './use-country-detail-routing.hook'
 import { useCountryFormHandlers } from './use-country-form-handlers.hook'
@@ -126,7 +127,6 @@ export function CountryDetailShell() {
   const {
     countryForm,
     historicalForm,
-    editHistoricalFromList,
     editFromDetail,
     deleteFromDetail,
   } = useCountryFormHandlers({
@@ -187,43 +187,25 @@ export function CountryDetailShell() {
   return (
     <>
       <CountryDetailPageGlobalStyle />
-      <ContentShell
-        /* 국가 목록 상태(현대·역사·대륙 fetch)는 이 지면에서만 필요 */
-        countryListState
-        /* 모바일(≤1024px)에서 상세 페인 노출 — 없으면 display:none으로 국가 상세 전체가 빈 화면.
-           국가 목록은 CountryMobileUI 오버레이("목록" 칩)가 담당한다. */
-        mobileDetailVisible
-        left={({ listCollapsed, toggleListCollapsed }) => (
-          <CountryList
-            selectedId={selectedId}
-            onSelect={handleSelectCountry}
-            onAdd={countryForm.openCreate}
-            onAddHistorical={historicalForm.openCreate}
-            onEditHistorical={editHistoricalFromList}
-            collapsed={listCollapsed}
-            onToggleCollapse={toggleListCollapsed}
-          />
-        )}
-        right={
-          <AnimatePresence initial={false} mode="wait">
-            {/* sub-route 전환마다 motion이 fade — 페이지가 자체 motion wrapper를 갖지 않아도 됨 */}
-            <RouteSwapMotion
-              key={location.pathname}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25, ease: 'easeInOut' }}
-            >
-              {/* sub-tab 위젯 일부가 거대(elections·cabinets 등) — 단일 throw가 페이지 전체를
-                  날리지 않도록 ErrorBoundary로 격리. 좌측 리스트·모달은 셸이 보존. */}
-              <SmartErrorBoundary>
-                <Outlet context={context} />
-              </SmartErrorBoundary>
-            </RouteSwapMotion>
-          </AnimatePresence>
-        }
-      >
-        <CountryMobileUI
+      <AnimatePresence initial={false} mode="wait">
+        {/* sub-route 전환마다 motion이 fade — 페이지가 자체 motion wrapper를 갖지 않아도 됨.
+            ⚠️ 좌측 사이드바는 이 fade 밖(레이아웃 소유)이라 함께 깜빡이지 않는다. */}
+        <RouteSwapMotion
+          key={location.pathname}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25, ease: 'easeInOut' }}
+        >
+          {/* sub-tab 위젯 일부가 거대(elections·cabinets 등) — 단일 throw가 페이지 전체를
+              날리지 않도록 ErrorBoundary로 격리. */}
+          <SmartErrorBoundary>
+            <Outlet context={context} />
+          </SmartErrorBoundary>
+        </RouteSwapMotion>
+      </AnimatePresence>
+
+      <CountryMobileUI
           isMobileListOpen={isMobileListOpen}
           onMobileListOpenChange={setIsMobileListOpen}
           selectedId={selectedId}
@@ -249,7 +231,6 @@ export function CountryDetailShell() {
           historicalCountries={historicalCountriesForModal}
           onSave={historicalForm.save}
         />
-      </ContentShell>
     </>
   )
 }
