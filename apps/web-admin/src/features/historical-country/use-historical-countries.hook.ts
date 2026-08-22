@@ -75,11 +75,12 @@ export const historicalCountryKeys = {
  * const { data: historicalCountries, isLoading } = useHistoricalCountries()
  * ```
  */
-export function useHistoricalCountries() {
+export function useHistoricalCountries(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: historicalCountryKeys.lists(),
     queryFn: () => historicalCountriesApi.getAllHistoricalCountries(),
     staleTime: 1000 * 60 * 5, // 5분
+    enabled: options?.enabled ?? true,
   })
 }
 

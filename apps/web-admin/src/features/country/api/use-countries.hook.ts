@@ -56,12 +56,13 @@ export const countryKeys = {
  * const { data: countries, isLoading } = useCountries()
  * ```
  */
-export function useCountries() {
+export function useCountries(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: countryKeys.lists(),
     queryFn: () => countriesApi.getAllCountries(),
     staleTime: 1000 * 60 * 5, // 5분
     gcTime: 1000 * 60 * 30, // 30분 — 상세↔목록 왕복 시 캐시 유지
+    enabled: options?.enabled ?? true,
   })
 }
 

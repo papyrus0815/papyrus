@@ -52,11 +52,12 @@ export const continentKeys = {
  * const { data: continents, isLoading } = useContinents()
  * ```
  */
-export function useContinents() {
+export function useContinents(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: continentKeys.lists(),
     queryFn: () => continentsApi.getAllContinents(),
     staleTime: 1000 * 60 * 10, // 10분 (대륙은 잘 변하지 않음)
+    enabled: options?.enabled ?? true,
   })
 }
 

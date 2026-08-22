@@ -78,10 +78,21 @@ export function useCountryListState() {
 
 interface ProviderProps {
   children: React.ReactNode
+  /**
+   * false면 국가·역사·대륙 fetch를 하지 않는다.
+   *
+   * 콘텐츠 영역 셸(ContentAreaShell)은 이 Provider를 **항상** 마운트한다. 경로에 따라
+   * 감쌌다 풀었다 하면 그 지점에서 트리 모양이 바뀌어 자식 전체가 재마운트되고, 셸을
+   * 레이아웃으로 올린 의미(사이드바 유지)가 사라지기 때문이다. 대신 fetch만 끈다.
+   */
+  enabled?: boolean
 }
 
-export function CountryListStateProvider({ children }: ProviderProps) {
-  const core = useContentCoreData()
+export function CountryListStateProvider({
+  children,
+  enabled = true,
+}: ProviderProps) {
+  const core = useContentCoreData({ enabled })
   const {
     countries,
     unifiedCountries,

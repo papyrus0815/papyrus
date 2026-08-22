@@ -16,8 +16,10 @@
  * - CountryFormModal 같은 전역 모달 — 특정 뷰에서만 필요하므로 페이지에서 호출
  * - CountryMobileUI — 좌측 패널이 없는 뷰에서 필요 없음
  * - PageHeader — 콘텐츠 영역 밖 독립 페이지에서만 사용하던 레거시
- * - CountryListStateProvider — 국가 목록 전용. 예전엔 셸이 항상 감쌌으나 그러면 셸을 쓰는
- *   모든 지면이 국가·역사국가·대륙을 fetch한다. `countryListState`로 opt-in.
+ * - CountryListStateProvider의 **fetch**. Provider 자체는 항상 마운트한다 — 경로에 따라
+ *   감쌌다 풀었다 하면 그 지점에서 트리 모양이 바뀌어 자식이 통째로 재마운트되고, 셸을
+ *   레이아웃으로 올린 의미(사이드바 유지)가 사라진다. 대신 `countryListState`가 false면
+ *   Provider가 쿼리를 끄므로 국가 지면 밖에서 국가·역사국가·대륙을 받지 않는다.
  */
 import React, { type ReactNode } from 'react'
 
@@ -70,8 +72,8 @@ interface ContentShellProps {
    */
   mobileDetailVisible?: boolean
   /**
-   * 국가 목록 상태 Provider를 감쌀지 — 국가 지면(/country)에서만 true.
-   * 이 Provider는 현대·역사 국가와 대륙을 fetch하므로 다른 지면에서 켜면 낭비다.
+   * 국가 목록 데이터를 실제로 fetch할지 — 국가 지면(/country)에서만 true.
+   * Provider는 트리 모양 유지를 위해 항상 마운트되고, 이 값이 쿼리 on/off만 결정한다.
    */
   countryListState?: boolean
   /** Shell 외부로 한 번 감싸고 싶은 추가 요소 (모달 등) */
@@ -124,11 +126,10 @@ export function ContentShell({
 
   return (
     <Wrap>
-      {countryListState ? (
-        <CountryListStateProvider>{body}</CountryListStateProvider>
-      ) : (
-        body
-      )}
+      {/* 조건부로 감싸지 말 것 — 래퍼가 생겼다 사라지면 그 자리에서 자식이 재마운트된다 */}
+      <CountryListStateProvider enabled={countryListState}>
+        {body}
+      </CountryListStateProvider>
     </Wrap>
   )
 }

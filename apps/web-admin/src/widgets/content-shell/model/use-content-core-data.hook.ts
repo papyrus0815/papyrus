@@ -55,21 +55,29 @@ interface HistoryCoreData {
   refetchAll: () => void
 }
 
-export function useContentCoreData(): HistoryCoreData {
+/**
+ * @param options.enabled false면 세 쿼리를 모두 끈다. 국가 지면이 아닐 때도 Provider가
+ *   **트리 모양 유지를 위해** 항상 마운트되므로(ContentAreaShell 주석 참고), fetch만 끈다.
+ */
+export function useContentCoreData(options?: {
+  enabled?: boolean
+}): HistoryCoreData {
+  const enabled = options?.enabled ?? true
   const {
     data: apiCountries,
     isLoading: isLoadingCountries,
     isError: isErrorCountries,
     refetch: refetchCountries,
-  } = useCountries()
+  } = useCountries({ enabled })
   const {
     data: apiHistoricalCountries,
     isLoading: isLoadingHistorical,
     isError: isErrorHistorical,
     refetch: refetchHistorical,
-  } = useHistoricalCountries()
-  const { data: apiContinents, isLoading: isLoadingContinents } =
-    useContinents()
+  } = useHistoricalCountries({ enabled })
+  const { data: apiContinents, isLoading: isLoadingContinents } = useContinents({
+    enabled,
+  })
 
   const countries = useMemo<Country[]>(() => {
     if (!apiCountries) return []
