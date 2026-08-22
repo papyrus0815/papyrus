@@ -18,8 +18,9 @@ const hairlineStrong = (mode: 'light' | 'dark') =>
  * sticky·hash scroll이 정상 동작한다(사건 상세 동일 패턴).
  */
 export const Page = styled.div`
-  height: calc(100vh - var(--header-height, 64px));
-  margin-top: var(--header-height, 64px);
+  /* 헤더 오프셋·스크롤 컨테이너는 ContentLayout이 준다 (좌측 기업 목록 사이드바 도입 시
+     companiesRoutes가 그 안으로 이동). 자체 오프셋을 유지하면 두 번 밀린다. */
+  min-height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   background: ${({ theme }) => theme.colors.background.primary};

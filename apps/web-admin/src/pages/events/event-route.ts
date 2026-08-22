@@ -31,14 +31,7 @@ export const eventPageRoute: RouteObject = {
   path: 'events',
   children: [
     {
-      // /events — 사건 리스트(catalog) 페이지. ledger 페이지는 보류·미라우트.
-      index: true,
-      lazy: async () => {
-        const { EventsCatalogPage } = await import('./list/events.page')
-        return { Component: EventsCatalogPage }
-      },
-    },
-    {
+      // 등록 폼은 전체 폭을 쓰므로 좌측 목록 셸 밖에 둔다.
       path: 'create',
       lazy: async () => {
         const { default: EventCreatePage } =
@@ -52,12 +45,45 @@ export const eventPageRoute: RouteObject = {
       loader: editRedirect,
     },
     {
-      path: ':eventId',
+      /**
+       * 목록·상세 공통 셸(좌측 사건 목록) — layout route라 둘을 오가도 유지된다.
+       *
+       * ContentLayout으로 한 겹 더 감싸는 이유: 좌측 사이드바는 `--header-height`만큼
+       * 아래에서 시작해야 하는데, 그 오프셋과 스크롤 컨테이너를 주는 게 ContentLayout이다.
+       * 이게 없으면 사이드바가 전역 헤더 뒤로 들어가 상단이 잘린다(국가·인물 지면은 이미
+       * ContentLayout 안에 있어 문제가 없었다).
+       */
       lazy: async () => {
-        const { default: EventDetailPage } =
-          await import('./detail/event-detail.page')
-        return { Component: EventDetailPage }
+        const { default: ContentLayout } =
+          await import('@/widgets/content-layout/content-layout.ui')
+        return { Component: ContentLayout }
       },
+      children: [
+        {
+          lazy: async () => {
+            const { EventsShell } = await import('./events-shell')
+            return { Component: EventsShell }
+          },
+          children: [
+            {
+              // /events — 사건 리스트(catalog). ledger 페이지는 보류·미라우트.
+              index: true,
+              lazy: async () => {
+                const { EventsCatalogPage } = await import('./list/events.page')
+                return { Component: EventsCatalogPage }
+              },
+            },
+            {
+              path: ':eventId',
+              lazy: async () => {
+                const { default: EventDetailPage } =
+                  await import('./detail/event-detail.page')
+                return { Component: EventDetailPage }
+              },
+            },
+          ],
+        },
+      ],
     },
   ],
 }

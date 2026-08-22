@@ -756,13 +756,10 @@ export const CompaniesListPage: React.FC = () => {
 // ───────────────────────── Styled ─────────────────────────
 
 const Page = styled.div`
-  /* companiesRoutes는 ContentLayout이 아니라 <Layout/> 직속이고 전역 body·#root가
-     overflow:hidden+100vh라, 페이지 자체를 *내부 스크롤 컨테이너*로 만들어야 헤더
-     아래 목록·페이지네이션이 잘리지 않는다(상세·폼 페이지와 동일 패턴). */
-  height: calc(100vh - var(--header-height, 64px));
-  margin-top: var(--header-height, 64px);
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* 헤더 오프셋과 스크롤 컨테이너는 ContentLayout이 준다 — 좌측 기업 목록 사이드바가
+     붙으면서 companiesRoutes가 ContentLayout 안으로 들어갔다. 여기서 다시
+     margin-top: var(--header-height)를 주면 헤더 높이만큼 두 번 밀린다. */
+  min-height: 100%;
   /* 가운데 정렬 캡 제거 — 좌우 전체 폭 사용 */
   padding: 2rem clamp(1.25rem, 2.5vw, 2.5rem) 4rem;
   width: 100%;

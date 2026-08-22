@@ -470,6 +470,13 @@ export function DynastySection() {
                 groupCent != null && centuryCounts ? centuryCounts.get(groupCent) ?? 0 : 0
               return (
                 <Fragment key={derived.dynasty.id}>
+                  {/* 좌측 가문 목록 사이드바가 선택 시 이 행으로 스크롤한다 (useAnchorSelection).
+                      Fragment엔 속성을 못 다니 앵커 전용 마커를 행 바로 앞에 둔다. */}
+                  <span
+                    data-entity-id={derived.dynasty.id}
+                    aria-hidden
+                    style={{ display: 'block', height: 0 }}
+                  />
                   {showGroupMarker && groupCent != null && (
                     <EraGroupMarker>
                       {centuryLabel(groupCent)}

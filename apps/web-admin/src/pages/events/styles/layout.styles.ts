@@ -9,10 +9,12 @@ import { BRAND, MOTION, toolbarControlHeight } from './theme'
 export const PageScene = styled.div`
   position: fixed;
   top: var(--header-height);
-  left: 0;
+  /* 좌측 사건 목록 사이드바를 피한다 — fixed는 셸의 grid 트랙을 모르므로 셸이 내려주는
+     --content-left-inset (ContentShell.DetailPane)을 쓴다. 셸 밖(등록 폼 등)에선 0.
+     ⚠️ styled 리터럴 안에서는 백틱을 쓰지 말 것 — 템플릿이 그 자리에서 끊긴다. */
+  left: var(--content-left-inset, 0px);
   right: 0;
   bottom: 0;
-  width: 100%;
   height: calc(100vh - var(--header-height));
   padding-top: 12px;
   /* iOS home indicator 영역 회피 — env가 0인 데스크톱에선 그냥 16px */

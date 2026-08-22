@@ -172,8 +172,6 @@ const appRouterConfig = [
           eventPageRoute,
           // 인물 등록/수정 풀 페이지 폼 — /persons-timeline/* URL이지만 ContentLayout 셸 없음
           ...personFormRoutes,
-          // 가문 — 풀 페이지
-          dynastyRoute,
           // 게이미피케이션 리더보드
           leaderboardRoute,
           // 파피 상점 (지갑·구매)
@@ -184,17 +182,20 @@ const appRouterConfig = [
           profileRoute,
           // 공개 프로필 (타 사용자) — /profile/:accountId
           publicProfileRoute,
-          // 인물 묶음(세대·계파·사단) 허브
-          ...personGroupsRoutes,
           // 행정기구·조직 라우트
           ...organizationsRoutes,
           // 민족 라우트 (CRUD)
           ...ethnicitiesRoutes,
-          // 기업 라우트 (CRUD)
-          ...companiesRoutes,
           // 기업 카테고리 라우트 (CRUD)
           ...companyCategoriesRoutes,
-          // 콘텐츠 영역 — 구 /history/* 자손들, 전부 top-level로 평탄화. ContentLayout 셸 공유.
+          /**
+           * 콘텐츠 영역 — 좌측 목록 사이드바를 갖는 지면 전부. ContentLayout 셸 공유.
+           *
+           * ContentLayout이 `--header-height` 오프셋과 스크롤 컨테이너를 준다. 사이드바는
+           * 그 오프셋 아래에서 시작해야 하므로(없으면 전역 헤더 뒤로 들어가 상단이 잘린다)
+           * 사이드바가 붙는 지면은 반드시 여기 안에 있어야 한다.
+           * 가문·집단·기업은 원래 밖에 있었고, 실제로 콘텐츠가 헤더에 가려져 있었다.
+           */
           {
             element: <ContentLayout />,
             children: [
@@ -203,6 +204,9 @@ const appRouterConfig = [
               headsOfStateRoute,
               ...personsTimelineRoutes,
               ...timelineViewsRoutes,
+              dynastyRoute,
+              ...personGroupsRoutes,
+              ...companiesRoutes,
             ],
           },
           // 레거시 redirect (북마크 흡수용 — 별도 파일에서 관리)

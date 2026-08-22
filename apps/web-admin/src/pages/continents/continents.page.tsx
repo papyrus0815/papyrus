@@ -238,7 +238,8 @@ export default function ContinentsPage() {
                 {continents.map((continent, index) => {
                   const stats = continentStats[continent.id]
                   return (
-                    <tr key={continent.id}>
+                    // 좌측 대륙 목록 사이드바가 선택 시 이 행으로 스크롤한다 (useAnchorSelection)
+                    <tr key={continent.id} data-entity-id={continent.id}>
                       <Td
                         style={{
                           textAlign: 'center',
