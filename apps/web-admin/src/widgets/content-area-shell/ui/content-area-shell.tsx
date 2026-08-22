@@ -11,10 +11,13 @@
  * - 사이드바는 자립해야 한다(선택 id는 URL에서, 모달은 자기가 소유). 페이지가 내려주는
  *   props에 의존하면 페이지 언마운트와 함께 죽어 셸을 올린 의미가 없어진다.
  * - 좌측이 없는 지면(수장 비교처럼 자체 좌측 UI를 가진 곳)은 fullScreen으로 통과시킨다.
+ * - 현재 지면의 목록 사이드바 폭을 `--list-sidebar-width`로 내려준다. 레일 밖에 fixed로 떠
+ *   있는 하단 계정 패널이 자기 폭을 이 값으로 잡는다(사이드바 없으면 0 → 아바타만 남음).
  */
 import React from 'react'
 
 import { Outlet, useLocation } from 'react-router-dom'
+import { createGlobalStyle } from 'styled-components'
 
 import { ContentShell } from '@/widgets/content-shell'
 import { CountrySidebar } from '@/widgets/country/country-list/ui/country-sidebar'
@@ -145,7 +148,12 @@ export function ContentAreaShell() {
   const spec = specFor(pathname)
 
   if (!spec) {
-    return <ContentShell fullScreen right={<Outlet />} />
+    return (
+      <>
+        <SidebarWidthVar $width="0px" />
+        <ContentShell fullScreen right={<Outlet />} />
+      </>
+    )
   }
 
   return (
@@ -157,13 +165,34 @@ export function ContentAreaShell() {
         storageKey: spec.storageKey,
         defaultCollapsed: spec.defaultCollapsed,
       }}
-      left={({ listCollapsed, toggleListCollapsed }) =>
-        spec.render({
-          collapsed: listCollapsed,
-          onToggleCollapse: toggleListCollapsed,
-        })
-      }
+      left={({ listCollapsed, toggleListCollapsed }) => (
+        <>
+          {/* 접힘 폭(48px)까지 반영 — 하단 계정 패널이 사이드바와 같이 줄었다 늘었다 한다 */}
+          <SidebarWidthVar $width={listCollapsed ? '48px' : 'var(--list-sidebar-full, 360px)'} />
+          {spec.render({
+            collapsed: listCollapsed,
+            onToggleCollapse: toggleListCollapsed,
+          })}
+        </>
+      )}
       right={<Outlet />}
     />
   )
 }
+
+/**
+ * 목록 사이드바 폭을 전역 변수로 공개 — 레일 밖 fixed 요소(하단 계정 패널)가 참조한다.
+ * 1024px 이하에서는 사이드바가 숨으므로 0.
+ */
+const SidebarWidthVar = createGlobalStyle<{ $width: string }>`
+  :root {
+    --list-sidebar-full: 360px;
+    --list-sidebar-width: ${({ $width }) => $width};
+  }
+  @media (max-width: 1280px) {
+    :root { --list-sidebar-full: 320px; }
+  }
+  @media (max-width: 1024px) {
+    :root { --list-sidebar-width: 0px; }
+  }
+`

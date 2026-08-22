@@ -23,7 +23,7 @@ import {
   CommandPalette,
   useCommandPaletteShortcut,
 } from '@/widgets/command-palette'
-import { NavRail } from '@/widgets/nav-rail'
+import { AccountPanel, NavRail } from '@/widgets/nav-rail'
 
 // Note: Simple layout only, wrapper removed per request
 
@@ -91,6 +91,9 @@ export default function Layout() {
           </ContentArea>
         </Suspense>
       </SmartErrorBoundary>
+
+      {/* 좌측 하단 계정 패널 — 레일+사이드바 하단에 걸친다(디스코드식) */}
+      {isAuthenticated && <AccountPanel />}
 
       {isAuthenticated && <CommandPalette />}
     </>

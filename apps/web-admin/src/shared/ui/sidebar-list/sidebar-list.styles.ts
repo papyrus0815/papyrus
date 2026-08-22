@@ -386,12 +386,13 @@ export const VirtualList = styled.div`
   overflow-y: auto;
   overflow-x: hidden;
   height: 100%;
-  padding: 6px 8px 12px 8px;
+  /* 하단 계정 패널(AccountPanel)이 fixed로 겹치므로 마지막 행이 가리지 않게 비워둔다 */
+  padding: 6px 8px calc(var(--user-panel-height, 52px) + 20px) 8px;
   background: transparent;
   ${overlayScrollbar}
 
   @media (max-width: 768px) {
-    padding: 4px 6px 8px 6px;
+    padding: 4px 6px calc(var(--user-panel-height, 52px) + 16px) 6px;
     gap: 3px;
   }
 `

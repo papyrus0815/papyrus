@@ -54,6 +54,11 @@ interface UserMenuProps {
    * 파피 잔액·등급 칩은 72px 레일에 들어가지 않고, 두 값 모두 드롭다운 안에 이미 있다.
    */
   compact?: boolean
+  /**
+   * 'panel' — 좌측 하단 계정 패널(디스코드식). 아바타 + 이름/등급을 가로로 편 넓은 트리거.
+   * 폭이 좁아지면(사이드바 없는 지면) 자동으로 아바타만 남는다.
+   */
+  variant?: 'icon' | 'panel'
 }
 
 export function UserMenu({
@@ -63,6 +68,7 @@ export function UserMenu({
   onOpenSettings,
   playClickSound,
   compact = false,
+  variant = 'icon',
 }: UserMenuProps) {
   const navigate = useNavigate()
   const { username, reset } = useSessionStore()
@@ -196,18 +202,55 @@ export function UserMenu({
         </HeaderGradeSlot>
       )}
 
-      <div ref={containerRef} style={{ position: 'relative' }}>
-        <UserButton
-          aria-label="내 계정"
-          aria-haspopup="menu"
-          aria-expanded={isOpen}
-          onClick={() => {
-            playClickSound()
-            onToggle()
-          }}
-        >
-          <Avatar style={avatarStyle}>{getAvatarInitial(shownName)}</Avatar>
-        </UserButton>
+      <div
+        ref={containerRef}
+        style={
+          variant === 'panel'
+            ? // 패널 모드에서는 트리거가 남은 폭을 다 먹어야 액션 아이콘이 우측에 붙는다
+              { position: 'relative', flex: 1, minWidth: 0 }
+            : { position: 'relative' }
+        }
+      >
+        {variant === 'panel' ? (
+          <PanelTrigger
+            aria-label="내 계정"
+            aria-haspopup="menu"
+            aria-expanded={isOpen}
+            onClick={() => {
+              playClickSound()
+              onToggle()
+            }}
+          >
+            <PanelAvatarWrap>
+              <Avatar style={avatarStyle}>{getAvatarInitial(shownName)}</Avatar>
+              {/* 접속 표시 — 디스코드의 온라인 점. 지금은 항상 온라인. */}
+              <StatusDot aria-hidden />
+            </PanelAvatarWrap>
+            <PanelText>
+              {/* 닉네임 코스메틱 색은 쓰지 않는다 — 사용자가 고른 값이라 패널 배경과 대비가
+                  보장되지 않는다(실제로 라이트 모드에서 #f9fafb가 나와 이름이 안 보였다).
+                  코스메틱 색은 바로 위 드롭다운 ProfileHeader와 프로필 지면에서 보인다. */}
+              <PanelName>{shownName || '게스트'}</PanelName>
+              <PanelMeta>
+                {pointSummary
+                  ? `${pointSummary.totalPoints.toLocaleString()}P`
+                  : '온라인'}
+              </PanelMeta>
+            </PanelText>
+          </PanelTrigger>
+        ) : (
+          <UserButton
+            aria-label="내 계정"
+            aria-haspopup="menu"
+            aria-expanded={isOpen}
+            onClick={() => {
+              playClickSound()
+              onToggle()
+            }}
+          >
+            <Avatar style={avatarStyle}>{getAvatarInitial(shownName)}</Avatar>
+          </UserButton>
+        )}
 
         <AnimatePresence>
           {isOpen && (
@@ -262,6 +305,78 @@ const UserButton = styled(IconButton)`
   height: 34px;
   padding: 0;
   gap: 0;
+`
+
+/** 좌측 하단 계정 패널의 트리거 — 아바타 + 이름/등급을 가로로 편 넓은 버튼 */
+const PanelTrigger = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: -2px;
+  }
+`
+
+const PanelAvatarWrap = styled.span`
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+`
+
+const StatusDot = styled.span`
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.background.secondary};
+`
+
+/** 이름·등급 — 패널이 좁아지면(사이드바 없는 지면) 통째로 사라지고 아바타만 남는다 */
+const PanelText = styled.span`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+
+  @container user-panel (max-width: 150px) {
+    display: none;
+  }
+`
+
+const PanelName = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const PanelMeta = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 const UserPanel = styled(DropdownPanel)`

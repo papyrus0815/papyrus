@@ -6,11 +6,12 @@
  *
  * 구성(위→아래):
  *   홈(Papyrus) → 구분선 → 내비 11개(넘치면 이 구간만 스크롤) → 구분선 →
- *   검색(⌘K) · 알림 · 사운드 · 테마 · 사용자
+ *   검색(⌘K) · 알림 · 테마
  *
- * 헤더에 있던 드롭다운 3종(알림·사운드·사용자)은 그대로 재사용하되, 레일에서는 아래로
- * 열릴 자리가 없으므로 **오른쪽으로** 열리도록 컨테이너에서 위치만 덮어쓴다
- * (DropdownPanel 컴포넌트 셀렉터).
+ * 사운드·계정은 레일이 아니라 **하단 계정 패널**(AccountPanel)에 있다 — 디스코드와 같은 자리.
+ *
+ * 헤더에 있던 드롭다운은 그대로 재사용하되, 레일에서는 아래로 열릴 자리가 없으므로
+ * **오른쪽으로** 열리도록 컨테이너에서 위치만 덮어쓴다(DropdownPanel 컴포넌트 셀렉터).
  */
 import React, { useMemo, useState } from 'react'
 
@@ -24,9 +25,7 @@ import { Z_INDEX } from '@/shared/styles/z-index'
 import { useCommandPaletteStore } from '@/widgets/command-palette'
 import { DropdownPanel, IconButton } from '@/widgets/header/header-shared.ui'
 import { NotificationBell } from '@/widgets/header/notification-bell.ui'
-import { SoundSettings } from '@/widgets/header/sound-settings.ui'
 import { useNavItems } from '@/widgets/header/use-nav-items'
-import { UserMenu } from '@/widgets/header/user-menu.ui'
 
 import { RailButton } from './rail-button'
 
@@ -50,8 +49,6 @@ export function NavRail() {
   const items = useNavItems()
 
   const [isBellOpen, setIsBellOpen] = useState(false)
-  const [isUserOpen, setIsUserOpen] = useState(false)
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   return (
     <Rail aria-label="전역 내비게이션">
@@ -99,13 +96,6 @@ export function NavRail() {
           playClickSound={playClickSound}
         />
 
-        <SoundSettings
-          isOpen={isSettingsOpen}
-          onToggle={() => setIsSettingsOpen((prev) => !prev)}
-          onClose={() => setIsSettingsOpen(false)}
-          playClickSound={playClickSound}
-        />
-
         <RailButton
           label={mode === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
           icon={mode === 'dark' ? <FiSun size={17} /> : <FiMoon size={17} />}
@@ -113,15 +103,6 @@ export function NavRail() {
             playClickSound()
             toggleTheme()
           }}
-        />
-
-        <UserMenu
-          compact
-          isOpen={isUserOpen}
-          onToggle={() => setIsUserOpen((prev) => !prev)}
-          onClose={() => setIsUserOpen(false)}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          playClickSound={playClickSound}
         />
       </Utilities>
     </Rail>
@@ -138,7 +119,8 @@ const Rail = styled.nav`
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 10px 0;
+  /* 하단 계정 패널(AccountPanel)이 fixed로 겹치므로 그만큼 비워둔다 */
+  padding: 10px 0 calc(var(--user-panel-height, 52px) + 16px);
   z-index: ${Z_INDEX.HEADER};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? '#0e0e0e' : theme.colors.background.secondary};
