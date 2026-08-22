@@ -1,6 +1,5 @@
 export { ContentShell } from './ui/content-shell'
 export type { ContentShellRenderContext } from './ui/content-shell'
-export { LeftFilterSlot } from './ui/left-filter-slot'
 export { SidebarHeader } from './ui/sidebar-header'
 export { SidebarSheet, SidebarSheetTrigger } from './ui/sidebar-sheet'
 export {

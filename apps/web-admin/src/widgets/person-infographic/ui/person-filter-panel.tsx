@@ -55,7 +55,7 @@ function useCollapsedGroups() {
 /**
  * 인물 인포그래픽용 좌측 필터 패널.
  * - 기존 `persons-infographic.page.tsx`의 NavRail을 store 기반으로 재구성.
- * - LeftFilterSlot 안쪽에서 `view === 'person'`일 때 렌더.
+ * - 인물 목록 사이드바의 '상세 필터' 배지·모바일 필터 트리거가 여는 SidebarSheet 안에서 렌더.
  */
 export function PersonFilterPanel() {
   const all = useAdaptedPersons()

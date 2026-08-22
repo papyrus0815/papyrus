@@ -24,11 +24,11 @@ import { goBackOr, pathKeys } from '@/shared/router'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 import {
   ContentShell,
-  LeftFilterSlot,
   SidebarSheet,
   SidebarSheetTrigger,
 } from '@/widgets/content-shell'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
+import { PersonList, useRecentPersonsStore } from '@/widgets/person/person-list'
 import {
   countActiveScopes,
   PersonFilterPanel,
@@ -53,11 +53,19 @@ export default function PersonsTimelinePage() {
   const navigate = useNavigate()
   const params = useParams<{ personId?: string }>()
   const personId = params.personId ?? null
-  const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
+  // 상세 필터 시트 — 모바일 floating 트리거와 데스크톱 사이드바 '상세 필터' 배지가 함께 연다.
+  // (셀렉트로 표현 못 하는 다중 스코프·영향력·생존이 여기 있다)
+  const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
 
-  // 모바일 필터 트리거 배지용 — 활성 필터 개수 (scope + 영향력 + 생존 + 검색어)
+  // 최근 방문 인물 캐시 — 사이드바 '최근' 빠른 접근 그룹용
+  const pushRecentPerson = useRecentPersonsStore((store) => store.push)
+  useEffect(() => {
+    if (personId) pushRecentPerson(personId)
+  }, [personId, pushRecentPerson])
+
+  // 필터 트리거 배지용 — 활성 필터 개수 (scope + 영향력 + 생존 + 검색어)
   const activeFilterCount = usePersonInfographicFilterStore(
     (state) =>
       countActiveScopes(state.scopes) +
@@ -122,17 +130,32 @@ export default function PersonsTimelinePage() {
     [navigate],
   )
 
+  const handleAddPerson = useCallback(() => {
+    setEditingPersonId(null)
+    setEditModalOpen(true)
+  }, [])
+
+  const handleOpenAdvancedFilters = useCallback(
+    () => setAdvancedFilterOpen(true),
+    [],
+  )
+
   return (
     <>
       <ContentShell
+        /* 국가 목록과 같은 규약 — 좌측 목록이 탐색 수단이므로 기본 펼침.
+           (구 키 persons-filter-collapsed는 '기본 접힘'이던 필터 패널 시절 값이라 승계하지 않는다) */
         listCollapsedConfig={{
-          storageKey: 'persons-filter-collapsed',
-          defaultCollapsed: true,
+          storageKey: 'persons-list-collapsed',
+          defaultCollapsed: false,
         }}
         mobileDetailVisible
         left={({ listCollapsed, toggleListCollapsed }) => (
-          <LeftFilterSlot
-            view="person"
+          <PersonList
+            selectedId={personId}
+            onSelect={handlePersonClick}
+            onAdd={handleAddPerson}
+            onOpenAdvancedFilters={handleOpenAdvancedFilters}
             collapsed={listCollapsed}
             onToggleCollapse={toggleListCollapsed}
           />
@@ -171,30 +194,30 @@ export default function PersonsTimelinePage() {
       />
 
       {!personId && (
-        <>
-          <SidebarSheetTrigger
-            type="button"
-            onClick={() => setMobileFilterOpen(true)}
-            aria-label={
-              activeFilterCount > 0
-                ? `필터 열기, ${activeFilterCount}개 적용 중`
-                : '필터 열기'
-            }
-          >
-            <FiFilter size={20} />
-            {activeFilterCount > 0 && (
-              <FilterCountBadge aria-hidden>{activeFilterCount}</FilterCountBadge>
-            )}
-          </SidebarSheetTrigger>
-          <SidebarSheet
-            open={mobileFilterOpen}
-            onClose={() => setMobileFilterOpen(false)}
-            title="인물 필터"
-          >
-            <PersonFilterPanel />
-          </SidebarSheet>
-        </>
+        <SidebarSheetTrigger
+          type="button"
+          onClick={handleOpenAdvancedFilters}
+          aria-label={
+            activeFilterCount > 0
+              ? `필터 열기, ${activeFilterCount}개 적용 중`
+              : '필터 열기'
+          }
+        >
+          <FiFilter size={20} />
+          {activeFilterCount > 0 && (
+            <FilterCountBadge aria-hidden>{activeFilterCount}</FilterCountBadge>
+          )}
+        </SidebarSheetTrigger>
       )}
+
+      {/* 상세 필터 시트 — 인물 상세를 보는 중에도 사이드바에서 열 수 있어야 하므로 personId와 무관 */}
+      <SidebarSheet
+        open={advancedFilterOpen}
+        onClose={() => setAdvancedFilterOpen(false)}
+        title="인물 상세 필터"
+      >
+        <PersonFilterPanel />
+      </SidebarSheet>
 
       <PersonRegisterViewModal
         isOpen={editModalOpen}
