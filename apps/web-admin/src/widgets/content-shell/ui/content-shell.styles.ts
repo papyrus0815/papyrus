@@ -66,17 +66,20 @@ export const DetailPane = styled.div<{
   $listCollapsed?: boolean
   $sidebarExtraWidth?: number
 }>`
+  /* 좌측 내비 레일 + 목록 사이드바를 합친 폭. fixed로 뷰포트를 쓰는 지면이 이만큼 피한다. */
   --content-left-inset: ${({ $listCollapsed, $sidebarExtraWidth = 0 }) =>
-    $listCollapsed ? '48px' : `${360 + $sidebarExtraWidth}px`};
+    $listCollapsed
+      ? 'calc(var(--nav-rail-width, 72px) + 48px)'
+      : `calc(var(--nav-rail-width, 72px) + ${360 + $sidebarExtraWidth}px)`};
   @media (max-width: 1280px) {
     --content-left-inset: ${({ $listCollapsed, $sidebarExtraWidth = 0 }) =>
       $listCollapsed
-        ? '48px'
-        : `${320 + ($sidebarExtraWidth > 0 ? 160 : 0)}px`};
+        ? 'calc(var(--nav-rail-width, 72px) + 48px)'
+        : `calc(var(--nav-rail-width, 72px) + ${320 + ($sidebarExtraWidth > 0 ? 160 : 0)}px)`};
   }
   @media (max-width: 1024px) {
-    /* 좌측이 숨겨지므로 인셋 없음 */
-    --content-left-inset: 0px;
+    /* 목록 사이드바가 숨겨지므로 레일 폭만 */
+    --content-left-inset: var(--nav-rail-width, 72px);
   }
 
   display: flex;

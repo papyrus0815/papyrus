@@ -7,7 +7,15 @@ export const GlobalStyle = createGlobalStyle`
     /* 파생 색상 변수 */
     --color-primary-200: #e9d1ff;
     --color-primary-300: #d6aaff;
-    --header-height: 64px;
+    /* 전역 내비는 좌측 레일(NavRail)로 옮겼다 — 상단 바가 없으므로 0.
+       이 변수를 쓰는 곳이 58군데라 의미(=상단 오프셋)를 유지한 채 값만 0으로 둔다:
+       calc(100vh - var(--header-height)) / margin-top / top 이 전부 자동으로 맞는다. */
+    --header-height: 0px;
+    /* 좌측 내비 레일 폭 — 본문은 이만큼 오른쪽에서 시작한다 */
+    --nav-rail-width: 72px;
+    /* 우측 콘텐츠 안에서 position:fixed로 뷰포트를 쓰는 지면(사건 카탈로그)이 참조.
+       사이드바가 있는 지면은 ContentShell이 여기에 목록 폭을 더해 덮어쓴다. */
+    --content-left-inset: var(--nav-rail-width);
     --sidebar-width: 280px;
     --focus-ring: 0 0 0 3px rgba(173, 70, 255, 0.25);
     --shadow-soft: 0 1px 3px rgba(0,0,0,0.08);
@@ -23,6 +31,13 @@ export const GlobalStyle = createGlobalStyle`
     --glass-blur: 12px;
     --gradient-subtle: radial-gradient(1200px 500px at 10% -10%, rgba(173,70,255,0.06), transparent 50%), radial-gradient(800px 400px at 90% -20%, rgba(90,0,255,0.05), transparent 55%);
   }
+  /* 좁은 화면에서는 레일을 줄인다 — 본문 폭이 더 급하다 */
+  @media (max-width: 640px) {
+    :root {
+      --nav-rail-width: 56px;
+    }
+  }
+
   /* ✍️ 전역 폰트 설정 — Pretendard Variable 기본 + 시스템 한글 fallback */
 body {
     font-family:

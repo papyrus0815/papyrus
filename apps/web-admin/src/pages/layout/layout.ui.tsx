@@ -23,7 +23,7 @@ import {
   CommandPalette,
   useCommandPaletteShortcut,
 } from '@/widgets/command-palette'
-import Header from '@/widgets/header/header.ui'
+import { NavRail } from '@/widgets/nav-rail'
 
 // Note: Simple layout only, wrapper removed per request
 
@@ -79,13 +79,16 @@ export default function Layout() {
 
   return (
     <>
-      {/* 대시보드 헤더를 전역 공통으로 사용 */}
-      {isAuthenticated && <Header />}
+      {/* 전역 내비게이션 — 상단 바가 아니라 좌측 레일(디스코드식) */}
+      {isAuthenticated && <NavRail />}
 
       <SmartErrorBoundary FallbackComponent={ErrorHandler} onError={logError}>
         {/* Suspense: Outlet의 페이지들이 lazy-loading 될 때 로딩 UI를 보여줌 */}
         <Suspense fallback={getSkeleton()}>
-          <Outlet />
+          {/* 레일이 fixed라 본문을 그 폭만큼 밀어준다. 로그인 전에는 레일이 없어 0. */}
+          <ContentArea $railed={isAuthenticated}>
+            <Outlet />
+          </ContentArea>
         </Suspense>
       </SmartErrorBoundary>
 
@@ -93,3 +96,8 @@ export default function Layout() {
     </>
   )
 }
+
+const ContentArea = styled.div<{ $railed: boolean }>`
+  padding-left: ${({ $railed }) => ($railed ? 'var(--nav-rail-width, 72px)' : '0')};
+  min-height: 100vh;
+`
