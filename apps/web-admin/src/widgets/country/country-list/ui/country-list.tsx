@@ -384,8 +384,8 @@ function CountryListInner({
         : unifiedCountries.length
   const headerCount =
     filtered.length !== countPopulation
-      ? `${filtered.length}/${countPopulation}`
-      : countPopulation
+      ? `${filtered.length} / ${countPopulation}개`
+      : `${countPopulation}개`
 
   // 검색·필터 결과 수 스크린리더 공지 (F28) — 타이핑 폭주를 피해 300ms 디바운스.
   const [liveMessage, setLiveMessage] = React.useState('')
@@ -454,8 +454,8 @@ function CountryListInner({
             <>
               <SidebarHeader
                 title="국가 목록"
-                count={headerCount}
-                countTitle={
+                subtitle={headerCount}
+                subtitleTitle={
                   filtered.length !== countPopulation
                     ? `표시 ${filtered.length} / 전체 ${countPopulation}`
                     : undefined

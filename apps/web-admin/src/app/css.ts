@@ -12,12 +12,12 @@ export const GlobalStyle = createGlobalStyle`
        calc(100vh - var(--header-height)) / margin-top / top 이 전부 자동으로 맞는다. */
     --header-height: 0px;
     /* 좌측 내비 레일 폭 — 본문은 이만큼 오른쪽에서 시작한다 */
-    --nav-rail-width: 72px;
+    --nav-rail-width: 80px;
     /* 우측 콘텐츠 안에서 position:fixed로 뷰포트를 쓰는 지면(사건 카탈로그)이 참조.
        사이드바가 있는 지면은 ContentShell이 여기에 목록 폭을 더해 덮어쓴다. */
     --content-left-inset: var(--nav-rail-width);
     /* 좌측 하단 계정 패널 높이 — 레일·목록이 이만큼 아래를 비워 겹침을 피한다 */
-    --user-panel-height: 52px;
+    --user-panel-height: 60px;
     --sidebar-width: 280px;
     --focus-ring: 0 0 0 3px rgba(173, 70, 255, 0.25);
     --shadow-soft: 0 1px 3px rgba(0,0,0,0.08);
@@ -36,7 +36,7 @@ export const GlobalStyle = createGlobalStyle`
   /* 좁은 화면에서는 레일을 줄인다 — 본문 폭이 더 급하다 */
   @media (max-width: 640px) {
     :root {
-      --nav-rail-width: 56px;
+      --nav-rail-width: 64px;
     }
   }
 

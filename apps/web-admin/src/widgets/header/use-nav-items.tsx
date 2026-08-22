@@ -40,7 +40,7 @@ export function useNavItems(): NavItemSpec[] {
         key: `dashboard-${item.id}`,
         label: item.label,
         icon: (
-          <span style={{ width: 16, height: 16, display: 'inline-flex' }}>
+          <span style={{ width: 18, height: 18, display: 'inline-flex' }}>
             <Icon />
           </span>
         ),
@@ -58,7 +58,7 @@ export function useNavItems(): NavItemSpec[] {
       {
         key: 'countries',
         label: '국가',
-        icon: <FiMap size={16} />,
+        icon: <FiMap size={18} />,
         onClick: go(pathKeys.country()),
         // 국가 브라우즈(/country)와 상세(/country/:id/*) 모두 활성 표시
         active: /^\/country(\/|$)/.test(location.pathname),
@@ -66,7 +66,7 @@ export function useNavItems(): NavItemSpec[] {
       {
         key: 'events',
         label: '사건',
-        icon: <FiLayers size={16} />,
+        icon: <FiLayers size={18} />,
         onClick: go('/events'),
         active: location.pathname.startsWith('/events'),
       },
@@ -75,21 +75,21 @@ export function useNavItems(): NavItemSpec[] {
       {
         key: 'continents',
         label: '대륙',
-        icon: <FiGlobe size={16} />,
+        icon: <FiGlobe size={18} />,
         onClick: go(pathKeys.continents()),
         active: location.pathname.startsWith('/continents'),
       },
       {
         key: 'heads-of-state',
         label: '수장 비교',
-        icon: <FiAward size={16} />,
+        icon: <FiAward size={18} />,
         onClick: go(pathKeys.headsOfState()),
         active: location.pathname.startsWith('/heads-of-state'),
       },
       {
         key: 'companies',
         label: '기업',
-        icon: <FiBriefcase size={16} />,
+        icon: <FiBriefcase size={18} />,
         onClick: go('/companies'),
         active: location.pathname.startsWith('/companies'),
       },

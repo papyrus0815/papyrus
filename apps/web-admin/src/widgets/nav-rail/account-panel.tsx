@@ -55,12 +55,12 @@ const Panel = styled.div`
   width: calc(
     var(--nav-rail-width, 72px) + var(--list-sidebar-width, 0px) - 16px
   );
-  height: var(--user-panel-height, 52px);
+  height: var(--user-panel-height, 60px);
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 6px;
-  border-radius: 12px;
+  padding: 0 8px;
+  border-radius: 14px;
   z-index: ${Z_INDEX.NAV};
   container: user-panel / inline-size;
   background: ${({ theme }) =>
@@ -81,9 +81,9 @@ const Panel = styled.div`
 
   /* 액션 아이콘을 패널 높이에 맞춘다 */
   ${IconButton} {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
   }
 `
 

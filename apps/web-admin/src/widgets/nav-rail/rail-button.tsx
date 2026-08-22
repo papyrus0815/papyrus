@@ -84,9 +84,9 @@ const Tooltip = styled.span`
   position: fixed;
   left: calc(var(--nav-rail-width, 72px) + 6px);
   transform: translateY(-50%);
-  padding: 6px 10px;
+  padding: 7px 11px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   white-space: nowrap;
   pointer-events: none;
@@ -113,7 +113,7 @@ const ActivePill = styled.span`
   top: 50%;
   transform: translateY(-50%);
   width: 4px;
-  height: 22px;
+  height: 26px;
   border-radius: 0 4px 4px 0;
   background: ${({ theme }) => theme.colors.text.primary};
 `
@@ -123,12 +123,12 @@ const Button = styled.button<{ $active: boolean; $accent: boolean }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border: none;
   cursor: pointer;
   flex-shrink: 0;
-  border-radius: ${({ $active }) => ($active ? '16px' : '50%')};
+  border-radius: ${({ $active }) => ($active ? '17px' : '50%')};
   transition:
     border-radius 0.16s ease,
     background 0.16s ease,
@@ -151,7 +151,7 @@ const Button = styled.button<{ $active: boolean; $accent: boolean }>`
           : theme.colors.text.secondary};
 
       &:hover {
-        border-radius: 16px;
+        border-radius: 17px;
         background: ${$active ? activeBg : isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'};
         color: ${$active && $accent ? '#ffffff' : theme.colors.text.primary};
       }
@@ -164,7 +164,7 @@ const Button = styled.button<{ $active: boolean; $accent: boolean }>`
   }
 
   @media (max-width: 640px) {
-    width: 38px;
-    height: 38px;
+    width: 42px;
+    height: 42px;
   }
 `

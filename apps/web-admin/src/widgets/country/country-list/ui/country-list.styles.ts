@@ -14,6 +14,8 @@ import styled, { css } from 'styled-components'
 import { UnderlineTabNav } from '@/shared/ui/underline-tabs'
 import {
   darkBlur,
+  // 행 hover에 반응하는 자식(자식 chevron)을 위해 값으로도 필요 — 아래 재수출과 별개다
+  ListRow,
   overlayScrollbar,
   stickyBar,
 } from '@/shared/ui/sidebar-list'
@@ -489,12 +491,18 @@ export const HasChildrenChevron = styled.button`
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  opacity: 0.7;
   margin-left: 2px;
   transition: background 0.12s ease, opacity 0.12s ease, color 0.12s ease;
 
-  /* 시각적 강조 — 옅은 외곽선으로 클릭 가능함을 알림 */
+  /* 평소엔 감춘다 — 자식 있는 행마다 상시로 떠 있으면 목록 우측이 화살표 열이 된다.
+     핀 버튼과 같은 규약: 행 hover/포커스, 또는 펼친 상태에서만 보인다. */
+  opacity: 0;
   box-shadow: inset 0 0 0 1px ${({ theme }) => theme.colors.border.light};
+
+  ${ListRow}:hover &,
+  ${ListRow}:focus-within & {
+    opacity: 0.85;
+  }
 
   &:hover {
     opacity: 1;

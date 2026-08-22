@@ -225,8 +225,24 @@ function EntityListSidebarBase({
     }
   }, [selectedId, selectedGroupId, expandForSelection, domainKey])
 
+  /**
+   * 제목 아래 보조 줄 — 필터 중이면 '표시 / 전체'를 분수로 드러낸다.
+   *
+   * 빠른 접근(고정·최근)은 통상 그룹의 항목을 **다시 한 번** 싣는 자리다. items.length를
+   * 그대로 쓰면 그 중복이 더해져 분자가 분모를 넘는다(실제로 '453 / 452개'가 떴다).
+   */
+  const visibleCount = useMemo(() => {
+    const quickIds = new Set(
+      groups.filter((group) => group.isQuickAccess).map((group) => group.id),
+    )
+    if (quickIds.size === 0) return items.length
+    return items.filter((item) => !quickIds.has(item.groupId)).length
+  }, [items, groups])
+
   const headerCount =
-    items.length !== totalCount ? `${items.length}/${totalCount}` : totalCount
+    visibleCount !== totalCount
+      ? `${visibleCount} / ${totalCount}개`
+      : `${totalCount}개`
 
   // 결과 수 스크린리더 공지 — 타이핑 폭주를 피해 300ms 디바운스
   const [liveMessage, setLiveMessage] = useState('')
@@ -237,11 +253,11 @@ function EntityListSidebarBase({
     }
     const timerId = setTimeout(() => {
       setLiveMessage(
-        items.length === 0 ? '검색 결과 없음' : `${noun} ${items.length}개`,
+        visibleCount === 0 ? '검색 결과 없음' : `${noun} ${visibleCount}개`,
       )
     }, 300)
     return () => clearTimeout(timerId)
-  }, [items.length, hasActiveFilter, noun])
+  }, [visibleCount, hasActiveFilter, noun])
 
   const pinnedSet = useMemo(() => new Set(pinnedIds ?? []), [pinnedIds])
   const handleTogglePin = useCallback(
@@ -258,10 +274,10 @@ function EntityListSidebarBase({
           <>
             <SidebarHeader
               title={title}
-              count={headerCount}
-              countTitle={
-                items.length !== totalCount
-                  ? `표시 ${items.length} / 전체 ${totalCount}`
+              subtitle={headerCount}
+              subtitleTitle={
+                visibleCount !== totalCount
+                  ? `표시 ${visibleCount} / 전체 ${totalCount}`
                   : undefined
               }
               action={

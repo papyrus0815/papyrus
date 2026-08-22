@@ -82,7 +82,7 @@ export function NavRail() {
       <Utilities>
         <RailButton
           label={`국가 검색 (${isMac ? '⌘' : 'Ctrl'}K)`}
-          icon={<FiSearch size={17} />}
+          icon={<FiSearch size={19} />}
           onClick={() => {
             playClickSound()
             openCommandPalette()
@@ -98,7 +98,7 @@ export function NavRail() {
 
         <RailButton
           label={mode === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}
-          icon={mode === 'dark' ? <FiSun size={17} /> : <FiMoon size={17} />}
+          icon={mode === 'dark' ? <FiSun size={19} /> : <FiMoon size={19} />}
           onClick={() => {
             playClickSound()
             toggleTheme()
@@ -122,9 +122,12 @@ const Rail = styled.nav`
   /* 하단 계정 패널(AccountPanel)이 fixed로 겹치므로 그만큼 비워둔다 */
   padding: 10px 0 calc(var(--user-panel-height, 52px) + 16px);
   z-index: ${Z_INDEX.HEADER};
+  /* 표면 톤 계단의 가장 진한 층 — 사이드바(#151515 / secondary)보다 한 단계 더 어둡다 */
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? '#0e0e0e' : theme.colors.background.secondary};
-  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+    theme.mode === 'dark' ? '#0b0b0b' : '#e7eaf0'};
+  border-right: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)'};
 
   /* 레일 안의 드롭다운은 아래로 열릴 자리가 없다 — 오른쪽·아래 기준으로 편다.
      (헤더 시절 top:44px/right:0 규약을 여기서만 덮어쓴다) */
@@ -139,8 +142,8 @@ const Rail = styled.nav`
   /* 알림·사운드·사용자는 헤더용 트리거(IconButton)를 그대로 재사용한다 —
      레일에서는 다른 버튼과 같은 원형이어야 하므로 모양만 맞춘다. */
   ${IconButton} {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'};
@@ -150,14 +153,14 @@ const Rail = styled.nav`
       color 0.16s ease;
 
     &:hover {
-      border-radius: 16px;
+      border-radius: 17px;
       background: ${({ theme }) =>
         theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'};
     }
 
     @media (max-width: 640px) {
-      width: 38px;
-      height: 38px;
+      width: 42px;
+      height: 42px;
     }
   }
 `
@@ -170,7 +173,7 @@ const NavScroll = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
@@ -184,13 +187,13 @@ const Utilities = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   flex-shrink: 0;
 `
 
 const Divider = styled.div`
-  width: 28px;
+  width: 32px;
   height: 1px;
   flex-shrink: 0;
   background: ${({ theme }) => theme.colors.border.default};
@@ -198,7 +201,7 @@ const Divider = styled.div`
 
 /** 홈 버튼 안의 로고 글자 — 아이콘 대신 워드마크 첫 글자 */
 const HomeMark = styled.span`
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1;
