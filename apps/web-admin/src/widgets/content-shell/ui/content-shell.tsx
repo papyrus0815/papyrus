@@ -6,6 +6,12 @@
  * - 좌측 패널 접기/펼치기 state 관리
  * - 모바일·모달 레이어는 각 페이지가 자체 처리 (셸이 관여 X)
  *
+ * ⚠️ 셸 전체에 opacity fade를 걸지 말 것.
+ * 예전엔 Wrap이 motion.div로 매 마운트마다 0→1 페이드했는데, 셸은 라우트마다 새로
+ * 마운트되므로 지면을 옮길 때마다 **좌측 사이드바까지 같이 깜빡였다**. 좌측은 페이지가
+ * 아니라 그 자리에 계속 있어야 하는 크롬이다. 전환 연출이 필요하면 우측 슬롯을 넘기는
+ * 쪽에서 우측에만 건다(country-detail-shell의 RouteSwapMotion, persons-timeline의 motion.div).
+ *
  * 의도적으로 넣지 않은 것:
  * - CountryFormModal 같은 전역 모달 — 특정 뷰에서만 필요하므로 페이지에서 호출
  * - CountryMobileUI — 좌측 패널이 없는 뷰에서 필요 없음
@@ -15,7 +21,6 @@
  */
 import React, { type ReactNode } from 'react'
 
-import { motion } from 'framer-motion'
 import styled from 'styled-components'
 
 import { CountryListStateProvider } from '@/widgets/country/country-list/country-list-state.context'
@@ -118,12 +123,7 @@ export function ContentShell({
   )
 
   return (
-    <Wrap
-      as={motion.div}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-    >
+    <Wrap>
       {countryListState ? (
         <CountryListStateProvider>{body}</CountryListStateProvider>
       ) : (
