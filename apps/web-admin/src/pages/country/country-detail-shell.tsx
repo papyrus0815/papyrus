@@ -188,6 +188,8 @@ export function CountryDetailShell() {
     <>
       <CountryDetailPageGlobalStyle />
       <ContentShell
+        /* 국가 목록 상태(현대·역사·대륙 fetch)는 이 지면에서만 필요 */
+        countryListState
         /* 모바일(≤1024px)에서 상세 페인 노출 — 없으면 display:none으로 국가 상세 전체가 빈 화면.
            국가 목록은 CountryMobileUI 오버레이("목록" 칩)가 담당한다. */
         mobileDetailVisible

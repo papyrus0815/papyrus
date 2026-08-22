@@ -3,6 +3,10 @@
  * - MainGrid: 좌측(패널/리스트) + 우측(콘텐츠) 2컬럼 그리드
  * - DetailPane: 우측 컨테이너 (뷰포트 높이 - 헤더)
  * - DetailPaneScrollBody: 내부 스크롤 본문
+ *
+ * `--content-left-inset`: 좌측 사이드바가 차지한 폭. 우측 콘텐츠 안에서 `position: fixed`로
+ * 뷰포트를 통째로 쓰는 지면(사건 카탈로그 PageScene 등)이 `left: var(--content-left-inset, 0px)`
+ * 로 사이드바를 피할 수 있게 셸이 내려준다 — fixed는 grid 트랙을 모르기 때문.
  */
 import styled from 'styled-components'
 
@@ -56,7 +60,25 @@ export const MainGrid = styled.div<{
   }
 `
 
-export const DetailPane = styled.div<{ $mobileVisible?: boolean }>`
+export const DetailPane = styled.div<{
+  $mobileVisible?: boolean
+  /** 좌측 사이드바 폭 — MainGrid의 첫 트랙과 같은 값으로 맞춘다 */
+  $listCollapsed?: boolean
+  $sidebarExtraWidth?: number
+}>`
+  --content-left-inset: ${({ $listCollapsed, $sidebarExtraWidth = 0 }) =>
+    $listCollapsed ? '48px' : `${360 + $sidebarExtraWidth}px`};
+  @media (max-width: 1280px) {
+    --content-left-inset: ${({ $listCollapsed, $sidebarExtraWidth = 0 }) =>
+      $listCollapsed
+        ? '48px'
+        : `${320 + ($sidebarExtraWidth > 0 ? 160 : 0)}px`};
+  }
+  @media (max-width: 1024px) {
+    /* 좌측이 숨겨지므로 인셋 없음 */
+    --content-left-inset: 0px;
+  }
+
   display: flex;
   flex-direction: column;
   gap: 0;

@@ -2,7 +2,6 @@
  * ContentShell — 콘텐츠 영역(/country, /persons-timeline 등) 페이지의 공용 레이아웃 셸.
  *
  * 책임:
- * - 핵심 데이터(fetch) → CountryListStateProvider에 주입
  * - 좌측·우측 슬롯을 받아 MainGrid에 배치
  * - 좌측 패널 접기/펼치기 state 관리
  * - 모바일·모달 레이어는 각 페이지가 자체 처리 (셸이 관여 X)
@@ -11,6 +10,8 @@
  * - CountryFormModal 같은 전역 모달 — 특정 뷰에서만 필요하므로 페이지에서 호출
  * - CountryMobileUI — 좌측 패널이 없는 뷰에서 필요 없음
  * - PageHeader — 콘텐츠 영역 밖 독립 페이지에서만 사용하던 레거시
+ * - CountryListStateProvider — 국가 목록 전용. 예전엔 셸이 항상 감쌌으나 그러면 셸을 쓰는
+ *   모든 지면이 국가·역사국가·대륙을 fetch한다. `countryListState`로 opt-in.
  */
 import React, { type ReactNode } from 'react'
 
@@ -63,7 +64,12 @@ interface ContentShellProps {
    * - true: 모바일 전용 UI 없이 우측 콘텐츠를 그대로 보여줘야 할 때 (예: 인물 인포그래픽).
    */
   mobileDetailVisible?: boolean
-  /** Shell 외부로 한 번 감싸고 싶은 추가 요소 (모달 등) — provider 안쪽에 렌더됨 */
+  /**
+   * 국가 목록 상태 Provider를 감쌀지 — 국가 지면(/country)에서만 true.
+   * 이 Provider는 현대·역사 국가와 대륙을 fetch하므로 다른 지면에서 켜면 낭비다.
+   */
+  countryListState?: boolean
+  /** Shell 외부로 한 번 감싸고 싶은 추가 요소 (모달 등) */
   children?: ReactNode
 }
 
@@ -74,6 +80,7 @@ export function ContentShell({
   listCollapsedConfig,
   sidebarExtraWidth,
   mobileDetailVisible = false,
+  countryListState = false,
   children,
 }: ContentShellProps) {
   const { collapsed, toggle } = useListCollapsed(listCollapsedConfig)
@@ -86,6 +93,30 @@ export function ContentShell({
   const resolvedLeft = typeof left === 'function' ? left(ctx) : left
   const resolvedRight = typeof right === 'function' ? right(ctx) : right
 
+  const body = (
+    <>
+      {fullScreen ? (
+        resolvedRight
+      ) : (
+        <S.MainGrid
+          $noSidebar
+          $listCollapsed={collapsed}
+          $sidebarExtraWidth={sidebarExtraWidth}
+        >
+          {resolvedLeft}
+          <S.DetailPane
+            $mobileVisible={mobileDetailVisible}
+            $listCollapsed={collapsed}
+            $sidebarExtraWidth={sidebarExtraWidth}
+          >
+            <S.DetailPaneScrollBody>{resolvedRight}</S.DetailPaneScrollBody>
+          </S.DetailPane>
+        </S.MainGrid>
+      )}
+      {children}
+    </>
+  )
+
   return (
     <Wrap
       as={motion.div}
@@ -93,23 +124,11 @@ export function ContentShell({
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      <CountryListStateProvider>
-        {fullScreen ? (
-          resolvedRight
-        ) : (
-          <S.MainGrid
-            $noSidebar
-            $listCollapsed={collapsed}
-            $sidebarExtraWidth={sidebarExtraWidth}
-          >
-            {resolvedLeft}
-            <S.DetailPane $mobileVisible={mobileDetailVisible}>
-              <S.DetailPaneScrollBody>{resolvedRight}</S.DetailPaneScrollBody>
-            </S.DetailPane>
-          </S.MainGrid>
-        )}
-        {children}
-      </CountryListStateProvider>
+      {countryListState ? (
+        <CountryListStateProvider>{body}</CountryListStateProvider>
+      ) : (
+        body
+      )}
     </Wrap>
   )
 }
