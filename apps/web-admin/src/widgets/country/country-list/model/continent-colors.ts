@@ -34,43 +34,8 @@ const SPECIAL_GROUP_COLORS: Record<string, string> = {
 
 const FALLBACK_COLOR = '#a1a1aa'
 
-/**
- * IsoBadge ISO 텍스트 대비 보정 (F31) — 원색은 소형 볼드 텍스트로 AA(4.5:1) 미달이라
- * dot·strip·배경 틴트는 base를 유지하되 텍스트만 판독 가능한 톤(700/400 계열)으로 조정한다.
- * 라이트=흰 배경 기준 어둡게, 다크=#171717 기준 밝게.
- */
-const BADGE_TEXT_LIGHT: Record<string, string> = {
-  '#ef4444': '#b91c1c', // 아시아
-  '#3b82f6': '#1d4ed8', // 유럽
-  '#8b5cf6': '#6d28d9', // 북아메리카
-  '#ec4899': '#be185d', // 남아메리카
-  '#f59e0b': '#b45309', // 아프리카
-  '#14b8a6': '#0f766e', // 오세아니아
-  '#94a3b8': '#475569', // 남극
-  '#eab308': '#a16207', // 핀
-  '#06b6d4': '#0e7490', // 최근
-  '#92400e': '#92400e', // 과거(라이트는 이미 충분)
-  '#a1a1aa': '#52525b', // fallback/미분류
-}
-const BADGE_TEXT_DARK: Record<string, string> = {
-  '#ef4444': '#f87171',
-  '#3b82f6': '#60a5fa',
-  '#8b5cf6': '#a78bfa',
-  '#ec4899': '#f472b6',
-  '#f59e0b': '#fbbf24',
-  '#14b8a6': '#2dd4bf',
-  '#94a3b8': '#cbd5e1',
-  '#eab308': '#facc15',
-  '#06b6d4': '#22d3ee',
-  '#92400e': '#d97706', // 과거 다크는 밝힘
-  '#a1a1aa': '#d4d4d8',
-}
-
-/** 배지 ISO 텍스트용 대비 보정 색 (base 색은 dot·틴트 배경에 그대로 유지) */
-export function getBadgeTextColor(baseColor: string, isDark: boolean): string {
-  const map = isDark ? BADGE_TEXT_DARK : BADGE_TEXT_LIGHT
-  return map[baseColor] ?? baseColor
-}
+// 배지 텍스트 대비 보정·alpha 적용은 인물 목록과 공유 — 정의 원본은 shared/ui/sidebar-list.
+export { getBadgeTextColor, withAlpha } from '@/shared/ui/sidebar-list'
 
 export function getContinentColor(opts: {
   continentId?: string | null
@@ -112,22 +77,4 @@ const NAME_ORDER: Record<string, number> = {
 export function getContinentOrder(name?: string | null): number {
   if (!name) return 999
   return NAME_ORDER[name] ?? 999
-}
-
-/** hex color에 alpha 적용 — IsoBadge 배경(옅은 톤)에 사용 */
-export function withAlpha(hex: string, alpha: number): string {
-  const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
-    .toString(16)
-    .padStart(2, '0')
-  // #rgb → #rrggbb 정규화
-  if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
-    const r = hex[1]
-    const g = hex[2]
-    const b = hex[3]
-    return `#${r}${r}${g}${g}${b}${b}${a}`
-  }
-  if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
-    return `${hex}${a}`
-  }
-  return hex
 }
