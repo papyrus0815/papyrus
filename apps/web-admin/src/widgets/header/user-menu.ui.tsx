@@ -49,6 +49,11 @@ interface UserMenuProps {
   onClose: () => void
   onOpenSettings: () => void
   playClickSound: () => void
+  /**
+   * 좁은 좌측 레일용 — 트리거를 아바타 하나로 줄인다.
+   * 파피 잔액·등급 칩은 72px 레일에 들어가지 않고, 두 값 모두 드롭다운 안에 이미 있다.
+   */
+  compact?: boolean
 }
 
 export function UserMenu({
@@ -57,6 +62,7 @@ export function UserMenu({
   onClose,
   onOpenSettings,
   playClickSound,
+  compact = false,
 }: UserMenuProps) {
   const navigate = useNavigate()
   const { username, reset } = useSessionStore()
@@ -175,12 +181,12 @@ export function UserMenu({
 
   return (
     <>
-      {wallet && (
+      {!compact && wallet && (
         <HeaderPapySlot type="button" onClick={() => goTo(pathKeys.shop())} title="파피 상점">
           🪙 {wallet.balance.toLocaleString()}
         </HeaderPapySlot>
       )}
-      {pointSummary && (
+      {!compact && pointSummary && (
         <HeaderGradeSlot>
           <GradeChip
             gradeCode={pointSummary.gradeCode}
