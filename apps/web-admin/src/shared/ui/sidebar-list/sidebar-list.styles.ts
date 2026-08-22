@@ -634,6 +634,24 @@ export const AvatarBadge = styled.div<{ $size?: 'sm' | 'md' }>`
 /**
  * 사이드바 접힘 시 상단에 표시되는 펼치기 rail — 국가 목록·인물 목록 공통.
  */
+/** 행 우측 작은 수치 배지 — 자식 수·영향력 등 도메인 지표 */
+export const RowMetricBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 15px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: transparent;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  flex-shrink: 0;
+`
+
 // ─── 접힘 rail ───────────────────────────────────────────────────────────────
 
 export const CollapsedRail = styled.div`
