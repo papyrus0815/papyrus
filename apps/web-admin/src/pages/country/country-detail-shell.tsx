@@ -13,11 +13,9 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 
-import { AnimatePresence, motion } from 'framer-motion'
-import styled, { createGlobalStyle } from 'styled-components'
+import { createGlobalStyle } from 'styled-components'
 import {
   Outlet,
-  useLocation,
   useNavigate,
   useOutletContext,
   useParams,
@@ -44,12 +42,6 @@ const CountryDetailPageGlobalStyle = createGlobalStyle`
   #global-bg { display: none; }
 `
 
-/** sub-route(events ↔ detail) 전환 시 우측 콘텐츠 fade를 담당하는 motion 래퍼. */
-const RouteSwapMotion = styled(motion.div)`
-  width: 100%;
-  min-height: 100%;
-`
-
 export interface CountryDetailShellContext {
   selectedId: string | null
   selectedCountry: UnifiedCountry | undefined
@@ -71,7 +63,6 @@ export function useCountryDetailShellContext(): CountryDetailShellContext {
 
 export function CountryDetailShell() {
   const navigate = useNavigate()
-  const location = useLocation()
   const params = useParams<{ countryId?: string }>()
   const hloc = useContentLocation()
 
@@ -187,23 +178,22 @@ export function CountryDetailShell() {
   return (
     <>
       <CountryDetailPageGlobalStyle />
-      <AnimatePresence initial={false} mode="wait">
-        {/* sub-route 전환마다 motion이 fade — 페이지가 자체 motion wrapper를 갖지 않아도 됨.
-            ⚠️ 좌측 사이드바는 이 fade 밖(레이아웃 소유)이라 함께 깜빡이지 않는다. */}
-        <RouteSwapMotion
-          key={location.pathname}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25, ease: 'easeInOut' }}
-        >
-          {/* sub-tab 위젯 일부가 거대(elections·cabinets 등) — 단일 throw가 페이지 전체를
-              날리지 않도록 ErrorBoundary로 격리. */}
-          <SmartErrorBoundary>
-            <Outlet context={context} />
-          </SmartErrorBoundary>
-        </RouteSwapMotion>
-      </AnimatePresence>
+      {/*
+        sub-route 전환에 motion을 걸지 말 것.
+        예전엔 `key={location.pathname}`인 AnimatePresence(mode="wait")로 감쌌는데, 그러면
+        대시보드↔행정구역처럼 **같은 컴포넌트**로 가는 탭 전환에서도 우측이 통째로
+        언마운트→재마운트된다. 실측 결과 탭바가 34프레임(≈0.55초) 동안 사라졌다가 다시
+        그려졌다 — 사용자가 본 "메뉴 깜빡임"이 이것이다.
+
+        전환 연출은 이미 CountryDetail 위젯 안에 제자리로 있다: 탭바(StickyTopBar)는 페이드
+        밖에 두고 탭 패널만 TabSwapMotion으로 페이드하며, 국가 전환은 CountrySwapMotion이
+        맡는다. 여기서 한 겹 더 덮을 이유가 없다.
+      */}
+      {/* sub-tab 위젯 일부가 거대(elections·cabinets 등) — 단일 throw가 페이지 전체를
+          날리지 않도록 ErrorBoundary로 격리. */}
+      <SmartErrorBoundary>
+        <Outlet context={context} />
+      </SmartErrorBoundary>
 
       <CountryMobileUI
           isMobileListOpen={isMobileListOpen}
