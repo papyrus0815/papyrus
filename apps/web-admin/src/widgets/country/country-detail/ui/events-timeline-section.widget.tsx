@@ -16,11 +16,6 @@ import {
   formatSignedYear,
 } from '@/shared/lib/lifespan-text'
 import { pathKeys } from '@/shared/router'
-import {
-  PillTabButton,
-  PillTabNav,
-} from '@/shared/ui/tab/tab.styles'
-
 import { EventCreateFormDashboard } from './event-create-form-dashboard'
 
 const MAIN = '#6366f1'
@@ -147,6 +142,81 @@ const RowRange = styled.span`
 `
 
 /** 정렬 방향 토글 — 역사는 오래된순이 기본, 최근 동향을 볼 땐 최신순 */
+/**
+ * 지면 머리 한 줄 — 제목·건수·설명은 왼쪽, 조작(정렬·등록)은 오른쪽.
+ * 건수를 따로 큰 박스에 담지 않는다. 숫자 하나에 카드 한 장은 과잉이고, 제목 옆이
+ * "무엇이 몇 건인지"를 한 번에 읽히게 한다.
+ */
+const Header = styled.header`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+`
+
+const HeaderText = styled.div`
+  min-width: 0;
+`
+
+const HeaderTitleRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+`
+
+const HeaderTitle = styled.h2`
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const HeaderCount = styled.span`
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const HeaderDesc = styled.p`
+  margin: 6px 0 0;
+  max-width: 540px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+`
+
+const CreateButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
 const OrderToggle = styled.div`
   display: inline-flex;
   gap: 2px;
@@ -417,183 +487,28 @@ export function EventsTimelineSection({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
-      {/* 헤더 — 가문·민족과 동일 */}
-      <header
-        style={{
-          paddingBottom: 24,
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 24,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div>
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 26,
-              fontWeight: 800,
-              color: theme.colors.text.primary,
-              letterSpacing: '-0.04em',
-              lineHeight: 1.25,
-            }}
-          >
-            연대표
-          </h2>
-          <p
-            style={{
-              margin: '10px 0 0',
-              fontSize: 15,
-              color: theme.colors.text.secondary,
-              lineHeight: 1.55,
-              maxWidth: 540,
-              fontWeight: 500,
-            }}
-          >
+      {/*
+       * 지면 머리 — 이 위젯이 독립 페이지였던 시절엔 h2 '연대표' + 칸이 하나뿐인 탭바
+       * ('전체 사건') + 숫자 하나만 든 KPI 박스 + h3 '연대표'가 겹겹이 쌓여 있었다.
+       * 국가 상세의 탭으로 들어온 지금은 바깥 탭바가 이미 '사건'을 말하므로 전부 중복 —
+       * 본문에 닿기까지 네 겹의 크롬을 지나야 했다. 한 줄로 접는다.
+       */}
+      <Header>
+        <HeaderText>
+          <HeaderTitleRow>
+            <HeaderTitle>연대표</HeaderTitle>
+            {view === 'list' && list.length > 0 && (
+              <HeaderCount>{list.length}건</HeaderCount>
+            )}
+          </HeaderTitleRow>
+          <HeaderDesc>
             {countryId
-              ? '선택한 국가에 연관된 역사적 사건을 시간순으로 확인할 수 있습니다.'
-              : '등록된 역사적 사건을 시간순으로 확인할 수 있습니다. 아래에서 새 사건을 등록하거나 상세는 사건 메뉴에서 편집할 수 있습니다.'}
-          </p>
-        </div>
+              ? '이 국가와 과거 국가에 연관된 사건입니다. 행을 클릭하면 상세로 이동합니다.'
+              : '등록된 사건입니다. 행을 클릭하면 상세로 이동합니다.'}
+          </HeaderDesc>
+        </HeaderText>
         {view === 'list' && (
-          <button
-            type="button"
-            onClick={openCreate}
-            aria-label="새 사건 등록"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '10px 18px',
-              borderRadius: 12,
-              border: `1px solid ${theme.colors.border.default}`,
-              background: isDark ? 'rgba(255,255,255,0.08)' : '#fff',
-              color: theme.colors.text.primary,
-              cursor: 'pointer',
-              fontSize: 13,
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            새 사건 등록
-          </button>
-        )}
-      </header>
-
-      {/* 탭 + KPI — 가문·민족과 동일 (목록일 때만) */}
-      {view === 'list' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <PillTabNav>
-            <PillTabButton type="button" $active>
-              전체 사건
-            </PillTabButton>
-          </PillTabNav>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 28,
-              flexWrap: 'wrap',
-              padding: '20px 28px',
-              background: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
-              borderRadius: 16,
-              border: `1px solid ${theme.colors.border.default}`,
-              backdropFilter: isDark ? 'blur(12px)' : 'none',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: theme.colors.text.secondary,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                등록 사건
-              </span>
-              <span
-                style={{
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color: theme.colors.text.primary,
-                  letterSpacing: '-0.03em',
-                }}
-              >
-                {list.length}
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 500,
-                    color: theme.colors.text.secondary,
-                    marginLeft: 2,
-                  }}
-                >
-                  건
-                </span>
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {view === 'form' ? (
-        <FormSection aria-label="사건 등록">
-          <EventCreateFormDashboard
-            onBack={goToList}
-            onSuccess={handleCreateSuccess}
-          />
-        </FormSection>
-      ) : (
-        <section aria-label="연대표 현황" style={{ paddingTop: 8 }}>
-          <div
-            style={{
-              marginBottom: 20,
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              gap: 16,
-              flexWrap: 'wrap',
-            }}
-          >
-            <div>
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color: theme.colors.text.primary,
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                연대표
-              </h3>
-              <p
-                style={{
-                  margin: '6px 0 0',
-                  fontSize: 14,
-                  color: theme.colors.text.secondary,
-                  fontWeight: 500,
-                }}
-              >
-                시간순으로 나열했습니다. 행을 클릭하면 사건 상세로 이동합니다.
-              </p>
-            </div>
+          <HeaderActions>
             {list.length > 0 && (
               <OrderToggle role="group" aria-label="정렬 방향">
                 <OrderButton
@@ -614,7 +529,39 @@ export function EventsTimelineSection({
                 </OrderButton>
               </OrderToggle>
             )}
-          </div>
+            <CreateButton
+              type="button"
+              onClick={openCreate}
+              aria-label="새 사건 등록"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              새 사건 등록
+            </CreateButton>
+          </HeaderActions>
+        )}
+      </Header>
+
+      {view === 'form' ? (
+        <FormSection aria-label="사건 등록">
+          <EventCreateFormDashboard
+            onBack={goToList}
+            onSuccess={handleCreateSuccess}
+          />
+        </FormSection>
+      ) : (
+        <section aria-label="연대표">
 
           {isLoading && list.length === 0 ? (
             <div
