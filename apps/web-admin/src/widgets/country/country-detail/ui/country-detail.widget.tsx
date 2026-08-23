@@ -199,18 +199,25 @@ function CountryDetailInner({
               />
             )}
 
-            {/* 서브 탭 콘텐츠 — 탭 전환 시에만 opacity+y 페이드 */}
-            <AnimatePresence initial={false} mode="wait">
+            {/*
+              서브 탭 콘텐츠 — 들어오는 쪽만 짧게 페이드한다.
+
+              예전엔 AnimatePresence(mode="wait") + exit 0.32s였다. 그러면 나가는 패널이
+              다 사라질 때까지 기다렸다가 들어오는 패널이 시작하므로 전환에 **~800ms**가
+              걸리고, 그 중간이 빈 화면이다(실측: 272ms 시점 opacity 0.02, 434ms에 새 패널이
+              opacity 0으로 등장). 탭마다 콘텐츠 높이가 크게 달라(1974px→745px) 그 빈 구간이
+              레이아웃 붕괴처럼 읽혔다.
+
+              exit를 없애면 이전 패널은 즉시 교체되고 새 패널만 180ms 페이드-업 한다 —
+              전환이 한 동작으로 끝나고 빈 구간이 사라진다. 페이드는 CSS 애니메이션이 맡는다
+              (TabSwapMotion) — framer `initial`은 라우팅 완료 리렌더에 한 프레임 되칠해진다.
+            */}
               <S.TabSwapMotion
                 key={activeSubTab}
                 id={panelId(activeSubTab)}
                 role="tabpanel"
                 aria-labelledby={tabId(activeSubTab)}
                 tabIndex={0}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.32, ease: [0.25, 0.1, 0.25, 1] }}
               >
                 {activeSubTab === 'dashboard' && (
                   <CountryDetailDashboard country={country} onEdit={onEdit} />
@@ -270,7 +277,6 @@ function CountryDetailInner({
 
                 {/* 인물 탭은 헤더 "인물"로 통합 — 국가별 보기는 /history/dashboard/persons?countries=<id>로 이동 */}
               </S.TabSwapMotion>
-            </AnimatePresence>
           </S.AnalyticsDashboard>
         </S.CountrySwapMotion>
       </AnimatePresence>

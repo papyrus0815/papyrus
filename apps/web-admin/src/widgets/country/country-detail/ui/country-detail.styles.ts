@@ -17,10 +17,34 @@ export const CountrySwapMotion = styled(motion.div)`
   flex-direction: column;
 `
 
-/** 탭 전환 시 내부 fade를 담당하는 motion 래퍼. */
-export const TabSwapMotion = styled(motion.div)`
+/**
+ * 탭 전환 시 내부 fade — **CSS 애니메이션**으로 처리한다(framer 아님).
+ *
+ * framer의 `initial`로 하면 애니메이션이 끝난 뒤 라우팅 완료(≈230ms)로 부모가 리렌더될 때
+ * `initial`(opacity 0)이 한 프레임 다시 칠해져 깜빡였다 — 실측으로 정확히 1프레임 잡혔다.
+ * CSS 애니메이션은 요소 마운트에 묶이므로 리렌더가 되돌릴 수 없다(키가 바뀔 때만 재생).
+ *
+ * 접근성: prefers-reduced-motion이면 움직임을 끈다.
+ */
+export const TabSwapMotion = styled.div`
   display: flex;
   flex-direction: column;
+  animation: tabPanelIn 180ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+
+  @keyframes tabPanelIn {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 `
 
 /** 상단 OverviewSubTabs를 감싸 sticky 영역에서 압축되지 않도록 하는 래퍼. */
