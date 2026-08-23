@@ -10,6 +10,11 @@ import styled, { useTheme } from 'styled-components'
 
 import { useEvents } from '@/entities/event/model'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
+import { signedYearFromIsoLike } from '@/shared/lib/country-period'
+import {
+  formatCenturyLabel,
+  formatSignedYear,
+} from '@/shared/lib/lifespan-text'
 import { pathKeys } from '@/shared/router'
 import {
   PillTabButton,
@@ -40,12 +45,140 @@ const FormSection = styled.section`
   overflow: hidden;
 `
 
+/* ── 시간축 목록 ─────────────────────────────────────────────────────────────── */
+
+const Chronology = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+const CenturySection = styled.section`
+  display: flex;
+  flex-direction: column;
+`
+
+/** 세기 머리 — 스크롤 중에도 지금 보는 세기가 남도록 sticky */
+const CenturyHead = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 14px 0 8px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const CenturyLabel = styled.h3`
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CenturyCount = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+`
+
+/**
+ * 한 사건 = 한 행. 연도 열을 고정폭·tabular로 세워 세로로 스캔되게 한다
+ * (카드 격자에서는 연도가 카드마다 다른 x에 있어 훑을 수가 없었다).
+ */
+const EventRow = styled.button`
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: -2px;
+  }
+
+  @media (max-width: 720px) {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+`
+
+const RowYear = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+`
+
+const RowBody = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const RowTitle = styled.span`
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const RowRange = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+`
+
+/** 정렬 방향 토글 — 역사는 오래된순이 기본, 최근 동향을 볼 땐 최신순 */
+const OrderToggle = styled.div`
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const OrderButton = styled.button<{ $active: boolean }>`
+  padding: 5px 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.background.primary : 'transparent'};
+`
+
 /** 사건 카드 하단 관련 국가 칩 줄 */
 const CountryChipRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 12px;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 320px;
+
+  @media (max-width: 720px) {
+    display: none;
+  }
 `
 
 /** 과거 국가는 앰버 톤으로 — 현대 국가 칩과 한눈에 갈리게 */
@@ -149,6 +282,95 @@ export function EventsTimelineSection({
       )
     })
   }, [events, scopeSet])
+
+  /**
+   * 시간축 그룹 — 세기 → 사건. 카드 격자는 읽는 순서가 지그재그이고 연도 축이 없어서
+   * "언제 무슨 일이 있었나"를 못 읽는다. 세기로 묶고 행마다 연도를 고정폭으로 세운다.
+   *
+   * 연도는 부호 연도(BC 음수)로 정렬한다 — 원시 문자열 비교는 BC를 뒤집는다.
+   * 연도 미상은 방향과 무관하게 항상 맨 끝의 '연도 미상' 묶음으로 보낸다.
+   */
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc')
+
+  const centuryGroups = useMemo(() => {
+    type Entry = {
+      event: (typeof list)[number]
+      signedYear: number | null
+      yearLabel: string
+      rangeLabel: string | null
+      modern: Array<{ id: string; name: string; flagEmoji?: string }>
+      historical: Array<{ id: string; name: string }>
+    }
+
+    const entries: Entry[] = list.map((event) => {
+      const withRelations = event as typeof event & {
+        relatedCountries?: Array<{
+          id: string
+          name: string
+          flagEmoji?: string
+        }>
+        relatedHistoricalCountries?: Array<{ id: string; name: string }>
+      }
+      const signedYear = signedYearFromIsoLike(event.startDate)
+      const range = formatDateRange(event.startDate, event.endDate)
+      return {
+        event,
+        signedYear,
+        yearLabel:
+          signedYear == null ? '미상' : formatSignedYear(signedYear),
+        // 연도는 왼쪽 열에 이미 있으므로, 기간이 한 해로 끝나면 중복이라 감춘다
+        rangeLabel: event.endDate ? range : null,
+        modern: withRelations.relatedCountries ?? [],
+        historical: withRelations.relatedHistoricalCountries ?? [],
+      }
+    })
+
+    const direction = order === 'asc' ? 1 : -1
+    const buckets = new Map<
+      string,
+      { key: string; label: string; sortKey: number; events: Entry[] }
+    >()
+    for (const entry of entries) {
+      const key =
+        entry.signedYear == null
+          ? '__unknown__'
+          : `c${Math.sign(entry.signedYear)}-${Math.floor((Math.abs(entry.signedYear) - 1) / 100) + 1}`
+      const existing = buckets.get(key)
+      if (existing) {
+        existing.events.push(entry)
+      } else {
+        buckets.set(key, {
+          key,
+          label:
+            entry.signedYear == null
+              ? '연도 미상'
+              : formatCenturyLabel(entry.signedYear),
+          sortKey:
+            entry.signedYear == null
+              ? Number.POSITIVE_INFINITY
+              : entry.signedYear,
+          events: [entry],
+        })
+      }
+    }
+
+    return Array.from(buckets.values())
+      .sort((left, right) => {
+        // 미상은 방향과 무관하게 끝
+        if (!Number.isFinite(left.sortKey)) return 1
+        if (!Number.isFinite(right.sortKey)) return -1
+        return (left.sortKey - right.sortKey) * direction
+      })
+      .map((group) => ({
+        ...group,
+        events: [...group.events].sort((left, right) => {
+          if (left.signedYear == null && right.signedYear == null) return 0
+          if (left.signedYear == null) return 1
+          if (right.signedYear == null) return -1
+          return (left.signedYear - right.signedYear) * direction
+        }),
+      }))
+  }, [list, order])
 
   useEffect(() => {
     setView(initialFormFromSearchParams ? 'form' : 'list')
@@ -339,28 +561,59 @@ export function EventsTimelineSection({
         </FormSection>
       ) : (
         <section aria-label="연대표 현황" style={{ paddingTop: 8 }}>
-          <div style={{ marginBottom: 28 }}>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: 20,
-                fontWeight: 700,
-                color: theme.colors.text.primary,
-                letterSpacing: '-0.02em',
-              }}
-            >
-              연대표 현황
-            </h3>
-            <p
-              style={{
-                margin: '6px 0 0',
-                fontSize: 14,
-                color: theme.colors.text.secondary,
-                fontWeight: 500,
-              }}
-            >
-              등록된 사건 목록입니다. 카드를 클릭하면 연대표 상세로 이동합니다.
-            </p>
+          <div
+            style={{
+              marginBottom: 20,
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 16,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: theme.colors.text.primary,
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                연대표
+              </h3>
+              <p
+                style={{
+                  margin: '6px 0 0',
+                  fontSize: 14,
+                  color: theme.colors.text.secondary,
+                  fontWeight: 500,
+                }}
+              >
+                시간순으로 나열했습니다. 행을 클릭하면 사건 상세로 이동합니다.
+              </p>
+            </div>
+            {list.length > 0 && (
+              <OrderToggle role="group" aria-label="정렬 방향">
+                <OrderButton
+                  type="button"
+                  $active={order === 'asc'}
+                  aria-pressed={order === 'asc'}
+                  onClick={() => setOrder('asc')}
+                >
+                  오래된순
+                </OrderButton>
+                <OrderButton
+                  type="button"
+                  $active={order === 'desc'}
+                  aria-pressed={order === 'desc'}
+                  onClick={() => setOrder('desc')}
+                >
+                  최신순
+                </OrderButton>
+              </OrderToggle>
+            )}
           </div>
 
           {isLoading && list.length === 0 ? (
@@ -469,141 +722,49 @@ export function EventsTimelineSection({
               </div>
             </motion.div>
           ) : (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
-                gap: 24,
-              }}
-            >
-              {list.map(
-                (evt: {
-                  id: string
-                  title?: string
-                  startDate?: string
-                  endDate?: string
-                  description?: string
-                  /** 관련 현대 국가 — 카드 하단 칩 */
-                  relatedCountries?: Array<{
-                    id: string
-                    name: string
-                    flagEmoji?: string
-                  }>
-                  /** 관련 과거 국가 — 국가 지면 목록의 다수가 이쪽이다 */
-                  relatedHistoricalCountries?: Array<{
-                    id: string
-                    name: string
-                  }>
-                }) => {
-                  const start = evt.startDate
-                  const end = evt.endDate
-                  const dateLabel = start
-                    ? end
-                      ? formatDateRange(start, end)
-                      : formatDateRange(start)
-                    : '—'
-                  return (
-                    <button
-                      key={evt.id}
+            <Chronology>
+              {centuryGroups.map((group) => (
+                <CenturySection key={group.key}>
+                  <CenturyHead>
+                    <CenturyLabel>{group.label}</CenturyLabel>
+                    <CenturyCount>{group.events.length}건</CenturyCount>
+                  </CenturyHead>
+                  {group.events.map((entry) => (
+                    <EventRow
+                      key={entry.event.id}
                       type="button"
                       onClick={() =>
-                        navigate(pathKeys.events.detail(evt.id))
+                        navigate(pathKeys.events.detail(entry.event.id))
                       }
-                      style={{
-                        textAlign: 'left',
-                        background: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
-                        backdropFilter: isDark ? 'blur(12px)' : 'none',
-                        borderRadius: 16,
-                        minHeight: 160,
-                        overflow: 'hidden',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        border: `1px solid ${theme.colors.border.default}`,
-                        cursor: 'pointer',
-                        padding: 24,
-                        transition: 'border-color 0.2s, box-shadow 0.2s',
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.borderColor = '#c7d2fe'
-                        e.currentTarget.style.boxShadow =
-                          '0 4px 12px rgba(99,102,241,0.08)'
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.borderColor =
-                          theme.colors.border.default
-                        e.currentTarget.style.boxShadow = 'none'
-                      }}
                     >
-                      <div
-                        style={{
-                          fontSize: 16,
-                          fontWeight: 700,
-                          color: theme.colors.text.primary,
-                          letterSpacing: '-0.02em',
-                          lineHeight: 1.35,
-                          marginBottom: 8,
-                        }}
-                      >
-                        {evt.title || '제목 없음'}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          color: theme.colors.text.secondary,
-                          marginBottom: 10,
-                        }}
-                      >
-                        {dateLabel}
-                      </div>
-                      {(evt.description ?? '').trim() && (
-                        <div
-                          style={{
-                            fontSize: 13,
-                            color: theme.colors.text.secondary,
-                            lineHeight: 1.5,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical' as const,
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {evt.description!.trim()}
-                        </div>
+                      <RowYear>{entry.yearLabel}</RowYear>
+                      <RowBody>
+                        <RowTitle>{entry.event.title || '제목 없음'}</RowTitle>
+                        {entry.rangeLabel && (
+                          <RowRange>{entry.rangeLabel}</RowRange>
+                        )}
+                      </RowBody>
+                      {(entry.historical.length > 0 ||
+                        entry.modern.length > 0) && (
+                        <CountryChipRow>
+                          {entry.historical.map((item) => (
+                            <CountryChip key={`h-${item.id}`} $past>
+                              {item.name}
+                            </CountryChip>
+                          ))}
+                          {entry.modern.map((item) => (
+                            <CountryChip key={`m-${item.id}`}>
+                              {item.flagEmoji ? `${item.flagEmoji} ` : ''}
+                              {item.name}
+                            </CountryChip>
+                          ))}
+                        </CountryChipRow>
                       )}
-
-                      {/*
-                        관련 국가 칩 — 국가 지면에서 보는 사건 목록은 현대 국가 사건과
-                        브리지된 **과거 국가** 사건이 섞여 있다(서버 F14). 어느 나라 사건인지
-                        표시가 없으면 그 구분이 통째로 사라진다 — 독일은 36건 중 30건이
-                        과거국가(독일 제국·신성로마제국 …) 사건이다.
-                      */}
-                      {(() => {
-                        const modern = evt.relatedCountries ?? []
-                        const historical = evt.relatedHistoricalCountries ?? []
-                        if (modern.length === 0 && historical.length === 0) {
-                          return null
-                        }
-                        return (
-                          <CountryChipRow>
-                            {historical.map((item) => (
-                              <CountryChip key={`h-${item.id}`} $past>
-                                {item.name}
-                              </CountryChip>
-                            ))}
-                            {modern.map((item) => (
-                              <CountryChip key={`m-${item.id}`}>
-                                {item.flagEmoji ? `${item.flagEmoji} ` : ''}
-                                {item.name}
-                              </CountryChip>
-                            ))}
-                          </CountryChipRow>
-                        )
-                      })()}
-                    </button>
-                  )
-                },
-              )}
-            </div>
+                    </EventRow>
+                  ))}
+                </CenturySection>
+              ))}
+            </Chronology>
           )}
 
           {/* 자동 소진 중 일부 페이지 로드 실패 — 재시도로 이어받기(옛 세기 누락 방지) */}
