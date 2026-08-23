@@ -76,7 +76,7 @@ function specFor(pathname: string): DomainSpec | null {
   if (pathname.startsWith('/events')) {
     return {
       /* 기본 접힘 — 사건 카탈로그는 "목록이 전체 화면을 써야 한다"는 결정으로 캡·중앙정렬을
-         걷어낸 지면이라, 360px를 기본으로 펼치면 툴바가 3줄로 접히며 그 결정을 되돌린다. */
+         걷어낸 지면이라, 사이드바를 기본으로 펼치면 툴바가 3줄로 접히며 그 결정을 되돌린다. */
       storageKey: 'events-list-collapsed',
       defaultCollapsed: true,
       render: (context) => (
@@ -168,7 +168,9 @@ export function ContentAreaShell() {
       left={({ listCollapsed, toggleListCollapsed }) => (
         <>
           {/* 접힘 폭(48px)까지 반영 — 하단 계정 패널이 사이드바와 같이 줄었다 늘었다 한다 */}
-          <SidebarWidthVar $width={listCollapsed ? '48px' : 'var(--list-sidebar-full, 360px)'} />
+          <SidebarWidthVar
+            $width={listCollapsed ? '48px' : 'var(--list-sidebar-full, 320px)'}
+          />
           {spec.render({
             collapsed: listCollapsed,
             onToggleCollapse: toggleListCollapsed,
@@ -186,11 +188,7 @@ export function ContentAreaShell() {
  */
 const SidebarWidthVar = createGlobalStyle<{ $width: string }>`
   :root {
-    --list-sidebar-full: 360px;
     --list-sidebar-width: ${({ $width }) => $width};
-  }
-  @media (max-width: 1280px) {
-    :root { --list-sidebar-full: 320px; }
   }
   @media (max-width: 1024px) {
     :root { --list-sidebar-width: 0px; }

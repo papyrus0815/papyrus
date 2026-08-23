@@ -13,6 +13,12 @@ export const GlobalStyle = createGlobalStyle`
     --header-height: 0px;
     /* 좌측 내비 레일 폭 — 본문은 이만큼 오른쪽에서 시작한다 */
     --nav-rail-width: 80px;
+    /**
+     * 좌측 목록 사이드바(국가 목록·인물 목록 …) 펼침 폭 — **단일 정의**.
+     * 예전엔 MainGrid·--content-left-inset·ContentAreaShell 세 곳에 같은 숫자가 박혀 있어
+     * 한 곳만 고치면 본문 시작선과 fixed 지면의 인셋이 어긋났다.
+     */
+    --list-sidebar-full: 320px;
     /* 우측 콘텐츠 안에서 position:fixed로 뷰포트를 쓰는 지면(사건 카탈로그)이 참조.
        사이드바가 있는 지면은 ContentShell이 여기에 목록 폭을 더해 덮어쓴다. */
     --content-left-inset: var(--nav-rail-width);
@@ -34,6 +40,12 @@ export const GlobalStyle = createGlobalStyle`
     --gradient-subtle: radial-gradient(1200px 500px at 10% -10%, rgba(173,70,255,0.06), transparent 50%), radial-gradient(800px 400px at 90% -20%, rgba(90,0,255,0.05), transparent 55%);
   }
   /* 좁은 화면에서는 레일을 줄인다 — 본문 폭이 더 급하다 */
+  @media (max-width: 1280px) {
+    :root {
+      --list-sidebar-full: 288px;
+    }
+  }
+
   @media (max-width: 640px) {
     :root {
       --nav-rail-width: 64px;

@@ -26,7 +26,7 @@ export const MainGrid = styled.div<{
   }) => {
     if ($listCollapsed) return '48px minmax(0, 1fr)'
     if ($noSidebar) {
-      return `${360 + $sidebarExtraWidth}px minmax(0, 1fr)`
+      return `calc(var(--list-sidebar-full, 320px) + ${$sidebarExtraWidth}px) minmax(0, 1fr)`
     }
     return '15% 30% minmax(0, 1fr)'
   }};
@@ -45,7 +45,7 @@ export const MainGrid = styled.div<{
       if ($noSidebar) {
         // 1280px 이하에선 자식 컬럼이 160px (styles 매칭)
         const extra = $sidebarExtraWidth > 0 ? 160 : 0
-        return `${320 + extra}px minmax(0, 1fr)`
+        return `calc(var(--list-sidebar-full, 320px) + ${extra}px) minmax(0, 1fr)`
       }
       return '18% 35% minmax(0, 1fr)'
     }};
@@ -69,17 +69,17 @@ export const DetailPane = styled.div<{
   /* 좌측 내비 레일 + 목록 사이드바를 합친 폭. fixed로 뷰포트를 쓰는 지면이 이만큼 피한다. */
   --content-left-inset: ${({ $listCollapsed, $sidebarExtraWidth = 0 }) =>
     $listCollapsed
-      ? 'calc(var(--nav-rail-width, 72px) + 48px)'
-      : `calc(var(--nav-rail-width, 72px) + ${360 + $sidebarExtraWidth}px)`};
+      ? 'calc(var(--nav-rail-width, 80px) + 48px)'
+      : `calc(var(--nav-rail-width, 80px) + var(--list-sidebar-full, 320px) + ${$sidebarExtraWidth}px)`};
   @media (max-width: 1280px) {
     --content-left-inset: ${({ $listCollapsed, $sidebarExtraWidth = 0 }) =>
       $listCollapsed
-        ? 'calc(var(--nav-rail-width, 72px) + 48px)'
-        : `calc(var(--nav-rail-width, 72px) + ${320 + ($sidebarExtraWidth > 0 ? 160 : 0)}px)`};
+        ? 'calc(var(--nav-rail-width, 80px) + 48px)'
+        : `calc(var(--nav-rail-width, 80px) + var(--list-sidebar-full, 320px) + ${$sidebarExtraWidth > 0 ? 160 : 0}px)`};
   }
   @media (max-width: 1024px) {
     /* 목록 사이드바가 숨겨지므로 레일 폭만 */
-    --content-left-inset: var(--nav-rail-width, 72px);
+    --content-left-inset: var(--nav-rail-width, 80px);
   }
 
   display: flex;
