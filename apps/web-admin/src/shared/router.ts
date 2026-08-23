@@ -57,10 +57,8 @@ export const pathKeys = {
    * 국가 상세 내 인물 탭 고유 URL.
    * 하위 뷰: tab=stats(통계·최근 인물) | list(인물 리스트) | heads(역대 수반). 생략 시 stats.
    */
-  countryPersons: (countryId: string, tab?: 'stats' | 'list' | 'heads') =>
-    tab
-      ? `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/persons?tab=${tab}`
-      : `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/persons`,
+  countryPersons: (countryId: string) =>
+    `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/persons`,
   /** 국가 상세 내 연결된 역사적 국가 탭 고유 URL */
   countryHistorical: (countryId: string) =>
     `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/historical`,

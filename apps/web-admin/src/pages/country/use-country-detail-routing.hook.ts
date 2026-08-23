@@ -2,7 +2,7 @@
  * `/history/country/:countryId/*` 의 URL ↔ 탭 매핑·네비게이션을 단일 훅으로 캡슐화.
  *
  * - `initialDetailTab`: URL의 `detailTab`을 위젯에 전달할 수 있도록 변환
- *   (events는 페이지 분리, persons/heads-of-state는 라우터 loader가 redirect)
+ *   (events는 페이지 분리, heads-of-state는 라우터 loader가 redirect)
  * - `handleDetailTabChange`: 위젯 → URL 갱신 (단일 콜백, dashboard 포함 모든 탭 처리)
  */
 import { useCallback } from 'react'
@@ -21,6 +21,8 @@ function urlTabToWidgetTab(
   switch (urlTab) {
     case 'dashboard':
       return 'dashboard'
+    case 'persons':
+      return 'persons'
     case 'heads-of-state':
       return 'heads'
     case 'linked-historical':
@@ -60,6 +62,8 @@ function tabToPath(countryId: string, tab: CountryDetailTabKey | null): string {
       return pathKeys.countryElections(countryId)
     case 'laws':
       return pathKeys.countryLaws(countryId)
+    case 'persons':
+      return pathKeys.countryPersons(countryId)
     case 'ethnicity':
       return pathKeys.countryEthnicity(countryId)
     case 'treaty':
@@ -84,7 +88,7 @@ interface RoutingResult {
 /**
  * 페이지가 사용하는 URL ↔ 탭 매핑 헬퍼.
  *
- * deprecated URL(persons, heads-of-state)의 redirect는 라우터 loader 단계에서 처리되므로
+ * deprecated URL(heads-of-state)의 redirect는 라우터 loader 단계에서 처리되므로
  * 이 hook은 순수 매핑만 담당한다.
  */
 export function useCountryDetailRouting({

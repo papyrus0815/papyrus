@@ -1,6 +1,7 @@
 import * as personsApi from '@api/functional/persons'
 
 import { apiConnection, getApiConnection } from '../client'
+import type { PersonResponseDto } from '@/shared/api/persons'
 
 export type Era = 'BC' | 'AD'
 
@@ -189,6 +190,44 @@ export const personApi = {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     return (Array.isArray(data) ? data : data?.data ?? []) as Person[]
+  },
+
+  /**
+   * 국가 상세 "인물" 탭 — 현대 국가 인물 + 연결된 **과거 국가별** 인물.
+   * GET /persons/by-country/:countryId/grouped
+   *
+   * 평면 목록(getByCountryId)과 인물 집합은 같고, 출처만 나뉜다. 한 인물이 두 축에 걸리면
+   * 서버가 역사 그룹에만 남긴다(역사 우선) — '현대' 묶음이 실제 현대 국가 소속만 담게.
+   */
+  getByCountryIdGrouped: async (countryId: string) => {
+    const conn = getApiConnection()
+    const url = `${apiConnection.host}/persons/by-country/${encodeURIComponent(countryId)}/grouped`
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(typeof conn.headers?.Authorization === 'string' && {
+          Authorization: conn.headers.Authorization,
+        }),
+      },
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    // 서버가 주는 것은 PersonResponseDto — 이 모듈의 경량 Person으로 좁히면 카드 위젯이
+    // 요구하는 필드(생몰 정밀도·직위 등)가 타입에서 사라진다.
+    const payload = (data?.data ?? data) as {
+      modern?: PersonResponseDto[]
+      historical?: Array<{
+        historicalCountryId: string
+        historicalCountryName: string
+        persons: PersonResponseDto[]
+      }>
+    }
+    return {
+      modern: payload?.modern ?? [],
+      historical: payload?.historical ?? [],
+    }
   },
 
   /** 가문 소속 인물 (dynastyId). GET /persons/by-dynasty/:dynastyId */

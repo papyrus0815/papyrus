@@ -22,6 +22,7 @@ import {
   panelId,
   tabId,
 } from './overview-sub-tabs'
+import { CountryPersonsSection } from './country-persons-section.widget'
 import { TreatySectionWidget } from './treaty-section.widget'
 
 /**
@@ -221,6 +222,10 @@ function CountryDetailInner({
               >
                 {activeSubTab === 'dashboard' && (
                   <CountryDetailDashboard country={country} onEdit={onEdit} />
+                )}
+
+                {activeSubTab === 'persons' && (
+                  <CountryPersonsSection country={country} />
                 )}
 
                 {activeSubTab === 'regions' && (

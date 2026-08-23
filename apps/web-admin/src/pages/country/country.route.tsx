@@ -32,11 +32,15 @@ const lazyCountryDetailEventsContent: Lazy = async () => ({
  * 모두 detail 콘텐츠 페이지(`country-detail.page`)로 매핑되어 `CountryDetail` 위젯이
  * `initialDetailTab`을 보고 적절한 탭을 연다.
  *
- * deprecated 세그먼트(persons, heads-of-state)는 별도 loader-only 라우트로 redirect —
+ * deprecated 세그먼트(heads-of-state)는 별도 loader-only 라우트로 redirect —
  * 컴포넌트 마운트 후 useEffect redirect 대신 즉시 갈아탄다.
+ *
+ * `persons`는 예전엔 인물 대시보드로 내보내는 redirect였으나, 국가 지면 안에서 그 나라
+ * 사람(과거 국가 포함)을 봐야 해서 실제 탭으로 되돌렸다.
  */
 const countryDetailChildSegments = [
   'dashboard',
+  'persons',
   'historical',
   'regions',
   'government',
@@ -46,23 +50,6 @@ const countryDetailChildSegments = [
   'ethnicity',
   'treaty',
 ] as const
-
-/**
- * `/country/:id/persons` → `/persons-timeline/?countries=<id>` redirect.
- * `?tab=heads` (역대 수반 탭이 행정조직으로 통합되기 전 잔존 링크) 인 경우만
- * `/country/:id/government`로 갈아탄다.
- */
-const personsRedirectLoader = ({ params, request }: LoaderFunctionArgs) => {
-  const countryId = params.countryId
-  if (!countryId) return redirect(pathKeys.country())
-  const url = new URL(request.url)
-  if (url.searchParams.get('tab') === 'heads') {
-    return redirect(pathKeys.countryGovernment(countryId))
-  }
-  return redirect(
-    `${pathKeys.personsTimeline()}?countries=${encodeURIComponent(countryId)}`,
-  )
-}
 
 /** `/country/:id/heads-of-state` → `/country/:id/government` (역대 수반 탭이 행정조직 탭에 통합됨) */
 const headsOfStateRedirectLoader = ({ params }: LoaderFunctionArgs) => {
@@ -84,7 +71,6 @@ const countryDetailChildren: RouteObject[] = [
   // /country/:countryId/events — 별도 콘텐츠 페이지
   { path: ':countryId/events', lazy: lazyCountryDetailEventsContent },
   // deprecated → loader-level redirect (컴포넌트 안 띄우고 즉시 갈아탐)
-  { path: ':countryId/persons', loader: personsRedirectLoader },
   { path: ':countryId/heads-of-state', loader: headsOfStateRedirectLoader },
 ]
 

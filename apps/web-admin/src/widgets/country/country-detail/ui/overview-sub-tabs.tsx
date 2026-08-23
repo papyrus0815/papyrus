@@ -12,6 +12,7 @@ import * as S from './overview-sub-tabs.styles'
  */
 export type OverviewSubTab =
   | 'dashboard'
+  | 'persons'
   | 'linked-historical'
   | 'regions'
   | 'government'
@@ -27,6 +28,7 @@ interface OverviewSubTabsProps {
 
 const TAB_LABELS: Array<{ key: OverviewSubTab; label: string }> = [
   { key: 'dashboard', label: '대시보드' },
+  { key: 'persons', label: '인물' },
   { key: 'regions', label: '행정구역' },
   { key: 'government', label: '행정조직' },
   { key: 'ethnicity', label: '민족' },
