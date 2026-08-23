@@ -1666,7 +1666,9 @@ export const TableCell = styled.td<{ $bold?: boolean }>`
 
 export const MiniFlagWrapper = styled.div`
   width: 100%;
-  height: 380px;
+  /* 국기 배너 — 예전 380px는 첫 화면의 40%를 색으로만 채웠다(정보는 국호·대륙뿐).
+     띠로 줄여 그 자리를 지표·계보에 넘긴다. */
+  height: 168px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1742,7 +1744,7 @@ export const CountryNameOverlay = styled.div`
 
 /** 국가명 글래스 패널 - 가독성·트렌디한 톤 */
 export const CountryNameGlass = styled.div`
-  padding: 20px 24px;
+  padding: 12px 16px;
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.25);
   backdrop-filter: blur(12px);
@@ -1783,7 +1785,8 @@ export const AnalyticsCountryInfo = styled.div`
 `
 
 export const AnalyticsCountryName = styled.h1`
-  font-size: 42px;
+  /* 배너가 168px로 줄어 42px는 넘친다 */
+  font-size: 30px;
   font-weight: 700;
   color: #ffffff;
   margin: 0;

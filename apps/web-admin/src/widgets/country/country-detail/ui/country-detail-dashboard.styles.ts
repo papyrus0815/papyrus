@@ -1450,3 +1450,98 @@ export const EmptyCtaButton = styled.button`
     outline-offset: 2px;
   }
 `
+
+/* ── 개편(2026-08): 규모 지표 바 · 지금 · 하단 2열 ───────────────────────────── */
+
+/**
+ * 규모 지표 바 — 인구·면적·밀도·수도·ISO를 한 줄에.
+ * 예전엔 큰 카드 3개(인구/면적/수도) + 별도 메타 줄로 세로를 많이 먹었다. 값 자체는
+ * 짧으므로 한 줄에 세워도 읽힌다.
+ */
+export const FactBar = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: ${({ theme }) => theme.colors.border.light};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+export const Fact = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  background: ${({ theme }) => theme.colors.background.primary};
+`
+
+export const FactLabel = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const FactValue = styled.span`
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+export const FactUnit = styled.span`
+  margin-left: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** '지금' — 현임 수반 · 현 내각 · 선거 3매를 한 행에 */
+export const NowRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+`
+
+/** 하단 보조 — 최근 활동과 완성도를 나란히 */
+export const BottomRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 16px;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+/** 섹션 제목 줄 우측 텍스트 링크 (‘전체 보기’) */
+export const SectionLink = styled.button`
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary};
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+/** 계보 요약 위 '이전 N개' 줄 — 좌측 정렬(SectionLink의 margin-left:auto 무효화) */
+export const LineageMoreRow = styled.div`
+  display: flex;
+  margin-bottom: 6px;
+
+  > button {
+    margin-left: 0;
+  }
+`
