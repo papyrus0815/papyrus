@@ -8,11 +8,12 @@ import * as S from './overview-sub-tabs.styles'
  * 국가 상세 내부 서브 탭 키.
  *
  * URL/CountryDetailTab과 어휘를 통일 — 페이지(URL)와 위젯(state)이 같은 키를 공유한다.
- * 'heads-of-state'/'persons'/'events' 같은 페이지 전용 탭은 여기에 들어오지 않는다 (페이지에서 분기).
+ * 'heads-of-state'는 government 탭의 sub-view라 여기 없다.
  */
 export type OverviewSubTab =
   | 'dashboard'
   | 'persons'
+  | 'events'
   | 'linked-historical'
   | 'regions'
   | 'government'
@@ -29,6 +30,7 @@ interface OverviewSubTabsProps {
 const TAB_LABELS: Array<{ key: OverviewSubTab; label: string }> = [
   { key: 'dashboard', label: '대시보드' },
   { key: 'persons', label: '인물' },
+  { key: 'events', label: '사건' },
   { key: 'regions', label: '행정구역' },
   { key: 'government', label: '행정조직' },
   { key: 'ethnicity', label: '민족' },

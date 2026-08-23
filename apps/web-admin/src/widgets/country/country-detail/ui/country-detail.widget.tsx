@@ -1,9 +1,11 @@
 import React, { useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { type ContinentOption } from '@/entities/country/api'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { pathKeys } from '@/shared/router'
 
 import { CountryDetailDashboard } from './country-detail-dashboard.widget'
 import { CountryDetailHeader } from './country-detail-header.widget'
@@ -23,6 +25,7 @@ import {
   tabId,
 } from './overview-sub-tabs'
 import { CountryPersonsSection } from './country-persons-section.widget'
+import { EventsTimelineSection } from './events-timeline-section.widget'
 import { TreatySectionWidget } from './treaty-section.widget'
 
 /**
@@ -71,6 +74,8 @@ function CountryDetailInner({
   initialDetailTab,
   onDetailTabChange,
 }: CountryDetailProps) {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [activeSubTab, setActiveSubTab] = useState<OverviewSubTab>(() =>
     resolveSubTab(initialDetailTab),
   )
@@ -226,6 +231,30 @@ function CountryDetailInner({
 
                 {activeSubTab === 'persons' && (
                   <CountryPersonsSection country={country} />
+                )}
+
+                {activeSubTab === 'events' && (
+                  <EventsTimelineSection
+                    countryId={country.id}
+                    /* 서버 필터는 최상위 사건에만 걸린다 — 평탄화된 하위 사건까지
+                       같은 기준으로 거르도록 이 국가의 id 집합을 넘긴다 */
+                    scopeCountryIds={[
+                      country.id,
+                      ...(country.historicalCountries ?? []).map(
+                        (item) => item.id,
+                      ),
+                    ]}
+                    initialFormFromSearchParams={
+                      searchParams.get('form') === 'create'
+                    }
+                    onNavigateToForm={(toForm) =>
+                      navigate(
+                        toForm
+                          ? pathKeys.countryEvents(country.id, 'create')
+                          : pathKeys.countryEvents(country.id),
+                      )
+                    }
+                  />
                 )}
 
                 {activeSubTab === 'regions' && (

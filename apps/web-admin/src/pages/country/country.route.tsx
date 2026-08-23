@@ -22,15 +22,13 @@ const lazyCountryDetailContent: Lazy = async () => ({
   Component: (await import('./country-detail.page')).default,
 })
 
-/** 셸의 자식 — events 탭 콘텐츠. */
-const lazyCountryDetailEventsContent: Lazy = async () => ({
-  Component: (await import('./country-detail-events.page')).default,
-})
-
 /**
- * 셸이 떠받치는 sub-route 자식들. events만 별도 콘텐츠 페이지, 그 외 탭 세그먼트는
- * 모두 detail 콘텐츠 페이지(`country-detail.page`)로 매핑되어 `CountryDetail` 위젯이
- * `initialDetailTab`을 보고 적절한 탭을 연다.
+ * 셸이 떠받치는 sub-route 자식들. 모든 탭 세그먼트가 detail 콘텐츠 페이지
+ * (`country-detail.page`)로 매핑되어 `CountryDetail` 위젯이 `initialDetailTab`을 보고
+ * 적절한 탭을 연다.
+ *
+ * `events`도 예전엔 별도 페이지였으나 그러면 그 지면에서 **탭바가 통째로 사라져** 사건이
+ * 탭 목록에 낄 수 없었다. 위젯 서브탭으로 편입했다.
  *
  * deprecated 세그먼트(heads-of-state)는 별도 loader-only 라우트로 redirect —
  * 컴포넌트 마운트 후 useEffect redirect 대신 즉시 갈아탄다.
@@ -41,6 +39,7 @@ const lazyCountryDetailEventsContent: Lazy = async () => ({
 const countryDetailChildSegments = [
   'dashboard',
   'persons',
+  'events',
   'historical',
   'regions',
   'government',
@@ -68,8 +67,6 @@ const countryDetailChildren: RouteObject[] = [
     path: `:countryId/${seg}`,
     lazy: lazyCountryDetailContent,
   })),
-  // /country/:countryId/events — 별도 콘텐츠 페이지
-  { path: ':countryId/events', lazy: lazyCountryDetailEventsContent },
   // deprecated → loader-level redirect (컴포넌트 안 띄우고 즉시 갈아탐)
   { path: ':countryId/heads-of-state', loader: headsOfStateRedirectLoader },
 ]

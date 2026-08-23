@@ -2,7 +2,7 @@
  * 연대표(전체 사건) 섹션 — 가문·민족 메뉴와 동일한 헤더·레이아웃
  * 목록 뷰 + 사건 등록(events/create 전체 기능, 카드만 가문·민족 스타일)
  */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -40,9 +40,50 @@ const FormSection = styled.section`
   overflow: hidden;
 `
 
+/** 사건 카드 하단 관련 국가 칩 줄 */
+const CountryChipRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+`
+
+/** 과거 국가는 앰버 톤으로 — 현대 국가 칩과 한눈에 갈리게 */
+const CountryChip = styled.span<{ $past?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: ${({ theme, $past }) =>
+    $past
+      ? theme.mode === 'dark'
+        ? '#fbbf24'
+        : '#92400e'
+      : theme.colors.text.secondary};
+  background: ${({ theme, $past }) =>
+    $past
+      ? theme.mode === 'dark'
+        ? 'rgba(245,158,11,0.16)'
+        : '#fef3c7'
+      : theme.colors.background.secondary};
+`
+
 export interface EventsTimelineSectionProps {
   /** 국가(현대/역사적) ID로 연관 사건만 표시. 미전달 시 전체 */
   countryId?: string | null
+  /**
+   * 이 국가로 인정할 id 전부 — 현대 국가 id + 브리지된 과거 국가 id들.
+   *
+   * 서버 필터(countryId)는 **최상위 사건**에만 걸리는데, 응답에 실려온 하위 사건이
+   * 변환 단계에서 평탄화돼 목록에 함께 들어온다. 그래서 이 국가와 무관한 자식 사건이
+   * 섞인다(독일: 최상위 36건 → 목록 97건, 그중 40여 건이 무관).
+   * 이 집합이 있으면 목록을 같은 기준으로 한 번 더 거른다. 없으면 거르지 않는다.
+   */
+  scopeCountryIds?: string[]
   /** URL searchParams form=create 시 true. 사건 등록 폼을 바로 표시 */
   initialFormFromSearchParams?: boolean
   /** 목록↔폼 전환 시 URL 동기화 (form 열기: true, 목록: false) */
@@ -57,6 +98,7 @@ export interface EventsTimelineSectionProps {
 
 export function EventsTimelineSection({
   countryId,
+  scopeCountryIds,
   initialFormFromSearchParams,
   onNavigateToForm,
   editEventId,
@@ -84,7 +126,29 @@ export function EventsTimelineSection({
       autoLoadAll: true,
     })
 
-  const list = events ?? []
+  /**
+   * 서버가 거른 것과 같은 기준으로 목록을 한 번 더 좁힌다 —
+   * 관련 현대 국가 또는 관련 과거 국가가 이 국가 스코프에 걸리는 사건만.
+   */
+  const scopeSet = useMemo(
+    () => (scopeCountryIds?.length ? new Set(scopeCountryIds) : null),
+    [scopeCountryIds],
+  )
+  const list = useMemo(() => {
+    const all = events ?? []
+    if (!scopeSet) return all
+    return all.filter((evt) => {
+      const modern = (evt as { relatedCountries?: Array<{ id: string }> })
+        .relatedCountries
+      const historical = (
+        evt as { relatedHistoricalCountries?: Array<{ id: string }> }
+      ).relatedHistoricalCountries
+      return (
+        (modern ?? []).some((item) => scopeSet.has(item.id)) ||
+        (historical ?? []).some((item) => scopeSet.has(item.id))
+      )
+    })
+  }, [events, scopeSet])
 
   useEffect(() => {
     setView(initialFormFromSearchParams ? 'form' : 'list')
@@ -419,6 +483,17 @@ export function EventsTimelineSection({
                   startDate?: string
                   endDate?: string
                   description?: string
+                  /** 관련 현대 국가 — 카드 하단 칩 */
+                  relatedCountries?: Array<{
+                    id: string
+                    name: string
+                    flagEmoji?: string
+                  }>
+                  /** 관련 과거 국가 — 국가 지면 목록의 다수가 이쪽이다 */
+                  relatedHistoricalCountries?: Array<{
+                    id: string
+                    name: string
+                  }>
                 }) => {
                   const start = evt.startDate
                   const end = evt.endDate
@@ -495,6 +570,35 @@ export function EventsTimelineSection({
                           {evt.description!.trim()}
                         </div>
                       )}
+
+                      {/*
+                        관련 국가 칩 — 국가 지면에서 보는 사건 목록은 현대 국가 사건과
+                        브리지된 **과거 국가** 사건이 섞여 있다(서버 F14). 어느 나라 사건인지
+                        표시가 없으면 그 구분이 통째로 사라진다 — 독일은 36건 중 30건이
+                        과거국가(독일 제국·신성로마제국 …) 사건이다.
+                      */}
+                      {(() => {
+                        const modern = evt.relatedCountries ?? []
+                        const historical = evt.relatedHistoricalCountries ?? []
+                        if (modern.length === 0 && historical.length === 0) {
+                          return null
+                        }
+                        return (
+                          <CountryChipRow>
+                            {historical.map((item) => (
+                              <CountryChip key={`h-${item.id}`} $past>
+                                {item.name}
+                              </CountryChip>
+                            ))}
+                            {modern.map((item) => (
+                              <CountryChip key={`m-${item.id}`}>
+                                {item.flagEmoji ? `${item.flagEmoji} ` : ''}
+                                {item.name}
+                              </CountryChip>
+                            ))}
+                          </CountryChipRow>
+                        )
+                      })()}
                     </button>
                   )
                 },
