@@ -254,6 +254,55 @@ export class PersonService {
   }
 
   /**
+   * 국가 상세 "인물" 탭 — 현대 국가와 그 국가에 연결된 **과거(역사) 국가**의 인물을
+   * 한 번에, 출처가 보이도록 나눠서 돌려준다.
+   *
+   * 왜 나눠서 주나: 단순 합집합이면 "이 사람이 조선 사람인지 대한민국 사람인지"가 사라진다.
+   * 사용자가 국가 지면에서 기대하는 것은 그 구분이다.
+   *
+   * 중복 규칙 — **역사 우선**(국가↔역사국가 연결 규약 F8과 동일 방향).
+   * 한 인물이 역사 축과 현대 축에 모두 걸리면 역사 그룹에만 남긴다. 그래야 '현대' 묶음이
+   * 실제로 현대 국가 소속인 사람만 담는다. 역사국가를 여러 곳 걸친 인물은 각 그룹에 나온다
+   * (재임을 실제로 여러 곳에서 한 것이므로 사실 그대로).
+   */
+  async findPersonsByCountryGrouped(countryId: string): Promise<{
+    modern: PersonResponseDto[]
+    historical: Array<{
+      historicalCountryId: string
+      historicalCountryName: string
+      persons: PersonResponseDto[]
+    }>
+  }> {
+    const linked = await this.personRepository.findLinkedHistoricalCountries(
+      countryId,
+    )
+    const [modernAll, historicalGroups] = await Promise.all([
+      this.findPersonsByCountry(countryId),
+      this.personRepository.findPersonsByHistoricalCountryIdsGrouped(
+        linked.map((item) => item.id),
+      ),
+    ])
+
+    const historical = linked
+      .map((item) => ({
+        historicalCountryId: item.id,
+        historicalCountryName: item.name,
+        persons: historicalGroups.get(item.id) ?? [],
+      }))
+      .filter((group) => group.persons.length > 0)
+
+    const inHistorical = new Set<string>()
+    for (const group of historical) {
+      for (const person of group.persons) inHistorical.add(person.id)
+    }
+
+    return {
+      modern: modernAll.filter((person) => !inHistorical.has(person.id)),
+      historical,
+    }
+  }
+
+  /**
    * 소속 축별 인물 소스(본체 FK·재임·소속)를 id 기준 합집합.
    * 앞선 소스가 우선(중복 시 먼저 담긴 DTO 유지) — 현대/역사 축 공통 병합 로직.
    */

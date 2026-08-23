@@ -305,6 +305,28 @@ export interface IPersonRepository {
   ): Promise<PersonResponseDto[]>
 
   /**
+   * 여러 역사국가의 인물을 **한 번에** 조회해 역사국가별로 묶어 돌려준다.
+   *
+   * 국가 상세 인물 탭이 "현대 + 연결된 과거국가 전부"를 한 화면에 보여주는데, 독일처럼
+   * 연결 역사국가가 수십 개인 나라가 있다. 역사국가마다 단건 조회(3원 합집합 × N)를 돌면
+   * 쿼리가 수백 개가 되므로 축별로 `in` 한 번씩만 던진다.
+   *
+   * 합집합 축은 단건판(findPersonsByHistoricalCountry)과 동일:
+   * 본체 FK(person.historicalCountryId) + 재임·재위 + 소속(PersonCountryAffiliation).
+   */
+  findPersonsByHistoricalCountryIdsGrouped(
+    historicalCountryIds: string[],
+  ): Promise<Map<string, PersonResponseDto[]>>
+
+  /**
+   * 현대 국가에 연결(브리지)된 과거 국가 목록 — 존속 시작이 이른 순.
+   * 국가 상세 인물 탭이 "과거국가별" 묶음을 시대 순으로 세우는 데 쓴다.
+   */
+  findLinkedHistoricalCountries(countryId: string): Promise<
+    Array<{ id: string; name: string; startYear: number | null }>
+  >
+
+  /**
    * 가문별 인물 목록 (person.dynastyId = dynastyId, accountId 무관)
    */
   findPersonsByDynastyId(dynastyId: string): Promise<PersonResponseDto[]>

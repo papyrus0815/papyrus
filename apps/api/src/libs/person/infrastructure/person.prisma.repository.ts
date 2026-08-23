@@ -879,6 +879,122 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 현대 국가에 브리지된 과거 국가 목록 — 존속 시작이 이른 순(미상은 뒤).
+   * BC는 startEra로 구분되므로 부호 연도로 환산해 정렬한다.
+   */
+  async findLinkedHistoricalCountries(
+    countryId: string,
+  ): Promise<Array<{ id: string; name: string; startYear: number | null }>> {
+    const links = await this.prisma.historicalCountryModernCountry.findMany({
+      where: { modernCountryId: countryId },
+      select: {
+        historicalCountry: {
+          select: { id: true, name: true, startEra: true, startYear: true },
+        },
+      },
+    })
+    const rows = links
+      .map((link) => link.historicalCountry)
+      .filter((hc): hc is NonNullable<typeof hc> => !!hc)
+      .map((hc) => ({
+        id: hc.id,
+        name: hc.name,
+        // BC는 음수로 — 원시 startYear로 비교하면 BC 국가가 뒤집힌다
+        startYear:
+          hc.startYear == null
+            ? null
+            : hc.startEra === 'BC'
+              ? -hc.startYear
+              : hc.startYear,
+      }))
+    return rows.sort((left, right) => {
+      if (left.startYear == null && right.startYear == null) {
+        return left.name.localeCompare(right.name, 'ko')
+      }
+      if (left.startYear == null) return 1
+      if (right.startYear == null) return -1
+      return left.startYear - right.startYear
+    })
+  }
+
+  /**
+   * 여러 역사국가의 인물을 한 번에 조회해 역사국가별로 묶는다 (국가 상세 인물 탭).
+   *
+   * 축별로 `in` 쿼리 한 번씩 — 역사국가가 수십 개인 나라(독일 등)에서 단건 조회를 N번
+   * 돌면 쿼리가 수백 개가 된다. 인물 본체는 마지막에 id 합집합으로 **한 번만** 읽는다.
+   */
+  async findPersonsByHistoricalCountryIdsGrouped(
+    historicalCountryIds: string[],
+  ): Promise<Map<string, PersonResponseDto[]>> {
+    const result = new Map<string, PersonResponseDto[]>()
+    if (historicalCountryIds.length === 0) return result
+
+    const ids = Array.from(new Set(historicalCountryIds))
+
+    // (1) 축별 (역사국가 → 인물id) 쌍 수집
+    const [fkRows, tenureRows, reignRows, affiliationRows] = await Promise.all([
+      this.prisma.person.findMany({
+        where: { historicalCountryId: { in: ids } },
+        select: { id: true, historicalCountryId: true },
+      }),
+      this.prisma.governmentPositionTenure.findMany({
+        where: { historicalCountryId: { in: ids } },
+        select: { personId: true, historicalCountryId: true },
+      }),
+      this.prisma.sovereignReign.findMany({
+        where: { historicalCountryId: { in: ids } },
+        select: { personId: true, historicalCountryId: true },
+      }),
+      this.prisma.personCountryAffiliation.findMany({
+        where: { historicalCountryId: { in: ids } },
+        select: { personId: true, historicalCountryId: true },
+      }),
+    ])
+
+    const personIdsByHistorical = new Map<string, Set<string>>()
+    const add = (historicalId: string | null, personId: string) => {
+      if (!historicalId) return
+      const bucket = personIdsByHistorical.get(historicalId)
+      if (bucket) bucket.add(personId)
+      else personIdsByHistorical.set(historicalId, new Set([personId]))
+    }
+    for (const row of fkRows) add(row.historicalCountryId, row.id)
+    for (const row of tenureRows) add(row.historicalCountryId, row.personId)
+    for (const row of reignRows) add(row.historicalCountryId, row.personId)
+    for (const row of affiliationRows) add(row.historicalCountryId, row.personId)
+
+    // (2) 등장한 인물 전체를 한 번에 읽어 id → DTO 인덱스
+    const allPersonIds = new Set<string>()
+    for (const bucket of personIdsByHistorical.values()) {
+      for (const personId of bucket) allPersonIds.add(personId)
+    }
+    if (allPersonIds.size === 0) return result
+
+    const persons = await this.prisma.person.findMany({
+      where: { id: { in: Array.from(allPersonIds) } },
+      orderBy: [{ name: 'asc' }, { surname: 'asc' }],
+      include: PERSON_CARD_INCLUDE,
+    })
+    const dtoById = new Map<string, PersonResponseDto>()
+    for (const person of persons) {
+      dtoById.set(person.id, this.mapToPersonResponse(person))
+    }
+
+    // (3) 역사국가별로 되돌려 담기 (이름 정렬은 위 orderBy 순서를 그대로 따른다)
+    for (const [historicalId, bucket] of personIdsByHistorical) {
+      const list: PersonResponseDto[] = []
+      for (const person of persons) {
+        if (bucket.has(person.id)) {
+          const dto = dtoById.get(person.id)
+          if (dto) list.push(dto)
+        }
+      }
+      if (list.length > 0) result.set(historicalId, list)
+    }
+    return result
+  }
+
+  /**
    * 인물 ID 집합으로 인물 카드 목록 (묶음 멤버 등). 입력 순서는 보장하지 않음.
    */
   async findPersonsByIds(ids: string[]): Promise<PersonResponseDto[]> {
