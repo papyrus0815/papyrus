@@ -331,6 +331,27 @@ export class CountryService {
         ? Number(indicator.lifeExpectancyFemale)
         : null,
       sexRatio: indicator.sexRatio ? Number(indicator.sexRatio) : null,
+      // 연령대별 성별 인구 — BigInt는 JSON.stringify가 못 다룬다. 위 `...indicator`
+      // 스프레드가 원시 BigInt를 그대로 실어 보내므로 반드시 여기서 덮어써야 한다.
+      // (전까지는 이 컬럼들이 전부 NULL이라 터지지 않고 잠복해 있었다.)
+      maleAge0To9: indicator.maleAge0To9?.toString() ?? null,
+      femaleAge0To9: indicator.femaleAge0To9?.toString() ?? null,
+      maleAge10To19: indicator.maleAge10To19?.toString() ?? null,
+      femaleAge10To19: indicator.femaleAge10To19?.toString() ?? null,
+      maleAge20To29: indicator.maleAge20To29?.toString() ?? null,
+      femaleAge20To29: indicator.femaleAge20To29?.toString() ?? null,
+      maleAge30To39: indicator.maleAge30To39?.toString() ?? null,
+      femaleAge30To39: indicator.femaleAge30To39?.toString() ?? null,
+      maleAge40To49: indicator.maleAge40To49?.toString() ?? null,
+      femaleAge40To49: indicator.femaleAge40To49?.toString() ?? null,
+      maleAge50To59: indicator.maleAge50To59?.toString() ?? null,
+      femaleAge50To59: indicator.femaleAge50To59?.toString() ?? null,
+      maleAge60To69: indicator.maleAge60To69?.toString() ?? null,
+      femaleAge60To69: indicator.femaleAge60To69?.toString() ?? null,
+      maleAge70To79: indicator.maleAge70To79?.toString() ?? null,
+      femaleAge70To79: indicator.femaleAge70To79?.toString() ?? null,
+      maleAge80Plus: indicator.maleAge80Plus?.toString() ?? null,
+      femaleAge80Plus: indicator.femaleAge80Plus?.toString() ?? null,
     }))
   }
 
@@ -475,6 +496,27 @@ export class CountryService {
       ...rest,
       population: toBigIntField(population),
       urbanPopulation: toBigIntField(urbanPopulation),
+      // 연령대별 성별 인구도 BigInt 컬럼 — string으로 받아 여기서 변환한다.
+      // undefined는 toBigIntField가 undefined로 돌려주므로 그 칸은 기존 값이 보존된다
+      // (부분 갱신). 빈 문자열·null만 NULL로 지운다.
+      maleAge0To9: toBigIntField(rest.maleAge0To9),
+      femaleAge0To9: toBigIntField(rest.femaleAge0To9),
+      maleAge10To19: toBigIntField(rest.maleAge10To19),
+      femaleAge10To19: toBigIntField(rest.femaleAge10To19),
+      maleAge20To29: toBigIntField(rest.maleAge20To29),
+      femaleAge20To29: toBigIntField(rest.femaleAge20To29),
+      maleAge30To39: toBigIntField(rest.maleAge30To39),
+      femaleAge30To39: toBigIntField(rest.femaleAge30To39),
+      maleAge40To49: toBigIntField(rest.maleAge40To49),
+      femaleAge40To49: toBigIntField(rest.femaleAge40To49),
+      maleAge50To59: toBigIntField(rest.maleAge50To59),
+      femaleAge50To59: toBigIntField(rest.femaleAge50To59),
+      maleAge60To69: toBigIntField(rest.maleAge60To69),
+      femaleAge60To69: toBigIntField(rest.femaleAge60To69),
+      maleAge70To79: toBigIntField(rest.maleAge70To79),
+      femaleAge70To79: toBigIntField(rest.femaleAge70To79),
+      maleAge80Plus: toBigIntField(rest.maleAge80Plus),
+      femaleAge80Plus: toBigIntField(rest.femaleAge80Plus),
     }
     await this.prisma.countryDemographicIndicator.upsert({
       where: {

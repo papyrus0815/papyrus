@@ -40,6 +40,7 @@ import {
 import { GovernmentCard } from './dashboard-panels/government-card'
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
+import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
 
 /** 대시보드 계보 요약에 한 번에 보여줄 과거 국가 수 */
 const LINEAGE_SUMMARY_LIMIT = 12
@@ -355,10 +356,13 @@ export function CountryDetailDashboard({
       </S.BottomRow>
 
       {country.type === 'modern' && (
-        <IndicatorTrendsSection
-          countryId={country.id}
-          countryName={country.name}
-        />
+        <>
+          <IndicatorTrendsSection
+            countryId={country.id}
+            countryName={country.name}
+          />
+          <PopulationPyramidSection countryId={country.id} />
+        </>
       )}
     </S.DashboardRoot>
   )

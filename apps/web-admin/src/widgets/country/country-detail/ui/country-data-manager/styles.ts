@@ -53,6 +53,15 @@ export const Table = styled.table`
     border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
     white-space: nowrap;
   }
+
+  /*
+   * td에 색을 명시한다. 라이트 모드에서도 body의 상속색이 #f9fafb(거의 흰색)라
+   * 색을 안 주면 흰 모달 위에 흰 글씨가 되어 값이 안 보인다 — 이 모달의 표
+   * 전부(지표·교역·기록·연령별 인구)가 같은 증상이었다.
+   */
+  td {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
   th:first-child,
   td:first-child {
     text-align: left;
