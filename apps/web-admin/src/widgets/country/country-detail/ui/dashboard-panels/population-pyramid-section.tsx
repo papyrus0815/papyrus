@@ -21,11 +21,13 @@ import {
 } from '@/entities/country/model/population-pyramid'
 import type { DemographicIndicator } from '@/shared/api/country-indicators'
 
+import { CountryDataManagerModal } from '../country-data-manager/country-data-manager-modal'
 import { IconChart } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 
 interface Props {
   countryId: string
+  countryName: string
 }
 
 const MALE = '#3b82f6'
@@ -50,7 +52,8 @@ const compact = (value: number) => {
  * 보여주면서 동시에 연도 선택기다 — 눌러 가며 피라미드 모양이 어떻게 변했는지 따라간다.
  * 값이 있는 해만 띠에 오른다(빈 해를 눌러 빈 차트를 보게 되는 일이 없도록).
  */
-export function PopulationPyramidSection({ countryId }: Props) {
+export function PopulationPyramidSection({ countryId, countryName }: Props) {
+  const [managerOpen, setManagerOpen] = useState(false)
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
   const query = useDemographicIndicators(countryId)
@@ -122,15 +125,26 @@ export function PopulationPyramidSection({ countryId }: Props) {
     [current],
   )
 
+  const manager = (
+    <CountryDataManagerModal
+      countryId={countryId}
+      countryName={countryName}
+      open={managerOpen}
+      onClose={() => setManagerOpen(false)}
+      initialTab="pyramid"
+    />
+  )
+
   if (query.isLoading) return null
   if (years.length === 0) {
     return (
       <S.Section>
-        <Title />
+        <Title onRegister={() => setManagerOpen(true)} />
         <S.EmptyHint>
-          등록된 연령대별 인구가 없습니다. “지표 추이 → 데이터 관리 → 연령·성별
-          인구”에서 연도별 남·여 인구를 추가하면 여기에 피라미드가 그려집니다.
+          등록된 연령대별 인구가 없습니다. 연도별 남·여 인구를 넣으면 여기에
+          피라미드가 그려집니다.
         </S.EmptyHint>
+        {manager}
       </S.Section>
     )
   }
@@ -142,7 +156,8 @@ export function PopulationPyramidSection({ countryId }: Props) {
 
   return (
     <S.Section>
-      <Title />
+      <Title onRegister={() => setManagerOpen(true)} />
+      {manager}
 
       {years.length > 1 && (
         <YearStrip role="group" aria-label="연도 선택">
@@ -289,16 +304,36 @@ export function PopulationPyramidSection({ countryId }: Props) {
   )
 }
 
-function Title() {
+function Title({ onRegister }: { onRegister: () => void }) {
   return (
     <S.SectionTitleRow>
       <S.SectionTitleIcon $accent="sky">
         <IconChart />
       </S.SectionTitleIcon>
       <S.SectionTitleText>인구 피라미드</S.SectionTitleText>
+      {/* 이 자리에 버튼이 없으면 등록 진입점이 '지표 추이'의 작은 버튼 하나뿐이다 */}
+      <RegisterButton type="button" onClick={onRegister}>
+        연령·성별 인구 등록
+      </RegisterButton>
     </S.SectionTitleRow>
   )
 }
+
+const RegisterButton = styled.button`
+  margin-left: auto;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 130, 246, 0.35);
+  background: rgba(56, 130, 246, 0.08);
+  color: #2563eb;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(56, 130, 246, 0.16);
+  }
+`
 
 const YearStrip = styled.div`
   display: flex;

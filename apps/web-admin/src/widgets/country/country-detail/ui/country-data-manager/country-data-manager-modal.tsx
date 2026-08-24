@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Modal, ModalBody } from '@/shared/ui/modal'
 
@@ -14,9 +14,11 @@ interface Props {
   countryName: string
   open: boolean
   onClose: () => void
+  /** 열릴 때 선택돼 있을 탭. 부르는 쪽이 자기 주제로 바로 데려간다 */
+  initialTab?: MainTab
 }
 
-type MainTab = 'indicators' | 'pyramid' | 'trade' | 'records'
+export type MainTab = 'indicators' | 'pyramid' | 'trade' | 'records'
 
 const MAIN_TABS: { key: MainTab; label: string }[] = [
   { key: 'indicators', label: '지표' },
@@ -41,8 +43,14 @@ export function CountryDataManagerModal({
   countryName,
   open,
   onClose,
+  initialTab = 'indicators',
 }: Props) {
-  const [tab, setTab] = useState<MainTab>('indicators')
+  const [tab, setTab] = useState<MainTab>(initialTab)
+
+  // 닫혔다 다시 열릴 때는 부른 쪽이 지정한 탭에서 시작한다 (직전 탭을 물고 있지 않도록)
+  useEffect(() => {
+    if (open) setTab(initialTab)
+  }, [open, initialTab])
   const [indicatorType, setIndicatorType] = useState<IndicatorType>('economic')
 
   return (

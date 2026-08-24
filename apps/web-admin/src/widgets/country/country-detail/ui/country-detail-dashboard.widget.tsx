@@ -310,7 +310,24 @@ export function CountryDetailDashboard({
         )}
       </S.Section>
 
-      {/* 5. 활동과 보완 — 관리용 지표는 여기로 내린다 */}
+      {/*
+       * 5. 지표 — 나라 자체에 대한 이야기라 '활동/보완'(기록 관리용)보다 위다.
+       * 아래에 두었더니 뷰포트 3화면 아래로 밀려 "그런 기능 없는데?"가 됐다.
+       */}
+      {country.type === 'modern' && (
+        <>
+          <PopulationPyramidSection
+            countryId={country.id}
+            countryName={country.name}
+          />
+          <IndicatorTrendsSection
+            countryId={country.id}
+            countryName={country.name}
+          />
+        </>
+      )}
+
+      {/* 6. 활동과 보완 — 관리용 지표는 여기로 내린다 */}
       <S.BottomRow>
         <S.Section>
           <S.SectionTitleRow>
@@ -355,15 +372,6 @@ export function CountryDetailDashboard({
         </S.Section>
       </S.BottomRow>
 
-      {country.type === 'modern' && (
-        <>
-          <IndicatorTrendsSection
-            countryId={country.id}
-            countryName={country.name}
-          />
-          <PopulationPyramidSection countryId={country.id} />
-        </>
-      )}
     </S.DashboardRoot>
   )
 }
