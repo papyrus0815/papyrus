@@ -96,6 +96,11 @@ const EventGalleryView = lazy(() =>
     default: m.EventGalleryView,
   })),
 )
+const EventEraView = lazy(() =>
+  import('@/widgets/event-era-view/ui/event-era-view').then((m) => ({
+    default: m.EventEraView,
+  })),
+)
 
 import type {
   EventHierarchyNode,
@@ -1786,6 +1791,22 @@ export const EventsCatalogPage: React.FC = () => {
             events={events}
             selectedEventId={selectedEventId}
             dbCategories={dbCategories}
+            onSelectEvent={setSelectedEventId}
+            isLoading={firstPageLoading}
+            hasMoreData={stillLoadingMore}
+            hasActiveFilters={filtersOrSearchActive}
+            onResetFilters={handleResetAll}
+          />
+        </Suspense>
+      )
+      break
+    case VIEW_MODES.ERA:
+      activeSlot = (
+        <Suspense fallback={lazyFallback}>
+          <EventEraView
+            flattenedHierarchy={matchedOnlyHierarchy}
+            events={events}
+            selectedEventId={selectedEventId}
             onSelectEvent={setSelectedEventId}
             isLoading={firstPageLoading}
             hasMoreData={stillLoadingMore}

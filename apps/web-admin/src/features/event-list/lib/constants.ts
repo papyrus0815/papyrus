@@ -49,6 +49,8 @@ export const VIEW_MODES = {
   DASHBOARD: 'dashboard',
   TREE: 'tree',
   GALLERY: 'gallery',
+  /** 시대별 — 재위(빅토리아·건륭제 등)로 사건을 묶어 본다 */
+  ERA: 'era',
 } as const
 
 export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]

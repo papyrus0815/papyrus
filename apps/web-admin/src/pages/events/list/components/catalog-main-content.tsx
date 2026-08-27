@@ -30,6 +30,7 @@ import {
   FiMaximize2,
   FiMinimize2,
   FiMoreHorizontal,
+  FiFlag,
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -111,6 +112,8 @@ const VIEW_HINTS: Record<ViewMode, string> = {
   [VIEW_MODES.TIMELINE]:
     '시대별 분포·동시대성 — 막대 길이=기간, 우측 목록으로 사건명 확인',
   [VIEW_MODES.LIST]: '전체 사건을 시간순으로 훑기 — 세기·연도별 그룹',
+  [VIEW_MODES.ERA]:
+    '빅토리아 시대·건륭제 시대처럼 군주의 재위로 묶어 보기 — 사건이 걸린 나라의 재위만',
   [VIEW_MODES.MAP]: '지리적 위치 — 좌표 데이터가 아직 없어 준비 중입니다',
   [VIEW_MODES.GRID]: '10년 단위 밀집도 — 어느 시대에 사건이 몰렸는지',
   [VIEW_MODES.DASHBOARD]: '데이터 분포·품질 통계 — 사건 목록이 아닌 집계',
@@ -132,6 +135,7 @@ const PRIMARY_MODES: ModeDef[] = [
 
 /** 보조 5개 — "더보기 ▾" 드롭다운에 묶음 */
 const SECONDARY_MODES: ModeDef[] = [
+  { value: VIEW_MODES.ERA, label: '시대', icon: <FiFlag size={13} /> },
   { value: VIEW_MODES.GRID, label: '격자', icon: <FiGrid size={13} /> },
   {
     value: VIEW_MODES.DASHBOARD,

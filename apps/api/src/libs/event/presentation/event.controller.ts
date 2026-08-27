@@ -18,6 +18,7 @@ import {
   ConflictException,
 } from '@nestjs/common'
 import { AuthGuard } from '@nestjs/passport'
+
 import { ApiTags } from '@nestjs/swagger'
 import { EventService } from '../application/event.service'
 import { MilitaryEventService } from '../application/military-event.service'
@@ -31,6 +32,11 @@ import { Event } from '../domain/event.entity'
 import { ROOT_EVENT_WHERE } from '../domain/event-hierarchy'
 import { PrismaClient } from '@prisma/client'
 import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
+import {
+  reignYear,
+  resolveEraLabel,
+  type EventEraDto,
+} from '../domain/event-era.util'
 
 /** 사건 날짜 구조화 파싱 결과 */
 interface ParsedEventDate {
@@ -854,6 +860,164 @@ export class EventController {
         parentEventTitle: liveParent?.title ?? null,
         extraParents: liveExtraParents.length > 0 ? liveExtraParents : undefined,
       }
+    })
+  }
+
+  /**
+   * 사건의 「시대」 목록 — 빅토리아 시대, 건륭제 시대.
+   *
+   * 새 테이블 없이 재위(SovereignReign)에서 파생한다. 사건은 **자기가 걸린 나라의 재위**
+   * 에만 들어간다 — 연도만 보면 1900년 사건이 수십 개 재위에 동시에 걸려 분류가 무의미해진다.
+   * 자세한 근거는 `domain/event-era.util.ts`.
+   *
+   * 사건이 하나도 없는 시대는 빼고 준다. 시대 자체를 훑는 화면이 아니라 사건을 시대로
+   * 묶어 보는 화면이 목적이라, 빈 시대는 목록만 길게 만든다.
+   *
+   * ⚠️ 라우트는 반드시 @Get(':id')보다 먼저 선언 — 아니면 'eras'가 :id로 매칭된다.
+   * @tag events
+   */
+  @Get('eras')
+  async getEventEras(): Promise<EventEraDto[]> {
+    const [reigns, eventRows, relations] = await Promise.all([
+      this.prisma.sovereignReign.findMany({
+        where: { historicalCountryId: { not: null } },
+        select: {
+          id: true,
+          personId: true,
+          regnalName: true,
+          historicalCountryId: true,
+          startEra: true,
+          startYear: true,
+          startDate: true,
+          endEra: true,
+          endYear: true,
+          endDate: true,
+          person: { select: { name: true } },
+          historicalCountry: { select: { name: true } },
+          regnalEras: {
+            select: { eraName: true, startYear: true },
+            orderBy: { startYear: 'asc' },
+          },
+        },
+      }),
+      this.prisma.event.findMany({
+        where: { deletedAt: null, startYear: { not: null } },
+        select: {
+          id: true,
+          startEra: true,
+          startYear: true,
+          historicalCountryId: true,
+        },
+      }),
+      this.prisma.eventCountryRelation.findMany({
+        where: { historicalCountryId: { not: null } },
+        select: { eventId: true, historicalCountryId: true },
+      }),
+    ])
+
+    // 사건 → 걸린 역사 국가 집합. 직접 FK와 관계 테이블을 합친다.
+    const countriesByEvent = new Map<string, Set<string>>()
+    const attach = (eventId: string, countryId: string | null) => {
+      if (!countryId) return
+      const set = countriesByEvent.get(eventId) ?? new Set<string>()
+      set.add(countryId)
+      countriesByEvent.set(eventId, set)
+    }
+    for (const event of eventRows) attach(event.id, event.historicalCountryId)
+    for (const relation of relations) {
+      attach(relation.eventId, relation.historicalCountryId)
+    }
+
+    // 국가별 사건 목록으로 뒤집어 두면 재위마다 전체 사건을 훑지 않아도 된다.
+    const eventsByCountry = new Map<
+      string,
+      { id: string; signedYear: number }[]
+    >()
+    for (const event of eventRows) {
+      const signedYear =
+        event.startEra === 'BC' ? -(event.startYear as number) : (event.startYear as number)
+      for (const countryId of countriesByEvent.get(event.id) ?? []) {
+        const list = eventsByCountry.get(countryId) ?? []
+        list.push({ id: event.id, signedYear })
+        eventsByCountry.set(countryId, list)
+      }
+    }
+
+    const eras: EventEraDto[] = []
+    for (const reign of reigns) {
+      const startYear = reignYear(reign.startEra, reign.startYear, reign.startDate)
+      if (startYear == null) continue
+      const endYear = reignYear(reign.endEra, reign.endYear, reign.endDate)
+
+      const candidates = eventsByCountry.get(reign.historicalCountryId as string)
+      if (!candidates?.length) continue
+
+      const eventIds = candidates
+        .filter(
+          (candidate) =>
+            candidate.signedYear >= startYear &&
+            (endYear == null || candidate.signedYear <= endYear),
+        )
+        .map((candidate) => candidate.id)
+      if (eventIds.length === 0) continue
+
+      const { label, labelSource } = resolveEraLabel({
+        eraName: reign.regnalEras[0]?.eraName,
+        regnalName: reign.regnalName,
+        personName: reign.person?.name ?? '이름 미상',
+      })
+
+      eras.push({
+        id: reign.id,
+        label,
+        labelSource,
+        personId: reign.personId,
+        personName: reign.person?.name ?? '이름 미상',
+        countryName: reign.historicalCountry?.name ?? null,
+        historicalCountryId: reign.historicalCountryId,
+        startYear,
+        endYear,
+        eventIds: [...new Set(eventIds)],
+      })
+    }
+
+    /*
+     * 같은 인물·같은 나라의 재위는 한 시대로 합친다.
+     *
+     * 하인리히 2세는 신성로마제국에서 독일왕·이탈리아왕·황제 대관이 각각 재위 행으로
+     * 남아 1002–1024 / 1004–1024 / 1014–1024 세 줄이 된다. 시대를 훑는 화면에서 사실상
+     * 같은 이름 세 줄은 잡음이라, 기간은 합집합(최소 시작~최대 종료)으로, 사건도 합집합으로
+     * 묶는다. 다른 인물이면(빌헬름 1세/2세) personId가 달라 그대로 갈린다.
+     */
+    const merged = new Map<string, EventEraDto>()
+    for (const era of eras) {
+      const key = `${era.personId}::${era.historicalCountryId}`
+      const previous = merged.get(key)
+      if (!previous) {
+        merged.set(key, era)
+        continue
+      }
+      previous.startYear = Math.min(previous.startYear, era.startYear)
+      previous.endYear =
+        previous.endYear == null || era.endYear == null
+          ? null
+          : Math.max(previous.endYear, era.endYear)
+      previous.eventIds = [...new Set([...previous.eventIds, ...era.eventIds])]
+      // 라벨은 더 구체적인 출처를 남긴다 (연호 > 왕호 > 인물명)
+      const rank = { regnalEra: 0, regnalName: 1, personName: 2 } as const
+      if (rank[era.labelSource] < rank[previous.labelSource]) {
+        previous.label = era.label
+        previous.labelSource = era.labelSource
+      }
+    }
+
+    // 오래된 순. 같은 해 시작이면 짧은 재위가 먼저 — 긴 재위가 짧은 재위를 삼키는 것처럼
+    // 보이지 않게 한다.
+    return [...merged.values()].sort((left, right) => {
+      if (left.startYear !== right.startYear) {
+        return left.startYear - right.startYear
+      }
+      return (left.endYear ?? Infinity) - (right.endYear ?? Infinity)
     })
   }
 
