@@ -1,0 +1,149 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                         POLITICAL SYSTEM DOMAIN                             ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+///
+/// 국가의 **정체(政體)** — 대통령제냐 의원내각제냐, 단원제냐 양원제냐.
+///
+/// 국가에 붙은 붙박이 필드가 아니라 **기간을 가진 레코드**다. 정체는 바뀌기 때문이다.
+/// 프랑스는 제3·4공화국이 의원내각제였다가 제5공화국에서 이원집정부제가 됐고, 대한민국은
+/// 제1~6공화국을 오가며 대통령제↔의원내각제, 단원↔양원을 여러 번 바꿨다. 국가당 한 값으로
+/// 두면 그 역사가 통째로 사라진다.
+///
+/// 현대 국가(Country)와 과거 국가(HistoricalCountry) 양쪽에 붙는다 — 이 앱의 dual FK 규약
+/// (역사 우선 + 현대는 dual-fill)을 따른다.
+
+/// 정부 형태 — 행정권이 어디에 있는가.
+/// base.prisma의 GovernmentType(대통령제/의원내각제/군사정권/군주제/기타)은 어느 모델도
+/// 참조하지 않는 고아 enum이고 군주제를 입헌/절대로 못 가른다. 여기서 더 촘촘히 다시 센다.
+enum GovernmentForm {
+  /// 대통령제 — 국가원수가 곧 정부수반
+  PRESIDENTIAL
+  /// 의원내각제 — 정부수반이 의회에 책임
+  PARLIAMENTARY
+  /// 이원집정부제(반대통령제) — 대통령과 총리가 행정권을 나눠 가짐
+  SEMI_PRESIDENTIAL
+  /// 입헌군주제 — 군주는 상징, 실권은 내각·의회
+  CONSTITUTIONAL_MONARCHY
+  /// 절대군주제
+  ABSOLUTE_MONARCHY
+  /// 군사정권 — 군부가 행정권 장악
+  MILITARY
+  /// 일당제 국가
+  ONE_PARTY
+  /// 신정 — 종교 권위가 통치
+  THEOCRACY
+  /// 과도정부·임시정부
+  PROVISIONAL
+  /// 기타
+  OTHER
+}
+
+/// 입법부 구성
+enum LegislatureType {
+  /// 단원제
+  UNICAMERAL
+  /// 양원제
+  BICAMERAL
+  /// 의회 없음 (절대군주제·군정 등)
+  NONE
+}
+
+/// 국가 구조
+enum StateStructure {
+  /// 연방제
+  FEDERAL
+  /// 단일국가
+  UNITARY
+  /// 국가연합
+  CONFEDERATION
+  /// 기타
+  OTHER
+}
+
+/// 정당제
+enum PartySystem {
+  /// 일당제
+  ONE_PARTY
+  /// 양당제
+  TWO_PARTY
+  /// 다당제
+  MULTI_PARTY
+  /// 무정당 (정당 자체가 없거나 금지)
+  NON_PARTISAN
+  /// 기타
+  OTHER
+}
+
+model PoliticalSystem {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  //--- 대상 국가 (dual FK — 역사 우선, 현대는 dual-fill)
+  countryId String?  @map("country_id") @db.Char(36)
+  country   Country? @relation("CountryPoliticalSystems", fields: [countryId], references: [id], onDelete: Cascade)
+
+  historicalCountryId String?            @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation("HistoricalCountryPoliticalSystems", fields: [historicalCountryId], references: [id], onDelete: Cascade)
+
+  //--- 정체 이름
+  /// 이 정체의 통칭 — '제5공화국', '바이마르 공화국', '메이지 헌법 체제'. 없을 수도 있다.
+  name String? @db.VarChar(120)
+
+  //--- 존속 기간 (BC·고대·연단위 지원)
+  /// SovereignReign과 달리 DATETIME 거울 컬럼을 두지 않는다. 정체는 사실상 연 단위로만
+  /// 기록되고, 레거시 소비자가 없어 구조화 Int 축 하나만 진실로 두는 편이 안전하다
+  /// (드라이버가 연도<100 DATETIME을 손상시키는 함정을 아예 만들지 않는다).
+  startEra   Era? @map("start_era")
+  startYear  Int? @map("start_year")
+  startMonth Int? @map("start_month")
+  startDay   Int? @map("start_day")
+
+  endEra   Era? @map("end_era")
+  endYear  Int? @map("end_year")
+  endMonth Int? @map("end_month")
+  endDay   Int? @map("end_day")
+
+  /// 아직 지속 중 — 종료 필드가 비어 있는 것과 "모른다"를 구분한다
+  isCurrent Boolean @default(false) @map("is_current")
+
+  //--- 핵심 두 축
+  governmentForm  GovernmentForm?  @map("government_form")
+  legislatureType LegislatureType? @map("legislature_type")
+
+  //--- 입법부 상세
+  /// 하원(양원제) 또는 유일 원(단원제)의 이름 — '중의원', '국회', '하원'
+  lowerHouseName  String? @map("lower_house_name") @db.VarChar(100)
+  /// 그 원의 의석 수
+  lowerHouseSeats Int?    @map("lower_house_seats")
+  /// 상원 이름 — 양원제일 때만 의미 있다. '참의원', '상원', '귀족원'
+  upperHouseName  String? @map("upper_house_name") @db.VarChar(100)
+  upperHouseSeats Int?    @map("upper_house_seats")
+
+  //--- 국가원수 / 정부수반
+  /// 국가원수 직함 — '대통령', '국왕', '천황', '서기장'
+  headOfStateTitle String? @map("head_of_state_title") @db.VarChar(100)
+  /// 국가원수가 실권을 갖는가 — 입헌군주제의 국왕은 false, 대통령제의 대통령은 true
+  headOfStateHasPower Boolean? @map("head_of_state_has_power")
+  /// 정부수반 직함 — '국무총리', '수상', '총리대신'. 대통령제처럼 국가원수와 같으면 비운다
+  headOfGovernmentTitle String? @map("head_of_government_title") @db.VarChar(100)
+  headOfGovernmentHasPower Boolean? @map("head_of_government_has_power")
+
+  //--- 부가 축
+  stateStructure StateStructure? @map("state_structure")
+  partySystem    PartySystem?    @map("party_system")
+
+  /// 헌법·정체 전환의 배경 등 서술
+  notes String? @db.Text
+
+  //--- 소유권
+  accountId String?  @map("account_id") @db.Char(36)
+  account   Account? @relation("AccountPoliticalSystems", fields: [accountId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([countryId], name: "idx_political_system_countryId")
+  @@index([historicalCountryId], name: "idx_political_system_historicalCountryId")
+  @@index([startYear], name: "idx_political_system_startYear")
+  @@map("political_system")
+}

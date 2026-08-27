@@ -105,6 +105,7 @@ model Country {
   elections                 Election[]                       @relation("ElectionCountry")
   governmentTenures         GovernmentPositionTenure[]       @relation("TenureCountry")
   sovereignReigns           SovereignReign[]                 @relation("SovereignReignCountry")
+  politicalSystems          PoliticalSystem[]                @relation("CountryPoliticalSystems")
   eventCountryRelations     EventCountryRelation[]
 
   // 🆕 정규화된 군사 사건 관계

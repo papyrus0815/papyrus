@@ -16,6 +16,7 @@ import {
   type GovernmentContentTab,
 } from '@/features/government-info/model/government-content-tab'
 import { GovernmentOrganizationsTab } from '@/features/government-info/ui/government-organizations-tab.widget'
+import { PoliticalSystemTab } from '@/features/government-info/ui/political-system-tab.widget'
 import { GovernmentStatisticsTab } from '@/features/government-info/ui/government-statistics-tab.widget'
 import { MinistriesTabSection } from '@/features/government-info/ui/ministries-tab-section.widget'
 import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
@@ -97,7 +98,7 @@ export function GovernmentInfoSection({
         <SectionTabHeader
           variant="plain"
           title="행정조직"
-          description="역대 수반, 행정부, 중앙부처, 행정기구, 직위 정의, 통계를 관리합니다."
+          description="정체, 역대 수반, 행정부, 중앙부처, 행정기구, 직위 정의, 통계를 관리합니다."
           rightSlot={
             // 카테고리 설정은 중앙부처(ministries) 탭에서만 의미 있음 — 다른 sub-tab에서는 숨김.
             contentTab === 'ministries' ? (
@@ -135,6 +136,21 @@ export function GovernmentInfoSection({
             ))}
           </UnderlineTabNav>
         </div>
+
+        {contentTab === 'system' && (
+          <section aria-label="정체">
+            <PoliticalSystemTab
+              // 역사 국가면 그쪽 축으로, 현대 국가면 브리지 스코프로 (과거 국가 정체까지 함께 온다)
+              countryId={
+                country?.type === 'historical' ? undefined : effectiveCountryId
+              }
+              historicalCountryId={
+                country?.type === 'historical' ? country.id : undefined
+              }
+              countryName={country?.name}
+            />
+          </section>
+        )}
 
         {contentTab === 'heads' && country && (
           <section aria-label="역대 수반">
