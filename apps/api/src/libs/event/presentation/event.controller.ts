@@ -892,7 +892,7 @@ export class EventController {
           endEra: true,
           endYear: true,
           endDate: true,
-          person: { select: { name: true } },
+          person: { select: { name: true, profileImageUrl: true } },
           historicalCountry: { select: { name: true } },
           regnalEras: {
             select: { eraName: true, startYear: true },
@@ -973,6 +973,7 @@ export class EventController {
         labelSource,
         personId: reign.personId,
         personName: reign.person?.name ?? '이름 미상',
+        personImageUrl: reign.person?.profileImageUrl ?? null,
         countryName: reign.historicalCountry?.name ?? null,
         historicalCountryId: reign.historicalCountryId,
         startYear,

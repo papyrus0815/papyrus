@@ -10,10 +10,16 @@
  */
 import React, { useMemo, useState } from 'react'
 
-import { FiChevronDown, FiChevronRight, FiFlag } from 'react-icons/fi'
+import {
+  FiChevronDown,
+  FiChevronRight,
+  FiFlag,
+  FiHelpCircle,
+} from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { useEventEras } from '@/entities/event-era/api'
+import { useEventEras, type EventEra } from '@/entities/event-era/api'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { CatalogViewEmpty } from '@/features/event-list/ui/catalog-view-empty'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { CategoryDot } from '@/shared/ui/category-dot/category-dot'
@@ -83,14 +89,7 @@ export const EventEraView: React.FC<Props> = ({
           .map((eventId) => eventById.get(eventId))
           .filter((event): event is HistoricalEvent => !!event)
           // 시대 안은 오래된 순. eventIds는 국가별로 모은 순서라 연도가 뒤섞여 온다.
-          .sort((left, right) => {
-            const leftYear = eventSignedYear(left)
-            const rightYear = eventSignedYear(right)
-            if (leftYear == null && rightYear == null) return 0
-            if (leftYear == null) return 1
-            if (rightYear == null) return -1
-            return leftYear - rightYear
-          })
+          .sort(byOldestFirst)
         for (const event of items) assigned.add(event.id)
         return { era, items }
       })
@@ -104,6 +103,9 @@ export const EventEraView: React.FC<Props> = ({
       .filter(
         (event): event is HistoricalEvent => !!event && !assigned.has(event.id),
       )
+      // 시대 안과 같은 방향으로. 여기만 지면 정렬을 그대로 두면 위 묶음들은 오래된 순인데
+      // 이 묶음만 최신 순이 되어 같은 화면에서 방향이 뒤집힌다.
+      .sort(byOldestFirst)
 
     return { rows, orphans, eraCountByEvent }
   }, [erasQuery.data, visibleIds, eventById, flattenedHierarchy])
@@ -175,11 +177,22 @@ export const EventEraView: React.FC<Props> = ({
                   <FiChevronDown size={15} />
                 )}
               </Caret>
-              <EraLabel>{era.label}</EraLabel>
-              <EraPeriod>
-                {era.startYear}–{era.endYear ?? ''}
-              </EraPeriod>
-              {era.countryName && <EraCountry>{era.countryName}</EraCountry>}
+              <Portrait era={era} />
+              <HeadText>
+                <HeadTop>
+                  <EraLabel>{era.label}</EraLabel>
+                  <EraPeriod>
+                    {era.startYear}–{era.endYear ?? ''}
+                  </EraPeriod>
+                </HeadTop>
+                <HeadBottom>
+                  {/* 라벨이 왕호·연호면 인물명이 안 보이므로 아래 줄에 함께 둔다 */}
+                  {era.labelSource !== 'personName' && (
+                    <HeadPerson>{era.personName}</HeadPerson>
+                  )}
+                  {era.countryName && <EraCountry>{era.countryName}</EraCountry>}
+                </HeadBottom>
+              </HeadText>
               <EraCount>{items.length}건</EraCount>
             </SectionHead>
             {!isCollapsed && <EventList>{items.map(renderEvent)}</EventList>}
@@ -201,8 +214,19 @@ export const EventEraView: React.FC<Props> = ({
                 <FiChevronDown size={15} />
               )}
             </Caret>
-            <EraLabel $muted>시대 미상</EraLabel>
-            <EraNote>관련 국가가 없거나, 그 나라의 재위 기록이 아직 없습니다</EraNote>
+            <PortraitFallback $muted aria-hidden>
+              <FiHelpCircle size={20} />
+            </PortraitFallback>
+            <HeadText>
+              <HeadTop>
+                <EraLabel $muted>시대 미상</EraLabel>
+              </HeadTop>
+              <HeadBottom>
+                <EraNote>
+                  관련 국가가 없거나, 그 나라의 재위 기록이 아직 없습니다
+                </EraNote>
+              </HeadBottom>
+            </HeadText>
             <EraCount>{sections.orphans.length}건</EraCount>
           </SectionHead>
           {!collapsed.has(UNKNOWN_ERA) && (
@@ -215,11 +239,45 @@ export const EventEraView: React.FC<Props> = ({
 }
 
 /**
+ * 시대 머리의 동그란 얼굴.
+ *
+ * 초상은 실측 134명 중 73명만 있다. 없을 때 빈 원을 두면 로딩 실패처럼 보이므로
+ * 이름 첫 글자를 넣는다 — 얼굴이 없어도 시대마다 다른 표식이 남는다.
+ * 깨진 URL도 같은 폴백으로 떨어뜨린다(onError).
+ */
+function Portrait({ era }: { era: EventEra }) {
+  const [failed, setFailed] = useState(false)
+  const src = era.personImageUrl ? getUploadImageUrl(era.personImageUrl) : ''
+
+  if (!src || failed) {
+    return <PortraitFallback aria-hidden>{era.personName.slice(0, 1)}</PortraitFallback>
+  }
+  return (
+    <PortraitImage
+      src={src}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
+/**
  * BC 안전 부호 연도. `HistoricalEvent`에는 startYear/startEra가 없고 ISO 문자열만 있어
  * 공용 파서를 거친다 — 파서가 선행 '-'를 음수 연도로 돌려준다.
  */
 function eventSignedYear(event: HistoricalEvent): number | null {
   return parseIsoDateParts(event.startDate)?.year ?? null
+}
+
+/** 오래된 순. 연도 미상은 끝으로. */
+function byOldestFirst(left: HistoricalEvent, right: HistoricalEvent): number {
+  const leftYear = eventSignedYear(left)
+  const rightYear = eventSignedYear(right)
+  if (leftYear == null && rightYear == null) return 0
+  if (leftYear == null) return 1
+  if (rightYear == null) return -1
+  return leftYear - rightYear
 }
 
 function formatEventYear(event: HistoricalEvent): string {
@@ -241,7 +299,7 @@ const Section = styled.section`
 
 const SectionHead = styled.button`
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   width: 100%;
   padding: 10px 8px;
@@ -263,6 +321,64 @@ const Caret = styled.span`
   display: inline-flex;
   align-self: center;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-shrink: 0;
+`
+
+const PORTRAIT_SIZE = 40
+
+const portraitBase = `
+  width: ${PORTRAIT_SIZE}px;
+  height: ${PORTRAIT_SIZE}px;
+  border-radius: 50%;
+  flex-shrink: 0;
+`
+
+const PortraitImage = styled.img`
+  ${portraitBase}
+  object-fit: cover;
+  /* 초상은 대개 상반신이라 위쪽을 살린다 — 가운데 자르면 얼굴이 잘린다 */
+  object-position: center 22%;
+  background: ${({ theme }) => theme.colors.hover};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const PortraitFallback = styled.span<{ $muted?: boolean }>`
+  ${portraitBase}
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  background: ${({ theme }) => theme.colors.hover};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const HeadText = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+`
+
+const HeadTop = styled.span`
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+`
+
+const HeadBottom = styled.span`
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+`
+
+const HeadPerson = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
   flex-shrink: 0;
 `
 

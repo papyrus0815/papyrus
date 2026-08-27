@@ -28,6 +28,8 @@ export interface EventEraDto {
   labelSource: 'regnalEra' | 'regnalName' | 'personName'
   personId: string
   personName: string
+  /** 군주 초상 — 시대 머리에 동그란 얼굴로 쓴다. 실측 134명 중 73명만 있어 폴백 필수 */
+  personImageUrl: string | null
   /** 소속 국가(역사) 이름 — 같은 이름의 군주를 가르는 데 필요 */
   countryName: string | null
   historicalCountryId: string | null
