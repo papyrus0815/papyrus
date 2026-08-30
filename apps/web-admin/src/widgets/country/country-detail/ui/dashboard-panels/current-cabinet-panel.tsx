@@ -6,6 +6,7 @@ import styled from 'styled-components'
 import { getAllPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { personCareerApi } from '@/shared/api/person-career'
@@ -208,8 +209,6 @@ export function CurrentCabinetPanel({
   // 16명까지는 접지 않는다. 각료 15명짜리 정부를 9명에서 끊으면 '한눈에'가 아니다
   const visible = expanded ? members : members.slice(0, 16)
 
-  if (query.isLoading) return null
-
   /*
    * 현직이 없어도 섹션을 지우지 않는다. null을 돌려주던 시절엔 프랑스·독일처럼 재임이
    * 전부 종료된 나라에서 선거 카드와 '수반 등록' 진입점까지 함께 사라졌다.
@@ -234,14 +233,25 @@ export function CurrentCabinetPanel({
         </HeaderActions>
       </S.SectionTitleRow>
 
-      {isEmpty ? (
-        <S.EmptyWithCta>
-          <S.FeedEmpty>현재 재임 중인 수반·각료가 없습니다.</S.FeedEmpty>
-          <S.EmptyCtaButton type="button" onClick={() => setPickerOpen(true)}>
+      {query.isLoading ? (
+        <GovernmentSkeleton />
+      ) : isEmpty ? (
+        /*
+         * 빈 상태도 **정부의 골격**으로 보여준다. 문장 한 줄과 버튼만 두면 이 자리에
+         * 무엇이 들어오는지(수장 하나 + 각료 격자) 알 수 없다. 골격을 그려 두면 형태가
+         * 곧 설명이 되고, 그대로 눌러 채울 수 있다.
+         */
+        <GhostButton
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          aria-label="수반·각료 등록"
+        >
+          <GovernmentSkeleton ghost />
+          <GhostCaption>
             <IconBriefcase />
-            지금 등록하기
-          </S.EmptyCtaButton>
-        </S.EmptyWithCta>
+            아직 비어 있습니다 — 눌러서 수반·각료를 등록하세요
+          </GhostCaption>
+        </GhostButton>
       ) : (
         <>
       <MetaRow>
@@ -360,6 +370,37 @@ export function CurrentCabinetPanel({
   )
 }
 
+/**
+ * 정부 골격. 로딩 중엔 물결 애니메이션으로, 빈 상태(`ghost`)엔 정지 상태로 그린다.
+ *
+ * 같은 모양을 두 상태에 쓰되 움직임으로 가른다 — 빈 자리를 계속 일렁이게 두면 영원히
+ * 로딩 중인 것처럼 읽힌다.
+ */
+function GovernmentSkeleton({ ghost = false }: { ghost?: boolean }) {
+  const animation = 'wave' as const
+  return (
+    <SkeletonRoot $ghost={ghost} aria-hidden>
+      <SkeletonHead $ghost={ghost}>
+        <Skeleton variant="circular" width={104} height={104} animation={animation} />
+        <SkeletonHeadText>
+          <Skeleton width={92} height={13} animation={animation} />
+          <Skeleton width={188} height={26} animation={animation} />
+          <Skeleton width={150} height={13} animation={animation} />
+        </SkeletonHeadText>
+      </SkeletonHead>
+      <SkeletonRoster>
+        {Array.from({ length: 9 }, (_, index) => (
+          <SkeletonCell key={index}>
+            <Skeleton variant="circular" width={26} height={26} animation={animation} />
+            <Skeleton width={68} height={12} animation={animation} />
+            <Skeleton width={96} height={13} animation={animation} />
+          </SkeletonCell>
+        ))}
+      </SkeletonRoster>
+    </SkeletonRoot>
+  )
+}
+
 /** 얼굴. 각료는 초상이 거의 없어(실측 15명 전원 없음) 폴백이 기본값에 가깝다. */
 function Face({
   member,
@@ -394,6 +435,90 @@ function Face({
     />
   )
 }
+
+const SkeletonRoot = styled.div<{ $ghost: boolean }>`
+  /* 빈 상태에서는 더 옅게 — 데이터인 척하지 않도록 */
+  opacity: ${({ $ghost }) => ($ghost ? 0.5 : 1)};
+  pointer-events: none;
+
+  /*
+   * 빈 상태는 **움직이지 않는다**. 같은 골격이라도 일렁이면 영원히 로딩 중인 화면으로
+   * 읽힌다. 움직임 유무가 '불러오는 중'과 '아직 없음'을 가르는 유일한 신호다.
+   */
+  ${({ $ghost }) =>
+    $ghost &&
+    `
+    *, *::before { animation: none !important; }
+  `}
+`
+
+const SkeletonHead = styled.div<{ $ghost?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  /* 점선 = 채워야 할 자리. 실선은 '불러오는 중인 실제 카드'로 읽힌다 */
+  border: 1px ${({ $ghost }) => ($ghost ? 'dashed' : 'solid')}
+    ${({ theme }) => theme.colors.border.light};
+  background: ${({ $ghost, theme }) =>
+    $ghost ? 'transparent' : theme.colors.hover};
+`
+
+const SkeletonHeadText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+`
+
+const SkeletonRoster = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0 20px;
+`
+
+const SkeletonCell = styled.div`
+  display: grid;
+  grid-template-columns: 26px 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+`
+
+/** 골격 전체가 등록 진입점 — 형태를 보고 그대로 눌러 채운다 */
+const GhostButton = styled.button`
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 14px;
+
+  &:hover ${'' /* 골격을 살짝 띄워 누를 수 있음을 알린다 */} > div:first-child {
+    opacity: 0.62;
+  }
+`
+
+const GhostCaption = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`
 
 const CabinetName = styled.span`
   font-size: 13px;
