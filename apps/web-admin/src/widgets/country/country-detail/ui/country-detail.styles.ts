@@ -1510,16 +1510,24 @@ export const InfoTableValue = styled.td`
 `
 
 // Chart Grid Two Columns (공간 효율성 개선)
+/*
+ * 차트 격자.
+ *
+ * 예전엔 `grid-template-columns: repeat(2,1fr)` + `grid-template-rows: repeat(2,1fr)`로
+ * **2×2 네 칸을 항상 예약**했다. 지표가 하나뿐인 국가(미국: 인구 증가율만)에서는 나머지
+ * 세 칸이 그대로 빈 채 자리를 차지해 섹션 아래에 640px짜리 죽은 공간이 생겼다.
+ *
+ * 행 예약을 없애고 auto-fit으로 바꾼다. 차트가 하나면 폭을 다 쓰고(반쪽 짜리 세로
+ * 차트가 사라진다), 둘이면 나란히 선다.
+ */
 export const ChartGridTwoCol = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 16px;
   margin-top: 0;
   margin-bottom: 28px;
 
   @media (max-width: 1600px) {
-    grid-template-columns: repeat(2, 1fr);
     gap: 20px;
   }
 
@@ -1599,9 +1607,13 @@ export const ChartCardSubtitle = styled.p`
   font-weight: 500;
 `
 
+/*
+ * 추이 차트 높이. 560px이던 시절엔 반쪽 폭(468px) 칸에서 폭보다 높은 세로 차트가 되어
+ * 시간축이 뭉개졌다. 추이선은 가로로 길어야 읽힌다.
+ */
 export const ChartWrapper = styled.div`
   width: 100%;
-  height: 560px;
+  height: 260px;
   position: relative;
   z-index: 1;
 `

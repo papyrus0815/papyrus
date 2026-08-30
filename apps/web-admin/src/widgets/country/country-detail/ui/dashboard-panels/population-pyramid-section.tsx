@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   Bar,
@@ -72,6 +72,7 @@ export function PopulationPyramidSection({ countryId, countryName }: Props) {
   }, [query.data])
 
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
+  const stripRef = useRef<HTMLDivElement>(null)
 
   // 기본은 가장 최근 해. 국가를 바꿔 목록이 갈리면 선택도 따라 옮긴다.
   useEffect(() => {
@@ -119,6 +120,19 @@ export function PopulationPyramidSection({ countryId, countryName }: Props) {
     [years],
   )
 
+  /*
+   * 선택 연도를 띠 안으로 끌어온다.
+   *
+   * 연도가 3~4개일 땐 필요 없었지만 실데이터(미국 1960~2024, 65개)가 붙자 기본 선택인
+   * 최신 연도가 가로 스크롤 바깥으로 나가 "선택된 게 안 보이는" 상태가 됐다.
+   */
+  useEffect(() => {
+    const strip = stripRef.current
+    if (!strip || selectedYear == null) return
+    const active = strip.querySelector('[data-active="true"]')
+    active?.scrollIntoView({ block: 'nearest', inline: 'center' })
+  }, [selectedYear, years.length])
+
   // 고령이 위로 오도록 뒤집는다 (모델은 어린 연령부터 나열).
   const chartRows = useMemo(
     () => (current ? [...current.rows].reverse() : []),
@@ -160,12 +174,13 @@ export function PopulationPyramidSection({ countryId, countryName }: Props) {
       {manager}
 
       {years.length > 1 && (
-        <YearStrip role="group" aria-label="연도 선택">
+        <YearStrip ref={stripRef} role="group" aria-label="연도 선택" $dense={years.length > 16}>
           {years.map((entry) => (
             <YearBar
               key={entry.year}
               type="button"
               $active={entry.year === selectedYear}
+              data-active={entry.year === selectedYear}
               aria-pressed={entry.year === selectedYear}
               title={`${entry.year}년 · ${entry.totals.total.toLocaleString()}명`}
               onClick={() => setSelectedYear(entry.year)}
@@ -177,7 +192,10 @@ export function PopulationPyramidSection({ countryId, countryName }: Props) {
                   }}
                 />
               </YearBarTrack>
-              <YearBarLabel>{entry.year}</YearBarLabel>
+              {/* 연도가 많으면 5년 눈금만 — 65개를 다 쓰면 글자가 겹쳐 뭉갠다 */}
+              <YearBarLabel>
+                {years.length > 16 && entry.year % 5 !== 0 ? '' : entry.year}
+              </YearBarLabel>
             </YearBar>
           ))}
         </YearStrip>
@@ -335,13 +353,14 @@ const RegisterButton = styled.button`
   }
 `
 
-const YearStrip = styled.div`
+const YearStrip = styled.div<{ $dense?: boolean }>`
   display: flex;
   align-items: flex-end;
-  gap: 6px;
+  gap: ${({ $dense }) => ($dense ? 2 : 6)}px;
   overflow-x: auto;
   padding-bottom: 4px;
   margin-bottom: 16px;
+  scrollbar-width: thin;
 `
 
 const YearBar = styled.button<{ $active: boolean }>`
@@ -349,8 +368,10 @@ const YearBar = styled.button<{ $active: boolean }>`
   flex-direction: column;
   align-items: center;
   gap: 5px;
-  flex: 0 0 auto;
-  width: 44px;
+  flex: 1 1 auto;
+  /* 연도가 적으면 44px 고정, 많으면 균등 분배로 좁아진다 */
+  min-width: 16px;
+  max-width: 44px;
   padding: 0;
   border: none;
   background: none;
@@ -376,6 +397,7 @@ const YearBarFill = styled.span`
 `
 
 const YearBarLabel = styled.span`
+  min-height: 14px;
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;

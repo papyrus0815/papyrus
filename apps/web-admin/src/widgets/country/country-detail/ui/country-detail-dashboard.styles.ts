@@ -1512,6 +1512,8 @@ export const NowRow = styled.div`
 export const BottomRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  /* 두 칸이 서로 높이를 맞추면 짧은 쪽(완성도) 아래가 통째로 빈다 — 각자 내용만큼만 */
+  align-items: start;
   gap: 16px;
 
   @media (max-width: 1100px) {

@@ -124,8 +124,8 @@ export function IndicatorTrendsSection({
 
       {isLoading ? (
         <C.ChartGridTwoCol>
-          <C.ChartCardModern style={{ minHeight: 280, opacity: 0.6 }} />
-          <C.ChartCardModern style={{ minHeight: 280, opacity: 0.6 }} />
+          <C.ChartCardModern style={{ minHeight: 340, opacity: 0.6 }} />
+          <C.ChartCardModern style={{ minHeight: 340, opacity: 0.6 }} />
         </C.ChartGridTwoCol>
       ) : (
         <C.ChartGridTwoCol>
