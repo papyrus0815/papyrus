@@ -3,7 +3,10 @@ import React, { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import styled from 'styled-components'
 
+import { getAllPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -109,6 +112,26 @@ export function CurrentCabinetPanel({
    */
   const [modalPersonId, setModalPersonId] = useState<string | null>(null)
 
+  /*
+   * 등록은 여기서 끝난다. 예전엔 '역대 수반에서 등록'이라며 행정조직 탭으로 내보냈는데,
+   * 비어 있는 걸 보고 채우려던 사람을 다른 지면으로 보내면 방금 보던 문맥(어느 나라의
+   * 어느 정부)을 스스로 다시 세워야 한다. 인물 선택 → 재임 폼을 그 자리에서 띄운다.
+   */
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [registerPersonId, setRegisterPersonId] = useState<string | null>(null)
+
+  const personsQuery = useQuery({
+    queryKey: ['persons', 'all'],
+    queryFn: getAllPersons,
+    enabled: pickerOpen,
+    staleTime: 5 * 60_000,
+  })
+
+  const closeRegister = () => {
+    setRegisterPersonId(null)
+    setPickerOpen(false)
+  }
+
   // 정부 변천 패널과 같은 키 — react-query가 한 번만 받아온다
   const query = useQuery({
     queryKey: ['tenures-by-country', countryId, undefined],
@@ -201,17 +224,22 @@ export function CurrentCabinetPanel({
         </S.SectionTitleIcon>
         <S.SectionTitleText>지금</S.SectionTitleText>
         {!isEmpty && <CabinetName>{cabinetName ?? '현 정부'}</CabinetName>}
-        <HeaderAction type="button" onClick={onOpen}>
-          행정부 관리
-        </HeaderAction>
+        <HeaderActions>
+          <HeaderAction type="button" onClick={() => setPickerOpen(true)}>
+            + 수반·각료 등록
+          </HeaderAction>
+          <HeaderGhost type="button" onClick={onOpen}>
+            행정부 관리
+          </HeaderGhost>
+        </HeaderActions>
       </S.SectionTitleRow>
 
       {isEmpty ? (
         <S.EmptyWithCta>
           <S.FeedEmpty>현재 재임 중인 수반·각료가 없습니다.</S.FeedEmpty>
-          <S.EmptyCtaButton type="button" onClick={onOpen}>
+          <S.EmptyCtaButton type="button" onClick={() => setPickerOpen(true)}>
             <IconBriefcase />
-            역대 수반에서 등록
+            지금 등록하기
           </S.EmptyCtaButton>
         </S.EmptyWithCta>
       ) : (
@@ -294,6 +322,32 @@ export function CurrentCabinetPanel({
 
       {children && <Extra>{children}</Extra>}
 
+      {pickerOpen && (
+        <PersonSelectModal
+          persons={personsQuery.data ?? []}
+          selectedPersonId={registerPersonId ?? ''}
+          loading={personsQuery.isLoading}
+          title="수반·각료 등록 — 인물 선택"
+          searchPlaceholder="등록할 인물을 검색..."
+          defaultCountryId={countryId}
+          onSelect={(personId) => {
+            setRegisterPersonId(personId)
+            setPickerOpen(false)
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {registerPersonId && (
+        <TenureRegisterPanel
+          personId={registerPersonId}
+          open
+          onClose={closeRegister}
+          onSuccess={closeRegister}
+          initialCountryId={countryId}
+        />
+      )}
+
       <PersonInlineModal
         personId={modalPersonId}
         onClose={() => setModalPersonId(null)}
@@ -347,8 +401,14 @@ const CabinetName = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const HeaderAction = styled.button`
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
+`
+
+const HeaderAction = styled.button`
   padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid rgba(225, 29, 72, 0.3);
@@ -360,6 +420,22 @@ const HeaderAction = styled.button`
 
   &:hover {
     background: rgba(225, 29, 72, 0.14);
+  }
+`
+
+/** 관리(지면 이동)는 보조 — 주 동작은 바로 등록이다 */
+const HeaderGhost = styled.button`
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: none;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 
