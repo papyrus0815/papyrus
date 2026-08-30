@@ -273,6 +273,7 @@ export function CurrentCabinetPanel({
                     : `${shortDate(member.startDate)} 취임`
                 }
               >
+                <Face member={member} size={26} muted />
                 <CellTitle>{member.title}</CellTitle>
                 <CellName>
                   {member.name}
@@ -306,12 +307,22 @@ export function CurrentCabinetPanel({
 }
 
 /** 얼굴. 각료는 초상이 거의 없어(실측 15명 전원 없음) 폴백이 기본값에 가깝다. */
-function Face({ member, size }: { member: Member; size: number }) {
+function Face({
+  member,
+  size,
+  muted = false,
+}: {
+  member: Member
+  size: number
+  /** 각료 줄용 — 폴백이 여러 개 늘어설 때 조용하게 */
+  muted?: boolean
+}) {
   const [failed, setFailed] = useState(false)
   const src = member.imageUrl ? getUploadImageUrl(member.imageUrl) : ''
   if (!src || failed) {
     return (
       <FallbackFace
+        $muted={muted}
         style={{ width: size, height: size, fontSize: Math.round(size * 0.36) }}
         aria-hidden
       >
@@ -383,7 +394,7 @@ const FaceImage = styled.img`
   border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-const FallbackFace = styled.span`
+const FallbackFace = styled.span<{ $muted?: boolean }>`
   ${faceBase}
   display: inline-flex;
   align-items: center;
@@ -482,9 +493,10 @@ const HeadMeta = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
+/* 얼굴 26 + 자리 96 + 이름 — 3열이 유지되도록 최소폭을 계산해 둔다(3×280+40 < 960) */
 const Roster = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 0 20px;
 `
 
@@ -499,9 +511,9 @@ const Roster = styled.div`
  */
 const MemberCell = styled.button<{ $replaced?: boolean }>`
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
-  align-items: baseline;
-  gap: 10px;
+  grid-template-columns: 26px 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
   padding: 6px 8px;
   border: none;
   border-left: 2px solid
