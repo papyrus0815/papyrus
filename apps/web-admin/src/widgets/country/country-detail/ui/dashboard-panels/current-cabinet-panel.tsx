@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import styled from 'styled-components'
 
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
@@ -17,6 +18,7 @@ interface Props {
   /** 정부 출범일(수반 취임일) */
   startDate: string | null
   onOpen: () => void
+  /** 모달의 '전체 보기'에서 인물 지면으로 나갈 때 */
   onSelectPerson: (personId: string) => void
   /** 같은 '지금' 묶음에 함께 놓을 것(선거 카드 등) */
   children?: React.ReactNode
@@ -100,6 +102,12 @@ export function CurrentCabinetPanel({
   children,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
+  /*
+   * 이름을 누르면 인물 지면으로 나가 버리면 지금 보던 정부 명단을 잃는다. 대시보드는
+   * 훑는 지면이라 자리를 지킨 채 확인할 수 있어야 한다 — 사건 상세·행정부 상세가 쓰는
+   * 공용 PersonInlineModal 그대로.
+   */
+  const [modalPersonId, setModalPersonId] = useState<string | null>(null)
 
   // 정부 변천 패널과 같은 키 — react-query가 한 번만 받아온다
   const query = useQuery({
@@ -224,7 +232,7 @@ export function CurrentCabinetPanel({
             <HeadRow
               key={head.id}
               type="button"
-              onClick={() => head.personId && onSelectPerson(head.personId)}
+              onClick={() => head.personId && setModalPersonId(head.personId)}
             >
               <Face member={head} size={heads.length === 1 ? 76 : 60} />
               <HeadText>
@@ -255,7 +263,7 @@ export function CurrentCabinetPanel({
                 type="button"
                 $replaced={member.replaced}
                 onClick={() =>
-                  member.personId && onSelectPerson(member.personId)
+                  member.personId && setModalPersonId(member.personId)
                 }
                 title={
                   member.replaced && member.predecessor
@@ -282,6 +290,15 @@ export function CurrentCabinetPanel({
       )}
 
       {children && <Extra>{children}</Extra>}
+
+      <PersonInlineModal
+        personId={modalPersonId}
+        onClose={() => setModalPersonId(null)}
+        onEdit={(personId) => {
+          setModalPersonId(null)
+          onSelectPerson(personId)
+        }}
+      />
     </S.Section>
   )
 }
