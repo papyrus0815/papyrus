@@ -234,7 +234,9 @@ export function CurrentCabinetPanel({
               type="button"
               onClick={() => head.personId && setModalPersonId(head.personId)}
             >
-              <Face member={head} size={heads.length === 1 ? 76 : 60} />
+              <HeadFaceRing>
+                <Face member={head} size={heads.length === 1 ? 104 : 80} />
+              </HeadFaceRing>
               <HeadText>
                 <HeadRole>
                   {head.termNumber != null && `제${head.termNumber}대 `}
@@ -309,7 +311,10 @@ function Face({ member, size }: { member: Member; size: number }) {
   const src = member.imageUrl ? getUploadImageUrl(member.imageUrl) : ''
   if (!src || failed) {
     return (
-      <FallbackFace style={{ width: size, height: size }} aria-hidden>
+      <FallbackFace
+        style={{ width: size, height: size, fontSize: Math.round(size * 0.36) }}
+        aria-hidden
+      >
         {member.name.slice(0, 1)}
       </FallbackFace>
     )
@@ -383,7 +388,11 @@ const FallbackFace = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  /*
+   * 글자 크기는 호출부가 원 지름과 함께 넘긴다. cqw로 잡아 봤더니 컨테이너 쿼리 단위는
+   * 자기 자신이 아니라 **조상 컨테이너** 기준이라, 컨테이너가 없으면 뷰포트로 폴백해
+   * 글자가 터무니없이 커진다.
+   */
   font-weight: 700;
   background: ${({ theme }) => theme.colors.hover};
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -421,6 +430,27 @@ const HeadRow = styled.button`
   }
 `
 
+/*
+ * 얼굴을 띄운다. 76px 원이 옅은 회색 블록 위에 평평하게 얹혀 있어 26px 이름에 밀렸다.
+ * 104px로 키우고 흰 테 + 크림슨 링 + 그림자를 줘 지면에서 한 겹 떠오르게 한다.
+ * 링 색은 좌측 4px 띠·직함 색과 같은 계열이라 블록이 하나의 덩어리로 읽힌다.
+ */
+const HeadFaceRing = styled.span`
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 50%;
+  padding: 3px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  box-shadow:
+    0 0 0 2px rgba(190, 18, 60, 0.55),
+    0 6px 18px rgba(15, 23, 42, 0.16);
+
+  img,
+  span {
+    border: none;
+  }
+`
+
 /** 직함이 이름 위에 온다 — '제47대 대통령'이 먼저, 사람 이름이 그 다음 */
 const HeadRole = styled.span`
   display: block;
@@ -437,7 +467,7 @@ const HeadText = styled.span`
 const HeadName = styled.span`
   display: block;
   margin-top: 2px;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.2;
