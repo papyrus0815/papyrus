@@ -1,3 +1,5 @@
+import styled from 'styled-components'
+
 import type { ElectionSummary } from '../../model/use-country-dashboard-stats'
 import { IconVote } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
@@ -26,20 +28,17 @@ export function ElectionCard({
       </S.CardPanel>
     )
   }
+  /*
+   * 빈 상태는 한 줄로. 카드 한 장(180px)을 "등록된 선거가 없습니다" 한 문장에 내주면
+   * 정작 옆의 현 정부 명단보다 커져, 없는 것이 있는 것보다 눈에 띄는 지면이 된다.
+   */
   if (!next && !recent) {
     return (
-      <S.CardPanel $accent="indigo">
-        <S.CardPanelTitleRow>
-          <S.CardPanelTitle>선거</S.CardPanelTitle>
-        </S.CardPanelTitleRow>
-        <S.EmptyWithCta>
-          <S.FeedEmpty>등록된 선거가 없습니다.</S.FeedEmpty>
-          <S.EmptyCtaButton type="button" onClick={onOpen}>
-            <IconVote />
-            선거 탭으로
-          </S.EmptyCtaButton>
-        </S.EmptyWithCta>
-      </S.CardPanel>
+      <EmptyLine type="button" onClick={onOpen}>
+        <IconVote />
+        <span>선거 기록 없음</span>
+        <EmptyLineCta>등록하기</EmptyLineCta>
+      </EmptyLine>
     )
   }
   return (
@@ -69,3 +68,30 @@ export function ElectionCard({
     </S.CardPanel>
   )
 }
+
+const EmptyLine = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  background: none;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 12.5px;
+  cursor: pointer;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const EmptyLineCta = styled.span`
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`

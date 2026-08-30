@@ -244,23 +244,21 @@ export function CurrentCabinetPanel({
               <MemberCell
                 key={member.id}
                 type="button"
+                $replaced={member.replaced}
                 onClick={() =>
                   member.personId && onSelectPerson(member.personId)
                 }
                 title={
                   member.replaced && member.predecessor
-                    ? `${member.predecessor} 후임`
-                    : undefined
+                    ? `${member.predecessor} 후임 · ${shortDate(member.startDate)} 취임`
+                    : `${shortDate(member.startDate)} 취임`
                 }
               >
-                <Face member={member} size={30} />
-                <CellText>
-                  <CellTitle>{member.title}</CellTitle>
-                  <CellName>
-                    {member.name}
-                    {member.replaced && <Swap aria-label="임기 중 교체">↻</Swap>}
-                  </CellName>
-                </CellText>
+                <CellTitle>{member.title}</CellTitle>
+                <CellName>
+                  {member.name}
+                  {member.replaced && <Swap aria-label="임기 중 교체">↻</Swap>}
+                </CellName>
               </MemberCell>
             ))}
           </Roster>
@@ -407,20 +405,31 @@ const HeadMeta = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-/** 자리-사람 짝이 한눈에 스캔되도록 3열 격자 */
 const Roster = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 2px 8px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0 20px;
 `
 
-const MemberCell = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 8px;
+/*
+ * 한 줄에 자리와 사람. 예전엔 30px 아바타 + 두 줄(자리 위, 이름 아래)이었는데,
+ * **각료 초상은 실측 15명 전원이 없어** 회색 원에 첫 글자만 뜨는 자리 낭비였고
+ * (가로 39px × 15개), 두 줄 조판은 세로로 훑을 때 한 항목마다 두 줄을 건너뛰게 했다.
+ *
+ * 자리 열을 고정폭으로 세우면 '국무장관·국방장관·재무장관'이 세로로 정렬돼 스캔축이 선다.
+ * 행 높이는 절반이 되고 같은 폭에 더 많이 들어간다. 수반 줄의 초상은 그대로 둔다 —
+ * 거긴 실제로 사진이 있고, 한 명뿐이라 정렬을 깨지 않는다.
+ */
+const MemberCell = styled.button<{ $replaced?: boolean }>`
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
   border: none;
-  border-radius: 9px;
+  border-left: 2px solid
+    ${({ $replaced }) => ($replaced ? 'rgba(180,83,9,0.55)' : 'transparent')};
+  border-radius: 0 8px 8px 0;
   background: none;
   text-align: left;
   cursor: pointer;
@@ -431,14 +440,9 @@ const MemberCell = styled.button`
   }
 `
 
-const CellText = styled.span`
-  min-width: 0;
-`
-
-/** 자리가 먼저다 — 이름보다 '국무장관'이 스캔의 축 */
+/** 자리가 스캔의 축 — 이름보다 먼저 읽힌다 */
 const CellTitle = styled.span`
-  display: block;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
   overflow: hidden;
@@ -447,9 +451,9 @@ const CellTitle = styled.span`
 `
 
 const CellName = styled.span`
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
@@ -463,13 +467,16 @@ const Swap = styled.span`
   color: #b45309;
 `
 
-/* 카드가 하나(선거)뿐일 때 전폭으로 늘어나 빈 상태가 커 보이지 않게 상한을 둔다 */
+/* 카드가 하나(선거)뿐일 때 전폭으로 늘어나지 않게 — 빈 줄이면 자연폭으로 접힌다 */
 const Extra = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-top: 16px;
-  max-width: 620px;
+
+  > * {
+    max-width: 320px;
+  }
 `
 
 const MoreLink = styled.button`
