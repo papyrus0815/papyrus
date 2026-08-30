@@ -30,6 +30,7 @@ import { ActivityFeed } from './dashboard-panels/activity-feed'
 import { ClickableStatCard } from './dashboard-panels/clickable-stat-card'
 import { CompareLine } from './dashboard-panels/compare-line'
 import { CompletenessPanel } from './dashboard-panels/completeness-panel'
+import { CurrentCabinetPanel } from './dashboard-panels/current-cabinet-panel'
 import { CurrentHeadsPanel } from './dashboard-panels/current-heads-panel'
 import { ElectionCard } from './dashboard-panels/election-card'
 import {
@@ -37,7 +38,6 @@ import {
   formatPopulation,
   parsePopulation,
 } from './dashboard-panels/format'
-import { GovernmentCard } from './dashboard-panels/government-card'
 import { GovernmentFlowSection } from './dashboard-panels/government-flow-section'
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
@@ -196,37 +196,51 @@ export function CountryDetailDashboard({
         </S.Section>
       )}
 
-      {/* 3. 지금 — 현임 수반 · 현 내각 · 선거 */}
-      <S.Section>
-        <S.SectionTitleRow>
-          <S.SectionTitleIcon $accent="rose">
-            <IconVote />
-          </S.SectionTitleIcon>
-          <S.SectionTitleText>지금</S.SectionTitleText>
-        </S.SectionTitleRow>
-        <S.NowRow>
-          <CurrentHeadsPanel
-            isLoading={stats.loading.tenures}
-            heads={stats.currentHeads}
-            onSelect={(personId) =>
-              navigate(pathKeys.personsTimelineDetail(personId))
-            }
-            onRegister={goGovernment}
-          />
-          <GovernmentCard
-            cabinet={stats.currentCabinet}
-            isLoading={stats.loading.cabinets}
-            onOpen={goGovernment}
-          />
+      {/*
+       * 3. 지금 — 현임 정부를 한 곳에서.
+       *
+       * 예전엔 '현임 정부 수반' 카드 · '현 정부'(각료 수와 정당 막대만) · '선거' 세 장이었다.
+       * 수반은 그 카드와 「정부 변천」 현직 줄에 겹쳐 나오면서도, 정작 **누가 국무장관인지는
+       * 어디에도 없어** 행정조직 탭까지 들어가야 했다. 수반+명단을 한 묶음으로 합치고
+       * 선거는 그 아래로 넣는다. 각료 데이터가 없는 역사 국가는 옛 카드를 유지한다.
+       */}
+      {country.type === 'modern' ? (
+        <CurrentCabinetPanel
+          countryId={country.id}
+          cabinetName={stats.currentCabinet?.name ?? null}
+          startDate={stats.currentCabinet?.startDate ?? null}
+          onOpen={goGovernment}
+          onSelectPerson={(personId) =>
+            navigate(pathKeys.personsTimelineDetail(personId))
+          }
+        >
           <ElectionCard
             next={stats.nextElection}
             recent={stats.recentElection}
             isLoading={stats.loading.elections}
             onOpen={goElections}
           />
-        </S.NowRow>
-      </S.Section>
-
+        </CurrentCabinetPanel>
+      ) : (
+        <S.Section>
+          <S.SectionTitleRow>
+            <S.SectionTitleIcon $accent="rose">
+              <IconVote />
+            </S.SectionTitleIcon>
+            <S.SectionTitleText>지금</S.SectionTitleText>
+          </S.SectionTitleRow>
+          <S.NowRow>
+            <CurrentHeadsPanel
+              isLoading={stats.loading.tenures}
+              heads={stats.currentHeads}
+              onSelect={(personId) =>
+                navigate(pathKeys.personsTimelineDetail(personId))
+              }
+              onRegister={goGovernment}
+            />
+          </S.NowRow>
+        </S.Section>
+      )}
       {/* 4. 기록 — 각 탭으로 가는 입구. 숫자가 곧 링크다. */}
       <S.Section>
         <S.SectionTitleRow>

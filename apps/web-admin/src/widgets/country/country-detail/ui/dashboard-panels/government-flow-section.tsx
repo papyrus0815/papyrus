@@ -188,11 +188,6 @@ export function GovernmentFlowSection({ countryId, countryName }: Props) {
     }
   }, [administrations.length])
 
-  const incumbent = useMemo(
-    () => [...administrations].reverse().find((admin) => admin.isIncumbent),
-    [administrations],
-  )
-
   const goToHeads = () => navigate(pathKeys.countryGovernment(countryId))
 
   if (tenureQuery.isLoading) return null
@@ -231,22 +226,11 @@ export function GovernmentFlowSection({ countryId, countryName }: Props) {
     <S.Section>
       {title}
 
-      {incumbent && (
-        <Incumbent>
-          <Portrait admin={incumbent} size={44} />
-          <IncumbentText>
-            <IncumbentTop>
-              <IncumbentName>{incumbent.personName}</IncumbentName>
-              <NowBadge>현직</NowBadge>
-            </IncumbentTop>
-            <IncumbentMeta>
-              {incumbent.termNumber != null && `제${incumbent.termNumber}대 `}
-              {incumbent.title} · {incumbent.startYear}–현재
-            </IncumbentMeta>
-          </IncumbentText>
-        </Incumbent>
-      )}
-
+      {/*
+       * 현직 강조 블록은 여기 두지 않는다. 바로 위 「지금」이 수반과 각료 명단을 이미
+       * 크게 보여주고 있어, 같은 사람이 한 화면에 두 번 나오면 '한눈에'가 흐려진다.
+       * 이 지면의 몫은 **역대 흐름**이고, 현직은 트랙 마지막 칩이 초록 테두리로 표시한다.
+       */}
       {administrations.length > 0 && (
         <>
           <Track ref={scrollRef} role="list" aria-label="역대 수반">
@@ -385,51 +369,11 @@ const FallbackFace = styled.span`
   border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-const Incumbent = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  margin-bottom: 14px;
-  border-radius: 12px;
-  background: ${({ theme }) => theme.colors.hover};
-`
 
-const IncumbentText = styled.div`
-  min-width: 0;
-`
 
-const IncumbentTop = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`
 
-const IncumbentName = styled.span`
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
 
-const NowBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  height: 19px;
-  padding: 0 7px;
-  border-radius: 6px;
-  font-size: 10.5px;
-  font-weight: 800;
-  background: rgba(22, 163, 74, 0.14);
-  color: #15803d;
-`
 
-const IncumbentMeta = styled.div`
-  margin-top: 2px;
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
 
 const Track = styled.div`
   display: flex;
