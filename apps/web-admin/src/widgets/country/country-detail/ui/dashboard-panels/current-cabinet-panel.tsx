@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import styled from 'styled-components'
 
+import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { getAllPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
@@ -120,6 +121,23 @@ export function CurrentCabinetPanel({
    */
   const [pickerOpen, setPickerOpen] = useState(false)
   const [registerPersonId, setRegisterPersonId] = useState<string | null>(null)
+  /** 어느 부처의 우두머리를 등록하는가. null이면 부처 없이(수반 등) */
+  const [registerTarget, setRegisterTarget] = useState<{
+    departmentId: string | null
+    label: string
+  }>({ departmentId: null, label: '수반·각료' })
+
+  /*
+   * 빈 상태에서 부처 목록을 받아 **부처마다 등록 슬롯**을 세운다. 골격만 그려 두면
+   * "여기에 정부가 온다"까지는 알지만 무엇을 채워야 하는지는 여전히 모른다. 이 나라에
+   * 이미 등록된 부처(외무부·국방부…)를 그대로 줄 세우면 그게 곧 할 일 목록이다.
+   */
+  const departmentsQuery = useQuery({
+    queryKey: ['administration-departments', 'by-country', countryId],
+    queryFn: () => administrationDepartmentApi.getByCountryId(countryId),
+    enabled: !!countryId,
+    staleTime: 5 * 60_000,
+  })
 
   const personsQuery = useQuery({
     queryKey: ['persons', 'all'],
@@ -131,6 +149,12 @@ export function CurrentCabinetPanel({
   const closeRegister = () => {
     setRegisterPersonId(null)
     setPickerOpen(false)
+    setRegisterTarget({ departmentId: null, label: '수반·각료' })
+  }
+
+  const openRegister = (departmentId: string | null, label: string) => {
+    setRegisterTarget({ departmentId, label })
+    setPickerOpen(true)
   }
 
   // 정부 변천 패널과 같은 키 — react-query가 한 번만 받아온다
@@ -205,6 +229,7 @@ export function CurrentCabinetPanel({
     }
   }, [query.data, startDate])
 
+  const departments = departmentsQuery.data ?? []
   const replacedCount = members.filter((member) => member.replaced).length
   // 16명까지는 접지 않는다. 각료 15명짜리 정부를 9명에서 끊으면 '한눈에'가 아니다
   const visible = expanded ? members : members.slice(0, 16)
@@ -224,7 +249,10 @@ export function CurrentCabinetPanel({
         <S.SectionTitleText>지금</S.SectionTitleText>
         {!isEmpty && <CabinetName>{cabinetName ?? '현 정부'}</CabinetName>}
         <HeaderActions>
-          <HeaderAction type="button" onClick={() => setPickerOpen(true)}>
+          <HeaderAction
+            type="button"
+            onClick={() => openRegister(null, '수반·각료')}
+          >
             + 수반·각료 등록
           </HeaderAction>
           <HeaderGhost type="button" onClick={onOpen}>
@@ -236,22 +264,47 @@ export function CurrentCabinetPanel({
       {query.isLoading ? (
         <GovernmentSkeleton />
       ) : isEmpty ? (
-        /*
-         * 빈 상태도 **정부의 골격**으로 보여준다. 문장 한 줄과 버튼만 두면 이 자리에
-         * 무엇이 들어오는지(수장 하나 + 각료 격자) 알 수 없다. 골격을 그려 두면 형태가
-         * 곧 설명이 되고, 그대로 눌러 채울 수 있다.
-         */
-        <GhostButton
-          type="button"
-          onClick={() => setPickerOpen(true)}
-          aria-label="수반·각료 등록"
-        >
-          <GovernmentSkeleton ghost />
-          <GhostCaption>
-            <IconBriefcase />
-            아직 비어 있습니다 — 눌러서 수반·각료를 등록하세요
-          </GhostCaption>
-        </GhostButton>
+        <>
+          {/* 수장 자리 — 부처와 무관한 국가원수·정부수반 */}
+          <EmptySlotHead
+            type="button"
+            onClick={() => openRegister(null, '정부 수반')}
+          >
+            <SlotFace />
+            <SlotHeadText>
+              <SlotRole>정부 수반</SlotRole>
+              <SlotEmptyName>아직 등록되지 않음</SlotEmptyName>
+            </SlotHeadText>
+            <SlotAdd>+ 등록</SlotAdd>
+          </EmptySlotHead>
+
+          {departments.length > 0 ? (
+            <>
+              <SlotGroupLabel>부처별 우두머리</SlotGroupLabel>
+              <SlotGrid>
+                {departments.map((department) => (
+                  <EmptySlot
+                    key={department.id}
+                    type="button"
+                    onClick={() =>
+                      openRegister(department.id, department.name)
+                    }
+                  >
+                    <SlotTitle>{department.name}</SlotTitle>
+                    <SlotEmptyName>아직 없음</SlotEmptyName>
+                    <SlotAdd>+ 등록</SlotAdd>
+                  </EmptySlot>
+                ))}
+              </SlotGrid>
+            </>
+          ) : (
+            <GhostCaption as="div">
+              <IconBriefcase />
+              등록된 부처가 없습니다 — 「행정조직 → 중앙부처」에서 부처를 먼저 만들면
+              여기에 자리별 등록 칸이 생깁니다
+            </GhostCaption>
+          )}
+        </>
       ) : (
         <>
       <MetaRow>
@@ -337,7 +390,7 @@ export function CurrentCabinetPanel({
           persons={personsQuery.data ?? []}
           selectedPersonId={registerPersonId ?? ''}
           loading={personsQuery.isLoading}
-          title="수반·각료 등록 — 인물 선택"
+          title={`${registerTarget.label} 등록 — 인물 선택`}
           searchPlaceholder="등록할 인물을 검색..."
           defaultCountryId={countryId}
           onSelect={(personId) => {
@@ -355,6 +408,7 @@ export function CurrentCabinetPanel({
           onClose={closeRegister}
           onSuccess={closeRegister}
           initialCountryId={countryId}
+          initialAdministrationDepartmentId={registerTarget.departmentId}
         />
       )}
 
@@ -486,20 +540,104 @@ const SkeletonCell = styled.div`
   padding: 8px;
 `
 
-/** 골격 전체가 등록 진입점 — 형태를 보고 그대로 눌러 채운다 */
-const GhostButton = styled.button`
-  display: block;
+
+/*
+ * 빈 자리 슬롯. 골격(뼈대)만으로는 "여기에 정부가 온다"까지만 말하고, 무엇을 채워야
+ * 하는지는 말하지 못한다. 이미 등록된 부처를 그대로 줄 세우면 그게 곧 할 일 목록이 된다.
+ */
+const slotBase = `
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
-  padding: 0;
-  border: none;
+  border-radius: 10px;
+  border: 1px dashed;
   background: none;
   text-align: left;
   cursor: pointer;
-  border-radius: 14px;
+`
 
-  &:hover ${'' /* 골격을 살짝 띄워 누를 수 있음을 알린다 */} > div:first-child {
-    opacity: 0.62;
+const EmptySlotHead = styled.button`
+  ${slotBase}
+  gap: 16px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  border-color: ${({ theme }) => theme.colors.border.default};
+
+  &:hover {
+    border-color: rgba(190, 18, 60, 0.45);
+    background: ${({ theme }) => theme.colors.hover};
   }
+`
+
+/** 수장 자리의 빈 얼굴 — 실제 얼굴과 같은 지름이라 채워졌을 때와 자리가 어긋나지 않는다 */
+const SlotFace = styled.span`
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+`
+
+const SlotHeadText = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+`
+
+const SlotRole = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #be123c;
+`
+
+const SlotGroupLabel = styled.div`
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const SlotGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+`
+
+const EmptySlot = styled.button`
+  ${slotBase}
+  padding: 10px 12px;
+  border-color: ${({ theme }) => theme.colors.border.light};
+
+  &:hover {
+    border-color: rgba(190, 18, 60, 0.4);
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const SlotTitle = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const SlotEmptyName = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const SlotAdd = styled.span`
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #be123c;
 `
 
 const GhostCaption = styled.span`
