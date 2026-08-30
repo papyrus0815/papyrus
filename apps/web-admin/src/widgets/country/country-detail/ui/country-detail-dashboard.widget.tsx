@@ -207,8 +207,6 @@ export function CountryDetailDashboard({
       {country.type === 'modern' ? (
         <CurrentCabinetPanel
           countryId={country.id}
-          cabinetName={stats.currentCabinet?.name ?? null}
-          startDate={stats.currentCabinet?.startDate ?? null}
           onOpen={goGovernment}
           onSelectPerson={(personId) =>
             navigate(pathKeys.personsTimelineDetail(personId))
