@@ -38,6 +38,7 @@ import {
   parsePopulation,
 } from './dashboard-panels/format'
 import { GovernmentCard } from './dashboard-panels/government-card'
+import { GovernmentFlowSection } from './dashboard-panels/government-flow-section'
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
@@ -316,6 +317,11 @@ export function CountryDetailDashboard({
        */}
       {country.type === 'modern' && (
         <>
+          {/* 계보(국가가 어떻게 이어졌나) 다음에 정부 변천(그 안에서 정부 형태가 어떻게 뒤집혔나) */}
+          <GovernmentFlowSection
+            countryId={country.id}
+            countryName={country.name}
+          />
           <PopulationPyramidSection
             countryId={country.id}
             countryName={country.name}

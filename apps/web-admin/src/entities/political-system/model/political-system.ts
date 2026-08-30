@@ -112,6 +112,16 @@ export function formatPeriod(system: PoliticalSystem): string {
   return `${start}–${end}`
 }
 
+/**
+ * '상원 상원'·'의회 국민의회'처럼 라벨과 이름이 겹칠 때 이름만 남긴다.
+ * 원 이름이 이미 그 역할을 말하고 있으면 라벨을 앞에 붙이는 게 군더더기다.
+ */
+export function houseText(label: string, name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return label
+  return trimmed.includes(label) ? trimmed : `${label} ${trimmed}`
+}
+
 /** 한 줄 요약 — '대통령제 · 양원제' */
 export function summarize(system: PoliticalSystem): string {
   const parts = [
