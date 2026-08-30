@@ -361,6 +361,8 @@ export interface TenureRegisterPanelProps {
   initialCountryId?: string
   initialHistoricalCountryId?: string | null
   initialCabinetId?: string | null
+  /** 부처(중앙부처) 지면에서 열 때 — 그 부처 소속으로 저장한다 */
+  initialAdministrationDepartmentId?: string | null
 }
 
 const FORM_ID = 'tenure-register-form'
@@ -374,6 +376,7 @@ export function TenureRegisterPanel({
   initialCountryId,
   initialHistoricalCountryId,
   initialCabinetId,
+  initialAdministrationDepartmentId,
 }: TenureRegisterPanelProps) {
   const queryClient = useQueryClient()
   const isEdit = !!tenureId
@@ -807,6 +810,9 @@ export function TenureRegisterPanel({
       notes: combinedNotes || emptyAs,
       showPositionInfo: showOnEvents,
       cabinetId: cabinetId || emptyAs,
+      // 부처 지면에서 연 경우에만 실린다. 그 밖에는 undefined라 기존 값이 보존된다.
+      administrationDepartmentId:
+        initialAdministrationDepartmentId ?? undefined,
     }
     setSubmitting(true)
     try {

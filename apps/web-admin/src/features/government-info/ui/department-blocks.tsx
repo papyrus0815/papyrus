@@ -7,18 +7,50 @@ import { administrationDepartmentApi } from '@/shared/api/administration-departm
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
+import { getAllPersons } from '@/shared/api/persons'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import { notify } from '@/shared/ui/toast'
 
-/** 부처에 연결된 직위의 역대 장관(재임) 목록 — API로 조회 */
+/**
+ * 부처에 연결된 역대 장관(재임) 목록 + **그 부처에 바로 장관 등록**.
+ *
+ * 예전엔 읽기만 했고, 0건이면 블록 자체를 안 그렸다. 그래서 장관이 없는 부처는 "여기에
+ * 장관을 넣는다"는 사실이 화면에 없었고, 넣으려면 역대 수반·인물 지면으로 건너가 부처를
+ * 손으로 다시 골라야 했다. 부처가 이미 정해진 자리에서 끝나야 한다.
+ */
 export function DepartmentTenuresBlock({
   departmentId,
+  countryId,
+  historicalCountryId,
+  departmentName,
 }: {
   departmentId: string
+  /** 등록 폼에 미리 채울 국가 */
+  countryId?: string
+  historicalCountryId?: string | null
+  departmentName?: string
 }) {
+  const queryClient = useQueryClient()
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [registerPersonId, setRegisterPersonId] = useState<string | null>(null)
+
+  const personsQuery = useQuery({
+    queryKey: ['persons', 'all'],
+    queryFn: getAllPersons,
+    enabled: pickerOpen,
+    staleTime: 5 * 60_000,
+  })
+
+  const closeRegister = () => {
+    setRegisterPersonId(null)
+    setPickerOpen(false)
+  }
+
   const { mode } = useThemeStore()
   const isDark = mode === 'dark'
-  const C = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
+  const palette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
   const { data: tenures = [], isLoading } = useQuery({
     queryKey: ['administration-department-tenures', departmentId],
     queryFn: () =>
@@ -26,7 +58,6 @@ export function DepartmentTenuresBlock({
     enabled: !!departmentId,
   })
   if (isLoading) return null
-  if (tenures.length === 0) return null
   const formatDate = (dateStr: string | null) =>
     dateStr ? dateStr.slice(0, 10).replace(/-/g, '.') : '—'
   const formatName = (
@@ -68,7 +99,7 @@ export function DepartmentTenuresBlock({
             key={tenure.id}
             style={{
               fontSize: 13,
-              color: C.sectionLabelTint,
+              color: palette.sectionLabelTint,
               display: 'flex',
               flexWrap: 'wrap',
               gap: 6,
@@ -94,17 +125,17 @@ export function DepartmentTenuresBlock({
                   : null,
               )}
             </span>
-            <span style={{ color: C.textMuted }}>
+            <span style={{ color: palette.textMuted }}>
               {tenure.positionDefinition?.title ?? tenure.title ?? ''}
             </span>
-            <span style={{ color: C.textMuted, fontSize: 12 }}>
+            <span style={{ color: palette.textMuted, fontSize: 12 }}>
               {formatDate(tenure.startDate)}–{formatDate(tenure.endDate)}
             </span>
           </li>
         ))}
       </ul>
       {tenures.length > 8 && (
-        <div style={{ fontSize: 12, color: C.textMuted, marginTop: 6 }}>
+        <div style={{ fontSize: 12, color: palette.textMuted, marginTop: 6 }}>
           외 {tenures.length - 8}명
         </div>
       )}
@@ -116,22 +147,84 @@ export function DepartmentTenuresBlock({
       style={{
         marginTop: 16,
         paddingTop: 16,
-        borderTop: `1px solid ${isDark ? C.border : C.borderMid}`,
+        borderTop: `1px solid ${isDark ? palette.border : palette.borderMid}`,
       }}
     >
       <div
         style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
           fontSize: 11,
           fontWeight: 600,
-          color: C.textMuted,
+          color: palette.textMuted,
           letterSpacing: '0.05em',
           textTransform: 'uppercase',
           marginBottom: 10,
         }}
       >
-        소속 인사(재임)
+        <span>소속 인사(재임)</span>
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          style={{
+            marginLeft: 'auto',
+            padding: '4px 10px',
+            borderRadius: 7,
+            border: `1px solid ${palette.borderMid}`,
+            background: 'transparent',
+            color: palette.sectionLabelTint,
+            fontSize: 11.5,
+            fontWeight: 700,
+            letterSpacing: 0,
+            textTransform: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          + 장관 등록
+        </button>
       </div>
-      {listEl}
+      {tenures.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: palette.textMuted }}>
+          이 부처에 등록된 인사가 없습니다.
+        </div>
+      ) : (
+        listEl
+      )}
+
+      {pickerOpen && (
+        <PersonSelectModal
+          persons={personsQuery.data ?? []}
+          selectedPersonId={registerPersonId ?? ''}
+          loading={personsQuery.isLoading}
+          title={`${departmentName ?? '부처'} 장관 등록 — 인물 선택`}
+          searchPlaceholder="장관으로 등록할 인물을 검색..."
+          defaultCountryId={countryId}
+          onSelect={(personId) => {
+            setRegisterPersonId(personId)
+            setPickerOpen(false)
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {registerPersonId && (
+        <TenureRegisterPanel
+          personId={registerPersonId}
+          open
+          onClose={closeRegister}
+          onSuccess={() => {
+            // 방금 넣은 장관이 이 목록에 바로 보이도록
+            queryClient.invalidateQueries({
+              queryKey: ['administration-department-tenures', departmentId],
+            })
+            closeRegister()
+          }}
+          initialCountryId={countryId}
+          initialHistoricalCountryId={historicalCountryId ?? null}
+          initialAdministrationDepartmentId={departmentId}
+        />
+      )}
     </div>
   )
 }
@@ -153,7 +246,7 @@ export function DepartmentEventsBlock({
   const queryClient = useQueryClient()
   const { mode } = useThemeStore()
   const isDark = mode === 'dark'
-  const C = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
+  const palette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
   const { data: events = [], isLoading } = useQuery({
     queryKey: ['administration-department-events', departmentId],
     queryFn: () =>
@@ -244,9 +337,9 @@ export function DepartmentEventsBlock({
           padding: '4px 10px',
           fontSize: 11,
           fontWeight: 600,
-          color: C.accent,
+          color: palette.accent,
           background: 'transparent',
-          border: `1px solid ${C.accent}`,
+          border: `1px solid ${palette.accent}`,
           borderRadius: 8,
           cursor: 'pointer',
         }}
@@ -258,13 +351,13 @@ export function DepartmentEventsBlock({
   const outerStyle = {
     marginTop: 16,
     paddingTop: 16,
-    borderTop: `1px solid ${isDark ? C.border : C.borderMid}`,
+    borderTop: `1px solid ${isDark ? palette.border : palette.borderMid}`,
   } as const
 
   const eventsBody = (
     <>
       {isLoading ? (
-        <div style={{ fontSize: 12, color: C.textMuted }}>불러오는 중…</div>
+        <div style={{ fontSize: 12, color: palette.textMuted }}>불러오는 중…</div>
       ) : (
         <>
           {events.length > 0 && (
@@ -283,11 +376,11 @@ export function DepartmentEventsBlock({
                   key={deptEvent.id}
                   style={{
                     fontSize: 12,
-                    color: C.sectionLabelTint,
+                    color: palette.sectionLabelTint,
                     padding: '8px 10px',
-                    background: C.bgSubtle,
+                    background: palette.bgSubtle,
                     borderRadius: 8,
-                    border: `1px solid ${isDark ? C.border : C.borderMid}`,
+                    border: `1px solid ${isDark ? palette.border : palette.borderMid}`,
                   }}
                 >
                   {editingEvent?.id === deptEvent.id ? (
@@ -309,11 +402,11 @@ export function DepartmentEventsBlock({
                         placeholder="제목"
                         style={{
                           padding: '6px 10px',
-                          border: `1px solid ${C.borderMid}`,
+                          border: `1px solid ${palette.borderMid}`,
                           borderRadius: 8,
                           fontSize: 13,
-                          background: C.chipActionBg,
-                          color: isDark ? C.text : 'inherit',
+                          background: palette.chipActionBg,
+                          color: isDark ? palette.text : 'inherit',
                         }}
                       />
                       <div
@@ -330,11 +423,11 @@ export function DepartmentEventsBlock({
                           }
                           style={{
                             padding: '6px 10px',
-                            border: `1px solid ${C.borderMid}`,
+                            border: `1px solid ${palette.borderMid}`,
                             borderRadius: 8,
                             fontSize: 12,
-                            background: C.chipActionBg,
-                            color: isDark ? C.text : 'inherit',
+                            background: palette.chipActionBg,
+                            color: isDark ? palette.text : 'inherit',
                           }}
                         />
                         <input
@@ -348,11 +441,11 @@ export function DepartmentEventsBlock({
                           }
                           style={{
                             padding: '6px 10px',
-                            border: `1px solid ${C.borderMid}`,
+                            border: `1px solid ${palette.borderMid}`,
                             borderRadius: 8,
                             fontSize: 12,
-                            background: C.chipActionBg,
-                            color: isDark ? C.text : 'inherit',
+                            background: palette.chipActionBg,
+                            color: isDark ? palette.text : 'inherit',
                           }}
                         />
                         <select
@@ -366,11 +459,11 @@ export function DepartmentEventsBlock({
                           }
                           style={{
                             padding: '6px 10px',
-                            border: `1px solid ${C.borderMid}`,
+                            border: `1px solid ${palette.borderMid}`,
                             borderRadius: 8,
                             fontSize: 12,
-                            background: C.chipActionBg,
-                            color: isDark ? C.text : 'inherit',
+                            background: palette.chipActionBg,
+                            color: isDark ? palette.text : 'inherit',
                           }}
                         >
                           {Object.entries(DEPT_EVENT_TYPE_LABEL).map(
@@ -394,12 +487,12 @@ export function DepartmentEventsBlock({
                         rows={2}
                         style={{
                           padding: '6px 10px',
-                          border: `1px solid ${C.borderMid}`,
+                          border: `1px solid ${palette.borderMid}`,
                           borderRadius: 8,
                           fontSize: 12,
                           resize: 'vertical',
-                          background: C.chipActionBg,
-                          color: isDark ? C.text : 'inherit',
+                          background: palette.chipActionBg,
+                          color: isDark ? palette.text : 'inherit',
                         }}
                       />
                       <div style={{ display: 'flex', gap: 8 }}>
@@ -410,7 +503,7 @@ export function DepartmentEventsBlock({
                             padding: '6px 12px',
                             fontSize: 12,
                             fontWeight: 600,
-                            background: C.accent,
+                            background: palette.accent,
                             color: '#fff',
                             border: 'none',
                             borderRadius: 8,
@@ -434,10 +527,10 @@ export function DepartmentEventsBlock({
                           style={{
                             padding: '6px 12px',
                             fontSize: 12,
-                            border: `1px solid ${C.borderMid}`,
+                            border: `1px solid ${palette.borderMid}`,
                             borderRadius: 8,
-                            background: C.chipActionBg,
-                            color: isDark ? C.sectionLabelTint : 'inherit',
+                            background: palette.chipActionBg,
+                            color: isDark ? palette.sectionLabelTint : 'inherit',
                             cursor: 'pointer',
                           }}
                         >
@@ -458,7 +551,7 @@ export function DepartmentEventsBlock({
                         <span style={{ fontWeight: 600 }}>
                           {deptEvent.title}
                         </span>
-                        <span style={{ fontSize: 11, color: C.textMuted }}>
+                        <span style={{ fontSize: 11, color: palette.textMuted }}>
                           {formatDate(deptEvent.startDate)}–
                           {formatDate(deptEvent.endDate)}
                         </span>
@@ -467,8 +560,8 @@ export function DepartmentEventsBlock({
                             fontSize: 10,
                             padding: '2px 6px',
                             borderRadius: 6,
-                            background: isDark ? C.btnHover : C.avatarBg,
-                            color: C.textMuted,
+                            background: isDark ? palette.btnHover : palette.avatarBg,
+                            color: palette.textMuted,
                           }}
                         >
                           {DEPT_EVENT_TYPE_LABEL[deptEvent.eventType] ??
@@ -480,7 +573,7 @@ export function DepartmentEventsBlock({
                           style={{
                             marginTop: 4,
                             fontSize: 11,
-                            color: C.textMuted,
+                            color: palette.textMuted,
                             lineHeight: 1.4,
                           }}
                         >
@@ -508,10 +601,10 @@ export function DepartmentEventsBlock({
                           style={{
                             padding: '4px 8px',
                             fontSize: 11,
-                            border: `1px solid ${C.borderHairline}`,
+                            border: `1px solid ${palette.borderHairline}`,
                             borderRadius: 6,
-                            background: C.chipActionBg,
-                            color: isDark ? C.sectionLabelTint : 'inherit',
+                            background: palette.chipActionBg,
+                            color: isDark ? palette.sectionLabelTint : 'inherit',
                             cursor: 'pointer',
                           }}
                         >
@@ -536,8 +629,8 @@ export function DepartmentEventsBlock({
                             fontSize: 11,
                             border: `1px solid ${isDark ? 'rgba(225,29,72,0.4)' : '#fecaca'}`,
                             borderRadius: 6,
-                            background: C.dangerBg,
-                            color: C.danger,
+                            background: palette.dangerBg,
+                            color: palette.danger,
                             cursor: 'pointer',
                           }}
                         >
@@ -555,9 +648,9 @@ export function DepartmentEventsBlock({
               <div
                 style={{
                   padding: 12,
-                  background: C.bgSubtle,
+                  background: palette.bgSubtle,
                   borderRadius: 10,
-                  border: `1px dashed ${isDark ? C.borderHairline : C.borderMid}`,
+                  border: `1px dashed ${isDark ? palette.borderHairline : palette.borderMid}`,
                   marginTop: 8,
                 }}
               >
@@ -574,11 +667,11 @@ export function DepartmentEventsBlock({
                     width: '100%',
                     marginBottom: 8,
                     padding: '8px 12px',
-                    border: `1px solid ${C.borderMid}`,
+                    border: `1px solid ${palette.borderMid}`,
                     borderRadius: 8,
                     fontSize: 13,
-                    background: C.chipActionBg,
-                    color: isDark ? C.text : 'inherit',
+                    background: palette.chipActionBg,
+                    color: isDark ? palette.text : 'inherit',
                   }}
                 />
                 <div
@@ -600,11 +693,11 @@ export function DepartmentEventsBlock({
                     }
                     style={{
                       padding: '6px 10px',
-                      border: `1px solid ${C.borderMid}`,
+                      border: `1px solid ${palette.borderMid}`,
                       borderRadius: 8,
                       fontSize: 12,
-                      background: C.chipActionBg,
-                      color: isDark ? C.text : 'inherit',
+                      background: palette.chipActionBg,
+                      color: isDark ? palette.text : 'inherit',
                     }}
                   />
                   <input
@@ -618,11 +711,11 @@ export function DepartmentEventsBlock({
                     }
                     style={{
                       padding: '6px 10px',
-                      border: `1px solid ${C.borderMid}`,
+                      border: `1px solid ${palette.borderMid}`,
                       borderRadius: 8,
                       fontSize: 12,
-                      background: C.chipActionBg,
-                      color: isDark ? C.text : 'inherit',
+                      background: palette.chipActionBg,
+                      color: isDark ? palette.text : 'inherit',
                     }}
                   />
                   <select
@@ -636,11 +729,11 @@ export function DepartmentEventsBlock({
                     }
                     style={{
                       padding: '6px 10px',
-                      border: `1px solid ${C.borderMid}`,
+                      border: `1px solid ${palette.borderMid}`,
                       borderRadius: 8,
                       fontSize: 12,
-                      background: C.chipActionBg,
-                      color: isDark ? C.text : 'inherit',
+                      background: palette.chipActionBg,
+                      color: isDark ? palette.text : 'inherit',
                     }}
                   >
                     {Object.entries(DEPT_EVENT_TYPE_LABEL).map(
@@ -666,12 +759,12 @@ export function DepartmentEventsBlock({
                     width: '100%',
                     marginBottom: 8,
                     padding: '8px 12px',
-                    border: `1px solid ${C.borderMid}`,
+                    border: `1px solid ${palette.borderMid}`,
                     borderRadius: 8,
                     fontSize: 12,
                     resize: 'vertical',
-                    background: C.chipActionBg,
-                    color: isDark ? C.text : 'inherit',
+                    background: palette.chipActionBg,
+                    color: isDark ? palette.text : 'inherit',
                   }}
                 />
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -682,7 +775,7 @@ export function DepartmentEventsBlock({
                       padding: '6px 14px',
                       fontSize: 12,
                       fontWeight: 600,
-                      background: C.accent,
+                      background: palette.accent,
                       color: '#fff',
                       border: 'none',
                       borderRadius: 8,
@@ -706,10 +799,10 @@ export function DepartmentEventsBlock({
                     style={{
                       padding: '6px 14px',
                       fontSize: 12,
-                      border: `1px solid ${C.borderMid}`,
+                      border: `1px solid ${palette.borderMid}`,
                       borderRadius: 8,
-                      background: C.chipActionBg,
-                      color: isDark ? C.sectionLabelTint : 'inherit',
+                      background: palette.chipActionBg,
+                      color: isDark ? palette.sectionLabelTint : 'inherit',
                       cursor: 'pointer',
                     }}
                   >
@@ -739,7 +832,7 @@ export function DepartmentEventsBlock({
           style={{
             fontSize: 11,
             fontWeight: 600,
-            color: C.textMuted,
+            color: palette.textMuted,
             letterSpacing: '0.05em',
             textTransform: 'uppercase',
           }}

@@ -329,6 +329,9 @@ export function MinistriesTabSection({
                     tenuresSlot={
                       <DepartmentTenuresBlock
                         departmentId={ministryBrowseResolved.id}
+                        // 부처가 이미 정해진 자리라 국가·부처명을 등록 폼에 그대로 넘긴다
+                        countryId={effectiveCountryId}
+                        departmentName={ministryBrowseResolved.name}
                       />
                     }
                     eventsSlot={
