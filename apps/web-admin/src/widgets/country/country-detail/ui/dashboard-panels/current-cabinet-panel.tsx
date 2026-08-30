@@ -30,6 +30,8 @@ interface Member {
   title: string
   startDate: string | null
   isHead: boolean
+  /** 제47대 — 없으면 null */
+  termNumber: number | null
   /** 이 정부 임기 중에 앞사람을 이어받았는가 */
   replaced: boolean
   /** 그 자리를 앞서 맡았던 사람 */
@@ -42,6 +44,7 @@ interface TenureRow {
   positionType?: string | null
   positionDefinition?: { positionType?: string | null; title?: string | null } | null
   title?: string | null
+  termNumber?: number | null
   startDate?: string | null
   endDate?: string | null
   person?: {
@@ -148,6 +151,8 @@ export function CurrentCabinetPanel({
         isHead: HEAD_TYPES.has(
           current.positionType ?? current.positionDefinition?.positionType ?? '',
         ),
+        termNumber:
+          typeof current.termNumber === 'number' ? current.termNumber : null,
         replaced: !!earlier,
         predecessor: earlier?.person
           ? getPersonDisplayName(earlier.person)
@@ -205,9 +210,6 @@ export function CurrentCabinetPanel({
         <>
       <MetaRow>
         {startDate && <Meta>{shortDate(startDate)} 출범</Meta>}
-        {startDate && elapsedText(startDate) && (
-          <Meta>{elapsedText(startDate)}</Meta>
-        )}
         <Meta>각료 {members.length}명</Meta>
         {replacedCount > 0 && (
           <MetaWarn title="이 정부 임기 중에 사람이 바뀐 자리">
@@ -217,20 +219,27 @@ export function CurrentCabinetPanel({
       </MetaRow>
 
       {heads.length > 0 && (
-        <HeadRowGroup>
+        <HeadRowGroup $single={heads.length === 1}>
           {heads.map((head) => (
             <HeadRow
               key={head.id}
               type="button"
               onClick={() => head.personId && onSelectPerson(head.personId)}
             >
-              <Face member={head} size={46} />
+              <Face member={head} size={heads.length === 1 ? 76 : 60} />
               <HeadText>
-                <HeadName>{head.name}</HeadName>
-                <HeadMeta>
+                <HeadRole>
+                  {head.termNumber != null && `제${head.termNumber}대 `}
                   {head.title}
-                  {head.startDate && ` · ${shortDate(head.startDate)} 취임`}
-                </HeadMeta>
+                </HeadRole>
+                <HeadName>{head.name}</HeadName>
+                {head.startDate && (
+                  <HeadMeta>
+                    {shortDate(head.startDate)} 취임
+                    {elapsedText(head.startDate) &&
+                      ` · ${elapsedText(head.startDate)}`}
+                  </HeadMeta>
+                )}
               </HeadText>
             </HeadRow>
           ))}
@@ -364,25 +373,44 @@ const FallbackFace = styled.span`
   border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-/** 국가원수·정부수반이 따로인 나라는 나란히 */
-const HeadRowGroup = styled.div`
+/** 국가원수·정부수반이 따로인 나라는 나란히. 하나뿐이면 폭을 다 쓴다 */
+const HeadRowGroup = styled.div<{ $single: boolean }>`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: ${({ $single }) =>
+    $single ? '1fr' : 'repeat(auto-fit, minmax(300px, 1fr))'};
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 `
 
+/*
+ * 이 지면의 주어는 수장이다. 각료 15명이 조밀한 격자로 깔리는 만큼 수장이 그 위에서
+ * 확실히 커야 "지금 이 나라는 누구"가 먼저 읽힌다. 초상 76px · 이름 26px.
+ */
 const HeadRow = styled.button`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 18px;
   width: 100%;
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 18px 20px;
+  border-radius: 14px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-left: 4px solid #be123c;
   background: ${({ theme }) => theme.colors.hover};
   text-align: left;
   cursor: pointer;
+
+  &:hover {
+    border-color: rgba(190, 18, 60, 0.4);
+  }
+`
+
+/** 직함이 이름 위에 온다 — '제47대 대통령'이 먼저, 사람 이름이 그 다음 */
+const HeadRole = styled.span`
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #be123c;
 `
 
 const HeadText = styled.span`
@@ -391,15 +419,17 @@ const HeadText = styled.span`
 
 const HeadName = styled.span`
   display: block;
-  font-size: 16px;
+  margin-top: 2px;
+  font-size: 26px;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const HeadMeta = styled.span`
   display: block;
-  margin-top: 2px;
+  margin-top: 5px;
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.secondary};
