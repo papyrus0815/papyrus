@@ -335,9 +335,14 @@ export function CurrentCabinetPanel({
         <S.SectionTitleIcon $accent="rose">
           <IconBriefcase />
         </S.SectionTitleIcon>
-        <S.SectionTitleText>지금</S.SectionTitleText>
-        {selectedCabinet && (
-          <CabinetName>{cabinetLabel(selectedCabinet)}</CabinetName>
+        {/*
+          * '지금'이 아니다. 카드로 과거 정권을 고를 수 있게 된 순간부터 이 지면은
+          * 현재만 말하지 않는다. 선택된 행정부 이름도 헤더에서 뺐다 — 카드가 이미
+          * 이름을 크게 들고 선택 표시까지 한다.
+          */}
+        <S.SectionTitleText>행정부</S.SectionTitleText>
+        {cabinets.length > 1 && (
+          <S.SectionCountChip>{cabinets.length}대</S.SectionCountChip>
         )}
         <HeaderActions>
           <HeaderAction
@@ -445,18 +450,6 @@ export function CurrentCabinetPanel({
         </>
       ) : (
         <>
-      <MetaRow>
-        {selectedCabinet?.headTenure?.startDate && (
-          <Meta>{shortDate(selectedCabinet.headTenure.startDate)} 출범</Meta>
-        )}
-        <Meta>각료 {members.length}명</Meta>
-        {replacedCount > 0 && (
-          <MetaWarn title="이 정부 임기 중에 사람이 바뀐 자리">
-            {replacedCount}자리 교체
-          </MetaWarn>
-        )}
-      </MetaRow>
-
       {heads.length > 0 && (
         <HeadRowGroup $single={heads.length === 1}>
           {heads.map((head) => (
@@ -520,6 +513,18 @@ export function CurrentCabinetPanel({
         )
       ) : (
         <>
+          {/*
+            * 교체 수는 각료에 대한 사실이라 각료 줄에 붙인다. 수반 블록 우측에 띄웠더니
+            * 수반 옆 빈 공간에 홀로 떠 어느 대상의 수치인지 흐릿했다.
+            */}
+          <RosterLabel>
+            <SlotGroupLabel as="span">각료 {members.length}명</SlotGroupLabel>
+            {replacedCount > 0 && (
+              <MetaWarn title="이 정권 임기 중에 사람이 바뀐 자리">
+                {replacedCount}자리 교체
+              </MetaWarn>
+            )}
+          </RosterLabel>
           <Roster>
             {visible.map((member) => (
               <MemberCell
@@ -1058,6 +1063,13 @@ const HeadRole = styled.span`
 
 const HeadText = styled.span`
   min-width: 0;
+`
+
+const RosterLabel = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
 `
 
 const HeadName = styled.span`
