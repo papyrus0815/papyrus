@@ -527,7 +527,7 @@ export function CurrentCabinetPanel({
           </RosterLabel>
           <Roster>
             {visible.map((member) => (
-              <MemberCell
+              <MemberCard
                 key={member.id}
                 type="button"
                 $replaced={member.replaced}
@@ -540,13 +540,15 @@ export function CurrentCabinetPanel({
                     : `${shortDate(member.startDate)} 취임`
                 }
               >
-                <Face member={member} size={26} muted />
-                <CellTitle>{member.title}</CellTitle>
-                <CellName>
-                  {member.name}
-                  {member.replaced && <Swap aria-label="임기 중 교체">↻</Swap>}
-                </CellName>
-              </MemberCell>
+                <Face member={member} size={34} muted />
+                <CardText>
+                  <CellTitle>{member.title}</CellTitle>
+                  <CellName>
+                    {member.name}
+                    {member.replaced && <Swap aria-label="임기 중 교체">↻</Swap>}
+                  </CellName>
+                </CardText>
+              </MemberCard>
             ))}
           </Roster>
           {members.length > visible.length && (
@@ -1093,8 +1095,8 @@ const HeadMeta = styled.span`
 /* 얼굴 26 + 자리 96 + 이름 — 3열이 유지되도록 최소폭을 계산해 둔다(3×280+40 < 960) */
 const Roster = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 0 20px;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  gap: 10px;
 `
 
 /*
@@ -1106,29 +1108,43 @@ const Roster = styled.div`
  * 행 높이는 절반이 되고 같은 폭에 더 많이 들어간다. 수반 줄의 초상은 그대로 둔다 —
  * 거긴 실제로 사진이 있고, 한 명뿐이라 정렬을 깨지 않는다.
  */
-const MemberCell = styled.button<{ $replaced?: boolean }>`
-  display: grid;
-  grid-template-columns: 26px 96px minmax(0, 1fr);
+/*
+ * 각료 한 명 = 카드 한 장. 직전엔 테두리 없는 줄이라 명단이 정보 밀도는 높아도
+ * 행정부 카드 슬라이더와 재질이 달라 한 지면으로 안 읽혔다. 카드로 맞춘다.
+ *
+ * 다만 카드 안에서도 **직위가 이름 위**다. 스캔의 축은 '누구'가 아니라 '어느 자리'이고,
+ * 그건 줄이든 카드든 바뀌지 않는다.
+ */
+const MemberCard = styled.button<{ $replaced?: boolean }>`
+  display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 6px 8px;
-  border: none;
-  border-left: 2px solid
-    ${({ $replaced }) => ($replaced ? 'rgba(180,83,9,0.55)' : 'transparent')};
-  border-radius: 0 8px 8px 0;
-  background: none;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  /* 임기 중 교체된 자리는 좌측 띠로 — 카드에서도 한 줄로 훑어 찾을 수 있게 */
+  border-left: 3px solid
+    ${({ $replaced, theme }) =>
+      $replaced ? 'rgba(180,83,9,0.6)' : theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.primary};
   text-align: left;
   cursor: pointer;
   min-width: 0;
 
   &:hover {
     background: ${({ theme }) => theme.colors.hover};
+    border-color: rgba(190, 18, 60, 0.35);
   }
+`
+
+const CardText = styled.span`
+  min-width: 0;
 `
 
 /** 자리가 스캔의 축 — 이름보다 먼저 읽힌다 */
 const CellTitle = styled.span`
-  font-size: 12px;
+  display: block;
+  font-size: 11.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
   overflow: hidden;
@@ -1137,6 +1153,8 @@ const CellTitle = styled.span`
 `
 
 const CellName = styled.span`
+  display: block;
+  margin-top: 1px;
   font-size: 13.5px;
   font-weight: 700;
   letter-spacing: -0.01em;

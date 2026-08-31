@@ -38,7 +38,6 @@ import {
   formatPopulation,
   parsePopulation,
 } from './dashboard-panels/format'
-import { GovernmentFlowSection } from './dashboard-panels/government-flow-section'
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
@@ -197,12 +196,13 @@ export function CountryDetailDashboard({
       )}
 
       {/*
-       * 3. 지금 — 현임 정부를 한 곳에서.
+       * 3. 행정부 — 정권 카드로 고르고 그 정권의 수반·각료를 본다.
        *
-       * 예전엔 '현임 정부 수반' 카드 · '현 정부'(각료 수와 정당 막대만) · '선거' 세 장이었다.
-       * 수반은 그 카드와 「정부 변천」 현직 줄에 겹쳐 나오면서도, 정작 **누가 국무장관인지는
-       * 어디에도 없어** 행정조직 탭까지 들어가야 했다. 수반+명단을 한 묶음으로 합치고
-       * 선거는 그 아래로 넣는다. 각료 데이터가 없는 역사 국가는 옛 카드를 유지한다.
+       * 예전엔 '현임 정부 수반' 카드 · '현 정부'(각료 수와 정당 막대만) · '선거' 세 장이었고,
+       * 정작 **누가 국무장관인지는 어디에도 없어** 행정조직 탭까지 들어가야 했다.
+       * 별도로 있던 「정부 변천」(수반 승계 트랙)은 이 카드 슬라이더가 같은 축을 더 잘
+       * 보여줘 제거했다 — 정체(대통령제/양원제)는 행정조직 → 정체 탭에 그대로 있다.
+       * 각료 데이터가 없는 역사 국가는 옛 카드를 유지한다.
        */}
       {country.type === 'modern' ? (
         <CurrentCabinetPanel
@@ -329,11 +329,6 @@ export function CountryDetailDashboard({
        */}
       {country.type === 'modern' && (
         <>
-          {/* 계보(국가가 어떻게 이어졌나) 다음에 정부 변천(그 안에서 정부 형태가 어떻게 뒤집혔나) */}
-          <GovernmentFlowSection
-            countryId={country.id}
-            countryName={country.name}
-          />
           <PopulationPyramidSection
             countryId={country.id}
             countryName={country.name}
