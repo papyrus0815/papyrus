@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
@@ -12,6 +12,7 @@ import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-re
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { notify } from '@/shared/ui/toast'
 
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 
@@ -111,6 +112,7 @@ export function CurrentCabinetPanel({
    * 공용 PersonInlineModal 그대로.
    */
   const [modalPersonId, setModalPersonId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
   /*
    * 등록은 여기서 끝난다. 예전엔 '역대 수반에서 등록'이라며 행정조직 탭으로 내보냈는데,
@@ -217,6 +219,32 @@ export function CurrentCabinetPanel({
     enabled: pickerOpen,
     staleTime: 5 * 60_000,
   })
+
+  /*
+   * 부처가 하나도 없을 때 '「행정조직 → 중앙부처」에서 만드세요'라고 길만 알려 줬다.
+   * 채우려는 사람을 다른 지면으로 보내는 안내문은 등록이 아니다. 부처 생성은 name 하나만
+   * 필수라 여기서 끝낼 수 있다.
+   */
+  const [newDepartmentName, setNewDepartmentName] = useState('')
+  const [creatingDepartment, setCreatingDepartment] = useState(false)
+
+  const createDepartment = async () => {
+    const name = newDepartmentName.trim()
+    if (!name) return
+    setCreatingDepartment(true)
+    try {
+      await administrationDepartmentApi.create({ name, countryId })
+      setNewDepartmentName('')
+      await queryClient.invalidateQueries({
+        queryKey: ['administration-departments', 'by-country', countryId],
+      })
+      notify.success(`${name} 부처가 만들어졌습니다`)
+    } catch {
+      notify.error('부처 생성 실패')
+    } finally {
+      setCreatingDepartment(false)
+    }
+  }
 
   const closeRegister = () => {
     setRegisterPersonId(null)
@@ -503,11 +531,38 @@ export function CurrentCabinetPanel({
               </SlotGrid>
             </>
           ) : (
-            <GhostCaption as="div">
-              <IconBriefcase />
-              등록된 부처가 없습니다 — 「행정조직 → 중앙부처」에서 부처를 먼저 만들면
-              여기에 자리별 등록 칸이 생깁니다
-            </GhostCaption>
+<EmptyActions>
+            <EmptyActionsText>
+              등록된 각료가 없습니다. 바로 넣거나, 부처를 만들어 자리별로 채우세요.
+            </EmptyActionsText>
+            <EmptyActionsRow>
+              <HeaderAction
+                type="button"
+                onClick={() => openRegister(null, '각료')}
+              >
+                + 각료 등록
+              </HeaderAction>
+              <NewDeptForm
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void createDepartment()
+                }}
+              >
+                <NewDeptInput
+                  value={newDepartmentName}
+                  onChange={(event) => setNewDepartmentName(event.target.value)}
+                  placeholder="새 부처 이름 (예: 외무부)"
+                  aria-label="새 부처 이름"
+                />
+                <NewDeptSubmit
+                  type="submit"
+                  disabled={!newDepartmentName.trim() || creatingDepartment}
+                >
+                  부처 만들기
+                </NewDeptSubmit>
+              </NewDeptForm>
+            </EmptyActionsRow>
+          </EmptyActions>
           )}
         </>
       ) : (
@@ -567,11 +622,38 @@ export function CurrentCabinetPanel({
             </SlotGrid>
           </>
         ) : (
-          <GhostCaption as="div">
-            <IconBriefcase />
-            이 정권에 등록된 각료가 없습니다 — 「행정조직 → 중앙부처」에서 부처를 만들면
-            여기에 자리별 등록 칸이 생깁니다
-          </GhostCaption>
+<EmptyActions>
+            <EmptyActionsText>
+              등록된 각료가 없습니다. 바로 넣거나, 부처를 만들어 자리별로 채우세요.
+            </EmptyActionsText>
+            <EmptyActionsRow>
+              <HeaderAction
+                type="button"
+                onClick={() => openRegister(null, '각료')}
+              >
+                + 각료 등록
+              </HeaderAction>
+              <NewDeptForm
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void createDepartment()
+                }}
+              >
+                <NewDeptInput
+                  value={newDepartmentName}
+                  onChange={(event) => setNewDepartmentName(event.target.value)}
+                  placeholder="새 부처 이름 (예: 외무부)"
+                  aria-label="새 부처 이름"
+                />
+                <NewDeptSubmit
+                  type="submit"
+                  disabled={!newDepartmentName.trim() || creatingDepartment}
+                >
+                  부처 만들기
+                </NewDeptSubmit>
+              </NewDeptForm>
+            </EmptyActionsRow>
+          </EmptyActions>
         )
       ) : (
         <>
@@ -991,6 +1073,68 @@ const SlotAdd = styled.span`
   font-size: 11.5px;
   font-weight: 700;
   color: #be123c;
+`
+
+const EmptyActions = styled.div`
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+`
+
+const EmptyActionsText = styled.p`
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const EmptyActionsRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+`
+
+const NewDeptForm = styled.form`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`
+
+const NewDeptInput = styled.input`
+  height: 32px;
+  width: 200px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12.5px;
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.active};
+  }
+`
+
+const NewDeptSubmit = styled.button`
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: none;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => theme.colors.hover};
+  }
 `
 
 const GhostCaption = styled.span`
