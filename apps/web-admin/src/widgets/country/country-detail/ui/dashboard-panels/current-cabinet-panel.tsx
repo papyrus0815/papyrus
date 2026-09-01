@@ -12,9 +12,10 @@ import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-re
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
-import { FiChevronLeft, FiChevronRight } from 'react-icons/fi'
+import { FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi'
 
 import { IconBriefcase } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
@@ -64,6 +65,29 @@ interface TenureRow {
     country?: { defaultNameDisplayOrder?: string | null; isoCode?: string | null } | null
   } | null
 }
+
+/**
+ * 기본 행정부처 틀.
+ *
+ * 근대 국가라면 대개 갖는 자리들이다. 나라마다 이름과 구성이 다르지만(내무부가 없는
+ * 나라, 식민부가 있던 시대) **처음 한 칸도 없이 시작하는 것보다 골라 담는 편이 빠르다**.
+ * 그래서 통째로 넣지 않고 칩으로 늘어놓아 필요한 것만 고르게 한다.
+ */
+const DEFAULT_DEPARTMENTS = [
+  '외무부',
+  '국방부',
+  '재무부',
+  '법무부',
+  '내무부',
+  '교육부',
+  '보건부',
+  '노동부',
+  '산업부',
+  '농업부',
+  '교통부',
+  '문화부',
+  '환경부',
+]
 
 const HEAD_TYPES = new Set(['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'])
 
@@ -228,6 +252,58 @@ export function CurrentCabinetPanel({
   const [newDepartmentName, setNewDepartmentName] = useState('')
   const [creatingDepartment, setCreatingDepartment] = useState(false)
 
+  const invalidateDepartments = () =>
+    queryClient.invalidateQueries({
+      queryKey: ['administration-departments', 'by-country', countryId],
+    })
+
+  const removeDepartment = async (departmentId: string, name: string) => {
+    if (
+      !(await confirm({
+        title: '부처 삭제',
+        message: `「${name}」 부처를 삭제할까요? 이 부처에 연결된 재임 기록은 남고 부처 연결만 끊깁니다.`,
+        danger: true,
+      }))
+    )
+      return
+    try {
+      await administrationDepartmentApi.delete(departmentId)
+      await invalidateDepartments()
+      notify.success('부처가 삭제되었습니다')
+    } catch {
+      notify.error('부처 삭제 실패')
+    }
+  }
+
+  /** 기본 틀에서 아직 없는 것만 — 이미 만든 부처를 또 권하지 않는다 */
+  const presetSuggestions = useMemo(() => {
+    const existing = new Set(
+      (departmentsQuery.data ?? []).map((department) =>
+        department.name.replace(/\s/g, ''),
+      ),
+    )
+    return DEFAULT_DEPARTMENTS.filter(
+      (preset) =>
+        ![...existing].some((name) => name.includes(preset.replace(/\s/g, ''))),
+    )
+  }, [departmentsQuery.data])
+
+  const addPresets = async (names: string[]) => {
+    setCreatingDepartment(true)
+    try {
+      // 순차 생성 — 서버가 이름 중복을 막을 수 있어 한 건씩 결과를 본다
+      for (const name of names) {
+        await administrationDepartmentApi.create({ name, countryId })
+      }
+      await invalidateDepartments()
+      notify.success(`부처 ${names.length}개가 만들어졌습니다`)
+    } catch {
+      notify.error('기본 부처 생성 실패')
+    } finally {
+      setCreatingDepartment(false)
+    }
+  }
+
   const createDepartment = async () => {
     const name = newDepartmentName.trim()
     if (!name) return
@@ -235,9 +311,7 @@ export function CurrentCabinetPanel({
     try {
       await administrationDepartmentApi.create({ name, countryId })
       setNewDepartmentName('')
-      await queryClient.invalidateQueries({
-        queryKey: ['administration-departments', 'by-country', countryId],
-      })
+      await invalidateDepartments()
       notify.success(`${name} 부처가 만들어졌습니다`)
     } catch {
       notify.error('부처 생성 실패')
@@ -516,17 +590,16 @@ export function CurrentCabinetPanel({
               <SlotGroupLabel>부처별 우두머리</SlotGroupLabel>
               <SlotGrid>
                 {departments.map((department) => (
-                  <EmptySlot
+                  <DepartmentSlot
                     key={department.id}
-                    type="button"
-                    onClick={() =>
+                    name={department.name}
+                    onRegister={() =>
                       openRegister(department.id, department.name)
                     }
-                  >
-                    <SlotTitle>{department.name}</SlotTitle>
-                    <SlotEmptyName>아직 없음</SlotEmptyName>
-                    <SlotAdd>+ 등록</SlotAdd>
-                  </EmptySlot>
+                    onDelete={() =>
+                      void removeDepartment(department.id, department.name)
+                    }
+                  />
                 ))}
               </SlotGrid>
             </>
@@ -562,6 +635,33 @@ export function CurrentCabinetPanel({
                 </NewDeptSubmit>
               </NewDeptForm>
             </EmptyActionsRow>
+
+            {presetSuggestions.length > 0 && (
+              <PresetBlock>
+                <PresetLabel>
+                  기본 틀에서 고르기
+                  <PresetAll
+                    type="button"
+                    disabled={creatingDepartment}
+                    onClick={() => void addPresets(presetSuggestions)}
+                  >
+                    {presetSuggestions.length}개 모두 추가
+                  </PresetAll>
+                </PresetLabel>
+                <PresetChips>
+                  {presetSuggestions.map((preset) => (
+                    <PresetChip
+                      key={preset}
+                      type="button"
+                      disabled={creatingDepartment}
+                      onClick={() => void addPresets([preset])}
+                    >
+                      + {preset}
+                    </PresetChip>
+                  ))}
+                </PresetChips>
+              </PresetBlock>
+            )}
           </EmptyActions>
           )}
         </>
@@ -609,15 +709,14 @@ export function CurrentCabinetPanel({
             <SlotGroupLabel>부처별 우두머리</SlotGroupLabel>
             <SlotGrid>
               {departments.map((department) => (
-                <EmptySlot
+                <DepartmentSlot
                   key={department.id}
-                  type="button"
-                  onClick={() => openRegister(department.id, department.name)}
-                >
-                  <SlotTitle>{department.name}</SlotTitle>
-                  <SlotEmptyName>아직 없음</SlotEmptyName>
-                  <SlotAdd>+ 등록</SlotAdd>
-                </EmptySlot>
+                  name={department.name}
+                  onRegister={() => openRegister(department.id, department.name)}
+                  onDelete={() =>
+                    void removeDepartment(department.id, department.name)
+                  }
+                />
               ))}
             </SlotGrid>
           </>
@@ -653,6 +752,33 @@ export function CurrentCabinetPanel({
                 </NewDeptSubmit>
               </NewDeptForm>
             </EmptyActionsRow>
+
+            {presetSuggestions.length > 0 && (
+              <PresetBlock>
+                <PresetLabel>
+                  기본 틀에서 고르기
+                  <PresetAll
+                    type="button"
+                    disabled={creatingDepartment}
+                    onClick={() => void addPresets(presetSuggestions)}
+                  >
+                    {presetSuggestions.length}개 모두 추가
+                  </PresetAll>
+                </PresetLabel>
+                <PresetChips>
+                  {presetSuggestions.map((preset) => (
+                    <PresetChip
+                      key={preset}
+                      type="button"
+                      disabled={creatingDepartment}
+                      onClick={() => void addPresets([preset])}
+                    >
+                      + {preset}
+                    </PresetChip>
+                  ))}
+                </PresetChips>
+              </PresetBlock>
+            )}
           </EmptyActions>
         )
       ) : (
@@ -774,6 +900,38 @@ function GovernmentSkeleton({ ghost = false }: { ghost?: boolean }) {
         ))}
       </SkeletonRoster>
     </SkeletonRoot>
+  )
+}
+
+/**
+ * 빈 부처 자리 한 칸. 등록(주 동작)과 삭제(✕)를 **형제 버튼**으로 둔다 —
+ * 칸 전체를 버튼으로 만들고 그 안에 ✕를 넣으면 버튼 안 버튼이라 HTML이 깨진다.
+ */
+function DepartmentSlot({
+  name,
+  onRegister,
+  onDelete,
+}: {
+  name: string
+  onRegister: () => void
+  onDelete: () => void
+}) {
+  return (
+    <SlotShell>
+      <SlotMain type="button" onClick={onRegister}>
+        <SlotTitle>{name}</SlotTitle>
+        <SlotEmptyName>아직 없음</SlotEmptyName>
+        <SlotAdd>+ 등록</SlotAdd>
+      </SlotMain>
+      <SlotDelete
+        type="button"
+        onClick={onDelete}
+        aria-label={`${name} 삭제`}
+        title="부처 삭제"
+      >
+        <FiX size={13} />
+      </SlotDelete>
+    </SlotShell>
   )
 }
 
@@ -1042,14 +1200,113 @@ const SlotGrid = styled.div`
   gap: 8px;
 `
 
-const EmptySlot = styled.button`
+const SlotShell = styled.div`
+  position: relative;
+  display: flex;
+  min-width: 0;
+
+  /* 삭제는 평소엔 숨긴다 — 등록이 주 동작이고 삭제가 늘 보이면 실수를 부른다 */
+  &:hover button:last-child,
+  &:focus-within button:last-child {
+    opacity: 1;
+  }
+`
+
+const SlotMain = styled.button`
   ${slotBase}
-  padding: 10px 12px;
+  padding: 10px 30px 10px 12px;
   border-color: ${({ theme }) => theme.colors.border.light};
 
   &:hover {
     border-color: rgba(190, 18, 60, 0.4);
     background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const SlotDelete = styled.button`
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.1);
+  }
+`
+
+const PresetBlock = styled.div`
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const PresetLabel = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const PresetAll = styled.button`
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #be123c;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+`
+
+const PresetChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const PresetChip = styled.button`
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  background: none;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:hover:not(:disabled) {
+    border-style: solid;
+    border-color: rgba(190, 18, 60, 0.4);
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
