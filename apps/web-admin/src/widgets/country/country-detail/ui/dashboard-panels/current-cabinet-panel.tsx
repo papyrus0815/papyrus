@@ -606,10 +606,43 @@ export function CurrentCabinetPanel({
               </SlotGrid>
             </>
           ) : (
-<SetupCta type="button" onClick={() => setSetupOpen(true)}>
-            <IconBriefcase />
-            각료 등록
-          </SetupCta>
+<EmptyArea>
+            <SetupCta type="button" onClick={() => setSetupOpen(true)}>
+              <IconBriefcase />
+              각료 등록
+            </SetupCta>
+            {/*
+              * 기본 틀 칩은 지면에 둔다. 한 번에 하나씩 눌러 자리를 세우는 동작이라
+              * 모달을 열고 닫는 왕복보다 그 자리에서 톡톡 누르는 편이 빠르다.
+              * 모달은 '이름 직접 입력·만든 부처 정리·부처 없이 바로 등록'을 맡는다.
+              */}
+            {presetSuggestions.length > 0 && (
+              <PresetBlock>
+                <PresetLabel>
+                  기본 틀에서 고르기
+                  <PresetAll
+                    type="button"
+                    disabled={creatingDepartment}
+                    onClick={() => void addPresets(presetSuggestions)}
+                  >
+                    {presetSuggestions.length}개 모두 추가
+                  </PresetAll>
+                </PresetLabel>
+                <PresetChips>
+                  {presetSuggestions.map((preset) => (
+                    <PresetChip
+                      key={preset}
+                      type="button"
+                      disabled={creatingDepartment}
+                      onClick={() => void addPresets([preset])}
+                    >
+                      + {preset}
+                    </PresetChip>
+                  ))}
+                </PresetChips>
+              </PresetBlock>
+            )}
+          </EmptyArea>
           )}
         </>
       ) : (
@@ -668,10 +701,43 @@ export function CurrentCabinetPanel({
             </SlotGrid>
           </>
         ) : (
-<SetupCta type="button" onClick={() => setSetupOpen(true)}>
-            <IconBriefcase />
-            각료 등록
-          </SetupCta>
+<EmptyArea>
+            <SetupCta type="button" onClick={() => setSetupOpen(true)}>
+              <IconBriefcase />
+              각료 등록
+            </SetupCta>
+            {/*
+              * 기본 틀 칩은 지면에 둔다. 한 번에 하나씩 눌러 자리를 세우는 동작이라
+              * 모달을 열고 닫는 왕복보다 그 자리에서 톡톡 누르는 편이 빠르다.
+              * 모달은 '이름 직접 입력·만든 부처 정리·부처 없이 바로 등록'을 맡는다.
+              */}
+            {presetSuggestions.length > 0 && (
+              <PresetBlock>
+                <PresetLabel>
+                  기본 틀에서 고르기
+                  <PresetAll
+                    type="button"
+                    disabled={creatingDepartment}
+                    onClick={() => void addPresets(presetSuggestions)}
+                  >
+                    {presetSuggestions.length}개 모두 추가
+                  </PresetAll>
+                </PresetLabel>
+                <PresetChips>
+                  {presetSuggestions.map((preset) => (
+                    <PresetChip
+                      key={preset}
+                      type="button"
+                      disabled={creatingDepartment}
+                      onClick={() => void addPresets([preset])}
+                    >
+                      + {preset}
+                    </PresetChip>
+                  ))}
+                </PresetChips>
+              </PresetBlock>
+            )}
+          </EmptyArea>
         )
       ) : (
         <>
@@ -779,33 +845,6 @@ export function CurrentCabinetPanel({
                 만들기
               </NewDeptSubmit>
             </NewDeptForm>
-
-            {presetSuggestions.length > 0 && (
-              <PresetBlock>
-                <PresetLabel>
-                  기본 틀에서 고르기
-                  <PresetAll
-                    type="button"
-                    disabled={creatingDepartment}
-                    onClick={() => void addPresets(presetSuggestions)}
-                  >
-                    {presetSuggestions.length}개 모두 추가
-                  </PresetAll>
-                </PresetLabel>
-                <PresetChips>
-                  {presetSuggestions.map((preset) => (
-                    <PresetChip
-                      key={preset}
-                      type="button"
-                      disabled={creatingDepartment}
-                      onClick={() => void addPresets([preset])}
-                    >
-                      + {preset}
-                    </PresetChip>
-                  ))}
-                </PresetChips>
-              </PresetBlock>
-            )}
 
             {departments.length > 0 && (
               <PresetBlock>
@@ -1246,6 +1285,13 @@ const SlotDelete = styled.button`
   }
 `
 
+const EmptyArea = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+`
+
 const SetupCta = styled.button`
   display: inline-flex;
   align-items: center;
@@ -1324,9 +1370,7 @@ const MadeChipDelete = styled.button`
 `
 
 const PresetBlock = styled.div`
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  margin-top: 10px;
 `
 
 const PresetLabel = styled.div`
