@@ -6,6 +6,7 @@ import styled from 'styled-components'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { getAllPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { Modal, ModalBody } from '@/shared/ui/modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { Skeleton } from '@/shared/ui/skeleton'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
@@ -249,6 +250,7 @@ export function CurrentCabinetPanel({
    * 채우려는 사람을 다른 지면으로 보내는 안내문은 등록이 아니다. 부처 생성은 name 하나만
    * 필수라 여기서 끝낼 수 있다.
    */
+  const [setupOpen, setSetupOpen] = useState(false)
   const [newDepartmentName, setNewDepartmentName] = useState('')
   const [creatingDepartment, setCreatingDepartment] = useState(false)
 
@@ -604,65 +606,10 @@ export function CurrentCabinetPanel({
               </SlotGrid>
             </>
           ) : (
-<EmptyActions>
-            <EmptyActionsText>
-              등록된 각료가 없습니다. 바로 넣거나, 부처를 만들어 자리별로 채우세요.
-            </EmptyActionsText>
-            <EmptyActionsRow>
-              <HeaderAction
-                type="button"
-                onClick={() => openRegister(null, '각료')}
-              >
-                + 각료 등록
-              </HeaderAction>
-              <NewDeptForm
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  void createDepartment()
-                }}
-              >
-                <NewDeptInput
-                  value={newDepartmentName}
-                  onChange={(event) => setNewDepartmentName(event.target.value)}
-                  placeholder="새 부처 이름 (예: 외무부)"
-                  aria-label="새 부처 이름"
-                />
-                <NewDeptSubmit
-                  type="submit"
-                  disabled={!newDepartmentName.trim() || creatingDepartment}
-                >
-                  부처 만들기
-                </NewDeptSubmit>
-              </NewDeptForm>
-            </EmptyActionsRow>
-
-            {presetSuggestions.length > 0 && (
-              <PresetBlock>
-                <PresetLabel>
-                  기본 틀에서 고르기
-                  <PresetAll
-                    type="button"
-                    disabled={creatingDepartment}
-                    onClick={() => void addPresets(presetSuggestions)}
-                  >
-                    {presetSuggestions.length}개 모두 추가
-                  </PresetAll>
-                </PresetLabel>
-                <PresetChips>
-                  {presetSuggestions.map((preset) => (
-                    <PresetChip
-                      key={preset}
-                      type="button"
-                      disabled={creatingDepartment}
-                      onClick={() => void addPresets([preset])}
-                    >
-                      + {preset}
-                    </PresetChip>
-                  ))}
-                </PresetChips>
-              </PresetBlock>
-            )}
-          </EmptyActions>
+<SetupCta type="button" onClick={() => setSetupOpen(true)}>
+            <IconBriefcase />
+            각료 등록
+          </SetupCta>
           )}
         </>
       ) : (
@@ -721,65 +668,10 @@ export function CurrentCabinetPanel({
             </SlotGrid>
           </>
         ) : (
-<EmptyActions>
-            <EmptyActionsText>
-              등록된 각료가 없습니다. 바로 넣거나, 부처를 만들어 자리별로 채우세요.
-            </EmptyActionsText>
-            <EmptyActionsRow>
-              <HeaderAction
-                type="button"
-                onClick={() => openRegister(null, '각료')}
-              >
-                + 각료 등록
-              </HeaderAction>
-              <NewDeptForm
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  void createDepartment()
-                }}
-              >
-                <NewDeptInput
-                  value={newDepartmentName}
-                  onChange={(event) => setNewDepartmentName(event.target.value)}
-                  placeholder="새 부처 이름 (예: 외무부)"
-                  aria-label="새 부처 이름"
-                />
-                <NewDeptSubmit
-                  type="submit"
-                  disabled={!newDepartmentName.trim() || creatingDepartment}
-                >
-                  부처 만들기
-                </NewDeptSubmit>
-              </NewDeptForm>
-            </EmptyActionsRow>
-
-            {presetSuggestions.length > 0 && (
-              <PresetBlock>
-                <PresetLabel>
-                  기본 틀에서 고르기
-                  <PresetAll
-                    type="button"
-                    disabled={creatingDepartment}
-                    onClick={() => void addPresets(presetSuggestions)}
-                  >
-                    {presetSuggestions.length}개 모두 추가
-                  </PresetAll>
-                </PresetLabel>
-                <PresetChips>
-                  {presetSuggestions.map((preset) => (
-                    <PresetChip
-                      key={preset}
-                      type="button"
-                      disabled={creatingDepartment}
-                      onClick={() => void addPresets([preset])}
-                    >
-                      + {preset}
-                    </PresetChip>
-                  ))}
-                </PresetChips>
-              </PresetBlock>
-            )}
-          </EmptyActions>
+<SetupCta type="button" onClick={() => setSetupOpen(true)}>
+            <IconBriefcase />
+            각료 등록
+          </SetupCta>
         )
       ) : (
         <>
@@ -832,6 +724,113 @@ export function CurrentCabinetPanel({
       )}
 
       {children && <Extra>{children}</Extra>}
+
+      {/*
+        * 각료 구성은 모달에서 끝낸다. 예전엔 안내문 + 입력칸 + 기본 틀 칩이 대시보드에
+        * 통째로 깔려, 정작 보러 온 정권 정보보다 '아직 없다'는 설명이 더 넓었다.
+        * 지면에는 버튼 하나만 남기고 채우는 일은 모달로 옮긴다.
+        */}
+      <Modal
+        isOpen={setupOpen}
+        onClose={() => setSetupOpen(false)}
+        title="각료 등록"
+        subtitle={
+          selectedCabinet ? cabinetLabel(selectedCabinet) : '이 정권에 각료 넣기'
+        }
+      >
+        <ModalBody>
+          <SetupSection>
+            <SetupHeading>바로 등록</SetupHeading>
+            <SetupHint>
+              부처를 지정하지 않고 인물과 직책만으로 넣습니다.
+            </SetupHint>
+            <HeaderAction
+              type="button"
+              onClick={() => {
+                setSetupOpen(false)
+                openRegister(null, '각료')
+              }}
+            >
+              + 인물 선택해서 등록
+            </HeaderAction>
+          </SetupSection>
+
+          <SetupSection>
+            <SetupHeading>부처를 만들어 자리별로</SetupHeading>
+            <SetupHint>
+              부처를 만들면 자리마다 등록 칸이 생겨, 누가 어느 부처를 맡았는지 남습니다.
+            </SetupHint>
+            <NewDeptForm
+              onSubmit={(event) => {
+                event.preventDefault()
+                void createDepartment()
+              }}
+            >
+              <NewDeptInput
+                value={newDepartmentName}
+                onChange={(event) => setNewDepartmentName(event.target.value)}
+                placeholder="새 부처 이름 (예: 외무부)"
+                aria-label="새 부처 이름"
+              />
+              <NewDeptSubmit
+                type="submit"
+                disabled={!newDepartmentName.trim() || creatingDepartment}
+              >
+                만들기
+              </NewDeptSubmit>
+            </NewDeptForm>
+
+            {presetSuggestions.length > 0 && (
+              <PresetBlock>
+                <PresetLabel>
+                  기본 틀에서 고르기
+                  <PresetAll
+                    type="button"
+                    disabled={creatingDepartment}
+                    onClick={() => void addPresets(presetSuggestions)}
+                  >
+                    {presetSuggestions.length}개 모두 추가
+                  </PresetAll>
+                </PresetLabel>
+                <PresetChips>
+                  {presetSuggestions.map((preset) => (
+                    <PresetChip
+                      key={preset}
+                      type="button"
+                      disabled={creatingDepartment}
+                      onClick={() => void addPresets([preset])}
+                    >
+                      + {preset}
+                    </PresetChip>
+                  ))}
+                </PresetChips>
+              </PresetBlock>
+            )}
+
+            {departments.length > 0 && (
+              <PresetBlock>
+                <PresetLabel>만들어 둔 부처 {departments.length}개</PresetLabel>
+                <PresetChips>
+                  {departments.map((department) => (
+                    <MadeChip key={department.id}>
+                      {department.name}
+                      <MadeChipDelete
+                        type="button"
+                        aria-label={`${department.name} 삭제`}
+                        onClick={() =>
+                          void removeDepartment(department.id, department.name)
+                        }
+                      >
+                        <FiX size={12} />
+                      </MadeChipDelete>
+                    </MadeChip>
+                  ))}
+                </PresetChips>
+              </PresetBlock>
+            )}
+          </SetupSection>
+        </ModalBody>
+      </Modal>
 
       {pickerOpen && (
         <PersonSelectModal
@@ -1244,6 +1243,83 @@ const SlotDelete = styled.button`
   &:hover {
     color: #dc2626;
     background: rgba(220, 38, 38, 0.1);
+  }
+`
+
+const SetupCta = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  background: none;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    border-style: solid;
+    border-color: rgba(190, 18, 60, 0.4);
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const SetupSection = styled.section`
+  & + & {
+    margin-top: 22px;
+    padding-top: 20px;
+    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+`
+
+const SetupHeading = styled.h3`
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const SetupHint = styled.p`
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const MadeChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 6px 5px 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const MadeChipDelete = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover {
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.12);
   }
 `
 
