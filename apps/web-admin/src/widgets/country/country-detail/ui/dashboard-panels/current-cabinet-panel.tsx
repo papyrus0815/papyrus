@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import styled from 'styled-components'
 
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
@@ -12,6 +12,8 @@ import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-re
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+
+import { FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 
 import { IconBriefcase } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
@@ -154,6 +156,28 @@ export function CurrentCabinetPanel({
   }, [cabinetsQuery.data])
 
   const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(null)
+  const stripRef = useRef<HTMLDivElement>(null)
+  /** 좌우 끝에 닿았는지 — 갈 곳 없는 화살표는 숨긴다 */
+  const [edges, setEdges] = useState({ start: true, end: true })
+
+  const syncEdges = () => {
+    const node = stripRef.current
+    if (!node) return
+    const maxScroll = node.scrollWidth - node.clientWidth
+    setEdges({
+      start: node.scrollLeft <= 1,
+      end: node.scrollLeft >= maxScroll - 1,
+    })
+  }
+
+  /** 카드 한 장 + 간격만큼 민다 — 반 장이 걸치지 않도록 스냅과 보폭을 맞춘다 */
+  const slide = (direction: -1 | 1) => {
+    const node = stripRef.current
+    if (!node) return
+    const card = node.querySelector('[role="tab"]') as HTMLElement | null
+    const step = (card?.offsetWidth ?? 132) + 8
+    node.scrollBy({ left: direction * step * 2, behavior: 'smooth' })
+  }
 
   // 기본 선택은 현직(종료일 없는) 행정부, 없으면 가장 최근
   useEffect(() => {
@@ -169,11 +193,22 @@ export function CurrentCabinetPanel({
     )
   }, [cabinets])
 
+  useEffect(() => {
+    syncEdges()
+    // 카드 수가 바뀌면 스크롤 폭도 바뀐다
+  }, [cabinets.length])
+
   const overviewQuery = useQuery({
     queryKey: ['cabinet-overview', selectedCabinetId],
     queryFn: () => personCareerApi.getCabinetOverview(selectedCabinetId as string),
     enabled: !!selectedCabinetId,
     staleTime: 60_000,
+    /*
+     * 정권을 바꿀 때마다 골격이 번쩍이던 것을 없앤다. 카드를 누르면 아래가 통째로
+     * 스켈레톤이 됐다가 다시 채워져, 고르는 동작마다 화면이 무너졌다 서는 것처럼 보였다.
+     * 이전 정권 내용을 그대로 둔 채 새 데이터로 갈아끼운다 — 골격은 **첫 진입에만**.
+     */
+    placeholderData: keepPreviousData,
   })
 
   const personsQuery = useQuery({
@@ -363,7 +398,23 @@ export function CurrentCabinetPanel({
        * 최신이 왼쪽 — 첫 질문은 늘 '지금'이다.
        */}
       {cabinets.length > 0 && (
-        <CabinetStrip role="tablist" aria-label="행정부 선택">
+        <Carousel>
+          {!edges.start && (
+            <CarouselArrow
+              type="button"
+              $side="left"
+              aria-label="이전 행정부 보기"
+              onClick={() => slide(-1)}
+            >
+              <FiChevronLeft size={18} />
+            </CarouselArrow>
+          )}
+          <CabinetStrip
+            ref={stripRef}
+            role="tablist"
+            aria-label="행정부 선택"
+            onScroll={syncEdges}
+          >
           {cabinets.map((cabinet) => {
             const active = cabinet.id === selectedCabinetId
             return (
@@ -401,7 +452,18 @@ export function CurrentCabinetPanel({
               </CabinetCard>
             )
           })}
-        </CabinetStrip>
+          </CabinetStrip>
+          {!edges.end && (
+            <CarouselArrow
+              type="button"
+              $side="right"
+              aria-label="다음 행정부 보기"
+              onClick={() => slide(1)}
+            >
+              <FiChevronRight size={18} />
+            </CarouselArrow>
+          )}
+        </Carousel>
       )}
 
       {cabinetsQuery.isLoading || overviewQuery.isLoading ? (
@@ -668,17 +730,55 @@ function Face({
   )
 }
 
-/** 가로로 미는 정권 카드 띠 */
+/** 캐러셀 — 좌우 화살표가 띠 위에 겹쳐 떠 있다 */
+const Carousel = styled.div`
+  position: relative;
+  margin-bottom: 16px;
+`
+
+const CarouselArrow = styled.button<{ $side: 'left' | 'right' }>`
+  position: absolute;
+  top: calc(50% - 6px);
+  ${({ $side }) => ($side === 'left' ? 'left: -6px;' : 'right: -6px;')}
+  transform: translateY(-50%);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.14);
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+/*
+ * 가로로 미는 정권 카드 띠. 스냅을 걸어 카드가 반쯤 걸친 채 멈추지 않게 한다 —
+ * 화살표 보폭도 카드+간격의 배수라 스냅과 어긋나지 않는다.
+ */
 const CabinetStrip = styled.div`
   display: flex;
   gap: 8px;
   overflow-x: auto;
   padding-bottom: 6px;
-  margin-bottom: 16px;
-  scrollbar-width: thin;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 `
 
 const CabinetCard = styled.button<{ $active: boolean }>`
+  scroll-snap-align: start;
   display: flex;
   flex-direction: column;
   align-items: center;
