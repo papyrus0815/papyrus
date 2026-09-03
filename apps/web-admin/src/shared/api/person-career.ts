@@ -665,6 +665,16 @@ export type CabinetListItemDto = {
 /** GET /government-positions/cabinets/:id/overview 의 재임 1건 (수반·각료 공통) */
 export type CabinetOverviewTenure = {
   id: string
+  /** 이 임기를 낳은 선거(후보 경유). 없으면 임명·세습 등 */
+  electionCandidacy?: {
+    id: string
+    election?: {
+      id: string
+      name: string
+      pollDate?: string | null
+      electionType?: string | null
+    } | null
+  } | null
   positionType?: string | null
   title?: string | null
   titleEn?: string | null

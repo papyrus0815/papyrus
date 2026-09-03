@@ -3046,6 +3046,19 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
       },
       positionDefinition: { select: { id: true, title: true, rank: true } },
+      /*
+       * 이 임기를 낳은 선거. 행정부 지면이 "이 정권은 어느 선거로 섰나"를 보여주려면
+       * 후보(candidacy)를 거쳐 선거까지 따라가야 한다 — 스키마에 이미 있던 경로인데
+       * overview가 안 실어 줘서 화면에서 읽을 수 없었다(실측 재임 217건 중 연결 0건).
+       */
+      electionCandidacy: {
+        select: {
+          id: true,
+          election: {
+            select: { id: true, name: true, pollDate: true, electionType: true },
+          },
+        },
+      },
     } as const
 
     const cabinet = await this.prisma.cabinet.findUnique({

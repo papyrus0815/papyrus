@@ -4,6 +4,11 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import styled from 'styled-components'
 
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
+import {
+  createElectionCandidacy,
+  getElection,
+  getElections,
+} from '@/shared/api/election'
 import { getAllPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { Modal, ModalBody } from '@/shared/ui/modal'
@@ -251,6 +256,19 @@ export function CurrentCabinetPanel({
    * 필수라 여기서 끝낼 수 있다.
    */
   const [setupOpen, setSetupOpen] = useState(false)
+  const [electionPickerOpen, setElectionPickerOpen] = useState(false)
+  const [linkingElection, setLinkingElection] = useState(false)
+
+  /*
+   * 이 나라의 선거 목록. 서버가 브리지를 풀어 주므로 현대 국가로 물으면 연결된 과거
+   * 국가(독일 → 독일 제국)의 선거까지 온다.
+   */
+  const electionsQuery = useQuery({
+    queryKey: ['elections', 'by-country', countryId],
+    queryFn: () => getElections({ countryId }),
+    enabled: !!countryId,
+    staleTime: 5 * 60_000,
+  })
   const [newDepartmentName, setNewDepartmentName] = useState('')
   const [creatingDepartment, setCreatingDepartment] = useState(false)
 
@@ -319,6 +337,69 @@ export function CurrentCabinetPanel({
       notify.error('부처 생성 실패')
     } finally {
       setCreatingDepartment(false)
+    }
+  }
+
+  /**
+   * 정권을 선거에 잇는다. 재임↔선거는 **후보(candidacy)를 경유**하는 스키마라,
+   * 그 선거에 수반의 후보 기록이 없으면 먼저 만든 뒤 재임에 건다.
+   */
+  const linkElection = async (electionId: string) => {
+    const head = heads[0]
+    if (!head?.personId) return
+    setLinkingElection(true)
+    try {
+      const detail = await getElection(electionId)
+      const existing = (detail.candidacies ?? []).find(
+        (candidacy) => candidacy.personId === head.personId,
+      )
+      const candidacy =
+        existing ??
+        (await createElectionCandidacy(electionId, {
+          personId: head.personId,
+          /*
+           * 연결만을 위해 만드는 후보 기록이라 공천 형태는 단정하지 않는다.
+           * PARTY_NOMINATION은 정당 공천을, INDEPENDENT는 무소속을 주장하는데
+           * 여기서는 둘 다 알지 못한다. 선거 지면에서 나중에 정확히 고칠 수 있다.
+           */
+          nominationType: 'OTHER',
+        }))
+      await personCareerApi.updateGovernmentPositionTenure(head.id, {
+        electionCandidacyId: candidacy.id,
+      } as never)
+      await queryClient.invalidateQueries({
+        queryKey: ['cabinet-overview', selectedCabinetId],
+      })
+      setElectionPickerOpen(false)
+      notify.success('선거가 연결되었습니다')
+    } catch {
+      notify.error('선거 연결 실패')
+    } finally {
+      setLinkingElection(false)
+    }
+  }
+
+  const unlinkElection = async () => {
+    const head = heads[0]
+    if (!head) return
+    if (
+      !(await confirm({
+        title: '선거 연결 해제',
+        message: '이 정권과 선거의 연결을 끊을까요? 선거 기록 자체는 남습니다.',
+        danger: true,
+      }))
+    )
+      return
+    try {
+      await personCareerApi.updateGovernmentPositionTenure(head.id, {
+        electionCandidacyId: null,
+      } as never)
+      await queryClient.invalidateQueries({
+        queryKey: ['cabinet-overview', selectedCabinetId],
+      })
+      notify.success('연결이 해제되었습니다')
+    } catch {
+      notify.error('연결 해제 실패')
     }
   }
 
@@ -456,6 +537,11 @@ export function CurrentCabinetPanel({
   }
   const isIncumbentCabinet = (cabinet: (typeof cabinets)[number]) =>
     !cabinet.headTenure?.endDate
+
+  /** 이 정권을 낳은 선거 — 수반 임기의 후보 기록을 거쳐 온다 */
+  const linkedElection =
+    overviewQuery.data?.headTenure?.electionCandidacy?.election ?? null
+  const elections = electionsQuery.data ?? []
 
   const departments = departmentsQuery.data ?? []
   const replacedCount = members.filter((member) => member.replaced).length
@@ -679,6 +765,36 @@ export function CurrentCabinetPanel({
         </HeadRowGroup>
       )}
 
+      {/*
+        * 이 정권을 낳은 선거. 스키마엔 재임→후보→선거 경로가 처음부터 있었는데 화면이
+        * 없어 실측 재임 217건 중 연결이 0건이었다. 정권을 고른 자리에서 바로 잇는다.
+        */}
+      {heads.length > 0 && (
+        <ElectionRow>
+          <ElectionLabel>이 정권을 낳은 선거</ElectionLabel>
+          {linkedElection ? (
+            <>
+              <ElectionName>{linkedElection.name}</ElectionName>
+              {linkedElection.pollDate && (
+                <ElectionDate>{shortDate(linkedElection.pollDate)}</ElectionDate>
+              )}
+              <ElectionUnlink type="button" onClick={() => void unlinkElection()}>
+                연결 해제
+              </ElectionUnlink>
+            </>
+          ) : elections.length > 0 ? (
+            <ElectionLink
+              type="button"
+              onClick={() => setElectionPickerOpen(true)}
+            >
+              + 선거 연결
+            </ElectionLink>
+          ) : (
+            <ElectionMuted>등록된 선거가 없습니다</ElectionMuted>
+          )}
+        </ElectionRow>
+      )}
+
       {members.length === 0 ? (
         /*
          * 수반은 있는데 각료가 0명인 정권(독일 베트만홀베크 내각 등). 격자를 비워 두면
@@ -868,6 +984,36 @@ export function CurrentCabinetPanel({
               </PresetBlock>
             )}
           </SetupSection>
+        </ModalBody>
+      </Modal>
+
+      <Modal
+        isOpen={electionPickerOpen}
+        onClose={() => setElectionPickerOpen(false)}
+        title="선거 연결"
+        subtitle={
+          selectedCabinet
+            ? `${cabinetLabel(selectedCabinet)}을(를) 낳은 선거 고르기`
+            : undefined
+        }
+      >
+        <ModalBody>
+          <SetupHint>
+            고른 선거에 수반의 후보 기록이 없으면 함께 만들어 잇습니다.
+          </SetupHint>
+          <ElectionList>
+            {elections.map((election) => (
+              <ElectionOption
+                key={election.id}
+                type="button"
+                disabled={linkingElection}
+                onClick={() => void linkElection(election.id)}
+              >
+                <ElectionOptionName>{election.name}</ElectionOptionName>
+                <ElectionDate>{shortDate(election.pollDate)}</ElectionDate>
+              </ElectionOption>
+            ))}
+          </ElectionList>
         </ModalBody>
       </Modal>
 
@@ -1283,6 +1429,92 @@ const SlotDelete = styled.button`
     color: #dc2626;
     background: rgba(220, 38, 38, 0.1);
   }
+`
+
+const ElectionRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.hover};
+`
+
+const ElectionLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ElectionName = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ElectionDate = styled.span`
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ElectionMuted = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ElectionLink = styled.button`
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #be123c;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const ElectionUnlink = styled(ElectionLink)`
+  margin-left: auto;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ElectionList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const ElectionOption = styled.button`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: none;
+  text-align: left;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: rgba(190, 18, 60, 0.4);
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const ElectionOptionName = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const EmptyArea = styled.div`
