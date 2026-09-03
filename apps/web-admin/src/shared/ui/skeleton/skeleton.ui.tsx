@@ -32,7 +32,14 @@ const StyledSkeleton = styled.div<{
   $animation: 'pulse' | 'wave'
 }>`
   display: inline-block;
-  background-color: #e0e0e0;
+  /*
+   * 다크에서 #e0e0e0(밝은 회색)을 그대로 쓰면 어두운 지면 위에 흰 덩어리가 박혀 눈이
+   * 아프다. 골격은 '아직 없는 자리'를 표시할 뿐이라 배경보다 아주 조금만 밝으면 된다.
+   * 다크 표면 톤은 이 코드베이스의 다른 스켈레톤(dashboard/content)과 같은
+   * rgba(148,163,184,0.1) 계열로 맞춘다.
+   */
+  background-color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.13)' : '#e0e0e0'};
   width: ${({ width }) => (typeof width === 'number' ? `${width}px` : width)};
   height: ${({ height }) =>
     typeof height === 'number' ? `${height}px` : height};
@@ -52,7 +59,7 @@ const StyledSkeleton = styled.div<{
     }
   }}
 
-  ${({ $animation }) => {
+  ${({ $animation, theme }) => {
     switch ($animation) {
       case 'pulse':
         return css`
@@ -70,10 +77,13 @@ const StyledSkeleton = styled.div<{
             width: 150%;
             height: 100%;
             content: '';
+            /* 물결 하이라이트도 낮춘다 — 어두운 바탕에 흰 20%는 번쩍인다 */
             background: linear-gradient(
               90deg,
               transparent,
-              rgb(255 255 255 / 20%),
+              ${theme.mode === 'dark'
+                ? 'rgb(255 255 255 / 7%)'
+                : 'rgb(255 255 255 / 20%)'},
               transparent
             );
             animation: ${wave} 1.6s infinite;
