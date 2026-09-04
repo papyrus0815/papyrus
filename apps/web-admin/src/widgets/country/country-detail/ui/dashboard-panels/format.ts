@@ -35,14 +35,25 @@ export function formatAreaValue(
   return n.toLocaleString('ko-KR')
 }
 
+/**
+ * 저장된 **달력 날짜 그대로** 찍는다.
+ *
+ * 예전엔 `new Date(iso)` 뒤 local getFullYear/getMonth/getDate를 읽었다. 그러면
+ * `2024-11-05T00:00:00.000Z`가 UTC보다 뒤진 시간대에서 **11.4로 하루 밀린다** —
+ * 실제로 같은 화면 안에서 선거 하나가 '2024.11.5'와 '2024.11.4'로 갈려 보였다.
+ * 선거일·취임일 같은 역사적 날짜는 보는 사람의 시간대에 따라 달라지면 안 된다.
+ *
+ * ISO 문자열이면 앞부분을 그대로 읽고, 아닐 때만 Date로 폴백한다.
+ */
 export function formatStartDate(iso: string | null | undefined): string {
   if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  const y = d.getFullYear()
-  const m = d.getMonth() + 1
-  const day = d.getDate()
-  return `${y}.${m}.${day}`
+  const matched = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (matched) {
+    return `${Number(matched[1])}.${Number(matched[2])}.${Number(matched[3])}`
+  }
+  const parsed = new Date(iso)
+  if (Number.isNaN(parsed.getTime())) return iso
+  return `${parsed.getFullYear()}.${parsed.getMonth() + 1}.${parsed.getDate()}`
 }
 
 export function formatTenure(iso: string): string {
