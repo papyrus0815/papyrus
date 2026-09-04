@@ -33,8 +33,11 @@ interface Props {
   onOpenElections: () => void
   /** 모달의 '전체 보기'에서 인물 지면으로 나갈 때 */
   onSelectPerson: (personId: string) => void
-  /** 같은 '지금' 묶음에 함께 놓을 것(선거 카드 등) */
-  children?: React.ReactNode
+  /**
+   * 같은 묶음에 함께 놓을 것(선거 카드 등). 연결된 선거 id를 넘겨 주므로 자식이
+   * 중복 표시를 스스로 걸러낼 수 있다.
+   */
+  children?: React.ReactNode | ((linkedElectionId: string | null) => React.ReactNode)
 }
 
 interface Member {
@@ -949,7 +952,13 @@ export function CurrentCabinetPanel({
         </>
       )}
 
-      {children && <Extra>{children}</Extra>}
+      {children && (
+        <Extra>
+          {typeof children === 'function'
+            ? children(linkedElection?.id ?? null)
+            : children}
+        </Extra>
+      )}
 
       {/*
         * 각료 구성은 모달에서 끝낸다. 예전엔 안내문 + 입력칸 + 기본 틀 칩이 대시보드에
@@ -1098,37 +1107,83 @@ export function CurrentCabinetPanel({
                   <SetupHeading>
                     후보 {electionDetailQuery.data.candidacies.length}명
                   </SetupHeading>
+                  {/*
+                    * 득표율은 숫자만 늘어놓기보다 막대로 보여야 서로의 크기가 읽힌다.
+                    * 득표 기록이 하나도 없으면 막대는 그리지 않는다 — 0%짜리 빈 막대가
+                    * 늘어서면 '득표가 0이었다'는 거짓말이 된다.
+                    */}
                   <CandidacyList>
-                    {electionDetailQuery.data.candidacies.map((candidacy) => (
-                      <CandidacyRow
-                        key={candidacy.id}
-                        type="button"
-                        onClick={() => {
-                          if (!candidacy.person?.id) return
-                          setElectionDetailId(null)
-                          setModalPersonId(candidacy.person.id)
-                        }}
-                      >
-                        <CandidacyName>
-                          {candidacy.person
-                            ? getPersonDisplayName(
-                                {
-                                  name: candidacy.person.name,
-                                  surname: candidacy.person.surname ?? null,
-                                },
-                                {
-                                  countryDefaultNameDisplayOrder:
-                                    countryNameOrder,
-                                },
-                              )
-                            : '후보 미상'}
-                        </CandidacyName>
-                        {candidacy.party?.name && (
-                          <CandidacyParty>{candidacy.party.name}</CandidacyParty>
-                        )}
-                        {candidacy.result?.elected && <WonChip>당선</WonChip>}
-                      </CandidacyRow>
-                    ))}
+                    {[...electionDetailQuery.data.candidacies]
+                      .sort(
+                        (left, right) =>
+                          Number(right.result?.voteSharePercent ?? -1) -
+                          Number(left.result?.voteSharePercent ?? -1),
+                      )
+                      .map((candidacy) => {
+                        const share = candidacy.result?.voteSharePercent
+                          ? Number(candidacy.result.voteSharePercent)
+                          : null
+                        return (
+                          <CandidacyRow
+                            key={candidacy.id}
+                            type="button"
+                            onClick={() => {
+                              if (!candidacy.person?.id) return
+                              setElectionDetailId(null)
+                              setModalPersonId(candidacy.person.id)
+                            }}
+                          >
+                            <CandidacyTop>
+                              <CandidacyName>
+                                {candidacy.person
+                                  ? getPersonDisplayName(
+                                      {
+                                        name: candidacy.person.name,
+                                        surname: candidacy.person.surname ?? null,
+                                      },
+                                      {
+                                        countryDefaultNameDisplayOrder:
+                                          countryNameOrder,
+                                      },
+                                    )
+                                  : '후보 미상'}
+                              </CandidacyName>
+                              {candidacy.party?.name && (
+                                <CandidacyParty>
+                                  {candidacy.party.name}
+                                </CandidacyParty>
+                              )}
+                              {candidacy.result?.elected && (
+                                <WonChip>당선</WonChip>
+                              )}
+                              {share != null && (
+                                <CandidacyShare>
+                                  {share.toFixed(1)}%
+                                </CandidacyShare>
+                              )}
+                            </CandidacyTop>
+                            {share != null && (
+                              <ShareTrack>
+                                <ShareFill
+                                  style={{
+                                    width: `${Math.min(100, Math.max(0, share))}%`,
+                                    // 후보 DTO의 party에는 brandColor가 없다(정당 집계
+                                    // DTO에만 있다). 당선/낙선으로만 색을 가른다.
+                                    background: candidacy.result?.elected
+                                      ? '#15803d'
+                                      : '#94a3b8',
+                                  }}
+                                />
+                              </ShareTrack>
+                            )}
+                            {candidacy.result?.votes && (
+                              <CandidacyVotes>
+                                {Number(candidacy.result.votes).toLocaleString()}표
+                              </CandidacyVotes>
+                            )}
+                          </CandidacyRow>
+                        )
+                      })}
                   </CandidacyList>
                 </>
               )}
@@ -1650,9 +1705,10 @@ const CandidacyList = styled.div`
 
 const CandidacyRow = styled.button`
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 11px 12px;
   border-radius: 10px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: none;
@@ -1662,6 +1718,40 @@ const CandidacyRow = styled.button`
   &:hover {
     background: ${({ theme }) => theme.colors.hover};
   }
+`
+
+const CandidacyTop = styled.span`
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+`
+
+const CandidacyShare = styled.span`
+  margin-left: auto;
+  font-size: 13.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ShareTrack = styled.span`
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: ${({ theme }) => theme.colors.hover};
+  overflow: hidden;
+`
+
+const ShareFill = styled.span`
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+`
+
+const CandidacyVotes = styled.span`
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const CandidacyName = styled.span`
@@ -1676,7 +1766,6 @@ const CandidacyParty = styled.span`
 `
 
 const WonChip = styled.span`
-  margin-left: auto;
   padding: 2px 8px;
   border-radius: 6px;
   font-size: 10.5px;

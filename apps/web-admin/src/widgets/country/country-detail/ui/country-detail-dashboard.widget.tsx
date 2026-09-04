@@ -213,12 +213,16 @@ export function CountryDetailDashboard({
             navigate(pathKeys.personsTimelineDetail(personId))
           }
         >
-          <ElectionCard
-            next={stats.nextElection}
-            recent={stats.recentElection}
-            isLoading={stats.loading.elections}
-            onOpen={goElections}
-          />
+          {/* 위 '이 정권을 낳은 선거'와 같은 선거면 카드를 그리지 않는다 */}
+          {(linkedElectionId) => (
+            <ElectionCard
+              next={stats.nextElection}
+              recent={stats.recentElection}
+              isLoading={stats.loading.elections}
+              onOpen={goElections}
+              hideElectionId={linkedElectionId}
+            />
+          )}
         </CurrentCabinetPanel>
       ) : (
         <S.Section>
