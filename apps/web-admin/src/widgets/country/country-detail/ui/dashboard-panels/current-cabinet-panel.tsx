@@ -29,6 +29,8 @@ import * as S from '../country-detail-dashboard.styles'
 interface Props {
   countryId: string
   onOpen: () => void
+  /** 선거 지면으로 — 모달의 '자세히'에서 쓴다 */
+  onOpenElections: () => void
   /** 모달의 '전체 보기'에서 인물 지면으로 나갈 때 */
   onSelectPerson: (personId: string) => void
   /** 같은 '지금' 묶음에 함께 놓을 것(선거 카드 등) */
@@ -79,6 +81,24 @@ interface TenureRow {
  * 나라, 식민부가 있던 시대) **처음 한 칸도 없이 시작하는 것보다 골라 담는 편이 빠르다**.
  * 그래서 통째로 넣지 않고 칩으로 늘어놓아 필요한 것만 고르게 한다.
  */
+const ELECTION_TYPE_LABEL: Record<string, string> = {
+  PRESIDENTIAL_OR_HEAD: '대통령·수반 직선',
+  PARLIAMENTARY_CONSTITUENCY: '의회 지역구',
+  PARLIAMENTARY_PROPORTIONAL: '의회 비례대표',
+  LOCAL: '지방선거',
+  BY_ELECTION: '보궐·중간선거',
+  PRIMARY: '경선·예비선거',
+  REFERENDUM_OR_PLEBISCITE: '국민투표',
+  OTHER: '기타',
+}
+
+const ELECTION_STATUS_LABEL: Record<string, string> = {
+  SCHEDULED: '예정',
+  IN_PROGRESS: '진행 중',
+  FINALIZED: '확정',
+  CANCELLED: '취소',
+}
+
 const DEFAULT_DEPARTMENTS = [
   '외무부',
   '국방부',
@@ -132,6 +152,7 @@ function elapsedText(iso: string | null): string | null {
 export function CurrentCabinetPanel({
   countryId,
   onOpen,
+  onOpenElections,
   onSelectPerson,
   children,
 }: Props) {
@@ -257,6 +278,14 @@ export function CurrentCabinetPanel({
    */
   const [setupOpen, setSetupOpen] = useState(false)
   const [electionPickerOpen, setElectionPickerOpen] = useState(false)
+  const [electionDetailId, setElectionDetailId] = useState<string | null>(null)
+
+  const electionDetailQuery = useQuery({
+    queryKey: ['election-detail', electionDetailId],
+    queryFn: () => getElection(electionDetailId as string),
+    enabled: !!electionDetailId,
+    staleTime: 60_000,
+  })
   const [linkingElection, setLinkingElection] = useState(false)
 
   /*
@@ -541,6 +570,15 @@ export function CurrentCabinetPanel({
   /** 이 정권을 낳은 선거 — 수반 임기의 후보 기록을 거쳐 온다 */
   const linkedElection =
     overviewQuery.data?.headTenure?.electionCandidacy?.election ?? null
+
+  /*
+   * 후보 목록의 person에는 country가 없어 표시 순서를 스스로 못 정한다(그대로 두면
+   * '트럼프 도널드'처럼 뒤집힌다). 수반 person이 들고 온 국가 기본값을 지면 기본값으로
+   * 넘긴다 — 헬퍼의 countryDefaultNameDisplayOrder가 정확히 이 자리를 위한 옵션이다.
+   */
+  const countryNameOrder =
+    overviewQuery.data?.headTenure?.person?.country?.defaultNameDisplayOrder ??
+    null
   const elections = electionsQuery.data ?? []
 
   const departments = departmentsQuery.data ?? []
@@ -774,7 +812,13 @@ export function CurrentCabinetPanel({
           <ElectionLabel>이 정권을 낳은 선거</ElectionLabel>
           {linkedElection ? (
             <>
-              <ElectionName>{linkedElection.name}</ElectionName>
+              <ElectionOpen
+                type="button"
+                onClick={() => setElectionDetailId(linkedElection.id)}
+                title="선거 상세 보기"
+              >
+                {linkedElection.name}
+              </ElectionOpen>
               {linkedElection.pollDate && (
                 <ElectionDate>{shortDate(linkedElection.pollDate)}</ElectionDate>
               )}
@@ -984,6 +1028,120 @@ export function CurrentCabinetPanel({
               </PresetBlock>
             )}
           </SetupSection>
+        </ModalBody>
+      </Modal>
+
+      <Modal
+        isOpen={!!electionDetailId}
+        onClose={() => setElectionDetailId(null)}
+        title={electionDetailQuery.data?.name ?? '선거'}
+        subtitle={
+          electionDetailQuery.data
+            ? [
+                ELECTION_TYPE_LABEL[electionDetailQuery.data.electionType] ??
+                  electionDetailQuery.data.electionType,
+                ELECTION_STATUS_LABEL[electionDetailQuery.data.status ?? ''] ??
+                  null,
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : undefined
+        }
+      >
+        <ModalBody>
+          {electionDetailQuery.isLoading ? (
+            <SetupHint>불러오는 중…</SetupHint>
+          ) : electionDetailQuery.data ? (
+            <>
+              <DetailFacts>
+                <DetailFact>
+                  <DetailKey>투표일</DetailKey>
+                  <DetailValue>
+                    {shortDate(electionDetailQuery.data.pollDate)}
+                    {electionDetailQuery.data.pollEndDate &&
+                      ` ~ ${shortDate(electionDetailQuery.data.pollEndDate)}`}
+                  </DetailValue>
+                </DetailFact>
+                {/* 값이 없는 칸은 아예 그리지 않는다 — '—'만 늘어선 표는 정보가 아니다 */}
+                {electionDetailQuery.data.voterTurnoutPercent != null && (
+                  <DetailFact>
+                    <DetailKey>투표율</DetailKey>
+                    <DetailValue>
+                      {electionDetailQuery.data.voterTurnoutPercent}%
+                    </DetailValue>
+                  </DetailFact>
+                )}
+                {electionDetailQuery.data.totalSeats != null && (
+                  <DetailFact>
+                    <DetailKey>총 의석</DetailKey>
+                    <DetailValue>
+                      {electionDetailQuery.data.totalSeats.toLocaleString()}석
+                    </DetailValue>
+                  </DetailFact>
+                )}
+                {electionDetailQuery.data.convocationOrdinal != null && (
+                  <DetailFact>
+                    <DetailKey>회차</DetailKey>
+                    <DetailValue>
+                      제{electionDetailQuery.data.convocationOrdinal}대
+                    </DetailValue>
+                  </DetailFact>
+                )}
+              </DetailFacts>
+
+              {electionDetailQuery.data.description && (
+                <DetailNote>{electionDetailQuery.data.description}</DetailNote>
+              )}
+
+              {(electionDetailQuery.data.candidacies ?? []).length > 0 && (
+                <>
+                  <SetupHeading>
+                    후보 {electionDetailQuery.data.candidacies.length}명
+                  </SetupHeading>
+                  <CandidacyList>
+                    {electionDetailQuery.data.candidacies.map((candidacy) => (
+                      <CandidacyRow
+                        key={candidacy.id}
+                        type="button"
+                        onClick={() => {
+                          if (!candidacy.person?.id) return
+                          setElectionDetailId(null)
+                          setModalPersonId(candidacy.person.id)
+                        }}
+                      >
+                        <CandidacyName>
+                          {candidacy.person
+                            ? getPersonDisplayName(
+                                {
+                                  name: candidacy.person.name,
+                                  surname: candidacy.person.surname ?? null,
+                                },
+                                {
+                                  countryDefaultNameDisplayOrder:
+                                    countryNameOrder,
+                                },
+                              )
+                            : '후보 미상'}
+                        </CandidacyName>
+                        {candidacy.party?.name && (
+                          <CandidacyParty>{candidacy.party.name}</CandidacyParty>
+                        )}
+                        {candidacy.result?.elected && <WonChip>당선</WonChip>}
+                      </CandidacyRow>
+                    ))}
+                  </CandidacyList>
+                </>
+              )}
+
+              <DetailFooter>
+                <HeaderGhost type="button" onClick={onOpenElections}>
+                  선거 탭에서 자세히
+                </HeaderGhost>
+              </DetailFooter>
+            </>
+          ) : (
+            <SetupHint>선거를 불러오지 못했습니다.</SetupHint>
+          )}
         </ModalBody>
       </Modal>
 
@@ -1429,6 +1587,108 @@ const SlotDelete = styled.button`
     color: #dc2626;
     background: rgba(220, 38, 38, 0.1);
   }
+`
+
+const ElectionOpen = styled.button`
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const DetailFacts = styled.dl`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  margin: 0 0 14px;
+`
+
+const DetailFact = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const DetailKey = styled.dt`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const DetailValue = styled.dd`
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const DetailNote = styled.p`
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.hover};
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const CandidacyList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+`
+
+const CandidacyRow = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: none;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const CandidacyName = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CandidacyParty = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const WonChip = styled.span`
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  background: rgba(22, 163, 74, 0.14);
+  color: #15803d;
+`
+
+const DetailFooter = styled.div`
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const ElectionRow = styled.div`

@@ -208,6 +208,7 @@ export function CountryDetailDashboard({
         <CurrentCabinetPanel
           countryId={country.id}
           onOpen={goGovernment}
+          onOpenElections={goElections}
           onSelectPerson={(personId) =>
             navigate(pathKeys.personsTimelineDetail(personId))
           }
