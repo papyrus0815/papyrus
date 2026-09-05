@@ -213,27 +213,6 @@ export function CurrentCabinetPanel({
 
   const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(null)
   const stripRef = useRef<HTMLDivElement>(null)
-  /** 좌우 끝에 닿았는지 — 갈 곳 없는 화살표는 숨긴다 */
-  const [edges, setEdges] = useState({ start: true, end: true })
-
-  const syncEdges = () => {
-    const node = stripRef.current
-    if (!node) return
-    const maxScroll = node.scrollWidth - node.clientWidth
-    setEdges({
-      start: node.scrollLeft <= 1,
-      end: node.scrollLeft >= maxScroll - 1,
-    })
-  }
-
-  /** 카드 한 장 + 간격만큼 민다 — 반 장이 걸치지 않도록 스냅과 보폭을 맞춘다 */
-  const slide = (direction: -1 | 1) => {
-    const node = stripRef.current
-    if (!node) return
-    const card = node.querySelector('[role="tab"]') as HTMLElement | null
-    const step = (card?.offsetWidth ?? 132) + 8
-    node.scrollBy({ left: direction * step * 2, behavior: 'smooth' })
-  }
 
   // 기본 선택은 현직(종료일 없는) 행정부, 없으면 가장 최근
   useEffect(() => {
@@ -249,10 +228,28 @@ export function CurrentCabinetPanel({
     )
   }, [cabinets])
 
-  useEffect(() => {
-    syncEdges()
-    // 카드 수가 바뀌면 스크롤 폭도 바뀐다
-  }, [cabinets.length])
+  const selectedIndex = cabinets.findIndex(
+    (cabinet) => cabinet.id === selectedCabinetId,
+  )
+  /*
+   * 카드는 최신이 왼쪽이다. 그래서 **오른쪽이 과거**다 — '이전 정부'는 index+1.
+   * 화살표 라벨·툴팁에 대상 정권 이름을 그대로 실어 방향 혼동을 없앤다.
+   */
+  const newerCabinet = selectedIndex > 0 ? cabinets[selectedIndex - 1] : null
+  const olderCabinet =
+    selectedIndex >= 0 && selectedIndex < cabinets.length - 1
+      ? cabinets[selectedIndex + 1]
+      : null
+
+  const selectCabinet = (cabinetId: string) => {
+    setSelectedCabinetId(cabinetId)
+    // 넘치는 띠에서 고른 카드가 화면 밖이면 끌어온다
+    requestAnimationFrame(() => {
+      stripRef.current
+        ?.querySelector(`[data-cabinet-id="${cabinetId}"]`)
+        ?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
+    })
+  }
 
   const overviewQuery = useQuery({
     queryKey: ['cabinet-overview', selectedCabinetId],
@@ -630,12 +627,14 @@ export function CurrentCabinetPanel({
        */}
       {cabinets.length > 0 && (
         <Carousel>
-          {!edges.start && (
+          {/* 왼쪽 = 더 최근. 라벨에 대상 정권을 실어 방향을 헷갈리지 않게 한다 */}
+          {newerCabinet && (
             <CarouselArrow
               type="button"
               $side="left"
-              aria-label="이전 행정부 보기"
-              onClick={() => slide(-1)}
+              aria-label={`다음 정부로: ${cabinetLabel(newerCabinet)}`}
+              title={`${cabinetLabel(newerCabinet)} (${cabinetPeriod(newerCabinet)})`}
+              onClick={() => selectCabinet(newerCabinet.id)}
             >
               <FiChevronLeft size={18} />
             </CarouselArrow>
@@ -644,7 +643,22 @@ export function CurrentCabinetPanel({
             ref={stripRef}
             role="tablist"
             aria-label="행정부 선택"
-            onScroll={syncEdges}
+            onKeyDown={(event) => {
+              /*
+               * role="tablist"라면 방향키가 선택을 옮겨야 한다(ARIA tabs 패턴).
+               * 그전엔 아무 반응이 없어 키보드로는 정권을 바꿀 수 없었다.
+               */
+              if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+              const target = event.key === 'ArrowLeft' ? newerCabinet : olderCabinet
+              if (!target) return
+              event.preventDefault()
+              selectCabinet(target.id)
+              requestAnimationFrame(() => {
+                stripRef.current
+                  ?.querySelector<HTMLElement>(`[data-cabinet-id="${target.id}"]`)
+                  ?.focus()
+              })
+            }}
           >
           {cabinets.map((cabinet) => {
             const active = cabinet.id === selectedCabinetId
@@ -654,8 +668,11 @@ export function CurrentCabinetPanel({
                 type="button"
                 role="tab"
                 aria-selected={active}
+                data-cabinet-id={cabinet.id}
+                /* roving tabindex — 탭 한 번에 띠를 지나가고, 안에서는 방향키로 옮긴다 */
+                tabIndex={active ? 0 : -1}
                 $active={active}
-                onClick={() => setSelectedCabinetId(cabinet.id)}
+                onClick={() => selectCabinet(cabinet.id)}
                 title={`${cabinetLabel(cabinet)} · ${cabinetPeriod(cabinet)}`}
               >
                 <CabinetCardFace>
@@ -684,12 +701,13 @@ export function CurrentCabinetPanel({
             )
           })}
           </CabinetStrip>
-          {!edges.end && (
+          {olderCabinet && (
             <CarouselArrow
               type="button"
               $side="right"
-              aria-label="다음 행정부 보기"
-              onClick={() => slide(1)}
+              aria-label={`이전 정부로: ${cabinetLabel(olderCabinet)}`}
+              title={`${cabinetLabel(olderCabinet)} (${cabinetPeriod(olderCabinet)})`}
+              onClick={() => selectCabinet(olderCabinet.id)}
             >
               <FiChevronRight size={18} />
             </CarouselArrow>
