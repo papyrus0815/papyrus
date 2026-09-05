@@ -287,15 +287,59 @@ HS 코드, 교역 상대국이 없다. 이걸 보이려면 스키마를 늘려�
 검증: tsc 0 · lint 0 · 한국 기업 섹션 실화면 확인 · 교역 섹션은 `export_import`가 0행이라
 임시 행 2건(2023·2024)을 넣어 렌더를 확인하고 **삭제했다**(현재 다시 0행).
 
-### 남은 제안 — 품목(무엇을)
+---
 
-`export_import`에 자식 테이블을 붙이는 안:
+## 7. 교역 품목 — 스키마부터 화면까지 (2026-09-05)
 
+§6에서 "무엇을 수출·수입하는가"에 답할 수 없다고 적었던 칸을 채웠다.
+
+### 스키마
+
+`libs/db/prisma/country.prisma` — 마이그레이션 `20260905171706_add_export_import_item`
+
+```prisma
+enum TradeDirection { EXPORT IMPORT }
+
+model ExportImportItem {
+  exportImportId   String          // 부모 = 그 국가의 그 해
+  direction        TradeDirection
+  name             String          // 반도체, 승용차, 원유
+  hsCode           String?         // 국제 분류 대조용
+  value            Decimal?        // 금액
+  sharePct         Decimal?        // 그 방향 총액 중 비중(%)
+  partnerCountryId String?         // 교역 상대국 (Country, SetNull)
+  sortOrder        Int
+}
 ```
-export_import_item(export_import_id, direction ENUM(EXPORT,IMPORT),
-                   name, hs_code?, value, share_pct?, partner_country_id?, order)
-```
 
-이러면 "한국이 2024년에 무엇을 수출했나"(반도체 20% · 자동차 11% …)와 "누구와 교역했나"가
-한 테이블로 답해진다. 기업의 `company_product`가 이미 같은 모양(부모–품목)이라 규약도 맞는다.
-마이그레이션 + API + 데이터 관리 탭 확장이 필요해 별건으로 남긴다.
+금액과 비중을 **둘 다 선택 항목**으로 둔 이유: 실제 교역 자료는 "반도체 20.4%"처럼 비중만
+아는 경우와 금액만 아는 경우가 반반이다. 하나를 필수로 만들면 아는 것도 못 넣는다.
+부모 삭제는 CASCADE — 그 해를 지우면 그 해 품목도 함께 지워진다(실측 확인).
+
+### API
+
+- `GET /countries/:id/export-imports` 응답에 `items[]` 포함 (direction → sortOrder → name 순).
+  `partnerCountryName`을 함께 내려 프론트가 국가 목록을 다시 조회하지 않게 한다.
+- `POST` 입력에 `items?` 추가. **`undefined`면 품목을 건드리지 않고**, 배열이면 그 해 품목을
+  통째로 교체한다(delete-and-recreate, 기업 `CompanyProduct`와 같은 규약). 총액만 고치는
+  기존 호출이 품목을 조용히 날리면 안 되기 때문이다. 빈 배열은 명시적인 '전부 지우기'.
+- 총액 upsert와 품목 교체는 **한 트랜잭션**이다 — 품목 교체가 실패했는데 총액만 바뀌면
+  "수출 6.8조인데 품목은 작년 것"이 남는다.
+
+### 화면
+
+- 데이터 관리 → 교역 탭: 방향·품목명·금액·비중·HS·상대국 행 편집 + `+ 수출 품목`/`+ 수입 품목`.
+  품목을 손대지 않은 저장은 `items`를 보내지 않는다(매번 보내면 내용이 같아도 행 id가 갈린다).
+  품목명이 빈 줄은 저장하지 않고 그 사실을 토스트로 알린다.
+- 대시보드 교역 섹션: 총액·무역수지 아래에 `수출 품목` / `수입 품목` 두 줄. 비중이 있으면
+  비중을, 없으면 금액을 붙이고, 상대국이 있으면 `→ 미국`을 덧붙인다.
+
+### 검증
+
+tsc 0(api·web) · 변경 파일 신규 lint 0 · api jest 168 통과 · web jest 883 통과
+(양쪽의 기존 실패 스위트는 손대지 않은 파일 — gamification `badge.policy`, rich-text 등).
+
+실화면 왕복: 한국 2024년에 수출 반도체 20.4%(→미국)·승용차 11.2%, 수입 원유 12.8%을 넣어
+대시보드 표시까지 확인하고, **총액만 수정 저장했을 때 품목 3개가 그대로 남는 것**(items
+undefined 계약)과 연도 삭제 시 품목까지 CASCADE 되는 것을 확인한 뒤 **테스트 데이터를
+삭제했다**(export_import·export_import_item 모두 0행).

@@ -1687,6 +1687,70 @@ export const BottomRow = styled.div`
   }
 `
 
+/* ─── 교역 품목 (2026-09) ─────────────────────────────────────────────── */
+
+export const TradeItemGroups = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+export const TradeItemGroup = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+`
+
+export const TradeItemLabel = styled.span`
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const TradeItemChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+export const TradeItemChip = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: ${radius.pill}px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.045)'
+      : 'rgba(15, 23, 42, 0.04)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.07)'
+        : 'rgba(15, 23, 42, 0.06)'};
+`
+
+export const TradeItemName = styled.span`
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+export const TradeItemValue = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const TradeItemPartner = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 /* ─── 기업 (2026-09) ──────────────────────────────────────────────────── */
 
 export const CompanyRow = styled.div`

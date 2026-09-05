@@ -11,6 +11,15 @@ import type {
 
 export type { ExportImport, UpsertExportImportInput }
 
+/** 교역 방향 — 한 품목 행은 수출이거나 수입이다 */
+export type TradeDirection = ExportImport['items'][number]['direction']
+/** 응답 품목 한 줄 */
+export type ExportImportItem = ExportImport['items'][number]
+/** 저장 입력 품목 한 줄 (자식 id 없음 — 서버가 배열 통째 교체) */
+export type UpsertExportImportItem = NonNullable<
+  UpsertExportImportInput['items']
+>[number]
+
 export const countryTradeKeys = {
   list: (countryId: string) =>
     ['countries', countryId, 'export-imports'] as const,

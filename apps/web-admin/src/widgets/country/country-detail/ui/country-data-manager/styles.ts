@@ -180,3 +180,70 @@ export const EmptyHint = styled.p`
   text-align: center;
   padding: 18px 0;
 `
+
+/* ─── 교역 품목 편집 (2026-09) ───────────────────────────────────────────
+ * 총액만 담던 교역에 "무엇을" 칸이 생겼다. 품목은 행이 여럿이라 FormGrid로는
+ * 담기지 않아 전용 행 레이아웃을 둔다.
+ */
+export const ItemSectionTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const ItemSectionHint = styled.span`
+  font-weight: 500;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const ItemRows = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+`
+
+/** 방향 · 품목명 · 금액 · 비중 · HS · 상대국 · 삭제 */
+export const ItemRow = styled.div`
+  display: grid;
+  grid-template-columns: 84px minmax(120px, 1.6fr) minmax(90px, 1fr) 74px 90px minmax(110px, 1fr) 32px;
+  gap: 6px;
+  align-items: center;
+
+  @media (max-width: 760px) {
+    grid-template-columns: 84px minmax(0, 1fr) 32px;
+  }
+`
+
+export const ItemSelect = styled.select`
+  padding: 7px 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.active};
+  }
+`
+
+export const ItemHeadRow = styled.div`
+  display: grid;
+  grid-template-columns: 84px minmax(120px, 1.6fr) minmax(90px, 1fr) 74px 90px minmax(110px, 1fr) 32px;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  padding: 0 2px;
+
+  @media (max-width: 760px) {
+    display: none;
+  }
+`
