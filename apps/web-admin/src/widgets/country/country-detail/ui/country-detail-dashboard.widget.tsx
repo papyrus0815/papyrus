@@ -122,8 +122,55 @@ export function CountryDetailDashboard({
   const politicsLoading = stats.loading.cabinets || stats.loading.elections
   const showPolitics = politicsHasData || politicsLoading
 
+  const managementPanels = (
+    <>
+        <S.Section>
+          <S.SectionTitleRow>
+            <S.SectionTitleIcon $accent="amber">
+              <IconClock />
+            </S.SectionTitleIcon>
+            <S.SectionTitleText>최근 활동</S.SectionTitleText>
+            {totalActivity > 0 && (
+              <S.SectionCountChip>{totalActivity}건</S.SectionCountChip>
+            )}
+            {stats.lastUpdatedAt && (
+              <S.LastUpdatedHint>
+                <IconRefresh /> {formatRelativeTime(stats.lastUpdatedAt)} 갱신
+              </S.LastUpdatedHint>
+            )}
+          </S.SectionTitleRow>
+          <S.FeedPanel>
+            <ActivityFeed
+              items={stats.recentActivity}
+              isLoading={stats.loading.activity}
+              onPersonClick={(personId) =>
+                navigate(pathKeys.personsTimelineDetail(personId))
+              }
+              onEventClick={goEvents}
+            />
+          </S.FeedPanel>
+        </S.Section>
+
+        <S.Section>
+          <S.SectionTitleRow>
+            <S.SectionTitleIcon $accent="emerald">
+              <IconGlobe />
+            </S.SectionTitleIcon>
+            <S.SectionTitleText>더 채울 것</S.SectionTitleText>
+          </S.SectionTitleRow>
+          <CompletenessPanel
+            filled={stats.completeness.filled}
+            total={stats.completeness.total}
+            missing={stats.completeness.missing}
+            onEditMissing={onEdit ? () => onEdit(country) : null}
+          />
+        </S.Section>
+    </>
+  )
+
   return (
-    <S.DashboardRoot>
+    <S.DashboardShell>
+      <S.DashboardRoot>
       {/*
         구성 원칙 — 위에서부터 "이 나라가 어떤 나라인가"로 답한다.
         예전 배치는 데이터 완성도·등록 현황(관리 지표)이 첫 화면을 차지하고, 이 국가에서
@@ -345,51 +392,16 @@ export function CountryDetailDashboard({
         </>
       )}
 
-      {/* 6. 활동과 보완 — 관리용 지표는 여기로 내린다 */}
-      <S.BottomRow>
-        <S.Section>
-          <S.SectionTitleRow>
-            <S.SectionTitleIcon $accent="amber">
-              <IconClock />
-            </S.SectionTitleIcon>
-            <S.SectionTitleText>최근 활동</S.SectionTitleText>
-            {totalActivity > 0 && (
-              <S.SectionCountChip>{totalActivity}건</S.SectionCountChip>
-            )}
-            {stats.lastUpdatedAt && (
-              <S.LastUpdatedHint>
-                <IconRefresh /> {formatRelativeTime(stats.lastUpdatedAt)} 갱신
-              </S.LastUpdatedHint>
-            )}
-          </S.SectionTitleRow>
-          <S.FeedPanel>
-            <ActivityFeed
-              items={stats.recentActivity}
-              isLoading={stats.loading.activity}
-              onPersonClick={(personId) =>
-                navigate(pathKeys.personsTimelineDetail(personId))
-              }
-              onEventClick={goEvents}
-            />
-          </S.FeedPanel>
-        </S.Section>
+      {/*
+       * 6. 활동과 보완 — 기록 관리 축이라 나라 이야기(본문)와 성격이 다르다.
+       * 넓은 화면에서는 우측 레일로 빠지고, 좁으면 여기 본문 아래에 남는다.
+       * 같은 내용을 두 자리에 쓰므로 `managementPanels` 하나로 만들어 꽂는다.
+       */}
+      <S.BottomRow>{managementPanels}</S.BottomRow>
 
-        <S.Section>
-          <S.SectionTitleRow>
-            <S.SectionTitleIcon $accent="emerald">
-              <IconGlobe />
-            </S.SectionTitleIcon>
-            <S.SectionTitleText>더 채울 것</S.SectionTitleText>
-          </S.SectionTitleRow>
-          <CompletenessPanel
-            filled={stats.completeness.filled}
-            total={stats.completeness.total}
-            missing={stats.completeness.missing}
-            onEditMissing={onEdit ? () => onEdit(country) : null}
-          />
-        </S.Section>
-      </S.BottomRow>
+      </S.DashboardRoot>
 
-    </S.DashboardRoot>
+      <S.DashboardAside aria-label="기록 관리">{managementPanels}</S.DashboardAside>
+    </S.DashboardShell>
   )
 }

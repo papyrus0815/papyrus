@@ -145,6 +145,40 @@ const surfaceInteractive = css<{ $accent?: AccentKey }>`
 
 /* ─── Layout root ─────────────────────────────────────────────────────── */
 
+/**
+ * 대시보드 바깥 껍데기 — 넓은 화면에서만 우측 레일을 붙인다.
+ *
+ * 실측: 본문이 폭을 무제한으로 먹어 2560px에서 2080px가 되고 각료가 8열까지 늘어졌다.
+ * 넓은 화면에서는 공간이 남는 게 아니라 **낭비되는** 중이었다. 반대로 1280~1440은
+ * 본문이 832~960px라 여유가 없어, 여기서 320px를 떼면 각료 격자가 2열로 무너진다.
+ * 그래서 1680px 이상에서만 연다.
+ */
+export const DashboardShell = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+
+  @media (min-width: 1680px) {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 24px;
+    padding-right: 40px;
+  }
+`
+
+/** 우측 관리 레일 — 스크롤해도 자리를 지킨다 */
+export const DashboardAside = styled.aside`
+  display: none;
+
+  @media (min-width: 1680px) {
+    display: flex;
+    flex-direction: column;
+    gap: ${space.xxxl}px;
+    position: sticky;
+    top: 24px;
+    padding-top: ${space.xxxl}px;
+  }
+`
+
 export const DashboardRoot = styled.div`
   position: relative;
   display: flex;
@@ -152,6 +186,11 @@ export const DashboardRoot = styled.div`
   min-height: 0;
   padding: ${space.xxxl}px 40px 48px;
   gap: ${space.xxxl}px;
+
+  /* 우측 레일이 켜지면 오른쪽 여백은 셸이 갖는다 */
+  @media (min-width: 1680px) {
+    padding-right: 0;
+  }
 
   /* 헤더 ↔ 본문 사이 단일 indigo 약한 fade */
   &::before {
@@ -1509,7 +1548,12 @@ export const NowRow = styled.div`
 `
 
 /** 하단 보조 — 최근 활동과 완성도를 나란히 */
+/** 좁은 화면에서만 — 넓어지면 이 내용이 우측 레일로 간다 */
 export const BottomRow = styled.div`
+  @media (min-width: 1680px) {
+    display: none;
+  }
+
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
   /* 두 칸이 서로 높이를 맞추면 짧은 쪽(완성도) 아래가 통째로 빈다 — 각자 내용만큼만 */
