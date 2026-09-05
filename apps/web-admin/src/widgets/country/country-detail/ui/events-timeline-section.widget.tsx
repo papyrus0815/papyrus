@@ -50,6 +50,31 @@ const Chronology = styled.div`
 const CenturySection = styled.section`
   display: flex;
   flex-direction: column;
+  scroll-margin-top: 12px;
+
+  /* 연표 막대에서 넘어왔을 때 잠깐 켜지는 강조 — 어디에 내려섰는지 알려 준다 */
+  &[data-century-focus='true'] {
+    animation: centuryArrive 1.6s ease-out;
+  }
+
+  @keyframes centuryArrive {
+    0%,
+    60% {
+      background: rgba(245, 158, 11, 0.14);
+      box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.7);
+    }
+    100% {
+      background: transparent;
+      box-shadow: inset 3px 0 0 transparent;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &[data-century-focus='true'] {
+      animation: none;
+      box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.7);
+    }
+  }
 `
 
 /** 세기 머리 — 스크롤 중에도 지금 보는 세기가 남도록 sticky */
@@ -289,6 +314,13 @@ export interface EventsTimelineSectionProps {
   scopeCountryIds?: string[]
   /** URL searchParams form=create 시 true. 사건 등록 폼을 바로 표시 */
   initialFormFromSearchParams?: boolean
+  /**
+   * URL의 `century` — 부호 세기 문자열(20 = 20세기, -1 = 기원전 1세기).
+   * 대시보드 연표 막대에서 넘어오면 그 세기 묶음으로 스크롤하고 잠깐 강조한다.
+   * 걸러내지 않고 **데려다 놓기만** 한다 — 필터로 만들면 그 세기 밖 사건이 사라져,
+   * 전체를 보러 온 사람이 잃는 것이 생긴다.
+   */
+  focusCentury?: string | null
   /** 목록↔폼 전환 시 URL 동기화 (form 열기: true, 목록: false) */
   onNavigateToForm?: (toForm: boolean) => void
   /** 수정 모드: 전달 시 목록/헤더 없이 수정 폼만 표시 (dashboard/events/:id/edit) */
@@ -303,6 +335,7 @@ export function EventsTimelineSection({
   countryId,
   scopeCountryIds,
   initialFormFromSearchParams,
+  focusCentury,
   onNavigateToForm,
   editEventId,
   onEditBack,
@@ -441,6 +474,53 @@ export function EventsTimelineSection({
         }),
       }))
   }, [list, order])
+
+  /*
+   * 연표 막대에서 넘어온 세기로 데려다 놓는다.
+   *
+   * 목록을 자르지 않는 이유: 자르면 그 세기 밖 사건이 사라져 '전체를 보러 온' 사람이
+   * 잃는 게 생긴다. 스크롤 + 잠깐의 강조면 "여기다"를 말하기에 충분하다.
+   * 사건이 페이지 단위로 들어오므로 list가 늘어날 때마다 다시 시도한다(한 번 성공하면 끝).
+   */
+  const [centuryFocused, setCenturyFocused] = useState(false)
+  const focusKey = useMemo(() => {
+    if (!focusCentury) return null
+    const century = Number(focusCentury)
+    if (!Number.isFinite(century) || century === 0) return null
+    return `c${century > 0 ? 1 : -1}-${Math.abs(century)}`
+  }, [focusCentury])
+
+  useEffect(() => {
+    setCenturyFocused(false)
+  }, [focusKey])
+
+  useEffect(() => {
+    if (!focusKey || view !== 'list') return
+    const target = document.querySelector<HTMLElement>(
+      `[data-century-key="${focusKey}"]`,
+    )
+    if (!target) return
+
+    /*
+     * 사건은 페이지 단위로 들어온다. 첫 페이지에서 한 번 스크롤하고 끝내면 뒤 페이지가
+     * 붙으면서 목표가 아래로 밀려 **엉뚱한 세기 앞에 서 있게 된다**(실측: 19세기로
+     * 갔는데 18세기가 화면 위였다). 목록이 자랄 때마다 다시 맞춘다 —
+     * 강조는 처음 한 번만 켠다.
+     */
+    target.scrollIntoView({
+      block: 'start',
+      behavior: centuryFocused ? 'auto' : 'smooth',
+    })
+    if (centuryFocused) return
+
+    setCenturyFocused(true)
+    target.setAttribute('data-century-focus', 'true')
+    const timer = window.setTimeout(
+      () => target.removeAttribute('data-century-focus'),
+      1600,
+    )
+    return () => window.clearTimeout(timer)
+  }, [focusKey, centuryFocused, view, list.length])
 
   useEffect(() => {
     setView(initialFormFromSearchParams ? 'form' : 'list')
@@ -671,7 +751,7 @@ export function EventsTimelineSection({
           ) : (
             <Chronology>
               {centuryGroups.map((group) => (
-                <CenturySection key={group.key}>
+                <CenturySection key={group.key} data-century-key={group.key}>
                   <CenturyHead>
                     <CenturyLabel>{group.label}</CenturyLabel>
                     <CenturyCount>{group.events.length}건</CenturyCount>

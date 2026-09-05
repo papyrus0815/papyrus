@@ -3,8 +3,8 @@ import styled from 'styled-components'
 export interface EventCenturyStripProps {
   /** 오래된 순 세기 분포. century는 부호 세기(20 = 20세기, -1 = 기원전 1세기) */
   counts: Array<{ century: number; count: number }>
-  /** 막대를 누르면 가는 곳 — 사건 탭 */
-  onOpen: () => void
+  /** 막대를 누르면 그 세기로 — 사건 탭의 해당 세기 묶음으로 내려간다 */
+  onOpen: (century: number) => void
 }
 
 /** 부호 세기 → 라벨. 20 → '20세기', -1 → '기원전 1세기' */
@@ -64,9 +64,9 @@ export function EventCenturyStrip({ counts, onOpen }: EventCenturyStripProps) {
               )}
               <Bar
                 type="button"
-                onClick={onOpen}
+                onClick={() => onOpen(row.century)}
                 title={`${centuryLabel(row.century)} · ${row.count}건`}
-                aria-label={`${centuryLabel(row.century)} 사건 ${row.count}건 — 사건 탭으로 이동`}
+                aria-label={`${centuryLabel(row.century)} 사건 ${row.count}건 — 사건 탭의 그 세기로 이동`}
               >
                 <BarCount>{row.count}</BarCount>
                 <BarTrack>

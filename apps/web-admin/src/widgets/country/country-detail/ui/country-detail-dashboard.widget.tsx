@@ -137,6 +137,9 @@ export function CountryDetailDashboard({
     popNum != null || country.areaSqKm != null || !!densityText || !!capitalText
 
   const goEvents = () => navigate(pathKeys.countryEvents(country.id))
+  /** 연표 막대 → 사건 탭의 그 세기 묶음 */
+  const goEventsCentury = (century: number) =>
+    navigate(pathKeys.countryEvents(country.id, undefined, century))
   const goEventsCreate = () =>
     navigate(pathKeys.countryEvents(country.id, 'create'))
   const goGovernment = () =>
@@ -549,7 +552,7 @@ export function CountryDetailDashboard({
             <S.EventTimelineLabel>사건 연표</S.EventTimelineLabel>
             <EventCenturyStrip
               counts={stats.eventCenturyCounts}
-              onOpen={goEvents}
+              onOpen={goEventsCentury}
             />
           </S.EventTimelineBlock>
         )}

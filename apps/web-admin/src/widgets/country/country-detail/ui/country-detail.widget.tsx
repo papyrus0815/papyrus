@@ -253,6 +253,8 @@ function CountryDetailInner({
                     initialFormFromSearchParams={
                       searchParams.get('form') === 'create'
                     }
+                    /* 대시보드 연표 막대에서 넘어온 세기 — 그 묶음으로 내려간다 */
+                    focusCentury={searchParams.get('century')}
                     onNavigateToForm={(toForm) =>
                       navigate(
                         toForm

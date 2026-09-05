@@ -84,10 +84,22 @@ export const pathKeys = {
   countryElectionPartyDetail: (countryId: string, partyId: string) =>
     `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/elections/party/${encodeURIComponent(partyId)}`,
   /** 국가 상세 내 연대표(전체 사건) 탭 고유 URL. form=create 시 사건 등록 폼 표시 */
-  countryEvents: (countryId: string, form?: 'create') =>
-    form === 'create'
-      ? `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/events?form=create`
-      : `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/events`,
+  /**
+   * 국가 사건 탭. `century`는 **부호 세기**(20 = 20세기, -1 = 기원전 1세기) —
+   * 대시보드 연표 막대에서 그 세기로 곧장 내려가기 위해 싣는다.
+   */
+  countryEvents: (
+    countryId: string,
+    form?: 'create',
+    century?: number | null,
+  ) => {
+    const base = `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/events`
+    if (form === 'create') return `${base}?form=create`
+    if (century != null && Number.isFinite(century)) {
+      return `${base}?century=${century}`
+    }
+    return base
+  },
 
   // --- Timeline 뷰 (ContentShell 셸 — 구 /history/dashboard/*) ---
   /** 인물 타임라인 (국가 미선택 시 전체 인물) */
