@@ -8,6 +8,7 @@ import { compareByCountryStart } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
 
 import { formatRelativeTime } from '../lib/relative-time'
+import type { CompletenessField } from '../model/use-country-dashboard-stats'
 import { useCountryDashboardStats } from '../model/use-country-dashboard-stats'
 import {
   IconArea,
@@ -48,7 +49,6 @@ const LINEAGE_SUMMARY_LIMIT = 12
 
 export interface CountryDetailDashboardProps {
   country: UnifiedCountry
-  onEdit?: (country: UnifiedCountry) => void
   /**
    * 국가 히어로(국기 썸네일·국가명). 대시보드 탭에서만 뜨므로 셸 좌측 칼럼 안에서
    * 렌더한다 — 그래야 우측 관리 레일이 썸네일 줄부터 시작한다.
@@ -58,7 +58,6 @@ export interface CountryDetailDashboardProps {
 
 export function CountryDetailDashboard({
   country,
-  onEdit,
   header,
 }: CountryDetailDashboardProps) {
   const navigate = useNavigate()
@@ -94,6 +93,26 @@ export function CountryDetailDashboard({
   const goTreaty = () => navigate(pathKeys.countryTreaty(country.id))
   const goHistorical = () => navigate(pathKeys.countryHistorical(country.id))
 
+  /** 기록 완성도 칩 → 그 축을 채우는 탭으로 */
+  const goFillTarget = (field: CompletenessField) => {
+    switch (field.target) {
+      case 'government':
+        return goGovernment()
+      case 'persons':
+        return goPersons()
+      case 'events':
+        return goEvents()
+      case 'elections':
+        return goElections()
+      case 'historical':
+        return goHistorical()
+      case 'regions':
+        return goRegions()
+      case 'treaty':
+        return goTreaty()
+    }
+  }
+
   const totalActivity = stats.recentActivity.length
   // 서버가 linkKind로 전신을 구분해주면 대시보드 요약엔 직계 전신선만 보인다
   // (독일 47 → 12). 구분이 없으면(데이터 부족·구버전 API) 전체를 그대로 보여준다.
@@ -127,6 +146,17 @@ export function CountryDetailDashboard({
   const politicsHasData =
     !!stats.currentCabinet || !!stats.nextElection || !!stats.recentElection
   const politicsLoading = stats.loading.cabinets || stats.loading.elections
+
+  // 기록 완성도는 여러 쿼리를 모수로 삼는다 — 하나라도 로딩 중이면 "비어 있다"고 말하지 않는다
+  const completenessLoading =
+    stats.loading.persons ||
+    stats.loading.events ||
+    stats.loading.tenures ||
+    stats.loading.cabinets ||
+    stats.loading.elections ||
+    stats.loading.administration ||
+    stats.loading.cities ||
+    stats.loading.treaties
   const showPolitics = politicsHasData || politicsLoading
 
   const managementPanels = (
@@ -169,7 +199,8 @@ export function CountryDetailDashboard({
             filled={stats.completeness.filled}
             total={stats.completeness.total}
             missing={stats.completeness.missing}
-            onEditMissing={onEdit ? () => onEdit(country) : null}
+            isLoading={completenessLoading}
+            onFillMissing={goFillTarget}
           />
         </S.Section>
     </>

@@ -219,7 +219,6 @@ function CountryDetailInner({
                 {activeSubTab === 'dashboard' && (
                   <CountryDetailDashboard
                     country={country}
-                    onEdit={onEdit}
                     /*
                       히어로는 대시보드 셸 좌측 칼럼 안에서 렌더한다. 바깥 형제로 두면
                       우측 관리 레일이 히어로 아래에서 시작하고 히어로만 레일 밑으로

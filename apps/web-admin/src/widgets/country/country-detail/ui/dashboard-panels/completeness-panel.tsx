@@ -1,31 +1,47 @@
+import type { CompletenessField } from '../../model/use-country-dashboard-stats'
 import { IconCheck } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 
 export interface CompletenessPanelProps {
   filled: number
   total: number
-  missing: { key: string; label: string }[]
-  onEditMissing: (() => void) | null
+  missing: CompletenessField[]
+  /** 비어 있는 축 칩을 누르면 그 축을 채우는 탭으로 보낸다 */
+  onFillMissing: ((field: CompletenessField) => void) | null
+  /** 집계에 쓰는 쿼리가 아직 로딩 중 — 다 비어 있다고 단정하지 않는다 */
+  isLoading?: boolean
 }
 
 export function CompletenessPanel({
   filled,
   total,
   missing,
-  onEditMissing,
+  onFillMissing,
+  isLoading = false,
 }: CompletenessPanelProps) {
   const percent = total > 0 ? Math.round((filled / total) * 100) : 0
   const isFull = total > 0 && filled === total
 
   // SVG 도넛
-  const r = 42
-  const circumference = 2 * Math.PI * r
+  const radius = 42
+  const circumference = 2 * Math.PI * radius
   const offset = circumference * (1 - (total > 0 ? filled / total : 0))
+
+  if (isLoading) {
+    return (
+      <S.CardPanel $accent="indigo">
+        <S.CardPanelTitleRow>
+          <S.CardPanelTitle>기록 완성도</S.CardPanelTitle>
+        </S.CardPanelTitleRow>
+        <S.CompletenessLine>기록을 세는 중…</S.CompletenessLine>
+      </S.CardPanel>
+    )
+  }
 
   return (
     <S.CardPanel $accent={isFull ? 'emerald' : 'indigo'}>
       <S.CardPanelTitleRow>
-        <S.CardPanelTitle>데이터 완성도</S.CardPanelTitle>
+        <S.CardPanelTitle>기록 완성도</S.CardPanelTitle>
         <S.CardPanelHint>
           {filled}/{total}
         </S.CardPanelHint>
@@ -34,11 +50,11 @@ export function CompletenessPanel({
       <S.CompletenessRow>
         <S.DonutWrap>
           <S.DonutSvg viewBox="0 0 100 100">
-            <S.DonutTrackCircle cx="50" cy="50" r={r} />
+            <S.DonutTrackCircle cx="50" cy="50" r={radius} />
             <S.DonutFillCircle
               cx="50"
               cy="50"
-              r={r}
+              r={radius}
               $full={isFull}
               strokeDasharray={circumference}
               strokeDashoffset={offset}
@@ -56,7 +72,7 @@ export function CompletenessPanel({
               <S.CompletionCheckIcon aria-hidden>
                 <IconCheck />
               </S.CompletionCheckIcon>
-              모든 항목 등록 완료
+              모든 기록 축 등록 완료
             </S.CompletionFullState>
           ) : (
             <>
@@ -64,22 +80,22 @@ export function CompletenessPanel({
                 <S.CompletenessLineStrong>
                   {missing.length}개
                 </S.CompletenessLineStrong>
-                항목이 비어 있습니다
+                기록이 비어 있습니다
               </S.CompletenessLine>
               {missing.length > 0 && (
                 <S.MissingChips>
-                  {missing.slice(0, 6).map((m) =>
-                    onEditMissing ? (
+                  {missing.slice(0, 6).map((field) =>
+                    onFillMissing ? (
                       <S.MissingChipButton
-                        key={m.key}
+                        key={field.key}
                         type="button"
-                        onClick={onEditMissing}
-                        aria-label={`${m.label} 편집`}
+                        onClick={() => onFillMissing(field)}
+                        aria-label={`${field.label} 기록하러 가기`}
                       >
-                        {m.label}
+                        {field.label}
                       </S.MissingChipButton>
                     ) : (
-                      <S.MissingChip key={m.key}>{m.label}</S.MissingChip>
+                      <S.MissingChip key={field.key}>{field.label}</S.MissingChip>
                     ),
                   )}
                   {missing.length > 6 && (

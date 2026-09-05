@@ -16,25 +16,30 @@ function groupActivityByTime(items: RecentActivityItem[]): ActivityGroup[] {
   if (items.length === 0) return []
   const today = startOfDay(new Date())
   const sevenDaysAgo = today.getTime() - 6 * 86400000
+  const thirtyDaysAgo = today.getTime() - 29 * 86400000
   const groups = {
     today: [] as RecentActivityItem[],
     thisWeek: [] as RecentActivityItem[],
+    thisMonth: [] as RecentActivityItem[],
     older: [] as RecentActivityItem[],
   }
   for (const item of items) {
-    const t = new Date(item.createdAt).getTime()
-    if (!Number.isFinite(t)) {
+    const stamp = new Date(item.createdAt).getTime()
+    if (!Number.isFinite(stamp)) {
       groups.older.push(item)
       continue
     }
-    if (t >= today.getTime()) groups.today.push(item)
-    else if (t >= sevenDaysAgo) groups.thisWeek.push(item)
+    if (stamp >= today.getTime()) groups.today.push(item)
+    else if (stamp >= sevenDaysAgo) groups.thisWeek.push(item)
+    else if (stamp >= thirtyDaysAgo) groups.thisMonth.push(item)
     else groups.older.push(item)
   }
   const out: ActivityGroup[] = []
   if (groups.today.length) out.push({ label: '오늘', items: groups.today })
   if (groups.thisWeek.length)
     out.push({ label: '지난 7일', items: groups.thisWeek })
+  if (groups.thisMonth.length)
+    out.push({ label: '지난 30일', items: groups.thisMonth })
   if (groups.older.length) out.push({ label: '이전', items: groups.older })
   return out
 }

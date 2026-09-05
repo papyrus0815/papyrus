@@ -45,10 +45,21 @@ export interface CurrentHead {
   startDate: string
 }
 
+/** 비어 있는 축을 채우러 갈 곳 — 대시보드 위젯이 탭 이동으로 해석한다 */
+export type CompletenessTarget =
+  | 'government'
+  | 'persons'
+  | 'events'
+  | 'elections'
+  | 'historical'
+  | 'regions'
+  | 'treaty'
+
 export interface CompletenessField {
   key: string
   label: string
   filled: boolean
+  target: CompletenessTarget
 }
 
 export interface DeltaCounts {
@@ -150,6 +161,41 @@ export interface CountryDashboardStats {
 
 const HEAD_TYPES = new Set(['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT'])
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
+
+/** 최근 활동 피드에 올릴 최대 줄 수 */
+const ACTIVITY_FEED_LIMIT = 10
+/** 그 중 한 종류가 먼저 차지할 수 있는 몫 */
+const ACTIVITY_KIND_QUOTA = 5
+
+const byCreatedAtDesc = (a: RecentActivityItem, b: RecentActivityItem) =>
+  new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+
+/**
+ * 인물·사건을 종류별 몫을 먼저 떼고 합친다.
+ *
+ * 예전엔 그냥 합쳐 `createdAt` 순 10건을 잘랐다. 기록은 시딩 배치 단위로 한꺼번에
+ * 들어오므로 가장 늦게 들어온 배치 하나가 열 줄을 통째로 먹는다 — 미국은 사건이
+ * 41건 있는데도 피드가 각료 10명으로만 채워졌다. 각 종류에서 먼저 몫만큼 뽑고,
+ * 남는 자리만 최신순으로 메운다.
+ */
+function pickWithKindQuota(
+  persons: RecentActivityItem[],
+  events: RecentActivityItem[],
+): RecentActivityItem[] {
+  const sortedPersons = [...persons].sort(byCreatedAtDesc)
+  const sortedEvents = [...events].sort(byCreatedAtDesc)
+  const picked = [
+    ...sortedPersons.slice(0, ACTIVITY_KIND_QUOTA),
+    ...sortedEvents.slice(0, ACTIVITY_KIND_QUOTA),
+  ]
+  // 한쪽이 몫을 다 못 채우면 그 자리는 다른 쪽 최신 기록으로 메운다
+  const leftover = [
+    ...sortedPersons.slice(ACTIVITY_KIND_QUOTA),
+    ...sortedEvents.slice(ACTIVITY_KIND_QUOTA),
+  ].sort(byCreatedAtDesc)
+  picked.push(...leftover.slice(0, Math.max(0, ACTIVITY_FEED_LIMIT - picked.length)))
+  return picked.sort(byCreatedAtDesc).slice(0, ACTIVITY_FEED_LIMIT)
+}
 
 function countSince(items: unknown, sinceMs: number): number {
   if (!Array.isArray(items)) return 0
@@ -370,11 +416,7 @@ export function useCountryDashboardStats(
         endDate: e.endDate ?? null,
       }))
       .filter((e) => e.createdAt)
-    const merged = [...persons, ...events].sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    )
-    return merged.slice(0, 10)
+    return pickWithKindQuota(persons, events)
   }, [recentPersons, eventsQuery.data])
 
   const currentHeads = useMemo((): CurrentHead[] => {
@@ -440,36 +482,6 @@ export function useCountryDashboardStats(
       }
     })
   }, [tenuresQuery.data, country?.defaultNameDisplayOrder])
-
-  const completeness = useMemo(() => {
-    const fields: CompletenessField[] = country
-      ? [
-          { key: 'fullName', label: '정식 국호', filled: hasText(country.fullName) },
-          { key: 'localName', label: '현지어 명칭', filled: hasText(country.localName) },
-          { key: 'isoCode', label: 'ISO 코드', filled: hasText(country.isoCode) },
-          { key: 'flagEmoji', label: '국기 이모지', filled: hasText(country.flagEmoji) },
-          { key: 'thumbnailUrl', label: '국기 이미지', filled: hasText(country.thumbnailUrl) },
-          { key: 'capital', label: '수도', filled: hasText(country.capital) },
-          {
-            key: 'population',
-            label: '인구',
-            filled:
-              country.population != null &&
-              String(country.population).trim() !== '',
-          },
-          { key: 'areaSqKm', label: '면적', filled: country.areaSqKm != null },
-          { key: 'continentId', label: '대륙', filled: hasText(country.continentId) },
-          {
-            key: 'coordinates',
-            label: '좌표',
-            filled: country.latitude != null && country.longitude != null,
-          },
-        ]
-      : []
-    const filled = fields.filter((f) => f.filled).length
-    const missing = fields.filter((f) => !f.filled)
-    return { filled, total: fields.length, missing }
-  }, [country])
 
   const treatyCount = (treatiesQuery.data as { total?: number } | undefined)
     ?.total ?? 0
@@ -666,6 +678,96 @@ export function useCountryDashboardStats(
     }
   }, [electionsQuery.data])
 
+  /**
+   * 기록 완성도 — 이 나라에 어떤 기록 축이 비어 있는가.
+   *
+   * 예전 모수는 country 테이블 10개 필드(정식 국호·수도·좌표…)였다. 실측하니 71개국 중
+   * 69개국이 똑같이 6/10이었고 비어 있는 4개 항목까지 전부 같았다(정식 국호 0/71,
+   * 수도 0/71, 좌표 0/71, 국기 이미지 2/71). 어느 나라를 열어도 같은 화면이라
+   * "이 나라에 뭐가 없나"를 전혀 답하지 못했다. 모수를 이 나라의 기록 축으로 바꾼다.
+   */
+  const completeness = useMemo(() => {
+    const fields: CompletenessField[] = country
+      ? [
+          {
+            key: 'head',
+            label: '수반',
+            filled: currentHeads.length > 0,
+            target: 'government',
+          },
+          {
+            key: 'cabinet',
+            label: '행정부',
+            filled: currentCabinet != null,
+            target: 'government',
+          },
+          {
+            key: 'ministers',
+            label: '각료',
+            filled: (currentCabinet?.ministerCount ?? 0) > 0,
+            target: 'government',
+          },
+          {
+            key: 'departments',
+            label: '중앙부처',
+            filled: administrationCount > 0,
+            target: 'government',
+          },
+          {
+            key: 'persons',
+            label: '인물',
+            filled: personCount > 0,
+            target: 'persons',
+          },
+          {
+            key: 'events',
+            label: '사건',
+            filled: eventCount > 0,
+            target: 'events',
+          },
+          {
+            key: 'elections',
+            label: '선거',
+            filled: nextElection != null || recentElection != null,
+            target: 'elections',
+          },
+          {
+            key: 'historical',
+            label: '과거 국가',
+            filled: historicalCountryCount > 0,
+            target: 'historical',
+          },
+          {
+            key: 'regions',
+            label: '행정구역',
+            filled: cityCount > 0,
+            target: 'regions',
+          },
+          {
+            key: 'treaties',
+            label: '조약',
+            filled: treatyCount > 0,
+            target: 'treaty',
+          },
+        ]
+      : []
+    const filled = fields.filter((field) => field.filled).length
+    const missing = fields.filter((field) => !field.filled)
+    return { filled, total: fields.length, missing }
+  }, [
+    country,
+    currentHeads,
+    currentCabinet,
+    administrationCount,
+    personCount,
+    eventCount,
+    nextElection,
+    recentElection,
+    historicalCountryCount,
+    cityCount,
+    treatyCount,
+  ])
+
   // 라벨이 "갱신"인 만큼 모든 엔티티의 createdAt 중 최신을 사용.
   const lastUpdatedAt = useMemo<string | null>(() => {
     const sources: unknown[][] = [
@@ -739,8 +841,4 @@ export function useCountryDashboardStats(
     isLoading,
     loading,
   }
-}
-
-function hasText(v: unknown): boolean {
-  return typeof v === 'string' && v.trim() !== ''
 }
