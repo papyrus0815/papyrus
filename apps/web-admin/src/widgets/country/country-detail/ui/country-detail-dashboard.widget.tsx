@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 
 import { useNavigate } from 'react-router-dom'
@@ -48,11 +49,17 @@ const LINEAGE_SUMMARY_LIMIT = 12
 export interface CountryDetailDashboardProps {
   country: UnifiedCountry
   onEdit?: (country: UnifiedCountry) => void
+  /**
+   * 국가 히어로(국기 썸네일·국가명). 대시보드 탭에서만 뜨므로 셸 좌측 칼럼 안에서
+   * 렌더한다 — 그래야 우측 관리 레일이 썸네일 줄부터 시작한다.
+   */
+  header?: ReactNode
 }
 
 export function CountryDetailDashboard({
   country,
   onEdit,
+  header,
 }: CountryDetailDashboardProps) {
   const navigate = useNavigate()
   const stats = useCountryDashboardStats(country)
@@ -170,6 +177,8 @@ export function CountryDetailDashboard({
 
   return (
     <S.DashboardShell>
+      <S.DashboardMain>
+      {header}
       <S.DashboardRoot>
       {/*
         구성 원칙 — 위에서부터 "이 나라가 어떤 나라인가"로 답한다.
@@ -400,6 +409,7 @@ export function CountryDetailDashboard({
       <S.BottomRow>{managementPanels}</S.BottomRow>
 
       </S.DashboardRoot>
+      </S.DashboardMain>
 
       <S.DashboardAside aria-label="기록 관리">{managementPanels}</S.DashboardAside>
     </S.DashboardShell>

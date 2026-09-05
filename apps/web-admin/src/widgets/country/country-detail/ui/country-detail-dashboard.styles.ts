@@ -165,6 +165,19 @@ export const DashboardShell = styled.div`
   }
 `
 
+/**
+ * 좌측 칼럼 — 국가 히어로(썸네일)부터 본문까지.
+ *
+ * 히어로는 원래 대시보드 바깥(탭 패널의 형제)에 있어서 레일이 히어로 **아래**에서만
+ * 시작했고, 히어로만 레일 밑을 지나 화면 끝까지 뻗었다. 히어로를 이 칼럼 안으로
+ * 들여 레일과 같은 격자에 세운다 — 레일 top = 썸네일 top.
+ */
+export const DashboardMain = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+`
+
 /** 우측 관리 레일 — 스크롤해도 자리를 지킨다 */
 export const DashboardAside = styled.aside`
   display: none;
@@ -175,7 +188,6 @@ export const DashboardAside = styled.aside`
     gap: ${space.xxxl}px;
     position: sticky;
     top: 24px;
-    padding-top: ${space.xxxl}px;
   }
 `
 
