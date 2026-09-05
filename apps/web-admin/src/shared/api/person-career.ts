@@ -668,6 +668,7 @@ export type CabinetOverviewTenure = {
   /** 이 임기를 낳은 선거(후보 경유). 없으면 임명·세습 등 */
   electionCandidacy?: {
     id: string
+    result?: { voteSharePercent?: string | null; elected?: boolean } | null
     election?: {
       id: string
       name: string

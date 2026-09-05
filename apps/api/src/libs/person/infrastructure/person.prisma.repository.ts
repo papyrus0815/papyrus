@@ -3054,6 +3054,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       electionCandidacy: {
         select: {
           id: true,
+          // 득표율은 정권 요약에 바로 쓴다 — 이것 없으면 선거를 이어 놓고도
+          // '얼마로 이겼나'를 보려면 상세 모달을 열어야 한다
+          result: { select: { voteSharePercent: true, elected: true } },
           election: {
             select: { id: true, name: true, pollDate: true, electionType: true },
           },
