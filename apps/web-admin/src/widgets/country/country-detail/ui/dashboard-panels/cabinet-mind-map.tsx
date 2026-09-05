@@ -56,13 +56,31 @@ export interface CabinetMindMapProps {
  */
 const NODE_HEIGHT = 54
 const NODE_GAP = 12
-/** 가운데 카드와 가지 사이. 곡선이 이 폭 안에서 휜다 */
-const GUTTER = 64
-/** 가지 칸 폭 고정 — 곡선의 끝점이 어디인지 알아야 한다 */
-const BRANCH_WIDTH = 248
+/**
+ * 가운데 카드와 가지 사이. 곡선이 이 폭 안에서 휜다 — 넓을수록 완만하다.
+ * 64px는 지도가 좁을 때 정한 값이라 폭을 되찾은 지금은 곡선이 급하게 꺾였다.
+ */
+const GUTTER = 88
+/**
+ * 가지 칸 폭 — 최소·최대만 잡고 남는 폭은 흡수한다.
+ *
+ * 처음엔 248px로 고정했다. "곡선 끝점을 알아야 한다"고 봤기 때문인데, 실제로는 곡선
+ * SVG가 **거터 안에만** 있고 그 끝점은 언제나 노드 묶음의 모서리(로컬 좌표 0 또는
+ * GUTTER)다 — 가지 폭이 변해도 경로는 어긋나지 않는다. 고정했더니 2,162px 본문에서
+ * 좌우로 600px씩 비었다.
+ */
+const BRANCH_MIN = 200
+const BRANCH_MAX = 560
 
 const nodeCenterY = (index: number) =>
   index * (NODE_HEIGHT + NODE_GAP) + NODE_HEIGHT / 2
+
+/** 'YYYY-MM-DD…' → 'YYYY.M.D' — 저장된 달력 날짜를 그대로 찍는다(시간대 보정 금지) */
+function formatNodeDate(iso: string): string {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!matched) return ''
+  return `${Number(matched[1])}.${Number(matched[2])}.${Number(matched[3])}`
+}
 
 const groupHeightOf = (count: number) =>
   count > 0 ? count * NODE_HEIGHT + (count - 1) * NODE_GAP : 0
@@ -331,6 +349,13 @@ function BranchNode({
           {member.replaced && <Swap aria-label="임기 중 교체">↻</Swap>}
         </NodeName>
       </NodeText>
+      {/*
+        * 넓어진 가지 칸을 이름 하나로 비워 두지 않는다. 취임일은 각료 명단에서 가장
+        * 자주 찾는 값이고, 오른쪽 끝에 세우면 여러 줄이 세로로 정렬돼 표처럼 읽힌다.
+        */}
+      {member.startDate && (
+        <NodeDate>{formatNodeDate(member.startDate)}</NodeDate>
+      )}
     </Node>
   )
 }
@@ -344,7 +369,13 @@ const lineColor = css`
     theme.mode === 'dark' ? 'rgba(255,255,255,0.20)' : 'rgba(15,23,42,0.18)'}
 `
 
+/**
+ * 지도가 접히는 기준은 화면 폭이 아니라 **이 칼럼의 폭**이다. 좌측 국가 목록과 우측
+ * 관리 레일이 폭을 가져가므로 뷰포트로 재면 1,400px 화면에서도 본문은 900px이고,
+ * 3열 최소폭(약 1,090px)을 못 채운 채 가로로 넘친다.
+ */
 const MapWrap = styled.div`
+  container-type: inline-size;
   margin-bottom: 18px;
 `
 
@@ -359,7 +390,9 @@ const MapRoot = styled.div<{ $nav?: boolean; $branches?: boolean }>`
    * 250px 떨어져 허공에 뜬다 — 가지가 있을 때만 그 칸을 세운다.
    */
   grid-template-columns: ${({ $nav, $branches }) => {
-    const branch = $branches ? `${BRANCH_WIDTH}px` : '0'
+    const branch = $branches
+      ? `minmax(${BRANCH_MIN}px, ${BRANCH_MAX}px)`
+      : '0'
     return $nav
       ? `44px ${branch} auto ${branch} 44px`
       : `${branch} auto ${branch}`
@@ -386,7 +419,7 @@ const MapRoot = styled.div<{ $nav?: boolean; $branches?: boolean }>`
     animation: none;
   }
 
-  @media (max-width: 1100px) {
+  @container (max-width: 1120px) {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     justify-content: stretch;
@@ -434,7 +467,7 @@ const NavButton = styled.button<{ $side: 'left' | 'right' }>`
   }
 
   /* 좁은 화면에서는 아래 한 줄(NavRow)이 대신한다 */
-  @media (max-width: 1100px) {
+  @container (max-width: 1120px) {
     display: none;
   }
 `
@@ -448,7 +481,7 @@ const NavRow = styled.div`
   gap: 10px;
   margin-top: 10px;
 
-  @media (max-width: 1100px) {
+  @container (max-width: 1120px) {
     display: flex;
   }
 `
@@ -481,7 +514,7 @@ const NavCompact = styled.button`
     cursor: default;
   }
 
-  @media (max-width: 1100px) {
+  @container (max-width: 1120px) {
     display: inline-flex;
   }
 `
@@ -491,7 +524,7 @@ const MapSide = styled.div<{ $side: 'left' | 'right' }>`
   justify-content: ${({ $side }) =>
     $side === 'left' ? 'flex-end' : 'flex-start'};
 
-  @media (max-width: 1100px) {
+  @container (max-width: 1120px) {
     order: 2;
   }
 `
@@ -504,7 +537,7 @@ const GroupBox = styled.div<{ $side: 'left' | 'right' }>`
   width: 100%;
 
   /* 좁은 화면에서는 곡선 대신 왼쪽 세로줄 하나로 접는다 */
-  @media (max-width: 1100px) {
+  @container (max-width: 1120px) {
     padding-left: 18px;
 
     &::before {
@@ -533,7 +566,7 @@ const BranchSvg = styled.svg<{ $side: 'left' | 'right' }>`
     stroke-width: 1.25;
   }
 
-  @media (max-width: 1100px) {
+  @container (max-width: 1120px) {
     display: none;
   }
 `
@@ -543,7 +576,7 @@ const MapCenter = styled.div`
   justify-content: center;
   min-width: 0;
 
-  @media (max-width: 1100px) {
+  @container (max-width: 1120px) {
     order: 1;
   }
 `
@@ -553,7 +586,7 @@ const centerSurface = css`
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  width: 300px;
+  width: 340px;
   padding: 22px 24px 18px;
   border-radius: 20px;
   border: 1px solid rgba(190, 18, 60, 0.3);
@@ -713,7 +746,7 @@ const Stem = styled.div`
   margin: 0 auto;
   background: ${lineColor};
 
-  @media (max-width: 1100px) {
+  @container (max-width: 1120px) {
     display: none;
   }
 `
@@ -787,7 +820,7 @@ const Node = styled.button<{ $side: 'left' | 'right'; $replaced: boolean }>`
       border-color: rgba(180, 83, 9, 0.35);
     `}
 
-  @media (max-width: 1100px) {
+  @container (max-width: 1120px) {
     transform: none;
   }
 `
@@ -801,7 +834,22 @@ const NodeText = styled.span`
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
   gap: 1px;
+`
+
+/** 좁아지면 이름이 먼저다 — 날짜는 그때 물러난다 */
+const NodeDate = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  @container (max-width: 1280px) {
+    display: none;
+  }
 `
 
 const NodeTitle = styled.span`
