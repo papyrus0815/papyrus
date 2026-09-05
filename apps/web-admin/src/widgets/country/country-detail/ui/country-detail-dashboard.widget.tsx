@@ -549,31 +549,13 @@ export function CountryDetailDashboard({
           세기 단위로 흩어져 있어서다(미국 41건이 18~21세기).
         */}
         {stats.eventCenturyCounts.length > 0 && (
-          <S.EventTimelineRow>
-            <S.EventTimelineBlock>
-              <S.EventTimelineLabel>사건 연표</S.EventTimelineLabel>
-              <EventCenturyStrip
-                counts={stats.eventCenturyCounts}
-                onOpen={goEventsCentury}
-              />
-            </S.EventTimelineBlock>
-            {/*
-              달력 — 연표가 '어느 세기'를 말하면 달력은 '그 달 며칠'을 말한다.
-              사건이 세기 단위로 흩어져 있어 오늘 달을 열면 대개 빈 격자라,
-              사건이 있는 가장 최근 달에서 시작하고 빈 달은 건너뛰게 했다.
-            */}
-            {stats.calendarEvents.length > 0 && (
-              <S.EventTimelineBlock>
-                <S.EventTimelineLabel>사건 캘린더</S.EventTimelineLabel>
-                <EventCalendarPanel
-                  events={stats.calendarEvents}
-                  onSelectEvent={(eventId) =>
-                    navigate(pathKeys.events.detail(eventId))
-                  }
-                />
-              </S.EventTimelineBlock>
-            )}
-          </S.EventTimelineRow>
+          <S.EventTimelineBlock>
+            <S.EventTimelineLabel>사건 연표</S.EventTimelineLabel>
+            <EventCenturyStrip
+              counts={stats.eventCenturyCounts}
+              onOpen={goEventsCentury}
+            />
+          </S.EventTimelineBlock>
         )}
         {totalRegistered === 0 && !stats.isLoading && (
           <S.EmptyHint>
@@ -587,6 +569,31 @@ export function CountryDetailDashboard({
        * 5. 지표 — 나라 자체에 대한 이야기라 '활동/보완'(기록 관리용)보다 위다.
        * 아래에 두었더니 뷰포트 3화면 아래로 밀려 "그런 기능 없는데?"가 됐다.
        */}
+      {/*
+        4-1. 사건 캘린더 — 연표가 '어느 세기'를 말하면 달력은 '그 달 며칠'을 말한다.
+        작은 상자에 점만 찍던 시절엔 "여기 뭔가 있다"까지만 말했다. 폭을 다 쓰고
+        제목을 칸 안에 넣어 한눈에 읽히게 한다.
+      */}
+      {stats.calendarEvents.length > 0 && (
+        <S.Section>
+          <S.SectionTitleRow>
+            <S.SectionTitleIcon $accent="amber">
+              <IconCalendar />
+            </S.SectionTitleIcon>
+            <S.SectionTitleText>사건 캘린더</S.SectionTitleText>
+            <S.SectionLink type="button" onClick={goEvents}>
+              연대표 전체 보기
+            </S.SectionLink>
+          </S.SectionTitleRow>
+          <EventCalendarPanel
+            events={stats.calendarEvents}
+            onSelectEvent={(eventId) =>
+              navigate(pathKeys.events.detail(eventId))
+            }
+          />
+        </S.Section>
+      )}
+
       {/*
         5. 기업 — 이 나라에 등록된 기업. 국가별 엔드포인트가 없어 전체 목록을 받아
         countryId로 거른다(실DB 5행). 없으면 아무것도 그리지 않는다.

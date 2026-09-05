@@ -101,7 +101,6 @@ export function EventCalendarPanel({
 
   /* 오늘이 아니라 **사건이 있는 가장 최근 달**에서 연다 — 빈 격자로 시작하지 않는다 */
   const [cursor, setCursor] = useState<YearMonth | null>(null)
-  const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const current: YearMonth =
     cursor ??
     (monthsWithEvents[0]
@@ -126,12 +125,7 @@ export function EventCalendarPanel({
     (entry) => entry.year === current.year && entry.month === current.month,
   )?.count
 
-  const selectedEvents = selectedDay ? (byDay.get(selectedDay) ?? []) : []
-
-  const goMonth = (next: YearMonth) => {
-    setCursor(next)
-    setSelectedDay(null)
-  }
+  const goMonth = (next: YearMonth) => setCursor(next)
 
   return (
     <Root>
@@ -194,46 +188,37 @@ export function EventCalendarPanel({
           const dayKey = keyOf(current.year, current.month, day)
           const dayEvents = byDay.get(dayKey) ?? []
           const weekday = (startWeekday + day - 1) % 7
+          const shown = dayEvents.slice(0, 3)
           return (
             <DayCell
               key={dayKey}
-              type="button"
               $has={dayEvents.length > 0}
-              $selected={selectedDay === dayKey}
               $weekend={weekday === 0 || weekday === 6}
-              disabled={dayEvents.length === 0}
-              aria-label={
-                dayEvents.length > 0
-                  ? `${current.month}월 ${day}일 사건 ${dayEvents.length}건`
-                  : `${current.month}월 ${day}일`
-              }
-              onClick={() => setSelectedDay(dayKey)}
             >
-              <DayNumber>{day}</DayNumber>
-              {dayEvents.length > 0 && (
-                <DayMark>
-                  {dayEvents.length > 1 ? dayEvents.length : '●'}
-                </DayMark>
+              <DayNumber $weekend={weekday === 0 || weekday === 6}>
+                {day}
+              </DayNumber>
+              {/*
+                제목을 칸 안에 넣는다. 점만 찍으면 "여기 뭔가 있다"까지만 말하고,
+                무슨 일이 있었는지는 한 번 더 눌러야 나온다 — 달력을 보는 이유가 그건데.
+              */}
+              {shown.map((event) => (
+                <DayEvent
+                  key={event.id}
+                  type="button"
+                  title={event.title}
+                  onClick={() => onSelectEvent(event.id)}
+                >
+                  {event.title}
+                </DayEvent>
+              ))}
+              {dayEvents.length > shown.length && (
+                <DayMore>+{dayEvents.length - shown.length}건</DayMore>
               )}
             </DayCell>
           )
         })}
       </Grid>
-
-      {selectedEvents.length > 0 && (
-        <DayList>
-          {selectedEvents.map((event) => (
-            <DayListRow
-              key={event.id}
-              type="button"
-              onClick={() => onSelectEvent(event.id)}
-            >
-              <DayListDate>{event.date.slice(5).replace('-', '.')}</DayListDate>
-              <DayListTitle>{event.title}</DayListTitle>
-            </DayListRow>
-          ))}
-        </DayList>
-      )}
 
       {yearOnlyCount > 0 && (
         <Footnote>
@@ -247,27 +232,26 @@ export function EventCalendarPanel({
 const Root = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  width: max-content;
-  max-width: 100%;
+  gap: 12px;
+  width: 100%;
 `
 
 const Head = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 `
 
 const MonthNav = styled.button`
   appearance: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1;
   font-family: inherit;
   cursor: pointer;
@@ -275,103 +259,128 @@ const MonthNav = styled.button`
   &:hover {
     background: ${({ theme }) => theme.colors.hover};
   }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+  }
 `
 
 const MonthTitle = styled.span`
-  min-width: 96px;
+  min-width: 128px;
   text-align: center;
-  font-size: 13.5px;
+  font-size: 17px;
   font-weight: 800;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const MonthCount = styled.span`
-  padding: 1px 7px;
+  padding: 2px 9px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 700;
   color: #b45309;
   background: rgba(245, 158, 11, 0.16);
 `
 
+/* 달 넘기기 옆에 붙인다 — 폭이 넓어지자 오른쪽 끝으로 밀려 1,250px 떨어져 있었다 */
 const JumpGroup = styled.span`
   display: inline-flex;
-  gap: 6px;
-  margin-left: auto;
+  gap: 8px;
+  margin-left: 6px;
 `
 
 const Jump = styled.button`
   appearance: none;
-  border: none;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: none;
-  padding: 2px 4px;
+  padding: 5px 10px;
+  border-radius: 999px;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.primary};
   cursor: pointer;
 
   &:hover {
-    text-decoration: underline;
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 
+/** 폭을 꽉 채우는 월 격자 — 칸이 넓어야 제목이 들어간다 */
 const Grid = styled.div`
   display: grid;
-  grid-template-columns: repeat(7, 40px);
-  gap: 3px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
 `
 
 const Weekday = styled.span<{ $weekend: boolean }>`
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: 20px;
-  font-size: 10.5px;
+  justify-content: flex-start;
+  padding-left: 4px;
+  height: 22px;
+  font-size: 11.5px;
   font-weight: 700;
   color: ${({ $weekend, theme }) =>
     $weekend ? '#be123c' : theme.colors.text.tertiary};
 `
 
 const EmptyCell = styled.span`
-  height: 38px;
+  min-height: 96px;
+  border-radius: 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.012)' : 'rgba(15,23,42,0.012)'};
 `
 
-const DayCell = styled.button<{
-  $has: boolean
-  $selected: boolean
-  $weekend: boolean
-}>`
-  appearance: none;
-  font-family: inherit;
-  height: 38px;
+const DayCell = styled.div<{ $has: boolean; $weekend: boolean }>`
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  border-radius: 8px;
+  gap: 3px;
+  min-height: 96px;
+  padding: 6px;
+  border-radius: 10px;
   border: 1px solid
-    ${({ $selected, $has, theme }) =>
-      $selected
-        ? 'rgba(245, 158, 11, 0.8)'
-        : $has
-          ? 'rgba(245, 158, 11, 0.28)'
-          : theme.colors.border.light};
+    ${({ $has, theme }) =>
+      $has ? 'rgba(245, 158, 11, 0.30)' : theme.colors.border.light};
   background: ${({ $has, theme }) =>
-    $has ? 'rgba(245, 158, 11, 0.10)' : theme.colors.background.primary};
-  color: ${({ $weekend, $has, theme }) =>
-    $has
-      ? theme.colors.text.primary
-      : $weekend
-        ? 'rgba(190, 18, 60, 0.6)'
-        : theme.colors.text.tertiary};
-  cursor: ${({ $has }) => ($has ? 'pointer' : 'default')};
+    $has ? 'rgba(245, 158, 11, 0.07)' : theme.colors.background.primary};
+`
 
-  &:hover:not(:disabled) {
-    background: rgba(245, 158, 11, 0.18);
+const DayNumber = styled.span<{ $weekend: boolean }>`
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ $weekend, theme }) =>
+    $weekend ? 'rgba(190, 18, 60, 0.75)' : theme.colors.text.tertiary};
+`
+
+/** 칸 안의 사건 한 줄 — 누르면 그 사건으로 */
+const DayEvent = styled.button`
+  appearance: none;
+  display: block;
+  width: 100%;
+  padding: 4px 7px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.22);
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+
+  &:hover {
+    background: rgba(245, 158, 11, 0.36);
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.active};
@@ -379,60 +388,11 @@ const DayCell = styled.button<{
   }
 `
 
-const DayNumber = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-`
-
-const DayMark = styled.span`
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1;
-  color: #b45309;
-`
-
-const DayList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-top: 2px;
-`
-
-const DayListRow = styled.button`
-  appearance: none;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.primary};
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  max-width: 320px;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
-
-const DayListDate = styled.span`
-  flex-shrink: 0;
+const DayMore = styled.span`
+  padding-left: 4px;
   font-size: 10.5px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const DayListTitle = styled.span`
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #b45309;
 `
 
 const Footnote = styled.span`
