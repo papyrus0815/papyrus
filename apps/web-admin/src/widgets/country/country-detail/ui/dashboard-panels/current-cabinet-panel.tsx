@@ -278,12 +278,17 @@ export function CurrentCabinetPanel({
    */
   const [setupOpen, setSetupOpen] = useState(false)
   const [electionPickerOpen, setElectionPickerOpen] = useState(false)
-  const [electionDetailId, setElectionDetailId] = useState<string | null>(null)
+  /*
+   * 연결된 선거의 상세는 **항상** 받아 온다. 모달을 열 때만 받던 시절엔 선거 내용을
+   * 보려면 한 번 더 눌러야 했다 — 정권을 고르면 그 선거도 함께 펼쳐져야 한다.
+   */
+  const linkedElectionId =
+    overviewQuery.data?.headTenure?.electionCandidacy?.election?.id ?? null
 
   const electionDetailQuery = useQuery({
-    queryKey: ['election-detail', electionDetailId],
-    queryFn: () => getElection(electionDetailId as string),
-    enabled: !!electionDetailId,
+    queryKey: ['election-detail', linkedElectionId],
+    queryFn: () => getElection(linkedElectionId as string),
+    enabled: !!linkedElectionId,
     staleTime: 60_000,
   })
   const [linkingElection, setLinkingElection] = useState(false)
@@ -881,35 +886,149 @@ export function CurrentCabinetPanel({
         * 없어 실측 재임 217건 중 연결이 0건이었다. 정권을 고른 자리에서 바로 잇는다.
         */}
       {heads.length > 0 && (
-        <ElectionRow>
-          <ElectionLabel>이 정권을 낳은 선거</ElectionLabel>
-          {linkedElection ? (
-            <>
-              <ElectionOpen
+        <ElectionPanel>
+          <ElectionHead>
+            <ElectionLabel>이 정권을 낳은 선거</ElectionLabel>
+            {linkedElection ? (
+              <>
+                <ElectionName>{linkedElection.name}</ElectionName>
+                {electionDetailQuery.data && (
+                  <ElectionMeta>
+                    {[
+                      ELECTION_TYPE_LABEL[
+                        electionDetailQuery.data.electionType
+                      ] ?? electionDetailQuery.data.electionType,
+                      ELECTION_STATUS_LABEL[
+                        electionDetailQuery.data.status ?? ''
+                      ],
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </ElectionMeta>
+                )}
+                <ElectionUnlink type="button" onClick={() => void unlinkElection()}>
+                  연결 해제
+                </ElectionUnlink>
+              </>
+            ) : elections.length > 0 ? (
+              <ElectionLink
                 type="button"
-                onClick={() => setElectionDetailId(linkedElection.id)}
-                title="선거 상세 보기"
+                onClick={() => setElectionPickerOpen(true)}
               >
-                {linkedElection.name}
-              </ElectionOpen>
-              {linkedElection.pollDate && (
-                <ElectionDate>{shortDate(linkedElection.pollDate)}</ElectionDate>
+                + 선거 연결
+              </ElectionLink>
+            ) : (
+              <ElectionMuted>등록된 선거가 없습니다</ElectionMuted>
+            )}
+          </ElectionHead>
+
+          {/*
+            * 선거 내용을 지면에 그대로 편다. 모달로 감춰 두던 시절엔 정권을 골라도
+            * 선거는 이름 한 줄이라, 한 번 더 눌러야 '얼마로 이겼나'가 나왔다.
+            */}
+          {linkedElection && electionDetailQuery.data && (
+            <>
+              <ElectionFacts>
+                <ElectionFact>
+                  <DetailKey>투표일</DetailKey>
+                  <DetailValue>
+                    {shortDate(electionDetailQuery.data.pollDate)}
+                  </DetailValue>
+                </ElectionFact>
+                {electionDetailQuery.data.voterTurnoutPercent != null && (
+                  <ElectionFact>
+                    <DetailKey>투표율</DetailKey>
+                    <DetailValue>
+                      {electionDetailQuery.data.voterTurnoutPercent}%
+                    </DetailValue>
+                  </ElectionFact>
+                )}
+                {electionDetailQuery.data.totalSeats != null && (
+                  <ElectionFact>
+                    <DetailKey>총 의석</DetailKey>
+                    <DetailValue>
+                      {electionDetailQuery.data.totalSeats.toLocaleString()}석
+                    </DetailValue>
+                  </ElectionFact>
+                )}
+                <ElectionMore type="button" onClick={onOpenElections}>
+                  선거 탭에서 자세히
+                </ElectionMore>
+              </ElectionFacts>
+
+              {(electionDetailQuery.data.candidacies ?? []).length > 0 && (
+                <CandidacyList>
+                  {[...electionDetailQuery.data.candidacies]
+                    .sort(
+                      (left, right) =>
+                        Number(right.result?.voteSharePercent ?? -1) -
+                        Number(left.result?.voteSharePercent ?? -1),
+                    )
+                    .map((candidacy) => {
+                      const share = candidacy.result?.voteSharePercent
+                        ? Number(candidacy.result.voteSharePercent)
+                        : null
+                      return (
+                        <CandidacyRow
+                          key={candidacy.id}
+                          type="button"
+                          onClick={() =>
+                            candidacy.person?.id &&
+                            setModalPersonId(candidacy.person.id)
+                          }
+                        >
+                          <CandidacyTop>
+                            <CandidacyName>
+                              {candidacy.person
+                                ? getPersonDisplayName(
+                                    {
+                                      name: candidacy.person.name,
+                                      surname: candidacy.person.surname ?? null,
+                                    },
+                                    {
+                                      countryDefaultNameDisplayOrder:
+                                        countryNameOrder,
+                                    },
+                                  )
+                                : '후보 미상'}
+                            </CandidacyName>
+                            {candidacy.party?.name && (
+                              <CandidacyParty>
+                                {candidacy.party.name}
+                              </CandidacyParty>
+                            )}
+                            {candidacy.result?.elected && <WonChip>당선</WonChip>}
+                            {share != null && (
+                              <CandidacyShare>
+                                {share.toFixed(1)}%
+                              </CandidacyShare>
+                            )}
+                          </CandidacyTop>
+                          {share != null && (
+                            <ShareTrack>
+                              <ShareFill
+                                style={{
+                                  width: `${Math.min(100, Math.max(0, share))}%`,
+                                  background: candidacy.result?.elected
+                                    ? '#15803d'
+                                    : '#94a3b8',
+                                }}
+                              />
+                            </ShareTrack>
+                          )}
+                          {candidacy.result?.votes && (
+                            <CandidacyVotes>
+                              {Number(candidacy.result.votes).toLocaleString()}표
+                            </CandidacyVotes>
+                          )}
+                        </CandidacyRow>
+                      )
+                    })}
+                </CandidacyList>
               )}
-              <ElectionUnlink type="button" onClick={() => void unlinkElection()}>
-                연결 해제
-              </ElectionUnlink>
             </>
-          ) : elections.length > 0 ? (
-            <ElectionLink
-              type="button"
-              onClick={() => setElectionPickerOpen(true)}
-            >
-              + 선거 연결
-            </ElectionLink>
-          ) : (
-            <ElectionMuted>등록된 선거가 없습니다</ElectionMuted>
           )}
-        </ElectionRow>
+        </ElectionPanel>
       )}
 
       {members.length === 0 ? (
@@ -1100,166 +1219,6 @@ export function CurrentCabinetPanel({
               </PresetBlock>
             )}
           </SetupSection>
-        </ModalBody>
-      </Modal>
-
-      <Modal
-        isOpen={!!electionDetailId}
-        onClose={() => setElectionDetailId(null)}
-        title={electionDetailQuery.data?.name ?? '선거'}
-        subtitle={
-          electionDetailQuery.data
-            ? [
-                ELECTION_TYPE_LABEL[electionDetailQuery.data.electionType] ??
-                  electionDetailQuery.data.electionType,
-                ELECTION_STATUS_LABEL[electionDetailQuery.data.status ?? ''] ??
-                  null,
-              ]
-                .filter(Boolean)
-                .join(' · ')
-            : undefined
-        }
-      >
-        <ModalBody>
-          {electionDetailQuery.isLoading ? (
-            <SetupHint>불러오는 중…</SetupHint>
-          ) : electionDetailQuery.data ? (
-            <>
-              <DetailFacts>
-                <DetailFact>
-                  <DetailKey>투표일</DetailKey>
-                  <DetailValue>
-                    {shortDate(electionDetailQuery.data.pollDate)}
-                    {electionDetailQuery.data.pollEndDate &&
-                      ` ~ ${shortDate(electionDetailQuery.data.pollEndDate)}`}
-                  </DetailValue>
-                </DetailFact>
-                {/* 값이 없는 칸은 아예 그리지 않는다 — '—'만 늘어선 표는 정보가 아니다 */}
-                {electionDetailQuery.data.voterTurnoutPercent != null && (
-                  <DetailFact>
-                    <DetailKey>투표율</DetailKey>
-                    <DetailValue>
-                      {electionDetailQuery.data.voterTurnoutPercent}%
-                    </DetailValue>
-                  </DetailFact>
-                )}
-                {electionDetailQuery.data.totalSeats != null && (
-                  <DetailFact>
-                    <DetailKey>총 의석</DetailKey>
-                    <DetailValue>
-                      {electionDetailQuery.data.totalSeats.toLocaleString()}석
-                    </DetailValue>
-                  </DetailFact>
-                )}
-                {electionDetailQuery.data.convocationOrdinal != null && (
-                  <DetailFact>
-                    <DetailKey>회차</DetailKey>
-                    <DetailValue>
-                      제{electionDetailQuery.data.convocationOrdinal}대
-                    </DetailValue>
-                  </DetailFact>
-                )}
-              </DetailFacts>
-
-              {electionDetailQuery.data.description && (
-                <DetailNote>{electionDetailQuery.data.description}</DetailNote>
-              )}
-
-              {(electionDetailQuery.data.candidacies ?? []).length > 0 && (
-                <>
-                  <SetupHeading>
-                    후보 {electionDetailQuery.data.candidacies.length}명
-                  </SetupHeading>
-                  {/*
-                    * 득표율은 숫자만 늘어놓기보다 막대로 보여야 서로의 크기가 읽힌다.
-                    * 득표 기록이 하나도 없으면 막대는 그리지 않는다 — 0%짜리 빈 막대가
-                    * 늘어서면 '득표가 0이었다'는 거짓말이 된다.
-                    */}
-                  <CandidacyList>
-                    {[...electionDetailQuery.data.candidacies]
-                      .sort(
-                        (left, right) =>
-                          Number(right.result?.voteSharePercent ?? -1) -
-                          Number(left.result?.voteSharePercent ?? -1),
-                      )
-                      .map((candidacy) => {
-                        const share = candidacy.result?.voteSharePercent
-                          ? Number(candidacy.result.voteSharePercent)
-                          : null
-                        return (
-                          <CandidacyRow
-                            key={candidacy.id}
-                            type="button"
-                            onClick={() => {
-                              if (!candidacy.person?.id) return
-                              setElectionDetailId(null)
-                              setModalPersonId(candidacy.person.id)
-                            }}
-                          >
-                            <CandidacyTop>
-                              <CandidacyName>
-                                {candidacy.person
-                                  ? getPersonDisplayName(
-                                      {
-                                        name: candidacy.person.name,
-                                        surname: candidacy.person.surname ?? null,
-                                      },
-                                      {
-                                        countryDefaultNameDisplayOrder:
-                                          countryNameOrder,
-                                      },
-                                    )
-                                  : '후보 미상'}
-                              </CandidacyName>
-                              {candidacy.party?.name && (
-                                <CandidacyParty>
-                                  {candidacy.party.name}
-                                </CandidacyParty>
-                              )}
-                              {candidacy.result?.elected && (
-                                <WonChip>당선</WonChip>
-                              )}
-                              {share != null && (
-                                <CandidacyShare>
-                                  {share.toFixed(1)}%
-                                </CandidacyShare>
-                              )}
-                            </CandidacyTop>
-                            {share != null && (
-                              <ShareTrack>
-                                <ShareFill
-                                  style={{
-                                    width: `${Math.min(100, Math.max(0, share))}%`,
-                                    // 후보 DTO의 party에는 brandColor가 없다(정당 집계
-                                    // DTO에만 있다). 당선/낙선으로만 색을 가른다.
-                                    background: candidacy.result?.elected
-                                      ? '#15803d'
-                                      : '#94a3b8',
-                                  }}
-                                />
-                              </ShareTrack>
-                            )}
-                            {candidacy.result?.votes && (
-                              <CandidacyVotes>
-                                {Number(candidacy.result.votes).toLocaleString()}표
-                              </CandidacyVotes>
-                            )}
-                          </CandidacyRow>
-                        )
-                      })}
-                  </CandidacyList>
-                </>
-              )}
-
-              <DetailFooter>
-                <HeaderGhost type="button" onClick={onOpenElections}>
-                  선거 탭에서 자세히
-                </HeaderGhost>
-              </DetailFooter>
-            </>
-          ) : (
-            <SetupHint>선거를 불러오지 못했습니다.</SetupHint>
-          )}
         </ModalBody>
       </Modal>
 
@@ -1707,33 +1666,8 @@ const SlotDelete = styled.button`
   }
 `
 
-const ElectionOpen = styled.button`
-  border: none;
-  background: none;
-  padding: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  cursor: pointer;
-  text-align: left;
 
-  &:hover {
-    text-decoration: underline;
-  }
-`
 
-const DetailFacts = styled.dl`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 28px;
-  margin: 0 0 14px;
-`
-
-const DetailFact = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
 
 const DetailKey = styled.dt`
   font-size: 11px;
@@ -1749,21 +1683,12 @@ const DetailValue = styled.dd`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const DetailNote = styled.p`
-  margin: 0 0 18px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: ${({ theme }) => theme.colors.hover};
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
 
 const CandidacyList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 14px;
 `
 
 const CandidacyRow = styled.button`
@@ -1837,21 +1762,57 @@ const WonChip = styled.span`
   color: #15803d;
 `
 
-const DetailFooter = styled.div`
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+
+/*
+ * 선거를 지면에 편다. 모달로 감췄던 시절엔 정권을 골라도 선거는 이름 한 줄이라,
+ * '얼마로 이겼나'를 보려면 한 번 더 눌러야 했다. 정권 옆에 붙어 있어야 할 사실이다.
+ */
+const ElectionPanel = styled.section`
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-const ElectionRow = styled.div`
+const ElectionHead = styled.div`
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 8px 12px;
-  margin-bottom: 16px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: ${({ theme }) => theme.colors.hover};
+`
+
+const ElectionMeta = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ElectionFacts = styled.dl`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  margin: 14px 0 0;
+`
+
+const ElectionFact = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const ElectionMore = styled.button`
+  margin-left: auto;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
 `
 
 const ElectionLabel = styled.span`
