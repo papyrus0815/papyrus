@@ -1687,6 +1687,27 @@ export const BottomRow = styled.div`
   }
 `
 
+/* ─── 사건 연표 (2026-09) ─────────────────────────────────────────────── */
+
+/** 막대 몇 개짜리 띠가 본문 폭 전체를 상자로 두르면 빈 면이 주인공이 된다 — 내용만큼만 */
+export const EventTimelineBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: max-content;
+  max-width: 100%;
+  padding: 14px 18px;
+  border-radius: 12px;
+  ${surfaceStatic}
+`
+
+export const EventTimelineLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 /* ─── 교역 품목 (2026-09) ─────────────────────────────────────────────── */
 
 export const TradeItemGroups = styled.div`

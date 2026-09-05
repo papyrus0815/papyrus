@@ -50,6 +50,7 @@ import {
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
 import { CountryDataManagerModal } from './country-data-manager/country-data-manager-modal'
 import { CountryCompaniesSection } from './dashboard-panels/country-companies-section'
+import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
 import { TradeSection } from './dashboard-panels/trade-section'
@@ -239,8 +240,6 @@ export function CountryDetailDashboard({
       isLoading: stats.loading.events,
       icon: <IconCalendar />,
       onClick: goEvents,
-      sparkline: stats.monthlyEventCounts,
-      sparklineSrLabel: '사건 발생',
     },
     {
       key: 'administration',
@@ -539,6 +538,20 @@ export function CountryDetailDashboard({
               ),
             )}
           </S.EmptyAxisRow>
+        )}
+        {/*
+          사건 연표 — 숫자 하나로는 "이 나라에 사건이 몇 건"까지만 답한다. 어느 시대의
+          나라인지는 분포가 말한다. 달력이 아니라 세기 막대인 이유는 한 나라의 사건이
+          세기 단위로 흩어져 있어서다(미국 41건이 18~21세기).
+        */}
+        {stats.eventCenturyCounts.length > 0 && (
+          <S.EventTimelineBlock>
+            <S.EventTimelineLabel>사건 연표</S.EventTimelineLabel>
+            <EventCenturyStrip
+              counts={stats.eventCenturyCounts}
+              onOpen={goEvents}
+            />
+          </S.EventTimelineBlock>
         )}
         {totalRegistered === 0 && !stats.isLoading && (
           <S.EmptyHint>

@@ -131,6 +131,11 @@ export interface CountryDashboardStats {
   }
   /** 최근 12개월 사건 등록 분포 (가장 오래된 → 최신, 길이 12) */
   monthlyEventCounts: number[]
+  /**
+   * 세기별 사건 수 — 오래된 순. `century`는 부호 세기(20 = 20세기, -1 = 기원전 1세기).
+   * 사건이 있는 세기만 담는다(빈 세기는 화면에서 '건너뜀' 표지로 그린다).
+   */
+  eventCenturyCounts: Array<{ century: number; count: number }>
   /** 같은 대륙 평균/순위 비교 */
   continentComparison: ContinentComparison
   /** 가장 최신 cabinet 1건 요약 (수반 재임 끝나지 않은 것 우선) */
@@ -488,6 +493,38 @@ export function useCountryDashboardStats(
 
   // 사건 시간 분포는 "사건 발생일(startDate)" 기준 — createdAt 폴백 없음.
   // 발생일이 없는 사건은 분포에서 제외해 의미 일관성 유지.
+  /**
+   * 세기 분포 — 사건 발생일 기준.
+   *
+   * `startDate`는 DATETIME이 없는 사건(실측 330건 중 67건)도 서버가 구조화 연도로
+   * 합성해 내려준다('0976-01-01', BC는 앞에 '-'). 그래서 **문자열로 읽는다** —
+   * `new Date()`에 넣으면 100년 미만이 1900년대로 튀고 BC는 Invalid Date가 된다.
+   */
+  const eventCenturyCounts = useMemo<
+    Array<{ century: number; count: number }>
+  >(() => {
+    const list = (eventsQuery.data ?? []) as Array<{
+      startDate?: string | null
+    }>
+    const byCentury = new Map<number, number>()
+    for (const event of list) {
+      const raw = event.startDate
+      if (typeof raw !== 'string') continue
+      const matched = /^(-?)(\d{1,6})-/.exec(raw)
+      if (!matched) continue
+      const year = Number(matched[2])
+      if (!Number.isFinite(year) || year === 0) continue
+      const century =
+        matched[1] === '-'
+          ? -Math.ceil(year / 100)
+          : Math.ceil(year / 100)
+      byCentury.set(century, (byCentury.get(century) ?? 0) + 1)
+    }
+    return [...byCentury.entries()]
+      .map(([century, count]) => ({ century, count }))
+      .sort((left, right) => left.century - right.century)
+  }, [eventsQuery.data])
+
   const monthlyEventCounts = useMemo<number[]>(() => {
     const list = Array.isArray(eventsQuery.data) ? (eventsQuery.data as any[]) : []
     const buckets = new Array(12).fill(0)
@@ -833,6 +870,7 @@ export function useCountryDashboardStats(
     currentHeads,
     completeness,
     monthlyEventCounts,
+    eventCenturyCounts,
     continentComparison,
     currentCabinet,
     nextElection,
