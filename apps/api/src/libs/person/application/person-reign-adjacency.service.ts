@@ -23,8 +23,24 @@ const NEIGHBOR_OVERFETCH = 16
 /**
  * 승계 축 — 국가원수(군주 포함)와 정부수반은 **병렬 공존**하므로 한 시간축이 아니다.
  * 입헌군주정에서 총리와 군주는 동시에 재직하며 서로를 계승하지 않는다.
+ *
+ * HEAD_OF_STATE/HEAD_OF_GOVERNMENT는 나라에 보통 그 자리가 하나뿐이라 positionType만으로
+ * "같은 자리"가 특정된다. 반면 MILITARY_COMMANDER/CABINET_MINISTER는 한 나라에 동시에
+ * 여러 자리(참모총장·군단장·외무장관·재무장관…)가 있어 positionType 하나로는 서로 다른
+ * 자리가 뒤섞인다(참모총장의 '후임'으로 엉뚱한 여단장이 잡히는 식) — title까지 일치해야
+ * 같은 자리다(TITLED). SovereignReign은 군주 전용이라 TITLED 축을 갖지 않는다.
  */
-type SuccessionAxis = 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+type SuccessionAxis =
+  | { kind: 'HEAD_OF_STATE' }
+  | { kind: 'HEAD_OF_GOVERNMENT' }
+  | { kind: 'TITLED'; positionType: (typeof TITLED_POSITION_TYPES)[number]; title: string }
+
+/**
+ * 「같은 국가 전/후 재위」 화면에서만 앵커 후보를 넓히는 확장 — 「동시대 수장」 등 다른
+ * 화면과 공유하는 HEAD_POSITION_TYPES(head-record.shared.ts)는 건드리지 않는다(그 화면들은
+ * "수장급" 개념 자체가 국가원수·정부수반으로 한정돼 있어, 여기 넓히면 그쪽까지 오염된다).
+ */
+const TITLED_POSITION_TYPES = ['MILITARY_COMMANDER', 'CABINET_MINISTER'] as const
 
 /**
  * 축 판정은 **직위 정의(positionDefinition.positionType)** 가 진실이다 — record가
@@ -49,10 +65,14 @@ const ANCHOR_BASE_SELECT = {
   historicalCountryId: true,
 } as const
 
-/** 재임 앵커의 축은 자기 positionType (재임은 정의 없이도 타입이 필수 컬럼) */
+/**
+ * 재임 앵커의 축은 자기 positionType(재임은 정의 없이도 타입이 필수 컬럼) — TITLED 축은
+ * 거기에 title까지 더해 "같은 자리"를 특정하므로 title도 함께 읽는다.
+ */
 const ANCHOR_TENURE_SELECT = {
   ...ANCHOR_BASE_SELECT,
   positionType: true,
+  title: true,
 } as const
 
 /** 재위 앵커의 축은 연결된 직위 정의에서 읽는다 (정의 없으면 국가원수 폴백) */
@@ -87,35 +107,49 @@ export interface GetReignAdjacencyParams {
 
 interface AxisSource {
   positionType?: string | null
+  title?: string | null
   positionDefinition?: { positionType?: string | null } | null
 }
 
 /**
  * 앵커가 놓인 승계 축 — 재임은 자기 positionType, 재위는 연결된 직위 정의에서 읽는다.
- * 어느 쪽도 HEAD_OF_GOVERNMENT가 아니면 국가원수(폴백)라, 값이 비어도
- * `positionType: undefined`(= 필터 소실) 같은 구멍이 이웃 쿼리로 새지 않는다.
+ * 재임이 TITLED 후보(참모총장·장관 등)면 title까지 축에 실어 "같은 자리"만 매칭되게 한다
+ * (title이 비어 있으면 매칭 상대가 있을 수 없으므로 국가원수 축으로 안전 폴백 — 빈 이웃).
+ * 그 외(재임의 다른 positionType, 재위 전체)는 HEAD_OF_GOVERNMENT가 아니면 국가원수(폴백)라,
+ * 값이 비어도 `positionType: undefined`(= 필터 소실) 같은 구멍이 이웃 쿼리로 새지 않는다.
  */
 function axisOfAnchor(
   kind: 'TENURE' | 'SOVEREIGN_REIGN',
   row: AxisSource,
 ): SuccessionAxis {
+  if (kind === 'TENURE' && (TITLED_POSITION_TYPES as readonly string[]).includes(row.positionType ?? '')) {
+    if (row.title) {
+      return {
+        kind: 'TITLED',
+        positionType: row.positionType as (typeof TITLED_POSITION_TYPES)[number],
+        title: row.title,
+      }
+    }
+    return { kind: 'HEAD_OF_STATE' }
+  }
   const declared =
     kind === 'SOVEREIGN_REIGN'
       ? (row.positionDefinition?.positionType ?? null)
       : (row.positionType ?? null)
-  return declared === HEAD_OF_GOVERNMENT_TYPE ? 'HEAD_OF_GOVERNMENT' : 'HEAD_OF_STATE'
+  return declared === HEAD_OF_GOVERNMENT_TYPE ? { kind: 'HEAD_OF_GOVERNMENT' } : { kind: 'HEAD_OF_STATE' }
 }
 
 /**
- * 이웃 재위(SovereignReign)의 축 게이트 절.
+ * 이웃 재위(SovereignReign)의 축 게이트 절. TITLED 축은 호출되지 않는다 — SovereignReign은
+ * 군주 전용이라 참모총장·장관 같은 TITLED 자리를 가질 수 없다(fetchNeighbors가 가드).
  *
  * ⚠️ Prisma의 선택적 to-one 중첩 조건(`positionDefinition: { is: ... }`)은 **관계가
  * NULL인 행을 배제**한다. 국가원수 축에 그대로 쓰면 정의 미기입 군주가 조용히 사라진다 —
  * 실측으로 샤를 5세(프랑스 왕국 1364)가 필리프 6세 재위와 루이 12세 재임 사이에 실재해,
  * 떨어뜨리면 선대/후대가 134년 점프한다. 그래서 `positionDefinitionId: null`을 명시 OR로 살린다.
  */
-function reignAxisWhere(axis: SuccessionAxis): object {
-  if (axis === 'HEAD_OF_GOVERNMENT') {
+function reignAxisWhere(axis: { kind: 'HEAD_OF_STATE' } | { kind: 'HEAD_OF_GOVERNMENT' }): object {
+  if (axis.kind === 'HEAD_OF_GOVERNMENT') {
     return { positionDefinition: { is: { positionType: HEAD_OF_GOVERNMENT_TYPE } } }
   }
   return {
@@ -243,11 +277,22 @@ export class PersonReignAdjacencyService {
     if (!subject) throw new NotFoundException('인물을 찾을 수 없습니다')
     const subjectDeath = deathInfoOf(subject)
 
-    // 대상 수장급 앵커 — head tenure ∪ reign 전량. 앵커는 dedup하지 않는다:
-    // 카드가 record별로 렌더되므로 각 카드가 자기 승계 박스를 가져야 함(복위·다국가).
+    // 대상 앵커 — head tenure ∪ TITLED tenure(참모총장·장관 등, title 필수) ∪ reign 전량.
+    // 앵커는 dedup하지 않는다: 카드가 record별로 렌더되므로 각 카드가 자기 승계 박스를
+    // 가져야 함(복위·다국가). TITLED는 title이 없으면 매칭 상대를 특정할 수 없어 제외한다
+    // (axisOfAnchor의 null-title 폴백은 이 게이트 덕에 실질 도달 불가 — 방어용).
     const [anchorTenures, anchorReigns] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
-        where: { personId, positionType: { in: [...HEAD_POSITION_TYPES] } },
+        where: {
+          personId,
+          OR: [
+            { positionType: { in: [...HEAD_POSITION_TYPES] } },
+            {
+              positionType: { in: [...TITLED_POSITION_TYPES] },
+              title: { not: null },
+            },
+          ],
+        },
         select: ANCHOR_TENURE_SELECT,
       }),
       this.prisma.sovereignReign.findMany({
@@ -403,12 +448,14 @@ export class PersonReignAdjacencyService {
    * 경계는 앵커의 **실제 저장 startDate**와 비교(합성 연도-경계가 아니라) — MySQL
    * <AD1000 DATETIME 불안정 구간에서도 저장값끼리의 비교라 안전. 진실은 JS 후처리.
    *
-   * 축 게이트: 두 테이블 모두 조회하되 **앵커와 같은 축**의 행만 남긴다(재임은 자기
-   * positionType, 재위는 직위 정의). 축을 합치면 자기 축에 선대가 없는 앵커(입헌군주국
+   * 축 게이트: 재임은 자기 positionType(+ TITLED면 title까지), 재위는 직위 정의로
+   * **앵커와 같은 축**만 남긴다. 축을 합치면 자기 축에 선대가 없는 앵커(입헌군주국
    * 초대 총리 등)의 빈자리를 다른 축의 재직자가 조용히 메워 가짜 승계가 된다
    * (비테 총리 ← 니콜라이 2세). 반대로 테이블로 축을 가르면 한 직위가 두 테이블에 쪼개진
    * 국가에서 사슬이 끊긴다(프랑스 제3공화국 총리) — 그래서 게이트는 정의 기준이다.
    * 왕→초대 대통령 크로스는 대통령이 HEAD_OF_STATE라 국가원수 축 안에서 그대로 성립한다.
+   * TITLED 축은 SovereignReign을 아예 조회하지 않는다 — 군주 전용 테이블이라 참모총장·
+   * 장관 자리를 가질 수 없다(reignAxisWhere를 TITLED로 부르면 타입 자체가 막는다).
    */
   private async fetchNeighbors(
     scopeWhere: object,
@@ -423,28 +470,29 @@ export class PersonReignAdjacencyService {
     const orderBy = {
       startDate: relation === 'PREDECESSOR' ? ('desc' as const) : ('asc' as const),
     }
+    // 이웃 tenure는 **앵커와 같은 축**만 — 장관·의원은 물론 다른 축 수장도 배제.
+    // TITLED는 positionType과 title이 둘 다 같아야 "같은 자리"다.
+    const tenureAxisWhere =
+      axis.kind === 'TITLED'
+        ? { positionType: axis.positionType, title: axis.title }
+        : { positionType: axis.kind }
     const [tenureRows, reignRows] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
-        where: {
-          AND: [
-            scopeWhere,
-            // 이웃 tenure는 **앵커와 같은 축**만 — 장관·의원은 물론 다른 축 수장도 배제
-            { positionType: axis },
-            dateFilter,
-          ],
-        },
+        where: { AND: [scopeWhere, tenureAxisWhere, dateFilter] },
         select: { ...NEIGHBOR_SELECT, positionType: true, title: true },
         orderBy,
         take: NEIGHBOR_OVERFETCH,
       }),
-      this.prisma.sovereignReign.findMany({
-        // 재위도 정의로 거른다 — 총리 정의로 등록된 재위(푸앵카레)는 정부수반 축에,
-        // 쇼군·군주 재위는 국가원수 축에 남는다
-        where: { AND: [scopeWhere, reignAxisWhere(axis), dateFilter] },
-        select: { ...NEIGHBOR_SELECT, regnalName: true },
-        orderBy,
-        take: NEIGHBOR_OVERFETCH,
-      }),
+      axis.kind === 'TITLED'
+        ? Promise.resolve([])
+        : this.prisma.sovereignReign.findMany({
+            // 재위도 정의로 거른다 — 총리 정의로 등록된 재위(푸앵카레)는 정부수반 축에,
+            // 쇼군·군주 재위는 국가원수 축에 남는다
+            where: { AND: [scopeWhere, reignAxisWhere(axis), dateFilter] },
+            select: { ...NEIGHBOR_SELECT, regnalName: true },
+            orderBy,
+            take: NEIGHBOR_OVERFETCH,
+          }),
     ])
     const candidates: NeighborCandidate[] = []
     for (const row of tenureRows) {

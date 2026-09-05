@@ -57,11 +57,15 @@ function anchorReign(overrides: Partial<any> = {}) {
   }
 }
 
-/** ANCHOR_TENURE_SELECT 모양 — positionType이 앵커의 승계 축을 정한다 */
+/**
+ * ANCHOR_TENURE_SELECT 모양 — positionType이 앵커의 승계 축을 정한다.
+ * MILITARY_COMMANDER/CABINET_MINISTER(TITLED)는 title까지 축에 실린다.
+ */
 function anchorTenure(overrides: Partial<any> = {}) {
   return {
     id: overrides.id ?? 'anchor-tenure',
     positionType: 'HEAD_OF_STATE',
+    title: null,
     startDate: utc(2010),
     endDate: utc(2015),
     startDatePrecision: null,
@@ -205,6 +209,10 @@ function filterWorld(pool: any[], andClauses: any[]): any[] {
     const value = tenureAxisClause.positionType
     const allowed = value.in ?? [value]
     rows = rows.filter((row) => allowed.includes(row.positionType))
+    // TITLED 축(참모총장·장관 등)은 positionType에 더해 title까지 일치해야 같은 자리다
+    if (tenureAxisClause.title !== undefined) {
+      rows = rows.filter((row) => row.title === tenureAxisClause.title)
+    }
   }
   if (reignAxisClause) {
     rows = rows.filter((row) => rowMatchesReignAxis(row, reignAxisClause))
@@ -659,6 +667,156 @@ describe('PersonReignAdjacencyService', () => {
       expect(
         byRecord.get('dual-hog')!.predecessors.map((neighbor) => neighbor.person.id),
       ).toEqual(['prev-hog-p'])
+    })
+  })
+
+  describe('TITLED 축 (참모총장·장관 등 — positionType뿐 아니라 title까지 일치해야 같은 자리)', () => {
+    it('참모총장 재임도 앵커가 되어 같은 title의 전임·후임을 승계 이웃으로 삼는다', async () => {
+      const { service } = createService({
+        subject: { id: 'conrad' },
+        anchorTenures: [
+          anchorTenure({
+            id: 'conrad-chief',
+            positionType: 'MILITARY_COMMANDER',
+            title: '참모총장',
+            startDate: utc(1906, 10, 18),
+            endDate: utc(1911, 11, 3),
+            countryId: null,
+            historicalCountryId: 'austria-hungary',
+          }),
+        ],
+        worldTenures: [
+          worldTenure({
+            id: 'beck-chief',
+            positionType: 'MILITARY_COMMANDER',
+            title: '참모총장',
+            startDate: utc(1881),
+            endDate: utc(1906, 10, 18),
+            country: null,
+            historicalCountry: { id: 'austria-hungary', name: '오스트리아-헝가리 제국' },
+            person: rulerPerson({ id: 'beck-p', deathDate: utc(1920) }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(BASE_PARAMS)
+      const predecessors = result.entries[0]!.predecessors
+      expect(predecessors.map((neighbor) => neighbor.person.id)).toEqual(['beck-p'])
+      expect(predecessors[0]!.record.title).toBe('참모총장')
+    })
+
+    it('같은 국가·같은 positionType이어도 title이 다르면 승계 이웃에서 배제한다 (여단장이 참모총장 후임으로 잡히면 안 됨)', async () => {
+      const { service } = createService({
+        subject: { id: 'beck' },
+        anchorTenures: [
+          anchorTenure({
+            id: 'beck-chief',
+            positionType: 'MILITARY_COMMANDER',
+            title: '참모총장',
+            startDate: utc(1881),
+            endDate: utc(1906, 10, 18),
+            countryId: null,
+            historicalCountryId: 'austria-hungary',
+          }),
+        ],
+        worldTenures: [
+          // 같은 나라·같은 positionType(MILITARY_COMMANDER)이지만 다른 자리 — 승계 이웃 아님
+          worldTenure({
+            id: 'potiorek-corps',
+            positionType: 'MILITARY_COMMANDER',
+            title: '제3군단장 (그라츠)',
+            startDate: utc(1906),
+            country: null,
+            historicalCountry: { id: 'austria-hungary', name: '오스트리아-헝가리 제국' },
+            person: rulerPerson({ id: 'potiorek-p' }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(BASE_PARAMS)
+      expect(result.entries[0]!.successors).toEqual([])
+    })
+
+    it('CABINET_MINISTER도 title 일치로 승계선을 잇는다 (외무장관 전임·후임)', async () => {
+      const { service } = createService({
+        subject: { id: 'berchtold' },
+        anchorTenures: [
+          anchorTenure({
+            id: 'berchtold-fm',
+            positionType: 'CABINET_MINISTER',
+            title: '외무장관',
+            startDate: utc(1912),
+            endDate: utc(1915),
+            countryId: null,
+            historicalCountryId: 'austria-hungary',
+          }),
+        ],
+        worldTenures: [
+          worldTenure({
+            id: 'burian-fm',
+            positionType: 'CABINET_MINISTER',
+            title: '외무장관',
+            startDate: utc(1915),
+            country: null,
+            historicalCountry: { id: 'austria-hungary', name: '오스트리아-헝가리 제국' },
+            person: rulerPerson({ id: 'burian-p' }),
+          }),
+          // 같은 국가·같은 시기의 다른 부처 — 유입 금지
+          worldTenure({
+            id: 'krobatin-war',
+            positionType: 'CABINET_MINISTER',
+            title: '전쟁장관',
+            startDate: utc(1915),
+            country: null,
+            historicalCountry: { id: 'austria-hungary', name: '오스트리아-헝가리 제국' },
+            person: rulerPerson({ id: 'krobatin-p' }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(BASE_PARAMS)
+      const successors = result.entries[0]!.successors
+      expect(successors.map((neighbor) => neighbor.person.id)).toEqual(['burian-p'])
+    })
+
+    it('TITLED 앵커는 SovereignReign을 조회하지 않는다 (군주 전용 테이블이라 참모총장 자리를 가질 수 없음)', async () => {
+      const { service, calls } = createService({
+        subject: { id: 'conrad' },
+        anchorTenures: [
+          anchorTenure({
+            id: 'conrad-chief',
+            positionType: 'MILITARY_COMMANDER',
+            title: '참모총장',
+            startDate: utc(1906, 10, 18),
+            countryId: null,
+            historicalCountryId: 'austria-hungary',
+          }),
+        ],
+        worldReigns: [
+          // 같은 국가에 재위가 있어도 TITLED 축에선 아예 조회 대상이 아니어야 한다
+          worldReign({
+            id: 'unrelated-reign',
+            startDate: utc(1848),
+            historicalCountry: { id: 'austria-hungary', name: '오스트리아-헝가리 제국' },
+            person: rulerPerson({ id: 'franz-joseph-p' }),
+          }),
+        ],
+      })
+      const result = await service.getReignAdjacency(BASE_PARAMS)
+      expect(calls.neighborReignWheres).toHaveLength(0)
+      expect(result.entries[0]!.predecessors).toEqual([])
+    })
+
+    it('title 없는 MILITARY_COMMANDER/CABINET_MINISTER 재임은 애초에 앵커 후보가 아니다', async () => {
+      const { service, calls } = createService({
+        subject: { id: 'nobody' },
+        anchorTenures: [], // findMany 모킹이 where만 기록하고 빈 배열을 돌려주므로, 실제 게이트는 where 절로 검증
+      })
+      await service.getReignAdjacency(BASE_PARAMS)
+      const anchorWhere = calls.anchorTenureWheres[0]
+      // TITLED 절이 title:{not:null}을 강제하는지 where 형태로 확인
+      const titledClause = anchorWhere.OR.find((clause: any) => clause.title)
+      expect(titledClause).toEqual({
+        positionType: { in: ['MILITARY_COMMANDER', 'CABINET_MINISTER'] },
+        title: { not: null },
+      })
     })
   })
 
