@@ -20,6 +20,11 @@ export interface CabinetMindMapProps {
   collapsedLimit?: number
   expanded: boolean
   onToggleExpand: () => void
+  /**
+   * 이 정권을 낳은 선거. 지도 아래 줄기로 내려 단다 — 선거가 정권을 낳았으니
+   * 별도 패널로 떼어 두면 둘이 남남으로 읽힌다.
+   */
+  electionSlot?: ReactNode
 }
 
 /* ─── 좌표 상수 ────────────────────────────────────────────────────────
@@ -29,12 +34,12 @@ export interface CabinetMindMapProps {
  * 전례가 있어(genealogy-connector-drift), 여기서는 **규격을 고정해 계산 없이 맞춘다**.
  * 노드 높이·간격·거터가 상수면 i번째 노드의 중심 y는 산술로 나온다.
  */
-const NODE_HEIGHT = 46
+const NODE_HEIGHT = 54
 const NODE_GAP = 12
 /** 가운데 카드와 가지 사이. 곡선이 이 폭 안에서 휜다 */
 const GUTTER = 64
 /** 가지 칸 폭 고정 — 곡선의 끝점이 어디인지 알아야 한다 */
-const BRANCH_WIDTH = 236
+const BRANCH_WIDTH = 248
 
 const nodeCenterY = (index: number) =>
   index * (NODE_HEIGHT + NODE_GAP) + NODE_HEIGHT / 2
@@ -63,6 +68,7 @@ export function CabinetMindMap({
   collapsedLimit = 16,
   expanded,
   onToggleExpand,
+  electionSlot,
 }: CabinetMindMapProps) {
   const visible = expanded ? members : members.slice(0, collapsedLimit)
   const hidden = members.length - visible.length
@@ -99,7 +105,7 @@ export function CabinetMindMap({
               onClick={() => head.personId && onSelectPerson(head.personId)}
               aria-label={`${head.name} 상세`}
             >
-              <CenterFace>{renderFace(head, 92)}</CenterFace>
+              <CenterFace>{renderFace(head, 112)}</CenterFace>
               <CenterRole>
                 {head.termNumber != null && `제${head.termNumber}대 `}
                 {head.title}
@@ -149,6 +155,13 @@ export function CabinetMindMap({
             {hidden > 0 ? `각료 ${hidden}명 더 펼치기` : '접기'}
           </ExpandLink>
         </ExpandRow>
+      )}
+
+      {electionSlot && (
+        <>
+          <Stem aria-hidden />
+          <ElectionBranch>{electionSlot}</ElectionBranch>
+        </>
       )}
     </MapWrap>
   )
@@ -223,7 +236,7 @@ function BranchNode({
           : member.title
       }
     >
-      <NodeFace>{renderFace(member, 28)}</NodeFace>
+      <NodeFace>{renderFace(member, 36)}</NodeFace>
       <NodeText>
         <NodeTitle>{member.title}</NodeTitle>
         <NodeName>
@@ -333,7 +346,7 @@ const centerSurface = css`
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  width: 268px;
+  width: 300px;
   padding: 22px 24px 18px;
   border-radius: 20px;
   border: 1px solid rgba(190, 18, 60, 0.3);
@@ -376,10 +389,13 @@ const CenterCardStatic = styled.div`
 /** 얼굴 둘레 링 — 가운데가 중심이라는 걸 색이 아니라 형태로 말한다 */
 const CenterFace = styled.span`
   display: inline-flex;
-  padding: 3px;
-  margin-bottom: 10px;
+  padding: 4px;
+  margin-bottom: 12px;
   border-radius: 999px;
-  border: 2px solid rgba(190, 18, 60, 0.45);
+  border: 3px solid rgba(190, 18, 60, 0.5);
+  box-shadow:
+    0 0 0 1px rgba(190, 18, 60, 0.12),
+    0 8px 22px rgba(190, 18, 60, 0.22);
 
   img,
   span {
@@ -463,6 +479,33 @@ const CenterStatValue = styled.dd<{ $warn?: boolean }>`
   white-space: nowrap;
   color: ${({ $warn, theme }) =>
     $warn ? '#b45309' : theme.colors.text.primary};
+`
+
+/**
+ * 가운데 카드에서 선거로 내려가는 줄기.
+ *
+ * 좌우 가지는 곡선이지만 이건 곧은 선이다 — 곡선은 '여럿으로 갈라짐'을, 직선은
+ * '하나에서 하나로'를 뜻한다. 선거는 이 정권 하나를 낳았다.
+ */
+const Stem = styled.div`
+  width: 1px;
+  height: 26px;
+  margin: 0 auto;
+  background: ${lineColor};
+
+  @media (max-width: 1100px) {
+    display: none;
+  }
+`
+
+const ElectionBranch = styled.div`
+  display: flex;
+  justify-content: center;
+
+  > * {
+    width: 100%;
+    max-width: 640px;
+  }
 `
 
 const ExpandRow = styled.div`

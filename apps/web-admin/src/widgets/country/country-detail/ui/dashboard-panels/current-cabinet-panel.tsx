@@ -628,6 +628,170 @@ export function CurrentCabinetPanel({
     return rows
   }, [heads, members.length, replacedCount, voteShare])
 
+  /*
+   * 이 정권을 낳은 선거. 스키마엔 재임→후보→선거 경로가 처음부터 있었는데 화면이
+   * 없어 실측 재임 217건 중 연결이 0건이었다. 정권을 고른 자리에서 바로 잇는다.
+   *
+   * 마인드맵 아래 가지로 꽂는다 — 선거가 정권을 낳았으니 같은 지도 안에 있어야 한다.
+   */
+  const electionSlot =
+    heads.length > 0 ? (
+      <ElectionPanel>
+        <ElectionHead>
+          <ElectionLabel>이 정권을 낳은 선거</ElectionLabel>
+          {linkedElection ? (
+            <>
+              <ElectionName>{linkedElection.name}</ElectionName>
+              {electionDetailQuery.data && (
+                <ElectionMeta>
+                  {[
+                    ELECTION_TYPE_LABEL[
+                      electionDetailQuery.data.electionType
+                    ] ?? electionDetailQuery.data.electionType,
+                    ELECTION_STATUS_LABEL[
+                      electionDetailQuery.data.status ?? ''
+                    ],
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </ElectionMeta>
+              )}
+              <ElectionUnlink type="button" onClick={() => void unlinkElection()}>
+                연결 해제
+              </ElectionUnlink>
+            </>
+          ) : elections.length > 0 ? (
+            <ElectionLink
+              type="button"
+              onClick={() => setElectionPickerOpen(true)}
+            >
+              + 선거 연결
+            </ElectionLink>
+          ) : (
+            <ElectionMuted>등록된 선거가 없습니다</ElectionMuted>
+          )}
+        </ElectionHead>
+
+        {/*
+          * 선거 내용을 지면에 그대로 편다. 모달로 감춰 두던 시절엔 정권을 골라도
+          * 선거는 이름 한 줄이라, 한 번 더 눌러야 '얼마로 이겼나'가 나왔다.
+          */}
+        {linkedElection && electionDetailQuery.data && (
+          <>
+            <ElectionFacts>
+              <ElectionFact>
+                <DetailKey>투표일</DetailKey>
+                <DetailValue>
+                  {shortDate(electionDetailQuery.data.pollDate)}
+                </DetailValue>
+              </ElectionFact>
+              {electionDetailQuery.data.voterTurnoutPercent != null && (
+                <ElectionFact>
+                  <DetailKey>투표율</DetailKey>
+                  <DetailValue>
+                    {electionDetailQuery.data.voterTurnoutPercent}%
+                  </DetailValue>
+                </ElectionFact>
+              )}
+              {electionDetailQuery.data.totalSeats != null && (
+                <ElectionFact>
+                  <DetailKey>총 의석</DetailKey>
+                  <DetailValue>
+                    {electionDetailQuery.data.totalSeats.toLocaleString()}석
+                  </DetailValue>
+                </ElectionFact>
+              )}
+              <ElectionMore type="button" onClick={onOpenElections}>
+                선거 탭에서 자세히
+              </ElectionMore>
+            </ElectionFacts>
+
+            {(electionDetailQuery.data.candidacies ?? []).length > 0 && (
+              <CandidacyList>
+                {[...electionDetailQuery.data.candidacies]
+                  .sort(
+                    (left, right) =>
+                      Number(right.result?.voteSharePercent ?? -1) -
+                      Number(left.result?.voteSharePercent ?? -1),
+                  )
+                  .map((candidacy) => {
+                    const share = candidacy.result?.voteSharePercent
+                      ? Number(candidacy.result.voteSharePercent)
+                      : null
+                    return (
+                      <CandidacyRow
+                        key={candidacy.id}
+                        type="button"
+                        onClick={() =>
+                          candidacy.person?.id &&
+                          setModalPersonId(candidacy.person.id)
+                        }
+                      >
+                        <CandidacyTop>
+                          {/*
+                            * 이 정권을 낳은 그 사람은 지도 한가운데의 얼굴과 같은 얼굴을 쓴다 —
+                            * 선거 결과와 정권이 한 사람으로 이어진다. (선거 상세 응답의 후보에는
+                            * 프로필 이미지가 없어 수반과 같은 인물일 때만 그릴 수 있다)
+                            */}
+                          {heads[0]?.personId &&
+                            candidacy.person?.id === heads[0].personId && (
+                              <CandidacyFace>
+                                <Face member={heads[0]} size={30} />
+                              </CandidacyFace>
+                            )}
+                          <CandidacyName>
+                            {candidacy.person
+                              ? getPersonDisplayName(
+                                  {
+                                    name: candidacy.person.name,
+                                    surname: candidacy.person.surname ?? null,
+                                  },
+                                  {
+                                    countryDefaultNameDisplayOrder:
+                                      countryNameOrder,
+                                  },
+                                )
+                              : '후보 미상'}
+                          </CandidacyName>
+                          {candidacy.party?.name && (
+                            <CandidacyParty>
+                              {candidacy.party.name}
+                            </CandidacyParty>
+                          )}
+                          {candidacy.result?.elected && <WonChip>당선</WonChip>}
+                          {share != null && (
+                            <CandidacyShare>
+                              {share.toFixed(1)}%
+                            </CandidacyShare>
+                          )}
+                        </CandidacyTop>
+                        {share != null && (
+                          <ShareTrack>
+                            <ShareFill
+                              style={{
+                                width: `${Math.min(100, Math.max(0, share))}%`,
+                                background: candidacy.result?.elected
+                                  ? '#15803d'
+                                  : '#94a3b8',
+                              }}
+                            />
+                          </ShareTrack>
+                        )}
+                        {candidacy.result?.votes && (
+                          <CandidacyVotes>
+                            {Number(candidacy.result.votes).toLocaleString()}표
+                          </CandidacyVotes>
+                        )}
+                      </CandidacyRow>
+                    )
+                  })}
+              </CandidacyList>
+            )}
+          </>
+        )}
+      </ElectionPanel>
+    ) : null
+
   const isEmpty = heads.length === 0 && members.length === 0
 
   return (
@@ -721,11 +885,11 @@ export function CurrentCabinetPanel({
                       )}
                       alt=""
                       loading="lazy"
-                      style={{ width: 40, height: 40 }}
+                      style={{ width: 48, height: 48 }}
                     />
                   ) : (
                     <FallbackFace
-                      style={{ width: 40, height: 40, fontSize: 14 }}
+                      style={{ width: 48, height: 48, fontSize: 17 }}
                       aria-hidden
                     >
                       {cabinetLabel(cabinet).slice(0, 1)}
@@ -850,158 +1014,10 @@ export function CurrentCabinetPanel({
           onSelectPerson={(personId) => setModalPersonId(personId)}
           expanded={expanded}
           onToggleExpand={() => setExpanded((prev) => !prev)}
+          electionSlot={electionSlot}
         />
       )}
 
-      {/*
-        * 이 정권을 낳은 선거. 스키마엔 재임→후보→선거 경로가 처음부터 있었는데 화면이
-        * 없어 실측 재임 217건 중 연결이 0건이었다. 정권을 고른 자리에서 바로 잇는다.
-        */}
-      {heads.length > 0 && (
-        <ElectionPanel>
-          <ElectionHead>
-            <ElectionLabel>이 정권을 낳은 선거</ElectionLabel>
-            {linkedElection ? (
-              <>
-                <ElectionName>{linkedElection.name}</ElectionName>
-                {electionDetailQuery.data && (
-                  <ElectionMeta>
-                    {[
-                      ELECTION_TYPE_LABEL[
-                        electionDetailQuery.data.electionType
-                      ] ?? electionDetailQuery.data.electionType,
-                      ELECTION_STATUS_LABEL[
-                        electionDetailQuery.data.status ?? ''
-                      ],
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </ElectionMeta>
-                )}
-                <ElectionUnlink type="button" onClick={() => void unlinkElection()}>
-                  연결 해제
-                </ElectionUnlink>
-              </>
-            ) : elections.length > 0 ? (
-              <ElectionLink
-                type="button"
-                onClick={() => setElectionPickerOpen(true)}
-              >
-                + 선거 연결
-              </ElectionLink>
-            ) : (
-              <ElectionMuted>등록된 선거가 없습니다</ElectionMuted>
-            )}
-          </ElectionHead>
-
-          {/*
-            * 선거 내용을 지면에 그대로 편다. 모달로 감춰 두던 시절엔 정권을 골라도
-            * 선거는 이름 한 줄이라, 한 번 더 눌러야 '얼마로 이겼나'가 나왔다.
-            */}
-          {linkedElection && electionDetailQuery.data && (
-            <>
-              <ElectionFacts>
-                <ElectionFact>
-                  <DetailKey>투표일</DetailKey>
-                  <DetailValue>
-                    {shortDate(electionDetailQuery.data.pollDate)}
-                  </DetailValue>
-                </ElectionFact>
-                {electionDetailQuery.data.voterTurnoutPercent != null && (
-                  <ElectionFact>
-                    <DetailKey>투표율</DetailKey>
-                    <DetailValue>
-                      {electionDetailQuery.data.voterTurnoutPercent}%
-                    </DetailValue>
-                  </ElectionFact>
-                )}
-                {electionDetailQuery.data.totalSeats != null && (
-                  <ElectionFact>
-                    <DetailKey>총 의석</DetailKey>
-                    <DetailValue>
-                      {electionDetailQuery.data.totalSeats.toLocaleString()}석
-                    </DetailValue>
-                  </ElectionFact>
-                )}
-                <ElectionMore type="button" onClick={onOpenElections}>
-                  선거 탭에서 자세히
-                </ElectionMore>
-              </ElectionFacts>
-
-              {(electionDetailQuery.data.candidacies ?? []).length > 0 && (
-                <CandidacyList>
-                  {[...electionDetailQuery.data.candidacies]
-                    .sort(
-                      (left, right) =>
-                        Number(right.result?.voteSharePercent ?? -1) -
-                        Number(left.result?.voteSharePercent ?? -1),
-                    )
-                    .map((candidacy) => {
-                      const share = candidacy.result?.voteSharePercent
-                        ? Number(candidacy.result.voteSharePercent)
-                        : null
-                      return (
-                        <CandidacyRow
-                          key={candidacy.id}
-                          type="button"
-                          onClick={() =>
-                            candidacy.person?.id &&
-                            setModalPersonId(candidacy.person.id)
-                          }
-                        >
-                          <CandidacyTop>
-                            <CandidacyName>
-                              {candidacy.person
-                                ? getPersonDisplayName(
-                                    {
-                                      name: candidacy.person.name,
-                                      surname: candidacy.person.surname ?? null,
-                                    },
-                                    {
-                                      countryDefaultNameDisplayOrder:
-                                        countryNameOrder,
-                                    },
-                                  )
-                                : '후보 미상'}
-                            </CandidacyName>
-                            {candidacy.party?.name && (
-                              <CandidacyParty>
-                                {candidacy.party.name}
-                              </CandidacyParty>
-                            )}
-                            {candidacy.result?.elected && <WonChip>당선</WonChip>}
-                            {share != null && (
-                              <CandidacyShare>
-                                {share.toFixed(1)}%
-                              </CandidacyShare>
-                            )}
-                          </CandidacyTop>
-                          {share != null && (
-                            <ShareTrack>
-                              <ShareFill
-                                style={{
-                                  width: `${Math.min(100, Math.max(0, share))}%`,
-                                  background: candidacy.result?.elected
-                                    ? '#15803d'
-                                    : '#94a3b8',
-                                }}
-                              />
-                            </ShareTrack>
-                          )}
-                          {candidacy.result?.votes && (
-                            <CandidacyVotes>
-                              {Number(candidacy.result.votes).toLocaleString()}표
-                            </CandidacyVotes>
-                          )}
-                        </CandidacyRow>
-                      )
-                    })}
-                </CandidacyList>
-              )}
-            </>
-          )}
-        </ElectionPanel>
-      )}
 
       {members.length === 0 ? (
         /*
@@ -1328,13 +1344,14 @@ function Face({
  * 차지하던 시절엔 카드 내용이 560px인데 오른쪽 화살표가 **1,600px 밖**에 떠 있었다.
  * 컨테이너를 내용 폭으로 줄여 화살표가 카드에 붙게 한다.
  */
+/* 지도·선거와 같은 축에 세운다 — 정권 슬라이더도 이 그림의 일부다 */
 const Carousel = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
   width: max-content;
   max-width: 100%;
-  margin-bottom: 16px;
+  margin: 0 auto 16px;
 `
 
 /* 예전엔 트랙 위에 absolute로 얹혀 첫/끝 카드를 가렸다 — 흐름 안에 세운다 */
@@ -1385,7 +1402,7 @@ const CabinetCard = styled.button<{ $active: boolean }>`
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  width: 132px;
+  width: 144px;
   padding: 12px 10px;
   border-radius: 12px;
   border: 1px solid
@@ -1548,6 +1565,9 @@ const SlotRole = styled.span`
 `
 
 const SlotGroupLabel = styled.div`
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
   margin-bottom: 8px;
   font-size: 11px;
   font-weight: 700;
@@ -1559,6 +1579,9 @@ const SlotGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 8px;
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
 `
 
 const SlotShell = styled.div`
@@ -1652,8 +1675,13 @@ const CandidacyRow = styled.button`
 
 const CandidacyTop = styled.span`
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
+`
+
+const CandidacyFace = styled.span`
+  display: inline-flex;
+  flex-shrink: 0;
 `
 
 const CandidacyShare = styled.span`
@@ -1709,11 +1737,18 @@ const WonChip = styled.span`
  * 선거를 지면에 편다. 모달로 감췄던 시절엔 정권을 골라도 선거는 이름 한 줄이라,
  * '얼마로 이겼나'를 보려면 한 번 더 눌러야 했다. 정권 옆에 붙어 있어야 할 사실이다.
  */
+/**
+ * 선거는 지도의 아래 가지다 — 가운데 카드와 같은 곡률·같은 여백을 쓴다.
+ * 예전엔 폭 전체를 가로지르는 납작한 띠라 위의 지도와 남남으로 보였다.
+ */
 const ElectionPanel = styled.section`
-  margin-bottom: 18px;
-  padding: 16px 18px;
-  border-radius: 14px;
+  padding: 18px 20px;
+  border-radius: 18px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.025)'
+      : 'rgba(15,23,42,0.015)'};
 `
 
 const ElectionHead = styled.div`
@@ -2174,11 +2209,16 @@ const HeadMeta = styled.span`
 `
 
 /* 카드가 하나(선거)뿐일 때 전폭으로 늘어나지 않게 — 빈 줄이면 자연폭으로 접힌다 */
+/* 지도·선거와 같은 축 — 이 아래 것들이 좌측에 홀로 붙으면 그림이 어긋난다 */
 const Extra = styled.div`
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 12px;
   margin-top: 16px;
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
 
   > * {
     max-width: 320px;
