@@ -10,6 +10,7 @@ import {
   seedCurrencies,
   seedLanguages,
   seedCountries,
+  seedUsaDemographics,
   seedEventCategories,
   seedGovernmentPositionDefinitions,
   seedGovernmentPositionDefinitionScopes,
@@ -126,6 +127,12 @@ import {
   seedTisza,
   seedPetain,
   seedGallieni,
+  seedPotiorek,
+  seedBeckRzikowsky,
+  seedFriedrichTeschen,
+  seedBethmannHollweg,
+  seedBulow,
+  seedAehrenthal,
   seedTrumpCabinet,
   seedWorldWarOnePersonGroups,
   seedWorldWarOneAppointmentDetails,
@@ -171,6 +178,9 @@ async function main() {
 
         // 2. 국가 시딩
         await seedCountries(prisma, continentMap)
+
+        // 2-1. 미국 연도별 인구 지표(연령·성별 인구 피라미드) 시딩
+        await seedUsaDemographics(prisma)
 
         // 3. 독일 역사 국가 시딩
         await seedGermanyHistoricalCountries(prisma)
@@ -706,7 +716,42 @@ async function main() {
         //  · Person 필드 보강 + 재임 10건(경위 전건)/소속/별명 2/연보 21건/능력치
         await seedGallieni(prisma)
 
-        // 11-17. 트럼프 2기 내각 각료 15부 — 법무·노동·국토안보는 전임자 포함 18명.
+        // 11-17. 오스카어 포티오레크 — 보스니아-헤르체고비나 주지사(1911~14)·1914 대세르비아
+        //  침공군 총사령관. 사라예보 사건 당일 경호 총책임자였다.
+        //  · 의존: '오스트리아-헝가리 제국' HC
+        //  · Person x1 + 재임 6건(경위 전건, 참모본부~군단장~주지사~총사령관) + 소속/연보 16건/능력치
+        await seedPotiorek(prisma)
+
+        // 11-18. 프리드리히 베크-지코프스키 — 참모총장(1881~1906, 25년)·콘라트의 직전 전임자.
+        //  · 의존: '오스트리아-헝가리 제국' HC
+        //  · Person x1 + 재임 4건(경위 전건) + 소속/별명/연보 18건/능력치
+        await seedBeckRzikowsky(prisma)
+
+        // 11-19. 프리드리히 폰 외스터라이히-테셴 대공 — 오스트리아-헝가리군 명목상
+        //  최고사령관(1914~1916). 실권은 참모총장 콘라트에게 있었다.
+        //  · 의존: '오스트리아-헝가리 제국' HC
+        //  · Person x1 + 재임 4건(경위 전건) + 소속/연보 16건/능력치
+        await seedFriedrichTeschen(prisma)
+
+        // 11-20. 테오발트 폰 베트만홀베크 — 독일 제국 총리(1909~1917), 1914 7월 위기
+        //  "백지수표"·벨기에 중립 "종잇조각" 발언의 당사자.
+        //  · 의존: '독일 제국' HC + 관직 정의(총리·내무장관)
+        //  · Person x1 + 재임 5건(경위 전건)/내각 1 + 소속/연보 20건/능력치
+        await seedBethmannHollweg(prisma)
+
+        // 11-21. 베른하르트 폰 뷜로 — 독일 제국 총리(1900~1909), 베트만홀베크의 직전 전임자.
+        //  세계정책·함대 확장, 1905 제1차 모로코 위기·1908 데일리 텔레그래프 사건의 당사자.
+        //  · 의존: '독일 제국' HC + 관직 정의(총리·외무장관·대사·공사)
+        //  · Person x1 + 재임 6건(경위 전건)/내각 1 + 소속/연보 20건/능력치
+        await seedBulow(prisma)
+
+        // 11-22. 알로이스 렉사 폰 에렌탈 — 오스트리아-헝가리 외무장관(1906~1912, 재임 중
+        //  사망). 1908 보스니아 병합·콘라트 해임 관철의 당사자. UI 스텁 행 보강 전용.
+        //  · 의존: '오스트리아-헝가리 제국' HC + 관직 정의(외무장관·대사·특명전권공사)
+        //  · Person 필드 보강 + 재임 3건(경위 전건) + 소속/연보 17건/능력치
+        await seedAehrenthal(prisma)
+
+        // 11-23. 트럼프 2기 내각 각료 15부 — 법무·노동·국토안보는 전임자 포함 18명.
         //  · 의존: seedCountries('미국') + seedGovernmentPositionDefinitions(국무장관 등 신설 10종)
         //  · Person x18 + 소속(CITIZENSHIP→미국) x18 + 재임(CABINET_MINISTER, countryId=미국) x18
         await seedTrumpCabinet(prisma)
