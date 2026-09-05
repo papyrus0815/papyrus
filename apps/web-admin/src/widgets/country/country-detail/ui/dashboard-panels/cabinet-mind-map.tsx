@@ -25,6 +25,26 @@ export interface CabinetMindMapProps {
    * 별도 패널로 떼어 두면 둘이 남남으로 읽힌다.
    */
   electionSlot?: ReactNode
+  /**
+   * 정권 넘기기 — 지도 자체가 한 장의 슬라이드다.
+   *
+   * 예전엔 위에 정권 카드 리스트를 깔아 눌러 고르게 했다. 그러면 화면 맨 위가 목록이
+   * 되어 "이 나라의 지금"보다 "정권이 몇 대 있나"가 먼저 읽힌다. 목록을 걷고 지도
+   * 양옆에 버튼만 남긴다.
+   */
+  nav?: {
+    /** 왼쪽 = 더 최근 */
+    onNewer: (() => void) | null
+    /** 오른쪽 = 더 이전 */
+    onOlder: (() => void) | null
+    newerLabel: string | null
+    olderLabel: string | null
+    /** 몇 번째 정권인지 — 목록을 걷은 대신 위치를 적는다 */
+    index: number
+    total: number
+    /** 슬라이드 방향 전환을 알리는 키 (정권 id) */
+    slideKey: string | null
+  }
 }
 
 /* ─── 좌표 상수 ────────────────────────────────────────────────────────
@@ -69,6 +89,7 @@ export function CabinetMindMap({
   expanded,
   onToggleExpand,
   electionSlot,
+  nav,
 }: CabinetMindMapProps) {
   const visible = expanded ? members : members.slice(0, collapsedLimit)
   const hidden = members.length - visible.length
@@ -83,7 +104,25 @@ export function CabinetMindMap({
 
   return (
     <MapWrap>
-      <MapRoot>
+      <MapRoot
+        key={nav?.slideKey ?? 'map'}
+        $nav={!!nav}
+        $branches={visible.length > 0}
+      >
+        {nav && (
+          <NavButton
+            type="button"
+            $side="left"
+            disabled={!nav.onNewer}
+            aria-label={
+              nav.newerLabel ? `다음 정부로: ${nav.newerLabel}` : '더 최근 정부 없음'
+            }
+            title={nav.newerLabel ?? undefined}
+            onClick={() => nav.onNewer?.()}
+          >
+            ‹
+          </NavButton>
+        )}
         <MapSide $side="left">
           <SideGroup side="left" nodes={leftNodes}>
             {leftNodes.map((member) => (
@@ -113,6 +152,12 @@ export function CabinetMindMap({
               </CenterRole>
               <CenterName>{head.name}</CenterName>
               {cabinetLabel && <CenterCabinet>{cabinetLabel}</CenterCabinet>}
+              {nav && nav.total > 1 && (
+                /* 목록을 걷은 대신 위치를 여기 적는다 — 줄기 위에 두면 선을 끊는다 */
+                <CenterOrdinal>
+                  {nav.index + 1} / {nav.total}대
+                </CenterOrdinal>
+              )}
               {stats.length > 0 && (
                 <CenterStats>
                   {stats.map((stat) => (
@@ -147,7 +192,49 @@ export function CabinetMindMap({
             ))}
           </SideGroup>
         </MapSide>
+        {nav && (
+          <NavButton
+            type="button"
+            $side="right"
+            disabled={!nav.onOlder}
+            aria-label={
+              nav.olderLabel ? `이전 정부로: ${nav.olderLabel}` : '더 이전 정부 없음'
+            }
+            title={nav.olderLabel ?? undefined}
+            onClick={() => nav.onOlder?.()}
+          >
+            ›
+          </NavButton>
+        )}
       </MapRoot>
+
+      {nav && nav.total > 1 && (
+        <NavRow>
+          <NavCompact
+            type="button"
+            disabled={!nav.onNewer}
+            aria-label={
+              nav.newerLabel ? `다음 정부로: ${nav.newerLabel}` : '더 최근 정부 없음'
+            }
+            onClick={() => nav.onNewer?.()}
+          >
+            ‹
+          </NavCompact>
+          <NavPosition>
+            {nav.index + 1} / {nav.total}대
+          </NavPosition>
+          <NavCompact
+            type="button"
+            disabled={!nav.onOlder}
+            aria-label={
+              nav.olderLabel ? `이전 정부로: ${nav.olderLabel}` : '더 이전 정부 없음'
+            }
+            onClick={() => nav.onOlder?.()}
+          >
+            ›
+          </NavCompact>
+        </NavRow>
+      )}
 
       {members.length > collapsedLimit && (
         <ExpandRow>
@@ -265,17 +352,137 @@ const MapWrap = styled.div`
  * 가지 칸을 **고정 폭**으로 잡는다. 남는 폭을 나눠 가지면 곡선의 끝점이 화면마다 달라져
  * 상수로 그린 경로와 어긋난다. 지도 자체는 가운데 정렬해 넓은 화면에서도 덩어리로 읽힌다.
  */
-const MapRoot = styled.div`
+const MapRoot = styled.div<{ $nav?: boolean; $branches?: boolean }>`
   display: grid;
-  grid-template-columns: ${BRANCH_WIDTH}px auto ${BRANCH_WIDTH}px;
-  gap: ${GUTTER}px;
+  /*
+   * 가지가 없는 정권(각료 0명)에서도 가지 칸을 폭대로 잡으면 넘기기 버튼이 카드에서
+   * 250px 떨어져 허공에 뜬다 — 가지가 있을 때만 그 칸을 세운다.
+   */
+  grid-template-columns: ${({ $nav, $branches }) => {
+    const branch = $branches ? `${BRANCH_WIDTH}px` : '0'
+    return $nav
+      ? `44px ${branch} auto ${branch} 44px`
+      : `${branch} auto ${branch}`
+  }};
+  gap: ${({ $branches }) => ($branches ? GUTTER : 20)}px;
   align-items: center;
   justify-content: center;
+
+  /* 정권을 넘길 때 지도가 한 장씩 갈리는 느낌 — key가 바뀌면 다시 재생된다 */
+  animation: cabinetSlideIn 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+
+  @keyframes cabinetSlideIn {
+    from {
+      opacity: 0;
+      transform: translateX(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 
   @media (max-width: 1100px) {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     justify-content: stretch;
+  }
+`
+
+/**
+ * 지도 양옆 정권 넘기기 버튼.
+ *
+ * 끝에 닿아도 감추지 않는다 — 사라지면 지도 전체가 좌우로 밀려 방금 누른 자리에
+ * 다른 것이 와 있다. 비활성으로 남겨 자리를 지킨다.
+ */
+const NavButton = styled.button<{ $side: 'left' | 'right' }>`
+  justify-self: ${({ $side }) => ($side === 'left' ? 'end' : 'start')};
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  font-family: inherit;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => theme.colors.hover};
+    border-color: rgba(190, 18, 60, 0.45);
+    color: ${CENTER_ACCENT};
+  }
+  &:focus-visible {
+    outline: 2px solid ${CENTER_ACCENT};
+    outline-offset: 2px;
+  }
+  &:disabled {
+    opacity: 0.28;
+    cursor: default;
+  }
+
+  /* 좁은 화면에서는 아래 한 줄(NavRow)이 대신한다 */
+  @media (max-width: 1100px) {
+    display: none;
+  }
+`
+
+/** 몇 번째 정권인지 — 목록을 걷은 대신 위치를 적는다 */
+const NavRow = styled.div`
+  /* 넓은 화면에서는 지도 양옆 버튼이 맡는다 */
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+
+  @media (max-width: 1100px) {
+    display: flex;
+  }
+`
+
+const NavPosition = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 넓은 화면에선 위치 표시만, 좁은 화면에선 이 버튼이 넘기기를 맡는다 */
+const NavCompact = styled.button`
+  display: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-family: inherit;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.28;
+    cursor: default;
+  }
+
+  @media (max-width: 1100px) {
+    display: inline-flex;
   }
 `
 
@@ -428,6 +635,19 @@ const CenterName = styled.span`
   letter-spacing: -0.03em;
   line-height: 1.25;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CenterOrdinal = styled.span`
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
 `
 
 const CenterCabinet = styled.span`

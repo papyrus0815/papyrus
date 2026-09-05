@@ -199,7 +199,6 @@ export function CurrentCabinetPanel({
   }, [cabinetsQuery.data])
 
   const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(null)
-  const stripRef = useRef<HTMLDivElement>(null)
 
   // 기본 선택은 현직(종료일 없는) 행정부, 없으면 가장 최근
   useEffect(() => {
@@ -230,12 +229,6 @@ export function CurrentCabinetPanel({
 
   const selectCabinet = (cabinetId: string) => {
     setSelectedCabinetId(cabinetId)
-    // 넘치는 띠에서 고른 카드가 화면 밖이면 끌어온다
-    requestAnimationFrame(() => {
-      stripRef.current
-        ?.querySelector(`[data-cabinet-id="${cabinetId}"]`)
-        ?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
-    })
   }
 
   const overviewQuery = useQuery({
@@ -556,9 +549,6 @@ export function CurrentCabinetPanel({
       : '현재'
     return from ? `${from}–${to}` : ''
   }
-  const isIncumbentCabinet = (cabinet: (typeof cabinets)[number]) =>
-    !cabinet.headTenure?.endDate
-
   /** 이 정권을 낳은 선거 — 수반 임기의 후보 기록을 거쳐 온다 */
   const linkedElection =
     overviewQuery.data?.headTenure?.electionCandidacy?.election ?? null
@@ -855,120 +845,6 @@ export function CurrentCabinetPanel({
         </HeaderActions>
       </S.SectionTitleRow>
 
-      {/*
-       * 행정부 카드 슬라이더. 대시보드가 '현 정부' 하나만 보여주면 그 나라의 정권 교체가
-       * 화면에 없다. 카드를 옆으로 밀어 고르면 아래 명단이 그 정권 것으로 바뀐다.
-       * 최신이 왼쪽 — 첫 질문은 늘 '지금'이다.
-       */}
-      {cabinets.length > 0 && (
-        <Carousel>
-          {/*
-            * 왼쪽 = 더 최근. 라벨에 대상 정권을 실어 방향을 헷갈리지 않게 한다.
-            *
-            * 끝에 닿았다고 버튼을 감추지 않는다 — 사라졌다 나타나면 띠가 좌우로 밀려
-            * 방금 누른 자리에 다른 것이 와 있다. 비활성으로 남겨 자리를 지킨다.
-            */}
-          <CarouselArrow
-            type="button"
-            $side="left"
-            disabled={!newerCabinet}
-            aria-label={
-              newerCabinet
-                ? `다음 정부로: ${cabinetLabel(newerCabinet)}`
-                : '더 최근 정부 없음'
-            }
-            title={
-              newerCabinet
-                ? `${cabinetLabel(newerCabinet)} (${cabinetPeriod(newerCabinet)})`
-                : undefined
-            }
-            onClick={() => newerCabinet && selectCabinet(newerCabinet.id)}
-          >
-            <FiChevronLeft size={18} />
-          </CarouselArrow>
-          <CabinetStrip
-            ref={stripRef}
-            role="tablist"
-            aria-label="행정부 선택"
-            onKeyDown={(event) => {
-              /*
-               * role="tablist"라면 방향키가 선택을 옮겨야 한다(ARIA tabs 패턴).
-               * 그전엔 아무 반응이 없어 키보드로는 정권을 바꿀 수 없었다.
-               */
-              if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-              const target = event.key === 'ArrowLeft' ? newerCabinet : olderCabinet
-              if (!target) return
-              event.preventDefault()
-              selectCabinet(target.id)
-              requestAnimationFrame(() => {
-                stripRef.current
-                  ?.querySelector<HTMLElement>(`[data-cabinet-id="${target.id}"]`)
-                  ?.focus()
-              })
-            }}
-          >
-          {cabinets.map((cabinet) => {
-            const active = cabinet.id === selectedCabinetId
-            return (
-              <CabinetCard
-                key={cabinet.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                data-cabinet-id={cabinet.id}
-                /* roving tabindex — 탭 한 번에 띠를 지나가고, 안에서는 방향키로 옮긴다 */
-                tabIndex={active ? 0 : -1}
-                $active={active}
-                onClick={() => selectCabinet(cabinet.id)}
-                title={`${cabinetLabel(cabinet)} · ${cabinetPeriod(cabinet)}`}
-              >
-                <CabinetCardFace>
-                  {cabinet.headTenure?.person?.profileImageUrl ? (
-                    <FaceImage
-                      src={getUploadImageUrl(
-                        cabinet.headTenure.person.profileImageUrl,
-                      )}
-                      alt=""
-                      loading="lazy"
-                      style={{ width: 48, height: 48 }}
-                    />
-                  ) : (
-                    <FallbackFace
-                      style={{ width: 48, height: 48, fontSize: 17 }}
-                      aria-hidden
-                    >
-                      {cabinetLabel(cabinet).slice(0, 1)}
-                    </FallbackFace>
-                  )}
-                  {isIncumbentCabinet(cabinet) && <CabinetNow>현</CabinetNow>}
-                </CabinetCardFace>
-                <CabinetCardName>{cabinetLabel(cabinet)}</CabinetCardName>
-                <CabinetCardPeriod>{cabinetPeriod(cabinet)}</CabinetCardPeriod>
-              </CabinetCard>
-            )
-          })}
-          </CabinetStrip>
-          <CarouselArrow
-            type="button"
-            $side="right"
-            disabled={!olderCabinet}
-            aria-label={
-              olderCabinet
-                ? `이전 정부로: ${cabinetLabel(olderCabinet)}`
-                : '더 이전 정부 없음'
-            }
-            title={
-              olderCabinet
-                ? `${cabinetLabel(olderCabinet)} (${cabinetPeriod(olderCabinet)})`
-                : undefined
-            }
-            onClick={() => olderCabinet && selectCabinet(olderCabinet.id)}
-          >
-            <FiChevronRight size={18} />
-          </CarouselArrow>
-        </Carousel>
-      )}
-
       {cabinetsQuery.isLoading || overviewQuery.isLoading ? (
         <GovernmentSkeleton />
       ) : isEmpty ? (
@@ -1067,6 +943,27 @@ export function CurrentCabinetPanel({
           expanded={expanded}
           onToggleExpand={() => setExpanded((prev) => !prev)}
           electionSlot={electionSlot}
+          nav={
+            cabinets.length > 0
+              ? {
+                  onNewer: newerCabinet
+                    ? () => selectCabinet(newerCabinet.id)
+                    : null,
+                  onOlder: olderCabinet
+                    ? () => selectCabinet(olderCabinet.id)
+                    : null,
+                  newerLabel: newerCabinet
+                    ? `${cabinetLabel(newerCabinet)} (${cabinetPeriod(newerCabinet)})`
+                    : null,
+                  olderLabel: olderCabinet
+                    ? `${cabinetLabel(olderCabinet)} (${cabinetPeriod(olderCabinet)})`
+                    : null,
+                  index: Math.max(0, selectedIndex),
+                  total: cabinets.length,
+                  slideKey: selectedCabinetId,
+                }
+              : undefined
+          }
         />
       )}
 
@@ -1389,139 +1286,6 @@ function Face({
     />
   )
 }
-
-/** 캐러셀 — 좌우 화살표가 띠 위에 겹쳐 떠 있다 */
-/*
- * 화살표는 이 컨테이너의 좌·우 끝에 absolute로 붙는다. 컨테이너가 본문 폭 전체(2,162px)를
- * 차지하던 시절엔 카드 내용이 560px인데 오른쪽 화살표가 **1,600px 밖**에 떠 있었다.
- * 컨테이너를 내용 폭으로 줄여 화살표가 카드에 붙게 한다.
- */
-/* 지도·선거와 같은 축에 세운다 — 정권 슬라이더도 이 그림의 일부다 */
-const Carousel = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: max-content;
-  max-width: 100%;
-  margin: 0 auto 16px;
-`
-
-/* 예전엔 트랙 위에 absolute로 얹혀 첫/끝 카드를 가렸다 — 흐름 안에 세운다 */
-const CarouselArrow = styled.button<{ $side: 'left' | 'right' }>`
-  order: ${({ $side }) => ($side === 'left' ? 0 : 2)};
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.14);
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background: ${({ theme }) => theme.colors.hover};
-    border-color: ${({ theme }) => theme.colors.border.medium};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.active};
-    outline-offset: 2px;
-  }
-  &:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
-`
-
-/*
- * 가로로 미는 정권 카드 띠. 스냅을 걸어 카드가 반쯤 걸친 채 멈추지 않게 한다 —
- * 화살표 보폭도 카드+간격의 배수라 스냅과 어긋나지 않는다.
- */
-const CabinetStrip = styled.div`
-  order: 1;
-  min-width: 0;
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-  scroll-snap-type: x mandatory;
-  scroll-behavior: smooth;
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-`
-
-const CabinetCard = styled.button<{ $active: boolean }>`
-  scroll-snap-align: start;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  width: 144px;
-  padding: 12px 10px;
-  border-radius: 12px;
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? 'rgba(190,18,60,0.5)' : theme.colors.border.light};
-  background: ${({ $active, theme }) =>
-    $active ? 'rgba(190,18,60,0.07)' : theme.colors.background.primary};
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ $active, theme }) =>
-      $active ? 'rgba(190,18,60,0.1)' : theme.colors.hover};
-  }
-`
-
-const CabinetCardFace = styled.span`
-  position: relative;
-  display: inline-flex;
-`
-
-/** 현직 표시 — 카드 띠에서 '지금'이 어느 것인지 즉시 보이게 */
-const CabinetNow = styled.span`
-  position: absolute;
-  right: -4px;
-  bottom: -2px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: #15803d;
-  color: #fff;
-  font-size: 9.5px;
-  font-weight: 800;
-  border: 2px solid ${({ theme }) => theme.colors.background.primary};
-`
-
-const CabinetCardName = styled.span`
-  max-width: 100%;
-  font-size: 11.5px;
-  font-weight: 700;
-  line-height: 1.25;
-  text-align: center;
-  color: ${({ theme }) => theme.colors.text.primary};
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  word-break: keep-all;
-`
-
-const CabinetCardPeriod = styled.span`
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
 
 const SkeletonRoot = styled.div<{ $ghost: boolean }>`
   /* 빈 상태에서는 더 옅게 — 데이터인 척하지 않도록 */
