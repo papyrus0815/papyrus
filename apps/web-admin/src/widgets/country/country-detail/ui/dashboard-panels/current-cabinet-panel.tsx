@@ -25,6 +25,8 @@ import { FiChevronLeft, FiChevronRight, FiX } from 'react-icons/fi'
 
 import { IconBriefcase } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
+import type { CabinetMember } from './cabinet-member.types'
+import { CabinetMindMap } from './cabinet-mind-map'
 
 interface Props {
   countryId: string
@@ -40,23 +42,8 @@ interface Props {
   children?: React.ReactNode | ((linkedElectionId: string | null) => React.ReactNode)
 }
 
-interface Member {
-  id: string
-  personId: string | null
-  name: string
-  imageUrl: string | null
-  title: string
-  startDate: string | null
-  isHead: boolean
-  /** 종료일. 있으면 지난 정권이라 '몇 년째'가 아니라 기간으로 적는다 */
-  endDate: string | null
-  /** 제47대 — 없으면 null */
-  termNumber: number | null
-  /** 이 정부 임기 중에 앞사람을 이어받았는가 */
-  replaced: boolean
-  /** 그 자리를 앞서 맡았던 사람 */
-  predecessor: string | null
-}
+/** 마인드맵과 공유하는 자리 타입 — 정의는 cabinet-member.types.ts */
+type Member = CabinetMember
 
 interface TenureRow {
   id: string
@@ -594,12 +581,53 @@ export function CurrentCabinetPanel({
   const departments = departmentsQuery.data ?? []
   const replacedCount = members.filter((member) => member.replaced).length
   // 16명까지는 접지 않는다. 각료 15명짜리 정부를 9명에서 끊으면 '한눈에'가 아니다
-  const visible = expanded ? members : members.slice(0, 16)
 
   /*
    * 현직이 없어도 섹션을 지우지 않는다. null을 돌려주던 시절엔 프랑스·독일처럼 재임이
    * 전부 종료된 나라에서 선거 카드와 '수반 등록' 진입점까지 함께 사라졌다.
    */
+  /**
+   * 마인드맵 가운데 노드 아래 요약 — 취임·재임·각료·교체·득표율.
+   * 예전 히어로 카드가 들고 있던 줄을 그대로 옮겼다.
+   */
+  const mindMapStats = useMemo(() => {
+    const head = heads[0]
+    if (!head) return []
+    const rows: Array<{
+      key: string
+      label: string
+      value: string
+      warn?: boolean
+    }> = []
+    if (head.startDate) {
+      rows.push({ key: 'start', label: '취임', value: shortDate(head.startDate) })
+      rows.push({
+        key: 'span',
+        label: head.endDate ? '퇴임' : '재임',
+        value: head.endDate
+          ? shortDate(head.endDate)
+          : (elapsedText(head.startDate) ?? '—'),
+      })
+    }
+    rows.push({ key: 'members', label: '각료', value: `${members.length}명` })
+    if (replacedCount > 0) {
+      rows.push({
+        key: 'replaced',
+        label: '교체',
+        value: `${replacedCount}자리`,
+        warn: true,
+      })
+    }
+    if (voteShare != null) {
+      rows.push({
+        key: 'vote',
+        label: '득표율',
+        value: `${voteShare.toFixed(1)}%`,
+      })
+    }
+    return rows
+  }, [heads, members.length, replacedCount, voteShare])
+
   const isEmpty = heads.length === 0 && members.length === 0
 
   return (
@@ -802,83 +830,27 @@ export function CurrentCabinetPanel({
         </>
       ) : (
         <>
-      {heads.length > 0 && (
-        <HeroGroup $single={heads.length === 1}>
-          {heads.map((head) => (
-            <Hero key={head.id}>
-              <HeroTop>
-                <HeroFaceButton
-                  type="button"
-                  onClick={() => head.personId && setModalPersonId(head.personId)}
-                  aria-label={`${head.name} 상세`}
-                >
-                  <HeroFaceRing>
-                    <Face member={head} size={heads.length === 1 ? 116 : 84} />
-                  </HeroFaceRing>
-                </HeroFaceButton>
-                <HeroText>
-                  <HeroRole>
-                    {head.termNumber != null && `제${head.termNumber}대 `}
-                    {head.title}
-                    {!head.endDate && <NowBadge>현직</NowBadge>}
-                  </HeroRole>
-                  <HeroName
-                    type="button"
-                    onClick={() =>
-                      head.personId && setModalPersonId(head.personId)
-                    }
-                  >
-                    {head.name}
-                  </HeroName>
-                  {selectedCabinet && (
-                    <HeroCabinet>{cabinetLabel(selectedCabinet)}</HeroCabinet>
-                  )}
-                </HeroText>
-              </HeroTop>
-
-              {/*
-                * 정권 요약 한 줄. 취임·재임·각료·교체·득표율이 흩어져 있어 "이 정권이
-                * 어떤 정권인지"를 알려면 눈이 지면을 세 번 오갔다. 히어로 안에 모은다.
-                */}
-              {head.isHead && (
-                <HeroStats>
-                  {head.startDate && (
-                    <HeroStat>
-                      <HeroStatKey>취임</HeroStatKey>
-                      <HeroStatValue>{shortDate(head.startDate)}</HeroStatValue>
-                    </HeroStat>
-                  )}
-                  {head.startDate && (
-                    <HeroStat>
-                      <HeroStatKey>{head.endDate ? '퇴임' : '재임'}</HeroStatKey>
-                      <HeroStatValue>
-                        {head.endDate
-                          ? shortDate(head.endDate)
-                          : (elapsedText(head.startDate) ?? '—')}
-                      </HeroStatValue>
-                    </HeroStat>
-                  )}
-                  <HeroStat>
-                    <HeroStatKey>각료</HeroStatKey>
-                    <HeroStatValue>{members.length}명</HeroStatValue>
-                  </HeroStat>
-                  {replacedCount > 0 && (
-                    <HeroStat>
-                      <HeroStatKey>교체</HeroStatKey>
-                      <HeroStatValue $warn>{replacedCount}자리</HeroStatValue>
-                    </HeroStat>
-                  )}
-                  {voteShare != null && (
-                    <HeroStat>
-                      <HeroStatKey>득표율</HeroStatKey>
-                      <HeroStatValue>{voteShare.toFixed(1)}%</HeroStatValue>
-                    </HeroStat>
-                  )}
-                </HeroStats>
-              )}
-            </Hero>
-          ))}
-        </HeroGroup>
+      {/*
+        * 행정부 마인드맵 — 가운데 수반, 좌·우로 뻗는 각료.
+        *
+        * 예전엔 수반 히어로 카드 아래에 각료 칩이 격자로 깔렸다. 그러면 "이 정권에 이런
+        * 사람들이 있다"는 목록은 되지만 "이 사람 밑에 이 사람들이 있다"는 관계가 안 보인다.
+        * 정권은 본디 한 사람을 중심으로 뻗은 구조다. 히어로의 요약(취임·재임·각료·교체·
+        * 득표율)은 가운데 노드 아래로 옮겨 같은 자리에서 읽힌다.
+        */}
+      {(heads.length > 0 || members.length > 0) && (
+        <CabinetMindMap
+          head={heads[0] ?? null}
+          members={members}
+          cabinetLabel={selectedCabinet ? cabinetLabel(selectedCabinet) : null}
+          stats={mindMapStats}
+          renderFace={(member, size) => (
+            <Face member={member} size={size} muted={size <= 34} />
+          )}
+          onSelectPerson={(personId) => setModalPersonId(personId)}
+          expanded={expanded}
+          onToggleExpand={() => setExpanded((prev) => !prev)}
+        />
       )}
 
       {/*
@@ -1091,46 +1063,7 @@ export function CurrentCabinetPanel({
             )}
           </EmptyArea>
         )
-      ) : (
-        <>
-          {/*
-            * 수는 히어로 요약이 이미 말한다(각료 15명 · 교체 3자리). 여기서 또 세면
-            * 같은 숫자가 한 화면에 두 번 나온다 — 구역 표시만 남긴다.
-            */}
-          <SlotGroupLabel>각료</SlotGroupLabel>
-          <Roster>
-            {visible.map((member) => (
-              <MemberCard
-                key={member.id}
-                type="button"
-                $replaced={member.replaced}
-                onClick={() =>
-                  member.personId && setModalPersonId(member.personId)
-                }
-                title={
-                  member.replaced && member.predecessor
-                    ? `${member.predecessor} 후임 · ${shortDate(member.startDate)} 취임`
-                    : `${shortDate(member.startDate)} 취임`
-                }
-              >
-                <Face member={member} size={34} muted />
-                <CardText>
-                  <CellTitle>{member.title}</CellTitle>
-                  <CellName>
-                    {member.name}
-                    {member.replaced && <Swap aria-label="임기 중 교체">↻</Swap>}
-                  </CellName>
-                </CardText>
-              </MemberCard>
-            ))}
-          </Roster>
-          {members.length > visible.length && (
-            <MoreLink type="button" onClick={() => setExpanded(true)}>
-              나머지 {members.length - visible.length}명 더 보기
-            </MoreLink>
-          )}
-        </>
-      )}
+      ) : null}
         </>
       )}
 
@@ -2222,140 +2155,6 @@ const FallbackFace = styled.span<{ $muted?: boolean }>`
   border: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
-/** 국가원수·정부수반이 따로인 나라는 나란히. 하나뿐이면 폭을 다 쓴다 */
-/*
- * 수반 히어로 묶음.
- *
- * `$single`일 때 `1fr`이라 카드가 본문 폭 전체를 먹었다 — 2,992px 화면에서 2,162px짜리
- * 카드에 이름·날짜가 좌측 1/3만 채우고 나머지는 빈 면이었다. 한 장일 때도 상한을 둔다.
- */
-const HeroGroup = styled.div<{ $single: boolean }>`
-  display: grid;
-  grid-template-columns: ${({ $single }) =>
-    $single
-      ? 'minmax(0, 720px)'
-      : 'repeat(auto-fit, minmax(340px, 480px))'};
-  gap: 12px;
-  margin-bottom: 18px;
-`
-
-/*
- * 국가에 들어오면 가장 먼저 닿는 블록이다. 좌측 색 띠로 강조하던 것을 걷고
- * (띠는 지면 어디에도 없는 문법이라 이 카드만 튀었다) 면과 크기로 세운다.
- */
-const Hero = styled.div`
-  padding: 22px 24px;
-  border-radius: 16px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.hover};
-`
-
-const HeroTop = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 20px;
-`
-
-const HeroFaceButton = styled.button`
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
-  flex-shrink: 0;
-`
-
-const HeroFaceRing = styled.span`
-  display: inline-flex;
-  border-radius: 50%;
-  padding: 3px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.15);
-`
-
-const HeroText = styled.div`
-  min-width: 0;
-`
-
-const HeroRole = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #be123c;
-`
-
-const NowBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  height: 19px;
-  padding: 0 7px;
-  border-radius: 6px;
-  font-size: 10.5px;
-  font-weight: 800;
-  background: rgba(22, 163, 74, 0.14);
-  color: #15803d;
-`
-
-const HeroName = styled.button`
-  display: block;
-  margin: 3px 0 0;
-  padding: 0;
-  border: none;
-  background: none;
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.035em;
-  line-height: 1.15;
-  color: ${({ theme }) => theme.colors.text.primary};
-  cursor: pointer;
-  text-align: left;
-
-  &:hover {
-    text-decoration: underline;
-  }
-`
-
-const HeroCabinet = styled.div`
-  margin-top: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-/** 정권 요약 — 취임·재임·각료·교체·득표율을 한 줄에 */
-const HeroStats = styled.dl`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 30px;
-  margin: 18px 0 0;
-  padding-top: 16px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-const HeroStat = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
-const HeroStatKey = styled.dt`
-  font-size: 11px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const HeroStatValue = styled.dd<{ $warn?: boolean }>`
-  margin: 0;
-  font-size: 15px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  color: ${({ $warn, theme }) =>
-    $warn ? '#b45309' : theme.colors.text.primary};
-`
-
-
 const HeadName = styled.span`
   display: block;
   margin-top: 2px;
@@ -2374,91 +2173,6 @@ const HeadMeta = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-/* 얼굴 26 + 자리 96 + 이름 — 3열이 유지되도록 최소폭을 계산해 둔다(3×280+40 < 960) */
-const Roster = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
-  gap: 10px;
-`
-
-/*
- * 한 줄에 자리와 사람. 예전엔 30px 아바타 + 두 줄(자리 위, 이름 아래)이었는데,
- * **각료 초상은 실측 15명 전원이 없어** 회색 원에 첫 글자만 뜨는 자리 낭비였고
- * (가로 39px × 15개), 두 줄 조판은 세로로 훑을 때 한 항목마다 두 줄을 건너뛰게 했다.
- *
- * 자리 열을 고정폭으로 세우면 '국무장관·국방장관·재무장관'이 세로로 정렬돼 스캔축이 선다.
- * 행 높이는 절반이 되고 같은 폭에 더 많이 들어간다. 수반 줄의 초상은 그대로 둔다 —
- * 거긴 실제로 사진이 있고, 한 명뿐이라 정렬을 깨지 않는다.
- */
-/*
- * 각료 한 명 = 카드 한 장. 직전엔 테두리 없는 줄이라 명단이 정보 밀도는 높아도
- * 행정부 카드 슬라이더와 재질이 달라 한 지면으로 안 읽혔다. 카드로 맞춘다.
- *
- * 다만 카드 안에서도 **직위가 이름 위**다. 스캔의 축은 '누구'가 아니라 '어느 자리'이고,
- * 그건 줄이든 카드든 바뀌지 않는다.
- */
-const MemberCard = styled.button<{ $replaced?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 12px;
-  border-radius: 12px;
-  /*
-   * 교체 표시를 좌측 띠로 하던 것을 걷었다. 띠는 이 지면에 없는 문법이라 카드들이
-   * 서로 다른 물건처럼 보였고, 4열 격자에서는 세로로 훑는 축도 아니었다.
-   * 교체는 이름 옆 ↻ 하나로 충분하다.
-   */
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.primary};
-  text-align: left;
-  cursor: pointer;
-  min-width: 0;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-    border-color: rgba(190, 18, 60, 0.35);
-  }
-`
-
-const CardText = styled.span`
-  min-width: 0;
-`
-
-/** 자리가 스캔의 축 — 이름보다 먼저 읽힌다 */
-const CellTitle = styled.span`
-  display: block;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-const CellName = styled.span`
-  display: block;
-  margin-top: 1px;
-  font-size: 13.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.primary};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
-
-const Swap = styled.span`
-  display: inline-flex;
-  align-items: center;
-  margin-left: 6px;
-  padding: 1px 5px;
-  border-radius: 5px;
-  font-size: 10px;
-  font-weight: 800;
-  background: rgba(180, 83, 9, 0.12);
-  color: #b45309;
-`
-
 /* 카드가 하나(선거)뿐일 때 전폭으로 늘어나지 않게 — 빈 줄이면 자연폭으로 접힌다 */
 const Extra = styled.div`
   display: flex;
@@ -2468,20 +2182,5 @@ const Extra = styled.div`
 
   > * {
     max-width: 320px;
-  }
-`
-
-const MoreLink = styled.button`
-  margin-top: 8px;
-  border: none;
-  background: none;
-  padding: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
   }
 `
