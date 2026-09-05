@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import styled from 'styled-components'
+import styled, { css } from 'styled-components'
 
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import {
@@ -634,6 +634,18 @@ export function CurrentCabinetPanel({
    *
    * 마인드맵 아래 가지로 꽂는다 — 선거가 정권을 낳았으니 같은 지도 안에 있어야 한다.
    */
+  /** 등록된 후보들의 득표율 합이 100%에 못 미치는 몫 — 빠진 상대를 가늠하게 한다 */
+  const unregisteredShare = useMemo(() => {
+    const rows = electionDetailQuery.data?.candidacies ?? []
+    if (rows.length === 0) return null
+    const sum = rows.reduce(
+      (acc, row) => acc + Number(row.result?.voteSharePercent ?? 0),
+      0,
+    )
+    if (sum <= 0 || sum >= 99.5) return null
+    return 100 - sum
+  }, [electionDetailQuery.data])
+
   const electionSlot =
     heads.length > 0 ? (
       <ElectionPanel>
@@ -753,10 +765,13 @@ export function CurrentCabinetPanel({
                                 )
                               : '후보 미상'}
                           </CandidacyName>
-                          {candidacy.party?.name && (
+                          {candidacy.party?.name ? (
                             <CandidacyParty>
                               {candidacy.party.name}
                             </CandidacyParty>
+                          ) : (
+                            /* 정당을 조용히 비워 두면 '무소속'으로 읽힌다 — 모른다고 적는다 */
+                            <CandidacyParty $muted>정당 미등록</CandidacyParty>
                           )}
                           {candidacy.result?.elected && <WonChip>당선</WonChip>}
                           {share != null && (
@@ -787,6 +802,24 @@ export function CurrentCabinetPanel({
                   })}
               </CandidacyList>
             )}
+
+            {/*
+              * 후보가 한 명뿐이면 "상대가 없었다"가 아니라 "상대를 아직 안 넣었다"인
+              * 경우가 대부분이다. 조용히 한 줄만 그리면 전자로 읽힌다 — 빠진 몫을 적는다.
+              */}
+            {electionDetailQuery.data &&
+              (electionDetailQuery.data.candidacies?.length ?? 0) < 2 && (
+                <CandidacyGap>
+                  <span>
+                    등록된 후보 {electionDetailQuery.data.candidacies?.length ?? 0}명
+                    {unregisteredShare != null &&
+                      ` · 나머지 ${unregisteredShare.toFixed(1)}% 미등록`}
+                  </span>
+                  <ElectionLink type="button" onClick={onOpenElections}>
+                    상대 후보 추가
+                  </ElectionLink>
+                </CandidacyGap>
+              )}
           </>
         )}
       </ElectionPanel>
@@ -829,18 +862,30 @@ export function CurrentCabinetPanel({
        */}
       {cabinets.length > 0 && (
         <Carousel>
-          {/* 왼쪽 = 더 최근. 라벨에 대상 정권을 실어 방향을 헷갈리지 않게 한다 */}
-          {newerCabinet && (
-            <CarouselArrow
-              type="button"
-              $side="left"
-              aria-label={`다음 정부로: ${cabinetLabel(newerCabinet)}`}
-              title={`${cabinetLabel(newerCabinet)} (${cabinetPeriod(newerCabinet)})`}
-              onClick={() => selectCabinet(newerCabinet.id)}
-            >
-              <FiChevronLeft size={18} />
-            </CarouselArrow>
-          )}
+          {/*
+            * 왼쪽 = 더 최근. 라벨에 대상 정권을 실어 방향을 헷갈리지 않게 한다.
+            *
+            * 끝에 닿았다고 버튼을 감추지 않는다 — 사라졌다 나타나면 띠가 좌우로 밀려
+            * 방금 누른 자리에 다른 것이 와 있다. 비활성으로 남겨 자리를 지킨다.
+            */}
+          <CarouselArrow
+            type="button"
+            $side="left"
+            disabled={!newerCabinet}
+            aria-label={
+              newerCabinet
+                ? `다음 정부로: ${cabinetLabel(newerCabinet)}`
+                : '더 최근 정부 없음'
+            }
+            title={
+              newerCabinet
+                ? `${cabinetLabel(newerCabinet)} (${cabinetPeriod(newerCabinet)})`
+                : undefined
+            }
+            onClick={() => newerCabinet && selectCabinet(newerCabinet.id)}
+          >
+            <FiChevronLeft size={18} />
+          </CarouselArrow>
           <CabinetStrip
             ref={stripRef}
             role="tablist"
@@ -903,17 +948,24 @@ export function CurrentCabinetPanel({
             )
           })}
           </CabinetStrip>
-          {olderCabinet && (
-            <CarouselArrow
-              type="button"
-              $side="right"
-              aria-label={`이전 정부로: ${cabinetLabel(olderCabinet)}`}
-              title={`${cabinetLabel(olderCabinet)} (${cabinetPeriod(olderCabinet)})`}
-              onClick={() => selectCabinet(olderCabinet.id)}
-            >
-              <FiChevronRight size={18} />
-            </CarouselArrow>
-          )}
+          <CarouselArrow
+            type="button"
+            $side="right"
+            disabled={!olderCabinet}
+            aria-label={
+              olderCabinet
+                ? `이전 정부로: ${cabinetLabel(olderCabinet)}`
+                : '더 이전 정부 없음'
+            }
+            title={
+              olderCabinet
+                ? `${cabinetLabel(olderCabinet)} (${cabinetPeriod(olderCabinet)})`
+                : undefined
+            }
+            onClick={() => olderCabinet && selectCabinet(olderCabinet.id)}
+          >
+            <FiChevronRight size={18} />
+          </CarouselArrow>
         </Carousel>
       )}
 
@@ -1361,8 +1413,8 @@ const CarouselArrow = styled.button<{ $side: 'left' | 'right' }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: ${({ theme }) => theme.colors.background.primary};
@@ -1370,8 +1422,18 @@ const CarouselArrow = styled.button<{ $side: 'left' | 'right' }>`
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.14);
   cursor: pointer;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: ${({ theme }) => theme.colors.hover};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+  }
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
   }
 `
 
@@ -1718,9 +1780,15 @@ const CandidacyName = styled.span`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const CandidacyParty = styled.span`
+const CandidacyParty = styled.span<{ $muted?: boolean }>`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  ${({ $muted }) =>
+    $muted &&
+    css`
+      font-style: italic;
+      opacity: 0.75;
+    `}
 `
 
 const WonChip = styled.span`
@@ -1831,6 +1899,16 @@ const ElectionLink = styled.button`
 
 const ElectionUnlink = styled(ElectionLink)`
   margin-left: auto;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CandidacyGap = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 8px;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
