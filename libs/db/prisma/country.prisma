@@ -79,6 +79,8 @@ model Country {
 
   records                   CountryRecord[]
   exportsImports            ExportImport[]
+  /// 교역 품목에서 '상대국'으로 지목된 행들 (자국의 교역 자료가 아니다)
+  tradeItemPartnerOf        ExportImportItem[]               @relation("TradeItemPartnerCountry")
   economicIndicators        CountryEconomicIndicator[]
   demographicIndicators     CountryDemographicIndicator[]
   developmentIndicators     CountryDevelopmentIndicator[]
@@ -189,7 +191,9 @@ model ExportImport {
   importValue Decimal? @db.Decimal(20, 2)
 
   //--- 관계 필드
-  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  country Country            @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  /// 그 해에 무엇을 수출·수입했는지 (품목 단위)
+  items   ExportImportItem[]
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -197,6 +201,61 @@ model ExportImport {
 
   @@unique([countryId, year], name: "uniq_exportImport_country_year")
   @@map("export_import")
+}
+
+// ========================
+// ExportImportItem (교역 품목)
+// ========================
+/// 교역의 방향 — 한 품목 행은 수출이거나 수입이다.
+enum TradeDirection {
+  EXPORT
+  IMPORT
+}
+
+/// 그 해에 **무엇을** 수출·수입했는지. 부모(ExportImport)는 연도별 총액만 담아
+/// "규모"에는 답해도 "품목"에는 답하지 못했다 — 그 칸을 여기서 채운다.
+///
+/// 기업의 CompanyProduct와 같은 부모–품목 모양이며, 저장은 배열 통째
+/// delete-and-recreate다(자식 id를 클라이언트가 들고 다니지 않는다).
+model ExportImportItem {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 부모 교역 연도 행
+  exportImportId String @map("export_import_id") @db.Char(36)
+
+  /// 수출 / 수입
+  direction TradeDirection
+
+  /// 품목명 (예: 반도체, 승용차, 원유)
+  name String @db.VarChar(200)
+
+  /// HS 코드 — 있으면 국제 분류로 대조할 수 있다
+  hsCode String? @map("hs_code") @db.VarChar(20)
+
+  /// 금액 (부모의 총액과 같은 단위)
+  value Decimal? @db.Decimal(20, 2)
+
+  /// 그 방향 총액에서 차지하는 비중(%) — 금액 없이 비중만 아는 자료가 흔하다
+  sharePct Decimal? @map("share_pct") @db.Decimal(5, 2)
+
+  /// 교역 상대국 (현대 국가). 품목만 아는 자료가 대부분이라 선택 항목이다.
+  partnerCountryId String? @map("partner_country_id") @db.Char(36)
+
+  /// 표시 순서 — 보통 금액·비중 내림차순으로 넣는다
+  sortOrder Int @default(0) @map("sort_order")
+
+  //--- 관계 필드
+  exportImport   ExportImport @relation(fields: [exportImportId], references: [id], onDelete: Cascade)
+  partnerCountry Country?     @relation("TradeItemPartnerCountry", fields: [partnerCountryId], references: [id], onDelete: SetNull)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@index([exportImportId, direction, sortOrder])
+  @@index([partnerCountryId])
+  @@map("export_import_item")
 }
 
 // ========================

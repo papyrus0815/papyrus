@@ -638,6 +638,7 @@ export class CountryService {
     const rows = await this.prisma.exportImport.findMany({
       where: { countryId },
       orderBy: { year: 'asc' },
+      include: { items: EXPORT_IMPORT_ITEM_INCLUDE },
     })
     return rows.map(serializeExportImport)
   }
@@ -648,13 +649,49 @@ export class CountryService {
     accountId?: string,
   ) {
     await this.assertCountryAccess(countryId, accountId)
-    const { year, exportValue, importValue } = dto
+    const { year, exportValue, importValue, items } = dto
     const writable = { exportValue, importValue }
-    const row = await this.prisma.exportImport.upsert({
-      where: { uniq_exportImport_country_year: { countryId, year } },
-      create: { countryId, year, ...writable },
-      update: writable,
+
+    /*
+     * 총액과 품목은 한 트랜잭션이다 — 품목 교체가 실패했는데 총액만 바뀌어 있으면
+     * "수출 6.8조인데 품목은 작년 것"인 상태가 남는다.
+     *
+     * items가 undefined면 품목을 건드리지 않는다. 총액만 고치는 호출(기존 화면)이
+     * 품목을 조용히 날리면 안 된다. 빈 배열은 명시적인 '전부 지우기'다.
+     */
+    const row = await this.prisma.$transaction(async (tx) => {
+      const parent = await tx.exportImport.upsert({
+        where: { uniq_exportImport_country_year: { countryId, year } },
+        create: { countryId, year, ...writable },
+        update: writable,
+      })
+
+      if (items !== undefined) {
+        await tx.exportImportItem.deleteMany({
+          where: { exportImportId: parent.id },
+        })
+        if (items.length > 0) {
+          await tx.exportImportItem.createMany({
+            data: items.map((item, index) => ({
+              exportImportId: parent.id,
+              direction: item.direction,
+              name: item.name,
+              hsCode: item.hsCode ?? null,
+              value: item.value ?? null,
+              sharePct: item.sharePct ?? null,
+              partnerCountryId: item.partnerCountryId || null,
+              sortOrder: item.sortOrder ?? index,
+            })),
+          })
+        }
+      }
+
+      return tx.exportImport.findUniqueOrThrow({
+        where: { id: parent.id },
+        include: { items: EXPORT_IMPORT_ITEM_INCLUDE },
+      })
     })
+
     return serializeExportImport(row)
   }
 
@@ -695,12 +732,48 @@ function serializeCountryRecord(record: {
   }
 }
 
+/** 품목은 방향 → 순서 → 이름으로 세운다. 상대국 이름은 함께 내려 프론트 왕복을 줄인다. */
+const EXPORT_IMPORT_ITEM_INCLUDE = {
+  include: { partnerCountry: { select: { name: true } } },
+  /* `as const`를 걸면 orderBy 배열이 readonly가 돼 Prisma 인자 타입과 어긋난다 */
+  orderBy: [
+    { direction: 'asc' as const },
+    { sortOrder: 'asc' as const },
+    { name: 'asc' as const },
+  ],
+}
+
+function serializeExportImportItem(item: {
+  id: string
+  direction: string
+  name: string
+  hsCode: string | null
+  value: unknown
+  sharePct: unknown
+  partnerCountryId: string | null
+  partnerCountry?: { name: string } | null
+  sortOrder: number
+}) {
+  return {
+    id: item.id,
+    direction: item.direction as 'EXPORT' | 'IMPORT',
+    name: item.name,
+    hsCode: item.hsCode,
+    value: item.value != null ? Number(item.value) : null,
+    sharePct: item.sharePct != null ? Number(item.sharePct) : null,
+    partnerCountryId: item.partnerCountryId,
+    partnerCountryName: item.partnerCountry?.name ?? null,
+    sortOrder: item.sortOrder,
+  }
+}
+
 function serializeExportImport(row: {
   id: string
   countryId: string
   year: number
   exportValue: unknown
   importValue: unknown
+  items?: Parameters<typeof serializeExportImportItem>[0][]
   createdAt: Date
   updatedAt: Date
 }) {
@@ -710,6 +783,7 @@ function serializeExportImport(row: {
     year: row.year,
     exportValue: row.exportValue != null ? Number(row.exportValue) : null,
     importValue: row.importValue != null ? Number(row.importValue) : null,
+    items: (row.items ?? []).map(serializeExportImportItem),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
