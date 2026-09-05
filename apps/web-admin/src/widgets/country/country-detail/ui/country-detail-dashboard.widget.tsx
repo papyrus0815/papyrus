@@ -4,6 +4,11 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import {
+  useDemographicIndicators,
+  useEconomicIndicators,
+} from '@/entities/country/api.indicators'
+import { hasPyramidData } from '@/entities/country/model/population-pyramid'
 import { compareByCountryStart } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
 
@@ -30,6 +35,7 @@ import {
 import * as S from './country-detail-dashboard.styles'
 import { ActivityFeed } from './dashboard-panels/activity-feed'
 import { ClickableStatCard } from './dashboard-panels/clickable-stat-card'
+import type { SparkAccent } from './dashboard-panels/sparkline'
 import { CompareLine } from './dashboard-panels/compare-line'
 import { CompletenessPanel } from './dashboard-panels/completeness-panel'
 import { CurrentCabinetPanel } from './dashboard-panels/current-cabinet-panel'
@@ -41,8 +47,26 @@ import {
   parsePopulation,
 } from './dashboard-panels/format'
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
+import { CountryDataManagerModal } from './country-data-manager/country-data-manager-modal'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
+
+/** 기록 축 한 줄 — 카드로 세울지, 빈 축 칩으로 내릴지는 값이 결정한다 */
+interface RecordAxis {
+  key: string
+  accent: SparkAccent
+  label: string
+  unit: string
+  value: number
+  delta: number
+  isLoading: boolean
+  icon: ReactNode
+  /** null이면 아직 갈 곳이 없는 축(군대) */
+  onClick: (() => void) | null
+  badge?: string
+  sparkline?: number[]
+  sparklineSrLabel?: string
+}
 
 /** 대시보드 계보 요약에 한 번에 보여줄 과거 국가 수 */
 const LINEAGE_SUMMARY_LIMIT = 12
@@ -80,6 +104,27 @@ export function CountryDetailDashboard({
     Number.isFinite(areaNum)
       ? `${(popNum / areaNum).toFixed(1)} 명/km²`
       : null
+  const capitalText = country.capital ? String(country.capital).trim() : ''
+  /*
+   * 인구 피라미드·지표 섹션이 실제로 그릴 게 있는지 여기서 먼저 판단한다.
+   * 두 섹션이 쓰는 것과 **같은 쿼리 키**라 네트워크는 늘지 않는다(react-query dedup).
+   */
+  const isModern = country.type === 'modern'
+  const demographicQuery = useDemographicIndicators(isModern ? country.id : null)
+  const economicQuery = useEconomicIndicators(isModern ? country.id : null)
+  const [dataManagerOpen, setDataManagerOpen] = useState(false)
+  const indicatorsLoading =
+    isModern && (demographicQuery.isLoading || economicQuery.isLoading)
+  const showPyramid = (demographicQuery.data ?? []).some(hasPyramidData)
+  const showTrends =
+    (economicQuery.data ?? []).some((row) => row.gdpGrowthRate != null) ||
+    (demographicQuery.data ?? []).some(
+      (row) => row.populationGrowthRate != null,
+    )
+  const hasCountryData = showPyramid || showTrends
+
+  const hasAnyFact =
+    popNum != null || country.areaSqKm != null || !!densityText || !!capitalText
 
   const goEvents = () => navigate(pathKeys.countryEvents(country.id))
   const goEventsCreate = () =>
@@ -159,6 +204,88 @@ export function CountryDetailDashboard({
     stats.loading.treaties
   const showPolitics = politicsHasData || politicsLoading
 
+  /**
+   * 기록 축 정의 — 값이 있는 축은 카드로, 0인 축은 아래 한 줄 칩으로 갈린다.
+   * 로딩 중에는 '비어 있다'고 단정하지 않고 카드 쪽에 남긴다(스켈레톤이 그려진다).
+   */
+  const recordAxes: RecordAxis[] = [
+    {
+      key: 'person',
+      accent: 'violet',
+      label: '인물',
+      unit: '명',
+      value: stats.personCount,
+      delta: stats.deltaCounts.person,
+      isLoading: stats.loading.persons,
+      icon: <IconUserCheck />,
+      onClick: goPersons,
+    },
+    {
+      key: 'event',
+      accent: 'amber',
+      label: '사건',
+      unit: '건',
+      value: stats.eventCount,
+      delta: stats.deltaCounts.event,
+      isLoading: stats.loading.events,
+      icon: <IconCalendar />,
+      onClick: goEvents,
+      sparkline: stats.monthlyEventCounts,
+      sparklineSrLabel: '사건 발생',
+    },
+    {
+      key: 'administration',
+      accent: 'sky',
+      label: '행정조직',
+      unit: '개',
+      value: stats.administrationCount,
+      delta: stats.deltaCounts.administration,
+      isLoading: stats.loading.administration,
+      icon: <IconLandmark />,
+      onClick: goGovernment,
+    },
+    {
+      key: 'city',
+      accent: 'emerald',
+      label: '행정구역',
+      unit: '개',
+      value: stats.cityCount,
+      delta: stats.deltaCounts.city,
+      isLoading: stats.loading.cities,
+      icon: <IconCity />,
+      onClick: goRegions,
+    },
+    {
+      key: 'treaty',
+      accent: 'indigo',
+      label: '조약',
+      unit: '건',
+      value: stats.treatyCount,
+      delta: 0,
+      isLoading: stats.loading.treaties,
+      icon: <IconScroll />,
+      onClick: goTreaty,
+    },
+    {
+      key: 'military',
+      accent: 'rose',
+      label: '군대',
+      unit: '개',
+      value: stats.militaryCount,
+      delta: 0,
+      isLoading: stats.loading.military,
+      icon: <IconMilitary />,
+      onClick: null,
+      badge: '준비 중',
+    },
+  ]
+  const filledRecordAxes = recordAxes.filter(
+    (axis) => axis.isLoading || axis.value > 0,
+  )
+  const emptyRecordAxes = recordAxes.filter(
+    (axis) => !axis.isLoading && axis.value === 0,
+  )
+
   const managementPanels = (
     <>
         <S.Section>
@@ -218,42 +345,55 @@ export function CountryDetailDashboard({
         순서를 뒤집는다: 규모 → 계보 → 지금의 통치 → 기록 입구 → 활동/보완.
       */}
 
-      {/* 1. 규모 — 인구·면적·밀도·수도·ISO를 한 줄 지표 바로 */}
-      <S.FactBar aria-label="국가 규모">
-        <S.Fact>
-          <S.FactLabel>인구</S.FactLabel>
-          <S.FactValue>
-            {formatPopulation(country.population)}
-            {popNum != null && <S.FactUnit>명</S.FactUnit>}
-          </S.FactValue>
-          <CompareLine
-            comparison={stats.continentComparison}
-            metric="population"
-          />
-        </S.Fact>
-        <S.Fact>
-          <S.FactLabel>면적</S.FactLabel>
-          <S.FactValue>
-            {formatAreaValue(country.areaSqKm)}
-            {country.areaSqKm != null && <S.FactUnit>km²</S.FactUnit>}
-          </S.FactValue>
-          <CompareLine comparison={stats.continentComparison} metric="area" />
-        </S.Fact>
-        <S.Fact>
-          <S.FactLabel>인구 밀도</S.FactLabel>
-          <S.FactValue>{densityText ?? '—'}</S.FactValue>
-        </S.Fact>
-        <S.Fact>
-          <S.FactLabel>수도</S.FactLabel>
-          <S.FactValue>
-            {(country.capital && String(country.capital).trim()) || '—'}
-          </S.FactValue>
-        </S.Fact>
-        <S.Fact>
-          <S.FactLabel>ISO</S.FactLabel>
-          <S.FactValue>{country.isoCode || '—'}</S.FactValue>
-        </S.Fact>
-      </S.FactBar>
+      {/*
+        1. 규모 — 인구·면적·밀도·수도.
+
+        ISO는 규모 지표가 아니라 식별자라 히어로 이름 옆 칩으로 옮겼다.
+        값이 없는 칸은 아예 세우지 않는다 — 실DB에서 `capital`은 71개국 전부 비어 있어
+        '수도 —'가 모든 국가에서 죽은 칸이었다. 빈 칸을 크게 보여주는 건 정보가 아니다.
+      */}
+      {hasAnyFact && (
+        <S.FactBar aria-label="국가 규모">
+          {popNum != null && (
+            <S.Fact>
+              <S.FactLabel>인구</S.FactLabel>
+              <S.FactValue>
+                {formatPopulation(country.population)}
+                <S.FactUnit>명</S.FactUnit>
+              </S.FactValue>
+              <CompareLine
+                comparison={stats.continentComparison}
+                metric="population"
+              />
+            </S.Fact>
+          )}
+          {country.areaSqKm != null && (
+            <S.Fact>
+              <S.FactLabel>면적</S.FactLabel>
+              <S.FactValue>
+                {formatAreaValue(country.areaSqKm)}
+                <S.FactUnit>km²</S.FactUnit>
+              </S.FactValue>
+              <CompareLine
+                comparison={stats.continentComparison}
+                metric="area"
+              />
+            </S.Fact>
+          )}
+          {densityText && (
+            <S.Fact>
+              <S.FactLabel>인구 밀도</S.FactLabel>
+              <S.FactValue>{densityText}</S.FactValue>
+            </S.Fact>
+          )}
+          {capitalText && (
+            <S.Fact>
+              <S.FactLabel>수도</S.FactLabel>
+              <S.FactValue>{capitalText}</S.FactValue>
+            </S.Fact>
+          )}
+        </S.FactBar>
+      )}
 
       {/* 2. 계보 — 이 국가의 시간축. 예전엔 맨 아래에 있어 사실상 보이지 않았다. */}
       {lineage.length > 0 && (
@@ -331,7 +471,14 @@ export function CountryDetailDashboard({
           </S.NowRow>
         </S.Section>
       )}
-      {/* 4. 기록 — 각 탭으로 가는 입구. 숫자가 곧 링크다. */}
+      {/*
+        4. 기록 — 각 탭으로 가는 입구. 숫자가 곧 링크다.
+
+        예전엔 6칸을 무조건 카드로 그렸다. 실DB에서 조약은 전 국가 0행, 군대는 country_id가
+        전부 비어 있어 **어떤 국가에서도** 값이 생기지 않고, 행정구역은 69개국이 0이다.
+        그 결과 첫 화면에서 가장 큰 글자가 `0`이 됐다. 값이 있는 축만 카드로 세우고,
+        빈 축은 아래 한 줄에 모아 '채우러 가기'만 남긴다.
+      */}
       <S.Section>
         <S.SectionTitleRow>
           <S.SectionTitleIcon $accent="violet">
@@ -342,74 +489,51 @@ export function CountryDetailDashboard({
             총 {totalRegistered.toLocaleString('ko-KR')}건
           </S.SectionCountChip>
         </S.SectionTitleRow>
-        <S.StatsGrid>
-          <ClickableStatCard
-            accent="violet"
-            label="인물"
-            unit="명"
-            value={stats.personCount}
-            delta={stats.deltaCounts.person}
-            isLoading={stats.loading.persons}
-            icon={<IconUserCheck />}
-            onClick={goPersons}
-          />
-          <ClickableStatCard
-            accent="amber"
-            label="사건"
-            unit="건"
-            value={stats.eventCount}
-            delta={stats.deltaCounts.event}
-            isLoading={stats.loading.events}
-            icon={<IconCalendar />}
-            onClick={goEvents}
-            sparkline={stats.monthlyEventCounts}
-            sparklineSrLabel="사건 발생"
-          />
-          <ClickableStatCard
-            accent="sky"
-            label="행정조직"
-            unit="개"
-            value={stats.administrationCount}
-            delta={stats.deltaCounts.administration}
-            isLoading={stats.loading.administration}
-            icon={<IconLandmark />}
-            onClick={goGovernment}
-          />
-          <ClickableStatCard
-            accent="emerald"
-            label="행정구역"
-            unit="개"
-            value={stats.cityCount}
-            delta={stats.deltaCounts.city}
-            isLoading={stats.loading.cities}
-            icon={<IconCity />}
-            onClick={goRegions}
-          />
-          <ClickableStatCard
-            accent="indigo"
-            label="조약"
-            unit="건"
-            value={stats.treatyCount}
-            delta={0}
-            isLoading={stats.loading.treaties}
-            icon={<IconScroll />}
-            onClick={goTreaty}
-          />
-          <ClickableStatCard
-            accent="rose"
-            label="군대"
-            unit="개"
-            value={stats.militaryCount}
-            delta={0}
-            isLoading={stats.loading.military}
-            icon={<IconMilitary />}
-            onClick={null}
-            badge="준비 중"
-          />
-        </S.StatsGrid>
+        {filledRecordAxes.length > 0 && (
+          <S.StatsGrid>
+            {filledRecordAxes.map((axis) => (
+              <ClickableStatCard
+                key={axis.key}
+                accent={axis.accent}
+                label={axis.label}
+                unit={axis.unit}
+                value={axis.value}
+                delta={axis.delta}
+                isLoading={axis.isLoading}
+                icon={axis.icon}
+                onClick={axis.onClick}
+                badge={axis.badge}
+                sparkline={axis.sparkline}
+                sparklineSrLabel={axis.sparklineSrLabel}
+              />
+            ))}
+          </S.StatsGrid>
+        )}
+        {emptyRecordAxes.length > 0 && (
+          <S.EmptyAxisRow>
+            <S.EmptyAxisLabel>아직 없는 기록</S.EmptyAxisLabel>
+            {emptyRecordAxes.map((axis) =>
+              axis.onClick ? (
+                <S.EmptyAxisChip
+                  key={axis.key}
+                  type="button"
+                  onClick={axis.onClick}
+                  aria-label={`${axis.label} 기록하러 가기`}
+                >
+                  {axis.label}
+                </S.EmptyAxisChip>
+              ) : (
+                <S.EmptyAxisChipStatic key={axis.key}>
+                  {axis.label}
+                  {axis.badge ? ` · ${axis.badge}` : ''}
+                </S.EmptyAxisChipStatic>
+              ),
+            )}
+          </S.EmptyAxisRow>
+        )}
         {totalRegistered === 0 && !stats.isLoading && (
           <S.EmptyHint>
-            아직 이 국가에 등록된 기록이 없습니다. 위 카드를 눌러 각 탭에서
+            아직 이 국가에 등록된 기록이 없습니다. 위 항목을 눌러 각 탭에서
             인물·사건·행정조직을 등록해보세요.
           </S.EmptyHint>
         )}
@@ -419,17 +543,52 @@ export function CountryDetailDashboard({
        * 5. 지표 — 나라 자체에 대한 이야기라 '활동/보완'(기록 관리용)보다 위다.
        * 아래에 두었더니 뷰포트 3화면 아래로 밀려 "그런 기능 없는데?"가 됐다.
        */}
+      {country.type === 'modern' &&
+        (hasCountryData ? (
+          <>
+            {(showPyramid || indicatorsLoading) && (
+              <PopulationPyramidSection
+                countryId={country.id}
+                countryName={country.name}
+              />
+            )}
+            {(showTrends || indicatorsLoading) && (
+              <IndicatorTrendsSection
+                countryId={country.id}
+                countryName={country.name}
+              />
+            )}
+          </>
+        ) : (
+          /*
+           * 자료가 없으면 섹션 둘을 세우지 않는다.
+           *
+           * 실DB에서 인구 피라미드는 71개국 중 1개국, 경제·발전 지표는 0행이다. 그래서
+           * 거의 모든 국가에서 지면이 "등록된 …이 없습니다" **두 번**으로 끝났다 —
+           * 섹션 제목·버튼까지 갖춘 정식 블록 두 개가 마지막 인상을 '없음'으로 만들었다.
+           * 등록 입구는 남기되 한 줄로 접는다.
+           */
+          !indicatorsLoading && (
+            <S.EmptyAxisRow>
+              <S.EmptyAxisLabel>인구 피라미드 · 지표 추이</S.EmptyAxisLabel>
+              <S.EmptyAxisChipStatic>아직 자료 없음</S.EmptyAxisChipStatic>
+              <S.EmptyAxisChip
+                type="button"
+                onClick={() => setDataManagerOpen(true)}
+              >
+                연도별 자료 등록
+              </S.EmptyAxisChip>
+            </S.EmptyAxisRow>
+          )
+        ))}
       {country.type === 'modern' && (
-        <>
-          <PopulationPyramidSection
-            countryId={country.id}
-            countryName={country.name}
-          />
-          <IndicatorTrendsSection
-            countryId={country.id}
-            countryName={country.name}
-          />
-        </>
+        <CountryDataManagerModal
+          countryId={country.id}
+          countryName={country.name}
+          open={dataManagerOpen}
+          onClose={() => setDataManagerOpen(false)}
+          initialTab="pyramid"
+        />
       )}
 
       {/*

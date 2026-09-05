@@ -824,16 +824,94 @@ export const MetaInlineValue = styled.span`
 
 /* ─── 등록 현황 stat cards ──────────────────────────────────────────── */
 
+/**
+ * 기록 카드 격자 — `repeat(3, 1fr)` 고정이었다.
+ *
+ * 본문에 폭 상한이 없어(2,992px 화면에서 본문 2,202px) 카드 한 장이 **710×178px**가 됐고,
+ * 그 안에 담기는 값은 `0` 한 글자였다. 열 수를 고정하는 대신 카드 폭을 240~380px로 묶고
+ * 남는 폭은 **열 수로 흡수**한다 — 넓은 화면에서 6장이 한 줄에 서고 지면이 그만큼 짧아진다.
+ */
 export const StatsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: ${space.lg}px;
-  @media (max-width: 900px) {
-    grid-template-columns: repeat(2, 1fr);
+
+  > * {
+    flex: 1 1 240px;
+    max-width: 380px;
+    min-width: 0;
   }
+
   @media (max-width: 480px) {
-    grid-template-columns: 1fr;
+    > * {
+      max-width: none;
+    }
   }
+`
+
+/**
+ * 값이 0인 기록 축 — 카드로 그리면 `0`이 화면에서 가장 큰 글자가 된다.
+ * 실DB 기준 조약은 전 국가 0행, 군대는 country_id가 전부 비어 있어 **어떤 국가에서도**
+ * 값이 생기지 않는다. 이런 축은 카드에서 내려 한 줄로 모으고 '채우러 가기'만 남긴다.
+ */
+export const EmptyAxisRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 2px;
+`
+
+export const EmptyAxisLabel = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const emptyAxisChipBase = css`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: ${radius.pill}px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255,255,255,0.04)'
+      : 'rgba(15, 23, 42, 0.035)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.07)'
+        : 'rgba(15, 23, 42, 0.06)'};
+`
+
+export const EmptyAxisChip = styled.button`
+  ${emptyAxisChipBase}
+  appearance: none;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: ${PRIMARY_SOFT_BG};
+    border-color: ${PRIMARY_SOFT_BORDER};
+    color: ${PRIMARY_INK};
+  }
+  &:focus-visible {
+    outline: 2px solid ${PRIMARY};
+    outline-offset: 2px;
+  }
+`
+
+export const EmptyAxisChipStatic = styled.span`
+  ${emptyAxisChipBase}
+  opacity: 0.65;
 `
 
 export const StatCard = styled.div<{
@@ -1422,6 +1500,29 @@ export const LineageFlow = styled.ol`
 export const LineageChip = styled.li`
   display: flex;
   align-items: center;
+  gap: 8px;
+`
+
+/**
+ * 세기 구분자 — 칩 앞에 붙어 시간축을 되살린다.
+ * 칩만 12~47개 늘어놓으면 정렬이 시간순이어도 화면에서는 그냥 목록으로 읽힌다.
+ */
+export const LineageCenturyMark = styled.span`
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding-left: 4px;
+  border-left: 2px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.14)'
+        : 'rgba(15, 23, 42, 0.14)'};
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 `
 
 export const LineageArrow = styled.li`
@@ -1505,13 +1606,20 @@ export const EmptyCtaButton = styled.button`
 /* ── 개편(2026-08): 규모 지표 바 · 지금 · 하단 2열 ───────────────────────────── */
 
 /**
- * 규모 지표 바 — 인구·면적·밀도·수도·ISO를 한 줄에.
+ * 규모 지표 바 — 인구·면적·밀도·수도를 한 줄에. (ISO는 히어로 이름 옆 칩으로 옮겼다)
  * 예전엔 큰 카드 3개(인구/면적/수도) + 별도 메타 줄로 세로를 많이 먹었다. 값 자체는
  * 짧으므로 한 줄에 세워도 읽힌다.
  */
 export const FactBar = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  /*
+   * 예전엔 auto-fit + minmax(150px, 1fr)이라 칸이 남는 폭을 전부 나눠 가졌다 —
+   * 2,162px에서 한 칸이 540px가 되고 그 안의 값은 '—' 한 글자였다. 칸 폭을 고정하고
+   * 바 자체가 내용만큼만 차지하게 한다.
+   */
+  display: flex;
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: 100%;
   gap: 1px;
   border-radius: 14px;
   overflow: hidden;
@@ -1523,6 +1631,8 @@ export const Fact = styled.div`
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 0 1 auto;
+  min-width: 168px;
   padding: 14px 16px;
   background: ${({ theme }) => theme.colors.background.primary};
 `

@@ -1390,17 +1390,24 @@ function Face({
 }
 
 /** 캐러셀 — 좌우 화살표가 띠 위에 겹쳐 떠 있다 */
+/*
+ * 화살표는 이 컨테이너의 좌·우 끝에 absolute로 붙는다. 컨테이너가 본문 폭 전체(2,162px)를
+ * 차지하던 시절엔 카드 내용이 560px인데 오른쪽 화살표가 **1,600px 밖**에 떠 있었다.
+ * 컨테이너를 내용 폭으로 줄여 화살표가 카드에 붙게 한다.
+ */
 const Carousel = styled.div`
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: 100%;
   margin-bottom: 16px;
 `
 
+/* 예전엔 트랙 위에 absolute로 얹혀 첫/끝 카드를 가렸다 — 흐름 안에 세운다 */
 const CarouselArrow = styled.button<{ $side: 'left' | 'right' }>`
-  position: absolute;
-  top: calc(50% - 6px);
-  ${({ $side }) => ($side === 'left' ? 'left: -6px;' : 'right: -6px;')}
-  transform: translateY(-50%);
-  z-index: 1;
+  order: ${({ $side }) => ($side === 'left' ? 0 : 2)};
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1423,6 +1430,8 @@ const CarouselArrow = styled.button<{ $side: 'left' | 'right' }>`
  * 화살표 보폭도 카드+간격의 배수라 스냅과 어긋나지 않는다.
  */
 const CabinetStrip = styled.div`
+  order: 1;
+  min-width: 0;
   display: flex;
   gap: 8px;
   overflow-x: auto;
@@ -2214,10 +2223,18 @@ const FallbackFace = styled.span<{ $muted?: boolean }>`
 `
 
 /** 국가원수·정부수반이 따로인 나라는 나란히. 하나뿐이면 폭을 다 쓴다 */
+/*
+ * 수반 히어로 묶음.
+ *
+ * `$single`일 때 `1fr`이라 카드가 본문 폭 전체를 먹었다 — 2,992px 화면에서 2,162px짜리
+ * 카드에 이름·날짜가 좌측 1/3만 채우고 나머지는 빈 면이었다. 한 장일 때도 상한을 둔다.
+ */
 const HeroGroup = styled.div<{ $single: boolean }>`
   display: grid;
   grid-template-columns: ${({ $single }) =>
-    $single ? '1fr' : 'repeat(auto-fit, minmax(340px, 1fr))'};
+    $single
+      ? 'minmax(0, 720px)'
+      : 'repeat(auto-fit, minmax(340px, 480px))'};
   gap: 12px;
   margin-bottom: 18px;
 `

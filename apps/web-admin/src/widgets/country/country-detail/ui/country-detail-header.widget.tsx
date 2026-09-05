@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { getUploadImageUrl } from '@/shared/api/upload'
 
-import { CountryFlag } from '../../shared'
 import * as S from './country-detail.styles'
 
 interface CountryDetailHeaderProps {
@@ -17,10 +17,14 @@ interface CountryDetailHeaderProps {
 }
 
 /**
- * 국가 상세 페이지 헤더 - 개선된 디자인
- * - 국기, 국가명, 로컬명
- * - 대륙, 언어, 화폐 배지
- * - 수정/삭제 케밥 메뉴
+ * 국가 상세 히어로 — 국기 타일 · 국호 · 대륙/ISO · 케밥 메뉴를 96px 한 줄에.
+ *
+ * 예전에는 폭 전체 × 168px 국기 배너였다. 실DB에서 썸네일 보유가 **71개국 중 2개**라
+ * 69개국에서 이 자리가 통째로 빈 화면이었고, 있는 2개도 가로 국기를 cover 해 색 얼룩이 됐다.
+ * 국기는 제 비율의 타일로 세우고 없으면 `flagEmoji`(71/71 보유)로 대신한다.
+ *
+ * 언어·화폐 배지는 제거했다 — `languageId`/`currencyId`가 실DB에서 0/71이라
+ * 한 번도 렌더된 적이 없는 분기였다. 값이 붙는 날 되살리는 편이 정직하다.
  */
 export function CountryDetailHeader({
   country,
@@ -35,13 +39,13 @@ export function CountryDetailHeader({
   // 메뉴 열림 상태에서 바깥 클릭·Esc로 닫기
   useEffect(() => {
     if (!menuOpen) return
-    const onPointerDown = (e: MouseEvent) => {
-      if (kebabRef.current && !kebabRef.current.contains(e.target as Node)) {
+    const onPointerDown = (event: MouseEvent) => {
+      if (kebabRef.current && !kebabRef.current.contains(event.target as Node)) {
         setMenuOpen(false)
       }
     }
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuOpen(false)
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false)
     }
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -51,198 +55,131 @@ export function CountryDetailHeader({
     }
   }, [menuOpen])
 
+  const isoCode = country.isoCode?.trim() || null
+
   return (
-    <S.HeaderWrapper>
-      {/* 헤더 우측 슬롯 (카테고리 설정 등) */}
-      {rightSlot && (
-        <S.HeaderRightSlot>
-          {rightSlot}
-        </S.HeaderRightSlot>
-      )}
-      {/* 국기 이미지 컨테이너 */}
-      <S.MiniFlagWrapper
-        as={motion.div}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6 }}
-      >
-        <motion.div
-          initial={{ scale: 1.1, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-          style={{ width: '100%', height: '100%' }}
-        >
-          <CountryFlag
-            thumbnailUrl={country.thumbnailUrl}
-            countryName={country.name}
-            size="full"
+    <S.HeroBand
+      as={motion.div}
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <S.HeroFlagTile aria-hidden={!country.thumbnailUrl}>
+        {country.thumbnailUrl ? (
+          <img
+            src={getUploadImageUrl(country.thumbnailUrl)}
+            alt={`${country.name} 국기`}
           />
-        </motion.div>
-
-        {/* 국가명 - 국기 위 좌측 상단 (글래스 스타일) */}
-        <S.CountryNameOverlay
-          as={motion.div}
-          initial={{ x: -20, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <S.CountryNameGlass>
-            <S.AnalyticsCountryName>{country.name}</S.AnalyticsCountryName>
-            {country.localName && (
-              <S.AnalyticsCountryLocalName>
-                {country.localName}
-              </S.AnalyticsCountryLocalName>
-            )}
-          </S.CountryNameGlass>
-        </S.CountryNameOverlay>
-
-        {/* 그래디언트 오버레이 (더 나은 텍스트 가독성) */}
-        <S.FlagGradientOverlay />
-
-        {/* 대륙 뱃지 - 국기 영역 좌측 하단 */}
-        {continentName && (
-          <S.FlagBottomLeftOverlay
-            as={motion.div}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.35 }}
-          >
-            <motion.div
-              whileHover={{ scale: 1.05, y: -2 }}
-              transition={{ duration: 0.2 }}
-            >
-              <S.InfoBadge>
-                <S.BadgeLabel>대륙</S.BadgeLabel>
-                <S.BadgeValue>{continentName}</S.BadgeValue>
-              </S.InfoBadge>
-            </motion.div>
-          </S.FlagBottomLeftOverlay>
+        ) : country.flagEmoji ? (
+          country.flagEmoji
+        ) : (
+          <S.HeroFlagInitial>
+            {(isoCode ?? country.name).slice(0, 2)}
+          </S.HeroFlagInitial>
         )}
-      </S.MiniFlagWrapper>
+      </S.HeroFlagTile>
 
-      {/* 국가 정보 배지들 - 언어·화폐 (대륙은 국기 영역 좌하단에 배치) */}
-      {(country.languageId || country.currencyId) && (
-        <S.AnalyticsBadges
-          as={motion.div}
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-        >
-          {country.languageId && (
-            <motion.div
-              whileHover={{ scale: 1.05, y: -2 }}
-              transition={{ duration: 0.2 }}
-            >
-              <S.InfoBadge>
-                <S.BadgeLabel>언어</S.BadgeLabel>
-                <S.BadgeValue>{country.languageId}</S.BadgeValue>
-              </S.InfoBadge>
-            </motion.div>
+      <S.HeroTitleCol>
+        <S.HeroName>{country.name}</S.HeroName>
+        <S.HeroMetaRow>
+          {country.localName && (
+            <S.HeroLocalName>{country.localName}</S.HeroLocalName>
           )}
-          {country.currencyId && (
-            <motion.div
-              whileHover={{ scale: 1.05, y: -2 }}
-              transition={{ duration: 0.2 }}
-            >
-              <S.InfoBadge>
-                <S.BadgeLabel>화폐</S.BadgeLabel>
-                <S.BadgeValue>{country.currencyId}</S.BadgeValue>
-              </S.InfoBadge>
-            </motion.div>
+          {country.localName && (continentName || isoCode) && (
+            <S.HeroMetaSep aria-hidden>·</S.HeroMetaSep>
           )}
-        </S.AnalyticsBadges>
-      )}
+          {continentName && <S.HeroMetaChip>{continentName}</S.HeroMetaChip>}
+          {/*
+            ISO는 규모 지표가 아니라 식별자다. 예전엔 규모 바에서 인구·면적과 같은
+            칸을 차지해 "이 나라가 어떤 나라인가"의 답인 척했다 — 이름 옆이 제자리다.
+          */}
+          {isoCode && (
+            <S.HeroMetaChip title="ISO 국가 코드">{isoCode}</S.HeroMetaChip>
+          )}
+        </S.HeroMetaRow>
+      </S.HeroTitleCol>
 
-      {/* 케밥 메뉴 */}
-      {(onEdit || onDelete) && (
-        <S.CompactKebabMenu
-          ref={kebabRef}
-          as={motion.div}
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4, delay: 0.5 }}
-        >
-          <S.KebabButton
-            as={motion.button}
-            type="button"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            aria-label="국가 작업 메뉴"
-            whileHover={{ scale: 1.1, rotate: 90 }}
-            whileTap={{ scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            onClick={(e) => {
-              e.stopPropagation()
-              setMenuOpen((open) => !open)
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="12" cy="5" r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="12" cy="19" r="1.5" />
-            </svg>
-          </S.KebabButton>
-          <S.DropdownMenu
-            role="menu"
-            style={{ display: menuOpen ? 'block' : 'none' }}
-          >
-            {onEdit && (
-              <S.DropdownButton
-                as={motion.button}
-                type="button"
-                role="menuitem"
-                whileHover={{ x: 4 }}
-                transition={{ duration: 0.2 }}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setMenuOpen(false)
-                  onEdit(country)
-                }}
+      <S.HeroActions>
+        {rightSlot}
+        {(onEdit || onDelete) && (
+          <S.HeroKebab ref={kebabRef}>
+            <S.KebabButton
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label="국가 작업 메뉴"
+              onClick={(event) => {
+                event.stopPropagation()
+                setMenuOpen((open) => !open)
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
+                <circle cx="12" cy="5" r="1.5" />
+                <circle cx="12" cy="12" r="1.5" />
+                <circle cx="12" cy="19" r="1.5" />
+              </svg>
+            </S.KebabButton>
+            <S.DropdownMenu
+              role="menu"
+              style={{ display: menuOpen ? 'block' : 'none' }}
+            >
+              {onEdit && (
+                <S.DropdownButton
+                  type="button"
+                  role="menuitem"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setMenuOpen(false)
+                    onEdit(country)
+                  }}
                 >
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-                수정
-              </S.DropdownButton>
-            )}
-            {onDelete && (
-              <S.DropdownButton
-                as={motion.button}
-                type="button"
-                role="menuitem"
-                whileHover={{ x: 4 }}
-                transition={{ duration: 0.2 }}
-                $isDelete
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setMenuOpen(false)
-                  onDelete(country.id)
-                }}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  수정
+                </S.DropdownButton>
+              )}
+              {onDelete && (
+                <S.DropdownButton
+                  type="button"
+                  role="menuitem"
+                  $isDelete
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setMenuOpen(false)
+                    onDelete(country.id)
+                  }}
                 >
-                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-                삭제
-              </S.DropdownButton>
-            )}
-          </S.DropdownMenu>
-        </S.CompactKebabMenu>
-      )}
-    </S.HeaderWrapper>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                  삭제
+                </S.DropdownButton>
+              )}
+            </S.DropdownMenu>
+          </S.HeroKebab>
+        )}
+      </S.HeroActions>
+    </S.HeroBand>
   )
 }

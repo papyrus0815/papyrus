@@ -3051,6 +3051,149 @@ export const PremiumPercentageBadge = styled.div<{ positive?: boolean }>`
   }
 `
 
+/* ─── 국가 히어로 (2026-09 개편) ───────────────────────────────────────────
+ *
+ * 예전 히어로는 폭 전체 × 168px 국기 '배너'였다. 실측하니 썸네일을 가진 국가가
+ * 71개 중 **2개**뿐이라 69개국에서 이 띠가 통째로 빈 화면이었고(2,202×168px),
+ * 가진 2개도 가로 국기를 168px로 cover 하느라 색 얼룩으로 뭉갰다.
+ *
+ * 국기는 배경이 아니라 **제 비율의 타일**로 세운다. 썸네일이 없으면 flag_emoji로
+ * 대신한다 — 이쪽은 71/71 전부 가지고 있다. 밴드는 96px로 줄여 그 자리를 본문에 넘긴다.
+ * (역사 국가 상세는 여전히 옛 MiniFlagWrapper 계열을 쓴다 — 건드리지 않는다.)
+ */
+export const HeroBand = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 96px;
+  padding: 16px 40px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012))'
+      : 'linear-gradient(180deg, #fbfcfe, #ffffff)'};
+
+  @media (max-width: 1024px) {
+    padding: 14px 28px;
+  }
+  @media (max-width: 768px) {
+    padding: 12px 20px;
+    gap: 12px;
+  }
+`
+
+/** 국기 타일 — 썸네일이면 이미지, 없으면 이모지, 그것도 없으면 이니셜 */
+export const HeroFlagTile = styled.div`
+  flex-shrink: 0;
+  width: 68px;
+  height: 46px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  line-height: 1;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  @media (max-width: 768px) {
+    width: 56px;
+    height: 38px;
+    font-size: 25px;
+  }
+`
+
+/** 이니셜 폴백 — 이모지도 없는 국가 */
+export const HeroFlagInitial = styled.span`
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const HeroTitleCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+`
+
+export const HeroName = styled.h1`
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  @media (max-width: 768px) {
+    font-size: 21px;
+  }
+`
+
+/** 로컬명 · 대륙 · ISO — 예전엔 국기 위 글래스 박스와 좌하단 배지로 흩어져 있었다 */
+export const HeroMetaRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  min-width: 0;
+`
+
+export const HeroLocalName = styled.span`
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+`
+
+export const HeroMetaChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+`
+
+export const HeroMetaSep = styled.span`
+  opacity: 0.35;
+`
+
+/** 우측 액션 묶음 — 케밥 메뉴는 흐름 안에 두어 밴드 높이에 묶이지 않는다 */
+export const HeroActions = styled.div`
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+`
+
+/** DropdownMenu(absolute; top:100%)의 기준점 */
+export const HeroKebab = styled.div`
+  position: relative;
+`
+
 // ─── country-dashboard.styles re-export (FSD: widgets 간 직접 참조 방지) ─────
 export {
   GlobalDashboardHero,
