@@ -1687,6 +1687,71 @@ export const BottomRow = styled.div`
   }
 `
 
+/* ─── 기업 (2026-09) ──────────────────────────────────────────────────── */
+
+export const CompanyRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+`
+
+export const CompanyChip = styled.button<{ $accent?: AccentKey }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 8px;
+  border-radius: 10px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  ${surfaceInteractive}
+`
+
+export const CompanyLogo = styled.span`
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+`
+
+export const CompanyText = styled.span`
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+`
+
+export const CompanyName = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+`
+
+export const CompanyMeta = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+`
+
 /** 섹션 제목 줄 우측 텍스트 링크 (‘전체 보기’) */
 export const SectionLink = styled.button`
   margin-left: auto;

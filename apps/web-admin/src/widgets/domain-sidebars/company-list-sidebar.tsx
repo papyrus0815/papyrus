@@ -45,7 +45,8 @@ export function CompanyListSidebar({
 }: CompanyListSidebarProps) {
   const navigate = useNavigate()
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['companies', 'sidebar'],
+    /* 국가 대시보드 기업 섹션과 같은 키 — 같은 응답을 두 번 받지 않는다 */
+    queryKey: ['companies', 'all'],
     queryFn: () => companyApi.getAll(),
     staleTime: 60_000,
   })

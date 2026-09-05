@@ -9,6 +9,7 @@ import {
   useEconomicIndicators,
 } from '@/entities/country/api.indicators'
 import { hasPyramidData } from '@/entities/country/model/population-pyramid'
+import { useExportImports } from '@/entities/country/api.trade'
 import { compareByCountryStart } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
 
@@ -48,8 +49,10 @@ import {
 } from './dashboard-panels/format'
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
 import { CountryDataManagerModal } from './country-data-manager/country-data-manager-modal'
+import { CountryCompaniesSection } from './dashboard-panels/country-companies-section'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
+import { TradeSection } from './dashboard-panels/trade-section'
 
 /** 기록 축 한 줄 — 카드로 세울지, 빈 축 칩으로 내릴지는 값이 결정한다 */
 interface RecordAxis {
@@ -121,7 +124,13 @@ export function CountryDetailDashboard({
     (demographicQuery.data ?? []).some(
       (row) => row.populationGrowthRate != null,
     )
-  const hasCountryData = showPyramid || showTrends
+  /*
+   * 교역은 스키마(`export_import`)가 연도별 **총액**만 담는다 — 품목·상대국 컬럼이 없어
+   * "무엇을 수출·수입하는가"는 아직 화면에 낼 수 없다. 규모와 흑/적자만 보여준다.
+   */
+  const tradeQuery = useExportImports(isModern ? country.id : null)
+  const showTrade = (tradeQuery.data ?? []).length > 0
+  const hasCountryData = showPyramid || showTrends || showTrade
 
   const hasAnyFact =
     popNum != null || country.areaSqKm != null || !!densityText || !!capitalText
@@ -543,6 +552,14 @@ export function CountryDetailDashboard({
        * 5. 지표 — 나라 자체에 대한 이야기라 '활동/보완'(기록 관리용)보다 위다.
        * 아래에 두었더니 뷰포트 3화면 아래로 밀려 "그런 기능 없는데?"가 됐다.
        */}
+      {/*
+        5. 기업 — 이 나라에 등록된 기업. 국가별 엔드포인트가 없어 전체 목록을 받아
+        countryId로 거른다(실DB 5행). 없으면 아무것도 그리지 않는다.
+      */}
+      {country.type === 'modern' && (
+        <CountryCompaniesSection countryId={country.id} />
+      )}
+
       {country.type === 'modern' &&
         (hasCountryData ? (
           <>
@@ -558,6 +575,7 @@ export function CountryDetailDashboard({
                 countryName={country.name}
               />
             )}
+            <TradeSection countryId={country.id} countryName={country.name} />
           </>
         ) : (
           /*
@@ -570,7 +588,7 @@ export function CountryDetailDashboard({
            */
           !indicatorsLoading && (
             <S.EmptyAxisRow>
-              <S.EmptyAxisLabel>인구 피라미드 · 지표 추이</S.EmptyAxisLabel>
+              <S.EmptyAxisLabel>인구 피라미드 · 지표 추이 · 교역</S.EmptyAxisLabel>
               <S.EmptyAxisChipStatic>아직 자료 없음</S.EmptyAxisChipStatic>
               <S.EmptyAxisChip
                 type="button"
