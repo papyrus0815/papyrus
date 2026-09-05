@@ -265,7 +265,9 @@ export function CabinetMindMap({
       {electionSlot && (
         <>
           <Stem aria-hidden />
-          <ElectionBranch>{electionSlot}</ElectionBranch>
+          <ElectionBranch $nav={!!nav} $branches={visible.length > 0}>
+            {electionSlot}
+          </ElectionBranch>
         </>
       )}
     </MapWrap>
@@ -342,7 +344,7 @@ function BranchNode({
       }
     >
       <NodeFace>{renderFace(member, 36)}</NodeFace>
-      <NodeText>
+      <NodeText $side={side}>
         <NodeTitle>{member.title}</NodeTitle>
         <NodeName>
           {member.name}
@@ -751,13 +753,52 @@ const Stem = styled.div`
   }
 `
 
-const ElectionBranch = styled.div`
-  display: flex;
-  justify-content: center;
+/**
+ * 선거 카드 폭.
+ *
+ * 640px로 두었더니 1,900px짜리 지도 아래에 손바닥만 한 카드가 매달려 균형이 깨졌다.
+ * 지도의 **가지 바깥 모서리**까지 맞춘다 — 같은 격자를 깔고 넘기기 버튼 칸만 비운다.
+ */
+const ElectionBranch = styled.div<{ $nav?: boolean; $branches?: boolean }>`
+  /*
+   * 가지가 있으면 지도와 같은 격자를 깔아 가지 바깥 모서리까지 맞춘다.
+   *
+   * 가지가 없을 때 그 격자를 그대로 쓰면 가지 칸이 0이 되고, 남은 auto 칸이 폭 100%인
+   * 자식과 서로를 참조해 **세로 한 줄로 찌그러진다**(실제로 독일에서 그렇게 됐다).
+   * 그때는 격자를 걷고 가운데 정렬한다.
+   */
+  ${({ $nav, $branches }) =>
+    $branches
+      ? css`
+          display: grid;
+          grid-template-columns: ${$nav
+            ? `44px minmax(${BRANCH_MIN}px, ${BRANCH_MAX}px) auto minmax(${BRANCH_MIN}px, ${BRANCH_MAX}px) 44px`
+            : `minmax(${BRANCH_MIN}px, ${BRANCH_MAX}px) auto minmax(${BRANCH_MIN}px, ${BRANCH_MAX}px)`};
+          gap: ${GUTTER}px;
+          justify-content: center;
 
-  > * {
-    width: 100%;
-    max-width: 640px;
+          > * {
+            grid-column: ${$nav ? '2 / -2' : '1 / -1'};
+            width: 100%;
+          }
+        `
+      : css`
+          display: flex;
+          justify-content: center;
+
+          > * {
+            width: 100%;
+            max-width: 720px;
+          }
+        `}
+
+  @container (max-width: 1120px) {
+    display: flex;
+    justify-content: center;
+
+    > * {
+      max-width: 640px;
+    }
   }
 `
 
@@ -788,6 +829,12 @@ const Node = styled.button<{ $side: 'left' | 'right'; $replaced: boolean }>`
   display: flex;
   align-items: center;
   gap: 9px;
+  /*
+   * 왼쪽 가지는 좌우를 뒤집는다 — 얼굴이 곡선과 만나는 쪽(안쪽)에 서고 날짜는 바깥에
+   * 선다. 뒤집지 않으면 왼쪽 날짜만 가운데 카드에 바짝 붙어 중앙이 어수선해진다.
+   */
+  flex-direction: ${({ $side }) => ($side === 'left' ? 'row-reverse' : 'row')};
+  text-align: ${({ $side }) => ($side === 'left' ? 'right' : 'left')};
   width: 100%;
   height: ${NODE_HEIGHT}px;
   padding: 0 12px;
@@ -830,9 +877,10 @@ const NodeFace = styled.span`
   flex-shrink: 0;
 `
 
-const NodeText = styled.span`
+const NodeText = styled.span<{ $side: 'left' | 'right' }>`
   display: flex;
   flex-direction: column;
+  align-items: ${({ $side }) => ($side === 'left' ? 'flex-end' : 'flex-start')};
   min-width: 0;
   flex: 1;
   gap: 1px;
@@ -866,6 +914,7 @@ const NodeName = styled.span`
   display: flex;
   align-items: center;
   gap: 4px;
+  max-width: 100%;
   font-size: 13px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};

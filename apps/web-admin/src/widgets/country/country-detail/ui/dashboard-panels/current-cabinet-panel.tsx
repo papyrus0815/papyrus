@@ -679,7 +679,7 @@ export function CurrentCabinetPanel({
           * 선거는 이름 한 줄이라, 한 번 더 눌러야 '얼마로 이겼나'가 나왔다.
           */}
         {linkedElection && electionDetailQuery.data && (
-          <>
+          <ElectionBody>
             <ElectionFacts>
               <ElectionFact>
                 <DetailKey>투표일</DetailKey>
@@ -810,7 +810,7 @@ export function CurrentCabinetPanel({
                   </ElectionLink>
                 </CandidacyGap>
               )}
-          </>
+          </ElectionBody>
         )}
       </ElectionPanel>
     ) : null
@@ -1392,7 +1392,8 @@ const SlotRole = styled.span`
 
 const SlotGroupLabel = styled.div`
   width: 100%;
-  max-width: 640px;
+  /* 지도·선거 카드의 바깥 모서리와 같은 축 (가지 560 + 거터 88 + 카드 340) */
+  max-width: 1636px;
   margin-inline: auto;
   margin-bottom: 8px;
   font-size: 11px;
@@ -1403,10 +1404,11 @@ const SlotGroupLabel = styled.div`
 
 const SlotGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 8px;
   width: 100%;
-  max-width: 640px;
+  /* 지도·선거 카드의 바깥 모서리와 같은 축 (가지 560 + 거터 88 + 카드 340) */
+  max-width: 1636px;
   margin-inline: auto;
 `
 
@@ -1511,7 +1513,11 @@ const CandidacyFace = styled.span`
 `
 
 const CandidacyShare = styled.span`
-  margin-left: auto;
+  /*
+   * 예전엔 margin-left:auto로 행 오른쪽 끝에 붙였다. 카드를 지도 폭에 맞춰 넓히자
+   * 이름과 750px 떨어져 서로를 못 찾았다 — 이름 곁에 둔다. 크기는 그대로라 여전히
+   * 행에서 가장 큰 숫자다.
+   */
   font-size: 13.5px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -1574,6 +1580,8 @@ const WonChip = styled.span`
  * 예전엔 폭 전체를 가로지르는 납작한 띠라 위의 지도와 남남으로 보였다.
  */
 const ElectionPanel = styled.section`
+  /* 본문 2열 판정은 화면이 아니라 이 카드의 폭으로 한다 */
+  container-type: inline-size;
   padding: 18px 20px;
   border-radius: 18px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
@@ -1595,12 +1603,48 @@ const ElectionMeta = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+/**
+ * 선거 카드 본문 — 좌: 개요(투표일·투표율), 우: 후보 결과.
+ *
+ * 카드를 지도 폭에 맞춰 넓히자 한 줄짜리 후보 행에서 이름과 득표율이 1,200px 떨어져
+ * 서로를 못 찾았다. 개요를 왼쪽에 세우고 결과를 오른쪽에 몰아 거리를 줄인다.
+ */
+const ElectionBody = styled.div`
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  gap: 14px 36px;
+  align-items: start;
+  margin-top: 14px;
+
+  > *:first-child {
+    grid-column: 1;
+  }
+  > *:not(:first-child) {
+    grid-column: 2;
+  }
+
+  @container (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+
+    > * {
+      grid-column: 1 !important;
+    }
+  }
+`
+
 const ElectionFacts = styled.dl`
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 10px 26px;
-  margin: 14px 0 0;
+  margin: 0;
+
+  @container (min-width: 901px) {
+    /* 왼쪽 칸에서는 세로로 쌓인다 — 가로로 늘어놓을 폭이 없다 */
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
 `
 
 const ElectionFact = styled.div`
@@ -1611,6 +1655,11 @@ const ElectionFact = styled.div`
 
 const ElectionMore = styled.button`
   margin-left: auto;
+
+  @container (min-width: 901px) {
+    /* 세로로 쌓이는 좌측 칸에서는 auto 여백이 글자를 오른쪽으로 밀어낸다 */
+    margin-left: 0;
+  }
   border: none;
   background: none;
   padding: 0;
@@ -1855,6 +1904,9 @@ const PresetChip = styled.button`
 `
 
 const SlotTitle = styled.span`
+  /* 이름이 길면 이름이 줄어든다 — 옆의 '아직 없음'이 두 글자씩 접히는 것보다 낫다 */
+  flex: 1;
+  min-width: 0;
   font-size: 12.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -1864,7 +1916,9 @@ const SlotTitle = styled.span`
 `
 
 const SlotEmptyName = styled.span`
+  flex-shrink: 0;
   font-size: 12px;
+  white-space: nowrap;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -2059,7 +2113,8 @@ const Extra = styled.div`
   gap: 12px;
   margin-top: 16px;
   width: 100%;
-  max-width: 640px;
+  /* 지도·선거 카드의 바깥 모서리와 같은 축 (가지 560 + 거터 88 + 카드 340) */
+  max-width: 1636px;
   margin-inline: auto;
 
   > * {
