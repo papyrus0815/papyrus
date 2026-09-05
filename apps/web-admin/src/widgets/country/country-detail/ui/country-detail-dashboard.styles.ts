@@ -1689,6 +1689,14 @@ export const BottomRow = styled.div`
 
 /* ─── 사건 연표 (2026-09) ─────────────────────────────────────────────── */
 
+/** 연표와 달력을 나란히 — 좁아지면 아래로 접힌다 */
+export const EventTimelineRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+`
+
 /** 막대 몇 개짜리 띠가 본문 폭 전체를 상자로 두르면 빈 면이 주인공이 된다 — 내용만큼만 */
 export const EventTimelineBlock = styled.div`
   display: flex;

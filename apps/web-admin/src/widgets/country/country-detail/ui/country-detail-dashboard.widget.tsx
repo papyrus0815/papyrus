@@ -50,6 +50,7 @@ import {
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
 import { CountryDataManagerModal } from './country-data-manager/country-data-manager-modal'
 import { CountryCompaniesSection } from './dashboard-panels/country-companies-section'
+import { EventCalendarPanel } from './dashboard-panels/event-calendar-panel'
 import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
@@ -548,13 +549,31 @@ export function CountryDetailDashboard({
           세기 단위로 흩어져 있어서다(미국 41건이 18~21세기).
         */}
         {stats.eventCenturyCounts.length > 0 && (
-          <S.EventTimelineBlock>
-            <S.EventTimelineLabel>사건 연표</S.EventTimelineLabel>
-            <EventCenturyStrip
-              counts={stats.eventCenturyCounts}
-              onOpen={goEventsCentury}
-            />
-          </S.EventTimelineBlock>
+          <S.EventTimelineRow>
+            <S.EventTimelineBlock>
+              <S.EventTimelineLabel>사건 연표</S.EventTimelineLabel>
+              <EventCenturyStrip
+                counts={stats.eventCenturyCounts}
+                onOpen={goEventsCentury}
+              />
+            </S.EventTimelineBlock>
+            {/*
+              달력 — 연표가 '어느 세기'를 말하면 달력은 '그 달 며칠'을 말한다.
+              사건이 세기 단위로 흩어져 있어 오늘 달을 열면 대개 빈 격자라,
+              사건이 있는 가장 최근 달에서 시작하고 빈 달은 건너뛰게 했다.
+            */}
+            {stats.calendarEvents.length > 0 && (
+              <S.EventTimelineBlock>
+                <S.EventTimelineLabel>사건 캘린더</S.EventTimelineLabel>
+                <EventCalendarPanel
+                  events={stats.calendarEvents}
+                  onSelectEvent={(eventId) =>
+                    navigate(pathKeys.events.detail(eventId))
+                  }
+                />
+              </S.EventTimelineBlock>
+            )}
+          </S.EventTimelineRow>
         )}
         {totalRegistered === 0 && !stats.isLoading && (
           <S.EmptyHint>

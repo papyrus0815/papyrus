@@ -239,6 +239,11 @@ export class EventController {
       description: event.description,
       startDate: formatEventDate(event.startDate, event.startEra, event.startYear, event.startMonth, event.startDay),
       startDatePrecision: event.startDatePrecision ?? null,
+      /*
+       * 연도만 아는 사건(실측 330건 중 43건)은 startDate가 'YYYY-01-01'로 합성돼 나간다.
+       * 클라이언트는 그게 합성인지 진짜 1월 1일인지 구분할 수 없으므로 여기서 알려 준다.
+       */
+      isDayKnown: event.startDay != null || event.startDate != null,
       endDate: formatEventDate(event.endDate, event.endEra, event.endYear, event.endMonth, event.endDay),
       endDatePrecision: event.endDatePrecision ?? null,
       location: event.location,

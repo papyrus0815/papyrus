@@ -24,6 +24,19 @@ export interface RecentPersonItem {
 
 export type ActivityKind = 'person' | 'event'
 
+/** 달력 한 칸에 찍히는 사건 */
+export interface CalendarEventItem {
+  id: string
+  title: string
+  /** 'YYYY-MM-DD' (BC는 앞에 '-') — 서버가 구조화 연도로 합성한 값도 섞여 있다 */
+  date: string
+  /**
+   * 월·일까지 아는 사건인가. false면 서버가 채운 01-01이라 특정 날짜에 찍으면 거짓이다
+   * — 달력 아래 '연도만 아는 사건'으로 따로 센다.
+   */
+  isDayKnown: boolean
+}
+
 export interface RecentActivityItem {
   id: string
   kind: ActivityKind
@@ -136,6 +149,8 @@ export interface CountryDashboardStats {
    * 사건이 있는 세기만 담는다(빈 세기는 화면에서 '건너뜀' 표지로 그린다).
    */
   eventCenturyCounts: Array<{ century: number; count: number }>
+  /** 달력용 사건 — 날짜(YYYY-MM-DD)와 '일자를 아는가'만 남긴 경량 목록 */
+  calendarEvents: CalendarEventItem[]
   /** 같은 대륙 평균/순위 비교 */
   continentComparison: ContinentComparison
   /** 가장 최신 cabinet 1건 요약 (수반 재임 끝나지 않은 것 우선) */
@@ -525,6 +540,29 @@ export function useCountryDashboardStats(
       .sort((left, right) => left.century - right.century)
   }, [eventsQuery.data])
 
+  /** 달력용 경량 목록 — 같은 쿼리를 재사용하므로 왕복은 늘지 않는다 */
+  const calendarEvents = useMemo<CalendarEventItem[]>(() => {
+    const list = (eventsQuery.data ?? []) as Array<{
+      id?: string
+      title?: string | null
+      startDate?: string | null
+      isDayKnown?: boolean
+    }>
+    const rows: CalendarEventItem[] = []
+    for (const event of list) {
+      if (!event.id || typeof event.startDate !== 'string') continue
+      const matched = /^(-?\d{1,6}-\d{2}-\d{2})/.exec(event.startDate)
+      if (!matched) continue
+      rows.push({
+        id: event.id,
+        title: event.title?.trim() || '제목 없음',
+        date: matched[1],
+        isDayKnown: event.isDayKnown !== false,
+      })
+    }
+    return rows
+  }, [eventsQuery.data])
+
   const monthlyEventCounts = useMemo<number[]>(() => {
     const list = Array.isArray(eventsQuery.data) ? (eventsQuery.data as any[]) : []
     const buckets = new Array(12).fill(0)
@@ -871,6 +909,7 @@ export function useCountryDashboardStats(
     completeness,
     monthlyEventCounts,
     eventCenturyCounts,
+    calendarEvents,
     continentComparison,
     currentCabinet,
     nextElection,

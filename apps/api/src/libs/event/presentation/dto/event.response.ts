@@ -16,6 +16,15 @@ export class EventResponseDto {
   @ApiProperty({ description: '시작일 정밀도: year(년만), month(년·월), day(년·월·일)', required: false })
   startDatePrecision?: string | null
 
+  @ApiProperty({
+    description:
+      '월·일까지 아는 사건인가. false면 연도만 아는 사건이라 startDate의 01-01은 ' +
+      '서버가 채운 값이다 — 달력의 특정 날짜에 찍으면 거짓이 된다. ' +
+      '판정은 서버에서만 가능하다(합성된 startDate와 실제 DATETIME을 클라이언트는 구분 못 한다).',
+    required: false,
+  })
+  isDayKnown?: boolean
+
   @ApiProperty({ description: '종료일', required: false })
   endDate?: string | null
 
