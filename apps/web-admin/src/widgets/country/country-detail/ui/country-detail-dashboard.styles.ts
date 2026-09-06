@@ -145,52 +145,6 @@ const surfaceInteractive = css<{ $accent?: AccentKey }>`
 
 /* ─── Layout root ─────────────────────────────────────────────────────── */
 
-/**
- * 대시보드 바깥 껍데기 — 넓은 화면에서만 우측 레일을 붙인다.
- *
- * 실측: 본문이 폭을 무제한으로 먹어 2560px에서 2080px가 되고 각료가 8열까지 늘어졌다.
- * 넓은 화면에서는 공간이 남는 게 아니라 **낭비되는** 중이었다. 반대로 1280~1440은
- * 본문이 832~960px라 여유가 없어, 여기서 320px를 떼면 각료 격자가 2열로 무너진다.
- * 그래서 1680px 이상에서만 연다.
- */
-export const DashboardShell = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-
-  @media (min-width: 1680px) {
-    grid-template-columns: minmax(0, 1fr) 320px;
-    gap: 24px;
-    padding-right: 40px;
-  }
-`
-
-/**
- * 좌측 칼럼 — 국가 히어로(썸네일)부터 본문까지.
- *
- * 히어로는 원래 대시보드 바깥(탭 패널의 형제)에 있어서 레일이 히어로 **아래**에서만
- * 시작했고, 히어로만 레일 밑을 지나 화면 끝까지 뻗었다. 히어로를 이 칼럼 안으로
- * 들여 레일과 같은 격자에 세운다 — 레일 top = 썸네일 top.
- */
-export const DashboardMain = styled.div`
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-`
-
-/** 우측 관리 레일 — 스크롤해도 자리를 지킨다 */
-export const DashboardAside = styled.aside`
-  display: none;
-
-  @media (min-width: 1680px) {
-    display: flex;
-    flex-direction: column;
-    gap: ${space.xxxl}px;
-    position: sticky;
-    top: 24px;
-  }
-`
-
 export const DashboardRoot = styled.div`
   position: relative;
   display: flex;
@@ -198,11 +152,6 @@ export const DashboardRoot = styled.div`
   min-height: 0;
   padding: ${space.xxxl}px 40px 48px;
   gap: ${space.xxxl}px;
-
-  /* 우측 레일이 켜지면 오른쪽 여백은 셸이 갖는다 */
-  @media (min-width: 1680px) {
-    padding-right: 0;
-  }
 
   /* 헤더 ↔ 본문 사이 단일 indigo 약한 fade */
   &::before {
@@ -233,23 +182,48 @@ export const DashboardRoot = styled.div`
   }
 `
 
+/**
+ * 대시보드의 한 장(章).
+ *
+ * 예전엔 섹션 사이가 32px 여백뿐이라, 스크롤을 내리면 '교역이 어디서 끝나고 인구
+ * 피라미드가 어디서 시작하는지'가 안 보였다. 특히 섹션 안에도 소제목·카드가 있어
+ * 같은 굵기의 글자가 계속 나오면 층위가 통째로 뭉갠다.
+ *
+ * 그래서 장 머리에 **가로선 + 넉넉한 위 여백**을 둔다. 배경 밴드나 카드 테두리는
+ * 쓰지 않는다 — 이 지면은 이미 안쪽에 카드가 많아, 밖에 또 상자를 두르면 상자 안
+ * 상자가 된다.
+ */
 export const Section = styled.section`
   display: flex;
   flex-direction: column;
   gap: ${space.lg}px;
+  padding-top: 30px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  /* 첫 장 위에는 선을 긋지 않는다 — 위가 이미 히어로·요약이다 */
+  &:first-of-type {
+    padding-top: 0;
+    border-top: none;
+  }
+
+  /* 섹션 안에 섹션이 들어가면 선이 겹친다 (행정부 안의 내각 등) */
+  & & {
+    padding-top: 0;
+    border-top: none;
+  }
 `
 
 export const SectionTitleRow = styled.div`
   display: flex;
   align-items: center;
-  gap: ${space.sm}px;
-  margin-bottom: ${space.xs}px;
+  gap: 10px;
+  margin-bottom: ${space.sm}px;
 `
 
 export const SectionTitleIcon = styled.div<{ $accent?: AccentKey }>`
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -264,10 +238,11 @@ export const SectionTitleIcon = styled.div<{ $accent?: AccentKey }>`
   }
 `
 
+/* 장 제목은 섹션 안의 어떤 글자보다 커야 한다 — 안쪽 소제목이 14.5px까지 올라왔다 */
 export const SectionTitleText = styled.h2`
   margin: 0;
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 19px;
+  font-weight: 800;
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.02em;
 `
@@ -1672,8 +1647,13 @@ export const NowRow = styled.div`
 /** 하단 보조 — 최근 활동과 완성도를 나란히 */
 /** 좁은 화면에서만 — 넓어지면 이 내용이 우측 레일로 간다 */
 export const BottomRow = styled.div`
-  @media (min-width: 1680px) {
-    display: none;
+  padding-top: 30px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+
+  /* 이 줄은 두 섹션을 나란히 세운다 — 각자 선을 그으면 한쪽만 그어져 짝짝이가 된다 */
+  > section {
+    padding-top: 0;
+    border-top: none;
   }
 
   display: grid;
@@ -1718,79 +1698,132 @@ export const EventTimelineLabel = styled.span`
 
 /* ─── 교역 품목 (2026-09) ─────────────────────────────────────────────── */
 
+/**
+ * 수출·수입 두 블록의 그릇.
+ *
+ * 세로로 쌓아 두면 구조가 똑같은 두 덩어리가 위아래로 이어져 섹션이 길어지고,
+ * 무엇보다 **두 방향을 나란히 못 본다** — '수출은 에너지 위주, 수입은 운송장비 위주'는
+ * 두 그림을 번갈아 봐야 나오는 말이었다. 폭이 나면 좌우로 세운다.
+ * 뷰포트가 아니라 이 그릇의 폭으로 판단한다(대시보드 열 폭은 화면 폭과 다르다).
+ */
+export const TradeGroupsContainer = styled.div`
+  container-type: inline-size;
+`
+
 export const TradeItemGroups = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+
+  @container (min-width: 720px) {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 30px;
+  }
 `
 
 export const TradeItemGroup = styled.div`
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 8px;
   flex-wrap: wrap;
+  margin-top: 4px;
 `
 
 export const TradeItemLabel = styled.span`
   flex-shrink: 0;
-  font-size: 11.5px;
+  width: 52px;
+  padding-top: 3px;
+  font-size: 12px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-export const TradeItemChips = styled.div`
+/**
+ * 품목·상대 한 칸 — 이름과 값을 한 줄에 두고, **막대는 그 아래에 칸 너비만큼** 깐다.
+ *
+ * 두 번 갈아엎은 자리다. ① 알약 칩은 스무 개가 모두 같은 크기라 5.7%와 1.2%가 같아
+ * 보였고, ② 칩 배경을 비중만큼 채웠더니 칩 너비가 글자 수를 따라가서 '석유제품
+ * 4.1%'가 '원유 5.7%'보다 길어졌다 — 길이가 거짓말을 했다. ③ 이름·트랙·값을 가로로
+ * 세웠더니 이번엔 짧은 이름과 막대 사이가 한 뼘씩 벌어졌다.
+ * 이름 위·막대 아래로 쌓으면 셋이 다 풀린다 — 칸마다 트랙 길이가 같고(비교 성립),
+ * 이름 길이와 무관하며(거짓 인코딩 없음), 빈 가로 여백도 없다.
+ */
+export const TradeItemRows = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: 12px 22px;
+  flex: 1 1 260px;
+  min-width: 0;
+`
+
+export const TradeItemHead = styled.span`
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-export const TradeItemChip = styled.span<{ $clickable?: boolean }>`
-  display: inline-flex;
   align-items: baseline;
-  gap: 6px;
-  padding: 4px 10px;
-  font: inherit;
-  text-align: left;
-  cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
-
-  /* 누를 수 있는 칩만 반응한다 — 자유 입력 품목은 갈 곳이 없어 그대로 둔다 */
-  &:hover {
-    border-color: ${({ theme, $clickable }) =>
-      $clickable ? theme.colors.active : undefined};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.active};
-    outline-offset: 1px;
-  }
-  border-radius: ${radius.pill}px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.045)'
-      : 'rgba(15, 23, 42, 0.04)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.07)'
-        : 'rgba(15, 23, 42, 0.06)'};
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 `
 
 export const TradeItemName = styled.span`
-  font-size: 12.5px;
+  min-width: 0;
+  word-break: keep-all;
+  font-size: 13.5px;
   font-weight: 600;
+  line-height: 1.4;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 export const TradeItemValue = styled.span`
-  font-size: 11.5px;
+  flex-shrink: 0;
+  font-size: 13.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
+export const TradeItemRow = styled.span<{ $clickable?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
+
+  /* 누를 수 있는 칸만 반응한다 — 자유 입력 품목은 갈 곳이 없어 그대로 둔다 */
+  &:hover ${TradeItemName} {
+    text-decoration: ${({ $clickable }) => ($clickable ? 'underline' : 'none')};
+    text-underline-offset: 3px;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+`
+
+export const TradeItemTrack = styled.span`
+  height: 7px;
+  border-radius: ${radius.pill}px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : 'rgba(15,23,42,0.08)'};
+`
+
+export const TradeItemFill = styled.span<{ $color: string }>`
+  display: block;
+  height: 100%;
+  border-radius: ${radius.pill}px;
+  background: ${({ $color }) => $color};
+`
+
+/** 상대·제도·연결 — 이름 뒤에 잔글씨로 붙는다 */
 export const TradeItemPartner = styled.span`
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 /* ─── 교역 분류 구성 막대 (2026-09) ──────────────────────────────────── */
@@ -1802,8 +1835,11 @@ export const TradeItemPartner = styled.span`
  */
 export const TradeCompositionBar = styled.div`
   display: flex;
+  /* 조각 사이는 테두리가 아니라 **바탕색 틈**이 가른다 — 선을 그으면 데이터가 아닌
+     잉크가 늘고, 색이 붙은 이웃(운송↔화학)은 그래도 안 갈라진다 */
+  gap: 2px;
   width: 100%;
-  height: 10px;
+  height: 16px;
   border-radius: ${radius.pill}px;
   overflow: hidden;
   background: ${({ theme }) =>
@@ -1811,44 +1847,227 @@ export const TradeCompositionBar = styled.div`
 `
 
 export const TradeCompositionSlice = styled.div<{ $color: string }>`
+  flex: 0 0 auto;
   background: ${({ $color }) => $color};
-  min-width: 2px;
 `
 
 export const TradeCompositionLegend = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
-  margin-top: 6px;
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  gap: 6px 16px;
+  margin-top: 8px;
 `
 
 export const TradeCompositionLegendItem = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/**
+ * 값은 이름보다 한 톤 죽인다 — 범례가 '이름 + 숫자'로 읽히지, 숫자 나열로 읽히지
+ * 않게. 색이 15개 대분류를 끝까지 못 가르므로 **식별은 이 이름표가 맡는다**
+ * (막대 조각과 같은 순서로 놓아 왼쪽부터 짝지어 읽힌다).
+ */
+export const TradeCompositionPct = styled.span`
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export const TradeCompositionDot = styled.span<{ $color: string }>`
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
   background: ${({ $color }) => $color};
+`
+
+/* ─── 교역 규모·방향 (2026-09 개선) ─────────────────────────────────── */
+
+/**
+ * 연도 선택 — 등록된 해가 여럿인데 늘 최신만 보여주면 나머지는 없는 자료가 된다.
+ * (사실 막대에 "2022–2024년 3개"라고 적어두고 다른 해로는 갈 수 없었다.)
+ */
+export const TradeYearTabs = styled.div`
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+`
+
+export const TradeYearTab = styled.button<{ $active: boolean }>`
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: ${radius.pill}px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? 'transparent' : theme.colors.border.default};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.text.primary : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.background.primary : theme.colors.text.secondary};
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme, $active }) =>
+      $active ? 'transparent' : theme.colors.border.medium};
+  }
+`
+
+/**
+ * 규모 — 수출·수입을 **같은 축의 두 막대**로 놓는다.
+ *
+ * 숫자만 나란히 적으면(옛 FactBar) 2,065와 3,296.6의 차이가 읽는 사람 머릿속 계산으로
+ * 남는다. 같은 축에 눕히면 "수입이 1.6배"가 눈으로 먼저 온다 — 무역수지가 이 섹션의
+ * 본론인데 그림이 하나도 없던 게 문제였다.
+ */
+export const TradeScaleBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+`
+
+export const TradeScaleRow = styled.div`
+  display: grid;
+  /* 라벨 칸을 고정폭으로 두면 글자가 커졌을 때 '수/출'로 쪼개진다 — 내용에 맡긴다 */
+  grid-template-columns: auto minmax(104px, auto) 1fr;
+  align-items: center;
+  gap: 10px;
+`
+
+export const TradeScaleLabel = styled.span<{ $color: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: ${({ $color }) => $color};
+  }
+`
+
+export const TradeScaleValue = styled.span`
+  font-size: 19px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+export const TradeScaleTrack = styled.div`
+  height: 14px;
+  border-radius: ${radius.pill}px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.05)'};
+`
+
+export const TradeScaleFill = styled.div<{ $color: string }>`
+  height: 100%;
+  border-radius: ${radius.pill}px;
+  background: ${({ $color }) => $color};
+`
+
+export const TradeBalanceLine = styled.p<{ $surplus: boolean }>`
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  strong {
+    font-weight: 800;
+    color: ${({ $surplus, theme }) =>
+      $surplus
+        ? theme.mode === 'dark'
+          ? '#4ade80'
+          : '#15803d'
+        : theme.mode === 'dark'
+          ? '#f87171'
+          : '#b91c1c'};
+  }
+`
+
+/** 값마다 'USD 십억'을 붙이면 같은 말이 두 번 나온다 — 블록에 한 번만 적는다 */
+export const TradeScaleUnit = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/** 수출 블록과 수입 블록이 어디서 갈리는지 — 라벨만으로는 안 갈렸다 */
+export const TradeDirectionHeader = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+`
+
+export const TradeDirectionName = styled.span<{ $color: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &::before {
+    content: '';
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
+    background: ${({ $color }) => $color};
+  }
+`
+
+/** 막대가 무엇의 비율인지 — 이 문장이 없으면 등록분 비율을 전체 비율로 읽는다 */
+export const TradeCoverageNote = styled.span`
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export const TradeDirectionBlock = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
+  gap: 8px;
+  padding: 16px 0 4px;
+
+  /* 수출 블록이 어디서 끝나고 수입이 시작하는지 — 굵은 제목 대신 가는 선이 가른다 */
+  & + & {
+    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  /* 좌우로 서면 가르는 선의 방향도 바뀐다 */
+  @container (min-width: 720px) {
+    & + & {
+      border-top: none;
+      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+      padding-left: 30px;
+      margin-left: -30px;
+    }
+  }
 `
 
 export const TradeSourceLine = styled.p`
-  margin: 8px 0 0;
-  font-size: 11px;
+  margin: 12px 0 0;
+  font-size: 12px;
   line-height: 1.6;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 /* ─── 기업 (2026-09) ──────────────────────────────────────────────────── */

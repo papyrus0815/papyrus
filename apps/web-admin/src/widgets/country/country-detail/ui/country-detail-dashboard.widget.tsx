@@ -318,8 +318,7 @@ export function CountryDetailDashboard({
   )
 
   return (
-    <S.DashboardShell>
-      <S.DashboardMain>
+    <>
       {header}
       <S.DashboardRoot>
       {/*
@@ -587,15 +586,11 @@ export function CountryDetailDashboard({
 
       {/*
        * 6. 활동과 보완 — 기록 관리 축이라 나라 이야기(본문)와 성격이 다르다.
-       * 넓은 화면에서는 우측 레일로 빠지고, 좁으면 여기 본문 아래에 남는다.
-       * 같은 내용을 두 자리에 쓰므로 `managementPanels` 하나로 만들어 꽂는다.
+       * 한때 넓은 화면에서 우측 레일로 뺐지만 레일을 걷어내면서 본문 아래로 되돌렸다.
        */}
       <S.BottomRow>{managementPanels}</S.BottomRow>
 
       </S.DashboardRoot>
-      </S.DashboardMain>
-
-      <S.DashboardAside aria-label="기록 관리">{managementPanels}</S.DashboardAside>
-    </S.DashboardShell>
+    </>
   )
 }
