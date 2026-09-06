@@ -94,3 +94,28 @@ export function pyramidTotals(rows: PyramidRow[]) {
     { male: 0, female: 0, total: 0 },
   )
 }
+
+/**
+ * 피라미드 양 끝단(저연령·고연령) 비율.
+ *
+ * 두 값 모두 브래킷 경계와 정확히 맞아떨어져 **보간 없이** 나온다 — 0–19세는 앞 두
+ * 칸, 60세 이상은 뒤 세 칸의 합이다. (자주 쓰는 '65세 이상'이나 중위연령은 10년
+ * 브래킷만으로는 추정치라 여기서 만들지 않는다. 추정치를 정확한 값처럼 보여주지 않는다.)
+ */
+export function edgeShares(rows: PyramidRow[]) {
+  const totals = pyramidTotals(rows)
+  if (totals.total === 0) return null
+  const labelsOf = (brackets: AgeBracket[]) => brackets.map((bracket) => bracket.label)
+  const youngLabels = labelsOf(AGE_BRACKETS.slice(0, 2))
+  const oldLabels = labelsOf(AGE_BRACKETS.slice(6))
+  const sumOf = (labels: string[]) =>
+    rows
+      .filter((row) => labels.includes(row.bracket))
+      .reduce((sum, row) => sum + row.total, 0)
+  return {
+    youngLabel: `${AGE_BRACKETS[1].label.split('–')[1]}세 이하`,
+    young: (sumOf(youngLabels) / totals.total) * 100,
+    oldLabel: `${AGE_BRACKETS[6].label.split('–')[0]}세 이상`,
+    old: (sumOf(oldLabels) / totals.total) * 100,
+  }
+}
