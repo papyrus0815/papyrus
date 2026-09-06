@@ -175,11 +175,25 @@ export const FLOW_INCLUDE = {
         defaultUnit: true,
         categoryId: true,
         category: {
-          select: { id: true, name: true, colorKey: true, emoji: true },
+          select: {
+            id: true,
+            name: true,
+            colorKey: true,
+            emoji: true,
+            parent: { select: { id: true, name: true, colorKey: true } },
+          },
         },
       },
     },
-    category: { select: { id: true, name: true, colorKey: true, emoji: true } },
+    category: {
+      select: {
+        id: true,
+        name: true,
+        colorKey: true,
+        emoji: true,
+        parent: { select: { id: true, name: true, colorKey: true } },
+      },
+    },
     partnerCountry: { select: { name: true } },
     partnerHistoricalCountry: { select: { name: true } },
     partnerOrganization: { select: { name: true } },
@@ -199,6 +213,7 @@ type CategoryRefRow = {
   name: string
   colorKey: string | null
   emoji: string | null
+  parent?: { id: string; name: string; colorKey: string | null } | null
 } | null
 
 export type FlowRow = {
@@ -306,6 +321,18 @@ export function serializeFlow(
     categoryName: category?.name ?? null,
     categoryColorKey: category?.colorKey ?? null,
     categoryEmoji: category?.emoji ?? null,
+    /*
+     * 대분류도 함께 내린다. 중분류는 대분류 색을 물려받아 형제끼리 색이 겹치므로
+     * (자동차·선박이 둘 다 '운송장비' 색), 구성 막대는 대분류로 묶어야 읽힌다.
+     * 대분류가 없는 분류(자기 자신이 대분류)는 자기를 가리킨다.
+     */
+    rootCategoryId: category ? (category.parent?.id ?? category.id) : null,
+    rootCategoryName: category
+      ? (category.parent?.name ?? category.name)
+      : null,
+    rootCategoryColorKey: category
+      ? (category.parent?.colorKey ?? category.colorKey)
+      : null,
     hsCode: row.hsCode,
 
     partnerCountryId: row.partnerCountryId,

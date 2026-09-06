@@ -159,6 +159,10 @@ export interface ExportImportItemResponse {
   categoryName: string | null
   categoryColorKey: string | null
   categoryEmoji: string | null
+  /** 대분류 — 구성 막대는 이 단위로 묶어야 형제 중분류끼리 색이 겹치지 않는다 */
+  rootCategoryId: string | null
+  rootCategoryName: string | null
+  rootCategoryColorKey: string | null
   hsCode: string | null
 
   //--- 누구와
