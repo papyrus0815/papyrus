@@ -390,6 +390,9 @@ model Event {
   /// 선거 상세 서술의 정본으로 연결 (선택)
   electionsWithNarrative Election[] @relation("ElectionEventNarrative")
 
+  /// 이 사건을 계기로 기록된 교역 흐름 (아편전쟁 ↔ 아편 수입)
+  tradeFlows ExportImportItem[] @relation("TradeFlowEvent")
+
   /// 등록자 
   createdById String @map("created_by") @db.Char(36)
 

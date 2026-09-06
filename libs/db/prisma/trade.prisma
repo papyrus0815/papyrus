@@ -1,0 +1,480 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                                TRADE DOMAIN                                  ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+///
+/// 국가의 수출·수입을 기록한다. 세 겹이다.
+///
+///  1) 품목 카탈로그 (TradeCommodityCategory / TradeCommodity)
+///     "석유"는 나라·연도마다 새로 치는 문자열이 아니라 **한 행**이다. 그래야
+///     "1913년에 강철을 수출한 나라"를 가로로 물을 수 있다. 분류는 계층(대>중>소)이고
+///     HS 부(section)와 대조된다.
+///
+///  2) 연도 헤더 (ExportImport)
+///     한 국가(현대 또는 역사)–한 해의 총액. 금액에는 **단위가 붙는다** — 통화와 자릿수
+///     (백만·억)를 적지 않은 숫자는 비교할 수 없다. 자료 출처·추정 여부도 여기 붙는다.
+///
+///  3) 교역 흐름 (ExportImportItem)
+///     그 해에 **무엇을 · 누구와** 주고받았는지. 한 행은 세 단면(grain) 중 하나다 —
+///     품목별 / 상대국별 / 상대국×품목. 단면을 섞어 더하면 이중계산이 되므로 행 스스로
+///     자기 단면을 밝힌다.
+///
+/// 역사 자료를 담기 위한 장치:
+/// - 상대는 현대 국가 · 역사 국가 · 조직(동인도회사·한자동맹) · 자유 표기 넷 다 된다.
+/// - 교역 형태(조공·사무역·밀무역·전매)와 제약(금수·쿼터)을 구분한다.
+/// - 운송수단·교역로·교역항, 그리고 그 교역을 만든 사건·조약·기업을 건다.
+/// - 연도는 BC를 지원하고, 한 행이 기간(1860년대 평균)을 가리킬 수 있다.
+
+// ========================
+// Enums
+// ========================
+
+/// 교역의 방향 — 한 흐름 행은 수출이거나 수입이다.
+enum TradeDirection {
+  EXPORT
+  IMPORT
+}
+
+/// 이 흐름 행이 그 해 교역의 **어느 단면**인지.
+/// 단면이 다른 행끼리 더하면 같은 무역을 두 번 세게 된다 — 합계는 항상 같은 단면 안에서만.
+enum TradeFlowGrain {
+  /// 품목별 (상대국을 가리지 않음) — "1913년 수출: 면직물 24%"
+  COMMODITY
+  /// 상대국별 (품목을 가리지 않음) — "1913년 수출: 인도 12%"
+  PARTNER
+  /// 상대국 × 품목 — "1913년 대인도 면직물 수출"
+  PARTNER_COMMODITY
+}
+
+/// 금액의 가격 기준. 같은 무역도 수출국 장부(FOB)와 수입국 장부(CIF)에서 값이 다르다
+/// — 운임·보험이 CIF에만 들어가기 때문. 기준을 안 적으면 두 나라 통계가 어긋난 이유를 잃는다.
+enum TradePriceBasis {
+  /// 본선인도가 — 운임·보험 제외 (보통 수출 통계)
+  FOB
+  /// 운임·보험료 포함가 (보통 수입 통계)
+  CIF
+  /// 국경 인도가
+  FRONTIER
+  UNKNOWN
+}
+
+/// 자료에 적힌 금액의 자릿수. 원자료가 "백만 달러"면 그대로 넣고 단위를 여기 적는다.
+enum TradeValueScale {
+  ONE
+  THOUSAND
+  MILLION
+  BILLION
+  TRILLION
+}
+
+/// 한 헤더 행이 가리키는 기간의 성격.
+enum TradePeriodAggregation {
+  /// 그 해 한 해치
+  ANNUAL
+  /// 기간 연평균 (periodEndYear와 함께)
+  AVERAGE
+  /// 기간 합계 (periodEndYear와 함께)
+  TOTAL
+}
+
+/// 자료를 얼마나 믿을 수 있는가. 근대 이전 교역 통계는 추계마다 크게 갈린다.
+enum TradeDataConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+/// 그 교역이 **어떤 제도 위에서** 이뤄졌는가. 자유무역만 있는 게 아니다.
+enum TradeChannel {
+  /// 공무역 — 국가가 주체이거나 승인한 정규 교역
+  OFFICIAL
+  /// 조공무역 — 책봉·조공 체제의 사행 무역
+  TRIBUTE
+  /// 사무역 — 민간 상인의 교역
+  PRIVATE
+  /// 밀무역 — 금지된 잠상(潛商)·후시(後市)
+  SMUGGLING
+  /// 개항장·조계 무역 (데지마, 왜관, 상하이 조계)
+  CONCESSION
+  /// 특허회사 독점 (동인도회사 등)
+  CHARTERED_COMPANY
+  /// 국가 전매 (소금·담배·아편 전매)
+  STATE_MONOPOLY
+  /// 원조·차관에 딸린 이전
+  AID
+  /// 물물교환·구상무역(바터)
+  BARTER
+}
+
+/// 그 품목에 걸린 제약.
+enum TradeRestrictionKind {
+  NONE
+  /// 금수 — 아예 막음
+  EMBARGO
+  /// 제재
+  SANCTION
+  /// 수량 할당
+  QUOTA
+  /// 수출입 금지 품목
+  PROHIBITED
+  /// 허가제
+  LICENSED
+  /// 관세 인상 (보호관세)
+  PROTECTIVE_TARIFF
+  /// 반덤핑
+  ANTIDUMPING
+}
+
+/// 무엇으로 실어 날랐는가.
+enum TradeTransportMode {
+  SEA
+  RIVER
+  LAND
+  CARAVAN
+  RAIL
+  AIR
+  PIPELINE
+  CABLE
+  UNKNOWN
+}
+
+// ========================
+// TradeCommodityCategory (교역 품목 분류)
+// ========================
+/// 품목 분류 — 대분류 > 중분류 > 소분류의 계층.
+/// 예: 운송장비 > 자동차 > 승용차 / 에너지·광물 > 석유 > 원유.
+model TradeCommodityCategory {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 분류명 (예: 에너지·광물)
+  name String @db.VarChar(80)
+
+  /// 영문명
+  enName String? @map("en_name") @db.VarChar(80)
+
+  /// 안정 키 — 시드·코드가 이름 대신 이걸 참조한다 (이름은 바뀔 수 있다)
+  slug String @unique @db.VarChar(60)
+
+  /// 상위 분류 (없으면 대분류)
+  parentId String? @map("parent_id") @db.Char(36)
+
+  /// HS 부(section) 번호 1~21 — 국제 분류와 대조할 때
+  hsSection Int? @map("hs_section")
+
+  /// 설명
+  description String? @db.Text
+
+  /// 대시보드 구성 그래프에서 분류마다 같은 색을 쓰기 위한 키
+  colorKey String? @map("color_key") @db.VarChar(20)
+
+  /// 목록에서 앞에 붙이는 이모지
+  emoji String? @db.VarChar(10)
+
+  /// 표시 순서
+  sortOrder Int @default(0) @map("sort_order")
+
+  //--- 관계 필드
+  parent      TradeCommodityCategory?  @relation("TradeCommodityCategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    TradeCommodityCategory[] @relation("TradeCommodityCategoryHierarchy")
+  commodities TradeCommodity[]
+  /// 카탈로그에 없는 자유 입력 품목이 분류만 달고 있는 경우
+  flows       ExportImportItem[]       @relation("TradeFlowCategory")
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([parentId], name: "idx_tradeCommodityCategory_parentId")
+  @@index([sortOrder])
+  @@map("trade_commodity_category")
+}
+
+// ========================
+// TradeCommodity (교역 품목 마스터)
+// ========================
+/// 교역에 오르는 물건 한 종류. 나라·연도를 가로질러 같은 행을 가리킨다.
+model TradeCommodity {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 품목명 (예: 원유)
+  name String @unique @db.VarChar(120)
+
+  /// 영문명
+  enName String? @map("en_name") @db.VarChar(120)
+
+  /// 안정 키 (예: crude-oil)
+  slug String? @unique @db.VarChar(80)
+
+  /// 다른 이름들 — 쉼표 구분. 자료마다 표기가 달라(석유/원유/crude oil) 검색이 걸리게 한다
+  aliases String? @db.Text
+
+  /// 분류
+  categoryId String @map("category_id") @db.Char(36)
+
+  /// HS 코드 (4~6자리)
+  hsCode String? @map("hs_code") @db.VarChar(20)
+
+  /// SITC 코드 — 장기 시계열 비교에 쓰이는 분류
+  sitcCode String? @map("sitc_code") @db.VarChar(20)
+
+  /// 기본 수량 단위 (배럴 · 톤 · 대 · 척 · 필)
+  defaultUnit String? @map("default_unit") @db.VarChar(20)
+
+  /// 이 품목이 교역에 처음 등장하는 해 (부호 있는 연도 — 음수는 기원전).
+  /// 자동차를 1700년 수출로 적는 실수를 폼에서 잡아준다.
+  firstYearSigned Int? @map("first_year_signed")
+
+  /// 교역에서 사라진 해 (부호 있는 연도, 없으면 현재까지)
+  lastYearSigned Int? @map("last_year_signed")
+
+  /// 상품이 아니라 서비스 교역인가 (해운·관광·금융·특허료)
+  isService Boolean @default(false) @map("is_service")
+
+  /// 설명 — 왜 이 품목이 그 시대 교역에서 중요했는지
+  description String? @db.Text
+
+  /// 썸네일
+  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
+
+  /// 표시 순서
+  sortOrder Int @default(0) @map("sort_order")
+
+  //--- 관계 필드
+  category TradeCommodityCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  flows    ExportImportItem[]     @relation("TradeFlowCommodity")
+
+  //--- 등록 계정 (null이면 모두가 쓰는 공유 정본)
+  accountId String?  @map("account_id") @db.Char(36)
+  account   Account? @relation("AccountTradeCommodities", fields: [accountId], references: [id], onDelete: SetNull)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([categoryId], name: "idx_tradeCommodity_categoryId")
+  @@index([accountId], name: "idx_tradeCommodity_accountId")
+  @@index([hsCode])
+  @@map("trade_commodity")
+}
+
+// ========================
+// ExportImport (연도 헤더)
+// ========================
+/// 한 국가–한 해(또는 한 기간)의 교역 총액.
+/// 주체는 현대 국가(countryId) 또는 역사 국가(historicalCountryId) — 둘 중 하나만 채운다.
+model ExportImport {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 현대 국가 ID (역사 국가 자료면 null)
+  countryId String? @map("country_id") @db.Char(36)
+
+  /// 역사 국가 ID (현대 국가 자료면 null)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 기원 구분 — 기원전 교역(로마–한나라)도 기록할 수 있어야 한다
+  era Era @default(AD)
+
+  /// 연도 (1 이상의 양수. 기원전이면 era=BC)
+  year Int
+
+  /// 기간 자료면 끝 연도 (예: 1860–1869 연평균). 단일 연도면 null
+  periodEndYear Int? @map("period_end_year")
+
+  /// 이 행이 기간의 평균인지 합계인지 (기간이 아니면 ANNUAL)
+  aggregation TradePeriodAggregation @default(ANNUAL)
+
+  /// 수출 총액 (아래 통화·자릿수 단위로)
+  exportValue Decimal? @map("export_value") @db.Decimal(24, 4)
+
+  /// 수입 총액
+  importValue Decimal? @map("import_value") @db.Decimal(24, 4)
+
+  /// 금액의 통화 코드 — 원자료 그대로 (USD · GBP · JPY · 兩 · 냥).
+  /// ref_currency FK가 아닌 자유 문자열인 이유: 근대 이전 통화는 참조표에 없다.
+  currencyCode String? @map("currency_code") @db.VarChar(20)
+
+  /// 금액의 자릿수 단위 — 원자료가 "백만 달러"면 MILLION
+  valueScale TradeValueScale @default(ONE) @map("value_scale")
+
+  /// 금액이 명목가인지 불변가인지 (예: "1913년 불변가격")
+  priceNote String? @map("price_note") @db.VarChar(120)
+
+  /// 총액의 기본 가격 기준 (흐름 행이 따로 밝히지 않으면 이걸로 읽는다)
+  priceBasis TradePriceBasis? @map("price_basis")
+
+  /// 자료 출처 (예: 조선총독부 통계연보, Maddison Project)
+  sourceName String? @map("source_name") @db.VarChar(200)
+
+  /// 출처 URL
+  sourceUrl String? @map("source_url") @db.VarChar(500)
+
+  /// 추정치인가 (실측 통계가 아니라 추계)
+  isEstimate Boolean @default(false) @map("is_estimate")
+
+  /// 자료 신뢰도
+  confidence TradeDataConfidence? @map("confidence")
+
+  /// 메모 — 통계 범위(식민지 포함 여부), 회계연도 등 단서
+  note String? @db.Text
+
+  //--- 관계 필드
+  country           Country?           @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  historicalCountry HistoricalCountry? @relation("HistoricalCountryTrade", fields: [historicalCountryId], references: [id], onDelete: Cascade)
+  /// 그 해에 무엇을·누구와 주고받았는지
+  items             ExportImportItem[]
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([countryId, era, year], name: "uniq_exportImport_country_year")
+  @@unique([historicalCountryId, era, year], name: "uniq_exportImport_hcountry_year")
+  @@index([historicalCountryId])
+  @@index([year])
+  @@map("export_import")
+}
+
+// ========================
+// ExportImportItem (교역 흐름)
+// ========================
+/// 그 해 교역의 한 줄 — **무엇을(품목) · 누구와(상대) · 얼마나(금액·수량) · 어떻게(제도·경로)**.
+///
+/// 저장은 배열 통째 delete-and-recreate다(자식 id를 클라이언트가 들고 다니지 않는다).
+model ExportImportItem {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 부모 교역 연도 행
+  exportImportId String @map("export_import_id") @db.Char(36)
+
+  /// 수출 / 수입
+  direction TradeDirection
+
+  /// 이 행이 어느 단면인지 — 합계 이중계산 방지
+  grain TradeFlowGrain @default(COMMODITY)
+
+  //--- 무엇을
+  /// 카탈로그 품목 (있으면 국가 간 교차 조회가 된다)
+  commodityId String? @map("commodity_id") @db.Char(36)
+
+  /// 표기명 — 카탈로그를 걸었어도 자료의 표기 그대로 남긴다(예: '生絲').
+  /// 카탈로그만 고르고 비워두면 서버가 품목명으로 채운다.
+  name String @db.VarChar(200)
+
+  /// 분류 — 카탈로그 품목이면 거기서 파생되지만, 자유 입력 행도 분류할 수 있게 직접 건다
+  categoryId String? @map("category_id") @db.Char(36)
+
+  /// HS 코드 (카탈로그와 다른 세분류를 적을 때)
+  hsCode String? @map("hs_code") @db.VarChar(20)
+
+  //--- 누구와 (넷 중 채워진 것으로 읽는다)
+  /// 교역 상대 — 현대 국가
+  partnerCountryId String? @map("partner_country_id") @db.Char(36)
+
+  /// 교역 상대 — 역사 국가 (청, 에도 막부)
+  partnerHistoricalCountryId String? @map("partner_historical_country_id") @db.Char(36)
+
+  /// 교역 상대 — 조직 (영국 동인도회사, 한자동맹, EU)
+  partnerOrganizationId String? @map("partner_organization_id") @db.Char(36)
+
+  /// 교역 상대 — 자유 표기 ("기타 유럽", "세계 전체", "남양 제도")
+  partnerLabel String? @map("partner_label") @db.VarChar(120)
+
+  //--- 얼마나
+  /// 금액 (부모 헤더의 통화·자릿수 단위)
+  value Decimal? @db.Decimal(24, 4)
+
+  /// 그 방향 총액에서 차지하는 비중(%) — 금액 없이 비중만 아는 자료가 흔하다
+  sharePct Decimal? @map("share_pct") @db.Decimal(5, 2)
+
+  /// 수량 (금액 없이 수량만 남은 자료도 많다 — 면화 몇 담(擔), 배 몇 척)
+  quantity Decimal? @db.Decimal(24, 4)
+
+  /// 수량 단위 (톤 · 배럴 · 대 · 척 · 필 · 담)
+  quantityUnit String? @map("quantity_unit") @db.VarChar(20)
+
+  /// 단가 (수량 단위당 금액)
+  unitPrice Decimal? @map("unit_price") @db.Decimal(20, 6)
+
+  /// 이 행의 가격 기준 (없으면 헤더의 기준)
+  priceBasis TradePriceBasis? @map("price_basis")
+
+  /// 그 방향 안에서의 순위 (수출 1위 품목 …)
+  rankInDirection Int? @map("rank_in_direction")
+
+  /// 전년 대비 증감률(%) — 자료에 그것만 있는 경우가 있다
+  yoyPct Decimal? @map("yoy_pct") @db.Decimal(8, 2)
+
+  //--- 어떻게
+  /// 교역 제도 (조공 · 사무역 · 밀무역 · 전매 …)
+  channel TradeChannel? @map("channel")
+
+  /// 제약 (금수 · 쿼터 · 금지품목 …)
+  restriction TradeRestrictionKind? @map("restriction")
+
+  /// 관세율(%)
+  tariffRatePct Decimal? @map("tariff_rate_pct") @db.Decimal(6, 3)
+
+  /// 중계무역·재수출인가 (홍콩·싱가포르를 거친 물량을 자국 수출로 세면 안 된다)
+  isReExport Boolean @default(false) @map("is_re_export")
+
+  /// 운송수단
+  transportMode TradeTransportMode? @map("transport_mode")
+
+  /// 교역로 (실크로드 · 희망봉 항로 · 시베리아 횡단철도)
+  routeName String? @map("route_name") @db.VarChar(120)
+
+  /// 교역항·관문 (광저우 · 부산 왜관 · 나가사키 데지마)
+  portName String? @map("port_name") @db.VarChar(120)
+
+  //--- 왜 (이 교역을 만든 것)
+  /// 관련 사건 (아편전쟁, 대공황)
+  relatedEventId String? @map("related_event_id") @db.Char(36)
+
+  /// 관련 조약 (강화도조약, 난징조약)
+  relatedTreatyId String? @map("related_treaty_id") @db.Char(36)
+
+  /// 관련 기업 (영국 동인도회사, 미쓰이물산)
+  relatedCompanyId String? @map("related_company_id") @db.Char(36)
+
+  //--- 자료
+  /// 추정치인가
+  isEstimate Boolean @default(false) @map("is_estimate")
+
+  /// 이 행만의 출처 단서
+  sourceNote String? @map("source_note") @db.VarChar(255)
+
+  /// 메모
+  notes String? @db.Text
+
+  /// 표시 순서 — 보통 금액·비중 내림차순
+  sortOrder Int @default(0) @map("sort_order")
+
+  //--- 관계 필드
+  exportImport             ExportImport            @relation(fields: [exportImportId], references: [id], onDelete: Cascade)
+  commodity                TradeCommodity?         @relation("TradeFlowCommodity", fields: [commodityId], references: [id], onDelete: SetNull)
+  category                 TradeCommodityCategory? @relation("TradeFlowCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+  partnerCountry           Country?                @relation("TradeItemPartnerCountry", fields: [partnerCountryId], references: [id], onDelete: SetNull)
+  partnerHistoricalCountry HistoricalCountry?      @relation("TradeItemPartnerHistoricalCountry", fields: [partnerHistoricalCountryId], references: [id], onDelete: SetNull)
+  partnerOrganization      Organization?           @relation("TradeItemPartnerOrganization", fields: [partnerOrganizationId], references: [id], onDelete: SetNull)
+  relatedEvent             Event?                  @relation("TradeFlowEvent", fields: [relatedEventId], references: [id], onDelete: SetNull)
+  relatedTreaty            Treaty?                 @relation("TradeFlowTreaty", fields: [relatedTreatyId], references: [id], onDelete: SetNull)
+  relatedCompany           Company?                @relation("TradeFlowCompany", fields: [relatedCompanyId], references: [id], onDelete: SetNull)
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([exportImportId, direction, sortOrder])
+  @@index([commodityId, direction])
+  @@index([categoryId])
+  @@index([partnerCountryId])
+  @@index([partnerHistoricalCountryId])
+  @@index([partnerOrganizationId])
+  @@index([relatedEventId])
+  @@index([relatedTreatyId])
+  @@index([relatedCompanyId])
+  @@map("export_import_item")
+}

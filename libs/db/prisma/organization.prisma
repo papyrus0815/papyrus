@@ -255,6 +255,9 @@ model Organization {
   /// 이 조직/기업이 참여한 중앙 사건(Event) 관계
   eventRelations EventOrganizationRelation[]
 
+  /// 교역 흐름에서 '상대'로 지목된 행들 (동인도회사·한자동맹 같은 비국가 교역 주체)
+  tradeFlowPartnerOf ExportImportItem[] @relation("TradeItemPartnerOrganization")
+
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

@@ -124,6 +124,8 @@ model Company {
   stockPoints             CompanyStockPoint[]
   analystRatings          CompanyAnalystRating[]
   outlooks                CompanyOutlook[]
+  /// 이 기업이 실어 나른 교역 흐름 (동인도회사 ↔ 차·아편)
+  tradeFlows              ExportImportItem[]        @relation("TradeFlowCompany")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

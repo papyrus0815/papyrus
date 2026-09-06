@@ -65,6 +65,8 @@ model Account {
   personTraitAssignments PersonTraitAssignment[] @relation("PersonTraitsToAccount")
   /// 이 계정이 등록한 인물 묶음(세대·계파 등)
   personGroups        PersonGroup[]           @relation("AccountPersonGroups")
+  /// 이 계정이 추가한 교역 품목 (null 계정 = 모두가 쓰는 공유 정본)
+  tradeCommodities    TradeCommodity[]        @relation("AccountTradeCommodities")
 
   /// 게이미피케이션: 누적 점수 (PointEntry 합계의 비정규화 캐시)
   totalPoints Int    @default(0) @map("total_points")

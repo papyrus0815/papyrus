@@ -287,6 +287,11 @@ model HistoricalCountry {
   /// 법령(`Law`) — 역사 국가 소속 법제
   laws Law[] @relation("LawHistoricalCountry")
 
+  /// 이 역사 국가의 연도별 교역 자료 (수출·수입)
+  exportsImports     ExportImport[]     @relation("HistoricalCountryTrade")
+  /// 교역 흐름에서 '상대'로 지목된 행들 (자국의 교역 자료가 아니다)
+  tradeFlowPartnerOf ExportImportItem[] @relation("TradeItemPartnerHistoricalCountry")
+
   // --- 등록 계정 (개인 정보 플랫폼: 본인만 수정/삭제)
   accountId String?  @map("account_id") @db.Char(36)
   account   Account? @relation("AccountHistoricalCountries", fields: [accountId], references: [id], onDelete: SetNull)
