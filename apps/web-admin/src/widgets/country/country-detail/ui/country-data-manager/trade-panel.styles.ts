@@ -176,3 +176,36 @@ export const MutedTag = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
 `
+
+/** 연결된 사건·조약·기업 한 칸 — 이름과 해제 버튼만 */
+export const LinkChip = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  button {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    font-size: 11px;
+    cursor: pointer;
+    &:hover {
+      color: ${({ theme }) => theme.colors.error};
+    }
+  }
+`

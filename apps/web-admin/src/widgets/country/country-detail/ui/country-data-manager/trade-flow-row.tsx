@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import {
   CHANNEL_OPTIONS,
@@ -14,6 +14,11 @@ import type {
 
 import * as S from './styles'
 import * as T from './trade-panel.styles'
+import {
+  TradeLinkPicker,
+  type TradeLinkKind,
+  type TradeLinkSelection,
+} from './trade-link-picker'
 
 /** 편집 중인 흐름 한 줄 — 서버 id는 들고 다니지 않는다(배열 통째 교체) */
 export interface FlowDraft {
@@ -44,6 +49,12 @@ export interface FlowDraft {
   transportMode: string
   routeName: string
   portName: string
+  relatedEventId: string
+  relatedEventTitle: string
+  relatedTreatyId: string
+  relatedTreatyName: string
+  relatedCompanyId: string
+  relatedCompanyName: string
   isEstimate: boolean
   sourceNote: string
   notes: string
@@ -86,6 +97,9 @@ export function TradeFlowRow({
   onToggleDetail,
   onRemove,
 }: TradeFlowRowProps) {
+  /* 어느 종류를 고르는 중인지 — null이면 닫힘 */
+  const [pickerKind, setPickerKind] = useState<TradeLinkKind | null>(null)
+
   const commodityByName = useMemo(() => {
     const map = new Map<string, TradeCommodity>()
     for (const commodity of commodities) map.set(commodity.name, commodity)
@@ -471,6 +485,33 @@ export function TradeFlowRow({
             />
           </S.Field>
 
+          <T.DetailGroupLabel>왜 — 이 교역을 만든 것</T.DetailGroupLabel>
+          <LinkField
+            label="관련 사건"
+            hint="아편전쟁"
+            name={flow.relatedEventTitle}
+            onPick={() => setPickerKind('event')}
+            onClear={() => onPatch({ relatedEventId: '', relatedEventTitle: '' })}
+          />
+          <LinkField
+            label="관련 조약"
+            hint="강화도조약"
+            name={flow.relatedTreatyName}
+            onPick={() => setPickerKind('treaty')}
+            onClear={() =>
+              onPatch({ relatedTreatyId: '', relatedTreatyName: '' })
+            }
+          />
+          <LinkField
+            label="관련 기업"
+            hint="동인도회사"
+            name={flow.relatedCompanyName}
+            onPick={() => setPickerKind('company')}
+            onClear={() =>
+              onPatch({ relatedCompanyId: '', relatedCompanyName: '' })
+            }
+          />
+
           <T.DetailGroupLabel>자료</T.DetailGroupLabel>
           <T.InlineCheck>
             <input
@@ -497,6 +538,55 @@ export function TradeFlowRow({
           </S.Field>
         </T.DetailGrid>
       )}
+
+      <TradeLinkPicker
+        kind={pickerKind}
+        onClose={() => setPickerKind(null)}
+        onSelect={(picked: TradeLinkSelection) => {
+          if (pickerKind === 'event') {
+            onPatch({ relatedEventId: picked.id, relatedEventTitle: picked.name })
+          } else if (pickerKind === 'treaty') {
+            onPatch({ relatedTreatyId: picked.id, relatedTreatyName: picked.name })
+          } else if (pickerKind === 'company') {
+            onPatch({
+              relatedCompanyId: picked.id,
+              relatedCompanyName: picked.name,
+            })
+          }
+        }}
+      />
     </T.FlowCard>
+  )
+}
+
+interface LinkFieldProps {
+  label: string
+  hint: string
+  name: string
+  onPick: () => void
+  onClear: () => void
+}
+
+/**
+ * 연결 한 칸 — 고르기 전에는 버튼, 고른 뒤에는 이름 + 해제.
+ * 자유 입력을 막는 이유: 이 칸의 값어치는 실제 엔티티로 이어지는 데 있다.
+ */
+function LinkField({ label, hint, name, onPick, onClear }: LinkFieldProps) {
+  return (
+    <S.Field>
+      {label}
+      {name ? (
+        <T.LinkChip>
+          <span title={name}>{name}</span>
+          <button type="button" aria-label={`${label} 해제`} onClick={onClear}>
+            ✕
+          </button>
+        </T.LinkChip>
+      ) : (
+        <S.GhostButton type="button" onClick={onPick}>
+          + {hint} …
+        </S.GhostButton>
+      )}
+    </S.Field>
   )
 }

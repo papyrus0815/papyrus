@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
+
 import { useCountries } from '@/entities/country/api'
 import { useHistoricalCountries } from '@/entities/historical-country/api'
+import { getApiConnection } from '@/shared/api/client'
+import { getOrganizations } from '@/shared/api/organizations'
 import {
   useDeleteTradeRecord,
   useTradeCommodities,
@@ -65,6 +69,12 @@ function emptyFlow(direction: 'EXPORT' | 'IMPORT'): FlowDraft {
     transportMode: '',
     routeName: '',
     portName: '',
+    relatedEventId: '',
+    relatedEventTitle: '',
+    relatedTreatyId: '',
+    relatedTreatyName: '',
+    relatedCompanyId: '',
+    relatedCompanyName: '',
     isEstimate: false,
     sourceNote: '',
     notes: '',
@@ -103,6 +113,15 @@ export function TradePanel({ countryId, historicalCountryId }: Props) {
   const { data: historicalCountries = [] } = useHistoricalCountries()
   const { data: commodities = [] } = useTradeCommodities()
   const { data: categories = [] } = useTradeCommodityCategories()
+  /*
+   * 상대가 국가가 아닌 교역이 있다 — 동인도회사·한자동맹·EU.
+   * 목록은 화면당 한 번이면 되므로 길게 잡아 둔다.
+   */
+  const { data: organizations = [] } = useQuery({
+    queryKey: ['organizations', 'trade-partner-options'],
+    queryFn: () => getOrganizations(getApiConnection()),
+    staleTime: 10 * 60 * 1000,
+  })
   const upsertMut = useUpsertTradeRecord()
   const deleteMut = useDeleteTradeRecord()
 
@@ -204,6 +223,12 @@ export function TradePanel({ countryId, historicalCountryId }: Props) {
         transportMode: item.transportMode ?? '',
         routeName: item.routeName ?? '',
         portName: item.portName ?? '',
+        relatedEventId: item.relatedEventId ?? '',
+        relatedEventTitle: item.relatedEventTitle ?? '',
+        relatedTreatyId: item.relatedTreatyId ?? '',
+        relatedTreatyName: item.relatedTreatyName ?? '',
+        relatedCompanyId: item.relatedCompanyId ?? '',
+        relatedCompanyName: item.relatedCompanyName ?? '',
         isEstimate: item.isEstimate,
         sourceNote: item.sourceNote ?? '',
         notes: item.notes ?? '',
@@ -292,6 +317,9 @@ export function TradePanel({ countryId, historicalCountryId }: Props) {
         null) as UpsertTradeFlowInput['transportMode'],
       routeName: text(flow.routeName),
       portName: text(flow.portName),
+      relatedEventId: flow.relatedEventId || null,
+      relatedTreatyId: flow.relatedTreatyId || null,
+      relatedCompanyId: flow.relatedCompanyId || null,
       isEstimate: flow.isEstimate,
       sourceNote: text(flow.sourceNote),
       notes: text(flow.notes),
@@ -683,7 +711,7 @@ export function TradePanel({ countryId, historicalCountryId }: Props) {
                   categories={categories}
                   countries={countries}
                   historicalCountries={historicalCountries}
-                  organizations={[]}
+                  organizations={organizations}
                   onPatch={(patch) => patchFlow(flow.key, patch)}
                   onToggleDetail={() =>
                     setOpenKeys((prev) =>

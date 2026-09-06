@@ -15,6 +15,8 @@ import {
 import { CountryDataManagerModal } from '../country-data-manager/country-data-manager-modal'
 import { IconChart } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
+import { CommodityFlowsModal } from './commodity-flows-modal'
+import { TradeTrendLine } from './trade-trend-line'
 
 interface TradeSectionProps {
   countryId: string
@@ -41,6 +43,11 @@ function toNumber(value: unknown): number | null {
  */
 export function TradeSection({ countryId, countryName }: TradeSectionProps) {
   const [managerOpen, setManagerOpen] = useState(false)
+  /* 칩을 눌러 "이 품목을 누가 주고받았나"로 건너뛴다 — 카탈로그 품목만 열린다 */
+  const [pickedCommodity, setPickedCommodity] = useState<{
+    id: string
+    name: string
+  } | null>(null)
   const query = useExportImports(countryId)
 
   const years = useMemo(() => {
@@ -160,16 +167,34 @@ export function TradeSection({ countryId, countryName }: TradeSectionProps) {
         )}
       </S.FactBar>
 
+      {/* 한 해만 보면 '많다/적다'를 말할 수 없다 — 등록된 해가 둘 이상이면 축을 세운다 */}
+      <TradeTrendLine
+        years={years.map((row) => ({
+          label: formatTradeYear(row.era, row.year),
+          signedYear: row.signedYear,
+          exportValue: row.exportValue,
+          importValue: row.importValue,
+        }))}
+      />
+
       {hasFlows && (
         <S.TradeItemGroups>
           {exports.commodities.length > 0 && (
-            <TradeDirectionView label="수출" items={exports.commodities} />
+            <TradeDirectionView
+              label="수출"
+              items={exports.commodities}
+              onPickCommodity={setPickedCommodity}
+            />
           )}
           {exports.partners.length > 0 && (
             <TradeItemLine label="수출 상대" items={exports.partners} showPartnerAsName />
           )}
           {imports.commodities.length > 0 && (
-            <TradeDirectionView label="수입" items={imports.commodities} />
+            <TradeDirectionView
+              label="수입"
+              items={imports.commodities}
+              onPickCommodity={setPickedCommodity}
+            />
           )}
           {imports.partners.length > 0 && (
             <TradeItemLine label="수입 상대" items={imports.partners} showPartnerAsName />
@@ -185,6 +210,12 @@ export function TradeSection({ countryId, countryName }: TradeSectionProps) {
         </S.TradeSourceLine>
       )}
 
+      <CommodityFlowsModal
+        commodityId={pickedCommodity?.id ?? null}
+        commodityName={pickedCommodity?.name ?? ''}
+        onClose={() => setPickedCommodity(null)}
+      />
+
       <CountryDataManagerModal
         countryId={countryId}
         countryName={countryName}
@@ -199,10 +230,15 @@ export function TradeSection({ countryId, countryName }: TradeSectionProps) {
 interface TradeDirectionViewProps {
   label: string
   items: ExportImportItem[]
+  onPickCommodity: (picked: { id: string; name: string }) => void
 }
 
 /** 한 방향의 구성 — 분류 막대(무엇 위주냐) 위에 품목 칩(구체적으로 무엇). */
-function TradeDirectionView({ label, items }: TradeDirectionViewProps) {
+function TradeDirectionView({
+  label,
+  items,
+  onPickCommodity,
+}: TradeDirectionViewProps) {
   /*
    * 막대의 몫은 비중을 먼저 쓰고, 없으면 금액으로 대신한다. 둘 다 없는 행은
    * 크기를 알 수 없으므로 막대에서 빼되 칩에는 그대로 남긴다 — 이름만 아는 것도 정보다.
@@ -215,14 +251,21 @@ function TradeDirectionView({ label, items }: TradeDirectionViewProps) {
     for (const item of items) {
       const weight = item.sharePct ?? item.value ?? 0
       if (weight <= 0) continue
-      const key = item.categoryId ?? item.categoryName ?? '기타'
+      /*
+       * 대분류로 묶는다. 중분류는 대분류 색을 물려받아 형제끼리 색이 같으므로
+       * (자동차·선박이 둘 다 '운송장비' 색) 중분류로 그리면 막대를 읽을 수 없다.
+       * "무엇 위주의 나라인가"도 원래 대분류 단위 질문이다.
+       */
+      const key = item.rootCategoryId ?? item.categoryId ?? '기타'
       const current = weights.get(key)
       if (current) {
         current.weight += weight
       } else {
         weights.set(key, {
-          name: item.categoryName ?? '분류 없음',
-          color: categoryColor(item.categoryColorKey),
+          name: item.rootCategoryName ?? item.categoryName ?? '분류 없음',
+          color: categoryColor(
+            item.rootCategoryColorKey ?? item.categoryColorKey,
+          ),
           weight,
         })
       }
@@ -242,7 +285,7 @@ function TradeDirectionView({ label, items }: TradeDirectionViewProps) {
         <>
           <S.TradeCompositionBar
             role="img"
-            aria-label={`${label} 분류 구성: ${slices
+            aria-label={`${label} 분류 구성(등록된 품목 기준): ${slices
               .map((slice) => `${slice.name} ${slice.pct.toFixed(0)}%`)
               .join(', ')}`}
           >
@@ -255,6 +298,13 @@ function TradeDirectionView({ label, items }: TradeDirectionViewProps) {
             ))}
           </S.TradeCompositionBar>
           <S.TradeCompositionLegend>
+            {/*
+              막대는 등록된 품목끼리의 비율이지 교역 전체의 비율이 아니다.
+              자료가 "주요 품목만" 싣는 일이 흔해, 모수를 밝히지 않으면 오독된다.
+            */}
+            <S.TradeCompositionLegendItem>
+              등록 품목 기준
+            </S.TradeCompositionLegendItem>
             {slices.map((slice) => (
               <S.TradeCompositionLegendItem key={slice.name}>
                 <S.TradeCompositionDot $color={slice.color} />
@@ -264,7 +314,11 @@ function TradeDirectionView({ label, items }: TradeDirectionViewProps) {
           </S.TradeCompositionLegend>
         </>
       )}
-      <TradeItemLine label={`${label} 품목`} items={items} />
+      <TradeItemLine
+        label={`${label} 품목`}
+        items={items}
+        onPickCommodity={onPickCommodity}
+      />
     </S.TradeDirectionBlock>
   )
 }
@@ -274,10 +328,17 @@ interface TradeItemLineProps {
   items: ExportImportItem[]
   /** 상대국별 행은 상대 이름이 곧 제목이다 */
   showPartnerAsName?: boolean
+  /** 카탈로그 품목을 문 칩만 누를 수 있다 — 자유 입력 행은 갈 곳이 없다 */
+  onPickCommodity?: (picked: { id: string; name: string }) => void
 }
 
 /** 칩 한 줄 — 이름 + (비중 또는 금액 또는 수량) + 상대 + 제도. 비중이 있으면 그쪽이 더 읽힌다. */
-function TradeItemLine({ label, items, showPartnerAsName }: TradeItemLineProps) {
+function TradeItemLine({
+  label,
+  items,
+  showPartnerAsName,
+  onPickCommodity,
+}: TradeItemLineProps) {
   return (
     <S.TradeItemGroup>
       <S.TradeItemLabel>{label}</S.TradeItemLabel>
@@ -295,8 +356,22 @@ function TradeItemLine({ label, items, showPartnerAsName }: TradeItemLineProps) 
           const title = showPartnerAsName
             ? (item.partnerName ?? item.name)
             : item.name
+          const linkable =
+            onPickCommodity != null && item.commodityId != null && !showPartnerAsName
           return (
-            <S.TradeItemChip key={item.id}>
+            <S.TradeItemChip
+              key={item.id}
+              as={linkable ? 'button' : 'span'}
+              type={linkable ? 'button' : undefined}
+              $clickable={linkable}
+              title={linkable ? `${item.name} 교역 기록 보기` : undefined}
+              onClick={
+                linkable
+                  ? () =>
+                      onPickCommodity({ id: item.commodityId!, name: item.name })
+                  : undefined
+              }
+            >
               <S.TradeItemName>
                 {item.categoryEmoji && !showPartnerAsName
                   ? `${item.categoryEmoji} `
@@ -317,6 +392,20 @@ function TradeItemLine({ label, items, showPartnerAsName }: TradeItemLineProps) 
                 </S.TradeItemPartner>
               )}
               {item.isReExport && <S.TradeItemPartner>재수출</S.TradeItemPartner>}
+              {/*
+                왜 그 교역이 있었는지 — 하나만 붙인다. 셋을 다 늘어놓으면 칩이
+                문장이 되어 목록으로 안 읽힌다. 자세한 건 편집 패널에서 본다.
+              */}
+              {(item.relatedEventTitle ??
+                item.relatedTreatyName ??
+                item.relatedCompanyName) && (
+                <S.TradeItemPartner>
+                  ·{' '}
+                  {item.relatedEventTitle ??
+                    item.relatedTreatyName ??
+                    item.relatedCompanyName}
+                </S.TradeItemPartner>
+              )}
             </S.TradeItemChip>
           )
         })}

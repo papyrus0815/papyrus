@@ -1744,11 +1744,24 @@ export const TradeItemChips = styled.div`
   gap: 6px;
 `
 
-export const TradeItemChip = styled.span`
+export const TradeItemChip = styled.span<{ $clickable?: boolean }>`
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
   padding: 4px 10px;
+  font: inherit;
+  text-align: left;
+  cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
+
+  /* 누를 수 있는 칩만 반응한다 — 자유 입력 품목은 갈 곳이 없어 그대로 둔다 */
+  &:hover {
+    border-color: ${({ theme, $clickable }) =>
+      $clickable ? theme.colors.active : undefined};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 1px;
+  }
   border-radius: ${radius.pill}px;
   background: ${({ theme }) =>
     theme.mode === 'dark'
