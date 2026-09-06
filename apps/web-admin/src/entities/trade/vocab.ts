@@ -178,28 +178,81 @@ export function formatTradeYear(
  *
  * 분류마다 색을 고정해야 구성 막대와 범례가 화면을 옮겨도 같은 뜻으로 읽힌다.
  * 키를 모르면 회색으로 떨어뜨린다 — 색이 없다고 자료가 없는 건 아니다.
+ *
+ * **대분류가 15개라 색만으로는 끝까지 갈라지지 않는다.** 그래서 두 가지를 같이 한다.
+ * ⑴ 계열은 지키되 명도·채도를 벌려 가장 나쁜 쌍을 끌어올렸다 —
+ *    옛 값은 무기(#ef4444)와 섬유(#f43f5e)가 정상 시각 ΔE 3.5로 사실상 같은 빨강,
+ *    운송(#6366f1)·화학(#8b5cf6)·전자(#3b82f6)가 ΔE 6.3~7.2로 한 덩어리였고
+ *    15색 중 8색이 흰 배경 대비 3:1 미만이었다. 지금은 최악 쌍 6.9, 대비 미달 0.
+ * ⑵ 그래도 하한(15)에는 못 미치므로 **식별은 색이 아니라 이름표가 맡는다** — 범례를
+ *    막대 조각과 같은 순서로 놓아 왼쪽부터 짝지어 읽게 한다. 색은 묶음을 보여줄 뿐
+ *    혼자 뜻을 지지 않는다.
+ * 값을 바꾸려면 눈대중 말고 팔레트 검증을 다시 돌릴 것.
  */
-const CATEGORY_COLORS: Record<string, string> = {
-  lime: '#84cc16',
-  cyan: '#06b6d4',
-  amber: '#f59e0b',
-  slate: '#64748b',
-  violet: '#8b5cf6',
-  rose: '#f43f5e',
-  stone: '#78716c',
-  blue: '#3b82f6',
-  indigo: '#6366f1',
-  red: '#ef4444',
-  yellow: '#eab308',
-  orange: '#f97316',
-  teal: '#14b8a6',
-  emerald: '#10b981',
-  zinc: '#a1a1aa',
+const CATEGORY_COLORS: Record<'light' | 'dark', Record<string, string>> = {
+  light: {
+    lime: '#5d8c0a', // 농산물
+    cyan: '#0891b2', // 수산물
+    amber: '#c2740a', // 에너지·광물
+    slate: '#546b8a', // 금속·소재
+    violet: '#7c3aed', // 화학·의약
+    rose: '#db2777', // 섬유·의류
+    stone: '#78716c', // 기계
+    blue: '#2a78d6', // 전자·전기
+    indigo: '#4338ca', // 운송장비
+    red: '#b91c1c', // 무기·군수
+    yellow: '#a16207', // 사치품·귀금속
+    orange: '#ea580c', // 기호품
+    teal: '#0d9488', // 소비재
+    emerald: '#16a34a', // 서비스
+    zinc: '#8b8b93', // 기타
+  },
+  /* 같은 계열을 어두운 면에 맞춰 한두 단계 밝힌 값 — 라이트용을 그대로 쓰면
+     남색(#4338ca 2.27:1)·빨강(#b91c1c 2.77:1)이 배경에 잠긴다 */
+  dark: {
+    lime: '#7cb518',
+    cyan: '#06b6d4',
+    amber: '#d9820c',
+    slate: '#7b93b5',
+    violet: '#a78bfa',
+    rose: '#f0509a',
+    stone: '#a58260',
+    blue: '#3987e5',
+    indigo: '#7a72ee',
+    red: '#ef4444',
+    yellow: '#c99a10',
+    orange: '#f97316',
+    teal: '#17b8a6',
+    emerald: '#2eb85c',
+    zinc: '#a1a1aa',
+  },
 }
 
-const FALLBACK_CATEGORY_COLOR = '#94a3b8'
+const FALLBACK_CATEGORY_COLOR = { light: '#7a8699', dark: '#9aa5b5' }
 
-export function categoryColor(colorKey: string | null | undefined): string {
-  if (!colorKey) return FALLBACK_CATEGORY_COLOR
-  return CATEGORY_COLORS[colorKey] ?? FALLBACK_CATEGORY_COLOR
+/**
+ * 방향 색 — 수출·수입은 **맞선** 두 값이라 따뜻한 색 하나, 찬 색 하나로 갈라야
+ * 대립으로 읽힌다. 예전엔 초록(#10b981)·청록(#06b6d4)이라 둘 다 찬 색이었고
+ * 정상 시각 ΔE 12.5(하한 15)로 색만으로는 갈라지지 않았다.
+ * 아래 두 쌍은 명도대·채도·색각이상 분리·배경 대비를 모두 통과한 값이다.
+ */
+export const DIRECTION_COLORS = {
+  light: { EXPORT: '#17a06f', IMPORT: '#eb6834' },
+  dark: { EXPORT: '#199e70', IMPORT: '#d95926' },
+} as const
+
+export function directionColor(
+  direction: 'EXPORT' | 'IMPORT',
+  isDark: boolean,
+): string {
+  return DIRECTION_COLORS[isDark ? 'dark' : 'light'][direction]
+}
+
+export function categoryColor(
+  colorKey: string | null | undefined,
+  isDark = false,
+): string {
+  const mode = isDark ? 'dark' : 'light'
+  if (!colorKey) return FALLBACK_CATEGORY_COLOR[mode]
+  return CATEGORY_COLORS[mode][colorKey] ?? FALLBACK_CATEGORY_COLOR[mode]
 }

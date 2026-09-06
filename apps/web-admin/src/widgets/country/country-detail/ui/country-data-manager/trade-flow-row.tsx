@@ -237,7 +237,6 @@ export function TradeFlowRow({
           />
           {linkedCommodity ? (
             <T.MutedTag title={linkedCommodity.categoryPath}>
-              {linkedCommodity.categoryEmoji ?? '📦'}{' '}
               {linkedCommodity.categoryPath}
             </T.MutedTag>
           ) : flow.name.trim() ? (
