@@ -35,8 +35,10 @@ import {
 } from './country-detail-dashboard.icons'
 import * as S from './country-detail-dashboard.styles'
 import { ActivityFeed } from './dashboard-panels/activity-feed'
-import { ClickableStatCard } from './dashboard-panels/clickable-stat-card'
-import type { SparkAccent } from './dashboard-panels/sparkline'
+import {
+  RecordLedger,
+  type RecordLedgerRow,
+} from './dashboard-panels/record-ledger'
 import { CompareLine } from './dashboard-panels/compare-line'
 import { CompletenessPanel } from './dashboard-panels/completeness-panel'
 import { CurrentCabinetPanel } from './dashboard-panels/current-cabinet-panel'
@@ -55,23 +57,6 @@ import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
 import { TradeSection } from './dashboard-panels/trade-section'
-
-/** 기록 축 한 줄 — 카드로 세울지, 빈 축 칩으로 내릴지는 값이 결정한다 */
-interface RecordAxis {
-  key: string
-  accent: SparkAccent
-  label: string
-  unit: string
-  value: number
-  delta: number
-  isLoading: boolean
-  icon: ReactNode
-  /** null이면 아직 갈 곳이 없는 축(군대) */
-  onClick: (() => void) | null
-  badge?: string
-  sparkline?: number[]
-  sparklineSrLabel?: string
-}
 
 /** 대시보드 계보 요약에 한 번에 보여줄 과거 국가 수 */
 const LINEAGE_SUMMARY_LIMIT = 12
@@ -222,10 +207,9 @@ export function CountryDetailDashboard({
    * 기록 축 정의 — 값이 있는 축은 카드로, 0인 축은 아래 한 줄 칩으로 갈린다.
    * 로딩 중에는 '비어 있다'고 단정하지 않고 카드 쪽에 남긴다(스켈레톤이 그려진다).
    */
-  const recordAxes: RecordAxis[] = [
+  const recordAxes: RecordLedgerRow[] = [
     {
       key: 'person',
-      accent: 'violet',
       label: '인물',
       unit: '명',
       value: stats.personCount,
@@ -236,7 +220,6 @@ export function CountryDetailDashboard({
     },
     {
       key: 'event',
-      accent: 'amber',
       label: '사건',
       unit: '건',
       value: stats.eventCount,
@@ -247,7 +230,6 @@ export function CountryDetailDashboard({
     },
     {
       key: 'administration',
-      accent: 'sky',
       label: '행정조직',
       unit: '개',
       value: stats.administrationCount,
@@ -258,7 +240,6 @@ export function CountryDetailDashboard({
     },
     {
       key: 'city',
-      accent: 'emerald',
       label: '행정구역',
       unit: '개',
       value: stats.cityCount,
@@ -269,7 +250,6 @@ export function CountryDetailDashboard({
     },
     {
       key: 'treaty',
-      accent: 'indigo',
       label: '조약',
       unit: '건',
       value: stats.treatyCount,
@@ -280,7 +260,6 @@ export function CountryDetailDashboard({
     },
     {
       key: 'military',
-      accent: 'rose',
       label: '군대',
       unit: '개',
       value: stats.militaryCount,
@@ -291,13 +270,6 @@ export function CountryDetailDashboard({
       badge: '준비 중',
     },
   ]
-  const filledRecordAxes = recordAxes.filter(
-    (axis) => axis.isLoading || axis.value > 0,
-  )
-  const emptyRecordAxes = recordAxes.filter(
-    (axis) => !axis.isLoading && axis.value === 0,
-  )
-
   const managementPanels = (
     <>
         <S.Section>
@@ -486,10 +458,13 @@ export function CountryDetailDashboard({
       {/*
         4. 기록 — 각 탭으로 가는 입구. 숫자가 곧 링크다.
 
-        예전엔 6칸을 무조건 카드로 그렸다. 실DB에서 조약은 전 국가 0행, 군대는 country_id가
-        전부 비어 있어 **어떤 국가에서도** 값이 생기지 않고, 행정구역은 69개국이 0이다.
-        그 결과 첫 화면에서 가장 큰 글자가 `0`이 됐다. 값이 있는 축만 카드로 세우고,
-        빈 축은 아래 한 줄에 모아 '채우러 가기'만 남긴다.
+        카드에서 원장(막대 목록)으로 바꿨다. 카드는 축마다 제 상자를 가지므로 "인물 20"과
+        "사건 39" 중 어느 쪽이 많은지 **눈으로 견줄 수가 없고**, 폭도 380px에서 멈춰
+        본문 오른쪽이 통째로 비었다. 한 줄에 하나씩 막대로 세우면 순위가 즉시 읽히고
+        폭도 자연히 다 쓴다.
+
+        값이 0인 축은 막대를 그리지 않고 아래 한 줄로 접는다 — 실DB에서 조약은 전 국가
+        0행, 군대는 country_id가 전부 비어 어떤 국가에서도 값이 생기지 않는다.
       */}
       <S.Section>
         <S.SectionTitleRow>
@@ -501,48 +476,7 @@ export function CountryDetailDashboard({
             총 {totalRegistered.toLocaleString('ko-KR')}건
           </S.SectionCountChip>
         </S.SectionTitleRow>
-        {filledRecordAxes.length > 0 && (
-          <S.StatsGrid>
-            {filledRecordAxes.map((axis) => (
-              <ClickableStatCard
-                key={axis.key}
-                accent={axis.accent}
-                label={axis.label}
-                unit={axis.unit}
-                value={axis.value}
-                delta={axis.delta}
-                isLoading={axis.isLoading}
-                icon={axis.icon}
-                onClick={axis.onClick}
-                badge={axis.badge}
-                sparkline={axis.sparkline}
-                sparklineSrLabel={axis.sparklineSrLabel}
-              />
-            ))}
-          </S.StatsGrid>
-        )}
-        {emptyRecordAxes.length > 0 && (
-          <S.EmptyAxisRow>
-            <S.EmptyAxisLabel>아직 없는 기록</S.EmptyAxisLabel>
-            {emptyRecordAxes.map((axis) =>
-              axis.onClick ? (
-                <S.EmptyAxisChip
-                  key={axis.key}
-                  type="button"
-                  onClick={axis.onClick}
-                  aria-label={`${axis.label} 기록하러 가기`}
-                >
-                  {axis.label}
-                </S.EmptyAxisChip>
-              ) : (
-                <S.EmptyAxisChipStatic key={axis.key}>
-                  {axis.label}
-                  {axis.badge ? ` · ${axis.badge}` : ''}
-                </S.EmptyAxisChipStatic>
-              ),
-            )}
-          </S.EmptyAxisRow>
-        )}
+        <RecordLedger rows={recordAxes} />
         {/*
           사건 연표 — 숫자 하나로는 "이 나라에 사건이 몇 건"까지만 답한다. 어느 시대의
           나라인지는 분포가 말한다. 달력이 아니라 세기 막대인 이유는 한 나라의 사건이
