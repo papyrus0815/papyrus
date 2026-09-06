@@ -29,6 +29,7 @@ import { GlossaryModule } from '../../../libs/glossary/glossary.module'
 import { TreatyModule } from '../../../libs/treaty/treaty.module'
 import { ElectionModule } from '../../../libs/election/election.module'
 import { PoliticalSystemModule } from '../../../libs/political-system/political-system.module'
+import { TradeModule } from '../../../libs/trade/trade.module'
 import { EntityLinkSearchModule } from '../../../libs/entity-link-search/entity-link-search.module'
 import { NaturalFeatureModule } from '../../../libs/natural-feature/natural-feature.module'
 import { InfrastructureModule } from '../../../libs/infrastructure/infrastructure.module'
@@ -82,6 +83,7 @@ import {
     TreatyModule,
     ElectionModule,
     PoliticalSystemModule,
+    TradeModule,
     EntityLinkSearchModule,
     NaturalFeatureModule,
     InfrastructureModule,

@@ -24,6 +24,15 @@ import {
   UpdateCountryRecordDto,
   UpsertExportImportDto,
 } from '../presentation/dto'
+import {
+  RECORD_INCLUDE,
+  serializeRecord,
+} from '../../trade/application/trade.serializer'
+import {
+  assertPeriodOrder,
+  buildFlowCreateData,
+  buildRecordWritable,
+} from '../../trade/application/trade-write.util'
 
 /** 국가 완성도 신호: 썸네일 / 수도 / 현지어명 (각 1신호) */
 function countryCompletenessBonus(c: {
@@ -632,15 +641,20 @@ export class CountryService {
   }
 
   // ── 교역 (ExportImport) CRUD ─────────────────────────────────
+  //
+  // 정본 로직은 교역 도메인(`libs/trade`)에 있다. 여기는 현대 국가 스코프로 좁힌
+  // 얇은 창구 — 응답 모양은 `/trade/records`와 완전히 같다.
 
   async getExportImports(countryId: string, accountId?: string) {
     await this.assertCountryAccess(countryId, accountId)
     const rows = await this.prisma.exportImport.findMany({
       where: { countryId },
-      orderBy: { year: 'asc' },
-      include: { items: EXPORT_IMPORT_ITEM_INCLUDE },
+      include: RECORD_INCLUDE,
     })
-    return rows.map(serializeExportImport)
+    /* 정렬은 부호 연도로 — (era, year) 그대로 세우면 기원전이 뒤집힌다 */
+    return rows
+      .map(serializeRecord)
+      .sort((left, right) => left.signedYear - right.signedYear)
   }
 
   async upsertExportImport(
@@ -649,50 +663,47 @@ export class CountryService {
     accountId?: string,
   ) {
     await this.assertCountryAccess(countryId, accountId)
-    const { year, exportValue, importValue, items } = dto
-    const writable = { exportValue, importValue }
+    assertPeriodOrder(dto)
+    const era = dto.era ?? 'AD'
+    const writable = buildRecordWritable(dto)
 
     /*
-     * 총액과 품목은 한 트랜잭션이다 — 품목 교체가 실패했는데 총액만 바뀌어 있으면
+     * 총액과 흐름은 한 트랜잭션이다 — 흐름 교체가 실패했는데 총액만 바뀌어 있으면
      * "수출 6.8조인데 품목은 작년 것"인 상태가 남는다.
      *
-     * items가 undefined면 품목을 건드리지 않는다. 총액만 고치는 호출(기존 화면)이
-     * 품목을 조용히 날리면 안 된다. 빈 배열은 명시적인 '전부 지우기'다.
+     * items가 undefined면 흐름을 건드리지 않는다. 총액만 고치는 호출이 품목을 조용히
+     * 날리면 안 된다. 빈 배열은 명시적인 '전부 지우기'다.
      */
     const row = await this.prisma.$transaction(async (tx) => {
       const parent = await tx.exportImport.upsert({
-        where: { uniq_exportImport_country_year: { countryId, year } },
-        create: { countryId, year, ...writable },
+        where: {
+          uniq_exportImport_country_year: { countryId, era, year: dto.year },
+        },
+        create: { countryId, era, year: dto.year, ...writable },
         update: writable,
       })
 
-      if (items !== undefined) {
+      if (dto.items !== undefined) {
         await tx.exportImportItem.deleteMany({
           where: { exportImportId: parent.id },
         })
-        if (items.length > 0) {
-          await tx.exportImportItem.createMany({
-            data: items.map((item, index) => ({
-              exportImportId: parent.id,
-              direction: item.direction,
-              name: item.name,
-              hsCode: item.hsCode ?? null,
-              value: item.value ?? null,
-              sharePct: item.sharePct ?? null,
-              partnerCountryId: item.partnerCountryId || null,
-              sortOrder: item.sortOrder ?? index,
-            })),
-          })
+        if (dto.items.length > 0) {
+          const data = await buildFlowCreateData(
+            tx as never,
+            parent.id,
+            dto.items,
+          )
+          await tx.exportImportItem.createMany({ data: data as never })
         }
       }
 
       return tx.exportImport.findUniqueOrThrow({
         where: { id: parent.id },
-        include: { items: EXPORT_IMPORT_ITEM_INCLUDE },
+        include: RECORD_INCLUDE,
       })
     })
 
-    return serializeExportImport(row)
+    return serializeRecord(row)
   }
 
   async deleteExportImport(
@@ -729,62 +740,5 @@ function serializeCountryRecord(record: {
     recordedAt: record.recordedAt.toISOString(),
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
-  }
-}
-
-/** 품목은 방향 → 순서 → 이름으로 세운다. 상대국 이름은 함께 내려 프론트 왕복을 줄인다. */
-const EXPORT_IMPORT_ITEM_INCLUDE = {
-  include: { partnerCountry: { select: { name: true } } },
-  /* `as const`를 걸면 orderBy 배열이 readonly가 돼 Prisma 인자 타입과 어긋난다 */
-  orderBy: [
-    { direction: 'asc' as const },
-    { sortOrder: 'asc' as const },
-    { name: 'asc' as const },
-  ],
-}
-
-function serializeExportImportItem(item: {
-  id: string
-  direction: string
-  name: string
-  hsCode: string | null
-  value: unknown
-  sharePct: unknown
-  partnerCountryId: string | null
-  partnerCountry?: { name: string } | null
-  sortOrder: number
-}) {
-  return {
-    id: item.id,
-    direction: item.direction as 'EXPORT' | 'IMPORT',
-    name: item.name,
-    hsCode: item.hsCode,
-    value: item.value != null ? Number(item.value) : null,
-    sharePct: item.sharePct != null ? Number(item.sharePct) : null,
-    partnerCountryId: item.partnerCountryId,
-    partnerCountryName: item.partnerCountry?.name ?? null,
-    sortOrder: item.sortOrder,
-  }
-}
-
-function serializeExportImport(row: {
-  id: string
-  countryId: string
-  year: number
-  exportValue: unknown
-  importValue: unknown
-  items?: Parameters<typeof serializeExportImportItem>[0][]
-  createdAt: Date
-  updatedAt: Date
-}) {
-  return {
-    id: row.id,
-    countryId: row.countryId,
-    year: row.year,
-    exportValue: row.exportValue != null ? Number(row.exportValue) : null,
-    importValue: row.importValue != null ? Number(row.importValue) : null,
-    items: (row.items ?? []).map(serializeExportImportItem),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
   }
 }
