@@ -1780,6 +1780,64 @@ export const TradeItemPartner = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
+/* ─── 교역 분류 구성 막대 (2026-09) ──────────────────────────────────── */
+
+/**
+ * 품목을 분류로 묶어 한 줄 막대로 보여준다.
+ * 칩 목록은 "무엇을"에는 답해도 "무엇 위주의 나라인가"에는 답하지 못한다 — 원유·석탄이
+ * 따로 놓이면 '에너지 60%'라는 한눈이 사라진다. 이 막대가 그 층위를 맡는다.
+ */
+export const TradeCompositionBar = styled.div`
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: ${radius.pill}px;
+  overflow: hidden;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.05)'};
+`
+
+export const TradeCompositionSlice = styled.div<{ $color: string }>`
+  background: ${({ $color }) => $color};
+  min-width: 2px;
+`
+
+export const TradeCompositionLegend = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const TradeCompositionLegendItem = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+`
+
+export const TradeCompositionDot = styled.span<{ $color: string }>`
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+`
+
+export const TradeDirectionBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+`
+
+export const TradeSourceLine = styled.p`
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 /* ─── 기업 (2026-09) ──────────────────────────────────────────────────── */
 
 export const CompanyRow = styled.div`

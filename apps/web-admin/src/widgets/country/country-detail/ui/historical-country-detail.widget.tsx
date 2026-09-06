@@ -48,6 +48,7 @@ import { CountryFlag } from '../../shared'
 import * as S from './country-detail.styles'
 import { CountryElectionsSection } from './country-elections-section.widget'
 import { CountryLawsSection } from './country-laws-section.widget'
+import { TradePanel } from './country-data-manager/trade-panel'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { EventsTimelineSection } from './events-timeline-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
@@ -151,6 +152,7 @@ export type HistoricalCountryTab =
   | 'elections' // 선거·투표 (역사 국가 맥락)
   | 'laws' // 법령 카탈로그
   | 'ethnicity' // 구성 민족
+  | 'trade' // 교역 (수출·수입)
   | 'succession' // 계승 관계
   | 'membership' // 소속·구성 (신성로마-제후국 등)
   | 'relation' // 국가 관계 (한·중 조공, 동맹 등)
@@ -364,6 +366,24 @@ export function HistoricalCountryDetail({
                   )}
                   {activeTab === 'ethnicity' && (
                     <EthnicitySection historicalCountryId={country.id} />
+                  )}
+                  {/*
+                    교역 — 예전에는 현대 국가 전용이라 조선·청의 무역을 담을 자리가
+                    아예 없었다. 편집 패널은 현대·역사 국가를 함께 다룬다.
+                  */}
+                  {activeTab === 'trade' && (
+                    <div
+                      style={{
+                        padding: '16px 24px 32px',
+                        maxWidth: '100%',
+                        flex: 1,
+                        minHeight: 0,
+                        overflowY: 'auto',
+                        alignSelf: 'stretch',
+                      }}
+                    >
+                      <TradePanel historicalCountryId={country.id} />
+                    </div>
                   )}
                   {activeTab === 'succession' && (
                     <SuccessionSection country={country} />
@@ -586,6 +606,7 @@ function HistoricalCountryTabs({
     { id: 'elections', label: '선거·투표' },
     { id: 'laws', label: '법령' },
     { id: 'ethnicity', label: '민족' },
+    { id: 'trade', label: '교역' },
     { id: 'succession', label: '계승' },
     { id: 'membership', label: '소속·구성' },
     { id: 'relation', label: '국가 관계' },
