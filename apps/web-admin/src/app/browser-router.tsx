@@ -17,6 +17,7 @@ import { personGroupsRoutes } from '@/pages/person-groups/person-groups.route'
 import { ethnicitiesRoutes } from '@/pages/ethnicities/ethnicities.route'
 import { organizationsRoutes } from '@/pages/organizations/organizations.route'
 import { companiesRoutes, companyFormRoutes } from '@/pages/companies/companies.route'
+import { treatiesRoutes } from '@/pages/treaties/treaties.route'
 import { companyCategoriesRoutes } from '@/pages/company-categories/company-categories.route'
 import { eventFormRoutes, eventPageRoute } from '@/pages/events/event-route'
 import { countryRoute } from '@/pages/country/country.route'
@@ -209,6 +210,7 @@ const appRouterConfig = [
               dynastyRoute,
               ...personGroupsRoutes,
               ...companiesRoutes,
+              ...treatiesRoutes,
               eventPageRoute,
             ],
           },

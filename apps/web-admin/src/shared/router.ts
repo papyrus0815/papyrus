@@ -42,6 +42,13 @@ export const pathKeys = {
   personGroupDetail: (groupId: string) =>
     `/${ROUTES.PERSON_GROUPS}/${encodeURIComponent(groupId)}/`,
 
+  /** 조약 카탈로그 — 국가에 매이지 않은 조약 전역 목록·상세 */
+  treaties: {
+    list: () => `/${ROUTES.TREATIES}/`,
+    detail: (treatyId: string) =>
+      `/${ROUTES.TREATIES}/${encodeURIComponent(treatyId)}`,
+  },
+
   // --- Country (구 /history/country/*) ---
   country: () => `/${ROUTES.COUNTRY}/`,
   /** 국가 상세 고유 URL (경로 기반) */

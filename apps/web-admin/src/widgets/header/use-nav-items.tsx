@@ -1,12 +1,19 @@
 /**
  * 전역 내비게이션 항목 정의 — 상단 헤더와 좌측 레일이 같은 목록을 쓰도록 분리했다.
  *
- * 항목은 11개: 국가·사건·인물·저원·군사·가문·민족·집단·대륙·수장 비교·기업.
+ * 항목은 12개: 국가·사건·인물·저원·군사·가문·민족·집단·대륙·수장 비교·조약·기업.
  * 인물은 대시보드 메뉴에서 오지만 순서상 사건 다음이라 따로 끼워 넣는다.
  */
 import React, { useMemo } from 'react'
 
-import { FiAward, FiBriefcase, FiGlobe, FiLayers, FiMap } from 'react-icons/fi'
+import {
+  FiAward,
+  FiBriefcase,
+  FiFileText,
+  FiGlobe,
+  FiLayers,
+  FiMap,
+} from 'react-icons/fi'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
@@ -85,6 +92,13 @@ export function useNavItems(): NavItemSpec[] {
         icon: <FiAward size={18} />,
         onClick: go(pathKeys.headsOfState()),
         active: location.pathname.startsWith('/heads-of-state'),
+      },
+      {
+        key: 'treaties',
+        label: '조약',
+        icon: <FiFileText size={18} />,
+        onClick: go(pathKeys.treaties.list()),
+        active: location.pathname.startsWith('/treaties'),
       },
       {
         key: 'companies',

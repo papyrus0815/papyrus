@@ -20,6 +20,11 @@ import { Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 
 import {
+  buildCountryScopeOr,
+  resolveLinkedHistoricalCountryIds,
+} from '../../country/domain/country-scope.util'
+
+import {
   AddTreatyImageBodyDto,
   CreateTreatyBodyDto,
   CreateTreatySignatoryBodyDto,
@@ -191,15 +196,32 @@ export class TreatyController {
       parts.push({
         signatories: { some: { cabinetId: query.cabinetId } },
       })
-    } else if (query.countryId || query.historicalCountryId) {
+    } else if (query.countryId) {
+      /*
+       * 현대 국가 스코프는 브리지로 연결된 역사국가를 합산한다 —
+       * 대한민국 상세에서 조선이 맺은 강화도조약이 보여야 하고, 이는
+       * 사건·법령·인물 등 다른 도메인이 이미 따르는 공인 규약이다.
+       * (country-scope.util 참고: 표시용 3버킷 분류로 좁히지 말 것)
+       */
+      const linkedHistoricalIds = await resolveLinkedHistoricalCountryIds(
+        this.prisma,
+        query.countryId,
+      )
+      const scopeOr = buildCountryScopeOr(query.countryId, linkedHistoricalIds)
+      parts.push({
+        signatories: { some: scopeOr as Prisma.TreatySignatoryWhereInput },
+      })
+    }
+
+    /*
+     * countryId와 함께 오면 별도 `some` 절로 AND — "두 나라가 모두 서명한 조약"이
+     * 된다. 예전처럼 한 `some` 안에 두 FK를 합치면 서명국 XOR 규약상 절대
+     * 매칭되지 않는 조건이 만들어진다.
+     */
+    if (query.historicalCountryId) {
       parts.push({
         signatories: {
-          some: {
-            ...(query.countryId ? { countryId: query.countryId } : {}),
-            ...(query.historicalCountryId
-              ? { historicalCountryId: query.historicalCountryId }
-              : {}),
-          },
+          some: { historicalCountryId: query.historicalCountryId },
         },
       })
     }

@@ -53,6 +53,7 @@ import { EthnicitySection } from './ethnicity-section.widget'
 import { EventsTimelineSection } from './events-timeline-section.widget'
 import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { PersonCard } from './person/person-card'
+import { TreatySectionWidget } from './treaty-section.widget'
 import { LoadingOverlay } from './loading-overlay'
 import { MapRegionAdministrativeView } from './map-region-administrative-view'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
@@ -156,6 +157,7 @@ export type HistoricalCountryTab =
   | 'succession' // 계승 관계
   | 'membership' // 소속·구성 (신성로마-제후국 등)
   | 'relation' // 국가 관계 (한·중 조공, 동맹 등)
+  | 'treaty' // 조약·협정 (강화도조약 등)
   | 'culture' // 문화 유산
 
 /**
@@ -171,6 +173,7 @@ type HistoricalSyncedTab =
   | 'elections'
   | 'laws'
   | 'ethnicity'
+  | 'treaty'
 
 interface HistoricalCountryDetailProps {
   country: UnifiedCountry
@@ -190,6 +193,7 @@ const SYNCED_TAB_SET = new Set<HistoricalCountryTab>([
   'elections',
   'laws',
   'ethnicity',
+  'treaty',
 ])
 
 /**
@@ -393,6 +397,22 @@ export function HistoricalCountryDetail({
                   )}
                   {activeTab === 'relation' && (
                     <RelationSection country={country} />
+                  )}
+                  {/*
+                    조약 — 위젯의 Wrap은 자체 스크롤이 없다. 역사국가 상세의 탭 패널은
+                    flex/minHeight:0 컨테이너라 교역 탭과 같은 스크롤 래퍼가 필요하다.
+                  */}
+                  {activeTab === 'treaty' && (
+                    <div
+                      style={{
+                        flex: 1,
+                        minHeight: 0,
+                        overflowY: 'auto',
+                        alignSelf: 'stretch',
+                      }}
+                    >
+                      <TreatySectionWidget country={country} />
+                    </div>
                   )}
                   {/* 문화는 저작 API가 없어 플레이스홀더 — 로드맵 확정 시 배선.
                       영토 변천 탭은 저작 모델·데이터가 없어 제거함(행정구역은 regions 탭에서 실제 지원). */}
@@ -610,6 +630,7 @@ function HistoricalCountryTabs({
     { id: 'succession', label: '계승' },
     { id: 'membership', label: '소속·구성' },
     { id: 'relation', label: '국가 관계' },
+    { id: 'treaty', label: '조약' },
     { id: 'culture', label: '문화' },
   ]
 

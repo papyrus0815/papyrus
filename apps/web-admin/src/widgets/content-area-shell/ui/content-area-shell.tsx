@@ -29,6 +29,7 @@ import {
   MilitaryUnitListSidebar,
   OrganizationListSidebar,
   PersonGroupListSidebar,
+  TreatyListSidebar,
 } from '@/widgets/domain-sidebars'
 import { EventListSidebar } from '@/widgets/event/event-list-sidebar'
 import { PersonSidebar } from '@/widgets/person/person-list'
@@ -93,6 +94,17 @@ function specFor(pathname: string): DomainSpec | null {
       render: (context) => (
         <CompanyListSidebar
           selectedId={idFromPath(pathname, 'companies', ['new'])}
+          {...context}
+        />
+      ),
+    }
+  }
+  if (pathname.startsWith('/treaties')) {
+    return {
+      storageKey: 'treaties-list-collapsed',
+      render: (context) => (
+        <TreatyListSidebar
+          selectedId={idFromPath(pathname, 'treaties')}
           {...context}
         />
       ),

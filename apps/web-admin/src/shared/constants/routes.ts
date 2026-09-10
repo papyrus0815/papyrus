@@ -24,6 +24,7 @@ export const ROUTES = {
   LEGISLATURE: 'legislature',
   MILITARY: 'military',
   EVENTS: 'events',
+  TREATIES: 'treaties',
 
   // Genealogy (standalone full-screen)
   GENEALOGY: 'genealogy',
@@ -54,6 +55,7 @@ export const CONTENT_AREA_PREFIXES = [
   `/${ROUTES.ETHNICITY}`,
   `/${ROUTES.LEGISLATURE}`,
   `/${ROUTES.MILITARY}`,
+  `/${ROUTES.TREATIES}`,
 ] as const
 
 /**

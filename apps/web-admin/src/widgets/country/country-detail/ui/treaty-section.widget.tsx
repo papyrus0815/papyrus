@@ -19,6 +19,7 @@ import styled, {
   useTheme,
 } from 'styled-components'
 
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getTreatySectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
 
@@ -694,26 +695,29 @@ const Required = styled.span`
 // 날짜 포맷 헬퍼
 // ──────────────────────────────────────────────
 
-function fmtDate(d: string | null | undefined) {
-  if (!d) return '—'
-  try {
-    return new Date(d).toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
-  } catch {
-    return d
-  }
+/**
+ * 조약 날짜 표시.
+ *
+ * ⚠️ `new Date(iso).toLocaleDateString()`를 쓰면 안 된다 — API가 자정 UTC로 내려주는
+ * 날짜가 뷰어의 시간대에 따라 하루 밀린다(UTC-N 지역에서 1939-08-23이 8월 22일로 보였다).
+ * 조약 날짜는 시각이 아니라 달력상의 날이므로 ISO 문자열을 그대로 읽는다.
+ */
+function fmtDate(value: string | null | undefined) {
+  if (!value) return '—'
+  const parts = parseIsoDateParts(value)
+  if (!parts) return value
+  const year =
+    parts.year < 0 ? `기원전 ${-parts.year}년` : `${parts.year}년`
+  return `${year} ${parts.month}월 ${parts.day}일`
 }
 
-function toInputDate(d: string | null | undefined) {
-  if (!d) return ''
-  try {
-    return new Date(d).toISOString().slice(0, 10)
-  } catch {
-    return ''
-  }
+/** `<input type="date">` 값 — 위와 같은 이유로 로컬 Date를 거치지 않는다 */
+function toInputDate(value: string | null | undefined) {
+  if (!value) return ''
+  const parts = parseIsoDateParts(value)
+  if (!parts) return ''
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${String(parts.year).padStart(4, '0')}-${pad(parts.month)}-${pad(parts.day)}`
 }
 
 // ──────────────────────────────────────────────
@@ -767,7 +771,6 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
     detailId ? (
       <TreatyDetail
         treatyId={detailId}
-        country={country}
         onBack={() => setDetailId(null)}
         onInvalidate={invalidate}
       />
@@ -1397,12 +1400,35 @@ const TreatyEditModal: React.FC<{
 // 조약 상세 뷰
 // ──────────────────────────────────────────────
 
-const TreatyDetail: React.FC<{
+/**
+ * 조약 UI 팔레트(`theme.ts`)를 주입하는 얇은 Provider.
+ * `TreatySectionWidget`은 내부에서 같은 일을 하고, 카탈로그처럼 `TreatyDetail`만
+ * 따로 쓰는 지면은 이걸로 감싼다.
+ */
+export const TreatySectionThemeProvider: React.FC<{
+  children: React.ReactNode
+}> = ({ children }) => {
+  const parentTheme = useTheme()
+  const { mode } = useThemeStore()
+  const merged = useMemo(
+    () => ({ ...parentTheme, ts: getTreatySectionPalette(mode === 'dark') }),
+    [parentTheme, mode],
+  )
+  return <ThemeProvider theme={merged}>{children}</ThemeProvider>
+}
+
+/**
+ * 조약 상세 — 국가 상세의 조약 탭과 조약 카탈로그(`/treaties/:id`)가 함께 쓴다.
+ * 국가에 의존하지 않으므로 `country`는 받지 않는다(예전엔 받아놓고 쓰지 않았다).
+ *
+ * ⚠️ 팔레트는 `ThemeProvider`로 내려온 `theme.ts`를 요구한다 —
+ * 반드시 {@link TreatySectionThemeProvider} 안에서 렌더할 것.
+ */
+export const TreatyDetail: React.FC<{
   treatyId: string
-  country: UnifiedCountry
   onBack: () => void
   onInvalidate: () => void
-}> = ({ treatyId, country: _country, onBack, onInvalidate }) => {
+}> = ({ treatyId, onBack, onInvalidate }) => {
   const qc = useQueryClient()
   const ts = useTheme().ts!
 

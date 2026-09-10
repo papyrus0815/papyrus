@@ -29,6 +29,7 @@ import {
 } from '@/shared/api/treaty'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
@@ -291,15 +292,13 @@ export function TreatyLinkModal({
       .catch(() => setSigningAdminDivisions([]))
   }, [signingVenueCountryId])
 
+  /* 로컬 Date를 거치면 자정 UTC 날짜가 뷰어 시간대에 따라 하루 밀린다 (조약 탭과 같은 규약) */
   const formatIsoDateLabel = (iso: string) => {
     if (!iso?.trim()) return ''
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return iso
-    return d.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
+    const parts = parseIsoDateParts(iso)
+    if (!parts) return iso
+    const year = parts.year < 0 ? `기원전 ${-parts.year}년` : `${parts.year}년`
+    return `${year} ${parts.month}월 ${parts.day}일`
   }
 
   /** 기존 조약 연결: 국가 필터로만 불러오면 서명국이 다른 국가만 있는 조약이 전부 빠져 목록이 비어 보임 → 전체 조회 후 검색으로 좁힘 */
