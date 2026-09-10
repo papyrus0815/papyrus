@@ -67,10 +67,17 @@ const lightColors = {
   active: '#6366f1',
   activeLight: '#eef2ff',
   hover: '#f1f5f9',
+  /*
+   * 세 단계 모두 흰 배경에서 WCAG 본문 최소(4.5:1)를 넘긴다.
+   * 옛 tertiary(#9ca3af)는 2.54:1로 절반 수준이었다 — 국가 대시보드 한 지면에서만
+   * 그 색을 쓴 글자가 116곳이었고, 그중엔 10~11.5px짜리도 있었다.
+   * tertiary를 옛 secondary 값으로 올리고 secondary를 한 단계 더 진하게 내려
+   * 세 단계의 간격을 지킨다. (14.68 / 7.56 / 4.83)
+   */
   text: {
     primary: '#1f2937',
-    secondary: '#6b7280',
-    tertiary: '#9ca3af',
+    secondary: '#4b5563',
+    tertiary: '#6b7280',
   },
   border: {
     light: '#f3f4f6',
@@ -148,10 +155,12 @@ const darkColors = {
   active: '#636af2',
   activeLight: '#1e1e3a',
   hover: '#212121',
+  /* 라이트와 같은 이유 — 옛 tertiary(#71717a)는 3.71:1로 본문 최소에 못 미쳤다.
+     (16.44 / 7.00 / 5.66, 2레벨 배경 #212121에서도 6.28 / 5.09) */
   text: {
     primary: '#f5f5f5',
     secondary: '#a1a1aa',
-    tertiary: '#71717a',
+    tertiary: '#909099',
   },
   border: {
     light: '#212121',
