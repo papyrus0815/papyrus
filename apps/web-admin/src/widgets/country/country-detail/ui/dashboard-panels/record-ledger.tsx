@@ -202,7 +202,7 @@ const RowValue = styled.span`
 
 const RowUnit = styled.span`
   margin-left: 3px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -211,7 +211,7 @@ const RowUnit = styled.span`
 const RowDelta = styled.span`
   padding: 1px 6px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: #059669;

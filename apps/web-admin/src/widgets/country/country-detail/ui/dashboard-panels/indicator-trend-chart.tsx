@@ -104,7 +104,41 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
     }
   }, [points])
 
-  if (!chart) return null
+  /* 자료가 없어도 축과 눈금선은 남긴다 — 값 라벨만 비운다(지어내면 거짓) */
+  if (!chart) {
+    return (
+      <Card>
+        <Head>
+          <Title>{title}</Title>
+          <Caption>{caption}</Caption>
+        </Head>
+        <Plot>
+          <ResponsiveContainer width="100%" height={248}>
+            <LineChart margin={{ top: 28, right: 34, bottom: 4, left: 0 }}>
+              <CartesianGrid stroke={grid} vertical={false} />
+              {/* 눈금 배열을 줘야 격자선이 그려진다 — 숫자 라벨만 비운다 */}
+              <XAxis
+                type="number"
+                domain={[0, 1]}
+                ticks={[0, 0.25, 0.5, 0.75, 1]}
+                tick={false}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis
+                domain={[0, 1]}
+                ticks={[0, 0.25, 0.5, 0.75, 1]}
+                tick={false}
+                tickLine={false}
+                axisLine={false}
+                width={52}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </Plot>
+      </Card>
+    )
+  }
 
   /** 최고·최저·최신 — 겹치면(같은 해) 하나만 남긴다 */
   const marks = [
@@ -186,7 +220,7 @@ export function IndicatorTrendChart({ title, caption, points, unit = '%' }: Prop
                 value: '평균',
                 position: 'insideTopLeft',
                 fill: axisInk,
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 600,
               }}
             />
@@ -277,7 +311,7 @@ const SummaryItem = styled.div`
 `
 
 const SummaryLabel = styled.span`
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.secondary};

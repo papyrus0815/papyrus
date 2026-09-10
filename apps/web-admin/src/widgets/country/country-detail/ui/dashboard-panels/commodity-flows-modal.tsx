@@ -47,7 +47,7 @@ const YearGroup = styled.div`
 
 const YearLabel = styled.h3`
   margin: 0 0 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -71,7 +71,7 @@ const FlowRow = styled.div<{ $direction: 'EXPORT' | 'IMPORT' }>`
 `
 
 const DirectionTag = styled.span`
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
@@ -82,7 +82,7 @@ const Reporter = styled.span`
 `
 
 const Partner = styled.span`
-  font-size: 11.5px;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 

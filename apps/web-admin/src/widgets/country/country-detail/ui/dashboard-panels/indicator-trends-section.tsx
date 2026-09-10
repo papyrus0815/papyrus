@@ -11,6 +11,7 @@ import { CountryDataManagerModal } from '../country-data-manager/country-data-ma
 import { IconChart } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 import { IndicatorTrendChart, type TrendPoint } from './indicator-trend-chart'
+import { ChartEmpty } from './chart-empty'
 
 interface IndicatorTrendsSectionProps {
   /** 모던 국가 ID. 역사 국가에는 지표가 없으므로 호출하지 않는다. */
@@ -55,6 +56,15 @@ export function IndicatorTrendsSection({
   const isLoading = economicQuery.isLoading || demographicQuery.isLoading
   const hasAny = economicPoints.length > 0 || populationPoints.length > 0
 
+  const manager = (
+    <CountryDataManagerModal
+      countryId={countryId}
+      countryName={countryName}
+      open={managerOpen}
+      onClose={() => setManagerOpen(false)}
+    />
+  )
+
   return (
     <S.Section>
       <S.SectionTitleRow>
@@ -62,24 +72,35 @@ export function IndicatorTrendsSection({
           <IconChart />
         </S.SectionTitleIcon>
         <S.SectionTitleText>지표 추이</S.SectionTitleText>
-        <ManageButton type="button" onClick={() => setManagerOpen(true)}>
+        <S.SectionAction type="button" onClick={() => setManagerOpen(true)}>
           데이터 관리
-        </ManageButton>
+        </S.SectionAction>
       </S.SectionTitleRow>
 
       {!isLoading && !hasAny && (
-        <S.EmptyHint>
-          등록된 지표가 없습니다. “데이터 관리”에서 연도별 경제·인구·발전 지표,
-          교역, 기록을 추가할 수 있습니다.
-        </S.EmptyHint>
+        <ChartEmpty
+          text="연도별 GDP 성장률·인구 증가율을 넣으면 여기에 추이선이 그려집니다."
+          actionLabel="연도별 지표 등록"
+          onAction={() => setManagerOpen(true)}
+        >
+          <GridContainer>
+            <Grid>
+              <IndicatorTrendChart
+                title="경제 성장률"
+                caption="연간 실질 GDP 성장률"
+                points={[]}
+              />
+              <IndicatorTrendChart
+                title="인구 증가율"
+                caption="전년 대비 인구 증감"
+                points={[]}
+              />
+            </Grid>
+          </GridContainer>
+        </ChartEmpty>
       )}
 
-      <CountryDataManagerModal
-        countryId={countryId}
-        countryName={countryName}
-        open={managerOpen}
-        onClose={() => setManagerOpen(false)}
-      />
+      {manager}
 
       {/* 로딩 중엔 자리를 잡아만 둔다 — 뼈대가 번쩍이면 레이아웃이 튄다 */}
       {isLoading ? (
@@ -141,22 +162,3 @@ const Placeholder = styled.div`
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.02)'};
 `
 
-const ManageButton = styled.button`
-  margin-left: auto;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(159,122,234,0.45)' : 'rgba(124,58,237,0.35)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(159,122,234,0.16)' : 'rgba(124,58,237,0.08)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#c4b5fd' : '#6d28d9')};
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(159,122,234,0.26)' : 'rgba(124,58,237,0.16)'};
-  }
-`

@@ -489,7 +489,7 @@ const NavRow = styled.div`
 `
 
 const NavPosition = styled.span`
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
@@ -649,7 +649,7 @@ const CenterRole = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: ${CENTER_ACCENT};
@@ -658,7 +658,7 @@ const CenterRole = styled.span`
 const CenterNow = styled.span`
   padding: 1px 7px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: #fff;
   background: ${CENTER_ACCENT};
@@ -676,7 +676,7 @@ const CenterOrdinal = styled.span`
   margin-top: 4px;
   padding: 1px 8px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
@@ -719,7 +719,7 @@ const CenterStat = styled.div`
 `
 
 const CenterStatKey = styled.dt`
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -889,7 +889,7 @@ const NodeText = styled.span<{ $side: 'left' | 'right' }>`
 /** 좁아지면 이름이 먼저다 — 날짜는 그때 물러난다 */
 const NodeDate = styled.span`
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -901,7 +901,7 @@ const NodeDate = styled.span`
 `
 
 const NodeTitle = styled.span`
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -924,6 +924,6 @@ const NodeName = styled.span`
 `
 
 const Swap = styled.span`
-  font-size: 10px;
-  color: #b45309;
+  font-size: 12px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
 `

@@ -23,7 +23,11 @@ import {
 import type { DemographicIndicator } from '@/shared/api/country-indicators'
 
 import { CountryDataManagerModal } from '../country-data-manager/country-data-manager-modal'
-import { IconChart } from '../country-detail-dashboard.icons'
+import { ChartEmpty } from './chart-empty'
+import {
+  IconChart,
+  IconUsers,
+} from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 
 import {
@@ -161,7 +165,10 @@ function PyramidBar({
  * 늙고 있나"를 알 수 없으므로 **기준 연도(가장 이른 해)의 윤곽을 겹쳐** 둔다 — 아래가
  * 홀쭉해지고 위가 두꺼워지는 변화가 클릭 없이 한눈에 읽힌다.
  */
-export function PopulationPyramidSection({ countryId, countryName }: Props) {
+export function PopulationPyramidSection({
+  countryId,
+  countryName,
+}: Props) {
   const [managerOpen, setManagerOpen] = useState(false)
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
@@ -254,13 +261,60 @@ export function PopulationPyramidSection({ countryId, countryName }: Props) {
 
   if (query.isLoading) return null
   if (years.length === 0) {
+    /*
+     * 자료가 없어도 **피라미드 골격**은 그대로 둔다. 연령대 라벨은 카탈로그라 이미
+     * 아는 값이고, 축 눈금 숫자는 지어낼 수 없으니 눈금선만 남긴다.
+     */
     return (
       <S.Section>
-        <Title onRegister={() => setManagerOpen(true)} />
-        <S.EmptyHint>
-          등록된 연령대별 인구가 없습니다. 연도별 남·여 인구를 넣으면 여기에
-          피라미드가 그려집니다.
-        </S.EmptyHint>
+        <Title onRegister={null} />
+        <ChartEmpty
+          text="연도별 남·여 인구를 연령대로 넣으면 여기에 피라미드가 그려집니다."
+          actionLabel="연령·성별 인구 등록"
+          onAction={() => setManagerOpen(true)}
+        >
+          <ChartBox>
+            <ResponsiveContainer
+              width="100%"
+              height={AGE_BRACKETS.length * ROW_HEIGHT + 44}
+            >
+              <BarChart
+                data={[...AGE_BRACKETS].reverse().map((bracket) => ({
+                  bracket: bracket.label,
+                  value: 0,
+                }))}
+                layout="vertical"
+                margin={{ top: 4, right: 16, bottom: 4, left: 8 }}
+              >
+                <CartesianGrid
+                  horizontal={false}
+                  stroke={isDark ? 'rgba(255,255,255,0.07)' : '#eef1f5'}
+                />
+                <XAxis
+                  type="number"
+                  domain={[-1, 1]}
+                  ticks={[-1, -0.5, 0, 0.5, 1]}
+                  /* 값이 없으니 눈금 '숫자'는 비운다 — 채우면 거짓이 된다 */
+                  tick={false}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="bracket"
+                  width={54}
+                  tick={{ fontSize: 12.5, fill: theme.colors.text.primary }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <ReferenceLine
+                  x={0}
+                  stroke={isDark ? 'rgba(255,255,255,0.22)' : '#cbd5e1'}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartBox>
+        </ChartEmpty>
         {manager}
       </S.Section>
     )
@@ -517,7 +571,12 @@ function PyramidTooltip({
   )
 }
 
-function Title({ onRegister }: { onRegister: () => void }) {
+function Title({
+  onRegister,
+}: {
+  /** null이면 버튼을 내지 않는다 — 빈 자리 CTA와 라벨이 글자까지 같아 두 번 나온다 */
+  onRegister: (() => void) | null
+}) {
   return (
     <S.SectionTitleRow>
       <S.SectionTitleIcon $accent="sky">
@@ -525,32 +584,14 @@ function Title({ onRegister }: { onRegister: () => void }) {
       </S.SectionTitleIcon>
       <S.SectionTitleText>인구 피라미드</S.SectionTitleText>
       {/* 이 자리에 버튼이 없으면 등록 진입점이 '지표 추이'의 작은 버튼 하나뿐이다 */}
-      <RegisterButton type="button" onClick={onRegister}>
-        연령·성별 인구 등록
-      </RegisterButton>
+      {onRegister && (
+        <S.SectionAction type="button" onClick={onRegister}>
+          연령·성별 인구 등록
+        </S.SectionAction>
+      )}
     </S.SectionTitleRow>
   )
 }
-
-const RegisterButton = styled.button`
-  margin-left: auto;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,106,242,0.45)' : 'rgba(56,130,246,0.35)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,106,242,0.16)' : 'rgba(56,130,246,0.08)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#2563eb')};
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,106,242,0.26)' : 'rgba(56,130,246,0.16)'};
-  }
-`
 
 const StatsRow = styled.div`
   display: flex;

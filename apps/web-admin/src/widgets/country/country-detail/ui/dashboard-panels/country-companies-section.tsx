@@ -10,6 +10,7 @@ import { pathKeys } from '@/shared/router'
 
 import { IconLandmark } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
+import { SectionEmpty } from './section-empty'
 
 interface CountryCompaniesSectionProps {
   countryId: string
@@ -33,7 +34,7 @@ function year(iso: string | null): string | null {
  * 말하고 그게 어떤 기업인지는 눌러야 나왔다. 다만 실DB를 보면 로고 0/5, 설립일 2/5,
  * 본사 2/5, 티커 2/5로 **필드가 듬성듬성하다** — 없는 칸을 만들지 않고 있는 것만 잇는다.
  *
- * 이 나라에 등록된 기업이 없으면 아무것도 그리지 않는다.
+ * 기업이 없어도 섹션 자리는 지킨다 — 감추면 이 국가에 기업 축이 없는 것처럼 읽힌다.
  */
 export function CountryCompaniesSection({
   countryId,
@@ -59,7 +60,26 @@ export function CountryCompaniesSection({
       })
   }, [data, countryId])
 
-  if (companies.length === 0) return null
+  /* 자료가 없어도 자리는 지킨다 — 감추면 이 국가에 기업 축이 없는 것처럼 읽힌다 */
+  if (companies.length === 0) {
+    return (
+      <S.Section>
+        <S.SectionTitleRow>
+          <S.SectionTitleIcon $accent="sky">
+            <IconLandmark />
+          </S.SectionTitleIcon>
+          <S.SectionTitleText>기업</S.SectionTitleText>
+        </S.SectionTitleRow>
+        <SectionEmpty
+          text="이 국가에 등록된 기업이 아직 없습니다. 기업을 등록하고 국가를 지정하면 설립·본사·창업자가 여기 이어 붙습니다."
+          actionLabel="기업 등록"
+          onAction={() => navigate(pathKeys.companies.root())}
+          secondaryLabel="기업 전체 보기"
+          onSecondary={() => navigate(pathKeys.companies.root())}
+        />
+      </S.Section>
+    )
+  }
 
   return (
     <S.Section>
@@ -207,7 +227,7 @@ const Dissolved = styled.span`
   flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: ${({ theme }) =>
@@ -218,7 +238,7 @@ const Facts = styled.span`
   display: flex;
   flex-wrap: wrap;
   gap: 0 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `

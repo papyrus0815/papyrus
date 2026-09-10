@@ -103,7 +103,7 @@ const Range = styled.span`
 `
 
 const Total = styled.span`
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -187,14 +187,14 @@ const BarTrack = styled.span`
 `
 
 const BarCount = styled.span`
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const BarLabel = styled.span`
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};

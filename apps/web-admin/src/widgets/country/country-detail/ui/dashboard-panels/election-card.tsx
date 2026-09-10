@@ -96,7 +96,7 @@ const CardLabel = styled.span<{ $upcoming: boolean }>`
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: ${({ $upcoming, theme }) =>
     $upcoming ? '#4338ca' : theme.colors.text.tertiary};
@@ -129,7 +129,7 @@ const CardName = styled.span`
 const CardDate = styled.span`
   margin-left: auto;
   flex-shrink: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `

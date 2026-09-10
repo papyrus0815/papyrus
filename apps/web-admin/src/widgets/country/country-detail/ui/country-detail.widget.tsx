@@ -96,15 +96,16 @@ function CountryDetailInner({
     setActiveSubTab(resolveSubTab(initialDetailTab))
   }, [initialDetailTab])
 
-  // historical 국가 + modern-only 탭 URL(dashboard·linked-historical·treaty)
+  // historical 국가 + modern-only 탭 URL(dashboard·linked-historical)
   // 진입 시 → base URL로 자동 정리 (URL ↔ 화면 일치 회복).
   // historical 위젯은 자체 'overview'로 떨어지는데 URL은 modern-only 세그먼트라 불일치 발생.
+  // ⚠️ 'treaty'는 역사국가에도 탭이 생겼으므로 여기서 빼야 한다 — 남겨두면 딥링크가
+  // 조약 탭을 열자마자 base URL로 튕겨 개요로 돌아간다.
   React.useEffect(() => {
     if (country?.type !== 'historical' || !initialDetailTab) return
     const modernOnly: ReadonlySet<CountryDetailTabKey> = new Set([
       'dashboard',
       'linked-historical',
-      'treaty',
     ])
     if (modernOnly.has(initialDetailTab)) {
       onDetailTabChange?.(null)
@@ -136,7 +137,7 @@ function CountryDetailInner({
 
   // 역사적 국가는 별도 UI로 렌더링.
   // historical 위젯이 동기화하는 탭 키와 widget tab key가 겹치는 것만 forward —
-  // 'dashboard'/'linked-historical'/'treaty'는 historical에 매칭되는 탭이 없어 overview로 폴백.
+  // 'dashboard'/'linked-historical'는 historical에 매칭되는 탭이 없어 overview로 폴백.
   if (country.type === 'historical') {
     const historicalInitialTab =
       initialDetailTab === 'heads' ||
@@ -144,7 +145,8 @@ function CountryDetailInner({
       initialDetailTab === 'government' ||
       initialDetailTab === 'elections' ||
       initialDetailTab === 'laws' ||
-      initialDetailTab === 'ethnicity'
+      initialDetailTab === 'ethnicity' ||
+      initialDetailTab === 'treaty'
         ? initialDetailTab
         : undefined
     return (

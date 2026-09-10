@@ -147,6 +147,7 @@ export function CurrentCabinetPanel({
   children,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
+  /* 빈 국가에서 부처 프리셋 칩은 접어 둔다 — 펼침은 이 자리에서만 쓴다 */
   /*
    * 이름을 누르면 인물 지면으로 나가 버리면 지금 보던 정부 명단을 잃는다. 대시보드는
    * 훑는 지면이라 자리를 지킨 채 확인할 수 있어야 한다 — 사건 상세·행정부 상세가 쓰는
@@ -833,15 +834,15 @@ export function CurrentCabinetPanel({
           <S.SectionCountChip>{cabinets.length}대</S.SectionCountChip>
         )}
         <HeaderActions>
-          <HeaderAction
+          <S.SectionAction
             type="button"
             onClick={() => openRegister(null, '수반·각료')}
           >
             + 수반·각료 등록
-          </HeaderAction>
-          <HeaderGhost type="button" onClick={onOpen}>
+          </S.SectionAction>
+          <S.SectionAction type="button" onClick={onOpen}>
             행정부 관리
-          </HeaderGhost>
+          </S.SectionAction>
         </HeaderActions>
       </S.SectionTitleRow>
 
@@ -1387,7 +1388,7 @@ const SlotHeadText = styled.span`
 const SlotRole = styled.span`
   font-size: 12.5px;
   font-weight: 700;
-  color: #be123c;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fb7185' : '#be123c')};
 `
 
 const SlotGroupLabel = styled.div`
@@ -1396,7 +1397,7 @@ const SlotGroupLabel = styled.div`
   max-width: 1636px;
   margin-inline: auto;
   margin-bottom: 8px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -1463,7 +1464,7 @@ const SlotDelete = styled.button`
 
 
 const DetailKey = styled.dt`
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -1539,7 +1540,7 @@ const ShareFill = styled.span`
 `
 
 const CandidacyVotes = styled.span`
-  font-size: 11.5px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -1564,10 +1565,10 @@ const CandidacyParty = styled.span<{ $muted?: boolean }>`
 const WonChip = styled.span`
   padding: 2px 8px;
   border-radius: 6px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 800;
   background: rgba(22, 163, 74, 0.14);
-  color: #15803d;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#4ade80' : '#15803d')};
 `
 
 
@@ -1674,7 +1675,7 @@ const ElectionMore = styled.button`
 `
 
 const ElectionLabel = styled.span`
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -1702,7 +1703,7 @@ const ElectionLink = styled.button`
   padding: 0;
   font-size: 12.5px;
   font-weight: 700;
-  color: #be123c;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fb7185' : '#be123c')};
   cursor: pointer;
 
   &:hover {
@@ -1819,7 +1820,7 @@ const MadeChip = styled.span`
   padding: 5px 6px 5px 10px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
@@ -1851,7 +1852,7 @@ const PresetLabel = styled.div`
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -1860,9 +1861,9 @@ const PresetAll = styled.button`
   border: none;
   background: none;
   padding: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
-  color: #be123c;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fb7185' : '#be123c')};
   cursor: pointer;
 
   &:disabled {
@@ -1874,6 +1875,7 @@ const PresetAll = styled.button`
     text-decoration: underline;
   }
 `
+
 
 const PresetChips = styled.div`
   display: flex;
@@ -1887,7 +1889,7 @@ const PresetChip = styled.button`
   border: 1px dashed ${({ theme }) => theme.colors.border.default};
   background: none;
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 
@@ -1925,9 +1927,9 @@ const SlotEmptyName = styled.span`
 const SlotAdd = styled.span`
   margin-left: auto;
   flex-shrink: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
-  color: #be123c;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fb7185' : '#be123c')};
 `
 
 const EmptyActions = styled.div`
@@ -2028,7 +2030,7 @@ const HeaderAction = styled.button`
   border-radius: 8px;
   border: 1px solid rgba(225, 29, 72, 0.3);
   background: rgba(225, 29, 72, 0.07);
-  color: #be123c;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fb7185' : '#be123c')};
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
@@ -2039,20 +2041,6 @@ const HeaderAction = styled.button`
 `
 
 /** 관리(지면 이동)는 보조 — 주 동작은 바로 등록이다 */
-const HeaderGhost = styled.button`
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: none;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
 
 
 

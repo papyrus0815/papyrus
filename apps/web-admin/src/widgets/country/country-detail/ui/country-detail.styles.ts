@@ -217,7 +217,7 @@ export const PercentageChange = styled.div<{ positive?: boolean }>`
   position: absolute;
   top: 16px;
   right: 16px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: ${(props) => (props.positive ? '#34a853' : '#ea4335')};
   background: ${(props) =>
@@ -1155,7 +1155,7 @@ export const HistoricalCountryDate = styled.div`
 `
 
 export const HistoricalCountryType = styled.div`
-  font-size: 11px;
+  font-size: 12px;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   background: ${({ theme }) => (theme.mode === 'dark' ? '#212121' : '#fff')};
   padding: 4px 8px;
@@ -1202,7 +1202,7 @@ export const ChartBar = styled.div<{ $height: number; $color: string }>`
 `
 
 export const ChartBarValue = styled.span`
-  font-size: 10px;
+  font-size: 12px;
   color: #fff;
   font-weight: 500;
 `
@@ -1222,7 +1222,7 @@ export const ChartLabelContainer = styled.div`
 
 export const ChartLabel = styled.div`
   flex: 1;
-  font-size: 10px;
+  font-size: 12px;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
   text-align: center;
   overflow: hidden;
@@ -1321,7 +1321,7 @@ export const LineChartLabels = styled.div`
 `
 
 export const LineChartLabel = styled.span`
-  font-size: 10px;
+  font-size: 12px;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#5f6368')};
 `
 
@@ -1343,7 +1343,7 @@ export const HistoricalCountrySectionTitle = styled.h3`
 `
 
 export const HistoricalCountrySectionCount = styled.span`
-  font-size: 11px;
+  font-size: 12px;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#999')};
 `
 
@@ -1416,7 +1416,7 @@ export const HistoricalCountryCardMeta = styled.div`
 `
 
 export const HistoricalCountryCardType = styled.span`
-  font-size: 10px;
+  font-size: 12px;
   color: #666;
   padding: 2px 8px;
   background: #f5f5f5;
@@ -1424,7 +1424,7 @@ export const HistoricalCountryCardType = styled.span`
 `
 
 export const HistoricalCountryCardDate = styled.span`
-  font-size: 11px;
+  font-size: 12px;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#999')};
 `
 
@@ -1602,7 +1602,7 @@ export const ChartCardTitle = styled.h3`
 
 export const ChartCardSubtitle = styled.p`
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
 `
@@ -1892,7 +1892,7 @@ export const InfoBadge = styled.div`
 `
 
 export const BadgeLabel = styled.span`
-  font-size: 11px;
+  font-size: 12px;
   color: #78716c;
   font-weight: 600;
   text-transform: uppercase;
@@ -1987,7 +1987,7 @@ export const RegionItem = styled.div`
 `
 
 export const RegionLabel = styled.span`
-  font-size: 11px;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 500;
 `
@@ -2047,7 +2047,7 @@ export const CityRankSmall = styled.div`
   justify-content: center;
   background: ${({ theme }) => theme.colors.background.tertiary};
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   border-radius: 50%;
   flex-shrink: 0;
@@ -2065,7 +2065,7 @@ export const CityNameCompact = styled.div`
 `
 
 export const CityPopCompact = styled.div`
-  font-size: 10px;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 500;
   flex-shrink: 0;
@@ -2148,7 +2148,7 @@ export const GovernmentItemName = styled.div`
 `
 
 export const GovernmentItemRole = styled.div`
-  font-size: 10px;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-weight: 500;
 `
@@ -2167,7 +2167,7 @@ export const LeaderName = styled.div`
 `
 
 export const LeaderTitle = styled.div`
-  font-size: 11px;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 500;
   margin-bottom: 8px;
@@ -2177,7 +2177,7 @@ export const LeaderInfo = styled.div`
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 10px;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -2396,7 +2396,7 @@ export const EventCategoryBadge = styled.span`
   background: linear-gradient(135deg, #e8f0fe 0%, #d3e3fd 100%);
   color: #1967d2;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -2661,7 +2661,7 @@ export const HistoricalCountryBadge = styled.div`
 
   span {
     color: #f57c00;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
   }
 `
@@ -2887,7 +2887,7 @@ export const PersonRole = styled.div`
   background: #e6f4ff;
   border: 1px solid #91caff;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   color: #0958d9;
   font-weight: 500;
   margin-top: 6px;
@@ -3007,7 +3007,7 @@ export const PremiumCardBottomRow = styled.div`
 `
 
 export const PremiumCardYear = styled.div`
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   letter-spacing: 0.02em;
@@ -3038,7 +3038,7 @@ export const PremiumPercentageBadge = styled.div<{ positive?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   margin: 0;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#6b7280')};
@@ -3168,7 +3168,7 @@ export const HeroMetaChip = styled.span`
   align-items: center;
   padding: 2px 8px;
   border-radius: 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.01em;
   color: ${({ theme }) => theme.colors.text.secondary};

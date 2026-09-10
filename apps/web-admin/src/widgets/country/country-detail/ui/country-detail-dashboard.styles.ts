@@ -247,6 +247,42 @@ export const SectionTitleText = styled.h2`
   letter-spacing: -0.02em;
 `
 
+/**
+ * 섹션 머리의 동작 버튼 — '등록'·'관리' 같은 것.
+ *
+ * 섹션마다 제 색으로 버튼을 만들어 썼다: 행정부는 분홍, 인구 피라미드는 파랑,
+ * 지표 추이는 보라, 교역·기업은 남색 링크. 같은 성격의 버튼이 네 가지 색으로 흩어져
+ * 지면이 알록달록했고, 어느 것이 더 중요한 동작인지도 색이 거짓으로 말했다.
+ * 섹션 머리의 버튼은 **크롬**이다 — 하나의 조용한 모양으로 묶고, 진짜 유도가 필요한
+ * 자리(빈 섹션의 CTA)만 파란 버튼을 쓴다.
+ */
+export const SectionAction = styled.button`
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.05)'
+        : 'rgba(15,23,42,0.035)'};
+  }
+
+  /* 머리에 버튼이 둘이면 둘째부터는 자동 여백을 물린다 */
+  & + & {
+    margin-left: 0;
+  }
+`
+
 export const SectionCountChip = styled.span`
   display: inline-flex;
   align-items: center;
@@ -254,7 +290,7 @@ export const SectionCountChip = styled.span`
   margin-left: ${space.xs}px;
   padding: 2px 8px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) =>
@@ -383,7 +419,7 @@ export const DonutPercent = styled.span`
 
 export const DonutSubLabel = styled.span`
   margin-top: 2px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
   text-transform: uppercase;
@@ -575,7 +611,7 @@ export const PositionBadge = styled.span`
   align-self: flex-start;
   padding: 2px 8px;
   border-radius: 6px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -685,7 +721,7 @@ export const HeadName = styled.span`
 `
 
 export const HeadMeta = styled.span`
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
   overflow: hidden;
@@ -785,7 +821,7 @@ export const MetaInlineItem = styled.div`
 `
 
 export const MetaInlineLabel = styled.span`
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -824,25 +860,6 @@ export const StatsGrid = styled.div`
   }
 `
 
-/**
- * 값이 0인 기록 축 — 카드로 그리면 `0`이 화면에서 가장 큰 글자가 된다.
- * 실DB 기준 조약은 전 국가 0행, 군대는 country_id가 전부 비어 있어 **어떤 국가에서도**
- * 값이 생기지 않는다. 이런 축은 카드에서 내려 한 줄로 모으고 '채우러 가기'만 남긴다.
- */
-export const EmptyAxisRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 2px;
-`
-
-export const EmptyAxisLabel = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
 const emptyAxisChipBase = css`
   display: inline-flex;
   align-items: center;
@@ -862,31 +879,6 @@ const emptyAxisChipBase = css`
       theme.mode === 'dark'
         ? 'rgba(255,255,255,0.07)'
         : 'rgba(15, 23, 42, 0.06)'};
-`
-
-export const EmptyAxisChip = styled.button`
-  ${emptyAxisChipBase}
-  appearance: none;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-
-  &:hover {
-    background: ${PRIMARY_SOFT_BG};
-    border-color: ${PRIMARY_SOFT_BORDER};
-    color: ${PRIMARY_INK};
-  }
-  &:focus-visible {
-    outline: 2px solid ${PRIMARY};
-    outline-offset: 2px;
-  }
-`
-
-export const EmptyAxisChipStatic = styled.span`
-  ${emptyAxisChipBase}
-  opacity: 0.65;
 `
 
 export const StatCard = styled.div<{
@@ -1008,7 +1000,7 @@ export const DeltaChip = styled.span<{ $accent?: AccentKey }>`
   align-items: center;
   padding: 3px 8px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   background: ${({ $accent }) => accent($accent, 'soft')};
   color: ${({ $accent }) => accent($accent, 'ink')};
@@ -1022,7 +1014,7 @@ export const StatBadge = styled.span`
   gap: 4px;
   padding: 3px 8px;
   border-radius: 6px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1077,7 +1069,7 @@ export const ActivityGroupHeader = styled.div`
   align-items: center;
   gap: ${space.sm}px;
   padding: ${space.md}px ${space.xs}px ${space.sm}px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
   text-transform: uppercase;
@@ -1315,7 +1307,7 @@ export const CompareLine = styled.div`
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 4px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   z-index: 1;
 `
@@ -1326,7 +1318,7 @@ export const ComparePill = styled.span<{ $direction: 'up' | 'down' | 'flat' }>`
   gap: 3px;
   padding: 1px 7px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   background: ${({ $direction }) =>
@@ -1368,7 +1360,7 @@ export const GovHeadingBlock = styled.div`
 `
 
 export const GovStartDate = styled.span`
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
@@ -1492,7 +1484,7 @@ export const LineageCenturyMark = styled.span`
       theme.mode === 'dark'
         ? 'rgba(255,255,255,0.14)'
         : 'rgba(15, 23, 42, 0.14)'};
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -1531,7 +1523,7 @@ export const LineageName = styled.span`
 `
 
 export const LineageYears = styled.span`
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;
@@ -1542,7 +1534,7 @@ export const LineageYears = styled.span`
 
 export const LastUpdatedHint = styled.span`
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;
@@ -1690,7 +1682,7 @@ export const EventTimelineBlock = styled.div`
 `
 
 export const EventTimelineLabel = styled.span`
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -2128,7 +2120,7 @@ export const CompanyName = styled.span`
 `
 
 export const CompanyMeta = styled.span`
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;

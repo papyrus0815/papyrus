@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-import { useTheme } from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import {
   useExportImports,
@@ -14,6 +14,7 @@ import {
   VALUE_SCALE_LABEL,
 } from '@/entities/trade/vocab'
 
+import { ChartEmpty } from './chart-empty'
 import { TradeCompositionTreemap } from './trade-composition-treemap'
 import { TradeYearBars } from './trade-year-bars'
 import {
@@ -65,10 +66,13 @@ interface DirectionView {
  *  2) 분류 구성 막대 — 무엇 위주의 나라인가 (원유·석탄이 따로 놓이면 '에너지 60%'가 사라진다)
  *  3) 품목·상대 칩 — 구체적으로 무엇을, 누구와
  *
- * 자료가 없으면 **아무것도 그리지 않는다**. 빈 섹션을 세우면 지면이 "없습니다"로
- * 끝나던 옛 문제(검토서 A5)를 되풀이한다 — 등록 진입은 대시보드의 한 줄 안내가 맡는다.
+ * 자료가 없어도 **섹션은 선다**. 감췄더니 거의 모든 국가에서 교역이 아예 없는 기능처럼
+ * 보였다 — 대신 빈 자리가 무엇을 넣으면 무엇이 보이는지 말하고 등록 버튼을 함께 낸다.
  */
-export function TradeSection({ countryId, countryName }: TradeSectionProps) {
+export function TradeSection({
+  countryId,
+  countryName,
+}: TradeSectionProps) {
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
   const [managerOpen, setManagerOpen] = useState(false)
@@ -149,7 +153,45 @@ export function TradeSection({ countryId, countryName }: TradeSectionProps) {
     return { EXPORT: build('EXPORT'), IMPORT: build('IMPORT') }
   }, [current, isDark])
 
-  if (years.length === 0 || !current) return null
+  /*
+   * 자료가 없어도 **연도 막대 골격**은 그대로 둔다. 연도·금액은 지어낼 수 없으니
+   * 빈 트랙과 눈금선만 남긴다 — 값이 들어오면 같은 자리에 막대가 찬다.
+   */
+  if (years.length === 0 || !current) {
+    return (
+      <S.Section>
+        <S.SectionTitleRow>
+          <S.SectionTitleIcon $accent="emerald">
+            <IconChart />
+          </S.SectionTitleIcon>
+          <S.SectionTitleText>교역</S.SectionTitleText>
+        </S.SectionTitleRow>
+        <ChartEmpty
+          text="연도별 수출·수입액을 넣으면 여기에 규모와 무역수지가 그려집니다."
+          actionLabel="교역 자료 등록"
+          onAction={() => setManagerOpen(true)}
+        >
+          <EmptyBars>
+            {[0, 1, 2].map((row) => (
+              <EmptyBarRow key={row}>
+                {/* 격자 자식이 하나뿐이면 첫 칸(연도 자리)에 들어가 62px로 짜부라진다 */}
+                <span />
+                <EmptyTrack />
+                <span />
+              </EmptyBarRow>
+            ))}
+          </EmptyBars>
+        </ChartEmpty>
+        <CountryDataManagerModal
+          countryId={countryId}
+          countryName={countryName}
+          open={managerOpen}
+          onClose={() => setManagerOpen(false)}
+          initialTab="trade"
+        />
+      </S.Section>
+    )
+  }
 
   const balance =
     current.exportValue != null && current.importValue != null
@@ -186,9 +228,9 @@ export function TradeSection({ countryId, countryName }: TradeSectionProps) {
         </S.SectionTitleIcon>
         <S.SectionTitleText>교역</S.SectionTitleText>
         <S.SectionCountChip>{yearLabel} 기준</S.SectionCountChip>
-        <S.SectionLink type="button" onClick={() => setManagerOpen(true)}>
+        <S.SectionAction type="button" onClick={() => setManagerOpen(true)}>
           데이터 관리
-        </S.SectionLink>
+        </S.SectionAction>
       </S.SectionTitleRow>
 
       {/* 규모·추이·연도 선택을 한 그림이 맡는다 — 자세한 이유는 TradeYearBars 주석 */}
@@ -467,3 +509,28 @@ function TradeItemLine({
     </S.TradeItemGroup>
   )
 }
+
+/* 교역 빈 상태의 막대 골격 — 연도·금액은 없고 트랙만 */
+const EmptyBars = styled.div`
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 14px;
+  padding: 10px 0 26px;
+`
+
+const EmptyBarRow = styled.div`
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 128px;
+  gap: 12px;
+  align-items: center;
+  /* 폭을 안 주면 격자 자식이 내용 폭으로 줄어 트랙이 왼쪽에 짜부라진다 */
+  width: 100%;
+`
+
+const EmptyTrack = styled.span`
+  height: 20px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.06)'};
+`

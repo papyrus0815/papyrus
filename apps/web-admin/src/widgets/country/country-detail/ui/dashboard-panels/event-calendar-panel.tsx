@@ -278,9 +278,9 @@ const MonthTitle = styled.span`
 const MonthCount = styled.span`
   padding: 2px 9px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
-  color: #b45309;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
   background: rgba(245, 158, 11, 0.16);
 `
 
@@ -298,7 +298,7 @@ const Jump = styled.button`
   padding: 5px 10px;
   border-radius: 999px;
   font-family: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.primary};
@@ -322,7 +322,7 @@ const Weekday = styled.span<{ $weekend: boolean }>`
   justify-content: flex-start;
   padding-left: 4px;
   height: 22px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
   color: ${({ $weekend, theme }) =>
     $weekend ? '#be123c' : theme.colors.text.tertiary};
@@ -368,7 +368,7 @@ const DayEvent = styled.button`
   background: rgba(245, 158, 11, 0.22);
   color: ${({ theme }) => theme.colors.text.primary};
   font-family: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.35;
   text-align: left;
@@ -390,12 +390,12 @@ const DayEvent = styled.button`
 
 const DayMore = styled.span`
   padding-left: 4px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
-  color: #b45309;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
 `
 
 const Footnote = styled.span`
-  font-size: 10.5px;
+  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
