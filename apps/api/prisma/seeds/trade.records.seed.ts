@@ -23,6 +23,12 @@ type Direction = 'EXPORT' | 'IMPORT'
 
 interface FlowSeed {
   direction: Direction
+  /**
+   * 단면. 생략하면 상대 유무로 추론한다.
+   * 상대국별 행(품목 무관)은 이름 칸에 상대명이 들어가 추론이 PARTNER_COMMODITY로
+   * 잘못 떨어지므로 **반드시 명시**한다 — 품목별 행과 더하면 이중계산이다.
+   */
+  grain?: 'COMMODITY' | 'PARTNER' | 'PARTNER_COMMODITY'
   /** 카탈로그 품목명 (trade_commodity.name) — 못 찾으면 자유 입력으로 떨어진다 */
   commodity?: string
   /** 카탈로그에 없는 품목을 그대로 적을 때 */
@@ -89,6 +95,84 @@ const RECORDS: RecordSeed[] = [
       { direction: 'IMPORT', commodity: '원유', sharePct: 12.5, value: 79.1, rankInDirection: 1 },
       { direction: 'IMPORT', commodity: '반도체', sharePct: 8.3, value: 52.5, rankInDirection: 2 },
       { direction: 'IMPORT', commodity: '천연가스', sharePct: 4.6, value: 29.0 },
+    ],
+  },
+
+  // ── 미국 2022·2023·2024 — 상품 교역 ───────────────────────
+  //
+  // 세 해를 넣는 이유: 한 해만 있으면 대시보드 추이선이 그려지지 않는다(점 하나는
+  // 추세가 아니다). 총액은 상품(goods) 기준으로 통일했다 — 품목·상대 비중이 모두
+  // 상품 통계라서, 서비스를 총액에만 섞으면 분모와 분자가 어긋난다.
+  {
+    countryIso: 'US',
+    era: 'AD',
+    year: 2022,
+    exportValue: 2085.4,
+    importValue: 3277.0,
+    currencyCode: 'USD',
+    valueScale: 'BILLION',
+    sourceName: 'BEA·미 상무부 센서스국 상품 교역 통계',
+    confidence: 'MEDIUM',
+    note: '상품(goods) 기준. 서비스 교역은 별도이며 미국은 서비스에서 흑자다.',
+    flows: [],
+  },
+  {
+    countryIso: 'US',
+    era: 'AD',
+    year: 2023,
+    exportValue: 2045.2,
+    importValue: 3105.5,
+    currencyCode: 'USD',
+    valueScale: 'BILLION',
+    sourceName: 'BEA·미 상무부 센서스국 상품 교역 통계',
+    confidence: 'MEDIUM',
+    note: '상품(goods) 기준. 이 해에 멕시코가 중국을 제치고 최대 수입 상대가 됐다.',
+    flows: [],
+  },
+  {
+    countryIso: 'US',
+    era: 'AD',
+    year: 2024,
+    exportValue: 2065.0,
+    importValue: 3296.6,
+    currencyCode: 'USD',
+    valueScale: 'BILLION',
+    priceBasis: 'FOB',
+    sourceName: 'BEA·미 상무부 센서스국 상품 교역 통계',
+    confidence: 'HIGH',
+    note: '상품(goods) 기준 — 총액은 확정 발표치다. 아래 품목·상대 비중은 대략의 그림이라 행마다 추정으로 표시했다. 서비스를 합치면 적자 폭이 크게 줄어든다(미국은 서비스 흑자국).',
+    flows: [
+      /*
+       * 품목별 — 상대를 가리지 않은 단면(COMMODITY).
+       * 총액은 확정치지만 품목 비중은 반올림한 근사라 행마다 추정으로 표시한다.
+       */
+      { direction: 'EXPORT', commodity: '원유', sharePct: 5.7, rankInDirection: 1, transportMode: 'SEA', isEstimate: true, notes: '2015년 원유 수출 금지가 풀린 뒤 미국은 최대 산유국이자 주요 수출국이 됐다.' },
+      { direction: 'EXPORT', commodity: '항공기', sharePct: 5.0, rankInDirection: 2, transportMode: 'AIR', isEstimate: true },
+      { direction: 'EXPORT', commodity: '의약품', sharePct: 4.6, rankInDirection: 3, isEstimate: true },
+      { direction: 'EXPORT', commodity: '석유제품', sharePct: 4.1, transportMode: 'SEA', isEstimate: true },
+      { direction: 'EXPORT', commodity: '천연가스', sharePct: 3.1, transportMode: 'SEA', isEstimate: true, notes: 'LNG 수출은 2022년 이후 유럽의 러시아산 대체 수요로 커졌다.' },
+      { direction: 'EXPORT', commodity: '반도체', sharePct: 2.9, isEstimate: true },
+      { direction: 'EXPORT', commodity: '승용차', sharePct: 2.9, isEstimate: true },
+      { direction: 'EXPORT', commodity: '콩', sharePct: 1.2, isEstimate: true },
+
+      { direction: 'IMPORT', commodity: '승용차', sharePct: 6.7, rankInDirection: 1, isEstimate: true },
+      { direction: 'IMPORT', commodity: '의약품', sharePct: 6.5, rankInDirection: 2, isEstimate: true, notes: '2024년 의약품 수입이 크게 늘었다 — 아일랜드발 물량이 큰 몫이다.' },
+      { direction: 'IMPORT', commodity: '자동차부품', sharePct: 5.8, rankInDirection: 3, isEstimate: true },
+      { direction: 'IMPORT', commodity: '원유', sharePct: 5.2, transportMode: 'PIPELINE', isEstimate: true, notes: '캐나다산 중질유가 파이프라인으로 들어온다 — 미국은 최대 산유국이면서 동시에 큰 수입국이다.' },
+      { direction: 'IMPORT', commodity: '컴퓨터', sharePct: 4.6, isEstimate: true },
+      { direction: 'IMPORT', commodity: '휴대전화', sharePct: 3.0, isEstimate: true },
+
+      /*
+       * 상대국별 — 품목을 가리지 않은 단면(PARTNER).
+       * 위의 품목별 행과 **더하면 안 된다**. 같은 무역을 두 번 세게 된다.
+       * 캐나다는 아직 국가 테이블에 없어 자유 표기로 적었다(그 칸의 용도다).
+       */
+      { direction: 'EXPORT', grain: 'PARTNER', name: '캐나다', partnerLabel: '캐나다', sharePct: 17.3, isEstimate: true },
+      { direction: 'EXPORT', grain: 'PARTNER', name: '멕시코', partnerIso: 'MX', sharePct: 16.2, isEstimate: true },
+      { direction: 'EXPORT', grain: 'PARTNER', name: '중국', partnerIso: 'CN', sharePct: 6.7, isEstimate: true },
+      { direction: 'IMPORT', grain: 'PARTNER', name: '멕시코', partnerIso: 'MX', sharePct: 15.5, rankInDirection: 1, isEstimate: true, notes: '2023년부터 중국을 제치고 최대 수입 상대가 됐다.' },
+      { direction: 'IMPORT', grain: 'PARTNER', name: '중국', partnerIso: 'CN', sharePct: 13.4, rankInDirection: 2, isEstimate: true },
+      { direction: 'IMPORT', grain: 'PARTNER', name: '캐나다', partnerLabel: '캐나다', sharePct: 12.6, rankInDirection: 3, isEstimate: true },
     ],
   },
 
@@ -236,8 +320,9 @@ export async function seedTradeRecords(prisma: PrismaService): Promise<void> {
       return {
         exportImportId: parent.id,
         direction: flow.direction as never,
-        /* 단면은 상대 유무로 갈린다 — 섞어 더하면 같은 무역을 두 번 센다 */
-        grain: (hasPartner ? 'PARTNER_COMMODITY' : 'COMMODITY') as never,
+        /* 명시가 있으면 그대로, 없으면 상대 유무로 갈린다 */
+        grain: (flow.grain ??
+          (hasPartner ? 'PARTNER_COMMODITY' : 'COMMODITY')) as never,
         commodityId: commodity?.id ?? null,
         name,
         categoryId: commodity?.categoryId ?? null,
