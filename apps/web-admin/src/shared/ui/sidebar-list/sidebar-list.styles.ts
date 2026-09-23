@@ -19,6 +19,8 @@
 import styled, { css } from 'styled-components'
 import type { DefaultTheme } from 'styled-components'
 
+import { SIDEBAR_SURFACE } from './surface'
+
 // ─── 공통 헬퍼 ───────────────────────────────────────────────────────────────
 
 /** 다크 전용 backdrop-filter */
@@ -82,19 +84,46 @@ export const overlayScrollbar = css`
   }
 `
 
+/**
+ * 사이드바 표면색 — 한 사이드바 안의 **모든 불투명 면이 같은 값을 써야 한다**
+ * (패널 · sticky 상단 바 · sticky 그룹 헤더). 셋 중 하나만 달라도 스크롤할 때 톤이 어긋난다.
+ *
+ * 지면이 `--sidebar-surface`를 내려주면 그 값이 이긴다(도메인 예외용). 기본값이 곧 규약이다.
+ */
+export const sidebarSurface = (theme: DefaultTheme) =>
+  theme.mode === 'dark'
+    ? `var(--sidebar-surface, ${SIDEBAR_SURFACE.dark})`
+    : `var(--sidebar-surface, ${SIDEBAR_SURFACE.light})`
+
+/** 사이드바 경계 — 지면이 본문과 **같은 흰색**이라, 층을 만드는 건 이 선 하나뿐이다 */
+export const sidebarLine = (theme: DefaultTheme) =>
+  theme.mode === 'dark'
+    ? 'var(--sidebar-line, rgba(255, 255, 255, 0.07))'
+    : 'var(--sidebar-line, #e9eaec)'
+
+/**
+ * 지면 위에 얹는 **채움 한 단계** — 검색칸·셀렉트·아바타 대체 박스가 같은 값을 쓴다.
+ *
+ * 흰 지면에서는 채움의 방향이 뒤집힌다: 입력칸은 한 톤 내려 회색으로 채워야 '칸'으로 읽히고
+ * (흰 지면에 흰 칸은 보이지 않는다), 테두리는 필요 없다.
+ */
+export const sidebarFill = (theme: DefaultTheme) =>
+  theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.055)' : '#f4f4f5'
+
+/** 호버는 채움보다 한 눈금 더 — 칸(정적)과 호버(반응)가 같은 톤이면 반응이 안 읽힌다 */
+export const sidebarFillHover = (theme: DefaultTheme) =>
+  theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f0f0f2'
+
+/** 선택 행 — 이 목록에서 유일하게 accent를 쓰는 자리 */
+export const sidebarRowSelected = (theme: DefaultTheme) =>
+  theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.20)' : '#eef0fe'
+
 /** 사이드바 sticky 상단 영역 공통 스타일 (다크: 리퀴드 / 라이트: 솔리드) */
 export const stickyBar = (theme: DefaultTheme) => css`
   position: sticky;
   z-index: 2;
-  ${theme.mode === 'dark'
-    ? css`
-        background: #151515;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      `
-    : css`
-        background: #f4f6fa;
-        border-bottom: 1px solid ${theme.colors.border.light};
-      `}
+  background: ${sidebarSurface(theme)};
+  border-bottom: 1px solid ${sidebarLine(theme)};
 `
 
 /** SidebarHeader action 슬롯의 아이콘 버튼 (등록 등) */
@@ -111,7 +140,7 @@ export const SidebarActionButton = styled.button`
   justify-content: center;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.hover};
+    background: ${({ theme }) => sidebarFillHover(theme)};
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
@@ -152,18 +181,11 @@ export const ListPane = styled.div<{
   padding-top: 0;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* 표면 톤 계단(디스코드 규약): 레일 가장 진함 → 사이드바 중간 → 본문 가장 밝음.
-     예전엔 사이드바가 본문과 같은 흰색이라 층이 갈리지 않았다. */
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: #151515;
-          border-right: 1px solid rgba(255, 255, 255, 0.06);
-        `
-      : css`
-          background: #f4f6fa;
-          border-right: 1px solid ${theme.colors.border.light};
-        `}
+  /* 지면은 본문과 **같은 흰색**이고, 층은 오른쪽 경계선 하나로만 만든다(sidebarSurface).
+     톤 계단(레일 > 사이드바 > 본문)을 쓰던 시절엔 목록이 회색 판 위에 얹힌 물건으로 보였다.
+     도메인이 --sidebar-surface / --sidebar-line 을 내려주면 그쪽이 이긴다. */
+  background: ${({ theme }) => sidebarSurface(theme)};
+  border-right: 1px solid ${({ theme }) => sidebarLine(theme)};
 
   @media (max-width: 1024px) {
     display: none;
@@ -247,9 +269,10 @@ export const SearchInput = styled.input`
   border-radius: 10px;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  /* 흰 지면에 흰 칸은 보이지 않는다 — 한 톤 내려 채워야 '칸'으로 읽힌다(테두리 대신 채움) */
+  background-color: ${({ theme }) => sidebarFill(theme)};
   border: 1px solid transparent;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
@@ -263,16 +286,15 @@ export const SearchInput = styled.input`
   }
 
   &:hover {
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.18)'
-        : theme.colors.border.medium};
+    background-color: ${({ theme }) => sidebarFillHover(theme)};
+    border-color: transparent;
   }
 
+  /* 포커스는 반대로 채움을 걷고 테두리로 말한다 — 입력 중엔 글자가 지면 위에 바로 놓인다 */
   &:focus {
     outline: none;
     border-color: ${({ theme }) => theme.colors.active};
-    background: ${({ theme }) => theme.colors.background.primary};
+    background-color: transparent;
   }
 `
 
@@ -293,7 +315,7 @@ export const ClearButton = styled.button`
   transition: background 0.12s ease, color 0.12s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.hover};
+    background: ${({ theme }) => sidebarFillHover(theme)};
     color: ${({ theme }) => theme.colors.text.primary};
   }
 `
@@ -316,11 +338,7 @@ export const ClearAllFiltersButton = styled.button`
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => theme.colors.hover};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.1)'
-        : 'rgba(255, 255, 255, 0.95)'};
+    background: ${({ theme }) => sidebarFillHover(theme)};
   }
 
   &:active {
@@ -353,8 +371,10 @@ export const FilterSelect = styled.select<{ $active?: boolean }>`
   font-weight: 600;
   color: ${({ $active, theme }) =>
     $active ? theme.colors.active : theme.colors.text.secondary};
+  /* ⚠️ background-**color**로만 덮는다. shorthand를 쓰면 아래 화살표 SVG가
+     background-image째로 지워져 칩이 그냥 알약이 된다. */
   background-color: ${({ $active, theme }) =>
-    $active ? theme.colors.activeLight : theme.colors.background.secondary};
+    $active ? theme.colors.activeLight : sidebarFill(theme)};
   background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;
@@ -367,7 +387,8 @@ export const FilterSelect = styled.select<{ $active?: boolean }>`
   max-width: 116px;
 
   &:hover {
-    background-color: ${({ theme }) => theme.colors.hover};
+    background-color: ${({ $active, theme }) =>
+      $active ? theme.colors.activeLight : sidebarFillHover(theme)};
   }
 
   &:focus-visible {
@@ -415,12 +436,12 @@ export const GroupSectionHeader = styled.button`
   transition: color 0.12s ease;
 
   /* sticky 헤더 — 아래로 지나가는 행이 비치지 않도록 사이드바와 같은 톤으로 덮는다 */
-  ${({ theme }) => css`
-    background: ${theme.mode === 'dark' ? '#151515' : '#f4f6fa'};
-  `}
+  background: ${({ theme }) => sidebarSurface(theme)};
 
+  /* 기본이 '접힘'인 그룹이라 눌러서 펼칠 수 있다는 신호가 필요하다.
+     예전 hover 규칙은 평상시와 같은 색이어서 아무 피드백이 없었다. */
   &:hover {
-    color: ${({ theme }) => theme.colors.text.secondary};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   &:focus-visible {
@@ -478,6 +499,26 @@ export const GroupDot = styled.span`
   flex-shrink: 0;
 `
 
+/**
+ * 행 사이에 끼는 얇은 구분 라벨 — 도메인이 `item.leadDivider`로 요청한다.
+ *
+ * 그룹 헤더(아코디언)와 다르다: 접히지 않고, 누를 수도 없고, 그룹 안에서 **축을 끊어 주는
+ * 앵커**다(사건 목록의 연도). 도메인이 자기 레일 좌표에 도트를 얹을 수 있도록 position만
+ * 잡아 두고 나머지 장식은 하지 않는다.
+ */
+export const RowDivider = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 12px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+`
+
 export const ListRow = styled.div<{
   $active?: boolean
   $historicalActive?: boolean
@@ -507,9 +548,25 @@ export const ListRow = styled.div<{
   /* 구분선을 두지 않는다 — 행 높이가 커지고 hover/선택 배경이 생기면서 선까지 있으면
      좌측 컬럼이 표로 보인다(디스코드 채널 목록도 선이 없다). */
 
+  /* 선택 행 좌측 accent strip — 그룹(대륙·시대) 색으로 '어느 묶음의 선택인지'를 표시한다.
+     $accentColor는 오래 전부터 넘어오고 있었지만 조판에서 쓰이지 않던 값이다. */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: ${({ $accentColor }) => $accentColor ?? 'transparent'};
+    opacity: ${({ $active, $historicalActive }) =>
+      $active || $historicalActive ? 1 : 0};
+    transition: opacity 0.12s ease;
+  }
+
   ${({ $active, $historicalActive, theme }) => css`
     background: ${$active || $historicalActive
-      ? theme.colors.activeLight
+      ? sidebarRowSelected(theme)
       : 'transparent'};
     color: ${$active || $historicalActive
       ? theme.colors.active
@@ -525,8 +582,8 @@ export const ListRow = styled.div<{
 
     &:hover {
       background: ${$active || $historicalActive
-        ? theme.colors.activeLight
-        : theme.colors.hover};
+        ? sidebarRowSelected(theme)
+        : sidebarFillHover(theme)};
     }
   `}
 
@@ -598,6 +655,20 @@ export const PinButton = styled.button<{ $pinned?: boolean }>`
 `
 
 /**
+ * 행 맨 앞의 고정폭 슬롯 — 배지 대신 **값**을 세로로 정렬해 세울 때 쓴다(사건의 날짜).
+ *
+ * 배지(AvatarBadge)와 자리는 같지만 성격이 다르다: 배지는 색 블록이고, 이쪽은 행마다 같은
+ * 자리에서 오른쪽 맞춤으로 읽히는 한 줄짜리 값이다. 폭·타이포는 도메인 스코프가 정한다.
+ */
+export const RowLead = styled.div`
+  flex-shrink: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+`
+
+/**
  * 썸네일이 없을 때의 대체 박스 — 국가는 ISO 코드/랜드마크, 인물은 이름 첫 글자.
  * 배경/색은 inline style로 row가 전달 (그룹 accent 색 옅은 톤).
  */
@@ -620,7 +691,7 @@ export const AvatarBadge = styled.div<{ $size?: 'sm' | 'md' }>`
     monospace;
   text-transform: uppercase;
   line-height: 1;
-  background: ${({ theme }) => theme.colors.background.secondary};
+  background: ${({ theme }) => sidebarFill(theme)};
   color: ${({ theme }) => theme.colors.text.secondary};
 
   > svg {
@@ -676,7 +747,7 @@ export const CollapsedToggleBtn = styled.button`
   transition: background 0.15s ease, color 0.15s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.hover};
+    background: ${({ theme }) => sidebarFillHover(theme)};
     color: ${({ theme }) => theme.colors.text.primary};
   }
 `
@@ -698,7 +769,7 @@ export const ThumbnailAvatar = styled.div<{ $size?: 'sm' | 'md' }>`
   border-radius: 8px;
   overflow: hidden;
   flex-shrink: 0;
-  background: ${({ theme }) => theme.colors.background.secondary};
+  background: ${({ theme }) => sidebarFill(theme)};
 
   img {
     width: 100%;
@@ -708,17 +779,36 @@ export const ThumbnailAvatar = styled.div<{ $size?: 'sm' | 'md' }>`
   }
 `
 
-export const CodeText = styled.div<{ $unread?: boolean }>`
+/**
+ * 행 첫 줄(이름).
+ *
+ * `$lines`를 2 이상으로 주면 말줄임 대신 그 줄 수까지 접어 준다 — 이름이 아니라 **문장**인
+ * 도메인(사건 제목: "2025 이란–이스라엘 12일 전쟁 …")에서 한 줄 말줄임은 구분에 필요한
+ * 꼬리를 먼저 잘라낸다. 기본값(1줄 말줄임)은 이름이 짧은 도메인(국가·인물)의 조판 그대로다.
+ */
+export const CodeText = styled.div<{ $unread?: boolean; $lines?: number }>`
   font-size: 15px;
   font-weight: 600;
   color: inherit; /* ListRow의 active/비활성 색 따라감 */
   letter-spacing: -0.01em;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   line-height: 1.4;
   flex: 1;
   min-width: 0;
+
+  ${({ $lines }) =>
+    $lines && $lines > 1
+      ? css`
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: ${$lines};
+          white-space: normal;
+          overflow-wrap: anywhere;
+        `
+      : css`
+          white-space: nowrap;
+          text-overflow: ellipsis;
+        `}
 `
 
 /** 행 두 번째 줄 — 수도·인구·연도 등 부가 정보 (I2) */
@@ -735,6 +825,12 @@ export const SubMeta = styled.div`
   gap: 6px;
   font-variant-numeric: tabular-nums;
 
+  /* 기본은 '줄이지 않음' — 연도·수치·배지가 긴 이름에 밀려 사라지면 안 된다.
+     줄어들 조각은 SubMetaText로 명시한다. */
+  > * {
+    flex-shrink: 0;
+  }
+
   > span.dot {
     width: 2px;
     height: 2px;
@@ -743,6 +839,19 @@ export const SubMeta = styled.div`
     opacity: 0.5;
     flex-shrink: 0;
   }
+`
+
+/**
+ * SubMeta 안에서 남는 폭을 먹고, 넘치면 말줄임되는 조각(역사국가 영문명·수도 등).
+ * SubMeta가 flex라 부모의 text-overflow가 자식에 먹지 않아 예전엔 그냥 잘려 나갔다
+ * — 뒤따르는 존속기간·배지가 통째로 화면 밖으로 밀리던 원인.
+ */
+export const SubMetaText = styled.span`
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
 export const TextStack = styled.div`
@@ -764,18 +873,10 @@ export const EmptyFilterState = styled.div`
   padding: 40px 20px;
   text-align: center;
   margin: 20px 16px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.03)'
-      : 'rgba(255, 255, 255, 0.6)'};
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  /* ⚠️ 반투명 흰 카드는 흰 지면 위에서 사라진다 — 채움 한 단계 + 경계선으로 세운다 */
+  background: ${({ theme }) => sidebarFill(theme)};
   border-radius: 16px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.07)'
-        : 'rgba(255, 255, 255, 0.8)'};
+  border: 1px solid ${({ theme }) => sidebarLine(theme)};
 `
 
 export const EmptyFilterIcon = styled.div`
@@ -786,7 +887,7 @@ export const EmptyFilterIcon = styled.div`
   height: 48px;
   border-radius: 50%;
   margin-bottom: 12px;
-  background: ${({ theme }) => theme.colors.background.secondary};
+  background: ${({ theme }) => sidebarFill(theme)};
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
@@ -832,12 +933,7 @@ export const AddButton = styled.button`
   font-size: 14px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.07)'
-      : 'rgba(255, 255, 255, 0.85)'};
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: ${({ theme }) => sidebarSurface(theme)};
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
@@ -847,10 +943,7 @@ export const AddButton = styled.button`
       theme.mode === 'dark'
         ? 'rgba(255, 255, 255, 0.22)'
         : 'rgba(0, 0, 0, 0.18)'};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.12)'
-        : 'rgba(255, 255, 255, 0.97)'};
+    background: ${({ theme }) => sidebarFillHover(theme)};
   }
 
   &:active {
