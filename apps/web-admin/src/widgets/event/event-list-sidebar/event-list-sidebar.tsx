@@ -36,10 +36,10 @@ import { titleWithoutOwnDate } from '@/shared/lib/title-date'
 import { pathKeys } from '@/shared/router'
 import {
   EntityListSidebar,
-  useSidebarPins,
-  useSidebarRecents,
   type EntitySidebarGroup,
   type EntitySidebarItem,
+  useSidebarPins,
+  useSidebarRecents,
 } from '@/widgets/entity-list-sidebar'
 
 import { categoryInk } from './category-ink'
@@ -71,7 +71,8 @@ const RECENT_GROUP = '__recent__'
 type SortKey = 'recent' | 'oldest' | 'title' | 'created'
 
 /** 시간 순서로 늘어선 정렬인가 — 연 앵커는 이때만 뜻이 있다 */
-const isChronological = (sort: SortKey) => sort === 'recent' || sort === 'oldest'
+const isChronological = (sort: SortKey) =>
+  sort === 'recent' || sort === 'oldest'
 
 /**
  * 메타 줄 선두의 날짜 토큰.
@@ -80,20 +81,33 @@ const isChronological = (sort: SortKey) => sort === 'recent' || sort === 'oldest
  * 없는 자리(고정·최근, 이름순·등록순)에서는 연도까지 적어야 행 혼자서 말이 된다.
  * 정밀도를 넘어서 지어내지 않는다 — 연 정밀도는 연도까지, 날짜 미상은 아무것도.
  */
-function metaDateToken(
+/**
+ * 행 **선두 열**에 세우는 날짜 — 인물 목록이 얼굴을 세우는 그 자리다.
+ *
+ * 연도는 싣지 않는다. 선두 열은 모든 행에서 같은 폭이어야 열로 읽히는데(오른쪽 맞춤),
+ * '2026.9.14'와 '9.14'가 섞이면 폭이 널뛴다. 연도는 위의 연 소제목이 말하고, 소제목이 없는
+ * 자리(고정·최근·연도 미상)에서만 메타 줄이 따로 말한다.
+ *
+ * 연 정밀도 사건은 빈 값이다 — 월·일을 모르는데 지어낼 수 없고, 열 폭은 그대로 유지된다.
+ */
+function leadDateToken(event: HistoricalEvent): string {
+  const parts = parseIsoDateParts(event.startDate)
+  if (!parts) return ''
+  const precision = event.startDatePrecision
+  if (precision === 'year') return ''
+  if (precision === 'month') return `${parts.month}월`
+  return `${parts.month}.${parts.day}`
+}
+
+/** 메타 줄의 연도 — 연 소제목이 이미 말하는 자리에서는 되풀이하지 않는다 */
+function metaYearToken(
   event: HistoricalEvent,
   underYearHeading: boolean,
 ): string | null {
+  if (underYearHeading) return null
   const parts = parseIsoDateParts(event.startDate)
   if (!parts) return null
-  const year = parts.year < 0 ? `BC ${-parts.year}` : `${parts.year}`
-  const precision = event.startDatePrecision
-  if (precision === 'year') return underYearHeading ? null : year
-  if (precision === 'month') {
-    return underYearHeading ? `${parts.month}월` : `${year}.${parts.month}`
-  }
-  const monthDay = `${parts.month}.${parts.day}`
-  return underYearHeading ? monthDay : `${year}.${monthDay}`
+  return parts.year < 0 ? `BC ${-parts.year}` : `${parts.year}`
 }
 
 /**
@@ -164,7 +178,9 @@ function EventListSidebarInner({
   const mode = theme.mode === 'dark' ? 'dark' : 'light'
   // 사이드바는 세기 그룹을 온전히 보여야 하므로 전량 로드(서버 페이지네이션 위 클라 그룹핑은
   // 1페이지만 그룹이 잡히는 함정이 있다 — event-catalog 회귀와 같은 이유).
-  const { events, isLoading, isError, refetch } = useEvents({ autoLoadAll: true })
+  const { events, isLoading, isError, refetch } = useEvents({
+    autoLoadAll: true,
+  })
   const { pinnedIds, togglePin } = useSidebarPins('event-sidebar-pins')
   const recentIds = useSidebarRecents('event-sidebar-recents', selectedId)
 
@@ -234,7 +250,7 @@ function EventListSidebarInner({
         /* 둘째 줄은 한 호흡만 — 날짜 · 분류(색) · 어디/무엇의 일부 · 하위 N.
            맨 뒤 '하위 N'만 줄지 않는다: 긴 국가명에 밀려 사라져도 되는 건 문맥 쪽이다. */
         meta: [
-          metaDateToken(event, options.underYearAnchor),
+          metaYearToken(event, options.underYearAnchor),
           categoryLabel
             ? {
                 text: categoryLabel,
@@ -245,8 +261,10 @@ function EventListSidebarInner({
           context ? { text: context, shrink: true } : null,
           childCount > 0 ? `하위 ${childCount}` : null,
         ],
-        // 배지를 그리지 않는다 — 사건에는 ISO 코드도 얼굴도 없다. 그 폭은 제목이 가져간다.
-        noBadge: true,
+        /* 선두 고정폭 열 — 인물 목록의 아바타 자리에 사건은 날짜를 세운다.
+           썸네일을 놓을 수도 있었지만 실측 보유율이 13%(13/100)라, 열의 87%가 빈 블록이
+           되면서 제목 폭만 먹는다. 인물은 40%(151/380)라 얼굴이 그 자리를 벌 만하다. */
+        lead: leadDateToken(event),
         leadDivider: options.leadDivider,
         /* 읽어 주는 쪽에는 **줄이기 전 값**을 그대로 준다 — 화면에서는 연 소제목이 연도를
            대신 말해 날짜를 '9.4'로 줄였고, 제목에서도 중복 날짜 꼬리를 덜어냈다. */
@@ -328,7 +346,8 @@ function EventListSidebarInner({
     for (const { event, groupId, signedYear } of visible) {
       if (!groupMeta.has(groupId)) {
         groupMeta.set(groupId, {
-          name: signedYear == null ? '연도 미상' : formatCenturyLabel(signedYear),
+          name:
+            signedYear == null ? '연도 미상' : formatCenturyLabel(signedYear),
           // 미상은 항상 맨 끝
           sortKey: signedYear == null ? Number.POSITIVE_INFINITY : signedYear,
         })
@@ -401,9 +420,7 @@ function EventListSidebarInner({
           leadIcon: <FiStar size={11} />,
           isQuickAccess: true,
         })
-        rows.unshift(
-          ...pinnedEvents.map((event) => toRow(event, PINNED_GROUP)),
-        )
+        rows.unshift(...pinnedEvents.map((event) => toRow(event, PINNED_GROUP)))
       }
       if (recentEvents.length > 0) {
         quickGroups.push({
