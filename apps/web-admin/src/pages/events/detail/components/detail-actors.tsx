@@ -5,6 +5,10 @@ import { FiArrowDown, FiArrowUp, FiSettings, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
+import {
+  EVENT_COUNTRY_ROLE_OPTIONS,
+  type EventCountryRole,
+} from '@/entities/event/model'
 import { getAllCountries } from '@/shared/api/countries'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
@@ -13,6 +17,7 @@ import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { AdvancedCountrySelectModal } from '@/shared/ui/advanced-country-select-modal/advanced-country-select-modal'
+import { InlineSelect } from '@/shared/ui/inline-edit'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
@@ -41,7 +46,9 @@ interface DetailActorsProps {
  * - 타이틀: 큰 세리프 + italic subtitle, 그 아래 굵은 룰.
  * - 인물: 세로 리스트, 정사각 60px 아바타(b&w 톤) + bold serif 이름 + italic 역할
  *   + 본문체 비고. 행 사이 1px 라이트 룰.
- * - 국가: smallcaps `Nations` 라벨 + 본문 단락(현대 roman / 역사 italic, 가운뎃점 구분).
+ * - 참여국: 인물과 같은 행 구조. 이름 + 역할(10종 피커) + 역할 서술 + 비고.
+ *   현대/역사를 한 목록으로 합쳐 sortOrder 순으로 세운다 — 순서가 두 배열에 걸쳐
+ *   하나이기 때문.
  * - 액션(×, 편집)은 hover 시에만 노출.
  */
 export function DetailActors({
@@ -151,73 +158,95 @@ export function DetailActors({
     patchPersons([...persons.map(toPersonPayload), { personId }])
   }
 
-  const removeCountry = (id: string, isHistorical: boolean) => {
-    const countryList = isHistorical ? historicalCountries : modernCountries
-    const removedName = countryList.find((country) => country.id === id)?.name ?? '국가'
-    if (isHistorical) {
-      onPatch(
-        {
-          relatedHistoricalCountryIds: historicalCountries
-            .filter((country) => country.id !== id)
-            .map((country) => country.id),
-        },
-        { savedLabel: `관련국 제거 · ${removedName}` },
-      )
-    } else {
-      onPatch(
-        {
-          relatedCountryIds: modernCountries
-            .filter((country) => country.id !== id)
-            .map((country) => country.id),
-        },
-        { savedLabel: `관련국 제거 · ${removedName}` },
-      )
-    }
+  /**
+   * 참여국 — 현대·역사를 **한 목록**으로 합쳐 다룬다. 서버가 표시 편의로 두 배열을
+   * 내려주지만 순서(sortOrder)는 둘에 걸쳐 하나이므로, 편집은 언제나 합친 목록으로
+   * 한다. 저장은 `relatedCountries` 한 필드 — 서버가 자연키로 머지하므로 보내지 않은
+   * 필드(역할·서술·비고)는 그대로 살아남는다.
+   */
+  const countryRows = useMemo(() => {
+    const rows = [
+      ...modernCountries.map((country, index) => ({
+        id: country.id,
+        name: country.name,
+        isHistorical: false,
+        role: country.role ?? null,
+        roleDescription: country.roleDescription ?? null,
+        note: country.note ?? null,
+        sortOrder: country.sortOrder ?? index,
+      })),
+      ...historicalCountries.map((country, index) => ({
+        id: country.id,
+        name: country.name,
+        isHistorical: true,
+        role: country.role ?? null,
+        roleDescription: country.roleDescription ?? null,
+        note: country.note ?? null,
+        sortOrder: country.sortOrder ?? index,
+      })),
+    ]
+    rows.sort((left, right) => left.sortOrder - right.sortOrder)
+    return rows
+  }, [modernCountries, historicalCountries])
+
+  const patchCountries = (
+    next: typeof countryRows,
+    options?: { savedLabel?: string },
+  ) => onPatch({ relatedCountries: next.map(toCountryPayload) }, options)
+
+  const updateCountry = (
+    rowKey: string,
+    patch: { role?: EventCountryRole; roleDescription?: string; note?: string },
+  ) => {
+    const next = countryRows.map((row) =>
+      countryRowKey(row) === rowKey ? { ...row, ...patch } : row,
+    )
+    patchCountries(next)
   }
 
-  /** 국가 순서 이동 — 현대/역사 각 배열 안에서만 이동. 두 그룹 간 이동은 미지원. */
-  const moveCountry = (id: string, isHistorical: boolean, dir: -1 | 1) => {
-    const arr = isHistorical ? historicalCountries : modernCountries
-    const idx = arr.findIndex((c) => c.id === id)
-    if (idx < 0) return
-    const target = idx + dir
-    if (target < 0 || target >= arr.length) return
-    const next = arr.slice()
-    const [item] = next.splice(idx, 1)
-    next.splice(target, 0, item)
-    if (isHistorical) {
-      onPatch({ relatedHistoricalCountryIds: next.map((c) => c.id) })
-    } else {
-      onPatch({ relatedCountryIds: next.map((c) => c.id) })
-    }
+  const removeCountry = (rowKey: string) => {
+    const removed = countryRows.find((row) => countryRowKey(row) === rowKey)
+    patchCountries(
+      countryRows.filter((row) => countryRowKey(row) !== rowKey),
+      { savedLabel: `관련국 제거 · ${removed?.name ?? '국가'}` },
+    )
+  }
+
+  /** 순서 이동 — 이제 sortOrder로 실제 저장된다(예전엔 저장 자리가 없어 무시됐다). */
+  const moveCountry = (rowKey: string, dir: -1 | 1) => {
+    const index = countryRows.findIndex((row) => countryRowKey(row) === rowKey)
+    if (index < 0) return
+    const target = index + dir
+    if (target < 0 || target >= countryRows.length) return
+    const next = countryRows.slice()
+    const [moved] = next.splice(index, 1)
+    next.splice(target, 0, moved)
+    patchCountries(next)
   }
 
   const addCountry = (country: { id: string; isHistorical: boolean }) => {
-    if (country.isHistorical) {
-      if (historicalCountries.some((c) => c.id === country.id)) return
-      onPatch({
-        relatedHistoricalCountryIds: [
-          ...historicalCountries.map((c) => c.id),
-          country.id,
-        ],
-      })
-    } else {
-      if (modernCountries.some((c) => c.id === country.id)) return
-      onPatch({
-        relatedCountryIds: [...modernCountries.map((c) => c.id), country.id],
-      })
-    }
+    const rowKey = country.isHistorical ? `h:${country.id}` : `m:${country.id}`
+    if (countryRows.some((row) => countryRowKey(row) === rowKey)) return
+    patchCountries([
+      ...countryRows,
+      {
+        id: country.id,
+        name: '',
+        isHistorical: country.isHistorical,
+        role: null,
+        roleDescription: null,
+        note: null,
+        sortOrder: countryRows.length,
+      },
+    ])
   }
 
   const selectedCountryIds = useMemo(
-    () => [
-      ...modernCountries.map((c) => c.id),
-      ...historicalCountries.map((c) => c.id),
-    ],
-    [modernCountries, historicalCountries],
+    () => countryRows.map((row) => row.id),
+    [countryRows],
   )
 
-  const totalCountries = modernCountries.length + historicalCountries.length
+  const totalCountries = countryRows.length
   const hasAnything =
     persons.length > 0 || totalCountries > 0
   /** 순서 변경 토글은 행이 2개 이상일 때만 의미가 있다. */
@@ -382,105 +411,107 @@ export function DetailActors({
           인물 추가
         </AddBtn>
 
-        {/* 국가 — smallcaps 라벨 + 본문 단락 */}
-        {(modernCountries.length > 0 || historicalCountries.length > 0) && (
+        {/* 참여국 — 인물 행과 같은 편집 수준(역할·서술·비고) */}
+        {countryRows.length > 0 && (
           <NationsBlock>
-            <NationsEyebrow>관련국</NationsEyebrow>
-            <NationsParagraph>
-              {modernCountries.map((country, i) => (
-                <NationItem key={country.id}>
-                  <CountryLink
-                    to={pathKeys.countryDetail(country.id)}
-                    aria-haspopup="dialog"
-                    onClick={(clickEvent) => {
-                      if (!shouldInterceptEntityClick(clickEvent)) return
-                      clickEvent.preventDefault()
-                      onCountryClick(country.id)
-                    }}
-                  >
-                    {country.name}
-                  </CountryLink>
-                  {manageMode && (
-                    <>
-                      <NationReorder
+            <NationsEyebrow>참여국</NationsEyebrow>
+            <CountryList>
+              {countryRows.map((row, index) => {
+                const rowKey = countryRowKey(row)
+                const NameLink = row.isHistorical
+                  ? HistoricalCountryName
+                  : CountryLink
+                const hasNote = Boolean(row.note && row.note.trim())
+                return (
+                  <CountryRow key={rowKey}>
+                    <CountryBody>
+                      <CountryNameLine>
+                        <NameLink
+                          to={pathKeys.countryDetail(row.id)}
+                          aria-haspopup="dialog"
+                          onClick={(clickEvent) => {
+                            if (!shouldInterceptEntityClick(clickEvent)) return
+                            clickEvent.preventDefault()
+                            onCountryClick(row.id)
+                          }}
+                        >
+                          {row.name}
+                        </NameLink>
+                        <CountryRolePicker>
+                          <InlineSelect
+                            value={row.role ?? ''}
+                            options={EVENT_COUNTRY_ROLE_OPTIONS.map(
+                              (option) => ({
+                                value: option.value,
+                                label: option.label,
+                                description: option.hint,
+                              }),
+                            )}
+                            onSave={(next) =>
+                              updateCountry(rowKey, {
+                                role: next as EventCountryRole,
+                              })
+                            }
+                            placeholder="역할 지정"
+                            label={`${row.name} 역할`}
+                          />
+                        </CountryRolePicker>
+                      </CountryNameLine>
+                      <CountryRoleLine>
+                        <InlineText
+                          value={row.roleDescription ?? ''}
+                          onSave={(next) =>
+                            updateCountry(rowKey, { roleDescription: next })
+                          }
+                          placeholder="이 나라가 한 일 추가"
+                          multiline
+                          multilineEnter
+                        />
+                      </CountryRoleLine>
+                      <CountryNoteLine $hasContent={hasNote}>
+                        <InlineText
+                          value={row.note ?? ''}
+                          onSave={(next) => updateCountry(rowKey, { note: next })}
+                          placeholder="비고 추가"
+                          multiline
+                          multilineEnter
+                        />
+                      </CountryNoteLine>
+                    </CountryBody>
+
+                    <RowActions>
+                      {manageMode && (
+                        <>
+                          <ReorderBtn
+                            type="button"
+                            onClick={() => moveCountry(rowKey, -1)}
+                            disabled={index === 0}
+                            aria-label={`${row.name} 위로`}
+                          >
+                            <FiArrowUp />
+                          </ReorderBtn>
+                          <ReorderBtn
+                            type="button"
+                            onClick={() => moveCountry(rowKey, 1)}
+                            disabled={index === countryRows.length - 1}
+                            aria-label={`${row.name} 아래로`}
+                          >
+                            <FiArrowDown />
+                          </ReorderBtn>
+                        </>
+                      )}
+                      <RemoveInline
                         type="button"
-                        onClick={() => moveCountry(country.id, false, -1)}
-                        disabled={i === 0}
-                        aria-label={`${country.name} 위로`}
+                        onClick={() => removeCountry(rowKey)}
+                        aria-label={`${row.name} 제거`}
                       >
-                        <FiArrowUp />
-                      </NationReorder>
-                      <NationReorder
-                        type="button"
-                        onClick={() => moveCountry(country.id, false, 1)}
-                        disabled={i === modernCountries.length - 1}
-                        aria-label={`${country.name} 아래로`}
-                      >
-                        <FiArrowDown />
-                      </NationReorder>
-                    </>
-                  )}
-                  <NationRemove
-                    type="button"
-                    onClick={() => removeCountry(country.id, false)}
-                    aria-label={`${country.name} 제거`}
-                  >
-                    ×
-                  </NationRemove>
-                  {i < modernCountries.length - 1 && (
-                    <NationSep>·</NationSep>
-                  )}
-                </NationItem>
-              ))}
-              {modernCountries.length > 0 && historicalCountries.length > 0 && (
-                <NationHardSep>—</NationHardSep>
-              )}
-              {historicalCountries.map((country, i) => (
-                <NationItem key={country.id}>
-                  <HistoricalCountryName
-                    to={pathKeys.countryDetail(country.id)}
-                    aria-haspopup="dialog"
-                    onClick={(clickEvent) => {
-                      if (!shouldInterceptEntityClick(clickEvent)) return
-                      clickEvent.preventDefault()
-                      onCountryClick(country.id)
-                    }}
-                  >
-                    {country.name}
-                  </HistoricalCountryName>
-                  {manageMode && (
-                    <>
-                      <NationReorder
-                        type="button"
-                        onClick={() => moveCountry(country.id, true, -1)}
-                        disabled={i === 0}
-                        aria-label={`${country.name} 위로`}
-                      >
-                        <FiArrowUp />
-                      </NationReorder>
-                      <NationReorder
-                        type="button"
-                        onClick={() => moveCountry(country.id, true, 1)}
-                        disabled={i === historicalCountries.length - 1}
-                        aria-label={`${country.name} 아래로`}
-                      >
-                        <FiArrowDown />
-                      </NationReorder>
-                    </>
-                  )}
-                  <NationRemove
-                    type="button"
-                    onClick={() => removeCountry(country.id, true)}
-                    aria-label={`${country.name} 제거`}
-                  >
-                    ×
-                  </NationRemove>
-                  {i < historicalCountries.length - 1 && (
-                    <NationSep>·</NationSep>
-                  )}
-                </NationItem>
-              ))}
-            </NationsParagraph>
+                        <FiX />
+                      </RemoveInline>
+                    </RowActions>
+                  </CountryRow>
+                )
+              })}
+            </CountryList>
           </NationsBlock>
         )}
         <AddBtn type="button" onClick={() => setCountryModalOpen(true)}>
@@ -533,6 +564,32 @@ function toPersonPayload(p: { personId: string; role?: string | null; note?: str
     personId: p.personId,
     role: p.role ?? undefined,
     note: p.note ?? undefined,
+  }
+}
+
+/** 참여국 행의 신원 — 현대/역사가 같은 uuid를 쓰더라도 섞이지 않는다 */
+function countryRowKey(row: { id: string; isHistorical: boolean }): string {
+  return row.isHistorical ? `h:${row.id}` : `m:${row.id}`
+}
+
+/**
+ * 행 → 서버 계약(`relatedCountries`) 한 줄.
+ * 빈 문자열은 null로 눕혀 "지움"을 명확히 한다(3상 규약: 생략=유지, null=비움).
+ */
+function toCountryPayload(row: {
+  id: string
+  isHistorical: boolean
+  role: string | null
+  roleDescription: string | null
+  note: string | null
+}) {
+  return {
+    ...(row.isHistorical
+      ? { historicalCountryId: row.id }
+      : { countryId: row.id }),
+    role: (row.role ?? undefined) as EventCountryRole | undefined,
+    roleDescription: row.roleDescription?.trim() ? row.roleDescription : null,
+    note: row.note?.trim() ? row.note : null,
   }
 }
 
@@ -633,43 +690,6 @@ const ReorderBtn = styled.button`
   }
 `
 
-const NationReorder = styled.button`
-  margin-left: 4px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border: none;
-  border-radius: 3px;
-  background: transparent;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-  cursor: pointer;
-  vertical-align: 1px;
-  transition: color 0.14s, background 0.14s;
-
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 1px;
-  }
-
-  &:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
-
-  svg {
-    width: 10px;
-    height: 10px;
-  }
-`
 
 /* ─── Person list (vertical, hairline separators) ─── */
 
@@ -908,13 +928,87 @@ const NationsEyebrow = styled.div`
   color: ${({ theme }) => mutedTextColor(theme.mode)};
 `
 
-const NationsParagraph = styled.p`
-  font-size: 15px;
-  line-height: 1.7;
-  letter-spacing: -0.005em;
+const CountryList = styled.ol`
+  list-style: none;
   margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+`
+
+/* 인물 행과 같은 골격 — 아바타 열만 없다(국기 이모지는 이름 옆이 자연스러워 생략). */
+const CountryRow = styled.li`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  padding: 14px 12px;
+  margin: 0 -12px;
+  border-radius: 10px;
+  border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
+
+  &:last-child {
+    border-bottom: none;
+  }
+`
+
+const CountryBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+const CountryNameLine = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
 `
+
+/* 역할은 이름의 종속 정보 — 한 단 작고 약하게 둬서 이름이 계속 앞선다. */
+const CountryRolePicker = styled.span`
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+
+  [data-empty='true'] {
+    font-style: italic;
+    opacity: 0.55;
+  }
+`
+
+const CountryRoleLine = styled.div`
+  font-size: 14px;
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  [data-empty='true'] {
+    font-style: italic;
+    opacity: 0.55;
+  }
+`
+
+const CountryNoteLine = styled.div<{ $hasContent: boolean }>`
+  font-size: 13px;
+  line-height: 1.6;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+
+  ${({ $hasContent }) =>
+    !$hasContent &&
+    css`
+      [data-empty='true'] {
+        opacity: 0.5;
+        font-style: italic;
+      }
+    `}
+`
+
 
 const CountryLink = styled(Link)`
   color: inherit;
@@ -940,66 +1034,8 @@ const HistoricalCountryName = styled(CountryLink)`
       : 'rgba(15,23,42,0.74)'};
 `
 
-const NationSep = styled.span`
-  margin: 0 8px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.32)'
-      : 'rgba(15,23,42,0.28)'};
-`
 
-const NationHardSep = styled.span`
-  margin: 0 12px;
-  color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.45)'
-      : 'rgba(15,23,42,0.45)'};
-`
 
-/**
- * 국가 칩 단위 wrapper — hover 그룹을 단락 전체가 아닌 *해당 칩만*으로 좁혀
- * × 버튼이 다른 칩 호버 시 깜빡이지 않게.
- */
-const NationItem = styled.span`
-  /* 칩 단위 hover 그룹 */
-`
-
-const NationRemove = styled.button`
-  margin-left: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 1;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-  cursor: pointer;
-  opacity: 0;
-  vertical-align: 1px;
-  transition: opacity 0.14s, color 0.14s;
-
-  ${NationItem}:hover &,
-  ${NationItem}:focus-within & {
-    opacity: 0.7;
-  }
-
-  &:focus-visible {
-    opacity: 1;
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 2px;
-  }
-
-  &:hover {
-    opacity: 1;
-    color: ${({ theme }) => theme.colors.error};
-    outline: none;
-  }
-
-  /* 터치/포인터 hover 미지원 환경은 항상 노출. */
-  @media (hover: none) {
-    opacity: 0.7;
-  }
-`
 
 /* ─── Add buttons (editorial) ─── */
 

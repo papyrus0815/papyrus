@@ -89,8 +89,12 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
     endDate: string
     thumbnail: string
     keywords: string[]
-    relatedCountryIds: string[]
-    primaryCountryId: string | null
+    relatedCountries: Array<{
+      countryId?: string | null
+      historicalCountryId?: string | null
+      role?: string
+      roleDescription?: string | null
+    }>
     parentEventSlot?: {
       parent: { id: string; title: string } | null
       onOpenPicker: () => void
@@ -112,11 +116,13 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
       <output data-testid="endDate">{props.endDate}</output>
       <output data-testid="thumbnail">{props.thumbnail}</output>
       <output data-testid="keywords">{props.keywords.join('|')}</output>
-      <output data-testid="relatedCountryIds">
-        {props.relatedCountryIds.join('|')}
-      </output>
-      <output data-testid="primaryCountryId">
-        {props.primaryCountryId ?? ''}
+      <output data-testid="relatedCountries">
+        {props.relatedCountries
+          .map(
+            (participant) =>
+              `${participant.countryId ?? participant.historicalCountryId}:${participant.role ?? ''}:${participant.roleDescription ?? ''}`,
+          )
+          .join('|')}
       </output>
       <output data-testid="hasParentSlot">
         {String(Boolean(props.parentEventSlot))}
@@ -257,8 +263,20 @@ describe('EventBasicForm — 편집 하이드레이션', () => {
         { imageUrl: 'https://img/first.png' },
         { imageUrl: 'https://img/primary.png', isPrimary: true },
       ],
-      relatedCountryIds: ['c1', 'c2'],
-      relatedCountries: [{ id: 'c2', role: 'INITIATOR' }],
+      /**
+       * 역할·역할 서술까지 하이드레이션돼야 편집 저장이 큐레이션을 지우지 않는다
+       * (예전엔 id만 복원하고 INITIATOR 하나만 별표로 되살렸다).
+       */
+      relatedCountries: [
+        { id: 'c1', name: '프랑스', role: 'PARTICIPANT', sortOrder: 0 },
+        {
+          id: 'c2',
+          name: '오스트리아',
+          role: 'INITIATOR',
+          roleDescription: '회의를 주재',
+          sortOrder: 1,
+        },
+      ],
     })
 
     const client = makeClient()
@@ -274,8 +292,9 @@ describe('EventBasicForm — 편집 하이드레이션', () => {
     expect(screen.getByTestId('thumbnail')).toHaveTextContent(
       'https://img/primary.png',
     )
-    expect(screen.getByTestId('relatedCountryIds')).toHaveTextContent('c1|c2')
-    expect(screen.getByTestId('primaryCountryId')).toHaveTextContent('c2')
+    expect(screen.getByTestId('relatedCountries')).toHaveTextContent(
+      'c1:PARTICIPANT:|c2:INITIATOR:회의를 주재',
+    )
   })
 })
 

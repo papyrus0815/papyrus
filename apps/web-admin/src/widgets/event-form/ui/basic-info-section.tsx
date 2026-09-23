@@ -11,11 +11,15 @@ import {
   FiGlobe,
   FiImage,
   FiPlus,
-  FiStar,
   FiTag,
   FiX,
 } from 'react-icons/fi'
 
+import {
+  EVENT_COUNTRY_ROLE_OPTIONS,
+  participantKey,
+  type EventCountryParticipant,
+} from '@/entities/event/model'
 import { extractCategoryKey } from '@/features/event-create/lib'
 import * as S from '@/pages/events/create/event-create.styles'
 import { CATEGORY_ICON_MAP } from '@/pages/events/create/events.constants'
@@ -85,22 +89,16 @@ interface BasicInfoSectionProps {
   // DB 카테고리
   dbCategories: EventCategoryDto[]
 
-  // 관련 국가 (선택적)
-  relatedCountryIds?: string[]
-  setRelatedCountryIds?: (value: string[]) => void
-  relatedHistoricalCountryIds?: string[]
-  setRelatedHistoricalCountryIds?: (value: string[]) => void
+  /**
+   * 참여국 (선택) — 현대·역사를 한 배열에. 등록 시점에 역할과 한 줄 서술까지
+   * 적을 수 있다("조약 체결국을 디테일하게"가 여기서 끝난다). 주도국은
+   * role='INITIATOR'이고, 예전의 별표 토글은 역할에 흡수되어 사라졌다.
+   */
+  relatedCountries?: EventCountryParticipant[]
+  setRelatedCountries?: (value: EventCountryParticipant[]) => void
   availableCountries?: CountryResponseDto[]
   availableHistoricalCountries?: HistoricalCountryResponseDto[]
   onOpenCountryModal?: () => void
-  /**
-   * 메인(주도) 국가 — 별 아이콘 토글로 마킹. 저장 시 INITIATOR role로 저장되어
-   * Timeline 국가/대륙 모드의 lane 배치에 사용. 미마킹이면 모두 PARTICIPANT.
-   */
-  primaryCountryId?: string | null
-  setPrimaryCountryId?: (value: string | null) => void
-  primaryHistoricalCountryId?: string | null
-  setPrimaryHistoricalCountryId?: (value: string | null) => void
 
   /**
    * 상위 사건(선택) 슬롯 — '부모에서 가지를 낳는' 트리 등록용. undefined면 행 자체를
@@ -145,14 +143,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   keywords = [],
   setKeywords = () => {},
   dbCategories,
-  relatedCountryIds = [],
-  setRelatedCountryIds = () => {},
-  primaryCountryId = null,
-  setPrimaryCountryId = () => {},
-  primaryHistoricalCountryId = null,
-  setPrimaryHistoricalCountryId = () => {},
-  relatedHistoricalCountryIds = [],
-  setRelatedHistoricalCountryIds = () => {},
+  relatedCountries = [],
+  setRelatedCountries = () => {},
   availableCountries = [],
   availableHistoricalCountries = [],
   onOpenCountryModal,
@@ -202,8 +194,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const historicalLifespanWarnings = useMemo(() => {
     const eventSignedYear = signedYearFromIsoLike(startDate)
     if (eventSignedYear == null) return []
-    return relatedHistoricalCountryIds
-      .map((historicalId) => {
+    return relatedCountries
+      .filter((participant) => participant.historicalCountryId)
+      .map((participant) => {
+        const historicalId = participant.historicalCountryId!
         const country = availableHistoricalCountries.find(
           (candidate) => candidate.id === historicalId,
         )
@@ -216,7 +210,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       .filter(
         (item): item is { id: string; name: string; mismatch: string } => item != null,
       )
-  }, [startDate, relatedHistoricalCountryIds, availableHistoricalCountries])
+  }, [startDate, relatedCountries, availableHistoricalCountries])
 
   const addKeywordsFromInput = () => {
     const raw = keywordInput.trim()
@@ -765,96 +759,75 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               <FiGlobe size={16} />
               국가 추가
             </S.AddButton>
-            {(relatedCountryIds.length > 0 ||
-              relatedHistoricalCountryIds.length > 0) && (
-              <S.SelectedItemsContainer>
-                {relatedCountryIds.map((countryId) => {
-                  const country = availableCountries.find(
-                    (c) => c.id === countryId,
-                  )
+            {relatedCountries.length > 0 && (
+              <ParticipantList>
+                {relatedCountries.map((participant, index) => {
+                  const isHistorical = Boolean(participant.historicalCountryId)
+                  const country = isHistorical
+                    ? availableHistoricalCountries.find(
+                        (candidate) =>
+                          candidate.id === participant.historicalCountryId,
+                      )
+                    : availableCountries.find(
+                        (candidate) => candidate.id === participant.countryId,
+                      )
                   if (!country) return null
-                  const isPrimary = primaryCountryId === countryId
+                  const key = participantKey(participant)
+                  const patch = (next: Partial<EventCountryParticipant>) =>
+                    setRelatedCountries(
+                      relatedCountries.map((row, rowIndex) =>
+                        rowIndex === index ? { ...row, ...next } : row,
+                      ),
+                    )
                   return (
-                    <S.SelectedItem key={countryId}>
-                      <PrimaryToggle
-                        type="button"
-                        $active={isPrimary}
-                        title={isPrimary ? '메인 국가 — 클릭하여 해제' : '메인 국가로 지정'}
-                        aria-label={isPrimary ? '메인 국가 해제' : '메인 국가로 지정'}
-                        aria-pressed={isPrimary}
-                        onClick={() => {
-                          playClickSound()
-                          setPrimaryCountryId(isPrimary ? null : countryId)
-                        }}
+                    <ParticipantRow key={key}>
+                      <ParticipantName>
+                        {isHistorical
+                          ? `🏛️ ${country.name}`
+                          : `${(country as CountryResponseDto).flagEmoji ?? ''} ${country.name}`}
+                      </ParticipantName>
+                      <RoleSelect
+                        value={participant.role ?? 'PARTICIPANT'}
+                        aria-label={`${country.name} 역할`}
+                        onChange={(changeEvent) =>
+                          patch({
+                            role: changeEvent.target
+                              .value as EventCountryParticipant['role'],
+                          })
+                        }
                       >
-                        <FiStar
-                          size={12}
-                          fill={isPrimary ? 'currentColor' : 'none'}
-                        />
-                      </PrimaryToggle>
-                      <span>
-                        {country.flagEmoji} {country.name}
-                      </span>
+                        {EVENT_COUNTRY_ROLE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </RoleSelect>
+                      <RoleDescriptionInput
+                        value={participant.roleDescription ?? ''}
+                        aria-label={`${country.name}가 한 일`}
+                        placeholder="이 나라가 한 일 (선택)"
+                        onChange={(changeEvent) =>
+                          patch({ roleDescription: changeEvent.target.value })
+                        }
+                      />
                       <S.RemoveButton
                         type="button"
+                        aria-label={`${country.name} 제거`}
                         onClick={() => {
                           playClickSound()
-                          setRelatedCountryIds(
-                            relatedCountryIds.filter((id) => id !== countryId),
-                          )
-                          if (isPrimary) setPrimaryCountryId(null)
-                        }}
-                      >
-                        <FiX size={14} />
-                      </S.RemoveButton>
-                    </S.SelectedItem>
-                  )
-                })}
-                {relatedHistoricalCountryIds.map((countryId) => {
-                  const country = availableHistoricalCountries.find(
-                    (c) => c.id === countryId,
-                  )
-                  if (!country) return null
-                  const isPrimary = primaryHistoricalCountryId === countryId
-                  return (
-                    <S.SelectedItem key={countryId}>
-                      <PrimaryToggle
-                        type="button"
-                        $active={isPrimary}
-                        title={isPrimary ? '메인 역사적 국가 — 클릭하여 해제' : '메인 역사적 국가로 지정'}
-                        aria-label={isPrimary ? '메인 역사적 국가 해제' : '메인 역사적 국가로 지정'}
-                        aria-pressed={isPrimary}
-                        onClick={() => {
-                          playClickSound()
-                          setPrimaryHistoricalCountryId(
-                            isPrimary ? null : countryId,
-                          )
-                        }}
-                      >
-                        <FiStar
-                          size={12}
-                          fill={isPrimary ? 'currentColor' : 'none'}
-                        />
-                      </PrimaryToggle>
-                      <span>🏛️ {country.name}</span>
-                      <S.RemoveButton
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setRelatedHistoricalCountryIds(
-                            relatedHistoricalCountryIds.filter(
-                              (id) => id !== countryId,
+                          setRelatedCountries(
+                            relatedCountries.filter(
+                              (row) => participantKey(row) !== key,
                             ),
                           )
-                          if (isPrimary) setPrimaryHistoricalCountryId(null)
                         }}
                       >
                         <FiX size={14} />
                       </S.RemoveButton>
-                    </S.SelectedItem>
+                    </ParticipantRow>
                   )
                 })}
-              </S.SelectedItemsContainer>
+              </ParticipantList>
             )}
             {historicalLifespanWarnings.map((item) => (
               <AlertBox
@@ -887,41 +860,70 @@ const OptionalTag = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-/**
- * 메인 국가 토글 (★) — 클릭 시 해당 국가를 INITIATOR로 마킹.
- * 한 번에 하나만 활성 가능 (radio 의미). aria-pressed로 토글 상태 노출.
- */
-const PrimaryToggle = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  margin-right: 4px;
-  border: none;
-  border-radius: 4px;
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(245, 158, 11, 0.18)'
-        : 'rgba(245, 158, 11, 0.14)'
-      : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active ? '#f59e0b' : theme.colors.text.tertiary};
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+/* ─── 참여국 행 ───
+ * 한 줄 = 국가 + 역할 + 한 줄 서술. 등록 시점에 이미 "누가 어떤 자격으로"가 적히므로
+ * 조약처럼 국가별 사정이 다른 사건도 상세로 넘기지 않고 여기서 끝낼 수 있다. */
+const ParticipantList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+`
 
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(245, 158, 11, 0.12)'
-        : 'rgba(245, 158, 11, 0.08)'};
-    color: #f59e0b;
+const ParticipantRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(96px, 1fr) 104px minmax(0, 1.6fr) auto;
+  align-items: center;
+  gap: 8px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+`
+
+const ParticipantName = styled.span`
+  font-size: 14px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+/* background-color만 지정 — background 단축 속성은 네이티브 화살표 SVG를 지운다. */
+const RoleSelect = styled.select`
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 6px;
+  background-color: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 13px;
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+`
+
+const RoleDescriptionInput = styled.input`
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 6px;
+  background-color: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 13px;
+
+  &::placeholder {
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 
   &:focus-visible {
-    outline: 2px solid #f59e0b;
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
     outline-offset: 1px;
   }
 `

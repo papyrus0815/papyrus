@@ -17,6 +17,7 @@ import {
   ledgerAccent,
   ledgerHairlineStrong,
 } from '@/pages/events/ledger/styles/ledger-tokens'
+import { toParticipants } from '@/entities/event/model'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { notify } from '@/shared/ui/toast'
 
@@ -242,13 +243,15 @@ export function buildInverse(
           note: p.note ?? undefined,
         }))
         break
-      case 'relatedCountryIds':
-        inv.relatedCountryIds = (event.relatedCountries ?? []).map((c) => c.id)
-        break
-      case 'relatedHistoricalCountryIds':
-        inv.relatedHistoricalCountryIds = (
-          event.relatedHistoricalCountries ?? []
-        ).map((c) => c.id)
+      /**
+       * 참여국 되돌리기 — 역할·서술·비고까지 통째로 복원해야 진짜 undo다.
+       * id만 되돌리던 예전 코드는 역할 편집을 undo해도 역할이 돌아오지 않았다.
+       */
+      case 'relatedCountries':
+        inv.relatedCountries = toParticipants(
+          event.relatedCountries,
+          event.relatedHistoricalCountries,
+        )
         break
       /**
        * 모듈 객체 키 — 원래 값이 null/없음이면 inverse는 `null`을 명시 전송해야

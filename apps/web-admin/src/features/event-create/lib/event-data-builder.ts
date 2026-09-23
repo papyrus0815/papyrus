@@ -3,6 +3,7 @@
  * FSD: features/event-create/lib
  */
 import type { MilitaryEvent } from '@/shared/types/military-event.types'
+import type { EventCountryParticipant } from '@/entities/event/model'
 import type { CreateEventDto } from '@/shared/api/events'
 
 import type { EventBelligerentsGraph } from '../../../pages/events/types/belligerents-graph.types'
@@ -140,11 +141,11 @@ export const buildEventSubmitData = (params: {
   thumbnail: string
   parentEventId: string
   tags: string[]
-  relatedCountryIds: string[]
-  relatedHistoricalCountryIds: string[]
-  /** 메인(주도) 국가 — INITIATOR 마킹 대상. 없으면 모두 PARTICIPANT */
-  primaryCountryId?: string | null
-  primaryHistoricalCountryId?: string | null
+  /**
+   * 참여국 — 현대·역사를 한 배열에 섞어 담는다. 배열 순서가 표시 순서이고
+   * 주도국은 role='INITIATOR'다(예전의 별표 primaryCountryId를 대체).
+   */
+  relatedCountries: EventCountryParticipant[]
   relatedPersons: Array<{ personId: string; role: string; note: string }>
   /** 추가 상위(EventParentLink) — 주 상위(parentEventId) 지정 시에만 유효(INV-2) */
   extraParentEventIds?: string[]
@@ -219,27 +220,8 @@ export const buildEventSubmitData = (params: {
      */
     parentEventId: params.parentEventId || undefined,
     tags: params.tags.length > 0 ? params.tags : undefined,
-    relatedCountryIds:
-      params.relatedCountryIds.length > 0
-        ? params.relatedCountryIds
-        : undefined,
-    relatedHistoricalCountryIds:
-      params.relatedHistoricalCountryIds.length > 0
-        ? params.relatedHistoricalCountryIds
-        : undefined,
-    // primary는 선택된 ID 목록 안에 있을 때만 전송. 폼에서 국가 제거됐는데 primary state가 stale이면 무시.
-    primaryCountryId:
-      params.primaryCountryId &&
-      params.relatedCountryIds.includes(params.primaryCountryId)
-        ? params.primaryCountryId
-        : undefined,
-    primaryHistoricalCountryId:
-      params.primaryHistoricalCountryId &&
-      params.relatedHistoricalCountryIds.includes(
-        params.primaryHistoricalCountryId,
-      )
-        ? params.primaryHistoricalCountryId
-        : undefined,
+    relatedCountries:
+      params.relatedCountries.length > 0 ? params.relatedCountries : undefined,
     relatedPersons:
       [...params.relatedPersons, ...params.mentionedPersons].length > 0
         ? [...params.relatedPersons, ...params.mentionedPersons]

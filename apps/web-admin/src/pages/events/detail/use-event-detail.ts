@@ -6,6 +6,7 @@ import {
   useSuspenseQuery,
 } from '@tanstack/react-query'
 
+import type { EventCountryRole } from '@/entities/event/model'
 import { type NormalizedMilitaryEventResponse } from '@/features/event-create/lib'
 import { getEventById } from '@/shared/api/events'
 
@@ -56,15 +57,45 @@ export interface EventDetailCategory {
   description?: string | null
 }
 
+/**
+ * 참여국 한 줄. `role`/`roleDescription`은 서버가 늘 내려주던 값인데 이 타입이
+ * 받지 않아 화면 직전에 버려지고 있었다(그래서 시드가 채운 역할 10종이 한 번도
+ * 보이지 않았다).
+ */
 export interface EventDetailCountryRef {
   id: string
   name: string
   flagEmoji?: string
+  role?: EventCountryRole | null
+  roleDescription?: string | null
+  note?: string | null
+  sortOrder?: number
 }
 
 export interface EventDetailHistoricalCountryRef {
   id: string
   name: string
+  role?: EventCountryRole | null
+  roleDescription?: string | null
+  note?: string | null
+  sortOrder?: number
+}
+
+/** 사건에 걸린 조약 요약 — 본문·서명자 전문은 GET /treaties/:id가 정본 */
+export interface EventDetailTreaty {
+  /** TreatyEventLink 행 id — 연결 해제에 쓴다 */
+  linkId: string
+  linkType: 'SIGNING' | 'RATIFICATION' | 'VIOLATION' | 'RELATED'
+  linkNote?: string | null
+  id: string
+  name: string
+  alias?: string | null
+  type: string
+  signDate?: string | null
+  location?: string | null
+  summary?: string | null
+  signatoryCount: number
+  termCount: number
 }
 
 export interface EventDetailCabinetEvent {

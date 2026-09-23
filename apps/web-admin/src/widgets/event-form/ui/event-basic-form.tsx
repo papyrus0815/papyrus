@@ -26,6 +26,10 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { invalidateGamification } from '@/entities/gamification'
 import { useFormEntities } from '@/entities/event-form/model'
 import { buildEventSubmitData, checkBasicInfo, validateBasicInfo } from '@/features/event-create/lib'
+import {
+  participantKey,
+  toParticipants,
+} from '@/entities/event/model'
 import { useBasicInfoForm } from '@/features/event-form/model'
 import type { BasicInfoResetOptions } from '@/features/event-form/model/useBasicInfoForm'
 import {
@@ -222,14 +226,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     location,
     keywords,
     setKeywords,
-    relatedCountryIds,
-    setRelatedCountryIds,
-    relatedHistoricalCountryIds,
-    setRelatedHistoricalCountryIds,
-    primaryCountryId,
-    setPrimaryCountryId,
-    primaryHistoricalCountryId,
-    setPrimaryHistoricalCountryId,
+    relatedCountries,
+    setRelatedCountries,
     isValid: isBasicInfoValid,
     getDateError,
     calculateDaysDifference,
@@ -370,19 +368,19 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
 
         if (event.categoryId) setCategory(event.categoryId)
 
-        if (event.relatedCountryIds) setRelatedCountryIds(event.relatedCountryIds)
-        if (event.relatedHistoricalCountryIds)
-          setRelatedHistoricalCountryIds(event.relatedHistoricalCountryIds)
-
-        type CountryRel = { id: string; role?: string | null }
-        const initiator = (
-          event.relatedCountries as CountryRel[] | undefined
-        )?.find((country) => country.role === 'INITIATOR')
-        if (initiator) setPrimaryCountryId(initiator.id)
-        const initiatorHist = (
-          event.relatedHistoricalCountries as CountryRel[] | undefined
-        )?.find((country) => country.role === 'INITIATOR')
-        if (initiatorHist) setPrimaryHistoricalCountryId(initiatorHist.id)
+        /**
+         * 참여국 하이드레이션 — 역할·역할 서술·비고까지 통째로 싣는다. 예전엔 id만
+         * 복원하고 INITIATOR 하나만 별표로 되살려서, 편집 저장 한 번에 나머지 역할과
+         * 서술이 전부 사라졌다(실측 66/270 사건이 사정권이었다).
+         */
+        setRelatedCountries(
+          toParticipants(
+            event.relatedCountries as Parameters<typeof toParticipants>[0],
+            event.relatedHistoricalCountries as Parameters<
+              typeof toParticipants
+            >[1],
+          ),
+        )
 
         if (!cancelled && notifyOnLoad) notify.success('사건 정보를 불러왔습니다')
       } catch (error) {
@@ -425,10 +423,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         category,
         thumbnail,
         keywords,
-        relatedCountryIds,
-        relatedHistoricalCountryIds,
-        primaryCountryId,
-        primaryHistoricalCountryId,
+        relatedCountries,
         // 상위 사건도 기준선에 포함 — initialParent 프리필 상태가 곧 기준선이라
         // '열자마자 dirty' 오판이 없고, 해제/변경만 dirty가 된다.
         parentEvent?.id ?? '',
@@ -443,10 +438,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       category,
       thumbnail,
       keywords,
-      relatedCountryIds,
-      relatedHistoricalCountryIds,
-      primaryCountryId,
-      primaryHistoricalCountryId,
+      relatedCountries,
       parentEvent,
     ],
   )
@@ -525,10 +517,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         // (기존 계약 유지). 편집 모드 계층 편집은 상세 '연관' 섹션 담당.
         parentEventId: !isEditMode && parentEvent ? parentEvent.id : '',
         tags: [],
-        relatedCountryIds,
-        relatedHistoricalCountryIds,
-        primaryCountryId,
-        primaryHistoricalCountryId,
+        relatedCountries,
         relatedPersons: [],
         sections: [],
         militaryEvent: undefined,
@@ -622,10 +611,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     category,
     location,
     thumbnail,
-    relatedCountryIds,
-    relatedHistoricalCountryIds,
-    primaryCountryId,
-    primaryHistoricalCountryId,
+    relatedCountries,
     keywords,
     parentEvent,
     isEditMode,
@@ -677,14 +663,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         keywords={keywords}
         setKeywords={setKeywords}
         dbCategories={dbCategories}
-        relatedCountryIds={relatedCountryIds}
-        setRelatedCountryIds={setRelatedCountryIds}
-        relatedHistoricalCountryIds={relatedHistoricalCountryIds}
-        setRelatedHistoricalCountryIds={setRelatedHistoricalCountryIds}
-        primaryCountryId={primaryCountryId}
-        setPrimaryCountryId={setPrimaryCountryId}
-        primaryHistoricalCountryId={primaryHistoricalCountryId}
-        setPrimaryHistoricalCountryId={setPrimaryHistoricalCountryId}
+        relatedCountries={relatedCountries}
+        setRelatedCountries={setRelatedCountries}
         availableCountries={availableCountries}
         availableHistoricalCountries={availableHistoricalCountries}
         onOpenCountryModal={() => setShowCountryModal(true)}
@@ -709,31 +689,33 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         isOpen={showCountryModal}
         onClose={() => setShowCountryModal(false)}
         onSelect={(country) => {
-          if (country.isHistorical) {
-            if (relatedHistoricalCountryIds.includes(country.id)) {
-              setRelatedHistoricalCountryIds(
-                relatedHistoricalCountryIds.filter((id) => id !== country.id),
-              )
-            } else {
-              setRelatedHistoricalCountryIds([
-                ...relatedHistoricalCountryIds,
-                country.id,
-              ])
-            }
-          } else {
-            if (relatedCountryIds.includes(country.id)) {
-              setRelatedCountryIds(
-                relatedCountryIds.filter((id) => id !== country.id),
-              )
-            } else {
-              setRelatedCountryIds([...relatedCountryIds, country.id])
-            }
+          /* 토글 — 이미 담긴 국가를 다시 고르면 빠진다. 역할은 목록에서 정한다. */
+          const key = country.isHistorical ? `h:${country.id}` : `m:${country.id}`
+          const already = relatedCountries.some(
+            (participant) => participantKey(participant) === key,
+          )
+          if (already) {
+            setRelatedCountries(
+              relatedCountries.filter(
+                (participant) => participantKey(participant) !== key,
+              ),
+            )
+            return
           }
+          setRelatedCountries([
+            ...relatedCountries,
+            country.isHistorical
+              ? { historicalCountryId: country.id, role: 'PARTICIPANT' }
+              : { countryId: country.id, role: 'PARTICIPANT' },
+          ])
         }}
         modernCountries={availableCountries}
         historicalCountries={availableHistoricalCountries}
         title="관련 국가 선택"
-        selectedCountryIds={[...relatedCountryIds, ...relatedHistoricalCountryIds]}
+        selectedCountryIds={relatedCountries.map(
+          (participant) =>
+            participant.countryId ?? participant.historicalCountryId ?? '',
+        )}
         multiSelect={true}
       />
 

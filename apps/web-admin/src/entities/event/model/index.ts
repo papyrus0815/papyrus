@@ -25,6 +25,16 @@ export type {
 } from './types'
 export { CENTURY_UNKNOWN } from './types'
 export {
+  EVENT_COUNTRY_ROLE_OPTIONS,
+  eventCountryRoleLabel,
+  participantKey,
+  toParticipants,
+} from './country-participant'
+export type {
+  EventCountryParticipant,
+  EventCountryRole,
+} from './country-participant'
+export {
   CATEGORY_LABEL,
   CATEGORY_ICON_MAP,
   extractCategoryKey,

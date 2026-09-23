@@ -343,8 +343,7 @@ describe('detectReasonRevival — 하위 신규 연결', () => {
 })
 
 describe('LISTING_FIELDS — 목록 갱신 화이트리스트(DATA-9)', () => {
-  it('관련국 필드가 현대·역사 양쪽 다 포함된다', () => {
-    expect(LISTING_FIELDS).toContain('relatedCountryIds')
-    expect(LISTING_FIELDS).toContain('relatedHistoricalCountryIds')
+  it('참여국 정본 필드가 포함된다 — 현대·역사가 한 배열이라 키도 하나다', () => {
+    expect(LISTING_FIELDS).toContain('relatedCountries')
   })
 })

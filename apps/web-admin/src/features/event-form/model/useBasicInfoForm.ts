@@ -4,6 +4,7 @@
  */
 import { useCallback, useState } from 'react'
 
+import type { EventCountryParticipant } from '@/entities/event/model'
 import type { HistoricalEventCategory } from '@/pages/events/create/events.types'
 import { compareByDate, isoDaySpan } from '@/shared/lib/iso-date'
 
@@ -28,10 +29,11 @@ export const BASIC_INFO_FORM_INITIAL = {
   location: '',
   tags: [] as string[],
   keywords: [] as string[],
-  relatedCountryIds: [] as string[],
-  relatedHistoricalCountryIds: [] as string[],
-  primaryCountryId: null as string | null,
-  primaryHistoricalCountryId: null as string | null,
+  /**
+   * 참여국 — 현대·역사를 한 배열에. 주도국은 role='INITIATOR'이며, 예전의 별표
+   * (primaryCountryId)는 역할에 흡수되어 개념이 사라졌다.
+   */
+  relatedCountries: [] as EventCountryParticipant[],
 } as const
 
 /** `reset()`에서 유지할 수 있는 필드 — 연속 등록 시 매번 다시 고르지 않게 한다. */
@@ -65,21 +67,9 @@ export const useBasicInfoForm = () => {
   const [location, setLocation] = useState<string>(initial.location)
   const [tags, setTags] = useState<string[]>([...initial.tags])
   const [keywords, setKeywords] = useState<string[]>([...initial.keywords])
-  const [relatedCountryIds, setRelatedCountryIds] = useState<string[]>([
-    ...initial.relatedCountryIds,
-  ])
-  const [relatedHistoricalCountryIds, setRelatedHistoricalCountryIds] =
-    useState<string[]>([...initial.relatedHistoricalCountryIds])
-  /**
-   * 메인(주도) 국가 — 저장 시 EventCountryRelation.role=INITIATOR로 마킹.
-   * Timeline 국가/대륙 모드의 lane 배치에 사용. 미지정이면 모두 PARTICIPANT.
-   */
-  const [primaryCountryId, setPrimaryCountryId] = useState<string | null>(
-    initial.primaryCountryId,
-  )
-  const [primaryHistoricalCountryId, setPrimaryHistoricalCountryId] = useState<
-    string | null
-  >(initial.primaryHistoricalCountryId)
+  const [relatedCountries, setRelatedCountries] = useState<
+    EventCountryParticipant[]
+  >([...initial.relatedCountries])
 
   /**
    * 폼 초기화 — 모달의 "사건 계속 등록"처럼 언마운트 없이 다음 입력을 받을 때 사용.
@@ -101,10 +91,7 @@ export const useBasicInfoForm = () => {
     setKeywords([...initial.keywords])
     if (!options?.keepCategory) setCategory(initial.category)
     if (!options?.keepRelatedCountries) {
-      setRelatedCountryIds([...initial.relatedCountryIds])
-      setRelatedHistoricalCountryIds([...initial.relatedHistoricalCountryIds])
-      setPrimaryCountryId(initial.primaryCountryId)
-      setPrimaryHistoricalCountryId(initial.primaryHistoricalCountryId)
+      setRelatedCountries([...initial.relatedCountries])
     }
   }, [initial])
 
@@ -147,10 +134,7 @@ export const useBasicInfoForm = () => {
     location,
     tags,
     keywords,
-    relatedCountryIds,
-    relatedHistoricalCountryIds,
-    primaryCountryId,
-    primaryHistoricalCountryId,
+    relatedCountries,
 
     // 세터
     setTitle,
@@ -167,10 +151,7 @@ export const useBasicInfoForm = () => {
     setLocation,
     setTags,
     setKeywords,
-    setRelatedCountryIds,
-    setRelatedHistoricalCountryIds,
-    setPrimaryCountryId,
-    setPrimaryHistoricalCountryId,
+    setRelatedCountries,
 
     // 유틸리티
     isValid,

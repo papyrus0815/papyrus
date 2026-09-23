@@ -198,13 +198,12 @@ export const LISTING_FIELDS: ReadonlyArray<keyof UpdateEventDto> = [
   'description',
   /**
    * 목록 행이 실제로 그리고/거르는 값인데 화이트리스트에서 빠져 있었다(검토 DATA-9).
-   *  - relatedCountryIds: 행 우측 국기 칩을 그리고, 국가·대륙 필터의 매칭 술어가 읽는다.
-   *  - relatedHistoricalCountryIds: 같은 국가 칩 행·국가 피벗이 역사국가도 그린다(현대와 동형).
+   *  - relatedCountries: 행 우측 국기 칩을 그리고, 국가·대륙 필터의 매칭 술어가 읽는다
+   *    (현대·역사를 한 배열에 담은 참여국 정본).
    *  - keywords: 검색 매칭 술어가 제목·설명과 함께 본다.
    * 빠져 있으면 상세에서 관련국을 고쳐도 목록의 국기와 필터 결과가 stale하게 남는다.
    */
-  'relatedCountryIds',
-  'relatedHistoricalCountryIds',
+  'relatedCountries',
   'keywords',
 ]
 
@@ -294,26 +293,69 @@ export function buildOptimisticEvent(
     changed = true
   }
 
-  if ('relatedCountryIds' in patch) {
-    const resolved = resolveModernCountries(
-      patch.relatedCountryIds ?? [],
+  /**
+   * 참여국 낙관 반영 — 서버 계약은 현대·역사를 섞은 한 배열이지만, 화면 상태는
+   * 두 배열로 나뉘어 있다(표시 편의). 여기서 되나눠 넣되 순서(sortOrder)는 합친
+   * 배열의 index를 심어, 저장 왕복 전에도 화면 순서가 요청과 일치하게 한다.
+   */
+  if ('relatedCountries' in patch) {
+    const participants = patch.relatedCountries ?? []
+    const modernIds: string[] = []
+    const historicalIds: string[] = []
+    for (const participant of participants) {
+      if (participant.countryId) modernIds.push(participant.countryId)
+      else if (participant.historicalCountryId)
+        historicalIds.push(participant.historicalCountryId)
+    }
+    const modern = resolveModernCountries(
+      modernIds,
       prev.relatedCountries,
       qc.getQueryData(['countries', 'all']),
     )
-    if (resolved) {
-      next.relatedCountries = resolved
-      changed = true
-    }
-  }
-
-  if ('relatedHistoricalCountryIds' in patch) {
-    const resolved = resolveHistoricalCountries(
-      patch.relatedHistoricalCountryIds ?? [],
+    const historical = resolveHistoricalCountries(
+      historicalIds,
       prev.relatedHistoricalCountries,
       qc.getQueryData(['historical-countries', 'all']),
     )
-    if (resolved) {
-      next.relatedHistoricalCountries = resolved
+    // 둘 중 하나라도 이름을 못 찾으면 낙관 반영을 포기한다(기존 규약 — refetch가 보정).
+    if (modern && historical) {
+      const orderOf = new Map<string, number>()
+      participants.forEach((participant, index) => {
+        const key = participant.countryId
+          ? `m:${participant.countryId}`
+          : `h:${participant.historicalCountryId}`
+        orderOf.set(key, index)
+      })
+      const byKey = new Map(
+        participants.map((participant) => [
+          participant.countryId
+            ? `m:${participant.countryId}`
+            : `h:${participant.historicalCountryId}`,
+          participant,
+        ]),
+      )
+      next.relatedCountries = modern.map((country) => {
+        const participant = byKey.get(`m:${country.id}`)
+        return {
+          ...country,
+          role: participant?.role ?? country.role ?? null,
+          roleDescription:
+            participant?.roleDescription ?? country.roleDescription ?? null,
+          note: participant?.note ?? country.note ?? null,
+          sortOrder: orderOf.get(`m:${country.id}`) ?? 0,
+        }
+      })
+      next.relatedHistoricalCountries = historical.map((country) => {
+        const participant = byKey.get(`h:${country.id}`)
+        return {
+          ...country,
+          role: participant?.role ?? country.role ?? null,
+          roleDescription:
+            participant?.roleDescription ?? country.roleDescription ?? null,
+          note: participant?.note ?? country.note ?? null,
+          sortOrder: orderOf.get(`h:${country.id}`) ?? 0,
+        }
+      })
       changed = true
     }
   }

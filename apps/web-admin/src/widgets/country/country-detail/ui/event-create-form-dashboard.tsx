@@ -15,6 +15,7 @@ import {
 } from 'react-icons/fi'
 import styled, { useTheme } from 'styled-components'
 
+import { participantKey, toParticipants } from '@/entities/event/model'
 import { useFormEntities } from '@/entities/event-form/model'
 import {
   buildEventSubmitData,
@@ -550,15 +551,63 @@ export function EventCreateFormDashboard({
     setThumbnail,
     location,
     setLocation,
-    relatedCountryIds,
-    setRelatedCountryIds,
-    relatedHistoricalCountryIds,
-    setRelatedHistoricalCountryIds,
+    relatedCountries,
+    setRelatedCountries,
     tags,
     setKeywords,
     isValid,
     getDateError,
   } = useBasicInfoForm()
+
+  /**
+   * 이 빠른 등록 지면은 국가를 '칩 목록'으로만 다룬다(역할 편집은 사건 상세의 몫).
+   * 폼 정본은 참여국 배열 하나이므로, 여기서만 id 배열 ↔ 참여국 어댑터를 둔다.
+   * **역할·서술은 어댑터를 지나도 보존된다** — 기존 줄을 찾아 재사용하기 때문.
+   */
+  const relatedCountryIds = useMemo(
+    () =>
+      relatedCountries
+        .filter((participant) => participant.countryId)
+        .map((participant) => participant.countryId!),
+    [relatedCountries],
+  )
+  const relatedHistoricalCountryIds = useMemo(
+    () =>
+      relatedCountries
+        .filter((participant) => participant.historicalCountryId)
+        .map((participant) => participant.historicalCountryId!),
+    [relatedCountries],
+  )
+  const applyCountryIds = (
+    next: string[] | ((prev: string[]) => string[]),
+    isHistorical: boolean,
+  ) => {
+    const prev = isHistorical ? relatedHistoricalCountryIds : relatedCountryIds
+    const ids = typeof next === 'function' ? next(prev) : next
+    const untouched = relatedCountries.filter((participant) =>
+      isHistorical ? !participant.historicalCountryId : !participant.countryId,
+    )
+    const rebuilt = ids.map(
+      (id) =>
+        relatedCountries.find(
+          (participant) =>
+            (isHistorical
+              ? participant.historicalCountryId
+              : participant.countryId) === id,
+        ) ??
+        (isHistorical
+          ? ({ historicalCountryId: id, role: 'PARTICIPANT' } as const)
+          : ({ countryId: id, role: 'PARTICIPANT' } as const)),
+    )
+    setRelatedCountries(
+      isHistorical ? [...untouched, ...rebuilt] : [...rebuilt, ...untouched],
+    )
+  }
+  const setRelatedCountryIds = (next: string[] | ((prev: string[]) => string[])) =>
+    applyCountryIds(next, false)
+  const setRelatedHistoricalCountryIds = (
+    next: string[] | ((prev: string[]) => string[]),
+  ) => applyCountryIds(next, true)
 
   const rel = useRelationshipsForm(availableEvents, availablePersons)
   const dateError = getDateError()
@@ -669,8 +718,26 @@ export function EventCreateFormDashboard({
             ...new Set([...historicalIds, ...fromRelsHistorical]),
           ]
         }
-        setRelatedCountryIds(modernIds)
-        setRelatedHistoricalCountryIds(historicalIds)
+        /**
+         * ⚠️ 참여국 하이드레이션은 **역할·서술까지** 실어야 한다. id 배열만 복원하면
+         * 이 지면에서 저장하는 순간 모든 역할이 '참여국'으로 눕고 국가별 서술이
+         * 사라진다(예전 delete-and-recreate 시절의 손실을 그대로 재현하게 된다).
+         * countryRelations(구 경로)로만 알려진 국가는 id만 알 수 있으므로 뒤에 덧붙인다.
+         */
+        const hydrated = toParticipants(
+          event.relatedCountries as Parameters<typeof toParticipants>[0],
+          event.relatedHistoricalCountries as Parameters<
+            typeof toParticipants
+          >[1],
+        )
+        const hydratedKeys = new Set(hydrated.map(participantKey))
+        const extras = [
+          ...modernIds.map((id) => ({ countryId: id })),
+          ...historicalIds.map((id) => ({ historicalCountryId: id })),
+        ].filter(
+          (participant) => !hydratedKeys.has(participantKey(participant)),
+        )
+        setRelatedCountries([...hydrated, ...extras])
 
         const loadedDisplay: Array<{
           id: string
@@ -824,8 +891,7 @@ export function EventCreateFormDashboard({
         thumbnail: eventImages.length > 0 ? eventImages[0].imageUrl : thumbnail,
         parentEventId: rel.parentEventId,
         tags: tags ?? [],
-        relatedCountryIds,
-        relatedHistoricalCountryIds,
+        relatedCountries,
         relatedPersons: rel.relatedPersons,
         extraParentEventIds: rel.extraParentEventIds,
         sections,
