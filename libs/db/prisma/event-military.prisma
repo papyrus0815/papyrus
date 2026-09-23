@@ -255,6 +255,9 @@ model Treaty {
   /// 이 조약이 연 교역 흐름 (강화도조약 ↔ 부산 개항 무역)
   tradeFlows ExportImportItem[] @relation("TradeFlowTreaty")
 
+  /// 이 조약이 걸린 사건 (체결 사건·비준 사건·파기 사건은 서로 다른 행)
+  eventLinks TreatyEventLink[]
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -264,6 +267,42 @@ model Treaty {
   @@index([accountId], name: "idx_treaty_accountId")
   @@index([signingAdministrativeDivisionId], name: "idx_treaty_signingAdminDivId")
   @@map("treaty")
+}
+
+// ========================
+// 조약 ↔ 사건 연결
+//
+// 단일 FK(Treaty.eventId)가 아니라 링크표인 이유: Treaty에 이미 effectiveDate·
+// violationDate가 있고, 체결·비준·파기는 각각 **다른 사건**이다. 하나의 조약이
+// 여러 사건에 서로 다른 자격으로 걸린다. (event_parent_link와 같은 모양)
+// ========================
+model TreatyEventLink {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 조약 FK
+  treatyId String @map("treaty_id") @db.Char(36)
+  treaty   Treaty @relation(fields: [treatyId], references: [id], onDelete: Cascade)
+
+  /// 사건 FK
+  eventId String @map("event_id") @db.Char(36)
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 연결 성격 (체결/비준/파기/기타)
+  linkType TreatyEventLinkType @default(SIGNING) @map("link_type")
+
+  /// 연결 사유·메모
+  note String? @db.Text
+
+  //--- 메타데이터 필드
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// 같은 조약·사건 쌍이 같은 자격으로 두 번 걸리지 않는다.
+  /// (세 컬럼 모두 NOT NULL이라 MySQL에서도 유니크가 실제로 걸린다)
+  @@unique([treatyId, eventId, linkType], name: "uq_treaty_event_link")
+  @@index([eventId], name: "idx_treaty_event_link_eventId")
+  @@map("treaty_event_link")
 }
 
 // ========================

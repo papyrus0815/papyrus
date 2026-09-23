@@ -189,6 +189,18 @@ enum TreatyParticipationType {
   OBSERVER
 }
 
+/// 조약이 어떤 사건으로 묶이는가 — 체결·비준·파기는 각각 다른 사건이다.
+enum TreatyEventLinkType {
+  /// 이 사건에서 체결됨
+  SIGNING
+  /// 이 사건에서 비준됨
+  RATIFICATION
+  /// 이 사건으로 파기·위반됨
+  VIOLATION
+  /// 기타 관련
+  RELATED
+}
+
 /// 동맹 가입 상태
 enum AllianceMemberStatus {
   /// 창립 멤버
@@ -348,6 +360,11 @@ model Event {
   persons               PersonEvent[]
   BookEvent             BookEvent[]
   countryRelations      EventCountryRelation[]
+
+  /// 이 사건에 걸린 조약 (체결·비준·파기). 조약 본문·서명자는 Treaty가 정본이고
+  /// 사건은 링크로만 참조한다 — 같은 사실을 두 번 적지 않기 위함.
+  treatyLinks TreatyEventLink[]
+
   organizationRelations EventOrganizationRelation[]
   relatedEvents         EventRelation[]             @relation("EventToRelated")
   relatedByEvents       EventRelation[]             @relation("RelatedToEvent")
@@ -558,14 +575,20 @@ model EventCountryRelation {
   /// 역사적 국가 FK (역사적 국가인 경우)
   historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
-  /// 사건에서의 역할
+  /// 사건에서의 역할. INITIATOR가 곧 '주도국'이다 —
+  /// 예전의 primaryCountryId(별표)는 이 값으로 흡수되어 개념이 하나로 접혔다.
   role EventCountryRole
 
-  /// 역할 상세 설명
+  /// 역할 상세 설명 — "이 나라가 이 사건에서 무엇을 했나" 한 줄.
+  /// 조약이면 "전권대표 파견, 배상금 조항 관철"처럼 국가별 사실이 여기 들어간다.
   roleDescription String? @map("role_description") @db.Text
 
   /// 비고
   note String? @db.Text
+
+  /// 표시 순서. 없으면 createdAt 오름차순으로 읽었는데, 생성이 한 트랜잭션에 몰려
+  /// 같은 밀리초를 공유하는 행이 많아(실측 113묶음) 순서가 비결정적이었다.
+  sortOrder Int @default(0) @map("sort_order")
 
   //--- 관계 필드
   event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -576,7 +599,11 @@ model EventCountryRelation {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([eventId], name: "idx_event_country_eventId")
+  /// ⚠️ `@@unique([eventId, countryId, historicalCountryId])`를 추가하지 말 것.
+  /// 둘 중 하나는 **항상 NULL**이고 MySQL은 NULL을 서로 다른 값으로 취급해 유니크가
+  /// 전혀 걸리지 않는다(조용히 무력한 인덱스가 된다). 중복 방지는 쓰기 단일 통로인
+  /// `EventCountryRelationService.sync()`의 자연키 머지가 책임진다.
+  @@index([eventId, sortOrder], name: "idx_event_country_eventId_sortOrder")
   @@index([countryId], name: "idx_event_country_countryId")
   @@index([historicalCountryId], name: "idx_event_country_histCountryId")
   @@map("event_country_relation")
