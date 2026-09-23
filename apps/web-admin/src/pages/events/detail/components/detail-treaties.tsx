@@ -230,14 +230,16 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
         </TreatyList>
       ) : (
         <EmptyNote>
-          아직 연결된 조약이 없습니다. 참여국의 역할까지 적어 두었다면, 아래
-          버튼으로 그 목록을 그대로 서명국으로 옮겨 조약을 만들 수 있습니다.
+          {hasParticipants
+            ? '참여국을 그대로 서명국으로 옮겨 조약을 만들 수 있습니다.'
+            : '이 사건에서 체결된 조약을 만들거나, 이미 등록된 조약을 연결하세요.'}
         </EmptyNote>
       )}
 
       <Actions>
         <ActionBtn
           type="button"
+          $primary
           onClick={() => createMutation.mutate()}
           disabled={createMutation.isPending}
           title={
@@ -247,9 +249,7 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
           }
         >
           <FiPlus size={14} />
-          {createMutation.isPending
-            ? '만드는 중…'
-            : '이 사건에서 체결된 조약 만들기'}
+          {createMutation.isPending ? '만드는 중…' : '조약 만들기'}
         </ActionBtn>
         <ActionBtn type="button" onClick={() => setLinkModalOpen(true)}>
           기존 조약 연결
@@ -355,25 +355,32 @@ const Actions = styled.div`
   margin-top: 14px;
 `
 
-const ActionBtn = styled.button`
+/* 두 동작의 무게를 가른다 — 만들기가 이 섹션의 본 동작이고 연결은 보조다. */
+const ActionBtn = styled.button<{ $primary?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 32px;
   padding: 0 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border};
+  border: 1px solid
+    ${({ theme, $primary }) =>
+      $primary ? theme.colors.text.primary : theme.colors.border};
   border-radius: 8px;
-  background-color: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  background-color: ${({ theme, $primary }) =>
+    $primary ? theme.colors.text.primary : 'transparent'};
+  color: ${({ theme, $primary }) =>
+    $primary ? theme.colors.background.primary : theme.colors.text.secondary};
   font-family: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: ${({ $primary }) => ($primary ? 600 : 500)};
   cursor: pointer;
-  transition: color 0.14s, border-color 0.14s;
+  transition: color 0.14s, border-color 0.14s, opacity 0.14s;
 
   &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.tertiary};
+    ${({ $primary, theme }) =>
+      $primary
+        ? 'opacity: 0.86;'
+        : `color: ${theme.colors.text.primary}; border-color: ${theme.colors.text.tertiary};`}
   }
 
   &:disabled {

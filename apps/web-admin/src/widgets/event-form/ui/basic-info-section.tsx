@@ -746,7 +746,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       {onOpenCountryModal && (
         <S.FormRow>
           <S.FormLabel>
-            관련 국가<OptionalTag>(선택)</OptionalTag>
+            참여국<OptionalTag>(선택)</OptionalTag>
           </S.FormLabel>
           <S.FormField>
             <S.AddButton
@@ -810,7 +810,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           patch({ roleDescription: changeEvent.target.value })
                         }
                       />
-                      <S.RemoveButton
+                      <ParticipantRemove
                         type="button"
                         aria-label={`${country.name} 제거`}
                         onClick={() => {
@@ -823,7 +823,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         }}
                       >
                         <FiX size={14} />
-                      </S.RemoveButton>
+                      </ParticipantRemove>
                     </ParticipantRow>
                   )
                 })}
@@ -841,9 +841,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               </AlertBox>
             ))}
             <S.Hint>
-              이 사건과 관련된 국가들을 선택하세요 (예: 한국전쟁 → 대한민국,
-              북한, 미국, 중국 등). 좌측 ★ 별을 눌러 <strong>메인 국가</strong>를 지정하면
-              Timeline의 국가/대륙 모드 lane 배치에 사용됩니다.
+              나라마다 <strong>어떤 자격으로</strong> 관여했는지까지 적어 두면, 조약처럼
+              나라별 사정이 다른 사건도 한눈에 읽힙니다 (예: 주도국·서명국은 주도,
+              불참·거부국은 관찰). 역할을 <strong>주도국</strong>으로 두면 목록·타임라인이
+              그 나라를 사건의 대표로 세웁니다.
             </S.Hint>
           </S.FormField>
         </S.FormRow>
@@ -872,13 +873,40 @@ const ParticipantList = styled.div`
 
 const ParticipantRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(96px, 1fr) 104px minmax(0, 1.6fr) auto;
+  /* 국가명이 주인공 — 이름 열을 역할 열보다 넓게 잡아 긴 국호도 잘리지 않게 한다. */
+  grid-template-columns: minmax(132px, 1.1fr) 108px minmax(0, 1.7fr) auto;
   align-items: center;
   gap: 8px;
 
   @media (max-width: 720px) {
     grid-template-columns: minmax(0, 1fr) auto;
     row-gap: 6px;
+  }
+`
+
+/**
+ * 행에서 가장 강한 잉크가 '삭제'가 되면 안 된다 — 공용 RemoveButton은 칩 전용이라
+ * 상시 빨강이었다. 평소엔 중성색으로 물러나고 hover·focus에서만 파괴색을 띤다.
+ */
+const ParticipantRemove = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  transition: color 0.14s, background-color 0.14s;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.error};
+    background-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.08)'};
   }
 `
 

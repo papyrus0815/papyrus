@@ -928,6 +928,65 @@ const NationsEyebrow = styled.div`
   color: ${({ theme }) => mutedTextColor(theme.mode)};
 `
 
+/**
+ * 비고는 대부분 비어 있다(실측 676행 중 0행). 모든 행에 '비고 추가' 유령 줄을 세우면
+ * 14국짜리 사건에서 죽은 줄만 14개가 된다. 내용이 있을 때만 상시 노출하고, 없으면
+ * 행에 마우스를 올리거나 포커스가 들어왔을 때만 나타나게 한다.
+ */
+const CountryNoteLine = styled.div<{ $hasContent: boolean }>`
+  font-size: 13px;
+  line-height: 1.6;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+
+  ${({ $hasContent }) =>
+    !$hasContent &&
+    css`
+      height: 0;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 0.14s;
+
+      [data-empty='true'] {
+        opacity: 0.55;
+        font-style: italic;
+      }
+    `}
+`
+
+/**
+ * 역할은 이 지면의 새 축이라 스캔이 돼야 하는데, 이름 옆 회색 글씨로 두니
+ * "대한민국 피해국"이 한 덩어리로 읽히고 편집 가능한지도 보이지 않았다.
+ * 테두리를 둘러 이름에서 떼어내고, 작지만 또렷한 잉크를 준다.
+ */
+const CountryRolePicker = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 4px 1px 8px;
+  border: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+
+  [data-empty='true'] {
+    font-style: italic;
+    font-weight: 500;
+    opacity: 0.6;
+  }
+
+  /*
+   * InlineSelect의 ▾는 hover에서만 뜨는데, 배지는 그 자리를 18px 비워 두므로 평소엔
+   * 한쪽이 빈 알약처럼 보였다. 약하게 상시 노출해 균형을 맞추고 "고를 수 있다"는
+   * 신호도 남긴다 — 행에 들어오면 또렷해진다.
+   */
+  button {
+    opacity: 0.4;
+  }
+`
+
 const CountryList = styled.ol`
   list-style: none;
   margin: 0;
@@ -946,9 +1005,21 @@ const CountryRow = styled.li`
   margin: 0 -12px;
   border-radius: 10px;
   border-bottom: 1px solid ${({ theme }) => softRuleColor(theme.mode)};
+  transition: background 0.15s;
 
   &:last-child {
     border-bottom: none;
+  }
+
+  /* 빈 비고 줄은 이 행에 들어왔을 때만 펼친다 */
+  &:hover ${CountryNoteLine}, &:focus-within ${CountryNoteLine} {
+    height: auto;
+    opacity: 1;
+  }
+
+  &:hover ${CountryRolePicker} button,
+  &:focus-within ${CountryRolePicker} button {
+    opacity: 1;
   }
 `
 
@@ -970,17 +1041,6 @@ const CountryNameLine = styled.div`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-/* 역할은 이름의 종속 정보 — 한 단 작고 약하게 둬서 이름이 계속 앞선다. */
-const CountryRolePicker = styled.span`
-  font-size: 13px;
-  font-weight: 500;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-
-  [data-empty='true'] {
-    font-style: italic;
-    opacity: 0.55;
-  }
-`
 
 const CountryRoleLine = styled.div`
   font-size: 14px;
@@ -994,20 +1054,6 @@ const CountryRoleLine = styled.div`
   }
 `
 
-const CountryNoteLine = styled.div<{ $hasContent: boolean }>`
-  font-size: 13px;
-  line-height: 1.6;
-  color: ${({ theme }) => mutedTextColor(theme.mode)};
-
-  ${({ $hasContent }) =>
-    !$hasContent &&
-    css`
-      [data-empty='true'] {
-        opacity: 0.5;
-        font-style: italic;
-      }
-    `}
-`
 
 
 const CountryLink = styled(Link)`

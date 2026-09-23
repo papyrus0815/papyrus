@@ -247,6 +247,8 @@ function EventDetailContent({ eventId }: { eventId: string }) {
     if (enabledModules.includes('cabinets'))
       items.push({ id: 'module-cabinets', label: '관련 행정부' })
 
+    /* 조약 — 모듈이 아니라 상시 섹션이라 조건 없이 목차에 선다(빈 상태도 지면을 지킨다). */
+    items.push({ id: 'treaties', label: '조약' })
     items.push({ id: 'network', label: '연관' })
     items.push({ id: 'appendix', label: '이미지' })
     // 댓글 — 최상위 사건은 댓글 스레드, 하위 사건은 상위 댓글로 유도하는 안내(둘 다 #comments

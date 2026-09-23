@@ -711,7 +711,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         }}
         modernCountries={availableCountries}
         historicalCountries={availableHistoricalCountries}
-        title="관련 국가 선택"
+        title="참여국 선택"
         selectedCountryIds={relatedCountries.map(
           (participant) =>
             participant.countryId ?? participant.historicalCountryId ?? '',
