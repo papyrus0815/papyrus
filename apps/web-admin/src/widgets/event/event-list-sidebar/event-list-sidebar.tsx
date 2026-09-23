@@ -84,30 +84,30 @@ const isChronological = (sort: SortKey) =>
 /**
  * 행 **선두 열**에 세우는 날짜 — 인물 목록이 얼굴을 세우는 그 자리다.
  *
- * 연도는 싣지 않는다. 선두 열은 모든 행에서 같은 폭이어야 열로 읽히는데(오른쪽 맞춤),
- * '2026.9.14'와 '9.14'가 섞이면 폭이 널뛴다. 연도는 위의 연 소제목이 말하고, 소제목이 없는
- * 자리(고정·최근·연도 미상)에서만 메타 줄이 따로 말한다.
+ * 한 행의 날짜는 **한 토막**이어야 한다. 선두에 '4.1', 메타 줄에 '1683'을 따로 두면 읽는
+ * 사람이 둘을 도로 붙여야 한다(고정·최근 그룹에서 실제로 그렇게 보였다).
  *
- * 연 정밀도 사건은 빈 값이다 — 월·일을 모르는데 지어낼 수 없고, 열 폭은 그대로 유지된다.
+ * 그래서 **눈금이 이미 말하는 만큼만 덜어낸다**:
+ * - 연 소제목 아래 → 월·일만. 연도는 바로 위에 서 있다.
+ * - 소제목이 없는 자리(고정·최근·연도 미상) → 연도. 역사 사건에서 먼저 필요한 좌표는
+ *   날짜가 아니라 연도다.
+ *
+ * 어느 쪽이든 열 폭 안에 든다('11.27' 33.3px, 'BC 44' 33px < 36px). 연 정밀도 사건이 연
+ * 소제목 아래 오면 빈 값이다 — 월·일을 모르는데 지어낼 수 없고, 열 폭은 그대로 유지된다.
  */
-function leadDateToken(event: HistoricalEvent): string {
+function leadDateToken(
+  event: HistoricalEvent,
+  underYearHeading: boolean,
+): string {
   const parts = parseIsoDateParts(event.startDate)
   if (!parts) return ''
+  if (!underYearHeading) {
+    return parts.year < 0 ? `BC ${-parts.year}` : `${parts.year}`
+  }
   const precision = event.startDatePrecision
   if (precision === 'year') return ''
   if (precision === 'month') return `${parts.month}월`
   return `${parts.month}.${parts.day}`
-}
-
-/** 메타 줄의 연도 — 연 소제목이 이미 말하는 자리에서는 되풀이하지 않는다 */
-function metaYearToken(
-  event: HistoricalEvent,
-  underYearHeading: boolean,
-): string | null {
-  if (underYearHeading) return null
-  const parts = parseIsoDateParts(event.startDate)
-  if (!parts) return null
-  return parts.year < 0 ? `BC ${-parts.year}` : `${parts.year}`
 }
 
 /**
@@ -250,7 +250,6 @@ function EventListSidebarInner({
         /* 둘째 줄은 한 호흡만 — 날짜 · 분류(색) · 어디/무엇의 일부 · 하위 N.
            맨 뒤 '하위 N'만 줄지 않는다: 긴 국가명에 밀려 사라져도 되는 건 문맥 쪽이다. */
         meta: [
-          metaYearToken(event, options.underYearAnchor),
           categoryLabel
             ? {
                 text: categoryLabel,
@@ -264,7 +263,7 @@ function EventListSidebarInner({
         /* 선두 고정폭 열 — 인물 목록의 아바타 자리에 사건은 날짜를 세운다.
            썸네일을 놓을 수도 있었지만 실측 보유율이 13%(13/100)라, 열의 87%가 빈 블록이
            되면서 제목 폭만 먹는다. 인물은 40%(151/380)라 얼굴이 그 자리를 벌 만하다. */
-        lead: leadDateToken(event),
+        lead: leadDateToken(event, options.underYearAnchor),
         leadDivider: options.leadDivider,
         /* 읽어 주는 쪽에는 **줄이기 전 값**을 그대로 준다 — 화면에서는 연 소제목이 연도를
            대신 말해 날짜를 '9.4'로 줄였고, 제목에서도 중복 날짜 꼬리를 덜어냈다. */
