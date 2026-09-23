@@ -33,6 +33,7 @@ import {
   UpdateTreatyBodyDto,
   UpdateTreatySignatoryBodyDto,
   UpdateTreatyTermBodyDto,
+  LinkTreatyEventBodyDto,
   type CreateTreatySignatoryNestedDto,
 } from './dto/treaty.dto'
 
@@ -83,6 +84,20 @@ const TREATY_SIGNATORY_INCLUDE = {
   },
 } as const
 
+/** 조약에 걸린 사건 — 지면에 제목·시기를 바로 그릴 수 있을 만큼만 */
+const TREATY_EVENT_LINK_INCLUDE = {
+  event: {
+    select: {
+      id: true,
+      title: true,
+      startDate: true,
+      startEra: true,
+      startYear: true,
+      categoryId: true,
+    },
+  },
+} as const
+
 const TREATY_INCLUDE = {
   signingAdministrativeDivision: {
     select: { id: true, name: true, localName: true },
@@ -96,6 +111,10 @@ const TREATY_INCLUDE = {
   },
   images: {
     orderBy: [{ isPrimary: 'desc' as const }, { order: 'asc' as const }],
+  },
+  eventLinks: {
+    include: TREATY_EVENT_LINK_INCLUDE,
+    orderBy: { createdAt: 'asc' as const },
   },
 }
 
@@ -224,6 +243,10 @@ export class TreatyController {
           some: { historicalCountryId: query.historicalCountryId },
         },
       })
+    }
+
+    if (query.eventId) {
+      parts.push({ eventLinks: { some: { eventId: query.eventId } } })
     }
 
     if (query.type) parts.push({ type: query.type })
@@ -400,6 +423,61 @@ export class TreatyController {
     const exists = await this.prisma.treaty.findUnique({ where: { id } })
     if (!exists) throw new NotFoundException('조약을 찾을 수 없습니다.')
     await this.prisma.treaty.delete({ where: { id } })
+  }
+
+  // ──────────────────────────────────────────────
+  // 사건 연결
+  //
+  // 조약 본문·서명자는 Treaty가 정본이고 사건은 링크로만 참조한다. 체결·비준·파기는
+  // 각각 다른 사건이므로 (조약, 사건, 자격) 세 값이 한 행의 자연키다.
+  // ──────────────────────────────────────────────
+
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @Post(':id/events')
+  @ApiOperation({ summary: '조약을 사건에 연결 (체결/비준/파기/기타)' })
+  async linkEvent(
+    @Param('id') treatyId: string,
+    @Body() dto: LinkTreatyEventBodyDto,
+  ): Promise<any> {
+    const [treaty, event] = await Promise.all([
+      this.prisma.treaty.findUnique({ where: { id: treatyId } }),
+      this.prisma.event.findUnique({ where: { id: dto.eventId } }),
+    ])
+    if (!treaty) throw new NotFoundException('조약을 찾을 수 없습니다.')
+    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
+
+    const linkType = dto.linkType ?? 'SIGNING'
+    const existing = await this.prisma.treatyEventLink.findFirst({
+      where: { treatyId, eventId: dto.eventId, linkType: linkType as any },
+    })
+    if (existing) {
+      throw new BadRequestException('이미 같은 자격으로 연결된 사건입니다.')
+    }
+
+    const link = await this.prisma.treatyEventLink.create({
+      data: {
+        treatyId,
+        eventId: dto.eventId,
+        linkType: linkType as any,
+        note: dto.note ?? undefined,
+      },
+      include: TREATY_EVENT_LINK_INCLUDE,
+    })
+    return serializeDates(link)
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @Delete('event-links/:linkId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: '조약-사건 연결 해제 (조약·사건 자체는 그대로)' })
+  async unlinkEvent(@Param('linkId') linkId: string): Promise<void> {
+    const exists = await this.prisma.treatyEventLink.findUnique({
+      where: { id: linkId },
+    })
+    if (!exists) throw new NotFoundException('연결을 찾을 수 없습니다.')
+    await this.prisma.treatyEventLink.delete({ where: { id: linkId } })
   }
 
   // ──────────────────────────────────────────────

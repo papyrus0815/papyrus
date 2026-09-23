@@ -374,10 +374,42 @@ export class AddTreatyImageBodyDto {
 }
 
 /** GET /treaties 쿼리 */
+export const TREATY_EVENT_LINK_TYPE_VALUES = [
+  'SIGNING',
+  'RATIFICATION',
+  'VIOLATION',
+  'RELATED',
+] as const
+
+export type TreatyEventLinkTypeValue =
+  (typeof TREATY_EVENT_LINK_TYPE_VALUES)[number]
+
+/** 조약 ↔ 사건 연결 생성 */
+export class LinkTreatyEventBodyDto {
+  @IsString()
+  @IsNotEmpty()
+  eventId!: string
+
+  /** 체결·비준·파기·기타. 생략 시 SIGNING */
+  @IsOptional()
+  @IsIn(TREATY_EVENT_LINK_TYPE_VALUES)
+  linkType?: TreatyEventLinkTypeValue
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsString()
+  note?: string | null
+}
+
 export class FindTreatiesQueryDto {
   @IsOptional()
   @IsString()
   countryId?: string
+
+  /** 이 사건에 걸린 조약만 */
+  @IsOptional()
+  @IsString()
+  eventId?: string
 
   @IsOptional()
   @IsString()

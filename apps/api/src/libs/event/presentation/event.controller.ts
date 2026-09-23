@@ -332,6 +332,28 @@ export class EventController {
       relatedHistoricalCountryIds: relatedHistoricalCountryIds.length > 0 ? relatedHistoricalCountryIds : undefined,
       relatedCountries: relatedCountries.length > 0 ? relatedCountries : undefined,
       relatedHistoricalCountries: relatedHistoricalCountries.length > 0 ? relatedHistoricalCountries : undefined,
+      /**
+       * 이 사건에 걸린 조약 요약 — 상세(loadEventDetail) 경로에서만 include되므로
+       * 로드됐을 때만 실린다(conditional 계약). 서명국·조항 전문은 /treaties/:id가 정본.
+       */
+      treaties: Array.isArray((event as any).treatyLinks)
+        ? (event as any).treatyLinks.map((link: any) => ({
+            linkId: link.id,
+            linkType: link.linkType,
+            linkNote: link.note ?? null,
+            id: link.treaty.id,
+            name: link.treaty.name,
+            alias: link.treaty.alias ?? null,
+            type: link.treaty.type,
+            signDate: link.treaty.signDate
+              ? new Date(link.treaty.signDate).toISOString()
+              : null,
+            location: link.treaty.location ?? null,
+            summary: link.treaty.summary ?? null,
+            signatoryCount: link.treaty._count?.signatories ?? 0,
+            termCount: link.treaty._count?.terms ?? 0,
+          }))
+        : undefined,
       // 참여 인물(PersonEvent) — 인물 시점 role/note(장문) 포함
       relatedPersons: Array.isArray(event.persons) && event.persons.length > 0
         ? event.persons.map((pe: any) => ({
@@ -1251,7 +1273,25 @@ export class EventController {
             country: true,
             historicalCountry: true,
           },
-          // role 미설정 데이터에서도 lane 배치가 안정적이도록 createdAt 오름차순 — items[0] 결정성 보장
+          // 표시 순서는 sortOrder가 정본. createdAt은 동률 tiebreak(구 데이터 안전망).
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        },
+        // 이 사건에 걸린 조약 — 본문·서명자는 Treaty가 정본이라 여기선 요약만 싣는다.
+        treatyLinks: {
+          include: {
+            treaty: {
+              select: {
+                id: true,
+                name: true,
+                alias: true,
+                type: true,
+                signDate: true,
+                location: true,
+                summary: true,
+                _count: { select: { signatories: true, terms: true } },
+              },
+            },
+          },
           orderBy: { createdAt: 'asc' },
         },
         eventSections: {
