@@ -180,6 +180,27 @@ export interface CreateTreatyDto {
   allowDuplicateSignDate?: boolean
 }
 
+export type TreatyEventLinkType =
+  | 'SIGNING'
+  | 'RATIFICATION'
+  | 'VIOLATION'
+  | 'RELATED'
+
+export const TREATY_EVENT_LINK_LABELS: Record<TreatyEventLinkType, string> = {
+  SIGNING: '이 사건에서 체결',
+  RATIFICATION: '이 사건에서 비준',
+  VIOLATION: '이 사건으로 파기',
+  RELATED: '관련',
+}
+
+export interface TreatyEventLinkDto {
+  id: string
+  treatyId: string
+  eventId: string
+  linkType: TreatyEventLinkType
+  note?: string | null
+}
+
 export interface CreateTreatyTermDto {
   treatyId: string
   order?: number
@@ -221,6 +242,8 @@ export const treatyApi = {
     countryId?: string
     historicalCountryId?: string
     cabinetId?: string
+    /** 이 사건에 걸린 조약만 */
+    eventId?: string
     type?: TreatyType
     search?: string
     skip?: number
@@ -230,6 +253,7 @@ export const treatyApi = {
     if (params?.countryId) q.set('countryId', params.countryId)
     if (params?.historicalCountryId) q.set('historicalCountryId', params.historicalCountryId)
     if (params?.cabinetId) q.set('cabinetId', params.cabinetId)
+    if (params?.eventId) q.set('eventId', params.eventId)
     if (params?.type) q.set('type', params.type)
     if (params?.search?.trim()) q.set('search', params.search.trim())
     if (params?.skip !== undefined) q.set('skip', String(params.skip))
@@ -303,6 +327,25 @@ export const treatyApi = {
   /** 조항 삭제 */
   removeTerm: async (id: string): Promise<void> => {
     await apiClient.delete(`/treaties/terms/${id}`)
+  },
+
+  // ─── 사건 연결 ───
+
+  /**
+   * 조약을 사건에 연결. 체결·비준·파기는 각각 다른 사건이므로 자격(linkType)이
+   * 함께 자연키를 이룬다.
+   */
+  linkEvent: async (
+    treatyId: string,
+    dto: { eventId: string; linkType?: TreatyEventLinkType; note?: string | null },
+  ): Promise<TreatyEventLinkDto> => {
+    const res = await apiClient.post(`/treaties/${treatyId}/events`, dto)
+    return res.data
+  },
+
+  /** 연결 해제 — 조약·사건 자체는 남는다 */
+  unlinkEvent: async (linkId: string): Promise<void> => {
+    await apiClient.delete(`/treaties/event-links/${linkId}`)
   },
 
   // ─── 이미지 ───

@@ -50,6 +50,8 @@ import { notify } from '@/shared/ui/toast'
 import { CountrySelectModal } from '@/shared/ui/country-select-modal/country-select-modal'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { getAllPersons } from '@/shared/api/persons'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 
 const fadeIn = keyframes`from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; }`
 
@@ -1963,6 +1965,135 @@ export const TreatyDetail: React.FC<{
 }
 
 // ──────────────────────────────────────────────
+// 서명자 피커 (인물 · 행정부)
+//
+// 여기가 UUID 생입력이던 자리다. 실측상 treaty_signatory 42행 중 person_id·cabinet_id가
+// **0건**이었는데, 원인은 데이터가 없어서가 아니라 아무도 UUID를 외워 넣지 않아서였다.
+// ──────────────────────────────────────────────
+
+const SignatoryPersonPicker: React.FC<{
+  personId: string
+  onChange: (next: string) => void
+}> = ({ personId, onChange }) => {
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const { data: persons = [] } = useQuery({
+    queryKey: ['persons', 'all'],
+    queryFn: getAllPersons,
+    enabled: pickerOpen || Boolean(personId),
+    staleTime: 5 * 60_000,
+  })
+
+  const selected = persons.find((person) => person.id === personId)
+  const label = selected
+    ? getPersonDisplayName({
+        name: selected.name ?? '',
+        surname: selected.surname,
+        middleName: selected.middleName,
+        nameDisplayOrder: selected.nameDisplayOrder,
+        country: selected.country,
+      })
+    : ''
+
+  return (
+    <>
+      <PickerRow>
+        <PickerValue data-empty={!personId || undefined}>
+          {personId ? label || '불러오는 중…' : '선택 안 함'}
+        </PickerValue>
+        <PickerBtn type="button" onClick={() => setPickerOpen(true)}>
+          {personId ? '변경' : '인물 선택'}
+        </PickerBtn>
+        {personId && (
+          <PickerBtn type="button" onClick={() => onChange('')}>
+            해제
+          </PickerBtn>
+        )}
+      </PickerRow>
+      {pickerOpen && (
+        <PersonSelectModal
+          persons={persons}
+          selectedPersonId={personId}
+          onSelect={(nextId) => {
+            onChange(nextId)
+            setPickerOpen(false)
+          }}
+          onClose={() => setPickerOpen(false)}
+          title="서명 인물 선택"
+          searchPlaceholder="이름 또는 생몰년도로 검색..."
+        />
+      )}
+    </>
+  )
+}
+
+const SignatoryCabinetPicker: React.FC<{
+  cabinetId: string
+  /** 선택된 서명국 — 행정부 후보를 그 나라로 좁힌다 */
+  countryId: string | null
+  historicalCountryId: string | null
+  onChange: (next: string) => void
+}> = ({ cabinetId, countryId, historicalCountryId, onChange }) => {
+  const hasCountry = Boolean(countryId || historicalCountryId)
+  const { data: cabinets = [] } = useQuery({
+    queryKey: ['cabinets-for-signatory', countryId, historicalCountryId],
+    queryFn: () =>
+      personCareerApi.getCabinets({
+        countryId: countryId ?? undefined,
+        historicalCountryId: historicalCountryId ?? undefined,
+      }),
+    enabled: hasCountry,
+    staleTime: 60_000,
+  })
+
+  if (!hasCountry) {
+    return <FieldHint>서명국을 먼저 고르면 그 나라의 행정부가 나옵니다.</FieldHint>
+  }
+
+  return (
+    <Select value={cabinetId} onChange={(e) => onChange(e.target.value)}>
+      <option value="">선택 안 함</option>
+      {cabinets.map((cabinet) => (
+        <option key={cabinet.id} value={cabinet.id}>
+          {cabinetListLabel(cabinet)}
+        </option>
+      ))}
+    </Select>
+  )
+}
+
+const PickerRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const PickerValue = styled.span`
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+
+  &[data-empty] {
+    opacity: 0.6;
+  }
+`
+
+const PickerBtn = styled.button`
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 6px;
+  background-color: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+`
+
+// ──────────────────────────────────────────────
 // 서명국 추가 모달
 // ──────────────────────────────────────────────
 
@@ -2078,19 +2209,19 @@ const AddSignatoryModal: React.FC<{
               </FieldHint>
             </Field>
             <Field>
-              <FieldLabel>서명 인물 ID (선택)</FieldLabel>
-              <Input
-                value={personId}
-                onChange={(e) => setPersonId(e.target.value)}
-                placeholder="예: 몰로토프, 리벤트로프의 인물 ID"
+              <FieldLabel>서명 인물 (선택)</FieldLabel>
+              <SignatoryPersonPicker
+                personId={personId}
+                onChange={setPersonId}
               />
             </Field>
             <Field>
-              <FieldLabel>소속 행정부 ID (선택)</FieldLabel>
-              <Input
-                value={cabinetId}
-                onChange={(e) => setCabinetId(e.target.value)}
-                placeholder="예: 스탈린 행정부 ID"
+              <FieldLabel>소속 행정부 (선택)</FieldLabel>
+              <SignatoryCabinetPicker
+                cabinetId={cabinetId}
+                countryId={countryId}
+                historicalCountryId={historicalCountryId}
+                onChange={setCabinetId}
               />
             </Field>
             <Row2>
@@ -2301,19 +2432,19 @@ const EditSignatoryModal: React.FC<{
               </FieldHint>
             </Field>
             <Field>
-              <FieldLabel>서명 인물 ID (선택)</FieldLabel>
-              <Input
-                value={personId}
-                onChange={(e) => setPersonId(e.target.value)}
-                placeholder="예: 몰로토프, 리벤트로프의 인물 ID"
+              <FieldLabel>서명 인물 (선택)</FieldLabel>
+              <SignatoryPersonPicker
+                personId={personId}
+                onChange={setPersonId}
               />
             </Field>
             <Field>
-              <FieldLabel>소속 행정부 ID (선택)</FieldLabel>
-              <Input
-                value={cabinetId}
-                onChange={(e) => setCabinetId(e.target.value)}
-                placeholder="예: 스탈린 행정부 ID"
+              <FieldLabel>소속 행정부 (선택)</FieldLabel>
+              <SignatoryCabinetPicker
+                cabinetId={cabinetId}
+                countryId={countryId}
+                historicalCountryId={historicalCountryId}
+                onChange={setCabinetId}
               />
             </Field>
             <Row2>

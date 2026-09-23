@@ -156,6 +156,8 @@ export interface EventDetail {
   relatedHistoricalCountryIds?: string[]
   relatedCountries?: EventDetailCountryRef[]
   relatedHistoricalCountries?: EventDetailHistoricalCountryRef[]
+  /** 이 사건에서 체결·비준·파기된 조약 */
+  treaties?: EventDetailTreaty[]
   relatedPersons?: EventDetailPerson[]
   /**
    * 정규화 군사 정보 — 서버 응답에 런타임 전용으로 실려온다(SDK 타입엔 없어 @ts-ignore로

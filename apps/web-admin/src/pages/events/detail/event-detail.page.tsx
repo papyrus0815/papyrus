@@ -16,6 +16,7 @@ import { DetailAppendix } from './components/detail-appendix'
 import { DetailHero } from './components/detail-hero'
 import { DetailNarrative } from './components/detail-narrative'
 import { DetailNetwork } from './components/detail-network'
+import { DetailTreaties } from './components/detail-treaties'
 import { DetailRail } from './components/detail-rail'
 import { InlineEditProvider } from './components/inline'
 import { ModuleAdd } from './components/module-add'
@@ -326,6 +327,16 @@ function EventDetailContent({ eventId }: { eventId: string }) {
                 <ModuleMilitaryDetails event={event} onPatch={onPatch} />
               )}
               {enabledModules.includes('cabinets') && <ModuleCabinets event={event} />}
+
+              {/* 조약 — 사건과 조약을 잇는 유일한 지점(본문·서명자는 조약이 정본) */}
+              <DetailTreaties
+                event={event}
+                onInvalidate={() =>
+                  void queryClient.invalidateQueries({
+                    queryKey: eventKeys.detail(event.id),
+                  })
+                }
+              />
 
               <DetailNetwork event={event} onPatch={onPatch} />
               <DetailAppendix event={event} onPatch={onPatch} />
