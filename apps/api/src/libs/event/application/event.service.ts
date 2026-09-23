@@ -13,6 +13,10 @@ import { PointService } from '../../gamification/application/point.service'
 import { completenessBonus } from '../../gamification/domain/point.policy'
 import { NotificationService } from '../../notification/application/notification.service'
 import { yearPreview } from '../../shared/notification-preview.util'
+import {
+  EventCountryParticipantInput,
+  EventCountryParticipantService,
+} from './event-country-participant.service'
 
 /**
  * updateEvent 계층 트랜잭션이 소비하는 추가 상위 엣지(EventParentLink) 쓰기 계획.
@@ -25,6 +29,64 @@ type ExtraParentEdgePlan =
   | { kind: 'clearAll' }
   | { kind: 'diff'; finalExtras: string[] }
 
+/** 사건 본문 외의 하위 리소스 — 전부 선택. 생략한 항목은 손대지 않는다. */
+export interface CreateEventOptions {
+  relatedPersons?: Array<{ personId: string; role?: string; note?: string }>
+  /**
+   * 생성과 동시에 기입하는 계층 연결 사유(이 사건=자식) — 유효 쌍은 이번 요청의
+   * 주 상위·추가 상위뿐. 엣지 쓰기 뒤 같은 tx에서 applyHierarchyReasons로 적용.
+   */
+  parentLinkReasons?: Array<{ parentEventId: string; reason: string | null }>
+  /**
+   * 참여국 — 현대·역사 국가를 한 배열에 섞어 담는다. 배열 순서가 표시 순서이고,
+   * 주도국은 `role: 'INITIATOR'`로 표현한다(예전의 primaryCountryId 별표를 대체).
+   */
+  relatedCountries?: EventCountryParticipantInput[]
+  eventSections?: Array<{
+    title: string
+    content: string
+    order?: number
+    sectionType?: string
+  }>
+  eventImages?: Array<{
+    imageUrl: string
+    caption?: string
+    source?: string
+    order?: number
+    isPrimary?: boolean
+  }>
+  /** 기존 사건을 하위로 연결 */
+  childEventIds?: string[]
+  /**
+   * 추가 상위 사건 ID 목록(EventParentLink 엣지) — 주 상위(parentEventId)가 있을 때만
+   * 허용(INV-2)·주 상위와 중복 금지(INV-1). docs/event-multi-parent-review.md §4.2 W4.
+   */
+  extraParentEventIds?: string[]
+}
+
+export interface UpdateEventOptions
+  extends Omit<CreateEventOptions, 'parentLinkReasons'> {
+  /**
+   * 참여국 전체 목록. undefined=손대지 않음, []=전부 제거.
+   * 줄 단위 필드는 3상 — 생략=유지, null=비움, 값=설정.
+   */
+  relatedCountries?: EventCountryParticipantInput[]
+  /**
+   * 관련 인물 목록. undefined면 손대지 않음(부분 patch), 빈 배열이면 모두 제거.
+   * 아직 delete-and-recreate다(참여국만 머지로 승격 — 큐레이션된 데이터가 거기 있다).
+   */
+  relatedPersons?: Array<{ personId: string; role?: string; note?: string }>
+  /**
+   * 계층 연결 사유 — *부분 업서트* 규약(전체목록 아님): undefined=변경 없음, 나열된
+   * 쌍만 터치. reason 문자열=업서트, null(또는 공백)=행 삭제. 인접(멤버십) 채널과
+   * 독립 — hierarchyTouched 게이트를 태우지 않아 무관 편집이 순환 BFS로 막히지 않는다.
+   * parentLinkReasons: 이 사건이 자식인 쌍(상위와의 연결). childLinkReasons: 부모인 쌍.
+   * docs/event-subevent-link-reason-review.md §2.2.
+   */
+  parentLinkReasons?: Array<{ parentEventId: string; reason: string | null }>
+  childLinkReasons?: Array<{ childEventId: string; reason: string | null }>
+}
+
 @Injectable()
 export class EventService {
   constructor(
@@ -33,6 +95,7 @@ export class EventService {
     private readonly prisma: PrismaClient,
     private readonly pointService: PointService,
     private readonly notificationService: NotificationService,
+    private readonly countryParticipants: EventCountryParticipantService,
   ) {}
 
   /**
@@ -92,42 +155,18 @@ export class EventService {
       images?: Array<{ imageUrl: string; isPrimary?: boolean }>
     }>
     },
-    relatedPersons?: Array<{ personId: string; role?: string; note?: string }>,
-    /**
-     * 생성과 동시에 기입하는 계층 연결 사유(이 사건=자식) — 유효 쌍은 이번 요청의
-     * 주 상위·추가 상위뿐. 엣지 쓰기 뒤 같은 tx에서 applyHierarchyReasons로 적용.
-     * (죽은 계약 relatedEventIds가 쓰던 슬롯 재사용 — 호출부·spec이 위치기반 인자라
-     * trailing 추가 대신 빈 슬롯을 채워 뒤 인자들의 위치를 보존한다.)
-     */
-    parentLinkReasons?: Array<{ parentEventId: string; reason: string | null }>,
-    relatedCountryIds?: string[],
-    relatedHistoricalCountryIds?: string[],
-    eventSections?: Array<{
-      title: string
-      content: string
-      order?: number
-      sectionType?: string
-    }>,
-    eventImages?: Array<{
-      imageUrl: string
-      caption?: string
-      source?: string
-      order?: number
-      isPrimary?: boolean
-    }>,
-    childEventIds?: string[], // 기존 사건을 하위로 연결
-    /**
-     * 메인 국가 — 마킹된 country/historicalCountry는 EventCountryRelation.role=INITIATOR로 저장.
-     * 미지정이면 모두 PARTICIPANT (Timeline은 createdAt 폴백).
-     */
-    primaryCountryId?: string,
-    primaryHistoricalCountryId?: string,
-    /**
-     * 추가 상위 사건 ID 목록(EventParentLink 엣지) — 주 상위(parentEventId)가 있을 때만
-     * 허용(INV-2)·주 상위와 중복 금지(INV-1). docs/event-multi-parent-review.md §4.2 W4.
-     */
-    extraParentEventIds?: string[],
+    options: CreateEventOptions = {},
   ): Promise<Event> {
+    const {
+      relatedPersons,
+      parentLinkReasons,
+      relatedCountries,
+      eventSections,
+      eventImages,
+      childEventIds,
+      extraParentEventIds,
+    } = options
+
     // 중복 체크 — 같은 계정의 미삭제 사건 안에서만(타 계정 제목 충돌·소프트삭제 좀비 제외).
     const existing = await this.events.findByTitle(
       data.title,
@@ -287,35 +326,12 @@ export class EventService {
       )
     }
 
-    // 관련 국가 연결 — primary와 일치하는 1개만 INITIATOR, 나머지 PARTICIPANT
-    if (relatedCountryIds && relatedCountryIds.length > 0) {
-      await Promise.all(
-        relatedCountryIds.map((countryId) =>
-          this.prisma.eventCountryRelation.create({
-            data: {
-              eventId: event.id,
-              countryId,
-              role: countryId === primaryCountryId ? 'INITIATOR' : 'PARTICIPANT',
-            },
-          }),
-        ),
-      )
-    }
-
-    if (relatedHistoricalCountryIds && relatedHistoricalCountryIds.length > 0) {
-      await Promise.all(
-        relatedHistoricalCountryIds.map((historicalCountryId) =>
-          this.prisma.eventCountryRelation.create({
-            data: {
-              eventId: event.id,
-              historicalCountryId,
-              role:
-                historicalCountryId === primaryHistoricalCountryId
-                  ? 'INITIATOR'
-                  : 'PARTICIPANT',
-            },
-          }),
-        ),
+    // 참여국 — 배열 순서가 표시 순서, 역할은 각 줄이 들고 온다(주도국=INITIATOR).
+    if (relatedCountries && relatedCountries.length > 0) {
+      await this.countryParticipants.createAll(
+        this.prisma,
+        event.id,
+        relatedCountries,
       )
     }
 
@@ -444,47 +460,19 @@ export class EventService {
   async updateEvent(
     id: string,
     data: Partial<Omit<Event, 'id'>>,
-    relatedCountryIds?: string[],
-    relatedHistoricalCountryIds?: string[],
-    eventSections?: Array<{
-      title: string
-      content: string
-      order?: number
-      sectionType?: string
-    }>,
-    eventImages?: Array<{
-      imageUrl: string
-      caption?: string
-      source?: string
-      order?: number
-      isPrimary?: boolean
-    }>,
-    childEventIds?: string[], // 기존 사건을 하위로 연결
-    /** create와 동일 — INITIATOR 마킹 대상 ID */
-    primaryCountryId?: string,
-    primaryHistoricalCountryId?: string,
-    /**
-     * 관련 인물 목록. undefined면 손대지 않음(부분 patch), 빈 배열이면 모두 제거.
-     * 다른 array 필드(eventSections·eventImages·relatedCountryIds 등)와 동일한
-     * delete-and-recreate 패턴.
-     */
-    relatedPersons?: Array<{ personId: string; role?: string; note?: string }>,
-    /**
-     * 추가 상위 사건 ID 전체 목록(EventParentLink 엣지) — childEventIds와 동형의
-     * 전체목록 덮어쓰기 규약: undefined=변경 없음, []=전부 해제.
-     * 불변식·엣지 diff는 docs/event-multi-parent-review.md §4.2 매트릭스 참조.
-     */
-    extraParentEventIds?: string[],
-    /**
-     * 계층 연결 사유 — *부분 업서트* 규약(전체목록 아님): undefined=변경 없음, 나열된
-     * 쌍만 터치. reason 문자열=업서트, null(또는 공백)=행 삭제. 인접(멤버십) 채널과
-     * 독립 — hierarchyTouched 게이트를 태우지 않아 무관 편집이 순환 BFS로 막히지 않는다.
-     * parentLinkReasons: 이 사건이 자식인 쌍(상위와의 연결). childLinkReasons: 부모인 쌍.
-     * docs/event-subevent-link-reason-review.md §2.2.
-     */
-    parentLinkReasons?: Array<{ parentEventId: string; reason: string | null }>,
-    childLinkReasons?: Array<{ childEventId: string; reason: string | null }>,
+    options: UpdateEventOptions = {},
   ): Promise<Event> {
+    const {
+      relatedCountries,
+      eventSections,
+      eventImages,
+      childEventIds,
+      relatedPersons,
+      extraParentEventIds,
+      parentLinkReasons,
+      childLinkReasons,
+    } = options
+
     // 존재 여부 확인 (소유자 스코프한 제목 중복 검사에 사용)
     const target = await this.getEventById(id)
 
@@ -547,45 +535,15 @@ export class EventService {
       )
     }
 
-    // 관련 국가 업데이트
-    if (relatedCountryIds !== undefined || relatedHistoricalCountryIds !== undefined) {
-      // 기존 관련 국가 삭제
-      await this.prisma.eventCountryRelation.deleteMany({
-        where: { eventId: id },
-      })
-
-      // 새로운 관련 국가 추가 — primary와 일치하는 것만 INITIATOR
-      if (relatedCountryIds && relatedCountryIds.length > 0) {
-        await Promise.all(
-          relatedCountryIds.map((countryId) =>
-            this.prisma.eventCountryRelation.create({
-              data: {
-                eventId: id,
-                countryId,
-                role:
-                  countryId === primaryCountryId ? 'INITIATOR' : 'PARTICIPANT',
-              },
-            }),
-          ),
-        )
-      }
-
-      if (relatedHistoricalCountryIds && relatedHistoricalCountryIds.length > 0) {
-        await Promise.all(
-          relatedHistoricalCountryIds.map((historicalCountryId) =>
-            this.prisma.eventCountryRelation.create({
-              data: {
-                eventId: id,
-                historicalCountryId,
-                role:
-                  historicalCountryId === primaryHistoricalCountryId
-                    ? 'INITIATOR'
-                    : 'PARTICIPANT',
-              },
-            }),
-          ),
-        )
-      }
+    /**
+     * 참여국 동기화 — **자연키 머지**(delete-and-recreate 아님).
+     * 살아남은 국가의 역할·역할 서술·비고는 요청이 그 필드를 명시하지 않는 한 그대로
+     * 산다. 그래서 "국가 칩 하나 추가"가 그 사건의 큐레이션을 지우지 않는다.
+     */
+    if (relatedCountries !== undefined) {
+      await this.prisma.$transaction((tx) =>
+        this.countryParticipants.sync(tx, id, relatedCountries),
+      )
     }
 
     // EventSection 업데이트

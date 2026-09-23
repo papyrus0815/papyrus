@@ -201,8 +201,11 @@ export class EventController {
             id: relation.country.id,
             name: relation.country.name,
             flagEmoji: relation.country.flagEmoji,
-            // 사건 내 역할 — Timeline 등에서 대표 국가 선정에 사용 (INITIATOR > TARGET ...)
+            // 사건 내 역할 — 주도국은 INITIATOR. Timeline 대표 국가 선정도 이 값을 본다.
             role: relation.role ?? null,
+            roleDescription: relation.roleDescription ?? null,
+            note: relation.note ?? null,
+            sortOrder: relation.sortOrder ?? 0,
           })
         }
         if (relation.historicalCountryId && relation.historicalCountry) {
@@ -211,6 +214,9 @@ export class EventController {
             id: relation.historicalCountry.id,
             name: relation.historicalCountry.name,
             role: relation.role ?? null,
+            roleDescription: relation.roleDescription ?? null,
+            note: relation.note ?? null,
+            sortOrder: relation.sortOrder ?? 0,
           })
         }
       })
@@ -1108,7 +1114,7 @@ export class EventController {
         },
         countryRelations: {
           include: { country: true, historicalCountry: true },
-          orderBy: { createdAt: 'asc' },
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         },
         eventSections: {
           select: { id: true, title: true, order: true, sectionType: true },
@@ -1426,16 +1432,15 @@ export class EventController {
         childEvents: dto.childEvents, // 🆕 하위 사건 정보 전달
         createdById: userId, // 🆕 등록자 ID
       },
-      dto.relatedPersons,
-      dto.parentLinkReasons, // 🆕 생성 동시 연결 사유(이 사건=자식) — 구 relatedEventIds 슬롯
-      dto.relatedCountryIds,
-      dto.relatedHistoricalCountryIds,
-      dto.eventSections,
-      dto.eventImages,
-      dto.childEventIds, // 🆕 기존 사건을 하위로 연결
-      dto.primaryCountryId,
-      dto.primaryHistoricalCountryId,
-      dto.extraParentEventIds, // 🆕 추가 상위(EventParentLink) — 수령만 하고 버리는 계약 거짓말 금지
+      {
+        relatedPersons: dto.relatedPersons,
+        parentLinkReasons: dto.parentLinkReasons, // 생성 동시 연결 사유(이 사건=자식)
+        relatedCountries: dto.relatedCountries,
+        eventSections: dto.eventSections,
+        eventImages: dto.eventImages,
+        childEventIds: dto.childEventIds, // 기존 사건을 하위로 연결
+        extraParentEventIds: dto.extraParentEventIds, // 추가 상위(EventParentLink)
+      },
     )
 
     // 정규화된 군사 정보 저장
@@ -1555,17 +1560,16 @@ export class EventController {
         warCost: dto.warCost,
         keywords: dto.keywords,
       },
-      dto.relatedCountryIds,
-      dto.relatedHistoricalCountryIds,
-      dto.eventSections,
-      dto.eventImages,
-      dto.childEventIds, // 🆕 기존 사건을 하위로 연결
-      dto.primaryCountryId,
-      dto.primaryHistoricalCountryId,
-      dto.relatedPersons,
-      dto.extraParentEventIds, // 🆕 추가 상위(EventParentLink) 전체목록 — undefined=변경 없음
-      dto.parentLinkReasons, // 🆕 연결 사유(이 사건=자식) 부분 업서트
-      dto.childLinkReasons, // 🆕 연결 사유(이 사건=부모) 부분 업서트
+      {
+        relatedCountries: dto.relatedCountries,
+        eventSections: dto.eventSections,
+        eventImages: dto.eventImages,
+        childEventIds: dto.childEventIds, // 기존 사건을 하위로 연결
+        relatedPersons: dto.relatedPersons,
+        extraParentEventIds: dto.extraParentEventIds, // 전체목록 — undefined=변경 없음
+        parentLinkReasons: dto.parentLinkReasons, // 연결 사유(이 사건=자식) 부분 업서트
+        childLinkReasons: dto.childLinkReasons, // 연결 사유(이 사건=부모) 부분 업서트
+      },
     )
 
     // 정규화된 군사 정보 저장

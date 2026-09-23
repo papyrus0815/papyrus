@@ -208,16 +208,21 @@ function buildService(
     restoreForRecord: jest.fn(() => Promise.resolve()),
   }
   const fakeNotification = { notifyEvent: jest.fn(() => Promise.resolve()) }
+  const fakeCountryParticipants = {
+    sync: jest.fn(() => Promise.resolve()),
+    createAll: jest.fn(() => Promise.resolve()),
+  }
   const service = new EventService(
     fakeRepo as never,
     fakePrisma as never,
     fakePoint as never,
     fakeNotification as never,
+    fakeCountryParticipants as never,
   )
   return { service, fakePrisma, fakeRepo, reasons }
 }
 
-/** updateEvent 포지셔널 인자 헬퍼 — 계층 관련 인자만 노출 */
+/** updateEvent 헬퍼 — 계층 관련 옵션만 노출 */
 function updateHierarchy(
   service: EventService,
   id: string,
@@ -230,15 +235,10 @@ function updateHierarchy(
   return service.updateEvent(
     id,
     patch.parentEventId === undefined ? {} : { parentEventId: patch.parentEventId },
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    patch.childEventIds,
-    undefined,
-    undefined,
-    undefined,
-    patch.extraParentEventIds,
+    {
+      childEventIds: patch.childEventIds,
+      extraParentEventIds: patch.extraParentEventIds,
+    },
   )
 }
 
@@ -453,35 +453,16 @@ describe('EventService 다중 상위 가드 (W1~W5·BFS)', () => {
     {
       const { service } = buildService(events, [])
       await expect(
-        service.createEvent(
-          { title: '새 사건', createdById: OWNER } as never,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          ['X'],
-        ),
+        service.createEvent({ title: '새 사건', createdById: OWNER } as never, {
+          extraParentEventIds: ['X'],
+        }),
       ).rejects.toThrow(/주 상위가 없는 사건에는/)
     }
     {
       const { service, fakePrisma } = buildService(events, [])
       await service.createEvent(
         { title: '새 사건', createdById: OWNER, parentEventId: 'P1' } as never,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        ['X'],
+        { extraParentEventIds: ['X'] },
       )
       expect(fakePrisma.eventParentLink.createMany).toHaveBeenCalledWith({
         data: [{ childEventId: 'E-new', parentEventId: 'X' }],
@@ -498,16 +479,7 @@ describe('EventService 다중 상위 가드 (W1~W5·BFS)', () => {
     await expect(
       service.createEvent(
         { title: '새 사건', createdById: OWNER, parentEventId: 'P' } as never,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        ['C'],
-        undefined,
-        undefined,
-        undefined,
+        { childEventIds: ['C'] },
       ),
     ).rejects.toThrow(ConflictException)
   })
@@ -600,17 +572,12 @@ function updateReasons(
   return service.updateEvent(
     id,
     patch.parentEventId === undefined ? {} : { parentEventId: patch.parentEventId },
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    patch.childEventIds,
-    undefined,
-    undefined,
-    undefined,
-    patch.extraParentEventIds,
-    patch.parentLinkReasons,
-    patch.childLinkReasons,
+    {
+      childEventIds: patch.childEventIds,
+      extraParentEventIds: patch.extraParentEventIds,
+      parentLinkReasons: patch.parentLinkReasons,
+      childLinkReasons: patch.childLinkReasons,
+    },
   )
 }
 

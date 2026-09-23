@@ -238,6 +238,9 @@ export class EventResponseDto {
         name: { type: 'string' },
         flagEmoji: { type: 'string' },
         role: { type: 'string', nullable: true },
+        roleDescription: { type: 'string', nullable: true },
+        note: { type: 'string', nullable: true },
+        sortOrder: { type: 'number' },
       },
     },
   })
@@ -245,8 +248,13 @@ export class EventResponseDto {
     id: string
     name: string
     flagEmoji?: string
-    /** 사건 내 역할 — Timeline 등에서 대표 국가 선정에 사용 */
+    /** 사건 내 역할 — 주도국은 INITIATOR. Timeline 대표 국가 선정도 이 값을 본다 */
     role?: string | null
+    /** 역할 상세 — "이 나라가 이 사건에서 무엇을 했나" */
+    roleDescription?: string | null
+    note?: string | null
+    /** 표시 순서 */
+    sortOrder?: number
   }>
 
   @ApiProperty({
@@ -259,6 +267,9 @@ export class EventResponseDto {
         id: { type: 'string' },
         name: { type: 'string' },
         role: { type: 'string', nullable: true },
+        roleDescription: { type: 'string', nullable: true },
+        note: { type: 'string', nullable: true },
+        sortOrder: { type: 'number' },
       },
     },
   })
@@ -266,6 +277,30 @@ export class EventResponseDto {
     id: string
     name: string
     role?: string | null
+    roleDescription?: string | null
+    note?: string | null
+    sortOrder?: number
+  }>
+
+  @ApiProperty({
+    description:
+      '이 사건에 걸린 조약 요약 (상세 조회에서만). 서명국·조항 전문은 GET /treaties/:id가 정본',
+    required: false,
+  })
+  treaties?: Array<{
+    /** TreatyEventLink 행 id — 연결 해제에 쓴다 */
+    linkId: string
+    linkType: 'SIGNING' | 'RATIFICATION' | 'VIOLATION' | 'RELATED'
+    linkNote?: string | null
+    id: string
+    name: string
+    alias?: string | null
+    type: string
+    signDate?: string | null
+    location?: string | null
+    summary?: string | null
+    signatoryCount: number
+    termCount: number
   }>
 
   @ApiProperty({
