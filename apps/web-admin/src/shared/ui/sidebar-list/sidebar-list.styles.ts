@@ -224,12 +224,41 @@ export const SidebarTabBody = styled.div`
 
 // ─── 검색·필터 행 ────────────────────────────────────────────────────────────
 
+/**
+ * 검색·필터 블록 — 크롬의 2·3단.
+ *
+ * 크롬은 목록을 밀어내는 비용이다: 예전엔 제목 69 + 이 블록 118 = **187px**가 첫 행 앞에
+ * 소비됐다(840px 뷰포트의 22%). 단 사이 간격과 아래 여백을 줄여 회수한다 — 줄 수를 줄이는
+ * 건 SearchFilterInline 쪽 일이고, 여기서는 이미 있는 줄을 촘촘히 세운다.
+ */
 export const FilterRow = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 0 14px 14px;
+  gap: 6px;
+  padding: 0 14px 10px;
   ${({ theme }) => stickyBar(theme)}
+`
+
+/**
+ * 검색칸 + 칩을 **한 줄에** 놓는 압축 모드.
+ *
+ * 칩이 하나뿐인 지면(조약·기업)은 292px 줄에 116px짜리 칩 하나만 떠 있어 줄의 2/3가 비고,
+ * 그 빈 줄이 목록을 36px 아래로 밀었다. 남는 폭이 충분하면 같은 줄에 앉히는 게 맞다.
+ * 넘치면 wrap이 알아서 줄을 내주므로 폭이 좁아져도 깨지지 않는다.
+ */
+export const SearchFilterInline = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+
+  /* 검색이 남는 폭을 먹되, 초기화 버튼이 끼어들면 그만큼 양보한다.
+     실측(291px 줄): 검색 133 + 칩 90 + 초기화 56 + 간격 12 = 291 — 필터를 켜도 줄이 늘지
+     않는다. 기준값을 160으로 두면 켜는 순간 초기화가 다음 줄로 떨어져 줄 수가 출렁였다. */
+  > *:first-child {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
 `
 
 export const FilterWrapper = styled.div`
@@ -272,7 +301,9 @@ export const SearchInput = styled.input`
   /* 흰 지면에 흰 칸은 보이지 않는다 — 한 톤 내려 채워야 '칸'으로 읽힌다(테두리 대신 채움) */
   background-color: ${({ theme }) => sidebarFill(theme)};
   border: 1px solid transparent;
-  transition: border-color 0.12s ease, background-color 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease;
 
   &::placeholder {
     color: ${({ theme }) => theme.colors.text.tertiary};
@@ -312,7 +343,9 @@ export const ClearButton = styled.button`
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 
   &:hover {
     background: ${({ theme }) => sidebarFillHover(theme)};
@@ -334,7 +367,9 @@ export const ClearAllFiltersButton = styled.button`
   background: transparent;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.12s ease, background 0.12s ease;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
@@ -358,14 +393,102 @@ export const ClearAllFiltersButton = styled.button`
   }
 `
 
+/**
+ * 필터 칩 아래 **유도 줄** — 국가의 '과거 국가 289개 보기', 인물의 '상세 필터'.
+ *
+ * 국가·인물이 각자 같은 코드를 갖고 있었다(바이트까지 같았다). 한쪽만 고치면 곧 어긋난다.
+ */
+export const DiscoveryRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+`
+
+/**
+ * 유도 배지 — **칩과 형태를 가른다**.
+ *
+ * 예전엔 칩과 같이 채워져 있어서 '네 번째 필터 줄'로 읽혔다. 하는 일이 다르다: 칩은 지금
+ * 모수 안에서 값을 고르고, 배지는 **다른 모수로 점프**한다. 그래서 채움을 걷고 테두리만
+ * 남긴다 — 같은 줄의 무게 다툼이 사라지고, 위계가 한 단 내려간다.
+ */
+export const DiscoveryBadge = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  border: 1px solid ${({ theme }) => sidebarLine(theme)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) => sidebarFill(theme)};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 1px;
+  }
+`
+
+/** 배지 안의 수 — 배지가 흐린 톤이라 수만 본문 색으로 올려 읽히게 한다 */
+export const DiscoveryBadgeCount = styled.span`
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/**
+ * 유도 줄의 **상태 힌트** — '연결 안 됨 12', '상세 필터 적용 중'.
+ *
+ * 여기는 채움을 남긴다. 배지(누를 수 있는 것)보다 한 단 위가 아니라, **알아채야 하는 것**이라
+ * 색으로 말할 자격이 있는 유일한 자리다. 톤은 도메인이 $tone으로 고른다.
+ */
+export const DiscoveryHint = styled.span<{ $tone?: 'warn' | 'accent' }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  ${({ $tone = 'warn', theme }) => {
+    const dark = theme.mode === 'dark'
+    const palette =
+      $tone === 'accent'
+        ? {
+            border: dark ? 'rgba(99,102,241,0.32)' : '#c7d2fe',
+            background: dark ? 'rgba(99,102,241,0.14)' : '#eef2ff',
+            color: dark ? '#a5b4fc' : '#3730a3',
+          }
+        : {
+            border: dark ? 'rgba(245,158,11,0.32)' : '#fde68a',
+            background: dark ? 'rgba(245,158,11,0.14)' : '#fef3c7',
+            color: dark ? '#fbbf24' : '#92400e',
+          }
+    return css`
+      border: 1px solid ${palette.border};
+      background: ${palette.background};
+      color: ${palette.color};
+    `
+  }}
+`
+
 export const FilterSelect = styled.select<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   height: 30px;
   padding: 0 22px 0 10px;
   border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? 'transparent' : 'transparent'};
+    ${({ $active, theme }) => ($active ? 'transparent' : 'transparent')};
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
@@ -383,7 +506,9 @@ export const FilterSelect = styled.select<{ $active?: boolean }>`
   appearance: none;
   -webkit-appearance: none;
   outline: none;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
   max-width: 116px;
 
   &:hover {
@@ -642,7 +767,9 @@ export const PinButton = styled.button<{ $pinned?: boolean }>`
   line-height: 1;
   /* 핀된 항목은 항상 표시, 핀 안 된 항목은 행 hover 시에만 노출 */
   opacity: ${({ $pinned }) => ($pinned ? 1 : 0)};
-  transition: opacity 0.12s ease, color 0.12s ease;
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease;
 
   ${ListRow}:hover &,
   ${ListRow}:focus-within & {
@@ -683,12 +810,7 @@ export const AvatarBadge = styled.div<{ $size?: 'sm' | 'md' }>`
   font-weight: 700;
   letter-spacing: 0.02em;
   flex-shrink: 0;
-  font-family:
-    'SF Mono',
-    'Roboto Mono',
-    ui-monospace,
-    Menlo,
-    monospace;
+  font-family: 'SF Mono', 'Roboto Mono', ui-monospace, Menlo, monospace;
   text-transform: uppercase;
   line-height: 1;
   background: ${({ theme }) => sidebarFill(theme)};
@@ -744,7 +866,9 @@ export const CollapsedToggleBtn = styled.button`
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 
   &:hover {
     background: ${({ theme }) => sidebarFillHover(theme)};

@@ -29,17 +29,11 @@ import * as S from '@/shared/ui/sidebar-list'
 export const EventListScope = styled.div`
   display: contents;
 
-  /* 지면색·채움·선택 톤은 전부 공용 sidebar-list의 기본값을 그대로 쓴다.
+  /* 지면색·채움·상단 크롬 치수는 전부 공용 sidebar-list의 기본값을 그대로 쓴다.
      (흰 지면 + 경계선 한 줄 규약은 여기서 시작했지만, 이제 전 지면 공통이라 승격했다.)
-     여기 남은 건 **사건 목록만의 조판** — 칸 크기와 세기/연/제목/메타의 위계다. */
-  ${S.SearchInput} {
-    height: 38px;
-    font-size: 13.5px;
-  }
-  ${S.FilterSelect} {
-    height: 32px;
-    font-size: 12px;
-  }
+     검색칸 38 / 셀렉트 32를 여기서 덮던 시절이 있었는데, 실측해 보니 조판이 아니라 다른
+     지면과의 2px 드리프트였다 — 같은 크롬은 같은 치수여야 한다.
+     여기 남은 건 **사건 목록만의 조판** — 세기/연/제목/메타의 위계다. */
 
   ${S.VirtualList} {
     /* 둥근 행이 지면 안쪽으로 들어앉는 여백 + 행 자체의 좌우 패딩.

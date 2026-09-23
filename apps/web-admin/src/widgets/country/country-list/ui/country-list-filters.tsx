@@ -15,61 +15,14 @@ import {
   type CountryTypeFilter,
 } from '@/entities/country/model/unified-types'
 
-import {
-  useCountryListState,
-  type SortBy,
-} from '../country-list-state.context'
+import { type SortBy, useCountryListState } from '../country-list-state.context'
 import * as S from './country-list.styles'
 
-const DiscoveryRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-`
-
-const HistoricalCountBadge = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.14)' : theme.colors.border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : theme.colors.background.secondary};
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ theme }) => theme.colors.primary};
-  }
-`
-
-const BadgeCount = styled.span`
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const UnlinkedHint = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(245,158,11,0.32)' : '#fde68a'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(245,158,11,0.14)' : '#fef3c7'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#92400e')};
-`
+/* 유도 줄(배지·힌트) 조판은 공용 sidebar-list — 인물 목록과 바이트까지 같은 코드를 각자
+   갖고 있었다. 도메인은 무엇을 유도할지만 정한다. */
+const DiscoveryRow = S.DiscoveryRow
+const HistoricalCountBadge = S.DiscoveryBadge
+const BadgeCount = S.DiscoveryBadgeCount
 
 interface CountryListFiltersProps {
   query: string
@@ -101,8 +54,7 @@ export function CountryListFilters({
 }: CountryListFiltersProps) {
   const { historicalCount, unlinkedHistoricalIds, isErrorHistorical } =
     useCountryListState()
-  const isFiltered =
-    !!query || !!continentFilter || countryTypeFilter !== 'all'
+  const isFiltered = !!query || !!continentFilter || countryTypeFilter !== 'all'
   // 대륙 필터는 역사 국가에 continentId가 없어 '과거' 유형에선 무의미하므로 비활성(F3).
   const continentDisabled = countryTypeFilter === 'historical'
   // 검색 중에는 역사국가가 이미 결과에 합류하므로 유도 배지를 감춘다.
@@ -119,7 +71,14 @@ export function CountryListFilters({
     <S.FilterRow>
       <S.SearchWrapper>
         <S.SearchIcon>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4.35-4.35" />
           </svg>
@@ -134,7 +93,15 @@ export function CountryListFilters({
         />
         {query && (
           <S.ClearButton onClick={() => onQueryChange('')} aria-label="지우기">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            >
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </S.ClearButton>
@@ -142,7 +109,6 @@ export function CountryListFilters({
       </S.SearchWrapper>
 
       <S.FilterWrapper>
-
         <S.FilterSelect
           value={countryTypeFilter}
           onChange={(e) =>
@@ -205,9 +171,12 @@ export function CountryListFilters({
             </HistoricalCountBadge>
           )}
           {showUnlinkedHint && (
-            <UnlinkedHint title="현대 국가에 연결되지 않아 현대 행에서는 찾을 수 없는 국가 수">
+            <S.DiscoveryHint
+              $tone="warn"
+              title="현대 국가에 연결되지 않아 현대 행에서는 찾을 수 없는 국가 수"
+            >
               연결 안 됨 {unlinkedHistoricalIds.size}
-            </UnlinkedHint>
+            </S.DiscoveryHint>
           )}
         </DiscoveryRow>
       )}

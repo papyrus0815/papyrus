@@ -7,6 +7,8 @@
  */
 import styled from 'styled-components'
 
+import * as S from '@/shared/ui/sidebar-list'
+
 /** 이름 옆 군주(♛)·국가원수(★) 표식 */
 export const RoleMark = styled.span`
   display: inline-flex;
@@ -17,58 +19,12 @@ export const RoleMark = styled.span`
 `
 
 /** 검색·필터 행 아래 유도 배지 줄 (국가 목록의 '과거 국가 N개 보기' 자리) */
-export const DiscoveryRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-`
-
-/** 다중 선택·영향력·생존 등 상세 필터를 여는 배지 */
-export const AdvancedFilterBadge = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.14)'
-        : theme.colors.border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.05)'
-      : theme.colors.background.secondary};
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ theme }) => theme.colors.primary};
-  }
-`
-
-export const BadgeCount = styled.span`
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-/** 상세 필터가 켜져 있음을 알리는 경고 톤 힌트 (국가의 '연결 안 됨'과 같은 자리) */
-export const ActiveAdvancedHint = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99,102,241,0.32)' : '#c7d2fe'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99,102,241,0.14)' : '#eef2ff'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#3730a3')};
-`
+/* 유도 줄 조판은 공용 sidebar-list로 승격 — 국가 목록과 같은 코드를 각자 갖고 있었다.
+   옛 이름은 호출부를 건드리지 않으려고 그대로 둔다. */
+export const DiscoveryRow = S.DiscoveryRow
+export const AdvancedFilterBadge = S.DiscoveryBadge
+export const BadgeCount = S.DiscoveryBadgeCount
+/** 상세 필터가 켜져 있음을 알리는 힌트 (국가의 '연결 안 됨'과 같은 자리) */
+export const ActiveAdvancedHint = styled(S.DiscoveryHint).attrs({
+  $tone: 'accent' as const,
+})``

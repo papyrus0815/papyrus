@@ -61,9 +61,10 @@ const Root = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  /* 상단 여백 — 예전엔 제목이 뷰포트 맨 위에 붙어 숨 쉴 자리가 없었다 */
-  padding: 18px 14px 14px;
-  /* 표면 톤 계단: 사이드바는 본문보다 한 단계 진하다(레일 < 사이드바 < 본문) */
+  /* 상단 여백 — 제목이 뷰포트 맨 위에 붙지 않을 만큼만. 크롬은 목록을 밀어내는 비용이라
+     '숨 쉴 자리'를 넉넉히 줬던 18/14는 첫 행을 y=187까지 내렸다(840px의 22%). */
+  padding: 14px 14px 12px;
+  /* 지면색은 ListPane이 칠한다 — 헤더가 따로 칠하면 톤이 어긋난다 */
   background: transparent;
 `
 

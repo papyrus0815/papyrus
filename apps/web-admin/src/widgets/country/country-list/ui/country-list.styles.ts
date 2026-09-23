@@ -56,6 +56,11 @@ export {
   EmptyFilterActions,
   AddButton,
   AddButtonIcon,
+  SearchFilterInline,
+  DiscoveryRow,
+  DiscoveryBadge,
+  DiscoveryBadgeCount,
+  DiscoveryHint,
   // 국가 도메인 이름 유지 — 공용에서는 그룹/아바타 일반명
   GroupSectionHeader as ContinentSectionHeader,
   GroupCaret as ContinentCaret,
